@@ -116,8 +116,8 @@ interface PlayableNotePlayback {
 }
 
 const AUTO_AUDIO_CHUNK_FRAMES = 256;
-const MANUAL_AUDIO_CHUNK_FRAMES = 64;
-const MANUAL_AUDIO_TARGET_LEAD_MS = 8;
+const MANUAL_AUDIO_CHUNK_FRAMES = 256;
+const MANUAL_AUDIO_TARGET_LEAD_MS = 20;
 const DEFAULT_LANE_WIDTH = 3;
 const WIDE_SCRATCH_LANE_WIDTH = DEFAULT_LANE_WIDTH * 2;
 const DEFAULT_GRID_ROWS = 14;
@@ -1196,7 +1196,14 @@ async function playMixedPcmThroughOutput(params: {
   const { output, background, activeVoices, shouldStop, isDraining, mode, playbackSampleRate } = params;
 
   const chunkFrames = mode === 'manual' ? MANUAL_AUDIO_CHUNK_FRAMES : AUTO_AUDIO_CHUNK_FRAMES;
-  const chunk = Buffer.allocUnsafe(chunkFrames * 4);
+  // Keep one reusable PCM buffer and fill through Int16Array to minimize per-sample write overhead.
+  const chunkSamples = new Int16Array(chunkFrames * 2);
+  const chunk = new Uint8Array(chunkSamples.buffer);
+  const mixedLeft = new Float32Array(chunkFrames);
+  const mixedRight = new Float32Array(chunkFrames);
+  const backgroundLeft = background.left;
+  const backgroundRight = background.right;
+  const backgroundLength = backgroundLeft.length;
   let playhead = 0;
   const playbackStartMs = performance.now();
 
@@ -1211,27 +1218,37 @@ async function playMixedPcmThroughOutput(params: {
     }
 
     for (let frame = 0; frame < chunkFrames; frame += 1) {
-      let left = 0;
-      let right = 0;
-
       const sourceFrame = playhead + frame;
-      if (sourceFrame < background.left.length) {
-        left += background.left[sourceFrame];
-        right += background.right[sourceFrame];
+      if (sourceFrame < backgroundLength) {
+        mixedLeft[frame] = backgroundLeft[sourceFrame];
+        mixedRight[frame] = backgroundRight[sourceFrame];
+      } else {
+        mixedLeft[frame] = 0;
+        mixedRight[frame] = 0;
       }
+    }
 
-      for (const voice of activeVoices) {
-        const voiceFrame = voice.position + frame;
-        if (voiceFrame >= voice.endPosition) {
-          continue;
-        }
-        left += voice.sample.left[voiceFrame];
-        right += voice.sample.right[voiceFrame];
+    // Voice-major accumulation removes a per-sample boundary branch from the hot path.
+    for (let voiceIndex = 0; voiceIndex < activeVoices.length; voiceIndex += 1) {
+      const voice = activeVoices[voiceIndex]!;
+      const voiceFrames = Math.min(chunkFrames, voice.endPosition - voice.position);
+      if (voiceFrames <= 0) {
+        continue;
       }
+      const voiceLeft = voice.sample.left;
+      const voiceRight = voice.sample.right;
+      let sourceFrame = voice.position;
+      for (let frame = 0; frame < voiceFrames; frame += 1) {
+        mixedLeft[frame] += voiceLeft[sourceFrame];
+        mixedRight[frame] += voiceRight[sourceFrame];
+        sourceFrame += 1;
+      }
+    }
 
-      const offset = frame * 4;
-      chunk.writeInt16LE(floatToInt16(left), offset);
-      chunk.writeInt16LE(floatToInt16(right), offset + 2);
+    for (let frame = 0; frame < chunkFrames; frame += 1) {
+      const sampleOffset = frame * 2;
+      chunkSamples[sampleOffset] = floatToInt16(mixedLeft[frame]);
+      chunkSamples[sampleOffset + 1] = floatToInt16(mixedRight[frame]);
     }
 
     for (let index = activeVoices.length - 1; index >= 0; index -= 1) {

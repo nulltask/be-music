@@ -101,6 +101,10 @@ interface QueuedPcmChunk {
 }
 
 const AUTO_BACKEND_ORDER: ResolvedAudioBackendName[] = ['audio-io', 'speaker', 'audify'];
+const AUDIO_IO_MANUAL_HIGH_WATER_MS = 48;
+const AUDIO_IO_MANUAL_LOW_WATER_MS = 30;
+const AUDIO_IO_AUTO_HIGH_WATER_MS = 380;
+const AUDIO_IO_AUTO_LOW_WATER_MS = 330;
 
 const BACKEND_CANDIDATES: AudioOutputBackendCandidate[] = [
   { name: 'audio-io', create: tryCreateAudioIoBackend },
@@ -159,7 +163,7 @@ async function tryCreateSpeakerBackend(options: AudioBackendCreateOptions): Prom
 
   return {
     backend: 'speaker',
-    write: (chunk: Uint8Array) => speaker.write(chunk),
+    write: (chunk: Uint8Array) => speaker.write(Buffer.from(chunk)),
     waitWritable: (shouldStop: () => boolean) => waitSpeakerWritable(speaker, shouldStop),
     end: () =>
       new Promise<void>((resolvePromise) => {
@@ -388,11 +392,7 @@ async function tryCreateAudioIoBackend(options: AudioBackendCreateOptions): Prom
     return undefined;
   }
 
-  const chunkSampleCount = options.samplesPerFrame * options.channels;
-  const autoModeQueueChunks = options.mode === 'manual' ? 10 : 72;
-  const highWaterSamples = Math.max(chunkSampleCount * 6, chunkSampleCount * autoModeQueueChunks);
-  const lowWaterRatio = options.mode === 'manual' ? 0.75 : 0.88;
-  const lowWaterSamples = Math.max(chunkSampleCount * 2, Math.floor(highWaterSamples * lowWaterRatio));
+  const { highWaterSamples, lowWaterSamples } = resolveAudioIoQueueThresholds(options);
   const queue: QueuedPcmChunk[] = [];
   const lastOutputSamples = new Int16Array(Math.max(1, options.channels));
 
@@ -497,7 +497,7 @@ async function tryCreateAudioIoBackend(options: AudioBackendCreateOptions): Prom
       {
         sampleRate: options.sampleRate,
         channelCount: options.channels,
-        bufferDuration: options.mode === 'manual' ? 15 : 35,
+        bufferDuration: options.mode === 'manual' ? 30 : 40,
       },
       (outputBuffer: Int16Array) => {
         flushOrZeroFill(outputBuffer);
@@ -563,6 +563,21 @@ async function tryCreateAudioIoBackend(options: AudioBackendCreateOptions): Prom
       // audio-io はコールバックエラーを直接通知しないため現状は no-op。
     },
   };
+}
+
+function resolveAudioIoQueueThresholds(options: AudioBackendCreateOptions): {
+  highWaterSamples: number;
+  lowWaterSamples: number;
+} {
+  const chunkSampleCount = Math.max(1, options.samplesPerFrame * options.channels);
+  const samplesPerSecond = Math.max(1, options.sampleRate * options.channels);
+  const highWaterTargetMs = options.mode === 'manual' ? AUDIO_IO_MANUAL_HIGH_WATER_MS : AUDIO_IO_AUTO_HIGH_WATER_MS;
+  const lowWaterTargetMs = options.mode === 'manual' ? AUDIO_IO_MANUAL_LOW_WATER_MS : AUDIO_IO_AUTO_LOW_WATER_MS;
+  const highWaterByTime = Math.ceil((samplesPerSecond * highWaterTargetMs) / 1000);
+  const lowWaterByTime = Math.ceil((samplesPerSecond * lowWaterTargetMs) / 1000);
+  const highWaterSamples = Math.max(chunkSampleCount * 6, highWaterByTime);
+  const lowWaterSamples = Math.max(chunkSampleCount * 2, Math.min(highWaterSamples - chunkSampleCount, lowWaterByTime));
+  return { highWaterSamples, lowWaterSamples };
 }
 
 async function loadSpeakerConstructor(): Promise<SpeakerConstructor | undefined> {
