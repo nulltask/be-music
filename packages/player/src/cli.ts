@@ -107,7 +107,7 @@ interface SelectChartInteractivelyResult {
   auto: boolean;
 }
 
-type ResultScreenAction = 'enter' | 'escape' | 'ctrl-c';
+type ResultScreenAction = 'enter' | 'escape' | 'ctrl-c' | 'replay';
 type LoadingCancelReason = 'escape' | 'ctrl-c';
 
 interface PlayedChartResult {
@@ -237,25 +237,32 @@ async function runDirectoryInput(rootDir: string, args: CliArgs): Promise<void> 
 
     focusKey = selection.focusKey;
     auto = selection.auto;
-    let played: PlayedChartResult;
-    try {
-      played = await playChartOnce(selection.selectedPath, { ...args, auto });
-    } catch (error) {
-      if (error instanceof PlayerInterruptedError) {
-        if (error.reason === 'escape') {
-          continue;
+    const replayPath = selection.selectedPath;
+    while (true) {
+      let played: PlayedChartResult;
+      try {
+        played = await playChartOnce(replayPath, { ...args, auto });
+      } catch (error) {
+        if (error instanceof PlayerInterruptedError) {
+          if (error.reason === 'escape') {
+            break;
+          }
+          process.exitCode = error.exitCode;
+          return;
         }
-        process.exitCode = error.exitCode;
-        return;
+        throw error;
       }
-      throw error;
+
+      const resultAction = await showResultScreen(rootDir, played);
+      if (resultAction === 'replay') {
+        continue;
+      }
+      if (resultAction === 'enter') {
+        break;
+      }
+      process.exitCode = resultAction === 'ctrl-c' ? 130 : 0;
+      return;
     }
-    const resultAction = await showResultScreen(rootDir, played);
-    if (resultAction === 'enter') {
-      continue;
-    }
-    process.exitCode = resultAction === 'ctrl-c' ? 130 : 0;
-    return;
   }
 }
 
@@ -841,6 +848,7 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
     lines.push(`PERFECT ${played.summary.perfect}  GREAT ${played.summary.great}`);
     lines.push(`GOOD ${played.summary.good}  MISS ${played.summary.miss}`);
     lines.push('');
+    lines.push('Press r to replay this chart.');
     lines.push('Press Enter to return to song selection.');
     lines.push('Press Ctrl+C or Esc to quit.');
     process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J`);
@@ -862,24 +870,36 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
       resolvePromise(action);
     };
 
-        const onKeyPress = (_chunk: string | undefined, key: readline.Key): void => {
-      if (key.sequence === '\u0003') {
-        cleanup('ctrl-c');
-        return;
-      }
-      const keyName = key.name?.toLowerCase();
-      if (keyName === 'return' || keyName === 'enter') {
-        cleanup('enter');
-        return;
-      }
-      if (keyName === 'escape' || key.sequence === '\u001b') {
-        cleanup('escape');
+    const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
+      const action = resolveResultScreenActionFromKey(chunk, key);
+      if (action) {
+        cleanup(action);
       }
     };
 
     process.stdin.on('keypress', onKeyPress);
     render();
   });
+}
+
+export function resolveResultScreenActionFromKey(
+  chunk: string | undefined,
+  key: readline.Key,
+): ResultScreenAction | undefined {
+  if (key.sequence === '\u0003') {
+    return 'ctrl-c';
+  }
+  const keyName = key.name?.toLowerCase();
+  if (keyName === 'return' || keyName === 'enter') {
+    return 'enter';
+  }
+  if (keyName === 'escape' || key.sequence === '\u001b') {
+    return 'escape';
+  }
+  if (typeof chunk === 'string' && chunk.toLowerCase() === 'r') {
+    return 'replay';
+  }
+  return undefined;
 }
 
 async function buildChartSelectionEntries(

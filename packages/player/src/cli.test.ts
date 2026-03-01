@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
-import { parseArgs } from './cli.ts';
+import type readline from 'node:readline';
+import { parseArgs, resolveResultScreenActionFromKey } from './cli.ts';
 
 test('cli: --audio-backend を解析できる', () => {
   const parsed = parseArgs(['chart.bms', '--audio-backend', 'audio-io', '--auto']);
@@ -28,3 +29,33 @@ test('cli: デフォルトでは選曲プレビュー音声は無効', () => {
   const parsed = parseArgs(['chart.bms']);
   expect(parsed.previewAudio).toBe(false);
 });
+
+test('cli: リザルト画面で r キーをリプレイとして解釈できる', () => {
+  const action = resolveResultScreenActionFromKey('r', createKey());
+  expect(action).toBe('replay');
+});
+
+test('cli: リザルト画面で Enter キーを選曲戻りとして解釈できる', () => {
+  const action = resolveResultScreenActionFromKey(undefined, createKey('enter'));
+  expect(action).toBe('enter');
+});
+
+test('cli: リザルト画面で Esc キーを終了として解釈できる', () => {
+  const action = resolveResultScreenActionFromKey(undefined, createKey('escape', '\u001b'));
+  expect(action).toBe('escape');
+});
+
+test('cli: リザルト画面で Ctrl+C を終了として解釈できる', () => {
+  const action = resolveResultScreenActionFromKey(undefined, createKey(undefined, '\u0003'));
+  expect(action).toBe('ctrl-c');
+});
+
+function createKey(name?: string, sequence?: string): readline.Key {
+  return {
+    name,
+    sequence,
+    ctrl: false,
+    meta: false,
+    shift: false,
+  };
+}

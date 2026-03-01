@@ -188,6 +188,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
     miss: 0,
   };
   let combo = 0;
+  let interruptedReason: PlayerInterruptReason | undefined;
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
   const tui = createTuiIfEnabled(resolvedJson, options, 'AUTO', laneBindings, speed, 0);
@@ -209,6 +210,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
   if (!tui) {
     process.stdout.write('Auto play start\n');
     printLaneMap(laneBindings);
+    process.stdout.write('Press Ctrl+C or Esc to quit.\n');
   } else {
     tui.start();
     tui.setLatestJudge('READY');
@@ -223,70 +225,128 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
     });
   }
 
+  const stdin = process.stdin as NodeJS.ReadStream & { isRaw?: boolean };
+  const wasRawMode = Boolean(stdin.isRaw);
+  const canCaptureInput = process.stdin.isTTY;
+  let inputCaptureStopped = false;
+
+  const stopInputCapture = (): void => {
+    if (!canCaptureInput || inputCaptureStopped) {
+      return;
+    }
+    inputCaptureStopped = true;
+    process.stdin.removeListener('keypress', onKeyPress);
+    process.stdin.setRawMode(wasRawMode);
+  };
+
+  const onKeyPress = (_chunk: string, key: readline.Key): void => {
+    if (interruptedReason) {
+      return;
+    }
+    if (key.sequence === '\u0003') {
+      interruptedReason = 'ctrl-c';
+      stopInputCapture();
+      return;
+    }
+    if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b') {
+      interruptedReason = 'escape';
+      stopInputCapture();
+    }
+  };
+
+  if (canCaptureInput) {
+    readline.emitKeypressEvents(process.stdin);
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on('keypress', onKeyPress);
+  }
+
   try {
     await delay(leadInMs);
-    audioSession?.start();
+    if (!interruptedReason) {
+      audioSession?.start();
 
-    const startedAt = performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0);
-    for (const note of notes) {
-      const scheduledMs = (note.seconds * 1000) / speed;
-
-      while (true) {
-        const nowMs = performance.now() - startedAt;
-        if (nowMs >= scheduledMs) {
+      const startedAt = performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0);
+      for (const note of notes) {
+        if (interruptedReason) {
           break;
         }
-        const nowSec = elapsedMsToGameSeconds(nowMs, speed);
-        const nowBeat = beatAtSeconds(nowSec);
-        tui?.render({
-          currentBeat: nowBeat,
-          currentSeconds: nowSec,
-          totalSeconds,
-          summary,
-          notes,
-          ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
-        });
-        await waitPrecise(Math.max(1, Math.min(TUI_FRAME_INTERVAL_MS, scheduledMs - nowMs)));
+        const scheduledMs = (note.seconds * 1000) / speed;
+
+        while (true) {
+          if (interruptedReason) {
+            break;
+          }
+          const nowMs = performance.now() - startedAt;
+          if (nowMs >= scheduledMs) {
+            break;
+          }
+          const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+          const nowBeat = beatAtSeconds(nowSec);
+          tui?.render({
+            currentBeat: nowBeat,
+            currentSeconds: nowSec,
+            totalSeconds,
+            summary,
+            notes,
+            ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
+          });
+          await waitPrecise(Math.max(1, Math.min(TUI_FRAME_INTERVAL_MS, scheduledMs - nowMs)));
+        }
+        if (interruptedReason) {
+          break;
+        }
+
+        note.judged = true;
+        summary.perfect += 1;
+        combo += 1;
+
+        const key = keyMap.get(note.channel) ?? '?';
+        if (!tui) {
+          process.stdout.write(`AUTO ${formatSeconds(note.seconds)}s channel:${note.channel} key:${key}\n`);
+        } else {
+          tui.flashLane(note.channel);
+          if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
+            note.visibleUntilBeat = note.endBeat;
+            tui.holdLaneUntilBeat(note.channel, note.endBeat);
+          }
+          tui.setLatestJudge('PERFECT');
+          tui.setCombo(combo);
+          tui.render({
+            currentBeat: note.beat,
+            currentSeconds: note.seconds,
+            totalSeconds,
+            summary,
+            notes,
+            ...createBgaRenderFrame(bgaRenderer, note.seconds, preferSixel),
+          });
+        }
       }
 
-      note.judged = true;
-      summary.perfect += 1;
-      combo += 1;
-
-      const key = keyMap.get(note.channel) ?? '?';
-      if (!tui) {
-        process.stdout.write(`AUTO ${formatSeconds(note.seconds)}s channel:${note.channel} key:${key}\n`);
-      } else {
-        tui.flashLane(note.channel);
-        if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
-          note.visibleUntilBeat = note.endBeat;
-          tui.holdLaneUntilBeat(note.channel, note.endBeat);
-        }
-        tui.setLatestJudge('PERFECT');
-        tui.setCombo(combo);
-        tui.render({
-          currentBeat: note.beat,
-          currentSeconds: note.seconds,
+      if (!interruptedReason) {
+        tui?.render({
+          currentBeat: beatAtSeconds(totalSeconds),
+          currentSeconds: totalSeconds,
           totalSeconds,
           summary,
           notes,
-          ...createBgaRenderFrame(bgaRenderer, note.seconds, preferSixel),
+          ...createBgaRenderFrame(bgaRenderer, totalSeconds, preferSixel),
         });
       }
     }
-
-    tui?.render({
-      currentBeat: beatAtSeconds(totalSeconds),
-      currentSeconds: totalSeconds,
-      totalSeconds,
-      summary,
-      notes,
-      ...createBgaRenderFrame(bgaRenderer, totalSeconds, preferSixel),
-    });
   } finally {
-    await audioSession?.finish();
+    stopInputCapture();
+    if (interruptedReason) {
+      await audioSession?.dispose();
+    } else {
+      await audioSession?.finish();
+      await audioSession?.dispose();
+    }
     tui?.stop();
-    await audioSession?.dispose();
+  }
+
+  if (interruptedReason === 'ctrl-c') {
+    throw new PlayerInterruptedError(interruptedReason);
   }
 
   process.stdout.write(renderSummary(summary));
@@ -337,7 +397,8 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   if (!tui) {
     process.stdout.write('Manual play start\n');
     process.stdout.write(`Judge window: +/-${judgeWindowMs}ms\n`);
-    process.stdout.write('Press Ctrl+C or Esc to quit.\n');
+    process.stdout.write('Press Ctrl+C to quit.\n');
+    process.stdout.write('Press Esc to stop and open result.\n');
     printLaneMap(laneBindings);
   } else {
     tui.start();
@@ -594,6 +655,10 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   }
 
   if (interruptedReason) {
+    if (interruptedReason === 'escape') {
+      process.stdout.write(renderSummary(summary));
+      return summary;
+    }
     throw new PlayerInterruptedError(interruptedReason);
   }
 
