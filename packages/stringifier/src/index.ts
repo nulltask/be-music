@@ -1,5 +1,5 @@
 import {
-  eventToBeat,
+  createBeatResolver,
   intToBase36,
   isSampleTriggerChannel,
   normalizeChannel,
@@ -44,10 +44,12 @@ export function stringifyBms(json: BmsJson, options: BmsStringifyOptions = {}): 
 export function stringifyBmson(json: BmsJson, options: BmsonStringifyOptions = {}): string {
   const resolution = resolveBmsonResolutionForOutput(json, options);
   const indent = options.indent ?? 2;
+  const sortedEvents = sortEvents(json.events);
+  const beatResolver = createBeatResolver(json);
 
   const playableChannels = [
     ...new Set(
-      json.events
+      sortedEvents
         .filter((event) => isSampleTriggerChannel(event.channel) && normalizeChannel(event.channel) !== '01')
         .map((event) => normalizeChannel(event.channel)),
     ),
@@ -60,32 +62,32 @@ export function stringifyBmson(json: BmsJson, options: BmsonStringifyOptions = {
     string,
     { name: string; notes: Array<{ x: number; y: number; l: number; c: boolean }> }
   >();
+  const bpmEvents: Array<{ y: number; bpm: number }> = [];
+  const stopEvents: Array<{ y: number; duration: number }> = [];
 
-  for (const event of sortEvents(json.events)) {
-    if (!isSampleTriggerChannel(event.channel)) {
+  for (const event of sortedEvents) {
+    const channel = normalizeChannel(event.channel);
+    const isSampleChannel = isSampleTriggerChannel(channel);
+    if (!isSampleChannel && channel !== '03' && channel !== '08' && channel !== '09') {
       continue;
     }
-    const key = normalizeObjectKey(event.value);
-    const fileName = json.resources.wav[key] ?? key;
-    const y = Math.round(eventToBeat(json, event) * resolution);
-    const channel = normalizeChannel(event.channel);
-    const x = channel === '01' ? 0 : (xMap.get(channel) ?? 0);
 
-    const length =
-      typeof event.bmson?.l === 'number' && Number.isFinite(event.bmson.l) && event.bmson.l >= 0
-        ? Math.floor(event.bmson.l)
-        : 0;
-    const continuation = event.bmson?.c === true;
+    const y = Math.round(beatResolver.eventToBeat(event) * resolution);
+    if (isSampleChannel) {
+      const key = normalizeObjectKey(event.value);
+      const fileName = json.resources.wav[key] ?? key;
+      const x = channel === '01' ? 0 : (xMap.get(channel) ?? 0);
+      const length =
+        typeof event.bmson?.l === 'number' && Number.isFinite(event.bmson.l) && event.bmson.l >= 0
+          ? Math.floor(event.bmson.l)
+          : 0;
+      const continuation = event.bmson?.c === true;
 
-    const slot = soundChannels.get(key) ?? { name: fileName, notes: [] };
-    slot.notes.push({ x, y, l: length, c: continuation });
-    soundChannels.set(key, slot);
-  }
+      const slot = soundChannels.get(key) ?? { name: fileName, notes: [] };
+      slot.notes.push({ x, y, l: length, c: continuation });
+      soundChannels.set(key, slot);
+    }
 
-  const bpmEvents: Array<{ y: number; bpm: number }> = [];
-  for (const event of sortEvents(json.events)) {
-    const channel = normalizeChannel(event.channel);
-    const y = Math.round(eventToBeat(json, event) * resolution);
     if (channel === '03') {
       const bpm = parseBpmFrom03Token(event.value);
       if (bpm > 0) {
@@ -98,22 +100,14 @@ export function stringifyBmson(json: BmsJson, options: BmsonStringifyOptions = {
       if (typeof bpm === 'number' && bpm > 0) {
         bpmEvents.push({ y, bpm });
       }
-    }
-  }
-
-  const stopEvents: Array<{ y: number; duration: number }> = [];
-  for (const event of sortEvents(json.events)) {
-    if (normalizeChannel(event.channel) !== '09') {
       continue;
     }
-    const duration = json.resources.stop[normalizeObjectKey(event.value)];
-    if (typeof duration !== 'number' || duration <= 0) {
-      continue;
+    if (channel === '09') {
+      const duration = json.resources.stop[normalizeObjectKey(event.value)];
+      if (typeof duration === 'number' && duration > 0) {
+        stopEvents.push({ y, duration });
+      }
     }
-    stopEvents.push({
-      y: Math.round(eventToBeat(json, event) * resolution),
-      duration,
-    });
   }
 
   const bmson: Record<string, unknown> = {
@@ -411,7 +405,13 @@ function groupEvents(events: BmsEvent[]): Map<string, BmsEvent[]> {
       if (measureDelta !== 0) {
         return measureDelta;
       }
-      return leftChannel.localeCompare(rightChannel);
+      if (leftChannel < rightChannel) {
+        return -1;
+      }
+      if (leftChannel > rightChannel) {
+        return 1;
+      }
+      return 0;
     }),
   );
 }

@@ -166,6 +166,11 @@ export interface MeasurePosition {
   position: number;
 }
 
+export interface BeatResolver {
+  measureToBeat: (measure: number, position?: number) => number;
+  eventToBeat: (event: BmsEvent) => number;
+}
+
 export const DEFAULT_BPM = 120;
 
 export function createEmptyJson(sourceFormat: BmsSourceFormat = 'bms'): BmsJson {
@@ -282,6 +287,56 @@ export function eventToBeat(json: BmsJson, event: BmsEvent): number {
   return measureToBeat(json, event.measure, getEventPosition(event));
 }
 
+export function createBeatResolver(json: BmsJson): BeatResolver {
+  const measureLengths = new Map<number, number>();
+  let maxDefinedMeasure = -1;
+  for (const measure of json.measures) {
+    const normalizedIndex = Math.max(0, Math.floor(measure.index));
+    const normalizedLength = Number.isFinite(measure.length) && measure.length > 0 ? measure.length : 1;
+    measureLengths.set(normalizedIndex, normalizedLength);
+    if (normalizedIndex > maxDefinedMeasure) {
+      maxDefinedMeasure = normalizedIndex;
+    }
+  }
+
+  const measureStartBeats: number[] = [];
+  let cumulativeBeats = 0;
+  for (let measure = 0; measure <= maxDefinedMeasure; measure += 1) {
+    measureStartBeats[measure] = cumulativeBeats;
+    cumulativeBeats += getMeasureBeats(measureLengths.get(measure) ?? 1);
+  }
+  const denseLimit = maxDefinedMeasure + 1;
+
+  const resolveMeasureStartBeat = (measure: number): number => {
+    if (measure <= 0) {
+      return 0;
+    }
+    if (measure < denseLimit) {
+      return measureStartBeats[measure] ?? 0;
+    }
+    // Measures beyond the defined range default to length=1 (4 beats).
+    return cumulativeBeats + (measure - denseLimit) * 4;
+  };
+
+  const resolveMeasureLength = (measure: number): number => measureLengths.get(measure) ?? 1;
+
+  return {
+    measureToBeat: (measure, position = 0) => {
+      const safeMeasure = Math.max(0, Math.floor(measure));
+      const safePosition = clamp01(position);
+      const start = resolveMeasureStartBeat(safeMeasure);
+      const measureBeats = getMeasureBeats(resolveMeasureLength(safeMeasure));
+      return start + measureBeats * safePosition;
+    },
+    eventToBeat: (event) => {
+      const safeMeasure = Math.max(0, Math.floor(event.measure));
+      const start = resolveMeasureStartBeat(safeMeasure);
+      const measureBeats = getMeasureBeats(resolveMeasureLength(safeMeasure));
+      return start + measureBeats * getEventPosition(event);
+    },
+  };
+}
+
 export function beatToMeasurePosition(json: BmsJson, beat: number): MeasurePosition {
   if (beat <= 0) {
     return { measure: 0, position: 0 };
@@ -314,9 +369,12 @@ export function sortEvents(events: BmsEvent[]): BmsEvent[] {
       return positionDelta;
     }
     if (left.channel !== right.channel) {
-      return left.channel.localeCompare(right.channel);
+      return left.channel < right.channel ? -1 : 1;
     }
-    return left.value.localeCompare(right.value);
+    if (left.value !== right.value) {
+      return left.value < right.value ? -1 : 1;
+    }
+    return 0;
   });
 }
 
@@ -385,12 +443,24 @@ function compareEventPosition(left: BmsEvent, right: BmsEvent): number {
     return leftNumerator - rightNumerator;
   }
 
-  const leftScaled = BigInt(leftNumerator) * BigInt(rightDenominator);
-  const rightScaled = BigInt(rightNumerator) * BigInt(leftDenominator);
-  if (leftScaled < rightScaled) {
+  const leftScaled = leftNumerator * rightDenominator;
+  const rightScaled = rightNumerator * leftDenominator;
+  if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
+    if (leftScaled < rightScaled) {
+      return -1;
+    }
+    if (leftScaled > rightScaled) {
+      return 1;
+    }
+    return 0;
+  }
+
+  const leftScaledBigInt = BigInt(leftNumerator) * BigInt(rightDenominator);
+  const rightScaledBigInt = BigInt(rightNumerator) * BigInt(leftDenominator);
+  if (leftScaledBigInt < rightScaledBigInt) {
     return -1;
   }
-  if (leftScaled > rightScaled) {
+  if (leftScaledBigInt > rightScaledBigInt) {
     return 1;
   }
   return 0;

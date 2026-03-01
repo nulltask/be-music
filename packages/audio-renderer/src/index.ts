@@ -4,13 +4,14 @@ import { OggVorbisDecoder } from '@wasm-audio-decoders/ogg-vorbis';
 import { MPEGDecoder } from 'mpg123-decoder';
 import { OggOpusDecoder } from 'ogg-opus-decoder';
 import {
+  createBeatResolver,
   DEFAULT_BPM,
-  eventToBeat,
   isSampleTriggerChannel,
   normalizeChannel,
   normalizeObjectKey,
   parseBpmFrom03Token,
   sortEvents,
+  type BeatResolver,
   type BmsEvent,
   type BmsJson,
 } from '@be-music/json';
@@ -84,6 +85,11 @@ interface DecodedAudio {
   right?: Float32Array;
 }
 
+interface TimingBuildContext {
+  sortedEvents: BmsEvent[];
+  beatResolver: BeatResolver;
+}
+
 const DEFAULT_SAMPLE_RATE = 44_100;
 const DEFAULT_TAIL_SECONDS = 2;
 const DEFAULT_GAIN = 0.9;
@@ -92,10 +98,15 @@ const MPG123_SUPPRESSED_LOG_PATTERNS = [
 ];
 
 export function createTimingResolver(json: BmsJson): TimingResolver {
-  const tempoPoints = createTempoPoints(json);
-  const stopPoints = createStopPoints(json, tempoPoints);
+  return createTimingResolverWithContext(json, createTimingBuildContext(json));
+}
 
-    const beatToSecondsWithoutStops = (beat: number): number => {
+function createTimingResolverWithContext(json: BmsJson, context: TimingBuildContext): TimingResolver {
+  const { sortedEvents, beatResolver } = context;
+  const tempoPoints = createTempoPoints(json, sortedEvents, beatResolver);
+  const stopPoints = createStopPoints(json, tempoPoints, sortedEvents, beatResolver);
+
+  const beatToSecondsWithoutStops = (beat: number): number => {
     if (beat <= 0 || tempoPoints.length === 0) {
       return 0;
     }
@@ -106,7 +117,7 @@ export function createTimingResolver(json: BmsJson): TimingResolver {
     return point.seconds + (deltaBeat * 60) / point.bpm;
   };
 
-    const bpmAtBeat = (beat: number): number => {
+  const bpmAtBeat = (beat: number): number => {
     if (tempoPoints.length === 0) {
       return json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
     }
@@ -114,7 +125,7 @@ export function createTimingResolver(json: BmsJson): TimingResolver {
     return tempoPoints[Math.max(0, index)].bpm;
   };
 
-    const beatToSeconds = (beat: number): number => {
+  const beatToSeconds = (beat: number): number => {
     const base = beatToSecondsWithoutStops(beat);
     if (stopPoints.length === 0) {
       return base;
@@ -131,22 +142,32 @@ export function createTimingResolver(json: BmsJson): TimingResolver {
     stopPoints,
     bpmAtBeat,
     beatToSeconds,
-    eventToSeconds: (event) => beatToSeconds(eventToBeat(json, event)),
+    eventToSeconds: (event) => beatToSeconds(beatResolver.eventToBeat(event)),
   };
 }
 
 export function collectSampleTriggers(json: BmsJson, resolver = createTimingResolver(json)): TimedSampleTrigger[] {
-  const events = sortEvents(json.events).filter((event) => isSampleTriggerChannel(event.channel));
+  return collectSampleTriggersWithContext(json, resolver, createTimingBuildContext(json));
+}
+
+function collectSampleTriggersWithContext(
+  json: BmsJson,
+  resolver: TimingResolver,
+  context: TimingBuildContext,
+): TimedSampleTrigger[] {
+  const { sortedEvents, beatResolver } = context;
+  const events = sortedEvents.filter((event) => isSampleTriggerChannel(event.channel));
   const bmsonPlaybackMap =
-    json.sourceFormat === 'bmson' ? createBmsonSamplePlaybackMap(json, resolver, events) : undefined;
+    json.sourceFormat === 'bmson' ? createBmsonSamplePlaybackMap(json, resolver, events, beatResolver) : undefined;
 
   return events.map((event) => {
     const sampleKey = normalizeObjectKey(event.value);
     const playback = bmsonPlaybackMap?.get(event);
+    const beat = beatResolver.eventToBeat(event);
     return {
       event,
-      beat: eventToBeat(json, event),
-      seconds: resolver.eventToSeconds(event),
+      beat,
+      seconds: resolver.beatToSeconds(beat),
       channel: normalizeChannel(event.channel),
       sampleKey,
       samplePath: json.resources.wav[sampleKey],
@@ -166,8 +187,9 @@ export async function renderJson(json: BmsJson, options: RenderOptions = {}): Pr
   const baseDir = options.baseDir ?? process.cwd();
   const onSampleLoadProgress = options.onSampleLoadProgress;
 
-  const resolver = createTimingResolver(json);
-  const triggers = collectSampleTriggers(json, resolver);
+  const timingContext = createTimingBuildContext(json);
+  const resolver = createTimingResolverWithContext(json, timingContext);
+  const triggers = collectSampleTriggersWithContext(json, resolver, timingContext);
 
   const loadedSamples = new Map<string, StereoSample>();
   const resolvedPathCache = new Map<string, string | undefined>();
@@ -258,6 +280,13 @@ export async function renderJson(json: BmsJson, options: RenderOptions = {}): Pr
   };
 }
 
+function createTimingBuildContext(json: BmsJson): TimingBuildContext {
+  return {
+    sortedEvents: sortEvents(json.events),
+    beatResolver: createBeatResolver(json),
+  };
+}
+
 export async function renderChartFile(
   inputPath: string,
   outputPath: string,
@@ -280,30 +309,28 @@ export async function writeAudioFile(outputPath: string, result: RenderResult): 
   await writeFile(destination, encoded);
 }
 
-function createTempoPoints(json: BmsJson): TempoPoint[] {
+function createTempoPoints(json: BmsJson, sortedEvents: BmsEvent[], beatResolver: BeatResolver): TempoPoint[] {
   const baseBpm = json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
   const points: TempoPoint[] = [{ beat: 0, bpm: baseBpm, seconds: 0 }];
-
-  const changes = sortEvents(json.events)
-    .map((event) => {
-      const channel = normalizeChannel(event.channel);
-      const beat = eventToBeat(json, event);
-      if (channel === '03') {
-        const bpm = parseBpmFrom03Token(event.value);
-        if (bpm > 0) {
-          return { beat, bpm };
-        }
+  const changes: Array<{ beat: number; bpm: number }> = [];
+  for (const event of sortedEvents) {
+    const channel = normalizeChannel(event.channel);
+    if (channel !== '03' && channel !== '08') {
+      continue;
+    }
+    const beat = beatResolver.eventToBeat(event);
+    if (channel === '03') {
+      const bpm = parseBpmFrom03Token(event.value);
+      if (bpm > 0) {
+        changes.push({ beat, bpm });
       }
-      if (channel === '08') {
-        const bpm = json.resources.bpm[normalizeObjectKey(event.value)];
-        if (typeof bpm === 'number' && bpm > 0) {
-          return { beat, bpm };
-        }
-      }
-      return undefined;
-    })
-    .filter((value): value is { beat: number; bpm: number } => value !== undefined)
-    .sort((left, right) => left.beat - right.beat);
+      continue;
+    }
+    const bpm = json.resources.bpm[normalizeObjectKey(event.value)];
+    if (typeof bpm === 'number' && bpm > 0) {
+      changes.push({ beat, bpm });
+    }
+  }
 
   for (const change of changes) {
     const last = points[points.length - 1];
@@ -327,21 +354,26 @@ function createTempoPoints(json: BmsJson): TempoPoint[] {
   return points;
 }
 
-function createStopPoints(json: BmsJson, tempoPoints: TempoPoint[]): StopPoint[] {
-  const stopEvents = sortEvents(json.events)
-    .filter((event) => normalizeChannel(event.channel) === '09')
-    .map((event) => {
-      const beat = eventToBeat(json, event);
-      const duration = json.resources.stop[normalizeObjectKey(event.value)];
-      if (typeof duration !== 'number' || duration <= 0) {
-        return undefined;
-      }
-      const bpm = bpmAtBeatFromTempoPoints(tempoPoints, beat);
-      const seconds = (duration / 192) * (60 / bpm);
-      return { beat, seconds };
-    })
-    .filter((value): value is { beat: number; seconds: number } => value !== undefined)
-    .sort((left, right) => left.beat - right.beat);
+function createStopPoints(
+  json: BmsJson,
+  tempoPoints: TempoPoint[],
+  sortedEvents: BmsEvent[],
+  beatResolver: BeatResolver,
+): StopPoint[] {
+  const stopEvents: Array<{ beat: number; seconds: number }> = [];
+  for (const event of sortedEvents) {
+    if (normalizeChannel(event.channel) !== '09') {
+      continue;
+    }
+    const beat = beatResolver.eventToBeat(event);
+    const duration = json.resources.stop[normalizeObjectKey(event.value)];
+    if (typeof duration !== 'number' || duration <= 0) {
+      continue;
+    }
+    const bpm = bpmAtBeatFromTempoPoints(tempoPoints, beat);
+    const seconds = (duration / 192) * (60 / bpm);
+    stopEvents.push({ beat, seconds });
+  }
 
   const points: StopPoint[] = [];
   let cumulativeSeconds = 0;
@@ -509,22 +541,27 @@ function createBmsonSamplePlaybackMap(
   json: BmsJson,
   resolver: TimingResolver,
   sampleEvents: BmsEvent[],
+  beatResolver: BeatResolver,
 ): Map<BmsEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }> {
   const perSampleKey = new Map<string, Array<{ event: BmsEvent; beat: number; seconds: number }>>();
   for (const event of sampleEvents) {
     const sampleKey = normalizeObjectKey(event.value);
-    const entries = perSampleKey.get(sampleKey) ?? [];
+    let entries = perSampleKey.get(sampleKey);
+    if (!entries) {
+      entries = [];
+      perSampleKey.set(sampleKey, entries);
+    }
+    const beat = beatResolver.eventToBeat(event);
     entries.push({
       event,
-      beat: eventToBeat(json, event),
-      seconds: resolver.eventToSeconds(event),
+      beat,
+      seconds: resolver.beatToSeconds(beat),
     });
-    perSampleKey.set(sampleKey, entries);
   }
 
   const playbackMap = new Map<BmsEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>();
   for (const entries of perSampleKey.values()) {
-    entries.sort((left, right) => left.beat - right.beat);
+    // sampleEvents are already beat-sorted, so each sample bucket keeps beat order.
     let anchorSeconds = 0;
     let hasAnchor = false;
     let sliceIndex = 0;
@@ -615,7 +652,7 @@ function createSamplePathCandidates(samplePath: string): string[] {
   const seen = new Set<string>();
   const candidates: string[] = [];
 
-    const push = (value: string): void => {
+  const push = (value: string): void => {
     const normalized = value.trim();
     if (normalized.length === 0 || seen.has(normalized)) {
       return;

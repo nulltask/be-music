@@ -2,8 +2,8 @@ import { basename, dirname, resolve } from 'node:path';
 import readline from 'node:readline';
 import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
 import {
+  createBeatResolver,
   createEmptyJson,
-  measureToBeat,
   type BmsEvent,
   type BmsJson,
   isPlayableChannel,
@@ -73,7 +73,7 @@ export class PlayerInterruptedError extends Error {
 
   readonly exitCode: number;
 
-    constructor(reason: PlayerInterruptReason) {
+  constructor(reason: PlayerInterruptReason) {
     super(`Player interrupted: ${reason}`);
     this.reason = reason;
     this.exitCode = reason === 'ctrl-c' ? 130 : 0;
@@ -431,14 +431,14 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   const activeLongNotesByChannel = new Map<string, { endSeconds: number }>();
   const longNoteSuppressUntilSecondsByChannel = new Map<string, number>();
 
-    const stopInputCapture = () => {
+  const stopInputCapture = () => {
     process.stdin.removeListener('keypress', onKeyPress);
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(false);
     }
   };
 
-    const onKeyPress = (chunk: string, key: readline.Key): void => {
+  const onKeyPress = (chunk: string, key: readline.Key): void => {
     if (interruptedReason) {
       return;
     }
@@ -684,9 +684,11 @@ function createTuiIfEnabled(
     channel: binding.channel,
     key: binding.keyLabel,
   }));
-  const measureTimeline = createMeasureTimeline(json);
-  const bpmTimeline = createBpmTimeline(json);
-  const measureBoundariesBeats = createMeasureBoundariesBeats(json);
+  const timingResolver = createTimingResolver(json);
+  const beatResolver = createBeatResolver(json);
+  const measureTimeline = createMeasureTimeline(json, timingResolver, beatResolver);
+  const bpmTimeline = createBpmTimeline(json, timingResolver);
+  const measureBoundariesBeats = createMeasureBoundariesBeats(json, beatResolver);
   const tui = new PlayerTui({
     mode,
     title: json.metadata.title ?? 'Untitled',
@@ -854,7 +856,7 @@ async function createAudioSessionIfEnabled(
     process.stdout.write(`Audio playback stream error (${output.backend}).\n`);
   });
 
-    const finish = async (): Promise<void> => {
+  const finish = async (): Promise<void> => {
     if (closed) {
       return;
     }
@@ -872,7 +874,7 @@ async function createAudioSessionIfEnabled(
     await dispose();
   };
 
-    const dispose = async (): Promise<void> => {
+  const dispose = async (): Promise<void> => {
     if (closed) {
       return;
     }
@@ -1173,7 +1175,8 @@ async function buildPlayableSampleMap(
 
 function buildPlayableNotePlaybackMap(json: BmsJson): Map<BmsEvent, PlayableNotePlayback> {
   const playbackMap = new Map<BmsEvent, PlayableNotePlayback>();
-  for (const trigger of collectSampleTriggers(json, createTimingResolver(json))) {
+  const resolver = createTimingResolver(json);
+  for (const trigger of collectSampleTriggers(json, resolver)) {
     if (!isPlayableChannel(trigger.channel)) {
       continue;
     }
@@ -1327,14 +1330,17 @@ function findLastLaneIndex(bindings: LaneBinding[], predicate: (binding: LaneBin
   return -1;
 }
 
-function createMeasureTimeline(json: BmsJson): MeasureTimelinePoint[] {
-  const resolver = createTimingResolver(json);
+function createMeasureTimeline(
+  json: BmsJson,
+  resolver: ReturnType<typeof createTimingResolver>,
+  beatResolver: ReturnType<typeof createBeatResolver>,
+): MeasureTimelinePoint[] {
   const maxEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
   const maxDefinedMeasure = json.measures.reduce((max, measure) => Math.max(max, measure.index), 0);
   const maxMeasure = Math.max(0, maxEventMeasure, maxDefinedMeasure);
   const timeline: MeasureTimelinePoint[] = [];
   for (let measure = 0; measure <= maxMeasure + 1; measure += 1) {
-    const seconds = resolver.beatToSeconds(measureToBeat(json, measure, 0));
+    const seconds = resolver.beatToSeconds(beatResolver.measureToBeat(measure, 0));
     if (!Number.isFinite(seconds)) {
       continue;
     }
@@ -1344,8 +1350,7 @@ function createMeasureTimeline(json: BmsJson): MeasureTimelinePoint[] {
   return timeline;
 }
 
-function createBpmTimeline(json: BmsJson): BpmTimelinePoint[] {
-  const resolver = createTimingResolver(json);
+function createBpmTimeline(json: BmsJson, resolver: ReturnType<typeof createTimingResolver>): BpmTimelinePoint[] {
   const timeline: BpmTimelinePoint[] = [];
   let previousSeconds = Number.NaN;
   let previousBpm = Number.NaN;
@@ -1446,7 +1451,7 @@ function secondsToBeatWithoutStops(
   return point.beat + (elapsed * point.bpm) / 60;
 }
 
-function createMeasureBoundariesBeats(json: BmsJson): number[] {
+function createMeasureBoundariesBeats(json: BmsJson, beatResolver: ReturnType<typeof createBeatResolver>): number[] {
   const maxEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
   const maxDefinedMeasure = json.measures.reduce((max, measure) => Math.max(max, measure.index), 0);
   const maxMeasure = Math.max(0, maxEventMeasure, maxDefinedMeasure);
@@ -1454,7 +1459,7 @@ function createMeasureBoundariesBeats(json: BmsJson): number[] {
   let previous = Number.NaN;
 
   for (let measure = 0; measure <= maxMeasure + 1; measure += 1) {
-    const beat = measureToBeat(json, measure, 0);
+    const beat = beatResolver.measureToBeat(measure, 0);
     if (!Number.isFinite(beat)) {
       continue;
     }

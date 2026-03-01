@@ -1,5 +1,5 @@
 import {
-  eventToBeat,
+  createBeatResolver,
   type BmsEvent,
   type BmsJson,
   isPlayableChannel,
@@ -22,10 +22,11 @@ export interface TimedPlayableNote {
 
 export function extractPlayableNotes(json: BmsJson): TimedPlayableNote[] {
   const resolver = createTimingResolver(json);
+  const beatResolver = createBeatResolver(json);
   const notes = sortEvents(json.events)
     .filter((event) => isPlayableChannel(event.channel))
     .map((event) => {
-      const beat = eventToBeat(json, event);
+      const beat = beatResolver.eventToBeat(event);
       const endBeat = resolveLongNoteEndBeat(json, event, beat);
       return {
         event,
@@ -33,7 +34,7 @@ export function extractPlayableNotes(json: BmsJson): TimedPlayableNote[] {
         beat,
         endBeat,
         endSeconds: endBeat !== undefined ? resolver.beatToSeconds(endBeat) : undefined,
-        seconds: resolver.eventToSeconds(event),
+        seconds: resolver.beatToSeconds(beat),
         judged: false,
       };
     })

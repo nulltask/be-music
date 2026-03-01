@@ -1,6 +1,6 @@
 import { access, readFile } from 'node:fs/promises';
 import { extname, isAbsolute, resolve } from 'node:path';
-import { normalizeChannel, normalizeObjectKey, sortEvents, type BmsJson } from '@be-music/json';
+import { normalizeChannel, normalizeObjectKey, sortEvents, type BmsEvent, type BmsJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import bmp from 'bmp-js';
 import jpeg from 'jpeg-js';
@@ -176,9 +176,10 @@ export async function createBgaAnsiRenderer(
   const width = Math.max(8, Math.floor(options.width ?? DEFAULT_BGA_ASCII_WIDTH));
   const height = Math.max(6, Math.floor(options.height ?? DEFAULT_BGA_ASCII_HEIGHT));
   const resolver = createTimingResolver(json);
+  const sortedEvents = sortEvents(json.events);
 
-  const baseTimeline = buildBgaTimeline(json, resolver, BASE_BGA_CHANNEL);
-  const layerTimeline = buildBgaTimeline(json, resolver, LAYER_BGA_CHANNEL);
+  const baseTimeline = buildBgaTimeline(sortedEvents, resolver, BASE_BGA_CHANNEL);
+  const layerTimeline = buildBgaTimeline(sortedEvents, resolver, LAYER_BGA_CHANNEL);
 
   const baseKeys = new Set(baseTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layerKeys = new Set(layerTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
@@ -236,37 +237,47 @@ async function loadFramesByKeys(params: {
 }): Promise<Map<string, AnsiFrame>> {
   const { keys, resources, baseDir, width, height, mode } = params;
   const map = new Map<string, AnsiFrame>();
+  const loaded = await Promise.all(
+    [...keys].map(async (key) => {
+      const resourcePath = resources[key];
+      if (!resourcePath) {
+        return undefined;
+      }
+      const resolved = await resolveImagePath(baseDir, resourcePath);
+      if (!resolved) {
+        return undefined;
+      }
+      const frame = await loadImageAsAnsiFrame(resolved, width, height, mode);
+      return frame ? ([key, frame] as const) : undefined;
+    }),
+  );
 
-  for (const key of keys) {
-    const resourcePath = resources[key];
-    if (!resourcePath) {
-      continue;
-    }
-    const resolved = await resolveImagePath(baseDir, resourcePath);
-    if (!resolved) {
-      continue;
-    }
-    const frame = await loadImageAsAnsiFrame(resolved, width, height, mode);
-    if (frame) {
-      map.set(key, frame);
+  for (const entry of loaded) {
+    if (entry) {
+      map.set(entry[0], entry[1]);
     }
   }
 
   return map;
 }
 
-function buildBgaTimeline(json: BmsJson, resolver: ReturnType<typeof createTimingResolver>, channel: string): BgaCue[] {
+function buildBgaTimeline(
+  sortedEvents: BmsEvent[],
+  resolver: ReturnType<typeof createTimingResolver>,
+  channel: string,
+): BgaCue[] {
   const normalized = normalizeChannel(channel);
-  const timeline = sortEvents(json.events)
-    .filter((event) => normalizeChannel(event.channel) === normalized)
-    .map((event) => {
-      const key = normalizeObjectKey(event.value);
-      return {
-        seconds: resolver.eventToSeconds(event),
-        key: key === '00' ? undefined : key,
-      } satisfies BgaCue;
-    })
-    .sort((left, right) => left.seconds - right.seconds);
+  const timeline: BgaCue[] = [];
+  for (const event of sortedEvents) {
+    if (normalizeChannel(event.channel) !== normalized) {
+      continue;
+    }
+    const key = normalizeObjectKey(event.value);
+    timeline.push({
+      seconds: resolver.eventToSeconds(event),
+      key: key === '00' ? undefined : key,
+    });
+  }
 
   if (timeline.length < 2) {
     return timeline;
@@ -524,7 +535,7 @@ function encodeSixelRunLength(input: string): string {
   let current = input[0];
   let runLength = 1;
 
-    const flush = (): void => {
+  const flush = (): void => {
     if (runLength >= 4) {
       encoded += `!${runLength}${current}`;
       return;
@@ -577,7 +588,7 @@ function createImagePathCandidates(imagePath: string): string[] {
   const extCandidates = ['.bmp', '.BMP', '.png', '.PNG', '.jpg', '.JPG', '.jpeg', '.JPEG'];
   const candidates: string[] = [];
   const seen = new Set<string>();
-    const push = (value: string): void => {
+  const push = (value: string): void => {
     const normalized = value.trim();
     if (normalized.length === 0 || seen.has(normalized)) {
       return;
@@ -685,7 +696,14 @@ function createMissingFrame(maxWidth: number, maxHeight: number, mode: FrameMode
   return resizeAnsiFrame(specFrame, maxWidth, maxHeight);
 }
 
-function createSolidAnsiFrame(width: number, height: number, r: number, g: number, b: number, maskFill: 0 | 1): AnsiFrame {
+function createSolidAnsiFrame(
+  width: number,
+  height: number,
+  r: number,
+  g: number,
+  b: number,
+  maskFill: 0 | 1,
+): AnsiFrame {
   const safeWidth = Math.max(1, width);
   const safeHeight = Math.max(1, height);
   const rgb = new Uint8Array(safeWidth * safeHeight * 3);

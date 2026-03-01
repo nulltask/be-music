@@ -199,6 +199,10 @@ export function parseBms(input: string): BmsJson {
 
 export function parseBmson(input: string): BmsJson {
   const document = JSON.parse(input) as BmsonDocument;
+  return parseBmsonDocument(document);
+}
+
+function parseBmsonDocument(document: BmsonDocument): BmsJson {
   const json = createEmptyJson('bmson');
 
   const info = document.info ?? {};
@@ -328,6 +332,10 @@ export function parseBmson(input: string): BmsJson {
 
 export function parseJson(input: string): BmsJson {
   const raw = JSON.parse(input) as Partial<BmsJson>;
+  return parseJsonDocument(raw);
+}
+
+function parseJsonDocument(raw: Partial<BmsJson>): BmsJson {
   const json = createEmptyJson(raw.sourceFormat ?? 'json');
   json.sourceFormat = raw.sourceFormat ?? 'json';
   json.metadata = {
@@ -360,6 +368,13 @@ export function parseJson(input: string): BmsJson {
   return json;
 }
 
+function parseStructuredChartObject(parsed: Record<string, unknown>): BmsJson {
+  if (parsed.format === BMS_JSON_FORMAT) {
+    return parseJsonDocument(parsed as Partial<BmsJson>);
+  }
+  return parseBmsonDocument(parsed as BmsonDocument);
+}
+
 export function parseChart(input: string, formatHint?: string): BmsJson {
   const hint = formatHint?.toLowerCase();
   if (hint === 'bmson') {
@@ -367,19 +382,13 @@ export function parseChart(input: string, formatHint?: string): BmsJson {
   }
   if (hint === 'json') {
     const parsed = JSON.parse(input.trim()) as Record<string, unknown>;
-    if (parsed.format === BMS_JSON_FORMAT) {
-      return parseJson(input);
-    }
-    return parseBmson(input);
+    return parseStructuredChartObject(parsed);
   }
 
   const trimmed = input.trimStart();
   if (trimmed.startsWith('{')) {
     const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-    if (parsed.format === BMS_JSON_FORMAT) {
-      return parseJson(trimmed);
-    }
-    return parseBmson(trimmed);
+    return parseStructuredChartObject(parsed);
   }
 
   return parseBms(input);
@@ -634,18 +643,15 @@ function pushObjectDataLine(
     return;
   }
 
-  const tokens = splitTokens(data);
-  tokens.forEach((token, index) => {
-    if (token === '00') {
-      return;
-    }
+  const parsed = collectNonZeroObjectTokens(data);
+  for (const token of parsed.tokens) {
     json.events.push({
       measure,
       channel,
-      position: [index, tokens.length],
-      value: normalizeObjectKey(token),
+      position: [token.index, parsed.tokenCount],
+      value: token.value,
     });
-  });
+  }
 }
 
 function pushHeaderLine(json: BmsJson, command: string, value: string): void {
@@ -1005,8 +1011,13 @@ function migrateBmsExtensionHeadersFromExtras(json: BmsJson): void {
   json.metadata.extras = migratedExtras;
 }
 
-function splitTokens(input: string): string[] {
-  const tokens: string[] = [];
+function collectNonZeroObjectTokens(input: string): {
+  tokenCount: number;
+  tokens: Array<{ index: number; value: string }>;
+} {
+  // BMS object positions need the total token count (denominator), but only non-zero tokens become events.
+  const tokens: Array<{ index: number; value: string }> = [];
+  let tokenCount = 0;
   let high = '';
   for (let index = 0; index < input.length; index += 1) {
     const code = input.charCodeAt(index);
@@ -1018,10 +1029,14 @@ function splitTokens(input: string): string[] {
       high = normalized;
       continue;
     }
-    tokens.push(high + normalized);
+    const value = high + normalized;
+    if (value !== '00') {
+      tokens.push({ index: tokenCount, value });
+    }
+    tokenCount += 1;
     high = '';
   }
-  return tokens;
+  return { tokenCount, tokens };
 }
 
 function sortAndNormalizeEvents(events: Array<BmsEvent | Record<string, unknown>>): BmsEvent[] {
@@ -1042,9 +1057,12 @@ function sortAndNormalizeEvents(events: Array<BmsEvent | Record<string, unknown>
       return positionDelta;
     }
     if (left.channel !== right.channel) {
-      return left.channel.localeCompare(right.channel);
+      return left.channel < right.channel ? -1 : 1;
     }
-    return left.value.localeCompare(right.value);
+    if (left.value !== right.value) {
+      return left.value < right.value ? -1 : 1;
+    }
+    return 0;
   });
   return normalized;
 }
@@ -1909,19 +1927,16 @@ function createControlFlowObjectEntry(
     };
   }
 
-  const tokens = splitTokens(data);
+  const parsed = collectNonZeroObjectTokens(data);
   const events: BmsEvent[] = [];
-  tokens.forEach((token, index) => {
-    if (token === '00') {
-      return;
-    }
+  for (const token of parsed.tokens) {
     events.push({
       measure,
       channel,
-      position: [index, tokens.length],
-      value: normalizeObjectKey(token),
+      position: [token.index, parsed.tokenCount],
+      value: token.value,
     });
-  });
+  }
 
   if (events.length === 0) {
     return undefined;
