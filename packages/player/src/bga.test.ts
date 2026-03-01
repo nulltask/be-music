@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { PNG } from 'pngjs';
 import { encode as encodeBmpTs } from 'bmp-ts';
 import { createBgaAnsiRenderer } from './bga.ts';
@@ -14,8 +14,10 @@ interface RgbColor {
 }
 
 type Pixel = RgbColor | undefined;
+describe('player bga', () => {
 
-test('player bga: layer は黒透過で合成される', async () => {
+
+test('player bga: composites layer with black treated as transparent', async () => {
   const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-layer-'));
   try {
     await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
@@ -50,7 +52,7 @@ test('player bga: layer は黒透過で合成される', async () => {
   }
 });
 
-test('player bga: 256x256 未満は X 中央 / Y 上詰めで表示される', async () => {
+test('player bga: renders images smaller than 256x256 centered on X and top-aligned on Y', async () => {
   const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-small-'));
   try {
     await writePng(join(baseDir, 'small.png'), 128, 128, () => ({ r: 255, g: 255, b: 0, a: 255 }));
@@ -83,7 +85,7 @@ test('player bga: 256x256 未満は X 中央 / Y 上詰めで表示される', a
   }
 });
 
-test('player bga: 未定義の base キーは STAGEFILE ではなく黒表示になる', async () => {
+test('player bga: renders undefined base keys as black instead of STAGEFILE', async () => {
   const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-undefined-base-'));
   try {
     await writePng(join(baseDir, 'stage.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
@@ -233,3 +235,4 @@ function countColor(pixels: Pixel[][], color: RgbColor): number {
   }
   return count;
 }
+});
