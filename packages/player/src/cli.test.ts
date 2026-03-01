@@ -30,6 +30,18 @@ test('cli: デフォルトでは選曲プレビュー音声は無効', () => {
   expect(parsed.previewAudio).toBe(false);
 });
 
+test('cli: --debug-judge-window を解析できる', () => {
+  const parsed = parseArgs(['chart.bms', '--debug-judge-window', '280']);
+  expect(parsed.judgeWindowMs).toBe(280);
+  expect(parsed.judgeWindowSource).toBe('debug');
+});
+
+test('cli: --judge-window は非推奨エイリアスとして解析できる', () => {
+  const parsed = parseArgs(['chart.bms', '--judge-window', '260']);
+  expect(parsed.judgeWindowMs).toBe(260);
+  expect(parsed.judgeWindowSource).toBe('legacy');
+});
+
 test('cli: リザルト画面で r キーをリプレイとして解釈できる', () => {
   const action = resolveResultScreenActionFromKey('r', createKey());
   expect(action).toBe('replay');

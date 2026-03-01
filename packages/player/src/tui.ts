@@ -110,7 +110,7 @@ export class PlayerTui {
 
   private noteWindowBeat = Number.NEGATIVE_INFINITY;
 
-    constructor(options: TuiOptions) {
+  constructor(options: TuiOptions) {
     this.options = options;
     this.laneChannels = options.lanes.map((lane) => lane.channel);
     this.supported = Boolean(process.stdout.isTTY && process.stdin.isTTY);
@@ -123,15 +123,15 @@ export class PlayerTui {
     this.laneBlockVisibleWidth = calculateLaneBlockVisibleWidth(this.laneWidths, options.splitAfterIndex ?? -1);
   }
 
-    isSupported(): boolean {
+  isSupported(): boolean {
     return this.supported;
   }
 
-    isSixelEnabled(): boolean {
+  isSixelEnabled(): boolean {
     return this.sixelEnabled;
   }
 
-    start(): void {
+  start(): void {
     if (!this.supported || this.active) {
       return;
     }
@@ -139,7 +139,7 @@ export class PlayerTui {
     process.stdout.write('\u001b[?1049h\u001b[2J\u001b[H\u001b[?25l');
   }
 
-    stop(): void {
+  stop(): void {
     if (!this.active) {
       return;
     }
@@ -158,19 +158,19 @@ export class PlayerTui {
     process.stdout.write('\u001b[0m\u001b[?25h\u001b[?1049l');
   }
 
-    setLatestJudge(value: string): void {
+  setLatestJudge(value: string): void {
     this.latestJudge = value;
   }
 
-    setCombo(value: number): void {
+  setCombo(value: number): void {
     this.combo = Math.max(0, Math.floor(value));
   }
 
-    flashLane(channel: string): void {
+  flashLane(channel: string): void {
     this.laneFlashUntil.set(channel, Date.now() + FLASH_DURATION_MS);
   }
 
-    holdLaneUntilBeat(channel: string, beat: number): void {
+  holdLaneUntilBeat(channel: string, beat: number): void {
     if (!Number.isFinite(beat)) {
       return;
     }
@@ -181,7 +181,7 @@ export class PlayerTui {
     this.laneHoldUntilBeat.set(channel, beat);
   }
 
-    render(frame: TuiFrame): void {
+  render(frame: TuiFrame): void {
     if (!this.active) {
       return;
     }
@@ -287,7 +287,7 @@ export class PlayerTui {
       `${renderProgress(frame.currentSeconds, frame.totalSeconds)}  ${formatSeconds(frame.currentSeconds)} / ${formatSeconds(frame.totalSeconds)} sec`,
     );
     lines.push(
-      `SPEED x${this.options.speed.toFixed(2)}  WINDOW ±${this.options.judgeWindowMs}ms  BPM ${formatBpm(findCurrentBpm(this.options.bpmTimeline, frame.currentSeconds))}`,
+      `SPEED x${this.options.speed.toFixed(2)}  BAD ±${this.options.judgeWindowMs}ms  BPM ${formatBpm(findCurrentBpm(this.options.bpmTimeline, frame.currentSeconds))}`,
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
@@ -297,7 +297,7 @@ export class PlayerTui {
     );
     lines.push(`NOTES ${formatNotesProgress(frame.summary)}`);
     lines.push(
-      `PERFECT ${frame.summary.perfect}  GREAT ${frame.summary.great}  GOOD ${frame.summary.good}  MISS ${frame.summary.miss}`,
+      `PERFECT ${frame.summary.perfect}  GREAT ${frame.summary.great}  GOOD ${frame.summary.good}  BAD ${frame.summary.bad}  MISS ${frame.summary.miss}`,
     );
     lines.push('');
     const laneLines: string[] = [];
@@ -334,7 +334,7 @@ export class PlayerTui {
     );
 
     laneLines.push(
-      centerVisible(`${this.latestJudge}${this.combo > 0 ? ` ${this.combo}` : ''}`, this.laneBlockVisibleWidth),
+      centerVisible(formatJudgeComboDisplay(this.latestJudge, this.combo, now), this.laneBlockVisibleWidth),
     );
 
     laneLines.push(
@@ -387,7 +387,7 @@ export class PlayerTui {
     }
   }
 
-    private resolveNoteWindow(notes: TuiNote[], currentBeat: number): { start: number; end: number } {
+  private resolveNoteWindow(notes: TuiNote[], currentBeat: number): { start: number; end: number } {
     if (this.noteWindowSource !== notes || currentBeat < this.noteWindowBeat) {
       this.noteWindowSource = notes;
       this.noteWindowStartIndex = 0;
@@ -478,7 +478,7 @@ function center(value: string, width: number): string {
 
 function centerVisible(value: string, width: number): string {
   const safeWidth = Math.max(1, Math.floor(width));
-  const clipped = visibleWidth(value) > safeWidth ? value.slice(0, safeWidth) : value;
+  const clipped = visibleWidth(value) > safeWidth ? truncateVisibleWidth(value, safeWidth) : value;
   const clippedWidth = visibleWidth(clipped);
   if (clippedWidth >= safeWidth) {
     return clipped;
@@ -522,6 +522,49 @@ function colorizeNote(symbol: string, channel: string): string {
 
 function colorizeMeasureLine(symbol: string): string {
   return `\u001b[90m${symbol}\u001b[0m`;
+}
+
+function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: number): string {
+  const normalizedJudge = latestJudge === 'PERFECT' ? 'GREAT' : latestJudge;
+  const safeCombo = Math.max(0, Math.floor(combo));
+  const baseText = `${normalizedJudge}${safeCombo > 0 ? ` ${safeCombo}` : ''}`;
+
+  if (latestJudge === 'PERFECT') {
+    // ANSI blink is not consistently supported, so emulate blink with a time-based pulse.
+    const blinkOn = Math.floor(nowMs / 130) % 2 === 0;
+    return blinkOn ? colorizeRainbow(baseText) : colorizeText(baseText, '2;38;5;245');
+  }
+  if (latestJudge === 'GREAT') {
+    return colorizeText(baseText, '1;38;5;220');
+  }
+  if (latestJudge === 'GOOD') {
+    return colorizeText(baseText, '1;38;5;118');
+  }
+  if (latestJudge === 'BAD') {
+    return colorizeText(baseText, '1;38;5;208');
+  }
+  if (latestJudge === 'MISS') {
+    return colorizeText(baseText, '1;38;5;203');
+  }
+  if (latestJudge === 'READY') {
+    return colorizeText(baseText, '1;38;5;81');
+  }
+  if (latestJudge === '-') {
+    return colorizeText(baseText, '2;37');
+  }
+  return baseText;
+}
+
+function colorizeText(value: string, sgr: string): string {
+  return `\u001b[${sgr}m${value}${ANSI_RESET}`;
+}
+
+function colorizeRainbow(value: string): string {
+  const steps = [196, 208, 226, 118, 51, 39, 201];
+  const characters = [...value];
+  return characters
+    .map((character, index) => `\u001b[1;38;5;${steps[index % steps.length]}m${character}${ANSI_RESET}`)
+    .join('');
 }
 
 function renderLaneBlockWithBga(laneLines: string[], bgaAnsiLines?: string[]): string[] {
@@ -806,7 +849,7 @@ function formatPlayLevelLabel(value: number | undefined): string {
 
 function formatNotesProgress(summary: PlayerSummary): string {
   const total = Math.max(0, summary.total);
-  const judged = Math.max(0, summary.perfect + summary.great + summary.good + summary.miss);
+  const judged = Math.max(0, summary.perfect + summary.great + summary.good + summary.bad + summary.miss);
   return `${Math.min(total, judged)}/${total}`;
 }
 

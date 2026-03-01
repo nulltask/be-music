@@ -15,17 +15,14 @@ import {
   type PlayerLoadProgress,
   type PlayerSummary,
 } from './index.ts';
-import {
-  createAudioOutputBackend,
-  isAudioBackendName,
-  type AudioBackendName,
-} from './audio-backend.ts';
+import { createAudioOutputBackend, isAudioBackendName, type AudioBackendName } from './audio-backend.ts';
 
 interface CliArgs {
   input?: string;
   auto: boolean;
   speed?: number;
   judgeWindowMs?: number;
+  judgeWindowSource?: 'debug' | 'legacy';
   renderAudioPath?: string;
   audio: boolean;
   previewAudio: boolean;
@@ -151,7 +148,7 @@ interface RawInputCapture {
 class ChartSelectionLoadingCanceledError extends Error {
   readonly reason: LoadingCancelReason;
 
-    constructor(reason: LoadingCancelReason) {
+  constructor(reason: LoadingCancelReason) {
     super(`Chart loading canceled: ${reason}`);
     this.reason = reason;
   }
@@ -196,6 +193,13 @@ async function main(): Promise<void> {
     printUsage();
     process.exitCode = 1;
     return;
+  }
+
+  if (args.judgeWindowSource === 'legacy') {
+    process.stdout.write('Warning: --judge-window is deprecated. Use --debug-judge-window for debugging only.\n');
+  }
+  if (typeof args.judgeWindowMs === 'number' && Number.isFinite(args.judgeWindowMs)) {
+    process.stdout.write(`Warning: debug judge override enabled (BAD window: ${Math.round(args.judgeWindowMs)}ms).\n`);
   }
 
   const inputPath = resolveCliPath(args.input);
@@ -451,8 +455,15 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       index += 1;
       continue;
     }
+    if (token === '--debug-judge-window') {
+      args.judgeWindowMs = Number.parseInt(rawArgs[index + 1], 10);
+      args.judgeWindowSource = 'debug';
+      index += 1;
+      continue;
+    }
     if (token === '--judge-window') {
       args.judgeWindowMs = Number.parseInt(rawArgs[index + 1], 10);
+      args.judgeWindowSource = 'legacy';
       index += 1;
       continue;
     }
@@ -539,7 +550,6 @@ function printUsage(): void {
       'Options:',
       '  --auto                    Enable auto play mode',
       '  --speed <rate>            Playback speed multiplier (default: 1)',
-      '  --judge-window <ms>       Judgment window for manual mode (default: 120)',
       '  --render-audio <path>     Render audio preview before playing',
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
       '  --preview / --no-preview  Enable or disable song-preview audio in song-select (default: off)',
@@ -581,7 +591,7 @@ async function loadChartSelectionEntries(rootDir: string, files: string[]): Prom
   let cancelReason: LoadingCancelReason | undefined;
   process.stdout.write('\u001b[?25l');
 
-    const onKeyPress = (_chunk: string | undefined, key: readline.Key): void => {
+  const onKeyPress = (_chunk: string | undefined, key: readline.Key): void => {
     if (key.sequence === '\u0003') {
       cancelReason = 'ctrl-c';
       return;
@@ -730,13 +740,13 @@ async function selectChartInteractively(
 
   process.stdout.write('\u001b[?25l');
 
-    const syncPreview = (): void => {
+  const syncPreview = (): void => {
     const entry = entries[selectedIndex];
     const filePath = entry?.kind === 'chart' ? entry.filePath : undefined;
     previewController?.focus(filePath);
   };
 
-    const render = (): void => {
+  const render = (): void => {
     const columns = process.stdout.columns ?? 80;
     const rows = process.stdout.rows ?? 24;
     const listRows = Math.max(5, rows - 8);
@@ -789,7 +799,7 @@ async function selectChartInteractively(
   return new Promise<SelectChartInteractivelyResult>((resolvePromise) => {
     let finished = false;
 
-        const cleanup = (result: SelectChartInteractivelyResult): void => {
+    const cleanup = (result: SelectChartInteractivelyResult): void => {
       if (finished) {
         return;
       }
@@ -803,7 +813,7 @@ async function selectChartInteractively(
       })();
     };
 
-        const moveSelection = (delta: number): void => {
+    const moveSelection = (delta: number): void => {
       const currentSelectableIndex = selectableIndexByEntryIndex.get(selectedIndex) ?? 0;
       const nextSelectableIndex = Math.max(0, Math.min(selectableIndexes.length - 1, currentSelectableIndex + delta));
       selectedIndex = selectableIndexes[nextSelectableIndex];
@@ -811,7 +821,7 @@ async function selectChartInteractively(
       render();
     };
 
-        const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
+    const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
       if (key.sequence === '\u0003') {
         cleanup({
           reason: 'ctrl-c',
@@ -911,14 +921,16 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
   const totalNotes = Math.max(0, Math.floor(played.summary.total));
   const judgedNotes = Math.max(
     0,
-    Math.floor(played.summary.perfect + played.summary.great + played.summary.good + played.summary.miss),
+    Math.floor(
+      played.summary.perfect + played.summary.great + played.summary.good + played.summary.bad + played.summary.miss,
+    ),
   );
   const notesProgress = `${Math.min(totalNotes, judgedNotes)}/${totalNotes}`;
 
   const inputCapture = beginRawInputCapture();
   process.stdout.write('\u001b[?25l');
 
-    const render = (): void => {
+  const render = (): void => {
     const columns = process.stdout.columns ?? 80;
     const lineWidth = Math.max(16, columns - 2);
     const lines: string[] = [];
@@ -934,7 +946,7 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
     );
     lines.push(`NOTES ${notesProgress}`);
     lines.push(`PERFECT ${played.summary.perfect}  GREAT ${played.summary.great}`);
-    lines.push(`GOOD ${played.summary.good}  MISS ${played.summary.miss}`);
+    lines.push(`GOOD ${played.summary.good}  BAD ${played.summary.bad}  MISS ${played.summary.miss}`);
     lines.push('');
     lines.push('Press r to replay this chart.');
     lines.push('Press Enter to return to song selection.');
@@ -945,7 +957,7 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
   return new Promise<ResultScreenAction>((resolvePromise) => {
     let finished = false;
 
-        const cleanup = (action: ResultScreenAction): void => {
+    const cleanup = (action: ResultScreenAction): void => {
       if (finished) {
         return;
       }
@@ -1175,7 +1187,7 @@ function createChartPreviewController(options: { audioBackend: AudioBackendName 
   let disposed = false;
   let activePlayback: PreviewPlaybackHandle | undefined;
 
-    const stopPlaybackSafely = async (playback: PreviewPlaybackHandle): Promise<void> => {
+  const stopPlaybackSafely = async (playback: PreviewPlaybackHandle): Promise<void> => {
     playback.stop();
     await Promise.race([playback.done.catch(() => undefined), createTimeoutPromise(PREVIEW_STOP_TIMEOUT_MS)]);
   };

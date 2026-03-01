@@ -57,6 +57,7 @@ export interface PlayerSummary {
   perfect: number;
   great: number;
   good: number;
+  bad: number;
   miss: number;
 }
 
@@ -127,6 +128,10 @@ const DEFAULT_TERMINAL_COLUMNS = 120;
 const TUI_FRAME_INTERVAL_MS = 1000 / 60;
 const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
 const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
+const IIDX_PGREAT_WINDOW_MS = 16.67;
+const IIDX_GREAT_WINDOW_MS = 33.33;
+const IIDX_GOOD_WINDOW_MS = 116.67;
+const IIDX_BAD_WINDOW_MS = 250;
 
 export async function playChartFile(filePath: string, options: PlayerOptions = {}): Promise<PlayerSummary> {
   const json = await parseChartFile(filePath);
@@ -185,6 +190,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
     perfect: 0,
     great: 0,
     good: 0,
+    bad: 0,
     miss: 0,
   };
   let combo = 0;
@@ -356,7 +362,11 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const resolvedJson = resolveBmsControlFlow(json);
   const speed = options.speed ?? 1;
-  const judgeWindowMs = options.judgeWindowMs ?? 120;
+  const debugJudgeWindowMs = options.judgeWindowMs;
+  const badWindowMs =
+    typeof debugJudgeWindowMs === 'number' && Number.isFinite(debugJudgeWindowMs) && debugJudgeWindowMs > 0
+      ? debugJudgeWindowMs
+      : IIDX_BAD_WINDOW_MS;
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
@@ -372,12 +382,13 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
     perfect: 0,
     great: 0,
     good: 0,
+    bad: 0,
     miss: 0,
   };
   let combo = 0;
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
-  const tui = createTuiIfEnabled(resolvedJson, options, 'MANUAL', laneBindings, speed, judgeWindowMs);
+  const tui = createTuiIfEnabled(resolvedJson, options, 'MANUAL', laneBindings, speed, badWindowMs);
   const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
   const bgaRenderer = tui
     ? await createBgaAnsiRenderer(resolvedJson, {
@@ -395,7 +406,9 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
 
   if (!tui) {
     process.stdout.write('Manual play start\n');
-    process.stdout.write(`Judge window: +/-${judgeWindowMs}ms\n`);
+    process.stdout.write(
+      `Judge window: PGREAT<=${IIDX_PGREAT_WINDOW_MS}ms GREAT<=${IIDX_GREAT_WINDOW_MS}ms GOOD<=${IIDX_GOOD_WINDOW_MS}ms BAD<=${Math.round(badWindowMs)}ms\n`,
+    );
     process.stdout.write('Press Ctrl+C to quit.\n');
     process.stdout.write('Press Esc to stop and open result.\n');
     printLaneMap(laneBindings);
@@ -424,7 +437,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   audioSession?.start();
 
   const startedAt = performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0);
-  const horizon = ((notes.at(-1)?.seconds ?? 0) * 1000) / speed + leadInMs + judgeWindowMs + 1000;
+  const horizon = ((notes.at(-1)?.seconds ?? 0) * 1000) / speed + leadInMs + badWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
   const longHoldUntilMsByChannel = new Map<string, number>();
   const activeLongNotesByChannel = new Map<string, { endSeconds: number }>();
@@ -483,7 +496,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       refreshedHold = true;
     }
 
-    const candidate = findBestCandidate(notes, candidateChannels, nowSec, judgeWindowMs / 1000);
+    const candidate = findBestCandidate(notes, candidateChannels, nowSec, badWindowMs / 1000);
 
     if (!candidate) {
       if (refreshedHold) {
@@ -527,7 +540,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
     }
 
     const deltaMs = Math.abs(candidate.seconds - nowSec) * 1000;
-    if (deltaMs <= 30) {
+    if (deltaMs <= IIDX_PGREAT_WINDOW_MS) {
       summary.perfect += 1;
       combo += 1;
       if (!tui) {
@@ -538,11 +551,22 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       }
       return;
     }
-    if (deltaMs <= 70) {
+    if (deltaMs <= IIDX_GREAT_WINDOW_MS) {
       summary.great += 1;
       combo += 1;
       if (!tui) {
         process.stdout.write(`GREAT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+      } else {
+        tui.setLatestJudge('GREAT');
+        tui.setCombo(combo);
+      }
+      return;
+    }
+    if (deltaMs <= IIDX_GOOD_WINDOW_MS) {
+      summary.good += 1;
+      combo += 1;
+      if (!tui) {
+        process.stdout.write(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
         tui.setLatestJudge('GOOD');
         tui.setCombo(combo);
@@ -550,12 +574,12 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       return;
     }
 
-    summary.good += 1;
-    combo += 1;
+    summary.bad += 1;
+    combo = 0;
     if (!tui) {
-      process.stdout.write(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+      process.stdout.write(`BAD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
     } else {
-      tui.setLatestJudge('GOOD');
+      tui.setLatestJudge('BAD');
       tui.setCombo(combo);
     }
   };
@@ -596,7 +620,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
         if (note.judged) {
           continue;
         }
-        if (nowSec - note.seconds > judgeWindowMs / 1000) {
+        if (nowSec - note.seconds > badWindowMs / 1000) {
           note.judged = true;
           summary.miss += 1;
           combo = 0;
@@ -624,7 +648,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
     }
 
     if (!interruptedReason) {
-      const judgedCount = summary.perfect + summary.great + summary.good + summary.miss;
+      const judgedCount = summary.perfect + summary.great + summary.good + summary.bad + summary.miss;
       if (judgedCount < summary.total) {
         summary.miss += summary.total - judgedCount;
         combo = 0;
@@ -1546,6 +1570,7 @@ function renderSummary(summary: PlayerSummary): string {
       `PERFECT: ${summary.perfect}`,
       `GREAT  : ${summary.great}`,
       `GOOD   : ${summary.good}`,
+      `BAD    : ${summary.bad}`,
       `MISS   : ${summary.miss}`,
       `SCORE  : ${(score * 100).toFixed(2)}%`,
     ].join('\n') + '\n'
