@@ -103,8 +103,10 @@ interface QueuedPcmChunk {
 const AUTO_BACKEND_ORDER: ResolvedAudioBackendName[] = ['audio-io', 'speaker', 'audify'];
 const AUDIO_IO_MANUAL_HIGH_WATER_MS = 48;
 const AUDIO_IO_MANUAL_LOW_WATER_MS = 30;
-const AUDIO_IO_AUTO_HIGH_WATER_MS = 380;
-const AUDIO_IO_AUTO_LOW_WATER_MS = 330;
+const AUDIO_IO_AUTO_HIGH_WATER_MS = AUDIO_IO_MANUAL_HIGH_WATER_MS;
+const AUDIO_IO_AUTO_LOW_WATER_MS = AUDIO_IO_MANUAL_LOW_WATER_MS;
+const AUDIFY_HIGH_WATER_MS = 140;
+const AUDIFY_LOW_WATER_MS = 70;
 
 const BACKEND_CANDIDATES: AudioOutputBackendCandidate[] = [
   { name: 'audio-io', create: tryCreateAudioIoBackend },
@@ -242,8 +244,8 @@ async function tryCreateAudifyBackend(options: AudioBackendCreateOptions): Promi
     return undefined;
   }
 
-  const highWaterTargetMs = options.mode === 'manual' ? 140 : 380;
-  const lowWaterTargetMs = options.mode === 'manual' ? 70 : 240;
+  const highWaterTargetMs = AUDIFY_HIGH_WATER_MS;
+  const lowWaterTargetMs = AUDIFY_LOW_WATER_MS;
   const highWaterFrames = Math.max(256, Math.ceil((options.sampleRate * highWaterTargetMs) / 1000));
   const lowWaterFrames = Math.max(
     128,
@@ -497,7 +499,7 @@ async function tryCreateAudioIoBackend(options: AudioBackendCreateOptions): Prom
       {
         sampleRate: options.sampleRate,
         channelCount: options.channels,
-        bufferDuration: options.mode === 'manual' ? 30 : 40,
+        bufferDuration: 30,
       },
       (outputBuffer: Int16Array) => {
         flushOrZeroFill(outputBuffer);
