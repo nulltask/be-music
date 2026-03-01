@@ -28,7 +28,7 @@ import {
   resolveInputTokens,
   type LaneBinding,
 } from './manual-input.ts';
-import { extractPlayableNotes } from './playable-notes.ts';
+import { extractLandmineNotes, extractPlayableNotes } from './playable-notes.ts';
 import {
   createAudioBackendResolutionOrder,
   createAudioOutputBackend,
@@ -165,7 +165,7 @@ export async function playChartFile(filePath: string, options: PlayerOptions = {
   };
   return mergedOptions.auto ? autoPlay(json, mergedOptions) : manualPlay(json, mergedOptions);
 }
-export { extractPlayableNotes };
+export { extractLandmineNotes, extractPlayableNotes };
 
 function reportLoadProgress(options: PlayerOptions, ratio: number, message: string, detail?: string): void {
   const listener = options.onLoadProgress;
@@ -523,8 +523,10 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
 
   const notes = extractPlayableNotes(resolvedJson);
-  const totalSeconds = notes.at(-1)?.seconds ?? 0;
-  const channels = [...new Set(notes.map((note) => note.channel))];
+  const landmineNotes = extractLandmineNotes(resolvedJson);
+  const renderNotes = [...notes, ...landmineNotes].sort((left, right) => left.seconds - right.seconds);
+  const totalSeconds = Math.max(notes.at(-1)?.seconds ?? 0, landmineNotes.at(-1)?.seconds ?? 0);
+  const channels = [...new Set([...notes.map((note) => note.channel), ...landmineNotes.map((note) => note.channel)])];
   const laneBindings = createLaneBindings(channels);
   const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);
 
@@ -575,7 +577,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       currentSeconds: 0,
       totalSeconds,
       summary,
-      notes,
+      notes: renderNotes,
       ...createBgaRenderFrame(bgaRenderer, 0, preferSixel),
     });
   }
@@ -591,7 +593,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   audioSession?.start();
 
   const startedAt = performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0);
-  const horizon = ((notes.at(-1)?.seconds ?? 0) * 1000) / speed + leadInMs + badWindowMs + 1000;
+  const horizon = (totalSeconds * 1000) / speed + leadInMs + badWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
   const longHoldUntilMsByChannel = new Map<string, number>();
   const activeLongNotesByChannel = new Map<string, { endSeconds: number }>();
@@ -651,6 +653,22 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
     }
 
     const candidate = findBestCandidate(notes, candidateChannels, nowSec, badWindowMs / 1000);
+    const landmineCandidate = findBestCandidate(landmineNotes, candidateChannels, nowSec, badWindowMs / 1000);
+    const candidateDelta = candidate ? Math.abs(candidate.seconds - nowSec) : Number.POSITIVE_INFINITY;
+    const landmineDelta = landmineCandidate ? Math.abs(landmineCandidate.seconds - nowSec) : Number.POSITIVE_INFINITY;
+
+    if (landmineCandidate && landmineDelta <= candidateDelta) {
+      landmineCandidate.judged = true;
+      applyJudgeToSummary(summary, 'BAD', scoreTracker);
+      combo = 0;
+      if (!tui) {
+        process.stdout.write(`MINE channel:${landmineCandidate.channel} delta:${Math.round(landmineDelta * 1000)}ms\n`);
+      } else {
+        tui.setLatestJudge('BAD');
+        tui.setCombo(combo);
+      }
+      return;
+    }
 
     if (!candidate) {
       if (refreshedHold) {
@@ -790,11 +808,20 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
         currentSeconds: nowSec,
         totalSeconds,
         summary,
-        notes,
+        notes: renderNotes,
         ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
       });
 
-      if (notes.every((note) => note.judged)) {
+      for (const landmine of landmineNotes) {
+        if (landmine.judged) {
+          continue;
+        }
+        if (nowSec - landmine.seconds > badWindowMs / 1000) {
+          landmine.judged = true;
+        }
+      }
+
+      if (notes.every((note) => note.judged) && landmineNotes.every((note) => note.judged)) {
         break;
       }
 
@@ -817,7 +844,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
             currentSeconds: totalSeconds,
             totalSeconds,
             summary,
-            notes,
+            notes: renderNotes,
             ...createBgaRenderFrame(bgaRenderer, totalSeconds, preferSixel),
           });
         }

@@ -106,6 +106,18 @@ interface SelectChartInteractivelyResult {
 
 type ResultScreenAction = 'enter' | 'escape' | 'ctrl-c' | 'replay';
 type LoadingCancelReason = 'escape' | 'ctrl-c';
+type SongSelectPageDirection = 'up' | 'down';
+type SongSelectNavigationAction =
+  | 'move-up'
+  | 'move-down'
+  | 'page-up'
+  | 'page-down'
+  | 'first'
+  | 'last'
+  | 'confirm'
+  | 'toggle-auto'
+  | 'escape'
+  | 'ctrl-c';
 
 interface PlayedChartResult {
   chartPath: string;
@@ -746,24 +758,25 @@ async function selectChartInteractively(
     previewController?.focus(filePath);
   };
 
+  const listRowsForViewport = (): number => {
+    const rows = process.stdout.rows ?? 24;
+    return Math.max(5, rows - 8);
+  };
+
   const render = (): void => {
     const columns = process.stdout.columns ?? 80;
-    const rows = process.stdout.rows ?? 24;
-    const listRows = Math.max(5, rows - 8);
+    const listRows = listRowsForViewport();
     const numberWidth = String(Math.max(1, chartCount)).length;
     const lineWidth = Math.max(16, columns - 2);
     const itemLabelWidth = Math.max(8, lineWidth - numberWidth - 4);
     const columnLayout = createSelectionColumnLayout(itemLabelWidth, entries);
 
-    const half = Math.floor(listRows / 2);
-    let start = Math.max(0, selectedIndex - half);
-    if (start + listRows > entries.length) {
-      start = Math.max(0, entries.length - listRows);
-    }
-    const end = Math.min(entries.length, start + listRows);
+    const { start, end } = resolveVisibleEntryRange(selectedIndex, entries.length, listRows);
 
     const lines: string[] = [];
-    lines.push('Select chart  [↑/↓ or k/j: move]  [a: AUTO/MANUAL]  [Enter: play]  [Ctrl+C/Esc: exit]');
+    lines.push(
+      'Select chart  [↑/↓ or k/j: move]  [←/→ or h/l: page]  [Ctrl+b/f: page]  [a: AUTO/MANUAL]  [Enter: play]  [Ctrl+C/Esc: exit]',
+    );
     lines.push(truncateForDisplay(`Directory: ${rootDir}`, lineWidth));
     lines.push(`Mode: ${auto ? 'AUTO' : 'MANUAL'}`);
     lines.push('');
@@ -815,14 +828,26 @@ async function selectChartInteractively(
 
     const moveSelection = (delta: number): void => {
       const currentSelectableIndex = selectableIndexByEntryIndex.get(selectedIndex) ?? 0;
-      const nextSelectableIndex = Math.max(0, Math.min(selectableIndexes.length - 1, currentSelectableIndex + delta));
+      const nextSelectableIndex = resolveCircularSelectableIndex(
+        currentSelectableIndex,
+        delta,
+        selectableIndexes.length,
+      );
       selectedIndex = selectableIndexes[nextSelectableIndex];
       syncPreview();
       render();
     };
 
+    const moveSelectionByPage = (direction: SongSelectPageDirection): void => {
+      const pageSize = listRowsForViewport();
+      selectedIndex = resolvePageSelectableIndex(selectableIndexes, selectedIndex, entries.length, pageSize, direction);
+      syncPreview();
+      render();
+    };
+
     const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
-      if (key.sequence === '\u0003') {
+      const action = resolveSongSelectNavigationAction(chunk, key);
+      if (action === 'ctrl-c') {
         cleanup({
           reason: 'ctrl-c',
           focusKey: getEntryFocusKey(entries[selectedIndex]),
@@ -830,31 +855,35 @@ async function selectChartInteractively(
         });
         return;
       }
-
-      const lowerChunk = typeof chunk === 'string' ? chunk.toLowerCase() : '';
-      const keyName = key.name?.toLowerCase();
-
-      if (keyName === 'up' || lowerChunk === 'k') {
+      if (action === 'move-up') {
         moveSelection(-1);
         return;
       }
-      if (keyName === 'down' || lowerChunk === 'j') {
+      if (action === 'move-down') {
         moveSelection(1);
         return;
       }
-      if (keyName === 'home' || lowerChunk === 'g') {
+      if (action === 'page-up') {
+        moveSelectionByPage('up');
+        return;
+      }
+      if (action === 'page-down') {
+        moveSelectionByPage('down');
+        return;
+      }
+      if (action === 'first') {
         selectedIndex = selectableIndexes[0];
         syncPreview();
         render();
         return;
       }
-      if (keyName === 'end' || chunk === 'G') {
+      if (action === 'last') {
         selectedIndex = selectableIndexes[selectableIndexes.length - 1];
         syncPreview();
         render();
         return;
       }
-      if (keyName === 'return' || keyName === 'enter') {
+      if (action === 'confirm') {
         const selectedEntry = entries[selectedIndex];
         if (selectedEntry?.kind === 'random') {
           const randomIndex = Math.floor(Math.random() * files.length);
@@ -877,12 +906,12 @@ async function selectChartInteractively(
         }
         return;
       }
-      if (lowerChunk === 'a') {
+      if (action === 'toggle-auto') {
         auto = !auto;
         render();
         return;
       }
-      if (keyName === 'escape' || key.sequence === '\u001b') {
+      if (action === 'escape') {
         cleanup({
           reason: 'escape',
           focusKey: getEntryFocusKey(entries[selectedIndex]),
@@ -895,6 +924,100 @@ async function selectChartInteractively(
     syncPreview();
     render();
   });
+}
+
+export function resolveSongSelectNavigationAction(
+  chunk: string | undefined,
+  key: readline.Key,
+): SongSelectNavigationAction | undefined {
+  if (key.sequence === '\u0003') {
+    return 'ctrl-c';
+  }
+  const lowerChunk = typeof chunk === 'string' ? chunk.toLowerCase() : '';
+  const keyName = key.name?.toLowerCase();
+
+  if (keyName === 'up' || lowerChunk === 'k') {
+    return 'move-up';
+  }
+  if (keyName === 'down' || lowerChunk === 'j') {
+    return 'move-down';
+  }
+  if (keyName === 'left' || keyName === 'pageup' || lowerChunk === 'h' || (key.ctrl && keyName === 'b')) {
+    return 'page-up';
+  }
+  if (keyName === 'right' || keyName === 'pagedown' || lowerChunk === 'l' || (key.ctrl && keyName === 'f')) {
+    return 'page-down';
+  }
+  if (keyName === 'home' || lowerChunk === 'g') {
+    return 'first';
+  }
+  if (keyName === 'end' || chunk === 'G') {
+    return 'last';
+  }
+  if (keyName === 'return' || keyName === 'enter') {
+    return 'confirm';
+  }
+  if (lowerChunk === 'a') {
+    return 'toggle-auto';
+  }
+  if (keyName === 'escape' || key.sequence === '\u001b') {
+    return 'escape';
+  }
+  return undefined;
+}
+
+export function resolveCircularSelectableIndex(current: number, delta: number, length: number): number {
+  if (!Number.isFinite(length) || length <= 0) {
+    return 0;
+  }
+  const safeCurrent = Number.isFinite(current) ? Math.floor(current) : 0;
+  const safeDelta = Number.isFinite(delta) ? Math.floor(delta) : 0;
+  const next = (safeCurrent + safeDelta) % length;
+  return next >= 0 ? next : next + length;
+}
+
+export function resolveVisibleEntryRange(
+  selectedIndex: number,
+  entryCount: number,
+  listRows: number,
+): { start: number; end: number } {
+  const safeEntryCount = Number.isFinite(entryCount) ? Math.max(0, Math.floor(entryCount)) : 0;
+  const safeListRows = Number.isFinite(listRows) ? Math.max(1, Math.floor(listRows)) : 1;
+  if (safeEntryCount <= 0) {
+    return { start: 0, end: 0 };
+  }
+  const safeSelectedIndex = Number.isFinite(selectedIndex)
+    ? Math.max(0, Math.min(safeEntryCount - 1, Math.floor(selectedIndex)))
+    : 0;
+  const page = Math.floor(safeSelectedIndex / safeListRows);
+  const start = page * safeListRows;
+  const end = Math.min(safeEntryCount, start + safeListRows);
+  return { start, end };
+}
+
+export function resolvePageSelectableIndex(
+  selectableIndexes: number[],
+  selectedIndex: number,
+  entryCount: number,
+  listRows: number,
+  direction: SongSelectPageDirection,
+): number {
+  if (selectableIndexes.length === 0) {
+    return 0;
+  }
+  const { start, end } = resolveVisibleEntryRange(selectedIndex, entryCount, listRows);
+  if (direction === 'down') {
+    const next = selectableIndexes.find((index) => index >= end);
+    return typeof next === 'number' ? next : selectableIndexes[0]!;
+  }
+
+  for (let index = selectableIndexes.length - 1; index >= 0; index -= 1) {
+    const candidate = selectableIndexes[index]!;
+    if (candidate < start) {
+      return candidate;
+    }
+  }
+  return selectableIndexes[selectableIndexes.length - 1]!;
 }
 
 function getEntryFocusKey(entry: ChartSelectionEntry | undefined): string | undefined {

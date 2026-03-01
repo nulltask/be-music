@@ -6,6 +6,7 @@ import { OggOpusDecoder } from 'ogg-opus-decoder';
 import {
   createBeatResolver,
   DEFAULT_BPM,
+  isLandmineChannel,
   isSampleTriggerChannel,
   normalizeChannel,
   normalizeObjectKey,
@@ -156,7 +157,9 @@ function collectSampleTriggersWithContext(
   context: TimingBuildContext,
 ): TimedSampleTrigger[] {
   const { sortedEvents, beatResolver } = context;
-  const events = sortedEvents.filter((event) => isSampleTriggerChannel(event.channel));
+  const events = sortedEvents.filter(
+    (event) => isSampleTriggerChannel(event.channel) && !isLandmineChannel(event.channel),
+  );
   const bmsonPlaybackMap =
     json.sourceFormat === 'bmson' ? createBmsonSamplePlaybackMap(json, resolver, events, beatResolver) : undefined;
 

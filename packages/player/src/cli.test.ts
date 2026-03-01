@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'vitest';
 import type readline from 'node:readline';
-import { parseArgs, resolveResultScreenActionFromKey } from './cli.ts';
+import {
+  parseArgs,
+  resolveCircularSelectableIndex,
+  resolvePageSelectableIndex,
+  resolveResultScreenActionFromKey,
+  resolveSongSelectNavigationAction,
+  resolveVisibleEntryRange,
+} from './cli.ts';
 describe('player cli', () => {
 
 
@@ -64,11 +71,56 @@ test('cli: interprets Ctrl+C as exit on result screen', () => {
   expect(action).toBe('ctrl-c');
 });
 
-function createKey(name?: string, sequence?: string): readline.Key {
+test('cli: interprets Right as song-select next page', () => {
+  const action = resolveSongSelectNavigationAction(undefined, createKey('right'));
+  expect(action).toBe('page-down');
+});
+
+test('cli: interprets Left as song-select previous page', () => {
+  const action = resolveSongSelectNavigationAction(undefined, createKey('left'));
+  expect(action).toBe('page-up');
+});
+
+test('cli: interprets vim h/l as song-select page keys', () => {
+  expect(resolveSongSelectNavigationAction('h', createKey())).toBe('page-up');
+  expect(resolveSongSelectNavigationAction('l', createKey())).toBe('page-down');
+});
+
+test('cli: interprets Ctrl+b/Ctrl+f as song-select page keys', () => {
+  expect(resolveSongSelectNavigationAction(undefined, createKey('b', undefined, true))).toBe('page-up');
+  expect(resolveSongSelectNavigationAction(undefined, createKey('f', undefined, true))).toBe('page-down');
+});
+
+test('cli: resolves circular selectable index', () => {
+  expect(resolveCircularSelectableIndex(0, -1, 5)).toBe(4);
+  expect(resolveCircularSelectableIndex(4, 1, 5)).toBe(0);
+  expect(resolveCircularSelectableIndex(2, 6, 5)).toBe(3);
+});
+
+test('cli: resolves visible entry range based on viewport rows', () => {
+  expect(resolveVisibleEntryRange(9, 20, 6)).toEqual({ start: 6, end: 12 });
+  expect(resolveVisibleEntryRange(0, 20, 6)).toEqual({ start: 0, end: 6 });
+  expect(resolveVisibleEntryRange(19, 20, 6)).toEqual({ start: 18, end: 20 });
+});
+
+test('cli: resolves page selection using visible row range', () => {
+  const selectableIndexes = [0, 2, 4, 7, 9, 11, 14, 16, 19];
+  expect(resolvePageSelectableIndex(selectableIndexes, 9, 20, 6, 'down')).toBe(14);
+  expect(resolvePageSelectableIndex(selectableIndexes, 9, 20, 6, 'up')).toBe(4);
+});
+
+test('cli: wraps page selection as circular list', () => {
+  const selectableIndexes = [0, 2, 4, 7, 9, 11, 14, 16, 19];
+  expect(resolvePageSelectableIndex(selectableIndexes, 19, 20, 6, 'down')).toBe(0);
+  expect(resolvePageSelectableIndex(selectableIndexes, 0, 20, 6, 'up')).toBe(19);
+  expect(resolvePageSelectableIndex(selectableIndexes, 19, 20, 6, 'up')).toBe(16);
+});
+
+function createKey(name?: string, sequence?: string, ctrl = false): readline.Key {
   return {
     name,
     sequence,
-    ctrl: false,
+    ctrl,
     meta: false,
     shift: false,
   };

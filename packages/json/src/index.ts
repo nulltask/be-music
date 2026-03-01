@@ -391,6 +391,19 @@ export function isStopChannel(channel: string): boolean {
   return normalizeChannel(channel) === '09';
 }
 
+export function isLandmineChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  if (normalized.length !== 2) {
+    return false;
+  }
+  const side = normalized[0];
+  const lane = normalized[1];
+  if (side !== 'D' && side !== 'E') {
+    return false;
+  }
+  return lane >= '1' && lane <= '9';
+}
+
 export function isSampleTriggerChannel(channel: string): boolean {
   const normalized = normalizeChannel(channel);
   if (normalized === '01') {

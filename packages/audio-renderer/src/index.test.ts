@@ -86,6 +86,20 @@ test('audio-renderer: interprets sample-continue offsets from bmson notes.c', ()
   expect(triggers.map((trigger) => Number(trigger.sampleOffsetSeconds.toFixed(3)))).toEqual([0, 0.5, 0, 0.5]);
 });
 
+test('audio-renderer: ignores landmine channels for sample triggering', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'sample.wav';
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01' },
+    { measure: 0, channel: 'D1', position: [0, 1], value: '01' },
+  ];
+
+  const triggers = collectSampleTriggers(json);
+  expect(triggers).toHaveLength(1);
+  expect(triggers[0]?.channel).toBe('11');
+});
+
 test('audio-renderer: bms retrigger on same key cuts previous voice immediately', async () => {
   const retrigger = createEmptyJson('bms');
   retrigger.metadata.bpm = 120;

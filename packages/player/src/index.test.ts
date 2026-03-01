@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vitest';
 import { parseChartFile } from '../../parser/src/index.ts';
-import { autoPlay, extractPlayableNotes, resolveJudgeWindowsMs } from './index.ts';
+import { autoPlay, extractLandmineNotes, extractPlayableNotes, resolveJudgeWindowsMs } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 describe('player', () => {
@@ -80,6 +80,22 @@ test('player: derives long-note end beat from bms #LNOBJ', () => {
   expect(notes[0].endBeat).toBeCloseTo(1, 6);
   expect(notes[0].endSeconds).toBeCloseTo(0.5, 6);
   expect(notes[1].endBeat).toBeUndefined();
+});
+
+test('player: extracts landmine objects and maps them to playable lanes', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.events = [
+    { measure: 0, channel: 'D1', position: [0, 1], value: '10' },
+    { measure: 1, channel: 'E6', position: [0, 1], value: '20' },
+    { measure: 2, channel: '11', position: [0, 1], value: '01' },
+  ];
+
+  const landmines = extractLandmineNotes(json);
+  expect(landmines).toHaveLength(2);
+  expect(landmines[0]?.channel).toBe('11');
+  expect(landmines[1]?.channel).toBe('26');
+  expect(landmines[0]?.mine).toBe(true);
 });
 
 test('player: uses baseline judge windows for bms RANK=2', () => {

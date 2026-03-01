@@ -2,6 +2,7 @@ import {
   createBeatResolver,
   type BmsEvent,
   type BmsJson,
+  isLandmineChannel,
   isPlayableChannel,
   normalizeChannel,
   normalizeObjectKey,
@@ -18,6 +19,15 @@ export interface TimedPlayableNote {
   visibleUntilBeat?: number;
   seconds: number;
   judged: boolean;
+}
+
+export interface TimedLandmineNote {
+  event: BmsEvent;
+  channel: string;
+  beat: number;
+  seconds: number;
+  judged: boolean;
+  mine: true;
 }
 
 export function extractPlayableNotes(json: BmsJson): TimedPlayableNote[] {
@@ -42,6 +52,30 @@ export function extractPlayableNotes(json: BmsJson): TimedPlayableNote[] {
 
   applyLnobjEndBeatIfNeeded(json, notes, resolver);
   return notes;
+}
+
+export function extractLandmineNotes(json: BmsJson): TimedLandmineNote[] {
+  const resolver = createTimingResolver(json);
+  const beatResolver = createBeatResolver(json);
+  return sortEvents(json.events)
+    .filter((event) => isLandmineChannel(event.channel))
+    .map((event) => {
+      const mappedChannel = mapLandmineChannelToPlayableLane(event.channel);
+      if (!mappedChannel) {
+        return undefined;
+      }
+      const beat = beatResolver.eventToBeat(event);
+      return {
+        event,
+        channel: mappedChannel,
+        beat,
+        seconds: resolver.beatToSeconds(beat),
+        judged: false,
+        mine: true as const,
+      };
+    })
+    .filter((note): note is TimedLandmineNote => note !== undefined)
+    .sort((left, right) => left.seconds - right.seconds);
 }
 
 function applyLnobjEndBeatIfNeeded(
@@ -79,6 +113,25 @@ function resolveLongNoteEndBeat(json: BmsJson, event: BmsEvent, beat: number): n
   if (event.bmson?.l && event.bmson.l > 0 && json.sourceFormat === 'bmson') {
     const resolution = Math.max(1, json.bmson.info.resolution || 240);
     return beat + event.bmson.l / resolution;
+  }
+  return undefined;
+}
+
+function mapLandmineChannelToPlayableLane(channel: string): string | undefined {
+  const normalized = normalizeChannel(channel);
+  if (normalized.length !== 2) {
+    return undefined;
+  }
+  const side = normalized[0];
+  const lane = normalized[1];
+  if (lane < '1' || lane > '9') {
+    return undefined;
+  }
+  if (side === 'D') {
+    return `1${lane}`;
+  }
+  if (side === 'E') {
+    return `2${lane}`;
   }
   return undefined;
 }

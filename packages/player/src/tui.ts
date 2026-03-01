@@ -29,6 +29,7 @@ interface TuiNote {
   visibleUntilBeat?: number;
   seconds: number;
   judged: boolean;
+  mine?: boolean;
 }
 
 interface TuiFrame {
@@ -67,6 +68,7 @@ const BLUE_NOTE_CHANNELS = new Set(['12', '14', '18', '22', '24', '28']);
 const NOTE_HEAD_SYMBOL = '●';
 const LONG_NOTE_BODY_SYMBOL = '■';
 const LONG_NOTE_TAIL_SYMBOL = '◆';
+const MINE_NOTE_SYMBOL = '✕';
 const ANSI_RESET = '\u001b[0m';
 const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
@@ -227,6 +229,16 @@ export class PlayerTui {
       }
       const lane = this.laneIndex.get(note.channel);
       if (lane === undefined) {
+        continue;
+      }
+
+      if (note.mine === true) {
+        const delta = note.beat - frame.currentBeat;
+        if (delta < 0 || delta > NOTE_WINDOW_BEATS) {
+          continue;
+        }
+        const row = beatToRow(note.beat, frame.currentBeat, rowCount);
+        grid[row][lane] = MINE_NOTE_SYMBOL;
         continue;
       }
 
@@ -476,19 +488,25 @@ function renderLaneRow(
     const isHead = value === NOTE_HEAD_SYMBOL;
     const isBody = value === LONG_NOTE_BODY_SYMBOL;
     const isTail = value === LONG_NOTE_TAIL_SYMBOL;
-    const isNote = isHead || isBody || isTail;
+    const isMine = value === MINE_NOTE_SYMBOL;
+    const isNote = isHead || isBody || isTail || isMine;
     const cell = isHead
       ? renderNoteCell(laneWidth, 'head')
       : isBody
         ? renderNoteCell(laneWidth, 'body')
         : isTail
           ? renderNoteCell(laneWidth, 'tail')
-          : center(value, laneWidth);
-    const decoratedCell = isNote
-      ? colorizeNote(cell, channels[index] ?? '')
-      : value === MEASURE_LINE_SYMBOL
-        ? colorizeMeasureLine(cell)
-        : cell;
+          : isMine
+            ? center(MINE_NOTE_SYMBOL, laneWidth)
+            : center(value, laneWidth);
+    const decoratedCell =
+      isMine
+        ? colorizeMine(cell)
+        : isNote
+          ? colorizeNote(cell, channels[index] ?? '')
+          : value === MEASURE_LINE_SYMBOL
+            ? colorizeMeasureLine(cell)
+            : cell;
     const highlightRatio = laneHighlightRatios.get(index);
     if (highlightRatio !== undefined) {
       return highlightCell(decoratedCell, highlightRatio);
@@ -560,6 +578,10 @@ function colorizeNote(symbol: string, channel: string): string {
 
 function colorizeMeasureLine(symbol: string): string {
   return `\u001b[90m${symbol}\u001b[0m`;
+}
+
+function colorizeMine(symbol: string): string {
+  return `\u001b[1;38;5;198m${symbol}\u001b[0m`;
 }
 
 function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: number): string {

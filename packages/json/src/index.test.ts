@@ -11,6 +11,7 @@ import {
   getMeasureBeats,
   getMeasureLength,
   intToBase36,
+  isLandmineChannel,
   isMeasureLengthChannel,
   isPlayableChannel,
   isSampleTriggerChannel,
@@ -184,6 +185,11 @@ test('json: classifies channel types', () => {
 
   expect(isStopChannel('09')).toBe(true);
   expect(isStopChannel('19')).toBe(false);
+
+  expect(isLandmineChannel('D1')).toBe(true);
+  expect(isLandmineChannel('E9')).toBe(true);
+  expect(isLandmineChannel('11')).toBe(false);
+  expect(isLandmineChannel('D0')).toBe(false);
 
   expect(isSampleTriggerChannel('01')).toBe(true);
   expect(isSampleTriggerChannel('00')).toBe(false);
