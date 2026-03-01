@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { expect, test } from 'vitest';
 import { parseChartFile } from '../../parser/src/index.ts';
-import { autoPlay, extractPlayableNotes } from './index.ts';
+import { autoPlay, extractPlayableNotes, resolveJudgeWindowsMs } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -78,4 +78,55 @@ test('player: bms #LNOBJ からロングノート終端 beat を算出できる'
   expect(notes[0].endBeat).toBeCloseTo(1, 6);
   expect(notes[0].endSeconds).toBeCloseTo(0.5, 6);
   expect(notes[1].endBeat).toBeUndefined();
+});
+
+test('player: bms RANK=2 は基準判定幅になる', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.rank = 2;
+  const windows = resolveJudgeWindowsMs(json);
+  expect(windows.pgreat).toBeCloseTo(16.67, 6);
+  expect(windows.great).toBeCloseTo(33.33, 6);
+  expect(windows.good).toBeCloseTo(116.67, 6);
+  expect(windows.bad).toBeCloseTo(250, 6);
+});
+
+test('player: bms RANK=0 は判定幅が狭くなる', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.rank = 0;
+  const windows = resolveJudgeWindowsMs(json);
+  expect(windows.pgreat).toBeCloseTo((16.67 * 25) / 75, 6);
+  expect(windows.great).toBeCloseTo((33.33 * 25) / 75, 6);
+  expect(windows.good).toBeCloseTo((116.67 * 25) / 75, 6);
+  expect(windows.bad).toBeCloseTo((250 * 25) / 75, 6);
+});
+
+test('player: bms DEFEXRANK は NORMAL 基準で倍率換算される', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.rank = 0;
+  json.bms.defExRank = 120;
+  const windows = resolveJudgeWindowsMs(json);
+  expect(windows.pgreat).toBeCloseTo(16.67 * 1.2, 6);
+  expect(windows.great).toBeCloseTo(33.33 * 1.2, 6);
+  expect(windows.good).toBeCloseTo(116.67 * 1.2, 6);
+  expect(windows.bad).toBeCloseTo(250 * 1.2, 6);
+});
+
+test('player: bmson judge_rank=100 は基準判定幅になる', () => {
+  const json = createEmptyJson('bmson');
+  json.bmson.info.judgeRank = 100;
+  const windows = resolveJudgeWindowsMs(json);
+  expect(windows.pgreat).toBeCloseTo(16.67, 6);
+  expect(windows.great).toBeCloseTo(33.33, 6);
+  expect(windows.good).toBeCloseTo(116.67, 6);
+  expect(windows.bad).toBeCloseTo(250, 6);
+});
+
+test('player: debug judge window は BAD のみ上書きする', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.rank = 4;
+  const windows = resolveJudgeWindowsMs(json, 180);
+  expect(windows.pgreat).toBeCloseTo((16.67 * 125) / 75, 6);
+  expect(windows.great).toBeCloseTo((33.33 * 125) / 75, 6);
+  expect(windows.good).toBeCloseTo((116.67 * 125) / 75, 6);
+  expect(windows.bad).toBe(180);
 });

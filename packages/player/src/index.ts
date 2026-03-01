@@ -134,6 +134,9 @@ const IIDX_PGREAT_WINDOW_MS = 16.67;
 const IIDX_GREAT_WINDOW_MS = 33.33;
 const IIDX_GOOD_WINDOW_MS = 116.67;
 const IIDX_BAD_WINDOW_MS = 250;
+const BEATORAJA_BMS_JUDGERANK_MULTIPLIERS = [25, 50, 75, 100, 125] as const;
+const BEATORAJA_BMS_DEFAULT_JUDGERANK = BEATORAJA_BMS_JUDGERANK_MULTIPLIERS[2];
+const BEATORAJA_BMSON_DEFAULT_JUDGERANK = 100;
 const IIDX_EX_SCORE_PER_PGREAT = 2;
 const IIDX_EX_SCORE_PER_GREAT = 1;
 const IIDX_SCORE_MAX = 200000;
@@ -145,6 +148,13 @@ type JudgeKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'MISS';
 interface ScoreTracker {
   combo: number;
   scoreAccumulator: number;
+}
+
+interface JudgeWindowsMs {
+  pgreat: number;
+  great: number;
+  good: number;
+  bad: number;
 }
 
 export async function playChartFile(filePath: string, options: PlayerOptions = {}): Promise<PlayerSummary> {
@@ -264,6 +274,53 @@ function resolveIidxComboScoreUnit(totalNotes: number): number {
     return totalBonusSteps > 0 ? IIDX_SCORE_COMBO_BONUS_MAX / totalBonusSteps : 0;
   }
   return IIDX_SCORE_COMBO_BONUS_MAX / (10 * finiteTotalNotes - 55);
+}
+
+function resolveBmsJudgeRankPercent(json: BmsJson): number {
+  const defExRank = json.bms.defExRank;
+  if (typeof defExRank === 'number' && Number.isFinite(defExRank) && defExRank > 0) {
+    return (defExRank * BEATORAJA_BMS_DEFAULT_JUDGERANK) / 100;
+  }
+
+  const rankValue = Number.isFinite(json.metadata.rank) ? Math.trunc(json.metadata.rank!) : Number.NaN;
+  if (Number.isFinite(rankValue) && rankValue >= 0 && rankValue < BEATORAJA_BMS_JUDGERANK_MULTIPLIERS.length) {
+    return BEATORAJA_BMS_JUDGERANK_MULTIPLIERS[rankValue as 0 | 1 | 2 | 3 | 4];
+  }
+
+  return BEATORAJA_BMS_DEFAULT_JUDGERANK;
+}
+
+function resolveBmsonJudgeRankPercent(json: BmsJson): number {
+  const judgeRank = json.bmson.info.judgeRank;
+  if (Number.isFinite(judgeRank) && (judgeRank ?? 0) > 0) {
+    return judgeRank!;
+  }
+  const metadataRank = json.metadata.rank;
+  if (Number.isFinite(metadataRank) && (metadataRank ?? 0) > 0) {
+    return metadataRank!;
+  }
+  return BEATORAJA_BMSON_DEFAULT_JUDGERANK;
+}
+
+export function resolveJudgeWindowsMs(json: BmsJson, debugBadWindowMs?: number): JudgeWindowsMs {
+  const bmsonStyle = json.sourceFormat === 'bmson';
+  const baseJudgerank = bmsonStyle ? BEATORAJA_BMSON_DEFAULT_JUDGERANK : BEATORAJA_BMS_DEFAULT_JUDGERANK;
+  const judgeRank = bmsonStyle ? resolveBmsonJudgeRankPercent(json) : resolveBmsJudgeRankPercent(json);
+  const scale = judgeRank / baseJudgerank;
+  const pgreat = IIDX_PGREAT_WINDOW_MS * scale;
+  const great = IIDX_GREAT_WINDOW_MS * scale;
+  const good = IIDX_GOOD_WINDOW_MS * scale;
+  const badFromRank = IIDX_BAD_WINDOW_MS * scale;
+  const bad =
+    typeof debugBadWindowMs === 'number' && Number.isFinite(debugBadWindowMs) && debugBadWindowMs > 0
+      ? debugBadWindowMs
+      : badFromRank;
+  return {
+    pgreat,
+    great,
+    good,
+    bad,
+  };
 }
 
 export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
@@ -459,11 +516,8 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const resolvedJson = resolveBmsControlFlow(json);
   const speed = options.speed ?? 1;
-  const debugJudgeWindowMs = options.judgeWindowMs;
-  const badWindowMs =
-    typeof debugJudgeWindowMs === 'number' && Number.isFinite(debugJudgeWindowMs) && debugJudgeWindowMs > 0
-      ? debugJudgeWindowMs
-      : IIDX_BAD_WINDOW_MS;
+  const judgeWindows = resolveJudgeWindowsMs(resolvedJson, options.judgeWindowMs);
+  const badWindowMs = judgeWindows.bad;
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
@@ -507,7 +561,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   if (!tui) {
     process.stdout.write('Manual play start\n');
     process.stdout.write(
-      `Judge window: PGREAT<=${IIDX_PGREAT_WINDOW_MS}ms GREAT<=${IIDX_GREAT_WINDOW_MS}ms GOOD<=${IIDX_GOOD_WINDOW_MS}ms BAD<=${Math.round(badWindowMs)}ms\n`,
+      `Judge window: PGREAT<=${judgeWindows.pgreat.toFixed(2)}ms GREAT<=${judgeWindows.great.toFixed(2)}ms GOOD<=${judgeWindows.good.toFixed(2)}ms BAD<=${Math.round(badWindowMs)}ms\n`,
     );
     process.stdout.write('Press Ctrl+C to quit.\n');
     process.stdout.write('Press Esc to stop and open result.\n');
@@ -640,7 +694,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
     }
 
     const deltaMs = Math.abs(candidate.seconds - nowSec) * 1000;
-    if (deltaMs <= IIDX_PGREAT_WINDOW_MS) {
+    if (deltaMs <= judgeWindows.pgreat) {
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
       combo += 1;
       if (!tui) {
@@ -651,7 +705,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       }
       return;
     }
-    if (deltaMs <= IIDX_GREAT_WINDOW_MS) {
+    if (deltaMs <= judgeWindows.great) {
       applyJudgeToSummary(summary, 'GREAT', scoreTracker);
       combo += 1;
       if (!tui) {
@@ -662,7 +716,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       }
       return;
     }
-    if (deltaMs <= IIDX_GOOD_WINDOW_MS) {
+    if (deltaMs <= judgeWindows.good) {
       applyJudgeToSummary(summary, 'GOOD', scoreTracker);
       combo += 1;
       if (!tui) {
