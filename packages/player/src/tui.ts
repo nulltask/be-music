@@ -68,6 +68,8 @@ const NOTE_HEAD_SYMBOL = '●';
 const LONG_NOTE_BODY_SYMBOL = '■';
 const LONG_NOTE_TAIL_SYMBOL = '◆';
 const ANSI_RESET = '\u001b[0m';
+const SCORE_COUNTUP_MIN_PER_SEC = 4000;
+const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
 
 export class PlayerTui {
   private readonly options: TuiOptions;
@@ -93,6 +95,10 @@ export class PlayerTui {
   private latestJudge = '-';
 
   private combo = 0;
+
+  private displayedScore = 0;
+
+  private lastScoreAnimationMs = 0;
 
   private previousFrameLineCount = 0;
 
@@ -146,6 +152,8 @@ export class PlayerTui {
     this.active = false;
     this.latestJudge = '-';
     this.combo = 0;
+    this.displayedScore = 0;
+    this.lastScoreAnimationMs = 0;
     this.laneHoldUntilBeat.clear();
     this.previousFrameLineCount = 0;
     this.lastSixel = undefined;
@@ -295,9 +303,10 @@ export class PlayerTui {
     lines.push(
       `PLAYER ${formatPlayerLabel(this.options.player)}  RANK ${formatRankLabel(this.options.rank)}  PLAYLEVEL ${formatPlayLevelLabel(this.options.playLevel)}`,
     );
+    const animatedScore = this.resolveAnimatedScore(frame.summary.score, now);
     const maxExScore = Math.max(0, frame.summary.total * 2);
     lines.push(
-      `NOTES ${formatNotesProgress(frame.summary)}  EX ${frame.summary.exScore}/${maxExScore}  SCORE ${frame.summary.score}/200000`,
+      `NOTES ${formatNotesProgress(frame.summary)}  EX ${frame.summary.exScore}/${maxExScore}  SCORE ${animatedScore}/200000`,
     );
     lines.push(
       `PERFECT ${frame.summary.perfect}  GREAT ${frame.summary.great}  GOOD ${frame.summary.good}  BAD ${frame.summary.bad}  MISS ${frame.summary.miss}`,
@@ -412,6 +421,32 @@ export class PlayerTui {
     this.noteWindowStartIndex = start;
     this.noteWindowEndIndex = end;
     return { start, end };
+  }
+
+  private resolveAnimatedScore(targetScore: number, nowMs: number): number {
+    const safeTarget = Math.max(0, Math.floor(targetScore));
+    if (this.lastScoreAnimationMs <= 0) {
+      this.lastScoreAnimationMs = nowMs;
+    }
+
+    if (this.displayedScore > safeTarget) {
+      this.displayedScore = safeTarget;
+      this.lastScoreAnimationMs = nowMs;
+      return this.displayedScore;
+    }
+
+    if (this.displayedScore === safeTarget) {
+      this.lastScoreAnimationMs = nowMs;
+      return this.displayedScore;
+    }
+
+    const elapsedMs = Math.max(0, nowMs - this.lastScoreAnimationMs);
+    this.lastScoreAnimationMs = nowMs;
+    const remaining = safeTarget - this.displayedScore;
+    const countupPerSec = Math.max(SCORE_COUNTUP_MIN_PER_SEC, remaining * SCORE_COUNTUP_DISTANCE_FACTOR);
+    const step = Math.max(1, Math.floor((countupPerSec * elapsedMs) / 1000));
+    this.displayedScore = Math.min(safeTarget, this.displayedScore + step);
+    return this.displayedScore;
   }
 }
 
