@@ -681,11 +681,22 @@ function decodeJpeg(buffer: Buffer): DecodedImage {
 }
 
 function decodeBmp(buffer: Buffer): DecodedImage {
-  const decoded = decodeBmpTs(buffer, { toRGBA: true });
+  const decoded = decodeBmpTs(buffer);
+  const rgba = new Uint8Array(decoded.data.length);
+  for (let offset = 0; offset + 3 < decoded.data.length; offset += 4) {
+    const a = decoded.data[offset] ?? 255;
+    const b = decoded.data[offset + 1] ?? 0;
+    const g = decoded.data[offset + 2] ?? 0;
+    const r = decoded.data[offset + 3] ?? 0;
+    rgba[offset] = r;
+    rgba[offset + 1] = g;
+    rgba[offset + 2] = b;
+    rgba[offset + 3] = a;
+  }
   return {
     width: decoded.width,
     height: decoded.height,
-    data: decoded.data,
+    data: rgba,
     format: 'bmp',
   };
 }
