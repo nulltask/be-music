@@ -295,7 +295,10 @@ export class PlayerTui {
     lines.push(
       `PLAYER ${formatPlayerLabel(this.options.player)}  RANK ${formatRankLabel(this.options.rank)}  PLAYLEVEL ${formatPlayLevelLabel(this.options.playLevel)}`,
     );
-    lines.push(`NOTES ${formatNotesProgress(frame.summary)}`);
+    const maxExScore = Math.max(0, frame.summary.total * 2);
+    lines.push(
+      `NOTES ${formatNotesProgress(frame.summary)}  EX ${frame.summary.exScore}/${maxExScore}  SCORE ${frame.summary.score}/200000`,
+    );
     lines.push(
       `PERFECT ${frame.summary.perfect}  GREAT ${frame.summary.great}  GOOD ${frame.summary.good}  BAD ${frame.summary.bad}  MISS ${frame.summary.miss}`,
     );

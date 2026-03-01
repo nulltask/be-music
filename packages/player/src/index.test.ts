@@ -25,6 +25,8 @@ test('player: auto 再生が完走できる', async () => {
   expect(summary.good).toBe(0);
   expect(summary.bad).toBe(0);
   expect(summary.miss).toBe(0);
+  expect(summary.exScore).toBe(12);
+  expect(summary.score).toBe(200000);
 });
 
 test('player: 制御構文付き譜面は再生時に分岐解決される', async () => {
@@ -44,6 +46,8 @@ test('player: 制御構文付き譜面は再生時に分岐解決される', asy
   expect(summary.total).toBe(2);
   expect(summary.perfect).toBe(2);
   expect(summary.bad).toBe(0);
+  expect(summary.exScore).toBe(4);
+  expect(summary.score).toBe(200000);
 });
 
 test('player: bmson notes.l からロングノート終端 beat を算出できる', () => {

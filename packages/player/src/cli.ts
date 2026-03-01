@@ -919,6 +919,7 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
   const titleLine = played.title ?? relativePath;
   const artistLine = played.artist ? `ARTIST ${played.artist}` : undefined;
   const totalNotes = Math.max(0, Math.floor(played.summary.total));
+  const maxExScore = Math.max(0, totalNotes * 2);
   const judgedNotes = Math.max(
     0,
     Math.floor(
@@ -945,6 +946,7 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
       `PLAYER ${formatPlayerLabel(played.player)}  RANK ${formatRankLabel(played.rank)}  PLAYLEVEL ${formatPlayLevelLabel(played.playLevel)}`,
     );
     lines.push(`NOTES ${notesProgress}`);
+    lines.push(`EX-SCORE ${played.summary.exScore}/${maxExScore}  SCORE ${played.summary.score}/200000`);
     lines.push(`PERFECT ${played.summary.perfect}  GREAT ${played.summary.great}`);
     lines.push(`GOOD ${played.summary.good}  BAD ${played.summary.bad}  MISS ${played.summary.miss}`);
     lines.push('');

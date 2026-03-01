@@ -59,6 +59,8 @@ export interface PlayerSummary {
   good: number;
   bad: number;
   miss: number;
+  exScore: number;
+  score: number;
 }
 
 export interface PlayerLoadProgress {
@@ -132,6 +134,18 @@ const IIDX_PGREAT_WINDOW_MS = 16.67;
 const IIDX_GREAT_WINDOW_MS = 33.33;
 const IIDX_GOOD_WINDOW_MS = 116.67;
 const IIDX_BAD_WINDOW_MS = 250;
+const IIDX_EX_SCORE_PER_PGREAT = 2;
+const IIDX_EX_SCORE_PER_GREAT = 1;
+const IIDX_SCORE_MAX = 200000;
+const IIDX_SCORE_JUDGE_BASE_MAX = 150000;
+const IIDX_SCORE_COMBO_BONUS_MAX = 50000;
+
+type JudgeKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'MISS';
+
+interface ScoreTracker {
+  combo: number;
+  scoreAccumulator: number;
+}
 
 export async function playChartFile(filePath: string, options: PlayerOptions = {}): Promise<PlayerSummary> {
   const json = await parseChartFile(filePath);
@@ -172,6 +186,86 @@ function formatSampleLoadDetail(progress: RenderSampleLoadProgress): string {
   return `#WAV${progress.sampleKey}`;
 }
 
+function createScoreTracker(): ScoreTracker {
+  return {
+    combo: 0,
+    scoreAccumulator: 0,
+  };
+}
+
+function applyJudgeToSummary(summary: PlayerSummary, judge: JudgeKind, tracker: ScoreTracker): void {
+  if (judge === 'PERFECT') {
+    summary.perfect += 1;
+  } else if (judge === 'GREAT') {
+    summary.great += 1;
+  } else if (judge === 'GOOD') {
+    summary.good += 1;
+  } else if (judge === 'BAD') {
+    summary.bad += 1;
+  } else {
+    summary.miss += 1;
+  }
+
+  const exScoreDelta = resolveExScoreDelta(judge);
+  summary.exScore += exScoreDelta;
+
+  if (judge === 'PERFECT' || judge === 'GREAT' || judge === 'GOOD') {
+    tracker.combo += 1;
+  } else {
+    tracker.combo = 0;
+  }
+
+  const scoreDelta = resolveIidxScoreDelta(judge, summary.total, tracker.combo);
+  tracker.scoreAccumulator += scoreDelta;
+  summary.score = Math.max(0, Math.min(IIDX_SCORE_MAX, Math.floor(tracker.scoreAccumulator + 1e-9)));
+}
+
+function resolveExScoreDelta(judge: JudgeKind): number {
+  if (judge === 'PERFECT') {
+    return IIDX_EX_SCORE_PER_PGREAT;
+  }
+  if (judge === 'GREAT') {
+    return IIDX_EX_SCORE_PER_GREAT;
+  }
+  return 0;
+}
+
+function resolveIidxScoreDelta(judge: JudgeKind, totalNotes: number, combo: number): number {
+  if (!Number.isFinite(totalNotes) || totalNotes <= 0) {
+    return 0;
+  }
+
+  const baseUnit = IIDX_SCORE_JUDGE_BASE_MAX / totalNotes;
+  let judgeMultiplier = 0;
+  if (judge === 'PERFECT') {
+    judgeMultiplier = 1.5;
+  } else if (judge === 'GREAT') {
+    judgeMultiplier = 1;
+  } else if (judge === 'GOOD') {
+    judgeMultiplier = 0.2;
+  }
+
+  if (judgeMultiplier <= 0) {
+    return 0;
+  }
+
+  const comboUnit = resolveIidxComboScoreUnit(totalNotes);
+  const comboStep = Math.min(10, Math.max(0, combo - 1));
+  return baseUnit * judgeMultiplier + comboStep * comboUnit;
+}
+
+function resolveIidxComboScoreUnit(totalNotes: number): number {
+  if (!Number.isFinite(totalNotes) || totalNotes <= 1) {
+    return 0;
+  }
+  const finiteTotalNotes = Math.floor(totalNotes);
+  if (finiteTotalNotes <= 10) {
+    const totalBonusSteps = (finiteTotalNotes * (finiteTotalNotes - 1)) / 2;
+    return totalBonusSteps > 0 ? IIDX_SCORE_COMBO_BONUS_MAX / totalBonusSteps : 0;
+  }
+  return IIDX_SCORE_COMBO_BONUS_MAX / (10 * finiteTotalNotes - 55);
+}
+
 export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const resolvedJson = resolveBmsControlFlow(json);
@@ -192,7 +286,10 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
     good: 0,
     bad: 0,
     miss: 0,
+    exScore: 0,
+    score: 0,
   };
+  const scoreTracker = createScoreTracker();
   let combo = 0;
   let interruptedReason: PlayerInterruptReason | undefined;
 
@@ -304,7 +401,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
         }
 
         note.judged = true;
-        summary.perfect += 1;
+        applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
         combo += 1;
 
         const key = keyMap.get(note.channel) ?? '?';
@@ -384,7 +481,10 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
     good: 0,
     bad: 0,
     miss: 0,
+    exScore: 0,
+    score: 0,
   };
+  const scoreTracker = createScoreTracker();
   let combo = 0;
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
@@ -541,7 +641,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
 
     const deltaMs = Math.abs(candidate.seconds - nowSec) * 1000;
     if (deltaMs <= IIDX_PGREAT_WINDOW_MS) {
-      summary.perfect += 1;
+      applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
       combo += 1;
       if (!tui) {
         process.stdout.write(`PERFECT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -552,7 +652,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       return;
     }
     if (deltaMs <= IIDX_GREAT_WINDOW_MS) {
-      summary.great += 1;
+      applyJudgeToSummary(summary, 'GREAT', scoreTracker);
       combo += 1;
       if (!tui) {
         process.stdout.write(`GREAT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -563,7 +663,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       return;
     }
     if (deltaMs <= IIDX_GOOD_WINDOW_MS) {
-      summary.good += 1;
+      applyJudgeToSummary(summary, 'GOOD', scoreTracker);
       combo += 1;
       if (!tui) {
         process.stdout.write(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -574,7 +674,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       return;
     }
 
-    summary.bad += 1;
+    applyJudgeToSummary(summary, 'BAD', scoreTracker);
     combo = 0;
     if (!tui) {
       process.stdout.write(`BAD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -622,7 +722,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
         }
         if (nowSec - note.seconds > badWindowMs / 1000) {
           note.judged = true;
-          summary.miss += 1;
+          applyJudgeToSummary(summary, 'MISS', scoreTracker);
           combo = 0;
           if (tui) {
             tui.setLatestJudge('MISS');
@@ -650,7 +750,10 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
     if (!interruptedReason) {
       const judgedCount = summary.perfect + summary.great + summary.good + summary.bad + summary.miss;
       if (judgedCount < summary.total) {
-        summary.miss += summary.total - judgedCount;
+        const missingCount = summary.total - judgedCount;
+        for (let index = 0; index < missingCount; index += 1) {
+          applyJudgeToSummary(summary, 'MISS', scoreTracker);
+        }
         combo = 0;
         if (tui) {
           tui.setLatestJudge('MISS');
@@ -1561,8 +1664,9 @@ function formatSeconds(seconds: number): string {
 }
 
 function renderSummary(summary: PlayerSummary): string {
-  const score =
-    summary.total === 0 ? 0 : (summary.perfect * 1 + summary.great * 0.7 + summary.good * 0.4) / summary.total;
+  const maxExScore = Math.max(0, summary.total * IIDX_EX_SCORE_PER_PGREAT);
+  const exScoreRate = maxExScore > 0 ? summary.exScore / maxExScore : 0;
+  const scoreRate = summary.score / IIDX_SCORE_MAX;
   return (
     [
       '--- Result ---',
@@ -1572,7 +1676,8 @@ function renderSummary(summary: PlayerSummary): string {
       `GOOD   : ${summary.good}`,
       `BAD    : ${summary.bad}`,
       `MISS   : ${summary.miss}`,
-      `SCORE  : ${(score * 100).toFixed(2)}%`,
+      `EX-SCORE: ${summary.exScore} / ${maxExScore} (${(exScoreRate * 100).toFixed(2)}%)`,
+      `SCORE   : ${summary.score} / ${IIDX_SCORE_MAX} (${(scoreRate * 100).toFixed(2)}%)`,
     ].join('\n') + '\n'
   );
 }
