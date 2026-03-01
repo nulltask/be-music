@@ -109,12 +109,7 @@ export class PlayerTui {
 
   private noteWindowBeat = Number.NEGATIVE_INFINITY;
 
-  /**
-   * constructor に対応する処理を実行します。
-   * @param options - 動作を制御するオプション。
-   * @returns 戻り値はありません。
-   */
-  constructor(options: TuiOptions) {
+    constructor(options: TuiOptions) {
     this.options = options;
     this.laneChannels = options.lanes.map((lane) => lane.channel);
     this.supported = Boolean(process.stdout.isTTY && process.stdin.isTTY);
@@ -127,27 +122,15 @@ export class PlayerTui {
     this.laneBlockVisibleWidth = calculateLaneBlockVisibleWidth(this.laneWidths, options.splitAfterIndex ?? -1);
   }
 
-  /**
-   * 条件判定を行い、真偽値を返します。
-   * @returns 条件を満たす場合は `true`、それ以外は `false`。
-   */
-  isSupported(): boolean {
+    isSupported(): boolean {
     return this.supported;
   }
 
-  /**
-   * 条件判定を行い、真偽値を返します。
-   * @returns 条件を満たす場合は `true`、それ以外は `false`。
-   */
-  isSixelEnabled(): boolean {
+    isSixelEnabled(): boolean {
     return this.sixelEnabled;
   }
 
-  /**
-   * start に対応する処理を実行します。
-   * @returns 戻り値はありません。
-   */
-  start(): void {
+    start(): void {
     if (!this.supported || this.active) {
       return;
     }
@@ -155,11 +138,7 @@ export class PlayerTui {
     process.stdout.write('\u001b[?1049h\u001b[2J\u001b[H\u001b[?25l');
   }
 
-  /**
-   * stop に対応する処理を実行します。
-   * @returns 戻り値はありません。
-   */
-  stop(): void {
+    stop(): void {
     if (!this.active) {
       return;
     }
@@ -178,40 +157,19 @@ export class PlayerTui {
     process.stdout.write('\u001b[0m\u001b[?25h\u001b[?1049l');
   }
 
-  /**
-   * set Latest Judge に対応する処理を実行します。
-   * @param value - 処理対象の値。
-   * @returns 戻り値はありません。
-   */
-  setLatestJudge(value: string): void {
+    setLatestJudge(value: string): void {
     this.latestJudge = value;
   }
 
-  /**
-   * set Combo に対応する処理を実行します。
-   * @param value - 処理対象の値。
-   * @returns 戻り値はありません。
-   */
-  setCombo(value: number): void {
+    setCombo(value: number): void {
     this.combo = Math.max(0, Math.floor(value));
   }
 
-  /**
-   * flash Lane に対応する処理を実行します。
-   * @param channel - 対象チャンネル番号。
-   * @returns 戻り値はありません。
-   */
-  flashLane(channel: string): void {
+    flashLane(channel: string): void {
     this.laneFlashUntil.set(channel, Date.now() + FLASH_DURATION_MS);
   }
 
-  /**
-   * hold Lane Until Beat に対応する処理を実行します。
-   * @param channel - 対象チャンネル番号。
-   * @param beat - 拍位置（beat）を表す値。
-   * @returns 戻り値はありません。
-   */
-  holdLaneUntilBeat(channel: string, beat: number): void {
+    holdLaneUntilBeat(channel: string, beat: number): void {
     if (!Number.isFinite(beat)) {
       return;
     }
@@ -222,12 +180,7 @@ export class PlayerTui {
     this.laneHoldUntilBeat.set(channel, beat);
   }
 
-  /**
-   * 描画または音声レンダリングを行い、結果を返します。
-   * @param frame - frame に対応する入力値。
-   * @returns 戻り値はありません。
-   */
-  render(frame: TuiFrame): void {
+    render(frame: TuiFrame): void {
     if (!this.active) {
       return;
     }
@@ -433,13 +386,7 @@ export class PlayerTui {
     }
   }
 
-  /**
-   * 依存する値を解決し、確定値を返します。
-   * @param notes - notes に対応する入力値。
-   * @param currentBeat - currentBeat に対応する入力値。
-   * @returns 処理結果（{ start: number; end: number }）。
-   */
-  private resolveNoteWindow(notes: TuiNote[], currentBeat: number): { start: number; end: number } {
+    private resolveNoteWindow(notes: TuiNote[], currentBeat: number): { start: number; end: number } {
     if (this.noteWindowSource !== notes || currentBeat < this.noteWindowBeat) {
       this.noteWindowSource = notes;
       this.noteWindowStartIndex = 0;
@@ -464,12 +411,6 @@ export class PlayerTui {
   }
 }
 
-/**
- * 描画または音声レンダリングを行い、結果を返します。
- * @param currentSeconds - currentSeconds に対応する入力値。
- * @param totalSeconds - totalSeconds に対応する入力値。
- * @returns 変換後または整形後の文字列。
- */
 function renderProgress(currentSeconds: number, totalSeconds: number): string {
   const barLength = 28;
   const safeTotal = Math.max(1, totalSeconds);
@@ -478,28 +419,12 @@ function renderProgress(currentSeconds: number, totalSeconds: number): string {
   return `[${'#'.repeat(filled)}${'-'.repeat(barLength - filled)}] ${Math.round(ratio * 100)}%`;
 }
 
-/**
- * beat To Row に対応する処理を実行します。
- * @param beat - 拍位置（beat）を表す値。
- * @param currentBeat - currentBeat に対応する入力値。
- * @param rowCount - rowCount に対応する入力値。
- * @returns 計算結果の数値。
- */
 function beatToRow(beat: number, currentBeat: number, rowCount: number): number {
   const delta = beat - currentBeat;
   const normalized = clamp(delta / NOTE_WINDOW_BEATS, 0, 1);
   return rowCount - 1 - Math.floor(normalized * (rowCount - 1));
 }
 
-/**
- * 描画または音声レンダリングを行い、結果を返します。
- * @param values - 処理対象の値配列。
- * @param channels - channels に対応する入力値。
- * @param laneWidths - laneWidths に対応する入力値。
- * @param splitAfterIndex - splitAfterIndex に対応する入力値。
- * @param laneHighlightRatios - laneHighlightRatios に対応する入力値。
- * @returns 変換後または整形後の文字列。
- */
 function renderLaneRow(
   values: string[],
   channels: string[],
@@ -540,12 +465,6 @@ function renderLaneRow(
   return `${left}   ${right}`;
 }
 
-/**
- * center に対応する処理を実行します。
- * @param value - 処理対象の値。
- * @param width - width に対応する入力値。
- * @returns 変換後または整形後の文字列。
- */
 function center(value: string, width: number): string {
   if (value.length >= width) {
     return value.slice(0, width);
@@ -556,12 +475,6 @@ function center(value: string, width: number): string {
   return `${' '.repeat(leftPadding)}${value}${' '.repeat(rightPadding)}`;
 }
 
-/**
- * center Visible に対応する処理を実行します。
- * @param value - 処理対象の値。
- * @param width - width に対応する入力値。
- * @returns 変換後または整形後の文字列。
- */
 function centerVisible(value: string, width: number): string {
   const safeWidth = Math.max(1, Math.floor(width));
   const clipped = visibleWidth(value) > safeWidth ? value.slice(0, safeWidth) : value;
@@ -575,12 +488,6 @@ function centerVisible(value: string, width: number): string {
   return `${' '.repeat(leftPadding)}${clipped}${' '.repeat(rightPadding)}`;
 }
 
-/**
- * 描画または音声レンダリングを行い、結果を返します。
- * @param width - width に対応する入力値。
- * @param kind - kind に対応する入力値。
- * @returns 変換後または整形後の文字列。
- */
 function renderNoteCell(width: number, kind: 'head' | 'body' | 'tail'): string {
   const safeWidth = Math.max(1, width);
   if (kind === 'body') {
@@ -592,12 +499,6 @@ function renderNoteCell(width: number, kind: 'head' | 'body' | 'tail'): string {
   return '█'.repeat(safeWidth);
 }
 
-/**
- * highlight Cell に対応する処理を実行します。
- * @param value - 処理対象の値。
- * @param ratio - ratio に対応する入力値。
- * @returns 変換後または整形後の文字列。
- */
 function highlightCell(value: string, ratio: number): string {
   const decayProgress = Math.pow(1 - clamp(ratio, 0, 1), HIGHLIGHT_DECAY_POWER);
   const index = Math.round(decayProgress * (HIGHLIGHT_BG_STEPS.length - 1));
@@ -605,12 +506,6 @@ function highlightCell(value: string, ratio: number): string {
   return `\u001b[48;5;${background}m${value}\u001b[0m`;
 }
 
-/**
- * colorize Note に対応する処理を実行します。
- * @param symbol - symbol に対応する入力値。
- * @param channel - 対象チャンネル番号。
- * @returns 変換後または整形後の文字列。
- */
 function colorizeNote(symbol: string, channel: string): string {
   if (RED_NOTE_CHANNELS.has(channel)) {
     return `\u001b[31m${symbol}\u001b[0m`;
@@ -624,21 +519,10 @@ function colorizeNote(symbol: string, channel: string): string {
   return symbol;
 }
 
-/**
- * colorize Measure Line に対応する処理を実行します。
- * @param symbol - symbol に対応する入力値。
- * @returns 変換後または整形後の文字列。
- */
 function colorizeMeasureLine(symbol: string): string {
   return `\u001b[90m${symbol}\u001b[0m`;
 }
 
-/**
- * 描画または音声レンダリングを行い、結果を返します。
- * @param laneLines - laneLines に対応する入力値。
- * @param bgaAnsiLines - bgaAnsiLines に対応する入力値。
- * @returns 処理結果の配列。
- */
 function renderLaneBlockWithBga(laneLines: string[], bgaAnsiLines?: string[]): string[] {
   if (!bgaAnsiLines || bgaAnsiLines.length === 0) {
     return laneLines;
@@ -649,13 +533,6 @@ function renderLaneBlockWithBga(laneLines: string[], bgaAnsiLines?: string[]): s
   return laneLines.map((laneLine, index) => `${laneLine}   ${normalizedBgaLines[index] ?? ' '.repeat(bgaWidth)}`);
 }
 
-/**
- * fit Lines To Height に対応する処理を実行します。
- * @param lines - lines に対応する入力値。
- * @param targetHeight - targetHeight に対応する入力値。
- * @param width - width に対応する入力値。
- * @returns 処理結果の配列。
- */
 function fitLinesToHeight(lines: string[], targetHeight: number, width: number): string[] {
   const normalized = lines.map((line) => padVisibleWidth(line, width));
   if (normalized.length === targetHeight) {
@@ -675,12 +552,6 @@ function fitLinesToHeight(lines: string[], targetHeight: number, width: number):
   ];
 }
 
-/**
- * pad Visible Width に対応する処理を実行します。
- * @param line - line に対応する入力値。
- * @param width - width に対応する入力値。
- * @returns 変換後または整形後の文字列。
- */
 function padVisibleWidth(line: string, width: number): string {
   const currentWidth = visibleWidth(line);
   if (currentWidth >= width) {
@@ -689,11 +560,6 @@ function padVisibleWidth(line: string, width: number): string {
   return `${line}${' '.repeat(width - currentWidth)}`;
 }
 
-/**
- * visible Width に対応する処理を実行します。
- * @param value - 処理対象の値。
- * @returns 計算結果の数値。
- */
 function visibleWidth(value: string): number {
   const firstEsc = value.indexOf('\u001b');
   if (firstEsc < 0) {
@@ -720,12 +586,6 @@ function visibleWidth(value: string): number {
   return width;
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param note - note に対応する入力値。
- * @param currentBeat - currentBeat に対応する入力値。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number): boolean {
   const keepVisible =
     typeof note.visibleUntilBeat === 'number' &&
@@ -742,12 +602,6 @@ function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number): boolea
   return note.beat < currentBeat - NOTE_WINDOW_BEATS;
 }
 
-/**
- * calculate Lane Block Visible Width に対応する処理を実行します。
- * @param laneWidths - laneWidths に対応する入力値。
- * @param splitAfterIndex - splitAfterIndex に対応する入力値。
- * @returns 計算結果の数値。
- */
 function calculateLaneBlockVisibleWidth(laneWidths: number[], splitAfterIndex: number): number {
   const laneCount = Math.max(1, laneWidths.length);
   let width = 0;
@@ -761,12 +615,6 @@ function calculateLaneBlockVisibleWidth(laneWidths: number[], splitAfterIndex: n
   return Math.max(1, width);
 }
 
-/**
- * 条件に一致する要素を探索して返します。
- * @param value - 処理対象の値。
- * @param start - start に対応する入力値。
- * @returns 計算結果の数値。
- */
 function findAnsiSgrSequenceEnd(value: string, start: number): number {
   let index = start;
   while (index < value.length) {
@@ -784,10 +632,6 @@ function findAnsiSgrSequenceEnd(value: string, start: number): number {
   return -1;
 }
 
-/**
- * 入力内容からフォーマットや状態を判定します。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function detectSixelSupport(): boolean {
   const forced = process.env.BMS_PLAYER_SIXEL?.toLowerCase();
   if (forced === '1' || forced === 'true' || forced === 'yes') {
@@ -809,11 +653,6 @@ function detectSixelSupport(): boolean {
   return false;
 }
 
-/**
- * 表示用の PLAYER 値をラベルへ変換します。
- * @param value - 処理対象の値。
- * @returns 変換後または整形後の文字列。
- */
 function formatPlayerLabel(value: number | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return '-';
@@ -834,11 +673,6 @@ function formatPlayerLabel(value: number | undefined): string {
   return String(normalized);
 }
 
-/**
- * 表示用の RANK 値をラベルへ変換します。
- * @param value - 処理対象の値。
- * @returns 変換後または整形後の文字列。
- */
 function formatRankLabel(value: number | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return '-';
@@ -862,11 +696,6 @@ function formatRankLabel(value: number | undefined): string {
   return String(normalized);
 }
 
-/**
- * 表示用の PLAYLEVEL 値を星表記へ変換します。
- * @param value - 処理対象の値。
- * @returns 変換後または整形後の文字列。
- */
 function formatPlayLevelLabel(value: number | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return '-';
@@ -878,32 +707,16 @@ function formatPlayLevelLabel(value: number | undefined): string {
   return '*'.repeat(Math.min(32, normalized));
 }
 
-/**
- * 表示用のノート進捗を整形します。
- * @param summary - 処理対象のリザルト集計。
- * @returns 変換後または整形後の文字列。
- */
 function formatNotesProgress(summary: PlayerSummary): string {
   const total = Math.max(0, summary.total);
   const judged = Math.max(0, summary.perfect + summary.great + summary.good + summary.miss);
   return `${Math.min(total, judged)}/${total}`;
 }
 
-/**
- * 表示・出力に適した形式へ整形します。
- * @param seconds - 秒単位の時刻または長さ。
- * @returns 変換後または整形後の文字列。
- */
 function formatSeconds(seconds: number): string {
   return Math.max(0, seconds).toFixed(2);
 }
 
-/**
- * 条件に一致する要素を探索して返します。
- * @param timeline - timeline に対応する入力値。
- * @param currentSeconds - currentSeconds に対応する入力値。
- * @returns 計算結果の数値。
- */
 function findCurrentMeasure(timeline: ReadonlyArray<MeasureTimelinePoint> | undefined, currentSeconds: number): number {
   if (!timeline || timeline.length === 0) {
     return 0;
@@ -926,11 +739,6 @@ function findCurrentMeasure(timeline: ReadonlyArray<MeasureTimelinePoint> | unde
   return Math.max(0, best);
 }
 
-/**
- * 条件に一致する要素を探索して返します。
- * @param timeline - timeline に対応する入力値。
- * @returns 計算結果の数値。
- */
 function findTotalMeasures(timeline: ReadonlyArray<MeasureTimelinePoint> | undefined): number {
   if (!timeline || timeline.length === 0) {
     return 1;
@@ -939,12 +747,6 @@ function findTotalMeasures(timeline: ReadonlyArray<MeasureTimelinePoint> | undef
   return Math.max(1, Math.floor(last.measure));
 }
 
-/**
- * 条件に一致する要素を探索して返します。
- * @param timeline - timeline に対応する入力値。
- * @param currentSeconds - currentSeconds に対応する入力値。
- * @returns 計算結果の数値。
- */
 function findCurrentBpm(timeline: ReadonlyArray<BpmTimelinePoint> | undefined, currentSeconds: number): number {
   if (!timeline || timeline.length === 0) {
     return 0;
@@ -967,11 +769,6 @@ function findCurrentBpm(timeline: ReadonlyArray<BpmTimelinePoint> | undefined, c
   return Math.max(0, best);
 }
 
-/**
- * 表示・出力に適した形式へ整形します。
- * @param bpm - BPM 値。
- * @returns 変換後または整形後の文字列。
- */
 function formatBpm(bpm: number): string {
   const safe = Number.isFinite(bpm) ? Math.max(0, bpm) : 0;
   return safe % 1 === 0 ? `${safe.toFixed(0)}` : safe.toFixed(2);

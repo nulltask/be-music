@@ -108,20 +108,10 @@ const BACKEND_CANDIDATES: AudioOutputBackendCandidate[] = [
   { name: 'speaker', create: tryCreateSpeakerBackend },
 ];
 
-/**
- * 指定された値が利用可能な音声バックエンド名かどうかを判定します。
- * @param value - CLI などから受け取ったバックエンド名。
- * @returns 判定結果。対応済みバックエンド名なら `true`。
- */
 export function isAudioBackendName(value: string): value is AudioBackendName {
   return value === 'auto' || value === 'speaker' || value === 'audify' || value === 'audio-io';
 }
 
-/**
- * 指定された音声バックエンド名に対応する探索順序を返します。
- * @param requested - 要求されたバックエンド名。`auto` の場合は優先順で探索。
- * @returns 実際に初期化を試行するバックエンド名の配列。
- */
 export function createAudioBackendResolutionOrder(requested: AudioBackendName): ResolvedAudioBackendName[] {
   if (requested === 'auto') {
     return [...AUTO_BACKEND_ORDER];
@@ -129,12 +119,6 @@ export function createAudioBackendResolutionOrder(requested: AudioBackendName): 
   return [requested];
 }
 
-/**
- * 依存可能な音声バックエンドを初期化し、PCM 出力インターフェースを返します。
- * @param requested - 選択されたバックエンド名。`auto` は利用可能な実装へフォールバックします。
- * @param options - 出力デバイス初期化に必要な設定。
- * @returns 初期化成功時は音声出力バックエンド、失敗時は `undefined`。
- */
 export async function createAudioOutputBackend(
   requested: AudioBackendName,
   options: AudioBackendCreateOptions,
@@ -153,11 +137,6 @@ export async function createAudioOutputBackend(
   return undefined;
 }
 
-/**
- * `speaker` バックエンドを初期化し、Writable ストリーム形式の出力を返します。
- * @param options - 出力デバイス初期化に必要な設定。
- * @returns 利用可能な場合はバックエンド、初期化失敗時は `undefined`。
- */
 async function tryCreateSpeakerBackend(options: AudioBackendCreateOptions): Promise<AudioOutputBackend | undefined> {
   const Speaker = await loadSpeakerConstructor();
   if (!Speaker) {
@@ -199,11 +178,6 @@ async function tryCreateSpeakerBackend(options: AudioBackendCreateOptions): Prom
   };
 }
 
-/**
- * `audify` バックエンドを初期化し、RtAudio 経由の出力を返します。
- * @param options - 出力デバイス初期化に必要な設定。
- * @returns 利用可能な場合はバックエンド、初期化失敗時は `undefined`。
- */
 async function tryCreateAudifyBackend(options: AudioBackendCreateOptions): Promise<AudioOutputBackend | undefined> {
   const module = await loadAudifyModule();
   if (!module) {
@@ -405,11 +379,6 @@ async function tryCreateAudifyBackend(options: AudioBackendCreateOptions): Promi
   };
 }
 
-/**
- * `@echogarden/audio-io` バックエンドを初期化し、コールバック駆動出力を返します。
- * @param options - 出力デバイス初期化に必要な設定。
- * @returns 利用可能な場合はバックエンド、初期化失敗時は `undefined`。
- */
 async function tryCreateAudioIoBackend(options: AudioBackendCreateOptions): Promise<AudioOutputBackend | undefined> {
   const module = await loadAudioIoModule();
   if (!module) {
@@ -570,10 +539,6 @@ async function tryCreateAudioIoBackend(options: AudioBackendCreateOptions): Prom
   };
 }
 
-/**
- * `speaker` モジュールを動的ロードし、コンストラクタを返します。
- * @returns `speaker` のコンストラクタ。解決不能なら `undefined`。
- */
 async function loadSpeakerConstructor(): Promise<SpeakerConstructor | undefined> {
   try {
     const imported = await import('speaker');
@@ -587,10 +552,6 @@ async function loadSpeakerConstructor(): Promise<SpeakerConstructor | undefined>
   }
 }
 
-/**
- * `audify` モジュールを動的ロードし、必要 API を返します。
- * @returns `audify` API。解決不能なら `undefined`。
- */
 async function loadAudifyModule(): Promise<AudifyModule | undefined> {
   try {
     const imported = await import('audify');
@@ -608,10 +569,6 @@ async function loadAudifyModule(): Promise<AudifyModule | undefined> {
   }
 }
 
-/**
- * `@echogarden/audio-io` モジュールを動的ロードし、必要 API を返します。
- * @returns `audio-io` API。解決不能なら `undefined`。
- */
 async function loadAudioIoModule(): Promise<AudioIoModule | undefined> {
   try {
     const imported = await import('@echogarden/audio-io');
@@ -625,12 +582,6 @@ async function loadAudioIoModule(): Promise<AudioIoModule | undefined> {
   }
 }
 
-/**
- * `speaker` バックエンドの drain を待機し、次の PCM 書き込み可能状態を待ちます。
- * @param speaker - 出力先ストリーム。
- * @param shouldStop - 中断判定関数。`true` なら待機を打ち切ります。
- * @returns 待機完了を示す Promise。
- */
 async function waitSpeakerWritable(speaker: SpeakerInstance, shouldStop: () => boolean): Promise<void> {
   while (!shouldStop()) {
     const signaled = await new Promise<boolean>((resolvePromise) => {

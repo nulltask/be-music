@@ -91,21 +91,11 @@ const MPG123_SUPPRESSED_LOG_PATTERNS = [
   /\bcoreaudio\.c:\d+\]\s*warning:\s*didn't have any audio data in callback \(buffer underflow\)/i,
 ];
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果（TimingResolver）。
- */
 export function createTimingResolver(json: BmsJson): TimingResolver {
   const tempoPoints = createTempoPoints(json);
   const stopPoints = createStopPoints(json, tempoPoints);
 
-  /**
-   * beat To Seconds Without Stops に対応する処理を実行します。
-   * @param beat - 拍位置（beat）を表す値。
-   * @returns 計算結果の数値。
-   */
-  const beatToSecondsWithoutStops = (beat: number): number => {
+    const beatToSecondsWithoutStops = (beat: number): number => {
     if (beat <= 0 || tempoPoints.length === 0) {
       return 0;
     }
@@ -116,12 +106,7 @@ export function createTimingResolver(json: BmsJson): TimingResolver {
     return point.seconds + (deltaBeat * 60) / point.bpm;
   };
 
-  /**
-   * bpm At Beat に対応する処理を実行します。
-   * @param beat - 拍位置（beat）を表す値。
-   * @returns 計算結果の数値。
-   */
-  const bpmAtBeat = (beat: number): number => {
+    const bpmAtBeat = (beat: number): number => {
     if (tempoPoints.length === 0) {
       return json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
     }
@@ -129,12 +114,7 @@ export function createTimingResolver(json: BmsJson): TimingResolver {
     return tempoPoints[Math.max(0, index)].bpm;
   };
 
-  /**
-   * beat To Seconds に対応する処理を実行します。
-   * @param beat - 拍位置（beat）を表す値。
-   * @returns 計算結果の数値。
-   */
-  const beatToSeconds = (beat: number): number => {
+    const beatToSeconds = (beat: number): number => {
     const base = beatToSecondsWithoutStops(beat);
     if (stopPoints.length === 0) {
       return base;
@@ -155,12 +135,6 @@ export function createTimingResolver(json: BmsJson): TimingResolver {
   };
 }
 
-/**
- * 条件に一致する要素を収集します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param resolver - resolver に対応する入力値。
- * @returns 処理結果の配列。
- */
 export function collectSampleTriggers(json: BmsJson, resolver = createTimingResolver(json)): TimedSampleTrigger[] {
   const events = sortEvents(json.events).filter((event) => isSampleTriggerChannel(event.channel));
   const bmsonPlaybackMap =
@@ -183,12 +157,6 @@ export function collectSampleTriggers(json: BmsJson, resolver = createTimingReso
   });
 }
 
-/**
- * 非同期で描画または音声レンダリングを行い、結果を返します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param options - 動作を制御するオプション。
- * @returns 非同期処理完了後の結果（RenderResult）を解決する Promise。
- */
 export async function renderJson(json: BmsJson, options: RenderOptions = {}): Promise<RenderResult> {
   const sampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
   const normalize = options.normalize ?? true;
@@ -290,13 +258,6 @@ export async function renderJson(json: BmsJson, options: RenderOptions = {}): Pr
   };
 }
 
-/**
- * 非同期で描画または音声レンダリングを行い、結果を返します。
- * @param inputPath - 対象ファイルまたはディレクトリのパス。
- * @param outputPath - 対象ファイルまたはディレクトリのパス。
- * @param options - 動作を制御するオプション。
- * @returns 非同期処理完了後の結果（RenderResult）を解決する Promise。
- */
 export async function renderChartFile(
   inputPath: string,
   outputPath: string,
@@ -312,12 +273,6 @@ export async function renderChartFile(
   return audioRendered;
 }
 
-/**
- * 非同期で指定先へデータを書き込みます。
- * @param outputPath - 対象ファイルまたはディレクトリのパス。
- * @param result - result に対応する入力値。
- * @returns 戻り値はありません。
- */
 export async function writeAudioFile(outputPath: string, result: RenderResult): Promise<void> {
   const destination = resolve(outputPath);
   const format = detectAudioFormat(destination);
@@ -325,11 +280,6 @@ export async function writeAudioFile(outputPath: string, result: RenderResult): 
   await writeFile(destination, encoded);
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果の配列。
- */
 function createTempoPoints(json: BmsJson): TempoPoint[] {
   const baseBpm = json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
   const points: TempoPoint[] = [{ beat: 0, bpm: baseBpm, seconds: 0 }];
@@ -377,12 +327,6 @@ function createTempoPoints(json: BmsJson): TempoPoint[] {
   return points;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param tempoPoints - tempoPoints に対応する入力値。
- * @returns 処理結果の配列。
- */
 function createStopPoints(json: BmsJson, tempoPoints: TempoPoint[]): StopPoint[] {
   const stopEvents = sortEvents(json.events)
     .filter((event) => normalizeChannel(event.channel) === '09')
@@ -412,12 +356,6 @@ function createStopPoints(json: BmsJson, tempoPoints: TempoPoint[]): StopPoint[]
   return points;
 }
 
-/**
- * bpm At Beat From Tempo Points に対応する処理を実行します。
- * @param tempoPoints - tempoPoints に対応する入力値。
- * @param beat - 拍位置（beat）を表す値。
- * @returns 計算結果の数値。
- */
 function bpmAtBeatFromTempoPoints(tempoPoints: TempoPoint[], beat: number): number {
   if (tempoPoints.length === 0) {
     return DEFAULT_BPM;
@@ -426,12 +364,6 @@ function bpmAtBeatFromTempoPoints(tempoPoints: TempoPoint[], beat: number): numb
   return tempoPoints[Math.max(0, index)].bpm;
 }
 
-/**
- * 条件に一致する要素を探索して返します。
- * @param items - items に対応する入力値。
- * @param predicate - predicate に対応する入力値。
- * @returns 計算結果の数値。
- */
 function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
   let low = 0;
   let high = items.length - 1;
@@ -450,11 +382,6 @@ function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
   return answer;
 }
 
-/**
- * 非同期でget Or Create Sample に対応する処理を実行します。
- * @param params - params に対応する入力値。
- * @returns 非同期処理完了後の結果（StereoSample）を解決する Promise。
- */
 async function getOrCreateSample(params: {
   sampleKey: string;
   samplePath?: string;
@@ -551,17 +478,6 @@ async function getOrCreateSample(params: {
   }
 }
 
-/**
- * mix Sample に対応する処理を実行します。
- * @param destinationLeft - destinationLeft に対応する入力値。
- * @param destinationRight - destinationRight に対応する入力値。
- * @param sample - sample に対応する入力値。
- * @param startFrame - startFrame に対応する入力値。
- * @param gain - gain に対応する入力値。
- * @param sampleOffsetFrames - sampleOffsetFrames に対応する入力値。
- * @param sampleMaxFrames - sampleMaxFrames に対応する入力値。
- * @returns 戻り値はありません。
- */
 function mixSample(
   destinationLeft: Float32Array,
   destinationRight: Float32Array,
@@ -589,13 +505,6 @@ function mixSample(
   }
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param resolver - resolver に対応する入力値。
- * @param sampleEvents - sampleEvents に対応する入力値。
- * @returns 処理結果（Map<BmsEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>）。
- */
 function createBmsonSamplePlaybackMap(
   json: BmsJson,
   resolver: TimingResolver,
@@ -651,12 +560,6 @@ function createBmsonSamplePlaybackMap(
   return playbackMap;
 }
 
-/**
- * measure Peak に対応する処理を実行します。
- * @param left - 比較・演算対象の値。
- * @param right - 比較・演算対象の値。
- * @returns 計算結果の数値。
- */
 function measurePeak(left: Float32Array, right: Float32Array): number {
   let peak = 0;
   for (let index = 0; index < left.length; index += 1) {
@@ -672,25 +575,12 @@ function measurePeak(left: Float32Array, right: Float32Array): number {
   return peak;
 }
 
-/**
- * scale Pcm に対応する処理を実行します。
- * @param channel - 対象チャンネル番号。
- * @param scale - scale に対応する入力値。
- * @returns 戻り値はありません。
- */
 function scalePcm(channel: Float32Array, scale: number): void {
   for (let index = 0; index < channel.length; index += 1) {
     channel[index] *= scale;
   }
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param sampleKey - sampleKey に対応する入力値。
- * @param sampleRate - sampleRate に対応する入力値。
- * @param seconds - 秒単位の時刻または長さ。
- * @returns 処理結果（StereoSample）。
- */
 function createFallbackTone(sampleKey: string, sampleRate: number, seconds: number): StereoSample {
   const frameLength = Math.max(1, Math.round(sampleRate * seconds));
   const left = new Float32Array(frameLength);
@@ -708,12 +598,6 @@ function createFallbackTone(sampleKey: string, sampleRate: number, seconds: numb
   return { left, right };
 }
 
-/**
- * 非同期で依存する値を解決し、確定値を返します。
- * @param baseDir - baseDir に対応する入力値。
- * @param samplePath - 対象ファイルまたはディレクトリのパス。
- * @returns 非同期処理完了後の結果（string | undefined）を解決する Promise。
- */
 async function resolveSamplePath(baseDir: string, samplePath: string): Promise<string | undefined> {
   const candidates = createSamplePathCandidates(samplePath);
 
@@ -727,21 +611,11 @@ async function resolveSamplePath(baseDir: string, samplePath: string): Promise<s
   return undefined;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param samplePath - 対象ファイルまたはディレクトリのパス。
- * @returns 処理結果の配列。
- */
 function createSamplePathCandidates(samplePath: string): string[] {
   const seen = new Set<string>();
   const candidates: string[] = [];
 
-  /**
-   * push に対応する処理を実行します。
-   * @param value - 処理対象の値。
-   * @returns 戻り値はありません。
-   */
-  const push = (value: string): void => {
+    const push = (value: string): void => {
     const normalized = value.trim();
     if (normalized.length === 0 || seen.has(normalized)) {
       return;
@@ -763,12 +637,6 @@ function createSamplePathCandidates(samplePath: string): string[] {
   return candidates;
 }
 
-/**
- * append Sample Candidates By Rule に対応する処理を実行します。
- * @param samplePath - 対象ファイルまたはディレクトリのパス。
- * @param push - push に対応する入力値。
- * @returns 戻り値はありません。
- */
 function appendSampleCandidatesByRule(samplePath: string, push: (candidatePath: string) => void): void {
   push(samplePath);
 
@@ -836,11 +704,6 @@ function appendSampleCandidatesByRule(samplePath: string, push: (candidatePath: 
   push(`${withoutExtension}.OPUS`);
 }
 
-/**
- * 非同期でexists に対応する処理を実行します。
- * @param filePath - 対象ファイルまたはディレクトリのパス。
- * @returns 非同期処理完了後の結果（boolean）を解決する Promise。
- */
 async function exists(filePath: string): Promise<boolean> {
   try {
     await access(filePath);
@@ -850,12 +713,6 @@ async function exists(filePath: string): Promise<boolean> {
   }
 }
 
-/**
- * 非同期で入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @param pathHint - pathHint に対応する入力値。
- * @returns 非同期処理完了後の結果（DecodedAudio）を解決する Promise。
- */
 async function decodeAudioSample(buffer: Buffer, pathHint?: string): Promise<DecodedAudio> {
   if (isWavBuffer(buffer)) {
     return decodeWav(buffer);
@@ -889,11 +746,6 @@ async function decodeAudioSample(buffer: Buffer, pathHint?: string): Promise<Dec
   }
 }
 
-/**
- * 非同期で入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 非同期処理完了後の結果（DecodedAudio）を解決する Promise。
- */
 async function decodeOggLike(buffer: Buffer): Promise<DecodedAudio> {
   if (isOggOpusBuffer(buffer)) {
     return decodeOggOpus(buffer);
@@ -906,11 +758,6 @@ async function decodeOggLike(buffer: Buffer): Promise<DecodedAudio> {
   }
 }
 
-/**
- * 入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 処理結果（DecodedAudio）。
- */
 function decodeWav(buffer: Buffer): DecodedAudio {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   if (readAscii(view, 0, 4) !== 'RIFF' || readAscii(view, 8, 4) !== 'WAVE') {
@@ -975,11 +822,6 @@ function decodeWav(buffer: Buffer): DecodedAudio {
   };
 }
 
-/**
- * 非同期で入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 非同期処理完了後の結果（DecodedAudio）を解決する Promise。
- */
 async function decodeOggVorbis(buffer: Buffer): Promise<DecodedAudio> {
   const decoder = new OggVorbisDecoder();
   await decoder.ready;
@@ -1000,11 +842,6 @@ async function decodeOggVorbis(buffer: Buffer): Promise<DecodedAudio> {
   }
 }
 
-/**
- * 非同期で入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 非同期処理完了後の結果（DecodedAudio）を解決する Promise。
- */
 async function decodeMp3(buffer: Buffer): Promise<DecodedAudio> {
   return withSuppressedMpg123Warnings(async () => {
     const decoder = new MPEGDecoder();
@@ -1027,11 +864,6 @@ async function decodeMp3(buffer: Buffer): Promise<DecodedAudio> {
   });
 }
 
-/**
- * 非同期で入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 非同期処理完了後の結果（DecodedAudio）を解決する Promise。
- */
 async function decodeOggOpus(buffer: Buffer): Promise<DecodedAudio> {
   const decoder = new OggOpusDecoder();
   await decoder.ready;
@@ -1052,14 +884,6 @@ async function decodeOggOpus(buffer: Buffer): Promise<DecodedAudio> {
   }
 }
 
-/**
- * 入力データをデコードして扱いやすい形に変換します。
- * @param view - バイナリ読み取りに使う DataView。
- * @param offset - 読み書き開始位置のオフセット。
- * @param audioFormat - audioFormat に対応する入力値。
- * @param bitsPerSample - bitsPerSample に対応する入力値。
- * @returns 計算結果の数値。
- */
 function decodeSample(view: DataView, offset: number, audioFormat: number, bitsPerSample: number): number {
   if (audioFormat === 3 && bitsPerSample === 32) {
     return clampSignedUnit(view.getFloat32(offset, true));
@@ -1091,13 +915,6 @@ function decodeSample(view: DataView, offset: number, audioFormat: number, bitsP
   }
 }
 
-/**
- * resample Linear に対応する処理を実行します。
- * @param input - 解析または変換の入力データ。
- * @param inputRate - inputRate に対応する入力値。
- * @param outputRate - outputRate に対応する入力値。
- * @returns 処理結果（Float32Array）。
- */
 function resampleLinear(input: Float32Array, inputRate: number, outputRate: number): Float32Array {
   if (inputRate === outputRate) {
     return input;
@@ -1118,11 +935,6 @@ function resampleLinear(input: Float32Array, inputRate: number, outputRate: numb
   return output;
 }
 
-/**
- * 入力データをエンコードして出力形式へ変換します。
- * @param result - result に対応する入力値。
- * @returns 処理結果（Buffer）。
- */
 function encodeWav16(result: RenderResult): Buffer {
   const frameCount = Math.min(result.left.length, result.right.length);
   const dataSize = frameCount * 4;
@@ -1152,11 +964,6 @@ function encodeWav16(result: RenderResult): Buffer {
   return buffer;
 }
 
-/**
- * 入力データをエンコードして出力形式へ変換します。
- * @param result - result に対応する入力値。
- * @returns 処理結果（Buffer）。
- */
 function encodeAiff16(result: RenderResult): Buffer {
   const frameCount = Math.min(result.left.length, result.right.length);
   const dataSize = frameCount * 4;
@@ -1204,13 +1011,6 @@ function encodeAiff16(result: RenderResult): Buffer {
   return buffer;
 }
 
-/**
- * 指定先へデータを書き込みます。
- * @param buffer - 読み取り対象のバッファ。
- * @param offset - 読み書き開始位置のオフセット。
- * @param value - 処理対象の値。
- * @returns 戻り値はありません。
- */
 function writeExtended80(buffer: Buffer, offset: number, value: number): void {
   if (value <= 0) {
     buffer.fill(0, offset, offset + 10);
@@ -1242,11 +1042,6 @@ function writeExtended80(buffer: Buffer, offset: number, value: number): void {
   buffer.writeUInt32BE(lo >>> 0, offset + 6);
 }
 
-/**
- * float To Int16 に対応する処理を実行します。
- * @param sample - sample に対応する入力値。
- * @returns 計算結果の数値。
- */
 function floatToInt16(sample: number): number {
   const clamped = clampSignedUnit(sample);
   if (clamped >= 0) {
@@ -1255,11 +1050,6 @@ function floatToInt16(sample: number): number {
   return Math.round(clamped * 32768);
 }
 
-/**
- * 入力内容からフォーマットや状態を判定します。
- * @param path - 対象ファイルまたはディレクトリのパス。
- * @returns 処理結果（'wav' | 'aiff'）。
- */
 function detectAudioFormat(path: string): 'wav' | 'aiff' {
   const extension = extname(path).toLowerCase();
   if (extension === '.aiff' || extension === '.aif') {
@@ -1268,11 +1058,6 @@ function detectAudioFormat(path: string): 'wav' | 'aiff' {
   return 'wav';
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isWavBuffer(buffer: Buffer): boolean {
   if (buffer.byteLength < 12) {
     return false;
@@ -1281,11 +1066,6 @@ function isWavBuffer(buffer: Buffer): boolean {
   return readAscii(view, 0, 4) === 'RIFF' && readAscii(view, 8, 4) === 'WAVE';
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isOggBuffer(buffer: Buffer): boolean {
   if (buffer.byteLength < 4) {
     return false;
@@ -1294,11 +1074,6 @@ function isOggBuffer(buffer: Buffer): boolean {
   return readAscii(view, 0, 4) === 'OggS';
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isOggOpusBuffer(buffer: Buffer): boolean {
   if (buffer.byteLength < 32) {
     return false;
@@ -1306,11 +1081,6 @@ function isOggOpusBuffer(buffer: Buffer): boolean {
   return buffer.includes(Buffer.from('OpusHead', 'ascii'));
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isMp3Buffer(buffer: Buffer): boolean {
   if (buffer.byteLength >= 3) {
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -1326,13 +1096,6 @@ function isMp3Buffer(buffer: Buffer): boolean {
   return header0 === 0xff && (header1 & 0xe0) === 0xe0;
 }
 
-/**
- * 外部データを読み込み、処理可能な形式で返します。
- * @param view - バイナリ読み取りに使う DataView。
- * @param offset - 読み書き開始位置のオフセット。
- * @param length - 長さを表す値。
- * @returns 変換後または整形後の文字列。
- */
 function readAscii(view: DataView, offset: number, length: number): string {
   let result = '';
   for (let index = 0; index < length; index += 1) {
@@ -1341,11 +1104,6 @@ function readAscii(view: DataView, offset: number, length: number): string {
   return result;
 }
 
-/**
- * 非同期でwith Suppressed Mpg123 Warnings に対応する処理を実行します。
- * @param fn - fn に対応する入力値。
- * @returns 非同期処理完了後の結果（T）を解決する Promise。
- */
 async function withSuppressedMpg123Warnings<T>(fn: () => Promise<T>): Promise<T> {
   const originalConsoleError = console.error;
   const originalStderrWrite = process.stderr.write.bind(process.stderr);

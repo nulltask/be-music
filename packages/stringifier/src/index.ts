@@ -20,12 +20,6 @@ export interface BmsonStringifyOptions {
   indent?: number;
 }
 
-/**
- * 内部データを外部フォーマットの文字列に変換します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param options - 動作を制御するオプション。
- * @returns 変換後または整形後の文字列。
- */
 export function stringifyBms(json: BmsJson, options: BmsStringifyOptions = {}): string {
   const eol = options.eol ?? '\n';
   const maxResolution = options.maxResolution;
@@ -47,12 +41,6 @@ export function stringifyBms(json: BmsJson, options: BmsStringifyOptions = {}): 
   return lines.join(eol);
 }
 
-/**
- * 内部データを外部フォーマットの文字列に変換します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param options - 動作を制御するオプション。
- * @returns 変換後または整形後の文字列。
- */
 export function stringifyBmson(json: BmsJson, options: BmsonStringifyOptions = {}): string {
   const resolution = resolveBmsonResolutionForOutput(json, options);
   const indent = options.indent ?? 2;
@@ -144,22 +132,10 @@ export function stringifyBmson(json: BmsJson, options: BmsonStringifyOptions = {
   return `${JSON.stringify(bmson, null, indent)}\n`;
 }
 
-/**
- * 内部データを外部フォーマットの文字列に変換します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param format - 入出力フォーマット指定または判定ヒント。
- * @returns 変換後または整形後の文字列。
- */
 export function stringifyChart(json: BmsJson, format: 'bms' | 'bmson' = 'bms'): string {
   return format === 'bmson' ? stringifyBmson(json) : stringifyBms(json);
 }
 
-/**
- * push Metadata Lines に対応する処理を実行します。
- * @param lines - lines に対応する入力値。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 戻り値はありません。
- */
 function pushMetadataLines(lines: string[], json: BmsJson): void {
   lines.push(`#TITLE ${json.metadata.title ?? ''}`);
   if (json.metadata.subtitle) {
@@ -197,12 +173,6 @@ function pushMetadataLines(lines: string[], json: BmsJson): void {
   }
 }
 
-/**
- * push Bms Extension Lines に対応する処理を実行します。
- * @param lines - lines に対応する入力値。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 戻り値はありません。
- */
 function pushBmsExtensionLines(lines: string[], json: BmsJson): void {
   if (typeof json.bms.player === 'number') {
     lines.push(`#PLAYER ${formatNumber(json.bms.player)}`);
@@ -302,12 +272,6 @@ function pushBmsExtensionLines(lines: string[], json: BmsJson): void {
   }
 }
 
-/**
- * push Resource Lines に対応する処理を実行します。
- * @param lines - lines に対応する入力値。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 戻り値はありません。
- */
 function pushResourceLines(lines: string[], json: BmsJson): void {
   pushObjectResourceLines(lines, 'WAV', json.resources.wav);
   pushObjectResourceLines(lines, 'BMP', json.resources.bmp);
@@ -325,13 +289,6 @@ function pushResourceLines(lines: string[], json: BmsJson): void {
   pushObjectResourceLines(lines, 'TEXT', json.resources.text);
 }
 
-/**
- * push Object Resource Lines に対応する処理を実行します。
- * @param lines - lines に対応する入力値。
- * @param command - command に対応する入力値。
- * @param values - 処理対象の値配列。
- * @returns 戻り値はありません。
- */
 function pushObjectResourceLines(lines: string[], command: string, values: Record<string, string>): void {
   const entries = Object.entries(values).sort(([left], [right]) => left.localeCompare(right));
   for (const [key, value] of entries) {
@@ -339,12 +296,6 @@ function pushObjectResourceLines(lines: string[], command: string, values: Recor
   }
 }
 
-/**
- * push Measure Lines に対応する処理を実行します。
- * @param lines - lines に対応する入力値。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 戻り値はありません。
- */
 function pushMeasureLines(lines: string[], json: BmsJson): void {
   const measures = [...json.measures]
     .filter((measure) => measure.length > 0 && Math.abs(measure.length - 1) > 1e-9)
@@ -355,13 +306,6 @@ function pushMeasureLines(lines: string[], json: BmsJson): void {
   }
 }
 
-/**
- * push Event Lines に対応する処理を実行します。
- * @param lines - lines に対応する入力値。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param maxResolution - maxResolution に対応する入力値。
- * @returns 戻り値はありません。
- */
 function pushEventLines(lines: string[], json: BmsJson, maxResolution?: number): void {
   const grouped = groupEvents(sortEvents(json.events));
   for (const [key, events] of grouped.entries()) {
@@ -381,12 +325,6 @@ function pushEventLines(lines: string[], json: BmsJson, maxResolution?: number):
   }
 }
 
-/**
- * push Control Flow Lines に対応する処理を実行します。
- * @param lines - lines に対応する入力値。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 戻り値はありません。
- */
 function pushControlFlowLines(lines: string[], json: BmsJson): void {
   for (const entry of json.bms.controlFlow) {
     if (entry.kind === 'directive') {
@@ -408,12 +346,6 @@ function pushControlFlowLines(lines: string[], json: BmsJson): void {
   }
 }
 
-/**
- * push Bms Section Comment に対応する処理を実行します。
- * @param lines - lines に対応する入力値。
- * @param section - section に対応する入力値。
- * @returns 戻り値はありません。
- */
 function pushBmsSectionComment(lines: string[], section: string): void {
   if (lines.length > 0 && lines[lines.length - 1] !== '') {
     lines.push('');
@@ -422,13 +354,6 @@ function pushBmsSectionComment(lines: string[], section: string): void {
   lines.push('');
 }
 
-/**
- * serialize Control Flow Object Events に対応する処理を実行します。
- * @param measure - 対象小節番号。
- * @param channel - 対象チャンネル番号。
- * @param events - 処理対象のイベント配列。
- * @returns 処理結果（string | undefined）。
- */
 function serializeControlFlowObjectEvents(measure: number, channel: string, events: BmsEvent[]): string | undefined {
   const normalizedChannel = normalizeChannel(channel);
   const lineEvents = sortEvents(events)
@@ -461,11 +386,6 @@ function serializeControlFlowObjectEvents(measure: number, channel: string, even
   return `#${toMeasure(measure)}${normalizedChannel}:${cells.join('')}`;
 }
 
-/**
- * group Events に対応する処理を実行します。
- * @param events - 処理対象のイベント配列。
- * @returns 処理結果（Map<string, BmsEvent[]>）。
- */
 function groupEvents(events: BmsEvent[]): Map<string, BmsEvent[]> {
   const groups = new Map<string, BmsEvent[]>();
   for (const event of events) {
@@ -496,12 +416,6 @@ function groupEvents(events: BmsEvent[]): Map<string, BmsEvent[]> {
   );
 }
 
-/**
- * choose Resolution に対応する処理を実行します。
- * @param events - 処理対象のイベント配列。
- * @param maxResolution - maxResolution に対応する入力値。
- * @returns 計算結果の数値。
- */
 function chooseResolution(events: BmsEvent[], maxResolution?: number): number {
   let resolution = 1;
   for (const event of events) {
@@ -514,11 +428,6 @@ function chooseResolution(events: BmsEvent[], maxResolution?: number): number {
   return Math.max(1, resolution);
 }
 
-/**
- * 依存する値を解決し、確定値を返します。
- * @param event - 処理対象のイベント。
- * @returns 処理結果（{ numerator: number; denominator: number }）。
- */
 function resolveEventFraction(event: BmsEvent): { numerator: number; denominator: number } {
   const denominator = Math.max(1, Number.isFinite(event.position[1]) ? Math.floor(event.position[1]) : 1);
   const numerator = Number.isFinite(event.position[0])
@@ -527,12 +436,6 @@ function resolveEventFraction(event: BmsEvent): { numerator: number; denominator
   return reduceFraction(numerator, denominator);
 }
 
-/**
- * reduce Fraction に対応する処理を実行します。
- * @param numerator - numerator に対応する入力値。
- * @param denominator - denominator に対応する入力値。
- * @returns 処理結果（{ numerator: number; denominator: number }）。
- */
 function reduceFraction(numerator: number, denominator: number): { numerator: number; denominator: number } {
   if (numerator <= 0) {
     return { numerator: 0, denominator: 1 };
@@ -544,29 +447,14 @@ function reduceFraction(numerator: number, denominator: number): { numerator: nu
   };
 }
 
-/**
- * to Measure に対応する処理を実行します。
- * @param measure - 対象小節番号。
- * @returns 変換後または整形後の文字列。
- */
 function toMeasure(measure: number): string {
   return Math.max(0, Math.floor(measure)).toString(10).padStart(3, '0').slice(-3);
 }
 
-/**
- * 表示・出力に適した形式へ整形します。
- * @param value - 処理対象の値。
- * @returns 変換後または整形後の文字列。
- */
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param command - command に対応する入力値。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isDedicatedBmsExtensionCommand(command: string): boolean {
   const upper = command.toUpperCase();
   if (
@@ -602,10 +490,6 @@ function isDedicatedBmsExtensionCommand(command: string): boolean {
   return false;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @returns 処理結果（BmsJson）。
- */
 export function createDemoJson(): BmsJson {
   const json: BmsJson = {
     format: 'be-music-json/0.1.0',
@@ -656,21 +540,10 @@ export function createDemoJson(): BmsJson {
   return json;
 }
 
-/**
- * token From Number に対応する処理を実行します。
- * @param value - 処理対象の値。
- * @returns 変換後または整形後の文字列。
- */
 export function tokenFromNumber(value: number): string {
   return intToBase36(value, 2);
 }
 
-/**
- * 依存する値を解決し、確定値を返します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param options - 動作を制御するオプション。
- * @returns 計算結果の数値。
- */
 function resolveBmsonResolutionForOutput(json: BmsJson, options: BmsonStringifyOptions): number {
   if (typeof options.resolution === 'number' && Number.isFinite(options.resolution) && options.resolution > 0) {
     return Math.floor(options.resolution);
@@ -684,11 +557,6 @@ function resolveBmsonResolutionForOutput(json: BmsJson, options: BmsonStringifyO
   return 240;
 }
 
-/**
- * 依存する値を解決し、確定値を返します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 変換後または整形後の文字列。
- */
 function resolveBmsonVersionForOutput(json: BmsJson): string {
   if (typeof json.bmson.version === 'string' && json.bmson.version.length > 0) {
     return json.bmson.version;
@@ -696,13 +564,6 @@ function resolveBmsonVersionForOutput(json: BmsJson): string {
   return '1.0.0';
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param resolution - resolution に対応する入力値。
- * @param playableChannelCount - playableChannelCount に対応する入力値。
- * @returns 処理結果（Record<string, unknown>）。
- */
 function createBmsonInfoForOutput(
   json: BmsJson,
   resolution: number,
@@ -753,11 +614,6 @@ function createBmsonInfoForOutput(
   return output;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果（| { bga_header: Array<{ id: number; name: string }>; bga_events: Array<{ y: number; id: number }>; layer_events: Array<{ y: number; id: number }>; poor_events: Array<{ y: number; id: number }>; } | undefined）。
- */
 function createBmsonBgaForOutput(json: BmsJson):
   | {
       bga_header: Array<{ id: number; name: string }>;
@@ -795,11 +651,6 @@ function createBmsonBgaForOutput(json: BmsJson):
   };
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @returns 処理結果（string[] | undefined）。
- */
 function normalizeBmsonSubartistsForOutput(value: string[] | undefined): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -807,12 +658,6 @@ function normalizeBmsonSubartistsForOutput(value: string[] | undefined): string[
   return value.filter((item) => typeof item === 'string');
 }
 
-/**
- * 依存する値を解決し、確定値を返します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param resolution - resolution に対応する入力値。
- * @returns 処理結果の配列。
- */
 function resolveBmsonLinesForOutput(json: BmsJson, resolution: number): number[] {
   if (json.bmson.lines.length > 0) {
     return normalizeBmsonLines(json.bmson.lines);
@@ -820,11 +665,6 @@ function resolveBmsonLinesForOutput(json: BmsJson, resolution: number): number[]
   return createDefaultBmsonLines(json, resolution);
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param lines - lines に対応する入力値。
- * @returns 処理結果の配列。
- */
 function normalizeBmsonLines(lines: number[]): number[] {
   const values = lines.filter((line) => Number.isFinite(line)).map((line) => Math.max(0, Math.floor(line)));
   const sorted = [...new Set(values)].sort((left, right) => left - right);
@@ -834,12 +674,6 @@ function normalizeBmsonLines(lines: number[]): number[] {
   return sorted;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param resolution - resolution に対応する入力値。
- * @returns 処理結果の配列。
- */
 function createDefaultBmsonLines(json: BmsJson, resolution: number): number[] {
   const ticksPerMeasure = Math.max(1, Math.floor(resolution * 4));
   const lastEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);

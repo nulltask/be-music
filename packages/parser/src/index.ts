@@ -124,11 +124,6 @@ interface SwitchControlFrame {
 type ControlFlowFrame = RandomControlFrame | IfControlFrame | SwitchControlFrame;
 type MeasureLengthEntry = BmsJson['measures'][number];
 
-/**
- * 入力データを解析し、内部処理で扱う形式に変換します。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（BmsJson）。
- */
 export function parseBms(input: string): BmsJson {
   const json = createEmptyJson('bms');
   const controlFlowCaptureStack: ControlFlowCaptureFrameType[] = [];
@@ -202,11 +197,6 @@ export function parseBms(input: string): BmsJson {
   return json;
 }
 
-/**
- * 入力データを解析し、内部処理で扱う形式に変換します。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（BmsJson）。
- */
 export function parseBmson(input: string): BmsJson {
   const document = JSON.parse(input) as BmsonDocument;
   const json = createEmptyJson('bmson');
@@ -336,11 +326,6 @@ export function parseBmson(input: string): BmsJson {
   return json;
 }
 
-/**
- * 入力データを解析し、内部処理で扱う形式に変換します。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（BmsJson）。
- */
 export function parseJson(input: string): BmsJson {
   const raw = JSON.parse(input) as Partial<BmsJson>;
   const json = createEmptyJson(raw.sourceFormat ?? 'json');
@@ -375,12 +360,6 @@ export function parseJson(input: string): BmsJson {
   return json;
 }
 
-/**
- * 入力データを解析し、内部処理で扱う形式に変換します。
- * @param input - 解析または変換の入力データ。
- * @param formatHint - 入出力フォーマット指定または判定ヒント。
- * @returns 処理結果（BmsJson）。
- */
 export function parseChart(input: string, formatHint?: string): BmsJson {
   const hint = formatHint?.toLowerCase();
   if (hint === 'bmson') {
@@ -406,11 +385,6 @@ export function parseChart(input: string, formatHint?: string): BmsJson {
   return parseBms(input);
 }
 
-/**
- * 非同期で入力データを解析し、内部処理で扱う形式に変換します。
- * @param filePath - 対象ファイルまたはディレクトリのパス。
- * @returns 非同期処理完了後の結果（BmsJson）を解決する Promise。
- */
 export async function parseChartFile(filePath: string): Promise<BmsJson> {
   const buffer = await readFile(filePath);
   const extension = extname(filePath).toLowerCase();
@@ -428,12 +402,6 @@ export interface ResolveBmsControlFlowOptions {
   random?: () => number;
 }
 
-/**
- * 依存する値を解決し、確定値を返します。
- * @param input - 解析または変換の入力データ。
- * @param options - 動作を制御するオプション。
- * @returns 処理結果（BmsJson）。
- */
 export function resolveBmsControlFlow(input: BmsJson, options: ResolveBmsControlFlowOptions = {}): BmsJson {
   if (input.bms.controlFlow.length === 0) {
     return cloneJson(input);
@@ -463,11 +431,6 @@ export function resolveBmsControlFlow(input: BmsJson, options: ResolveBmsControl
   return json;
 }
 
-/**
- * 入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 処理結果（DecodedBmsText）。
- */
 export function decodeBmsText(buffer: Buffer): DecodedBmsText {
   if (hasUtf8Bom(buffer)) {
     return {
@@ -518,12 +481,6 @@ export function decodeBmsText(buffer: Buffer): DecodedBmsText {
   );
 }
 
-/**
- * score Decoded Bms Text に対応する処理を実行します。
- * @param text - text に対応する入力値。
- * @param bias - bias に対応する入力値。
- * @returns 計算結果の数値。
- */
 function scoreDecodedBmsText(text: string, bias: number): number {
   let score = bias;
   if (text.length === 0) {
@@ -571,11 +528,6 @@ function scoreDecodedBmsText(text: string, bias: number): number {
   return score;
 }
 
-/**
- * 文字統計を集計して返します。
- * @param text - text に対応する入力値。
- * @returns 処理結果（{ replacementCount: number; nullCount: number; lowControlCount: number; printableCount: number; japaneseCount: number }）。
- */
 function collectTextStatistics(text: string): {
   replacementCount: number;
   nullCount: number;
@@ -629,11 +581,6 @@ function collectTextStatistics(text: string): {
   };
 }
 
-/**
- * 入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 変換後または整形後の文字列。
- */
 function decodeUtf8Text(buffer: Buffer): string {
   let text = buffer.toString('utf8');
   if (text.charCodeAt(0) === 0xfeff) {
@@ -642,21 +589,11 @@ function decodeUtf8Text(buffer: Buffer): string {
   return text;
 }
 
-/**
- * 入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 変換後または整形後の文字列。
- */
 function decodeUtf16LeText(buffer: Buffer): string {
   const offset = hasUtf16LeBom(buffer) ? 2 : 0;
   return buffer.subarray(offset).toString('utf16le');
 }
 
-/**
- * 入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 変換後または整形後の文字列。
- */
 function decodeUtf16BeText(buffer: Buffer): string {
   const offset = hasUtf16BeBom(buffer) ? 2 : 0;
   const source = buffer.subarray(offset);
@@ -670,41 +607,18 @@ function decodeUtf16BeText(buffer: Buffer): string {
   return swapped.toString('utf16le');
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function hasUtf8Bom(buffer: Buffer): boolean {
   return buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf;
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function hasUtf16LeBom(buffer: Buffer): boolean {
   return buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe;
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function hasUtf16BeBom(buffer: Buffer): boolean {
   return buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff;
 }
 
-/**
- * push Object Data Line に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param measure - 対象小節番号。
- * @param channel - 対象チャンネル番号。
- * @param data - data に対応する入力値。
- * @returns 戻り値はありません。
- */
 function pushObjectDataLine(
   json: BmsJson,
   measure: number,
@@ -734,13 +648,6 @@ function pushObjectDataLine(
   });
 }
 
-/**
- * push Header Line に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param command - command に対応する入力値。
- * @param value - 処理対象の値。
- * @returns 戻り値はありません。
- */
 function pushHeaderLine(json: BmsJson, command: string, value: string): void {
   const objectCommand = command.match(INDEXED_HEADER_COMMAND);
   if (objectCommand) {
@@ -935,11 +842,6 @@ function pushHeaderLine(json: BmsJson, command: string, value: string): void {
   }
 }
 
-/**
- * migrate Bms Extension Headers From Extras に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 戻り値はありません。
- */
 function migrateBmsExtensionHeadersFromExtras(json: BmsJson): void {
   const migratedExtras: Record<string, string> = {};
 
@@ -1103,11 +1005,6 @@ function migrateBmsExtensionHeadersFromExtras(json: BmsJson): void {
   json.metadata.extras = migratedExtras;
 }
 
-/**
- * split Tokens に対応する処理を実行します。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果の配列。
- */
 function splitTokens(input: string): string[] {
   const tokens: string[] = [];
   let high = '';
@@ -1127,11 +1024,6 @@ function splitTokens(input: string): string[] {
   return tokens;
 }
 
-/**
- * sort And Normalize Events に対応する処理を実行します。
- * @param events - 処理対象のイベント配列。
- * @returns 処理結果の配列。
- */
 function sortAndNormalizeEvents(events: Array<BmsEvent | Record<string, unknown>>): BmsEvent[] {
   const normalized: BmsEvent[] = [];
   for (const event of events) {
@@ -1157,11 +1049,6 @@ function sortAndNormalizeEvents(events: Array<BmsEvent | Record<string, unknown>
   return normalized;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param event - 処理対象のイベント。
- * @returns 処理結果（BmsEvent | undefined）。
- */
 function normalizeRawEvent(event: BmsEvent | Record<string, unknown>): BmsEvent | undefined {
   const raw = event as Record<string, unknown>;
   const measure = normalizeMeasure(raw.measure);
@@ -1181,11 +1068,6 @@ function normalizeRawEvent(event: BmsEvent | Record<string, unknown>): BmsEvent 
   };
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @returns 処理結果（number | undefined）。
- */
 function normalizeMeasure(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined;
@@ -1193,11 +1075,6 @@ function normalizeMeasure(value: unknown): number | undefined {
   return Math.max(0, Math.floor(value));
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @returns 処理結果（string | undefined）。
- */
 function normalizeEventChannel(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined;
@@ -1205,11 +1082,6 @@ function normalizeEventChannel(value: unknown): string | undefined {
   return normalizeChannel(value);
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @returns 処理結果（string | undefined）。
- */
 function normalizeEventValue(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined;
@@ -1217,11 +1089,6 @@ function normalizeEventValue(value: unknown): string | undefined {
   return normalizeObjectKey(value);
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param position - position に対応する入力値。
- * @returns 処理結果（BmsPosition | undefined）。
- */
 function normalizePosition(position: unknown): BmsPosition | undefined {
   if (!Array.isArray(position) || position.length < 2) {
     return undefined;
@@ -1237,11 +1104,6 @@ function normalizePosition(position: unknown): BmsPosition | undefined {
   return [numerator, denominator];
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @returns 処理結果（number | undefined）。
- */
 function normalizePositionDenominator(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return undefined;
@@ -1249,12 +1111,6 @@ function normalizePositionDenominator(value: unknown): number | undefined {
   return Math.max(1, Math.floor(value));
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @param denominator - denominator に対応する入力値。
- * @returns 処理結果（number | undefined）。
- */
 function normalizePositionNumerator(value: unknown, denominator: number): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined;
@@ -1263,11 +1119,6 @@ function normalizePositionNumerator(value: unknown, denominator: number): number
   return Math.max(0, Math.min(denominator - 1, normalized));
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @returns 処理結果（BmsEvent['bmson'] | undefined）。
- */
 function normalizeEventBmsonExtension(value: unknown): BmsEvent['bmson'] | undefined {
   if (!value || typeof value !== 'object') {
     return undefined;
@@ -1284,12 +1135,6 @@ function normalizeEventBmsonExtension(value: unknown): BmsEvent['bmson'] | undef
   return Object.keys(extension).length > 0 ? extension : undefined;
 }
 
-/**
- * compare Event Position に対応する処理を実行します。
- * @param left - 比較・演算対象の値。
- * @param right - 比較・演算対象の値。
- * @returns 計算結果の数値。
- */
 function compareEventPosition(left: BmsEvent, right: BmsEvent): number {
   if (left.position[1] === right.position[1]) {
     return left.position[0] - right.position[0];
@@ -1318,11 +1163,6 @@ function compareEventPosition(left: BmsEvent, right: BmsEvent): number {
   return 0;
 }
 
-/**
- * ASCII 英数字のみを BMS オブジェクトトークン向けに正規化します。
- * @param code - 1 文字の文字コード。
- * @returns 条件を満たす場合は正規化済み 1 文字、それ以外は `undefined`。
- */
 function normalizeAsciiTokenChar(code: number): string | undefined {
   if (code >= 0x30 && code <= 0x39) {
     return String.fromCharCode(code);
@@ -1336,14 +1176,6 @@ function normalizeAsciiTokenChar(code: number): string | undefined {
   return undefined;
 }
 
-/**
- * 小節長情報を index 単位で追加または更新します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param measure - 対象小節番号。
- * @param length - 小節長。
- * @param measureByIndex - index から小節情報を引くためのマップ。
- * @returns 戻り値はありません。
- */
 function upsertMeasureLength(
   json: BmsJson,
   measure: number,
@@ -1369,11 +1201,6 @@ function upsertMeasureLength(
   }
 }
 
-/**
- * 派生情報を組み立てて返します。
- * @param soundChannels - soundChannels に対応する入力値。
- * @returns 処理結果（Map<number, string>）。
- */
 function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[]): Map<number, string> {
   const xValues = new Set<number>();
   for (const soundChannel of soundChannels) {
@@ -1395,11 +1222,6 @@ function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[]): Map<number, stri
   return map;
 }
 
-/**
- * lane Index To Channel に対応する処理を実行します。
- * @param index - 対象要素のインデックス。
- * @returns 変換後または整形後の文字列。
- */
 function laneIndexToChannel(index: number): string {
   const digits = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const first = digits[Math.floor(index / digits.length)] ?? '1';
@@ -1407,11 +1229,6 @@ function laneIndexToChannel(index: number): string {
   return `${first}${second}`;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（BmsJson['bms']）。
- */
 function normalizeBmsExtensions(input: unknown): BmsJson['bms'] {
   const normalized: BmsJson['bms'] = {
     controlFlow: [],
@@ -1515,11 +1332,6 @@ function normalizeBmsExtensions(input: unknown): BmsJson['bms'] {
   return normalized;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @returns 処理結果（number | undefined）。
- */
 function normalizeNumericBmsExtensionValue(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -1531,11 +1343,6 @@ function normalizeNumericBmsExtensionValue(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（Record<string, string>）。
- */
 function normalizeIndexedBmsExtensionMap(input: unknown): Record<string, string> {
   if (!input || typeof input !== 'object') {
     return {};
@@ -1555,11 +1362,6 @@ function normalizeIndexedBmsExtensionMap(input: unknown): Record<string, string>
   return normalized;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果の配列。
- */
 function normalizeBmsExtensionStringList(input: unknown): string[] {
   if (typeof input === 'string') {
     return input.length > 0 ? [input] : [];
@@ -1577,12 +1379,6 @@ function normalizeBmsExtensionStringList(input: unknown): string[] {
   return normalized;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param info - info に対応する入力値。
- * @param resolution - resolution に対応する入力値。
- * @returns 処理結果（BmsJson['bmson']['info']）。
- */
 function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): BmsJson['bmson']['info'] {
   const normalized: BmsJson['bmson']['info'] = {};
   copyIfString(normalized, 'title', info.title);
@@ -1613,11 +1409,6 @@ function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): BmsJson['
   return normalized;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（BmsJson['bmson']['bga']）。
- */
 function normalizeBmsonBgaForIr(input: BmsonDocument['bga'] | undefined): BmsJson['bmson']['bga'] {
   if (!input || typeof input !== 'object') {
     return {
@@ -1635,11 +1426,6 @@ function normalizeBmsonBgaForIr(input: BmsonDocument['bga'] | undefined): BmsJso
   };
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（BmsJson['bmson']['bga']['header']）。
- */
 function normalizeBmsonBgaHeaderEntries(input: unknown): BmsJson['bmson']['bga']['header'] {
   if (!Array.isArray(input)) {
     return [];
@@ -1662,11 +1448,6 @@ function normalizeBmsonBgaHeaderEntries(input: unknown): BmsJson['bmson']['bga']
   return entries;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（BmsJson['bmson']['bga']['events']）。
- */
 function normalizeBmsonBgaEventEntries(input: unknown): BmsJson['bmson']['bga']['events'] {
   if (!Array.isArray(input)) {
     return [];
@@ -1690,11 +1471,6 @@ function normalizeBmsonBgaEventEntries(input: unknown): BmsJson['bmson']['bga'][
   return entries;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（string[] | undefined）。
- */
 function normalizeBmsonSubartists(input: unknown): string[] | undefined {
   if (!Array.isArray(input)) {
     return undefined;
@@ -1717,11 +1493,6 @@ function normalizeBmsonSubartists(input: unknown): string[] | undefined {
   return names;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @returns 処理結果（number | undefined）。
- */
 function normalizeBmsonNoteLength(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     return undefined;
@@ -1729,37 +1500,18 @@ function normalizeBmsonNoteLength(value: unknown): number | undefined {
   return Math.floor(value);
 }
 
-/**
- * copy If String に対応する処理を実行します。
- * @param target - target に対応する入力値。
- * @param key - キー入力イベント情報。
- * @param value - 処理対象の値。
- * @returns 戻り値はありません。
- */
 function copyIfString<T extends object>(target: T, key: keyof T & string, value: unknown): void {
   if (typeof value === 'string') {
     (target as Record<string, unknown>)[key] = value;
   }
 }
 
-/**
- * copy If Finite Number に対応する処理を実行します。
- * @param target - target に対応する入力値。
- * @param key - キー入力イベント情報。
- * @param value - 処理対象の値。
- * @returns 戻り値はありません。
- */
 function copyIfFiniteNumber<T extends object>(target: T, key: keyof T & string, value: unknown): void {
   if (typeof value === 'number' && Number.isFinite(value)) {
     (target as Record<string, unknown>)[key] = value;
   }
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @returns 処理結果（number | undefined）。
- */
 function normalizePositiveInteger(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined;
@@ -1771,11 +1523,6 @@ function normalizePositiveInteger(value: unknown): number | undefined {
   return normalized;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（BmsJson['bmson']）。
- */
 function normalizeBmsonExtensions(input: unknown): BmsJson['bmson'] {
   const normalized: BmsJson['bmson'] = {
     lines: [],
@@ -1803,11 +1550,6 @@ function normalizeBmsonExtensions(input: unknown): BmsJson['bmson'] {
   return normalized;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（BmsJson['bmson']['info']）。
- */
 function normalizeBmsonInfoFromIr(input: unknown): BmsJson['bmson']['info'] {
   const info: BmsJson['bmson']['info'] = {};
   if (!input || typeof input !== 'object') {
@@ -1844,11 +1586,6 @@ function normalizeBmsonInfoFromIr(input: unknown): BmsJson['bmson']['info'] {
   return info;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（BmsJson['bmson']['bga']）。
- */
 function normalizeBmsonBgaFromIr(input: unknown): BmsJson['bmson']['bga'] {
   if (!input || typeof input !== 'object') {
     return {
@@ -1867,11 +1604,6 @@ function normalizeBmsonBgaFromIr(input: unknown): BmsJson['bmson']['bga'] {
   };
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（BmsControlFlowEntry | undefined）。
- */
 function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | undefined {
   if (!input || typeof input !== 'object') {
     return undefined;
@@ -1944,11 +1676,6 @@ function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | und
   return undefined;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param input - 解析または変換の入力データ。
- * @returns 処理結果（ControlFlowCommand | undefined）。
- */
 function normalizeControlFlowCommand(input: unknown): ControlFlowCommand | undefined {
   if (typeof input !== 'string') {
     return undefined;
@@ -1974,11 +1701,6 @@ function normalizeControlFlowCommand(input: unknown): ControlFlowCommand | undef
   return undefined;
 }
 
-/**
- * 依存する値を解決し、確定値を返します。
- * @param document - document に対応する入力値。
- * @returns 計算結果の数値。
- */
 function resolveBmsonResolution(document: BmsonDocument): number {
   const infoResolution =
     typeof document.info?.resolution === 'number' && Number.isFinite(document.info.resolution)
@@ -1999,11 +1721,6 @@ function resolveBmsonResolution(document: BmsonDocument): number {
   return 240;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param lines - lines に対応する入力値。
- * @returns 処理結果の配列。
- */
 function normalizeBmsonLines(lines: unknown): number[] {
   if (!Array.isArray(lines)) {
     return [];
@@ -2034,12 +1751,6 @@ function normalizeBmsonLines(lines: unknown): number[] {
   return sorted;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param lines - lines に対応する入力値。
- * @param resolution - resolution に対応する入力値。
- * @returns 処理結果（Array<{ index: number; length: number }>）。
- */
 function createMeasureLengthsFromBmsonLines(
   lines: number[],
   resolution: number,
@@ -2064,12 +1775,6 @@ function createMeasureLengthsFromBmsonLines(
   return measures;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param resolution - resolution に対応する入力値。
- * @param lines - lines に対応する入力値。
- * @returns 処理結果（(y: number) => MeasurePositionWithFraction）。
- */
 function createBmsonPositionResolver(resolution: number, lines: number[]): (y: number) => MeasurePositionWithFraction {
   const ticksPerMeasure = Math.max(1, Math.floor(resolution * 4));
   return (y: number) => {
@@ -2107,12 +1812,6 @@ function createBmsonPositionResolver(resolution: number, lines: number[]): (y: n
   };
 }
 
-/**
- * 条件に一致する要素を探索して返します。
- * @param lines - lines に対応する入力値。
- * @param y - y に対応する入力値。
- * @returns 計算結果の数値。
- */
 function findLastLineIndex(lines: number[], y: number): number {
   let low = 0;
   let high = lines.length - 1;
@@ -2131,12 +1830,6 @@ function findLastLineIndex(lines: number[], y: number): number {
   return answer;
 }
 
-/**
- * update Control Flow Capture Stack に対応する処理を実行します。
- * @param stack - stack に対応する入力値。
- * @param command - command に対応する入力値。
- * @returns 戻り値はありません。
- */
 function updateControlFlowCaptureStack(stack: ControlFlowCaptureFrameType[], command: ControlFlowCommand): void {
   if (command === 'RANDOM' || command === 'SETRANDOM') {
     stack.push('random');
@@ -2163,12 +1856,6 @@ function updateControlFlowCaptureStack(stack: ControlFlowCaptureFrameType[], com
   }
 }
 
-/**
- * remove Current Capture Frame に対応する処理を実行します。
- * @param stack - stack に対応する入力値。
- * @param type - type に対応する入力値。
- * @returns 戻り値はありません。
- */
 function removeCurrentCaptureFrame(stack: ControlFlowCaptureFrameType[], type: ControlFlowCaptureFrameType): void {
   for (let index = stack.length - 1; index >= 0; index -= 1) {
     if (stack[index] === type) {
@@ -2178,13 +1865,6 @@ function removeCurrentCaptureFrame(stack: ControlFlowCaptureFrameType[], type: C
   }
 }
 
-/**
- * apply Active Control Flow Entry に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param entry - entry に対応する入力値。
- * @param measureByIndex - index から小節情報を引くためのマップ。
- * @returns 戻り値はありません。
- */
 function applyActiveControlFlowEntry(
   json: BmsJson,
   entry: BmsControlFlowEntry,
@@ -2210,13 +1890,6 @@ function applyActiveControlFlowEntry(
   }
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param measure - 対象小節番号。
- * @param channel - 対象チャンネル番号。
- * @param data - data に対応する入力値。
- * @returns 処理結果（Extract<BmsControlFlowEntry, { kind: 'object' }> | undefined）。
- */
 function createControlFlowObjectEntry(
   measure: number,
   channel: string,
@@ -2261,14 +1934,6 @@ function createControlFlowObjectEntry(
   };
 }
 
-/**
- * apply Control Flow Command に対応する処理を実行します。
- * @param stack - stack に対応する入力値。
- * @param command - command に対応する入力値。
- * @param rawValue - rawValue に対応する入力値。
- * @param random - random に対応する入力値。
- * @returns 戻り値はありません。
- */
 function applyControlFlowCommand(
   stack: ControlFlowFrame[],
   command: ControlFlowCommand,
@@ -2446,11 +2111,6 @@ function applyControlFlowCommand(
   }
 }
 
-/**
- * 入力データを解析し、内部処理で扱う形式に変換します。
- * @param value - 処理対象の値。
- * @returns 処理結果（number | undefined）。
- */
 function parsePositiveInteger(value?: string): number | undefined {
   if (!value || value.length === 0) {
     return undefined;
@@ -2466,12 +2126,6 @@ function parsePositiveInteger(value?: string): number | undefined {
   return normalized;
 }
 
-/**
- * generate Random Value に対応する処理を実行します。
- * @param max - 数値制限に使う境界値。
- * @param random - random に対応する入力値。
- * @returns 計算結果の数値。
- */
 function generateRandomValue(max: number, random: () => number): number {
   const normalized = Math.max(1, Math.floor(max));
   if (normalized <= 1) {
@@ -2482,11 +2136,6 @@ function generateRandomValue(max: number, random: () => number): number {
   return Math.floor(clamped * normalized) + 1;
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param stack - stack に対応する入力値。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isControlFlowActive(stack: ControlFlowFrame[]): boolean {
   for (const frame of stack) {
     if (frame.type === 'if' && !frame.active) {
@@ -2499,11 +2148,6 @@ function isControlFlowActive(stack: ControlFlowFrame[]): boolean {
   return true;
 }
 
-/**
- * get Current Random Value に対応する処理を実行します。
- * @param stack - stack に対応する入力値。
- * @returns 処理結果（number | undefined）。
- */
 function getCurrentRandomValue(stack: ControlFlowFrame[]): number | undefined {
   for (let index = stack.length - 1; index >= 0; index -= 1) {
     const frame = stack[index];
@@ -2514,11 +2158,6 @@ function getCurrentRandomValue(stack: ControlFlowFrame[]): number | undefined {
   return undefined;
 }
 
-/**
- * get Current If Frame に対応する処理を実行します。
- * @param stack - stack に対応する入力値。
- * @returns 処理結果（IfControlFrame | undefined）。
- */
 function getCurrentIfFrame(stack: ControlFlowFrame[]): IfControlFrame | undefined {
   for (let index = stack.length - 1; index >= 0; index -= 1) {
     const frame = stack[index];
@@ -2529,11 +2168,6 @@ function getCurrentIfFrame(stack: ControlFlowFrame[]): IfControlFrame | undefine
   return undefined;
 }
 
-/**
- * get Current Switch Frame に対応する処理を実行します。
- * @param stack - stack に対応する入力値。
- * @returns 処理結果（SwitchControlFrame | undefined）。
- */
 function getCurrentSwitchFrame(stack: ControlFlowFrame[]): SwitchControlFrame | undefined {
   for (let index = stack.length - 1; index >= 0; index -= 1) {
     const frame = stack[index];
@@ -2544,12 +2178,6 @@ function getCurrentSwitchFrame(stack: ControlFlowFrame[]): SwitchControlFrame | 
   return undefined;
 }
 
-/**
- * remove Current Frame に対応する処理を実行します。
- * @param stack - stack に対応する入力値。
- * @param type - type に対応する入力値。
- * @returns 戻り値はありません。
- */
 function removeCurrentFrame(stack: ControlFlowFrame[], type: ControlFlowFrame['type']): void {
   for (let index = stack.length - 1; index >= 0; index -= 1) {
     if (stack[index].type === type) {

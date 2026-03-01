@@ -75,12 +75,7 @@ export class BgaAnsiRenderer {
 
   private cachedSixelScaleY = -1;
 
-  /**
-   * constructor に対応する処理を実行します。
-   * @param params - params に対応する入力値。
-   * @returns 戻り値はありません。
-   */
-  constructor(params: {
+    constructor(params: {
     baseTimeline: BgaCue[];
     layerTimeline: BgaCue[];
     baseFramesByKey: Map<string, AnsiFrame>;
@@ -94,12 +89,7 @@ export class BgaAnsiRenderer {
     this.stageFileFrame = params.stageFileFrame;
   }
 
-  /**
-   * get Ansi Lines に対応する処理を実行します。
-   * @param currentSeconds - currentSeconds に対応する入力値。
-   * @returns 処理結果（string[] | undefined）。
-   */
-  getAnsiLines(currentSeconds: number): string[] | undefined {
+    getAnsiLines(currentSeconds: number): string[] | undefined {
     this.refreshComposite(currentSeconds);
     if (!this.cachedComposite) {
       return undefined;
@@ -115,14 +105,7 @@ export class BgaAnsiRenderer {
     return this.cachedLines;
   }
 
-  /**
-   * get Sixel に対応する処理を実行します。
-   * @param currentSeconds - currentSeconds に対応する入力値。
-   * @param scaleX - scaleX に対応する入力値。
-   * @param scaleY - scaleY に対応する入力値。
-   * @returns 処理結果（string | undefined）。
-   */
-  getSixel(currentSeconds: number, scaleX?: number, scaleY?: number): string | undefined {
+    getSixel(currentSeconds: number, scaleX?: number, scaleY?: number): string | undefined {
     this.refreshComposite(currentSeconds);
     if (!this.cachedComposite) {
       return undefined;
@@ -141,12 +124,7 @@ export class BgaAnsiRenderer {
     return this.cachedSixel;
   }
 
-  /**
-   * refresh Composite に対応する処理を実行します。
-   * @param currentSeconds - currentSeconds に対応する入力値。
-   * @returns 戻り値はありません。
-   */
-  private refreshComposite(currentSeconds: number): void {
+    private refreshComposite(currentSeconds: number): void {
     const baseKey = findActiveCueKey(this.baseTimeline, currentSeconds) ?? '';
     const layerKey = findActiveCueKey(this.layerTimeline, currentSeconds) ?? '';
     if (this.cachedBaseKey === baseKey && this.cachedLayerKey === layerKey) {
@@ -166,12 +144,6 @@ export class BgaAnsiRenderer {
   }
 }
 
-/**
- * 非同期で処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param options - 動作を制御するオプション。
- * @returns 非同期処理完了後の結果（BgaAnsiRenderer | undefined）を解決する Promise。
- */
 export async function createBgaAnsiRenderer(
   json: BmsJson,
   options: BgaAnsiOptions,
@@ -224,11 +196,6 @@ export async function createBgaAnsiRenderer(
   });
 }
 
-/**
- * 非同期で外部データを読み込み、処理可能な形式で返します。
- * @param params - params に対応する入力値。
- * @returns 非同期処理完了後の結果（Map<string, AnsiFrame>）を解決する Promise。
- */
 async function loadFramesByKeys(params: {
   keys: ReadonlySet<string>;
   resources: Record<string, string>;
@@ -258,13 +225,6 @@ async function loadFramesByKeys(params: {
   return map;
 }
 
-/**
- * 派生情報を組み立てて返します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param resolver - resolver に対応する入力値。
- * @param channel - 対象チャンネル番号。
- * @returns 処理結果の配列。
- */
 function buildBgaTimeline(json: BmsJson, resolver: ReturnType<typeof createTimingResolver>, channel: string): BgaCue[] {
   const normalized = normalizeChannel(channel);
   const timeline = sortEvents(json.events)
@@ -295,12 +255,6 @@ function buildBgaTimeline(json: BmsJson, resolver: ReturnType<typeof createTimin
   return compact;
 }
 
-/**
- * 条件に一致する要素を探索して返します。
- * @param timeline - timeline に対応する入力値。
- * @param currentSeconds - currentSeconds に対応する入力値。
- * @returns 処理結果（string | undefined）。
- */
 function findActiveCueKey(timeline: BgaCue[], currentSeconds: number): string | undefined {
   let low = 0;
   let high = timeline.length - 1;
@@ -323,12 +277,6 @@ function findActiveCueKey(timeline: BgaCue[], currentSeconds: number): string | 
   return timeline[answer].key;
 }
 
-/**
- * merge Composite Frames に対応する処理を実行します。
- * @param baseFrame - baseFrame に対応する入力値。
- * @param layerFrame - layerFrame に対応する入力値。
- * @returns 処理結果（CompositeFrame | undefined）。
- */
 function mergeCompositeFrames(baseFrame?: AnsiFrame, layerFrame?: AnsiFrame): CompositeFrame | undefined {
   if (!baseFrame && !layerFrame) {
     return undefined;
@@ -358,15 +306,6 @@ function mergeCompositeFrames(baseFrame?: AnsiFrame, layerFrame?: AnsiFrame): Co
   };
 }
 
-/**
- * paint Frame に対応する処理を実行します。
- * @param canvasRgb - canvasRgb に対応する入力値。
- * @param canvasMask - canvasMask に対応する入力値。
- * @param canvasWidth - canvasWidth に対応する入力値。
- * @param canvasHeight - canvasHeight に対応する入力値。
- * @param frame - frame に対応する入力値。
- * @returns 戻り値はありません。
- */
 function paintFrame(
   canvasRgb: Uint8Array,
   canvasMask: Uint8Array,
@@ -403,14 +342,6 @@ function paintFrame(
   }
 }
 
-/**
- * compose Ansi Lines に対応する処理を実行します。
- * @param rgb - rgb に対応する入力値。
- * @param opaqueMask - opaqueMask に対応する入力値。
- * @param width - width に対応する入力値。
- * @param height - height に対応する入力値。
- * @returns 処理結果の配列。
- */
 function composeAnsiLines(rgb: Uint8Array, opaqueMask: Uint8Array, width: number, height: number): string[] {
   const lines: string[] = [];
   for (let y = 0; y < height; y += 1) {
@@ -454,13 +385,6 @@ function composeAnsiLines(rgb: Uint8Array, opaqueMask: Uint8Array, width: number
   return lines;
 }
 
-/**
- * compose Sixel に対応する処理を実行します。
- * @param frame - frame に対応する入力値。
- * @param scaleX - scaleX に対応する入力値。
- * @param scaleY - scaleY に対応する入力値。
- * @returns 変換後または整形後の文字列。
- */
 function composeSixel(frame: CompositeFrame, scaleX: number, scaleY: number): string {
   const { width: sourceWidth, height: sourceHeight, rgb, opaqueMask } = frame;
   const width = sourceWidth * scaleX;
@@ -542,13 +466,6 @@ function composeSixel(frame: CompositeFrame, scaleX: number, scaleY: number): st
   return parts.join('');
 }
 
-/**
- * quantize Rgb に対応する処理を実行します。
- * @param sourceR - sourceR に対応する入力値。
- * @param sourceG - sourceG に対応する入力値。
- * @param sourceB - sourceB に対応する入力値。
- * @returns 処理結果（{ key: number; r: number; g: number; b: number }）。
- */
 function quantizeRgb(
   sourceR: number,
   sourceG: number,
@@ -564,20 +481,10 @@ function quantizeRgb(
   return { key, r, g, b };
 }
 
-/**
- * to Sixel Percent に対応する処理を実行します。
- * @param channelValue - channelValue に対応する入力値。
- * @returns 計算結果の数値。
- */
 function toSixelPercent(channelValue: number): number {
   return Math.max(0, Math.min(100, Math.round((channelValue / 255) * 100)));
 }
 
-/**
- * 入力データをエンコードして出力形式へ変換します。
- * @param input - 解析または変換の入力データ。
- * @returns 変換後または整形後の文字列。
- */
 function encodeSixelRunLength(input: string): string {
   if (input.length === 0) {
     return input;
@@ -587,11 +494,7 @@ function encodeSixelRunLength(input: string): string {
   let current = input[0];
   let runLength = 1;
 
-  /**
-   * flush に対応する処理を実行します。
-   * @returns 戻り値はありません。
-   */
-  const flush = (): void => {
+    const flush = (): void => {
     if (runLength >= 4) {
       encoded += `!${runLength}${current}`;
       return;
@@ -614,14 +517,6 @@ function encodeSixelRunLength(input: string): string {
   return encoded;
 }
 
-/**
- * 非同期で外部データを読み込み、処理可能な形式で返します。
- * @param imagePath - 対象ファイルまたはディレクトリのパス。
- * @param maxWidth - maxWidth に対応する入力値。
- * @param maxHeight - maxHeight に対応する入力値。
- * @param mode - mode に対応する入力値。
- * @returns 非同期処理完了後の結果（AnsiFrame | undefined）を解決する Promise。
- */
 async function loadImageAsAnsiFrame(
   imagePath: string,
   maxWidth: number,
@@ -637,12 +532,6 @@ async function loadImageAsAnsiFrame(
   }
 }
 
-/**
- * 非同期で依存する値を解決し、確定値を返します。
- * @param baseDir - baseDir に対応する入力値。
- * @param imagePath - 対象ファイルまたはディレクトリのパス。
- * @returns 非同期処理完了後の結果（string | undefined）を解決する Promise。
- */
 async function resolveImagePath(baseDir: string, imagePath: string): Promise<string | undefined> {
   const candidates = createImagePathCandidates(imagePath);
   for (const candidate of candidates) {
@@ -654,21 +543,11 @@ async function resolveImagePath(baseDir: string, imagePath: string): Promise<str
   return undefined;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param imagePath - 対象ファイルまたはディレクトリのパス。
- * @returns 処理結果の配列。
- */
 function createImagePathCandidates(imagePath: string): string[] {
   const extCandidates = ['.bmp', '.BMP', '.png', '.PNG', '.jpg', '.JPG', '.jpeg', '.JPEG'];
   const candidates: string[] = [];
   const seen = new Set<string>();
-  /**
-   * push に対応する処理を実行します。
-   * @param value - 処理対象の値。
-   * @returns 戻り値はありません。
-   */
-  const push = (value: string): void => {
+    const push = (value: string): void => {
     const normalized = value.trim();
     if (normalized.length === 0 || seen.has(normalized)) {
       return;
@@ -695,11 +574,6 @@ function createImagePathCandidates(imagePath: string): string[] {
   return candidates;
 }
 
-/**
- * 非同期でexists に対応する処理を実行します。
- * @param path - 対象ファイルまたはディレクトリのパス。
- * @returns 非同期処理完了後の結果（boolean）を解決する Promise。
- */
 async function exists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -709,12 +583,6 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-/**
- * 入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @param pathHint - pathHint に対応する入力値。
- * @returns 処理結果（DecodedImage）。
- */
 function decodeImageBuffer(buffer: Buffer, pathHint: string): DecodedImage {
   if (isPngBuffer(buffer)) {
     return decodePng(buffer);
@@ -748,11 +616,6 @@ function decodeImageBuffer(buffer: Buffer, pathHint: string): DecodedImage {
   }
 }
 
-/**
- * 入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 処理結果（DecodedImage）。
- */
 function decodePng(buffer: Buffer): DecodedImage {
   const decoded = PNG.sync.read(buffer);
   return {
@@ -763,11 +626,6 @@ function decodePng(buffer: Buffer): DecodedImage {
   };
 }
 
-/**
- * 入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 処理結果（DecodedImage）。
- */
 function decodeJpeg(buffer: Buffer): DecodedImage {
   const decoded = jpeg.decode(buffer, {
     useTArray: true,
@@ -781,11 +639,6 @@ function decodeJpeg(buffer: Buffer): DecodedImage {
   };
 }
 
-/**
- * 入力データをデコードして扱いやすい形に変換します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 処理結果（DecodedImage）。
- */
 function decodeBmp(buffer: Buffer): DecodedImage {
   const decoded = bmp.decode(buffer);
   return {
@@ -796,14 +649,6 @@ function decodeBmp(buffer: Buffer): DecodedImage {
   };
 }
 
-/**
- * convert Image To Ansi Frame に対応する処理を実行します。
- * @param image - image に対応する入力値。
- * @param maxWidth - maxWidth に対応する入力値。
- * @param maxHeight - maxHeight に対応する入力値。
- * @param mode - mode に対応する入力値。
- * @returns 処理結果（AnsiFrame）。
- */
 function convertImageToAnsiFrame(image: DecodedImage, maxWidth: number, maxHeight: number, mode: FrameMode): AnsiFrame {
   const canvasWidth = Math.max(1, maxWidth);
   const canvasHeight = Math.max(1, maxHeight);
@@ -855,16 +700,6 @@ function convertImageToAnsiFrame(image: DecodedImage, maxWidth: number, maxHeigh
   };
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param r - r に対応する入力値。
- * @param g - g に対応する入力値。
- * @param b - b に対応する入力値。
- * @param a - a に対応する入力値。
- * @param format - 入出力フォーマット指定または判定ヒント。
- * @param mode - mode に対応する入力値。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isOpaquePixel(r: number, g: number, b: number, a: number, format: ImageFormat, mode: FrameMode): boolean {
   if (mode !== 'layer') {
     return true;
@@ -878,14 +713,6 @@ function isOpaquePixel(r: number, g: number, b: number, a: number, format: Image
   return true;
 }
 
-/**
- * fit Size Keeping Aspect に対応する処理を実行します。
- * @param sourceWidth - sourceWidth に対応する入力値。
- * @param sourceHeight - sourceHeight に対応する入力値。
- * @param maxWidth - maxWidth に対応する入力値。
- * @param maxHeight - maxHeight に対応する入力値。
- * @returns 処理結果（{ width: number; height: number }）。
- */
 function fitSizeKeepingAspect(
   sourceWidth: number,
   sourceHeight: number,
@@ -909,11 +736,6 @@ function fitSizeKeepingAspect(
   return { width, height };
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isPngBuffer(buffer: Buffer): boolean {
   return (
     buffer.length >= 8 &&
@@ -928,20 +750,10 @@ function isPngBuffer(buffer: Buffer): boolean {
   );
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isJpegBuffer(buffer: Buffer): boolean {
   return buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xd8;
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param buffer - 読み取り対象のバッファ。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isBmpBuffer(buffer: Buffer): boolean {
   return buffer.length >= 2 && buffer[0] === 0x42 && buffer[1] === 0x4d;
 }

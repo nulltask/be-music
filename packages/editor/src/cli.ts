@@ -12,10 +12,6 @@ import {
   setMetadata,
 } from './index.ts';
 
-/**
- * 非同期でmain に対応する処理を実行します。
- * @returns 戻り値はありません。
- */
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
 
@@ -129,11 +125,6 @@ async function main(): Promise<void> {
   }
 }
 
-/**
- * print Usage に対応する処理を実行します。
- * @param exitCode - exitCode に対応する入力値。
- * @returns 戻り値はありません。
- */
 function printUsage(exitCode: number): void {
   process.stdout.write(
     [

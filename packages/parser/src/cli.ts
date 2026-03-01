@@ -9,10 +9,6 @@ interface CliArgs {
   formatHint?: string;
 }
 
-/**
- * 非同期でmain に対応する処理を実行します。
- * @returns 戻り値はありません。
- */
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (!args.input) {
@@ -38,11 +34,6 @@ async function main(): Promise<void> {
   process.stdout.write(`Wrote parsed JSON to ${outputPath}\n`);
 }
 
-/**
- * 入力データを解析し、内部処理で扱う形式に変換します。
- * @param rawArgs - CLI から渡される引数配列。
- * @returns 処理結果（CliArgs）。
- */
 function parseArgs(rawArgs: string[]): CliArgs {
   const args: CliArgs = {};
   const positional: string[] = [];
@@ -62,10 +53,6 @@ function parseArgs(rawArgs: string[]): CliArgs {
   return args;
 }
 
-/**
- * print Usage に対応する処理を実行します。
- * @returns 戻り値はありません。
- */
 function printUsage(): void {
   process.stdout.write(
     [

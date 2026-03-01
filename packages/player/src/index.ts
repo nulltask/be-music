@@ -67,12 +67,7 @@ export class PlayerInterruptedError extends Error {
 
   readonly exitCode: number;
 
-  /**
-   * constructor に対応する処理を実行します。
-   * @param reason - 中断要因。
-   * @returns 戻り値はありません。
-   */
-  constructor(reason: PlayerInterruptReason) {
+    constructor(reason: PlayerInterruptReason) {
     super(`Player interrupted: ${reason}`);
     this.reason = reason;
     this.exitCode = reason === 'ctrl-c' ? 130 : 0;
@@ -200,12 +195,6 @@ const FIXED_BINDINGS: Array<{
   { channel: '26', keyLabel: 'Enter', inputTokens: ['enter', 'return'], side: '2P' },
 ];
 
-/**
- * 非同期で再生処理を実行し、結果を返します。
- * @param filePath - 対象ファイルまたはディレクトリのパス。
- * @param options - 動作を制御するオプション。
- * @returns 非同期処理完了後の結果（PlayerSummary）を解決する Promise。
- */
 export async function playChartFile(filePath: string, options: PlayerOptions = {}): Promise<PlayerSummary> {
   const json = await parseChartFile(filePath);
   const mergedOptions: PlayerOptions = {
@@ -215,11 +204,6 @@ export async function playChartFile(filePath: string, options: PlayerOptions = {
   return mergedOptions.auto ? autoPlay(json, mergedOptions) : manualPlay(json, mergedOptions);
 }
 
-/**
- * extract Playable Notes に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果の配列。
- */
 export function extractPlayableNotes(json: BmsJson): TimedPlayableNote[] {
   const resolver = createTimingResolver(json);
   const notes = sortEvents(json.events)
@@ -243,13 +227,6 @@ export function extractPlayableNotes(json: BmsJson): TimedPlayableNote[] {
   return notes;
 }
 
-/**
- * apply Lnobj End Beat If Needed に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param notes - notes に対応する入力値。
- * @param resolver - resolver に対応する入力値。
- * @returns 戻り値はありません。
- */
 function applyLnobjEndBeatIfNeeded(
   json: BmsJson,
   notes: TimedPlayableNote[],
@@ -281,14 +258,6 @@ function applyLnobjEndBeatIfNeeded(
   }
 }
 
-/**
- * ロード進捗を通知します。
- * @param options - 動作を制御するオプション。
- * @param ratio - 進捗率（0.0-1.0）。
- * @param message - 表示メッセージ。
- * @param detail - 追加詳細表示。
- * @returns 戻り値はありません。
- */
 function reportLoadProgress(options: PlayerOptions, ratio: number, message: string, detail?: string): void {
   const listener = options.onLoadProgress;
   if (!listener) {
@@ -308,11 +277,6 @@ interface AudioSessionLoadProgress {
   detail?: string;
 }
 
-/**
- * サンプル読み込み進捗を表示用文字列に変換します。
- * @param progress - サンプル読み込み進捗。
- * @returns 変換後または整形後の文字列。
- */
 function formatSampleLoadDetail(progress: RenderSampleLoadProgress): string {
   if (typeof progress.resolvedPath === 'string' && progress.resolvedPath.length > 0) {
     return basename(progress.resolvedPath);
@@ -323,12 +287,6 @@ function formatSampleLoadDetail(progress: RenderSampleLoadProgress): string {
   return `#WAV${progress.sampleKey}`;
 }
 
-/**
- * 非同期でauto Play に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param options - 動作を制御するオプション。
- * @returns 非同期処理完了後の結果（PlayerSummary）を解決する Promise。
- */
 export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const resolvedJson = resolveBmsControlFlow(json);
@@ -455,12 +413,6 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
   return summary;
 }
 
-/**
- * 非同期でmanual Play に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param options - 動作を制御するオプション。
- * @returns 非同期処理完了後の結果（PlayerSummary）を解決する Promise。
- */
 export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const resolvedJson = resolveBmsControlFlow(json);
@@ -538,24 +490,14 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   const activeLongNotesByChannel = new Map<string, { endSeconds: number }>();
   const longNoteSuppressUntilSecondsByChannel = new Map<string, number>();
 
-  /**
-   * stop Input Capture に対応する処理を実行します。
-   * @returns 戻り値はありません。
-   */
-  const stopInputCapture = () => {
+    const stopInputCapture = () => {
     process.stdin.removeListener('keypress', onKeyPress);
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(false);
     }
   };
 
-  /**
-   * on Key Press に対応する処理を実行します。
-   * @param chunk - キー入力から取得した文字列チャンク。
-   * @param key - キー入力イベント情報。
-   * @returns 戻り値はありません。
-   */
-  const onKeyPress = (chunk: string, key: readline.Key): void => {
+    const onKeyPress = (chunk: string, key: readline.Key): void => {
     if (interruptedReason) {
       return;
     }
@@ -779,14 +721,6 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   return summary;
 }
 
-/**
- * 条件に一致する要素を探索して返します。
- * @param notes - notes に対応する入力値。
- * @param candidateChannels - candidateChannels に対応する入力値。
- * @param nowSec - nowSec に対応する入力値。
- * @param judgeWindowSec - judgeWindowSec に対応する入力値。
- * @returns 処理結果（TimedPlayableNote | undefined）。
- */
 function findBestCandidate(
   notes: TimedPlayableNote[],
   candidateChannels: ReadonlySet<string>,
@@ -813,13 +747,6 @@ function findBestCandidate(
   return best;
 }
 
-/**
- * 条件に一致する要素を探索して返します。
- * @param notes - notes に対応する入力値。
- * @param candidateChannels - candidateChannels に対応する入力値。
- * @param nowSec - nowSec に対応する入力値。
- * @returns 処理結果（TimedPlayableNote | undefined）。
- */
 function findLaneSoundCandidate(
   notes: TimedPlayableNote[],
   candidateChannels: ReadonlySet<string>,
@@ -853,11 +780,6 @@ function findLaneSoundCandidate(
   return nearestUnjudged ?? nearestAny;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param channels - channels に対応する入力値。
- * @returns 処理結果の配列。
- */
 function createLaneBindings(channels: string[]): LaneBinding[] {
   const existing = new Set(channels.map((channel) => normalizeChannel(channel)));
   const bindings: LaneBinding[] = [];
@@ -901,11 +823,6 @@ function createLaneBindings(channels: string[]): LaneBinding[] {
   return bindings;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param bindings - bindings に対応する入力値。
- * @returns 処理結果（Map<string, string[]>）。
- */
 function createInputTokenToChannelsMap(bindings: LaneBinding[]): Map<string, string[]> {
   const map = new Map<string, string[]>();
   for (const binding of bindings) {
@@ -919,12 +836,6 @@ function createInputTokenToChannelsMap(bindings: LaneBinding[]): Map<string, str
   return map;
 }
 
-/**
- * 依存する値を解決し、確定値を返します。
- * @param chunk - キー入力から取得した文字列チャンク。
- * @param key - キー入力イベント情報。
- * @returns 処理結果の配列。
- */
 function resolveInputTokens(chunk: string, key: readline.Key): string[] {
   const tokens = new Set<string>();
   const normalizedChunk = normalizeKey(chunk);
@@ -960,12 +871,6 @@ function resolveInputTokens(chunk: string, key: readline.Key): string[] {
   return [...tokens];
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param chunk - キー入力から取得した文字列チャンク。
- * @param key - キー入力イベント情報。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isStandaloneShiftKeypress(chunk: string, key: readline.Key): boolean {
   if (key.name === 'shift') {
     return true;
@@ -975,12 +880,6 @@ function isStandaloneShiftKeypress(chunk: string, key: readline.Key): boolean {
   return chunk.length === 0 && sequence.length === 0 && Boolean(key.shift) && !key.ctrl && !key.meta && !key.name;
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param chunk - キー入力から取得した文字列チャンク。
- * @param key - キー入力イベント情報。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
 function isStandaloneControlKeypress(chunk: string, key: readline.Key): boolean {
   if (key.name === 'ctrl' || key.name === 'control') {
     return true;
@@ -990,16 +889,6 @@ function isStandaloneControlKeypress(chunk: string, key: readline.Key): boolean 
   return chunk.length === 0 && sequence.length === 0 && Boolean(key.ctrl) && !key.shift && !key.meta && !key.name;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param options - 動作を制御するオプション。
- * @param mode - mode に対応する入力値。
- * @param laneBindings - laneBindings に対応する入力値。
- * @param speed - speed に対応する入力値。
- * @param judgeWindowMs - judgeWindowMs に対応する入力値。
- * @returns 処理結果（PlayerTui | undefined）。
- */
 function createTuiIfEnabled(
   json: BmsJson,
   options: PlayerOptions,
@@ -1047,13 +936,6 @@ function createTuiIfEnabled(
   return tui;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param bgaRenderer - bgaRenderer に対応する入力値。
- * @param currentSeconds - currentSeconds に対応する入力値。
- * @param preferSixel - preferSixel に対応する入力値。
- * @returns 処理結果（{ bgaAnsiLines?: string[]; bgaSixel?: string }）。
- */
 function createBgaRenderFrame(
   bgaRenderer: BgaAnsiRenderer | undefined,
   currentSeconds: number,
@@ -1073,10 +955,6 @@ function createBgaRenderFrame(
   };
 }
 
-/**
- * estimate Sixel Scale For Current Terminal に対応する処理を実行します。
- * @returns 処理結果（{ x: number; y: number }）。
- */
 function estimateSixelScaleForCurrentTerminal(): { x: number; y: number } {
   const columns = process.stdout.columns ?? DEFAULT_TERMINAL_COLUMNS;
   const rows = process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
@@ -1086,13 +964,6 @@ function estimateSixelScaleForCurrentTerminal(): { x: number; y: number } {
   return { x, y };
 }
 
-/**
- * 非同期で処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param options - 動作を制御するオプション。
- * @param mode - mode に対応する入力値。
- * @returns 非同期処理完了後の結果（AudioSession | undefined）を解決する Promise。
- */
 async function createAudioSessionIfEnabled(
   json: BmsJson,
   options: PlayerOptions,
@@ -1206,11 +1077,7 @@ async function createAudioSessionIfEnabled(
     process.stdout.write(`Audio playback stream error (${output.backend}).\n`);
   });
 
-  /**
-   * 非同期でfinish に対応する処理を実行します。
-   * @returns 戻り値はありません。
-   */
-  const finish = async (): Promise<void> => {
+    const finish = async (): Promise<void> => {
     if (closed) {
       return;
     }
@@ -1228,11 +1095,7 @@ async function createAudioSessionIfEnabled(
     await dispose();
   };
 
-  /**
-   * 非同期でdispose に対応する処理を実行します。
-   * @returns 戻り値はありません。
-   */
-  const dispose = async (): Promise<void> => {
+    const dispose = async (): Promise<void> => {
     if (closed) {
       return;
     }
@@ -1332,11 +1195,6 @@ interface ActiveVoice {
   sliceId?: string;
 }
 
-/**
- * 非同期で再生処理を実行し、結果を返します。
- * @param params - params に対応する入力値。
- * @returns 戻り値はありません。
- */
 async function playMixedPcmThroughOutput(params: {
   output: AudioOutputBackend;
   background: RenderResult;
@@ -1410,14 +1268,6 @@ async function playMixedPcmThroughOutput(params: {
   await output.end();
 }
 
-/**
- * 非同期でwait For Playback Realtime に対応する処理を実行します。
- * @param playheadFrames - playheadFrames に対応する入力値。
- * @param sampleRate - sampleRate に対応する入力値。
- * @param startMs - startMs に対応する入力値。
- * @param shouldStop - shouldStop に対応する入力値。
- * @returns 戻り値はありません。
- */
 async function waitForPlaybackRealtime(
   playheadFrames: number,
   sampleRate: number,
@@ -1439,35 +1289,18 @@ async function waitForPlaybackRealtime(
   }
 }
 
-/**
- * strip Playable Events に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果（BmsJson）。
- */
 function stripPlayableEvents(json: BmsJson): BmsJson {
   const cloned = structuredClone(json);
   cloned.events = cloned.events.filter((event) => !isPlayableChannel(event.channel));
   return cloned;
 }
 
-/**
- * strip Non Playable Events に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果（BmsJson）。
- */
 function stripNonPlayableEvents(json: BmsJson): BmsJson {
   const cloned = structuredClone(json);
   cloned.events = cloned.events.filter((event) => isPlayableChannel(event.channel));
   return cloned;
 }
 
-/**
- * 非同期で描画または音声レンダリングを行い、結果を返します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param bgmVolume - bgmVolume に対応する入力値。
- * @param options - 動作を制御するオプション。
- * @returns 非同期処理完了後の結果（RenderResult）を解決する Promise。
- */
 async function renderAutoBackgroundWithBgmVolume(
   json: BmsJson,
   bgmVolume: number,
@@ -1501,13 +1334,6 @@ async function renderAutoBackgroundWithBgmVolume(
   );
 }
 
-/**
- * 非同期で派生情報を組み立てて返します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param options - 動作を制御するオプション。
- * @param sampleRate - sampleRate に対応する入力値。
- * @returns 非同期処理完了後の結果（Map<string, RenderResult>）を解決する Promise。
- */
 async function buildPlayableSampleMap(
   json: BmsJson,
   options: PlayerOptions,
@@ -1568,11 +1394,6 @@ async function buildPlayableSampleMap(
   return sampleMap;
 }
 
-/**
- * 派生情報を組み立てて返します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果（Map<BmsEvent, PlayableNotePlayback>）。
- */
 function buildPlayableNotePlaybackMap(json: BmsJson): Map<BmsEvent, PlayableNotePlayback> {
   const playbackMap = new Map<BmsEvent, PlayableNotePlayback>();
   for (const trigger of collectSampleTriggers(json, createTimingResolver(json))) {
@@ -1588,11 +1409,6 @@ function buildPlayableNotePlaybackMap(json: BmsJson): Map<BmsEvent, PlayableNote
   return playbackMap;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @returns 計算結果の数値。
- */
 function normalizeBgmVolume(value: number | undefined): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return 1;
@@ -1600,12 +1416,6 @@ function normalizeBgmVolume(value: number | undefined): number {
   return Math.max(0, value);
 }
 
-/**
- * apply Gain To Render Result に対応する処理を実行します。
- * @param result - result に対応する入力値。
- * @param gain - gain に対応する入力値。
- * @returns 処理結果（RenderResult）。
- */
 function applyGainToRenderResult(result: RenderResult, gain: number): RenderResult {
   if (gain === 1) {
     return result;
@@ -1627,11 +1437,6 @@ function applyGainToRenderResult(result: RenderResult, gain: number): RenderResu
   };
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param result - result に対応する入力値。
- * @returns 処理結果（RenderResult）。
- */
 function normalizeRenderResultIfNeeded(result: RenderResult): RenderResult {
   if (result.peak <= 1) {
     return result;
@@ -1639,12 +1444,6 @@ function normalizeRenderResultIfNeeded(result: RenderResult): RenderResult {
   return applyGainToRenderResult(result, 1 / result.peak);
 }
 
-/**
- * mix Render Results に対応する処理を実行します。
- * @param leftResult - leftResult に対応する入力値。
- * @param rightResult - rightResult に対応する入力値。
- * @returns 処理結果（RenderResult）。
- */
 function mixRenderResults(leftResult: RenderResult, rightResult: RenderResult): RenderResult {
   if (leftResult.sampleRate !== rightResult.sampleRate) {
     return leftResult;
@@ -1670,12 +1469,6 @@ function mixRenderResults(leftResult: RenderResult, rightResult: RenderResult): 
   };
 }
 
-/**
- * measure Render Peak に対応する処理を実行します。
- * @param left - 比較・演算対象の値。
- * @param right - 比較・演算対象の値。
- * @returns 計算結果の数値。
- */
 function measureRenderPeak(left: Float32Array, right: Float32Array): number {
   let peak = 0;
   for (let index = 0; index < left.length; index += 1) {
@@ -1691,11 +1484,6 @@ function measureRenderPeak(left: Float32Array, right: Float32Array): number {
   return peak;
 }
 
-/**
- * float To Int16 に対応する処理を実行します。
- * @param value - 処理対象の値。
- * @returns 計算結果の数値。
- */
 function floatToInt16(value: number): number {
   const clamped = Math.max(-1, Math.min(1, value));
   if (clamped >= 0) {
@@ -1704,21 +1492,10 @@ function floatToInt16(value: number): number {
   return Math.round(clamped * 32768);
 }
 
-/**
- * elapsed Ms To Game Seconds に対応する処理を実行します。
- * @param elapsedMs - elapsedMs に対応する入力値。
- * @param speed - speed に対応する入力値。
- * @returns 計算結果の数値。
- */
 function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
   return Math.max(0, (elapsedMs / 1000) * speed);
 }
 
-/**
- * 非同期でwait Precise に対応する処理を実行します。
- * @param delayMs - delayMs に対応する入力値。
- * @returns 戻り値はありません。
- */
 async function waitPrecise(delayMs: number): Promise<void> {
   const target = performance.now() + Math.max(0, delayMs);
   while (true) {
@@ -1734,12 +1511,6 @@ async function waitPrecise(delayMs: number): Promise<void> {
   }
 }
 
-/**
- * add Head Padding に対応する処理を実行します。
- * @param result - result に対応する入力値。
- * @param paddingMs - paddingMs に対応する入力値。
- * @returns 処理結果（RenderResult）。
- */
 function addHeadPadding(result: RenderResult, paddingMs: number): RenderResult {
   const safePaddingMs = Number.isFinite(paddingMs) ? Math.max(0, paddingMs) : 0;
   if (safePaddingMs === 0) {
@@ -1764,24 +1535,12 @@ function addHeadPadding(result: RenderResult, paddingMs: number): RenderResult {
   };
 }
 
-/**
- * to Playback Sample Rate に対応する処理を実行します。
- * @param baseSampleRate - baseSampleRate に対応する入力値。
- * @param speed - speed に対応する入力値。
- * @returns 計算結果の数値。
- */
 function toPlaybackSampleRate(baseSampleRate: number, speed: number): number {
   const safeSpeed = Number.isFinite(speed) && speed > 0 ? speed : 1;
   const scaled = Math.round(baseSampleRate * safeSpeed);
   return Math.max(8_000, Math.min(192_000, scaled));
 }
 
-/**
- * 条件に一致する要素を探索して返します。
- * @param bindings - bindings に対応する入力値。
- * @param predicate - predicate に対応する入力値。
- * @returns 計算結果の数値。
- */
 function findLastLaneIndex(bindings: LaneBinding[], predicate: (binding: LaneBinding) => boolean): number {
   for (let index = bindings.length - 1; index >= 0; index -= 1) {
     if (predicate(bindings[index])) {
@@ -1791,11 +1550,6 @@ function findLastLaneIndex(bindings: LaneBinding[], predicate: (binding: LaneBin
   return -1;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果の配列。
- */
 function createMeasureTimeline(json: BmsJson): MeasureTimelinePoint[] {
   const resolver = createTimingResolver(json);
   const maxEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
@@ -1813,13 +1567,6 @@ function createMeasureTimeline(json: BmsJson): MeasureTimelinePoint[] {
   return timeline;
 }
 
-/**
- * 依存する値を解決し、確定値を返します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param event - 処理対象のイベント。
- * @param beat - 拍位置（beat）を表す値。
- * @returns 処理結果（number | undefined）。
- */
 function resolveLongNoteEndBeat(json: BmsJson, event: BmsEvent, beat: number): number | undefined {
   const length = event.bmson?.l;
   if (typeof length !== 'number' || !Number.isFinite(length) || length <= 0) {
@@ -1837,11 +1584,6 @@ function resolveLongNoteEndBeat(json: BmsJson, event: BmsEvent, beat: number): n
   return beat + length / resolution;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果の配列。
- */
 function createBpmTimeline(json: BmsJson): BpmTimelinePoint[] {
   const resolver = createTimingResolver(json);
   const timeline: BpmTimelinePoint[] = [];
@@ -1872,11 +1614,6 @@ function createBpmTimeline(json: BmsJson): BpmTimelinePoint[] {
   return timeline;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果（(seconds: number) => number）。
- */
 function createBeatAtSecondsResolver(json: BmsJson): (seconds: number) => number {
   const resolver = createTimingResolver(json);
   const stopWindows = createStopBeatWindows(resolver);
@@ -1902,11 +1639,6 @@ function createBeatAtSecondsResolver(json: BmsJson): (seconds: number) => number
   };
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param resolver - resolver に対応する入力値。
- * @returns 処理結果の配列。
- */
 function createStopBeatWindows(resolver: ReturnType<typeof createTimingResolver>): StopBeatWindow[] {
   const durationByBeat = new Map<number, number>();
   for (const point of resolver.stopPoints) {
@@ -1927,12 +1659,6 @@ function createStopBeatWindows(resolver: ReturnType<typeof createTimingResolver>
     });
 }
 
-/**
- * seconds To Beat Without Stops に対応する処理を実行します。
- * @param tempoPoints - tempoPoints に対応する入力値。
- * @param seconds - 秒単位の時刻または長さ。
- * @returns 計算結果の数値。
- */
 function secondsToBeatWithoutStops(
   tempoPoints: ReadonlyArray<{ beat: number; bpm: number; seconds: number }>,
   seconds: number,
@@ -1960,11 +1686,6 @@ function secondsToBeatWithoutStops(
   return point.beat + (elapsed * point.bpm) / 60;
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果の配列。
- */
 function createMeasureBoundariesBeats(json: BmsJson): number[] {
   const maxEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
   const maxDefinedMeasure = json.measures.reduce((max, measure) => Math.max(max, measure.index), 0);
@@ -1987,11 +1708,6 @@ function createMeasureBoundariesBeats(json: BmsJson): number[] {
   return boundaries;
 }
 
-/**
- * estimate Bga Ansi Display Size に対応する処理を実行します。
- * @param bindings - bindings に対応する入力値。
- * @returns 処理結果（{ width: number; height: number }）。
- */
 function estimateBgaAnsiDisplaySize(bindings: LaneBinding[]): { width: number; height: number } {
   const laneWidths = bindings.map((binding) =>
     binding.channel === '16' || binding.channel === '26' ? WIDE_SCRATCH_LANE_WIDTH : DEFAULT_LANE_WIDTH,
@@ -2016,11 +1732,6 @@ function estimateBgaAnsiDisplaySize(bindings: LaneBinding[]): { width: number; h
   return { width, height };
 }
 
-/**
- * print Lane Map に対応する処理を実行します。
- * @param bindings - bindings に対応する入力値。
- * @returns 戻り値はありません。
- */
 function printLaneMap(bindings: LaneBinding[]): void {
   process.stdout.write('Channel map:\n');
   for (const binding of bindings) {
@@ -2028,29 +1739,14 @@ function printLaneMap(bindings: LaneBinding[]): void {
   }
 }
 
-/**
- * 表示・出力に適した形式へ整形します。
- * @param seconds - 秒単位の時刻または長さ。
- * @returns 変換後または整形後の文字列。
- */
 function formatSeconds(seconds: number): string {
   return seconds.toFixed(3);
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param value - 処理対象の値。
- * @returns 変換後または整形後の文字列。
- */
 function normalizeKey(value: string): string {
   return value.length === 1 ? value.toLowerCase() : value;
 }
 
-/**
- * 描画または音声レンダリングを行い、結果を返します。
- * @param summary - summary に対応する入力値。
- * @returns 変換後または整形後の文字列。
- */
 function renderSummary(summary: PlayerSummary): string {
   const score =
     summary.total === 0 ? 0 : (summary.perfect * 1 + summary.great * 0.7 + summary.good * 0.4) / summary.total;
