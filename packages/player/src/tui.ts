@@ -879,10 +879,7 @@ function formatPlayLevelLabel(value: number | undefined): string {
     return '-';
   }
   const normalized = Math.floor(value);
-  if (normalized <= 0) {
-    return '-';
-  }
-  return '*'.repeat(Math.min(32, normalized));
+  return String(normalized);
 }
 
 function formatNotesProgress(summary: PlayerSummary): string {

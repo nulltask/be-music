@@ -1574,10 +1574,10 @@ function formatPlayLevelLabel(value: number | undefined): string {
     return '-';
   }
   const normalized = Math.floor(value);
-  if (!Number.isFinite(normalized) || normalized <= 0) {
+  if (!Number.isFinite(normalized)) {
     return '-';
   }
-  return '*'.repeat(Math.min(32, normalized));
+  return String(normalized);
 }
 
 function formatTotalNotesLabel(value: number | undefined): string {
