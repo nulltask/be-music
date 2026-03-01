@@ -27,7 +27,7 @@
     "@be-music/json": "0.1.0",
     "@be-music/parser": "0.1.0",
     "@be-music/utils": "0.1.0",
-    "bmp-js": "^0.1.0",
+    "bmp-ts": "^1.0.9",
     "jpeg-js": "^0.4.4",
     "pngjs": "^7.0.0",
     "speaker": "^0.5.5"

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { expect, test } from 'vitest';
 import { PNG } from 'pngjs';
-import bmp from 'bmp-js';
+import { encode as encodeBmpTs } from 'bmp-ts';
 import { createBgaAnsiRenderer } from './bga.ts';
 
 interface RgbColor {
@@ -140,21 +140,18 @@ async function writeBmp(
   height: number,
   pixel: (x: number, y: number) => { r: number; g: number; b: number; a: number },
 ): Promise<void> {
-  const bmpModule = bmp as unknown as {
-    encode(input: { data: Buffer; width: number; height: number }): { data: Uint8Array };
-  };
   const data = Buffer.alloc(width * height * 4);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const value = pixel(x, y);
       const offset = (y * width + x) * 4;
-      data[offset] = 0;
-      data[offset + 1] = value.g;
-      data[offset + 2] = value.b;
-      data[offset + 3] = value.a;
+      data[offset] = value.a;
+      data[offset + 1] = value.b;
+      data[offset + 2] = value.g;
+      data[offset + 3] = value.r;
     }
   }
-  await writeFile(path, bmpModule.encode({ data, width, height }).data);
+  await writeFile(path, encodeBmpTs({ data, width, height }).data);
 }
 
 function parseAnsiPixels(lines: string[]): Pixel[][] {

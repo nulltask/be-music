@@ -2,7 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import { extname, isAbsolute, resolve } from 'node:path';
 import { normalizeChannel, normalizeObjectKey, sortEvents, type BmsEvent, type BmsJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
-import bmp from 'bmp-js';
+import { decode as decodeBmpTs } from 'bmp-ts';
 import jpeg from 'jpeg-js';
 import { PNG } from 'pngjs';
 
@@ -681,7 +681,7 @@ function decodeJpeg(buffer: Buffer): DecodedImage {
 }
 
 function decodeBmp(buffer: Buffer): DecodedImage {
-  const decoded = bmp.decode(buffer);
+  const decoded = decodeBmpTs(buffer, { toRGBA: true });
   return {
     width: decoded.width,
     height: decoded.height,
