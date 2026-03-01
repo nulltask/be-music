@@ -1,4 +1,4 @@
-# bms-monorepo
+# be-music
 
 TypeScript + npm workspaces で構成した BMS/BMSON ツールチェーンです。
 
