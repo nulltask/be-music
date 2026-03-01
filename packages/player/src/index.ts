@@ -3,14 +3,12 @@ import readline from 'node:readline';
 import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
 import {
   createEmptyJson,
-  eventToBeat,
   measureToBeat,
   type BmsEvent,
   type BmsJson,
   isPlayableChannel,
   normalizeChannel,
   normalizeObjectKey,
-  sortEvents,
 } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import {
@@ -23,6 +21,14 @@ import {
 import { clampInt } from '@be-music/utils';
 import { createBgaAnsiRenderer, type BgaAnsiRenderer } from './bga.ts';
 import { PlayerTui } from './tui.ts';
+import { findBestCandidate, findLaneSoundCandidate } from './judging.ts';
+import {
+  createInputTokenToChannelsMap,
+  createLaneBindings,
+  resolveInputTokens,
+  type LaneBinding,
+} from './manual-input.ts';
+import { extractPlayableNotes } from './playable-notes.ts';
 import {
   createAudioBackendResolutionOrder,
   createAudioOutputBackend,
@@ -74,24 +80,6 @@ export class PlayerInterruptedError extends Error {
   }
 }
 
-interface TimedPlayableNote {
-  event: BmsEvent;
-  channel: string;
-  beat: number;
-  endBeat?: number;
-  endSeconds?: number;
-  visibleUntilBeat?: number;
-  seconds: number;
-  judged: boolean;
-}
-
-interface LaneBinding {
-  channel: string;
-  keyLabel: string;
-  inputTokens: string[];
-  side: '1P' | '2P' | 'OTHER';
-}
-
 interface MeasureTimelinePoint {
   measure: number;
   seconds: number;
@@ -140,61 +128,6 @@ const TUI_FRAME_INTERVAL_MS = 1000 / 60;
 const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
 const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
 
-const KEY_LAYOUT = [
-  'a',
-  's',
-  'd',
-  'f',
-  'g',
-  'h',
-  'j',
-  'k',
-  'l',
-  ';',
-  'q',
-  'w',
-  'e',
-  'r',
-  'u',
-  'i',
-  'o',
-  'p',
-  'z',
-  'x',
-  'c',
-  'v',
-  'b',
-  'n',
-  'm',
-  ',',
-  '.',
-  '/',
-];
-
-const FIXED_BINDINGS: Array<{
-  channel: string;
-  keyLabel: string;
-  inputTokens: string[];
-  side: '1P' | '2P';
-}> = [
-  { channel: '16', keyLabel: 'Ctrl', inputTokens: ['ctrl', 'control'], side: '1P' },
-  { channel: '11', keyLabel: 'z', inputTokens: ['z'], side: '1P' },
-  { channel: '12', keyLabel: 's', inputTokens: ['s'], side: '1P' },
-  { channel: '13', keyLabel: 'x', inputTokens: ['x'], side: '1P' },
-  { channel: '14', keyLabel: 'd', inputTokens: ['d'], side: '1P' },
-  { channel: '15', keyLabel: 'c', inputTokens: ['c'], side: '1P' },
-  { channel: '18', keyLabel: 'f', inputTokens: ['f'], side: '1P' },
-  { channel: '19', keyLabel: 'v', inputTokens: ['v'], side: '1P' },
-  { channel: '21', keyLabel: ',', inputTokens: [','], side: '2P' },
-  { channel: '22', keyLabel: 'l', inputTokens: ['l'], side: '2P' },
-  { channel: '23', keyLabel: '.', inputTokens: ['.'], side: '2P' },
-  { channel: '24', keyLabel: ';', inputTokens: [';'], side: '2P' },
-  { channel: '25', keyLabel: '/', inputTokens: ['/'], side: '2P' },
-  { channel: '28', keyLabel: ':', inputTokens: [':'], side: '2P' },
-  { channel: '29', keyLabel: '_', inputTokens: ['_'], side: '2P' },
-  { channel: '26', keyLabel: 'Enter', inputTokens: ['enter', 'return'], side: '2P' },
-];
-
 export async function playChartFile(filePath: string, options: PlayerOptions = {}): Promise<PlayerSummary> {
   const json = await parseChartFile(filePath);
   const mergedOptions: PlayerOptions = {
@@ -203,60 +136,7 @@ export async function playChartFile(filePath: string, options: PlayerOptions = {
   };
   return mergedOptions.auto ? autoPlay(json, mergedOptions) : manualPlay(json, mergedOptions);
 }
-
-export function extractPlayableNotes(json: BmsJson): TimedPlayableNote[] {
-  const resolver = createTimingResolver(json);
-  const notes = sortEvents(json.events)
-    .filter((event) => isPlayableChannel(event.channel))
-    .map((event) => {
-      const beat = eventToBeat(json, event);
-      const endBeat = resolveLongNoteEndBeat(json, event, beat);
-      return {
-        event,
-        channel: normalizeChannel(event.channel),
-        beat,
-        endBeat,
-        endSeconds: endBeat !== undefined ? resolver.beatToSeconds(endBeat) : undefined,
-        seconds: resolver.eventToSeconds(event),
-        judged: false,
-      };
-    })
-    .sort((left, right) => left.seconds - right.seconds);
-
-  applyLnobjEndBeatIfNeeded(json, notes, resolver);
-  return notes;
-}
-
-function applyLnobjEndBeatIfNeeded(
-  json: BmsJson,
-  notes: TimedPlayableNote[],
-  resolver: ReturnType<typeof createTimingResolver>,
-): void {
-  if (json.sourceFormat !== 'bms') {
-    return;
-  }
-
-  const lnObj =
-    typeof json.bms.lnObj === 'string' && json.bms.lnObj.length > 0 ? normalizeObjectKey(json.bms.lnObj) : undefined;
-  if (!lnObj) {
-    return;
-  }
-
-  const pendingStartByChannel = new Map<string, TimedPlayableNote>();
-  for (const note of notes) {
-    const value = normalizeObjectKey(note.event.value);
-    if (value === lnObj) {
-      const start = pendingStartByChannel.get(note.channel);
-      if (start && note.beat > start.beat) {
-        start.endBeat = note.beat;
-        start.endSeconds = resolver.beatToSeconds(note.beat);
-      }
-      pendingStartByChannel.delete(note.channel);
-      continue;
-    }
-    pendingStartByChannel.set(note.channel, note);
-  }
-}
+export { extractPlayableNotes };
 
 function reportLoadProgress(options: PlayerOptions, ratio: number, message: string, detail?: string): void {
   const listener = options.onLoadProgress;
@@ -719,174 +599,6 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
 
   process.stdout.write(renderSummary(summary));
   return summary;
-}
-
-function findBestCandidate(
-  notes: TimedPlayableNote[],
-  candidateChannels: ReadonlySet<string>,
-  nowSec: number,
-  judgeWindowSec: number,
-): TimedPlayableNote | undefined {
-  let best: TimedPlayableNote | undefined;
-  let bestDelta = Number.POSITIVE_INFINITY;
-
-  for (const note of notes) {
-    if (note.judged || !candidateChannels.has(note.channel)) {
-      continue;
-    }
-    const delta = Math.abs(note.seconds - nowSec);
-    if (delta > judgeWindowSec) {
-      continue;
-    }
-    if (delta < bestDelta) {
-      bestDelta = delta;
-      best = note;
-    }
-  }
-
-  return best;
-}
-
-function findLaneSoundCandidate(
-  notes: TimedPlayableNote[],
-  candidateChannels: ReadonlySet<string>,
-  nowSec: number,
-): TimedPlayableNote | undefined {
-  let nearestUnjudged: TimedPlayableNote | undefined;
-  let nearestUnjudgedDelta = Number.POSITIVE_INFINITY;
-  let nearestAny: TimedPlayableNote | undefined;
-  let nearestAnyDelta = Number.POSITIVE_INFINITY;
-
-  for (const note of notes) {
-    if (!candidateChannels.has(note.channel)) {
-      continue;
-    }
-
-    const delta = Math.abs(note.seconds - nowSec);
-    if (delta < nearestAnyDelta) {
-      nearestAnyDelta = delta;
-      nearestAny = note;
-    }
-
-    if (note.judged) {
-      continue;
-    }
-    if (delta < nearestUnjudgedDelta) {
-      nearestUnjudgedDelta = delta;
-      nearestUnjudged = note;
-    }
-  }
-
-  return nearestUnjudged ?? nearestAny;
-}
-
-function createLaneBindings(channels: string[]): LaneBinding[] {
-  const existing = new Set(channels.map((channel) => normalizeChannel(channel)));
-  const bindings: LaneBinding[] = [];
-  const usedTokens = new Set<string>();
-
-  for (const definition of FIXED_BINDINGS) {
-    if (!existing.has(definition.channel)) {
-      continue;
-    }
-    bindings.push({
-      channel: definition.channel,
-      keyLabel: definition.keyLabel,
-      inputTokens: [...definition.inputTokens],
-      side: definition.side,
-    });
-    definition.inputTokens.forEach((token) => usedTokens.add(token));
-  }
-
-  const unknownChannels = [...existing].filter(
-    (channel) => !FIXED_BINDINGS.some((definition) => definition.channel === channel),
-  );
-  unknownChannels.sort();
-
-  let fallbackIndex = 0;
-  for (const channel of unknownChannels) {
-    let token = KEY_LAYOUT[fallbackIndex] ?? `f${fallbackIndex + 1}`;
-    while (usedTokens.has(token)) {
-      fallbackIndex += 1;
-      token = KEY_LAYOUT[fallbackIndex] ?? `f${fallbackIndex + 1}`;
-    }
-    fallbackIndex += 1;
-    usedTokens.add(token);
-    bindings.push({
-      channel,
-      keyLabel: token,
-      inputTokens: [token],
-      side: 'OTHER',
-    });
-  }
-
-  return bindings;
-}
-
-function createInputTokenToChannelsMap(bindings: LaneBinding[]): Map<string, string[]> {
-  const map = new Map<string, string[]>();
-  for (const binding of bindings) {
-    for (const token of binding.inputTokens) {
-      const normalized = token.toLowerCase();
-      const channels = map.get(normalized) ?? [];
-      channels.push(binding.channel);
-      map.set(normalized, channels);
-    }
-  }
-  return map;
-}
-
-function resolveInputTokens(chunk: string, key: readline.Key): string[] {
-  const tokens = new Set<string>();
-  const normalizedChunk = normalizeKey(chunk);
-  if (normalizedChunk) {
-    tokens.add(normalizedChunk);
-  }
-
-  if (isStandaloneShiftKeypress(chunk, key)) {
-    tokens.add('shift');
-    return [...tokens];
-  }
-
-  if (isStandaloneControlKeypress(chunk, key)) {
-    tokens.add('ctrl');
-    tokens.add('control');
-    return [...tokens];
-  }
-
-  if (key.name) {
-    const normalizedName = key.name.toLowerCase();
-    tokens.add(normalizedName);
-    if (normalizedName === 'return') {
-      tokens.add('enter');
-    } else if (normalizedName === 'enter') {
-      tokens.add('return');
-    } else if (normalizedName === 'ctrl') {
-      tokens.add('control');
-    } else if (normalizedName === 'control') {
-      tokens.add('ctrl');
-    }
-  }
-
-  return [...tokens];
-}
-
-function isStandaloneShiftKeypress(chunk: string, key: readline.Key): boolean {
-  if (key.name === 'shift') {
-    return true;
-  }
-
-  const sequence = key.sequence ?? '';
-  return chunk.length === 0 && sequence.length === 0 && Boolean(key.shift) && !key.ctrl && !key.meta && !key.name;
-}
-
-function isStandaloneControlKeypress(chunk: string, key: readline.Key): boolean {
-  if (key.name === 'ctrl' || key.name === 'control') {
-    return true;
-  }
-
-  const sequence = key.sequence ?? '';
-  return chunk.length === 0 && sequence.length === 0 && Boolean(key.ctrl) && !key.shift && !key.meta && !key.name;
 }
 
 function createTuiIfEnabled(
@@ -1567,23 +1279,6 @@ function createMeasureTimeline(json: BmsJson): MeasureTimelinePoint[] {
   return timeline;
 }
 
-function resolveLongNoteEndBeat(json: BmsJson, event: BmsEvent, beat: number): number | undefined {
-  const length = event.bmson?.l;
-  if (typeof length !== 'number' || !Number.isFinite(length) || length <= 0) {
-    return undefined;
-  }
-
-  const resolution =
-    typeof json.bmson.info.resolution === 'number' && Number.isFinite(json.bmson.info.resolution)
-      ? json.bmson.info.resolution
-      : 240;
-  if (resolution <= 0) {
-    return undefined;
-  }
-
-  return beat + length / resolution;
-}
-
 function createBpmTimeline(json: BmsJson): BpmTimelinePoint[] {
   const resolver = createTimingResolver(json);
   const timeline: BpmTimelinePoint[] = [];
@@ -1741,10 +1436,6 @@ function printLaneMap(bindings: LaneBinding[]): void {
 
 function formatSeconds(seconds: number): string {
   return seconds.toFixed(3);
-}
-
-function normalizeKey(value: string): string {
-  return value.length === 1 ? value.toLowerCase() : value;
 }
 
 function renderSummary(summary: PlayerSummary): string {
