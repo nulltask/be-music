@@ -22,6 +22,7 @@ interface BenchmarkCliDefaults {
 interface BenchmarkCliOptions {
   datasetDir: string;
   baselinePath: string;
+  file?: string;
   limit: number;
   warmup: number;
   iterations: number;
@@ -69,6 +70,7 @@ interface ParserBenchmarkSnapshot {
     totalBytes: number;
   };
   options: {
+    file?: string;
     limit: number;
     warmup: number;
     iterations: number;
@@ -118,7 +120,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  const selected = selectBenchmarkFiles(candidates, options.limit);
+  const selected = options.file
+    ? [resolveBenchmarkFileCandidate(candidates, options.datasetDir, options.file)]
+    : selectBenchmarkFiles(candidates, options.limit);
   const totalBytes = sumTotalBytes(selected);
   const metrics: Partial<Record<BenchmarkMetricKey, BenchmarkMetric>> = {};
 
@@ -166,6 +170,7 @@ async function main(): Promise<void> {
       totalBytes,
     },
     options: {
+      file: options.file,
       limit: options.limit,
       warmup: options.warmup,
       iterations: options.iterations,
@@ -221,6 +226,7 @@ function parseBenchmarkCliArgs(args: string[], defaults: BenchmarkCliDefaults): 
   const options: BenchmarkCliOptions = {
     datasetDir: defaults.datasetDir,
     baselinePath: defaults.baselinePath,
+    file: undefined,
     limit: defaults.limit,
     warmup: defaults.warmup,
     iterations: defaults.iterations,
@@ -243,6 +249,11 @@ function parseBenchmarkCliArgs(args: string[], defaults: BenchmarkCliDefaults): 
     }
     if (token === '--baseline') {
       options.baselinePath = resolveCliValue(args[index + 1], '--baseline');
+      index += 1;
+      continue;
+    }
+    if (token === '--file') {
+      options.file = resolveCliValue(args[index + 1], '--file');
       index += 1;
       continue;
     }
@@ -327,6 +338,7 @@ function printUsage(defaults: BenchmarkCliDefaults): void {
     'Options:',
     `  --dataset <dir>         Chart root directory (default: ${defaults.datasetDir})`,
     `  --baseline <file>       Baseline snapshot path (default: ${defaults.baselinePath})`,
+    '  --file <path>           Benchmark only the specified chart file (relative to --dataset or absolute path)',
     `  --limit <n>             Max files to benchmark (default: ${defaults.limit})`,
     `  --warmup <n>            Warmup iterations (default: ${defaults.warmup})`,
     `  --iterations <n>        Measured iterations (default: ${defaults.iterations})`,
@@ -381,6 +393,30 @@ function selectBenchmarkFiles(candidates: ChartFileCandidate[], limit: number): 
     (left, right) => right.sizeBytes - left.sizeBytes || left.relativePath.localeCompare(right.relativePath, 'ja'),
   );
   return sorted.slice(0, Math.max(1, Math.min(limit, sorted.length)));
+}
+
+function resolveBenchmarkFileCandidate(
+  candidates: ChartFileCandidate[],
+  datasetDir: string,
+  filePath: string,
+): ChartFileCandidate {
+  const requestedAbsolute = resolve(filePath);
+  const normalizedFilePath = normalizePath(filePath);
+  const requestedRelative = normalizePath(relative(datasetDir, requestedAbsolute));
+  const matched = candidates.find(
+    (entry) =>
+      entry.absolutePath === requestedAbsolute ||
+      entry.relativePath === normalizedFilePath ||
+      entry.relativePath === requestedRelative,
+  );
+  if (matched) {
+    return matched;
+  }
+  throw new Error(`--file is not found under dataset: ${filePath}`);
+}
+
+function normalizePath(value: string): string {
+  return value.replaceAll('\\', '/').replace(/^\.\/+/, '');
 }
 
 async function preloadChartsForParse(files: ChartFileCandidate[]): Promise<PreloadedChart[]> {
@@ -573,6 +609,9 @@ function printSnapshotSummary(snapshot: ParserBenchmarkSnapshot, options: Benchm
   process.stdout.write(
     `Config       : mode=${options.mode} warmup=${options.warmup} iterations=${options.iterations} limit=${options.limit}\n`,
   );
+  if (options.file) {
+    process.stdout.write(`Target file  : ${options.file}\n`);
+  }
   process.stdout.write('\n');
 
   const parseMetric = snapshot.metrics.parseChart;
