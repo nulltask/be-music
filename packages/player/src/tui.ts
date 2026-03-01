@@ -98,6 +98,8 @@ export class PlayerTui {
 
   private combo = 0;
 
+  private paused = false;
+
   private displayedScore = 0;
 
   private lastScoreAnimationMs = 0;
@@ -154,6 +156,7 @@ export class PlayerTui {
     this.active = false;
     this.latestJudge = '-';
     this.combo = 0;
+    this.paused = false;
     this.displayedScore = 0;
     this.lastScoreAnimationMs = 0;
     this.laneHoldUntilBeat.clear();
@@ -174,6 +177,10 @@ export class PlayerTui {
 
   setCombo(value: number): void {
     this.combo = Math.max(0, Math.floor(value));
+  }
+
+  setPaused(value: boolean): void {
+    this.paused = value;
   }
 
   flashLane(channel: string): void {
@@ -358,7 +365,7 @@ export class PlayerTui {
     );
 
     laneLines.push(
-      centerVisible(formatJudgeComboDisplay(this.latestJudge, this.combo, now), this.laneBlockVisibleWidth),
+      centerVisible(formatJudgeComboDisplay(this.latestJudge, this.combo, now, this.paused), this.laneBlockVisibleWidth),
     );
 
     laneLines.push(
@@ -379,7 +386,7 @@ export class PlayerTui {
       lines.push(...renderLaneBlockWithBga(laneLines, frame.bgaAnsiLines));
     }
     lines.push('');
-    lines.push('Ctrl+C/Esc: quit');
+    lines.push('Space: pause/resume  Ctrl+C/Esc: quit');
 
     const columns = process.stdout.columns ?? 120;
     const paddedLines = lines.map((line) => padVisibleWidth(line, columns));
@@ -584,7 +591,10 @@ function colorizeMine(symbol: string): string {
   return `\u001b[1;97;41m${symbol}\u001b[0m`;
 }
 
-function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: number): string {
+function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: number, paused: boolean): string {
+  if (paused) {
+    return colorizeText('PAUSE', '1;97;41');
+  }
   const normalizedJudge = latestJudge === 'PERFECT' ? 'GREAT' : latestJudge;
   const safeCombo = Math.max(0, Math.floor(combo));
   const baseText = `${normalizedJudge}${safeCombo > 0 ? ` ${safeCombo}` : ''}`;

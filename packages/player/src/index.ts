@@ -105,8 +105,17 @@ interface AudioSession {
   finish: () => Promise<void>;
   dispose: () => Promise<void>;
   chartStartDelayMs: number;
+  pause: () => void;
+  resume: () => void;
   triggerEvent?: (event: BmsEvent) => void;
   stopChannel?: (channel: string) => void;
+}
+
+interface PlaybackClock {
+  nowMs: () => number;
+  isPaused: () => boolean;
+  pause: () => boolean;
+  resume: () => boolean;
 }
 
 interface PlayableNotePlayback {
@@ -142,6 +151,7 @@ const IIDX_EX_SCORE_PER_GREAT = 1;
 const IIDX_SCORE_MAX = 200000;
 const IIDX_SCORE_JUDGE_BASE_MAX = 150000;
 const IIDX_SCORE_COMBO_BONUS_MAX = 50000;
+const PAUSE_POLL_INTERVAL_MS = 16;
 
 type JudgeKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'MISS';
 
@@ -372,7 +382,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
   if (!tui) {
     process.stdout.write('Auto play start\n');
     printLaneMap(laneBindings);
-    process.stdout.write('Press Ctrl+C or Esc to quit.\n');
+    process.stdout.write('Press Space to pause/resume. Press Ctrl+C or Esc to quit.\n');
   } else {
     tui.start();
     tui.setLatestJudge('READY');
@@ -391,6 +401,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
   const wasRawMode = Boolean(stdin.isRaw);
   const canCaptureInput = process.stdin.isTTY;
   let inputCaptureStopped = false;
+  let playbackClock: PlaybackClock | undefined;
 
   const stopInputCapture = (): void => {
     if (!canCaptureInput || inputCaptureStopped) {
@@ -399,6 +410,32 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
     inputCaptureStopped = true;
     process.stdin.removeListener('keypress', onKeyPress);
     process.stdin.setRawMode(wasRawMode);
+  };
+
+  const togglePause = (): void => {
+    if (!playbackClock) {
+      return;
+    }
+    if (playbackClock.isPaused()) {
+      if (!playbackClock.resume()) {
+        return;
+      }
+      audioSession?.resume();
+      tui?.setPaused(false);
+      if (!tui) {
+        process.stdout.write('RESUME\n');
+      }
+      return;
+    }
+
+    if (!playbackClock.pause()) {
+      return;
+    }
+    audioSession?.pause();
+    tui?.setPaused(true);
+    if (!tui) {
+      process.stdout.write('PAUSE\n');
+    }
   };
 
   const onKeyPress = (_chunk: string, key: readline.Key): void => {
@@ -413,6 +450,10 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
     if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b') {
       interruptedReason = 'escape';
       stopInputCapture();
+      return;
+    }
+    if (isSpaceKey(key)) {
+      togglePause();
     }
   };
 
@@ -428,7 +469,8 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
     if (!interruptedReason) {
       audioSession?.start();
 
-      const startedAt = performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0);
+      const chartClock = createPlaybackClock(performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0));
+      playbackClock = chartClock;
       const badWindowSeconds = IIDX_BAD_WINDOW_MS / 1000;
 
       const markExpiredLandmines = (referenceSeconds: number): void => {
@@ -447,9 +489,13 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
           if (interruptedReason) {
             return;
           }
-          const nowMs = performance.now() - startedAt;
+          const nowMs = chartClock.nowMs();
           if (nowMs >= targetMs) {
             return;
+          }
+          if (chartClock.isPaused()) {
+            await waitPrecise(PAUSE_POLL_INTERVAL_MS);
+            continue;
           }
           const nowSec = elapsedMsToGameSeconds(nowMs, speed);
           markExpiredLandmines(nowSec);
@@ -592,6 +638,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
     process.stdout.write(
       `Judge window: PGREAT<=${judgeWindows.pgreat.toFixed(2)}ms GREAT<=${judgeWindows.great.toFixed(2)}ms GOOD<=${judgeWindows.good.toFixed(2)}ms BAD<=${Math.round(badWindowMs)}ms\n`,
     );
+    process.stdout.write('Press Space to pause/resume.\n');
     process.stdout.write('Press Ctrl+C to quit.\n');
     process.stdout.write('Press Esc to stop and open result.\n');
     printLaneMap(laneBindings);
@@ -619,7 +666,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
 
   audioSession?.start();
 
-  const startedAt = performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0);
+  const playbackClock = createPlaybackClock(performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0));
   const horizon = (totalSeconds * 1000) / speed + leadInMs + badWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
   const longHoldUntilMsByChannel = new Map<string, number>();
@@ -647,6 +694,31 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       stopInputCapture();
       return;
     }
+    if (isSpaceKey(key)) {
+      if (playbackClock.isPaused()) {
+        if (!playbackClock.resume()) {
+          return;
+        }
+        audioSession?.resume();
+        tui?.setPaused(false);
+        if (!tui) {
+          process.stdout.write('RESUME\n');
+        }
+      } else {
+        if (!playbackClock.pause()) {
+          return;
+        }
+        audioSession?.pause();
+        tui?.setPaused(true);
+        if (!tui) {
+          process.stdout.write('PAUSE\n');
+        }
+      }
+      return;
+    }
+    if (playbackClock.isPaused()) {
+      return;
+    }
 
     const tokens = resolveInputTokens(chunk, key);
     const candidateChannels = new Set<string>();
@@ -667,7 +739,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       }
     }
 
-    const nowMs = performance.now() - startedAt;
+    const nowMs = playbackClock.nowMs();
     const nowSec = elapsedMsToGameSeconds(nowMs, speed);
 
     let refreshedHold = false;
@@ -786,11 +858,24 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   process.stdin.on('keypress', onKeyPress);
 
   try {
-    while (performance.now() - startedAt < horizon) {
+    while (playbackClock.nowMs() < horizon) {
       if (interruptedReason) {
         break;
       }
-      const nowMs = performance.now() - startedAt;
+      const nowMs = playbackClock.nowMs();
+      if (playbackClock.isPaused()) {
+        const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+        tui?.render({
+          currentBeat: beatAtSeconds(nowSec),
+          currentSeconds: nowSec,
+          totalSeconds,
+          summary,
+          notes: renderNotes,
+          ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
+        });
+        await waitPrecise(PAUSE_POLL_INTERVAL_MS);
+        continue;
+      }
       const nowSec = elapsedMsToGameSeconds(nowMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
 
@@ -1112,6 +1197,7 @@ async function createAudioSessionIfEnabled(
   let closed = false;
   let abortRequested = false;
   let draining = false;
+  let paused = false;
   let playbackTask: Promise<void> | undefined;
   const activeVoices: ActiveVoice[] = [];
 
@@ -1165,6 +1251,7 @@ async function createAudioSessionIfEnabled(
         activeVoices,
         shouldStop: () => abortRequested,
         isDraining: () => draining,
+        isPaused: () => paused,
         mode,
         playbackSampleRate: sampleRate,
       }).catch(() => undefined);
@@ -1172,10 +1259,22 @@ async function createAudioSessionIfEnabled(
     finish,
     dispose,
     chartStartDelayMs: headPaddingMs,
+    pause: () => {
+      if (closed) {
+        return;
+      }
+      paused = true;
+    },
+    resume: () => {
+      if (closed) {
+        return;
+      }
+      paused = false;
+    },
     triggerEvent:
       mode === 'manual'
         ? (event: BmsEvent) => {
-            if (draining || abortRequested) {
+            if (draining || abortRequested || paused) {
               return;
             }
             const normalized = normalizeObjectKey(event.value);
@@ -1217,6 +1316,9 @@ async function createAudioSessionIfEnabled(
     stopChannel:
       mode === 'manual'
         ? (channel: string) => {
+            if (paused) {
+              return;
+            }
             const normalizedChannel = normalizeChannel(channel);
             for (let index = activeVoices.length - 1; index >= 0; index -= 1) {
               if (activeVoices[index].channel === normalizedChannel) {
@@ -1244,10 +1346,11 @@ async function playMixedPcmThroughOutput(params: {
   activeVoices: ActiveVoice[];
   shouldStop: () => boolean;
   isDraining: () => boolean;
+  isPaused: () => boolean;
   mode: 'auto' | 'manual';
   playbackSampleRate: number;
 }): Promise<void> {
-  const { output, background, activeVoices, shouldStop, isDraining, mode, playbackSampleRate } = params;
+  const { output, background, activeVoices, shouldStop, isDraining, isPaused, mode, playbackSampleRate } = params;
 
   const chunkFrames = mode === 'manual' ? MANUAL_AUDIO_CHUNK_FRAMES : AUTO_AUDIO_CHUNK_FRAMES;
   // Keep one reusable PCM buffer and fill through Int16Array to minimize per-sample write overhead.
@@ -1260,10 +1363,26 @@ async function playMixedPcmThroughOutput(params: {
   const backgroundLength = backgroundLeft.length;
   let playhead = 0;
   const playbackStartMs = performance.now();
+  let pausedAtMs = 0;
+  let pausedDurationMs = 0;
+  let pauseActive = false;
 
   while (!shouldStop()) {
+    if (isPaused()) {
+      if (!pauseActive) {
+        pauseActive = true;
+        pausedAtMs = performance.now();
+      }
+      await delay(PAUSE_POLL_INTERVAL_MS);
+      continue;
+    }
+    if (pauseActive) {
+      pauseActive = false;
+      pausedDurationMs += performance.now() - pausedAtMs;
+    }
+
     if (mode === 'manual') {
-      await waitForPlaybackRealtime(playhead, playbackSampleRate, playbackStartMs, shouldStop);
+      await waitForPlaybackRealtime(playhead, playbackSampleRate, playbackStartMs + pausedDurationMs, shouldStop);
     }
 
     const backgroundEnded = playhead >= background.left.length;
@@ -1550,6 +1669,44 @@ function floatToInt16(value: number): number {
     return Math.round(clamped * 32767);
   }
   return Math.round(clamped * 32768);
+}
+
+function createPlaybackClock(startAtMs: number): PlaybackClock {
+  const anchorMs = Number.isFinite(startAtMs) ? startAtMs : performance.now();
+  let paused = false;
+  let pausedAtMs = 0;
+  let pausedDurationMs = 0;
+
+  const nowMs = (): number => {
+    const reference = paused ? pausedAtMs : performance.now();
+    return Math.max(0, reference - anchorMs - pausedDurationMs);
+  };
+
+  return {
+    nowMs,
+    isPaused: () => paused,
+    pause: () => {
+      if (paused) {
+        return false;
+      }
+      paused = true;
+      pausedAtMs = performance.now();
+      return true;
+    },
+    resume: () => {
+      if (!paused) {
+        return false;
+      }
+      pausedDurationMs += Math.max(0, performance.now() - pausedAtMs);
+      paused = false;
+      pausedAtMs = 0;
+      return true;
+    },
+  };
+}
+
+function isSpaceKey(key: readline.Key): boolean {
+  return key.name?.toLowerCase() === 'space' || key.sequence === ' ';
 }
 
 function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
