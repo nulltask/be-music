@@ -17,6 +17,29 @@ export function clampSignedUnit(value: number): number {
   return clamp(value, -1, 1);
 }
 
+export function normalizeNonNegativeInt(value: number, fallback = 0): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(0, Math.floor(value));
+}
+
+export function normalizePositiveInt(value: number, fallback = 1): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return Math.max(1, Math.floor(value));
+}
+
+export function normalizeFractionNumerator(value: number, denominator: number, fallback = 0): number {
+  const safeDenominator = normalizePositiveInt(denominator, 1);
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  const normalized = Math.floor(value);
+  return Math.max(0, Math.min(safeDenominator - 1, normalized));
+}
+
 export function gcd(left: number, right: number): number {
   let a = Math.abs(left);
   let b = Math.abs(right);

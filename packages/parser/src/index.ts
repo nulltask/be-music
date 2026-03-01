@@ -14,6 +14,7 @@ import {
   normalizeChannel,
   normalizeObjectKey,
 } from '@be-music/json';
+import { normalizeFractionNumerator, normalizeNonNegativeInt, normalizePositiveInt } from '@be-music/utils';
 
 const OBJECT_DATA_LINE = /^#(\d{3})([0-9A-Z]{2})\s*:\s*(.+)\s*$/i;
 const HEADER_LINE = /^#([A-Z][A-Z0-9_]*)(?:\s+(.+))?$/i;
@@ -1090,7 +1091,7 @@ function normalizeMeasure(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined;
   }
-  return Math.max(0, Math.floor(value));
+  return normalizeNonNegativeInt(value);
 }
 
 function normalizeEventChannel(value: unknown): string | undefined {
@@ -1126,15 +1127,14 @@ function normalizePositionDenominator(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return undefined;
   }
-  return Math.max(1, Math.floor(value));
+  return normalizePositiveInt(value);
 }
 
 function normalizePositionNumerator(value: unknown, denominator: number): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined;
   }
-  const normalized = Math.floor(value);
-  return Math.max(0, Math.min(denominator - 1, normalized));
+  return normalizeFractionNumerator(value, denominator);
 }
 
 function normalizeEventBmsonExtension(value: unknown): BmsEvent['bmson'] | undefined {

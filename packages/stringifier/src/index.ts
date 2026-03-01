@@ -9,7 +9,7 @@ import {
   type BmsEvent,
   type BmsJson,
 } from '@be-music/json';
-import { gcd, lcm } from '@be-music/utils';
+import { gcd, lcm, normalizeFractionNumerator, normalizeNonNegativeInt, normalizePositiveInt } from '@be-music/utils';
 export interface BmsStringifyOptions {
   eol?: '\n' | '\r\n';
   maxResolution?: number;
@@ -429,10 +429,8 @@ function chooseResolution(events: BmsEvent[], maxResolution?: number): number {
 }
 
 function resolveEventFraction(event: BmsEvent): { numerator: number; denominator: number } {
-  const denominator = Math.max(1, Number.isFinite(event.position[1]) ? Math.floor(event.position[1]) : 1);
-  const numerator = Number.isFinite(event.position[0])
-    ? Math.max(0, Math.min(denominator - 1, Math.floor(event.position[0])))
-    : 0;
+  const denominator = normalizePositiveInt(event.position[1], 1);
+  const numerator = normalizeFractionNumerator(event.position[0], denominator, 0);
   return reduceFraction(numerator, denominator);
 }
 
@@ -448,7 +446,7 @@ function reduceFraction(numerator: number, denominator: number): { numerator: nu
 }
 
 function toMeasure(measure: number): string {
-  return Math.max(0, Math.floor(measure)).toString(10).padStart(3, '0').slice(-3);
+  return normalizeNonNegativeInt(measure).toString(10).padStart(3, '0').slice(-3);
 }
 
 function formatNumber(value: number): string {
