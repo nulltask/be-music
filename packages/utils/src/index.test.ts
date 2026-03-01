@@ -31,23 +31,33 @@ test('normalizeNonNegativeInt/normalizePositiveInt: normalizes integer values', 
   expect(normalizeNonNegativeInt(4.9)).toBe(4);
   expect(normalizeNonNegativeInt(-1.2)).toBe(0);
   expect(normalizeNonNegativeInt(Number.NaN, 7)).toBe(7);
+  expect(normalizeNonNegativeInt(Number.POSITIVE_INFINITY, 9)).toBe(9);
+  expect(normalizeNonNegativeInt(Number.NEGATIVE_INFINITY, 4)).toBe(4);
   expect(normalizePositiveInt(9.8)).toBe(9);
   expect(normalizePositiveInt(0.1)).toBe(1);
+  expect(normalizePositiveInt(-5, 3)).toBe(3);
   expect(normalizePositiveInt(Number.NaN, 5)).toBe(5);
+  expect(normalizePositiveInt(Number.POSITIVE_INFINITY, 6)).toBe(6);
 });
 
 test('normalizeFractionNumerator: normalizes fractional numerators into range', () => {
   expect(normalizeFractionNumerator(3.9, 8)).toBe(3);
   expect(normalizeFractionNumerator(-2, 8)).toBe(0);
   expect(normalizeFractionNumerator(99, 8)).toBe(7);
+  expect(normalizeFractionNumerator(2.8, 3.9)).toBe(2);
+  expect(normalizeFractionNumerator(10, Number.NaN)).toBe(0);
+  expect(normalizeFractionNumerator(10, -3)).toBe(0);
   expect(normalizeFractionNumerator(Number.NaN, 8, 2)).toBe(2);
+  expect(normalizeFractionNumerator(Number.POSITIVE_INFINITY, 8, 3)).toBe(3);
   expect(normalizeFractionNumerator(4, 0)).toBe(0);
 });
 
 test('gcd/lcm: computes greatest common divisor and least common multiple', () => {
   expect(gcd(24, 18)).toBe(6);
+  expect(gcd(-24, 18)).toBe(6);
   expect(gcd(0, 5)).toBe(5);
   expect(lcm(6, 8)).toBe(24);
+  expect(lcm(-6, 8)).toBe(24);
   expect(lcm(0, 8)).toBe(0);
 });
 });
