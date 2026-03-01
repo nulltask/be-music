@@ -67,6 +67,7 @@ const BLUE_NOTE_CHANNELS = new Set(['12', '14', '18', '22', '24', '28']);
 const NOTE_HEAD_SYMBOL = '●';
 const LONG_NOTE_BODY_SYMBOL = '■';
 const LONG_NOTE_TAIL_SYMBOL = '◆';
+const ANSI_RESET = '\u001b[0m';
 
 export class PlayerTui {
   private readonly options: TuiOptions;
@@ -553,25 +554,26 @@ function fitLinesToHeight(lines: string[], targetHeight: number, width: number):
 }
 
 function padVisibleWidth(line: string, width: number): string {
-  const currentWidth = visibleWidth(line);
+  const clipped = truncateVisibleWidth(line, width);
+  const currentWidth = visibleWidth(clipped);
   if (currentWidth >= width) {
-    return line;
+    return clipped;
   }
-  return `${line}${' '.repeat(width - currentWidth)}`;
+  return `${clipped}${' '.repeat(width - currentWidth)}`;
 }
 
 function visibleWidth(value: string): number {
-  const firstEsc = value.indexOf('\u001b');
-  if (firstEsc < 0) {
-    return value.length;
-  }
-
   let width = 0;
   let index = 0;
   while (index < value.length) {
     if (value.charCodeAt(index) !== 0x1b || index + 1 >= value.length || value[index + 1] !== '[') {
-      width += 1;
-      index += 1;
+      const codePoint = value.codePointAt(index);
+      if (typeof codePoint !== 'number') {
+        index += 1;
+        continue;
+      }
+      width += getCharacterDisplayWidth(codePoint);
+      index += codePoint > 0xffff ? 2 : 1;
       continue;
     }
 
@@ -584,6 +586,101 @@ function visibleWidth(value: string): number {
     index = sequenceEnd + 1;
   }
   return width;
+}
+
+function truncateVisibleWidth(value: string, width: number): string {
+  const safeWidth = Math.max(0, Math.floor(width));
+  if (safeWidth <= 0) {
+    return '';
+  }
+
+  let visible = 0;
+  let index = 0;
+  let output = '';
+  let sgrActive = false;
+
+  while (index < value.length) {
+    if (value.charCodeAt(index) === 0x1b && index + 1 < value.length && value[index + 1] === '[') {
+      const sequenceEnd = findAnsiSgrSequenceEnd(value, index + 2);
+      if (sequenceEnd < 0) {
+        break;
+      }
+      const sequence = value.slice(index, sequenceEnd + 1);
+      output += sequence;
+      sgrActive = updateSgrActive(sgrActive, sequence);
+      index = sequenceEnd + 1;
+      continue;
+    }
+
+    const codePoint = value.codePointAt(index);
+    if (typeof codePoint !== 'number') {
+      index += 1;
+      continue;
+    }
+    const charWidth = getCharacterDisplayWidth(codePoint);
+    if (visible + charWidth > safeWidth) {
+      break;
+    }
+    output += String.fromCodePoint(codePoint);
+    visible += charWidth;
+    index += codePoint > 0xffff ? 2 : 1;
+  }
+
+  if (sgrActive) {
+    output += ANSI_RESET;
+  }
+  return output;
+}
+
+function updateSgrActive(current: boolean, sequence: string): boolean {
+  if (!sequence.endsWith('m')) {
+    return current;
+  }
+  const body = sequence.slice(2, -1);
+  if (body.length === 0) {
+    return false;
+  }
+  const params = body.split(';').map((part) => Number.parseInt(part, 10));
+  if (params.some((value) => !Number.isNaN(value) && value === 0)) {
+    return false;
+  }
+  return true;
+}
+
+function getCharacterDisplayWidth(codePoint: number): number {
+  if (isCombiningCharacter(codePoint)) {
+    return 0;
+  }
+  if (isWideCharacter(codePoint)) {
+    return 2;
+  }
+  return 1;
+}
+
+function isCombiningCharacter(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
+    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
+    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
+    (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f)
+  );
+}
+
+function isWideCharacter(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x1100 && codePoint <= 0x115f) ||
+    codePoint === 0x2329 ||
+    codePoint === 0x232a ||
+    (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
+    (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
+    (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
+    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
+    (codePoint >= 0x1f300 && codePoint <= 0x1faff)
+  );
 }
 
 function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number): boolean {
