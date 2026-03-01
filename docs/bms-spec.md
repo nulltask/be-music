@@ -30,6 +30,11 @@
 - チャンネル `01`: 背景音チャンネル
 - チャンネル `1x` / `2x`: 演奏チャンネル
 - チャンネル `04` / `07`: player の BGA 表示で使用
+- `04` は base、`07` は layer として合成
+- layer (`07`) は黒 (`#000000`) を透過色として扱う
+- BGA 画像は 256x256 キャンバス前提で扱い、通常は拡大縮小しない
+- 256x256 未満の画像は X 軸中央・Y 軸上詰めで配置
+- `04` / `07` で未定義 `#BMPxx` を参照した場合は 256x256 黒として扱う
 - 制御構文: `#RANDOM`, `#SETRANDOM`, `#ENDRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#DEF`, `#SKIP`, `#ENDSW`
 - 拡張ヘッダ: `#LNTYPE`, `#LNOBJ`, `#DEFEXRANK`, `#EXRANKxx`, `#ARGBxx`, `#PLAYER`, `#PATH_WAV`, `#BASEBPM`, `#STP`, `#OPTION`, `#CHANGEOPTIONxx`, `#WAVCMD`, `#EXWAVxx`, `#EXBMPxx`, `#BGAxx`, `#POORBGA`, `#SWBGAxx`, `#VIDEOFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET` を `bms` 拡張領域へ保持
 

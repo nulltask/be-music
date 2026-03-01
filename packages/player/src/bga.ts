@@ -14,6 +14,9 @@ const TRANSPARENT_ALPHA_THRESHOLD = 16;
 const ANSI_RESET = '\u001b[0m';
 const DEFAULT_SIXEL_SCALE_X = 8;
 const DEFAULT_SIXEL_SCALE_Y = 16;
+const SPEC_BGA_CANVAS_SIZE = 256;
+const TERMINAL_PIXEL_ASPECT_X = 2;
+const TERMINAL_PIXEL_ASPECT_Y = 1;
 
 type ImageFormat = 'bmp' | 'png' | 'jpeg';
 type FrameMode = 'base' | 'layer';
@@ -61,6 +64,10 @@ export class BgaAnsiRenderer {
 
   private readonly stageFileFrame?: AnsiFrame;
 
+  private readonly missingBaseFrame: AnsiFrame;
+
+  private readonly missingLayerFrame: AnsiFrame;
+
   private cachedBaseKey = '__INIT__';
 
   private cachedLayerKey = '__INIT__';
@@ -75,21 +82,25 @@ export class BgaAnsiRenderer {
 
   private cachedSixelScaleY = -1;
 
-    constructor(params: {
+  constructor(params: {
     baseTimeline: BgaCue[];
     layerTimeline: BgaCue[];
     baseFramesByKey: Map<string, AnsiFrame>;
     layerFramesByKey: Map<string, AnsiFrame>;
     stageFileFrame?: AnsiFrame;
+    missingBaseFrame: AnsiFrame;
+    missingLayerFrame: AnsiFrame;
   }) {
     this.baseTimeline = params.baseTimeline;
     this.layerTimeline = params.layerTimeline;
     this.baseFramesByKey = params.baseFramesByKey;
     this.layerFramesByKey = params.layerFramesByKey;
     this.stageFileFrame = params.stageFileFrame;
+    this.missingBaseFrame = params.missingBaseFrame;
+    this.missingLayerFrame = params.missingLayerFrame;
   }
 
-    getAnsiLines(currentSeconds: number): string[] | undefined {
+  getAnsiLines(currentSeconds: number): string[] | undefined {
     this.refreshComposite(currentSeconds);
     if (!this.cachedComposite) {
       return undefined;
@@ -105,7 +116,7 @@ export class BgaAnsiRenderer {
     return this.cachedLines;
   }
 
-    getSixel(currentSeconds: number, scaleX?: number, scaleY?: number): string | undefined {
+  getSixel(currentSeconds: number, scaleX?: number, scaleY?: number): string | undefined {
     this.refreshComposite(currentSeconds);
     if (!this.cachedComposite) {
       return undefined;
@@ -124,15 +135,15 @@ export class BgaAnsiRenderer {
     return this.cachedSixel;
   }
 
-    private refreshComposite(currentSeconds: number): void {
+  private refreshComposite(currentSeconds: number): void {
     const baseKey = findActiveCueKey(this.baseTimeline, currentSeconds) ?? '';
     const layerKey = findActiveCueKey(this.layerTimeline, currentSeconds) ?? '';
     if (this.cachedBaseKey === baseKey && this.cachedLayerKey === layerKey) {
       return;
     }
 
-    const baseFrame = (baseKey ? this.baseFramesByKey.get(baseKey) : undefined) ?? this.stageFileFrame;
-    const layerFrame = layerKey ? this.layerFramesByKey.get(layerKey) : undefined;
+    const baseFrame = this.resolveBaseFrame(baseKey);
+    const layerFrame = this.resolveLayerFrame(layerKey);
 
     this.cachedBaseKey = baseKey;
     this.cachedLayerKey = layerKey;
@@ -141,6 +152,20 @@ export class BgaAnsiRenderer {
     this.cachedSixel = undefined;
     this.cachedSixelScaleX = -1;
     this.cachedSixelScaleY = -1;
+  }
+
+  private resolveBaseFrame(baseKey: string): AnsiFrame | undefined {
+    if (!baseKey) {
+      return this.stageFileFrame;
+    }
+    return this.baseFramesByKey.get(baseKey) ?? this.missingBaseFrame;
+  }
+
+  private resolveLayerFrame(layerKey: string): AnsiFrame | undefined {
+    if (!layerKey) {
+      return undefined;
+    }
+    return this.layerFramesByKey.get(layerKey) ?? this.missingLayerFrame;
   }
 }
 
@@ -187,12 +212,17 @@ export async function createBgaAnsiRenderer(
     return undefined;
   }
 
+  const missingBaseFrame = createMissingFrame(width, height, 'base');
+  const missingLayerFrame = createMissingFrame(width, height, 'layer');
+
   return new BgaAnsiRenderer({
     baseTimeline,
     layerTimeline,
     baseFramesByKey,
     layerFramesByKey,
     stageFileFrame,
+    missingBaseFrame,
+    missingLayerFrame,
   });
 }
 
@@ -649,46 +679,120 @@ function decodeBmp(buffer: Buffer): DecodedImage {
   };
 }
 
+function createMissingFrame(maxWidth: number, maxHeight: number, mode: FrameMode): AnsiFrame {
+  const specMaskFill = mode === 'base' ? 1 : 0;
+  const specFrame = createSolidAnsiFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, specMaskFill);
+  return resizeAnsiFrame(specFrame, maxWidth, maxHeight);
+}
+
+function createSolidAnsiFrame(width: number, height: number, r: number, g: number, b: number, maskFill: 0 | 1): AnsiFrame {
+  const safeWidth = Math.max(1, width);
+  const safeHeight = Math.max(1, height);
+  const rgb = new Uint8Array(safeWidth * safeHeight * 3);
+  const opaqueMask = new Uint8Array(safeWidth * safeHeight);
+  if (maskFill === 0) {
+    return {
+      width: safeWidth,
+      height: safeHeight,
+      rgb,
+      opaqueMask,
+    };
+  }
+
+  for (let pixelOffset = 0; pixelOffset < safeWidth * safeHeight; pixelOffset += 1) {
+    const rgbOffset = pixelOffset * 3;
+    rgb[rgbOffset] = r;
+    rgb[rgbOffset + 1] = g;
+    rgb[rgbOffset + 2] = b;
+    opaqueMask[pixelOffset] = 1;
+  }
+
+  return {
+    width: safeWidth,
+    height: safeHeight,
+    rgb,
+    opaqueMask,
+  };
+}
+
 function convertImageToAnsiFrame(image: DecodedImage, maxWidth: number, maxHeight: number, mode: FrameMode): AnsiFrame {
+  const specFrame = createSolidAnsiFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, 0);
+  const offsetX = Math.floor((SPEC_BGA_CANVAS_SIZE - image.width) / 2);
+  const offsetY = 0;
+
+  for (let sourceY = 0; sourceY < image.height; sourceY += 1) {
+    const targetY = sourceY + offsetY;
+    if (targetY < 0 || targetY >= SPEC_BGA_CANVAS_SIZE) {
+      continue;
+    }
+
+    for (let sourceX = 0; sourceX < image.width; sourceX += 1) {
+      const targetX = sourceX + offsetX;
+      if (targetX < 0 || targetX >= SPEC_BGA_CANVAS_SIZE) {
+        continue;
+      }
+
+      const sourceOffset = (sourceY * image.width + sourceX) * 4;
+      const r = image.data[sourceOffset] ?? 0;
+      const g = image.data[sourceOffset + 1] ?? 0;
+      const b = image.data[sourceOffset + 2] ?? 0;
+      const a = image.data[sourceOffset + 3] ?? 255;
+      if (!isOpaquePixel(r, g, b, a, image.format, mode)) {
+        continue;
+      }
+
+      const targetPixelOffset = targetY * SPEC_BGA_CANVAS_SIZE + targetX;
+      const targetRgbOffset = targetPixelOffset * 3;
+      specFrame.rgb[targetRgbOffset] = r;
+      specFrame.rgb[targetRgbOffset + 1] = g;
+      specFrame.rgb[targetRgbOffset + 2] = b;
+      specFrame.opaqueMask[targetPixelOffset] = 1;
+    }
+  }
+
+  return resizeAnsiFrame(specFrame, maxWidth, maxHeight);
+}
+
+function resizeAnsiFrame(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {
   const canvasWidth = Math.max(1, maxWidth);
   const canvasHeight = Math.max(1, maxHeight);
-  const fitted = fitSizeKeepingAspect(image.width, image.height, canvasWidth, canvasHeight);
+  const fitted = fitSizeKeepingAspect(
+    source.width * TERMINAL_PIXEL_ASPECT_X,
+    source.height * TERMINAL_PIXEL_ASPECT_Y,
+    canvasWidth,
+    canvasHeight,
+  );
   const offsetX = Math.floor((canvasWidth - fitted.width) / 2);
   const offsetY = Math.floor((canvasHeight - fitted.height) / 2);
-
   const rgb = new Uint8Array(canvasWidth * canvasHeight * 3);
   const opaqueMask = new Uint8Array(canvasWidth * canvasHeight);
 
   for (let y = 0; y < fitted.height; y += 1) {
-    const sourceY = Math.min(image.height - 1, Math.max(0, Math.floor(((y + 0.5) * image.height) / fitted.height)));
+    const sourceY = Math.min(source.height - 1, Math.max(0, Math.floor(((y + 0.5) * source.height) / fitted.height)));
     const targetY = y + offsetY;
     if (targetY < 0 || targetY >= canvasHeight) {
       continue;
     }
 
     for (let x = 0; x < fitted.width; x += 1) {
-      const sourceX = Math.min(image.width - 1, Math.max(0, Math.floor(((x + 0.5) * image.width) / fitted.width)));
+      const sourceX = Math.min(source.width - 1, Math.max(0, Math.floor(((x + 0.5) * source.width) / fitted.width)));
       const targetX = x + offsetX;
       if (targetX < 0 || targetX >= canvasWidth) {
         continue;
       }
 
-      const offset = (sourceY * image.width + sourceX) * 4;
-      const r = image.data[offset] ?? 0;
-      const g = image.data[offset + 1] ?? 0;
-      const b = image.data[offset + 2] ?? 0;
-      const a = image.data[offset + 3] ?? 255;
-
-      if (!isOpaquePixel(r, g, b, a, image.format, mode)) {
+      const sourcePixelOffset = sourceY * source.width + sourceX;
+      if (source.opaqueMask[sourcePixelOffset] === 0) {
         continue;
       }
 
-      const pixelOffset = targetY * canvasWidth + targetX;
-      const rgbOffset = pixelOffset * 3;
-      rgb[rgbOffset] = r;
-      rgb[rgbOffset + 1] = g;
-      rgb[rgbOffset + 2] = b;
-      opaqueMask[pixelOffset] = 1;
+      const sourceRgbOffset = sourcePixelOffset * 3;
+      const targetPixelOffset = targetY * canvasWidth + targetX;
+      const targetRgbOffset = targetPixelOffset * 3;
+      rgb[targetRgbOffset] = source.rgb[sourceRgbOffset] ?? 0;
+      rgb[targetRgbOffset + 1] = source.rgb[sourceRgbOffset + 1] ?? 0;
+      rgb[targetRgbOffset + 2] = source.rgb[sourceRgbOffset + 2] ?? 0;
+      opaqueMask[targetPixelOffset] = 1;
     }
   }
 

@@ -228,6 +228,7 @@ npm run editor -- export chart.json chart.bms
 - `player` の手動演奏では、演奏チャンネルはキー押下時のみ発音します（背景系チャンネルのみ自動再生）。
 - `player` の標準チャンネル順とキー割り当ては IIDX 配列（1P/2P）です。2P チャンネルがある場合、TUI は 1P/2P 間にスペースを入れて表示します。
 - `player` の TUI では、直近判定を `PERFECT` / `GOOD` / `MISS` で表示し、コンボ数（`> 0` のときのみ）をレーン下端と入力キー行の間に中央揃えで表示します。`GREAT` 判定は表示上 `GOOD` に集約します。
+- `player` の BGA は `04`(base) と `07`(layer) を重ねて描画し、layer は黒を透過として扱います。画像は 256x256 キャンバス前提で、256x256 未満は X 中央・Y 上詰めで配置します。
 - `parser` は BMS テキスト読込時に文字コードを推測し、Shift_JIS などのマルチバイト入力を扱います。
 - `#LNTYPE` / `#LNOBJ` / `#DEFEXRANK` / `#EXRANKxx` / `#ARGBxx` は `bms` 拡張領域に専用フィールドとして保持します。
 - `bmson` の `info` 拡張項目 (`subartists`, `chart_name`, `judge_rank`, `total`, 画像/プレビュー系) と `bga`、`notes.l/c` は `bmson` / `events[].bmson` 拡張領域で保持します。
