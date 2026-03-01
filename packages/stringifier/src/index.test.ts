@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { parseBmson, parseChartFile } from '../../parser/src/index.ts';
-import { stringifyBms, stringifyBmson } from './index.ts';
+import { createDemoJson, stringifyBms, stringifyBmson, stringifyChart, tokenFromNumber } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -172,4 +172,121 @@ test('bmson stringify: bga/info 拡張項目と notes.l/c を保持して出力�
   const lead = document.sound_channels.find((channel) => channel.name === 'lead.wav');
   expect(lead?.notes[0]).toEqual({ x: 1, y: 0, l: 120, c: true });
   expect(lead?.notes[1]).toEqual({ x: 1, y: 1080, l: 0, c: false });
+});
+
+test('BMS stringify: オプション maxResolution / eol と controlFlow object を処理できる', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.title = 'Options';
+  json.metadata.artist = 'Codex';
+  json.metadata.extras = {
+    CUSTOM: 'YES',
+    PLAYER: 'ignored-as-extra',
+  };
+  json.resources.wav = { '01': 'a.wav', '02': 'b.wav' };
+  json.events = [
+    { measure: 0, channel: '11', position: [1, 8], value: '01' },
+    { measure: 0, channel: '11', position: [7, 8], value: '02' },
+  ];
+  json.bms.controlFlow = [
+    { kind: 'directive', command: 'RANDOM', value: '2' },
+    { kind: 'header', command: 'ENDIF', value: '' },
+    {
+      kind: 'object',
+      measure: 1,
+      channel: '11',
+      events: [{ measure: 1, channel: '11', position: [0, 1], value: '01' }],
+      measureLength: 0.5,
+    },
+    {
+      kind: 'object',
+      measure: 2,
+      channel: '12',
+      events: [
+        { measure: 2, channel: '12', position: [0, 2], value: '01' },
+        { measure: 2, channel: '12', position: [1, 2], value: '00' },
+      ],
+    },
+  ];
+
+  const output = stringifyBms(json, { maxResolution: 4, eol: '\r\n' });
+  expect(output).toContain('#CUSTOM YES');
+  expect(output).not.toContain('#PLAYER ignored-as-extra');
+  expect(output).toContain('#00011:0001');
+  expect(output).toContain('#00111:0.5');
+  expect(output).toContain('#00212:01');
+  expect(output).toContain('#ENDIF');
+  expect(output).toContain('\r\n');
+});
+
+test('bmson stringify: resolution/version/lines 正規化とフォールバック情報を扱える', () => {
+  const json = createEmptyJson('json');
+  json.metadata.title = 'Fallback';
+  json.metadata.artist = 'Composer';
+  json.metadata.genre = 'Genre';
+  json.metadata.bpm = 150;
+  json.metadata.playLevel = 7;
+  json.metadata.rank = 75;
+  json.metadata.total = 320;
+  json.resources.wav['01'] = 'sample.wav';
+  json.resources.bpm['AA'] = 180;
+  json.resources.stop['AB'] = 96;
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01' },
+    { measure: 0, channel: '03', position: [0, 1], value: '78' },
+    { measure: 0, channel: '08', position: [1, 2], value: 'AA' },
+    { measure: 0, channel: '09', position: [3, 4], value: 'AB' },
+    { measure: 0, channel: 'AA', position: [0, 1], value: 'FF' },
+  ];
+  json.bmson.lines = [960, 0, 960];
+  json.bmson.info.subartists = ['A', 'B', ''];
+  json.bmson.version = '';
+
+  const output = stringifyBmson(json, { resolution: 480, indent: 0 });
+  const document = JSON.parse(output) as {
+    version: string;
+    lines: Array<{ y: number }>;
+    info: {
+      title: string;
+      artist: string;
+      genre: string;
+      level: number;
+      init_bpm: number;
+      mode_hint: string;
+      resolution: number;
+      judge_rank: number;
+      total: number;
+      subartists?: string[];
+    };
+    bpm_events: Array<{ y: number; bpm: number }>;
+    stop_events: Array<{ y: number; duration: number }>;
+  };
+
+  expect(document.version).toBe('1.0.0');
+  expect(document.lines.map((line) => line.y)).toEqual([0, 960]);
+  expect(document.info).toMatchObject({
+    title: 'Fallback',
+    artist: 'Composer',
+    genre: 'Genre',
+    level: 7,
+    init_bpm: 150,
+    mode_hint: 'beat-2k',
+    resolution: 480,
+    judge_rank: 75,
+    total: 320,
+  });
+  expect(document.info.subartists).toEqual(['A', 'B', '']);
+  expect(document.bpm_events.map((event) => event.bpm)).toEqual([120, 180]);
+  expect(document.stop_events[0].duration).toBe(96);
+});
+
+test('stringifier: stringifyChart / createDemoJson / tokenFromNumber', () => {
+  const demo = createDemoJson();
+  expect(demo.events.length).toBeGreaterThan(0);
+
+  const bms = stringifyChart(demo, 'bms');
+  const bmson = stringifyChart(demo, 'bmson');
+  expect(bms).toContain('#TITLE Demo Chart');
+  expect(bmson).toContain('"sound_channels"');
+
+  expect(tokenFromNumber(35)).toBe('0Z');
 });
