@@ -389,9 +389,12 @@ async function tryCreateAudioIoBackend(options: AudioBackendCreateOptions): Prom
   }
 
   const chunkSampleCount = options.samplesPerFrame * options.channels;
-  const highWaterSamples = Math.max(chunkSampleCount * 6, chunkSampleCount * (options.mode === 'manual' ? 10 : 48));
-  const lowWaterSamples = Math.max(chunkSampleCount * 2, Math.floor(highWaterSamples * 0.75));
+  const autoModeQueueChunks = options.mode === 'manual' ? 10 : 72;
+  const highWaterSamples = Math.max(chunkSampleCount * 6, chunkSampleCount * autoModeQueueChunks);
+  const lowWaterRatio = options.mode === 'manual' ? 0.75 : 0.88;
+  const lowWaterSamples = Math.max(chunkSampleCount * 2, Math.floor(highWaterSamples * lowWaterRatio));
   const queue: QueuedPcmChunk[] = [];
+  const lastOutputSamples = new Int16Array(Math.max(1, options.channels));
 
   let queuedSamples = 0;
   let closing = false;
@@ -437,6 +440,12 @@ async function tryCreateAudioIoBackend(options: AudioBackendCreateOptions): Prom
       }
       const size = Math.min(outputBuffer.length - written, available);
       outputBuffer.set(head.samples.subarray(head.offset, head.offset + size), written);
+      if (size >= options.channels) {
+        const lastFrameOffset = head.offset + size - options.channels;
+        for (let channel = 0; channel < options.channels; channel += 1) {
+          lastOutputSamples[channel] = head.samples[lastFrameOffset + channel] ?? 0;
+        }
+      }
       head.offset += size;
       written += size;
       queuedSamples -= size;
@@ -445,7 +454,24 @@ async function tryCreateAudioIoBackend(options: AudioBackendCreateOptions): Prom
       }
     }
     if (written < outputBuffer.length) {
-      outputBuffer.fill(0, written);
+      // Underflow can cause an abrupt step to 0 and produce a click.
+      // Smoothly ramp the last output sample to silence within this callback block.
+      const remaining = outputBuffer.length - written;
+      const frameCount = Math.max(1, Math.floor(remaining / options.channels));
+      for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+        const progress = (frameIndex + 1) / frameCount;
+        const gain = Math.max(0, 1 - progress);
+        const offset = written + frameIndex * options.channels;
+        for (let channel = 0; channel < options.channels; channel += 1) {
+          outputBuffer[offset + channel] = Math.round(lastOutputSamples[channel] * gain);
+        }
+      }
+
+      const tailStart = written + frameCount * options.channels;
+      if (tailStart < outputBuffer.length) {
+        outputBuffer.fill(0, tailStart);
+      }
+      lastOutputSamples.fill(0);
     }
 
     if (!closing || queuedSamples > 0 || closed) {
