@@ -335,13 +335,12 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
       }
     }
   } finally {
-    stopInputCapture();
     if (interruptedReason) {
-      await audioSession?.dispose();
+      await disposeAudioSessionSafely(audioSession);
     } else {
-      await audioSession?.finish();
-      await audioSession?.dispose();
+      await finalizeAudioSessionSafely(audioSession);
     }
+    stopInputCapture();
     tui?.stop();
   }
 
@@ -644,14 +643,13 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       }
     }
   } finally {
+    if (interruptedReason) {
+      await disposeAudioSessionSafely(audioSession);
+    } else {
+      await finalizeAudioSessionSafely(audioSession);
+    }
     stopInputCapture();
     tui?.stop();
-    if (interruptedReason) {
-      await audioSession?.dispose();
-    } else {
-      await audioSession?.finish();
-      await audioSession?.dispose();
-    }
   }
 
   if (interruptedReason) {
@@ -713,6 +711,36 @@ function createTuiIfEnabled(
   }
 
   return tui;
+}
+
+async function finalizeAudioSessionSafely(audioSession: AudioSession | undefined): Promise<void> {
+  if (!audioSession) {
+    return;
+  }
+  const finishCompleted = await settleWithTimeout(audioSession.finish(), 2_000);
+  if (!finishCompleted) {
+    await settleWithTimeout(audioSession.dispose(), 600);
+    return;
+  }
+  await settleWithTimeout(audioSession.dispose(), 600);
+}
+
+async function disposeAudioSessionSafely(audioSession: AudioSession | undefined): Promise<void> {
+  if (!audioSession) {
+    return;
+  }
+  await settleWithTimeout(audioSession.dispose(), 600);
+}
+
+async function settleWithTimeout(task: Promise<void>, timeoutMs: number): Promise<boolean> {
+  let completed = false;
+  const guardedTask = task
+    .catch(() => undefined)
+    .then(() => {
+      completed = true;
+    });
+  await Promise.race([guardedTask, delay(timeoutMs)]);
+  return completed;
 }
 
 function createBgaRenderFrame(
