@@ -581,7 +581,7 @@ function colorizeMeasureLine(symbol: string): string {
 }
 
 function colorizeMine(symbol: string): string {
-  return `\u001b[1;38;5;198m${symbol}\u001b[0m`;
+  return `\u001b[1;97;41m${symbol}\u001b[0m`;
 }
 
 function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: number): string {

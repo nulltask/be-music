@@ -332,8 +332,10 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
 
   const notes = extractPlayableNotes(resolvedJson);
-  const totalSeconds = notes.at(-1)?.seconds ?? 0;
-  const channels = [...new Set(notes.map((note) => note.channel))];
+  const landmineNotes = extractLandmineNotes(resolvedJson);
+  const renderNotes = [...notes, ...landmineNotes].sort((left, right) => left.seconds - right.seconds);
+  const totalSeconds = Math.max(notes.at(-1)?.seconds ?? 0, landmineNotes.at(-1)?.seconds ?? 0);
+  const channels = [...new Set([...notes.map((note) => note.channel), ...landmineNotes.map((note) => note.channel)])];
   const laneBindings = createLaneBindings(channels);
   const keyMap = new Map(laneBindings.map((binding) => [binding.channel, binding.keyLabel]));
   const summary: PlayerSummary = {
@@ -380,7 +382,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
       currentSeconds: 0,
       totalSeconds,
       summary,
-      notes,
+      notes: renderNotes,
       ...createBgaRenderFrame(bgaRenderer, 0, preferSixel),
     });
   }
@@ -427,32 +429,49 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
       audioSession?.start();
 
       const startedAt = performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0);
-      for (const note of notes) {
-        if (interruptedReason) {
-          break;
-        }
-        const scheduledMs = (note.seconds * 1000) / speed;
+      const badWindowSeconds = IIDX_BAD_WINDOW_MS / 1000;
 
+      const markExpiredLandmines = (referenceSeconds: number): void => {
+        for (const landmine of landmineNotes) {
+          if (landmine.judged) {
+            continue;
+          }
+          if (referenceSeconds - landmine.seconds > badWindowSeconds) {
+            landmine.judged = true;
+          }
+        }
+      };
+
+      const renderUntil = async (targetMs: number): Promise<void> => {
         while (true) {
           if (interruptedReason) {
-            break;
+            return;
           }
           const nowMs = performance.now() - startedAt;
-          if (nowMs >= scheduledMs) {
-            break;
+          if (nowMs >= targetMs) {
+            return;
           }
           const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+          markExpiredLandmines(nowSec);
           const nowBeat = beatAtSeconds(nowSec);
           tui?.render({
             currentBeat: nowBeat,
             currentSeconds: nowSec,
             totalSeconds,
             summary,
-            notes,
+            notes: renderNotes,
             ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
           });
-          await waitPrecise(Math.max(1, Math.min(TUI_FRAME_INTERVAL_MS, scheduledMs - nowMs)));
+          await waitPrecise(Math.max(1, Math.min(TUI_FRAME_INTERVAL_MS, targetMs - nowMs)));
         }
+      };
+
+      for (const note of notes) {
+        if (interruptedReason) {
+          break;
+        }
+        const scheduledMs = (note.seconds * 1000) / speed;
+        await renderUntil(scheduledMs);
         if (interruptedReason) {
           break;
         }
@@ -477,19 +496,27 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
             currentSeconds: note.seconds,
             totalSeconds,
             summary,
-            notes,
+            notes: renderNotes,
             ...createBgaRenderFrame(bgaRenderer, note.seconds, preferSixel),
           });
         }
+
+        markExpiredLandmines(note.seconds);
       }
 
       if (!interruptedReason) {
+        const totalScheduledMs = (totalSeconds * 1000) / speed;
+        await renderUntil(totalScheduledMs);
+        markExpiredLandmines(totalSeconds + badWindowSeconds);
+        for (const landmine of landmineNotes) {
+          landmine.judged = true;
+        }
         tui?.render({
           currentBeat: beatAtSeconds(totalSeconds),
           currentSeconds: totalSeconds,
           totalSeconds,
           summary,
-          notes,
+          notes: renderNotes,
           ...createBgaRenderFrame(bgaRenderer, totalSeconds, preferSixel),
         });
       }

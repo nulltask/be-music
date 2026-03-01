@@ -52,6 +52,28 @@ test('player: resolves control-flow branches at playback time', async () => {
   expect(summary.score).toBe(200000);
 });
 
+test('player: auto play ignores landmine notes in score totals', async () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01' },
+    { measure: 0, channel: 'D1', position: [1, 2], value: '10' },
+  ];
+
+  const summary = await autoPlay(json, {
+    auto: true,
+    speed: 48,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+  });
+
+  expect(summary.total).toBe(1);
+  expect(summary.perfect).toBe(1);
+  expect(summary.bad).toBe(0);
+  expect(summary.miss).toBe(0);
+});
+
 test('player: derives long-note end beat from bmson notes.l', () => {
   const json = createEmptyJson('bmson');
   json.metadata.bpm = 120;
