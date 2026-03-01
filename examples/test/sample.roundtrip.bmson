@@ -1,0 +1,99 @@
+{
+  "version": "1.0.0",
+  "info": {
+    "title": "Sample",
+    "subtitle": "",
+    "artist": "Codex",
+    "genre": "",
+    "level": 0,
+    "init_bpm": 120,
+    "mode_hint": "beat-1k"
+  },
+  "resolution": 240,
+  "bpm_events": [
+    {
+      "y": 1920,
+      "bpm": 100
+    }
+  ],
+  "stop_events": [],
+  "sound_channels": [
+    {
+      "name": "sample.wav",
+      "notes": [
+        {
+          "x": 1,
+          "y": 0,
+          "l": 0,
+          "c": false
+        },
+        {
+          "x": 1,
+          "y": 240,
+          "l": 0,
+          "c": false
+        },
+        {
+          "x": 1,
+          "y": 480,
+          "l": 0,
+          "c": false
+        },
+        {
+          "x": 1,
+          "y": 720,
+          "l": 0,
+          "c": false
+        },
+        {
+          "x": 1,
+          "y": 960,
+          "l": 0,
+          "c": false
+        },
+        {
+          "x": 1,
+          "y": 1200,
+          "l": 0,
+          "c": false
+        },
+        {
+          "x": 1,
+          "y": 1440,
+          "l": 0,
+          "c": false
+        },
+        {
+          "x": 1,
+          "y": 1680,
+          "l": 0,
+          "c": false
+        },
+        {
+          "x": 1,
+          "y": 1920,
+          "l": 0,
+          "c": false
+        },
+        {
+          "x": 1,
+          "y": 2160,
+          "l": 0,
+          "c": false
+        },
+        {
+          "x": 1,
+          "y": 2400,
+          "l": 0,
+          "c": false
+        },
+        {
+          "x": 1,
+          "y": 2640,
+          "l": 0,
+          "c": false
+        }
+      ]
+    }
+  ]
+}

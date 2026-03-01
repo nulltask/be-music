@@ -1,0 +1,47 @@
+{
+  "version": "1.0.0",
+  "info": {
+    "title": "BMSON Strict Test",
+    "subtitle": "Strict",
+    "artist": "Codex",
+    "genre": "TEST",
+    "subartists": ["Alice", "Bob"],
+    "chart_name": "HYPER",
+    "level": 9,
+    "init_bpm": 160,
+    "resolution": 240,
+    "mode_hint": "beat-7k",
+    "judge_rank": 125,
+    "total": 340,
+    "back_image": "back.png",
+    "eyecatch_image": "eye.png",
+    "banner_image": "banner.png",
+    "preview_music": "preview.ogg"
+  },
+  "lines": [{ "y": 0 }, { "y": 960 }, { "y": 1920 }],
+  "bga": {
+    "bga_header": [
+      { "id": 1, "name": "base.png" },
+      { "id": 2, "name": "layer.png" },
+      { "id": 3, "name": "poor.png" }
+    ],
+    "bga_events": [{ "y": 0, "id": 1 }],
+    "layer_events": [{ "y": 480, "id": 2 }],
+    "poor_events": [{ "y": 960, "id": 3 }]
+  },
+  "bpm_events": [{ "y": 960, "bpm": 180 }],
+  "stop_events": [{ "y": 1200, "duration": 96 }],
+  "sound_channels": [
+    {
+      "name": "lead.wav",
+      "notes": [
+        { "x": 1, "y": 0, "l": 120, "c": true },
+        { "x": 1, "y": 1080, "l": 0, "c": false }
+      ]
+    },
+    {
+      "name": "bgm.wav",
+      "notes": [{ "y": 240, "l": 0, "c": false }]
+    }
+  ]
+}

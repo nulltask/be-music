@@ -1,0 +1,25 @@
+# OS-generated files
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100/
+.Trashes/
+._*
+
+# Dependencies and build artifacts
+node_modules/
+packages/*/node_modules/
+packages/*/dist/
+*.tsbuildinfo
+coverage/
+
+# Example datasets
+examples/*
+!examples/test
+
+# Temporary files
+tmp/*
+!tmp/.keep

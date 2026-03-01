@@ -1,0 +1,33 @@
+{
+  "name": "@be-music/audio-renderer",
+  "version": "0.1.0",
+  "description": "BMS audio-renderer",
+  "bin": {
+    "bms-audio-render": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsgo -b tsconfig.json --emitDeclarationOnly --force",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "dev": "tsx --tsconfig ../../tsconfig.dev.json src/cli.ts"
+  },
+  "dependencies": {
+    "@be-music/json": "0.1.0",
+    "@be-music/parser": "0.1.0",
+    "@be-music/utils": "0.1.0",
+    "@wasm-audio-decoders/ogg-vorbis": "^0.1.20",
+    "mpg123-decoder": "^1.0.3",
+    "ogg-opus-decoder": "^1.7.3"
+  }
+}

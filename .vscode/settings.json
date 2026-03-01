@@ -1,0 +1,32 @@
+{
+  "cSpell.words": [
+    "argb",
+    "audify",
+    "bcoreaudio",
+    "bmson",
+    "DEFEXRANK",
+    "echogarden",
+    "ENDRANDOM",
+    "ENDSW",
+    "EXRAN",
+    "IIDX",
+    "LNOBJ",
+    "LNTYPE",
+    "mmmcc",
+    "oxfmt",
+    "oxlint",
+    "SETRANDOM",
+    "SETSWITCH",
+    "Sixel",
+    "stringifier",
+    "subartists",
+    "tsgo",
+    "Vorbis"
+  ],
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.oxc": "always"
+  },
+  "oxc.fmt.configPath": ".oxfmtrc.json"
+}

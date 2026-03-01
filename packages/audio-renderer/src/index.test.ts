@@ -1,0 +1,156 @@
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createEmptyJson } from '../../json/src/index.ts';
+import { expect, test } from 'vitest';
+import { type RenderResult, collectSampleTriggers, renderJson } from './index.ts';
+
+const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const fixtureDir = resolve(rootDir, 'examples/test');
+
+function createSingleTriggerChart(samplePath: string) {
+  const json = createEmptyJson('json');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = samplePath;
+  json.events = [{ measure: 0, channel: '01', position: [0, 1], value: '01' }];
+  return json;
+}
+
+function maxDeltaBetweenResults(left: RenderResult, right: RenderResult, startFrame: number, endFrame: number): number {
+  const start = Math.max(0, startFrame);
+  const end = Math.min(left.left.length, right.left.length, endFrame);
+  let maxDelta = 0;
+
+  for (let index = start; index < end; index += 1) {
+    const deltaLeft = Math.abs(left.left[index] - right.left[index]);
+    const deltaRight = Math.abs(left.right[index] - right.right[index]);
+    if (deltaLeft > maxDelta) {
+      maxDelta = deltaLeft;
+    }
+    if (deltaRight > maxDelta) {
+      maxDelta = deltaRight;
+    }
+  }
+
+  return maxDelta;
+}
+
+const codecCases = [
+  { label: 'MP3', path: 'render-codec-test.mp3' },
+  { label: 'OGG (Vorbis)', path: 'render-codec-test.ogg' },
+  { label: 'OPUS', path: 'render-codec-test.opus' },
+] as const;
+
+test.each(codecCases)('audio-renderer: $label サンプルを読み込んでミックスできる', async ({ path }) => {
+  const json = createSingleTriggerChart(path);
+  const result = await renderJson(json, {
+    baseDir: fixtureDir,
+    sampleRate: 44_100,
+    normalize: false,
+    tailSeconds: 0,
+    fallbackToneSeconds: 0.01,
+  });
+
+  expect(result.durationSeconds).toBeGreaterThan(0.2);
+  expect(result.durationSeconds).toBeLessThan(0.8);
+  expect(result.peak).toBeGreaterThan(0.001);
+});
+
+test('audio-renderer: .wav 指定でファイルが無い場合 mp3 にフォールバックできる', async () => {
+  const json = createSingleTriggerChart('render-codec-test.wav');
+  const result = await renderJson(json, {
+    baseDir: fixtureDir,
+    sampleRate: 44_100,
+    normalize: false,
+    tailSeconds: 0,
+    fallbackToneSeconds: 0.01,
+  });
+
+  expect(result.durationSeconds).toBeGreaterThan(0.2);
+  expect(result.durationSeconds).toBeLessThan(0.8);
+});
+
+test('audio-renderer: bmson notes.c に基づくサンプル継続オフセットを解釈できる', () => {
+  const json = createEmptyJson('bmson');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'sample.wav';
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
+    { measure: 0, channel: '12', position: [1, 4], value: '01', bmson: { c: true } },
+    { measure: 0, channel: '13', position: [2, 4], value: '01', bmson: { c: false } },
+    { measure: 0, channel: '14', position: [3, 4], value: '01', bmson: { c: true } },
+  ];
+
+  const triggers = collectSampleTriggers(json);
+  expect(triggers.map((trigger) => Number(trigger.sampleOffsetSeconds.toFixed(3)))).toEqual([0, 0.5, 0, 0.5]);
+});
+
+test('audio-renderer: bms は同一定義番号の再トリガで先行音を即カットする', async () => {
+  const retrigger = createEmptyJson('bms');
+  retrigger.metadata.bpm = 120;
+  retrigger.resources.wav['01'] = 'not-found.wav';
+  retrigger.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01' },
+    { measure: 0, channel: '11', position: [1, 8], value: '01' },
+  ];
+
+  const single = createEmptyJson('bms');
+  single.metadata.bpm = 120;
+  single.resources.wav['01'] = 'not-found.wav';
+  single.events = [{ measure: 0, channel: '11', position: [1, 8], value: '01' }];
+
+  const [retriggerResult, singleResult] = await Promise.all([
+    renderJson(retrigger, {
+      sampleRate: 44_100,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1.2,
+    }),
+    renderJson(single, {
+      sampleRate: 44_100,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1.2,
+    }),
+  ]);
+
+  const startFrame = Math.round(0.3 * 44_100);
+  const endFrame = Math.round(0.7 * 44_100);
+  expect(maxDeltaBetweenResults(retriggerResult, singleResult, startFrame, endFrame)).toBeLessThan(1e-6);
+});
+
+test('audio-renderer: bms は同じ音声ファイルでも別定義番号なら先行音をカットしない', async () => {
+  const overlap = createEmptyJson('bms');
+  overlap.metadata.bpm = 120;
+  overlap.resources.wav['01'] = 'render-codec-test.mp3';
+  overlap.resources.wav['02'] = 'render-codec-test.mp3';
+  overlap.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01' },
+    { measure: 0, channel: '12', position: [1, 40], value: '02' },
+  ];
+
+  const single = createEmptyJson('bms');
+  single.metadata.bpm = 120;
+  single.resources.wav['02'] = 'render-codec-test.mp3';
+  single.events = [{ measure: 0, channel: '12', position: [1, 40], value: '02' }];
+
+  const [overlapResult, singleResult] = await Promise.all([
+    renderJson(overlap, {
+      baseDir: fixtureDir,
+      sampleRate: 44_100,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.1,
+    }),
+    renderJson(single, {
+      baseDir: fixtureDir,
+      sampleRate: 44_100,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.1,
+    }),
+  ]);
+
+  const startFrame = Math.round(0.08 * 44_100);
+  const endFrame = Math.round(0.2 * 44_100);
+  expect(maxDeltaBetweenResults(overlapResult, singleResult, startFrame, endFrame)).toBeGreaterThan(1e-3);
+});

@@ -1,0 +1,42 @@
+{
+  "name": "be-music",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Be-Music tooling monorepo",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt . --write",
+    "format:check": "oxfmt . --check",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "bench:parser": "npm run bench --workspace @be-music/parser --",
+    "bench:parser:check": "npm run bench:check --workspace @be-music/parser --",
+    "bench:parser:update-baseline": "npm run bench:update-baseline --workspace @be-music/parser --",
+    "player": "npm run dev --workspace @be-music/player --",
+    "editor": "npm run dev --workspace @be-music/editor --",
+    "audio-render": "npm run dev --workspace @be-music/audio-renderer --",
+    "parse": "npm run dev --workspace @be-music/parser --",
+    "stringify": "npm run dev --workspace @be-music/stringifier --"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "@typescript/native-preview": "7.0.0-dev.20260228.1",
+    "@vitest/coverage-v8": "^4.0.18",
+    "oxfmt": "^0.35.0",
+    "oxlint": "^1.50.0",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.20.3",
+    "vite": "^7.1.7",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@be-music/utils",
+  "version": "0.1.0",
+  "description": "Shared utility helpers for be-music packages",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsgo -b tsconfig.json --emitDeclarationOnly --force",
+    "clean": "rimraf dist tsconfig.tsbuildinfo"
+  }
+}

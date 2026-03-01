@@ -1,0 +1,30 @@
+{
+  "name": "@be-music/stringifier",
+  "version": "0.1.0",
+  "description": "BMS/BMSON stringifier",
+  "bin": {
+    "bms-stringify": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsgo -b tsconfig.json --emitDeclarationOnly --force",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "dev": "tsx --tsconfig ../../tsconfig.dev.json src/cli.ts"
+  },
+  "dependencies": {
+    "@be-music/json": "0.1.0",
+    "@be-music/parser": "0.1.0",
+    "@be-music/utils": "0.1.0"
+  }
+}

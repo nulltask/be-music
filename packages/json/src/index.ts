@@ -1,0 +1,546 @@
+export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
+
+export type BmsSourceFormat = 'bms' | 'bmson' | 'json';
+
+export interface BmsMetadata {
+  title?: string;
+  subtitle?: string;
+  artist?: string;
+  genre?: string;
+  comment?: string;
+  stageFile?: string;
+  playLevel?: number;
+  rank?: number;
+  total?: number;
+  difficulty?: number;
+  bpm: number;
+  extras: Record<string, string>;
+}
+
+export interface BmsResources {
+  wav: Record<string, string>;
+  bmp: Record<string, string>;
+  bpm: Record<string, number>;
+  stop: Record<string, number>;
+  text: Record<string, string>;
+}
+
+export interface BmsMeasure {
+  index: number;
+  length: number;
+}
+
+export type BmsPosition = readonly [numerator: number, denominator: number];
+
+export interface BmsonEventExtensions {
+  l?: number;
+  c?: boolean;
+}
+
+export interface BmsEvent {
+  measure: number;
+  channel: string;
+  position: BmsPosition;
+  value: string;
+  bmson?: BmsonEventExtensions;
+}
+
+export interface BmsonInfoExtensions {
+  title?: string;
+  subtitle?: string;
+  artist?: string;
+  genre?: string;
+  subartists?: string[];
+  chartName?: string;
+  level?: number;
+  initBpm?: number;
+  resolution?: number;
+  modeHint?: string;
+  judgeRank?: number;
+  total?: number;
+  backImage?: string;
+  eyecatchImage?: string;
+  bannerImage?: string;
+  previewMusic?: string;
+}
+
+export interface BmsonBgaHeaderEntry {
+  id: number;
+  name: string;
+}
+
+export interface BmsonBgaEvent {
+  y: number;
+  id: number;
+}
+
+export interface BmsonBgaExtensions {
+  header: BmsonBgaHeaderEntry[];
+  events: BmsonBgaEvent[];
+  layerEvents: BmsonBgaEvent[];
+  poorEvents: BmsonBgaEvent[];
+}
+
+export interface BmsonExtensions {
+  version?: string;
+  lines: number[];
+  info: BmsonInfoExtensions;
+  bga: BmsonBgaExtensions;
+}
+
+export type BmsControlFlowCommand =
+  | 'RANDOM'
+  | 'SETRANDOM'
+  | 'IF'
+  | 'ELSEIF'
+  | 'ELSE'
+  | 'ENDIF'
+  | 'ENDRANDOM'
+  | 'SWITCH'
+  | 'SETSWITCH'
+  | 'CASE'
+  | 'SKIP'
+  | 'DEF'
+  | 'ENDSW';
+
+export interface BmsControlFlowDirectiveEntry {
+  kind: 'directive';
+  command: BmsControlFlowCommand;
+  value?: string;
+}
+
+export interface BmsControlFlowHeaderEntry {
+  kind: 'header';
+  command: string;
+  value: string;
+}
+
+export interface BmsControlFlowObjectEntry {
+  kind: 'object';
+  measure: number;
+  channel: string;
+  events: BmsEvent[];
+  measureLength?: number;
+}
+
+export type BmsControlFlowEntry = BmsControlFlowDirectiveEntry | BmsControlFlowHeaderEntry | BmsControlFlowObjectEntry;
+
+export interface BmsExtensions {
+  controlFlow: BmsControlFlowEntry[];
+  lnType?: number;
+  lnObj?: string;
+  defExRank?: number;
+  exRank: Record<string, string>;
+  argb: Record<string, string>;
+  player?: number;
+  pathWav?: string;
+  baseBpm?: number;
+  stp: string[];
+  option?: string;
+  changeOption: Record<string, string>;
+  wavCmd?: string;
+  exWav: Record<string, string>;
+  exBmp: Record<string, string>;
+  bga: Record<string, string>;
+  poorBga?: string;
+  swBga: Record<string, string>;
+  videoFile?: string;
+  materials?: string;
+  divideProp?: string;
+  charset?: string;
+}
+
+export interface BmsJson {
+  format: typeof BMS_JSON_FORMAT;
+  sourceFormat: BmsSourceFormat;
+  metadata: BmsMetadata;
+  resources: BmsResources;
+  measures: BmsMeasure[];
+  events: BmsEvent[];
+  bms: BmsExtensions;
+  bmson: BmsonExtensions;
+}
+
+export interface MeasurePosition {
+  measure: number;
+  position: number;
+}
+
+export const DEFAULT_BPM = 120;
+
+/**
+ * 処理に必要な初期データを生成します。
+ * @param sourceFormat - sourceFormat に対応する入力値。
+ * @returns 処理結果（BmsJson）。
+ */
+export function createEmptyJson(sourceFormat: BmsSourceFormat = 'bms'): BmsJson {
+  return {
+    format: BMS_JSON_FORMAT,
+    sourceFormat,
+    metadata: {
+      bpm: DEFAULT_BPM,
+      extras: {},
+    },
+    resources: {
+      wav: {},
+      bmp: {},
+      bpm: {},
+      stop: {},
+      text: {},
+    },
+    measures: [],
+    events: [],
+    bms: {
+      controlFlow: [],
+      exRank: {},
+      argb: {},
+      stp: [],
+      changeOption: {},
+      exWav: {},
+      exBmp: {},
+      bga: {},
+      swBga: {},
+    },
+    bmson: {
+      lines: [],
+      info: {},
+      bga: {
+        header: [],
+        events: [],
+        layerEvents: [],
+        poorEvents: [],
+      },
+    },
+  };
+}
+
+/**
+ * clone Json に対応する処理を実行します。
+ * @param json - 処理対象の BMS/BMSON 中間表現。
+ * @returns 処理結果（BmsJson）。
+ */
+export function cloneJson(json: BmsJson): BmsJson {
+  return structuredClone(json);
+}
+
+/**
+ * 入力値を仕様に沿う正規形に整えます。
+ * @param value - 処理対象の値。
+ * @returns 変換後または整形後の文字列。
+ */
+export function normalizeObjectKey(value: string): string {
+  const normalized = value.trim().toUpperCase();
+  if (normalized.length === 0) {
+    return '00';
+  }
+  if (normalized.length === 1) {
+    return `0${normalized}`;
+  }
+  return normalized.slice(0, 2);
+}
+
+/**
+ * 入力値を仕様に沿う正規形に整えます。
+ * @param value - 処理対象の値。
+ * @returns 変換後または整形後の文字列。
+ */
+export function normalizeChannel(value: string): string {
+  return normalizeObjectKey(value);
+}
+
+/**
+ * int To Base36 に対応する処理を実行します。
+ * @param value - 処理対象の値。
+ * @param pad - pad に対応する入力値。
+ * @returns 変換後または整形後の文字列。
+ */
+export function intToBase36(value: number, pad = 2): string {
+  if (!Number.isFinite(value) || value < 0) {
+    return '0'.repeat(pad);
+  }
+  const encoded = Math.floor(value).toString(36).toUpperCase();
+  return encoded.padStart(pad, '0').slice(-pad);
+}
+
+/**
+ * base36 To Int に対応する処理を実行します。
+ * @param value - 処理対象の値。
+ * @returns 計算結果の数値。
+ */
+export function base36ToInt(value: string): number {
+  const parsed = Number.parseInt(value, 36);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * 入力データを解析し、内部処理で扱う形式に変換します。
+ * @param value - 処理対象の値。
+ * @returns 計算結果の数値。
+ */
+export function parseBpmFrom03Token(value: string): number {
+  const parsed = Number.parseInt(value, 16);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * ensure Measure に対応する処理を実行します。
+ * @param json - 処理対象の BMS/BMSON 中間表現。
+ * @param index - 対象要素のインデックス。
+ * @returns 処理結果（BmsMeasure）。
+ */
+export function ensureMeasure(json: BmsJson, index: number): BmsMeasure {
+  const found = json.measures.find((measure) => measure.index === index);
+  if (found) {
+    return found;
+  }
+  const created: BmsMeasure = {
+    index,
+    length: 1,
+  };
+  json.measures.push(created);
+  return created;
+}
+
+/**
+ * get Measure Length に対応する処理を実行します。
+ * @param json - 処理対象の BMS/BMSON 中間表現。
+ * @param index - 対象要素のインデックス。
+ * @returns 計算結果の数値。
+ */
+export function getMeasureLength(json: BmsJson, index: number): number {
+  const found = json.measures.find((measure) => measure.index === index);
+  return found?.length ?? 1;
+}
+
+/**
+ * get Measure Beats に対応する処理を実行します。
+ * @param length - 長さを表す値。
+ * @returns 計算結果の数値。
+ */
+export function getMeasureBeats(length: number): number {
+  return 4 * length;
+}
+
+/**
+ * measure To Beat に対応する処理を実行します。
+ * @param json - 処理対象の BMS/BMSON 中間表現。
+ * @param measure - 対象小節番号。
+ * @param position - position に対応する入力値。
+ * @returns 計算結果の数値。
+ */
+export function measureToBeat(json: BmsJson, measure: number, position = 0): number {
+  const safePosition = clamp01(position);
+  let beats = 0;
+  for (let current = 0; current < measure; current += 1) {
+    beats += getMeasureBeats(getMeasureLength(json, current));
+  }
+  beats += getMeasureBeats(getMeasureLength(json, measure)) * safePosition;
+  return beats;
+}
+
+/**
+ * event To Beat に対応する処理を実行します。
+ * @param json - 処理対象の BMS/BMSON 中間表現。
+ * @param event - 処理対象のイベント。
+ * @returns 計算結果の数値。
+ */
+export function eventToBeat(json: BmsJson, event: BmsEvent): number {
+  return measureToBeat(json, event.measure, getEventPosition(event));
+}
+
+/**
+ * beat To Measure Position に対応する処理を実行します。
+ * @param json - 処理対象の BMS/BMSON 中間表現。
+ * @param beat - 拍位置（beat）を表す値。
+ * @returns 処理結果（MeasurePosition）。
+ */
+export function beatToMeasurePosition(json: BmsJson, beat: number): MeasurePosition {
+  if (beat <= 0) {
+    return { measure: 0, position: 0 };
+  }
+
+  let remaining = beat;
+  let measure = 0;
+  while (remaining > 0) {
+    const measureBeats = getMeasureBeats(getMeasureLength(json, measure));
+    if (remaining < measureBeats) {
+      return {
+        measure,
+        position: remaining / measureBeats,
+      };
+    }
+    remaining -= measureBeats;
+    measure += 1;
+  }
+
+  return { measure, position: 0 };
+}
+
+/**
+ * sort Events に対応する処理を実行します。
+ * @param events - 処理対象のイベント配列。
+ * @returns 処理結果の配列。
+ */
+export function sortEvents(events: BmsEvent[]): BmsEvent[] {
+  return [...events].sort((left, right) => {
+    if (left.measure !== right.measure) {
+      return left.measure - right.measure;
+    }
+    const positionDelta = compareEventPosition(left, right);
+    if (positionDelta !== 0) {
+      return positionDelta;
+    }
+    if (left.channel !== right.channel) {
+      return left.channel.localeCompare(right.channel);
+    }
+    return left.value.localeCompare(right.value);
+  });
+}
+
+/**
+ * 条件判定を行い、真偽値を返します。
+ * @param channel - 対象チャンネル番号。
+ * @returns 条件を満たす場合は `true`、それ以外は `false`。
+ */
+export function isMeasureLengthChannel(channel: string): boolean {
+  return normalizeChannel(channel) === '02';
+}
+
+/**
+ * 条件判定を行い、真偽値を返します。
+ * @param channel - 対象チャンネル番号。
+ * @returns 条件を満たす場合は `true`、それ以外は `false`。
+ */
+export function isTempoChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  return normalized === '03' || normalized === '08';
+}
+
+/**
+ * 条件判定を行い、真偽値を返します。
+ * @param channel - 対象チャンネル番号。
+ * @returns 条件を満たす場合は `true`、それ以外は `false`。
+ */
+export function isStopChannel(channel: string): boolean {
+  return normalizeChannel(channel) === '09';
+}
+
+/**
+ * 条件判定を行い、真偽値を返します。
+ * @param channel - 対象チャンネル番号。
+ * @returns 条件を満たす場合は `true`、それ以外は `false`。
+ */
+export function isSampleTriggerChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  if (normalized === '01') {
+    return true;
+  }
+  if (normalized.startsWith('0')) {
+    return false;
+  }
+  if (isTempoChannel(normalized) || isStopChannel(normalized)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * 条件判定を行い、真偽値を返します。
+ * @param channel - 対象チャンネル番号。
+ * @returns 条件を満たす場合は `true`、それ以外は `false`。
+ */
+export function isPlayableChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  if (!isSampleTriggerChannel(normalized)) {
+    return false;
+  }
+  return normalized.startsWith('1') || normalized.startsWith('2');
+}
+
+/**
+ * 対象データの一覧を返します。
+ * @param json - 処理対象の BMS/BMSON 中間表現。
+ * @returns 処理結果の配列。
+ */
+export function listPlayableChannels(json: BmsJson): string[] {
+  return [...new Set(json.events.map((event) => normalizeChannel(event.channel)).filter(isPlayableChannel))].sort();
+}
+
+/**
+ * 数値を指定範囲内に制限します。
+ * @param value - 処理対象の値。
+ * @returns 計算結果の数値。
+ */
+function clamp01(value: number): number {
+  if (value < 0) {
+    return 0;
+  }
+  if (value >= 1) {
+    return 0.999999999;
+  }
+  return value;
+}
+
+/**
+ * get Event Position に対応する処理を実行します。
+ * @param event - 処理対象のイベント。
+ * @returns 計算結果の数値。
+ */
+function getEventPosition(event: BmsEvent): number {
+  const denominator = normalizePositionDenominator(event.position[1]);
+  const numerator = normalizePositionNumerator(event.position[0], denominator);
+  return numerator / denominator;
+}
+
+/**
+ * compare Event Position に対応する処理を実行します。
+ * @param left - 比較・演算対象の値。
+ * @param right - 比較・演算対象の値。
+ * @returns 計算結果の数値。
+ */
+function compareEventPosition(left: BmsEvent, right: BmsEvent): number {
+  const leftDenominator = normalizePositionDenominator(left.position[1]);
+  const leftNumerator = normalizePositionNumerator(left.position[0], leftDenominator);
+  const rightDenominator = normalizePositionDenominator(right.position[1]);
+  const rightNumerator = normalizePositionNumerator(right.position[0], rightDenominator);
+
+  if (leftDenominator === rightDenominator) {
+    return leftNumerator - rightNumerator;
+  }
+
+  const leftScaled = BigInt(leftNumerator) * BigInt(rightDenominator);
+  const rightScaled = BigInt(rightNumerator) * BigInt(leftDenominator);
+  if (leftScaled < rightScaled) {
+    return -1;
+  }
+  if (leftScaled > rightScaled) {
+    return 1;
+  }
+  return 0;
+}
+
+/**
+ * 入力値を仕様に沿う正規形に整えます。
+ * @param value - 処理対象の値。
+ * @returns 計算結果の数値。
+ */
+function normalizePositionDenominator(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 1;
+  }
+  return Math.max(1, Math.floor(value));
+}
+
+/**
+ * 入力値を仕様に沿う正規形に整えます。
+ * @param value - 処理対象の値。
+ * @param denominator - denominator に対応する入力値。
+ * @returns 計算結果の数値。
+ */
+function normalizePositionNumerator(value: number, denominator: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  const normalized = Math.floor(value);
+  return Math.max(0, Math.min(denominator - 1, normalized));
+}

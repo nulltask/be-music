@@ -1,0 +1,31 @@
+{
+  "format": "be-music-json/0.1.0",
+  "sourceFormat": "bms",
+  "metadata": {
+    "bpm": 120,
+    "extras": {},
+    "title": "テスト曲",
+    "artist": "佐藤"
+  },
+  "resources": {
+    "wav": {
+      "01": "test.wav"
+    },
+    "bmp": {},
+    "bpm": {},
+    "stop": {},
+    "text": {}
+  },
+  "measures": [],
+  "events": [
+    {
+      "measure": 0,
+      "channel": "11",
+      "value": "01",
+      "position": [
+        0,
+        1
+      ]
+    }
+  ]
+}

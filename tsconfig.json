@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/utils" },
+    { "path": "packages/json" },
+    { "path": "packages/parser" },
+    { "path": "packages/stringifier" },
+    { "path": "packages/audio-renderer" },
+    { "path": "packages/player" },
+    { "path": "packages/editor" }
+  ]
+}

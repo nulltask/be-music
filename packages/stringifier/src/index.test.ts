@@ -1,0 +1,175 @@
+import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { expect, test } from 'vitest';
+import { createEmptyJson } from '../../json/src/index.ts';
+import { parseBmson, parseChartFile } from '../../parser/src/index.ts';
+import { stringifyBms, stringifyBmson } from './index.ts';
+
+const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+
+test('BMS stringify: 分数 position から小節解像度を生成できる', () => {
+  const json = createEmptyJson('json');
+  json.metadata.title = 'Stringify BMS Test';
+  json.metadata.artist = 'Codex';
+  json.resources.wav['01'] = 'sample.wav';
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01' },
+    { measure: 0, channel: '11', position: [1, 4], value: '01' },
+    { measure: 0, channel: '11', position: [1, 2], value: '01' },
+    { measure: 0, channel: '11', position: [3, 4], value: '01' },
+  ];
+
+  const text = stringifyBms(json);
+  const lines = text.split('\n');
+  const sections = [
+    'METADATA',
+    'EXTENDED HEADER',
+    'RESOURCES',
+    'MEASURE LENGTH',
+    'OBJECT DATA',
+    'CONTROL FLOW',
+  ] as const;
+
+  expect(lines[0]).toBe('*---------------------- METADATA FIELD');
+  expect(lines[1]).toBe('');
+
+  for (const section of sections.slice(1)) {
+    const marker = `*---------------------- ${section} FIELD`;
+    const index = lines.indexOf(marker);
+    expect(index).toBeGreaterThan(0);
+    expect(lines[index - 1]).toBe('');
+    expect(lines[index + 1]).toBe('');
+  }
+
+  expect(text.startsWith('\n')).toBe(false);
+  expect(text).toMatch(/#00011:01010101/);
+});
+
+test('bmson stringify: version/lines/info.resolution を出力できる', async () => {
+  const chartPath = resolve(rootDir, 'examples/test/bmson-lines-resolution-test.bmson');
+  const source = parseBmson(await readFile(chartPath, 'utf8'));
+
+  const output = stringifyBmson(source);
+  const document = JSON.parse(output) as {
+    version: string;
+    info: { resolution: number };
+    lines: Array<{ y: number }>;
+  };
+
+  expect(document.version).toBe('1.0.0');
+  expect(document.info.resolution).toBe(240);
+  expect(document.lines.map((line) => line.y)).toEqual([0, 960, 1680, 2640]);
+});
+
+test('bmson stringify: IR に lines がない場合は小節長から lines を生成する', () => {
+  const json = createEmptyJson('json');
+  json.metadata.title = 'Lines Fallback Test';
+  json.metadata.artist = 'Codex';
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'sample.wav';
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01' },
+    { measure: 1, channel: '11', position: [0, 1], value: '01' },
+  ];
+  json.measures = [{ index: 1, length: 0.5 }];
+  json.bmson.info.resolution = 240;
+
+  const output = stringifyBmson(json);
+  const document = JSON.parse(output) as { lines: Array<{ y: number }> };
+  expect(document.lines.map((line) => line.y)).toEqual([0, 960, 1440]);
+});
+
+test('BMS stringify: controlFlow を保持して書き出せる', async () => {
+  const chartPath = resolve(rootDir, 'examples/test/control-flow-test.bms');
+  const json = await parseChartFile(chartPath);
+
+  const output = stringifyBms(json);
+  expect(output).toMatch(/#SETRANDOM 2/);
+  expect(output).toMatch(/#IF 1/);
+  expect(output).toMatch(/#00012:01/);
+  expect(output).toMatch(/#SETSWITCH 3/);
+  expect(output).toMatch(/#CASE 3/);
+  expect(output).toMatch(/#ENDRANDOM/);
+});
+
+test('BMS stringify: 拡張ヘッダを書き出せる', async () => {
+  const chartPath = resolve(rootDir, 'examples/test/extensions-headers-test.bms');
+  const json = await parseChartFile(chartPath);
+
+  const output = stringifyBms(json);
+  expect(output).toMatch(/#PLAYER 1/);
+  expect(output).toMatch(/#PATH_WAV sounds\//);
+  expect(output).toMatch(/#BASEBPM 155/);
+  expect(output).toMatch(/#STP 001\.240/);
+  expect(output).toMatch(/#OPTION HIGH-SPEED/);
+  expect(output).toMatch(/#CHANGEOPTION01 MIRROR/);
+  expect(output).toMatch(/#WAVCMD legacy/);
+  expect(output).toMatch(/#LNTYPE 1/);
+  expect(output).toMatch(/#LNOBJ ZZ/);
+  expect(output).toMatch(/#DEFEXRANK 120/);
+  expect(output).toMatch(/#EXRANK01 120,90,60,30/);
+  expect(output).toMatch(/#ARGB0A FF000000/);
+  expect(output).toMatch(/#EXWAV01 sample_ex\.wav/);
+  expect(output).toMatch(/#EXBMP01 image_ex\.bmp/);
+  expect(output).toMatch(/#BGA01 01/);
+  expect(output).toMatch(/#POORBGA 01/);
+  expect(output).toMatch(/#SWBGA01 02/);
+  expect(output).toMatch(/#VIDEOFILE movie\.mp4/);
+  expect(output).toMatch(/#MATERIALS materials\.def/);
+  expect(output).toMatch(/#DIVIDEPROP lane=2/);
+  expect(output).toMatch(/#CHARSET Shift_JIS/);
+});
+
+test('bmson stringify: bga/info 拡張項目と notes.l/c を保持して出力できる', async () => {
+  const chartPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
+  const source = parseBmson(await readFile(chartPath, 'utf8'));
+
+  const output = stringifyBmson(source);
+  const document = JSON.parse(output) as {
+    info: {
+      subartists?: string[];
+      chart_name?: string;
+      mode_hint?: string;
+      judge_rank?: number;
+      total?: number;
+      back_image?: string;
+      eyecatch_image?: string;
+      banner_image?: string;
+      preview_music?: string;
+    };
+    bga?: {
+      bga_header: Array<{ id: number; name: string }>;
+      bga_events: Array<{ y: number; id: number }>;
+      layer_events: Array<{ y: number; id: number }>;
+      poor_events: Array<{ y: number; id: number }>;
+    };
+    sound_channels: Array<{
+      name: string;
+      notes: Array<{ x: number; y: number; l: number; c: boolean }>;
+    }>;
+  };
+
+  expect(document.info.subartists).toEqual(['Alice', 'Bob']);
+  expect(document.info.chart_name).toBe('HYPER');
+  expect(document.info.mode_hint).toBe('beat-7k');
+  expect(document.info.judge_rank).toBe(125);
+  expect(document.info.total).toBe(340);
+  expect(document.info.back_image).toBe('back.png');
+  expect(document.info.eyecatch_image).toBe('eye.png');
+  expect(document.info.banner_image).toBe('banner.png');
+  expect(document.info.preview_music).toBe('preview.ogg');
+
+  expect(document.bga?.bga_header).toEqual([
+    { id: 1, name: 'base.png' },
+    { id: 2, name: 'layer.png' },
+    { id: 3, name: 'poor.png' },
+  ]);
+  expect(document.bga?.bga_events).toEqual([{ y: 0, id: 1 }]);
+  expect(document.bga?.layer_events).toEqual([{ y: 480, id: 2 }]);
+  expect(document.bga?.poor_events).toEqual([{ y: 960, id: 3 }]);
+
+  const lead = document.sound_channels.find((channel) => channel.name === 'lead.wav');
+  expect(lead?.notes[0]).toEqual({ x: 1, y: 0, l: 120, c: true });
+  expect(lead?.notes[1]).toEqual({ x: 1, y: 1080, l: 0, c: false });
+});

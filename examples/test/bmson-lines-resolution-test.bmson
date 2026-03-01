@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "info": {
+    "title": "BMSON Lines Resolution Test",
+    "subtitle": "",
+    "artist": "Codex",
+    "genre": "TEST",
+    "level": 5,
+    "init_bpm": 150,
+    "resolution": 240
+  },
+  "lines": [{ "y": 0 }, { "y": 960 }, { "y": 1680 }, { "y": 2640 }],
+  "bpm_events": [{ "y": 960, "bpm": 180 }],
+  "stop_events": [{ "y": 1200, "duration": 96 }],
+  "sound_channels": [
+    {
+      "name": "sample.wav",
+      "notes": [
+        { "x": 1, "y": 0, "l": 0, "c": false },
+        { "x": 1, "y": 1200, "l": 0, "c": false },
+        { "x": 1, "y": 2040, "l": 0, "c": false }
+      ]
+    }
+  ]
+}

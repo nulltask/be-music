@@ -1,0 +1,15 @@
+#TITLE Control Flow Runtime Fixed
+#ARTIST Codex
+#BPM 120
+#WAV01 sample.wav
+
+#SETRANDOM 2
+#IF 2
+#00012:01
+#ENDIF
+
+#SETSWITCH 3
+#CASE 3
+#00116:01
+#SKIP
+#ENDSW
