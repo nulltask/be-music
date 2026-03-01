@@ -120,6 +120,34 @@ interface PlayedChartResult {
   playLevel?: number;
 }
 
+type DirectorySceneState =
+  | {
+      kind: 'select';
+      focusKey?: string;
+      auto: boolean;
+    }
+  | {
+      kind: 'play';
+      chartPath: string;
+      focusKey?: string;
+      auto: boolean;
+    }
+  | {
+      kind: 'result';
+      played: PlayedChartResult;
+      focusKey?: string;
+      auto: boolean;
+    }
+  | {
+      kind: 'exit';
+      exitCode: number;
+    };
+
+interface RawInputCapture {
+  stdin: NodeJS.ReadStream & { isRaw?: boolean };
+  restore: () => void;
+}
+
 class ChartSelectionLoadingCanceledError extends Error {
   readonly reason: LoadingCancelReason;
 
@@ -215,55 +243,116 @@ async function runDirectoryInput(rootDir: string, args: CliArgs): Promise<void> 
     return;
   }
 
-  let focusKey: string | undefined;
-  let auto = args.auto;
-  while (true) {
-    const selection = await selectChartInteractively(rootDir, candidates, {
-      previewAudio: args.audio && args.previewAudio,
-      audioBackend: args.audioBackend ?? 'auto',
-      entries,
-      initialFocusKey: focusKey,
-      initialAuto: auto,
-    });
+  let state: DirectorySceneState = {
+    kind: 'select',
+    auto: args.auto,
+  };
 
-    if (selection.reason === 'ctrl-c') {
-      process.exitCode = 130;
-      return;
-    }
-    if (selection.reason === 'escape' || !selection.selectedPath) {
-      process.exitCode = 0;
-      return;
+  while (state.kind !== 'exit') {
+    if (state.kind === 'select') {
+      const selection = await selectChartInteractively(rootDir, candidates, {
+        previewAudio: args.audio && args.previewAudio,
+        audioBackend: args.audioBackend ?? 'auto',
+        entries,
+        initialFocusKey: state.focusKey,
+        initialAuto: state.auto,
+      });
+      state = resolveDirectoryStateFromSelection(selection);
+      continue;
     }
 
-    focusKey = selection.focusKey;
-    auto = selection.auto;
-    const replayPath = selection.selectedPath;
-    while (true) {
-      let played: PlayedChartResult;
+    if (state.kind === 'play') {
+      const playState = state;
       try {
-        played = await playChartOnce(replayPath, { ...args, auto });
+        const played = await playChartOnce(playState.chartPath, { ...args, auto: playState.auto });
+        state = {
+          kind: 'result',
+          played,
+          focusKey: playState.focusKey,
+          auto: playState.auto,
+        };
       } catch (error) {
         if (error instanceof PlayerInterruptedError) {
-          if (error.reason === 'escape') {
-            break;
-          }
-          process.exitCode = error.exitCode;
-          return;
+          state = resolveDirectoryStateFromPlayInterrupt(error.reason, playState);
+          continue;
         }
         throw error;
       }
-
-      const resultAction = await showResultScreen(rootDir, played);
-      if (resultAction === 'replay') {
-        continue;
-      }
-      if (resultAction === 'enter') {
-        break;
-      }
-      process.exitCode = resultAction === 'ctrl-c' ? 130 : 0;
-      return;
+      continue;
     }
+
+    const resultAction = await showResultScreen(rootDir, state.played);
+    state = resolveDirectoryStateFromResultAction(resultAction, state);
   }
+
+  process.exitCode = state.exitCode;
+}
+
+function resolveDirectoryStateFromSelection(selection: SelectChartInteractivelyResult): DirectorySceneState {
+  if (selection.reason === 'ctrl-c') {
+    return {
+      kind: 'exit',
+      exitCode: 130,
+    };
+  }
+
+  if (selection.reason === 'escape' || !selection.selectedPath) {
+    return {
+      kind: 'exit',
+      exitCode: 0,
+    };
+  }
+
+  return {
+    kind: 'play',
+    chartPath: selection.selectedPath,
+    focusKey: selection.focusKey,
+    auto: selection.auto,
+  };
+}
+
+function resolveDirectoryStateFromPlayInterrupt(
+  reason: PlayerInterruptedError['reason'],
+  state: Extract<DirectorySceneState, { kind: 'play' }>,
+): DirectorySceneState {
+  if (reason === 'escape') {
+    return {
+      kind: 'select',
+      focusKey: state.focusKey,
+      auto: state.auto,
+    };
+  }
+  return {
+    kind: 'exit',
+    exitCode: 130,
+  };
+}
+
+function resolveDirectoryStateFromResultAction(
+  action: ResultScreenAction,
+  state: Extract<DirectorySceneState, { kind: 'result' }>,
+): DirectorySceneState {
+  if (action === 'replay') {
+    return {
+      kind: 'play',
+      chartPath: state.played.chartPath,
+      focusKey: state.focusKey,
+      auto: state.auto,
+    };
+  }
+
+  if (action === 'enter') {
+    return {
+      kind: 'select',
+      focusKey: state.focusKey,
+      auto: state.auto,
+    };
+  }
+
+  return {
+    kind: 'exit',
+    exitCode: action === 'ctrl-c' ? 130 : 0,
+  };
 }
 
 async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedChartResult> {
@@ -464,16 +553,32 @@ function printUsage(): void {
   );
 }
 
-async function loadChartSelectionEntries(rootDir: string, files: string[]): Promise<ChartSelectionEntry[] | undefined> {
+function beginRawInputCapture(): RawInputCapture {
   const stdin = process.stdin as NodeJS.ReadStream & { isRaw?: boolean };
   const wasRawMode = Boolean(stdin.isRaw);
-  let cancelReason: LoadingCancelReason | undefined;
-
+  let restored = false;
   readline.emitKeypressEvents(process.stdin);
   if (stdin.isTTY) {
     stdin.setRawMode(true);
   }
   stdin.resume();
+  return {
+    stdin,
+    restore: () => {
+      if (restored) {
+        return;
+      }
+      restored = true;
+      if (stdin.isTTY) {
+        stdin.setRawMode(wasRawMode);
+      }
+    },
+  };
+}
+
+async function loadChartSelectionEntries(rootDir: string, files: string[]): Promise<ChartSelectionEntry[] | undefined> {
+  const inputCapture = beginRawInputCapture();
+  let cancelReason: LoadingCancelReason | undefined;
   process.stdout.write('\u001b[?25l');
 
     const onKeyPress = (_chunk: string | undefined, key: readline.Key): void => {
@@ -485,7 +590,7 @@ async function loadChartSelectionEntries(rootDir: string, files: string[]): Prom
       cancelReason = 'escape';
     }
   };
-  process.stdin.on('keypress', onKeyPress);
+  inputCapture.stdin.on('keypress', onKeyPress);
 
   try {
     const entries = await buildChartSelectionEntries(rootDir, files, {
@@ -508,10 +613,8 @@ async function loadChartSelectionEntries(rootDir: string, files: string[]): Prom
     }
     throw error;
   } finally {
-    process.stdin.removeListener('keypress', onKeyPress);
-    if (stdin.isTTY) {
-      stdin.setRawMode(wasRawMode);
-    }
+    inputCapture.stdin.removeListener('keypress', onKeyPress);
+    inputCapture.restore();
     process.stdout.write('\u001b[?25h');
   }
 }
@@ -615,8 +718,7 @@ async function selectChartInteractively(
         })
       : undefined;
 
-  const stdin = process.stdin as NodeJS.ReadStream & { isRaw?: boolean };
-  const wasRawMode = Boolean(stdin.isRaw);
+  const inputCapture = beginRawInputCapture();
   let selectedIndex = selectableIndexes[0];
   let auto = options.initialAuto ?? false;
   if (options.initialFocusKey) {
@@ -626,11 +728,6 @@ async function selectChartInteractively(
     }
   }
 
-  readline.emitKeypressEvents(process.stdin);
-  if (stdin.isTTY) {
-    stdin.setRawMode(true);
-  }
-  stdin.resume();
   process.stdout.write('\u001b[?25l');
 
     const syncPreview = (): void => {
@@ -697,10 +794,8 @@ async function selectChartInteractively(
         return;
       }
       finished = true;
-      process.stdin.removeListener('keypress', onKeyPress);
-      if (stdin.isTTY) {
-        stdin.setRawMode(wasRawMode);
-      }
+      inputCapture.stdin.removeListener('keypress', onKeyPress);
+      inputCapture.restore();
       process.stdout.write('\u001b[?25h\u001b[2J\u001b[H');
       void (async () => {
         await previewController?.dispose();
@@ -786,7 +881,7 @@ async function selectChartInteractively(
       }
     };
 
-    process.stdin.on('keypress', onKeyPress);
+    inputCapture.stdin.on('keypress', onKeyPress);
     syncPreview();
     render();
   });
@@ -820,14 +915,7 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
   );
   const notesProgress = `${Math.min(totalNotes, judgedNotes)}/${totalNotes}`;
 
-  const stdin = process.stdin as NodeJS.ReadStream & { isRaw?: boolean };
-  const wasRawMode = Boolean(stdin.isRaw);
-
-  readline.emitKeypressEvents(process.stdin);
-  if (stdin.isTTY) {
-    stdin.setRawMode(true);
-  }
-  stdin.resume();
+  const inputCapture = beginRawInputCapture();
   process.stdout.write('\u001b[?25l');
 
     const render = (): void => {
@@ -862,10 +950,8 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
         return;
       }
       finished = true;
-      process.stdin.removeListener('keypress', onKeyPress);
-      if (stdin.isTTY) {
-        stdin.setRawMode(wasRawMode);
-      }
+      inputCapture.stdin.removeListener('keypress', onKeyPress);
+      inputCapture.restore();
       process.stdout.write('\u001b[?25h\u001b[2J\u001b[H');
       resolvePromise(action);
     };
@@ -877,7 +963,7 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
       }
     };
 
-    process.stdin.on('keypress', onKeyPress);
+    inputCapture.stdin.on('keypress', onKeyPress);
     render();
   });
 }
