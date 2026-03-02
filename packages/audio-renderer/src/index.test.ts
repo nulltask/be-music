@@ -100,6 +100,21 @@ test('audio-renderer: ignores landmine channels for sample triggering', () => {
   expect(triggers[0]?.channel).toBe('11');
 });
 
+test('audio-renderer: ignores scroll channels for sample triggering', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'sample.wav';
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01' },
+    { measure: 0, channel: 'SC', position: [0, 1], value: '01' },
+  ];
+  json.bms.scroll['01'] = 0.5;
+
+  const triggers = collectSampleTriggers(json);
+  expect(triggers).toHaveLength(1);
+  expect(triggers[0]?.channel).toBe('11');
+});
+
 test('audio-renderer: bms retrigger on same key cuts previous voice immediately', async () => {
   const retrigger = createEmptyJson('bms');
   retrigger.metadata.bpm = 120;

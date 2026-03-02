@@ -15,6 +15,7 @@ import {
   isMeasureLengthChannel,
   isPlayableChannel,
   isSampleTriggerChannel,
+  isScrollChannel,
   isStopChannel,
   isTempoChannel,
   listPlayableChannels,
@@ -186,6 +187,9 @@ test('json: classifies channel types', () => {
   expect(isStopChannel('09')).toBe(true);
   expect(isStopChannel('19')).toBe(false);
 
+  expect(isScrollChannel('SC')).toBe(true);
+  expect(isScrollChannel('11')).toBe(false);
+
   expect(isLandmineChannel('D1')).toBe(true);
   expect(isLandmineChannel('E9')).toBe(true);
   expect(isLandmineChannel('11')).toBe(false);
@@ -195,6 +199,7 @@ test('json: classifies channel types', () => {
   expect(isSampleTriggerChannel('00')).toBe(false);
   expect(isSampleTriggerChannel('03')).toBe(false);
   expect(isSampleTriggerChannel('09')).toBe(false);
+  expect(isSampleTriggerChannel('SC')).toBe(false);
   expect(isSampleTriggerChannel('11')).toBe(true);
 
   expect(isPlayableChannel('11')).toBe(true);

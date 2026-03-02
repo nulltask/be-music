@@ -168,6 +168,9 @@ function pushMetadataLines(lines: string[], json: BmsJson): void {
 }
 
 function pushBmsExtensionLines(lines: string[], json: BmsJson): void {
+  if (typeof json.bms.preview === 'string' && json.bms.preview.length > 0) {
+    lines.push(`#PREVIEW ${json.bms.preview}`);
+  }
   if (typeof json.bms.player === 'number') {
     lines.push(`#PLAYER ${formatNumber(json.bms.player)}`);
   }
@@ -202,8 +205,14 @@ function pushBmsExtensionLines(lines: string[], json: BmsJson): void {
   if (typeof json.bms.lnType === 'number') {
     lines.push(`#LNTYPE ${formatNumber(json.bms.lnType)}`);
   }
+  if (typeof json.bms.lnMode === 'number') {
+    lines.push(`#LNMODE ${formatNumber(json.bms.lnMode)}`);
+  }
   if (typeof json.bms.lnObj === 'string' && json.bms.lnObj.length > 0) {
     lines.push(`#LNOBJ ${normalizeObjectKey(json.bms.lnObj)}`);
+  }
+  if (typeof json.bms.volWav === 'number') {
+    lines.push(`#VOLWAV ${formatNumber(json.bms.volWav)}`);
   }
   if (typeof json.bms.defExRank === 'number') {
     lines.push(`#DEFEXRANK ${formatNumber(json.bms.defExRank)}`);
@@ -239,6 +248,13 @@ function pushBmsExtensionLines(lines: string[], json: BmsJson): void {
   for (const [key, value] of Object.entries(json.bms.bga ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
     if (value.length > 0) {
       lines.push(`#BGA${normalizeObjectKey(key)} ${value}`);
+    }
+  }
+  for (const [key, value] of Object.entries(json.bms.scroll ?? {}).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    if (Number.isFinite(value)) {
+      lines.push(`#SCROLL${normalizeObjectKey(key)} ${formatNumber(value)}`);
     }
   }
   if (typeof json.bms.poorBga === 'string' && json.bms.poorBga.length > 0) {
@@ -456,8 +472,11 @@ function formatNumber(value: number): string {
 function isDedicatedBmsExtensionCommand(command: string): boolean {
   const upper = command.toUpperCase();
   if (
+    upper === 'PREVIEW' ||
     upper === 'LNTYPE' ||
+    upper === 'LNMODE' ||
     upper === 'LNOBJ' ||
+    upper === 'VOLWAV' ||
     upper === 'DEFEXRANK' ||
     upper === 'PLAYER' ||
     upper === 'PATH_WAV' ||
@@ -481,6 +500,7 @@ function isDedicatedBmsExtensionCommand(command: string): boolean {
     /^EXWAV[0-9A-Z]{2}$/.test(upper) ||
     /^EXBMP[0-9A-Z]{2}$/.test(upper) ||
     /^BGA[0-9A-Z]{2}$/.test(upper) ||
+    /^SCROLL[0-9A-Z]{2}$/.test(upper) ||
     /^SWBGA[0-9A-Z]{2}$/.test(upper)
   ) {
     return true;
@@ -521,6 +541,7 @@ export function createDemoJson(): BmsJson {
       exWav: {},
       exBmp: {},
       bga: {},
+      scroll: {},
       swBga: {},
     },
     bmson: {

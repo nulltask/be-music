@@ -100,6 +100,7 @@ test('BMS stringify: writes extension headers', async () => {
   const json = await parseChartFile(chartPath);
 
   const output = stringifyBms(json);
+  expect(output).toMatch(/#PREVIEW preview\.ogg/);
   expect(output).toMatch(/#PLAYER 1/);
   expect(output).toMatch(/#PATH_WAV sounds\//);
   expect(output).toMatch(/#BASEBPM 155/);
@@ -108,13 +109,16 @@ test('BMS stringify: writes extension headers', async () => {
   expect(output).toMatch(/#CHANGEOPTION01 MIRROR/);
   expect(output).toMatch(/#WAVCMD legacy/);
   expect(output).toMatch(/#LNTYPE 1/);
+  expect(output).toMatch(/#LNMODE 1/);
   expect(output).toMatch(/#LNOBJ ZZ/);
+  expect(output).toMatch(/#VOLWAV 80/);
   expect(output).toMatch(/#DEFEXRANK 120/);
   expect(output).toMatch(/#EXRANK01 120,90,60,30/);
   expect(output).toMatch(/#ARGB0A FF000000/);
   expect(output).toMatch(/#EXWAV01 sample_ex\.wav/);
   expect(output).toMatch(/#EXBMP01 image_ex\.bmp/);
   expect(output).toMatch(/#BGA01 01/);
+  expect(output).toMatch(/#SCROLL01 0\.5/);
   expect(output).toMatch(/#POORBGA 01/);
   expect(output).toMatch(/#SWBGA01 02/);
   expect(output).toMatch(/#VIDEOFILE movie\.mp4/);
