@@ -33,14 +33,15 @@ describe('player cli', () => {
     expect(parsed.audioBackend).toBeUndefined();
   });
 
-  test('cli: enables song-select preview audio with --preview', () => {
+  test('cli: accepts --preview as a no-op and keeps preview always enabled', () => {
     const parsed = parseArgs(['chart.bms', '--preview']);
-    expect(parsed.previewAudio).toBe(true);
+    expect(parsed.input).toBe('chart.bms');
   });
 
-  test('cli: disables song-select preview audio by default', () => {
-    const parsed = parseArgs(['chart.bms']);
-    expect(parsed.previewAudio).toBe(false);
+  test('cli: rejects --no-preview because preview is always enabled', () => {
+    expect(() => parseArgs(['chart.bms', '--no-preview'])).toThrow(
+      '--no-preview is no longer supported; song preview is always enabled',
+    );
   });
 
   test('cli: parses --debug-judge-window', () => {

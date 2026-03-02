@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readdir, stat } from 'node:fs/promises';
+import { access, readdir, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
@@ -26,7 +26,6 @@ interface CliArgs {
   debugActiveAudio: boolean;
   renderAudioPath?: string;
   audio: boolean;
-  previewAudio: boolean;
   bgmVolume?: number;
   playVolume?: number;
   audioTailSeconds?: number;
@@ -47,6 +46,7 @@ interface ChartSummaryItem {
   relativePath: string;
   directoryLabel: string;
   fileLabel: string;
+  previewContinueKey?: string;
   totalNotes?: number;
   player?: number;
   rank?: number;
@@ -69,6 +69,7 @@ type ChartSelectionEntry =
       kind: 'chart';
       filePath: string;
       fileLabel: string;
+      previewContinueKey?: string;
       totalNotes?: number;
       player?: number;
       rank?: number;
@@ -96,11 +97,16 @@ interface BuildChartSelectionEntriesOptions {
 }
 
 interface SelectChartInteractivelyOptions {
-  previewAudio: boolean;
+  audio: boolean;
   audioBackend: AudioBackendName;
   entries?: ChartSelectionEntry[];
   initialFocusKey?: string;
   initialAuto?: boolean;
+}
+
+interface PreviewFocusTarget {
+  filePath?: string;
+  previewContinueKey?: string;
 }
 
 type SelectChartInteractivelyExitReason = 'selected' | 'escape' | 'ctrl-c';
@@ -175,7 +181,7 @@ class ChartSelectionLoadingCanceledError extends Error {
 }
 
 interface ChartPreviewController {
-  focus: (filePath: string | undefined) => void;
+  focus: (target: PreviewFocusTarget) => void;
   dispose: () => Promise<void>;
 }
 
@@ -184,12 +190,22 @@ interface PreviewPlaybackHandle {
   done: Promise<void>;
 }
 
+interface ChartPreviewAsset {
+  continueKey: string;
+  rendered: RenderResult;
+}
+
+interface RenderedPreviewSample {
+  continueKey: string;
+  rendered: RenderResult;
+}
+
 const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms']);
 const PREVIEW_CHUNK_FRAMES = 256;
-const PREVIEW_MAX_SECONDS = 30;
 const PREVIEW_SILENCE_THRESHOLD = 0.0001;
 const PREVIEW_STOP_TIMEOUT_MS = 180;
 const PREVIEW_BACKPRESSURE_TIMEOUT_MS = 800;
+const PREVIEW_CACHE_LIMIT = 8;
 
 function createPreviewBackendCandidates(requested: AudioBackendName): AudioBackendName[] {
   if (requested !== 'auto') {
@@ -275,7 +291,7 @@ async function runDirectoryInput(rootDir: string, args: CliArgs): Promise<void> 
   while (state.kind !== 'exit') {
     if (state.kind === 'select') {
       const selection = await selectChartInteractively(rootDir, candidates, {
-        previewAudio: args.audio && args.previewAudio,
+        audio: args.audio,
         audioBackend: args.audioBackend ?? 'auto',
         entries,
         initialFocusKey: state.focusKey,
@@ -469,7 +485,7 @@ function sanitizeMetadataText(value: string | undefined): string | undefined {
 }
 
 export function parseArgs(rawArgs: string[]): CliArgs {
-  const args: CliArgs = { auto: false, audio: true, previewAudio: false, tui: true, debugActiveAudio: false };
+  const args: CliArgs = { auto: false, audio: true, tui: true, debugActiveAudio: false };
   const positional: string[] = [];
 
   for (let index = 0; index < rawArgs.length; index += 1) {
@@ -587,12 +603,10 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       continue;
     }
     if (token === '--preview' || token === '--preview-audio') {
-      args.previewAudio = true;
       continue;
     }
     if (token === '--no-preview' || token === '--no-preview-audio') {
-      args.previewAudio = false;
-      continue;
+      throw new Error(`${token} is no longer supported; song preview is always enabled`);
     }
     if (token === '--no-tui') {
       args.tui = false;
@@ -627,7 +641,6 @@ function printUsage(): void {
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
       '  --render-audio <path>     Render audio preview before playing',
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
-      '  --preview / --no-preview  Enable or disable song-preview audio in song-select (default: off)',
       '  --audio-backend <name>    Audio backend: auto | speaker | audify (default: auto)',
       '  --bgm-volume <value>      Volume multiplier for non-play lanes (default: 1, 0 disables BGM)',
       '  --play-volume <value>     Volume multiplier for playable/key sounds (default: 1)',
@@ -804,7 +817,7 @@ async function selectChartInteractively(
   }
 
   const previewController =
-    options.previewAudio && process.stdout.isTTY
+    options.audio && process.stdout.isTTY
       ? createChartPreviewController({
           audioBackend: options.audioBackend,
         })
@@ -824,8 +837,14 @@ async function selectChartInteractively(
 
   const syncPreview = (): void => {
     const entry = entries[selectedIndex];
-    const filePath = entry?.kind === 'chart' ? entry.filePath : undefined;
-    previewController?.focus(filePath);
+    if (entry?.kind === 'chart') {
+      previewController?.focus({
+        filePath: entry.filePath,
+        previewContinueKey: entry.previewContinueKey,
+      });
+      return;
+    }
+    previewController?.focus({});
   };
 
   const listRowsForViewport = (): number => {
@@ -1277,6 +1296,7 @@ async function buildChartSelectionEntries(
         kind: 'chart',
         filePath: chart.filePath,
         fileLabel: chart.fileLabel,
+        previewContinueKey: chart.previewContinueKey,
         totalNotes: chart.totalNotes,
         player: chart.player,
         rank: chart.rank,
@@ -1318,6 +1338,7 @@ async function buildChartSummary(rootDir: string, filePath: string): Promise<Cha
   let bpmInitial: number | undefined;
   let bpmMin: number | undefined;
   let bpmMax: number | undefined;
+  let previewContinueKey: string | undefined;
   try {
     const chart = await parseChartFile(filePath);
     const resolvedChart = resolveBmsControlFlow(chart, { random: () => 0 });
@@ -1329,6 +1350,7 @@ async function buildChartSummary(rootDir: string, filePath: string): Promise<Cha
     bpmInitial = bpmSummary?.initial;
     bpmMin = bpmSummary?.min;
     bpmMax = bpmSummary?.max;
+    previewContinueKey = await resolvePreviewContinueKeyFromChart(resolvedChart, filePath);
   } catch {
     // 一覧表示のメタ情報取得失敗は再生可否と分離し、欠損扱いで続行する。
   }
@@ -1338,6 +1360,7 @@ async function buildChartSummary(rootDir: string, filePath: string): Promise<Cha
     relativePath,
     directoryLabel,
     fileLabel,
+    previewContinueKey,
     totalNotes,
     player,
     rank,
@@ -1376,11 +1399,13 @@ function extractChartBpmSummary(json: BeMusicJson): { initial: number; min: numb
 }
 
 function createChartPreviewController(options: { audioBackend: AudioBackendName }): ChartPreviewController {
-  const previewCache = new Map<string, RenderResult>();
+  const previewCache = new Map<string, ChartPreviewAsset | null>();
   let focusedFilePath: string | undefined;
+  let focusedPreviewContinueKey: string | undefined;
   let sequence = 0;
   let disposed = false;
   let activePlayback: PreviewPlaybackHandle | undefined;
+  let activePreviewKey: string | undefined;
 
   const stopPlaybackSafely = async (playback: PreviewPlaybackHandle): Promise<void> => {
     playback.stop();
@@ -1393,32 +1418,40 @@ function createChartPreviewController(options: { audioBackend: AudioBackendName 
     }
     const playback = activePlayback;
     activePlayback = undefined;
+    activePreviewKey = undefined;
     await stopPlaybackSafely(playback);
   };
 
   return {
-    focus: (filePath: string | undefined) => {
-      if (disposed || focusedFilePath === filePath) {
+    focus: (target: PreviewFocusTarget) => {
+      const filePath = target.filePath;
+      const expectedPreviewKey = target.previewContinueKey;
+      if (disposed || (focusedFilePath === filePath && focusedPreviewContinueKey === expectedPreviewKey)) {
         return;
       }
       focusedFilePath = filePath;
+      focusedPreviewContinueKey = expectedPreviewKey;
       sequence += 1;
       const currentSequence = sequence;
 
       void (async () => {
-        await stopActivePlayback();
-        if (disposed || currentSequence !== sequence || !filePath) {
+        if (!filePath) {
+          await stopActivePlayback();
+          return;
+        }
+        if (expectedPreviewKey && activePlayback && activePreviewKey === expectedPreviewKey) {
           return;
         }
 
         let preview = previewCache.get(filePath);
-        if (!preview) {
-          preview = await renderChartPreview(filePath);
-          if (!preview) {
-            return;
+        if (preview === undefined) {
+          try {
+            preview = (await renderChartPreview(filePath)) ?? null;
+          } catch {
+            preview = null;
           }
           previewCache.set(filePath, preview);
-          while (previewCache.size > 8) {
+          while (previewCache.size > PREVIEW_CACHE_LIMIT) {
             const oldest = previewCache.keys().next().value as string | undefined;
             if (!oldest) {
               break;
@@ -1431,7 +1464,24 @@ function createChartPreviewController(options: { audioBackend: AudioBackendName 
           return;
         }
 
-        const playback = await startPreviewPlayback(preview, options.audioBackend);
+        if (!preview) {
+          await stopActivePlayback();
+          return;
+        }
+        if (expectedPreviewKey && activePlayback && activePreviewKey === expectedPreviewKey) {
+          return;
+        }
+
+        if (activePlayback && activePreviewKey === preview.continueKey) {
+          return;
+        }
+
+        await stopActivePlayback();
+        if (disposed || currentSequence !== sequence) {
+          return;
+        }
+
+        const playback = await startPreviewPlayback(preview.rendered, options.audioBackend);
         if (!playback) {
           return;
         }
@@ -1440,6 +1490,13 @@ function createChartPreviewController(options: { audioBackend: AudioBackendName 
           return;
         }
         activePlayback = playback;
+        activePreviewKey = preview.continueKey;
+        void playback.done.finally(() => {
+          if (activePlayback === playback) {
+            activePlayback = undefined;
+            activePreviewKey = undefined;
+          }
+        });
       })();
     },
     dispose: async () => {
@@ -1449,30 +1506,60 @@ function createChartPreviewController(options: { audioBackend: AudioBackendName 
       disposed = true;
       sequence += 1;
       focusedFilePath = undefined;
+      focusedPreviewContinueKey = undefined;
       previewCache.clear();
       await stopActivePlayback();
     },
   };
 }
 
-async function renderChartPreview(filePath: string): Promise<RenderResult | undefined> {
+async function renderChartPreview(filePath: string): Promise<ChartPreviewAsset | undefined> {
   const chart = await parseChartFile(filePath);
   const resolved = resolveBmsControlFlow(chart, { random: () => 0 });
-  const chartWavGain = resolveChartVolWavGain(resolved);
   const previewPath = resolved.bms.preview;
-  if (typeof previewPath === 'string' && previewPath.length > 0) {
-    const directPreview = await renderPreviewSampleFile(resolved, filePath, previewPath, chartWavGain);
-    if (directPreview) {
-      return trimAndLimitPreview(directPreview);
-    }
+  if (typeof previewPath !== 'string' || previewPath.trim().length === 0) {
+    return undefined;
   }
 
-  const rendered = await renderJson(resolved, {
-    baseDir: dirname(filePath),
-    tailSeconds: 0.6,
-    gain: chartWavGain,
-  });
-  return trimAndLimitPreview(rendered);
+  const chartWavGain = resolveChartVolWavGain(resolved);
+  const previewSample = await renderPreviewSampleFile(resolved, filePath, previewPath, chartWavGain);
+  if (!previewSample) {
+    return undefined;
+  }
+
+  return {
+    continueKey: previewSample.continueKey,
+    rendered: trimPreviewLeadingSilence(previewSample.rendered),
+  };
+}
+
+async function resolvePreviewContinueKeyFromChart(chart: BeMusicJson, chartPath: string): Promise<string | undefined> {
+  const previewPath = chart.bms.preview;
+  if (typeof previewPath !== 'string' || previewPath.trim().length === 0) {
+    return undefined;
+  }
+  const candidates = createPreviewPathCandidates(chart, previewPath);
+  const baseDir = dirname(chartPath);
+  for (const candidate of candidates) {
+    const resolvedCandidate = resolvePreviewCandidatePath(baseDir, candidate);
+    if (await doesFileExist(resolvedCandidate)) {
+      return normalizePreviewContinueKey(resolvedCandidate);
+    }
+  }
+  const firstCandidate = candidates[0];
+  if (!firstCandidate) {
+    return undefined;
+  }
+  return normalizePreviewContinueKey(resolvePreviewCandidatePath(baseDir, firstCandidate));
+}
+
+async function doesFileExist(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function renderPreviewSampleFile(
@@ -1480,11 +1567,12 @@ async function renderPreviewSampleFile(
   chartPath: string,
   previewPath: string,
   gain: number,
-): Promise<RenderResult | undefined> {
+): Promise<RenderedPreviewSample | undefined> {
   const candidates = createPreviewPathCandidates(chart, previewPath);
   const baseDir = dirname(chartPath);
   for (const candidate of candidates) {
     let fellBack = false;
+    let loadedPreviewPath: string | undefined;
     const sampleJson = createEmptyJson('json');
     sampleJson.metadata.bpm = chart.metadata.bpm;
     sampleJson.resources.wav['01'] = candidate;
@@ -1496,16 +1584,38 @@ async function renderPreviewSampleFile(
       gain,
       fallbackToneSeconds: 0.05,
       onSampleLoadProgress: (progress) => {
+        if (
+          progress.stage === 'reading' &&
+          typeof progress.resolvedPath === 'string' &&
+          progress.resolvedPath.length > 0
+        ) {
+          loadedPreviewPath = progress.resolvedPath;
+        }
         if (progress.stage === 'fallback') {
           fellBack = true;
         }
       },
     });
     if (!fellBack) {
-      return rendered;
+      const resolvedCandidatePath = loadedPreviewPath ?? resolvePreviewCandidatePath(baseDir, candidate);
+      return {
+        rendered,
+        continueKey: normalizePreviewContinueKey(resolvedCandidatePath),
+      };
     }
   }
   return undefined;
+}
+
+function resolvePreviewCandidatePath(baseDir: string, candidate: string): string {
+  if (isAbsolute(candidate)) {
+    return candidate;
+  }
+  return resolve(baseDir, candidate);
+}
+
+function normalizePreviewContinueKey(value: string): string {
+  return value.replaceAll('\\', '/');
 }
 
 function createPreviewPathCandidates(chart: BeMusicJson, previewPath: string): string[] {
@@ -1521,20 +1631,6 @@ function createPreviewPathCandidates(chart: BeMusicJson, previewPath: string): s
     candidates.add(joined);
   }
   return [...candidates];
-}
-
-function trimAndLimitPreview(rendered: RenderResult): RenderResult {
-  const trimmed = trimPreviewLeadingSilence(rendered);
-  const maxFrames = Math.max(1, Math.floor(trimmed.sampleRate * PREVIEW_MAX_SECONDS));
-  if (trimmed.left.length <= maxFrames) {
-    return trimmed;
-  }
-  return {
-    ...trimmed,
-    left: trimmed.left.subarray(0, maxFrames),
-    right: trimmed.right.subarray(0, maxFrames),
-    durationSeconds: maxFrames / trimmed.sampleRate,
-  };
 }
 
 function resolveChartVolWavGain(chart: BeMusicJson): number {
@@ -1615,17 +1711,12 @@ async function startPreviewPlaybackWithBackend(
   const chunk = Buffer.allocUnsafe(PREVIEW_CHUNK_FRAMES * 4);
 
   // 起動直後の失敗を検知するため、最初のチャンクを先に書き込む。
-  const firstFrameCount = Math.min(PREVIEW_CHUNK_FRAMES, rendered.left.length - playhead);
-  if (firstFrameCount > 0) {
-    writePreviewPcmChunk(chunk, rendered, playhead, firstFrameCount);
-    playhead += firstFrameCount;
-
-    const writable = output.write(chunk);
-    if (!writable) {
-      const becameWritable = await waitPreviewWritableWithTimeout(output, () => stopRequested);
-      if (!becameWritable) {
-        stopRequested = true;
-      }
+  playhead = writeLoopedPreviewPcmChunk(chunk, rendered, playhead);
+  const firstWritable = output.write(chunk);
+  if (!firstWritable) {
+    const becameWritable = await waitPreviewWritableWithTimeout(output, () => stopRequested);
+    if (!becameWritable) {
+      stopRequested = true;
     }
   }
 
@@ -1635,10 +1726,8 @@ async function startPreviewPlaybackWithBackend(
   }
 
   const done = (async () => {
-    while (!stopRequested && playhead < rendered.left.length) {
-      const frameCount = Math.min(PREVIEW_CHUNK_FRAMES, rendered.left.length - playhead);
-      writePreviewPcmChunk(chunk, rendered, playhead, frameCount);
-      playhead += frameCount;
+    while (!stopRequested) {
+      playhead = writeLoopedPreviewPcmChunk(chunk, rendered, playhead);
 
       const writable = output.write(chunk);
       if (!writable) {
@@ -1650,11 +1739,7 @@ async function startPreviewPlaybackWithBackend(
       }
     }
 
-    if (stopRequested) {
-      output.destroy();
-      return;
-    }
-    await output.end();
+    output.destroy();
   })().catch(() => undefined);
 
   return {
@@ -1689,17 +1774,22 @@ function createTimeoutPromise(ms: number): Promise<void> {
   });
 }
 
-function writePreviewPcmChunk(chunk: Buffer, rendered: RenderResult, startFrame: number, frameCount: number): void {
-  for (let frame = 0; frame < frameCount; frame += 1) {
-    const source = startFrame + frame;
+function writeLoopedPreviewPcmChunk(chunk: Buffer, rendered: RenderResult, startFrame: number): number {
+  const totalFrames = Math.max(1, Math.min(rendered.left.length, rendered.right.length));
+  let source = startFrame;
+  if (source >= totalFrames) {
+    source %= totalFrames;
+  }
+  for (let frame = 0; frame < PREVIEW_CHUNK_FRAMES; frame += 1) {
     const offset = frame * 4;
     chunk.writeInt16LE(floatToInt16(rendered.left[source]), offset);
     chunk.writeInt16LE(floatToInt16(rendered.right[source]), offset + 2);
+    source += 1;
+    if (source >= totalFrames) {
+      source = 0;
+    }
   }
-  const writtenBytes = frameCount * 4;
-  if (writtenBytes < chunk.length) {
-    chunk.fill(0, writtenBytes);
-  }
+  return source;
 }
 
 function floatToInt16(value: number): number {
