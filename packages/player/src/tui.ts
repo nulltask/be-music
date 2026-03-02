@@ -272,10 +272,11 @@ export class PlayerTui {
 
       if (note.mine === true) {
         const distance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
-        if (!isDistanceWithinWindow(distance)) {
+        const visibleDistance = normalizeNoteApproachDistance(distance, frame.currentBeat, note.beat);
+        if (!isDistanceWithinWindow(visibleDistance)) {
           continue;
         }
-        const row = distanceToRow(distance, rowCount);
+        const row = distanceToRow(visibleDistance, rowCount);
         grid[row][lane] = MINE_NOTE_SYMBOL;
         continue;
       }
@@ -285,8 +286,16 @@ export class PlayerTui {
         const bodyEndBeat = note.endBeat;
         const bodyStartDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyStartBeat);
         const bodyEndDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyEndBeat);
-        const bodyVisibleFrom = clamp(Math.abs(bodyStartDistance), 0, NOTE_WINDOW_SCROLL_DISTANCE);
-        const bodyVisibleTo = clamp(Math.abs(bodyEndDistance), 0, NOTE_WINDOW_SCROLL_DISTANCE);
+        const bodyVisibleFrom = clamp(
+          normalizeNoteApproachDistance(bodyStartDistance, frame.currentBeat, bodyStartBeat),
+          0,
+          NOTE_WINDOW_SCROLL_DISTANCE,
+        );
+        const bodyVisibleTo = clamp(
+          normalizeNoteApproachDistance(bodyEndDistance, frame.currentBeat, bodyEndBeat),
+          0,
+          NOTE_WINDOW_SCROLL_DISTANCE,
+        );
         if (bodyVisibleTo >= bodyVisibleFrom) {
           const startRow = distanceToRow(bodyVisibleFrom, rowCount);
           const endRow = distanceToRow(bodyVisibleTo, rowCount);
@@ -301,8 +310,9 @@ export class PlayerTui {
         }
 
         const tailDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.endBeat);
-        if (isDistanceWithinWindow(tailDistance)) {
-          const tailRow = distanceToRow(tailDistance, rowCount);
+        const tailVisibleDistance = normalizeNoteApproachDistance(tailDistance, frame.currentBeat, note.endBeat);
+        if (isDistanceWithinWindow(tailVisibleDistance)) {
+          const tailRow = distanceToRow(tailVisibleDistance, rowCount);
           if (tailRow >= 0 && tailRow < rowCount) {
             grid[tailRow][lane] = LONG_NOTE_TAIL_SYMBOL;
           }
@@ -310,10 +320,11 @@ export class PlayerTui {
       }
 
       const headDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
-      if (!isDistanceWithinWindow(headDistance)) {
+      const headVisibleDistance = normalizeNoteApproachDistance(headDistance, frame.currentBeat, note.beat);
+      if (!isDistanceWithinWindow(headVisibleDistance)) {
         continue;
       }
-      const row = distanceToRow(headDistance, rowCount);
+      const row = distanceToRow(headVisibleDistance, rowCount);
       grid[row][lane] = NOTE_HEAD_SYMBOL;
     }
 
@@ -658,6 +669,16 @@ function renderProgress(currentSeconds: number, totalSeconds: number): string {
 
 function isDistanceWithinWindow(distance: number): boolean {
   return Number.isFinite(distance) && Math.abs(distance) <= NOTE_WINDOW_SCROLL_DISTANCE;
+}
+
+function normalizeNoteApproachDistance(distance: number, currentBeat: number, targetBeat: number): number {
+  if (!Number.isFinite(distance) || !Number.isFinite(currentBeat) || !Number.isFinite(targetBeat)) {
+    return Number.NaN;
+  }
+  if (targetBeat + BEAT_EPSILON < currentBeat) {
+    return Number.NaN;
+  }
+  return Math.abs(distance);
 }
 
 function isUpcomingBeat(currentBeat: number, targetBeat: number): boolean {
