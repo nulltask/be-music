@@ -105,6 +105,11 @@ interface BpmTimelinePoint {
   seconds: number;
 }
 
+interface ScrollTimelinePoint {
+  beat: number;
+  speed: number;
+}
+
 interface StopBeatWindow {
   beat: number;
   startSeconds: number;
@@ -1073,6 +1078,7 @@ function createTuiIfEnabled(
   const beatResolver = createBeatResolver(json);
   const measureTimeline = createMeasureTimeline(json, timingResolver, beatResolver);
   const bpmTimeline = createBpmTimeline(json, timingResolver);
+  const scrollTimeline = createScrollTimeline(json, beatResolver);
   const measureBoundariesBeats = createMeasureBoundariesBeats(json, beatResolver);
   const tui = new PlayerTui({
     mode,
@@ -1085,6 +1091,7 @@ function createTuiIfEnabled(
     speed,
     judgeWindowMs,
     bpmTimeline,
+    scrollTimeline,
     measureTimeline,
     measureBoundariesBeats,
     splitAfterIndex,
@@ -2172,6 +2179,34 @@ function createBpmTimeline(json: BeMusicJson, resolver: ReturnType<typeof create
   if (timeline.length === 0) {
     const fallbackBpm = Number.isFinite(json.metadata.bpm) && json.metadata.bpm > 0 ? json.metadata.bpm : 130;
     timeline.push({ bpm: fallbackBpm, seconds: 0 });
+  }
+
+  return timeline;
+}
+
+function createScrollTimeline(
+  json: BeMusicJson,
+  beatResolver: ReturnType<typeof createBeatResolver>,
+): ScrollTimelinePoint[] {
+  const timeline: ScrollTimelinePoint[] = [];
+
+  for (const event of json.events) {
+    if (normalizeChannel(event.channel) !== 'SC') {
+      continue;
+    }
+    const key = normalizeObjectKey(event.value);
+    const speed = json.bms.scroll[key];
+    if (typeof speed !== 'number' || !Number.isFinite(speed)) {
+      continue;
+    }
+    const beat = beatResolver.eventToBeat(event);
+    if (!Number.isFinite(beat) || beat < 0) {
+      continue;
+    }
+    timeline.push({
+      beat,
+      speed,
+    });
   }
 
   return timeline;
