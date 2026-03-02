@@ -18,6 +18,7 @@ interface TuiOptions {
   judgeWindowMs: number;
   bpmTimeline?: ReadonlyArray<BpmTimelinePoint>;
   scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>;
+  stopWindows?: ReadonlyArray<StopWindowPoint>;
   measureTimeline?: ReadonlyArray<MeasureTimelinePoint>;
   measureBoundariesBeats?: number[];
   splitAfterIndex?: number;
@@ -58,6 +59,11 @@ interface BpmTimelinePoint {
 interface ScrollTimelinePoint {
   beat: number;
   speed: number;
+}
+
+interface StopWindowPoint {
+  startSeconds: number;
+  endSeconds: number;
 }
 
 interface ScrollSegment {
@@ -342,8 +348,12 @@ export class PlayerTui {
     lines.push(
       `${renderProgress(frame.currentSeconds, frame.totalSeconds)}  ${formatSeconds(frame.currentSeconds)} / ${formatSeconds(frame.totalSeconds)} sec`,
     );
+    const currentBpm = findCurrentBpm(this.options.bpmTimeline, frame.currentSeconds);
+    const currentScroll = findCurrentScroll(this.options.scrollTimeline, frame.currentBeat);
+    const remainingStopSeconds = findRemainingStopSeconds(this.options.stopWindows, frame.currentSeconds);
+    const stopLabel = remainingStopSeconds > 0 ? `${formatStopSeconds(remainingStopSeconds)}s` : '-';
     lines.push(
-      `SPEED x${this.options.speed.toFixed(2)}  BAD ±${this.options.judgeWindowMs}ms  BPM ${formatBpm(findCurrentBpm(this.options.bpmTimeline, frame.currentSeconds))}`,
+      `SPEED x${this.options.speed.toFixed(2)}  BAD ±${this.options.judgeWindowMs}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}`,
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
@@ -1170,7 +1180,73 @@ function findCurrentBpm(timeline: ReadonlyArray<BpmTimelinePoint> | undefined, c
   return Math.max(0, best);
 }
 
+function findCurrentScroll(timeline: ReadonlyArray<ScrollTimelinePoint> | undefined, currentBeat: number): number {
+  if (!timeline || timeline.length === 0) {
+    return 1;
+  }
+
+  let low = 0;
+  let high = timeline.length - 1;
+  let best = 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const point = timeline[mid];
+    if (point.beat <= currentBeat) {
+      best = point.speed;
+      low = mid + 1;
+      continue;
+    }
+    high = mid - 1;
+  }
+
+  return Number.isFinite(best) ? best : 1;
+}
+
+function findRemainingStopSeconds(
+  stopWindows: ReadonlyArray<StopWindowPoint> | undefined,
+  currentSeconds: number,
+): number {
+  if (!stopWindows || stopWindows.length === 0 || !Number.isFinite(currentSeconds)) {
+    return 0;
+  }
+
+  let low = 0;
+  let high = stopWindows.length - 1;
+  let index = -1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const point = stopWindows[mid];
+    if (point.startSeconds <= currentSeconds) {
+      index = mid;
+      low = mid + 1;
+      continue;
+    }
+    high = mid - 1;
+  }
+
+  if (index < 0) {
+    return 0;
+  }
+  const window = stopWindows[index];
+  if (currentSeconds >= window.endSeconds) {
+    return 0;
+  }
+  return Math.max(0, window.endSeconds - currentSeconds);
+}
+
 function formatBpm(bpm: number): string {
   const safe = Number.isFinite(bpm) ? Math.max(0, bpm) : 0;
   return safe % 1 === 0 ? `${safe.toFixed(0)}` : safe.toFixed(2);
+}
+
+function formatScroll(speed: number): string {
+  if (!Number.isFinite(speed)) {
+    return '1';
+  }
+  return speed % 1 === 0 ? speed.toFixed(0) : speed.toFixed(2);
+}
+
+function formatStopSeconds(seconds: number): string {
+  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  return safe.toFixed(2);
 }

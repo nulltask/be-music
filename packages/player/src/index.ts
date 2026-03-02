@@ -1080,6 +1080,10 @@ function createTuiIfEnabled(
   const measureTimeline = createMeasureTimeline(json, timingResolver, beatResolver);
   const bpmTimeline = createBpmTimeline(json, timingResolver);
   const scrollTimeline = createScrollTimeline(json, beatResolver);
+  const stopWindows = createStopBeatWindows(timingResolver).map((window) => ({
+    startSeconds: window.startSeconds,
+    endSeconds: window.endSeconds,
+  }));
   const measureBoundariesBeats = createMeasureBoundariesBeats(json, beatResolver);
   const tui = new PlayerTui({
     mode,
@@ -1093,6 +1097,7 @@ function createTuiIfEnabled(
     judgeWindowMs,
     bpmTimeline,
     scrollTimeline,
+    stopWindows,
     measureTimeline,
     measureBoundariesBeats,
     splitAfterIndex,
