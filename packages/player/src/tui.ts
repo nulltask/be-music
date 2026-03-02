@@ -69,6 +69,7 @@ interface ScrollSegment {
 const NOTE_WINDOW_BEATS = 4;
 const NOTE_WINDOW_SCROLL_DISTANCE = NOTE_WINDOW_BEATS;
 const MAX_SCROLL_LOOKAHEAD_BEATS = NOTE_WINDOW_BEATS * 64;
+const MAX_NOTES_PER_RENDER_WINDOW = 2048;
 const FLASH_DURATION_MS = 120;
 const DEFAULT_LANE_WIDTH = 3;
 const DEFAULT_GRID_ROWS = 14;
@@ -274,8 +275,8 @@ export class PlayerTui {
         const bodyEndBeat = note.endBeat;
         const bodyStartDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyStartBeat);
         const bodyEndDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyEndBeat);
-        const bodyVisibleFrom = clamp(bodyStartDistance, 0, NOTE_WINDOW_SCROLL_DISTANCE);
-        const bodyVisibleTo = clamp(bodyEndDistance, 0, NOTE_WINDOW_SCROLL_DISTANCE);
+        const bodyVisibleFrom = clamp(Math.abs(bodyStartDistance), 0, NOTE_WINDOW_SCROLL_DISTANCE);
+        const bodyVisibleTo = clamp(Math.abs(bodyEndDistance), 0, NOTE_WINDOW_SCROLL_DISTANCE);
         if (bodyVisibleTo >= bodyVisibleFrom) {
           const startRow = distanceToRow(bodyVisibleFrom, rowCount);
           const endRow = distanceToRow(bodyVisibleTo, rowCount);
@@ -458,7 +459,7 @@ export class PlayerTui {
     this.noteWindowBeat = currentBeat;
 
     let start = this.noteWindowStartIndex;
-    while (start < notes.length && canDropNoteFromRenderWindow(notes[start], currentBeat, this.scrollDistanceMapper)) {
+    while (start < notes.length && canDropNoteFromRenderWindow(notes[start], currentBeat)) {
       start += 1;
     }
 
@@ -467,7 +468,7 @@ export class PlayerTui {
     if (!Number.isFinite(maxBeat)) {
       end = notes.length;
     } else {
-      while (end < notes.length && notes[end].beat <= maxBeat) {
+      while (end < notes.length && notes[end].beat <= maxBeat && end - start < MAX_NOTES_PER_RENDER_WINDOW) {
         end += 1;
       }
     }
@@ -640,11 +641,11 @@ function renderProgress(currentSeconds: number, totalSeconds: number): string {
 }
 
 function isDistanceWithinWindow(distance: number): boolean {
-  return Number.isFinite(distance) && distance >= 0 && distance <= NOTE_WINDOW_SCROLL_DISTANCE;
+  return Number.isFinite(distance) && Math.abs(distance) <= NOTE_WINDOW_SCROLL_DISTANCE;
 }
 
 function distanceToRow(distance: number, rowCount: number): number {
-  const normalized = clamp(distance / NOTE_WINDOW_SCROLL_DISTANCE, 0, 1);
+  const normalized = clamp(Math.abs(distance) / NOTE_WINDOW_SCROLL_DISTANCE, 0, 1);
   return rowCount - 1 - Math.floor(normalized * (rowCount - 1));
 }
 
@@ -961,7 +962,7 @@ function isWideCharacter(codePoint: number): boolean {
   );
 }
 
-function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number, scrollDistanceMapper: ScrollDistanceMapper): boolean {
+function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number): boolean {
   const keepVisible =
     typeof note.visibleUntilBeat === 'number' &&
     Number.isFinite(note.visibleUntilBeat) &&
@@ -974,8 +975,7 @@ function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number, scrollD
     return false;
   }
 
-  const distance = scrollDistanceMapper.distanceBetween(currentBeat, note.beat);
-  return Number.isFinite(distance) && distance < -NOTE_WINDOW_SCROLL_DISTANCE;
+  return note.beat < currentBeat - NOTE_WINDOW_BEATS;
 }
 
 function calculateLaneBlockVisibleWidth(laneWidths: number[], splitAfterIndex: number): number {
