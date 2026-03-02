@@ -1,6 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
-export type AudioBackendName = 'auto' | 'speaker' | 'audify';
+export type AudioBackendName = 'auto' | 'speaker' | 'audify' | 'webaudio';
 export type ResolvedAudioBackendName = Exclude<AudioBackendName, 'auto'>;
 
 export interface AudioOutputBackend {
@@ -89,17 +89,40 @@ interface AudifyModule {
   };
 }
 
-const AUTO_BACKEND_ORDER: ResolvedAudioBackendName[] = ['speaker', 'audify'];
+interface NodeWebAudioAudioBuffer {
+  getChannelData: (channel: number) => Float32Array;
+}
+
+interface NodeWebAudioAudioBufferSourceNode {
+  buffer: NodeWebAudioAudioBuffer | null;
+  connect: (destination: unknown) => unknown;
+  start: (when?: number) => void;
+}
+
+interface NodeWebAudioAudioContext {
+  readonly currentTime: number;
+  readonly destination: unknown;
+  createBuffer: (numberOfChannels: number, length: number, sampleRate: number) => NodeWebAudioAudioBuffer;
+  createBufferSource: () => NodeWebAudioAudioBufferSourceNode;
+  close?: () => Promise<void>;
+}
+
+type NodeWebAudioAudioContextConstructor = new (options?: { sampleRate?: number }) => NodeWebAudioAudioContext;
+
+const AUTO_BACKEND_ORDER: ResolvedAudioBackendName[] = ['webaudio', 'speaker', 'audify'];
 const AUDIFY_HIGH_WATER_MS = 48;
 const AUDIFY_LOW_WATER_MS = 24;
+const WEBAUDIO_HIGH_WATER_MS = 64;
+const WEBAUDIO_LOW_WATER_MS = 32;
 
 const BACKEND_CANDIDATES: AudioOutputBackendCandidate[] = [
   { name: 'audify', create: tryCreateAudifyBackend },
+  { name: 'webaudio', create: tryCreateWebAudioBackend },
   { name: 'speaker', create: tryCreateSpeakerBackend },
 ];
 
 export function isAudioBackendName(value: string): value is AudioBackendName {
-  return value === 'auto' || value === 'speaker' || value === 'audify';
+  return value === 'auto' || value === 'speaker' || value === 'audify' || value === 'webaudio';
 }
 
 export function createAudioBackendResolutionOrder(requested: AudioBackendName): ResolvedAudioBackendName[] {
@@ -164,6 +187,128 @@ async function tryCreateSpeakerBackend(options: AudioBackendCreateOptions): Prom
     },
     onError: (listener: () => void) => {
       speaker.on('error', listener);
+    },
+  };
+}
+
+async function tryCreateWebAudioBackend(options: AudioBackendCreateOptions): Promise<AudioOutputBackend | undefined> {
+  const AudioContext = await loadNodeWebAudioContextConstructor();
+  if (!AudioContext) {
+    return undefined;
+  }
+
+  let context: NodeWebAudioAudioContext;
+  try {
+    context = new AudioContext({
+      sampleRate: options.sampleRate,
+    });
+  } catch {
+    try {
+      context = new AudioContext();
+    } catch {
+      return undefined;
+    }
+  }
+
+  const errorListeners = new Set<() => void>();
+  const highWaterFrames = Math.max(256, Math.ceil((options.sampleRate * WEBAUDIO_HIGH_WATER_MS) / 1000));
+  const lowWaterFrames = Math.max(
+    128,
+    Math.min(highWaterFrames - 1, Math.ceil((options.sampleRate * WEBAUDIO_LOW_WATER_MS) / 1000)),
+  );
+
+  let closed = false;
+  let scheduledUntilSeconds = Math.max(0, context.currentTime);
+
+  const emitError = (): void => {
+    for (const listener of errorListeners) {
+      listener();
+    }
+  };
+
+  const queuedFrames = (): number => {
+    if (closed) {
+      return 0;
+    }
+    const now = Math.max(0, context.currentTime);
+    return Math.max(0, Math.ceil((scheduledUntilSeconds - now) * options.sampleRate));
+  };
+
+  const closeContext = async (): Promise<void> => {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    try {
+      await context.close?.();
+    } catch {
+      // noop
+    }
+  };
+
+  return {
+    backend: 'webaudio',
+    write: (chunk: Uint8Array) => {
+      if (closed || chunk.byteLength <= 0) {
+        return true;
+      }
+
+      const channels = Math.max(1, options.channels);
+      const bytesPerFrame = channels * 2;
+      if (chunk.byteLength < bytesPerFrame) {
+        return true;
+      }
+      const frameCount = Math.floor(chunk.byteLength / bytesPerFrame);
+      if (frameCount <= 0) {
+        return true;
+      }
+
+      try {
+        const pcm = new Int16Array(chunk.buffer, chunk.byteOffset, frameCount * channels);
+        const buffer = context.createBuffer(channels, frameCount, options.sampleRate);
+        for (let channel = 0; channel < channels; channel += 1) {
+          const channelData = buffer.getChannelData(channel);
+          let pcmIndex = channel;
+          for (let frame = 0; frame < frameCount; frame += 1) {
+            channelData[frame] = pcm[pcmIndex]! / 32768;
+            pcmIndex += channels;
+          }
+        }
+
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(context.destination);
+        const now = Math.max(0, context.currentTime);
+        const startAt = Math.max(now, scheduledUntilSeconds);
+        source.start(startAt);
+        scheduledUntilSeconds = startAt + frameCount / options.sampleRate;
+      } catch {
+        emitError();
+        return false;
+      }
+
+      return queuedFrames() <= highWaterFrames;
+    },
+    waitWritable: async (shouldStop: () => boolean) => {
+      while (!shouldStop() && !closed && queuedFrames() > lowWaterFrames) {
+        await delay(1);
+      }
+    },
+    end: async () => {
+      if (closed) {
+        return;
+      }
+      const timeoutAt = performance.now() + 5_000;
+      while (!closed && queuedFrames() > 0 && performance.now() < timeoutAt) {
+        await delay(1);
+      }
+      await closeContext();
+    },
+    destroy: () => {
+      void closeContext();
+    },
+    onError: (listener: () => void) => {
+      errorListeners.add(listener);
     },
   };
 }
@@ -406,6 +551,22 @@ async function loadAudifyModule(): Promise<AudifyModule | undefined> {
       return undefined;
     }
     return module;
+  } catch {
+    return undefined;
+  }
+}
+
+async function loadNodeWebAudioContextConstructor(): Promise<NodeWebAudioAudioContextConstructor | undefined> {
+  try {
+    const imported = await import('node-web-audio-api');
+    const candidate =
+      (imported as { AudioContext?: unknown }).AudioContext ??
+      (imported as { default?: { AudioContext?: unknown } }).default?.AudioContext ??
+      (imported as { default?: unknown }).default;
+    if (typeof candidate !== 'function') {
+      return undefined;
+    }
+    return candidate as NodeWebAudioAudioContextConstructor;
   } catch {
     return undefined;
   }

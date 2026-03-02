@@ -16,6 +16,11 @@ describe('player cli', () => {
     expect(parsed.auto).toBe(true);
   });
 
+  test('cli: parses --audio-backend webaudio', () => {
+    const parsed = parseArgs(['chart.bms', '--audio-backend', 'webaudio']);
+    expect(parsed.audioBackend).toBe('webaudio');
+  });
+
   test('cli: throws on invalid --audio-backend', () => {
     expect(() => parseArgs(['chart.bms', '--audio-backend', 'invalid-backend'])).toThrow(
       'Invalid --audio-backend value: invalid-backend',

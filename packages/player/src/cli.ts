@@ -15,7 +15,13 @@ import {
   type PlayerLoadProgress,
   type PlayerSummary,
 } from './index.ts';
-import { createAudioOutputBackend, isAudioBackendName, type AudioBackendName } from './audio-backend.ts';
+import {
+  createAudioBackendResolutionOrder,
+  createAudioOutputBackend,
+  isAudioBackendName,
+  type AudioBackendName,
+  type ResolvedAudioBackendName,
+} from './audio-backend.ts';
 
 interface CliArgs {
   input?: string;
@@ -182,12 +188,14 @@ class ChartSelectionLoadingCanceledError extends Error {
 
 interface ChartPreviewController {
   focus: (target: PreviewFocusTarget) => void;
+  getActiveBackend: () => ResolvedAudioBackendName | undefined;
   dispose: () => Promise<void>;
 }
 
 interface PreviewPlaybackHandle {
   stop: () => void;
   done: Promise<void>;
+  backend: ResolvedAudioBackendName;
 }
 
 interface ChartPreviewAsset {
@@ -207,11 +215,8 @@ const PREVIEW_STOP_TIMEOUT_MS = 180;
 const PREVIEW_BACKPRESSURE_TIMEOUT_MS = 800;
 const PREVIEW_CACHE_LIMIT = 8;
 
-function createPreviewBackendCandidates(requested: AudioBackendName): AudioBackendName[] {
-  if (requested !== 'auto') {
-    return [requested];
-  }
-  return ['audify', 'speaker'];
+function createPreviewBackendCandidates(requested: AudioBackendName): ResolvedAudioBackendName[] {
+  return createAudioBackendResolutionOrder(requested);
 }
 
 async function main(): Promise<void> {
@@ -641,7 +646,7 @@ function printUsage(): void {
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
       '  --render-audio <path>     Render audio preview before playing',
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
-      '  --audio-backend <name>    Audio backend: auto | speaker | audify (default: auto)',
+      '  --audio-backend <name>    Audio backend: auto | speaker | webaudio | audify (default: auto)',
       '  --bgm-volume <value>      Volume multiplier for non-play lanes (default: 1, 0 disables BGM)',
       '  --play-volume <value>     Volume multiplier for playable/key sounds (default: 1)',
       '  --audio-tail <seconds>    Audio tail length when rendering playback buffer (default: 1.5)',
@@ -868,6 +873,9 @@ async function selectChartInteractively(
     );
     lines.push(truncateForDisplay(`Directory: ${rootDir}`, lineWidth));
     lines.push(`Mode: ${auto ? 'AUTO' : 'MANUAL'}`);
+    lines.push(
+      `Audio backend: ${formatSongSelectAudioBackendLabel(options.audio, options.audioBackend, previewController?.getActiveBackend())}`,
+    );
     lines.push('');
     const headerPrefix = `  ${' '.repeat(numberWidth)} `;
     const columnHeader = formatSelectionColumnHeader(columnLayout);
@@ -1406,6 +1414,7 @@ function createChartPreviewController(options: { audioBackend: AudioBackendName 
   let disposed = false;
   let activePlayback: PreviewPlaybackHandle | undefined;
   let activePreviewKey: string | undefined;
+  let activeBackend: ResolvedAudioBackendName | undefined;
 
   const stopPlaybackSafely = async (playback: PreviewPlaybackHandle): Promise<void> => {
     playback.stop();
@@ -1419,6 +1428,7 @@ function createChartPreviewController(options: { audioBackend: AudioBackendName 
     const playback = activePlayback;
     activePlayback = undefined;
     activePreviewKey = undefined;
+    activeBackend = undefined;
     await stopPlaybackSafely(playback);
   };
 
@@ -1491,14 +1501,17 @@ function createChartPreviewController(options: { audioBackend: AudioBackendName 
         }
         activePlayback = playback;
         activePreviewKey = preview.continueKey;
+        activeBackend = playback.backend;
         void playback.done.finally(() => {
           if (activePlayback === playback) {
             activePlayback = undefined;
             activePreviewKey = undefined;
+            activeBackend = undefined;
           }
         });
       })();
     },
+    getActiveBackend: () => activeBackend,
     dispose: async () => {
       if (disposed) {
         return;
@@ -1680,7 +1693,7 @@ async function startPreviewPlayback(
 
 async function startPreviewPlaybackWithBackend(
   rendered: RenderResult,
-  audioBackend: AudioBackendName,
+  audioBackend: ResolvedAudioBackendName,
 ): Promise<PreviewPlaybackHandle | undefined> {
   if (rendered.left.length === 0 || rendered.right.length === 0) {
     return undefined;
@@ -1748,7 +1761,25 @@ async function startPreviewPlaybackWithBackend(
       output.destroy();
     },
     done,
+    backend: output.backend,
   };
+}
+
+function formatSongSelectAudioBackendLabel(
+  audioEnabled: boolean,
+  requested: AudioBackendName,
+  active: ResolvedAudioBackendName | undefined,
+): string {
+  if (!audioEnabled) {
+    return 'disabled';
+  }
+  if (requested !== 'auto') {
+    return requested;
+  }
+  if (active) {
+    return `auto (${active})`;
+  }
+  return `auto (${createAudioBackendResolutionOrder('auto').join(' -> ')})`;
 }
 
 async function waitPreviewWritableWithTimeout(
