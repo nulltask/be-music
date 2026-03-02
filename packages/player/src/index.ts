@@ -6,6 +6,7 @@ import {
   createEmptyJson,
   type BeMusicEvent,
   type BeMusicJson,
+  isScrollChannel,
   isPlayableChannel,
   normalizeChannel,
   normalizeObjectKey,
@@ -2238,13 +2239,20 @@ function createScrollTimeline(
   beatResolver: ReturnType<typeof createBeatResolver>,
 ): ScrollTimelinePoint[] {
   const timeline: ScrollTimelinePoint[] = [];
+  const scrollMap = json.bms.scroll;
+  if (Object.keys(scrollMap).length === 0) {
+    return timeline;
+  }
 
   for (const event of json.events) {
-    if (normalizeChannel(event.channel) !== 'SC') {
+    if (!isScrollChannel(event.channel)) {
       continue;
     }
     const key = normalizeObjectKey(event.value);
-    const speed = json.bms.scroll[key];
+    if (!Object.hasOwn(scrollMap, key)) {
+      continue;
+    }
+    const speed = scrollMap[key];
     if (typeof speed !== 'number' || !Number.isFinite(speed)) {
       continue;
     }

@@ -70,6 +70,7 @@ const NOTE_WINDOW_BEATS = 4;
 const NOTE_WINDOW_SCROLL_DISTANCE = NOTE_WINDOW_BEATS;
 const MAX_SCROLL_LOOKAHEAD_BEATS = NOTE_WINDOW_BEATS * 64;
 const MAX_NOTES_PER_RENDER_WINDOW = 2048;
+const BEAT_EPSILON = 1e-9;
 const FLASH_DURATION_MS = 120;
 const DEFAULT_LANE_WIDTH = 3;
 const DEFAULT_GRID_ROWS = 14;
@@ -232,6 +233,9 @@ export class PlayerTui {
     const laneHighlightRatios = new Map<number, number>();
 
     for (const boundaryBeat of this.options.measureBoundariesBeats ?? []) {
+      if (!isUpcomingBeat(frame.currentBeat, boundaryBeat)) {
+        continue;
+      }
       const distance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, boundaryBeat);
       if (!isDistanceWithinWindow(distance)) {
         continue;
@@ -397,7 +401,10 @@ export class PlayerTui {
     );
 
     laneLines.push(
-      centerVisible(formatJudgeComboDisplay(this.latestJudge, this.combo, now, this.paused), this.laneBlockVisibleWidth),
+      centerVisible(
+        formatJudgeComboDisplay(this.latestJudge, this.combo, now, this.paused),
+        this.laneBlockVisibleWidth,
+      ),
     );
 
     laneLines.push(
@@ -566,7 +573,6 @@ class ScrollDistanceMapper {
     const segment = this.segments[findLastSegmentIndexByBeat(this.segments, safeBeat)]!;
     return segment.startDistance + (safeBeat - segment.startBeat) * segment.speed;
   }
-
 }
 
 function buildScrollSegments(timeline?: ReadonlyArray<ScrollTimelinePoint>): ScrollSegment[] {
@@ -644,6 +650,13 @@ function isDistanceWithinWindow(distance: number): boolean {
   return Number.isFinite(distance) && Math.abs(distance) <= NOTE_WINDOW_SCROLL_DISTANCE;
 }
 
+function isUpcomingBeat(currentBeat: number, targetBeat: number): boolean {
+  if (!Number.isFinite(currentBeat) || !Number.isFinite(targetBeat)) {
+    return false;
+  }
+  return targetBeat + BEAT_EPSILON >= currentBeat;
+}
+
 function distanceToRow(distance: number, rowCount: number): number {
   const normalized = clamp(Math.abs(distance) / NOTE_WINDOW_SCROLL_DISTANCE, 0, 1);
   return rowCount - 1 - Math.floor(normalized * (rowCount - 1));
@@ -672,14 +685,13 @@ function renderLaneRow(
           : isMine
             ? center(MINE_NOTE_SYMBOL, laneWidth)
             : center(value, laneWidth);
-    const decoratedCell =
-      isMine
-        ? colorizeMine(cell)
-        : isNote
-          ? colorizeNote(cell, channels[index] ?? '')
-          : value === MEASURE_LINE_SYMBOL
-            ? colorizeMeasureLine(cell)
-            : cell;
+    const decoratedCell = isMine
+      ? colorizeMine(cell)
+      : isNote
+        ? colorizeNote(cell, channels[index] ?? '')
+        : value === MEASURE_LINE_SYMBOL
+          ? colorizeMeasureLine(cell)
+          : cell;
     const highlightRatio = laneHighlightRatios.get(index);
     if (highlightRatio !== undefined) {
       return highlightCell(decoratedCell, highlightRatio);
@@ -744,7 +756,7 @@ function colorizeNote(symbol: string, channel: string): string {
     return `\u001b[34m${symbol}\u001b[0m`;
   }
   if (WHITE_NOTE_CHANNELS.has(channel)) {
-    return `\u001b[97m${symbol}\u001b[0m`;
+    return `\u001b[1;97m${symbol}\u001b[0m`;
   }
   return symbol;
 }
