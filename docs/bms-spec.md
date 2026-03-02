@@ -13,37 +13,97 @@
 
 ## 対応 (構文受理)
 
-- オブジェクトデータ行: `#mmmcc:data`
-- ヘッダ行: `#COMMAND value`
-- `#` で始まらない行は無視
-- 未知ヘッダは `metadata.extras` に保持
-- 既知/未知を問わず `#mmmcc` はイベントとして保持
+- [x] オブジェクトデータ行 `#mmmcc:data` を受理
+- [x] ヘッダ行 `#COMMAND value` を受理
+- [x] `#` で始まらない行を無視
+- [x] 未知ヘッダを `metadata.extras` に保持
+- [x] 既知/未知を問わず `#mmmcc` をイベントとして保持
 
 ## 対応 (意味解釈)
 
-- メタヘッダ: `TITLE`, `SUBTITLE`, `ARTIST`, `GENRE`, `COMMENT`, `STAGEFILE`, `PLAYLEVEL`, `RANK`, `TOTAL`, `DIFFICULTY`, `BPM`
-- リソースヘッダ: `WAVxx`, `BMPxx`, `BPMxx`, `STOPxx`, `TEXTxx`
-- チャンネル `02`: 小節長 (`#mmm02:length`)
-- チャンネル `03`: 16進直値 BPM 変更
-- チャンネル `08`: `#BPMxx` 参照 BPM 変更
-- チャンネル `09`: `#STOPxx` 参照 STOP
-- チャンネル `01`: 背景音チャンネル
-- チャンネル `1x` / `2x`: 演奏チャンネル
-- チャンネル `D1-D9` / `E1-E9`: 地雷チャンネル
-- player の MANUAL モードでは、地雷タイミングで対応キーを押すと `BAD` 判定になる
-- 地雷は `TOTAL`/`EX-SCORE` の対象ノート数には含めない
-- チャンネル `04` / `07`: player の BGA 表示で使用
-- `04` は base、`07` は layer として合成
-- layer (`07`) は黒 (`#000000`) を透過色として扱う
-- BGA 画像は 256x256 キャンバス前提で扱い、通常は拡大縮小しない
-- 256x256 未満の画像は X 軸中央・Y 軸上詰めで配置
-- `04` / `07` で未定義 `#BMPxx` を参照した場合は 256x256 黒として扱う
-- 制御構文: `#RANDOM`, `#SETRANDOM`, `#ENDRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#DEF`, `#SKIP`, `#ENDSW`
-- 拡張ヘッダ: `#LNTYPE`, `#LNOBJ`, `#DEFEXRANK`, `#EXRANKxx`, `#ARGBxx`, `#PLAYER`, `#PATH_WAV`, `#BASEBPM`, `#STP`, `#OPTION`, `#CHANGEOPTIONxx`, `#WAVCMD`, `#EXWAVxx`, `#EXBMPxx`, `#BGAxx`, `#POORBGA`, `#SWBGAxx`, `#VIDEOFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET` を `bms` 拡張領域へ保持
+- [x] メタヘッダ `#TITLE` を解釈
+- [x] メタヘッダ `#SUBTITLE` を解釈
+- [x] メタヘッダ `#ARTIST` を解釈
+- [x] メタヘッダ `#GENRE` を解釈
+- [x] メタヘッダ `#COMMENT` を解釈
+- [x] メタヘッダ `#STAGEFILE` を解釈
+- [x] メタヘッダ `#PLAYLEVEL` を解釈
+- [x] メタヘッダ `#RANK` を解釈
+- [x] メタヘッダ `#TOTAL` を解釈
+- [x] メタヘッダ `#DIFFICULTY` を解釈
+- [x] メタヘッダ `#BPM` を解釈
+- [x] リソースヘッダ `#WAVxx` を解釈
+- [x] リソースヘッダ `#BMPxx` を解釈
+- [x] リソースヘッダ `#BPMxx` を解釈
+- [x] リソースヘッダ `#STOPxx` を解釈
+- [x] リソースヘッダ `#TEXTxx` を解釈
+- [x] チャンネル `02` (小節長: `#mmm02:length`) を解釈
+- [x] チャンネル `03` (16進直値 BPM) を解釈
+- [x] チャンネル `08` (`#BPMxx` 参照 BPM) を解釈
+- [x] チャンネル `09` (`#STOPxx` 参照 STOP) を解釈
+- [x] チャンネル `01` (背景音) を解釈
+- [x] チャンネル `1x` (演奏) を解釈
+- [x] チャンネル `2x` (演奏) を解釈
+- [x] チャンネル `D1-D9` (地雷) を解釈
+- [x] チャンネル `E1-E9` (地雷) を解釈
+- [x] MANUAL モードで地雷タイミング入力を `BAD` 判定に反映
+- [x] 地雷を `TOTAL` / `EX-SCORE` の対象ノート数から除外
+- [x] チャンネル `SC` を `#SCROLLxx` 参照イベントとして保持
+- [x] チャンネル `SC` を音声トリガー対象から除外
+- [x] チャンネル `04` を BGA base として表示に使用
+- [x] チャンネル `07` を BGA layer として表示に使用
+- [x] `04` と `07` を合成表示
+- [x] layer (`07`) で黒 (`#000000`) を透過色として扱う
+- [x] BGA 画像を 256x256 キャンバス前提で扱う
+- [x] BGA 画像を通常は拡大縮小しない
+- [x] 256x256 未満の画像を X 軸中央 / Y 軸上詰めで配置
+- [x] `04` / `07` で未定義 `#BMPxx` 参照時は 256x256 黒として扱う
+- [x] 制御構文 `#RANDOM` を保持して実行時評価
+- [x] 制御構文 `#SETRANDOM` を保持して実行時評価
+- [x] 制御構文 `#ENDRANDOM` を保持して実行時評価
+- [x] 制御構文 `#IF` を保持して実行時評価
+- [x] 制御構文 `#ELSEIF` を保持して実行時評価
+- [x] 制御構文 `#ELSE` を保持して実行時評価
+- [x] 制御構文 `#ENDIF` を保持して実行時評価
+- [x] 制御構文 `#SWITCH` を保持して実行時評価
+- [x] 制御構文 `#SETSWITCH` を保持して実行時評価
+- [x] 制御構文 `#CASE` を保持して実行時評価
+- [x] 制御構文 `#DEF` を保持して実行時評価
+- [x] 制御構文 `#SKIP` を保持して実行時評価
+- [x] 制御構文 `#ENDSW` を保持して実行時評価
+- [x] 拡張ヘッダ `#PREVIEW` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#LNTYPE` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#LNMODE` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#LNOBJ` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#VOLWAV` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#DEFEXRANK` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#EXRANKxx` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#ARGBxx` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#PLAYER` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#PATH_WAV` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#BASEBPM` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#STP` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#OPTION` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#CHANGEOPTIONxx` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#WAVCMD` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#EXWAVxx` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#EXBMPxx` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#BGAxx` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#SCROLLxx` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#POORBGA` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#SWBGAxx` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#VIDEOFILE` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#MATERIALS` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#DIVIDEPROP` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#CHARSET` を `bms` 拡張領域へ保持
+- [x] `#PREVIEW` を曲選択プレビュー再生で優先的に使用
+- [x] `#VOLWAV` を player / audio-renderer の再生ゲインに反映
 
 ## 未対応 (一次参照に対する差分)
 
-- 拡張チャンネルの専用挙動: `#xxx51-69` (LN) など
+- [ ] 拡張チャンネル `#mmm51-59` (LN: `LNTYPE=1`) の専用挙動
+- [ ] 拡張チャンネル `#mmm61-69` (LN: `LNTYPE=2`) の専用挙動
+- [ ] チャンネル `#mmmSC` のスクロール速度を player 描画へ反映
 
 ## イベント位置の扱い
 

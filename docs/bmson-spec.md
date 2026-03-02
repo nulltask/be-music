@@ -26,9 +26,19 @@
 - [x] ルート: `bpm_events`
 - [x] ルート: `stop_events`
 - [x] ルート: `bga`
-- [x] `info` 拡張項目 (`subartists`, `chart_name`, `mode_hint`, `judge_rank`, `total`, 画像/プレビュー系)
-- [x] `sound_channels[].notes[]` の `x`, `y`
-- [x] `sound_channels[].notes[]` の `l`, `c`
+- [x] `info` 拡張項目: `subartists`
+- [x] `info` 拡張項目: `chart_name`
+- [x] `info` 拡張項目: `mode_hint`
+- [x] `info` 拡張項目: `judge_rank`
+- [x] `info` 拡張項目: `total`
+- [x] `info` 拡張項目: `back_image`
+- [x] `info` 拡張項目: `eyecatch_image`
+- [x] `info` 拡張項目: `banner_image`
+- [x] `info` 拡張項目: `preview_music`
+- [x] `sound_channels[].notes[]` の `x`
+- [x] `sound_channels[].notes[]` の `y`
+- [x] `sound_channels[].notes[]` の `l`
+- [x] `sound_channels[].notes[]` の `c`
 - [x] `lines` を使った `measure` / `position` 解決
 - [x] `x <= 0` (または未指定) ノートを BGM (`01`) として解釈
 - [ ] 未知ルートキーの透過保持
@@ -37,24 +47,41 @@
 
 - [x] `version` 出力 (`bmson.version`, 未指定時 `1.0.0`)
 - [x] `info.resolution` 出力 (未指定時 `240`)
-- [x] `info` 拡張項目の出力
+- [x] `info` 拡張項目 `subartists` の出力
+- [x] `info` 拡張項目 `chart_name` の出力
+- [x] `info` 拡張項目 `mode_hint` の出力
+- [x] `info` 拡張項目 `judge_rank` の出力
+- [x] `info` 拡張項目 `total` の出力
+- [x] `info` 拡張項目 `back_image` の出力
+- [x] `info` 拡張項目 `eyecatch_image` の出力
+- [x] `info` 拡張項目 `banner_image` の出力
+- [x] `info` 拡張項目 `preview_music` の出力
 - [x] `lines` 出力 (`bmson.lines` 優先)
 - [x] `lines` 自動生成 (IR 小節長ベース)
 - [x] `sound_channels` 出力
 - [x] `bpm_events` 出力 (`03` / `08` 由来)
 - [x] `stop_events` 出力 (`09` 由来)
-- [x] `notes.l/c` 出力 (未指定時 `l=0`, `c=false`)
-- [x] `bga` 出力 (`bga_header`, `bga_events`, `layer_events`, `poor_events`)
+- [x] `notes.l` 出力 (未指定時 `l=0`)
+- [x] `notes.c` 出力 (未指定時 `c=false`)
+- [x] `bga.bga_header` 出力
+- [x] `bga.bga_events` 出力
+- [x] `bga.layer_events` 出力
+- [x] `bga.poor_events` 出力
 - [ ] 未知ルートキーの透過再出力
 - [~] `notes.x` の元値を厳密保持 (IR で lanes を再割当するため完全同一は保証しない)
 
 ### player / audio-renderer (bmson 再生挙動)
 
 - [x] bmson 入力再生 (`parseChartFile` 経由)
-- [x] `lines` / `resolution` / `bpm_events` / `stop_events` を使った時刻解決
+- [x] `lines` を使った時刻解決
+- [x] `resolution` を使った時刻解決
+- [x] `bpm_events` を使った時刻解決
+- [x] `stop_events` を使った時刻解決
 - [x] `notes.c` によるサンプル継続オフセット解釈
 - [x] `notes.l` を使ったロングノート終端解釈
-- [ ] bmson `bga` (`bga_events`, `layer_events`, `poor_events`) の再生反映
+- [ ] `bga.bga_events` の再生反映
+- [ ] `bga.layer_events` の再生反映
+- [ ] `bga.poor_events` の再生反映
 - [ ] 動画 BGA 再生
 
 ## 実装が読み込むフィールド (parser)

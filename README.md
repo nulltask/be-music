@@ -79,53 +79,169 @@ npm run bench:parser
 ### BMS 対応状況サマリ
 
 - 対応レベル: 部分対応
-- [x] parser: `#mmmcc:data` / `#COMMAND value` を読み込み
-- [x] parser: 主要ヘッダ/リソース (`TITLE`, `ARTIST`, `BPM`, `WAVxx`, `BMPxx`, `BPMxx`, `STOPxx`, `TEXTxx`) を解釈
-- [x] parser: 小節長/BPM/STOP/背景音/演奏チャンネル (`02`, `03`, `08`, `09`, `01`, `1x`/`2x`) を解釈
+- [x] parser: オブジェクトデータ行 `#mmmcc:data` を読み込み
+- [x] parser: ヘッダ行 `#COMMAND value` を読み込み
+- [x] parser: ヘッダ `#TITLE` を解釈
+- [x] parser: ヘッダ `#ARTIST` を解釈
+- [x] parser: ヘッダ `#BPM` を解釈
+- [x] parser: リソース `#WAVxx` を解釈
+- [x] parser: リソース `#BMPxx` を解釈
+- [x] parser: リソース `#BPMxx` を解釈
+- [x] parser: リソース `#STOPxx` を解釈
+- [x] parser: リソース `#TEXTxx` を解釈
+- [x] parser: チャンネル `02` (小節長) を解釈
+- [x] parser: チャンネル `03` (16進直値 BPM) を解釈
+- [x] parser: チャンネル `08` (`#BPMxx` 参照 BPM) を解釈
+- [x] parser: チャンネル `09` (`#STOPxx` 参照 STOP) を解釈
+- [x] parser: チャンネル `01` (背景音) を解釈
+- [x] parser: チャンネル `1x` / `2x` (演奏) を解釈
 - [x] parser: BMS テキストの文字コード推測 (Shift_JIS, UTF-8, EUC-JP, latin1 など)
-- [x] parser: 制御構文 (`#RANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#SETRANDOM`, `#ENDRANDOM`, `#SWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#SETSWITCH`, `#ENDSW`) の保持
-- [x] player / audio-renderer: 制御構文の実行時評価
-- [x] parser / stringifier: 拡張ヘッダ (`#LNTYPE`, `#LNOBJ`, `#DEFEXRANK`, `#EXRANKxx`, `#ARGBxx`, `#PLAYER`, `#PATH_WAV`, `#BASEBPM`, `#STP`, `#OPTION`, `#CHANGEOPTIONxx`, `#WAVCMD`, `#EXWAVxx`, `#EXBMPxx`, `#BGAxx`, `#POORBGA`, `#SWBGAxx`, `#VIDEOFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET`) の保持と書き出し
-- [x] player / audio-renderer: 小節長/BPM/STOP を反映した再生
+- [x] parser: 制御構文 `#RANDOM` を保持
+- [x] parser: 制御構文 `#SETRANDOM` を保持
+- [x] parser: 制御構文 `#ENDRANDOM` を保持
+- [x] parser: 制御構文 `#IF` を保持
+- [x] parser: 制御構文 `#ELSEIF` を保持
+- [x] parser: 制御構文 `#ELSE` を保持
+- [x] parser: 制御構文 `#ENDIF` を保持
+- [x] parser: 制御構文 `#SWITCH` を保持
+- [x] parser: 制御構文 `#SETSWITCH` を保持
+- [x] parser: 制御構文 `#CASE` を保持
+- [x] parser: 制御構文 `#DEF` を保持
+- [x] parser: 制御構文 `#SKIP` を保持
+- [x] parser: 制御構文 `#ENDSW` を保持
+- [x] player / audio-renderer: 制御構文 `#RANDOM` / `#SETRANDOM` / `#ENDRANDOM` を実行時評価
+- [x] player / audio-renderer: 制御構文 `#IF` / `#ELSEIF` / `#ELSE` / `#ENDIF` を実行時評価
+- [x] player / audio-renderer: 制御構文 `#SWITCH` / `#SETSWITCH` / `#CASE` / `#DEF` / `#SKIP` / `#ENDSW` を実行時評価
+- [x] parser / stringifier: 拡張ヘッダ `#PREVIEW` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#LNTYPE` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#LNMODE` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#LNOBJ` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#VOLWAV` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#DEFEXRANK` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#EXRANKxx` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#ARGBxx` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#PLAYER` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#PATH_WAV` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#BASEBPM` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#STP` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#OPTION` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#CHANGEOPTIONxx` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#WAVCMD` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#EXWAVxx` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#EXBMPxx` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#BGAxx` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#SCROLLxx` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#POORBGA` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#SWBGAxx` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#VIDEOFILE` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#MATERIALS` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#DIVIDEPROP` の保持と書き出し
+- [x] parser / stringifier: 拡張ヘッダ `#CHARSET` の保持と書き出し
+- [x] player / audio-renderer: チャンネル `02` (小節長) を再生タイミングへ反映
+- [x] player / audio-renderer: チャンネル `03` (16進直値 BPM) を再生タイミングへ反映
+- [x] player / audio-renderer: チャンネル `08` (`#BPMxx` 参照 BPM) を再生タイミングへ反映
+- [x] player / audio-renderer: チャンネル `09` (`#STOPxx` 参照 STOP) を再生タイミングへ反映
 - [x] player / audio-renderer: 同一定義番号の再トリガで先行音を即カット
 - [x] player: `#LNOBJ` によるロングノート終端判定
-- [x] 拡張ヘッダの専用解釈 (`#PLAYER`, `#PATH_WAV`, `#BASEBPM`, `#STP`, `#OPTION`, `#CHANGEOPTIONxx`, `#WAVCMD`, `#EXWAVxx`, `#EXBMPxx`, `#BGAxx`, `#POORBGA`, `#SWBGAxx`, `#VIDEOFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET` など)
-- [ ] 拡張チャンネルの専用挙動 (`#xxx51-69` (LN), `#xxxD1-E9` (地雷) など)
+- [x] player: 拡張ヘッダ `#PREVIEW` を曲選択プレビュー再生で優先使用
+- [x] player / audio-renderer: 拡張ヘッダ `#VOLWAV` を再生ゲインに反映
+- [ ] 拡張チャンネル `#xxx51-59` (LN: `LNTYPE=1`) の専用挙動
+- [ ] 拡張チャンネル `#xxx61-69` (LN: `LNTYPE=2`) の専用挙動
 - [ ] 動画 BGA 再生
 - 詳細: [`docs/bms-spec.md`](./docs/bms-spec.md)
 
 ### BMSON 対応状況サマリ
 
 - 対応レベル: 部分対応
-- [x] parser: `version` / `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga` / `notes.l/c` を読み込み
-- [x] stringifier: 上記主要要素の書き出し (`lines` 自動生成含む)
-- [x] player / audio-renderer: `lines` / `resolution` / `bpm_events` / `stop_events` / `notes.l/c` を使った再生
+- [x] parser: ルート `version` を読み込み
+- [x] parser: ルート `info` を読み込み
+- [x] parser: ルート `lines` を読み込み
+- [x] parser: ルート `sound_channels` を読み込み
+- [x] parser: ルート `bpm_events` を読み込み
+- [x] parser: ルート `stop_events` を読み込み
+- [x] parser: ルート `bga` を読み込み
+- [x] parser: `notes.l` を読み込み
+- [x] parser: `notes.c` を読み込み
+- [x] stringifier: `version` を書き出し
+- [x] stringifier: `info` を書き出し
+- [x] stringifier: `lines` を書き出し
+- [x] stringifier: `lines` を自動生成して書き出し
+- [x] stringifier: `sound_channels` を書き出し
+- [x] stringifier: `bpm_events` を書き出し
+- [x] stringifier: `stop_events` を書き出し
+- [x] stringifier: `bga` を書き出し
+- [x] stringifier: `notes.l` を書き出し
+- [x] stringifier: `notes.c` を書き出し
+- [x] player / audio-renderer: `lines` を使った時刻解決
+- [x] player / audio-renderer: `resolution` を使った時刻解決
+- [x] player / audio-renderer: `bpm_events` を使った時刻解決
+- [x] player / audio-renderer: `stop_events` を使った時刻解決
+- [x] player / audio-renderer: `notes.l` を使ったロングノート解釈
+- [x] player / audio-renderer: `notes.c` を使った継続発音オフセット解釈
 - [ ] 未知ルートキーの透過保持
-- [ ] `bga_events` / `layer_events` / `poor_events` の再生反映
+- [ ] `bga_events` の再生反映
+- [ ] `layer_events` の再生反映
+- [ ] `poor_events` の再生反映
 - [ ] 動画 BGA 再生
 - 詳細: [`docs/bmson-spec.md`](./docs/bmson-spec.md)
 
 ### parser (`@be-music/parser`)
 
-- [x] BMS の `#mmmcc:data` / `#COMMAND value` を読み込み
-- [x] BMS の主要ヘッダ/リソース (`TITLE`, `ARTIST`, `BPM`, `WAVxx`, `BMPxx`, `STOPxx` など) を解釈
-- [x] BMS の小節長/BPM/STOP/背景音/演奏チャンネル (`02`, `03`, `08`, `09`, `01`, `1x`/`2x`) を解釈
+- [x] BMS の `#mmmcc:data` を読み込み
+- [x] BMS の `#COMMAND value` を読み込み
+- [x] BMS ヘッダ `#TITLE` を解釈
+- [x] BMS ヘッダ `#ARTIST` を解釈
+- [x] BMS ヘッダ `#BPM` を解釈
+- [x] BMS リソース `#WAVxx` を解釈
+- [x] BMS リソース `#BMPxx` を解釈
+- [x] BMS リソース `#STOPxx` を解釈
+- [x] BMS チャンネル `02` (小節長) を解釈
+- [x] BMS チャンネル `03` (16進直値 BPM) を解釈
+- [x] BMS チャンネル `08` (`#BPMxx` 参照 BPM) を解釈
+- [x] BMS チャンネル `09` (`#STOPxx` 参照 STOP) を解釈
+- [x] BMS チャンネル `01` (背景音) を解釈
+- [x] BMS チャンネル `1x` / `2x` (演奏) を解釈
 - [x] BMS テキストの文字コード推測 (Shift_JIS, UTF-8, EUC-JP, latin1 など)
-- [x] BMSON の基本要素 (`info`, `sound_channels`, `bpm_events`, `stop_events`) を読み込み
-- [x] BMSON の `version` / `lines` / `info.resolution` を読み込み
-- [x] BMSON の `bga` / `info` 拡張項目 / `notes.l/c` を読み込み
-- [x] BMS 制御構文 (`#RANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#SETRANDOM`, `#ENDRANDOM`, `#SWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#SETSWITCH`, `#ENDSW`) の保持と実行時評価
-- [x] BMS 拡張仕様 (`#LNTYPE`, `#LNOBJ`, `#EXRANKxx`, `#ARGBxx` など) の専用解釈
-- [x] BMSON の厳密準拠 (`bga`, `info` 拡張項目, `notes.l/c` など)
+- [x] BMSON ルート `info` を読み込み
+- [x] BMSON ルート `sound_channels` を読み込み
+- [x] BMSON ルート `bpm_events` を読み込み
+- [x] BMSON ルート `stop_events` を読み込み
+- [x] BMSON ルート `version` を読み込み
+- [x] BMSON ルート `lines` を読み込み
+- [x] BMSON `info.resolution` を読み込み
+- [x] BMSON ルート `bga` を読み込み
+- [x] BMSON `info` 拡張項目を読み込み
+- [x] BMSON `notes.l` を読み込み
+- [x] BMSON `notes.c` を読み込み
+- [x] BMS 制御構文 `#RANDOM` / `#SETRANDOM` / `#ENDRANDOM` を保持して評価
+- [x] BMS 制御構文 `#IF` / `#ELSEIF` / `#ELSE` / `#ENDIF` を保持して評価
+- [x] BMS 制御構文 `#SWITCH` / `#SETSWITCH` / `#CASE` / `#DEF` / `#SKIP` / `#ENDSW` を保持して評価
+- [x] BMS 拡張ヘッダ `#PREVIEW` を専用解釈
+- [x] BMS 拡張ヘッダ `#LNTYPE` を専用解釈
+- [x] BMS 拡張ヘッダ `#LNMODE` を専用解釈
+- [x] BMS 拡張ヘッダ `#LNOBJ` を専用解釈
+- [x] BMS 拡張ヘッダ `#VOLWAV` を専用解釈
+- [x] BMS 拡張ヘッダ `#EXRANKxx` を専用解釈
+- [x] BMS 拡張ヘッダ `#ARGBxx` を専用解釈
+- [x] BMS 拡張ヘッダ `#SCROLLxx` を専用解釈
+- [x] BMSON `bga` を厳密準拠で保持
+- [x] BMSON `info` 拡張項目を厳密準拠で保持
+- [x] BMSON `notes.l/c` を厳密準拠で保持
 
 ### stringifier (`@be-music/stringifier`)
 
 - [x] 中間表現(JSON) -> BMS の書き出し
 - [x] 分数位置 `position: [numerator, denominator]` を使った小節解像度生成
-- [x] 中間表現(JSON) -> BMSON の基本書き出し (`sound_channels`, `bpm_events`, `stop_events`)
-- [x] BMSON の `notes.l/c` を保持して書き出し (未指定時は `l=0`, `c=false`)
-- [x] BMSON の `version` / `lines` / `info.resolution` を書き出し
-- [x] BMSON の `bga` / `info` 拡張項目の完全書き出し
+- [x] 中間表現(JSON) -> BMSON の `sound_channels` を書き出し
+- [x] 中間表現(JSON) -> BMSON の `bpm_events` を書き出し
+- [x] 中間表現(JSON) -> BMSON の `stop_events` を書き出し
+- [x] BMSON の `notes.l` を保持して書き出し (未指定時は `l=0`)
+- [x] BMSON の `notes.c` を保持して書き出し (未指定時は `c=false`)
+- [x] BMSON の `version` を書き出し
+- [x] BMSON の `lines` を書き出し
+- [x] BMSON の `info.resolution` を書き出し
+- [x] BMSON の `bga` を完全書き出し
+- [x] BMSON の `info` 拡張項目を完全書き出し
 
 ### audio-renderer (`@be-music/audio-renderer`)
 
@@ -232,7 +348,7 @@ npm run editor -- export chart.json chart.bms
 - `player` は IIDX 準拠を優先し、通常時の判定幅は固定です。`--debug-judge-window <ms>` はデバッグ専用の隠しオプションとしてのみ受け付けます（`--judge-window` は後方互換のため非推奨サポート）。
 - `player` の BGA は `04`(base) と `07`(layer) を重ねて描画し、layer は黒を透過として扱います。画像は 256x256 キャンバス前提で、256x256 未満は X 中央・Y 上詰めで配置します。
 - `parser` は BMS テキスト読込時に文字コードを推測し、Shift_JIS などのマルチバイト入力を扱います。
-- `#LNTYPE` / `#LNOBJ` / `#DEFEXRANK` / `#EXRANKxx` / `#ARGBxx` は `bms` 拡張領域に専用フィールドとして保持します。
+- `#PREVIEW` / `#LNTYPE` / `#LNMODE` / `#LNOBJ` / `#VOLWAV` / `#DEFEXRANK` / `#EXRANKxx` / `#ARGBxx` / `#SCROLLxx` は `bms` 拡張領域に専用フィールドとして保持します。
 - `bmson` の `info` 拡張項目 (`subartists`, `chart_name`, `judge_rank`, `total`, 画像/プレビュー系) と `bga`、`notes.l/c` は `bmson` / `events[].bmson` 拡張領域で保持します。
 - `examples/test/control-flow-test.bms` は `#SETRANDOM` / `#SETSWITCH` を使った決定論的テスト用です。
 - `examples/test/control-flow-random-demo.bms` は分岐ごとにノート数・チャンネル・BGMを大きく変えたランダム挙動確認用です。
