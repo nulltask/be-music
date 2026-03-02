@@ -33,7 +33,6 @@
     "speaker": "^0.5.5"
   },
   "optionalDependencies": {
-    "@echogarden/audio-io": "^0.4.2",
     "audify": "^1.10.1"
   }
 }

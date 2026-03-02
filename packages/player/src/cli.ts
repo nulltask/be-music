@@ -28,6 +28,7 @@ interface CliArgs {
   audio: boolean;
   previewAudio: boolean;
   bgmVolume?: number;
+  playVolume?: number;
   audioTailSeconds?: number;
   audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
@@ -36,9 +37,6 @@ interface CliArgs {
   audioLeadMaxMs?: number;
   audioLeadStepUpMs?: number;
   audioLeadStepDownMs?: number;
-  audioIoBufferDurationMs?: number;
-  audioIoHighWaterMs?: number;
-  audioIoLowWaterMs?: number;
   audifyHighWaterMs?: number;
   audifyLowWaterMs?: number;
   tui: boolean;
@@ -60,25 +58,25 @@ interface ChartSummaryItem {
 
 type ChartSelectionEntry =
   | {
-    kind: 'random';
-    label: string;
-  }
+      kind: 'random';
+      label: string;
+    }
   | {
-    kind: 'group';
-    label: string;
-  }
+      kind: 'group';
+      label: string;
+    }
   | {
-    kind: 'chart';
-    filePath: string;
-    fileLabel: string;
-    totalNotes?: number;
-    player?: number;
-    rank?: number;
-    playLevel?: number;
-    bpmInitial?: number;
-    bpmMin?: number;
-    bpmMax?: number;
-  };
+      kind: 'chart';
+      filePath: string;
+      fileLabel: string;
+      totalNotes?: number;
+      player?: number;
+      rank?: number;
+      playLevel?: number;
+      bpmInitial?: number;
+      bpmMin?: number;
+      bpmMax?: number;
+    };
 
 interface ChartSummaryLoadingProgress {
   filePath: string;
@@ -141,26 +139,26 @@ interface PlayedChartResult {
 
 type DirectorySceneState =
   | {
-    kind: 'select';
-    focusKey?: string;
-    auto: boolean;
-  }
+      kind: 'select';
+      focusKey?: string;
+      auto: boolean;
+    }
   | {
-    kind: 'play';
-    chartPath: string;
-    focusKey?: string;
-    auto: boolean;
-  }
+      kind: 'play';
+      chartPath: string;
+      focusKey?: string;
+      auto: boolean;
+    }
   | {
-    kind: 'result';
-    played: PlayedChartResult;
-    focusKey?: string;
-    auto: boolean;
-  }
+      kind: 'result';
+      played: PlayedChartResult;
+      focusKey?: string;
+      auto: boolean;
+    }
   | {
-    kind: 'exit';
-    exitCode: number;
-  };
+      kind: 'exit';
+      exitCode: number;
+    };
 
 interface RawInputCapture {
   stdin: NodeJS.ReadStream & { isRaw?: boolean };
@@ -197,7 +195,7 @@ function createPreviewBackendCandidates(requested: AudioBackendName): AudioBacke
   if (requested !== 'auto') {
     return [requested];
   }
-  return ['audio-io', 'audify', 'speaker'];
+  return ['audify', 'speaker'];
 }
 
 async function main(): Promise<void> {
@@ -384,8 +382,8 @@ function resolveDirectoryStateFromResultAction(
 async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedChartResult> {
   const reportPlayLoadingProgress = process.stdout.isTTY
     ? (progress: PlayLoadingProgress): void => {
-      renderPlayLoadingProgress(chartPath, progress);
-    }
+        renderPlayLoadingProgress(chartPath, progress);
+      }
     : undefined;
   reportPlayLoadingProgress?.({
     ratio: 0.03,
@@ -420,6 +418,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     debugActiveAudio: args.debugActiveAudio,
     audio: args.audio,
     bgmVolume: args.bgmVolume,
+    playVolume: args.playVolume,
     audioBaseDir: dirname(chartPath),
     audioTailSeconds: args.audioTailSeconds,
     audioOffsetMs: args.audioOffsetMs,
@@ -429,21 +428,18 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     audioLeadMaxMs: args.audioLeadMaxMs,
     audioLeadStepUpMs: args.audioLeadStepUpMs,
     audioLeadStepDownMs: args.audioLeadStepDownMs,
-    audioIoBufferDurationMs: args.audioIoBufferDurationMs,
-    audioIoHighWaterMs: args.audioIoHighWaterMs,
-    audioIoLowWaterMs: args.audioIoLowWaterMs,
     audifyHighWaterMs: args.audifyHighWaterMs,
     audifyLowWaterMs: args.audifyLowWaterMs,
     tui: args.tui,
     onLoadProgress: reportPlayLoadingProgress
       ? (progress: PlayerLoadProgress): void => {
-        const mappedRatio = 0.22 + Math.max(0, Math.min(1, progress.ratio)) * 0.76;
-        reportPlayLoadingProgress({
-          ratio: mappedRatio,
-          message: progress.message,
-          detail: progress.detail,
-        });
-      }
+          const mappedRatio = 0.22 + Math.max(0, Math.min(1, progress.ratio)) * 0.76;
+          reportPlayLoadingProgress({
+            ratio: mappedRatio,
+            message: progress.message,
+            detail: progress.detail,
+          });
+        }
       : undefined,
   };
 
@@ -518,6 +514,11 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       index += 1;
       continue;
     }
+    if (token === '--play-volume') {
+      args.playVolume = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
     if (token === '--audio-offset-ms') {
       args.audioOffsetMs = Number.parseInt(rawArgs[index + 1], 10);
       index += 1;
@@ -548,20 +549,12 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       index += 1;
       continue;
     }
-    if (token === '--audio-io-buffer-ms') {
-      args.audioIoBufferDurationMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--audio-io-high-water-ms') {
-      args.audioIoHighWaterMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--audio-io-low-water-ms') {
-      args.audioIoLowWaterMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
+    if (
+      token === '--audio-io-buffer-ms' ||
+      token === '--audio-io-high-water-ms' ||
+      token === '--audio-io-low-water-ms'
+    ) {
+      throw new Error(`${token} is no longer supported; audio-io backend has been removed`);
     }
     if (token === '--audify-high-water-ms') {
       args.audifyHighWaterMs = Number.parseFloat(rawArgs[index + 1]);
@@ -635,8 +628,9 @@ function printUsage(): void {
       '  --render-audio <path>     Render audio preview before playing',
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
       '  --preview / --no-preview  Enable or disable song-preview audio in song-select (default: off)',
-      '  --audio-backend <name>    Audio backend: auto | speaker | audify | audio-io (default: auto)',
+      '  --audio-backend <name>    Audio backend: auto | speaker | audify (default: auto)',
       '  --bgm-volume <value>      Volume multiplier for non-play lanes (default: 1, 0 disables BGM)',
+      '  --play-volume <value>     Volume multiplier for playable/key sounds (default: 1)',
       '  --audio-tail <seconds>    Audio tail length when rendering playback buffer (default: 1.5)',
       '  --audio-offset-ms <ms>    Timing offset for audio sync calibration (default: 0)',
       '  --audio-head-padding-ms   Silent head padding before chart start (default: 0)',
@@ -644,9 +638,6 @@ function printUsage(): void {
       '  --audio-lead-max-ms <ms>  Maximum adaptive lead time under heavy load (default: 32)',
       '  --audio-lead-step-up-ms   Adaptive lead increment step (default: 1.5)',
       '  --audio-lead-step-down-ms Adaptive lead decrement step (default: 0.5)',
-      '  --audio-io-buffer-ms <ms> audio-io callback buffer duration (default: 12)',
-      '  --audio-io-high-water-ms  audio-io output queue high-water mark (default: 24)',
-      '  --audio-io-low-water-ms   audio-io output queue low-water mark (default: 12)',
       '  --audify-high-water-ms    audify output queue high-water mark (default: 48)',
       '  --audify-low-water-ms     audify output queue low-water mark (default: 24)',
       '  --tui / --no-tui          Enable or disable TUI play screen (default: on in TTY)',
@@ -815,8 +806,8 @@ async function selectChartInteractively(
   const previewController =
     options.previewAudio && process.stdout.isTTY
       ? createChartPreviewController({
-        audioBackend: options.audioBackend,
-      })
+          audioBackend: options.audioBackend,
+        })
       : undefined;
 
   const inputCapture = beginRawInputCapture();

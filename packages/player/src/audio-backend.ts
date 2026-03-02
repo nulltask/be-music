@@ -1,6 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
-export type AudioBackendName = 'auto' | 'speaker' | 'audify' | 'audio-io';
+export type AudioBackendName = 'auto' | 'speaker' | 'audify';
 export type ResolvedAudioBackendName = Exclude<AudioBackendName, 'auto'>;
 
 export interface AudioOutputBackend {
@@ -21,9 +21,6 @@ export interface AudioBackendCreateOptions {
 }
 
 export interface AudioBackendTuning {
-  audioIoBufferDurationMs?: number;
-  audioIoHighWaterMs?: number;
-  audioIoLowWaterMs?: number;
   audifyHighWaterMs?: number;
   audifyLowWaterMs?: number;
 }
@@ -92,40 +89,17 @@ interface AudifyModule {
   };
 }
 
-interface AudioIoOutput {
-  dispose: () => Promise<void>;
-}
-
-interface AudioIoModule {
-  createAudioOutput: (
-    config: { sampleRate: number; channelCount: number; bufferDuration?: number },
-    handler: (outputBuffer: Int16Array) => void,
-  ) => Promise<AudioIoOutput>;
-  isPlatformSupported?: () => boolean;
-}
-
-interface QueuedPcmChunk {
-  samples: Int16Array;
-  offset: number;
-}
-
-const AUTO_BACKEND_ORDER: ResolvedAudioBackendName[] = ['audio-io', 'speaker', 'audify'];
-const AUDIO_IO_MANUAL_HIGH_WATER_MS = 24;
-const AUDIO_IO_MANUAL_LOW_WATER_MS = 12;
-const AUDIO_IO_AUTO_HIGH_WATER_MS = AUDIO_IO_MANUAL_HIGH_WATER_MS;
-const AUDIO_IO_AUTO_LOW_WATER_MS = AUDIO_IO_MANUAL_LOW_WATER_MS;
+const AUTO_BACKEND_ORDER: ResolvedAudioBackendName[] = ['speaker', 'audify'];
 const AUDIFY_HIGH_WATER_MS = 48;
 const AUDIFY_LOW_WATER_MS = 24;
-const AUDIO_IO_BUFFER_DURATION_MS = 12;
 
 const BACKEND_CANDIDATES: AudioOutputBackendCandidate[] = [
-  { name: 'audio-io', create: tryCreateAudioIoBackend },
   { name: 'audify', create: tryCreateAudifyBackend },
   { name: 'speaker', create: tryCreateSpeakerBackend },
 ];
 
 export function isAudioBackendName(value: string): value is AudioBackendName {
-  return value === 'auto' || value === 'speaker' || value === 'audify' || value === 'audio-io';
+  return value === 'auto' || value === 'speaker' || value === 'audify';
 }
 
 export function createAudioBackendResolutionOrder(requested: AudioBackendName): ResolvedAudioBackendName[] {
@@ -395,205 +369,6 @@ async function tryCreateAudifyBackend(options: AudioBackendCreateOptions): Promi
   };
 }
 
-async function tryCreateAudioIoBackend(options: AudioBackendCreateOptions): Promise<AudioOutputBackend | undefined> {
-  const module = await loadAudioIoModule();
-  if (!module) {
-    return undefined;
-  }
-  if (typeof module.isPlatformSupported === 'function' && !module.isPlatformSupported()) {
-    return undefined;
-  }
-
-  const { highWaterSamples, lowWaterSamples } = resolveAudioIoQueueThresholds(options);
-  const queue: QueuedPcmChunk[] = [];
-  const lastOutputSamples = new Int16Array(Math.max(1, options.channels));
-
-  let queuedSamples = 0;
-  let closing = false;
-  let closed = false;
-  let output: AudioIoOutput | undefined;
-  let waitDisposeResolve: (() => void) | undefined;
-  const waitDispose = new Promise<void>((resolve) => {
-    waitDisposeResolve = resolve;
-  });
-  const minimumSilentCallbacksBeforeDispose = 2;
-  let silentCallbacksAfterDrain = 0;
-
-  const completeDispose = (): void => {
-    waitDisposeResolve?.();
-  };
-
-  const requestDispose = (): void => {
-    if (closed) {
-      return;
-    }
-    closed = true;
-    const activeOutput = output;
-    if (!activeOutput) {
-      completeDispose();
-      return;
-    }
-    void activeOutput
-      .dispose()
-      .catch(() => undefined)
-      .finally(() => {
-        completeDispose();
-      });
-  };
-
-  const flushOrZeroFill = (outputBuffer: Int16Array): void => {
-    let written = 0;
-    while (written < outputBuffer.length && queue.length > 0) {
-      const head = queue[0];
-      const available = head.samples.length - head.offset;
-      if (available <= 0) {
-        queue.shift();
-        continue;
-      }
-      const size = Math.min(outputBuffer.length - written, available);
-      outputBuffer.set(head.samples.subarray(head.offset, head.offset + size), written);
-      if (size >= options.channels) {
-        const lastFrameOffset = head.offset + size - options.channels;
-        for (let channel = 0; channel < options.channels; channel += 1) {
-          lastOutputSamples[channel] = head.samples[lastFrameOffset + channel] ?? 0;
-        }
-      }
-      head.offset += size;
-      written += size;
-      queuedSamples -= size;
-      if (head.offset >= head.samples.length) {
-        queue.shift();
-      }
-    }
-    if (written < outputBuffer.length) {
-      // Underflow can cause an abrupt step to 0 and produce a click.
-      // Smoothly ramp the last output sample to silence within this callback block.
-      const remaining = outputBuffer.length - written;
-      const frameCount = Math.max(1, Math.floor(remaining / options.channels));
-      for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
-        const progress = (frameIndex + 1) / frameCount;
-        const gain = Math.max(0, 1 - progress);
-        const offset = written + frameIndex * options.channels;
-        for (let channel = 0; channel < options.channels; channel += 1) {
-          outputBuffer[offset + channel] = Math.round(lastOutputSamples[channel] * gain);
-        }
-      }
-
-      const tailStart = written + frameCount * options.channels;
-      if (tailStart < outputBuffer.length) {
-        outputBuffer.fill(0, tailStart);
-      }
-      lastOutputSamples.fill(0);
-    }
-
-    if (!closing || queuedSamples > 0 || closed) {
-      if (queuedSamples > 0) {
-        silentCallbacksAfterDrain = 0;
-      }
-      return;
-    }
-
-    if (written > 0) {
-      silentCallbacksAfterDrain = 0;
-      return;
-    }
-
-    silentCallbacksAfterDrain += 1;
-    if (silentCallbacksAfterDrain >= minimumSilentCallbacksBeforeDispose) {
-      requestDispose();
-    }
-  };
-
-  try {
-    output = await module.createAudioOutput(
-      {
-        sampleRate: options.sampleRate,
-        channelCount: options.channels,
-        bufferDuration: resolvePositiveMs(options.tuning?.audioIoBufferDurationMs, AUDIO_IO_BUFFER_DURATION_MS),
-      },
-      (outputBuffer: Int16Array) => {
-        flushOrZeroFill(outputBuffer);
-      },
-    );
-  } catch {
-    return undefined;
-  }
-
-  return {
-    backend: 'audio-io',
-    write: (chunk: Uint8Array) => {
-      if (closed || closing) {
-        return true;
-      }
-
-      const alignedLength = chunk.byteLength - (chunk.byteLength % 2);
-      if (alignedLength <= 0) {
-        return true;
-      }
-
-      const copied = new Uint8Array(alignedLength);
-      copied.set(chunk.subarray(0, alignedLength));
-      const samples = new Int16Array(copied.buffer);
-      queue.push({
-        samples,
-        offset: 0,
-      });
-      queuedSamples += samples.length;
-      return queuedSamples <= highWaterSamples;
-    },
-    waitWritable: async (shouldStop: () => boolean) => {
-      while (!shouldStop() && !closed && queuedSamples > lowWaterSamples) {
-        await delay(1);
-      }
-    },
-    end: async () => {
-      if (closed) {
-        return;
-      }
-      closing = true;
-
-      // バッファが空でもデバイス側に残っている可能性があるため、
-      // コールバック側で数回のサイレントバッファを経てから dispose する。
-      const forcedDisposeTask = delay(300).then(() => {
-        if (!closed) {
-          requestDispose();
-        }
-      });
-
-      await Promise.race([waitDispose, forcedDisposeTask.then(() => waitDispose)]);
-    },
-    destroy: () => {
-      if (closed) {
-        return;
-      }
-      closing = true;
-      queue.length = 0;
-      queuedSamples = 0;
-      requestDispose();
-    },
-    onError: (_listener: () => void) => {
-      // audio-io はコールバックエラーを直接通知しないため現状は no-op。
-    },
-  };
-}
-
-function resolveAudioIoQueueThresholds(options: AudioBackendCreateOptions): {
-  highWaterSamples: number;
-  lowWaterSamples: number;
-} {
-  const chunkSampleCount = Math.max(1, options.samplesPerFrame * options.channels);
-  const samplesPerSecond = Math.max(1, options.sampleRate * options.channels);
-  const defaultHighWaterMs = options.mode === 'manual' ? AUDIO_IO_MANUAL_HIGH_WATER_MS : AUDIO_IO_AUTO_HIGH_WATER_MS;
-  const defaultLowWaterMs = options.mode === 'manual' ? AUDIO_IO_MANUAL_LOW_WATER_MS : AUDIO_IO_AUTO_LOW_WATER_MS;
-  const highWaterTargetMs = resolvePositiveMs(options.tuning?.audioIoHighWaterMs, defaultHighWaterMs);
-  const lowWaterTargetMs = resolveLowWaterMs(options.tuning?.audioIoLowWaterMs, highWaterTargetMs, defaultLowWaterMs);
-  const highWaterByTime = Math.ceil((samplesPerSecond * highWaterTargetMs) / 1000);
-  const lowWaterByTime = Math.ceil((samplesPerSecond * lowWaterTargetMs) / 1000);
-  const highWaterSamples = Math.max(chunkSampleCount * 3, highWaterByTime);
-  const lowWaterSamples = Math.max(chunkSampleCount, Math.min(highWaterSamples - chunkSampleCount, lowWaterByTime));
-  return { highWaterSamples, lowWaterSamples };
-}
-
 function resolvePositiveMs(value: number | undefined, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return fallback;
@@ -628,19 +403,6 @@ async function loadAudifyModule(): Promise<AudifyModule | undefined> {
       return undefined;
     }
     if (typeof module.RtAudioFormat?.RTAUDIO_SINT16 !== 'number') {
-      return undefined;
-    }
-    return module;
-  } catch {
-    return undefined;
-  }
-}
-
-async function loadAudioIoModule(): Promise<AudioIoModule | undefined> {
-  try {
-    const imported = await import('@echogarden/audio-io');
-    const module = imported as unknown as AudioIoModule;
-    if (typeof module.createAudioOutput !== 'function') {
       return undefined;
     }
     return module;

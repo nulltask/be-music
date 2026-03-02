@@ -46,6 +46,7 @@ export interface PlayerOptions {
   leadInMs?: number;
   audio?: boolean;
   bgmVolume?: number;
+  playVolume?: number;
   audioBaseDir?: string;
   audioTailSeconds?: number;
   audioOffsetMs?: number;
@@ -55,9 +56,6 @@ export interface PlayerOptions {
   audioLeadMaxMs?: number;
   audioLeadStepUpMs?: number;
   audioLeadStepDownMs?: number;
-  audioIoBufferDurationMs?: number;
-  audioIoHighWaterMs?: number;
-  audioIoLowWaterMs?: number;
   audifyHighWaterMs?: number;
   audifyLowWaterMs?: number;
   tui?: boolean;
@@ -399,10 +397,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
   const bgaRenderer = tui
     ? await createBgaAnsiRenderer(resolvedJson, {
-      baseDir: options.audioBaseDir ?? process.cwd(),
-      width: bgaDisplay.width,
-      height: bgaDisplay.height,
-    })
+        baseDir: options.audioBaseDir ?? process.cwd(),
+        width: bgaDisplay.width,
+        height: bgaDisplay.height,
+      })
     : undefined;
   const preferSixel = tui?.isSixelEnabled() ?? false;
   reportLoadProgress(options, 0.3, 'Preparing audio...');
@@ -525,7 +523,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     if (!interruptedReason) {
       audioSession?.start();
 
-      const chartClock = createPlaybackClock(performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0));
+      const chartClock = createPlaybackClock(
+        performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0),
+      );
       playbackClock = chartClock;
       const badWindowSeconds = IIDX_BAD_WINDOW_MS / 1000;
 
@@ -680,10 +680,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
   const bgaRenderer = tui
     ? await createBgaAnsiRenderer(resolvedJson, {
-      baseDir: options.audioBaseDir ?? process.cwd(),
-      width: bgaDisplay.width,
-      height: bgaDisplay.height,
-    })
+        baseDir: options.audioBaseDir ?? process.cwd(),
+        width: bgaDisplay.width,
+        height: bgaDisplay.height,
+      })
     : undefined;
   const preferSixel = tui?.isSixelEnabled() ?? false;
   reportLoadProgress(options, 0.3, 'Preparing audio...');
@@ -1181,6 +1181,7 @@ async function createAudioSessionIfEnabled(
 
   const headPaddingMs = options.audioHeadPaddingMs ?? 0;
   const bgmVolume = normalizeBgmVolume(options.bgmVolume);
+  const playVolume = normalizePlayVolume(options.playVolume);
   const chartWavGain = resolveChartVolWavGain(json);
   const renderOptions = {
     baseDir: options.audioBaseDir ?? process.cwd(),
@@ -1194,7 +1195,22 @@ async function createAudioSessionIfEnabled(
   const rendered =
     mode === 'manual'
       ? applyGainToRenderResult(
-        await renderJson(stripPlayableEvents(json), {
+          await renderJson(stripPlayableEvents(json), {
+            ...renderOptions,
+            onSampleLoadProgress: (progress) => {
+              if (progress.stage !== 'reading') {
+                return;
+              }
+              onLoadProgress?.({
+                ratio: 0.2,
+                message: 'Loading audio file...',
+                detail: formatSampleLoadDetail(progress),
+              });
+            },
+          }),
+          bgmVolume,
+        )
+      : await renderAutoMixWithVolumeControls(json, bgmVolume, playVolume, {
           ...renderOptions,
           onSampleLoadProgress: (progress) => {
             if (progress.stage !== 'reading') {
@@ -1206,22 +1222,7 @@ async function createAudioSessionIfEnabled(
               detail: formatSampleLoadDetail(progress),
             });
           },
-        }),
-        bgmVolume,
-      )
-      : await renderAutoBackgroundWithBgmVolume(json, bgmVolume, {
-        ...renderOptions,
-        onSampleLoadProgress: (progress) => {
-          if (progress.stage !== 'reading') {
-            return;
-          }
-          onLoadProgress?.({
-            ratio: 0.2,
-            message: 'Loading audio file...',
-            detail: formatSampleLoadDetail(progress),
-          });
-        },
-      });
+        });
   onLoadProgress?.({
     ratio: 0.55,
     message: 'Initializing audio backend...',
@@ -1258,14 +1259,20 @@ async function createAudioSessionIfEnabled(
 
   const playableSamples =
     mode === 'manual'
-      ? await buildPlayableSampleMap(json, options, padded.sampleRate, (progress) => {
-        const ratio = progress.total <= 0 ? 1 : progress.loaded / progress.total;
-        onLoadProgress?.({
-          ratio: 0.72 + Math.max(0, Math.min(1, ratio)) * 0.26,
-          message: `Loading key sounds... (${progress.loaded}/${progress.total})`,
-          detail: progress.samplePath ?? progress.sampleKey,
-        });
-      }, chartWavGain)
+      ? await buildPlayableSampleMap(
+          json,
+          options,
+          padded.sampleRate,
+          (progress) => {
+            const ratio = progress.total <= 0 ? 1 : progress.loaded / progress.total;
+            onLoadProgress?.({
+              ratio: 0.72 + Math.max(0, Math.min(1, ratio)) * 0.26,
+              message: `Loading key sounds... (${progress.loaded}/${progress.total})`,
+              detail: progress.samplePath ?? progress.sampleKey,
+            });
+          },
+          chartWavGain * playVolume,
+        )
       : undefined;
   const playableNotePlaybackMap = mode === 'manual' ? buildPlayableNotePlaybackMap(json) : undefined;
   onLoadProgress?.({
@@ -1356,51 +1363,51 @@ async function createAudioSessionIfEnabled(
     triggerEvent:
       mode === 'manual'
         ? (event: BeMusicEvent) => {
-          if (draining || abortRequested || paused) {
-            return;
+            if (draining || abortRequested || paused) {
+              return;
+            }
+            const normalized = normalizeObjectKey(event.value);
+            const sample = playableSamples?.get(normalized);
+            if (!sample) {
+              return;
+            }
+            const playback = playableNotePlaybackMap?.get(event);
+            const offsetSeconds = playback?.offsetSeconds ?? 0;
+            const offsetFrames = Math.max(0, Math.round(offsetSeconds * sample.sampleRate));
+            const durationFrames =
+              typeof playback?.durationSeconds === 'number' && Number.isFinite(playback.durationSeconds)
+                ? Math.max(1, Math.round(playback.durationSeconds * sample.sampleRate))
+                : sample.left.length - offsetFrames;
+            const endPosition = Math.min(sample.left.length, offsetFrames + durationFrames);
+            if (offsetFrames >= endPosition) {
+              return;
+            }
+            if (json.sourceFormat === 'bms') {
+              removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
+            }
+            if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
+              return;
+            }
+            activeVoices.push({
+              sample,
+              position: offsetFrames,
+              endPosition,
+              channel: normalizeChannel(event.channel),
+              sampleKey: normalized,
+              samplePath: json.resources.wav[normalized],
+              sliceId: playback?.sliceId,
+            });
           }
-          const normalized = normalizeObjectKey(event.value);
-          const sample = playableSamples?.get(normalized);
-          if (!sample) {
-            return;
-          }
-          const playback = playableNotePlaybackMap?.get(event);
-          const offsetSeconds = playback?.offsetSeconds ?? 0;
-          const offsetFrames = Math.max(0, Math.round(offsetSeconds * sample.sampleRate));
-          const durationFrames =
-            typeof playback?.durationSeconds === 'number' && Number.isFinite(playback.durationSeconds)
-              ? Math.max(1, Math.round(playback.durationSeconds * sample.sampleRate))
-              : sample.left.length - offsetFrames;
-          const endPosition = Math.min(sample.left.length, offsetFrames + durationFrames);
-          if (offsetFrames >= endPosition) {
-            return;
-          }
-          if (json.sourceFormat === 'bms') {
-            removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
-          }
-          if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
-            return;
-          }
-          activeVoices.push({
-            sample,
-            position: offsetFrames,
-            endPosition,
-            channel: normalizeChannel(event.channel),
-            sampleKey: normalized,
-            samplePath: json.resources.wav[normalized],
-            sliceId: playback?.sliceId,
-          });
-        }
         : undefined,
     stopChannel:
       mode === 'manual'
         ? (channel: string) => {
-          if (paused) {
-            return;
+            if (paused) {
+              return;
+            }
+            const normalizedChannel = normalizeChannel(channel);
+            removeActiveVoicesInPlace(activeVoices, (voice) => voice.channel === normalizedChannel);
           }
-          const normalizedChannel = normalizeChannel(channel);
-          removeActiveVoicesInPlace(activeVoices, (voice) => voice.channel === normalizedChannel);
-        }
         : undefined,
   };
 }
@@ -1443,7 +1450,10 @@ function collectActiveAudioFileNames(activeVoices: ActiveVoice[]): string[] {
   return [...unique];
 }
 
-async function createDebugActiveAudioEstimator(json: BeMusicJson, baseDir?: string): Promise<DebugActiveAudioEstimator> {
+async function createDebugActiveAudioEstimator(
+  json: BeMusicJson,
+  baseDir?: string,
+): Promise<DebugActiveAudioEstimator> {
   const resolver = createTimingResolver(json);
   const triggers = collectSampleTriggers(json, resolver);
   const sampleDurationSecondsByKey = await buildDebugSampleDurationSecondsMap(triggers, baseDir);
@@ -1454,10 +1464,10 @@ async function createDebugActiveAudioEstimator(json: BeMusicJson, baseDir?: stri
         typeof trigger.sampleDurationSeconds === 'number' && Number.isFinite(trigger.sampleDurationSeconds)
           ? Math.max(0, trigger.sampleDurationSeconds)
           : Math.max(
-            0,
-            (sampleDurationSecondsByKey.get(trigger.sampleKey) ?? DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS) -
-            Math.max(0, trigger.sampleOffsetSeconds),
-          );
+              0,
+              (sampleDurationSecondsByKey.get(trigger.sampleKey) ?? DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS) -
+                Math.max(0, trigger.sampleOffsetSeconds),
+            );
       return {
         sampleKey: trigger.sampleKey,
         startSeconds,
@@ -1714,7 +1724,13 @@ async function playMixedPcmThroughOutput(params: {
     }
 
     const mixDurationMs = Math.max(0, performance.now() - mixStartedAtMs);
-    adaptiveLeadMs = resolveAdaptiveLeadMs(adaptiveLeadMs, leadTuning, chunkDurationMs, mixDurationMs, activeVoices.length);
+    adaptiveLeadMs = resolveAdaptiveLeadMs(
+      adaptiveLeadMs,
+      leadTuning,
+      chunkDurationMs,
+      mixDurationMs,
+      activeVoices.length,
+    );
   }
 
   if (shouldStop()) {
@@ -1755,7 +1771,9 @@ function resolveAdaptiveLeadMs(
   activeVoiceCount: number,
 ): number {
   const safeBaseLeadMs = Number.isFinite(tuning.baseLeadMs) ? Math.max(0, tuning.baseLeadMs) : 0;
-  const safeMaxLeadMs = Number.isFinite(tuning.maxLeadMs) ? Math.max(safeBaseLeadMs, tuning.maxLeadMs) : AUDIO_TARGET_LEAD_MAX_MS;
+  const safeMaxLeadMs = Number.isFinite(tuning.maxLeadMs)
+    ? Math.max(safeBaseLeadMs, tuning.maxLeadMs)
+    : AUDIO_TARGET_LEAD_MAX_MS;
   const safeStepUpMs =
     Number.isFinite(tuning.stepUpMs) && tuning.stepUpMs > 0 ? tuning.stepUpMs : AUDIO_TARGET_LEAD_STEP_UP_MS;
   const safeStepDownMs =
@@ -1797,15 +1815,6 @@ function createAudioLeadTuning(options: PlayerOptions, mode: 'auto' | 'manual'):
 
 function createAudioBackendTuning(options: PlayerOptions): AudioBackendTuning | undefined {
   const tuning: AudioBackendTuning = {};
-  if (typeof options.audioIoBufferDurationMs === 'number') {
-    tuning.audioIoBufferDurationMs = options.audioIoBufferDurationMs;
-  }
-  if (typeof options.audioIoHighWaterMs === 'number') {
-    tuning.audioIoHighWaterMs = options.audioIoHighWaterMs;
-  }
-  if (typeof options.audioIoLowWaterMs === 'number') {
-    tuning.audioIoLowWaterMs = options.audioIoLowWaterMs;
-  }
   if (typeof options.audifyHighWaterMs === 'number') {
     tuning.audifyHighWaterMs = options.audifyHighWaterMs;
   }
@@ -1838,25 +1847,30 @@ function stripNonPlayableEvents(json: BeMusicJson): BeMusicJson {
   return cloned;
 }
 
-async function renderAutoBackgroundWithBgmVolume(
+async function renderAutoMixWithVolumeControls(
   json: BeMusicJson,
   bgmVolume: number,
+  playVolume: number,
   options: {
     baseDir: string;
     tailSeconds: number;
     onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
   },
 ): Promise<RenderResult> {
-  if (bgmVolume === 1) {
+  if (bgmVolume === 1 && playVolume === 1) {
     return renderJson(json, options);
   }
 
   const playableOnly = stripNonPlayableEvents(json);
   if (bgmVolume === 0) {
-    return renderJson(playableOnly, options);
+    return applyGainToRenderResult(await renderJson(playableOnly, options), playVolume);
   }
 
   const bgmOnly = stripPlayableEvents(json);
+  if (playVolume === 0) {
+    return applyGainToRenderResult(await renderJson(bgmOnly, options), bgmVolume);
+  }
+
   const splitRenderOptions = {
     ...options,
     normalize: false,
@@ -1865,10 +1879,11 @@ async function renderAutoBackgroundWithBgmVolume(
     renderJson(bgmOnly, splitRenderOptions),
     renderJson(playableOnly, splitRenderOptions),
   ]);
+  const scaledPlayable = applyGainToRenderResult(playableRendered, playVolume);
+  const scaledBgm = applyGainToRenderResult(bgmRendered, bgmVolume);
+  const bgmHeadroomGain = resolveBgmHeadroomGain(scaledPlayable, scaledBgm);
 
-  return normalizeRenderResultIfNeeded(
-    mixRenderResults(applyGainToRenderResult(bgmRendered, bgmVolume), playableRendered),
-  );
+  return mixRenderResults(applyGainToRenderResult(scaledBgm, bgmHeadroomGain), scaledPlayable);
 }
 
 async function buildPlayableSampleMap(
@@ -1955,6 +1970,13 @@ function normalizeBgmVolume(value: number | undefined): number {
   return Math.max(0, value);
 }
 
+function normalizePlayVolume(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.max(0, value);
+}
+
 function resolveChartVolWavGain(json: BeMusicJson): number {
   const volWav = json.bms.volWav;
   if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
@@ -1984,13 +2006,6 @@ function applyGainToRenderResult(result: RenderResult, gain: number): RenderResu
   };
 }
 
-function normalizeRenderResultIfNeeded(result: RenderResult): RenderResult {
-  if (result.peak <= 1) {
-    return result;
-  }
-  return applyGainToRenderResult(result, 1 / result.peak);
-}
-
 function mixRenderResults(leftResult: RenderResult, rightResult: RenderResult): RenderResult {
   if (leftResult.sampleRate !== rightResult.sampleRate) {
     return leftResult;
@@ -2014,6 +2029,40 @@ function mixRenderResults(leftResult: RenderResult, rightResult: RenderResult): 
     durationSeconds: frameLength / leftResult.sampleRate,
     peak: measureRenderPeak(mixedLeft, mixedRight),
   };
+}
+
+function resolveBgmHeadroomGain(playableResult: RenderResult, bgmResult: RenderResult): number {
+  const frameLength = Math.max(playableResult.left.length, bgmResult.left.length);
+  let headroomGain = 1;
+
+  // Keep playable/key-sound amplitude intact by shrinking only the BGM side when summed peak would clip.
+  for (let frame = 0; frame < frameLength; frame += 1) {
+    const playableLeft = Math.abs(playableResult.left[frame] ?? 0);
+    const playableRight = Math.abs(playableResult.right[frame] ?? 0);
+    const bgmLeft = Math.abs(bgmResult.left[frame] ?? 0);
+    const bgmRight = Math.abs(bgmResult.right[frame] ?? 0);
+    headroomGain = Math.min(
+      headroomGain,
+      resolveBgmHeadroomGainForChannel(playableLeft, bgmLeft),
+      resolveBgmHeadroomGainForChannel(playableRight, bgmRight),
+    );
+    if (headroomGain <= 0) {
+      return 0;
+    }
+  }
+
+  return Math.max(0, Math.min(1, headroomGain));
+}
+
+function resolveBgmHeadroomGainForChannel(playableAbs: number, bgmAbs: number): number {
+  if (bgmAbs <= 1e-9) {
+    return 1;
+  }
+  const availableHeadroom = 1 - playableAbs;
+  if (availableHeadroom <= 0) {
+    return 0;
+  }
+  return availableHeadroom / bgmAbs;
 }
 
 function measureRenderPeak(left: Float32Array, right: Float32Array): number {
@@ -2284,7 +2333,10 @@ function secondsToBeatWithoutStops(
   return point.beat + (elapsed * point.bpm) / 60;
 }
 
-function createMeasureBoundariesBeats(json: BeMusicJson, beatResolver: ReturnType<typeof createBeatResolver>): number[] {
+function createMeasureBoundariesBeats(
+  json: BeMusicJson,
+  beatResolver: ReturnType<typeof createBeatResolver>,
+): number[] {
   const maxEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
   const maxDefinedMeasure = json.measures.reduce((max, measure) => Math.max(max, measure.index), 0);
   const maxMeasure = Math.max(0, maxEventMeasure, maxDefinedMeasure);
