@@ -40,6 +40,7 @@ interface TuiFrame {
   totalSeconds: number;
   summary: PlayerSummary;
   notes: TuiNote[];
+  audioBackend?: string;
   activeAudioFiles?: string[];
   activeAudioVoiceCount?: number;
   bgaAnsiLines?: string[];
@@ -363,8 +364,9 @@ export class PlayerTui {
     const currentScroll = findCurrentScroll(this.options.scrollTimeline, frame.currentBeat);
     const remainingStopSeconds = findRemainingStopSeconds(this.options.stopWindows, frame.currentSeconds);
     const stopLabel = remainingStopSeconds > 0 ? `${formatStopSeconds(remainingStopSeconds)}s` : '-';
+    const audioBackendLabel = formatAudioBackendLabel(frame.audioBackend);
     lines.push(
-      `SPEED x${this.options.speed.toFixed(2)}  BAD ±${this.options.judgeWindowMs}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}`,
+      `SPEED x${this.options.speed.toFixed(2)}  BAD ±${this.options.judgeWindowMs}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}  AUDIO ${audioBackendLabel}`,
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
@@ -1270,4 +1272,12 @@ function formatScroll(speed: number): string {
 function formatStopSeconds(seconds: number): string {
   const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
   return safe.toFixed(2);
+}
+
+function formatAudioBackendLabel(value: string | undefined): string {
+  if (typeof value !== 'string') {
+    return '-';
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : '-';
 }

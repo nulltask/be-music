@@ -121,6 +121,7 @@ interface AudioSession {
   finish: () => Promise<void>;
   dispose: () => Promise<void>;
   chartStartDelayMs: number;
+  backendLabel: string;
   pause: () => void;
   resume: () => void;
   getActiveAudioFiles?: () => string[];
@@ -408,6 +409,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'auto', (progress) => {
     reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
   });
+  const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
   reportLoadProgress(options, 1, 'Ready');
   const autoDebugAudioEstimator = options.debugActiveAudio
     ? await createDebugActiveAudioEstimator(resolvedJson, options.audioBaseDir)
@@ -447,6 +449,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       totalSeconds,
       summary,
       notes: renderNotes,
+      audioBackend: audioBackendLabel,
       ...resolveDebugActiveAudioState(0),
       ...createBgaRenderFrame(bgaRenderer, 0, preferSixel),
     });
@@ -563,6 +566,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             totalSeconds,
             summary,
             notes: renderNotes,
+            audioBackend: audioBackendLabel,
             ...resolveDebugActiveAudioState(nowSec),
             ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
           });
@@ -601,6 +605,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             totalSeconds,
             summary,
             notes: renderNotes,
+            audioBackend: audioBackendLabel,
             ...resolveDebugActiveAudioState(note.seconds),
             ...createBgaRenderFrame(bgaRenderer, note.seconds, preferSixel),
           });
@@ -622,6 +627,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           totalSeconds,
           summary,
           notes: renderNotes,
+          audioBackend: audioBackendLabel,
           ...resolveDebugActiveAudioState(totalSeconds),
           ...createBgaRenderFrame(bgaRenderer, totalSeconds, preferSixel),
         });
@@ -691,6 +697,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'manual', (progress) => {
     reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
   });
+  const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
   reportLoadProgress(options, 1, 'Ready');
   const resolveDebugActiveAudioState = (): { activeAudioFiles?: string[]; activeAudioVoiceCount?: number } => {
     if (options.debugActiveAudio !== true) {
@@ -721,6 +728,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       totalSeconds,
       summary,
       notes: renderNotes,
+      audioBackend: audioBackendLabel,
       ...resolveDebugActiveAudioState(),
       ...createBgaRenderFrame(bgaRenderer, 0, preferSixel),
     });
@@ -941,6 +949,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           totalSeconds,
           summary,
           notes: renderNotes,
+          audioBackend: audioBackendLabel,
           ...resolveDebugActiveAudioState(),
           ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
         });
@@ -992,6 +1001,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         totalSeconds,
         summary,
         notes: renderNotes,
+        audioBackend: audioBackendLabel,
         ...resolveDebugActiveAudioState(),
         ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
       });
@@ -1029,6 +1039,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             totalSeconds,
             summary,
             notes: renderNotes,
+            audioBackend: audioBackendLabel,
             ...resolveDebugActiveAudioState(),
             ...createBgaRenderFrame(bgaRenderer, totalSeconds, preferSixel),
           });
@@ -1055,6 +1066,13 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
   process.stdout.write(renderSummary(summary));
   return summary;
+}
+
+function resolveAudioBackendLabel(options: PlayerOptions, audioSession: AudioSession | undefined): string {
+  if (options.audio === false) {
+    return 'off';
+  }
+  return audioSession?.backendLabel ?? 'none';
 }
 
 function createTuiIfEnabled(
@@ -1331,6 +1349,7 @@ async function createAudioSessionIfEnabled(
   };
 
   return {
+    backendLabel: output.backend,
     start: () => {
       if (closed || playbackTask) {
         return;
