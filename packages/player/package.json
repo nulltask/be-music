@@ -29,11 +29,7 @@
     "@be-music/utils": "0.1.0",
     "bmp-ts": "^1.0.9",
     "jpeg-js": "^0.4.4",
-    "pngjs": "^7.0.0",
-    "speaker": "^0.5.5"
-  },
-  "optionalDependencies": {
-    "audify": "^1.10.1",
-    "node-web-audio-api": "^1.0.8"
+    "node-web-audio-api": "^1.0.8",
+    "pngjs": "^7.0.0"
   }
 }

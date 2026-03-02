@@ -9,21 +9,9 @@ import {
   resolveVisibleEntryRange,
 } from './cli.ts';
 describe('player cli', () => {
-  test('cli: parses --audio-backend', () => {
-    const parsed = parseArgs(['chart.bms', '--audio-backend', 'speaker', '--auto']);
-    expect(parsed.input).toBe('chart.bms');
-    expect(parsed.audioBackend).toBe('speaker');
-    expect(parsed.auto).toBe(true);
-  });
-
-  test('cli: parses --audio-backend webaudio', () => {
-    const parsed = parseArgs(['chart.bms', '--audio-backend', 'webaudio']);
-    expect(parsed.audioBackend).toBe('webaudio');
-  });
-
-  test('cli: throws on invalid --audio-backend', () => {
-    expect(() => parseArgs(['chart.bms', '--audio-backend', 'invalid-backend'])).toThrow(
-      'Invalid --audio-backend value: invalid-backend',
+  test('cli: rejects removed --audio-backend flag', () => {
+    expect(() => parseArgs(['chart.bms', '--audio-backend', 'webaudio'])).toThrow(
+      '--audio-backend is no longer supported; node-web-audio-api is always used',
     );
   });
 
@@ -31,11 +19,6 @@ describe('player cli', () => {
     expect(() => parseArgs(['chart.bms', '--audio-io-buffer-ms', '12'])).toThrow(
       '--audio-io-buffer-ms is no longer supported; audio-io backend has been removed',
     );
-  });
-
-  test('cli: leaves --audio-backend undefined when omitted', () => {
-    const parsed = parseArgs(['chart.bms']);
-    expect(parsed.audioBackend).toBeUndefined();
   });
 
   test('cli: accepts --preview as a no-op and keeps preview always enabled', () => {
@@ -73,18 +56,21 @@ describe('player cli', () => {
       '2.0',
       '--audio-lead-step-down-ms',
       '0.8',
-      '--audify-high-water-ms',
-      '28',
-      '--audify-low-water-ms',
-      '14',
     ]);
     expect(parsed.playVolume).toBe(0.75);
     expect(parsed.audioLeadMs).toBe(9.5);
     expect(parsed.audioLeadMaxMs).toBe(20);
     expect(parsed.audioLeadStepUpMs).toBe(2);
     expect(parsed.audioLeadStepDownMs).toBe(0.8);
-    expect(parsed.audifyHighWaterMs).toBe(28);
-    expect(parsed.audifyLowWaterMs).toBe(14);
+  });
+
+  test('cli: rejects removed audify tuning flags', () => {
+    expect(() => parseArgs(['chart.bms', '--audify-high-water-ms', '28'])).toThrow(
+      '--audify-high-water-ms is no longer supported; audify backend has been removed',
+    );
+    expect(() => parseArgs(['chart.bms', '--audify-low-water-ms', '14'])).toThrow(
+      '--audify-low-water-ms is no longer supported; audify backend has been removed',
+    );
   });
 
   test('cli: parses --judge-window as a deprecated alias', () => {

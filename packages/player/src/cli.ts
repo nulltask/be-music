@@ -15,13 +15,7 @@ import {
   type PlayerLoadProgress,
   type PlayerSummary,
 } from './index.ts';
-import {
-  createAudioBackendResolutionOrder,
-  createAudioOutputBackend,
-  isAudioBackendName,
-  type AudioBackendName,
-  type ResolvedAudioBackendName,
-} from './audio-backend.ts';
+import { createNodeAudioSink } from './audio-sink.ts';
 
 interface CliArgs {
   input?: string;
@@ -37,13 +31,10 @@ interface CliArgs {
   audioTailSeconds?: number;
   audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
-  audioBackend?: AudioBackendName;
   audioLeadMs?: number;
   audioLeadMaxMs?: number;
   audioLeadStepUpMs?: number;
   audioLeadStepDownMs?: number;
-  audifyHighWaterMs?: number;
-  audifyLowWaterMs?: number;
   tui: boolean;
 }
 
@@ -104,7 +95,6 @@ interface BuildChartSelectionEntriesOptions {
 
 interface SelectChartInteractivelyOptions {
   audio: boolean;
-  audioBackend: AudioBackendName;
   entries?: ChartSelectionEntry[];
   initialFocusKey?: string;
   initialAuto?: boolean;
@@ -188,14 +178,14 @@ class ChartSelectionLoadingCanceledError extends Error {
 
 interface ChartPreviewController {
   focus: (target: PreviewFocusTarget) => void;
-  getActiveBackend: () => ResolvedAudioBackendName | undefined;
+  getActiveBackend: () => string | undefined;
   dispose: () => Promise<void>;
 }
 
 interface PreviewPlaybackHandle {
   stop: () => void;
   done: Promise<void>;
-  backend: ResolvedAudioBackendName;
+  backend: string;
 }
 
 interface ChartPreviewAsset {
@@ -214,10 +204,6 @@ const PREVIEW_SILENCE_THRESHOLD = 0.0001;
 const PREVIEW_STOP_TIMEOUT_MS = 180;
 const PREVIEW_BACKPRESSURE_TIMEOUT_MS = 800;
 const PREVIEW_CACHE_LIMIT = 8;
-
-function createPreviewBackendCandidates(requested: AudioBackendName): ResolvedAudioBackendName[] {
-  return createAudioBackendResolutionOrder(requested);
-}
 
 async function main(): Promise<void> {
   let args: CliArgs;
@@ -297,7 +283,6 @@ async function runDirectoryInput(rootDir: string, args: CliArgs): Promise<void> 
     if (state.kind === 'select') {
       const selection = await selectChartInteractively(rootDir, candidates, {
         audio: args.audio,
-        audioBackend: args.audioBackend ?? 'auto',
         entries,
         initialFocusKey: state.focusKey,
         initialAuto: state.auto,
@@ -444,13 +429,10 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     audioTailSeconds: args.audioTailSeconds,
     audioOffsetMs: args.audioOffsetMs,
     audioHeadPaddingMs: args.audioHeadPaddingMs,
-    audioBackend: args.audioBackend,
     audioLeadMs: args.audioLeadMs,
     audioLeadMaxMs: args.audioLeadMaxMs,
     audioLeadStepUpMs: args.audioLeadStepUpMs,
     audioLeadStepDownMs: args.audioLeadStepDownMs,
-    audifyHighWaterMs: args.audifyHighWaterMs,
-    audifyLowWaterMs: args.audifyLowWaterMs,
     tui: args.tui,
     onLoadProgress: reportPlayLoadingProgress
       ? (progress: PlayerLoadProgress): void => {
@@ -577,27 +559,23 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     ) {
       throw new Error(`${token} is no longer supported; audio-io backend has been removed`);
     }
-    if (token === '--audify-high-water-ms') {
-      args.audifyHighWaterMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--audify-low-water-ms') {
-      args.audifyLowWaterMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
     if (token === '--audio-backend') {
-      const backend = rawArgs[index + 1];
-      if (!backend) {
-        throw new Error('Missing value for --audio-backend');
-      }
-      if (!isAudioBackendName(backend)) {
-        throw new Error('Invalid --audio-backend value: ' + backend);
-      }
-      args.audioBackend = backend;
-      index += 1;
-      continue;
+      throw new Error('--audio-backend is no longer supported; node-web-audio-api is always used');
+    }
+    if (token === '--audify-high-water-ms' || token === '--audify-low-water-ms') {
+      throw new Error(`${token} is no longer supported; audify backend has been removed`);
+    }
+    if (token === '--speaker-buffer-size' || token === '--speaker-samples-per-frame') {
+      throw new Error(`${token} is no longer supported; speaker backend has been removed`);
+    }
+    if (token.startsWith('--audio-backend=')) {
+      throw new Error('--audio-backend is no longer supported; node-web-audio-api is always used');
+    }
+    if (token.startsWith('--audify-')) {
+      throw new Error(`${token.split('=')[0]} is no longer supported; audify backend has been removed`);
+    }
+    if (token.startsWith('--speaker-')) {
+      throw new Error(`${token.split('=')[0]} is no longer supported; speaker backend has been removed`);
     }
     if (token === '--no-audio') {
       args.audio = false;
@@ -646,7 +624,7 @@ function printUsage(): void {
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
       '  --render-audio <path>     Render audio preview before playing',
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
-      '  --audio-backend <name>    Audio backend: auto | speaker | webaudio | audify (default: auto)',
+      '                           Audio backend: node-web-audio-api (fixed)',
       '  --bgm-volume <value>      Volume multiplier for non-play lanes (default: 1, 0 disables BGM)',
       '  --play-volume <value>     Volume multiplier for playable/key sounds (default: 1)',
       '  --audio-tail <seconds>    Audio tail length when rendering playback buffer (default: 1.5)',
@@ -656,8 +634,6 @@ function printUsage(): void {
       '  --audio-lead-max-ms <ms>  Maximum adaptive lead time under heavy load (default: 32)',
       '  --audio-lead-step-up-ms   Adaptive lead increment step (default: 1.5)',
       '  --audio-lead-step-down-ms Adaptive lead decrement step (default: 0.5)',
-      '  --audify-high-water-ms    audify output queue high-water mark (default: 48)',
-      '  --audify-low-water-ms     audify output queue low-water mark (default: 24)',
       '  --tui / --no-tui          Enable or disable TUI play screen (default: on in TTY)',
     ].join('\n') + '\n',
   );
@@ -821,12 +797,7 @@ async function selectChartInteractively(
     return { reason: 'escape', auto: options.initialAuto ?? false };
   }
 
-  const previewController =
-    options.audio && process.stdout.isTTY
-      ? createChartPreviewController({
-          audioBackend: options.audioBackend,
-        })
-      : undefined;
+  const previewController = options.audio && process.stdout.isTTY ? createChartPreviewController() : undefined;
 
   const inputCapture = beginRawInputCapture();
   let selectedIndex = selectableIndexes[0];
@@ -874,7 +845,7 @@ async function selectChartInteractively(
     lines.push(truncateForDisplay(`Directory: ${rootDir}`, lineWidth));
     lines.push(`Mode: ${auto ? 'AUTO' : 'MANUAL'}`);
     lines.push(
-      `Audio backend: ${formatSongSelectAudioBackendLabel(options.audio, options.audioBackend, previewController?.getActiveBackend())}`,
+      `Audio backend: ${formatSongSelectAudioBackendLabel(options.audio, previewController?.getActiveBackend())}`,
     );
     lines.push('');
     const headerPrefix = `  ${' '.repeat(numberWidth)} `;
@@ -1406,7 +1377,7 @@ function extractChartBpmSummary(json: BeMusicJson): { initial: number; min: numb
   };
 }
 
-function createChartPreviewController(options: { audioBackend: AudioBackendName }): ChartPreviewController {
+function createChartPreviewController(): ChartPreviewController {
   const previewCache = new Map<string, ChartPreviewAsset | null>();
   let focusedFilePath: string | undefined;
   let focusedPreviewContinueKey: string | undefined;
@@ -1414,7 +1385,7 @@ function createChartPreviewController(options: { audioBackend: AudioBackendName 
   let disposed = false;
   let activePlayback: PreviewPlaybackHandle | undefined;
   let activePreviewKey: string | undefined;
-  let activeBackend: ResolvedAudioBackendName | undefined;
+  let activeBackend: string | undefined;
 
   const stopPlaybackSafely = async (playback: PreviewPlaybackHandle): Promise<void> => {
     playback.stop();
@@ -1491,7 +1462,7 @@ function createChartPreviewController(options: { audioBackend: AudioBackendName 
           return;
         }
 
-        const playback = await startPreviewPlayback(preview.rendered, options.audioBackend);
+        const playback = await startPreviewPlayback(preview.rendered);
         if (!playback) {
           return;
         }
@@ -1678,23 +1649,7 @@ function trimPreviewLeadingSilence(rendered: RenderResult): RenderResult {
   };
 }
 
-async function startPreviewPlayback(
-  rendered: RenderResult,
-  audioBackend: AudioBackendName,
-): Promise<PreviewPlaybackHandle | undefined> {
-  for (const candidate of createPreviewBackendCandidates(audioBackend)) {
-    const playback = await startPreviewPlaybackWithBackend(rendered, candidate);
-    if (playback) {
-      return playback;
-    }
-  }
-  return undefined;
-}
-
-async function startPreviewPlaybackWithBackend(
-  rendered: RenderResult,
-  audioBackend: ResolvedAudioBackendName,
-): Promise<PreviewPlaybackHandle | undefined> {
+async function startPreviewPlayback(rendered: RenderResult): Promise<PreviewPlaybackHandle | undefined> {
   if (rendered.left.length === 0 || rendered.right.length === 0) {
     return undefined;
   }
@@ -1703,7 +1658,7 @@ async function startPreviewPlaybackWithBackend(
   let startupFailed = false;
   let playhead = 0;
 
-  const output = await createAudioOutputBackend(audioBackend, {
+  const output = await createNodeAudioSink({
     sampleRate: rendered.sampleRate,
     channels: 2,
     samplesPerFrame: PREVIEW_CHUNK_FRAMES,
@@ -1761,25 +1716,18 @@ async function startPreviewPlaybackWithBackend(
       output.destroy();
     },
     done,
-    backend: output.backend,
+    backend: output.label,
   };
 }
 
-function formatSongSelectAudioBackendLabel(
-  audioEnabled: boolean,
-  requested: AudioBackendName,
-  active: ResolvedAudioBackendName | undefined,
-): string {
+function formatSongSelectAudioBackendLabel(audioEnabled: boolean, active: string | undefined): string {
   if (!audioEnabled) {
     return 'disabled';
   }
-  if (requested !== 'auto') {
-    return requested;
-  }
   if (active) {
-    return `auto (${active})`;
+    return active;
   }
-  return `auto (${createAudioBackendResolutionOrder('auto').join(' -> ')})`;
+  return 'node-webaudio';
 }
 
 async function waitPreviewWritableWithTimeout(

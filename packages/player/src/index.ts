@@ -31,13 +31,7 @@ import {
   type LaneBinding,
 } from './manual-input.ts';
 import { extractLandmineNotes, extractPlayableNotes } from './playable-notes.ts';
-import {
-  createAudioBackendResolutionOrder,
-  createAudioOutputBackend,
-  type AudioBackendName,
-  type AudioBackendTuning,
-  type AudioOutputBackend,
-} from './audio-backend.ts';
+import { createNodeAudioSink, type AudioSink } from './audio-sink.ts';
 
 export interface PlayerOptions {
   auto?: boolean;
@@ -52,13 +46,10 @@ export interface PlayerOptions {
   audioTailSeconds?: number;
   audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
-  audioBackend?: AudioBackendName;
   audioLeadMs?: number;
   audioLeadMaxMs?: number;
   audioLeadStepUpMs?: number;
   audioLeadStepDownMs?: number;
-  audifyHighWaterMs?: number;
-  audifyLowWaterMs?: number;
   tui?: boolean;
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
 }
@@ -1255,31 +1246,23 @@ async function createAudioSessionIfEnabled(
 
   const sampleRate = toPlaybackSampleRate(padded.sampleRate, options.speed ?? 1);
   const samplesPerFrame = mode === 'manual' ? MANUAL_AUDIO_CHUNK_FRAMES : AUTO_AUDIO_CHUNK_FRAMES;
-  const requestedBackend = options.audioBackend ?? 'auto';
-  const backendTuning = createAudioBackendTuning(options);
   const leadTuning = createAudioLeadTuning(options, mode);
-  const output = await createAudioOutputBackend(requestedBackend, {
+  const output = await createNodeAudioSink({
     sampleRate,
     channels: 2,
     samplesPerFrame,
     mode,
-    tuning: backendTuning,
   });
   if (!output) {
-    const attempted = createAudioBackendResolutionOrder(requestedBackend).join(', ');
-    process.stdout.write(
-      `Audio playback disabled: no available audio backend (requested: ${requestedBackend}; tried: ${attempted}).\n`,
-    );
+    process.stdout.write('Audio playback disabled: node-web-audio-api is unavailable.\n');
     onLoadProgress?.({
       ratio: 1,
-      message: 'No available audio backend; continuing without audio.',
+      message: 'node-web-audio-api is unavailable; continuing without audio.',
     });
     return undefined;
   }
 
-  if (requestedBackend === 'auto') {
-    process.stdout.write(`Audio backend: ${output.backend}\n`);
-  }
+  process.stdout.write(`Audio backend: ${output.label}\n`);
 
   const playableSamples =
     mode === 'manual'
@@ -1312,7 +1295,7 @@ async function createAudioSessionIfEnabled(
   const activeVoices: ActiveVoice[] = [];
 
   output.onError(() => {
-    process.stdout.write(`Audio playback stream error (${output.backend}).\n`);
+    process.stdout.write(`Audio playback stream error (${output.label}).\n`);
   });
 
   const finish = async (): Promise<void> => {
@@ -1349,7 +1332,7 @@ async function createAudioSessionIfEnabled(
   };
 
   return {
-    backendLabel: output.backend,
+    backendLabel: output.label,
     start: () => {
       if (closed || playbackTask) {
         return;
@@ -1647,7 +1630,7 @@ function advanceAndPruneActiveVoices(activeVoices: ActiveVoice[], chunkFrames: n
 }
 
 async function playMixedPcmThroughOutput(params: {
-  output: AudioOutputBackend;
+  output: AudioSink;
   background: RenderResult;
   playableSamples?: Map<string, RenderResult>;
   activeVoices: ActiveVoice[];
@@ -1836,21 +1819,6 @@ function createAudioLeadTuning(options: PlayerOptions, mode: 'auto' | 'manual'):
     stepUpMs,
     stepDownMs,
   };
-}
-
-function createAudioBackendTuning(options: PlayerOptions): AudioBackendTuning | undefined {
-  const tuning: AudioBackendTuning = {};
-  if (typeof options.audifyHighWaterMs === 'number') {
-    tuning.audifyHighWaterMs = options.audifyHighWaterMs;
-  }
-  if (typeof options.audifyLowWaterMs === 'number') {
-    tuning.audifyLowWaterMs = options.audifyLowWaterMs;
-  }
-
-  if (Object.keys(tuning).length === 0) {
-    return undefined;
-  }
-  return tuning;
 }
 
 function resolvePositiveNumberOption(value: number | undefined, fallback: number): number {
