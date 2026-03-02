@@ -45,6 +45,44 @@ test('cli: parses --debug-judge-window', () => {
   expect(parsed.judgeWindowSource).toBe('debug');
 });
 
+test('cli: enables active audio debug overlay', () => {
+  const parsed = parseArgs(['chart.bms', '--debug-active-audio']);
+  expect(parsed.debugActiveAudio).toBe(true);
+});
+
+test('cli: parses audio buffer tuning options', () => {
+  const parsed = parseArgs([
+    'chart.bms',
+    '--audio-lead-ms',
+    '9.5',
+    '--audio-lead-max-ms',
+    '20',
+    '--audio-lead-step-up-ms',
+    '2.0',
+    '--audio-lead-step-down-ms',
+    '0.8',
+    '--audio-io-buffer-ms',
+    '10',
+    '--audio-io-high-water-ms',
+    '18',
+    '--audio-io-low-water-ms',
+    '9',
+    '--audify-high-water-ms',
+    '28',
+    '--audify-low-water-ms',
+    '14',
+  ]);
+  expect(parsed.audioLeadMs).toBe(9.5);
+  expect(parsed.audioLeadMaxMs).toBe(20);
+  expect(parsed.audioLeadStepUpMs).toBe(2);
+  expect(parsed.audioLeadStepDownMs).toBe(0.8);
+  expect(parsed.audioIoBufferDurationMs).toBe(10);
+  expect(parsed.audioIoHighWaterMs).toBe(18);
+  expect(parsed.audioIoLowWaterMs).toBe(9);
+  expect(parsed.audifyHighWaterMs).toBe(28);
+  expect(parsed.audifyLowWaterMs).toBe(14);
+});
+
 test('cli: parses --judge-window as a deprecated alias', () => {
   const parsed = parseArgs(['chart.bms', '--judge-window', '260']);
   expect(parsed.judgeWindowMs).toBe(260);

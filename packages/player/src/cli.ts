@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { readdir, stat } from 'node:fs/promises';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { BmsJson } from '@be-music/json';
+import { createEmptyJson, type BmsJson } from '@be-music/json';
 import { resolveCliPath } from '@be-music/utils';
 import readline from 'node:readline';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
@@ -23,6 +23,7 @@ interface CliArgs {
   speed?: number;
   judgeWindowMs?: number;
   judgeWindowSource?: 'debug' | 'legacy';
+  debugActiveAudio: boolean;
   renderAudioPath?: string;
   audio: boolean;
   previewAudio: boolean;
@@ -31,6 +32,15 @@ interface CliArgs {
   audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
   audioBackend?: AudioBackendName;
+  audioLeadMs?: number;
+  audioLeadMaxMs?: number;
+  audioLeadStepUpMs?: number;
+  audioLeadStepDownMs?: number;
+  audioIoBufferDurationMs?: number;
+  audioIoHighWaterMs?: number;
+  audioIoLowWaterMs?: number;
+  audifyHighWaterMs?: number;
+  audifyLowWaterMs?: number;
   tui: boolean;
 }
 
@@ -407,6 +417,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   const playOptions = {
     speed: args.speed,
     judgeWindowMs: args.judgeWindowMs,
+    debugActiveAudio: args.debugActiveAudio,
     audio: args.audio,
     bgmVolume: args.bgmVolume,
     audioBaseDir: dirname(chartPath),
@@ -414,6 +425,15 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     audioOffsetMs: args.audioOffsetMs,
     audioHeadPaddingMs: args.audioHeadPaddingMs,
     audioBackend: args.audioBackend,
+    audioLeadMs: args.audioLeadMs,
+    audioLeadMaxMs: args.audioLeadMaxMs,
+    audioLeadStepUpMs: args.audioLeadStepUpMs,
+    audioLeadStepDownMs: args.audioLeadStepDownMs,
+    audioIoBufferDurationMs: args.audioIoBufferDurationMs,
+    audioIoHighWaterMs: args.audioIoHighWaterMs,
+    audioIoLowWaterMs: args.audioIoLowWaterMs,
+    audifyHighWaterMs: args.audifyHighWaterMs,
+    audifyLowWaterMs: args.audifyLowWaterMs,
     tui: args.tui,
     onLoadProgress: reportPlayLoadingProgress
       ? (progress: PlayerLoadProgress): void => {
@@ -453,7 +473,7 @@ function sanitizeMetadataText(value: string | undefined): string | undefined {
 }
 
 export function parseArgs(rawArgs: string[]): CliArgs {
-  const args: CliArgs = { auto: false, audio: true, previewAudio: false, tui: true };
+  const args: CliArgs = { auto: false, audio: true, previewAudio: false, tui: true, debugActiveAudio: false };
   const positional: string[] = [];
 
   for (let index = 0; index < rawArgs.length; index += 1) {
@@ -471,6 +491,10 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       args.judgeWindowMs = Number.parseInt(rawArgs[index + 1], 10);
       args.judgeWindowSource = 'debug';
       index += 1;
+      continue;
+    }
+    if (token === '--debug-active-audio') {
+      args.debugActiveAudio = true;
       continue;
     }
     if (token === '--judge-window') {
@@ -501,6 +525,51 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     }
     if (token === '--audio-head-padding-ms') {
       args.audioHeadPaddingMs = Number.parseInt(rawArgs[index + 1], 10);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-lead-ms') {
+      args.audioLeadMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-lead-max-ms') {
+      args.audioLeadMaxMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-lead-step-up-ms') {
+      args.audioLeadStepUpMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-lead-step-down-ms') {
+      args.audioLeadStepDownMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-io-buffer-ms') {
+      args.audioIoBufferDurationMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-io-high-water-ms') {
+      args.audioIoHighWaterMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-io-low-water-ms') {
+      args.audioIoLowWaterMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audify-high-water-ms') {
+      args.audifyHighWaterMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audify-low-water-ms') {
+      args.audifyLowWaterMs = Number.parseFloat(rawArgs[index + 1]);
       index += 1;
       continue;
     }
@@ -560,8 +629,9 @@ function printUsage(): void {
       'Usage: bms-player <input.(bms|bme|bml|pms|bmson|json)|directory> [options]',
       '',
       'Options:',
-      '  --auto                    Enable auto play mode',
+      '  --auto                    Enable auto play mode (default: off)',
       '  --speed <rate>            Playback speed multiplier (default: 1)',
+      '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
       '  --render-audio <path>     Render audio preview before playing',
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
       '  --preview / --no-preview  Enable or disable song-preview audio in song-select (default: off)',
@@ -570,6 +640,15 @@ function printUsage(): void {
       '  --audio-tail <seconds>    Audio tail length when rendering playback buffer (default: 1.5)',
       '  --audio-offset-ms <ms>    Timing offset for audio sync calibration (default: 0)',
       '  --audio-head-padding-ms   Silent head padding before chart start (default: 0)',
+      '  --audio-lead-ms <ms>      Base lead time for real-time mixer scheduling (default: 10)',
+      '  --audio-lead-max-ms <ms>  Maximum adaptive lead time under heavy load (default: 32)',
+      '  --audio-lead-step-up-ms   Adaptive lead increment step (default: 1.5)',
+      '  --audio-lead-step-down-ms Adaptive lead decrement step (default: 0.5)',
+      '  --audio-io-buffer-ms <ms> audio-io callback buffer duration (default: 12)',
+      '  --audio-io-high-water-ms  audio-io output queue high-water mark (default: 24)',
+      '  --audio-io-low-water-ms   audio-io output queue low-water mark (default: 12)',
+      '  --audify-high-water-ms    audify output queue high-water mark (default: 48)',
+      '  --audify-low-water-ms     audify output queue low-water mark (default: 24)',
       '  --tui / --no-tui          Enable or disable TUI play screen (default: on in TTY)',
     ].join('\n') + '\n',
   );
@@ -1388,10 +1467,72 @@ function createChartPreviewController(options: { audioBackend: AudioBackendName 
 async function renderChartPreview(filePath: string): Promise<RenderResult | undefined> {
   const chart = await parseChartFile(filePath);
   const resolved = resolveBmsControlFlow(chart, { random: () => 0 });
+  const chartWavGain = resolveChartVolWavGain(resolved);
+  const previewPath = resolved.bms.preview;
+  if (typeof previewPath === 'string' && previewPath.length > 0) {
+    const directPreview = await renderPreviewSampleFile(resolved, filePath, previewPath, chartWavGain);
+    if (directPreview) {
+      return trimAndLimitPreview(directPreview);
+    }
+  }
+
   const rendered = await renderJson(resolved, {
     baseDir: dirname(filePath),
     tailSeconds: 0.6,
+    gain: chartWavGain,
   });
+  return trimAndLimitPreview(rendered);
+}
+
+async function renderPreviewSampleFile(
+  chart: BmsJson,
+  chartPath: string,
+  previewPath: string,
+  gain: number,
+): Promise<RenderResult | undefined> {
+  const candidates = createPreviewPathCandidates(chart, previewPath);
+  const baseDir = dirname(chartPath);
+  for (const candidate of candidates) {
+    let fellBack = false;
+    const sampleJson = createEmptyJson('json');
+    sampleJson.metadata.bpm = chart.metadata.bpm;
+    sampleJson.resources.wav['01'] = candidate;
+    sampleJson.events = [{ measure: 0, channel: '01', position: [0, 1], value: '01' }];
+
+    const rendered = await renderJson(sampleJson, {
+      baseDir,
+      tailSeconds: 0,
+      gain,
+      fallbackToneSeconds: 0.05,
+      onSampleLoadProgress: (progress) => {
+        if (progress.stage === 'fallback') {
+          fellBack = true;
+        }
+      },
+    });
+    if (!fellBack) {
+      return rendered;
+    }
+  }
+  return undefined;
+}
+
+function createPreviewPathCandidates(chart: BmsJson, previewPath: string): string[] {
+  const normalizedPreview = previewPath.trim();
+  if (normalizedPreview.length === 0) {
+    return [];
+  }
+
+  const normalizedPathWav = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav.trim() : '';
+  const candidates = new Set<string>([normalizedPreview]);
+  if (!isAbsolute(normalizedPreview) && normalizedPathWav.length > 0) {
+    const joined = `${normalizedPathWav.replace(/[\\/]+$/, '')}/${normalizedPreview.replace(/^[\\/]+/, '')}`;
+    candidates.add(joined);
+  }
+  return [...candidates];
+}
+
+function trimAndLimitPreview(rendered: RenderResult): RenderResult {
   const trimmed = trimPreviewLeadingSilence(rendered);
   const maxFrames = Math.max(1, Math.floor(trimmed.sampleRate * PREVIEW_MAX_SECONDS));
   if (trimmed.left.length <= maxFrames) {
@@ -1403,6 +1544,14 @@ async function renderChartPreview(filePath: string): Promise<RenderResult | unde
     right: trimmed.right.subarray(0, maxFrames),
     durationSeconds: maxFrames / trimmed.sampleRate,
   };
+}
+
+function resolveChartVolWavGain(chart: BmsJson): number {
+  const volWav = chart.bms.volWav;
+  if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
+    return 1;
+  }
+  return volWav / 100;
 }
 
 function trimPreviewLeadingSilence(rendered: RenderResult): RenderResult {

@@ -17,6 +17,15 @@ export interface AudioBackendCreateOptions {
   channels: number;
   samplesPerFrame: number;
   mode: 'auto' | 'manual';
+  tuning?: AudioBackendTuning;
+}
+
+export interface AudioBackendTuning {
+  audioIoBufferDurationMs?: number;
+  audioIoHighWaterMs?: number;
+  audioIoLowWaterMs?: number;
+  audifyHighWaterMs?: number;
+  audifyLowWaterMs?: number;
 }
 
 interface AudioOutputBackendCandidate {
@@ -101,12 +110,13 @@ interface QueuedPcmChunk {
 }
 
 const AUTO_BACKEND_ORDER: ResolvedAudioBackendName[] = ['audio-io', 'speaker', 'audify'];
-const AUDIO_IO_MANUAL_HIGH_WATER_MS = 48;
-const AUDIO_IO_MANUAL_LOW_WATER_MS = 30;
+const AUDIO_IO_MANUAL_HIGH_WATER_MS = 24;
+const AUDIO_IO_MANUAL_LOW_WATER_MS = 12;
 const AUDIO_IO_AUTO_HIGH_WATER_MS = AUDIO_IO_MANUAL_HIGH_WATER_MS;
 const AUDIO_IO_AUTO_LOW_WATER_MS = AUDIO_IO_MANUAL_LOW_WATER_MS;
-const AUDIFY_HIGH_WATER_MS = 140;
-const AUDIFY_LOW_WATER_MS = 70;
+const AUDIFY_HIGH_WATER_MS = 48;
+const AUDIFY_LOW_WATER_MS = 24;
+const AUDIO_IO_BUFFER_DURATION_MS = 12;
 
 const BACKEND_CANDIDATES: AudioOutputBackendCandidate[] = [
   { name: 'audio-io', create: tryCreateAudioIoBackend },
@@ -244,8 +254,8 @@ async function tryCreateAudifyBackend(options: AudioBackendCreateOptions): Promi
     return undefined;
   }
 
-  const highWaterTargetMs = AUDIFY_HIGH_WATER_MS;
-  const lowWaterTargetMs = AUDIFY_LOW_WATER_MS;
+  const highWaterTargetMs = resolvePositiveMs(options.tuning?.audifyHighWaterMs, AUDIFY_HIGH_WATER_MS);
+  const lowWaterTargetMs = resolveLowWaterMs(options.tuning?.audifyLowWaterMs, highWaterTargetMs, AUDIFY_LOW_WATER_MS);
   const highWaterFrames = Math.max(256, Math.ceil((options.sampleRate * highWaterTargetMs) / 1000));
   const lowWaterFrames = Math.max(
     128,
@@ -499,7 +509,7 @@ async function tryCreateAudioIoBackend(options: AudioBackendCreateOptions): Prom
       {
         sampleRate: options.sampleRate,
         channelCount: options.channels,
-        bufferDuration: 30,
+        bufferDuration: resolvePositiveMs(options.tuning?.audioIoBufferDurationMs, AUDIO_IO_BUFFER_DURATION_MS),
       },
       (outputBuffer: Int16Array) => {
         flushOrZeroFill(outputBuffer);
@@ -573,13 +583,27 @@ function resolveAudioIoQueueThresholds(options: AudioBackendCreateOptions): {
 } {
   const chunkSampleCount = Math.max(1, options.samplesPerFrame * options.channels);
   const samplesPerSecond = Math.max(1, options.sampleRate * options.channels);
-  const highWaterTargetMs = options.mode === 'manual' ? AUDIO_IO_MANUAL_HIGH_WATER_MS : AUDIO_IO_AUTO_HIGH_WATER_MS;
-  const lowWaterTargetMs = options.mode === 'manual' ? AUDIO_IO_MANUAL_LOW_WATER_MS : AUDIO_IO_AUTO_LOW_WATER_MS;
+  const defaultHighWaterMs = options.mode === 'manual' ? AUDIO_IO_MANUAL_HIGH_WATER_MS : AUDIO_IO_AUTO_HIGH_WATER_MS;
+  const defaultLowWaterMs = options.mode === 'manual' ? AUDIO_IO_MANUAL_LOW_WATER_MS : AUDIO_IO_AUTO_LOW_WATER_MS;
+  const highWaterTargetMs = resolvePositiveMs(options.tuning?.audioIoHighWaterMs, defaultHighWaterMs);
+  const lowWaterTargetMs = resolveLowWaterMs(options.tuning?.audioIoLowWaterMs, highWaterTargetMs, defaultLowWaterMs);
   const highWaterByTime = Math.ceil((samplesPerSecond * highWaterTargetMs) / 1000);
   const lowWaterByTime = Math.ceil((samplesPerSecond * lowWaterTargetMs) / 1000);
-  const highWaterSamples = Math.max(chunkSampleCount * 6, highWaterByTime);
-  const lowWaterSamples = Math.max(chunkSampleCount * 2, Math.min(highWaterSamples - chunkSampleCount, lowWaterByTime));
+  const highWaterSamples = Math.max(chunkSampleCount * 3, highWaterByTime);
+  const lowWaterSamples = Math.max(chunkSampleCount, Math.min(highWaterSamples - chunkSampleCount, lowWaterByTime));
   return { highWaterSamples, lowWaterSamples };
+}
+
+function resolvePositiveMs(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return value;
+}
+
+function resolveLowWaterMs(value: number | undefined, highWaterMs: number, fallback: number): number {
+  const candidate = resolvePositiveMs(value, fallback);
+  return Math.max(1, Math.min(highWaterMs, candidate));
 }
 
 async function loadSpeakerConstructor(): Promise<SpeakerConstructor | undefined> {

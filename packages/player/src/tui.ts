@@ -38,6 +38,8 @@ interface TuiFrame {
   totalSeconds: number;
   summary: PlayerSummary;
   notes: TuiNote[];
+  activeAudioFiles?: string[];
+  activeAudioVoiceCount?: number;
   bgaAnsiLines?: string[];
   bgaSixel?: string;
 }
@@ -204,7 +206,8 @@ export class PlayerTui {
     }
 
     const terminalRows = process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
-    const rowCount = Math.max(MIN_GRID_ROWS, terminalRows - STATIC_TUI_LINES);
+    const debugLineCount = frame.activeAudioFiles === undefined && frame.activeAudioVoiceCount === undefined ? 0 : 1;
+    const rowCount = Math.max(MIN_GRID_ROWS, terminalRows - STATIC_TUI_LINES - debugLineCount);
     const laneCount = Math.max(1, this.options.lanes.length);
     const now = Date.now();
     const grid = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => '│'));
@@ -330,6 +333,13 @@ export class PlayerTui {
     lines.push(
       `PERFECT ${frame.summary.perfect}  GREAT ${frame.summary.great}  GOOD ${frame.summary.good}  BAD ${frame.summary.bad}  MISS ${frame.summary.miss}`,
     );
+    if (frame.activeAudioFiles !== undefined || frame.activeAudioVoiceCount !== undefined) {
+      const voiceCount =
+        typeof frame.activeAudioVoiceCount === 'number' && Number.isFinite(frame.activeAudioVoiceCount)
+          ? Math.max(0, Math.floor(frame.activeAudioVoiceCount))
+          : (frame.activeAudioFiles?.length ?? 0);
+      lines.push(`AUDIO VOICES ${voiceCount}  FILES ${formatActiveAudioFiles(frame.activeAudioFiles ?? [])}`);
+    }
     lines.push('');
     const laneLines: string[] = [];
     laneLines.push(
@@ -918,6 +928,22 @@ function formatNotesProgress(summary: PlayerSummary): string {
   const total = Math.max(0, summary.total);
   const judged = Math.max(0, summary.perfect + summary.great + summary.good + summary.bad + summary.miss);
   return `${Math.min(total, judged)}/${total}`;
+}
+
+function formatActiveAudioFiles(files: string[]): string {
+  if (files.length === 0) {
+    return '-';
+  }
+
+  const labels = files.map((file) => {
+    const slash = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\'));
+    return slash >= 0 ? file.slice(slash + 1) : file;
+  });
+  const uniqueLabels = [...new Set(labels)];
+  const visible = uniqueLabels.slice(0, 4);
+  const extra = uniqueLabels.length - visible.length;
+  const suffix = extra > 0 ? ` ... +${extra}` : '';
+  return `${visible.join(', ')}${suffix}`;
 }
 
 function formatSeconds(seconds: number): string {

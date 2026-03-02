@@ -14,6 +14,7 @@ import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import {
   type RenderResult,
   type RenderSampleLoadProgress,
+  type TimedSampleTrigger,
   collectSampleTriggers,
   createTimingResolver,
   renderJson,
@@ -33,6 +34,7 @@ import {
   createAudioBackendResolutionOrder,
   createAudioOutputBackend,
   type AudioBackendName,
+  type AudioBackendTuning,
   type AudioOutputBackend,
 } from './audio-backend.ts';
 
@@ -40,6 +42,7 @@ export interface PlayerOptions {
   auto?: boolean;
   speed?: number;
   judgeWindowMs?: number;
+  debugActiveAudio?: boolean;
   leadInMs?: number;
   audio?: boolean;
   bgmVolume?: number;
@@ -48,6 +51,15 @@ export interface PlayerOptions {
   audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
   audioBackend?: AudioBackendName;
+  audioLeadMs?: number;
+  audioLeadMaxMs?: number;
+  audioLeadStepUpMs?: number;
+  audioLeadStepDownMs?: number;
+  audioIoBufferDurationMs?: number;
+  audioIoHighWaterMs?: number;
+  audioIoLowWaterMs?: number;
+  audifyHighWaterMs?: number;
+  audifyLowWaterMs?: number;
   tui?: boolean;
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
 }
@@ -107,8 +119,17 @@ interface AudioSession {
   chartStartDelayMs: number;
   pause: () => void;
   resume: () => void;
+  getActiveAudioFiles?: () => string[];
+  getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BmsEvent) => void;
   stopChannel?: (channel: string) => void;
+}
+
+interface AudioLeadTuning {
+  baseLeadMs: number;
+  maxLeadMs: number;
+  stepUpMs: number;
+  stepDownMs: number;
 }
 
 interface PlaybackClock {
@@ -126,7 +147,8 @@ interface PlayableNotePlayback {
 
 const AUTO_AUDIO_CHUNK_FRAMES = 256;
 const MANUAL_AUDIO_CHUNK_FRAMES = 256;
-const MANUAL_AUDIO_TARGET_LEAD_MS = 20;
+const MANUAL_AUDIO_TARGET_LEAD_MS = 10;
+const AUTO_AUDIO_TARGET_LEAD_MS = MANUAL_AUDIO_TARGET_LEAD_MS;
 const DEFAULT_LANE_WIDTH = 3;
 const WIDE_SCRATCH_LANE_WIDTH = DEFAULT_LANE_WIDTH * 2;
 const DEFAULT_GRID_ROWS = 14;
@@ -152,6 +174,11 @@ const IIDX_SCORE_MAX = 200000;
 const IIDX_SCORE_JUDGE_BASE_MAX = 150000;
 const IIDX_SCORE_COMBO_BONUS_MAX = 50000;
 const PAUSE_POLL_INTERVAL_MS = 16;
+const AUDIO_TARGET_LEAD_MAX_MS = 32;
+const AUDIO_TARGET_LEAD_STEP_UP_MS = 1.5;
+const AUDIO_TARGET_LEAD_STEP_DOWN_MS = 0.5;
+const DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS = 0.18;
+const DEBUG_ACTIVE_AUDIO_SAMPLE_RATE = 44_100;
 
 type JudgeKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'MISS';
 
@@ -378,6 +405,29 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
     reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
   });
   reportLoadProgress(options, 1, 'Ready');
+  const autoDebugAudioEstimator = options.debugActiveAudio
+    ? await createDebugActiveAudioEstimator(resolvedJson, options.audioBaseDir)
+    : undefined;
+  const resolveDebugActiveAudioState = (
+    nowSeconds: number,
+  ): { activeAudioFiles?: string[]; activeAudioVoiceCount?: number } => {
+    if (options.debugActiveAudio !== true) {
+      return {};
+    }
+    const sessionVoiceCount = audioSession?.getActiveAudioVoiceCount?.() ?? 0;
+    const sessionFiles = audioSession?.getActiveAudioFiles?.() ?? [];
+    if (sessionVoiceCount > 0 || sessionFiles.length > 0) {
+      return {
+        activeAudioFiles: sessionFiles,
+        activeAudioVoiceCount: sessionVoiceCount,
+      };
+    }
+    const estimated = autoDebugAudioEstimator?.resolve(nowSeconds);
+    return {
+      activeAudioFiles: estimated?.activeAudioFiles ?? [],
+      activeAudioVoiceCount: estimated?.activeAudioVoiceCount ?? 0,
+    };
+  };
 
   if (!tui) {
     process.stdout.write('Auto play start\n');
@@ -393,6 +443,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
       totalSeconds,
       summary,
       notes: renderNotes,
+      ...resolveDebugActiveAudioState(0),
       ...createBgaRenderFrame(bgaRenderer, 0, preferSixel),
     });
   }
@@ -506,6 +557,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
             totalSeconds,
             summary,
             notes: renderNotes,
+            ...resolveDebugActiveAudioState(nowSec),
             ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
           });
           await waitPrecise(Math.max(1, Math.min(TUI_FRAME_INTERVAL_MS, targetMs - nowMs)));
@@ -543,6 +595,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
             totalSeconds,
             summary,
             notes: renderNotes,
+            ...resolveDebugActiveAudioState(note.seconds),
             ...createBgaRenderFrame(bgaRenderer, note.seconds, preferSixel),
           });
         }
@@ -563,6 +616,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
           totalSeconds,
           summary,
           notes: renderNotes,
+          ...resolveDebugActiveAudioState(totalSeconds),
           ...createBgaRenderFrame(bgaRenderer, totalSeconds, preferSixel),
         });
       }
@@ -632,6 +686,15 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
     reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
   });
   reportLoadProgress(options, 1, 'Ready');
+  const resolveDebugActiveAudioState = (): { activeAudioFiles?: string[]; activeAudioVoiceCount?: number } => {
+    if (options.debugActiveAudio !== true) {
+      return {};
+    }
+    return {
+      activeAudioFiles: audioSession?.getActiveAudioFiles?.() ?? [],
+      activeAudioVoiceCount: audioSession?.getActiveAudioVoiceCount?.() ?? 0,
+    };
+  };
 
   if (!tui) {
     process.stdout.write('Manual play start\n');
@@ -652,6 +715,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
       totalSeconds,
       summary,
       notes: renderNotes,
+      ...resolveDebugActiveAudioState(),
       ...createBgaRenderFrame(bgaRenderer, 0, preferSixel),
     });
   }
@@ -871,6 +935,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
           totalSeconds,
           summary,
           notes: renderNotes,
+          ...resolveDebugActiveAudioState(),
           ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
         });
         await waitPrecise(PAUSE_POLL_INTERVAL_MS);
@@ -921,6 +986,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
         totalSeconds,
         summary,
         notes: renderNotes,
+        ...resolveDebugActiveAudioState(),
         ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
       });
 
@@ -957,6 +1023,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
             totalSeconds,
             summary,
             notes: renderNotes,
+            ...resolveDebugActiveAudioState(),
             ...createBgaRenderFrame(bgaRenderer, totalSeconds, preferSixel),
           });
         }
@@ -1107,9 +1174,11 @@ async function createAudioSessionIfEnabled(
 
   const headPaddingMs = options.audioHeadPaddingMs ?? 0;
   const bgmVolume = normalizeBgmVolume(options.bgmVolume);
+  const chartWavGain = resolveChartVolWavGain(json);
   const renderOptions = {
     baseDir: options.audioBaseDir ?? process.cwd(),
     tailSeconds: options.audioTailSeconds ?? 1.5,
+    gain: chartWavGain,
   } as const;
   onLoadProgress?.({
     ratio: 0.05,
@@ -1155,11 +1224,14 @@ async function createAudioSessionIfEnabled(
   const sampleRate = toPlaybackSampleRate(padded.sampleRate, options.speed ?? 1);
   const samplesPerFrame = mode === 'manual' ? MANUAL_AUDIO_CHUNK_FRAMES : AUTO_AUDIO_CHUNK_FRAMES;
   const requestedBackend = options.audioBackend ?? 'auto';
+  const backendTuning = createAudioBackendTuning(options);
+  const leadTuning = createAudioLeadTuning(options, mode);
   const output = await createAudioOutputBackend(requestedBackend, {
     sampleRate,
     channels: 2,
     samplesPerFrame,
     mode,
+    tuning: backendTuning,
   });
   if (!output) {
     const attempted = createAudioBackendResolutionOrder(requestedBackend).join(', ');
@@ -1186,7 +1258,7 @@ async function createAudioSessionIfEnabled(
             message: `Loading key sounds... (${progress.loaded}/${progress.total})`,
             detail: progress.samplePath ?? progress.sampleKey,
           });
-        })
+        }, chartWavGain)
       : undefined;
   const playableNotePlaybackMap = mode === 'manual' ? buildPlayableNotePlaybackMap(json) : undefined;
   onLoadProgress?.({
@@ -1253,6 +1325,7 @@ async function createAudioSessionIfEnabled(
         isDraining: () => draining,
         isPaused: () => paused,
         mode,
+        leadTuning,
         playbackSampleRate: sampleRate,
       }).catch(() => undefined);
     },
@@ -1271,6 +1344,8 @@ async function createAudioSessionIfEnabled(
       }
       paused = false;
     },
+    getActiveAudioFiles: () => collectActiveAudioFileNames(activeVoices),
+    getActiveAudioVoiceCount: () => activeVoices.length,
     triggerEvent:
       mode === 'manual'
         ? (event: BmsEvent) => {
@@ -1294,11 +1369,7 @@ async function createAudioSessionIfEnabled(
               return;
             }
             if (json.sourceFormat === 'bms') {
-              for (let index = activeVoices.length - 1; index >= 0; index -= 1) {
-                if (activeVoices[index].sampleKey === normalized) {
-                  activeVoices.splice(index, 1);
-                }
-              }
+              removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
             }
             if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
               return;
@@ -1309,6 +1380,7 @@ async function createAudioSessionIfEnabled(
               endPosition,
               channel: normalizeChannel(event.channel),
               sampleKey: normalized,
+              samplePath: json.resources.wav[normalized],
               sliceId: playback?.sliceId,
             });
           }
@@ -1320,11 +1392,7 @@ async function createAudioSessionIfEnabled(
               return;
             }
             const normalizedChannel = normalizeChannel(channel);
-            for (let index = activeVoices.length - 1; index >= 0; index -= 1) {
-              if (activeVoices[index].channel === normalizedChannel) {
-                activeVoices.splice(index, 1);
-              }
-            }
+            removeActiveVoicesInPlace(activeVoices, (voice) => voice.channel === normalizedChannel);
           }
         : undefined,
   };
@@ -1336,7 +1404,204 @@ interface ActiveVoice {
   endPosition: number;
   channel?: string;
   sampleKey?: string;
+  samplePath?: string;
   sliceId?: string;
+}
+
+interface DebugSampleWindow {
+  sampleKey: string;
+  startSeconds: number;
+  endSeconds: number;
+  label: string;
+}
+
+interface DebugActiveAudioState {
+  activeAudioFiles: string[];
+  activeAudioVoiceCount: number;
+}
+
+interface DebugActiveAudioEstimator {
+  resolve: (nowSeconds: number) => DebugActiveAudioState;
+}
+
+function collectActiveAudioFileNames(activeVoices: ActiveVoice[]): string[] {
+  const unique = new Set<string>();
+  for (const voice of activeVoices) {
+    const label = voice.samplePath ?? voice.sampleKey;
+    if (typeof label !== 'string' || label.length === 0) {
+      continue;
+    }
+    unique.add(label);
+  }
+  return [...unique];
+}
+
+async function createDebugActiveAudioEstimator(json: BmsJson, baseDir?: string): Promise<DebugActiveAudioEstimator> {
+  const resolver = createTimingResolver(json);
+  const triggers = collectSampleTriggers(json, resolver);
+  const sampleDurationSecondsByKey = await buildDebugSampleDurationSecondsMap(triggers, baseDir);
+  const windows: DebugSampleWindow[] = triggers
+    .map((trigger) => {
+      const startSeconds = Math.max(0, trigger.seconds);
+      const durationSeconds =
+        typeof trigger.sampleDurationSeconds === 'number' && Number.isFinite(trigger.sampleDurationSeconds)
+          ? Math.max(0, trigger.sampleDurationSeconds)
+          : Math.max(
+              0,
+              (sampleDurationSecondsByKey.get(trigger.sampleKey) ?? DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS) -
+                Math.max(0, trigger.sampleOffsetSeconds),
+            );
+      return {
+        sampleKey: trigger.sampleKey,
+        startSeconds,
+        endSeconds: startSeconds + durationSeconds,
+        label: trigger.samplePath ?? trigger.sampleKey,
+      } satisfies DebugSampleWindow;
+    })
+    .filter((window) => window.endSeconds > window.startSeconds)
+    .sort((left, right) => left.startSeconds - right.startSeconds);
+
+  if (json.sourceFormat === 'bms') {
+    const latestBySampleKey = new Map<string, number>();
+    for (let index = 0; index < windows.length; index += 1) {
+      const window = windows[index]!;
+      const previousIndex = latestBySampleKey.get(window.sampleKey);
+      if (previousIndex !== undefined) {
+        const previousWindow = windows[previousIndex]!;
+        if (window.startSeconds < previousWindow.endSeconds) {
+          previousWindow.endSeconds = window.startSeconds;
+        }
+      }
+      latestBySampleKey.set(window.sampleKey, index);
+    }
+  }
+
+  let active: DebugSampleWindow[] = [];
+  let nextIndex = 0;
+  let lastResolvedSeconds = Number.NEGATIVE_INFINITY;
+
+  const rebuildAt = (nowSeconds: number): void => {
+    active = [];
+    nextIndex = 0;
+    while (nextIndex < windows.length && windows[nextIndex]!.startSeconds <= nowSeconds) {
+      const window = windows[nextIndex]!;
+      nextIndex += 1;
+      if (window.endSeconds > nowSeconds) {
+        active.push(window);
+      }
+    }
+  };
+
+  return {
+    resolve: (nowSeconds: number): DebugActiveAudioState => {
+      const safeNowSeconds = Number.isFinite(nowSeconds) ? Math.max(0, nowSeconds) : 0;
+      if (safeNowSeconds < lastResolvedSeconds) {
+        rebuildAt(safeNowSeconds);
+      } else {
+        while (nextIndex < windows.length && windows[nextIndex]!.startSeconds <= safeNowSeconds) {
+          const window = windows[nextIndex]!;
+          nextIndex += 1;
+          if (window.endSeconds > safeNowSeconds) {
+            active.push(window);
+          }
+        }
+      }
+      lastResolvedSeconds = safeNowSeconds;
+
+      let writeIndex = 0;
+      for (let readIndex = 0; readIndex < active.length; readIndex += 1) {
+        const window = active[readIndex]!;
+        if (window.endSeconds <= safeNowSeconds) {
+          continue;
+        }
+        if (writeIndex !== readIndex) {
+          active[writeIndex] = window;
+        }
+        writeIndex += 1;
+      }
+      active.length = writeIndex;
+
+      const uniqueLabels = new Set<string>();
+      for (const window of active) {
+        uniqueLabels.add(window.label);
+      }
+      return {
+        activeAudioFiles: [...uniqueLabels],
+        activeAudioVoiceCount: active.length,
+      };
+    },
+  };
+}
+
+async function buildDebugSampleDurationSecondsMap(
+  triggers: TimedSampleTrigger[],
+  baseDir?: string,
+): Promise<Map<string, number>> {
+  const uniqueTriggers = new Map<string, TimedSampleTrigger>();
+  for (const trigger of triggers) {
+    if (!uniqueTriggers.has(trigger.sampleKey)) {
+      uniqueTriggers.set(trigger.sampleKey, trigger);
+    }
+  }
+
+  const durations = new Map<string, number>();
+  for (const trigger of uniqueTriggers.values()) {
+    const sampleJson = createEmptyJson('json');
+    sampleJson.metadata.bpm = 120;
+    if (trigger.samplePath) {
+      sampleJson.resources.wav[trigger.sampleKey] = trigger.samplePath;
+    }
+    sampleJson.events = [
+      {
+        measure: 0,
+        channel: '11',
+        position: [0, 1],
+        value: trigger.sampleKey,
+      },
+    ];
+
+    const rendered = await renderJson(sampleJson, {
+      baseDir: baseDir ?? process.cwd(),
+      sampleRate: DEBUG_ACTIVE_AUDIO_SAMPLE_RATE,
+      tailSeconds: 0,
+      gain: 1,
+      normalize: false,
+      fallbackToneSeconds: DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS,
+    });
+    durations.set(trigger.sampleKey, rendered.durationSeconds);
+  }
+  return durations;
+}
+
+function removeActiveVoicesInPlace(activeVoices: ActiveVoice[], shouldRemove: (voice: ActiveVoice) => boolean): void {
+  let writeIndex = 0;
+  for (let readIndex = 0; readIndex < activeVoices.length; readIndex += 1) {
+    const voice = activeVoices[readIndex]!;
+    if (shouldRemove(voice)) {
+      continue;
+    }
+    if (writeIndex !== readIndex) {
+      activeVoices[writeIndex] = voice;
+    }
+    writeIndex += 1;
+  }
+  activeVoices.length = writeIndex;
+}
+
+function advanceAndPruneActiveVoices(activeVoices: ActiveVoice[], chunkFrames: number): void {
+  let writeIndex = 0;
+  for (let readIndex = 0; readIndex < activeVoices.length; readIndex += 1) {
+    const voice = activeVoices[readIndex]!;
+    voice.position += chunkFrames;
+    if (voice.position >= voice.endPosition) {
+      continue;
+    }
+    if (writeIndex !== readIndex) {
+      activeVoices[writeIndex] = voice;
+    }
+    writeIndex += 1;
+  }
+  activeVoices.length = writeIndex;
 }
 
 async function playMixedPcmThroughOutput(params: {
@@ -1348,9 +1613,11 @@ async function playMixedPcmThroughOutput(params: {
   isDraining: () => boolean;
   isPaused: () => boolean;
   mode: 'auto' | 'manual';
+  leadTuning: AudioLeadTuning;
   playbackSampleRate: number;
 }): Promise<void> {
-  const { output, background, activeVoices, shouldStop, isDraining, isPaused, mode, playbackSampleRate } = params;
+  const { output, background, activeVoices, shouldStop, isDraining, isPaused, mode, leadTuning, playbackSampleRate } =
+    params;
 
   const chunkFrames = mode === 'manual' ? MANUAL_AUDIO_CHUNK_FRAMES : AUTO_AUDIO_CHUNK_FRAMES;
   // Keep one reusable PCM buffer and fill through Int16Array to minimize per-sample write overhead.
@@ -1366,6 +1633,8 @@ async function playMixedPcmThroughOutput(params: {
   let pausedAtMs = 0;
   let pausedDurationMs = 0;
   let pauseActive = false;
+  let adaptiveLeadMs = leadTuning.baseLeadMs;
+  const chunkDurationMs = (chunkFrames / playbackSampleRate) * 1000;
 
   while (!shouldStop()) {
     if (isPaused()) {
@@ -1381,9 +1650,14 @@ async function playMixedPcmThroughOutput(params: {
       pausedDurationMs += performance.now() - pausedAtMs;
     }
 
-    if (mode === 'manual') {
-      await waitForPlaybackRealtime(playhead, playbackSampleRate, playbackStartMs + pausedDurationMs, shouldStop);
-    }
+    const mixStartedAtMs = performance.now();
+    await waitForPlaybackRealtime(
+      playhead,
+      playbackSampleRate,
+      playbackStartMs + pausedDurationMs,
+      shouldStop,
+      adaptiveLeadMs,
+    );
 
     const backgroundEnded = playhead >= background.left.length;
     if ((mode === 'auto' || isDraining()) && backgroundEnded && activeVoices.length === 0) {
@@ -1424,19 +1698,16 @@ async function playMixedPcmThroughOutput(params: {
       chunkSamples[sampleOffset + 1] = floatToInt16(mixedRight[frame]);
     }
 
-    for (let index = activeVoices.length - 1; index >= 0; index -= 1) {
-      const voice = activeVoices[index];
-      voice.position += chunkFrames;
-      if (voice.position >= voice.endPosition) {
-        activeVoices.splice(index, 1);
-      }
-    }
+    advanceAndPruneActiveVoices(activeVoices, chunkFrames);
     playhead += chunkFrames;
 
     const writable = output.write(chunk);
     if (!writable) {
       await output.waitWritable(shouldStop);
     }
+
+    const mixDurationMs = Math.max(0, performance.now() - mixStartedAtMs);
+    adaptiveLeadMs = resolveAdaptiveLeadMs(adaptiveLeadMs, leadTuning, chunkDurationMs, mixDurationMs, activeVoices.length);
   }
 
   if (shouldStop()) {
@@ -1451,8 +1722,10 @@ async function waitForPlaybackRealtime(
   sampleRate: number,
   startMs: number,
   shouldStop: () => boolean,
+  targetLeadMs: number,
 ): Promise<void> {
-  const targetLeadFrames = Math.max(0, Math.round((MANUAL_AUDIO_TARGET_LEAD_MS / 1000) * sampleRate));
+  const safeTargetLeadMs = Number.isFinite(targetLeadMs) ? Math.max(0, targetLeadMs) : MANUAL_AUDIO_TARGET_LEAD_MS;
+  const targetLeadFrames = Math.max(0, Math.round((safeTargetLeadMs / 1000) * sampleRate));
 
   while (!shouldStop()) {
     const elapsedFrames = Math.floor(((performance.now() - startMs) / 1000) * sampleRate);
@@ -1465,6 +1738,85 @@ async function waitForPlaybackRealtime(
     const waitMs = Math.max(1, Math.ceil((waitFrames / sampleRate) * 1000));
     await delay(Math.min(waitMs, 3));
   }
+}
+
+function resolveAdaptiveLeadMs(
+  currentLeadMs: number,
+  tuning: AudioLeadTuning,
+  chunkDurationMs: number,
+  mixDurationMs: number,
+  activeVoiceCount: number,
+): number {
+  const safeBaseLeadMs = Number.isFinite(tuning.baseLeadMs) ? Math.max(0, tuning.baseLeadMs) : 0;
+  const safeMaxLeadMs = Number.isFinite(tuning.maxLeadMs) ? Math.max(safeBaseLeadMs, tuning.maxLeadMs) : AUDIO_TARGET_LEAD_MAX_MS;
+  const safeStepUpMs =
+    Number.isFinite(tuning.stepUpMs) && tuning.stepUpMs > 0 ? tuning.stepUpMs : AUDIO_TARGET_LEAD_STEP_UP_MS;
+  const safeStepDownMs =
+    Number.isFinite(tuning.stepDownMs) && tuning.stepDownMs > 0 ? tuning.stepDownMs : AUDIO_TARGET_LEAD_STEP_DOWN_MS;
+  const safeCurrentLeadMs = Number.isFinite(currentLeadMs) ? Math.max(0, currentLeadMs) : safeBaseLeadMs;
+  const safeChunkDurationMs = Number.isFinite(chunkDurationMs) ? Math.max(1, chunkDurationMs) : 1;
+  const safeMixDurationMs = Number.isFinite(mixDurationMs) ? Math.max(0, mixDurationMs) : 0;
+
+  const loadRatio = safeMixDurationMs / safeChunkDurationMs;
+  let nextLeadMs = safeCurrentLeadMs;
+  if (loadRatio >= 0.7) {
+    nextLeadMs += safeStepUpMs;
+  } else if (loadRatio <= 0.45) {
+    nextLeadMs -= safeStepDownMs;
+  }
+
+  // Keep small baseline latency while granting temporary headroom for dense chord bursts.
+  const polyphonyFloorMs = safeBaseLeadMs + Math.max(0, activeVoiceCount - 24) * 0.2;
+  const minLeadMs = Math.max(safeBaseLeadMs, Math.min(safeMaxLeadMs, polyphonyFloorMs));
+  if (nextLeadMs < minLeadMs) {
+    nextLeadMs = minLeadMs;
+  }
+  return Math.min(safeMaxLeadMs, nextLeadMs);
+}
+
+function createAudioLeadTuning(options: PlayerOptions, mode: 'auto' | 'manual'): AudioLeadTuning {
+  const defaultBaseLeadMs = mode === 'manual' ? MANUAL_AUDIO_TARGET_LEAD_MS : AUTO_AUDIO_TARGET_LEAD_MS;
+  const baseLeadMs = resolvePositiveNumberOption(options.audioLeadMs, defaultBaseLeadMs);
+  const maxLeadMs = Math.max(baseLeadMs, resolvePositiveNumberOption(options.audioLeadMaxMs, AUDIO_TARGET_LEAD_MAX_MS));
+  const stepUpMs = resolvePositiveNumberOption(options.audioLeadStepUpMs, AUDIO_TARGET_LEAD_STEP_UP_MS);
+  const stepDownMs = resolvePositiveNumberOption(options.audioLeadStepDownMs, AUDIO_TARGET_LEAD_STEP_DOWN_MS);
+  return {
+    baseLeadMs,
+    maxLeadMs,
+    stepUpMs,
+    stepDownMs,
+  };
+}
+
+function createAudioBackendTuning(options: PlayerOptions): AudioBackendTuning | undefined {
+  const tuning: AudioBackendTuning = {};
+  if (typeof options.audioIoBufferDurationMs === 'number') {
+    tuning.audioIoBufferDurationMs = options.audioIoBufferDurationMs;
+  }
+  if (typeof options.audioIoHighWaterMs === 'number') {
+    tuning.audioIoHighWaterMs = options.audioIoHighWaterMs;
+  }
+  if (typeof options.audioIoLowWaterMs === 'number') {
+    tuning.audioIoLowWaterMs = options.audioIoLowWaterMs;
+  }
+  if (typeof options.audifyHighWaterMs === 'number') {
+    tuning.audifyHighWaterMs = options.audifyHighWaterMs;
+  }
+  if (typeof options.audifyLowWaterMs === 'number') {
+    tuning.audifyLowWaterMs = options.audifyLowWaterMs;
+  }
+
+  if (Object.keys(tuning).length === 0) {
+    return undefined;
+  }
+  return tuning;
+}
+
+function resolvePositiveNumberOption(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return value;
 }
 
 function stripPlayableEvents(json: BmsJson): BmsJson {
@@ -1517,6 +1869,7 @@ async function buildPlayableSampleMap(
   options: PlayerOptions,
   sampleRate: number,
   onProgress?: (progress: { loaded: number; total: number; sampleKey: string; samplePath?: string }) => void,
+  chartWavGain = 1,
 ): Promise<Map<string, RenderResult>> {
   const sampleMap = new Map<string, RenderResult>();
   const keys = [
@@ -1555,7 +1908,7 @@ async function buildPlayableSampleMap(
       baseDir: options.audioBaseDir ?? process.cwd(),
       sampleRate,
       tailSeconds: 0,
-      gain: 1,
+      gain: chartWavGain,
       normalize: false,
       fallbackToneSeconds: 0.06,
     });
@@ -1593,6 +1946,14 @@ function normalizeBgmVolume(value: number | undefined): number {
     return 1;
   }
   return Math.max(0, value);
+}
+
+function resolveChartVolWavGain(json: BmsJson): number {
+  const volWav = json.bms.volWav;
+  if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
+    return 1;
+  }
+  return volWav / 100;
 }
 
 function applyGainToRenderResult(result: RenderResult, gain: number): RenderResult {
