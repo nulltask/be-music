@@ -127,8 +127,11 @@ export type BmsControlFlowEntry = BmsControlFlowDirectiveEntry | BmsControlFlowH
 
 export interface BmsExtensions {
   controlFlow: BmsControlFlowEntry[];
+  preview?: string;
   lnType?: number;
+  lnMode?: number;
   lnObj?: string;
+  volWav?: number;
   defExRank?: number;
   exRank: Record<string, string>;
   argb: Record<string, string>;
@@ -142,6 +145,7 @@ export interface BmsExtensions {
   exWav: Record<string, string>;
   exBmp: Record<string, string>;
   bga: Record<string, string>;
+  scroll: Record<string, number>;
   poorBga?: string;
   swBga: Record<string, string>;
   videoFile?: string;
@@ -199,6 +203,7 @@ export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
       exWav: {},
       exBmp: {},
       bga: {},
+      scroll: {},
       swBga: {},
     },
     bmson: {
@@ -391,6 +396,10 @@ export function isStopChannel(channel: string): boolean {
   return normalizeChannel(channel) === '09';
 }
 
+export function isScrollChannel(channel: string): boolean {
+  return normalizeChannel(channel) === 'SC';
+}
+
 export function isLandmineChannel(channel: string): boolean {
   const normalized = normalizeChannel(channel);
   if (normalized.length !== 2) {
@@ -412,7 +421,7 @@ export function isSampleTriggerChannel(channel: string): boolean {
   if (normalized.startsWith('0')) {
     return false;
   }
-  if (isTempoChannel(normalized) || isStopChannel(normalized)) {
+  if (isTempoChannel(normalized) || isStopChannel(normalized) || isScrollChannel(normalized)) {
     return false;
   }
   return true;

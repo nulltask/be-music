@@ -34,6 +34,7 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   const chartPath = resolve(rootDir, 'examples/test/extensions-headers-test.bms');
   const json = await parseChartFile(chartPath);
 
+  expect(json.bms.preview).toBe('preview.ogg');
   expect(json.bms.player).toBe(1);
   expect(json.bms.pathWav).toBe('sounds/');
   expect(json.bms.baseBpm).toBe(155);
@@ -42,20 +43,25 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   expect(json.bms.changeOption['01']).toBe('MIRROR');
   expect(json.bms.wavCmd).toBe('legacy');
   expect(json.bms.lnType).toBe(1);
+  expect(json.bms.lnMode).toBe(1);
   expect(json.bms.lnObj).toBe('ZZ');
+  expect(json.bms.volWav).toBe(80);
   expect(json.bms.defExRank).toBe(120);
   expect(json.bms.exRank['01']).toBe('120,90,60,30');
   expect(json.bms.argb['0A']).toBe('FF000000');
   expect(json.bms.exWav['01']).toBe('sample_ex.wav');
   expect(json.bms.exBmp['01']).toBe('image_ex.bmp');
   expect(json.bms.bga['01']).toBe('01');
+  expect(json.bms.scroll['01']).toBe(0.5);
   expect(json.bms.poorBga).toBe('01');
   expect(json.bms.swBga['01']).toBe('02');
   expect(json.bms.videoFile).toBe('movie.mp4');
   expect(json.bms.materials).toBe('materials.def');
   expect(json.bms.divideProp).toBe('lane=2');
   expect(json.bms.charset).toBe('Shift_JIS');
+  expect(json.events.some((event) => event.channel === 'SC' && event.value === '01')).toBe(true);
 
+  expect(json.metadata.extras.PREVIEW).toBeUndefined();
   expect(json.metadata.extras.PLAYER).toBeUndefined();
   expect(json.metadata.extras.PATH_WAV).toBeUndefined();
   expect(json.metadata.extras.BASEBPM).toBeUndefined();
@@ -64,13 +70,16 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   expect(json.metadata.extras.CHANGEOPTION01).toBeUndefined();
   expect(json.metadata.extras.WAVCMD).toBeUndefined();
   expect(json.metadata.extras.LNTYPE).toBeUndefined();
+  expect(json.metadata.extras.LNMODE).toBeUndefined();
   expect(json.metadata.extras.LNOBJ).toBeUndefined();
+  expect(json.metadata.extras.VOLWAV).toBeUndefined();
   expect(json.metadata.extras.DEFEXRANK).toBeUndefined();
   expect(json.metadata.extras.EXRANK01).toBeUndefined();
   expect(json.metadata.extras.ARGB0A).toBeUndefined();
   expect(json.metadata.extras.EXWAV01).toBeUndefined();
   expect(json.metadata.extras.EXBMP01).toBeUndefined();
   expect(json.metadata.extras.BGA01).toBeUndefined();
+  expect(json.metadata.extras.SCROLL01).toBeUndefined();
   expect(json.metadata.extras.POORBGA).toBeUndefined();
   expect(json.metadata.extras.SWBGA01).toBeUndefined();
   expect(json.metadata.extras.VIDEOFILE).toBeUndefined();
@@ -208,8 +217,11 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
       measures: [],
       events: [],
       bms: {
+        preview: 'preview.ogg',
         lnType: '2',
+        lnMode: '1',
         lnObj: 'zz',
+        volWav: '90',
         defExRank: '100.5',
         player: '2',
         pathWav: 'sounds/',
@@ -235,6 +247,9 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
         },
         bga: {
           3: '01',
+        },
+        scroll: {
+          1: '0.5',
         },
         poorBga: '02',
         swBga: {
@@ -265,8 +280,11 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
   expect(parsed.bmson.version).toBe('1.0.1');
   expect(parsed.bmson.info.resolution).toBe(480);
   expect(parsed.bmson.lines).toEqual([0, 960, 1680]);
+  expect(parsed.bms.preview).toBe('preview.ogg');
   expect(parsed.bms.lnType).toBe(2);
+  expect(parsed.bms.lnMode).toBe(1);
   expect(parsed.bms.lnObj).toBe('ZZ');
+  expect(parsed.bms.volWav).toBe(90);
   expect(parsed.bms.defExRank).toBe(100.5);
   expect(parsed.bms.player).toBe(2);
   expect(parsed.bms.pathWav).toBe('sounds/');
@@ -281,6 +299,7 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
   expect(parsed.bms.exWav['01']).toBe('extended.wav');
   expect(parsed.bms.exBmp['02']).toBe('extended.bmp');
   expect(parsed.bms.bga['03']).toBe('01');
+  expect(parsed.bms.scroll['01']).toBe(0.5);
   expect(parsed.bms.poorBga).toBe('02');
   expect(parsed.bms.swBga['04']).toBe('03');
   expect(parsed.bms.videoFile).toBe('movie.mp4');
@@ -320,8 +339,11 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
       metadata: {
         bpm: 120,
         extras: {
+          PREVIEW: 'preview.ogg',
           LNTYPE: '1',
+          LNMODE: '2',
           LNOBJ: 'zz',
+          VOLWAV: '70',
           DEFEXRANK: '120',
           PLAYER: '1',
           PATH_WAV: 'sounds/',
@@ -335,6 +357,7 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
           EXWAV01: 'extended.wav',
           EXBMP0A: 'extended.bmp',
           BGA01: '01',
+          SCROLL01: '1.25',
           POORBGA: '02',
           SWBGA01: '03',
           VIDEOFILE: 'movie.mp4',
@@ -357,8 +380,11 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
     }),
   );
 
+  expect(parsed.bms.preview).toBe('preview.ogg');
   expect(parsed.bms.lnType).toBe(1);
+  expect(parsed.bms.lnMode).toBe(2);
   expect(parsed.bms.lnObj).toBe('ZZ');
+  expect(parsed.bms.volWav).toBe(70);
   expect(parsed.bms.defExRank).toBe(120);
   expect(parsed.bms.player).toBe(1);
   expect(parsed.bms.pathWav).toBe('sounds/');
@@ -372,6 +398,7 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
   expect(parsed.bms.exWav['01']).toBe('extended.wav');
   expect(parsed.bms.exBmp['0A']).toBe('extended.bmp');
   expect(parsed.bms.bga['01']).toBe('01');
+  expect(parsed.bms.scroll['01']).toBe(1.25);
   expect(parsed.bms.poorBga).toBe('02');
   expect(parsed.bms.swBga['01']).toBe('03');
   expect(parsed.bms.videoFile).toBe('movie.mp4');
