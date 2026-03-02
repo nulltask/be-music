@@ -1,8 +1,22 @@
+*---------------------- METADATA FIELD
+
 #TITLE Control Flow Test
 #ARTIST Codex
 #BPM 120
+
+*---------------------- EXTENDED HEADER FIELD
+
+*---------------------- RESOURCES FIELD
+
 #WAV01 sample.wav
 #WAV02 branch.wav
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+*---------------------- CONTROL FLOW FIELD
+
 #SETRANDOM 2
 #IF 1
 #WAV02 wrong.wav

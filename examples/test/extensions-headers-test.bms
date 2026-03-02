@@ -1,6 +1,11 @@
+*---------------------- METADATA FIELD
+
 #TITLE Extension Header Test
 #ARTIST Codex
 #BPM 150
+
+*---------------------- EXTENDED HEADER FIELD
+
 #PREVIEW preview.ogg
 #PLAYER 1
 #PATH_WAV sounds/
@@ -11,7 +16,7 @@
 #WAVCMD legacy
 #LNTYPE 1
 #LNMODE 1
-#LNOBJ zz
+#LNOBJ ZZ
 #VOLWAV 80
 #DEFEXRANK 120
 #EXRANK01 120,90,60,30
@@ -26,6 +31,16 @@
 #MATERIALS materials.def
 #DIVIDEPROP lane=2
 #CHARSET Shift_JIS
+
+*---------------------- RESOURCES FIELD
+
 #WAV01 sample.wav
-#000SC:01
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
 #00011:01
+#000SC:01
+
+*---------------------- CONTROL FLOW FIELD

@@ -1,14 +1,29 @@
+*---------------------- METADATA FIELD
+
 #TITLE Regression Sequence
 #ARTIST Codex
 #BPM 120
+
+*---------------------- EXTENDED HEADER FIELD
+
+*---------------------- RESOURCES FIELD
+
 #WAV01 sample.wav
 #WAV02 sample.wav
 #BPM01 180
 #STOP01 96
-#00001:02000000
-#00011:01000100
+
+*---------------------- MEASURE LENGTH FIELD
+
 #00102:0.75
+
+*---------------------- OBJECT DATA FIELD
+
+#00001:02
+#00011:0101
 #00108:01
 #00109:01
 #00111:00010001
-#00211:01000100
+#00211:0101
+
+*---------------------- CONTROL FLOW FIELD

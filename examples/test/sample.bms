@@ -1,8 +1,22 @@
+*---------------------- METADATA FIELD
+
 #TITLE Sample
 #ARTIST Codex
 #BPM 120
+
+*---------------------- EXTENDED HEADER FIELD
+
+*---------------------- RESOURCES FIELD
+
 #WAV01 sample.wav
-#00011:0100010001000100
-#00111:0100010001000100
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+#00011:01010101
+#00111:01010101
 #00203:64
 #00211:01010101
+
+*---------------------- CONTROL FLOW FIELD
