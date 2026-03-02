@@ -4,8 +4,8 @@ import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers
 import {
   createBeatResolver,
   createEmptyJson,
-  type BmsEvent,
-  type BmsJson,
+  type BeMusicEvent,
+  type BeMusicJson,
   isPlayableChannel,
   normalizeChannel,
   normalizeObjectKey,
@@ -121,7 +121,7 @@ interface AudioSession {
   resume: () => void;
   getActiveAudioFiles?: () => string[];
   getActiveAudioVoiceCount?: () => number;
-  triggerEvent?: (event: BmsEvent) => void;
+  triggerEvent?: (event: BeMusicEvent) => void;
   stopChannel?: (channel: string) => void;
 }
 
@@ -313,7 +313,7 @@ function resolveIidxComboScoreUnit(totalNotes: number): number {
   return IIDX_SCORE_COMBO_BONUS_MAX / (10 * finiteTotalNotes - 55);
 }
 
-function resolveBmsJudgeRankPercent(json: BmsJson): number {
+function resolveBmsJudgeRankPercent(json: BeMusicJson): number {
   const defExRank = json.bms.defExRank;
   if (typeof defExRank === 'number' && Number.isFinite(defExRank) && defExRank > 0) {
     return (defExRank * BEATORAJA_BMS_DEFAULT_JUDGERANK) / 100;
@@ -327,7 +327,7 @@ function resolveBmsJudgeRankPercent(json: BmsJson): number {
   return BEATORAJA_BMS_DEFAULT_JUDGERANK;
 }
 
-function resolveBmsonJudgeRankPercent(json: BmsJson): number {
+function resolveBmsonJudgeRankPercent(json: BeMusicJson): number {
   const judgeRank = json.bmson.info.judgeRank;
   if (Number.isFinite(judgeRank) && (judgeRank ?? 0) > 0) {
     return judgeRank!;
@@ -339,7 +339,7 @@ function resolveBmsonJudgeRankPercent(json: BmsJson): number {
   return BEATORAJA_BMSON_DEFAULT_JUDGERANK;
 }
 
-export function resolveJudgeWindowsMs(json: BmsJson, debugBadWindowMs?: number): JudgeWindowsMs {
+export function resolveJudgeWindowsMs(json: BeMusicJson, debugBadWindowMs?: number): JudgeWindowsMs {
   const bmsonStyle = json.sourceFormat === 'bmson';
   const baseJudgerank = bmsonStyle ? BEATORAJA_BMSON_DEFAULT_JUDGERANK : BEATORAJA_BMS_DEFAULT_JUDGERANK;
   const judgeRank = bmsonStyle ? resolveBmsonJudgeRankPercent(json) : resolveBmsJudgeRankPercent(json);
@@ -360,7 +360,7 @@ export function resolveJudgeWindowsMs(json: BmsJson, debugBadWindowMs?: number):
   };
 }
 
-export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
+export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const resolvedJson = resolveBmsControlFlow(json);
   const speed = options.speed ?? 1;
@@ -394,10 +394,10 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
   const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
   const bgaRenderer = tui
     ? await createBgaAnsiRenderer(resolvedJson, {
-        baseDir: options.audioBaseDir ?? process.cwd(),
-        width: bgaDisplay.width,
-        height: bgaDisplay.height,
-      })
+      baseDir: options.audioBaseDir ?? process.cwd(),
+      width: bgaDisplay.width,
+      height: bgaDisplay.height,
+    })
     : undefined;
   const preferSixel = tui?.isSixelEnabled() ?? false;
   reportLoadProgress(options, 0.3, 'Preparing audio...');
@@ -639,7 +639,7 @@ export async function autoPlay(json: BmsJson, options: PlayerOptions = {}): Prom
   return summary;
 }
 
-export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
+export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const resolvedJson = resolveBmsControlFlow(json);
   const speed = options.speed ?? 1;
@@ -675,10 +675,10 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
   const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
   const bgaRenderer = tui
     ? await createBgaAnsiRenderer(resolvedJson, {
-        baseDir: options.audioBaseDir ?? process.cwd(),
-        width: bgaDisplay.width,
-        height: bgaDisplay.height,
-      })
+      baseDir: options.audioBaseDir ?? process.cwd(),
+      width: bgaDisplay.width,
+      height: bgaDisplay.height,
+    })
     : undefined;
   const preferSixel = tui?.isSixelEnabled() ?? false;
   reportLoadProgress(options, 0.3, 'Preparing audio...');
@@ -1052,7 +1052,7 @@ export async function manualPlay(json: BmsJson, options: PlayerOptions = {}): Pr
 }
 
 function createTuiIfEnabled(
-  json: BmsJson,
+  json: BeMusicJson,
   options: PlayerOptions,
   mode: 'AUTO' | 'MANUAL',
   laneBindings: LaneBinding[],
@@ -1159,7 +1159,7 @@ function estimateSixelScaleForCurrentTerminal(): { x: number; y: number } {
 }
 
 async function createAudioSessionIfEnabled(
-  json: BmsJson,
+  json: BeMusicJson,
   options: PlayerOptions,
   mode: 'auto' | 'manual',
   onLoadProgress?: (progress: AudioSessionLoadProgress) => void,
@@ -1187,22 +1187,7 @@ async function createAudioSessionIfEnabled(
   const rendered =
     mode === 'manual'
       ? applyGainToRenderResult(
-          await renderJson(stripPlayableEvents(json), {
-            ...renderOptions,
-            onSampleLoadProgress: (progress) => {
-              if (progress.stage !== 'reading') {
-                return;
-              }
-              onLoadProgress?.({
-                ratio: 0.2,
-                message: 'Loading audio file...',
-                detail: formatSampleLoadDetail(progress),
-              });
-            },
-          }),
-          bgmVolume,
-        )
-      : await renderAutoBackgroundWithBgmVolume(json, bgmVolume, {
+        await renderJson(stripPlayableEvents(json), {
           ...renderOptions,
           onSampleLoadProgress: (progress) => {
             if (progress.stage !== 'reading') {
@@ -1214,7 +1199,22 @@ async function createAudioSessionIfEnabled(
               detail: formatSampleLoadDetail(progress),
             });
           },
-        });
+        }),
+        bgmVolume,
+      )
+      : await renderAutoBackgroundWithBgmVolume(json, bgmVolume, {
+        ...renderOptions,
+        onSampleLoadProgress: (progress) => {
+          if (progress.stage !== 'reading') {
+            return;
+          }
+          onLoadProgress?.({
+            ratio: 0.2,
+            message: 'Loading audio file...',
+            detail: formatSampleLoadDetail(progress),
+          });
+        },
+      });
   onLoadProgress?.({
     ratio: 0.55,
     message: 'Initializing audio backend...',
@@ -1252,13 +1252,13 @@ async function createAudioSessionIfEnabled(
   const playableSamples =
     mode === 'manual'
       ? await buildPlayableSampleMap(json, options, padded.sampleRate, (progress) => {
-          const ratio = progress.total <= 0 ? 1 : progress.loaded / progress.total;
-          onLoadProgress?.({
-            ratio: 0.72 + Math.max(0, Math.min(1, ratio)) * 0.26,
-            message: `Loading key sounds... (${progress.loaded}/${progress.total})`,
-            detail: progress.samplePath ?? progress.sampleKey,
-          });
-        }, chartWavGain)
+        const ratio = progress.total <= 0 ? 1 : progress.loaded / progress.total;
+        onLoadProgress?.({
+          ratio: 0.72 + Math.max(0, Math.min(1, ratio)) * 0.26,
+          message: `Loading key sounds... (${progress.loaded}/${progress.total})`,
+          detail: progress.samplePath ?? progress.sampleKey,
+        });
+      }, chartWavGain)
       : undefined;
   const playableNotePlaybackMap = mode === 'manual' ? buildPlayableNotePlaybackMap(json) : undefined;
   onLoadProgress?.({
@@ -1348,52 +1348,52 @@ async function createAudioSessionIfEnabled(
     getActiveAudioVoiceCount: () => activeVoices.length,
     triggerEvent:
       mode === 'manual'
-        ? (event: BmsEvent) => {
-            if (draining || abortRequested || paused) {
-              return;
-            }
-            const normalized = normalizeObjectKey(event.value);
-            const sample = playableSamples?.get(normalized);
-            if (!sample) {
-              return;
-            }
-            const playback = playableNotePlaybackMap?.get(event);
-            const offsetSeconds = playback?.offsetSeconds ?? 0;
-            const offsetFrames = Math.max(0, Math.round(offsetSeconds * sample.sampleRate));
-            const durationFrames =
-              typeof playback?.durationSeconds === 'number' && Number.isFinite(playback.durationSeconds)
-                ? Math.max(1, Math.round(playback.durationSeconds * sample.sampleRate))
-                : sample.left.length - offsetFrames;
-            const endPosition = Math.min(sample.left.length, offsetFrames + durationFrames);
-            if (offsetFrames >= endPosition) {
-              return;
-            }
-            if (json.sourceFormat === 'bms') {
-              removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
-            }
-            if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
-              return;
-            }
-            activeVoices.push({
-              sample,
-              position: offsetFrames,
-              endPosition,
-              channel: normalizeChannel(event.channel),
-              sampleKey: normalized,
-              samplePath: json.resources.wav[normalized],
-              sliceId: playback?.sliceId,
-            });
+        ? (event: BeMusicEvent) => {
+          if (draining || abortRequested || paused) {
+            return;
           }
+          const normalized = normalizeObjectKey(event.value);
+          const sample = playableSamples?.get(normalized);
+          if (!sample) {
+            return;
+          }
+          const playback = playableNotePlaybackMap?.get(event);
+          const offsetSeconds = playback?.offsetSeconds ?? 0;
+          const offsetFrames = Math.max(0, Math.round(offsetSeconds * sample.sampleRate));
+          const durationFrames =
+            typeof playback?.durationSeconds === 'number' && Number.isFinite(playback.durationSeconds)
+              ? Math.max(1, Math.round(playback.durationSeconds * sample.sampleRate))
+              : sample.left.length - offsetFrames;
+          const endPosition = Math.min(sample.left.length, offsetFrames + durationFrames);
+          if (offsetFrames >= endPosition) {
+            return;
+          }
+          if (json.sourceFormat === 'bms') {
+            removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
+          }
+          if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
+            return;
+          }
+          activeVoices.push({
+            sample,
+            position: offsetFrames,
+            endPosition,
+            channel: normalizeChannel(event.channel),
+            sampleKey: normalized,
+            samplePath: json.resources.wav[normalized],
+            sliceId: playback?.sliceId,
+          });
+        }
         : undefined,
     stopChannel:
       mode === 'manual'
         ? (channel: string) => {
-            if (paused) {
-              return;
-            }
-            const normalizedChannel = normalizeChannel(channel);
-            removeActiveVoicesInPlace(activeVoices, (voice) => voice.channel === normalizedChannel);
+          if (paused) {
+            return;
           }
+          const normalizedChannel = normalizeChannel(channel);
+          removeActiveVoicesInPlace(activeVoices, (voice) => voice.channel === normalizedChannel);
+        }
         : undefined,
   };
 }
@@ -1436,7 +1436,7 @@ function collectActiveAudioFileNames(activeVoices: ActiveVoice[]): string[] {
   return [...unique];
 }
 
-async function createDebugActiveAudioEstimator(json: BmsJson, baseDir?: string): Promise<DebugActiveAudioEstimator> {
+async function createDebugActiveAudioEstimator(json: BeMusicJson, baseDir?: string): Promise<DebugActiveAudioEstimator> {
   const resolver = createTimingResolver(json);
   const triggers = collectSampleTriggers(json, resolver);
   const sampleDurationSecondsByKey = await buildDebugSampleDurationSecondsMap(triggers, baseDir);
@@ -1447,10 +1447,10 @@ async function createDebugActiveAudioEstimator(json: BmsJson, baseDir?: string):
         typeof trigger.sampleDurationSeconds === 'number' && Number.isFinite(trigger.sampleDurationSeconds)
           ? Math.max(0, trigger.sampleDurationSeconds)
           : Math.max(
-              0,
-              (sampleDurationSecondsByKey.get(trigger.sampleKey) ?? DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS) -
-                Math.max(0, trigger.sampleOffsetSeconds),
-            );
+            0,
+            (sampleDurationSecondsByKey.get(trigger.sampleKey) ?? DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS) -
+            Math.max(0, trigger.sampleOffsetSeconds),
+          );
       return {
         sampleKey: trigger.sampleKey,
         startSeconds,
@@ -1819,20 +1819,20 @@ function resolvePositiveNumberOption(value: number | undefined, fallback: number
   return value;
 }
 
-function stripPlayableEvents(json: BmsJson): BmsJson {
+function stripPlayableEvents(json: BeMusicJson): BeMusicJson {
   const cloned = structuredClone(json);
   cloned.events = cloned.events.filter((event) => !isPlayableChannel(event.channel));
   return cloned;
 }
 
-function stripNonPlayableEvents(json: BmsJson): BmsJson {
+function stripNonPlayableEvents(json: BeMusicJson): BeMusicJson {
   const cloned = structuredClone(json);
   cloned.events = cloned.events.filter((event) => isPlayableChannel(event.channel));
   return cloned;
 }
 
 async function renderAutoBackgroundWithBgmVolume(
-  json: BmsJson,
+  json: BeMusicJson,
   bgmVolume: number,
   options: {
     baseDir: string;
@@ -1865,7 +1865,7 @@ async function renderAutoBackgroundWithBgmVolume(
 }
 
 async function buildPlayableSampleMap(
-  json: BmsJson,
+  json: BeMusicJson,
   options: PlayerOptions,
   sampleRate: number,
   onProgress?: (progress: { loaded: number; total: number; sampleKey: string; samplePath?: string }) => void,
@@ -1925,8 +1925,8 @@ async function buildPlayableSampleMap(
   return sampleMap;
 }
 
-function buildPlayableNotePlaybackMap(json: BmsJson): Map<BmsEvent, PlayableNotePlayback> {
-  const playbackMap = new Map<BmsEvent, PlayableNotePlayback>();
+function buildPlayableNotePlaybackMap(json: BeMusicJson): Map<BeMusicEvent, PlayableNotePlayback> {
+  const playbackMap = new Map<BeMusicEvent, PlayableNotePlayback>();
   const resolver = createTimingResolver(json);
   for (const trigger of collectSampleTriggers(json, resolver)) {
     if (!isPlayableChannel(trigger.channel)) {
@@ -1948,7 +1948,7 @@ function normalizeBgmVolume(value: number | undefined): number {
   return Math.max(0, value);
 }
 
-function resolveChartVolWavGain(json: BmsJson): number {
+function resolveChartVolWavGain(json: BeMusicJson): number {
   const volWav = json.bms.volWav;
   if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
     return 1;
@@ -2129,7 +2129,7 @@ function findLastLaneIndex(bindings: LaneBinding[], predicate: (binding: LaneBin
 }
 
 function createMeasureTimeline(
-  json: BmsJson,
+  json: BeMusicJson,
   resolver: ReturnType<typeof createTimingResolver>,
   beatResolver: ReturnType<typeof createBeatResolver>,
 ): MeasureTimelinePoint[] {
@@ -2148,7 +2148,7 @@ function createMeasureTimeline(
   return timeline;
 }
 
-function createBpmTimeline(json: BmsJson, resolver: ReturnType<typeof createTimingResolver>): BpmTimelinePoint[] {
+function createBpmTimeline(json: BeMusicJson, resolver: ReturnType<typeof createTimingResolver>): BpmTimelinePoint[] {
   const timeline: BpmTimelinePoint[] = [];
   let previousSeconds = Number.NaN;
   let previousBpm = Number.NaN;
@@ -2177,7 +2177,7 @@ function createBpmTimeline(json: BmsJson, resolver: ReturnType<typeof createTimi
   return timeline;
 }
 
-function createBeatAtSecondsResolver(json: BmsJson): (seconds: number) => number {
+function createBeatAtSecondsResolver(json: BeMusicJson): (seconds: number) => number {
   const resolver = createTimingResolver(json);
   const stopWindows = createStopBeatWindows(resolver);
 
@@ -2249,7 +2249,7 @@ function secondsToBeatWithoutStops(
   return point.beat + (elapsed * point.bpm) / 60;
 }
 
-function createMeasureBoundariesBeats(json: BmsJson, beatResolver: ReturnType<typeof createBeatResolver>): number[] {
+function createMeasureBoundariesBeats(json: BeMusicJson, beatResolver: ReturnType<typeof createBeatResolver>): number[] {
   const maxEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
   const maxDefinedMeasure = json.measures.reduce((max, measure) => Math.max(max, measure.index), 0);
   const maxMeasure = Math.max(0, maxEventMeasure, maxDefinedMeasure);

@@ -2,7 +2,7 @@
 import { readdir, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createEmptyJson, type BmsJson } from '@be-music/json';
+import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { resolveCliPath } from '@be-music/utils';
 import readline from 'node:readline';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
@@ -60,25 +60,25 @@ interface ChartSummaryItem {
 
 type ChartSelectionEntry =
   | {
-      kind: 'random';
-      label: string;
-    }
+    kind: 'random';
+    label: string;
+  }
   | {
-      kind: 'group';
-      label: string;
-    }
+    kind: 'group';
+    label: string;
+  }
   | {
-      kind: 'chart';
-      filePath: string;
-      fileLabel: string;
-      totalNotes?: number;
-      player?: number;
-      rank?: number;
-      playLevel?: number;
-      bpmInitial?: number;
-      bpmMin?: number;
-      bpmMax?: number;
-    };
+    kind: 'chart';
+    filePath: string;
+    fileLabel: string;
+    totalNotes?: number;
+    player?: number;
+    rank?: number;
+    playLevel?: number;
+    bpmInitial?: number;
+    bpmMin?: number;
+    bpmMax?: number;
+  };
 
 interface ChartSummaryLoadingProgress {
   filePath: string;
@@ -141,26 +141,26 @@ interface PlayedChartResult {
 
 type DirectorySceneState =
   | {
-      kind: 'select';
-      focusKey?: string;
-      auto: boolean;
-    }
+    kind: 'select';
+    focusKey?: string;
+    auto: boolean;
+  }
   | {
-      kind: 'play';
-      chartPath: string;
-      focusKey?: string;
-      auto: boolean;
-    }
+    kind: 'play';
+    chartPath: string;
+    focusKey?: string;
+    auto: boolean;
+  }
   | {
-      kind: 'result';
-      played: PlayedChartResult;
-      focusKey?: string;
-      auto: boolean;
-    }
+    kind: 'result';
+    played: PlayedChartResult;
+    focusKey?: string;
+    auto: boolean;
+  }
   | {
-      kind: 'exit';
-      exitCode: number;
-    };
+    kind: 'exit';
+    exitCode: number;
+  };
 
 interface RawInputCapture {
   stdin: NodeJS.ReadStream & { isRaw?: boolean };
@@ -384,8 +384,8 @@ function resolveDirectoryStateFromResultAction(
 async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedChartResult> {
   const reportPlayLoadingProgress = process.stdout.isTTY
     ? (progress: PlayLoadingProgress): void => {
-        renderPlayLoadingProgress(chartPath, progress);
-      }
+      renderPlayLoadingProgress(chartPath, progress);
+    }
     : undefined;
   reportPlayLoadingProgress?.({
     ratio: 0.03,
@@ -437,13 +437,13 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     tui: args.tui,
     onLoadProgress: reportPlayLoadingProgress
       ? (progress: PlayerLoadProgress): void => {
-          const mappedRatio = 0.22 + Math.max(0, Math.min(1, progress.ratio)) * 0.76;
-          reportPlayLoadingProgress({
-            ratio: mappedRatio,
-            message: progress.message,
-            detail: progress.detail,
-          });
-        }
+        const mappedRatio = 0.22 + Math.max(0, Math.min(1, progress.ratio)) * 0.76;
+        reportPlayLoadingProgress({
+          ratio: mappedRatio,
+          message: progress.message,
+          detail: progress.detail,
+        });
+      }
       : undefined,
   };
 
@@ -815,8 +815,8 @@ async function selectChartInteractively(
   const previewController =
     options.previewAudio && process.stdout.isTTY
       ? createChartPreviewController({
-          audioBackend: options.audioBackend,
-        })
+        audioBackend: options.audioBackend,
+      })
       : undefined;
 
   const inputCapture = beginRawInputCapture();
@@ -1357,7 +1357,7 @@ async function buildChartSummary(rootDir: string, filePath: string): Promise<Cha
   };
 }
 
-function extractChartBpmSummary(json: BmsJson): { initial: number; min: number; max: number } | undefined {
+function extractChartBpmSummary(json: BeMusicJson): { initial: number; min: number; max: number } | undefined {
   const resolver = createTimingResolver(json);
   const bpmValues = resolver.tempoPoints
     .map((point) => point.bpm)
@@ -1485,7 +1485,7 @@ async function renderChartPreview(filePath: string): Promise<RenderResult | unde
 }
 
 async function renderPreviewSampleFile(
-  chart: BmsJson,
+  chart: BeMusicJson,
   chartPath: string,
   previewPath: string,
   gain: number,
@@ -1517,7 +1517,7 @@ async function renderPreviewSampleFile(
   return undefined;
 }
 
-function createPreviewPathCandidates(chart: BmsJson, previewPath: string): string[] {
+function createPreviewPathCandidates(chart: BeMusicJson, previewPath: string): string[] {
   const normalizedPreview = previewPath.trim();
   if (normalizedPreview.length === 0) {
     return [];
@@ -1546,7 +1546,7 @@ function trimAndLimitPreview(rendered: RenderResult): RenderResult {
   };
 }
 
-function resolveChartVolWavGain(chart: BmsJson): number {
+function resolveChartVolWavGain(chart: BeMusicJson): number {
   const volWav = chart.bms.volWav;
   if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
     return 1;

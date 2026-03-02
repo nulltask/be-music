@@ -1,7 +1,7 @@
 import {
   createBeatResolver,
-  type BmsEvent,
-  type BmsJson,
+  type BeMusicEvent,
+  type BeMusicJson,
   isLandmineChannel,
   isPlayableChannel,
   normalizeChannel,
@@ -11,7 +11,7 @@ import {
 import { createTimingResolver } from '@be-music/audio-renderer';
 
 export interface TimedPlayableNote {
-  event: BmsEvent;
+  event: BeMusicEvent;
   channel: string;
   beat: number;
   endBeat?: number;
@@ -22,7 +22,7 @@ export interface TimedPlayableNote {
 }
 
 export interface TimedLandmineNote {
-  event: BmsEvent;
+  event: BeMusicEvent;
   channel: string;
   beat: number;
   seconds: number;
@@ -30,7 +30,7 @@ export interface TimedLandmineNote {
   mine: true;
 }
 
-export function extractPlayableNotes(json: BmsJson): TimedPlayableNote[] {
+export function extractPlayableNotes(json: BeMusicJson): TimedPlayableNote[] {
   const resolver = createTimingResolver(json);
   const beatResolver = createBeatResolver(json);
   const notes = sortEvents(json.events)
@@ -54,7 +54,7 @@ export function extractPlayableNotes(json: BmsJson): TimedPlayableNote[] {
   return notes;
 }
 
-export function extractLandmineNotes(json: BmsJson): TimedLandmineNote[] {
+export function extractLandmineNotes(json: BeMusicJson): TimedLandmineNote[] {
   const resolver = createTimingResolver(json);
   const beatResolver = createBeatResolver(json);
   return sortEvents(json.events)
@@ -79,7 +79,7 @@ export function extractLandmineNotes(json: BmsJson): TimedLandmineNote[] {
 }
 
 function applyLnobjEndBeatIfNeeded(
-  json: BmsJson,
+  json: BeMusicJson,
   notes: TimedPlayableNote[],
   resolver: ReturnType<typeof createTimingResolver>,
 ): void {
@@ -109,7 +109,7 @@ function applyLnobjEndBeatIfNeeded(
   }
 }
 
-function resolveLongNoteEndBeat(json: BmsJson, event: BmsEvent, beat: number): number | undefined {
+function resolveLongNoteEndBeat(json: BeMusicJson, event: BeMusicEvent, beat: number): number | undefined {
   if (event.bmson?.l && event.bmson.l > 0 && json.sourceFormat === 'bmson') {
     const resolution = Math.max(1, json.bmson.info.resolution || 240);
     return beat + event.bmson.l / resolution;

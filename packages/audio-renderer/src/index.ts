@@ -13,8 +13,8 @@ import {
   parseBpmFrom03Token,
   sortEvents,
   type BeatResolver,
-  type BmsEvent,
-  type BmsJson,
+  type BeMusicEvent,
+  type BeMusicJson,
 } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { clampSignedUnit } from '@be-music/utils';
@@ -34,12 +34,12 @@ export interface TimingResolver {
   tempoPoints: TempoPoint[];
   stopPoints: StopPoint[];
   beatToSeconds: (beat: number) => number;
-  eventToSeconds: (event: BmsEvent) => number;
+  eventToSeconds: (event: BeMusicEvent) => number;
   bpmAtBeat: (beat: number) => number;
 }
 
 export interface TimedSampleTrigger {
-  event: BmsEvent;
+  event: BeMusicEvent;
   beat: number;
   seconds: number;
   channel: string;
@@ -87,7 +87,7 @@ interface DecodedAudio {
 }
 
 interface TimingBuildContext {
-  sortedEvents: BmsEvent[];
+  sortedEvents: BeMusicEvent[];
   beatResolver: BeatResolver;
 }
 
@@ -98,11 +98,11 @@ const MPG123_SUPPRESSED_LOG_PATTERNS = [
   /\bcoreaudio\.c:\d+\]\s*warning:\s*didn't have any audio data in callback \(buffer underflow\)/i,
 ];
 
-export function createTimingResolver(json: BmsJson): TimingResolver {
+export function createTimingResolver(json: BeMusicJson): TimingResolver {
   return createTimingResolverWithContext(json, createTimingBuildContext(json));
 }
 
-function createTimingResolverWithContext(json: BmsJson, context: TimingBuildContext): TimingResolver {
+function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuildContext): TimingResolver {
   const { sortedEvents, beatResolver } = context;
   const tempoPoints = createTempoPoints(json, sortedEvents, beatResolver);
   const stopPoints = createStopPoints(json, tempoPoints, sortedEvents, beatResolver);
@@ -147,12 +147,12 @@ function createTimingResolverWithContext(json: BmsJson, context: TimingBuildCont
   };
 }
 
-export function collectSampleTriggers(json: BmsJson, resolver = createTimingResolver(json)): TimedSampleTrigger[] {
+export function collectSampleTriggers(json: BeMusicJson, resolver = createTimingResolver(json)): TimedSampleTrigger[] {
   return collectSampleTriggersWithContext(json, resolver, createTimingBuildContext(json));
 }
 
 function collectSampleTriggersWithContext(
-  json: BmsJson,
+  json: BeMusicJson,
   resolver: TimingResolver,
   context: TimingBuildContext,
 ): TimedSampleTrigger[] {
@@ -181,7 +181,7 @@ function collectSampleTriggersWithContext(
   });
 }
 
-export async function renderJson(json: BmsJson, options: RenderOptions = {}): Promise<RenderResult> {
+export async function renderJson(json: BeMusicJson, options: RenderOptions = {}): Promise<RenderResult> {
   const sampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
   const normalize = options.normalize ?? true;
   const tailSeconds = options.tailSeconds ?? DEFAULT_TAIL_SECONDS;
@@ -283,7 +283,7 @@ export async function renderJson(json: BmsJson, options: RenderOptions = {}): Pr
   };
 }
 
-function createTimingBuildContext(json: BmsJson): TimingBuildContext {
+function createTimingBuildContext(json: BeMusicJson): TimingBuildContext {
   return {
     sortedEvents: sortEvents(json.events),
     beatResolver: createBeatResolver(json),
@@ -312,7 +312,7 @@ export async function writeAudioFile(outputPath: string, result: RenderResult): 
   await writeFile(destination, encoded);
 }
 
-function createTempoPoints(json: BmsJson, sortedEvents: BmsEvent[], beatResolver: BeatResolver): TempoPoint[] {
+function createTempoPoints(json: BeMusicJson, sortedEvents: BeMusicEvent[], beatResolver: BeatResolver): TempoPoint[] {
   const baseBpm = json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
   const points: TempoPoint[] = [{ beat: 0, bpm: baseBpm, seconds: 0 }];
   const changes: Array<{ beat: number; bpm: number }> = [];
@@ -358,9 +358,9 @@ function createTempoPoints(json: BmsJson, sortedEvents: BmsEvent[], beatResolver
 }
 
 function createStopPoints(
-  json: BmsJson,
+  json: BeMusicJson,
   tempoPoints: TempoPoint[],
-  sortedEvents: BmsEvent[],
+  sortedEvents: BeMusicEvent[],
   beatResolver: BeatResolver,
 ): StopPoint[] {
   const stopEvents: Array<{ beat: number; seconds: number }> = [];
@@ -541,12 +541,12 @@ function mixSample(
 }
 
 function createBmsonSamplePlaybackMap(
-  json: BmsJson,
+  json: BeMusicJson,
   resolver: TimingResolver,
-  sampleEvents: BmsEvent[],
+  sampleEvents: BeMusicEvent[],
   beatResolver: BeatResolver,
-): Map<BmsEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }> {
-  const perSampleKey = new Map<string, Array<{ event: BmsEvent; beat: number; seconds: number }>>();
+): Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }> {
+  const perSampleKey = new Map<string, Array<{ event: BeMusicEvent; beat: number; seconds: number }>>();
   for (const event of sampleEvents) {
     const sampleKey = normalizeObjectKey(event.value);
     let entries = perSampleKey.get(sampleKey);
@@ -562,14 +562,14 @@ function createBmsonSamplePlaybackMap(
     });
   }
 
-  const playbackMap = new Map<BmsEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>();
+  const playbackMap = new Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>();
   for (const entries of perSampleKey.values()) {
     // sampleEvents are already beat-sorted, so each sample bucket keeps beat order.
     let anchorSeconds = 0;
     let hasAnchor = false;
     let sliceIndex = 0;
 
-    for (let index = 0; index < entries.length; ) {
+    for (let index = 0; index < entries.length;) {
       const currentBeat = entries[index].beat;
       let end = index + 1;
       while (end < entries.length && Math.abs(entries[end].beat - currentBeat) < 1e-9) {
@@ -807,12 +807,12 @@ function decodeWav(buffer: Buffer): DecodedAudio {
   let offset = 12;
   let format:
     | {
-        audioFormat: number;
-        channels: number;
-        sampleRate: number;
-        blockAlign: number;
-        bitsPerSample: number;
-      }
+      audioFormat: number;
+      channels: number;
+      sampleRate: number;
+      blockAlign: number;
+      bitsPerSample: number;
+    }
     | undefined;
   let pcmOffset = -1;
   let pcmSize = 0;

@@ -6,9 +6,9 @@ import {
   cloneJson,
   type BmsControlFlowCommand,
   type BmsControlFlowEntry,
-  type BmsEvent,
-  type BmsPosition,
-  type BmsJson,
+  type BeMusicEvent,
+  type BeMusicPosition,
+  type BeMusicJson,
   createEmptyJson,
   intToBase36,
   normalizeChannel,
@@ -94,7 +94,7 @@ interface BmsonDocument {
 
 interface MeasurePositionWithFraction {
   measure: number;
-  position: BmsPosition;
+  position: BeMusicPosition;
 }
 
 type ControlFlowCommand = BmsControlFlowCommand;
@@ -123,9 +123,9 @@ interface SwitchControlFrame {
 }
 
 type ControlFlowFrame = RandomControlFrame | IfControlFrame | SwitchControlFrame;
-type MeasureLengthEntry = BmsJson['measures'][number];
+type MeasureLengthEntry = BeMusicJson['measures'][number];
 
-export function parseBms(input: string): BmsJson {
+export function parseBms(input: string): BeMusicJson {
   const json = createEmptyJson('bms');
   const controlFlowCaptureStack: ControlFlowCaptureFrameType[] = [];
   const measureByIndex = new Map<number, MeasureLengthEntry>();
@@ -198,12 +198,12 @@ export function parseBms(input: string): BmsJson {
   return json;
 }
 
-export function parseBmson(input: string): BmsJson {
+export function parseBmson(input: string): BeMusicJson {
   const document = JSON.parse(input) as BmsonDocument;
   return parseBmsonDocument(document);
 }
 
-function parseBmsonDocument(document: BmsonDocument): BmsJson {
+function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   const json = createEmptyJson('bmson');
 
   const info = document.info ?? {};
@@ -274,7 +274,7 @@ function parseBmsonDocument(document: BmsonDocument): BmsJson {
 
       const { measure, position } = positionResolver(note.y);
       const channel = isBgmNote ? '01' : (laneMap.get(lane) ?? '11');
-      const event: BmsEvent = {
+      const event: BeMusicEvent = {
         measure,
         position,
         channel,
@@ -331,12 +331,12 @@ function parseBmsonDocument(document: BmsonDocument): BmsJson {
   return json;
 }
 
-export function parseJson(input: string): BmsJson {
-  const raw = JSON.parse(input) as Partial<BmsJson>;
+export function parseJson(input: string): BeMusicJson {
+  const raw = JSON.parse(input) as Partial<BeMusicJson>;
   return parseJsonDocument(raw);
 }
 
-function parseJsonDocument(raw: Partial<BmsJson>): BmsJson {
+function parseJsonDocument(raw: Partial<BeMusicJson>): BeMusicJson {
   const json = createEmptyJson(raw.sourceFormat ?? 'json');
   json.sourceFormat = raw.sourceFormat ?? 'json';
   json.metadata = {
@@ -359,7 +359,7 @@ function parseJsonDocument(raw: Partial<BmsJson>): BmsJson {
     .filter((measure) => measure.length > 0)
     .sort((left, right) => left.index - right.index);
   const rawEvents = Array.isArray(raw.events) ? raw.events : [];
-  json.events = sortAndNormalizeEvents(rawEvents as Array<BmsEvent | Record<string, unknown>>);
+  json.events = sortAndNormalizeEvents(rawEvents as Array<BeMusicEvent | Record<string, unknown>>);
   if (json.events.length !== rawEvents.length) {
     throw new Error('Invalid bms-json event: position [numerator, denominator] is required.');
   }
@@ -369,14 +369,14 @@ function parseJsonDocument(raw: Partial<BmsJson>): BmsJson {
   return json;
 }
 
-function parseStructuredChartObject(parsed: Record<string, unknown>): BmsJson {
+function parseStructuredChartObject(parsed: Record<string, unknown>): BeMusicJson {
   if (parsed.format === BMS_JSON_FORMAT) {
-    return parseJsonDocument(parsed as Partial<BmsJson>);
+    return parseJsonDocument(parsed as Partial<BeMusicJson>);
   }
   return parseBmsonDocument(parsed as BmsonDocument);
 }
 
-export function parseChart(input: string, formatHint?: string): BmsJson {
+export function parseChart(input: string, formatHint?: string): BeMusicJson {
   const hint = formatHint?.toLowerCase();
   if (hint === 'bmson') {
     return parseBmson(input);
@@ -395,7 +395,7 @@ export function parseChart(input: string, formatHint?: string): BmsJson {
   return parseBms(input);
 }
 
-export async function parseChartFile(filePath: string): Promise<BmsJson> {
+export async function parseChartFile(filePath: string): Promise<BeMusicJson> {
   const buffer = await readFile(filePath);
   const extension = extname(filePath).toLowerCase();
   if (extension === '.bmson') {
@@ -412,7 +412,7 @@ export interface ResolveBmsControlFlowOptions {
   random?: () => number;
 }
 
-export function resolveBmsControlFlow(input: BmsJson, options: ResolveBmsControlFlowOptions = {}): BmsJson {
+export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsControlFlowOptions = {}): BeMusicJson {
   if (input.bms.controlFlow.length === 0) {
     return cloneJson(input);
   }
@@ -630,7 +630,7 @@ function hasUtf16BeBom(buffer: Buffer): boolean {
 }
 
 function pushObjectDataLine(
-  json: BmsJson,
+  json: BeMusicJson,
   measure: number,
   channel: string,
   data: string,
@@ -655,7 +655,7 @@ function pushObjectDataLine(
   }
 }
 
-function pushHeaderLine(json: BmsJson, command: string, value: string): void {
+function pushHeaderLine(json: BeMusicJson, command: string, value: string): void {
   const objectCommand = command.match(INDEXED_HEADER_COMMAND);
   if (objectCommand) {
     const directive = objectCommand[1];
@@ -849,7 +849,7 @@ function pushHeaderLine(json: BmsJson, command: string, value: string): void {
   }
 }
 
-function migrateBmsExtensionHeadersFromExtras(json: BmsJson): void {
+function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
   const migratedExtras: Record<string, string> = {};
 
   for (const [command, value] of Object.entries(json.metadata.extras ?? {})) {
@@ -1040,8 +1040,8 @@ function collectNonZeroObjectTokens(input: string): {
   return { tokenCount, tokens };
 }
 
-function sortAndNormalizeEvents(events: Array<BmsEvent | Record<string, unknown>>): BmsEvent[] {
-  const normalized: BmsEvent[] = [];
+function sortAndNormalizeEvents(events: Array<BeMusicEvent | Record<string, unknown>>): BeMusicEvent[] {
+  const normalized: BeMusicEvent[] = [];
   for (const event of events) {
     const parsed = normalizeRawEvent(event);
     if (parsed) {
@@ -1068,7 +1068,7 @@ function sortAndNormalizeEvents(events: Array<BmsEvent | Record<string, unknown>
   return normalized;
 }
 
-function normalizeRawEvent(event: BmsEvent | Record<string, unknown>): BmsEvent | undefined {
+function normalizeRawEvent(event: BeMusicEvent | Record<string, unknown>): BeMusicEvent | undefined {
   const raw = event as Record<string, unknown>;
   const measure = normalizeMeasure(raw.measure);
   const channel = normalizeEventChannel(raw.channel);
@@ -1108,7 +1108,7 @@ function normalizeEventValue(value: unknown): string | undefined {
   return normalizeObjectKey(value);
 }
 
-function normalizePosition(position: unknown): BmsPosition | undefined {
+function normalizePosition(position: unknown): BeMusicPosition | undefined {
   if (!Array.isArray(position) || position.length < 2) {
     return undefined;
   }
@@ -1137,12 +1137,12 @@ function normalizePositionNumerator(value: unknown, denominator: number): number
   return normalizeFractionNumerator(value, denominator);
 }
 
-function normalizeEventBmsonExtension(value: unknown): BmsEvent['bmson'] | undefined {
+function normalizeEventBmsonExtension(value: unknown): BeMusicEvent['bmson'] | undefined {
   if (!value || typeof value !== 'object') {
     return undefined;
   }
   const raw = value as Record<string, unknown>;
-  const extension: NonNullable<BmsEvent['bmson']> = {};
+  const extension: NonNullable<BeMusicEvent['bmson']> = {};
   const length = normalizeBmsonNoteLength(raw.l);
   if (length !== undefined) {
     extension.l = length;
@@ -1153,7 +1153,7 @@ function normalizeEventBmsonExtension(value: unknown): BmsEvent['bmson'] | undef
   return Object.keys(extension).length > 0 ? extension : undefined;
 }
 
-function compareEventPosition(left: BmsEvent, right: BmsEvent): number {
+function compareEventPosition(left: BeMusicEvent, right: BeMusicEvent): number {
   if (left.position[1] === right.position[1]) {
     return left.position[0] - right.position[0];
   }
@@ -1195,7 +1195,7 @@ function normalizeAsciiTokenChar(code: number): string | undefined {
 }
 
 function upsertMeasureLength(
-  json: BmsJson,
+  json: BeMusicJson,
   measure: number,
   length: number,
   measureByIndex?: Map<number, MeasureLengthEntry>,
@@ -1247,8 +1247,8 @@ function laneIndexToChannel(index: number): string {
   return `${first}${second}`;
 }
 
-function normalizeBmsExtensions(input: unknown): BmsJson['bms'] {
-  const normalized: BmsJson['bms'] = {
+function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
+  const normalized: BeMusicJson['bms'] = {
     controlFlow: [],
     exRank: {},
     argb: {},
@@ -1397,8 +1397,8 @@ function normalizeBmsExtensionStringList(input: unknown): string[] {
   return normalized;
 }
 
-function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): BmsJson['bmson']['info'] {
-  const normalized: BmsJson['bmson']['info'] = {};
+function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): BeMusicJson['bmson']['info'] {
+  const normalized: BeMusicJson['bmson']['info'] = {};
   copyIfString(normalized, 'title', info.title);
   copyIfString(normalized, 'subtitle', info.subtitle);
   copyIfString(normalized, 'artist', info.artist);
@@ -1427,7 +1427,7 @@ function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): BmsJson['
   return normalized;
 }
 
-function normalizeBmsonBgaForIr(input: BmsonDocument['bga'] | undefined): BmsJson['bmson']['bga'] {
+function normalizeBmsonBgaForIr(input: BmsonDocument['bga'] | undefined): BeMusicJson['bmson']['bga'] {
   if (!input || typeof input !== 'object') {
     return {
       header: [],
@@ -1444,11 +1444,11 @@ function normalizeBmsonBgaForIr(input: BmsonDocument['bga'] | undefined): BmsJso
   };
 }
 
-function normalizeBmsonBgaHeaderEntries(input: unknown): BmsJson['bmson']['bga']['header'] {
+function normalizeBmsonBgaHeaderEntries(input: unknown): BeMusicJson['bmson']['bga']['header'] {
   if (!Array.isArray(input)) {
     return [];
   }
-  const entries: BmsJson['bmson']['bga']['header'] = [];
+  const entries: BeMusicJson['bmson']['bga']['header'] = [];
   for (const item of input) {
     if (!item || typeof item !== 'object') {
       continue;
@@ -1466,11 +1466,11 @@ function normalizeBmsonBgaHeaderEntries(input: unknown): BmsJson['bmson']['bga']
   return entries;
 }
 
-function normalizeBmsonBgaEventEntries(input: unknown): BmsJson['bmson']['bga']['events'] {
+function normalizeBmsonBgaEventEntries(input: unknown): BeMusicJson['bmson']['bga']['events'] {
   if (!Array.isArray(input)) {
     return [];
   }
-  const entries: BmsJson['bmson']['bga']['events'] = [];
+  const entries: BeMusicJson['bmson']['bga']['events'] = [];
   for (const item of input) {
     if (!item || typeof item !== 'object') {
       continue;
@@ -1541,8 +1541,8 @@ function normalizePositiveInteger(value: unknown): number | undefined {
   return normalized;
 }
 
-function normalizeBmsonExtensions(input: unknown): BmsJson['bmson'] {
-  const normalized: BmsJson['bmson'] = {
+function normalizeBmsonExtensions(input: unknown): BeMusicJson['bmson'] {
+  const normalized: BeMusicJson['bmson'] = {
     lines: [],
     info: {},
     bga: {
@@ -1568,8 +1568,8 @@ function normalizeBmsonExtensions(input: unknown): BmsJson['bmson'] {
   return normalized;
 }
 
-function normalizeBmsonInfoFromIr(input: unknown): BmsJson['bmson']['info'] {
-  const info: BmsJson['bmson']['info'] = {};
+function normalizeBmsonInfoFromIr(input: unknown): BeMusicJson['bmson']['info'] {
+  const info: BeMusicJson['bmson']['info'] = {};
   if (!input || typeof input !== 'object') {
     return info;
   }
@@ -1604,7 +1604,7 @@ function normalizeBmsonInfoFromIr(input: unknown): BmsJson['bmson']['info'] {
   return info;
 }
 
-function normalizeBmsonBgaFromIr(input: unknown): BmsJson['bmson']['bga'] {
+function normalizeBmsonBgaFromIr(input: unknown): BeMusicJson['bmson']['bga'] {
   if (!input || typeof input !== 'object') {
     return {
       header: [],
@@ -1663,7 +1663,7 @@ function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | und
     const channel = normalizeChannel(raw.channel);
 
     const rawEvents = Array.isArray(raw.events) ? raw.events : [];
-    const normalizedEvents = sortAndNormalizeEvents(rawEvents as Array<BmsEvent | Record<string, unknown>>)
+    const normalizedEvents = sortAndNormalizeEvents(rawEvents as Array<BeMusicEvent | Record<string, unknown>>)
       .filter((event) => event.measure === measure && normalizeChannel(event.channel) === channel)
       .map((event) => ({
         measure,
@@ -1884,7 +1884,7 @@ function removeCurrentCaptureFrame(stack: ControlFlowCaptureFrameType[], type: C
 }
 
 function applyActiveControlFlowEntry(
-  json: BmsJson,
+  json: BeMusicJson,
   entry: BmsControlFlowEntry,
   measureByIndex?: Map<number, MeasureLengthEntry>,
 ): void {
@@ -1928,7 +1928,7 @@ function createControlFlowObjectEntry(
   }
 
   const parsed = collectNonZeroObjectTokens(data);
-  const events: BmsEvent[] = [];
+  const events: BeMusicEvent[] = [];
   for (const token of parsed.tokens) {
     events.push({
       measure,

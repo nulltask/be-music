@@ -6,33 +6,33 @@ import {
   normalizeChannel,
   normalizeObjectKey,
   sortEvents,
-  type BmsEvent,
-  type BmsJson,
+  type BeMusicEvent,
+  type BeMusicJson,
 } from '@be-music/json';
 import { parseChart, parseChartFile } from '@be-music/parser';
 import { stringifyBmson, stringifyBms } from '@be-music/stringifier';
 
-export async function importChart(inputPath: string): Promise<BmsJson> {
+export async function importChart(inputPath: string): Promise<BeMusicJson> {
   return parseChartFile(resolve(inputPath));
 }
 
-export async function loadJsonFile(filePath: string): Promise<BmsJson> {
+export async function loadJsonFile(filePath: string): Promise<BeMusicJson> {
   const content = await readFile(resolve(filePath), 'utf8');
   return parseChart(content, 'json');
 }
 
-export async function saveJsonFile(filePath: string, json: BmsJson): Promise<void> {
+export async function saveJsonFile(filePath: string, json: BeMusicJson): Promise<void> {
   await writeFile(resolve(filePath), `${JSON.stringify(normalizeJson(json), null, 2)}\n`, 'utf8');
 }
 
-export async function exportChart(filePath: string, json: BmsJson): Promise<void> {
+export async function exportChart(filePath: string, json: BeMusicJson): Promise<void> {
   const outputPath = resolve(filePath);
   const extension = extname(outputPath).toLowerCase();
   const content = extension === '.bmson' ? stringifyBmson(json) : stringifyBms(json);
   await writeFile(outputPath, content, 'utf8');
 }
 
-export function setMetadata(json: BmsJson, key: string, value: string): BmsJson {
+export function setMetadata(json: BeMusicJson, key: string, value: string): BeMusicJson {
   const normalized = normalizeJson(json);
   const property = key.toLowerCase();
 
@@ -81,7 +81,7 @@ export function setMetadata(json: BmsJson, key: string, value: string): BmsJson 
 }
 
 export function addNote(
-  json: BmsJson,
+  json: BeMusicJson,
   params: {
     measure: number;
     channel: string;
@@ -89,12 +89,12 @@ export function addNote(
     positionDenominator: number;
     value: string;
   },
-): BmsJson {
+): BeMusicJson {
   const normalized = normalizeJson(json);
   ensureMeasure(normalized, params.measure);
   const position = normalizePositionFraction(params.positionNumerator, params.positionDenominator);
 
-  const event: BmsEvent = {
+  const event: BeMusicEvent = {
     measure: Math.max(0, Math.floor(params.measure)),
     channel: normalizeChannel(params.channel),
     position: [position.numerator, position.denominator],
@@ -107,7 +107,7 @@ export function addNote(
 }
 
 export function deleteNote(
-  json: BmsJson,
+  json: BeMusicJson,
   params: {
     measure: number;
     channel: string;
@@ -115,7 +115,7 @@ export function deleteNote(
     positionDenominator: number;
     value?: string;
   },
-): BmsJson {
+): BeMusicJson {
   const normalized = normalizeJson(json);
   const channel = normalizeChannel(params.channel);
   const position = normalizePositionFraction(params.positionNumerator, params.positionDenominator);
@@ -139,16 +139,16 @@ export function deleteNote(
   return normalized;
 }
 
-export function listNotes(json: BmsJson, measure?: number): BmsEvent[] {
+export function listNotes(json: BeMusicJson, measure?: number): BeMusicEvent[] {
   const target = normalizeJson(json);
   return sortEvents(target.events).filter((event) => (measure === undefined ? true : event.measure === measure));
 }
 
-export function createBlankJson(): BmsJson {
+export function createBlankJson(): BeMusicJson {
   return createEmptyJson('json');
 }
 
-function normalizeJson(json: BmsJson): BmsJson {
+function normalizeJson(json: BeMusicJson): BeMusicJson {
   const cloned = structuredClone(json);
   if (!cloned.metadata) {
     cloned.metadata = {
@@ -189,7 +189,7 @@ function normalizePositionFraction(numerator: number, denominator: number): { nu
   };
 }
 
-function isSamePosition(event: BmsEvent, target: { numerator: number; denominator: number }): boolean {
+function isSamePosition(event: BeMusicEvent, target: { numerator: number; denominator: number }): boolean {
   const left = BigInt(event.position[0]) * BigInt(target.denominator);
   const right = BigInt(target.numerator) * BigInt(event.position[1]);
   if (left !== right) {

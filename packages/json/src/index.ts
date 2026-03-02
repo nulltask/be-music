@@ -1,8 +1,8 @@
 export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
 
-export type BmsSourceFormat = 'bms' | 'bmson' | 'json';
+export type BeMusicSourceFormat = 'bms' | 'bmson' | 'json';
 
-export interface BmsMetadata {
+export interface BeMusicMetadata {
   title?: string;
   subtitle?: string;
   artist?: string;
@@ -25,22 +25,22 @@ export interface BmsResources {
   text: Record<string, string>;
 }
 
-export interface BmsMeasure {
+export interface BeMusicMeasure {
   index: number;
   length: number;
 }
 
-export type BmsPosition = readonly [numerator: number, denominator: number];
+export type BeMusicPosition = readonly [numerator: number, denominator: number];
 
 export interface BmsonEventExtensions {
   l?: number;
   c?: boolean;
 }
 
-export interface BmsEvent {
+export interface BeMusicEvent {
   measure: number;
   channel: string;
-  position: BmsPosition;
+  position: BeMusicPosition;
   value: string;
   bmson?: BmsonEventExtensions;
 }
@@ -119,7 +119,7 @@ export interface BmsControlFlowObjectEntry {
   kind: 'object';
   measure: number;
   channel: string;
-  events: BmsEvent[];
+  events: BeMusicEvent[];
   measureLength?: number;
 }
 
@@ -150,13 +150,13 @@ export interface BmsExtensions {
   charset?: string;
 }
 
-export interface BmsJson {
+export interface BeMusicJson {
   format: typeof BMS_JSON_FORMAT;
-  sourceFormat: BmsSourceFormat;
-  metadata: BmsMetadata;
+  sourceFormat: BeMusicSourceFormat;
+  metadata: BeMusicMetadata;
   resources: BmsResources;
-  measures: BmsMeasure[];
-  events: BmsEvent[];
+  measures: BeMusicMeasure[];
+  events: BeMusicEvent[];
   bms: BmsExtensions;
   bmson: BmsonExtensions;
 }
@@ -168,12 +168,12 @@ export interface MeasurePosition {
 
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
-  eventToBeat: (event: BmsEvent) => number;
+  eventToBeat: (event: BeMusicEvent) => number;
 }
 
 export const DEFAULT_BPM = 120;
 
-export function createEmptyJson(sourceFormat: BmsSourceFormat = 'bms'): BmsJson {
+export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMusicJson {
   return {
     format: BMS_JSON_FORMAT,
     sourceFormat,
@@ -214,7 +214,7 @@ export function createEmptyJson(sourceFormat: BmsSourceFormat = 'bms'): BmsJson 
   };
 }
 
-export function cloneJson(json: BmsJson): BmsJson {
+export function cloneJson(json: BeMusicJson): BeMusicJson {
   return structuredClone(json);
 }
 
@@ -251,12 +251,12 @@ export function parseBpmFrom03Token(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function ensureMeasure(json: BmsJson, index: number): BmsMeasure {
+export function ensureMeasure(json: BeMusicJson, index: number): BeMusicMeasure {
   const found = json.measures.find((measure) => measure.index === index);
   if (found) {
     return found;
   }
-  const created: BmsMeasure = {
+  const created: BeMusicMeasure = {
     index,
     length: 1,
   };
@@ -264,7 +264,7 @@ export function ensureMeasure(json: BmsJson, index: number): BmsMeasure {
   return created;
 }
 
-export function getMeasureLength(json: BmsJson, index: number): number {
+export function getMeasureLength(json: BeMusicJson, index: number): number {
   const found = json.measures.find((measure) => measure.index === index);
   return found?.length ?? 1;
 }
@@ -273,7 +273,7 @@ export function getMeasureBeats(length: number): number {
   return 4 * length;
 }
 
-export function measureToBeat(json: BmsJson, measure: number, position = 0): number {
+export function measureToBeat(json: BeMusicJson, measure: number, position = 0): number {
   const safePosition = clamp01(position);
   let beats = 0;
   for (let current = 0; current < measure; current += 1) {
@@ -283,11 +283,11 @@ export function measureToBeat(json: BmsJson, measure: number, position = 0): num
   return beats;
 }
 
-export function eventToBeat(json: BmsJson, event: BmsEvent): number {
+export function eventToBeat(json: BeMusicJson, event: BeMusicEvent): number {
   return measureToBeat(json, event.measure, getEventPosition(event));
 }
 
-export function createBeatResolver(json: BmsJson): BeatResolver {
+export function createBeatResolver(json: BeMusicJson): BeatResolver {
   const measureLengths = new Map<number, number>();
   let maxDefinedMeasure = -1;
   for (const measure of json.measures) {
@@ -337,7 +337,7 @@ export function createBeatResolver(json: BmsJson): BeatResolver {
   };
 }
 
-export function beatToMeasurePosition(json: BmsJson, beat: number): MeasurePosition {
+export function beatToMeasurePosition(json: BeMusicJson, beat: number): MeasurePosition {
   if (beat <= 0) {
     return { measure: 0, position: 0 };
   }
@@ -359,7 +359,7 @@ export function beatToMeasurePosition(json: BmsJson, beat: number): MeasurePosit
   return { measure, position: 0 };
 }
 
-export function sortEvents(events: BmsEvent[]): BmsEvent[] {
+export function sortEvents(events: BeMusicEvent[]): BeMusicEvent[] {
   return [...events].sort((left, right) => {
     if (left.measure !== right.measure) {
       return left.measure - right.measure;
@@ -426,7 +426,7 @@ export function isPlayableChannel(channel: string): boolean {
   return normalized.startsWith('1') || normalized.startsWith('2');
 }
 
-export function listPlayableChannels(json: BmsJson): string[] {
+export function listPlayableChannels(json: BeMusicJson): string[] {
   return [...new Set(json.events.map((event) => normalizeChannel(event.channel)).filter(isPlayableChannel))].sort();
 }
 
@@ -440,13 +440,13 @@ function clamp01(value: number): number {
   return value;
 }
 
-function getEventPosition(event: BmsEvent): number {
+function getEventPosition(event: BeMusicEvent): number {
   const denominator = normalizePositionDenominator(event.position[1]);
   const numerator = normalizePositionNumerator(event.position[0], denominator);
   return numerator / denominator;
 }
 
-function compareEventPosition(left: BmsEvent, right: BmsEvent): number {
+function compareEventPosition(left: BeMusicEvent, right: BeMusicEvent): number {
   const leftDenominator = normalizePositionDenominator(left.position[1]);
   const leftNumerator = normalizePositionNumerator(left.position[0], leftDenominator);
   const rightDenominator = normalizePositionDenominator(right.position[1]);

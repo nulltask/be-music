@@ -143,12 +143,12 @@
 ## Event 構造 (正規)
 
 ```ts
-type BmsPosition = readonly [numerator: number, denominator: number];
+type BeMusicPosition = readonly [numerator: number, denominator: number];
 
-interface BmsEvent {
+interface BeMusicEvent {
   measure: number;
   channel: string;
-  position: BmsPosition;
+  position: BeMusicPosition;
   value: string;
   bmson?: {
     l?: number;

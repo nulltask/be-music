@@ -1,6 +1,6 @@
 import { access, readFile } from 'node:fs/promises';
 import { extname, isAbsolute, resolve } from 'node:path';
-import { normalizeChannel, normalizeObjectKey, sortEvents, type BmsEvent, type BmsJson } from '@be-music/json';
+import { normalizeChannel, normalizeObjectKey, sortEvents, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { decode as decodeBmpTs } from 'bmp-ts';
 import jpeg from 'jpeg-js';
@@ -170,7 +170,7 @@ export class BgaAnsiRenderer {
 }
 
 export async function createBgaAnsiRenderer(
-  json: BmsJson,
+  json: BeMusicJson,
   options: BgaAnsiOptions,
 ): Promise<BgaAnsiRenderer | undefined> {
   const width = Math.max(8, Math.floor(options.width ?? DEFAULT_BGA_ASCII_WIDTH));
@@ -262,7 +262,7 @@ async function loadFramesByKeys(params: {
 }
 
 function buildBgaTimeline(
-  sortedEvents: BmsEvent[],
+  sortedEvents: BeMusicEvent[],
   resolver: ReturnType<typeof createTimingResolver>,
   channel: string,
 ): BgaCue[] {

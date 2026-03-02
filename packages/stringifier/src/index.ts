@@ -6,8 +6,8 @@ import {
   normalizeObjectKey,
   parseBpmFrom03Token,
   sortEvents,
-  type BmsEvent,
-  type BmsJson,
+  type BeMusicEvent,
+  type BeMusicJson,
 } from '@be-music/json';
 import { gcd, lcm, normalizeFractionNumerator, normalizeNonNegativeInt, normalizePositiveInt } from '@be-music/utils';
 export interface BmsStringifyOptions {
@@ -20,7 +20,7 @@ export interface BmsonStringifyOptions {
   indent?: number;
 }
 
-export function stringifyBms(json: BmsJson, options: BmsStringifyOptions = {}): string {
+export function stringifyBms(json: BeMusicJson, options: BmsStringifyOptions = {}): string {
   const eol = options.eol ?? '\n';
   const maxResolution = options.maxResolution;
   const lines: string[] = [];
@@ -41,7 +41,7 @@ export function stringifyBms(json: BmsJson, options: BmsStringifyOptions = {}): 
   return lines.join(eol);
 }
 
-export function stringifyBmson(json: BmsJson, options: BmsonStringifyOptions = {}): string {
+export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions = {}): string {
   const resolution = resolveBmsonResolutionForOutput(json, options);
   const indent = options.indent ?? 2;
   const sortedEvents = sortEvents(json.events);
@@ -126,11 +126,11 @@ export function stringifyBmson(json: BmsJson, options: BmsonStringifyOptions = {
   return `${JSON.stringify(bmson, null, indent)}\n`;
 }
 
-export function stringifyChart(json: BmsJson, format: 'bms' | 'bmson' = 'bms'): string {
+export function stringifyChart(json: BeMusicJson, format: 'bms' | 'bmson' = 'bms'): string {
   return format === 'bmson' ? stringifyBmson(json) : stringifyBms(json);
 }
 
-function pushMetadataLines(lines: string[], json: BmsJson): void {
+function pushMetadataLines(lines: string[], json: BeMusicJson): void {
   lines.push(`#TITLE ${json.metadata.title ?? ''}`);
   if (json.metadata.subtitle) {
     lines.push(`#SUBTITLE ${json.metadata.subtitle}`);
@@ -167,7 +167,7 @@ function pushMetadataLines(lines: string[], json: BmsJson): void {
   }
 }
 
-function pushBmsExtensionLines(lines: string[], json: BmsJson): void {
+function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
   if (typeof json.bms.player === 'number') {
     lines.push(`#PLAYER ${formatNumber(json.bms.player)}`);
   }
@@ -266,7 +266,7 @@ function pushBmsExtensionLines(lines: string[], json: BmsJson): void {
   }
 }
 
-function pushResourceLines(lines: string[], json: BmsJson): void {
+function pushResourceLines(lines: string[], json: BeMusicJson): void {
   pushObjectResourceLines(lines, 'WAV', json.resources.wav);
   pushObjectResourceLines(lines, 'BMP', json.resources.bmp);
 
@@ -290,7 +290,7 @@ function pushObjectResourceLines(lines: string[], command: string, values: Recor
   }
 }
 
-function pushMeasureLines(lines: string[], json: BmsJson): void {
+function pushMeasureLines(lines: string[], json: BeMusicJson): void {
   const measures = [...json.measures]
     .filter((measure) => measure.length > 0 && Math.abs(measure.length - 1) > 1e-9)
     .sort((left, right) => left.index - right.index);
@@ -300,7 +300,7 @@ function pushMeasureLines(lines: string[], json: BmsJson): void {
   }
 }
 
-function pushEventLines(lines: string[], json: BmsJson, maxResolution?: number): void {
+function pushEventLines(lines: string[], json: BeMusicJson, maxResolution?: number): void {
   const grouped = groupEvents(sortEvents(json.events));
   for (const [key, events] of grouped.entries()) {
     const [measureText, channel] = key.split(':');
@@ -319,7 +319,7 @@ function pushEventLines(lines: string[], json: BmsJson, maxResolution?: number):
   }
 }
 
-function pushControlFlowLines(lines: string[], json: BmsJson): void {
+function pushControlFlowLines(lines: string[], json: BeMusicJson): void {
   for (const entry of json.bms.controlFlow) {
     if (entry.kind === 'directive') {
       lines.push(entry.value ? `#${entry.command} ${entry.value}` : `#${entry.command}`);
@@ -348,7 +348,7 @@ function pushBmsSectionComment(lines: string[], section: string): void {
   lines.push('');
 }
 
-function serializeControlFlowObjectEvents(measure: number, channel: string, events: BmsEvent[]): string | undefined {
+function serializeControlFlowObjectEvents(measure: number, channel: string, events: BeMusicEvent[]): string | undefined {
   const normalizedChannel = normalizeChannel(channel);
   const lineEvents = sortEvents(events)
     .filter(
@@ -380,8 +380,8 @@ function serializeControlFlowObjectEvents(measure: number, channel: string, even
   return `#${toMeasure(measure)}${normalizedChannel}:${cells.join('')}`;
 }
 
-function groupEvents(events: BmsEvent[]): Map<string, BmsEvent[]> {
-  const groups = new Map<string, BmsEvent[]>();
+function groupEvents(events: BeMusicEvent[]): Map<string, BeMusicEvent[]> {
+  const groups = new Map<string, BeMusicEvent[]>();
   for (const event of events) {
     const measure = Math.max(0, Math.floor(event.measure));
     const channel = normalizeChannel(event.channel);
@@ -416,7 +416,7 @@ function groupEvents(events: BmsEvent[]): Map<string, BmsEvent[]> {
   );
 }
 
-function chooseResolution(events: BmsEvent[], maxResolution?: number): number {
+function chooseResolution(events: BeMusicEvent[], maxResolution?: number): number {
   let resolution = 1;
   for (const event of events) {
     const { denominator } = resolveEventFraction(event);
@@ -428,7 +428,7 @@ function chooseResolution(events: BmsEvent[], maxResolution?: number): number {
   return Math.max(1, resolution);
 }
 
-function resolveEventFraction(event: BmsEvent): { numerator: number; denominator: number } {
+function resolveEventFraction(event: BeMusicEvent): { numerator: number; denominator: number } {
   const denominator = normalizePositiveInt(event.position[1], 1);
   const numerator = normalizeFractionNumerator(event.position[0], denominator, 0);
   return reduceFraction(numerator, denominator);
@@ -488,8 +488,8 @@ function isDedicatedBmsExtensionCommand(command: string): boolean {
   return false;
 }
 
-export function createDemoJson(): BmsJson {
-  const json: BmsJson = {
+export function createDemoJson(): BeMusicJson {
+  const json: BeMusicJson = {
     format: 'be-music-json/0.1.0',
     sourceFormat: 'json',
     metadata: {
@@ -542,7 +542,7 @@ export function tokenFromNumber(value: number): string {
   return intToBase36(value, 2);
 }
 
-function resolveBmsonResolutionForOutput(json: BmsJson, options: BmsonStringifyOptions): number {
+function resolveBmsonResolutionForOutput(json: BeMusicJson, options: BmsonStringifyOptions): number {
   if (typeof options.resolution === 'number' && Number.isFinite(options.resolution) && options.resolution > 0) {
     return Math.floor(options.resolution);
   }
@@ -555,7 +555,7 @@ function resolveBmsonResolutionForOutput(json: BmsJson, options: BmsonStringifyO
   return 240;
 }
 
-function resolveBmsonVersionForOutput(json: BmsJson): string {
+function resolveBmsonVersionForOutput(json: BeMusicJson): string {
   if (typeof json.bmson.version === 'string' && json.bmson.version.length > 0) {
     return json.bmson.version;
   }
@@ -563,7 +563,7 @@ function resolveBmsonVersionForOutput(json: BmsJson): string {
 }
 
 function createBmsonInfoForOutput(
-  json: BmsJson,
+  json: BeMusicJson,
   resolution: number,
   playableChannelCount: number,
 ): Record<string, unknown> {
@@ -612,13 +612,13 @@ function createBmsonInfoForOutput(
   return output;
 }
 
-function createBmsonBgaForOutput(json: BmsJson):
+function createBmsonBgaForOutput(json: BeMusicJson):
   | {
-      bga_header: Array<{ id: number; name: string }>;
-      bga_events: Array<{ y: number; id: number }>;
-      layer_events: Array<{ y: number; id: number }>;
-      poor_events: Array<{ y: number; id: number }>;
-    }
+    bga_header: Array<{ id: number; name: string }>;
+    bga_events: Array<{ y: number; id: number }>;
+    layer_events: Array<{ y: number; id: number }>;
+    poor_events: Array<{ y: number; id: number }>;
+  }
   | undefined {
   const header = (json.bmson.bga.header ?? []).map((entry) => ({
     id: Math.max(0, Math.floor(entry.id)),
@@ -656,7 +656,7 @@ function normalizeBmsonSubartistsForOutput(value: string[] | undefined): string[
   return value.filter((item) => typeof item === 'string');
 }
 
-function resolveBmsonLinesForOutput(json: BmsJson, resolution: number): number[] {
+function resolveBmsonLinesForOutput(json: BeMusicJson, resolution: number): number[] {
   if (json.bmson.lines.length > 0) {
     return normalizeBmsonLines(json.bmson.lines);
   }
@@ -672,7 +672,7 @@ function normalizeBmsonLines(lines: number[]): number[] {
   return sorted;
 }
 
-function createDefaultBmsonLines(json: BmsJson, resolution: number): number[] {
+function createDefaultBmsonLines(json: BeMusicJson, resolution: number): number[] {
   const ticksPerMeasure = Math.max(1, Math.floor(resolution * 4));
   const lastEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
   const lastMeasureLength = json.measures.reduce((max, measure) => Math.max(max, measure.index), 0);
