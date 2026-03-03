@@ -52,6 +52,39 @@ test('player bga: composites layer with black treated as transparent', async () 
   }
 });
 
+test('player bga: composites 4-bit indexed bmp layer with black treated as transparent', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-layer-indexed-'));
+  try {
+    await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+    await writeIndexed4BitBmp(join(baseDir, 'layer4.bmp'), 256, 256, (x) => (x < 128 ? 0 : 1));
+
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bmp['01'] = 'base.png';
+    json.resources.bmp['02'] = 'layer4.bmp';
+    json.events = [
+      { measure: 0, channel: '04', position: [0, 1], value: '01' },
+      { measure: 0, channel: '07', position: [0, 1], value: '02' },
+    ];
+
+    const renderer = await createBgaAnsiRenderer(json, {
+      baseDir,
+      width: 40,
+      height: 20,
+    });
+    expect(renderer).toBeDefined();
+
+    const lines = renderer?.getAnsiLines(0);
+    expect(lines).toBeDefined();
+    const pixels = parseAnsiPixels(lines ?? []);
+
+    expect(pixels[10]?.[5]).toEqual({ r: 255, g: 0, b: 0 });
+    expect(pixels[10]?.[30]).toEqual({ r: 0, g: 255, b: 0 });
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
 test('player bga: renders images smaller than 256x256 centered on X and top-aligned on Y', async () => {
   const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-small-'));
   try {
@@ -200,6 +233,64 @@ async function writeBmp(
       bitsPerPixel: 32,
     }),
   );
+}
+
+async function writeIndexed4BitBmp(
+  path: string,
+  width: number,
+  height: number,
+  pixel: (x: number, y: number) => number,
+): Promise<void> {
+  const rowStride = Math.floor((Math.max(1, width) * 4 + 31) / 32) * 4;
+  const imageSize = rowStride * Math.max(1, height);
+  const paletteEntryCount = 16;
+  const paletteSize = paletteEntryCount * 4;
+  const pixelDataOffset = 14 + 40 + paletteSize;
+  const fileSize = pixelDataOffset + imageSize;
+  const data = new Uint8Array(fileSize);
+  const view = new DataView(data.buffer);
+
+  data[0] = 0x42;
+  data[1] = 0x4d;
+  view.setUint32(2, fileSize, true);
+  view.setUint32(10, pixelDataOffset, true);
+  view.setUint32(14, 40, true);
+  view.setInt32(18, width, true);
+  view.setInt32(22, height, true);
+  view.setUint16(26, 1, true);
+  view.setUint16(28, 4, true);
+  view.setUint32(30, 0, true);
+  view.setUint32(34, imageSize, true);
+  view.setInt32(38, 2835, true);
+  view.setInt32(42, 2835, true);
+  view.setUint32(46, paletteEntryCount, true);
+  view.setUint32(50, paletteEntryCount, true);
+
+  const paletteOffset = 14 + 40;
+  // Palette index 0: black (transparent key for layer BMP)
+  data[paletteOffset] = 0;
+  data[paletteOffset + 1] = 0;
+  data[paletteOffset + 2] = 0;
+  data[paletteOffset + 3] = 0;
+  // Palette index 1: green
+  data[paletteOffset + 4] = 0;
+  data[paletteOffset + 5] = 255;
+  data[paletteOffset + 6] = 0;
+  data[paletteOffset + 7] = 0;
+
+  for (let row = 0; row < height; row += 1) {
+    const sourceY = height - 1 - row;
+    const rowOffset = pixelDataOffset + row * rowStride;
+    let byteOffset = 0;
+    for (let x = 0; x < width; x += 2) {
+      const left = pixel(x, sourceY) & 0x0f;
+      const right = x + 1 < width ? pixel(x + 1, sourceY) & 0x0f : 0;
+      data[rowOffset + byteOffset] = (left << 4) | right;
+      byteOffset += 1;
+    }
+  }
+
+  await writeFile(path, data);
 }
 
 function parseAnsiPixels(lines: string[]): Pixel[][] {

@@ -762,10 +762,12 @@ function decodeJpeg(buffer: Buffer): DecodedImage {
 }
 
 function decodeBmp(buffer: Buffer): DecodedImage {
-  const decoded = decodeBmpFast(buffer);
-  if (decoded.bitsPerPixel <= 8) {
-    return decodeIndexedBmp(buffer, decoded.bitsPerPixel);
+  const bitsPerPixel = readBmpBitsPerPixel(buffer);
+  if (bitsPerPixel <= 8) {
+    return decodeIndexedBmp(buffer, bitsPerPixel);
   }
+
+  const decoded = decodeBmpFast(buffer);
   const channels = decoded.channels > 0 ? decoded.channels : 4;
   const depth = Math.max(1, Math.floor(decoded.bitsPerPixel / channels));
   const rgba = convertToRgba8(toSampleArray(decoded.data), decoded.width, decoded.height, channels, depth);
@@ -777,6 +779,20 @@ function decodeBmp(buffer: Buffer): DecodedImage {
   };
 }
 
+function readBmpBitsPerPixel(buffer: Buffer): number {
+  if (buffer.length < 30) {
+    throw new Error('invalid bmp header');
+  }
+  const dibHeaderSize = buffer.readUInt32LE(14);
+  if (dibHeaderSize === 12) {
+    if (buffer.length < 26) {
+      throw new Error('invalid bmp core header');
+    }
+    return buffer.readUInt16LE(24);
+  }
+  return buffer.readUInt16LE(28);
+}
+
 function decodeIndexedBmp(buffer: Buffer, bitsPerPixel: number): DecodedImage {
   if (bitsPerPixel !== 1 && bitsPerPixel !== 4 && bitsPerPixel !== 8) {
     throw new Error(`unsupported indexed bmp bit depth: ${bitsPerPixel}`);
@@ -784,27 +800,28 @@ function decodeIndexedBmp(buffer: Buffer, bitsPerPixel: number): DecodedImage {
 
   const pixelDataOffset = buffer.readUInt32LE(10);
   const dibHeaderSize = buffer.readUInt32LE(14);
-  const width = buffer.readInt32LE(18);
-  const rawHeight = buffer.readInt32LE(22);
+  const width = dibHeaderSize === 12 ? buffer.readUInt16LE(18) : buffer.readInt32LE(18);
+  const rawHeight = dibHeaderSize === 12 ? buffer.readUInt16LE(20) : buffer.readInt32LE(22);
   const height = Math.abs(rawHeight);
-  const topDown = rawHeight < 0;
+  const topDown = dibHeaderSize === 12 ? false : rawHeight < 0;
   if (width <= 0 || height <= 0) {
     throw new Error('invalid bmp dimensions');
   }
 
-  const colorsUsed = dibHeaderSize >= 36 ? buffer.readUInt32LE(46) : 0;
+  const colorsUsed = dibHeaderSize >= 40 ? buffer.readUInt32LE(46) : 0;
   const paletteEntryCount = colorsUsed > 0 ? colorsUsed : 1 << bitsPerPixel;
   const paletteOffset = 14 + dibHeaderSize;
+  const paletteEntrySize = dibHeaderSize === 12 ? 3 : 4;
   const palette: Array<[r: number, g: number, b: number, a: number]> = [];
   for (let index = 0; index < paletteEntryCount; index += 1) {
-    const offset = paletteOffset + index * 4;
-    if (offset + 3 >= buffer.length) {
+    const offset = paletteOffset + index * paletteEntrySize;
+    if (offset + paletteEntrySize - 1 >= buffer.length) {
       break;
     }
     const b = buffer[offset] ?? 0;
     const g = buffer[offset + 1] ?? 0;
     const r = buffer[offset + 2] ?? 0;
-    const a = 255;
+    const a = paletteEntrySize >= 4 ? (buffer[offset + 3] ?? 255) : 255;
     palette.push([r, g, b, a]);
   }
   if (palette.length === 0) {
