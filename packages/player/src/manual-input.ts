@@ -66,7 +66,7 @@ export interface LaneModeOptions {
 }
 
 const IIDX_5KEY_SP_BINDINGS: FixedLaneDefinition[] = [
-  { channel: '16', keyLabel: 'a', inputTokens: ['a'], side: '1P', isScratch: true },
+  { channel: '16', keyLabel: 'LShift', inputTokens: ['shift-left', 'a'], side: '1P', isScratch: true },
   { channel: '11', keyLabel: 'z', inputTokens: ['z'], side: '1P' },
   { channel: '12', keyLabel: 's', inputTokens: ['s'], side: '1P' },
   { channel: '13', keyLabel: 'x', inputTokens: ['x'], side: '1P' },
@@ -87,7 +87,7 @@ const IIDX_5KEY_DP_BINDINGS: FixedLaneDefinition[] = [
   { channel: '23', keyLabel: '.', inputTokens: ['.'], side: '2P' },
   { channel: '24', keyLabel: ';', inputTokens: [';'], side: '2P' },
   { channel: '25', keyLabel: '/', inputTokens: ['/'], side: '2P' },
-  { channel: '26', keyLabel: ']', inputTokens: [']'], side: '2P', isScratch: true },
+  { channel: '26', keyLabel: 'RShift', inputTokens: ['shift-right', ']'], side: '2P', isScratch: true },
 ];
 
 const IIDX_14KEY_DP_BINDINGS: FixedLaneDefinition[] = [
@@ -99,7 +99,7 @@ const IIDX_14KEY_DP_BINDINGS: FixedLaneDefinition[] = [
   { channel: '25', keyLabel: '/', inputTokens: ['/'], side: '2P' },
   { channel: '28', keyLabel: ':', inputTokens: [':'], side: '2P' },
   { channel: '29', keyLabel: '_', inputTokens: ['_'], side: '2P' },
-  { channel: '26', keyLabel: ']', inputTokens: [']'], side: '2P', isScratch: true },
+  { channel: '26', keyLabel: 'RShift', inputTokens: ['shift-right', ']'], side: '2P', isScratch: true },
 ];
 
 const POPN_9KEY_BINDINGS: FixedLaneDefinition[] = [
@@ -360,7 +360,74 @@ export function createInputTokenToChannelsMap(bindings: LaneBinding[]): Map<stri
   return map;
 }
 
+interface KittyKeyboardEvent {
+  keyCode: number;
+  shiftedKeyCode?: number;
+  baseKeyCode?: number;
+  modifiers: number;
+  eventType: number;
+}
+
+export interface ResolvedInputTokenEvent {
+  tokens: string[];
+  releaseTokens: string[];
+  kittyProtocolEvent: boolean;
+}
+
+const KITTY_KEYBOARD_PROTOCOL_ENABLE_FLAGS = 11;
+const KITTY_KEYBOARD_PROTOCOL_ENABLE_SEQUENCE = `\u001b[>${KITTY_KEYBOARD_PROTOCOL_ENABLE_FLAGS}u`;
+const KITTY_KEYBOARD_PROTOCOL_DISABLE_SEQUENCE = '\u001b[<u';
+const KITTY_MODIFIER_SHIFT_MASK = 1;
+const KITTY_MODIFIER_CTRL_MASK = 4;
+const KITTY_EVENT_TYPE_RELEASE = 3;
+const KITTY_LEFT_SHIFT_KEY_CODE = 57_441;
+const KITTY_RIGHT_SHIFT_KEY_CODE = 57_447;
+
+export function beginKittyKeyboardProtocolOptIn(stdout: NodeJS.WriteStream = process.stdout): () => void {
+  if (!stdout.isTTY || !process.stdin.isTTY) {
+    return () => undefined;
+  }
+  stdout.write(KITTY_KEYBOARD_PROTOCOL_ENABLE_SEQUENCE);
+  let ended = false;
+  return () => {
+    if (ended) {
+      return;
+    }
+    ended = true;
+    stdout.write(KITTY_KEYBOARD_PROTOCOL_DISABLE_SEQUENCE);
+  };
+}
+
+export function resolveInputTokenEvent(chunk: string, key: readline.Key): ResolvedInputTokenEvent {
+  const kittyEvent = parseKittyKeyboardEvent(chunk, key);
+  if (kittyEvent) {
+    const kittyTokens = [...resolveKittyInputTokens(kittyEvent)];
+    if (kittyEvent.eventType === KITTY_EVENT_TYPE_RELEASE) {
+      return {
+        tokens: [],
+        releaseTokens: kittyTokens,
+        kittyProtocolEvent: true,
+      };
+    }
+    return {
+      tokens: kittyTokens,
+      releaseTokens: [],
+      kittyProtocolEvent: true,
+    };
+  }
+
+  return {
+    tokens: resolveLegacyInputTokens(chunk, key),
+    releaseTokens: [],
+    kittyProtocolEvent: false,
+  };
+}
+
 export function resolveInputTokens(chunk: string, key: readline.Key): string[] {
+  return resolveInputTokenEvent(chunk, key).tokens;
+}
+
+function resolveLegacyInputTokens(chunk: string, key: readline.Key): string[] {
   const tokens = new Set<string>();
   const normalizedChunk = normalizeKey(chunk);
   if (normalizedChunk) {
@@ -393,6 +460,120 @@ export function resolveInputTokens(chunk: string, key: readline.Key): string[] {
   }
 
   return [...tokens];
+}
+
+function parseKittyKeyboardEvent(chunk: string, key: readline.Key): KittyKeyboardEvent | undefined {
+  const sequence = chunk.length > 0 ? chunk : (key.sequence ?? '');
+  if (sequence.length === 0) {
+    return undefined;
+  }
+  if (!sequence.startsWith('\u001b[') || !sequence.endsWith('u')) {
+    return undefined;
+  }
+  const body = sequence.slice(2, -1);
+  if (!/^[0-9:;]+$/.test(body)) {
+    return undefined;
+  }
+  const parameters = body.split(';');
+  if (parameters.length === 0) {
+    return undefined;
+  }
+  const keyCodeParts = parameters[0]!.split(':');
+  const keyCode = parseNumericPart(keyCodeParts[0]);
+  if (keyCode === undefined) {
+    return undefined;
+  }
+
+  const shiftedKeyCode = parseNumericPart(keyCodeParts[1]);
+  const baseKeyCode = parseNumericPart(keyCodeParts[2]);
+  let modifiers = 1;
+  let eventType = 1;
+
+  if (parameters.length >= 2) {
+    const [rawModifiers, rawEventType] = parameters[1]!.split(':');
+    const parsedModifiers = parseNumericPart(rawModifiers);
+    if (parsedModifiers !== undefined) {
+      modifiers = parsedModifiers;
+    }
+    const parsedEventType = parseNumericPart(rawEventType);
+    if (parsedEventType !== undefined) {
+      eventType = parsedEventType;
+    }
+  }
+
+  return {
+    keyCode,
+    shiftedKeyCode,
+    baseKeyCode,
+    modifiers,
+    eventType,
+  };
+}
+
+function parseNumericPart(value: string | undefined): number | undefined {
+  if (typeof value !== 'string' || value.length === 0 || !/^\d+$/.test(value)) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function resolveKittyInputTokens(event: KittyKeyboardEvent): Set<string> {
+  const tokens = new Set<string>();
+  const modifierBits = Math.max(0, event.modifiers - 1);
+  const hasShift = (modifierBits & KITTY_MODIFIER_SHIFT_MASK) !== 0;
+  const hasCtrl = (modifierBits & KITTY_MODIFIER_CTRL_MASK) !== 0;
+  const hasNonShiftModifier = (modifierBits & ~KITTY_MODIFIER_SHIFT_MASK) !== 0;
+  const implicitShiftByKeyCode = event.keyCode >= 65 && event.keyCode <= 90;
+
+  if (event.keyCode === KITTY_LEFT_SHIFT_KEY_CODE) {
+    tokens.add('shift-left');
+    tokens.add('shift');
+    return tokens;
+  }
+  if (event.keyCode === KITTY_RIGHT_SHIFT_KEY_CODE) {
+    tokens.add('shift-right');
+    tokens.add('shift');
+    return tokens;
+  }
+
+  if (event.keyCode === 27) {
+    tokens.add('escape');
+  } else if (event.keyCode === 13) {
+    tokens.add('enter');
+    tokens.add('return');
+  } else if (event.keyCode === 32) {
+    tokens.add('space');
+  } else if (event.keyCode === 9) {
+    tokens.add('tab');
+  }
+
+  const printableToken = resolveKittyPrintableToken(event);
+  if (printableToken && !hasNonShiftModifier) {
+    tokens.add(printableToken);
+    if ((hasShift || implicitShiftByKeyCode) && /^[a-z]$/.test(printableToken)) {
+      tokens.add(`shift+${printableToken}`);
+    }
+  }
+  if (hasCtrl && printableToken) {
+    tokens.add('ctrl');
+    tokens.add('control');
+    tokens.add(`ctrl+${printableToken}`);
+  }
+
+  return tokens;
+}
+
+function resolveKittyPrintableToken(event: KittyKeyboardEvent): string | undefined {
+  const codePoint = event.baseKeyCode ?? event.keyCode;
+  if (!Number.isFinite(codePoint) || codePoint < 32 || codePoint > 126) {
+    return undefined;
+  }
+  const value = String.fromCodePoint(codePoint);
+  if (!value) {
+    return undefined;
+  }
+  return normalizeKey(value);
 }
 
 function isStandaloneShiftKeypress(chunk: string, key: readline.Key): boolean {

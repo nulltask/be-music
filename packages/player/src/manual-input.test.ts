@@ -1,9 +1,11 @@
+import type readline from 'node:readline';
 import { describe, expect, test } from 'vitest';
 import {
   appendFreeZoneInputChannels,
   createInputTokenToChannelsMap,
   createLaneBindings,
   resolveLaneDisplayMode,
+  resolveInputTokenEvent,
 } from './manual-input.ts';
 
 describe('manual input', () => {
@@ -11,8 +13,8 @@ describe('manual input', () => {
     const bindings = createLaneBindings(['11', '14']);
     expect(bindings.map((binding) => binding.channel)).toEqual(['16', '11', '12', '13', '14', '15']);
     expect(bindings.find((binding) => binding.channel === '16')).toMatchObject({
-      keyLabel: 'a',
-      inputTokens: ['a'],
+      keyLabel: 'LShift',
+      inputTokens: ['shift-left', 'a'],
       isScratch: true,
     });
   });
@@ -39,8 +41,8 @@ describe('manual input', () => {
       '26',
     ]);
     expect(bindings.find((binding) => binding.channel === '26')).toMatchObject({
-      keyLabel: ']',
-      inputTokens: [']'],
+      keyLabel: 'RShift',
+      inputTokens: ['shift-right', ']'],
       isScratch: true,
     });
   });
@@ -180,7 +182,33 @@ describe('manual input', () => {
       '26',
     ]);
     expect(inputMap.get('a')).toContain('17');
+    expect(inputMap.get('shift-left')).toContain('17');
     expect(inputMap.get(']')).toContain('27');
+    expect(inputMap.get('shift-right')).toContain('27');
+  });
+
+  test('manual-input: resolves kitty keyboard protocol tokens for scratch and controls', () => {
+    const leftShiftPress = resolveInputTokenEvent('\u001b[57441;1:1u', createKey(undefined, '\u001b[57441;1:1u'));
+    expect(leftShiftPress.tokens).toContain('shift-left');
+    expect(leftShiftPress.tokens).toContain('shift');
+    expect(leftShiftPress.kittyProtocolEvent).toBe(true);
+
+    const rightShiftRelease = resolveInputTokenEvent('\u001b[57447;1:3u', createKey(undefined, '\u001b[57447;1:3u'));
+    expect(rightShiftRelease.tokens).toEqual([]);
+    expect(rightShiftRelease.releaseTokens).toContain('shift-right');
+    expect(rightShiftRelease.kittyProtocolEvent).toBe(true);
+
+    const ctrlC = resolveInputTokenEvent('\u001b[99;5:1u', createKey(undefined, '\u001b[99;5:1u'));
+    expect(ctrlC.tokens).toContain('ctrl+c');
+    expect(ctrlC.tokens).toContain('ctrl');
+
+    const shiftW = resolveInputTokenEvent('\u001b[87;2:1u', createKey(undefined, '\u001b[87;2:1u'));
+    expect(shiftW.tokens).toContain('w');
+    expect(shiftW.tokens).toContain('shift+w');
+
+    const implicitShiftW = resolveInputTokenEvent('\u001b[87;1:1u', createKey(undefined, '\u001b[87;1:1u'));
+    expect(implicitShiftW.tokens).toContain('w');
+    expect(implicitShiftW.tokens).toContain('shift+w');
   });
 
   test('manual-input: resolves lane display mode labels', () => {
@@ -197,3 +225,13 @@ describe('manual input', () => {
     expect(resolveLaneDisplayMode(['11', '17'], { player: 3 })).toBe('9 KEY');
   });
 });
+
+function createKey(name?: string, sequence?: string, shift = false, ctrl = false): readline.Key {
+  return {
+    name,
+    sequence: sequence ?? '',
+    ctrl,
+    meta: false,
+    shift,
+  } satisfies readline.Key;
+}

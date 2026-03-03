@@ -25,10 +25,11 @@ import { PlayerTui } from '../tui.ts';
 import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
 import {
   appendFreeZoneInputChannels,
+  beginKittyKeyboardProtocolOptIn,
   createInputTokenToChannelsMap,
   createLaneBindings,
   resolveLaneDisplayMode,
-  resolveInputTokens,
+  resolveInputTokenEvent,
   type LaneBinding,
 } from '../manual-input.ts';
 import { extractInvisiblePlayableNotes, extractLandmineNotes, extractPlayableNotes } from '../playable-notes.ts';
@@ -197,7 +198,6 @@ const DEFAULT_COMPRESSOR_RELEASE_MS = 120;
 const DEFAULT_COMPRESSOR_MAKEUP_DB = 0;
 const DEFAULT_LIMITER_CEILING_DB = -0.3;
 const DEFAULT_LIMITER_RELEASE_MS = 80;
-const FREE_ZONE_CHANNELS = new Set(['17', '27']);
 
 export { applyHighSpeedControlAction, resolveHighSpeedControlActionFromKey, type HighSpeedControlAction };
 export { resolveJudgeWindowsMs };
@@ -251,7 +251,6 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
 
   const notes = extractPlayableNotes(resolvedJson);
-  const scorableNotes = notes.filter((note) => !isFreeZoneChannel(note.channel));
   const landmineNotes = extractLandmineNotes(resolvedJson);
   const invisibleNotes = options.showInvisibleNotes === true ? extractInvisiblePlayableNotes(resolvedJson) : [];
   const renderNotes = [...notes, ...landmineNotes, ...invisibleNotes].sort((left, right) => left.seconds - right.seconds);
@@ -270,6 +269,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
   const laneBindings = createLaneBindings(channels, laneModeOptions);
   const laneDisplayMode = resolveLaneDisplayMode(channels, laneModeOptions);
+  const activeFreeZoneChannels = resolveActiveFreeZoneChannels(channels, laneBindings);
+  const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
   const keyMap = new Map(laneBindings.map((binding) => [binding.channel, binding.keyLabel]));
   const summary: PlayerSummary = {
     total: scorableNotes.length,
@@ -588,7 +589,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
 
   const notes = extractPlayableNotes(resolvedJson);
-  const scorableNotes = notes.filter((note) => !isFreeZoneChannel(note.channel));
   const landmineNotes = extractLandmineNotes(resolvedJson);
   const invisibleNotes = options.showInvisibleNotes === true ? extractInvisiblePlayableNotes(resolvedJson) : [];
   const renderNotes = [...notes, ...landmineNotes, ...invisibleNotes].sort((left, right) => left.seconds - right.seconds);
@@ -607,6 +607,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
   const laneBindings = createLaneBindings(channels, laneModeOptions);
   const laneDisplayMode = resolveLaneDisplayMode(channels, laneModeOptions);
+  const activeFreeZoneChannels = resolveActiveFreeZoneChannels(channels, laneBindings);
+  const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
   const scratchPlayableChannels = new Set(
     laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
   );
@@ -700,6 +702,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     process.stdin.setRawMode(true);
   }
   process.stdin.resume();
+  const stopKittyKeyboardProtocol = beginKittyKeyboardProtocolOptIn();
 
   audioSession?.start();
 
@@ -709,29 +712,39 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const longHoldUntilMsByChannel = new Map<string, number>();
   const activeLongNotesByChannel = new Map<string, { endSeconds: number }>();
   const longNoteSuppressUntilSecondsByChannel = new Map<string, number>();
+  let inputCaptureStopped = false;
 
   const stopInputCapture = () => {
+    if (inputCaptureStopped) {
+      return;
+    }
+    inputCaptureStopped = true;
     process.stdin.removeListener('keypress', onKeyPress);
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(false);
     }
+    stopKittyKeyboardProtocol();
   };
 
   const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
     if (interruptedReason) {
       return;
     }
-    if (key.sequence === '\u0003') {
+    const inputEvent = resolveInputTokenEvent(chunk ?? '', key);
+    const tokens = inputEvent.tokens;
+
+    if (key.sequence === '\u0003' || tokens.includes('ctrl+c')) {
       interruptedReason = 'ctrl-c';
       stopInputCapture();
       return;
     }
-    if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b') {
+    if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b' || tokens.includes('escape')) {
       interruptedReason = 'escape';
       stopInputCapture();
       return;
     }
-    const highSpeedAction = resolveHighSpeedControlActionFromKey(chunk, key);
+    const highSpeedAction =
+      resolveHighSpeedControlActionFromTokens(tokens) ?? resolveHighSpeedControlActionFromKey(chunk, key);
     if (highSpeedAction) {
       const nextHighSpeed = applyHighSpeedControlAction(highSpeed, highSpeedAction);
       if (nextHighSpeed !== highSpeed) {
@@ -744,7 +757,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       return;
     }
-    if (isSpaceKey(key)) {
+    if (tokens.includes('space') || isSpaceKey(key)) {
       if (playbackClock.isPaused()) {
         if (!playbackClock.resume()) {
           return;
@@ -770,7 +783,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       return;
     }
 
-    const tokens = resolveInputTokens(chunk ?? '', key);
     const candidateChannels = new Set<string>();
     for (const token of tokens) {
       const mapped = inputTokenToChannels.get(token);
@@ -836,7 +848,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         const shouldSuppressFallback = suppressUntil !== undefined && nowSec < suppressUntil;
         if (!shouldSuppressFallback) {
           audioSession?.triggerEvent?.(fallback.event);
-          if (isFreeZoneChannel(fallback.channel)) {
+          if (isActiveFreeZoneChannel(fallback.channel, activeFreeZoneChannels)) {
             return;
           }
         } else {
@@ -2254,6 +2266,16 @@ function isSpaceKey(key: readline.Key): boolean {
   return key.name?.toLowerCase() === 'space' || key.sequence === ' ';
 }
 
+function resolveHighSpeedControlActionFromTokens(tokens: readonly string[]): HighSpeedControlAction | undefined {
+  if (tokens.includes('shift+w')) {
+    return 'increase';
+  }
+  if (tokens.includes('shift+e')) {
+    return 'decrease';
+  }
+  return undefined;
+}
+
 function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
   return Math.max(0, (elapsedMs / 1000) * speed);
 }
@@ -2379,8 +2401,26 @@ function formatSeconds(seconds: number): string {
   return `${hours}:${minutesPart.toString().padStart(2, '0')}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
 }
 
-function isFreeZoneChannel(channel: string): boolean {
-  return FREE_ZONE_CHANNELS.has(normalizeChannel(channel));
+function resolveActiveFreeZoneChannels(
+  channels: readonly string[],
+  laneBindings: readonly LaneBinding[],
+): ReadonlySet<string> {
+  const existingChannels = new Set(channels.map((channel) => normalizeChannel(channel)));
+  const boundChannels = new Set(laneBindings.map((binding) => normalizeChannel(binding.channel)));
+  const activeFreeZoneChannels = new Set<string>();
+
+  if (existingChannels.has('17') && boundChannels.has('16') && !boundChannels.has('17')) {
+    activeFreeZoneChannels.add('17');
+  }
+  if (existingChannels.has('27') && boundChannels.has('26') && !boundChannels.has('27')) {
+    activeFreeZoneChannels.add('27');
+  }
+
+  return activeFreeZoneChannels;
+}
+
+function isActiveFreeZoneChannel(channel: string, activeFreeZoneChannels: ReadonlySet<string>): boolean {
+  return activeFreeZoneChannels.has(normalizeChannel(channel));
 }
 
 function resolveNoteKeyLabel(channel: string, keyMap: ReadonlyMap<string, string>): string {

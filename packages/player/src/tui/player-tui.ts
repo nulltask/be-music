@@ -110,10 +110,6 @@ const ANSI_RESET = '\u001b[0m';
 const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
 const HIGH_SPEED_TRANSITION_MS = 180;
-const FREE_ZONE_CHANNEL_TO_SCRATCH_CHANNEL = new Map<string, string>([
-  ['17', '16'],
-  ['27', '26'],
-]);
 
 export class PlayerTui {
   private readonly options: TuiOptions;
@@ -121,6 +117,10 @@ export class PlayerTui {
   private readonly laneIndex = new Map<string, number>();
 
   private readonly laneChannels: string[];
+
+  private readonly freeZoneChannelToScratchChannel = new Map<string, string>();
+
+  private readonly freeZoneSourceChannels = new Set<string>();
 
   private readonly laneFlashUntil = new Map<string, number>();
 
@@ -187,6 +187,14 @@ export class PlayerTui {
       this.laneIndex.set(lane.channel, index);
       this.laneWidths[index] = lane.isScratch ? DEFAULT_LANE_WIDTH * 2 : DEFAULT_LANE_WIDTH;
     });
+    if (!this.laneIndex.has('17') && this.laneIndex.has('16')) {
+      this.freeZoneChannelToScratchChannel.set('17', '16');
+      this.freeZoneSourceChannels.add('17');
+    }
+    if (!this.laneIndex.has('27') && this.laneIndex.has('26')) {
+      this.freeZoneChannelToScratchChannel.set('27', '26');
+      this.freeZoneSourceChannels.add('27');
+    }
     this.laneBlockVisibleWidth = calculateLaneBlockVisibleWidth(this.laneWidths, options.splitAfterIndex ?? -1);
   }
 
@@ -259,14 +267,14 @@ export class PlayerTui {
   }
 
   flashLane(channel: string): void {
-    this.laneFlashUntil.set(resolveRenderLaneChannel(channel), Date.now() + FLASH_DURATION_MS);
+    this.laneFlashUntil.set(this.resolveRenderLaneChannel(channel), Date.now() + FLASH_DURATION_MS);
   }
 
   holdLaneUntilBeat(channel: string, beat: number): void {
     if (!Number.isFinite(beat)) {
       return;
     }
-    const targetChannel = resolveRenderLaneChannel(channel);
+    const targetChannel = this.resolveRenderLaneChannel(channel);
     const previous = this.laneHoldUntilBeat.get(targetChannel);
     if (previous !== undefined && previous >= beat) {
       return;
@@ -321,7 +329,7 @@ export class PlayerTui {
       if (note.judged && !keepVisible) {
         continue;
       }
-      const lane = this.laneIndex.get(resolveRenderLaneChannel(note.channel));
+      const lane = this.laneIndex.get(this.resolveRenderLaneChannel(note.channel));
       if (lane === undefined) {
         continue;
       }
@@ -333,7 +341,7 @@ export class PlayerTui {
           continue;
         }
         const row = distanceToRow(visibleDistance, rowCount, scrollWindowBeats);
-        setLaneCell(grid, gridSourceChannels, row, lane, MINE_NOTE_SYMBOL, note.channel);
+        setLaneCell(grid, gridSourceChannels, row, lane, MINE_NOTE_SYMBOL, note.channel, this.freeZoneSourceChannels);
         continue;
       }
 
@@ -363,7 +371,15 @@ export class PlayerTui {
             if (row < 0 || row >= rowCount) {
               continue;
             }
-            setLaneCell(grid, gridSourceChannels, row, lane, longBodySymbol, note.channel);
+            setLaneCell(
+              grid,
+              gridSourceChannels,
+              row,
+              lane,
+              longBodySymbol,
+              note.channel,
+              this.freeZoneSourceChannels,
+            );
           }
         }
 
@@ -372,7 +388,15 @@ export class PlayerTui {
         if (isDistanceWithinWindow(tailVisibleDistance, scrollWindowBeats)) {
           const tailRow = distanceToRow(tailVisibleDistance, rowCount, scrollWindowBeats);
           if (tailRow >= 0 && tailRow < rowCount) {
-            setLaneCell(grid, gridSourceChannels, tailRow, lane, longTailSymbol, note.channel);
+            setLaneCell(
+              grid,
+              gridSourceChannels,
+              tailRow,
+              lane,
+              longTailSymbol,
+              note.channel,
+              this.freeZoneSourceChannels,
+            );
           }
         }
       }
@@ -390,6 +414,7 @@ export class PlayerTui {
         lane,
         note.invisible ? INVISIBLE_NOTE_HEAD_SYMBOL : NOTE_HEAD_SYMBOL,
         note.channel,
+        this.freeZoneSourceChannels,
       );
     }
 
@@ -628,6 +653,11 @@ export class PlayerTui {
     }
     return this.displayedHighSpeed;
   }
+
+  private resolveRenderLaneChannel(channel: string): string {
+    const normalized = channel.toUpperCase();
+    return this.freeZoneChannelToScratchChannel.get(normalized) ?? normalized;
+  }
 }
 
 class ScrollDistanceMapper {
@@ -847,16 +877,6 @@ function renderLaneRow(
   return `${left}   ${right}`;
 }
 
-function resolveRenderLaneChannel(channel: string): string {
-  const normalized = channel.toUpperCase();
-  return FREE_ZONE_CHANNEL_TO_SCRATCH_CHANNEL.get(normalized) ?? normalized;
-}
-
-function isFreeZoneChannel(channel: string): boolean {
-  const normalized = channel.toUpperCase();
-  return normalized === '17' || normalized === '27';
-}
-
 function setLaneCell(
   grid: string[][],
   sourceChannels: string[][],
@@ -864,6 +884,7 @@ function setLaneCell(
   lane: number,
   symbol: string,
   sourceChannel: string,
+  freeZoneSourceChannels: ReadonlySet<string>,
 ): void {
   const rowCells = grid[row];
   const rowSources = sourceChannels[row];
@@ -871,19 +892,23 @@ function setLaneCell(
     return;
   }
 
+  const normalizedSourceChannel = sourceChannel.toUpperCase();
   const previousSymbol = rowCells[lane] ?? '│';
   const previousSourceChannel = rowSources[lane] ?? '';
-  const nextPriority = resolveLaneCellPriority(symbol, sourceChannel);
-  const previousPriority = resolveLaneCellPriority(previousSymbol, previousSourceChannel);
+  const nextPriority = resolveLaneCellPriority(symbol, freeZoneSourceChannels.has(normalizedSourceChannel));
+  const previousPriority = resolveLaneCellPriority(
+    previousSymbol,
+    freeZoneSourceChannels.has(previousSourceChannel.toUpperCase()),
+  );
   if (nextPriority < previousPriority) {
     return;
   }
 
   rowCells[lane] = symbol;
-  rowSources[lane] = sourceChannel.toUpperCase();
+  rowSources[lane] = normalizedSourceChannel;
 }
 
-function resolveLaneCellPriority(symbol: string, sourceChannel: string): number {
+function resolveLaneCellPriority(symbol: string, isFreeZoneSourceChannel: boolean): number {
   if (symbol === MINE_NOTE_SYMBOL) {
     return 5;
   }
@@ -895,7 +920,7 @@ function resolveLaneCellPriority(symbol: string, sourceChannel: string): number 
     symbol === INVISIBLE_LONG_NOTE_BODY_SYMBOL ||
     symbol === INVISIBLE_LONG_NOTE_TAIL_SYMBOL
   ) {
-    return isFreeZoneChannel(sourceChannel) ? 3 : 4;
+    return isFreeZoneSourceChannel ? 3 : 4;
   }
   if (symbol === MEASURE_LINE_SYMBOL) {
     return 1;

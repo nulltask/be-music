@@ -107,6 +107,26 @@ test('player: ignores free-zone channel for score and judgment totals', async ()
   expect(summary.score).toBe(0);
 });
 
+test('player: treats channel 17 as regular lane note in 9-key mode', async () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.bms.player = 3;
+  json.events = [{ measure: 0, channel: '17', position: [0, 1], value: '01' }];
+
+  const summary = await autoPlay(json, {
+    auto: true,
+    speed: 48,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+  });
+
+  expect(summary.total).toBe(1);
+  expect(summary.perfect).toBe(1);
+  expect(summary.poor).toBe(0);
+  expect(summary.exScore).toBe(2);
+});
+
 test('player: auto scratch judges 16ch/26ch notes in manual play', async () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
