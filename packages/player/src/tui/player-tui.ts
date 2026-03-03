@@ -417,7 +417,7 @@ export class PlayerTui {
     const stopLabel = remainingStopSeconds > 0 ? `${formatStopSeconds(remainingStopSeconds)}s` : '-';
     const audioBackendLabel = formatAudioBackendLabel(frame.audioBackend);
     lines.push(
-      `SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(displayHighSpeed)}  BAD ±${this.options.judgeWindowMs}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}  AUDIO ${audioBackendLabel}`,
+      `SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(displayHighSpeed)}  BAD ±${formatJudgeWindowMs(this.options.judgeWindowMs)}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}  AUDIO ${audioBackendLabel}`,
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
@@ -1366,6 +1366,12 @@ function formatScroll(speed: number): string {
 function formatStopSeconds(seconds: number): string {
   const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
   return safe.toFixed(2);
+}
+
+function formatJudgeWindowMs(milliseconds: number): string {
+  const safe = Number.isFinite(milliseconds) ? Math.max(0, milliseconds) : 0;
+  const truncated = Math.floor(safe * 100) / 100;
+  return truncated.toFixed(2);
 }
 
 function formatAudioBackendLabel(value: string | undefined): string {
