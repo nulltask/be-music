@@ -4,6 +4,7 @@
 
 - [BMS 実装仕様](./bms-spec.md)
 - [BMSON 実装仕様](./bmson-spec.md)
+- [Bemuse 実装仕様](./bemuse-spec.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./json-spec.md)
 
 補足:

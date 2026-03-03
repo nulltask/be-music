@@ -40,6 +40,7 @@ npm run test
 - [仕様書トップ](./docs/README.md)
 - [BMS 実装仕様](./docs/bms-spec.md)
 - [BMSON 実装仕様](./docs/bmson-spec.md)
+- [Bemuse 実装仕様](./docs/bemuse-spec.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./docs/json-spec.md)
 
 ## 対応状況サマリ
@@ -278,4 +279,3 @@ npm run bench:parser
 
 - ベースライン: `tmp/parser-benchmark-baseline.json`
 - 既定の退行しきい値: `+50%`
-
