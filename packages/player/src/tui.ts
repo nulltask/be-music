@@ -105,6 +105,7 @@ const INVISIBLE_LONG_NOTE_TAIL_SYMBOL = '◇';
 const ANSI_RESET = '\u001b[0m';
 const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
+const HIGH_SPEED_TRANSITION_MS = 180;
 
 export class PlayerTui {
   private readonly options: TuiOptions;
@@ -155,8 +156,21 @@ export class PlayerTui {
 
   private noteWindowBeat = Number.NEGATIVE_INFINITY;
 
+  private displayedHighSpeed: number;
+
+  private targetHighSpeed: number;
+
+  private highSpeedTransitionFrom: number;
+
+  private highSpeedTransitionStartMs = 0;
+
   constructor(options: TuiOptions) {
+    const initialHighSpeed = normalizeHighSpeed(options.highSpeed);
+    options.highSpeed = initialHighSpeed;
     this.options = options;
+    this.displayedHighSpeed = initialHighSpeed;
+    this.targetHighSpeed = initialHighSpeed;
+    this.highSpeedTransitionFrom = initialHighSpeed;
     this.laneChannels = options.lanes.map((lane) => lane.channel);
     this.scrollDistanceMapper = new ScrollDistanceMapper(options.scrollTimeline);
     this.supported = Boolean(process.stdout.isTTY && process.stdin.isTTY);
@@ -204,6 +218,10 @@ export class PlayerTui {
     this.noteWindowStartIndex = 0;
     this.noteWindowEndIndex = 0;
     this.noteWindowBeat = Number.NEGATIVE_INFINITY;
+    this.displayedHighSpeed = normalizeHighSpeed(this.options.highSpeed);
+    this.targetHighSpeed = this.displayedHighSpeed;
+    this.highSpeedTransitionFrom = this.displayedHighSpeed;
+    this.highSpeedTransitionStartMs = 0;
     process.stdout.write('\u001b[0m\u001b[?25h\u001b[?1049l');
   }
 
@@ -220,7 +238,17 @@ export class PlayerTui {
   }
 
   setHighSpeed(value: number): void {
-    this.options.highSpeed = normalizeHighSpeed(value);
+    const next = normalizeHighSpeed(value);
+    if (Math.abs(next - this.targetHighSpeed) < 1e-9) {
+      return;
+    }
+    const nowMs = Date.now();
+    const current = this.resolveDisplayHighSpeed(nowMs);
+    this.options.highSpeed = next;
+    this.highSpeedTransitionFrom = current;
+    this.displayedHighSpeed = current;
+    this.targetHighSpeed = next;
+    this.highSpeedTransitionStartMs = nowMs;
   }
 
   flashLane(channel: string): void {
@@ -246,9 +274,10 @@ export class PlayerTui {
     const terminalRows = process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
     const debugLineCount = frame.activeAudioFiles === undefined && frame.activeAudioVoiceCount === undefined ? 0 : 1;
     const rowCount = Math.max(MIN_GRID_ROWS, terminalRows - STATIC_TUI_LINES - debugLineCount);
-    const scrollWindowBeats = resolveVisibleBeatsForTuiGrid(rowCount, this.options.highSpeed);
     const laneCount = Math.max(1, this.options.lanes.length);
     const now = Date.now();
+    const displayHighSpeed = this.resolveDisplayHighSpeed(now);
+    const scrollWindowBeats = resolveVisibleBeatsForTuiGrid(rowCount, displayHighSpeed);
     const grid = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => '│'));
     const laneHighlightRatios = new Map<number, number>();
 
@@ -385,7 +414,7 @@ export class PlayerTui {
     const stopLabel = remainingStopSeconds > 0 ? `${formatStopSeconds(remainingStopSeconds)}s` : '-';
     const audioBackendLabel = formatAudioBackendLabel(frame.audioBackend);
     lines.push(
-      `SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(this.options.highSpeed)}  BAD ±${this.options.judgeWindowMs}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}  AUDIO ${audioBackendLabel}`,
+      `SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(displayHighSpeed)}  BAD ±${this.options.judgeWindowMs}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}  AUDIO ${audioBackendLabel}`,
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
@@ -551,6 +580,29 @@ export class PlayerTui {
     const step = Math.max(1, Math.floor((countupPerSec * elapsedMs) / 1000));
     this.displayedScore = Math.min(safeTarget, this.displayedScore + step);
     return this.displayedScore;
+  }
+
+  private resolveDisplayHighSpeed(nowMs: number): number {
+    if (Math.abs(this.displayedHighSpeed - this.targetHighSpeed) < 1e-9) {
+      return this.targetHighSpeed;
+    }
+    if (this.highSpeedTransitionStartMs <= 0) {
+      this.displayedHighSpeed = this.targetHighSpeed;
+      return this.displayedHighSpeed;
+    }
+    const elapsedMs = Math.max(0, nowMs - this.highSpeedTransitionStartMs);
+    const next = resolveAnimatedHighSpeedValue(
+      this.highSpeedTransitionFrom,
+      this.targetHighSpeed,
+      elapsedMs,
+      HIGH_SPEED_TRANSITION_MS,
+    );
+    this.displayedHighSpeed = next;
+    if (elapsedMs >= HIGH_SPEED_TRANSITION_MS || Math.abs(next - this.targetHighSpeed) <= 1e-3) {
+      this.displayedHighSpeed = this.targetHighSpeed;
+      this.highSpeedTransitionStartMs = 0;
+    }
+    return this.displayedHighSpeed;
   }
 }
 
@@ -719,6 +771,22 @@ export function resolveVisibleBeatsForTuiGrid(rowCount: number, highSpeed: numbe
   const safeHighSpeed = normalizeHighSpeed(highSpeed);
   const visibleMeasures = safeRows / (IIDX_MEASURE_ROWS_AT_HS1 * safeHighSpeed);
   return Math.max(MIN_SCROLL_WINDOW_BEATS, visibleMeasures * IIDX_MEASURE_BEATS);
+}
+
+export function resolveAnimatedHighSpeedValue(
+  fromHighSpeed: number,
+  toHighSpeed: number,
+  elapsedMs: number,
+  durationMs: number,
+): number {
+  const from = normalizeHighSpeed(fromHighSpeed);
+  const to = normalizeHighSpeed(toHighSpeed);
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    return to;
+  }
+  const safeElapsedMs = Number.isFinite(elapsedMs) ? elapsedMs : 0;
+  const ratio = clamp(safeElapsedMs / durationMs, 0, 1);
+  return from + (to - from) * ratio;
 }
 
 function normalizeHighSpeed(value: number): number {

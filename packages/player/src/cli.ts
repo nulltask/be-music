@@ -456,6 +456,7 @@ async function main(): Promise<void> {
     nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args);
   } catch (error) {
     if (error instanceof PlayerInterruptedError) {
+      nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args);
       process.exitCode = error.exitCode;
       return;
     }
@@ -724,10 +725,14 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
       : undefined,
   };
 
-  const summary = args.auto
-    ? await autoPlay(json, { ...playOptions, auto: true })
-    : await manualPlay(json, { ...playOptions, autoScratch: args.autoScratch });
-  args.highSpeed = resolvedHighSpeed;
+  let summary: PlayerSummary;
+  try {
+    summary = args.auto
+      ? await autoPlay(json, { ...playOptions, auto: true })
+      : await manualPlay(json, { ...playOptions, autoScratch: args.autoScratch });
+  } finally {
+    args.highSpeed = resolvedHighSpeed;
+  }
   const title = sanitizeMetadataText(json.metadata.title);
   const artist = sanitizeMetadataText(json.metadata.artist);
 
