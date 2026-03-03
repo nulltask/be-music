@@ -187,7 +187,6 @@ const AUDIO_TARGET_LEAD_STEP_UP_MS = 1.5;
 const AUDIO_TARGET_LEAD_STEP_DOWN_MS = 0.5;
 const DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS = 0.18;
 const DEBUG_ACTIVE_AUDIO_SAMPLE_RATE = 44_100;
-const SCRATCH_PLAYABLE_CHANNELS = new Set(['16', '26']);
 const DEFAULT_COMPRESSOR_THRESHOLD_DB = -12;
 const DEFAULT_COMPRESSOR_RATIO = 2.5;
 const DEFAULT_COMPRESSOR_ATTACK_MS = 8;
@@ -594,6 +593,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     ]),
   ];
   const laneBindings = createLaneBindings(channels);
+  const scratchPlayableChannels = new Set(
+    laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
+  );
   const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);
 
   const summary: PlayerSummary = {
@@ -761,7 +763,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     if (autoScratchEnabled) {
       for (const channel of candidateChannels) {
-        if (isScratchPlayableChannel(channel)) {
+        if (scratchPlayableChannels.has(channel)) {
           candidateChannels.delete(channel);
         }
       }
@@ -941,7 +943,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
       if (autoScratchEnabled) {
         for (const note of notes) {
-          if (note.judged || !isScratchPlayableChannel(note.channel) || nowSec < note.seconds) {
+          if (note.judged || !scratchPlayableChannels.has(note.channel) || nowSec < note.seconds) {
             continue;
           }
           note.judged = true;
@@ -1067,10 +1069,6 @@ function resolveAudioBackendLabel(options: PlayerOptions, audioSession: AudioSes
   return audioSession?.backendLabel ?? 'none';
 }
 
-function isScratchPlayableChannel(channel: string): boolean {
-  return SCRATCH_PLAYABLE_CHANNELS.has(normalizeChannel(channel));
-}
-
 function createTuiIfEnabled(
   json: BeMusicJson,
   options: PlayerOptions,
@@ -1088,6 +1086,7 @@ function createTuiIfEnabled(
   const lanes = laneBindings.map((binding) => ({
     channel: binding.channel,
     key: binding.keyLabel,
+    isScratch: binding.isScratch,
   }));
   const timingResolver = createTimingResolver(json);
   const beatResolver = createBeatResolver(json);
@@ -2291,7 +2290,7 @@ function findLastLaneIndex(bindings: LaneBinding[], predicate: (binding: LaneBin
 
 function estimateBgaAnsiDisplaySize(bindings: LaneBinding[]): { width: number; height: number } {
   const laneWidths = bindings.map((binding) =>
-    isScratchPlayableChannel(binding.channel) ? WIDE_SCRATCH_LANE_WIDTH : DEFAULT_LANE_WIDTH,
+    binding.isScratch ? WIDE_SCRATCH_LANE_WIDTH : DEFAULT_LANE_WIDTH,
   );
   const laneCount = laneWidths.length;
   const has2P = bindings.some((binding) => binding.side === '2P');

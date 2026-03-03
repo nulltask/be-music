@@ -10,6 +10,7 @@ export { resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './
 interface TuiLane {
   channel: string;
   key: string;
+  isScratch?: boolean;
 }
 
 interface TuiOptions {
@@ -179,8 +180,7 @@ export class PlayerTui {
     this.sixelEnabled = this.supported && detectSixelSupport();
     options.lanes.forEach((lane, index) => {
       this.laneIndex.set(lane.channel, index);
-      this.laneWidths[index] =
-        lane.channel === '16' || lane.channel === '26' ? DEFAULT_LANE_WIDTH * 2 : DEFAULT_LANE_WIDTH;
+      this.laneWidths[index] = lane.isScratch ? DEFAULT_LANE_WIDTH * 2 : DEFAULT_LANE_WIDTH;
     });
     this.laneBlockVisibleWidth = calculateLaneBlockVisibleWidth(this.laneWidths, options.splitAfterIndex ?? -1);
   }
