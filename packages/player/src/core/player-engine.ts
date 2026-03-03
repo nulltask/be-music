@@ -720,69 +720,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     inputCaptureStopped = true;
     process.stdin.removeListener('keypress', onKeyPress);
+    process.stdin.removeListener('data', onRawInputData);
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(false);
     }
     stopKittyKeyboardProtocol();
   };
 
-  const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
-    if (interruptedReason) {
-      return;
-    }
-    const inputEvent = resolveInputTokenEvent(chunk ?? '', key);
-    const tokens = inputEvent.tokens;
-
-    if (key.sequence === '\u0003' || tokens.includes('ctrl+c')) {
-      interruptedReason = 'ctrl-c';
-      stopInputCapture();
-      return;
-    }
-    if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b' || tokens.includes('escape')) {
-      interruptedReason = 'escape';
-      stopInputCapture();
-      return;
-    }
-    const highSpeedAction =
-      resolveHighSpeedControlActionFromTokens(tokens) ?? resolveHighSpeedControlActionFromKey(chunk, key);
-    if (highSpeedAction) {
-      const nextHighSpeed = applyHighSpeedControlAction(highSpeed, highSpeedAction);
-      if (nextHighSpeed !== highSpeed) {
-        highSpeed = nextHighSpeed;
-        tui?.setHighSpeed(highSpeed);
-        options.onHighSpeedChange?.(highSpeed);
-      }
-      if (!tui) {
-        process.stdout.write(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
-      }
-      return;
-    }
-    if (tokens.includes('space') || isSpaceKey(key)) {
-      if (playbackClock.isPaused()) {
-        if (!playbackClock.resume()) {
-          return;
-        }
-        audioSession?.resume();
-        tui?.setPaused(false);
-        if (!tui) {
-          process.stdout.write('RESUME\n');
-        }
-      } else {
-        if (!playbackClock.pause()) {
-          return;
-        }
-        audioSession?.pause();
-        tui?.setPaused(true);
-        if (!tui) {
-          process.stdout.write('PAUSE\n');
-        }
-      }
-      return;
-    }
-    if (playbackClock.isPaused()) {
-      return;
-    }
-
+  const handleMappedInputTokens = (tokens: readonly string[]): void => {
     const candidateChannels = new Set<string>();
     for (const token of tokens) {
       const mapped = inputTokenToChannels.get(token);
@@ -927,7 +872,121 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
   };
 
+  const applyHighSpeedAction = (action: HighSpeedControlAction | undefined): boolean => {
+    if (!action) {
+      return false;
+    }
+    const nextHighSpeed = applyHighSpeedControlAction(highSpeed, action);
+    if (nextHighSpeed !== highSpeed) {
+      highSpeed = nextHighSpeed;
+      tui?.setHighSpeed(highSpeed);
+      options.onHighSpeedChange?.(highSpeed);
+    }
+    if (!tui) {
+      process.stdout.write(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
+    }
+    return true;
+  };
+
+  const togglePause = (): void => {
+    if (playbackClock.isPaused()) {
+      if (!playbackClock.resume()) {
+        return;
+      }
+      audioSession?.resume();
+      tui?.setPaused(false);
+      if (!tui) {
+        process.stdout.write('RESUME\n');
+      }
+      return;
+    }
+    if (!playbackClock.pause()) {
+      return;
+    }
+    audioSession?.pause();
+    tui?.setPaused(true);
+    if (!tui) {
+      process.stdout.write('PAUSE\n');
+    }
+  };
+
+  const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
+    if (interruptedReason) {
+      return;
+    }
+    const inputEvent = resolveInputTokenEvent(chunk ?? '', key);
+    if (inputEvent.kittyProtocolEvent) {
+      return;
+    }
+    const tokens = inputEvent.tokens;
+
+    if (key.sequence === '\u0003' || tokens.includes('ctrl+c')) {
+      interruptedReason = 'ctrl-c';
+      stopInputCapture();
+      return;
+    }
+    if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b' || tokens.includes('escape')) {
+      interruptedReason = 'escape';
+      stopInputCapture();
+      return;
+    }
+    const highSpeedAction =
+      resolveHighSpeedControlActionFromTokens(tokens) ?? resolveHighSpeedControlActionFromKey(chunk, key);
+    if (applyHighSpeedAction(highSpeedAction)) {
+      return;
+    }
+    if (tokens.includes('space') || isSpaceKey(key)) {
+      togglePause();
+      return;
+    }
+    if (playbackClock.isPaused()) {
+      return;
+    }
+    handleMappedInputTokens(tokens);
+  };
+
+  const onRawInputData = (data: Buffer): void => {
+    if (interruptedReason) {
+      return;
+    }
+    const chunk = data.toString('utf8');
+    const inputEvent = resolveInputTokenEvent(chunk, {
+      name: undefined,
+      sequence: chunk,
+      ctrl: false,
+      meta: false,
+      shift: false,
+    } satisfies readline.Key);
+    if (!inputEvent.kittyProtocolEvent) {
+      return;
+    }
+
+    const tokens = inputEvent.tokens;
+    if (tokens.includes('ctrl+c')) {
+      interruptedReason = 'ctrl-c';
+      stopInputCapture();
+      return;
+    }
+    if (tokens.includes('escape')) {
+      interruptedReason = 'escape';
+      stopInputCapture();
+      return;
+    }
+    if (applyHighSpeedAction(resolveHighSpeedControlActionFromTokens(tokens))) {
+      return;
+    }
+    if (tokens.includes('space')) {
+      togglePause();
+      return;
+    }
+    if (playbackClock.isPaused()) {
+      return;
+    }
+    handleMappedInputTokens(tokens);
+  };
+
   process.stdin.on('keypress', onKeyPress);
+  process.stdin.on('data', onRawInputData);
 
   try {
     while (playbackClock.nowMs() < horizon) {

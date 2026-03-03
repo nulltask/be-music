@@ -380,8 +380,8 @@ const KITTY_KEYBOARD_PROTOCOL_DISABLE_SEQUENCE = '\u001b[<u';
 const KITTY_MODIFIER_SHIFT_MASK = 1;
 const KITTY_MODIFIER_CTRL_MASK = 4;
 const KITTY_EVENT_TYPE_RELEASE = 3;
-const KITTY_LEFT_SHIFT_KEY_CODE = 57_441;
-const KITTY_RIGHT_SHIFT_KEY_CODE = 57_447;
+const KITTY_LEFT_SHIFT_KEY_CODES = new Set([57_441, 441]);
+const KITTY_RIGHT_SHIFT_KEY_CODES = new Set([57_447, 447]);
 
 export function beginKittyKeyboardProtocolOptIn(stdout: NodeJS.WriteStream = process.stdout): () => void {
   if (!stdout.isTTY || !process.stdin.isTTY) {
@@ -399,19 +399,21 @@ export function beginKittyKeyboardProtocolOptIn(stdout: NodeJS.WriteStream = pro
 }
 
 export function resolveInputTokenEvent(chunk: string, key: readline.Key): ResolvedInputTokenEvent {
-  const kittyEvent = parseKittyKeyboardEvent(chunk, key);
-  if (kittyEvent) {
-    const kittyTokens = [...resolveKittyInputTokens(kittyEvent)];
-    if (kittyEvent.eventType === KITTY_EVENT_TYPE_RELEASE) {
-      return {
-        tokens: [],
-        releaseTokens: kittyTokens,
-        kittyProtocolEvent: true,
-      };
+  const kittyEvents = parseKittyKeyboardEvents(chunk, key);
+  if (kittyEvents.length > 0) {
+    const tokens = new Set<string>();
+    const releaseTokens = new Set<string>();
+    for (const kittyEvent of kittyEvents) {
+      const kittyTokens = resolveKittyInputTokens(kittyEvent);
+      if (kittyEvent.eventType === KITTY_EVENT_TYPE_RELEASE) {
+        kittyTokens.forEach((token) => releaseTokens.add(token));
+        continue;
+      }
+      kittyTokens.forEach((token) => tokens.add(token));
     }
     return {
-      tokens: kittyTokens,
-      releaseTokens: [],
+      tokens: [...tokens],
+      releaseTokens: [...releaseTokens],
       kittyProtocolEvent: true,
     };
   }
@@ -462,52 +464,51 @@ function resolveLegacyInputTokens(chunk: string, key: readline.Key): string[] {
   return [...tokens];
 }
 
-function parseKittyKeyboardEvent(chunk: string, key: readline.Key): KittyKeyboardEvent | undefined {
+function parseKittyKeyboardEvents(chunk: string, key: readline.Key): KittyKeyboardEvent[] {
   const sequence = chunk.length > 0 ? chunk : (key.sequence ?? '');
   if (sequence.length === 0) {
-    return undefined;
-  }
-  if (!sequence.startsWith('\u001b[') || !sequence.endsWith('u')) {
-    return undefined;
-  }
-  const body = sequence.slice(2, -1);
-  if (!/^[0-9:;]+$/.test(body)) {
-    return undefined;
-  }
-  const parameters = body.split(';');
-  if (parameters.length === 0) {
-    return undefined;
-  }
-  const keyCodeParts = parameters[0]!.split(':');
-  const keyCode = parseNumericPart(keyCodeParts[0]);
-  if (keyCode === undefined) {
-    return undefined;
+    return [];
   }
 
-  const shiftedKeyCode = parseNumericPart(keyCodeParts[1]);
-  const baseKeyCode = parseNumericPart(keyCodeParts[2]);
-  let modifiers = 1;
-  let eventType = 1;
+  const events: KittyKeyboardEvent[] = [];
+  const normalizedSequence = sequence.replaceAll('\u001b[', '');
+  const regex = /([0-9]+(?::[0-9]+){0,2})(?:;([0-9]+(?::[0-9]+)?))?u/g;
 
-  if (parameters.length >= 2) {
-    const [rawModifiers, rawEventType] = parameters[1]!.split(':');
-    const parsedModifiers = parseNumericPart(rawModifiers);
-    if (parsedModifiers !== undefined) {
-      modifiers = parsedModifiers;
+  for (const match of normalizedSequence.matchAll(regex)) {
+    const keyPart = match[1];
+    if (typeof keyPart !== 'string') {
+      continue;
     }
-    const parsedEventType = parseNumericPart(rawEventType);
-    if (parsedEventType !== undefined) {
-      eventType = parsedEventType;
+    const keyCodeParts = keyPart.split(':');
+    const keyCode = parseNumericPart(keyCodeParts[0]);
+    if (keyCode === undefined) {
+      continue;
     }
+    const shiftedKeyCode = parseNumericPart(keyCodeParts[1]);
+    const baseKeyCode = parseNumericPart(keyCodeParts[2]);
+    let modifiers = 1;
+    let eventType = 1;
+    const modifierPart = match[2];
+    if (typeof modifierPart === 'string') {
+      const [rawModifiers, rawEventType] = modifierPart.split(':');
+      const parsedModifiers = parseNumericPart(rawModifiers);
+      if (parsedModifiers !== undefined) {
+        modifiers = parsedModifiers;
+      }
+      const parsedEventType = parseNumericPart(rawEventType);
+      if (parsedEventType !== undefined) {
+        eventType = parsedEventType;
+      }
+    }
+    events.push({
+      keyCode,
+      shiftedKeyCode,
+      baseKeyCode,
+      modifiers,
+      eventType,
+    });
   }
-
-  return {
-    keyCode,
-    shiftedKeyCode,
-    baseKeyCode,
-    modifiers,
-    eventType,
-  };
+  return events;
 }
 
 function parseNumericPart(value: string | undefined): number | undefined {
@@ -526,12 +527,12 @@ function resolveKittyInputTokens(event: KittyKeyboardEvent): Set<string> {
   const hasNonShiftModifier = (modifierBits & ~KITTY_MODIFIER_SHIFT_MASK) !== 0;
   const implicitShiftByKeyCode = event.keyCode >= 65 && event.keyCode <= 90;
 
-  if (event.keyCode === KITTY_LEFT_SHIFT_KEY_CODE) {
+  if (KITTY_LEFT_SHIFT_KEY_CODES.has(event.keyCode)) {
     tokens.add('shift-left');
     tokens.add('shift');
     return tokens;
   }
-  if (event.keyCode === KITTY_RIGHT_SHIFT_KEY_CODE) {
+  if (KITTY_RIGHT_SHIFT_KEY_CODES.has(event.keyCode)) {
     tokens.add('shift-right');
     tokens.add('shift');
     return tokens;

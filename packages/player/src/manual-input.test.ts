@@ -211,6 +211,21 @@ describe('manual input', () => {
     expect(implicitShiftW.tokens).toContain('shift+w');
   });
 
+  test('manual-input: resolves ghostty short kitty shift key codes', () => {
+    const leftShift = resolveInputTokenEvent('441;2u', createKey(undefined, '441;2u'));
+    expect(leftShift.tokens).toContain('shift-left');
+
+    const rightShift = resolveInputTokenEvent('447;2u', createKey(undefined, '447;2u'));
+    expect(rightShift.tokens).toContain('shift-right');
+
+    const rightShiftCombined = resolveInputTokenEvent(
+      '447;2u447;1:3u',
+      createKey(undefined, '447;2u447;1:3u'),
+    );
+    expect(rightShiftCombined.tokens).toContain('shift-right');
+    expect(rightShiftCombined.releaseTokens).toContain('shift-right');
+  });
+
   test('manual-input: resolves lane display mode labels', () => {
     expect(resolveLaneDisplayMode(['11'])).toBe('5 KEY SP');
     expect(resolveLaneDisplayMode(['11'], { chartExtension: '.bme' })).toBe('7 KEY SP');
