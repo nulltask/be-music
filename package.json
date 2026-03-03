@@ -29,7 +29,7 @@
     "@types/node": "^24.3.1",
     "@typescript/native-preview": "7.0.0-dev.20260301.1",
     "@vitest/coverage-v8": "^4.0.18",
-    "oxfmt": "^0.35.0",
+    "oxfmt": "^0.36.0",
     "oxlint": "^1.50.0",
     "rimraf": "^6.0.1",
     "tsx": "^4.20.3",
