@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264']);
-const PACKET_READ_CHUNK_BYTES = 2_000_000;
+// Keep chunks small so ff_decode_multi never allocates too many full-size frames at once.
+const PACKET_READ_CHUNK_BYTES = 65_536;
 const MAX_PACKET_READ_ITERATIONS = 16_384;
 const FALLBACK_FPS = 30;
 
@@ -87,6 +88,23 @@ export interface DecodedVideoFrames {
 }
 
 export async function decodeVideoFrames(videoPath: string): Promise<DecodedVideoFrames | undefined> {
+  const frames: DecodedVideoFrame[] = [];
+  const decoded = await decodeVideoFramesStream(videoPath, (frame) => {
+    frames.push(frame);
+  });
+  if (!decoded || frames.length === 0) {
+    return undefined;
+  }
+  return {
+    codecName: decoded.codecName,
+    frames,
+  };
+}
+
+export async function decodeVideoFramesStream(
+  videoPath: string,
+  onFrame: (frame: DecodedVideoFrame) => void,
+): Promise<{ codecName: 'mpeg1video' | 'h264'; frameCount: number } | undefined> {
   let libav: LibAvInstance | undefined;
   try {
     const libavInstance = await createLibAvInstance();
@@ -111,64 +129,22 @@ export async function decodeVideoFrames(videoPath: string): Promise<DecodedVideo
       videoStream.codecpar,
     );
     try {
-      const rawFrames = await readAllVideoFrames(
+      const frameCount = await decodeVideoFramesWithCallback(
         libavInstance,
         formatContext,
-        videoStream.index,
+        videoStream,
         decoderContext,
         packetRef,
         frameRef,
+        onFrame,
       );
-      if (!rawFrames) {
-        return undefined;
-      }
-      if (rawFrames.length === 0) {
-        return undefined;
-      }
-
-      const timeScale = resolveTimeScale(videoStream);
-      const firstPts = resolveFramePts(rawFrames[0]);
-      const fallbackStep = resolveFallbackStep(videoStream.duration, rawFrames.length);
-      const frames: DecodedVideoFrame[] = [];
-
-      let lastSeconds = 0;
-      for (let index = 0; index < rawFrames.length; index += 1) {
-        const frame = rawFrames[index];
-        const converted = convertFrameToRgba(frame, libavInstance);
-        if (!converted) {
-          continue;
-        }
-
-        const pts = resolveFramePts(frame);
-        let seconds = index * fallbackStep;
-        if (typeof pts === 'number' && typeof firstPts === 'number') {
-          seconds = (pts - firstPts) * timeScale;
-        }
-
-        if (!Number.isFinite(seconds)) {
-          seconds = index * fallbackStep;
-        }
-        seconds = Math.max(0, seconds);
-        if (seconds + 1e-6 < lastSeconds) {
-          seconds = lastSeconds;
-        }
-        lastSeconds = seconds;
-
-        frames.push({
-          seconds,
-          width: converted.width,
-          height: converted.height,
-          rgba: converted.rgba,
-        });
-      }
-
-      if (frames.length === 0) {
+      if (frameCount === undefined || frameCount <= 0) {
         return undefined;
       }
 
       return {
         codecName,
-        frames,
+        frameCount,
       };
     } finally {
       await libavInstance.ff_free_decoder(decoderContext, packetRef, frameRef);
@@ -184,29 +160,69 @@ function isSupportedVideoCodec(codecName: string): codecName is 'mpeg1video' | '
   return SUPPORTED_VIDEO_CODECS.has(codecName);
 }
 
-async function readAllVideoFrames(
+async function decodeVideoFramesWithCallback(
   libav: LibAvInstance,
   formatContext: number,
-  streamIndex: number,
+  stream: LibAvStream,
   decoderContext: number,
   packetRef: number,
   frameRef: number,
-): Promise<LibAvVideoFrame[] | undefined> {
-  const frames: LibAvVideoFrame[] = [];
+  onFrame: (frame: DecodedVideoFrame) => void,
+): Promise<number | undefined> {
+  const timeScale = resolveTimeScale(stream);
+  const fallbackStep = resolveFallbackStep();
+  let firstPts: number | undefined;
+  let nextFallbackSeconds = 0;
+  let lastSeconds = 0;
+  let frameCount = 0;
+
+  const consume = (decodedFrames: LibAvVideoFrame[]): void => {
+    for (const frame of decodedFrames) {
+      const converted = convertFrameToRgba(frame, libav);
+      if (!converted) {
+        continue;
+      }
+
+      const pts = resolveFramePts(frame);
+      if (typeof pts === 'number' && typeof firstPts !== 'number') {
+        firstPts = pts;
+      }
+
+      let seconds = nextFallbackSeconds;
+      if (typeof pts === 'number' && typeof firstPts === 'number') {
+        seconds = (pts - firstPts) * timeScale;
+      }
+      if (!Number.isFinite(seconds)) {
+        seconds = nextFallbackSeconds;
+      }
+      seconds = Math.max(0, seconds);
+      if (seconds + 1e-6 < lastSeconds) {
+        seconds = lastSeconds;
+      }
+      lastSeconds = seconds;
+      nextFallbackSeconds = seconds + fallbackStep;
+
+      onFrame({
+        seconds,
+        width: converted.width,
+        height: converted.height,
+        rgba: converted.rgba,
+      });
+      frameCount += 1;
+    }
+  };
 
   for (let iteration = 0; iteration < MAX_PACKET_READ_ITERATIONS; iteration += 1) {
     const [readResult, packetsByStream] = await libav.ff_read_frame_multi(formatContext, packetRef, {
       limit: PACKET_READ_CHUNK_BYTES,
     });
-    const packets = packetsByStream[streamIndex] ?? [];
+    const packets = packetsByStream[stream.index] ?? [];
     if (packets.length > 0) {
       const decoded = await libav.ff_decode_multi(decoderContext, packetRef, frameRef, packets, {
         copyoutFrame: 'video',
         ignoreErrors: true,
       });
-      if (decoded.length > 0) {
-        frames.push(...decoded);
-      }
+      consume(decoded);
     }
 
     if (readResult === libav.AVERROR_EOF) {
@@ -215,10 +231,8 @@ async function readAllVideoFrames(
         copyoutFrame: 'video',
         ignoreErrors: true,
       });
-      if (flushed.length > 0) {
-        frames.push(...flushed);
-      }
-      return frames;
+      consume(flushed);
+      return frameCount;
     }
 
     if (readResult === 0 || readResult === -libav.EAGAIN) {
@@ -237,10 +251,7 @@ function resolveTimeScale(stream: LibAvStream): number {
   return numerator / denominator;
 }
 
-function resolveFallbackStep(durationSeconds: number, frameCount: number): number {
-  if (Number.isFinite(durationSeconds) && durationSeconds > 0 && frameCount > 0) {
-    return durationSeconds / frameCount;
-  }
+function resolveFallbackStep(): number {
   return 1 / FALLBACK_FPS;
 }
 

@@ -5,7 +5,7 @@ import { createTimingResolver } from '@be-music/audio-renderer';
 import { decode as decodeBmpTs } from 'bmp-ts';
 import jpeg from 'jpeg-js';
 import { PNG } from 'pngjs';
-import { decodeVideoFrames } from './bga-video.ts';
+import { decodeVideoFramesStream } from './bga-video.ts';
 
 const BASE_BGA_CHANNEL = '04';
 const LAYER_BGA_CHANNEL = '07';
@@ -304,24 +304,27 @@ async function loadFramesByKeys(params: {
 }): Promise<Map<string, FrameSource>> {
   const { keys, resources, baseDir, mode, width, height } = params;
   const map = new Map<string, FrameSource>();
-  const loaded = await Promise.all(
-    [...keys].map(async (key) => {
-      const resourcePath = resources[key];
-      if (!resourcePath) {
-        return undefined;
-      }
-      const resolved = await resolveMediaPath(baseDir, resourcePath);
-      if (!resolved) {
-        return undefined;
-      }
-      const source = await loadFrameSource(resolved, mode, width, height);
-      return source ? ([key, source] as const) : undefined;
-    }),
-  );
+  const cache = new Map<string, FrameSource | null>();
 
-  for (const entry of loaded) {
-    if (entry) {
-      map.set(entry[0], entry[1]);
+  for (const key of keys) {
+    const resourcePath = resources[key];
+    if (!resourcePath) {
+      continue;
+    }
+    const resolved = await resolveMediaPath(baseDir, resourcePath);
+    if (!resolved) {
+      continue;
+    }
+
+    const cacheKey = `${mode}:${width}x${height}:${resolved}`;
+    if (!cache.has(cacheKey)) {
+      const source = await loadFrameSource(resolved, mode, width, height);
+      cache.set(cacheKey, source ?? null);
+    }
+
+    const source = cache.get(cacheKey);
+    if (source) {
+      map.set(key, source);
     }
   }
 
@@ -337,8 +340,14 @@ function normalizeDisplaySize(width?: number, height?: number): { width: number;
 
 function resizeFrameSourceMap(sourceMap: Map<string, FrameSource>, width: number, height: number): Map<string, FrameSource> {
   const map = new Map<string, FrameSource>();
+  const cache = new WeakMap<FrameSource, FrameSource>();
   for (const [key, source] of sourceMap) {
-    map.set(key, resizeFrameSource(source, width, height));
+    let resized = cache.get(source);
+    if (!resized) {
+      resized = resizeFrameSource(source, width, height);
+      cache.set(source, resized);
+    }
+    map.set(key, resized);
   }
   return map;
 }
@@ -593,13 +602,8 @@ async function loadVideoAsFrameSource(
   width: number,
   height: number,
 ): Promise<FrameSource | undefined> {
-  const decoded = await decodeVideoFrames(videoPath);
-  if (!decoded || decoded.frames.length === 0) {
-    return undefined;
-  }
-
   const frames: TimedAnsiFrame[] = [];
-  for (const frame of decoded.frames) {
+  const decoded = await decodeVideoFramesStream(videoPath, (frame) => {
     const specFrame = convertImageToSpecFrame(
       {
         width: frame.width,
@@ -613,9 +617,9 @@ async function loadVideoAsFrameSource(
       seconds: frame.seconds,
       frame: resizeAnsiFrame(specFrame, width, height),
     });
-  }
+  });
 
-  if (frames.length === 0) {
+  if (!decoded || frames.length === 0) {
     return undefined;
   }
 
