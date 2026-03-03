@@ -58,15 +58,29 @@ export class BgaAnsiRenderer {
 
   private readonly layerTimeline: BgaCue[];
 
-  private readonly baseFramesByKey: Map<string, AnsiFrame>;
+  private readonly baseSourceFramesByKey: Map<string, AnsiFrame>;
 
-  private readonly layerFramesByKey: Map<string, AnsiFrame>;
+  private readonly layerSourceFramesByKey: Map<string, AnsiFrame>;
 
-  private readonly stageFileFrame?: AnsiFrame;
+  private readonly stageFileSourceFrame?: AnsiFrame;
 
-  private readonly missingBaseFrame: AnsiFrame;
+  private readonly missingBaseSourceFrame: AnsiFrame;
 
-  private readonly missingLayerFrame: AnsiFrame;
+  private readonly missingLayerSourceFrame: AnsiFrame;
+
+  private baseFramesByKey = new Map<string, AnsiFrame>();
+
+  private layerFramesByKey = new Map<string, AnsiFrame>();
+
+  private stageFileFrame?: AnsiFrame;
+
+  private missingBaseFrame: AnsiFrame;
+
+  private missingLayerFrame: AnsiFrame;
+
+  private displayWidth: number;
+
+  private displayHeight: number;
 
   private cachedBaseKey = '__INIT__';
 
@@ -85,19 +99,36 @@ export class BgaAnsiRenderer {
   constructor(params: {
     baseTimeline: BgaCue[];
     layerTimeline: BgaCue[];
-    baseFramesByKey: Map<string, AnsiFrame>;
-    layerFramesByKey: Map<string, AnsiFrame>;
-    stageFileFrame?: AnsiFrame;
-    missingBaseFrame: AnsiFrame;
-    missingLayerFrame: AnsiFrame;
+    baseSourceFramesByKey: Map<string, AnsiFrame>;
+    layerSourceFramesByKey: Map<string, AnsiFrame>;
+    stageFileSourceFrame?: AnsiFrame;
+    missingBaseSourceFrame: AnsiFrame;
+    missingLayerSourceFrame: AnsiFrame;
+    width: number;
+    height: number;
   }) {
     this.baseTimeline = params.baseTimeline;
     this.layerTimeline = params.layerTimeline;
-    this.baseFramesByKey = params.baseFramesByKey;
-    this.layerFramesByKey = params.layerFramesByKey;
-    this.stageFileFrame = params.stageFileFrame;
-    this.missingBaseFrame = params.missingBaseFrame;
-    this.missingLayerFrame = params.missingLayerFrame;
+    this.baseSourceFramesByKey = params.baseSourceFramesByKey;
+    this.layerSourceFramesByKey = params.layerSourceFramesByKey;
+    this.stageFileSourceFrame = params.stageFileSourceFrame;
+    this.missingBaseSourceFrame = params.missingBaseSourceFrame;
+    this.missingLayerSourceFrame = params.missingLayerSourceFrame;
+    this.displayWidth = params.width;
+    this.displayHeight = params.height;
+    this.missingBaseFrame = resizeAnsiFrame(this.missingBaseSourceFrame, this.displayWidth, this.displayHeight);
+    this.missingLayerFrame = resizeAnsiFrame(this.missingLayerSourceFrame, this.displayWidth, this.displayHeight);
+    this.rebuildFrames();
+  }
+
+  setDisplaySize(width: number, height: number): void {
+    const next = normalizeDisplaySize(width, height);
+    if (next.width === this.displayWidth && next.height === this.displayHeight) {
+      return;
+    }
+    this.displayWidth = next.width;
+    this.displayHeight = next.height;
+    this.rebuildFrames();
   }
 
   getAnsiLines(currentSeconds: number): string[] | undefined {
@@ -133,6 +164,27 @@ export class BgaAnsiRenderer {
       this.cachedSixelScaleY = normalizedScaleY;
     }
     return this.cachedSixel;
+  }
+
+  private rebuildFrames(): void {
+    this.baseFramesByKey = resizeFrameMap(this.baseSourceFramesByKey, this.displayWidth, this.displayHeight);
+    this.layerFramesByKey = resizeFrameMap(this.layerSourceFramesByKey, this.displayWidth, this.displayHeight);
+    this.stageFileFrame = this.stageFileSourceFrame
+      ? resizeAnsiFrame(this.stageFileSourceFrame, this.displayWidth, this.displayHeight)
+      : undefined;
+    this.missingBaseFrame = resizeAnsiFrame(this.missingBaseSourceFrame, this.displayWidth, this.displayHeight);
+    this.missingLayerFrame = resizeAnsiFrame(this.missingLayerSourceFrame, this.displayWidth, this.displayHeight);
+    this.resetCache();
+  }
+
+  private resetCache(): void {
+    this.cachedBaseKey = '__INIT__';
+    this.cachedLayerKey = '__INIT__';
+    this.cachedComposite = undefined;
+    this.cachedLines = undefined;
+    this.cachedSixel = undefined;
+    this.cachedSixelScaleX = -1;
+    this.cachedSixelScaleY = -1;
   }
 
   private refreshComposite(currentSeconds: number): void {
@@ -173,8 +225,7 @@ export async function createBgaAnsiRenderer(
   json: BeMusicJson,
   options: BgaAnsiOptions,
 ): Promise<BgaAnsiRenderer | undefined> {
-  const width = Math.max(8, Math.floor(options.width ?? DEFAULT_BGA_ASCII_WIDTH));
-  const height = Math.max(6, Math.floor(options.height ?? DEFAULT_BGA_ASCII_HEIGHT));
+  const displaySize = normalizeDisplaySize(options.width, options.height);
   const resolver = createTimingResolver(json);
   const sortedEvents = sortEvents(json.events);
 
@@ -184,46 +235,44 @@ export async function createBgaAnsiRenderer(
   const baseKeys = new Set(baseTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layerKeys = new Set(layerTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
 
-  const baseFramesByKey = await loadFramesByKeys({
+  const baseSourceFramesByKey = await loadFramesByKeys({
     keys: baseKeys,
     resources: json.resources.bmp,
     baseDir: options.baseDir,
-    width,
-    height,
     mode: 'base',
   });
-  const layerFramesByKey = await loadFramesByKeys({
+  const layerSourceFramesByKey = await loadFramesByKeys({
     keys: layerKeys,
     resources: json.resources.bmp,
     baseDir: options.baseDir,
-    width,
-    height,
     mode: 'layer',
   });
 
-  let stageFileFrame: AnsiFrame | undefined;
+  let stageFileSourceFrame: AnsiFrame | undefined;
   if (json.metadata.stageFile) {
     const resolved = await resolveImagePath(options.baseDir, json.metadata.stageFile);
     if (resolved) {
-      stageFileFrame = await loadImageAsAnsiFrame(resolved, width, height, 'base');
+      stageFileSourceFrame = await loadImageAsSpecFrame(resolved, 'base');
     }
   }
 
-  if (baseFramesByKey.size === 0 && layerFramesByKey.size === 0 && !stageFileFrame) {
+  if (baseSourceFramesByKey.size === 0 && layerSourceFramesByKey.size === 0 && !stageFileSourceFrame) {
     return undefined;
   }
 
-  const missingBaseFrame = createMissingFrame(width, height, 'base');
-  const missingLayerFrame = createMissingFrame(width, height, 'layer');
+  const missingBaseSourceFrame = createMissingSourceFrame('base');
+  const missingLayerSourceFrame = createMissingSourceFrame('layer');
 
   return new BgaAnsiRenderer({
     baseTimeline,
     layerTimeline,
-    baseFramesByKey,
-    layerFramesByKey,
-    stageFileFrame,
-    missingBaseFrame,
-    missingLayerFrame,
+    baseSourceFramesByKey,
+    layerSourceFramesByKey,
+    stageFileSourceFrame,
+    missingBaseSourceFrame,
+    missingLayerSourceFrame,
+    width: displaySize.width,
+    height: displaySize.height,
   });
 }
 
@@ -231,11 +280,9 @@ async function loadFramesByKeys(params: {
   keys: ReadonlySet<string>;
   resources: Record<string, string>;
   baseDir: string;
-  width: number;
-  height: number;
   mode: FrameMode;
 }): Promise<Map<string, AnsiFrame>> {
-  const { keys, resources, baseDir, width, height, mode } = params;
+  const { keys, resources, baseDir, mode } = params;
   const map = new Map<string, AnsiFrame>();
   const loaded = await Promise.all(
     [...keys].map(async (key) => {
@@ -247,7 +294,7 @@ async function loadFramesByKeys(params: {
       if (!resolved) {
         return undefined;
       }
-      const frame = await loadImageAsAnsiFrame(resolved, width, height, mode);
+      const frame = await loadImageAsSpecFrame(resolved, mode);
       return frame ? ([key, frame] as const) : undefined;
     }),
   );
@@ -258,6 +305,21 @@ async function loadFramesByKeys(params: {
     }
   }
 
+  return map;
+}
+
+function normalizeDisplaySize(width?: number, height?: number): { width: number; height: number } {
+  return {
+    width: Math.max(8, Math.floor(width ?? DEFAULT_BGA_ASCII_WIDTH)),
+    height: Math.max(6, Math.floor(height ?? DEFAULT_BGA_ASCII_HEIGHT)),
+  };
+}
+
+function resizeFrameMap(sourceMap: Map<string, AnsiFrame>, width: number, height: number): Map<string, AnsiFrame> {
+  const map = new Map<string, AnsiFrame>();
+  for (const [key, sourceFrame] of sourceMap) {
+    map.set(key, resizeAnsiFrame(sourceFrame, width, height));
+  }
   return map;
 }
 
@@ -558,16 +620,11 @@ function encodeSixelRunLength(input: string): string {
   return encoded;
 }
 
-async function loadImageAsAnsiFrame(
-  imagePath: string,
-  maxWidth: number,
-  maxHeight: number,
-  mode: FrameMode,
-): Promise<AnsiFrame | undefined> {
+async function loadImageAsSpecFrame(imagePath: string, mode: FrameMode): Promise<AnsiFrame | undefined> {
   try {
     const buffer = await readFile(imagePath);
     const decoded = decodeImageBuffer(buffer, imagePath);
-    return convertImageToAnsiFrame(decoded, maxWidth, maxHeight, mode);
+    return convertImageToSpecFrame(decoded, mode);
   } catch {
     return undefined;
   }
@@ -701,10 +758,9 @@ function decodeBmp(buffer: Buffer): DecodedImage {
   };
 }
 
-function createMissingFrame(maxWidth: number, maxHeight: number, mode: FrameMode): AnsiFrame {
+function createMissingSourceFrame(mode: FrameMode): AnsiFrame {
   const specMaskFill = mode === 'base' ? 1 : 0;
-  const specFrame = createSolidAnsiFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, specMaskFill);
-  return resizeAnsiFrame(specFrame, maxWidth, maxHeight);
+  return createSolidAnsiFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, specMaskFill);
 }
 
 function createSolidAnsiFrame(
@@ -744,7 +800,7 @@ function createSolidAnsiFrame(
   };
 }
 
-function convertImageToAnsiFrame(image: DecodedImage, maxWidth: number, maxHeight: number, mode: FrameMode): AnsiFrame {
+function convertImageToSpecFrame(image: DecodedImage, mode: FrameMode): AnsiFrame {
   const specFrame = createSolidAnsiFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, 0);
   const offsetX = Math.floor((SPEC_BGA_CANVAS_SIZE - image.width) / 2);
   const offsetY = 0;
@@ -779,7 +835,7 @@ function convertImageToAnsiFrame(image: DecodedImage, maxWidth: number, maxHeigh
     }
   }
 
-  return resizeAnsiFrame(specFrame, maxWidth, maxHeight);
+  return specFrame;
 }
 
 function resizeAnsiFrame(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {

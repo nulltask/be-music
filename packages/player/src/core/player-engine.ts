@@ -288,6 +288,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         height: bgaDisplay.height,
       })
     : undefined;
+  const detachBgaResizeHandler = attachBgaResizeHandler(tui, bgaRenderer, laneBindings);
   const preferSixel = tui?.isSixelEnabled() ?? false;
   reportLoadProgress(options, 0.3, 'Preparing audio...');
   const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'auto', (progress) => {
@@ -548,6 +549,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       }
     }
   } finally {
+    detachBgaResizeHandler();
     if (interruptedReason) {
       await disposeAudioSessionSafely(audioSession);
     } else {
@@ -629,6 +631,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         height: bgaDisplay.height,
       })
     : undefined;
+  const detachBgaResizeHandler = attachBgaResizeHandler(tui, bgaRenderer, laneBindings);
   const preferSixel = tui?.isSixelEnabled() ?? false;
   reportLoadProgress(options, 0.3, 'Preparing audio...');
   const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'manual', (progress) => {
@@ -1041,6 +1044,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
     }
   } finally {
+    detachBgaResizeHandler();
     if (interruptedReason) {
       await disposeAudioSessionSafely(audioSession);
     } else {
@@ -2310,6 +2314,25 @@ function estimateBgaAnsiDisplaySize(bindings: LaneBinding[]): { width: number; h
   const height = Math.max(MIN_BGA_ASCII_HEIGHT, laneBlockHeight);
 
   return { width, height };
+}
+
+function attachBgaResizeHandler(
+  tui: PlayerTui | undefined,
+  bgaRenderer: BgaAnsiRenderer | undefined,
+  bindings: LaneBinding[],
+): () => void {
+  if (!tui || !bgaRenderer || !process.stdout.isTTY) {
+    return () => undefined;
+  }
+
+  const onResize = (): void => {
+    const displaySize = estimateBgaAnsiDisplaySize(bindings);
+    bgaRenderer.setDisplaySize(displaySize.width, displaySize.height);
+  };
+  process.stdout.on('resize', onResize);
+  return () => {
+    process.stdout.off('resize', onResize);
+  };
 }
 
 function printLaneMap(bindings: LaneBinding[]): void {

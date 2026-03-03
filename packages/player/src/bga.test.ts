@@ -112,6 +112,37 @@ test('player bga: renders undefined base keys as black instead of STAGEFILE', as
   }
 });
 
+test('player bga: updates output size when display size changes', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-resize-'));
+  try {
+    await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bmp['01'] = 'base.png';
+    json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
+
+    const renderer = await createBgaAnsiRenderer(json, {
+      baseDir,
+      width: 40,
+      height: 20,
+    });
+    expect(renderer).toBeDefined();
+
+    const before = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+    expect(before.length).toBe(20);
+    expect(before[0]?.length).toBe(40);
+
+    renderer?.setDisplaySize(60, 24);
+    const after = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+    expect(after.length).toBe(24);
+    expect(after[0]?.length).toBe(60);
+    expect(after[12]?.[30]).toEqual({ r: 255, g: 0, b: 0 });
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
 async function writePng(
   path: string,
   width: number,
