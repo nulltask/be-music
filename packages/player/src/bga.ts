@@ -5,6 +5,7 @@ import { createTimingResolver } from '@be-music/audio-renderer';
 import { decode as decodeBmpTs } from 'bmp-ts';
 import jpeg from 'jpeg-js';
 import { PNG } from 'pngjs';
+import { decodeVideoFrames } from './bga-video.ts';
 
 const BASE_BGA_CHANNEL = '04';
 const LAYER_BGA_CHANNEL = '07';
@@ -16,7 +17,7 @@ const SPEC_BGA_CANVAS_SIZE = 256;
 const TERMINAL_PIXEL_ASPECT_X = 2;
 const TERMINAL_PIXEL_ASPECT_Y = 1;
 
-type ImageFormat = 'bmp' | 'png' | 'jpeg';
+type ImageFormat = 'bmp' | 'png' | 'jpeg' | 'video';
 type FrameMode = 'base' | 'layer';
 
 interface BgaCue {
@@ -38,6 +39,28 @@ interface AnsiFrame {
   opaqueMask: Uint8Array;
 }
 
+interface TimedAnsiFrame {
+  seconds: number;
+  frame: AnsiFrame;
+}
+
+interface StaticFrameSource {
+  kind: 'static';
+  frame: AnsiFrame;
+}
+
+interface VideoFrameSource {
+  kind: 'video';
+  frames: TimedAnsiFrame[];
+}
+
+type FrameSource = StaticFrameSource | VideoFrameSource;
+
+interface FrameSelection {
+  frame?: AnsiFrame;
+  index: number;
+}
+
 interface CompositeFrame {
   width: number;
   height: number;
@@ -56,21 +79,21 @@ export class BgaAnsiRenderer {
 
   private readonly layerTimeline: BgaCue[];
 
-  private readonly baseSourceFramesByKey: Map<string, AnsiFrame>;
+  private readonly baseSourceFramesByKey: Map<string, FrameSource>;
 
-  private readonly layerSourceFramesByKey: Map<string, AnsiFrame>;
+  private readonly layerSourceFramesByKey: Map<string, FrameSource>;
 
-  private readonly stageFileSourceFrame?: AnsiFrame;
+  private readonly stageFileSourceFrame?: FrameSource;
 
   private readonly missingBaseSourceFrame: AnsiFrame;
 
   private readonly missingLayerSourceFrame: AnsiFrame;
 
-  private baseFramesByKey = new Map<string, AnsiFrame>();
+  private baseFramesByKey = new Map<string, FrameSource>();
 
-  private layerFramesByKey = new Map<string, AnsiFrame>();
+  private layerFramesByKey = new Map<string, FrameSource>();
 
-  private stageFileFrame?: AnsiFrame;
+  private stageFileFrame?: FrameSource;
 
   private missingBaseFrame: AnsiFrame;
 
@@ -84,6 +107,10 @@ export class BgaAnsiRenderer {
 
   private cachedLayerKey = '__INIT__';
 
+  private cachedBaseFrameIndex = -1;
+
+  private cachedLayerFrameIndex = -1;
+
   private cachedComposite?: CompositeFrame;
 
   private cachedLines?: string[];
@@ -91,9 +118,9 @@ export class BgaAnsiRenderer {
   constructor(params: {
     baseTimeline: BgaCue[];
     layerTimeline: BgaCue[];
-    baseSourceFramesByKey: Map<string, AnsiFrame>;
-    layerSourceFramesByKey: Map<string, AnsiFrame>;
-    stageFileSourceFrame?: AnsiFrame;
+    baseSourceFramesByKey: Map<string, FrameSource>;
+    layerSourceFramesByKey: Map<string, FrameSource>;
+    stageFileSourceFrame?: FrameSource;
     missingBaseSourceFrame: AnsiFrame;
     missingLayerSourceFrame: AnsiFrame;
     width: number;
@@ -140,10 +167,10 @@ export class BgaAnsiRenderer {
   }
 
   private rebuildFrames(): void {
-    this.baseFramesByKey = resizeFrameMap(this.baseSourceFramesByKey, this.displayWidth, this.displayHeight);
-    this.layerFramesByKey = resizeFrameMap(this.layerSourceFramesByKey, this.displayWidth, this.displayHeight);
+    this.baseFramesByKey = resizeFrameSourceMap(this.baseSourceFramesByKey, this.displayWidth, this.displayHeight);
+    this.layerFramesByKey = resizeFrameSourceMap(this.layerSourceFramesByKey, this.displayWidth, this.displayHeight);
     this.stageFileFrame = this.stageFileSourceFrame
-      ? resizeAnsiFrame(this.stageFileSourceFrame, this.displayWidth, this.displayHeight)
+      ? resizeFrameSource(this.stageFileSourceFrame, this.displayWidth, this.displayHeight)
       : undefined;
     this.missingBaseFrame = resizeAnsiFrame(this.missingBaseSourceFrame, this.displayWidth, this.displayHeight);
     this.missingLayerFrame = resizeAnsiFrame(this.missingLayerSourceFrame, this.displayWidth, this.displayHeight);
@@ -153,38 +180,58 @@ export class BgaAnsiRenderer {
   private resetCache(): void {
     this.cachedBaseKey = '__INIT__';
     this.cachedLayerKey = '__INIT__';
+    this.cachedBaseFrameIndex = -1;
+    this.cachedLayerFrameIndex = -1;
     this.cachedComposite = undefined;
     this.cachedLines = undefined;
   }
 
   private refreshComposite(currentSeconds: number): void {
-    const baseKey = findActiveCueKey(this.baseTimeline, currentSeconds) ?? '';
-    const layerKey = findActiveCueKey(this.layerTimeline, currentSeconds) ?? '';
-    if (this.cachedBaseKey === baseKey && this.cachedLayerKey === layerKey) {
+    const baseCue = findActiveCue(this.baseTimeline, currentSeconds);
+    const layerCue = findActiveCue(this.layerTimeline, currentSeconds);
+
+    const baseKey = baseCue?.key ?? '';
+    const layerKey = layerCue?.key ?? '';
+    const baseSeconds = baseCue ? Math.max(0, currentSeconds - baseCue.seconds) : Math.max(0, currentSeconds);
+    const layerSeconds = layerCue ? Math.max(0, currentSeconds - layerCue.seconds) : 0;
+
+    const baseSelection = this.resolveBaseFrame(baseKey, baseSeconds);
+    const layerSelection = this.resolveLayerFrame(layerKey, layerSeconds);
+
+    if (
+      this.cachedBaseKey === baseKey &&
+      this.cachedLayerKey === layerKey &&
+      this.cachedBaseFrameIndex === baseSelection.index &&
+      this.cachedLayerFrameIndex === layerSelection.index
+    ) {
       return;
     }
 
-    const baseFrame = this.resolveBaseFrame(baseKey);
-    const layerFrame = this.resolveLayerFrame(layerKey);
-
     this.cachedBaseKey = baseKey;
     this.cachedLayerKey = layerKey;
-    this.cachedComposite = mergeCompositeFrames(baseFrame, layerFrame);
+    this.cachedBaseFrameIndex = baseSelection.index;
+    this.cachedLayerFrameIndex = layerSelection.index;
+    this.cachedComposite = mergeCompositeFrames(baseSelection.frame, layerSelection.frame);
     this.cachedLines = undefined;
   }
 
-  private resolveBaseFrame(baseKey: string): AnsiFrame | undefined {
+  private resolveBaseFrame(baseKey: string, seconds: number): FrameSelection {
     if (!baseKey) {
-      return this.stageFileFrame;
+      return selectFrameFromSource(this.stageFileFrame, seconds);
     }
-    return this.baseFramesByKey.get(baseKey) ?? this.missingBaseFrame;
+    const source = this.baseFramesByKey.get(baseKey) ?? createStaticFrameSource(this.missingBaseFrame);
+    return selectFrameFromSource(source, seconds);
   }
 
-  private resolveLayerFrame(layerKey: string): AnsiFrame | undefined {
+  private resolveLayerFrame(layerKey: string, seconds: number): FrameSelection {
     if (!layerKey) {
-      return undefined;
+      return {
+        frame: undefined,
+        index: -1,
+      };
     }
-    return this.layerFramesByKey.get(layerKey) ?? this.missingLayerFrame;
+    const source = this.layerFramesByKey.get(layerKey) ?? createStaticFrameSource(this.missingLayerFrame);
+    return selectFrameFromSource(source, seconds);
   }
 }
 
@@ -207,19 +254,23 @@ export async function createBgaAnsiRenderer(
     resources: json.resources.bmp,
     baseDir: options.baseDir,
     mode: 'base',
+    width: displaySize.width,
+    height: displaySize.height,
   });
   const layerSourceFramesByKey = await loadFramesByKeys({
     keys: layerKeys,
     resources: json.resources.bmp,
     baseDir: options.baseDir,
     mode: 'layer',
+    width: displaySize.width,
+    height: displaySize.height,
   });
 
-  let stageFileSourceFrame: AnsiFrame | undefined;
+  let stageFileSourceFrame: FrameSource | undefined;
   if (json.metadata.stageFile) {
-    const resolved = await resolveImagePath(options.baseDir, json.metadata.stageFile);
+    const resolved = await resolveMediaPath(options.baseDir, json.metadata.stageFile);
     if (resolved) {
-      stageFileSourceFrame = await loadImageAsSpecFrame(resolved, 'base');
+      stageFileSourceFrame = await loadFrameSource(resolved, 'base', displaySize.width, displaySize.height);
     }
   }
 
@@ -248,21 +299,23 @@ async function loadFramesByKeys(params: {
   resources: Record<string, string>;
   baseDir: string;
   mode: FrameMode;
-}): Promise<Map<string, AnsiFrame>> {
-  const { keys, resources, baseDir, mode } = params;
-  const map = new Map<string, AnsiFrame>();
+  width: number;
+  height: number;
+}): Promise<Map<string, FrameSource>> {
+  const { keys, resources, baseDir, mode, width, height } = params;
+  const map = new Map<string, FrameSource>();
   const loaded = await Promise.all(
     [...keys].map(async (key) => {
       const resourcePath = resources[key];
       if (!resourcePath) {
         return undefined;
       }
-      const resolved = await resolveImagePath(baseDir, resourcePath);
+      const resolved = await resolveMediaPath(baseDir, resourcePath);
       if (!resolved) {
         return undefined;
       }
-      const frame = await loadImageAsSpecFrame(resolved, mode);
-      return frame ? ([key, frame] as const) : undefined;
+      const source = await loadFrameSource(resolved, mode, width, height);
+      return source ? ([key, source] as const) : undefined;
     }),
   );
 
@@ -282,12 +335,78 @@ function normalizeDisplaySize(width?: number, height?: number): { width: number;
   };
 }
 
-function resizeFrameMap(sourceMap: Map<string, AnsiFrame>, width: number, height: number): Map<string, AnsiFrame> {
-  const map = new Map<string, AnsiFrame>();
-  for (const [key, sourceFrame] of sourceMap) {
-    map.set(key, resizeAnsiFrame(sourceFrame, width, height));
+function resizeFrameSourceMap(sourceMap: Map<string, FrameSource>, width: number, height: number): Map<string, FrameSource> {
+  const map = new Map<string, FrameSource>();
+  for (const [key, source] of sourceMap) {
+    map.set(key, resizeFrameSource(source, width, height));
   }
   return map;
+}
+
+function createStaticFrameSource(frame: AnsiFrame): FrameSource {
+  return {
+    kind: 'static',
+    frame,
+  };
+}
+
+function resizeFrameSource(source: FrameSource, width: number, height: number): FrameSource {
+  if (source.kind === 'static') {
+    return {
+      kind: 'static',
+      frame: resizeAnsiFrame(source.frame, width, height),
+    };
+  }
+
+  return {
+    kind: 'video',
+    frames: source.frames.map((entry) => ({
+      seconds: entry.seconds,
+      frame: resizeAnsiFrame(entry.frame, width, height),
+    })),
+  };
+}
+
+function selectFrameFromSource(source: FrameSource | undefined, seconds: number): FrameSelection {
+  if (!source) {
+    return {
+      frame: undefined,
+      index: -1,
+    };
+  }
+
+  if (source.kind === 'static') {
+    return {
+      frame: source.frame,
+      index: 0,
+    };
+  }
+
+  if (source.frames.length === 0) {
+    return {
+      frame: undefined,
+      index: -1,
+    };
+  }
+
+  let low = 0;
+  let high = source.frames.length - 1;
+  let answer = 0;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (source.frames[mid].seconds <= seconds) {
+      answer = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const bounded = Math.max(0, Math.min(source.frames.length - 1, answer));
+  return {
+    frame: source.frames[bounded].frame,
+    index: bounded,
+  };
 }
 
 function buildBgaTimeline(
@@ -307,25 +426,10 @@ function buildBgaTimeline(
       key: key === '00' ? undefined : key,
     });
   }
-
-  if (timeline.length < 2) {
-    return timeline;
-  }
-
-  const compact: BgaCue[] = [];
-  let previousKey = '__UNSET__';
-  for (const cue of timeline) {
-    const currentKey = cue.key ?? '';
-    if (currentKey === previousKey) {
-      continue;
-    }
-    compact.push(cue);
-    previousKey = currentKey;
-  }
-  return compact;
+  return timeline;
 }
 
-function findActiveCueKey(timeline: BgaCue[], currentSeconds: number): string | undefined {
+function findActiveCue(timeline: BgaCue[], currentSeconds: number): BgaCue | undefined {
   let low = 0;
   let high = timeline.length - 1;
   let answer = -1;
@@ -344,7 +448,7 @@ function findActiveCueKey(timeline: BgaCue[], currentSeconds: number): string | 
     return undefined;
   }
 
-  return timeline[answer].key;
+  return timeline[answer];
 }
 
 function mergeCompositeFrames(baseFrame?: AnsiFrame, layerFrame?: AnsiFrame): CompositeFrame | undefined {
@@ -456,6 +560,10 @@ function composeAnsiLines(rgb: Uint8Array, opaqueMask: Uint8Array, width: number
 }
 
 async function loadImageAsSpecFrame(imagePath: string, mode: FrameMode): Promise<AnsiFrame | undefined> {
+  const extension = extname(imagePath).toLowerCase();
+  if (extension !== '.bmp' && extension !== '.png' && extension !== '.jpg' && extension !== '.jpeg') {
+    return undefined;
+  }
   try {
     const buffer = await readFile(imagePath);
     const decoded = decodeImageBuffer(buffer, imagePath);
@@ -465,8 +573,60 @@ async function loadImageAsSpecFrame(imagePath: string, mode: FrameMode): Promise
   }
 }
 
-async function resolveImagePath(baseDir: string, imagePath: string): Promise<string | undefined> {
-  const candidates = createImagePathCandidates(imagePath);
+async function loadFrameSource(
+  resourcePath: string,
+  mode: FrameMode,
+  width: number,
+  height: number,
+): Promise<FrameSource | undefined> {
+  const imageFrame = await loadImageAsSpecFrame(resourcePath, mode);
+  if (imageFrame) {
+    return createStaticFrameSource(imageFrame);
+  }
+
+  return loadVideoAsFrameSource(resourcePath, mode, width, height);
+}
+
+async function loadVideoAsFrameSource(
+  videoPath: string,
+  mode: FrameMode,
+  width: number,
+  height: number,
+): Promise<FrameSource | undefined> {
+  const decoded = await decodeVideoFrames(videoPath);
+  if (!decoded || decoded.frames.length === 0) {
+    return undefined;
+  }
+
+  const frames: TimedAnsiFrame[] = [];
+  for (const frame of decoded.frames) {
+    const specFrame = convertImageToSpecFrame(
+      {
+        width: frame.width,
+        height: frame.height,
+        data: frame.rgba,
+        format: 'video',
+      },
+      mode,
+    );
+    frames.push({
+      seconds: frame.seconds,
+      frame: resizeAnsiFrame(specFrame, width, height),
+    });
+  }
+
+  if (frames.length === 0) {
+    return undefined;
+  }
+
+  return {
+    kind: 'video',
+    frames,
+  };
+}
+
+async function resolveMediaPath(baseDir: string, mediaPath: string): Promise<string | undefined> {
+  const candidates = createMediaPathCandidates(mediaPath);
   for (const candidate of candidates) {
     const absolute = isAbsolute(candidate) ? candidate : resolve(baseDir, candidate);
     if (await exists(absolute)) {
@@ -476,8 +636,33 @@ async function resolveImagePath(baseDir: string, imagePath: string): Promise<str
   return undefined;
 }
 
-function createImagePathCandidates(imagePath: string): string[] {
-  const extCandidates = ['.bmp', '.BMP', '.png', '.PNG', '.jpg', '.JPG', '.jpeg', '.JPEG'];
+function createMediaPathCandidates(mediaPath: string): string[] {
+  const extCandidates = [
+    '.bmp',
+    '.BMP',
+    '.png',
+    '.PNG',
+    '.jpg',
+    '.JPG',
+    '.jpeg',
+    '.JPEG',
+    '.mpg',
+    '.MPG',
+    '.mpeg',
+    '.MPEG',
+    '.mp4',
+    '.MP4',
+    '.m4v',
+    '.M4V',
+    '.avi',
+    '.AVI',
+    '.wmv',
+    '.WMV',
+    '.mov',
+    '.MOV',
+    '.webm',
+    '.WEBM',
+  ];
   const candidates: string[] = [];
   const seen = new Set<string>();
   const push = (value: string): void => {
@@ -489,9 +674,9 @@ function createImagePathCandidates(imagePath: string): string[] {
     candidates.push(normalized);
   };
 
-  const basePaths = [imagePath];
-  const slashNormalized = imagePath.replaceAll('\\', '/');
-  if (slashNormalized !== imagePath) {
+  const basePaths = [mediaPath];
+  const slashNormalized = mediaPath.replaceAll('\\', '/');
+  if (slashNormalized !== mediaPath) {
     basePaths.push(slashNormalized);
   }
 
@@ -728,7 +913,7 @@ function isOpaquePixel(r: number, g: number, b: number, a: number, format: Image
   if (mode !== 'layer') {
     return true;
   }
-  if (format === 'bmp') {
+  if (format === 'bmp' || format === 'video') {
     return !(r === 0 && g === 0 && b === 0);
   }
   if (format === 'png') {

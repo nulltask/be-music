@@ -27,6 +27,7 @@
     "@be-music/json": "0.1.0",
     "@be-music/parser": "0.1.0",
     "@be-music/utils": "0.1.0",
+    "@uwx/libav.js-fat": "6.0.0-nightly.29.f420ff.ffmpeg.6.1.1",
     "bmp-ts": "^1.0.9",
     "jpeg-js": "^0.4.4",
     "node-web-audio-api": "^1.0.8",
