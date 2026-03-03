@@ -28,5 +28,6 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.oxc": "always"
   },
-  "oxc.fmt.configPath": ".oxfmtrc.json"
+  "oxc.fmt.configPath": ".oxfmtrc.json",
+  "terminal.integrated.enableKittyKeyboardProtocol": true,
 }
