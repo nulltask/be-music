@@ -94,6 +94,10 @@ const MIN_GRID_ROWS = 4;
 const STATIC_TUI_LINES = 16;
 const MEASURE_LINE_SYMBOL = '┄';
 const LANE_BOTTOM_SYMBOL = '▔';
+const LANE_FILL_SYMBOL = '│';
+const LANE_DIVIDER_SYMBOL = '│';
+const LANE_OUTER_BORDER_SYMBOL = '┃';
+const SPLIT_PANEL_INNER_WIDTH = 5;
 const HIGHLIGHT_BG_STEPS = [249, 248, 247, 246, 245, 244, 243, 242, 241, 240, 239];
 const HIGHLIGHT_DECAY_POWER = 0.72;
 const RED_NOTE_CHANNELS = new Set(['16', '26']);
@@ -294,7 +298,7 @@ export class PlayerTui {
     const now = Date.now();
     const displayHighSpeed = this.resolveDisplayHighSpeed(now);
     const scrollWindowBeats = resolveVisibleBeatsForTuiGrid(rowCount, displayHighSpeed);
-    const grid = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => '│'));
+    const grid = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => LANE_FILL_SYMBOL));
     const gridSourceChannels = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => ''));
     const laneHighlightRatios = new Map<number, number>();
 
@@ -308,7 +312,7 @@ export class PlayerTui {
       }
       const row = distanceToRow(distance, rowCount, scrollWindowBeats);
       for (let lane = 0; lane < laneCount; lane += 1) {
-        if (grid[row][lane] === '│') {
+        if (grid[row][lane] === LANE_FILL_SYMBOL) {
           grid[row][lane] = MEASURE_LINE_SYMBOL;
         }
       }
@@ -837,31 +841,42 @@ function renderLaneRow(
     const isInvisibleBody = value === INVISIBLE_LONG_NOTE_BODY_SYMBOL;
     const isInvisibleTail = value === INVISIBLE_LONG_NOTE_TAIL_SYMBOL;
     const isMine = value === MINE_NOTE_SYMBOL;
+    const isLaneFill = value === LANE_FILL_SYMBOL;
+    const isLaneCeiling = value === '═';
+    const isJudgeLine = value === LANE_BOTTOM_SYMBOL;
     const isInvisibleNote = isInvisibleHead || isInvisibleBody || isInvisibleTail;
     const isNote = isHead || isBody || isTail || isInvisibleNote || isMine;
     const noteUnderline = isHead || isTail || isInvisibleHead || isInvisibleTail;
-    const cell = isHead
-      ? renderNoteCell(laneWidth, 'head')
-      : isBody
-        ? renderNoteCell(laneWidth, 'body')
-        : isTail
-          ? renderNoteCell(laneWidth, 'tail')
-          : isInvisibleHead
+    const cell = isLaneFill
+      ? renderLaneBackdropCell(laneWidth)
+      : isLaneCeiling
+        ? colorizeLaneCeiling('─'.repeat(Math.max(1, laneWidth)))
+        : isJudgeLine
+          ? colorizeJudgeLine('━'.repeat(Math.max(1, laneWidth)))
+          : isHead
             ? renderNoteCell(laneWidth, 'head')
-            : isInvisibleBody
+            : isBody
               ? renderNoteCell(laneWidth, 'body')
-              : isInvisibleTail
+              : isTail
                 ? renderNoteCell(laneWidth, 'tail')
-            : isMine
-              ? center(MINE_NOTE_SYMBOL, laneWidth)
-              : center(value, laneWidth);
+                : isInvisibleHead
+                  ? renderNoteCell(laneWidth, 'head')
+                  : isInvisibleBody
+                    ? renderNoteCell(laneWidth, 'body')
+                    : isInvisibleTail
+                      ? renderNoteCell(laneWidth, 'tail')
+                      : isMine
+                        ? center(MINE_NOTE_SYMBOL, laneWidth)
+                        : center(value, laneWidth);
     const decoratedCell = isMine
       ? colorizeMine(cell)
       : isNote
         ? colorizeNote(cell, sourceChannels?.[index] ?? channels[index] ?? '', isInvisibleNote, noteUnderline)
         : value === MEASURE_LINE_SYMBOL
           ? colorizeMeasureLine(cell)
-          : cell;
+          : isLaneFill || isLaneCeiling || isJudgeLine
+            ? cell
+            : colorizeLaneLabel(cell);
     const highlightRatio = laneHighlightRatios.get(index);
     if (highlightRatio !== undefined) {
       return highlightCell(decoratedCell, highlightRatio);
@@ -869,12 +884,23 @@ function renderLaneRow(
     return decoratedCell;
   });
   if (splitAfterIndex < 0 || splitAfterIndex >= cells.length - 1) {
-    return cells.join(' ');
+    return renderLaneSection(cells);
   }
 
-  const left = cells.slice(0, splitAfterIndex + 1).join(' ');
-  const right = cells.slice(splitAfterIndex + 1).join(' ');
-  return `${left}   ${right}`;
+  const left = renderLaneSection(cells.slice(0, splitAfterIndex + 1));
+  const right = renderLaneSection(cells.slice(splitAfterIndex + 1));
+  return `${left}${renderLaneSplitPanel()}${right}`;
+}
+
+function renderLaneSection(cells: string[]): string {
+  const divider = colorizeLaneDivider(LANE_DIVIDER_SYMBOL);
+  const body = cells.join(divider);
+  return `${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}${body}${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}`;
+}
+
+function renderLaneSplitPanel(): string {
+  const fill = `\u001b[48;5;233m${' '.repeat(SPLIT_PANEL_INNER_WIDTH)}${ANSI_RESET}`;
+  return `${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}${fill}${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}`;
 }
 
 function setLaneCell(
@@ -893,7 +919,7 @@ function setLaneCell(
   }
 
   const normalizedSourceChannel = sourceChannel.toUpperCase();
-  const previousSymbol = rowCells[lane] ?? '│';
+  const previousSymbol = rowCells[lane] ?? LANE_FILL_SYMBOL;
   const previousSourceChannel = rowSources[lane] ?? '';
   const nextPriority = resolveLaneCellPriority(symbol, freeZoneSourceChannels.has(normalizedSourceChannel));
   const previousPriority = resolveLaneCellPriority(
@@ -925,7 +951,7 @@ function resolveLaneCellPriority(symbol: string, isFreeZoneSourceChannel: boolea
   if (symbol === MEASURE_LINE_SYMBOL) {
     return 1;
   }
-  if (symbol === '│') {
+  if (symbol === LANE_FILL_SYMBOL) {
     return 0;
   }
   return 1;
@@ -972,6 +998,31 @@ function highlightCell(value: string, ratio: number): string {
   return `\u001b[48;5;${background}m${value}\u001b[0m`;
 }
 
+function renderLaneBackdropCell(width: number): string {
+  const safeWidth = Math.max(1, width);
+  return ' '.repeat(safeWidth);
+}
+
+function colorizeLaneDivider(symbol: string): string {
+  return `\u001b[38;5;246m${symbol}${ANSI_RESET}`;
+}
+
+function colorizeLaneOuterBorder(symbol: string): string {
+  return `\u001b[1;38;5;253m${symbol}${ANSI_RESET}`;
+}
+
+function colorizeLaneCeiling(symbol: string): string {
+  return `\u001b[38;5;240m${symbol}${ANSI_RESET}`;
+}
+
+function colorizeJudgeLine(symbol: string): string {
+  return `\u001b[1;38;5;196m${symbol}${ANSI_RESET}`;
+}
+
+function colorizeLaneLabel(symbol: string): string {
+  return `\u001b[1;38;5;251m${symbol}${ANSI_RESET}`;
+}
+
 function colorizeNote(symbol: string, channel: string, invisible = false, underline = false): string {
   const suffix = underline ? ';4' : '';
   if (invisible) {
@@ -990,7 +1041,7 @@ function colorizeNote(symbol: string, channel: string, invisible = false, underl
 }
 
 function colorizeMeasureLine(symbol: string): string {
-  return `\u001b[90m${symbol}\u001b[0m`;
+  return `\u001b[38;5;239m${symbol}\u001b[0m`;
 }
 
 function colorizeMine(symbol: string): string {
@@ -1219,16 +1270,31 @@ function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number, scrollW
 }
 
 function calculateLaneBlockVisibleWidth(laneWidths: number[], splitAfterIndex: number): number {
-  const laneCount = Math.max(1, laneWidths.length);
-  let width = 0;
-  for (let index = 0; index < laneCount; index += 1) {
-    width += laneWidths[index] ?? DEFAULT_LANE_WIDTH;
+  const sectionWidth = (sectionLaneWidths: number[]): number => {
+    const laneCount = Math.max(0, sectionLaneWidths.length);
+    if (laneCount <= 0) {
+      return 0;
+    }
+    let width = 2; // outer borders
+    for (let index = 0; index < laneCount; index += 1) {
+      width += sectionLaneWidths[index] ?? DEFAULT_LANE_WIDTH;
+    }
+    width += Math.max(0, laneCount - 1); // lane dividers
+    return width;
+  };
+
+  if (laneWidths.length <= 0) {
+    return sectionWidth([DEFAULT_LANE_WIDTH]);
   }
-  width += Math.max(0, laneCount - 1);
-  if (splitAfterIndex >= 0 && splitAfterIndex < laneCount - 1) {
-    width += 2;
+
+  if (splitAfterIndex < 0 || splitAfterIndex >= laneWidths.length - 1) {
+    return sectionWidth(laneWidths);
   }
-  return Math.max(1, width);
+
+  const left = laneWidths.slice(0, splitAfterIndex + 1);
+  const right = laneWidths.slice(splitAfterIndex + 1);
+  const splitPanelWidth = SPLIT_PANEL_INNER_WIDTH + 2; // split borders
+  return Math.max(1, sectionWidth(left) + splitPanelWidth + sectionWidth(right));
 }
 
 function findAnsiSgrSequenceEnd(value: string, start: number): number {

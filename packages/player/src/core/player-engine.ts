@@ -713,6 +713,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const activeLongNotesByChannel = new Map<string, { endSeconds: number }>();
   const longNoteSuppressUntilSecondsByChannel = new Map<string, number>();
   let inputCaptureStopped = false;
+  let suppressLegacyKeypressUntilMs = 0;
 
   const stopInputCapture = () => {
     if (inputCaptureStopped) {
@@ -914,6 +915,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (interruptedReason) {
       return;
     }
+    if (Date.now() < suppressLegacyKeypressUntilMs) {
+      return;
+    }
     const inputEvent = resolveInputTokenEvent(chunk ?? '', key);
     if (inputEvent.kittyProtocolEvent) {
       return;
@@ -960,6 +964,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (!inputEvent.kittyProtocolEvent) {
       return;
     }
+    suppressLegacyKeypressUntilMs = Date.now() + 36;
 
     const tokens = inputEvent.tokens;
     if (tokens.includes('ctrl+c')) {
@@ -985,8 +990,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     handleMappedInputTokens(tokens);
   };
 
+  process.stdin.prependListener('data', onRawInputData);
   process.stdin.on('keypress', onKeyPress);
-  process.stdin.on('data', onRawInputData);
 
   try {
     while (playbackClock.nowMs() < horizon) {
