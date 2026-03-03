@@ -168,6 +168,8 @@ export class PlayerTui {
 
   private noteWindowBeat = Number.NEGATIVE_INFINITY;
 
+  private visibleNoteIndices = new Set<number>();
+
   private displayedHighSpeed: number;
 
   private targetHighSpeed: number;
@@ -237,6 +239,7 @@ export class PlayerTui {
     this.noteWindowStartIndex = 0;
     this.noteWindowEndIndex = 0;
     this.noteWindowBeat = Number.NEGATIVE_INFINITY;
+    this.visibleNoteIndices.clear();
     this.displayedHighSpeed = normalizeHighSpeed(this.options.highSpeed);
     this.targetHighSpeed = this.displayedHighSpeed;
     this.highSpeedTransitionFrom = this.displayedHighSpeed;
@@ -300,6 +303,7 @@ export class PlayerTui {
     const scrollWindowBeats = resolveVisibleBeatsForTuiGrid(rowCount, displayHighSpeed);
     const grid = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => LANE_FILL_SYMBOL));
     const gridSourceChannels = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => ''));
+    const measureLineRows = new Set<number>();
     const laneHighlightRatios = new Map<number, number>();
 
     for (const boundaryBeat of this.options.measureBoundariesBeats ?? []) {
@@ -311,6 +315,7 @@ export class PlayerTui {
         continue;
       }
       const row = distanceToRow(distance, rowCount, scrollWindowBeats);
+      measureLineRows.add(row);
       for (let lane = 0; lane < laneCount; lane += 1) {
         if (grid[row][lane] === LANE_FILL_SYMBOL) {
           grid[row][lane] = MEASURE_LINE_SYMBOL;
@@ -323,9 +328,12 @@ export class PlayerTui {
       frame.currentBeat,
       scrollWindowBeats,
     );
+    const visibleNoteIndices = new Set<number>();
 
     for (let noteIndex = noteStartIndex; noteIndex < noteEndIndex; noteIndex += 1) {
       const note = frame.notes[noteIndex];
+      const wasVisible = this.visibleNoteIndices.has(noteIndex);
+      let visibleThisFrame = false;
       const keepVisible =
         typeof note.visibleUntilBeat === 'number' &&
         Number.isFinite(note.visibleUntilBeat) &&
@@ -344,8 +352,9 @@ export class PlayerTui {
         if (!isDistanceWithinWindow(visibleDistance, scrollWindowBeats)) {
           continue;
         }
-        const row = distanceToRow(visibleDistance, rowCount, scrollWindowBeats);
+        const row = wasVisible ? distanceToNoteRow(visibleDistance, rowCount, scrollWindowBeats) : 0;
         setLaneCell(grid, gridSourceChannels, row, lane, MINE_NOTE_SYMBOL, note.channel, this.freeZoneSourceChannels);
+        visibleNoteIndices.add(noteIndex);
         continue;
       }
 
@@ -367,9 +376,9 @@ export class PlayerTui {
           scrollWindowBeats,
         );
         if (bodyVisibleTo >= bodyVisibleFrom) {
-          const startRow = distanceToRow(bodyVisibleFrom, rowCount, scrollWindowBeats);
-          const endRow = distanceToRow(bodyVisibleTo, rowCount, scrollWindowBeats);
-          const from = Math.min(startRow, endRow);
+          const startRow = distanceToNoteRow(bodyVisibleFrom, rowCount, scrollWindowBeats);
+          const endRow = distanceToNoteRow(bodyVisibleTo, rowCount, scrollWindowBeats);
+          const from = wasVisible ? Math.min(startRow, endRow) : 0;
           const to = Math.max(startRow, endRow);
           for (let row = from; row <= to; row += 1) {
             if (row < 0 || row >= rowCount) {
@@ -385,12 +394,13 @@ export class PlayerTui {
               this.freeZoneSourceChannels,
             );
           }
+          visibleThisFrame = true;
         }
 
         const tailDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.endBeat);
         const tailVisibleDistance = normalizeNoteApproachDistance(tailDistance, frame.currentBeat, note.endBeat);
         if (isDistanceWithinWindow(tailVisibleDistance, scrollWindowBeats)) {
-          const tailRow = distanceToRow(tailVisibleDistance, rowCount, scrollWindowBeats);
+          const tailRow = wasVisible ? distanceToNoteRow(tailVisibleDistance, rowCount, scrollWindowBeats) : 0;
           if (tailRow >= 0 && tailRow < rowCount) {
             setLaneCell(
               grid,
@@ -401,6 +411,7 @@ export class PlayerTui {
               note.channel,
               this.freeZoneSourceChannels,
             );
+            visibleThisFrame = true;
           }
         }
       }
@@ -408,9 +419,12 @@ export class PlayerTui {
       const headDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
       const headVisibleDistance = normalizeNoteApproachDistance(headDistance, frame.currentBeat, note.beat);
       if (!isDistanceWithinWindow(headVisibleDistance, scrollWindowBeats)) {
+        if (visibleThisFrame) {
+          visibleNoteIndices.add(noteIndex);
+        }
         continue;
       }
-      const row = distanceToRow(headVisibleDistance, rowCount, scrollWindowBeats);
+      const row = wasVisible ? distanceToNoteRow(headVisibleDistance, rowCount, scrollWindowBeats) : 0;
       setLaneCell(
         grid,
         gridSourceChannels,
@@ -420,7 +434,10 @@ export class PlayerTui {
         note.channel,
         this.freeZoneSourceChannels,
       );
+      visibleThisFrame = true;
+      visibleNoteIndices.add(noteIndex);
     }
+    this.visibleNoteIndices = visibleNoteIndices;
 
     for (const [channel, until] of this.laneFlashUntil.entries()) {
       if (until <= now) {
@@ -507,6 +524,19 @@ export class PlayerTui {
       if (rowIndex === judgeRowIndex) {
         laneLines.push(
           renderJudgeRow(
+            row,
+            this.laneChannels,
+            this.laneWidths,
+            this.options.splitAfterIndex,
+            laneHighlightRatios,
+            gridSourceChannels[rowIndex],
+          ),
+        );
+        continue;
+      }
+      if (measureLineRows.has(rowIndex)) {
+        laneLines.push(
+          renderMeasureRow(
             row,
             this.laneChannels,
             this.laneWidths,
@@ -829,6 +859,17 @@ function distanceToRow(distance: number, rowCount: number, scrollWindowBeats: nu
   return rowCount - 1 - Math.floor(normalized * (rowCount - 1));
 }
 
+function distanceToNoteRow(distance: number, rowCount: number, scrollWindowBeats: number): number {
+  const safeDistance = Math.abs(distance);
+  const rowSpan = Math.max(1, rowCount - 1);
+  const rowStepDistance = scrollWindowBeats / rowSpan;
+  if (safeDistance <= Math.max(BEAT_EPSILON, rowStepDistance * 0.5)) {
+    return rowCount - 1;
+  }
+  const shiftedDistance = Math.min(scrollWindowBeats, safeDistance + rowStepDistance);
+  return distanceToRow(shiftedDistance, rowCount, scrollWindowBeats);
+}
+
 function renderLaneRow(
   values: string[],
   channels: string[],
@@ -903,6 +944,70 @@ function renderLaneSection(cells: string[]): string {
 function renderLaneSplitPanel(): string {
   const fill = `\u001b[48;5;233m${' '.repeat(SPLIT_PANEL_INNER_WIDTH)}${ANSI_RESET}`;
   return `${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}${fill}${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}`;
+}
+
+function renderMeasureRow(
+  values: string[],
+  channels: string[],
+  laneWidths: number[],
+  splitAfterIndex = -1,
+  laneHighlightRatios = new Map<number, number>(),
+  sourceChannels?: string[],
+): string {
+  const renderSection = (startIndex: number, endIndex: number): string => {
+    const cells: string[] = [];
+    for (let index = startIndex; index < endIndex; index += 1) {
+      const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
+      const channel = sourceChannels?.[index] ?? channels[index] ?? '';
+      let cell = renderMeasureLaneCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel);
+      const highlightRatio = laneHighlightRatios.get(index);
+      if (highlightRatio !== undefined) {
+        cell = highlightCell(cell, highlightRatio);
+      }
+      cells.push(cell);
+    }
+    return renderMeasureSection(cells);
+  };
+
+  if (splitAfterIndex < 0 || splitAfterIndex >= values.length - 1) {
+    return renderSection(0, values.length);
+  }
+
+  const left = renderSection(0, splitAfterIndex + 1);
+  const right = renderSection(splitAfterIndex + 1, values.length);
+  return `${left}${renderLaneSplitPanel()}${right}`;
+}
+
+function renderMeasureSection(cells: string[]): string {
+  const divider = colorizeMeasureLine(MEASURE_LINE_SYMBOL);
+  const body = cells.join(divider);
+  return `${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}${body}${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}`;
+}
+
+function renderMeasureLaneCell(value: string, laneWidth: number, sourceChannel: string): string {
+  const safeWidth = Math.max(1, laneWidth);
+  if (value === NOTE_HEAD_SYMBOL) {
+    return colorizeNote(renderNoteCell(safeWidth, 'head'), sourceChannel, false, true);
+  }
+  if (value === LONG_NOTE_BODY_SYMBOL) {
+    return colorizeNote(renderNoteCell(safeWidth, 'body'), sourceChannel, false, false);
+  }
+  if (value === LONG_NOTE_TAIL_SYMBOL) {
+    return colorizeNote(renderNoteCell(safeWidth, 'tail'), sourceChannel, false, true);
+  }
+  if (value === INVISIBLE_NOTE_HEAD_SYMBOL) {
+    return colorizeNote(renderNoteCell(safeWidth, 'head'), sourceChannel, true, true);
+  }
+  if (value === INVISIBLE_LONG_NOTE_BODY_SYMBOL) {
+    return colorizeNote(renderNoteCell(safeWidth, 'body'), sourceChannel, true, false);
+  }
+  if (value === INVISIBLE_LONG_NOTE_TAIL_SYMBOL) {
+    return colorizeNote(renderNoteCell(safeWidth, 'tail'), sourceChannel, true, true);
+  }
+  if (value === MINE_NOTE_SYMBOL) {
+    return colorizeMine(center(MINE_NOTE_SYMBOL, safeWidth));
+  }
+  return colorizeMeasureLine(MEASURE_LINE_SYMBOL.repeat(safeWidth));
 }
 
 function renderJudgeRow(
@@ -1107,7 +1212,7 @@ function colorizeNote(symbol: string, channel: string, invisible = false, underl
 }
 
 function colorizeMeasureLine(symbol: string): string {
-  return `\u001b[38;5;239m${symbol}\u001b[0m`;
+  return `\u001b[38;5;247m${symbol}\u001b[0m`;
 }
 
 function colorizeMine(symbol: string): string {
