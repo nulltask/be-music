@@ -763,6 +763,9 @@ function decodeJpeg(buffer: Buffer): DecodedImage {
 
 function decodeBmp(buffer: Buffer): DecodedImage {
   const decoded = decodeBmpFast(buffer);
+  if (decoded.bitsPerPixel <= 8) {
+    return decodeIndexedBmp(buffer, decoded.bitsPerPixel);
+  }
   const channels = decoded.channels > 0 ? decoded.channels : 4;
   const depth = Math.max(1, Math.floor(decoded.bitsPerPixel / channels));
   const rgba = convertToRgba8(toSampleArray(decoded.data), decoded.width, decoded.height, channels, depth);
@@ -772,6 +775,80 @@ function decodeBmp(buffer: Buffer): DecodedImage {
     data: rgba,
     format: 'bmp',
   };
+}
+
+function decodeIndexedBmp(buffer: Buffer, bitsPerPixel: number): DecodedImage {
+  if (bitsPerPixel !== 1 && bitsPerPixel !== 4 && bitsPerPixel !== 8) {
+    throw new Error(`unsupported indexed bmp bit depth: ${bitsPerPixel}`);
+  }
+
+  const pixelDataOffset = buffer.readUInt32LE(10);
+  const dibHeaderSize = buffer.readUInt32LE(14);
+  const width = buffer.readInt32LE(18);
+  const rawHeight = buffer.readInt32LE(22);
+  const height = Math.abs(rawHeight);
+  const topDown = rawHeight < 0;
+  if (width <= 0 || height <= 0) {
+    throw new Error('invalid bmp dimensions');
+  }
+
+  const colorsUsed = dibHeaderSize >= 36 ? buffer.readUInt32LE(46) : 0;
+  const paletteEntryCount = colorsUsed > 0 ? colorsUsed : 1 << bitsPerPixel;
+  const paletteOffset = 14 + dibHeaderSize;
+  const palette: Array<[r: number, g: number, b: number, a: number]> = [];
+  for (let index = 0; index < paletteEntryCount; index += 1) {
+    const offset = paletteOffset + index * 4;
+    if (offset + 3 >= buffer.length) {
+      break;
+    }
+    const b = buffer[offset] ?? 0;
+    const g = buffer[offset + 1] ?? 0;
+    const r = buffer[offset + 2] ?? 0;
+    const a = 255;
+    palette.push([r, g, b, a]);
+  }
+  if (palette.length === 0) {
+    throw new Error('bmp palette not found');
+  }
+
+  const rowStride = Math.floor((bitsPerPixel * width + 31) / 32) * 4;
+  const rgba = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    const sourceY = topDown ? y : height - 1 - y;
+    const rowOffset = pixelDataOffset + sourceY * rowStride;
+    for (let x = 0; x < width; x += 1) {
+      const paletteIndex = readIndexedBmpPaletteIndex(buffer, rowOffset, x, bitsPerPixel);
+      const color = palette[paletteIndex] ?? [0, 0, 0, 255];
+      const targetOffset = (y * width + x) * 4;
+      rgba[targetOffset] = color[0];
+      rgba[targetOffset + 1] = color[1];
+      rgba[targetOffset + 2] = color[2];
+      rgba[targetOffset + 3] = color[3];
+    }
+  }
+
+  return {
+    width,
+    height,
+    data: rgba,
+    format: 'bmp',
+  };
+}
+
+function readIndexedBmpPaletteIndex(buffer: Buffer, rowOffset: number, x: number, bitsPerPixel: number): number {
+  if (bitsPerPixel === 8) {
+    return buffer[rowOffset + x] ?? 0;
+  }
+
+  const byteOffset = rowOffset + Math.floor((x * bitsPerPixel) / 8);
+  const byte = buffer[byteOffset] ?? 0;
+  if (bitsPerPixel === 4) {
+    return x % 2 === 0 ? (byte >> 4) & 0x0f : byte & 0x0f;
+  }
+
+  // bitsPerPixel === 1
+  const bit = 7 - (x % 8);
+  return (byte >> bit) & 0x01;
 }
 
 function toSampleArray(data: unknown): ArrayLike<number> {
