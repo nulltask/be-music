@@ -27,7 +27,21 @@ const SEA_BUNDLE_BANNER =
   "globalThis.Worker ??= (() => { try { return require('node:worker_threads').Worker; } catch { return undefined; } })();";
 
 function printUsage() {
-  process.stdout.write(`Usage: node packages/player/scripts/build-sea.mjs [options]\n\nOptions:\n  -o, --output <path>       Output executable path\n      --node-binary <path>  Node executable used for SEA build (default: current node)\n      --bundle-only         Build only the SEA bundle and config file\n  -h, --help                Show this help\n`);
+  process.stdout.write(
+    [
+      'Usage: node packages/player/scripts/build-sea.mjs [options]',
+      '',
+      'Essential options:',
+      '  -o, --output <path>       Output executable path',
+      '',
+      'Advanced options:',
+      '      --node-binary <path>  Node executable used for SEA build (default: current node)',
+      '      --bundle-only         Build only the SEA bundle and config file',
+      '',
+      'Developer options:',
+      '  -h, --help                Show this help',
+    ].join('\n') + '\n',
+  );
 }
 
 function parseArgs(argv) {

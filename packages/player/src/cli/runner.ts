@@ -177,6 +177,10 @@ interface RawInputCapture {
 
 export async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
+  if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
+    printUsage();
+    return;
+  }
   const overrideFlags = resolveCliConfigOverrideFlags(rawArgs);
   let args: CliArgs;
   try {
@@ -762,10 +766,22 @@ function printUsage(): void {
     [
       'Usage: bms-player <input.(bms|bme|bml|pms|bmson|json)|directory> [options]',
       '',
-      'Options:',
+      'Essential options:',
       '  --auto                    Enable auto play mode (default: off)',
       '  --auto-scratch            Enable scratch auto mode (16ch/26ch only)',
+      '  --speed <rate>            Playback speed multiplier (default: 1)',
+      '  --high-speed <rate>       TUI note fall speed multiplier, 0.5-10.0 in 0.5 steps (default: 1.0)',
+      '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
+      '                           Audio backend: node-web-audio-api (fixed)',
+      '  --tui / --no-tui          Enable or disable TUI play screen (default: on in TTY)',
+      '',
+      'Advanced tuning:',
       '  --show-invisible-notes    Show invisible channels (31-39/41-49) in TUI as green notes',
+      '  --render-audio <path>     Render audio preview before playing',
+      '  --bgm-volume <value>      Volume multiplier for non-play lanes (default: 1, 0 disables BGM)',
+      '  --play-volume <value>     Volume multiplier for playable/key sounds (default: 1)',
+      '  --audio-tail <seconds>    Audio tail length when rendering playback buffer (default: 1.5)',
+      '  --audio-offset-ms <ms>    Timing offset for audio sync calibration (default: 0)',
       '  --compressor / --no-compressor',
       '                            Enable or disable output compressor (default: off)',
       '  --compressor-threshold-db Compressor threshold in dBFS (default: -12)',
@@ -776,22 +792,16 @@ function printUsage(): void {
       '  --limiter / --no-limiter  Enable or disable output limiter (default: on)',
       '  --limiter-ceiling-db      Limiter ceiling in dBFS (default: -0.3)',
       '  --limiter-release-ms      Limiter release time in ms (default: 80)',
-      '  --speed <rate>            Playback speed multiplier (default: 1)',
-      '  --high-speed <rate>       TUI note fall speed multiplier, 0.5-10.0 in 0.5 steps (default: 1.0)',
-      '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
-      '  --render-audio <path>     Render audio preview before playing',
-      '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
-      '                           Audio backend: node-web-audio-api (fixed)',
-      '  --bgm-volume <value>      Volume multiplier for non-play lanes (default: 1, 0 disables BGM)',
-      '  --play-volume <value>     Volume multiplier for playable/key sounds (default: 1)',
-      '  --audio-tail <seconds>    Audio tail length when rendering playback buffer (default: 1.5)',
-      '  --audio-offset-ms <ms>    Timing offset for audio sync calibration (default: 0)',
       '  --audio-head-padding-ms   Silent head padding before chart start (default: 0)',
       '  --audio-lead-ms <ms>      Base lead time for real-time mixer scheduling (default: 10)',
       '  --audio-lead-max-ms <ms>  Maximum adaptive lead time under heavy load (default: 32)',
       '  --audio-lead-step-up-ms   Adaptive lead increment step (default: 1.5)',
       '  --audio-lead-step-down-ms Adaptive lead decrement step (default: 0.5)',
-      '  --tui / --no-tui          Enable or disable TUI play screen (default: on in TTY)',
+      '',
+      'Developer/debug:',
+      '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
+      '  --debug-judge-window <ms> Override BAD window for debugging',
+      '  --judge-window <ms>       Deprecated alias for --debug-judge-window',
     ].join('\n') + '\n',
   );
 }

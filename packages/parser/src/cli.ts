@@ -10,7 +10,12 @@ interface CliArgs {
 }
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
+    printUsage();
+    return;
+  }
+  const args = parseArgs(rawArgs);
   if (!args.input) {
     printUsage();
     process.exitCode = 1;
@@ -57,6 +62,12 @@ function printUsage(): void {
   process.stdout.write(
     [
       'Usage: bms-parse <input> [output.json] [--format bms|bmson|json]',
+      '',
+      'Essential usage:',
+      '  bms-parse <input> [output.json]',
+      '',
+      'Advanced options:',
+      '  --format, -f <bms|bmson|json>  Force input format hint',
       '',
       'Examples:',
       '  bms-parse chart.bms chart.json',
