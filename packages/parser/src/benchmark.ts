@@ -333,7 +333,7 @@ function parseNonNegativeNumber(value: string | undefined, optionName: string): 
 
 function printUsage(defaults: BenchmarkCliDefaults): void {
   const lines = [
-    'Usage: npm run bench --workspace @be-music/parser -- [options]',
+    'Usage: pnpm run bench:parser [options]',
     '',
     'Options:',
     `  --dataset <dir>         Chart root directory (default: ${defaults.datasetDir})`,

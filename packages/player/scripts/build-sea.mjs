@@ -164,7 +164,7 @@ function resolvePostjectCliPath() {
     return require.resolve('postject/dist/cli.js');
   } catch {
     throw new Error(
-      'postject is required for legacy SEA builds but was not found. Install it with `npm i -D postject -w packages/player`.',
+      'postject is required for legacy SEA builds but was not found. Install it with `pnpm --filter @be-music/player add -D postject`.',
     );
   }
 }

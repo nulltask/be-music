@@ -2,29 +2,27 @@
   "name": "be-music",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.30.3",
   "description": "Be-Music tooling monorepo",
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "clean": "npm run clean --workspaces --if-present",
-    "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint . --fix",
-    "format": "oxfmt . --write",
-    "format:check": "oxfmt . --check",
+    "build": "pnpm -r --sort --workspace-concurrency=Infinity run build:bundle && tsgo -b tsconfig.json --emitDeclarationOnly --force",
+    "clean": "pnpm -r run clean",
+    "typecheck": "pnpm -r --parallel run typecheck",
+    "lint": "pnpm -r --parallel run lint",
+    "lint:fix": "pnpm -r --parallel run lint:fix",
+    "format": "pnpm -r --parallel run format",
+    "format:check": "pnpm -r --parallel run format:check",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "bench:parser": "npm run bench --workspace @be-music/parser --",
-    "bench:parser:check": "npm run bench:check --workspace @be-music/parser --",
-    "bench:parser:update-baseline": "npm run bench:update-baseline --workspace @be-music/parser --",
-    "player": "npm run dev --workspace @be-music/player --",
-    "player:sea": "npm run build:sea --workspace @be-music/player --",
-    "editor": "npm run dev --workspace @be-music/editor --",
-    "audio-render": "npm run dev --workspace @be-music/audio-renderer --",
-    "parse": "npm run dev --workspace @be-music/parser --",
-    "stringify": "npm run dev --workspace @be-music/stringifier --"
+    "bench:parser": "pnpm --filter @be-music/parser run bench",
+    "bench:parser:check": "pnpm --filter @be-music/parser run bench:check",
+    "bench:parser:update-baseline": "pnpm --filter @be-music/parser run bench:update-baseline",
+    "player": "pnpm --filter @be-music/player run dev",
+    "player:sea": "pnpm --filter @be-music/player run build:sea",
+    "editor": "pnpm --filter @be-music/editor run dev",
+    "audio-render": "pnpm --filter @be-music/audio-renderer run dev",
+    "parse": "pnpm --filter @be-music/parser run dev",
+    "stringify": "pnpm --filter @be-music/stringifier run dev"
   },
   "devDependencies": {
     "@types/node": "^24.3.1",
@@ -39,5 +37,10 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }
