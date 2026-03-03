@@ -317,6 +317,12 @@ npm run player -- chart.bms --audio-head-padding-ms 180
 # 音声再生を無効化
 npm run player -- chart.bms --no-audio
 
+# 出力リミッタを無効化 (既定は ON)
+npm run player -- chart.bms --no-limiter
+
+# コンプレッサを有効化して音圧高めの譜面を調整
+npm run player -- chart.bms --compressor --compressor-threshold-db -10 --compressor-ratio 3
+
 # 音声バックエンドを指定 (auto | speaker | audify | audio-io)
 npm run player -- chart.bms --audio-backend audio-io
 ```

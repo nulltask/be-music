@@ -21,6 +21,15 @@ interface CliArgs {
   input?: string;
   auto: boolean;
   autoScratch: boolean;
+  compressor: boolean;
+  compressorThresholdDb?: number;
+  compressorRatio?: number;
+  compressorAttackMs?: number;
+  compressorReleaseMs?: number;
+  compressorMakeupDb?: number;
+  limiter: boolean;
+  limiterCeilingDb?: number;
+  limiterReleaseMs?: number;
   speed?: number;
   judgeWindowMs?: number;
   judgeWindowSource?: 'debug' | 'legacy';
@@ -460,6 +469,15 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   }
 
   const playOptions = {
+    compressor: args.compressor,
+    compressorThresholdDb: args.compressorThresholdDb,
+    compressorRatio: args.compressorRatio,
+    compressorAttackMs: args.compressorAttackMs,
+    compressorReleaseMs: args.compressorReleaseMs,
+    compressorMakeupDb: args.compressorMakeupDb,
+    limiter: args.limiter,
+    limiterCeilingDb: args.limiterCeilingDb,
+    limiterReleaseMs: args.limiterReleaseMs,
     speed: args.speed,
     judgeWindowMs: args.judgeWindowMs,
     debugActiveAudio: args.debugActiveAudio,
@@ -513,7 +531,15 @@ function sanitizeMetadataText(value: string | undefined): string | undefined {
 }
 
 export function parseArgs(rawArgs: string[]): CliArgs {
-  const args: CliArgs = { auto: false, autoScratch: false, audio: true, tui: true, debugActiveAudio: false };
+  const args: CliArgs = {
+    auto: false,
+    autoScratch: false,
+    compressor: false,
+    limiter: true,
+    audio: true,
+    tui: true,
+    debugActiveAudio: false,
+  };
   const positional: string[] = [];
 
   for (let index = 0; index < rawArgs.length; index += 1) {
@@ -530,6 +556,57 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     }
     if (token === '--speed') {
       args.speed = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--compressor') {
+      args.compressor = true;
+      continue;
+    }
+    if (token === '--no-compressor') {
+      args.compressor = false;
+      continue;
+    }
+    if (token === '--compressor-threshold-db') {
+      args.compressorThresholdDb = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--compressor-ratio') {
+      args.compressorRatio = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--compressor-attack-ms') {
+      args.compressorAttackMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--compressor-release-ms') {
+      args.compressorReleaseMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--compressor-makeup-db') {
+      args.compressorMakeupDb = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--limiter') {
+      args.limiter = true;
+      continue;
+    }
+    if (token === '--no-limiter') {
+      args.limiter = false;
+      continue;
+    }
+    if (token === '--limiter-ceiling-db') {
+      args.limiterCeilingDb = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--limiter-release-ms') {
+      args.limiterReleaseMs = Number.parseFloat(rawArgs[index + 1]);
       index += 1;
       continue;
     }
@@ -668,6 +745,16 @@ function printUsage(): void {
       'Options:',
       '  --auto                    Enable auto play mode (default: off)',
       '  --auto-scratch            Enable scratch auto mode (16ch/26ch only)',
+      '  --compressor / --no-compressor',
+      '                            Enable or disable output compressor (default: off)',
+      '  --compressor-threshold-db Compressor threshold in dBFS (default: -12)',
+      '  --compressor-ratio        Compressor ratio (default: 2.5)',
+      '  --compressor-attack-ms    Compressor attack time in ms (default: 8)',
+      '  --compressor-release-ms   Compressor release time in ms (default: 120)',
+      '  --compressor-makeup-db    Compressor makeup gain in dB (default: 0)',
+      '  --limiter / --no-limiter  Enable or disable output limiter (default: on)',
+      '  --limiter-ceiling-db      Limiter ceiling in dBFS (default: -0.3)',
+      '  --limiter-release-ms      Limiter release time in ms (default: 80)',
       '  --speed <rate>            Playback speed multiplier (default: 1)',
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
       '  --render-audio <path>     Render audio preview before playing',

@@ -36,6 +36,15 @@ import { createNodeAudioSink, type AudioSink } from './audio-sink.ts';
 export interface PlayerOptions {
   auto?: boolean;
   autoScratch?: boolean;
+  compressor?: boolean;
+  compressorThresholdDb?: number;
+  compressorRatio?: number;
+  compressorAttackMs?: number;
+  compressorReleaseMs?: number;
+  compressorMakeupDb?: number;
+  limiter?: boolean;
+  limiterCeilingDb?: number;
+  limiterReleaseMs?: number;
   speed?: number;
   judgeWindowMs?: number;
   debugActiveAudio?: boolean;
@@ -129,6 +138,18 @@ interface AudioLeadTuning {
   stepDownMs: number;
 }
 
+interface OutputDynamicsConfig {
+  compressorEnabled: boolean;
+  compressorThresholdLinear: number;
+  compressorInvRatioMinusOne: number;
+  compressorAttackCoef: number;
+  compressorReleaseCoef: number;
+  compressorMakeupGain: number;
+  limiterEnabled: boolean;
+  limiterCeilingLinear: number;
+  limiterReleaseCoef: number;
+}
+
 interface PlaybackClock {
   nowMs: () => number;
   isPaused: () => boolean;
@@ -177,6 +198,13 @@ const AUDIO_TARGET_LEAD_STEP_DOWN_MS = 0.5;
 const DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS = 0.18;
 const DEBUG_ACTIVE_AUDIO_SAMPLE_RATE = 44_100;
 const SCRATCH_PLAYABLE_CHANNELS = new Set(['16', '26']);
+const DEFAULT_COMPRESSOR_THRESHOLD_DB = -12;
+const DEFAULT_COMPRESSOR_RATIO = 2.5;
+const DEFAULT_COMPRESSOR_ATTACK_MS = 8;
+const DEFAULT_COMPRESSOR_RELEASE_MS = 120;
+const DEFAULT_COMPRESSOR_MAKEUP_DB = 0;
+const DEFAULT_LIMITER_CEILING_DB = -0.3;
+const DEFAULT_LIMITER_RELEASE_MS = 80;
 
 type JudgeKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
 
@@ -1292,6 +1320,7 @@ async function createAudioSessionIfEnabled(
   const sampleRate = toPlaybackSampleRate(padded.sampleRate, options.speed ?? 1);
   const samplesPerFrame = mode === 'manual' ? MANUAL_AUDIO_CHUNK_FRAMES : AUTO_AUDIO_CHUNK_FRAMES;
   const leadTuning = createAudioLeadTuning(options, mode);
+  const outputDynamics = createOutputDynamicsConfig(options, sampleRate);
   const output = await createNodeAudioSink({
     sampleRate,
     channels: 2,
@@ -1393,6 +1422,7 @@ async function createAudioSessionIfEnabled(
         isPaused: () => paused,
         mode,
         leadTuning,
+        outputDynamics,
         playbackSampleRate: sampleRate,
       }).catch(() => undefined);
     },
@@ -1684,6 +1714,7 @@ async function playMixedPcmThroughOutput(params: {
   isPaused: () => boolean;
   mode: 'auto' | 'manual';
   leadTuning: AudioLeadTuning;
+  outputDynamics?: OutputDynamicsConfig;
   playbackSampleRate: number;
 }): Promise<void> {
   const { output, background, activeVoices, shouldStop, isDraining, isPaused, mode, leadTuning, playbackSampleRate } =
@@ -1705,6 +1736,9 @@ async function playMixedPcmThroughOutput(params: {
   let pauseActive = false;
   let adaptiveLeadMs = leadTuning.baseLeadMs;
   const chunkDurationMs = (chunkFrames / playbackSampleRate) * 1000;
+  const outputDynamics = params.outputDynamics;
+  let compressorGain = 1;
+  let limiterGain = 1;
 
   while (!shouldStop()) {
     if (isPaused()) {
@@ -1764,8 +1798,50 @@ async function playMixedPcmThroughOutput(params: {
 
     for (let frame = 0; frame < chunkFrames; frame += 1) {
       const sampleOffset = frame * 2;
-      chunkSamples[sampleOffset] = floatToInt16(mixedLeft[frame]);
-      chunkSamples[sampleOffset + 1] = floatToInt16(mixedRight[frame]);
+      let leftSample = mixedLeft[frame];
+      let rightSample = mixedRight[frame];
+
+      if (outputDynamics) {
+        const level = Math.max(Math.abs(leftSample), Math.abs(rightSample));
+        if (outputDynamics.compressorEnabled) {
+          const desiredCompressorGain =
+            level > outputDynamics.compressorThresholdLinear
+              ? Math.pow(level / outputDynamics.compressorThresholdLinear, outputDynamics.compressorInvRatioMinusOne)
+              : 1;
+          const compressorCoef =
+            desiredCompressorGain < compressorGain
+              ? outputDynamics.compressorAttackCoef
+              : outputDynamics.compressorReleaseCoef;
+          compressorGain = desiredCompressorGain + compressorCoef * (compressorGain - desiredCompressorGain);
+        } else {
+          compressorGain = 1;
+        }
+
+        const compressorAppliedGain = compressorGain * outputDynamics.compressorMakeupGain;
+        leftSample *= compressorAppliedGain;
+        rightSample *= compressorAppliedGain;
+
+        if (outputDynamics.limiterEnabled) {
+          const limitedLevel = Math.max(Math.abs(leftSample), Math.abs(rightSample));
+          const desiredLimiterGain =
+            limitedLevel > outputDynamics.limiterCeilingLinear && limitedLevel > 1e-9
+              ? outputDynamics.limiterCeilingLinear / limitedLevel
+              : 1;
+          if (desiredLimiterGain < limiterGain) {
+            // Limiter attack is immediate to avoid transient clipping.
+            limiterGain = desiredLimiterGain;
+          } else {
+            limiterGain = desiredLimiterGain + outputDynamics.limiterReleaseCoef * (limiterGain - desiredLimiterGain);
+          }
+          leftSample *= limiterGain;
+          rightSample *= limiterGain;
+        } else {
+          limiterGain = 1;
+        }
+      }
+
+      chunkSamples[sampleOffset] = floatToInt16(leftSample);
+      chunkSamples[sampleOffset + 1] = floatToInt16(rightSample);
     }
 
     advanceAndPruneActiveVoices(activeVoices, chunkFrames);
@@ -1864,6 +1940,63 @@ function createAudioLeadTuning(options: PlayerOptions, mode: 'auto' | 'manual'):
     stepUpMs,
     stepDownMs,
   };
+}
+
+function createOutputDynamicsConfig(options: PlayerOptions, sampleRate: number): OutputDynamicsConfig | undefined {
+  const limiterEnabled = options.limiter !== false;
+  const compressorEnabled = options.compressor === true;
+  if (!limiterEnabled && !compressorEnabled) {
+    return undefined;
+  }
+
+  const compressorThresholdDb = Math.min(
+    0,
+    resolveFiniteNumberOption(options.compressorThresholdDb, DEFAULT_COMPRESSOR_THRESHOLD_DB),
+  );
+  const compressorThresholdLinear = Math.max(1e-4, dbToLinear(compressorThresholdDb));
+  const compressorRatio = Math.max(1.01, resolvePositiveNumberOption(options.compressorRatio, DEFAULT_COMPRESSOR_RATIO));
+  const compressorInvRatioMinusOne = 1 / compressorRatio - 1;
+  const compressorAttackMs = resolvePositiveNumberOption(options.compressorAttackMs, DEFAULT_COMPRESSOR_ATTACK_MS);
+  const compressorReleaseMs = resolvePositiveNumberOption(options.compressorReleaseMs, DEFAULT_COMPRESSOR_RELEASE_MS);
+  const compressorMakeupDb = resolveFiniteNumberOption(options.compressorMakeupDb, DEFAULT_COMPRESSOR_MAKEUP_DB);
+  const compressorMakeupGain = dbToLinear(compressorMakeupDb);
+
+  const limiterCeilingDb = Math.min(0, resolveFiniteNumberOption(options.limiterCeilingDb, DEFAULT_LIMITER_CEILING_DB));
+  const limiterCeilingLinear = Math.max(1e-4, dbToLinear(limiterCeilingDb));
+  const limiterReleaseMs = resolvePositiveNumberOption(options.limiterReleaseMs, DEFAULT_LIMITER_RELEASE_MS);
+
+  return {
+    compressorEnabled,
+    compressorThresholdLinear,
+    compressorInvRatioMinusOne,
+    compressorAttackCoef: resolveTimeSmoothingCoef(compressorAttackMs, sampleRate),
+    compressorReleaseCoef: resolveTimeSmoothingCoef(compressorReleaseMs, sampleRate),
+    compressorMakeupGain,
+    limiterEnabled,
+    limiterCeilingLinear,
+    limiterReleaseCoef: resolveTimeSmoothingCoef(limiterReleaseMs, sampleRate),
+  };
+}
+
+function resolveFiniteNumberOption(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
+  return value;
+}
+
+function resolveTimeSmoothingCoef(timeMs: number, sampleRate: number): number {
+  const safeTimeMs = Number.isFinite(timeMs) ? Math.max(0, timeMs) : 0;
+  const safeSampleRate = Number.isFinite(sampleRate) ? Math.max(1, sampleRate) : 1;
+  if (safeTimeMs <= 0) {
+    return 0;
+  }
+  return Math.exp(-1 / ((safeTimeMs / 1000) * safeSampleRate));
+}
+
+function dbToLinear(db: number): number {
+  const safeDb = Number.isFinite(db) ? db : 0;
+  return 10 ** (safeDb / 20);
 }
 
 function resolvePositiveNumberOption(value: number | undefined, fallback: number): number {

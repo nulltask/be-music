@@ -39,6 +39,43 @@ describe('player cli', () => {
     expect(formatPlayModeLabel('auto')).toBe('AUTO');
   });
 
+  test('cli: uses limiter on and compressor off by default', () => {
+    const parsed = parseArgs(['chart.bms']);
+    expect(parsed.limiter).toBe(true);
+    expect(parsed.compressor).toBe(false);
+  });
+
+  test('cli: parses compressor and limiter tuning options', () => {
+    const parsed = parseArgs([
+      'chart.bms',
+      '--compressor',
+      '--compressor-threshold-db',
+      '-10',
+      '--compressor-ratio',
+      '3',
+      '--compressor-attack-ms',
+      '6',
+      '--compressor-release-ms',
+      '140',
+      '--compressor-makeup-db',
+      '1.5',
+      '--no-limiter',
+      '--limiter-ceiling-db',
+      '-1',
+      '--limiter-release-ms',
+      '90',
+    ]);
+    expect(parsed.compressor).toBe(true);
+    expect(parsed.compressorThresholdDb).toBe(-10);
+    expect(parsed.compressorRatio).toBe(3);
+    expect(parsed.compressorAttackMs).toBe(6);
+    expect(parsed.compressorReleaseMs).toBe(140);
+    expect(parsed.compressorMakeupDb).toBe(1.5);
+    expect(parsed.limiter).toBe(false);
+    expect(parsed.limiterCeilingDb).toBe(-1);
+    expect(parsed.limiterReleaseMs).toBe(90);
+  });
+
   test('cli: rejects removed --audio-backend flag', () => {
     expect(() => parseArgs(['chart.bms', '--audio-backend', 'webaudio'])).toThrow(
       '--audio-backend is no longer supported; node-web-audio-api is always used',
