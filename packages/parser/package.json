@@ -18,16 +18,22 @@
     }
   },
   "scripts": {
+    "build:bundle": "vite build",
     "build": "vite build && tsgo -b tsconfig.json --emitDeclarationOnly --force",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "dev": "tsx --tsconfig ../../tsconfig.dev.json src/cli.ts",
+    "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt . --write",
+    "format:check": "oxfmt . --check",
     "bench": "tsx --tsconfig ../../tsconfig.dev.json src/benchmark.ts",
-    "bench:check": "npm run bench -- --check",
-    "bench:update-baseline": "npm run bench -- --write-baseline"
+    "bench:check": "pnpm run bench -- --check",
+    "bench:update-baseline": "pnpm run bench -- --write-baseline"
   },
   "dependencies": {
-    "@be-music/json": "0.1.0",
-    "@be-music/utils": "0.1.0",
+    "@be-music/json": "workspace:*",
+    "@be-music/utils": "workspace:*",
     "iconv-lite": "^0.7.0"
   }
 }

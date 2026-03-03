@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "paths": {
+      "@be-music/utils": ["../../packages/utils/src/index.ts"],
+      "@be-music/json": ["../../packages/json/src/index.ts"],
+      "@be-music/parser": ["../../packages/parser/src/index.ts"],
+      "@be-music/stringifier": ["../../packages/stringifier/src/index.ts"],
+      "@be-music/audio-renderer": ["../../packages/audio-renderer/src/index.ts"],
+      "@be-music/player": ["../../packages/player/src/index.ts"],
+      "@be-music/editor": ["../../packages/editor/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}
