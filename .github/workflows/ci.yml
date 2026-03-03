@@ -44,3 +44,50 @@ jobs:
 
       - name: Test
         run: npm test
+
+  sea:
+    name: SEA (${{ matrix.os }})
+    needs: ci
+    if: github.event_name != 'pull_request'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund -w @be-music/player --include-workspace-root
+
+      - name: Build SEA executable
+        run: npm run build:sea -w packages/player
+
+      - name: Select SEA binary path
+        id: sea-binary
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            echo "path=packages/player/dist-sea/be-music-player.exe" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=packages/player/dist-sea/be-music-player" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload SEA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: be-music-player-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ steps.sea-binary.outputs.path }}
+          if-no-files-found: error
