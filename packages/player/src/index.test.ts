@@ -33,6 +33,8 @@ test('player: auto play finishes successfully', async () => {
 
   expect(summary.total).toBe(6);
   expect(summary.perfect).toBe(6);
+  expect(summary.fast).toBe(0);
+  expect(summary.slow).toBe(0);
   expect(summary.great).toBe(0);
   expect(summary.good).toBe(0);
   expect(summary.bad).toBe(0);
@@ -57,6 +59,8 @@ test('player: resolves control-flow branches at playback time', async () => {
 
   expect(summary.total).toBe(2);
   expect(summary.perfect).toBe(2);
+  expect(summary.fast).toBe(0);
+  expect(summary.slow).toBe(0);
   expect(summary.bad).toBe(0);
   expect(summary.exScore).toBe(4);
   expect(summary.score).toBe(200000);
@@ -145,6 +149,8 @@ test('player: auto scratch judges 16ch/26ch notes in manual play', async () => {
 
   expect(summary.total).toBe(2);
   expect(summary.perfect).toBe(1);
+  expect(summary.fast).toBe(0);
+  expect(summary.slow).toBe(0);
   expect(summary.poor).toBe(1);
   expect(summary.bad).toBe(0);
 });

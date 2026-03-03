@@ -94,6 +94,8 @@ export interface PlayerOptions {
 export interface PlayerSummary {
   total: number;
   perfect: number;
+  fast: number;
+  slow: number;
   great: number;
   good: number;
   bad: number;
@@ -275,6 +277,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const summary: PlayerSummary = {
     total: scorableNotes.length,
     perfect: 0,
+    fast: 0,
+    slow: 0,
     great: 0,
     good: 0,
     bad: 0,
@@ -618,6 +622,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const summary: PlayerSummary = {
     total: scorableNotes.length,
     perfect: 0,
+    fast: 0,
+    slow: 0,
     great: 0,
     good: 0,
     bad: 0,
@@ -828,9 +834,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       longHoldUntilMsByChannel.delete(channel);
     }
 
-    const deltaMs = Math.abs(candidate.seconds - nowSec) * 1000;
+    const signedDeltaMs = (nowSec - candidate.seconds) * 1000;
+    const deltaMs = Math.abs(signedDeltaMs);
     if (deltaMs <= judgeWindows.pgreat) {
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
+      if (signedDeltaMs < 0) {
+        summary.fast += 1;
+      } else if (signedDeltaMs > 0) {
+        summary.slow += 1;
+      }
       combo += 1;
       if (!tui) {
         process.stdout.write(`PERFECT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -2510,6 +2522,8 @@ function renderSummary(summary: PlayerSummary): string {
       '--- Result ---',
       `TOTAL  : ${summary.total}`,
       `PERFECT: ${summary.perfect}`,
+      `FAST   : ${summary.fast}`,
+      `SLOW   : ${summary.slow}`,
       `GREAT  : ${summary.great}`,
       `GOOD   : ${summary.good}`,
       `BAD    : ${summary.bad}`,

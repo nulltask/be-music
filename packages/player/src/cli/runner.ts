@@ -1190,6 +1190,7 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
     lines.push(`NOTES ${notesProgress}`);
     lines.push(`EX-SCORE ${played.summary.exScore}/${maxExScore}  SCORE ${played.summary.score}/200000`);
     lines.push(`PERFECT ${played.summary.perfect}  GREAT ${played.summary.great}`);
+    lines.push(`FAST ${played.summary.fast}  SLOW ${played.summary.slow}`);
     lines.push(`GOOD ${played.summary.good}  BAD ${played.summary.bad}  POOR ${played.summary.poor}`);
     lines.push('');
     lines.push('Press r to replay this chart.');

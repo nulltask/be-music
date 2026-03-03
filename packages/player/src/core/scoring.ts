@@ -14,6 +14,7 @@ export interface ScoreSummary {
 export interface ScoreTracker {
   combo: number;
   scoreAccumulator: number;
+  scoreMaxAccumulator: number;
 }
 
 export const IIDX_EX_SCORE_PER_PGREAT = 2;
@@ -21,11 +22,11 @@ export const IIDX_EX_SCORE_PER_GREAT = 1;
 export const IIDX_SCORE_MAX = 200000;
 const IIDX_SCORE_JUDGE_BASE_MAX = 150000;
 const IIDX_SCORE_COMBO_BONUS_MAX = 50000;
-
 export function createScoreTracker(): ScoreTracker {
   return {
     combo: 0,
     scoreAccumulator: 0,
+    scoreMaxAccumulator: Number.NaN,
   };
 }
 
@@ -53,7 +54,10 @@ export function applyJudgeToSummary(summary: ScoreSummary, judge: JudgeKind, tra
 
   const scoreDelta = resolveIidxScoreDelta(judge, summary.total, tracker.combo);
   tracker.scoreAccumulator += scoreDelta;
-  summary.score = Math.max(0, Math.min(IIDX_SCORE_MAX, Math.floor(tracker.scoreAccumulator + 1e-9)));
+  if (!Number.isFinite(tracker.scoreMaxAccumulator)) {
+    tracker.scoreMaxAccumulator = resolveIidxScoreMaxAccumulator(summary.total);
+  }
+  summary.score = resolveDisplayedScore(tracker.scoreAccumulator, tracker.scoreMaxAccumulator);
 }
 
 function resolveExScoreDelta(judge: JudgeKind): number {
@@ -101,4 +105,31 @@ function resolveIidxComboScoreUnit(totalNotes: number): number {
     return totalBonusSteps > 0 ? IIDX_SCORE_COMBO_BONUS_MAX / totalBonusSteps : 0;
   }
   return IIDX_SCORE_COMBO_BONUS_MAX / (10 * finiteTotalNotes - 55);
+}
+
+function resolveIidxScoreMaxAccumulator(totalNotes: number): number {
+  const finiteTotalNotes = Number.isFinite(totalNotes) ? Math.max(0, Math.floor(totalNotes)) : 0;
+  if (finiteTotalNotes <= 0) {
+    return 0;
+  }
+
+  let maxScore = 0;
+  for (let noteIndex = 0; noteIndex < finiteTotalNotes; noteIndex += 1) {
+    const combo = noteIndex + 1;
+    maxScore += resolveIidxScoreDelta('PERFECT', finiteTotalNotes, combo);
+  }
+  return Math.max(0, maxScore);
+}
+
+function resolveDisplayedScore(scoreAccumulator: number, scoreMaxAccumulator: number): number {
+  if (!Number.isFinite(scoreAccumulator) || !Number.isFinite(scoreMaxAccumulator) || scoreMaxAccumulator <= 0) {
+    return 0;
+  }
+
+  if (scoreAccumulator >= scoreMaxAccumulator - 1e-6) {
+    return IIDX_SCORE_MAX;
+  }
+
+  const ratio = Math.max(0, Math.min(1, scoreAccumulator / scoreMaxAccumulator));
+  return Math.floor(IIDX_SCORE_MAX * ratio + 1e-9);
 }

@@ -490,7 +490,7 @@ export class PlayerTui {
       `NOTES ${formatNotesProgress(frame.summary)}  EX ${frame.summary.exScore}/${maxExScore}  SCORE ${animatedScore}/200000`,
     );
     lines.push(
-      `PERFECT ${frame.summary.perfect}  GREAT ${frame.summary.great}  GOOD ${frame.summary.good}  BAD ${frame.summary.bad}  POOR ${frame.summary.poor}`,
+      `PERFECT ${frame.summary.perfect}  FAST ${frame.summary.fast}  SLOW ${frame.summary.slow}  GREAT ${frame.summary.great}  GOOD ${frame.summary.good}  BAD ${frame.summary.bad}  POOR ${frame.summary.poor}`,
     );
     if (frame.activeAudioFiles !== undefined || frame.activeAudioVoiceCount !== undefined) {
       const voiceCount =
