@@ -2,7 +2,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vitest';
-import { type RenderResult, collectSampleTriggers, renderJson } from './index.ts';
+import { type RenderResult, collectSampleTriggers, createTimingResolver, renderJson } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const fixtureDir = resolve(rootDir, 'examples/test');
@@ -113,6 +113,34 @@ test('audio-renderer: ignores scroll channels for sample triggering', () => {
   const triggers = collectSampleTriggers(json);
   expect(triggers).toHaveLength(1);
   expect(triggers[0]?.channel).toBe('11');
+});
+
+test('audio-renderer: treats #STOP192 as one measure length at current BPM', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.stop['01'] = 192;
+  json.events = [{ measure: 0, channel: '09', position: [0, 1], value: '01' }];
+
+  const resolver = createTimingResolver(json);
+  expect(resolver.stopPoints).toHaveLength(1);
+  expect(resolver.stopPoints[0]?.seconds).toBeCloseTo(2, 9);
+});
+
+test('audio-renderer: supports LR2-style 100001x BPM stop compensation values', () => {
+  const json = createEmptyJson('bms');
+  const baseBpm = 150;
+  json.metadata.bpm = baseBpm;
+  json.resources.bpm['01'] = baseBpm * 100001;
+  json.resources.stop['01'] = 30000;
+  json.events = [
+    { measure: 0, channel: '08', position: [0, 1], value: '01' },
+    { measure: 0, channel: '09', position: [0, 1], value: '01' },
+  ];
+
+  const resolver = createTimingResolver(json);
+  expect(resolver.stopPoints).toHaveLength(1);
+  // 30000 at 100001x BPM is used by LR2 gimmicks to compensate roughly 3/1920 measure.
+  expect(resolver.stopPoints[0]?.seconds).toBeCloseTo((3 / 1920) * (240 / baseBpm), 6);
 });
 
 test('audio-renderer: bms retrigger on same key cuts previous voice immediately', async () => {

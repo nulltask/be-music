@@ -374,7 +374,8 @@ function createStopPoints(
       continue;
     }
     const bpm = bpmAtBeatFromTempoPoints(tempoPoints, beat);
-    const seconds = (duration / 192) * (60 / bpm);
+    // BMS STOP uses 1/192 of a measure as the unit.
+    const seconds = (duration / 192) * (240 / bpm);
     stopEvents.push({ beat, seconds });
   }
 
