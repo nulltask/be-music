@@ -224,6 +224,74 @@ test('BMS stringify: handles maxResolution/eol options and controlFlow objects',
   expect(output).toContain('\r\n');
 });
 
+test('BMS stringify: writes optional metadata and sorts extension/resource entries', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.title = 'Sort Check';
+  json.metadata.subtitle = 'Sub';
+  json.metadata.artist = 'Codex';
+  json.metadata.genre = 'Genre';
+  json.metadata.comment = 'Comment';
+  json.metadata.stageFile = 'stage.png';
+  json.metadata.playLevel = 7;
+  json.metadata.rank = 2;
+  json.metadata.total = 320;
+  json.metadata.difficulty = 4;
+  json.metadata.extras = {
+    ZZZ: 'last',
+    AAA: 'first',
+    ARGB0A: 'filtered-argb',
+    CHANGEOPTION01: 'filtered-change',
+    SWBGA01: 'filtered-swbga',
+  };
+
+  json.bms.changeOption = { '0B': 'MIRROR', '0A': 'RANDOM' };
+  json.bms.exRank = { '0B': '120,90,60,30', '0A': '100,80,50,20' };
+  json.bms.exWav = { '0B': 'b.wav', '0A': 'a.wav' };
+  json.bms.exBmp = { '0B': 'b.bmp', '0A': 'a.bmp' };
+  json.bms.swBga = { '0B': '0B', '0A': '0A' };
+
+  json.resources.bpm = { '0B': 180, '0A': 150 };
+  json.resources.stop = { '0B': 64, '0A': 32 };
+
+  json.measures = [
+    { index: 2, length: 0.75 },
+    { index: 1, length: 1.5 },
+    { index: 3, length: 1 },
+  ];
+  json.events = [
+    { measure: 0, channel: '13', position: [0, 1], value: '01' },
+    { measure: 0, channel: '11', position: [0, 1], value: '01' },
+  ];
+
+  const output = stringifyBms(json);
+
+  expect(output).toContain('#SUBTITLE Sub');
+  expect(output).toContain('#PLAYLEVEL 7');
+  expect(output).toContain('#RANK 2');
+  expect(output).toContain('#TOTAL 320');
+  expect(output).toContain('#DIFFICULTY 4');
+  expect(output).toContain('#COMMENT Comment');
+  expect(output).toContain('#STAGEFILE stage.png');
+
+  expect(output.indexOf('#AAA first')).toBeGreaterThan(-1);
+  expect(output.indexOf('#ZZZ last')).toBeGreaterThan(output.indexOf('#AAA first'));
+  expect(output).not.toContain('#ARGB0A filtered-argb');
+  expect(output).not.toContain('#CHANGEOPTION01 filtered-change');
+  expect(output).not.toContain('#SWBGA01 filtered-swbga');
+
+  expect(output.indexOf('#CHANGEOPTION0A RANDOM')).toBeLessThan(output.indexOf('#CHANGEOPTION0B MIRROR'));
+  expect(output.indexOf('#EXRANK0A 100,80,50,20')).toBeLessThan(output.indexOf('#EXRANK0B 120,90,60,30'));
+  expect(output.indexOf('#EXWAV0A a.wav')).toBeLessThan(output.indexOf('#EXWAV0B b.wav'));
+  expect(output.indexOf('#EXBMP0A a.bmp')).toBeLessThan(output.indexOf('#EXBMP0B b.bmp'));
+  expect(output.indexOf('#SWBGA0A 0A')).toBeLessThan(output.indexOf('#SWBGA0B 0B'));
+  expect(output.indexOf('#BPM0A 150')).toBeLessThan(output.indexOf('#BPM0B 180'));
+  expect(output.indexOf('#STOP0A 32')).toBeLessThan(output.indexOf('#STOP0B 64'));
+
+  expect(output.indexOf('#00102:1.5')).toBeLessThan(output.indexOf('#00202:0.75'));
+  expect(output).not.toContain('#00302:1');
+  expect(output.indexOf('#00011:01')).toBeLessThan(output.indexOf('#00013:01'));
+});
+
 test('bmson stringify: handles resolution/version/lines normalization and fallback metadata', () => {
   const json = createEmptyJson('json');
   json.metadata.title = 'Fallback';
@@ -238,12 +306,13 @@ test('bmson stringify: handles resolution/version/lines normalization and fallba
   json.resources.stop['AB'] = 96;
   json.events = [
     { measure: 0, channel: '11', position: [0, 1], value: '01' },
+    { measure: 0, channel: '02', position: [0, 1], value: '01' },
     { measure: 0, channel: '03', position: [0, 1], value: '78' },
     { measure: 0, channel: '08', position: [1, 2], value: 'AA' },
     { measure: 0, channel: '09', position: [3, 4], value: 'AB' },
     { measure: 0, channel: 'AA', position: [0, 1], value: 'FF' },
   ];
-  json.bmson.lines = [960, 0, 960];
+  json.bmson.lines = [960, 960];
   json.bmson.info.subartists = ['A', 'B', ''];
   json.bmson.version = '';
 
