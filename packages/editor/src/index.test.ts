@@ -31,7 +31,10 @@ describe('editor', () => {
   test('editor: setMetadata handles known keys, extras, and BPM validation', () => {
     let json = createEmptyJson('json');
     json = setMetadata(json, 'title', 'Song');
+    json = setMetadata(json, 'subtitle', 'Sub');
     json = setMetadata(json, 'artist', 'Composer');
+    json = setMetadata(json, 'comment', 'Test comment');
+    json = setMetadata(json, 'stagefile', 'stage.png');
     json = setMetadata(json, 'playlevel', '12.5');
     json = setMetadata(json, 'rank', '3');
     json = setMetadata(json, 'total', '250');
@@ -40,7 +43,10 @@ describe('editor', () => {
     json = setMetadata(json, 'wavcmd', 'legacy');
 
     expect(json.metadata.title).toBe('Song');
+    expect(json.metadata.subtitle).toBe('Sub');
     expect(json.metadata.artist).toBe('Composer');
+    expect(json.metadata.comment).toBe('Test comment');
+    expect(json.metadata.stageFile).toBe('stage.png');
     expect(json.metadata.playLevel).toBe(12.5);
     expect(json.metadata.rank).toBe(3);
     expect(json.metadata.total).toBe(250);
@@ -78,6 +84,13 @@ describe('editor', () => {
     });
     json = addNote(json, {
       measure: 1,
+      channel: '12',
+      positionNumerator: 1,
+      positionDenominator: 2,
+      value: '09',
+    });
+    json = addNote(json, {
+      measure: 1,
       channel: '11',
       positionNumerator: Number.NaN,
       positionDenominator: 0,
@@ -91,6 +104,7 @@ describe('editor', () => {
       [1, '11', 0, 1, '03'],
       [1, '11', 1, 2, '01'],
       [1, '11', 2, 4, '02'],
+      [1, '12', 1, 2, '09'],
       [2, '1A', 3, 4, '0F'],
     ]);
     expect(json.measures.some((measure) => measure.index === 2)).toBe(true);
@@ -113,6 +127,7 @@ describe('editor', () => {
     });
     expect(removedByPosition.events.some((event) => event.value === '01')).toBe(false);
     expect(removedByPosition.events.some((event) => event.value === '02')).toBe(false);
+    expect(removedByPosition.events.some((event) => event.channel === '12' && event.value === '09')).toBe(true);
   });
 
   test('editor: normalizes incomplete JSON to defaults during operations', () => {
