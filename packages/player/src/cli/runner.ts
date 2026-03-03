@@ -1,21 +1,18 @@
 #!/usr/bin/env node
-import { access, readdir, stat } from 'node:fs/promises';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { stat } from 'node:fs/promises';
+import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { resolveCliPath } from '@be-music/utils';
 import readline from 'node:readline';
-import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
-import { createTimingResolver, type RenderResult, renderJson, writeAudioFile } from '@be-music/audio-renderer';
+import { parseChartFile } from '@be-music/parser';
+import { renderJson, writeAudioFile } from '@be-music/audio-renderer';
 import {
   autoPlay,
-  extractPlayableNotes,
   manualPlay,
   PlayerInterruptedError,
   type PlayerLoadProgress,
   type PlayerSummary,
 } from '../index.ts';
-import { createNodeAudioSink } from '../audio-sink.ts';
 import {
   HIGH_SPEED_STEP,
   MAX_HIGH_SPEED,
@@ -55,6 +52,15 @@ import {
   formatSelectionEntryLabel,
   truncateForDisplay,
 } from './selection-format.ts';
+import {
+  buildChartSelectionEntries,
+  ChartSelectionLoadingCanceledError,
+  listChartFiles,
+  type ChartSelectionEntry,
+  type ChartSummaryLoadingProgress,
+  type LoadingCancelReason,
+} from './chart-selection.ts';
+import { createChartPreviewController, formatSongSelectAudioBackendLabel } from './chart-preview.ts';
 
 export {
   applyPersistedPlayerConfigToArgs,
@@ -104,59 +110,10 @@ interface CliArgs {
   tui: boolean;
 }
 
-interface ChartSummaryItem {
-  filePath: string;
-  relativePath: string;
-  directoryLabel: string;
-  fileLabel: string;
-  previewContinueKey?: string;
-  totalNotes?: number;
-  player?: number;
-  rank?: number;
-  playLevel?: number;
-  bpmInitial?: number;
-  bpmMin?: number;
-  bpmMax?: number;
-}
-
-type ChartSelectionEntry =
-  | {
-      kind: 'random';
-      label: string;
-    }
-  | {
-      kind: 'group';
-      label: string;
-    }
-  | {
-      kind: 'chart';
-      filePath: string;
-      fileLabel: string;
-      previewContinueKey?: string;
-      totalNotes?: number;
-      player?: number;
-      rank?: number;
-      playLevel?: number;
-      bpmInitial?: number;
-      bpmMin?: number;
-      bpmMax?: number;
-    };
-
-interface ChartSummaryLoadingProgress {
-  filePath: string;
-  currentIndex: number;
-  totalCount: number;
-}
-
 interface PlayLoadingProgress {
   ratio: number;
   message: string;
   detail?: string;
-}
-
-interface BuildChartSelectionEntriesOptions {
-  onLoadingFile?: (progress: ChartSummaryLoadingProgress) => void;
-  getCancelReason?: () => LoadingCancelReason | undefined;
 }
 
 interface SelectChartInteractivelyOptions {
@@ -165,11 +122,6 @@ interface SelectChartInteractivelyOptions {
   initialFocusKey?: string;
   initialPlayMode?: PlayMode;
   initialHighSpeed?: number;
-}
-
-interface PreviewFocusTarget {
-  filePath?: string;
-  previewContinueKey?: string;
 }
 
 type SelectChartInteractivelyExitReason = 'selected' | 'escape' | 'ctrl-c';
@@ -181,8 +133,6 @@ interface SelectChartInteractivelyResult {
   playMode: PlayMode;
   highSpeed: number;
 }
-
-type LoadingCancelReason = 'escape' | 'ctrl-c';
 
 interface PlayedChartResult {
   chartPath: string;
@@ -224,44 +174,6 @@ interface RawInputCapture {
   stdin: NodeJS.ReadStream & { isRaw?: boolean };
   restore: () => void;
 }
-
-class ChartSelectionLoadingCanceledError extends Error {
-  readonly reason: LoadingCancelReason;
-
-  constructor(reason: LoadingCancelReason) {
-    super(`Chart loading canceled: ${reason}`);
-    this.reason = reason;
-  }
-}
-
-interface ChartPreviewController {
-  focus: (target: PreviewFocusTarget) => void;
-  getActiveBackend: () => string | undefined;
-  dispose: () => Promise<void>;
-}
-
-interface PreviewPlaybackHandle {
-  stop: () => void;
-  done: Promise<void>;
-  backend: string;
-}
-
-interface ChartPreviewAsset {
-  continueKey: string;
-  rendered: RenderResult;
-}
-
-interface RenderedPreviewSample {
-  continueKey: string;
-  rendered: RenderResult;
-}
-
-const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms']);
-const PREVIEW_CHUNK_FRAMES = 256;
-const PREVIEW_SILENCE_THRESHOLD = 0.0001;
-const PREVIEW_STOP_TIMEOUT_MS = 180;
-const PREVIEW_BACKPRESSURE_TIMEOUT_MS = 800;
-const PREVIEW_CACHE_LIMIT = 8;
 
 export async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
@@ -988,38 +900,6 @@ function renderPlayLoadingProgress(chartPath: string, progress: PlayLoadingProgr
   process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J`);
 }
 
-async function listChartFiles(rootDir: string): Promise<string[]> {
-  const files: string[] = [];
-  const queue: string[] = [rootDir];
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) {
-      continue;
-    }
-
-    const entries = await readdir(current, { withFileTypes: true });
-    for (const entry of entries) {
-      const absolute = resolve(current, entry.name);
-      if (entry.isDirectory()) {
-        queue.push(absolute);
-        continue;
-      }
-      if (!entry.isFile()) {
-        continue;
-      }
-      const dot = entry.name.lastIndexOf('.');
-      const extension = dot >= 0 ? entry.name.slice(dot).toLowerCase() : '';
-      if (SELECTABLE_CHART_EXTENSIONS.has(extension)) {
-        files.push(absolute);
-      }
-    }
-  }
-
-  files.sort((left, right) => left.localeCompare(right, 'ja'));
-  return files;
-}
-
 async function selectChartInteractively(
   rootDir: string,
   files: string[],
@@ -1342,592 +1222,6 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
     inputCapture.stdin.on('keypress', onKeyPress);
     render();
   });
-}
-
-async function buildChartSelectionEntries(
-  rootDir: string,
-  files: string[],
-  options: BuildChartSelectionEntriesOptions = {},
-): Promise<ChartSelectionEntry[]> {
-  let summaries: ChartSummaryItem[];
-  if (!options.onLoadingFile && !options.getCancelReason) {
-    summaries = await Promise.all(files.map((filePath) => buildChartSummary(rootDir, filePath)));
-  } else {
-    summaries = [];
-    for (let index = 0; index < files.length; index += 1) {
-      const cancelReason = options.getCancelReason?.();
-      if (cancelReason) {
-        throw new ChartSelectionLoadingCanceledError(cancelReason);
-      }
-      const filePath = files[index];
-      options.onLoadingFile?.({
-        filePath,
-        currentIndex: index + 1,
-        totalCount: files.length,
-      });
-      summaries.push(await buildChartSummary(rootDir, filePath));
-      const cancelAfterReason = options.getCancelReason?.();
-      if (cancelAfterReason) {
-        throw new ChartSelectionLoadingCanceledError(cancelAfterReason);
-      }
-    }
-  }
-  summaries.sort((left, right) => left.relativePath.localeCompare(right.relativePath, 'ja'));
-
-  const groupedByDirectory = new Map<string, ChartSummaryItem[]>();
-  for (const summary of summaries) {
-    const group = groupedByDirectory.get(summary.directoryLabel);
-    if (group) {
-      group.push(summary);
-      continue;
-    }
-    groupedByDirectory.set(summary.directoryLabel, [summary]);
-  }
-
-  const directoryLabels = [...groupedByDirectory.keys()].sort((left, right) => {
-    if (left === '.') {
-      return right === '.' ? 0 : -1;
-    }
-    if (right === '.') {
-      return 1;
-    }
-    return left.localeCompare(right, 'ja');
-  });
-
-  const entries: ChartSelectionEntry[] = [{ kind: 'random', label: '[Random] Select a chart randomly' }];
-  for (const directoryLabel of directoryLabels) {
-    const charts = groupedByDirectory.get(directoryLabel);
-    if (!charts || charts.length === 0) {
-      continue;
-    }
-    const sortedCharts = [...charts].sort((left, right) => {
-      const playerDiff = compareOptionalNumber(left.player, right.player);
-      if (playerDiff !== 0) {
-        return playerDiff;
-      }
-      const playLevelDiff = compareOptionalNumber(left.playLevel, right.playLevel);
-      if (playLevelDiff !== 0) {
-        return playLevelDiff;
-      }
-      const fileDiff = left.fileLabel.localeCompare(right.fileLabel, 'ja');
-      if (fileDiff !== 0) {
-        return fileDiff;
-      }
-      return left.relativePath.localeCompare(right.relativePath, 'ja');
-    });
-
-    entries.push({
-      kind: 'group',
-      label: directoryLabel === '.' ? '[Folder] (root)' : `[Folder] ${directoryLabel}`,
-    });
-
-    for (const chart of sortedCharts) {
-      entries.push({
-        kind: 'chart',
-        filePath: chart.filePath,
-        fileLabel: chart.fileLabel,
-        previewContinueKey: chart.previewContinueKey,
-        totalNotes: chart.totalNotes,
-        player: chart.player,
-        rank: chart.rank,
-        playLevel: chart.playLevel,
-        bpmInitial: chart.bpmInitial,
-        bpmMin: chart.bpmMin,
-        bpmMax: chart.bpmMax,
-      });
-    }
-  }
-  return entries;
-}
-
-function compareOptionalNumber(left: number | undefined, right: number | undefined): number {
-  const hasLeft = typeof left === 'number' && Number.isFinite(left);
-  const hasRight = typeof right === 'number' && Number.isFinite(right);
-  if (hasLeft && hasRight) {
-    return left - right;
-  }
-  if (hasLeft) {
-    return -1;
-  }
-  if (hasRight) {
-    return 1;
-  }
-  return 0;
-}
-
-async function buildChartSummary(rootDir: string, filePath: string): Promise<ChartSummaryItem> {
-  const relativePath = relative(rootDir, filePath).replaceAll('\\', '/');
-  const slashIndex = relativePath.lastIndexOf('/');
-  const directoryLabel = slashIndex >= 0 ? relativePath.slice(0, slashIndex) : '.';
-  const fileLabel = slashIndex >= 0 ? relativePath.slice(slashIndex + 1) : relativePath;
-
-  let player: number | undefined;
-  let rank: number | undefined;
-  let playLevel: number | undefined;
-  let totalNotes: number | undefined;
-  let bpmInitial: number | undefined;
-  let bpmMin: number | undefined;
-  let bpmMax: number | undefined;
-  let previewContinueKey: string | undefined;
-  try {
-    const chart = await parseChartFile(filePath);
-    const resolvedChart = resolveBmsControlFlow(chart, { random: () => 0 });
-    totalNotes = extractPlayableNotes(resolvedChart).length;
-    player = chart.bms.player;
-    rank = chart.metadata.rank;
-    playLevel = chart.metadata.playLevel;
-    const bpmSummary = extractChartBpmSummary(resolvedChart);
-    bpmInitial = bpmSummary?.initial;
-    bpmMin = bpmSummary?.min;
-    bpmMax = bpmSummary?.max;
-    previewContinueKey = await resolvePreviewContinueKeyFromChart(resolvedChart, filePath);
-  } catch {
-    // 一覧表示のメタ情報取得失敗は再生可否と分離し、欠損扱いで続行する。
-  }
-
-  return {
-    filePath,
-    relativePath,
-    directoryLabel,
-    fileLabel,
-    previewContinueKey,
-    totalNotes,
-    player,
-    rank,
-    playLevel,
-    bpmInitial,
-    bpmMin,
-    bpmMax,
-  };
-}
-
-function extractChartBpmSummary(json: BeMusicJson): { initial: number; min: number; max: number } | undefined {
-  const resolver = createTimingResolver(json);
-  const bpmValues = resolver.tempoPoints
-    .map((point) => point.bpm)
-    .filter((value) => Number.isFinite(value) && value > 0);
-  if (bpmValues.length === 0) {
-    return undefined;
-  }
-
-  let min = bpmValues[0];
-  let max = bpmValues[0];
-  for (const bpm of bpmValues) {
-    if (bpm < min) {
-      min = bpm;
-    }
-    if (bpm > max) {
-      max = bpm;
-    }
-  }
-
-  return {
-    initial: bpmValues[0],
-    min,
-    max,
-  };
-}
-
-function createChartPreviewController(): ChartPreviewController {
-  const previewCache = new Map<string, ChartPreviewAsset | null>();
-  let focusedFilePath: string | undefined;
-  let focusedPreviewContinueKey: string | undefined;
-  let sequence = 0;
-  let disposed = false;
-  let activePlayback: PreviewPlaybackHandle | undefined;
-  let activePreviewKey: string | undefined;
-  let activeBackend: string | undefined;
-
-  const stopPlaybackSafely = async (playback: PreviewPlaybackHandle): Promise<void> => {
-    playback.stop();
-    await Promise.race([playback.done.catch(() => undefined), createTimeoutPromise(PREVIEW_STOP_TIMEOUT_MS)]);
-  };
-
-  const stopActivePlayback = async (): Promise<void> => {
-    if (!activePlayback) {
-      return;
-    }
-    const playback = activePlayback;
-    activePlayback = undefined;
-    activePreviewKey = undefined;
-    activeBackend = undefined;
-    await stopPlaybackSafely(playback);
-  };
-
-  return {
-    focus: (target: PreviewFocusTarget) => {
-      const filePath = target.filePath;
-      const expectedPreviewKey = target.previewContinueKey;
-      if (disposed || (focusedFilePath === filePath && focusedPreviewContinueKey === expectedPreviewKey)) {
-        return;
-      }
-      focusedFilePath = filePath;
-      focusedPreviewContinueKey = expectedPreviewKey;
-      sequence += 1;
-      const currentSequence = sequence;
-
-      void (async () => {
-        if (!filePath) {
-          await stopActivePlayback();
-          return;
-        }
-        if (expectedPreviewKey && activePlayback && activePreviewKey === expectedPreviewKey) {
-          return;
-        }
-
-        let preview = previewCache.get(filePath);
-        if (preview === undefined) {
-          try {
-            preview = (await renderChartPreview(filePath)) ?? null;
-          } catch {
-            preview = null;
-          }
-          previewCache.set(filePath, preview);
-          while (previewCache.size > PREVIEW_CACHE_LIMIT) {
-            const oldest = previewCache.keys().next().value as string | undefined;
-            if (!oldest) {
-              break;
-            }
-            previewCache.delete(oldest);
-          }
-        }
-
-        if (disposed || currentSequence !== sequence) {
-          return;
-        }
-
-        if (!preview) {
-          await stopActivePlayback();
-          return;
-        }
-        if (expectedPreviewKey && activePlayback && activePreviewKey === expectedPreviewKey) {
-          return;
-        }
-
-        if (activePlayback && activePreviewKey === preview.continueKey) {
-          return;
-        }
-
-        await stopActivePlayback();
-        if (disposed || currentSequence !== sequence) {
-          return;
-        }
-
-        const playback = await startPreviewPlayback(preview.rendered);
-        if (!playback) {
-          return;
-        }
-        if (disposed || currentSequence !== sequence) {
-          await stopPlaybackSafely(playback);
-          return;
-        }
-        activePlayback = playback;
-        activePreviewKey = preview.continueKey;
-        activeBackend = playback.backend;
-        void playback.done.finally(() => {
-          if (activePlayback === playback) {
-            activePlayback = undefined;
-            activePreviewKey = undefined;
-            activeBackend = undefined;
-          }
-        });
-      })();
-    },
-    getActiveBackend: () => activeBackend,
-    dispose: async () => {
-      if (disposed) {
-        return;
-      }
-      disposed = true;
-      sequence += 1;
-      focusedFilePath = undefined;
-      focusedPreviewContinueKey = undefined;
-      previewCache.clear();
-      await stopActivePlayback();
-    },
-  };
-}
-
-async function renderChartPreview(filePath: string): Promise<ChartPreviewAsset | undefined> {
-  const chart = await parseChartFile(filePath);
-  const resolved = resolveBmsControlFlow(chart, { random: () => 0 });
-  const previewPath = resolved.bms.preview;
-  if (typeof previewPath !== 'string' || previewPath.trim().length === 0) {
-    return undefined;
-  }
-
-  const chartWavGain = resolveChartVolWavGain(resolved);
-  const previewSample = await renderPreviewSampleFile(resolved, filePath, previewPath, chartWavGain);
-  if (!previewSample) {
-    return undefined;
-  }
-
-  return {
-    continueKey: previewSample.continueKey,
-    rendered: trimPreviewLeadingSilence(previewSample.rendered),
-  };
-}
-
-async function resolvePreviewContinueKeyFromChart(chart: BeMusicJson, chartPath: string): Promise<string | undefined> {
-  const previewPath = chart.bms.preview;
-  if (typeof previewPath !== 'string' || previewPath.trim().length === 0) {
-    return undefined;
-  }
-  const candidates = createPreviewPathCandidates(chart, previewPath);
-  const baseDir = dirname(chartPath);
-  for (const candidate of candidates) {
-    const resolvedCandidate = resolvePreviewCandidatePath(baseDir, candidate);
-    if (await doesFileExist(resolvedCandidate)) {
-      return normalizePreviewContinueKey(resolvedCandidate);
-    }
-  }
-  const firstCandidate = candidates[0];
-  if (!firstCandidate) {
-    return undefined;
-  }
-  return normalizePreviewContinueKey(resolvePreviewCandidatePath(baseDir, firstCandidate));
-}
-
-async function doesFileExist(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function renderPreviewSampleFile(
-  chart: BeMusicJson,
-  chartPath: string,
-  previewPath: string,
-  gain: number,
-): Promise<RenderedPreviewSample | undefined> {
-  const candidates = createPreviewPathCandidates(chart, previewPath);
-  const baseDir = dirname(chartPath);
-  for (const candidate of candidates) {
-    let fellBack = false;
-    let loadedPreviewPath: string | undefined;
-    const sampleJson = createEmptyJson('json');
-    sampleJson.metadata.bpm = chart.metadata.bpm;
-    sampleJson.resources.wav['01'] = candidate;
-    sampleJson.events = [{ measure: 0, channel: '01', position: [0, 1], value: '01' }];
-
-    const rendered = await renderJson(sampleJson, {
-      baseDir,
-      tailSeconds: 0,
-      gain,
-      fallbackToneSeconds: 0.05,
-      onSampleLoadProgress: (progress) => {
-        if (
-          progress.stage === 'reading' &&
-          typeof progress.resolvedPath === 'string' &&
-          progress.resolvedPath.length > 0
-        ) {
-          loadedPreviewPath = progress.resolvedPath;
-        }
-        if (progress.stage === 'fallback') {
-          fellBack = true;
-        }
-      },
-    });
-    if (!fellBack) {
-      const resolvedCandidatePath = loadedPreviewPath ?? resolvePreviewCandidatePath(baseDir, candidate);
-      return {
-        rendered,
-        continueKey: normalizePreviewContinueKey(resolvedCandidatePath),
-      };
-    }
-  }
-  return undefined;
-}
-
-function resolvePreviewCandidatePath(baseDir: string, candidate: string): string {
-  if (isAbsolute(candidate)) {
-    return candidate;
-  }
-  return resolve(baseDir, candidate);
-}
-
-function normalizePreviewContinueKey(value: string): string {
-  return value.replaceAll('\\', '/');
-}
-
-function createPreviewPathCandidates(chart: BeMusicJson, previewPath: string): string[] {
-  const normalizedPreview = previewPath.trim();
-  if (normalizedPreview.length === 0) {
-    return [];
-  }
-
-  const normalizedPathWav = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav.trim() : '';
-  const candidates = new Set<string>([normalizedPreview]);
-  if (!isAbsolute(normalizedPreview) && normalizedPathWav.length > 0) {
-    const joined = `${normalizedPathWav.replace(/[\\/]+$/, '')}/${normalizedPreview.replace(/^[\\/]+/, '')}`;
-    candidates.add(joined);
-  }
-  return [...candidates];
-}
-
-function resolveChartVolWavGain(chart: BeMusicJson): number {
-  const volWav = chart.bms.volWav;
-  if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
-    return 1;
-  }
-  return volWav / 100;
-}
-
-function trimPreviewLeadingSilence(rendered: RenderResult): RenderResult {
-  const length = Math.min(rendered.left.length, rendered.right.length);
-  let start = 0;
-  while (start < length) {
-    const left = Math.abs(rendered.left[start]);
-    const right = Math.abs(rendered.right[start]);
-    if (left > PREVIEW_SILENCE_THRESHOLD || right > PREVIEW_SILENCE_THRESHOLD) {
-      break;
-    }
-    start += 1;
-  }
-  if (start <= 0 || start >= length) {
-    return rendered;
-  }
-  const left = rendered.left.subarray(start);
-  const right = rendered.right.subarray(start);
-  return {
-    ...rendered,
-    left,
-    right,
-    durationSeconds: left.length / rendered.sampleRate,
-  };
-}
-
-async function startPreviewPlayback(rendered: RenderResult): Promise<PreviewPlaybackHandle | undefined> {
-  if (rendered.left.length === 0 || rendered.right.length === 0) {
-    return undefined;
-  }
-
-  let stopRequested = false;
-  let startupFailed = false;
-  let playhead = 0;
-
-  const output = await createNodeAudioSink({
-    sampleRate: rendered.sampleRate,
-    channels: 2,
-    samplesPerFrame: PREVIEW_CHUNK_FRAMES,
-    mode: 'auto',
-  });
-
-  if (!output) {
-    return undefined;
-  }
-
-  output.onError(() => {
-    if (playhead <= 0) {
-      startupFailed = true;
-    }
-    stopRequested = true;
-  });
-
-  const chunk = Buffer.allocUnsafe(PREVIEW_CHUNK_FRAMES * 4);
-
-  // 起動直後の失敗を検知するため、最初のチャンクを先に書き込む。
-  playhead = writeLoopedPreviewPcmChunk(chunk, rendered, playhead);
-  const firstWritable = output.write(chunk);
-  if (!firstWritable) {
-    const becameWritable = await waitPreviewWritableWithTimeout(output, () => stopRequested);
-    if (!becameWritable) {
-      stopRequested = true;
-    }
-  }
-
-  if (startupFailed || stopRequested) {
-    output.destroy();
-    return undefined;
-  }
-
-  const done = (async () => {
-    while (!stopRequested) {
-      playhead = writeLoopedPreviewPcmChunk(chunk, rendered, playhead);
-
-      const writable = output.write(chunk);
-      if (!writable) {
-        const becameWritable = await waitPreviewWritableWithTimeout(output, () => stopRequested);
-        if (!becameWritable) {
-          stopRequested = true;
-          break;
-        }
-      }
-    }
-
-    output.destroy();
-  })().catch(() => undefined);
-
-  return {
-    stop: () => {
-      stopRequested = true;
-      output.destroy();
-    },
-    done,
-    backend: output.label,
-  };
-}
-
-function formatSongSelectAudioBackendLabel(audioEnabled: boolean, active: string | undefined): string {
-  if (!audioEnabled) {
-    return 'disabled';
-  }
-  if (active) {
-    return active;
-  }
-  return 'node-webaudio';
-}
-
-async function waitPreviewWritableWithTimeout(
-  output: { waitWritable: (shouldStop: () => boolean) => Promise<void> },
-  shouldStop: () => boolean,
-): Promise<boolean> {
-  if (shouldStop()) {
-    return false;
-  }
-
-  const waitWritableTask = output
-    .waitWritable(shouldStop)
-    .then(() => true)
-    .catch(() => false);
-  const timeoutTask = createTimeoutPromise(PREVIEW_BACKPRESSURE_TIMEOUT_MS).then(() => false);
-  const writable = await Promise.race([waitWritableTask, timeoutTask]);
-  return writable && !shouldStop();
-}
-
-function createTimeoutPromise(ms: number): Promise<void> {
-  return new Promise<void>((resolvePromise) => {
-    setTimeout(resolvePromise, ms);
-  });
-}
-
-function writeLoopedPreviewPcmChunk(chunk: Buffer, rendered: RenderResult, startFrame: number): number {
-  const totalFrames = Math.max(1, Math.min(rendered.left.length, rendered.right.length));
-  let source = startFrame;
-  if (source >= totalFrames) {
-    source %= totalFrames;
-  }
-  for (let frame = 0; frame < PREVIEW_CHUNK_FRAMES; frame += 1) {
-    const offset = frame * 4;
-    chunk.writeInt16LE(floatToInt16(rendered.left[source]), offset);
-    chunk.writeInt16LE(floatToInt16(rendered.right[source]), offset + 2);
-    source += 1;
-    if (source >= totalFrames) {
-      source = 0;
-    }
-  }
-  return source;
-}
-
-function floatToInt16(value: number): number {
-  const clamped = Math.max(-1, Math.min(1, value));
-  if (clamped >= 0) {
-    return Math.round(clamped * 32767);
-  }
-  return Math.round(clamped * 32768);
 }
 
 function isCliEntryPoint(): boolean {

@@ -6,7 +6,6 @@ import {
   createEmptyJson,
   type BeMusicEvent,
   type BeMusicJson,
-  isScrollChannel,
   isPlayableChannel,
   normalizeChannel,
   normalizeObjectKey,
@@ -44,6 +43,15 @@ import {
   applyJudgeToSummary,
   createScoreTracker,
 } from './scoring.ts';
+import { resolveJudgeWindowsMs } from './judge-window.ts';
+import {
+  createBeatAtSecondsResolver,
+  createBpmTimeline,
+  createMeasureBoundariesBeats,
+  createMeasureTimeline,
+  createScrollTimeline,
+  createStopBeatWindows,
+} from './timeline.ts';
 
 export interface PlayerOptions {
   auto?: boolean;
@@ -110,28 +118,6 @@ export class PlayerInterruptedError extends Error {
   }
 }
 
-interface MeasureTimelinePoint {
-  measure: number;
-  seconds: number;
-}
-
-interface BpmTimelinePoint {
-  bpm: number;
-  seconds: number;
-}
-
-interface ScrollTimelinePoint {
-  beat: number;
-  speed: number;
-}
-
-interface StopBeatWindow {
-  beat: number;
-  startSeconds: number;
-  endSeconds: number;
-  durationSeconds: number;
-}
-
 interface AudioSession {
   start: () => void;
   finish: () => Promise<void>;
@@ -194,13 +180,7 @@ const DEFAULT_TERMINAL_COLUMNS = 120;
 const TUI_FRAME_INTERVAL_MS = 1000 / 60;
 const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
 const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
-const IIDX_PGREAT_WINDOW_MS = 16.67;
-const IIDX_GREAT_WINDOW_MS = 33.33;
-const IIDX_GOOD_WINDOW_MS = 116.67;
 const IIDX_BAD_WINDOW_MS = 250;
-const BEATORAJA_BMS_JUDGERANK_MULTIPLIERS = [25, 50, 75, 100, 125] as const;
-const BEATORAJA_BMS_DEFAULT_JUDGERANK = BEATORAJA_BMS_JUDGERANK_MULTIPLIERS[2];
-const BEATORAJA_BMSON_DEFAULT_JUDGERANK = 100;
 const PAUSE_POLL_INTERVAL_MS = 16;
 const AUDIO_TARGET_LEAD_MAX_MS = 32;
 const AUDIO_TARGET_LEAD_STEP_UP_MS = 1.5;
@@ -217,13 +197,7 @@ const DEFAULT_LIMITER_CEILING_DB = -0.3;
 const DEFAULT_LIMITER_RELEASE_MS = 80;
 
 export { applyHighSpeedControlAction, resolveHighSpeedControlActionFromKey, type HighSpeedControlAction };
-
-interface JudgeWindowsMs {
-  pgreat: number;
-  great: number;
-  good: number;
-  bad: number;
-}
+export { resolveJudgeWindowsMs };
 
 export async function playChartFile(filePath: string, options: PlayerOptions = {}): Promise<PlayerSummary> {
   const json = await parseChartFile(filePath);
@@ -262,53 +236,6 @@ function formatSampleLoadDetail(progress: RenderSampleLoadProgress): string {
     return progress.samplePath;
   }
   return `#WAV${progress.sampleKey}`;
-}
-
-function resolveBmsJudgeRankPercent(json: BeMusicJson): number {
-  const defExRank = json.bms.defExRank;
-  if (typeof defExRank === 'number' && Number.isFinite(defExRank) && defExRank > 0) {
-    return (defExRank * BEATORAJA_BMS_DEFAULT_JUDGERANK) / 100;
-  }
-
-  const rankValue = Number.isFinite(json.metadata.rank) ? Math.trunc(json.metadata.rank!) : Number.NaN;
-  if (Number.isFinite(rankValue) && rankValue >= 0 && rankValue < BEATORAJA_BMS_JUDGERANK_MULTIPLIERS.length) {
-    return BEATORAJA_BMS_JUDGERANK_MULTIPLIERS[rankValue as 0 | 1 | 2 | 3 | 4];
-  }
-
-  return BEATORAJA_BMS_DEFAULT_JUDGERANK;
-}
-
-function resolveBmsonJudgeRankPercent(json: BeMusicJson): number {
-  const judgeRank = json.bmson.info.judgeRank;
-  if (Number.isFinite(judgeRank) && (judgeRank ?? 0) > 0) {
-    return judgeRank!;
-  }
-  const metadataRank = json.metadata.rank;
-  if (Number.isFinite(metadataRank) && (metadataRank ?? 0) > 0) {
-    return metadataRank!;
-  }
-  return BEATORAJA_BMSON_DEFAULT_JUDGERANK;
-}
-
-export function resolveJudgeWindowsMs(json: BeMusicJson, debugBadWindowMs?: number): JudgeWindowsMs {
-  const bmsonStyle = json.sourceFormat === 'bmson';
-  const baseJudgerank = bmsonStyle ? BEATORAJA_BMSON_DEFAULT_JUDGERANK : BEATORAJA_BMS_DEFAULT_JUDGERANK;
-  const judgeRank = bmsonStyle ? resolveBmsonJudgeRankPercent(json) : resolveBmsJudgeRankPercent(json);
-  const scale = judgeRank / baseJudgerank;
-  const pgreat = IIDX_PGREAT_WINDOW_MS * scale;
-  const great = IIDX_GREAT_WINDOW_MS * scale;
-  const good = IIDX_GOOD_WINDOW_MS * scale;
-  const badFromRank = IIDX_BAD_WINDOW_MS * scale;
-  const bad =
-    typeof debugBadWindowMs === 'number' && Number.isFinite(debugBadWindowMs) && debugBadWindowMs > 0
-      ? debugBadWindowMs
-      : badFromRank;
-  return {
-    pgreat,
-    great,
-    good,
-    bad,
-  };
 }
 
 export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
@@ -2360,187 +2287,6 @@ function findLastLaneIndex(bindings: LaneBinding[], predicate: (binding: LaneBin
     }
   }
   return -1;
-}
-
-function createMeasureTimeline(
-  json: BeMusicJson,
-  resolver: ReturnType<typeof createTimingResolver>,
-  beatResolver: ReturnType<typeof createBeatResolver>,
-): MeasureTimelinePoint[] {
-  const maxEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
-  const maxDefinedMeasure = json.measures.reduce((max, measure) => Math.max(max, measure.index), 0);
-  const maxMeasure = Math.max(0, maxEventMeasure, maxDefinedMeasure);
-  const timeline: MeasureTimelinePoint[] = [];
-  for (let measure = 0; measure <= maxMeasure + 1; measure += 1) {
-    const seconds = resolver.beatToSeconds(beatResolver.measureToBeat(measure, 0));
-    if (!Number.isFinite(seconds)) {
-      continue;
-    }
-    timeline.push({ measure, seconds });
-  }
-
-  return timeline;
-}
-
-function createBpmTimeline(json: BeMusicJson, resolver: ReturnType<typeof createTimingResolver>): BpmTimelinePoint[] {
-  const timeline: BpmTimelinePoint[] = [];
-  let previousSeconds = Number.NaN;
-  let previousBpm = Number.NaN;
-
-  for (const point of resolver.tempoPoints) {
-    const seconds = resolver.beatToSeconds(point.beat);
-    if (!Number.isFinite(seconds) || !Number.isFinite(point.bpm) || point.bpm <= 0) {
-      continue;
-    }
-    if (Math.abs(seconds - previousSeconds) < 1e-6 && Math.abs(point.bpm - previousBpm) < 1e-6) {
-      continue;
-    }
-    timeline.push({
-      bpm: point.bpm,
-      seconds,
-    });
-    previousSeconds = seconds;
-    previousBpm = point.bpm;
-  }
-
-  if (timeline.length === 0) {
-    const fallbackBpm = Number.isFinite(json.metadata.bpm) && json.metadata.bpm > 0 ? json.metadata.bpm : 130;
-    timeline.push({ bpm: fallbackBpm, seconds: 0 });
-  }
-
-  return timeline;
-}
-
-function createScrollTimeline(
-  json: BeMusicJson,
-  beatResolver: ReturnType<typeof createBeatResolver>,
-): ScrollTimelinePoint[] {
-  const timeline: ScrollTimelinePoint[] = [];
-  const scrollMap = json.bms.scroll;
-  if (Object.keys(scrollMap).length === 0) {
-    return timeline;
-  }
-
-  for (const event of json.events) {
-    if (!isScrollChannel(event.channel)) {
-      continue;
-    }
-    const key = normalizeObjectKey(event.value);
-    if (!Object.hasOwn(scrollMap, key)) {
-      continue;
-    }
-    const speed = scrollMap[key];
-    if (typeof speed !== 'number' || !Number.isFinite(speed)) {
-      continue;
-    }
-    const beat = beatResolver.eventToBeat(event);
-    if (!Number.isFinite(beat) || beat < 0) {
-      continue;
-    }
-    timeline.push({
-      beat,
-      speed,
-    });
-  }
-
-  return timeline;
-}
-
-function createBeatAtSecondsResolver(json: BeMusicJson): (seconds: number) => number {
-  const resolver = createTimingResolver(json);
-  const stopWindows = createStopBeatWindows(resolver);
-
-  return (seconds: number): number => {
-    if (!Number.isFinite(seconds) || seconds <= 0) {
-      return 0;
-    }
-
-    let endedStopSeconds = 0;
-    for (const window of stopWindows) {
-      if (seconds < window.startSeconds) {
-        break;
-      }
-      if (seconds < window.endSeconds) {
-        return window.beat;
-      }
-      endedStopSeconds += window.durationSeconds;
-    }
-
-    const adjustedSeconds = Math.max(0, seconds - endedStopSeconds);
-    return secondsToBeatWithoutStops(resolver.tempoPoints, adjustedSeconds);
-  };
-}
-
-function createStopBeatWindows(resolver: ReturnType<typeof createTimingResolver>): StopBeatWindow[] {
-  const durationByBeat = new Map<number, number>();
-  for (const point of resolver.stopPoints) {
-    const current = durationByBeat.get(point.beat) ?? 0;
-    durationByBeat.set(point.beat, current + point.seconds);
-  }
-
-  return [...durationByBeat.entries()]
-    .sort(([leftBeat], [rightBeat]) => leftBeat - rightBeat)
-    .map(([beat, durationSeconds]) => {
-      const startSeconds = resolver.beatToSeconds(beat);
-      return {
-        beat,
-        startSeconds,
-        endSeconds: startSeconds + durationSeconds,
-        durationSeconds,
-      } satisfies StopBeatWindow;
-    });
-}
-
-function secondsToBeatWithoutStops(
-  tempoPoints: ReadonlyArray<{ beat: number; bpm: number; seconds: number }>,
-  seconds: number,
-): number {
-  if (tempoPoints.length === 0 || seconds <= 0) {
-    return 0;
-  }
-
-  let low = 0;
-  let high = tempoPoints.length - 1;
-  let index = 0;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const point = tempoPoints[mid];
-    if (point.seconds <= seconds) {
-      index = mid;
-      low = mid + 1;
-      continue;
-    }
-    high = mid - 1;
-  }
-
-  const point = tempoPoints[index];
-  const elapsed = Math.max(0, seconds - point.seconds);
-  return point.beat + (elapsed * point.bpm) / 60;
-}
-
-function createMeasureBoundariesBeats(
-  json: BeMusicJson,
-  beatResolver: ReturnType<typeof createBeatResolver>,
-): number[] {
-  const maxEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
-  const maxDefinedMeasure = json.measures.reduce((max, measure) => Math.max(max, measure.index), 0);
-  const maxMeasure = Math.max(0, maxEventMeasure, maxDefinedMeasure);
-  const boundaries: number[] = [];
-  let previous = Number.NaN;
-
-  for (let measure = 0; measure <= maxMeasure + 1; measure += 1) {
-    const beat = beatResolver.measureToBeat(measure, 0);
-    if (!Number.isFinite(beat)) {
-      continue;
-    }
-    if (Math.abs(beat - previous) < 1e-9) {
-      continue;
-    }
-    boundaries.push(beat);
-    previous = beat;
-  }
-
-  return boundaries;
 }
 
 function estimateBgaAnsiDisplaySize(bindings: LaneBinding[]): { width: number; height: number } {
