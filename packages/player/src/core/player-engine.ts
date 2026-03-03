@@ -1254,7 +1254,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       markExpiredLandmines(nowSec);
       markExpiredInvisibleNotes(nowSec);
 
-      if (remainingScorableNotes === 0 && remainingLandmineNotes === 0 && remainingInvisibleNotes === 0) {
+      if (
+        remainingScorableNotes === 0 &&
+        remainingLandmineNotes === 0 &&
+        remainingInvisibleNotes === 0 &&
+        !audioSession
+      ) {
         break;
       }
 
@@ -1389,11 +1394,7 @@ async function finalizeAudioSessionSafely(audioSession: AudioSession | undefined
   if (!audioSession) {
     return;
   }
-  const finishCompleted = await settleWithTimeout(audioSession.finish(), 2_000);
-  if (!finishCompleted) {
-    await settleWithTimeout(audioSession.dispose(), 600);
-    return;
-  }
+  await audioSession.finish().catch(() => undefined);
   await settleWithTimeout(audioSession.dispose(), 600);
 }
 
@@ -1554,14 +1555,7 @@ async function createAudioSessionIfEnabled(
     if (!playbackTask) {
       return;
     }
-    const completed = await Promise.race([
-      playbackTask.then(() => true).catch(() => true),
-      delay(5_000).then(() => false),
-    ]);
-    if (completed) {
-      return;
-    }
-    await dispose();
+    await playbackTask.catch(() => undefined);
   };
 
   const dispose = async (): Promise<void> => {

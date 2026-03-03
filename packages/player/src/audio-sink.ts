@@ -174,8 +174,7 @@ function createWebAudioSink(
       if (closed) {
         return;
       }
-      const timeoutAt = performance.now() + 5_000;
-      while (!closed && queuedFrames() > 0 && performance.now() < timeoutAt) {
+      while (!closed && queuedFrames() > 0) {
         await delay(1);
       }
       await closeContext();
