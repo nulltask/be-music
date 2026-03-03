@@ -1198,6 +1198,14 @@ function createTuiIfEnabled(
   }));
   const timingResolver = createTimingResolver(json);
   const beatResolver = createBeatResolver(json);
+  const measureLengths = new Map<number, number>();
+  for (const measure of json.measures) {
+    const measureIndex = Math.max(0, Math.floor(measure.index));
+    if (typeof measure.length !== 'number' || !Number.isFinite(measure.length) || measure.length <= 0) {
+      continue;
+    }
+    measureLengths.set(measureIndex, measure.length);
+  }
   const measureTimeline = createMeasureTimeline(json, timingResolver, beatResolver);
   const bpmTimeline = createBpmTimeline(json, timingResolver);
   const scrollTimeline = createScrollTimeline(json, beatResolver);
@@ -1223,6 +1231,7 @@ function createTuiIfEnabled(
     scrollTimeline,
     stopWindows,
     measureTimeline,
+    measureLengths,
     measureBoundariesBeats,
     splitAfterIndex,
   });

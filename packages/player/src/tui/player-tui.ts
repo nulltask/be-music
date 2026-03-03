@@ -29,6 +29,7 @@ interface TuiOptions {
   scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>;
   stopWindows?: ReadonlyArray<StopWindowPoint>;
   measureTimeline?: ReadonlyArray<MeasureTimelinePoint>;
+  measureLengths?: ReadonlyMap<number, number>;
   measureBoundariesBeats?: number[];
   splitAfterIndex?: number;
 }
@@ -113,6 +114,8 @@ const ANSI_RESET = '\u001b[0m';
 const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
 const HIGH_SPEED_TRANSITION_MS = 180;
+const MEASURE_SIGNATURE_MAX_DENOMINATOR = 32;
+const MEASURE_SIGNATURE_TOLERANCE = 1e-8;
 
 export class PlayerTui {
   private readonly options: TuiOptions;
@@ -463,7 +466,10 @@ export class PlayerTui {
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
-    lines.push(`MEASURE ${clamp(currentMeasure, 1, totalMeasures)}/${totalMeasures}`);
+    const displayMeasure = clamp(currentMeasure, 1, totalMeasures);
+    const measureLength = resolveMeasureLength(this.options.measureLengths, displayMeasure - 1);
+    const measureSignature = formatMeasureSignature(measureLength);
+    lines.push(`MEASURE ${displayMeasure}/${totalMeasures}  METER ${measureSignature}`);
     lines.push(
       `LANE ${this.options.laneDisplayMode}  PLAYER ${formatPlayerLabel(this.options.player)}  RANK ${formatRankLabel(this.options.rank)}  PLAYLEVEL ${formatPlayLevelLabel(this.options.playLevel)}`,
     );
@@ -1572,6 +1578,82 @@ function findTotalMeasures(timeline: ReadonlyArray<MeasureTimelinePoint> | undef
   }
   const last = timeline[timeline.length - 1];
   return Math.max(1, Math.floor(last.measure));
+}
+
+function resolveMeasureLength(measureLengths: ReadonlyMap<number, number> | undefined, measure: number): number {
+  const safeMeasure = Math.max(0, Math.floor(measure));
+  const length = measureLengths?.get(safeMeasure);
+  if (typeof length !== 'number' || !Number.isFinite(length) || length <= 0) {
+    return 1;
+  }
+  return length;
+}
+
+export function formatMeasureSignature(length: number | undefined): string {
+  const safeLength = typeof length === 'number' && Number.isFinite(length) && length > 0 ? length : 1;
+  const quarterBeats = safeLength * IIDX_MEASURE_BEATS;
+  const fraction = approximateFraction(
+    quarterBeats,
+    MEASURE_SIGNATURE_MAX_DENOMINATOR,
+    MEASURE_SIGNATURE_TOLERANCE,
+  );
+  if (fraction) {
+    return `${fraction.numerator}/${fraction.denominator * IIDX_MEASURE_BEATS}`;
+  }
+  return `${formatMeterDecimal(quarterBeats)}/${IIDX_MEASURE_BEATS}`;
+}
+
+function approximateFraction(
+  value: number,
+  maxDenominator: number,
+  tolerance: number,
+): { numerator: number; denominator: number } | undefined {
+  if (!Number.isFinite(value) || value <= 0 || !Number.isFinite(maxDenominator) || maxDenominator < 1) {
+    return undefined;
+  }
+
+  let bestNumerator = 0;
+  let bestDenominator = 1;
+  let bestError = Number.POSITIVE_INFINITY;
+  for (let denominator = 1; denominator <= Math.floor(maxDenominator); denominator += 1) {
+    const numerator = Math.round(value * denominator);
+    if (numerator <= 0) {
+      continue;
+    }
+    const error = Math.abs(value - numerator / denominator);
+    if (error < bestError) {
+      bestError = error;
+      bestNumerator = numerator;
+      bestDenominator = denominator;
+    }
+  }
+
+  if (bestNumerator <= 0 || bestError > tolerance) {
+    return undefined;
+  }
+
+  const divisor = greatestCommonDivisor(bestNumerator, bestDenominator);
+  return {
+    numerator: Math.floor(bestNumerator / divisor),
+    denominator: Math.floor(bestDenominator / divisor),
+  };
+}
+
+function greatestCommonDivisor(left: number, right: number): number {
+  let a = Math.abs(Math.floor(left));
+  let b = Math.abs(Math.floor(right));
+  while (b !== 0) {
+    const rest = a % b;
+    a = b;
+    b = rest;
+  }
+  return Math.max(1, a);
+}
+
+function formatMeterDecimal(value: number): string {
+  const safe = Number.isFinite(value) ? Math.max(0, value) : 0;
+  const fixed = safe.toFixed(6);
+  return fixed.replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
 }
 
 function findCurrentBpm(timeline: ReadonlyArray<BpmTimelinePoint> | undefined, currentSeconds: number): number {
