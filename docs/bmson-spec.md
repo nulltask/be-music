@@ -41,6 +41,19 @@
 - [x] `sound_channels[].notes[]` の `c`
 - [x] `lines` を使った `measure` / `position` 解決
 - [x] `x <= 0` (または未指定) ノートを BGM (`01`) として解釈
+- [ ] `version` の妥当性検証（`null` のエラー化、未指定時の legacy 扱い方針）
+- [ ] `version` の互換判定を SemVer で行う方針の明文化
+- [ ] `info.init_bpm` 未指定を fatal error として扱う
+- [ ] `info.title` / `artist` / `genre` など必須情報の欠損時エラー方針
+- [ ] `lines` 未指定時に 4/4（`resolution * 4` 間隔）を前提とした補完規則の固定
+- [ ] `sound_channels[].name` の拡張子フォールバック探索（`.wav`/`.ogg`/`.m4a`）
+- [ ] `sound_channels[].name` のパス正規化（`\` と `/`）およびディレクトリトラバーサル防止
+- [ ] `sound_channels[].notes[]` 同一 pulse で `c=true/false` が混在する場合の優先規則
+- [ ] `bpm_events` 同一 `y` 多重定義時の「末尾優先」正規化
+- [ ] `stop_events` 同一 `y` 多重定義時の「加算」正規化
+- [ ] `bga.bga_header` の同一 `id` 多重定義時に後勝ちで解釈
+- [ ] `info.title_image` の受理と IR への保持
+- [ ] `subartists` の `key:value` 形式（`music:`/`chart:` 等）の保持規則
 - [ ] 未知ルートキーの透過保持
 
 ### stringifier (`@be-music/json` -> bmson)
@@ -67,6 +80,10 @@
 - [x] `bga.bga_events` 出力
 - [x] `bga.layer_events` 出力
 - [x] `bga.poor_events` 出力
+- [ ] `bpm_events` 同一 `y` のイベントを「末尾優先」へ正規化して出力
+- [ ] `stop_events` 同一 `y` のイベントを加算正規化して出力
+- [ ] `info.title_image` の出力
+- [ ] `sound_channels[].name` のパス区切り正規化と危険パス除去
 - [ ] 未知ルートキーの透過再出力
 - [~] `notes.x` の元値を厳密保持 (IR で lanes を再割当するため完全同一は保証しない)
 
@@ -83,6 +100,12 @@
 - [ ] `bga.layer_events` の再生反映
 - [ ] `bga.poor_events` の再生反映
 - [ ] 動画 BGA 再生
+- [ ] 同一 pulse の処理順（Note/BGA → BPM → STOP）を仕様通りに固定
+- [ ] 同一 `y` の `bpm_events` を末尾優先で適用
+- [ ] 同一 `y` の `stop_events` を加算して適用
+- [ ] sound channel スライス規則（`c` と restart）に基づく再生
+- [ ] 同一 slice に playable/BGM が混在する場合の BGM 破棄規則
+- [ ] 異なる sound channel の同一 `(x,y)` ノートを Layered Note として合成再生
 
 ## 実装が読み込むフィールド (parser)
 

@@ -86,13 +86,19 @@
 ### parser (bemuse -> `@be-music/json`)
 
 - [ ] `index.json` (`MusicServerIndex`) を受理し、`songs[]` を列挙
+- [ ] `songs[].id` / `songs[].path` を保持し、`path` 末尾 `/` を正規化
 - [ ] `song.path` + `charts[].file` から譜面ファイル URL/パスを解決
 - [ ] `bemuse-song.json` 単体入力を受理
+- [ ] `?server=<url>` で `index.json` 省略時に自動補完して解決
+- [ ] `?server=<url/to/bemuse-song.json>` を single-song server として解決
 - [ ] `bemusepack_url` の `undefined/null/string` を規則通りに解決
+- [ ] `bemusepack_url` 文字列を `assetsBase` と `metadataFilename` に分解して解決
 - [ ] `assets/metadata.json` を読み、`files[].name` を大小文字非区別で参照
 - [ ] `*.bemuse` の `BEMUSEPACK` / `metadataLength` を検証
 - [ ] `ref = [index,start,end]` で payload 範囲を抽出
 - [ ] 参照不正（index 範囲外、`start > end`、payload 範囲外）をエラー化
+- [ ] `SongMetadata` の拡張項目（`replaygain`, `preview_start`, `preview_url`, `video_url`, `video_offset`, `readme`, `chart_names`）を保持
+- [ ] `charts[]` の付帯情報（`md5`, `noteCount`, `bpm`, `duration`, `keys`, `scratch`, `bga`）を保持
 - [ ] 取得した譜面文字列を既存 `parseBms` / `parseBmson` に委譲
 
 ### stringifier (`@be-music/json` -> bemuse assets)
@@ -103,8 +109,11 @@
 - [ ] `files[].ref` の `[start,end)` を payload 連結順で生成
 - [ ] チャンク名を `<group>.<seq>.<md5-8>.bemuse` 形式で出力
 - [ ] `refs[].hash` を payload の MD5 で出力
+- [ ] `refs[].size` の出力方針（省略/出力）を実装方針どおり固定
 - [ ] `BEMUSEPACK` + `metadataLength` + payload でバイナリを書き出す
+- [ ] 非空 `metadata` ブロック (`metadataLength > 0`) の書き出し可否を方針化
 - [ ] `assets/metadata.json` を同時出力
+- [ ] `bemuse-song.json` / `index.json` の生成（single-song / multi-song server）をサポート
 
 ### player / audio-renderer
 
@@ -112,6 +121,10 @@
 - [ ] keysound は `assets/metadata.json` + `*.bemuse` から解決
 - [ ] package 未収録の画像/動画は base resources へ fallback
 - [ ] `refs[].hash` をキーにキャッシュ戦略を適用
+- [ ] 画像/動画 fallback の対象拡張子を `png|jpg|webm|mp4|m4v` に固定
+- [ ] `preview_url` 未指定時の既定値 `_bemuse_preview.mp3` を解決
+- [ ] `video_url` が `video_file` を上書きする規則を適用
+- [ ] `video_offset` を動画再生開始位置へ反映
 
 ## MVP 受け入れ基準
 
