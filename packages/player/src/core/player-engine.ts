@@ -19,7 +19,6 @@ import {
   createTimingResolver,
   renderJson,
 } from '@be-music/audio-renderer';
-import { clampInt } from '@be-music/utils';
 import { createBgaAnsiRenderer, type BgaAnsiRenderer } from '../bga.ts';
 import { PlayerTui } from '../tui.ts';
 import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
@@ -302,7 +301,6 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       })
     : undefined;
   const detachBgaResizeHandler = attachBgaResizeHandler(tui, bgaRenderer, laneBindings);
-  const preferSixel = tui?.isSixelEnabled() ?? false;
   reportLoadProgress(options, 0.3, 'Preparing audio...');
   const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'auto', (progress) => {
     reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
@@ -351,7 +349,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       notes: renderNotes,
       audioBackend: audioBackendLabel,
       ...resolveDebugActiveAudioState(0),
-      ...createBgaRenderFrame(bgaRenderer, 0, preferSixel),
+      ...createBgaRenderFrame(bgaRenderer, 0),
     });
   }
 
@@ -492,7 +490,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             notes: renderNotes,
             audioBackend: audioBackendLabel,
             ...resolveDebugActiveAudioState(nowSec),
-            ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
+            ...createBgaRenderFrame(bgaRenderer, nowSec),
           });
           await waitPrecise(Math.max(1, Math.min(TUI_FRAME_INTERVAL_MS, targetMs - nowMs)));
         }
@@ -531,7 +529,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             notes: renderNotes,
             audioBackend: audioBackendLabel,
             ...resolveDebugActiveAudioState(note.seconds),
-            ...createBgaRenderFrame(bgaRenderer, note.seconds, preferSixel),
+            ...createBgaRenderFrame(bgaRenderer, note.seconds),
           });
         }
 
@@ -558,7 +556,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           notes: renderNotes,
           audioBackend: audioBackendLabel,
           ...resolveDebugActiveAudioState(totalSeconds),
-          ...createBgaRenderFrame(bgaRenderer, totalSeconds, preferSixel),
+          ...createBgaRenderFrame(bgaRenderer, totalSeconds),
         });
       }
     }
@@ -654,7 +652,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       })
     : undefined;
   const detachBgaResizeHandler = attachBgaResizeHandler(tui, bgaRenderer, laneBindings);
-  const preferSixel = tui?.isSixelEnabled() ?? false;
   reportLoadProgress(options, 0.3, 'Preparing audio...');
   const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'manual', (progress) => {
     reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
@@ -697,7 +694,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       notes: renderNotes,
       audioBackend: audioBackendLabel,
       ...resolveDebugActiveAudioState(),
-      ...createBgaRenderFrame(bgaRenderer, 0, preferSixel),
+      ...createBgaRenderFrame(bgaRenderer, 0),
     });
   }
 
@@ -1021,7 +1018,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           notes: renderNotes,
           audioBackend: audioBackendLabel,
           ...resolveDebugActiveAudioState(),
-          ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
+          ...createBgaRenderFrame(bgaRenderer, nowSec),
         });
         await waitPrecise(PAUSE_POLL_INTERVAL_MS);
         continue;
@@ -1094,7 +1091,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         notes: renderNotes,
         audioBackend: audioBackendLabel,
         ...resolveDebugActiveAudioState(),
-        ...createBgaRenderFrame(bgaRenderer, nowSec, preferSixel),
+        ...createBgaRenderFrame(bgaRenderer, nowSec),
       });
 
       for (const landmine of landmineNotes) {
@@ -1144,7 +1141,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             notes: renderNotes,
             audioBackend: audioBackendLabel,
             ...resolveDebugActiveAudioState(),
-            ...createBgaRenderFrame(bgaRenderer, totalSeconds, preferSixel),
+            ...createBgaRenderFrame(bgaRenderer, totalSeconds),
           });
         }
       }
@@ -1273,29 +1270,13 @@ async function settleWithTimeout(task: Promise<void>, timeoutMs: number): Promis
 function createBgaRenderFrame(
   bgaRenderer: BgaAnsiRenderer | undefined,
   currentSeconds: number,
-  preferSixel: boolean,
-): { bgaAnsiLines?: string[]; bgaSixel?: string } {
+): { bgaAnsiLines?: string[] } {
   if (!bgaRenderer) {
     return {};
-  }
-  if (preferSixel) {
-    const scale = estimateSixelScaleForCurrentTerminal();
-    return {
-      bgaSixel: bgaRenderer.getSixel(currentSeconds, scale.x, scale.y),
-    };
   }
   return {
     bgaAnsiLines: bgaRenderer.getAnsiLines(currentSeconds),
   };
-}
-
-function estimateSixelScaleForCurrentTerminal(): { x: number; y: number } {
-  const columns = process.stdout.columns ?? DEFAULT_TERMINAL_COLUMNS;
-  const rows = process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
-  const baseRows = DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
-  const x = clampInt(Math.round((columns / DEFAULT_TERMINAL_COLUMNS) * 8), 4, 24);
-  const y = clampInt(Math.round((rows / baseRows) * 16), 8, 48);
-  return { x, y };
 }
 
 async function createAudioSessionIfEnabled(

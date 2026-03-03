@@ -12,8 +12,6 @@ const DEFAULT_BGA_ASCII_WIDTH = 34;
 const DEFAULT_BGA_ASCII_HEIGHT = 20;
 const TRANSPARENT_ALPHA_THRESHOLD = 16;
 const ANSI_RESET = '\u001b[0m';
-const DEFAULT_SIXEL_SCALE_X = 8;
-const DEFAULT_SIXEL_SCALE_Y = 16;
 const SPEC_BGA_CANVAS_SIZE = 256;
 const TERMINAL_PIXEL_ASPECT_X = 2;
 const TERMINAL_PIXEL_ASPECT_Y = 1;
@@ -90,12 +88,6 @@ export class BgaAnsiRenderer {
 
   private cachedLines?: string[];
 
-  private cachedSixel?: string;
-
-  private cachedSixelScaleX = -1;
-
-  private cachedSixelScaleY = -1;
-
   constructor(params: {
     baseTimeline: BgaCue[];
     layerTimeline: BgaCue[];
@@ -147,25 +139,6 @@ export class BgaAnsiRenderer {
     return this.cachedLines;
   }
 
-  getSixel(currentSeconds: number, scaleX?: number, scaleY?: number): string | undefined {
-    this.refreshComposite(currentSeconds);
-    if (!this.cachedComposite) {
-      return undefined;
-    }
-    const normalizedScaleX = Math.max(1, Math.floor(scaleX ?? DEFAULT_SIXEL_SCALE_X));
-    const normalizedScaleY = Math.max(1, Math.floor(scaleY ?? DEFAULT_SIXEL_SCALE_Y));
-    if (
-      !this.cachedSixel ||
-      this.cachedSixelScaleX !== normalizedScaleX ||
-      this.cachedSixelScaleY !== normalizedScaleY
-    ) {
-      this.cachedSixel = composeSixel(this.cachedComposite, normalizedScaleX, normalizedScaleY);
-      this.cachedSixelScaleX = normalizedScaleX;
-      this.cachedSixelScaleY = normalizedScaleY;
-    }
-    return this.cachedSixel;
-  }
-
   private rebuildFrames(): void {
     this.baseFramesByKey = resizeFrameMap(this.baseSourceFramesByKey, this.displayWidth, this.displayHeight);
     this.layerFramesByKey = resizeFrameMap(this.layerSourceFramesByKey, this.displayWidth, this.displayHeight);
@@ -182,9 +155,6 @@ export class BgaAnsiRenderer {
     this.cachedLayerKey = '__INIT__';
     this.cachedComposite = undefined;
     this.cachedLines = undefined;
-    this.cachedSixel = undefined;
-    this.cachedSixelScaleX = -1;
-    this.cachedSixelScaleY = -1;
   }
 
   private refreshComposite(currentSeconds: number): void {
@@ -201,9 +171,6 @@ export class BgaAnsiRenderer {
     this.cachedLayerKey = layerKey;
     this.cachedComposite = mergeCompositeFrames(baseFrame, layerFrame);
     this.cachedLines = undefined;
-    this.cachedSixel = undefined;
-    this.cachedSixelScaleX = -1;
-    this.cachedSixelScaleY = -1;
   }
 
   private resolveBaseFrame(baseKey: string): AnsiFrame | undefined {
@@ -486,138 +453,6 @@ function composeAnsiLines(rgb: Uint8Array, opaqueMask: Uint8Array, width: number
   }
 
   return lines;
-}
-
-function composeSixel(frame: CompositeFrame, scaleX: number, scaleY: number): string {
-  const { width: sourceWidth, height: sourceHeight, rgb, opaqueMask } = frame;
-  const width = sourceWidth * scaleX;
-  const height = sourceHeight * scaleY;
-  const paletteKeys = new Map<number, number>();
-  const paletteByRegister: Array<{ register: number; r: number; g: number; b: number }> = [];
-  const sourceRegisters = new Uint16Array(sourceWidth * sourceHeight);
-
-  for (let pixelOffset = 0; pixelOffset < sourceRegisters.length; pixelOffset += 1) {
-    if (opaqueMask[pixelOffset] === 0) {
-      continue;
-    }
-
-    const rgbOffset = pixelOffset * 3;
-    const { key, r, g, b } = quantizeRgb(rgb[rgbOffset] ?? 0, rgb[rgbOffset + 1] ?? 0, rgb[rgbOffset + 2] ?? 0);
-
-    let register = paletteKeys.get(key);
-    if (!register) {
-      register = paletteByRegister.length + 1;
-      paletteKeys.set(key, register);
-      paletteByRegister.push({ register, r, g, b });
-    }
-    sourceRegisters[pixelOffset] = register;
-  }
-
-  const parts: string[] = [];
-  parts.push('\u001bPq');
-  parts.push(`"1;1;${width};${height}`);
-
-  for (const color of paletteByRegister) {
-    parts.push(`#${color.register};2;${toSixelPercent(color.r)};${toSixelPercent(color.g)};${toSixelPercent(color.b)}`);
-  }
-
-  const bandCount = Math.ceil(height / 6);
-  for (let band = 0; band < bandCount; band += 1) {
-    let hasAnyColor = false;
-    for (const color of paletteByRegister) {
-      let hasAnyPixel = false;
-      let sixelData = '';
-
-      for (let x = 0; x < width; x += 1) {
-        let bits = 0;
-        for (let bit = 0; bit < 6; bit += 1) {
-          const y = band * 6 + bit;
-          if (y >= height) {
-            continue;
-          }
-          const sourceX = Math.min(sourceWidth - 1, Math.floor(x / scaleX));
-          const sourceY = Math.min(sourceHeight - 1, Math.floor(y / scaleY));
-          const sourceOffset = sourceY * sourceWidth + sourceX;
-          if (sourceRegisters[sourceOffset] === color.register) {
-            bits |= 1 << bit;
-          }
-        }
-        if (bits !== 0) {
-          hasAnyPixel = true;
-        }
-        sixelData += String.fromCharCode(63 + bits);
-      }
-
-      if (!hasAnyPixel) {
-        continue;
-      }
-
-      if (hasAnyColor) {
-        parts.push('$');
-      }
-      parts.push(`#${color.register}`);
-      parts.push(encodeSixelRunLength(sixelData));
-      hasAnyColor = true;
-    }
-
-    if (band < bandCount - 1) {
-      parts.push('-');
-    }
-  }
-
-  parts.push('\u001b\\');
-  return parts.join('');
-}
-
-function quantizeRgb(
-  sourceR: number,
-  sourceG: number,
-  sourceB: number,
-): { key: number; r: number; g: number; b: number } {
-  const rBucket = Math.max(0, Math.min(5, Math.round(sourceR / 51)));
-  const gBucket = Math.max(0, Math.min(5, Math.round(sourceG / 51)));
-  const bBucket = Math.max(0, Math.min(5, Math.round(sourceB / 51)));
-  const r = rBucket * 51;
-  const g = gBucket * 51;
-  const b = bBucket * 51;
-  const key = rBucket * 36 + gBucket * 6 + bBucket;
-  return { key, r, g, b };
-}
-
-function toSixelPercent(channelValue: number): number {
-  return Math.max(0, Math.min(100, Math.round((channelValue / 255) * 100)));
-}
-
-function encodeSixelRunLength(input: string): string {
-  if (input.length === 0) {
-    return input;
-  }
-
-  let encoded = '';
-  let current = input[0];
-  let runLength = 1;
-
-  const flush = (): void => {
-    if (runLength >= 4) {
-      encoded += `!${runLength}${current}`;
-      return;
-    }
-    encoded += current.repeat(runLength);
-  };
-
-  for (let index = 1; index < input.length; index += 1) {
-    const next = input[index];
-    if (next === current) {
-      runLength += 1;
-      continue;
-    }
-    flush();
-    current = next;
-    runLength = 1;
-  }
-  flush();
-
-  return encoded;
 }
 
 async function loadImageAsSpecFrame(imagePath: string, mode: FrameMode): Promise<AnsiFrame | undefined> {

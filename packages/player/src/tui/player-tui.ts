@@ -54,7 +54,6 @@ interface TuiFrame {
   activeAudioFiles?: string[];
   activeAudioVoiceCount?: number;
   bgaAnsiLines?: string[];
-  bgaSixel?: string;
 }
 
 interface MeasureTimelinePoint {
@@ -138,8 +137,6 @@ export class PlayerTui {
 
   private readonly supported: boolean;
 
-  private readonly sixelEnabled: boolean;
-
   private active = false;
 
   private latestJudge = '-';
@@ -153,12 +150,6 @@ export class PlayerTui {
   private lastScoreAnimationMs = 0;
 
   private previousFrameLineCount = 0;
-
-  private lastSixel?: string;
-
-  private lastSixelRow = -1;
-
-  private lastSixelColumn = -1;
 
   private noteWindowSource?: TuiNote[];
 
@@ -188,7 +179,6 @@ export class PlayerTui {
     this.laneChannels = options.lanes.map((lane) => lane.channel);
     this.scrollDistanceMapper = new ScrollDistanceMapper(options.scrollTimeline);
     this.supported = Boolean(process.stdout.isTTY && process.stdin.isTTY);
-    this.sixelEnabled = this.supported && detectSixelSupport();
     options.lanes.forEach((lane, index) => {
       this.laneIndex.set(lane.channel, index);
       this.laneWidths[index] = lane.isScratch ? DEFAULT_LANE_WIDTH * 2 : DEFAULT_LANE_WIDTH;
@@ -206,10 +196,6 @@ export class PlayerTui {
 
   isSupported(): boolean {
     return this.supported;
-  }
-
-  isSixelEnabled(): boolean {
-    return this.sixelEnabled;
   }
 
   start(): void {
@@ -232,9 +218,6 @@ export class PlayerTui {
     this.lastScoreAnimationMs = 0;
     this.laneHoldUntilBeat.clear();
     this.previousFrameLineCount = 0;
-    this.lastSixel = undefined;
-    this.lastSixelRow = -1;
-    this.lastSixelColumn = -1;
     this.noteWindowSource = undefined;
     this.noteWindowStartIndex = 0;
     this.noteWindowEndIndex = 0;
@@ -575,14 +558,7 @@ export class PlayerTui {
       ),
     );
 
-    const laneBlockStartRow = lines.length + 1;
-    const laneBlockWidth = this.laneBlockVisibleWidth;
-    const useSixel = this.sixelEnabled && typeof frame.bgaSixel === 'string';
-    if (useSixel) {
-      lines.push(...laneLines);
-    } else {
-      lines.push(...renderLaneBlockWithBga(laneLines, frame.bgaAnsiLines));
-    }
+    lines.push(...renderLaneBlockWithBga(laneLines, frame.bgaAnsiLines));
     lines.push('');
     lines.push('Space: pause/resume  W/E: HS +/-  Ctrl+C/Esc: quit');
 
@@ -596,24 +572,6 @@ export class PlayerTui {
     }
     process.stdout.write(`\u001b[H${paddedLines.join('\n')}`);
     this.previousFrameLineCount = lines.length;
-
-    if (useSixel) {
-      const bgaColumn = laneBlockWidth + 4;
-      const sixelChanged =
-        this.lastSixel !== frame.bgaSixel ||
-        this.lastSixelRow !== laneBlockStartRow ||
-        this.lastSixelColumn !== bgaColumn;
-      if (sixelChanged) {
-        process.stdout.write(`\u001b[s\u001b[${laneBlockStartRow};${bgaColumn}H${frame.bgaSixel}\u001b[u`);
-        this.lastSixel = frame.bgaSixel;
-        this.lastSixelRow = laneBlockStartRow;
-        this.lastSixelColumn = bgaColumn;
-      }
-    } else {
-      this.lastSixel = undefined;
-      this.lastSixelRow = -1;
-      this.lastSixelColumn = -1;
-    }
   }
 
   private resolveNoteWindow(notes: TuiNote[], currentBeat: number, scrollWindowBeats: number): { start: number; end: number } {
@@ -1494,27 +1452,6 @@ function findAnsiSgrSequenceEnd(value: string, start: number): number {
     index += 1;
   }
   return -1;
-}
-
-function detectSixelSupport(): boolean {
-  const forced = process.env.BMS_PLAYER_SIXEL?.toLowerCase();
-  if (forced === '1' || forced === 'true' || forced === 'yes') {
-    return true;
-  }
-  if (forced === '0' || forced === 'false' || forced === 'no') {
-    return false;
-  }
-
-  const term = (process.env.TERM ?? '').toLowerCase();
-  if (term.includes('sixel') || term.includes('mlterm')) {
-    return true;
-  }
-
-  if (process.env.WEZTERM_EXECUTABLE || process.env.WEZTERM_PANE) {
-    return true;
-  }
-
-  return false;
 }
 
 function formatPlayerLabel(value: number | undefined): string {
