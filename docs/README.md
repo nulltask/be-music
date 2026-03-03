@@ -1,10 +1,10 @@
 # 仕様書
 
-このディレクトリは、`bms` リポジトリで使う仕様を Markdown でまとめたものです。
+このディレクトリは、`be-music` リポジトリで使う仕様を Markdown でまとめたものです。
 
 - [BMS 実装仕様](./bms-spec.md)
 - [BMSON 実装仕様](./bmson-spec.md)
-- [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./json-ir-spec.md)
+- [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./json-spec.md)
 
 補足:
 

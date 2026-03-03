@@ -19,6 +19,7 @@
   "events": [],
   "bms": {
     "lnType": 1,
+    "lnMode": 0,
     "lnObj": "ZZ",
     "defExRank": 120,
     "exRank": {
@@ -44,6 +45,9 @@
     },
     "bga": {
       "01": "01"
+    },
+    "scroll": {
+      "01": 0.5
     },
     "poorBga": "01",
     "swBga": {
@@ -109,6 +113,7 @@
 `bms` は BMS 固有の追加情報を保持する拡張領域です。
 
 - `lnType`: `#LNTYPE` の値
+- `lnMode`: `#LNMODE` の値
 - `lnObj`: `#LNOBJ` のキー (2桁 base36)
 - `defExRank`: `#DEFEXRANK` の値
 - `exRank`: `#EXRANKxx` のマップ
@@ -123,6 +128,7 @@
 - `exWav`: `#EXWAVxx` のマップ
 - `exBmp`: `#EXBMPxx` のマップ
 - `bga`: `#BGAxx` のマップ
+- `scroll`: `#SCROLLxx` のマップ
 - `poorBga`: `#POORBGA` の値
 - `swBga`: `#SWBGAxx` のマップ
 - `videoFile`: `#VIDEOFILE` の値
