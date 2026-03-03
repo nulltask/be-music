@@ -209,6 +209,21 @@ const DEFAULT_LIMITER_RELEASE_MS = 80;
 export { applyHighSpeedControlAction, resolveHighSpeedControlActionFromKey, type HighSpeedControlAction };
 export { resolveJudgeWindowsMs };
 
+export function applyFastSlowForJudge(
+  summary: Pick<PlayerSummary, 'fast' | 'slow'>,
+  judge: 'PERFECT' | 'GREAT' | 'GOOD',
+  signedDeltaMs: number,
+): void {
+  if (judge !== 'GREAT' && judge !== 'GOOD') {
+    return;
+  }
+  if (signedDeltaMs < 0) {
+    summary.fast += 1;
+  } else if (signedDeltaMs > 0) {
+    summary.slow += 1;
+  }
+}
+
 export async function playChartFile(filePath: string, options: PlayerOptions = {}): Promise<PlayerSummary> {
   const json = await parseChartFile(filePath);
   const mergedOptions: PlayerOptions = {
@@ -984,11 +999,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     const deltaMs = Math.abs(signedDeltaMs);
     if (deltaMs <= judgeWindows.pgreat) {
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
-      if (signedDeltaMs < 0) {
-        summary.fast += 1;
-      } else if (signedDeltaMs > 0) {
-        summary.slow += 1;
-      }
+      applyFastSlowForJudge(summary, 'PERFECT', signedDeltaMs);
       combo += 1;
       if (!tui) {
         process.stdout.write(`PERFECT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -1000,6 +1011,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     if (deltaMs <= judgeWindows.great) {
       applyJudgeToSummary(summary, 'GREAT', scoreTracker);
+      applyFastSlowForJudge(summary, 'GREAT', signedDeltaMs);
       combo += 1;
       if (!tui) {
         process.stdout.write(`GREAT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -1011,6 +1023,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     if (deltaMs <= judgeWindows.good) {
       applyJudgeToSummary(summary, 'GOOD', scoreTracker);
+      applyFastSlowForJudge(summary, 'GOOD', signedDeltaMs);
       combo += 1;
       if (!tui) {
         process.stdout.write(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);

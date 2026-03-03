@@ -5,6 +5,7 @@ import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vitest';
 import { parseChartFile } from '../../parser/src/index.ts';
 import {
+  applyFastSlowForJudge,
   applyHighSpeedControlAction,
   autoPlay,
   extractInvisiblePlayableNotes,
@@ -238,6 +239,24 @@ test('player: uses baseline judge windows for bms RANK=2', () => {
   expect(windows.great).toBeCloseTo(33.33, 6);
   expect(windows.good).toBeCloseTo(116.67, 6);
   expect(windows.bad).toBeCloseTo(250, 6);
+});
+
+test('player: FAST/SLOW are counted only for GREAT/GOOD', () => {
+  const summary = {
+    fast: 0,
+    slow: 0,
+  };
+
+  applyFastSlowForJudge(summary, 'PERFECT', -12);
+  applyFastSlowForJudge(summary, 'PERFECT', 8);
+  expect(summary.fast).toBe(0);
+  expect(summary.slow).toBe(0);
+
+  applyFastSlowForJudge(summary, 'GREAT', -18);
+  applyFastSlowForJudge(summary, 'GOOD', 27);
+  applyFastSlowForJudge(summary, 'GOOD', 0);
+  expect(summary.fast).toBe(1);
+  expect(summary.slow).toBe(1);
 });
 
 test('player: narrows judge windows for bms RANK=0', () => {
