@@ -1230,7 +1230,16 @@ function isCliEntryPoint(): boolean {
   if (!entry) {
     return false;
   }
-  return resolve(entry) === fileURLToPath(import.meta.url);
+
+  try {
+    const moduleUrl = (import.meta as { url?: unknown }).url;
+    if (typeof moduleUrl !== 'string' || moduleUrl.length === 0) {
+      return false;
+    }
+    return resolve(entry) === fileURLToPath(moduleUrl);
+  } catch {
+    return false;
+  }
 }
 
 if (isCliEntryPoint()) {

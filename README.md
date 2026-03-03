@@ -328,6 +328,15 @@ npm run player -- chart.bms --compressor --compressor-threshold-db -10 --compres
 
 # 音声バックエンドを指定 (auto | speaker | audify | audio-io)
 npm run player -- chart.bms --audio-backend audio-io
+
+# SEA (Single Executable Applications) で player をビルド
+# Node.js 24+ と SEA fuse 対応バイナリが必要です
+# (Node.js 24 は --experimental-sea-config + postject へ自動フォールバック)
+npm run player:sea
+./packages/player/dist-sea/be-music-player chart.bms
+
+# Node 実行ファイルを明示する場合
+npm run player:sea -- --node-binary /path/to/node
 ```
 
 ### 5. エディタ

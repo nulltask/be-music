@@ -13,6 +13,7 @@ $RECYCLE.BIN/
 node_modules/
 packages/*/node_modules/
 packages/*/dist/
+packages/*/dist-sea/
 *.tsbuildinfo
 coverage/
 

@@ -20,6 +20,7 @@
     "bench:parser:check": "npm run bench:check --workspace @be-music/parser --",
     "bench:parser:update-baseline": "npm run bench:update-baseline --workspace @be-music/parser --",
     "player": "npm run dev --workspace @be-music/player --",
+    "player:sea": "npm run build:sea --workspace @be-music/player --",
     "editor": "npm run dev --workspace @be-music/editor --",
     "audio-render": "npm run dev --workspace @be-music/audio-renderer --",
     "parse": "npm run dev --workspace @be-music/parser --",

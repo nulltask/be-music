@@ -10,7 +10,17 @@ function isCliEntryPoint(): boolean {
   if (!entry) {
     return false;
   }
-  return resolve(entry) === fileURLToPath(import.meta.url);
+
+  try {
+    const moduleUrl = (import.meta as { url?: unknown }).url;
+    if (typeof moduleUrl === 'string' && moduleUrl.length > 0) {
+      return resolve(entry) === fileURLToPath(moduleUrl);
+    }
+  } catch {
+    // SEA/CJS bundles may not provide import.meta.url.
+  }
+
+  return resolve(entry) === resolve(process.execPath);
 }
 
 if (isCliEntryPoint()) {
