@@ -336,7 +336,9 @@ export class PlayerTui {
         typeof note.visibleUntilBeat === 'number' &&
         Number.isFinite(note.visibleUntilBeat) &&
         note.visibleUntilBeat > frame.currentBeat;
-      if (note.judged && !keepVisible) {
+      const keepJudgedUntilJudgeLine =
+        note.judged && !keepVisible && Number.isFinite(note.beat) && note.beat + BEAT_EPSILON >= frame.currentBeat;
+      if (note.judged && !keepVisible && !keepJudgedUntilJudgeLine) {
         continue;
       }
       const lane = this.laneIndex.get(this.resolveRenderLaneChannel(note.channel));

@@ -740,7 +740,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const horizon = (totalSeconds * 1000) / speed + leadInMs + badWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
   const longHoldUntilMsByChannel = new Map<string, number>();
-  const activeLongNotesByChannel = new Map<string, { endSeconds: number }>();
+  const activeLongNotesByChannel = new Map<string, { endSeconds: number; note: TimedPlayableNote }>();
   const longNoteSuppressUntilSecondsByChannel = new Map<string, number>();
   const activeKittyPressedChannels = new Set<string>();
   let inputCaptureStopped = false;
@@ -869,6 +869,66 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
   };
 
+  const applyManualTimingJudge = (channel: string, signedDeltaMs: number): void => {
+    const deltaMs = Math.abs(signedDeltaMs);
+    if (deltaMs <= judgeWindows.pgreat) {
+      applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
+      applyFastSlowForJudge(summary, 'PERFECT', signedDeltaMs);
+      combo += 1;
+      if (!tui) {
+        process.stdout.write(`PERFECT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+      } else {
+        tui.setLatestJudge('PERFECT');
+        tui.setCombo(combo);
+      }
+      return;
+    }
+    if (deltaMs <= judgeWindows.great) {
+      applyJudgeToSummary(summary, 'GREAT', scoreTracker);
+      applyFastSlowForJudge(summary, 'GREAT', signedDeltaMs);
+      combo += 1;
+      if (!tui) {
+        process.stdout.write(`GREAT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+      } else {
+        tui.setLatestJudge('GREAT');
+        tui.setCombo(combo);
+      }
+      return;
+    }
+    if (deltaMs <= judgeWindows.good) {
+      applyJudgeToSummary(summary, 'GOOD', scoreTracker);
+      applyFastSlowForJudge(summary, 'GOOD', signedDeltaMs);
+      combo += 1;
+      if (!tui) {
+        process.stdout.write(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+      } else {
+        tui.setLatestJudge('GOOD');
+        tui.setCombo(combo);
+      }
+      return;
+    }
+    if (deltaMs <= badWindowMs) {
+      applyJudgeToSummary(summary, 'BAD', scoreTracker);
+      combo = 0;
+      if (!tui) {
+        process.stdout.write(`BAD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+      } else {
+        tui.setLatestJudge('BAD');
+        tui.setCombo(combo);
+      }
+      return;
+    }
+
+    applyJudgeToSummary(summary, 'POOR', scoreTracker);
+    combo = 0;
+    if (!tui) {
+      process.stdout.write(`POOR channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+    } else {
+      tui.setLatestJudge('POOR');
+      tui.setCombo(combo);
+    }
+  };
+
   const stopInputCapture = () => {
     if (inputCaptureStopped) {
       return;
@@ -978,70 +1038,26 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     const channel = candidate.channel;
     tui?.flashLane(channel);
     audioSession?.triggerEvent?.(candidate.event);
-    if (
+    const isLongNote =
       typeof candidate.endSeconds === 'number' &&
       Number.isFinite(candidate.endSeconds) &&
-      candidate.endSeconds > candidate.seconds
-    ) {
-      activeLongNotesByChannel.set(channel, { endSeconds: candidate.endSeconds });
+      candidate.endSeconds > candidate.seconds;
+    if (isLongNote) {
+      activeLongNotesByChannel.set(channel, { endSeconds: candidate.endSeconds, note: candidate });
       longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
       const previousSuppressUntil = longNoteSuppressUntilSecondsByChannel.get(channel) ?? Number.NEGATIVE_INFINITY;
       if (candidate.endSeconds > previousSuppressUntil) {
         longNoteSuppressUntilSecondsByChannel.set(channel, candidate.endSeconds);
       }
       candidate.visibleUntilBeat = candidate.endBeat;
+      return;
     } else {
       activeLongNotesByChannel.delete(channel);
       longHoldUntilMsByChannel.delete(channel);
     }
 
     const signedDeltaMs = (nowSec - candidate.seconds) * 1000;
-    const deltaMs = Math.abs(signedDeltaMs);
-    if (deltaMs <= judgeWindows.pgreat) {
-      applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
-      applyFastSlowForJudge(summary, 'PERFECT', signedDeltaMs);
-      combo += 1;
-      if (!tui) {
-        process.stdout.write(`PERFECT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
-      } else {
-        tui.setLatestJudge('PERFECT');
-        tui.setCombo(combo);
-      }
-      return;
-    }
-    if (deltaMs <= judgeWindows.great) {
-      applyJudgeToSummary(summary, 'GREAT', scoreTracker);
-      applyFastSlowForJudge(summary, 'GREAT', signedDeltaMs);
-      combo += 1;
-      if (!tui) {
-        process.stdout.write(`GREAT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
-      } else {
-        tui.setLatestJudge('GREAT');
-        tui.setCombo(combo);
-      }
-      return;
-    }
-    if (deltaMs <= judgeWindows.good) {
-      applyJudgeToSummary(summary, 'GOOD', scoreTracker);
-      applyFastSlowForJudge(summary, 'GOOD', signedDeltaMs);
-      combo += 1;
-      if (!tui) {
-        process.stdout.write(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
-      } else {
-        tui.setLatestJudge('GOOD');
-        tui.setCombo(combo);
-      }
-      return;
-    }
-
-    applyJudgeToSummary(summary, 'BAD', scoreTracker);
-    combo = 0;
-    if (!tui) {
-      process.stdout.write(`BAD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
-    } else {
-      tui.setLatestJudge('BAD');
-      tui.setCombo(combo);
-    }
+    applyManualTimingJudge(channel, signedDeltaMs);
   };
 
   const applyHighSpeedAction = (action: HighSpeedControlAction | undefined): boolean => {
@@ -1152,6 +1168,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       for (const channel of releasedChannels) {
         activeKittyPressedChannels.delete(channel);
         tui?.releaseLane(channel);
+        if (activeLongNotesByChannel.has(channel)) {
+          longHoldUntilMsByChannel.set(channel, playbackClock.nowMs());
+        }
       }
     }
 
@@ -1220,6 +1239,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         if (nowSec >= hold.endSeconds) {
           activeLongNotesByChannel.delete(channel);
           longHoldUntilMsByChannel.delete(channel);
+          applyManualTimingJudge(channel, (nowSec - hold.endSeconds) * 1000);
           continue;
         }
 
@@ -1228,6 +1248,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           activeLongNotesByChannel.delete(channel);
           longHoldUntilMsByChannel.delete(channel);
           audioSession?.stopChannel?.(channel);
+          applyManualTimingJudge(channel, (nowSec - hold.endSeconds) * 1000);
         }
       }
 
