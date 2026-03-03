@@ -61,7 +61,7 @@ export interface PlayerSummary {
   great: number;
   good: number;
   bad: number;
-  miss: number;
+  poor: number;
   exScore: number;
   score: number;
 }
@@ -178,7 +178,7 @@ const DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS = 0.18;
 const DEBUG_ACTIVE_AUDIO_SAMPLE_RATE = 44_100;
 const SCRATCH_PLAYABLE_CHANNELS = new Set(['16', '26']);
 
-type JudgeKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'MISS';
+type JudgeKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
 
 interface ScoreTracker {
   combo: number;
@@ -248,7 +248,7 @@ function applyJudgeToSummary(summary: PlayerSummary, judge: JudgeKind, tracker: 
   } else if (judge === 'BAD') {
     summary.bad += 1;
   } else {
-    summary.miss += 1;
+    summary.poor += 1;
   }
 
   const exScoreDelta = resolveExScoreDelta(judge);
@@ -379,7 +379,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     great: 0,
     good: 0,
     bad: 0,
-    miss: 0,
+    poor: 0,
     exScore: 0,
     score: 0,
   };
@@ -669,7 +669,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     great: 0,
     good: 0,
     bad: 0,
-    miss: 0,
+    poor: 0,
     exScore: 0,
     score: 0,
   };
@@ -873,7 +873,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
       if (!tui) {
-        process.stdout.write(`MISS-KEY ${tokens[0] ?? '?'}\n`);
+        process.stdout.write(`POOR-KEY ${tokens[0] ?? '?'}\n`);
       }
       return;
     }
@@ -1018,10 +1018,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
         if (nowSec - note.seconds > badWindowMs / 1000) {
           note.judged = true;
-          applyJudgeToSummary(summary, 'MISS', scoreTracker);
+          applyJudgeToSummary(summary, 'POOR', scoreTracker);
           combo = 0;
           if (tui) {
-            tui.setLatestJudge('MISS');
+            tui.setLatestJudge('POOR');
             tui.setCombo(combo);
           }
         }
@@ -1055,15 +1055,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
 
     if (!interruptedReason) {
-      const judgedCount = summary.perfect + summary.great + summary.good + summary.bad + summary.miss;
+      const judgedCount = summary.perfect + summary.great + summary.good + summary.bad + summary.poor;
       if (judgedCount < summary.total) {
         const missingCount = summary.total - judgedCount;
         for (let index = 0; index < missingCount; index += 1) {
-          applyJudgeToSummary(summary, 'MISS', scoreTracker);
+          applyJudgeToSummary(summary, 'POOR', scoreTracker);
         }
         combo = 0;
         if (tui) {
-          tui.setLatestJudge('MISS');
+          tui.setLatestJudge('POOR');
           tui.setCombo(combo);
           tui.render({
             currentBeat: beatAtSeconds(totalSeconds),
@@ -2450,7 +2450,7 @@ function renderSummary(summary: PlayerSummary): string {
       `GREAT  : ${summary.great}`,
       `GOOD   : ${summary.good}`,
       `BAD    : ${summary.bad}`,
-      `MISS   : ${summary.miss}`,
+      `POOR   : ${summary.poor}`,
       `EX-SCORE: ${summary.exScore} / ${maxExScore} (${(exScoreRate * 100).toFixed(2)}%)`,
       `SCORE   : ${summary.score} / ${IIDX_SCORE_MAX} (${(scoreRate * 100).toFixed(2)}%)`,
     ].join('\n') + '\n'

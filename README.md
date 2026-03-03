@@ -257,7 +257,7 @@ npm run bench:parser
 - [x] キーボード手動演奏
 - [x] 手動時は演奏チャンネルをキー押下時のみ発音 (背景音チャンネルは自動再生)
 - [x] BGM 音量調整 (`--bgm-volume`) / 無音化 (`0`)
-- [x] TUI プレイ画面 (判定、進行バー、小節線、チャンネル配列表示、直近判定 `GREAT` / `GOOD` / `BAD` / `MISS`、コンボ数表示、EX-SCORE / SCORE 表示。PGREAT は虹色 `GREAT` を点滅表示)
+- [x] TUI プレイ画面 (判定、進行バー、小節線、チャンネル配列表示、直近判定 `GREAT` / `GOOD` / `BAD` / `POOR`、コンボ数表示、EX-SCORE / SCORE 表示。PGREAT は虹色 `GREAT` を点滅表示)
 - [x] BGA 表示 (ANSI Color)
 - [x] Sixel 対応端末での BGA 画像表示 (非対応端末は ANSI Color にフォールバック)
 - [ ] 動画 BGA の再生
@@ -346,7 +346,7 @@ npm run editor -- export chart.json chart.bms
 - `player` は TUI プレイ画面付きの CLI です。音声再生は `--audio-backend` で `speaker` / `audify` / `audio-io` を選択でき、未指定時は `auto` で利用可能な実装へフォールバックします（外部コマンド起動なし）。
 - `player` の手動演奏では、演奏チャンネルはキー押下時のみ発音します（背景系チャンネルのみ自動再生）。
 - `player` の標準チャンネル順とキー割り当ては IIDX 配列（1P/2P）です。2P チャンネルがある場合、TUI は 1P/2P 間にスペースを入れて表示します。
-- `player` の TUI では、直近判定を `GREAT` / `GOOD` / `BAD` / `MISS` で表示し、コンボ数（`> 0` のときのみ）をレーン下端と入力キー行の間に中央揃えで表示します。PGREAT（内部判定は `PERFECT`）は虹色 `GREAT` の点滅表示です。
+- `player` の TUI では、直近判定を `GREAT` / `GOOD` / `BAD` / `POOR` で表示し、コンボ数（`> 0` のときのみ）をレーン下端と入力キー行の間に中央揃えで表示します。PGREAT（内部判定は `PERFECT`）は虹色 `GREAT` の点滅表示です。
 - `player` は IIDX 準拠の `EX-SCORE` (`PGREAT=2`, `GREAT=1`) と 20万点満点 `SCORE`（判定基礎点 15万 + コンボ点 5万）を集計して表示します。
 - `player` は IIDX 準拠を優先し、通常時の判定幅は固定です。`--debug-judge-window <ms>` はデバッグ専用の隠しオプションとしてのみ受け付けます（`--judge-window` は後方互換のため非推奨サポート）。
 - `player` の BGA は `04`(base) と `07`(layer) を重ねて描画し、layer は黒を透過として扱います。画像は 256x256 キャンバス前提で、256x256 未満は X 中央・Y 上詰めで配置します。

@@ -26,7 +26,7 @@ test('player: auto play finishes successfully', async () => {
   expect(summary.great).toBe(0);
   expect(summary.good).toBe(0);
   expect(summary.bad).toBe(0);
-  expect(summary.miss).toBe(0);
+  expect(summary.poor).toBe(0);
   expect(summary.exScore).toBe(12);
   expect(summary.score).toBe(200000);
 });
@@ -71,7 +71,7 @@ test('player: auto play ignores landmine notes in score totals', async () => {
   expect(summary.total).toBe(1);
   expect(summary.perfect).toBe(1);
   expect(summary.bad).toBe(0);
-  expect(summary.miss).toBe(0);
+  expect(summary.poor).toBe(0);
 });
 
 test('player: auto scratch judges 16ch/26ch notes in manual play', async () => {
@@ -92,7 +92,7 @@ test('player: auto scratch judges 16ch/26ch notes in manual play', async () => {
 
   expect(summary.total).toBe(2);
   expect(summary.perfect).toBe(1);
-  expect(summary.miss).toBe(1);
+  expect(summary.poor).toBe(1);
   expect(summary.bad).toBe(0);
 });
 

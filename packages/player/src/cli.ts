@@ -1162,7 +1162,7 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
   const judgedNotes = Math.max(
     0,
     Math.floor(
-      played.summary.perfect + played.summary.great + played.summary.good + played.summary.bad + played.summary.miss,
+      played.summary.perfect + played.summary.great + played.summary.good + played.summary.bad + played.summary.poor,
     ),
   );
   const notesProgress = `${Math.min(totalNotes, judgedNotes)}/${totalNotes}`;
@@ -1187,7 +1187,7 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
     lines.push(`NOTES ${notesProgress}`);
     lines.push(`EX-SCORE ${played.summary.exScore}/${maxExScore}  SCORE ${played.summary.score}/200000`);
     lines.push(`PERFECT ${played.summary.perfect}  GREAT ${played.summary.great}`);
-    lines.push(`GOOD ${played.summary.good}  BAD ${played.summary.bad}  MISS ${played.summary.miss}`);
+    lines.push(`GOOD ${played.summary.good}  BAD ${played.summary.bad}  POOR ${played.summary.poor}`);
     lines.push('');
     lines.push('Press r to replay this chart.');
     lines.push('Press Enter to return to song selection.');

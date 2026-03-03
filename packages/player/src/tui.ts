@@ -380,7 +380,7 @@ export class PlayerTui {
       `NOTES ${formatNotesProgress(frame.summary)}  EX ${frame.summary.exScore}/${maxExScore}  SCORE ${animatedScore}/200000`,
     );
     lines.push(
-      `PERFECT ${frame.summary.perfect}  GREAT ${frame.summary.great}  GOOD ${frame.summary.good}  BAD ${frame.summary.bad}  MISS ${frame.summary.miss}`,
+      `PERFECT ${frame.summary.perfect}  GREAT ${frame.summary.great}  GOOD ${frame.summary.good}  BAD ${frame.summary.bad}  POOR ${frame.summary.poor}`,
     );
     if (frame.activeAudioFiles !== undefined || frame.activeAudioVoiceCount !== undefined) {
       const voiceCount =
@@ -824,7 +824,7 @@ function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: numb
   if (latestJudge === 'BAD') {
     return colorizeText(baseText, '1;38;5;208');
   }
-  if (latestJudge === 'MISS') {
+  if (latestJudge === 'POOR') {
     return colorizeText(baseText, '1;38;5;203');
   }
   if (latestJudge === 'READY') {
@@ -1127,7 +1127,7 @@ function formatPlayLevelLabel(value: number | undefined): string {
 
 function formatNotesProgress(summary: PlayerSummary): string {
   const total = Math.max(0, summary.total);
-  const judged = Math.max(0, summary.perfect + summary.great + summary.good + summary.bad + summary.miss);
+  const judged = Math.max(0, summary.perfect + summary.great + summary.good + summary.bad + summary.poor);
   return `${Math.min(total, judged)}/${total}`;
 }
 
