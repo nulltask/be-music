@@ -3,7 +3,14 @@ import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vitest';
 import { parseChartFile } from '../../parser/src/index.ts';
-import { autoPlay, extractLandmineNotes, extractPlayableNotes, manualPlay, resolveJudgeWindowsMs } from './index.ts';
+import {
+  autoPlay,
+  extractInvisiblePlayableNotes,
+  extractLandmineNotes,
+  extractPlayableNotes,
+  manualPlay,
+  resolveJudgeWindowsMs,
+} from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 describe('player', () => {
@@ -140,6 +147,22 @@ test('player: extracts landmine objects and maps them to playable lanes', () => 
   expect(landmines[0]?.channel).toBe('11');
   expect(landmines[1]?.channel).toBe('26');
   expect(landmines[0]?.mine).toBe(true);
+});
+
+test('player: extracts invisible channels and maps them to playable lanes', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.events = [
+    { measure: 0, channel: '31', position: [0, 1], value: '10' },
+    { measure: 1, channel: '44', position: [0, 1], value: '20' },
+    { measure: 2, channel: '11', position: [0, 1], value: '01' },
+  ];
+
+  const invisible = extractInvisiblePlayableNotes(json);
+  expect(invisible).toHaveLength(2);
+  expect(invisible[0]?.channel).toBe('11');
+  expect(invisible[1]?.channel).toBe('24');
+  expect(invisible[0]?.invisible).toBe(true);
 });
 
 test('player: uses baseline judge windows for bms RANK=2', () => {

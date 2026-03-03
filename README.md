@@ -317,6 +317,9 @@ npm run player -- chart.bms --audio-head-padding-ms 180
 # 音声再生を無効化
 npm run player -- chart.bms --no-audio
 
+# 不可視チャンネル (31-39/41-49) を緑ノートで表示
+npm run player -- chart.bms --show-invisible-notes
+
 # 出力リミッタを無効化 (既定は ON)
 npm run player -- chart.bms --no-limiter
 

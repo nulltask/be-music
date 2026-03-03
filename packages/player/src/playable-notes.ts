@@ -19,6 +19,7 @@ export interface TimedPlayableNote {
   visibleUntilBeat?: number;
   seconds: number;
   judged: boolean;
+  invisible?: true;
 }
 
 export interface TimedLandmineNote {
@@ -78,6 +79,29 @@ export function extractLandmineNotes(json: BeMusicJson): TimedLandmineNote[] {
     .sort((left, right) => left.seconds - right.seconds);
 }
 
+export function extractInvisiblePlayableNotes(json: BeMusicJson): TimedPlayableNote[] {
+  const resolver = createTimingResolver(json);
+  const beatResolver = createBeatResolver(json);
+  return sortEvents(json.events)
+    .map((event): TimedPlayableNote | undefined => {
+      const mappedChannel = mapInvisibleChannelToPlayableLane(event.channel);
+      if (!mappedChannel) {
+        return undefined;
+      }
+      const beat = beatResolver.eventToBeat(event);
+      return {
+        event,
+        channel: mappedChannel,
+        beat,
+        seconds: resolver.beatToSeconds(beat),
+        judged: false,
+        invisible: true,
+      };
+    })
+    .filter((note): note is TimedPlayableNote => note !== undefined)
+    .sort((left, right) => left.seconds - right.seconds);
+}
+
 function applyLnobjEndBeatIfNeeded(
   json: BeMusicJson,
   notes: TimedPlayableNote[],
@@ -131,6 +155,25 @@ function mapLandmineChannelToPlayableLane(channel: string): string | undefined {
     return `1${lane}`;
   }
   if (side === 'E') {
+    return `2${lane}`;
+  }
+  return undefined;
+}
+
+function mapInvisibleChannelToPlayableLane(channel: string): string | undefined {
+  const normalized = normalizeChannel(channel);
+  if (normalized.length !== 2) {
+    return undefined;
+  }
+  const side = normalized[0];
+  const lane = normalized[1];
+  if (lane < '1' || lane > '9') {
+    return undefined;
+  }
+  if (side === '3') {
+    return `1${lane}`;
+  }
+  if (side === '4') {
     return `2${lane}`;
   }
   return undefined;

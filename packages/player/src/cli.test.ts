@@ -39,6 +39,11 @@ describe('player cli', () => {
     expect(formatPlayModeLabel('auto')).toBe('AUTO');
   });
 
+  test('cli: parses invisible-note display flag', () => {
+    const parsed = parseArgs(['chart.bms', '--show-invisible-notes']);
+    expect(parsed.showInvisibleNotes).toBe(true);
+  });
+
   test('cli: uses limiter on and compressor off by default', () => {
     const parsed = parseArgs(['chart.bms']);
     expect(parsed.limiter).toBe(true);

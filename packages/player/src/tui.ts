@@ -32,6 +32,7 @@ interface TuiNote {
   seconds: number;
   judged: boolean;
   mine?: boolean;
+  invisible?: boolean;
 }
 
 interface TuiFrame {
@@ -94,6 +95,9 @@ const NOTE_HEAD_SYMBOL = '●';
 const LONG_NOTE_BODY_SYMBOL = '■';
 const LONG_NOTE_TAIL_SYMBOL = '◆';
 const MINE_NOTE_SYMBOL = '✕';
+const INVISIBLE_NOTE_HEAD_SYMBOL = '◯';
+const INVISIBLE_LONG_NOTE_BODY_SYMBOL = '□';
+const INVISIBLE_LONG_NOTE_TAIL_SYMBOL = '◇';
 const ANSI_RESET = '\u001b[0m';
 const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
@@ -283,6 +287,8 @@ export class PlayerTui {
       }
 
       if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
+        const longBodySymbol = note.invisible ? INVISIBLE_LONG_NOTE_BODY_SYMBOL : LONG_NOTE_BODY_SYMBOL;
+        const longTailSymbol = note.invisible ? INVISIBLE_LONG_NOTE_TAIL_SYMBOL : LONG_NOTE_TAIL_SYMBOL;
         const bodyStartBeat = Math.max(note.beat, frame.currentBeat);
         const bodyEndBeat = note.endBeat;
         const bodyStartDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyStartBeat);
@@ -306,7 +312,7 @@ export class PlayerTui {
             if (row < 0 || row >= rowCount) {
               continue;
             }
-            grid[row][lane] = LONG_NOTE_BODY_SYMBOL;
+            grid[row][lane] = longBodySymbol;
           }
         }
 
@@ -315,7 +321,7 @@ export class PlayerTui {
         if (isDistanceWithinWindow(tailVisibleDistance)) {
           const tailRow = distanceToRow(tailVisibleDistance, rowCount);
           if (tailRow >= 0 && tailRow < rowCount) {
-            grid[tailRow][lane] = LONG_NOTE_TAIL_SYMBOL;
+            grid[tailRow][lane] = longTailSymbol;
           }
         }
       }
@@ -326,7 +332,7 @@ export class PlayerTui {
         continue;
       }
       const row = distanceToRow(headVisibleDistance, rowCount);
-      grid[row][lane] = NOTE_HEAD_SYMBOL;
+      grid[row][lane] = note.invisible ? INVISIBLE_NOTE_HEAD_SYMBOL : NOTE_HEAD_SYMBOL;
     }
 
     for (const [channel, until] of this.laneFlashUntil.entries()) {
@@ -707,21 +713,32 @@ function renderLaneRow(
     const isHead = value === NOTE_HEAD_SYMBOL;
     const isBody = value === LONG_NOTE_BODY_SYMBOL;
     const isTail = value === LONG_NOTE_TAIL_SYMBOL;
+    const isInvisibleHead = value === INVISIBLE_NOTE_HEAD_SYMBOL;
+    const isInvisibleBody = value === INVISIBLE_LONG_NOTE_BODY_SYMBOL;
+    const isInvisibleTail = value === INVISIBLE_LONG_NOTE_TAIL_SYMBOL;
     const isMine = value === MINE_NOTE_SYMBOL;
-    const isNote = isHead || isBody || isTail || isMine;
+    const isInvisibleNote = isInvisibleHead || isInvisibleBody || isInvisibleTail;
+    const isNote = isHead || isBody || isTail || isInvisibleNote || isMine;
+    const noteUnderline = isHead || isTail || isInvisibleHead || isInvisibleTail;
     const cell = isHead
       ? renderNoteCell(laneWidth, 'head')
       : isBody
         ? renderNoteCell(laneWidth, 'body')
         : isTail
           ? renderNoteCell(laneWidth, 'tail')
-          : isMine
-            ? center(MINE_NOTE_SYMBOL, laneWidth)
-            : center(value, laneWidth);
+          : isInvisibleHead
+            ? renderNoteCell(laneWidth, 'head')
+            : isInvisibleBody
+              ? renderNoteCell(laneWidth, 'body')
+              : isInvisibleTail
+                ? renderNoteCell(laneWidth, 'tail')
+            : isMine
+              ? center(MINE_NOTE_SYMBOL, laneWidth)
+              : center(value, laneWidth);
     const decoratedCell = isMine
       ? colorizeMine(cell)
       : isNote
-        ? colorizeNote(cell, channels[index] ?? '')
+        ? colorizeNote(cell, channels[index] ?? '', isInvisibleNote, noteUnderline)
         : value === MEASURE_LINE_SYMBOL
           ? colorizeMeasureLine(cell)
           : cell;
@@ -781,15 +798,19 @@ function highlightCell(value: string, ratio: number): string {
   return `\u001b[48;5;${background}m${value}\u001b[0m`;
 }
 
-function colorizeNote(symbol: string, channel: string): string {
+function colorizeNote(symbol: string, channel: string, invisible = false, underline = false): string {
+  const suffix = underline ? ';4' : '';
+  if (invisible) {
+    return `\u001b[32${suffix}m${symbol}\u001b[0m`;
+  }
   if (RED_NOTE_CHANNELS.has(channel)) {
-    return `\u001b[31m${symbol}\u001b[0m`;
+    return `\u001b[31${suffix}m${symbol}\u001b[0m`;
   }
   if (BLUE_NOTE_CHANNELS.has(channel)) {
-    return `\u001b[34m${symbol}\u001b[0m`;
+    return `\u001b[34${suffix}m${symbol}\u001b[0m`;
   }
   if (WHITE_NOTE_CHANNELS.has(channel)) {
-    return `\u001b[1;97m${symbol}\u001b[0m`;
+    return `\u001b[1;97${suffix}m${symbol}\u001b[0m`;
   }
   return symbol;
 }

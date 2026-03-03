@@ -21,6 +21,7 @@ interface CliArgs {
   input?: string;
   auto: boolean;
   autoScratch: boolean;
+  showInvisibleNotes: boolean;
   compressor: boolean;
   compressorThresholdDb?: number;
   compressorRatio?: number;
@@ -469,6 +470,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   }
 
   const playOptions = {
+    showInvisibleNotes: args.showInvisibleNotes,
     compressor: args.compressor,
     compressorThresholdDb: args.compressorThresholdDb,
     compressorRatio: args.compressorRatio,
@@ -534,6 +536,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
   const args: CliArgs = {
     auto: false,
     autoScratch: false,
+    showInvisibleNotes: false,
     compressor: false,
     limiter: true,
     audio: true,
@@ -552,6 +555,14 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     if (token === '--auto-scratch') {
       args.auto = false;
       args.autoScratch = true;
+      continue;
+    }
+    if (token === '--show-invisible-notes') {
+      args.showInvisibleNotes = true;
+      continue;
+    }
+    if (token === '--no-show-invisible-notes') {
+      args.showInvisibleNotes = false;
       continue;
     }
     if (token === '--speed') {
@@ -745,6 +756,7 @@ function printUsage(): void {
       'Options:',
       '  --auto                    Enable auto play mode (default: off)',
       '  --auto-scratch            Enable scratch auto mode (16ch/26ch only)',
+      '  --show-invisible-notes    Show invisible channels (31-39/41-49) in TUI as green notes',
       '  --compressor / --no-compressor',
       '                            Enable or disable output compressor (default: off)',
       '  --compressor-threshold-db Compressor threshold in dBFS (default: -12)',
