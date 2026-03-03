@@ -2,7 +2,6 @@ import {
   createBeatResolver,
   type BeMusicEvent,
   type BeMusicJson,
-  isLandmineChannel,
   isPlayableChannel,
   normalizeChannel,
   normalizeObjectKey,
@@ -32,75 +31,107 @@ export interface TimedLandmineNote {
   mine: true;
 }
 
-export function extractPlayableNotes(json: BeMusicJson): TimedPlayableNote[] {
+export interface ExtractTimedNotesOptions {
+  includeLandmine?: boolean;
+  includeInvisible?: boolean;
+}
+
+export interface ExtractTimedNotesResult {
+  playableNotes: TimedPlayableNote[];
+  landmineNotes: TimedLandmineNote[];
+  invisibleNotes: TimedPlayableNote[];
+}
+
+export function extractTimedNotes(
+  json: BeMusicJson,
+  options: ExtractTimedNotesOptions = {},
+): ExtractTimedNotesResult {
+  const includeLandmine = options.includeLandmine !== false;
+  const includeInvisible = options.includeInvisible === true;
   const resolver = createTimingResolver(json);
   const beatResolver = createBeatResolver(json);
-  const notes = sortEvents(json.events)
-    .filter((event) => isPlayableChannel(event.channel))
-    .map((event) => {
+  const sortedEvents = sortEvents(json.events);
+  const playableNotes: TimedPlayableNote[] = [];
+  const landmineNotes: TimedLandmineNote[] = [];
+  const invisibleNotes: TimedPlayableNote[] = [];
+
+  for (const event of sortedEvents) {
+    const normalizedChannel = normalizeChannel(event.channel);
+
+    if (isPlayableChannel(normalizedChannel)) {
       const beat = beatResolver.eventToBeat(event);
-      const endBeat = resolveLongNoteEndBeat(json, event, beat);
-      return {
+      const endBeat = resolveLongNoteEndBeat(json, event, beat, normalizedChannel);
+      playableNotes.push({
         event,
-        channel: normalizeChannel(event.channel),
+        channel: normalizedChannel,
         beat,
         endBeat,
         endSeconds: endBeat !== undefined ? resolver.beatToSeconds(endBeat) : undefined,
         seconds: resolver.beatToSeconds(beat),
         judged: false,
-      };
-    })
-    .sort((left, right) => left.seconds - right.seconds);
+      });
+      continue;
+    }
 
-  applyLnobjEndBeatIfNeeded(json, notes, resolver);
-  return notes;
+    if (includeLandmine) {
+      const mappedLandmineChannel = mapLandmineNormalizedChannelToPlayableLane(normalizedChannel);
+      if (mappedLandmineChannel) {
+        const beat = beatResolver.eventToBeat(event);
+        landmineNotes.push({
+          event,
+          channel: mappedLandmineChannel,
+          beat,
+          seconds: resolver.beatToSeconds(beat),
+          judged: false,
+          mine: true,
+        });
+        continue;
+      }
+    }
+
+    if (includeInvisible) {
+      const mappedInvisibleChannel = mapInvisibleNormalizedChannelToPlayableLane(normalizedChannel);
+      if (mappedInvisibleChannel) {
+        const beat = beatResolver.eventToBeat(event);
+        invisibleNotes.push({
+          event,
+          channel: mappedInvisibleChannel,
+          beat,
+          seconds: resolver.beatToSeconds(beat),
+          judged: false,
+          invisible: true,
+        });
+      }
+    }
+  }
+
+  applyLnobjEndBeatIfNeeded(json, playableNotes, resolver);
+  return {
+    playableNotes,
+    landmineNotes,
+    invisibleNotes,
+  };
+}
+
+export function extractPlayableNotes(json: BeMusicJson): TimedPlayableNote[] {
+  return extractTimedNotes(json, {
+    includeLandmine: false,
+    includeInvisible: false,
+  }).playableNotes;
 }
 
 export function extractLandmineNotes(json: BeMusicJson): TimedLandmineNote[] {
-  const resolver = createTimingResolver(json);
-  const beatResolver = createBeatResolver(json);
-  return sortEvents(json.events)
-    .filter((event) => isLandmineChannel(event.channel))
-    .map((event) => {
-      const mappedChannel = mapLandmineChannelToPlayableLane(event.channel);
-      if (!mappedChannel) {
-        return undefined;
-      }
-      const beat = beatResolver.eventToBeat(event);
-      return {
-        event,
-        channel: mappedChannel,
-        beat,
-        seconds: resolver.beatToSeconds(beat),
-        judged: false,
-        mine: true as const,
-      };
-    })
-    .filter((note): note is TimedLandmineNote => note !== undefined)
-    .sort((left, right) => left.seconds - right.seconds);
+  return extractTimedNotes(json, {
+    includeLandmine: true,
+    includeInvisible: false,
+  }).landmineNotes;
 }
 
 export function extractInvisiblePlayableNotes(json: BeMusicJson): TimedPlayableNote[] {
-  const resolver = createTimingResolver(json);
-  const beatResolver = createBeatResolver(json);
-  return sortEvents(json.events)
-    .map((event): TimedPlayableNote | undefined => {
-      const mappedChannel = mapInvisibleChannelToPlayableLane(event.channel);
-      if (!mappedChannel) {
-        return undefined;
-      }
-      const beat = beatResolver.eventToBeat(event);
-      return {
-        event,
-        channel: mappedChannel,
-        beat,
-        seconds: resolver.beatToSeconds(beat),
-        judged: false,
-        invisible: true,
-      };
-    })
-    .filter((note): note is TimedPlayableNote => note !== undefined)
-    .sort((left, right) => left.seconds - right.seconds);
+  return extractTimedNotes(json, {
+    includeLandmine: false,
+    includeInvisible: true,
+  }).invisibleNotes;
 }
 
 function applyLnobjEndBeatIfNeeded(
@@ -134,8 +165,13 @@ function applyLnobjEndBeatIfNeeded(
   }
 }
 
-function resolveLongNoteEndBeat(json: BeMusicJson, event: BeMusicEvent, beat: number): number | undefined {
-  if (isFreeZoneChannel(event.channel)) {
+function resolveLongNoteEndBeat(
+  json: BeMusicJson,
+  event: BeMusicEvent,
+  beat: number,
+  normalizedChannel = normalizeChannel(event.channel),
+): number | undefined {
+  if (isFreeZoneNormalizedChannel(normalizedChannel)) {
     return beat + FREE_ZONE_BEAT_LENGTH;
   }
 
@@ -146,13 +182,11 @@ function resolveLongNoteEndBeat(json: BeMusicJson, event: BeMusicEvent, beat: nu
   return undefined;
 }
 
-function isFreeZoneChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
+function isFreeZoneNormalizedChannel(normalized: string): boolean {
   return normalized === '17' || normalized === '27';
 }
 
-function mapLandmineChannelToPlayableLane(channel: string): string | undefined {
-  const normalized = normalizeChannel(channel);
+function mapLandmineNormalizedChannelToPlayableLane(normalized: string): string | undefined {
   if (normalized.length !== 2) {
     return undefined;
   }
@@ -170,8 +204,7 @@ function mapLandmineChannelToPlayableLane(channel: string): string | undefined {
   return undefined;
 }
 
-function mapInvisibleChannelToPlayableLane(channel: string): string | undefined {
-  const normalized = normalizeChannel(channel);
+function mapInvisibleNormalizedChannelToPlayableLane(normalized: string): string | undefined {
   if (normalized.length !== 2) {
     return undefined;
   }

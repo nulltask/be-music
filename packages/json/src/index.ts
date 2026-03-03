@@ -1,3 +1,5 @@
+import { compareFractions } from '@be-music/utils';
+
 export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
 
 export type BeMusicSourceFormat = 'bms' | 'bmson' | 'json';
@@ -280,11 +282,12 @@ export function getMeasureBeats(length: number): number {
 
 export function measureToBeat(json: BeMusicJson, measure: number, position = 0): number {
   const safePosition = clamp01(position);
+  const measureLengths = createExactMeasureLengthMap(json);
   let beats = 0;
   for (let current = 0; current < measure; current += 1) {
-    beats += getMeasureBeats(getMeasureLength(json, current));
+    beats += getMeasureBeats(measureLengths.get(current) ?? 1);
   }
-  beats += getMeasureBeats(getMeasureLength(json, measure)) * safePosition;
+  beats += getMeasureBeats(measureLengths.get(measure) ?? 1) * safePosition;
   return beats;
 }
 
@@ -347,10 +350,11 @@ export function beatToMeasurePosition(json: BeMusicJson, beat: number): MeasureP
     return { measure: 0, position: 0 };
   }
 
+  const measureLengths = createExactMeasureLengthMap(json);
   let remaining = beat;
   let measure = 0;
   while (remaining > 0) {
-    const measureBeats = getMeasureBeats(getMeasureLength(json, measure));
+    const measureBeats = getMeasureBeats(measureLengths.get(measure) ?? 1);
     if (remaining < measureBeats) {
       return {
         measure,
@@ -436,7 +440,23 @@ export function isPlayableChannel(channel: string): boolean {
 }
 
 export function listPlayableChannels(json: BeMusicJson): string[] {
-  return [...new Set(json.events.map((event) => normalizeChannel(event.channel)).filter(isPlayableChannel))].sort();
+  const channels = new Set<string>();
+  for (const event of json.events) {
+    const channel = normalizeChannel(event.channel);
+    if (!isPlayableChannel(channel)) {
+      continue;
+    }
+    channels.add(channel);
+  }
+  return [...channels].sort();
+}
+
+function createExactMeasureLengthMap(json: BeMusicJson): Map<number, number> {
+  const measureLengths = new Map<number, number>();
+  for (const measure of json.measures) {
+    measureLengths.set(measure.index, measure.length);
+  }
+  return measureLengths;
 }
 
 function clamp01(value: number): number {
@@ -460,32 +480,7 @@ function compareEventPosition(left: BeMusicEvent, right: BeMusicEvent): number {
   const leftNumerator = normalizePositionNumerator(left.position[0], leftDenominator);
   const rightDenominator = normalizePositionDenominator(right.position[1]);
   const rightNumerator = normalizePositionNumerator(right.position[0], rightDenominator);
-
-  if (leftDenominator === rightDenominator) {
-    return leftNumerator - rightNumerator;
-  }
-
-  const leftScaled = leftNumerator * rightDenominator;
-  const rightScaled = rightNumerator * leftDenominator;
-  if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
-    if (leftScaled < rightScaled) {
-      return -1;
-    }
-    if (leftScaled > rightScaled) {
-      return 1;
-    }
-    return 0;
-  }
-
-  const leftScaledBigInt = BigInt(leftNumerator) * BigInt(rightDenominator);
-  const rightScaledBigInt = BigInt(rightNumerator) * BigInt(leftDenominator);
-  if (leftScaledBigInt < rightScaledBigInt) {
-    return -1;
-  }
-  if (leftScaledBigInt > rightScaledBigInt) {
-    return 1;
-  }
-  return 0;
+  return compareFractions(leftNumerator, leftDenominator, rightNumerator, rightDenominator);
 }
 
 function normalizePositionDenominator(value: number): number {

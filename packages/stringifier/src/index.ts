@@ -9,7 +9,14 @@ import {
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
-import { gcd, lcm, normalizeFractionNumerator, normalizeNonNegativeInt, normalizePositiveInt } from '@be-music/utils';
+import {
+  gcd,
+  lcm,
+  normalizeFractionNumerator,
+  normalizeNonNegativeInt,
+  normalizePositiveInt,
+  normalizeSortedUniqueNonNegativeIntegers,
+} from '@be-music/utils';
 export interface BmsStringifyOptions {
   eol?: '\n' | '\r\n';
   maxResolution?: number;
@@ -47,13 +54,15 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   const sortedEvents = sortEvents(json.events);
   const beatResolver = createBeatResolver(json);
 
-  const playableChannels = [
-    ...new Set(
-      sortedEvents
-        .filter((event) => isSampleTriggerChannel(event.channel) && normalizeChannel(event.channel) !== '01')
-        .map((event) => normalizeChannel(event.channel)),
-    ),
-  ].sort();
+  const playableChannelSet = new Set<string>();
+  for (const event of sortedEvents) {
+    const channel = normalizeChannel(event.channel);
+    if (channel === '01' || !isSampleTriggerChannel(channel)) {
+      continue;
+    }
+    playableChannelSet.add(channel);
+  }
+  const playableChannels = [...playableChannelSet].sort();
 
   const xMap = new Map<string, number>();
   playableChannels.forEach((channel, index) => xMap.set(channel, index + 1));
@@ -113,7 +122,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   const bmson: Record<string, unknown> = {
     version: resolveBmsonVersionForOutput(json),
     info: createBmsonInfoForOutput(json, resolution, playableChannels.length),
-    lines: resolveBmsonLinesForOutput(json, resolution).map((y) => ({ y })),
+    lines: mapBmsonLineValues(resolveBmsonLinesForOutput(json, resolution)),
     bpm_events: bpmEvents,
     stop_events: stopEvents,
     sound_channels: [...soundChannels.values()],
@@ -318,9 +327,8 @@ function pushMeasureLines(lines: string[], json: BeMusicJson): void {
 
 function pushEventLines(lines: string[], json: BeMusicJson, maxResolution?: number): void {
   const grouped = groupEvents(sortEvents(json.events));
-  for (const [key, events] of grouped.entries()) {
-    const [measureText, channel] = key.split(':');
-    const measure = Number.parseInt(measureText, 10);
+  for (const group of grouped) {
+    const { measure, channel, events } = group;
     const resolution = chooseResolution(events, maxResolution);
     const cells = Array.from({ length: resolution }, () => '00');
 
@@ -366,19 +374,22 @@ function pushBmsSectionComment(lines: string[], section: string): void {
 
 function serializeControlFlowObjectEvents(measure: number, channel: string, events: BeMusicEvent[]): string | undefined {
   const normalizedChannel = normalizeChannel(channel);
-  const lineEvents = sortEvents(events)
-    .filter(
-      (event) =>
-        event.measure === measure &&
-        normalizeChannel(event.channel) === normalizedChannel &&
-        normalizeObjectKey(event.value) !== '00',
-    )
-    .map((event) => ({
+  const lineEvents: BeMusicEvent[] = [];
+  for (const event of sortEvents(events)) {
+    if (event.measure !== measure || normalizeChannel(event.channel) !== normalizedChannel) {
+      continue;
+    }
+    const value = normalizeObjectKey(event.value);
+    if (value === '00') {
+      continue;
+    }
+    lineEvents.push({
       ...event,
       measure,
       channel: normalizedChannel,
-      value: normalizeObjectKey(event.value),
-    }));
+      value,
+    });
+  }
 
   if (lineEvents.length === 0) {
     return undefined;
@@ -396,40 +407,53 @@ function serializeControlFlowObjectEvents(measure: number, channel: string, even
   return `#${toMeasure(measure)}${normalizedChannel}:${cells.join('')}`;
 }
 
-function groupEvents(events: BeMusicEvent[]): Map<string, BeMusicEvent[]> {
-  const groups = new Map<string, BeMusicEvent[]>();
+interface GroupedEventLine {
+  measure: number;
+  channel: string;
+  events: BeMusicEvent[];
+}
+
+function groupEvents(events: BeMusicEvent[]): GroupedEventLine[] {
+  const groupedByMeasure = new Map<number, Map<string, BeMusicEvent[]>>();
   for (const event of events) {
     const measure = Math.max(0, Math.floor(event.measure));
     const channel = normalizeChannel(event.channel);
     const { numerator, denominator } = resolveEventFraction(event);
-    const key = `${measure}:${channel}`;
-    const slot = groups.get(key) ?? [];
+    const groupedByChannel = groupedByMeasure.get(measure) ?? new Map<string, BeMusicEvent[]>();
+    if (!groupedByMeasure.has(measure)) {
+      groupedByMeasure.set(measure, groupedByChannel);
+    }
+    const slot = groupedByChannel.get(channel) ?? [];
     slot.push({
       measure,
       channel,
       position: [numerator, denominator],
       value: normalizeObjectKey(event.value),
     });
-    groups.set(key, slot);
+    groupedByChannel.set(channel, slot);
   }
 
-  return new Map(
-    [...groups.entries()].sort(([left], [right]) => {
-      const [leftMeasure, leftChannel] = left.split(':');
-      const [rightMeasure, rightChannel] = right.split(':');
-      const measureDelta = Number.parseInt(leftMeasure, 10) - Number.parseInt(rightMeasure, 10);
-      if (measureDelta !== 0) {
-        return measureDelta;
+  const measures = [...groupedByMeasure.keys()].sort((left, right) => left - right);
+  const result: GroupedEventLine[] = [];
+  for (const measure of measures) {
+    const groupedByChannel = groupedByMeasure.get(measure);
+    if (!groupedByChannel) {
+      continue;
+    }
+    const channels = [...groupedByChannel.keys()].sort();
+    for (const channel of channels) {
+      const slot = groupedByChannel.get(channel);
+      if (!slot) {
+        continue;
       }
-      if (leftChannel < rightChannel) {
-        return -1;
-      }
-      if (leftChannel > rightChannel) {
-        return 1;
-      }
-      return 0;
-    }),
-  );
+      result.push({
+        measure,
+        channel,
+        events: slot,
+      });
+    }
+  }
+  return result;
 }
 
 function chooseResolution(events: BeMusicEvent[], maxResolution?: number): number {
@@ -641,22 +665,16 @@ function createBmsonBgaForOutput(json: BeMusicJson):
     poor_events: Array<{ y: number; id: number }>;
   }
   | undefined {
-  const header = (json.bmson.bga.header ?? []).map((entry) => ({
-    id: Math.max(0, Math.floor(entry.id)),
-    name: entry.name,
-  }));
-  const events = (json.bmson.bga.events ?? []).map((entry) => ({
-    y: Math.max(0, Math.floor(entry.y)),
-    id: Math.max(0, Math.floor(entry.id)),
-  }));
-  const layerEvents = (json.bmson.bga.layerEvents ?? []).map((entry) => ({
-    y: Math.max(0, Math.floor(entry.y)),
-    id: Math.max(0, Math.floor(entry.id)),
-  }));
-  const poorEvents = (json.bmson.bga.poorEvents ?? []).map((entry) => ({
-    y: Math.max(0, Math.floor(entry.y)),
-    id: Math.max(0, Math.floor(entry.id)),
-  }));
+  const header: Array<{ id: number; name: string }> = [];
+  for (const entry of json.bmson.bga.header ?? []) {
+    header.push({
+      id: Math.max(0, Math.floor(entry.id)),
+      name: entry.name,
+    });
+  }
+  const events = normalizeBmsonBgaEventEntries(json.bmson.bga.events ?? []);
+  const layerEvents = normalizeBmsonBgaEventEntries(json.bmson.bga.layerEvents ?? []);
+  const poorEvents = normalizeBmsonBgaEventEntries(json.bmson.bga.poorEvents ?? []);
 
   if (header.length === 0 && events.length === 0 && layerEvents.length === 0 && poorEvents.length === 0) {
     return undefined;
@@ -685,8 +703,7 @@ function resolveBmsonLinesForOutput(json: BeMusicJson, resolution: number): numb
 }
 
 function normalizeBmsonLines(lines: number[]): number[] {
-  const values = lines.filter((line) => Number.isFinite(line)).map((line) => Math.max(0, Math.floor(line)));
-  const sorted = [...new Set(values)].sort((left, right) => left - right);
+  const sorted = normalizeSortedUniqueNonNegativeIntegers(lines);
   if (sorted.length === 0 || sorted[0] !== 0) {
     sorted.unshift(0);
   }
@@ -695,10 +712,21 @@ function normalizeBmsonLines(lines: number[]): number[] {
 
 function createDefaultBmsonLines(json: BeMusicJson, resolution: number): number[] {
   const ticksPerMeasure = Math.max(1, Math.floor(resolution * 4));
-  const lastEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
-  const lastMeasureLength = json.measures.reduce((max, measure) => Math.max(max, measure.index), 0);
+  let lastEventMeasure = 0;
+  for (const event of json.events) {
+    if (event.measure > lastEventMeasure) {
+      lastEventMeasure = event.measure;
+    }
+  }
+  let lastMeasureLength = 0;
+  const lengths = new Map<number, number>();
+  for (const measure of json.measures) {
+    if (measure.index > lastMeasureLength) {
+      lastMeasureLength = measure.index;
+    }
+    lengths.set(measure.index, measure.length);
+  }
   const measureCount = Math.max(1, Math.max(lastEventMeasure, lastMeasureLength) + 1);
-  const lengths = new Map(json.measures.map((measure) => [measure.index, measure.length]));
 
   const lines = [0];
   let cursor = 0;
@@ -710,4 +738,23 @@ function createDefaultBmsonLines(json: BeMusicJson, resolution: number): number[
   }
 
   return lines;
+}
+
+function mapBmsonLineValues(lines: ReadonlyArray<number>): Array<{ y: number }> {
+  const mapped: Array<{ y: number }> = [];
+  for (const y of lines) {
+    mapped.push({ y });
+  }
+  return mapped;
+}
+
+function normalizeBmsonBgaEventEntries(entries: ReadonlyArray<{ y: number; id: number }>): Array<{ y: number; id: number }> {
+  const normalized: Array<{ y: number; id: number }> = [];
+  for (const entry of entries) {
+    normalized.push({
+      y: Math.max(0, Math.floor(entry.y)),
+      id: Math.max(0, Math.floor(entry.id)),
+    });
+  }
+  return normalized;
 }

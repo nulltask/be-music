@@ -102,7 +102,7 @@ function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuild
       return 0;
     }
 
-    const index = findLastIndex(tempoPoints, (point) => point.beat <= beat);
+    const index = findTempoPointIndexAtOrBeforeBeat(tempoPoints, beat);
     const point = tempoPoints[Math.max(0, index)];
     const deltaBeat = beat - point.beat;
     return point.seconds + (deltaBeat * 60) / point.bpm;
@@ -112,7 +112,7 @@ function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuild
     if (tempoPoints.length === 0) {
       return json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
     }
-    const index = findLastIndex(tempoPoints, (point) => point.beat <= beat);
+    const index = findTempoPointIndexAtOrBeforeBeat(tempoPoints, beat);
     return tempoPoints[Math.max(0, index)].bpm;
   };
 
@@ -121,7 +121,7 @@ function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuild
     if (stopPoints.length === 0) {
       return base;
     }
-    const index = findLastIndex(stopPoints, (point) => point.beat < beat);
+    const index = findStopPointIndexBeforeBeat(stopPoints, beat);
     if (index < 0) {
       return base;
     }
@@ -147,17 +147,22 @@ function collectSampleTriggersWithContext(
   context: TimingBuildContext,
 ): TimedSampleTrigger[] {
   const { sortedEvents, beatResolver } = context;
-  const events = sortedEvents.filter(
-    (event) => isSampleTriggerChannel(event.channel) && !isLandmineChannel(event.channel),
-  );
+  const events: BeMusicEvent[] = [];
+  for (const event of sortedEvents) {
+    if (!isSampleTriggerChannel(event.channel) || isLandmineChannel(event.channel)) {
+      continue;
+    }
+    events.push(event);
+  }
   const bmsonPlaybackMap =
     json.sourceFormat === 'bmson' ? createBmsonSamplePlaybackMap(json, resolver, events, beatResolver) : undefined;
 
-  return events.map((event) => {
+  const triggers: TimedSampleTrigger[] = [];
+  for (const event of events) {
     const sampleKey = normalizeObjectKey(event.value);
     const playback = bmsonPlaybackMap?.get(event);
     const beat = beatResolver.eventToBeat(event);
-    return {
+    triggers.push({
       event,
       beat,
       seconds: resolver.beatToSeconds(beat),
@@ -167,8 +172,9 @@ function collectSampleTriggersWithContext(
       sampleOffsetSeconds: playback?.offsetSeconds ?? 0,
       sampleDurationSeconds: playback?.durationSeconds,
       sampleSliceId: playback?.sliceId,
-    } satisfies TimedSampleTrigger;
-  });
+    } satisfies TimedSampleTrigger);
+  }
+  return triggers;
 }
 
 export async function renderJson(json: BeMusicJson, options: RenderOptions = {}): Promise<RenderResult> {
@@ -305,7 +311,7 @@ export async function writeAudioFile(outputPath: string, result: RenderResult): 
 function createTempoPoints(json: BeMusicJson, sortedEvents: BeMusicEvent[], beatResolver: BeatResolver): TempoPoint[] {
   const baseBpm = json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
   const points: TempoPoint[] = [{ beat: 0, bpm: baseBpm, seconds: 0 }];
-  const changes: Array<{ beat: number; bpm: number }> = [];
+
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
     if (channel !== '03' && channel !== '08') {
@@ -315,33 +321,14 @@ function createTempoPoints(json: BeMusicJson, sortedEvents: BeMusicEvent[], beat
     if (channel === '03') {
       const bpm = parseBpmFrom03Token(event.value);
       if (bpm > 0) {
-        changes.push({ beat, bpm });
+        integrateTempoPoint(points, beat, bpm);
       }
       continue;
     }
     const bpm = json.resources.bpm[normalizeObjectKey(event.value)];
     if (typeof bpm === 'number' && bpm > 0) {
-      changes.push({ beat, bpm });
+      integrateTempoPoint(points, beat, bpm);
     }
-  }
-
-  for (const change of changes) {
-    const last = points[points.length - 1];
-    if (change.beat < last.beat) {
-      continue;
-    }
-
-    if (Math.abs(change.beat - last.beat) < 1e-9) {
-      last.bpm = change.bpm;
-      continue;
-    }
-
-    const seconds = last.seconds + ((change.beat - last.beat) * 60) / last.bpm;
-    points.push({
-      beat: change.beat,
-      bpm: change.bpm,
-      seconds,
-    });
   }
 
   return points;
@@ -353,7 +340,9 @@ function createStopPoints(
   sortedEvents: BeMusicEvent[],
   beatResolver: BeatResolver,
 ): StopPoint[] {
-  const stopEvents: Array<{ beat: number; seconds: number }> = [];
+  const points: StopPoint[] = [];
+  let cumulativeSeconds = 0;
+
   for (const event of sortedEvents) {
     if (normalizeChannel(event.channel) !== '09') {
       continue;
@@ -366,19 +355,14 @@ function createStopPoints(
     const bpm = bpmAtBeatFromTempoPoints(tempoPoints, beat);
     // BMS STOP uses 1/192 of a measure as the unit.
     const seconds = (duration / 192) * (240 / bpm);
-    stopEvents.push({ beat, seconds });
-  }
-
-  const points: StopPoint[] = [];
-  let cumulativeSeconds = 0;
-  for (const stopEvent of stopEvents) {
-    cumulativeSeconds += stopEvent.seconds;
+    cumulativeSeconds += seconds;
     points.push({
-      beat: stopEvent.beat,
-      seconds: stopEvent.seconds,
+      beat,
+      seconds,
       cumulativeSeconds,
     });
   }
+
   return points;
 }
 
@@ -386,18 +370,18 @@ function bpmAtBeatFromTempoPoints(tempoPoints: TempoPoint[], beat: number): numb
   if (tempoPoints.length === 0) {
     return DEFAULT_BPM;
   }
-  const index = findLastIndex(tempoPoints, (point) => point.beat <= beat);
+  const index = findTempoPointIndexAtOrBeforeBeat(tempoPoints, beat);
   return tempoPoints[Math.max(0, index)].bpm;
 }
 
-function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
+function findTempoPointIndexAtOrBeforeBeat(points: ReadonlyArray<TempoPoint>, beat: number): number {
   let low = 0;
-  let high = items.length - 1;
+  let high = points.length - 1;
   let answer = -1;
 
   while (low <= high) {
     const mid = Math.floor((low + high) / 2);
-    if (predicate(items[mid])) {
+    if (points[mid]!.beat <= beat) {
       answer = mid;
       low = mid + 1;
     } else {
@@ -406,6 +390,42 @@ function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
   }
 
   return answer;
+}
+
+function findStopPointIndexBeforeBeat(points: ReadonlyArray<StopPoint>, beat: number): number {
+  let low = 0;
+  let high = points.length - 1;
+  let answer = -1;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (points[mid]!.beat < beat) {
+      answer = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  return answer;
+}
+
+function integrateTempoPoint(points: TempoPoint[], beat: number, bpm: number): void {
+  const last = points[points.length - 1]!;
+  if (beat < last.beat) {
+    return;
+  }
+  if (Math.abs(beat - last.beat) < 1e-9) {
+    last.bpm = bpm;
+    return;
+  }
+
+  const seconds = last.seconds + ((beat - last.beat) * 60) / last.bpm;
+  points.push({
+    beat,
+    bpm,
+    seconds,
+  });
 }
 
 async function getOrCreateSample(params: {
@@ -513,21 +533,28 @@ function mixSample(
   sampleOffsetFrames = 0,
   sampleMaxFrames?: number,
 ): void {
-  let source = Math.max(0, sampleOffsetFrames);
-  let index = 0;
-  const maxFrames = sampleMaxFrames ?? sample.left.length;
-  while (source < sample.left.length) {
-    if (index >= maxFrames) {
-      break;
-    }
+  const sourceStart = Math.max(0, sampleOffsetFrames);
+  const availableFrames = sample.left.length - sourceStart;
+  if (availableFrames <= 0) {
+    return;
+  }
+
+  const requestedFrames = sampleMaxFrames ?? availableFrames;
+  if (requestedFrames <= 0) {
+    return;
+  }
+
+  const destinationAvailable = destinationLeft.length - startFrame;
+  if (destinationAvailable <= 0) {
+    return;
+  }
+
+  const framesToMix = Math.min(availableFrames, requestedFrames, destinationAvailable);
+  for (let index = 0; index < framesToMix; index += 1) {
+    const source = sourceStart + index;
     const target = startFrame + index;
-    if (target >= destinationLeft.length) {
-      break;
-    }
     destinationLeft[target] += sample.left[source] * gain;
     destinationRight[target] += sample.right[source] * gain;
-    source += 1;
-    index += 1;
   }
 }
 
@@ -561,28 +588,32 @@ function createBmsonSamplePlaybackMap(
     let sliceIndex = 0;
 
     for (let index = 0; index < entries.length;) {
-      const currentBeat = entries[index].beat;
+      const firstEntry = entries[index]!;
+      const currentBeat = firstEntry.beat;
       let end = index + 1;
-      while (end < entries.length && Math.abs(entries[end].beat - currentBeat) < 1e-9) {
+      let shouldRestart = firstEntry.event.bmson?.c !== true;
+      while (end < entries.length && Math.abs(entries[end]!.beat - currentBeat) < 1e-9) {
+        if (entries[end]!.event.bmson?.c !== true) {
+          shouldRestart = true;
+        }
         end += 1;
       }
 
-      const group = entries.slice(index, end);
-      const shouldRestart = group.some((entry) => entry.event.bmson?.c !== true);
       if (!hasAnchor || shouldRestart) {
-        anchorSeconds = group[0].seconds;
+        anchorSeconds = firstEntry.seconds;
         hasAnchor = true;
       }
 
-      const offsetSeconds = Math.max(0, group[0].seconds - anchorSeconds);
-      const next = entries[end];
-      const durationSeconds = next ? Math.max(0, next.seconds - group[0].seconds) : undefined;
-      const sampleKey = normalizeObjectKey(group[0].event.value);
+      const offsetSeconds = Math.max(0, firstEntry.seconds - anchorSeconds);
+      const next = end < entries.length ? entries[end]! : undefined;
+      const durationSeconds = next ? Math.max(0, next.seconds - firstEntry.seconds) : undefined;
+      const sampleKey = normalizeObjectKey(firstEntry.event.value);
       const sliceId = `${sampleKey}:${sliceIndex}`;
       sliceIndex += 1;
+      const playback = { offsetSeconds, durationSeconds, sliceId };
 
-      for (const entry of group) {
-        playbackMap.set(entry.event, { offsetSeconds, durationSeconds, sliceId });
+      for (let cursor = index; cursor < end; cursor += 1) {
+        playbackMap.set(entries[cursor]!.event, playback);
       }
       index = end;
     }

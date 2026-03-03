@@ -35,10 +35,10 @@
     "@be-music/parser": "workspace:*",
     "@be-music/utils": "workspace:*",
     "@uwx/libav.js-fat": "6.0.0-nightly.29.f420ff.ffmpeg.6.1.1",
-    "bmp-ts": "^1.0.9",
+    "fast-bmp": "^4.0.1",
+    "fast-png": "^8.0.0",
     "jpeg-js": "^0.4.4",
-    "node-web-audio-api": "^1.0.8",
-    "pngjs": "^7.0.0"
+    "node-web-audio-api": "^1.0.8"
   },
   "devDependencies": {
     "postject": "^1.0.0-alpha.6"

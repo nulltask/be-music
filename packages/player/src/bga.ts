@@ -2,9 +2,9 @@ import { access, readFile } from 'node:fs/promises';
 import { extname, isAbsolute, resolve } from 'node:path';
 import { normalizeChannel, normalizeObjectKey, sortEvents, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
-import { decode as decodeBmpTs } from 'bmp-ts';
+import { decode as decodeBmpFast } from 'fast-bmp';
+import { decode as decodePngFast } from 'fast-png';
 import jpeg from 'jpeg-js';
-import { PNG } from 'pngjs';
 import { decodeVideoFramesStream } from './bga-video.ts';
 
 const BASE_BGA_CHANNEL = '04';
@@ -739,11 +739,11 @@ function decodeImageBuffer(buffer: Buffer, pathHint: string): DecodedImage {
 }
 
 function decodePng(buffer: Buffer): DecodedImage {
-  const decoded = PNG.sync.read(buffer);
+  const decoded = decodePngFast(buffer);
   return {
     width: decoded.width,
     height: decoded.height,
-    data: decoded.data,
+    data: convertToRgba8(decoded.data, decoded.width, decoded.height, decoded.channels, decoded.depth),
     format: 'png',
   };
 }
@@ -762,24 +762,85 @@ function decodeJpeg(buffer: Buffer): DecodedImage {
 }
 
 function decodeBmp(buffer: Buffer): DecodedImage {
-  const decoded = decodeBmpTs(buffer);
-  const rgba = new Uint8Array(decoded.data.length);
-  for (let offset = 0; offset + 3 < decoded.data.length; offset += 4) {
-    const a = decoded.data[offset] ?? 255;
-    const b = decoded.data[offset + 1] ?? 0;
-    const g = decoded.data[offset + 2] ?? 0;
-    const r = decoded.data[offset + 3] ?? 0;
-    rgba[offset] = r;
-    rgba[offset + 1] = g;
-    rgba[offset + 2] = b;
-    rgba[offset + 3] = a;
-  }
+  const decoded = decodeBmpFast(buffer);
+  const channels = decoded.channels > 0 ? decoded.channels : 4;
+  const depth = Math.max(1, Math.floor(decoded.bitsPerPixel / channels));
+  const rgba = convertToRgba8(toSampleArray(decoded.data), decoded.width, decoded.height, channels, depth);
   return {
     width: decoded.width,
     height: decoded.height,
     data: rgba,
     format: 'bmp',
   };
+}
+
+function toSampleArray(data: unknown): ArrayLike<number> {
+  if (ArrayBuffer.isView(data)) {
+    if ('length' in data) {
+      return data as unknown as ArrayLike<number>;
+    }
+    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  }
+  if (typeof data === 'object' && data && 'byteLength' in data) {
+    return new Uint8Array(data as ArrayBufferLike);
+  }
+  if (typeof data === 'object' && data && 'length' in data) {
+    return data as ArrayLike<number>;
+  }
+  return new Uint8Array(0);
+}
+
+function convertToRgba8(
+  data: ArrayLike<number>,
+  width: number,
+  height: number,
+  channels: number,
+  depth: number,
+): Uint8Array {
+  const safeWidth = Math.max(0, Math.floor(width));
+  const safeHeight = Math.max(0, Math.floor(height));
+  const safeChannels = Math.max(1, Math.floor(channels));
+  const safeDepth = Math.max(1, Math.floor(depth));
+  const sampleMax = Math.max(1, safeDepth >= 16 ? 65535 : 2 ** safeDepth - 1);
+  const pixelCount = safeWidth * safeHeight;
+  const rgba = new Uint8Array(pixelCount * 4);
+  for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1) {
+    const sourceOffset = pixelIndex * safeChannels;
+    const targetOffset = pixelIndex * 4;
+
+    if (safeChannels === 1) {
+      const gray = toByte(data[sourceOffset] ?? 0, sampleMax);
+      rgba[targetOffset] = gray;
+      rgba[targetOffset + 1] = gray;
+      rgba[targetOffset + 2] = gray;
+      rgba[targetOffset + 3] = 255;
+      continue;
+    }
+
+    if (safeChannels === 2) {
+      const gray = toByte(data[sourceOffset] ?? 0, sampleMax);
+      rgba[targetOffset] = gray;
+      rgba[targetOffset + 1] = gray;
+      rgba[targetOffset + 2] = gray;
+      rgba[targetOffset + 3] = toByte(data[sourceOffset + 1] ?? sampleMax, sampleMax);
+      continue;
+    }
+
+    rgba[targetOffset] = toByte(data[sourceOffset] ?? 0, sampleMax);
+    rgba[targetOffset + 1] = toByte(data[sourceOffset + 1] ?? 0, sampleMax);
+    rgba[targetOffset + 2] = toByte(data[sourceOffset + 2] ?? 0, sampleMax);
+    rgba[targetOffset + 3] =
+      safeChannels >= 4 ? toByte(data[sourceOffset + 3] ?? sampleMax, sampleMax) : 255;
+  }
+  return rgba;
+}
+
+function toByte(sample: number, sampleMax: number): number {
+  const normalized = Number.isFinite(sample) ? Math.max(0, Math.min(sampleMax, sample)) : 0;
+  if (sampleMax === 255) {
+    return normalized;
+  }
+  return Math.round((normalized * 255) / sampleMax);
 }
 
 function createMissingSourceFrame(mode: FrameMode): AnsiFrame {

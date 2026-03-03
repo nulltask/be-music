@@ -1,4 +1,5 @@
 import type { BeMusicJson, BeMusicPosition } from '@be-music/json';
+import { normalizeSortedUniqueNonNegativeIntegers } from '@be-music/utils';
 
 export interface BmsonInfo {
   title?: string;
@@ -127,7 +128,7 @@ export function normalizeBmsonLines(lines: unknown): number[] {
     }
   }
 
-  const sorted = [...new Set(values)].sort((left, right) => left - right);
+  const sorted = normalizeSortedUniqueNonNegativeIntegers(values);
   if (sorted.length === 0) {
     return [];
   }

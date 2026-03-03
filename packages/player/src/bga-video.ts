@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
-const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264']);
+const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264', 'mjpeg']);
 // Keep chunks small so ff_decode_multi never allocates too many full-size frames at once.
 const PACKET_READ_CHUNK_BYTES = 65_536;
 const MAX_PACKET_READ_ITERATIONS = 16_384;
@@ -83,7 +83,7 @@ export interface DecodedVideoFrame {
 }
 
 export interface DecodedVideoFrames {
-  codecName: 'mpeg1video' | 'h264';
+  codecName: 'mpeg1video' | 'h264' | 'mjpeg';
   frames: DecodedVideoFrame[];
 }
 
@@ -104,7 +104,7 @@ export async function decodeVideoFrames(videoPath: string): Promise<DecodedVideo
 export async function decodeVideoFramesStream(
   videoPath: string,
   onFrame: (frame: DecodedVideoFrame) => void,
-): Promise<{ codecName: 'mpeg1video' | 'h264'; frameCount: number } | undefined> {
+): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number } | undefined> {
   let libav: LibAvInstance | undefined;
   try {
     const libavInstance = await createLibAvInstance();
@@ -156,7 +156,7 @@ export async function decodeVideoFramesStream(
   }
 }
 
-function isSupportedVideoCodec(codecName: string): codecName is 'mpeg1video' | 'h264' {
+function isSupportedVideoCodec(codecName: string): codecName is 'mpeg1video' | 'h264' | 'mjpeg' {
   return SUPPORTED_VIDEO_CODECS.has(codecName);
 }
 

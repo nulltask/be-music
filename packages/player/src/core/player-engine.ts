@@ -1,6 +1,7 @@
 import { basename, dirname, extname, resolve } from 'node:path';
 import readline from 'node:readline';
 import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
+import { floatToInt16 } from '@be-music/utils';
 import {
   createBeatResolver,
   createEmptyJson,
@@ -31,7 +32,12 @@ import {
   resolveInputTokenEvent,
   type LaneBinding,
 } from '../manual-input.ts';
-import { extractInvisiblePlayableNotes, extractLandmineNotes, extractPlayableNotes } from '../playable-notes.ts';
+import {
+  extractTimedNotes,
+  type TimedLandmineNote,
+  type TimedPlayableNote,
+} from '../playable-notes.ts';
+import { formatSeconds, resolveChartVolWavGain } from '../player-utils.ts';
 import { createNodeAudioSink, type AudioSink } from '../audio-sink.ts';
 import {
   applyHighSpeedControlAction,
@@ -212,7 +218,7 @@ export async function playChartFile(filePath: string, options: PlayerOptions = {
   };
   return mergedOptions.auto ? autoPlay(json, mergedOptions) : manualPlay(json, mergedOptions);
 }
-export { extractInvisiblePlayableNotes, extractLandmineNotes, extractPlayableNotes };
+export { extractInvisiblePlayableNotes, extractLandmineNotes, extractPlayableNotes, extractTimedNotes } from '../playable-notes.ts';
 
 function reportLoadProgress(options: PlayerOptions, ratio: number, message: string, detail?: string): void {
   const listener = options.onLoadProgress;
@@ -251,22 +257,20 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
 
-  const notes = extractPlayableNotes(resolvedJson);
-  const landmineNotes = extractLandmineNotes(resolvedJson);
-  const invisibleNotes = options.showInvisibleNotes === true ? extractInvisiblePlayableNotes(resolvedJson) : [];
-  const renderNotes = [...notes, ...landmineNotes, ...invisibleNotes].sort((left, right) => left.seconds - right.seconds);
+  const extractedNotes = extractTimedNotes(resolvedJson, {
+    includeLandmine: true,
+    includeInvisible: options.showInvisibleNotes === true,
+  });
+  const notes = extractedNotes.playableNotes;
+  const landmineNotes = extractedNotes.landmineNotes;
+  const invisibleNotes = extractedNotes.invisibleNotes;
+  const renderNotes = mergeRenderNotesBySeconds(notes, landmineNotes, invisibleNotes);
   const totalSeconds = Math.max(
     notes.at(-1)?.seconds ?? 0,
     landmineNotes.at(-1)?.seconds ?? 0,
     invisibleNotes.at(-1)?.seconds ?? 0,
   );
-  const channels = [
-    ...new Set([
-      ...notes.map((note) => note.channel),
-      ...landmineNotes.map((note) => note.channel),
-      ...invisibleNotes.map((note) => note.channel),
-    ]),
-  ];
+  const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
   const laneBindings = createLaneBindings(channels, laneModeOptions);
   const laneDisplayMode = resolveLaneDisplayMode(channels, laneModeOptions);
@@ -443,25 +447,35 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       );
       playbackClock = chartClock;
       const badWindowSeconds = IIDX_BAD_WINDOW_MS / 1000;
+      let landmineExpireCursor = 0;
+      let invisibleExpireCursor = 0;
 
       const markExpiredLandmines = (referenceSeconds: number): void => {
-        for (const landmine of landmineNotes) {
+        while (landmineExpireCursor < landmineNotes.length) {
+          const landmine = landmineNotes[landmineExpireCursor]!;
           if (landmine.judged) {
+            landmineExpireCursor += 1;
             continue;
           }
-          if (referenceSeconds - landmine.seconds > badWindowSeconds) {
-            landmine.judged = true;
+          if (referenceSeconds - landmine.seconds <= badWindowSeconds) {
+            break;
           }
+          landmine.judged = true;
+          landmineExpireCursor += 1;
         }
       };
       const markExpiredInvisibleNotes = (referenceSeconds: number): void => {
-        for (const invisible of invisibleNotes) {
+        while (invisibleExpireCursor < invisibleNotes.length) {
+          const invisible = invisibleNotes[invisibleExpireCursor]!;
           if (invisible.judged) {
+            invisibleExpireCursor += 1;
             continue;
           }
-          if (referenceSeconds - invisible.seconds > badWindowSeconds) {
-            invisible.judged = true;
+          if (referenceSeconds - invisible.seconds <= badWindowSeconds) {
+            break;
           }
+          invisible.judged = true;
+          invisibleExpireCursor += 1;
         }
       };
 
@@ -590,22 +604,20 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
 
-  const notes = extractPlayableNotes(resolvedJson);
-  const landmineNotes = extractLandmineNotes(resolvedJson);
-  const invisibleNotes = options.showInvisibleNotes === true ? extractInvisiblePlayableNotes(resolvedJson) : [];
-  const renderNotes = [...notes, ...landmineNotes, ...invisibleNotes].sort((left, right) => left.seconds - right.seconds);
+  const extractedNotes = extractTimedNotes(resolvedJson, {
+    includeLandmine: true,
+    includeInvisible: options.showInvisibleNotes === true,
+  });
+  const notes = extractedNotes.playableNotes;
+  const landmineNotes = extractedNotes.landmineNotes;
+  const invisibleNotes = extractedNotes.invisibleNotes;
+  const renderNotes = mergeRenderNotesBySeconds(notes, landmineNotes, invisibleNotes);
   const totalSeconds = Math.max(
     notes.at(-1)?.seconds ?? 0,
     landmineNotes.at(-1)?.seconds ?? 0,
     invisibleNotes.at(-1)?.seconds ?? 0,
   );
-  const channels = [
-    ...new Set([
-      ...notes.map((note) => note.channel),
-      ...landmineNotes.map((note) => note.channel),
-      ...invisibleNotes.map((note) => note.channel),
-    ]),
-  ];
+  const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
   const laneBindings = createLaneBindings(channels, laneModeOptions);
   const laneDisplayMode = resolveLaneDisplayMode(channels, laneModeOptions);
@@ -717,6 +729,129 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const longNoteSuppressUntilSecondsByChannel = new Map<string, number>();
   let inputCaptureStopped = false;
   let suppressLegacyKeypressUntilMs = 0;
+  const badWindowSeconds = badWindowMs / 1000;
+  const autoScratchNotes = autoScratchEnabled
+    ? scorableNotes.filter((note) => scratchPlayableChannels.has(note.channel))
+    : [];
+  let autoScratchCursor = 0;
+  let scorableMissCursor = 0;
+  let landmineExpireCursor = 0;
+  let invisibleExpireCursor = 0;
+  let remainingScorableNotes = scorableNotes.length;
+  let remainingLandmineNotes = landmineNotes.length;
+  let remainingInvisibleNotes = invisibleNotes.length;
+
+  const markScorableJudged = (note: TimedPlayableNote): boolean => {
+    if (note.judged) {
+      return false;
+    }
+    note.judged = true;
+    remainingScorableNotes -= 1;
+    return true;
+  };
+
+  const markLandmineJudged = (note: TimedLandmineNote): boolean => {
+    if (note.judged) {
+      return false;
+    }
+    note.judged = true;
+    remainingLandmineNotes -= 1;
+    return true;
+  };
+
+  const markInvisibleJudged = (note: TimedPlayableNote): boolean => {
+    if (note.judged) {
+      return false;
+    }
+    note.judged = true;
+    remainingInvisibleNotes -= 1;
+    return true;
+  };
+
+  const markExpiredLandmines = (referenceSeconds: number): void => {
+    while (landmineExpireCursor < landmineNotes.length) {
+      const landmine = landmineNotes[landmineExpireCursor]!;
+      if (landmine.judged) {
+        landmineExpireCursor += 1;
+        continue;
+      }
+      if (referenceSeconds - landmine.seconds <= badWindowSeconds) {
+        break;
+      }
+      markLandmineJudged(landmine);
+      landmineExpireCursor += 1;
+    }
+  };
+
+  const markExpiredInvisibleNotes = (referenceSeconds: number): void => {
+    while (invisibleExpireCursor < invisibleNotes.length) {
+      const invisible = invisibleNotes[invisibleExpireCursor]!;
+      if (invisible.judged) {
+        invisibleExpireCursor += 1;
+        continue;
+      }
+      if (referenceSeconds - invisible.seconds <= badWindowSeconds) {
+        break;
+      }
+      markInvisibleJudged(invisible);
+      invisibleExpireCursor += 1;
+    }
+  };
+
+  const applyAutoScratchJudgements = (referenceSeconds: number): void => {
+    if (!autoScratchEnabled) {
+      return;
+    }
+    while (autoScratchCursor < autoScratchNotes.length) {
+      const note = autoScratchNotes[autoScratchCursor]!;
+      if (note.judged) {
+        autoScratchCursor += 1;
+        continue;
+      }
+      if (referenceSeconds < note.seconds) {
+        break;
+      }
+      autoScratchCursor += 1;
+      if (!markScorableJudged(note)) {
+        continue;
+      }
+      applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
+      combo += 1;
+      audioSession?.triggerEvent?.(note.event);
+      tui?.flashLane(note.channel);
+      if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
+        note.visibleUntilBeat = note.endBeat;
+        tui?.holdLaneUntilBeat(note.channel, note.endBeat);
+      }
+      if (tui) {
+        tui.setLatestJudge('PERFECT');
+        tui.setCombo(combo);
+      }
+    }
+  };
+
+  const applyExpiredScorableJudgements = (referenceSeconds: number): void => {
+    while (scorableMissCursor < scorableNotes.length) {
+      const note = scorableNotes[scorableMissCursor]!;
+      if (note.judged) {
+        scorableMissCursor += 1;
+        continue;
+      }
+      if (referenceSeconds - note.seconds <= badWindowSeconds) {
+        break;
+      }
+      scorableMissCursor += 1;
+      if (!markScorableJudged(note)) {
+        continue;
+      }
+      applyJudgeToSummary(summary, 'POOR', scoreTracker);
+      combo = 0;
+      if (tui) {
+        tui.setLatestJudge('POOR');
+        tui.setCombo(combo);
+      }
+    }
+  };
 
   const stopInputCapture = () => {
     if (inputCaptureStopped) {
@@ -769,13 +904,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       refreshedHold = true;
     }
 
-    const candidate = findBestCandidate(scorableNotes, candidateChannels, nowSec, badWindowMs / 1000);
-    const landmineCandidate = findBestCandidate(landmineNotes, candidateChannels, nowSec, badWindowMs / 1000);
+    const candidate = findBestCandidate(scorableNotes, candidateChannels, nowSec, badWindowSeconds);
+    const landmineCandidate = findBestCandidate(landmineNotes, candidateChannels, nowSec, badWindowSeconds);
     const candidateDelta = candidate ? Math.abs(candidate.seconds - nowSec) : Number.POSITIVE_INFINITY;
     const landmineDelta = landmineCandidate ? Math.abs(landmineCandidate.seconds - nowSec) : Number.POSITIVE_INFINITY;
 
     if (landmineCandidate && landmineDelta <= candidateDelta) {
-      landmineCandidate.judged = true;
+      if (!markLandmineJudged(landmineCandidate)) {
+        return;
+      }
       applyJudgeToSummary(summary, 'BAD', scoreTracker);
       combo = 0;
       if (!tui) {
@@ -810,7 +947,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       return;
     }
 
-    candidate.judged = true;
+    if (!markScorableJudged(candidate)) {
+      return;
+    }
     const channel = candidate.channel;
     tui?.flashLane(channel);
     audioSession?.triggerEvent?.(candidate.event);
@@ -1047,41 +1186,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
 
-      if (autoScratchEnabled) {
-        for (const note of scorableNotes) {
-          if (note.judged || !scratchPlayableChannels.has(note.channel) || nowSec < note.seconds) {
-            continue;
-          }
-          note.judged = true;
-          applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
-          combo += 1;
-          audioSession?.triggerEvent?.(note.event);
-          tui?.flashLane(note.channel);
-          if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
-            note.visibleUntilBeat = note.endBeat;
-            tui?.holdLaneUntilBeat(note.channel, note.endBeat);
-          }
-          if (tui) {
-            tui.setLatestJudge('PERFECT');
-            tui.setCombo(combo);
-          }
-        }
-      }
-
-      for (const note of scorableNotes) {
-        if (note.judged) {
-          continue;
-        }
-        if (nowSec - note.seconds > badWindowMs / 1000) {
-          note.judged = true;
-          applyJudgeToSummary(summary, 'POOR', scoreTracker);
-          combo = 0;
-          if (tui) {
-            tui.setLatestJudge('POOR');
-            tui.setCombo(combo);
-          }
-        }
-      }
+      applyAutoScratchJudgements(nowSec);
+      applyExpiredScorableJudgements(nowSec);
 
       tui?.render({
         currentBeat: nowBeat,
@@ -1094,28 +1200,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         ...createBgaRenderFrame(bgaRenderer, nowSec),
       });
 
-      for (const landmine of landmineNotes) {
-        if (landmine.judged) {
-          continue;
-        }
-        if (nowSec - landmine.seconds > badWindowMs / 1000) {
-          landmine.judged = true;
-        }
-      }
-      for (const invisible of invisibleNotes) {
-        if (invisible.judged) {
-          continue;
-        }
-        if (nowSec - invisible.seconds > badWindowMs / 1000) {
-          invisible.judged = true;
-        }
-      }
+      markExpiredLandmines(nowSec);
+      markExpiredInvisibleNotes(nowSec);
 
-      if (
-        scorableNotes.every((note) => note.judged) &&
-        landmineNotes.every((note) => note.judged) &&
-        invisibleNotes.every((note) => note.judged)
-      ) {
+      if (remainingScorableNotes === 0 && remainingLandmineNotes === 0 && remainingInvisibleNotes === 0) {
         break;
       }
 
@@ -2100,11 +2188,14 @@ async function buildPlayableSampleMap(
   chartWavGain = 1,
 ): Promise<Map<string, RenderResult>> {
   const sampleMap = new Map<string, RenderResult>();
-  const keys = [
-    ...new Set(
-      json.events.filter((event) => isPlayableChannel(event.channel)).map((event) => normalizeObjectKey(event.value)),
-    ),
-  ];
+  const keySet = new Set<string>();
+  for (const event of json.events) {
+    if (!isPlayableChannel(event.channel)) {
+      continue;
+    }
+    keySet.add(normalizeObjectKey(event.value));
+  }
+  const keys = [...keySet];
 
   if (keys.length === 0) {
     onProgress?.({
@@ -2181,14 +2272,6 @@ function normalizePlayVolume(value: number | undefined): number {
     return 1;
   }
   return Math.max(0, value);
-}
-
-function resolveChartVolWavGain(json: BeMusicJson): number {
-  const volWav = json.bms.volWav;
-  if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
-    return 1;
-  }
-  return volWav / 100;
 }
 
 function applyGainToRenderResult(result: RenderResult, gain: number): RenderResult {
@@ -2286,12 +2369,72 @@ function measureRenderPeak(left: Float32Array, right: Float32Array): number {
   return peak;
 }
 
-function floatToInt16(value: number): number {
-  const clamped = Math.max(-1, Math.min(1, value));
-  if (clamped >= 0) {
-    return Math.round(clamped * 32767);
+function mergeRenderNotesBySeconds(
+  notes: ReadonlyArray<TimedPlayableNote>,
+  landmineNotes: ReadonlyArray<TimedLandmineNote>,
+  invisibleNotes: ReadonlyArray<TimedPlayableNote>,
+): Array<TimedPlayableNote | TimedLandmineNote> {
+  const merged: Array<TimedPlayableNote | TimedLandmineNote> = [];
+  let noteIndex = 0;
+  let landmineIndex = 0;
+  let invisibleIndex = 0;
+
+  while (noteIndex < notes.length || landmineIndex < landmineNotes.length || invisibleIndex < invisibleNotes.length) {
+    const note = noteIndex < notes.length ? notes[noteIndex]! : undefined;
+    const landmine = landmineIndex < landmineNotes.length ? landmineNotes[landmineIndex]! : undefined;
+    const invisible = invisibleIndex < invisibleNotes.length ? invisibleNotes[invisibleIndex]! : undefined;
+
+    if (
+      note &&
+      (landmine === undefined || note.seconds <= landmine.seconds) &&
+      (invisible === undefined || note.seconds <= invisible.seconds)
+    ) {
+      merged.push(note);
+      noteIndex += 1;
+      continue;
+    }
+
+    if (landmine && (invisible === undefined || landmine.seconds <= invisible.seconds)) {
+      merged.push(landmine);
+      landmineIndex += 1;
+      continue;
+    }
+
+    if (invisible) {
+      merged.push(invisible);
+      invisibleIndex += 1;
+    }
   }
-  return Math.round(clamped * 32768);
+
+  return merged;
+}
+
+function collectUniqueNoteChannels(
+  notes: ReadonlyArray<TimedPlayableNote>,
+  landmineNotes: ReadonlyArray<TimedLandmineNote>,
+  invisibleNotes: ReadonlyArray<TimedPlayableNote>,
+): string[] {
+  const channels: string[] = [];
+  const seen = new Set<string>();
+  const collect = (channel: string): void => {
+    if (seen.has(channel)) {
+      return;
+    }
+    seen.add(channel);
+    channels.push(channel);
+  };
+
+  for (const note of notes) {
+    collect(note.channel);
+  }
+  for (const note of landmineNotes) {
+    collect(note.channel);
+  }
+  for (const note of invisibleNotes) {
+    collect(note.channel);
+  }
+
+  return channels;
 }
 
 function createPlaybackClock(startAtMs: number): PlaybackClock {
@@ -2448,23 +2591,6 @@ function printLaneMap(bindings: LaneBinding[]): void {
   for (const binding of bindings) {
     process.stdout.write(`  ${binding.channel} => ${binding.keyLabel}\n`);
   }
-}
-
-function formatSeconds(seconds: number): string {
-  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
-  const totalCentiseconds = Math.floor(safe * 100);
-  const centiseconds = totalCentiseconds % 100;
-  const totalSeconds = Math.floor(totalCentiseconds / 100);
-  const secondsPart = totalSeconds % 60;
-  const totalMinutes = Math.floor(totalSeconds / 60);
-
-  if (totalMinutes < 60) {
-    return `${totalMinutes}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
-  }
-
-  const minutesPart = totalMinutes % 60;
-  const hours = Math.floor(totalMinutes / 60);
-  return `${hours}:${minutesPart.toString().padStart(2, '0')}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
 }
 
 function resolveActiveFreeZoneChannels(

@@ -17,6 +17,14 @@ export function clampSignedUnit(value: number): number {
   return clamp(value, -1, 1);
 }
 
+export function floatToInt16(value: number): number {
+  const clamped = clampSignedUnit(value);
+  if (clamped >= 0) {
+    return Math.round(clamped * 32767);
+  }
+  return Math.round(clamped * 32768);
+}
+
 export function normalizeNonNegativeInt(value: number, fallback = 0): number {
   if (!Number.isFinite(value)) {
     return fallback;
@@ -56,4 +64,48 @@ export function lcm(left: number, right: number): number {
     return 0;
   }
   return Math.abs((left * right) / gcd(left, right));
+}
+
+export function compareFractions(
+  leftNumerator: number,
+  leftDenominator: number,
+  rightNumerator: number,
+  rightDenominator: number,
+): number {
+  if (leftDenominator === rightDenominator) {
+    return leftNumerator - rightNumerator;
+  }
+
+  const leftScaled = leftNumerator * rightDenominator;
+  const rightScaled = rightNumerator * leftDenominator;
+  if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
+    if (leftScaled < rightScaled) {
+      return -1;
+    }
+    if (leftScaled > rightScaled) {
+      return 1;
+    }
+    return 0;
+  }
+
+  const leftScaledBigInt = BigInt(leftNumerator) * BigInt(rightDenominator);
+  const rightScaledBigInt = BigInt(rightNumerator) * BigInt(leftDenominator);
+  if (leftScaledBigInt < rightScaledBigInt) {
+    return -1;
+  }
+  if (leftScaledBigInt > rightScaledBigInt) {
+    return 1;
+  }
+  return 0;
+}
+
+export function normalizeSortedUniqueNonNegativeIntegers(values: ReadonlyArray<number>): number[] {
+  const deduplicated = new Set<number>();
+  for (const value of values) {
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+    deduplicated.add(Math.max(0, Math.floor(value)));
+  }
+  return [...deduplicated].sort((left, right) => left - right);
 }

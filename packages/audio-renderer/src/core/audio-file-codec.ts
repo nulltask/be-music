@@ -1,5 +1,5 @@
 import { extname } from 'node:path';
-import { clampSignedUnit } from '@be-music/utils';
+import { floatToInt16 } from '@be-music/utils';
 
 export type AudioFileFormat = 'wav' | 'aiff';
 
@@ -122,12 +122,4 @@ function writeExtended80(buffer: Buffer, offset: number, value: number): void {
   buffer.writeUInt16BE(exponent & 0x7fff, offset);
   buffer.writeUInt32BE(hi >>> 0, offset + 2);
   buffer.writeUInt32BE(lo >>> 0, offset + 6);
-}
-
-function floatToInt16(sample: number): number {
-  const clamped = clampSignedUnit(sample);
-  if (clamped >= 0) {
-    return Math.round(clamped * 32767);
-  }
-  return Math.round(clamped * 32768);
 }

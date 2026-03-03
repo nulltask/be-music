@@ -1,9 +1,11 @@
 import { access } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
+import { floatToInt16 } from '@be-music/utils';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { type RenderResult, renderJson } from '@be-music/audio-renderer';
 import { createNodeAudioSink } from '../audio-sink.ts';
+import { resolveChartVolWavGain } from '../player-utils.ts';
 
 interface PreviewPlaybackHandle {
   stop: () => void;
@@ -291,14 +293,6 @@ function createPreviewPathCandidates(chart: BeMusicJson, previewPath: string): s
   return [...candidates];
 }
 
-function resolveChartVolWavGain(chart: BeMusicJson): number {
-  const volWav = chart.bms.volWav;
-  if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
-    return 1;
-  }
-  return volWav / 100;
-}
-
 function trimPreviewLeadingSilence(rendered: RenderResult): RenderResult {
   const length = Math.min(rendered.left.length, rendered.right.length);
   let start = 0;
@@ -433,12 +427,4 @@ function writeLoopedPreviewPcmChunk(chunk: Buffer, rendered: RenderResult, start
     }
   }
   return source;
-}
-
-function floatToInt16(value: number): number {
-  const clamped = Math.max(-1, Math.min(1, value));
-  if (clamped >= 0) {
-    return Math.round(clamped * 32767);
-  }
-  return Math.round(clamped * 32768);
 }

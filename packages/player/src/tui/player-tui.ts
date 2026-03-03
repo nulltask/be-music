@@ -1,5 +1,6 @@
 import { clamp } from '@be-music/utils';
 import type { PlayerSummary } from '../index.ts';
+import { formatSeconds } from '../player-utils.ts';
 import {
   normalizeHighSpeed,
   resolveAnimatedHighSpeedValue,
@@ -1531,23 +1532,6 @@ function formatActiveAudioFiles(files: string[]): string {
   const extra = uniqueLabels.length - visible.length;
   const suffix = extra > 0 ? ` ... +${extra}` : '';
   return `${visible.join(', ')}${suffix}`;
-}
-
-function formatSeconds(seconds: number): string {
-  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
-  const totalCentiseconds = Math.floor(safe * 100);
-  const centiseconds = totalCentiseconds % 100;
-  const totalSeconds = Math.floor(totalCentiseconds / 100);
-  const secondsPart = totalSeconds % 60;
-  const totalMinutes = Math.floor(totalSeconds / 60);
-
-  if (totalMinutes < 60) {
-    return `${totalMinutes}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
-  }
-
-  const minutesPart = totalMinutes % 60;
-  const hours = Math.floor(totalMinutes / 60);
-  return `${hours}:${minutesPart.toString().padStart(2, '0')}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
 }
 
 function findCurrentMeasure(timeline: ReadonlyArray<MeasureTimelinePoint> | undefined, currentSeconds: number): number {

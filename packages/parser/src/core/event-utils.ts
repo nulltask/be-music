@@ -5,7 +5,7 @@ import {
   type BeMusicJson,
   type BeMusicPosition,
 } from '@be-music/json';
-import { normalizeFractionNumerator, normalizeNonNegativeInt, normalizePositiveInt } from '@be-music/utils';
+import { compareFractions, normalizeFractionNumerator, normalizeNonNegativeInt, normalizePositiveInt } from '@be-music/utils';
 
 type MeasureLengthEntry = BeMusicJson['measures'][number];
 
@@ -185,31 +185,7 @@ function normalizeEventBmsonExtension(value: unknown): BeMusicEvent['bmson'] | u
 }
 
 function compareEventPosition(left: BeMusicEvent, right: BeMusicEvent): number {
-  if (left.position[1] === right.position[1]) {
-    return left.position[0] - right.position[0];
-  }
-
-  const leftScaled = left.position[0] * right.position[1];
-  const rightScaled = right.position[0] * left.position[1];
-  if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
-    if (leftScaled < rightScaled) {
-      return -1;
-    }
-    if (leftScaled > rightScaled) {
-      return 1;
-    }
-    return 0;
-  }
-
-  const leftScaledBigInt = BigInt(left.position[0]) * BigInt(right.position[1]);
-  const rightScaledBigInt = BigInt(right.position[0]) * BigInt(left.position[1]);
-  if (leftScaledBigInt < rightScaledBigInt) {
-    return -1;
-  }
-  if (leftScaledBigInt > rightScaledBigInt) {
-    return 1;
-  }
-  return 0;
+  return compareFractions(left.position[0], left.position[1], right.position[0], right.position[1]);
 }
 
 function normalizeAsciiTokenCode(code: number): number {

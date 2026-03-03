@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vitest';
-import { PNG } from 'pngjs';
-import { encode as encodeBmpTs } from 'bmp-ts';
+import { encode as encodeBmp } from 'fast-bmp';
+import { encode as encodePng } from 'fast-png';
 import { createBgaAnsiRenderer } from './bga.ts';
 
 interface RgbColor {
@@ -149,22 +149,27 @@ async function writePng(
   height: number,
   pixel: (x: number, y: number) => { r: number; g: number; b: number; a: number },
 ): Promise<void> {
-  const pngModule = PNG as unknown as {
-    new (options: { width: number; height: number }): { data: Uint8Array };
-    sync: { write(value: unknown): Uint8Array };
-  };
-  const png = new pngModule({ width, height });
+  const data = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const value = pixel(x, y);
       const offset = (y * width + x) * 4;
-      png.data[offset] = value.r;
-      png.data[offset + 1] = value.g;
-      png.data[offset + 2] = value.b;
-      png.data[offset + 3] = value.a;
+      data[offset] = value.r;
+      data[offset + 1] = value.g;
+      data[offset + 2] = value.b;
+      data[offset + 3] = value.a;
     }
   }
-  await writeFile(path, pngModule.sync.write(png));
+  await writeFile(
+    path,
+    encodePng({
+      width,
+      height,
+      data,
+      depth: 8,
+      channels: 4,
+    }),
+  );
 }
 
 async function writeBmp(
@@ -173,18 +178,28 @@ async function writeBmp(
   height: number,
   pixel: (x: number, y: number) => { r: number; g: number; b: number; a: number },
 ): Promise<void> {
-  const data = Buffer.alloc(width * height * 4);
+  const data = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const value = pixel(x, y);
       const offset = (y * width + x) * 4;
-      data[offset] = value.a;
-      data[offset + 1] = value.b;
-      data[offset + 2] = value.g;
-      data[offset + 3] = value.r;
+      data[offset] = value.r;
+      data[offset + 1] = value.g;
+      data[offset + 2] = value.b;
+      data[offset + 3] = value.a;
     }
   }
-  await writeFile(path, encodeBmpTs({ data, width, height }).data);
+  await writeFile(
+    path,
+    encodeBmp({
+      width,
+      height,
+      data,
+      channels: 4,
+      components: 3,
+      bitsPerPixel: 32,
+    }),
+  );
 }
 
 function parseAnsiPixels(lines: string[]): Pixel[][] {

@@ -23,5 +23,8 @@
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt . --write",
     "format:check": "oxfmt . --check"
+  },
+  "dependencies": {
+    "@be-music/utils": "workspace:*"
   }
 }
