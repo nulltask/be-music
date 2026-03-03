@@ -18,14 +18,20 @@
     }
   },
   "scripts": {
+    "build:bundle": "vite build",
     "build": "vite build && tsgo -b tsconfig.json --emitDeclarationOnly --force",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "dev": "tsx --tsconfig ../../tsconfig.dev.json src/cli.ts"
+    "dev": "tsx --tsconfig ../../tsconfig.dev.json src/cli.ts",
+    "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt . --write",
+    "format:check": "oxfmt . --check"
   },
   "dependencies": {
-    "@be-music/json": "0.1.0",
-    "@be-music/parser": "0.1.0",
-    "@be-music/stringifier": "0.1.0",
-    "@be-music/utils": "0.1.0"
+    "@be-music/json": "workspace:*",
+    "@be-music/parser": "workspace:*",
+    "@be-music/stringifier": "workspace:*",
+    "@be-music/utils": "workspace:*"
   }
 }

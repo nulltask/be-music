@@ -15,7 +15,13 @@
     }
   },
   "scripts": {
+    "build:bundle": "vite build",
     "build": "vite build && tsgo -b tsconfig.json --emitDeclarationOnly --force",
-    "clean": "rimraf dist tsconfig.tsbuildinfo"
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt . --write",
+    "format:check": "oxfmt . --check"
   }
 }
