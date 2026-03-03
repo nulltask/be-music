@@ -98,7 +98,7 @@ const HIGHLIGHT_BG_STEPS = [249, 248, 247, 246, 245, 244, 243, 242, 241, 240, 23
 const HIGHLIGHT_DECAY_POWER = 0.72;
 const RED_NOTE_CHANNELS = new Set(['16', '26']);
 const WHITE_NOTE_CHANNELS = new Set(['11', '13', '15', '19', '21', '23', '25', '29']);
-const BLUE_NOTE_CHANNELS = new Set(['12', '14', '18', '22', '24', '28']);
+const BLUE_NOTE_CHANNELS = new Set(['12', '14', '17', '18', '22', '24', '27', '28']);
 const NOTE_HEAD_SYMBOL = '●';
 const LONG_NOTE_BODY_SYMBOL = '■';
 const LONG_NOTE_TAIL_SYMBOL = '◆';
@@ -110,6 +110,10 @@ const ANSI_RESET = '\u001b[0m';
 const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
 const HIGH_SPEED_TRANSITION_MS = 180;
+const FREE_ZONE_CHANNEL_TO_SCRATCH_CHANNEL = new Map<string, string>([
+  ['17', '16'],
+  ['27', '26'],
+]);
 
 export class PlayerTui {
   private readonly options: TuiOptions;
@@ -255,18 +259,19 @@ export class PlayerTui {
   }
 
   flashLane(channel: string): void {
-    this.laneFlashUntil.set(channel, Date.now() + FLASH_DURATION_MS);
+    this.laneFlashUntil.set(resolveRenderLaneChannel(channel), Date.now() + FLASH_DURATION_MS);
   }
 
   holdLaneUntilBeat(channel: string, beat: number): void {
     if (!Number.isFinite(beat)) {
       return;
     }
-    const previous = this.laneHoldUntilBeat.get(channel);
+    const targetChannel = resolveRenderLaneChannel(channel);
+    const previous = this.laneHoldUntilBeat.get(targetChannel);
     if (previous !== undefined && previous >= beat) {
       return;
     }
-    this.laneHoldUntilBeat.set(channel, beat);
+    this.laneHoldUntilBeat.set(targetChannel, beat);
   }
 
   render(frame: TuiFrame): void {
@@ -282,6 +287,7 @@ export class PlayerTui {
     const displayHighSpeed = this.resolveDisplayHighSpeed(now);
     const scrollWindowBeats = resolveVisibleBeatsForTuiGrid(rowCount, displayHighSpeed);
     const grid = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => '│'));
+    const gridSourceChannels = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => ''));
     const laneHighlightRatios = new Map<number, number>();
 
     for (const boundaryBeat of this.options.measureBoundariesBeats ?? []) {
@@ -315,7 +321,7 @@ export class PlayerTui {
       if (note.judged && !keepVisible) {
         continue;
       }
-      const lane = this.laneIndex.get(note.channel);
+      const lane = this.laneIndex.get(resolveRenderLaneChannel(note.channel));
       if (lane === undefined) {
         continue;
       }
@@ -327,7 +333,7 @@ export class PlayerTui {
           continue;
         }
         const row = distanceToRow(visibleDistance, rowCount, scrollWindowBeats);
-        grid[row][lane] = MINE_NOTE_SYMBOL;
+        setLaneCell(grid, gridSourceChannels, row, lane, MINE_NOTE_SYMBOL, note.channel);
         continue;
       }
 
@@ -357,7 +363,7 @@ export class PlayerTui {
             if (row < 0 || row >= rowCount) {
               continue;
             }
-            grid[row][lane] = longBodySymbol;
+            setLaneCell(grid, gridSourceChannels, row, lane, longBodySymbol, note.channel);
           }
         }
 
@@ -366,7 +372,7 @@ export class PlayerTui {
         if (isDistanceWithinWindow(tailVisibleDistance, scrollWindowBeats)) {
           const tailRow = distanceToRow(tailVisibleDistance, rowCount, scrollWindowBeats);
           if (tailRow >= 0 && tailRow < rowCount) {
-            grid[tailRow][lane] = longTailSymbol;
+            setLaneCell(grid, gridSourceChannels, tailRow, lane, longTailSymbol, note.channel);
           }
         }
       }
@@ -377,7 +383,14 @@ export class PlayerTui {
         continue;
       }
       const row = distanceToRow(headVisibleDistance, rowCount, scrollWindowBeats);
-      grid[row][lane] = note.invisible ? INVISIBLE_NOTE_HEAD_SYMBOL : NOTE_HEAD_SYMBOL;
+      setLaneCell(
+        grid,
+        gridSourceChannels,
+        row,
+        lane,
+        note.invisible ? INVISIBLE_NOTE_HEAD_SYMBOL : NOTE_HEAD_SYMBOL,
+        note.channel,
+      );
     }
 
     for (const [channel, until] of this.laneFlashUntil.entries()) {
@@ -409,7 +422,7 @@ export class PlayerTui {
     lines.push(`BMS PLAYER TUI [${this.options.mode}]`);
     lines.push(`${this.options.title}${this.options.artist ? ` / ${this.options.artist}` : ''}`);
     lines.push(
-      `${renderProgress(frame.currentSeconds, frame.totalSeconds)}  ${formatSeconds(frame.currentSeconds)} / ${formatSeconds(frame.totalSeconds)} sec`,
+      `${renderProgress(frame.currentSeconds, frame.totalSeconds)}  ${formatSeconds(frame.currentSeconds)} / ${formatSeconds(frame.totalSeconds)}`,
     );
     const currentBpm = findCurrentBpm(this.options.bpmTimeline, frame.currentSeconds);
     const currentScroll = findCurrentScroll(this.options.scrollTimeline, frame.currentBeat);
@@ -459,9 +472,17 @@ export class PlayerTui {
       ),
     );
 
-    for (const row of grid) {
+    for (let rowIndex = 0; rowIndex < grid.length; rowIndex += 1) {
+      const row = grid[rowIndex]!;
       laneLines.push(
-        renderLaneRow(row, this.laneChannels, this.laneWidths, this.options.splitAfterIndex, laneHighlightRatios),
+        renderLaneRow(
+          row,
+          this.laneChannels,
+          this.laneWidths,
+          this.options.splitAfterIndex,
+          laneHighlightRatios,
+          gridSourceChannels[rowIndex],
+        ),
       );
     }
 
@@ -775,6 +796,7 @@ function renderLaneRow(
   laneWidths: number[],
   splitAfterIndex = -1,
   laneHighlightRatios = new Map<number, number>(),
+  sourceChannels?: string[],
 ): string {
   const cells = values.map((value, index) => {
     const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
@@ -806,7 +828,7 @@ function renderLaneRow(
     const decoratedCell = isMine
       ? colorizeMine(cell)
       : isNote
-        ? colorizeNote(cell, channels[index] ?? '', isInvisibleNote, noteUnderline)
+        ? colorizeNote(cell, sourceChannels?.[index] ?? channels[index] ?? '', isInvisibleNote, noteUnderline)
         : value === MEASURE_LINE_SYMBOL
           ? colorizeMeasureLine(cell)
           : cell;
@@ -823,6 +845,65 @@ function renderLaneRow(
   const left = cells.slice(0, splitAfterIndex + 1).join(' ');
   const right = cells.slice(splitAfterIndex + 1).join(' ');
   return `${left}   ${right}`;
+}
+
+function resolveRenderLaneChannel(channel: string): string {
+  const normalized = channel.toUpperCase();
+  return FREE_ZONE_CHANNEL_TO_SCRATCH_CHANNEL.get(normalized) ?? normalized;
+}
+
+function isFreeZoneChannel(channel: string): boolean {
+  const normalized = channel.toUpperCase();
+  return normalized === '17' || normalized === '27';
+}
+
+function setLaneCell(
+  grid: string[][],
+  sourceChannels: string[][],
+  row: number,
+  lane: number,
+  symbol: string,
+  sourceChannel: string,
+): void {
+  const rowCells = grid[row];
+  const rowSources = sourceChannels[row];
+  if (!rowCells || !rowSources || lane < 0 || lane >= rowCells.length || lane >= rowSources.length) {
+    return;
+  }
+
+  const previousSymbol = rowCells[lane] ?? '│';
+  const previousSourceChannel = rowSources[lane] ?? '';
+  const nextPriority = resolveLaneCellPriority(symbol, sourceChannel);
+  const previousPriority = resolveLaneCellPriority(previousSymbol, previousSourceChannel);
+  if (nextPriority < previousPriority) {
+    return;
+  }
+
+  rowCells[lane] = symbol;
+  rowSources[lane] = sourceChannel.toUpperCase();
+}
+
+function resolveLaneCellPriority(symbol: string, sourceChannel: string): number {
+  if (symbol === MINE_NOTE_SYMBOL) {
+    return 5;
+  }
+  if (
+    symbol === NOTE_HEAD_SYMBOL ||
+    symbol === LONG_NOTE_BODY_SYMBOL ||
+    symbol === LONG_NOTE_TAIL_SYMBOL ||
+    symbol === INVISIBLE_NOTE_HEAD_SYMBOL ||
+    symbol === INVISIBLE_LONG_NOTE_BODY_SYMBOL ||
+    symbol === INVISIBLE_LONG_NOTE_TAIL_SYMBOL
+  ) {
+    return isFreeZoneChannel(sourceChannel) ? 3 : 4;
+  }
+  if (symbol === MEASURE_LINE_SYMBOL) {
+    return 1;
+  }
+  if (symbol === '│') {
+    return 0;
+  }
+  return 1;
 }
 
 function center(value: string, width: number): string {
@@ -1237,7 +1318,20 @@ function formatActiveAudioFiles(files: string[]): string {
 }
 
 function formatSeconds(seconds: number): string {
-  return Math.max(0, seconds).toFixed(2);
+  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  const totalCentiseconds = Math.floor(safe * 100);
+  const centiseconds = totalCentiseconds % 100;
+  const totalSeconds = Math.floor(totalCentiseconds / 100);
+  const secondsPart = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+
+  if (totalMinutes < 60) {
+    return `${totalMinutes}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
+  }
+
+  const minutesPart = totalMinutes % 60;
+  const hours = Math.floor(totalMinutes / 60);
+  return `${hours}:${minutesPart.toString().padStart(2, '0')}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
 }
 
 function findCurrentMeasure(timeline: ReadonlyArray<MeasureTimelinePoint> | undefined, currentSeconds: number): number {

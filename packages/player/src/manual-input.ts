@@ -60,6 +60,11 @@ interface FixedLaneDefinition {
   isScratch?: boolean;
 }
 
+export interface LaneModeOptions {
+  player?: number;
+  chartExtension?: string;
+}
+
 const IIDX_5KEY_SP_BINDINGS: FixedLaneDefinition[] = [
   { channel: '16', keyLabel: 'a', inputTokens: ['a'], side: '1P', isScratch: true },
   { channel: '11', keyLabel: 'z', inputTokens: ['z'], side: '1P' },
@@ -131,13 +136,13 @@ const FIXED_BINDINGS_BY_MODE: Record<LaneMode, FixedLaneDefinition[]> = {
   '48-key-dp': KBM_48KEY_DP_BINDINGS,
 };
 
-export function createLaneBindings(channels: string[]): LaneBinding[] {
+export function createLaneBindings(channels: string[], options: LaneModeOptions = {}): LaneBinding[] {
   const existing = new Set(channels.map((channel) => normalizeChannel(channel)));
   if (existing.size === 0) {
     return [];
   }
 
-  const mode = resolveLaneMode(existing);
+  const mode = resolveLaneMode(existing, options);
   const modeBindings = FIXED_BINDINGS_BY_MODE[mode];
   const bindings: LaneBinding[] = [];
   const usedTokens = new Set<string>();
@@ -154,7 +159,16 @@ export function createLaneBindings(channels: string[]): LaneBinding[] {
     definition.inputTokens.forEach((token) => usedTokens.add(token));
   }
 
-  const unknownChannels = [...existing].filter((channel) => !definedChannels.has(channel));
+  const unknownChannels = [...existing].filter((channel) => {
+    if (definedChannels.has(channel)) {
+      return false;
+    }
+    const scratchChannel = resolveFreeZoneScratchChannel(channel);
+    if (scratchChannel && definedChannels.has(scratchChannel)) {
+      return false;
+    }
+    return true;
+  });
   unknownChannels.sort();
 
   let fallbackIndex = 0;
@@ -178,15 +192,45 @@ export function createLaneBindings(channels: string[]): LaneBinding[] {
   return bindings;
 }
 
-export function resolveLaneDisplayMode(channels: string[]): string {
+export function appendFreeZoneInputChannels(
+  inputTokenToChannels: Map<string, string[]>,
+  bindings: LaneBinding[],
+  channels: string[],
+): void {
+  const existing = new Set(channels.map((channel) => normalizeChannel(channel)));
+  const definedChannels = new Set(bindings.map((binding) => binding.channel));
+
+  const appendAlias = (freeZoneChannel: string, scratchChannel: string): void => {
+    if (!existing.has(freeZoneChannel) || definedChannels.has(freeZoneChannel)) {
+      return;
+    }
+    const scratchBinding = bindings.find((binding) => binding.channel === scratchChannel);
+    if (!scratchBinding) {
+      return;
+    }
+    for (const token of scratchBinding.inputTokens) {
+      const normalizedToken = token.toLowerCase();
+      const mappedChannels = inputTokenToChannels.get(normalizedToken) ?? [];
+      if (!mappedChannels.includes(freeZoneChannel)) {
+        mappedChannels.push(freeZoneChannel);
+        inputTokenToChannels.set(normalizedToken, mappedChannels);
+      }
+    }
+  };
+
+  appendAlias('17', '16');
+  appendAlias('27', '26');
+}
+
+export function resolveLaneDisplayMode(channels: string[], options: LaneModeOptions = {}): string {
   const existing = new Set(channels.map((channel) => normalizeChannel(channel)));
   if (existing.size === 0) {
     return 'UNKNOWN';
   }
-  return LANE_MODE_LABELS[resolveLaneMode(existing)];
+  return LANE_MODE_LABELS[resolveLaneMode(existing, options)];
 }
 
-function resolveLaneMode(existing: ReadonlySet<string>): LaneMode {
+function resolveLaneMode(existing: ReadonlySet<string>, options: LaneModeOptions): LaneMode {
   const hasExtendedLane = [...existing].some((channel) => {
     if (channel.length !== 2) {
       return false;
@@ -198,25 +242,63 @@ function resolveLaneMode(existing: ReadonlySet<string>): LaneMode {
     return laneIndex !== undefined && laneIndex > 9;
   });
   const has2P = [...existing].some((channel) => is2PSideLaneChannel(channel));
+  const has7KeyMarker = existing.has('18') || existing.has('19');
+  const has14KeyMarker = has7KeyMarker || existing.has('28') || existing.has('29');
 
   if (hasExtendedLane) {
     return has2P ? '48-key-dp' : '24-key-sp';
   }
 
-  if (has2P) {
-    const has14KeyMarker = existing.has('18') || existing.has('19') || existing.has('28') || existing.has('29');
-    return has14KeyMarker ? '14-key-dp' : '5-key-dp';
+  if (has2P && has14KeyMarker) {
+    return '14-key-dp';
   }
 
-  if (existing.has('17')) {
+  if (options.player === 3 && existing.has('17')) {
     return '9-key';
   }
 
-  if (existing.has('18') || existing.has('19')) {
+  if (has7KeyMarker) {
     return '7-key-sp';
   }
 
+  const fallback = resolveLaneModeByExtension(options.chartExtension, has2P);
+  if (fallback) {
+    return fallback;
+  }
+
+  if (has2P) {
+    return '5-key-dp';
+  }
+
   return '5-key-sp';
+}
+
+function resolveLaneModeByExtension(chartExtension: string | undefined, has2P: boolean): LaneMode | undefined {
+  if (typeof chartExtension !== 'string') {
+    return undefined;
+  }
+  const normalized = chartExtension.trim().toLowerCase();
+  if (normalized === '.pms') {
+    return '9-key';
+  }
+  if (normalized === '.bme') {
+    return has2P ? '14-key-dp' : '7-key-sp';
+  }
+  if (normalized === '.bms') {
+    return has2P ? '5-key-dp' : '5-key-sp';
+  }
+  return undefined;
+}
+
+function resolveFreeZoneScratchChannel(channel: string): string | undefined {
+  const normalized = normalizeChannel(channel);
+  if (normalized === '17') {
+    return '16';
+  }
+  if (normalized === '27') {
+    return '26';
+  }
+  return undefined;
 }
 
 function is2PSideLaneChannel(channel: string): boolean {

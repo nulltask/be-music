@@ -1,4 +1,4 @@
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, extname, resolve } from 'node:path';
 import readline from 'node:readline';
 import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
 import {
@@ -24,6 +24,7 @@ import { createBgaAnsiRenderer, type BgaAnsiRenderer } from '../bga.ts';
 import { PlayerTui } from '../tui.ts';
 import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
 import {
+  appendFreeZoneInputChannels,
   createInputTokenToChannelsMap,
   createLaneBindings,
   resolveLaneDisplayMode,
@@ -86,6 +87,7 @@ export interface PlayerOptions {
   tui?: boolean;
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
   onHighSpeedChange?: (highSpeed: number) => void;
+  laneModeExtension?: string;
 }
 
 export interface PlayerSummary {
@@ -195,6 +197,7 @@ const DEFAULT_COMPRESSOR_RELEASE_MS = 120;
 const DEFAULT_COMPRESSOR_MAKEUP_DB = 0;
 const DEFAULT_LIMITER_CEILING_DB = -0.3;
 const DEFAULT_LIMITER_RELEASE_MS = 80;
+const FREE_ZONE_CHANNELS = new Set(['17', '27']);
 
 export { applyHighSpeedControlAction, resolveHighSpeedControlActionFromKey, type HighSpeedControlAction };
 export { resolveJudgeWindowsMs };
@@ -204,6 +207,7 @@ export async function playChartFile(filePath: string, options: PlayerOptions = {
   const mergedOptions: PlayerOptions = {
     ...options,
     audioBaseDir: options.audioBaseDir ?? dirname(resolve(filePath)),
+    laneModeExtension: options.laneModeExtension ?? extname(filePath).toLowerCase(),
   };
   return mergedOptions.auto ? autoPlay(json, mergedOptions) : manualPlay(json, mergedOptions);
 }
@@ -247,6 +251,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
 
   const notes = extractPlayableNotes(resolvedJson);
+  const scorableNotes = notes.filter((note) => !isFreeZoneChannel(note.channel));
   const landmineNotes = extractLandmineNotes(resolvedJson);
   const invisibleNotes = options.showInvisibleNotes === true ? extractInvisiblePlayableNotes(resolvedJson) : [];
   const renderNotes = [...notes, ...landmineNotes, ...invisibleNotes].sort((left, right) => left.seconds - right.seconds);
@@ -262,11 +267,12 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       ...invisibleNotes.map((note) => note.channel),
     ]),
   ];
-  const laneBindings = createLaneBindings(channels);
-  const laneDisplayMode = resolveLaneDisplayMode(channels);
+  const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
+  const laneBindings = createLaneBindings(channels, laneModeOptions);
+  const laneDisplayMode = resolveLaneDisplayMode(channels, laneModeOptions);
   const keyMap = new Map(laneBindings.map((binding) => [binding.channel, binding.keyLabel]));
   const summary: PlayerSummary = {
-    total: notes.length,
+    total: scorableNotes.length,
     perfect: 0,
     great: 0,
     good: 0,
@@ -487,7 +493,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         }
       };
 
-      for (const note of notes) {
+      for (const note of scorableNotes) {
         if (interruptedReason) {
           break;
         }
@@ -501,9 +507,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
         combo += 1;
 
-        const key = keyMap.get(note.channel) ?? '?';
+        const key = resolveNoteKeyLabel(note.channel, keyMap);
         if (!tui) {
-          process.stdout.write(`AUTO ${formatSeconds(note.seconds)}s channel:${note.channel} key:${key}\n`);
+          process.stdout.write(`AUTO ${formatSeconds(note.seconds)} channel:${note.channel} key:${key}\n`);
         } else {
           tui.flashLane(note.channel);
           if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
@@ -582,6 +588,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
 
   const notes = extractPlayableNotes(resolvedJson);
+  const scorableNotes = notes.filter((note) => !isFreeZoneChannel(note.channel));
   const landmineNotes = extractLandmineNotes(resolvedJson);
   const invisibleNotes = options.showInvisibleNotes === true ? extractInvisiblePlayableNotes(resolvedJson) : [];
   const renderNotes = [...notes, ...landmineNotes, ...invisibleNotes].sort((left, right) => left.seconds - right.seconds);
@@ -597,15 +604,17 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       ...invisibleNotes.map((note) => note.channel),
     ]),
   ];
-  const laneBindings = createLaneBindings(channels);
-  const laneDisplayMode = resolveLaneDisplayMode(channels);
+  const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
+  const laneBindings = createLaneBindings(channels, laneModeOptions);
+  const laneDisplayMode = resolveLaneDisplayMode(channels, laneModeOptions);
   const scratchPlayableChannels = new Set(
     laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
   );
   const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);
+  appendFreeZoneInputChannels(inputTokenToChannels, laneBindings, channels);
 
   const summary: PlayerSummary = {
-    total: notes.length,
+    total: scorableNotes.length,
     perfect: 0,
     great: 0,
     good: 0,
@@ -799,7 +808,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       refreshedHold = true;
     }
 
-    const candidate = findBestCandidate(notes, candidateChannels, nowSec, badWindowMs / 1000);
+    const candidate = findBestCandidate(scorableNotes, candidateChannels, nowSec, badWindowMs / 1000);
     const landmineCandidate = findBestCandidate(landmineNotes, candidateChannels, nowSec, badWindowMs / 1000);
     const candidateDelta = candidate ? Math.abs(candidate.seconds - nowSec) : Number.POSITIVE_INFINITY;
     const landmineDelta = landmineCandidate ? Math.abs(landmineCandidate.seconds - nowSec) : Number.POSITIVE_INFINITY;
@@ -827,6 +836,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         const shouldSuppressFallback = suppressUntil !== undefined && nowSec < suppressUntil;
         if (!shouldSuppressFallback) {
           audioSession?.triggerEvent?.(fallback.event);
+          if (isFreeZoneChannel(fallback.channel)) {
+            return;
+          }
         } else {
           return;
         }
@@ -951,7 +963,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
 
       if (autoScratchEnabled) {
-        for (const note of notes) {
+        for (const note of scorableNotes) {
           if (note.judged || !scratchPlayableChannels.has(note.channel) || nowSec < note.seconds) {
             continue;
           }
@@ -971,7 +983,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
 
-      for (const note of notes) {
+      for (const note of scorableNotes) {
         if (note.judged) {
           continue;
         }
@@ -1015,7 +1027,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
 
       if (
-        notes.every((note) => note.judged) &&
+        scorableNotes.every((note) => note.judged) &&
         landmineNotes.every((note) => note.judged) &&
         invisibleNotes.every((note) => note.judged)
       ) {
@@ -2351,7 +2363,38 @@ function printLaneMap(bindings: LaneBinding[]): void {
 }
 
 function formatSeconds(seconds: number): string {
-  return seconds.toFixed(3);
+  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  const totalCentiseconds = Math.floor(safe * 100);
+  const centiseconds = totalCentiseconds % 100;
+  const totalSeconds = Math.floor(totalCentiseconds / 100);
+  const secondsPart = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+
+  if (totalMinutes < 60) {
+    return `${totalMinutes}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
+  }
+
+  const minutesPart = totalMinutes % 60;
+  const hours = Math.floor(totalMinutes / 60);
+  return `${hours}:${minutesPart.toString().padStart(2, '0')}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
+}
+
+function isFreeZoneChannel(channel: string): boolean {
+  return FREE_ZONE_CHANNELS.has(normalizeChannel(channel));
+}
+
+function resolveNoteKeyLabel(channel: string, keyMap: ReadonlyMap<string, string>): string {
+  const normalized = normalizeChannel(channel);
+  if (keyMap.has(normalized)) {
+    return keyMap.get(normalized) ?? '?';
+  }
+  if (normalized === '17') {
+    return keyMap.get('16') ?? '?';
+  }
+  if (normalized === '27') {
+    return keyMap.get('26') ?? '?';
+  }
+  return '?';
 }
 
 function renderSummary(summary: PlayerSummary): string {

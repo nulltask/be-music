@@ -9,6 +9,7 @@ import {
   sortEvents,
 } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
+const FREE_ZONE_BEAT_LENGTH = 1;
 
 export interface TimedPlayableNote {
   event: BeMusicEvent;
@@ -134,11 +135,20 @@ function applyLnobjEndBeatIfNeeded(
 }
 
 function resolveLongNoteEndBeat(json: BeMusicJson, event: BeMusicEvent, beat: number): number | undefined {
+  if (isFreeZoneChannel(event.channel)) {
+    return beat + FREE_ZONE_BEAT_LENGTH;
+  }
+
   if (event.bmson?.l && event.bmson.l > 0 && json.sourceFormat === 'bmson') {
     const resolution = Math.max(1, json.bmson.info.resolution || 240);
     return beat + event.bmson.l / resolution;
   }
   return undefined;
+}
+
+function isFreeZoneChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  return normalized === '17' || normalized === '27';
 }
 
 function mapLandmineChannelToPlayableLane(channel: string): string | undefined {

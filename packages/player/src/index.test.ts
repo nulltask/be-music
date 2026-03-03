@@ -84,6 +84,29 @@ test('player: auto play ignores landmine notes in score totals', async () => {
   expect(summary.poor).toBe(0);
 });
 
+test('player: ignores free-zone channel for score and judgment totals', async () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.events = [{ measure: 0, channel: '17', position: [0, 1], value: '01' }];
+
+  const summary = await autoPlay(json, {
+    auto: true,
+    speed: 48,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+  });
+
+  expect(summary.total).toBe(0);
+  expect(summary.perfect).toBe(0);
+  expect(summary.great).toBe(0);
+  expect(summary.good).toBe(0);
+  expect(summary.bad).toBe(0);
+  expect(summary.poor).toBe(0);
+  expect(summary.exScore).toBe(0);
+  expect(summary.score).toBe(0);
+});
+
 test('player: auto scratch judges 16ch/26ch notes in manual play', async () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
@@ -166,6 +189,19 @@ test('player: extracts invisible channels and maps them to playable lanes', () =
   expect(invisible[0]?.channel).toBe('11');
   expect(invisible[1]?.channel).toBe('24');
   expect(invisible[0]?.invisible).toBe(true);
+});
+
+test('player: assigns quarter-note length to free-zone notes', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.events = [{ measure: 0, channel: '17', position: [0, 1], value: '01' }];
+
+  const notes = extractPlayableNotes(json);
+  expect(notes).toHaveLength(1);
+  expect(notes[0]?.channel).toBe('17');
+  expect(notes[0]?.beat).toBeCloseTo(0, 6);
+  expect(notes[0]?.endBeat).toBeCloseTo(1, 6);
+  expect(notes[0]?.endSeconds).toBeCloseTo(0.5, 6);
 });
 
 test('player: uses baseline judge windows for bms RANK=2', () => {
