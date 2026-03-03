@@ -217,9 +217,9 @@ describe('player cli', () => {
     expect(action).toBe('enter');
   });
 
-  test('cli: interprets Esc as exit on result screen', () => {
+  test('cli: interprets Esc as return-to-select on result screen', () => {
     const action = resolveResultScreenActionFromKey(undefined, createKey('escape', '\u001b'));
-    expect(action).toBe('escape');
+    expect(action).toBe('enter');
   });
 
   test('cli: interprets Ctrl+C as exit on result screen', () => {

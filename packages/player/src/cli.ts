@@ -634,7 +634,7 @@ function resolveDirectoryStateFromResultAction(
     };
   }
 
-  if (action === 'enter') {
+  if (action === 'enter' || action === 'escape') {
     return {
       kind: 'select',
       focusKey: state.focusKey,
@@ -1559,8 +1559,8 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
     lines.push(`GOOD ${played.summary.good}  BAD ${played.summary.bad}  POOR ${played.summary.poor}`);
     lines.push('');
     lines.push('Press r to replay this chart.');
-    lines.push('Press Enter to return to song selection.');
-    lines.push('Press Ctrl+C or Esc to quit.');
+    lines.push('Press Enter or Esc to return to song selection.');
+    lines.push('Press Ctrl+C to quit.');
     process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J`);
   };
 
@@ -1602,7 +1602,7 @@ export function resolveResultScreenActionFromKey(
     return 'enter';
   }
   if (keyName === 'escape' || key.sequence === '\u001b') {
-    return 'escape';
+    return 'enter';
   }
   if (typeof chunk === 'string' && chunk.toLowerCase() === 'r') {
     return 'replay';
