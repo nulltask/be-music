@@ -191,10 +191,16 @@ describe('manual input', () => {
     const leftShiftPress = resolveInputTokenEvent('\u001b[57441;1:1u', createKey(undefined, '\u001b[57441;1:1u'));
     expect(leftShiftPress.tokens).toContain('shift-left');
     expect(leftShiftPress.tokens).toContain('shift');
+    expect(leftShiftPress.repeatTokens).toEqual([]);
     expect(leftShiftPress.kittyProtocolEvent).toBe(true);
+
+    const repeatedS = resolveInputTokenEvent('\u001b[115;1:2u', createKey(undefined, '\u001b[115;1:2u'));
+    expect(repeatedS.tokens).toEqual([]);
+    expect(repeatedS.repeatTokens).toContain('s');
 
     const rightShiftRelease = resolveInputTokenEvent('\u001b[57447;1:3u', createKey(undefined, '\u001b[57447;1:3u'));
     expect(rightShiftRelease.tokens).toEqual([]);
+    expect(rightShiftRelease.repeatTokens).toEqual([]);
     expect(rightShiftRelease.releaseTokens).toContain('shift-right');
     expect(rightShiftRelease.kittyProtocolEvent).toBe(true);
 

@@ -727,6 +727,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const longHoldUntilMsByChannel = new Map<string, number>();
   const activeLongNotesByChannel = new Map<string, { endSeconds: number }>();
   const longNoteSuppressUntilSecondsByChannel = new Map<string, number>();
+  const activeKittyPressedChannels = new Set<string>();
   let inputCaptureStopped = false;
   let suppressLegacyKeypressUntilMs = 0;
   const badWindowSeconds = badWindowMs / 1000;
@@ -858,6 +859,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       return;
     }
     inputCaptureStopped = true;
+    for (const channel of activeKittyPressedChannels) {
+      tui?.releaseLane(channel);
+    }
+    activeKittyPressedChannels.clear();
     process.stdin.removeListener('keypress', onKeyPress);
     process.stdin.removeListener('data', onRawInputData);
     if (process.stdin.isTTY) {
@@ -866,7 +871,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     stopKittyKeyboardProtocol();
   };
 
-  const handleMappedInputTokens = (tokens: readonly string[]): void => {
+  const resolveMappedInputChannels = (tokens: readonly string[]): Set<string> => {
     const candidateChannels = new Set<string>();
     for (const token of tokens) {
       const mapped = inputTokenToChannels.get(token);
@@ -882,6 +887,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
     }
+    return candidateChannels;
+  };
+
+  const handleMappedInputTokens = (tokens: readonly string[]): void => {
+    const candidateChannels = resolveMappedInputChannels(tokens);
     if (candidateChannels.size === 0) {
       return;
     }
@@ -1114,28 +1124,49 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     suppressLegacyKeypressUntilMs = Date.now() + 36;
 
-    const tokens = inputEvent.tokens;
-    if (tokens.includes('ctrl+c')) {
+    const pressTokens = inputEvent.tokens;
+    const repeatTokens = inputEvent.repeatTokens;
+    const releaseTokens = inputEvent.releaseTokens;
+    if (pressTokens.length > 0 || repeatTokens.length > 0) {
+      const pressedChannels = resolveMappedInputChannels([...pressTokens, ...repeatTokens]);
+      for (const channel of pressedChannels) {
+        activeKittyPressedChannels.add(channel);
+        tui?.pressLane(channel);
+      }
+    }
+    if (releaseTokens.length > 0) {
+      const releasedChannels = resolveMappedInputChannels(releaseTokens);
+      for (const channel of releasedChannels) {
+        activeKittyPressedChannels.delete(channel);
+        tui?.releaseLane(channel);
+      }
+    }
+
+    if (pressTokens.length === 0) {
+      return;
+    }
+
+    if (pressTokens.includes('ctrl+c')) {
       interruptedReason = 'ctrl-c';
       stopInputCapture();
       return;
     }
-    if (tokens.includes('escape')) {
+    if (pressTokens.includes('escape')) {
       interruptedReason = 'escape';
       stopInputCapture();
       return;
     }
-    if (applyHighSpeedAction(resolveHighSpeedControlActionFromTokens(tokens))) {
+    if (applyHighSpeedAction(resolveHighSpeedControlActionFromTokens(pressTokens))) {
       return;
     }
-    if (tokens.includes('space')) {
+    if (pressTokens.includes('space')) {
       togglePause();
       return;
     }
     if (playbackClock.isPaused()) {
       return;
     }
-    handleMappedInputTokens(tokens);
+    handleMappedInputTokens(pressTokens);
   };
 
   process.stdin.prependListener('data', onRawInputData);
@@ -1164,6 +1195,13 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       const nowSec = elapsedMsToGameSeconds(nowMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
+
+      for (const channel of activeKittyPressedChannels) {
+        if (!activeLongNotesByChannel.has(channel)) {
+          continue;
+        }
+        longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_REPEAT_HOLD_GRACE_MS);
+      }
 
       for (const [channel, hold] of activeLongNotesByChannel.entries()) {
         if (nowSec >= hold.endSeconds) {
