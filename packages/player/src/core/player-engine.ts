@@ -26,6 +26,7 @@ import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
 import {
   createInputTokenToChannelsMap,
   createLaneBindings,
+  resolveLaneDisplayMode,
   resolveInputTokens,
   type LaneBinding,
 } from '../manual-input.ts';
@@ -262,6 +263,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     ]),
   ];
   const laneBindings = createLaneBindings(channels);
+  const laneDisplayMode = resolveLaneDisplayMode(channels);
   const keyMap = new Map(laneBindings.map((binding) => [binding.channel, binding.keyLabel]));
   const summary: PlayerSummary = {
     total: notes.length,
@@ -279,7 +281,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
-  const tui = createTuiIfEnabled(resolvedJson, options, 'AUTO', laneBindings, speed, 0);
+  const tui = createTuiIfEnabled(resolvedJson, options, 'AUTO', laneBindings, laneDisplayMode, speed, 0);
   const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
   const bgaRenderer = tui
     ? await createBgaAnsiRenderer(resolvedJson, {
@@ -322,6 +324,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 
   if (!tui) {
     process.stdout.write('Auto play start\n');
+    process.stdout.write(`Lane mode: ${laneDisplayMode}\n`);
     printLaneMap(laneBindings);
     process.stdout.write('Press Space to pause/resume. Press Ctrl+C or Esc to quit.\n');
     process.stdout.write('Press W/E to adjust HIGH-SPEED (W:+0.5, E:-0.5).\n');
@@ -595,6 +598,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     ]),
   ];
   const laneBindings = createLaneBindings(channels);
+  const laneDisplayMode = resolveLaneDisplayMode(channels);
   const scratchPlayableChannels = new Set(
     laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
   );
@@ -620,6 +624,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     options,
     autoScratchEnabled ? 'AUTO SCRATCH' : 'MANUAL',
     laneBindings,
+    laneDisplayMode,
     speed,
     badWindowMs,
   );
@@ -651,6 +656,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
   if (!tui) {
     process.stdout.write('Manual play start\n');
+    process.stdout.write(`Lane mode: ${laneDisplayMode}\n`);
     if (autoScratchEnabled) {
       process.stdout.write('Mode: AUTO SCRATCH (16ch/26ch only)\n');
     }
@@ -1078,6 +1084,7 @@ function createTuiIfEnabled(
   options: PlayerOptions,
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH',
   laneBindings: LaneBinding[],
+  laneDisplayMode: string,
   speed: number,
   judgeWindowMs: number,
 ): PlayerTui | undefined {
@@ -1105,6 +1112,7 @@ function createTuiIfEnabled(
   const highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
   const tui = new PlayerTui({
     mode,
+    laneDisplayMode,
     title: json.metadata.title ?? 'Untitled',
     artist: json.metadata.artist,
     player: json.bms.player,

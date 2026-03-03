@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { createLaneBindings } from './manual-input.ts';
+import { createLaneBindings, resolveLaneDisplayMode } from './manual-input.ts';
 
 describe('manual input', () => {
   test('manual-input: builds full 5-key SP lanes from used channels', () => {
@@ -103,5 +103,15 @@ describe('manual input', () => {
       'SC',
     ]);
     expect(bindings.at(-1)?.side).toBe('OTHER');
+  });
+
+  test('manual-input: resolves lane display mode labels', () => {
+    expect(resolveLaneDisplayMode(['11'])).toBe('5 KEY SP');
+    expect(resolveLaneDisplayMode(['11', '22'])).toBe('5 KEY DP');
+    expect(resolveLaneDisplayMode(['11', '19'])).toBe('7 KEY SP');
+    expect(resolveLaneDisplayMode(['11', '21', '29'])).toBe('14 KEY DP');
+    expect(resolveLaneDisplayMode(['11', '17'])).toBe('9 KEY');
+    expect(resolveLaneDisplayMode(['1A'])).toBe('24 KEY SP');
+    expect(resolveLaneDisplayMode(['2A'])).toBe('48 KEY DP');
   });
 });

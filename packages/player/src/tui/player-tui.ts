@@ -15,6 +15,7 @@ interface TuiLane {
 
 interface TuiOptions {
   mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
+  laneDisplayMode: string;
   title: string;
   artist?: string;
   player?: number;
@@ -422,7 +423,7 @@ export class PlayerTui {
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
     lines.push(`MEASURE ${clamp(currentMeasure, 1, totalMeasures)}/${totalMeasures}`);
     lines.push(
-      `PLAYER ${formatPlayerLabel(this.options.player)}  RANK ${formatRankLabel(this.options.rank)}  PLAYLEVEL ${formatPlayLevelLabel(this.options.playLevel)}`,
+      `LANE ${this.options.laneDisplayMode}  PLAYER ${formatPlayerLabel(this.options.player)}  RANK ${formatRankLabel(this.options.rank)}  PLAYLEVEL ${formatPlayLevelLabel(this.options.playLevel)}`,
     );
     const animatedScore = this.resolveAnimatedScore(frame.summary.score, now);
     const maxExScore = Math.max(0, frame.summary.total * 2);

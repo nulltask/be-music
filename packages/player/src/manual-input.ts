@@ -11,6 +11,16 @@ export interface LaneBinding {
 
 type LaneMode = '5-key-sp' | '5-key-dp' | '7-key-sp' | '14-key-dp' | '9-key' | '24-key-sp' | '48-key-dp';
 
+const LANE_MODE_LABELS: Record<LaneMode, string> = {
+  '5-key-sp': '5 KEY SP',
+  '5-key-dp': '5 KEY DP',
+  '7-key-sp': '7 KEY SP',
+  '14-key-dp': '14 KEY DP',
+  '9-key': '9 KEY',
+  '24-key-sp': '24 KEY SP',
+  '48-key-dp': '48 KEY DP',
+};
+
 const KEY_LAYOUT = [
   'a',
   's',
@@ -166,6 +176,14 @@ export function createLaneBindings(channels: string[]): LaneBinding[] {
   }
 
   return bindings;
+}
+
+export function resolveLaneDisplayMode(channels: string[]): string {
+  const existing = new Set(channels.map((channel) => normalizeChannel(channel)));
+  if (existing.size === 0) {
+    return 'UNKNOWN';
+  }
+  return LANE_MODE_LABELS[resolveLaneMode(existing)];
 }
 
 function resolveLaneMode(existing: ReadonlySet<string>): LaneMode {
