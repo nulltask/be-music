@@ -35,6 +35,7 @@ import { createNodeAudioSink, type AudioSink } from './audio-sink.ts';
 
 export interface PlayerOptions {
   auto?: boolean;
+  autoScratch?: boolean;
   speed?: number;
   judgeWindowMs?: number;
   debugActiveAudio?: boolean;
@@ -175,6 +176,7 @@ const AUDIO_TARGET_LEAD_STEP_UP_MS = 1.5;
 const AUDIO_TARGET_LEAD_STEP_DOWN_MS = 0.5;
 const DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS = 0.18;
 const DEBUG_ACTIVE_AUDIO_SAMPLE_RATE = 44_100;
+const SCRATCH_PLAYABLE_CHANNELS = new Set(['16', '26']);
 
 type JudgeKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'MISS';
 
@@ -645,6 +647,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const resolvedJson = resolveBmsControlFlow(json);
+  const autoScratchEnabled = options.autoScratch === true;
   const speed = options.speed ?? 1;
   const judgeWindows = resolveJudgeWindowsMs(resolvedJson, options.judgeWindowMs);
   const badWindowMs = judgeWindows.bad;
@@ -674,7 +677,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let combo = 0;
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
-  const tui = createTuiIfEnabled(resolvedJson, options, 'MANUAL', laneBindings, speed, badWindowMs);
+  const tui = createTuiIfEnabled(
+    resolvedJson,
+    options,
+    autoScratchEnabled ? 'AUTO SCRATCH' : 'MANUAL',
+    laneBindings,
+    speed,
+    badWindowMs,
+  );
   const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
   const bgaRenderer = tui
     ? await createBgaAnsiRenderer(resolvedJson, {
@@ -702,6 +712,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
   if (!tui) {
     process.stdout.write('Manual play start\n');
+    if (autoScratchEnabled) {
+      process.stdout.write('Mode: AUTO SCRATCH (16ch/26ch only)\n');
+    }
     process.stdout.write(
       `Judge window: PGREAT<=${judgeWindows.pgreat.toFixed(2)}ms GREAT<=${judgeWindows.great.toFixed(2)}ms GOOD<=${judgeWindows.good.toFixed(2)}ms BAD<=${Math.round(badWindowMs)}ms\n`,
     );
@@ -797,6 +810,13 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         continue;
       }
       mapped.forEach((channel) => candidateChannels.add(channel));
+    }
+    if (autoScratchEnabled) {
+      for (const channel of candidateChannels) {
+        if (isScratchPlayableChannel(channel)) {
+          candidateChannels.delete(channel);
+        }
+      }
     }
     if (candidateChannels.size === 0) {
       return;
@@ -971,6 +991,27 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
 
+      if (autoScratchEnabled) {
+        for (const note of notes) {
+          if (note.judged || !isScratchPlayableChannel(note.channel) || nowSec < note.seconds) {
+            continue;
+          }
+          note.judged = true;
+          applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
+          combo += 1;
+          audioSession?.triggerEvent?.(note.event);
+          tui?.flashLane(note.channel);
+          if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
+            note.visibleUntilBeat = note.endBeat;
+            tui?.holdLaneUntilBeat(note.channel, note.endBeat);
+          }
+          if (tui) {
+            tui.setLatestJudge('PERFECT');
+            tui.setCombo(combo);
+          }
+        }
+      }
+
       for (const note of notes) {
         if (note.judged) {
           continue;
@@ -1066,10 +1107,14 @@ function resolveAudioBackendLabel(options: PlayerOptions, audioSession: AudioSes
   return audioSession?.backendLabel ?? 'none';
 }
 
+function isScratchPlayableChannel(channel: string): boolean {
+  return SCRATCH_PLAYABLE_CHANNELS.has(normalizeChannel(channel));
+}
+
 function createTuiIfEnabled(
   json: BeMusicJson,
   options: PlayerOptions,
-  mode: 'AUTO' | 'MANUAL',
+  mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH',
   laneBindings: LaneBinding[],
   speed: number,
   judgeWindowMs: number,
@@ -2360,7 +2405,7 @@ function createMeasureBoundariesBeats(
 
 function estimateBgaAnsiDisplaySize(bindings: LaneBinding[]): { width: number; height: number } {
   const laneWidths = bindings.map((binding) =>
-    binding.channel === '16' || binding.channel === '26' ? WIDE_SCRATCH_LANE_WIDTH : DEFAULT_LANE_WIDTH,
+    isScratchPlayableChannel(binding.channel) ? WIDE_SCRATCH_LANE_WIDTH : DEFAULT_LANE_WIDTH,
   );
   const laneCount = laneWidths.length;
   const has2P = bindings.some((binding) => binding.side === '2P');

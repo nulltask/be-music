@@ -20,6 +20,7 @@ import { createNodeAudioSink } from './audio-sink.ts';
 interface CliArgs {
   input?: string;
   auto: boolean;
+  autoScratch: boolean;
   speed?: number;
   judgeWindowMs?: number;
   judgeWindowSource?: 'debug' | 'legacy';
@@ -37,6 +38,8 @@ interface CliArgs {
   audioLeadStepDownMs?: number;
   tui: boolean;
 }
+
+type PlayMode = 'manual' | 'auto-scratch' | 'auto';
 
 interface ChartSummaryItem {
   filePath: string;
@@ -97,7 +100,7 @@ interface SelectChartInteractivelyOptions {
   audio: boolean;
   entries?: ChartSelectionEntry[];
   initialFocusKey?: string;
-  initialAuto?: boolean;
+  initialPlayMode?: PlayMode;
 }
 
 interface PreviewFocusTarget {
@@ -111,7 +114,7 @@ interface SelectChartInteractivelyResult {
   reason: SelectChartInteractivelyExitReason;
   selectedPath?: string;
   focusKey?: string;
-  auto: boolean;
+  playMode: PlayMode;
 }
 
 type ResultScreenAction = 'enter' | 'escape' | 'ctrl-c' | 'replay';
@@ -143,19 +146,19 @@ type DirectorySceneState =
   | {
       kind: 'select';
       focusKey?: string;
-      auto: boolean;
+      playMode: PlayMode;
     }
   | {
       kind: 'play';
       chartPath: string;
       focusKey?: string;
-      auto: boolean;
+      playMode: PlayMode;
     }
   | {
       kind: 'result';
       played: PlayedChartResult;
       focusKey?: string;
-      auto: boolean;
+      playMode: PlayMode;
     }
   | {
       kind: 'exit';
@@ -204,6 +207,44 @@ const PREVIEW_SILENCE_THRESHOLD = 0.0001;
 const PREVIEW_STOP_TIMEOUT_MS = 180;
 const PREVIEW_BACKPRESSURE_TIMEOUT_MS = 800;
 const PREVIEW_CACHE_LIMIT = 8;
+
+export function resolvePlayModeFromArgs(args: Pick<CliArgs, 'auto' | 'autoScratch'>): PlayMode {
+  if (args.auto) {
+    return 'auto';
+  }
+  if (args.autoScratch) {
+    return 'auto-scratch';
+  }
+  return 'manual';
+}
+
+function applyPlayModeToArgs(args: CliArgs, playMode: PlayMode): CliArgs {
+  return {
+    ...args,
+    auto: playMode === 'auto',
+    autoScratch: playMode === 'auto-scratch',
+  };
+}
+
+export function cyclePlayMode(playMode: PlayMode): PlayMode {
+  if (playMode === 'manual') {
+    return 'auto-scratch';
+  }
+  if (playMode === 'auto-scratch') {
+    return 'auto';
+  }
+  return 'manual';
+}
+
+export function formatPlayModeLabel(playMode: PlayMode): 'MANUAL' | 'AUTO SCRATCH' | 'AUTO' {
+  if (playMode === 'auto-scratch') {
+    return 'AUTO SCRATCH';
+  }
+  if (playMode === 'auto') {
+    return 'AUTO';
+  }
+  return 'MANUAL';
+}
 
 async function main(): Promise<void> {
   let args: CliArgs;
@@ -276,7 +317,7 @@ async function runDirectoryInput(rootDir: string, args: CliArgs): Promise<void> 
 
   let state: DirectorySceneState = {
     kind: 'select',
-    auto: args.auto,
+    playMode: resolvePlayModeFromArgs(args),
   };
 
   while (state.kind !== 'exit') {
@@ -285,7 +326,7 @@ async function runDirectoryInput(rootDir: string, args: CliArgs): Promise<void> 
         audio: args.audio,
         entries,
         initialFocusKey: state.focusKey,
-        initialAuto: state.auto,
+        initialPlayMode: state.playMode,
       });
       state = resolveDirectoryStateFromSelection(selection);
       continue;
@@ -294,12 +335,12 @@ async function runDirectoryInput(rootDir: string, args: CliArgs): Promise<void> 
     if (state.kind === 'play') {
       const playState = state;
       try {
-        const played = await playChartOnce(playState.chartPath, { ...args, auto: playState.auto });
+        const played = await playChartOnce(playState.chartPath, applyPlayModeToArgs(args, playState.playMode));
         state = {
           kind: 'result',
           played,
           focusKey: playState.focusKey,
-          auto: playState.auto,
+          playMode: playState.playMode,
         };
       } catch (error) {
         if (error instanceof PlayerInterruptedError) {
@@ -337,7 +378,7 @@ function resolveDirectoryStateFromSelection(selection: SelectChartInteractivelyR
     kind: 'play',
     chartPath: selection.selectedPath,
     focusKey: selection.focusKey,
-    auto: selection.auto,
+    playMode: selection.playMode,
   };
 }
 
@@ -349,7 +390,7 @@ function resolveDirectoryStateFromPlayInterrupt(
     return {
       kind: 'select',
       focusKey: state.focusKey,
-      auto: state.auto,
+      playMode: state.playMode,
     };
   }
   return {
@@ -367,7 +408,7 @@ function resolveDirectoryStateFromResultAction(
       kind: 'play',
       chartPath: state.played.chartPath,
       focusKey: state.focusKey,
-      auto: state.auto,
+      playMode: state.playMode,
     };
   }
 
@@ -375,7 +416,7 @@ function resolveDirectoryStateFromResultAction(
     return {
       kind: 'select',
       focusKey: state.focusKey,
-      auto: state.auto,
+      playMode: state.playMode,
     };
   }
 
@@ -448,7 +489,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
 
   const summary = args.auto
     ? await autoPlay(json, { ...playOptions, auto: true })
-    : await manualPlay(json, playOptions);
+    : await manualPlay(json, { ...playOptions, autoScratch: args.autoScratch });
   const title = sanitizeMetadataText(json.metadata.title);
   const artist = sanitizeMetadataText(json.metadata.artist);
 
@@ -472,13 +513,19 @@ function sanitizeMetadataText(value: string | undefined): string | undefined {
 }
 
 export function parseArgs(rawArgs: string[]): CliArgs {
-  const args: CliArgs = { auto: false, audio: true, tui: true, debugActiveAudio: false };
+  const args: CliArgs = { auto: false, autoScratch: false, audio: true, tui: true, debugActiveAudio: false };
   const positional: string[] = [];
 
   for (let index = 0; index < rawArgs.length; index += 1) {
     const token = rawArgs[index];
     if (token === '--auto') {
       args.auto = true;
+      args.autoScratch = false;
+      continue;
+    }
+    if (token === '--auto-scratch') {
+      args.auto = false;
+      args.autoScratch = true;
       continue;
     }
     if (token === '--speed') {
@@ -620,6 +667,7 @@ function printUsage(): void {
       '',
       'Options:',
       '  --auto                    Enable auto play mode (default: off)',
+      '  --auto-scratch            Enable scratch auto mode (16ch/26ch only)',
       '  --speed <rate>            Playback speed multiplier (default: 1)',
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
       '  --render-audio <path>     Render audio preview before playing',
@@ -794,14 +842,14 @@ async function selectChartInteractively(
   }
 
   if (selectableIndexes.length === 0) {
-    return { reason: 'escape', auto: options.initialAuto ?? false };
+    return { reason: 'escape', playMode: options.initialPlayMode ?? 'manual' };
   }
 
   const previewController = options.audio && process.stdout.isTTY ? createChartPreviewController() : undefined;
 
   const inputCapture = beginRawInputCapture();
   let selectedIndex = selectableIndexes[0];
-  let auto = options.initialAuto ?? false;
+  let playMode: PlayMode = options.initialPlayMode ?? 'manual';
   if (options.initialFocusKey) {
     const found = selectableIndexes.find((index) => getEntryFocusKey(entries[index]) === options.initialFocusKey);
     if (typeof found === 'number') {
@@ -840,10 +888,10 @@ async function selectChartInteractively(
 
     const lines: string[] = [];
     lines.push(
-      'Select chart  [↑/↓ or k/j: move]  [←/→ or h/l: page]  [Ctrl+b/f: page]  [a: AUTO/MANUAL]  [Enter: play]  [Ctrl+C/Esc: exit]',
+      'Select chart  [↑/↓ or k/j: move]  [←/→ or h/l: page]  [Ctrl+b/f: page]  [a: MANUAL/AUTO SCRATCH/AUTO]  [Enter: play]  [Ctrl+C/Esc: exit]',
     );
     lines.push(truncateForDisplay(`Directory: ${rootDir}`, lineWidth));
-    lines.push(`Mode: ${auto ? 'AUTO' : 'MANUAL'}`);
+    lines.push(`Mode: ${formatPlayModeLabel(playMode)}`);
     lines.push(
       `Audio backend: ${formatSongSelectAudioBackendLabel(options.audio, previewController?.getActiveBackend())}`,
     );
@@ -919,7 +967,7 @@ async function selectChartInteractively(
         cleanup({
           reason: 'ctrl-c',
           focusKey: getEntryFocusKey(entries[selectedIndex]),
-          auto,
+          playMode,
         });
         return;
       }
@@ -959,7 +1007,7 @@ async function selectChartInteractively(
             reason: 'selected',
             selectedPath: files[randomIndex],
             focusKey: getEntryFocusKey(selectedEntry),
-            auto,
+            playMode,
           });
           return;
         }
@@ -968,14 +1016,14 @@ async function selectChartInteractively(
             reason: 'selected',
             selectedPath: selectedEntry.filePath,
             focusKey: getEntryFocusKey(selectedEntry),
-            auto,
+            playMode,
           });
           return;
         }
         return;
       }
       if (action === 'toggle-auto') {
-        auto = !auto;
+        playMode = cyclePlayMode(playMode);
         render();
         return;
       }
@@ -983,7 +1031,7 @@ async function selectChartInteractively(
         cleanup({
           reason: 'escape',
           focusKey: getEntryFocusKey(entries[selectedIndex]),
-          auto,
+          playMode,
         });
       }
     };

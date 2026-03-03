@@ -299,6 +299,9 @@ npm run audio-render -- chart.bms out.aiff --sample-rate 48000
 # オートプレイ
 npm run player -- chart.bms --auto
 
+# スクラッチのみオート (16ch/26ch)
+npm run player -- chart.bms --auto-scratch
+
 # 手動演奏
 npm run player -- chart.bms
 

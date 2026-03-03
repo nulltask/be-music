@@ -7,7 +7,7 @@ interface TuiLane {
 }
 
 interface TuiOptions {
-  mode: 'AUTO' | 'MANUAL';
+  mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
   title: string;
   artist?: string;
   player?: number;

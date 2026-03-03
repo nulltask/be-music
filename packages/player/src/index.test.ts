@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vitest';
 import { parseChartFile } from '../../parser/src/index.ts';
-import { autoPlay, extractLandmineNotes, extractPlayableNotes, resolveJudgeWindowsMs } from './index.ts';
+import { autoPlay, extractLandmineNotes, extractPlayableNotes, manualPlay, resolveJudgeWindowsMs } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 describe('player', () => {
@@ -72,6 +72,28 @@ test('player: auto play ignores landmine notes in score totals', async () => {
   expect(summary.perfect).toBe(1);
   expect(summary.bad).toBe(0);
   expect(summary.miss).toBe(0);
+});
+
+test('player: auto scratch judges 16ch/26ch notes in manual play', async () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.events = [
+    { measure: 0, channel: '16', position: [0, 1], value: '01' },
+    { measure: 0, channel: '11', position: [0, 1], value: '02' },
+  ];
+
+  const summary = await manualPlay(json, {
+    autoScratch: true,
+    speed: 64,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+  });
+
+  expect(summary.total).toBe(2);
+  expect(summary.perfect).toBe(1);
+  expect(summary.miss).toBe(1);
+  expect(summary.bad).toBe(0);
 });
 
 test('player: derives long-note end beat from bmson notes.l', () => {

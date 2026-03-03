@@ -1,14 +1,44 @@
 import { describe, expect, test } from 'vitest';
 import type readline from 'node:readline';
 import {
+  cyclePlayMode,
+  formatPlayModeLabel,
   parseArgs,
   resolveCircularSelectableIndex,
   resolvePageSelectableIndex,
+  resolvePlayModeFromArgs,
   resolveResultScreenActionFromKey,
   resolveSongSelectNavigationAction,
   resolveVisibleEntryRange,
 } from './cli.ts';
 describe('player cli', () => {
+  test('cli: parses --auto-scratch mode', () => {
+    const parsed = parseArgs(['chart.bms', '--auto-scratch']);
+    expect(parsed.auto).toBe(false);
+    expect(parsed.autoScratch).toBe(true);
+    expect(resolvePlayModeFromArgs(parsed)).toBe('auto-scratch');
+  });
+
+  test('cli: last explicit mode flag wins', () => {
+    const parsedAuto = parseArgs(['chart.bms', '--auto-scratch', '--auto']);
+    expect(resolvePlayModeFromArgs(parsedAuto)).toBe('auto');
+
+    const parsedAutoScratch = parseArgs(['chart.bms', '--auto', '--auto-scratch']);
+    expect(resolvePlayModeFromArgs(parsedAutoScratch)).toBe('auto-scratch');
+  });
+
+  test('cli: cycles song-select mode by a key in three states', () => {
+    expect(cyclePlayMode('manual')).toBe('auto-scratch');
+    expect(cyclePlayMode('auto-scratch')).toBe('auto');
+    expect(cyclePlayMode('auto')).toBe('manual');
+  });
+
+  test('cli: formats play mode labels for song-select', () => {
+    expect(formatPlayModeLabel('manual')).toBe('MANUAL');
+    expect(formatPlayModeLabel('auto-scratch')).toBe('AUTO SCRATCH');
+    expect(formatPlayModeLabel('auto')).toBe('AUTO');
+  });
+
   test('cli: rejects removed --audio-backend flag', () => {
     expect(() => parseArgs(['chart.bms', '--audio-backend', 'webaudio'])).toThrow(
       '--audio-backend is no longer supported; node-web-audio-api is always used',
