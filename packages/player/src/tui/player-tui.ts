@@ -132,6 +132,8 @@ export class PlayerTui {
 
   private readonly laneHoldUntilBeat = new Map<string, number>();
 
+  private readonly pressedLaneChannels = new Set<string>();
+
   private readonly laneWidths: number[] = [];
 
   private readonly laneBlockVisibleWidth: number;
@@ -220,6 +222,7 @@ export class PlayerTui {
     this.displayedScore = 0;
     this.lastScoreAnimationMs = 0;
     this.laneHoldUntilBeat.clear();
+    this.pressedLaneChannels.clear();
     this.previousFrameLineCount = 0;
     this.noteWindowSource = undefined;
     this.noteWindowStartIndex = 0;
@@ -273,6 +276,14 @@ export class PlayerTui {
       return;
     }
     this.laneHoldUntilBeat.set(targetChannel, beat);
+  }
+
+  pressLane(channel: string): void {
+    this.pressedLaneChannels.add(this.resolveRenderLaneChannel(channel));
+  }
+
+  releaseLane(channel: string): void {
+    this.pressedLaneChannels.delete(this.resolveRenderLaneChannel(channel));
   }
 
   render(frame: TuiFrame): void {
@@ -443,6 +454,14 @@ export class PlayerTui {
         this.laneHoldUntilBeat.delete(channel);
         continue;
       }
+      const lane = this.laneIndex.get(channel);
+      if (lane === undefined) {
+        continue;
+      }
+      laneHighlightRatios.set(lane, 1);
+    }
+
+    for (const channel of this.pressedLaneChannels) {
       const lane = this.laneIndex.get(channel);
       if (lane === undefined) {
         continue;
