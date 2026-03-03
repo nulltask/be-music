@@ -5,9 +5,11 @@
 ## 一次参照
 
 - 公式ドキュメント: The `.bemuse` File Format  
-  https://bemuse.ninja/docs/bemusepack/
+  https://bemuse.ninja/project/docs/bemusepack/
 - 公式ドキュメント: Music Server  
-  https://bemuse.ninja/docs/music-server/
+  https://bemuse.ninja/project/docs/music-server/
+- 公式ドキュメント: Preparing BMS Song for Online Play in Bemuse [new method]  
+  https://bemuse.ninja/project/docs/song-workshop/
 - 公式実装 (`*.bemuse` 書き出し): `bemuse-packer.js`  
   https://github.com/bemusic/bemuse/blob/master/packages/bemuse-tools/src/bemuse-packer.js
 - 公式実装 (`*.bemuse` 読み込み): `bemuse-package.ts`  

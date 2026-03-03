@@ -13,6 +13,7 @@
 - Extended BPM (`#BPMxx` / `#EXBPM`): https://hitkey.nekokan.dyndns.info/exbpm-object.htm
 - `#OPTION` / `#CHANGEOPTION` 仕様: https://hitkey.nekokan.dyndns.info/option.htm
 - Sonorous 提案拡張 (補助一次参照): https://hitkey.nekokan.dyndns.info/bmsexts-ja.htm
+- Bemuse BMS Extensions (補助一次参照): https://bemuse.ninja/project/docs/bms-extensions
 
 ## 参考資料
 
