@@ -47,6 +47,7 @@ export interface PlayerOptions {
   limiterCeilingDb?: number;
   limiterReleaseMs?: number;
   speed?: number;
+  highSpeed?: number;
   judgeWindowMs?: number;
   debugActiveAudio?: boolean;
   leadInMs?: number;
@@ -63,6 +64,7 @@ export interface PlayerOptions {
   audioLeadStepDownMs?: number;
   tui?: boolean;
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
+  onHighSpeedChange?: (highSpeed: number) => void;
 }
 
 export interface PlayerSummary {
@@ -206,8 +208,13 @@ const DEFAULT_COMPRESSOR_RELEASE_MS = 120;
 const DEFAULT_COMPRESSOR_MAKEUP_DB = 0;
 const DEFAULT_LIMITER_CEILING_DB = -0.3;
 const DEFAULT_LIMITER_RELEASE_MS = 80;
+const DEFAULT_HIGH_SPEED = 1;
+const MIN_HIGH_SPEED = 0.5;
+const MAX_HIGH_SPEED = 10;
+const HIGH_SPEED_STEP = 0.5;
 
 type JudgeKind = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
+export type HighSpeedControlAction = 'increase' | 'decrease';
 
 interface ScoreTracker {
   combo: number;
@@ -426,6 +433,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const scoreTracker = createScoreTracker();
   let combo = 0;
   let interruptedReason: PlayerInterruptReason | undefined;
+  let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
   const tui = createTuiIfEnabled(resolvedJson, options, 'AUTO', laneBindings, speed, 0);
@@ -472,6 +480,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     process.stdout.write('Auto play start\n');
     printLaneMap(laneBindings);
     process.stdout.write('Press Space to pause/resume. Press Ctrl+C or Esc to quit.\n');
+    process.stdout.write('Press W/E to adjust HIGH-SPEED (W:+0.5, E:-0.5).\n');
   } else {
     tui.start();
     tui.setLatestJudge('READY');
@@ -541,6 +550,19 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b') {
       interruptedReason = 'escape';
       stopInputCapture();
+      return;
+    }
+    const highSpeedAction = resolveHighSpeedControlActionFromKey(_chunk, key);
+    if (highSpeedAction) {
+      const nextHighSpeed = applyHighSpeedControlAction(highSpeed, highSpeedAction);
+      if (nextHighSpeed !== highSpeed) {
+        highSpeed = nextHighSpeed;
+        tui?.setHighSpeed(highSpeed);
+        options.onHighSpeedChange?.(highSpeed);
+      }
+      if (!tui) {
+        process.stdout.write(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
+      }
       return;
     }
     if (isSpaceKey(key)) {
@@ -742,6 +764,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   };
   const scoreTracker = createScoreTracker();
   let combo = 0;
+  let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
   const tui = createTuiIfEnabled(
@@ -786,6 +809,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       `Judge window: PGREAT<=${judgeWindows.pgreat.toFixed(2)}ms GREAT<=${judgeWindows.great.toFixed(2)}ms GOOD<=${judgeWindows.good.toFixed(2)}ms BAD<=${Math.round(badWindowMs)}ms\n`,
     );
     process.stdout.write('Press Space to pause/resume.\n');
+    process.stdout.write('Press W/E to adjust HIGH-SPEED (W:+0.5, E:-0.5).\n');
     process.stdout.write('Press Ctrl+C to quit.\n');
     process.stdout.write('Press Esc to stop and open result.\n');
     printLaneMap(laneBindings);
@@ -829,7 +853,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
   };
 
-  const onKeyPress = (chunk: string, key: readline.Key): void => {
+  const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
     if (interruptedReason) {
       return;
     }
@@ -841,6 +865,19 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b') {
       interruptedReason = 'escape';
       stopInputCapture();
+      return;
+    }
+    const highSpeedAction = resolveHighSpeedControlActionFromKey(chunk, key);
+    if (highSpeedAction) {
+      const nextHighSpeed = applyHighSpeedControlAction(highSpeed, highSpeedAction);
+      if (nextHighSpeed !== highSpeed) {
+        highSpeed = nextHighSpeed;
+        tui?.setHighSpeed(highSpeed);
+        options.onHighSpeedChange?.(highSpeed);
+      }
+      if (!tui) {
+        process.stdout.write(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
+      }
       return;
     }
     if (isSpaceKey(key)) {
@@ -869,7 +906,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       return;
     }
 
-    const tokens = resolveInputTokens(chunk, key);
+    const tokens = resolveInputTokens(chunk ?? '', key);
     const candidateChannels = new Set<string>();
     for (const token of tokens) {
       const mapped = inputTokenToChannels.get(token);
@@ -1218,6 +1255,7 @@ function createTuiIfEnabled(
     endSeconds: window.endSeconds,
   }));
   const measureBoundariesBeats = createMeasureBoundariesBeats(json, beatResolver);
+  const highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
   const tui = new PlayerTui({
     mode,
     title: json.metadata.title ?? 'Untitled',
@@ -1227,6 +1265,7 @@ function createTuiIfEnabled(
     playLevel: json.metadata.playLevel,
     lanes,
     speed,
+    highSpeed,
     judgeWindowMs,
     bpmTimeline,
     scrollTimeline,
@@ -2348,6 +2387,27 @@ function isSpaceKey(key: readline.Key): boolean {
   return key.name?.toLowerCase() === 'space' || key.sequence === ' ';
 }
 
+export function resolveHighSpeedControlActionFromKey(
+  chunk: string | undefined,
+  key: readline.Key,
+): HighSpeedControlAction | undefined {
+  const keyName = key.name?.toLowerCase();
+  if (chunk === 'W' || (key.shift && keyName === 'w')) {
+    return 'increase';
+  }
+  if (chunk === 'E' || (key.shift && keyName === 'e')) {
+    return 'decrease';
+  }
+  return undefined;
+}
+
+export function applyHighSpeedControlAction(current: number, action: HighSpeedControlAction): number {
+  const safeCurrent = Number.isFinite(current) && current > 0 ? current : DEFAULT_HIGH_SPEED;
+  const delta = action === 'increase' ? HIGH_SPEED_STEP : -HIGH_SPEED_STEP;
+  const next = Math.min(MAX_HIGH_SPEED, Math.max(MIN_HIGH_SPEED, safeCurrent + delta));
+  return resolveHighSpeedMultiplier(next);
+}
+
 function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
   return Math.max(0, (elapsedMs / 1000) * speed);
 }
@@ -2395,6 +2455,14 @@ function toPlaybackSampleRate(baseSampleRate: number, speed: number): number {
   const safeSpeed = Number.isFinite(speed) && speed > 0 ? speed : 1;
   const scaled = Math.round(baseSampleRate * safeSpeed);
   return Math.max(8_000, Math.min(192_000, scaled));
+}
+
+function resolveHighSpeedMultiplier(value: number | undefined): number {
+  if (!Number.isFinite(value) || (value ?? 0) <= 0) {
+    return DEFAULT_HIGH_SPEED;
+  }
+  const clamped = Math.min(MAX_HIGH_SPEED, Math.max(MIN_HIGH_SPEED, Number(value)));
+  return Math.round(clamped / HIGH_SPEED_STEP) * HIGH_SPEED_STEP;
 }
 
 function findLastLaneIndex(bindings: LaneBinding[], predicate: (binding: LaneBinding) => boolean): number {

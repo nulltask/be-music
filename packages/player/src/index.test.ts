@@ -1,14 +1,17 @@
 import { dirname, resolve } from 'node:path';
+import type readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vitest';
 import { parseChartFile } from '../../parser/src/index.ts';
 import {
+  applyHighSpeedControlAction,
   autoPlay,
   extractInvisiblePlayableNotes,
   extractLandmineNotes,
   extractPlayableNotes,
   manualPlay,
+  resolveHighSpeedControlActionFromKey,
   resolveJudgeWindowsMs,
 } from './index.ts';
 
@@ -215,4 +218,34 @@ test('player: debug judge window override affects BAD only', () => {
   expect(windows.good).toBeCloseTo((116.67 * 125) / 75, 6);
   expect(windows.bad).toBe(180);
 });
+
+test('player: interprets W/E as in-play HIGH-SPEED controls', () => {
+  expect(resolveHighSpeedControlActionFromKey('w', createKey('w'))).toBeUndefined();
+  expect(resolveHighSpeedControlActionFromKey('W', createKey('w', 'W', true))).toBe('increase');
+  expect(resolveHighSpeedControlActionFromKey('e', createKey('e'))).toBeUndefined();
+  expect(resolveHighSpeedControlActionFromKey('E', createKey('e', 'E', true))).toBe('decrease');
+  expect(resolveHighSpeedControlActionFromKey('x', createKey('x'))).toBeUndefined();
 });
+
+test('player: applies in-play HIGH-SPEED controls with 0.5 steps and clamp', () => {
+  expect(applyHighSpeedControlAction(1, 'increase')).toBe(1.5);
+  expect(applyHighSpeedControlAction(1, 'decrease')).toBe(0.5);
+  expect(applyHighSpeedControlAction(10, 'increase')).toBe(10);
+  expect(applyHighSpeedControlAction(0.5, 'decrease')).toBe(0.5);
+});
+});
+
+function createKey(
+  name?: string,
+  sequence?: string,
+  shift = false,
+  ctrl = false,
+): readline.Key {
+  return {
+    name,
+    sequence: sequence ?? '',
+    ctrl,
+    meta: false,
+    shift,
+  } satisfies readline.Key;
+}

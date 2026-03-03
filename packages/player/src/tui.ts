@@ -15,6 +15,7 @@ interface TuiOptions {
   playLevel?: number;
   lanes: TuiLane[];
   speed: number;
+  highSpeed: number;
   judgeWindowMs: number;
   bpmTimeline?: ReadonlyArray<BpmTimelinePoint>;
   scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>;
@@ -74,9 +75,12 @@ interface ScrollSegment {
   startDistance: number;
 }
 
-const NOTE_WINDOW_BEATS = 4;
-const NOTE_WINDOW_SCROLL_DISTANCE = NOTE_WINDOW_BEATS;
-const MAX_SCROLL_LOOKAHEAD_BEATS = NOTE_WINDOW_BEATS * 64;
+const IIDX_MEASURE_BEATS = 4;
+const IIDX_MEASURE_ROWS_AT_HS1 = 16;
+const MAX_SCROLL_LOOKAHEAD_BEATS = IIDX_MEASURE_BEATS * 64;
+const MIN_SCROLL_WINDOW_BEATS = 0.25;
+const MIN_HIGH_SPEED = 0.5;
+const MAX_HIGH_SPEED = 10;
 const MAX_NOTES_PER_RENDER_WINDOW = 2048;
 const BEAT_EPSILON = 1e-9;
 const FLASH_DURATION_MS = 120;
@@ -215,6 +219,10 @@ export class PlayerTui {
     this.paused = value;
   }
 
+  setHighSpeed(value: number): void {
+    this.options.highSpeed = normalizeHighSpeed(value);
+  }
+
   flashLane(channel: string): void {
     this.laneFlashUntil.set(channel, Date.now() + FLASH_DURATION_MS);
   }
@@ -238,6 +246,7 @@ export class PlayerTui {
     const terminalRows = process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
     const debugLineCount = frame.activeAudioFiles === undefined && frame.activeAudioVoiceCount === undefined ? 0 : 1;
     const rowCount = Math.max(MIN_GRID_ROWS, terminalRows - STATIC_TUI_LINES - debugLineCount);
+    const scrollWindowBeats = resolveVisibleBeatsForTuiGrid(rowCount, this.options.highSpeed);
     const laneCount = Math.max(1, this.options.lanes.length);
     const now = Date.now();
     const grid = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => '│'));
@@ -248,10 +257,10 @@ export class PlayerTui {
         continue;
       }
       const distance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, boundaryBeat);
-      if (!isDistanceWithinWindow(distance)) {
+      if (!isDistanceWithinWindow(distance, scrollWindowBeats)) {
         continue;
       }
-      const row = distanceToRow(distance, rowCount);
+      const row = distanceToRow(distance, rowCount, scrollWindowBeats);
       for (let lane = 0; lane < laneCount; lane += 1) {
         if (grid[row][lane] === '│') {
           grid[row][lane] = MEASURE_LINE_SYMBOL;
@@ -259,7 +268,11 @@ export class PlayerTui {
       }
     }
 
-    const { start: noteStartIndex, end: noteEndIndex } = this.resolveNoteWindow(frame.notes, frame.currentBeat);
+    const { start: noteStartIndex, end: noteEndIndex } = this.resolveNoteWindow(
+      frame.notes,
+      frame.currentBeat,
+      scrollWindowBeats,
+    );
 
     for (let noteIndex = noteStartIndex; noteIndex < noteEndIndex; noteIndex += 1) {
       const note = frame.notes[noteIndex];
@@ -278,10 +291,10 @@ export class PlayerTui {
       if (note.mine === true) {
         const distance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
         const visibleDistance = normalizeNoteApproachDistance(distance, frame.currentBeat, note.beat);
-        if (!isDistanceWithinWindow(visibleDistance)) {
+        if (!isDistanceWithinWindow(visibleDistance, scrollWindowBeats)) {
           continue;
         }
-        const row = distanceToRow(visibleDistance, rowCount);
+        const row = distanceToRow(visibleDistance, rowCount, scrollWindowBeats);
         grid[row][lane] = MINE_NOTE_SYMBOL;
         continue;
       }
@@ -296,16 +309,16 @@ export class PlayerTui {
         const bodyVisibleFrom = clamp(
           normalizeNoteApproachDistance(bodyStartDistance, frame.currentBeat, bodyStartBeat),
           0,
-          NOTE_WINDOW_SCROLL_DISTANCE,
+          scrollWindowBeats,
         );
         const bodyVisibleTo = clamp(
           normalizeNoteApproachDistance(bodyEndDistance, frame.currentBeat, bodyEndBeat),
           0,
-          NOTE_WINDOW_SCROLL_DISTANCE,
+          scrollWindowBeats,
         );
         if (bodyVisibleTo >= bodyVisibleFrom) {
-          const startRow = distanceToRow(bodyVisibleFrom, rowCount);
-          const endRow = distanceToRow(bodyVisibleTo, rowCount);
+          const startRow = distanceToRow(bodyVisibleFrom, rowCount, scrollWindowBeats);
+          const endRow = distanceToRow(bodyVisibleTo, rowCount, scrollWindowBeats);
           const from = Math.min(startRow, endRow);
           const to = Math.max(startRow, endRow);
           for (let row = from; row <= to; row += 1) {
@@ -318,8 +331,8 @@ export class PlayerTui {
 
         const tailDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.endBeat);
         const tailVisibleDistance = normalizeNoteApproachDistance(tailDistance, frame.currentBeat, note.endBeat);
-        if (isDistanceWithinWindow(tailVisibleDistance)) {
-          const tailRow = distanceToRow(tailVisibleDistance, rowCount);
+        if (isDistanceWithinWindow(tailVisibleDistance, scrollWindowBeats)) {
+          const tailRow = distanceToRow(tailVisibleDistance, rowCount, scrollWindowBeats);
           if (tailRow >= 0 && tailRow < rowCount) {
             grid[tailRow][lane] = longTailSymbol;
           }
@@ -328,10 +341,10 @@ export class PlayerTui {
 
       const headDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
       const headVisibleDistance = normalizeNoteApproachDistance(headDistance, frame.currentBeat, note.beat);
-      if (!isDistanceWithinWindow(headVisibleDistance)) {
+      if (!isDistanceWithinWindow(headVisibleDistance, scrollWindowBeats)) {
         continue;
       }
-      const row = distanceToRow(headVisibleDistance, rowCount);
+      const row = distanceToRow(headVisibleDistance, rowCount, scrollWindowBeats);
       grid[row][lane] = note.invisible ? INVISIBLE_NOTE_HEAD_SYMBOL : NOTE_HEAD_SYMBOL;
     }
 
@@ -372,7 +385,7 @@ export class PlayerTui {
     const stopLabel = remainingStopSeconds > 0 ? `${formatStopSeconds(remainingStopSeconds)}s` : '-';
     const audioBackendLabel = formatAudioBackendLabel(frame.audioBackend);
     lines.push(
-      `SPEED x${this.options.speed.toFixed(2)}  BAD ±${this.options.judgeWindowMs}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}  AUDIO ${audioBackendLabel}`,
+      `SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(this.options.highSpeed)}  BAD ±${this.options.judgeWindowMs}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}  AUDIO ${audioBackendLabel}`,
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
@@ -454,7 +467,7 @@ export class PlayerTui {
       lines.push(...renderLaneBlockWithBga(laneLines, frame.bgaAnsiLines));
     }
     lines.push('');
-    lines.push('Space: pause/resume  Ctrl+C/Esc: quit');
+    lines.push('Space: pause/resume  W/E: HS +/-  Ctrl+C/Esc: quit');
 
     const columns = process.stdout.columns ?? 120;
     const paddedLines = lines.map((line) => padVisibleWidth(line, columns));
@@ -486,7 +499,7 @@ export class PlayerTui {
     }
   }
 
-  private resolveNoteWindow(notes: TuiNote[], currentBeat: number): { start: number; end: number } {
+  private resolveNoteWindow(notes: TuiNote[], currentBeat: number, scrollWindowBeats: number): { start: number; end: number } {
     if (this.noteWindowSource !== notes || currentBeat < this.noteWindowBeat) {
       this.noteWindowSource = notes;
       this.noteWindowStartIndex = 0;
@@ -495,12 +508,12 @@ export class PlayerTui {
     this.noteWindowBeat = currentBeat;
 
     let start = this.noteWindowStartIndex;
-    while (start < notes.length && canDropNoteFromRenderWindow(notes[start], currentBeat)) {
+    while (start < notes.length && canDropNoteFromRenderWindow(notes[start], currentBeat, scrollWindowBeats)) {
       start += 1;
     }
 
     let end = Math.max(this.noteWindowEndIndex, start);
-    const maxBeat = this.scrollDistanceMapper.maxBeatWithinDistance(currentBeat, NOTE_WINDOW_SCROLL_DISTANCE);
+    const maxBeat = this.scrollDistanceMapper.maxBeatWithinDistance(currentBeat, scrollWindowBeats);
     if (!Number.isFinite(maxBeat)) {
       end = notes.length;
     } else {
@@ -675,8 +688,8 @@ function renderProgress(currentSeconds: number, totalSeconds: number): string {
   return `[${'#'.repeat(filled)}${'-'.repeat(barLength - filled)}] ${Math.round(ratio * 100)}%`;
 }
 
-function isDistanceWithinWindow(distance: number): boolean {
-  return Number.isFinite(distance) && Math.abs(distance) <= NOTE_WINDOW_SCROLL_DISTANCE;
+function isDistanceWithinWindow(distance: number, scrollWindowBeats: number): boolean {
+  return Number.isFinite(distance) && Math.abs(distance) <= scrollWindowBeats;
 }
 
 function normalizeNoteApproachDistance(distance: number, currentBeat: number, targetBeat: number): number {
@@ -696,9 +709,23 @@ function isUpcomingBeat(currentBeat: number, targetBeat: number): boolean {
   return targetBeat + BEAT_EPSILON >= currentBeat;
 }
 
-function distanceToRow(distance: number, rowCount: number): number {
-  const normalized = clamp(Math.abs(distance) / NOTE_WINDOW_SCROLL_DISTANCE, 0, 1);
+function distanceToRow(distance: number, rowCount: number, scrollWindowBeats: number): number {
+  const normalized = clamp(Math.abs(distance) / scrollWindowBeats, 0, 1);
   return rowCount - 1 - Math.floor(normalized * (rowCount - 1));
+}
+
+export function resolveVisibleBeatsForTuiGrid(rowCount: number, highSpeed: number): number {
+  const safeRows = Number.isFinite(rowCount) ? Math.max(MIN_GRID_ROWS, Math.floor(rowCount)) : MIN_GRID_ROWS;
+  const safeHighSpeed = normalizeHighSpeed(highSpeed);
+  const visibleMeasures = safeRows / (IIDX_MEASURE_ROWS_AT_HS1 * safeHighSpeed);
+  return Math.max(MIN_SCROLL_WINDOW_BEATS, visibleMeasures * IIDX_MEASURE_BEATS);
+}
+
+function normalizeHighSpeed(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 1;
+  }
+  return Math.min(MAX_HIGH_SPEED, Math.max(MIN_HIGH_SPEED, value));
 }
 
 function renderLaneRow(
@@ -1028,7 +1055,7 @@ function isWideCharacter(codePoint: number): boolean {
   );
 }
 
-function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number): boolean {
+function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number, scrollWindowBeats: number): boolean {
   const keepVisible =
     typeof note.visibleUntilBeat === 'number' &&
     Number.isFinite(note.visibleUntilBeat) &&
@@ -1041,7 +1068,7 @@ function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number): boolea
     return false;
   }
 
-  return note.beat < currentBeat - NOTE_WINDOW_BEATS;
+  return note.beat < currentBeat - Math.max(IIDX_MEASURE_BEATS, scrollWindowBeats);
 }
 
 function calculateLaneBlockVisibleWidth(laneWidths: number[], splitAfterIndex: number): number {
@@ -1281,6 +1308,11 @@ function findRemainingStopSeconds(
 function formatBpm(bpm: number): string {
   const safe = Number.isFinite(bpm) ? Math.max(0, bpm) : 0;
   return safe % 1 === 0 ? `${safe.toFixed(0)}` : safe.toFixed(2);
+}
+
+function formatHighSpeed(highSpeed: number): string {
+  const safe = normalizeHighSpeed(highSpeed);
+  return safe.toFixed(1);
 }
 
 function formatScroll(speed: number): string {

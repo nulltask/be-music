@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'vitest';
 import type readline from 'node:readline';
 import {
+  applyPersistedPlayerConfigToArgs,
   cyclePlayMode,
   formatPlayModeLabel,
   parseArgs,
+  resolveCliConfigOverrideFlags,
   resolveCircularSelectableIndex,
   resolvePageSelectableIndex,
   resolvePlayModeFromArgs,
@@ -27,6 +29,40 @@ describe('player cli', () => {
     expect(resolvePlayModeFromArgs(parsedAutoScratch)).toBe('auto-scratch');
   });
 
+  test('cli: detects explicit play-mode and high-speed override flags', () => {
+    expect(resolveCliConfigOverrideFlags(['chart.bms'])).toEqual({
+      playMode: false,
+      highSpeed: false,
+    });
+    expect(resolveCliConfigOverrideFlags(['chart.bms', '--auto', '--high-speed', '2.5'])).toEqual({
+      playMode: true,
+      highSpeed: true,
+    });
+  });
+
+  test('cli: applies persisted mode/high-speed when CLI flags are omitted', () => {
+    const parsed = parseArgs(['chart.bms']);
+    const merged = applyPersistedPlayerConfigToArgs(
+      parsed,
+      { playMode: 'auto-scratch', highSpeed: 3.5 },
+      { playMode: false, highSpeed: false },
+    );
+    expect(resolvePlayModeFromArgs(merged)).toBe('auto-scratch');
+    expect(merged.highSpeed).toBe(3.5);
+  });
+
+  test('cli: keeps explicit mode/high-speed over persisted settings', () => {
+    const rawArgs = ['chart.bms', '--auto', '--high-speed', '2.0'];
+    const parsed = parseArgs(rawArgs);
+    const merged = applyPersistedPlayerConfigToArgs(
+      parsed,
+      { playMode: 'manual', highSpeed: 5 },
+      resolveCliConfigOverrideFlags(rawArgs),
+    );
+    expect(resolvePlayModeFromArgs(merged)).toBe('auto');
+    expect(merged.highSpeed).toBe(2);
+  });
+
   test('cli: cycles song-select mode by a key in three states', () => {
     expect(cyclePlayMode('manual')).toBe('auto-scratch');
     expect(cyclePlayMode('auto-scratch')).toBe('auto');
@@ -42,6 +78,26 @@ describe('player cli', () => {
   test('cli: parses invisible-note display flag', () => {
     const parsed = parseArgs(['chart.bms', '--show-invisible-notes']);
     expect(parsed.showInvisibleNotes).toBe(true);
+  });
+
+  test('cli: parses --high-speed in 0.5 increments', () => {
+    const parsed = parseArgs(['chart.bms', '--high-speed', '3.5']);
+    expect(parsed.highSpeed).toBe(3.5);
+  });
+
+  test('cli: rejects out-of-range --high-speed', () => {
+    expect(() => parseArgs(['chart.bms', '--high-speed', '0.25'])).toThrow(
+      '--high-speed must be between 0.5 and 10',
+    );
+    expect(() => parseArgs(['chart.bms', '--high-speed', '10.5'])).toThrow(
+      '--high-speed must be between 0.5 and 10',
+    );
+  });
+
+  test('cli: rejects --high-speed values outside 0.5 increments', () => {
+    expect(() => parseArgs(['chart.bms', '--high-speed', '1.3'])).toThrow(
+      '--high-speed must be in 0.5 increments',
+    );
   });
 
   test('cli: uses limiter on and compressor off by default', () => {
@@ -189,6 +245,11 @@ describe('player cli', () => {
   test('cli: interprets Ctrl+b/Ctrl+f as song-select page keys', () => {
     expect(resolveSongSelectNavigationAction(undefined, createKey('b', undefined, true))).toBe('page-up');
     expect(resolveSongSelectNavigationAction(undefined, createKey('f', undefined, true))).toBe('page-down');
+  });
+
+  test('cli: interprets s/S as song-select HIGH-SPEED controls', () => {
+    expect(resolveSongSelectNavigationAction('s', createKey('s'))).toBe('increase-high-speed');
+    expect(resolveSongSelectNavigationAction('S', createKey('s', 'S', false))).toBe('decrease-high-speed');
   });
 
   test('cli: resolves circular selectable index', () => {

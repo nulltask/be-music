@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { access, readdir, stat } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
@@ -32,6 +33,7 @@ interface CliArgs {
   limiterCeilingDb?: number;
   limiterReleaseMs?: number;
   speed?: number;
+  highSpeed?: number;
   judgeWindowMs?: number;
   judgeWindowSource?: 'debug' | 'legacy';
   debugActiveAudio: boolean;
@@ -50,6 +52,16 @@ interface CliArgs {
 }
 
 type PlayMode = 'manual' | 'auto-scratch' | 'auto';
+
+interface PersistedPlayerConfig {
+  playMode: PlayMode;
+  highSpeed: number;
+}
+
+interface CliConfigOverrideFlags {
+  playMode: boolean;
+  highSpeed: boolean;
+}
 
 interface ChartSummaryItem {
   filePath: string;
@@ -111,6 +123,7 @@ interface SelectChartInteractivelyOptions {
   entries?: ChartSelectionEntry[];
   initialFocusKey?: string;
   initialPlayMode?: PlayMode;
+  initialHighSpeed?: number;
 }
 
 interface PreviewFocusTarget {
@@ -125,6 +138,7 @@ interface SelectChartInteractivelyResult {
   selectedPath?: string;
   focusKey?: string;
   playMode: PlayMode;
+  highSpeed: number;
 }
 
 type ResultScreenAction = 'enter' | 'escape' | 'ctrl-c' | 'replay';
@@ -139,6 +153,8 @@ type SongSelectNavigationAction =
   | 'last'
   | 'confirm'
   | 'toggle-auto'
+  | 'increase-high-speed'
+  | 'decrease-high-speed'
   | 'escape'
   | 'ctrl-c';
 
@@ -157,18 +173,21 @@ type DirectorySceneState =
       kind: 'select';
       focusKey?: string;
       playMode: PlayMode;
+      highSpeed: number;
     }
   | {
       kind: 'play';
       chartPath: string;
       focusKey?: string;
       playMode: PlayMode;
+      highSpeed: number;
     }
   | {
       kind: 'result';
       played: PlayedChartResult;
       focusKey?: string;
       playMode: PlayMode;
+      highSpeed: number;
     }
   | {
       kind: 'exit';
@@ -217,6 +236,11 @@ const PREVIEW_SILENCE_THRESHOLD = 0.0001;
 const PREVIEW_STOP_TIMEOUT_MS = 180;
 const PREVIEW_BACKPRESSURE_TIMEOUT_MS = 800;
 const PREVIEW_CACHE_LIMIT = 8;
+const MIN_HIGH_SPEED = 0.5;
+const MAX_HIGH_SPEED = 10;
+const HIGH_SPEED_STEP = 0.5;
+const DEFAULT_PLAY_MODE: PlayMode = 'manual';
+const DEFAULT_HIGH_SPEED = 1;
 
 export function resolvePlayModeFromArgs(args: Pick<CliArgs, 'auto' | 'autoScratch'>): PlayMode {
   if (args.auto) {
@@ -233,6 +257,13 @@ function applyPlayModeToArgs(args: CliArgs, playMode: PlayMode): CliArgs {
     ...args,
     auto: playMode === 'auto',
     autoScratch: playMode === 'auto-scratch',
+  };
+}
+
+function applySongSelectConfigToArgs(args: CliArgs, playMode: PlayMode, highSpeed: number): CliArgs {
+  return {
+    ...applyPlayModeToArgs(args, playMode),
+    highSpeed: normalizeHighSpeedValue(highSpeed),
   };
 }
 
@@ -256,16 +287,150 @@ export function formatPlayModeLabel(playMode: PlayMode): 'MANUAL' | 'AUTO SCRATC
   return 'MANUAL';
 }
 
+function normalizeHighSpeedValue(value: number | undefined): number {
+  const base = Number.isFinite(value) ? Number(value) : 1;
+  const clamped = Math.min(MAX_HIGH_SPEED, Math.max(MIN_HIGH_SPEED, base));
+  return Math.round(clamped / HIGH_SPEED_STEP) * HIGH_SPEED_STEP;
+}
+
+function increaseHighSpeed(value: number): number {
+  return normalizeHighSpeedValue(value + HIGH_SPEED_STEP);
+}
+
+function decreaseHighSpeed(value: number): number {
+  return normalizeHighSpeedValue(value - HIGH_SPEED_STEP);
+}
+
+function formatHighSpeedLabel(value: number): string {
+  return normalizeHighSpeedValue(value).toFixed(1);
+}
+
+function resolvePersistedPlayerConfigFromArgs(
+  args: Pick<CliArgs, 'auto' | 'autoScratch' | 'highSpeed'>,
+): PersistedPlayerConfig {
+  return {
+    playMode: resolvePlayModeFromArgs(args),
+    highSpeed: normalizeHighSpeedValue(args.highSpeed),
+  };
+}
+
+function createDefaultPersistedPlayerConfig(): PersistedPlayerConfig {
+  return {
+    playMode: DEFAULT_PLAY_MODE,
+    highSpeed: DEFAULT_HIGH_SPEED,
+  };
+}
+
+export function resolveCliConfigOverrideFlags(rawArgs: string[]): CliConfigOverrideFlags {
+  let playMode = false;
+  let highSpeed = false;
+  for (const token of rawArgs) {
+    if (token === '--auto' || token === '--auto-scratch') {
+      playMode = true;
+    }
+    if (token === '--high-speed' || token.startsWith('--high-speed=')) {
+      highSpeed = true;
+    }
+  }
+  return {
+    playMode,
+    highSpeed,
+  };
+}
+
+export function applyPersistedPlayerConfigToArgs(
+  args: CliArgs,
+  persisted: PersistedPlayerConfig,
+  overrides: CliConfigOverrideFlags,
+): CliArgs {
+  let merged = args;
+  if (!overrides.playMode) {
+    merged = applyPlayModeToArgs(merged, persisted.playMode);
+  }
+  if (!overrides.highSpeed && typeof merged.highSpeed !== 'number') {
+    merged = {
+      ...merged,
+      highSpeed: normalizeHighSpeedValue(persisted.highSpeed),
+    };
+  }
+  return merged;
+}
+
+function resolvePlayerConfigPath(): string {
+  return resolve(homedir(), '.be-music', 'player.json');
+}
+
+function parsePersistedPlayMode(value: unknown): PlayMode | undefined {
+  if (value === 'manual' || value === 'auto-scratch' || value === 'auto') {
+    return value;
+  }
+  return undefined;
+}
+
+function parsePersistedHighSpeed(value: unknown): number | undefined {
+  if (!Number.isFinite(value)) {
+    return undefined;
+  }
+  return normalizeHighSpeedValue(Number(value));
+}
+
+function parsePersistedPlayerConfig(value: unknown): PersistedPlayerConfig {
+  const defaults = createDefaultPersistedPlayerConfig();
+  if (typeof value !== 'object' || value === null) {
+    return defaults;
+  }
+  const objectValue = value as { playMode?: unknown; highSpeed?: unknown };
+  return {
+    playMode: parsePersistedPlayMode(objectValue.playMode) ?? defaults.playMode,
+    highSpeed: parsePersistedHighSpeed(objectValue.highSpeed) ?? defaults.highSpeed,
+  };
+}
+
+async function loadPersistedPlayerConfig(): Promise<PersistedPlayerConfig> {
+  const configPath = resolvePlayerConfigPath();
+  let content: string;
+  try {
+    content = await readFile(configPath, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+      return createDefaultPersistedPlayerConfig();
+    }
+    throw error;
+  }
+  return parsePersistedPlayerConfig(JSON.parse(content));
+}
+
+async function savePersistedPlayerConfig(config: PersistedPlayerConfig): Promise<void> {
+  const configPath = resolvePlayerConfigPath();
+  await mkdir(dirname(configPath), { recursive: true });
+  const normalized: PersistedPlayerConfig = {
+    playMode: config.playMode,
+    highSpeed: normalizeHighSpeedValue(config.highSpeed),
+  };
+  await writeFile(configPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
+}
+
 async function main(): Promise<void> {
+  const rawArgs = process.argv.slice(2);
+  const overrideFlags = resolveCliConfigOverrideFlags(rawArgs);
   let args: CliArgs;
   try {
-    args = parseArgs(process.argv.slice(2));
+    args = parseArgs(rawArgs);
   } catch (error) {
     process.stdout.write(`${formatCliParseError(error)}\n\n`);
     printUsage();
     process.exitCode = 1;
     return;
   }
+
+  let persistedConfig = createDefaultPersistedPlayerConfig();
+  try {
+    persistedConfig = await loadPersistedPlayerConfig();
+  } catch (error) {
+    process.stdout.write(`Warning: failed to load ~/.be-music/player.json (${formatCliParseError(error)}).\n`);
+  }
+  args = applyPersistedPlayerConfigToArgs(args, persistedConfig, overrideFlags);
+  let nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args);
 
   if (!args.input) {
     printUsage();
@@ -281,28 +446,43 @@ async function main(): Promise<void> {
   }
 
   const inputPath = resolveCliPath(args.input);
-  const inputStat = await stat(inputPath);
-  if (inputStat.isDirectory()) {
-    await runDirectoryInput(inputPath, args);
-    return;
-  }
   try {
+    const inputStat = await stat(inputPath);
+    if (inputStat.isDirectory()) {
+      nextPersistedConfig = await runDirectoryInput(inputPath, args, nextPersistedConfig);
+      return;
+    }
     await playChartOnce(inputPath, args);
+    nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args);
   } catch (error) {
     if (error instanceof PlayerInterruptedError) {
       process.exitCode = error.exitCode;
       return;
     }
     throw error;
+  } finally {
+    try {
+      await savePersistedPlayerConfig(nextPersistedConfig);
+    } catch (error) {
+      process.stdout.write(`Warning: failed to save ~/.be-music/player.json (${formatCliParseError(error)}).\n`);
+    }
   }
 }
 
-async function runDirectoryInput(rootDir: string, args: CliArgs): Promise<void> {
+async function runDirectoryInput(
+  rootDir: string,
+  args: CliArgs,
+  initialConfig: PersistedPlayerConfig,
+): Promise<PersistedPlayerConfig> {
+  let persistedConfig: PersistedPlayerConfig = {
+    playMode: initialConfig.playMode,
+    highSpeed: normalizeHighSpeedValue(initialConfig.highSpeed),
+  };
   const candidates = await listChartFiles(rootDir);
   if (candidates.length === 0) {
     process.stdout.write(`No chart files found in directory: ${rootDir}\n`);
     process.exitCode = 1;
-    return;
+    return persistedConfig;
   }
 
   if (!process.stdin.isTTY || !process.stdout.isTTY || candidates.length === 1) {
@@ -310,24 +490,27 @@ async function runDirectoryInput(rootDir: string, args: CliArgs): Promise<void> 
     process.stdout.write(`Selected chart: ${selected}\n`);
     try {
       await playChartOnce(selected, args);
+      persistedConfig = resolvePersistedPlayerConfigFromArgs(args);
     } catch (error) {
       if (error instanceof PlayerInterruptedError) {
+        persistedConfig = resolvePersistedPlayerConfigFromArgs(args);
         process.exitCode = error.exitCode;
-        return;
+        return persistedConfig;
       }
       throw error;
     }
-    return;
+    return persistedConfig;
   }
 
   const entries = await loadChartSelectionEntries(rootDir, candidates);
   if (!entries) {
-    return;
+    return persistedConfig;
   }
 
   let state: DirectorySceneState = {
     kind: 'select',
-    playMode: resolvePlayModeFromArgs(args),
+    playMode: persistedConfig.playMode,
+    highSpeed: persistedConfig.highSpeed,
   };
 
   while (state.kind !== 'exit') {
@@ -337,24 +520,48 @@ async function runDirectoryInput(rootDir: string, args: CliArgs): Promise<void> 
         entries,
         initialFocusKey: state.focusKey,
         initialPlayMode: state.playMode,
+        initialHighSpeed: state.highSpeed,
       });
+      persistedConfig = {
+        playMode: selection.playMode,
+        highSpeed: normalizeHighSpeedValue(selection.highSpeed),
+      };
       state = resolveDirectoryStateFromSelection(selection);
       continue;
     }
 
     if (state.kind === 'play') {
       const playState = state;
+      const playArgs = applySongSelectConfigToArgs(args, playState.playMode, playState.highSpeed);
+      persistedConfig = {
+        playMode: playState.playMode,
+        highSpeed: normalizeHighSpeedValue(playArgs.highSpeed),
+      };
       try {
-        const played = await playChartOnce(playState.chartPath, applyPlayModeToArgs(args, playState.playMode));
+        const played = await playChartOnce(playState.chartPath, playArgs);
+        const resolvedHighSpeed = normalizeHighSpeedValue(playArgs.highSpeed);
+        persistedConfig = {
+          playMode: playState.playMode,
+          highSpeed: resolvedHighSpeed,
+        };
         state = {
           kind: 'result',
           played,
           focusKey: playState.focusKey,
           playMode: playState.playMode,
+          highSpeed: resolvedHighSpeed,
         };
       } catch (error) {
         if (error instanceof PlayerInterruptedError) {
-          state = resolveDirectoryStateFromPlayInterrupt(error.reason, playState);
+          const resolvedHighSpeed = normalizeHighSpeedValue(playArgs.highSpeed);
+          persistedConfig = {
+            playMode: playState.playMode,
+            highSpeed: resolvedHighSpeed,
+          };
+          state = resolveDirectoryStateFromPlayInterrupt(error.reason, {
+            ...playState,
+            highSpeed: resolvedHighSpeed,
+          });
           continue;
         }
         throw error;
@@ -367,6 +574,7 @@ async function runDirectoryInput(rootDir: string, args: CliArgs): Promise<void> 
   }
 
   process.exitCode = state.exitCode;
+  return persistedConfig;
 }
 
 function resolveDirectoryStateFromSelection(selection: SelectChartInteractivelyResult): DirectorySceneState {
@@ -389,6 +597,7 @@ function resolveDirectoryStateFromSelection(selection: SelectChartInteractivelyR
     chartPath: selection.selectedPath,
     focusKey: selection.focusKey,
     playMode: selection.playMode,
+    highSpeed: selection.highSpeed,
   };
 }
 
@@ -401,6 +610,7 @@ function resolveDirectoryStateFromPlayInterrupt(
       kind: 'select',
       focusKey: state.focusKey,
       playMode: state.playMode,
+      highSpeed: state.highSpeed,
     };
   }
   return {
@@ -419,6 +629,7 @@ function resolveDirectoryStateFromResultAction(
       chartPath: state.played.chartPath,
       focusKey: state.focusKey,
       playMode: state.playMode,
+      highSpeed: state.highSpeed,
     };
   }
 
@@ -427,6 +638,7 @@ function resolveDirectoryStateFromResultAction(
       kind: 'select',
       focusKey: state.focusKey,
       playMode: state.playMode,
+      highSpeed: state.highSpeed,
     };
   }
 
@@ -437,6 +649,7 @@ function resolveDirectoryStateFromResultAction(
 }
 
 async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedChartResult> {
+  let resolvedHighSpeed = normalizeHighSpeedValue(args.highSpeed);
   const reportPlayLoadingProgress = process.stdout.isTTY
     ? (progress: PlayLoadingProgress): void => {
         renderPlayLoadingProgress(chartPath, progress);
@@ -481,6 +694,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     limiterCeilingDb: args.limiterCeilingDb,
     limiterReleaseMs: args.limiterReleaseMs,
     speed: args.speed,
+    highSpeed: args.highSpeed,
     judgeWindowMs: args.judgeWindowMs,
     debugActiveAudio: args.debugActiveAudio,
     audio: args.audio,
@@ -495,6 +709,9 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     audioLeadStepUpMs: args.audioLeadStepUpMs,
     audioLeadStepDownMs: args.audioLeadStepDownMs,
     tui: args.tui,
+    onHighSpeedChange: (value: number): void => {
+      resolvedHighSpeed = normalizeHighSpeedValue(value);
+    },
     onLoadProgress: reportPlayLoadingProgress
       ? (progress: PlayerLoadProgress): void => {
           const mappedRatio = 0.22 + Math.max(0, Math.min(1, progress.ratio)) * 0.76;
@@ -510,6 +727,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   const summary = args.auto
     ? await autoPlay(json, { ...playOptions, auto: true })
     : await manualPlay(json, { ...playOptions, autoScratch: args.autoScratch });
+  args.highSpeed = resolvedHighSpeed;
   const title = sanitizeMetadataText(json.metadata.title);
   const artist = sanitizeMetadataText(json.metadata.artist);
 
@@ -567,6 +785,11 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     }
     if (token === '--speed') {
       args.speed = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--high-speed') {
+      args.highSpeed = parseHighSpeedArg(rawArgs[index + 1]);
       index += 1;
       continue;
     }
@@ -741,6 +964,22 @@ export function parseArgs(rawArgs: string[]): CliArgs {
   return args;
 }
 
+function parseHighSpeedArg(raw: string | undefined): number {
+  const parsed = Number.parseFloat(raw ?? '');
+  if (!Number.isFinite(parsed)) {
+    throw new Error('--high-speed expects a numeric value');
+  }
+  if (parsed < MIN_HIGH_SPEED || parsed > MAX_HIGH_SPEED) {
+    throw new Error(`--high-speed must be between ${MIN_HIGH_SPEED} and ${MAX_HIGH_SPEED}`);
+  }
+  const steps = parsed / HIGH_SPEED_STEP;
+  const roundedSteps = Math.round(steps);
+  if (Math.abs(steps - roundedSteps) > 1e-9) {
+    throw new Error(`--high-speed must be in ${HIGH_SPEED_STEP} increments`);
+  }
+  return roundedSteps * HIGH_SPEED_STEP;
+}
+
 function formatCliParseError(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -768,6 +1007,7 @@ function printUsage(): void {
       '  --limiter-ceiling-db      Limiter ceiling in dBFS (default: -0.3)',
       '  --limiter-release-ms      Limiter release time in ms (default: 80)',
       '  --speed <rate>            Playback speed multiplier (default: 1)',
+      '  --high-speed <rate>       TUI note fall speed multiplier, 0.5-10.0 in 0.5 steps (default: 1.0)',
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
       '  --render-audio <path>     Render audio preview before playing',
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
@@ -941,7 +1181,11 @@ async function selectChartInteractively(
   }
 
   if (selectableIndexes.length === 0) {
-    return { reason: 'escape', playMode: options.initialPlayMode ?? 'manual' };
+    return {
+      reason: 'escape',
+      playMode: options.initialPlayMode ?? 'manual',
+      highSpeed: normalizeHighSpeedValue(options.initialHighSpeed),
+    };
   }
 
   const previewController = options.audio && process.stdout.isTTY ? createChartPreviewController() : undefined;
@@ -949,6 +1193,7 @@ async function selectChartInteractively(
   const inputCapture = beginRawInputCapture();
   let selectedIndex = selectableIndexes[0];
   let playMode: PlayMode = options.initialPlayMode ?? 'manual';
+  let highSpeed = normalizeHighSpeedValue(options.initialHighSpeed);
   if (options.initialFocusKey) {
     const found = selectableIndexes.find((index) => getEntryFocusKey(entries[index]) === options.initialFocusKey);
     if (typeof found === 'number') {
@@ -987,10 +1232,10 @@ async function selectChartInteractively(
 
     const lines: string[] = [];
     lines.push(
-      'Select chart  [↑/↓ or k/j: move]  [←/→ or h/l: page]  [Ctrl+b/f: page]  [a: MANUAL/AUTO SCRATCH/AUTO]  [Enter: play]  [Ctrl+C/Esc: exit]',
+      'Select chart  [↑/↓ or k/j: move]  [←/→ or h/l: page]  [Ctrl+b/f: page]  [a: MANUAL/AUTO SCRATCH/AUTO]  [s/S: HS +/-]  [Enter: play]  [Ctrl+C/Esc: exit]',
     );
     lines.push(truncateForDisplay(`Directory: ${rootDir}`, lineWidth));
-    lines.push(`Mode: ${formatPlayModeLabel(playMode)}`);
+    lines.push(`Mode: ${formatPlayModeLabel(playMode)}  HIGH-SPEED: x${formatHighSpeedLabel(highSpeed)}`);
     lines.push(
       `Audio backend: ${formatSongSelectAudioBackendLabel(options.audio, previewController?.getActiveBackend())}`,
     );
@@ -1067,6 +1312,7 @@ async function selectChartInteractively(
           reason: 'ctrl-c',
           focusKey: getEntryFocusKey(entries[selectedIndex]),
           playMode,
+          highSpeed,
         });
         return;
       }
@@ -1107,6 +1353,7 @@ async function selectChartInteractively(
             selectedPath: files[randomIndex],
             focusKey: getEntryFocusKey(selectedEntry),
             playMode,
+            highSpeed,
           });
           return;
         }
@@ -1116,6 +1363,7 @@ async function selectChartInteractively(
             selectedPath: selectedEntry.filePath,
             focusKey: getEntryFocusKey(selectedEntry),
             playMode,
+            highSpeed,
           });
           return;
         }
@@ -1126,11 +1374,22 @@ async function selectChartInteractively(
         render();
         return;
       }
+      if (action === 'increase-high-speed') {
+        highSpeed = increaseHighSpeed(highSpeed);
+        render();
+        return;
+      }
+      if (action === 'decrease-high-speed') {
+        highSpeed = decreaseHighSpeed(highSpeed);
+        render();
+        return;
+      }
       if (action === 'escape') {
         cleanup({
           reason: 'escape',
           focusKey: getEntryFocusKey(entries[selectedIndex]),
           playMode,
+          highSpeed,
         });
       }
     };
@@ -1171,6 +1430,12 @@ export function resolveSongSelectNavigationAction(
   }
   if (keyName === 'return' || keyName === 'enter') {
     return 'confirm';
+  }
+  if (chunk === 's') {
+    return 'increase-high-speed';
+  }
+  if (chunk === 'S') {
+    return 'decrease-high-speed';
   }
   if (lowerChunk === 'a') {
     return 'toggle-auto';
