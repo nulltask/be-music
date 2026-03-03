@@ -1038,16 +1038,13 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     const channel = candidate.channel;
     tui?.flashLane(channel);
     audioSession?.triggerEvent?.(candidate.event);
-    const isLongNote =
-      typeof candidate.endSeconds === 'number' &&
-      Number.isFinite(candidate.endSeconds) &&
-      candidate.endSeconds > candidate.seconds;
-    if (isLongNote) {
-      activeLongNotesByChannel.set(channel, { endSeconds: candidate.endSeconds, note: candidate });
+    const endSeconds = candidate.endSeconds;
+    if (typeof endSeconds === 'number' && Number.isFinite(endSeconds) && endSeconds > candidate.seconds) {
+      activeLongNotesByChannel.set(channel, { endSeconds, note: candidate });
       longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
       const previousSuppressUntil = longNoteSuppressUntilSecondsByChannel.get(channel) ?? Number.NEGATIVE_INFINITY;
-      if (candidate.endSeconds > previousSuppressUntil) {
-        longNoteSuppressUntilSecondsByChannel.set(channel, candidate.endSeconds);
+      if (endSeconds > previousSuppressUntil) {
+        longNoteSuppressUntilSecondsByChannel.set(channel, endSeconds);
       }
       candidate.visibleUntilBeat = candidate.endBeat;
       return;
