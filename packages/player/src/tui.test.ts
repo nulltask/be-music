@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './tui.ts';
+import { formatMeasureSignature, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './tui.ts';
 
 describe('player tui', () => {
   test('tui: keeps rows-per-beat constant across different terminal heights', () => {
@@ -39,5 +39,16 @@ describe('player tui', () => {
   test('tui: clamps interpolated HIGH-SPEED endpoints to supported range', () => {
     expect(resolveAnimatedHighSpeedValue(0.1, 12, 90, 180)).toBeCloseTo(5.25, 9);
     expect(resolveAnimatedHighSpeedValue(1, 3, 90, 0)).toBeCloseTo(3, 9);
+  });
+
+  test('tui: formats current measure meter as a fraction', () => {
+    expect(formatMeasureSignature(undefined)).toBe('4/4');
+    expect(formatMeasureSignature(0.75)).toBe('3/4');
+    expect(formatMeasureSignature(1.5)).toBe('6/4');
+    expect(formatMeasureSignature(1 / 3)).toBe('4/12');
+  });
+
+  test('tui: falls back to decimal meter when fraction conversion is not stable', () => {
+    expect(formatMeasureSignature(0.123456789)).toBe('0.493827/4');
   });
 });

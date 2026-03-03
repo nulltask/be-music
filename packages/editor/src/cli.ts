@@ -130,14 +130,16 @@ function printUsage(exitCode: number): void {
     [
       'Usage: bms-editor <command> [args]',
       '',
-      'Commands:',
+      'Essential commands:',
       '  init <output.json>',
       '  import <input.(bms|bmson)> <output.json>',
       '  export <input.json> <output.(bms|bmson)>',
+      '  list-notes <input.json> [measure]',
+      '',
+      'Advanced edit commands:',
       '  set-meta <input.json> <key> <value...>',
       '  add-note <input.json> <measure> <channel> <positionNumerator> <positionDenominator> <value>',
       '  delete-note <input.json> <measure> <channel> <positionNumerator> <positionDenominator> [value]',
-      '  list-notes <input.json> [measure]',
     ].join('\n') + '\n',
   );
   process.exitCode = exitCode;

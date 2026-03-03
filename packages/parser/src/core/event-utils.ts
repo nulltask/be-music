@@ -23,23 +23,25 @@ export function collectNonZeroObjectTokens(input: string): {
   // BMS object positions need the total token count (denominator), but only non-zero tokens become events.
   const tokens: Array<{ index: number; value: string }> = [];
   let tokenCount = 0;
-  let high = '';
+  let highCode = -1;
   for (let index = 0; index < input.length; index += 1) {
     const code = input.charCodeAt(index);
-    const normalized = normalizeAsciiTokenChar(code);
-    if (!normalized) {
+    const normalizedCode = normalizeAsciiTokenCode(code);
+    if (normalizedCode < 0) {
       continue;
     }
-    if (high.length === 0) {
-      high = normalized;
+    if (highCode < 0) {
+      highCode = normalizedCode;
       continue;
     }
-    const value = high + normalized;
-    if (value !== '00') {
-      tokens.push({ index: tokenCount, value });
+    if (!(highCode === 0x30 && normalizedCode === 0x30)) {
+      tokens.push({
+        index: tokenCount,
+        value: String.fromCharCode(highCode, normalizedCode),
+      });
     }
     tokenCount += 1;
-    high = '';
+    highCode = -1;
   }
   return { tokenCount, tokens };
 }
@@ -210,15 +212,15 @@ function compareEventPosition(left: BeMusicEvent, right: BeMusicEvent): number {
   return 0;
 }
 
-function normalizeAsciiTokenChar(code: number): string | undefined {
+function normalizeAsciiTokenCode(code: number): number {
   if (code >= 0x30 && code <= 0x39) {
-    return String.fromCharCode(code);
+    return code;
   }
   if (code >= 0x41 && code <= 0x5a) {
-    return String.fromCharCode(code);
+    return code;
   }
   if (code >= 0x61 && code <= 0x7a) {
-    return String.fromCharCode(code - 0x20);
+    return code - 0x20;
   }
-  return undefined;
+  return -1;
 }

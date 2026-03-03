@@ -370,6 +370,7 @@ interface KittyKeyboardEvent {
 
 export interface ResolvedInputTokenEvent {
   tokens: string[];
+  repeatTokens: string[];
   releaseTokens: string[];
   kittyProtocolEvent: boolean;
 }
@@ -379,6 +380,7 @@ const KITTY_KEYBOARD_PROTOCOL_ENABLE_SEQUENCE = `\u001b[>${KITTY_KEYBOARD_PROTOC
 const KITTY_KEYBOARD_PROTOCOL_DISABLE_SEQUENCE = '\u001b[<u';
 const KITTY_MODIFIER_SHIFT_MASK = 1;
 const KITTY_MODIFIER_CTRL_MASK = 4;
+const KITTY_EVENT_TYPE_REPEAT = 2;
 const KITTY_EVENT_TYPE_RELEASE = 3;
 const KITTY_LEFT_SHIFT_KEY_CODES = new Set([57_441, 441]);
 const KITTY_RIGHT_SHIFT_KEY_CODES = new Set([57_447, 447]);
@@ -402,6 +404,7 @@ export function resolveInputTokenEvent(chunk: string, key: readline.Key): Resolv
   const kittyEvents = parseKittyKeyboardEvents(chunk, key);
   if (kittyEvents.length > 0) {
     const tokens = new Set<string>();
+    const repeatTokens = new Set<string>();
     const releaseTokens = new Set<string>();
     for (const kittyEvent of kittyEvents) {
       const kittyTokens = resolveKittyInputTokens(kittyEvent);
@@ -409,10 +412,15 @@ export function resolveInputTokenEvent(chunk: string, key: readline.Key): Resolv
         kittyTokens.forEach((token) => releaseTokens.add(token));
         continue;
       }
+      if (kittyEvent.eventType === KITTY_EVENT_TYPE_REPEAT) {
+        kittyTokens.forEach((token) => repeatTokens.add(token));
+        continue;
+      }
       kittyTokens.forEach((token) => tokens.add(token));
     }
     return {
       tokens: [...tokens],
+      repeatTokens: [...repeatTokens],
       releaseTokens: [...releaseTokens],
       kittyProtocolEvent: true,
     };
@@ -420,6 +428,7 @@ export function resolveInputTokenEvent(chunk: string, key: readline.Key): Resolv
 
   return {
     tokens: resolveLegacyInputTokens(chunk, key),
+    repeatTokens: [],
     releaseTokens: [],
     kittyProtocolEvent: false,
   };

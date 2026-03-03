@@ -12,7 +12,12 @@ interface CliArgs {
 }
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
+    printUsage();
+    return;
+  }
+  const args = parseArgs(rawArgs);
   if (!args.input || !args.output) {
     printUsage();
     process.exitCode = 1;
@@ -81,9 +86,11 @@ function printUsage(): void {
     [
       'Usage: bms-audio-render <input.(bms|bmson|json)> <output.(wav|aiff)> [options]',
       '',
-      'Options:',
+      'Essential options:',
       '  --sample-rate, -r <hz>   Output sample rate (default: 44100)',
       '  --tail <seconds>          Tail silence duration (default: 2)',
+      '',
+      'Advanced options:',
       '  --base-dir <path>         Base directory to resolve audio samples',
       '  --normalize               Enable peak normalization (default)',
       '  --no-normalize            Disable normalization',

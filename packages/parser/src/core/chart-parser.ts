@@ -37,7 +37,6 @@ import {
   updateControlFlowCaptureStack,
 } from './control-flow.ts';
 
-const OBJECT_DATA_LINE = /^#(\d{3})([0-9A-Z]{2})\s*:\s*(.+)\s*$/i;
 const HEADER_LINE = /^#([A-Z][A-Z0-9_]*)(?:\s+(.+))?$/i;
 const CONTROL_FLOW_LINE =
   /^#(RANDOM|SETRANDOM|IF|ELSEIF|ELSE|ENDIF|ENDRANDOM|SWITCH|SETSWITCH|CASE|SKIP|DEF|ENDSW)(?:\s+(.+))?$/i;
@@ -51,23 +50,20 @@ export function parseBms(input: string): BeMusicJson {
   const controlFlowCaptureStack: ControlFlowCaptureFrameType[] = [];
   const measureByIndex = new Map<number, MeasureLengthEntry>();
 
-  const lines = input.split(/\r?\n/);
-  for (const rawLine of lines) {
+  forEachLine(input, (rawLine) => {
     const line = rawLine.trim();
     if (!line.startsWith('#')) {
-      continue;
+      return;
     }
 
     const second = line.charCodeAt(1);
     const startsWithMeasure = second >= 0x30 && second <= 0x39;
     if (startsWithMeasure) {
-      const objectMatch = line.match(OBJECT_DATA_LINE);
-      if (!objectMatch) {
-        continue;
+      const objectLine = parseObjectDataLine(line);
+      if (!objectLine) {
+        return;
       }
-      const measure = Number.parseInt(objectMatch[1], 10);
-      const channel = normalizeChannel(objectMatch[2]);
-      const data = objectMatch[3].trim();
+      const { measure, channel, data } = objectLine;
       if (controlFlowCaptureStack.length > 0) {
         const controlFlowObject = createControlFlowObjectEntry(measure, channel, data);
         if (controlFlowObject) {
@@ -76,7 +72,7 @@ export function parseBms(input: string): BeMusicJson {
       } else {
         pushObjectDataLine(json, measure, channel, data, measureByIndex);
       }
-      continue;
+      return;
     }
 
     const controlFlowMatch = line.match(CONTROL_FLOW_LINE);
@@ -89,7 +85,7 @@ export function parseBms(input: string): BeMusicJson {
         value,
       });
       updateControlFlowCaptureStack(controlFlowCaptureStack, command);
-      continue;
+      return;
     }
 
     if (controlFlowCaptureStack.length > 0) {
@@ -101,18 +97,18 @@ export function parseBms(input: string): BeMusicJson {
           value: headerMatch[2]?.trim() ?? '',
         });
       }
-      continue;
+      return;
     }
 
     const headerMatch = line.match(HEADER_LINE);
     if (!headerMatch) {
-      continue;
+      return;
     }
 
     const command = headerMatch[1].toUpperCase();
     const value = headerMatch[2]?.trim() ?? '';
     pushHeaderLine(json, command, value);
-  }
+  });
 
   json.measures.sort((left, right) => left.index - right.index);
   json.events = sortAndNormalizeEvents(json.events);
@@ -166,31 +162,23 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
 
   const soundChannels = document.sound_channels ?? [];
   const laneMap = buildBmsonLaneMap(soundChannels);
-  soundChannels.forEach((soundChannel, index) => {
+  for (let index = 0; index < soundChannels.length; index += 1) {
+    const soundChannel = soundChannels[index]!;
     const key = intToBase36(index + 1, 2);
     json.resources.wav[key] = soundChannel.name;
     const notes = soundChannel.notes ?? [];
     const playableTicks = new Set<number>();
-    for (const note of notes) {
-      if (!Number.isFinite(note.y) || !Number.isFinite(note.x)) {
-        continue;
-      }
-      const lane = Math.floor(note.x!);
-      if (lane > 0) {
-        playableTicks.add(Math.round(note.y));
-      }
-    }
+    const bgmCandidates: Array<{ pulse: number; event: BeMusicEvent }> = [];
 
     for (const note of notes) {
       if (!Number.isFinite(note.y)) {
         continue;
       }
-
       const pulse = Math.round(note.y);
       const lane = Number.isFinite(note.x) ? Math.floor(note.x!) : 0;
       const isBgmNote = lane <= 0;
-      if (isBgmNote && playableTicks.has(pulse)) {
-        continue;
+      if (!isBgmNote) {
+        playableTicks.add(pulse);
       }
 
       const { measure, position } = positionResolver(note.y);
@@ -212,9 +200,20 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
           event.bmson.c = noteContinue;
         }
       }
+      if (isBgmNote) {
+        bgmCandidates.push({ pulse, event });
+        continue;
+      }
       json.events.push(event);
     }
-  });
+
+    for (const candidate of bgmCandidates) {
+      if (playableTicks.has(candidate.pulse)) {
+        continue;
+      }
+      json.events.push(candidate.event);
+    }
+  }
 
   const bpmEvents = document.bpm_events ?? [];
   bpmEvents.forEach((bpmEvent, index) => {
@@ -365,6 +364,98 @@ function pushObjectDataLine(
       position: [token.index, parsed.tokenCount],
       value: token.value,
     });
+  }
+}
+
+interface ParsedObjectDataLine {
+  measure: number;
+  channel: string;
+  data: string;
+}
+
+function parseObjectDataLine(line: string): ParsedObjectDataLine | undefined {
+  if (line.length < 8 || line.charCodeAt(0) !== 0x23) {
+    return undefined;
+  }
+
+  const digit0 = line.charCodeAt(1);
+  const digit1 = line.charCodeAt(2);
+  const digit2 = line.charCodeAt(3);
+  if (
+    digit0 < 0x30 ||
+    digit0 > 0x39 ||
+    digit1 < 0x30 ||
+    digit1 > 0x39 ||
+    digit2 < 0x30 ||
+    digit2 > 0x39
+  ) {
+    return undefined;
+  }
+
+  const channel0 = normalizeBase36AsciiCode(line.charCodeAt(4));
+  const channel1 = normalizeBase36AsciiCode(line.charCodeAt(5));
+  if (channel0 < 0 || channel1 < 0) {
+    return undefined;
+  }
+
+  let cursor = 6;
+  while (cursor < line.length && isAsciiWhitespace(line.charCodeAt(cursor))) {
+    cursor += 1;
+  }
+  if (cursor >= line.length || line.charCodeAt(cursor) !== 0x3a) {
+    return undefined;
+  }
+
+  cursor += 1;
+  while (cursor < line.length && isAsciiWhitespace(line.charCodeAt(cursor))) {
+    cursor += 1;
+  }
+  if (cursor >= line.length) {
+    return undefined;
+  }
+
+  const data = line.slice(cursor).trim();
+  if (data.length === 0) {
+    return undefined;
+  }
+
+  return {
+    measure: (digit0 - 0x30) * 100 + (digit1 - 0x30) * 10 + (digit2 - 0x30),
+    channel: String.fromCharCode(channel0, channel1),
+    data,
+  };
+}
+
+function normalizeBase36AsciiCode(code: number): number {
+  if (code >= 0x30 && code <= 0x39) {
+    return code;
+  }
+  if (code >= 0x41 && code <= 0x5a) {
+    return code;
+  }
+  if (code >= 0x61 && code <= 0x7a) {
+    return code - 0x20;
+  }
+  return -1;
+}
+
+function isAsciiWhitespace(code: number): boolean {
+  return code === 0x20 || code === 0x09 || code === 0x0b || code === 0x0c;
+}
+
+function forEachLine(input: string, visitor: (line: string) => void): void {
+  let lineStart = 0;
+  for (let index = 0; index <= input.length; index += 1) {
+    const isLineBreak = index === input.length || input.charCodeAt(index) === 0x0a;
+    if (!isLineBreak) {
+      continue;
+    }
+    let lineEnd = index;
+    if (lineEnd > lineStart && input.charCodeAt(lineEnd - 1) === 0x0d) {
+      lineEnd -= 1;
+    }
+    visitor(input.slice(lineStart, lineEnd));
+    lineStart = index + 1;
   }
 }
 
