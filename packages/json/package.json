@@ -1,7 +1,7 @@
 {
   "name": "@be-music/json",
   "version": "0.1.0",
-  "description": "BMS/BMSON intermediate representation",
+  "description": "Internal Be-Music intermediate representation (not an exchange/distribution format)",
   "files": [
     "dist"
   ],
