@@ -30,6 +30,52 @@ test('BMS: auto-detects and reads Shift_JIS files', async () => {
   expect(json.metadata.artist).toBe('佐藤');
 });
 
+test('BMS: uses 130 BPM when #BPM is omitted', () => {
+  const parsed = parseChart(
+    [
+      '#TITLE No BPM',
+      '#00111:01',
+      '',
+    ].join('\n'),
+  );
+  expect(parsed.sourceFormat).toBe('bms');
+  expect(parsed.metadata.bpm).toBe(130);
+});
+
+test('BMS: keeps declared #BPM even when it is 120', () => {
+  const parsed = parseChart(
+    [
+      '#TITLE Explicit BPM',
+      '#BPM 120',
+      '#00111:01',
+      '',
+    ].join('\n'),
+  );
+  expect(parsed.sourceFormat).toBe('bms');
+  expect(parsed.metadata.bpm).toBe(120);
+});
+
+test('BMS: keeps 130 fallback unless a control-flow branch applies #BPM', () => {
+  const parsed = parseChart(
+    [
+      '#RANDOM 2',
+      '#IF 1',
+      '#BPM 150',
+      '#ENDIF',
+      '#ENDRANDOM',
+      '#00111:01',
+      '',
+    ].join('\n'),
+  );
+  expect(parsed.metadata.bpm).toBe(130);
+
+  const resolvedWhenBranchIsActive = resolveBmsControlFlow(parsed, { random: () => 0 });
+  expect(resolvedWhenBranchIsActive.metadata.bpm).toBe(150);
+
+  const resolvedWhenBranchIsInactive = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
+  expect(resolvedWhenBranchIsInactive.metadata.bpm).toBe(130);
+});
+
 test('BMS: parses extension headers into dedicated fields', async () => {
   const chartPath = resolve(rootDir, 'examples/test/extensions-headers-test.bms');
   const json = await parseChartFile(chartPath);

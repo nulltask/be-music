@@ -49,6 +49,7 @@ export function parseBms(input: string): BeMusicJson {
   const json = createEmptyJson('bms');
   const controlFlowCaptureStack: ControlFlowCaptureFrameType[] = [];
   const measureByIndex = new Map<number, MeasureLengthEntry>();
+  let hasValidMainBpmHeader = false;
 
   forEachLine(input, (rawLine) => {
     const line = rawLine.trim();
@@ -107,9 +108,19 @@ export function parseBms(input: string): BeMusicJson {
 
     const command = headerMatch[1].toUpperCase();
     const value = headerMatch[2]?.trim() ?? '';
+    if (command === 'BPM') {
+      const parsedMainBpm = Number.parseFloat(value);
+      if (Number.isFinite(parsedMainBpm) && parsedMainBpm > 0) {
+        hasValidMainBpmHeader = true;
+      }
+    }
     pushHeaderLine(json, command, value);
   });
 
+  if (!hasValidMainBpmHeader) {
+    // BMS compatibility: if #BPM is not declared, treat 130 as the default base BPM.
+    json.metadata.bpm = 130;
+  }
   json.measures.sort((left, right) => left.index - right.index);
   json.events = sortAndNormalizeEvents(json.events);
   return json;
