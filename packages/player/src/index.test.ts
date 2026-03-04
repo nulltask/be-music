@@ -89,6 +89,29 @@ test('player: auto play ignores landmine notes in score totals', async () => {
   expect(summary.poor).toBe(0);
 });
 
+test('player: emits runtime state transitions via onStateChange', async () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+  const phases: string[] = [];
+  await autoPlay(json, {
+    auto: true,
+    speed: 48,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+    onStateChange: (snapshot) => {
+      phases.push(snapshot.phase);
+    },
+  });
+
+  expect(phases[0]).toBe('loading');
+  expect(phases).toContain('ready');
+  expect(phases).toContain('playing');
+  expect(phases.at(-1)).toBe('result');
+});
+
 test('player: ignores free-zone channel for score and judgment totals', async () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;

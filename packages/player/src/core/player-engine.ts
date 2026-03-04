@@ -92,6 +92,7 @@ export interface PlayerOptions {
   audioLeadStepDownMs?: number;
   tui?: boolean;
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
+  onStateChange?: (snapshot: PlayerRuntimeStateSnapshot) => void;
   onHighSpeedChange?: (highSpeed: number) => void;
   laneModeExtension?: string;
 }
@@ -116,6 +117,20 @@ export interface PlayerLoadProgress {
 }
 
 export type PlayerInterruptReason = 'escape' | 'ctrl-c';
+export type PlayerRuntimeMode = 'auto' | 'manual';
+export type PlayerRuntimePhase = 'loading' | 'ready' | 'playing' | 'paused' | 'result' | 'interrupted';
+
+export interface PlayerRuntimeStateSnapshot {
+  mode: PlayerRuntimeMode;
+  phase: PlayerRuntimePhase;
+  speed: number;
+  highSpeed: number;
+  currentSeconds: number;
+  totalSeconds: number;
+  combo: number;
+  summary: PlayerSummary;
+  interruptedReason?: PlayerInterruptReason;
+}
 
 export class PlayerInterruptedError extends Error {
   readonly reason: PlayerInterruptReason;
@@ -248,6 +263,17 @@ function reportLoadProgress(options: PlayerOptions, ratio: number, message: stri
   });
 }
 
+function reportRuntimeState(options: PlayerOptions, snapshot: PlayerRuntimeStateSnapshot): void {
+  const listener = options.onStateChange;
+  if (!listener) {
+    return;
+  }
+  listener({
+    ...snapshot,
+    summary: { ...snapshot.summary },
+  });
+}
+
 interface AudioSessionLoadProgress {
   ratio: number;
   message: string;
@@ -308,6 +334,24 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   let combo = 0;
   let interruptedReason: PlayerInterruptReason | undefined;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
+  const emitRuntimeState = (
+    phase: PlayerRuntimePhase,
+    currentSeconds: number,
+    interrupted?: PlayerInterruptReason,
+  ): void => {
+    reportRuntimeState(options, {
+      mode: 'auto',
+      phase,
+      speed,
+      highSpeed,
+      currentSeconds: Math.max(0, currentSeconds),
+      totalSeconds,
+      combo,
+      summary,
+      interruptedReason: interrupted,
+    });
+  };
+  emitRuntimeState('loading', 0);
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
   const tui = createTuiIfEnabled(resolvedJson, options, 'AUTO', laneBindings, laneDisplayMode, speed, 0);
@@ -326,6 +370,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   });
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
   reportLoadProgress(options, 1, 'Ready');
+  emitRuntimeState('ready', 0);
   const autoDebugAudioEstimator = options.debugActiveAudio
     ? await createDebugActiveAudioEstimator(resolvedJson, options.audioBaseDir)
     : undefined;
@@ -377,6 +422,12 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const canCaptureInput = process.stdin.isTTY;
   let inputCaptureStopped = false;
   let playbackClock: PlaybackClock | undefined;
+  const resolvePlaybackSeconds = (): number => {
+    if (!playbackClock) {
+      return 0;
+    }
+    return elapsedMsToGameSeconds(playbackClock.nowMs(), speed);
+  };
 
   const stopInputCapture = (): void => {
     if (!canCaptureInput || inputCaptureStopped) {
@@ -397,6 +448,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       }
       audioSession?.resume();
       tui?.setPaused(false);
+      emitRuntimeState('playing', resolvePlaybackSeconds());
       if (!tui) {
         process.stdout.write('RESUME\n');
       }
@@ -408,6 +460,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     }
     audioSession?.pause();
     tui?.setPaused(true);
+    emitRuntimeState('paused', resolvePlaybackSeconds());
     if (!tui) {
       process.stdout.write('PAUSE\n');
     }
@@ -434,6 +487,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         highSpeed = nextHighSpeed;
         tui?.setHighSpeed(highSpeed);
         options.onHighSpeedChange?.(highSpeed);
+        const phase = playbackClock ? (playbackClock.isPaused() ? 'paused' : 'playing') : 'ready';
+        emitRuntimeState(phase, resolvePlaybackSeconds());
       }
       if (!tui) {
         process.stdout.write(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
@@ -461,6 +516,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0),
       );
       playbackClock = chartClock;
+      emitRuntimeState('playing', 0);
       const badWindowSeconds = IIDX_BAD_WINDOW_MS / 1000;
       let landmineExpireCursor = 0;
       let invisibleExpireCursor = 0;
@@ -504,6 +560,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             return;
           }
           if (chartClock.isPaused()) {
+            emitRuntimeState('paused', elapsedMsToGameSeconds(nowMs, speed));
             await waitPrecise(PAUSE_POLL_INTERVAL_MS);
             continue;
           }
@@ -521,6 +578,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             ...resolveDebugActiveAudioState(nowSec),
             ...createBgaRenderFrame(bgaRenderer, nowSec),
           });
+          emitRuntimeState('playing', nowSec);
           await waitPrecise(Math.max(1, Math.min(TUI_FRAME_INTERVAL_MS, targetMs - nowMs)));
         }
       };
@@ -564,6 +622,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 
         markExpiredLandmines(note.seconds);
         markExpiredInvisibleNotes(note.seconds);
+        emitRuntimeState('playing', note.seconds);
       }
 
       if (!interruptedReason) {
@@ -587,9 +646,13 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           ...resolveDebugActiveAudioState(totalSeconds),
           ...createBgaRenderFrame(bgaRenderer, totalSeconds),
         });
+        emitRuntimeState('result', totalSeconds);
       }
     }
   } finally {
+    if (interruptedReason) {
+      emitRuntimeState('interrupted', resolvePlaybackSeconds(), interruptedReason);
+    }
     detachBgaResizeHandler();
     if (interruptedReason) {
       await disposeAudioSessionSafely(audioSession);
@@ -659,6 +722,24 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const scoreTracker = createScoreTracker();
   let combo = 0;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
+  const emitRuntimeState = (
+    phase: PlayerRuntimePhase,
+    currentSeconds: number,
+    interrupted?: PlayerInterruptReason,
+  ): void => {
+    reportRuntimeState(options, {
+      mode: 'manual',
+      phase,
+      speed,
+      highSpeed,
+      currentSeconds: Math.max(0, currentSeconds),
+      totalSeconds,
+      combo,
+      summary,
+      interruptedReason: interrupted,
+    });
+  };
+  emitRuntimeState('loading', 0);
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
   const tui = createTuiIfEnabled(
@@ -685,6 +766,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   });
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
   reportLoadProgress(options, 1, 'Ready');
+  emitRuntimeState('ready', 0);
   const resolveDebugActiveAudioState = (): { activeAudioFiles?: string[]; activeAudioVoiceCount?: number } => {
     if (options.debugActiveAudio !== true) {
       return {};
@@ -737,6 +819,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   audioSession?.start();
 
   const playbackClock = createPlaybackClock(performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0));
+  const resolvePlaybackSeconds = (): number => elapsedMsToGameSeconds(playbackClock.nowMs(), speed);
+  emitRuntimeState('playing', 0);
   const horizon = (totalSeconds * 1000) / speed + leadInMs + badWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
   const longHoldUntilMsByChannel = new Map<string, number>();
@@ -1066,6 +1150,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       highSpeed = nextHighSpeed;
       tui?.setHighSpeed(highSpeed);
       options.onHighSpeedChange?.(highSpeed);
+      emitRuntimeState(playbackClock.isPaused() ? 'paused' : 'playing', resolvePlaybackSeconds());
     }
     if (!tui) {
       process.stdout.write(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
@@ -1080,6 +1165,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       audioSession?.resume();
       tui?.setPaused(false);
+      emitRuntimeState('playing', resolvePlaybackSeconds());
       if (!tui) {
         process.stdout.write('RESUME\n');
       }
@@ -1090,6 +1176,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     audioSession?.pause();
     tui?.setPaused(true);
+    emitRuntimeState('paused', resolvePlaybackSeconds());
     if (!tui) {
       process.stdout.write('PAUSE\n');
     }
@@ -1219,6 +1306,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           ...resolveDebugActiveAudioState(),
           ...createBgaRenderFrame(bgaRenderer, nowSec),
         });
+        emitRuntimeState('paused', nowSec);
         await waitPrecise(PAUSE_POLL_INTERVAL_MS);
         continue;
       }
@@ -1268,6 +1356,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         ...resolveDebugActiveAudioState(),
         ...createBgaRenderFrame(bgaRenderer, nowSec),
       });
+      emitRuntimeState('playing', nowSec);
 
       markExpiredLandmines(nowSec);
       markExpiredInvisibleNotes(nowSec);
@@ -1309,6 +1398,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
     }
   } finally {
+    if (interruptedReason) {
+      emitRuntimeState('interrupted', resolvePlaybackSeconds(), interruptedReason);
+    }
     detachBgaResizeHandler();
     if (interruptedReason) {
       await disposeAudioSessionSafely(audioSession);
@@ -1321,12 +1413,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
   if (interruptedReason) {
     if (interruptedReason === 'escape') {
+      emitRuntimeState('result', resolvePlaybackSeconds());
       process.stdout.write(renderSummary(summary));
       return summary;
     }
     throw new PlayerInterruptedError(interruptedReason);
   }
 
+  emitRuntimeState('result', totalSeconds);
   process.stdout.write(renderSummary(summary));
   return summary;
 }

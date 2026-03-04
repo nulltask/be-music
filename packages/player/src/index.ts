@@ -3,3 +3,4 @@
  * Implementation modules are split under `./core/`.
  */
 export * from './core/player-engine.ts';
+export * from './core/player-signals.ts';
