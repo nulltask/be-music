@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import {
+  collectLnobjEndEvents,
   createBeatResolver,
   DEFAULT_BPM,
   isLandmineChannel,
@@ -148,9 +149,13 @@ function collectSampleTriggersWithContext(
   context: TimingBuildContext,
 ): TimedSampleTrigger[] {
   const { sortedEvents, beatResolver } = context;
+  const lnobjEndEvents = collectLnobjEndEvents(json);
   const events: BeMusicEvent[] = [];
   for (const event of sortedEvents) {
     if (!isSampleTriggerChannel(event.channel) || isLandmineChannel(event.channel)) {
+      continue;
+    }
+    if (lnobjEndEvents.has(event)) {
       continue;
     }
     events.push(event);

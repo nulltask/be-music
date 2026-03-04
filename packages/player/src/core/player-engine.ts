@@ -3,6 +3,7 @@ import readline from 'node:readline';
 import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
 import { floatToInt16 } from '@be-music/utils';
 import {
+  collectLnobjEndEvents,
   createBeatResolver,
   createEmptyJson,
   type BeMusicEvent,
@@ -1455,6 +1456,7 @@ async function createAudioSessionIfEnabled(
   const bgmVolume = normalizeBgmVolume(options.bgmVolume);
   const playVolume = normalizePlayVolume(options.playVolume);
   const chartWavGain = resolveChartVolWavGain(json);
+  const lnobjEndEvents = mode === 'manual' ? collectLnobjEndEvents(json) : undefined;
   const renderOptions = {
     baseDir: options.audioBaseDir ?? process.cwd(),
     tailSeconds: options.audioTailSeconds ?? 1.5,
@@ -1625,6 +1627,9 @@ async function createAudioSessionIfEnabled(
       mode === 'manual'
         ? (event: BeMusicEvent) => {
             if (draining || abortRequested || paused) {
+              return;
+            }
+            if (lnobjEndEvents?.has(event)) {
               return;
             }
             const normalized = normalizeObjectKey(event.value);

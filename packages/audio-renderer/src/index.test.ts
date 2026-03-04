@@ -115,6 +115,23 @@ test('audio-renderer: ignores scroll channels for sample triggering', () => {
   expect(triggers[0]?.channel).toBe('11');
 });
 
+test('audio-renderer: ignores paired #LNOBJ end objects for sample triggering', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.bms.lnObj = 'AA';
+  json.resources.wav['01'] = 'start.wav';
+  json.resources.wav['AA'] = 'end.wav';
+  const start = { measure: 0, channel: '11', position: [0, 1] as const, value: '01' };
+  const end = { measure: 0, channel: '11', position: [1, 2] as const, value: 'AA' };
+  const orphan = { measure: 0, channel: '12', position: [3, 4] as const, value: 'AA' };
+  json.events = [start, end, orphan];
+
+  const triggers = collectSampleTriggers(json);
+  expect(triggers.some((trigger) => trigger.event === start)).toBe(true);
+  expect(triggers.some((trigger) => trigger.event === end)).toBe(false);
+  expect(triggers.some((trigger) => trigger.event === orphan)).toBe(true);
+});
+
 test('audio-renderer: treats #STOP192 as one measure length at current BPM', () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;

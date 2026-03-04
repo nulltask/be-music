@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  collectLnobjEndEvents,
   cloneJson,
   createBeatResolver,
   createEmptyJson,
@@ -184,5 +185,24 @@ test('json: classifies channel types', () => {
   expect(isPlayableChannel('21')).toBe(true);
   expect(isPlayableChannel('31')).toBe(false);
   expect(isPlayableChannel('01')).toBe(false);
+});
+
+test('json: collectLnobjEndEvents returns only paired LNOBJ end markers', () => {
+  const json = createEmptyJson('bms');
+  json.bms.lnObj = 'AA';
+  const startA: BeMusicEvent = { measure: 0, channel: '11', position: [0, 1], value: '01' };
+  const endA: BeMusicEvent = { measure: 0, channel: '11', position: [1, 4], value: 'AA' };
+  const sameBeatLnobj: BeMusicEvent = { measure: 0, channel: '12', position: [0, 1], value: 'AA' };
+  const startB: BeMusicEvent = { measure: 0, channel: '12', position: [1, 2], value: '02' };
+  const endB: BeMusicEvent = { measure: 0, channel: '12', position: [3, 4], value: 'AA' };
+  const invisibleLnobj: BeMusicEvent = { measure: 0, channel: '31', position: [1, 1], value: 'AA' };
+  json.events = [startA, endA, sameBeatLnobj, startB, endB, invisibleLnobj];
+
+  const endEvents = collectLnobjEndEvents(json);
+  expect(endEvents.size).toBe(2);
+  expect(endEvents.has(endA)).toBe(true);
+  expect(endEvents.has(endB)).toBe(true);
+  expect(endEvents.has(sameBeatLnobj)).toBe(false);
+  expect(endEvents.has(invisibleLnobj)).toBe(false);
 });
 });

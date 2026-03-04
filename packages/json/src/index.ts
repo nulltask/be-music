@@ -397,6 +397,44 @@ export function isPlayableChannel(channel: string): boolean {
   return normalized.startsWith('1') || normalized.startsWith('2');
 }
 
+export function collectLnobjEndEvents(json: BeMusicJson): Set<BeMusicEvent> {
+  if (json.sourceFormat !== 'bms') {
+    return new Set();
+  }
+
+  const lnObj =
+    typeof json.bms.lnObj === 'string' && json.bms.lnObj.length > 0 ? normalizeObjectKey(json.bms.lnObj) : undefined;
+  if (!lnObj) {
+    return new Set();
+  }
+
+  const beatResolver = createBeatResolver(json);
+  const pendingStartBeatByChannel = new Map<string, number>();
+  const endEvents = new Set<BeMusicEvent>();
+
+  for (const event of sortEvents(json.events)) {
+    const normalizedChannel = normalizeChannel(event.channel);
+    if (!isPlayableChannel(normalizedChannel)) {
+      continue;
+    }
+
+    const beat = beatResolver.eventToBeat(event);
+    const value = normalizeObjectKey(event.value);
+    if (value === lnObj) {
+      const startBeat = pendingStartBeatByChannel.get(normalizedChannel);
+      if (typeof startBeat === 'number' && beat > startBeat) {
+        endEvents.add(event);
+      }
+      pendingStartBeatByChannel.delete(normalizedChannel);
+      continue;
+    }
+
+    pendingStartBeatByChannel.set(normalizedChannel, beat);
+  }
+
+  return endEvents;
+}
+
 function createExactMeasureLengthMap(json: BeMusicJson): Map<number, number> {
   const measureLengths = new Map<number, number>();
   for (const measure of json.measures) {
