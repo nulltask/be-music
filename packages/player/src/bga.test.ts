@@ -16,6 +16,39 @@ interface RgbColor {
 type Pixel = RgbColor | undefined;
 describe('player bga', () => {
 
+test('player bga: reports loading progress details with target file names', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-progress-'));
+  try {
+    await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+    await writePng(join(baseDir, 'stage.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.metadata.stageFile = 'stage.png';
+    json.resources.bmp['01'] = 'base.png';
+    json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
+
+    const progressDetails: string[] = [];
+    const progressRatios: number[] = [];
+    const renderer = await createBgaAnsiRenderer(json, {
+      baseDir,
+      width: 40,
+      height: 20,
+      onLoadProgress: (progress) => {
+        progressRatios.push(progress.ratio);
+        progressDetails.push(progress.detail);
+      },
+    });
+
+    expect(renderer).toBeDefined();
+    expect(progressDetails).toContain('base.png');
+    expect(progressDetails).toContain('stage.png');
+    expect(progressRatios.at(-1)).toBeCloseTo(1, 6);
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
 
 test('player bga: composites layer with black treated as transparent', async () => {
   const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-layer-'));

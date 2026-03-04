@@ -436,6 +436,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         baseDir: options.audioBaseDir ?? process.cwd(),
         width: bgaDisplay.width,
         height: bgaDisplay.height,
+        onLoadProgress: (progress) => {
+          reportLoadProgress(options, 0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
+        },
       })
     : undefined;
   const detachBgaResizeHandler = attachBgaResizeHandler(tui, bgaRenderer, laneBindings);
@@ -841,6 +844,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         baseDir: options.audioBaseDir ?? process.cwd(),
         width: bgaDisplay.width,
         height: bgaDisplay.height,
+        onLoadProgress: (progress) => {
+          reportLoadProgress(options, 0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
+        },
       })
     : undefined;
   const triggerPoorBga = (seconds: number): void => {
@@ -1036,6 +1042,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       scorableMissCursor += 1;
       if (!markScorableJudged(note)) {
         continue;
+      }
+      if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
+        note.visibleUntilBeat = note.endBeat;
       }
       applyJudgeToSummary(summary, 'POOR', scoreTracker);
       triggerPoorBga(referenceSeconds);

@@ -77,6 +77,12 @@ export interface BgaAnsiOptions {
   baseDir: string;
   width?: number;
   height?: number;
+  onLoadProgress?: (progress: BgaAnsiLoadProgress) => void;
+}
+
+export interface BgaAnsiLoadProgress {
+  ratio: number;
+  detail: string;
 }
 
 export class BgaAnsiRenderer {
@@ -407,6 +413,23 @@ export async function createBgaAnsiRenderer(
     poorKeys.add(poorFallbackKey);
   }
   const poorFallbackUntilSeconds = poorTimeline[0]?.seconds ?? Number.POSITIVE_INFINITY;
+  const totalLoadTargetCount =
+    countMappedBmpResourceTargets(baseKeys, json.resources.bmp) +
+    countMappedBmpResourceTargets(poorKeys, json.resources.bmp) +
+    countMappedBmpResourceTargets(layerKeys, json.resources.bmp) +
+    countMappedBmpResourceTargets(layer2Keys, json.resources.bmp) +
+    countMappedStageFileTarget(json.metadata.stageFile);
+  let loadedTargetCount = 0;
+  const reportLoadProgress = (detail: string): void => {
+    if (!options.onLoadProgress || totalLoadTargetCount <= 0) {
+      return;
+    }
+    loadedTargetCount += 1;
+    options.onLoadProgress({
+      ratio: Math.max(0, Math.min(1, loadedTargetCount / totalLoadTargetCount)),
+      detail: normalizeProgressDetail(detail),
+    });
+  };
 
   const baseSourceFramesByKey = await loadFramesByKeys({
     keys: baseKeys,
@@ -415,6 +438,7 @@ export async function createBgaAnsiRenderer(
     mode: 'base',
     width: displaySize.width,
     height: displaySize.height,
+    onLoadProgress: reportLoadProgress,
   });
   const poorSourceFramesByKey = await loadFramesByKeys({
     keys: poorKeys,
@@ -423,6 +447,7 @@ export async function createBgaAnsiRenderer(
     mode: 'base',
     width: displaySize.width,
     height: displaySize.height,
+    onLoadProgress: reportLoadProgress,
   });
   const layerSourceFramesByKey = await loadFramesByKeys({
     keys: layerKeys,
@@ -431,6 +456,7 @@ export async function createBgaAnsiRenderer(
     mode: 'layer',
     width: displaySize.width,
     height: displaySize.height,
+    onLoadProgress: reportLoadProgress,
   });
   const layer2SourceFramesByKey = await loadFramesByKeys({
     keys: layer2Keys,
@@ -439,10 +465,12 @@ export async function createBgaAnsiRenderer(
     mode: 'layer',
     width: displaySize.width,
     height: displaySize.height,
+    onLoadProgress: reportLoadProgress,
   });
 
   let stageFileSourceFrame: FrameSource | undefined;
   if (json.metadata.stageFile) {
+    reportLoadProgress(json.metadata.stageFile);
     const resolved = await resolveMediaPath(options.baseDir, json.metadata.stageFile);
     if (resolved) {
       stageFileSourceFrame = await loadFrameSource(resolved, 'base', displaySize.width, displaySize.height);
@@ -490,8 +518,9 @@ async function loadFramesByKeys(params: {
   mode: FrameMode;
   width: number;
   height: number;
+  onLoadProgress?: (detail: string) => void;
 }): Promise<Map<string, FrameSource>> {
-  const { keys, resources, baseDir, mode, width, height } = params;
+  const { keys, resources, baseDir, mode, width, height, onLoadProgress } = params;
   const map = new Map<string, FrameSource>();
   const cache = new Map<string, FrameSource | null>();
 
@@ -500,6 +529,7 @@ async function loadFramesByKeys(params: {
     if (!resourcePath) {
       continue;
     }
+    onLoadProgress?.(resourcePath);
     const resolved = await resolveMediaPath(baseDir, resourcePath);
     if (!resolved) {
       continue;
@@ -518,6 +548,27 @@ async function loadFramesByKeys(params: {
   }
 
   return map;
+}
+
+function countMappedBmpResourceTargets(keys: ReadonlySet<string>, resources: Record<string, string>): number {
+  let count = 0;
+  for (const key of keys) {
+    if (resources[key]) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function countMappedStageFileTarget(stageFile: string | undefined): number {
+  if (typeof stageFile !== 'string' || stageFile.length === 0) {
+    return 0;
+  }
+  return 1;
+}
+
+function normalizeProgressDetail(detail: string): string {
+  return detail.replaceAll('\\', '/');
 }
 
 function normalizeDisplaySize(width?: number, height?: number): { width: number; height: number } {
