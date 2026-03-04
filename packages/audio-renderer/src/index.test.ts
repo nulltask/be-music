@@ -2,7 +2,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vitest';
-import { type RenderResult, collectSampleTriggers, createTimingResolver, renderJson } from './index.ts';
+import { type RenderResult, collectSampleTriggers, createTimingResolver, renderJson, renderSingleSample } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const fixtureDir = resolve(rootDir, 'examples/test');
@@ -53,6 +53,31 @@ test.each(codecCases)('audio-renderer: $label サンプルを読み込んでミ�
   expect(result.durationSeconds).toBeGreaterThan(0.2);
   expect(result.durationSeconds).toBeLessThan(0.8);
   expect(result.peak).toBeGreaterThan(0.001);
+});
+
+test.each(codecCases)('audio-renderer: renderSingleSample matches single-trigger renderJson for $label', async ({ path }) => {
+  const json = createSingleTriggerChart(path);
+  const [mixed, single] = await Promise.all([
+    renderJson(json, {
+      baseDir: fixtureDir,
+      sampleRate: 44_100,
+      gain: 0.75,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.01,
+    }),
+    renderSingleSample('01', path, {
+      baseDir: fixtureDir,
+      sampleRate: 44_100,
+      gain: 0.75,
+      fallbackToneSeconds: 0.01,
+    }),
+  ]);
+
+  expect(single.left.length).toBe(mixed.left.length);
+  expect(single.right.length).toBe(mixed.right.length);
+  expect(Math.abs(single.durationSeconds - mixed.durationSeconds)).toBeLessThan(1e-9);
+  expect(maxDeltaBetweenResults(single, mixed, 0, mixed.left.length)).toBeLessThan(1e-7);
 });
 describe('audio-renderer', () => {
 

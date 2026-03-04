@@ -5,8 +5,6 @@ import { floatToInt16 } from '@be-music/utils';
 import {
   collectLnobjEndEvents,
   createBeatResolver,
-  createEmptyJson,
-  DEFAULT_BPM,
   mapBmsLongNoteChannelToPlayable,
   type BeMusicEvent,
   type BeMusicJson,
@@ -21,6 +19,7 @@ import {
   type TimedSampleTrigger,
   collectSampleTriggers,
   createTimingResolver,
+  renderSingleSample,
   renderJson,
 } from '@be-music/audio-renderer';
 import { createBgaAnsiRenderer, type BgaAnsiRenderer } from '../bga.ts';
@@ -2023,26 +2022,10 @@ async function buildDebugSampleDurationSecondsMap(
 
   const durations = new Map<string, number>();
   for (const trigger of uniqueTriggers.values()) {
-    const sampleJson = createEmptyJson('json');
-    sampleJson.metadata.bpm = DEFAULT_BPM;
-    if (trigger.samplePath) {
-      sampleJson.resources.wav[trigger.sampleKey] = trigger.samplePath;
-    }
-    sampleJson.events = [
-      {
-        measure: 0,
-        channel: '11',
-        position: [0, 1],
-        value: trigger.sampleKey,
-      },
-    ];
-
-    const rendered = await renderJson(sampleJson, {
+    const rendered = await renderSingleSample(trigger.sampleKey, trigger.samplePath, {
       baseDir: baseDir ?? process.cwd(),
       sampleRate: DEBUG_ACTIVE_AUDIO_SAMPLE_RATE,
-      tailSeconds: 0,
       gain: 1,
-      normalize: false,
       fallbackToneSeconds: DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS,
     });
     durations.set(trigger.sampleKey, rendered.durationSeconds);
@@ -2503,27 +2486,11 @@ async function buildRuntimeSampleMap(
 
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index];
-    const sampleJson = createEmptyJson('json');
-    sampleJson.metadata.bpm = json.metadata.bpm;
-
     const sourcePath = json.resources.wav[key];
-    if (sourcePath) {
-      sampleJson.resources.wav[key] = sourcePath;
-    }
-
-    sampleJson.events.push({
-      measure: 0,
-      channel: '11',
-      position: [0, 1],
-      value: key,
-    });
-
-    const rendered = await renderJson(sampleJson, {
+    const rendered = await renderSingleSample(key, sourcePath, {
       baseDir: options.audioBaseDir ?? process.cwd(),
       sampleRate,
-      tailSeconds: 0,
       gain: chartWavGain,
-      normalize: false,
       fallbackToneSeconds: 0.06,
     });
 

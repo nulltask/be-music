@@ -82,6 +82,14 @@ export interface RenderResult {
   peak: number;
 }
 
+export interface RenderSingleSampleOptions {
+  sampleRate?: number;
+  gain?: number;
+  baseDir?: string;
+  fallbackToneSeconds?: number;
+  onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
+}
+
 interface StereoSample {
   left: Float32Array;
   right: Float32Array;
@@ -319,6 +327,29 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
     durationSeconds: left.length / sampleRate,
     peak: normalize && peak > 1 ? 1 : peak,
   };
+}
+
+export async function renderSingleSample(
+  sampleKey: string,
+  samplePath: string | undefined,
+  options: RenderSingleSampleOptions = {},
+): Promise<RenderResult> {
+  const normalizedKey = normalizeObjectKey(sampleKey);
+  const sampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
+  const gain = typeof options.gain === 'number' && Number.isFinite(options.gain) ? options.gain : 1;
+  const baseDir = options.baseDir ?? process.cwd();
+  const fallbackToneSeconds = options.fallbackToneSeconds ?? 0.08;
+  const sample = await getOrCreateSample({
+    sampleKey: normalizedKey,
+    samplePath,
+    sampleRate,
+    baseDir,
+    fallbackToneSeconds,
+    loadedSamples: new Map(),
+    resolvedPathCache: new Map(),
+    onSampleLoadProgress: options.onSampleLoadProgress,
+  });
+  return toRenderResult(sample, sampleRate, gain);
 }
 
 function createTimingBuildContext(json: BeMusicJson): TimingBuildContext {
@@ -564,6 +595,33 @@ async function getOrCreateSample(params: {
     });
     return fallback;
   }
+}
+
+function toRenderResult(sample: StereoSample, sampleRate: number, gain: number): RenderResult {
+  const safeGain = Number.isFinite(gain) ? gain : 1;
+  if (safeGain === 1) {
+    return {
+      sampleRate,
+      left: sample.left,
+      right: sample.right,
+      durationSeconds: sample.left.length / sampleRate,
+      peak: measurePeak(sample.left, sample.right),
+    };
+  }
+
+  const left = new Float32Array(sample.left.length);
+  const right = new Float32Array(sample.right.length);
+  for (let index = 0; index < sample.left.length; index += 1) {
+    left[index] = sample.left[index] * safeGain;
+    right[index] = sample.right[index] * safeGain;
+  }
+  return {
+    sampleRate,
+    left,
+    right,
+    durationSeconds: left.length / sampleRate,
+    peak: measurePeak(left, right),
+  };
 }
 
 function mixSample(
