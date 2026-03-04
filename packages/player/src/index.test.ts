@@ -13,6 +13,7 @@ import {
   extractPlayableNotes,
   manualPlay,
   resolveHighSpeedControlActionFromKey,
+  isPlayLaneChannelForVolumeControl,
   resolveJudgeWindowsMs,
 } from './index.ts';
 
@@ -257,6 +258,17 @@ test('player: FAST/SLOW are counted only for GREAT/GOOD', () => {
   applyFastSlowForJudge(summary, 'GOOD', 0);
   expect(summary.fast).toBe(1);
   expect(summary.slow).toBe(1);
+});
+
+test('player: volume control play-side channels include invisible lanes', () => {
+  expect(isPlayLaneChannelForVolumeControl('11')).toBe(true);
+  expect(isPlayLaneChannelForVolumeControl('29')).toBe(true);
+  expect(isPlayLaneChannelForVolumeControl('31')).toBe(true);
+  expect(isPlayLaneChannelForVolumeControl('48')).toBe(true);
+
+  expect(isPlayLaneChannelForVolumeControl('01')).toBe(false);
+  expect(isPlayLaneChannelForVolumeControl('51')).toBe(false);
+  expect(isPlayLaneChannelForVolumeControl('A1')).toBe(false);
 });
 
 test('player: narrows judge windows for bms RANK=0', () => {

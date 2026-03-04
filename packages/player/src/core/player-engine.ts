@@ -2194,14 +2194,30 @@ function resolvePositiveNumberOption(value: number | undefined, fallback: number
 
 function stripPlayableEvents(json: BeMusicJson): BeMusicJson {
   const cloned = structuredClone(json);
-  cloned.events = cloned.events.filter((event) => !isPlayableChannel(event.channel));
+  cloned.events = cloned.events.filter((event) => !isPlayLaneChannelForVolumeControl(event.channel));
   return cloned;
 }
 
 function stripNonPlayableEvents(json: BeMusicJson): BeMusicJson {
   const cloned = structuredClone(json);
-  cloned.events = cloned.events.filter((event) => isPlayableChannel(event.channel));
+  cloned.events = cloned.events.filter((event) => isPlayLaneChannelForVolumeControl(event.channel));
   return cloned;
+}
+
+export function isPlayLaneChannelForVolumeControl(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  if (isPlayableChannel(normalized)) {
+    return true;
+  }
+  if (normalized.length !== 2) {
+    return false;
+  }
+  const side = normalized[0];
+  const lane = normalized[1];
+  if (lane < '1' || lane > '9') {
+    return false;
+  }
+  return side === '3' || side === '4';
 }
 
 async function renderAutoMixWithVolumeControls(
