@@ -22,7 +22,7 @@
     "build": "vite build && tsgo -b tsconfig.json",
     "build:sea": "tsx ../../scripts/build-sea.ts --package audio-renderer",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "dev": "tsx --tsconfig ../../tsconfig.dev.json src/cli.ts",
+    "dev": "tsx --tsconfig ../../tsconfig.typecheck.json src/cli.ts",
     "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",

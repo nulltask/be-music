@@ -1,7 +1,4 @@
 {
-  "extends": "./tsconfig.options.json",
-  "compilerOptions": {
-    "noEmit": true
-  },
+  "extends": "./tsconfig.typecheck.base.json",
   "include": ["packages/*/src/**/*.ts", "vite.package.config.ts", "vitest.config.ts"]
 }
