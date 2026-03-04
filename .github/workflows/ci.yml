@@ -16,9 +16,53 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code_changed: ${{ steps.filter.outputs.code }}
+      player_changed: ${{ steps.filter.outputs.player }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+            player:
+              - 'packages/player/**'
+              - 'packages/audio-renderer/**'
+              - 'packages/parser/**'
+              - 'packages/json/**'
+              - 'packages/utils/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.node-version'
+              - 'tsconfig*.json'
+              - 'packages/*/tsconfig*.json'
+
+  verify:
+    name: Verify (${{ matrix.task }})
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        task:
+          - lint
+          - typecheck
+          - build
+          - test
 
     steps:
       - name: Checkout
@@ -32,28 +76,22 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Fetch dependencies
+        run: pnpm fetch --frozen-lockfile
 
-      - name: Lint
-        run: pnpm run lint
+      - name: Install dependencies (offline)
+        run: pnpm install --frozen-lockfile --offline
 
-      - name: Typecheck
-        run: pnpm run typecheck
-
-      - name: Build
-        run: pnpm run build
-
-      - name: Test
-        run: pnpm run test
+      - name: Run ${{ matrix.task }}
+        run: pnpm run ${{ matrix.task }}
 
   sea:
     name: SEA (${{ matrix.os }})
-    needs: ci
-    if: github.event_name != 'pull_request'
+    needs: changes
+    if: github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.player_changed == 'true')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -79,8 +117,11 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Fetch dependencies
+        run: pnpm fetch --frozen-lockfile
+
+      - name: Install dependencies (offline)
+        run: pnpm install --frozen-lockfile --offline
 
       - name: Build SEA executable
         run: pnpm --filter @be-music/player run build:sea
