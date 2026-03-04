@@ -20,7 +20,7 @@
   "scripts": {
     "build:bundle": "vite build",
     "build": "vite build && tsgo -b tsconfig.json",
-    "build:sea": "node ./scripts/build-sea.mjs",
+    "build:sea": "tsx ../../scripts/build-sea.ts --package audio-renderer",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "dev": "tsx --tsconfig ../../tsconfig.dev.json src/cli.ts",
     "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
