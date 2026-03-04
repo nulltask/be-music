@@ -179,7 +179,7 @@ interface RawInputCapture {
 
 interface ResultScreenOptions {
   allowReplay?: boolean;
-  returnActionLabel?: string;
+  nextActionLabel?: string;
 }
 
 type ResultScreenExitAction = Exclude<ResultScreenAction, 'replay'>;
@@ -675,7 +675,7 @@ async function playSingleChartUntilExit(chartPath: string, rootDir: string, args
     const played = await playChartOnce(chartPath, args);
     const action = await showResultScreen(rootDir, played, {
       allowReplay: true,
-      returnActionLabel: 'exit',
+      nextActionLabel: 'exit player',
     });
     if (action === 'replay') {
       continue;
@@ -1374,7 +1374,7 @@ async function showResultScreen(
   options: ResultScreenOptions = {},
 ): Promise<ResultScreenAction> {
   const allowReplay = options.allowReplay ?? true;
-  const returnActionLabel = options.returnActionLabel ?? 'return to song selection';
+  const nextActionLabel = options.nextActionLabel ?? 'return to song selection';
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     return 'enter';
   }
@@ -1418,7 +1418,8 @@ async function showResultScreen(
     if (allowReplay) {
       lines.push('Press r to replay this chart.');
     }
-    lines.push(`Press Enter or Esc to ${returnActionLabel}.`);
+    lines.push('Press Enter or Esc to close result screen.');
+    lines.push(`Next: ${nextActionLabel}.`);
     lines.push('Press Ctrl+C to quit.');
     process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J`);
   };
