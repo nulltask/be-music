@@ -86,6 +86,14 @@ describe('manual input', () => {
     expect(bindings.map((binding) => binding.channel)).toEqual(['11', '12', '13', '14', '15', '16', '17', '18', '19']);
   });
 
+  test('manual-input: does not force 9-key for #PLAYER=2/4', () => {
+    const coupleBindings = createLaneBindings(['11', '17'], { player: 2 });
+    expect(coupleBindings.map((binding) => binding.channel)).toEqual(['16', '11', '12', '13', '14', '15']);
+
+    const battleBindings = createLaneBindings(['11', '17'], { player: 4 });
+    expect(battleBindings.map((binding) => binding.channel)).toEqual(['16', '11', '12', '13', '14', '15']);
+  });
+
   test('manual-input: falls back to extension mode when channels alone are ambiguous', () => {
     expect(createLaneBindings(['11'], { chartExtension: '.bms' }).map((binding) => binding.channel)).toEqual([
       '16',
