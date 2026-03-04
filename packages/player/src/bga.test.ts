@@ -175,6 +175,145 @@ test('player bga: renders undefined base keys as black instead of STAGEFILE', as
   }
 });
 
+test('player bga: switches to channel 06 frame when POOR is triggered', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-'));
+  try {
+    await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+    await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bmp['01'] = 'base.png';
+    json.resources.bmp['02'] = 'poor.png';
+    json.events = [
+      { measure: 0, channel: '04', position: [0, 1], value: '01' },
+      { measure: 0, channel: '06', position: [0, 1], value: '02' },
+    ];
+
+    const renderer = await createBgaAnsiRenderer(json, {
+      baseDir,
+      width: 40,
+      height: 20,
+    });
+    expect(renderer).toBeDefined();
+
+    const beforePoor = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+    expect(beforePoor[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
+
+    renderer?.triggerPoor(0);
+    const duringPoor = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+    expect(duringPoor[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
+
+    const afterPoor = parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? []);
+    expect(afterPoor[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('player bga: clears POOR overlay and resumes normal BGA', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-clear-'));
+  try {
+    await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+    await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bmp['01'] = 'base.png';
+    json.resources.bmp['02'] = 'poor.png';
+    json.events = [
+      { measure: 0, channel: '04', position: [0, 1], value: '01' },
+      { measure: 0, channel: '06', position: [0, 1], value: '02' },
+    ];
+
+    const renderer = await createBgaAnsiRenderer(json, {
+      baseDir,
+      width: 40,
+      height: 20,
+    });
+    expect(renderer).toBeDefined();
+
+    renderer?.triggerPoor(0);
+    const duringPoor = parseAnsiPixels(renderer?.getAnsiLines(0.3) ?? []);
+    expect(duringPoor[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
+
+    renderer?.clearPoor();
+    const resumed = parseAnsiPixels(renderer?.getAnsiLines(0.3) ?? []);
+    expect(resumed[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('player bga: uses #BMP00 as default POOR image before first channel 06 cue when #POORBGA is unspecified', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-bmp00-'));
+  try {
+    await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+    await writePng(join(baseDir, 'fallback.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+    await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bmp['00'] = 'fallback.png';
+    json.resources.bmp['01'] = 'base.png';
+    json.resources.bmp['02'] = 'poor.png';
+    json.events = [
+      { measure: 0, channel: '04', position: [0, 1], value: '01' },
+      { measure: 1, channel: '06', position: [0, 1], value: '02' },
+    ];
+
+    const renderer = await createBgaAnsiRenderer(json, {
+      baseDir,
+      width: 40,
+      height: 20,
+    });
+    expect(renderer).toBeDefined();
+
+    renderer?.triggerPoor(0);
+    const beforeFirstPoorCue = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+    expect(beforeFirstPoorCue[10]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
+
+    renderer?.triggerPoor(2.1);
+    const afterFirstPoorCue = parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? []);
+    expect(afterFirstPoorCue[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('player bga: does not apply #BMP00 POOR fallback when #POORBGA is specified', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-no-fallback-'));
+  try {
+    await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+    await writePng(join(baseDir, 'fallback.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+    await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.bms.poorBga = '01';
+    json.resources.bmp['00'] = 'fallback.png';
+    json.resources.bmp['01'] = 'base.png';
+    json.resources.bmp['02'] = 'poor.png';
+    json.events = [
+      { measure: 0, channel: '04', position: [0, 1], value: '01' },
+      { measure: 1, channel: '06', position: [0, 1], value: '02' },
+    ];
+
+    const renderer = await createBgaAnsiRenderer(json, {
+      baseDir,
+      width: 40,
+      height: 20,
+    });
+    expect(renderer).toBeDefined();
+
+    renderer?.triggerPoor(0);
+    const beforeFirstPoorCue = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+    expect(beforeFirstPoorCue[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
 test('player bga: updates output size when display size changes', async () => {
   const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-resize-'));
   try {
@@ -210,6 +349,7 @@ test('player bga: does not apply terminal aspect correction twice for video fram
   const frame = createOpaqueAnsiFrame(40, 20, (_x, y) => (y < 10 ? { r: 255, g: 0, b: 0 } : { r: 0, g: 0, b: 255 }));
   const renderer = new BgaAnsiRenderer({
     baseTimeline: [{ seconds: 0, key: '01' }],
+    poorTimeline: [],
     layerTimeline: [],
     baseSourceFramesByKey: new Map([
       [
@@ -220,10 +360,14 @@ test('player bga: does not apply terminal aspect correction twice for video fram
         },
       ],
     ]) as any,
+    poorSourceFramesByKey: new Map(),
     layerSourceFramesByKey: new Map(),
     stageFileSourceFrame: undefined,
     missingBaseSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
+    missingPoorSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
     missingLayerSourceFrame: createTransparentAnsiFrame(256, 256),
+    poorFallbackKey: undefined,
+    poorFallbackUntilSeconds: Number.POSITIVE_INFINITY,
     width: 40,
     height: 20,
   });

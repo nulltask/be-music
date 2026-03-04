@@ -677,6 +677,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         height: bgaDisplay.height,
       })
     : undefined;
+  const triggerPoorBga = (seconds: number): void => {
+    bgaRenderer?.triggerPoor(seconds);
+  };
+  const clearPoorBga = (): void => {
+    bgaRenderer?.clearPoor();
+  };
   const detachBgaResizeHandler = attachBgaResizeHandler(tui, bgaRenderer, laneBindings);
   reportLoadProgress(options, 0.3, 'Preparing audio...');
   const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'manual', (progress) => {
@@ -831,6 +837,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         continue;
       }
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
+      clearPoorBga();
       combo += 1;
       audioSession?.triggerEvent?.(note.event);
       tui?.flashLane(note.channel);
@@ -860,6 +867,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         continue;
       }
       applyJudgeToSummary(summary, 'POOR', scoreTracker);
+      triggerPoorBga(referenceSeconds);
       combo = 0;
       if (tui) {
         tui.setLatestJudge('POOR');
@@ -868,11 +876,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
   };
 
-  const applyManualTimingJudge = (channel: string, signedDeltaMs: number): void => {
+  const applyManualTimingJudge = (channel: string, signedDeltaMs: number, atSeconds: number): void => {
     const deltaMs = Math.abs(signedDeltaMs);
     if (deltaMs <= judgeWindows.pgreat) {
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
       applyFastSlowForJudge(summary, 'PERFECT', signedDeltaMs);
+      clearPoorBga();
       combo += 1;
       if (!tui) {
         process.stdout.write(`PERFECT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -885,6 +894,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (deltaMs <= judgeWindows.great) {
       applyJudgeToSummary(summary, 'GREAT', scoreTracker);
       applyFastSlowForJudge(summary, 'GREAT', signedDeltaMs);
+      clearPoorBga();
       combo += 1;
       if (!tui) {
         process.stdout.write(`GREAT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -897,6 +907,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (deltaMs <= judgeWindows.good) {
       applyJudgeToSummary(summary, 'GOOD', scoreTracker);
       applyFastSlowForJudge(summary, 'GOOD', signedDeltaMs);
+      clearPoorBga();
       combo += 1;
       if (!tui) {
         process.stdout.write(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -919,6 +930,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
 
     applyJudgeToSummary(summary, 'POOR', scoreTracker);
+    triggerPoorBga(atSeconds);
     combo = 0;
     if (!tui) {
       process.stdout.write(`POOR channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -1053,7 +1065,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
 
     const signedDeltaMs = (nowSec - candidate.seconds) * 1000;
-    applyManualTimingJudge(channel, signedDeltaMs);
+    applyManualTimingJudge(channel, signedDeltaMs, nowSec);
   };
 
   const applyHighSpeedAction = (action: HighSpeedControlAction | undefined): boolean => {
@@ -1235,7 +1247,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         if (nowSec >= hold.endSeconds) {
           activeLongNotesByChannel.delete(channel);
           longHoldUntilMsByChannel.delete(channel);
-          applyManualTimingJudge(channel, (nowSec - hold.endSeconds) * 1000);
+          applyManualTimingJudge(channel, (nowSec - hold.endSeconds) * 1000, nowSec);
           continue;
         }
 
@@ -1244,7 +1256,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           activeLongNotesByChannel.delete(channel);
           longHoldUntilMsByChannel.delete(channel);
           audioSession?.stopChannel?.(channel);
-          applyManualTimingJudge(channel, (nowSec - hold.endSeconds) * 1000);
+          applyManualTimingJudge(channel, (nowSec - hold.endSeconds) * 1000, nowSec);
         }
       }
 
@@ -1290,6 +1302,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         for (let index = 0; index < missingCount; index += 1) {
           applyJudgeToSummary(summary, 'POOR', scoreTracker);
         }
+        triggerPoorBga(totalSeconds);
         combo = 0;
         if (tui) {
           tui.setLatestJudge('POOR');

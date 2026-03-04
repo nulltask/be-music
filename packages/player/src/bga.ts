@@ -8,9 +8,11 @@ import jpeg from 'jpeg-js';
 import { decodeVideoFramesStream } from './bga-video.ts';
 
 const BASE_BGA_CHANNEL = '04';
+const POOR_BGA_CHANNEL = '06';
 const LAYER_BGA_CHANNEL = '07';
 const DEFAULT_BGA_ASCII_WIDTH = 34;
 const DEFAULT_BGA_ASCII_HEIGHT = 20;
+const DEFAULT_POOR_BGA_DISPLAY_SECONDS = 2;
 const TRANSPARENT_ALPHA_THRESHOLD = 16;
 const ANSI_RESET = '\u001b[0m';
 const SPEC_BGA_CANVAS_SIZE = 256;
@@ -77,9 +79,13 @@ export interface BgaAnsiOptions {
 export class BgaAnsiRenderer {
   private readonly baseTimeline: BgaCue[];
 
+  private readonly poorTimeline: BgaCue[];
+
   private readonly layerTimeline: BgaCue[];
 
   private readonly baseSourceFramesByKey: Map<string, FrameSource>;
+
+  private readonly poorSourceFramesByKey: Map<string, FrameSource>;
 
   private readonly layerSourceFramesByKey: Map<string, FrameSource>;
 
@@ -87,15 +93,25 @@ export class BgaAnsiRenderer {
 
   private readonly missingBaseSourceFrame: AnsiFrame;
 
+  private readonly missingPoorSourceFrame: AnsiFrame;
+
   private readonly missingLayerSourceFrame: AnsiFrame;
 
+  private readonly poorFallbackKey?: string;
+
+  private readonly poorFallbackUntilSeconds: number;
+
   private baseFramesByKey = new Map<string, FrameSource>();
+
+  private poorFramesByKey = new Map<string, FrameSource>();
 
   private layerFramesByKey = new Map<string, FrameSource>();
 
   private stageFileFrame?: FrameSource;
 
   private missingBaseFrame: AnsiFrame;
+
+  private missingPoorFrame: AnsiFrame;
 
   private missingLayerFrame: AnsiFrame;
 
@@ -107,37 +123,78 @@ export class BgaAnsiRenderer {
 
   private cachedLayerKey = '__INIT__';
 
+  private cachedPoorKey = '__INIT__';
+
   private cachedBaseFrameIndex = -1;
 
+  private cachedPoorFrameIndex = -1;
+
   private cachedLayerFrameIndex = -1;
+
+  private cachedPoorActive = false;
 
   private cachedComposite?: CompositeFrame;
 
   private cachedLines?: string[];
 
+  private poorActiveUntilSeconds = Number.NEGATIVE_INFINITY;
+
   constructor(params: {
     baseTimeline: BgaCue[];
+    poorTimeline: BgaCue[];
     layerTimeline: BgaCue[];
     baseSourceFramesByKey: Map<string, FrameSource>;
+    poorSourceFramesByKey: Map<string, FrameSource>;
     layerSourceFramesByKey: Map<string, FrameSource>;
     stageFileSourceFrame?: FrameSource;
     missingBaseSourceFrame: AnsiFrame;
+    missingPoorSourceFrame: AnsiFrame;
     missingLayerSourceFrame: AnsiFrame;
+    poorFallbackKey?: string;
+    poorFallbackUntilSeconds: number;
     width: number;
     height: number;
   }) {
     this.baseTimeline = params.baseTimeline;
+    this.poorTimeline = params.poorTimeline;
     this.layerTimeline = params.layerTimeline;
     this.baseSourceFramesByKey = params.baseSourceFramesByKey;
+    this.poorSourceFramesByKey = params.poorSourceFramesByKey;
     this.layerSourceFramesByKey = params.layerSourceFramesByKey;
     this.stageFileSourceFrame = params.stageFileSourceFrame;
     this.missingBaseSourceFrame = params.missingBaseSourceFrame;
+    this.missingPoorSourceFrame = params.missingPoorSourceFrame;
     this.missingLayerSourceFrame = params.missingLayerSourceFrame;
+    this.poorFallbackKey = params.poorFallbackKey;
+    this.poorFallbackUntilSeconds = params.poorFallbackUntilSeconds;
     this.displayWidth = params.width;
     this.displayHeight = params.height;
     this.missingBaseFrame = resizeAnsiFrame(this.missingBaseSourceFrame, this.displayWidth, this.displayHeight);
+    this.missingPoorFrame = resizeAnsiFrame(this.missingPoorSourceFrame, this.displayWidth, this.displayHeight);
     this.missingLayerFrame = resizeAnsiFrame(this.missingLayerSourceFrame, this.displayWidth, this.displayHeight);
     this.rebuildFrames();
+  }
+
+  triggerPoor(currentSeconds: number): void {
+    const safeCurrentSeconds = Number.isFinite(currentSeconds) ? currentSeconds : 0;
+    const nextPoorActiveUntilSeconds = safeCurrentSeconds + DEFAULT_POOR_BGA_DISPLAY_SECONDS;
+    if (nextPoorActiveUntilSeconds <= this.poorActiveUntilSeconds) {
+      return;
+    }
+    this.poorActiveUntilSeconds = nextPoorActiveUntilSeconds;
+    this.cachedPoorActive = false;
+    this.cachedComposite = undefined;
+    this.cachedLines = undefined;
+  }
+
+  clearPoor(): void {
+    if (this.poorActiveUntilSeconds === Number.NEGATIVE_INFINITY) {
+      return;
+    }
+    this.poorActiveUntilSeconds = Number.NEGATIVE_INFINITY;
+    this.cachedPoorActive = false;
+    this.cachedComposite = undefined;
+    this.cachedLines = undefined;
   }
 
   setDisplaySize(width: number, height: number): void {
@@ -168,11 +225,13 @@ export class BgaAnsiRenderer {
 
   private rebuildFrames(): void {
     this.baseFramesByKey = resizeFrameSourceMap(this.baseSourceFramesByKey, this.displayWidth, this.displayHeight);
+    this.poorFramesByKey = resizeFrameSourceMap(this.poorSourceFramesByKey, this.displayWidth, this.displayHeight);
     this.layerFramesByKey = resizeFrameSourceMap(this.layerSourceFramesByKey, this.displayWidth, this.displayHeight);
     this.stageFileFrame = this.stageFileSourceFrame
       ? resizeFrameSource(this.stageFileSourceFrame, this.displayWidth, this.displayHeight)
       : undefined;
     this.missingBaseFrame = resizeAnsiFrame(this.missingBaseSourceFrame, this.displayWidth, this.displayHeight);
+    this.missingPoorFrame = resizeAnsiFrame(this.missingPoorSourceFrame, this.displayWidth, this.displayHeight);
     this.missingLayerFrame = resizeAnsiFrame(this.missingLayerSourceFrame, this.displayWidth, this.displayHeight);
     this.resetCache();
   }
@@ -180,8 +239,11 @@ export class BgaAnsiRenderer {
   private resetCache(): void {
     this.cachedBaseKey = '__INIT__';
     this.cachedLayerKey = '__INIT__';
+    this.cachedPoorKey = '__INIT__';
     this.cachedBaseFrameIndex = -1;
     this.cachedLayerFrameIndex = -1;
+    this.cachedPoorFrameIndex = -1;
+    this.cachedPoorActive = false;
     this.cachedComposite = undefined;
     this.cachedLines = undefined;
   }
@@ -197,21 +259,32 @@ export class BgaAnsiRenderer {
 
     const baseSelection = this.resolveBaseFrame(baseKey, baseSeconds);
     const layerSelection = this.resolveLayerFrame(layerKey, layerSeconds);
+    const poorActive = currentSeconds < this.poorActiveUntilSeconds;
+    const poorSelection = poorActive ? this.resolvePoorFrame(currentSeconds) : { key: '', index: -1, frame: undefined };
 
     if (
       this.cachedBaseKey === baseKey &&
       this.cachedLayerKey === layerKey &&
+      this.cachedPoorKey === poorSelection.key &&
       this.cachedBaseFrameIndex === baseSelection.index &&
-      this.cachedLayerFrameIndex === layerSelection.index
+      this.cachedLayerFrameIndex === layerSelection.index &&
+      this.cachedPoorFrameIndex === poorSelection.index &&
+      this.cachedPoorActive === poorActive
     ) {
       return;
     }
 
     this.cachedBaseKey = baseKey;
     this.cachedLayerKey = layerKey;
+    this.cachedPoorKey = poorSelection.key;
     this.cachedBaseFrameIndex = baseSelection.index;
     this.cachedLayerFrameIndex = layerSelection.index;
-    this.cachedComposite = mergeCompositeFrames(baseSelection.frame, layerSelection.frame);
+    this.cachedPoorFrameIndex = poorSelection.index;
+    this.cachedPoorActive = poorActive;
+    this.cachedComposite =
+      poorActive && poorSelection.frame
+        ? mergeCompositeFrames(poorSelection.frame)
+        : mergeCompositeFrames(baseSelection.frame, layerSelection.frame);
     this.cachedLines = undefined;
   }
 
@@ -233,6 +306,36 @@ export class BgaAnsiRenderer {
     const source = this.layerFramesByKey.get(layerKey) ?? createStaticFrameSource(this.missingLayerFrame);
     return selectFrameFromSource(source, seconds);
   }
+
+  private resolvePoorFrame(currentSeconds: number): { key: string; frame?: AnsiFrame; index: number } {
+    const poorCue = findActiveCue(this.poorTimeline, currentSeconds);
+    const poorKey = this.resolvePoorKey(poorCue, currentSeconds);
+    if (!poorKey) {
+      return {
+        key: '',
+        frame: undefined,
+        index: -1,
+      };
+    }
+    const source = this.poorFramesByKey.get(poorKey) ?? createStaticFrameSource(this.missingPoorFrame);
+    const seconds = poorCue ? Math.max(0, currentSeconds - poorCue.seconds) : Math.max(0, currentSeconds);
+    const selected = selectFrameFromSource(source, seconds);
+    return {
+      key: poorKey,
+      frame: selected.frame,
+      index: selected.index,
+    };
+  }
+
+  private resolvePoorKey(poorCue: BgaCue | undefined, currentSeconds: number): string | undefined {
+    if (poorCue) {
+      return poorCue.key;
+    }
+    if (this.poorFallbackKey && currentSeconds < this.poorFallbackUntilSeconds) {
+      return this.poorFallbackKey;
+    }
+    return undefined;
+  }
 }
 
 export async function createBgaAnsiRenderer(
@@ -244,13 +347,30 @@ export async function createBgaAnsiRenderer(
   const sortedEvents = sortEvents(json.events);
 
   const baseTimeline = buildBgaTimeline(sortedEvents, resolver, BASE_BGA_CHANNEL);
+  const poorTimeline = buildBgaTimeline(sortedEvents, resolver, POOR_BGA_CHANNEL);
   const layerTimeline = buildBgaTimeline(sortedEvents, resolver, LAYER_BGA_CHANNEL);
 
   const baseKeys = new Set(baseTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
+  const poorKeys = new Set(poorTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layerKeys = new Set(layerTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
+  const shouldUsePoorBmp00Fallback =
+    typeof json.bms.poorBga !== 'string' && typeof json.resources.bmp['00'] === 'string' && json.resources.bmp['00'].length > 0;
+  const poorFallbackKey = shouldUsePoorBmp00Fallback ? '00' : undefined;
+  if (poorFallbackKey) {
+    poorKeys.add(poorFallbackKey);
+  }
+  const poorFallbackUntilSeconds = poorTimeline[0]?.seconds ?? Number.POSITIVE_INFINITY;
 
   const baseSourceFramesByKey = await loadFramesByKeys({
     keys: baseKeys,
+    resources: json.resources.bmp,
+    baseDir: options.baseDir,
+    mode: 'base',
+    width: displaySize.width,
+    height: displaySize.height,
+  });
+  const poorSourceFramesByKey = await loadFramesByKeys({
+    keys: poorKeys,
     resources: json.resources.bmp,
     baseDir: options.baseDir,
     mode: 'base',
@@ -274,21 +394,32 @@ export async function createBgaAnsiRenderer(
     }
   }
 
-  if (baseSourceFramesByKey.size === 0 && layerSourceFramesByKey.size === 0 && !stageFileSourceFrame) {
+  if (
+    baseSourceFramesByKey.size === 0 &&
+    poorSourceFramesByKey.size === 0 &&
+    layerSourceFramesByKey.size === 0 &&
+    !stageFileSourceFrame
+  ) {
     return undefined;
   }
 
   const missingBaseSourceFrame = createMissingSourceFrame('base');
+  const missingPoorSourceFrame = createMissingSourceFrame('base');
   const missingLayerSourceFrame = createMissingSourceFrame('layer');
 
   return new BgaAnsiRenderer({
     baseTimeline,
+    poorTimeline,
     layerTimeline,
     baseSourceFramesByKey,
+    poorSourceFramesByKey,
     layerSourceFramesByKey,
     stageFileSourceFrame,
     missingBaseSourceFrame,
+    missingPoorSourceFrame,
     missingLayerSourceFrame,
+    poorFallbackKey,
+    poorFallbackUntilSeconds,
     width: displaySize.width,
     height: displaySize.height,
   });
