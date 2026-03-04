@@ -23,6 +23,11 @@ describe('player cli', () => {
     expect(resolvePlayModeFromArgs(parsed)).toBe('auto-scratch');
   });
 
+  test('cli: parses --ln-type-auto mode', () => {
+    const parsed = parseArgs(['chart.bms', '--ln-type-auto']);
+    expect(parsed.inferBmsLnTypeWhenMissing).toBe(true);
+  });
+
   test('cli: last explicit mode flag wins', () => {
     const parsedAuto = parseArgs(['chart.bms', '--auto-scratch', '--auto']);
     expect(resolvePlayModeFromArgs(parsedAuto)).toBe('auto');

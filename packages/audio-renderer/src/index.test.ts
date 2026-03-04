@@ -132,6 +132,59 @@ test('audio-renderer: ignores paired #LNOBJ end objects for sample triggering', 
   expect(triggers.some((trigger) => trigger.event === orphan)).toBe(true);
 });
 
+test('audio-renderer: suppresses LNTYPE=1 long-note end markers from trigger list', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.bms.lnType = 1;
+  json.resources.wav['01'] = 'start.wav';
+  json.resources.wav['02'] = 'end.wav';
+  const start = { measure: 0, channel: '51', position: [0, 4] as const, value: '01' };
+  const end = { measure: 0, channel: '51', position: [2, 4] as const, value: '02' };
+  const orphan = { measure: 0, channel: '51', position: [3, 4] as const, value: '01' };
+  json.events = [start, end, orphan];
+
+  const triggers = collectSampleTriggers(json);
+  expect(triggers.some((trigger) => trigger.event === start)).toBe(true);
+  expect(triggers.some((trigger) => trigger.event === end)).toBe(false);
+  expect(triggers.some((trigger) => trigger.event === orphan)).toBe(true);
+});
+
+test('audio-renderer: suppresses LNTYPE=2 continuation markers from trigger list', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.bms.lnType = 2;
+  json.resources.wav['01'] = 'start.wav';
+  const runStart = { measure: 0, channel: '51', position: [0, 4] as const, value: '01' };
+  const runContinue = { measure: 0, channel: '51', position: [1, 4] as const, value: '01' };
+  const secondRun = { measure: 0, channel: '51', position: [3, 4] as const, value: '01' };
+  json.events = [runStart, runContinue, secondRun];
+
+  const triggers = collectSampleTriggers(json);
+  expect(triggers.some((trigger) => trigger.event === runStart)).toBe(true);
+  expect(triggers.some((trigger) => trigger.event === runContinue)).toBe(false);
+  expect(triggers.some((trigger) => trigger.event === secondRun)).toBe(true);
+});
+
+test('audio-renderer: can infer LNTYPE=2 trigger suppression when #LNTYPE is omitted', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'start.wav';
+  const start = { measure: 0, channel: '61', position: [0, 4] as const, value: '01' };
+  const contA = { measure: 0, channel: '61', position: [1, 4] as const, value: '01' };
+  const contB = { measure: 0, channel: '61', position: [2, 4] as const, value: '01' };
+  json.events = [start, contA, contB];
+
+  const defaultTriggers = collectSampleTriggers(json);
+  expect(defaultTriggers.some((trigger) => trigger.event === start)).toBe(true);
+  expect(defaultTriggers.some((trigger) => trigger.event === contA)).toBe(false);
+  expect(defaultTriggers.some((trigger) => trigger.event === contB)).toBe(true);
+
+  const inferredTriggers = collectSampleTriggers(json, undefined, { inferBmsLnTypeWhenMissing: true });
+  expect(inferredTriggers.some((trigger) => trigger.event === start)).toBe(true);
+  expect(inferredTriggers.some((trigger) => trigger.event === contA)).toBe(false);
+  expect(inferredTriggers.some((trigger) => trigger.event === contB)).toBe(false);
+});
+
 test('audio-renderer: treats #STOP192 as one measure length at current BPM', () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;

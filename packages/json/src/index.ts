@@ -397,6 +397,87 @@ export function isPlayableChannel(channel: string): boolean {
   return normalized.startsWith('1') || normalized.startsWith('2');
 }
 
+export function isBmsLongNoteChannel(channel: string): boolean {
+  return mapBmsLongNoteChannelToPlayable(channel) !== undefined;
+}
+
+export function mapBmsLongNoteChannelToPlayable(channel: string): string | undefined {
+  const normalized = normalizeChannel(channel);
+  if (normalized.length !== 2) {
+    return undefined;
+  }
+  const side = normalized[0];
+  const lane = normalized[1];
+  if (lane < '1' || lane > '9') {
+    return undefined;
+  }
+  if (side === '5') {
+    return `1${lane}`;
+  }
+  if (side === '6') {
+    return `2${lane}`;
+  }
+  return undefined;
+}
+
+export interface BmsLongNote {
+  event: BeMusicEvent;
+  sourceChannel: string;
+  channel: string;
+  beat: number;
+  endBeat?: number;
+}
+
+export interface BmsLongNoteResolution {
+  notes: BmsLongNote[];
+  suppressedTriggerEvents: Set<BeMusicEvent>;
+}
+
+export interface ResolveBmsLongNotesOptions {
+  inferLnTypeWhenMissing?: boolean;
+}
+
+interface ResolvedBmsLongNoteEvent {
+  event: BeMusicEvent;
+  sourceChannel: string;
+  channel: string;
+}
+
+export function resolveBmsLongNotes(
+  json: BeMusicJson,
+  options: ResolveBmsLongNotesOptions = {},
+): BmsLongNoteResolution {
+  if (json.sourceFormat !== 'bms') {
+    return {
+      notes: [],
+      suppressedTriggerEvents: new Set(),
+    };
+  }
+
+  const longNoteEvents = sortEvents(json.events)
+    .map((event) => {
+      const sourceChannel = normalizeChannel(event.channel);
+      const mapped = mapBmsLongNoteChannelToPlayable(sourceChannel);
+      if (!mapped) {
+        return undefined;
+      }
+      return { event, sourceChannel, channel: mapped };
+    })
+    .filter((event): event is ResolvedBmsLongNoteEvent => event !== undefined);
+  if (longNoteEvents.length === 0) {
+    return {
+      notes: [],
+      suppressedTriggerEvents: new Set(),
+    };
+  }
+
+  const beatResolver = createBeatResolver(json);
+  const lnType = resolveBmsLongNoteType(json, longNoteEvents, options);
+  return lnType === 2
+    ? resolveBmsLongNotesType2(longNoteEvents, beatResolver)
+    : resolveBmsLongNotesType1(longNoteEvents, beatResolver);
+}
+
 export function collectLnobjEndEvents(json: BeMusicJson): Set<BeMusicEvent> {
   if (json.sourceFormat !== 'bms') {
     return new Set();
@@ -433,6 +514,191 @@ export function collectLnobjEndEvents(json: BeMusicJson): Set<BeMusicEvent> {
   }
 
   return endEvents;
+}
+
+function resolveBmsLongNotesType1(
+  events: ResolvedBmsLongNoteEvent[],
+  beatResolver: BeatResolver,
+): BmsLongNoteResolution {
+  const notes: BmsLongNote[] = [];
+  const suppressedTriggerEvents = new Set<BeMusicEvent>();
+  const pendingByChannel = new Map<string, BmsLongNote>();
+
+  for (const item of events) {
+    const beat = beatResolver.eventToBeat(item.event);
+    const pending = pendingByChannel.get(item.sourceChannel);
+    if (pending && beat > pending.beat) {
+      pending.endBeat = beat;
+      suppressedTriggerEvents.add(item.event);
+      pendingByChannel.delete(item.sourceChannel);
+      continue;
+    }
+    const note: BmsLongNote = {
+      event: item.event,
+      sourceChannel: item.sourceChannel,
+      channel: item.channel,
+      beat,
+    };
+    notes.push(note);
+    pendingByChannel.set(item.sourceChannel, note);
+  }
+
+  return { notes, suppressedTriggerEvents };
+}
+
+function resolveBmsLongNotesType2(
+  events: ResolvedBmsLongNoteEvent[],
+  beatResolver: BeatResolver,
+): BmsLongNoteResolution {
+  const notes: BmsLongNote[] = [];
+  const suppressedTriggerEvents = new Set<BeMusicEvent>();
+  const eventsByChannel = new Map<string, ResolvedBmsLongNoteEvent[]>();
+
+  for (const event of events) {
+    const bucket = eventsByChannel.get(event.sourceChannel) ?? [];
+    bucket.push(event);
+    eventsByChannel.set(event.sourceChannel, bucket);
+  }
+
+  for (const channelEvents of eventsByChannel.values()) {
+    let runNote: BmsLongNote | undefined;
+    let previousEvent: BeMusicEvent | undefined;
+
+    for (const item of channelEvents) {
+      const beat = beatResolver.eventToBeat(item.event);
+      if (!runNote) {
+        runNote = {
+          event: item.event,
+          sourceChannel: item.sourceChannel,
+          channel: item.channel,
+          beat,
+        };
+        notes.push(runNote);
+        previousEvent = item.event;
+        continue;
+      }
+
+      if (previousEvent && isBmsLongNoteType2Continuation(previousEvent, item.event)) {
+        suppressedTriggerEvents.add(item.event);
+        previousEvent = item.event;
+        continue;
+      }
+
+      if (previousEvent) {
+        const endBeat = resolveBmsLongNoteType2SegmentEndBeat(previousEvent, beatResolver);
+        if (endBeat > runNote.beat) {
+          runNote.endBeat = endBeat;
+        }
+      }
+      runNote = {
+        event: item.event,
+        sourceChannel: item.sourceChannel,
+        channel: item.channel,
+        beat,
+      };
+      notes.push(runNote);
+      previousEvent = item.event;
+    }
+
+    if (runNote && previousEvent) {
+      const endBeat = resolveBmsLongNoteType2SegmentEndBeat(previousEvent, beatResolver);
+      if (endBeat > runNote.beat) {
+        runNote.endBeat = endBeat;
+      }
+    }
+  }
+
+  notes.sort((left, right) => {
+    if (left.beat !== right.beat) {
+      return left.beat - right.beat;
+    }
+    if (left.channel !== right.channel) {
+      return left.channel < right.channel ? -1 : 1;
+    }
+    if (left.event.value !== right.event.value) {
+      return left.event.value < right.event.value ? -1 : 1;
+    }
+    return 0;
+  });
+
+  return { notes, suppressedTriggerEvents };
+}
+
+function resolveBmsLongNoteType(
+  json: BeMusicJson,
+  events: ResolvedBmsLongNoteEvent[],
+  options: ResolveBmsLongNotesOptions,
+): 1 | 2 {
+  if (json.bms.lnType === 1 || json.bms.lnType === 2) {
+    return json.bms.lnType;
+  }
+  if (options.inferLnTypeWhenMissing !== true) {
+    return 1;
+  }
+  return inferBmsLongNoteType(events);
+}
+
+function inferBmsLongNoteType(events: ResolvedBmsLongNoteEvent[]): 1 | 2 {
+  for (const item of events) {
+    if (item.sourceChannel.startsWith('6')) {
+      return 2;
+    }
+  }
+
+  const eventsByChannel = new Map<string, ResolvedBmsLongNoteEvent[]>();
+  for (const item of events) {
+    const bucket = eventsByChannel.get(item.sourceChannel) ?? [];
+    bucket.push(item);
+    eventsByChannel.set(item.sourceChannel, bucket);
+  }
+
+  for (const channelEvents of eventsByChannel.values()) {
+    let previous: BeMusicEvent | undefined;
+    for (const item of channelEvents) {
+      if (
+        previous &&
+        normalizeObjectKey(previous.value) === normalizeObjectKey(item.event.value) &&
+        isBmsLongNoteType2Continuation(previous, item.event)
+      ) {
+        return 2;
+      }
+      previous = item.event;
+    }
+  }
+
+  return 1;
+}
+
+function isBmsLongNoteType2Continuation(previous: BeMusicEvent, current: BeMusicEvent): boolean {
+  if (current.measure === previous.measure) {
+    return (
+      current.position[1] === previous.position[1] &&
+      normalizePositionNumerator(current.position[0], normalizePositionDenominator(current.position[1])) ===
+        normalizePositionNumerator(previous.position[0], normalizePositionDenominator(previous.position[1])) + 1
+    );
+  }
+
+  if (current.measure !== previous.measure + 1) {
+    return false;
+  }
+
+  const previousDenominator = normalizePositionDenominator(previous.position[1]);
+  const previousNumerator = normalizePositionNumerator(previous.position[0], previousDenominator);
+  const currentDenominator = normalizePositionDenominator(current.position[1]);
+  const currentNumerator = normalizePositionNumerator(current.position[0], currentDenominator);
+
+  return previousNumerator + 1 === previousDenominator && currentNumerator === 0;
+}
+
+function resolveBmsLongNoteType2SegmentEndBeat(event: BeMusicEvent, beatResolver: BeatResolver): number {
+  const measure = Math.max(0, Math.floor(event.measure));
+  const denominator = normalizePositionDenominator(event.position[1]);
+  const numerator = normalizePositionNumerator(event.position[0], denominator);
+  const nextNumerator = numerator + 1;
+  if (nextNumerator >= denominator) {
+    return beatResolver.measureToBeat(measure + 1, 0);
+  }
+  return beatResolver.measureToBeat(measure, nextNumerator / denominator);
 }
 
 function createExactMeasureLengthMap(json: BeMusicJson): Map<number, number> {

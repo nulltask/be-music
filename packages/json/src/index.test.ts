@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import {
   collectLnobjEndEvents,
+  mapBmsLongNoteChannelToPlayable,
+  resolveBmsLongNotes,
   cloneJson,
   createBeatResolver,
   createEmptyJson,
@@ -11,6 +13,7 @@ import {
   intToBase36,
   isLandmineChannel,
   isPlayableChannel,
+  isBmsLongNoteChannel,
   isSampleTriggerChannel,
   isScrollChannel,
   isStopChannel,
@@ -185,6 +188,14 @@ test('json: classifies channel types', () => {
   expect(isPlayableChannel('21')).toBe(true);
   expect(isPlayableChannel('31')).toBe(false);
   expect(isPlayableChannel('01')).toBe(false);
+
+  expect(isBmsLongNoteChannel('51')).toBe(true);
+  expect(isBmsLongNoteChannel('69')).toBe(true);
+  expect(isBmsLongNoteChannel('5A')).toBe(false);
+  expect(isBmsLongNoteChannel('11')).toBe(false);
+  expect(mapBmsLongNoteChannelToPlayable('51')).toBe('11');
+  expect(mapBmsLongNoteChannelToPlayable('69')).toBe('29');
+  expect(mapBmsLongNoteChannelToPlayable('5A')).toBeUndefined();
 });
 
 test('json: collectLnobjEndEvents returns only paired LNOBJ end markers', () => {
@@ -204,5 +215,129 @@ test('json: collectLnobjEndEvents returns only paired LNOBJ end markers', () => 
   expect(endEvents.has(endB)).toBe(true);
   expect(endEvents.has(sameBeatLnobj)).toBe(false);
   expect(endEvents.has(invisibleLnobj)).toBe(false);
+});
+
+test('json: resolveBmsLongNotes pairs 51-59/61-69 in LNTYPE=1 and suppresses end triggers', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.bms.lnType = 1;
+  const startA: BeMusicEvent = { measure: 0, channel: '51', position: [0, 4], value: '01' };
+  const endA: BeMusicEvent = { measure: 0, channel: '51', position: [2, 4], value: '02' };
+  const orphanA: BeMusicEvent = { measure: 0, channel: '51', position: [3, 4], value: '03' };
+  const startB: BeMusicEvent = { measure: 0, channel: '61', position: [1, 4], value: '04' };
+  const endB: BeMusicEvent = { measure: 1, channel: '61', position: [1, 4], value: '05' };
+  json.events = [startA, endA, orphanA, startB, endB];
+
+  const resolved = resolveBmsLongNotes(json);
+  expect(resolved.notes).toHaveLength(3);
+  expect(resolved.notes[0]).toMatchObject({
+    event: startA,
+    sourceChannel: '51',
+    channel: '11',
+    beat: 0,
+  });
+  expect(resolved.notes[0]?.endBeat).toBeCloseTo(2, 6);
+  expect(resolved.notes[1]).toMatchObject({
+    event: startB,
+    sourceChannel: '61',
+    channel: '21',
+    beat: 1,
+  });
+  expect(resolved.notes[1]?.endBeat).toBeCloseTo(5, 6);
+  expect(resolved.notes[2]).toMatchObject({
+    event: orphanA,
+    sourceChannel: '51',
+    channel: '11',
+    beat: 3,
+  });
+  expect(resolved.notes[2]?.endBeat).toBeUndefined();
+  expect(resolved.suppressedTriggerEvents.has(endA)).toBe(true);
+  expect(resolved.suppressedTriggerEvents.has(endB)).toBe(true);
+  expect(resolved.suppressedTriggerEvents.has(startA)).toBe(false);
+});
+
+test('json: resolveBmsLongNotes defaults to LNTYPE=1 when #LNTYPE is omitted', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  const start: BeMusicEvent = { measure: 0, channel: '51', position: [0, 4], value: '01' };
+  const end: BeMusicEvent = { measure: 0, channel: '51', position: [2, 4], value: '02' };
+  json.events = [start, end];
+
+  const resolved = resolveBmsLongNotes(json);
+  expect(resolved.notes).toHaveLength(1);
+  expect(resolved.notes[0]).toMatchObject({
+    event: start,
+    channel: '11',
+    beat: 0,
+  });
+  expect(resolved.notes[0]?.endBeat).toBeCloseTo(2, 6);
+  expect(resolved.suppressedTriggerEvents.has(end)).toBe(true);
+});
+
+test('json: resolveBmsLongNotes expands continuous tokens in LNTYPE=2 and suppresses continuation triggers', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.bms.lnType = 2;
+  const runStart: BeMusicEvent = { measure: 0, channel: '51', position: [0, 4], value: '01' };
+  const runContinue: BeMusicEvent = { measure: 0, channel: '51', position: [1, 4], value: '01' };
+  const secondRun: BeMusicEvent = { measure: 0, channel: '51', position: [3, 4], value: '01' };
+  const crossStart: BeMusicEvent = { measure: 1, channel: '61', position: [3, 4], value: '02' };
+  const crossContinue: BeMusicEvent = { measure: 2, channel: '61', position: [0, 4], value: '02' };
+  json.events = [runStart, runContinue, secondRun, crossStart, crossContinue];
+
+  const resolved = resolveBmsLongNotes(json);
+  expect(resolved.notes).toHaveLength(3);
+  expect(resolved.notes[0]).toMatchObject({
+    event: runStart,
+    sourceChannel: '51',
+    channel: '11',
+    beat: 0,
+  });
+  expect(resolved.notes[0]?.endBeat).toBeCloseTo(2, 6);
+  expect(resolved.notes[1]).toMatchObject({
+    event: secondRun,
+    sourceChannel: '51',
+    channel: '11',
+    beat: 3,
+  });
+  expect(resolved.notes[1]?.endBeat).toBeCloseTo(4, 6);
+  expect(resolved.notes[2]).toMatchObject({
+    event: crossStart,
+    sourceChannel: '61',
+    channel: '21',
+    beat: 7,
+  });
+  expect(resolved.notes[2]?.endBeat).toBeCloseTo(9, 6);
+
+  expect(resolved.suppressedTriggerEvents.has(runContinue)).toBe(true);
+  expect(resolved.suppressedTriggerEvents.has(crossContinue)).toBe(true);
+  expect(resolved.suppressedTriggerEvents.has(runStart)).toBe(false);
+  expect(resolved.suppressedTriggerEvents.has(secondRun)).toBe(false);
+});
+
+test('json: resolveBmsLongNotes can infer LNTYPE=2 when #LNTYPE is omitted', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  const start: BeMusicEvent = { measure: 0, channel: '61', position: [0, 4], value: '01' };
+  const contA: BeMusicEvent = { measure: 0, channel: '61', position: [1, 4], value: '01' };
+  const contB: BeMusicEvent = { measure: 0, channel: '61', position: [2, 4], value: '01' };
+  json.events = [start, contA, contB];
+
+  const defaultResolved = resolveBmsLongNotes(json);
+  expect(defaultResolved.notes).toHaveLength(2);
+  expect(defaultResolved.notes[0]?.endBeat).toBeCloseTo(1, 6);
+  expect(defaultResolved.notes[1]?.endBeat).toBeUndefined();
+
+  const inferredResolved = resolveBmsLongNotes(json, { inferLnTypeWhenMissing: true });
+  expect(inferredResolved.notes).toHaveLength(1);
+  expect(inferredResolved.notes[0]).toMatchObject({
+    event: start,
+    sourceChannel: '61',
+    channel: '21',
+    beat: 0,
+  });
+  expect(inferredResolved.notes[0]?.endBeat).toBeCloseTo(3, 6);
+  expect(inferredResolved.suppressedTriggerEvents.has(contA)).toBe(true);
+  expect(inferredResolved.suppressedTriggerEvents.has(contB)).toBe(true);
 });
 });

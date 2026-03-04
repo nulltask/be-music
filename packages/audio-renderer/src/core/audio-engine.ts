@@ -5,6 +5,7 @@ import {
   createBeatResolver,
   DEFAULT_BPM,
   isLandmineChannel,
+  resolveBmsLongNotes,
   isSampleTriggerChannel,
   normalizeChannel,
   normalizeObjectKey,
@@ -59,6 +60,11 @@ export interface RenderOptions {
   fallbackToneSeconds?: number;
   resolveTriggerGain?: (trigger: TimedSampleTrigger) => number;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
+  inferBmsLnTypeWhenMissing?: boolean;
+}
+
+export interface CollectSampleTriggersOptions {
+  inferBmsLnTypeWhenMissing?: boolean;
 }
 
 export interface RenderSampleLoadProgress {
@@ -139,23 +145,34 @@ function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuild
   };
 }
 
-export function collectSampleTriggers(json: BeMusicJson, resolver = createTimingResolver(json)): TimedSampleTrigger[] {
-  return collectSampleTriggersWithContext(json, resolver, createTimingBuildContext(json));
+export function collectSampleTriggers(
+  json: BeMusicJson,
+  resolver = createTimingResolver(json),
+  options: CollectSampleTriggersOptions = {},
+): TimedSampleTrigger[] {
+  return collectSampleTriggersWithContext(json, resolver, createTimingBuildContext(json), options);
 }
 
 function collectSampleTriggersWithContext(
   json: BeMusicJson,
   resolver: TimingResolver,
   context: TimingBuildContext,
+  options: CollectSampleTriggersOptions = {},
 ): TimedSampleTrigger[] {
   const { sortedEvents, beatResolver } = context;
   const lnobjEndEvents = collectLnobjEndEvents(json);
+  const bmsLongNotes = resolveBmsLongNotes(json, {
+    inferLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+  });
   const events: BeMusicEvent[] = [];
   for (const event of sortedEvents) {
     if (!isSampleTriggerChannel(event.channel) || isLandmineChannel(event.channel)) {
       continue;
     }
     if (lnobjEndEvents.has(event)) {
+      continue;
+    }
+    if (bmsLongNotes.suppressedTriggerEvents.has(event)) {
       continue;
     }
     events.push(event);
@@ -195,7 +212,9 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
 
   const timingContext = createTimingBuildContext(json);
   const resolver = createTimingResolverWithContext(json, timingContext);
-  const triggers = collectSampleTriggersWithContext(json, resolver, timingContext);
+  const triggers = collectSampleTriggersWithContext(json, resolver, timingContext, {
+    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+  });
 
   const loadedSamples = new Map<string, StereoSample>();
   const resolvedPathCache = new Map<string, string | undefined>();

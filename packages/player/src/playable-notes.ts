@@ -1,5 +1,6 @@
 import {
   createBeatResolver,
+  resolveBmsLongNotes,
   type BeMusicEvent,
   type BeMusicJson,
   isPlayableChannel,
@@ -34,12 +35,17 @@ export interface TimedLandmineNote {
 export interface ExtractTimedNotesOptions {
   includeLandmine?: boolean;
   includeInvisible?: boolean;
+  inferBmsLnTypeWhenMissing?: boolean;
 }
 
 export interface ExtractTimedNotesResult {
   playableNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
   invisibleNotes: TimedPlayableNote[];
+}
+
+export interface ExtractPlayableNotesOptions {
+  inferBmsLnTypeWhenMissing?: boolean;
 }
 
 export function extractTimedNotes(
@@ -106,6 +112,19 @@ export function extractTimedNotes(
   }
 
   applyLnobjEndBeatIfNeeded(json, playableNotes, resolver);
+  appendLegacyLongNotesIfNeeded(json, playableNotes, resolver, options);
+  playableNotes.sort((left, right) => {
+    if (left.beat !== right.beat) {
+      return left.beat - right.beat;
+    }
+    if (left.channel !== right.channel) {
+      return left.channel < right.channel ? -1 : 1;
+    }
+    if (left.event.value !== right.event.value) {
+      return left.event.value < right.event.value ? -1 : 1;
+    }
+    return 0;
+  });
   return {
     playableNotes,
     landmineNotes,
@@ -113,10 +132,14 @@ export function extractTimedNotes(
   };
 }
 
-export function extractPlayableNotes(json: BeMusicJson): TimedPlayableNote[] {
+export function extractPlayableNotes(
+  json: BeMusicJson,
+  options: ExtractPlayableNotesOptions = {},
+): TimedPlayableNote[] {
   return extractTimedNotes(json, {
     includeLandmine: false,
     includeInvisible: false,
+    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing,
   }).playableNotes;
 }
 
@@ -162,6 +185,32 @@ function applyLnobjEndBeatIfNeeded(
       continue;
     }
     pendingStartByChannel.set(note.channel, note);
+  }
+}
+
+function appendLegacyLongNotesIfNeeded(
+  json: BeMusicJson,
+  notes: TimedPlayableNote[],
+  resolver: ReturnType<typeof createTimingResolver>,
+  options: Pick<ExtractTimedNotesOptions, 'inferBmsLnTypeWhenMissing'>,
+): void {
+  const resolved = resolveBmsLongNotes(json, {
+    inferLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+  });
+  if (resolved.notes.length === 0) {
+    return;
+  }
+  for (const longNote of resolved.notes) {
+    const endBeat = typeof longNote.endBeat === 'number' && longNote.endBeat > longNote.beat ? longNote.endBeat : undefined;
+    notes.push({
+      event: longNote.event,
+      channel: longNote.channel,
+      beat: longNote.beat,
+      endBeat,
+      endSeconds: endBeat !== undefined ? resolver.beatToSeconds(endBeat) : undefined,
+      seconds: resolver.beatToSeconds(longNote.beat),
+      judged: false,
+    });
   }
 }
 

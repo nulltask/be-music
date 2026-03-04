@@ -6,6 +6,7 @@ import {
   collectLnobjEndEvents,
   createBeatResolver,
   createEmptyJson,
+  mapBmsLongNoteChannelToPlayable,
   type BeMusicEvent,
   type BeMusicJson,
   isPlayableChannel,
@@ -65,6 +66,7 @@ import {
 export interface PlayerOptions {
   auto?: boolean;
   autoScratch?: boolean;
+  inferBmsLnTypeWhenMissing?: boolean;
   showInvisibleNotes?: boolean;
   compressor?: boolean;
   compressorThresholdDb?: number;
@@ -267,6 +269,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const extractedNotes = extractTimedNotes(resolvedJson, {
     includeLandmine: true,
     includeInvisible: options.showInvisibleNotes === true,
+    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
   });
   const notes = extractedNotes.playableNotes;
   const landmineNotes = extractedNotes.landmineNotes;
@@ -319,7 +322,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
   reportLoadProgress(options, 1, 'Ready');
   const autoDebugAudioEstimator = options.debugActiveAudio
-    ? await createDebugActiveAudioEstimator(resolvedJson, options.audioBaseDir)
+    ? await createDebugActiveAudioEstimator(resolvedJson, {
+        baseDir: options.audioBaseDir,
+        inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+      })
     : undefined;
   const resolveDebugActiveAudioState = (
     nowSeconds: number,
@@ -614,6 +620,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const extractedNotes = extractTimedNotes(resolvedJson, {
     includeLandmine: true,
     includeInvisible: options.showInvisibleNotes === true,
+    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
   });
   const notes = extractedNotes.playableNotes;
   const landmineNotes = extractedNotes.landmineNotes;
@@ -1455,12 +1462,14 @@ async function createAudioSessionIfEnabled(
   const headPaddingMs = options.audioHeadPaddingMs ?? 0;
   const bgmVolume = normalizeBgmVolume(options.bgmVolume);
   const playVolume = normalizePlayVolume(options.playVolume);
+  const inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
   const chartWavGain = resolveChartVolWavGain(json);
   const lnobjEndEvents = mode === 'manual' ? collectLnobjEndEvents(json) : undefined;
   const renderOptions = {
     baseDir: options.audioBaseDir ?? process.cwd(),
     tailSeconds: options.audioTailSeconds ?? 1.5,
     gain: chartWavGain,
+    inferBmsLnTypeWhenMissing,
   } as const;
   onLoadProgress?.({
     ratio: 0.05,
@@ -1542,7 +1551,8 @@ async function createAudioSessionIfEnabled(
           chartWavGain * playVolume,
         )
       : undefined;
-  const playableNotePlaybackMap = mode === 'manual' ? buildPlayableNotePlaybackMap(json) : undefined;
+  const playableNotePlaybackMap =
+    mode === 'manual' ? buildPlayableNotePlaybackMap(json, inferBmsLnTypeWhenMissing) : undefined;
   onLoadProgress?.({
     ratio: 1,
     message: 'Audio ready.',
@@ -1718,11 +1728,16 @@ function collectActiveAudioFileNames(activeVoices: ActiveVoice[]): string[] {
 
 async function createDebugActiveAudioEstimator(
   json: BeMusicJson,
-  baseDir?: string,
+  options: {
+    baseDir?: string;
+    inferBmsLnTypeWhenMissing?: boolean;
+  } = {},
 ): Promise<DebugActiveAudioEstimator> {
   const resolver = createTimingResolver(json);
-  const triggers = collectSampleTriggers(json, resolver);
-  const sampleDurationSecondsByKey = await buildDebugSampleDurationSecondsMap(triggers, baseDir);
+  const triggers = collectSampleTriggers(json, resolver, {
+    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+  });
+  const sampleDurationSecondsByKey = await buildDebugSampleDurationSecondsMap(triggers, options.baseDir);
   const windows: DebugSampleWindow[] = triggers
     .map((trigger) => {
       const startSeconds = Math.max(0, trigger.seconds);
@@ -2203,7 +2218,7 @@ function stripNonPlayableEvents(json: BeMusicJson): BeMusicJson {
 
 export function isPlayLaneChannelForVolumeControl(channel: string): boolean {
   const normalized = normalizeChannel(channel);
-  if (isPlayableChannel(normalized)) {
+  if (isPlayableEventChannel(normalized)) {
     return true;
   }
   if (normalized.length !== 2) {
@@ -2217,6 +2232,11 @@ export function isPlayLaneChannelForVolumeControl(channel: string): boolean {
   return side === '3' || side === '4';
 }
 
+function isPlayableEventChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  return isPlayableChannel(normalized) || mapBmsLongNoteChannelToPlayable(normalized) !== undefined;
+}
+
 export function shouldUseAutoMixBgmHeadroomControl(options: PlayerOptions): boolean {
   return options.limiter === false;
 }
@@ -2228,6 +2248,7 @@ async function renderAutoMixWithVolumeControls(
   options: {
     baseDir: string;
     tailSeconds: number;
+    inferBmsLnTypeWhenMissing?: boolean;
     useBgmHeadroomControl?: boolean;
     onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
   },
@@ -2280,7 +2301,7 @@ async function buildPlayableSampleMap(
   const sampleMap = new Map<string, RenderResult>();
   const keySet = new Set<string>();
   for (const event of json.events) {
-    if (!isPlayableChannel(event.channel)) {
+    if (!isPlayableEventChannel(event.channel)) {
       continue;
     }
     keySet.add(normalizeObjectKey(event.value));
@@ -2334,11 +2355,14 @@ async function buildPlayableSampleMap(
   return sampleMap;
 }
 
-function buildPlayableNotePlaybackMap(json: BeMusicJson): Map<BeMusicEvent, PlayableNotePlayback> {
+function buildPlayableNotePlaybackMap(
+  json: BeMusicJson,
+  inferBmsLnTypeWhenMissing: boolean,
+): Map<BeMusicEvent, PlayableNotePlayback> {
   const playbackMap = new Map<BeMusicEvent, PlayableNotePlayback>();
   const resolver = createTimingResolver(json);
-  for (const trigger of collectSampleTriggers(json, resolver)) {
-    if (!isPlayableChannel(trigger.channel)) {
+  for (const trigger of collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing })) {
+    if (!isPlayableEventChannel(trigger.channel)) {
       continue;
     }
     playbackMap.set(trigger.event, {

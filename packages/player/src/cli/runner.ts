@@ -82,6 +82,7 @@ interface CliArgs {
   input?: string;
   auto: boolean;
   autoScratch: boolean;
+  inferBmsLnTypeWhenMissing: boolean;
   showInvisibleNotes: boolean;
   compressor: boolean;
   compressorThresholdDb?: number;
@@ -531,6 +532,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     const outputPath = resolveCliPath(args.renderAudioPath);
     const audioRendered = await renderJson(json, {
       baseDir: dirname(chartPath),
+      inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
     });
     await writeAudioFile(outputPath, audioRendered);
     process.stdout.write(`Rendered preview audio: ${outputPath}\n`);
@@ -541,6 +543,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   }
 
   const playOptions = {
+    inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
     showInvisibleNotes: args.showInvisibleNotes,
     compressor: args.compressor,
     compressorThresholdDb: args.compressorThresholdDb,
@@ -616,6 +619,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
   const args: CliArgs = {
     auto: false,
     autoScratch: false,
+    inferBmsLnTypeWhenMissing: false,
     showInvisibleNotes: false,
     compressor: false,
     limiter: true,
@@ -635,6 +639,10 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     if (token === '--auto-scratch') {
       args.auto = false;
       args.autoScratch = true;
+      continue;
+    }
+    if (token === '--ln-type-auto') {
+      args.inferBmsLnTypeWhenMissing = true;
       continue;
     }
     if (token === '--show-invisible-notes') {
@@ -865,6 +873,7 @@ function printUsage(): void {
       '',
       'Advanced tuning:',
       '  --show-invisible-notes    Show invisible channels (31-39/41-49) in TUI as green notes',
+      '  --ln-type-auto            Auto-detect BMS #LNTYPE when omitted (default: off)',
       '  --render-audio <path>     Render audio preview before playing',
       '  --bgm-volume <value>      Volume multiplier for non-play lanes (default: 1, 0 disables BGM)',
       '  --play-volume <value>     Volume multiplier for playable/key sounds (default: 1)',

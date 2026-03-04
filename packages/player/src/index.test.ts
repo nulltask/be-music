@@ -189,6 +189,85 @@ test('player: derives long-note end beat from bms #LNOBJ', () => {
   expect(notes[1].endBeat).toBeUndefined();
 });
 
+test('player: derives long-note end beat from bms LNTYPE=1 channels 51-59/61-69', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.bms.lnType = 1;
+  json.events = [
+    { measure: 0, channel: '51', position: [0, 4], value: '01' },
+    { measure: 0, channel: '51', position: [2, 4], value: '02' },
+    { measure: 0, channel: '61', position: [1, 4], value: '03' },
+    { measure: 1, channel: '61', position: [1, 4], value: '04' },
+  ];
+
+  const notes = extractPlayableNotes(json);
+  expect(notes).toHaveLength(2);
+  expect(notes[0]).toMatchObject({
+    channel: '11',
+    beat: 0,
+  });
+  expect(notes[0]?.endBeat).toBeCloseTo(2, 6);
+  expect(notes[1]).toMatchObject({
+    channel: '21',
+    beat: 1,
+  });
+  expect(notes[1]?.endBeat).toBeCloseTo(5, 6);
+});
+
+test('player: derives long-note span from bms LNTYPE=2 continuity channels', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.bms.lnType = 2;
+  json.events = [
+    { measure: 0, channel: '51', position: [0, 4], value: '01' },
+    { measure: 0, channel: '51', position: [1, 4], value: '01' },
+    { measure: 0, channel: '51', position: [3, 4], value: '01' },
+    { measure: 1, channel: '61', position: [3, 4], value: '02' },
+    { measure: 2, channel: '61', position: [0, 4], value: '02' },
+  ];
+
+  const notes = extractPlayableNotes(json);
+  expect(notes).toHaveLength(3);
+  expect(notes[0]).toMatchObject({
+    channel: '11',
+    beat: 0,
+  });
+  expect(notes[0]?.endBeat).toBeCloseTo(2, 6);
+  expect(notes[1]).toMatchObject({
+    channel: '11',
+    beat: 3,
+  });
+  expect(notes[1]?.endBeat).toBeCloseTo(4, 6);
+  expect(notes[2]).toMatchObject({
+    channel: '21',
+    beat: 7,
+  });
+  expect(notes[2]?.endBeat).toBeCloseTo(9, 6);
+});
+
+test('player: can opt-in to infer LNTYPE=2 when #LNTYPE is omitted', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.events = [
+    { measure: 0, channel: '61', position: [0, 4], value: '01' },
+    { measure: 0, channel: '61', position: [1, 4], value: '01' },
+    { measure: 0, channel: '61', position: [2, 4], value: '01' },
+  ];
+
+  const defaultNotes = extractPlayableNotes(json);
+  expect(defaultNotes).toHaveLength(2);
+  expect(defaultNotes[0]?.endBeat).toBeCloseTo(1, 6);
+  expect(defaultNotes[1]?.endBeat).toBeUndefined();
+
+  const inferredNotes = extractPlayableNotes(json, {
+    inferBmsLnTypeWhenMissing: true,
+  });
+  expect(inferredNotes).toHaveLength(1);
+  expect(inferredNotes[0]?.channel).toBe('21');
+  expect(inferredNotes[0]?.beat).toBe(0);
+  expect(inferredNotes[0]?.endBeat).toBeCloseTo(3, 6);
+});
+
 test('player: extracts landmine objects and maps them to playable lanes', () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
@@ -265,11 +344,12 @@ test('player: FAST/SLOW are counted only for GREAT/GOOD', () => {
 test('player: volume control play-side channels include invisible lanes', () => {
   expect(isPlayLaneChannelForVolumeControl('11')).toBe(true);
   expect(isPlayLaneChannelForVolumeControl('29')).toBe(true);
+  expect(isPlayLaneChannelForVolumeControl('51')).toBe(true);
+  expect(isPlayLaneChannelForVolumeControl('61')).toBe(true);
   expect(isPlayLaneChannelForVolumeControl('31')).toBe(true);
   expect(isPlayLaneChannelForVolumeControl('48')).toBe(true);
 
   expect(isPlayLaneChannelForVolumeControl('01')).toBe(false);
-  expect(isPlayLaneChannelForVolumeControl('51')).toBe(false);
   expect(isPlayLaneChannelForVolumeControl('A1')).toBe(false);
 });
 
