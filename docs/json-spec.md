@@ -56,6 +56,7 @@
       "01": "02"
     },
     "videoFile": "movie.mp4",
+    "midiFile": "song.mid",
     "materials": "materials.def",
     "divideProp": "lane=2",
     "charset": "Shift_JIS",
@@ -134,6 +135,7 @@
 - `poorBga`: `#POORBGA` の値
 - `swBga`: `#SWBGAxx` のマップ
 - `videoFile`: `#VIDEOFILE` の値
+- `midiFile`: `#MIDIFILE` の値
 - `materials`: `#MATERIALS` の値
 - `divideProp`: `#DIVIDEPROP` の値
 - `charset`: `#CHARSET` の値

@@ -122,6 +122,7 @@ test('BMS stringify: writes extension headers', async () => {
   expect(output).toMatch(/#POORBGA 01/);
   expect(output).toMatch(/#SWBGA01 02/);
   expect(output).toMatch(/#VIDEOFILE movie\.mp4/);
+  expect(output).toMatch(/#MIDIFILE sample\.mid/);
   expect(output).toMatch(/#MATERIALS materials\.def/);
   expect(output).toMatch(/#DIVIDEPROP lane=2/);
   expect(output).toMatch(/#CHARSET Shift_JIS/);

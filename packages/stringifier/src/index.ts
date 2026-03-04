@@ -275,6 +275,9 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
   if (typeof json.bms.videoFile === 'string' && json.bms.videoFile.length > 0) {
     lines.push(`#VIDEOFILE ${json.bms.videoFile}`);
   }
+  if (typeof json.bms.midiFile === 'string' && json.bms.midiFile.length > 0) {
+    lines.push(`#MIDIFILE ${json.bms.midiFile}`);
+  }
   if (typeof json.bms.materials === 'string' && json.bms.materials.length > 0) {
     lines.push(`#MATERIALS ${json.bms.materials}`);
   }
@@ -505,6 +508,7 @@ function isDedicatedBmsExtensionCommand(command: string): boolean {
     upper === 'WAVCMD' ||
     upper === 'POORBGA' ||
     upper === 'VIDEOFILE' ||
+    upper === 'MIDIFILE' ||
     upper === 'MATERIALS' ||
     upper === 'DIVIDEPROP' ||
     upper === 'CHARSET'

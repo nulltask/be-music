@@ -56,6 +56,7 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   expect(json.bms.poorBga).toBe('01');
   expect(json.bms.swBga['01']).toBe('02');
   expect(json.bms.videoFile).toBe('movie.mp4');
+  expect(json.bms.midiFile).toBe('sample.mid');
   expect(json.bms.materials).toBe('materials.def');
   expect(json.bms.divideProp).toBe('lane=2');
   expect(json.bms.charset).toBe('Shift_JIS');
@@ -83,6 +84,7 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   expect(json.metadata.extras.POORBGA).toBeUndefined();
   expect(json.metadata.extras.SWBGA01).toBeUndefined();
   expect(json.metadata.extras.VIDEOFILE).toBeUndefined();
+  expect(json.metadata.extras.MIDIFILE).toBeUndefined();
   expect(json.metadata.extras.MATERIALS).toBeUndefined();
   expect(json.metadata.extras.DIVIDEPROP).toBeUndefined();
   expect(json.metadata.extras.CHARSET).toBeUndefined();
@@ -256,6 +258,7 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
           4: '03',
         },
         videoFile: 'movie.mp4',
+        midiFile: 'song.mid',
         materials: 'materials.def',
         divideProp: 'lane=2',
         charset: 'Shift_JIS',
@@ -304,6 +307,7 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
   expect(parsed.bms.poorBga).toBe('02');
   expect(parsed.bms.swBga['04']).toBe('03');
   expect(parsed.bms.videoFile).toBe('movie.mp4');
+  expect(parsed.bms.midiFile).toBe('song.mid');
   expect(parsed.bms.materials).toBe('materials.def');
   expect(parsed.bms.divideProp).toBe('lane=2');
   expect(parsed.bms.charset).toBe('Shift_JIS');
@@ -363,6 +367,7 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
           POORBGA: '02',
           SWBGA01: '03',
           VIDEOFILE: 'movie.mp4',
+          MIDIFILE: 'song.mid',
           MATERIALS: 'materials.def',
           DIVIDEPROP: 'lane=2',
           CHARSET: 'Shift_JIS',
@@ -405,10 +410,12 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
   expect(parsed.bms.poorBga).toBe('02');
   expect(parsed.bms.swBga['01']).toBe('03');
   expect(parsed.bms.videoFile).toBe('movie.mp4');
+  expect(parsed.bms.midiFile).toBe('song.mid');
   expect(parsed.bms.materials).toBe('materials.def');
   expect(parsed.bms.divideProp).toBe('lane=2');
   expect(parsed.bms.charset).toBe('Shift_JIS');
   expect(parsed.metadata.extras.CUSTOM).toBe('ok');
+  expect(parsed.metadata.extras.MIDIFILE).toBeUndefined();
   expect(parsed.metadata.extras.LNTYPE).toBeUndefined();
 });
 

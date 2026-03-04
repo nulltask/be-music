@@ -648,6 +648,11 @@ function pushHeaderLine(json: BeMusicJson, command: string, value: string): void
         json.bms.videoFile = value;
       }
       return;
+    case 'MIDIFILE':
+      if (value.length > 0) {
+        json.bms.midiFile = value;
+      }
+      return;
     case 'MATERIALS':
       if (value.length > 0) {
         json.bms.materials = value;
@@ -762,6 +767,12 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
     if (upper === 'VIDEOFILE') {
       if (typeof json.bms.videoFile !== 'string' && value.length > 0) {
         json.bms.videoFile = value;
+      }
+      continue;
+    }
+    if (upper === 'MIDIFILE') {
+      if (typeof json.bms.midiFile !== 'string' && value.length > 0) {
+        json.bms.midiFile = value;
       }
       continue;
     }
@@ -964,6 +975,11 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   const videoFile = raw.videoFile ?? raw.video_file;
   if (typeof videoFile === 'string' && videoFile.length > 0) {
     normalized.videoFile = videoFile;
+  }
+
+  const midiFile = raw.midiFile ?? raw.midi_file;
+  if (typeof midiFile === 'string' && midiFile.length > 0) {
+    normalized.midiFile = midiFile;
   }
 
   if (typeof raw.materials === 'string' && raw.materials.length > 0) {

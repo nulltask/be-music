@@ -151,6 +151,7 @@ export interface BmsExtensions {
   poorBga?: string;
   swBga: Record<string, string>;
   videoFile?: string;
+  midiFile?: string;
   materials?: string;
   divideProp?: string;
   charset?: string;

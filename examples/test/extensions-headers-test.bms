@@ -28,6 +28,7 @@
 #POORBGA 01
 #SWBGA01 02
 #VIDEOFILE movie.mp4
+#MIDIFILE sample.mid
 #MATERIALS materials.def
 #DIVIDEPROP lane=2
 #CHARSET Shift_JIS
