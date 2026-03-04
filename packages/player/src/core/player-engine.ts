@@ -119,7 +119,7 @@ export interface PlayerLoadProgress {
   detail?: string;
 }
 
-export type PlayerInterruptReason = 'escape' | 'ctrl-c';
+export type PlayerInterruptReason = 'escape' | 'ctrl-c' | 'restart';
 
 export class PlayerInterruptedError extends Error {
   readonly reason: PlayerInterruptReason;
@@ -468,7 +468,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       process.stdout.write(`${randomPatternSummary}\n`);
     }
     printLaneMap(laneBindings);
-    process.stdout.write('Press Space to pause/resume. Press Ctrl+C or Esc to quit.\n');
+    process.stdout.write('Press Space to pause/resume. Press Shift+R to restart.\n');
+    process.stdout.write('Press Ctrl+C or Esc to quit.\n');
     process.stdout.write('Press W/E to adjust HIGH-SPEED (W:+0.5, E:-0.5).\n');
   } else {
     tui.start();
@@ -538,6 +539,11 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     }
     if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b') {
       interruptedReason = 'escape';
+      stopInputCapture();
+      return;
+    }
+    if (isRestartKeyPress(_chunk, key)) {
+      interruptedReason = 'restart';
       stopInputCapture();
       return;
     }
@@ -717,6 +723,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   if (interruptedReason === 'ctrl-c') {
     throw new PlayerInterruptedError(interruptedReason);
   }
+  if (interruptedReason === 'restart') {
+    throw new PlayerInterruptedError(interruptedReason);
+  }
 
   process.stdout.write(renderSummary(summary));
   return summary;
@@ -832,6 +841,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       `Judge window: PGREAT<=${judgeWindows.pgreat.toFixed(2)}ms GREAT<=${judgeWindows.great.toFixed(2)}ms GOOD<=${judgeWindows.good.toFixed(2)}ms BAD<=${Math.round(badWindowMs)}ms\n`,
     );
     process.stdout.write('Press Space to pause/resume.\n');
+    process.stdout.write('Press Shift+R to restart.\n');
     process.stdout.write('Press W/E to adjust HIGH-SPEED (W:+0.5, E:-0.5).\n');
     process.stdout.write('Press Ctrl+C to quit.\n');
     process.stdout.write('Press Esc to stop and open result.\n');
@@ -1251,6 +1261,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       stopInputCapture();
       return;
     }
+    if (isRestartInputTokens(tokens) || isRestartKeyPress(chunk, key)) {
+      interruptedReason = 'restart';
+      stopInputCapture();
+      return;
+    }
     const highSpeedAction =
       resolveHighSpeedControlActionFromTokens(tokens) ?? resolveHighSpeedControlActionFromKey(chunk, key);
     if (applyHighSpeedAction(highSpeedAction)) {
@@ -1315,6 +1330,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     if (pressTokens.includes('escape')) {
       interruptedReason = 'escape';
+      stopInputCapture();
+      return;
+    }
+    if (isRestartInputTokens(pressTokens)) {
+      interruptedReason = 'restart';
       stopInputCapture();
       return;
     }
@@ -2722,6 +2742,17 @@ function createPlaybackClock(startAtMs: number): PlaybackClock {
 
 function isSpaceKey(key: readline.Key): boolean {
   return key.name?.toLowerCase() === 'space' || key.sequence === ' ';
+}
+
+function isRestartInputTokens(tokens: readonly string[]): boolean {
+  return tokens.includes('shift+r');
+}
+
+function isRestartKeyPress(chunk: string | undefined, key: readline.Key): boolean {
+  if (typeof chunk === 'string' && chunk === 'R') {
+    return true;
+  }
+  return key.name?.toLowerCase() === 'r' && key.shift === true;
 }
 
 function resolveHighSpeedControlActionFromTokens(tokens: readonly string[]): HighSpeedControlAction | undefined {

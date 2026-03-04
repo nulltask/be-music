@@ -600,7 +600,7 @@ export class PlayerTui {
 
     lines.push(...renderLaneBlockWithBga(laneLines, frame.bgaAnsiLines));
     lines.push('');
-    lines.push('Space: pause/resume  W/E: HS +/-  Ctrl+C/Esc: quit');
+    lines.push('Space: pause/resume  Shift+R: restart  W/E: HS +/-  Ctrl+C/Esc: quit');
 
     const columns = process.stdout.columns ?? 120;
     const paddedLines = lines.map((line) => padVisibleWidth(line, columns));

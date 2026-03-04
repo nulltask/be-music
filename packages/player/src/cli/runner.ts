@@ -506,6 +506,15 @@ function resolveDirectoryStateFromPlayInterrupt(
   reason: PlayerInterruptedError['reason'],
   state: Extract<DirectorySceneState, { kind: 'play' }>,
 ): DirectorySceneState {
+  if (reason === 'restart') {
+    return {
+      kind: 'play',
+      chartPath: state.chartPath,
+      focusKey: state.focusKey,
+      playMode: state.playMode,
+      highSpeed: state.highSpeed,
+    };
+  }
   if (reason === 'escape') {
     return {
       kind: 'select',
@@ -628,12 +637,24 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   };
 
   let summary: PlayerSummary;
-  try {
-    summary = args.auto
-      ? await autoPlay(json, { ...playOptions, auto: true })
-      : await manualPlay(json, { ...playOptions, autoScratch: args.autoScratch });
-  } finally {
-    args.highSpeed = resolvedHighSpeed;
+  while (true) {
+    try {
+      summary = args.auto
+        ? await autoPlay(json, { ...playOptions, auto: true })
+        : await manualPlay(json, { ...playOptions, autoScratch: args.autoScratch });
+      break;
+    } catch (error) {
+      if (error instanceof PlayerInterruptedError && error.reason === 'restart') {
+        reportPlayLoadingProgress?.({
+          ratio: 0.34,
+          message: 'Restarting playback...',
+        });
+        continue;
+      }
+      throw error;
+    } finally {
+      args.highSpeed = resolvedHighSpeed;
+    }
   }
   const title = sanitizeMetadataText(json.metadata.title);
   const artist = sanitizeMetadataText(json.metadata.artist);

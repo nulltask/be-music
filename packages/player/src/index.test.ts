@@ -17,6 +17,7 @@ import {
   resolveHighSpeedControlActionFromKey,
   isPlayLaneChannelForVolumeControl,
   formatRandomPatternSummary,
+  PlayerInterruptedError,
   resolveJudgeWindowsMs,
   resolveBmsControlFlowForPlayback,
 } from './index.ts';
@@ -114,6 +115,11 @@ test('player: keeps SETRANDOM and RANDOM order in pattern summary', () => {
 
   const resolved = resolveBmsControlFlowForPlayback(json, () => 0);
   expect(formatRandomPatternSummary(resolved.randomPatterns)).toBe('RANDOM #1 4/4  #2 1/2');
+});
+
+test('player: restart interrupt uses zero exit code', () => {
+  const error = new PlayerInterruptedError('restart');
+  expect(error.exitCode).toBe(0);
 });
 
 test('player: auto play ignores landmine notes in score totals', async () => {
