@@ -25,7 +25,7 @@ describe('editor', () => {
     const json = createBlankJson();
     expect(json.sourceFormat).toBe('json');
     expect(json.format).toBe('be-music-json/0.1.0');
-    expect(json.metadata.bpm).toBe(120);
+    expect(json.metadata.bpm).toBe(130);
   });
 
   test('editor: setMetadata handles known keys, extras, and BPM validation', () => {
@@ -142,7 +142,7 @@ describe('editor', () => {
     } as unknown as BeMusicJson;
 
     const normalized = setMetadata(broken, 'genre', 'TEST');
-    expect(normalized.metadata.bpm).toBe(120);
+    expect(normalized.metadata.bpm).toBe(130);
     expect(normalized.metadata.extras).toEqual({});
     expect(normalized.resources.wav).toEqual({});
     expect(normalized.resources.bmp).toEqual({});

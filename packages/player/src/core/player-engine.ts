@@ -6,6 +6,7 @@ import {
   collectLnobjEndEvents,
   createBeatResolver,
   createEmptyJson,
+  DEFAULT_BPM,
   mapBmsLongNoteChannelToPlayable,
   type BeMusicEvent,
   type BeMusicJson,
@@ -1858,7 +1859,7 @@ async function buildDebugSampleDurationSecondsMap(
   const durations = new Map<string, number>();
   for (const trigger of uniqueTriggers.values()) {
     const sampleJson = createEmptyJson('json');
-    sampleJson.metadata.bpm = 120;
+    sampleJson.metadata.bpm = DEFAULT_BPM;
     if (trigger.samplePath) {
       sampleJson.resources.wav[trigger.sampleKey] = trigger.samplePath;
     }

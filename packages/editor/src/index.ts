@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import {
+  DEFAULT_BPM,
   createEmptyJson,
   ensureMeasure,
   normalizeChannel,
@@ -152,12 +153,13 @@ function normalizeJson(json: BeMusicJson): BeMusicJson {
   const cloned = structuredClone(json);
   if (!cloned.metadata) {
     cloned.metadata = {
-      bpm: 120,
+      bpm: DEFAULT_BPM,
       extras: {},
     };
   }
   cloned.metadata.extras = cloned.metadata.extras ?? {};
-  cloned.metadata.bpm = Number.isFinite(cloned.metadata.bpm) && cloned.metadata.bpm > 0 ? cloned.metadata.bpm : 120;
+  cloned.metadata.bpm =
+    Number.isFinite(cloned.metadata.bpm) && cloned.metadata.bpm > 0 ? cloned.metadata.bpm : DEFAULT_BPM;
   cloned.resources = cloned.resources ?? {
     wav: {},
     bmp: {},

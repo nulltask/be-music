@@ -173,7 +173,7 @@ export interface BeatResolver {
   eventToBeat: (event: BeMusicEvent) => number;
 }
 
-export const DEFAULT_BPM = 120;
+export const DEFAULT_BPM = 130;
 
 export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMusicJson {
   return {
