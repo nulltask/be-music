@@ -215,6 +215,33 @@ test('player bga: renders undefined base keys as black instead of STAGEFILE', as
   }
 });
 
+test('player bga: uses black viewport background before first BGA cue', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-black-viewport-'));
+  try {
+    await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bmp['01'] = 'base.png';
+    json.events = [{ measure: 1, channel: '04', position: [0, 1], value: '01' }];
+
+    const renderer = await createBgaAnsiRenderer(json, {
+      baseDir,
+      width: 40,
+      height: 20,
+    });
+    expect(renderer).toBeDefined();
+
+    const beforeCue = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+    expect(beforeCue[10]?.[20]).toEqual({ r: 0, g: 0, b: 0 });
+
+    const afterCue = parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? []);
+    expect(afterCue[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
 test('player bga: switches to channel 06 frame when POOR is triggered', async () => {
   const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-'));
   try {

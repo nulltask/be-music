@@ -16,7 +16,9 @@ import {
   shouldUseAutoMixBgmHeadroomControl,
   resolveHighSpeedControlActionFromKey,
   isPlayLaneChannelForVolumeControl,
+  formatRandomPatternSummary,
   resolveJudgeWindowsMs,
+  resolveBmsControlFlowForPlayback,
 } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -68,6 +70,50 @@ test('player: resolves control-flow branches at playback time', async () => {
   expect(summary.bad).toBe(0);
   expect(summary.exScore).toBe(4);
   expect(summary.score).toBe(200000);
+});
+
+test('player: resolves RANDOM pattern summary for control-flow playback', () => {
+  const json = createEmptyJson('bms');
+  json.bms.controlFlow = [
+    { kind: 'directive', command: 'RANDOM', value: '3' },
+    { kind: 'directive', command: 'IF', value: '2' },
+    {
+      kind: 'object',
+      measure: 0,
+      channel: '11',
+      events: [{ measure: 0, channel: '11', position: [0, 1], value: '01' }],
+    },
+    { kind: 'directive', command: 'ENDIF' },
+    { kind: 'directive', command: 'ENDRANDOM' },
+  ];
+
+  const resolved = resolveBmsControlFlowForPlayback(json, () => 0.5);
+  expect(formatRandomPatternSummary(resolved.randomPatterns)).toBe('RANDOM 2/3');
+  expect(
+    resolved.resolvedJson.events.some(
+      (event) => event.channel === '11' && event.value === '01' && event.measure === 0 && event.position[0] === 0,
+    ),
+  ).toBe(true);
+});
+
+test('player: formats multiple RANDOM pattern summaries in declaration order', () => {
+  const summary = formatRandomPatternSummary([
+    { index: 1, current: 2, total: 3 },
+    { index: 2, current: 4, total: 9 },
+  ]);
+  expect(summary).toBe('RANDOM #1 2/3  #2 4/9');
+});
+
+test('player: keeps SETRANDOM and RANDOM order in pattern summary', () => {
+  const json = createEmptyJson('bms');
+  json.bms.controlFlow = [
+    { kind: 'directive', command: 'SETRANDOM', value: '4' },
+    { kind: 'directive', command: 'RANDOM', value: '2' },
+    { kind: 'directive', command: 'ENDRANDOM' },
+  ];
+
+  const resolved = resolveBmsControlFlowForPlayback(json, () => 0);
+  expect(formatRandomPatternSummary(resolved.randomPatterns)).toBe('RANDOM #1 4/4  #2 1/2');
 });
 
 test('player: auto play ignores landmine notes in score totals', async () => {

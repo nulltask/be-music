@@ -150,6 +150,8 @@ export class BgaAnsiRenderer {
 
   private cachedLines?: string[];
 
+  private blackBackgroundLines: string[];
+
   private poorActiveUntilSeconds = Number.NEGATIVE_INFINITY;
 
   constructor(params: {
@@ -186,6 +188,7 @@ export class BgaAnsiRenderer {
     this.poorFallbackUntilSeconds = params.poorFallbackUntilSeconds;
     this.displayWidth = params.width;
     this.displayHeight = params.height;
+    this.blackBackgroundLines = [];
     this.missingBaseFrame = resizeAnsiFrame(this.missingBaseSourceFrame, this.displayWidth, this.displayHeight);
     this.missingPoorFrame = resizeAnsiFrame(this.missingPoorSourceFrame, this.displayWidth, this.displayHeight);
     this.missingLayerFrame = resizeAnsiFrame(this.missingLayerSourceFrame, this.displayWidth, this.displayHeight);
@@ -227,7 +230,7 @@ export class BgaAnsiRenderer {
   getAnsiLines(currentSeconds: number): string[] | undefined {
     this.refreshComposite(currentSeconds);
     if (!this.cachedComposite) {
-      return undefined;
+      return this.blackBackgroundLines;
     }
     if (!this.cachedLines) {
       this.cachedLines = composeAnsiLines(
@@ -251,6 +254,7 @@ export class BgaAnsiRenderer {
     this.missingBaseFrame = resizeAnsiFrame(this.missingBaseSourceFrame, this.displayWidth, this.displayHeight);
     this.missingPoorFrame = resizeAnsiFrame(this.missingPoorSourceFrame, this.displayWidth, this.displayHeight);
     this.missingLayerFrame = resizeAnsiFrame(this.missingLayerSourceFrame, this.displayWidth, this.displayHeight);
+    this.blackBackgroundLines = createBlackBackgroundAnsiLines(this.displayWidth, this.displayHeight);
     this.resetCache();
   }
 
@@ -753,6 +757,14 @@ function composeAnsiLines(rgb: Uint8Array, opaqueMask: Uint8Array, width: number
   }
 
   return lines;
+}
+
+function createBlackBackgroundAnsiLines(width: number, height: number): string[] {
+  const safeWidth = Math.max(1, Math.floor(width));
+  const safeHeight = Math.max(1, Math.floor(height));
+  const opaqueMask = new Uint8Array(safeWidth * safeHeight).fill(1);
+  const rgb = new Uint8Array(safeWidth * safeHeight * 3);
+  return composeAnsiLines(rgb, opaqueMask, safeWidth, safeHeight);
 }
 
 async function loadImageAsSpecFrame(imagePath: string, mode: FrameMode): Promise<AnsiFrame | undefined> {

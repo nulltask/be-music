@@ -147,6 +147,17 @@ interface AudioSession {
   stopChannel?: (channel: string) => void;
 }
 
+export interface RandomPatternSelection {
+  index: number;
+  current: number;
+  total: number;
+}
+
+interface ControlFlowResolutionResult {
+  resolvedJson: BeMusicJson;
+  randomPatterns: RandomPatternSelection[];
+}
+
 interface AudioLeadTuning {
   baseLeadMs: number;
   maxLeadMs: number;
@@ -259,9 +270,101 @@ function formatSampleLoadDetail(progress: RenderSampleLoadProgress): string {
   return `#WAV${progress.sampleKey}`;
 }
 
+export function resolveBmsControlFlowForPlayback(
+  json: BeMusicJson,
+  randomSource: () => number = Math.random,
+): ControlFlowResolutionResult {
+  const randomPatterns: RandomPatternSelection[] = [];
+  const runtimeRandomSequence: number[] = [];
+
+  for (const entry of json.bms.controlFlow) {
+    if (entry.kind !== 'directive') {
+      continue;
+    }
+    if (entry.command === 'RANDOM') {
+      const total = parsePositiveInteger(entry.value) ?? 1;
+      const randomValue = randomSource();
+      runtimeRandomSequence.push(randomValue);
+      randomPatterns.push({
+        index: randomPatterns.length + 1,
+        current: generateControlFlowRandomValue(total, randomValue),
+        total,
+      });
+      continue;
+    }
+    if (entry.command === 'SETRANDOM') {
+      const fixedValue = parsePositiveInteger(entry.value) ?? 1;
+      randomPatterns.push({
+        index: randomPatterns.length + 1,
+        current: fixedValue,
+        total: fixedValue,
+      });
+      continue;
+    }
+    if (entry.command === 'SWITCH') {
+      runtimeRandomSequence.push(randomSource());
+    }
+  }
+
+  let randomDrawIndex = 0;
+  const resolvedJson = resolveBmsControlFlow(json, {
+    random: () => {
+      const replayValue = runtimeRandomSequence[randomDrawIndex];
+      if (typeof replayValue === 'number') {
+        randomDrawIndex += 1;
+        return replayValue;
+      }
+      return randomSource();
+    },
+  });
+
+  return {
+    resolvedJson,
+    randomPatterns,
+  };
+}
+
+export function formatRandomPatternSummary(randomPatterns: ReadonlyArray<RandomPatternSelection>): string | undefined {
+  if (randomPatterns.length === 0) {
+    return undefined;
+  }
+  if (randomPatterns.length === 1) {
+    const only = randomPatterns[0];
+    return `RANDOM ${only.current}/${only.total}`;
+  }
+  const parts = randomPatterns.map((pattern) => `#${pattern.index} ${pattern.current}/${pattern.total}`);
+  return `RANDOM ${parts.join('  ')}`;
+}
+
+function parsePositiveInteger(value?: string): number | undefined {
+  if (typeof value !== 'string' || value.length === 0) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  const normalized = Math.floor(parsed);
+  if (normalized <= 0) {
+    return undefined;
+  }
+  return normalized;
+}
+
+function generateControlFlowRandomValue(total: number, randomValue: number): number {
+  const safeTotal = Math.max(1, Math.floor(total));
+  if (safeTotal <= 1) {
+    return 1;
+  }
+  const clamped = Number.isFinite(randomValue) ? Math.max(0, Math.min(0.999999999, randomValue)) : 0;
+  return Math.floor(clamped * safeTotal) + 1;
+}
+
 export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   reportLoadProgress(options, 0.02, 'Resolving chart...');
-  const resolvedJson = resolveBmsControlFlow(json);
+  const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
+  const resolvedJson = controlFlowResolution.resolvedJson;
+  const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
   const speed = options.speed ?? 1;
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
@@ -306,7 +409,16 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
-  const tui = createTuiIfEnabled(resolvedJson, options, 'AUTO', laneBindings, laneDisplayMode, speed, 0);
+  const tui = createTuiIfEnabled(
+    resolvedJson,
+    options,
+    'AUTO',
+    laneBindings,
+    laneDisplayMode,
+    speed,
+    0,
+    randomPatternSummary,
+  );
   const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
   const bgaRenderer = tui
     ? await createBgaAnsiRenderer(resolvedJson, {
@@ -352,6 +464,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   if (!tui) {
     process.stdout.write('Auto play start\n');
     process.stdout.write(`Lane mode: ${laneDisplayMode}\n`);
+    if (randomPatternSummary) {
+      process.stdout.write(`${randomPatternSummary}\n`);
+    }
     printLaneMap(laneBindings);
     process.stdout.write('Press Space to pause/resume. Press Ctrl+C or Esc to quit.\n');
     process.stdout.write('Press W/E to adjust HIGH-SPEED (W:+0.5, E:-0.5).\n');
@@ -609,7 +724,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 
 export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   reportLoadProgress(options, 0.02, 'Resolving chart...');
-  const resolvedJson = resolveBmsControlFlow(json);
+  const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
+  const resolvedJson = controlFlowResolution.resolvedJson;
+  const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
   const autoScratchEnabled = options.autoScratch === true;
   const speed = options.speed ?? 1;
   const judgeWindows = resolveJudgeWindowsMs(resolvedJson, options.judgeWindowMs);
@@ -669,6 +786,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     laneDisplayMode,
     speed,
     badWindowMs,
+    randomPatternSummary,
   );
   const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
   const bgaRenderer = tui
@@ -704,6 +822,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   if (!tui) {
     process.stdout.write('Manual play start\n');
     process.stdout.write(`Lane mode: ${laneDisplayMode}\n`);
+    if (randomPatternSummary) {
+      process.stdout.write(`${randomPatternSummary}\n`);
+    }
     if (autoScratchEnabled) {
       process.stdout.write('Mode: AUTO SCRATCH (16ch/26ch only)\n');
     }
@@ -1359,6 +1480,7 @@ function createTuiIfEnabled(
   laneDisplayMode: string,
   speed: number,
   judgeWindowMs: number,
+  randomPatternSummary?: string,
 ): PlayerTui | undefined {
   if (options.tui === false) {
     return undefined;
@@ -1402,6 +1524,7 @@ function createTuiIfEnabled(
     speed,
     highSpeed,
     judgeWindowMs,
+    randomPatternSummary,
     bpmTimeline,
     scrollTimeline,
     stopWindows,
