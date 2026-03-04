@@ -3,6 +3,7 @@ import {
   collectLnobjEndEvents,
   mapBmsLongNoteChannelToPlayable,
   resolveBmsLongNotes,
+  resolveLnobjLongNotes,
   cloneJson,
   createBeatResolver,
   createEmptyJson,
@@ -215,6 +216,36 @@ test('json: collectLnobjEndEvents returns only paired LNOBJ end markers', () => 
   expect(endEvents.has(endB)).toBe(true);
   expect(endEvents.has(sameBeatLnobj)).toBe(false);
   expect(endEvents.has(invisibleLnobj)).toBe(false);
+});
+
+test('json: resolveLnobjLongNotes accepts multiple LNOBJ declarations', () => {
+  const json = createEmptyJson('bms');
+  json.bms.lnObjs = ['AA', 'BB'];
+  json.bms.lnObj = 'BB';
+  const startA: BeMusicEvent = { measure: 0, channel: '11', position: [0, 1], value: '01' };
+  const endA: BeMusicEvent = { measure: 0, channel: '11', position: [1, 4], value: 'AA' };
+  const startB: BeMusicEvent = { measure: 0, channel: '12', position: [0, 1], value: '02' };
+  const endB: BeMusicEvent = { measure: 0, channel: '12', position: [1, 4], value: 'BB' };
+  json.events = [startA, endA, startB, endB];
+
+  const resolved = resolveLnobjLongNotes(json);
+  expect(resolved.endEvents.has(endA)).toBe(true);
+  expect(resolved.endEvents.has(endB)).toBe(true);
+  expect(resolved.startToEndBeat.get(startA)).toBeCloseTo(1, 6);
+  expect(resolved.startToEndBeat.get(startB)).toBeCloseTo(1, 6);
+});
+
+test('json: resolveLnobjLongNotes prioritizes 51-69 objects over LNOBJ at same tick', () => {
+  const json = createEmptyJson('bms');
+  json.bms.lnObj = 'AA';
+  const start: BeMusicEvent = { measure: 0, channel: '11', position: [0, 1], value: '01' };
+  const lnobjEnd: BeMusicEvent = { measure: 0, channel: '11', position: [2, 4], value: 'AA' };
+  const legacyLongNote: BeMusicEvent = { measure: 0, channel: '51', position: [2, 4], value: '02' };
+  json.events = [start, lnobjEnd, legacyLongNote];
+
+  const resolved = resolveLnobjLongNotes(json);
+  expect(resolved.endEvents.has(lnobjEnd)).toBe(false);
+  expect(resolved.startToEndBeat.get(start)).toBeUndefined();
 });
 
 test('json: resolveBmsLongNotes pairs 51-59/61-69 in LNTYPE=1 and suppresses end triggers', () => {

@@ -606,7 +606,9 @@ function pushHeaderLine(json: BeMusicJson, command: string, value: string): void
       return;
     case 'LNOBJ':
       if (value.length > 0) {
-        json.bms.lnObj = normalizeObjectKey(value);
+        const normalizedValue = normalizeObjectKey(value);
+        json.bms.lnObj = normalizedValue;
+        json.bms.lnObjs = [...(json.bms.lnObjs ?? []), normalizedValue];
       }
       return;
     case 'VOLWAV':
@@ -712,8 +714,14 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
       continue;
     }
     if (upper === 'LNOBJ') {
-      if (typeof json.bms.lnObj !== 'string' && value.length > 0) {
-        json.bms.lnObj = normalizeObjectKey(value);
+      if (value.length > 0) {
+        const normalizedValue = normalizeObjectKey(value);
+        if (typeof json.bms.lnObj !== 'string') {
+          json.bms.lnObj = normalizedValue;
+        }
+        if ((json.bms.lnObjs?.length ?? 0) === 0) {
+          json.bms.lnObjs = [normalizedValue];
+        }
       }
       continue;
     }
@@ -888,6 +896,7 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
 function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   const normalized: BeMusicJson['bms'] = {
     controlFlow: [],
+    lnObjs: [],
     exRank: {},
     argb: {},
     stp: [],
@@ -929,7 +938,20 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   }
 
   if (typeof raw.lnObj === 'string' && raw.lnObj.length > 0) {
-    normalized.lnObj = normalizeObjectKey(raw.lnObj);
+    const value = normalizeObjectKey(raw.lnObj);
+    normalized.lnObj = value;
+    normalized.lnObjs = [...(normalized.lnObjs ?? []), value];
+  }
+
+  const lnObjs = normalizeBmsExtensionStringList(raw.lnObjs ?? raw.ln_objs);
+  if (lnObjs.length > 0) {
+    normalized.lnObjs = lnObjs.map((value) => normalizeObjectKey(value));
+    normalized.lnObj = normalized.lnObjs[normalized.lnObjs.length - 1];
+  } else {
+    const currentLnObjs = normalized.lnObjs;
+    if (Array.isArray(currentLnObjs) && currentLnObjs.length > 0) {
+      normalized.lnObj = currentLnObjs[currentLnObjs.length - 1];
+    }
   }
 
   const volWav = normalizeNumericBmsExtensionValue(raw.volWav ?? raw.volwav ?? raw.vol_wav);

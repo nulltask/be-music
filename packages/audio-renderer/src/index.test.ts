@@ -132,6 +132,44 @@ test('audio-renderer: ignores paired #LNOBJ end objects for sample triggering', 
   expect(triggers.some((trigger) => trigger.event === orphan)).toBe(true);
 });
 
+test('audio-renderer: accepts multiple #LNOBJ declarations for end suppression', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.bms.lnObjs = ['AA', 'BB'];
+  json.bms.lnObj = 'BB';
+  json.resources.wav['01'] = 'start-a.wav';
+  json.resources.wav['02'] = 'start-b.wav';
+  json.resources.wav['AA'] = 'end-a.wav';
+  json.resources.wav['BB'] = 'end-b.wav';
+  const startA = { measure: 0, channel: '11', position: [0, 1] as const, value: '01' };
+  const endA = { measure: 0, channel: '11', position: [1, 4] as const, value: 'AA' };
+  const startB = { measure: 0, channel: '12', position: [0, 1] as const, value: '02' };
+  const endB = { measure: 0, channel: '12', position: [1, 4] as const, value: 'BB' };
+  json.events = [startA, endA, startB, endB];
+
+  const triggers = collectSampleTriggers(json);
+  expect(triggers.some((trigger) => trigger.event === startA)).toBe(true);
+  expect(triggers.some((trigger) => trigger.event === startB)).toBe(true);
+  expect(triggers.some((trigger) => trigger.event === endA)).toBe(false);
+  expect(triggers.some((trigger) => trigger.event === endB)).toBe(false);
+});
+
+test('audio-renderer: prioritizes 51-69 over LNOBJ when same lane tick conflicts', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.bms.lnObj = 'AA';
+  json.resources.wav['01'] = 'start.wav';
+  json.resources.wav['AA'] = 'lnobj.wav';
+  json.resources.wav['02'] = 'legacy.wav';
+  const start = { measure: 0, channel: '11', position: [0, 1] as const, value: '01' };
+  const lnobjEnd = { measure: 0, channel: '11', position: [2, 4] as const, value: 'AA' };
+  const legacy = { measure: 0, channel: '51', position: [2, 4] as const, value: '02' };
+  json.events = [start, lnobjEnd, legacy];
+
+  const triggers = collectSampleTriggers(json);
+  expect(triggers.some((trigger) => trigger.event === lnobjEnd)).toBe(true);
+});
+
 test('audio-renderer: suppresses LNTYPE=1 long-note end markers from trigger list', () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;

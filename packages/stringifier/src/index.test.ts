@@ -128,6 +128,19 @@ test('BMS stringify: writes extension headers', async () => {
   expect(output).toMatch(/#CHARSET Shift_JIS/);
 });
 
+test('BMS stringify: writes multiple LNOBJ declarations in order', () => {
+  const json = createEmptyJson('bms');
+  json.bms.lnObjs = ['AA', 'BB'];
+  json.bms.lnObj = 'BB';
+
+  const output = stringifyBms(json);
+  const lnObjLines = output
+    .split('\n')
+    .filter((line) => line.startsWith('#LNOBJ '))
+    .map((line) => line.trim());
+  expect(lnObjLines).toEqual(['#LNOBJ AA', '#LNOBJ BB']);
+});
+
 test('bmson stringify: preserves and outputs bga/info extensions and notes.l/c', async () => {
   const chartPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
   const source = parseBmson(await readFile(chartPath, 'utf8'));

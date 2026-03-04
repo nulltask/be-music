@@ -133,6 +133,7 @@ export interface BmsExtensions {
   lnType?: number;
   lnMode?: number;
   lnObj?: string;
+  lnObjs?: string[];
   volWav?: number;
   defExRank?: number;
   exRank: Record<string, string>;
@@ -194,6 +195,7 @@ export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
     events: [],
     bms: {
       controlFlow: [],
+      lnObjs: [],
       exRank: {},
       argb: {},
       stp: [],
@@ -480,18 +482,34 @@ export function resolveBmsLongNotes(
 }
 
 export function collectLnobjEndEvents(json: BeMusicJson): Set<BeMusicEvent> {
+  return resolveLnobjLongNotes(json).endEvents;
+}
+
+export interface LnobjLongNoteResolution {
+  startToEndBeat: Map<BeMusicEvent, number>;
+  endEvents: Set<BeMusicEvent>;
+}
+
+export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolution {
   if (json.sourceFormat !== 'bms') {
-    return new Set();
+    return {
+      startToEndBeat: new Map(),
+      endEvents: new Set(),
+    };
   }
 
-  const lnObj =
-    typeof json.bms.lnObj === 'string' && json.bms.lnObj.length > 0 ? normalizeObjectKey(json.bms.lnObj) : undefined;
-  if (!lnObj) {
-    return new Set();
+  const lnObjValues = resolveLnobjValues(json);
+  if (lnObjValues.size === 0) {
+    return {
+      startToEndBeat: new Map(),
+      endEvents: new Set(),
+    };
   }
 
   const beatResolver = createBeatResolver(json);
-  const pendingStartBeatByChannel = new Map<string, number>();
+  const legacyLongNoteTicks = collectLegacyLongNoteTickKeys(json);
+  const pendingStartByChannel = new Map<string, { event: BeMusicEvent; beat: number }>();
+  const startToEndBeat = new Map<BeMusicEvent, number>();
   const endEvents = new Set<BeMusicEvent>();
 
   for (const event of sortEvents(json.events)) {
@@ -499,22 +517,30 @@ export function collectLnobjEndEvents(json: BeMusicJson): Set<BeMusicEvent> {
     if (!isPlayableChannel(normalizedChannel)) {
       continue;
     }
-
-    const beat = beatResolver.eventToBeat(event);
-    const value = normalizeObjectKey(event.value);
-    if (value === lnObj) {
-      const startBeat = pendingStartBeatByChannel.get(normalizedChannel);
-      if (typeof startBeat === 'number' && beat > startBeat) {
-        endEvents.add(event);
-      }
-      pendingStartBeatByChannel.delete(normalizedChannel);
+    if (legacyLongNoteTicks.has(createChannelTickKey(normalizedChannel, event))) {
+      pendingStartByChannel.delete(normalizedChannel);
       continue;
     }
 
-    pendingStartBeatByChannel.set(normalizedChannel, beat);
+    const beat = beatResolver.eventToBeat(event);
+    const value = normalizeObjectKey(event.value);
+    if (lnObjValues.has(value)) {
+      const start = pendingStartByChannel.get(normalizedChannel);
+      if (start && beat > start.beat) {
+        startToEndBeat.set(start.event, beat);
+        endEvents.add(event);
+      }
+      pendingStartByChannel.delete(normalizedChannel);
+      continue;
+    }
+
+    pendingStartByChannel.set(normalizedChannel, { event, beat });
   }
 
-  return endEvents;
+  return {
+    startToEndBeat,
+    endEvents,
+  };
 }
 
 function resolveBmsLongNotesType1(
@@ -545,6 +571,42 @@ function resolveBmsLongNotesType1(
   }
 
   return { notes, suppressedTriggerEvents };
+}
+
+function resolveLnobjValues(json: BeMusicJson): Set<string> {
+  const values = new Set<string>();
+  for (const candidate of json.bms.lnObjs ?? []) {
+    if (typeof candidate === 'string' && candidate.length > 0) {
+      values.add(normalizeObjectKey(candidate));
+    }
+  }
+  if (typeof json.bms.lnObj === 'string' && json.bms.lnObj.length > 0) {
+    values.add(normalizeObjectKey(json.bms.lnObj));
+  }
+  return values;
+}
+
+function collectLegacyLongNoteTickKeys(json: BeMusicJson): Set<string> {
+  const keys = new Set<string>();
+  for (const event of json.events) {
+    const playableChannel = mapBmsLongNoteChannelToPlayable(event.channel);
+    if (!playableChannel) {
+      continue;
+    }
+    keys.add(createChannelTickKey(playableChannel, event));
+  }
+  return keys;
+}
+
+function createChannelTickKey(channel: string, event: BeMusicEvent): string {
+  return `${normalizeChannel(channel)}:${createEventTickKey(event)}`;
+}
+
+function createEventTickKey(event: BeMusicEvent): string {
+  const measure = Math.max(0, Math.floor(event.measure));
+  const denominator = normalizePositionDenominator(event.position[1]);
+  const numerator = normalizePositionNumerator(event.position[0], denominator);
+  return `${measure}:${numerator}/${denominator}`;
 }
 
 function resolveBmsLongNotesType2(

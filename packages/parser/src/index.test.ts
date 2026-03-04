@@ -91,6 +91,7 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   expect(json.bms.lnType).toBe(1);
   expect(json.bms.lnMode).toBe(1);
   expect(json.bms.lnObj).toBe('ZZ');
+  expect(json.bms.lnObjs).toEqual(['ZZ']);
   expect(json.bms.volWav).toBe(80);
   expect(json.bms.defExRank).toBe(120);
   expect(json.bms.exRank['01']).toBe('120,90,60,30');
@@ -134,6 +135,21 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   expect(json.metadata.extras.MATERIALS).toBeUndefined();
   expect(json.metadata.extras.DIVIDEPROP).toBeUndefined();
   expect(json.metadata.extras.CHARSET).toBeUndefined();
+});
+
+test('BMS: keeps all LNOBJ declarations and uses the last one as lnObj', () => {
+  const parsed = parseChart(
+    [
+      '#LNOBJ AA',
+      '#LNOBJ BB',
+      '#00111:01',
+      '',
+    ].join('\n'),
+  );
+
+  expect(parsed.bms.lnObjs).toEqual(['AA', 'BB']);
+  expect(parsed.bms.lnObj).toBe('BB');
+  expect(parsed.metadata.extras.LNOBJ).toBeUndefined();
 });
 
 test('BMS: parses RANDOM/IF/SWITCH control flow directives', async () => {
@@ -334,6 +350,7 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
   expect(parsed.bms.lnType).toBe(2);
   expect(parsed.bms.lnMode).toBe(1);
   expect(parsed.bms.lnObj).toBe('ZZ');
+  expect(parsed.bms.lnObjs).toEqual(['ZZ']);
   expect(parsed.bms.volWav).toBe(90);
   expect(parsed.bms.defExRank).toBe(100.5);
   expect(parsed.bms.player).toBe(2);
@@ -438,6 +455,7 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
   expect(parsed.bms.lnType).toBe(1);
   expect(parsed.bms.lnMode).toBe(2);
   expect(parsed.bms.lnObj).toBe('ZZ');
+  expect(parsed.bms.lnObjs).toEqual(['ZZ']);
   expect(parsed.bms.volWav).toBe(70);
   expect(parsed.bms.defExRank).toBe(120);
   expect(parsed.bms.player).toBe(1);

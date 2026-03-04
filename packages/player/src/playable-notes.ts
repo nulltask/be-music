@@ -1,11 +1,11 @@
 import {
   createBeatResolver,
   resolveBmsLongNotes,
+  resolveLnobjLongNotes,
   type BeMusicEvent,
   type BeMusicJson,
   isPlayableChannel,
   normalizeChannel,
-  normalizeObjectKey,
   sortEvents,
 } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
@@ -162,29 +162,20 @@ function applyLnobjEndBeatIfNeeded(
   notes: TimedPlayableNote[],
   resolver: ReturnType<typeof createTimingResolver>,
 ): void {
-  if (json.sourceFormat !== 'bms') {
+  const resolved = resolveLnobjLongNotes(json);
+  if (resolved.startToEndBeat.size === 0) {
     return;
   }
-
-  const lnObj =
-    typeof json.bms.lnObj === 'string' && json.bms.lnObj.length > 0 ? normalizeObjectKey(json.bms.lnObj) : undefined;
-  if (!lnObj) {
-    return;
-  }
-
-  const pendingStartByChannel = new Map<string, TimedPlayableNote>();
   for (const note of notes) {
-    const value = normalizeObjectKey(note.event.value);
-    if (value === lnObj) {
-      const start = pendingStartByChannel.get(note.channel);
-      if (start && note.beat > start.beat) {
-        start.endBeat = note.beat;
-        start.endSeconds = resolver.beatToSeconds(note.beat);
-      }
-      pendingStartByChannel.delete(note.channel);
+    if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
       continue;
     }
-    pendingStartByChannel.set(note.channel, note);
+    const endBeat = resolved.startToEndBeat.get(note.event);
+    if (typeof endBeat !== 'number' || !Number.isFinite(endBeat) || endBeat <= note.beat) {
+      continue;
+    }
+    note.endBeat = endBeat;
+    note.endSeconds = resolver.beatToSeconds(endBeat);
   }
 }
 
