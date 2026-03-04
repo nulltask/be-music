@@ -20,7 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code_changed: ${{ steps.filter.outputs.code }}
-      player_changed: ${{ steps.filter.outputs.player }}
+      sea_player_changed: ${{ steps.filter.outputs.sea_player }}
+      sea_audio_renderer_changed: ${{ steps.filter.outputs.sea_audio_renderer }}
 
     steps:
       - name: Checkout
@@ -37,12 +38,24 @@ jobs:
               - '**'
               - '!docs/**'
               - '!**/*.md'
-            player:
+            sea_player:
               - 'packages/player/**'
               - 'packages/audio-renderer/**'
               - 'packages/parser/**'
               - 'packages/json/**'
               - 'packages/utils/**'
+              - 'scripts/build-sea.ts'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.node-version'
+              - 'tsconfig*.json'
+              - 'packages/*/tsconfig*.json'
+            sea_audio_renderer:
+              - 'packages/audio-renderer/**'
+              - 'packages/parser/**'
+              - 'packages/json/**'
+              - 'packages/utils/**'
+              - 'scripts/build-sea.ts'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - '.node-version'
@@ -78,12 +91,10 @@ jobs:
         with:
           node-version-file: .node-version
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
-      - name: Fetch dependencies
-        run: pnpm fetch --frozen-lockfile
-
-      - name: Install dependencies (offline)
-        run: pnpm install --frozen-lockfile --offline
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Run ${{ matrix.task }}
         run: pnpm run ${{ matrix.task }}
@@ -91,7 +102,7 @@ jobs:
   sea:
     name: SEA (${{ matrix.os }})
     needs: changes
-    if: github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.player_changed == 'true')
+    if: github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_player_changed == 'true' || needs.changes.outputs.sea_audio_renderer_changed == 'true')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -116,20 +127,22 @@ jobs:
         with:
           node-version-file: .node-version
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
-      - name: Fetch dependencies
-        run: pnpm fetch --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: Install dependencies (offline)
-        run: pnpm install --frozen-lockfile --offline
+      - name: Build player SEA executable
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_player_changed == 'true'
+        run: pnpm --filter @be-music/player run build:sea
 
-      - name: Build SEA executable
-        run: |
-          pnpm --filter @be-music/player run build:sea
-          pnpm --filter @be-music/audio-renderer run build:sea
+      - name: Build audio-renderer SEA executable
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_audio_renderer_changed == 'true'
+        run: pnpm --filter @be-music/audio-renderer run build:sea
 
       - name: Select player SEA binary path
         id: sea-player-binary
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_player_changed == 'true'
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
@@ -140,6 +153,7 @@ jobs:
 
       - name: Select audio-renderer SEA binary path
         id: sea-audio-renderer-binary
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_audio_renderer_changed == 'true'
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
@@ -149,6 +163,7 @@ jobs:
           fi
 
       - name: Upload player SEA artifact
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_player_changed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: be-music-player-${{ runner.os }}-${{ runner.arch }}
@@ -156,6 +171,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload audio-renderer SEA artifact
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_audio_renderer_changed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: be-music-audio-renderer-${{ runner.os }}-${{ runner.arch }}
