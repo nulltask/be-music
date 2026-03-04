@@ -253,11 +253,16 @@ pnpm run editor export chart.json chart.bms
 # player の SEA バイナリを生成
 pnpm run player:sea
 
+# audio-renderer の SEA バイナリを生成
+pnpm run audio-renderer:sea
+
 # 生成物
 ./packages/player/dist-sea/be-music-player chart.bms
+./packages/audio-renderer/dist-sea/be-music-audio-render chart.bms output.wav
 
 # Node 実行ファイルを明示する場合
 pnpm run player:sea --node-binary /path/to/node
+pnpm run audio-renderer:sea --node-binary /path/to/node
 ```
 
 補足:

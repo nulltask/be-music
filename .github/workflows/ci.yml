@@ -124,10 +124,12 @@ jobs:
         run: pnpm install --frozen-lockfile --offline
 
       - name: Build SEA executable
-        run: pnpm --filter @be-music/player run build:sea
+        run: |
+          pnpm --filter @be-music/player run build:sea
+          pnpm --filter @be-music/audio-renderer run build:sea
 
-      - name: Select SEA binary path
-        id: sea-binary
+      - name: Select player SEA binary path
+        id: sea-player-binary
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
@@ -136,9 +138,26 @@ jobs:
             echo "path=packages/player/dist-sea/be-music-player" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Upload SEA artifact
+      - name: Select audio-renderer SEA binary path
+        id: sea-audio-renderer-binary
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            echo "path=packages/audio-renderer/dist-sea/be-music-audio-render.exe" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=packages/audio-renderer/dist-sea/be-music-audio-render" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload player SEA artifact
         uses: actions/upload-artifact@v4
         with:
           name: be-music-player-${{ runner.os }}-${{ runner.arch }}
-          path: ${{ steps.sea-binary.outputs.path }}
+          path: ${{ steps.sea-player-binary.outputs.path }}
+          if-no-files-found: error
+
+      - name: Upload audio-renderer SEA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: be-music-audio-renderer-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ steps.sea-audio-renderer-binary.outputs.path }}
           if-no-files-found: error

@@ -56,6 +56,10 @@ importers:
       ogg-opus-decoder:
         specifier: ^1.7.3
         version: 1.7.3
+    devDependencies:
+      postject:
+        specifier: ^1.0.0-alpha.6
+        version: 1.0.0-alpha.6
 
   packages/editor:
     dependencies:

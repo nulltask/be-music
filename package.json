@@ -19,6 +19,7 @@
     "bench:parser:update-baseline": "pnpm --filter @be-music/parser run bench:update-baseline",
     "player": "pnpm --filter @be-music/player run dev",
     "player:sea": "pnpm --filter @be-music/player run build:sea",
+    "audio-renderer:sea": "pnpm --filter @be-music/audio-renderer run build:sea",
     "editor": "pnpm --filter @be-music/editor run dev",
     "audio-render": "pnpm --filter @be-music/audio-renderer run dev",
     "parse": "pnpm --filter @be-music/parser run dev",
