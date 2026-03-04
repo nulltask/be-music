@@ -371,7 +371,7 @@ function resizeFrameSource(source: FrameSource, width: number, height: number): 
     kind: 'video',
     frames: source.frames.map((entry) => ({
       seconds: entry.seconds,
-      frame: resizeAnsiFrame(entry.frame, width, height),
+      frame: resizeAnsiFrameInDisplaySpace(entry.frame, width, height),
     })),
   };
 }
@@ -1039,11 +1039,34 @@ function fitSizeWithinSpecCanvas(sourceWidth: number, sourceHeight: number): { w
 }
 
 function resizeAnsiFrame(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {
+  return resizeAnsiFrameWithAspect(
+    source,
+    maxWidth,
+    maxHeight,
+    TERMINAL_PIXEL_ASPECT_X,
+    TERMINAL_PIXEL_ASPECT_Y,
+  );
+}
+
+function resizeAnsiFrameInDisplaySpace(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {
+  return resizeAnsiFrameWithAspect(source, maxWidth, maxHeight, 1, 1);
+}
+
+function resizeAnsiFrameWithAspect(
+  source: AnsiFrame,
+  maxWidth: number,
+  maxHeight: number,
+  aspectX: number,
+  aspectY: number,
+): AnsiFrame {
   const canvasWidth = Math.max(1, maxWidth);
   const canvasHeight = Math.max(1, maxHeight);
+  if (source.width === canvasWidth && source.height === canvasHeight && aspectX === 1 && aspectY === 1) {
+    return source;
+  }
   const fitted = fitSizeKeepingAspect(
-    source.width * TERMINAL_PIXEL_ASPECT_X,
-    source.height * TERMINAL_PIXEL_ASPECT_Y,
+    source.width * Math.max(1, aspectX),
+    source.height * Math.max(1, aspectY),
     canvasWidth,
     canvasHeight,
   );

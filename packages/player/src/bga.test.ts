@@ -5,7 +5,7 @@ import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vitest';
 import { encode as encodeBmp } from 'fast-bmp';
 import { encode as encodePng } from 'fast-png';
-import { createBgaAnsiRenderer } from './bga.ts';
+import { BgaAnsiRenderer, createBgaAnsiRenderer } from './bga.ts';
 
 interface RgbColor {
   r: number;
@@ -206,6 +206,33 @@ test('player bga: updates output size when display size changes', async () => {
   }
 });
 
+test('player bga: does not apply terminal aspect correction twice for video frame sources', () => {
+  const frame = createOpaqueAnsiFrame(40, 20, (_x, y) => (y < 10 ? { r: 255, g: 0, b: 0 } : { r: 0, g: 0, b: 255 }));
+  const renderer = new BgaAnsiRenderer({
+    baseTimeline: [{ seconds: 0, key: '01' }],
+    layerTimeline: [],
+    baseSourceFramesByKey: new Map([
+      [
+        '01',
+        {
+          kind: 'video',
+          frames: [{ seconds: 0, frame }],
+        },
+      ],
+    ]) as any,
+    layerSourceFramesByKey: new Map(),
+    stageFileSourceFrame: undefined,
+    missingBaseSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
+    missingLayerSourceFrame: createTransparentAnsiFrame(256, 256),
+    width: 40,
+    height: 20,
+  });
+
+  const pixels = parseAnsiPixels(renderer.getAnsiLines(0) ?? []);
+  expect(pixels[2]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
+  expect(pixels[18]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
+});
+
 async function writePng(
   path: string,
   width: number,
@@ -401,5 +428,45 @@ function countColor(pixels: Pixel[][], color: RgbColor): number {
     }
   }
   return count;
+}
+
+function createOpaqueAnsiFrame(
+  width: number,
+  height: number,
+  pixel: (x: number, y: number) => RgbColor,
+): {
+  width: number;
+  height: number;
+  rgb: Uint8Array;
+  opaqueMask: Uint8Array;
+} {
+  const rgb = new Uint8Array(width * height * 3);
+  const opaqueMask = new Uint8Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const color = pixel(x, y);
+      const pixelOffset = y * width + x;
+      const rgbOffset = pixelOffset * 3;
+      rgb[rgbOffset] = color.r;
+      rgb[rgbOffset + 1] = color.g;
+      rgb[rgbOffset + 2] = color.b;
+      opaqueMask[pixelOffset] = 1;
+    }
+  }
+  return { width, height, rgb, opaqueMask };
+}
+
+function createTransparentAnsiFrame(width: number, height: number): {
+  width: number;
+  height: number;
+  rgb: Uint8Array;
+  opaqueMask: Uint8Array;
+} {
+  return {
+    width,
+    height,
+    rgb: new Uint8Array(width * height * 3),
+    opaqueMask: new Uint8Array(width * height),
+  };
 }
 });
