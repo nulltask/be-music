@@ -44,6 +44,12 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
     outputBaseName: 'be-music-player',
     optionalExternalModules: ['node-web-audio-api', '@uwx/libav.js-fat'],
     bundleBanner: SEA_WORKER_BANNER,
+    aliases: {
+      '@be-music/audio-renderer': resolve(repositoryDir, 'packages/audio-renderer/src/index.ts'),
+      '@be-music/json': resolve(repositoryDir, 'packages/json/src/index.ts'),
+      '@be-music/parser': resolve(repositoryDir, 'packages/parser/src/index.ts'),
+      '@be-music/utils': resolve(repositoryDir, 'packages/utils/src/index.ts'),
+    },
     postjectInstallHintCommand: 'pnpm --filter @be-music/player add -D postject',
   },
   'audio-renderer': {
@@ -160,7 +166,27 @@ function buildExternalModules(optionalExternalModules: string[]): string[] {
   return [...modules];
 }
 
+function createWorkspaceAliasPlugin(aliases?: Record<string, string>) {
+  if (!aliases) {
+    return undefined;
+  }
+
+  const entries = Object.entries(aliases);
+  return {
+    name: 'be-music-sea-workspace-alias',
+    resolveId(source: string) {
+      for (const [find, replacement] of entries) {
+        if (source === find) {
+          return replacement;
+        }
+      }
+      return null;
+    },
+  };
+}
+
 async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<void> {
+  const workspaceAliasPlugin = createWorkspaceAliasPlugin(config.aliases);
   await build({
     configFile: false,
     resolve: config.aliases
@@ -180,6 +206,7 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
         fileName: () => 'sea-entry.cjs',
       },
       rollupOptions: {
+        plugins: workspaceAliasPlugin ? [workspaceAliasPlugin] : undefined,
         external: buildExternalModules(config.optionalExternalModules ?? []),
         output: {
           codeSplitting: false,
