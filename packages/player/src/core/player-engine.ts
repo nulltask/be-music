@@ -190,6 +190,12 @@ interface PlayableNotePlayback {
   sliceId?: string;
 }
 
+interface RealtimeAudioTrigger {
+  event: BeMusicEvent;
+  seconds: number;
+  channel: string;
+}
+
 const AUTO_AUDIO_CHUNK_FRAMES = 256;
 const MANUAL_AUDIO_CHUNK_FRAMES = 256;
 const MANUAL_AUDIO_TARGET_LEAD_MS = 10;
@@ -213,6 +219,8 @@ const AUDIO_TARGET_LEAD_STEP_UP_MS = 1.5;
 const AUDIO_TARGET_LEAD_STEP_DOWN_MS = 0.5;
 const DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS = 0.18;
 const DEBUG_ACTIVE_AUDIO_SAMPLE_RATE = 44_100;
+const RUNTIME_AUDIO_SAMPLE_RATE = 44_100;
+const REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS = 1e-6;
 const DEFAULT_COMPRESSOR_THRESHOLD_DB = -12;
 const DEFAULT_COMPRESSOR_RATIO = 2.5;
 const DEFAULT_COMPRESSOR_ATTACK_MS = 8;
@@ -365,15 +373,18 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
   const resolvedJson = controlFlowResolution.resolvedJson;
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
+  const inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
   const speed = options.speed ?? 1;
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
+  const realtimeAudioTriggers = collectRealtimeAudioTriggers(resolvedJson, inferBmsLnTypeWhenMissing);
+  const realtimeAudioEndSeconds = options.audio === false ? 0 : (realtimeAudioTriggers.at(-1)?.seconds ?? 0);
 
   const extractedNotes = extractTimedNotes(resolvedJson, {
     includeLandmine: true,
     includeInvisible: options.showInvisibleNotes === true,
-    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+    inferBmsLnTypeWhenMissing,
   });
   const notes = extractedNotes.playableNotes;
   const landmineNotes = extractedNotes.landmineNotes;
@@ -383,6 +394,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     notes.at(-1)?.seconds ?? 0,
     landmineNotes.at(-1)?.seconds ?? 0,
     invisibleNotes.at(-1)?.seconds ?? 0,
+    realtimeAudioEndSeconds,
   );
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
@@ -437,7 +449,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const autoDebugAudioEstimator = options.debugActiveAudio
     ? await createDebugActiveAudioEstimator(resolvedJson, {
         baseDir: options.audioBaseDir,
-        inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+        inferBmsLnTypeWhenMissing,
       })
     : undefined;
   const resolveDebugActiveAudioState = (
@@ -492,6 +504,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const canCaptureInput = process.stdin.isTTY;
   let inputCaptureStopped = false;
   let playbackClock: PlaybackClock | undefined;
+  let realtimeAudioTriggerIndex = 0;
 
   const stopInputCapture = (): void => {
     if (!canCaptureInput || inputCaptureStopped) {
@@ -565,6 +578,22 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     }
   };
 
+  const triggerRealtimeAudioEvents = (referenceSeconds: number): void => {
+    const triggerEvent = audioSession?.triggerEvent;
+    if (!triggerEvent) {
+      return;
+    }
+    const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+    while (realtimeAudioTriggerIndex < realtimeAudioTriggers.length) {
+      const trigger = realtimeAudioTriggers[realtimeAudioTriggerIndex]!;
+      if (trigger.seconds > safeReferenceSeconds) {
+        break;
+      }
+      triggerEvent(trigger.event);
+      realtimeAudioTriggerIndex += 1;
+    }
+  };
+
   if (canCaptureInput) {
     readline.emitKeypressEvents(process.stdin);
     process.stdin.setRawMode(true);
@@ -628,6 +657,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             continue;
           }
           const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+          triggerRealtimeAudioEvents(nowSec);
           markExpiredLandmines(nowSec);
           markExpiredInvisibleNotes(nowSec);
           const nowBeat = beatAtSeconds(nowSec);
@@ -736,6 +766,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
   const resolvedJson = controlFlowResolution.resolvedJson;
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
+  const inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
   const autoScratchEnabled = options.autoScratch === true;
   const speed = options.speed ?? 1;
   const judgeWindows = resolveJudgeWindowsMs(resolvedJson, options.judgeWindowMs);
@@ -743,11 +774,18 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
+  const nonPlayableRealtimeAudioTriggers = collectRealtimeAudioTriggers(
+    resolvedJson,
+    inferBmsLnTypeWhenMissing,
+    (channel) => !isPlayLaneChannelForVolumeControl(channel),
+  );
+  const nonPlayableRealtimeAudioEndSeconds =
+    options.audio === false ? 0 : (nonPlayableRealtimeAudioTriggers.at(-1)?.seconds ?? 0);
 
   const extractedNotes = extractTimedNotes(resolvedJson, {
     includeLandmine: true,
     includeInvisible: options.showInvisibleNotes === true,
-    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+    inferBmsLnTypeWhenMissing,
   });
   const notes = extractedNotes.playableNotes;
   const landmineNotes = extractedNotes.landmineNotes;
@@ -757,6 +795,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     notes.at(-1)?.seconds ?? 0,
     landmineNotes.at(-1)?.seconds ?? 0,
     invisibleNotes.at(-1)?.seconds ?? 0,
+    nonPlayableRealtimeAudioEndSeconds,
   );
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
@@ -893,6 +932,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let remainingScorableNotes = scorableNotes.length;
   let remainingLandmineNotes = landmineNotes.length;
   let remainingInvisibleNotes = invisibleNotes.length;
+  let nonPlayableRealtimeAudioTriggerIndex = 0;
 
   const markScorableJudged = (note: TimedPlayableNote): boolean => {
     if (note.judged) {
@@ -1069,6 +1109,22 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     } else {
       tui.setLatestJudge('POOR');
       tui.setCombo(combo);
+    }
+  };
+
+  const triggerNonPlayableRealtimeAudioEvents = (referenceSeconds: number): void => {
+    const triggerEvent = audioSession?.triggerEvent;
+    if (!triggerEvent) {
+      return;
+    }
+    const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+    while (nonPlayableRealtimeAudioTriggerIndex < nonPlayableRealtimeAudioTriggers.length) {
+      const trigger = nonPlayableRealtimeAudioTriggers[nonPlayableRealtimeAudioTriggerIndex]!;
+      if (trigger.seconds > safeReferenceSeconds) {
+        break;
+      }
+      triggerEvent(trigger.event);
+      nonPlayableRealtimeAudioTriggerIndex += 1;
     }
   };
 
@@ -1378,6 +1434,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const nowSec = elapsedMsToGameSeconds(nowMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
 
+      triggerNonPlayableRealtimeAudioEvents(nowSec);
+
       for (const channel of activeKittyPressedChannels) {
         if (!activeLongNotesByChannel.has(channel)) {
           continue;
@@ -1622,56 +1680,35 @@ async function createAudioSessionIfEnabled(
   const playVolume = normalizePlayVolume(options.playVolume);
   const inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
   const chartWavGain = resolveChartVolWavGain(json);
-  const lnobjEndEvents = mode === 'manual' ? collectLnobjEndEvents(json) : undefined;
-  const renderOptions = {
-    baseDir: options.audioBaseDir ?? process.cwd(),
-    tailSeconds: options.audioTailSeconds ?? 1.5,
-    gain: chartWavGain,
-    inferBmsLnTypeWhenMissing,
-  } as const;
+  const lnobjEndEvents = collectLnobjEndEvents(json);
+  const runtimeSampleRate = RUNTIME_AUDIO_SAMPLE_RATE;
+
   onLoadProgress?.({
     ratio: 0.05,
-    message: 'Rendering playback buffer...',
+    message: 'Preparing real-time key sounds...',
   });
-  const rendered =
-    mode === 'manual'
-      ? applyGainToRenderResult(
-          await renderJson(stripPlayableEvents(json), {
-            ...renderOptions,
-            onSampleLoadProgress: (progress) => {
-              if (progress.stage !== 'reading') {
-                return;
-              }
-              onLoadProgress?.({
-                ratio: 0.2,
-                message: 'Loading audio file...',
-                detail: formatSampleLoadDetail(progress),
-              });
-            },
-          }),
-          bgmVolume,
-        )
-      : await renderAutoMixWithVolumeControls(json, bgmVolume, playVolume, {
-          ...renderOptions,
-          useBgmHeadroomControl: shouldUseAutoMixBgmHeadroomControl(options),
-          onSampleLoadProgress: (progress) => {
-            if (progress.stage !== 'reading') {
-              return;
-            }
-            onLoadProgress?.({
-              ratio: 0.2,
-              message: 'Loading audio file...',
-              detail: formatSampleLoadDetail(progress),
-            });
-          },
-        });
+  const samplesByKey = await buildRuntimeSampleMap(
+    json,
+    options,
+    runtimeSampleRate,
+    (progress) => {
+      const ratio = progress.total <= 0 ? 1 : progress.loaded / progress.total;
+      onLoadProgress?.({
+        ratio: 0.08 + Math.max(0, Math.min(1, ratio)) * 0.72,
+        message: `Loading key sounds... (${progress.loaded}/${progress.total})`,
+        detail: progress.samplePath ?? progress.sampleKey,
+      });
+    },
+    chartWavGain,
+    inferBmsLnTypeWhenMissing,
+  );
   onLoadProgress?.({
-    ratio: 0.55,
+    ratio: 0.82,
     message: 'Initializing audio backend...',
   });
-  const padded = addHeadPadding(rendered, headPaddingMs);
+  const background = createSilentRenderResult(runtimeSampleRate);
 
-  const sampleRate = toPlaybackSampleRate(padded.sampleRate, options.speed ?? 1);
+  const sampleRate = toPlaybackSampleRate(background.sampleRate, options.speed ?? 1);
   const samplesPerFrame = mode === 'manual' ? MANUAL_AUDIO_CHUNK_FRAMES : AUTO_AUDIO_CHUNK_FRAMES;
   const leadTuning = createAudioLeadTuning(options, mode);
   const outputDynamics = createOutputDynamicsConfig(options, sampleRate);
@@ -1692,25 +1729,7 @@ async function createAudioSessionIfEnabled(
 
   process.stdout.write(`Audio backend: ${output.label}\n`);
 
-  const playableSamples =
-    mode === 'manual'
-      ? await buildPlayableSampleMap(
-          json,
-          options,
-          padded.sampleRate,
-          (progress) => {
-            const ratio = progress.total <= 0 ? 1 : progress.loaded / progress.total;
-            onLoadProgress?.({
-              ratio: 0.72 + Math.max(0, Math.min(1, ratio)) * 0.26,
-              message: `Loading key sounds... (${progress.loaded}/${progress.total})`,
-              detail: progress.samplePath ?? progress.sampleKey,
-            });
-          },
-          chartWavGain * playVolume,
-        )
-      : undefined;
-  const playableNotePlaybackMap =
-    mode === 'manual' ? buildPlayableNotePlaybackMap(json, inferBmsLnTypeWhenMissing) : undefined;
+  const eventPlaybackMap = buildEventPlaybackMap(json, inferBmsLnTypeWhenMissing);
   onLoadProgress?.({
     ratio: 1,
     message: 'Audio ready.',
@@ -1762,8 +1781,7 @@ async function createAudioSessionIfEnabled(
 
       playbackTask = playMixedPcmThroughOutput({
         output,
-        background: padded,
-        playableSamples,
+        background,
         activeVoices,
         shouldStop: () => abortRequested,
         isDraining: () => draining,
@@ -1791,48 +1809,50 @@ async function createAudioSessionIfEnabled(
     },
     getActiveAudioFiles: () => collectActiveAudioFileNames(activeVoices),
     getActiveAudioVoiceCount: () => activeVoices.length,
-    triggerEvent:
-      mode === 'manual'
-        ? (event: BeMusicEvent) => {
-            if (draining || abortRequested || paused) {
-              return;
-            }
-            if (lnobjEndEvents?.has(event)) {
-              return;
-            }
-            const normalized = normalizeObjectKey(event.value);
-            const sample = playableSamples?.get(normalized);
-            if (!sample) {
-              return;
-            }
-            const playback = playableNotePlaybackMap?.get(event);
-            const offsetSeconds = playback?.offsetSeconds ?? 0;
-            const offsetFrames = Math.max(0, Math.round(offsetSeconds * sample.sampleRate));
-            const durationFrames =
-              typeof playback?.durationSeconds === 'number' && Number.isFinite(playback.durationSeconds)
-                ? Math.max(1, Math.round(playback.durationSeconds * sample.sampleRate))
-                : sample.left.length - offsetFrames;
-            const endPosition = Math.min(sample.left.length, offsetFrames + durationFrames);
-            if (offsetFrames >= endPosition) {
-              return;
-            }
-            if (json.sourceFormat === 'bms') {
-              removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
-            }
-            if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
-              return;
-            }
-            activeVoices.push({
-              sample,
-              position: offsetFrames,
-              endPosition,
-              channel: normalizeChannel(event.channel),
-              sampleKey: normalized,
-              samplePath: json.resources.wav[normalized],
-              sliceId: playback?.sliceId,
-            });
-          }
-        : undefined,
+    triggerEvent: (event: BeMusicEvent) => {
+      if (draining || abortRequested || paused) {
+        return;
+      }
+      if (lnobjEndEvents.has(event)) {
+        return;
+      }
+      const normalized = normalizeObjectKey(event.value);
+      const sample = samplesByKey.get(normalized);
+      if (!sample) {
+        return;
+      }
+      const playback = eventPlaybackMap.get(event);
+      const offsetSeconds = playback?.offsetSeconds ?? 0;
+      const offsetFrames = Math.max(0, Math.round(offsetSeconds * sample.sampleRate));
+      const durationFrames =
+        typeof playback?.durationSeconds === 'number' && Number.isFinite(playback.durationSeconds)
+          ? Math.max(1, Math.round(playback.durationSeconds * sample.sampleRate))
+          : sample.left.length - offsetFrames;
+      const endPosition = Math.min(sample.left.length, offsetFrames + durationFrames);
+      if (offsetFrames >= endPosition) {
+        return;
+      }
+      if (json.sourceFormat === 'bms') {
+        removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
+      }
+      if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
+        return;
+      }
+      const voiceGain = resolveTriggerVoiceGain(event.channel, playVolume, bgmVolume);
+      if (voiceGain <= 0) {
+        return;
+      }
+      activeVoices.push({
+        sample,
+        position: offsetFrames,
+        endPosition,
+        channel: normalizeChannel(event.channel),
+        sampleKey: normalized,
+        samplePath: json.resources.wav[normalized],
+        sliceId: playback?.sliceId,
+        gain: voiceGain,
+      });
+    },
     stopChannel:
       mode === 'manual'
         ? (channel: string) => {
@@ -1854,6 +1874,7 @@ interface ActiveVoice {
   sampleKey?: string;
   samplePath?: string;
   sliceId?: string;
+  gain: number;
 }
 
 interface DebugSampleWindow {
@@ -2063,7 +2084,6 @@ function advanceAndPruneActiveVoices(activeVoices: ActiveVoice[], chunkFrames: n
 async function playMixedPcmThroughOutput(params: {
   output: AudioSink;
   background: RenderResult;
-  playableSamples?: Map<string, RenderResult>;
   activeVoices: ActiveVoice[];
   shouldStop: () => boolean;
   isDraining: () => boolean;
@@ -2073,8 +2093,7 @@ async function playMixedPcmThroughOutput(params: {
   outputDynamics?: OutputDynamicsConfig;
   playbackSampleRate: number;
 }): Promise<void> {
-  const { output, background, activeVoices, shouldStop, isDraining, isPaused, mode, leadTuning, playbackSampleRate } =
-    params;
+  const { output, background, activeVoices, shouldStop, isDraining, isPaused, mode, leadTuning, playbackSampleRate } = params;
 
   const chunkFrames = mode === 'manual' ? MANUAL_AUDIO_CHUNK_FRAMES : AUTO_AUDIO_CHUNK_FRAMES;
   // Keep one reusable PCM buffer and fill through Int16Array to minimize per-sample write overhead.
@@ -2120,7 +2139,7 @@ async function playMixedPcmThroughOutput(params: {
     );
 
     const backgroundEnded = playhead >= background.left.length;
-    if ((mode === 'auto' || isDraining()) && backgroundEnded && activeVoices.length === 0) {
+    if (isDraining() && backgroundEnded && activeVoices.length === 0) {
       break;
     }
 
@@ -2144,11 +2163,20 @@ async function playMixedPcmThroughOutput(params: {
       }
       const voiceLeft = voice.sample.left;
       const voiceRight = voice.sample.right;
+      const voiceGain = voice.gain;
       let sourceFrame = voice.position;
-      for (let frame = 0; frame < voiceFrames; frame += 1) {
-        mixedLeft[frame] += voiceLeft[sourceFrame];
-        mixedRight[frame] += voiceRight[sourceFrame];
-        sourceFrame += 1;
+      if (Math.abs(voiceGain - 1) <= 1e-9) {
+        for (let frame = 0; frame < voiceFrames; frame += 1) {
+          mixedLeft[frame] += voiceLeft[sourceFrame];
+          mixedRight[frame] += voiceRight[sourceFrame];
+          sourceFrame += 1;
+        }
+      } else {
+        for (let frame = 0; frame < voiceFrames; frame += 1) {
+          mixedLeft[frame] += voiceLeft[sourceFrame] * voiceGain;
+          mixedRight[frame] += voiceRight[sourceFrame] * voiceGain;
+          sourceFrame += 1;
+        }
       }
     }
 
@@ -2449,20 +2477,18 @@ async function renderAutoMixWithVolumeControls(
   return mixRenderResults(applyGainToRenderResult(scaledBgm, bgmHeadroomGain), scaledPlayable);
 }
 
-async function buildPlayableSampleMap(
+async function buildRuntimeSampleMap(
   json: BeMusicJson,
   options: PlayerOptions,
   sampleRate: number,
   onProgress?: (progress: { loaded: number; total: number; sampleKey: string; samplePath?: string }) => void,
   chartWavGain = 1,
+  inferBmsLnTypeWhenMissing = false,
 ): Promise<Map<string, RenderResult>> {
   const sampleMap = new Map<string, RenderResult>();
   const keySet = new Set<string>();
-  for (const event of json.events) {
-    if (!isPlayableEventChannel(event.channel)) {
-      continue;
-    }
-    keySet.add(normalizeObjectKey(event.value));
+  for (const trigger of collectRealtimeAudioTriggers(json, inferBmsLnTypeWhenMissing)) {
+    keySet.add(trigger.sampleKey);
   }
   const keys = [...keySet];
 
@@ -2513,16 +2539,13 @@ async function buildPlayableSampleMap(
   return sampleMap;
 }
 
-function buildPlayableNotePlaybackMap(
+function buildEventPlaybackMap(
   json: BeMusicJson,
   inferBmsLnTypeWhenMissing: boolean,
 ): Map<BeMusicEvent, PlayableNotePlayback> {
   const playbackMap = new Map<BeMusicEvent, PlayableNotePlayback>();
   const resolver = createTimingResolver(json);
   for (const trigger of collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing })) {
-    if (!isPlayableEventChannel(trigger.channel)) {
-      continue;
-    }
     playbackMap.set(trigger.event, {
       offsetSeconds: trigger.sampleOffsetSeconds,
       durationSeconds: trigger.sampleDurationSeconds,
@@ -2530,6 +2553,39 @@ function buildPlayableNotePlaybackMap(
     });
   }
   return playbackMap;
+}
+
+function collectRealtimeAudioTriggers(
+  json: BeMusicJson,
+  inferBmsLnTypeWhenMissing: boolean,
+  includeChannel: (channel: string) => boolean = () => true,
+): Array<TimedSampleTrigger & RealtimeAudioTrigger> {
+  const resolver = createTimingResolver(json);
+  return collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing })
+    .filter((trigger) => includeChannel(trigger.channel))
+    .map((trigger) => ({
+      ...trigger,
+      seconds: Math.max(0, trigger.seconds),
+      channel: normalizeChannel(trigger.channel),
+    }))
+    .sort((left, right) => left.seconds - right.seconds);
+}
+
+function resolveTriggerVoiceGain(channel: string, playVolume: number, bgmVolume: number): number {
+  return isPlayLaneChannelForVolumeControl(channel) ? playVolume : bgmVolume;
+}
+
+function createSilentRenderResult(sampleRate: number): RenderResult {
+  const safeSampleRate = Number.isFinite(sampleRate) ? Math.max(8_000, Math.floor(sampleRate)) : RUNTIME_AUDIO_SAMPLE_RATE;
+  const left = new Float32Array(0);
+  const right = new Float32Array(0);
+  return {
+    sampleRate: safeSampleRate,
+    left,
+    right,
+    durationSeconds: 0,
+    peak: 0,
+  };
 }
 
 function normalizeBgmVolume(value: number | undefined): number {
