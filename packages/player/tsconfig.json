@@ -2,9 +2,11 @@
   "extends": "../../tsconfig.options.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "emitDeclarationOnly": true
   },
   "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"],
   "references": [
     { "path": "../json" },
     { "path": "../parser" },

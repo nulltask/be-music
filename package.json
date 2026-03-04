@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.30.3",
   "description": "Be-Music tooling monorepo",
   "scripts": {
-    "build": "pnpm -r --sort --workspace-concurrency=Infinity run build:bundle && tsgo -b tsconfig.json --emitDeclarationOnly --force",
+    "build": "pnpm -r --sort --workspace-concurrency=Infinity run build:bundle && tsgo -b tsconfig.json",
     "clean": "pnpm -r run clean",
     "typecheck": "pnpm -r --parallel run typecheck",
     "lint": "pnpm -r --parallel run lint",
