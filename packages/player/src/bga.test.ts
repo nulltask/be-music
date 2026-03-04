@@ -85,6 +85,46 @@ test('player bga: composites 4-bit indexed bmp layer with black treated as trans
   }
 });
 
+test('player bga: composites channel 0A above channel 07', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-layer2-'));
+  try {
+    await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+    await writeBmp(join(baseDir, 'layer.bmp'), 256, 256, (x) =>
+      x < 128 ? { r: 0, g: 0, b: 0, a: 255 } : { r: 0, g: 255, b: 0, a: 255 },
+    );
+    await writePng(join(baseDir, 'layer2.png'), 256, 256, (x) =>
+      x < 128 ? { r: 0, g: 0, b: 255, a: 255 } : { r: 0, g: 0, b: 0, a: 0 },
+    );
+
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bmp['01'] = 'base.png';
+    json.resources.bmp['02'] = 'layer.bmp';
+    json.resources.bmp['03'] = 'layer2.png';
+    json.events = [
+      { measure: 0, channel: '04', position: [0, 1], value: '01' },
+      { measure: 0, channel: '07', position: [0, 1], value: '02' },
+      { measure: 0, channel: '0A', position: [0, 1], value: '03' },
+    ];
+
+    const renderer = await createBgaAnsiRenderer(json, {
+      baseDir,
+      width: 40,
+      height: 20,
+    });
+    expect(renderer).toBeDefined();
+
+    const lines = renderer?.getAnsiLines(0);
+    expect(lines).toBeDefined();
+    const pixels = parseAnsiPixels(lines ?? []);
+
+    expect(pixels[10]?.[5]).toEqual({ r: 0, g: 0, b: 255 });
+    expect(pixels[10]?.[30]).toEqual({ r: 0, g: 255, b: 0 });
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
 test('player bga: renders images smaller than 256x256 centered on X and top-aligned on Y', async () => {
   const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-small-'));
   try {
@@ -245,6 +285,48 @@ test('player bga: clears POOR overlay and resumes normal BGA', async () => {
   }
 });
 
+test('player bga: prioritizes POOR over 04/07/0A while active', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-priority-'));
+  try {
+    await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+    await writePng(join(baseDir, 'layer.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+    await writePng(join(baseDir, 'layer2.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+    await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 255, g: 255, b: 0, a: 255 }));
+
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bmp['01'] = 'base.png';
+    json.resources.bmp['02'] = 'layer.png';
+    json.resources.bmp['03'] = 'layer2.png';
+    json.resources.bmp['04'] = 'poor.png';
+    json.events = [
+      { measure: 0, channel: '04', position: [0, 1], value: '01' },
+      { measure: 0, channel: '07', position: [0, 1], value: '02' },
+      { measure: 0, channel: '0A', position: [0, 1], value: '03' },
+      { measure: 0, channel: '06', position: [0, 1], value: '04' },
+    ];
+
+    const renderer = await createBgaAnsiRenderer(json, {
+      baseDir,
+      width: 40,
+      height: 20,
+    });
+    expect(renderer).toBeDefined();
+
+    const beforePoor = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+    expect(beforePoor[10]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
+
+    renderer?.triggerPoor(0);
+    const duringPoor = parseAnsiPixels(renderer?.getAnsiLines(0.5) ?? []);
+    expect(duringPoor[10]?.[20]).toEqual({ r: 255, g: 255, b: 0 });
+
+    const afterPoor = parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? []);
+    expect(afterPoor[10]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
 test('player bga: uses #BMP00 as default POOR image before first channel 06 cue when #POORBGA is unspecified', async () => {
   const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-bmp00-'));
   try {
@@ -351,6 +433,7 @@ test('player bga: does not apply terminal aspect correction twice for video fram
     baseTimeline: [{ seconds: 0, key: '01' }],
     poorTimeline: [],
     layerTimeline: [],
+    layer2Timeline: [],
     baseSourceFramesByKey: new Map([
       [
         '01',
@@ -362,6 +445,7 @@ test('player bga: does not apply terminal aspect correction twice for video fram
     ]) as any,
     poorSourceFramesByKey: new Map(),
     layerSourceFramesByKey: new Map(),
+    layer2SourceFramesByKey: new Map(),
     stageFileSourceFrame: undefined,
     missingBaseSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
     missingPoorSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
