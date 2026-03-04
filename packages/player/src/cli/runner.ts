@@ -177,6 +177,13 @@ interface RawInputCapture {
   restore: () => void;
 }
 
+interface ResultScreenOptions {
+  allowReplay?: boolean;
+  returnActionLabel?: string;
+}
+
+type ResultScreenExitAction = Exclude<ResultScreenAction, 'replay'>;
+
 export async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
   if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
@@ -223,7 +230,12 @@ export async function main(): Promise<void> {
       nextPersistedConfig = await runDirectoryInput(inputPath, args, nextPersistedConfig);
       return;
     }
-    await playChartOnce(inputPath, args);
+    const action = await playSingleChartUntilExit(inputPath, dirname(inputPath), args);
+    if (action === 'ctrl-c') {
+      nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args, nextPersistedConfig);
+      process.exitCode = 130;
+      return;
+    }
     nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args, nextPersistedConfig);
   } catch (error) {
     if (error instanceof PlayerInterruptedError) {
@@ -262,7 +274,7 @@ async function runDirectoryInput(
     return persistedConfig;
   }
 
-  if (!process.stdin.isTTY || !process.stdout.isTTY || candidates.length === 1) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
     const selected = candidates[0];
     process.stdout.write(`Selected chart: ${selected}\n`);
     try {
@@ -273,6 +285,36 @@ async function runDirectoryInput(
         selected,
         persistedConfig,
       );
+    } catch (error) {
+      if (error instanceof PlayerInterruptedError) {
+        persistedConfig = resolvePersistedConfigForSongSelect(
+          resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
+          rootDir,
+          selected,
+          persistedConfig,
+        );
+        process.exitCode = error.exitCode;
+        return persistedConfig;
+      }
+      throw error;
+    }
+    return persistedConfig;
+  }
+
+  if (candidates.length === 1) {
+    const selected = candidates[0];
+    process.stdout.write(`Selected chart: ${selected}\n`);
+    try {
+      const action = await playSingleChartUntilExit(selected, rootDir, args);
+      persistedConfig = resolvePersistedConfigForSongSelect(
+        resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
+        rootDir,
+        selected,
+        persistedConfig,
+      );
+      if (action === 'ctrl-c') {
+        process.exitCode = 130;
+      }
     } catch (error) {
       if (error instanceof PlayerInterruptedError) {
         persistedConfig = resolvePersistedConfigForSongSelect(
@@ -605,6 +647,20 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     rank: json.metadata.rank,
     playLevel: json.metadata.playLevel,
   };
+}
+
+async function playSingleChartUntilExit(chartPath: string, rootDir: string, args: CliArgs): Promise<ResultScreenExitAction> {
+  while (true) {
+    const played = await playChartOnce(chartPath, args);
+    const action = await showResultScreen(rootDir, played, {
+      allowReplay: true,
+      returnActionLabel: 'exit',
+    });
+    if (action === 'replay') {
+      continue;
+    }
+    return action;
+  }
 }
 
 function sanitizeMetadataText(value: string | undefined): string | undefined {
@@ -1291,7 +1347,13 @@ export function resolveSongSelectInitialFocusKey(
   return createChartFocusKey(normalized);
 }
 
-async function showResultScreen(rootDir: string, played: PlayedChartResult): Promise<ResultScreenAction> {
+async function showResultScreen(
+  rootDir: string,
+  played: PlayedChartResult,
+  options: ResultScreenOptions = {},
+): Promise<ResultScreenAction> {
+  const allowReplay = options.allowReplay ?? true;
+  const returnActionLabel = options.returnActionLabel ?? 'return to song selection';
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     return 'enter';
   }
@@ -1332,8 +1394,10 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
     lines.push(`FAST ${played.summary.fast}  SLOW ${played.summary.slow}`);
     lines.push(`GOOD ${played.summary.good}  BAD ${played.summary.bad}  POOR ${played.summary.poor}`);
     lines.push('');
-    lines.push('Press r to replay this chart.');
-    lines.push('Press Enter or Esc to return to song selection.');
+    if (allowReplay) {
+      lines.push('Press r to replay this chart.');
+    }
+    lines.push(`Press Enter or Esc to ${returnActionLabel}.`);
     lines.push('Press Ctrl+C to quit.');
     process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J`);
   };
@@ -1354,9 +1418,13 @@ async function showResultScreen(rootDir: string, played: PlayedChartResult): Pro
 
     const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
       const action = resolveResultScreenActionFromKey(chunk, key);
-      if (action) {
-        cleanup(action);
+      if (!action) {
+        return;
       }
+      if (action === 'replay' && !allowReplay) {
+        return;
+      }
+      cleanup(action);
     };
 
     inputCapture.stdin.on('keypress', onKeyPress);
