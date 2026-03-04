@@ -71,5 +71,6 @@
     "source.fixAll.oxc": "always"
   },
   "oxc.fmt.configPath": ".oxfmtrc.json",
-  "terminal.integrated.enableKittyKeyboardProtocol": true
+  "terminal.integrated.enableKittyKeyboardProtocol": true,
+  "typescript.experimental.useTsgo": true
 }
