@@ -56,6 +56,7 @@ export interface RenderOptions {
   gain?: number;
   baseDir?: string;
   fallbackToneSeconds?: number;
+  resolveTriggerGain?: (trigger: TimedSampleTrigger) => number;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
 }
 
@@ -184,6 +185,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const gain = options.gain ?? DEFAULT_GAIN;
   const fallbackToneSeconds = options.fallbackToneSeconds ?? 0.08;
   const baseDir = options.baseDir ?? process.cwd();
+  const resolveTriggerGain = options.resolveTriggerGain;
   const onSampleLoadProgress = options.onSampleLoadProgress;
 
   const timingContext = createTimingBuildContext(json);
@@ -196,6 +198,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const scheduled: Array<{
     start: number;
     sample: StereoSample;
+    triggerGain: number;
     sampleOffsetFrames: number;
     sampleMaxFrames?: number;
   }> = [];
@@ -229,6 +232,8 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
     if (sampleMaxFrames <= 0) {
       continue;
     }
+    const rawTriggerGain = resolveTriggerGain?.(trigger) ?? 1;
+    const triggerGain = Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1;
 
     const start = Math.max(0, Math.round(trigger.seconds * sampleRate));
     if (json.sourceFormat === 'bmson' && trigger.sampleSliceId) {
@@ -249,18 +254,31 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
       }
     }
 
-    const scheduleIndex = scheduled.push({ start, sample, sampleOffsetFrames, sampleMaxFrames }) - 1;
+    const scheduleIndex = scheduled.push({ start, sample, triggerGain, sampleOffsetFrames, sampleMaxFrames }) - 1;
     if (json.sourceFormat === 'bms') {
       latestBmsScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
     }
-    maxFrame = Math.max(maxFrame, start + sampleMaxFrames + Math.round(tailSeconds * sampleRate));
+    if (triggerGain > 0) {
+      maxFrame = Math.max(maxFrame, start + sampleMaxFrames + Math.round(tailSeconds * sampleRate));
+    }
   }
 
   const left = new Float32Array(maxFrame);
   const right = new Float32Array(maxFrame);
 
   for (const item of scheduled) {
-    mixSample(left, right, item.sample, item.start, gain, item.sampleOffsetFrames, item.sampleMaxFrames);
+    if (item.triggerGain <= 0) {
+      continue;
+    }
+    mixSample(
+      left,
+      right,
+      item.sample,
+      item.start,
+      gain * item.triggerGain,
+      item.sampleOffsetFrames,
+      item.sampleMaxFrames,
+    );
   }
 
   const peak = measurePeak(left, right);

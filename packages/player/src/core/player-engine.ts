@@ -2240,6 +2240,15 @@ async function renderAutoMixWithVolumeControls(
     return renderJson(json, options);
   }
 
+  if (options.useBgmHeadroomControl !== true) {
+    return renderJson(json, {
+      ...options,
+      normalize: false,
+      resolveTriggerGain: (trigger) =>
+        isPlayLaneChannelForVolumeControl(trigger.channel) ? playVolume : bgmVolume,
+    });
+  }
+
   const playableOnly = stripNonPlayableEvents(json);
   if (bgmVolume === 0) {
     return applyGainToRenderResult(await renderJson(playableOnly, options), playVolume);
@@ -2260,9 +2269,6 @@ async function renderAutoMixWithVolumeControls(
   ]);
   const scaledPlayable = applyGainToRenderResult(playableRendered, playVolume);
   const scaledBgm = applyGainToRenderResult(bgmRendered, bgmVolume);
-  if (options.useBgmHeadroomControl !== true) {
-    return mixRenderResults(scaledBgm, scaledPlayable);
-  }
   const bgmHeadroomGain = resolveBgmHeadroomGain(scaledPlayable, scaledBgm);
 
   return mixRenderResults(applyGainToRenderResult(scaledBgm, bgmHeadroomGain), scaledPlayable);

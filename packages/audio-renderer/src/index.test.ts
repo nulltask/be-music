@@ -177,6 +177,41 @@ test('audio-renderer: bms retrigger on same key cuts previous voice immediately'
   expect(maxDeltaBetweenResults(retriggerResult, singleResult, startFrame, endFrame)).toBeLessThan(1e-6);
 });
 
+test('audio-renderer: per-trigger gain keeps global retrigger behavior across channels', async () => {
+  const mixed = createEmptyJson('bms');
+  mixed.metadata.bpm = 120;
+  mixed.resources.wav['01'] = 'not-found.wav';
+  mixed.events = [
+    { measure: 0, channel: '01', position: [0, 1], value: '01' },
+    { measure: 0, channel: '11', position: [1, 8], value: '01' },
+  ];
+
+  const single = createEmptyJson('bms');
+  single.metadata.bpm = 120;
+  single.resources.wav['01'] = 'not-found.wav';
+  single.events = [{ measure: 0, channel: '11', position: [1, 8], value: '01' }];
+
+  const [mixedResult, singleResult] = await Promise.all([
+    renderJson(mixed, {
+      sampleRate: 44_100,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1.2,
+      resolveTriggerGain: (trigger) => (trigger.channel === '01' ? 0.4 : 1),
+    }),
+    renderJson(single, {
+      sampleRate: 44_100,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1.2,
+    }),
+  ]);
+
+  const startFrame = Math.round(0.3 * 44_100);
+  const endFrame = Math.round(0.7 * 44_100);
+  expect(maxDeltaBetweenResults(mixedResult, singleResult, startFrame, endFrame)).toBeLessThan(1e-6);
+});
+
 test('audio-renderer: bms retrigger on different keys does not cut previous voice even with same file', async () => {
   const overlap = createEmptyJson('bms');
   overlap.metadata.bpm = 120;
