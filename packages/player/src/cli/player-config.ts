@@ -16,6 +16,7 @@ export interface PlayerConfigArgs extends PlayModeArgs {
 export interface PersistedPlayerConfig {
   playMode: PlayMode;
   highSpeed: number;
+  lastSelectedChartFileByDirectory?: Record<string, string>;
 }
 
 export interface CliConfigOverrideFlags {
@@ -92,11 +93,21 @@ export function formatHighSpeedLabel(value: number): string {
   return normalizeHighSpeedValue(value).toFixed(1);
 }
 
-export function resolvePersistedPlayerConfigFromArgs(args: PlayerConfigArgs): PersistedPlayerConfig {
-  return {
+export function resolvePersistedPlayerConfigFromArgs(
+  args: PlayerConfigArgs,
+  previous?: PersistedPlayerConfig,
+): PersistedPlayerConfig {
+  const resolved: PersistedPlayerConfig = {
     playMode: resolvePlayModeFromArgs(args),
     highSpeed: normalizeHighSpeedValue(args.highSpeed),
   };
+  if (previous?.lastSelectedChartFileByDirectory) {
+    const copied = copyLastSelectedChartFileByDirectory(previous.lastSelectedChartFileByDirectory);
+    if (copied) {
+      resolved.lastSelectedChartFileByDirectory = copied;
+    }
+  }
+  return resolved;
 }
 
 export function createDefaultPersistedPlayerConfig(): PersistedPlayerConfig {
@@ -164,11 +175,22 @@ function parsePersistedPlayerConfig(value: unknown): PersistedPlayerConfig {
   if (typeof value !== 'object' || value === null) {
     return defaults;
   }
-  const objectValue = value as { playMode?: unknown; highSpeed?: unknown };
-  return {
+  const objectValue = value as {
+    playMode?: unknown;
+    highSpeed?: unknown;
+    lastSelectedChartFileByDirectory?: unknown;
+  };
+  const resolved: PersistedPlayerConfig = {
     playMode: parsePersistedPlayMode(objectValue.playMode) ?? defaults.playMode,
     highSpeed: parsePersistedHighSpeed(objectValue.highSpeed) ?? defaults.highSpeed,
   };
+  if (typeof objectValue.lastSelectedChartFileByDirectory === 'object' && objectValue.lastSelectedChartFileByDirectory) {
+    const copied = copyLastSelectedChartFileByDirectory(objectValue.lastSelectedChartFileByDirectory);
+    if (copied) {
+      resolved.lastSelectedChartFileByDirectory = copied;
+    }
+  }
+  return resolved;
 }
 
 export async function loadPersistedPlayerConfig(): Promise<PersistedPlayerConfig> {
@@ -192,5 +214,37 @@ export async function savePersistedPlayerConfig(config: PersistedPlayerConfig): 
     playMode: config.playMode,
     highSpeed: normalizeHighSpeedValue(config.highSpeed),
   };
+  if (config.lastSelectedChartFileByDirectory) {
+    const copied = copyLastSelectedChartFileByDirectory(config.lastSelectedChartFileByDirectory);
+    if (copied) {
+      normalized.lastSelectedChartFileByDirectory = copied;
+    }
+  }
   await writeFile(configPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
+}
+
+function copyLastSelectedChartFileByDirectory(value: unknown): Record<string, string> | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const entries = Object.entries(value as Record<string, unknown>);
+  const copied: Record<string, string> = {};
+  for (const [directory, filePath] of entries) {
+    const normalizedDirectory = directory.trim();
+    if (normalizedDirectory.length === 0) {
+      continue;
+    }
+    if (typeof filePath !== 'string') {
+      continue;
+    }
+    const normalizedFilePath = filePath.trim();
+    if (normalizedFilePath.length === 0) {
+      continue;
+    }
+    copied[normalizedDirectory] = normalizedFilePath;
+  }
+  if (Object.keys(copied).length === 0) {
+    return undefined;
+  }
+  return copied;
 }

@@ -6,10 +6,12 @@ import {
   formatPlayModeLabel,
   parseArgs,
   resolveCliConfigOverrideFlags,
+  resolvePersistedPlayerConfigFromArgs,
   resolveCircularSelectableIndex,
   resolvePageSelectableIndex,
   resolvePlayModeFromArgs,
   resolveResultScreenActionFromKey,
+  resolveSongSelectInitialFocusKey,
   resolveSongSelectNavigationAction,
   resolveVisibleEntryRange,
 } from './cli.ts';
@@ -61,6 +63,29 @@ describe('player cli', () => {
     );
     expect(resolvePlayModeFromArgs(merged)).toBe('auto');
     expect(merged.highSpeed).toBe(2);
+  });
+
+  test('cli: preserves per-directory selected chart files when resolving persisted config from args', () => {
+    const parsed = parseArgs(['chart.bms']);
+    const resolved = resolvePersistedPlayerConfigFromArgs(parsed, {
+      playMode: 'manual',
+      highSpeed: 1,
+      lastSelectedChartFileByDirectory: {
+        '/songs/a': '/songs/a/alpha.bms',
+        '/songs/b': '/songs/b/beta.bms',
+      },
+    });
+    expect(resolved.lastSelectedChartFileByDirectory).toEqual({
+      '/songs/a': '/songs/a/alpha.bms',
+      '/songs/b': '/songs/b/beta.bms',
+    });
+  });
+
+  test('cli: restores song-select focus by persisted chart filename when available', () => {
+    const files = ['/charts/a.bms', '/charts/b.bms', '/charts/c.bms'];
+    expect(resolveSongSelectInitialFocusKey(files, '/charts/b.bms')).toBe('chart:/charts/b.bms');
+    expect(resolveSongSelectInitialFocusKey(files, '/charts/missing.bms')).toBeUndefined();
+    expect(resolveSongSelectInitialFocusKey(files, undefined)).toBeUndefined();
   });
 
   test('cli: cycles song-select mode by a key in three states', () => {

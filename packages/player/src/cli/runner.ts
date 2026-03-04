@@ -67,6 +67,7 @@ export {
   cyclePlayMode,
   formatPlayModeLabel,
   resolveCliConfigOverrideFlags,
+  resolvePersistedPlayerConfigFromArgs,
   resolvePlayModeFromArgs,
 } from './player-config.ts';
 export {
@@ -199,7 +200,7 @@ export async function main(): Promise<void> {
     process.stdout.write(`Warning: failed to load ~/.be-music/player.json (${formatCliParseError(error)}).\n`);
   }
   args = applyPersistedPlayerConfigToArgs(args, persistedConfig, overrideFlags);
-  let nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args);
+  let nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args, persistedConfig);
 
   if (!args.input) {
     printUsage();
@@ -222,10 +223,10 @@ export async function main(): Promise<void> {
       return;
     }
     await playChartOnce(inputPath, args);
-    nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args);
+    nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args, nextPersistedConfig);
   } catch (error) {
     if (error instanceof PlayerInterruptedError) {
-      nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args);
+      nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args, nextPersistedConfig);
       process.exitCode = error.exitCode;
       return;
     }
@@ -244,10 +245,15 @@ async function runDirectoryInput(
   args: CliArgs,
   initialConfig: PersistedPlayerConfig,
 ): Promise<PersistedPlayerConfig> {
-  let persistedConfig: PersistedPlayerConfig = {
-    playMode: initialConfig.playMode,
-    highSpeed: normalizeHighSpeedValue(initialConfig.highSpeed),
-  };
+  let persistedConfig = resolvePersistedConfigForSongSelect(
+    {
+      playMode: initialConfig.playMode,
+      highSpeed: normalizeHighSpeedValue(initialConfig.highSpeed),
+    },
+    rootDir,
+    undefined,
+    initialConfig,
+  );
   const candidates = await listChartFiles(rootDir);
   if (candidates.length === 0) {
     process.stdout.write(`No chart files found in directory: ${rootDir}\n`);
@@ -260,10 +266,20 @@ async function runDirectoryInput(
     process.stdout.write(`Selected chart: ${selected}\n`);
     try {
       await playChartOnce(selected, args);
-      persistedConfig = resolvePersistedPlayerConfigFromArgs(args);
+      persistedConfig = resolvePersistedConfigForSongSelect(
+        resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
+        rootDir,
+        selected,
+        persistedConfig,
+      );
     } catch (error) {
       if (error instanceof PlayerInterruptedError) {
-        persistedConfig = resolvePersistedPlayerConfigFromArgs(args);
+        persistedConfig = resolvePersistedConfigForSongSelect(
+          resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
+          rootDir,
+          selected,
+          persistedConfig,
+        );
         process.exitCode = error.exitCode;
         return persistedConfig;
       }
@@ -279,6 +295,10 @@ async function runDirectoryInput(
 
   let state: DirectorySceneState = {
     kind: 'select',
+    focusKey: resolveSongSelectInitialFocusKey(
+      candidates,
+      resolveLastSelectedChartFileForDirectory(initialConfig, rootDir),
+    ),
     playMode: persistedConfig.playMode,
     highSpeed: persistedConfig.highSpeed,
   };
@@ -292,10 +312,15 @@ async function runDirectoryInput(
         initialPlayMode: state.playMode,
         initialHighSpeed: state.highSpeed,
       });
-      persistedConfig = {
-        playMode: selection.playMode,
-        highSpeed: normalizeHighSpeedValue(selection.highSpeed),
-      };
+      persistedConfig = resolvePersistedConfigForSongSelect(
+        {
+          playMode: selection.playMode,
+          highSpeed: normalizeHighSpeedValue(selection.highSpeed),
+        },
+        rootDir,
+        resolveLastSelectedChartFile(selection),
+        persistedConfig,
+      );
       state = resolveDirectoryStateFromSelection(selection);
       continue;
     }
@@ -303,17 +328,27 @@ async function runDirectoryInput(
     if (state.kind === 'play') {
       const playState = state;
       const playArgs = applySongSelectConfigToArgs(args, playState.playMode, playState.highSpeed);
-      persistedConfig = {
-        playMode: playState.playMode,
-        highSpeed: normalizeHighSpeedValue(playArgs.highSpeed),
-      };
+      persistedConfig = resolvePersistedConfigForSongSelect(
+        {
+          playMode: playState.playMode,
+          highSpeed: normalizeHighSpeedValue(playArgs.highSpeed),
+        },
+        rootDir,
+        playState.chartPath,
+        persistedConfig,
+      );
       try {
         const played = await playChartOnce(playState.chartPath, playArgs);
         const resolvedHighSpeed = normalizeHighSpeedValue(playArgs.highSpeed);
-        persistedConfig = {
-          playMode: playState.playMode,
-          highSpeed: resolvedHighSpeed,
-        };
+        persistedConfig = resolvePersistedConfigForSongSelect(
+          {
+            playMode: playState.playMode,
+            highSpeed: resolvedHighSpeed,
+          },
+          rootDir,
+          playState.chartPath,
+          persistedConfig,
+        );
         state = {
           kind: 'result',
           played,
@@ -324,10 +359,15 @@ async function runDirectoryInput(
       } catch (error) {
         if (error instanceof PlayerInterruptedError) {
           const resolvedHighSpeed = normalizeHighSpeedValue(playArgs.highSpeed);
-          persistedConfig = {
-            playMode: playState.playMode,
-            highSpeed: resolvedHighSpeed,
-          };
+          persistedConfig = resolvePersistedConfigForSongSelect(
+            {
+              playMode: playState.playMode,
+              highSpeed: resolvedHighSpeed,
+            },
+            rootDir,
+            playState.chartPath,
+            persistedConfig,
+          );
           state = resolveDirectoryStateFromPlayInterrupt(error.reason, {
             ...playState,
             highSpeed: resolvedHighSpeed,
@@ -345,6 +385,54 @@ async function runDirectoryInput(
 
   process.exitCode = state.exitCode;
   return persistedConfig;
+}
+
+function resolvePersistedConfigForSongSelect(
+  base: Pick<PersistedPlayerConfig, 'playMode' | 'highSpeed'>,
+  directoryPath: string | undefined,
+  preferredLastSelectedChartFile?: string,
+  previous?: PersistedPlayerConfig,
+): PersistedPlayerConfig {
+  const resolved: PersistedPlayerConfig = {
+    playMode: base.playMode,
+    highSpeed: normalizeHighSpeedValue(base.highSpeed),
+  };
+  if (previous?.lastSelectedChartFileByDirectory) {
+    resolved.lastSelectedChartFileByDirectory = { ...previous.lastSelectedChartFileByDirectory };
+  }
+  const preferred = preferredLastSelectedChartFile?.trim();
+  if (preferred) {
+    if (directoryPath && directoryPath.length > 0) {
+      const byDirectory = { ...(resolved.lastSelectedChartFileByDirectory ?? {}) };
+      byDirectory[directoryPath] = preferred;
+      resolved.lastSelectedChartFileByDirectory = byDirectory;
+    }
+  }
+  if (resolved.lastSelectedChartFileByDirectory && Object.keys(resolved.lastSelectedChartFileByDirectory).length === 0) {
+    delete resolved.lastSelectedChartFileByDirectory;
+  }
+  return resolved;
+}
+
+function resolveLastSelectedChartFile(selection: SelectChartInteractivelyResult): string | undefined {
+  if (typeof selection.selectedPath === 'string' && selection.selectedPath.length > 0) {
+    return selection.selectedPath;
+  }
+  return resolveChartFileFromFocusKey(selection.focusKey);
+}
+
+function resolveLastSelectedChartFileForDirectory(
+  config: PersistedPlayerConfig,
+  directoryPath: string,
+): string | undefined {
+  const byDirectory = config.lastSelectedChartFileByDirectory;
+  if (byDirectory) {
+    const scoped = byDirectory[directoryPath];
+    if (typeof scoped === 'string' && scoped.trim().length > 0) {
+      return scoped;
+    }
+  }
+  return undefined;
 }
 
 function resolveDirectoryStateFromSelection(selection: SelectChartInteractivelyResult): DirectorySceneState {
@@ -1157,9 +1245,41 @@ function getEntryFocusKey(entry: ChartSelectionEntry | undefined): string | unde
     return 'random';
   }
   if (entry.kind === 'chart') {
-    return `chart:${entry.filePath}`;
+    return createChartFocusKey(entry.filePath);
   }
   return undefined;
+}
+
+function createChartFocusKey(filePath: string): string {
+  return `chart:${filePath}`;
+}
+
+function resolveChartFileFromFocusKey(focusKey: string | undefined): string | undefined {
+  if (typeof focusKey !== 'string') {
+    return undefined;
+  }
+  if (!focusKey.startsWith('chart:')) {
+    return undefined;
+  }
+  const filePath = focusKey.slice('chart:'.length).trim();
+  return filePath.length > 0 ? filePath : undefined;
+}
+
+export function resolveSongSelectInitialFocusKey(
+  files: readonly string[],
+  selectedChartFile: string | undefined,
+): string | undefined {
+  if (typeof selectedChartFile !== 'string') {
+    return undefined;
+  }
+  const normalized = selectedChartFile.trim();
+  if (normalized.length === 0) {
+    return undefined;
+  }
+  if (!files.includes(normalized)) {
+    return undefined;
+  }
+  return createChartFocusKey(normalized);
 }
 
 async function showResultScreen(rootDir: string, played: PlayedChartResult): Promise<ResultScreenAction> {
