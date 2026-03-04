@@ -82,25 +82,6 @@ export interface DecodedVideoFrame {
   rgba: Uint8Array;
 }
 
-export interface DecodedVideoFrames {
-  codecName: 'mpeg1video' | 'h264' | 'mjpeg';
-  frames: DecodedVideoFrame[];
-}
-
-export async function decodeVideoFrames(videoPath: string): Promise<DecodedVideoFrames | undefined> {
-  const frames: DecodedVideoFrame[] = [];
-  const decoded = await decodeVideoFramesStream(videoPath, (frame) => {
-    frames.push(frame);
-  });
-  if (!decoded || frames.length === 0) {
-    return undefined;
-  }
-  return {
-    codecName: decoded.codecName,
-    frames,
-  };
-}
-
 export async function decodeVideoFramesStream(
   videoPath: string,
   onFrame: (frame: DecodedVideoFrame) => void,

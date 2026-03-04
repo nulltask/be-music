@@ -251,11 +251,6 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   return json;
 }
 
-export function parseJson(input: string): BeMusicJson {
-  const raw = JSON.parse(input) as Partial<BeMusicJson>;
-  return parseJsonDocument(raw);
-}
-
 function parseJsonDocument(raw: Partial<BeMusicJson>): BeMusicJson {
   const json = createEmptyJson(raw.sourceFormat ?? 'json');
   json.sourceFormat = raw.sourceFormat ?? 'json';

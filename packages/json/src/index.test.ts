@@ -1,7 +1,5 @@
 import { describe, expect, test } from 'vitest';
 import {
-  base36ToInt,
-  beatToMeasurePosition,
   cloneJson,
   createBeatResolver,
   createEmptyJson,
@@ -9,16 +7,13 @@ import {
   ensureMeasure,
   eventToBeat,
   getMeasureBeats,
-  getMeasureLength,
   intToBase36,
   isLandmineChannel,
-  isMeasureLengthChannel,
   isPlayableChannel,
   isSampleTriggerChannel,
   isScrollChannel,
   isStopChannel,
   isTempoChannel,
-  listPlayableChannels,
   measureToBeat,
   normalizeChannel,
   normalizeObjectKey,
@@ -68,31 +63,26 @@ describe('json', () => {
     expect(normalizeChannel('1a')).toBe('1A');
   });
 
-  test('json: intToBase36 / base36ToInt / parseBpmFrom03Token', () => {
-    expect(intToBase36(0)).toBe('00');
-    expect(intToBase36(35)).toBe('0Z');
-    expect(intToBase36(36)).toBe('10');
-    expect(intToBase36(-1)).toBe('00');
-    expect(intToBase36(1, 4)).toBe('0001');
+test('json: intToBase36 / parseBpmFrom03Token', () => {
+  expect(intToBase36(0)).toBe('00');
+  expect(intToBase36(35)).toBe('0Z');
+  expect(intToBase36(36)).toBe('10');
+  expect(intToBase36(-1)).toBe('00');
+  expect(intToBase36(1, 4)).toBe('0001');
 
-    expect(base36ToInt('ZZ')).toBe(1295);
-    expect(base36ToInt('??')).toBe(0);
+  expect(parseBpmFrom03Token('7F')).toBe(127);
+  expect(parseBpmFrom03Token('GG')).toBe(0);
+});
 
-    expect(parseBpmFrom03Token('7F')).toBe(127);
-    expect(parseBpmFrom03Token('GG')).toBe(0);
-  });
-
-  test('json: ensureMeasure / getMeasureLength / getMeasureBeats', () => {
-    const json = createEmptyJson();
-    expect(getMeasureLength(json, 0)).toBe(1);
-
-    const created = ensureMeasure(json, 2);
-    created.length = 0.75;
-    const found = ensureMeasure(json, 2);
-    expect(found).toBe(created);
-    expect(getMeasureLength(json, 2)).toBe(0.75);
-    expect(getMeasureBeats(0.75)).toBe(3);
-  });
+test('json: ensureMeasure / getMeasureBeats', () => {
+  const json = createEmptyJson();
+  const created = ensureMeasure(json, 2);
+  created.length = 0.75;
+  const found = ensureMeasure(json, 2);
+  expect(found).toBe(created);
+  expect(json.measures.find((measure) => measure.index === 2)?.length).toBe(0.75);
+  expect(getMeasureBeats(0.75)).toBe(3);
+});
 
   test('json: measureToBeat/eventToBeat reflect measure lengths', () => {
     const json = createEmptyJson();
@@ -138,16 +128,7 @@ describe('json', () => {
     expect(resolver.eventToBeat(event)).toBe(12);
   });
 
-  test('json: beatToMeasurePosition converts beat back to measure position', () => {
-    const json = createEmptyJson();
-    json.measures = [{ index: 1, length: 0.5 }];
-
-    expect(beatToMeasurePosition(json, -1)).toEqual({ measure: 0, position: 0 });
-    expect(beatToMeasurePosition(json, 5)).toEqual({ measure: 1, position: 0.5 });
-    expect(beatToMeasurePosition(json, 6)).toEqual({ measure: 2, position: 0 });
-  });
-
-  test('json: sortEvents stabilizes by measure/position/channel/value order', () => {
+test('json: sortEvents stabilizes by measure/position/channel/value order', () => {
     const events: BeMusicEvent[] = [
       { measure: 1, channel: '12', position: [1, 3], value: '02' },
       { measure: 0, channel: '11', position: [1, 2], value: '02' },
@@ -176,13 +157,10 @@ describe('json', () => {
     expect(sorted[1].value).toBe('02');
   });
 
-  test('json: classifies channel types', () => {
-    expect(isMeasureLengthChannel('02')).toBe(true);
-    expect(isMeasureLengthChannel('11')).toBe(false);
-
-    expect(isTempoChannel('03')).toBe(true);
-    expect(isTempoChannel('08')).toBe(true);
-    expect(isTempoChannel('11')).toBe(false);
+test('json: classifies channel types', () => {
+  expect(isTempoChannel('03')).toBe(true);
+  expect(isTempoChannel('08')).toBe(true);
+  expect(isTempoChannel('11')).toBe(false);
 
     expect(isStopChannel('09')).toBe(true);
     expect(isStopChannel('19')).toBe(false);
@@ -202,21 +180,9 @@ describe('json', () => {
     expect(isSampleTriggerChannel('SC')).toBe(false);
     expect(isSampleTriggerChannel('11')).toBe(true);
 
-    expect(isPlayableChannel('11')).toBe(true);
-    expect(isPlayableChannel('21')).toBe(true);
-    expect(isPlayableChannel('31')).toBe(false);
-    expect(isPlayableChannel('01')).toBe(false);
-  });
-
-  test('json: listPlayableChannels returns unique sorted channels', () => {
-    const json = createEmptyJson();
-    json.events = [
-      { measure: 0, channel: '21', position: [0, 1], value: '01' },
-      { measure: 0, channel: '11', position: [0, 1], value: '01' },
-      { measure: 0, channel: '11', position: [1, 2], value: '02' },
-      { measure: 0, channel: '03', position: [0, 1], value: '64' },
-    ];
-
-    expect(listPlayableChannels(json)).toEqual(['11', '21']);
-  });
+  expect(isPlayableChannel('11')).toBe(true);
+  expect(isPlayableChannel('21')).toBe(true);
+  expect(isPlayableChannel('31')).toBe(false);
+  expect(isPlayableChannel('01')).toBe(false);
+});
 });

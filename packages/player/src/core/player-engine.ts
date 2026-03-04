@@ -1,4 +1,4 @@
-import { basename, dirname, extname, resolve } from 'node:path';
+import { basename } from 'node:path';
 import readline from 'node:readline';
 import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
 import { floatToInt16 } from '@be-music/utils';
@@ -11,7 +11,7 @@ import {
   normalizeChannel,
   normalizeObjectKey,
 } from '@be-music/json';
-import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
+import { resolveBmsControlFlow } from '@be-music/parser';
 import {
   type RenderResult,
   type RenderSampleLoadProgress,
@@ -224,15 +224,6 @@ export function applyFastSlowForJudge(
   }
 }
 
-export async function playChartFile(filePath: string, options: PlayerOptions = {}): Promise<PlayerSummary> {
-  const json = await parseChartFile(filePath);
-  const mergedOptions: PlayerOptions = {
-    ...options,
-    audioBaseDir: options.audioBaseDir ?? dirname(resolve(filePath)),
-    laneModeExtension: options.laneModeExtension ?? extname(filePath).toLowerCase(),
-  };
-  return mergedOptions.auto ? autoPlay(json, mergedOptions) : manualPlay(json, mergedOptions);
-}
 export { extractInvisiblePlayableNotes, extractLandmineNotes, extractPlayableNotes, extractTimedNotes } from '../playable-notes.ts';
 
 function reportLoadProgress(options: PlayerOptions, ratio: number, message: string, detail?: string): void {

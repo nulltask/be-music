@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { parseBmson, parseChartFile } from '../../parser/src/index.ts';
-import { createDemoJson, stringifyBms, stringifyBmson, stringifyChart, tokenFromNumber } from './index.ts';
+import { stringifyBms, stringifyBmson } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 describe('stringifier', () => {
@@ -354,15 +354,21 @@ test('bmson stringify: handles resolution/version/lines normalization and fallba
   expect(document.stop_events[0].duration).toBe(96);
 });
 
-test('stringifier: stringifyChart / createDemoJson / tokenFromNumber', () => {
-  const demo = createDemoJson();
-  expect(demo.events.length).toBeGreaterThan(0);
+test('stringifier: stringifyBms/stringifyBmson handle equivalent chart content', () => {
+  const demo = createEmptyJson('json');
+  demo.metadata.title = 'Demo Chart';
+  demo.metadata.artist = 'unknown';
+  demo.resources.wav['01'] = 'kick.wav';
+  demo.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01' },
+    { measure: 0, channel: '11', position: [1, 2], value: '01' },
+    { measure: 1, channel: '11', position: [0, 1], value: '01' },
+    { measure: 1, channel: '11', position: [1, 2], value: '01' },
+  ];
 
-  const bms = stringifyChart(demo, 'bms');
-  const bmson = stringifyChart(demo, 'bmson');
+  const bms = stringifyBms(demo);
+  const bmson = stringifyBmson(demo);
   expect(bms).toContain('#TITLE Demo Chart');
   expect(bmson).toContain('"sound_channels"');
-
-  expect(tokenFromNumber(35)).toBe('0Z');
 });
 });

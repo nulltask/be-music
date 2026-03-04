@@ -1,6 +1,5 @@
 import {
   createBeatResolver,
-  intToBase36,
   isSampleTriggerChannel,
   normalizeChannel,
   normalizeObjectKey,
@@ -133,10 +132,6 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   }
 
   return `${JSON.stringify(bmson, null, indent)}\n`;
-}
-
-export function stringifyChart(json: BeMusicJson, format: 'bms' | 'bmson' = 'bms'): string {
-  return format === 'bmson' ? stringifyBmson(json) : stringifyBms(json);
 }
 
 function pushMetadataLines(lines: string[], json: BeMusicJson): void {
@@ -530,61 +525,6 @@ function isDedicatedBmsExtensionCommand(command: string): boolean {
     return true;
   }
   return false;
-}
-
-export function createDemoJson(): BeMusicJson {
-  const json: BeMusicJson = {
-    format: 'be-music-json/0.1.0',
-    sourceFormat: 'json',
-    metadata: {
-      title: 'Demo Chart',
-      artist: 'unknown',
-      bpm: 120,
-      extras: {},
-    },
-    resources: {
-      wav: { '01': 'kick.wav' },
-      bmp: {},
-      bpm: {},
-      stop: {},
-      text: {},
-    },
-    measures: [],
-    events: [
-      { measure: 0, channel: '11', position: [0, 1], value: '01' },
-      { measure: 0, channel: '11', position: [1, 2], value: '01' },
-      { measure: 1, channel: '11', position: [0, 1], value: '01' },
-      { measure: 1, channel: '11', position: [1, 2], value: '01' },
-    ],
-    bms: {
-      controlFlow: [],
-      exRank: {},
-      argb: {},
-      stp: [],
-      changeOption: {},
-      exWav: {},
-      exBmp: {},
-      bga: {},
-      scroll: {},
-      swBga: {},
-    },
-    bmson: {
-      lines: [],
-      info: {},
-      bga: {
-        header: [],
-        events: [],
-        layerEvents: [],
-        poorEvents: [],
-      },
-    },
-  };
-
-  return json;
-}
-
-export function tokenFromNumber(value: number): string {
-  return intToBase36(value, 2);
 }
 
 function resolveBmsonResolutionForOutput(json: BeMusicJson, options: BmsonStringifyOptions): number {

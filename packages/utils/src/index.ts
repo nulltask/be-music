@@ -8,11 +8,6 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-export function clampInt(value: number, min: number, max: number): number {
-  const normalized = Number.isFinite(value) ? Math.floor(value) : min;
-  return clamp(normalized, min, max);
-}
-
 export function clampSignedUnit(value: number): number {
   return clamp(value, -1, 1);
 }

@@ -2,7 +2,6 @@ import { resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import {
   clamp,
-  clampInt,
   clampSignedUnit,
   gcd,
   lcm,
@@ -18,11 +17,9 @@ test('resolveCliPath: resolves to an absolute path from the specified cwd', () =
   expect(resolveCliPath('chart/test.bms', '/tmp')).toBe(resolve('/tmp', 'chart/test.bms'));
 });
 
-test('clamp/clampInt/clampSignedUnit: clamps values to configured ranges', () => {
+test('clamp/clampSignedUnit: clamps values to configured ranges', () => {
   expect(clamp(4, 0, 3)).toBe(3);
   expect(clamp(-2, 0, 3)).toBe(0);
-  expect(clampInt(10.7, 0, 8)).toBe(8);
-  expect(clampInt(Number.NaN, 2, 5)).toBe(2);
   expect(clampSignedUnit(1.5)).toBe(1);
   expect(clampSignedUnit(-2)).toBe(-1);
 });

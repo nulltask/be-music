@@ -434,10 +434,6 @@ export function resolveInputTokenEvent(chunk: string, key: readline.Key): Resolv
   };
 }
 
-export function resolveInputTokens(chunk: string, key: readline.Key): string[] {
-  return resolveInputTokenEvent(chunk, key).tokens;
-}
-
 function resolveLegacyInputTokens(chunk: string, key: readline.Key): string[] {
   const tokens = new Set<string>();
   const normalizedChunk = normalizeKey(chunk);

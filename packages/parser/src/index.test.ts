@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { BMS_JSON_FORMAT } from '../../json/src/index.ts';
-import { parseBmson, parseChartFile, parseJson, resolveBmsControlFlow } from './index.ts';
+import { parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 describe('parser', () => {
@@ -208,7 +208,7 @@ test('bmson: treats x=0/null notes as BGM(01) and prioritizes playable notes on 
 });
 
 test('JSON: normalizes and imports bms/bmson extensions and rejects invalid positions', () => {
-  const parsed = parseJson(
+  const parsed = parseChart(
     JSON.stringify({
       format: BMS_JSON_FORMAT,
       sourceFormat: 'json',
@@ -275,6 +275,7 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
         info: { resolution: 480 },
       },
     }),
+    'json',
   );
 
   expect(parsed.bmson.version).toBe('1.0.1');
@@ -318,7 +319,7 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
   ]);
 
   expect(() =>
-    parseJson(
+    parseChart(
       JSON.stringify({
         format: BMS_JSON_FORMAT,
         sourceFormat: 'json',
@@ -327,12 +328,13 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
         measures: [],
         events: [{ measure: 0, channel: '11', value: '01' }],
       }),
+      'json',
     ),
   ).toThrow(/position \[numerator, denominator\] is required/);
 });
 
 test('JSON: migrates legacy metadata.extras extension headers to bms extensions', () => {
-  const parsed = parseJson(
+  const parsed = parseChart(
     JSON.stringify({
       format: BMS_JSON_FORMAT,
       sourceFormat: 'json',
@@ -378,6 +380,7 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
         info: {},
       },
     }),
+    'json',
   );
 
   expect(parsed.bms.preview).toBe('preview.ogg');
@@ -410,7 +413,7 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
 });
 
 test('JSON: normalizes and imports bmson extensions (info/bga/notes.l/c)', () => {
-  const parsed = parseJson(
+  const parsed = parseChart(
     JSON.stringify({
       format: BMS_JSON_FORMAT,
       sourceFormat: 'json',
@@ -446,6 +449,7 @@ test('JSON: normalizes and imports bmson extensions (info/bga/notes.l/c)', () =>
         },
       },
     }),
+    'json',
   );
 
   expect(parsed.events[0].bmson).toEqual({ l: 240, c: true });

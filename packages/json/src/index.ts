@@ -167,11 +167,6 @@ export interface BeMusicJson {
   bmson: BmsonExtensions;
 }
 
-export interface MeasurePosition {
-  measure: number;
-  position: number;
-}
-
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
   eventToBeat: (event: BeMusicEvent) => number;
@@ -248,11 +243,6 @@ export function intToBase36(value: number, pad = 2): string {
   return encoded.padStart(pad, '0').slice(-pad);
 }
 
-export function base36ToInt(value: string): number {
-  const parsed = Number.parseInt(value, 36);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 export function parseBpmFrom03Token(value: string): number {
   const parsed = Number.parseInt(value, 16);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -269,11 +259,6 @@ export function ensureMeasure(json: BeMusicJson, index: number): BeMusicMeasure 
   };
   json.measures.push(created);
   return created;
-}
-
-export function getMeasureLength(json: BeMusicJson, index: number): number {
-  const found = json.measures.find((measure) => measure.index === index);
-  return found?.length ?? 1;
 }
 
 export function getMeasureBeats(length: number): number {
@@ -345,29 +330,6 @@ export function createBeatResolver(json: BeMusicJson): BeatResolver {
   };
 }
 
-export function beatToMeasurePosition(json: BeMusicJson, beat: number): MeasurePosition {
-  if (beat <= 0) {
-    return { measure: 0, position: 0 };
-  }
-
-  const measureLengths = createExactMeasureLengthMap(json);
-  let remaining = beat;
-  let measure = 0;
-  while (remaining > 0) {
-    const measureBeats = getMeasureBeats(measureLengths.get(measure) ?? 1);
-    if (remaining < measureBeats) {
-      return {
-        measure,
-        position: remaining / measureBeats,
-      };
-    }
-    remaining -= measureBeats;
-    measure += 1;
-  }
-
-  return { measure, position: 0 };
-}
-
 export function sortEvents(events: BeMusicEvent[]): BeMusicEvent[] {
   return [...events].sort((left, right) => {
     if (left.measure !== right.measure) {
@@ -385,10 +347,6 @@ export function sortEvents(events: BeMusicEvent[]): BeMusicEvent[] {
     }
     return 0;
   });
-}
-
-export function isMeasureLengthChannel(channel: string): boolean {
-  return normalizeChannel(channel) === '02';
 }
 
 export function isTempoChannel(channel: string): boolean {
@@ -437,18 +395,6 @@ export function isPlayableChannel(channel: string): boolean {
     return false;
   }
   return normalized.startsWith('1') || normalized.startsWith('2');
-}
-
-export function listPlayableChannels(json: BeMusicJson): string[] {
-  const channels = new Set<string>();
-  for (const event of json.events) {
-    const channel = normalizeChannel(event.channel);
-    if (!isPlayableChannel(channel)) {
-      continue;
-    }
-    channels.add(channel);
-  }
-  return [...channels].sort();
 }
 
 function createExactMeasureLengthMap(json: BeMusicJson): Map<number, number> {
