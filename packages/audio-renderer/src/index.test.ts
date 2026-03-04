@@ -79,6 +79,49 @@ test.each(codecCases)('audio-renderer: renderSingleSample matches single-trigger
   expect(Math.abs(single.durationSeconds - mixed.durationSeconds)).toBeLessThan(1e-9);
   expect(maxDeltaBetweenResults(single, mixed, 0, mixed.left.length)).toBeLessThan(1e-7);
 });
+
+test('audio-renderer: startSeconds trims leading timeline before rendering', async () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'not-found.wav';
+  json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+
+  const [full, shifted] = await Promise.all([
+    renderJson(json, {
+      sampleRate: 44_100,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+    renderJson(json, {
+      sampleRate: 44_100,
+      normalize: false,
+      tailSeconds: 0,
+      startSeconds: 2,
+      fallbackToneSeconds: 0.05,
+    }),
+  ]);
+
+  expect(full.durationSeconds).toBeGreaterThan(2);
+  expect(shifted.durationSeconds).toBeLessThan(0.2);
+});
+
+test('audio-renderer: renderJson throws AbortError when signal is already aborted', async () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'not-found.wav';
+  json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+  const controller = new AbortController();
+  controller.abort();
+
+  await expect(
+    renderJson(json, {
+      signal: controller.signal,
+    }),
+  ).rejects.toMatchObject({
+    name: 'AbortError',
+  });
+});
 describe('audio-renderer', () => {
 
 

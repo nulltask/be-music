@@ -1,10 +1,15 @@
 import { access } from 'node:fs/promises';
 import { extname, isAbsolute, resolve } from 'node:path';
 
-export async function resolveSamplePath(baseDir: string, samplePath: string): Promise<string | undefined> {
+export async function resolveSamplePath(
+  baseDir: string,
+  samplePath: string,
+  signal?: AbortSignal,
+): Promise<string | undefined> {
   const candidates = createSamplePathCandidates(samplePath);
 
   for (const candidate of candidates) {
+    throwIfAborted(signal);
     const absolute = isAbsolute(candidate) ? candidate : resolve(baseDir, candidate);
     if (await exists(absolute)) {
       return absolute;
@@ -114,4 +119,13 @@ async function exists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) {
+    return;
+  }
+  const error = new Error('The operation was aborted.');
+  error.name = 'AbortError';
+  throw error;
 }

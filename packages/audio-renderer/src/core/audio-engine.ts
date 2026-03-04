@@ -56,8 +56,10 @@ export interface RenderOptions {
   normalize?: boolean;
   tailSeconds?: number;
   gain?: number;
+  startSeconds?: number;
   baseDir?: string;
   fallbackToneSeconds?: number;
+  signal?: AbortSignal;
   resolveTriggerGain?: (trigger: TimedSampleTrigger) => number;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
   inferBmsLnTypeWhenMissing?: boolean;
@@ -87,6 +89,7 @@ export interface RenderSingleSampleOptions {
   gain?: number;
   baseDir?: string;
   fallbackToneSeconds?: number;
+  signal?: AbortSignal;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
 }
 
@@ -213,10 +216,13 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const normalize = options.normalize ?? true;
   const tailSeconds = options.tailSeconds ?? DEFAULT_TAIL_SECONDS;
   const gain = options.gain ?? DEFAULT_GAIN;
+  const startSeconds = Number.isFinite(options.startSeconds) ? Math.max(0, options.startSeconds ?? 0) : 0;
   const fallbackToneSeconds = options.fallbackToneSeconds ?? 0.08;
   const baseDir = options.baseDir ?? process.cwd();
+  const signal = options.signal;
   const resolveTriggerGain = options.resolveTriggerGain;
   const onSampleLoadProgress = options.onSampleLoadProgress;
+  throwIfAborted(signal);
 
   const timingContext = createTimingBuildContext(json);
   const resolver = createTimingResolverWithContext(json, timingContext);
@@ -239,6 +245,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   let maxFrame = Math.max(1, Math.round(tailSeconds * sampleRate));
 
   for (const trigger of triggers) {
+    throwIfAborted(signal);
     const sample = await getOrCreateSample({
       sampleKey: trigger.sampleKey,
       samplePath: trigger.samplePath,
@@ -247,6 +254,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
       fallbackToneSeconds,
       loadedSamples,
       resolvedPathCache,
+      signal,
       onSampleLoadProgress,
     });
 
@@ -267,7 +275,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
     const rawTriggerGain = resolveTriggerGain?.(trigger) ?? 1;
     const triggerGain = Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1;
 
-    const start = Math.max(0, Math.round(trigger.seconds * sampleRate));
+    const start = Math.max(0, Math.round((trigger.seconds - startSeconds) * sampleRate));
     if (json.sourceFormat === 'bmson' && trigger.sampleSliceId) {
       const dedupeKey = `${trigger.sampleSliceId}@${start}`;
       if (bmsonScheduledSlices.has(dedupeKey)) {
@@ -298,7 +306,11 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const left = new Float32Array(maxFrame);
   const right = new Float32Array(maxFrame);
 
-  for (const item of scheduled) {
+  for (let scheduleIndex = 0; scheduleIndex < scheduled.length; scheduleIndex += 1) {
+    if ((scheduleIndex & 0x1f) === 0) {
+      throwIfAborted(signal);
+    }
+    const item = scheduled[scheduleIndex]!;
     if (item.triggerGain <= 0) {
       continue;
     }
@@ -310,6 +322,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
       gain * item.triggerGain,
       item.sampleOffsetFrames,
       item.sampleMaxFrames,
+      signal,
     );
   }
 
@@ -339,6 +352,7 @@ export async function renderSingleSample(
   const gain = typeof options.gain === 'number' && Number.isFinite(options.gain) ? options.gain : 1;
   const baseDir = options.baseDir ?? process.cwd();
   const fallbackToneSeconds = options.fallbackToneSeconds ?? 0.08;
+  throwIfAborted(options.signal);
   const sample = await getOrCreateSample({
     sampleKey: normalizedKey,
     samplePath,
@@ -347,8 +361,10 @@ export async function renderSingleSample(
     fallbackToneSeconds,
     loadedSamples: new Map(),
     resolvedPathCache: new Map(),
+    signal: options.signal,
     onSampleLoadProgress: options.onSampleLoadProgress,
   });
+  throwIfAborted(options.signal);
   return toRenderResult(sample, sampleRate, gain);
 }
 
@@ -509,6 +525,7 @@ async function getOrCreateSample(params: {
   fallbackToneSeconds: number;
   loadedSamples: Map<string, StereoSample>;
   resolvedPathCache: Map<string, string | undefined>;
+  signal?: AbortSignal;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
 }): Promise<StereoSample> {
   const {
@@ -519,8 +536,10 @@ async function getOrCreateSample(params: {
     fallbackToneSeconds,
     loadedSamples,
     resolvedPathCache,
+    signal,
     onSampleLoadProgress,
   } = params;
+  throwIfAborted(signal);
 
   const cached = loadedSamples.get(sampleKey);
   if (cached) {
@@ -551,7 +570,7 @@ async function getOrCreateSample(params: {
   const cacheKey = `${baseDir}:${samplePath}`;
   const resolvedPath = resolvedPathCache.has(cacheKey)
     ? resolvedPathCache.get(cacheKey)
-    : await resolveSamplePath(baseDir, samplePath);
+    : await resolveSamplePath(baseDir, samplePath, signal);
   resolvedPathCache.set(cacheKey, resolvedPath);
 
   if (!resolvedPath) {
@@ -565,6 +584,7 @@ async function getOrCreateSample(params: {
   }
 
   try {
+    throwIfAborted(signal);
     onSampleLoadProgress?.({
       stage: 'reading',
       sampleKey,
@@ -572,7 +592,9 @@ async function getOrCreateSample(params: {
       resolvedPath,
     });
     const buffer = await readFile(resolvedPath);
+    throwIfAborted(signal);
     const decoded = await decodeAudioSample(buffer, resolvedPath);
+    throwIfAborted(signal);
     const left = resampleLinear(decoded.left, decoded.sampleRate, sampleRate);
     const rightSource = decoded.right ?? decoded.left;
     const right = resampleLinear(rightSource, decoded.sampleRate, sampleRate);
@@ -632,6 +654,7 @@ function mixSample(
   gain: number,
   sampleOffsetFrames = 0,
   sampleMaxFrames?: number,
+  signal?: AbortSignal,
 ): void {
   const sourceStart = Math.max(0, sampleOffsetFrames);
   const availableFrames = sample.left.length - sourceStart;
@@ -651,11 +674,23 @@ function mixSample(
 
   const framesToMix = Math.min(availableFrames, requestedFrames, destinationAvailable);
   for (let index = 0; index < framesToMix; index += 1) {
+    if ((index & 0x7ff) === 0) {
+      throwIfAborted(signal);
+    }
     const source = sourceStart + index;
     const target = startFrame + index;
     destinationLeft[target] += sample.left[source] * gain;
     destinationRight[target] += sample.right[source] * gain;
   }
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) {
+    return;
+  }
+  const error = new Error('The operation was aborted.');
+  error.name = 'AbortError';
+  throw error;
 }
 
 function createBmsonSamplePlaybackMap(
