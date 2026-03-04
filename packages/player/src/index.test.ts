@@ -12,6 +12,8 @@ import {
   extractLandmineNotes,
   extractPlayableNotes,
   manualPlay,
+  resolveBgmHeadroomGain,
+  shouldUseAutoMixBgmHeadroomControl,
   resolveHighSpeedControlActionFromKey,
   isPlayLaneChannelForVolumeControl,
   resolveJudgeWindowsMs,
@@ -269,6 +271,33 @@ test('player: volume control play-side channels include invisible lanes', () => 
   expect(isPlayLaneChannelForVolumeControl('01')).toBe(false);
   expect(isPlayLaneChannelForVolumeControl('51')).toBe(false);
   expect(isPlayLaneChannelForVolumeControl('A1')).toBe(false);
+});
+
+test('player: bgm headroom gain does not mute BGM when play lane already clips', () => {
+  const playable = {
+    sampleRate: 44_100,
+    left: new Float32Array([1.2, 0.8]),
+    right: new Float32Array([1.1, 0.8]),
+    durationSeconds: 2 / 44_100,
+    peak: 1.2,
+  };
+  const bgm = {
+    sampleRate: 44_100,
+    left: new Float32Array([0.5, 0.5]),
+    right: new Float32Array([0.5, 0.5]),
+    durationSeconds: 2 / 44_100,
+    peak: 0.5,
+  };
+
+  const gain = resolveBgmHeadroomGain(playable, bgm);
+  expect(gain).toBeGreaterThan(0);
+  expect(gain).toBeLessThanOrEqual(1);
+});
+
+test('player: auto mix headroom control is disabled while limiter is enabled', () => {
+  expect(shouldUseAutoMixBgmHeadroomControl({})).toBe(false);
+  expect(shouldUseAutoMixBgmHeadroomControl({ limiter: true })).toBe(false);
+  expect(shouldUseAutoMixBgmHeadroomControl({ limiter: false })).toBe(true);
 });
 
 test('player: narrows judge windows for bms RANK=0', () => {

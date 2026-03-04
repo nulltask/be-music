@@ -1493,6 +1493,7 @@ async function createAudioSessionIfEnabled(
         )
       : await renderAutoMixWithVolumeControls(json, bgmVolume, playVolume, {
           ...renderOptions,
+          useBgmHeadroomControl: shouldUseAutoMixBgmHeadroomControl(options),
           onSampleLoadProgress: (progress) => {
             if (progress.stage !== 'reading') {
               return;
@@ -2220,6 +2221,10 @@ export function isPlayLaneChannelForVolumeControl(channel: string): boolean {
   return side === '3' || side === '4';
 }
 
+export function shouldUseAutoMixBgmHeadroomControl(options: PlayerOptions): boolean {
+  return options.limiter === false;
+}
+
 async function renderAutoMixWithVolumeControls(
   json: BeMusicJson,
   bgmVolume: number,
@@ -2227,6 +2232,7 @@ async function renderAutoMixWithVolumeControls(
   options: {
     baseDir: string;
     tailSeconds: number;
+    useBgmHeadroomControl?: boolean;
     onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
   },
 ): Promise<RenderResult> {
@@ -2254,6 +2260,9 @@ async function renderAutoMixWithVolumeControls(
   ]);
   const scaledPlayable = applyGainToRenderResult(playableRendered, playVolume);
   const scaledBgm = applyGainToRenderResult(bgmRendered, bgmVolume);
+  if (options.useBgmHeadroomControl !== true) {
+    return mixRenderResults(scaledBgm, scaledPlayable);
+  }
   const bgmHeadroomGain = resolveBgmHeadroomGain(scaledPlayable, scaledBgm);
 
   return mixRenderResults(applyGainToRenderResult(scaledBgm, bgmHeadroomGain), scaledPlayable);
@@ -2399,7 +2408,7 @@ function mixRenderResults(leftResult: RenderResult, rightResult: RenderResult): 
   };
 }
 
-function resolveBgmHeadroomGain(playableResult: RenderResult, bgmResult: RenderResult): number {
+export function resolveBgmHeadroomGain(playableResult: RenderResult, bgmResult: RenderResult): number {
   const frameLength = Math.max(playableResult.left.length, bgmResult.left.length);
   let headroomGain = 1;
 
@@ -2414,9 +2423,6 @@ function resolveBgmHeadroomGain(playableResult: RenderResult, bgmResult: RenderR
       resolveBgmHeadroomGainForChannel(playableLeft, bgmLeft),
       resolveBgmHeadroomGainForChannel(playableRight, bgmRight),
     );
-    if (headroomGain <= 0) {
-      return 0;
-    }
   }
 
   return Math.max(0, Math.min(1, headroomGain));
@@ -2428,9 +2434,10 @@ function resolveBgmHeadroomGainForChannel(playableAbs: number, bgmAbs: number): 
   }
   const availableHeadroom = 1 - playableAbs;
   if (availableHeadroom <= 0) {
-    return 0;
+    // Play-side already clips by itself: do not force BGM to complete silence here.
+    return 1;
   }
-  return availableHeadroom / bgmAbs;
+  return Math.min(1, availableHeadroom / bgmAbs);
 }
 
 function measureRenderPeak(left: Float32Array, right: Float32Array): number {
