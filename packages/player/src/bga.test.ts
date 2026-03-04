@@ -118,6 +118,36 @@ test('player bga: renders images smaller than 256x256 centered on X and top-alig
   }
 });
 
+test('player bga: scales down sources larger than 256x256 without clipping bottom area', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-large-square-'));
+  try {
+    await writePng(join(baseDir, 'large-square.png'), 512, 512, (_x, y) =>
+      y < 256 ? { r: 255, g: 0, b: 0, a: 255 } : { r: 0, g: 0, b: 255, a: 255 },
+    );
+
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bmp['01'] = 'large-square.png';
+    json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
+
+    const renderer = await createBgaAnsiRenderer(json, {
+      baseDir,
+      width: 40,
+      height: 20,
+    });
+    expect(renderer).toBeDefined();
+
+    const lines = renderer?.getAnsiLines(0);
+    expect(lines).toBeDefined();
+    const pixels = parseAnsiPixels(lines ?? []);
+
+    expect(pixels[4]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
+    expect(pixels[16]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
 test('player bga: renders undefined base keys as black instead of STAGEFILE', async () => {
   const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-undefined-base-'));
   try {

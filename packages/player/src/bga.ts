@@ -981,17 +981,26 @@ function createSolidAnsiFrame(
 
 function convertImageToSpecFrame(image: DecodedImage, mode: FrameMode): AnsiFrame {
   const specFrame = createSolidAnsiFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, 0);
-  const offsetX = Math.floor((SPEC_BGA_CANVAS_SIZE - image.width) / 2);
+  const fittedSize = fitSizeWithinSpecCanvas(image.width, image.height);
+  const offsetX = Math.floor((SPEC_BGA_CANVAS_SIZE - fittedSize.width) / 2);
   const offsetY = 0;
 
-  for (let sourceY = 0; sourceY < image.height; sourceY += 1) {
-    const targetY = sourceY + offsetY;
+  for (let targetYWithinImage = 0; targetYWithinImage < fittedSize.height; targetYWithinImage += 1) {
+    const sourceY = Math.min(
+      image.height - 1,
+      Math.max(0, Math.floor(((targetYWithinImage + 0.5) * image.height) / fittedSize.height)),
+    );
+    const targetY = targetYWithinImage + offsetY;
     if (targetY < 0 || targetY >= SPEC_BGA_CANVAS_SIZE) {
       continue;
     }
 
-    for (let sourceX = 0; sourceX < image.width; sourceX += 1) {
-      const targetX = sourceX + offsetX;
+    for (let targetXWithinImage = 0; targetXWithinImage < fittedSize.width; targetXWithinImage += 1) {
+      const sourceX = Math.min(
+        image.width - 1,
+        Math.max(0, Math.floor(((targetXWithinImage + 0.5) * image.width) / fittedSize.width)),
+      );
+      const targetX = targetXWithinImage + offsetX;
       if (targetX < 0 || targetX >= SPEC_BGA_CANVAS_SIZE) {
         continue;
       }
@@ -1015,6 +1024,18 @@ function convertImageToSpecFrame(image: DecodedImage, mode: FrameMode): AnsiFram
   }
 
   return specFrame;
+}
+
+function fitSizeWithinSpecCanvas(sourceWidth: number, sourceHeight: number): { width: number; height: number } {
+  const safeSourceWidth = Math.max(1, Math.floor(sourceWidth));
+  const safeSourceHeight = Math.max(1, Math.floor(sourceHeight));
+  const widthScale = SPEC_BGA_CANVAS_SIZE / safeSourceWidth;
+  const heightScale = SPEC_BGA_CANVAS_SIZE / safeSourceHeight;
+  const scale = Math.min(1, widthScale, heightScale);
+  return {
+    width: Math.max(1, Math.floor(safeSourceWidth * scale)),
+    height: Math.max(1, Math.floor(safeSourceHeight * scale)),
+  };
 }
 
 function resizeAnsiFrame(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {
