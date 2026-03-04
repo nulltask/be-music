@@ -26,6 +26,7 @@ interface TuiOptions {
   speed: number;
   highSpeed: number;
   judgeWindowMs: number;
+  showLaneChannels?: boolean;
   randomPatternSummary?: string;
   bpmTimeline?: ReadonlyArray<BpmTimelinePoint>;
   scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>;
@@ -524,23 +525,16 @@ export class PlayerTui {
     }
     lines.push('');
     const laneLines: string[] = [];
-    laneLines.push(
-      renderLaneRow(
-        this.options.lanes.map((lane) => lane.channel),
-        this.laneChannels,
-        this.laneWidths,
-        this.options.splitAfterIndex,
-      ),
-    );
-    laneLines.push(
-      renderLaneRow(
-        this.options.lanes.map(() => '═'),
-        this.laneChannels,
-        this.laneWidths,
-        this.options.splitAfterIndex,
-      ),
-    );
-
+    if (this.options.showLaneChannels === true) {
+      laneLines.push(
+        renderLaneRow(
+          this.options.lanes.map((lane) => lane.channel),
+          this.laneChannels,
+          this.laneWidths,
+          this.options.splitAfterIndex,
+        ),
+      );
+    }
     const judgeRowIndex = Math.max(0, grid.length - 1);
     for (let rowIndex = 0; rowIndex < grid.length; rowIndex += 1) {
       const row = grid[rowIndex]!;

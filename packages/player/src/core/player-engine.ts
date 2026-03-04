@@ -1544,6 +1544,7 @@ function createTuiIfEnabled(
     speed,
     highSpeed,
     judgeWindowMs,
+    showLaneChannels: options.debugActiveAudio === true,
     randomPatternSummary,
     bpmTimeline,
     scrollTimeline,
