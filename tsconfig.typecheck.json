@@ -1,4 +1,14 @@
 {
-  "extends": "./tsconfig.typecheck.base.json",
+  "extends": "./tsconfig.options.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "paths": {
+      "@be-music/*": ["./packages/*/src/index.ts"]
+    }
+  },
   "include": ["packages/*/src/**/*.ts", "vite.package.config.ts", "vitest.config.ts"]
 }
