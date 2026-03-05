@@ -1,6 +1,6 @@
 import { clamp } from '@be-music/utils';
 import type { PlayerSummary } from '../index.ts';
-import { formatSeconds } from '../player-utils.ts';
+import { formatSeconds, resolveAltModifierLabel } from '../player-utils.ts';
 import {
   normalizeHighSpeed,
   resolveAnimatedHighSpeedValue,
@@ -118,6 +118,7 @@ const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
 const HIGH_SPEED_TRANSITION_MS = 180;
 const MEASURE_SIGNATURE_MAX_DENOMINATOR = 32;
+const HIGH_SPEED_MODIFIER_LABEL = resolveAltModifierLabel();
 const MEASURE_SIGNATURE_TOLERANCE = 1e-8;
 
 interface RgbColor {
@@ -594,7 +595,9 @@ export class PlayerTui {
 
     lines.push(...renderLaneBlockWithBga(laneLines, frame.bgaAnsiLines));
     lines.push('');
-    lines.push('Space: pause/resume  Shift+R: restart  Alt+odd/even lane: HS -/+  Ctrl+C/Esc: quit');
+    lines.push(
+      `Space: pause/resume  Shift+R: restart  ${HIGH_SPEED_MODIFIER_LABEL}+odd/even lane: HS -/+  Ctrl+C/Esc: quit`,
+    );
 
     const columns = process.stdout.columns ?? 120;
     const paddedLines = lines.map((line) => padVisibleWidth(line, columns));

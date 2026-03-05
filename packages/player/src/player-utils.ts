@@ -24,3 +24,7 @@ export function formatSeconds(seconds: number): string {
   const hours = Math.floor(totalMinutes / 60);
   return `${hours}:${minutesPart.toString().padStart(2, '0')}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
 }
+
+export function resolveAltModifierLabel(platform: NodeJS.Platform = process.platform): 'Alt' | 'Option' {
+  return platform === 'darwin' ? 'Option' : 'Alt';
+}

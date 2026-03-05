@@ -39,7 +39,7 @@ import {
   type TimedLandmineNote,
   type TimedPlayableNote,
 } from '../playable-notes.ts';
-import { formatSeconds, resolveChartVolWavGain } from '../player-utils.ts';
+import { formatSeconds, resolveAltModifierLabel, resolveChartVolWavGain } from '../player-utils.ts';
 import { createNodeAudioSink, type AudioSink } from '../audio-sink.ts';
 import {
   applyHighSpeedControlAction,
@@ -476,6 +476,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       activeAudioVoiceCount: estimated?.activeAudioVoiceCount ?? 0,
     };
   };
+  const highSpeedModifierLabel = resolveAltModifierLabel();
 
   if (!tui) {
     process.stdout.write('Auto play start\n');
@@ -486,8 +487,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     printLaneMap(laneBindings);
     process.stdout.write('Press Space to pause/resume. Press Shift+R to restart.\n');
     process.stdout.write('Press Ctrl+C or Esc to quit.\n');
-    process.stdout.write('Press Alt+odd lane key to decrease HIGH-SPEED.\n');
-    process.stdout.write('Press Alt+even lane key to increase HIGH-SPEED.\n');
+    process.stdout.write(`Press ${highSpeedModifierLabel}+odd lane key to decrease HIGH-SPEED.\n`);
+    process.stdout.write(`Press ${highSpeedModifierLabel}+even lane key to increase HIGH-SPEED.\n`);
   } else {
     tui.start();
     tui.setLatestJudge('READY');
@@ -879,6 +880,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       activeAudioVoiceCount: audioSession?.getActiveAudioVoiceCount?.() ?? 0,
     };
   };
+  const highSpeedModifierLabel = resolveAltModifierLabel();
 
   if (!tui) {
     process.stdout.write('Manual play start\n');
@@ -894,8 +896,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     );
     process.stdout.write('Press Space to pause/resume.\n');
     process.stdout.write('Press Shift+R to restart.\n');
-    process.stdout.write('Press Alt+odd lane key to decrease HIGH-SPEED.\n');
-    process.stdout.write('Press Alt+even lane key to increase HIGH-SPEED.\n');
+    process.stdout.write(`Press ${highSpeedModifierLabel}+odd lane key to decrease HIGH-SPEED.\n`);
+    process.stdout.write(`Press ${highSpeedModifierLabel}+even lane key to increase HIGH-SPEED.\n`);
     process.stdout.write('Press Ctrl+C to quit.\n');
     process.stdout.write('Press Esc to stop and open result.\n');
     printLaneMap(laneBindings);
