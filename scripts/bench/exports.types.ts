@@ -64,6 +64,11 @@ export interface BenchmarkCaseDefinition {
 
 export type DefineBenchmarkCase = (key: string, value: BenchmarkCaseDefinition) => void;
 
+export interface BenchmarkPackageDefinition {
+  module: Record<string, unknown>;
+  registerCases: (define: DefineBenchmarkCase) => void;
+}
+
 export interface BenchFixtures {
   tmpDir: string;
   bmsText: string;

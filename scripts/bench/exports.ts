@@ -5,22 +5,9 @@ import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Bench, type TaskResult } from 'tinybench';
-import * as utilsApi from '@be-music/utils';
 import * as jsonApi from '@be-music/json';
 import * as parserApi from '@be-music/parser';
-import * as stringifierApi from '@be-music/stringifier';
-import * as editorApi from '@be-music/editor';
-import * as audioRendererApi from '@be-music/audio-renderer';
-import * as playerApi from '@be-music/player';
 import type { RenderResult } from '@be-music/audio-renderer';
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
-import { registerUtilsExportsCases } from '../../packages/utils/scripts/exports-cases.ts';
-import { registerJsonExportsCases } from '../../packages/json/scripts/exports-cases.ts';
-import { registerParserExportsCases } from '../../packages/parser/scripts/exports-cases.ts';
-import { registerStringifierExportsCases } from '../../packages/stringifier/scripts/exports-cases.ts';
-import { registerEditorExportsCases } from '../../packages/editor/scripts/exports-cases.ts';
-import { registerAudioRendererExportsCases } from '../../packages/audio-renderer/scripts/exports-cases.ts';
-import { registerPlayerExportsCases } from '../../packages/player/scripts/exports-cases.ts';
 import {
   PACKAGE_NAMES,
   type PackageName,
@@ -30,6 +17,7 @@ import {
   type ExportsBenchmarkCliOverrides,
   type ExportsBenchmarkSnapshot,
 } from './exports.types.ts';
+import { PACKAGE_DEFINITIONS, registerAllExportsBenchmarkCases } from './packages/index.ts';
 
 interface CliDefaults {
   outputPath: string;
@@ -46,16 +34,6 @@ interface CliOptions {
   includeInteractive: boolean;
   filter?: string;
 }
-
-const PACKAGE_MODULES: Record<PackageName, Record<string, unknown>> = {
-  utils: utilsApi as Record<string, unknown>,
-  json: jsonApi as Record<string, unknown>,
-  parser: parserApi as Record<string, unknown>,
-  stringifier: stringifierApi as Record<string, unknown>,
-  editor: editorApi as Record<string, unknown>,
-  'audio-renderer': audioRendererApi as Record<string, unknown>,
-  player: playerApi as Record<string, unknown>,
-};
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repositoryDir = resolve(scriptDir, '../..');
@@ -230,13 +208,7 @@ function createBenchmarkCases(): Map<string, BenchmarkCaseDefinition> {
     cases.set(key, value);
   };
 
-  registerUtilsExportsCases(define);
-  registerJsonExportsCases(define);
-  registerParserExportsCases(define);
-  registerStringifierExportsCases(define);
-  registerEditorExportsCases(define);
-  registerAudioRendererExportsCases(define);
-  registerPlayerExportsCases(define);
+  registerAllExportsBenchmarkCases(define);
 
   return cases;
 }
@@ -397,7 +369,7 @@ function createRenderResult(leftValues: number[], rightValues: number[], sampleR
 function collectExportedFunctionsByPackage(selectedPackages: readonly PackageName[]): Record<PackageName, string[]> {
   const output = {} as Record<PackageName, string[]>;
   for (const packageName of selectedPackages) {
-    const entries = Object.entries(PACKAGE_MODULES[packageName])
+    const entries = Object.entries(PACKAGE_DEFINITIONS[packageName].module)
       .filter(([, value]) => typeof value === 'function')
       .map(([key]) => key)
       .sort((left, right) => left.localeCompare(right));
