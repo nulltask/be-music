@@ -99,6 +99,124 @@ jobs:
       - name: Run ${{ matrix.task }}
         run: pnpm run ${{ matrix.task }}
 
+  benchmark-pr:
+    name: Benchmark (PR)
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run head benchmark
+        run: pnpm run bench --output tmp/bench/head.json --time 30 --warmup-time 15
+
+      - name: Run base benchmark
+        id: base-benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          BASE_DIR="$(mktemp -d)"
+
+          cleanup() {
+            git worktree remove --force "$BASE_DIR" >/dev/null 2>&1 || true
+            rm -rf "$BASE_DIR" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          git worktree add --detach "$BASE_DIR" "$BASE_SHA"
+
+          if ! node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); process.exit(pkg.scripts && pkg.scripts['bench'] ? 0 : 1);" "$BASE_DIR/package.json"; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if (
+            cd "$BASE_DIR"
+            pnpm install --frozen-lockfile --prefer-offline
+            pnpm run bench --output tmp/bench/base.json --time 30 --warmup-time 15
+          ); then
+            mkdir -p tmp/bench
+            cp "$BASE_DIR/tmp/bench/base.json" tmp/bench/base.json
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate benchmark report
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.base-benchmark.outputs.available }}" = "true" ]; then
+            pnpm run bench:compare --head tmp/bench/head.json --base tmp/bench/base.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold 5 --top 12
+          else
+            pnpm run bench:compare --head tmp/bench/head.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold 5 --top 12
+          fi
+
+      - name: Post benchmark comment
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const marker = '<!-- be-music-exports-benchmark -->';
+            const body = fs.readFileSync('tmp/bench/pr-benchmark.md', 'utf8').trim();
+            const issue_number = context.issue.number;
+            const { owner, repo } = context.repo;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((comment) => {
+              return (
+                comment.user?.type === 'Bot' &&
+                typeof comment.body === 'string' &&
+                comment.body.includes(marker)
+              );
+            });
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
   sea:
     name: SEA (${{ matrix.os }})
     needs: changes

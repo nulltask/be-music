@@ -22,6 +22,7 @@
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt . --write",
-    "format:check": "oxfmt . --check"
+    "format:check": "oxfmt . --check",
+    "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts"
   }
 }

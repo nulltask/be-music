@@ -27,9 +27,7 @@
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt . --write",
     "format:check": "oxfmt . --check",
-    "bench": "tsx --tsconfig ../../tsconfig.typecheck.json src/benchmark.ts",
-    "bench:check": "pnpm run bench -- --check",
-    "bench:update-baseline": "pnpm run bench -- --write-baseline"
+    "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts"
   },
   "dependencies": {
     "@be-music/json": "workspace:*",

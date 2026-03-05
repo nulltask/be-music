@@ -271,18 +271,14 @@ pnpm run audio-renderer:sea --node-binary /path/to/node
 - Node.js 25+ では `--build-sea` を使用します。
 - Node.js 24 系では `--experimental-sea-config + postject` へ自動フォールバックします。
 
-## parser ベンチマーク
+## Exports ベンチマーク
 
 ```bash
-# ベースライン更新
-pnpm run bench:parser:update-baseline
+# 全パッケージ
+pnpm run bench
 
-# 退行チェック
-pnpm run bench:parser:check
-
-# 単純計測
-pnpm run bench:parser
+# 単一パッケージ（例: parser）
+pnpm --filter @be-music/parser run bench
 ```
 
-- ベースライン: `tmp/parser-benchmark-baseline.json`
-- 既定の退行しきい値: `+50%`
+- 出力: `tmp/bench/exports*.json`
