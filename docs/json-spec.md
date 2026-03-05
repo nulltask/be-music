@@ -22,6 +22,7 @@
   "bms": {
     "lnType": 1,
     "lnMode": 0,
+    "lnObjs": ["AA", "ZZ"],
     "lnObj": "ZZ",
     "defExRank": 120,
     "exRank": {
@@ -117,6 +118,7 @@
 
 - `lnType`: `#LNTYPE` の値
 - `lnMode`: `#LNMODE` の値
+- `lnObjs`: 複数 `#LNOBJ` 宣言を宣言順で保持した配列 (2桁 base36)
 - `lnObj`: `#LNOBJ` のキー (2桁 base36)
 - `defExRank`: `#DEFEXRANK` の値
 - `exRank`: `#EXRANKxx` のマップ
@@ -142,6 +144,8 @@
 - `controlFlow`: 制御構文 (`#RANDOM`/`#IF`/`#SWITCH` 系) と、その内側のヘッダ/オブジェクト行
 - `controlFlow.kind = "object"` は通常イベントと同じ `events` 形式（必要に応じて `measureLength`）で保持
 - パーサは制御構文をこの配列へ保持し、分岐の実行は再生/レンダリング時に行います
+- `lnObj` は互換のための単一値（末尾宣言）で、複数宣言の正規情報は `lnObjs` を参照します
+- `scroll` の値は有限数を許可し、`0` および負値も保持対象です
 
 `bmson` は bmson 固有の追加情報を保持する拡張領域です。
 

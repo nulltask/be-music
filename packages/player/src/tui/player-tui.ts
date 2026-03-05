@@ -2,6 +2,7 @@ import { clamp } from '@be-music/utils';
 import type { PlayerSummary } from '../index.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../player-utils.ts';
 import type { PlayerStateSignals } from '../player-state-signals.ts';
+import { findStackableRowIndex } from './lane-stacking.ts';
 import {
   normalizeHighSpeed,
   resolveAnimatedHighSpeedValue,
@@ -1423,17 +1424,7 @@ function findStackableRow(
   canPlaceAt: (targetRow: number, allowEqualPriorityOverwrite: boolean) => boolean,
 ): number | undefined {
   const rowCount = Math.min(grid.length, sourceChannels.length);
-  for (let offset = 1; offset < rowCount; offset += 1) {
-    const upper = preferredRow - offset;
-    if (upper >= 0 && canPlaceAt(upper, false)) {
-      return upper;
-    }
-    const lower = preferredRow + offset;
-    if (lower < rowCount && canPlaceAt(lower, false)) {
-      return lower;
-    }
-  }
-  return undefined;
+  return findStackableRowIndex(rowCount, preferredRow, (targetRow) => canPlaceAt(targetRow, false));
 }
 
 function resolveLaneCellPriority(symbol: string, isFreeZoneSourceChannel: boolean): number {
