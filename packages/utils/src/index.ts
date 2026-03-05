@@ -5,11 +5,23 @@ export function resolveCliPath(path: string, cwd: string = process.env.INIT_CWD 
 }
 
 export function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
+  if (value <= min) {
+    return min;
+  }
+  if (value >= max) {
+    return max;
+  }
+  return value;
 }
 
 export function clampSignedUnit(value: number): number {
-  return clamp(value, -1, 1);
+  if (value <= -1) {
+    return -1;
+  }
+  if (value >= 1) {
+    return 1;
+  }
+  return value;
 }
 
 export function floatToInt16(value: number): number {
@@ -24,14 +36,16 @@ export function normalizeNonNegativeInt(value: number, fallback = 0): number {
   if (!Number.isFinite(value)) {
     return fallback;
   }
-  return Math.max(0, Math.floor(value));
+  const normalized = Math.floor(value);
+  return normalized < 0 ? 0 : normalized;
 }
 
 export function normalizePositiveInt(value: number, fallback = 1): number {
   if (!Number.isFinite(value) || value <= 0) {
     return fallback;
   }
-  return Math.max(1, Math.floor(value));
+  const normalized = Math.floor(value);
+  return normalized < 1 ? 1 : normalized;
 }
 
 export function normalizeFractionNumerator(value: number, denominator: number, fallback = 0): number {
@@ -40,7 +54,14 @@ export function normalizeFractionNumerator(value: number, denominator: number, f
     return fallback;
   }
   const normalized = Math.floor(value);
-  return Math.max(0, Math.min(safeDenominator - 1, normalized));
+  if (normalized < 0) {
+    return 0;
+  }
+  const maxNumerator = safeDenominator - 1;
+  if (normalized > maxNumerator) {
+    return maxNumerator;
+  }
+  return normalized;
 }
 
 export function gcd(left: number, right: number): number {
@@ -114,7 +135,7 @@ export function findLastIndexAtOrBefore<T>(
   let high = items.length - 1;
   let answer = -1;
   while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
+    const mid = (low + high) >>> 1;
     if (resolveValue(items[mid]!) <= target) {
       answer = mid;
       low = mid + 1;
@@ -134,7 +155,7 @@ export function findLastIndexBefore<T>(
   let high = items.length - 1;
   let answer = -1;
   while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
+    const mid = (low + high) >>> 1;
     if (resolveValue(items[mid]!) < target) {
       answer = mid;
       low = mid + 1;

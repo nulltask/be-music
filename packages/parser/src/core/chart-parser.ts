@@ -40,9 +40,21 @@ import {
 
 const INDEXED_HEADER_COMMAND =
   /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SWBGA)([0-9A-Z]{2})$/;
-const HEADER_LINE = /^#([A-Z][A-Z0-9_]*)(?:\s+(.+))?$/i;
-const CONTROL_FLOW_LINE =
-  /^#(RANDOM|SETRANDOM|IF|ELSEIF|ELSE|ENDIF|ENDRANDOM|SWITCH|SETSWITCH|CASE|SKIP|DEF|ENDSW)(?:\s+(.+))?$/i;
+const CONTROL_FLOW_COMMANDS: ReadonlySet<BmsControlFlowCommand> = new Set([
+  'RANDOM',
+  'SETRANDOM',
+  'IF',
+  'ELSEIF',
+  'ELSE',
+  'ENDIF',
+  'ENDRANDOM',
+  'SWITCH',
+  'SETSWITCH',
+  'CASE',
+  'SKIP',
+  'DEF',
+  'ENDSW',
+]);
 type IndexedHeaderDirective =
   | 'WAV'
   | 'BMP'
@@ -91,38 +103,30 @@ export function parseBms(input: string): BeMusicJson {
       return;
     }
 
-    const controlFlowMatch = line.match(CONTROL_FLOW_LINE);
-    if (controlFlowMatch) {
-      const command = controlFlowMatch[1].toUpperCase() as BmsControlFlowCommand;
-      const value = controlFlowMatch[2]?.trim();
+    const headerLine = parseHeaderDirectiveLine(line);
+    if (!headerLine) {
+      return;
+    }
+    const { command, value } = headerLine;
+
+    if (isControlFlowCommand(command)) {
       json.bms.controlFlow.push({
         kind: 'directive',
         command,
-        value,
+        value: value.length > 0 ? value : undefined,
       });
       updateControlFlowCaptureStack(controlFlowCaptureStack, command);
       return;
     }
 
     if (controlFlowCaptureStack.length > 0) {
-      const headerMatch = line.match(HEADER_LINE);
-      if (!headerMatch) {
-        return;
-      }
       json.bms.controlFlow.push({
         kind: 'header',
-        command: headerMatch[1].toUpperCase(),
-        value: headerMatch[2]?.trim() ?? '',
+        command,
+        value,
       });
       return;
     }
-
-    const headerMatch = line.match(HEADER_LINE);
-    if (!headerMatch) {
-      return;
-    }
-    const command = headerMatch[1].toUpperCase();
-    const value = headerMatch[2]?.trim() ?? '';
 
     if (command === 'BPM') {
       const parsedMainBpm = Number.parseFloat(value);
@@ -448,8 +452,54 @@ function parseObjectDataLine(line: string): ParsedObjectDataLine | undefined {
   };
 }
 
+interface ParsedHeaderDirectiveLine {
+  command: string;
+  value: string;
+}
+
+function parseHeaderDirectiveLine(line: string): ParsedHeaderDirectiveLine | undefined {
+  if (line.length < 2 || line.charCodeAt(0) !== 0x23) {
+    return undefined;
+  }
+  const commandStart = line.charCodeAt(1);
+  if (!isAsciiLetter(commandStart)) {
+    return undefined;
+  }
+
+  let cursor = 2;
+  while (cursor < line.length && isHeaderCommandChar(line.charCodeAt(cursor))) {
+    cursor += 1;
+  }
+  if (cursor < line.length && !isAsciiWhitespace(line.charCodeAt(cursor))) {
+    return undefined;
+  }
+
+  const command = line.slice(1, cursor).toUpperCase();
+  while (cursor < line.length && isAsciiWhitespace(line.charCodeAt(cursor))) {
+    cursor += 1;
+  }
+
+  const value = cursor < line.length ? line.slice(cursor).trim() : '';
+  return { command, value };
+}
+
 function isAsciiWhitespace(code: number): boolean {
   return code === 0x20 || code === 0x09 || code === 0x0b || code === 0x0c;
+}
+
+function isAsciiLetter(code: number): boolean {
+  return (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a);
+}
+
+function isHeaderCommandChar(code: number): boolean {
+  if (isAsciiLetter(code)) {
+    return true;
+  }
+  return (code >= 0x30 && code <= 0x39) || code === 0x5f;
+}
+
+function isControlFlowCommand(command: string): command is BmsControlFlowCommand {
+  return CONTROL_FLOW_COMMANDS.has(command as BmsControlFlowCommand);
 }
 
 function forEachLine(input: string, visitor: (line: string) => void): void {

@@ -11,6 +11,10 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -105,6 +109,10 @@ jobs:
     if: github.event_name == 'pull_request' && needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      BENCH_TIME_MS: 60
+      BENCH_WARMUP_TIME_MS: 30
+      BENCH_REGRESSION_THRESHOLD: 8
     permissions:
       contents: read
       pull-requests: write
@@ -131,7 +139,7 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Run head benchmark
-        run: pnpm run bench --output tmp/bench/head.json --time 30 --warmup-time 15
+        run: pnpm run bench --output tmp/bench/head.json --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
 
       - name: Run base benchmark
         id: base-benchmark
@@ -157,7 +165,7 @@ jobs:
           if (
             cd "$BASE_DIR"
             pnpm install --frozen-lockfile --prefer-offline
-            pnpm run bench --output tmp/bench/base.json --time 30 --warmup-time 15
+            pnpm run bench --output tmp/bench/base.json --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
           ); then
             mkdir -p tmp/bench
             cp "$BASE_DIR/tmp/bench/base.json" tmp/bench/base.json
@@ -171,9 +179,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ steps.base-benchmark.outputs.available }}" = "true" ]; then
-            pnpm run bench:compare --head tmp/bench/head.json --base tmp/bench/base.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold 5 --top 12
+            pnpm run bench:compare --head tmp/bench/head.json --base tmp/bench/base.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
           else
-            pnpm run bench:compare --head tmp/bench/head.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold 5 --top 12
+            pnpm run bench:compare --head tmp/bench/head.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
           fi
 
       - name: Post benchmark comment

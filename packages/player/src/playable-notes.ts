@@ -1,10 +1,10 @@
 import {
   createBeatResolver,
+  isPlayableChannel,
   resolveBmsLongNotes,
   resolveLnobjLongNotes,
   type BeMusicEvent,
   type BeMusicJson,
-  isPlayableChannel,
   normalizeChannel,
   sortEvents,
 } from '@be-music/json';
@@ -57,6 +57,7 @@ export function extractTimedNotes(
   const resolver = createTimingResolver(json);
   const beatResolver = createBeatResolver(json);
   const sortedEvents = sortEvents(json.events);
+  const bmsonResolution = json.sourceFormat === 'bmson' ? Math.max(1, json.bmson.info.resolution || 240) : undefined;
   const playableNotes: TimedPlayableNote[] = [];
   const landmineNotes: TimedLandmineNote[] = [];
   const invisibleNotes: TimedPlayableNote[] = [];
@@ -66,7 +67,7 @@ export function extractTimedNotes(
 
     if (isPlayableChannel(normalizedChannel)) {
       const beat = beatResolver.eventToBeat(event);
-      const endBeat = resolveLongNoteEndBeat(json, event, beat, normalizedChannel);
+      const endBeat = resolveLongNoteEndBeat(event, beat, normalizedChannel, bmsonResolution);
       playableNotes.push({
         event,
         channel: normalizedChannel,
@@ -162,6 +163,9 @@ function applyLnobjEndBeatIfNeeded(
   notes: TimedPlayableNote[],
   resolver: ReturnType<typeof createTimingResolver>,
 ): void {
+  if (json.sourceFormat !== 'bms') {
+    return;
+  }
   const resolved = resolveLnobjLongNotes(json);
   if (resolved.startToEndBeat.size === 0) {
     return;
@@ -185,6 +189,9 @@ function appendLegacyLongNotesIfNeeded(
   resolver: ReturnType<typeof createTimingResolver>,
   options: Pick<ExtractTimedNotesOptions, 'inferBmsLnTypeWhenMissing'>,
 ): void {
+  if (json.sourceFormat !== 'bms') {
+    return;
+  }
   const resolved = resolveBmsLongNotes(json, {
     inferLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
   });
@@ -206,18 +213,17 @@ function appendLegacyLongNotesIfNeeded(
 }
 
 function resolveLongNoteEndBeat(
-  json: BeMusicJson,
   event: BeMusicEvent,
   beat: number,
   normalizedChannel = normalizeChannel(event.channel),
+  bmsonResolution?: number,
 ): number | undefined {
   if (isFreeZoneNormalizedChannel(normalizedChannel)) {
     return beat + FREE_ZONE_BEAT_LENGTH;
   }
 
-  if (event.bmson?.l && event.bmson.l > 0 && json.sourceFormat === 'bmson') {
-    const resolution = Math.max(1, json.bmson.info.resolution || 240);
-    return beat + event.bmson.l / resolution;
+  if (event.bmson?.l && event.bmson.l > 0 && typeof bmsonResolution === 'number') {
+    return beat + event.bmson.l / bmsonResolution;
   }
   return undefined;
 }
@@ -230,15 +236,16 @@ function mapLandmineNormalizedChannelToPlayableLane(normalized: string): string 
   if (normalized.length !== 2) {
     return undefined;
   }
-  const side = normalized[0];
   const lane = normalized[1];
-  if (lane < '1' || lane > '9') {
+  const laneCode = normalized.charCodeAt(1);
+  if (laneCode < 0x31 || laneCode > 0x39) {
     return undefined;
   }
-  if (side === 'D') {
+  const sideCode = normalized.charCodeAt(0);
+  if (sideCode === 0x44) {
     return `1${lane}`;
   }
-  if (side === 'E') {
+  if (sideCode === 0x45) {
     return `2${lane}`;
   }
   return undefined;
@@ -248,15 +255,16 @@ function mapInvisibleNormalizedChannelToPlayableLane(normalized: string): string
   if (normalized.length !== 2) {
     return undefined;
   }
-  const side = normalized[0];
   const lane = normalized[1];
-  if (lane < '1' || lane > '9') {
+  const laneCode = normalized.charCodeAt(1);
+  if (laneCode < 0x31 || laneCode > 0x39) {
     return undefined;
   }
-  if (side === '3') {
+  const sideCode = normalized.charCodeAt(0);
+  if (sideCode === 0x33) {
     return `1${lane}`;
   }
-  if (side === '4') {
+  if (sideCode === 0x34) {
     return `2${lane}`;
   }
   return undefined;

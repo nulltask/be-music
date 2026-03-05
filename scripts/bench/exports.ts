@@ -245,18 +245,72 @@ async function runBenchmarkCase(
 }
 
 function convertTaskResult(result: TaskResult): BenchmarkTaskStats {
-  const samples = Array.isArray(result.samples) ? result.samples : [];
-  const meanMs = Number.isFinite(result.mean) ? result.mean : Number.NaN;
+  const typedResult = result as TaskResult & {
+    mean?: number;
+    p75?: number;
+    p99?: number;
+    min?: number;
+    max?: number;
+    hz?: number;
+    rme?: number;
+    samples?: number[];
+    totalTime?: number;
+    period?: number;
+    latency?: {
+      min?: number;
+      max?: number;
+      p75?: number;
+      p99?: number;
+      samplesCount?: number;
+    };
+    throughput?: {
+      mean?: number;
+      rme?: number;
+      samplesCount?: number;
+    };
+  };
+  const isV6 =
+    typeof typedResult.period === 'number' ||
+    typeof typedResult.throughput?.mean === 'number' ||
+    typeof typedResult.latency?.samplesCount === 'number';
+  if (isV6) {
+    const periodSeconds = typedResult.period;
+    const latency = typedResult.latency;
+    const throughput = typedResult.throughput;
+    // tinybench v6 exposes period/latency in milliseconds.
+    const meanMs = Number.isFinite(periodSeconds) ? periodSeconds : Number.NaN;
+    const p75Ms = Number.isFinite(latency?.p75) ? latency?.p75 ?? meanMs : meanMs;
+    const p99Ms = Number.isFinite(latency?.p99) ? latency?.p99 ?? meanMs : meanMs;
+    const minMs = Number.isFinite(latency?.min) ? latency?.min ?? meanMs : meanMs;
+    const maxMs = Number.isFinite(latency?.max) ? latency?.max ?? meanMs : meanMs;
+    return {
+      hz: Number.isFinite(throughput?.mean) ? throughput?.mean ?? 0 : 0,
+      meanMs,
+      p75Ms,
+      p99Ms,
+      minMs,
+      maxMs,
+      rmePercent: Number.isFinite(throughput?.rme) ? throughput?.rme ?? 0 : 0,
+      sampleCount:
+        Number.isFinite(latency?.samplesCount) && (latency?.samplesCount ?? 0) > 0
+          ? Math.floor(latency?.samplesCount ?? 0)
+          : 0,
+      totalTimeMs: Number.isFinite(typedResult.totalTime) ? typedResult.totalTime ?? 0 : 0,
+    };
+  }
+
+  const samples = Array.isArray(typedResult.samples) ? typedResult.samples : [];
+  const meanMs = Number.isFinite(typedResult.mean) ? typedResult.mean ?? Number.NaN : Number.NaN;
   return {
-    hz: Number.isFinite(result.hz) ? result.hz : 0,
+    hz: Number.isFinite(typedResult.hz) ? typedResult.hz ?? 0 : 0,
     meanMs,
-    p75Ms: Number.isFinite(result.p75) ? result.p75 : meanMs,
-    p99Ms: Number.isFinite(result.p99) ? result.p99 : meanMs,
-    minMs: Number.isFinite(result.min) ? result.min : meanMs,
-    maxMs: Number.isFinite(result.max) ? result.max : meanMs,
-    rmePercent: Number.isFinite(result.rme) ? result.rme : 0,
+    p75Ms: Number.isFinite(typedResult.p75) ? typedResult.p75 ?? meanMs : meanMs,
+    p99Ms: Number.isFinite(typedResult.p99) ? typedResult.p99 ?? meanMs : meanMs,
+    minMs: Number.isFinite(typedResult.min) ? typedResult.min ?? meanMs : meanMs,
+    maxMs: Number.isFinite(typedResult.max) ? typedResult.max ?? meanMs : meanMs,
+    rmePercent: Number.isFinite(typedResult.rme) ? typedResult.rme ?? 0 : 0,
     sampleCount: samples.length,
-    totalTimeMs: Number.isFinite(result.totalTime) ? result.totalTime : 0,
+    totalTimeMs: Number.isFinite(typedResult.totalTime) ? typedResult.totalTime ?? 0 : 0,
   };
 }
 
