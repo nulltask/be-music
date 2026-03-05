@@ -26,6 +26,14 @@
 - 対応レベル: 部分対応
 - 方針: 仕様全域の完全再現ではなく、主要な譜面再生要素を優先して実装
 
+## リビジョン追従情報
+
+- 監査起点: `78dfb931952e617518629627f84919a5b2deeeaf` (`feat: initial commit`)
+- 監査時点: `335200e` (`fix(player): formalize scroll compatibility policy and tests`)
+- 監査対象: `packages/parser` / `packages/player` / `packages/audio-renderer` / `packages/json` / `packages/stringifier` / `docs`
+- 監査対象コミット数 (no-merge): `135` (`feat=52`, `fix=44`, `refactor=22`, `perf=2`, `test=4`, `docs=9`, `chore=2`)
+- この文書は上記範囲の実装差分を反映する
+
 ## 対応 (構文受理)
 
 - [x] オブジェクトデータ行 `#mmmcc:data` を受理
@@ -215,13 +223,28 @@
 
 - 使用チャンネルからレーンモードを自動判定 (`5 KEY SP`, `5 KEY DP`, `7 KEY SP`, `14 KEY DP`, `9 KEY`, `24 KEY SP`, `48 KEY DP`)
 - レーンモードを自動判定できない場合は拡張子で補完 (`.bms -> 5 KEY`, `.bme -> 7 KEY`, `.pms -> 9 KEY`)
+- `.pms` 譜面の 9KEY は標準配列 (`PMS-STD`) / 互換配列 (`PMS-COMPAT`) をチャンネル分布から推定し、`LANE` 表示に反映
 - FREE ZONE (`17` / `27`) は独立レーンを作らずスクラッチレーン (`16` / `26`) 上に描画
 - FREE ZONE ノート長は 4 分音符固定
 - FREE ZONE は判定対象外 (`TOTAL` / `EX-SCORE` / `SCORE` に含めない)
 - BGA ビューポート背景は黒を使用（透明領域・BGA 未表示中も黒）
 - 制御構文を含む譜面では、選択された `#RANDOM` パターンを `RANDOM 現在/総数` 形式で表示
+- プレイ中に `Shift+R` で演奏を最初から再開し、`#RANDOM` は再抽選する
 - キー入力は kitty keyboard protocol を自動オプトインし、1P/2P スクラッチに左/右 Shift を利用
 - kitty 非対応端末では既存入力へフォールバック (`a` / `]` でもスクラッチ入力可能)
+- HIGH-SPEED 操作は `Alt/Option` + レーン入力（奇数レーンで減速、偶数レーンで加速）で行う
+- 曲選択プレビューは `#PREVIEW` を優先し、未指定時は譜面先頭発音からフォールバック生成する
+- 曲選択プレビューのレンダリングはフォーカス移動時に中断し、直前プレビューを継続再生しない
+- 単曲モード（および譜面1件ディレクトリ）では、リザルトを `Enter` / `Esc` 待ちにし、`r` でリプレイできる
+- リザルト遷移は固定待機時間ではなく、再生中音声のドレイン完了を待って実行する
+
+### player 判定/音声ルール
+
+- FAST/SLOW は `GREAT` / `GOOD` のみで加算し、`PERFECT` では加算しない
+- ロングノートは終端時刻で判定し、終端オブジェクトの発音は行わない
+- `AUTO` / `AUTO SCRATCH` / `MANUAL` のいずれでも、再生音声はリアルタイムトリガ方式を使用する
+- `--play-volume` は演奏レーン系、`--bgm-volume` は非演奏レーン系へ適用する
+- `SC` / 地雷 / `LNOBJ` 終端抑止対象イベントは音声トリガ対象から除外する
 
 ### SCROLL/BPM/STOP 互換ポリシー
 
@@ -230,6 +253,7 @@
 - `SCROLL` の可視探索は `MAX_SCROLL_LOOKAHEAD_BEATS`（`4 * 64` beat）で上限を設ける
 - BPM×`100001` + `STOP` 補正を含むギミックでも、BPM 表示は内部時刻計算で使用する値をそのまま採用する
 - beatoraja 固有の描画バグ依存譜面は互換対象外とし、現時点では再現モードを実装しない
+- 上記ポリシーの回帰は `packages/player/src/tui/lane-stacking.test.ts`・`packages/player/src/core/timeline.test.ts`・`packages/player/src/bga.test.ts` で検証する
 
 ## イベント位置の扱い
 
