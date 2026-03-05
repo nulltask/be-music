@@ -278,11 +278,9 @@ export function parseBpmFrom03Token(value: string): number {
 }
 
 export function ensureMeasure(json: BeMusicJson, index: number): BeMusicMeasure {
-  for (let measureIndex = 0; measureIndex < json.measures.length; measureIndex += 1) {
-    const current = json.measures[measureIndex]!;
-    if (current.index === index) {
-      return current;
-    }
+  const found = json.measures.find((measure) => measure.index === index);
+  if (found) {
+    return found;
   }
   const created: BeMusicMeasure = {
     index,
