@@ -90,7 +90,7 @@ const IIDX_MEASURE_BEATS = 4;
 const MAX_SCROLL_LOOKAHEAD_BEATS = IIDX_MEASURE_BEATS * 64;
 const MAX_NOTES_PER_RENDER_WINDOW = 2048;
 const BEAT_EPSILON = 1e-9;
-const FLASH_DURATION_MS = 120;
+const FLASH_DURATION_MS = 180;
 const DEFAULT_LANE_WIDTH = 3;
 const DEFAULT_GRID_ROWS = 14;
 const MIN_GRID_ROWS = 4;
@@ -101,8 +101,11 @@ const LANE_DIVIDER_SYMBOL = '│';
 const LANE_OUTER_BORDER_SYMBOL = '┃';
 const SPLIT_PANEL_INNER_WIDTH = 5;
 const JUDGE_LINE_SYMBOL = '█';
-const HIGHLIGHT_BG_STEPS = [240, 239, 238, 237, 236, 235, 234, 233, 232, 232, 232];
 const HIGHLIGHT_DECAY_POWER = 0.72;
+const HIGHLIGHT_R_BOOST = 56;
+const HIGHLIGHT_G_BOOST = 62;
+const HIGHLIGHT_B_BOOST = 74;
+const NOTE_ROW_HYSTERESIS_CELLS = 0.18;
 const RED_NOTE_CHANNELS = new Set(['16', '26']);
 const WHITE_NOTE_CHANNELS = new Set(['11', '13', '15', '19', '21', '23', '25', '29']);
 const BLUE_NOTE_CHANNELS = new Set(['12', '14', '17', '18', '22', '24', '27', '28']);
@@ -190,6 +193,8 @@ export class PlayerTui {
 
   private visibleNoteIndices = new Set<number>();
 
+  private visibleNoteRows = new Map<number, number>();
+
   private displayedHighSpeed: number;
 
   private targetHighSpeed: number;
@@ -253,6 +258,7 @@ export class PlayerTui {
     this.noteWindowEndIndex = 0;
     this.noteWindowBeat = Number.NEGATIVE_INFINITY;
     this.visibleNoteIndices.clear();
+    this.visibleNoteRows.clear();
     this.displayedHighSpeed = normalizeHighSpeed(this.options.highSpeed);
     this.targetHighSpeed = this.displayedHighSpeed;
     this.highSpeedTransitionFrom = this.displayedHighSpeed;
@@ -359,10 +365,12 @@ export class PlayerTui {
       scrollWindowBeats,
     );
     const visibleNoteIndices = new Set<number>();
+    const visibleNoteRows = new Map<number, number>();
 
     for (let noteIndex = noteStartIndex; noteIndex < noteEndIndex; noteIndex += 1) {
       const note = frame.notes[noteIndex];
       const wasVisible = this.visibleNoteIndices.has(noteIndex);
+      const previousRow = this.visibleNoteRows.get(noteIndex);
       let visibleThisFrame = false;
       const keepVisible =
         typeof note.visibleUntilBeat === 'number' &&
@@ -384,9 +392,10 @@ export class PlayerTui {
         if (!isDistanceWithinWindow(visibleDistance, scrollWindowBeats)) {
           continue;
         }
-        const row = wasVisible ? distanceToNoteRow(visibleDistance, rowCount, scrollWindowBeats) : 0;
+        const row = wasVisible ? distanceToNoteRow(visibleDistance, rowCount, scrollWindowBeats, previousRow) : 0;
         setLaneCell(grid, gridSourceChannels, row, lane, MINE_NOTE_SYMBOL, note.channel, this.freeZoneSourceChannels);
         visibleNoteIndices.add(noteIndex);
+        visibleNoteRows.set(noteIndex, row);
         continue;
       }
 
@@ -456,7 +465,7 @@ export class PlayerTui {
         }
         continue;
       }
-      const row = wasVisible ? distanceToNoteRow(headVisibleDistance, rowCount, scrollWindowBeats) : 0;
+      const row = wasVisible ? distanceToNoteRow(headVisibleDistance, rowCount, scrollWindowBeats, previousRow) : 0;
       setLaneCell(
         grid,
         gridSourceChannels,
@@ -468,8 +477,10 @@ export class PlayerTui {
       );
       visibleThisFrame = true;
       visibleNoteIndices.add(noteIndex);
+      visibleNoteRows.set(noteIndex, row);
     }
     this.visibleNoteIndices = visibleNoteIndices;
+    this.visibleNoteRows = visibleNoteRows;
 
     for (const [channel, until] of this.laneFlashUntil.entries()) {
       if (until <= now) {
@@ -901,7 +912,12 @@ function distanceToRow(distance: number, rowCount: number, scrollWindowBeats: nu
   return rowCount - 1 - Math.floor(normalized * (rowCount - 1));
 }
 
-function distanceToNoteRow(distance: number, rowCount: number, scrollWindowBeats: number): number {
+function distanceToNoteRow(
+  distance: number,
+  rowCount: number,
+  scrollWindowBeats: number,
+  previousRow?: number,
+): number {
   const safeDistance = Math.abs(distance);
   const rowSpan = Math.max(1, rowCount - 1);
   const rowStepDistance = scrollWindowBeats / rowSpan;
@@ -909,7 +925,21 @@ function distanceToNoteRow(distance: number, rowCount: number, scrollWindowBeats
     return rowCount - 1;
   }
   const shiftedDistance = Math.min(scrollWindowBeats, safeDistance + rowStepDistance);
-  return distanceToRow(shiftedDistance, rowCount, scrollWindowBeats);
+  const nextRow = distanceToRow(shiftedDistance, rowCount, scrollWindowBeats);
+  if (typeof previousRow !== 'number' || !Number.isFinite(previousRow)) {
+    return nextRow;
+  }
+
+  const clampedPreviousRow = clamp(Math.floor(previousRow), 0, rowCount - 1);
+  const normalizedProgressFromJudgeLine = clamp(shiftedDistance / scrollWindowBeats, 0, 1);
+  const progressFromTop = normalizedProgressFromJudgeLine * rowSpan;
+  const previousCellFromTop = rowSpan - clampedPreviousRow;
+  const minToAdvance = previousCellFromTop - NOTE_ROW_HYSTERESIS_CELLS;
+  const maxToRewind = previousCellFromTop + 1 + NOTE_ROW_HYSTERESIS_CELLS;
+  if (progressFromTop >= minToAdvance && progressFromTop < maxToRewind) {
+    return clampedPreviousRow;
+  }
+  return nextRow;
 }
 
 function renderLaneRow(
@@ -966,7 +996,7 @@ function renderLaneRow(
             : colorizeLaneLabel(cell);
     const highlightRatio = laneHighlightRatios.get(index);
     if (highlightRatio !== undefined) {
-      return highlightCell(decoratedCell, highlightRatio);
+      return highlightCell(decoratedCell, laneChannel, highlightRatio);
     }
     return applyLaneBackground ? colorizeLaneBackground(decoratedCell, laneChannel) : decoratedCell;
   });
@@ -1063,7 +1093,7 @@ function renderMeasureRow(
       let cell = renderMeasureLaneCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel);
       const highlightRatio = laneHighlightRatios.get(index);
       if (highlightRatio !== undefined) {
-        cell = highlightCell(cell, highlightRatio);
+        cell = highlightCell(cell, channel, highlightRatio);
       } else {
         cell = colorizeLaneBackground(cell, channel);
       }
@@ -1129,7 +1159,7 @@ function renderJudgeRow(
       let cell = renderJudgeLaneCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel);
       const highlightRatio = laneHighlightRatios.get(index);
       if (highlightRatio !== undefined) {
-        cell = highlightCell(cell, highlightRatio);
+        cell = highlightCell(cell, channel, highlightRatio);
       } else {
         cell = colorizeLaneBackground(cell, channel);
       }
@@ -1267,11 +1297,9 @@ function renderNoteCell(width: number, kind: 'head' | 'body' | 'tail'): string {
   return '█'.repeat(safeWidth);
 }
 
-function highlightCell(value: string, ratio: number): string {
-  const decayProgress = Math.pow(1 - clamp(ratio, 0, 1), HIGHLIGHT_DECAY_POWER);
-  const index = Math.round(decayProgress * (HIGHLIGHT_BG_STEPS.length - 1));
-  const background = HIGHLIGHT_BG_STEPS[index] ?? HIGHLIGHT_BG_STEPS[HIGHLIGHT_BG_STEPS.length - 1];
-  return `\u001b[48;5;${background}m${value}\u001b[0m`;
+function highlightCell(value: string, channel: string, ratio: number): string {
+  const background = resolveLaneHighlightBackgroundColor(channel, ratio);
+  return `\u001b[48;2;${background.r};${background.g};${background.b}m${value}\u001b[0m`;
 }
 
 function renderLaneBackdropCell(width: number): string {
@@ -1341,6 +1369,23 @@ function resolveLaneBackgroundColor(channel: string): RgbColor {
     return BLACK_KEY_LANE_BG_RGB;
   }
   return BLACK_RGB;
+}
+
+function resolveLaneHighlightBackgroundColor(channel: string, ratio: number): RgbColor {
+  const base = resolveLaneBackgroundColor(channel);
+  const strength = Math.pow(clamp(ratio, 0, 1), HIGHLIGHT_DECAY_POWER);
+  return {
+    r: mixColorByte(base.r, base.r + HIGHLIGHT_R_BOOST, strength),
+    g: mixColorByte(base.g, base.g + HIGHLIGHT_G_BOOST, strength),
+    b: mixColorByte(base.b, base.b + HIGHLIGHT_B_BOOST, strength),
+  };
+}
+
+function mixColorByte(from: number, to: number, ratio: number): number {
+  const safeRatio = clamp(ratio, 0, 1);
+  const safeTo = clamp(Math.round(to), 0, 255);
+  const mixed = from + (safeTo - from) * safeRatio;
+  return clamp(Math.round(mixed), 0, 255);
 }
 
 function colorizeInputKeyLabel(value: string, style: 'white' | 'black' | 'scratch'): string {
