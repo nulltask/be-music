@@ -28,6 +28,7 @@
     "eyecatch",
     "ghostty",
     "IIDX",
+    "isoworker",
     "Judgeable",
     "Judgements",
     "JUDGERANK",
@@ -63,6 +64,8 @@
     "Vorbis",
     "wavcmd",
     "webaudio",
+    "Workerize",
+    "Workerized",
     "YUVJ"
   ],
   "editor.defaultFormatter": "oxc.oxc-vscode",
