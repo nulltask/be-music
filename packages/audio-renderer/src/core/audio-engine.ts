@@ -5,8 +5,9 @@ import {
   createBeatResolver,
   DEFAULT_BPM,
   isLandmineChannel,
-  resolveBmsLongNotes,
   isSampleTriggerChannel,
+  isStopChannel,
+  resolveBmsLongNotes,
   normalizeChannel,
   normalizeObjectKey,
   parseBpmFrom03Token,
@@ -107,6 +108,8 @@ interface TimingBuildContext {
 const DEFAULT_SAMPLE_RATE = 44_100;
 const DEFAULT_TAIL_SECONDS = 2;
 const DEFAULT_GAIN = 0.9;
+const EMPTY_EVENT_SET = new Set<BeMusicEvent>();
+const FALLBACK_SAMPLE_CACHE = new Map<string, StereoSample>();
 
 export function createTimingResolver(json: BeMusicJson): TimingResolver {
   return createTimingResolverWithContext(json, createTimingBuildContext(json));
@@ -172,28 +175,34 @@ function collectSampleTriggersWithContext(
   options: CollectSampleTriggersOptions = {},
 ): TimedSampleTrigger[] {
   const { sortedEvents, beatResolver } = context;
-  const lnobjEndEvents = collectLnobjEndEvents(json);
-  const bmsLongNotes = resolveBmsLongNotes(json, {
-    inferLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
-  });
-  const events: BeMusicEvent[] = [];
+  const isBmsChart = json.sourceFormat === 'bms';
+  const lnobjEndEvents = isBmsChart ? collectLnobjEndEvents(json) : EMPTY_EVENT_SET;
+  const suppressedBmsLongNoteEvents = isBmsChart
+    ? resolveBmsLongNotes(json, {
+      inferLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+    }).suppressedTriggerEvents
+    : EMPTY_EVENT_SET;
+  const selectedEvents: Array<{ event: BeMusicEvent; normalizedChannel: string }> = [];
   for (const event of sortedEvents) {
-    if (!isSampleTriggerChannel(event.channel) || isLandmineChannel(event.channel)) {
+    const normalizedChannel = normalizeChannel(event.channel);
+    if (!isSampleTriggerChannel(normalizedChannel) || isLandmineChannel(normalizedChannel)) {
       continue;
     }
     if (lnobjEndEvents.has(event)) {
       continue;
     }
-    if (bmsLongNotes.suppressedTriggerEvents.has(event)) {
+    if (suppressedBmsLongNoteEvents.has(event)) {
       continue;
     }
-    events.push(event);
+    selectedEvents.push({ event, normalizedChannel });
   }
+  const events = selectedEvents.map((item) => item.event);
   const bmsonPlaybackMap =
     json.sourceFormat === 'bmson' ? createBmsonSamplePlaybackMap(json, resolver, events, beatResolver) : undefined;
 
   const triggers: TimedSampleTrigger[] = [];
-  for (const event of events) {
+  for (const item of selectedEvents) {
+    const event = item.event;
     const sampleKey = normalizeObjectKey(event.value);
     const playback = bmsonPlaybackMap?.get(event);
     const beat = beatResolver.eventToBeat(event);
@@ -201,7 +210,7 @@ function collectSampleTriggersWithContext(
       event,
       beat,
       seconds: resolver.beatToSeconds(beat),
-      channel: normalizeChannel(event.channel),
+      channel: item.normalizedChannel,
       sampleKey,
       samplePath: json.resources.wav[sampleKey],
       sampleOffsetSeconds: playback?.offsetSeconds ?? 0,
@@ -307,24 +316,42 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const left = new Float32Array(maxFrame);
   const right = new Float32Array(maxFrame);
 
-  for (let scheduleIndex = 0; scheduleIndex < scheduled.length; scheduleIndex += 1) {
-    if ((scheduleIndex & 0x1f) === 0) {
-      throwIfAborted(signal);
+  if (!signal) {
+    for (let scheduleIndex = 0; scheduleIndex < scheduled.length; scheduleIndex += 1) {
+      const item = scheduled[scheduleIndex]!;
+      if (item.triggerGain <= 0) {
+        continue;
+      }
+      mixSample(
+        left,
+        right,
+        item.sample,
+        item.start,
+        gain * item.triggerGain,
+        item.sampleOffsetFrames,
+        item.sampleMaxFrames,
+      );
     }
-    const item = scheduled[scheduleIndex]!;
-    if (item.triggerGain <= 0) {
-      continue;
+  } else {
+    for (let scheduleIndex = 0; scheduleIndex < scheduled.length; scheduleIndex += 1) {
+      if ((scheduleIndex & 0x1f) === 0) {
+        throwIfAborted(signal);
+      }
+      const item = scheduled[scheduleIndex]!;
+      if (item.triggerGain <= 0) {
+        continue;
+      }
+      mixSample(
+        left,
+        right,
+        item.sample,
+        item.start,
+        gain * item.triggerGain,
+        item.sampleOffsetFrames,
+        item.sampleMaxFrames,
+        signal,
+      );
     }
-    mixSample(
-      left,
-      right,
-      item.sample,
-      item.start,
-      gain * item.triggerGain,
-      item.sampleOffsetFrames,
-      item.sampleMaxFrames,
-      signal,
-    );
   }
 
   const peak = measurePeak(left, right);
@@ -434,7 +461,8 @@ function createStopPoints(
   let cumulativeSeconds = 0;
 
   for (const event of sortedEvents) {
-    if (normalizeChannel(event.channel) !== '09') {
+    const normalizedChannel = normalizeChannel(event.channel);
+    if (!isStopChannel(normalizedChannel)) {
       continue;
     }
     const beat = beatResolver.eventToBeat(event);
@@ -516,7 +544,7 @@ async function getOrCreateSample(params: {
     return cached;
   }
 
-  const fallback = createFallbackTone(sampleKey, sampleRate, fallbackToneSeconds);
+  const fallback = getFallbackSample(sampleKey, sampleRate, fallbackToneSeconds);
   if (!samplePath) {
     loadedSamples.set(sampleKey, fallback);
     onSampleLoadProgress?.({
@@ -584,6 +612,17 @@ async function getOrCreateSample(params: {
   }
 }
 
+function getFallbackSample(sampleKey: string, sampleRate: number, fallbackToneSeconds: number): StereoSample {
+  const cacheKey = `${sampleKey}:${sampleRate}:${fallbackToneSeconds}`;
+  const cached = FALLBACK_SAMPLE_CACHE.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const created = createFallbackTone(sampleKey, sampleRate, fallbackToneSeconds);
+  FALLBACK_SAMPLE_CACHE.set(cacheKey, created);
+  return created;
+}
+
 function toRenderResult(sample: StereoSample, sampleRate: number, gain: number): RenderResult {
   const safeGain = Number.isFinite(gain) ? gain : 1;
   if (safeGain === 1) {
@@ -638,14 +677,25 @@ function mixSample(
   }
 
   const framesToMix = Math.min(availableFrames, requestedFrames, destinationAvailable);
+  const sourceLeft = sample.left;
+  const sourceRight = sample.right;
+  if (!signal) {
+    for (let index = 0; index < framesToMix; index += 1) {
+      const source = sourceStart + index;
+      const target = startFrame + index;
+      destinationLeft[target] += sourceLeft[source] * gain;
+      destinationRight[target] += sourceRight[source] * gain;
+    }
+    return;
+  }
   for (let index = 0; index < framesToMix; index += 1) {
     if ((index & 0x7ff) === 0) {
       throwIfAborted(signal);
     }
     const source = sourceStart + index;
     const target = startFrame + index;
-    destinationLeft[target] += sample.left[source] * gain;
-    destinationRight[target] += sample.right[source] * gain;
+    destinationLeft[target] += sourceLeft[source] * gain;
+    destinationRight[target] += sourceRight[source] * gain;
   }
 }
 
@@ -664,7 +714,7 @@ function createBmsonSamplePlaybackMap(
   sampleEvents: BeMusicEvent[],
   beatResolver: BeatResolver,
 ): Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }> {
-  const perSampleKey = new Map<string, Array<{ event: BeMusicEvent; beat: number; seconds: number }>>();
+  const perSampleKey = new Map<string, Array<{ event: BeMusicEvent; beat: number; seconds: number; sampleKey: string }>>();
   for (const event of sampleEvents) {
     const sampleKey = normalizeObjectKey(event.value);
     let entries = perSampleKey.get(sampleKey);
@@ -677,6 +727,7 @@ function createBmsonSamplePlaybackMap(
       event,
       beat,
       seconds: resolver.beatToSeconds(beat),
+      sampleKey,
     });
   }
 
@@ -707,8 +758,7 @@ function createBmsonSamplePlaybackMap(
       const offsetSeconds = Math.max(0, firstEntry.seconds - anchorSeconds);
       const next = end < entries.length ? entries[end]! : undefined;
       const durationSeconds = next ? Math.max(0, next.seconds - firstEntry.seconds) : undefined;
-      const sampleKey = normalizeObjectKey(firstEntry.event.value);
-      const sliceId = `${sampleKey}:${sliceIndex}`;
+      const sliceId = `${firstEntry.sampleKey}:${sliceIndex}`;
       sliceIndex += 1;
       const playback = { offsetSeconds, durationSeconds, sliceId };
 

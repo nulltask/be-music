@@ -247,6 +247,13 @@ export function normalizeObjectKey(value: string): string {
 }
 
 export function normalizeChannel(value: string): string {
+  if (value.length === 2) {
+    const code0 = normalizeAsciiBase36Code(value.charCodeAt(0));
+    const code1 = normalizeAsciiBase36Code(value.charCodeAt(1));
+    if (code0 >= 0 && code1 >= 0) {
+      return String.fromCharCode(code0, code1);
+    }
+  }
   return normalizeObjectKey(value);
 }
 
@@ -259,14 +266,23 @@ export function intToBase36(value: number, pad = 2): string {
 }
 
 export function parseBpmFrom03Token(value: string): number {
+  if (value.length === 2) {
+    const high = parseHexDigit(value.charCodeAt(0));
+    const low = parseHexDigit(value.charCodeAt(1));
+    if (high >= 0 && low >= 0) {
+      return (high << 4) + low;
+    }
+  }
   const parsed = Number.parseInt(value, 16);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
 export function ensureMeasure(json: BeMusicJson, index: number): BeMusicMeasure {
-  const found = json.measures.find((measure) => measure.index === index);
-  if (found) {
-    return found;
+  for (let measureIndex = 0; measureIndex < json.measures.length; measureIndex += 1) {
+    const current = json.measures[measureIndex]!;
+    if (current.index === index) {
+      return current;
+    }
   }
   const created: BeMusicMeasure = {
     index,
@@ -367,51 +383,27 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
 }
 
 export function isTempoChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  return normalized === '03' || normalized === '08';
+  return isTempoNormalizedChannel(normalizeChannel(channel));
 }
 
 export function isStopChannel(channel: string): boolean {
-  return normalizeChannel(channel) === '09';
+  return isStopNormalizedChannel(normalizeChannel(channel));
 }
 
 export function isScrollChannel(channel: string): boolean {
-  return normalizeChannel(channel) === 'SC';
+  return isScrollNormalizedChannel(normalizeChannel(channel));
 }
 
 export function isLandmineChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  if (normalized.length !== 2) {
-    return false;
-  }
-  const side = normalized[0];
-  const lane = normalized[1];
-  if (side !== 'D' && side !== 'E') {
-    return false;
-  }
-  return lane >= '1' && lane <= '9';
+  return isLandmineNormalizedChannel(normalizeChannel(channel));
 }
 
 export function isSampleTriggerChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  if (normalized === '01') {
-    return true;
-  }
-  if (normalized.startsWith('0')) {
-    return false;
-  }
-  if (isTempoChannel(normalized) || isStopChannel(normalized) || isScrollChannel(normalized)) {
-    return false;
-  }
-  return true;
+  return isSampleTriggerNormalizedChannel(normalizeChannel(channel));
 }
 
 export function isPlayableChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  if (!isSampleTriggerChannel(normalized)) {
-    return false;
-  }
-  return normalized.startsWith('1') || normalized.startsWith('2');
+  return isPlayableNormalizedChannel(normalizeChannel(channel));
 }
 
 export function isBmsLongNoteChannel(channel: string): boolean {
@@ -419,22 +411,7 @@ export function isBmsLongNoteChannel(channel: string): boolean {
 }
 
 export function mapBmsLongNoteChannelToPlayable(channel: string): string | undefined {
-  const normalized = normalizeChannel(channel);
-  if (normalized.length !== 2) {
-    return undefined;
-  }
-  const side = normalized[0];
-  const lane = normalized[1];
-  if (lane < '1' || lane > '9') {
-    return undefined;
-  }
-  if (side === '5') {
-    return `1${lane}`;
-  }
-  if (side === '6') {
-    return `2${lane}`;
-  }
-  return undefined;
+  return mapBmsLongNoteNormalizedChannelToPlayable(normalizeChannel(channel));
 }
 
 export interface BmsLongNote {
@@ -471,16 +448,16 @@ export function resolveBmsLongNotes(
     };
   }
 
-  const longNoteEvents = sortEvents(json.events)
-    .map((event) => {
-      const sourceChannel = normalizeChannel(event.channel);
-      const mapped = mapBmsLongNoteChannelToPlayable(sourceChannel);
-      if (!mapped) {
-        return undefined;
-      }
-      return { event, sourceChannel, channel: mapped };
-    })
-    .filter((event): event is ResolvedBmsLongNoteEvent => event !== undefined);
+  const longNoteEvents: ResolvedBmsLongNoteEvent[] = [];
+  const sortedEvents = sortEvents(json.events);
+  for (const event of sortedEvents) {
+    const sourceChannel = normalizeChannel(event.channel);
+    const mapped = mapBmsLongNoteNormalizedChannelToPlayable(sourceChannel);
+    if (!mapped) {
+      continue;
+    }
+    longNoteEvents.push({ event, sourceChannel, channel: mapped });
+  }
   if (longNoteEvents.length === 0) {
     return {
       notes: [],
@@ -526,12 +503,13 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
   const startToEndBeat = new Map<BeMusicEvent, number>();
   const endEvents = new Set<BeMusicEvent>();
 
-  for (const event of sortEvents(json.events)) {
+  const sortedEvents = sortEvents(json.events);
+  for (const event of sortedEvents) {
     const normalizedChannel = normalizeChannel(event.channel);
-    if (!isPlayableChannel(normalizedChannel)) {
+    if (!isPlayableNormalizedChannel(normalizedChannel)) {
       continue;
     }
-    if (legacyLongNoteTicks.has(createChannelTickKey(normalizedChannel, event))) {
+    if (legacyLongNoteTicks.has(createNormalizedChannelTickKey(normalizedChannel, event))) {
       pendingStartByChannel.delete(normalizedChannel);
       continue;
     }
@@ -603,17 +581,22 @@ function resolveLnobjValues(json: BeMusicJson): Set<string> {
 function collectLegacyLongNoteTickKeys(json: BeMusicJson): Set<string> {
   const keys = new Set<string>();
   for (const event of json.events) {
-    const playableChannel = mapBmsLongNoteChannelToPlayable(event.channel);
+    const sourceChannel = normalizeChannel(event.channel);
+    const playableChannel = mapBmsLongNoteNormalizedChannelToPlayable(sourceChannel);
     if (!playableChannel) {
       continue;
     }
-    keys.add(createChannelTickKey(playableChannel, event));
+    keys.add(createNormalizedChannelTickKey(playableChannel, event));
   }
   return keys;
 }
 
 function createChannelTickKey(channel: string, event: BeMusicEvent): string {
-  return `${normalizeChannel(channel)}:${createEventTickKey(event)}`;
+  return createNormalizedChannelTickKey(normalizeChannel(channel), event);
+}
+
+function createNormalizedChannelTickKey(normalizedChannel: string, event: BeMusicEvent): string {
+  return `${normalizedChannel}:${createEventTickKey(event)}`;
 }
 
 function createEventTickKey(event: BeMusicEvent): string {
@@ -823,4 +806,77 @@ function normalizePositionNumerator(value: number, denominator: number): number 
   }
   const normalized = Math.floor(value);
   return Math.max(0, Math.min(denominator - 1, normalized));
+}
+
+function parseHexDigit(code: number): number {
+  if (code >= 0x30 && code <= 0x39) {
+    return code - 0x30;
+  }
+  if (code >= 0x41 && code <= 0x46) {
+    return code - 0x41 + 10;
+  }
+  if (code >= 0x61 && code <= 0x66) {
+    return code - 0x61 + 10;
+  }
+  return -1;
+}
+
+function isTempoNormalizedChannel(normalized: string): boolean {
+  return normalized === '03' || normalized === '08';
+}
+
+function isStopNormalizedChannel(normalized: string): boolean {
+  return normalized === '09';
+}
+
+function isScrollNormalizedChannel(normalized: string): boolean {
+  return normalized === 'SC';
+}
+
+function isLandmineNormalizedChannel(normalized: string): boolean {
+  if (normalized.length !== 2) {
+    return false;
+  }
+  const side = normalized.charCodeAt(0);
+  if (side !== 0x44 && side !== 0x45) {
+    return false;
+  }
+  const lane = normalized.charCodeAt(1);
+  return lane >= 0x31 && lane <= 0x39;
+}
+
+function isSampleTriggerNormalizedChannel(normalized: string): boolean {
+  if (normalized === '01') {
+    return true;
+  }
+  if (normalized.length === 0 || normalized.charCodeAt(0) === 0x30) {
+    return false;
+  }
+  return !isTempoNormalizedChannel(normalized) && !isStopNormalizedChannel(normalized) && !isScrollNormalizedChannel(normalized);
+}
+
+function isPlayableNormalizedChannel(normalized: string): boolean {
+  if (!isSampleTriggerNormalizedChannel(normalized)) {
+    return false;
+  }
+  const side = normalized.charCodeAt(0);
+  return side === 0x31 || side === 0x32;
+}
+
+function mapBmsLongNoteNormalizedChannelToPlayable(normalized: string): string | undefined {
+  if (normalized.length !== 2) {
+    return undefined;
+  }
+  const lane = normalized.charCodeAt(1);
+  if (lane < 0x31 || lane > 0x39) {
+    return undefined;
+  }
+  const side = normalized.charCodeAt(0);
+  if (side === 0x35) {
+    return `1${normalized[1]}`;
+  }
+  if (side === 0x36) {
+    return `2${normalized[1]}`;
+  }
+  return undefined;
 }
