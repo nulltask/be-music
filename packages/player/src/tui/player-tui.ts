@@ -20,6 +20,7 @@ interface TuiOptions {
   laneDisplayMode: string;
   title: string;
   artist?: string;
+  genre?: string;
   player?: number;
   rank?: number;
   playLevel?: number;
@@ -582,18 +583,19 @@ export class PlayerTui {
     }
 
     const lines: string[] = [];
-    lines.push(`BMS PLAYER TUI [${this.options.mode}]`);
-    lines.push(`${this.options.title}${this.options.artist ? ` / ${this.options.artist}` : ''}`);
-    lines.push(
-      `${renderProgress(frame.currentSeconds, frame.totalSeconds)}  ${formatSeconds(frame.currentSeconds)} / ${formatSeconds(frame.totalSeconds)}`,
-    );
     const currentBpm = findCurrentBpm(this.options.bpmTimeline, frame.currentSeconds);
     const currentScroll = findCurrentScroll(this.options.scrollTimeline, frame.currentBeat);
     const remainingStopSeconds = findRemainingStopSeconds(this.options.stopWindows, frame.currentSeconds);
     const stopLabel = remainingStopSeconds > 0 ? `${formatStopSeconds(remainingStopSeconds)}s` : '-';
     const audioBackendLabel = formatAudioBackendLabel(frame.audioBackend);
+    lines.push(`BMS PLAYER TUI [${this.options.mode}]  AUDIO ${audioBackendLabel}`);
+    lines.push(`${this.options.title}${this.options.artist ? ` / ${this.options.artist}` : ''}`);
+    lines.push(`GENRE ${formatGenreLabel(this.options.genre)}`);
     lines.push(
-      `SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(displayHighSpeed)}  BAD ±${formatJudgeWindowMs(this.options.judgeWindowMs)}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}  AUDIO ${audioBackendLabel}  FPS ${formatFps(currentFps)}`,
+      `${renderProgress(frame.currentSeconds, frame.totalSeconds)}  ${formatSeconds(frame.currentSeconds)} / ${formatSeconds(frame.totalSeconds)}`,
+    );
+    lines.push(
+      `TIMING  SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(displayHighSpeed)}  BAD ±${formatJudgeWindowMs(this.options.judgeWindowMs)}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}`,
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
@@ -601,12 +603,13 @@ export class PlayerTui {
     const measureLength = resolveMeasureLength(this.options.measureLengths, displayMeasure - 1);
     const measureSignature = formatMeasureSignature(measureLength);
     lines.push(`MEASURE ${displayMeasure}/${totalMeasures}  METER ${measureSignature}`);
+    lines.push(
+      `CHART   LANE ${this.options.laneDisplayMode}  PLAYER ${formatPlayerLabel(this.options.player)}  RANK ${formatRankLabel(this.options.rank)}  PLAYLEVEL ${formatPlayLevelLabel(this.options.playLevel)}`,
+    );
+    lines.push(`PERF    FPS ${formatFps(currentFps)}`);
     if (typeof this.options.randomPatternSummary === 'string' && this.options.randomPatternSummary.length > 0) {
       lines.push(this.options.randomPatternSummary);
     }
-    lines.push(
-      `LANE ${this.options.laneDisplayMode}  PLAYER ${formatPlayerLabel(this.options.player)}  RANK ${formatRankLabel(this.options.rank)}  PLAYLEVEL ${formatPlayLevelLabel(this.options.playLevel)}`,
-    );
     const animatedScore = this.resolveAnimatedScore(frame.summary.score, now);
     const maxExScore = Math.max(0, frame.summary.total * 2);
     lines.push(
@@ -2258,6 +2261,14 @@ function formatJudgeWindowMs(milliseconds: number): string {
 }
 
 function formatAudioBackendLabel(value: string | undefined): string {
+  if (typeof value !== 'string') {
+    return '-';
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : '-';
+}
+
+function formatGenreLabel(value: string | undefined): string {
   if (typeof value !== 'string') {
     return '-';
   }

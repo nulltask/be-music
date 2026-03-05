@@ -82,6 +82,7 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
     laneDisplayMode: options.laneDisplayMode,
     title: options.json.metadata.title ?? 'Untitled',
     artist: options.json.metadata.artist,
+    genre: options.json.metadata.genre,
     player: options.json.bms.player,
     rank: options.json.metadata.rank,
     playLevel: options.json.metadata.playLevel,
