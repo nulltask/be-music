@@ -95,7 +95,8 @@ const DEFAULT_LANE_WIDTH = 3;
 const DEFAULT_GRID_ROWS = 14;
 const MIN_GRID_ROWS = 4;
 const STATIC_TUI_LINES = 16;
-const MEASURE_LINE_SYMBOL = '┄';
+const MEASURE_LINE_SYMBOL = '▔';
+const MEASURE_LINE_DIVIDER_SYMBOL = '┬';
 const LANE_FILL_SYMBOL = '│';
 const LANE_DIVIDER_SYMBOL = '│';
 const LANE_OUTER_BORDER_SYMBOL = '┃';
@@ -1112,7 +1113,7 @@ function renderMeasureRow(
 }
 
 function renderMeasureSection(cells: string[]): string {
-  const divider = colorizeMeasureLine(MEASURE_LINE_SYMBOL);
+  const divider = colorizeMeasureLine(MEASURE_LINE_DIVIDER_SYMBOL);
   const body = cells.join(divider);
   return `${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}${body}${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}`;
 }
