@@ -1,5 +1,6 @@
 import { createTimingResolver, type TimingResolver } from '@be-music/audio-renderer';
 import { isScrollChannel, normalizeObjectKey, type BeatResolver, type BeMusicJson } from '@be-music/json';
+import { findLastIndexAtOrBefore } from '@be-music/utils';
 
 export interface MeasureTimelinePoint {
   measure: number;
@@ -28,9 +29,7 @@ export function createMeasureTimeline(
   resolver: TimingResolver,
   beatResolver: BeatResolver,
 ): MeasureTimelinePoint[] {
-  const maxEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
-  const maxDefinedMeasure = json.measures.reduce((max, measure) => Math.max(max, measure.index), 0);
-  const maxMeasure = Math.max(0, maxEventMeasure, maxDefinedMeasure);
+  const maxMeasure = resolveMaxMeasureIndex(json);
   const timeline: MeasureTimelinePoint[] = [];
   for (let measure = 0; measure <= maxMeasure + 1; measure += 1) {
     const seconds = resolver.beatToSeconds(beatResolver.measureToBeat(measure, 0));
@@ -107,24 +106,33 @@ export function createScrollTimeline(json: BeMusicJson, beatResolver: BeatResolv
 export function createBeatAtSecondsResolver(json: BeMusicJson): (seconds: number) => number {
   const resolver = createTimingResolver(json);
   const stopWindows = createStopBeatWindows(resolver);
+  let lastSeconds = Number.NEGATIVE_INFINITY;
+  let stopCursor = 0;
+  let endedStopSeconds = 0;
 
   return (seconds: number): number => {
     if (!Number.isFinite(seconds) || seconds <= 0) {
       return 0;
     }
+    const safeSeconds = Math.max(0, seconds);
 
-    let endedStopSeconds = 0;
-    for (const window of stopWindows) {
-      if (seconds < window.startSeconds) {
-        break;
-      }
-      if (seconds < window.endSeconds) {
-        return window.beat;
-      }
-      endedStopSeconds += window.durationSeconds;
+    // Playback time usually increases monotonically; keep a cursor to avoid re-scanning stop windows every frame.
+    if (safeSeconds + 1e-9 < lastSeconds) {
+      stopCursor = 0;
+      endedStopSeconds = 0;
+    }
+    lastSeconds = safeSeconds;
+
+    while (stopCursor < stopWindows.length && safeSeconds >= stopWindows[stopCursor]!.endSeconds) {
+      endedStopSeconds += stopWindows[stopCursor]!.durationSeconds;
+      stopCursor += 1;
+    }
+    const activeWindow = stopWindows[stopCursor];
+    if (activeWindow && safeSeconds >= activeWindow.startSeconds && safeSeconds < activeWindow.endSeconds) {
+      return activeWindow.beat;
     }
 
-    const adjustedSeconds = Math.max(0, seconds - endedStopSeconds);
+    const adjustedSeconds = Math.max(0, safeSeconds - endedStopSeconds);
     return secondsToBeatWithoutStops(resolver.tempoPoints, adjustedSeconds);
   };
 }
@@ -150,9 +158,7 @@ export function createStopBeatWindows(resolver: TimingResolver): StopBeatWindow[
 }
 
 export function createMeasureBoundariesBeats(json: BeMusicJson, beatResolver: BeatResolver): number[] {
-  const maxEventMeasure = json.events.reduce((max, event) => Math.max(max, event.measure), 0);
-  const maxDefinedMeasure = json.measures.reduce((max, measure) => Math.max(max, measure.index), 0);
-  const maxMeasure = Math.max(0, maxEventMeasure, maxDefinedMeasure);
+  const maxMeasure = resolveMaxMeasureIndex(json);
   const boundaries: number[] = [];
   let previous = Number.NaN;
 
@@ -178,22 +184,24 @@ function secondsToBeatWithoutStops(
   if (tempoPoints.length === 0 || seconds <= 0) {
     return 0;
   }
+  const index = findLastIndexAtOrBefore(tempoPoints, seconds, (point) => point.seconds);
 
-  let low = 0;
-  let high = tempoPoints.length - 1;
-  let index = 0;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const point = tempoPoints[mid]!;
-    if (point.seconds <= seconds) {
-      index = mid;
-      low = mid + 1;
-      continue;
-    }
-    high = mid - 1;
-  }
-
-  const point = tempoPoints[index]!;
+  const point = tempoPoints[Math.max(0, index)]!;
   const elapsed = Math.max(0, seconds - point.seconds);
   return point.beat + (elapsed * point.bpm) / 60;
+}
+
+function resolveMaxMeasureIndex(json: BeMusicJson): number {
+  let maxMeasure = 0;
+  for (const event of json.events) {
+    if (event.measure > maxMeasure) {
+      maxMeasure = event.measure;
+    }
+  }
+  for (const measure of json.measures) {
+    if (measure.index > maxMeasure) {
+      maxMeasure = measure.index;
+    }
+  }
+  return Math.max(0, maxMeasure);
 }

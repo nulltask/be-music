@@ -11,6 +11,7 @@ import {
   normalizeChannel,
   normalizeObjectKey,
 } from '@be-music/json';
+import { normalizeAsciiBase36Code } from '@be-music/utils';
 import { decodeBmsText, decodeUtf8Text } from './bms-text-decoder.ts';
 import {
   collectNonZeroObjectTokens,
@@ -37,11 +38,25 @@ import {
   updateControlFlowCaptureStack,
 } from './control-flow.ts';
 
+const INDEXED_HEADER_COMMAND =
+  /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SWBGA)([0-9A-Z]{2})$/;
 const HEADER_LINE = /^#([A-Z][A-Z0-9_]*)(?:\s+(.+))?$/i;
 const CONTROL_FLOW_LINE =
   /^#(RANDOM|SETRANDOM|IF|ELSEIF|ELSE|ENDIF|ENDRANDOM|SWITCH|SETSWITCH|CASE|SKIP|DEF|ENDSW)(?:\s+(.+))?$/i;
-const INDEXED_HEADER_COMMAND =
-  /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SWBGA)([0-9A-Z]{2})$/;
+type IndexedHeaderDirective =
+  | 'WAV'
+  | 'BMP'
+  | 'BPM'
+  | 'STOP'
+  | 'TEXT'
+  | 'EXRANK'
+  | 'ARGB'
+  | 'CHANGEOPTION'
+  | 'EXWAV'
+  | 'EXBMP'
+  | 'BGA'
+  | 'SCROLL'
+  | 'SWBGA';
 
 type MeasureLengthEntry = BeMusicJson['measures'][number];
 
@@ -91,13 +106,14 @@ export function parseBms(input: string): BeMusicJson {
 
     if (controlFlowCaptureStack.length > 0) {
       const headerMatch = line.match(HEADER_LINE);
-      if (headerMatch) {
-        json.bms.controlFlow.push({
-          kind: 'header',
-          command: headerMatch[1].toUpperCase(),
-          value: headerMatch[2]?.trim() ?? '',
-        });
+      if (!headerMatch) {
+        return;
       }
+      json.bms.controlFlow.push({
+        kind: 'header',
+        command: headerMatch[1].toUpperCase(),
+        value: headerMatch[2]?.trim() ?? '',
+      });
       return;
     }
 
@@ -105,9 +121,9 @@ export function parseBms(input: string): BeMusicJson {
     if (!headerMatch) {
       return;
     }
-
     const command = headerMatch[1].toUpperCase();
     const value = headerMatch[2]?.trim() ?? '';
+
     if (command === 'BPM') {
       const parsedMainBpm = Number.parseFloat(value);
       if (Number.isFinite(parsedMainBpm) && parsedMainBpm > 0) {
@@ -398,8 +414,8 @@ function parseObjectDataLine(line: string): ParsedObjectDataLine | undefined {
     return undefined;
   }
 
-  const channel0 = normalizeBase36AsciiCode(line.charCodeAt(4));
-  const channel1 = normalizeBase36AsciiCode(line.charCodeAt(5));
+  const channel0 = normalizeAsciiBase36Code(line.charCodeAt(4));
+  const channel1 = normalizeAsciiBase36Code(line.charCodeAt(5));
   if (channel0 < 0 || channel1 < 0) {
     return undefined;
   }
@@ -432,19 +448,6 @@ function parseObjectDataLine(line: string): ParsedObjectDataLine | undefined {
   };
 }
 
-function normalizeBase36AsciiCode(code: number): number {
-  if (code >= 0x30 && code <= 0x39) {
-    return code;
-  }
-  if (code >= 0x41 && code <= 0x5a) {
-    return code;
-  }
-  if (code >= 0x61 && code <= 0x7a) {
-    return code - 0x20;
-  }
-  return -1;
-}
-
 function isAsciiWhitespace(code: number): boolean {
   return code === 0x20 || code === 0x09 || code === 0x0b || code === 0x0c;
 }
@@ -468,79 +471,9 @@ function forEachLine(input: string, visitor: (line: string) => void): void {
 function pushHeaderLine(json: BeMusicJson, command: string, value: string): void {
   const objectCommand = command.match(INDEXED_HEADER_COMMAND);
   if (objectCommand) {
-    const directive = objectCommand[1];
+    const directive = objectCommand[1] as IndexedHeaderDirective;
     const key = normalizeObjectKey(objectCommand[2]);
-    if (directive === 'WAV') {
-      json.resources.wav[key] = value;
-      return;
-    }
-    if (directive === 'BMP') {
-      json.resources.bmp[key] = value;
-      return;
-    }
-    if (directive === 'TEXT') {
-      json.resources.text[key] = value;
-      return;
-    }
-    if (directive === 'EXRANK') {
-      if (value.length > 0) {
-        json.bms.exRank[key] = value;
-      }
-      return;
-    }
-    if (directive === 'ARGB') {
-      if (value.length > 0) {
-        json.bms.argb[key] = value;
-      }
-      return;
-    }
-    if (directive === 'CHANGEOPTION') {
-      if (value.length > 0) {
-        json.bms.changeOption[key] = value;
-      }
-      return;
-    }
-    if (directive === 'EXWAV') {
-      if (value.length > 0) {
-        json.bms.exWav[key] = value;
-      }
-      return;
-    }
-    if (directive === 'EXBMP') {
-      if (value.length > 0) {
-        json.bms.exBmp[key] = value;
-      }
-      return;
-    }
-    if (directive === 'BGA') {
-      if (value.length > 0) {
-        json.bms.bga[key] = value;
-      }
-      return;
-    }
-    if (directive === 'SCROLL') {
-      const numeric = Number.parseFloat(value);
-      if (Number.isFinite(numeric)) {
-        json.bms.scroll[key] = numeric;
-      }
-      return;
-    }
-    if (directive === 'SWBGA') {
-      if (value.length > 0) {
-        json.bms.swBga[key] = value;
-      }
-      return;
-    }
-
-    const numericValue = Number.parseFloat(value);
-    if (!Number.isFinite(numericValue)) {
-      return;
-    }
-    if (directive === 'BPM') {
-      json.resources.bpm[key] = numericValue;
-      return;
-    }
-    json.resources.stop[key] = numericValue;
+    applyIndexedHeaderLine(json, directive, key, value);
     return;
   }
 
@@ -685,6 +618,80 @@ function pushHeaderLine(json: BeMusicJson, command: string, value: string): void
       if (value.length > 0) {
         json.metadata.extras[command] = value;
       }
+  }
+}
+
+function applyIndexedHeaderLine(
+  json: BeMusicJson,
+  directive: IndexedHeaderDirective,
+  key: string,
+  value: string,
+): void {
+  switch (directive) {
+    case 'WAV':
+      json.resources.wav[key] = value;
+      return;
+    case 'BMP':
+      json.resources.bmp[key] = value;
+      return;
+    case 'TEXT':
+      json.resources.text[key] = value;
+      return;
+    case 'EXRANK':
+      if (value.length > 0) {
+        json.bms.exRank[key] = value;
+      }
+      return;
+    case 'ARGB':
+      if (value.length > 0) {
+        json.bms.argb[key] = value;
+      }
+      return;
+    case 'CHANGEOPTION':
+      if (value.length > 0) {
+        json.bms.changeOption[key] = value;
+      }
+      return;
+    case 'EXWAV':
+      if (value.length > 0) {
+        json.bms.exWav[key] = value;
+      }
+      return;
+    case 'EXBMP':
+      if (value.length > 0) {
+        json.bms.exBmp[key] = value;
+      }
+      return;
+    case 'BGA':
+      if (value.length > 0) {
+        json.bms.bga[key] = value;
+      }
+      return;
+    case 'SCROLL': {
+      const numeric = Number.parseFloat(value);
+      if (Number.isFinite(numeric)) {
+        json.bms.scroll[key] = numeric;
+      }
+      return;
+    }
+    case 'SWBGA':
+      if (value.length > 0) {
+        json.bms.swBga[key] = value;
+      }
+      return;
+    case 'BPM':
+    case 'STOP': {
+      const numericValue = Number.parseFloat(value);
+      if (!Number.isFinite(numericValue)) {
+        return;
+      }
+      if (directive === 'BPM') {
+        json.resources.bpm[key] = numericValue;
+      } else {
+        json.resources.stop[key] = numericValue;
+      }
+      return;
+    }
   }
 }
 

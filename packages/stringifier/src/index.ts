@@ -437,19 +437,9 @@ function groupEvents(events: BeMusicEvent[]): GroupedEventLine[] {
     groupedByChannel.set(channel, slot);
   }
 
-  const measures = [...groupedByMeasure.keys()].sort((left, right) => left - right);
   const result: GroupedEventLine[] = [];
-  for (const measure of measures) {
-    const groupedByChannel = groupedByMeasure.get(measure);
-    if (!groupedByChannel) {
-      continue;
-    }
-    const channels = [...groupedByChannel.keys()].sort();
-    for (const channel of channels) {
-      const slot = groupedByChannel.get(channel);
-      if (!slot) {
-        continue;
-      }
+  for (const [measure, groupedByChannel] of groupedByMeasure) {
+    for (const [channel, slot] of groupedByChannel) {
       result.push({
         measure,
         channel,

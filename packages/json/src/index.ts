@@ -1,4 +1,4 @@
-import { compareFractions } from '@be-music/utils';
+import { compareFractions, normalizeAsciiBase36Code } from '@be-music/utils';
 
 export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
 
@@ -224,14 +224,26 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
 }
 
 export function normalizeObjectKey(value: string): string {
-  const normalized = value.trim().toUpperCase();
-  if (normalized.length === 0) {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
     return '00';
   }
-  if (normalized.length === 1) {
-    return `0${normalized}`;
+  if (trimmed.length === 1) {
+    const code = normalizeAsciiBase36Code(trimmed.charCodeAt(0));
+    if (code >= 0) {
+      return `0${String.fromCharCode(code)}`;
+    }
+    return `0${trimmed.toUpperCase()}`;
   }
-  return normalized.slice(0, 2);
+  if (trimmed.length === 2) {
+    const code0 = normalizeAsciiBase36Code(trimmed.charCodeAt(0));
+    const code1 = normalizeAsciiBase36Code(trimmed.charCodeAt(1));
+    if (code0 >= 0 && code1 >= 0) {
+      return String.fromCharCode(code0, code1);
+    }
+    return trimmed.toUpperCase();
+  }
+  return trimmed.toUpperCase().slice(0, 2);
 }
 
 export function normalizeChannel(value: string): string {
@@ -334,22 +346,24 @@ export function createBeatResolver(json: BeMusicJson): BeatResolver {
 }
 
 export function sortEvents(events: BeMusicEvent[]): BeMusicEvent[] {
-  return [...events].sort((left, right) => {
-    if (left.measure !== right.measure) {
-      return left.measure - right.measure;
-    }
-    const positionDelta = compareEventPosition(left, right);
-    if (positionDelta !== 0) {
-      return positionDelta;
-    }
-    if (left.channel !== right.channel) {
-      return left.channel < right.channel ? -1 : 1;
-    }
-    if (left.value !== right.value) {
-      return left.value < right.value ? -1 : 1;
-    }
-    return 0;
-  });
+  return [...events].sort(compareEvents);
+}
+
+export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
+  if (left.measure !== right.measure) {
+    return left.measure - right.measure;
+  }
+  const positionDelta = compareEventPosition(left, right);
+  if (positionDelta !== 0) {
+    return positionDelta;
+  }
+  if (left.channel !== right.channel) {
+    return left.channel < right.channel ? -1 : 1;
+  }
+  if (left.value !== right.value) {
+    return left.value < right.value ? -1 : 1;
+  }
+  return 0;
 }
 
 export function isTempoChannel(channel: string): boolean {

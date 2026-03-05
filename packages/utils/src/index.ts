@@ -104,3 +104,56 @@ export function normalizeSortedUniqueNonNegativeIntegers(values: ReadonlyArray<n
   }
   return [...deduplicated].sort((left, right) => left - right);
 }
+
+export function findLastIndexAtOrBefore<T>(
+  items: ReadonlyArray<T>,
+  target: number,
+  resolveValue: (item: T) => number,
+): number {
+  let low = 0;
+  let high = items.length - 1;
+  let answer = -1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (resolveValue(items[mid]!) <= target) {
+      answer = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return answer;
+}
+
+export function findLastIndexBefore<T>(
+  items: ReadonlyArray<T>,
+  target: number,
+  resolveValue: (item: T) => number,
+): number {
+  let low = 0;
+  let high = items.length - 1;
+  let answer = -1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (resolveValue(items[mid]!) < target) {
+      answer = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return answer;
+}
+
+export function normalizeAsciiBase36Code(code: number): number {
+  if (code >= 0x30 && code <= 0x39) {
+    return code;
+  }
+  if (code >= 0x41 && code <= 0x5a) {
+    return code;
+  }
+  if (code >= 0x61 && code <= 0x7a) {
+    return code - 0x20;
+  }
+  return -1;
+}

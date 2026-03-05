@@ -15,6 +15,7 @@ import {
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
+import { findLastIndexAtOrBefore, findLastIndexBefore } from '@be-music/utils';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { detectAudioFormat, encodeAiff16, encodeWav16 } from './audio-file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './audio-decode.ts';
@@ -121,7 +122,7 @@ function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuild
       return 0;
     }
 
-    const index = findTempoPointIndexAtOrBeforeBeat(tempoPoints, beat);
+    const index = findLastIndexAtOrBefore(tempoPoints, beat, (point) => point.beat);
     const point = tempoPoints[Math.max(0, index)];
     const deltaBeat = beat - point.beat;
     return point.seconds + (deltaBeat * 60) / point.bpm;
@@ -131,7 +132,7 @@ function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuild
     if (tempoPoints.length === 0) {
       return json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
     }
-    const index = findTempoPointIndexAtOrBeforeBeat(tempoPoints, beat);
+    const index = findLastIndexAtOrBefore(tempoPoints, beat, (point) => point.beat);
     return tempoPoints[Math.max(0, index)].bpm;
   };
 
@@ -140,7 +141,7 @@ function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuild
     if (stopPoints.length === 0) {
       return base;
     }
-    const index = findStopPointIndexBeforeBeat(stopPoints, beat);
+    const index = findLastIndexBefore(stopPoints, beat, (point) => point.beat);
     if (index < 0) {
       return base;
     }
@@ -459,44 +460,8 @@ function bpmAtBeatFromTempoPoints(tempoPoints: TempoPoint[], beat: number): numb
   if (tempoPoints.length === 0) {
     return DEFAULT_BPM;
   }
-  const index = findTempoPointIndexAtOrBeforeBeat(tempoPoints, beat);
+  const index = findLastIndexAtOrBefore(tempoPoints, beat, (point) => point.beat);
   return tempoPoints[Math.max(0, index)].bpm;
-}
-
-function findTempoPointIndexAtOrBeforeBeat(points: ReadonlyArray<TempoPoint>, beat: number): number {
-  let low = 0;
-  let high = points.length - 1;
-  let answer = -1;
-
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (points[mid]!.beat <= beat) {
-      answer = mid;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-
-  return answer;
-}
-
-function findStopPointIndexBeforeBeat(points: ReadonlyArray<StopPoint>, beat: number): number {
-  let low = 0;
-  let high = points.length - 1;
-  let answer = -1;
-
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (points[mid]!.beat < beat) {
-      answer = mid;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-
-  return answer;
 }
 
 function integrateTempoPoint(points: TempoPoint[], beat: number, bpm: number): void {

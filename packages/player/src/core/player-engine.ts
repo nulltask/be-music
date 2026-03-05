@@ -1153,23 +1153,33 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     stopKittyKeyboardProtocol();
   };
 
-  const resolveMappedInputChannels = (tokens: readonly string[]): Set<string> => {
-    const candidateChannels = new Set<string>();
+  const candidateChannelsBuffer = new Set<string>();
+  const collectMappedInputChannels = (tokens: readonly string[]): void => {
     for (const token of tokens) {
       const mapped = inputTokenToChannels.get(token);
       if (!mapped) {
         continue;
       }
-      mapped.forEach((channel) => candidateChannels.add(channel));
+      mapped.forEach((channel) => candidateChannelsBuffer.add(channel));
+    }
+  };
+  const resolveMappedInputChannels = (
+    tokens: readonly string[],
+    additionalTokens?: readonly string[],
+  ): ReadonlySet<string> => {
+    candidateChannelsBuffer.clear();
+    collectMappedInputChannels(tokens);
+    if (additionalTokens && additionalTokens.length > 0) {
+      collectMappedInputChannels(additionalTokens);
     }
     if (autoScratchEnabled) {
-      for (const channel of candidateChannels) {
+      for (const channel of candidateChannelsBuffer) {
         if (scratchPlayableChannels.has(channel)) {
-          candidateChannels.delete(channel);
+          candidateChannelsBuffer.delete(channel);
         }
       }
     }
-    return candidateChannels;
+    return candidateChannelsBuffer;
   };
 
   const handleMappedInputTokens = (tokens: readonly string[]): void => {
@@ -1366,7 +1376,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     const repeatTokens = inputEvent.repeatTokens;
     const releaseTokens = inputEvent.releaseTokens;
     if (pressTokens.length > 0 || repeatTokens.length > 0) {
-      const pressedChannels = resolveMappedInputChannels([...pressTokens, ...repeatTokens]);
+      const pressedChannels = resolveMappedInputChannels(pressTokens, repeatTokens);
       for (const channel of pressedChannels) {
         activeKittyPressedChannels.add(channel);
         tui?.pressLane(channel);
@@ -2478,11 +2488,7 @@ async function buildRuntimeSampleMap(
   inferBmsLnTypeWhenMissing = false,
 ): Promise<Map<string, RenderResult>> {
   const sampleMap = new Map<string, RenderResult>();
-  const keySet = new Set<string>();
-  for (const trigger of collectRealtimeAudioTriggers(json, inferBmsLnTypeWhenMissing)) {
-    keySet.add(trigger.sampleKey);
-  }
-  const keys = [...keySet];
+  const keys = collectRealtimeAudioSampleKeys(json, inferBmsLnTypeWhenMissing);
 
   if (keys.length === 0) {
     onProgress?.({
@@ -2537,14 +2543,28 @@ function collectRealtimeAudioTriggers(
   includeChannel: (channel: string) => boolean = () => true,
 ): Array<TimedSampleTrigger & RealtimeAudioTrigger> {
   const resolver = createTimingResolver(json);
-  return collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing })
-    .filter((trigger) => includeChannel(trigger.channel))
-    .map((trigger) => ({
+  const triggers = collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing });
+  const filtered: Array<TimedSampleTrigger & RealtimeAudioTrigger> = [];
+  for (const trigger of triggers) {
+    if (!includeChannel(trigger.channel)) {
+      continue;
+    }
+    filtered.push({
       ...trigger,
       seconds: Math.max(0, trigger.seconds),
       channel: normalizeChannel(trigger.channel),
-    }))
-    .sort((left, right) => left.seconds - right.seconds);
+    });
+  }
+  return filtered;
+}
+
+function collectRealtimeAudioSampleKeys(json: BeMusicJson, inferBmsLnTypeWhenMissing: boolean): string[] {
+  const resolver = createTimingResolver(json);
+  const keys = new Set<string>();
+  for (const trigger of collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing })) {
+    keys.add(trigger.sampleKey);
+  }
+  return [...keys];
 }
 
 function resolveTriggerVoiceGain(channel: string, playVolume: number, bgmVolume: number): number {

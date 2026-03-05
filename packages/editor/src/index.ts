@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import {
   DEFAULT_BPM,
+  compareEvents,
   createEmptyJson,
   ensureMeasure,
   normalizeChannel,
@@ -102,8 +103,7 @@ export function addNote(
     value: normalizeObjectKey(params.value),
   };
 
-  normalized.events.push(event);
-  normalized.events = sortEvents(normalized.events);
+  insertSortedEvent(normalized.events, event);
   return normalized;
 }
 
@@ -142,7 +142,10 @@ export function deleteNote(
 
 export function listNotes(json: BeMusicJson, measure?: number): BeMusicEvent[] {
   const target = normalizeJson(json);
-  return sortEvents(target.events).filter((event) => (measure === undefined ? true : event.measure === measure));
+  if (measure === undefined) {
+    return [...target.events];
+  }
+  return target.events.filter((event) => event.measure === measure);
 }
 
 export function createBlankJson(): BeMusicJson {
@@ -198,4 +201,22 @@ function isSamePosition(event: BeMusicEvent, target: { numerator: number; denomi
     return false;
   }
   return true;
+}
+
+function insertSortedEvent(events: BeMusicEvent[], event: BeMusicEvent): void {
+  if (events.length === 0) {
+    events.push(event);
+    return;
+  }
+  let low = 0;
+  let high = events.length;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (compareEvents(events[mid]!, event) <= 0) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  events.splice(low, 0, event);
 }

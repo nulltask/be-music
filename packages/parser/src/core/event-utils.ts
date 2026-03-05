@@ -1,11 +1,17 @@
 import {
+  compareEvents,
   normalizeChannel,
   normalizeObjectKey,
   type BeMusicEvent,
   type BeMusicJson,
   type BeMusicPosition,
 } from '@be-music/json';
-import { compareFractions, normalizeFractionNumerator, normalizeNonNegativeInt, normalizePositiveInt } from '@be-music/utils';
+import {
+  normalizeAsciiBase36Code,
+  normalizeFractionNumerator,
+  normalizeNonNegativeInt,
+  normalizePositiveInt,
+} from '@be-music/utils';
 
 type MeasureLengthEntry = BeMusicJson['measures'][number];
 
@@ -26,7 +32,7 @@ export function collectNonZeroObjectTokens(input: string): {
   let highCode = -1;
   for (let index = 0; index < input.length; index += 1) {
     const code = input.charCodeAt(index);
-    const normalizedCode = normalizeAsciiTokenCode(code);
+    const normalizedCode = normalizeAsciiBase36Code(code);
     if (normalizedCode < 0) {
       continue;
     }
@@ -55,22 +61,7 @@ export function sortAndNormalizeEvents(events: Array<BeMusicEvent | Record<strin
     }
   }
 
-  normalized.sort((left, right) => {
-    if (left.measure !== right.measure) {
-      return left.measure - right.measure;
-    }
-    const positionDelta = compareEventPosition(left, right);
-    if (positionDelta !== 0) {
-      return positionDelta;
-    }
-    if (left.channel !== right.channel) {
-      return left.channel < right.channel ? -1 : 1;
-    }
-    if (left.value !== right.value) {
-      return left.value < right.value ? -1 : 1;
-    }
-    return 0;
-  });
+  normalized.sort(compareEvents);
   return normalized;
 }
 
@@ -182,21 +173,4 @@ function normalizeEventBmsonExtension(value: unknown): BeMusicEvent['bmson'] | u
     extension.c = raw.c;
   }
   return Object.keys(extension).length > 0 ? extension : undefined;
-}
-
-function compareEventPosition(left: BeMusicEvent, right: BeMusicEvent): number {
-  return compareFractions(left.position[0], left.position[1], right.position[0], right.position[1]);
-}
-
-function normalizeAsciiTokenCode(code: number): number {
-  if (code >= 0x30 && code <= 0x39) {
-    return code;
-  }
-  if (code >= 0x41 && code <= 0x5a) {
-    return code;
-  }
-  if (code >= 0x61 && code <= 0x7a) {
-    return code - 0x20;
-  }
-  return -1;
 }
