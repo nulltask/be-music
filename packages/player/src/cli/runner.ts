@@ -13,6 +13,8 @@ import {
   type PlayerLoadProgress,
   type PlayerSummary,
 } from '../index.ts';
+import { createNodeInputRuntime } from '../node/node-input-runtime.ts';
+import { createNodeUiRuntime } from '../node/node-ui-runtime.ts';
 import {
   HIGH_SPEED_STEP,
   MAX_HIGH_SPEED,
@@ -621,6 +623,19 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     audioLeadStepUpMs: args.audioLeadStepUpMs,
     audioLeadStepDownMs: args.audioLeadStepDownMs,
     tui: args.tui,
+    createUiRuntime: args.tui
+      ? async (context: Parameters<typeof createNodeUiRuntime>[0]) => {
+          const runtime = await createNodeUiRuntime(context);
+          if (!runtime.tuiEnabled && args.tui) {
+            process.stdout.write('TUI is unavailable in this environment. Falling back to text output.\n');
+          }
+          return runtime;
+        }
+      : undefined,
+    createInputRuntime: (context: Parameters<typeof createNodeInputRuntime>[0]) => createNodeInputRuntime(context),
+    writeOutput: (text: string): void => {
+      process.stdout.write(text);
+    },
     onHighSpeedChange: (value: number): void => {
       resolvedHighSpeed = normalizeHighSpeedValue(value);
     },

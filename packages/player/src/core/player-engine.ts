@@ -1,5 +1,4 @@
 import { basename } from 'node:path';
-import readline from 'node:readline';
 import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
 import { floatToInt16 } from '@be-music/utils';
 import {
@@ -22,17 +21,13 @@ import {
   renderSingleSample,
   renderJson,
 } from '@be-music/audio-renderer';
-import { createBgaAnsiRenderer, type BgaAnsiRenderer } from '../bga.ts';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../player-state-signals.ts';
-import { PlayerTui } from '../tui.ts';
 import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
 import {
   appendFreeZoneInputChannels,
-  beginKittyKeyboardProtocolOptIn,
   createInputTokenToChannelsMap,
   createLaneBindings,
   resolveLaneDisplayMode,
-  resolveInputTokenEvent,
   type LaneBinding,
 } from '../manual-input.ts';
 import {
@@ -48,6 +43,8 @@ import {
   resolveHighSpeedMultiplier,
   type HighSpeedControlAction,
 } from './high-speed-control.ts';
+import { createPlayerUiSignalBus, type PlayerUiSignalBus } from './player-ui-signal-bus.ts';
+import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './player-input-signal-bus.ts';
 import {
   IIDX_EX_SCORE_PER_PGREAT,
   IIDX_SCORE_MAX,
@@ -55,14 +52,43 @@ import {
   createScoreTracker,
 } from './scoring.ts';
 import { resolveJudgeWindowsMs } from './judge-window.ts';
-import {
-  createBeatAtSecondsResolver,
-  createBpmTimeline,
-  createMeasureBoundariesBeats,
-  createMeasureTimeline,
-  createScrollTimeline,
-  createStopBeatWindows,
-} from './timeline.ts';
+import { createBeatAtSecondsResolver } from './timeline.ts';
+
+export interface PlayerUiRuntime {
+  readonly tuiEnabled: boolean;
+  start: () => void;
+  stop: () => void;
+  dispose: () => void;
+  triggerPoor: (seconds: number) => void;
+  clearPoor: () => void;
+}
+
+export interface PlayerInputRuntime {
+  start: () => void;
+  stop: () => void;
+}
+
+export interface CreatePlayerUiRuntimeContext {
+  json: BeMusicJson;
+  mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH';
+  laneDisplayMode: string;
+  laneBindings: LaneBinding[];
+  speed: number;
+  judgeWindowMs: number;
+  highSpeed: number;
+  showLaneChannels: boolean;
+  randomPatternSummary?: string;
+  stateSignals: PlayerStateSignals;
+  uiSignals: PlayerUiSignalBus;
+  baseDir: string;
+  onBgaLoadProgress: (progress: { ratio: number; detail?: string }) => void;
+}
+
+export interface CreatePlayerInputRuntimeContext {
+  mode: 'auto' | 'manual';
+  inputSignals: PlayerInputSignalBus;
+  inputTokenToChannels: ReadonlyMap<string, readonly string[]>;
+}
 
 export interface PlayerOptions {
   auto?: boolean;
@@ -98,6 +124,9 @@ export interface PlayerOptions {
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
   onHighSpeedChange?: (highSpeed: number) => void;
   laneModeExtension?: string;
+  createUiRuntime?: (context: CreatePlayerUiRuntimeContext) => Promise<PlayerUiRuntime | undefined>;
+  createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
+  writeOutput?: (text: string) => void;
 }
 
 export interface PlayerSummary {
@@ -200,15 +229,6 @@ const AUTO_AUDIO_CHUNK_FRAMES = 256;
 const MANUAL_AUDIO_CHUNK_FRAMES = 256;
 const MANUAL_AUDIO_TARGET_LEAD_MS = 10;
 const AUTO_AUDIO_TARGET_LEAD_MS = MANUAL_AUDIO_TARGET_LEAD_MS;
-const DEFAULT_LANE_WIDTH = 3;
-const WIDE_SCRATCH_LANE_WIDTH = DEFAULT_LANE_WIDTH * 2;
-const DEFAULT_GRID_ROWS = 14;
-const MIN_GRID_ROWS = 4;
-const STATIC_TUI_LINES = 15;
-const BGA_LANE_GAP = 3;
-const MIN_BGA_ASCII_WIDTH = 8;
-const MIN_BGA_ASCII_HEIGHT = 6;
-const DEFAULT_TERMINAL_COLUMNS = 120;
 const TUI_FRAME_INTERVAL_MS = 1000 / 60;
 const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
 const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
@@ -260,6 +280,20 @@ function reportLoadProgress(options: PlayerOptions, ratio: number, message: stri
     message,
     detail,
   });
+}
+
+function resolveOutputWriter(options: PlayerOptions): (text: string) => void {
+  if (typeof options.writeOutput === 'function') {
+    return options.writeOutput;
+  }
+  const stdout = (globalThis as { process?: { stdout?: { write?: (value: string) => unknown } } }).process?.stdout;
+  if (stdout && typeof stdout.write === 'function') {
+    const write = stdout.write.bind(stdout);
+    return (text: string): void => {
+      write(text);
+    };
+  }
+  return (): void => undefined;
 }
 
 interface AudioSessionLoadProgress {
@@ -369,6 +403,7 @@ function generateControlFlowRandomValue(total: number, randomValue: number): num
 }
 
 export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
+  const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
   const resolvedJson = controlFlowResolution.resolvedJson;
@@ -422,32 +457,42 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   let interruptedReason: PlayerInterruptReason | undefined;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
   const stateSignals = createPlayerStateSignals(highSpeed);
+  const uiSignals = createPlayerUiSignalBus({
+    currentBeat: 0,
+    currentSeconds: 0,
+    totalSeconds,
+    summary,
+    notes: renderNotes,
+  });
+  const inputSignals = createPlayerInputSignalBus();
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
-  const tui = createTuiIfEnabled(
-    resolvedJson,
-    options,
-    'AUTO',
-    laneBindings,
+  const uiRuntime = await options.createUiRuntime?.({
+    json: resolvedJson,
+    mode: 'AUTO',
     laneDisplayMode,
+    laneBindings,
     speed,
-    0,
+    judgeWindowMs: 0,
+    highSpeed,
+    showLaneChannels: options.debugActiveAudio === true,
     randomPatternSummary,
     stateSignals,
-  );
-  const activeStateSignals = tui ? stateSignals : undefined;
-  const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
-  const bgaRenderer = tui
-    ? await createBgaAnsiRenderer(resolvedJson, {
-        baseDir: options.audioBaseDir ?? process.cwd(),
-        width: bgaDisplay.width,
-        height: bgaDisplay.height,
-        onLoadProgress: (progress) => {
-          reportLoadProgress(options, 0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
-        },
-      })
-    : undefined;
-  const detachBgaResizeHandler = attachBgaResizeHandler(tui, bgaRenderer, laneBindings);
+    uiSignals,
+    baseDir: options.audioBaseDir ?? process.cwd(),
+    onBgaLoadProgress: (progress) => {
+      reportLoadProgress(options, 0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
+    },
+  });
+  const uiEnabled = uiRuntime?.tuiEnabled === true;
+  const activeStateSignals = uiEnabled ? stateSignals : undefined;
+
+  const inputRuntime = options.createInputRuntime?.({
+    mode: 'auto',
+    inputSignals,
+    inputTokenToChannels,
+  });
+
   reportLoadProgress(options, 0.3, 'Preparing audio...');
   const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'auto', (progress) => {
     reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
@@ -481,48 +526,42 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     };
   };
   const highSpeedModifierLabel = resolveAltModifierLabel();
-
-  if (!tui) {
-    process.stdout.write('Auto play start\n');
-    process.stdout.write(`Lane mode: ${laneDisplayMode}\n`);
-    if (randomPatternSummary) {
-      process.stdout.write(`${randomPatternSummary}\n`);
+  const publishUiFrame = (seconds: number, beat: number): void => {
+    if (!uiEnabled) {
+      return;
     }
-    printLaneMap(laneBindings);
-    process.stdout.write('Press Space to pause/resume. Press Shift+R to restart.\n');
-    process.stdout.write('Press Ctrl+C or Esc to quit.\n');
-    process.stdout.write(`Press ${highSpeedModifierLabel}+odd lane key to decrease HIGH-SPEED.\n`);
-    process.stdout.write(`Press ${highSpeedModifierLabel}+even lane key to increase HIGH-SPEED.\n`);
-  } else {
-    tui.start();
-    activeStateSignals?.publishJudgeCombo('READY', 0);
-    tui.render({
-      currentBeat: 0,
-      currentSeconds: 0,
+    const debugState = resolveDebugActiveAudioState(seconds);
+    uiSignals.publishFrame({
+      currentBeat: beat,
+      currentSeconds: seconds,
       totalSeconds,
       summary,
       notes: renderNotes,
       audioBackend: audioBackendLabel,
-      ...resolveDebugActiveAudioState(0),
-      ...createBgaRenderFrame(bgaRenderer, 0),
+      activeAudioFiles: debugState.activeAudioFiles,
+      activeAudioVoiceCount: debugState.activeAudioVoiceCount,
     });
+  };
+
+  if (!uiEnabled) {
+    writeOutput('Auto play start\n');
+    writeOutput(`Lane mode: ${laneDisplayMode}\n`);
+    if (randomPatternSummary) {
+      writeOutput(`${randomPatternSummary}\n`);
+    }
+    printLaneMap(writeOutput, laneBindings);
+    writeOutput('Press Space to pause/resume. Press Shift+R to restart.\n');
+    writeOutput('Press Ctrl+C or Esc to quit.\n');
+    writeOutput(`Press ${highSpeedModifierLabel}+odd lane key to decrease HIGH-SPEED.\n`);
+    writeOutput(`Press ${highSpeedModifierLabel}+even lane key to increase HIGH-SPEED.\n`);
+  } else {
+    uiRuntime?.start();
+    activeStateSignals?.publishJudgeCombo('READY', 0);
+    publishUiFrame(0, 0);
   }
 
-  const stdin = process.stdin as NodeJS.ReadStream & { isRaw?: boolean };
-  const wasRawMode = Boolean(stdin.isRaw);
-  const canCaptureInput = process.stdin.isTTY;
-  let inputCaptureStopped = false;
   let playbackClock: PlaybackClock | undefined;
   let realtimeAudioTriggerIndex = 0;
-
-  const stopInputCapture = (): void => {
-    if (!canCaptureInput || inputCaptureStopped) {
-      return;
-    }
-    inputCaptureStopped = true;
-    process.stdin.removeListener('keypress', onKeyPress);
-    process.stdin.setRawMode(wasRawMode);
-  };
 
   const togglePause = (): void => {
     if (!playbackClock) {
@@ -534,8 +573,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       }
       audioSession?.resume();
       activeStateSignals?.setPaused(false);
-      if (!tui) {
-        process.stdout.write('RESUME\n');
+      if (!uiEnabled) {
+        writeOutput('RESUME\n');
       }
       return;
     }
@@ -545,50 +584,35 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     }
     audioSession?.pause();
     activeStateSignals?.setPaused(true);
-    if (!tui) {
-      process.stdout.write('PAUSE\n');
+    if (!uiEnabled) {
+      writeOutput('PAUSE\n');
     }
   };
-
-  const onKeyPress = (_chunk: string, key: readline.Key): void => {
-    if (interruptedReason) {
-      return;
-    }
-    if (key.sequence === '\u0003') {
-      interruptedReason = 'ctrl-c';
-      stopInputCapture();
-      return;
-    }
-    if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b') {
-      interruptedReason = 'escape';
-      stopInputCapture();
-      return;
-    }
-    if (isRestartKeyPress(_chunk, key)) {
-      interruptedReason = 'restart';
-      stopInputCapture();
-      return;
-    }
-    const inputEvent = resolveInputTokenEvent(_chunk ?? '', key);
-    const highSpeedAction = resolveHighSpeedControlActionFromAltLaneTokens(
-      inputEvent.tokens,
-      inputTokenToChannels,
-      key,
-    );
-    if (highSpeedAction) {
-      const nextHighSpeed = applyHighSpeedControlAction(highSpeed, highSpeedAction);
-      if (nextHighSpeed !== highSpeed) {
-        highSpeed = nextHighSpeed;
-        activeStateSignals?.setHighSpeed(highSpeed);
-        options.onHighSpeedChange?.(highSpeed);
+  const consumeInputCommands = (): void => {
+    const commands = inputSignals.drainCommands();
+    for (const command of commands) {
+      if (interruptedReason) {
+        continue;
       }
-      if (!tui) {
-        process.stdout.write(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
+      if (command.kind === 'interrupt') {
+        interruptedReason = command.reason;
+        continue;
       }
-      return;
-    }
-    if (isSpaceKey(key)) {
-      togglePause();
+      if (command.kind === 'toggle-pause') {
+        togglePause();
+        continue;
+      }
+      if (command.kind === 'high-speed') {
+        const nextHighSpeed = applyHighSpeedControlAction(highSpeed, command.action);
+        if (nextHighSpeed !== highSpeed) {
+          highSpeed = nextHighSpeed;
+          activeStateSignals?.setHighSpeed(highSpeed);
+          options.onHighSpeedChange?.(highSpeed);
+        }
+        if (!uiEnabled) {
+          writeOutput(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
+        }
+      }
     }
   };
 
@@ -608,15 +632,11 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     }
   };
 
-  if (canCaptureInput) {
-    readline.emitKeypressEvents(process.stdin);
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.on('keypress', onKeyPress);
-  }
+  inputRuntime?.start();
 
   try {
     await delay(leadInMs);
+    consumeInputCommands();
     if (!interruptedReason) {
       audioSession?.start();
 
@@ -659,6 +679,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 
       const renderUntil = async (targetMs: number): Promise<void> => {
         while (true) {
+          consumeInputCommands();
           if (interruptedReason) {
             return;
           }
@@ -675,16 +696,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           markExpiredLandmines(nowSec);
           markExpiredInvisibleNotes(nowSec);
           const nowBeat = beatAtSeconds(nowSec);
-          tui?.render({
-            currentBeat: nowBeat,
-            currentSeconds: nowSec,
-            totalSeconds,
-            summary,
-            notes: renderNotes,
-            audioBackend: audioBackendLabel,
-            ...resolveDebugActiveAudioState(nowSec),
-            ...createBgaRenderFrame(bgaRenderer, nowSec),
-          });
+          publishUiFrame(nowSec, nowBeat);
           await waitPrecise(Math.max(1, Math.min(TUI_FRAME_INTERVAL_MS, targetMs - nowMs)));
         }
       };
@@ -704,25 +716,16 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         combo += 1;
 
         const key = resolveNoteKeyLabel(note.channel, keyMap);
-        if (!tui) {
-          process.stdout.write(`AUTO ${formatSeconds(note.seconds)} channel:${note.channel} key:${key}\n`);
+        if (!uiEnabled) {
+          writeOutput(`AUTO ${formatSeconds(note.seconds)} channel:${note.channel} key:${key}\n`);
         } else {
-          tui.flashLane(note.channel);
+          uiSignals.pushCommand({ kind: 'flash-lane', channel: note.channel });
           if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
             note.visibleUntilBeat = note.endBeat;
-            tui.holdLaneUntilBeat(note.channel, note.endBeat);
+            uiSignals.pushCommand({ kind: 'hold-lane-until-beat', channel: note.channel, beat: note.endBeat });
           }
           activeStateSignals?.publishJudgeCombo('PERFECT', combo, note.channel);
-          tui.render({
-            currentBeat: note.beat,
-            currentSeconds: note.seconds,
-            totalSeconds,
-            summary,
-            notes: renderNotes,
-            audioBackend: audioBackendLabel,
-            ...resolveDebugActiveAudioState(note.seconds),
-            ...createBgaRenderFrame(bgaRenderer, note.seconds),
-          });
+          publishUiFrame(note.seconds, note.beat);
         }
 
         markExpiredLandmines(note.seconds);
@@ -740,27 +743,18 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         for (const invisible of invisibleNotes) {
           invisible.judged = true;
         }
-        tui?.render({
-          currentBeat: beatAtSeconds(totalSeconds),
-          currentSeconds: totalSeconds,
-          totalSeconds,
-          summary,
-          notes: renderNotes,
-          audioBackend: audioBackendLabel,
-          ...resolveDebugActiveAudioState(totalSeconds),
-          ...createBgaRenderFrame(bgaRenderer, totalSeconds),
-        });
+        publishUiFrame(totalSeconds, beatAtSeconds(totalSeconds));
       }
     }
   } finally {
-    detachBgaResizeHandler();
     if (interruptedReason) {
       await disposeAudioSessionSafely(audioSession);
     } else {
       await finalizeAudioSessionSafely(audioSession);
     }
-    stopInputCapture();
-    tui?.stop();
+    inputRuntime?.stop();
+    uiRuntime?.stop();
+    uiRuntime?.dispose();
   }
 
   if (interruptedReason === 'ctrl-c') {
@@ -770,11 +764,12 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     throw new PlayerInterruptedError(interruptedReason);
   }
 
-  process.stdout.write(renderSummary(summary));
+  writeOutput(renderSummary(summary));
   return summary;
 }
 
 export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
+  const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
   const resolvedJson = controlFlowResolution.resolvedJson;
@@ -838,38 +833,42 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let combo = 0;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
   const stateSignals = createPlayerStateSignals(highSpeed);
+  const uiSignals = createPlayerUiSignalBus({
+    currentBeat: 0,
+    currentSeconds: 0,
+    totalSeconds,
+    summary,
+    notes: renderNotes,
+  });
+  const inputSignals = createPlayerInputSignalBus();
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
-  const tui = createTuiIfEnabled(
-    resolvedJson,
-    options,
-    autoScratchEnabled ? 'AUTO SCRATCH' : 'MANUAL',
-    laneBindings,
+  const uiRuntime = await options.createUiRuntime?.({
+    json: resolvedJson,
+    mode: autoScratchEnabled ? 'AUTO SCRATCH' : 'MANUAL',
     laneDisplayMode,
+    laneBindings,
     speed,
-    badWindowMs,
+    judgeWindowMs: badWindowMs,
+    highSpeed,
+    showLaneChannels: options.debugActiveAudio === true,
     randomPatternSummary,
     stateSignals,
-  );
-  const activeStateSignals = tui ? stateSignals : undefined;
-  const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
-  const bgaRenderer = tui
-    ? await createBgaAnsiRenderer(resolvedJson, {
-        baseDir: options.audioBaseDir ?? process.cwd(),
-        width: bgaDisplay.width,
-        height: bgaDisplay.height,
-        onLoadProgress: (progress) => {
-          reportLoadProgress(options, 0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
-        },
-      })
-    : undefined;
-  const triggerPoorBga = (seconds: number): void => {
-    bgaRenderer?.triggerPoor(seconds);
-  };
-  const clearPoorBga = (): void => {
-    bgaRenderer?.clearPoor();
-  };
-  const detachBgaResizeHandler = attachBgaResizeHandler(tui, bgaRenderer, laneBindings);
+    uiSignals,
+    baseDir: options.audioBaseDir ?? process.cwd(),
+    onBgaLoadProgress: (progress) => {
+      reportLoadProgress(options, 0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
+    },
+  });
+  const uiEnabled = uiRuntime?.tuiEnabled === true;
+  const activeStateSignals = uiEnabled ? stateSignals : undefined;
+
+  const inputRuntime = options.createInputRuntime?.({
+    mode: 'manual',
+    inputSignals,
+    inputTokenToChannels,
+  });
+
   reportLoadProgress(options, 0.3, 'Preparing audio...');
   const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'manual', (progress) => {
     reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
@@ -886,50 +885,50 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     };
   };
   const highSpeedModifierLabel = resolveAltModifierLabel();
-
-  if (!tui) {
-    process.stdout.write('Manual play start\n');
-    process.stdout.write(`Lane mode: ${laneDisplayMode}\n`);
-    if (randomPatternSummary) {
-      process.stdout.write(`${randomPatternSummary}\n`);
+  const publishUiFrame = (seconds: number, beat: number): void => {
+    if (!uiEnabled) {
+      return;
     }
-    if (autoScratchEnabled) {
-      process.stdout.write('Mode: AUTO SCRATCH (16ch/26ch only)\n');
-    }
-    process.stdout.write(
-      `Judge window: PGREAT<=${judgeWindows.pgreat.toFixed(2)}ms GREAT<=${judgeWindows.great.toFixed(2)}ms GOOD<=${judgeWindows.good.toFixed(2)}ms BAD<=${Math.round(badWindowMs)}ms\n`,
-    );
-    process.stdout.write('Press Space to pause/resume.\n');
-    process.stdout.write('Press Shift+R to restart.\n');
-    process.stdout.write(`Press ${highSpeedModifierLabel}+odd lane key to decrease HIGH-SPEED.\n`);
-    process.stdout.write(`Press ${highSpeedModifierLabel}+even lane key to increase HIGH-SPEED.\n`);
-    process.stdout.write('Press Ctrl+C to quit.\n');
-    process.stdout.write('Press Esc to stop and open result.\n');
-    printLaneMap(laneBindings);
-  } else {
-    tui.start();
-    activeStateSignals?.publishJudgeCombo('READY', 0);
-    tui.render({
-      currentBeat: 0,
-      currentSeconds: 0,
+    const debugState = resolveDebugActiveAudioState();
+    uiSignals.publishFrame({
+      currentBeat: beat,
+      currentSeconds: seconds,
       totalSeconds,
       summary,
       notes: renderNotes,
       audioBackend: audioBackendLabel,
-      ...resolveDebugActiveAudioState(),
-      ...createBgaRenderFrame(bgaRenderer, 0),
+      activeAudioFiles: debugState.activeAudioFiles,
+      activeAudioVoiceCount: debugState.activeAudioVoiceCount,
     });
+  };
+
+  if (!uiEnabled) {
+    writeOutput('Manual play start\n');
+    writeOutput(`Lane mode: ${laneDisplayMode}\n`);
+    if (randomPatternSummary) {
+      writeOutput(`${randomPatternSummary}\n`);
+    }
+    if (autoScratchEnabled) {
+      writeOutput('Mode: AUTO SCRATCH (16ch/26ch only)\n');
+    }
+    writeOutput(
+      `Judge window: PGREAT<=${judgeWindows.pgreat.toFixed(2)}ms GREAT<=${judgeWindows.great.toFixed(2)}ms GOOD<=${judgeWindows.good.toFixed(2)}ms BAD<=${Math.round(badWindowMs)}ms\n`,
+    );
+    writeOutput('Press Space to pause/resume.\n');
+    writeOutput('Press Shift+R to restart.\n');
+    writeOutput(`Press ${highSpeedModifierLabel}+odd lane key to decrease HIGH-SPEED.\n`);
+    writeOutput(`Press ${highSpeedModifierLabel}+even lane key to increase HIGH-SPEED.\n`);
+    writeOutput('Press Ctrl+C to quit.\n');
+    writeOutput('Press Esc to stop and open result.\n');
+    printLaneMap(writeOutput, laneBindings);
+  } else {
+    uiRuntime?.start();
+    activeStateSignals?.publishJudgeCombo('READY', 0);
+    publishUiFrame(0, 0);
   }
 
   await delay(leadInMs);
-
-  readline.emitKeypressEvents(process.stdin);
-  if (process.stdin.isTTY) {
-    process.stdin.setRawMode(true);
-  }
-  process.stdin.resume();
-  const stopKittyKeyboardProtocol = beginKittyKeyboardProtocolOptIn();
-
+  inputRuntime?.start();
   audioSession?.start();
 
   const playbackClock = createPlaybackClock(performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0));
@@ -939,8 +938,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const activeLongNotesByChannel = new Map<string, { endSeconds: number; note: TimedPlayableNote }>();
   const longNoteSuppressUntilSecondsByChannel = new Map<string, number>();
   const activeKittyPressedChannels = new Set<string>();
-  let inputCaptureStopped = false;
-  let suppressLegacyKeypressUntilMs = 0;
   const badWindowSeconds = badWindowMs / 1000;
   const autoScratchNotes = autoScratchEnabled
     ? scorableNotes.filter((note) => scratchPlayableChannels.has(note.channel))
@@ -1029,13 +1026,17 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         continue;
       }
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
-      clearPoorBga();
+      uiSignals.pushCommand({ kind: 'clear-poor-bga' });
       combo += 1;
       audioSession?.triggerEvent?.(note.event);
-      tui?.flashLane(note.channel);
+      if (uiEnabled) {
+        uiSignals.pushCommand({ kind: 'flash-lane', channel: note.channel });
+      }
       if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
         note.visibleUntilBeat = note.endBeat;
-        tui?.holdLaneUntilBeat(note.channel, note.endBeat);
+        if (uiEnabled) {
+          uiSignals.pushCommand({ kind: 'hold-lane-until-beat', channel: note.channel, beat: note.endBeat });
+        }
       }
       activeStateSignals?.publishJudgeCombo('PERFECT', combo, note.channel);
     }
@@ -1059,7 +1060,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         note.visibleUntilBeat = note.endBeat;
       }
       applyJudgeToSummary(summary, 'POOR', scoreTracker);
-      triggerPoorBga(referenceSeconds);
+      uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: referenceSeconds });
       combo = 0;
       activeStateSignals?.publishJudgeCombo('POOR', combo, note.channel);
     }
@@ -1070,10 +1071,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (deltaMs <= judgeWindows.pgreat) {
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
       applyFastSlowForJudge(summary, 'PERFECT', signedDeltaMs);
-      clearPoorBga();
+      uiSignals.pushCommand({ kind: 'clear-poor-bga' });
       combo += 1;
-      if (!tui) {
-        process.stdout.write(`PERFECT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+      if (!uiEnabled) {
+        writeOutput(`PERFECT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
         activeStateSignals?.publishJudgeCombo('PERFECT', combo, channel);
       }
@@ -1082,10 +1083,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (deltaMs <= judgeWindows.great) {
       applyJudgeToSummary(summary, 'GREAT', scoreTracker);
       applyFastSlowForJudge(summary, 'GREAT', signedDeltaMs);
-      clearPoorBga();
+      uiSignals.pushCommand({ kind: 'clear-poor-bga' });
       combo += 1;
-      if (!tui) {
-        process.stdout.write(`GREAT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+      if (!uiEnabled) {
+        writeOutput(`GREAT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
         activeStateSignals?.publishJudgeCombo('GREAT', combo, channel);
       }
@@ -1094,10 +1095,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (deltaMs <= judgeWindows.good) {
       applyJudgeToSummary(summary, 'GOOD', scoreTracker);
       applyFastSlowForJudge(summary, 'GOOD', signedDeltaMs);
-      clearPoorBga();
+      uiSignals.pushCommand({ kind: 'clear-poor-bga' });
       combo += 1;
-      if (!tui) {
-        process.stdout.write(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+      if (!uiEnabled) {
+        writeOutput(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
         activeStateSignals?.publishJudgeCombo('GOOD', combo, channel);
       }
@@ -1106,8 +1107,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (deltaMs <= badWindowMs) {
       applyJudgeToSummary(summary, 'BAD', scoreTracker);
       combo = 0;
-      if (!tui) {
-        process.stdout.write(`BAD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+      if (!uiEnabled) {
+        writeOutput(`BAD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
         activeStateSignals?.publishJudgeCombo('BAD', combo, channel);
       }
@@ -1115,10 +1116,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
 
     applyJudgeToSummary(summary, 'POOR', scoreTracker);
-    triggerPoorBga(atSeconds);
+    uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: atSeconds });
     combo = 0;
-    if (!tui) {
-      process.stdout.write(`POOR channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+    if (!uiEnabled) {
+      writeOutput(`POOR channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
     } else {
       activeStateSignals?.publishJudgeCombo('POOR', combo, channel);
     }
@@ -1138,23 +1139,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       triggerEvent(trigger.event);
       nonPlayableRealtimeAudioTriggerIndex += 1;
     }
-  };
-
-  const stopInputCapture = () => {
-    if (inputCaptureStopped) {
-      return;
-    }
-    inputCaptureStopped = true;
-    for (const channel of activeKittyPressedChannels) {
-      tui?.releaseLane(channel);
-    }
-    activeKittyPressedChannels.clear();
-    process.stdin.removeListener('keypress', onKeyPress);
-    process.stdin.removeListener('data', onRawInputData);
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode(false);
-    }
-    stopKittyKeyboardProtocol();
   };
 
   const candidateChannelsBuffer = new Set<string>();
@@ -1192,9 +1176,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       return;
     }
 
-    if (tui) {
+    if (uiEnabled) {
       for (const mappedChannel of candidateChannels) {
-        tui.flashLane(mappedChannel);
+        uiSignals.pushCommand({ kind: 'flash-lane', channel: mappedChannel });
       }
     }
 
@@ -1221,8 +1205,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       applyJudgeToSummary(summary, 'BAD', scoreTracker);
       combo = 0;
-      if (!tui) {
-        process.stdout.write(`MINE channel:${landmineCandidate.channel} delta:${Math.round(landmineDelta * 1000)}ms\n`);
+      if (!uiEnabled) {
+        writeOutput(`MINE channel:${landmineCandidate.channel} delta:${Math.round(landmineDelta * 1000)}ms\n`);
       } else {
         activeStateSignals?.publishJudgeCombo('BAD', combo, landmineCandidate.channel);
       }
@@ -1246,8 +1230,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           return;
         }
       }
-      if (!tui) {
-        process.stdout.write(`POOR-KEY ${tokens[0] ?? '?'}\n`);
+      if (!uiEnabled) {
+        writeOutput(`POOR-KEY ${tokens[0] ?? '?'}\n`);
       }
       return;
     }
@@ -1256,7 +1240,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       return;
     }
     const channel = candidate.channel;
-    tui?.flashLane(channel);
+    if (uiEnabled) {
+      uiSignals.pushCommand({ kind: 'flash-lane', channel });
+    }
     audioSession?.triggerEvent?.(candidate.event);
     const endSeconds = candidate.endSeconds;
     if (typeof endSeconds === 'number' && Number.isFinite(endSeconds) && endSeconds > candidate.seconds) {
@@ -1287,8 +1273,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       activeStateSignals?.setHighSpeed(highSpeed);
       options.onHighSpeedChange?.(highSpeed);
     }
-    if (!tui) {
-      process.stdout.write(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
+    if (!uiEnabled) {
+      writeOutput(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
     }
     return true;
   };
@@ -1300,8 +1286,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       audioSession?.resume();
       activeStateSignals?.setPaused(false);
-      if (!tui) {
-        process.stdout.write('RESUME\n');
+      if (!uiEnabled) {
+        writeOutput('RESUME\n');
       }
       return;
     }
@@ -1310,144 +1296,66 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     audioSession?.pause();
     activeStateSignals?.setPaused(true);
-    if (!tui) {
-      process.stdout.write('PAUSE\n');
+    if (!uiEnabled) {
+      writeOutput('PAUSE\n');
     }
   };
 
-  const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
-    if (interruptedReason) {
-      return;
-    }
-    if (Date.now() < suppressLegacyKeypressUntilMs) {
-      return;
-    }
-    const inputEvent = resolveInputTokenEvent(chunk ?? '', key);
-    if (inputEvent.kittyProtocolEvent) {
-      return;
-    }
-    const tokens = inputEvent.tokens;
-
-    if (key.sequence === '\u0003' || tokens.includes('ctrl+c')) {
-      interruptedReason = 'ctrl-c';
-      stopInputCapture();
-      return;
-    }
-    if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b' || tokens.includes('escape')) {
-      interruptedReason = 'escape';
-      stopInputCapture();
-      return;
-    }
-    if (isRestartInputTokens(tokens) || isRestartKeyPress(chunk, key)) {
-      interruptedReason = 'restart';
-      stopInputCapture();
-      return;
-    }
-    const highSpeedAction = resolveHighSpeedControlActionFromAltLaneTokens(tokens, inputTokenToChannels, key);
-    if (applyHighSpeedAction(highSpeedAction)) {
-      return;
-    }
-    if (tokens.includes('space') || isSpaceKey(key)) {
-      togglePause();
-      return;
-    }
-    if (playbackClock.isPaused()) {
-      return;
-    }
-    handleMappedInputTokens(tokens);
-  };
-
-  const onRawInputData = (data: Buffer): void => {
-    if (interruptedReason) {
-      return;
-    }
-    const chunk = data.toString('utf8');
-    const inputEvent = resolveInputTokenEvent(chunk, {
-      name: undefined,
-      sequence: chunk,
-      ctrl: false,
-      meta: false,
-      shift: false,
-    } satisfies readline.Key);
-    if (!inputEvent.kittyProtocolEvent) {
-      return;
-    }
-    suppressLegacyKeypressUntilMs = Date.now() + 36;
-
-    const pressTokens = inputEvent.tokens;
-    const repeatTokens = inputEvent.repeatTokens;
-    const releaseTokens = inputEvent.releaseTokens;
-    if (pressTokens.length > 0 || repeatTokens.length > 0) {
-      const pressedChannels = resolveMappedInputChannels(pressTokens, repeatTokens);
-      for (const channel of pressedChannels) {
-        activeKittyPressedChannels.add(channel);
-        tui?.pressLane(channel);
+  const consumeInputCommands = (): void => {
+    const commands = inputSignals.drainCommands();
+    for (const command of commands) {
+      if (interruptedReason) {
+        continue;
       }
-    }
-    if (releaseTokens.length > 0) {
-      const releasedChannels = resolveMappedInputChannels(releaseTokens);
-      for (const channel of releasedChannels) {
-        activeKittyPressedChannels.delete(channel);
-        tui?.releaseLane(channel);
-        if (activeLongNotesByChannel.has(channel)) {
-          longHoldUntilMsByChannel.set(channel, playbackClock.nowMs());
+      if (command.kind === 'interrupt') {
+        interruptedReason = command.reason;
+        continue;
+      }
+      if (command.kind === 'toggle-pause') {
+        togglePause();
+        continue;
+      }
+      if (command.kind === 'high-speed') {
+        applyHighSpeedAction(command.action);
+        continue;
+      }
+      if (command.kind === 'kitty-state') {
+        const pressedChannels = resolveMappedInputChannels(command.pressTokens, command.repeatTokens);
+        for (const channel of pressedChannels) {
+          activeKittyPressedChannels.add(channel);
+          if (uiEnabled) {
+            uiSignals.pushCommand({ kind: 'press-lane', channel });
+          }
         }
+        const releasedChannels = resolveMappedInputChannels(command.releaseTokens);
+        for (const channel of releasedChannels) {
+          activeKittyPressedChannels.delete(channel);
+          if (uiEnabled) {
+            uiSignals.pushCommand({ kind: 'release-lane', channel });
+          }
+          if (activeLongNotesByChannel.has(channel)) {
+            longHoldUntilMsByChannel.set(channel, playbackClock.nowMs());
+          }
+        }
+        continue;
       }
+      if (playbackClock.isPaused()) {
+        continue;
+      }
+      handleMappedInputTokens(command.tokens);
     }
-
-    if (pressTokens.length === 0) {
-      return;
-    }
-
-    if (pressTokens.includes('ctrl+c')) {
-      interruptedReason = 'ctrl-c';
-      stopInputCapture();
-      return;
-    }
-    if (pressTokens.includes('escape')) {
-      interruptedReason = 'escape';
-      stopInputCapture();
-      return;
-    }
-    if (isRestartInputTokens(pressTokens)) {
-      interruptedReason = 'restart';
-      stopInputCapture();
-      return;
-    }
-    if (applyHighSpeedAction(resolveHighSpeedControlActionFromAltLaneTokens(pressTokens, inputTokenToChannels))) {
-      return;
-    }
-    if (pressTokens.includes('space')) {
-      togglePause();
-      return;
-    }
-    if (playbackClock.isPaused()) {
-      return;
-    }
-    handleMappedInputTokens(pressTokens);
   };
-
-  process.stdin.prependListener('data', onRawInputData);
-  process.stdin.on('keypress', onKeyPress);
 
   try {
     while (playbackClock.nowMs() < horizon) {
+      consumeInputCommands();
       if (interruptedReason) {
         break;
       }
       const nowMs = playbackClock.nowMs();
       if (playbackClock.isPaused()) {
         const nowSec = elapsedMsToGameSeconds(nowMs, speed);
-        tui?.render({
-          currentBeat: beatAtSeconds(nowSec),
-          currentSeconds: nowSec,
-          totalSeconds,
-          summary,
-          notes: renderNotes,
-          audioBackend: audioBackendLabel,
-          ...resolveDebugActiveAudioState(),
-          ...createBgaRenderFrame(bgaRenderer, nowSec),
-        });
+        publishUiFrame(nowSec, beatAtSeconds(nowSec));
         await waitPrecise(PAUSE_POLL_INTERVAL_MS);
         continue;
       }
@@ -1488,17 +1396,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
       applyAutoScratchJudgements(nowSec);
       applyExpiredScorableJudgements(nowSec);
-
-      tui?.render({
-        currentBeat: nowBeat,
-        currentSeconds: nowSec,
-        totalSeconds,
-        summary,
-        notes: renderNotes,
-        audioBackend: audioBackendLabel,
-        ...resolveDebugActiveAudioState(),
-        ...createBgaRenderFrame(bgaRenderer, nowSec),
-      });
+      publishUiFrame(nowSec, nowBeat);
 
       markExpiredLandmines(nowSec);
       markExpiredInvisibleNotes(nowSec);
@@ -1522,43 +1420,34 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         for (let index = 0; index < missingCount; index += 1) {
           applyJudgeToSummary(summary, 'POOR', scoreTracker);
         }
-        triggerPoorBga(totalSeconds);
+        uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: totalSeconds });
         combo = 0;
-        if (tui) {
+        if (uiEnabled) {
           activeStateSignals?.publishJudgeCombo('POOR', combo);
-          tui.render({
-            currentBeat: beatAtSeconds(totalSeconds),
-            currentSeconds: totalSeconds,
-            totalSeconds,
-            summary,
-            notes: renderNotes,
-            audioBackend: audioBackendLabel,
-            ...resolveDebugActiveAudioState(),
-            ...createBgaRenderFrame(bgaRenderer, totalSeconds),
-          });
+          publishUiFrame(totalSeconds, beatAtSeconds(totalSeconds));
         }
       }
     }
   } finally {
-    detachBgaResizeHandler();
     if (interruptedReason) {
       await disposeAudioSessionSafely(audioSession);
     } else {
       await finalizeAudioSessionSafely(audioSession);
     }
-    stopInputCapture();
-    tui?.stop();
+    inputRuntime?.stop();
+    uiRuntime?.stop();
+    uiRuntime?.dispose();
   }
 
   if (interruptedReason) {
     if (interruptedReason === 'escape') {
-      process.stdout.write(renderSummary(summary));
+      writeOutput(renderSummary(summary));
       return summary;
     }
     throw new PlayerInterruptedError(interruptedReason);
   }
 
-  process.stdout.write(renderSummary(summary));
+  writeOutput(renderSummary(summary));
   return summary;
 }
 
@@ -1567,81 +1456,6 @@ function resolveAudioBackendLabel(options: PlayerOptions, audioSession: AudioSes
     return 'off';
   }
   return audioSession?.backendLabel ?? 'none';
-}
-
-function createTuiIfEnabled(
-  json: BeMusicJson,
-  options: PlayerOptions,
-  mode: 'AUTO' | 'MANUAL' | 'AUTO SCRATCH',
-  laneBindings: LaneBinding[],
-  laneDisplayMode: string,
-  speed: number,
-  judgeWindowMs: number,
-  randomPatternSummary?: string,
-  stateSignals?: PlayerStateSignals,
-): PlayerTui | undefined {
-  if (options.tui === false) {
-    return undefined;
-  }
-
-  const has2P = laneBindings.some((binding) => binding.side === '2P');
-  const splitAfterIndex = has2P ? findLastLaneIndex(laneBindings, (binding) => binding.side === '1P') : -1;
-  const lanes = laneBindings.map((binding) => ({
-    channel: binding.channel,
-    key: binding.keyLabel,
-    isScratch: binding.isScratch,
-  }));
-  const timingResolver = createTimingResolver(json);
-  const beatResolver = createBeatResolver(json);
-  const measureLengths = new Map<number, number>();
-  for (const measure of json.measures) {
-    const measureIndex = Math.max(0, Math.floor(measure.index));
-    if (typeof measure.length !== 'number' || !Number.isFinite(measure.length) || measure.length <= 0) {
-      continue;
-    }
-    measureLengths.set(measureIndex, measure.length);
-  }
-  const measureTimeline = createMeasureTimeline(json, timingResolver, beatResolver);
-  const bpmTimeline = createBpmTimeline(json, timingResolver);
-  const scrollTimeline = createScrollTimeline(json, beatResolver);
-  const stopWindows = createStopBeatWindows(timingResolver).map((window) => ({
-    startSeconds: window.startSeconds,
-    endSeconds: window.endSeconds,
-  }));
-  const measureBoundariesBeats = createMeasureBoundariesBeats(json, beatResolver);
-  const highSpeed = stateSignals ? stateSignals.highSpeed() : resolveHighSpeedMultiplier(options.highSpeed);
-  const tui = new PlayerTui({
-    mode,
-    laneDisplayMode,
-    title: json.metadata.title ?? 'Untitled',
-    artist: json.metadata.artist,
-    player: json.bms.player,
-    rank: json.metadata.rank,
-    playLevel: json.metadata.playLevel,
-    lanes,
-    speed,
-    highSpeed,
-    judgeWindowMs,
-    showLaneChannels: options.debugActiveAudio === true,
-    randomPatternSummary,
-    bpmTimeline,
-    scrollTimeline,
-    stopWindows,
-    measureTimeline,
-    measureLengths,
-    measureBoundariesBeats,
-    splitAfterIndex,
-    stateSignals,
-  });
-
-  if (!tui.isSupported()) {
-    if (options.tui === true) {
-      process.stdout.write('TUI is unavailable in this environment. Falling back to text output.\n');
-    }
-    return undefined;
-  }
-
-  return tui;
 }
 
 async function finalizeAudioSessionSafely(audioSession: AudioSession | undefined): Promise<void> {
@@ -1670,24 +1484,13 @@ async function settleWithTimeout(task: Promise<void>, timeoutMs: number): Promis
   return completed;
 }
 
-function createBgaRenderFrame(
-  bgaRenderer: BgaAnsiRenderer | undefined,
-  currentSeconds: number,
-): { bgaAnsiLines?: string[] } {
-  if (!bgaRenderer) {
-    return {};
-  }
-  return {
-    bgaAnsiLines: bgaRenderer.getAnsiLines(currentSeconds),
-  };
-}
-
 async function createAudioSessionIfEnabled(
   json: BeMusicJson,
   options: PlayerOptions,
   mode: 'auto' | 'manual',
   onLoadProgress?: (progress: AudioSessionLoadProgress) => void,
 ): Promise<AudioSession | undefined> {
+  const writeOutput = resolveOutputWriter(options);
   if (options.audio === false) {
     onLoadProgress?.({
       ratio: 1,
@@ -1740,7 +1543,7 @@ async function createAudioSessionIfEnabled(
     mode,
   });
   if (!output) {
-    process.stdout.write('Audio playback disabled: node-web-audio-api is unavailable.\n');
+    writeOutput('Audio playback disabled: node-web-audio-api is unavailable.\n');
     onLoadProgress?.({
       ratio: 1,
       message: 'node-web-audio-api is unavailable; continuing without audio.',
@@ -1748,7 +1551,7 @@ async function createAudioSessionIfEnabled(
     return undefined;
   }
 
-  process.stdout.write(`Audio backend: ${output.label}\n`);
+  writeOutput(`Audio backend: ${output.label}\n`);
 
   const eventPlaybackMap = buildEventPlaybackMap(json, inferBmsLnTypeWhenMissing);
   onLoadProgress?.({
@@ -1764,7 +1567,7 @@ async function createAudioSessionIfEnabled(
   const activeVoices: ActiveVoice[] = [];
 
   output.onError(() => {
-    process.stdout.write(`Audio playback stream error (${output.label}).\n`);
+    writeOutput(`Audio playback stream error (${output.label}).\n`);
   });
 
   const finish = async (): Promise<void> => {
@@ -2796,93 +2599,6 @@ function createPlaybackClock(startAtMs: number): PlaybackClock {
   };
 }
 
-function isSpaceKey(key: readline.Key): boolean {
-  return key.name?.toLowerCase() === 'space' || key.sequence === ' ';
-}
-
-function isRestartInputTokens(tokens: readonly string[]): boolean {
-  return tokens.includes('shift+r');
-}
-
-function isRestartKeyPress(chunk: string | undefined, key: readline.Key): boolean {
-  if (typeof chunk === 'string' && chunk === 'R') {
-    return true;
-  }
-  return key.name?.toLowerCase() === 'r' && key.shift === true;
-}
-
-function resolveHighSpeedControlActionFromAltLaneTokens(
-  tokens: readonly string[],
-  inputTokenToChannels: ReadonlyMap<string, readonly string[]>,
-  key?: readline.Key,
-): HighSpeedControlAction | undefined {
-  const channels = new Set<string>();
-  const addChannelsForAltToken = (token: string): void => {
-    if (!token.startsWith('alt+')) {
-      return;
-    }
-    const baseToken = token.slice('alt+'.length).toLowerCase();
-    const mapped = inputTokenToChannels.get(baseToken);
-    if (!mapped) {
-      return;
-    }
-    for (const channel of mapped) {
-      channels.add(channel);
-    }
-  };
-
-  for (const token of tokens) {
-    const normalizedToken = token.toLowerCase();
-    addChannelsForAltToken(normalizedToken);
-    if (normalizedToken.startsWith('option+')) {
-      addChannelsForAltToken(`alt+${normalizedToken.slice('option+'.length)}`);
-    }
-  }
-  if (key?.meta) {
-    const keyName = normalizeLegacyKeyNameToken(key.name);
-    if (keyName) {
-      addChannelsForAltToken(`alt+${keyName}`);
-    }
-  }
-
-  if (channels.size === 0) {
-    return undefined;
-  }
-  return resolveHighSpeedControlActionFromLaneChannels([...channels]);
-}
-
-function normalizeLegacyKeyNameToken(name: string | undefined): string | undefined {
-  if (typeof name !== 'string' || name.length === 0) {
-    return undefined;
-  }
-  const lowered = name.toLowerCase();
-  if (lowered.length === 1) {
-    return lowered;
-  }
-  if (lowered === 'comma') {
-    return ',';
-  }
-  if (lowered === 'period') {
-    return '.';
-  }
-  if (lowered === 'slash') {
-    return '/';
-  }
-  if (lowered === 'semicolon') {
-    return ';';
-  }
-  if (lowered === 'quote') {
-    return "'";
-  }
-  if (lowered === 'leftbracket') {
-    return '[';
-  }
-  if (lowered === 'rightbracket') {
-    return ']';
-  }
-  return undefined;
-}
-
 function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
   return Math.max(0, (elapsedMs / 1000) * speed);
 }
@@ -2932,62 +2648,10 @@ function toPlaybackSampleRate(baseSampleRate: number, speed: number): number {
   return Math.max(8_000, Math.min(192_000, scaled));
 }
 
-function findLastLaneIndex(bindings: LaneBinding[], predicate: (binding: LaneBinding) => boolean): number {
-  for (let index = bindings.length - 1; index >= 0; index -= 1) {
-    if (predicate(bindings[index])) {
-      return index;
-    }
-  }
-  return -1;
-}
-
-function estimateBgaAnsiDisplaySize(bindings: LaneBinding[]): { width: number; height: number } {
-  const laneWidths = bindings.map((binding) =>
-    binding.isScratch ? WIDE_SCRATCH_LANE_WIDTH : DEFAULT_LANE_WIDTH,
-  );
-  const laneCount = laneWidths.length;
-  const has2P = bindings.some((binding) => binding.side === '2P');
-  const splitAfterIndex = has2P ? findLastLaneIndex(bindings, (binding) => binding.side === '1P') : -1;
-
-  const laneTextWidth = laneWidths.reduce((sum, width) => sum + width, 0);
-  const laneSpacingWidth = laneCount > 0 ? laneCount - 1 : 0;
-  const splitExtraWidth = splitAfterIndex >= 0 && splitAfterIndex < laneCount - 1 ? 2 : 0;
-  const laneBlockWidth = laneTextWidth + laneSpacingWidth + splitExtraWidth;
-
-  const columns = process.stdout.columns ?? DEFAULT_TERMINAL_COLUMNS;
-  const width = Math.max(MIN_BGA_ASCII_WIDTH, columns - laneBlockWidth - BGA_LANE_GAP);
-
-  const terminalRows = process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
-  const rowCount = Math.max(MIN_GRID_ROWS, terminalRows - STATIC_TUI_LINES);
-  const laneBlockHeight = rowCount + 4;
-  const height = Math.max(MIN_BGA_ASCII_HEIGHT, laneBlockHeight);
-
-  return { width, height };
-}
-
-function attachBgaResizeHandler(
-  tui: PlayerTui | undefined,
-  bgaRenderer: BgaAnsiRenderer | undefined,
-  bindings: LaneBinding[],
-): () => void {
-  if (!tui || !bgaRenderer || !process.stdout.isTTY) {
-    return () => undefined;
-  }
-
-  const onResize = (): void => {
-    const displaySize = estimateBgaAnsiDisplaySize(bindings);
-    bgaRenderer.setDisplaySize(displaySize.width, displaySize.height);
-  };
-  process.stdout.on('resize', onResize);
-  return () => {
-    process.stdout.off('resize', onResize);
-  };
-}
-
-function printLaneMap(bindings: LaneBinding[]): void {
-  process.stdout.write('Channel map:\n');
+function printLaneMap(writeOutput: (text: string) => void, bindings: LaneBinding[]): void {
+  writeOutput('Channel map:\n');
   for (const binding of bindings) {
-    process.stdout.write(`  ${binding.channel} => ${binding.keyLabel}\n`);
+    writeOutput(`  ${binding.channel} => ${binding.keyLabel}\n`);
   }
 }
 
