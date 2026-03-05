@@ -453,10 +453,19 @@ export class PlayerTui {
         if (!isDistanceWithinWindow(visibleDistance, scrollWindowBeats)) {
           continue;
         }
-        const row = wasVisible ? distanceToNoteRow(visibleDistance, rowCount, scrollWindowBeats, previousRow) : 0;
-        setLaneCell(grid, gridSourceChannels, row, lane, MINE_NOTE_SYMBOL, note.channel, this.freeZoneSourceChannels);
+        const row = distanceToNoteRow(visibleDistance, rowCount, scrollWindowBeats, previousRow);
+        const placedRow = setLaneCell(
+          grid,
+          gridSourceChannels,
+          row,
+          lane,
+          MINE_NOTE_SYMBOL,
+          note.channel,
+          this.freeZoneSourceChannels,
+          true,
+        );
         visibleNoteIndices.add(noteIndex);
-        visibleNoteRows.set(noteIndex, row);
+        visibleNoteRows.set(noteIndex, placedRow);
         continue;
       }
 
@@ -467,20 +476,17 @@ export class PlayerTui {
         const bodyEndBeat = note.endBeat;
         const bodyStartDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyStartBeat);
         const bodyEndDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyEndBeat);
-        const bodyVisibleFrom = clamp(
-          normalizeNoteApproachDistance(bodyStartDistance, frame.currentBeat, bodyStartBeat),
-          0,
-          scrollWindowBeats,
-        );
-        const bodyVisibleTo = clamp(
-          normalizeNoteApproachDistance(bodyEndDistance, frame.currentBeat, bodyEndBeat),
-          0,
-          scrollWindowBeats,
-        );
-        if (bodyVisibleTo >= bodyVisibleFrom) {
+        const normalizedBodyStart = normalizeNoteApproachDistance(bodyStartDistance, frame.currentBeat, bodyStartBeat);
+        const normalizedBodyEnd = normalizeNoteApproachDistance(bodyEndDistance, frame.currentBeat, bodyEndBeat);
+        const hasBodyStart = Number.isFinite(normalizedBodyStart);
+        const hasBodyEnd = Number.isFinite(normalizedBodyEnd);
+
+        if (hasBodyStart || hasBodyEnd) {
+          const bodyVisibleFrom = clamp(hasBodyStart ? normalizedBodyStart : normalizedBodyEnd, 0, scrollWindowBeats);
+          const bodyVisibleTo = clamp(hasBodyEnd ? normalizedBodyEnd : normalizedBodyStart, 0, scrollWindowBeats);
           const startRow = distanceToNoteRow(bodyVisibleFrom, rowCount, scrollWindowBeats);
           const endRow = distanceToNoteRow(bodyVisibleTo, rowCount, scrollWindowBeats);
-          const from = wasVisible ? Math.min(startRow, endRow) : 0;
+          const from = Math.min(startRow, endRow);
           const to = Math.max(startRow, endRow);
           for (let row = from; row <= to; row += 1) {
             if (row < 0 || row >= rowCount) {
@@ -502,7 +508,7 @@ export class PlayerTui {
         const tailDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.endBeat);
         const tailVisibleDistance = normalizeNoteApproachDistance(tailDistance, frame.currentBeat, note.endBeat);
         if (isDistanceWithinWindow(tailVisibleDistance, scrollWindowBeats)) {
-          const tailRow = wasVisible ? distanceToNoteRow(tailVisibleDistance, rowCount, scrollWindowBeats) : 0;
+          const tailRow = distanceToNoteRow(tailVisibleDistance, rowCount, scrollWindowBeats);
           if (tailRow >= 0 && tailRow < rowCount) {
             setLaneCell(
               grid,
@@ -512,6 +518,7 @@ export class PlayerTui {
               longTailSymbol,
               note.channel,
               this.freeZoneSourceChannels,
+              true,
             );
             visibleThisFrame = true;
           }
@@ -526,8 +533,8 @@ export class PlayerTui {
         }
         continue;
       }
-      const row = wasVisible ? distanceToNoteRow(headVisibleDistance, rowCount, scrollWindowBeats, previousRow) : 0;
-      setLaneCell(
+      const row = distanceToNoteRow(headVisibleDistance, rowCount, scrollWindowBeats, previousRow);
+      const placedRow = setLaneCell(
         grid,
         gridSourceChannels,
         row,
@@ -535,10 +542,11 @@ export class PlayerTui {
         note.invisible ? INVISIBLE_NOTE_HEAD_SYMBOL : NOTE_HEAD_SYMBOL,
         note.channel,
         this.freeZoneSourceChannels,
+        true,
       );
       visibleThisFrame = true;
       visibleNoteIndices.add(noteIndex);
-      visibleNoteRows.set(noteIndex, row);
+      visibleNoteRows.set(noteIndex, placedRow);
     }
     this.visibleNoteIndices = visibleNoteIndices;
     this.visibleNoteRows = visibleNoteRows;
@@ -881,7 +889,7 @@ class ScrollDistanceMapper {
         continue;
       }
 
-      const speed = Math.abs(segment.speed);
+      const speed = segment.speed;
       if (speed <= 1e-9) {
         beat = segmentEndBeat;
         index += 1;
@@ -980,7 +988,7 @@ function renderProgress(currentSeconds: number, totalSeconds: number): string {
 }
 
 function isDistanceWithinWindow(distance: number, scrollWindowBeats: number): boolean {
-  return Number.isFinite(distance) && Math.abs(distance) <= scrollWindowBeats;
+  return Number.isFinite(distance) && distance >= -BEAT_EPSILON && distance <= scrollWindowBeats;
 }
 
 function normalizeNoteApproachDistance(distance: number, currentBeat: number, targetBeat: number): number {
@@ -990,7 +998,13 @@ function normalizeNoteApproachDistance(distance: number, currentBeat: number, ta
   if (targetBeat + BEAT_EPSILON < currentBeat) {
     return Number.NaN;
   }
-  return Math.abs(distance);
+  if (distance < -BEAT_EPSILON) {
+    return Number.NaN;
+  }
+  if (distance <= BEAT_EPSILON) {
+    return 0;
+  }
+  return distance;
 }
 
 function isUpcomingBeat(currentBeat: number, targetBeat: number): boolean {
@@ -1001,7 +1015,8 @@ function isUpcomingBeat(currentBeat: number, targetBeat: number): boolean {
 }
 
 function distanceToRow(distance: number, rowCount: number, scrollWindowBeats: number): number {
-  const normalized = clamp(Math.abs(distance) / scrollWindowBeats, 0, 1);
+  const safeDistance = Number.isFinite(distance) ? Math.max(0, distance) : 0;
+  const normalized = clamp(safeDistance / scrollWindowBeats, 0, 1);
   return rowCount - 1 - Math.floor(normalized * (rowCount - 1));
 }
 
@@ -1011,7 +1026,7 @@ function distanceToNoteRow(
   scrollWindowBeats: number,
   previousRow?: number,
 ): number {
-  const safeDistance = Math.abs(distance);
+  const safeDistance = Number.isFinite(distance) ? Math.max(0, distance) : 0;
   const rowSpan = Math.max(1, rowCount - 1);
   const rowStepDistance = scrollWindowBeats / rowSpan;
   if (safeDistance <= Math.max(BEAT_EPSILON, rowStepDistance * 0.5)) {
@@ -1321,27 +1336,94 @@ function setLaneCell(
   symbol: string,
   sourceChannel: string,
   freeZoneSourceChannels: ReadonlySet<string>,
-): void {
-  const rowCells = grid[row];
-  const rowSources = sourceChannels[row];
+  stackWhenOccupied = false,
+): number {
+  const safeRow = clamp(Math.floor(row), 0, Math.max(0, grid.length - 1));
+  const rowCells = grid[safeRow];
+  const rowSources = sourceChannels[safeRow];
   if (!rowCells || !rowSources || lane < 0 || lane >= rowCells.length || lane >= rowSources.length) {
-    return;
+    return safeRow;
   }
 
   const normalizedSourceChannel = sourceChannel.toUpperCase();
-  const previousSymbol = rowCells[lane] ?? LANE_FILL_SYMBOL;
-  const previousSourceChannel = rowSources[lane] ?? '';
   const nextPriority = resolveLaneCellPriority(symbol, freeZoneSourceChannels.has(normalizedSourceChannel));
-  const previousPriority = resolveLaneCellPriority(
-    previousSymbol,
-    freeZoneSourceChannels.has(previousSourceChannel.toUpperCase()),
-  );
-  if (nextPriority < previousPriority) {
-    return;
+
+  const canPlaceAt = (targetRow: number, allowEqualPriorityOverwrite: boolean): boolean => {
+    const targetCells = grid[targetRow];
+    const targetSources = sourceChannels[targetRow];
+    if (!targetCells || !targetSources || lane < 0 || lane >= targetCells.length || lane >= targetSources.length) {
+      return false;
+    }
+    const previousSymbol = targetCells[lane] ?? LANE_FILL_SYMBOL;
+    const previousSourceChannel = targetSources[lane] ?? '';
+    const previousPriority = resolveLaneCellPriority(
+      previousSymbol,
+      freeZoneSourceChannels.has(previousSourceChannel.toUpperCase()),
+    );
+    if (nextPriority < previousPriority) {
+      return false;
+    }
+    if (!allowEqualPriorityOverwrite && nextPriority === previousPriority) {
+      return false;
+    }
+    return true;
+  };
+
+  const placeAt = (targetRow: number): void => {
+    const targetCells = grid[targetRow]!;
+    const targetSources = sourceChannels[targetRow]!;
+    targetCells[lane] = symbol;
+    targetSources[lane] = normalizedSourceChannel;
+  };
+
+  if (canPlaceAt(safeRow, !stackWhenOccupied)) {
+    placeAt(safeRow);
+    return safeRow;
   }
 
-  rowCells[lane] = symbol;
-  rowSources[lane] = normalizedSourceChannel;
+  if (stackWhenOccupied && isStackableLaneSymbol(symbol)) {
+    const stackedRow = findStackableRow(grid, sourceChannels, safeRow, canPlaceAt);
+    if (stackedRow !== undefined) {
+      placeAt(stackedRow);
+      return stackedRow;
+    }
+  }
+
+  if (canPlaceAt(safeRow, true)) {
+    placeAt(safeRow);
+  }
+
+  return safeRow;
+}
+
+function isStackableLaneSymbol(symbol: string): boolean {
+  return (
+    symbol === NOTE_HEAD_SYMBOL ||
+    symbol === LONG_NOTE_TAIL_SYMBOL ||
+    symbol === INVISIBLE_NOTE_HEAD_SYMBOL ||
+    symbol === INVISIBLE_LONG_NOTE_TAIL_SYMBOL ||
+    symbol === MINE_NOTE_SYMBOL
+  );
+}
+
+function findStackableRow(
+  grid: string[][],
+  sourceChannels: string[][],
+  preferredRow: number,
+  canPlaceAt: (targetRow: number, allowEqualPriorityOverwrite: boolean) => boolean,
+): number | undefined {
+  const rowCount = Math.min(grid.length, sourceChannels.length);
+  for (let offset = 1; offset < rowCount; offset += 1) {
+    const upper = preferredRow - offset;
+    if (upper >= 0 && canPlaceAt(upper, false)) {
+      return upper;
+    }
+    const lower = preferredRow + offset;
+    if (lower < rowCount && canPlaceAt(lower, false)) {
+      return lower;
+    }
+  }
+  return undefined;
 }
 
 function resolveLaneCellPriority(symbol: string, isFreeZoneSourceChannel: boolean): number {
