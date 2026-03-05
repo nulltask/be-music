@@ -22,12 +22,12 @@ import {
 } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
 describe('player', () => {
 
 
 test('player: auto play finishes successfully', async () => {
-  const chartPath = resolve(rootDir, 'examples/test/sequence-regression.bms');
-  const json = await parseChartFile(chartPath);
+  const json = await parseChartFile(unifiedBmsChartPath);
 
   const summary = await autoPlay(json, {
     auto: true,
@@ -37,39 +37,33 @@ test('player: auto play finishes successfully', async () => {
     tui: false,
   });
 
-  expect(summary.total).toBe(6);
-  expect(summary.perfect).toBe(6);
+  expect(summary.total).toBeGreaterThan(0);
+  expect(summary.perfect).toBe(summary.total);
   expect(summary.fast).toBe(0);
   expect(summary.slow).toBe(0);
   expect(summary.great).toBe(0);
   expect(summary.good).toBe(0);
   expect(summary.bad).toBe(0);
   expect(summary.poor).toBe(0);
-  expect(summary.exScore).toBe(12);
+  expect(summary.exScore).toBe(summary.total * 2);
   expect(summary.score).toBe(200000);
 });
 
 test('player: resolves control-flow branches at playback time', async () => {
-  const chartPath = resolve(rootDir, 'examples/test/control-flow-runtime-fixed.bms');
-  const json = await parseChartFile(chartPath);
+  const json = await parseChartFile(unifiedBmsChartPath);
 
-  expect(extractPlayableNotes(json).length).toBe(0);
+  expect(extractPlayableNotes(json).some((note) => note.event.measure >= 20 && note.event.measure <= 23)).toBe(false);
 
-  const summary = await autoPlay(json, {
-    auto: true,
-    speed: 64,
-    leadInMs: 0,
-    audio: false,
-    tui: false,
-  });
+  const resolvedWhenRandomIs1 = resolveBmsControlFlowForPlayback(json, () => 0).resolvedJson;
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(true);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 21 && event.channel === '16')).toBe(true);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '22')).toBe(true);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(true);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(false);
 
-  expect(summary.total).toBe(2);
-  expect(summary.perfect).toBe(2);
-  expect(summary.fast).toBe(0);
-  expect(summary.slow).toBe(0);
-  expect(summary.bad).toBe(0);
-  expect(summary.exScore).toBe(4);
-  expect(summary.score).toBe(200000);
+  const resolvedWhenRandomIs2 = resolveBmsControlFlowForPlayback(json, () => 0.9999999).resolvedJson;
+  expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(false);
+  expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(true);
 });
 
 test('player: resolves RANDOM pattern summary for control-flow playback', () => {

@@ -7,6 +7,7 @@ import { parseBmson, parseChartFile } from '../../parser/src/index.ts';
 import { stringifyBms, stringifyBmson } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
 describe('stringifier', () => {
 
 
@@ -83,49 +84,54 @@ test('bmson stringify: generates lines from measure lengths when IR has no lines
 });
 
 test('BMS stringify: preserves and writes controlFlow', async () => {
-  const chartPath = resolve(rootDir, 'examples/test/control-flow-test.bms');
-  const json = await parseChartFile(chartPath);
+  const json = await parseChartFile(unifiedBmsChartPath);
 
   const output = stringifyBms(json);
   expect(output).toMatch(/#SETRANDOM 2/);
-  expect(output).toMatch(/#IF 1/);
-  expect(output).toMatch(/#00012:01/);
+  expect(output).toMatch(/#IF 2/);
+  expect(output).toMatch(/#02012:01/);
   expect(output).toMatch(/#SETSWITCH 3/);
   expect(output).toMatch(/#CASE 3/);
+  expect(output).toMatch(/#02116:01/);
+  expect(output).toMatch(/#RANDOM 2/);
+  expect(output).toMatch(/#02324:01/);
   expect(output).toMatch(/#ENDRANDOM/);
 });
 
 test('BMS stringify: writes extension headers', async () => {
-  const chartPath = resolve(rootDir, 'examples/test/extensions-headers-test.bms');
-  const json = await parseChartFile(chartPath);
+  const json = await parseChartFile(unifiedBmsChartPath);
 
   const output = stringifyBms(json);
-  expect(output).toMatch(/#PREVIEW preview\.ogg/);
-  expect(output).toMatch(/#PLAYER 1/);
-  expect(output).toMatch(/#PATH_WAV sounds\//);
-  expect(output).toMatch(/#BASEBPM 155/);
-  expect(output).toMatch(/#STP 001\.240/);
-  expect(output).toMatch(/#OPTION HIGH-SPEED/);
+  expect(output).toMatch(/#PREVIEW sample\.wav/);
+  expect(output).toMatch(/#PLAYER 3/);
+  expect(output).toMatch(/#PATH_WAV \.\//);
+  expect(output).toMatch(/#BASEBPM 128/);
+  expect(output).toMatch(/#STP 008\.192/);
+  expect(output).toMatch(/#OPTION RANDOM/);
   expect(output).toMatch(/#CHANGEOPTION01 MIRROR/);
+  expect(output).toMatch(/#CHANGEOPTION02 RANDOM/);
   expect(output).toMatch(/#WAVCMD legacy/);
   expect(output).toMatch(/#LNTYPE 1/);
   expect(output).toMatch(/#LNMODE 1/);
-  expect(output).toMatch(/#LNOBJ ZZ/);
-  expect(output).toMatch(/#VOLWAV 80/);
+  expect(output).toMatch(/#LNOBJ AA/);
+  expect(output).toMatch(/#LNOBJ AB/);
+  expect(output).toMatch(/#VOLWAV 90/);
   expect(output).toMatch(/#DEFEXRANK 120/);
   expect(output).toMatch(/#EXRANK01 120,90,60,30/);
-  expect(output).toMatch(/#ARGB0A FF000000/);
-  expect(output).toMatch(/#EXWAV01 sample_ex\.wav/);
-  expect(output).toMatch(/#EXBMP01 image_ex\.bmp/);
+  expect(output).toMatch(/#ARGB01 FF000000/);
+  expect(output).toMatch(/#EXWAV01 ex_sample\.wav/);
+  expect(output).toMatch(/#EXBMP01 ex_image\.bmp/);
   expect(output).toMatch(/#BGA01 01/);
   expect(output).toMatch(/#SCROLL01 0\.5/);
-  expect(output).toMatch(/#POORBGA 01/);
+  expect(output).toMatch(/#SCROLL02 1/);
+  expect(output).toMatch(/#SCROLL03 1\.5/);
+  expect(output).toMatch(/#POORBGA 03/);
   expect(output).toMatch(/#SWBGA01 02/);
-  expect(output).toMatch(/#VIDEOFILE movie\.mp4/);
-  expect(output).toMatch(/#MIDIFILE sample\.mid/);
-  expect(output).toMatch(/#MATERIALS materials\.def/);
+  expect(output).toMatch(/#VIDEOFILE demo\.mp4/);
+  expect(output).toMatch(/#MIDIFILE demo\.mid/);
+  expect(output).toMatch(/#MATERIALS demo\.materials/);
   expect(output).toMatch(/#DIVIDEPROP lane=2/);
-  expect(output).toMatch(/#CHARSET Shift_JIS/);
+  expect(output).toMatch(/#CHARSET UTF-8/);
 });
 
 test('BMS stringify: writes multiple LNOBJ declarations in order', () => {
