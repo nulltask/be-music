@@ -1430,9 +1430,10 @@ async function showResultScreen(
     );
     lines.push(`NOTES ${notesProgress}`);
     lines.push(`EX-SCORE ${played.summary.exScore}/${maxExScore}  SCORE ${played.summary.score}/200000`);
-    lines.push(`PERFECT ${played.summary.perfect}  GREAT ${played.summary.great}`);
+    lines.push(
+      `PGREAT ${played.summary.perfect}  GREAT ${played.summary.great}  GOOD ${played.summary.good}  BAD ${played.summary.bad}  POOR ${played.summary.poor}`,
+    );
     lines.push(`FAST ${played.summary.fast}  SLOW ${played.summary.slow}`);
-    lines.push(`GOOD ${played.summary.good}  BAD ${played.summary.bad}  POOR ${played.summary.poor}`);
     lines.push('');
     if (allowReplay) {
       lines.push('Press r to replay this chart.');

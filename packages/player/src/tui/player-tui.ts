@@ -215,6 +215,8 @@ export class PlayerTui {
 
   private lastFrameRenderedAtMs = 0;
 
+  private lastRenderedBeat = Number.NaN;
+
   private lastSignalPaused?: boolean;
 
   private lastSignalHighSpeed?: number;
@@ -288,6 +290,7 @@ export class PlayerTui {
     this.highSpeedTransitionStartMs = 0;
     this.smoothedFps = Number.NaN;
     this.lastFrameRenderedAtMs = 0;
+    this.lastRenderedBeat = Number.NaN;
     process.stdout.write('\u001b[0m\u001b[?25h\u001b[?1049l');
   }
 
@@ -437,8 +440,16 @@ export class PlayerTui {
         typeof note.visibleUntilBeat === 'number' &&
         Number.isFinite(note.visibleUntilBeat) &&
         note.visibleUntilBeat > frame.currentBeat;
+      const crossedJudgeLineSinceLastFrame =
+        note.judged &&
+        Number.isFinite(this.lastRenderedBeat) &&
+        note.beat + BEAT_EPSILON >= this.lastRenderedBeat &&
+        note.beat <= frame.currentBeat + BEAT_EPSILON;
       const keepJudgedUntilJudgeLine =
-        note.judged && !keepVisible && Number.isFinite(note.beat) && note.beat + BEAT_EPSILON >= frame.currentBeat;
+        note.judged &&
+        !keepVisible &&
+        Number.isFinite(note.beat) &&
+        (note.beat + BEAT_EPSILON >= frame.currentBeat || crossedJudgeLineSinceLastFrame);
       if (note.judged && !keepVisible && !keepJudgedUntilJudgeLine) {
         continue;
       }
@@ -624,7 +635,7 @@ export class PlayerTui {
       `NOTES ${formatNotesProgress(frame.summary)}  EX ${frame.summary.exScore}/${maxExScore}  SCORE ${animatedScore}/200000`,
     );
     lines.push(
-      `PERFECT ${frame.summary.perfect}  FAST ${frame.summary.fast}  SLOW ${frame.summary.slow}  GREAT ${frame.summary.great}  GOOD ${frame.summary.good}  BAD ${frame.summary.bad}  POOR ${frame.summary.poor}`,
+      `PG ${frame.summary.perfect}  GR ${frame.summary.great}  GD ${frame.summary.good}  BD ${frame.summary.bad}  PR ${frame.summary.poor}  FAST ${frame.summary.fast}  SLOW ${frame.summary.slow}`,
     );
     if (frame.activeAudioFiles !== undefined || frame.activeAudioVoiceCount !== undefined) {
       const voiceCount =
@@ -715,6 +726,7 @@ export class PlayerTui {
     }
     process.stdout.write(`\u001b[H${paddedLines.join('\n')}`);
     this.previousFrameLineCount = lines.length;
+    this.lastRenderedBeat = frame.currentBeat;
   }
 
   private resolveNoteWindow(notes: TuiNote[], currentBeat: number, scrollWindowBeats: number): { start: number; end: number } {

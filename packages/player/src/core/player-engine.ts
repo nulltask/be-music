@@ -2696,16 +2696,16 @@ function renderSummary(summary: PlayerSummary): string {
   const exScoreRate = maxExScore > 0 ? summary.exScore / maxExScore : 0;
   const scoreRate = summary.score / IIDX_SCORE_MAX;
   return (
-    [
+      [
       '--- Result ---',
       `TOTAL  : ${summary.total}`,
-      `PERFECT: ${summary.perfect}`,
-      `FAST   : ${summary.fast}`,
-      `SLOW   : ${summary.slow}`,
+      `PGREAT : ${summary.perfect}`,
       `GREAT  : ${summary.great}`,
       `GOOD   : ${summary.good}`,
       `BAD    : ${summary.bad}`,
       `POOR   : ${summary.poor}`,
+      `FAST   : ${summary.fast}`,
+      `SLOW   : ${summary.slow}`,
       `EX-SCORE: ${summary.exScore} / ${maxExScore} (${(exScoreRate * 100).toFixed(2)}%)`,
       `SCORE   : ${summary.score} / ${IIDX_SCORE_MAX} (${(scoreRate * 100).toFixed(2)}%)`,
     ].join('\n') + '\n'
