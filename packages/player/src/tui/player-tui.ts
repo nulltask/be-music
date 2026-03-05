@@ -127,6 +127,7 @@ const HIGH_SPEED_TRANSITION_MS = 180;
 const JUDGE_COMBO_VISIBILITY_TIMEOUT_MS = 1000;
 const JUDGE_COMBO_BLINK_INTERVAL_MS = 80;
 const FPS_SMOOTHING_FACTOR = 0.2;
+const INPUT_KEY_ACTIVE_STYLE = '1;30;48;5;208';
 const MEASURE_SIGNATURE_MAX_DENOMINATOR = 32;
 const HIGH_SPEED_MODIFIER_LABEL = resolveAltModifierLabel();
 const MEASURE_SIGNATURE_TOLERANCE = 1e-8;
@@ -573,6 +574,12 @@ export class PlayerTui {
       }
       laneHighlightRatios.set(lane, 1);
     }
+    const activeInputKeyChannels = new Set(this.pressedLaneChannels);
+    for (const [channel, until] of this.laneFlashUntil.entries()) {
+      if (until > now) {
+        activeInputKeyChannels.add(channel);
+      }
+    }
 
     const lines: string[] = [];
     lines.push(`BMS PLAYER TUI [${this.options.mode}]`);
@@ -675,6 +682,8 @@ export class PlayerTui {
       this.options.lanes,
       this.laneWidths,
       this.options.splitAfterIndex,
+      activeInputKeyChannels,
+      this.options.laneDisplayMode.startsWith('9 KEY'),
     );
     laneLines.push(blackKeyRow);
     laneLines.push(whiteAndScratchKeyRow);
@@ -1105,23 +1114,34 @@ function renderInputKeyRows(
   lanes: ReadonlyArray<TuiLane>,
   laneWidths: number[],
   splitAfterIndex = -1,
+  activeChannels = new Set<string>(),
+  useOddEvenRows = false,
 ): [blackKeyRow: string, whiteAndScratchRow: string] {
-  const blackKeyCells: string[] = [];
-  const whiteCells: string[] = [];
+  const upperRowCells: string[] = [];
+  const lowerRowCells: string[] = [];
 
   for (let index = 0; index < lanes.length; index += 1) {
     const lane = lanes[index]!;
     const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
-    const isBlackLane = resolveInputKeyLaneGroup(lane) === 'black';
-    const styledLabel = colorizeInputKeyLabel(center(lane.key, laneWidth), resolveInputKeyLaneStyle(lane));
+    const laneNumber = useOddEvenRows ? resolveLaneNumberForInputRows(lane.channel) : -1;
+    const isUpperRowLane = useOddEvenRows
+      ? laneNumber > 0 && laneNumber % 2 === 0
+      : resolveInputKeyLaneGroup(lane) === 'black';
+    const laneChannel = lane.channel.toUpperCase();
+    const labelStyle = useOddEvenRows
+      ? (isUpperRowLane ? 'black' : 'white')
+      : resolveInputKeyLaneStyle(lane);
+    const styledLabel = activeChannels.has(laneChannel)
+      ? colorizeActiveInputKeyLabel(center(lane.key, laneWidth))
+      : colorizeInputKeyLabel(center(lane.key, laneWidth), labelStyle);
     const emptyCell = ' '.repeat(Math.max(1, laneWidth));
-    blackKeyCells.push(isBlackLane ? styledLabel : emptyCell);
-    whiteCells.push(isBlackLane ? emptyCell : styledLabel);
+    upperRowCells.push(isUpperRowLane ? styledLabel : emptyCell);
+    lowerRowCells.push(isUpperRowLane ? emptyCell : styledLabel);
   }
 
   return [
-    renderLaneSectionWithSplitPanel(blackKeyCells, splitAfterIndex),
-    renderLaneSectionWithSplitPanel(whiteCells, splitAfterIndex),
+    renderLaneSectionWithSplitPanel(upperRowCells, splitAfterIndex),
+    renderLaneSectionWithSplitPanel(lowerRowCells, splitAfterIndex),
   ];
 }
 
@@ -1479,6 +1499,10 @@ function colorizeInputKeyLabel(value: string, style: 'white' | 'black' | 'scratc
   return `\u001b[1;30;48;5;245m${value}${ANSI_RESET}`;
 }
 
+function colorizeActiveInputKeyLabel(value: string): string {
+  return `\u001b[${INPUT_KEY_ACTIVE_STYLE}m${value}${ANSI_RESET}`;
+}
+
 function resolveInputKeyLaneGroup(lane: TuiLane): 'white' | 'black' {
   const normalized = lane.channel.toUpperCase();
   if (BLUE_NOTE_CHANNELS.has(normalized)) {
@@ -1492,6 +1516,18 @@ function resolveInputKeyLaneStyle(lane: TuiLane): 'white' | 'black' | 'scratch' 
     return 'scratch';
   }
   return resolveInputKeyLaneGroup(lane) === 'black' ? 'black' : 'white';
+}
+
+function resolveLaneNumberForInputRows(channel: string): number {
+  const normalized = channel.toUpperCase();
+  if (normalized.length !== 2) {
+    return -1;
+  }
+  const code = normalized.charCodeAt(1);
+  if (code < 0x31 || code > 0x39) {
+    return -1;
+  }
+  return code - 0x30;
 }
 
 function createJudgeComboDisplayState(): JudgeComboDisplayState {

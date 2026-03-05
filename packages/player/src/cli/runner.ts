@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { stat } from 'node:fs/promises';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveCliPath } from '@be-music/utils';
 import readline from 'node:readline';
@@ -622,6 +622,10 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     audioLeadMaxMs: args.audioLeadMaxMs,
     audioLeadStepUpMs: args.audioLeadStepUpMs,
     audioLeadStepDownMs: args.audioLeadStepDownMs,
+    laneModeExtension: (() => {
+      const extension = extname(chartPath).toLowerCase();
+      return extension.length > 0 ? extension : undefined;
+    })(),
     tui: args.tui,
     createUiRuntime: args.tui
       ? async (context: Parameters<typeof createNodeUiRuntime>[0]) => {

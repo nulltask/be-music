@@ -69,11 +69,39 @@ describe('manual input', () => {
     ]);
   });
 
-  test('manual-input: builds full 9-key lanes when .pms fallback is used', () => {
+  test('manual-input: builds full 9-key lanes with BME layout when .pms fallback has 16-19 markers', () => {
     const bindings = createLaneBindings(['11', '17'], { chartExtension: '.pms' });
     expect(bindings.map((binding) => binding.channel)).toEqual(['11', '12', '13', '14', '15', '16', '17', '18', '19']);
-    expect(bindings.find((binding) => binding.channel === '16')?.keyLabel).toBe('h');
+    expect(bindings.map((binding) => binding.keyLabel)).toEqual(['z', 's', 'x', 'd', 'c', 'f', 'v', 'g', 'b']);
     expect(bindings.find((binding) => binding.channel === '16')?.isScratch).toBe(false);
+  });
+
+  test('manual-input: builds full 9-key lanes with standard PMS layout when .pms fallback has 22-25 markers', () => {
+    const bindings = createLaneBindings(['11', '22'], { chartExtension: '.pms' });
+    expect(bindings.map((binding) => binding.channel)).toEqual(['11', '12', '13', '14', '15', '22', '23', '24', '25']);
+    expect(bindings.map((binding) => binding.keyLabel)).toEqual(['z', 's', 'x', 'd', 'c', 'f', 'v', 'g', 'b']);
+    expect(bindings.every((binding) => binding.side === '1P')).toBe(true);
+  });
+
+  test('manual-input: prefers standard PMS layout when .pms has mixed 16-19 and 22-25 markers', () => {
+    const bindings = createLaneBindings(['11', '18', '22'], { chartExtension: '.pms' });
+    expect(bindings.slice(0, 9).map((binding) => binding.channel)).toEqual([
+      '11',
+      '12',
+      '13',
+      '14',
+      '15',
+      '22',
+      '23',
+      '24',
+      '25',
+    ]);
+    expect(bindings.at(-1)?.channel).toBe('18');
+  });
+
+  test('manual-input: defaults .pms ambiguous chart to standard PMS layout', () => {
+    const bindings = createLaneBindings(['11'], { chartExtension: '.pms' });
+    expect(bindings.map((binding) => binding.channel)).toEqual(['11', '12', '13', '14', '15', '22', '23', '24', '25']);
   });
 
   test('manual-input: treats lone channel 17 as unknown and keeps 5-key SP mode', () => {
@@ -263,8 +291,9 @@ describe('manual input', () => {
     expect(resolveLaneDisplayMode(['1A'])).toBe('24 KEY SP');
     expect(resolveLaneDisplayMode(['2A'])).toBe('48 KEY DP');
     expect(resolveLaneDisplayMode(['11', '17'])).toBe('5 KEY SP');
-    expect(resolveLaneDisplayMode(['11', '17'], { chartExtension: '.pms' })).toBe('9 KEY');
-    expect(resolveLaneDisplayMode(['11', '17'], { player: 3 })).toBe('9 KEY');
+    expect(resolveLaneDisplayMode(['11', '17'], { chartExtension: '.pms' })).toBe('9 KEY (PMS-COMPAT)');
+    expect(resolveLaneDisplayMode(['11', '18', '22'], { chartExtension: '.pms' })).toBe('9 KEY (PMS-STD)');
+    expect(resolveLaneDisplayMode(['11', '17'], { player: 3 })).toBe('9 KEY (PMS-COMPAT)');
   });
 });
 

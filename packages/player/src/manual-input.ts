@@ -10,6 +10,7 @@ export interface LaneBinding {
 }
 
 type LaneMode = '5-key-sp' | '5-key-dp' | '7-key-sp' | '14-key-dp' | '9-key' | '24-key-sp' | '48-key-dp';
+type Pms9KeyLayout = 'standard' | 'compat';
 
 const LANE_MODE_LABELS: Record<LaneMode, string> = {
   '5-key-sp': '5 KEY SP',
@@ -102,16 +103,28 @@ const IIDX_14KEY_DP_BINDINGS: FixedLaneDefinition[] = [
   { channel: '26', keyLabel: 'RShift', inputTokens: ['shift-right', ']'], side: '2P', isScratch: true },
 ];
 
-const POPN_9KEY_BINDINGS: FixedLaneDefinition[] = [
-  { channel: '11', keyLabel: 'a', inputTokens: ['a'], side: '1P' },
+const POPN_9KEY_BME_BINDINGS: FixedLaneDefinition[] = [
+  { channel: '11', keyLabel: 'z', inputTokens: ['z'], side: '1P' },
   { channel: '12', keyLabel: 's', inputTokens: ['s'], side: '1P' },
-  { channel: '13', keyLabel: 'd', inputTokens: ['d'], side: '1P' },
-  { channel: '14', keyLabel: 'f', inputTokens: ['f'], side: '1P' },
-  { channel: '15', keyLabel: 'g', inputTokens: ['g'], side: '1P' },
-  { channel: '16', keyLabel: 'h', inputTokens: ['h'], side: '1P' },
-  { channel: '17', keyLabel: 'j', inputTokens: ['j'], side: '1P' },
-  { channel: '18', keyLabel: 'k', inputTokens: ['k'], side: '1P' },
-  { channel: '19', keyLabel: 'l', inputTokens: ['l'], side: '1P' },
+  { channel: '13', keyLabel: 'x', inputTokens: ['x'], side: '1P' },
+  { channel: '14', keyLabel: 'd', inputTokens: ['d'], side: '1P' },
+  { channel: '15', keyLabel: 'c', inputTokens: ['c'], side: '1P' },
+  { channel: '16', keyLabel: 'f', inputTokens: ['f'], side: '1P' },
+  { channel: '17', keyLabel: 'v', inputTokens: ['v'], side: '1P' },
+  { channel: '18', keyLabel: 'g', inputTokens: ['g'], side: '1P' },
+  { channel: '19', keyLabel: 'b', inputTokens: ['b'], side: '1P' },
+];
+
+const POPN_9KEY_PMS_BINDINGS: FixedLaneDefinition[] = [
+  { channel: '11', keyLabel: 'z', inputTokens: ['z'], side: '1P' },
+  { channel: '12', keyLabel: 's', inputTokens: ['s'], side: '1P' },
+  { channel: '13', keyLabel: 'x', inputTokens: ['x'], side: '1P' },
+  { channel: '14', keyLabel: 'd', inputTokens: ['d'], side: '1P' },
+  { channel: '15', keyLabel: 'c', inputTokens: ['c'], side: '1P' },
+  { channel: '22', keyLabel: 'f', inputTokens: ['f'], side: '1P' },
+  { channel: '23', keyLabel: 'v', inputTokens: ['v'], side: '1P' },
+  { channel: '24', keyLabel: 'g', inputTokens: ['g'], side: '1P' },
+  { channel: '25', keyLabel: 'b', inputTokens: ['b'], side: '1P' },
 ];
 
 const EXTENDED_LANE_DIGITS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -131,7 +144,7 @@ const FIXED_BINDINGS_BY_MODE: Record<LaneMode, FixedLaneDefinition[]> = {
   '5-key-dp': IIDX_5KEY_DP_BINDINGS,
   '7-key-sp': IIDX_7KEY_SP_BINDINGS,
   '14-key-dp': IIDX_14KEY_DP_BINDINGS,
-  '9-key': POPN_9KEY_BINDINGS,
+  '9-key': POPN_9KEY_BME_BINDINGS,
   '24-key-sp': KBM_24KEY_SP_BINDINGS,
   '48-key-dp': KBM_48KEY_DP_BINDINGS,
 };
@@ -143,7 +156,7 @@ export function createLaneBindings(channels: string[], options: LaneModeOptions 
   }
 
   const mode = resolveLaneMode(existing, options);
-  const modeBindings = FIXED_BINDINGS_BY_MODE[mode];
+  const modeBindings = resolveModeBindings(mode, existing, options);
   const bindings: LaneBinding[] = [];
   const usedTokens = new Set<string>();
   const definedChannels = new Set(modeBindings.map((definition) => definition.channel));
@@ -227,7 +240,13 @@ export function resolveLaneDisplayMode(channels: string[], options: LaneModeOpti
   if (existing.size === 0) {
     return 'UNKNOWN';
   }
-  return LANE_MODE_LABELS[resolveLaneMode(existing, options)];
+  const mode = resolveLaneMode(existing, options);
+  const label = LANE_MODE_LABELS[mode];
+  if (mode !== '9-key') {
+    return label;
+  }
+  const layout = resolvePms9KeyLayout(existing, options.chartExtension);
+  return `${label} (${layout === 'standard' ? 'PMS-STD' : 'PMS-COMPAT'})`;
 }
 
 function resolveLaneMode(existing: ReadonlySet<string>, options: LaneModeOptions): LaneMode {
@@ -247,6 +266,10 @@ function resolveLaneMode(existing: ReadonlySet<string>, options: LaneModeOptions
 
   if (hasExtendedLane) {
     return has2P ? '48-key-dp' : '24-key-sp';
+  }
+
+  if (isPmsExtension(options.chartExtension)) {
+    return '9-key';
   }
 
   if (has2P && has14KeyMarker) {
@@ -274,13 +297,13 @@ function resolveLaneMode(existing: ReadonlySet<string>, options: LaneModeOptions
 }
 
 function resolveLaneModeByExtension(chartExtension: string | undefined, has2P: boolean): LaneMode | undefined {
+  if (isPmsExtension(chartExtension)) {
+    return '9-key';
+  }
   if (typeof chartExtension !== 'string') {
     return undefined;
   }
   const normalized = chartExtension.trim().toLowerCase();
-  if (normalized === '.pms') {
-    return '9-key';
-  }
   if (normalized === '.bme') {
     return has2P ? '14-key-dp' : '7-key-sp';
   }
@@ -288,6 +311,56 @@ function resolveLaneModeByExtension(chartExtension: string | undefined, has2P: b
     return has2P ? '5-key-dp' : '5-key-sp';
   }
   return undefined;
+}
+
+function resolveModeBindings(
+  mode: LaneMode,
+  existing: ReadonlySet<string>,
+  options: LaneModeOptions,
+): FixedLaneDefinition[] {
+  if (mode !== '9-key') {
+    return FIXED_BINDINGS_BY_MODE[mode];
+  }
+  return resolvePms9KeyBindings(existing, options.chartExtension);
+}
+
+function resolvePms9KeyBindings(
+  existing: ReadonlySet<string>,
+  chartExtension: string | undefined,
+): FixedLaneDefinition[] {
+  if (resolvePms9KeyLayout(existing, chartExtension) === 'standard') {
+    return POPN_9KEY_PMS_BINDINGS;
+  }
+  return POPN_9KEY_BME_BINDINGS;
+}
+
+function resolvePms9KeyLayout(
+  existing: ReadonlySet<string>,
+  chartExtension: string | undefined,
+): Pms9KeyLayout {
+  const pmsLayoutChannels = ['22', '23', '24', '25'];
+  const bmeLayoutChannels = ['16', '17', '18', '19'];
+  const pmsLayoutScore = countExistingChannels(existing, pmsLayoutChannels);
+  const bmeLayoutScore = countExistingChannels(existing, bmeLayoutChannels);
+
+  if (pmsLayoutScore === 0 && bmeLayoutScore === 0) {
+    return isPmsExtension(chartExtension) ? 'standard' : 'compat';
+  }
+  return pmsLayoutScore >= bmeLayoutScore ? 'standard' : 'compat';
+}
+
+function countExistingChannels(existing: ReadonlySet<string>, channels: readonly string[]): number {
+  let count = 0;
+  for (const channel of channels) {
+    if (existing.has(channel)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function isPmsExtension(chartExtension: string | undefined): boolean {
+  return typeof chartExtension === 'string' && chartExtension.trim().toLowerCase() === '.pms';
 }
 
 function resolveFreeZoneScratchChannel(channel: string): string | undefined {
