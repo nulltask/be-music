@@ -114,6 +114,9 @@ importers:
       '@uwx/libav.js-fat':
         specifier: 6.0.0-nightly.29.f420ff.ffmpeg.6.1.1
         version: 6.0.0-nightly.29.f420ff.ffmpeg.6.1.1
+      alien-signals:
+        specifier: ^3.1.2
+        version: 3.1.2
       fast-bmp:
         specifier: ^4.0.1
         version: 4.0.1
@@ -928,6 +931,9 @@ packages:
 
   '@wasm-audio-decoders/opus-ml@0.0.2':
     resolution: {integrity: sha512-58rWEqDGg+CKCyEeKm2KoxxSwTWtHh/NLTW9ObR4K8CGF6VwuuGudEI1CtniS/oSRmL1nJq/eh8MKARiluw4DQ==}
+
+  alien-signals@3.1.2:
+    resolution: {integrity: sha512-d9dYqZTS90WLiU0I5c6DHj/HcKkF8ZyGN3G5x8wSbslulz70KOxaqCT0hQCo9KOyhVqzqGojvNdJXoTumZOtcw==}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -1912,6 +1918,8 @@ snapshots:
   '@wasm-audio-decoders/opus-ml@0.0.2':
     dependencies:
       '@wasm-audio-decoders/common': 9.0.7
+
+  alien-signals@3.1.2: {}
 
   assertion-error@2.0.1: {}
 

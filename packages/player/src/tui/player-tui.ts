@@ -1,6 +1,7 @@
 import { clamp } from '@be-music/utils';
 import type { PlayerSummary } from '../index.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../player-utils.ts';
+import type { PlayerStateSignals } from '../player-state-signals.ts';
 import {
   normalizeHighSpeed,
   resolveAnimatedHighSpeedValue,
@@ -35,6 +36,7 @@ interface TuiOptions {
   measureLengths?: ReadonlyMap<number, number>;
   measureBoundariesBeats?: number[];
   splitAfterIndex?: number;
+  stateSignals?: PlayerStateSignals;
 }
 
 interface TuiNote {
@@ -148,6 +150,8 @@ const SCRATCH_LANE_BG_RGB: RgbColor = { r: 5, g: 8, b: 12 };
 export class PlayerTui {
   private readonly options: TuiOptions;
 
+  private readonly stateSignals?: PlayerStateSignals;
+
   private readonly laneIndex = new Map<string, number>();
 
   private readonly laneChannels: string[];
@@ -204,10 +208,17 @@ export class PlayerTui {
 
   private highSpeedTransitionStartMs = 0;
 
+  private lastSignalPaused?: boolean;
+
+  private lastSignalHighSpeed?: number;
+
+  private lastSignalJudgeComboTick = Number.NaN;
+
   constructor(options: TuiOptions) {
     const initialHighSpeed = normalizeHighSpeed(options.highSpeed);
     options.highSpeed = initialHighSpeed;
     this.options = options;
+    this.stateSignals = options.stateSignals;
     this.displayedHighSpeed = initialHighSpeed;
     this.targetHighSpeed = initialHighSpeed;
     this.highSpeedTransitionFrom = initialHighSpeed;
@@ -227,6 +238,10 @@ export class PlayerTui {
       this.freeZoneSourceChannels.add('27');
     }
     this.laneBlockVisibleWidth = calculateLaneBlockVisibleWidth(this.laneWidths, options.splitAfterIndex ?? -1);
+    this.lastSignalPaused = this.paused;
+    this.lastSignalHighSpeed = this.targetHighSpeed;
+    this.lastSignalJudgeComboTick = Number.NaN;
+    this.syncStateSignals();
   }
 
   isSupported(): boolean {
@@ -326,10 +341,45 @@ export class PlayerTui {
     this.pressedLaneChannels.delete(this.resolveRenderLaneChannel(channel));
   }
 
+  private syncStateSignals(): void {
+    const stateSignals = this.stateSignals;
+    if (!stateSignals) {
+      return;
+    }
+
+    const paused = stateSignals.paused();
+    if (this.lastSignalPaused !== paused) {
+      this.lastSignalPaused = paused;
+      this.setPaused(paused);
+    }
+
+    const highSpeed = normalizeHighSpeed(stateSignals.highSpeed());
+    if (this.lastSignalHighSpeed === undefined || Math.abs(this.lastSignalHighSpeed - highSpeed) > 1e-9) {
+      this.lastSignalHighSpeed = highSpeed;
+      this.setHighSpeed(highSpeed);
+    }
+
+    const judgeComboTick = stateSignals.judgeComboTick();
+    if (judgeComboTick === this.lastSignalJudgeComboTick) {
+      return;
+    }
+    this.lastSignalJudgeComboTick = judgeComboTick;
+    this.applyJudgeComboSignalState(stateSignals.getJudgeCombo());
+  }
+
+  private applyJudgeComboSignalState(state: Readonly<{ judge: string; combo: number; channel?: string; updatedAtMs: number }>): void {
+    for (const display of this.resolveJudgeComboTargets(state.channel)) {
+      display.latestJudge = state.judge;
+      display.combo = state.combo;
+      display.updatedAtMs = state.updatedAtMs;
+    }
+  }
+
   render(frame: TuiFrame): void {
     if (!this.active) {
       return;
     }
+    this.syncStateSignals();
 
     const terminalRows = process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
     const debugLineCount = frame.activeAudioFiles === undefined && frame.activeAudioVoiceCount === undefined ? 0 : 1;

@@ -23,6 +23,7 @@ import {
   renderJson,
 } from '@be-music/audio-renderer';
 import { createBgaAnsiRenderer, type BgaAnsiRenderer } from '../bga.ts';
+import { createPlayerStateSignals, type PlayerStateSignals } from '../player-state-signals.ts';
 import { PlayerTui } from '../tui.ts';
 import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
 import {
@@ -420,6 +421,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   let combo = 0;
   let interruptedReason: PlayerInterruptReason | undefined;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
+  const stateSignals = createPlayerStateSignals(highSpeed);
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
   const tui = createTuiIfEnabled(
@@ -431,7 +433,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     speed,
     0,
     randomPatternSummary,
+    stateSignals,
   );
+  const activeStateSignals = tui ? stateSignals : undefined;
   const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
   const bgaRenderer = tui
     ? await createBgaAnsiRenderer(resolvedJson, {
@@ -491,8 +495,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     process.stdout.write(`Press ${highSpeedModifierLabel}+even lane key to increase HIGH-SPEED.\n`);
   } else {
     tui.start();
-    tui.setLatestJudge('READY');
-    tui.setCombo(0);
+    activeStateSignals?.publishJudgeCombo('READY', 0);
     tui.render({
       currentBeat: 0,
       currentSeconds: 0,
@@ -530,7 +533,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         return;
       }
       audioSession?.resume();
-      tui?.setPaused(false);
+      activeStateSignals?.setPaused(false);
       if (!tui) {
         process.stdout.write('RESUME\n');
       }
@@ -541,7 +544,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       return;
     }
     audioSession?.pause();
-    tui?.setPaused(true);
+    activeStateSignals?.setPaused(true);
     if (!tui) {
       process.stdout.write('PAUSE\n');
     }
@@ -576,7 +579,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       const nextHighSpeed = applyHighSpeedControlAction(highSpeed, highSpeedAction);
       if (nextHighSpeed !== highSpeed) {
         highSpeed = nextHighSpeed;
-        tui?.setHighSpeed(highSpeed);
+        activeStateSignals?.setHighSpeed(highSpeed);
         options.onHighSpeedChange?.(highSpeed);
       }
       if (!tui) {
@@ -709,8 +712,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             note.visibleUntilBeat = note.endBeat;
             tui.holdLaneUntilBeat(note.channel, note.endBeat);
           }
-          tui.setLatestJudge('PERFECT', note.channel);
-          tui.setCombo(combo, note.channel);
+          activeStateSignals?.publishJudgeCombo('PERFECT', combo, note.channel);
           tui.render({
             currentBeat: note.beat,
             currentSeconds: note.seconds,
@@ -835,6 +837,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const scoreTracker = createScoreTracker();
   let combo = 0;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
+  const stateSignals = createPlayerStateSignals(highSpeed);
 
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
   const tui = createTuiIfEnabled(
@@ -846,7 +849,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     speed,
     badWindowMs,
     randomPatternSummary,
+    stateSignals,
   );
+  const activeStateSignals = tui ? stateSignals : undefined;
   const bgaDisplay = estimateBgaAnsiDisplaySize(laneBindings);
   const bgaRenderer = tui
     ? await createBgaAnsiRenderer(resolvedJson, {
@@ -903,8 +908,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     printLaneMap(laneBindings);
   } else {
     tui.start();
-    tui.setLatestJudge('READY');
-    tui.setCombo(0);
+    activeStateSignals?.publishJudgeCombo('READY', 0);
     tui.render({
       currentBeat: 0,
       currentSeconds: 0,
@@ -1033,10 +1037,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         note.visibleUntilBeat = note.endBeat;
         tui?.holdLaneUntilBeat(note.channel, note.endBeat);
       }
-      if (tui) {
-        tui.setLatestJudge('PERFECT', note.channel);
-        tui.setCombo(combo, note.channel);
-      }
+      activeStateSignals?.publishJudgeCombo('PERFECT', combo, note.channel);
     }
   };
 
@@ -1060,10 +1061,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       applyJudgeToSummary(summary, 'POOR', scoreTracker);
       triggerPoorBga(referenceSeconds);
       combo = 0;
-      if (tui) {
-        tui.setLatestJudge('POOR', note.channel);
-        tui.setCombo(combo, note.channel);
-      }
+      activeStateSignals?.publishJudgeCombo('POOR', combo, note.channel);
     }
   };
 
@@ -1077,8 +1075,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!tui) {
         process.stdout.write(`PERFECT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
-        tui.setLatestJudge('PERFECT', channel);
-        tui.setCombo(combo, channel);
+        activeStateSignals?.publishJudgeCombo('PERFECT', combo, channel);
       }
       return;
     }
@@ -1090,8 +1087,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!tui) {
         process.stdout.write(`GREAT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
-        tui.setLatestJudge('GREAT', channel);
-        tui.setCombo(combo, channel);
+        activeStateSignals?.publishJudgeCombo('GREAT', combo, channel);
       }
       return;
     }
@@ -1103,8 +1099,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!tui) {
         process.stdout.write(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
-        tui.setLatestJudge('GOOD', channel);
-        tui.setCombo(combo, channel);
+        activeStateSignals?.publishJudgeCombo('GOOD', combo, channel);
       }
       return;
     }
@@ -1114,8 +1109,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!tui) {
         process.stdout.write(`BAD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
-        tui.setLatestJudge('BAD', channel);
-        tui.setCombo(combo, channel);
+        activeStateSignals?.publishJudgeCombo('BAD', combo, channel);
       }
       return;
     }
@@ -1126,8 +1120,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (!tui) {
       process.stdout.write(`POOR channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
     } else {
-      tui.setLatestJudge('POOR', channel);
-      tui.setCombo(combo, channel);
+      activeStateSignals?.publishJudgeCombo('POOR', combo, channel);
     }
   };
 
@@ -1231,8 +1224,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!tui) {
         process.stdout.write(`MINE channel:${landmineCandidate.channel} delta:${Math.round(landmineDelta * 1000)}ms\n`);
       } else {
-        tui.setLatestJudge('BAD', landmineCandidate.channel);
-        tui.setCombo(combo, landmineCandidate.channel);
+        activeStateSignals?.publishJudgeCombo('BAD', combo, landmineCandidate.channel);
       }
       return;
     }
@@ -1292,7 +1284,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     const nextHighSpeed = applyHighSpeedControlAction(highSpeed, action);
     if (nextHighSpeed !== highSpeed) {
       highSpeed = nextHighSpeed;
-      tui?.setHighSpeed(highSpeed);
+      activeStateSignals?.setHighSpeed(highSpeed);
       options.onHighSpeedChange?.(highSpeed);
     }
     if (!tui) {
@@ -1307,7 +1299,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         return;
       }
       audioSession?.resume();
-      tui?.setPaused(false);
+      activeStateSignals?.setPaused(false);
       if (!tui) {
         process.stdout.write('RESUME\n');
       }
@@ -1317,7 +1309,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       return;
     }
     audioSession?.pause();
-    tui?.setPaused(true);
+    activeStateSignals?.setPaused(true);
     if (!tui) {
       process.stdout.write('PAUSE\n');
     }
@@ -1533,8 +1525,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         triggerPoorBga(totalSeconds);
         combo = 0;
         if (tui) {
-          tui.setLatestJudge('POOR');
-          tui.setCombo(combo);
+          activeStateSignals?.publishJudgeCombo('POOR', combo);
           tui.render({
             currentBeat: beatAtSeconds(totalSeconds),
             currentSeconds: totalSeconds,
@@ -1587,6 +1578,7 @@ function createTuiIfEnabled(
   speed: number,
   judgeWindowMs: number,
   randomPatternSummary?: string,
+  stateSignals?: PlayerStateSignals,
 ): PlayerTui | undefined {
   if (options.tui === false) {
     return undefined;
@@ -1617,7 +1609,7 @@ function createTuiIfEnabled(
     endSeconds: window.endSeconds,
   }));
   const measureBoundariesBeats = createMeasureBoundariesBeats(json, beatResolver);
-  const highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
+  const highSpeed = stateSignals ? stateSignals.highSpeed() : resolveHighSpeedMultiplier(options.highSpeed);
   const tui = new PlayerTui({
     mode,
     laneDisplayMode,
@@ -1639,6 +1631,7 @@ function createTuiIfEnabled(
     measureLengths,
     measureBoundariesBeats,
     splitAfterIndex,
+    stateSignals,
   });
 
   if (!tui.isSupported()) {
