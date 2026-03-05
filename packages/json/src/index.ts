@@ -175,6 +175,11 @@ export interface BeatResolver {
 }
 
 export const DEFAULT_BPM = 130;
+const BASE36_UPPER_DIGITS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const BASE36_PAD_1_DIVISOR = 36;
+const BASE36_PAD_2_DIVISOR = BASE36_PAD_1_DIVISOR * BASE36_PAD_1_DIVISOR;
+const BMS_LONG_NOTE_PLAYABLE_1P = ['11', '12', '13', '14', '15', '16', '17', '18', '19'] as const;
+const BMS_LONG_NOTE_PLAYABLE_2P = ['21', '22', '23', '24', '25', '26', '27', '28', '29'] as const;
 
 export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMusicJson {
   return {
@@ -220,7 +225,51 @@ export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
 }
 
 export function cloneJson(json: BeMusicJson): BeMusicJson {
-  return structuredClone(json);
+  return {
+    format: json.format,
+    sourceFormat: json.sourceFormat,
+    metadata: {
+      ...json.metadata,
+      extras: { ...json.metadata.extras },
+    },
+    resources: {
+      wav: { ...json.resources.wav },
+      bmp: { ...json.resources.bmp },
+      bpm: { ...json.resources.bpm },
+      stop: { ...json.resources.stop },
+      text: { ...json.resources.text },
+    },
+    measures: json.measures.map((measure) => ({ index: measure.index, length: measure.length })),
+    events: json.events.map(cloneEvent),
+    bms: {
+      ...json.bms,
+      controlFlow: json.bms.controlFlow.map(cloneControlFlowEntry),
+      lnObjs: json.bms.lnObjs ? [...json.bms.lnObjs] : undefined,
+      exRank: { ...json.bms.exRank },
+      argb: { ...json.bms.argb },
+      stp: [...json.bms.stp],
+      changeOption: { ...json.bms.changeOption },
+      exWav: { ...json.bms.exWav },
+      exBmp: { ...json.bms.exBmp },
+      bga: { ...json.bms.bga },
+      scroll: { ...json.bms.scroll },
+      swBga: { ...json.bms.swBga },
+    },
+    bmson: {
+      ...json.bmson,
+      lines: [...json.bmson.lines],
+      info: {
+        ...json.bmson.info,
+        subartists: json.bmson.info.subartists ? [...json.bmson.info.subartists] : undefined,
+      },
+      bga: {
+        header: json.bmson.bga.header.map((entry) => ({ id: entry.id, name: entry.name })),
+        events: json.bmson.bga.events.map((event) => ({ y: event.y, id: event.id })),
+        layerEvents: json.bmson.bga.layerEvents.map((event) => ({ y: event.y, id: event.id })),
+        poorEvents: json.bmson.bga.poorEvents.map((event) => ({ y: event.y, id: event.id })),
+      },
+    },
+  };
 }
 
 export function normalizeObjectKey(value: string): string {
@@ -229,16 +278,22 @@ export function normalizeObjectKey(value: string): string {
     return '00';
   }
   if (trimmed.length === 1) {
-    const code = normalizeAsciiBase36Code(trimmed.charCodeAt(0));
+    const sourceCode = trimmed.charCodeAt(0);
+    const code = normalizeAsciiBase36Code(sourceCode);
     if (code >= 0) {
-      return `0${String.fromCharCode(code)}`;
+      return code === sourceCode ? `0${trimmed}` : `0${String.fromCharCode(code)}`;
     }
     return `0${trimmed.toUpperCase()}`;
   }
   if (trimmed.length === 2) {
-    const code0 = normalizeAsciiBase36Code(trimmed.charCodeAt(0));
-    const code1 = normalizeAsciiBase36Code(trimmed.charCodeAt(1));
+    const sourceCode0 = trimmed.charCodeAt(0);
+    const sourceCode1 = trimmed.charCodeAt(1);
+    const code0 = normalizeAsciiBase36Code(sourceCode0);
+    const code1 = normalizeAsciiBase36Code(sourceCode1);
     if (code0 >= 0 && code1 >= 0) {
+      if (code0 === sourceCode0 && code1 === sourceCode1) {
+        return trimmed;
+      }
       return String.fromCharCode(code0, code1);
     }
     return trimmed.toUpperCase();
@@ -248,9 +303,14 @@ export function normalizeObjectKey(value: string): string {
 
 export function normalizeChannel(value: string): string {
   if (value.length === 2) {
-    const code0 = normalizeAsciiBase36Code(value.charCodeAt(0));
-    const code1 = normalizeAsciiBase36Code(value.charCodeAt(1));
+    const sourceCode0 = value.charCodeAt(0);
+    const sourceCode1 = value.charCodeAt(1);
+    const code0 = normalizeAsciiBase36Code(sourceCode0);
+    const code1 = normalizeAsciiBase36Code(sourceCode1);
     if (code0 >= 0 && code1 >= 0) {
+      if (code0 === sourceCode0 && code1 === sourceCode1) {
+        return value;
+      }
       return String.fromCharCode(code0, code1);
     }
   }
@@ -261,7 +321,17 @@ export function intToBase36(value: number, pad = 2): string {
   if (!Number.isFinite(value) || value < 0) {
     return '0'.repeat(pad);
   }
-  const encoded = Math.floor(value).toString(36).toUpperCase();
+  const normalized = Math.floor(value);
+  if (pad === 1) {
+    return BASE36_UPPER_DIGITS[normalized % BASE36_PAD_1_DIVISOR] ?? '0';
+  }
+  if (pad === 2) {
+    const valuePad2 = Math.floor(normalized % BASE36_PAD_2_DIVISOR);
+    const high = Math.floor(valuePad2 / BASE36_PAD_1_DIVISOR);
+    const low = valuePad2 % BASE36_PAD_1_DIVISOR;
+    return `${BASE36_UPPER_DIGITS[high]}${BASE36_UPPER_DIGITS[low]}`;
+  }
+  const encoded = normalized.toString(36).toUpperCase();
   return encoded.padStart(pad, '0').slice(-pad);
 }
 
@@ -278,9 +348,11 @@ export function parseBpmFrom03Token(value: string): number {
 }
 
 export function ensureMeasure(json: BeMusicJson, index: number): BeMusicMeasure {
-  const found = json.measures.find((measure) => measure.index === index);
-  if (found) {
-    return found;
+  for (let measureIndex = 0; measureIndex < json.measures.length; measureIndex += 1) {
+    const measure = json.measures[measureIndex]!;
+    if (measure.index === index) {
+      return measure;
+    }
   }
   const created: BeMusicMeasure = {
     index,
@@ -296,12 +368,12 @@ export function getMeasureBeats(length: number): number {
 
 export function measureToBeat(json: BeMusicJson, measure: number, position = 0): number {
   const safePosition = clamp01(position);
-  const measureLengths = createExactMeasureLengthMap(json);
+  const measureLengths = createExactMeasureLengthRecord(json);
   let beats = 0;
   for (let current = 0; current < measure; current += 1) {
-    beats += getMeasureBeats(measureLengths.get(current) ?? 1);
+    beats += getMeasureBeats(measureLengths[current] ?? 1);
   }
-  beats += getMeasureBeats(measureLengths.get(measure) ?? 1) * safePosition;
+  beats += getMeasureBeats(measureLengths[measure] ?? 1) * safePosition;
   return beats;
 }
 
@@ -310,12 +382,12 @@ export function eventToBeat(json: BeMusicJson, event: BeMusicEvent): number {
 }
 
 export function createBeatResolver(json: BeMusicJson): BeatResolver {
-  const measureLengths = new Map<number, number>();
+  const measureLengths: number[] = [];
   let maxDefinedMeasure = -1;
   for (const measure of json.measures) {
     const normalizedIndex = Math.max(0, Math.floor(measure.index));
     const normalizedLength = Number.isFinite(measure.length) && measure.length > 0 ? measure.length : 1;
-    measureLengths.set(normalizedIndex, normalizedLength);
+    measureLengths[normalizedIndex] = normalizedLength;
     if (normalizedIndex > maxDefinedMeasure) {
       maxDefinedMeasure = normalizedIndex;
     }
@@ -325,7 +397,7 @@ export function createBeatResolver(json: BeMusicJson): BeatResolver {
   let cumulativeBeats = 0;
   for (let measure = 0; measure <= maxDefinedMeasure; measure += 1) {
     measureStartBeats[measure] = cumulativeBeats;
-    cumulativeBeats += getMeasureBeats(measureLengths.get(measure) ?? 1);
+    cumulativeBeats += getMeasureBeats(measureLengths[measure] ?? 1);
   }
   const denseLimit = maxDefinedMeasure + 1;
 
@@ -340,7 +412,7 @@ export function createBeatResolver(json: BeMusicJson): BeatResolver {
     return cumulativeBeats + (measure - denseLimit) * 4;
   };
 
-  const resolveMeasureLength = (measure: number): number => measureLengths.get(measure) ?? 1;
+  const resolveMeasureLength = (measure: number): number => (measure < denseLimit ? (measureLengths[measure] ?? 1) : 1);
 
   return {
     measureToBeat: (measure, position = 0) => {
@@ -381,35 +453,35 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
 }
 
 export function isTempoChannel(channel: string): boolean {
-  return isTempoNormalizedChannel(normalizeChannel(channel));
+  return isTempoNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isStopChannel(channel: string): boolean {
-  return isStopNormalizedChannel(normalizeChannel(channel));
+  return isStopNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isScrollChannel(channel: string): boolean {
-  return isScrollNormalizedChannel(normalizeChannel(channel));
+  return isScrollNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isLandmineChannel(channel: string): boolean {
-  return isLandmineNormalizedChannel(normalizeChannel(channel));
+  return isLandmineNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isSampleTriggerChannel(channel: string): boolean {
-  return isSampleTriggerNormalizedChannel(normalizeChannel(channel));
+  return isSampleTriggerNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isPlayableChannel(channel: string): boolean {
-  return isPlayableNormalizedChannel(normalizeChannel(channel));
+  return isPlayableNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isBmsLongNoteChannel(channel: string): boolean {
-  return mapBmsLongNoteChannelToPlayable(channel) !== undefined;
+  return isBmsLongNoteNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function mapBmsLongNoteChannelToPlayable(channel: string): string | undefined {
-  return mapBmsLongNoteNormalizedChannelToPlayable(normalizeChannel(channel));
+  return mapBmsLongNoteNormalizedChannelToPlayable(resolveNormalizedChannelForPredicate(channel));
 }
 
 export interface BmsLongNote {
@@ -759,12 +831,32 @@ function resolveBmsLongNoteType2SegmentEndBeat(event: BeMusicEvent, beatResolver
   return beatResolver.measureToBeat(measure, nextNumerator / denominator);
 }
 
-function createExactMeasureLengthMap(json: BeMusicJson): Map<number, number> {
-  const measureLengths = new Map<number, number>();
+function createExactMeasureLengthRecord(json: BeMusicJson): Record<number, number> {
+  const measureLengths: Record<number, number> = {};
   for (const measure of json.measures) {
-    measureLengths.set(measure.index, measure.length);
+    measureLengths[measure.index] = measure.length;
   }
   return measureLengths;
+}
+
+function cloneEvent(event: BeMusicEvent): BeMusicEvent {
+  return {
+    measure: event.measure,
+    channel: event.channel,
+    position: [event.position[0], event.position[1]],
+    value: event.value,
+    bmson: event.bmson ? { ...event.bmson } : undefined,
+  };
+}
+
+function cloneControlFlowEntry(entry: BmsControlFlowEntry): BmsControlFlowEntry {
+  if (entry.kind === 'object') {
+    return {
+      ...entry,
+      events: entry.events.map(cloneEvent),
+    };
+  }
+  return { ...entry };
 }
 
 function clamp01(value: number): number {
@@ -819,6 +911,21 @@ function parseHexDigit(code: number): number {
   return -1;
 }
 
+function resolveNormalizedChannelForPredicate(channel: string): string {
+  if (channel.length === 2) {
+    const code0 = channel.charCodeAt(0);
+    const code1 = channel.charCodeAt(1);
+    if (isNormalizedBase36Code(code0) && isNormalizedBase36Code(code1)) {
+      return channel;
+    }
+  }
+  return normalizeChannel(channel);
+}
+
+function isNormalizedBase36Code(code: number): boolean {
+  return (code >= 0x30 && code <= 0x39) || (code >= 0x41 && code <= 0x5a);
+}
+
 function isTempoNormalizedChannel(normalized: string): boolean {
   return normalized === '03' || normalized === '08';
 }
@@ -861,20 +968,22 @@ function isPlayableNormalizedChannel(normalized: string): boolean {
   return side === 0x31 || side === 0x32;
 }
 
-function mapBmsLongNoteNormalizedChannelToPlayable(normalized: string): string | undefined {
+function isBmsLongNoteNormalizedChannel(normalized: string): boolean {
   if (normalized.length !== 2) {
-    return undefined;
+    return false;
   }
   const lane = normalized.charCodeAt(1);
   if (lane < 0x31 || lane > 0x39) {
-    return undefined;
+    return false;
   }
   const side = normalized.charCodeAt(0);
-  if (side === 0x35) {
-    return `1${normalized[1]}`;
+  return side === 0x35 || side === 0x36;
+}
+
+function mapBmsLongNoteNormalizedChannelToPlayable(normalized: string): string | undefined {
+  if (!isBmsLongNoteNormalizedChannel(normalized)) {
+    return undefined;
   }
-  if (side === 0x36) {
-    return `2${normalized[1]}`;
-  }
-  return undefined;
+  const laneIndex = normalized.charCodeAt(1) - 0x31;
+  return normalized.charCodeAt(0) === 0x35 ? BMS_LONG_NOTE_PLAYABLE_1P[laneIndex] : BMS_LONG_NOTE_PLAYABLE_2P[laneIndex];
 }
