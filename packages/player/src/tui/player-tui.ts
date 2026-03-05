@@ -901,7 +901,7 @@ class ScrollDistanceMapper {
         continue;
       }
 
-      const speed = segment.speed;
+      const speed = Math.abs(segment.speed);
       if (speed <= 1e-9) {
         beat = segmentEndBeat;
         index += 1;
@@ -1010,13 +1010,11 @@ function normalizeNoteApproachDistance(distance: number, currentBeat: number, ta
   if (targetBeat + BEAT_EPSILON < currentBeat) {
     return Number.NaN;
   }
-  if (distance < -BEAT_EPSILON) {
-    return Number.NaN;
-  }
-  if (distance <= BEAT_EPSILON) {
+  const approachDistance = Math.abs(distance);
+  if (approachDistance <= BEAT_EPSILON) {
     return 0;
   }
-  return distance;
+  return approachDistance;
 }
 
 function isUpcomingBeat(currentBeat: number, targetBeat: number): boolean {
