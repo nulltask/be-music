@@ -709,8 +709,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             note.visibleUntilBeat = note.endBeat;
             tui.holdLaneUntilBeat(note.channel, note.endBeat);
           }
-          tui.setLatestJudge('PERFECT');
-          tui.setCombo(combo);
+          tui.setLatestJudge('PERFECT', note.channel);
+          tui.setCombo(combo, note.channel);
           tui.render({
             currentBeat: note.beat,
             currentSeconds: note.seconds,
@@ -1034,8 +1034,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         tui?.holdLaneUntilBeat(note.channel, note.endBeat);
       }
       if (tui) {
-        tui.setLatestJudge('PERFECT');
-        tui.setCombo(combo);
+        tui.setLatestJudge('PERFECT', note.channel);
+        tui.setCombo(combo, note.channel);
       }
     }
   };
@@ -1061,8 +1061,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       triggerPoorBga(referenceSeconds);
       combo = 0;
       if (tui) {
-        tui.setLatestJudge('POOR');
-        tui.setCombo(combo);
+        tui.setLatestJudge('POOR', note.channel);
+        tui.setCombo(combo, note.channel);
       }
     }
   };
@@ -1077,8 +1077,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!tui) {
         process.stdout.write(`PERFECT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
-        tui.setLatestJudge('PERFECT');
-        tui.setCombo(combo);
+        tui.setLatestJudge('PERFECT', channel);
+        tui.setCombo(combo, channel);
       }
       return;
     }
@@ -1090,8 +1090,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!tui) {
         process.stdout.write(`GREAT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
-        tui.setLatestJudge('GREAT');
-        tui.setCombo(combo);
+        tui.setLatestJudge('GREAT', channel);
+        tui.setCombo(combo, channel);
       }
       return;
     }
@@ -1103,8 +1103,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!tui) {
         process.stdout.write(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
-        tui.setLatestJudge('GOOD');
-        tui.setCombo(combo);
+        tui.setLatestJudge('GOOD', channel);
+        tui.setCombo(combo, channel);
       }
       return;
     }
@@ -1114,8 +1114,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!tui) {
         process.stdout.write(`BAD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
-        tui.setLatestJudge('BAD');
-        tui.setCombo(combo);
+        tui.setLatestJudge('BAD', channel);
+        tui.setCombo(combo, channel);
       }
       return;
     }
@@ -1126,8 +1126,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (!tui) {
       process.stdout.write(`POOR channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
     } else {
-      tui.setLatestJudge('POOR');
-      tui.setCombo(combo);
+      tui.setLatestJudge('POOR', channel);
+      tui.setCombo(combo, channel);
     }
   };
 
@@ -1231,8 +1231,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!tui) {
         process.stdout.write(`MINE channel:${landmineCandidate.channel} delta:${Math.round(landmineDelta * 1000)}ms\n`);
       } else {
-        tui.setLatestJudge('BAD');
-        tui.setCombo(combo);
+        tui.setLatestJudge('BAD', landmineCandidate.channel);
+        tui.setCombo(combo, landmineCandidate.channel);
       }
       return;
     }

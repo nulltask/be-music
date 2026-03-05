@@ -101,11 +101,12 @@ const LANE_DIVIDER_SYMBOL = '│';
 const LANE_OUTER_BORDER_SYMBOL = '┃';
 const SPLIT_PANEL_INNER_WIDTH = 5;
 const JUDGE_LINE_SYMBOL = '█';
-const HIGHLIGHT_BG_STEPS = [249, 248, 247, 246, 245, 244, 243, 242, 241, 240, 239];
+const HIGHLIGHT_BG_STEPS = [240, 239, 238, 237, 236, 235, 234, 233, 232, 232, 232];
 const HIGHLIGHT_DECAY_POWER = 0.72;
 const RED_NOTE_CHANNELS = new Set(['16', '26']);
 const WHITE_NOTE_CHANNELS = new Set(['11', '13', '15', '19', '21', '23', '25', '29']);
 const BLUE_NOTE_CHANNELS = new Set(['12', '14', '17', '18', '22', '24', '27', '28']);
+const SCRATCH_LANE_CHANNELS = new Set(['16', '26']);
 const NOTE_HEAD_SYMBOL = '●';
 const LONG_NOTE_BODY_SYMBOL = '■';
 const LONG_NOTE_TAIL_SYMBOL = '◆';
@@ -117,6 +118,7 @@ const ANSI_RESET = '\u001b[0m';
 const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
 const HIGH_SPEED_TRANSITION_MS = 180;
+const JUDGE_COMBO_VISIBILITY_TIMEOUT_MS = 1000;
 const MEASURE_SIGNATURE_MAX_DENOMINATOR = 32;
 const HIGH_SPEED_MODIFIER_LABEL = resolveAltModifierLabel();
 const MEASURE_SIGNATURE_TOLERANCE = 1e-8;
@@ -127,7 +129,16 @@ interface RgbColor {
   b: number;
 }
 
+interface JudgeComboDisplayState {
+  latestJudge: string;
+  combo: number;
+  updatedAtMs: number;
+}
+
 const BLACK_RGB: RgbColor = { r: 0, g: 0, b: 0 };
+const WHITE_KEY_LANE_BG_RGB: RgbColor = { r: 24, g: 36, b: 56 };
+const BLACK_KEY_LANE_BG_RGB: RgbColor = { r: 2, g: 4, b: 8 };
+const SCRATCH_LANE_BG_RGB: RgbColor = { r: 5, g: 8, b: 12 };
 
 export class PlayerTui {
   private readonly options: TuiOptions;
@@ -156,9 +167,9 @@ export class PlayerTui {
 
   private active = false;
 
-  private latestJudge = '-';
+  private readonly leftJudgeComboDisplay = createJudgeComboDisplayState();
 
-  private combo = 0;
+  private readonly rightJudgeComboDisplay = createJudgeComboDisplayState();
 
   private paused = false;
 
@@ -228,8 +239,8 @@ export class PlayerTui {
       return;
     }
     this.active = false;
-    this.latestJudge = '-';
-    this.combo = 0;
+    resetJudgeComboDisplayState(this.leftJudgeComboDisplay);
+    resetJudgeComboDisplayState(this.rightJudgeComboDisplay);
     this.paused = false;
     this.displayedScore = 0;
     this.lastScoreAnimationMs = 0;
@@ -248,12 +259,21 @@ export class PlayerTui {
     process.stdout.write('\u001b[0m\u001b[?25h\u001b[?1049l');
   }
 
-  setLatestJudge(value: string): void {
-    this.latestJudge = value;
+  setLatestJudge(value: string, channel?: string): void {
+    const nowMs = Date.now();
+    for (const display of this.resolveJudgeComboTargets(channel)) {
+      display.latestJudge = value;
+      display.updatedAtMs = nowMs;
+    }
   }
 
-  setCombo(value: number): void {
-    this.combo = Math.max(0, Math.floor(value));
+  setCombo(value: number, channel?: string): void {
+    const safeCombo = Math.max(0, Math.floor(value));
+    const nowMs = Date.now();
+    for (const display of this.resolveJudgeComboTargets(channel)) {
+      display.combo = safeCombo;
+      display.updatedAtMs = nowMs;
+    }
   }
 
   setPaused(value: boolean): void {
@@ -577,21 +597,16 @@ export class PlayerTui {
       );
     }
 
-    laneLines.push(
-      centerVisible(
-        formatJudgeComboDisplay(this.latestJudge, this.combo, now, this.paused),
-        this.laneBlockVisibleWidth,
-      ),
-    );
+    const judgeComboLabels = this.resolveJudgeComboLabels(now);
+    laneLines.push(renderJudgeComboLine(judgeComboLabels, this.laneWidths, this.options.splitAfterIndex));
 
-    laneLines.push(
-      renderLaneRow(
-        this.options.lanes.map((lane) => lane.key),
-        this.laneChannels,
-        this.laneWidths,
-        this.options.splitAfterIndex,
-      ),
+    const [blackKeyRow, whiteAndScratchKeyRow] = renderInputKeyRows(
+      this.options.lanes,
+      this.laneWidths,
+      this.options.splitAfterIndex,
     );
+    laneLines.push(blackKeyRow);
+    laneLines.push(whiteAndScratchKeyRow);
 
     lines.push(...renderLaneBlockWithBga(laneLines, frame.bgaAnsiLines));
     lines.push('');
@@ -691,6 +706,37 @@ export class PlayerTui {
   private resolveRenderLaneChannel(channel: string): string {
     const normalized = channel.toUpperCase();
     return this.freeZoneChannelToScratchChannel.get(normalized) ?? normalized;
+  }
+
+  private resolveJudgeComboTargets(channel?: string): JudgeComboDisplayState[] {
+    if (!hasLaneSplit(this.options.splitAfterIndex, this.laneWidths.length)) {
+      return [this.leftJudgeComboDisplay];
+    }
+    if (typeof channel !== 'string' || channel.length === 0) {
+      return [this.leftJudgeComboDisplay, this.rightJudgeComboDisplay];
+    }
+    return this.resolveLaneSide(channel) === '2P' ? [this.rightJudgeComboDisplay] : [this.leftJudgeComboDisplay];
+  }
+
+  private resolveJudgeComboLabels(nowMs: number): { single: string; left: string; right: string } {
+    if (!hasLaneSplit(this.options.splitAfterIndex, this.laneWidths.length)) {
+      const single = resolveVisibleJudgeComboLabel(this.leftJudgeComboDisplay, nowMs, this.paused);
+      return { single, left: single, right: single };
+    }
+    return {
+      single: '',
+      left: resolveVisibleJudgeComboLabel(this.leftJudgeComboDisplay, nowMs, this.paused),
+      right: resolveVisibleJudgeComboLabel(this.rightJudgeComboDisplay, nowMs, this.paused),
+    };
+  }
+
+  private resolveLaneSide(channel: string): '1P' | '2P' {
+    const splitAfterIndex = this.options.splitAfterIndex ?? -1;
+    const laneIndex = this.laneIndex.get(this.resolveRenderLaneChannel(channel));
+    if (typeof laneIndex !== 'number') {
+      return inferLaneSideByChannel(channel);
+    }
+    return laneIndex <= splitAfterIndex ? '1P' : '2P';
   }
 }
 
@@ -872,9 +918,11 @@ function renderLaneRow(
   splitAfterIndex = -1,
   laneHighlightRatios = new Map<number, number>(),
   sourceChannels?: string[],
+  applyLaneBackground = true,
 ): string {
   const cells = values.map((value, index) => {
     const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
+    const laneChannel = resolveLaneRenderChannel(index, channels, sourceChannels);
     const isHead = value === NOTE_HEAD_SYMBOL;
     const isBody = value === LONG_NOTE_BODY_SYMBOL;
     const isTail = value === LONG_NOTE_TAIL_SYMBOL;
@@ -909,7 +957,7 @@ function renderLaneRow(
     const decoratedCell = isMine
       ? colorizeMine(cell)
       : isNote
-        ? colorizeNote(cell, sourceChannels?.[index] ?? channels[index] ?? '', isInvisibleNote, noteUnderline)
+        ? colorizeNote(cell, laneChannel, isInvisibleNote, noteUnderline)
         : value === MEASURE_LINE_SYMBOL
           ? colorizeMeasureLine(cell)
           : isLaneFill || isLaneCeiling
@@ -919,7 +967,7 @@ function renderLaneRow(
     if (highlightRatio !== undefined) {
       return highlightCell(decoratedCell, highlightRatio);
     }
-    return decoratedCell;
+    return applyLaneBackground ? colorizeLaneBackground(decoratedCell, laneChannel) : decoratedCell;
   });
   if (splitAfterIndex < 0 || splitAfterIndex >= cells.length - 1) {
     return renderLaneSection(cells);
@@ -941,6 +989,63 @@ function renderLaneSplitPanel(): string {
   return `${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}${fill}${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}`;
 }
 
+function renderInputKeyRows(
+  lanes: ReadonlyArray<TuiLane>,
+  laneWidths: number[],
+  splitAfterIndex = -1,
+): [blackKeyRow: string, whiteAndScratchRow: string] {
+  const blackKeyCells: string[] = [];
+  const whiteCells: string[] = [];
+
+  for (let index = 0; index < lanes.length; index += 1) {
+    const lane = lanes[index]!;
+    const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
+    const isBlackLane = resolveInputKeyLaneGroup(lane) === 'black';
+    const styledLabel = colorizeInputKeyLabel(center(lane.key, laneWidth), resolveInputKeyLaneStyle(lane));
+    const emptyCell = ' '.repeat(Math.max(1, laneWidth));
+    blackKeyCells.push(isBlackLane ? styledLabel : emptyCell);
+    whiteCells.push(isBlackLane ? emptyCell : styledLabel);
+  }
+
+  return [
+    renderLaneSectionWithSplitPanel(blackKeyCells, splitAfterIndex),
+    renderLaneSectionWithSplitPanel(whiteCells, splitAfterIndex),
+  ];
+}
+
+function renderJudgeComboLine(
+  labels: { single: string; left: string; right: string },
+  laneWidths: number[],
+  splitAfterIndex: number | undefined,
+): string {
+  const safeSplitIndex = Number.isInteger(splitAfterIndex) ? (splitAfterIndex as number) : -1;
+  if (!hasLaneSplit(safeSplitIndex, laneWidths.length)) {
+    return centerVisible(labels.single, calculateLaneBlockVisibleWidth(laneWidths, safeSplitIndex));
+  }
+
+  const leftWidth = calculateLaneSectionVisibleWidth(laneWidths.slice(0, safeSplitIndex + 1));
+  const rightWidth = calculateLaneSectionVisibleWidth(laneWidths.slice(safeSplitIndex + 1));
+  const splitPanelWidth = SPLIT_PANEL_INNER_WIDTH + 2;
+  return `${centerVisible(labels.left, leftWidth)}${' '.repeat(splitPanelWidth)}${centerVisible(labels.right, rightWidth)}`;
+}
+
+function renderLaneSectionWithSplitPanel(cells: string[], splitAfterIndex: number): string {
+  if (splitAfterIndex < 0 || splitAfterIndex >= cells.length - 1) {
+    return renderLaneSection(cells);
+  }
+  const left = renderLaneSection(cells.slice(0, splitAfterIndex + 1));
+  const right = renderLaneSection(cells.slice(splitAfterIndex + 1));
+  return `${left}${renderLaneSplitPanel()}${right}`;
+}
+
+function resolveLaneRenderChannel(index: number, channels: string[], sourceChannels?: string[]): string {
+  const source = sourceChannels?.[index];
+  if (typeof source === 'string' && source.length > 0) {
+    return source;
+  }
+  return channels[index] ?? '';
+}
+
 function renderMeasureRow(
   values: string[],
   channels: string[],
@@ -953,11 +1058,13 @@ function renderMeasureRow(
     const cells: string[] = [];
     for (let index = startIndex; index < endIndex; index += 1) {
       const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
-      const channel = sourceChannels?.[index] ?? channels[index] ?? '';
+      const channel = resolveLaneRenderChannel(index, channels, sourceChannels);
       let cell = renderMeasureLaneCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel);
       const highlightRatio = laneHighlightRatios.get(index);
       if (highlightRatio !== undefined) {
         cell = highlightCell(cell, highlightRatio);
+      } else {
+        cell = colorizeLaneBackground(cell, channel);
       }
       cells.push(cell);
     }
@@ -1017,11 +1124,13 @@ function renderJudgeRow(
     const cells: string[] = [];
     for (let index = startIndex; index < endIndex; index += 1) {
       const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
-      const channel = sourceChannels?.[index] ?? channels[index] ?? '';
+      const channel = resolveLaneRenderChannel(index, channels, sourceChannels);
       let cell = renderJudgeLaneCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel);
       const highlightRatio = laneHighlightRatios.get(index);
       if (highlightRatio !== undefined) {
         cell = highlightCell(cell, highlightRatio);
+      } else {
+        cell = colorizeLaneBackground(cell, channel);
       }
       cells.push(cell);
     }
@@ -1212,6 +1321,74 @@ function colorizeMeasureLine(symbol: string): string {
 
 function colorizeMine(symbol: string): string {
   return `\u001b[1;97;41m${symbol}\u001b[0m`;
+}
+
+function colorizeLaneBackground(value: string, channel: string): string {
+  const color = resolveLaneBackgroundColor(channel);
+  return `\u001b[48;2;${color.r};${color.g};${color.b}m${value}${ANSI_RESET}`;
+}
+
+function resolveLaneBackgroundColor(channel: string): RgbColor {
+  const normalized = channel.toUpperCase();
+  if (SCRATCH_LANE_CHANNELS.has(normalized)) {
+    return SCRATCH_LANE_BG_RGB;
+  }
+  if (WHITE_NOTE_CHANNELS.has(normalized)) {
+    return WHITE_KEY_LANE_BG_RGB;
+  }
+  if (BLUE_NOTE_CHANNELS.has(normalized)) {
+    return BLACK_KEY_LANE_BG_RGB;
+  }
+  return BLACK_RGB;
+}
+
+function colorizeInputKeyLabel(value: string, style: 'white' | 'black' | 'scratch'): string {
+  if (style === 'white') {
+    return `\u001b[1;30;48;5;255m${value}${ANSI_RESET}`;
+  }
+  if (style === 'black') {
+    return `\u001b[1;97;48;5;232m${value}${ANSI_RESET}`;
+  }
+  return `\u001b[1;30;48;5;245m${value}${ANSI_RESET}`;
+}
+
+function resolveInputKeyLaneGroup(lane: TuiLane): 'white' | 'black' {
+  const normalized = lane.channel.toUpperCase();
+  if (BLUE_NOTE_CHANNELS.has(normalized)) {
+    return 'black';
+  }
+  return 'white';
+}
+
+function resolveInputKeyLaneStyle(lane: TuiLane): 'white' | 'black' | 'scratch' {
+  if (lane.isScratch === true) {
+    return 'scratch';
+  }
+  return resolveInputKeyLaneGroup(lane) === 'black' ? 'black' : 'white';
+}
+
+function createJudgeComboDisplayState(): JudgeComboDisplayState {
+  return {
+    latestJudge: '-',
+    combo: 0,
+    updatedAtMs: 0,
+  };
+}
+
+function resetJudgeComboDisplayState(state: JudgeComboDisplayState): void {
+  state.latestJudge = '-';
+  state.combo = 0;
+  state.updatedAtMs = 0;
+}
+
+function resolveVisibleJudgeComboLabel(state: JudgeComboDisplayState, nowMs: number, paused: boolean): string {
+  if (paused) {
+    return formatJudgeComboDisplay(state.latestJudge, state.combo, nowMs, true);
+  }
+  if (state.updatedAtMs <= 0 || nowMs - state.updatedAtMs > JUDGE_COMBO_VISIBILITY_TIMEOUT_MS) {
+    return '';
+  }
+  return formatJudgeComboDisplay(state.latestJudge, state.combo, nowMs, false);
 }
 
 function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: number, paused: boolean): string {
@@ -1553,6 +1730,19 @@ function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number, scrollW
   }
 
   return note.beat < currentBeat - Math.max(IIDX_MEASURE_BEATS, scrollWindowBeats);
+}
+
+function hasLaneSplit(splitAfterIndex: number | undefined, laneCount: number): boolean {
+  const safeSplit = Number.isInteger(splitAfterIndex) ? (splitAfterIndex as number) : -1;
+  return safeSplit >= 0 && safeSplit < laneCount - 1;
+}
+
+function inferLaneSideByChannel(channel: string): '1P' | '2P' {
+  const normalized = channel.toUpperCase();
+  if (normalized.startsWith('2')) {
+    return '2P';
+  }
+  return '1P';
 }
 
 function calculateLaneBlockVisibleWidth(laneWidths: number[], splitAfterIndex: number): number {
