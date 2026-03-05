@@ -1,5 +1,4 @@
 import { dirname, resolve } from 'node:path';
-import type readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vitest';
@@ -14,7 +13,7 @@ import {
   manualPlay,
   resolveBgmHeadroomGain,
   shouldUseAutoMixBgmHeadroomControl,
-  resolveHighSpeedControlActionFromKey,
+  resolveHighSpeedControlActionFromLaneChannels,
   isPlayLaneChannelForVolumeControl,
   formatRandomPatternSummary,
   PlayerInterruptedError,
@@ -502,12 +501,14 @@ test('player: debug judge window override affects BAD only', () => {
   expect(windows.bad).toBe(180);
 });
 
-test('player: interprets W/E as in-play HIGH-SPEED controls', () => {
-  expect(resolveHighSpeedControlActionFromKey('w', createKey('w'))).toBeUndefined();
-  expect(resolveHighSpeedControlActionFromKey('W', createKey('w', 'W', true))).toBe('increase');
-  expect(resolveHighSpeedControlActionFromKey('e', createKey('e'))).toBeUndefined();
-  expect(resolveHighSpeedControlActionFromKey('E', createKey('e', 'E', true))).toBe('decrease');
-  expect(resolveHighSpeedControlActionFromKey('x', createKey('x'))).toBeUndefined();
+test('player: maps in-play HIGH-SPEED control by odd/even lane channel', () => {
+  expect(resolveHighSpeedControlActionFromLaneChannels(['11'])).toBe('decrease');
+  expect(resolveHighSpeedControlActionFromLaneChannels(['12'])).toBe('increase');
+  expect(resolveHighSpeedControlActionFromLaneChannels(['1A'])).toBe('increase');
+  expect(resolveHighSpeedControlActionFromLaneChannels(['11', '13'])).toBe('decrease');
+  expect(resolveHighSpeedControlActionFromLaneChannels(['12', '14'])).toBe('increase');
+  expect(resolveHighSpeedControlActionFromLaneChannels(['11', '12'])).toBeUndefined();
+  expect(resolveHighSpeedControlActionFromLaneChannels(['01'])).toBeUndefined();
 });
 
 test('player: applies in-play HIGH-SPEED controls with 0.5 steps and clamp', () => {
@@ -517,18 +518,3 @@ test('player: applies in-play HIGH-SPEED controls with 0.5 steps and clamp', () 
   expect(applyHighSpeedControlAction(0.5, 'decrease')).toBe(0.5);
 });
 });
-
-function createKey(
-  name?: string,
-  sequence?: string,
-  shift = false,
-  ctrl = false,
-): readline.Key {
-  return {
-    name,
-    sequence: sequence ?? '',
-    ctrl,
-    meta: false,
-    shift,
-  } satisfies readline.Key;
-}

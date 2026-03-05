@@ -216,6 +216,11 @@ describe('manual input', () => {
     expect(ctrlC.tokens).toContain('ctrl+c');
     expect(ctrlC.tokens).toContain('ctrl');
 
+    const altS = resolveInputTokenEvent('\u001b[115;3:1u', createKey(undefined, '\u001b[115;3:1u'));
+    expect(altS.tokens).toContain('alt+s');
+    expect(altS.tokens).toContain('option+s');
+    expect(altS.tokens).toContain('alt');
+
     const shiftW = resolveInputTokenEvent('\u001b[87;2:1u', createKey(undefined, '\u001b[87;2:1u'));
     expect(shiftW.tokens).toContain('w');
     expect(shiftW.tokens).toContain('shift+w');
@@ -240,6 +245,14 @@ describe('manual input', () => {
     expect(rightShiftCombined.releaseTokens).toContain('shift-right');
   });
 
+  test('manual-input: resolves legacy Alt key tokens', () => {
+    const altS = resolveInputTokenEvent('s', createKey('s', 's', false, false, true));
+    expect(altS.tokens).toContain('s');
+    expect(altS.tokens).toContain('alt');
+    expect(altS.tokens).toContain('alt+s');
+    expect(altS.tokens).toContain('option+s');
+  });
+
   test('manual-input: resolves lane display mode labels', () => {
     expect(resolveLaneDisplayMode(['11'])).toBe('5 KEY SP');
     expect(resolveLaneDisplayMode(['11'], { chartExtension: '.bme' })).toBe('7 KEY SP');
@@ -255,12 +268,12 @@ describe('manual input', () => {
   });
 });
 
-function createKey(name?: string, sequence?: string, shift = false, ctrl = false): readline.Key {
+function createKey(name?: string, sequence?: string, shift = false, ctrl = false, meta = false): readline.Key {
   return {
     name,
     sequence: sequence ?? '',
     ctrl,
-    meta: false,
+    meta,
     shift,
   } satisfies readline.Key;
 }

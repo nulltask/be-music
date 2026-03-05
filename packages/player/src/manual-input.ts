@@ -379,6 +379,7 @@ const KITTY_KEYBOARD_PROTOCOL_ENABLE_FLAGS = 11;
 const KITTY_KEYBOARD_PROTOCOL_ENABLE_SEQUENCE = `\u001b[>${KITTY_KEYBOARD_PROTOCOL_ENABLE_FLAGS}u`;
 const KITTY_KEYBOARD_PROTOCOL_DISABLE_SEQUENCE = '\u001b[<u';
 const KITTY_MODIFIER_SHIFT_MASK = 1;
+const KITTY_MODIFIER_ALT_MASK = 2;
 const KITTY_MODIFIER_CTRL_MASK = 4;
 const KITTY_EVENT_TYPE_REPEAT = 2;
 const KITTY_EVENT_TYPE_RELEASE = 3;
@@ -466,6 +467,16 @@ function resolveLegacyInputTokens(chunk: string, key: readline.Key): string[] {
     }
   }
 
+  if (key.meta) {
+    tokens.add('alt');
+    tokens.add('option');
+    const altKeyToken = resolveLegacyModifierKeyToken(normalizedChunk, key.name);
+    if (altKeyToken) {
+      tokens.add(`alt+${altKeyToken}`);
+      tokens.add(`option+${altKeyToken}`);
+    }
+  }
+
   return [...tokens];
 }
 
@@ -528,6 +539,7 @@ function resolveKittyInputTokens(event: KittyKeyboardEvent): Set<string> {
   const tokens = new Set<string>();
   const modifierBits = Math.max(0, event.modifiers - 1);
   const hasShift = (modifierBits & KITTY_MODIFIER_SHIFT_MASK) !== 0;
+  const hasAlt = (modifierBits & KITTY_MODIFIER_ALT_MASK) !== 0;
   const hasCtrl = (modifierBits & KITTY_MODIFIER_CTRL_MASK) !== 0;
   const hasNonShiftModifier = (modifierBits & ~KITTY_MODIFIER_SHIFT_MASK) !== 0;
   const implicitShiftByKeyCode = event.keyCode >= 65 && event.keyCode <= 90;
@@ -566,6 +578,12 @@ function resolveKittyInputTokens(event: KittyKeyboardEvent): Set<string> {
     tokens.add('control');
     tokens.add(`ctrl+${printableToken}`);
   }
+  if (hasAlt && printableToken) {
+    tokens.add('alt');
+    tokens.add('option');
+    tokens.add(`alt+${printableToken}`);
+    tokens.add(`option+${printableToken}`);
+  }
 
   return tokens;
 }
@@ -602,4 +620,39 @@ function isStandaloneControlKeypress(chunk: string, key: readline.Key): boolean 
 
 function normalizeKey(value: string): string {
   return value.length === 1 ? value.toLowerCase() : value;
+}
+
+function resolveLegacyModifierKeyToken(chunk: string | undefined, keyName: string | undefined): string | undefined {
+  if (typeof chunk === 'string' && chunk.length === 1) {
+    return chunk;
+  }
+  if (typeof keyName !== 'string' || keyName.length === 0) {
+    return undefined;
+  }
+  const lowered = keyName.toLowerCase();
+  if (lowered.length === 1) {
+    return lowered;
+  }
+  if (lowered === 'comma') {
+    return ',';
+  }
+  if (lowered === 'period') {
+    return '.';
+  }
+  if (lowered === 'slash') {
+    return '/';
+  }
+  if (lowered === 'semicolon') {
+    return ';';
+  }
+  if (lowered === 'quote') {
+    return "'";
+  }
+  if (lowered === 'leftbracket') {
+    return '[';
+  }
+  if (lowered === 'rightbracket') {
+    return ']';
+  }
+  return undefined;
 }

@@ -43,7 +43,7 @@ import { formatSeconds, resolveChartVolWavGain } from '../player-utils.ts';
 import { createNodeAudioSink, type AudioSink } from '../audio-sink.ts';
 import {
   applyHighSpeedControlAction,
-  resolveHighSpeedControlActionFromKey,
+  resolveHighSpeedControlActionFromLaneChannels,
   resolveHighSpeedMultiplier,
   type HighSpeedControlAction,
 } from './high-speed-control.ts';
@@ -228,7 +228,7 @@ const DEFAULT_COMPRESSOR_MAKEUP_DB = 0;
 const DEFAULT_LIMITER_CEILING_DB = -0.3;
 const DEFAULT_LIMITER_RELEASE_MS = 80;
 
-export { applyHighSpeedControlAction, resolveHighSpeedControlActionFromKey, type HighSpeedControlAction };
+export { applyHighSpeedControlAction, resolveHighSpeedControlActionFromLaneChannels, type HighSpeedControlAction };
 export { resolveJudgeWindowsMs };
 
 export function applyFastSlowForJudge(
@@ -398,6 +398,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
   const laneBindings = createLaneBindings(channels, laneModeOptions);
+  const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);
+  appendFreeZoneInputChannels(inputTokenToChannels, laneBindings, channels);
   const laneDisplayMode = resolveLaneDisplayMode(channels, laneModeOptions);
   const activeFreeZoneChannels = resolveActiveFreeZoneChannels(channels, laneBindings);
   const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
@@ -484,7 +486,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     printLaneMap(laneBindings);
     process.stdout.write('Press Space to pause/resume. Press Shift+R to restart.\n');
     process.stdout.write('Press Ctrl+C or Esc to quit.\n');
-    process.stdout.write('Press W/E to adjust HIGH-SPEED (W:+0.5, E:-0.5).\n');
+    process.stdout.write('Press Alt+odd lane key to decrease HIGH-SPEED.\n');
+    process.stdout.write('Press Alt+even lane key to increase HIGH-SPEED.\n');
   } else {
     tui.start();
     tui.setLatestJudge('READY');
@@ -562,7 +565,12 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       stopInputCapture();
       return;
     }
-    const highSpeedAction = resolveHighSpeedControlActionFromKey(_chunk, key);
+    const inputEvent = resolveInputTokenEvent(_chunk ?? '', key);
+    const highSpeedAction = resolveHighSpeedControlActionFromAltLaneTokens(
+      inputEvent.tokens,
+      inputTokenToChannels,
+      key,
+    );
     if (highSpeedAction) {
       const nextHighSpeed = applyHighSpeedControlAction(highSpeed, highSpeedAction);
       if (nextHighSpeed !== highSpeed) {
@@ -886,7 +894,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     );
     process.stdout.write('Press Space to pause/resume.\n');
     process.stdout.write('Press Shift+R to restart.\n');
-    process.stdout.write('Press W/E to adjust HIGH-SPEED (W:+0.5, E:-0.5).\n');
+    process.stdout.write('Press Alt+odd lane key to decrease HIGH-SPEED.\n');
+    process.stdout.write('Press Alt+even lane key to increase HIGH-SPEED.\n');
     process.stdout.write('Press Ctrl+C to quit.\n');
     process.stdout.write('Press Esc to stop and open result.\n');
     printLaneMap(laneBindings);
@@ -1340,8 +1349,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       stopInputCapture();
       return;
     }
-    const highSpeedAction =
-      resolveHighSpeedControlActionFromTokens(tokens) ?? resolveHighSpeedControlActionFromKey(chunk, key);
+    const highSpeedAction = resolveHighSpeedControlActionFromAltLaneTokens(tokens, inputTokenToChannels, key);
     if (applyHighSpeedAction(highSpeedAction)) {
       return;
     }
@@ -1412,7 +1420,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       stopInputCapture();
       return;
     }
-    if (applyHighSpeedAction(resolveHighSpeedControlActionFromTokens(pressTokens))) {
+    if (applyHighSpeedAction(resolveHighSpeedControlActionFromAltLaneTokens(pressTokens, inputTokenToChannels))) {
       return;
     }
     if (pressTokens.includes('space')) {
@@ -2808,12 +2816,74 @@ function isRestartKeyPress(chunk: string | undefined, key: readline.Key): boolea
   return key.name?.toLowerCase() === 'r' && key.shift === true;
 }
 
-function resolveHighSpeedControlActionFromTokens(tokens: readonly string[]): HighSpeedControlAction | undefined {
-  if (tokens.includes('shift+w')) {
-    return 'increase';
+function resolveHighSpeedControlActionFromAltLaneTokens(
+  tokens: readonly string[],
+  inputTokenToChannels: ReadonlyMap<string, readonly string[]>,
+  key?: readline.Key,
+): HighSpeedControlAction | undefined {
+  const channels = new Set<string>();
+  const addChannelsForAltToken = (token: string): void => {
+    if (!token.startsWith('alt+')) {
+      return;
+    }
+    const baseToken = token.slice('alt+'.length).toLowerCase();
+    const mapped = inputTokenToChannels.get(baseToken);
+    if (!mapped) {
+      return;
+    }
+    for (const channel of mapped) {
+      channels.add(channel);
+    }
+  };
+
+  for (const token of tokens) {
+    const normalizedToken = token.toLowerCase();
+    addChannelsForAltToken(normalizedToken);
+    if (normalizedToken.startsWith('option+')) {
+      addChannelsForAltToken(`alt+${normalizedToken.slice('option+'.length)}`);
+    }
   }
-  if (tokens.includes('shift+e')) {
-    return 'decrease';
+  if (key?.meta) {
+    const keyName = normalizeLegacyKeyNameToken(key.name);
+    if (keyName) {
+      addChannelsForAltToken(`alt+${keyName}`);
+    }
+  }
+
+  if (channels.size === 0) {
+    return undefined;
+  }
+  return resolveHighSpeedControlActionFromLaneChannels([...channels]);
+}
+
+function normalizeLegacyKeyNameToken(name: string | undefined): string | undefined {
+  if (typeof name !== 'string' || name.length === 0) {
+    return undefined;
+  }
+  const lowered = name.toLowerCase();
+  if (lowered.length === 1) {
+    return lowered;
+  }
+  if (lowered === 'comma') {
+    return ',';
+  }
+  if (lowered === 'period') {
+    return '.';
+  }
+  if (lowered === 'slash') {
+    return '/';
+  }
+  if (lowered === 'semicolon') {
+    return ';';
+  }
+  if (lowered === 'quote') {
+    return "'";
+  }
+  if (lowered === 'leftbracket') {
+    return '[';
+  }
+  if (lowered === 'rightbracket') {
+    return ']';
   }
   return undefined;
 }
