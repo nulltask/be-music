@@ -119,6 +119,7 @@ const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
 const HIGH_SPEED_TRANSITION_MS = 180;
 const JUDGE_COMBO_VISIBILITY_TIMEOUT_MS = 1000;
+const JUDGE_COMBO_BLINK_INTERVAL_MS = 80;
 const MEASURE_SIGNATURE_MAX_DENOMINATOR = 32;
 const HIGH_SPEED_MODIFIER_LABEL = resolveAltModifierLabel();
 const MEASURE_SIGNATURE_TOLERANCE = 1e-8;
@@ -1400,21 +1401,19 @@ function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: numb
   const baseText = `${normalizedJudge}${safeCombo > 0 ? ` ${safeCombo}` : ''}`;
 
   if (latestJudge === 'PERFECT') {
-    // ANSI blink is not consistently supported, so emulate blink with a time-based pulse.
-    const blinkOn = Math.floor(nowMs / 130) % 2 === 0;
-    return blinkOn ? colorizeRainbow(baseText) : colorizeText(baseText, '2;38;5;245');
+    return colorizeBlinkingRainbow(baseText, nowMs);
   }
   if (latestJudge === 'GREAT') {
-    return colorizeText(baseText, '1;38;5;220');
+    return colorizeBlinkingText(baseText, '1;38;5;220', '2;38;5;220', nowMs);
   }
   if (latestJudge === 'GOOD') {
-    return colorizeText(baseText, '1;38;5;118');
+    return colorizeBlinkingText(baseText, '1;38;5;118', '2;38;5;118', nowMs);
   }
   if (latestJudge === 'BAD') {
-    return colorizeText(baseText, '1;38;5;208');
+    return colorizeBlinkingText(baseText, '1;38;5;208', '2;38;5;208', nowMs);
   }
   if (latestJudge === 'POOR') {
-    return colorizeText(baseText, '1;38;5;203');
+    return colorizeBlinkingText(baseText, '1;38;5;203', '2;38;5;203', nowMs);
   }
   if (latestJudge === 'READY') {
     return colorizeText(baseText, '1;38;5;81');
@@ -1425,15 +1424,27 @@ function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: numb
   return baseText;
 }
 
+function colorizeBlinkingText(value: string, onSgr: string, offSgr: string, nowMs: number): string {
+  // ANSI blink is not consistently supported, so emulate blink with a time-based pulse.
+  const blinkOn = Math.floor(nowMs / JUDGE_COMBO_BLINK_INTERVAL_MS) % 2 === 0;
+  return colorizeText(value, blinkOn ? onSgr : offSgr);
+}
+
+function colorizeBlinkingRainbow(value: string, nowMs: number): string {
+  const blinkOn = Math.floor(nowMs / JUDGE_COMBO_BLINK_INTERVAL_MS) % 2 === 0;
+  return colorizeRainbow(value, blinkOn);
+}
+
 function colorizeText(value: string, sgr: string): string {
   return `\u001b[${sgr}m${value}${ANSI_RESET}`;
 }
 
-function colorizeRainbow(value: string): string {
+function colorizeRainbow(value: string, bright = true): string {
   const steps = [196, 208, 226, 118, 51, 39, 201];
+  const intensity = bright ? '1' : '2';
   const characters = [...value];
   return characters
-    .map((character, index) => `\u001b[1;38;5;${steps[index % steps.length]}m${character}${ANSI_RESET}`)
+    .map((character, index) => `\u001b[${intensity};38;5;${steps[index % steps.length]}m${character}${ANSI_RESET}`)
     .join('');
 }
 
