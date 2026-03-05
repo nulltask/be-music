@@ -19,6 +19,7 @@
 
 - `bms benchmark` (実装比較): https://hitkey.nekokan.dyndns.info/bmsbench.shtml
 - `bmsplayer data` (互換性調査): https://hitkey.nekokan.dyndns.info/bmsplayer_data2010.shtml
+- Numuther: BMS Scroll ギミック解説（SCROLL/BPM/STOP 実例）: https://note.com/numuther/n/n57bf895e7969
 
 ## 対応状況の要約
 
@@ -198,6 +199,17 @@
 - [ ] `#BASEBPM` の実時間反映（速度表示・HI-SPEED 計算・内部時刻計算）方針
 - [ ] 超長行（例: 100KB 級）入力時の受理上限とエラーハンドリング
 - [ ] 演奏/内部オブジェクトが数十万規模の譜面に対する上限と性能保証方針
+
+### 参考資料由来 TODO（SCROLL/BPM/STOP）
+
+| TODO | 現状 | 備考 |
+| --- | --- | --- |
+| [ ] `#SCROLL 0` 区間で同一レーンに重なったノートの前後表示優先順位を仕様化 | 部分対応 | 現状 TUI は衝突回避で近傍行へ退避表示するため、プレイヤー差分が出る |
+| [ ] `#SCROLL < 0` の逆走表示（方向・判定ライン付近・画面外）を互換仕様として固定 | 部分対応 | 現状は接近距離を絶対値化して描画しており、方向互換を未定義 |
+| [ ] `#SCROLL 0` 長区間での先読み上限と可視範囲を仕様化 | 未対応 | 実装には先読み打ち切り (`MAX_SCROLL_LOOKAHEAD_BEATS`) がある |
+| [ ] BPM×`100001` + `#STOPxx` 補正時の「表示 BPM」互換方針を明文化 | 部分対応 | 時刻計算は対応済み、表示互換（LR2/他プレイヤー差）未整理 |
+| [ ] SCROLL/BPM/STOP 複合ギミック（部分ワープ・空 POOR・逆走）の回帰テストを追加 | 未対応 | 既存テストは単体寄りで、複合描画シナリオが不足 |
+| [ ] beatoraja 固有の出現/消失バグ依存譜面の扱い（非対応明記 or 再現モード）を決定 | 未対応 | 仕様差分として文書化が必要 |
 
 ## player 固有挙動
 
