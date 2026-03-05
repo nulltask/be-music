@@ -24,5 +24,8 @@
     "format": "oxfmt . --write",
     "format:check": "oxfmt . --check",
     "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts"
+  },
+  "dependencies": {
+    "isoworker": "^0.2.4"
   }
 }

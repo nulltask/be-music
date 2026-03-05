@@ -56,11 +56,9 @@ import {
 } from './selection-format.ts';
 import {
   buildChartSelectionEntries,
-  ChartSelectionLoadingCanceledError,
   listChartFiles,
   type ChartSelectionEntry,
   type ChartSummaryLoadingProgress,
-  type LoadingCancelReason,
 } from './chart-selection.ts';
 import { createChartPreviewController, formatSongSelectAudioBackendLabel } from './chart-preview.ts';
 
@@ -179,6 +177,14 @@ interface RawInputCapture {
   restore: () => void;
 }
 
+type LoadingCancelReason = 'escape' | 'ctrl-c';
+
+interface LoadingAbortCapture {
+  signal: AbortSignal;
+  getReason: () => LoadingCancelReason | undefined;
+  dispose: () => void;
+}
+
 interface ResultScreenOptions {
   allowReplay?: boolean;
   nextActionLabel?: string;
@@ -271,7 +277,22 @@ async function runDirectoryInput(
     undefined,
     initialConfig,
   );
-  const candidates = await listChartFiles(rootDir);
+  let candidates: string[];
+  const startupLoadingAbortCapture = beginLoadingAbortCapture();
+  try {
+    candidates = await listChartFiles(rootDir, {
+      signal: startupLoadingAbortCapture?.signal,
+    });
+  } catch (error) {
+    const cancelReason = resolveLoadingCancelReason(error, startupLoadingAbortCapture);
+    if (cancelReason) {
+      applyLoadingCancel(cancelReason);
+      return persistedConfig;
+    }
+    throw error;
+  } finally {
+    startupLoadingAbortCapture?.dispose();
+  }
   if (candidates.length === 0) {
     process.stdout.write(`No chart files found in directory: ${rootDir}\n`);
     process.exitCode = 1;
@@ -569,32 +590,47 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
         renderPlayLoadingProgress(chartPath, progress);
       }
     : undefined;
-  reportPlayLoadingProgress?.({
-    ratio: 0.03,
-    message: 'Parsing chart file...',
-  });
-  const json = await parseChartFile(chartPath);
-  reportPlayLoadingProgress?.({
-    ratio: 0.16,
-    message: 'Chart parsed.',
-  });
+  const chartLoadingAbortCapture = beginLoadingAbortCapture();
+  let json: Awaited<ReturnType<typeof parseChartFile>>;
+  try {
+    reportPlayLoadingProgress?.({
+      ratio: 0.03,
+      message: 'Parsing chart file...',
+    });
+    json = await parseChartFile(chartPath, {
+      signal: chartLoadingAbortCapture?.signal,
+    });
+    reportPlayLoadingProgress?.({
+      ratio: 0.16,
+      message: 'Chart parsed.',
+    });
 
-  if (args.renderAudioPath) {
-    reportPlayLoadingProgress?.({
-      ratio: 0.2,
-      message: 'Rendering preview audio...',
-    });
-    const outputPath = resolveCliPath(args.renderAudioPath);
-    const audioRendered = await renderJson(json, {
-      baseDir: dirname(chartPath),
-      inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
-    });
-    await writeAudioFile(outputPath, audioRendered);
-    process.stdout.write(`Rendered preview audio: ${outputPath}\n`);
-    reportPlayLoadingProgress?.({
-      ratio: 0.32,
-      message: 'Preview audio rendered.',
-    });
+    if (args.renderAudioPath) {
+      reportPlayLoadingProgress?.({
+        ratio: 0.2,
+        message: 'Rendering preview audio...',
+      });
+      const outputPath = resolveCliPath(args.renderAudioPath);
+      const audioRendered = await renderJson(json, {
+        baseDir: dirname(chartPath),
+        inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
+        signal: chartLoadingAbortCapture?.signal,
+      });
+      await writeAudioFile(outputPath, audioRendered);
+      process.stdout.write(`Rendered preview audio: ${outputPath}\n`);
+      reportPlayLoadingProgress?.({
+        ratio: 0.32,
+        message: 'Preview audio rendered.',
+      });
+    }
+  } catch (error) {
+    const cancelReason = resolveLoadingCancelReason(error, chartLoadingAbortCapture);
+    if (cancelReason) {
+      throw new PlayerInterruptedError(cancelReason);
+    }
+    throw error;
+  } finally {
+    chartLoadingAbortCapture?.dispose();
   }
 
   const playOptions = {
@@ -659,12 +695,31 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
 
   let summary: PlayerSummary;
   while (true) {
+    let playbackLoadingAbortCapture = beginLoadingAbortCapture();
+    const disposePlaybackLoadingAbortCapture = (): void => {
+      playbackLoadingAbortCapture?.dispose();
+      playbackLoadingAbortCapture = undefined;
+    };
     try {
       summary = args.auto
-        ? await autoPlay(json, { ...playOptions, auto: true })
-        : await manualPlay(json, { ...playOptions, autoScratch: args.autoScratch });
+        ? await autoPlay(json, {
+            ...playOptions,
+            auto: true,
+            signal: playbackLoadingAbortCapture?.signal,
+            onLoadComplete: disposePlaybackLoadingAbortCapture,
+          })
+        : await manualPlay(json, {
+            ...playOptions,
+            autoScratch: args.autoScratch,
+            signal: playbackLoadingAbortCapture?.signal,
+            onLoadComplete: disposePlaybackLoadingAbortCapture,
+          });
       break;
     } catch (error) {
+      const cancelReason = resolveLoadingCancelReason(error, playbackLoadingAbortCapture);
+      if (cancelReason) {
+        throw new PlayerInterruptedError(cancelReason);
+      }
       if (error instanceof PlayerInterruptedError && error.reason === 'restart') {
         reportPlayLoadingProgress?.({
           ratio: 0.34,
@@ -674,6 +729,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
       }
       throw error;
     } finally {
+      disposePlaybackLoadingAbortCapture();
       args.highSpeed = resolvedHighSpeed;
     }
   }
@@ -1024,45 +1080,77 @@ function beginRawInputCapture(): RawInputCapture {
   };
 }
 
-async function loadChartSelectionEntries(rootDir: string, files: string[]): Promise<ChartSelectionEntry[] | undefined> {
+function beginLoadingAbortCapture(): LoadingAbortCapture | undefined {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return undefined;
+  }
   const inputCapture = beginRawInputCapture();
-  let cancelReason: LoadingCancelReason | undefined;
-  process.stdout.write('\u001b[?25l');
-
+  const controller = new AbortController();
+  let reason: LoadingCancelReason | undefined;
   const onKeyPress = (_chunk: string | undefined, key: readline.Key): void => {
     if (key.sequence === '\u0003') {
-      cancelReason = 'ctrl-c';
+      reason = 'ctrl-c';
+      controller.abort();
       return;
     }
     if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b') {
-      cancelReason = 'escape';
+      reason = 'escape';
+      controller.abort();
     }
   };
   inputCapture.stdin.on('keypress', onKeyPress);
+  return {
+    signal: controller.signal,
+    getReason: () => reason,
+    dispose: () => {
+      inputCapture.stdin.removeListener('keypress', onKeyPress);
+      inputCapture.restore();
+    },
+  };
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function resolveLoadingCancelReason(
+  error: unknown,
+  capture: LoadingAbortCapture | undefined,
+): LoadingCancelReason | undefined {
+  if (!isAbortError(error)) {
+    return undefined;
+  }
+  return capture?.getReason();
+}
+
+function applyLoadingCancel(reason: LoadingCancelReason): void {
+  process.exitCode = reason === 'ctrl-c' ? 130 : 0;
+  if (process.stdout.isTTY) {
+    process.stdout.write('\u001b[2J\u001b[H');
+  }
+}
+
+async function loadChartSelectionEntries(rootDir: string, files: string[]): Promise<ChartSelectionEntry[] | undefined> {
+  const loadingAbortCapture = beginLoadingAbortCapture();
+  process.stdout.write('\u001b[?25l');
 
   try {
     const entries = await buildChartSelectionEntries(rootDir, files, {
       onLoadingFile: (progress) => {
         renderChartLoadingProgress(rootDir, progress);
       },
-      getCancelReason: () => cancelReason,
+      signal: loadingAbortCapture?.signal,
     });
-    if (cancelReason) {
-      process.exitCode = cancelReason === 'ctrl-c' ? 130 : 0;
-      process.stdout.write('\u001b[2J\u001b[H');
-      return undefined;
-    }
     return entries;
   } catch (error) {
-    if (error instanceof ChartSelectionLoadingCanceledError) {
-      process.exitCode = error.reason === 'ctrl-c' ? 130 : 0;
-      process.stdout.write('\u001b[2J\u001b[H');
+    const cancelReason = resolveLoadingCancelReason(error, loadingAbortCapture);
+    if (cancelReason) {
+      applyLoadingCancel(cancelReason);
       return undefined;
     }
     throw error;
   } finally {
-    inputCapture.stdin.removeListener('keypress', onKeyPress);
-    inputCapture.restore();
+    loadingAbortCapture?.dispose();
     process.stdout.write('\u001b[?25h');
   }
 }

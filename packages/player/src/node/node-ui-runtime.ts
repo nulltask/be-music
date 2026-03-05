@@ -39,6 +39,7 @@ export interface NodeUiRuntimeOptions {
   stateSignals: PlayerStateSignals;
   uiSignals: PlayerUiSignalBus;
   baseDir: string;
+  loadSignal?: AbortSignal;
   onBgaLoadProgress?: (progress: { ratio: number; detail?: string }) => void;
 }
 
@@ -118,6 +119,7 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
     baseDir: options.baseDir,
     width: bgaDisplay.width,
     height: bgaDisplay.height,
+    signal: options.loadSignal,
     onLoadProgress: (progress) => {
       options.onBgaLoadProgress?.({
         ratio: progress.ratio,

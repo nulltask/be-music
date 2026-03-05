@@ -341,8 +341,14 @@ export function parseChart(input: string, formatHint?: string): BeMusicJson {
   return parseBms(input);
 }
 
-export async function parseChartFile(filePath: string): Promise<BeMusicJson> {
-  const buffer = await readFile(filePath);
+export interface ParseChartFileOptions {
+  signal?: AbortSignal;
+}
+
+export async function parseChartFile(filePath: string, options: ParseChartFileOptions = {}): Promise<BeMusicJson> {
+  const buffer = await readFile(filePath, {
+    signal: options.signal,
+  });
   const extension = extname(filePath).toLowerCase();
   if (extension === '.bmson') {
     return parseBmson(decodeUtf8Text(buffer));

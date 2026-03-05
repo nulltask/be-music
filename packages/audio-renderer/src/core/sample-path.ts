@@ -1,5 +1,6 @@
 import { access } from 'node:fs/promises';
 import { extname, isAbsolute, resolve } from 'node:path';
+import { throwIfAborted } from '@be-music/utils';
 
 export async function resolveSamplePath(
   baseDir: string,
@@ -11,7 +12,7 @@ export async function resolveSamplePath(
   for (const candidate of candidates) {
     throwIfAborted(signal);
     const absolute = isAbsolute(candidate) ? candidate : resolve(baseDir, candidate);
-    if (await exists(absolute)) {
+    if (await exists(absolute, signal)) {
       return absolute;
     }
   }
@@ -112,20 +113,16 @@ function appendSampleCandidatesByRule(samplePath: string, push: (candidatePath: 
   push(`${withoutExtension}.OPUS`);
 }
 
-async function exists(filePath: string): Promise<boolean> {
+async function exists(filePath: string, signal?: AbortSignal): Promise<boolean> {
   try {
+    throwIfAborted(signal);
     await access(filePath);
+    throwIfAborted(signal);
     return true;
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw error;
+    }
     return false;
   }
-}
-
-function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (!signal?.aborted) {
-    return;
-  }
-  const error = new Error('The operation was aborted.');
-  error.name = 'AbortError';
-  throw error;
 }

@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import { throwIfAborted } from '@be-music/utils';
 
 export type AudioRuntime = 'node' | 'browser';
 export type AudioEngine = 'webaudio';
@@ -19,6 +20,7 @@ export interface AudioSinkCreateOptions {
   channels: number;
   samplesPerFrame: number;
   mode: 'auto' | 'manual';
+  signal?: AbortSignal;
 }
 
 export interface WebAudioBufferLike {
@@ -58,7 +60,9 @@ export function createBrowserAudioSink(context: WebAudioContextLike, options: Au
 }
 
 export async function createNodeAudioSink(options: AudioSinkCreateOptions): Promise<AudioSink | undefined> {
-  const AudioContext = await loadNodeWebAudioContextConstructor();
+  throwIfAborted(options.signal);
+  const AudioContext = await loadNodeWebAudioContextConstructor(options.signal);
+  throwIfAborted(options.signal);
   if (!AudioContext) {
     return undefined;
   }
@@ -74,6 +78,10 @@ export async function createNodeAudioSink(options: AudioSinkCreateOptions): Prom
     } catch {
       return undefined;
     }
+  }
+  if (options.signal?.aborted) {
+    await closeContextSafely(context);
+    throwIfAborted(options.signal);
   }
 
   return createWebAudioSink('node', context, options);
@@ -188,15 +196,30 @@ function createWebAudioSink(
   };
 }
 
-async function loadNodeWebAudioContextConstructor(): Promise<NodeWebAudioContextConstructor | undefined> {
+async function loadNodeWebAudioContextConstructor(
+  signal?: AbortSignal,
+): Promise<NodeWebAudioContextConstructor | undefined> {
   try {
+    throwIfAborted(signal);
     const imported = (await import('node-web-audio-api')) as NodeWebAudioModule;
+    throwIfAborted(signal);
     const candidate = imported.AudioContext ?? imported.default?.AudioContext ?? imported.default;
     if (typeof candidate !== 'function') {
       return undefined;
     }
     return candidate as NodeWebAudioContextConstructor;
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw error;
+    }
     return undefined;
+  }
+}
+
+async function closeContextSafely(context: WebAudioContextLike): Promise<void> {
+  try {
+    await context.close?.();
+  } catch {
+    // noop
   }
 }

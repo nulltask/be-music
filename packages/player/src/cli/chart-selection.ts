@@ -1,5 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
+import { invokeWorkerizedFunction, throwIfAborted, workerize } from '@be-music/utils';
 import { type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { createTimingResolver } from '@be-music/audio-renderer';
@@ -20,6 +21,11 @@ interface ChartSummaryItem {
   bpmMin?: number;
   bpmMax?: number;
 }
+
+type WorkerizedChartSelectionEntriesBuilder = ((
+  summaries: ChartSummaryItem[],
+  callback: (error: unknown, result: ChartSelectionEntry[]) => void,
+) => void) & { close: () => void };
 
 export type ChartSelectionEntry =
   | {
@@ -50,29 +56,24 @@ export interface ChartSummaryLoadingProgress {
   totalCount: number;
 }
 
-export type LoadingCancelReason = 'escape' | 'ctrl-c';
-
 export interface BuildChartSelectionEntriesOptions {
   onLoadingFile?: (progress: ChartSummaryLoadingProgress) => void;
-  getCancelReason?: () => LoadingCancelReason | undefined;
+  signal?: AbortSignal;
 }
 
-export class ChartSelectionLoadingCanceledError extends Error {
-  readonly reason: LoadingCancelReason;
-
-  constructor(reason: LoadingCancelReason) {
-    super(`Chart loading canceled: ${reason}`);
-    this.reason = reason;
-  }
+export interface ListChartFilesOptions {
+  signal?: AbortSignal;
 }
 
 const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms']);
+let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
 
-export async function listChartFiles(rootDir: string): Promise<string[]> {
+export async function listChartFiles(rootDir: string, options: ListChartFilesOptions = {}): Promise<string[]> {
   const files: string[] = [];
   const queue: string[] = [rootDir];
 
   while (queue.length > 0) {
+    throwIfAborted(options.signal);
     const current = queue.shift();
     if (!current) {
       continue;
@@ -80,6 +81,7 @@ export async function listChartFiles(rootDir: string): Promise<string[]> {
 
     const entries = await readdir(current, { withFileTypes: true });
     for (const entry of entries) {
+      throwIfAborted(options.signal);
       const absolute = resolve(current, entry.name);
       if (entry.isDirectory()) {
         queue.push(absolute);
@@ -105,29 +107,68 @@ export async function buildChartSelectionEntries(
   files: string[],
   options: BuildChartSelectionEntriesOptions = {},
 ): Promise<ChartSelectionEntry[]> {
+  throwIfAborted(options.signal);
   let summaries: ChartSummaryItem[];
-  if (!options.onLoadingFile && !options.getCancelReason) {
-    summaries = await Promise.all(files.map((filePath) => buildChartSummary(rootDir, filePath)));
+  if (!options.onLoadingFile) {
+    summaries = await Promise.all(files.map((filePath) => buildChartSummary(rootDir, filePath, options.signal)));
   } else {
     summaries = [];
     for (let index = 0; index < files.length; index += 1) {
-      const cancelReason = options.getCancelReason?.();
-      if (cancelReason) {
-        throw new ChartSelectionLoadingCanceledError(cancelReason);
-      }
+      throwIfAborted(options.signal);
       const filePath = files[index];
       options.onLoadingFile?.({
         filePath,
         currentIndex: index + 1,
         totalCount: files.length,
       });
-      summaries.push(await buildChartSummary(rootDir, filePath));
-      const cancelAfterReason = options.getCancelReason?.();
-      if (cancelAfterReason) {
-        throw new ChartSelectionLoadingCanceledError(cancelAfterReason);
-      }
+      summaries.push(await buildChartSummary(rootDir, filePath, options.signal));
     }
   }
+  throwIfAborted(options.signal);
+  return buildChartSelectionEntriesFromSummariesOffThread(summaries, options.signal);
+}
+
+async function buildChartSelectionEntriesFromSummariesOffThread(
+  summaries: ChartSummaryItem[],
+  signal?: AbortSignal,
+): Promise<ChartSelectionEntry[]> {
+  const activeWorker = buildChartSelectionEntriesWorker;
+  try {
+    const result = await invokeWorkerizedFunction(activeWorker, [summaries], {
+      signal,
+      onAbort: () => {
+        if (buildChartSelectionEntriesWorker === activeWorker) {
+          buildChartSelectionEntriesWorker.close();
+          buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
+        }
+      },
+    });
+    if (!Array.isArray(result)) {
+      return buildChartSelectionEntriesFromSummaries(summaries);
+    }
+    return result;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    if (buildChartSelectionEntriesWorker === activeWorker) {
+      buildChartSelectionEntriesWorker.close();
+      buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
+    }
+    return buildChartSelectionEntriesFromSummaries(summaries);
+  }
+}
+
+function createBuildChartSelectionEntriesWorker(): WorkerizedChartSelectionEntriesBuilder {
+  return workerize(
+    (summaries: ChartSummaryItem[]) => buildChartSelectionEntriesFromSummaries(summaries),
+    () => [buildChartSelectionEntriesFromSummaries, compareOptionalNumber],
+    true,
+  ) as WorkerizedChartSelectionEntriesBuilder;
+}
+
+function buildChartSelectionEntriesFromSummaries(summariesInput: readonly ChartSummaryItem[]): ChartSelectionEntry[] {
+  const summaries = [...summariesInput];
   summaries.sort((left, right) => left.relativePath.localeCompare(right.relativePath, 'ja'));
 
   const groupedByDirectory = new Map<string, ChartSummaryItem[]>();
@@ -211,7 +252,8 @@ function compareOptionalNumber(left: number | undefined, right: number | undefin
   return 0;
 }
 
-async function buildChartSummary(rootDir: string, filePath: string): Promise<ChartSummaryItem> {
+async function buildChartSummary(rootDir: string, filePath: string, signal?: AbortSignal): Promise<ChartSummaryItem> {
+  throwIfAborted(signal);
   const relativePath = relative(rootDir, filePath).replaceAll('\\', '/');
   const slashIndex = relativePath.lastIndexOf('/');
   const directoryLabel = slashIndex >= 0 ? relativePath.slice(0, slashIndex) : '.';
@@ -226,8 +268,11 @@ async function buildChartSummary(rootDir: string, filePath: string): Promise<Cha
   let bpmMax: number | undefined;
   let previewContinueKey: string | undefined;
   try {
-    const chart = await parseChartFile(filePath);
+    throwIfAborted(signal);
+    const chart = await parseChartFile(filePath, { signal });
+    throwIfAborted(signal);
     const resolvedChart = resolveBmsControlFlow(chart, { random: () => 0 });
+    throwIfAborted(signal);
     totalNotes = extractPlayableNotes(resolvedChart).length;
     player = chart.bms.player;
     rank = chart.metadata.rank;
@@ -236,8 +281,11 @@ async function buildChartSummary(rootDir: string, filePath: string): Promise<Cha
     bpmInitial = bpmSummary?.initial;
     bpmMin = bpmSummary?.min;
     bpmMax = bpmSummary?.max;
-    previewContinueKey = await resolvePreviewContinueKeyFromChart(resolvedChart, filePath);
-  } catch {
+    previewContinueKey = await resolvePreviewContinueKeyFromChart(resolvedChart, filePath, signal);
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     // 一覧表示のメタ情報取得失敗は再生可否と分離し、欠損扱いで続行する。
   }
 
@@ -255,6 +303,10 @@ async function buildChartSummary(rootDir: string, filePath: string): Promise<Cha
     bpmMin,
     bpmMax,
   };
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }
 
 function extractChartBpmSummary(json: BeMusicJson): { initial: number; min: number; max: number } | undefined {

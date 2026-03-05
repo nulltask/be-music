@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
+import { throwIfAborted } from '@be-music/utils';
 
 const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264', 'mjpeg']);
 // Keep chunks small so ff_decode_multi never allocates too many full-size frames at once.
@@ -85,15 +86,19 @@ export interface DecodedVideoFrame {
 export async function decodeVideoFramesStream(
   videoPath: string,
   onFrame: (frame: DecodedVideoFrame) => void,
+  signal?: AbortSignal,
 ): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number } | undefined> {
   let libav: LibAvInstance | undefined;
   try {
+    throwIfAborted(signal);
     const libavInstance = await createLibAvInstance();
     libav = libavInstance;
-    const file = await readFile(videoPath);
+    throwIfAborted(signal);
+    const file = await readFile(videoPath, { signal });
     const fileName = basename(videoPath);
     await libavInstance.writeFile(fileName, new Uint8Array(file));
 
+    throwIfAborted(signal);
     const [formatContext, streams] = await libavInstance.ff_init_demuxer_file(fileName);
     const videoStream = streams.find((stream) => stream.codec_type === libavInstance.AVMEDIA_TYPE_VIDEO);
     if (!videoStream) {
@@ -118,6 +123,7 @@ export async function decodeVideoFramesStream(
         packetRef,
         frameRef,
         onFrame,
+        signal,
       );
       if (frameCount === undefined || frameCount <= 0) {
         return undefined;
@@ -130,7 +136,10 @@ export async function decodeVideoFramesStream(
     } finally {
       await libavInstance.ff_free_decoder(decoderContext, packetRef, frameRef);
     }
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     return undefined;
   } finally {
     libav?.terminate();
@@ -149,6 +158,7 @@ async function decodeVideoFramesWithCallback(
   packetRef: number,
   frameRef: number,
   onFrame: (frame: DecodedVideoFrame) => void,
+  signal?: AbortSignal,
 ): Promise<number | undefined> {
   const timeScale = resolveTimeScale(stream);
   const fallbackStep = resolveFallbackStep();
@@ -159,6 +169,7 @@ async function decodeVideoFramesWithCallback(
 
   const consume = (decodedFrames: LibAvVideoFrame[]): void => {
     for (const frame of decodedFrames) {
+      throwIfAborted(signal);
       const converted = convertFrameToRgba(frame, libav);
       if (!converted) {
         continue;
@@ -194,6 +205,7 @@ async function decodeVideoFramesWithCallback(
   };
 
   for (let iteration = 0; iteration < MAX_PACKET_READ_ITERATIONS; iteration += 1) {
+    throwIfAborted(signal);
     const [readResult, packetsByStream] = await libav.ff_read_frame_multi(formatContext, packetRef, {
       limit: PACKET_READ_CHUNK_BYTES,
     });
@@ -440,6 +452,10 @@ function clampToByte(value: number): number {
     return 255;
   }
   return value;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }
 
 async function createLibAvInstance(): Promise<LibAvInstance> {

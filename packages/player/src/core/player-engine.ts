@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
-import { floatToInt16 } from '@be-music/utils';
+import { floatToInt16, throwIfAborted } from '@be-music/utils';
 import {
   collectLnobjEndEvents,
   createBeatResolver,
@@ -81,6 +81,7 @@ export interface CreatePlayerUiRuntimeContext {
   stateSignals: PlayerStateSignals;
   uiSignals: PlayerUiSignalBus;
   baseDir: string;
+  loadSignal?: AbortSignal;
   onBgaLoadProgress: (progress: { ratio: number; detail?: string }) => void;
 }
 
@@ -121,7 +122,9 @@ export interface PlayerOptions {
   audioLeadStepUpMs?: number;
   audioLeadStepDownMs?: number;
   tui?: boolean;
+  signal?: AbortSignal;
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
+  onLoadComplete?: () => void;
   onHighSpeedChange?: (highSpeed: number) => void;
   laneModeExtension?: string;
   createUiRuntime?: (context: CreatePlayerUiRuntimeContext) => Promise<PlayerUiRuntime | undefined>;
@@ -403,6 +406,7 @@ function generateControlFlowRandomValue(total: number, randomValue: number): num
 }
 
 export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
+  throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
@@ -466,6 +470,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   });
   const inputSignals = createPlayerInputSignalBus();
 
+  throwIfAborted(options.signal);
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
   const uiRuntime = await options.createUiRuntime?.({
     json: resolvedJson,
@@ -480,10 +485,12 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     stateSignals,
     uiSignals,
     baseDir: options.audioBaseDir ?? process.cwd(),
+    loadSignal: options.signal,
     onBgaLoadProgress: (progress) => {
       reportLoadProgress(options, 0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
     },
   });
+  throwIfAborted(options.signal);
   const uiEnabled = uiRuntime?.tuiEnabled === true;
   const activeStateSignals = uiEnabled ? stateSignals : undefined;
 
@@ -497,14 +504,18 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'auto', (progress) => {
     reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
   });
+  throwIfAborted(options.signal);
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
-  reportLoadProgress(options, 1, 'Ready');
   const autoDebugAudioEstimator = options.debugActiveAudio
     ? await createDebugActiveAudioEstimator(resolvedJson, {
         baseDir: options.audioBaseDir,
         inferBmsLnTypeWhenMissing,
+        signal: options.signal,
       })
     : undefined;
+  throwIfAborted(options.signal);
+  reportLoadProgress(options, 1, 'Ready');
+  options.onLoadComplete?.();
   const resolveDebugActiveAudioState = (
     nowSeconds: number,
   ): { activeAudioFiles?: string[]; activeAudioVoiceCount?: number } => {
@@ -769,6 +780,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 }
 
 export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
+  throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
@@ -842,6 +854,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   });
   const inputSignals = createPlayerInputSignalBus();
 
+  throwIfAborted(options.signal);
   reportLoadProgress(options, 0.18, 'Preparing BGA...');
   const uiRuntime = await options.createUiRuntime?.({
     json: resolvedJson,
@@ -856,10 +869,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     stateSignals,
     uiSignals,
     baseDir: options.audioBaseDir ?? process.cwd(),
+    loadSignal: options.signal,
     onBgaLoadProgress: (progress) => {
       reportLoadProgress(options, 0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
     },
   });
+  throwIfAborted(options.signal);
   const uiEnabled = uiRuntime?.tuiEnabled === true;
   const activeStateSignals = uiEnabled ? stateSignals : undefined;
 
@@ -873,8 +888,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'manual', (progress) => {
     reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
   });
+  throwIfAborted(options.signal);
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
   reportLoadProgress(options, 1, 'Ready');
+  options.onLoadComplete?.();
   const resolveDebugActiveAudioState = (): { activeAudioFiles?: string[]; activeAudioVoiceCount?: number } => {
     if (options.debugActiveAudio !== true) {
       return {};
@@ -1490,6 +1507,7 @@ async function createAudioSessionIfEnabled(
   mode: 'auto' | 'manual',
   onLoadProgress?: (progress: AudioSessionLoadProgress) => void,
 ): Promise<AudioSession | undefined> {
+  throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   if (options.audio === false) {
     onLoadProgress?.({
@@ -1511,6 +1529,7 @@ async function createAudioSessionIfEnabled(
     ratio: 0.05,
     message: 'Preparing real-time key sounds...',
   });
+  throwIfAborted(options.signal);
   const samplesByKey = await buildRuntimeSampleMap(
     json,
     options,
@@ -1525,7 +1544,9 @@ async function createAudioSessionIfEnabled(
     },
     chartWavGain,
     inferBmsLnTypeWhenMissing,
+    options.signal,
   );
+  throwIfAborted(options.signal);
   onLoadProgress?.({
     ratio: 0.82,
     message: 'Initializing audio backend...',
@@ -1541,7 +1562,9 @@ async function createAudioSessionIfEnabled(
     channels: 2,
     samplesPerFrame,
     mode,
+    signal: options.signal,
   });
+  throwIfAborted(options.signal);
   if (!output) {
     writeOutput('Audio playback disabled: node-web-audio-api is unavailable.\n');
     onLoadProgress?.({
@@ -1734,13 +1757,16 @@ async function createDebugActiveAudioEstimator(
   options: {
     baseDir?: string;
     inferBmsLnTypeWhenMissing?: boolean;
+    signal?: AbortSignal;
   } = {},
 ): Promise<DebugActiveAudioEstimator> {
+  throwIfAborted(options.signal);
   const resolver = createTimingResolver(json);
   const triggers = collectSampleTriggers(json, resolver, {
     inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
   });
-  const sampleDurationSecondsByKey = await buildDebugSampleDurationSecondsMap(triggers, options.baseDir);
+  const sampleDurationSecondsByKey = await buildDebugSampleDurationSecondsMap(triggers, options.baseDir, options.signal);
+  throwIfAborted(options.signal);
   const windows: DebugSampleWindow[] = triggers
     .map((trigger) => {
       const startSeconds = Math.max(0, trigger.seconds);
@@ -1837,7 +1863,9 @@ async function createDebugActiveAudioEstimator(
 async function buildDebugSampleDurationSecondsMap(
   triggers: TimedSampleTrigger[],
   baseDir?: string,
+  signal?: AbortSignal,
 ): Promise<Map<string, number>> {
+  throwIfAborted(signal);
   const uniqueTriggers = new Map<string, TimedSampleTrigger>();
   for (const trigger of triggers) {
     if (!uniqueTriggers.has(trigger.sampleKey)) {
@@ -1847,11 +1875,13 @@ async function buildDebugSampleDurationSecondsMap(
 
   const durations = new Map<string, number>();
   for (const trigger of uniqueTriggers.values()) {
+    throwIfAborted(signal);
     const rendered = await renderSingleSample(trigger.sampleKey, trigger.samplePath, {
       baseDir: baseDir ?? process.cwd(),
       sampleRate: DEBUG_ACTIVE_AUDIO_SAMPLE_RATE,
       gain: 1,
       fallbackToneSeconds: DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS,
+      signal,
     });
     durations.set(trigger.sampleKey, rendered.durationSeconds);
   }
@@ -2292,7 +2322,9 @@ async function buildRuntimeSampleMap(
   onProgress?: (progress: { loaded: number; total: number; sampleKey: string; samplePath?: string }) => void,
   chartWavGain = 1,
   inferBmsLnTypeWhenMissing = false,
+  signal?: AbortSignal,
 ): Promise<Map<string, RenderResult>> {
+  throwIfAborted(signal);
   const sampleMap = new Map<string, RenderResult>();
   const keys = collectRealtimeAudioSampleKeys(json, inferBmsLnTypeWhenMissing);
 
@@ -2306,6 +2338,7 @@ async function buildRuntimeSampleMap(
   }
 
   for (let index = 0; index < keys.length; index += 1) {
+    throwIfAborted(signal);
     const key = keys[index];
     const sourcePath = json.resources.wav[key];
     const rendered = await renderSingleSample(key, sourcePath, {
@@ -2313,6 +2346,7 @@ async function buildRuntimeSampleMap(
       sampleRate,
       gain: chartWavGain,
       fallbackToneSeconds: 0.06,
+      signal,
     });
 
     sampleMap.set(key, rendered);

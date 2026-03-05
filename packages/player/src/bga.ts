@@ -1,5 +1,6 @@
 import { access, readFile } from 'node:fs/promises';
 import { extname, isAbsolute, resolve } from 'node:path';
+import { invokeWorkerizedFunction, throwIfAborted, workerize } from '@be-music/utils';
 import { normalizeChannel, normalizeObjectKey, sortEvents, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { decode as decodeBmpFast } from 'fast-bmp';
@@ -73,11 +74,20 @@ interface CompositeFrame {
   opaqueMask: Uint8Array;
 }
 
+type WorkerizedSpecFrameConverter = ((
+  image: DecodedImage,
+  mode: FrameMode,
+  callback: (error: unknown, result: AnsiFrame) => void,
+) => void) & { close: () => void };
+
+let convertImageToSpecFrameWorker = createConvertImageToSpecFrameWorker();
+
 export interface BgaAnsiOptions {
   baseDir: string;
   width?: number;
   height?: number;
   onLoadProgress?: (progress: BgaAnsiLoadProgress) => void;
+  signal?: AbortSignal;
 }
 
 export interface BgaAnsiLoadProgress {
@@ -393,6 +403,7 @@ export async function createBgaAnsiRenderer(
   json: BeMusicJson,
   options: BgaAnsiOptions,
 ): Promise<BgaAnsiRenderer | undefined> {
+  throwIfAborted(options.signal);
   const displaySize = normalizeDisplaySize(options.width, options.height);
   const resolver = createTimingResolver(json);
   const sortedEvents = sortEvents(json.events);
@@ -439,7 +450,9 @@ export async function createBgaAnsiRenderer(
     width: displaySize.width,
     height: displaySize.height,
     onLoadProgress: reportLoadProgress,
+    signal: options.signal,
   });
+  throwIfAborted(options.signal);
   const poorSourceFramesByKey = await loadFramesByKeys({
     keys: poorKeys,
     resources: json.resources.bmp,
@@ -448,7 +461,9 @@ export async function createBgaAnsiRenderer(
     width: displaySize.width,
     height: displaySize.height,
     onLoadProgress: reportLoadProgress,
+    signal: options.signal,
   });
+  throwIfAborted(options.signal);
   const layerSourceFramesByKey = await loadFramesByKeys({
     keys: layerKeys,
     resources: json.resources.bmp,
@@ -457,7 +472,9 @@ export async function createBgaAnsiRenderer(
     width: displaySize.width,
     height: displaySize.height,
     onLoadProgress: reportLoadProgress,
+    signal: options.signal,
   });
+  throwIfAborted(options.signal);
   const layer2SourceFramesByKey = await loadFramesByKeys({
     keys: layer2Keys,
     resources: json.resources.bmp,
@@ -466,14 +483,16 @@ export async function createBgaAnsiRenderer(
     width: displaySize.width,
     height: displaySize.height,
     onLoadProgress: reportLoadProgress,
+    signal: options.signal,
   });
+  throwIfAborted(options.signal);
 
   let stageFileSourceFrame: FrameSource | undefined;
   if (json.metadata.stageFile) {
     reportLoadProgress(json.metadata.stageFile);
-    const resolved = await resolveMediaPath(options.baseDir, json.metadata.stageFile);
+    const resolved = await resolveMediaPath(options.baseDir, json.metadata.stageFile, options.signal);
     if (resolved) {
-      stageFileSourceFrame = await loadFrameSource(resolved, 'base', displaySize.width, displaySize.height);
+      stageFileSourceFrame = await loadFrameSource(resolved, 'base', displaySize.width, displaySize.height, options.signal);
     }
   }
 
@@ -519,25 +538,27 @@ async function loadFramesByKeys(params: {
   width: number;
   height: number;
   onLoadProgress?: (detail: string) => void;
+  signal?: AbortSignal;
 }): Promise<Map<string, FrameSource>> {
-  const { keys, resources, baseDir, mode, width, height, onLoadProgress } = params;
+  const { keys, resources, baseDir, mode, width, height, onLoadProgress, signal } = params;
   const map = new Map<string, FrameSource>();
   const cache = new Map<string, FrameSource | null>();
 
   for (const key of keys) {
+    throwIfAborted(signal);
     const resourcePath = resources[key];
     if (!resourcePath) {
       continue;
     }
     onLoadProgress?.(resourcePath);
-    const resolved = await resolveMediaPath(baseDir, resourcePath);
+    const resolved = await resolveMediaPath(baseDir, resourcePath, signal);
     if (!resolved) {
       continue;
     }
 
     const cacheKey = `${mode}:${width}x${height}:${resolved}`;
     if (!cache.has(cacheKey)) {
-      const source = await loadFrameSource(resolved, mode, width, height);
+      const source = await loadFrameSource(resolved, mode, width, height, signal);
       cache.set(cacheKey, source ?? null);
     }
 
@@ -818,18 +839,75 @@ function createBlackBackgroundAnsiLines(width: number, height: number): string[]
   return composeAnsiLines(rgb, opaqueMask, safeWidth, safeHeight);
 }
 
-async function loadImageAsSpecFrame(imagePath: string, mode: FrameMode): Promise<AnsiFrame | undefined> {
+async function loadImageAsSpecFrame(
+  imagePath: string,
+  mode: FrameMode,
+  signal?: AbortSignal,
+): Promise<AnsiFrame | undefined> {
   const extension = extname(imagePath).toLowerCase();
   if (extension !== '.bmp' && extension !== '.png' && extension !== '.jpg' && extension !== '.jpeg') {
     return undefined;
   }
   try {
-    const buffer = await readFile(imagePath);
+    throwIfAborted(signal);
+    const buffer = await readFile(imagePath, { signal });
+    throwIfAborted(signal);
     const decoded = decodeImageBuffer(buffer, imagePath);
-    return convertImageToSpecFrame(decoded, mode);
-  } catch {
+    throwIfAborted(signal);
+    return await convertImageToSpecFrameOffThread(decoded, mode, signal);
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     return undefined;
   }
+}
+
+async function convertImageToSpecFrameOffThread(
+  image: DecodedImage,
+  mode: FrameMode,
+  signal?: AbortSignal,
+): Promise<AnsiFrame> {
+  const activeWorker = convertImageToSpecFrameWorker;
+  try {
+    const frame = await invokeWorkerizedFunction(activeWorker, [image, mode], {
+      signal,
+      onAbort: () => {
+        if (convertImageToSpecFrameWorker === activeWorker) {
+          convertImageToSpecFrameWorker.close();
+          convertImageToSpecFrameWorker = createConvertImageToSpecFrameWorker();
+        }
+      },
+    });
+    if (!frame || typeof frame.width !== 'number' || typeof frame.height !== 'number') {
+      return convertImageToSpecFrame(image, mode);
+    }
+    return frame;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    if (convertImageToSpecFrameWorker === activeWorker) {
+      convertImageToSpecFrameWorker.close();
+      convertImageToSpecFrameWorker = createConvertImageToSpecFrameWorker();
+    }
+    return convertImageToSpecFrame(image, mode);
+  }
+}
+
+function createConvertImageToSpecFrameWorker(): WorkerizedSpecFrameConverter {
+  return workerize(
+    (image: DecodedImage, mode: FrameMode) => convertImageToSpecFrame(image, mode),
+    () => [
+      convertImageToSpecFrame,
+      createSolidAnsiFrame,
+      fitSizeWithinSpecCanvas,
+      isOpaquePixel,
+      SPEC_BGA_CANVAS_SIZE,
+      TRANSPARENT_ALPHA_THRESHOLD,
+    ],
+    true,
+  ) as WorkerizedSpecFrameConverter;
 }
 
 async function loadFrameSource(
@@ -837,13 +915,15 @@ async function loadFrameSource(
   mode: FrameMode,
   width: number,
   height: number,
+  signal?: AbortSignal,
 ): Promise<FrameSource | undefined> {
-  const imageFrame = await loadImageAsSpecFrame(resourcePath, mode);
+  throwIfAborted(signal);
+  const imageFrame = await loadImageAsSpecFrame(resourcePath, mode, signal);
   if (imageFrame) {
     return createStaticFrameSource(imageFrame);
   }
 
-  return loadVideoAsFrameSource(resourcePath, mode, width, height);
+  return loadVideoAsFrameSource(resourcePath, mode, width, height, signal);
 }
 
 async function loadVideoAsFrameSource(
@@ -851,23 +931,31 @@ async function loadVideoAsFrameSource(
   mode: FrameMode,
   width: number,
   height: number,
+  signal?: AbortSignal,
 ): Promise<FrameSource | undefined> {
+  throwIfAborted(signal);
   const frames: TimedAnsiFrame[] = [];
-  const decoded = await decodeVideoFramesStream(videoPath, (frame) => {
-    const specFrame = convertImageToSpecFrame(
-      {
-        width: frame.width,
-        height: frame.height,
-        data: frame.rgba,
-        format: 'video',
-      },
-      mode,
-    );
-    frames.push({
-      seconds: frame.seconds,
-      frame: resizeAnsiFrame(specFrame, width, height),
-    });
-  });
+  const decoded = await decodeVideoFramesStream(
+    videoPath,
+    (frame) => {
+      throwIfAborted(signal);
+      const specFrame = convertImageToSpecFrame(
+        {
+          width: frame.width,
+          height: frame.height,
+          data: frame.rgba,
+          format: 'video',
+        },
+        mode,
+      );
+      frames.push({
+        seconds: frame.seconds,
+        frame: resizeAnsiFrame(specFrame, width, height),
+      });
+    },
+    signal,
+  );
+  throwIfAborted(signal);
 
   if (!decoded || frames.length === 0) {
     return undefined;
@@ -879,11 +967,12 @@ async function loadVideoAsFrameSource(
   };
 }
 
-async function resolveMediaPath(baseDir: string, mediaPath: string): Promise<string | undefined> {
+async function resolveMediaPath(baseDir: string, mediaPath: string, signal?: AbortSignal): Promise<string | undefined> {
   const candidates = createMediaPathCandidates(mediaPath);
   for (const candidate of candidates) {
+    throwIfAborted(signal);
     const absolute = isAbsolute(candidate) ? candidate : resolve(baseDir, candidate);
-    if (await exists(absolute)) {
+    if (await exists(absolute, signal)) {
       return absolute;
     }
   }
@@ -946,13 +1035,22 @@ function createMediaPathCandidates(mediaPath: string): string[] {
   return candidates;
 }
 
-async function exists(path: string): Promise<boolean> {
+async function exists(path: string, signal?: AbortSignal): Promise<boolean> {
   try {
+    throwIfAborted(signal);
     await access(path);
+    throwIfAborted(signal);
     return true;
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     return false;
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }
 
 function decodeImageBuffer(buffer: Buffer, pathHint: string): DecodedImage {

@@ -72,4 +72,30 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       utilsApi.normalizeAsciiBase36Code(0x66);
     },
   });
+  define('utils.workerize', {
+    run: () => {
+      const worker = utilsApi.workerize((value: number) => value + 1, () => []);
+      worker.close();
+    },
+  });
+  define('utils.invokeWorkerizedFunction', {
+    run: async () => {
+      const worker = utilsApi.workerize((value: number) => value + 1, () => []);
+      try {
+        await utilsApi.invokeWorkerizedFunction(worker, [41]);
+      } finally {
+        worker.close();
+      }
+    },
+  });
+  define('utils.createAbortError', {
+    run: () => {
+      utilsApi.createAbortError();
+    },
+  });
+  define('utils.throwIfAborted', {
+    run: () => {
+      utilsApi.throwIfAborted(undefined);
+    },
+  });
 }

@@ -122,6 +122,28 @@ test('audio-renderer: renderJson throws AbortError when signal is already aborte
     name: 'AbortError',
   });
 });
+
+test('audio-renderer: renderJson propagates AbortError during sample loading', async () => {
+  const json = createSingleTriggerChart('render-codec-test.ogg');
+  const controller = new AbortController();
+
+  await expect(
+    renderJson(json, {
+      baseDir: fixtureDir,
+      sampleRate: 44_100,
+      normalize: false,
+      tailSeconds: 0,
+      signal: controller.signal,
+      onSampleLoadProgress: (progress) => {
+        if (progress.stage === 'reading') {
+          controller.abort();
+        }
+      },
+    }),
+  ).rejects.toMatchObject({
+    name: 'AbortError',
+  });
+});
 describe('audio-renderer', () => {
 
 

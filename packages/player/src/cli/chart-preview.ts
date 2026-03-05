@@ -1,7 +1,6 @@
-import { createHash } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import { floatToInt16 } from '@be-music/utils';
+import { floatToInt16, invokeWorkerizedFunction, throwIfAborted, workerize } from '@be-music/utils';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { collectSampleTriggers, createTimingResolver, type RenderResult, renderJson } from '@be-music/audio-renderer';
@@ -29,6 +28,29 @@ interface FallbackPreviewIdentity {
   startSeconds: number;
 }
 
+interface FallbackSignaturePayload {
+  sourceFormat: string;
+  baseBpm: number;
+  tempoPoints: Array<[beat: number, bpm: number, seconds: number]>;
+  stopPoints: Array<[beat: number, seconds: number]>;
+  triggers: Array<
+    [
+      seconds: number,
+      beat: number,
+      sampleKey: string,
+      samplePath: string,
+      sampleOffsetSeconds: number,
+      sampleDurationSeconds?: number,
+      sampleSliceId?: string,
+    ]
+  >;
+}
+
+type WorkerizedFallbackContinueKey = ((
+  payload: FallbackSignaturePayload,
+  callback: (error: unknown, result: string) => void,
+) => void) & { close: () => void };
+
 export interface PreviewFocusTarget {
   filePath?: string;
   previewContinueKey?: string;
@@ -46,6 +68,7 @@ const PREVIEW_SILENCE_THRESHOLD = 0.0001;
 const PREVIEW_STOP_TIMEOUT_MS = 180;
 const PREVIEW_BACKPRESSURE_TIMEOUT_MS = 800;
 const PREVIEW_CACHE_LIMIT = 8;
+let fallbackContinueKeyWorker = createFallbackContinueKeyWorker();
 
 export function createChartPreviewController(): ChartPreviewController {
   const previewCache = new Map<string, ChartPreviewAsset | null>();
@@ -194,14 +217,17 @@ export function createChartPreviewController(): ChartPreviewController {
 export async function resolvePreviewContinueKeyFromChart(
   chart: BeMusicJson,
   chartPath: string,
+  signal?: AbortSignal,
 ): Promise<string | undefined> {
+  throwIfAborted(signal);
   const previewPath = chart.bms.preview;
   if (typeof previewPath !== 'string' || previewPath.trim().length === 0) {
-    return resolveFallbackPreviewIdentity(chart)?.continueKey;
+    return (await resolveFallbackPreviewIdentity(chart, signal))?.continueKey;
   }
   const candidates = createPreviewPathCandidates(chart, previewPath);
   const baseDir = dirname(chartPath);
   for (const candidate of candidates) {
+    throwIfAborted(signal);
     const resolvedCandidate = resolvePreviewCandidatePath(baseDir, candidate);
     if (await doesFileExist(resolvedCandidate)) {
       return normalizePreviewContinueKey(resolvedCandidate);
@@ -209,9 +235,9 @@ export async function resolvePreviewContinueKeyFromChart(
   }
   const firstCandidate = candidates[0];
   if (!firstCandidate) {
-    return resolveFallbackPreviewIdentity(chart)?.continueKey;
+    return (await resolveFallbackPreviewIdentity(chart, signal))?.continueKey;
   }
-  return resolveFallbackPreviewIdentity(chart)?.continueKey;
+  return (await resolveFallbackPreviewIdentity(chart, signal))?.continueKey;
 }
 
 export function formatSongSelectAudioBackendLabel(audioEnabled: boolean, active: string | undefined): string {
@@ -226,7 +252,7 @@ export function formatSongSelectAudioBackendLabel(audioEnabled: boolean, active:
 
 async function renderChartPreview(filePath: string, signal?: AbortSignal): Promise<ChartPreviewAsset | undefined> {
   throwIfAborted(signal);
-  const chart = await parseChartFile(filePath);
+  const chart = await parseChartFile(filePath, { signal });
   throwIfAborted(signal);
   const resolved = resolveBmsControlFlow(chart, { random: () => 0 });
   const chartWavGain = resolveChartVolWavGain(resolved);
@@ -313,7 +339,7 @@ async function renderFallbackChartPreview(
   gain: number,
   signal?: AbortSignal,
 ): Promise<RenderedPreviewSample | undefined> {
-  const fallbackIdentity = resolveFallbackPreviewIdentity(chart);
+  const fallbackIdentity = await resolveFallbackPreviewIdentity(chart, signal);
   if (!fallbackIdentity) {
     return undefined;
   }
@@ -342,7 +368,11 @@ function normalizePreviewContinueKey(value: string): string {
   return value.replaceAll('\\', '/');
 }
 
-function resolveFallbackPreviewIdentity(chart: BeMusicJson): FallbackPreviewIdentity | undefined {
+async function resolveFallbackPreviewIdentity(
+  chart: BeMusicJson,
+  signal?: AbortSignal,
+): Promise<FallbackPreviewIdentity | undefined> {
+  throwIfAborted(signal);
   const resolver = createTimingResolver(chart);
   const triggers = collectSampleTriggers(chart, resolver);
   if (triggers.length === 0) {
@@ -356,49 +386,110 @@ function resolveFallbackPreviewIdentity(chart: BeMusicJson): FallbackPreviewIden
   if (!Number.isFinite(firstTriggerSeconds)) {
     return undefined;
   }
-  const hash = createHash('sha1');
-  hash.update('fallback-preview-signature-v3\n');
-  hash.update(`source:${chart.sourceFormat}\n`);
-  hash.update(`baseBpm:${encodeSignatureNumber(chart.metadata.bpm)}\n`);
-
-  for (const point of resolver.tempoPoints) {
-    hash.update(
-      `tempo:${encodeSignatureNumber(point.beat)}:${encodeSignatureNumber(point.bpm)}:${encodeSignatureNumber(point.seconds)}\n`,
-    );
-  }
-  for (const point of resolver.stopPoints) {
-    hash.update(`stop:${encodeSignatureNumber(point.beat)}:${encodeSignatureNumber(point.seconds)}\n`);
-  }
-  const normalizedTriggers = triggers
-    .map(
-      (trigger) =>
-        `trigger:${encodeSignatureNumber(trigger.seconds)}:${encodeSignatureNumber(trigger.beat)}:${trigger.sampleKey}:${normalizePreviewContinueKey(trigger.samplePath ?? '')}:${encodeSignatureNumber(trigger.sampleOffsetSeconds)}:${encodeSignatureNumber(trigger.sampleDurationSeconds)}:${trigger.sampleSliceId ?? ''}\n`,
-    )
-    .sort();
-  for (const normalizedTrigger of normalizedTriggers) {
-    hash.update(normalizedTrigger);
-  }
+  const payload: FallbackSignaturePayload = {
+    sourceFormat: chart.sourceFormat,
+    baseBpm: chart.metadata.bpm,
+    tempoPoints: resolver.tempoPoints.map((point) => [point.beat, point.bpm, point.seconds]),
+    stopPoints: resolver.stopPoints.map((point) => [point.beat, point.seconds]),
+    triggers: triggers.map((trigger) => [
+      trigger.seconds,
+      trigger.beat,
+      trigger.sampleKey,
+      trigger.samplePath ?? '',
+      trigger.sampleOffsetSeconds,
+      trigger.sampleDurationSeconds,
+      trigger.sampleSliceId,
+    ]),
+  };
+  const continueKey = await computeFallbackContinueKeyOffThread(payload, signal);
 
   return {
-    continueKey: `fallback:${hash.digest('hex').slice(0, 24)}`,
+    continueKey,
     startSeconds: firstTriggerSeconds,
   };
 }
 
-function encodeSignatureNumber(value: number | undefined): string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return '-';
+async function computeFallbackContinueKeyOffThread(
+  payload: FallbackSignaturePayload,
+  signal?: AbortSignal,
+): Promise<string> {
+  throwIfAborted(signal);
+  const activeWorker = fallbackContinueKeyWorker;
+  try {
+    const continueKey = await invokeWorkerizedFunction(activeWorker, [payload], {
+      signal,
+      onAbort: () => {
+        if (fallbackContinueKeyWorker === activeWorker) {
+          fallbackContinueKeyWorker.close();
+          fallbackContinueKeyWorker = createFallbackContinueKeyWorker();
+        }
+      },
+    });
+    if (typeof continueKey !== 'string' || continueKey.length === 0) {
+      return computeFallbackContinueKey(payload);
+    }
+    return continueKey;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    if (fallbackContinueKeyWorker === activeWorker) {
+      fallbackContinueKeyWorker.close();
+      fallbackContinueKeyWorker = createFallbackContinueKeyWorker();
+    }
+    return computeFallbackContinueKey(payload);
   }
-  return `${Math.round(value * 1_000_000)}`;
 }
 
-function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (!signal?.aborted) {
-    return;
+function createFallbackContinueKeyWorker(): WorkerizedFallbackContinueKey {
+  return workerize(
+    (payload: FallbackSignaturePayload) => computeFallbackContinueKey(payload),
+    () => [computeFallbackContinueKey],
+    true,
+  ) as WorkerizedFallbackContinueKey;
+}
+
+function computeFallbackContinueKey(payload: FallbackSignaturePayload): string {
+  const encodeSignatureNumber = (value: number | undefined): string => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return '-';
+    }
+    return `${Math.round(value * 1_000_000)}`;
+  };
+  const normalizePath = (value: string | undefined): string => (value ?? '').replaceAll('\\', '/');
+  const fnv1a64Hex = (value: string, seed: bigint): string => {
+    let hash = seed;
+    const prime = 0x100000001b3n;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= BigInt(value.charCodeAt(index));
+      hash = BigInt.asUintN(64, hash * prime);
+    }
+    return hash.toString(16).padStart(16, '0');
+  };
+
+  const lines: string[] = [];
+  lines.push('fallback-preview-signature-v4');
+  lines.push(`source:${payload.sourceFormat}`);
+  lines.push(`baseBpm:${encodeSignatureNumber(payload.baseBpm)}`);
+  for (const [beat, bpm, seconds] of payload.tempoPoints) {
+    lines.push(`tempo:${encodeSignatureNumber(beat)}:${encodeSignatureNumber(bpm)}:${encodeSignatureNumber(seconds)}`);
   }
-  const error = new Error('The operation was aborted.');
-  error.name = 'AbortError';
-  throw error;
+  for (const [beat, seconds] of payload.stopPoints) {
+    lines.push(`stop:${encodeSignatureNumber(beat)}:${encodeSignatureNumber(seconds)}`);
+  }
+  const normalizedTriggers = payload.triggers
+    .map(
+      ([seconds, beat, sampleKey, samplePath, sampleOffsetSeconds, sampleDurationSeconds, sampleSliceId]) =>
+        `trigger:${encodeSignatureNumber(seconds)}:${encodeSignatureNumber(beat)}:${sampleKey}:${normalizePath(samplePath)}:${encodeSignatureNumber(sampleOffsetSeconds)}:${encodeSignatureNumber(sampleDurationSeconds)}:${sampleSliceId ?? ''}`,
+    )
+    .sort();
+  for (const line of normalizedTriggers) {
+    lines.push(line);
+  }
+  const serialized = `${lines.join('\n')}\n`;
+  const primary = fnv1a64Hex(serialized, 0xcbf29ce484222325n);
+  const secondary = fnv1a64Hex(serialized, 0xaf63dc4c8601ec8cn);
+  return `fallback:${`${primary}${secondary}`.slice(0, 24)}`;
 }
 
 function isAbortError(error: unknown): boolean {

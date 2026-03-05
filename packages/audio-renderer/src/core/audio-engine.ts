@@ -16,7 +16,7 @@ import {
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
-import { findLastIndexAtOrBefore, findLastIndexBefore } from '@be-music/utils';
+import { findLastIndexAtOrBefore, findLastIndexBefore, throwIfAborted } from '@be-music/utils';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { detectAudioFormat, encodeAiff16, encodeWav16 } from './audio-file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './audio-decode.ts';
@@ -409,7 +409,7 @@ export async function renderChartFile(
   options: RenderOptions = {},
 ): Promise<RenderResult> {
   const chartPath = resolve(inputPath);
-  const json = resolveBmsControlFlow(await parseChartFile(chartPath));
+  const json = resolveBmsControlFlow(await parseChartFile(chartPath, { signal: options.signal }));
   const audioRendered = await renderJson(json, {
     ...options,
     baseDir: options.baseDir ?? dirname(chartPath),
@@ -584,13 +584,13 @@ async function getOrCreateSample(params: {
       samplePath,
       resolvedPath,
     });
-    const buffer = await readFile(resolvedPath);
+    const buffer = await readFile(resolvedPath, { signal });
     throwIfAborted(signal);
-    const decoded = await decodeAudioSample(buffer, resolvedPath);
+    const decoded = await decodeAudioSample(buffer, resolvedPath, signal);
     throwIfAborted(signal);
-    const left = resampleLinear(decoded.left, decoded.sampleRate, sampleRate);
+    const left = resampleLinear(decoded.left, decoded.sampleRate, sampleRate, signal);
     const rightSource = decoded.right ?? decoded.left;
-    const right = resampleLinear(rightSource, decoded.sampleRate, sampleRate);
+    const right = resampleLinear(rightSource, decoded.sampleRate, sampleRate, signal);
     const sample = { left, right };
     loadedSamples.set(sampleKey, sample);
     onSampleLoadProgress?.({
@@ -600,7 +600,10 @@ async function getOrCreateSample(params: {
       resolvedPath,
     });
     return sample;
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     loadedSamples.set(sampleKey, fallback);
     onSampleLoadProgress?.({
       stage: 'fallback',
@@ -699,13 +702,8 @@ function mixSample(
   }
 }
 
-function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (!signal?.aborted) {
-    return;
-  }
-  const error = new Error('The operation was aborted.');
-  error.name = 'AbortError';
-  throw error;
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }
 
 function createBmsonSamplePlaybackMap(

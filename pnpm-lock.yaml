@@ -146,7 +146,11 @@ importers:
         specifier: workspace:*
         version: link:../utils
 
-  packages/utils: {}
+  packages/utils:
+    dependencies:
+      isoworker:
+        specifier: ^0.2.4
+        version: 0.2.4
 
 packages:
 
@@ -1038,6 +1042,9 @@ packages:
 
   iobuffer@6.0.1:
     resolution: {integrity: sha512-SZWYkWNfjIXIBYSDpXDYIgshqtbOPsi4lviawAEceR1Kqk+sHDlcQjWrzNQsii80AyBY0q5c8HCTNjqo74ul+Q==}
+
+  isoworker@0.2.4:
+    resolution: {integrity: sha512-oIN3zgTUVzu52EWYyl7zVlqNOOA+vdsUQs2DIHLDwWgs1CnOohdwopN23HmIYiZKePmjU7sQLq+J4xYjMMfsYQ==}
 
   istanbul-lib-coverage@3.2.2:
     resolution: {integrity: sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg==}
@@ -2030,6 +2037,8 @@ snapshots:
       safer-buffer: 2.1.2
 
   iobuffer@6.0.1: {}
+
+  isoworker@0.2.4: {}
 
   istanbul-lib-coverage@3.2.2: {}
 
