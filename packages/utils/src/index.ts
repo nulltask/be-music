@@ -116,14 +116,32 @@ export function compareFractions(
 }
 
 export function normalizeSortedUniqueNonNegativeIntegers(values: ReadonlyArray<number>): number[] {
-  const deduplicated = new Set<number>();
+  const normalized: number[] = [];
   for (const value of values) {
     if (!Number.isFinite(value)) {
       continue;
     }
-    deduplicated.add(Math.max(0, Math.floor(value)));
+    const floored = Math.floor(value);
+    normalized.push(floored < 0 ? 0 : floored);
   }
-  return [...deduplicated].sort((left, right) => left - right);
+  if (normalized.length <= 1) {
+    return normalized;
+  }
+
+  normalized.sort((left, right) => left - right);
+  let writeIndex = 1;
+  let previous = normalized[0]!;
+  for (let readIndex = 1; readIndex < normalized.length; readIndex += 1) {
+    const current = normalized[readIndex]!;
+    if (current === previous) {
+      continue;
+    }
+    normalized[writeIndex] = current;
+    writeIndex += 1;
+    previous = current;
+  }
+  normalized.length = writeIndex;
+  return normalized;
 }
 
 export function findLastIndexAtOrBefore<T>(

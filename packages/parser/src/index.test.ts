@@ -6,19 +6,22 @@ import { BMS_JSON_FORMAT } from '../../json/src/index.ts';
 import { parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
 describe('parser', () => {
 
 
 test('BMS: parses measure length, BPM, STOP, and BGA channels', async () => {
-  const chartPath = resolve(rootDir, 'examples/test/sequence-regression.bms');
-  const json = await parseChartFile(chartPath);
+  const json = await parseChartFile(unifiedBmsChartPath);
 
   expect(json.sourceFormat).toBe('bms');
-  expect(json.metadata.title).toBe('Regression Sequence');
-  expect(json.resources.bpm['01']).toBe(180);
-  expect(json.resources.stop['01']).toBe(96);
-  expect(json.measures).toEqual([{ index: 1, length: 0.75 }]);
-  expect(json.events.some((event) => event.channel === '01' && event.value === '02')).toBe(true);
+  expect(json.metadata.title).toBe('Four-Measure Command Combo Test');
+  expect(json.resources.bpm['01']).toBe(96);
+  expect(json.resources.stop['01']).toBe(48);
+  expect(json.measures).toContainEqual({ index: 4, length: 0.75 });
+  expect(json.events.some((event) => event.channel === '04' && event.value === '01')).toBe(true);
+  expect(json.events.some((event) => event.channel === '07' && event.value === '02')).toBe(true);
+  expect(json.events.some((event) => event.channel === '0A' && event.value === '01')).toBe(true);
+  expect(json.events.some((event) => event.channel === 'SC' && event.value === '01')).toBe(true);
   expect(json.events.some((event) => event.channel === '11' && event.value === '01')).toBe(true);
 });
 
@@ -77,36 +80,38 @@ test('BMS: keeps 130 fallback unless a control-flow branch applies #BPM', () => 
 });
 
 test('BMS: parses extension headers into dedicated fields', async () => {
-  const chartPath = resolve(rootDir, 'examples/test/extensions-headers-test.bms');
-  const json = await parseChartFile(chartPath);
+  const json = await parseChartFile(unifiedBmsChartPath);
 
-  expect(json.bms.preview).toBe('preview.ogg');
-  expect(json.bms.player).toBe(1);
-  expect(json.bms.pathWav).toBe('sounds/');
-  expect(json.bms.baseBpm).toBe(155);
-  expect(json.bms.stp).toEqual(['001.240']);
-  expect(json.bms.option).toBe('HIGH-SPEED');
+  expect(json.bms.preview).toBe('sample.wav');
+  expect(json.bms.player).toBe(3);
+  expect(json.bms.pathWav).toBe('./');
+  expect(json.bms.baseBpm).toBe(128);
+  expect(json.bms.stp).toEqual(['008.192']);
+  expect(json.bms.option).toBe('RANDOM');
   expect(json.bms.changeOption['01']).toBe('MIRROR');
+  expect(json.bms.changeOption['02']).toBe('RANDOM');
   expect(json.bms.wavCmd).toBe('legacy');
   expect(json.bms.lnType).toBe(1);
   expect(json.bms.lnMode).toBe(1);
-  expect(json.bms.lnObj).toBe('ZZ');
-  expect(json.bms.lnObjs).toEqual(['ZZ']);
-  expect(json.bms.volWav).toBe(80);
+  expect(json.bms.lnObj).toBe('AB');
+  expect(json.bms.lnObjs).toEqual(['AA', 'AB']);
+  expect(json.bms.volWav).toBe(90);
   expect(json.bms.defExRank).toBe(120);
   expect(json.bms.exRank['01']).toBe('120,90,60,30');
-  expect(json.bms.argb['0A']).toBe('FF000000');
-  expect(json.bms.exWav['01']).toBe('sample_ex.wav');
-  expect(json.bms.exBmp['01']).toBe('image_ex.bmp');
+  expect(json.bms.argb['01']).toBe('FF000000');
+  expect(json.bms.exWav['01']).toBe('ex_sample.wav');
+  expect(json.bms.exBmp['01']).toBe('ex_image.bmp');
   expect(json.bms.bga['01']).toBe('01');
   expect(json.bms.scroll['01']).toBe(0.5);
-  expect(json.bms.poorBga).toBe('01');
+  expect(json.bms.scroll['02']).toBe(1);
+  expect(json.bms.scroll['03']).toBe(1.5);
+  expect(json.bms.poorBga).toBe('03');
   expect(json.bms.swBga['01']).toBe('02');
-  expect(json.bms.videoFile).toBe('movie.mp4');
-  expect(json.bms.midiFile).toBe('sample.mid');
-  expect(json.bms.materials).toBe('materials.def');
+  expect(json.bms.videoFile).toBe('demo.mp4');
+  expect(json.bms.midiFile).toBe('demo.mid');
+  expect(json.bms.materials).toBe('demo.materials');
   expect(json.bms.divideProp).toBe('lane=2');
-  expect(json.bms.charset).toBe('Shift_JIS');
+  expect(json.bms.charset).toBe('UTF-8');
   expect(json.events.some((event) => event.channel === 'SC' && event.value === '01')).toBe(true);
 
   expect(json.metadata.extras.PREVIEW).toBeUndefined();
@@ -116,6 +121,7 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   expect(json.metadata.extras.STP).toBeUndefined();
   expect(json.metadata.extras.OPTION).toBeUndefined();
   expect(json.metadata.extras.CHANGEOPTION01).toBeUndefined();
+  expect(json.metadata.extras.CHANGEOPTION02).toBeUndefined();
   expect(json.metadata.extras.WAVCMD).toBeUndefined();
   expect(json.metadata.extras.LNTYPE).toBeUndefined();
   expect(json.metadata.extras.LNMODE).toBeUndefined();
@@ -123,11 +129,13 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   expect(json.metadata.extras.VOLWAV).toBeUndefined();
   expect(json.metadata.extras.DEFEXRANK).toBeUndefined();
   expect(json.metadata.extras.EXRANK01).toBeUndefined();
-  expect(json.metadata.extras.ARGB0A).toBeUndefined();
+  expect(json.metadata.extras.ARGB01).toBeUndefined();
   expect(json.metadata.extras.EXWAV01).toBeUndefined();
   expect(json.metadata.extras.EXBMP01).toBeUndefined();
   expect(json.metadata.extras.BGA01).toBeUndefined();
   expect(json.metadata.extras.SCROLL01).toBeUndefined();
+  expect(json.metadata.extras.SCROLL02).toBeUndefined();
+  expect(json.metadata.extras.SCROLL03).toBeUndefined();
   expect(json.metadata.extras.POORBGA).toBeUndefined();
   expect(json.metadata.extras.SWBGA01).toBeUndefined();
   expect(json.metadata.extras.VIDEOFILE).toBeUndefined();
@@ -153,32 +161,32 @@ test('BMS: keeps all LNOBJ declarations and uses the last one as lnObj', () => {
 });
 
 test('BMS: parses RANDOM/IF/SWITCH control flow directives', async () => {
-  const chartPath = resolve(rootDir, 'examples/test/control-flow-test.bms');
-  const parsed = await parseChartFile(chartPath);
+  const parsed = await parseChartFile(unifiedBmsChartPath);
 
   expect(parsed.resources.wav['02']).toBe('branch.wav');
   expect(parsed.bms.controlFlow.length).toBeGreaterThan(0);
-  expect(parsed.events.some((event) => event.channel === '12')).toBe(false);
-  expect(parsed.events.some((event) => event.channel === '16')).toBe(false);
-  expect(parsed.events.some((event) => event.measure === 1 && event.channel === '22')).toBe(false);
+  expect(parsed.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(false);
+  expect(parsed.events.some((event) => event.measure === 21 && event.channel === '16')).toBe(false);
+  expect(parsed.events.some((event) => event.measure === 23 && event.channel === '22')).toBe(false);
 
   const resolvedWhenRandomIs1 = resolveBmsControlFlow(parsed, { random: () => 0 });
   expect(resolvedWhenRandomIs1.resources.wav['02']).toBe('right.wav');
-  expect(resolvedWhenRandomIs1.events.some((event) => event.channel === '12')).toBe(true);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.channel === '11')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.channel === '13')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.channel === '16')).toBe(true);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.channel === '14')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.channel === '15')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.channel === '18')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 1 && event.channel === '21')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 1 && event.channel === '22')).toBe(true);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 2 && event.channel === '23')).toBe(true);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 2 && event.channel === '24')).toBe(false);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(true);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '11')).toBe(false);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '12')).toBe(true);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '13')).toBe(false);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 21 && event.channel === '16')).toBe(true);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '14')).toBe(false);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '15')).toBe(false);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '18')).toBe(false);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '21')).toBe(false);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '22')).toBe(true);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(true);
+  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(false);
 
   const resolvedWhenRandomIs2 = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
-  expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 2 && event.channel === '23')).toBe(false);
-  expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 2 && event.channel === '24')).toBe(true);
+  expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(false);
+  expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(true);
 
   expect(parsed.metadata.extras.RANDOM).toBeUndefined();
   expect(parsed.metadata.extras.SWITCH).toBeUndefined();

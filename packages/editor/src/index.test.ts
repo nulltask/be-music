@@ -18,6 +18,7 @@ import {
 } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
 describe('editor', () => {
 
 
@@ -201,8 +202,7 @@ describe('editor', () => {
   });
 
   test('editor: importChart loads chart files', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/sequence-regression.bms');
-    const json = await importChart(chartPath);
+    const json = await importChart(unifiedBmsChartPath);
     expect(json.sourceFormat).toBe('bms');
     expect(json.events.length).toBeGreaterThan(0);
   });

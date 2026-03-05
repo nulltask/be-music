@@ -1,6 +1,7 @@
 import { clamp } from '@be-music/utils';
 import type { PlayerSummary } from '../index.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../player-utils.ts';
+import type { PlayerStateSignals } from '../player-state-signals.ts';
 import {
   normalizeHighSpeed,
   resolveAnimatedHighSpeedValue,
@@ -35,6 +36,7 @@ interface TuiOptions {
   measureLengths?: ReadonlyMap<number, number>;
   measureBoundariesBeats?: number[];
   splitAfterIndex?: number;
+  stateSignals?: PlayerStateSignals;
 }
 
 interface TuiNote {
@@ -124,6 +126,7 @@ const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
 const HIGH_SPEED_TRANSITION_MS = 180;
 const JUDGE_COMBO_VISIBILITY_TIMEOUT_MS = 1000;
 const JUDGE_COMBO_BLINK_INTERVAL_MS = 80;
+const FPS_SMOOTHING_FACTOR = 0.2;
 const MEASURE_SIGNATURE_MAX_DENOMINATOR = 32;
 const HIGH_SPEED_MODIFIER_LABEL = resolveAltModifierLabel();
 const MEASURE_SIGNATURE_TOLERANCE = 1e-8;
@@ -147,6 +150,8 @@ const SCRATCH_LANE_BG_RGB: RgbColor = { r: 5, g: 8, b: 12 };
 
 export class PlayerTui {
   private readonly options: TuiOptions;
+
+  private readonly stateSignals?: PlayerStateSignals;
 
   private readonly laneIndex = new Map<string, number>();
 
@@ -204,10 +209,21 @@ export class PlayerTui {
 
   private highSpeedTransitionStartMs = 0;
 
+  private smoothedFps = Number.NaN;
+
+  private lastFrameRenderedAtMs = 0;
+
+  private lastSignalPaused?: boolean;
+
+  private lastSignalHighSpeed?: number;
+
+  private lastSignalJudgeComboTick = Number.NaN;
+
   constructor(options: TuiOptions) {
     const initialHighSpeed = normalizeHighSpeed(options.highSpeed);
     options.highSpeed = initialHighSpeed;
     this.options = options;
+    this.stateSignals = options.stateSignals;
     this.displayedHighSpeed = initialHighSpeed;
     this.targetHighSpeed = initialHighSpeed;
     this.highSpeedTransitionFrom = initialHighSpeed;
@@ -227,6 +243,10 @@ export class PlayerTui {
       this.freeZoneSourceChannels.add('27');
     }
     this.laneBlockVisibleWidth = calculateLaneBlockVisibleWidth(this.laneWidths, options.splitAfterIndex ?? -1);
+    this.lastSignalPaused = this.paused;
+    this.lastSignalHighSpeed = this.targetHighSpeed;
+    this.lastSignalJudgeComboTick = Number.NaN;
+    this.syncStateSignals();
   }
 
   isSupported(): boolean {
@@ -264,6 +284,8 @@ export class PlayerTui {
     this.targetHighSpeed = this.displayedHighSpeed;
     this.highSpeedTransitionFrom = this.displayedHighSpeed;
     this.highSpeedTransitionStartMs = 0;
+    this.smoothedFps = Number.NaN;
+    this.lastFrameRenderedAtMs = 0;
     process.stdout.write('\u001b[0m\u001b[?25h\u001b[?1049l');
   }
 
@@ -326,16 +348,52 @@ export class PlayerTui {
     this.pressedLaneChannels.delete(this.resolveRenderLaneChannel(channel));
   }
 
+  private syncStateSignals(): void {
+    const stateSignals = this.stateSignals;
+    if (!stateSignals) {
+      return;
+    }
+
+    const paused = stateSignals.paused();
+    if (this.lastSignalPaused !== paused) {
+      this.lastSignalPaused = paused;
+      this.setPaused(paused);
+    }
+
+    const highSpeed = normalizeHighSpeed(stateSignals.highSpeed());
+    if (this.lastSignalHighSpeed === undefined || Math.abs(this.lastSignalHighSpeed - highSpeed) > 1e-9) {
+      this.lastSignalHighSpeed = highSpeed;
+      this.setHighSpeed(highSpeed);
+    }
+
+    const judgeComboTick = stateSignals.judgeComboTick();
+    if (judgeComboTick === this.lastSignalJudgeComboTick) {
+      return;
+    }
+    this.lastSignalJudgeComboTick = judgeComboTick;
+    this.applyJudgeComboSignalState(stateSignals.getJudgeCombo());
+  }
+
+  private applyJudgeComboSignalState(state: Readonly<{ judge: string; combo: number; channel?: string; updatedAtMs: number }>): void {
+    for (const display of this.resolveJudgeComboTargets(state.channel)) {
+      display.latestJudge = state.judge;
+      display.combo = state.combo;
+      display.updatedAtMs = state.updatedAtMs;
+    }
+  }
+
   render(frame: TuiFrame): void {
     if (!this.active) {
       return;
     }
+    this.syncStateSignals();
 
     const terminalRows = process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
     const debugLineCount = frame.activeAudioFiles === undefined && frame.activeAudioVoiceCount === undefined ? 0 : 1;
     const rowCount = Math.max(MIN_GRID_ROWS, terminalRows - STATIC_TUI_LINES - debugLineCount);
     const laneCount = Math.max(1, this.options.lanes.length);
     const now = Date.now();
+    const currentFps = this.resolveFps(now);
     const displayHighSpeed = this.resolveDisplayHighSpeed(now);
     const scrollWindowBeats = resolveVisibleBeatsForTuiGrid(rowCount, displayHighSpeed);
     const grid = Array.from({ length: rowCount }, () => Array.from({ length: laneCount }, () => LANE_FILL_SYMBOL));
@@ -528,7 +586,7 @@ export class PlayerTui {
     const stopLabel = remainingStopSeconds > 0 ? `${formatStopSeconds(remainingStopSeconds)}s` : '-';
     const audioBackendLabel = formatAudioBackendLabel(frame.audioBackend);
     lines.push(
-      `SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(displayHighSpeed)}  BAD ±${formatJudgeWindowMs(this.options.judgeWindowMs)}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}  AUDIO ${audioBackendLabel}`,
+      `SPEED x${this.options.speed.toFixed(2)}  HS x${formatHighSpeed(displayHighSpeed)}  BAD ±${formatJudgeWindowMs(this.options.judgeWindowMs)}ms  BPM ${formatBpm(currentBpm)}  SCROLL ${formatScroll(currentScroll)}  STOP ${stopLabel}  AUDIO ${audioBackendLabel}  FPS ${formatFps(currentFps)}`,
     );
     const currentMeasure = findCurrentMeasure(this.options.measureTimeline, frame.currentSeconds) + 1;
     const totalMeasures = findTotalMeasures(this.options.measureTimeline);
@@ -714,6 +772,28 @@ export class PlayerTui {
       this.highSpeedTransitionStartMs = 0;
     }
     return this.displayedHighSpeed;
+  }
+
+  private resolveFps(nowMs: number): number | undefined {
+    if (this.lastFrameRenderedAtMs <= 0) {
+      this.lastFrameRenderedAtMs = nowMs;
+      return undefined;
+    }
+
+    const elapsedMs = nowMs - this.lastFrameRenderedAtMs;
+    this.lastFrameRenderedAtMs = nowMs;
+    if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
+      return Number.isFinite(this.smoothedFps) ? this.smoothedFps : undefined;
+    }
+
+    const instantFps = 1000 / elapsedMs;
+    if (!Number.isFinite(this.smoothedFps)) {
+      this.smoothedFps = instantFps;
+      return this.smoothedFps;
+    }
+
+    this.smoothedFps += (instantFps - this.smoothedFps) * FPS_SMOOTHING_FACTOR;
+    return this.smoothedFps;
   }
 
   private resolveRenderLaneChannel(channel: string): string {
@@ -2147,4 +2227,11 @@ function formatAudioBackendLabel(value: string | undefined): string {
   }
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : '-';
+}
+
+function formatFps(fps: number | undefined): string {
+  if (typeof fps !== 'number' || !Number.isFinite(fps) || fps <= 0) {
+    return '-';
+  }
+  return fps >= 100 ? fps.toFixed(0) : fps.toFixed(1);
 }
