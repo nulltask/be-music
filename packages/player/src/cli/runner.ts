@@ -185,6 +185,8 @@ interface ResultScreenOptions {
 }
 
 type ResultScreenExitAction = Exclude<ResultScreenAction, 'replay'>;
+const SONG_SELECT_PREVIEW_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
+const SONG_SELECT_PREVIEW_SPINNER_INTERVAL_MS = 80;
 
 export async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
@@ -1130,6 +1132,9 @@ async function selectChartInteractively(
   }
 
   const previewController = options.audio && process.stdout.isTTY ? createChartPreviewController() : undefined;
+  let previewSpinnerFrame = 0;
+  let previewSpinnerTimer: NodeJS.Timeout | undefined;
+  let wasSpinnerVisible = false;
 
   const inputCapture = beginRawInputCapture();
   let selectedIndex = selectableIndexes[0];
@@ -1191,7 +1196,18 @@ async function selectChartInteractively(
       const chartNumber = chartIndexByEntryIndex.get(index);
       const number =
         typeof chartNumber === 'number' ? String(chartNumber + 1).padStart(numberWidth, ' ') : ' '.repeat(numberWidth);
-      const label = truncateForDisplay(formatSelectionEntryLabel(entry, columnLayout), itemLabelWidth);
+      let displayEntry = entry;
+      if (
+        index === selectedIndex &&
+        entry.kind === 'chart' &&
+        previewController?.getRenderingFilePath() === entry.filePath
+      ) {
+        displayEntry = {
+          ...entry,
+          fileLabel: `${SONG_SELECT_PREVIEW_SPINNER_FRAMES[previewSpinnerFrame]} ${entry.fileLabel}`,
+        };
+      }
+      const label = truncateForDisplay(formatSelectionEntryLabel(displayEntry, columnLayout), itemLabelWidth);
       const line = `${marker} ${number} ${label}`;
       if (index === selectedIndex) {
         lines.push(`\u001b[7m${line.padEnd(lineWidth, ' ')}\u001b[0m`);
@@ -1212,12 +1228,41 @@ async function selectChartInteractively(
 
   return new Promise<SelectChartInteractivelyResult>((resolvePromise) => {
     let finished = false;
+    const isSelectedEntryPreviewRendering = (): boolean => {
+      const selectedEntry = entries[selectedIndex];
+      if (!previewController || selectedEntry?.kind !== 'chart') {
+        return false;
+      }
+      return previewController.getRenderingFilePath() === selectedEntry.filePath;
+    };
+    const ensurePreviewSpinnerTimer = (): void => {
+      if (!previewController || previewSpinnerTimer) {
+        return;
+      }
+      previewSpinnerTimer = setInterval(() => {
+        if (!isSelectedEntryPreviewRendering()) {
+          if (wasSpinnerVisible) {
+            wasSpinnerVisible = false;
+            previewSpinnerFrame = 0;
+            render();
+          }
+          return;
+        }
+        wasSpinnerVisible = true;
+        previewSpinnerFrame = (previewSpinnerFrame + 1) % SONG_SELECT_PREVIEW_SPINNER_FRAMES.length;
+        render();
+      }, SONG_SELECT_PREVIEW_SPINNER_INTERVAL_MS);
+    };
 
     const cleanup = (result: SelectChartInteractivelyResult): void => {
       if (finished) {
         return;
       }
       finished = true;
+      if (previewSpinnerTimer) {
+        clearInterval(previewSpinnerTimer);
+        previewSpinnerTimer = undefined;
+      }
       inputCapture.stdin.removeListener('keypress', onKeyPress);
       inputCapture.restore();
       process.stdout.write('\u001b[?25h\u001b[2J\u001b[H');
@@ -1336,6 +1381,7 @@ async function selectChartInteractively(
     };
 
     inputCapture.stdin.on('keypress', onKeyPress);
+    ensurePreviewSpinnerTimer();
     syncPreview();
     render();
   });

@@ -1,9 +1,10 @@
+import { createHash } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { floatToInt16 } from '@be-music/utils';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
-import { collectSampleTriggers, type RenderResult, renderJson } from '@be-music/audio-renderer';
+import { collectSampleTriggers, createTimingResolver, type RenderResult, renderJson } from '@be-music/audio-renderer';
 import { createNodeAudioSink } from '../audio-sink.ts';
 import { resolveChartVolWavGain } from '../player-utils.ts';
 
@@ -23,6 +24,11 @@ interface RenderedPreviewSample {
   rendered: RenderResult;
 }
 
+interface FallbackPreviewIdentity {
+  continueKey: string;
+  startSeconds: number;
+}
+
 export interface PreviewFocusTarget {
   filePath?: string;
   previewContinueKey?: string;
@@ -31,6 +37,7 @@ export interface PreviewFocusTarget {
 export interface ChartPreviewController {
   focus: (target: PreviewFocusTarget) => void;
   getActiveBackend: () => string | undefined;
+  getRenderingFilePath: () => string | undefined;
   dispose: () => Promise<void>;
 }
 
@@ -47,6 +54,7 @@ export function createChartPreviewController(): ChartPreviewController {
   let sequence = 0;
   let disposed = false;
   let activeRenderAbortController: AbortController | undefined;
+  let activeRenderFilePath: string | undefined;
   let activePlayback: PreviewPlaybackHandle | undefined;
   let activePreviewKey: string | undefined;
   let activeBackend: string | undefined;
@@ -76,6 +84,7 @@ export function createChartPreviewController(): ChartPreviewController {
       }
       activeRenderAbortController?.abort();
       activeRenderAbortController = undefined;
+      activeRenderFilePath = undefined;
       focusedFilePath = filePath;
       focusedPreviewContinueKey = expectedPreviewKey;
       sequence += 1;
@@ -100,6 +109,7 @@ export function createChartPreviewController(): ChartPreviewController {
         if (preview === undefined) {
           const renderAbortController = new AbortController();
           activeRenderAbortController = renderAbortController;
+          activeRenderFilePath = filePath;
           try {
             preview = (await renderChartPreview(filePath, renderAbortController.signal)) ?? null;
           } catch (error) {
@@ -110,6 +120,7 @@ export function createChartPreviewController(): ChartPreviewController {
           } finally {
             if (activeRenderAbortController === renderAbortController) {
               activeRenderAbortController = undefined;
+              activeRenderFilePath = undefined;
             }
           }
           if (disposed || currentSequence !== sequence) {
@@ -162,6 +173,7 @@ export function createChartPreviewController(): ChartPreviewController {
       })();
     },
     getActiveBackend: (): string | undefined => activeBackend,
+    getRenderingFilePath: (): string | undefined => activeRenderFilePath,
     dispose: async (): Promise<void> => {
       if (disposed) {
         return;
@@ -170,6 +182,7 @@ export function createChartPreviewController(): ChartPreviewController {
       sequence += 1;
       activeRenderAbortController?.abort();
       activeRenderAbortController = undefined;
+      activeRenderFilePath = undefined;
       focusedFilePath = undefined;
       focusedPreviewContinueKey = undefined;
       previewCache.clear();
@@ -184,7 +197,7 @@ export async function resolvePreviewContinueKeyFromChart(
 ): Promise<string | undefined> {
   const previewPath = chart.bms.preview;
   if (typeof previewPath !== 'string' || previewPath.trim().length === 0) {
-    return createChartFallbackContinueKey(chartPath);
+    return resolveFallbackPreviewIdentity(chart)?.continueKey;
   }
   const candidates = createPreviewPathCandidates(chart, previewPath);
   const baseDir = dirname(chartPath);
@@ -196,9 +209,9 @@ export async function resolvePreviewContinueKeyFromChart(
   }
   const firstCandidate = candidates[0];
   if (!firstCandidate) {
-    return createChartFallbackContinueKey(chartPath);
+    return resolveFallbackPreviewIdentity(chart)?.continueKey;
   }
-  return createChartFallbackContinueKey(chartPath);
+  return resolveFallbackPreviewIdentity(chart)?.continueKey;
 }
 
 export function formatSongSelectAudioBackendLabel(audioEnabled: boolean, active: string | undefined): string {
@@ -300,25 +313,20 @@ async function renderFallbackChartPreview(
   gain: number,
   signal?: AbortSignal,
 ): Promise<RenderedPreviewSample | undefined> {
-  const triggers = collectSampleTriggers(chart);
-  if (triggers.length === 0) {
+  const fallbackIdentity = resolveFallbackPreviewIdentity(chart);
+  if (!fallbackIdentity) {
     return undefined;
   }
-  const firstTriggerSeconds = triggers.reduce(
-    (minimum, trigger) => Math.min(minimum, trigger.seconds),
-    Number.POSITIVE_INFINITY,
-  );
-  const startSeconds = Number.isFinite(firstTriggerSeconds) ? Math.max(0, firstTriggerSeconds) : 0;
   const rendered = await renderJson(chart, {
     baseDir: dirname(chartPath),
     tailSeconds: 0,
-    startSeconds,
+    startSeconds: fallbackIdentity.startSeconds,
     gain,
     fallbackToneSeconds: 0.05,
     signal,
   });
   return {
-    continueKey: createChartFallbackContinueKey(chartPath),
+    continueKey: fallbackIdentity.continueKey,
     rendered,
   };
 }
@@ -334,8 +342,54 @@ function normalizePreviewContinueKey(value: string): string {
   return value.replaceAll('\\', '/');
 }
 
-function createChartFallbackContinueKey(chartPath: string): string {
-  return `chart:${normalizePreviewContinueKey(chartPath)}`;
+function resolveFallbackPreviewIdentity(chart: BeMusicJson): FallbackPreviewIdentity | undefined {
+  const resolver = createTimingResolver(chart);
+  const triggers = collectSampleTriggers(chart, resolver);
+  if (triggers.length === 0) {
+    return undefined;
+  }
+
+  const firstTriggerSeconds = Math.max(
+    0,
+    triggers.reduce((minimum, trigger) => Math.min(minimum, trigger.seconds), Number.POSITIVE_INFINITY),
+  );
+  if (!Number.isFinite(firstTriggerSeconds)) {
+    return undefined;
+  }
+  const hash = createHash('sha1');
+  hash.update('fallback-preview-signature-v3\n');
+  hash.update(`source:${chart.sourceFormat}\n`);
+  hash.update(`baseBpm:${encodeSignatureNumber(chart.metadata.bpm)}\n`);
+
+  for (const point of resolver.tempoPoints) {
+    hash.update(
+      `tempo:${encodeSignatureNumber(point.beat)}:${encodeSignatureNumber(point.bpm)}:${encodeSignatureNumber(point.seconds)}\n`,
+    );
+  }
+  for (const point of resolver.stopPoints) {
+    hash.update(`stop:${encodeSignatureNumber(point.beat)}:${encodeSignatureNumber(point.seconds)}\n`);
+  }
+  const normalizedTriggers = triggers
+    .map(
+      (trigger) =>
+        `trigger:${encodeSignatureNumber(trigger.seconds)}:${encodeSignatureNumber(trigger.beat)}:${trigger.sampleKey}:${normalizePreviewContinueKey(trigger.samplePath ?? '')}:${encodeSignatureNumber(trigger.sampleOffsetSeconds)}:${encodeSignatureNumber(trigger.sampleDurationSeconds)}:${trigger.sampleSliceId ?? ''}\n`,
+    )
+    .sort();
+  for (const normalizedTrigger of normalizedTriggers) {
+    hash.update(normalizedTrigger);
+  }
+
+  return {
+    continueKey: `fallback:${hash.digest('hex').slice(0, 24)}`,
+    startSeconds: firstTriggerSeconds,
+  };
+}
+
+function encodeSignatureNumber(value: number | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '-';
+  }
+  return `${Math.round(value * 1_000_000)}`;
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
