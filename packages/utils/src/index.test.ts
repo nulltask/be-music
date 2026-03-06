@@ -18,6 +18,8 @@ describe('utils', () => {
 
 test('resolveCliPath: resolves to an absolute path from the specified cwd', () => {
   expect(resolveCliPath('chart/test.bms', '/tmp')).toBe(resolve('/tmp', 'chart/test.bms'));
+  expect(resolveCliPath('./chart/test.bms', '/tmp')).toBe(resolve('/tmp', './chart/test.bms'));
+  expect(resolveCliPath('./', '/tmp')).toBe(resolve('/tmp', './'));
 });
 
 test('clamp/clampSignedUnit: clamps values to configured ranges', () => {
