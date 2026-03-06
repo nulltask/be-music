@@ -2,7 +2,7 @@
 import { stat } from 'node:fs/promises';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveCliPath } from '@be-music/utils';
+import { isAbortError, resolveCliPath } from '@be-music/utils';
 import readline from 'node:readline';
 import { parseChartFile } from '@be-music/parser';
 import { renderJson, writeAudioFile } from '@be-music/audio-renderer';
@@ -1107,10 +1107,6 @@ function beginLoadingAbortCapture(): LoadingAbortCapture | undefined {
       inputCapture.restore();
     },
   };
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
 }
 
 function resolveLoadingCancelReason(

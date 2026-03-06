@@ -93,9 +93,31 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       utilsApi.createAbortError();
     },
   });
+  define('utils.isAbortError', {
+    run: () => {
+      utilsApi.isAbortError(new Error('x'));
+    },
+  });
   define('utils.throwIfAborted', {
     run: () => {
       utilsApi.throwIfAborted(undefined);
+    },
+  });
+  define('utils.resolveFirstExistingPath', {
+    run: async (fixtures) => {
+      await utilsApi.resolveFirstExistingPath(fixtures.tmpDir, ['missing.wav', 'missing.ogg']);
+    },
+  });
+  define('utils.writeStereoPcm16Le', {
+    run: (fixtures) => {
+      const buffer = Buffer.allocUnsafe(16);
+      utilsApi.writeStereoPcm16Le(buffer, 0, fixtures.sampleRenderResult.left, fixtures.sampleRenderResult.right, 0, 4);
+    },
+  });
+  define('utils.writeStereoPcm16Be', {
+    run: (fixtures) => {
+      const buffer = Buffer.allocUnsafe(16);
+      utilsApi.writeStereoPcm16Be(buffer, 0, fixtures.sampleRenderResult.left, fixtures.sampleRenderResult.right, 0, 4);
     },
   });
 }

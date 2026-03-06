@@ -30,6 +30,17 @@ export async function invokeWorkerizedFunction<TArgs extends unknown[], TResult>
   options: InvokeWorkerizedFunctionOptions = {},
 ): Promise<TResult> {
   throwIfAborted(options.signal);
+  if (!options.signal && !options.onAbort) {
+    return new Promise<TResult>((resolve, reject) => {
+      worker(...args, (error, result) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(result);
+      });
+    });
+  }
   return new Promise<TResult>((resolve, reject) => {
     let settled = false;
     const onAbort = (): void => {

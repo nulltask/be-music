@@ -1,5 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
-import { throwIfAborted } from '@be-music/utils';
+import { isAbortError, throwIfAborted } from '@be-music/utils';
 
 export type AudioRuntime = 'node' | 'browser';
 export type AudioEngine = 'webaudio';
@@ -209,7 +209,7 @@ async function loadNodeWebAudioContextConstructor(
     }
     return candidate as NodeWebAudioContextConstructor;
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (isAbortError(error)) {
       throw error;
     }
     return undefined;

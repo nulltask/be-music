@@ -1,6 +1,6 @@
-import { access, readFile } from 'node:fs/promises';
-import { extname, isAbsolute, resolve } from 'node:path';
-import { invokeWorkerizedFunction, throwIfAborted, workerize } from '@be-music/utils';
+import { readFile } from 'node:fs/promises';
+import { extname } from 'node:path';
+import { invokeWorkerizedFunction, isAbortError, resolveFirstExistingPath, throwIfAborted, workerize } from '@be-music/utils';
 import { normalizeChannel, normalizeObjectKey, sortEvents, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { decode as decodeBmpFast } from 'fast-bmp';
@@ -968,15 +968,7 @@ async function loadVideoAsFrameSource(
 }
 
 async function resolveMediaPath(baseDir: string, mediaPath: string, signal?: AbortSignal): Promise<string | undefined> {
-  const candidates = createMediaPathCandidates(mediaPath);
-  for (const candidate of candidates) {
-    throwIfAborted(signal);
-    const absolute = isAbsolute(candidate) ? candidate : resolve(baseDir, candidate);
-    if (await exists(absolute, signal)) {
-      return absolute;
-    }
-  }
-  return undefined;
+  return resolveFirstExistingPath(baseDir, createMediaPathCandidates(mediaPath), signal);
 }
 
 function createMediaPathCandidates(mediaPath: string): string[] {
@@ -1033,24 +1025,6 @@ function createMediaPathCandidates(mediaPath: string): string[] {
   }
 
   return candidates;
-}
-
-async function exists(path: string, signal?: AbortSignal): Promise<boolean> {
-  try {
-    throwIfAborted(signal);
-    await access(path);
-    throwIfAborted(signal);
-    return true;
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw error;
-    }
-    return false;
-  }
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
 }
 
 function decodeImageBuffer(buffer: Buffer, pathHint: string): DecodedImage {

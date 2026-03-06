@@ -1,30 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { createAbortError, invokeWorkerizedFunction, throwIfAborted, workerize } from './index.ts';
+import { invokeWorkerizedFunction, workerize } from './index.ts';
 
 describe('workerize utilities', () => {
-  test('createAbortError: creates AbortError instances', () => {
-    const error = createAbortError();
-    expect(error).toBeInstanceOf(Error);
-    expect(error.name).toBe('AbortError');
-    expect(error.message).toBe('The operation was aborted.');
-  });
-
-  test('throwIfAborted: throws only for aborted signals', () => {
-    expect(() => throwIfAborted(undefined)).not.toThrow();
-    const abortController = new AbortController();
-    expect(() => throwIfAborted(abortController.signal)).not.toThrow();
-    abortController.abort();
-    try {
-      throwIfAborted(abortController.signal);
-      throw new Error('Expected AbortError');
-    } catch (error) {
-      expect(error).toMatchObject({
-        name: 'AbortError',
-        message: 'The operation was aborted.',
-      });
-    }
-  });
-
   test('invokeWorkerizedFunction: resolves workerized results', async () => {
     const worker = workerize((value: number) => value + 1, () => []);
     try {

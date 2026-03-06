@@ -1,5 +1,5 @@
 import { extname } from 'node:path';
-import { floatToInt16 } from '@be-music/utils';
+import { writeStereoPcm16Be, writeStereoPcm16Le } from '@be-music/utils';
 
 export type AudioFileFormat = 'wav' | 'aiff';
 
@@ -20,7 +20,7 @@ export function detectAudioFormat(path: string): AudioFileFormat {
 export function encodeWav16(result: StereoRenderResult): Buffer {
   const frameCount = Math.min(result.left.length, result.right.length);
   const dataSize = frameCount * 4;
-  const buffer = Buffer.alloc(44 + dataSize);
+  const buffer = Buffer.allocUnsafe(44 + dataSize);
 
   buffer.write('RIFF', 0, 4, 'ascii');
   buffer.writeUInt32LE(36 + dataSize, 4);
@@ -36,12 +36,7 @@ export function encodeWav16(result: StereoRenderResult): Buffer {
   buffer.write('data', 36, 4, 'ascii');
   buffer.writeUInt32LE(dataSize, 40);
 
-  let pointer = 44;
-  for (let index = 0; index < frameCount; index += 1) {
-    buffer.writeInt16LE(floatToInt16(result.left[index]), pointer);
-    buffer.writeInt16LE(floatToInt16(result.right[index]), pointer + 2);
-    pointer += 4;
-  }
+  writeStereoPcm16Le(buffer, 44, result.left, result.right, 0, frameCount);
 
   return buffer;
 }
@@ -52,7 +47,7 @@ export function encodeAiff16(result: StereoRenderResult): Buffer {
   const ssndSize = 8 + dataSize;
   const formSize = 4 + (8 + 18) + (8 + ssndSize);
 
-  const buffer = Buffer.alloc(8 + formSize);
+  const buffer = Buffer.allocUnsafe(8 + formSize);
   let pointer = 0;
 
   buffer.write('FORM', pointer, 4, 'ascii');
@@ -84,11 +79,7 @@ export function encodeAiff16(result: StereoRenderResult): Buffer {
   buffer.writeUInt32BE(0, pointer);
   pointer += 4;
 
-  for (let index = 0; index < frameCount; index += 1) {
-    buffer.writeInt16BE(floatToInt16(result.left[index]), pointer);
-    buffer.writeInt16BE(floatToInt16(result.right[index]), pointer + 2);
-    pointer += 4;
-  }
+  writeStereoPcm16Be(buffer, pointer, result.left, result.right, 0, frameCount);
 
   return buffer;
 }

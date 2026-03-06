@@ -51,6 +51,21 @@ export function applyHighSpeedControlAction(current: number, action: HighSpeedCo
 }
 
 function resolvePlayableLaneIndex(channel: string): number | undefined {
+  if (channel.length === 2) {
+    const sideCode = channel.charCodeAt(0);
+    if (sideCode === 0x31 || sideCode === 0x32) {
+      const laneCode = channel.charCodeAt(1);
+      if (laneCode >= 0x31 && laneCode <= 0x39) {
+        return laneCode - 0x30;
+      }
+      const uppercaseLaneCode = laneCode & 0xdf;
+      if (uppercaseLaneCode >= 0x41 && uppercaseLaneCode <= 0x5a) {
+        return uppercaseLaneCode - 0x41 + 10;
+      }
+      return undefined;
+    }
+  }
+
   const normalized = channel.trim().toUpperCase();
   if (normalized.length !== 2) {
     return undefined;

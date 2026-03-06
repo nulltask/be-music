@@ -122,6 +122,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -139,7 +140,7 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Run head benchmark
-        run: pnpm run bench --output tmp/bench/head.json --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+        run: BENCH_GIT_SHA="${{ github.event.pull_request.head.sha }}" pnpm run bench --output tmp/bench/head.json --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
 
       - name: Run base benchmark
         id: base-benchmark
@@ -165,7 +166,7 @@ jobs:
           if (
             cd "$BASE_DIR"
             pnpm install --frozen-lockfile --prefer-offline
-            pnpm run bench --output tmp/bench/base.json --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+            BENCH_GIT_SHA="$BASE_SHA" pnpm run bench --output tmp/bench/base.json --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
           ); then
             mkdir -p tmp/bench
             cp "$BASE_DIR/tmp/bench/base.json" tmp/bench/base.json

@@ -323,6 +323,13 @@ function parseStructuredChartObject(parsed: Record<string, unknown>): BeMusicJso
 }
 
 export function parseChart(input: string, formatHint?: string): BeMusicJson {
+  if (formatHint === undefined) {
+    const firstCode = input.charCodeAt(0);
+    if (firstCode === 0x23) {
+      return parseBms(input);
+    }
+  }
+
   const hint = formatHint?.toLowerCase();
   if (hint === 'bmson') {
     return parseBmson(input);
@@ -332,9 +339,16 @@ export function parseChart(input: string, formatHint?: string): BeMusicJson {
     return parseStructuredChartObject(parsed);
   }
 
-  const trimmed = input.trimStart();
-  if (trimmed.startsWith('{')) {
-    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+  let startIndex = 0;
+  while (startIndex < input.length) {
+    const code = input.charCodeAt(startIndex);
+    if (code !== 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d) {
+      break;
+    }
+    startIndex += 1;
+  }
+  if (input.charCodeAt(startIndex) === 0x7b) {
+    const parsed = JSON.parse(input.slice(startIndex)) as Record<string, unknown>;
     return parseStructuredChartObject(parsed);
   }
 

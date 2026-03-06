@@ -1,23 +1,12 @@
-import { access } from 'node:fs/promises';
-import { extname, isAbsolute, resolve } from 'node:path';
-import { throwIfAborted } from '@be-music/utils';
+import { extname } from 'node:path';
+import { resolveFirstExistingPath } from '@be-music/utils';
 
 export async function resolveSamplePath(
   baseDir: string,
   samplePath: string,
   signal?: AbortSignal,
 ): Promise<string | undefined> {
-  const candidates = createSamplePathCandidates(samplePath);
-
-  for (const candidate of candidates) {
-    throwIfAborted(signal);
-    const absolute = isAbsolute(candidate) ? candidate : resolve(baseDir, candidate);
-    if (await exists(absolute, signal)) {
-      return absolute;
-    }
-  }
-
-  return undefined;
+  return resolveFirstExistingPath(baseDir, createSamplePathCandidates(samplePath), signal);
 }
 
 function createSamplePathCandidates(samplePath: string): string[] {
@@ -111,18 +100,4 @@ function appendSampleCandidatesByRule(samplePath: string, push: (candidatePath: 
   push(`${withoutExtension}.OGA`);
   push(`${withoutExtension}.opus`);
   push(`${withoutExtension}.OPUS`);
-}
-
-async function exists(filePath: string, signal?: AbortSignal): Promise<boolean> {
-  try {
-    throwIfAborted(signal);
-    await access(filePath);
-    throwIfAborted(signal);
-    return true;
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw error;
-    }
-    return false;
-  }
 }

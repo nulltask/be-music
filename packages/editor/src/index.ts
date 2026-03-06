@@ -1,9 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import {
+  BMS_JSON_FORMAT,
   DEFAULT_BPM,
+  cloneJson,
   compareEvents,
-  createEmptyJson,
   ensureMeasure,
   normalizeChannel,
   normalizeObjectKey,
@@ -24,7 +25,8 @@ export async function loadJsonFile(filePath: string): Promise<BeMusicJson> {
 }
 
 export async function saveJsonFile(filePath: string, json: BeMusicJson): Promise<void> {
-  await writeFile(resolve(filePath), `${JSON.stringify(normalizeJson(json), null, 2)}\n`, 'utf8');
+  const normalized = canSerializeJsonAsIs(json) ? json : normalizeJson(json);
+  await writeFile(resolve(filePath), `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
 }
 
 export async function exportChart(filePath: string, json: BeMusicJson): Promise<void> {
@@ -149,11 +151,50 @@ export function listNotes(json: BeMusicJson, measure?: number): BeMusicEvent[] {
 }
 
 export function createBlankJson(): BeMusicJson {
-  return createEmptyJson('json');
+  return {
+    format: BMS_JSON_FORMAT,
+    sourceFormat: 'json',
+    metadata: {
+      bpm: DEFAULT_BPM,
+      extras: {},
+    },
+    resources: {
+      wav: {},
+      bmp: {},
+      bpm: {},
+      stop: {},
+      text: {},
+    },
+    measures: [],
+    events: [],
+    bms: {
+      controlFlow: [],
+      lnObjs: [],
+      exRank: {},
+      argb: {},
+      stp: [],
+      changeOption: {},
+      exWav: {},
+      exBmp: {},
+      bga: {},
+      scroll: {},
+      swBga: {},
+    },
+    bmson: {
+      lines: [],
+      info: {},
+      bga: {
+        header: [],
+        events: [],
+        layerEvents: [],
+        poorEvents: [],
+      },
+    },
+  };
 }
 
 function normalizeJson(json: BeMusicJson): BeMusicJson {
-  const cloned = structuredClone(json);
+  const cloned = canCloneJsonFast(json) ? cloneJson(json) : structuredClone(json);
   if (!cloned.metadata) {
     cloned.metadata = {
       bpm: DEFAULT_BPM,
@@ -175,11 +216,95 @@ function normalizeJson(json: BeMusicJson): BeMusicJson {
   cloned.resources.bpm = cloned.resources.bpm ?? {};
   cloned.resources.stop = cloned.resources.stop ?? {};
   cloned.resources.text = cloned.resources.text ?? {};
-  cloned.measures = (cloned.measures ?? []).filter(
-    (measure) => Number.isFinite(measure.index) && Number.isFinite(measure.length),
-  );
-  cloned.events = sortEvents(cloned.events ?? []);
+  if (!hasOnlyFiniteMeasures(cloned.measures)) {
+    cloned.measures = (cloned.measures ?? []).filter(
+      (measure) => Number.isFinite(measure.index) && Number.isFinite(measure.length),
+    );
+  }
+  if (!areEventsSorted(cloned.events)) {
+    cloned.events = sortEvents(cloned.events ?? []);
+  }
   return cloned;
+}
+
+function canSerializeJsonAsIs(json: BeMusicJson): boolean {
+  return (
+    json.format === BMS_JSON_FORMAT &&
+    json.metadata !== undefined &&
+    Number.isFinite(json.metadata.bpm) &&
+    json.metadata.bpm > 0 &&
+    json.metadata.extras !== undefined &&
+    json.resources !== undefined &&
+    json.resources.wav !== undefined &&
+    json.resources.bmp !== undefined &&
+    json.resources.bpm !== undefined &&
+    json.resources.stop !== undefined &&
+    json.resources.text !== undefined &&
+    Array.isArray(json.measures) &&
+    hasOnlyFiniteMeasures(json.measures) &&
+    Array.isArray(json.events) &&
+    areEventsSorted(json.events)
+  );
+}
+
+function canCloneJsonFast(json: BeMusicJson): boolean {
+  return (
+    json.metadata !== undefined &&
+    json.metadata.extras !== undefined &&
+    json.resources !== undefined &&
+    json.resources.wav !== undefined &&
+    json.resources.bmp !== undefined &&
+    json.resources.bpm !== undefined &&
+    json.resources.stop !== undefined &&
+    json.resources.text !== undefined &&
+    Array.isArray(json.measures) &&
+    Array.isArray(json.events) &&
+    json.bms !== undefined &&
+    Array.isArray(json.bms.controlFlow) &&
+    (json.bms.lnObjs === undefined || Array.isArray(json.bms.lnObjs)) &&
+    json.bms.exRank !== undefined &&
+    json.bms.argb !== undefined &&
+    Array.isArray(json.bms.stp) &&
+    json.bms.changeOption !== undefined &&
+    json.bms.exWav !== undefined &&
+    json.bms.exBmp !== undefined &&
+    json.bms.bga !== undefined &&
+    json.bms.scroll !== undefined &&
+    json.bms.swBga !== undefined &&
+    json.bmson !== undefined &&
+    Array.isArray(json.bmson.lines) &&
+    json.bmson.info !== undefined &&
+    json.bmson.bga !== undefined &&
+    Array.isArray(json.bmson.bga.header) &&
+    Array.isArray(json.bmson.bga.events) &&
+    Array.isArray(json.bmson.bga.layerEvents) &&
+    Array.isArray(json.bmson.bga.poorEvents)
+  );
+}
+
+function hasOnlyFiniteMeasures(measures: BeMusicJson['measures'] | undefined): boolean {
+  if (!Array.isArray(measures)) {
+    return false;
+  }
+  for (let index = 0; index < measures.length; index += 1) {
+    const measure = measures[index]!;
+    if (!Number.isFinite(measure.index) || !Number.isFinite(measure.length)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areEventsSorted(events: BeMusicJson['events'] | undefined): boolean {
+  if (!Array.isArray(events)) {
+    return false;
+  }
+  for (let index = 1; index < events.length; index += 1) {
+    if (compareEvents(events[index - 1]!, events[index]!) > 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function normalizePositionFraction(numerator: number, denominator: number): { numerator: number; denominator: number } {
