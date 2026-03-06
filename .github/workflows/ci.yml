@@ -190,41 +190,17 @@ jobs:
         with:
           script: |
             const fs = require('node:fs');
-            const marker = '<!-- be-music-exports-benchmark -->';
-            const body = fs.readFileSync('tmp/bench/pr-benchmark.md', 'utf8').trim();
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const body = `${fs.readFileSync('tmp/bench/pr-benchmark.md', 'utf8').trim()}\n\n- Workflow run: [#${process.env.GITHUB_RUN_NUMBER}](${runUrl})`;
             const issue_number = context.issue.number;
             const { owner, repo } = context.repo;
 
-            const comments = await github.paginate(github.rest.issues.listComments, {
+            await github.rest.issues.createComment({
               owner,
               repo,
               issue_number,
-              per_page: 100,
+              body,
             });
-
-            const existing = comments.find((comment) => {
-              return (
-                comment.user?.type === 'Bot' &&
-                typeof comment.body === 'string' &&
-                comment.body.includes(marker)
-              );
-            });
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number,
-                body,
-              });
-            }
 
   sea:
     name: SEA (${{ matrix.os }})
