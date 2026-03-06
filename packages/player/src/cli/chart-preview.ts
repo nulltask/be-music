@@ -1,6 +1,13 @@
-import { access } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import { floatToInt16, invokeWorkerizedFunction, throwIfAborted, workerize } from '@be-music/utils';
+import { setTimeout as delay } from 'node:timers/promises';
+import {
+  invokeWorkerizedFunction,
+  isAbortError,
+  resolveFirstExistingPath,
+  throwIfAborted,
+  workerize,
+  writeStereoPcm16Le,
+} from '@be-music/utils';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { collectSampleTriggers, createTimingResolver, type RenderResult, renderJson } from '@be-music/audio-renderer';
@@ -84,7 +91,7 @@ export function createChartPreviewController(): ChartPreviewController {
 
   const stopPlaybackSafely = async (playback: PreviewPlaybackHandle): Promise<void> => {
     playback.stop();
-    await Promise.race([playback.done.catch(() => undefined), createTimeoutPromise(PREVIEW_STOP_TIMEOUT_MS)]);
+    await Promise.race([playback.done.catch(() => undefined), delay(PREVIEW_STOP_TIMEOUT_MS)]);
   };
 
   const stopActivePlayback = async (): Promise<void> => {
@@ -225,17 +232,13 @@ export async function resolvePreviewContinueKeyFromChart(
     return (await resolveFallbackPreviewIdentity(chart, signal))?.continueKey;
   }
   const candidates = createPreviewPathCandidates(chart, previewPath);
-  const baseDir = dirname(chartPath);
-  for (const candidate of candidates) {
-    throwIfAborted(signal);
-    const resolvedCandidate = resolvePreviewCandidatePath(baseDir, candidate);
-    if (await doesFileExist(resolvedCandidate)) {
-      return normalizePreviewContinueKey(resolvedCandidate);
-    }
-  }
-  const firstCandidate = candidates[0];
-  if (!firstCandidate) {
+  if (candidates.length === 0) {
     return (await resolveFallbackPreviewIdentity(chart, signal))?.continueKey;
+  }
+  const baseDir = dirname(chartPath);
+  const resolvedCandidate = await resolveFirstExistingPath(baseDir, candidates, signal);
+  if (resolvedCandidate) {
+    return normalizePreviewContinueKey(resolvedCandidate);
   }
   return (await resolveFallbackPreviewIdentity(chart, signal))?.continueKey;
 }
@@ -274,15 +277,6 @@ async function renderChartPreview(filePath: string, signal?: AbortSignal): Promi
     continueKey: fallbackPreview.continueKey,
     rendered: trimPreviewLeadingSilence(fallbackPreview.rendered),
   };
-}
-
-async function doesFileExist(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function renderPreviewSampleFile(
@@ -492,10 +486,6 @@ function computeFallbackContinueKey(payload: FallbackSignaturePayload): string {
   return `fallback:${`${primary}${secondary}`.slice(0, 24)}`;
 }
 
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
-}
-
 function createPreviewPathCandidates(chart: BeMusicJson, previewPath: string): string[] {
   const normalizedPreview = previewPath.trim();
   if (normalizedPreview.length === 0) {
@@ -618,15 +608,9 @@ async function waitPreviewWritableWithTimeout(
     .waitWritable(shouldStop)
     .then(() => true)
     .catch(() => false);
-  const timeoutTask = createTimeoutPromise(PREVIEW_BACKPRESSURE_TIMEOUT_MS).then(() => false);
+  const timeoutTask = delay(PREVIEW_BACKPRESSURE_TIMEOUT_MS).then(() => false);
   const writable = await Promise.race([waitWritableTask, timeoutTask]);
   return writable && !shouldStop();
-}
-
-function createTimeoutPromise(ms: number): Promise<void> {
-  return new Promise<void>((resolvePromise) => {
-    setTimeout(resolvePromise, ms);
-  });
 }
 
 function writeLoopedPreviewPcmChunk(chunk: Buffer, rendered: RenderResult, startFrame: number): number {
@@ -635,14 +619,16 @@ function writeLoopedPreviewPcmChunk(chunk: Buffer, rendered: RenderResult, start
   if (source >= totalFrames) {
     source %= totalFrames;
   }
-  for (let frame = 0; frame < PREVIEW_CHUNK_FRAMES; frame += 1) {
-    const offset = frame * 4;
-    chunk.writeInt16LE(floatToInt16(rendered.left[source]), offset);
-    chunk.writeInt16LE(floatToInt16(rendered.right[source]), offset + 2);
-    source += 1;
-    if (source >= totalFrames) {
-      source = 0;
-    }
+  const firstChunkFrames = Math.min(PREVIEW_CHUNK_FRAMES, totalFrames - source);
+  writeStereoPcm16Le(chunk, 0, rendered.left, rendered.right, source, firstChunkFrames);
+  source += firstChunkFrames;
+  if (source >= totalFrames) {
+    source = 0;
+  }
+  const remainingFrames = PREVIEW_CHUNK_FRAMES - firstChunkFrames;
+  if (remainingFrames > 0) {
+    writeStereoPcm16Le(chunk, firstChunkFrames * 4, rendered.left, rendered.right, 0, remainingFrames);
+    source = remainingFrames % totalFrames;
   }
   return source;
 }

@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
-import { invokeWorkerizedFunction, throwIfAborted, workerize } from '@be-music/utils';
+import { invokeWorkerizedFunction, isAbortError, throwIfAborted, workerize } from '@be-music/utils';
 import { type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { createTimingResolver } from '@be-music/audio-renderer';
@@ -72,12 +72,9 @@ export async function listChartFiles(rootDir: string, options: ListChartFilesOpt
   const files: string[] = [];
   const queue: string[] = [rootDir];
 
-  while (queue.length > 0) {
+  for (let index = 0; index < queue.length; index += 1) {
     throwIfAborted(options.signal);
-    const current = queue.shift();
-    if (!current) {
-      continue;
-    }
+    const current = queue[index]!;
 
     const entries = await readdir(current, { withFileTypes: true });
     for (const entry of entries) {
@@ -303,10 +300,6 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     bpmMin,
     bpmMax,
   };
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
 }
 
 function extractChartBpmSummary(json: BeMusicJson): { initial: number; min: number; max: number } | undefined {

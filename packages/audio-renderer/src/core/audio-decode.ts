@@ -1,6 +1,6 @@
 import { extname } from 'node:path';
 import { OggVorbisDecoder } from '@wasm-audio-decoders/ogg-vorbis';
-import { clampSignedUnit, throwIfAborted } from '@be-music/utils';
+import { clampSignedUnit, isAbortError, throwIfAborted } from '@be-music/utils';
 import { MPEGDecoder } from 'mpg123-decoder';
 import { OggOpusDecoder } from 'ogg-opus-decoder';
 
@@ -372,8 +372,4 @@ async function withSuppressedMpg123Warnings<T>(fn: () => Promise<T>): Promise<T>
     console.error = originalConsoleError;
     process.stderr.write = originalStderrWrite;
   }
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
 }

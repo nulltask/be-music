@@ -16,7 +16,7 @@ import {
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
-import { findLastIndexAtOrBefore, findLastIndexBefore, throwIfAborted } from '@be-music/utils';
+import { findLastIndexAtOrBefore, findLastIndexBefore, isAbortError, throwIfAborted } from '@be-music/utils';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { detectAudioFormat, encodeAiff16, encodeWav16 } from './audio-file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './audio-decode.ts';
@@ -700,10 +700,6 @@ function mixSample(
     destinationLeft[target] += sourceLeft[source] * gain;
     destinationRight[target] += sourceRight[source] * gain;
   }
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
 }
 
 function createBmsonSamplePlaybackMap(

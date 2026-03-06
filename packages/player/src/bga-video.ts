@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { throwIfAborted } from '@be-music/utils';
+import { isAbortError, throwIfAborted } from '@be-music/utils';
 
 const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264', 'mjpeg']);
 // Keep chunks small so ff_decode_multi never allocates too many full-size frames at once.
@@ -452,10 +452,6 @@ function clampToByte(value: number): number {
     return 255;
   }
   return value;
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
 }
 
 async function createLibAvInstance(): Promise<LibAvInstance> {
