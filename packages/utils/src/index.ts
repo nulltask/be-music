@@ -33,24 +33,26 @@ export function floatToInt16(value: number): number {
 }
 
 export function normalizeNonNegativeInt(value: number, fallback = 0): number {
-  if (!Number.isFinite(value)) {
+  if (value >= 0 && value < Number.POSITIVE_INFINITY) {
+    return Math.floor(value);
+  }
+  if (value === Number.NEGATIVE_INFINITY || value !== value || value === Number.POSITIVE_INFINITY) {
     return fallback;
   }
-  const normalized = Math.floor(value);
-  return normalized < 0 ? 0 : normalized;
+  return 0;
 }
 
 export function normalizePositiveInt(value: number, fallback = 1): number {
-  if (!Number.isFinite(value) || value <= 0) {
-    return fallback;
+  if (value > 0 && value < Number.POSITIVE_INFINITY) {
+    const normalized = Math.floor(value);
+    return normalized >= 1 ? normalized : 1;
   }
-  const normalized = Math.floor(value);
-  return normalized < 1 ? 1 : normalized;
+  return fallback;
 }
 
 export function normalizeFractionNumerator(value: number, denominator: number, fallback = 0): number {
   const safeDenominator = normalizePositiveInt(denominator, 1);
-  if (!Number.isFinite(value)) {
+  if (value === Number.POSITIVE_INFINITY || value === Number.NEGATIVE_INFINITY || value !== value) {
     return fallback;
   }
   const normalized = Math.floor(value);
@@ -116,15 +118,19 @@ export function compareFractions(
 }
 
 export function normalizeSortedUniqueNonNegativeIntegers(values: ReadonlyArray<number>): number[] {
-  const normalized: number[] = [];
-  for (const value of values) {
-    if (!Number.isFinite(value)) {
+  const normalized = new Array<number>(values.length);
+  let normalizedLength = 0;
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (value === Number.POSITIVE_INFINITY || value === Number.NEGATIVE_INFINITY || value !== value) {
       continue;
     }
     const floored = Math.floor(value);
-    normalized.push(floored < 0 ? 0 : floored);
+    normalized[normalizedLength] = floored < 0 ? 0 : floored;
+    normalizedLength += 1;
   }
-  if (normalized.length <= 1) {
+  normalized.length = normalizedLength;
+  if (normalizedLength <= 1) {
     return normalized;
   }
 

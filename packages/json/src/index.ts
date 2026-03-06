@@ -1,4 +1,4 @@
-import { compareFractions, normalizeAsciiBase36Code } from '@be-music/utils';
+import { normalizeAsciiBase36Code } from '@be-music/utils';
 
 export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
 
@@ -180,6 +180,11 @@ const BASE36_PAD_1_DIVISOR = 36;
 const BASE36_PAD_2_DIVISOR = BASE36_PAD_1_DIVISOR * BASE36_PAD_1_DIVISOR;
 const BMS_LONG_NOTE_PLAYABLE_1P = ['11', '12', '13', '14', '15', '16', '17', '18', '19'] as const;
 const BMS_LONG_NOTE_PLAYABLE_2P = ['21', '22', '23', '24', '25', '26', '27', '28', '29'] as const;
+const PACKED_CHANNEL_01 = 0x3031;
+const PACKED_CHANNEL_03 = 0x3033;
+const PACKED_CHANNEL_08 = 0x3038;
+const PACKED_CHANNEL_09 = 0x3039;
+const PACKED_CHANNEL_SC = 0x5343;
 
 export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMusicJson {
   return {
@@ -453,34 +458,71 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
 }
 
 export function isTempoChannel(channel: string): boolean {
+  const packed = tryPackNormalizedChannel(channel);
+  if (packed >= 0) {
+    return packed === PACKED_CHANNEL_03 || packed === PACKED_CHANNEL_08;
+  }
   return isTempoNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isStopChannel(channel: string): boolean {
+  const packed = tryPackNormalizedChannel(channel);
+  if (packed >= 0) {
+    return packed === PACKED_CHANNEL_09;
+  }
   return isStopNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isScrollChannel(channel: string): boolean {
+  const packed = tryPackNormalizedChannel(channel);
+  if (packed >= 0) {
+    return packed === PACKED_CHANNEL_SC;
+  }
   return isScrollNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isLandmineChannel(channel: string): boolean {
+  const packed = tryPackNormalizedChannel(channel);
+  if (packed >= 0) {
+    return isPackedLandmineChannel(packed);
+  }
   return isLandmineNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isSampleTriggerChannel(channel: string): boolean {
+  const packed = tryPackNormalizedChannel(channel);
+  if (packed >= 0) {
+    return isPackedSampleTriggerChannel(packed);
+  }
   return isSampleTriggerNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isPlayableChannel(channel: string): boolean {
+  const packed = tryPackNormalizedChannel(channel);
+  if (packed >= 0) {
+    return isPackedPlayableChannel(packed);
+  }
   return isPlayableNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function isBmsLongNoteChannel(channel: string): boolean {
+  const packed = tryPackNormalizedChannel(channel);
+  if (packed >= 0) {
+    return isPackedBmsLongNoteChannel(packed);
+  }
   return isBmsLongNoteNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
 export function mapBmsLongNoteChannelToPlayable(channel: string): string | undefined {
+  const packed = tryPackNormalizedChannel(channel);
+  if (packed >= 0) {
+    if (!isPackedBmsLongNoteChannel(packed)) {
+      return undefined;
+    }
+    const high = ((packed >> 8) & 0xff) - 4;
+    const low = packed & 0xff;
+    return String.fromCharCode(high, low);
+  }
   return mapBmsLongNoteNormalizedChannelToPlayable(resolveNormalizedChannelForPredicate(channel));
 }
 
@@ -880,7 +922,31 @@ function compareEventPosition(left: BeMusicEvent, right: BeMusicEvent): number {
   const leftNumerator = normalizePositionNumerator(left.position[0], leftDenominator);
   const rightDenominator = normalizePositionDenominator(right.position[1]);
   const rightNumerator = normalizePositionNumerator(right.position[0], rightDenominator);
-  return compareFractions(leftNumerator, leftDenominator, rightNumerator, rightDenominator);
+  if (leftDenominator === rightDenominator) {
+    return leftNumerator - rightNumerator;
+  }
+
+  const leftScaled = leftNumerator * rightDenominator;
+  const rightScaled = rightNumerator * leftDenominator;
+  if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
+    if (leftScaled < rightScaled) {
+      return -1;
+    }
+    if (leftScaled > rightScaled) {
+      return 1;
+    }
+    return 0;
+  }
+
+  const leftScaledBigInt = BigInt(leftNumerator) * BigInt(rightDenominator);
+  const rightScaledBigInt = BigInt(rightNumerator) * BigInt(leftDenominator);
+  if (leftScaledBigInt < rightScaledBigInt) {
+    return -1;
+  }
+  if (leftScaledBigInt > rightScaledBigInt) {
+    return 1;
+  }
+  return 0;
 }
 
 function normalizePositionDenominator(value: number): number {
@@ -924,6 +990,54 @@ function resolveNormalizedChannelForPredicate(channel: string): string {
 
 function isNormalizedBase36Code(code: number): boolean {
   return (code >= 0x30 && code <= 0x39) || (code >= 0x41 && code <= 0x5a);
+}
+
+function tryPackNormalizedChannel(channel: string): number {
+  if (channel.length !== 2) {
+    return -1;
+  }
+  const high = normalizeAsciiBase36Code(channel.charCodeAt(0));
+  const low = normalizeAsciiBase36Code(channel.charCodeAt(1));
+  if (high < 0 || low < 0) {
+    return -1;
+  }
+  return (high << 8) | low;
+}
+
+function isPackedLandmineChannel(packed: number): boolean {
+  const high = (packed >> 8) & 0xff;
+  if (high !== 0x44 && high !== 0x45) {
+    return false;
+  }
+  const low = packed & 0xff;
+  return low >= 0x31 && low <= 0x39;
+}
+
+function isPackedSampleTriggerChannel(packed: number): boolean {
+  if (packed === PACKED_CHANNEL_01) {
+    return true;
+  }
+  if (((packed >> 8) & 0xff) === 0x30) {
+    return false;
+  }
+  return packed !== PACKED_CHANNEL_03 && packed !== PACKED_CHANNEL_08 && packed !== PACKED_CHANNEL_09 && packed !== PACKED_CHANNEL_SC;
+}
+
+function isPackedPlayableChannel(packed: number): boolean {
+  if (!isPackedSampleTriggerChannel(packed)) {
+    return false;
+  }
+  const high = (packed >> 8) & 0xff;
+  return high === 0x31 || high === 0x32;
+}
+
+function isPackedBmsLongNoteChannel(packed: number): boolean {
+  const low = packed & 0xff;
+  if (low < 0x31 || low > 0x39) {
+    return false;
+  }
+  const high = (packed >> 8) & 0xff;
+  return high === 0x35 || high === 0x36;
 }
 
 function isTempoNormalizedChannel(normalized: string): boolean {
