@@ -31,6 +31,12 @@ export function decodeBmsText(buffer: Buffer): DecodedBmsText {
       text: decodeUtf16BeText(buffer),
     };
   }
+  if (isAsciiText(buffer)) {
+    return {
+      encoding: 'utf8',
+      text: decodeUtf8Text(buffer),
+    };
+  }
 
   const candidates: Array<{ encoding: DetectedBmsEncoding; bias: number }> = [
     { encoding: 'shift_jis', bias: 5 },
@@ -198,4 +204,13 @@ function hasUtf16LeBom(buffer: Buffer): boolean {
 
 function hasUtf16BeBom(buffer: Buffer): boolean {
   return buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff;
+}
+
+function isAsciiText(buffer: Buffer): boolean {
+  for (let index = 0; index < buffer.length; index += 1) {
+    if (buffer[index]! >= 0x80) {
+      return false;
+    }
+  }
+  return true;
 }

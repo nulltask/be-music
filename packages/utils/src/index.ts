@@ -23,27 +23,15 @@ export function resolveCliPath(path: string, cwd: string = process.env.INIT_CWD 
 }
 
 export function clamp(value: number, min: number, max: number): number {
-  if (value <= min) {
-    return min;
-  }
-  if (value >= max) {
-    return max;
-  }
-  return value;
+  return value <= min ? min : value >= max ? max : value;
 }
 
 export function clampSignedUnit(value: number): number {
-  if (value <= -1) {
-    return -1;
-  }
-  if (value >= 1) {
-    return 1;
-  }
-  return value;
+  return value <= -1 ? -1 : value >= 1 ? 1 : value;
 }
 
 export function floatToInt16(value: number): number {
-  const clamped = clampSignedUnit(value);
+  const clamped = value <= -1 ? -1 : value >= 1 ? 1 : value;
   if (clamped >= 0) {
     return Math.round(clamped * 32767);
   }
@@ -51,7 +39,7 @@ export function floatToInt16(value: number): number {
 }
 
 export function normalizeNonNegativeInt(value: number, fallback = 0): number {
-  if (!Number.isFinite(value)) {
+  if (value !== value || value === Number.POSITIVE_INFINITY || value === Number.NEGATIVE_INFINITY) {
     return fallback;
   }
   const normalized = Math.trunc(value);
@@ -59,7 +47,7 @@ export function normalizeNonNegativeInt(value: number, fallback = 0): number {
 }
 
 export function normalizePositiveInt(value: number, fallback = 1): number {
-  if (!Number.isFinite(value) || value <= 0) {
+  if (value <= 0 || value !== value || value === Number.POSITIVE_INFINITY || value === Number.NEGATIVE_INFINITY) {
     return fallback;
   }
   const normalized = Math.trunc(value);
@@ -67,7 +55,7 @@ export function normalizePositiveInt(value: number, fallback = 1): number {
 }
 
 export function normalizeFractionNumerator(value: number, denominator: number, fallback = 0): number {
-  if (!Number.isFinite(value)) {
+  if (value !== value || value === Number.POSITIVE_INFINITY || value === Number.NEGATIVE_INFINITY) {
     return fallback;
   }
 
@@ -77,7 +65,7 @@ export function normalizeFractionNumerator(value: number, denominator: number, f
   }
 
   let safeDenominator = 1;
-  if (Number.isFinite(denominator) && denominator > 0) {
+  if (denominator > 0 && denominator === denominator && denominator !== Number.POSITIVE_INFINITY) {
     safeDenominator = Math.trunc(denominator);
     if (safeDenominator < 1) {
       safeDenominator = 1;
@@ -121,14 +109,11 @@ export function compareFractions(
 
   const leftScaled = leftNumerator * rightDenominator;
   const rightScaled = rightNumerator * leftDenominator;
-  if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
-    if (leftScaled < rightScaled) {
-      return -1;
-    }
-    if (leftScaled > rightScaled) {
-      return 1;
-    }
+  if (leftScaled === rightScaled) {
     return 0;
+  }
+  if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
+    return leftScaled < rightScaled ? -1 : 1;
   }
 
   const leftScaledBigInt = BigInt(leftNumerator) * BigInt(rightDenominator);
@@ -199,18 +184,17 @@ export function findLastIndexAtOrBefore<T>(
   resolveValue: (item: T) => number,
 ): number {
   let low = 0;
-  let high = items.length - 1;
-  let answer = -1;
-  while (low <= high) {
+  let high = items.length;
+  while (low < high) {
     const mid = (low + high) >>> 1;
-    if (resolveValue(items[mid]!) <= target) {
-      answer = mid;
+    const value = resolveValue(items[mid]!);
+    if (value <= target) {
       low = mid + 1;
     } else {
-      high = mid - 1;
+      high = mid;
     }
   }
-  return answer;
+  return low - 1;
 }
 
 export function findLastIndexBefore<T>(
@@ -219,18 +203,17 @@ export function findLastIndexBefore<T>(
   resolveValue: (item: T) => number,
 ): number {
   let low = 0;
-  let high = items.length - 1;
-  let answer = -1;
-  while (low <= high) {
+  let high = items.length;
+  while (low < high) {
     const mid = (low + high) >>> 1;
-    if (resolveValue(items[mid]!) < target) {
-      answer = mid;
+    const value = resolveValue(items[mid]!);
+    if (value < target) {
       low = mid + 1;
     } else {
-      high = mid - 1;
+      high = mid;
     }
   }
-  return answer;
+  return low - 1;
 }
 
 export function normalizeAsciiBase36Code(code: number): number {

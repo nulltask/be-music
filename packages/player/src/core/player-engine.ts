@@ -260,13 +260,12 @@ export function applyFastSlowForJudge(
   judge: 'PERFECT' | 'GREAT' | 'GOOD',
   signedDeltaMs: number,
 ): void {
-  if (judge !== 'GREAT' && judge !== 'GOOD') {
-    return;
-  }
-  if (signedDeltaMs < 0) {
-    summary.fast += 1;
-  } else if (signedDeltaMs > 0) {
-    summary.slow += 1;
+  if (judge === 'GREAT' || judge === 'GOOD') {
+    if (signedDeltaMs < 0) {
+      summary.fast += 1;
+    } else if (signedDeltaMs > 0) {
+      summary.slow += 1;
+    }
   }
 }
 
@@ -370,15 +369,24 @@ export function resolveBmsControlFlowForPlayback(
 }
 
 export function formatRandomPatternSummary(randomPatterns: ReadonlyArray<RandomPatternSelection>): string | undefined {
-  if (randomPatterns.length === 0) {
+  const count = randomPatterns.length;
+  if (count === 0) {
     return undefined;
   }
-  if (randomPatterns.length === 1) {
+  if (count === 1) {
     const only = randomPatterns[0];
     return `RANDOM ${only.current}/${only.total}`;
   }
-  const parts = randomPatterns.map((pattern) => `#${pattern.index} ${pattern.current}/${pattern.total}`);
-  return `RANDOM ${parts.join('  ')}`;
+
+  let summary = 'RANDOM ';
+  for (let index = 0; index < count; index += 1) {
+    const pattern = randomPatterns[index]!;
+    if (index > 0) {
+      summary += '  ';
+    }
+    summary += `#${pattern.index} ${pattern.current}/${pattern.total}`;
+  }
+  return summary;
 }
 
 function parsePositiveInteger(value?: string): number | undefined {
@@ -2241,6 +2249,23 @@ function stripNonPlayableEvents(json: BeMusicJson): BeMusicJson {
 }
 
 export function isPlayLaneChannelForVolumeControl(channel: string): boolean {
+  if (channel.length === 2) {
+    const sideCode = channel.charCodeAt(0);
+    const laneCode = channel.charCodeAt(1);
+    if (
+      laneCode >= 0x31 &&
+      laneCode <= 0x39 &&
+      (sideCode === 0x31 ||
+        sideCode === 0x32 ||
+        sideCode === 0x33 ||
+        sideCode === 0x34 ||
+        sideCode === 0x35 ||
+        sideCode === 0x36)
+    ) {
+      return true;
+    }
+  }
+
   const normalized = normalizeChannel(channel);
   if (isPlayableEventChannel(normalized)) {
     return true;
@@ -2250,10 +2275,7 @@ export function isPlayLaneChannelForVolumeControl(channel: string): boolean {
   }
   const side = normalized[0];
   const lane = normalized[1];
-  if (lane < '1' || lane > '9') {
-    return false;
-  }
-  return side === '3' || side === '4';
+  return (side === '3' || side === '4') && lane >= '1' && lane <= '9';
 }
 
 function isPlayableEventChannel(channel: string): boolean {
@@ -2485,19 +2507,23 @@ function mixRenderResults(leftResult: RenderResult, rightResult: RenderResult): 
 }
 
 export function resolveBgmHeadroomGain(playableResult: RenderResult, bgmResult: RenderResult): number {
-  const frameLength = Math.max(playableResult.left.length, bgmResult.left.length);
+  const playableLeft = playableResult.left;
+  const playableRight = playableResult.right;
+  const bgmLeft = bgmResult.left;
+  const bgmRight = bgmResult.right;
+  const frameLength = Math.max(playableLeft.length, bgmLeft.length);
   let headroomGain = 1;
 
   // Keep playable/key-sound amplitude intact by shrinking only the BGM side when summed peak would clip.
   for (let frame = 0; frame < frameLength; frame += 1) {
-    const playableLeft = Math.abs(playableResult.left[frame] ?? 0);
-    const playableRight = Math.abs(playableResult.right[frame] ?? 0);
-    const bgmLeft = Math.abs(bgmResult.left[frame] ?? 0);
-    const bgmRight = Math.abs(bgmResult.right[frame] ?? 0);
+    const playableLeftAbs = Math.abs(playableLeft[frame] ?? 0);
+    const playableRightAbs = Math.abs(playableRight[frame] ?? 0);
+    const bgmLeftAbs = Math.abs(bgmLeft[frame] ?? 0);
+    const bgmRightAbs = Math.abs(bgmRight[frame] ?? 0);
     headroomGain = Math.min(
       headroomGain,
-      resolveBgmHeadroomGainForChannel(playableLeft, bgmLeft),
-      resolveBgmHeadroomGainForChannel(playableRight, bgmRight),
+      resolveBgmHeadroomGainForChannel(playableLeftAbs, bgmLeftAbs),
+      resolveBgmHeadroomGainForChannel(playableRightAbs, bgmRightAbs),
     );
   }
 

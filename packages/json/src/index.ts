@@ -235,6 +235,59 @@ export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
 }
 
 export function cloneJson(json: BeMusicJson): BeMusicJson {
+  const sourceMeasures = json.measures;
+  const measures = new Array<BeMusicMeasure>(sourceMeasures.length);
+  for (let index = 0; index < sourceMeasures.length; index += 1) {
+    const measure = sourceMeasures[index]!;
+    measures[index] = { index: measure.index, length: measure.length };
+  }
+
+  const sourceEvents = json.events;
+  const events = new Array<BeMusicEvent>(sourceEvents.length);
+  for (let index = 0; index < sourceEvents.length; index += 1) {
+    events[index] = cloneEvent(sourceEvents[index]!);
+  }
+
+  const sourceControlFlow = json.bms.controlFlow;
+  const controlFlow = new Array<BmsControlFlowEntry>(sourceControlFlow.length);
+  for (let index = 0; index < sourceControlFlow.length; index += 1) {
+    controlFlow[index] = cloneControlFlowEntry(sourceControlFlow[index]!);
+  }
+
+  const sourceLines = json.bmson.lines;
+  const lines = new Array<number>(sourceLines.length);
+  for (let index = 0; index < sourceLines.length; index += 1) {
+    lines[index] = sourceLines[index]!;
+  }
+
+  const sourceHeader = json.bmson.bga.header;
+  const header = new Array<BmsonBgaHeaderEntry>(sourceHeader.length);
+  for (let index = 0; index < sourceHeader.length; index += 1) {
+    const entry = sourceHeader[index]!;
+    header[index] = { id: entry.id, name: entry.name };
+  }
+
+  const sourceBgaEvents = json.bmson.bga.events;
+  const bgaEvents = new Array<BmsonBgaEvent>(sourceBgaEvents.length);
+  for (let index = 0; index < sourceBgaEvents.length; index += 1) {
+    const event = sourceBgaEvents[index]!;
+    bgaEvents[index] = { y: event.y, id: event.id };
+  }
+
+  const sourceLayerEvents = json.bmson.bga.layerEvents;
+  const layerEvents = new Array<BmsonBgaEvent>(sourceLayerEvents.length);
+  for (let index = 0; index < sourceLayerEvents.length; index += 1) {
+    const event = sourceLayerEvents[index]!;
+    layerEvents[index] = { y: event.y, id: event.id };
+  }
+
+  const sourcePoorEvents = json.bmson.bga.poorEvents;
+  const poorEvents = new Array<BmsonBgaEvent>(sourcePoorEvents.length);
+  for (let index = 0; index < sourcePoorEvents.length; index += 1) {
+    const event = sourcePoorEvents[index]!;
+    poorEvents[index] = { y: event.y, id: event.id };
+  }
+
   return {
     format: json.format,
     sourceFormat: json.sourceFormat,
@@ -249,11 +302,11 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
       stop: { ...json.resources.stop },
       text: { ...json.resources.text },
     },
-    measures: json.measures.map((measure) => ({ index: measure.index, length: measure.length })),
-    events: json.events.map(cloneEvent),
+    measures,
+    events,
     bms: {
       ...json.bms,
-      controlFlow: json.bms.controlFlow.map(cloneControlFlowEntry),
+      controlFlow,
       lnObjs: json.bms.lnObjs ? [...json.bms.lnObjs] : undefined,
       exRank: { ...json.bms.exRank },
       argb: { ...json.bms.argb },
@@ -267,22 +320,35 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
     },
     bmson: {
       ...json.bmson,
-      lines: [...json.bmson.lines],
+      lines,
       info: {
         ...json.bmson.info,
         subartists: json.bmson.info.subartists ? [...json.bmson.info.subartists] : undefined,
       },
       bga: {
-        header: json.bmson.bga.header.map((entry) => ({ id: entry.id, name: entry.name })),
-        events: json.bmson.bga.events.map((event) => ({ y: event.y, id: event.id })),
-        layerEvents: json.bmson.bga.layerEvents.map((event) => ({ y: event.y, id: event.id })),
-        poorEvents: json.bmson.bga.poorEvents.map((event) => ({ y: event.y, id: event.id })),
+        header,
+        events: bgaEvents,
+        layerEvents,
+        poorEvents,
       },
     },
   };
 }
 
 export function normalizeObjectKey(value: string): string {
+  if (value.length === 2) {
+    const code0 = normalizeAsciiBase36CodeFast(value.charCodeAt(0));
+    const code1 = normalizeAsciiBase36CodeFast(value.charCodeAt(1));
+    if (code0 >= 0 && code1 >= 0) {
+      return String.fromCharCode(code0, code1);
+    }
+  }
+  if (value.length === 1) {
+    const code = normalizeAsciiBase36CodeFast(value.charCodeAt(0));
+    if (code >= 0) {
+      return String.fromCharCode(0x30, code);
+    }
+  }
   const trimmed = value.trim();
   if (trimmed.length === 0) {
     return '00';
@@ -313,14 +379,9 @@ export function normalizeObjectKey(value: string): string {
 
 export function normalizeChannel(value: string): string {
   if (value.length === 2) {
-    const sourceCode0 = value.charCodeAt(0);
-    const sourceCode1 = value.charCodeAt(1);
-    const code0 = normalizeAsciiBase36Code(sourceCode0);
-    const code1 = normalizeAsciiBase36Code(sourceCode1);
+    const code0 = normalizeAsciiBase36CodeFast(value.charCodeAt(0));
+    const code1 = normalizeAsciiBase36CodeFast(value.charCodeAt(1));
     if (code0 >= 0 && code1 >= 0) {
-      if (code0 === sourceCode0 && code1 === sourceCode1) {
-        return value;
-      }
       return String.fromCharCode(code0, code1);
     }
   }
@@ -344,8 +405,8 @@ export function intToBase36(value: number, pad = 2): string {
 
 export function parseBpmFrom03Token(value: string): number {
   if (value.length === 2) {
-    const high = parseHexDigit(value.charCodeAt(0));
-    const low = parseHexDigit(value.charCodeAt(1));
+    const high = parseHexDigitFast(value.charCodeAt(0));
+    const low = parseHexDigitFast(value.charCodeAt(1));
     if (high >= 0 && low >= 0) {
       return (high << 4) + low;
     }
@@ -389,17 +450,27 @@ export function getMeasureBeats(length: number): number {
 }
 
 export function measureToBeat(json: BeMusicJson, measure: number, position = 0): number {
+  const safeMeasure = Math.max(0, Math.floor(measure));
+  if (json.measures.length === 0) {
+    return safeMeasure * 4 + 4 * clamp01(position);
+  }
   const safePosition = clamp01(position);
   const measureLengths = createExactMeasureLengthRecord(json);
   let beats = 0;
-  for (let current = 0; current < measure; current += 1) {
+  for (let current = 0; current < safeMeasure; current += 1) {
     beats += getMeasureBeats(measureLengths[current] ?? 1);
   }
-  beats += getMeasureBeats(measureLengths[measure] ?? 1) * safePosition;
+  beats += getMeasureBeats(measureLengths[safeMeasure] ?? 1) * safePosition;
   return beats;
 }
 
 export function eventToBeat(json: BeMusicJson, event: BeMusicEvent): number {
+  if (json.measures.length === 0) {
+    const measure = Math.max(0, Math.floor(event.measure));
+    const denominator = normalizePositionDenominator(event.position[1]);
+    const numerator = normalizePositionNumerator(event.position[0], denominator);
+    return measure * 4 + (4 * numerator) / denominator;
+  }
   return measureToBeat(json, event.measure, getEventPosition(event));
 }
 
@@ -469,6 +540,20 @@ export function createBeatResolver(json: BeMusicJson): BeatResolver {
 }
 
 export function sortEvents(events: BeMusicEvent[]): BeMusicEvent[] {
+  if (events.length <= 1) {
+    return [...events];
+  }
+
+  let sorted = true;
+  for (let index = 1; index < events.length; index += 1) {
+    if (compareEvents(events[index - 1]!, events[index]!) > 0) {
+      sorted = false;
+      break;
+    }
+  }
+  if (sorted) {
+    return [...events];
+  }
   return [...events].sort(compareEvents);
 }
 
@@ -516,6 +601,13 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
 }
 
 export function isTempoChannel(channel: string): boolean {
+  if (channel.length === 2) {
+    const high = channel.charCodeAt(0);
+    const low = channel.charCodeAt(1);
+    if (high === 0x30 && (low === 0x33 || low === 0x38)) {
+      return true;
+    }
+  }
   const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return packed === PACKED_CHANNEL_03 || packed === PACKED_CHANNEL_08;
@@ -524,6 +616,9 @@ export function isTempoChannel(channel: string): boolean {
 }
 
 export function isStopChannel(channel: string): boolean {
+  if (channel.length === 2 && channel.charCodeAt(0) === 0x30 && channel.charCodeAt(1) === 0x39) {
+    return true;
+  }
   const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return packed === PACKED_CHANNEL_09;
@@ -532,6 +627,13 @@ export function isStopChannel(channel: string): boolean {
 }
 
 export function isScrollChannel(channel: string): boolean {
+  if (channel.length === 2) {
+    const high = channel.charCodeAt(0) & 0xdf;
+    const low = channel.charCodeAt(1) & 0xdf;
+    if (high === 0x53 && low === 0x43) {
+      return true;
+    }
+  }
   const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return packed === PACKED_CHANNEL_SC;
@@ -540,6 +642,13 @@ export function isScrollChannel(channel: string): boolean {
 }
 
 export function isLandmineChannel(channel: string): boolean {
+  if (channel.length === 2) {
+    const high = channel.charCodeAt(0) & 0xdf;
+    const low = channel.charCodeAt(1);
+    if ((high === 0x44 || high === 0x45) && low >= 0x31 && low <= 0x39) {
+      return true;
+    }
+  }
   const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return isPackedLandmineChannel(packed);
@@ -548,6 +657,17 @@ export function isLandmineChannel(channel: string): boolean {
 }
 
 export function isSampleTriggerChannel(channel: string): boolean {
+  if (channel.length === 2) {
+    const highCode = channel.charCodeAt(0);
+    const lowCode = channel.charCodeAt(1);
+    if (highCode === 0x30) {
+      return lowCode === 0x31;
+    }
+    if ((highCode & 0xdf) === 0x53 && (lowCode & 0xdf) === 0x43) {
+      return false;
+    }
+    return true;
+  }
   const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return isPackedSampleTriggerChannel(packed);
@@ -556,6 +676,13 @@ export function isSampleTriggerChannel(channel: string): boolean {
 }
 
 export function isPlayableChannel(channel: string): boolean {
+  if (channel.length === 2) {
+    const high = channel.charCodeAt(0);
+    const low = channel.charCodeAt(1);
+    if ((high === 0x31 || high === 0x32) && low >= 0x31 && low <= 0x39) {
+      return true;
+    }
+  }
   const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return isPackedPlayableChannel(packed);
@@ -564,6 +691,13 @@ export function isPlayableChannel(channel: string): boolean {
 }
 
 export function isBmsLongNoteChannel(channel: string): boolean {
+  if (channel.length === 2) {
+    const high = channel.charCodeAt(0);
+    const low = channel.charCodeAt(1);
+    if ((high === 0x35 || high === 0x36) && low >= 0x31 && low <= 0x39) {
+      return true;
+    }
+  }
   const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return isPackedBmsLongNoteChannel(packed);
@@ -932,7 +1066,7 @@ function resolveBmsLongNoteType2SegmentEndBeat(event: BeMusicEvent, beatResolver
 }
 
 function createExactMeasureLengthRecord(json: BeMusicJson): Record<number, number> {
-  const measureLengths: Record<number, number> = {};
+  const measureLengths: number[] = [];
   for (const measure of json.measures) {
     measureLengths[measure.index] = measure.length;
   }
@@ -1003,6 +1137,17 @@ function parseHexDigit(code: number): number {
   return -1;
 }
 
+function parseHexDigitFast(code: number): number {
+  if (code >= 0x30 && code <= 0x39) {
+    return code - 0x30;
+  }
+  const uppercase = code & 0xdf;
+  if (uppercase >= 0x41 && uppercase <= 0x46) {
+    return uppercase - 0x41 + 10;
+  }
+  return -1;
+}
+
 function resolveNormalizedChannelForPredicate(channel: string): string {
   if (channel.length === 2) {
     const code0 = channel.charCodeAt(0);
@@ -1022,8 +1167,13 @@ function tryPackChannel(channel: string): number {
   if (channel.length !== 2) {
     return -1;
   }
-  const high = normalizeAsciiBase36CodeFast(channel.charCodeAt(0));
-  const low = normalizeAsciiBase36CodeFast(channel.charCodeAt(1));
+  const sourceHigh = channel.charCodeAt(0);
+  const sourceLow = channel.charCodeAt(1);
+  if (isNormalizedBase36Code(sourceHigh) && isNormalizedBase36Code(sourceLow)) {
+    return (sourceHigh << 8) | sourceLow;
+  }
+  const high = normalizeAsciiBase36CodeFast(sourceHigh);
+  const low = normalizeAsciiBase36CodeFast(sourceLow);
   if (high < 0 || low < 0) {
     return -1;
   }
