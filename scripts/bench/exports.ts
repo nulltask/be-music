@@ -1,5 +1,6 @@
 #!/usr/bin/env tsx
 
+import { execFileSync } from 'node:child_process';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -159,7 +160,7 @@ export async function runExportsBenchmark(options: CliOptions): Promise<ExportsB
   const snapshot: ExportsBenchmarkSnapshot = {
     schemaVersion: 1,
     createdAt: new Date().toISOString(),
-    gitSha: process.env.GITHUB_SHA,
+    gitSha: resolveSnapshotGitSha(),
     nodeVersion: process.version,
     platform: process.platform,
     options: {
@@ -197,6 +198,25 @@ export async function runExportsBenchmarkCli(
 
 async function main(): Promise<void> {
   await runExportsBenchmarkCli();
+}
+
+function resolveSnapshotGitSha(): string | undefined {
+  const envSha = process.env.BENCH_GIT_SHA?.trim();
+  if (envSha) {
+    return envSha;
+  }
+
+  try {
+    const gitSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repositoryDir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return gitSha || undefined;
+  } catch {
+    const githubSha = process.env.GITHUB_SHA?.trim();
+    return githubSha || undefined;
+  }
 }
 
 function createBenchmarkCases(): Map<string, BenchmarkCaseDefinition> {
