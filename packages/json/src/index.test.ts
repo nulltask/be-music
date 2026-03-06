@@ -133,6 +133,21 @@ test('json: ensureMeasure / getMeasureBeats', () => {
     expect(resolver.eventToBeat(event)).toBe(12);
   });
 
+  test('json: createBeatResolver handles charts without explicit measure lengths', () => {
+    const json = createEmptyJson();
+    const resolver = createBeatResolver(json);
+
+    expect(resolver.measureToBeat(3, 0.5)).toBe(14);
+    expect(
+      resolver.eventToBeat({
+        measure: 2,
+        channel: '11',
+        position: [1, 4],
+        value: '01',
+      }),
+    ).toBe(9);
+  });
+
 test('json: sortEvents stabilizes by measure/position/channel/value order', () => {
     const events: BeMusicEvent[] = [
       { measure: 1, channel: '12', position: [1, 3], value: '02' },
@@ -165,12 +180,14 @@ test('json: sortEvents stabilizes by measure/position/channel/value order', () =
 test('json: classifies channel types', () => {
   expect(isTempoChannel('03')).toBe(true);
   expect(isTempoChannel('08')).toBe(true);
+  expect(isTempoChannel('sc')).toBe(false);
   expect(isTempoChannel('11')).toBe(false);
 
     expect(isStopChannel('09')).toBe(true);
     expect(isStopChannel('19')).toBe(false);
 
     expect(isScrollChannel('SC')).toBe(true);
+    expect(isScrollChannel('sc')).toBe(true);
     expect(isScrollChannel('11')).toBe(false);
 
     expect(isLandmineChannel('D1')).toBe(true);
@@ -191,10 +208,12 @@ test('json: classifies channel types', () => {
   expect(isPlayableChannel('01')).toBe(false);
 
   expect(isBmsLongNoteChannel('51')).toBe(true);
+  expect(isBmsLongNoteChannel('6a')).toBe(false);
   expect(isBmsLongNoteChannel('69')).toBe(true);
   expect(isBmsLongNoteChannel('5A')).toBe(false);
   expect(isBmsLongNoteChannel('11')).toBe(false);
   expect(mapBmsLongNoteChannelToPlayable('51')).toBe('11');
+  expect(mapBmsLongNoteChannelToPlayable('61')).toBe('21');
   expect(mapBmsLongNoteChannelToPlayable('69')).toBe('29');
   expect(mapBmsLongNoteChannelToPlayable('5A')).toBeUndefined();
 });

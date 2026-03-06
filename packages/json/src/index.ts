@@ -178,6 +178,11 @@ export const DEFAULT_BPM = 130;
 const BASE36_UPPER_DIGITS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const BASE36_PAD_1_DIVISOR = 36;
 const BASE36_PAD_2_DIVISOR = BASE36_PAD_1_DIVISOR * BASE36_PAD_1_DIVISOR;
+const BASE36_PAD_2_TABLE = Array.from({ length: BASE36_PAD_2_DIVISOR }, (_value, index) => {
+  const high = Math.floor(index / BASE36_PAD_1_DIVISOR);
+  const low = index % BASE36_PAD_1_DIVISOR;
+  return `${BASE36_UPPER_DIGITS[high]}${BASE36_UPPER_DIGITS[low]}`;
+});
 const BMS_LONG_NOTE_PLAYABLE_1P = ['11', '12', '13', '14', '15', '16', '17', '18', '19'] as const;
 const BMS_LONG_NOTE_PLAYABLE_2P = ['21', '22', '23', '24', '25', '26', '27', '28', '29'] as const;
 const PACKED_CHANNEL_01 = 0x3031;
@@ -331,10 +336,7 @@ export function intToBase36(value: number, pad = 2): string {
     return BASE36_UPPER_DIGITS[normalized % BASE36_PAD_1_DIVISOR] ?? '0';
   }
   if (pad === 2) {
-    const valuePad2 = Math.floor(normalized % BASE36_PAD_2_DIVISOR);
-    const high = Math.floor(valuePad2 / BASE36_PAD_1_DIVISOR);
-    const low = valuePad2 % BASE36_PAD_1_DIVISOR;
-    return `${BASE36_UPPER_DIGITS[high]}${BASE36_UPPER_DIGITS[low]}`;
+    return BASE36_PAD_2_TABLE[normalized % BASE36_PAD_2_DIVISOR] ?? '00';
   }
   const encoded = normalized.toString(36).toUpperCase();
   return encoded.padStart(pad, '0').slice(-pad);
@@ -353,6 +355,21 @@ export function parseBpmFrom03Token(value: string): number {
 }
 
 export function ensureMeasure(json: BeMusicJson, index: number): BeMusicMeasure {
+  const measureCount = json.measures.length;
+  if (measureCount > 0) {
+    const lastMeasure = json.measures[measureCount - 1]!;
+    if (lastMeasure.index === index) {
+      return lastMeasure;
+    }
+    if (lastMeasure.index < index) {
+      const created: BeMusicMeasure = {
+        index,
+        length: 1,
+      };
+      json.measures.push(created);
+      return created;
+    }
+  }
   for (let measureIndex = 0; measureIndex < json.measures.length; measureIndex += 1) {
     const measure = json.measures[measureIndex]!;
     if (measure.index === index) {
@@ -387,6 +404,21 @@ export function eventToBeat(json: BeMusicJson, event: BeMusicEvent): number {
 }
 
 export function createBeatResolver(json: BeMusicJson): BeatResolver {
+  if (json.measures.length === 0) {
+    return {
+      measureToBeat: (measure, position = 0) => {
+        const safeMeasure = Math.max(0, Math.floor(measure));
+        return safeMeasure * 4 + 4 * clamp01(position);
+      },
+      eventToBeat: (event) => {
+        const safeMeasure = Math.max(0, Math.floor(event.measure));
+        const denominator = normalizePositionDenominator(event.position[1]);
+        const numerator = normalizePositionNumerator(event.position[0], denominator);
+        return safeMeasure * 4 + (4 * numerator) / denominator;
+      },
+    };
+  }
+
   const measureLengths: number[] = [];
   let maxDefinedMeasure = -1;
   for (const measure of json.measures) {
@@ -444,9 +476,35 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
   if (left.measure !== right.measure) {
     return left.measure - right.measure;
   }
-  const positionDelta = compareEventPosition(left, right);
-  if (positionDelta !== 0) {
-    return positionDelta;
+  const leftDenominator = normalizePositionDenominator(left.position[1]);
+  const leftNumerator = normalizePositionNumerator(left.position[0], leftDenominator);
+  const rightDenominator = normalizePositionDenominator(right.position[1]);
+  const rightNumerator = normalizePositionNumerator(right.position[0], rightDenominator);
+  if (leftDenominator === rightDenominator) {
+    const numeratorDelta = leftNumerator - rightNumerator;
+    if (numeratorDelta !== 0) {
+      return numeratorDelta;
+    }
+  } else {
+    const leftScaled = leftNumerator * rightDenominator;
+    const rightScaled = rightNumerator * leftDenominator;
+    if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
+      if (leftScaled < rightScaled) {
+        return -1;
+      }
+      if (leftScaled > rightScaled) {
+        return 1;
+      }
+    } else {
+      const leftScaledBigInt = BigInt(leftNumerator) * BigInt(rightDenominator);
+      const rightScaledBigInt = BigInt(rightNumerator) * BigInt(leftDenominator);
+      if (leftScaledBigInt < rightScaledBigInt) {
+        return -1;
+      }
+      if (leftScaledBigInt > rightScaledBigInt) {
+        return 1;
+      }
+    }
   }
   if (left.channel !== right.channel) {
     return left.channel < right.channel ? -1 : 1;
@@ -458,7 +516,7 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
 }
 
 export function isTempoChannel(channel: string): boolean {
-  const packed = tryPackNormalizedChannel(channel);
+  const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return packed === PACKED_CHANNEL_03 || packed === PACKED_CHANNEL_08;
   }
@@ -466,7 +524,7 @@ export function isTempoChannel(channel: string): boolean {
 }
 
 export function isStopChannel(channel: string): boolean {
-  const packed = tryPackNormalizedChannel(channel);
+  const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return packed === PACKED_CHANNEL_09;
   }
@@ -474,7 +532,7 @@ export function isStopChannel(channel: string): boolean {
 }
 
 export function isScrollChannel(channel: string): boolean {
-  const packed = tryPackNormalizedChannel(channel);
+  const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return packed === PACKED_CHANNEL_SC;
   }
@@ -482,7 +540,7 @@ export function isScrollChannel(channel: string): boolean {
 }
 
 export function isLandmineChannel(channel: string): boolean {
-  const packed = tryPackNormalizedChannel(channel);
+  const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return isPackedLandmineChannel(packed);
   }
@@ -490,7 +548,7 @@ export function isLandmineChannel(channel: string): boolean {
 }
 
 export function isSampleTriggerChannel(channel: string): boolean {
-  const packed = tryPackNormalizedChannel(channel);
+  const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return isPackedSampleTriggerChannel(packed);
   }
@@ -498,7 +556,7 @@ export function isSampleTriggerChannel(channel: string): boolean {
 }
 
 export function isPlayableChannel(channel: string): boolean {
-  const packed = tryPackNormalizedChannel(channel);
+  const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return isPackedPlayableChannel(packed);
   }
@@ -506,7 +564,7 @@ export function isPlayableChannel(channel: string): boolean {
 }
 
 export function isBmsLongNoteChannel(channel: string): boolean {
-  const packed = tryPackNormalizedChannel(channel);
+  const packed = tryPackChannel(channel);
   if (packed >= 0) {
     return isPackedBmsLongNoteChannel(packed);
   }
@@ -514,14 +572,14 @@ export function isBmsLongNoteChannel(channel: string): boolean {
 }
 
 export function mapBmsLongNoteChannelToPlayable(channel: string): string | undefined {
-  const packed = tryPackNormalizedChannel(channel);
+  const packed = tryPackChannel(channel);
   if (packed >= 0) {
     if (!isPackedBmsLongNoteChannel(packed)) {
       return undefined;
     }
-    const high = ((packed >> 8) & 0xff) - 4;
     const low = packed & 0xff;
-    return String.fromCharCode(high, low);
+    const laneIndex = low - 0x31;
+    return ((packed >> 8) & 0xff) === 0x35 ? BMS_LONG_NOTE_PLAYABLE_1P[laneIndex] : BMS_LONG_NOTE_PLAYABLE_2P[laneIndex];
   }
   return mapBmsLongNoteNormalizedChannelToPlayable(resolveNormalizedChannelForPredicate(channel));
 }
@@ -917,38 +975,6 @@ function getEventPosition(event: BeMusicEvent): number {
   return numerator / denominator;
 }
 
-function compareEventPosition(left: BeMusicEvent, right: BeMusicEvent): number {
-  const leftDenominator = normalizePositionDenominator(left.position[1]);
-  const leftNumerator = normalizePositionNumerator(left.position[0], leftDenominator);
-  const rightDenominator = normalizePositionDenominator(right.position[1]);
-  const rightNumerator = normalizePositionNumerator(right.position[0], rightDenominator);
-  if (leftDenominator === rightDenominator) {
-    return leftNumerator - rightNumerator;
-  }
-
-  const leftScaled = leftNumerator * rightDenominator;
-  const rightScaled = rightNumerator * leftDenominator;
-  if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
-    if (leftScaled < rightScaled) {
-      return -1;
-    }
-    if (leftScaled > rightScaled) {
-      return 1;
-    }
-    return 0;
-  }
-
-  const leftScaledBigInt = BigInt(leftNumerator) * BigInt(rightDenominator);
-  const rightScaledBigInt = BigInt(rightNumerator) * BigInt(leftDenominator);
-  if (leftScaledBigInt < rightScaledBigInt) {
-    return -1;
-  }
-  if (leftScaledBigInt > rightScaledBigInt) {
-    return 1;
-  }
-  return 0;
-}
-
 function normalizePositionDenominator(value: number): number {
   if (!Number.isFinite(value) || value <= 0) {
     return 1;
@@ -992,16 +1018,27 @@ function isNormalizedBase36Code(code: number): boolean {
   return (code >= 0x30 && code <= 0x39) || (code >= 0x41 && code <= 0x5a);
 }
 
-function tryPackNormalizedChannel(channel: string): number {
+function tryPackChannel(channel: string): number {
   if (channel.length !== 2) {
     return -1;
   }
-  const high = normalizeAsciiBase36Code(channel.charCodeAt(0));
-  const low = normalizeAsciiBase36Code(channel.charCodeAt(1));
+  const high = normalizeAsciiBase36CodeFast(channel.charCodeAt(0));
+  const low = normalizeAsciiBase36CodeFast(channel.charCodeAt(1));
   if (high < 0 || low < 0) {
     return -1;
   }
   return (high << 8) | low;
+}
+
+function normalizeAsciiBase36CodeFast(code: number): number {
+  if (code >= 0x30 && code <= 0x39) {
+    return code;
+  }
+  const uppercase = code & 0xdf;
+  if (uppercase >= 0x41 && uppercase <= 0x5a) {
+    return uppercase;
+  }
+  return -1;
 }
 
 function isPackedLandmineChannel(packed: number): boolean {
