@@ -9,5 +9,6 @@ export default createPackageViteConfig({
   entries: {
     index: 'src/index.ts',
     cli: 'src/cli.ts',
+    'node-ui-worker': 'src/node/node-ui-worker.ts',
   },
 });

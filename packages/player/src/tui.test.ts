@@ -1,5 +1,19 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { formatMeasureSignature, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './tui.ts';
+import { PlayerTui } from './tui.ts';
+
+const STDOUT_IS_TTY_DESCRIPTOR = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+const STDIN_IS_TTY_DESCRIPTOR = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+const STDOUT_COLUMNS_DESCRIPTOR = Object.getOwnPropertyDescriptor(process.stdout, 'columns');
+const STDOUT_ROWS_DESCRIPTOR = Object.getOwnPropertyDescriptor(process.stdout, 'rows');
+
+afterEach(() => {
+  restoreDescriptor(process.stdout, 'isTTY', STDOUT_IS_TTY_DESCRIPTOR);
+  restoreDescriptor(process.stdin, 'isTTY', STDIN_IS_TTY_DESCRIPTOR);
+  restoreDescriptor(process.stdout, 'columns', STDOUT_COLUMNS_DESCRIPTOR);
+  restoreDescriptor(process.stdout, 'rows', STDOUT_ROWS_DESCRIPTOR);
+  vi.restoreAllMocks();
+});
 
 describe('player tui', () => {
   test('tui: keeps rows-per-beat constant across different terminal heights', () => {
@@ -51,4 +65,106 @@ describe('player tui', () => {
   test('tui: falls back to decimal meter when fraction conversion is not stable', () => {
     expect(formatMeasureSignature(0.123456789)).toBe('0.493827/4');
   });
+
+  test('tui: can use explicit tty support overrides for worker rendering', () => {
+    Object.defineProperty(process.stdout, 'isTTY', {
+      configurable: true,
+      value: false,
+    });
+    Object.defineProperty(process.stdin, 'isTTY', {
+      configurable: true,
+      value: false,
+    });
+
+    const tui = new PlayerTui({
+      mode: 'MANUAL',
+      laneDisplayMode: '7 KEY',
+      title: 'Test Song',
+      lanes: [
+        { channel: '16', key: 'A', isScratch: true },
+        { channel: '11', key: 'S' },
+        { channel: '12', key: 'D' },
+      ],
+      speed: 1,
+      highSpeed: 1,
+      judgeWindowMs: 16.67,
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+    });
+
+    expect(tui.isSupported()).toBe(true);
+  });
+
+  test('tui: clears and relayouts the frame after terminal resize', () => {
+    mockTerminal({ columns: 120, rows: 32 });
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
+    const tui = new PlayerTui({
+      mode: 'MANUAL',
+      laneDisplayMode: '7 KEY',
+      title: 'Test Song',
+      lanes: [
+        { channel: '16', key: 'A', isScratch: true },
+        { channel: '11', key: 'S' },
+        { channel: '12', key: 'D' },
+      ],
+      speed: 1,
+      highSpeed: 1,
+      judgeWindowMs: 16.67,
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+    });
+    const frame: Parameters<PlayerTui['render']>[0] = {
+      currentBeat: 0,
+      currentSeconds: 0,
+      totalSeconds: 120,
+      summary: {
+        total: 100,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+      },
+      notes: [],
+    };
+
+    tui.start();
+    writeSpy.mockClear();
+
+    tui.render(frame);
+    const initialRender = writeSpy.mock.calls.at(-1)?.[0];
+    expect(initialRender).toContain('\u001b[H');
+    expect(initialRender).not.toContain('\u001b[2J\u001b[H');
+
+    tui.setTerminalSize(80, 24);
+    tui.render(frame);
+
+    const resizedRender = writeSpy.mock.calls.at(-1)?.[0];
+    expect(resizedRender).toContain('\u001b[2J\u001b[H');
+
+    tui.stop();
+  });
 });
+
+function mockTerminal({ columns, rows }: { columns: number; rows: number }): void {
+  Object.defineProperty(process.stdout, 'columns', {
+    configurable: true,
+    value: columns,
+  });
+  Object.defineProperty(process.stdout, 'rows', {
+    configurable: true,
+    value: rows,
+  });
+}
+
+function restoreDescriptor(target: object, key: PropertyKey, descriptor: PropertyDescriptor | undefined): void {
+  if (descriptor) {
+    Object.defineProperty(target, key, descriptor);
+    return;
+  }
+  Reflect.deleteProperty(target, key);
+}
