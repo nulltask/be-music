@@ -1,3 +1,4 @@
+import type { MessagePort } from 'node:worker_threads';
 import type { BeMusicJson } from '@be-music/json';
 import type { PlayerInputCommand } from '../core/player-input-signal-bus.ts';
 import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '../core/player-engine.ts';
@@ -68,7 +69,7 @@ export interface NodeGameplayInputRuntimeInit {
 export type NodeGameplayWorkerInboundMessage =
   | { kind: 'abort'; reason?: string }
   | { kind: 'input-commands'; commands: PlayerInputCommand[] }
-  | { kind: 'ui-init-result'; requestId: number; enabled: boolean; error?: string }
+  | { kind: 'ui-init-result'; requestId: number; enabled: boolean; port?: MessagePort; error?: string }
   | { kind: 'ui-bga-load-progress'; requestId: number; progress: { ratio: number; detail?: string } }
   | { kind: 'ui-stop-result'; requestId: number; error?: string }
   | { kind: 'ui-dispose-result'; requestId: number; error?: string };

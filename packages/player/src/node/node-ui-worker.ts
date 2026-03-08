@@ -1,4 +1,4 @@
-import { parentPort, workerData } from 'node:worker_threads';
+import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { createBeatResolver } from '@be-music/json';
 import {
@@ -94,6 +94,9 @@ async function bootstrap(): Promise<void> {
     stdinIsTTY: initData.stdinIsTTY,
     stdoutIsTTY: initData.stdoutIsTTY,
   });
+  tui.setPaused(initData.initialPaused);
+  tui.setLatestJudge(initData.initialJudgeCombo.judge, initData.initialJudgeCombo.channel);
+  tui.setCombo(initData.initialJudgeCombo.combo, initData.initialJudgeCombo.channel);
 
   if (!tui.isSupported()) {
     postWorkerMessage({ kind: 'unsupported' });
@@ -119,6 +122,7 @@ async function bootstrap(): Promise<void> {
 
   let latestFrame: PlayerUiFramePayload | undefined;
   const queuedCommands: PlayerUiCommand[] = [];
+  let bridgePort: MessagePort | undefined;
 
   const deferredUiFlush = createDeferredUiFlush(({ commands, frame }) => {
     if (commands) {
@@ -159,9 +163,68 @@ async function bootstrap(): Promise<void> {
     }
   });
 
-  port.on('message', (message: NodeUiWorkerInboundMessage) => {
+  const handleRenderMessage = (message: NodeUiWorkerInboundMessage): boolean => {
     if (message.kind === 'start') {
       tui.start();
+      return true;
+    }
+    if (message.kind === 'frame') {
+      latestFrame = message.frame;
+      deferredUiFlush.markFrameDirty();
+      return true;
+    }
+    if (message.kind === 'commands') {
+      queuedCommands.push(...message.commands);
+      deferredUiFlush.markCommandsDirty();
+      return true;
+    }
+    if (message.kind === 'set-paused') {
+      tui.setPaused(message.value);
+      if (latestFrame) {
+        deferredUiFlush.markFrameDirty();
+      }
+      return true;
+    }
+    if (message.kind === 'set-high-speed') {
+      tui.setHighSpeed(message.value);
+      if (latestFrame) {
+        deferredUiFlush.markFrameDirty();
+      }
+      return true;
+    }
+    if (message.kind === 'set-judge-combo') {
+      tui.setLatestJudge(message.state.judge, message.state.channel);
+      tui.setCombo(message.state.combo, message.state.channel);
+      if (latestFrame) {
+        deferredUiFlush.markFrameDirty();
+      }
+      return true;
+    }
+    if (message.kind === 'trigger-poor') {
+      bgaRenderer?.triggerPoor(message.seconds);
+      if (latestFrame) {
+        deferredUiFlush.markFrameDirty();
+      }
+      return true;
+    }
+    if (message.kind === 'clear-poor') {
+      bgaRenderer?.clearPoor();
+      if (latestFrame) {
+        deferredUiFlush.markFrameDirty();
+      }
+      return true;
+    }
+    return false;
+  };
+
+  const handleControlMessage = (message: NodeUiWorkerInboundMessage): void => {
+    if (message.kind === 'attach-bridge-port') {
+      bridgePort?.off('message', handleControlMessage);
+      bridgePort = message.port;
+      bridgePort.on('message', handleControlMessage);
+      return;
+    }
+    if (handleRenderMessage(message)) {
       return;
     }
     if (message.kind === 'stop') {
@@ -171,56 +234,14 @@ async function bootstrap(): Promise<void> {
     }
     if (message.kind === 'dispose') {
       deferredUiFlush.dispose();
+      bridgePort?.close();
       tui.stop();
       postWorkerMessage({ kind: 'disposed' });
       port.close();
       process.exit(0);
       return;
     }
-    if (message.kind === 'frame') {
-      latestFrame = message.frame;
-      deferredUiFlush.markFrameDirty();
-      return;
-    }
-    if (message.kind === 'commands') {
-      queuedCommands.push(...message.commands);
-      deferredUiFlush.markCommandsDirty();
-      return;
-    }
-    if (message.kind === 'set-paused') {
-      tui.setPaused(message.value);
-      if (latestFrame) {
-        deferredUiFlush.markFrameDirty();
-      }
-      return;
-    }
-    if (message.kind === 'set-high-speed') {
-      tui.setHighSpeed(message.value);
-      if (latestFrame) {
-        deferredUiFlush.markFrameDirty();
-      }
-      return;
-    }
-    if (message.kind === 'set-judge-combo') {
-      tui.setLatestJudge(message.state.judge, message.state.channel);
-      tui.setCombo(message.state.combo, message.state.channel);
-      if (latestFrame) {
-        deferredUiFlush.markFrameDirty();
-      }
-      return;
-    }
-    if (message.kind === 'trigger-poor') {
-      bgaRenderer?.triggerPoor(message.seconds);
-      if (latestFrame) {
-        deferredUiFlush.markFrameDirty();
-      }
-      return;
-    }
-    if (message.kind === 'clear-poor') {
-      bgaRenderer?.clearPoor();
-      if (latestFrame) {
-        deferredUiFlush.markFrameDirty();
-      }
+    if (message.kind !== 'resize') {
       return;
     }
 
@@ -230,7 +251,9 @@ async function bootstrap(): Promise<void> {
     if (latestFrame) {
       deferredUiFlush.markFrameDirty();
     }
-  });
+  };
+
+  port.on('message', handleControlMessage);
 
   postWorkerMessage({ kind: 'ready' });
 }

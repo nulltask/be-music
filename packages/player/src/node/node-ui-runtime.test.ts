@@ -16,37 +16,41 @@ const workerState = vi.hoisted(() => ({
   autoAckLifecycle: true,
 }));
 
-vi.mock('node:worker_threads', () => ({
-  Worker: class MockWorker extends EventEmitter {
-    readonly postMessage = vi.fn((message: unknown) => {
-      if (!workerState.autoAckLifecycle || typeof message !== 'object' || message === null || !('kind' in message)) {
-        return;
-      }
-      if (message.kind === 'stop') {
-        queueMicrotask(() => {
-          this.emit('message', { kind: 'stopped' });
-        });
-        return;
-      }
-      if (message.kind === 'dispose') {
-        queueMicrotask(() => {
-          this.emit('message', { kind: 'disposed' });
-        });
-      }
-    });
-
-    readonly terminate = vi.fn(async () => 0);
-
-    constructor(..._args: unknown[]) {
-      super();
-      workerState.lastWorkerOptions = _args[1] as WorkerOptions | undefined;
-      workerState.lastWorker = this;
-      queueMicrotask(() => {
-        this.emit('message', { kind: 'ready' });
+vi.mock('node:worker_threads', async () => {
+  const actual = await vi.importActual<typeof import('node:worker_threads')>('node:worker_threads');
+  return {
+    ...actual,
+    Worker: class MockWorker extends EventEmitter {
+      readonly postMessage = vi.fn((message: unknown) => {
+        if (!workerState.autoAckLifecycle || typeof message !== 'object' || message === null || !('kind' in message)) {
+          return;
+        }
+        if (message.kind === 'stop') {
+          queueMicrotask(() => {
+            this.emit('message', { kind: 'stopped' });
+          });
+          return;
+        }
+        if (message.kind === 'dispose') {
+          queueMicrotask(() => {
+            this.emit('message', { kind: 'disposed' });
+          });
+        }
       });
-    }
-  },
-}));
+
+      readonly terminate = vi.fn(async () => 0);
+
+      constructor(..._args: unknown[]) {
+        super();
+        workerState.lastWorkerOptions = _args[1] as WorkerOptions | undefined;
+        workerState.lastWorker = this;
+        queueMicrotask(() => {
+          this.emit('message', { kind: 'ready' });
+        });
+      }
+    },
+  };
+});
 
 import { createNodeUiRuntime } from './node-ui-runtime.ts';
 
@@ -165,6 +169,20 @@ describe('node ui runtime', () => {
     const disposePromise = runtime.dispose();
     worker.emit('message', { kind: 'disposed' });
     await disposePromise;
+  });
+
+  test('creates a dedicated bridge port for direct UI IPC', async () => {
+    const uiSignals = createPlayerUiSignalBus(createFrame());
+    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const worker = getLastWorker();
+
+    worker.postMessage.mockClear();
+
+    const bridgePort = runtime.createBridgePort();
+    expect(bridgePort).toBeDefined();
+    expect(messagesOfKind(worker, 'attach-bridge-port')).toHaveLength(1);
+
+    await runtime.dispose();
   });
 });
 

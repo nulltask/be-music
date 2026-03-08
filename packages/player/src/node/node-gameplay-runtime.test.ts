@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import type { WorkerOptions } from 'node:worker_threads';
+import { MessageChannel, type MessagePort, type WorkerOptions } from 'node:worker_threads';
 import { isAbortError } from '@be-music/utils';
 import { createEmptyJson } from '../../../json/src/index.ts';
 import type { NodeInputRuntime } from './node-input-runtime.ts';
@@ -26,6 +26,7 @@ const inputRuntimeState = vi.hoisted(() => ({
 const uiRuntimeState = vi.hoisted(() => ({
   context: undefined as Parameters<(typeof import('./node-ui-runtime.ts'))['createNodeUiRuntime']>[0] | undefined,
   runtime: undefined as NodeUiRuntime | undefined,
+  bridgePort: undefined as MessagePort | undefined,
   start: vi.fn(),
   stop: vi.fn(async () => undefined),
   dispose: vi.fn(async () => undefined),
@@ -34,19 +35,23 @@ const uiRuntimeState = vi.hoisted(() => ({
   tuiEnabled: true,
 }));
 
-vi.mock('node:worker_threads', () => ({
-  Worker: class MockWorker extends EventEmitter {
-    readonly postMessage = vi.fn();
+vi.mock('node:worker_threads', async () => {
+  const actual = await vi.importActual<typeof import('node:worker_threads')>('node:worker_threads');
+  return {
+    ...actual,
+    Worker: class MockWorker extends EventEmitter {
+      readonly postMessage = vi.fn();
 
-    readonly terminate = vi.fn(async () => 0);
+      readonly terminate = vi.fn(async () => 0);
 
-    constructor(...args: unknown[]) {
-      super();
-      workerState.lastWorker = this;
-      workerState.lastWorkerOptions = args[1] as WorkerOptions | undefined;
-    }
-  },
-}));
+      constructor(...args: unknown[]) {
+        super();
+        workerState.lastWorker = this;
+        workerState.lastWorkerOptions = args[1] as WorkerOptions | undefined;
+      }
+    },
+  };
+});
 
 vi.mock('./node-input-runtime.ts', () => ({
   createNodeInputRuntime: vi.fn((context) => {
@@ -62,6 +67,7 @@ vi.mock('./node-input-runtime.ts', () => ({
 vi.mock('./node-ui-runtime.ts', () => ({
   createNodeUiRuntime: vi.fn(async (context) => {
     uiRuntimeState.context = context;
+    uiRuntimeState.bridgePort = new MessageChannel().port1;
     uiRuntimeState.runtime = {
       tuiEnabled: uiRuntimeState.tuiEnabled,
       start: uiRuntimeState.start,
@@ -69,6 +75,12 @@ vi.mock('./node-ui-runtime.ts', () => ({
       dispose: uiRuntimeState.dispose,
       triggerPoor: uiRuntimeState.triggerPoor,
       clearPoor: uiRuntimeState.clearPoor,
+      createBridgePort: () => {
+        if (!uiRuntimeState.bridgePort) {
+          throw new Error('bridge port missing');
+        }
+        return uiRuntimeState.bridgePort;
+      },
     };
     return uiRuntimeState.runtime;
   }),
@@ -86,6 +98,7 @@ afterEach(() => {
   inputRuntimeState.stop.mockReset();
   uiRuntimeState.context = undefined;
   uiRuntimeState.runtime = undefined;
+  uiRuntimeState.bridgePort = undefined;
   uiRuntimeState.start.mockReset();
   uiRuntimeState.stop.mockReset();
   uiRuntimeState.dispose.mockReset();
@@ -127,7 +140,7 @@ describe('node gameplay runtime', () => {
     expect(inputRuntimeState.stop).toHaveBeenCalled();
   });
 
-  test('bridges UI lifecycle and updates through the main thread runtime', async () => {
+  test('passes a direct bridge port to the gameplay worker and keeps lifecycle acks on the main thread', async () => {
     const promise = runNodeGameplayRuntime(createOptions());
     const worker = getLastWorker();
 
@@ -139,44 +152,10 @@ describe('node gameplay runtime', () => {
     await Promise.resolve();
 
     expect(uiRuntimeState.context?.laneDisplayMode).toBe('7 KEY');
-    expect(messagesOfKind(worker, 'ui-init-result')).toEqual([{ kind: 'ui-init-result', requestId: 3, enabled: true }]);
-
-    worker.emit('message', { kind: 'ui-start' });
-    expect(uiRuntimeState.start).toHaveBeenCalled();
-
-    worker.emit('message', {
-      kind: 'ui-frame',
-      frame: {
-        ...createUiInit().initialFrame,
-        currentBeat: 8,
-        currentSeconds: 4,
-      },
-    });
-    expect(uiRuntimeState.context?.uiSignals.getFrame()).toMatchObject({
-      currentBeat: 8,
-      currentSeconds: 4,
-    });
-
-    worker.emit('message', {
-      kind: 'ui-set-judge-combo',
-      state: {
-        judge: 'GREAT',
-        combo: 12,
-        channel: '11',
-        updatedAtMs: 1234,
-      },
-    });
-    expect(uiRuntimeState.context?.stateSignals.getJudgeCombo()).toMatchObject({
-      judge: 'GREAT',
-      combo: 12,
-      channel: '11',
-      updatedAtMs: 1234,
-    });
-
-    worker.emit('message', { kind: 'ui-trigger-poor', seconds: 1.25 });
-    worker.emit('message', { kind: 'ui-clear-poor' });
-    expect(uiRuntimeState.triggerPoor).toHaveBeenCalledWith(1.25);
-    expect(uiRuntimeState.clearPoor).toHaveBeenCalled();
+    const uiInitResults = messagesOfKind(worker, 'ui-init-result');
+    expect(uiInitResults).toHaveLength(1);
+    expect(uiInitResults[0]).toMatchObject({ kind: 'ui-init-result', requestId: 3, enabled: true });
+    expect((uiInitResults[0] as { port?: MessagePort }).port).toBe(uiRuntimeState.bridgePort);
 
     worker.emit('message', { kind: 'ui-stop', requestId: 4 });
     await Promise.resolve();

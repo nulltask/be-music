@@ -1,6 +1,6 @@
 import { effect } from 'alien-signals';
 import { createAbortError } from '@be-music/utils';
-import { parentPort, workerData } from 'node:worker_threads';
+import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import type {
   CreatePlayerInputRuntimeContext,
   CreatePlayerUiRuntimeContext,
@@ -41,7 +41,7 @@ async function bootstrap(): Promise<void> {
   const pendingUiInit = new Map<
     number,
     {
-      resolve: (enabled: boolean) => void;
+      resolve: (result: { enabled: boolean; port?: MessagePort }) => void;
       reject: (error: Error) => void;
       onProgress: CreatePlayerUiRuntimeContext['onBgaLoadProgress'];
     }
@@ -72,7 +72,10 @@ async function bootstrap(): Promise<void> {
         pending.reject(new Error(message.error));
         return;
       }
-      pending.resolve(message.enabled);
+      pending.resolve({
+        enabled: message.enabled,
+        port: message.port,
+      });
       return;
     }
     if (message.kind === 'ui-bga-load-progress') {
@@ -129,8 +132,8 @@ async function bootstrap(): Promise<void> {
   const createUiRuntime = async (context: CreatePlayerUiRuntimeContext) => {
     const initRequestId = nextUiRequestId;
     nextUiRequestId += 1;
-    const tuiEnabled = await requestUiInit(initRequestId, context, pendingUiInit);
-    if (!tuiEnabled) {
+    const uiInitResult = await requestUiInit(initRequestId, context, pendingUiInit);
+    if (!uiInitResult.enabled) {
       postWorkerMessage({
         kind: 'output',
         text: 'TUI is unavailable in this environment. Falling back to text output.\n',
@@ -144,6 +147,24 @@ async function bootstrap(): Promise<void> {
         clearPoor: () => undefined,
       };
     }
+    if (!uiInitResult.port) {
+      throw new Error('UI bridge port is unavailable');
+    }
+    const bridgePort = uiInitResult.port;
+
+    const postUiMessage = (
+      message:
+        | { kind: 'start' }
+        | { kind: 'frame'; frame: ReturnType<CreatePlayerUiRuntimeContext['uiSignals']['getFrame']> }
+        | { kind: 'commands'; commands: ReturnType<CreatePlayerUiRuntimeContext['uiSignals']['drainCommands']> }
+        | { kind: 'set-paused'; value: boolean }
+        | { kind: 'set-high-speed'; value: number }
+        | { kind: 'set-judge-combo'; state: ReturnType<CreatePlayerUiRuntimeContext['stateSignals']['getJudgeCombo']> }
+        | { kind: 'trigger-poor'; seconds: number }
+        | { kind: 'clear-poor' },
+    ): void => {
+      bridgePort.postMessage(message);
+    };
 
     let disposed = false;
     let stopPromise: Promise<void> | undefined;
@@ -153,11 +174,11 @@ async function bootstrap(): Promise<void> {
       if (commands) {
         const queuedCommands = context.uiSignals.drainCommands();
         if (queuedCommands.length > 0) {
-          postWorkerMessage({ kind: 'ui-commands', commands: queuedCommands });
+          postUiMessage({ kind: 'commands', commands: queuedCommands });
         }
       }
       if (frame) {
-        postWorkerMessage({ kind: 'ui-frame', frame: context.uiSignals.getFrame() });
+        postUiMessage({ kind: 'frame', frame: context.uiSignals.getFrame() });
       }
     });
 
@@ -172,16 +193,16 @@ async function bootstrap(): Promise<void> {
     });
 
     const stopPausedEffect = effect(() => {
-      postWorkerMessage({ kind: 'ui-set-paused', value: context.stateSignals.paused() });
+      postUiMessage({ kind: 'set-paused', value: context.stateSignals.paused() });
     });
 
     const stopHighSpeedEffect = effect(() => {
-      postWorkerMessage({ kind: 'ui-set-high-speed', value: context.stateSignals.highSpeed() });
+      postUiMessage({ kind: 'set-high-speed', value: context.stateSignals.highSpeed() });
     });
 
     const stopJudgeComboEffect = effect(() => {
       context.stateSignals.judgeComboTick();
-      postWorkerMessage({ kind: 'ui-set-judge-combo', state: context.stateSignals.getJudgeCombo() });
+      postUiMessage({ kind: 'set-judge-combo', state: context.stateSignals.getJudgeCombo() });
     });
 
     return {
@@ -190,7 +211,7 @@ async function bootstrap(): Promise<void> {
         if (disposed) {
           return;
         }
-        postWorkerMessage({ kind: 'ui-start' });
+        postUiMessage({ kind: 'start' });
       },
       stop: () => {
         if (disposed) {
@@ -209,6 +230,7 @@ async function bootstrap(): Promise<void> {
           return disposePromise;
         }
         disposed = true;
+        bridgePort.close();
         deferredUiFlush.dispose();
         stopFrameEffect();
         stopCommandEffect();
@@ -224,13 +246,13 @@ async function bootstrap(): Promise<void> {
         if (disposed) {
           return;
         }
-        postWorkerMessage({ kind: 'ui-trigger-poor', seconds });
+        postUiMessage({ kind: 'trigger-poor', seconds });
       },
       clearPoor: () => {
         if (disposed) {
           return;
         }
-        postWorkerMessage({ kind: 'ui-clear-poor' });
+        postUiMessage({ kind: 'clear-poor' });
       },
     };
   };
@@ -288,13 +310,13 @@ function requestUiInit(
   pendingUiInit: Map<
     number,
     {
-      resolve: (enabled: boolean) => void;
+      resolve: (result: { enabled: boolean; port?: MessagePort }) => void;
       reject: (error: Error) => void;
       onProgress: CreatePlayerUiRuntimeContext['onBgaLoadProgress'];
     }
   >,
-): Promise<boolean> {
-  return new Promise<boolean>((resolve, reject) => {
+): Promise<{ enabled: boolean; port?: MessagePort }> {
+  return new Promise<{ enabled: boolean; port?: MessagePort }>((resolve, reject) => {
     pendingUiInit.set(requestId, {
       resolve,
       reject,

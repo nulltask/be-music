@@ -1,6 +1,6 @@
 import { effect } from 'alien-signals';
 import { fileURLToPath } from 'node:url';
-import { Worker } from 'node:worker_threads';
+import { MessageChannel, type MessagePort, Worker } from 'node:worker_threads';
 import type { LaneBinding } from '../manual-input.ts';
 import type { PlayerStateSignals } from '../player-state-signals.ts';
 import type { PlayerUiSignalBus } from '../core/player-ui-signal-bus.ts';
@@ -22,11 +22,13 @@ export interface NodeUiRuntimeOptions {
   highSpeed: number;
   showLaneChannels?: boolean;
   randomPatternSummary?: string;
-  stateSignals: PlayerStateSignals;
-  uiSignals: PlayerUiSignalBus;
+  stateSignals?: PlayerStateSignals;
+  uiSignals?: PlayerUiSignalBus;
   baseDir: string;
   loadSignal?: AbortSignal;
   onBgaLoadProgress?: (progress: { ratio: number; detail?: string }) => void;
+  initialPaused?: boolean;
+  initialJudgeCombo?: ReturnType<PlayerStateSignals['getJudgeCombo']>;
 }
 
 export interface NodeUiRuntime {
@@ -36,6 +38,7 @@ export interface NodeUiRuntime {
   dispose: () => Promise<void>;
   triggerPoor: (seconds: number) => void;
   clearPoor: () => void;
+  createBridgePort: () => MessagePort;
 }
 
 export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promise<NodeUiRuntime> {
@@ -53,12 +56,16 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
       dispose: () => Promise.resolve(),
       triggerPoor: () => undefined,
       clearPoor: () => undefined,
+      createBridgePort: () => {
+        throw new Error('TUI bridge port is unavailable');
+      },
     };
   }
 
   let disposed = false;
   let stopPromise: Promise<void> | undefined;
   let disposePromise: Promise<void> | undefined;
+  let bridgePortAttached = false;
   const postWorkerMessage = (message: NodeUiWorkerInboundMessage): void => {
     if (disposed) {
       return;
@@ -66,40 +73,64 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
     worker.postMessage(message);
   };
 
-  const deferredUiFlush = createDeferredUiFlush(({ commands, frame }) => {
-    if (commands) {
-      const queuedCommands = options.uiSignals.drainCommands();
-      if (queuedCommands.length > 0) {
-        postWorkerMessage({ kind: 'commands', commands: queuedCommands });
-      }
-    }
-    if (frame) {
-      postWorkerMessage({ kind: 'frame', frame: options.uiSignals.getFrame() });
-    }
-  });
+  const deferredUiFlush =
+    options.uiSignals && options.stateSignals
+      ? createDeferredUiFlush(({ commands, frame }) => {
+          if (commands) {
+            const queuedCommands = options.uiSignals?.drainCommands() ?? [];
+            if (queuedCommands.length > 0) {
+              postWorkerMessage({ kind: 'commands', commands: queuedCommands });
+            }
+          }
+          if (frame) {
+            const frameState = options.uiSignals?.getFrame();
+            if (frameState) {
+              postWorkerMessage({ kind: 'frame', frame: frameState });
+            }
+          }
+        })
+      : undefined;
 
-  const stopFrameEffect = effect(() => {
-    options.uiSignals.frameTick();
-    deferredUiFlush.markFrameDirty();
-  });
+  const stopFrameEffect =
+    options.uiSignals && deferredUiFlush
+      ? effect(() => {
+          options.uiSignals?.frameTick();
+          deferredUiFlush.markFrameDirty();
+        })
+      : () => undefined;
 
-  const stopCommandEffect = effect(() => {
-    options.uiSignals.commandTick();
-    deferredUiFlush.markCommandsDirty();
-  });
+  const stopCommandEffect =
+    options.uiSignals && deferredUiFlush
+      ? effect(() => {
+          options.uiSignals?.commandTick();
+          deferredUiFlush.markCommandsDirty();
+        })
+      : () => undefined;
 
-  const stopPausedEffect = effect(() => {
-    postWorkerMessage({ kind: 'set-paused', value: options.stateSignals.paused() });
-  });
+  const stopPausedEffect =
+    options.stateSignals && options.uiSignals
+      ? effect(() => {
+          postWorkerMessage({ kind: 'set-paused', value: options.stateSignals?.paused() ?? false });
+        })
+      : () => undefined;
 
-  const stopHighSpeedEffect = effect(() => {
-    postWorkerMessage({ kind: 'set-high-speed', value: options.stateSignals.highSpeed() });
-  });
+  const stopHighSpeedEffect =
+    options.stateSignals && options.uiSignals
+      ? effect(() => {
+          postWorkerMessage({ kind: 'set-high-speed', value: options.stateSignals?.highSpeed() ?? options.highSpeed });
+        })
+      : () => undefined;
 
-  const stopJudgeComboEffect = effect(() => {
-    options.stateSignals.judgeComboTick();
-    postWorkerMessage({ kind: 'set-judge-combo', state: options.stateSignals.getJudgeCombo() });
-  });
+  const stopJudgeComboEffect =
+    options.stateSignals && options.uiSignals
+      ? effect(() => {
+          options.stateSignals?.judgeComboTick();
+          const state = options.stateSignals?.getJudgeCombo();
+          if (state) {
+            postWorkerMessage({ kind: 'set-judge-combo', state });
+          }
+        })
+      : () => undefined;
 
   const detachResizeHandler = attachResizeHandler((columns, rows) => {
     postWorkerMessage({ kind: 'resize', columns, rows });
@@ -125,7 +156,7 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
         return disposePromise;
       }
       disposed = true;
-      deferredUiFlush.dispose();
+      deferredUiFlush?.dispose();
       stopFrameEffect();
       stopCommandEffect();
       stopPausedEffect();
@@ -140,6 +171,18 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
     },
     clearPoor: () => {
       postWorkerMessage({ kind: 'clear-poor' });
+    },
+    createBridgePort: () => {
+      if (disposed) {
+        throw new Error('TUI bridge port is unavailable');
+      }
+      if (bridgePortAttached) {
+        throw new Error('TUI bridge port is already attached');
+      }
+      const channel = new MessageChannel();
+      bridgePortAttached = true;
+      worker.postMessage({ kind: 'attach-bridge-port', port: channel.port1 }, [channel.port1]);
+      return channel.port2;
     },
   };
 }
@@ -211,6 +254,13 @@ function createWorkerInitData(options: NodeUiRuntimeOptions): NodeUiWorkerInitDa
     baseDir: options.baseDir,
     stdinIsTTY: Boolean(process.stdin.isTTY),
     stdoutIsTTY: Boolean(process.stdout.isTTY),
+    initialPaused: options.initialPaused ?? options.stateSignals?.paused() ?? false,
+    initialJudgeCombo: options.initialJudgeCombo ??
+      options.stateSignals?.getJudgeCombo() ?? {
+        judge: 'READY',
+        combo: 0,
+        updatedAtMs: 0,
+      },
   };
 }
 

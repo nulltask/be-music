@@ -1,3 +1,4 @@
+import type { MessagePort } from 'node:worker_threads';
 import type { BeMusicJson } from '@be-music/json';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/player-ui-signal-bus.ts';
 import type { LaneBinding } from '../manual-input.ts';
@@ -16,9 +17,12 @@ export interface NodeUiWorkerInitData {
   baseDir: string;
   stdinIsTTY: boolean;
   stdoutIsTTY: boolean;
+  initialPaused: boolean;
+  initialJudgeCombo: PlayerJudgeComboSignalState;
 }
 
 export type NodeUiWorkerInboundMessage =
+  | { kind: 'attach-bridge-port'; port: MessagePort }
   | { kind: 'start' }
   | { kind: 'stop' }
   | { kind: 'dispose' }

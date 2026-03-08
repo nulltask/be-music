@@ -2,12 +2,10 @@ import { effect } from 'alien-signals';
 import { createAbortError } from '@be-music/utils';
 import type { BeMusicJson } from '@be-music/json';
 import { fileURLToPath } from 'node:url';
-import { Worker } from 'node:worker_threads';
+import { Worker, type TransferListItem } from 'node:worker_threads';
 import { createPlayerInputSignalBus } from '../core/player-input-signal-bus.ts';
 import type { PlayerLoadProgress, PlayerSummary } from '../core/player-engine.ts';
 import { PlayerInterruptedError } from '../core/player-engine.ts';
-import { createPlayerUiSignalBus } from '../core/player-ui-signal-bus.ts';
-import { createPlayerStateSignals, type PlayerStateSignals } from '../player-state-signals.ts';
 import { createNodeInputRuntime, type NodeInputRuntime } from './node-input-runtime.ts';
 import { createNodeUiRuntime, type NodeUiRuntime } from './node-ui-runtime.ts';
 import type {
@@ -44,8 +42,6 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
   let inputRuntime: NodeInputRuntime | undefined;
   let stopInputEffect = (): void => undefined;
   let uiRuntime: NodeUiRuntime | undefined;
-  let uiSignals: ReturnType<typeof createPlayerUiSignalBus> | undefined;
-  let stateSignals: PlayerStateSignals | undefined;
   let settled = false;
 
   const cleanup = async (): Promise<void> => {
@@ -56,8 +52,6 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
     await settleMaybeAsyncWithTimeout(uiRuntime?.stop(), 200);
     await settleMaybeAsyncWithTimeout(uiRuntime?.dispose(), 300);
     uiRuntime = undefined;
-    uiSignals = undefined;
-    stateSignals = undefined;
   };
 
   return await new Promise<PlayerSummary>((resolve, reject) => {
@@ -129,51 +123,10 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
       }
       if (message.kind === 'ui-init') {
         void handleUiInit(worker, message, {
-          setRuntime: (runtime, nextUiSignals, nextStateSignals) => {
+          setRuntime: (runtime) => {
             uiRuntime = runtime;
-            uiSignals = nextUiSignals;
-            stateSignals = nextStateSignals;
           },
         });
-        return;
-      }
-      if (message.kind === 'ui-start') {
-        uiRuntime?.start();
-        return;
-      }
-      if (message.kind === 'ui-frame') {
-        uiSignals?.publishFrame(message.frame);
-        return;
-      }
-      if (message.kind === 'ui-commands') {
-        for (const command of message.commands) {
-          uiSignals?.pushCommand(command);
-        }
-        return;
-      }
-      if (message.kind === 'ui-set-paused') {
-        stateSignals?.setPaused(message.value);
-        return;
-      }
-      if (message.kind === 'ui-set-high-speed') {
-        stateSignals?.setHighSpeed(message.value);
-        return;
-      }
-      if (message.kind === 'ui-set-judge-combo') {
-        stateSignals?.publishJudgeCombo(
-          message.state.judge,
-          message.state.combo,
-          message.state.channel,
-          message.state.updatedAtMs,
-        );
-        return;
-      }
-      if (message.kind === 'ui-trigger-poor') {
-        uiRuntime?.triggerPoor(message.seconds);
-        return;
-      }
-      if (message.kind === 'ui-clear-poor') {
-        uiRuntime?.clearPoor();
         return;
       }
       if (message.kind === 'ui-stop') {
@@ -184,8 +137,6 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
         void handleUiLifecycleAck(worker, message.requestId, 'ui-dispose-result', async () => {
           await uiRuntime?.dispose();
           uiRuntime = undefined;
-          uiSignals = undefined;
-          stateSignals = undefined;
         });
         return;
       }
@@ -225,23 +176,9 @@ async function handleUiInit(
   worker: Worker,
   message: Extract<NodeGameplayWorkerOutboundMessage, { kind: 'ui-init' }>,
   runtimeStore: {
-    setRuntime: (
-      runtime: NodeUiRuntime | undefined,
-      uiSignals: ReturnType<typeof createPlayerUiSignalBus> | undefined,
-      stateSignals: PlayerStateSignals | undefined,
-    ) => void;
+    setRuntime: (runtime: NodeUiRuntime | undefined) => void;
   },
 ): Promise<void> {
-  const localUiSignals = createPlayerUiSignalBus(message.runtime.initialFrame);
-  const localStateSignals = createPlayerStateSignals(message.runtime.highSpeed);
-  localStateSignals.setPaused(message.runtime.initialPaused);
-  localStateSignals.publishJudgeCombo(
-    message.runtime.initialJudgeCombo.judge,
-    message.runtime.initialJudgeCombo.combo,
-    message.runtime.initialJudgeCombo.channel,
-    message.runtime.initialJudgeCombo.updatedAtMs,
-  );
-
   try {
     const runtime = await createNodeUiRuntime({
       json: message.runtime.json,
@@ -253,9 +190,9 @@ async function handleUiInit(
       highSpeed: message.runtime.highSpeed,
       showLaneChannels: message.runtime.showLaneChannels,
       randomPatternSummary: message.runtime.randomPatternSummary,
-      stateSignals: localStateSignals,
-      uiSignals: localUiSignals,
       baseDir: message.runtime.baseDir,
+      initialPaused: message.runtime.initialPaused,
+      initialJudgeCombo: message.runtime.initialJudgeCombo,
       onBgaLoadProgress: (progress) => {
         postWorkerMessage(worker, {
           kind: 'ui-bga-load-progress',
@@ -264,18 +201,20 @@ async function handleUiInit(
         });
       },
     });
-    runtimeStore.setRuntime(
-      runtime.tuiEnabled ? runtime : undefined,
-      runtime.tuiEnabled ? localUiSignals : undefined,
-      runtime.tuiEnabled ? localStateSignals : undefined,
-    );
-    postWorkerMessage(worker, {
+    runtimeStore.setRuntime(runtime.tuiEnabled ? runtime : undefined);
+    const transferList: TransferListItem[] = [];
+    const response: NodeGameplayWorkerInboundMessage = {
       kind: 'ui-init-result',
       requestId: message.requestId,
       enabled: runtime.tuiEnabled,
-    });
+    };
+    if (runtime.tuiEnabled) {
+      response.port = runtime.createBridgePort();
+      transferList.push(response.port);
+    }
+    postWorkerMessage(worker, response, transferList);
   } catch (error) {
-    runtimeStore.setRuntime(undefined, undefined, undefined);
+    runtimeStore.setRuntime(undefined);
     postWorkerMessage(worker, {
       kind: 'ui-init-result',
       requestId: message.requestId,
@@ -331,8 +270,12 @@ function resolveNodeGameplayWorkerEnv(): NodeJS.ProcessEnv {
   };
 }
 
-function postWorkerMessage(worker: Worker, message: NodeGameplayWorkerInboundMessage): void {
-  worker.postMessage(message);
+function postWorkerMessage(
+  worker: Worker,
+  message: NodeGameplayWorkerInboundMessage,
+  transferList?: TransferListItem[],
+): void {
+  worker.postMessage(message, transferList ?? []);
 }
 
 async function settleMaybeAsyncWithTimeout(
