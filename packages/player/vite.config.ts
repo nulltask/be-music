@@ -9,6 +9,7 @@ export default createPackageViteConfig({
   entries: {
     index: 'src/index.ts',
     cli: 'src/cli.ts',
+    'node-gameplay-worker': 'src/node/node-gameplay-worker.ts',
     'node-ui-worker': 'src/node/node-ui-worker.ts',
   },
 });

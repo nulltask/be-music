@@ -1,0 +1,357 @@
+import { effect } from 'alien-signals';
+import { createAbortError } from '@be-music/utils';
+import type { BeMusicJson } from '@be-music/json';
+import { fileURLToPath } from 'node:url';
+import { Worker } from 'node:worker_threads';
+import { createPlayerInputSignalBus } from '../core/player-input-signal-bus.ts';
+import type { PlayerLoadProgress, PlayerSummary } from '../core/player-engine.ts';
+import { PlayerInterruptedError } from '../core/player-engine.ts';
+import { createPlayerUiSignalBus } from '../core/player-ui-signal-bus.ts';
+import { createPlayerStateSignals, type PlayerStateSignals } from '../player-state-signals.ts';
+import { createNodeInputRuntime, type NodeInputRuntime } from './node-input-runtime.ts';
+import { createNodeUiRuntime, type NodeUiRuntime } from './node-ui-runtime.ts';
+import type {
+  NodeGameplayWorkerInboundMessage,
+  NodeGameplayWorkerInitData,
+  NodeGameplayWorkerOutboundMessage,
+  NodeGameplayWorkerPlayOptions,
+} from './node-gameplay-worker-protocol.ts';
+
+export interface NodeGameplayRuntimeOptions {
+  json: BeMusicJson;
+  mode: 'auto' | 'manual';
+  autoScratch?: boolean;
+  playOptions: NodeGameplayWorkerPlayOptions;
+  signal?: AbortSignal;
+  onLoadProgress?: (progress: PlayerLoadProgress) => void;
+  onLoadComplete?: () => void;
+  onHighSpeedChange?: (value: number) => void;
+  writeOutput?: (text: string) => void;
+}
+
+export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions): Promise<PlayerSummary> {
+  if (options.signal?.aborted) {
+    throw createAbortError();
+  }
+
+  const worker = new Worker(resolveNodeGameplayWorkerUrl(), {
+    workerData: createWorkerInitData(options),
+    execArgv: process.execArgv,
+    env: resolveNodeGameplayWorkerEnv(),
+  });
+  const writeOutput = options.writeOutput ?? ((text: string) => process.stdout.write(text));
+
+  let inputRuntime: NodeInputRuntime | undefined;
+  let stopInputEffect = (): void => undefined;
+  let uiRuntime: NodeUiRuntime | undefined;
+  let uiSignals: ReturnType<typeof createPlayerUiSignalBus> | undefined;
+  let stateSignals: PlayerStateSignals | undefined;
+  let settled = false;
+
+  const cleanup = async (): Promise<void> => {
+    inputRuntime?.stop();
+    inputRuntime = undefined;
+    stopInputEffect();
+    stopInputEffect = () => undefined;
+    await settleMaybeAsyncWithTimeout(uiRuntime?.stop(), 200);
+    await settleMaybeAsyncWithTimeout(uiRuntime?.dispose(), 300);
+    uiRuntime = undefined;
+    uiSignals = undefined;
+    stateSignals = undefined;
+  };
+
+  return await new Promise<PlayerSummary>((resolve, reject) => {
+    const signal = options.signal;
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup()
+        .catch(() => undefined)
+        .finally(() => {
+          worker.off('message', onMessage);
+          worker.off('error', onError);
+          worker.off('exit', onExit);
+          signal?.removeEventListener('abort', onAbort);
+          callback();
+        });
+    };
+
+    const onMessage = (message: NodeGameplayWorkerOutboundMessage): void => {
+      if (message.kind === 'load-progress') {
+        options.onLoadProgress?.(message.progress);
+        return;
+      }
+      if (message.kind === 'load-complete') {
+        options.onLoadComplete?.();
+        return;
+      }
+      if (message.kind === 'output') {
+        writeOutput(message.text);
+        return;
+      }
+      if (message.kind === 'high-speed') {
+        options.onHighSpeedChange?.(message.value);
+        return;
+      }
+      if (message.kind === 'input-init') {
+        inputRuntime?.stop();
+        stopInputEffect();
+        const inputSignals = createPlayerInputSignalBus();
+        inputRuntime = createNodeInputRuntime({
+          mode: message.runtime.mode,
+          inputSignals,
+          inputTokenToChannels: new Map(
+            message.runtime.inputTokenToChannelsEntries.map(([token, channels]) => [token, [...channels]]),
+          ),
+        });
+        stopInputEffect = effect(() => {
+          inputSignals.tick();
+          const commands = inputSignals.drainCommands();
+          if (commands.length > 0) {
+            postWorkerMessage(worker, {
+              kind: 'input-commands',
+              commands,
+            });
+          }
+        });
+        return;
+      }
+      if (message.kind === 'input-start') {
+        inputRuntime?.start();
+        return;
+      }
+      if (message.kind === 'input-stop') {
+        inputRuntime?.stop();
+        return;
+      }
+      if (message.kind === 'ui-init') {
+        void handleUiInit(worker, message, {
+          setRuntime: (runtime, nextUiSignals, nextStateSignals) => {
+            uiRuntime = runtime;
+            uiSignals = nextUiSignals;
+            stateSignals = nextStateSignals;
+          },
+        });
+        return;
+      }
+      if (message.kind === 'ui-start') {
+        uiRuntime?.start();
+        return;
+      }
+      if (message.kind === 'ui-frame') {
+        uiSignals?.publishFrame(message.frame);
+        return;
+      }
+      if (message.kind === 'ui-commands') {
+        for (const command of message.commands) {
+          uiSignals?.pushCommand(command);
+        }
+        return;
+      }
+      if (message.kind === 'ui-set-paused') {
+        stateSignals?.setPaused(message.value);
+        return;
+      }
+      if (message.kind === 'ui-set-high-speed') {
+        stateSignals?.setHighSpeed(message.value);
+        return;
+      }
+      if (message.kind === 'ui-set-judge-combo') {
+        stateSignals?.publishJudgeCombo(
+          message.state.judge,
+          message.state.combo,
+          message.state.channel,
+          message.state.updatedAtMs,
+        );
+        return;
+      }
+      if (message.kind === 'ui-trigger-poor') {
+        uiRuntime?.triggerPoor(message.seconds);
+        return;
+      }
+      if (message.kind === 'ui-clear-poor') {
+        uiRuntime?.clearPoor();
+        return;
+      }
+      if (message.kind === 'ui-stop') {
+        void handleUiLifecycleAck(worker, message.requestId, 'ui-stop-result', () => uiRuntime?.stop());
+        return;
+      }
+      if (message.kind === 'ui-dispose') {
+        void handleUiLifecycleAck(worker, message.requestId, 'ui-dispose-result', async () => {
+          await uiRuntime?.dispose();
+          uiRuntime = undefined;
+          uiSignals = undefined;
+          stateSignals = undefined;
+        });
+        return;
+      }
+      if (message.kind === 'result') {
+        settle(() => resolve(message.summary));
+        return;
+      }
+      if (message.kind === 'interrupted') {
+        settle(() => reject(new PlayerInterruptedError(message.reason)));
+        return;
+      }
+      if (message.kind === 'error') {
+        settle(() => reject(message.name === 'AbortError' ? createAbortError() : new Error(message.message)));
+      }
+    };
+
+    const onError = (error: Error): void => {
+      settle(() => reject(error));
+    };
+
+    const onExit = (code: number): void => {
+      settle(() => reject(new Error(`Gameplay worker exited unexpectedly (code ${code})`)));
+    };
+
+    const onAbort = (): void => {
+      postWorkerMessage(worker, { kind: 'abort' });
+    };
+
+    worker.on('message', onMessage);
+    worker.on('error', onError);
+    worker.on('exit', onExit);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function handleUiInit(
+  worker: Worker,
+  message: Extract<NodeGameplayWorkerOutboundMessage, { kind: 'ui-init' }>,
+  runtimeStore: {
+    setRuntime: (
+      runtime: NodeUiRuntime | undefined,
+      uiSignals: ReturnType<typeof createPlayerUiSignalBus> | undefined,
+      stateSignals: PlayerStateSignals | undefined,
+    ) => void;
+  },
+): Promise<void> {
+  const localUiSignals = createPlayerUiSignalBus(message.runtime.initialFrame);
+  const localStateSignals = createPlayerStateSignals(message.runtime.highSpeed);
+  localStateSignals.setPaused(message.runtime.initialPaused);
+  localStateSignals.publishJudgeCombo(
+    message.runtime.initialJudgeCombo.judge,
+    message.runtime.initialJudgeCombo.combo,
+    message.runtime.initialJudgeCombo.channel,
+    message.runtime.initialJudgeCombo.updatedAtMs,
+  );
+
+  try {
+    const runtime = await createNodeUiRuntime({
+      json: message.runtime.json,
+      mode: message.runtime.mode,
+      laneDisplayMode: message.runtime.laneDisplayMode,
+      laneBindings: message.runtime.laneBindings,
+      speed: message.runtime.speed,
+      judgeWindowMs: message.runtime.judgeWindowMs,
+      highSpeed: message.runtime.highSpeed,
+      showLaneChannels: message.runtime.showLaneChannels,
+      randomPatternSummary: message.runtime.randomPatternSummary,
+      stateSignals: localStateSignals,
+      uiSignals: localUiSignals,
+      baseDir: message.runtime.baseDir,
+      onBgaLoadProgress: (progress) => {
+        postWorkerMessage(worker, {
+          kind: 'ui-bga-load-progress',
+          requestId: message.requestId,
+          progress,
+        });
+      },
+    });
+    runtimeStore.setRuntime(
+      runtime.tuiEnabled ? runtime : undefined,
+      runtime.tuiEnabled ? localUiSignals : undefined,
+      runtime.tuiEnabled ? localStateSignals : undefined,
+    );
+    postWorkerMessage(worker, {
+      kind: 'ui-init-result',
+      requestId: message.requestId,
+      enabled: runtime.tuiEnabled,
+    });
+  } catch (error) {
+    runtimeStore.setRuntime(undefined, undefined, undefined);
+    postWorkerMessage(worker, {
+      kind: 'ui-init-result',
+      requestId: message.requestId,
+      enabled: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+async function handleUiLifecycleAck(
+  worker: Worker,
+  requestId: number,
+  kind: 'ui-stop-result' | 'ui-dispose-result',
+  action: () => void | Promise<void>,
+): Promise<void> {
+  try {
+    await Promise.resolve(action());
+    postWorkerMessage(worker, { kind, requestId });
+  } catch (error) {
+    postWorkerMessage(worker, {
+      kind,
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function createWorkerInitData(options: NodeGameplayRuntimeOptions): NodeGameplayWorkerInitData {
+  return {
+    json: options.json,
+    mode: options.mode,
+    autoScratch: options.autoScratch,
+    playOptions: options.playOptions,
+  };
+}
+
+function resolveNodeGameplayWorkerUrl(): URL {
+  return new URL(
+    import.meta.url.endsWith('.ts') ? './node-gameplay-worker.ts' : './node-gameplay-worker.js',
+    import.meta.url,
+  );
+}
+
+function resolveNodeGameplayWorkerEnv(): NodeJS.ProcessEnv {
+  if (!import.meta.url.endsWith('.ts')) {
+    return process.env;
+  }
+
+  return {
+    ...process.env,
+    TSX_TSCONFIG_PATH:
+      process.env.TSX_TSCONFIG_PATH ?? fileURLToPath(new URL('../../../../tsconfig.typecheck.json', import.meta.url)),
+  };
+}
+
+function postWorkerMessage(worker: Worker, message: NodeGameplayWorkerInboundMessage): void {
+  worker.postMessage(message);
+}
+
+async function settleMaybeAsyncWithTimeout(
+  task: void | Promise<void> | undefined,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (!task) {
+    return true;
+  }
+  return await settleWithTimeout(Promise.resolve(task), timeoutMs);
+}
+
+async function settleWithTimeout(task: Promise<void>, timeoutMs: number): Promise<boolean> {
+  let completed = false;
+  const guardedTask = task
+    .catch(() => undefined)
+    .then(() => {
+      completed = true;
+    });
+  await Promise.race([guardedTask, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
+  return completed;
+}
