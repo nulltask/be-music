@@ -158,6 +158,60 @@ test('BMS: keeps all LNOBJ declarations in declaration order', () => {
   expect(parsed.metadata.extras.LNOBJ).toBeUndefined();
 });
 
+test('BMS: prefers EOF-side definitions for duplicate headers, indexed headers, and measure lengths', () => {
+  const parsed = parseChart(
+    [
+      '#TITLE First Title',
+      '#TITLE Final Title',
+      '#BPM 120',
+      '#BPM 150',
+      '#WAV01 first.wav',
+      '#WAV01 second.wav',
+      '#SCROLL01 0.5',
+      '#SCROLL01 -1',
+      '#00102:1.5',
+      '#00102:0.75',
+      '#00111:01',
+      '',
+    ].join('\n'),
+  );
+
+  expect(parsed.metadata.title).toBe('Final Title');
+  expect(parsed.metadata.bpm).toBe(150);
+  expect(parsed.resources.wav['01']).toBe('second.wav');
+  expect(parsed.bms.scroll['01']).toBe(-1);
+  expect(parsed.measures).toContainEqual({ index: 1, length: 0.75 });
+});
+
+test('BMS: preserves repeated STP, LNOBJ, and control-flow entries instead of collapsing them', () => {
+  const parsed = parseChart(
+    [
+      '#STP 001.192',
+      '#STP 002.096',
+      '#LNOBJ AA',
+      '#LNOBJ BB',
+      '#RANDOM 2',
+      '#IF 1',
+      '#TITLE Branch Title',
+      '#ENDIF',
+      '#ENDRANDOM',
+      '#00111:01',
+      '',
+    ].join('\n'),
+  );
+
+  expect(parsed.bms.stp).toEqual(['001.192', '002.096']);
+  expect(parsed.bms.lnObjs).toEqual(['AA', 'BB']);
+  expect(parsed.metadata.title).toBeUndefined();
+  expect(parsed.bms.controlFlow).toEqual([
+    { kind: 'directive', command: 'RANDOM', value: '2' },
+    { kind: 'directive', command: 'IF', value: '1' },
+    { kind: 'header', command: 'TITLE', value: 'Branch Title' },
+    { kind: 'directive', command: 'ENDIF', value: undefined },
+    { kind: 'directive', command: 'ENDRANDOM', value: undefined },
+  ]);
+});
+
 test('BMS: parses RANDOM/IF/SWITCH control flow directives', async () => {
   const parsed = await parseChartFile(unifiedBmsChartPath);
 
