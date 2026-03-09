@@ -205,6 +205,10 @@
 - [x] BGA 合成の最大レイヤ数と優先順位（通常時は 3 層: `04` < `07` < `0A`、POOR 表示中は POOR を最優先）
 - [ ] 動画 BGA に対する `#ARGBxx` / `#BGAxx` パラメータ適用の有無
 - [ ] `#BASEBPM` の実時間反映（速度表示・HI-SPEED 計算・内部時刻計算）方針
+- [ ] player: `#PLAYER` 未指定時の既定値 `1` を選曲画面・TUI・結果表示へ反映
+- [ ] player: `#PLAYER=2` / `#PLAYER=4` の表示と実装実態を一致させる（meta only 明示 or 専用モード実装）
+- [ ] editor: `setMetadata` / `set-meta` で `#PLAYER` を `metadata.extras` ではなく `bms.player` へ書き込む
+- [ ] editor: dedicated BMS 拡張ヘッダを API/CLI 編集後に save/load ラウンドトリップなしで export できるようにする
 - [ ] 超長行（例: 100KB 級）入力時の受理上限とエラーハンドリング
 - [ ] 演奏/内部オブジェクトが数十万規模の譜面に対する上限と性能保証方針
 
