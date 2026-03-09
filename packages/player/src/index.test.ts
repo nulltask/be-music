@@ -266,7 +266,7 @@ test('player: derives long-note end beat from bmson notes.l', () => {
 test('player: derives long-note end beat from bms #LNOBJ', () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
-  json.bms.lnObj = 'AA';
+  json.bms.lnObjs = ['AA'];
   json.events = [
     { measure: 0, channel: '11', position: [0, 1], value: '01' },
     { measure: 0, channel: '11', position: [1, 4], value: 'AA' },
@@ -285,7 +285,6 @@ test('player: derives long-note end beat from multiple #LNOBJ declarations', () 
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
   json.bms.lnObjs = ['AA', 'BB'];
-  json.bms.lnObj = 'BB';
   const startA = { measure: 0, channel: '11', position: [0, 1] as const, value: '01' };
   const endA = { measure: 0, channel: '11', position: [1, 4] as const, value: 'AA' };
   const startB = { measure: 0, channel: '12', position: [0, 1] as const, value: '02' };
@@ -300,7 +299,7 @@ test('player: derives long-note end beat from multiple #LNOBJ declarations', () 
 test('player: prioritizes 51-69 over LNOBJ when the same lane tick conflicts', () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
-  json.bms.lnObj = 'AA';
+  json.bms.lnObjs = ['AA'];
   const start = { measure: 0, channel: '11', position: [0, 1] as const, value: '01' };
   const lnobjEnd = { measure: 0, channel: '11', position: [2, 4] as const, value: 'AA' };
   const legacy = { measure: 0, channel: '51', position: [2, 4] as const, value: '02' };

@@ -93,7 +93,6 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   expect(json.bms.wavCmd).toBe('legacy');
   expect(json.bms.lnType).toBe(1);
   expect(json.bms.lnMode).toBe(1);
-  expect(json.bms.lnObj).toBe('AB');
   expect(json.bms.lnObjs).toEqual(['AA', 'AB']);
   expect(json.bms.volWav).toBe(90);
   expect(json.bms.defExRank).toBe(120);
@@ -145,7 +144,7 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   expect(json.metadata.extras.CHARSET).toBeUndefined();
 });
 
-test('BMS: keeps all LNOBJ declarations and uses the last one as lnObj', () => {
+test('BMS: keeps all LNOBJ declarations in declaration order', () => {
   const parsed = parseChart(
     [
       '#LNOBJ AA',
@@ -156,7 +155,6 @@ test('BMS: keeps all LNOBJ declarations and uses the last one as lnObj', () => {
   );
 
   expect(parsed.bms.lnObjs).toEqual(['AA', 'BB']);
-  expect(parsed.bms.lnObj).toBe('BB');
   expect(parsed.metadata.extras.LNOBJ).toBeUndefined();
 });
 
@@ -279,7 +277,7 @@ test('bmson: treats x=0/null notes as BGM(01) and prioritizes playable notes on 
   expect(playableNotes.some((event) => event.position[0] === 480)).toBe(true);
 });
 
-test('JSON: normalizes and imports bms/bmson extensions and rejects invalid positions', () => {
+test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and rejects invalid positions', () => {
   const parsed = parseChart(
     JSON.stringify({
       format: BMS_JSON_FORMAT,
@@ -292,7 +290,8 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
         preview: 'preview.ogg',
         lnType: '2',
         lnMode: '1',
-        lnObj: 'zz',
+        lnObj: 'yy',
+        lnObjs: ['zz'],
         volWav: '90',
         defExRank: '100.5',
         player: '2',
@@ -357,8 +356,8 @@ test('JSON: normalizes and imports bms/bmson extensions and rejects invalid posi
   expect(parsed.bms.preview).toBe('preview.ogg');
   expect(parsed.bms.lnType).toBe(2);
   expect(parsed.bms.lnMode).toBe(1);
-  expect(parsed.bms.lnObj).toBe('ZZ');
   expect(parsed.bms.lnObjs).toEqual(['ZZ']);
+  expect(parsed.bms.lnObjs).not.toContain('YY');
   expect(parsed.bms.volWav).toBe(90);
   expect(parsed.bms.defExRank).toBe(100.5);
   expect(parsed.bms.player).toBe(2);
@@ -462,7 +461,6 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
   expect(parsed.bms.preview).toBe('preview.ogg');
   expect(parsed.bms.lnType).toBe(1);
   expect(parsed.bms.lnMode).toBe(2);
-  expect(parsed.bms.lnObj).toBe('ZZ');
   expect(parsed.bms.lnObjs).toEqual(['ZZ']);
   expect(parsed.bms.volWav).toBe(70);
   expect(parsed.bms.defExRank).toBe(120);

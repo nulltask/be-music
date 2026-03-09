@@ -137,7 +137,6 @@ test('BMS stringify: writes extension headers', async () => {
 test('BMS stringify: writes multiple LNOBJ declarations in order', () => {
   const json = createEmptyJson('bms');
   json.bms.lnObjs = ['AA', 'BB'];
-  json.bms.lnObj = 'BB';
 
   const output = stringifyBms(json);
   const lnObjLines = output

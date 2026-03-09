@@ -208,7 +208,7 @@ test('audio-renderer: ignores scroll channels for sample triggering', () => {
 test('audio-renderer: ignores paired #LNOBJ end objects for sample triggering', () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
-  json.bms.lnObj = 'AA';
+  json.bms.lnObjs = ['AA'];
   json.resources.wav['01'] = 'start.wav';
   json.resources.wav['AA'] = 'end.wav';
   const start = { measure: 0, channel: '11', position: [0, 1] as const, value: '01' };
@@ -226,7 +226,6 @@ test('audio-renderer: accepts multiple #LNOBJ declarations for end suppression',
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
   json.bms.lnObjs = ['AA', 'BB'];
-  json.bms.lnObj = 'BB';
   json.resources.wav['01'] = 'start-a.wav';
   json.resources.wav['02'] = 'start-b.wav';
   json.resources.wav['AA'] = 'end-a.wav';
@@ -247,7 +246,7 @@ test('audio-renderer: accepts multiple #LNOBJ declarations for end suppression',
 test('audio-renderer: prioritizes 51-69 over LNOBJ when same lane tick conflicts', () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
-  json.bms.lnObj = 'AA';
+  json.bms.lnObjs = ['AA'];
   json.resources.wav['01'] = 'start.wav';
   json.resources.wav['AA'] = 'lnobj.wav';
   json.resources.wav['02'] = 'legacy.wav';

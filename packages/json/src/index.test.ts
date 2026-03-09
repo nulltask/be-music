@@ -220,7 +220,7 @@ test('json: classifies channel types', () => {
 
 test('json: collectLnobjEndEvents returns only paired LNOBJ end markers', () => {
   const json = createEmptyJson('bms');
-  json.bms.lnObj = 'AA';
+  json.bms.lnObjs = ['AA'];
   const startA: BeMusicEvent = { measure: 0, channel: '11', position: [0, 1], value: '01' };
   const endA: BeMusicEvent = { measure: 0, channel: '11', position: [1, 4], value: 'AA' };
   const sameBeatLnobj: BeMusicEvent = { measure: 0, channel: '12', position: [0, 1], value: 'AA' };
@@ -240,7 +240,6 @@ test('json: collectLnobjEndEvents returns only paired LNOBJ end markers', () => 
 test('json: resolveLnobjLongNotes accepts multiple LNOBJ declarations', () => {
   const json = createEmptyJson('bms');
   json.bms.lnObjs = ['AA', 'BB'];
-  json.bms.lnObj = 'BB';
   const startA: BeMusicEvent = { measure: 0, channel: '11', position: [0, 1], value: '01' };
   const endA: BeMusicEvent = { measure: 0, channel: '11', position: [1, 4], value: 'AA' };
   const startB: BeMusicEvent = { measure: 0, channel: '12', position: [0, 1], value: '02' };
@@ -256,7 +255,7 @@ test('json: resolveLnobjLongNotes accepts multiple LNOBJ declarations', () => {
 
 test('json: resolveLnobjLongNotes prioritizes 51-69 objects over LNOBJ at same tick', () => {
   const json = createEmptyJson('bms');
-  json.bms.lnObj = 'AA';
+  json.bms.lnObjs = ['AA'];
   const start: BeMusicEvent = { measure: 0, channel: '11', position: [0, 1], value: '01' };
   const lnobjEnd: BeMusicEvent = { measure: 0, channel: '11', position: [2, 4], value: 'AA' };
   const legacyLongNote: BeMusicEvent = { measure: 0, channel: '51', position: [2, 4], value: '02' };

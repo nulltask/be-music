@@ -132,7 +132,6 @@ export interface BmsExtensions {
   preview?: string;
   lnType?: number;
   lnMode?: number;
-  lnObj?: string;
   lnObjs?: string[];
   volWav?: number;
   defExRank?: number;
@@ -875,9 +874,6 @@ function resolveLnobjValues(json: BeMusicJson): Set<string> {
     if (typeof candidate === 'string' && candidate.length > 0) {
       values.add(normalizeObjectKey(candidate));
     }
-  }
-  if (typeof json.bms.lnObj === 'string' && json.bms.lnObj.length > 0) {
-    values.add(normalizeObjectKey(json.bms.lnObj));
   }
   return values;
 }

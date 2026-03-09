@@ -218,8 +218,6 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
         lines.push(`#LNOBJ ${normalizeObjectKey(lnObj)}`);
       }
     }
-  } else if (typeof json.bms.lnObj === 'string' && json.bms.lnObj.length > 0) {
-    lines.push(`#LNOBJ ${normalizeObjectKey(json.bms.lnObj)}`);
   }
   if (typeof json.bms.volWav === 'number') {
     lines.push(`#VOLWAV ${formatNumber(json.bms.volWav)}`);
