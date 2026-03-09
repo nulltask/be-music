@@ -1,4 +1,11 @@
-import type { BeMusicJson, BeMusicPosition } from '@be-music/json';
+import type {
+  BeMusicJson,
+  BeMusicPosition,
+  BmsonBpmEventEntry,
+  BmsonSoundChannelEntry,
+  BmsonSoundNoteEntry,
+  BmsonStopEventEntry,
+} from '@be-music/json';
 import { normalizeSortedUniqueNonNegativeIntegers } from '@be-music/utils';
 
 export interface BmsonInfo {
@@ -138,6 +145,83 @@ export function normalizeBmsonLines(lines: unknown): number[] {
   return sorted;
 }
 
+export function normalizeBmsonBpmEvents(input: unknown): BmsonBpmEventEntry[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const events: BmsonBpmEventEntry[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.y !== 'number' || !Number.isFinite(raw.y) || typeof raw.bpm !== 'number' || !Number.isFinite(raw.bpm)) {
+      continue;
+    }
+    if (raw.bpm <= 0) {
+      continue;
+    }
+    events.push({
+      y: Math.max(0, Math.round(raw.y)),
+      bpm: raw.bpm,
+    });
+  }
+  return events;
+}
+
+export function normalizeBmsonStopEvents(input: unknown): BmsonStopEventEntry[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const events: BmsonStopEventEntry[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    const raw = item as Record<string, unknown>;
+    if (
+      typeof raw.y !== 'number' ||
+      !Number.isFinite(raw.y) ||
+      typeof raw.duration !== 'number' ||
+      !Number.isFinite(raw.duration)
+    ) {
+      continue;
+    }
+    if (raw.duration <= 0) {
+      continue;
+    }
+    events.push({
+      y: Math.max(0, Math.round(raw.y)),
+      duration: raw.duration,
+    });
+  }
+  return events;
+}
+
+export function normalizeBmsonSoundChannels(input: unknown): BmsonSoundChannelEntry[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const channels: BmsonSoundChannelEntry[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.name !== 'string') {
+      continue;
+    }
+    channels.push({
+      name: raw.name,
+      notes: normalizeBmsonSoundNotes(raw.notes),
+    });
+  }
+  return channels;
+}
+
 export function createMeasureLengthsFromBmsonLines(
   lines: number[],
   resolution: number,
@@ -256,6 +340,9 @@ export function normalizeBmsonExtensions(input: unknown): BeMusicJson['bmson'] {
       layerEvents: [],
       poorEvents: [],
     },
+    bpmEvents: [],
+    stopEvents: [],
+    soundChannels: [],
   };
   if (!input || typeof input !== 'object') {
     return normalized;
@@ -269,6 +356,9 @@ export function normalizeBmsonExtensions(input: unknown): BeMusicJson['bmson'] {
   normalized.lines = normalizeBmsonLines(raw.lines);
   normalized.info = normalizeBmsonInfoFromIr(raw.info);
   normalized.bga = normalizeBmsonBgaFromIr(raw.bga);
+  normalized.bpmEvents = normalizeBmsonBpmEvents(raw.bpmEvents ?? raw.bpm_events);
+  normalized.stopEvents = normalizeBmsonStopEvents(raw.stopEvents ?? raw.stop_events);
+  normalized.soundChannels = normalizeBmsonSoundChannels(raw.soundChannels ?? raw.sound_channels);
 
   return normalized;
 }
@@ -345,6 +435,38 @@ function normalizeBmsonSubartists(input: unknown): string[] | undefined {
     }
   }
   return names;
+}
+
+function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const notes: BmsonSoundNoteEntry[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.y !== 'number' || !Number.isFinite(raw.y)) {
+      continue;
+    }
+
+    const note: BmsonSoundNoteEntry = {
+      y: Math.max(0, Math.round(raw.y)),
+    };
+    if (typeof raw.x === 'number' && Number.isFinite(raw.x)) {
+      note.x = Math.floor(raw.x);
+    }
+    if (typeof raw.l === 'number' && Number.isFinite(raw.l) && raw.l >= 0) {
+      note.l = Math.floor(raw.l);
+    }
+    if (typeof raw.c === 'boolean') {
+      note.c = raw.c;
+    }
+    notes.push(note);
+  }
+  return notes;
 }
 
 function copyIfString<T extends object>(target: T, key: keyof T & string, value: unknown): void {

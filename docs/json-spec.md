@@ -67,6 +67,26 @@
     "materials": "materials.def",
     "divideProp": "lane=2",
     "charset": "Shift_JIS",
+    "sourceLines": [
+      {
+        "kind": "header",
+        "command": "TITLE",
+        "value": "Example"
+      },
+      {
+        "kind": "object",
+        "measure": 1,
+        "channel": "13",
+        "events": [
+          {
+            "measure": 1,
+            "channel": "13",
+            "position": [1, 4],
+            "value": "22"
+          }
+        ]
+      }
+    ],
     "objectLines": [
       {
         "measure": 1,
@@ -109,6 +129,18 @@
   "bmson": {
     "version": "string?",
     "lines": [0, 960, 1920],
+    "bpmEvents": [
+      { "y": 0, "bpm": 120 }
+    ],
+    "stopEvents": [
+      { "y": 480, "duration": 96 }
+    ],
+    "soundChannels": [
+      {
+        "name": "lead.wav",
+        "notes": [{ "x": 1, "y": 0, "l": 120, "c": true }]
+      }
+    ],
     "info": {
       "resolution": 240,
       "chartName": "HYPER",
@@ -160,8 +192,10 @@
 - `materials`: `#MATERIALS` の値
 - `divideProp`: `#DIVIDEPROP` の値
 - `charset`: `#CHARSET` の値
+- `sourceLines`: 空行/コメントを除く BMS の全行を宣言順で保持するスナップショット
+- `sourceLines` は BMS の header / object / 制御構文の相対位置を保ったまま `stringifyBms(parseChart(...))` を再現するための第一選択です
 - `objectLines`: 制御構文の外側にあるオブジェクト行の宣言順スナップショット
-- `objectLines` は BMS の行分割を保持し、`stringifyBms(parseChart(...))` で元の行構成を復元するために使います
+- `objectLines` は制御構文外の object 行だけを扱いたい処理向けの部分スナップショットです
 - `objectLines` が `events` / `measures` と一致しない場合、stringifier はこの配列を無視して再生成します
 - `controlFlow`: 制御構文 (`#RANDOM`/`#IF`/`#SWITCH` 系) と、その内側のヘッダ/オブジェクト行
 - `controlFlow.kind = "object"` は通常イベントと同じ `events` 形式（必要に応じて `measureLength`）で保持
@@ -172,6 +206,9 @@
 
 - `version`: bmson のバージョン文字列
 - `lines`: 小節線 `y` 値の配列 (昇順・重複なし・`0` 始まり)
+- `bpmEvents`: `bpm_events` の配列順スナップショット
+- `stopEvents`: `stop_events` の配列順スナップショット
+- `soundChannels`: `sound_channels` の配列順スナップショット。未使用チャンネルも保持します
 - `info`: `resolution` に加え、`subartists`, `chartName`, `modeHint`, `judgeRank`, `total`, 画像/プレビュー系を保持
 - `bga`: `header`, `events`, `layerEvents`, `poorEvents` を保持
 

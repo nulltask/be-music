@@ -5,6 +5,7 @@ import {
   type BmsControlFlowCommand,
   type BmsControlFlowEntry,
   type BmsObjectLineEntry,
+  type BmsSourceLineEntry,
   type BeMusicEvent,
   type BeMusicJson,
   createEmptyJson,
@@ -25,10 +26,13 @@ import {
   createBmsonPositionResolver,
   createMeasureLengthsFromBmsonLines,
   type BmsonDocument,
+  normalizeBmsonBpmEvents,
   normalizeBmsonBgaForIr,
   normalizeBmsonExtensions,
   normalizeBmsonInfoForIr,
   normalizeBmsonLines,
+  normalizeBmsonSoundChannels,
+  normalizeBmsonStopEvents,
   resolveBmsonResolution,
 } from './bmson.ts';
 import {
@@ -97,11 +101,16 @@ export function parseBms(input: string): BeMusicJson {
         const controlFlowObject = createControlFlowObjectEntry(measure, channel, data);
         if (controlFlowObject) {
           json.bms.controlFlow.push(controlFlowObject);
+          json.bms.sourceLines.push(controlFlowObject);
         }
       } else {
         const objectLine = createBmsObjectLineEntry(measure, channel, data);
         if (objectLine) {
           json.bms.objectLines.push(objectLine);
+          json.bms.sourceLines.push({
+            kind: 'object',
+            ...objectLine,
+          });
         }
         pushObjectDataLine(json, measure, channel, data, measureByIndex);
       }
@@ -115,24 +124,33 @@ export function parseBms(input: string): BeMusicJson {
     const { command, value } = headerLine;
 
     if (isControlFlowCommand(command)) {
-      json.bms.controlFlow.push({
+      const directiveEntry: BmsSourceLineEntry = {
         kind: 'directive',
         command,
         value: value.length > 0 ? value : undefined,
-      });
+      };
+      json.bms.controlFlow.push(directiveEntry);
+      json.bms.sourceLines.push(directiveEntry);
       updateControlFlowCaptureStack(controlFlowCaptureStack, command);
       return;
     }
 
     if (controlFlowCaptureStack.length > 0) {
-      json.bms.controlFlow.push({
+      const headerEntry: BmsSourceLineEntry = {
         kind: 'header',
         command,
         value,
-      });
+      };
+      json.bms.controlFlow.push(headerEntry);
+      json.bms.sourceLines.push(headerEntry);
       return;
     }
 
+    json.bms.sourceLines.push({
+      kind: 'header',
+      command,
+      value,
+    });
     if (command === 'BPM') {
       const parsedMainBpm = Number.parseFloat(value);
       if (Number.isFinite(parsedMainBpm) && parsedMainBpm > 0) {
@@ -196,7 +214,8 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
     json.metadata.total = json.bmson.info.total;
   }
 
-  const soundChannels = document.sound_channels ?? [];
+  const soundChannels = normalizeBmsonSoundChannels(document.sound_channels);
+  json.bmson.soundChannels = soundChannels;
   const laneMap = buildBmsonLaneMap(soundChannels);
   for (let index = 0; index < soundChannels.length; index += 1) {
     const soundChannel = soundChannels[index]!;
@@ -251,11 +270,9 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
     }
   }
 
-  const bpmEvents = document.bpm_events ?? [];
+  const bpmEvents = normalizeBmsonBpmEvents(document.bpm_events);
+  json.bmson.bpmEvents = bpmEvents;
   bpmEvents.forEach((bpmEvent, index) => {
-    if (!Number.isFinite(bpmEvent.y) || !Number.isFinite(bpmEvent.bpm) || bpmEvent.bpm <= 0) {
-      return;
-    }
     const key = intToBase36(index + 1, 2);
     json.resources.bpm[key] = bpmEvent.bpm;
     const { measure, position } = positionResolver(bpmEvent.y);
@@ -267,11 +284,9 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
     });
   });
 
-  const stopEvents = document.stop_events ?? [];
+  const stopEvents = normalizeBmsonStopEvents(document.stop_events);
+  json.bmson.stopEvents = stopEvents;
   stopEvents.forEach((stopEvent, index) => {
-    if (!Number.isFinite(stopEvent.y) || !Number.isFinite(stopEvent.duration) || stopEvent.duration <= 0) {
-      return;
-    }
     const key = intToBase36(index + 1, 2);
     json.resources.stop[key] = stopEvent.duration;
     const { measure, position } = positionResolver(stopEvent.y);
@@ -1006,6 +1021,7 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
 function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   const normalized: BeMusicJson['bms'] = {
     controlFlow: [],
+    sourceLines: [],
     objectLines: [],
     lnObjs: [],
     exRank: {},
@@ -1032,6 +1048,18 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
       }
     }
     normalized.controlFlow = entries;
+  }
+
+  const rawSourceLines = raw.sourceLines ?? raw.source_lines;
+  if (Array.isArray(rawSourceLines)) {
+    const entries: BmsSourceLineEntry[] = [];
+    for (const item of rawSourceLines) {
+      const entry = normalizeBmsControlFlowEntry(item);
+      if (entry) {
+        entries.push(entry);
+      }
+    }
+    normalized.sourceLines = entries;
   }
 
   const rawObjectLines = raw.objectLines ?? raw.object_lines;

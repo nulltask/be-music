@@ -178,6 +178,37 @@ test('BMS stringify: preserves parsed duplicate object lines and BGM/A6 line bou
   ]);
 });
 
+test('BMS stringify: preserves parsed header order and control-flow placement', () => {
+  const input = [
+    '#RANDOM 2',
+    '#IF 1',
+    '#TITLE Branch',
+    '#00111:11',
+    '#ENDIF',
+    '#ENDRANDOM',
+    '#TITLE Final',
+    '#WAV02 b.wav',
+    '#WAV01 a.wav',
+    '#00111:22',
+    '',
+  ].join('\n');
+
+  const output = stringifyBms(parseChart(input));
+
+  expect(output.split('\n')).toEqual([
+    '#RANDOM 2',
+    '#IF 1',
+    '#TITLE Branch',
+    '#00111:11',
+    '#ENDIF',
+    '#ENDRANDOM',
+    '#TITLE Final',
+    '#WAV02 b.wav',
+    '#WAV01 a.wav',
+    '#00111:22',
+  ]);
+});
+
 test('BMS stringify: falls back to regenerated object lines when parsed structure no longer matches events', () => {
   const parsed = parseChart(
     [
@@ -192,6 +223,22 @@ test('BMS stringify: falls back to regenerated object lines when parsed structur
   const objectLines = output.split('\n').filter((line) => line.startsWith('#00113:'));
 
   expect(objectLines).toEqual(['#00113:2233']);
+});
+
+test('BMS stringify: falls back to canonical sections when parsed sourceLines no longer match', () => {
+  const parsed = parseChart(
+    [
+      '#TITLE Original',
+      '#00111:11',
+      '',
+    ].join('\n'),
+  );
+  parsed.metadata.title = 'Changed';
+
+  const output = stringifyBms(parsed);
+
+  expect(output).toContain('*---------------------- METADATA FIELD');
+  expect(output).toContain('#TITLE Changed');
 });
 
 test('bmson stringify: preserves and outputs bga/info extensions and notes.l/c', async () => {
@@ -245,6 +292,52 @@ test('bmson stringify: preserves and outputs bga/info extensions and notes.l/c',
   const lead = document.sound_channels.find((channel) => channel.name === 'lead.wav');
   expect(lead?.notes[0]).toEqual({ x: 1, y: 0, l: 120, c: true });
   expect(lead?.notes[1]).toEqual({ x: 1, y: 1080, l: 0, c: false });
+});
+
+test('bmson stringify: preserves parsed sound_channels and bpm/stop event ordering', () => {
+  const parsed = parseBmson(
+    JSON.stringify({
+      version: '1.0.0',
+      info: {
+        title: 'Test',
+        artist: 'Codex',
+        init_bpm: 120,
+        resolution: 240,
+      },
+      lines: [{ y: 0 }, { y: 960 }],
+      bpm_events: [
+        { y: 480, bpm: 180 },
+        { y: 0, bpm: 120 },
+      ],
+      stop_events: [
+        { y: 960, duration: 96 },
+        { y: 480, duration: 48 },
+      ],
+      sound_channels: [
+        { name: 'unused.wav', notes: [] },
+        { name: 'lead.wav', notes: [{ x: 1, y: 0, l: 120, c: true }] },
+      ],
+    }),
+  );
+
+  const document = JSON.parse(stringifyBmson(parsed)) as {
+    bpm_events: Array<{ y: number; bpm: number }>;
+    stop_events: Array<{ y: number; duration: number }>;
+    sound_channels: Array<{ name: string; notes: Array<{ x?: number; y: number; l?: number; c?: boolean }> }>;
+  };
+
+  expect(document.bpm_events).toEqual([
+    { y: 480, bpm: 180 },
+    { y: 0, bpm: 120 },
+  ]);
+  expect(document.stop_events).toEqual([
+    { y: 960, duration: 96 },
+    { y: 480, duration: 48 },
+  ]);
+  expect(document.sound_channels).toEqual([
+    { name: 'unused.wav', notes: [] },
+    { name: 'lead.wav', notes: [{ x: 1, y: 0, l: 120, c: true }] },
+  ]);
 });
 
 test('BMS stringify: handles maxResolution/eol options and controlFlow objects', () => {

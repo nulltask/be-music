@@ -169,6 +169,7 @@ export function createBlankJson(): BeMusicJson {
     events: [],
     bms: {
       controlFlow: [],
+      sourceLines: [],
       objectLines: [],
       lnObjs: [],
       exRank: {},
@@ -190,6 +191,9 @@ export function createBlankJson(): BeMusicJson {
         layerEvents: [],
         poorEvents: [],
       },
+      bpmEvents: [],
+      stopEvents: [],
+      soundChannels: [],
     },
   };
 }
@@ -262,6 +266,7 @@ function canCloneJsonFast(json: BeMusicJson): boolean {
     Array.isArray(json.events) &&
     json.bms !== undefined &&
     Array.isArray(json.bms.controlFlow) &&
+    Array.isArray(json.bms.sourceLines) &&
     Array.isArray(json.bms.objectLines) &&
     (json.bms.lnObjs === undefined || Array.isArray(json.bms.lnObjs)) &&
     json.bms.exRank !== undefined &&
@@ -275,6 +280,9 @@ function canCloneJsonFast(json: BeMusicJson): boolean {
     json.bms.swBga !== undefined &&
     json.bmson !== undefined &&
     Array.isArray(json.bmson.lines) &&
+    Array.isArray(json.bmson.bpmEvents) &&
+    Array.isArray(json.bmson.stopEvents) &&
+    Array.isArray(json.bmson.soundChannels) &&
     json.bmson.info !== undefined &&
     json.bmson.bga !== undefined &&
     Array.isArray(json.bmson.bga.header) &&

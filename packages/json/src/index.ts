@@ -83,11 +83,36 @@ export interface BmsonBgaExtensions {
   poorEvents: BmsonBgaEvent[];
 }
 
+export interface BmsonBpmEventEntry {
+  y: number;
+  bpm: number;
+}
+
+export interface BmsonStopEventEntry {
+  y: number;
+  duration: number;
+}
+
+export interface BmsonSoundNoteEntry {
+  x?: number;
+  y: number;
+  l?: number;
+  c?: boolean;
+}
+
+export interface BmsonSoundChannelEntry {
+  name: string;
+  notes: BmsonSoundNoteEntry[];
+}
+
 export interface BmsonExtensions {
   version?: string;
   lines: number[];
   info: BmsonInfoExtensions;
   bga: BmsonBgaExtensions;
+  bpmEvents: BmsonBpmEventEntry[];
+  stopEvents: BmsonStopEventEntry[];
+  soundChannels: BmsonSoundChannelEntry[];
 }
 
 export type BmsControlFlowCommand =
@@ -134,8 +159,11 @@ export interface BmsObjectLineEntry {
   measureLength?: number;
 }
 
+export type BmsSourceLineEntry = BmsControlFlowEntry;
+
 export interface BmsExtensions {
   controlFlow: BmsControlFlowEntry[];
+  sourceLines: BmsSourceLineEntry[];
   objectLines: BmsObjectLineEntry[];
   preview?: string;
   lnType?: number;
@@ -217,6 +245,7 @@ export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
     events: [],
     bms: {
       controlFlow: [],
+      sourceLines: [],
       objectLines: [],
       lnObjs: [],
       exRank: {},
@@ -238,6 +267,9 @@ export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
         layerEvents: [],
         poorEvents: [],
       },
+      bpmEvents: [],
+      stopEvents: [],
+      soundChannels: [],
     },
   };
 }
@@ -260,6 +292,12 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
   const controlFlow = new Array<BmsControlFlowEntry>(sourceControlFlow.length);
   for (let index = 0; index < sourceControlFlow.length; index += 1) {
     controlFlow[index] = cloneControlFlowEntry(sourceControlFlow[index]!);
+  }
+
+  const sourceSourceLines = json.bms.sourceLines;
+  const bmsSourceLines = new Array<BmsSourceLineEntry>(sourceSourceLines.length);
+  for (let index = 0; index < sourceSourceLines.length; index += 1) {
+    bmsSourceLines[index] = cloneControlFlowEntry(sourceSourceLines[index]!);
   }
 
   const sourceObjectLines = json.bms.objectLines;
@@ -302,6 +340,13 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
     poorEvents[index] = { y: event.y, id: event.id };
   }
 
+  const bpmEvents = json.bmson.bpmEvents.map((event) => ({ y: event.y, bpm: event.bpm }));
+  const stopEvents = json.bmson.stopEvents.map((event) => ({ y: event.y, duration: event.duration }));
+  const soundChannels = json.bmson.soundChannels.map((channel) => ({
+    name: channel.name,
+    notes: channel.notes.map((note) => ({ ...note })),
+  }));
+
   return {
     format: json.format,
     sourceFormat: json.sourceFormat,
@@ -321,6 +366,7 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
     bms: {
       ...json.bms,
       controlFlow,
+      sourceLines: bmsSourceLines,
       objectLines,
       lnObjs: json.bms.lnObjs ? [...json.bms.lnObjs] : undefined,
       exRank: { ...json.bms.exRank },
@@ -346,6 +392,9 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
         layerEvents,
         poorEvents,
       },
+      bpmEvents,
+      stopEvents,
+      soundChannels,
     },
   };
 }

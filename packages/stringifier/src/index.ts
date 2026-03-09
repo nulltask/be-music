@@ -1,3 +1,4 @@
+import { parseBms, parseBmson } from '@be-music/parser';
 import {
   compareEvents,
   createBeatResolver,
@@ -7,6 +8,10 @@ import {
   parseBpmFrom03Token,
   sortEvents,
   type BmsObjectLineEntry,
+  type BmsSourceLineEntry,
+  type BmsonBpmEventEntry,
+  type BmsonSoundChannelEntry,
+  type BmsonStopEventEntry,
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
@@ -31,6 +36,10 @@ export interface BmsonStringifyOptions {
 export function stringifyBms(json: BeMusicJson, options: BmsStringifyOptions = {}): string {
   const eol = options.eol ?? '\n';
   const maxResolution = options.maxResolution;
+  const preservedSourceLines = maxResolution === undefined ? resolvePreservedBmsSourceLinesForOutput(json) : undefined;
+  if (preservedSourceLines) {
+    return preservedSourceLines.join(eol);
+  }
   const preservedObjectLines = maxResolution === undefined ? resolvePreservedObjectLinesForOutput(json) : undefined;
   const lines: string[] = [];
 
@@ -53,6 +62,10 @@ export function stringifyBms(json: BeMusicJson, options: BmsStringifyOptions = {
 export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions = {}): string {
   const resolution = resolveBmsonResolutionForOutput(json, options);
   const indent = options.indent ?? 2;
+  const preservedDocument = options.resolution === undefined ? resolvePreservedBmsonDocumentForOutput(json, resolution) : undefined;
+  if (preservedDocument) {
+    return `${JSON.stringify(preservedDocument, null, indent)}\n`;
+  }
   const sortedEvents = sortEvents(json.events);
   const beatResolver = createBeatResolver(json);
 
@@ -135,6 +148,152 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   }
 
   return `${JSON.stringify(bmson, null, indent)}\n`;
+}
+
+function resolvePreservedBmsSourceLinesForOutput(json: BeMusicJson): string[] | undefined {
+  const sourceLines = json.bms.sourceLines;
+  if (!Array.isArray(sourceLines) || sourceLines.length === 0) {
+    return undefined;
+  }
+
+  const lines = renderPreservedBmsSourceLines(sourceLines);
+  if (lines.length === 0) {
+    return undefined;
+  }
+  return doPreservedBmsSourceLinesMatchChart(json, lines) ? lines : undefined;
+}
+
+function renderPreservedBmsSourceLines(sourceLines: BmsSourceLineEntry[]): string[] {
+  const lines: string[] = [];
+  for (const entry of sourceLines) {
+    if (entry.kind === 'directive') {
+      lines.push(entry.value ? `#${entry.command} ${entry.value}` : `#${entry.command}`);
+      continue;
+    }
+    if (entry.kind === 'header') {
+      lines.push(entry.value.length > 0 ? `#${entry.command} ${entry.value}` : `#${entry.command}`);
+      continue;
+    }
+    if (typeof entry.measureLength === 'number' && entry.measureLength > 0) {
+      lines.push(`#${toMeasure(entry.measure)}${normalizeChannel(entry.channel)}:${formatNumber(entry.measureLength)}`);
+      continue;
+    }
+    const serialized = serializeBmsObjectLineEvents(entry.measure, entry.channel, entry.events);
+    if (serialized) {
+      lines.push(serialized);
+    }
+  }
+  return lines;
+}
+
+function doPreservedBmsSourceLinesMatchChart(json: BeMusicJson, lines: string[]): boolean {
+  const reparsed = parseBms(lines.join('\n'));
+  return areBmsChartsEquivalent(json, reparsed);
+}
+
+function resolvePreservedBmsonDocumentForOutput(
+  json: BeMusicJson,
+  resolution: number,
+): Record<string, unknown> | undefined {
+  if (
+    json.bmson.soundChannels.length === 0 &&
+    json.bmson.bpmEvents.length === 0 &&
+    json.bmson.stopEvents.length === 0
+  ) {
+    return undefined;
+  }
+
+  const document = createPreservedBmsonDocumentForOutput(json, resolution);
+  return doPreservedBmsonDocumentMatchChart(json, document) ? document : undefined;
+}
+
+function createPreservedBmsonDocumentForOutput(json: BeMusicJson, resolution: number): Record<string, unknown> {
+  const document: Record<string, unknown> = {
+    info: createPreservedBmsonInfoForOutput(json, resolution),
+  };
+  if (typeof json.bmson.version === 'string' && json.bmson.version.length > 0) {
+    document.version = json.bmson.version;
+  }
+  if (json.bmson.lines.length > 0) {
+    document.lines = mapBmsonLineValues(json.bmson.lines);
+  }
+  if (json.bmson.bpmEvents.length > 0) {
+    document.bpm_events = json.bmson.bpmEvents.map(mapBmsonBpmEventForOutput);
+  }
+  if (json.bmson.stopEvents.length > 0) {
+    document.stop_events = json.bmson.stopEvents.map(mapBmsonStopEventForOutput);
+  }
+  if (json.bmson.soundChannels.length > 0) {
+    document.sound_channels = json.bmson.soundChannels.map(mapBmsonSoundChannelForOutput);
+  }
+  const bga = createBmsonBgaForOutput(json);
+  if (bga) {
+    document.bga = bga;
+  }
+  return document;
+}
+
+function createPreservedBmsonInfoForOutput(json: BeMusicJson, resolution: number): Record<string, unknown> {
+  const info = json.bmson.info;
+  const output: Record<string, unknown> = {};
+
+  if (typeof info.title === 'string') {
+    output.title = info.title;
+  }
+  if (typeof info.subtitle === 'string') {
+    output.subtitle = info.subtitle;
+  }
+  if (typeof info.artist === 'string') {
+    output.artist = info.artist;
+  }
+  if (typeof info.genre === 'string') {
+    output.genre = info.genre;
+  }
+  if (Array.isArray(info.subartists)) {
+    output.subartists = info.subartists.filter((item) => typeof item === 'string');
+  }
+  if (typeof info.chartName === 'string') {
+    output.chart_name = info.chartName;
+  }
+  if (typeof info.level === 'number') {
+    output.level = info.level;
+  }
+  if (typeof info.initBpm === 'number') {
+    output.init_bpm = info.initBpm;
+  }
+  if (typeof info.modeHint === 'string') {
+    output.mode_hint = info.modeHint;
+  }
+  if (typeof info.judgeRank === 'number') {
+    output.judge_rank = info.judgeRank;
+  }
+  if (typeof info.total === 'number') {
+    output.total = info.total;
+  }
+  if (typeof info.backImage === 'string') {
+    output.back_image = info.backImage;
+  }
+  if (typeof info.eyecatchImage === 'string') {
+    output.eyecatch_image = info.eyecatchImage;
+  }
+  if (typeof info.bannerImage === 'string') {
+    output.banner_image = info.bannerImage;
+  }
+  if (typeof info.previewMusic === 'string') {
+    output.preview_music = info.previewMusic;
+  }
+  if (typeof info.resolution === 'number') {
+    output.resolution = info.resolution;
+  } else {
+    output.resolution = resolution;
+  }
+
+  return output;
+}
+
+function doPreservedBmsonDocumentMatchChart(json: BeMusicJson, document: Record<string, unknown>): boolean {
+  const reparsed = parseBmson(JSON.stringify(document));
+  return areBmsonChartsEquivalent(json, reparsed);
 }
 
 function pushMetadataLines(lines: string[], json: BeMusicJson): void {
@@ -434,6 +593,390 @@ function doPreservedObjectLinesMatchChart(json: BeMusicJson, objectLines: BmsObj
 
 function areEventBmsonExtensionsEqual(left: BeMusicEvent['bmson'], right: BeMusicEvent['bmson']): boolean {
   return left?.l === right?.l && left?.c === right?.c;
+}
+
+function areBmsChartsEquivalent(left: BeMusicJson, right: BeMusicJson): boolean {
+  return (
+    areMetadataEqual(left.metadata, right.metadata) &&
+    areResourcesEqual(left.resources, right.resources) &&
+    areMeasuresEqual(left.measures, right.measures) &&
+    areEventsEqual(left.events, right.events) &&
+    areBmsExtensionsEqual(left.bms, right.bms)
+  );
+}
+
+function areBmsonChartsEquivalent(left: BeMusicJson, right: BeMusicJson): boolean {
+  return (
+    areMetadataEqual(left.metadata, right.metadata) &&
+    areResourcesEqual(left.resources, right.resources) &&
+    areMeasuresEqual(left.measures, right.measures) &&
+    areEventsEqual(left.events, right.events) &&
+    areBmsonExtensionsEqual(left.bmson, right.bmson)
+  );
+}
+
+function areMetadataEqual(left: BeMusicJson['metadata'], right: BeMusicJson['metadata']): boolean {
+  return (
+    left.title === right.title &&
+    left.subtitle === right.subtitle &&
+    left.artist === right.artist &&
+    left.genre === right.genre &&
+    left.comment === right.comment &&
+    left.stageFile === right.stageFile &&
+    left.playLevel === right.playLevel &&
+    left.rank === right.rank &&
+    left.total === right.total &&
+    left.difficulty === right.difficulty &&
+    left.bpm === right.bpm &&
+    areStringMapsEqual(left.extras, right.extras)
+  );
+}
+
+function areResourcesEqual(left: BeMusicJson['resources'], right: BeMusicJson['resources']): boolean {
+  return (
+    areStringMapsEqual(left.wav, right.wav) &&
+    areStringMapsEqual(left.bmp, right.bmp) &&
+    areNumberMapsEqual(left.bpm, right.bpm) &&
+    areNumberMapsEqual(left.stop, right.stop) &&
+    areStringMapsEqual(left.text, right.text)
+  );
+}
+
+function areMeasuresEqual(left: BeMusicJson['measures'], right: BeMusicJson['measures']): boolean {
+  const sortedLeft = [...left].sort((a, b) => a.index - b.index);
+  const sortedRight = [...right].sort((a, b) => a.index - b.index);
+  if (sortedLeft.length !== sortedRight.length) {
+    return false;
+  }
+  for (let index = 0; index < sortedLeft.length; index += 1) {
+    if (sortedLeft[index]!.index !== sortedRight[index]!.index || sortedLeft[index]!.length !== sortedRight[index]!.length) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areEventsEqual(left: BeMusicEvent[], right: BeMusicEvent[]): boolean {
+  const sortedLeft = sortEvents(left);
+  const sortedRight = sortEvents(right);
+  if (sortedLeft.length !== sortedRight.length) {
+    return false;
+  }
+  for (let index = 0; index < sortedLeft.length; index += 1) {
+    if (compareEvents(sortedLeft[index]!, sortedRight[index]!) !== 0) {
+      return false;
+    }
+    if (!areEventBmsonExtensionsEqual(sortedLeft[index]!.bmson, sortedRight[index]!.bmson)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areBmsExtensionsEqual(left: BeMusicJson['bms'], right: BeMusicJson['bms']): boolean {
+  return (
+    areControlFlowEntriesEqual(left.controlFlow, right.controlFlow) &&
+    areBmsObjectLinesEqual(left.objectLines, right.objectLines) &&
+    left.preview === right.preview &&
+    left.lnType === right.lnType &&
+    left.lnMode === right.lnMode &&
+    areStringArraysEqual(left.lnObjs, right.lnObjs) &&
+    left.volWav === right.volWav &&
+    left.defExRank === right.defExRank &&
+    areStringMapsEqual(left.exRank, right.exRank) &&
+    areStringMapsEqual(left.argb, right.argb) &&
+    left.player === right.player &&
+    left.pathWav === right.pathWav &&
+    left.baseBpm === right.baseBpm &&
+    areStringArraysEqual(left.stp, right.stp) &&
+    left.option === right.option &&
+    areStringMapsEqual(left.changeOption, right.changeOption) &&
+    left.wavCmd === right.wavCmd &&
+    areStringMapsEqual(left.exWav, right.exWav) &&
+    areStringMapsEqual(left.exBmp, right.exBmp) &&
+    areStringMapsEqual(left.bga, right.bga) &&
+    areNumberMapsEqual(left.scroll, right.scroll) &&
+    left.poorBga === right.poorBga &&
+    areStringMapsEqual(left.swBga, right.swBga) &&
+    left.videoFile === right.videoFile &&
+    left.midiFile === right.midiFile &&
+    left.materials === right.materials &&
+    left.divideProp === right.divideProp &&
+    left.charset === right.charset
+  );
+}
+
+function areBmsonExtensionsEqual(left: BeMusicJson['bmson'], right: BeMusicJson['bmson']): boolean {
+  return (
+    left.version === right.version &&
+    areNumberArraysEqual(left.lines, right.lines) &&
+    areBmsonInfoEqual(left.info, right.info) &&
+    areBmsonBgaEqual(left.bga, right.bga) &&
+    areBmsonBpmEventsEqual(left.bpmEvents, right.bpmEvents) &&
+    areBmsonStopEventsEqual(left.stopEvents, right.stopEvents) &&
+    areBmsonSoundChannelsEqual(left.soundChannels, right.soundChannels)
+  );
+}
+
+function areControlFlowEntriesEqual(
+  left: BeMusicJson['bms']['controlFlow'],
+  right: BeMusicJson['bms']['controlFlow'],
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftEntry = left[index]!;
+    const rightEntry = right[index]!;
+    if (leftEntry.kind !== rightEntry.kind) {
+      return false;
+    }
+    if (leftEntry.kind === 'directive' && rightEntry.kind === 'directive') {
+      if (leftEntry.command !== rightEntry.command || leftEntry.value !== rightEntry.value) {
+        return false;
+      }
+      continue;
+    }
+    if (leftEntry.kind === 'header' && rightEntry.kind === 'header') {
+      if (leftEntry.command !== rightEntry.command || leftEntry.value !== rightEntry.value) {
+        return false;
+      }
+      continue;
+    }
+    if (leftEntry.kind !== 'object' || rightEntry.kind !== 'object') {
+      return false;
+    }
+    if (!areBmsObjectLineEqual(leftEntry, rightEntry)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areBmsObjectLinesEqual(left: BmsObjectLineEntry[], right: BmsObjectLineEntry[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (!areBmsObjectLineEqual(left[index]!, right[index]!)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areBmsObjectLineEqual(left: BmsObjectLineEntry, right: BmsObjectLineEntry): boolean {
+  return (
+    left.measure === right.measure &&
+    normalizeChannel(left.channel) === normalizeChannel(right.channel) &&
+    left.measureLength === right.measureLength &&
+    areEventsEqual(left.events, right.events)
+  );
+}
+
+function areBmsonInfoEqual(left: BeMusicJson['bmson']['info'], right: BeMusicJson['bmson']['info']): boolean {
+  return (
+    left.title === right.title &&
+    left.subtitle === right.subtitle &&
+    left.artist === right.artist &&
+    left.genre === right.genre &&
+    areStringArraysEqual(left.subartists, right.subartists) &&
+    left.chartName === right.chartName &&
+    left.level === right.level &&
+    left.initBpm === right.initBpm &&
+    left.resolution === right.resolution &&
+    left.modeHint === right.modeHint &&
+    left.judgeRank === right.judgeRank &&
+    left.total === right.total &&
+    left.backImage === right.backImage &&
+    left.eyecatchImage === right.eyecatchImage &&
+    left.bannerImage === right.bannerImage &&
+    left.previewMusic === right.previewMusic
+  );
+}
+
+function areBmsonBgaEqual(left: BeMusicJson['bmson']['bga'], right: BeMusicJson['bmson']['bga']): boolean {
+  return (
+    areBmsonBgaHeadersEqual(left.header, right.header) &&
+    areBmsonBgaEventsEqual(left.events, right.events) &&
+    areBmsonBgaEventsEqual(left.layerEvents, right.layerEvents) &&
+    areBmsonBgaEventsEqual(left.poorEvents, right.poorEvents)
+  );
+}
+
+function areBmsonBgaHeadersEqual(
+  left: BeMusicJson['bmson']['bga']['header'],
+  right: BeMusicJson['bmson']['bga']['header'],
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index]!.id !== right[index]!.id || left[index]!.name !== right[index]!.name) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areBmsonBgaEventsEqual(
+  left: BeMusicJson['bmson']['bga']['events'],
+  right: BeMusicJson['bmson']['bga']['events'],
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index]!.y !== right[index]!.y || left[index]!.id !== right[index]!.id) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areBmsonBpmEventsEqual(left: BmsonBpmEventEntry[], right: BmsonBpmEventEntry[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index]!.y !== right[index]!.y || left[index]!.bpm !== right[index]!.bpm) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areBmsonStopEventsEqual(left: BmsonStopEventEntry[], right: BmsonStopEventEntry[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index]!.y !== right[index]!.y || left[index]!.duration !== right[index]!.duration) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areBmsonSoundChannelsEqual(left: BmsonSoundChannelEntry[], right: BmsonSoundChannelEntry[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index]!.name !== right[index]!.name || !areBmsonSoundNotesEqual(left[index]!.notes, right[index]!.notes)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areBmsonSoundNotesEqual(
+  left: BmsonSoundChannelEntry['notes'],
+  right: BmsonSoundChannelEntry['notes'],
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (
+      left[index]!.x !== right[index]!.x ||
+      left[index]!.y !== right[index]!.y ||
+      left[index]!.l !== right[index]!.l ||
+      left[index]!.c !== right[index]!.c
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areStringMapsEqual(left: Record<string, string>, right: Record<string, string>): boolean {
+  const leftEntries = Object.entries(left).sort(([a], [b]) => a.localeCompare(b));
+  const rightEntries = Object.entries(right).sort(([a], [b]) => a.localeCompare(b));
+  if (leftEntries.length !== rightEntries.length) {
+    return false;
+  }
+  for (let index = 0; index < leftEntries.length; index += 1) {
+    if (
+      leftEntries[index]![0] !== rightEntries[index]![0] ||
+      leftEntries[index]![1] !== rightEntries[index]![1]
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areNumberMapsEqual(left: Record<string, number>, right: Record<string, number>): boolean {
+  const leftEntries = Object.entries(left).sort(([a], [b]) => a.localeCompare(b));
+  const rightEntries = Object.entries(right).sort(([a], [b]) => a.localeCompare(b));
+  if (leftEntries.length !== rightEntries.length) {
+    return false;
+  }
+  for (let index = 0; index < leftEntries.length; index += 1) {
+    if (
+      leftEntries[index]![0] !== rightEntries[index]![0] ||
+      leftEntries[index]![1] !== rightEntries[index]![1]
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areStringArraysEqual(left: string[] | undefined, right: string[] | undefined): boolean {
+  const normalizedLeft = left ?? [];
+  const normalizedRight = right ?? [];
+  if (normalizedLeft.length !== normalizedRight.length) {
+    return false;
+  }
+  for (let index = 0; index < normalizedLeft.length; index += 1) {
+    if (normalizedLeft[index] !== normalizedRight[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areNumberArraysEqual(left: number[], right: number[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function mapBmsonBpmEventForOutput(event: BmsonBpmEventEntry): { y: number; bpm: number } {
+  return {
+    y: Math.max(0, Math.floor(event.y)),
+    bpm: event.bpm,
+  };
+}
+
+function mapBmsonStopEventForOutput(event: BmsonStopEventEntry): { y: number; duration: number } {
+  return {
+    y: Math.max(0, Math.floor(event.y)),
+    duration: event.duration,
+  };
+}
+
+function mapBmsonSoundChannelForOutput(channel: BmsonSoundChannelEntry): {
+  name: string;
+  notes: Array<{ x?: number; y: number; l?: number; c?: boolean }>;
+} {
+  return {
+    name: channel.name,
+    notes: channel.notes.map((note) => ({
+      ...(typeof note.x === 'number' ? { x: Math.floor(note.x) } : {}),
+      y: Math.max(0, Math.floor(note.y)),
+      ...(typeof note.l === 'number' ? { l: Math.max(0, Math.floor(note.l)) } : {}),
+      ...(typeof note.c === 'boolean' ? { c: note.c } : {}),
+    })),
+  };
 }
 
 function pushControlFlowLines(lines: string[], json: BeMusicJson): void {
