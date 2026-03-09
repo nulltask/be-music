@@ -4,6 +4,14 @@ import { formatSeconds, resolveAltModifierLabel } from '../player-utils.ts';
 import type { PlayerStateSignals } from '../player-state-signals.ts';
 import { findStackableRowIndex } from './lane-stacking.ts';
 import { normalizeHighSpeed, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
+import {
+  calculateLaneBlockVisibleWidth,
+  calculateLaneSectionVisibleWidth,
+  calculateTuiGridRowCount,
+  DEFAULT_LANE_WIDTH,
+  resolveLaneWidths,
+  SPLIT_PANEL_INNER_WIDTH,
+} from './layout.ts';
 export { resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
 
 interface TuiLane {
@@ -93,16 +101,11 @@ const MAX_SCROLL_LOOKAHEAD_BEATS = IIDX_MEASURE_BEATS * 64;
 const MAX_NOTES_PER_RENDER_WINDOW = 2048;
 const BEAT_EPSILON = 1e-9;
 const FLASH_DURATION_MS = 180;
-const DEFAULT_LANE_WIDTH = 3;
-const DEFAULT_GRID_ROWS = 14;
-const MIN_GRID_ROWS = 4;
-const STATIC_TUI_LINES = 16;
 const MEASURE_LINE_SYMBOL = '▔';
 const MEASURE_LINE_DIVIDER_SYMBOL = '┬';
 const LANE_FILL_SYMBOL = '│';
 const LANE_DIVIDER_SYMBOL = '│';
 const LANE_OUTER_BORDER_SYMBOL = '┃';
-const SPLIT_PANEL_INNER_WIDTH = 5;
 const JUDGE_LINE_SYMBOL = '█';
 const HIGHLIGHT_DECAY_POWER = 0.72;
 const HIGHLIGHT_R_BOOST = 56;
@@ -205,8 +208,6 @@ export class PlayerTui {
 
   private readonly laneWidths: number[] = [];
 
-  private readonly laneBlockVisibleWidth: number;
-
   private readonly scrollDistanceMapper: ScrollDistanceMapper;
 
   private readonly supported: boolean;
@@ -276,9 +277,10 @@ export class PlayerTui {
     this.supported = Boolean(
       (options.stdoutIsTTY ?? process.stdout.isTTY) && (options.stdinIsTTY ?? process.stdin.isTTY),
     );
+    const laneWidths = resolveLaneWidths(options.lanes);
     options.lanes.forEach((lane, index) => {
       this.laneIndex.set(lane.channel, index);
-      this.laneWidths[index] = lane.isScratch ? DEFAULT_LANE_WIDTH * 2 : DEFAULT_LANE_WIDTH;
+      this.laneWidths[index] = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
     });
     if (!this.laneIndex.has('17') && this.laneIndex.has('16')) {
       this.freeZoneChannelToScratchChannel.set('17', '16');
@@ -288,7 +290,6 @@ export class PlayerTui {
       this.freeZoneChannelToScratchChannel.set('27', '26');
       this.freeZoneSourceChannels.add('27');
     }
-    this.laneBlockVisibleWidth = calculateLaneBlockVisibleWidth(this.laneWidths, options.splitAfterIndex ?? -1);
     this.lastSignalPaused = this.paused;
     this.lastSignalHighSpeed = this.targetHighSpeed;
     this.lastSignalJudgeComboTick = Number.NaN;
@@ -451,9 +452,14 @@ export class PlayerTui {
     }
     this.syncStateSignals();
 
-    const terminalRows = this.terminalRows ?? process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
+    const terminalRows = this.terminalRows ?? process.stdout.rows;
     const debugLineCount = frame.activeAudioFiles === undefined && frame.activeAudioVoiceCount === undefined ? 0 : 1;
-    const rowCount = Math.max(MIN_GRID_ROWS, terminalRows - STATIC_TUI_LINES - debugLineCount);
+    const rowCount = calculateTuiGridRowCount(terminalRows, {
+      showLaneChannels: this.options.showLaneChannels === true,
+      hasRandomPatternSummary:
+        typeof this.options.randomPatternSummary === 'string' && this.options.randomPatternSummary.length > 0,
+      hasAudioDebugLine: debugLineCount > 0,
+    });
     const laneCount = Math.max(1, this.options.lanes.length);
     const now = Date.now();
     const currentFps = this.resolveFps(now);
@@ -2074,45 +2080,6 @@ function inferLaneSideByChannel(channel: string): '1P' | '2P' {
     return '2P';
   }
   return '1P';
-}
-
-function calculateLaneBlockVisibleWidth(laneWidths: number[], splitAfterIndex: number): number {
-  if (laneWidths.length <= 0) {
-    return calculateLaneSectionVisibleWidth([DEFAULT_LANE_WIDTH]);
-  }
-
-  if (splitAfterIndex < 0 || splitAfterIndex >= laneWidths.length - 1) {
-    return calculateLaneSectionVisibleWidth(laneWidths);
-  }
-
-  const left = laneWidths.slice(0, splitAfterIndex + 1);
-  const right = laneWidths.slice(splitAfterIndex + 1);
-  const splitPanelWidth = SPLIT_PANEL_INNER_WIDTH + 2; // split borders
-  return Math.max(
-    1,
-    calculateLaneSectionVisibleWidth(left) + splitPanelWidth + calculateLaneSectionVisibleWidth(right),
-  );
-}
-
-function calculateLaneSectionVisibleWidth(sectionLaneWidths: number[]): number {
-  const innerWidth = calculateLaneSectionInnerVisibleWidth(sectionLaneWidths);
-  if (innerWidth <= 0) {
-    return 0;
-  }
-  return innerWidth + 2; // outer borders
-}
-
-function calculateLaneSectionInnerVisibleWidth(sectionLaneWidths: number[]): number {
-  const laneCount = Math.max(0, sectionLaneWidths.length);
-  if (laneCount <= 0) {
-    return 0;
-  }
-  let width = 0;
-  for (let index = 0; index < laneCount; index += 1) {
-    width += sectionLaneWidths[index] ?? DEFAULT_LANE_WIDTH;
-  }
-  width += Math.max(0, laneCount - 1); // lane dividers
-  return width;
 }
 
 function findAnsiSgrSequenceEnd(value: string, start: number): number {
