@@ -2,7 +2,6 @@
   "name": "be-music",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@10.30.3",
   "description": "Be-Music tooling monorepo",
   "scripts": {
     "build": "pnpm -r --sort --workspace-concurrency=Infinity run build:bundle && tsgo -b tsconfig.json",
@@ -15,6 +14,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "bench": "tsx --tsconfig tsconfig.typecheck.json scripts/bench/exports.ts",
+    "bench:aggregate": "tsx --tsconfig tsconfig.typecheck.json scripts/bench/aggregate-results.ts",
     "bench:compare": "tsx --tsconfig tsconfig.typecheck.json scripts/bench/compare-results.ts",
     "player": "pnpm --filter @be-music/player run dev",
     "player:sea": "pnpm --filter @be-music/player run build:sea",
@@ -39,6 +39,7 @@
   "engines": {
     "node": ">=22"
   },
+  "packageManager": "pnpm@10.30.3",
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"

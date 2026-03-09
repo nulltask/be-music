@@ -3,6 +3,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { ExportsBenchmarkSnapshot } from './exports.types.ts';
 
 interface CliDefaults {
   outputPath: string;
@@ -18,40 +19,6 @@ interface CliOptions {
   topCount: number;
   summaryPath?: string;
   failOnRegression: boolean;
-}
-
-interface BenchmarkTaskStats {
-  hz: number;
-  meanMs: number;
-  p75Ms: number;
-  p99Ms: number;
-  minMs: number;
-  maxMs: number;
-  rmePercent: number;
-  sampleCount: number;
-  totalTimeMs: number;
-}
-
-interface ExportsBenchmarkSnapshot {
-  schemaVersion: 1;
-  createdAt: string;
-  gitSha?: string;
-  nodeVersion: string;
-  platform: string;
-  options: {
-    timeMs: number;
-    warmupTimeMs: number;
-    includeInteractive: boolean;
-    filter?: string;
-  };
-  totals: {
-    exported: number;
-    benchmarked: number;
-    skipped: number;
-    filteredOut: number;
-  };
-  skipped: Record<string, string>;
-  results: Record<string, BenchmarkTaskStats>;
 }
 
 interface ComparedRow {
@@ -180,6 +147,8 @@ function buildDiffMarkdown(
   lines.push(`- Head SHA: \`${formatSha(headSnapshot.gitSha)}\``);
   lines.push(`- Comparable cases: \`${summary.comparableCaseCount}\``);
   lines.push(`- Regression threshold: \`${thresholdPercent.toFixed(2)}%\``);
+  lines.push(`- Base runs: \`${formatRunCount(baseSnapshot)}\``);
+  lines.push(`- Head runs: \`${formatRunCount(headSnapshot)}\``);
   lines.push('');
   lines.push('### Summary');
   lines.push('| Metric | Value |');
@@ -232,11 +201,7 @@ function buildDiffMarkdown(
   return lines.join('\n');
 }
 
-function buildHeadOnlyMarkdown(
-  headSnapshot: ExportsBenchmarkSnapshot,
-  topCount: number,
-  basePath?: string,
-): string {
+function buildHeadOnlyMarkdown(headSnapshot: ExportsBenchmarkSnapshot, topCount: number, basePath?: string): string {
   const slowest = Object.entries(headSnapshot.results)
     .map(([key, value]) => ({ key, hz: value.hz, meanMs: value.meanMs }))
     .sort((left, right) => left.hz - right.hz)
@@ -253,6 +218,7 @@ function buildHeadOnlyMarkdown(
   lines.push(`- Head SHA: \`${formatSha(headSnapshot.gitSha)}\``);
   lines.push(`- Head benchmarked cases: \`${headSnapshot.totals.benchmarked}\``);
   lines.push(`- Head skipped cases: \`${headSnapshot.totals.skipped}\``);
+  lines.push(`- Head runs: \`${formatRunCount(headSnapshot)}\``);
   lines.push('');
   lines.push('### Slowest Cases In Head');
   if (slowest.length === 0) {
@@ -277,7 +243,7 @@ function compareSnapshots(
     if (!baseResult || !Number.isFinite(baseResult.hz) || baseResult.hz <= 0) {
       continue;
     }
-    const deltaPercent = ((headResult.hz / baseResult.hz) - 1) * 100;
+    const deltaPercent = (headResult.hz / baseResult.hz - 1) * 100;
     rows.push({
       key,
       baseHz: baseResult.hz,
@@ -356,6 +322,9 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
+    if (token === '--') {
+      continue;
+    }
 
     if (token === '--help' || token === '-h') {
       printUsage(defaults);
@@ -477,6 +446,14 @@ function formatPercent(value: number): string {
     return 'n/a';
   }
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+}
+
+function formatRunCount(snapshot: ExportsBenchmarkSnapshot): string {
+  const runCount = snapshot.aggregation?.runCount ?? 1;
+  if (snapshot.aggregation?.strategy === 'median') {
+    return `median of ${runCount}`;
+  }
+  return `${runCount}`;
 }
 
 void main().catch((error: unknown) => {

@@ -24,7 +24,16 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    projects: workspaceProjects,
+    projects: [
+      ...workspaceProjects,
+      {
+        extends: true as const,
+        test: {
+          name: 'benchmark-scripts',
+          include: ['scripts/bench/**/*.test.ts'],
+        },
+      },
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'html', 'lcov'],
