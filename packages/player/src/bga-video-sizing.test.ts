@@ -6,6 +6,7 @@ import { createEmptyJson } from '../../json/src/index.ts';
 
 vi.mock('./bga-video.ts', () => ({
   decodeVideoFramesStream: vi.fn(async (videoPath: string, onFrame: (frame: unknown) => void) => {
+    const hasBlackBorder = videoPath.includes('bordered');
     const isPortrait = videoPath.includes('portrait');
     const width = isPortrait ? 180 : 320;
     const height = isPortrait ? 320 : 240;
@@ -13,7 +14,8 @@ vi.mock('./bga-video.ts', () => ({
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
         const offset = (y * width + x) * 4;
-        rgba[offset] = 255;
+        const insideBorder = !hasBlackBorder || (x >= 32 && x < width - 32 && y >= 24 && y < height - 24);
+        rgba[offset] = insideBorder ? 255 : 0;
         rgba[offset + 1] = 0;
         rgba[offset + 2] = 0;
         rgba[offset + 3] = 255;
@@ -91,6 +93,37 @@ describe('player bga video sizing', () => {
         minY: 0,
         maxX: 30,
         maxY: 19,
+      });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('trims black video borders before fitting into the BGA region', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-video-size-'));
+    try {
+      await writeFile(join(baseDir, 'bordered.mp4'), '');
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'bordered.mp4';
+      json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
+
+      const renderer = await createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+
+      expect(renderer).toBeDefined();
+      const pixels = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const bounds = findOpaqueBounds(pixels);
+      expect(bounds).toBeDefined();
+      expect(bounds).toMatchObject({
+        minX: 0,
+        minY: 2,
+        maxX: 39,
+        maxY: 16,
       });
     } finally {
       await rm(baseDir, { recursive: true, force: true });

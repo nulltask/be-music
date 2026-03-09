@@ -24,6 +24,7 @@ const DEFAULT_BGA_ASCII_WIDTH = 34;
 const DEFAULT_BGA_ASCII_HEIGHT = 20;
 const DEFAULT_POOR_BGA_DISPLAY_SECONDS = 2;
 const TRANSPARENT_ALPHA_THRESHOLD = 16;
+const VIDEO_BLACK_BORDER_THRESHOLD = 8;
 const ANSI_RESET = '\u001b[0m';
 const SPEC_BGA_CANVAS_SIZE = 256;
 const TERMINAL_PIXEL_ASPECT_X = 2;
@@ -1397,7 +1398,65 @@ function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode): AnsiFr
     }
   }
 
-  return sourceFrame;
+  return image.format === 'video' ? trimBlackVideoFrameBorders(sourceFrame) : sourceFrame;
+}
+
+function trimBlackVideoFrameBorders(source: AnsiFrame): AnsiFrame {
+  let minX = source.width;
+  let minY = source.height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < source.height; y += 1) {
+    for (let x = 0; x < source.width; x += 1) {
+      const pixelOffset = y * source.width + x;
+      if (source.opaqueMask[pixelOffset] === 0) {
+        continue;
+      }
+      const rgbOffset = pixelOffset * 3;
+      const r = source.rgb[rgbOffset] ?? 0;
+      const g = source.rgb[rgbOffset + 1] ?? 0;
+      const b = source.rgb[rgbOffset + 2] ?? 0;
+      if (r <= VIDEO_BLACK_BORDER_THRESHOLD && g <= VIDEO_BLACK_BORDER_THRESHOLD && b <= VIDEO_BLACK_BORDER_THRESHOLD) {
+        continue;
+      }
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (maxX < 0 || maxY < 0) {
+    return source;
+  }
+  if (minX === 0 && minY === 0 && maxX === source.width - 1 && maxY === source.height - 1) {
+    return source;
+  }
+
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+  const trimmed = createSolidAnsiFrame(width, height, 0, 0, 0, 0);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const sourceX = minX + x;
+      const sourceY = minY + y;
+      const sourcePixelOffset = sourceY * source.width + sourceX;
+      if (source.opaqueMask[sourcePixelOffset] === 0) {
+        continue;
+      }
+      const targetPixelOffset = y * width + x;
+      const sourceRgbOffset = sourcePixelOffset * 3;
+      const targetRgbOffset = targetPixelOffset * 3;
+      trimmed.rgb[targetRgbOffset] = source.rgb[sourceRgbOffset] ?? 0;
+      trimmed.rgb[targetRgbOffset + 1] = source.rgb[sourceRgbOffset + 1] ?? 0;
+      trimmed.rgb[targetRgbOffset + 2] = source.rgb[sourceRgbOffset + 2] ?? 0;
+      trimmed.opaqueMask[targetPixelOffset] = 1;
+    }
+  }
+
+  return trimmed;
 }
 
 function fitSizeWithinSpecCanvas(sourceWidth: number, sourceHeight: number): { width: number; height: number } {
