@@ -653,7 +653,7 @@ function resizeFrameSource(source: FrameSource, width: number, height: number): 
     kind: 'video',
     frames: source.frames.map((entry) => ({
       seconds: entry.seconds,
-      frame: resizeAnsiFrameInDisplaySpace(entry.frame, width, height),
+      frame: resizeAnsiFrame(entry.frame, width, height),
     })),
   };
 }
@@ -934,8 +934,8 @@ function createConvertImageToSpecFrameWorker(): WorkerizedSpecFrameConverter {
 async function loadFrameSource(
   resourcePath: string,
   mode: FrameMode,
-  width: number,
-  height: number,
+  _width: number,
+  _height: number,
   signal?: AbortSignal,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
@@ -944,14 +944,12 @@ async function loadFrameSource(
     return createStaticFrameSource(imageFrame);
   }
 
-  return loadVideoAsFrameSource(resourcePath, mode, width, height, signal);
+  return loadVideoAsFrameSource(resourcePath, mode, signal);
 }
 
 async function loadVideoAsFrameSource(
   videoPath: string,
   mode: FrameMode,
-  width: number,
-  height: number,
   signal?: AbortSignal,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
@@ -960,7 +958,7 @@ async function loadVideoAsFrameSource(
     videoPath,
     (frame) => {
       throwIfAborted(signal);
-      const specFrame = convertImageToSpecFrame(
+      const sourceFrame = convertImageToSourceFrame(
         {
           width: frame.width,
           height: frame.height,
@@ -971,7 +969,7 @@ async function loadVideoAsFrameSource(
       );
       frames.push({
         seconds: frame.seconds,
-        frame: resizeAnsiFrame(specFrame, width, height),
+        frame: sourceFrame,
       });
     },
     signal,
@@ -1374,6 +1372,34 @@ function convertImageToSpecFrame(image: DecodedImage, mode: FrameMode): AnsiFram
   return specFrame;
 }
 
+function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode): AnsiFrame {
+  const safeWidth = Math.max(1, Math.floor(image.width));
+  const safeHeight = Math.max(1, Math.floor(image.height));
+  const sourceFrame = createSolidAnsiFrame(safeWidth, safeHeight, 0, 0, 0, 0);
+
+  for (let y = 0; y < safeHeight; y += 1) {
+    for (let x = 0; x < safeWidth; x += 1) {
+      const sourceOffset = (y * safeWidth + x) * 4;
+      const r = image.data[sourceOffset] ?? 0;
+      const g = image.data[sourceOffset + 1] ?? 0;
+      const b = image.data[sourceOffset + 2] ?? 0;
+      const a = image.data[sourceOffset + 3] ?? 255;
+      if (!isOpaquePixel(r, g, b, a, image.format, mode)) {
+        continue;
+      }
+
+      const targetPixelOffset = y * safeWidth + x;
+      const targetRgbOffset = targetPixelOffset * 3;
+      sourceFrame.rgb[targetRgbOffset] = r;
+      sourceFrame.rgb[targetRgbOffset + 1] = g;
+      sourceFrame.rgb[targetRgbOffset + 2] = b;
+      sourceFrame.opaqueMask[targetPixelOffset] = 1;
+    }
+  }
+
+  return sourceFrame;
+}
+
 function fitSizeWithinSpecCanvas(sourceWidth: number, sourceHeight: number): { width: number; height: number } {
   const safeSourceWidth = Math.max(1, Math.floor(sourceWidth));
   const safeSourceHeight = Math.max(1, Math.floor(sourceHeight));
@@ -1388,10 +1414,6 @@ function fitSizeWithinSpecCanvas(sourceWidth: number, sourceHeight: number): { w
 
 function resizeAnsiFrame(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {
   return resizeAnsiFrameWithAspect(source, maxWidth, maxHeight, TERMINAL_PIXEL_ASPECT_X, TERMINAL_PIXEL_ASPECT_Y);
-}
-
-function resizeAnsiFrameInDisplaySpace(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {
-  return resizeAnsiFrameWithAspect(source, maxWidth, maxHeight, 1, 1);
 }
 
 function resizeAnsiFrameWithAspect(

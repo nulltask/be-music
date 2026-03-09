@@ -5,9 +5,10 @@ import { describe, expect, test, vi } from 'vitest';
 import { createEmptyJson } from '../../json/src/index.ts';
 
 vi.mock('./bga-video.ts', () => ({
-  decodeVideoFramesStream: vi.fn(async (_videoPath: string, onFrame: (frame: unknown) => void) => {
-    const width = 320;
-    const height = 240;
+  decodeVideoFramesStream: vi.fn(async (videoPath: string, onFrame: (frame: unknown) => void) => {
+    const isPortrait = videoPath.includes('portrait');
+    const width = isPortrait ? 180 : 320;
+    const height = isPortrait ? 320 : 240;
     const rgba = new Uint8Array(width * height * 4);
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
@@ -34,7 +35,7 @@ vi.mock('./bga-video.ts', () => ({
 import { createBgaAnsiRenderer } from './bga.ts';
 
 describe('player bga video sizing', () => {
-  test('stretches video frames to use the full BGA canvas like BMP sources', async () => {
+  test('fits landscape video frames into the BGA region with contain sizing', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-video-size-'));
     try {
       await writeFile(join(baseDir, 'movie.mp4'), '');
@@ -56,8 +57,39 @@ describe('player bga video sizing', () => {
       expect(bounds).toBeDefined();
       expect(bounds).toMatchObject({
         minX: 0,
-        minY: 0,
+        minY: 2,
         maxX: 39,
+        maxY: 16,
+      });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('fits portrait video frames into the BGA region with contain sizing', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-video-size-'));
+    try {
+      await writeFile(join(baseDir, 'portrait.mp4'), '');
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'portrait.mp4';
+      json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
+
+      const renderer = await createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+
+      expect(renderer).toBeDefined();
+      const pixels = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const bounds = findOpaqueBounds(pixels);
+      expect(bounds).toBeDefined();
+      expect(bounds).toMatchObject({
+        minX: 9,
+        minY: 0,
+        maxX: 30,
         maxY: 19,
       });
     } finally {
