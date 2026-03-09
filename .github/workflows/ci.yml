@@ -291,7 +291,7 @@ jobs:
 
       - name: Upload player SEA artifact
         if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_player_changed == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: be-music-player-${{ runner.os }}-${{ runner.arch }}
           path: ${{ steps.sea-player-binary.outputs.path }}
@@ -299,7 +299,7 @@ jobs:
 
       - name: Upload audio-renderer SEA artifact
         if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_audio_renderer_changed == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: be-music-audio-renderer-${{ runner.os }}-${{ runner.arch }}
           path: ${{ steps.sea-audio-renderer-binary.outputs.path }}
