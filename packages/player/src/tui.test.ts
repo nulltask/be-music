@@ -174,8 +174,61 @@ describe('player tui', () => {
       }),
     ).toEqual({
       width: 81,
-      height: 17,
+      height: 15,
     });
+  });
+
+  test('tui: renders groove gauge line when gauge summary is present', () => {
+    mockTerminal({ columns: 120, rows: 32 });
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
+    const tui = new PlayerTui({
+      mode: 'MANUAL',
+      laneDisplayMode: '7 KEY',
+      title: 'Test Song',
+      lanes: [
+        { channel: '16', key: 'A', isScratch: true },
+        { channel: '11', key: 'S' },
+        { channel: '12', key: 'D' },
+      ],
+      speed: 1,
+      highSpeed: 1,
+      judgeWindowMs: 16.67,
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+    });
+
+    tui.start();
+    tui.render({
+      currentBeat: 0,
+      currentSeconds: 0,
+      totalSeconds: 120,
+      summary: {
+        total: 100,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+        gauge: {
+          current: 64,
+          max: 100,
+          clearThreshold: 80,
+          initial: 20,
+          effectiveTotal: 160,
+          cleared: false,
+        },
+      },
+      notes: [],
+    });
+
+    const renderOutput = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
+    expect(renderOutput).toContain(' 64%');
+
+    tui.stop();
   });
 
   test('tui: keeps rendered lines within terminal height when optional rows are enabled', () => {

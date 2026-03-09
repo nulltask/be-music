@@ -16,6 +16,14 @@ export interface PlayerUiFrameSummary {
   poor: number;
   exScore: number;
   score: number;
+  gauge?: {
+    current: number;
+    max: number;
+    clearThreshold: number;
+    initial: number;
+    effectiveTotal: number;
+    cleared: boolean;
+  };
 }
 
 export interface PlayerUiFrameNote {

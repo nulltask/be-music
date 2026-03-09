@@ -49,6 +49,24 @@ test('player: auto play finishes successfully', async () => {
   expect(summary.score).toBe(200000);
 });
 
+test('player: defaults groove gauge TOTAL to LR2 160 when #TOTAL is omitted', async () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+  const summary = await autoPlay(json, {
+    auto: true,
+    speed: 48,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+  });
+
+  expect(summary.gauge?.effectiveTotal).toBe(160);
+  expect(summary.gauge?.current).toBe(100);
+  expect(summary.gauge?.cleared).toBe(true);
+});
+
 test('player: resolves control-flow branches at playback time', async () => {
   const json = await parseChartFile(unifiedBmsChartPath);
 
@@ -202,6 +220,35 @@ test('player: auto scratch judges 16ch/26ch notes in manual play', async () => {
   expect(summary.slow).toBe(0);
   expect(summary.poor).toBe(1);
   expect(summary.bad).toBe(0);
+});
+
+test('player: stray key applies LR2 empty-poor groove gauge damage without changing note judgments', async () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 60;
+  json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+
+  const summary = await manualPlay(json, {
+    speed: 64,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+    createInputRuntime: ({ inputSignals }) => ({
+      start: () => {
+        inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+        inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+      },
+      stop: () => undefined,
+    }),
+  });
+
+  expect(summary.total).toBe(1);
+  expect(summary.perfect).toBe(0);
+  expect(summary.great).toBe(0);
+  expect(summary.good).toBe(0);
+  expect(summary.bad).toBe(0);
+  expect(summary.poor).toBe(0);
+  expect(summary.gauge?.current).toBeCloseTo(18, 9);
+  expect(summary.gauge?.cleared).toBe(false);
 });
 
 test('player: derives long-note end beat from bmson notes.l', () => {

@@ -177,6 +177,10 @@ const BAD_JUDGE_RGB: RgbColor = { r: 255, g: 159, b: 74 };
 const POOR_JUDGE_RGB: RgbColor = { r: 255, g: 107, b: 107 };
 const READY_JUDGE_RGB: RgbColor = { r: 95, g: 215, b: 255 };
 const IDLE_JUDGE_RGB: RgbColor = { r: 154, g: 161, b: 170 };
+const GROOVE_GAUGE_SAFE_RGB: RgbColor = { r: 72, g: 238, b: 255 };
+const GROOVE_GAUGE_SAFE_EMPTY_RGB: RgbColor = { r: 18, g: 74, b: 86 };
+const GROOVE_GAUGE_CLEAR_RGB: RgbColor = { r: 255, g: 72, b: 72 };
+const GROOVE_GAUGE_CLEAR_EMPTY_RGB: RgbColor = { r: 84, g: 18, b: 18 };
 const RAINBOW_RGB_STEPS: RgbColor[] = [
   { r: 255, g: 0, b: 0 },
   { r: 255, g: 135, b: 0 },
@@ -766,6 +770,8 @@ export class PlayerTui {
     laneLines.push(whiteAndScratchKeyRow);
 
     lines.push(...renderLaneBlockWithBga(laneLines, frame.bgaAnsiLines));
+    lines.push('');
+    lines.push(formatGrooveGaugeLine(frame.summary, calculateLaneBlockVisibleWidth(this.laneWidths, this.options.splitAfterIndex ?? -1)));
     lines.push('');
     lines.push(
       `Space: pause/resume  Shift+R: restart  ${HIGH_SPEED_MODIFIER_LABEL}+odd/even lane: HS -/+  Ctrl+C/Esc: quit`,
@@ -2154,6 +2160,43 @@ function formatNotesProgress(summary: PlayerSummary): string {
   const total = Math.max(0, summary.total);
   const judged = Math.max(0, summary.perfect + summary.great + summary.good + summary.bad + summary.poor);
   return `${Math.min(total, judged)}/${total}`;
+}
+
+function formatGrooveGaugeLine(summary: PlayerSummary, laneBlockWidth: number): string {
+  const gauge = summary.gauge;
+  if (!gauge) {
+    return '-';
+  }
+  const percentLabel = `${formatGrooveGaugePercent(gauge.current)}%`;
+  const safeLaneBlockWidth = Math.max(3, Math.floor(laneBlockWidth));
+  const barWidth = Math.max(1, safeLaneBlockWidth - 2);
+  return `${colorizeLaneOuterBorder('┃')}${renderGrooveGaugeBar(gauge.current, gauge.clearThreshold, gauge.max, barWidth)}${colorizeLaneOuterBorder('┃')} ${percentLabel}`;
+}
+
+function renderGrooveGaugeBar(current: number, clearThreshold: number, max: number, width: number): string {
+  const safeWidth = Math.max(1, Math.floor(width));
+  const safeMax = Number.isFinite(max) && max > 0 ? max : 100;
+  const ratio = clamp(current / safeMax, 0, 1);
+  const clearRatio = clamp(clearThreshold / safeMax, 0, 1);
+  const filled = Math.round(safeWidth * ratio);
+  const clearIndex = Math.round(safeWidth * clearRatio);
+  let output = '';
+  for (let index = 0; index < safeWidth; index += 1) {
+    const inClearZone = index >= clearIndex;
+    const filledCell = index < filled;
+    const color = inClearZone
+      ? (filledCell ? GROOVE_GAUGE_CLEAR_RGB : GROOVE_GAUGE_CLEAR_EMPTY_RGB)
+      : (filledCell ? GROOVE_GAUGE_SAFE_RGB : GROOVE_GAUGE_SAFE_EMPTY_RGB);
+    output += colorizeText(filledCell ? '█' : '░', color);
+  }
+  return output;
+}
+
+function formatGrooveGaugePercent(value: number): string {
+  if (!Number.isFinite(value)) {
+    return '-';
+  }
+  return String(Math.max(0, Math.floor(value)));
 }
 
 function formatActiveAudioFiles(files: string[]): string {

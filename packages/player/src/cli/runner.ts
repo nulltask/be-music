@@ -1524,6 +1524,7 @@ async function showResultScreen(
     ),
   );
   const notesProgress = `${Math.min(totalNotes, judgedNotes)}/${totalNotes}`;
+  const gaugeLine = formatGrooveGaugeResultLine(played.summary);
 
   const inputCapture = beginRawInputCapture();
   process.stdout.write('\u001b[?25l');
@@ -1542,6 +1543,9 @@ async function showResultScreen(
     lines.push(
       `PLAYER ${formatPlayerLabel(played.player)}  RANK ${formatRankLabel(played.rank)}  PLAYLEVEL ${formatPlayLevelLabel(played.playLevel)}`,
     );
+    if (gaugeLine) {
+      lines.push(truncateForDisplay(gaugeLine, lineWidth));
+    }
     lines.push(`NOTES ${notesProgress}`);
     lines.push(`EX-SCORE ${played.summary.exScore}/${maxExScore}  SCORE ${played.summary.score}/200000`);
     lines.push(
@@ -1586,6 +1590,30 @@ async function showResultScreen(
     inputCapture.stdin.on('keypress', onKeyPress);
     render();
   });
+}
+
+function formatGrooveGaugeResultLine(summary: PlayerSummary): string | undefined {
+  const gauge = summary.gauge;
+  if (!gauge) {
+    return undefined;
+  }
+  const status = gauge.cleared ? 'CLEAR' : 'FAILED';
+  return `GAUGE ${renderPlainGrooveGaugeBar(gauge.current, gauge.max, 24)} ${gauge.current.toFixed(2)}% ${status} TOTAL ${formatGrooveGaugeNumber(gauge.effectiveTotal)}`;
+}
+
+function renderPlainGrooveGaugeBar(current: number, max: number, width: number): string {
+  const safeWidth = Math.max(1, Math.floor(width));
+  const safeMax = Number.isFinite(max) && max > 0 ? max : 100;
+  const filled = Math.round(safeWidth * Math.max(0, Math.min(1, current / safeMax)));
+  return `[${'#'.repeat(filled)}${'-'.repeat(safeWidth - filled)}]`;
+}
+
+function formatGrooveGaugeNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    return '-';
+  }
+  const rounded = Math.round(value);
+  return Math.abs(value - rounded) <= 1e-9 ? String(rounded) : value.toFixed(2);
 }
 
 function isCliEntryPoint(): boolean {
