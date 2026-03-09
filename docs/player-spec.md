@@ -1,0 +1,103 @@
+# Player 実装仕様
+
+この文書は、`@be-music/player` が譜面をどう判定し、どう表示するかを定義します。
+フォーマット固有の受理規則は [`bms-spec.md`](./bms-spec.md) / [`bmson-spec.md`](./bmson-spec.md) を優先し、この文書は player 実行時の挙動に限定して記述します。
+
+## 目的
+
+- `@be-music/player` の実行時仕様を、フォーマット仕様から分離して記録する
+- 判定、ゲージ、UI 表示の互換方針を明文化する
+- 変更時に参照すべき基準を 1 か所へ集約する
+
+## 現在の対象範囲
+
+現時点で実装しているゲージは、Lunatic Rave 2 互換の `NORMAL` groove gauge のみです。
+`HARD` / `EX-HARD` / `HAZARD` / 段位ゲージは未実装です。
+
+## Groove Gauge
+
+### 基本方針
+
+- `NORMAL` groove gauge は Lunatic Rave 2 の既定値に合わせる
+- ゲージ表示範囲は `0-100%` ではなく、実際の内部値として `2-100%` を使う
+- クリア判定は楽曲終了時のゲージ `80%以上` とする
+
+### 初期値と既定値
+
+- 初期ゲージは `20%`
+- 曲中の下限は `2%`
+- 上限は `100%`
+- クリアラインは `80%`
+- `#TOTAL` 未指定時の既定値は `160`
+- `#TOTAL` 指定時はその値をそのまま使用する
+
+### 増減量
+
+`noteCount = TOTAL / EX-SCORE / SCORE` の対象になる演奏ノート数とする。
+FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めない。
+
+`baseGain = effectiveTotal / noteCount`
+
+- `PGREAT`: `+baseGain`
+- `GREAT`: `+baseGain`
+- `GOOD`: `+baseGain / 2`
+- `BAD`: `-4`
+- `POOR`: `-6`
+- `EMPTY_POOR`: `-2`
+
+ゲージ更新後の値は `2-100%` に clamp する。
+
+## 判定語の意味
+
+### `POOR`
+
+`POOR` は、演奏対象ノートに対して失敗した判定です。
+次のいずれかで発生します。
+
+- ノートが `BAD` 窓を過ぎても入力されなかった
+- 手動入力で候補ノートは見つかったが、入力時刻が `BAD` 窓より外れていた
+
+`POOR` 発生時は次を適用します。
+
+- `summary.poor` を加算する
+- コンボを 0 に戻す
+- POOR BGA を発火する
+- judge/combo 表示を `POOR` に更新する
+- groove gauge を `-6` する
+
+### `EMPTY_POOR`
+
+`EMPTY_POOR` は、レーン入力はあったが `BAD` 窓内に演奏対象ノートが存在しなかった場合の player 内部イベントです。
+現行実装では、これは通常の判定結果としては数えません。
+
+`EMPTY_POOR` 発生時は次を適用します。
+
+- groove gauge のみ `-2` する
+- `summary.poor` は増やさない
+- コンボは切らない
+- POOR BGA は発火しない
+- judge/combo 表示は更新しない
+
+keysound fallback が存在する場合は、その発音を先に行うことがあります。
+ただし FREE ZONE の fallback 発音だけは `EMPTY_POOR` を発生させず、そのまま return します。
+
+## UI 表示
+
+### TUI
+
+- ゲージ行は `GAUGE` 行として常時表示する
+- バーの左側は通常領域、右側はクリアライン以降の領域として描き分ける
+- 数値表示は `xx.xx%` を使用する
+- 末尾に `CLEAR` / `FAILED` と `TOTAL` 値を表示する
+
+### Result
+
+- リザルト画面に最終ゲージを表示する
+- 表示内容は、バー、最終値、`CLEAR` / `FAILED`、`TOTAL` 値とする
+
+## 既知の未対応
+
+- LR2 の `NORMAL` 以外のゲージ種別
+- ゲージ種別切り替えオプション
+- ゲージ推移の履歴表示
+- 空 POOR を判定数として数える互換モード

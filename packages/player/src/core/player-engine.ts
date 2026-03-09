@@ -42,6 +42,12 @@ import {
 import { createPlayerUiSignalBus, type PlayerUiSignalBus } from './player-ui-signal-bus.ts';
 import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './player-input-signal-bus.ts';
 import { IIDX_EX_SCORE_PER_PGREAT, IIDX_SCORE_MAX, applyJudgeToSummary, createScoreTracker } from './scoring.ts';
+import {
+  applyGrooveGaugeJudge,
+  createGrooveGaugeState,
+  isGrooveGaugeCleared,
+  type GrooveGaugeJudgeKind,
+} from './groove-gauge.ts';
 import { resolveJudgeWindowsMs } from './judge-window.ts';
 import { createBeatAtSecondsResolver } from './timeline.ts';
 
@@ -134,6 +140,16 @@ export interface PlayerSummary {
   poor: number;
   exScore: number;
   score: number;
+  gauge?: PlayerGrooveGaugeSummary;
+}
+
+export interface PlayerGrooveGaugeSummary {
+  current: number;
+  max: number;
+  clearThreshold: number;
+  initial: number;
+  effectiveTotal: number;
+  cleared: boolean;
 }
 
 export interface PlayerLoadProgress {
@@ -409,6 +425,52 @@ function generateControlFlowRandomValue(total: number, randomValue: number): num
   return Math.floor(clamped * safeTotal) + 1;
 }
 
+function createInitialPlayerSummary(
+  totalNotes: number,
+  totalValue: number | undefined,
+): {
+  summary: PlayerSummary;
+  applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
+} {
+  const grooveGauge = createGrooveGaugeState(totalNotes, totalValue);
+  const gaugeSummary: PlayerGrooveGaugeSummary = {
+    current: grooveGauge.current,
+    max: grooveGauge.max,
+    clearThreshold: grooveGauge.clearThreshold,
+    initial: grooveGauge.initial,
+    effectiveTotal: grooveGauge.effectiveTotal,
+    cleared: isGrooveGaugeCleared(grooveGauge),
+  };
+  const syncGrooveGaugeSummary = (): void => {
+    gaugeSummary.current = grooveGauge.current;
+    gaugeSummary.max = grooveGauge.max;
+    gaugeSummary.clearThreshold = grooveGauge.clearThreshold;
+    gaugeSummary.initial = grooveGauge.initial;
+    gaugeSummary.effectiveTotal = grooveGauge.effectiveTotal;
+    gaugeSummary.cleared = isGrooveGaugeCleared(grooveGauge);
+  };
+
+  return {
+    summary: {
+      total: grooveGauge.noteCount,
+      perfect: 0,
+      fast: 0,
+      slow: 0,
+      great: 0,
+      good: 0,
+      bad: 0,
+      poor: 0,
+      exScore: 0,
+      score: 0,
+      gauge: gaugeSummary,
+    },
+    applyGaugeJudge: (judge: GrooveGaugeJudgeKind): void => {
+      applyGrooveGaugeJudge(grooveGauge, judge);
+      syncGrooveGaugeSummary();
+    },
+  };
+}
+
 export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
@@ -448,18 +510,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const activeFreeZoneChannels = resolveActiveFreeZoneChannels(channels, laneBindings);
   const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
   const keyMap = new Map(laneBindings.map((binding) => [binding.channel, binding.keyLabel]));
-  const summary: PlayerSummary = {
-    total: scorableNotes.length,
-    perfect: 0,
-    fast: 0,
-    slow: 0,
-    great: 0,
-    good: 0,
-    bad: 0,
-    poor: 0,
-    exScore: 0,
-    score: 0,
-  };
+  const { summary, applyGaugeJudge } = createInitialPlayerSummary(scorableNotes.length, resolvedJson.metadata.total);
   const scoreTracker = createScoreTracker();
   let combo = 0;
   let interruptedReason: PlayerInterruptReason | undefined;
@@ -728,6 +779,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 
         note.judged = true;
         applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
+        applyGaugeJudge('PERFECT');
         combo += 1;
 
         const key = resolveNoteKeyLabel(note.channel, keyMap);
@@ -833,18 +885,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);
   appendFreeZoneInputChannels(inputTokenToChannels, laneBindings, channels);
 
-  const summary: PlayerSummary = {
-    total: scorableNotes.length,
-    perfect: 0,
-    fast: 0,
-    slow: 0,
-    great: 0,
-    good: 0,
-    bad: 0,
-    poor: 0,
-    exScore: 0,
-    score: 0,
-  };
+  const { summary, applyGaugeJudge } = createInitialPlayerSummary(scorableNotes.length, resolvedJson.metadata.total);
   const scoreTracker = createScoreTracker();
   let combo = 0;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
@@ -1047,6 +1088,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         continue;
       }
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
+      applyGaugeJudge('PERFECT');
       uiSignals.pushCommand({ kind: 'clear-poor-bga' });
       combo += 1;
       audioSession?.triggerEvent?.(note.event);
@@ -1081,6 +1123,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         note.visibleUntilBeat = note.endBeat;
       }
       applyJudgeToSummary(summary, 'POOR', scoreTracker);
+      applyGaugeJudge('POOR');
       uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: referenceSeconds });
       combo = 0;
       activeStateSignals?.publishJudgeCombo('POOR', combo, note.channel);
@@ -1091,6 +1134,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     const deltaMs = Math.abs(signedDeltaMs);
     if (deltaMs <= judgeWindows.pgreat) {
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
+      applyGaugeJudge('PERFECT');
       applyFastSlowForJudge(summary, 'PERFECT', signedDeltaMs);
       uiSignals.pushCommand({ kind: 'clear-poor-bga' });
       combo += 1;
@@ -1103,6 +1147,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     if (deltaMs <= judgeWindows.great) {
       applyJudgeToSummary(summary, 'GREAT', scoreTracker);
+      applyGaugeJudge('GREAT');
       applyFastSlowForJudge(summary, 'GREAT', signedDeltaMs);
       uiSignals.pushCommand({ kind: 'clear-poor-bga' });
       combo += 1;
@@ -1115,6 +1160,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     if (deltaMs <= judgeWindows.good) {
       applyJudgeToSummary(summary, 'GOOD', scoreTracker);
+      applyGaugeJudge('GOOD');
       applyFastSlowForJudge(summary, 'GOOD', signedDeltaMs);
       uiSignals.pushCommand({ kind: 'clear-poor-bga' });
       combo += 1;
@@ -1127,6 +1173,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     if (deltaMs <= badWindowMs) {
       applyJudgeToSummary(summary, 'BAD', scoreTracker);
+      applyGaugeJudge('BAD');
       combo = 0;
       if (!uiEnabled) {
         writeOutput(`BAD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -1137,6 +1184,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
 
     applyJudgeToSummary(summary, 'POOR', scoreTracker);
+    applyGaugeJudge('POOR');
     uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: atSeconds });
     combo = 0;
     if (!uiEnabled) {
@@ -1225,6 +1273,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         return;
       }
       applyJudgeToSummary(summary, 'BAD', scoreTracker);
+      applyGaugeJudge('BAD');
       combo = 0;
       if (!uiEnabled) {
         writeOutput(`MINE channel:${landmineCandidate.channel} delta:${Math.round(landmineDelta * 1000)}ms\n`);
@@ -1254,6 +1303,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!uiEnabled) {
         writeOutput(`POOR-KEY ${tokens[0] ?? '?'}\n`);
       }
+      applyGaugeJudge('EMPTY_POOR');
       return;
     }
 
@@ -1440,6 +1490,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         const missingCount = summary.total - judgedCount;
         for (let index = 0; index < missingCount; index += 1) {
           applyJudgeToSummary(summary, 'POOR', scoreTracker);
+          applyGaugeJudge('POOR');
         }
         uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: totalSeconds });
         combo = 0;
@@ -2766,14 +2817,32 @@ function resolveNoteKeyLabel(channel: string, keyMap: ReadonlyMap<string, string
   return '?';
 }
 
+function formatGrooveGaugeNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    return '-';
+  }
+  const rounded = Math.round(value);
+  return Math.abs(value - rounded) <= 1e-9 ? String(rounded) : value.toFixed(2);
+}
+
+function formatGrooveGaugeStatus(summary: PlayerSummary): string {
+  return summary.gauge?.cleared === true ? 'CLEAR' : 'FAILED';
+}
+
 function renderSummary(summary: PlayerSummary): string {
   const maxExScore = Math.max(0, summary.total * IIDX_EX_SCORE_PER_PGREAT);
   const exScoreRate = maxExScore > 0 ? summary.exScore / maxExScore : 0;
   const scoreRate = summary.score / IIDX_SCORE_MAX;
+  const gauge = summary.gauge;
   return (
     [
       '--- Result ---',
       `TOTAL  : ${summary.total}`,
+      ...(gauge
+        ? [
+            `GAUGE  : ${gauge.current.toFixed(2)} / ${gauge.max.toFixed(2)} ${formatGrooveGaugeStatus(summary)} (TOTAL ${formatGrooveGaugeNumber(gauge.effectiveTotal)})`,
+          ]
+        : []),
       `PGREAT : ${summary.perfect}`,
       `GREAT  : ${summary.great}`,
       `GOOD   : ${summary.good}`,
