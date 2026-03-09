@@ -299,38 +299,38 @@ function convertTaskResult(result: TaskResult): BenchmarkTaskStats {
     const throughput = typedResult.throughput;
     // tinybench v6 exposes period/latency in milliseconds.
     const meanMs = Number.isFinite(periodSeconds) ? periodSeconds : Number.NaN;
-    const p75Ms = Number.isFinite(latency?.p75) ? latency?.p75 ?? meanMs : meanMs;
-    const p99Ms = Number.isFinite(latency?.p99) ? latency?.p99 ?? meanMs : meanMs;
-    const minMs = Number.isFinite(latency?.min) ? latency?.min ?? meanMs : meanMs;
-    const maxMs = Number.isFinite(latency?.max) ? latency?.max ?? meanMs : meanMs;
+    const p75Ms = Number.isFinite(latency?.p75) ? (latency?.p75 ?? meanMs) : meanMs;
+    const p99Ms = Number.isFinite(latency?.p99) ? (latency?.p99 ?? meanMs) : meanMs;
+    const minMs = Number.isFinite(latency?.min) ? (latency?.min ?? meanMs) : meanMs;
+    const maxMs = Number.isFinite(latency?.max) ? (latency?.max ?? meanMs) : meanMs;
     return {
-      hz: Number.isFinite(throughput?.mean) ? throughput?.mean ?? 0 : 0,
+      hz: Number.isFinite(throughput?.mean) ? (throughput?.mean ?? 0) : 0,
       meanMs,
       p75Ms,
       p99Ms,
       minMs,
       maxMs,
-      rmePercent: Number.isFinite(throughput?.rme) ? throughput?.rme ?? 0 : 0,
+      rmePercent: Number.isFinite(throughput?.rme) ? (throughput?.rme ?? 0) : 0,
       sampleCount:
         Number.isFinite(latency?.samplesCount) && (latency?.samplesCount ?? 0) > 0
           ? Math.floor(latency?.samplesCount ?? 0)
           : 0,
-      totalTimeMs: Number.isFinite(typedResult.totalTime) ? typedResult.totalTime ?? 0 : 0,
+      totalTimeMs: Number.isFinite(typedResult.totalTime) ? (typedResult.totalTime ?? 0) : 0,
     };
   }
 
   const samples = Array.isArray(typedResult.samples) ? typedResult.samples : [];
-  const meanMs = Number.isFinite(typedResult.mean) ? typedResult.mean ?? Number.NaN : Number.NaN;
+  const meanMs = Number.isFinite(typedResult.mean) ? (typedResult.mean ?? Number.NaN) : Number.NaN;
   return {
-    hz: Number.isFinite(typedResult.hz) ? typedResult.hz ?? 0 : 0,
+    hz: Number.isFinite(typedResult.hz) ? (typedResult.hz ?? 0) : 0,
     meanMs,
-    p75Ms: Number.isFinite(typedResult.p75) ? typedResult.p75 ?? meanMs : meanMs,
-    p99Ms: Number.isFinite(typedResult.p99) ? typedResult.p99 ?? meanMs : meanMs,
-    minMs: Number.isFinite(typedResult.min) ? typedResult.min ?? meanMs : meanMs,
-    maxMs: Number.isFinite(typedResult.max) ? typedResult.max ?? meanMs : meanMs,
-    rmePercent: Number.isFinite(typedResult.rme) ? typedResult.rme ?? 0 : 0,
+    p75Ms: Number.isFinite(typedResult.p75) ? (typedResult.p75 ?? meanMs) : meanMs,
+    p99Ms: Number.isFinite(typedResult.p99) ? (typedResult.p99 ?? meanMs) : meanMs,
+    minMs: Number.isFinite(typedResult.min) ? (typedResult.min ?? meanMs) : meanMs,
+    maxMs: Number.isFinite(typedResult.max) ? (typedResult.max ?? meanMs) : meanMs,
+    rmePercent: Number.isFinite(typedResult.rme) ? (typedResult.rme ?? 0) : 0,
     sampleCount: samples.length,
-    totalTimeMs: Number.isFinite(typedResult.totalTime) ? typedResult.totalTime ?? 0 : 0,
+    totalTimeMs: Number.isFinite(typedResult.totalTime) ? (typedResult.totalTime ?? 0) : 0,
   };
 }
 
@@ -470,9 +470,7 @@ function validateCaseCoverage(
   const selectedPrefixSet = new Set(selectedPackages.map((packageName) => `${packageName}.`));
   const missingCases = exportedKeys.filter((key) => !cases.has(key));
   const staleCases = [...cases.keys()].filter(
-    (key) =>
-      !exportedKeys.includes(key) &&
-      [...selectedPrefixSet].some((prefix) => key.startsWith(prefix)),
+    (key) => !exportedKeys.includes(key) && [...selectedPrefixSet].some((prefix) => key.startsWith(prefix)),
   );
 
   if (missingCases.length === 0 && staleCases.length === 0) {
@@ -518,6 +516,9 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
+    if (token === '--') {
+      continue;
+    }
     if (token === '--help' || token === '-h') {
       printUsage(defaults);
       process.exit(0);
