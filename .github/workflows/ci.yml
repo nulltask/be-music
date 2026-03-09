@@ -181,7 +181,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -199,7 +200,15 @@ jobs:
         id: detect-bench
         shell: bash
         run: |
-          if node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); process.exit(pkg.scripts && pkg.scripts['bench'] ? 0 : 1);" package.json; then
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          BASE_PKG_JSON="$(mktemp)"
+          trap 'rm -f "$BASE_PKG_JSON"' EXIT
+          if ! git show "${BASE_SHA}:package.json" > "$BASE_PKG_JSON" 2>/dev/null; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); process.exit(pkg.scripts && pkg.scripts['bench'] ? 0 : 1);" "$BASE_PKG_JSON"; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
@@ -214,10 +223,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          BASE_DIR="$(mktemp -d)"
+
+          cleanup() {
+            git worktree remove --force "$BASE_DIR" >/dev/null 2>&1 || true
+            rm -rf "$BASE_DIR" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          git worktree add --detach "$BASE_DIR" "$BASE_SHA"
           mkdir -p tmp/bench/base-runs
-          for run_index in $(seq 1 "$BENCH_REPEATS"); do
-            BENCH_GIT_SHA="${{ github.event.pull_request.base.sha }}" pnpm run bench --output "tmp/bench/base-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
-          done
+
+          (
+            cd "$BASE_DIR"
+            pnpm install --frozen-lockfile --prefer-offline
+            for run_index in $(seq 1 "$BENCH_REPEATS"); do
+              BENCH_GIT_SHA="$BASE_SHA" pnpm run bench --output "tmp/bench/base-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+            done
+          )
+
+          cp "$BASE_DIR"/tmp/bench/base-runs/*.json tmp/bench/base-runs/
 
       - name: Aggregate base benchmark snapshots
         if: steps.detect-bench.outputs.available == 'true'
