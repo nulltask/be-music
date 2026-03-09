@@ -212,6 +212,35 @@ test('BMS: preserves repeated STP, LNOBJ, and control-flow entries instead of co
   ]);
 });
 
+test('BMS: preserves non-control-flow object line boundaries for roundtrip', () => {
+  const parsed = parseChart(
+    [
+      '#00113:11111111',
+      '#00113:0022332255224400',
+      '#00113:0066',
+      '#00101:11',
+      '#00101:22',
+      '#001A6:11',
+      '#001A6:22',
+      '#00102:1.5',
+      '#00102:0.75',
+      '',
+    ].join('\n'),
+  );
+
+  expect(parsed.bms.objectLines.map((line) => `${line.measure}:${line.channel}:${line.events.length}:${line.measureLength ?? '-'}`)).toEqual([
+    '1:13:4:-',
+    '1:13:6:-',
+    '1:13:1:-',
+    '1:01:1:-',
+    '1:01:1:-',
+    '1:A6:1:-',
+    '1:A6:1:-',
+    '1:02:0:1.5',
+    '1:02:0:0.75',
+  ]);
+});
+
 test('BMS: parses RANDOM/IF/SWITCH control flow directives', async () => {
   const parsed = await parseChartFile(unifiedBmsChartPath);
 

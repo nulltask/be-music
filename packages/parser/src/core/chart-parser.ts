@@ -4,6 +4,7 @@ import {
   BMS_JSON_FORMAT,
   type BmsControlFlowCommand,
   type BmsControlFlowEntry,
+  type BmsObjectLineEntry,
   type BeMusicEvent,
   type BeMusicJson,
   createEmptyJson,
@@ -98,6 +99,10 @@ export function parseBms(input: string): BeMusicJson {
           json.bms.controlFlow.push(controlFlowObject);
         }
       } else {
+        const objectLine = createBmsObjectLineEntry(measure, channel, data);
+        if (objectLine) {
+          json.bms.objectLines.push(objectLine);
+        }
         pushObjectDataLine(json, measure, channel, data, measureByIndex);
       }
       return;
@@ -411,6 +416,40 @@ function pushObjectDataLine(
       value: token.value,
     });
   }
+}
+
+function createBmsObjectLineEntry(measure: number, channel: string, data: string): BmsObjectLineEntry | undefined {
+  if (channel === '02') {
+    const measureLength = Number.parseFloat(data);
+    if (!Number.isFinite(measureLength) || measureLength <= 0) {
+      return undefined;
+    }
+    return {
+      measure,
+      channel,
+      events: [],
+      measureLength,
+    };
+  }
+
+  const parsed = collectNonZeroObjectTokens(data);
+  const events: BeMusicEvent[] = [];
+  for (const token of parsed.tokens) {
+    events.push({
+      measure,
+      channel,
+      position: [token.index, parsed.tokenCount],
+      value: token.value,
+    });
+  }
+  if (events.length === 0) {
+    return undefined;
+  }
+  return {
+    measure,
+    channel,
+    events,
+  };
 }
 
 interface ParsedObjectDataLine {
@@ -967,6 +1006,7 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
 function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   const normalized: BeMusicJson['bms'] = {
     controlFlow: [],
+    objectLines: [],
     lnObjs: [],
     exRank: {},
     argb: {},
@@ -992,6 +1032,18 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
       }
     }
     normalized.controlFlow = entries;
+  }
+
+  const rawObjectLines = raw.objectLines ?? raw.object_lines;
+  if (Array.isArray(rawObjectLines)) {
+    const entries: BmsObjectLineEntry[] = [];
+    for (const item of rawObjectLines) {
+      const entry = normalizeBmsObjectLineEntry(item);
+      if (entry) {
+        entries.push(entry);
+      }
+    }
+    normalized.objectLines = entries;
   }
 
   if (typeof raw.preview === 'string' && raw.preview.length > 0) {
@@ -1186,40 +1238,57 @@ function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | und
     };
   }
   if (kind === 'object') {
-    if (typeof raw.measure !== 'number' || !Number.isFinite(raw.measure) || typeof raw.channel !== 'string') {
+    const objectLine = normalizeBmsObjectLineEntry(raw);
+    if (!objectLine) {
       return undefined;
     }
-    const measure = Math.max(0, Math.floor(raw.measure));
-    const channel = normalizeChannel(raw.channel);
-
-    const rawEvents = Array.isArray(raw.events) ? raw.events : [];
-    const normalizedEvents = sortAndNormalizeEvents(rawEvents as Array<BeMusicEvent | Record<string, unknown>>)
-      .filter((event) => event.measure === measure && normalizeChannel(event.channel) === channel)
-      .map((event) => ({
-        measure,
-        channel,
-        position: event.position,
-        value: event.value,
-        ...(event.bmson ? { bmson: event.bmson } : {}),
-      }));
-
-    const measureLength =
-      typeof raw.measureLength === 'number' && Number.isFinite(raw.measureLength) && raw.measureLength > 0
-        ? raw.measureLength
-        : undefined;
-
-    if (normalizedEvents.length === 0 && measureLength === undefined) {
-      const fallbackData = typeof raw.data === 'string' ? raw.data.trim() : '';
-      return createControlFlowObjectEntry(measure, channel, fallbackData);
-    }
-
     return {
       kind: 'object',
-      measure,
-      channel,
-      events: normalizedEvents,
-      measureLength,
+      ...objectLine,
     };
   }
   return undefined;
+}
+
+function normalizeBmsObjectLineEntry(input: unknown): BmsObjectLineEntry | undefined {
+  if (!input || typeof input !== 'object') {
+    return undefined;
+  }
+  const raw = input as Record<string, unknown>;
+  if (typeof raw.measure !== 'number' || !Number.isFinite(raw.measure) || typeof raw.channel !== 'string') {
+    return undefined;
+  }
+  const measure = Math.max(0, Math.floor(raw.measure));
+  const channel = normalizeChannel(raw.channel);
+
+  const rawEvents = Array.isArray(raw.events) ? raw.events : [];
+  const normalizedEvents = sortAndNormalizeEvents(rawEvents as Array<BeMusicEvent | Record<string, unknown>>)
+    .filter(
+      (event) =>
+        event.measure === measure && normalizeChannel(event.channel) === channel && normalizeObjectKey(event.value) !== '00',
+    )
+    .map((event) => ({
+      measure,
+      channel,
+      position: event.position,
+      value: event.value,
+      ...(event.bmson ? { bmson: event.bmson } : {}),
+    }));
+
+  const measureLength =
+    typeof raw.measureLength === 'number' && Number.isFinite(raw.measureLength) && raw.measureLength > 0
+      ? raw.measureLength
+      : undefined;
+
+  if (normalizedEvents.length === 0 && measureLength === undefined) {
+    const fallbackData = typeof raw.data === 'string' ? raw.data.trim() : '';
+    return createBmsObjectLineEntry(measure, channel, fallbackData);
+  }
+
+  return {
+    measure,
+    channel,
+    events: normalizedEvents,
+    measureLength,
+  };
 }

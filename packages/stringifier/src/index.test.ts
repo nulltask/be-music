@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { parseBmson, parseChartFile } from '../../parser/src/index.ts';
+import { parseBmson, parseChart, parseChartFile } from '../../parser/src/index.ts';
 import { stringifyBms, stringifyBmson } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -144,6 +144,54 @@ test('BMS stringify: writes multiple LNOBJ declarations in order', () => {
     .filter((line) => line.startsWith('#LNOBJ '))
     .map((line) => line.trim());
   expect(lnObjLines).toEqual(['#LNOBJ AA', '#LNOBJ BB']);
+});
+
+test('BMS stringify: preserves parsed duplicate object lines and BGM/A6 line boundaries', () => {
+  const parsed = parseChart(
+    [
+      '#00113:11111111',
+      '#00113:0022332255224400',
+      '#00113:0066',
+      '#00101:11',
+      '#00101:22',
+      '#001A6:11',
+      '#001A6:22',
+      '#00102:1.5',
+      '#00102:0.75',
+      '',
+    ].join('\n'),
+  );
+
+  const output = stringifyBms(parsed);
+  const measureLines = output.split('\n').filter((line) => line.startsWith('#00102:'));
+  const objectLines = output.split('\n').filter((line) => /^#001(13|01|A6):/.test(line));
+
+  expect(measureLines).toEqual(['#00102:1.5', '#00102:0.75']);
+  expect(objectLines).toEqual([
+    '#00113:11111111',
+    '#00113:0022332255224400',
+    '#00113:0066',
+    '#00101:11',
+    '#00101:22',
+    '#001A6:11',
+    '#001A6:22',
+  ]);
+});
+
+test('BMS stringify: falls back to regenerated object lines when parsed structure no longer matches events', () => {
+  const parsed = parseChart(
+    [
+      '#00113:11',
+      '#00113:22',
+      '',
+    ].join('\n'),
+  );
+  parsed.events.push({ measure: 1, channel: '13', position: [1, 2], value: '33' });
+
+  const output = stringifyBms(parsed);
+  const objectLines = output.split('\n').filter((line) => line.startsWith('#00113:'));
+
+  expect(objectLines).toEqual(['#00113:2233']);
 });
 
 test('bmson stringify: preserves and outputs bga/info extensions and notes.l/c', async () => {

@@ -1,10 +1,12 @@
 import {
+  compareEvents,
   createBeatResolver,
   isSampleTriggerChannel,
   normalizeChannel,
   normalizeObjectKey,
   parseBpmFrom03Token,
   sortEvents,
+  type BmsObjectLineEntry,
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
@@ -29,6 +31,7 @@ export interface BmsonStringifyOptions {
 export function stringifyBms(json: BeMusicJson, options: BmsStringifyOptions = {}): string {
   const eol = options.eol ?? '\n';
   const maxResolution = options.maxResolution;
+  const preservedObjectLines = maxResolution === undefined ? resolvePreservedObjectLinesForOutput(json) : undefined;
   const lines: string[] = [];
 
   pushBmsSectionComment(lines, 'METADATA');
@@ -38,9 +41,9 @@ export function stringifyBms(json: BeMusicJson, options: BmsStringifyOptions = {
   pushBmsSectionComment(lines, 'RESOURCES');
   pushResourceLines(lines, json);
   pushBmsSectionComment(lines, 'MEASURE LENGTH');
-  pushMeasureLines(lines, json);
+  pushMeasureLines(lines, json, preservedObjectLines);
   pushBmsSectionComment(lines, 'OBJECT DATA');
-  pushEventLines(lines, json, maxResolution);
+  pushEventLines(lines, json, maxResolution, preservedObjectLines);
   pushBmsSectionComment(lines, 'CONTROL FLOW');
   pushControlFlowLines(lines, json);
 
@@ -317,7 +320,16 @@ function pushObjectResourceLines(lines: string[], command: string, values: Recor
   }
 }
 
-function pushMeasureLines(lines: string[], json: BeMusicJson): void {
+function pushMeasureLines(lines: string[], json: BeMusicJson, preservedObjectLines?: BmsObjectLineEntry[]): void {
+  if (preservedObjectLines) {
+    for (const objectLine of preservedObjectLines) {
+      if (typeof objectLine.measureLength === 'number' && objectLine.measureLength > 0) {
+        lines.push(`#${toMeasure(objectLine.measure)}02:${formatNumber(objectLine.measureLength)}`);
+      }
+    }
+    return;
+  }
+
   const measures = [...json.measures]
     .filter((measure) => measure.length > 0 && Math.abs(measure.length - 1) > 1e-9)
     .sort((left, right) => left.index - right.index);
@@ -327,7 +339,22 @@ function pushMeasureLines(lines: string[], json: BeMusicJson): void {
   }
 }
 
-function pushEventLines(lines: string[], json: BeMusicJson, maxResolution?: number): void {
+function pushEventLines(
+  lines: string[],
+  json: BeMusicJson,
+  maxResolution?: number,
+  preservedObjectLines?: BmsObjectLineEntry[],
+): void {
+  if (preservedObjectLines) {
+    for (const objectLine of preservedObjectLines) {
+      const serialized = serializeBmsObjectLineEvents(objectLine.measure, objectLine.channel, objectLine.events);
+      if (serialized) {
+        lines.push(serialized);
+      }
+    }
+    return;
+  }
+
   const grouped = groupEvents(sortEvents(json.events));
   for (const group of grouped) {
     const { measure, channel, events } = group;
@@ -343,6 +370,70 @@ function pushEventLines(lines: string[], json: BeMusicJson, maxResolution?: numb
 
     lines.push(`#${toMeasure(measure)}${channel}:${cells.join('')}`);
   }
+}
+
+function resolvePreservedObjectLinesForOutput(json: BeMusicJson): BmsObjectLineEntry[] | undefined {
+  const objectLines = json.bms.objectLines;
+  if (!Array.isArray(objectLines) || objectLines.length === 0) {
+    return undefined;
+  }
+  return doPreservedObjectLinesMatchChart(json, objectLines) ? objectLines : undefined;
+}
+
+function doPreservedObjectLinesMatchChart(json: BeMusicJson, objectLines: BmsObjectLineEntry[]): boolean {
+  const flattenedEvents: BeMusicEvent[] = [];
+  const preservedMeasureLengths = new Map<number, number>();
+
+  for (const objectLine of objectLines) {
+    if (typeof objectLine.measureLength === 'number' && objectLine.measureLength > 0) {
+      preservedMeasureLengths.set(Math.max(0, Math.floor(objectLine.measure)), objectLine.measureLength);
+    }
+    for (const event of objectLine.events) {
+      if (normalizeObjectKey(event.value) === '00') {
+        continue;
+      }
+      flattenedEvents.push({
+        measure: Math.max(0, Math.floor(objectLine.measure)),
+        channel: normalizeChannel(objectLine.channel),
+        position: event.position,
+        value: normalizeObjectKey(event.value),
+        ...(event.bmson ? { bmson: event.bmson } : {}),
+      });
+    }
+  }
+
+  const sortedFlattenedEvents = sortEvents(flattenedEvents);
+  const sortedCurrentEvents = sortEvents(json.events);
+  if (sortedFlattenedEvents.length !== sortedCurrentEvents.length) {
+    return false;
+  }
+  for (let index = 0; index < sortedCurrentEvents.length; index += 1) {
+    if (compareEvents(sortedFlattenedEvents[index]!, sortedCurrentEvents[index]!) !== 0) {
+      return false;
+    }
+    if (!areEventBmsonExtensionsEqual(sortedFlattenedEvents[index]!.bmson, sortedCurrentEvents[index]!.bmson)) {
+      return false;
+    }
+  }
+
+  const currentMeasureLengths = new Map<number, number>();
+  for (const measure of json.measures) {
+    currentMeasureLengths.set(Math.max(0, Math.floor(measure.index)), measure.length);
+  }
+  if (preservedMeasureLengths.size !== currentMeasureLengths.size) {
+    return false;
+  }
+  for (const [measure, length] of preservedMeasureLengths) {
+    if (currentMeasureLengths.get(measure) !== length) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areEventBmsonExtensionsEqual(left: BeMusicEvent['bmson'], right: BeMusicEvent['bmson']): boolean {
+  return left?.l === right?.l && left?.c === right?.c;
 }
 
 function pushControlFlowLines(lines: string[], json: BeMusicJson): void {
@@ -375,6 +466,10 @@ function pushBmsSectionComment(lines: string[], section: string): void {
 }
 
 function serializeControlFlowObjectEvents(measure: number, channel: string, events: BeMusicEvent[]): string | undefined {
+  return serializeBmsObjectLineEvents(measure, channel, events);
+}
+
+function serializeBmsObjectLineEvents(measure: number, channel: string, events: BeMusicEvent[]): string | undefined {
   const normalizedChannel = normalizeChannel(channel);
   const lineEvents: BeMusicEvent[] = [];
   for (const event of sortEvents(events)) {

@@ -9,6 +9,13 @@
 - BMS / BMSON の差分を吸収して、内部処理を単一形式で扱う
 - 再文字列化時にイベント時刻を安定再現する
 
+## 設計原則
+
+- IR は `parse` した入力を `stringify` したときに、元の譜面が持っていた構造をできる限り変えずに再現することを原則とします
+- ここでいう構造には、重複定義の順序、制御構文、オブジェクト行の分割単位、bmson の小節線情報など、再文字列化結果に影響する要素を含みます
+- 空行、コメント、空白、改行コード、文字コードなど、IR が明示的に保持しない表層情報はこの原則の対象外です
+- IR を編集した結果、保持していた構造情報と正規化済みの `events` / `measures` / 拡張情報が一致しなくなった場合、stringifier は整合性を優先して再生成を行います
+
 ## ルート構造
 
 ```json
@@ -60,6 +67,20 @@
     "materials": "materials.def",
     "divideProp": "lane=2",
     "charset": "Shift_JIS",
+    "objectLines": [
+      {
+        "measure": 1,
+        "channel": "13",
+        "events": [
+          {
+            "measure": 1,
+            "channel": "13",
+            "position": [1, 4],
+            "value": "22"
+          }
+        ]
+      }
+    ],
     "controlFlow": [
       {
         "kind": "directive",
@@ -139,6 +160,9 @@
 - `materials`: `#MATERIALS` の値
 - `divideProp`: `#DIVIDEPROP` の値
 - `charset`: `#CHARSET` の値
+- `objectLines`: 制御構文の外側にあるオブジェクト行の宣言順スナップショット
+- `objectLines` は BMS の行分割を保持し、`stringifyBms(parseChart(...))` で元の行構成を復元するために使います
+- `objectLines` が `events` / `measures` と一致しない場合、stringifier はこの配列を無視して再生成します
 - `controlFlow`: 制御構文 (`#RANDOM`/`#IF`/`#SWITCH` 系) と、その内側のヘッダ/オブジェクト行
 - `controlFlow.kind = "object"` は通常イベントと同じ `events` 形式（必要に応じて `measureLength`）で保持
 - パーサは制御構文をこの配列へ保持し、分岐の実行は再生/レンダリング時に行います

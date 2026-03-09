@@ -51,13 +51,20 @@ describe('json', () => {
       position: [0, 1],
       value: '01',
     });
+    source.bms.objectLines.push({
+      measure: 0,
+      channel: '11',
+      events: [{ measure: 0, channel: '11', position: [0, 1], value: '01' }],
+    });
 
     const cloned = cloneJson(source);
     cloned.metadata.title = 'changed';
     cloned.events[0].value = '02';
+    cloned.bms.objectLines[0]!.events[0]!.value = '03';
 
     expect(source.metadata.title).toBe('original');
     expect(source.events[0].value).toBe('01');
+    expect(source.bms.objectLines[0]!.events[0]!.value).toBe('01');
   });
 
   test('json: normalizeObjectKey / normalizeChannel', () => {

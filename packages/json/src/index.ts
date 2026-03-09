@@ -127,8 +127,16 @@ export interface BmsControlFlowObjectEntry {
 
 export type BmsControlFlowEntry = BmsControlFlowDirectiveEntry | BmsControlFlowHeaderEntry | BmsControlFlowObjectEntry;
 
+export interface BmsObjectLineEntry {
+  measure: number;
+  channel: string;
+  events: BeMusicEvent[];
+  measureLength?: number;
+}
+
 export interface BmsExtensions {
   controlFlow: BmsControlFlowEntry[];
+  objectLines: BmsObjectLineEntry[];
   preview?: string;
   lnType?: number;
   lnMode?: number;
@@ -209,6 +217,7 @@ export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
     events: [],
     bms: {
       controlFlow: [],
+      objectLines: [],
       lnObjs: [],
       exRank: {},
       argb: {},
@@ -251,6 +260,12 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
   const controlFlow = new Array<BmsControlFlowEntry>(sourceControlFlow.length);
   for (let index = 0; index < sourceControlFlow.length; index += 1) {
     controlFlow[index] = cloneControlFlowEntry(sourceControlFlow[index]!);
+  }
+
+  const sourceObjectLines = json.bms.objectLines;
+  const objectLines = new Array<BmsObjectLineEntry>(sourceObjectLines.length);
+  for (let index = 0; index < sourceObjectLines.length; index += 1) {
+    objectLines[index] = cloneBmsObjectLineEntry(sourceObjectLines[index]!);
   }
 
   const sourceLines = json.bmson.lines;
@@ -306,6 +321,7 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
     bms: {
       ...json.bms,
       controlFlow,
+      objectLines,
       lnObjs: json.bms.lnObjs ? [...json.bms.lnObjs] : undefined,
       exRank: { ...json.bms.exRank },
       argb: { ...json.bms.argb },
@@ -1087,6 +1103,13 @@ function cloneControlFlowEntry(entry: BmsControlFlowEntry): BmsControlFlowEntry 
     };
   }
   return { ...entry };
+}
+
+function cloneBmsObjectLineEntry(entry: BmsObjectLineEntry): BmsObjectLineEntry {
+  return {
+    ...entry,
+    events: entry.events.map(cloneEvent),
+  };
 }
 
 function clamp01(value: number): number {

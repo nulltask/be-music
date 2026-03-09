@@ -169,6 +169,7 @@ export function createBlankJson(): BeMusicJson {
     events: [],
     bms: {
       controlFlow: [],
+      objectLines: [],
       lnObjs: [],
       exRank: {},
       argb: {},
@@ -261,6 +262,7 @@ function canCloneJsonFast(json: BeMusicJson): boolean {
     Array.isArray(json.events) &&
     json.bms !== undefined &&
     Array.isArray(json.bms.controlFlow) &&
+    Array.isArray(json.bms.objectLines) &&
     (json.bms.lnObjs === undefined || Array.isArray(json.bms.lnObjs)) &&
     json.bms.exRank !== undefined &&
     json.bms.argb !== undefined &&
