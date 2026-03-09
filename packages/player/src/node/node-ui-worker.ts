@@ -11,22 +11,13 @@ import {
 import { createBgaAnsiRenderer } from '../bga.ts';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/player-ui-signal-bus.ts';
 import { PlayerTui } from '../tui.ts';
+import { estimateBgaAnsiDisplaySize as resolveBgaDisplaySize, resolveLaneWidths } from '../tui/layout.ts';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';
 import type {
   NodeUiWorkerInboundMessage,
   NodeUiWorkerInitData,
   NodeUiWorkerOutboundMessage,
 } from './node-ui-worker-protocol.ts';
-
-const DEFAULT_LANE_WIDTH = 3;
-const WIDE_SCRATCH_LANE_WIDTH = DEFAULT_LANE_WIDTH * 2;
-const DEFAULT_GRID_ROWS = 14;
-const MIN_GRID_ROWS = 4;
-const STATIC_TUI_LINES = 15;
-const BGA_LANE_GAP = 3;
-const MIN_BGA_ASCII_WIDTH = 8;
-const MIN_BGA_ASCII_HEIGHT = 6;
-const DEFAULT_TERMINAL_COLUMNS = 120;
 
 const port = parentPort;
 const initData = workerData as NodeUiWorkerInitData;
@@ -123,6 +114,13 @@ async function bootstrap(): Promise<void> {
   let latestFrame: PlayerUiFramePayload | undefined;
   const queuedCommands: PlayerUiCommand[] = [];
   let bridgePort: MessagePort | undefined;
+  let terminalColumns: number | undefined;
+  let terminalRows: number | undefined;
+
+  const syncBgaDisplaySize = (frame: PlayerUiFramePayload | undefined): void => {
+    const size = estimateBgaAnsiDisplaySize(initData.laneBindings, terminalColumns, terminalRows, frame);
+    bgaRenderer?.setDisplaySize(size.width, size.height);
+  };
 
   const deferredUiFlush = createDeferredUiFlush(({ commands, frame }) => {
     if (commands) {
@@ -156,6 +154,7 @@ async function bootstrap(): Promise<void> {
     }
 
     if (frame && latestFrame) {
+      syncBgaDisplaySize(latestFrame);
       tui.render({
         ...latestFrame,
         bgaAnsiLines: bgaRenderer?.getAnsiLines(latestFrame.currentSeconds),
@@ -170,6 +169,7 @@ async function bootstrap(): Promise<void> {
     }
     if (message.kind === 'frame') {
       latestFrame = message.frame;
+      syncBgaDisplaySize(latestFrame);
       deferredUiFlush.markFrameDirty();
       return true;
     }
@@ -246,8 +246,9 @@ async function bootstrap(): Promise<void> {
     }
 
     tui.setTerminalSize(message.columns, message.rows);
-    const size = estimateBgaAnsiDisplaySize(initData.laneBindings, message.columns, message.rows);
-    bgaRenderer?.setDisplaySize(size.width, size.height);
+    terminalColumns = message.columns;
+    terminalRows = message.rows;
+    syncBgaDisplaySize(latestFrame);
     if (latestFrame) {
       deferredUiFlush.markFrameDirty();
     }
@@ -273,22 +274,20 @@ function resolveSplitAfterIndex(bindings: NodeUiWorkerInitData['laneBindings']):
 
 function estimateBgaAnsiDisplaySize(
   bindings: NodeUiWorkerInitData['laneBindings'],
-  columns = process.stdout.columns ?? DEFAULT_TERMINAL_COLUMNS,
-  rows = process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES,
+  columns = process.stdout.columns,
+  rows = process.stdout.rows,
+  frame?: Pick<PlayerUiFramePayload, 'activeAudioFiles' | 'activeAudioVoiceCount'>,
 ): { width: number; height: number } {
-  const laneWidths = bindings.map((binding) => (binding.isScratch ? WIDE_SCRATCH_LANE_WIDTH : DEFAULT_LANE_WIDTH));
-  const laneCount = laneWidths.length;
-  const splitAfterIndex = resolveSplitAfterIndex(bindings);
-  const laneTextWidth = laneWidths.reduce((sum, width) => sum + width, 0);
-  const laneSpacingWidth = laneCount > 0 ? laneCount - 1 : 0;
-  const splitExtraWidth = splitAfterIndex >= 0 && splitAfterIndex < laneCount - 1 ? 2 : 0;
-  const laneBlockWidth = laneTextWidth + laneSpacingWidth + splitExtraWidth;
-
-  const width = Math.max(MIN_BGA_ASCII_WIDTH, columns - laneBlockWidth - BGA_LANE_GAP);
-  const rowCount = Math.max(MIN_GRID_ROWS, rows - STATIC_TUI_LINES);
-  const laneBlockHeight = rowCount + 4;
-  const height = Math.max(MIN_BGA_ASCII_HEIGHT, laneBlockHeight);
-  return { width, height };
+  return resolveBgaDisplaySize({
+    laneWidths: resolveLaneWidths(bindings),
+    splitAfterIndex: resolveSplitAfterIndex(bindings),
+    columns,
+    rows,
+    showLaneChannels: initData.showLaneChannels === true,
+    hasRandomPatternSummary:
+      typeof initData.randomPatternSummary === 'string' && initData.randomPatternSummary.length > 0,
+    hasAudioDebugLine: frame?.activeAudioFiles !== undefined || frame?.activeAudioVoiceCount !== undefined,
+  });
 }
 
 function postWorkerMessage(message: NodeUiWorkerOutboundMessage): void {
