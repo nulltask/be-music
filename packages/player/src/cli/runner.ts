@@ -6,15 +6,8 @@ import { isAbortError, resolveCliPath } from '@be-music/utils';
 import readline from 'node:readline';
 import { parseChartFile } from '@be-music/parser';
 import { renderJson, writeAudioFile } from '@be-music/audio-renderer';
-import {
-  autoPlay,
-  manualPlay,
-  PlayerInterruptedError,
-  type PlayerLoadProgress,
-  type PlayerSummary,
-} from '../index.ts';
-import { createNodeInputRuntime } from '../node/node-input-runtime.ts';
-import { createNodeUiRuntime } from '../node/node-ui-runtime.ts';
+import { PlayerInterruptedError, type PlayerLoadProgress, type PlayerSummary } from '../index.ts';
+import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
 import {
   HIGH_SPEED_STEP,
   MAX_HIGH_SPEED,
@@ -476,7 +469,10 @@ function resolvePersistedConfigForSongSelect(
       resolved.lastSelectedChartFileByDirectory = byDirectory;
     }
   }
-  if (resolved.lastSelectedChartFileByDirectory && Object.keys(resolved.lastSelectedChartFileByDirectory).length === 0) {
+  if (
+    resolved.lastSelectedChartFileByDirectory &&
+    Object.keys(resolved.lastSelectedChartFileByDirectory).length === 0
+  ) {
     delete resolved.lastSelectedChartFileByDirectory;
   }
   return resolved;
@@ -665,32 +661,6 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
       return extension.length > 0 ? extension : undefined;
     })(),
     tui: args.tui,
-    createUiRuntime: args.tui
-      ? async (context: Parameters<typeof createNodeUiRuntime>[0]) => {
-          const runtime = await createNodeUiRuntime(context);
-          if (!runtime.tuiEnabled && args.tui) {
-            process.stdout.write('TUI is unavailable in this environment. Falling back to text output.\n');
-          }
-          return runtime;
-        }
-      : undefined,
-    createInputRuntime: (context: Parameters<typeof createNodeInputRuntime>[0]) => createNodeInputRuntime(context),
-    writeOutput: (text: string): void => {
-      process.stdout.write(text);
-    },
-    onHighSpeedChange: (value: number): void => {
-      resolvedHighSpeed = normalizeHighSpeedValue(value);
-    },
-    onLoadProgress: reportPlayLoadingProgress
-      ? (progress: PlayerLoadProgress): void => {
-          const mappedRatio = 0.22 + Math.max(0, Math.min(1, progress.ratio)) * 0.76;
-          reportPlayLoadingProgress({
-            ratio: mappedRatio,
-            message: progress.message,
-            detail: progress.detail,
-          });
-        }
-      : undefined,
   };
 
   let summary: PlayerSummary;
@@ -701,19 +671,30 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
       playbackLoadingAbortCapture = undefined;
     };
     try {
-      summary = args.auto
-        ? await autoPlay(json, {
-            ...playOptions,
-            auto: true,
-            signal: playbackLoadingAbortCapture?.signal,
-            onLoadComplete: disposePlaybackLoadingAbortCapture,
-          })
-        : await manualPlay(json, {
-            ...playOptions,
-            autoScratch: args.autoScratch,
-            signal: playbackLoadingAbortCapture?.signal,
-            onLoadComplete: disposePlaybackLoadingAbortCapture,
-          });
+      summary = await runNodeGameplayRuntime({
+        json,
+        mode: args.auto ? 'auto' : 'manual',
+        autoScratch: args.autoScratch,
+        playOptions,
+        signal: playbackLoadingAbortCapture?.signal,
+        writeOutput: (text: string): void => {
+          process.stdout.write(text);
+        },
+        onHighSpeedChange: (value: number): void => {
+          resolvedHighSpeed = normalizeHighSpeedValue(value);
+        },
+        onLoadProgress: reportPlayLoadingProgress
+          ? (progress: PlayerLoadProgress): void => {
+              const mappedRatio = 0.22 + Math.max(0, Math.min(1, progress.ratio)) * 0.76;
+              reportPlayLoadingProgress({
+                ratio: mappedRatio,
+                message: progress.message,
+                detail: progress.detail,
+              });
+            }
+          : undefined,
+        onLoadComplete: disposePlaybackLoadingAbortCapture,
+      });
       break;
     } catch (error) {
       const cancelReason = resolveLoadingCancelReason(error, playbackLoadingAbortCapture);
@@ -747,7 +728,11 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   };
 }
 
-async function playSingleChartUntilExit(chartPath: string, rootDir: string, args: CliArgs): Promise<ResultScreenExitAction> {
+async function playSingleChartUntilExit(
+  chartPath: string,
+  rootDir: string,
+  args: CliArgs,
+): Promise<ResultScreenExitAction> {
   while (true) {
     const played = await playChartOnce(chartPath, args);
     const action = await showResultScreen(rootDir, played, {
@@ -1470,7 +1455,6 @@ async function selectChartInteractively(
     render();
   });
 }
-
 
 function getEntryFocusKey(entry: ChartSelectionEntry | undefined): string | undefined {
   if (!entry) {

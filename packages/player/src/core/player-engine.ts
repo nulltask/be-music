@@ -30,11 +30,7 @@ import {
   resolveLaneDisplayMode,
   type LaneBinding,
 } from '../manual-input.ts';
-import {
-  extractTimedNotes,
-  type TimedLandmineNote,
-  type TimedPlayableNote,
-} from '../playable-notes.ts';
+import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 import { formatSeconds, resolveAltModifierLabel, resolveChartVolWavGain } from '../player-utils.ts';
 import { createNodeAudioSink, type AudioSink } from '../audio-sink.ts';
 import {
@@ -45,20 +41,15 @@ import {
 } from './high-speed-control.ts';
 import { createPlayerUiSignalBus, type PlayerUiSignalBus } from './player-ui-signal-bus.ts';
 import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './player-input-signal-bus.ts';
-import {
-  IIDX_EX_SCORE_PER_PGREAT,
-  IIDX_SCORE_MAX,
-  applyJudgeToSummary,
-  createScoreTracker,
-} from './scoring.ts';
+import { IIDX_EX_SCORE_PER_PGREAT, IIDX_SCORE_MAX, applyJudgeToSummary, createScoreTracker } from './scoring.ts';
 import { resolveJudgeWindowsMs } from './judge-window.ts';
 import { createBeatAtSecondsResolver } from './timeline.ts';
 
 export interface PlayerUiRuntime {
   readonly tuiEnabled: boolean;
   start: () => void;
-  stop: () => void;
-  dispose: () => void;
+  stop: () => void | Promise<void>;
+  dispose: () => void | Promise<void>;
   triggerPoor: (seconds: number) => void;
   clearPoor: () => void;
 }
@@ -269,7 +260,12 @@ export function applyFastSlowForJudge(
   }
 }
 
-export { extractInvisiblePlayableNotes, extractLandmineNotes, extractPlayableNotes, extractTimedNotes } from '../playable-notes.ts';
+export {
+  extractInvisiblePlayableNotes,
+  extractLandmineNotes,
+  extractPlayableNotes,
+  extractTimedNotes,
+} from '../playable-notes.ts';
 
 function reportLoadProgress(options: PlayerOptions, ratio: number, message: string, detail?: string): void {
   const listener = options.onLoadProgress;
@@ -772,8 +768,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       await finalizeAudioSessionSafely(audioSession);
     }
     inputRuntime?.stop();
-    uiRuntime?.stop();
-    uiRuntime?.dispose();
+    await settleMaybeAsyncWithTimeout(uiRuntime?.stop(), 300);
+    await settleMaybeAsyncWithTimeout(uiRuntime?.dispose(), 300);
   }
 
   if (interruptedReason === 'ctrl-c') {
@@ -1460,8 +1456,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       await finalizeAudioSessionSafely(audioSession);
     }
     inputRuntime?.stop();
-    uiRuntime?.stop();
-    uiRuntime?.dispose();
+    await settleMaybeAsyncWithTimeout(uiRuntime?.stop(), 300);
+    await settleMaybeAsyncWithTimeout(uiRuntime?.dispose(), 300);
   }
 
   if (interruptedReason) {
@@ -1507,6 +1503,16 @@ async function settleWithTimeout(task: Promise<void>, timeoutMs: number): Promis
     });
   await Promise.race([guardedTask, delay(timeoutMs)]);
   return completed;
+}
+
+async function settleMaybeAsyncWithTimeout(
+  task: void | Promise<void> | undefined,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (!task) {
+    return true;
+  }
+  return settleWithTimeout(Promise.resolve(task), timeoutMs);
 }
 
 async function createAudioSessionIfEnabled(
@@ -1773,7 +1779,11 @@ async function createDebugActiveAudioEstimator(
   const triggers = collectSampleTriggers(json, resolver, {
     inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
   });
-  const sampleDurationSecondsByKey = await buildDebugSampleDurationSecondsMap(triggers, options.baseDir, options.signal);
+  const sampleDurationSecondsByKey = await buildDebugSampleDurationSecondsMap(
+    triggers,
+    options.baseDir,
+    options.signal,
+  );
   throwIfAborted(options.signal);
   const windows: DebugSampleWindow[] = triggers
     .map((trigger) => {
@@ -1939,7 +1949,8 @@ async function playMixedPcmThroughOutput(params: {
   outputDynamics?: OutputDynamicsConfig;
   playbackSampleRate: number;
 }): Promise<void> {
-  const { output, background, activeVoices, shouldStop, isDraining, isPaused, mode, leadTuning, playbackSampleRate } = params;
+  const { output, background, activeVoices, shouldStop, isDraining, isPaused, mode, leadTuning, playbackSampleRate } =
+    params;
 
   const chunkFrames = mode === 'manual' ? MANUAL_AUDIO_CHUNK_FRAMES : AUTO_AUDIO_CHUNK_FRAMES;
   // Keep one reusable PCM buffer and fill through Int16Array to minimize per-sample write overhead.
@@ -2184,7 +2195,10 @@ function createOutputDynamicsConfig(options: PlayerOptions, sampleRate: number):
     resolveFiniteNumberOption(options.compressorThresholdDb, DEFAULT_COMPRESSOR_THRESHOLD_DB),
   );
   const compressorThresholdLinear = Math.max(1e-4, dbToLinear(compressorThresholdDb));
-  const compressorRatio = Math.max(1.01, resolvePositiveNumberOption(options.compressorRatio, DEFAULT_COMPRESSOR_RATIO));
+  const compressorRatio = Math.max(
+    1.01,
+    resolvePositiveNumberOption(options.compressorRatio, DEFAULT_COMPRESSOR_RATIO),
+  );
   const compressorInvRatioMinusOne = 1 / compressorRatio - 1;
   const compressorAttackMs = resolvePositiveNumberOption(options.compressorAttackMs, DEFAULT_COMPRESSOR_ATTACK_MS);
   const compressorReleaseMs = resolvePositiveNumberOption(options.compressorReleaseMs, DEFAULT_COMPRESSOR_RELEASE_MS);
@@ -2307,8 +2321,7 @@ async function renderAutoMixWithVolumeControls(
     return renderJson(json, {
       ...options,
       normalize: false,
-      resolveTriggerGain: (trigger) =>
-        isPlayLaneChannelForVolumeControl(trigger.channel) ? playVolume : bgmVolume,
+      resolveTriggerGain: (trigger) => (isPlayLaneChannelForVolumeControl(trigger.channel) ? playVolume : bgmVolume),
     });
   }
 
@@ -2434,7 +2447,9 @@ function resolveTriggerVoiceGain(channel: string, playVolume: number, bgmVolume:
 }
 
 function createSilentRenderResult(sampleRate: number): RenderResult {
-  const safeSampleRate = Number.isFinite(sampleRate) ? Math.max(8_000, Math.floor(sampleRate)) : RUNTIME_AUDIO_SAMPLE_RATE;
+  const safeSampleRate = Number.isFinite(sampleRate)
+    ? Math.max(8_000, Math.floor(sampleRate))
+    : RUNTIME_AUDIO_SAMPLE_RATE;
   const left = new Float32Array(0);
   const right = new Float32Array(0);
   return {
@@ -2756,7 +2771,7 @@ function renderSummary(summary: PlayerSummary): string {
   const exScoreRate = maxExScore > 0 ? summary.exScore / maxExScore : 0;
   const scoreRate = summary.score / IIDX_SCORE_MAX;
   return (
-      [
+    [
       '--- Result ---',
       `TOTAL  : ${summary.total}`,
       `PGREAT : ${summary.perfect}`,

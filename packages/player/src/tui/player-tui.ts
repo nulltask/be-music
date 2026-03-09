@@ -3,11 +3,7 @@ import type { PlayerSummary } from '../index.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../player-utils.ts';
 import type { PlayerStateSignals } from '../player-state-signals.ts';
 import { findStackableRowIndex } from './lane-stacking.ts';
-import {
-  normalizeHighSpeed,
-  resolveAnimatedHighSpeedValue,
-  resolveVisibleBeatsForTuiGrid,
-} from './high-speed.ts';
+import { normalizeHighSpeed, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
 export { resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
 
 interface TuiLane {
@@ -39,6 +35,8 @@ interface TuiOptions {
   measureBoundariesBeats?: number[];
   splitAfterIndex?: number;
   stateSignals?: PlayerStateSignals;
+  stdinIsTTY?: boolean;
+  stdoutIsTTY?: boolean;
 }
 
 interface TuiNote {
@@ -129,7 +127,6 @@ const HIGH_SPEED_TRANSITION_MS = 180;
 const JUDGE_COMBO_VISIBILITY_TIMEOUT_MS = 1000;
 const JUDGE_COMBO_BLINK_INTERVAL_MS = 80;
 const FPS_SMOOTHING_FACTOR = 0.2;
-const INPUT_KEY_ACTIVE_STYLE = '1;30;48;5;208';
 const MEASURE_SIGNATURE_MAX_DENOMINATOR = 32;
 const HIGH_SPEED_MODIFIER_LABEL = resolveAltModifierLabel();
 const MEASURE_SIGNATURE_TOLERANCE = 1e-8;
@@ -150,6 +147,42 @@ const BLACK_RGB: RgbColor = { r: 0, g: 0, b: 0 };
 const WHITE_KEY_LANE_BG_RGB: RgbColor = { r: 24, g: 36, b: 56 };
 const BLACK_KEY_LANE_BG_RGB: RgbColor = { r: 2, g: 4, b: 8 };
 const SCRATCH_LANE_BG_RGB: RgbColor = { r: 5, g: 8, b: 12 };
+const SPLIT_PANEL_BACKGROUND_RGB: RgbColor = { r: 18, g: 18, b: 18 };
+const LANE_DIVIDER_RGB: RgbColor = { r: 148, g: 148, b: 148 };
+const LANE_OUTER_BORDER_RGB: RgbColor = { r: 218, g: 218, b: 218 };
+const LANE_CEILING_RGB: RgbColor = { r: 88, g: 88, b: 88 };
+const JUDGE_LINE_RGB: RgbColor = { r: 255, g: 48, b: 48 };
+const LANE_LABEL_RGB: RgbColor = { r: 198, g: 198, b: 198 };
+const RED_NOTE_RGB: RgbColor = { r: 255, g: 95, b: 95 };
+const BLUE_NOTE_RGB: RgbColor = { r: 95, g: 135, b: 255 };
+const WHITE_NOTE_RGB: RgbColor = { r: 255, g: 255, b: 255 };
+const INVISIBLE_NOTE_RGB: RgbColor = { r: 102, g: 224, b: 161 };
+const MEASURE_LINE_RGB: RgbColor = { r: 158, g: 158, b: 158 };
+const MINE_FOREGROUND_RGB: RgbColor = { r: 255, g: 255, b: 255 };
+const MINE_BACKGROUND_RGB: RgbColor = { r: 205, g: 64, b: 64 };
+const INPUT_KEY_LIGHT_FOREGROUND_RGB: RgbColor = { r: 24, g: 24, b: 24 };
+const INPUT_KEY_LIGHT_BACKGROUND_RGB: RgbColor = { r: 238, g: 238, b: 238 };
+const INPUT_KEY_DARK_FOREGROUND_RGB: RgbColor = { r: 250, g: 250, b: 250 };
+const INPUT_KEY_DARK_BACKGROUND_RGB: RgbColor = { r: 16, g: 16, b: 16 };
+const INPUT_KEY_SCRATCH_BACKGROUND_RGB: RgbColor = { r: 138, g: 138, b: 138 };
+const INPUT_KEY_ACTIVE_BACKGROUND_RGB: RgbColor = { r: 255, g: 135, b: 0 };
+const PAUSE_FOREGROUND_RGB: RgbColor = { r: 255, g: 255, b: 255 };
+const PAUSE_BACKGROUND_RGB: RgbColor = { r: 200, g: 59, b: 59 };
+const GREAT_JUDGE_RGB: RgbColor = { r: 255, g: 215, b: 95 };
+const GOOD_JUDGE_RGB: RgbColor = { r: 135, g: 255, b: 118 };
+const BAD_JUDGE_RGB: RgbColor = { r: 255, g: 159, b: 74 };
+const POOR_JUDGE_RGB: RgbColor = { r: 255, g: 107, b: 107 };
+const READY_JUDGE_RGB: RgbColor = { r: 95, g: 215, b: 255 };
+const IDLE_JUDGE_RGB: RgbColor = { r: 154, g: 161, b: 170 };
+const RAINBOW_RGB_STEPS: RgbColor[] = [
+  { r: 255, g: 0, b: 0 },
+  { r: 255, g: 135, b: 0 },
+  { r: 255, g: 255, b: 0 },
+  { r: 135, g: 255, b: 0 },
+  { r: 0, g: 255, b: 255 },
+  { r: 0, g: 175, b: 255 },
+  { r: 255, g: 0, b: 255 },
+];
 
 export class PlayerTui {
   private readonly options: TuiOptions;
@@ -179,6 +212,12 @@ export class PlayerTui {
   private readonly supported: boolean;
 
   private active = false;
+
+  private terminalColumns?: number;
+
+  private terminalRows?: number;
+
+  private needsFullRefresh = false;
 
   private readonly leftJudgeComboDisplay = createJudgeComboDisplayState();
 
@@ -234,7 +273,9 @@ export class PlayerTui {
     this.highSpeedTransitionFrom = initialHighSpeed;
     this.laneChannels = options.lanes.map((lane) => lane.channel);
     this.scrollDistanceMapper = new ScrollDistanceMapper(options.scrollTimeline);
-    this.supported = Boolean(process.stdout.isTTY && process.stdin.isTTY);
+    this.supported = Boolean(
+      (options.stdoutIsTTY ?? process.stdout.isTTY) && (options.stdinIsTTY ?? process.stdin.isTTY),
+    );
     options.lanes.forEach((lane, index) => {
       this.laneIndex.set(lane.channel, index);
       this.laneWidths[index] = lane.isScratch ? DEFAULT_LANE_WIDTH * 2 : DEFAULT_LANE_WIDTH;
@@ -263,6 +304,7 @@ export class PlayerTui {
       return;
     }
     this.active = true;
+    this.needsFullRefresh = false;
     process.stdout.write('\u001b[?1049h\u001b[2J\u001b[H\u001b[?25l');
   }
 
@@ -285,6 +327,7 @@ export class PlayerTui {
     this.noteWindowBeat = Number.NEGATIVE_INFINITY;
     this.visibleNoteIndices.clear();
     this.visibleNoteRows.clear();
+    this.needsFullRefresh = false;
     this.displayedHighSpeed = normalizeHighSpeed(this.options.highSpeed);
     this.targetHighSpeed = this.displayedHighSpeed;
     this.highSpeedTransitionFrom = this.displayedHighSpeed;
@@ -354,6 +397,18 @@ export class PlayerTui {
     this.pressedLaneChannels.delete(this.resolveRenderLaneChannel(channel));
   }
 
+  setTerminalSize(columns: number | undefined, rows: number | undefined): void {
+    const nextColumns = normalizeTerminalDimension(columns);
+    const nextRows = normalizeTerminalDimension(rows);
+    if (this.terminalColumns === nextColumns && this.terminalRows === nextRows) {
+      return;
+    }
+    this.terminalColumns = nextColumns;
+    this.terminalRows = nextRows;
+    this.previousFrameLineCount = 0;
+    this.needsFullRefresh = true;
+  }
+
   private syncStateSignals(): void {
     const stateSignals = this.stateSignals;
     if (!stateSignals) {
@@ -380,7 +435,9 @@ export class PlayerTui {
     this.applyJudgeComboSignalState(stateSignals.getJudgeCombo());
   }
 
-  private applyJudgeComboSignalState(state: Readonly<{ judge: string; combo: number; channel?: string; updatedAtMs: number }>): void {
+  private applyJudgeComboSignalState(
+    state: Readonly<{ judge: string; combo: number; channel?: string; updatedAtMs: number }>,
+  ): void {
     for (const display of this.resolveJudgeComboTargets(state.channel)) {
       display.latestJudge = state.judge;
       display.combo = state.combo;
@@ -394,7 +451,7 @@ export class PlayerTui {
     }
     this.syncStateSignals();
 
-    const terminalRows = process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
+    const terminalRows = this.terminalRows ?? process.stdout.rows ?? DEFAULT_GRID_ROWS + STATIC_TUI_LINES;
     const debugLineCount = frame.activeAudioFiles === undefined && frame.activeAudioVoiceCount === undefined ? 0 : 1;
     const rowCount = Math.max(MIN_GRID_ROWS, terminalRows - STATIC_TUI_LINES - debugLineCount);
     const laneCount = Math.max(1, this.options.lanes.length);
@@ -434,7 +491,6 @@ export class PlayerTui {
 
     for (let noteIndex = noteStartIndex; noteIndex < noteEndIndex; noteIndex += 1) {
       const note = frame.notes[noteIndex];
-      const wasVisible = this.visibleNoteIndices.has(noteIndex);
       const previousRow = this.visibleNoteRows.get(noteIndex);
       let visibleThisFrame = false;
       const keepVisible =
@@ -504,15 +560,7 @@ export class PlayerTui {
             if (row < 0 || row >= rowCount) {
               continue;
             }
-            setLaneCell(
-              grid,
-              gridSourceChannels,
-              row,
-              lane,
-              longBodySymbol,
-              note.channel,
-              this.freeZoneSourceChannels,
-            );
+            setLaneCell(grid, gridSourceChannels, row, lane, longBodySymbol, note.channel, this.freeZoneSourceChannels);
           }
           visibleThisFrame = true;
         }
@@ -717,7 +765,7 @@ export class PlayerTui {
       `Space: pause/resume  Shift+R: restart  ${HIGH_SPEED_MODIFIER_LABEL}+odd/even lane: HS -/+  Ctrl+C/Esc: quit`,
     );
 
-    const columns = process.stdout.columns ?? 120;
+    const columns = this.terminalColumns ?? process.stdout.columns ?? 120;
     const paddedLines = lines.map((line) => padVisibleWidth(line, columns));
     if (this.previousFrameLineCount > paddedLines.length) {
       const diff = this.previousFrameLineCount - paddedLines.length;
@@ -725,12 +773,17 @@ export class PlayerTui {
         paddedLines.push(' '.repeat(columns));
       }
     }
-    process.stdout.write(`\u001b[H${paddedLines.join('\n')}`);
+    process.stdout.write(`${this.needsFullRefresh ? '\u001b[2J' : ''}\u001b[H${paddedLines.join('\n')}`);
     this.previousFrameLineCount = lines.length;
+    this.needsFullRefresh = false;
     this.lastRenderedBeat = frame.currentBeat;
   }
 
-  private resolveNoteWindow(notes: TuiNote[], currentBeat: number, scrollWindowBeats: number): { start: number; end: number } {
+  private resolveNoteWindow(
+    notes: TuiNote[],
+    currentBeat: number,
+    scrollWindowBeats: number,
+  ): { start: number; end: number } {
     if (this.noteWindowSource !== notes || currentBeat < this.noteWindowBeat) {
       this.noteWindowSource = notes;
       this.noteWindowStartIndex = 0;
@@ -1135,7 +1188,7 @@ function renderLaneSection(cells: string[]): string {
 }
 
 function renderLaneSplitPanel(): string {
-  const fill = `\u001b[48;5;233m${' '.repeat(SPLIT_PANEL_INNER_WIDTH)}${ANSI_RESET}`;
+  const fill = `\u001b[48;2;${SPLIT_PANEL_BACKGROUND_RGB.r};${SPLIT_PANEL_BACKGROUND_RGB.g};${SPLIT_PANEL_BACKGROUND_RGB.b}m${' '.repeat(SPLIT_PANEL_INNER_WIDTH)}${ANSI_RESET}`;
   return `${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}${fill}${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}`;
 }
 
@@ -1157,9 +1210,7 @@ function renderInputKeyRows(
       ? laneNumber > 0 && laneNumber % 2 === 0
       : resolveInputKeyLaneGroup(lane) === 'black';
     const laneChannel = lane.channel.toUpperCase();
-    const labelStyle = useOddEvenRows
-      ? (isUpperRowLane ? 'black' : 'white')
-      : resolveInputKeyLaneStyle(lane);
+    const labelStyle = useOddEvenRows ? (isUpperRowLane ? 'black' : 'white') : resolveInputKeyLaneStyle(lane);
     const styledLabel = activeChannels.has(laneChannel)
       ? colorizeActiveInputKeyLabel(center(lane.key, laneWidth))
       : colorizeInputKeyLabel(center(lane.key, laneWidth), labelStyle);
@@ -1495,48 +1546,47 @@ function renderLaneBackdropCell(width: number): string {
 }
 
 function colorizeLaneDivider(symbol: string): string {
-  return `\u001b[38;5;246m${symbol}${ANSI_RESET}`;
+  return colorizeText(symbol, LANE_DIVIDER_RGB);
 }
 
 function colorizeLaneOuterBorder(symbol: string): string {
-  return `\u001b[1;38;5;253m${symbol}${ANSI_RESET}`;
+  return colorizeText(symbol, LANE_OUTER_BORDER_RGB);
 }
 
 function colorizeLaneCeiling(symbol: string): string {
-  return `\u001b[38;5;240m${symbol}${ANSI_RESET}`;
+  return colorizeText(symbol, LANE_CEILING_RGB);
 }
 
 function colorizeJudgeLine(symbol: string): string {
-  return `\u001b[1;38;5;196m${symbol}${ANSI_RESET}`;
+  return colorizeText(symbol, JUDGE_LINE_RGB);
 }
 
 function colorizeLaneLabel(symbol: string): string {
-  return `\u001b[1;38;5;251m${symbol}${ANSI_RESET}`;
+  return colorizeText(symbol, LANE_LABEL_RGB);
 }
 
 function colorizeNote(symbol: string, channel: string, invisible = false, underline = false): string {
-  const suffix = underline ? ';4' : '';
   if (invisible) {
-    return `\u001b[32${suffix}m${symbol}\u001b[0m`;
+    return colorizeText(symbol, INVISIBLE_NOTE_RGB, undefined, underline);
   }
   if (RED_NOTE_CHANNELS.has(channel)) {
-    return `\u001b[31${suffix}m${symbol}\u001b[0m`;
+    return colorizeText(symbol, RED_NOTE_RGB, undefined, underline);
   }
   if (BLUE_NOTE_CHANNELS.has(channel)) {
-    return `\u001b[34${suffix}m${symbol}\u001b[0m`;
+    return colorizeText(symbol, BLUE_NOTE_RGB, undefined, underline);
   }
   if (WHITE_NOTE_CHANNELS.has(channel)) {
-    return `\u001b[1;97${suffix}m${symbol}\u001b[0m`;
+    return colorizeText(symbol, WHITE_NOTE_RGB, undefined, underline);
   }
   return symbol;
 }
 
 function colorizeMeasureLine(symbol: string): string {
-  return `\u001b[38;5;247m${symbol}\u001b[0m`;
+  return colorizeText(symbol, MEASURE_LINE_RGB);
 }
 
 function colorizeMine(symbol: string): string {
-  return `\u001b[1;97;41m${symbol}\u001b[0m`;
+  return colorizeText(symbol, MINE_FOREGROUND_RGB, MINE_BACKGROUND_RGB);
 }
 
 function colorizeLaneBackground(value: string, channel: string): string {
@@ -1577,16 +1627,16 @@ function mixColorByte(from: number, to: number, ratio: number): number {
 
 function colorizeInputKeyLabel(value: string, style: 'white' | 'black' | 'scratch'): string {
   if (style === 'white') {
-    return `\u001b[1;30;48;5;255m${value}${ANSI_RESET}`;
+    return colorizeText(value, INPUT_KEY_LIGHT_FOREGROUND_RGB, INPUT_KEY_LIGHT_BACKGROUND_RGB);
   }
   if (style === 'black') {
-    return `\u001b[1;97;48;5;232m${value}${ANSI_RESET}`;
+    return colorizeText(value, INPUT_KEY_DARK_FOREGROUND_RGB, INPUT_KEY_DARK_BACKGROUND_RGB);
   }
-  return `\u001b[1;30;48;5;245m${value}${ANSI_RESET}`;
+  return colorizeText(value, INPUT_KEY_LIGHT_FOREGROUND_RGB, INPUT_KEY_SCRATCH_BACKGROUND_RGB);
 }
 
 function colorizeActiveInputKeyLabel(value: string): string {
-  return `\u001b[${INPUT_KEY_ACTIVE_STYLE}m${value}${ANSI_RESET}`;
+  return colorizeText(value, INPUT_KEY_LIGHT_FOREGROUND_RGB, INPUT_KEY_ACTIVE_BACKGROUND_RGB);
 }
 
 function resolveInputKeyLaneGroup(lane: TuiLane): 'white' | 'black' {
@@ -1642,7 +1692,7 @@ function resolveVisibleJudgeComboLabel(state: JudgeComboDisplayState, nowMs: num
 
 function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: number, paused: boolean): string {
   if (paused) {
-    return colorizeText('PAUSE', '1;97;41');
+    return colorizeText('PAUSE', PAUSE_FOREGROUND_RGB, PAUSE_BACKGROUND_RGB);
   }
   const normalizedJudge = latestJudge === 'PERFECT' ? 'GREAT' : latestJudge;
   const safeCombo = Math.max(0, Math.floor(combo));
@@ -1652,30 +1702,30 @@ function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: numb
     return colorizeBlinkingRainbow(baseText, nowMs);
   }
   if (latestJudge === 'GREAT') {
-    return colorizeBlinkingText(baseText, '1;38;5;220', '2;38;5;220', nowMs);
+    return colorizeBlinkingText(baseText, GREAT_JUDGE_RGB, dimRgb(GREAT_JUDGE_RGB, 0.5), nowMs);
   }
   if (latestJudge === 'GOOD') {
-    return colorizeBlinkingText(baseText, '1;38;5;118', '2;38;5;118', nowMs);
+    return colorizeBlinkingText(baseText, GOOD_JUDGE_RGB, dimRgb(GOOD_JUDGE_RGB, 0.5), nowMs);
   }
   if (latestJudge === 'BAD') {
-    return colorizeBlinkingText(baseText, '1;38;5;208', '2;38;5;208', nowMs);
+    return colorizeBlinkingText(baseText, BAD_JUDGE_RGB, dimRgb(BAD_JUDGE_RGB, 0.5), nowMs);
   }
   if (latestJudge === 'POOR') {
-    return colorizeBlinkingText(baseText, '1;38;5;203', '2;38;5;203', nowMs);
+    return colorizeBlinkingText(baseText, POOR_JUDGE_RGB, dimRgb(POOR_JUDGE_RGB, 0.5), nowMs);
   }
   if (latestJudge === 'READY') {
-    return colorizeText(baseText, '1;38;5;81');
+    return colorizeText(baseText, READY_JUDGE_RGB);
   }
   if (latestJudge === '-') {
-    return colorizeText(baseText, '2;37');
+    return colorizeText(baseText, IDLE_JUDGE_RGB);
   }
   return baseText;
 }
 
-function colorizeBlinkingText(value: string, onSgr: string, offSgr: string, nowMs: number): string {
+function colorizeBlinkingText(value: string, onColor: RgbColor, offColor: RgbColor, nowMs: number): string {
   // ANSI blink is not consistently supported, so emulate blink with a time-based pulse.
   const blinkOn = Math.floor(nowMs / JUDGE_COMBO_BLINK_INTERVAL_MS) % 2 === 0;
-  return colorizeText(value, blinkOn ? onSgr : offSgr);
+  return colorizeText(value, blinkOn ? onColor : offColor);
 }
 
 function colorizeBlinkingRainbow(value: string, nowMs: number): string {
@@ -1683,17 +1733,34 @@ function colorizeBlinkingRainbow(value: string, nowMs: number): string {
   return colorizeRainbow(value, blinkOn);
 }
 
-function colorizeText(value: string, sgr: string): string {
-  return `\u001b[${sgr}m${value}${ANSI_RESET}`;
+function colorizeText(value: string, foreground: RgbColor, background?: RgbColor, underline = false): string {
+  const sgr = [`38;2;${foreground.r};${foreground.g};${foreground.b}`];
+  if (background) {
+    sgr.push(`48;2;${background.r};${background.g};${background.b}`);
+  }
+  if (underline) {
+    sgr.push('4');
+  }
+  return `\u001b[${sgr.join(';')}m${value}${ANSI_RESET}`;
 }
 
 function colorizeRainbow(value: string, bright = true): string {
-  const steps = [196, 208, 226, 118, 51, 39, 201];
-  const intensity = bright ? '1' : '2';
+  const brightness = bright ? 1 : 0.5;
   const characters = [...value];
   return characters
-    .map((character, index) => `\u001b[${intensity};38;5;${steps[index % steps.length]}m${character}${ANSI_RESET}`)
+    .map((character, index) =>
+      colorizeText(character, dimRgb(RAINBOW_RGB_STEPS[index % RAINBOW_RGB_STEPS.length]!, brightness)),
+    )
     .join('');
+}
+
+function dimRgb(color: RgbColor, factor: number): RgbColor {
+  const safeFactor = clamp(factor, 0, 1);
+  return {
+    r: clampColorByte(color.r * safeFactor),
+    g: clampColorByte(color.g * safeFactor),
+    b: clampColorByte(color.b * safeFactor),
+  };
 }
 
 function renderLaneBlockWithBga(laneLines: string[], bgaAnsiLines?: string[]): string[] {
@@ -1735,6 +1802,13 @@ function padVisibleWidth(line: string, width: number): string {
     return clipped;
   }
   return `${clipped}${' '.repeat(width - currentWidth)}`;
+}
+
+function normalizeTerminalDimension(value: number | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+  return Math.max(1, Math.floor(value));
 }
 
 function renderBgaLineWithScopedBlackBackground(line: string, width: number): string {
@@ -1791,9 +1865,7 @@ function parseAnsiSgrParams(value: string, start: number, end: number): number[]
   if (parts.length === 0) {
     return [0];
   }
-  const params = parts
-    .map((part) => Number.parseInt(part, 10))
-    .filter((param) => Number.isFinite(param));
+  const params = parts.map((part) => Number.parseInt(part, 10)).filter((param) => Number.isFinite(param));
   return params.length > 0 ? params : [0];
 }
 
@@ -2175,11 +2247,7 @@ function resolveMeasureLength(measureLengths: ReadonlyMap<number, number> | unde
 export function formatMeasureSignature(length: number | undefined): string {
   const safeLength = typeof length === 'number' && Number.isFinite(length) && length > 0 ? length : 1;
   const quarterBeats = safeLength * IIDX_MEASURE_BEATS;
-  const fraction = approximateFraction(
-    quarterBeats,
-    MEASURE_SIGNATURE_MAX_DENOMINATOR,
-    MEASURE_SIGNATURE_TOLERANCE,
-  );
+  const fraction = approximateFraction(quarterBeats, MEASURE_SIGNATURE_MAX_DENOMINATOR, MEASURE_SIGNATURE_TOLERANCE);
   if (fraction) {
     return `${fraction.numerator}/${fraction.denominator * IIDX_MEASURE_BEATS}`;
   }
