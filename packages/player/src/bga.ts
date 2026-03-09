@@ -1,6 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
-import { invokeWorkerizedFunction, isAbortError, resolveFirstExistingPath, throwIfAborted, workerize } from '@be-music/utils';
+import {
+  invokeWorkerizedFunction,
+  isAbortError,
+  resolveFirstExistingPath,
+  throwIfAborted,
+  workerize,
+} from '@be-music/utils';
 import { normalizeChannel, normalizeObjectKey, sortEvents, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { decode as decodeBmpFast } from 'fast-bmp';
@@ -333,7 +339,10 @@ export class BgaAnsiRenderer {
       poorActive && poorSelection.frame
         ? mergeCompositeFrames(poorSelection.frame)
         : mergeCompositeFrames(
-            ...[baseSelection.frame, layerSelection.frame, layer2Selection.frame].slice(0, MAX_NORMAL_BGA_COMPOSITE_LAYERS),
+            ...[baseSelection.frame, layerSelection.frame, layer2Selection.frame].slice(
+              0,
+              MAX_NORMAL_BGA_COMPOSITE_LAYERS,
+            ),
           );
     this.cachedLines = undefined;
   }
@@ -418,7 +427,9 @@ export async function createBgaAnsiRenderer(
   const layerKeys = new Set(layerTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layer2Keys = new Set(layer2Timeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const shouldUsePoorBmp00Fallback =
-    typeof json.bms.poorBga !== 'string' && typeof json.resources.bmp['00'] === 'string' && json.resources.bmp['00'].length > 0;
+    typeof json.bms.poorBga !== 'string' &&
+    typeof json.resources.bmp['00'] === 'string' &&
+    json.resources.bmp['00'].length > 0;
   const poorFallbackKey = shouldUsePoorBmp00Fallback ? '00' : undefined;
   if (poorFallbackKey) {
     poorKeys.add(poorFallbackKey);
@@ -492,7 +503,13 @@ export async function createBgaAnsiRenderer(
     reportLoadProgress(json.metadata.stageFile);
     const resolved = await resolveMediaPath(options.baseDir, json.metadata.stageFile, options.signal);
     if (resolved) {
-      stageFileSourceFrame = await loadFrameSource(resolved, 'base', displaySize.width, displaySize.height, options.signal);
+      stageFileSourceFrame = await loadFrameSource(
+        resolved,
+        'base',
+        displaySize.width,
+        displaySize.height,
+        options.signal,
+      );
     }
   }
 
@@ -599,7 +616,11 @@ function normalizeDisplaySize(width?: number, height?: number): { width: number;
   };
 }
 
-function resizeFrameSourceMap(sourceMap: Map<string, FrameSource>, width: number, height: number): Map<string, FrameSource> {
+function resizeFrameSourceMap(
+  sourceMap: Map<string, FrameSource>,
+  width: number,
+  height: number,
+): Map<string, FrameSource> {
   const map = new Map<string, FrameSource>();
   const cache = new WeakMap<FrameSource, FrameSource>();
   for (const [key, source] of sourceMap) {
@@ -1245,8 +1266,7 @@ function convertToRgba8(
     rgba[targetOffset] = toByte(data[sourceOffset] ?? 0, sampleMax);
     rgba[targetOffset + 1] = toByte(data[sourceOffset + 1] ?? 0, sampleMax);
     rgba[targetOffset + 2] = toByte(data[sourceOffset + 2] ?? 0, sampleMax);
-    rgba[targetOffset + 3] =
-      safeChannels >= 4 ? toByte(data[sourceOffset + 3] ?? sampleMax, sampleMax) : 255;
+    rgba[targetOffset + 3] = safeChannels >= 4 ? toByte(data[sourceOffset + 3] ?? sampleMax, sampleMax) : 255;
   }
   return rgba;
 }
@@ -1303,8 +1323,14 @@ function createSolidAnsiFrame(
 
 function convertImageToSpecFrame(image: DecodedImage, mode: FrameMode): AnsiFrame {
   const specFrame = createSolidAnsiFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, 0);
-  const fittedSize = fitSizeWithinSpecCanvas(image.width, image.height);
-  const offsetX = Math.floor((SPEC_BGA_CANVAS_SIZE - fittedSize.width) / 2);
+  const fittedSize =
+    image.format === 'video'
+      ? {
+          width: SPEC_BGA_CANVAS_SIZE,
+          height: SPEC_BGA_CANVAS_SIZE,
+        }
+      : fitSizeWithinSpecCanvas(image.width, image.height);
+  const offsetX = image.format === 'video' ? 0 : Math.floor((SPEC_BGA_CANVAS_SIZE - fittedSize.width) / 2);
   const offsetY = 0;
 
   for (let targetYWithinImage = 0; targetYWithinImage < fittedSize.height; targetYWithinImage += 1) {
@@ -1361,13 +1387,7 @@ function fitSizeWithinSpecCanvas(sourceWidth: number, sourceHeight: number): { w
 }
 
 function resizeAnsiFrame(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {
-  return resizeAnsiFrameWithAspect(
-    source,
-    maxWidth,
-    maxHeight,
-    TERMINAL_PIXEL_ASPECT_X,
-    TERMINAL_PIXEL_ASPECT_Y,
-  );
+  return resizeAnsiFrameWithAspect(source, maxWidth, maxHeight, TERMINAL_PIXEL_ASPECT_X, TERMINAL_PIXEL_ASPECT_Y);
 }
 
 function resizeAnsiFrameInDisplaySpace(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {

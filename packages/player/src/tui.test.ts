@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { formatMeasureSignature, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './tui.ts';
 import { PlayerTui } from './tui.ts';
+import { estimateBgaAnsiDisplaySize, resolveLaneWidths } from './tui/layout.ts';
 
 const STDOUT_IS_TTY_DESCRIPTOR = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
 const STDIN_IS_TTY_DESCRIPTOR = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
@@ -145,6 +146,91 @@ describe('player tui', () => {
 
     const resizedRender = writeSpy.mock.calls.at(-1)?.[0];
     expect(resizedRender).toContain('\u001b[2J\u001b[H');
+
+    tui.stop();
+  });
+
+  test('tui: estimates BGA size from the actual lane block layout', () => {
+    const laneWidths = resolveLaneWidths([
+      { isScratch: true },
+      { isScratch: false },
+      { isScratch: false },
+      { isScratch: false },
+      { isScratch: false },
+      { isScratch: false },
+      { isScratch: false },
+      { isScratch: false },
+    ]);
+
+    expect(
+      estimateBgaAnsiDisplaySize({
+        laneWidths,
+        splitAfterIndex: -1,
+        columns: 120,
+        rows: 32,
+        showLaneChannels: true,
+        hasRandomPatternSummary: true,
+        hasAudioDebugLine: true,
+      }),
+    ).toEqual({
+      width: 81,
+      height: 17,
+    });
+  });
+
+  test('tui: keeps rendered lines within terminal height when optional rows are enabled', () => {
+    mockTerminal({ columns: 120, rows: 32 });
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
+    const tui = new PlayerTui({
+      mode: 'MANUAL',
+      laneDisplayMode: '7 KEY',
+      title: 'Test Song',
+      lanes: [
+        { channel: '16', key: 'A', isScratch: true },
+        { channel: '11', key: 'S' },
+        { channel: '12', key: 'D' },
+      ],
+      speed: 1,
+      highSpeed: 1,
+      judgeWindowMs: 16.67,
+      showLaneChannels: true,
+      randomPatternSummary: 'RANDOM 42: 1 -> 3 -> 2',
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+    });
+    const frame: Parameters<PlayerTui['render']>[0] = {
+      currentBeat: 0,
+      currentSeconds: 0,
+      totalSeconds: 120,
+      summary: {
+        total: 100,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+      },
+      notes: [],
+      activeAudioFiles: [],
+      activeAudioVoiceCount: 0,
+    };
+
+    tui.start();
+    writeSpy.mockClear();
+
+    tui.render(frame);
+
+    const renderOutput = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
+    const visibleFrame = renderOutput.startsWith('\u001b[2J\u001b[H')
+      ? renderOutput.slice('\u001b[2J\u001b[H'.length)
+      : renderOutput.startsWith('\u001b[H')
+        ? renderOutput.slice('\u001b[H'.length)
+        : renderOutput;
+    expect(visibleFrame.split('\n')).toHaveLength(32);
 
     tui.stop();
   });
