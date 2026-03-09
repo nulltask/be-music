@@ -231,6 +231,69 @@ describe('player tui', () => {
     tui.stop();
   });
 
+  test('tui: renders long-note head and tail in the correct order', () => {
+    mockTerminal({ columns: 60, rows: 24 });
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
+    const tui = new PlayerTui({
+      mode: 'MANUAL',
+      laneDisplayMode: '5 KEY SP',
+      title: 'Long Note Test',
+      lanes: [
+        { channel: '16', key: 'A', isScratch: true },
+        { channel: '11', key: 'S' },
+        { channel: '12', key: 'D' },
+      ],
+      speed: 1,
+      highSpeed: 1,
+      judgeWindowMs: 16.67,
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+    });
+
+    tui.start();
+    tui.render({
+      currentBeat: 0,
+      currentSeconds: 0,
+      totalSeconds: 120,
+      summary: {
+        total: 1,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+      },
+      notes: [
+        {
+          channel: '11',
+          beat: 0.75,
+          endBeat: 1.25,
+          seconds: 0,
+          judged: false,
+        },
+      ],
+    });
+
+    const renderOutput = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
+    const visibleLines = extractVisibleFrame(renderOutput).split('\n');
+    const tailRow = visibleLines.findIndex((line) => line.includes('│▒▒▒│'));
+    const headRow = visibleLines.findIndex((line) => line.includes('│███│'));
+    const bodyRows = visibleLines
+      .map((line, index) => (line.includes('│▓▓▓│') ? index : -1))
+      .filter((index) => index >= 0);
+
+    expect(tailRow).toBeGreaterThanOrEqual(0);
+    expect(headRow).toBeGreaterThanOrEqual(0);
+    expect(tailRow).toBeLessThan(headRow);
+    expect(bodyRows.some((row) => row < tailRow)).toBe(true);
+
+    tui.stop();
+  });
+
   test('tui: keeps rendered lines within terminal height when optional rows are enabled', () => {
     mockTerminal({ columns: 120, rows: 32 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
@@ -306,4 +369,13 @@ function restoreDescriptor(target: object, key: PropertyKey, descriptor: Propert
     return;
   }
   Reflect.deleteProperty(target, key);
+}
+
+function extractVisibleFrame(renderOutput: string): string {
+  const visibleFrame = renderOutput.startsWith('\u001b[2J\u001b[H')
+    ? renderOutput.slice('\u001b[2J\u001b[H'.length)
+    : renderOutput.startsWith('\u001b[H')
+      ? renderOutput.slice('\u001b[H'.length)
+      : renderOutput;
+  return visibleFrame.replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '');
 }
