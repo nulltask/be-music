@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/utils" },
     { "path": "packages/json" },
+    { "path": "packages/chart" },
     { "path": "packages/parser" },
     { "path": "packages/stringifier" },
     { "path": "packages/audio-renderer" },

@@ -1,19 +1,21 @@
-import { basename } from 'node:path';
-import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
-import { floatToInt16, throwIfAborted } from '@be-music/utils';
 import {
   collectLnobjEndEvents,
   createBeatResolver,
-  type BeMusicEvent,
-  type BeMusicJson,
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
-  normalizeChannel,
-  normalizeObjectKey,
   parseBmsDynamicVolumeGain,
   sortEvents,
+} from '@be-music/chart';
+import { basename } from 'node:path';
+import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
+import { floatToInt16, throwIfAborted } from '@be-music/utils';
+import {
+  type BeMusicEvent,
+  type BeMusicJson,
+  normalizeChannel,
+  normalizeObjectKey,
 } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {

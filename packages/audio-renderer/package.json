@@ -32,6 +32,7 @@
     "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts"
   },
   "dependencies": {
+    "@be-music/chart": "workspace:*",
     "@be-music/json": "workspace:*",
     "@be-music/parser": "workspace:*",
     "@be-music/utils": "workspace:*",

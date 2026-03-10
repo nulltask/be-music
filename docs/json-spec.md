@@ -9,6 +9,13 @@
 - BMS / BMSON の差分を吸収して、内部処理を単一形式で扱う
 - 再文字列化時にイベント時刻を安定再現する
 
+## パッケージ境界
+
+- `@be-music/json` は純粋な IR パッケージです
+- `@be-music/json` が提供するのは、型、正規化済みのデータ構造、clone / 初期化 / 基本的な整形 helper に限られます
+- beat 変換、イベント順序、ロングノート解決、sample trigger 判定などの譜面意味論は `@be-music/chart` が担当します
+- round-trip のための source-level 情報は IR の一部として保持しますが、正規化済みの譜面意味論とは `preservation` 層で分離します
+
 ## 設計原則
 
 - IR は `parse` した入力を `stringify` したときに、元の譜面が持っていた構造をできる限り変えずに再現することを原則とします
@@ -67,40 +74,6 @@
     "materials": "materials.def",
     "divideProp": "lane=2",
     "charset": "Shift_JIS",
-    "sourceLines": [
-      {
-        "kind": "header",
-        "command": "TITLE",
-        "value": "Example"
-      },
-      {
-        "kind": "object",
-        "measure": 1,
-        "channel": "13",
-        "events": [
-          {
-            "measure": 1,
-            "channel": "13",
-            "position": [1, 4],
-            "value": "22"
-          }
-        ]
-      }
-    ],
-    "objectLines": [
-      {
-        "measure": 1,
-        "channel": "13",
-        "events": [
-          {
-            "measure": 1,
-            "channel": "13",
-            "position": [1, 4],
-            "value": "22"
-          }
-        ]
-      }
-    ],
     "controlFlow": [
       {
         "kind": "directive",
@@ -128,19 +101,6 @@
   },
   "bmson": {
     "version": "string?",
-    "lines": [0, 960, 1920],
-    "bpmEvents": [
-      { "y": 0, "bpm": 120 }
-    ],
-    "stopEvents": [
-      { "y": 480, "duration": 96 }
-    ],
-    "soundChannels": [
-      {
-        "name": "lead.wav",
-        "notes": [{ "x": 1, "y": 0, "l": 120, "c": true }]
-      }
-    ],
     "info": {
       "resolution": 240,
       "chartName": "HYPER",
@@ -161,6 +121,55 @@
       ],
       "layerEvents": [],
       "poorEvents": []
+    }
+  },
+  "preservation": {
+    "bms": {
+      "sourceLines": [
+        {
+          "kind": "header",
+          "command": "TITLE",
+          "value": "Example"
+        },
+        {
+          "kind": "object",
+          "measure": 1,
+          "channel": "13",
+          "events": [
+            {
+              "measure": 1,
+              "channel": "13",
+              "position": [1, 4],
+              "value": "22"
+            }
+          ]
+        }
+      ],
+      "objectLines": [
+        {
+          "measure": 1,
+          "channel": "13",
+          "events": [
+            {
+              "measure": 1,
+              "channel": "13",
+              "position": [1, 4],
+              "value": "22"
+            }
+          ]
+        }
+      ]
+    },
+    "bmson": {
+      "lines": [0, 960, 1920],
+      "bpmEvents": [{ "y": 0, "bpm": 120 }],
+      "stopEvents": [{ "y": 480, "duration": 96 }],
+      "soundChannels": [
+        {
+          "name": "lead.wav",
+          "notes": [{ "x": 1, "y": 0, "l": 120, "c": true }]
+        }
+      ]
     }
   }
 }
@@ -193,11 +202,6 @@
 - `materials`: `#MATERIALS` の値
 - `divideProp`: `#DIVIDEPROP` の値
 - `charset`: `#CHARSET` の値
-- `sourceLines`: 空行/コメントを除く BMS の全行を宣言順で保持するスナップショット
-- `sourceLines` は BMS の header / object / 制御構文の相対位置を保ったまま `stringifyBms(parseChart(...))` を再現するための第一選択です
-- `objectLines`: 制御構文の外側にあるオブジェクト行の宣言順スナップショット
-- `objectLines` は制御構文外の object 行だけを扱いたい処理向けの部分スナップショットです
-- `objectLines` が `events` / `measures` と一致しない場合、stringifier はこの配列を無視して再生成します
 - `controlFlow`: 制御構文 (`#RANDOM`/`#IF`/`#SWITCH` 系) と、その内側のヘッダ/オブジェクト行
 - `controlFlow.kind = "object"` は通常イベントと同じ `events` 形式（必要に応じて `measureLength`）で保持
 - パーサは制御構文をこの配列へ保持し、分岐の実行は再生/レンダリング時に行います
@@ -206,12 +210,20 @@
 `bmson` は bmson 固有の追加情報を保持する拡張領域です。
 
 - `version`: bmson のバージョン文字列
-- `lines`: 小節線 `y` 値の配列 (昇順・重複なし・`0` 始まり)
-- `bpmEvents`: `bpm_events` の配列順スナップショット
-- `stopEvents`: `stop_events` の配列順スナップショット
-- `soundChannels`: `sound_channels` の配列順スナップショット。未使用チャンネルも保持します
 - `info`: `resolution` に加え、`subartists`, `chartName`, `modeHint`, `judgeRank`, `total`, 画像/プレビュー系を保持
 - `bga`: `header`, `events`, `layerEvents`, `poorEvents` を保持
+
+`preservation` は round-trip のための source-level 情報を保持する補助層です。
+
+- `preservation.bms.sourceLines`: 空行/コメントを除く BMS の全行を宣言順で保持するスナップショット
+- `preservation.bms.sourceLines` は BMS の header / object / 制御構文の相対位置を保ったまま `stringifyBms(parseChart(...))` を再現するための第一選択です
+- `preservation.bms.objectLines`: 制御構文の外側にあるオブジェクト行の宣言順スナップショット
+- `preservation.bms.objectLines` は制御構文外の object 行だけを扱いたい処理向けの部分スナップショットです
+- `preservation.bms.objectLines` が `events` / `measures` と一致しない場合、stringifier はこの配列を無視して再生成します
+- `preservation.bmson.lines`: 小節線 `y` 値の配列 (昇順・重複なし・`0` 始まり)
+- `preservation.bmson.bpmEvents`: `bpm_events` の配列順スナップショット
+- `preservation.bmson.stopEvents`: `stop_events` の配列順スナップショット
+- `preservation.bmson.soundChannels`: `sound_channels` の配列順スナップショット。未使用チャンネルも保持します
 
 ## Event 構造 (正規)
 
@@ -254,6 +266,6 @@ interface BeMusicEvent {
 
 ## 変換規則
 
-- `eventToBeat` は `position` 分数を `numerator / denominator` に変換して計算
-- `stringifier` は `position` 分母情報を使って小節内解像度を決定
-- `parseJson` は `position` タプル必須。欠損イベントはエラー扱い
+- `stringifier` は `position` 分母情報を使って小節内解像度を決定します
+- `parseJson` は `position` タプルを必須とし、欠損イベントはエラー扱いにします
+- beat 変換やイベント順序などの譜面意味論 helper は `@be-music/chart` が提供します

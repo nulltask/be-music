@@ -3,10 +3,12 @@ import {
   isPlayableChannel,
   resolveBmsLongNotes,
   resolveLnobjLongNotes,
+  sortEvents,
+} from '@be-music/chart';
+import {
   type BeMusicEvent,
   type BeMusicJson,
   normalizeChannel,
-  sortEvents,
 } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
 const FREE_ZONE_BEAT_LENGTH = 1;

@@ -1,14 +1,14 @@
+import { compareEvents, sortEvents } from '@be-music/chart';
 import { readFile, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import {
   BMS_JSON_FORMAT,
   DEFAULT_BPM,
   cloneJson,
-  compareEvents,
+  createEmptyJson,
   ensureMeasure,
   normalizeChannel,
   normalizeObjectKey,
-  sortEvents,
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
@@ -162,52 +162,7 @@ export function listNotes(json: BeMusicJson, measure?: number): BeMusicEvent[] {
 }
 
 export function createBlankJson(): BeMusicJson {
-  return {
-    format: BMS_JSON_FORMAT,
-    sourceFormat: 'json',
-    metadata: {
-      bpm: DEFAULT_BPM,
-      extras: {},
-    },
-    resources: {
-      wav: {},
-      bmp: {},
-      bpm: {},
-      stop: {},
-      text: {},
-    },
-    measures: [],
-    events: [],
-    bms: {
-      controlFlow: [],
-      sourceLines: [],
-      objectLines: [],
-      lnObjs: [],
-      exRank: {},
-      argb: {},
-      stp: [],
-      changeOption: {},
-      exWav: {},
-      exBmp: {},
-      bga: {},
-      scroll: {},
-      speed: {},
-      swBga: {},
-    },
-    bmson: {
-      lines: [],
-      info: {},
-      bga: {
-        header: [],
-        events: [],
-        layerEvents: [],
-        poorEvents: [],
-      },
-      bpmEvents: [],
-      stopEvents: [],
-      soundChannels: [],
-    },
-  };
+  return createEmptyJson('json');
 }
 
 function normalizeJson(json: BeMusicJson): BeMusicJson {
@@ -233,6 +188,20 @@ function normalizeJson(json: BeMusicJson): BeMusicJson {
   cloned.resources.bpm = cloned.resources.bpm ?? {};
   cloned.resources.stop = cloned.resources.stop ?? {};
   cloned.resources.text = cloned.resources.text ?? {};
+  cloned.preservation = cloned.preservation ?? createEmptyJson('json').preservation;
+  cloned.preservation.bms = cloned.preservation.bms ?? { sourceLines: [], objectLines: [] };
+  cloned.preservation.bms.sourceLines = cloned.preservation.bms.sourceLines ?? [];
+  cloned.preservation.bms.objectLines = cloned.preservation.bms.objectLines ?? [];
+  cloned.preservation.bmson = cloned.preservation.bmson ?? {
+    lines: [],
+    bpmEvents: [],
+    stopEvents: [],
+    soundChannels: [],
+  };
+  cloned.preservation.bmson.lines = cloned.preservation.bmson.lines ?? [];
+  cloned.preservation.bmson.bpmEvents = cloned.preservation.bmson.bpmEvents ?? [];
+  cloned.preservation.bmson.stopEvents = cloned.preservation.bmson.stopEvents ?? [];
+  cloned.preservation.bmson.soundChannels = cloned.preservation.bmson.soundChannels ?? [];
   if (!hasOnlyFiniteMeasures(cloned.measures)) {
     cloned.measures = (cloned.measures ?? []).filter(
       (measure) => Number.isFinite(measure.index) && Number.isFinite(measure.length),
@@ -257,6 +226,15 @@ function canSerializeJsonAsIs(json: BeMusicJson): boolean {
     json.resources.bpm !== undefined &&
     json.resources.stop !== undefined &&
     json.resources.text !== undefined &&
+    json.preservation !== undefined &&
+    json.preservation.bms !== undefined &&
+    json.preservation.bmson !== undefined &&
+    Array.isArray(json.preservation.bms.sourceLines) &&
+    Array.isArray(json.preservation.bms.objectLines) &&
+    Array.isArray(json.preservation.bmson.lines) &&
+    Array.isArray(json.preservation.bmson.bpmEvents) &&
+    Array.isArray(json.preservation.bmson.stopEvents) &&
+    Array.isArray(json.preservation.bmson.soundChannels) &&
     Array.isArray(json.measures) &&
     hasOnlyFiniteMeasures(json.measures) &&
     Array.isArray(json.events) &&
@@ -277,9 +255,12 @@ function canCloneJsonFast(json: BeMusicJson): boolean {
     Array.isArray(json.measures) &&
     Array.isArray(json.events) &&
     json.bms !== undefined &&
+    json.preservation !== undefined &&
+    json.preservation.bms !== undefined &&
+    json.preservation.bmson !== undefined &&
     Array.isArray(json.bms.controlFlow) &&
-    Array.isArray(json.bms.sourceLines) &&
-    Array.isArray(json.bms.objectLines) &&
+    Array.isArray(json.preservation.bms.sourceLines) &&
+    Array.isArray(json.preservation.bms.objectLines) &&
     (json.bms.lnObjs === undefined || Array.isArray(json.bms.lnObjs)) &&
     json.bms.exRank !== undefined &&
     json.bms.argb !== undefined &&
@@ -292,10 +273,10 @@ function canCloneJsonFast(json: BeMusicJson): boolean {
     json.bms.speed !== undefined &&
     json.bms.swBga !== undefined &&
     json.bmson !== undefined &&
-    Array.isArray(json.bmson.lines) &&
-    Array.isArray(json.bmson.bpmEvents) &&
-    Array.isArray(json.bmson.stopEvents) &&
-    Array.isArray(json.bmson.soundChannels) &&
+    Array.isArray(json.preservation.bmson.lines) &&
+    Array.isArray(json.preservation.bmson.bpmEvents) &&
+    Array.isArray(json.preservation.bmson.stopEvents) &&
+    Array.isArray(json.preservation.bmson.soundChannels) &&
     json.bmson.info !== undefined &&
     json.bmson.bga !== undefined &&
     Array.isArray(json.bmson.bga.header) &&

@@ -8,5 +8,5 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"],
-  "references": [{ "path": "../json" }, { "path": "../chart" }, { "path": "../parser" }, { "path": "../stringifier" }, { "path": "../utils" }]
+  "references": [{ "path": "../json" }]
 }

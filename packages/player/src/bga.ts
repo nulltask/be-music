@@ -7,7 +7,8 @@ import {
   throwIfAborted,
   workerize,
 } from '@be-music/utils';
-import { normalizeChannel, normalizeObjectKey, sortEvents, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { sortEvents } from '@be-music/chart';
+import { normalizeChannel, normalizeObjectKey, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { decode as decodeBmpFast } from 'fast-bmp';
 import { decode as decodePngFast } from 'fast-png';

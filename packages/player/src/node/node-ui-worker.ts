@@ -1,6 +1,6 @@
+import { createBeatResolver } from '@be-music/chart';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import { createTimingResolver } from '@be-music/audio-renderer';
-import { createBeatResolver } from '@be-music/json';
 import {
   createBpmTimeline,
   createMeasureBoundariesBeats,

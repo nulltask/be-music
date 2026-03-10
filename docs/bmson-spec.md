@@ -69,7 +69,7 @@
 - [x] `info` 拡張項目 `eyecatch_image` の出力
 - [x] `info` 拡張項目 `banner_image` の出力
 - [x] `info` 拡張項目 `preview_music` の出力
-- [x] `lines` 出力 (`bmson.lines` 優先)
+- [x] `lines` 出力 (`preservation.bmson.lines` 優先)
 - [x] `lines` 自動生成 (IR 小節長ベース)
 - [x] `sound_channels` 出力
 - [x] `bpm_events` 出力 (`03` / `08` 由来)
@@ -117,7 +117,7 @@
 ## bmson -> BMS/BMSON 中間表現 (`@be-music/json`) 変換
 
 - `version` を `bmson.version` に保持
-- `lines[].y` を `bmson.lines` に保持
+- `lines[].y` を `preservation.bmson.lines` に保持
 - `info.resolution` を `bmson.info.resolution` に保持
 - 互換としてルート `resolution` も読み取り、`info.resolution` がなければ採用
 - `sound_channels[i].name` を `resources.wav[key]` に登録
@@ -129,20 +129,24 @@
 - `x` 未指定時は `11`
 - `bpm_events` は `resources.bpm` + チャンネル `08` へ変換
 - `stop_events` は `resources.stop` + チャンネル `09` へ変換
+- `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
+- `stop_events` の元配列は `preservation.bmson.stopEvents` に保持
+- `sound_channels` の元配列は `preservation.bmson.soundChannels` に保持
 - `bga` は `bmson.bga` へ保持
 
 ## BMS/BMSON 中間表現 -> BMSON 変換 (stringifier)
 
-- `eventToBeat` から `y = round(beat * resolution)` を生成
+- `@be-music/chart` の `eventToBeat` 相当の beat 解決から `y = round(beat * resolution)` を生成
 - `bmson.version` を `version` に出力 (未指定時は `1.0.0`)
 - `bmson.info.resolution` を `info.resolution` に出力 (未指定時は `240`)
 - `bmson.info` の拡張項目 (`subartists`, `chart_name`, `judge_rank`, `total`, 画像/プレビュー系など) を出力
-- `bmson.lines` があれば `lines[].y` として出力
-- `bmson.lines` がない場合は IR の小節長から `lines` を自動生成
+- `preservation.bmson.lines` があれば `lines[].y` として出力
+- `preservation.bmson.lines` がない場合は IR の小節長から `lines` を自動生成
 - `sound_channels` は `wav` キー単位で出力
 - `03` / `08` チャンネルから `bpm_events` を生成
 - `09` チャンネルから `stop_events` を生成
 - `events[].bmson.l/c` を `sound_channels.notes[].l/c` へ反映 (未指定時は `l=0`, `c=false`)
+- `preservation.bmson.bpmEvents` / `stopEvents` / `soundChannels` が現在の IR と整合する場合は、それらの配列構造を優先して再出力
 - `bmson.bga` が存在すれば `bga` を出力
 
 ## 一次参照に対する未対応/非互換

@@ -1,9 +1,6 @@
-import { readFile, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
 import {
   collectLnobjEndEvents,
   createBeatResolver,
-  DEFAULT_BPM,
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
@@ -12,12 +9,17 @@ import {
   isSampleTriggerChannel,
   isStopChannel,
   parseBmsDynamicVolumeGain,
-  resolveBmsLongNotes,
-  normalizeChannel,
-  normalizeObjectKey,
   parseBpmFrom03Token,
+  resolveBmsLongNotes,
   sortEvents,
   type BeatResolver,
+} from '@be-music/chart';
+import { readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import {
+  normalizeChannel,
+  normalizeObjectKey,
+  DEFAULT_BPM,
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';

@@ -41,6 +41,9 @@ importers:
 
   packages/audio-renderer:
     dependencies:
+      '@be-music/chart':
+        specifier: workspace:*
+        version: link:../chart
       '@be-music/json':
         specifier: workspace:*
         version: link:../json
@@ -64,8 +67,17 @@ importers:
         specifier: ^1.0.0-alpha.6
         version: 1.0.0-alpha.6
 
+  packages/chart:
+    dependencies:
+      '@be-music/json':
+        specifier: workspace:*
+        version: link:../json
+
   packages/editor:
     dependencies:
+      '@be-music/chart':
+        specifier: workspace:*
+        version: link:../chart
       '@be-music/json':
         specifier: workspace:*
         version: link:../json
@@ -87,6 +99,9 @@ importers:
 
   packages/parser:
     dependencies:
+      '@be-music/chart':
+        specifier: workspace:*
+        version: link:../chart
       '@be-music/json':
         specifier: workspace:*
         version: link:../json
@@ -102,6 +117,9 @@ importers:
       '@be-music/audio-renderer':
         specifier: workspace:*
         version: link:../audio-renderer
+      '@be-music/chart':
+        specifier: workspace:*
+        version: link:../chart
       '@be-music/json':
         specifier: workspace:*
         version: link:../json
@@ -136,6 +154,9 @@ importers:
 
   packages/stringifier:
     dependencies:
+      '@be-music/chart':
+        specifier: workspace:*
+        version: link:../chart
       '@be-music/json':
         specifier: workspace:*
         version: link:../json

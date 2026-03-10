@@ -332,7 +332,7 @@ test('BMS: preserves non-control-flow object line boundaries for roundtrip', () 
     ].join('\n'),
   );
 
-  expect(parsed.bms.sourceLines.map((line) => line.kind)).toEqual([
+  expect(parsed.preservation.bms.sourceLines.map((line) => line.kind)).toEqual([
     'header',
     'object',
     'object',
@@ -344,7 +344,7 @@ test('BMS: preserves non-control-flow object line boundaries for roundtrip', () 
     'object',
     'object',
   ]);
-  expect(parsed.bms.objectLines.map((line) => `${line.measure}:${line.channel}:${line.events.length}:${line.measureLength ?? '-'}`)).toEqual([
+  expect(parsed.preservation.bms.objectLines.map((line) => `${line.measure}:${line.channel}:${line.events.length}:${line.measureLength ?? '-'}`)).toEqual([
     '1:13:4:-',
     '1:13:6:-',
     '1:13:1:-',
@@ -399,10 +399,10 @@ test('bmson: maps version/lines/info.resolution into IR', async () => {
   expect(json.sourceFormat).toBe('bmson');
   expect(json.bmson.version).toBe('1.0.0');
   expect(json.bmson.info.resolution).toBe(240);
-  expect(json.bmson.lines).toEqual([0, 960, 1680, 2640]);
-  expect(json.bmson.soundChannels.map((channel) => channel.name)).toEqual(['sample.wav']);
-  expect(json.bmson.bpmEvents.map((event) => event.bpm)).toEqual([180]);
-  expect(json.bmson.stopEvents.map((event) => event.duration)).toEqual([96]);
+  expect(json.preservation.bmson.lines).toEqual([0, 960, 1680, 2640]);
+  expect(json.preservation.bmson.soundChannels.map((channel) => channel.name)).toEqual(['sample.wav']);
+  expect(json.preservation.bmson.bpmEvents.map((event) => event.bpm)).toEqual([180]);
+  expect(json.preservation.bmson.stopEvents.map((event) => event.duration)).toEqual([96]);
   expect(json.measures).toEqual([{ index: 1, length: 0.75 }]);
 
   expect(
@@ -574,7 +574,7 @@ test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and r
 
   expect(parsed.bmson.version).toBe('1.0.1');
   expect(parsed.bmson.info.resolution).toBe(480);
-  expect(parsed.bmson.lines).toEqual([0, 960, 1680]);
+  expect(parsed.preservation.bmson.lines).toEqual([0, 960, 1680]);
   expect(parsed.bms.preview).toBe('preview.ogg');
   expect(parsed.bms.lnType).toBe(2);
   expect(parsed.bms.lnMode).toBe(1);
@@ -604,7 +604,7 @@ test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and r
   expect(parsed.bms.materials).toBe('materials.def');
   expect(parsed.bms.divideProp).toBe('lane=2');
   expect(parsed.bms.charset).toBe('Shift_JIS');
-  expect(parsed.bms.sourceLines).toEqual([
+  expect(parsed.preservation.bms.sourceLines).toEqual([
     { kind: 'header', command: 'TITLE', value: 'Roundtrip' },
     {
       kind: 'object',
@@ -624,9 +624,9 @@ test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and r
       measureLength: undefined,
     },
   ]);
-  expect(parsed.bmson.bpmEvents).toEqual([{ y: 240, bpm: 150 }]);
-  expect(parsed.bmson.stopEvents).toEqual([{ y: 960, duration: 48 }]);
-  expect(parsed.bmson.soundChannels).toEqual([
+  expect(parsed.preservation.bmson.bpmEvents).toEqual([{ y: 240, bpm: 150 }]);
+  expect(parsed.preservation.bmson.stopEvents).toEqual([{ y: 960, duration: 48 }]);
+  expect(parsed.preservation.bmson.soundChannels).toEqual([
     {
       name: 'sample.wav',
       notes: [{ x: 1, y: 0, l: 240, c: true }],
