@@ -122,6 +122,20 @@ function createJudgeComboRecorder(records: RecordedJudgeCombo[]) {
   };
 }
 
+function createPlaybackEndRecorder(targetSeconds: number, records: number[]) {
+  return async (context: CreatePlayerUiRuntimeContext) => ({
+    tuiEnabled: true,
+    playbackEndSeconds: targetSeconds,
+    start: () => undefined,
+    stop: () => {
+      records.push(context.uiSignals.getFrame().currentSeconds);
+    },
+    dispose: () => undefined,
+    triggerPoor: () => undefined,
+    clearPoor: () => undefined,
+  });
+}
+
 describe('player', () => {
   test('player: auto play finishes successfully', async () => {
     const json = await parseChartFile(unifiedBmsChartPath);
@@ -144,6 +158,39 @@ describe('player', () => {
     expect(summary.poor).toBe(0);
     expect(summary.exScore).toBe(summary.total * 2);
     expect(summary.score).toBe(200000);
+  });
+
+  test('player: auto play waits for UI BGA playback tail', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+    const frameEndSeconds: number[] = [];
+    await autoPlay(json, {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      createUiRuntime: createPlaybackEndRecorder(2, frameEndSeconds),
+    });
+
+    expect(frameEndSeconds.at(-1)).toBeGreaterThanOrEqual(2);
+  });
+
+  test('player: manual play waits for UI BGA playback tail after notes are judged', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+    const frameEndSeconds: number[] = [];
+    await manualPlay(json, {
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      createUiRuntime: createPlaybackEndRecorder(2, frameEndSeconds),
+    });
+
+    expect(frameEndSeconds.at(-1)).toBeGreaterThanOrEqual(2);
   });
 
   test('player: defaults groove gauge TOTAL to LR2 160 when #TOTAL is omitted', async () => {

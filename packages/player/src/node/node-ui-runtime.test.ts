@@ -14,6 +14,7 @@ const workerState = vi.hoisted(() => ({
   lastWorker: undefined as MockWorker | undefined,
   lastWorkerOptions: undefined as WorkerOptions | undefined,
   autoAckLifecycle: true,
+  readyMessage: { kind: 'ready' } as { kind: 'ready'; bgaPlaybackEndSeconds?: number },
 }));
 
 vi.mock('node:worker_threads', async () => {
@@ -45,7 +46,7 @@ vi.mock('node:worker_threads', async () => {
         workerState.lastWorkerOptions = _args[1] as WorkerOptions | undefined;
         workerState.lastWorker = this;
         queueMicrotask(() => {
-          this.emit('message', { kind: 'ready' });
+          this.emit('message', workerState.readyMessage);
         });
       }
     },
@@ -60,6 +61,7 @@ afterEach(() => {
   workerState.lastWorker = undefined;
   workerState.lastWorkerOptions = undefined;
   workerState.autoAckLifecycle = true;
+  workerState.readyMessage = { kind: 'ready' };
 });
 
 describe('node ui runtime', () => {
@@ -183,6 +185,16 @@ describe('node ui runtime', () => {
     const bridgePort = runtime.createBridgePort();
     expect(bridgePort).toBeDefined();
     expect(messagesOfKind(worker, 'attach-bridge-port')).toHaveLength(1);
+
+    await runtime.dispose();
+  });
+
+  test('captures BGA playback end seconds from the UI worker ready message', async () => {
+    workerState.readyMessage = { kind: 'ready', bgaPlaybackEndSeconds: 3.25 };
+    const uiSignals = createPlayerUiSignalBus(createFrame());
+    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+
+    expect(runtime.playbackEndSeconds).toBe(3.25);
 
     await runtime.dispose();
   });

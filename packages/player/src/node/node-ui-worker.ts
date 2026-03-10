@@ -265,7 +265,7 @@ async function bootstrap(): Promise<void> {
 
   port.on('message', handleControlMessage);
 
-  postWorkerMessage({ kind: 'ready' });
+  postWorkerMessage({ kind: 'ready', bgaPlaybackEndSeconds: bgaRenderer?.playbackEndSeconds });
 }
 
 function resolveSplitAfterIndex(bindings: NodeUiWorkerInitData['laneBindings']): number {

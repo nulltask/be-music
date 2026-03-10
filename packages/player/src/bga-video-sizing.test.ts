@@ -30,6 +30,7 @@ vi.mock('./bga-video.ts', () => ({
     return {
       codecName: 'h264',
       frameCount: 1,
+      durationSeconds: 2.5,
     };
   }),
 }));
@@ -125,6 +126,28 @@ describe('player bga video sizing', () => {
         maxX: 39,
         maxY: 16,
       });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('tracks gameplay playback end through the last BGA video cue duration', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-video-size-'));
+    try {
+      await writeFile(join(baseDir, 'movie.mp4'), '');
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'movie.mp4';
+      json.events = [{ measure: 0, channel: '04', position: [1, 2], value: '01' }];
+
+      const renderer = await createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+
+      expect(renderer?.playbackEndSeconds).toBeCloseTo(3.5, 6);
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }

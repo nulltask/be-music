@@ -557,6 +557,7 @@ describe('player bga', () => {
       missingLayerSourceFrame: createTransparentAnsiFrame(256, 256),
       poorFallbackKey: undefined,
       poorFallbackUntilSeconds: Number.POSITIVE_INFINITY,
+      playbackEndSeconds: 0,
       width: 40,
       height: 20,
     });

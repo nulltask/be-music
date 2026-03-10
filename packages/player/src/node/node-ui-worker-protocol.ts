@@ -36,7 +36,7 @@ export type NodeUiWorkerInboundMessage =
   | { kind: 'resize'; columns?: number; rows?: number };
 
 export type NodeUiWorkerOutboundMessage =
-  | { kind: 'ready' }
+  | { kind: 'ready'; bgaPlaybackEndSeconds?: number }
   | { kind: 'unsupported' }
   | { kind: 'stopped' }
   | { kind: 'disposed' }

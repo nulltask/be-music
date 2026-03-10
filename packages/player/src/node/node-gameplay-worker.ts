@@ -48,7 +48,7 @@ async function bootstrap(): Promise<void> {
   const pendingUiInit = new Map<
     number,
     {
-      resolve: (result: { enabled: boolean; port?: MessagePort }) => void;
+      resolve: (result: { enabled: boolean; port?: MessagePort; bgaPlaybackEndSeconds?: number }) => void;
       reject: (error: Error) => void;
       onProgress: CreatePlayerUiRuntimeContext['onBgaLoadProgress'];
     }
@@ -82,6 +82,7 @@ async function bootstrap(): Promise<void> {
       pending.resolve({
         enabled: message.enabled,
         port: message.port,
+        bgaPlaybackEndSeconds: message.bgaPlaybackEndSeconds,
       });
       return;
     }
@@ -214,6 +215,7 @@ async function bootstrap(): Promise<void> {
 
     return {
       tuiEnabled: true,
+      playbackEndSeconds: uiInitResult.bgaPlaybackEndSeconds,
       start: () => {
         if (disposed) {
           return;
@@ -331,13 +333,13 @@ function requestUiInit(
   pendingUiInit: Map<
     number,
     {
-      resolve: (result: { enabled: boolean; port?: MessagePort }) => void;
+      resolve: (result: { enabled: boolean; port?: MessagePort; bgaPlaybackEndSeconds?: number }) => void;
       reject: (error: Error) => void;
       onProgress: CreatePlayerUiRuntimeContext['onBgaLoadProgress'];
     }
   >,
-): Promise<{ enabled: boolean; port?: MessagePort }> {
-  return new Promise<{ enabled: boolean; port?: MessagePort }>((resolve, reject) => {
+): Promise<{ enabled: boolean; port?: MessagePort; bgaPlaybackEndSeconds?: number }> {
+  return new Promise<{ enabled: boolean; port?: MessagePort; bgaPlaybackEndSeconds?: number }>((resolve, reject) => {
     pendingUiInit.set(requestId, {
       resolve,
       reject,

@@ -87,7 +87,7 @@ export async function decodeVideoFramesStream(
   videoPath: string,
   onFrame: (frame: DecodedVideoFrame) => void,
   signal?: AbortSignal,
-): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number } | undefined> {
+): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
   let libav: LibAvInstance | undefined;
   try {
     throwIfAborted(signal);
@@ -115,6 +115,7 @@ export async function decodeVideoFramesStream(
       videoStream.codecpar,
     );
     try {
+      const durationSeconds = resolveStreamDurationSeconds(videoStream);
       const frameCount = await decodeVideoFramesWithCallback(
         libavInstance,
         formatContext,
@@ -132,6 +133,7 @@ export async function decodeVideoFramesStream(
       return {
         codecName,
         frameCount,
+        durationSeconds,
       };
     } finally {
       await libavInstance.ff_free_decoder(decoderContext, packetRef, frameRef);
@@ -242,6 +244,17 @@ function resolveTimeScale(stream: LibAvStream): number {
   const numerator = Number.isFinite(stream.time_base_num) ? stream.time_base_num : 1;
   const denominator = Number.isFinite(stream.time_base_den) && stream.time_base_den > 0 ? stream.time_base_den : 1;
   return numerator / denominator;
+}
+
+function resolveStreamDurationSeconds(stream: LibAvStream): number | undefined {
+  if (typeof stream.duration !== 'number' || !Number.isFinite(stream.duration) || stream.duration <= 0) {
+    return undefined;
+  }
+  const seconds = stream.duration * resolveTimeScale(stream);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return undefined;
+  }
+  return seconds;
 }
 
 function resolveFallbackStep(): number {

@@ -33,6 +33,7 @@ export interface NodeUiRuntimeOptions {
 
 export interface NodeUiRuntime {
   readonly tuiEnabled: boolean;
+  readonly playbackEndSeconds?: number;
   start: () => void;
   stop: () => Promise<void>;
   dispose: () => Promise<void>;
@@ -48,7 +49,7 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
     env: resolveNodeUiWorkerEnv(),
   });
   const workerReady = await waitForWorkerReady(worker, options.loadSignal, options.onBgaLoadProgress);
-  if (!workerReady) {
+  if (!workerReady.enabled) {
     return {
       tuiEnabled: false,
       start: () => undefined,
@@ -138,6 +139,7 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
 
   return {
     tuiEnabled: true,
+    playbackEndSeconds: workerReady.bgaPlaybackEndSeconds,
     start: () => {
       postWorkerMessage({ kind: 'start' });
     },
@@ -294,13 +296,13 @@ async function waitForWorkerReady(
   worker: Worker,
   signal: AbortSignal | undefined,
   onBgaLoadProgress: NodeUiRuntimeOptions['onBgaLoadProgress'],
-): Promise<boolean> {
+): Promise<{ enabled: boolean; bgaPlaybackEndSeconds?: number }> {
   if (signal?.aborted) {
     await worker.terminate();
     throw resolveAbortReason(signal);
   }
 
-  return await new Promise<boolean>((resolve, reject) => {
+  return await new Promise<{ enabled: boolean; bgaPlaybackEndSeconds?: number }>((resolve, reject) => {
     let settled = false;
 
     const cleanup = (): void => {
@@ -325,13 +327,18 @@ async function waitForWorkerReady(
         return;
       }
       if (message.kind === 'ready') {
-        settle(() => resolve(true));
+        settle(() =>
+          resolve({
+            enabled: true,
+            bgaPlaybackEndSeconds: message.bgaPlaybackEndSeconds,
+          }),
+        );
         return;
       }
       if (message.kind === 'unsupported') {
         settle(() => {
           void worker.terminate();
-          resolve(false);
+          resolve({ enabled: false });
         });
         return;
       }

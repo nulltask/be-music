@@ -65,6 +65,7 @@ interface StaticFrameSource {
 interface VideoFrameSource {
   kind: 'video';
   frames: TimedAnsiFrame[];
+  durationSeconds?: number;
 }
 
 type FrameSource = StaticFrameSource | VideoFrameSource;
@@ -147,6 +148,8 @@ export async function loadStageFileAnsiLines(
 }
 
 export class BgaAnsiRenderer {
+  readonly playbackEndSeconds: number;
+
   private readonly baseTimeline: BgaCue[];
 
   private readonly poorTimeline: BgaCue[];
@@ -231,6 +234,7 @@ export class BgaAnsiRenderer {
     missingLayerSourceFrame: AnsiFrame;
     poorFallbackKey?: string;
     poorFallbackUntilSeconds: number;
+    playbackEndSeconds: number;
     width: number;
     height: number;
   }) {
@@ -247,6 +251,7 @@ export class BgaAnsiRenderer {
     this.missingLayerSourceFrame = params.missingLayerSourceFrame;
     this.poorFallbackKey = params.poorFallbackKey;
     this.poorFallbackUntilSeconds = params.poorFallbackUntilSeconds;
+    this.playbackEndSeconds = params.playbackEndSeconds;
     this.displayWidth = params.width;
     this.displayHeight = params.height;
     this.blackBackgroundLines = [];
@@ -567,6 +572,11 @@ export async function createBgaAnsiRenderer(
     missingLayerSourceFrame,
     poorFallbackKey,
     poorFallbackUntilSeconds,
+    playbackEndSeconds: Math.max(
+      resolveTimelinePlaybackEndSeconds(baseTimeline, baseSourceFramesByKey),
+      resolveTimelinePlaybackEndSeconds(layerTimeline, layerSourceFramesByKey),
+      resolveTimelinePlaybackEndSeconds(layer2Timeline, layer2SourceFramesByKey),
+    ),
     width: displaySize.width,
     height: displaySize.height,
   });
@@ -665,6 +675,7 @@ function fillFrameSourceBackground(source: FrameSource, r: number, g: number, b:
   }
   return {
     kind: 'video',
+    durationSeconds: source.durationSeconds,
     frames: source.frames.map((entry) => ({
       seconds: entry.seconds,
       frame: fillAnsiFrameBackground(entry.frame, r, g, b),
@@ -682,6 +693,7 @@ function resizeFrameSource(source: FrameSource, width: number, height: number): 
 
   return {
     kind: 'video',
+    durationSeconds: source.durationSeconds,
     frames: source.frames.map((entry) => ({
       seconds: entry.seconds,
       frame: resizeAnsiFrame(entry.frame, width, height),
@@ -699,6 +711,7 @@ function resizeFrameSourceCover(source: FrameSource, width: number, height: numb
 
   return {
     kind: 'video',
+    durationSeconds: source.durationSeconds,
     frames: source.frames.map((entry) => ({
       seconds: entry.seconds,
       frame: resizeAnsiFrameCover(entry.frame, width, height),
@@ -1068,6 +1081,7 @@ async function loadVideoAsFrameSource(
 
   return {
     kind: 'video',
+    durationSeconds: decoded.durationSeconds,
     frames,
   };
 }
@@ -1091,6 +1105,34 @@ async function loadStageFileLoadingSourceFrame(
 
 async function resolveMediaPath(baseDir: string, mediaPath: string, signal?: AbortSignal): Promise<string | undefined> {
   return resolveFirstExistingPath(baseDir, createMediaPathCandidates(mediaPath), signal);
+}
+
+function resolveTimelinePlaybackEndSeconds(
+  timeline: ReadonlyArray<BgaCue>,
+  sourcesByKey: ReadonlyMap<string, FrameSource>,
+): number {
+  const lastCue = timeline.at(-1);
+  if (!lastCue) {
+    return 0;
+  }
+  if (!lastCue.key) {
+    return lastCue.seconds;
+  }
+  return lastCue.seconds + resolveFrameSourceDurationSeconds(sourcesByKey.get(lastCue.key));
+}
+
+function resolveFrameSourceDurationSeconds(source: FrameSource | undefined): number {
+  if (!source || source.kind === 'static') {
+    return 0;
+  }
+  const streamDuration = source.durationSeconds ?? 0;
+  const lastFrameSeconds = source.frames.at(-1)?.seconds ?? 0;
+  if (source.frames.length < 2) {
+    return Math.max(streamDuration, lastFrameSeconds);
+  }
+  const previousFrameSeconds = source.frames.at(-2)?.seconds ?? 0;
+  const estimatedTailSeconds = Math.max(0, lastFrameSeconds - previousFrameSeconds);
+  return Math.max(streamDuration, lastFrameSeconds + estimatedTailSeconds);
 }
 
 function createMediaPathCandidates(mediaPath: string): string[] {

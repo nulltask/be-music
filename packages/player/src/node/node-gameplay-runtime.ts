@@ -213,6 +213,7 @@ async function handleUiInit(
       kind: 'ui-init-result',
       requestId: message.requestId,
       enabled: runtime.tuiEnabled,
+      bgaPlaybackEndSeconds: runtime.playbackEndSeconds,
     };
     if (runtime.tuiEnabled) {
       response.port = runtime.createBridgePort();

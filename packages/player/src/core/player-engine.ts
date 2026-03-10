@@ -68,6 +68,7 @@ import { createBeatAtSecondsResolver } from './timeline.ts';
 
 export interface PlayerUiRuntime {
   readonly tuiEnabled: boolean;
+  readonly playbackEndSeconds?: number;
   start: () => void;
   stop: () => void | Promise<void>;
   dispose: () => void | Promise<void>;
@@ -692,7 +693,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const landmineNotes = extractedNotes.landmineNotes;
   const invisibleNotes = extractedNotes.invisibleNotes;
   const renderNotes = mergeRenderNotesBySeconds(notes, landmineNotes, invisibleNotes);
-  const totalSeconds = Math.max(
+  let totalSeconds = Math.max(
     resolvePlayableNotesTailSeconds(notes),
     landmineNotes.at(-1)?.seconds ?? 0,
     invisibleNotes.at(-1)?.seconds ?? 0,
@@ -743,6 +744,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     },
   });
   throwIfAborted(options.signal);
+  totalSeconds = Math.max(totalSeconds, uiRuntime?.playbackEndSeconds ?? 0);
   const uiEnabled = uiRuntime?.tuiEnabled === true;
   const activeStateSignals = uiEnabled ? stateSignals : undefined;
 
@@ -1132,7 +1134,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const landmineNotes = extractedNotes.landmineNotes;
   const invisibleNotes = extractedNotes.invisibleNotes;
   const renderNotes = mergeRenderNotesBySeconds(notes, landmineNotes, invisibleNotes);
-  const totalSeconds = Math.max(
+  let totalSeconds = Math.max(
     resolvePlayableNotesTailSeconds(notes),
     landmineNotes.at(-1)?.seconds ?? 0,
     invisibleNotes.at(-1)?.seconds ?? 0,
@@ -1188,6 +1190,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     },
   });
   throwIfAborted(options.signal);
+  totalSeconds = Math.max(totalSeconds, uiRuntime?.playbackEndSeconds ?? 0);
   const uiEnabled = uiRuntime?.tuiEnabled === true;
   const activeStateSignals = uiEnabled ? stateSignals : undefined;
 
@@ -1848,13 +1851,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       markExpiredLandmines(nowSec);
       markExpiredInvisibleNotes(nowSec);
 
+      const safeNowSeconds = Math.max(0, nowSec) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
       if (
         remainingScorableNotes === 0 &&
         remainingLandmineNotes === 0 &&
         remainingInvisibleNotes === 0 &&
         pendingAutoScratchLongNotes.length === 0 &&
         activeLongNotesByChannel.size === 0 &&
-        !audioSession
+        !audioSession &&
+        safeNowSeconds >= totalSeconds
       ) {
         break;
       }

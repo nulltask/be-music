@@ -33,6 +33,7 @@ const uiRuntimeState = vi.hoisted(() => ({
   triggerPoor: vi.fn(),
   clearPoor: vi.fn(),
   tuiEnabled: true,
+  playbackEndSeconds: undefined as number | undefined,
 }));
 
 vi.mock('node:worker_threads', async () => {
@@ -70,6 +71,7 @@ vi.mock('./node-ui-runtime.ts', () => ({
     uiRuntimeState.bridgePort = new MessageChannel().port1;
     uiRuntimeState.runtime = {
       tuiEnabled: uiRuntimeState.tuiEnabled,
+      playbackEndSeconds: uiRuntimeState.playbackEndSeconds,
       start: uiRuntimeState.start,
       stop: uiRuntimeState.stop,
       dispose: uiRuntimeState.dispose,
@@ -105,6 +107,7 @@ afterEach(() => {
   uiRuntimeState.triggerPoor.mockReset();
   uiRuntimeState.clearPoor.mockReset();
   uiRuntimeState.tuiEnabled = true;
+  uiRuntimeState.playbackEndSeconds = undefined;
 });
 
 describe('node gameplay runtime', () => {
@@ -151,6 +154,7 @@ describe('node gameplay runtime', () => {
   });
 
   test('passes a direct bridge port to the gameplay worker and keeps lifecycle acks on the main thread', async () => {
+    uiRuntimeState.playbackEndSeconds = 4.5;
     const promise = runNodeGameplayRuntime(createOptions());
     const worker = getLastWorker();
 
@@ -164,7 +168,12 @@ describe('node gameplay runtime', () => {
     expect(uiRuntimeState.context?.laneDisplayMode).toBe('7 KEY');
     const uiInitResults = messagesOfKind(worker, 'ui-init-result');
     expect(uiInitResults).toHaveLength(1);
-    expect(uiInitResults[0]).toMatchObject({ kind: 'ui-init-result', requestId: 3, enabled: true });
+    expect(uiInitResults[0]).toMatchObject({
+      kind: 'ui-init-result',
+      requestId: 3,
+      enabled: true,
+      bgaPlaybackEndSeconds: 4.5,
+    });
     expect((uiInitResults[0] as { port?: MessagePort }).port).toBe(uiRuntimeState.bridgePort);
 
     worker.emit('message', { kind: 'ui-stop', requestId: 4 });
