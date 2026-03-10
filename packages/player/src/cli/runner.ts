@@ -40,9 +40,11 @@ import {
   resolveCircularSelectableIndex,
   resolvePageSelectableIndex,
   resolveResultScreenActionFromKey,
+  resolveSongSelectDifficultyFilter,
   resolveSongSelectNavigationAction,
   resolveVisibleEntryRange,
   type ResultScreenAction,
+  type SongSelectDifficultyFilter,
   type SongSelectPageDirection,
 } from './song-select-navigation.ts';
 import {
@@ -74,6 +76,7 @@ export {
   resolveCircularSelectableIndex,
   resolvePageSelectableIndex,
   resolveResultScreenActionFromKey,
+  resolveSongSelectDifficultyFilter,
   resolveSongSelectNavigationAction,
   resolveVisibleEntryRange,
 } from './song-select-navigation.ts';
@@ -129,6 +132,7 @@ interface SelectChartInteractivelyOptions {
   initialFocusKey?: string;
   initialPlayMode?: PlayMode;
   initialHighSpeed?: number;
+  initialDifficultyFilter?: SongSelectDifficultyFilter;
 }
 
 type SelectChartInteractivelyExitReason = 'selected' | 'escape' | 'ctrl-c';
@@ -139,6 +143,7 @@ interface SelectChartInteractivelyResult {
   focusKey?: string;
   playMode: PlayMode;
   highSpeed: number;
+  difficultyFilter?: SongSelectDifficultyFilter;
 }
 
 interface PlayedChartResult {
@@ -158,6 +163,7 @@ type DirectorySceneState =
       focusKey?: string;
       playMode: PlayMode;
       highSpeed: number;
+      difficultyFilter?: SongSelectDifficultyFilter;
     }
   | {
       kind: 'play';
@@ -165,6 +171,7 @@ type DirectorySceneState =
       focusKey?: string;
       playMode: PlayMode;
       highSpeed: number;
+      difficultyFilter?: SongSelectDifficultyFilter;
     }
   | {
       kind: 'result';
@@ -172,6 +179,7 @@ type DirectorySceneState =
       focusKey?: string;
       playMode: PlayMode;
       highSpeed: number;
+      difficultyFilter?: SongSelectDifficultyFilter;
     }
   | {
       kind: 'exit';
@@ -375,6 +383,7 @@ async function runDirectoryInput(
     ),
     playMode: persistedConfig.playMode,
     highSpeed: persistedConfig.highSpeed,
+    difficultyFilter: undefined,
   };
 
   while (state.kind !== 'exit') {
@@ -385,6 +394,7 @@ async function runDirectoryInput(
         initialFocusKey: state.focusKey,
         initialPlayMode: state.playMode,
         initialHighSpeed: state.highSpeed,
+        initialDifficultyFilter: state.difficultyFilter,
       });
       persistedConfig = resolvePersistedConfigForSongSelect(
         {
@@ -429,6 +439,7 @@ async function runDirectoryInput(
           focusKey: playState.focusKey,
           playMode: playState.playMode,
           highSpeed: resolvedHighSpeed,
+          difficultyFilter: playState.difficultyFilter,
         };
       } catch (error) {
         if (error instanceof PlayerInterruptedError) {
@@ -533,6 +544,7 @@ function resolveDirectoryStateFromSelection(selection: SelectChartInteractivelyR
     focusKey: selection.focusKey,
     playMode: selection.playMode,
     highSpeed: selection.highSpeed,
+    difficultyFilter: selection.difficultyFilter,
   };
 }
 
@@ -547,6 +559,7 @@ function resolveDirectoryStateFromPlayInterrupt(
       focusKey: state.focusKey,
       playMode: state.playMode,
       highSpeed: state.highSpeed,
+      difficultyFilter: state.difficultyFilter,
     };
   }
   if (reason === 'escape') {
@@ -555,6 +568,7 @@ function resolveDirectoryStateFromPlayInterrupt(
       focusKey: state.focusKey,
       playMode: state.playMode,
       highSpeed: state.highSpeed,
+      difficultyFilter: state.difficultyFilter,
     };
   }
   return {
@@ -574,6 +588,7 @@ function resolveDirectoryStateFromResultAction(
       focusKey: state.focusKey,
       playMode: state.playMode,
       highSpeed: state.highSpeed,
+      difficultyFilter: state.difficultyFilter,
     };
   }
 
@@ -583,6 +598,7 @@ function resolveDirectoryStateFromResultAction(
       focusKey: state.focusKey,
       playMode: state.playMode,
       highSpeed: state.highSpeed,
+      difficultyFilter: state.difficultyFilter,
     };
   }
 
@@ -1378,52 +1394,128 @@ function convertSrgbChannelToLinear(value: number): number {
   return ((normalized + 0.055) / 1.055) ** 2.4;
 }
 
+function formatSongSelectDifficultyFilterLabel(value: SongSelectDifficultyFilter | undefined): string {
+  return typeof value === 'number' ? String(value) : 'ALL';
+}
+
+function filterChartSelectionEntries(
+  entries: readonly ChartSelectionEntry[],
+  difficultyFilter: SongSelectDifficultyFilter | undefined,
+): ChartSelectionEntry[] {
+  if (typeof difficultyFilter !== 'number') {
+    return [...entries];
+  }
+
+  const filtered: ChartSelectionEntry[] = [];
+  let pendingGroup: Extract<ChartSelectionEntry, { kind: 'group' }> | undefined;
+  let groupHasVisibleCharts = false;
+  let hasVisibleCharts = false;
+
+  const flushPendingGroup = (): void => {
+    if (pendingGroup && groupHasVisibleCharts) {
+      filtered.push(pendingGroup);
+    }
+    pendingGroup = undefined;
+    groupHasVisibleCharts = false;
+  };
+
+  for (const entry of entries) {
+    if (entry.kind === 'random') {
+      continue;
+    }
+    if (entry.kind === 'group') {
+      flushPendingGroup();
+      pendingGroup = entry;
+      continue;
+    }
+    if (entry.difficulty !== difficultyFilter) {
+      continue;
+    }
+    if (pendingGroup && !groupHasVisibleCharts) {
+      filtered.push(pendingGroup);
+      groupHasVisibleCharts = true;
+    }
+    filtered.push(entry);
+    hasVisibleCharts = true;
+  }
+
+  if (hasVisibleCharts) {
+    filtered.unshift({ kind: 'random', label: '[Random] Select a chart randomly' });
+  }
+  return filtered;
+}
+
 async function selectChartInteractively(
   rootDir: string,
   files: string[],
   options: SelectChartInteractivelyOptions,
 ): Promise<SelectChartInteractivelyResult> {
-  const entries = options.entries ?? (await buildChartSelectionEntries(rootDir, files));
-  const selectableIndexes = entries.flatMap((entry, index) => (entry.kind === 'group' ? [] : [index]));
-  const chartIndexes = entries.flatMap((entry, index) => (entry.kind === 'chart' ? [index] : []));
-  const chartCount = chartIndexes.length;
-  const selectableIndexByEntryIndex = new Map<number, number>();
-  const chartIndexByEntryIndex = new Map<number, number>();
-  for (let index = 0; index < selectableIndexes.length; index += 1) {
-    selectableIndexByEntryIndex.set(selectableIndexes[index], index);
-  }
-  for (let index = 0; index < chartIndexes.length; index += 1) {
-    chartIndexByEntryIndex.set(chartIndexes[index], index);
-  }
-
-  if (selectableIndexes.length === 0) {
-    return {
-      reason: 'escape',
-      playMode: options.initialPlayMode ?? 'manual',
-      highSpeed: normalizeHighSpeedValue(options.initialHighSpeed),
-    };
-  }
-
+  const allEntries = options.entries ?? (await buildChartSelectionEntries(rootDir, files));
   const previewController = options.audio && process.stdout.isTTY ? createChartPreviewController() : undefined;
   let previewSpinnerFrame = 0;
   let previewSpinnerTimer: NodeJS.Timeout | undefined;
   let wasSpinnerVisible = false;
 
   const inputCapture = beginRawInputCapture();
-  let selectedIndex = selectableIndexes[0];
+  let difficultyFilter = options.initialDifficultyFilter;
   let playMode: PlayMode = options.initialPlayMode ?? 'manual';
   let highSpeed = normalizeHighSpeedValue(options.initialHighSpeed);
-  if (options.initialFocusKey) {
-    const found = selectableIndexes.find((index) => getEntryFocusKey(entries[index]) === options.initialFocusKey);
-    if (typeof found === 'number') {
-      selectedIndex = found;
+  let selectedIndex = 0;
+
+  const resolveSelectionView = () => {
+    const entries = filterChartSelectionEntries(allEntries, difficultyFilter);
+    const selectableIndexes = entries.flatMap((entry, index) => (entry.kind === 'group' ? [] : [index]));
+    const chartIndexes = entries.flatMap((entry, index) => (entry.kind === 'chart' ? [index] : []));
+    const selectableIndexByEntryIndex = new Map<number, number>();
+    const chartIndexByEntryIndex = new Map<number, number>();
+    for (let index = 0; index < selectableIndexes.length; index += 1) {
+      selectableIndexByEntryIndex.set(selectableIndexes[index]!, index);
     }
-  }
+    for (let index = 0; index < chartIndexes.length; index += 1) {
+      chartIndexByEntryIndex.set(chartIndexes[index]!, index);
+    }
+    return {
+      entries,
+      selectableIndexes,
+      chartIndexes,
+      chartCount: chartIndexes.length,
+      chartFiles: entries.flatMap((entry) => (entry.kind === 'chart' ? [entry.filePath] : [])),
+      selectableIndexByEntryIndex,
+      chartIndexByEntryIndex,
+    };
+  };
+
+  const ensureSelectedIndex = (preferredFocusKey?: string): void => {
+    const view = resolveSelectionView();
+    if (view.entries.length === 0) {
+      selectedIndex = 0;
+      return;
+    }
+    const clampedIndex = Math.max(0, Math.min(selectedIndex, view.entries.length - 1));
+    selectedIndex = clampedIndex;
+    if (view.selectableIndexes.length === 0) {
+      return;
+    }
+    const focusKey = preferredFocusKey ?? getEntryFocusKey(view.entries[selectedIndex]);
+    if (focusKey) {
+      const found = view.selectableIndexes.find((index) => getEntryFocusKey(view.entries[index]) === focusKey);
+      if (typeof found === 'number') {
+        selectedIndex = found;
+        return;
+      }
+    }
+    if (!view.selectableIndexByEntryIndex.has(selectedIndex)) {
+      selectedIndex = view.selectableIndexes[0]!;
+    }
+  };
+
+  ensureSelectedIndex(options.initialFocusKey);
 
   process.stdout.write('\u001b[?25l');
 
   const syncPreview = (): void => {
-    const entry = entries[selectedIndex];
+    const view = resolveSelectionView();
+    const entry = view.entries[selectedIndex];
     if (entry?.kind === 'chart') {
       previewController?.focus({
         filePath: entry.filePath,
@@ -1440,21 +1532,24 @@ async function selectChartInteractively(
   };
 
   const render = (): void => {
+    const view = resolveSelectionView();
     const columns = process.stdout.columns ?? 80;
     const listRows = listRowsForViewport();
-    const numberWidth = String(Math.max(1, chartCount)).length;
+    const numberWidth = String(Math.max(1, view.chartCount)).length;
     const lineWidth = Math.max(16, columns - 2);
     const itemLabelWidth = Math.max(8, lineWidth - numberWidth - 4);
-    const columnLayout = createSelectionColumnLayout(itemLabelWidth, entries);
+    const columnLayout = createSelectionColumnLayout(itemLabelWidth, view.entries);
 
-    const { start, end } = resolveVisibleEntryRange(selectedIndex, entries.length, listRows);
+    const { start, end } = resolveVisibleEntryRange(selectedIndex, view.entries.length, listRows);
 
     const lines: string[] = [];
     lines.push(
-      'Select chart  [↑/↓ or k/j: move]  [←/→ or h/l: page]  [Ctrl+b/f: page]  [a: MANUAL/AUTO SCRATCH/AUTO]  [s/S: HS +/-]  [Enter: play]  [Ctrl+C/Esc: exit]',
+      'Select chart  [↑/↓ or k/j: move]  [←/→ or h/l: page]  [Ctrl+b/f: page]  [1-5: DIFF filter]  [0: clear DIFF]  [a: MANUAL/AUTO SCRATCH/AUTO]  [s/S: HS +/-]  [Enter: play]  [Ctrl+C/Esc: exit]',
     );
     lines.push(truncateForDisplay(`Directory: ${rootDir}`, lineWidth));
-    lines.push(`Mode: ${formatPlayModeLabel(playMode)}  HIGH-SPEED: x${formatHighSpeedLabel(highSpeed)}`);
+    lines.push(
+      `Mode: ${formatPlayModeLabel(playMode)}  HIGH-SPEED: x${formatHighSpeedLabel(highSpeed)}  DIFFICULTY: ${formatSongSelectDifficultyFilterLabel(difficultyFilter)}`,
+    );
     lines.push(
       `Audio backend: ${formatSongSelectAudioBackendLabel(options.audio, previewController?.getActiveBackend())}`,
     );
@@ -1463,10 +1558,15 @@ async function selectChartInteractively(
     const columnHeader = formatSelectionColumnHeader(columnLayout);
     lines.push(`${headerPrefix}${truncateForDisplay(columnHeader, itemLabelWidth)}`);
 
+    if (view.entries.length === 0) {
+      lines.push('');
+      lines.push(truncateForDisplay('No charts match the current DIFFICULTY filter.', lineWidth));
+    }
+
     for (let index = start; index < end; index += 1) {
-      const entry = entries[index];
+      const entry = view.entries[index];
       const marker = index === selectedIndex ? '>' : ' ';
-      const chartNumber = chartIndexByEntryIndex.get(index);
+      const chartNumber = view.chartIndexByEntryIndex.get(index);
       const number =
         typeof chartNumber === 'number' ? String(chartNumber + 1).padStart(numberWidth, ' ') : ' '.repeat(numberWidth);
       let displayEntry = entry;
@@ -1490,11 +1590,14 @@ async function selectChartInteractively(
     }
 
     lines.push('');
-    const selectedChartIndex = chartIndexByEntryIndex.get(selectedIndex);
+    const selectedChartIndex = view.chartIndexByEntryIndex.get(selectedIndex);
     if (typeof selectedChartIndex === 'number') {
-      lines.push(`${selectedChartIndex + 1}/${chartCount}`);
+      lines.push(`${selectedChartIndex + 1}/${view.chartCount}`);
+    } else if (view.chartCount > 0) {
+      const selectedEntry = view.entries[selectedIndex];
+      lines.push(selectedEntry?.kind === 'random' ? `RANDOM/${view.chartCount}` : `0/${view.chartCount}`);
     } else {
-      lines.push(`RANDOM/${chartCount}`);
+      lines.push('0/0');
     }
     process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J`);
   };
@@ -1502,7 +1605,8 @@ async function selectChartInteractively(
   return new Promise<SelectChartInteractivelyResult>((resolvePromise) => {
     let finished = false;
     const isSelectedEntryPreviewRendering = (): boolean => {
-      const selectedEntry = entries[selectedIndex];
+      const view = resolveSelectionView();
+      const selectedEntry = view.entries[selectedIndex];
       if (!previewController || selectedEntry?.kind !== 'chart') {
         return false;
       }
@@ -1546,32 +1650,58 @@ async function selectChartInteractively(
     };
 
     const moveSelection = (delta: number): void => {
-      const currentSelectableIndex = selectableIndexByEntryIndex.get(selectedIndex) ?? 0;
+      const view = resolveSelectionView();
+      if (view.selectableIndexes.length === 0) {
+        return;
+      }
+      const currentSelectableIndex = view.selectableIndexByEntryIndex.get(selectedIndex) ?? 0;
       const nextSelectableIndex = resolveCircularSelectableIndex(
         currentSelectableIndex,
         delta,
-        selectableIndexes.length,
+        view.selectableIndexes.length,
       );
-      selectedIndex = selectableIndexes[nextSelectableIndex];
+      selectedIndex = view.selectableIndexes[nextSelectableIndex]!;
       syncPreview();
       render();
     };
 
     const moveSelectionByPage = (direction: SongSelectPageDirection): void => {
+      const view = resolveSelectionView();
+      if (view.selectableIndexes.length === 0) {
+        return;
+      }
       const pageSize = listRowsForViewport();
-      selectedIndex = resolvePageSelectableIndex(selectableIndexes, selectedIndex, entries.length, pageSize, direction);
+      selectedIndex = resolvePageSelectableIndex(
+        view.selectableIndexes,
+        selectedIndex,
+        view.entries.length,
+        pageSize,
+        direction,
+      );
       syncPreview();
       render();
     };
 
     const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
+      const nextDifficultyFilter = resolveSongSelectDifficultyFilter(chunk);
+      if (nextDifficultyFilter !== undefined) {
+        const focusKey = getEntryFocusKey(resolveSelectionView().entries[selectedIndex]);
+        difficultyFilter = nextDifficultyFilter ?? undefined;
+        ensureSelectedIndex(focusKey);
+        syncPreview();
+        render();
+        return;
+      }
+
       const action = resolveSongSelectNavigationAction(chunk, key);
       if (action === 'ctrl-c') {
+        const view = resolveSelectionView();
         cleanup({
           reason: 'ctrl-c',
-          focusKey: getEntryFocusKey(entries[selectedIndex]),
+          focusKey: getEntryFocusKey(view.entries[selectedIndex]),
           playMode,
           highSpeed,
+          difficultyFilter,
         });
         return;
       }
@@ -1592,27 +1722,37 @@ async function selectChartInteractively(
         return;
       }
       if (action === 'first') {
-        selectedIndex = selectableIndexes[0];
+        const view = resolveSelectionView();
+        if (view.selectableIndexes.length === 0) {
+          return;
+        }
+        selectedIndex = view.selectableIndexes[0]!;
         syncPreview();
         render();
         return;
       }
       if (action === 'last') {
-        selectedIndex = selectableIndexes[selectableIndexes.length - 1];
+        const view = resolveSelectionView();
+        if (view.selectableIndexes.length === 0) {
+          return;
+        }
+        selectedIndex = view.selectableIndexes[view.selectableIndexes.length - 1]!;
         syncPreview();
         render();
         return;
       }
       if (action === 'confirm') {
-        const selectedEntry = entries[selectedIndex];
+        const view = resolveSelectionView();
+        const selectedEntry = view.entries[selectedIndex];
         if (selectedEntry?.kind === 'random') {
-          const randomIndex = Math.floor(Math.random() * files.length);
+          const randomIndex = Math.floor(Math.random() * view.chartFiles.length);
           cleanup({
             reason: 'selected',
-            selectedPath: files[randomIndex],
+            selectedPath: view.chartFiles[randomIndex],
             focusKey: getEntryFocusKey(selectedEntry),
             playMode,
             highSpeed,
+            difficultyFilter,
           });
           return;
         }
@@ -1623,6 +1763,7 @@ async function selectChartInteractively(
             focusKey: getEntryFocusKey(selectedEntry),
             playMode,
             highSpeed,
+            difficultyFilter,
           });
           return;
         }
@@ -1644,11 +1785,13 @@ async function selectChartInteractively(
         return;
       }
       if (action === 'escape') {
+        const view = resolveSelectionView();
         cleanup({
           reason: 'escape',
-          focusKey: getEntryFocusKey(entries[selectedIndex]),
+          focusKey: getEntryFocusKey(view.entries[selectedIndex]),
           playMode,
           highSpeed,
+          difficultyFilter,
         });
       }
     };

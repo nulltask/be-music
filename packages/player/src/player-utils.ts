@@ -59,6 +59,15 @@ export function resolveDisplayedPlayLevelValue(chart: BeMusicJson): BeMusicPlayL
   return undefined;
 }
 
+export function resolveDisplayedDifficultyValue(chart: BeMusicJson): number | undefined {
+  const difficulty = chart.metadata.difficulty;
+  const normalized = typeof difficulty === 'number' && Number.isFinite(difficulty) ? Math.trunc(difficulty) : Number.NaN;
+  if (Number.isFinite(normalized) && normalized >= 1 && normalized <= 5) {
+    return normalized;
+  }
+  return undefined;
+}
+
 function hasDynamicJudgeRankChanges(chart: BeMusicJson): boolean {
   if (chart.sourceFormat !== 'bms') {
     return false;

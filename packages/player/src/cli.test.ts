@@ -14,11 +14,20 @@ import {
   resolvePageSelectableIndex,
   resolvePlayModeFromArgs,
   resolveResultScreenActionFromKey,
+  resolveSongSelectDifficultyFilter,
   resolveSongSelectInitialFocusKey,
   resolveSongSelectNavigationAction,
   resolveVisibleEntryRange,
 } from './cli.ts';
-import { createSelectionColumnLayout, formatPlayLevelLabel, formatRankLabel, formatSelectionEntryLabel } from './cli/selection-format.ts';
+import {
+  createSelectionColumnLayout,
+  formatDifficultyLabel,
+  formatPlayLevelLabel,
+  formatRankLabel,
+  formatSelectionColumnHeader,
+  formatSelectionEntryLabel,
+  truncateForDisplay,
+} from './cli/selection-format.ts';
 
 describe('player cli', () => {
   test('cli: parses --auto-scratch mode', () => {
@@ -113,6 +122,13 @@ describe('player cli', () => {
   test('cli: formats DEFEXRANK values without dropping decimals', () => {
     expect(formatRankLabel(4)).toBe('VERY EASY');
     expect(formatRankLabel(199.97)).toBe('199.97');
+  });
+
+  test('cli: formats DIFFICULTY values as 1-5 only', () => {
+    expect(formatDifficultyLabel(3)).toBe('3');
+    expect(formatDifficultyLabel(0)).toBe('-');
+    expect(formatDifficultyLabel(6)).toBe('-');
+    expect(formatDifficultyLabel(undefined)).toBe('-');
   });
 
   test('cli: renders loading overlay lines with opaque styling', () => {
@@ -231,10 +247,80 @@ describe('player cli', () => {
     expect(formatSelectionEntryLabel(entries[0], layout)).toContain('RANDOM');
   });
 
+  test('cli: uses compact PLEVEL header so NOTES stays visible', () => {
+    const entries = [
+      {
+        kind: 'chart' as const,
+        fileLabel: 'sample.bms',
+        player: 1,
+        difficulty: 3,
+        rank: 2,
+        playLevel: 12.4,
+        bpmInitial: 180,
+        bpmMin: 180,
+        bpmMax: 180,
+        totalNotes: 1234,
+      },
+    ];
+    const layout = createSelectionColumnLayout(48, entries);
+    expect(formatSelectionColumnHeader(layout)).toContain('PLEVEL');
+    expect(formatSelectionColumnHeader(layout)).toContain('NOTES');
+  });
+
+  test('cli: shrinks file column before dropping NOTES in narrow song-select layouts', () => {
+    const entries = [
+      {
+        kind: 'chart' as const,
+        fileLabel: 'very-long-chart-file-name-that-should-be-truncated.bms',
+        player: 1,
+        difficulty: 4,
+        rank: 2,
+        playLevel: 12.4,
+        bpmInitial: 180,
+        bpmMin: 180,
+        bpmMax: 180,
+        totalNotes: 1234,
+      },
+    ];
+    const layout = createSelectionColumnLayout(43, entries);
+    expect(layout.fileWidth).toBe(1);
+    expect(formatSelectionColumnHeader(layout)).toMatch(/NOTES$/);
+    expect(formatSelectionEntryLabel(entries[0], layout)).toMatch(/1234$/);
+  });
+
+  test('cli: keeps NOTES visible when wide filename characters are truncated', () => {
+    const entries = [
+      {
+        kind: 'chart' as const,
+        fileLabel: 'なんでも吸い込むピンク色のためのロングファイル名.bms',
+        player: 1,
+        difficulty: 4,
+        rank: 3,
+        playLevel: 12,
+        bpmInitial: 180,
+        bpmMin: 180,
+        bpmMax: 180,
+        totalNotes: 2048,
+      },
+    ];
+    const itemLabelWidth = 48;
+    const layout = createSelectionColumnLayout(itemLabelWidth, entries);
+    const rendered = truncateForDisplay(formatSelectionEntryLabel(entries[0], layout), itemLabelWidth);
+    expect(rendered).toMatch(/2048$/);
+  });
+
   test('cli: formats PLAYLEVEL 0 as question mark and preserves strings/decimals', () => {
     expect(formatPlayLevelLabel(0)).toBe('?');
     expect(formatPlayLevelLabel(12.4)).toBe('12.4');
     expect(formatPlayLevelLabel('安心')).toBe('安心');
+  });
+
+  test('cli: resolves DIFFICULTY filter keys in song-select', () => {
+    expect(resolveSongSelectDifficultyFilter('1')).toBe(1);
+    expect(resolveSongSelectDifficultyFilter('5')).toBe(5);
+    expect(resolveSongSelectDifficultyFilter('0')).toBeNull();
+    expect(resolveSongSelectDifficultyFilter('6')).toBeUndefined();
+    expect(resolveSongSelectDifficultyFilter(undefined)).toBeUndefined();
   });
 
   test('cli: parses invisible-note display flag', () => {

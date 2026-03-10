@@ -5,7 +5,12 @@ import { type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { extractPlayableNotes } from '../index.ts';
-import { resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue, resolveDisplayedPlayLevelValue } from '../player-utils.ts';
+import {
+  resolveDisplayedDifficultyValue,
+  resolveDisplayedJudgeRankLabel,
+  resolveDisplayedJudgeRankValue,
+  resolveDisplayedPlayLevelValue,
+} from '../player-utils.ts';
 import { resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
 
 interface ChartSummaryItem {
@@ -16,6 +21,7 @@ interface ChartSummaryItem {
   previewContinueKey?: string;
   totalNotes?: number;
   player?: number;
+  difficulty?: number;
   rank?: number;
   rankLabel?: string;
   playLevel?: BeMusicPlayLevel;
@@ -45,6 +51,7 @@ export type ChartSelectionEntry =
       previewContinueKey?: string;
       totalNotes?: number;
       player?: number;
+      difficulty?: number;
       rank?: number;
       rankLabel?: string;
       playLevel?: BeMusicPlayLevel;
@@ -162,7 +169,7 @@ async function buildChartSelectionEntriesFromSummariesOffThread(
 function createBuildChartSelectionEntriesWorker(): WorkerizedChartSelectionEntriesBuilder {
   return workerize(
     (summaries: ChartSummaryItem[]) => buildChartSelectionEntriesFromSummaries(summaries),
-    () => [buildChartSelectionEntriesFromSummaries, compareOptionalNumber],
+    () => [buildChartSelectionEntriesFromSummaries, compareOptionalNumber, compareOptionalPlayLevel],
     true,
   ) as WorkerizedChartSelectionEntriesBuilder;
 }
@@ -202,6 +209,10 @@ function buildChartSelectionEntriesFromSummaries(summariesInput: readonly ChartS
       if (playerDiff !== 0) {
         return playerDiff;
       }
+      const difficultyDiff = compareOptionalNumber(left.difficulty, right.difficulty);
+      if (difficultyDiff !== 0) {
+        return difficultyDiff;
+      }
       const playLevelDiff = compareOptionalPlayLevel(left.playLevel, right.playLevel);
       if (playLevelDiff !== 0) {
         return playLevelDiff;
@@ -226,6 +237,7 @@ function buildChartSelectionEntriesFromSummaries(summariesInput: readonly ChartS
         previewContinueKey: chart.previewContinueKey,
         totalNotes: chart.totalNotes,
         player: chart.player,
+        difficulty: chart.difficulty,
         rank: chart.rank,
         rankLabel: chart.rankLabel,
         playLevel: chart.playLevel,
@@ -290,6 +302,7 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
   let bpmMin: number | undefined;
   let bpmMax: number | undefined;
   let previewContinueKey: string | undefined;
+  let difficulty: number | undefined;
   try {
     throwIfAborted(signal);
     const chart = await parseChartFile(filePath, { signal });
@@ -298,6 +311,7 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     throwIfAborted(signal);
     totalNotes = extractPlayableNotes(resolvedChart).length;
     player = chart.bms.player;
+    difficulty = resolveDisplayedDifficultyValue(chart);
     rank = resolveDisplayedJudgeRankValue(resolvedChart);
     rankLabel = resolveDisplayedJudgeRankLabel(resolvedChart);
     playLevel = resolveDisplayedPlayLevelValue(chart);
@@ -321,6 +335,7 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     previewContinueKey,
     totalNotes,
     player,
+    difficulty,
     rank,
     rankLabel,
     playLevel,

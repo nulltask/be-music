@@ -2,6 +2,7 @@ import type readline from 'node:readline';
 
 export type ResultScreenAction = 'enter' | 'escape' | 'ctrl-c' | 'replay';
 export type SongSelectPageDirection = 'up' | 'down';
+export type SongSelectDifficultyFilter = 1 | 2 | 3 | 4 | 5;
 export type SongSelectNavigationAction =
   | 'move-up'
   | 'move-down'
@@ -58,6 +59,18 @@ export function resolveSongSelectNavigationAction(
   }
   if (keyName === 'escape' || key.sequence === '\u001b') {
     return 'escape';
+  }
+  return undefined;
+}
+
+export function resolveSongSelectDifficultyFilter(
+  chunk: string | undefined,
+): SongSelectDifficultyFilter | null | undefined {
+  if (chunk === '0') {
+    return null;
+  }
+  if (chunk === '1' || chunk === '2' || chunk === '3' || chunk === '4' || chunk === '5') {
+    return Number.parseInt(chunk, 10) as SongSelectDifficultyFilter;
   }
   return undefined;
 }

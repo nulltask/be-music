@@ -177,6 +177,7 @@ bmson の基準値は `100%` です。
 `#DEFEXRANK` がある BMS はその数値を、通常の `#RANK 0-4` は対応ラベルを表示します。
 同じく `PLAYLEVEL` は chart から解決した表示値を使い、BMS で `#PLAYLEVEL` が省略された場合は BM98 互換の既定値 `3` を出します。
 `PLAYLEVEL` が `0` のとき、player は表示上 `?` を使います。文字列 `PLAYLEVEL` はそのまま表示し、小数値も丸め落とさず表示します。
+`DIFFICULTY` は `1-5` の整数だけを表示対象として扱います。選曲一覧では `PLAYER -> DIFFICULTY -> PLAYLEVEL -> filename` の順で並べ、キー `1-5` で `DIFFICULTY` フィルタを切り替え、`0` で解除します。`DIFFICULTY` 未指定、または範囲外の値はフィルタ対象外で、表示上も `-` とします。
 
 `#EXRANKxx` による動的変更が存在する BMS は、表示上の rank を `RANDOM` とします。
 これは途中で判定幅が変わる譜面で、固定ラベル 1 つでは表現できないためです。
