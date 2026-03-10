@@ -1,6 +1,7 @@
-import { normalizeChannel, normalizeObjectKey, type BeMusicJson } from '@be-music/json';
+import { normalizeChannel, normalizeObjectKey, type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
 
 const BMS_DEFAULT_DISPLAY_RANK = 2;
+const BMS_DEFAULT_DISPLAY_PLAY_LEVEL = 3;
 const BMSON_DEFAULT_DISPLAY_JUDGE_RANK = 100;
 
 export function resolveChartVolWavGain(chart: BeMusicJson): number {
@@ -42,6 +43,20 @@ export function resolveDisplayedJudgeRankLabel(chart: BeMusicJson): string {
     return 'RANDOM';
   }
   return formatDisplayedJudgeRankValue(resolveDisplayedJudgeRankValue(chart));
+}
+
+export function resolveDisplayedPlayLevelValue(chart: BeMusicJson): BeMusicPlayLevel | undefined {
+  const playLevel = chart.metadata.playLevel;
+  if (typeof playLevel === 'number' && Number.isFinite(playLevel) && playLevel >= 0) {
+    return playLevel;
+  }
+  if (typeof playLevel === 'string' && playLevel.trim().length > 0) {
+    return playLevel.trim();
+  }
+  if (chart.sourceFormat === 'bms') {
+    return BMS_DEFAULT_DISPLAY_PLAY_LEVEL;
+  }
+  return undefined;
 }
 
 function hasDynamicJudgeRankChanges(chart: BeMusicJson): boolean {

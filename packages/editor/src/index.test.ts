@@ -58,6 +58,9 @@ describe('editor', () => {
     const previousBpm = json.metadata.bpm;
     json = setMetadata(json, 'bpm', '-10');
     expect(json.metadata.bpm).toBe(previousBpm);
+
+    json = setMetadata(json, 'playlevel', '安心');
+    expect(json.metadata.playLevel).toBe('安心');
   });
 
   test('editor: addNote/listNotes/deleteNote support normalization and fractional position comparison', () => {

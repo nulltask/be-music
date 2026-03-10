@@ -9,7 +9,11 @@ import {
   createStopBeatWindows,
 } from '../core/timeline.ts';
 import { createBgaAnsiRenderer } from '../bga.ts';
-import { resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from '../player-utils.ts';
+import {
+  resolveDisplayedJudgeRankLabel,
+  resolveDisplayedJudgeRankValue,
+  resolveDisplayedPlayLevelValue,
+} from '../player-utils.ts';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/player-ui-signal-bus.ts';
 import { PlayerTui } from '../tui.ts';
 import { estimateBgaAnsiDisplaySize as resolveBgaDisplaySize, resolveLaneWidths } from '../tui/layout.ts';
@@ -70,7 +74,7 @@ async function bootstrap(): Promise<void> {
     player: initData.json.bms.player,
     rank: resolveDisplayedJudgeRankValue(initData.json),
     rankLabel: resolveDisplayedJudgeRankLabel(initData.json),
-    playLevel: initData.json.metadata.playLevel,
+    playLevel: resolveDisplayedPlayLevelValue(initData.json),
     lanes,
     speed: initData.speed,
     highSpeed: initData.highSpeed,

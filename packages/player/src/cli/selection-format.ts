@@ -1,3 +1,5 @@
+import type { BeMusicPlayLevel } from '@be-music/json';
+
 export interface SelectionDisplayEntry {
   kind: 'random' | 'group' | 'chart';
   label?: string;
@@ -6,7 +8,7 @@ export interface SelectionDisplayEntry {
   player?: number;
   rank?: number;
   rankLabel?: string;
-  playLevel?: number;
+  playLevel?: BeMusicPlayLevel;
   bpmInitial?: number;
   bpmMin?: number;
   bpmMax?: number;
@@ -151,15 +153,19 @@ function formatRankValue(value: number): string {
   return rounded.toFixed(2).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
 }
 
-export function formatPlayLevelLabel(value: number | undefined): string {
-  if (typeof value !== 'number') {
+export function formatPlayLevelLabel(value: BeMusicPlayLevel | undefined): string {
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : '-';
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     return '-';
   }
-  const normalized = Math.floor(value);
-  if (!Number.isFinite(normalized)) {
-    return '-';
+  if (value === 0) {
+    return '?';
   }
-  return String(normalized);
+  const rounded = Math.round(value * 100) / 100;
+  return rounded.toFixed(2).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
 }
 
 function formatTotalNotesLabel(value: number | undefined): string {

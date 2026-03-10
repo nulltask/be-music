@@ -1,11 +1,11 @@
 import { readdir } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
 import { invokeWorkerizedFunction, isAbortError, throwIfAborted, workerize } from '@be-music/utils';
-import { type BeMusicJson } from '@be-music/json';
+import { type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { extractPlayableNotes } from '../index.ts';
-import { resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from '../player-utils.ts';
+import { resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue, resolveDisplayedPlayLevelValue } from '../player-utils.ts';
 import { resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
 
 interface ChartSummaryItem {
@@ -18,7 +18,7 @@ interface ChartSummaryItem {
   player?: number;
   rank?: number;
   rankLabel?: string;
-  playLevel?: number;
+  playLevel?: BeMusicPlayLevel;
   bpmInitial?: number;
   bpmMin?: number;
   bpmMax?: number;
@@ -47,7 +47,7 @@ export type ChartSelectionEntry =
       player?: number;
       rank?: number;
       rankLabel?: string;
-      playLevel?: number;
+      playLevel?: BeMusicPlayLevel;
       bpmInitial?: number;
       bpmMin?: number;
       bpmMax?: number;
@@ -202,7 +202,7 @@ function buildChartSelectionEntriesFromSummaries(summariesInput: readonly ChartS
       if (playerDiff !== 0) {
         return playerDiff;
       }
-      const playLevelDiff = compareOptionalNumber(left.playLevel, right.playLevel);
+      const playLevelDiff = compareOptionalPlayLevel(left.playLevel, right.playLevel);
       if (playLevelDiff !== 0) {
         return playLevelDiff;
       }
@@ -253,6 +253,27 @@ function compareOptionalNumber(left: number | undefined, right: number | undefin
   return 0;
 }
 
+function compareOptionalPlayLevel(left: BeMusicPlayLevel | undefined, right: BeMusicPlayLevel | undefined): number {
+  const hasLeft = typeof left === 'number' ? Number.isFinite(left) : typeof left === 'string' && left.trim().length > 0;
+  const hasRight = typeof right === 'number' ? Number.isFinite(right) : typeof right === 'string' && right.trim().length > 0;
+  if (hasLeft && hasRight) {
+    if (typeof left === 'number' && typeof right === 'number') {
+      return left - right;
+    }
+    if (typeof left === 'string' && typeof right === 'string') {
+      return left.localeCompare(right, 'ja');
+    }
+    return typeof left === 'number' ? -1 : 1;
+  }
+  if (hasLeft) {
+    return -1;
+  }
+  if (hasRight) {
+    return 1;
+  }
+  return 0;
+}
+
 async function buildChartSummary(rootDir: string, filePath: string, signal?: AbortSignal): Promise<ChartSummaryItem> {
   throwIfAborted(signal);
   const relativePath = relative(rootDir, filePath).replaceAll('\\', '/');
@@ -263,7 +284,7 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
   let player: number | undefined;
   let rank: number | undefined;
   let rankLabel: string | undefined;
-  let playLevel: number | undefined;
+  let playLevel: BeMusicPlayLevel | undefined;
   let totalNotes: number | undefined;
   let bpmInitial: number | undefined;
   let bpmMin: number | undefined;
@@ -279,7 +300,7 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     player = chart.bms.player;
     rank = resolveDisplayedJudgeRankValue(resolvedChart);
     rankLabel = resolveDisplayedJudgeRankLabel(resolvedChart);
-    playLevel = chart.metadata.playLevel;
+    playLevel = resolveDisplayedPlayLevelValue(chart);
     const bpmSummary = extractChartBpmSummary(resolvedChart);
     bpmInitial = bpmSummary?.initial;
     bpmMin = bpmSummary?.min;

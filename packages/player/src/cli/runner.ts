@@ -4,12 +4,17 @@ import { dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isAbortError, resolveCliPath } from '@be-music/utils';
 import readline from 'node:readline';
+import type { BeMusicPlayLevel } from '@be-music/json';
 import { parseChartFile } from '@be-music/parser';
 import { renderJson, writeAudioFile } from '@be-music/audio-renderer';
 import { PlayerInterruptedError, type PlayerLoadProgress, type PlayerSummary } from '../index.ts';
 import { loadStageFileAnsiImage, type StageFileAnsiImage } from '../bga.ts';
 import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
-import { resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from '../player-utils.ts';
+import {
+  resolveDisplayedJudgeRankLabel,
+  resolveDisplayedJudgeRankValue,
+  resolveDisplayedPlayLevelValue,
+} from '../player-utils.ts';
 import {
   HIGH_SPEED_STEP,
   MAX_HIGH_SPEED,
@@ -144,7 +149,7 @@ interface PlayedChartResult {
   player?: number;
   rank?: number;
   rankLabel?: string;
-  playLevel?: number;
+  playLevel?: BeMusicPlayLevel;
 }
 
 type DirectorySceneState =
@@ -601,7 +606,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
         player?: number;
         rank: number;
         rankLabel?: string;
-        playLevel?: number;
+        playLevel?: BeMusicPlayLevel;
       }
     | undefined;
   const reportPlayLoadingProgress = process.stdout.isTTY
@@ -769,7 +774,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     player: resolvedChartMetadata?.player ?? json.bms.player,
     rank: resolvedChartMetadata?.rank ?? resolveDisplayedJudgeRankValue(json),
     rankLabel: resolvedChartMetadata?.rankLabel ?? resolveDisplayedJudgeRankLabel(json),
-    playLevel: resolvedChartMetadata?.playLevel ?? json.metadata.playLevel,
+    playLevel: resolvedChartMetadata?.playLevel ?? resolveDisplayedPlayLevelValue(json),
   };
 }
 

@@ -100,6 +100,34 @@ test('BMS: parses #STAGEFILE into metadata.stageFile', () => {
   expect(parsed.metadata.stageFile).toBe('loading.png');
 });
 
+test('BMS: parses #PLAYLEVEL 0 as metadata playLevel 0', () => {
+  const parsed = parseChart(
+    [
+      '#TITLE PlayLevelZero',
+      '#PLAYLEVEL 0',
+      '#00111:01',
+      '',
+    ].join('\n'),
+  );
+
+  expect(parsed.sourceFormat).toBe('bms');
+  expect(parsed.metadata.playLevel).toBe(0);
+});
+
+test('BMS: parses string #PLAYLEVEL values without discarding them', () => {
+  const parsed = parseChart(
+    [
+      '#TITLE PlayLevelString',
+      '#PLAYLEVEL 安心',
+      '#00111:01',
+      '',
+    ].join('\n'),
+  );
+
+  expect(parsed.sourceFormat).toBe('bms');
+  expect(parsed.metadata.playLevel).toBe('安心');
+});
+
 test('BMS: keeps the last #DEFEXRANK with decimals', () => {
   const parsed = parseChart(
     [

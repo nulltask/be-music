@@ -64,6 +64,9 @@
 - [x] メタヘッダ `#STAGEFILE` を解釈
 - [x] `#STAGEFILE` を選曲後の loading screen 専用画像として表示
 - [x] メタヘッダ `#PLAYLEVEL` を解釈
+- [x] player: BMS で `#PLAYLEVEL` 未指定時は表示用既定値 `3` を選曲画面・TUI・結果表示へ反映
+- [x] `#PLAYLEVEL 0` を保持
+- [x] 文字列 `#PLAYLEVEL` を保持
 - [x] メタヘッダ `#RANK` を解釈
 - [x] `#RANK 0-4` を判定難易度指定として保持
 - [x] メタヘッダ `#TOTAL` を解釈

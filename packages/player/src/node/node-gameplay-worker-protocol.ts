@@ -1,5 +1,5 @@
 import type { MessagePort } from 'node:worker_threads';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJson, BeMusicPlayLevel } from '@be-music/json';
 import type { PlayerInputCommand } from '../core/player-input-signal-bus.ts';
 import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '../core/player-engine.ts';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/player-ui-signal-bus.ts';
@@ -72,7 +72,7 @@ export interface NodeGameplayResolvedChartMetadata {
   player?: number;
   rank: number;
   rankLabel?: string;
-  playLevel?: number;
+  playLevel?: BeMusicPlayLevel;
 }
 
 export type NodeGameplayWorkerInboundMessage =
