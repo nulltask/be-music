@@ -289,7 +289,7 @@ describe('player tui', () => {
     expect(tailRow).toBeGreaterThanOrEqual(0);
     expect(headRow).toBeGreaterThanOrEqual(0);
     expect(tailRow).toBeLessThan(headRow);
-    expect(bodyRows.some((row) => row < tailRow)).toBe(true);
+    expect(bodyRows.some((row) => row > tailRow && row < headRow)).toBe(true);
 
     tui.stop();
   });
