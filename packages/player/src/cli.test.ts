@@ -15,6 +15,8 @@ import {
   resolveSongSelectNavigationAction,
   resolveVisibleEntryRange,
 } from './cli.ts';
+import { createSelectionColumnLayout, formatRankLabel, formatSelectionEntryLabel } from './cli/selection-format.ts';
+
 describe('player cli', () => {
   test('cli: parses --auto-scratch mode', () => {
     const parsed = parseArgs(['chart.bms', '--auto-scratch']);
@@ -103,6 +105,30 @@ describe('player cli', () => {
     expect(formatPlayModeLabel('manual')).toBe('MANUAL');
     expect(formatPlayModeLabel('auto-scratch')).toBe('AUTO SCRATCH');
     expect(formatPlayModeLabel('auto')).toBe('AUTO');
+  });
+
+  test('cli: formats DEFEXRANK values without dropping decimals', () => {
+    expect(formatRankLabel(4)).toBe('VERY EASY');
+    expect(formatRankLabel(199.97)).toBe('199.97');
+  });
+
+  test('cli: keeps RANDOM rank labels in selection rows', () => {
+    const entries = [
+      {
+        kind: 'chart' as const,
+        fileLabel: 'dynamic.bms',
+        player: 1,
+        rank: 2,
+        rankLabel: 'RANDOM',
+        playLevel: 7,
+        bpmInitial: 180,
+        bpmMin: 180,
+        bpmMax: 180,
+        totalNotes: 500,
+      },
+    ];
+    const layout = createSelectionColumnLayout(64, entries);
+    expect(formatSelectionEntryLabel(entries[0], layout)).toContain('RANDOM');
   });
 
   test('cli: parses invisible-note display flag', () => {

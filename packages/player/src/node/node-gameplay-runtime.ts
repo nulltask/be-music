@@ -13,6 +13,7 @@ import type {
   NodeGameplayWorkerInitData,
   NodeGameplayWorkerOutboundMessage,
   NodeGameplayWorkerPlayOptions,
+  NodeGameplayResolvedChartMetadata,
 } from './node-gameplay-worker-protocol.ts';
 
 export interface NodeGameplayRuntimeOptions {
@@ -23,6 +24,7 @@ export interface NodeGameplayRuntimeOptions {
   signal?: AbortSignal;
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
   onLoadComplete?: () => void;
+  onResolvedChart?: (metadata: NodeGameplayResolvedChartMetadata) => void;
   onHighSpeedChange?: (value: number) => void;
   writeOutput?: (text: string) => void;
 }
@@ -80,6 +82,10 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
       }
       if (message.kind === 'load-complete') {
         options.onLoadComplete?.();
+        return;
+      }
+      if (message.kind === 'resolved-chart') {
+        options.onResolvedChart?.(message.metadata);
         return;
       }
       if (message.kind === 'output') {

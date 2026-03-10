@@ -41,10 +41,21 @@ function resolveBmsonJudgeRankPercent(json: BeMusicJson): number {
   return BEATORAJA_BMSON_DEFAULT_JUDGERANK;
 }
 
+export function resolveBmsJudgeWindowsMsForPercent(
+  judgeRankPercent: number,
+  debugBadWindowMs?: number,
+): JudgeWindowsMs {
+  return scaleJudgeWindowsMs(judgeRankPercent, BEATORAJA_BMS_DEFAULT_JUDGERANK, debugBadWindowMs);
+}
+
 export function resolveJudgeWindowsMs(json: BeMusicJson, debugBadWindowMs?: number): JudgeWindowsMs {
   const bmsonStyle = json.sourceFormat === 'bmson';
   const baseJudgerank = bmsonStyle ? BEATORAJA_BMSON_DEFAULT_JUDGERANK : BEATORAJA_BMS_DEFAULT_JUDGERANK;
   const judgeRank = bmsonStyle ? resolveBmsonJudgeRankPercent(json) : resolveBmsJudgeRankPercent(json);
+  return scaleJudgeWindowsMs(judgeRank, baseJudgerank, debugBadWindowMs);
+}
+
+function scaleJudgeWindowsMs(judgeRank: number, baseJudgerank: number, debugBadWindowMs?: number): JudgeWindowsMs {
   const scale = judgeRank / baseJudgerank;
   const pgreat = IIDX_PGREAT_WINDOW_MS * scale;
   const great = IIDX_GREAT_WINDOW_MS * scale;

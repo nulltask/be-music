@@ -8,6 +8,7 @@ import { parseChartFile } from '@be-music/parser';
 import { renderJson, writeAudioFile } from '@be-music/audio-renderer';
 import { PlayerInterruptedError, type PlayerLoadProgress, type PlayerSummary } from '../index.ts';
 import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
+import { resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from '../player-utils.ts';
 import {
   HIGH_SPEED_STEP,
   MAX_HIGH_SPEED,
@@ -136,6 +137,7 @@ interface PlayedChartResult {
   artist?: string;
   player?: number;
   rank?: number;
+  rankLabel?: string;
   playLevel?: number;
 }
 
@@ -581,6 +583,16 @@ function resolveDirectoryStateFromResultAction(
 
 async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedChartResult> {
   let resolvedHighSpeed = normalizeHighSpeedValue(args.highSpeed);
+  let resolvedChartMetadata:
+    | {
+        title?: string;
+        artist?: string;
+        player?: number;
+        rank: number;
+        rankLabel?: string;
+        playLevel?: number;
+      }
+    | undefined;
   const reportPlayLoadingProgress = process.stdout.isTTY
     ? (progress: PlayLoadingProgress): void => {
         renderPlayLoadingProgress(chartPath, progress);
@@ -694,6 +706,9 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
             }
           : undefined,
         onLoadComplete: disposePlaybackLoadingAbortCapture,
+        onResolvedChart: (metadata) => {
+          resolvedChartMetadata = metadata;
+        },
       });
       break;
     } catch (error) {
@@ -720,11 +735,12 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   return {
     chartPath,
     summary,
-    title,
-    artist,
-    player: json.bms.player,
-    rank: json.metadata.rank,
-    playLevel: json.metadata.playLevel,
+    title: sanitizeMetadataText(resolvedChartMetadata?.title) ?? title,
+    artist: sanitizeMetadataText(resolvedChartMetadata?.artist) ?? artist,
+    player: resolvedChartMetadata?.player ?? json.bms.player,
+    rank: resolvedChartMetadata?.rank ?? resolveDisplayedJudgeRankValue(json),
+    rankLabel: resolvedChartMetadata?.rankLabel ?? resolveDisplayedJudgeRankLabel(json),
+    playLevel: resolvedChartMetadata?.playLevel ?? json.metadata.playLevel,
   };
 }
 
@@ -1541,7 +1557,7 @@ async function showResultScreen(
     lines.push(truncateForDisplay(`FILE ${relativePath}`, lineWidth));
     lines.push('');
     lines.push(
-      `PLAYER ${formatPlayerLabel(played.player)}  RANK ${formatRankLabel(played.rank)}  PLAYLEVEL ${formatPlayLevelLabel(played.playLevel)}`,
+      `PLAYER ${formatPlayerLabel(played.player)}  RANK ${played.rankLabel ?? formatRankLabel(played.rank)}  PLAYLEVEL ${formatPlayLevelLabel(played.playLevel)}`,
     );
     if (gaugeLine) {
       lines.push(truncateForDisplay(gaugeLine, lineWidth));

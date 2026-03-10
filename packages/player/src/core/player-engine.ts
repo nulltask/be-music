@@ -10,6 +10,7 @@ import {
   isPlayableChannel,
   normalizeChannel,
   normalizeObjectKey,
+  sortEvents,
 } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
@@ -59,7 +60,7 @@ import {
   isGrooveGaugeCleared,
   type GrooveGaugeJudgeKind,
 } from './groove-gauge.ts';
-import { resolveJudgeWindowsMs } from './judge-window.ts';
+import { resolveBmsJudgeWindowsMsForPercent, resolveJudgeWindowsMs } from './judge-window.ts';
 import { createBeatAtSecondsResolver } from './timeline.ts';
 
 export interface PlayerUiRuntime {
@@ -137,6 +138,7 @@ export interface PlayerOptions {
   laneModeExtension?: string;
   createUiRuntime?: (context: CreatePlayerUiRuntimeContext) => Promise<PlayerUiRuntime | undefined>;
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
+  onResolvedChart?: (json: BeMusicJson) => void;
   writeOutput?: (text: string) => void;
 }
 
@@ -528,6 +530,34 @@ export function formatRandomPatternSummary(randomPatterns: ReadonlyArray<RandomP
   return summary;
 }
 
+interface DynamicBmsJudgeRankChange {
+  seconds: number;
+  rankPercent: number;
+}
+
+function collectDynamicBmsJudgeRankChanges(json: BeMusicJson): DynamicBmsJudgeRankChange[] {
+  if (json.sourceFormat !== 'bms') {
+    return [];
+  }
+  const resolver = createTimingResolver(json);
+  const changes: DynamicBmsJudgeRankChange[] = [];
+  for (const event of sortEvents(json.events)) {
+    if (normalizeChannel(event.channel) !== 'A0') {
+      continue;
+    }
+    const raw = json.bms.exRank[normalizeObjectKey(event.value)];
+    const parsed = Number.parseFloat(raw ?? '');
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      continue;
+    }
+    changes.push({
+      seconds: resolver.eventToSeconds(event),
+      rankPercent: parsed,
+    });
+  }
+  return changes;
+}
+
 function parsePositiveInteger(value?: string): number | undefined {
   if (typeof value !== 'string' || value.length === 0) {
     return undefined;
@@ -612,6 +642,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
   const resolvedJson = controlFlowResolution.resolvedJson;
+  options.onResolvedChart?.(resolvedJson);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
   const inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
   const speed = options.speed ?? 1;
@@ -1009,12 +1040,23 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   reportLoadProgress(options, 0.02, 'Resolving chart...');
   const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
   const resolvedJson = controlFlowResolution.resolvedJson;
+  options.onResolvedChart?.(resolvedJson);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
   const inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
   const autoScratchEnabled = options.autoScratch === true;
   const speed = options.speed ?? 1;
-  const judgeWindows = resolveJudgeWindowsMs(resolvedJson, options.judgeWindowMs);
-  const badWindowMs = judgeWindows.bad;
+  let judgeWindows = resolveJudgeWindowsMs(resolvedJson, options.judgeWindowMs);
+  let badWindowMs = judgeWindows.bad;
+  let badWindowSeconds = badWindowMs / 1000;
+  const dynamicJudgeRankChanges = collectDynamicBmsJudgeRankChanges(resolvedJson);
+  let dynamicJudgeRankCursor = 0;
+  let maxBadWindowMs = badWindowMs;
+  for (const change of dynamicJudgeRankChanges) {
+    const dynamicBadWindowMs = resolveBmsJudgeWindowsMsForPercent(change.rankPercent, options.judgeWindowMs).bad;
+    if (dynamicBadWindowMs > maxBadWindowMs) {
+      maxBadWindowMs = dynamicBadWindowMs;
+    }
+  }
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
@@ -1165,13 +1207,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   audioSession?.start();
 
   const playbackClock = createPlaybackClock(performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0));
-  const horizon = (totalSeconds * 1000) / speed + leadInMs + badWindowMs + 1000;
+  const horizon = (totalSeconds * 1000) / speed + leadInMs + maxBadWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
   const longHoldUntilMsByChannel = new Map<string, number>();
   const activeLongNotesByChannel = new Map<string, ActiveLongNoteState>();
   const longNoteSuppressUntilSecondsByChannel = new Map<string, number>();
   const activeKittyPressedChannels = new Set<string>();
-  const badWindowSeconds = badWindowMs / 1000;
   const autoScratchNotes = autoScratchEnabled
     ? scorableNotes.filter((note) => scratchPlayableChannels.has(note.channel))
     : [];
@@ -1239,6 +1280,20 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       markInvisibleJudged(invisible);
       invisibleExpireCursor += 1;
+    }
+  };
+
+  const advanceDynamicJudgeRankChanges = (referenceSeconds: number): void => {
+    const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+    while (dynamicJudgeRankCursor < dynamicJudgeRankChanges.length) {
+      const change = dynamicJudgeRankChanges[dynamicJudgeRankCursor]!;
+      if (change.seconds > safeReferenceSeconds) {
+        break;
+      }
+      judgeWindows = resolveBmsJudgeWindowsMsForPercent(change.rankPercent, options.judgeWindowMs);
+      badWindowMs = judgeWindows.bad;
+      badWindowSeconds = badWindowMs / 1000;
+      dynamicJudgeRankCursor += 1;
     }
   };
 
@@ -1425,6 +1480,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
     const nowMs = playbackClock.nowMs();
     const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+    advanceDynamicJudgeRankChanges(nowSec);
 
     let refreshedHold = false;
     for (const channel of candidateChannels) {
@@ -1629,6 +1685,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       const nowSec = elapsedMsToGameSeconds(nowMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
+      advanceDynamicJudgeRankChanges(nowSec);
 
       triggerNonPlayableRealtimeAudioEvents(nowSec);
 

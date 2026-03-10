@@ -205,6 +205,22 @@ test('audio-renderer: ignores scroll channels for sample triggering', () => {
   expect(triggers[0]?.channel).toBe('11');
 });
 
+test('audio-renderer: ignores dynamic EXRANK channels for sample triggering', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'sample.wav';
+  json.resources.wav['AA'] = 'judge.wav';
+  json.bms.exRank['AA'] = '48';
+  json.events = [
+    { measure: 0, channel: '11', position: [0, 1], value: '01' },
+    { measure: 0, channel: 'A0', position: [0, 1], value: 'AA' },
+  ];
+
+  const triggers = collectSampleTriggers(json);
+  expect(triggers).toHaveLength(1);
+  expect(triggers[0]?.channel).toBe('11');
+});
+
 test('audio-renderer: ignores paired #LNOBJ end objects for sample triggering', () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;

@@ -452,6 +452,30 @@ test('BMS stringify: writes optional metadata and sorts extension/resource entri
   expect(output.indexOf('#00011:01')).toBeLessThan(output.indexOf('#00013:01'));
 });
 
+test('BMS stringify: writes #RANK 4 without normalization', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.title = 'Rank 4';
+  json.metadata.bpm = 130;
+  json.metadata.rank = 4;
+  json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+  const output = stringifyBms(json);
+
+  expect(output).toContain('#RANK 4');
+});
+
+test('BMS stringify: writes #DEFEXRANK decimals without normalization', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.title = 'DefExRank';
+  json.metadata.bpm = 130;
+  json.bms.defExRank = 199.97;
+  json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+  const output = stringifyBms(json);
+
+  expect(output).toContain('#DEFEXRANK 199.97');
+});
+
 test('bmson stringify: handles resolution/version/lines normalization and fallback metadata', () => {
   const json = createEmptyJson('json');
   json.metadata.title = 'Fallback';

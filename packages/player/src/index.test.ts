@@ -22,6 +22,7 @@ import {
   resolveBmsControlFlowForPlayback,
 } from './index.ts';
 import type { PlayerInputCommand } from './core/player-input-signal-bus.ts';
+import { resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from './player-utils.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
@@ -47,6 +48,21 @@ function createScratchLnobjLongNoteChart() {
   json.events = [
     { measure: 1, channel: '16', position: [0, 1] as const, value: '01' },
     { measure: 3, channel: '16', position: [0, 1] as const, value: 'AA' },
+  ];
+  return json;
+}
+
+function createDynamicExRankChart() {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 480;
+  json.metadata.rank = 2;
+  json.bms.exRank['AA'] = '48';
+  json.bms.exRank['CC'] = '100';
+  json.events = [
+    { measure: 0, channel: 'A0', position: [0, 1] as const, value: 'AA' },
+    { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+    { measure: 2, channel: 'A0', position: [0, 1] as const, value: 'CC' },
+    { measure: 3, channel: '11', position: [0, 1] as const, value: '02' },
   ];
   return json;
 }
@@ -711,6 +727,16 @@ test('player: narrows judge windows for bms RANK=0', () => {
   expect(windows.bad).toBeCloseTo((250 * 25) / 75, 6);
 });
 
+test('player: widens judge windows for bms RANK=4', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.rank = 4;
+  const windows = resolveJudgeWindowsMs(json);
+  expect(windows.pgreat).toBeCloseTo((16.67 * 125) / 75, 6);
+  expect(windows.great).toBeCloseTo((33.33 * 125) / 75, 6);
+  expect(windows.good).toBeCloseTo((116.67 * 125) / 75, 6);
+  expect(windows.bad).toBeCloseTo((250 * 125) / 75, 6);
+});
+
 test('player: scales judge windows from bms DEFEXRANK using NORMAL baseline', () => {
   const json = createEmptyJson('bms');
   json.metadata.rank = 0;
@@ -720,6 +746,58 @@ test('player: scales judge windows from bms DEFEXRANK using NORMAL baseline', ()
   expect(windows.great).toBeCloseTo(33.33 * 1.2, 6);
   expect(windows.good).toBeCloseTo(116.67 * 1.2, 6);
   expect(windows.bad).toBeCloseTo(250 * 1.2, 6);
+});
+
+test('player: resolves displayed judge rank from bms DEFEXRANK and defaults', () => {
+  const defExRankChart = createEmptyJson('bms');
+  defExRankChart.metadata.rank = 1;
+  defExRankChart.bms.defExRank = 199.97;
+  expect(resolveDisplayedJudgeRankValue(defExRankChart)).toBe(199.97);
+
+  const defaultChart = createEmptyJson('bms');
+  expect(resolveDisplayedJudgeRankValue(defaultChart)).toBe(2);
+
+  const truncatedRankChart = createEmptyJson('bms');
+  truncatedRankChart.metadata.rank = 3.9;
+  expect(resolveDisplayedJudgeRankValue(truncatedRankChart)).toBe(3);
+});
+
+test('player: shows RANDOM label when dynamic EXRANK changes exist', () => {
+  const json = createDynamicExRankChart();
+  expect(resolveDisplayedJudgeRankLabel(json)).toBe('RANDOM');
+});
+
+test('player: resolves displayed judge rank from bmson judge rank', () => {
+  const json = createEmptyJson('bmson');
+  expect(resolveDisplayedJudgeRankValue(json)).toBe(100);
+
+  json.bmson.info.judgeRank = 199.97;
+  expect(resolveDisplayedJudgeRankValue(json)).toBe(199.97);
+});
+
+test('player: updates manual judge windows from dynamic EXRANK events', async () => {
+  const json = createDynamicExRankChart();
+  const summary = await manualPlay(json, {
+    audio: false,
+    tui: false,
+    leadInMs: 0,
+    createInputRuntime: createScheduledInputRuntime([
+      {
+        delayMs: 580,
+        command: { kind: 'lane-input', tokens: ['z'] },
+      },
+      {
+        delayMs: 1580,
+        command: { kind: 'lane-input', tokens: ['z'] },
+      },
+    ]),
+  });
+
+  expect(summary.total).toBe(2);
+  expect(summary.bad).toBe(1);
+  expect(summary.good).toBe(1);
+  expect(summary.perfect).toBe(0);
+  expect(summary.great).toBe(0);
 });
 
 test('player: uses baseline judge windows for bmson judge_rank=100', () => {

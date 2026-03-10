@@ -102,6 +102,16 @@ player の基準判定窓は IIDX 系の固定値を使います。
 
 BMS では `#DEFEXRANK` を最優先し、その次に `metadata.rank` を参照します。
 `metadata.rank` は beatoraja 互換の倍率テーブル `[25, 50, 75, 100, 125]` を使い、未指定時は `75%` を既定値とします。
+`#xxxA0` による `#EXRANKxx` イベントがある場合、その時点以降の判定窓を `#EXRANKxx` の値で動的に更新します。
+`#EXRANKxx` の値は `Number.parseFloat()` で解釈し、空値・非数・`0` 以下は無視します。
+
+- `#RANK 0`: `25%` (`VERY HARD`)
+- `#RANK 1`: `50%` (`HARD`)
+- `#RANK 2`: `75%` (`NORMAL`)
+- `#RANK 3`: `100%` (`EASY`)
+- `#RANK 4`: `125%` (`VERY EASY`)
+
+`#EXRANKxx` による動的変更が存在する BMS は、選曲一覧・TUI・結果画面の rank 表示を `RANDOM` とします。
 
 ### bmson の判定窓
 

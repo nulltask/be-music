@@ -28,6 +28,7 @@ interface TuiOptions {
   genre?: string;
   player?: number;
   rank?: number;
+  rankLabel?: string;
   playLevel?: number;
   lanes: TuiLane[];
   speed: number;
@@ -682,7 +683,7 @@ export class PlayerTui {
     const measureSignature = formatMeasureSignature(measureLength);
     lines.push(`MEASURE ${displayMeasure}/${totalMeasures}  METER ${measureSignature}`);
     lines.push(
-      `CHART   LANE ${this.options.laneDisplayMode}  PLAYER ${formatPlayerLabel(this.options.player)}  RANK ${formatRankLabel(this.options.rank)}  PLAYLEVEL ${formatPlayLevelLabel(this.options.playLevel)}`,
+      `CHART   LANE ${this.options.laneDisplayMode}  PLAYER ${formatPlayerLabel(this.options.player)}  RANK ${this.options.rankLabel ?? formatRankLabel(this.options.rank)}  PLAYLEVEL ${formatPlayLevelLabel(this.options.playLevel)}`,
     );
     lines.push(`PERF    FPS ${formatFps(currentFps)}`);
     if (typeof this.options.randomPatternSummary === 'string' && this.options.randomPatternSummary.length > 0) {

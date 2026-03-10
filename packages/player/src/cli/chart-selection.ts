@@ -5,6 +5,7 @@ import { type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { extractPlayableNotes } from '../index.ts';
+import { resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from '../player-utils.ts';
 import { resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
 
 interface ChartSummaryItem {
@@ -16,6 +17,7 @@ interface ChartSummaryItem {
   totalNotes?: number;
   player?: number;
   rank?: number;
+  rankLabel?: string;
   playLevel?: number;
   bpmInitial?: number;
   bpmMin?: number;
@@ -44,6 +46,7 @@ export type ChartSelectionEntry =
       totalNotes?: number;
       player?: number;
       rank?: number;
+      rankLabel?: string;
       playLevel?: number;
       bpmInitial?: number;
       bpmMin?: number;
@@ -224,6 +227,7 @@ function buildChartSelectionEntriesFromSummaries(summariesInput: readonly ChartS
         totalNotes: chart.totalNotes,
         player: chart.player,
         rank: chart.rank,
+        rankLabel: chart.rankLabel,
         playLevel: chart.playLevel,
         bpmInitial: chart.bpmInitial,
         bpmMin: chart.bpmMin,
@@ -258,6 +262,7 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
 
   let player: number | undefined;
   let rank: number | undefined;
+  let rankLabel: string | undefined;
   let playLevel: number | undefined;
   let totalNotes: number | undefined;
   let bpmInitial: number | undefined;
@@ -272,7 +277,8 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     throwIfAborted(signal);
     totalNotes = extractPlayableNotes(resolvedChart).length;
     player = chart.bms.player;
-    rank = chart.metadata.rank;
+    rank = resolveDisplayedJudgeRankValue(resolvedChart);
+    rankLabel = resolveDisplayedJudgeRankLabel(resolvedChart);
     playLevel = chart.metadata.playLevel;
     const bpmSummary = extractChartBpmSummary(resolvedChart);
     bpmInitial = bpmSummary?.initial;
@@ -295,6 +301,7 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     totalNotes,
     player,
     rank,
+    rankLabel,
     playLevel,
     bpmInitial,
     bpmMin,

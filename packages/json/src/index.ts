@@ -727,6 +727,9 @@ export function isSampleTriggerChannel(channel: string): boolean {
     if (highCode === 0x30) {
       return lowCode === 0x31;
     }
+    if ((highCode & 0xdf) === 0x41 && lowCode === 0x30) {
+      return false;
+    }
     if ((highCode & 0xdf) === 0x53 && (lowCode & 0xdf) === 0x43) {
       return false;
     }

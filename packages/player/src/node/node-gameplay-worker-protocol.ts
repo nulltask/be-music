@@ -66,6 +66,15 @@ export interface NodeGameplayInputRuntimeInit {
   inputTokenToChannelsEntries: Array<[string, string[]]>;
 }
 
+export interface NodeGameplayResolvedChartMetadata {
+  title?: string;
+  artist?: string;
+  player?: number;
+  rank: number;
+  rankLabel?: string;
+  playLevel?: number;
+}
+
 export type NodeGameplayWorkerInboundMessage =
   | { kind: 'abort'; reason?: string }
   | { kind: 'input-commands'; commands: PlayerInputCommand[] }
@@ -77,6 +86,7 @@ export type NodeGameplayWorkerInboundMessage =
 export type NodeGameplayWorkerOutboundMessage =
   | { kind: 'load-progress'; progress: PlayerLoadProgress }
   | { kind: 'load-complete' }
+  | { kind: 'resolved-chart'; metadata: NodeGameplayResolvedChartMetadata }
   | { kind: 'output'; text: string }
   | { kind: 'high-speed'; value: number }
   | { kind: 'input-init'; runtime: NodeGameplayInputRuntimeInit }

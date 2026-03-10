@@ -58,6 +58,35 @@ test('BMS: keeps declared #BPM even when it is 120', () => {
   expect(parsed.metadata.bpm).toBe(120);
 });
 
+test('BMS: parses #RANK 4 as metadata rank 4', () => {
+  const parsed = parseChart(
+    [
+      '#TITLE Rank 4',
+      '#RANK 4',
+      '#00111:01',
+      '',
+    ].join('\n'),
+  );
+
+  expect(parsed.sourceFormat).toBe('bms');
+  expect(parsed.metadata.rank).toBe(4);
+});
+
+test('BMS: keeps the last #DEFEXRANK with decimals', () => {
+  const parsed = parseChart(
+    [
+      '#TITLE DefExRank',
+      '#DEFEXRANK 120',
+      '#DEFEXRANK 199.97',
+      '#00111:01',
+      '',
+    ].join('\n'),
+  );
+
+  expect(parsed.sourceFormat).toBe('bms');
+  expect(parsed.bms.defExRank).toBe(199.97);
+});
+
 test('BMS: keeps 130 fallback unless a control-flow branch applies #BPM', () => {
   const parsed = parseChart(
     [

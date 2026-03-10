@@ -5,6 +5,7 @@ export interface SelectionDisplayEntry {
   totalNotes?: number;
   player?: number;
   rank?: number;
+  rankLabel?: string;
   playLevel?: number;
   bpmInitial?: number;
   bpmMin?: number;
@@ -35,7 +36,7 @@ export function createSelectionColumnLayout(
       continue;
     }
     playerWidth = Math.max(playerWidth, formatPlayerLabel(entry.player).length);
-    rankWidth = Math.max(rankWidth, formatRankLabel(entry.rank).length);
+    rankWidth = Math.max(rankWidth, formatRankCellValue(entry).length);
     playLevelWidth = Math.max(playLevelWidth, formatPlayLevelLabel(entry.playLevel).length);
     bpmWidth = Math.max(bpmWidth, formatBpmLabel(entry.bpmMin, entry.bpmInitial, entry.bpmMax).length);
     notesWidth = Math.max(notesWidth, formatTotalNotesLabel(entry.totalNotes).length);
@@ -81,11 +82,18 @@ export function formatSelectionEntryLabel(entry: SelectionDisplayEntry, layout: 
 
   const file = formatColumnCell(`  ${entry.fileLabel ?? ''}`, layout.fileWidth);
   const player = formatColumnCell(formatPlayerLabel(entry.player), layout.playerWidth, 'right');
-  const rank = formatColumnCell(formatRankLabel(entry.rank), layout.rankWidth, 'right');
+  const rank = formatColumnCell(formatRankCellValue(entry), layout.rankWidth, 'right');
   const playLevel = formatColumnCell(formatPlayLevelLabel(entry.playLevel), layout.playLevelWidth, 'left');
   const bpm = formatColumnCell(formatBpmLabel(entry.bpmMin, entry.bpmInitial, entry.bpmMax), layout.bpmWidth, 'right');
   const notes = formatColumnCell(formatTotalNotesLabel(entry.totalNotes), layout.notesWidth, 'right');
   return `${file}  ${player}  ${rank}  ${playLevel}  ${bpm}  ${notes}`;
+}
+
+function formatRankCellValue(entry: SelectionDisplayEntry): string {
+  if (typeof entry.rankLabel === 'string' && entry.rankLabel.length > 0) {
+    return entry.rankLabel;
+  }
+  return formatRankLabel(entry.rank);
 }
 
 function formatColumnCell(value: string, width: number, align: 'left' | 'right' = 'left'): string {
@@ -114,26 +122,33 @@ export function formatPlayerLabel(value: number | undefined): string {
 }
 
 export function formatRankLabel(value: number | undefined): string {
-  if (typeof value !== 'number') {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     return '-';
   }
-  const normalized = Math.floor(value);
-  if (normalized === 0) {
-    return 'VERY HARD';
+  const normalized = Math.trunc(value);
+  if (normalized === value) {
+    if (normalized === 0) {
+      return 'VERY HARD';
+    }
+    if (normalized === 1) {
+      return 'HARD';
+    }
+    if (normalized === 2) {
+      return 'NORMAL';
+    }
+    if (normalized === 3) {
+      return 'EASY';
+    }
+    if (normalized === 4) {
+      return 'VERY EASY';
+    }
   }
-  if (normalized === 1) {
-    return 'HARD';
-  }
-  if (normalized === 2) {
-    return 'NORMAL';
-  }
-  if (normalized === 3) {
-    return 'EASY';
-  }
-  if (normalized === 4) {
-    return 'VERY EASY';
-  }
-  return String(normalized);
+  return formatRankValue(value);
+}
+
+function formatRankValue(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  return rounded.toFixed(2).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
 }
 
 export function formatPlayLevelLabel(value: number | undefined): string {
