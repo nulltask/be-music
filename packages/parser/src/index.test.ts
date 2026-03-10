@@ -58,6 +58,20 @@ test('BMS: keeps declared #BPM even when it is 120', () => {
   expect(parsed.metadata.bpm).toBe(120);
 });
 
+test('BMS: accepts CR-only line endings', () => {
+  const parsed = parseChart('#TITLE CR Only\r#BPM 150\r#00111:01\r');
+
+  expect(parsed.sourceFormat).toBe('bms');
+  expect(parsed.metadata.title).toBe('CR Only');
+  expect(parsed.metadata.bpm).toBe(150);
+  expect(parsed.events).toContainEqual({
+    measure: 1,
+    channel: '11',
+    position: [0, 1],
+    value: '01',
+  });
+});
+
 test('BMS: parses #RANK 4 as metadata rank 4', () => {
   const parsed = parseChart(
     [

@@ -578,18 +578,23 @@ function isControlFlowCommand(command: string): command is BmsControlFlowCommand
 
 function forEachLine(input: string, visitor: (line: string) => void): void {
   let lineStart = 0;
-  for (let index = 0; index <= input.length; index += 1) {
-    const isLineBreak = index === input.length || input.charCodeAt(index) === 0x0a;
-    if (!isLineBreak) {
+  let index = 0;
+  while (index < input.length) {
+    const code = input.charCodeAt(index);
+    if (code !== 0x0a && code !== 0x0d) {
+      index += 1;
       continue;
     }
-    let lineEnd = index;
-    if (lineEnd > lineStart && input.charCodeAt(lineEnd - 1) === 0x0d) {
-      lineEnd -= 1;
+
+    visitor(input.slice(lineStart, index));
+
+    if (code === 0x0d && index + 1 < input.length && input.charCodeAt(index + 1) === 0x0a) {
+      index += 1;
     }
-    visitor(input.slice(lineStart, lineEnd));
     lineStart = index + 1;
+    index += 1;
   }
+  visitor(input.slice(lineStart, input.length));
 }
 
 function pushHeaderLine(json: BeMusicJson, command: string, value: string): void {
