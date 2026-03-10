@@ -8,6 +8,7 @@ export const BGA_LANE_GAP = 3;
 export const MIN_BGA_ASCII_WIDTH = 8;
 export const MIN_BGA_ASCII_HEIGHT = 6;
 export const DEFAULT_TERMINAL_COLUMNS = 120;
+export const PLAY_PROGRESS_INDICATOR_SIDE_WIDTH = 2;
 
 interface TuiLayoutOptions {
   showLaneChannels?: boolean;
@@ -68,6 +69,7 @@ export function estimateBgaAnsiDisplaySize(options: TuiBgaDisplaySizeOptions): {
     MIN_BGA_ASCII_WIDTH,
     (options.columns ?? DEFAULT_TERMINAL_COLUMNS) -
       calculateLaneBlockVisibleWidth(options.laneWidths, options.splitAfterIndex) -
+      calculateProgressIndicatorVisibleWidth(options.laneWidths, options.splitAfterIndex) -
       BGA_LANE_GAP,
   );
   const rowCount = calculateTuiGridRowCount(options.rows, options);
@@ -76,6 +78,16 @@ export function estimateBgaAnsiDisplaySize(options: TuiBgaDisplaySizeOptions): {
     calculateTuiLaneLinesCount(rowCount, options.showLaneChannels === true),
   );
   return { width, height };
+}
+
+function calculateProgressIndicatorVisibleWidth(laneWidths: number[], splitAfterIndex: number): number {
+  if (laneWidths.length <= 0) {
+    return 0;
+  }
+  if (splitAfterIndex < 0 || splitAfterIndex >= laneWidths.length - 1) {
+    return PLAY_PROGRESS_INDICATOR_SIDE_WIDTH;
+  }
+  return PLAY_PROGRESS_INDICATOR_SIDE_WIDTH * 2;
 }
 
 export function calculateLaneSectionVisibleWidth(sectionLaneWidths: number[]): number {

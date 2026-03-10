@@ -10,6 +10,7 @@ import {
   calculateLaneSectionVisibleWidth,
   calculateTuiGridRowCount,
   DEFAULT_LANE_WIDTH,
+  PLAY_PROGRESS_INDICATOR_SIDE_WIDTH,
   resolveLaneWidths,
   SPLIT_PANEL_INNER_WIDTH,
 } from './layout.ts';
@@ -191,6 +192,8 @@ const GROOVE_GAUGE_SAFE_RGB: RgbColor = { r: 72, g: 238, b: 255 };
 const GROOVE_GAUGE_SAFE_EMPTY_RGB: RgbColor = { r: 18, g: 74, b: 86 };
 const GROOVE_GAUGE_CLEAR_RGB: RgbColor = { r: 255, g: 72, b: 72 };
 const GROOVE_GAUGE_CLEAR_EMPTY_RGB: RgbColor = { r: 84, g: 18, b: 18 };
+const PLAY_PROGRESS_RAIL_RGB: RgbColor = { r: 52, g: 128, b: 184 };
+const PLAY_PROGRESS_HEAD_RGB: RgbColor = { r: 255, g: 186, b: 54 };
 const RAINBOW_RGB_STEPS: RgbColor[] = [
   { r: 255, g: 0, b: 0 },
   { r: 255, g: 135, b: 0 },
@@ -726,6 +729,7 @@ export class PlayerTui {
       );
     }
     const judgeRowIndex = Math.max(0, grid.length - 1);
+    const playfieldIndicatorStartIndex = laneLines.length;
     for (let rowIndex = 0; rowIndex < grid.length; rowIndex += 1) {
       const row = grid[rowIndex]!;
       if (rowIndex === judgeRowIndex) {
@@ -765,6 +769,7 @@ export class PlayerTui {
         ),
       );
     }
+    const playfieldIndicatorEndIndex = Math.max(playfieldIndicatorStartIndex, laneLines.length - 1);
 
     const judgeComboLabels = this.resolveJudgeComboLabels(now);
     laneLines.push(renderJudgeComboLine(judgeComboLabels, this.laneWidths, this.options.splitAfterIndex));
@@ -779,7 +784,15 @@ export class PlayerTui {
     laneLines.push(blackKeyRow);
     laneLines.push(whiteAndScratchKeyRow);
 
-    lines.push(...renderLaneBlockWithBga(laneLines, frame.bgaAnsiLines));
+    const laneLinesWithProgress = renderLaneLinesWithProgressIndicators(
+      laneLines,
+      frame.currentSeconds,
+      frame.totalSeconds,
+      playfieldIndicatorStartIndex,
+      playfieldIndicatorEndIndex,
+      hasLaneSplit(this.options.splitAfterIndex, this.laneWidths.length),
+    );
+    lines.push(...renderLaneBlockWithBga(laneLinesWithProgress, frame.bgaAnsiLines));
     lines.push('');
     lines.push(formatGrooveGaugeLine(frame.summary, calculateLaneBlockVisibleWidth(this.laneWidths, this.options.splitAfterIndex ?? -1)));
     lines.push('');
@@ -1940,6 +1953,64 @@ function renderLaneBlockWithBga(laneLines: string[], bgaAnsiLines?: string[]): s
   );
   const emptyBgaLine = renderBgaLineWithScopedBlackBackground(' '.repeat(bgaWidth), bgaWidth);
   return laneLines.map((laneLine, index) => `${laneLine}   ${normalizedBgaLines[index] ?? emptyBgaLine}`);
+}
+
+function renderLaneLinesWithProgressIndicators(
+  laneLines: string[],
+  currentSeconds: number,
+  totalSeconds: number,
+  startRowIndex: number,
+  endRowIndex: number,
+  renderRightIndicator: boolean,
+): string[] {
+  if (laneLines.length <= 0) {
+    return laneLines;
+  }
+  const markerRow = resolveProgressIndicatorMarkerRow(startRowIndex, endRowIndex, currentSeconds, totalSeconds);
+  return laneLines.map((line, index) => {
+    if (index < startRowIndex || index > endRowIndex) {
+      const emptySide = renderProgressIndicatorPadding();
+      return renderRightIndicator ? `${emptySide}${line}${emptySide}` : `${emptySide}${line}`;
+    }
+    const left = renderProgressIndicatorSide(index, markerRow);
+    if (!renderRightIndicator) {
+      return `${left}${line}`;
+    }
+    return `${left}${line}${renderProgressIndicatorSide(index, markerRow, 'right')}`;
+  });
+}
+
+function resolveProgressIndicatorMarkerRow(
+  startRowIndex: number,
+  endRowIndex: number,
+  currentSeconds: number,
+  totalSeconds: number,
+): number {
+  const safeStart = Math.max(0, Math.floor(startRowIndex));
+  const safeEnd = Math.max(safeStart, Math.floor(endRowIndex));
+  const safeLineCount = Math.max(1, safeEnd - safeStart + 1);
+  const safeTotal = Number.isFinite(totalSeconds) && totalSeconds > 0 ? totalSeconds : 1;
+  const safeCurrent = Number.isFinite(currentSeconds) ? currentSeconds : 0;
+  const ratio = clamp(safeCurrent / safeTotal, 0, 1);
+  return safeStart + Math.round((safeLineCount - 1) * ratio);
+}
+
+function renderProgressIndicatorSide(
+  rowIndex: number,
+  markerRow: number,
+  side: 'left' | 'right' = 'left',
+): string {
+  const symbol = rowIndex === markerRow ? '●' : '╎';
+  const color = rowIndex === markerRow ? PLAY_PROGRESS_HEAD_RGB : PLAY_PROGRESS_RAIL_RGB;
+  const coloredSymbol = colorizeText(symbol, color);
+  if (side === 'right') {
+    return `${' '.repeat(Math.max(0, PLAY_PROGRESS_INDICATOR_SIDE_WIDTH - 1))}${coloredSymbol}`;
+  }
+  return `${coloredSymbol}${' '.repeat(Math.max(0, PLAY_PROGRESS_INDICATOR_SIDE_WIDTH - 1))}`;
+}
+
+function renderProgressIndicatorPadding(): string {
+  return ' '.repeat(Math.max(1, PLAY_PROGRESS_INDICATOR_SIDE_WIDTH));
 }
 
 function fitLinesToHeight(lines: string[], targetHeight: number, width: number): string[] {
