@@ -4,12 +4,15 @@ import { floatToInt16, throwIfAborted } from '@be-music/utils';
 import {
   collectLnobjEndEvents,
   createBeatResolver,
-  mapBmsLongNoteChannelToPlayable,
   type BeMusicEvent,
   type BeMusicJson,
-  isPlayableChannel,
+  isBmsBgmVolumeChangeChannel,
+  isBmsDynamicVolumeChangeChannel,
+  isBmsKeyVolumeChangeChannel,
+  isPlayLaneSoundChannel,
   normalizeChannel,
   normalizeObjectKey,
+  parseBmsDynamicVolumeGain,
   sortEvents,
 } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
@@ -535,8 +538,6 @@ interface DynamicBmsJudgeRankChange {
   rankPercent: number;
 }
 
-type DynamicAudioVolumeBus = 'bgm' | 'play';
-
 interface TimedAudioVolumeEvent {
   event: BeMusicEvent;
   seconds: number;
@@ -565,27 +566,6 @@ function collectDynamicBmsJudgeRankChanges(json: BeMusicJson): DynamicBmsJudgeRa
   return changes;
 }
 
-function isDynamicBmsBgmVolumeChannel(channel: string): boolean {
-  return normalizeChannel(channel) === '97';
-}
-
-function isDynamicBmsKeyVolumeChannel(channel: string): boolean {
-  return normalizeChannel(channel) === '98';
-}
-
-function isDynamicBmsVolumeChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  return normalized === '97' || normalized === '98';
-}
-
-function parseDynamicBmsVolumeGain(value: string): number | undefined {
-  const parsed = Number.parseInt(normalizeObjectKey(value), 16);
-  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 0xff) {
-    return undefined;
-  }
-  return parsed / 0xff;
-}
-
 function collectRealtimeAudioVolumeEvents(json: BeMusicJson): TimedAudioVolumeEvent[] {
   if (json.sourceFormat !== 'bms') {
     return [];
@@ -593,10 +573,10 @@ function collectRealtimeAudioVolumeEvents(json: BeMusicJson): TimedAudioVolumeEv
   const resolver = createTimingResolver(json);
   const events: TimedAudioVolumeEvent[] = [];
   for (const event of sortEvents(json.events)) {
-    if (!isDynamicBmsVolumeChannel(event.channel)) {
+    if (!isBmsDynamicVolumeChangeChannel(event.channel)) {
       continue;
     }
-    if (parseDynamicBmsVolumeGain(event.value) === undefined) {
+    if (parseBmsDynamicVolumeGain(event.value) === undefined) {
       continue;
     }
     events.push({
@@ -1136,7 +1116,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const nonPlayableRealtimeAudioTriggers = collectRealtimeAudioTriggers(
     resolvedJson,
     inferBmsLnTypeWhenMissing,
-    (channel) => !isPlayLaneChannelForVolumeControl(channel),
+    (channel) => !isPlayLaneSoundChannel(channel),
   );
   const nonPlayableRealtimeAudioEndSeconds =
     options.audio === false
@@ -2126,14 +2106,14 @@ async function createAudioSessionIfEnabled(
         return;
       }
       const normalizedChannel = normalizeChannel(event.channel);
-      if (isDynamicBmsVolumeChannel(normalizedChannel)) {
-        const dynamicGain = parseDynamicBmsVolumeGain(event.value);
+      if (isBmsDynamicVolumeChangeChannel(normalizedChannel)) {
+        const dynamicGain = parseBmsDynamicVolumeGain(event.value);
         if (dynamicGain === undefined) {
           return;
         }
-        if (isDynamicBmsKeyVolumeChannel(normalizedChannel)) {
+        if (isBmsKeyVolumeChangeChannel(normalizedChannel)) {
           currentPlayDynamicGain = dynamicGain;
-        } else if (isDynamicBmsBgmVolumeChannel(normalizedChannel)) {
+        } else if (isBmsBgmVolumeChangeChannel(normalizedChannel)) {
           currentBgmDynamicGain = dynamicGain;
         }
         return;
@@ -2163,10 +2143,10 @@ async function createAudioSessionIfEnabled(
       if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
         return;
       }
-      const volumeBus = resolveDynamicAudioVolumeBus(normalizedChannel);
+      const isPlayLaneSound = isPlayLaneSoundChannel(normalizedChannel);
       const voiceGain =
-        resolveTriggerVoiceBaseGain(volumeBus, playVolume, bgmVolume) *
-        (volumeBus === 'play' ? currentPlayDynamicGain : currentBgmDynamicGain);
+        (isPlayLaneSound ? playVolume : bgmVolume) *
+        (isPlayLaneSound ? currentPlayDynamicGain : currentBgmDynamicGain);
       if (voiceGain <= 0) {
         return;
       }
@@ -2719,51 +2699,16 @@ function resolvePositiveNumberOption(value: number | undefined, fallback: number
 
 function stripPlayableEvents(json: BeMusicJson): BeMusicJson {
   const cloned = structuredClone(json);
-  cloned.events = cloned.events.filter((event) => !isPlayLaneChannelForVolumeControl(event.channel));
+  cloned.events = cloned.events.filter((event) => !isPlayLaneSoundChannel(event.channel));
   return cloned;
 }
 
 function stripNonPlayableEvents(json: BeMusicJson): BeMusicJson {
   const cloned = structuredClone(json);
   cloned.events = cloned.events.filter((event) =>
-    isPlayLaneChannelForVolumeControl(event.channel) || isDynamicBmsKeyVolumeChannel(event.channel),
+    isPlayLaneSoundChannel(event.channel) || isBmsKeyVolumeChangeChannel(event.channel),
   );
   return cloned;
-}
-
-export function isPlayLaneChannelForVolumeControl(channel: string): boolean {
-  if (channel.length === 2) {
-    const sideCode = channel.charCodeAt(0);
-    const laneCode = channel.charCodeAt(1);
-    if (
-      laneCode >= 0x31 &&
-      laneCode <= 0x39 &&
-      (sideCode === 0x31 ||
-        sideCode === 0x32 ||
-        sideCode === 0x33 ||
-        sideCode === 0x34 ||
-        sideCode === 0x35 ||
-        sideCode === 0x36)
-    ) {
-      return true;
-    }
-  }
-
-  const normalized = normalizeChannel(channel);
-  if (isPlayableEventChannel(normalized)) {
-    return true;
-  }
-  if (normalized.length !== 2) {
-    return false;
-  }
-  const side = normalized[0];
-  const lane = normalized[1];
-  return (side === '3' || side === '4') && lane >= '1' && lane <= '9';
-}
-
-function isPlayableEventChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  return isPlayableChannel(normalized) || mapBmsLongNoteChannelToPlayable(normalized) !== undefined;
 }
 
 export function shouldUseAutoMixBgmHeadroomControl(options: PlayerOptions): boolean {
@@ -2790,7 +2735,7 @@ async function renderAutoMixWithVolumeControls(
     return renderJson(json, {
       ...options,
       normalize: false,
-      resolveTriggerGain: (trigger) => (isPlayLaneChannelForVolumeControl(trigger.channel) ? playVolume : bgmVolume),
+      resolveTriggerGain: (trigger) => (isPlayLaneSoundChannel(trigger.channel) ? playVolume : bgmVolume),
     });
   }
 
@@ -2909,18 +2854,6 @@ function collectRealtimeAudioSampleKeys(json: BeMusicJson, inferBmsLnTypeWhenMis
     keys.add(trigger.sampleKey);
   }
   return [...keys];
-}
-
-function resolveDynamicAudioVolumeBus(channel: string): DynamicAudioVolumeBus {
-  return isPlayLaneChannelForVolumeControl(channel) ? 'play' : 'bgm';
-}
-
-function resolveTriggerVoiceBaseGain(
-  volumeBus: DynamicAudioVolumeBus,
-  playVolume: number,
-  bgmVolume: number,
-): number {
-  return volumeBus === 'play' ? playVolume : bgmVolume;
 }
 
 function createSilentRenderResult(sampleRate: number): RenderResult {

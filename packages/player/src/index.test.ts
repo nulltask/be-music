@@ -15,7 +15,6 @@ import {
   resolveBgmHeadroomGain,
   shouldUseAutoMixBgmHeadroomControl,
   resolveHighSpeedControlActionFromLaneChannels,
-  isPlayLaneChannelForVolumeControl,
   formatRandomPatternSummary,
   PlayerInterruptedError,
   resolveJudgeWindowsMs,
@@ -678,18 +677,6 @@ describe('player', () => {
     applyFastSlowForJudge(summary, 'GOOD', 0);
     expect(summary.fast).toBe(1);
     expect(summary.slow).toBe(1);
-  });
-
-  test('player: volume control play-side channels include invisible lanes', () => {
-    expect(isPlayLaneChannelForVolumeControl('11')).toBe(true);
-    expect(isPlayLaneChannelForVolumeControl('29')).toBe(true);
-    expect(isPlayLaneChannelForVolumeControl('51')).toBe(true);
-    expect(isPlayLaneChannelForVolumeControl('61')).toBe(true);
-    expect(isPlayLaneChannelForVolumeControl('31')).toBe(true);
-    expect(isPlayLaneChannelForVolumeControl('48')).toBe(true);
-
-    expect(isPlayLaneChannelForVolumeControl('01')).toBe(false);
-    expect(isPlayLaneChannelForVolumeControl('A1')).toBe(false);
   });
 
   test('player: bgm headroom gain does not mute BGM when play lane already clips', () => {

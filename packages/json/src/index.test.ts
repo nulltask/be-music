@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   collectLnobjEndEvents,
   mapBmsLongNoteChannelToPlayable,
+  parseBmsDynamicVolumeGain,
   resolveBmsLongNotes,
   resolveLnobjLongNotes,
   cloneJson,
@@ -12,8 +13,12 @@ import {
   eventToBeat,
   getMeasureBeats,
   intToBase36,
+  isBmsBgmVolumeChangeChannel,
+  isBmsDynamicVolumeChangeChannel,
+  isBmsKeyVolumeChangeChannel,
   isLandmineChannel,
   isPlayableChannel,
+  isPlayLaneSoundChannel,
   isBmsLongNoteChannel,
   isSampleTriggerChannel,
   isScrollChannel,
@@ -226,6 +231,15 @@ test('json: classifies channel types', () => {
   expect(isPlayableChannel('31')).toBe(false);
   expect(isPlayableChannel('01')).toBe(false);
 
+  expect(isPlayLaneSoundChannel('11')).toBe(true);
+  expect(isPlayLaneSoundChannel('29')).toBe(true);
+  expect(isPlayLaneSoundChannel('31')).toBe(true);
+  expect(isPlayLaneSoundChannel('48')).toBe(true);
+  expect(isPlayLaneSoundChannel('51')).toBe(true);
+  expect(isPlayLaneSoundChannel('61')).toBe(true);
+  expect(isPlayLaneSoundChannel('01')).toBe(false);
+  expect(isPlayLaneSoundChannel('A1')).toBe(false);
+
   expect(isBmsLongNoteChannel('51')).toBe(true);
   expect(isBmsLongNoteChannel('6a')).toBe(false);
   expect(isBmsLongNoteChannel('69')).toBe(true);
@@ -235,6 +249,17 @@ test('json: classifies channel types', () => {
   expect(mapBmsLongNoteChannelToPlayable('61')).toBe('21');
   expect(mapBmsLongNoteChannelToPlayable('69')).toBe('29');
   expect(mapBmsLongNoteChannelToPlayable('5A')).toBeUndefined();
+
+  expect(isBmsBgmVolumeChangeChannel('97')).toBe(true);
+  expect(isBmsBgmVolumeChangeChannel('98')).toBe(false);
+  expect(isBmsKeyVolumeChangeChannel('98')).toBe(true);
+  expect(isBmsKeyVolumeChangeChannel('97')).toBe(false);
+  expect(isBmsDynamicVolumeChangeChannel('97')).toBe(true);
+  expect(isBmsDynamicVolumeChangeChannel('98')).toBe(true);
+  expect(isBmsDynamicVolumeChangeChannel('11')).toBe(false);
+  expect(parseBmsDynamicVolumeGain('80')).toBeCloseTo(0x80 / 0xff, 9);
+  expect(parseBmsDynamicVolumeGain('00')).toBeUndefined();
+  expect(parseBmsDynamicVolumeGain('GG')).toBeUndefined();
 });
 
 test('json: collectLnobjEndEvents returns only paired LNOBJ end markers', () => {
