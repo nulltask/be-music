@@ -2,10 +2,13 @@ import { describe, expect, test } from 'vitest';
 import type readline from 'node:readline';
 import {
   applyPersistedPlayerConfigToArgs,
+  createPlayLoadingProgressScreenOutput,
+  createPlayLoadingProgressScreenLines,
   cyclePlayMode,
   formatPlayModeLabel,
   parseArgs,
   resolveCliConfigOverrideFlags,
+  resolvePlayLoadingStageFileDisplaySize,
   resolvePersistedPlayerConfigFromArgs,
   resolveCircularSelectableIndex,
   resolvePageSelectableIndex,
@@ -110,6 +113,103 @@ describe('player cli', () => {
   test('cli: formats DEFEXRANK values without dropping decimals', () => {
     expect(formatRankLabel(4)).toBe('VERY EASY');
     expect(formatRankLabel(199.97)).toBe('199.97');
+  });
+
+  test('cli: renders loading overlay lines with opaque styling', () => {
+    const lines = createPlayLoadingProgressScreenLines(
+      '/charts/stagefile-test.bms',
+      {
+        ratio: 0.5,
+        message: 'Preparing audio...',
+        detail: 'sample.wav',
+      },
+      { columns: 48 },
+    );
+
+    expect(lines[0]).toContain('Loading selected chart...');
+    expect(lines.some((line) => line.includes('Preparing audio...'))).toBe(true);
+    expect(lines.some((line) => line.includes('/charts/stagefile-test.bms'))).toBe(true);
+    expect(lines.some((line) => line.includes('sample.wav'))).toBe(true);
+    expect(lines.every((line) => line.startsWith('\u001b[38;2;255;255;255;48;2;0;0;0m'))).toBe(true);
+  });
+
+  test('cli: chooses black text on bright stage pixels and white text on dark stage pixels', () => {
+    const whiteRow = new Uint8Array(Array.from({ length: 48 * 3 }, () => 255));
+    const blackRow = new Uint8Array(48 * 3);
+    const rgb = new Uint8Array([...whiteRow, ...blackRow]);
+    const lines = createPlayLoadingProgressScreenLines(
+      '/charts/stagefile-test.bms',
+      {
+        ratio: 0.5,
+        message: 'Preparing audio...',
+      },
+      {
+        columns: 48,
+        stageFileImage: {
+          width: 48,
+          height: 2,
+          rgb,
+          lines: ['IMG1', 'IMG2'],
+        },
+      },
+    );
+
+    expect(lines[0]).toContain('\u001b[38;2;0;0;0;48;2;255;255;255mL');
+    expect(lines[1]).toContain('\u001b[38;2;255;255;255;48;2;0;0;0m[');
+  });
+
+  test('cli: overlays loading text onto full-screen STAGEFILE output', () => {
+    const output = createPlayLoadingProgressScreenOutput(
+      '/charts/stagefile-test.bms',
+      {
+        ratio: 0.5,
+        message: 'Preparing audio...',
+      },
+      {
+        columns: 48,
+        stageFileImage: {
+          width: 48,
+          height: 2,
+          rgb: new Uint8Array(48 * 2 * 3),
+          lines: ['ANSI_STAGE_LINE_1', 'ANSI_STAGE_LINE_2'],
+        },
+      },
+    );
+
+    expect(output).toContain('\u001b[2J\u001b[HANSI_STAGE_LINE_1\nANSI_STAGE_LINE_2\u001b[H');
+    expect(output).toContain('Loading selected chart...');
+  });
+
+  test('cli: updates loading overlay without redrawing the STAGEFILE background', () => {
+    const output = createPlayLoadingProgressScreenOutput(
+      '/charts/stagefile-test.bms',
+      {
+        ratio: 0.75,
+        message: 'Preparing audio...',
+        detail: 'sample.wav',
+      },
+      {
+        columns: 48,
+        stageFileImage: {
+          width: 48,
+          height: 2,
+          rgb: new Uint8Array(48 * 2 * 3),
+          lines: ['ANSI_STAGE_LINE_1', 'ANSI_STAGE_LINE_2'],
+        },
+        resetScreen: false,
+        includeStageFileImage: false,
+      },
+    );
+
+    expect(output.startsWith('\u001b[H')).toBe(true);
+    expect(output).not.toContain('\u001b[2J');
+    expect(output).not.toContain('ANSI_STAGE_LINE_1');
+    expect(output).toContain('Detail: sample.wav');
+  });
+
+  test('cli: expands STAGEFILE splash bounds to the available loading screen area', () => {
+    expect(resolvePlayLoadingStageFileDisplaySize(120, 40)).toEqual({ width: 120, height: 40 });
+    expect(resolvePlayLoadingStageFileDisplaySize(24, 10)).toEqual({ width: 24, height: 10 });
   });
 
   test('cli: keeps RANDOM rank labels in selection rows', () => {

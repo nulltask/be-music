@@ -44,7 +44,7 @@ export interface NodeUiRuntime {
 export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promise<NodeUiRuntime> {
   const worker = new Worker(resolveNodeUiWorkerUrl(), {
     workerData: createWorkerInitData(options),
-    execArgv: process.execArgv,
+    execArgv: resolveNodeUiWorkerExecArgv(),
     env: resolveNodeUiWorkerEnv(),
   });
   const workerReady = await waitForWorkerReady(worker, options.loadSignal, options.onBgaLoadProgress);
@@ -266,6 +266,16 @@ function createWorkerInitData(options: NodeUiRuntimeOptions): NodeUiWorkerInitDa
 
 function resolveNodeUiWorkerUrl(): URL {
   return new URL(import.meta.url.endsWith('.ts') ? './node-ui-worker.ts' : './node-ui-worker.js', import.meta.url);
+}
+
+function resolveNodeUiWorkerExecArgv(): string[] {
+  if (!import.meta.url.endsWith('.ts')) {
+    return process.execArgv;
+  }
+  if (process.execArgv.includes('--conditions=source')) {
+    return process.execArgv;
+  }
+  return [...process.execArgv, '--conditions=source'];
 }
 
 function resolveNodeUiWorkerEnv(): NodeJS.ProcessEnv {

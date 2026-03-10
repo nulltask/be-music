@@ -5,7 +5,7 @@ import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vitest';
 import { encode as encodeBmp } from 'fast-bmp';
 import { encode as encodePng } from 'fast-png';
-import { BgaAnsiRenderer, createBgaAnsiRenderer } from './bga.ts';
+import { BgaAnsiRenderer, createBgaAnsiRenderer, loadStageFileAnsiLines } from './bga.ts';
 
 interface RgbColor {
   r: number;
@@ -41,8 +41,54 @@ describe('player bga', () => {
 
       expect(renderer).toBeDefined();
       expect(progressDetails).toContain('base.png');
-      expect(progressDetails).toContain('stage.png');
+      expect(progressDetails).not.toContain('stage.png');
       expect(progressRatios.at(-1)).toBeCloseTo(1, 6);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: loads STAGEFILE splash lines as a full-screen cover image', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-stagefile-splash-'));
+    try {
+      await writePng(join(baseDir, 'stage.png'), 64, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.metadata.stageFile = 'stage.png';
+
+      const lines = await loadStageFileAnsiLines(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+
+      expect(lines).toBeDefined();
+      const pixels = parseAnsiPixels(lines ?? []);
+      expect(pixels[10]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
+      expect(pixels[0]?.[0]).toEqual({ r: 0, g: 0, b: 255 });
+      expect(pixels[19]?.[39]).toEqual({ r: 0, g: 0, b: 255 });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: does not create a gameplay renderer for STAGEFILE-only charts', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-stagefile-only-'));
+    try {
+      await writePng(join(baseDir, 'stage.png'), 64, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.metadata.stageFile = 'stage.png';
+
+      const renderer = await createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+
+      expect(renderer).toBeUndefined();
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }
@@ -250,9 +296,11 @@ describe('player bga', () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-black-viewport-'));
     try {
       await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePng(join(baseDir, 'stage.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
 
       const json = createEmptyJson('bms');
       json.metadata.bpm = 120;
+      json.metadata.stageFile = 'stage.png';
       json.resources.bmp['01'] = 'base.png';
       json.events = [{ measure: 1, channel: '04', position: [0, 1], value: '01' }];
 
@@ -504,7 +552,6 @@ describe('player bga', () => {
       poorSourceFramesByKey: new Map(),
       layerSourceFramesByKey: new Map(),
       layer2SourceFramesByKey: new Map(),
-      stageFileSourceFrame: undefined,
       missingBaseSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
       missingPoorSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
       missingLayerSourceFrame: createTransparentAnsiFrame(256, 256),

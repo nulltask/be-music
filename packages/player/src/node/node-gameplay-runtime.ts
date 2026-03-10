@@ -36,7 +36,7 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
 
   const worker = new Worker(resolveNodeGameplayWorkerUrl(), {
     workerData: createWorkerInitData(options),
-    execArgv: process.execArgv,
+    execArgv: resolveNodeGameplayWorkerExecArgv(),
     env: resolveNodeGameplayWorkerEnv(),
   });
   const writeOutput = options.writeOutput ?? ((text: string) => process.stdout.write(text));
@@ -262,6 +262,16 @@ function resolveNodeGameplayWorkerUrl(): URL {
     import.meta.url.endsWith('.ts') ? './node-gameplay-worker.ts' : './node-gameplay-worker.js',
     import.meta.url,
   );
+}
+
+function resolveNodeGameplayWorkerExecArgv(): string[] {
+  if (!import.meta.url.endsWith('.ts')) {
+    return process.execArgv;
+  }
+  if (process.execArgv.includes('--conditions=source')) {
+    return process.execArgv;
+  }
+  return [...process.execArgv, '--conditions=source'];
 }
 
 function resolveNodeGameplayWorkerEnv(): NodeJS.ProcessEnv {

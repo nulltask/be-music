@@ -453,6 +453,18 @@ manual long note で保持が切れた場合は、対応チャンネルの再生
 player 本体は UI 実装に依存せず、`stateSignals` と `uiSignals` を通じて状態を通知します。
 judge/combo、フレーム情報、POOR BGA、レーンフラッシュ、レーン保持表示はこの信号経由で伝えます。
 
+### Loading screen
+
+選曲後の loading 中は、CLI が progress bar と現在の手順を標準出力へ描画します。
+このとき `metadata.stageFile` が存在し、画像を解決できる場合は、その画像を ANSI 化して terminal 全体へ描画し、loading 文言はその上にオーバーレイします。
+
+`#STAGEFILE` の表示サイズは現在の端末サイズいっぱいまで使います。
+描画時は画像の縦横比を維持したまま、terminal 全体を覆うように `cover` 相当で拡大します。端末比率と合わない場合は中央基準で一部を crop します。
+loading 文言はその上へオーバーレイし、各文字セルの背景色には対応する `STAGEFILE` ピクセル色を使います。文字色は背景とのコントラスト比が高いほうを選ぶため、白または黒のどちらかになります。
+
+`#STAGEFILE` が未指定、ファイル未発見、非対応形式、デコード失敗の場合は、画像なしのテキスト loading screen へフォールバックします。
+`#STAGEFILE` は loading 専用であり、gameplay 中の BGA renderer は参照しません。最初の base BGA cue がまだ有効でない間は、viewport は黒背景のままです。
+
 ### TUI
 
 標準 TUI は次の情報を表示します。
