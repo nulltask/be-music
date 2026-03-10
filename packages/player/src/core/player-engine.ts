@@ -20,6 +20,7 @@ import {
   type RenderResult,
   type RenderSampleLoadProgress,
   type TimedSampleTrigger,
+  type TimingResolver,
   collectSampleTriggers,
   createTimingResolver,
   renderSingleSample,
@@ -64,7 +65,7 @@ import {
   type GrooveGaugeJudgeKind,
 } from './groove-gauge.ts';
 import { resolveBmsJudgeWindowsMsForPercent, resolveJudgeWindowsMs } from './judge-window.ts';
-import { createBeatAtSecondsResolver } from './timeline.ts';
+import { createBeatAtSecondsResolverFromTimingResolver } from './timeline.ts';
 
 export interface PlayerUiRuntime {
   readonly tuiEnabled: boolean;
@@ -219,6 +220,28 @@ interface AudioLeadTuning {
   maxLeadMs: number;
   stepUpMs: number;
   stepDownMs: number;
+}
+
+type PlayerRenderNote = TimedPlayableNote | TimedLandmineNote;
+
+interface PreparedPlaybackChartData {
+  notes: TimedPlayableNote[];
+  landmineNotes: TimedLandmineNote[];
+  invisibleNotes: TimedPlayableNote[];
+  renderNotes: PlayerRenderNote[];
+  totalSeconds: number;
+  laneBindings: LaneBinding[];
+  laneDisplayMode: string;
+  activeFreeZoneChannels: ReadonlySet<string>;
+  scorableNotes: TimedPlayableNote[];
+  inputTokenToChannels: ReadonlyMap<string, readonly string[]>;
+}
+
+interface InitializedPlayerUiRuntime {
+  uiRuntime: PlayerUiRuntime | undefined;
+  totalSeconds: number;
+  uiEnabled: boolean;
+  activeStateSignals: PlayerStateSignals | undefined;
 }
 
 interface OutputDynamicsConfig {
@@ -544,11 +567,13 @@ interface TimedAudioVolumeEvent {
   seconds: number;
 }
 
-function collectDynamicBmsJudgeRankChanges(json: BeMusicJson): DynamicBmsJudgeRankChange[] {
+function collectDynamicBmsJudgeRankChanges(
+  json: BeMusicJson,
+  resolver: TimingResolver = createTimingResolver(json),
+): DynamicBmsJudgeRankChange[] {
   if (json.sourceFormat !== 'bms') {
     return [];
   }
-  const resolver = createTimingResolver(json);
   const changes: DynamicBmsJudgeRankChange[] = [];
   for (const event of sortEvents(json.events)) {
     if (normalizeChannel(event.channel) !== 'A0') {
@@ -567,11 +592,13 @@ function collectDynamicBmsJudgeRankChanges(json: BeMusicJson): DynamicBmsJudgeRa
   return changes;
 }
 
-function collectRealtimeAudioVolumeEvents(json: BeMusicJson): TimedAudioVolumeEvent[] {
+function collectRealtimeAudioVolumeEvents(
+  json: BeMusicJson,
+  resolver: TimingResolver = createTimingResolver(json),
+): TimedAudioVolumeEvent[] {
   if (json.sourceFormat !== 'bms') {
     return [];
   }
-  const resolver = createTimingResolver(json);
   const events: TimedAudioVolumeEvent[] = [];
   for (const event of sortEvents(json.events)) {
     if (!isBmsDynamicVolumeChangeChannel(event.channel)) {
@@ -666,6 +693,109 @@ function createInitialPlayerSummary(
   };
 }
 
+function preparePlaybackChartData(
+  resolvedJson: BeMusicJson,
+  options: Pick<PlayerOptions, 'showInvisibleNotes' | 'laneModeExtension'>,
+  inferBmsLnTypeWhenMissing: boolean,
+  auxiliaryPlaybackEndSeconds: number,
+): PreparedPlaybackChartData {
+  const extractedNotes = extractTimedNotes(resolvedJson, {
+    includeLandmine: true,
+    includeInvisible: options.showInvisibleNotes === true,
+    inferBmsLnTypeWhenMissing,
+  });
+  const notes = extractedNotes.playableNotes;
+  const landmineNotes = extractedNotes.landmineNotes;
+  const invisibleNotes = extractedNotes.invisibleNotes;
+  const renderNotes = mergeRenderNotesBySeconds(notes, landmineNotes, invisibleNotes);
+  const totalSeconds = Math.max(
+    resolvePlayableNotesTailSeconds(notes),
+    landmineNotes.at(-1)?.seconds ?? 0,
+    invisibleNotes.at(-1)?.seconds ?? 0,
+    auxiliaryPlaybackEndSeconds,
+  );
+  const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
+  const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
+  const laneBindings = createLaneBindings(channels, laneModeOptions);
+  const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);
+  appendFreeZoneInputChannels(inputTokenToChannels, laneBindings, channels);
+  const laneDisplayMode = resolveLaneDisplayMode(channels, laneModeOptions);
+  const activeFreeZoneChannels = resolveActiveFreeZoneChannels(channels, laneBindings);
+  const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
+
+  return {
+    notes,
+    landmineNotes,
+    invisibleNotes,
+    renderNotes,
+    totalSeconds,
+    laneBindings,
+    laneDisplayMode,
+    activeFreeZoneChannels,
+    scorableNotes,
+    inputTokenToChannels,
+  };
+}
+
+async function initializePlayerUiRuntime({
+  options,
+  resolvedJson,
+  mode,
+  laneDisplayMode,
+  laneBindings,
+  speed,
+  judgeWindowMs,
+  highSpeed,
+  randomPatternSummary,
+  stateSignals,
+  uiSignals,
+  totalSeconds,
+}: {
+  options: PlayerOptions;
+  resolvedJson: BeMusicJson;
+  mode: CreatePlayerUiRuntimeContext['mode'];
+  laneDisplayMode: string;
+  laneBindings: LaneBinding[];
+  speed: number;
+  judgeWindowMs: number;
+  highSpeed: number;
+  randomPatternSummary: string | undefined;
+  stateSignals: PlayerStateSignals;
+  uiSignals: PlayerUiSignalBus;
+  totalSeconds: number;
+}): Promise<InitializedPlayerUiRuntime> {
+  throwIfAborted(options.signal);
+  reportLoadProgress(options, 0.18, 'Preparing BGA...');
+  const uiRuntime = await options.createUiRuntime?.({
+    json: resolvedJson,
+    mode,
+    laneDisplayMode,
+    laneBindings,
+    speed,
+    judgeWindowMs,
+    highSpeed,
+    showLaneChannels: options.debugActiveAudio === true,
+    randomPatternSummary,
+    stateSignals,
+    uiSignals,
+    baseDir: options.audioBaseDir ?? process.cwd(),
+    loadSignal: options.signal,
+    onBgaLoadProgress: (progress) => {
+      reportLoadProgress(options, 0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
+    },
+  });
+  throwIfAborted(options.signal);
+  const updatedTotalSeconds = Math.max(totalSeconds, uiRuntime?.playbackEndSeconds ?? 0);
+  const uiEnabled = uiRuntime?.tuiEnabled === true;
+
+  return {
+    uiRuntime,
+    totalSeconds: updatedTotalSeconds,
+    uiEnabled,
+    activeStateSignals: uiEnabled ? stateSignals : undefined,
+  };
+}
+
 export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
@@ -678,35 +808,38 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const speed = options.speed ?? 1;
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
-  const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
-  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson);
-  const realtimeAudioTriggers = collectRealtimeAudioTriggers(resolvedJson, inferBmsLnTypeWhenMissing);
+  const timingResolver = createTimingResolver(resolvedJson);
+  const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
+  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
+  const realtimeAudioTriggers = collectRealtimeAudioTriggers(
+    resolvedJson,
+    inferBmsLnTypeWhenMissing,
+    undefined,
+    timingResolver,
+  );
   const realtimeAudioEndSeconds =
     options.audio === false ? 0 : Math.max(realtimeAudioTriggers.at(-1)?.seconds ?? 0, realtimeAudioVolumeEvents.at(-1)?.seconds ?? 0);
-
-  const extractedNotes = extractTimedNotes(resolvedJson, {
-    includeLandmine: true,
-    includeInvisible: options.showInvisibleNotes === true,
+  const playbackChart = preparePlaybackChartData(
+    resolvedJson,
+    {
+      showInvisibleNotes: options.showInvisibleNotes,
+      laneModeExtension: options.laneModeExtension,
+    },
     inferBmsLnTypeWhenMissing,
-  });
-  const notes = extractedNotes.playableNotes;
-  const landmineNotes = extractedNotes.landmineNotes;
-  const invisibleNotes = extractedNotes.invisibleNotes;
-  const renderNotes = mergeRenderNotesBySeconds(notes, landmineNotes, invisibleNotes);
-  let totalSeconds = Math.max(
-    resolvePlayableNotesTailSeconds(notes),
-    landmineNotes.at(-1)?.seconds ?? 0,
-    invisibleNotes.at(-1)?.seconds ?? 0,
     realtimeAudioEndSeconds,
   );
-  const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
-  const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
-  const laneBindings = createLaneBindings(channels, laneModeOptions);
-  const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);
-  appendFreeZoneInputChannels(inputTokenToChannels, laneBindings, channels);
-  const laneDisplayMode = resolveLaneDisplayMode(channels, laneModeOptions);
-  const activeFreeZoneChannels = resolveActiveFreeZoneChannels(channels, laneBindings);
-  const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
+  const {
+    notes,
+    landmineNotes,
+    invisibleNotes,
+    renderNotes,
+    laneBindings,
+    laneDisplayMode,
+    activeFreeZoneChannels,
+    scorableNotes,
+    inputTokenToChannels,
+  } = playbackChart;
+  let { totalSeconds } = playbackChart;
   const keyMap = new Map(laneBindings.map((binding) => [binding.channel, binding.keyLabel]));
   const { summary, applyGaugeJudge } = createInitialPlayerSummary(scorableNotes.length, resolvedJson.metadata.total);
   const scoreTracker = createScoreTracker();
@@ -722,31 +855,26 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     notes: renderNotes,
   });
   const inputSignals = createPlayerInputSignalBus();
-
-  throwIfAborted(options.signal);
-  reportLoadProgress(options, 0.18, 'Preparing BGA...');
-  const uiRuntime = await options.createUiRuntime?.({
-    json: resolvedJson,
+  const {
+    uiRuntime,
+    totalSeconds: playbackTotalSeconds,
+    uiEnabled,
+    activeStateSignals,
+  } = await initializePlayerUiRuntime({
+    options,
+    resolvedJson,
     mode: 'AUTO',
     laneDisplayMode,
     laneBindings,
     speed,
     judgeWindowMs: 0,
     highSpeed,
-    showLaneChannels: options.debugActiveAudio === true,
     randomPatternSummary,
     stateSignals,
     uiSignals,
-    baseDir: options.audioBaseDir ?? process.cwd(),
-    loadSignal: options.signal,
-    onBgaLoadProgress: (progress) => {
-      reportLoadProgress(options, 0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
-    },
+    totalSeconds,
   });
-  throwIfAborted(options.signal);
-  totalSeconds = Math.max(totalSeconds, uiRuntime?.playbackEndSeconds ?? 0);
-  const uiEnabled = uiRuntime?.tuiEnabled === true;
-  const activeStateSignals = uiEnabled ? stateSignals : undefined;
+  totalSeconds = playbackTotalSeconds;
 
   const inputRuntime = options.createInputRuntime?.({
     mode: 'auto',
@@ -1102,8 +1230,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let judgeWindows = resolveJudgeWindowsMs(resolvedJson, options.judgeWindowMs);
   let badWindowMs = judgeWindows.bad;
   let badWindowSeconds = badWindowMs / 1000;
-  const dynamicJudgeRankChanges = collectDynamicBmsJudgeRankChanges(resolvedJson);
-  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson);
+  const timingResolver = createTimingResolver(resolvedJson);
+  const dynamicJudgeRankChanges = collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver);
+  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
   let dynamicJudgeRankCursor = 0;
   let maxBadWindowMs = badWindowMs;
   for (const change of dynamicJudgeRankChanges) {
@@ -1114,43 +1243,41 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   }
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
-  const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
+  const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
   const nonPlayableRealtimeAudioTriggers = collectRealtimeAudioTriggers(
     resolvedJson,
     inferBmsLnTypeWhenMissing,
     (channel) => !isPlayLaneSoundChannel(channel),
+    timingResolver,
   );
   const nonPlayableRealtimeAudioEndSeconds =
     options.audio === false
       ? 0
       : Math.max(nonPlayableRealtimeAudioTriggers.at(-1)?.seconds ?? 0, realtimeAudioVolumeEvents.at(-1)?.seconds ?? 0);
-
-  const extractedNotes = extractTimedNotes(resolvedJson, {
-    includeLandmine: true,
-    includeInvisible: options.showInvisibleNotes === true,
+  const playbackChart = preparePlaybackChartData(
+    resolvedJson,
+    {
+      showInvisibleNotes: options.showInvisibleNotes,
+      laneModeExtension: options.laneModeExtension,
+    },
     inferBmsLnTypeWhenMissing,
-  });
-  const notes = extractedNotes.playableNotes;
-  const landmineNotes = extractedNotes.landmineNotes;
-  const invisibleNotes = extractedNotes.invisibleNotes;
-  const renderNotes = mergeRenderNotesBySeconds(notes, landmineNotes, invisibleNotes);
-  let totalSeconds = Math.max(
-    resolvePlayableNotesTailSeconds(notes),
-    landmineNotes.at(-1)?.seconds ?? 0,
-    invisibleNotes.at(-1)?.seconds ?? 0,
     nonPlayableRealtimeAudioEndSeconds,
   );
-  const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
-  const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
-  const laneBindings = createLaneBindings(channels, laneModeOptions);
-  const laneDisplayMode = resolveLaneDisplayMode(channels, laneModeOptions);
-  const activeFreeZoneChannels = resolveActiveFreeZoneChannels(channels, laneBindings);
-  const scorableNotes = notes.filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels));
+  const {
+    notes,
+    landmineNotes,
+    invisibleNotes,
+    renderNotes,
+    laneBindings,
+    laneDisplayMode,
+    activeFreeZoneChannels,
+    scorableNotes,
+    inputTokenToChannels,
+  } = playbackChart;
+  let { totalSeconds } = playbackChart;
   const scratchPlayableChannels = new Set(
     laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
   );
-  const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);
-  appendFreeZoneInputChannels(inputTokenToChannels, laneBindings, channels);
 
   const { summary, applyGaugeJudge, applyGaugeDelta } = createInitialPlayerSummary(
     scorableNotes.length,
@@ -1168,31 +1295,26 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     notes: renderNotes,
   });
   const inputSignals = createPlayerInputSignalBus();
-
-  throwIfAborted(options.signal);
-  reportLoadProgress(options, 0.18, 'Preparing BGA...');
-  const uiRuntime = await options.createUiRuntime?.({
-    json: resolvedJson,
+  const {
+    uiRuntime,
+    totalSeconds: playbackTotalSeconds,
+    uiEnabled,
+    activeStateSignals,
+  } = await initializePlayerUiRuntime({
+    options,
+    resolvedJson,
     mode: autoScratchEnabled ? 'AUTO SCRATCH' : 'MANUAL',
     laneDisplayMode,
     laneBindings,
     speed,
     judgeWindowMs: badWindowMs,
     highSpeed,
-    showLaneChannels: options.debugActiveAudio === true,
     randomPatternSummary,
     stateSignals,
     uiSignals,
-    baseDir: options.audioBaseDir ?? process.cwd(),
-    loadSignal: options.signal,
-    onBgaLoadProgress: (progress) => {
-      reportLoadProgress(options, 0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
-    },
+    totalSeconds,
   });
-  throwIfAborted(options.signal);
-  totalSeconds = Math.max(totalSeconds, uiRuntime?.playbackEndSeconds ?? 0);
-  const uiEnabled = uiRuntime?.tuiEnabled === true;
-  const activeStateSignals = uiEnabled ? stateSignals : undefined;
+  totalSeconds = playbackTotalSeconds;
 
   const inputRuntime = options.createInputRuntime?.({
     mode: 'manual',
@@ -2835,8 +2957,8 @@ function collectRealtimeAudioTriggers(
   json: BeMusicJson,
   inferBmsLnTypeWhenMissing: boolean,
   includeChannel: (channel: string) => boolean = () => true,
+  resolver: TimingResolver = createTimingResolver(json),
 ): Array<TimedSampleTrigger & RealtimeAudioTrigger> {
-  const resolver = createTimingResolver(json);
   const triggers = collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing });
   const filtered: Array<TimedSampleTrigger & RealtimeAudioTrigger> = [];
   for (const trigger of triggers) {
@@ -2991,8 +3113,8 @@ function mergeRenderNotesBySeconds(
   notes: ReadonlyArray<TimedPlayableNote>,
   landmineNotes: ReadonlyArray<TimedLandmineNote>,
   invisibleNotes: ReadonlyArray<TimedPlayableNote>,
-): Array<TimedPlayableNote | TimedLandmineNote> {
-  const merged: Array<TimedPlayableNote | TimedLandmineNote> = [];
+): PlayerRenderNote[] {
+  const merged: PlayerRenderNote[] = [];
   let noteIndex = 0;
   let landmineIndex = 0;
   let invisibleIndex = 0;
