@@ -254,7 +254,7 @@ interface TimedManualJudge {
 interface ActiveLongNoteState {
   endSeconds: number;
   note: TimedPlayableNote;
-  mode: 2 | 3;
+  mode: 1 | 2 | 3;
   headJudge: TimedManualJudge;
   gaugeDrainCursorSeconds: number;
   audioStopped: boolean;
@@ -1270,15 +1270,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     applyResolvedManualJudge(channel, resolveManualTimedJudge(signedDeltaMs, judgeWindows, badWindowMs), atSeconds);
   };
 
-  const finalizeActiveLongNote = (
-    channel: string,
-    hold: ActiveLongNoteState,
-    tailJudge: TimedManualJudge,
-    atSeconds: number,
-  ): void => {
+  const finalizeActiveLongNote = (channel: string, hold: ActiveLongNoteState, judge: TimedManualJudge, atSeconds: number): void => {
     activeLongNotesByChannel.delete(channel);
     longHoldUntilMsByChannel.delete(channel);
-    applyResolvedManualJudge(channel, combineLongNoteJudges(hold.headJudge, tailJudge), atSeconds);
+    applyResolvedManualJudge(channel, judge, atSeconds);
   };
 
   const triggerNonPlayableRealtimeAudioEvents = (referenceSeconds: number): void => {
@@ -1411,17 +1406,23 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         longNoteSuppressUntilSecondsByChannel.set(channel, endSeconds);
       }
       candidate.visibleUntilBeat = candidate.endBeat;
-      if (longNoteMode === 1) {
-        activeLongNotesByChannel.delete(channel);
-        longHoldUntilMsByChannel.delete(channel);
-        applyManualTimingJudge(channel, signedDeltaMs, nowSec);
-        return;
-      }
       if (longNoteMode === 2 || longNoteMode === 3) {
         activeLongNotesByChannel.set(channel, {
           endSeconds,
           note: candidate,
           mode: longNoteMode,
+          headJudge: resolveManualTimedJudge(signedDeltaMs, judgeWindows, badWindowMs),
+          gaugeDrainCursorSeconds: nowSec,
+          audioStopped: false,
+        });
+        longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
+        return;
+      }
+      if (longNoteMode === 1) {
+        activeLongNotesByChannel.set(channel, {
+          endSeconds,
+          note: candidate,
+          mode: 1,
           headJudge: resolveManualTimedJudge(signedDeltaMs, judgeWindows, badWindowMs),
           gaugeDrainCursorSeconds: nowSec,
           audioStopped: false,
@@ -1551,6 +1552,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       for (const [channel, hold] of activeLongNotesByChannel.entries()) {
         const holdUntilMs = longHoldUntilMsByChannel.get(channel);
         const isHolding = holdUntilMs !== undefined && nowMs <= holdUntilMs;
+        if (hold.mode === 1 && holdUntilMs !== undefined && nowMs > holdUntilMs) {
+          if (!hold.audioStopped) {
+            audioSession?.stopChannel?.(channel);
+            hold.audioStopped = true;
+          }
+          finalizeActiveLongNote(channel, hold, { kind: 'BAD', signedDeltaMs: (nowSec - hold.endSeconds) * 1000 }, nowSec);
+          continue;
+        }
         if (hold.mode === 3) {
           const drainUntilSeconds = Math.min(nowSec, hold.endSeconds);
           if (!isHolding && drainUntilSeconds > hold.gaugeDrainCursorSeconds) {
@@ -1564,15 +1573,25 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
 
         if (nowSec >= hold.endSeconds) {
+          if (hold.mode === 1) {
+            finalizeActiveLongNote(channel, hold, hold.headJudge, nowSec);
+            continue;
+          }
           if (hold.mode === 3 && !isHolding && hold.endSeconds > hold.gaugeDrainCursorSeconds) {
             applyGaugeDelta(-(hold.endSeconds - hold.gaugeDrainCursorSeconds) * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND);
             hold.gaugeDrainCursorSeconds = hold.endSeconds;
           }
-          const tailJudge =
+          const finalJudge =
             hold.mode === 3 && !isHolding
-              ? ({ kind: 'POOR', signedDeltaMs: (nowSec - hold.endSeconds) * 1000 } satisfies TimedManualJudge)
-              : resolveManualTimedJudge((nowSec - hold.endSeconds) * 1000, judgeWindows, badWindowMs);
-          finalizeActiveLongNote(channel, hold, tailJudge, nowSec);
+              ? combineLongNoteJudges(
+                hold.headJudge,
+                { kind: 'POOR', signedDeltaMs: (nowSec - hold.endSeconds) * 1000 } satisfies TimedManualJudge,
+              )
+              : combineLongNoteJudges(
+                hold.headJudge,
+                resolveManualTimedJudge((nowSec - hold.endSeconds) * 1000, judgeWindows, badWindowMs),
+              );
+          finalizeActiveLongNote(channel, hold, finalJudge, nowSec);
           continue;
         }
 
@@ -1584,7 +1603,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           finalizeActiveLongNote(
             channel,
             hold,
-            resolveManualTimedJudge((nowSec - hold.endSeconds) * 1000, judgeWindows, badWindowMs),
+            combineLongNoteJudges(
+              hold.headJudge,
+              resolveManualTimedJudge((nowSec - hold.endSeconds) * 1000, judgeWindows, badWindowMs),
+            ),
             nowSec,
           );
         }

@@ -480,8 +480,9 @@ test('player: defaults BMS long notes to LNMODE=1 in manual play', async () => {
     audio: false,
     tui: false,
     createInputRuntime: createScheduledInputRuntime([
+      { delayMs: 520, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
       { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
-      { delayMs: 850, command: { kind: 'interrupt', reason: 'escape' } },
+      { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
     ]),
   });
 
@@ -489,6 +490,25 @@ test('player: defaults BMS long notes to LNMODE=1 in manual play', async () => {
   expect(summary.bad).toBe(0);
   expect(summary.poor).toBe(0);
   expect(summary.perfect + summary.great + summary.good).toBe(1);
+});
+
+test('player: LNMODE=1 treats early release as BAD', async () => {
+  const summary = await manualPlay(createLnobjLongNoteChart(1), {
+    speed: 1,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+    createInputRuntime: createScheduledInputRuntime([
+      { delayMs: 520, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
+      { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+      { delayMs: 900, command: { kind: 'kitty-state', pressTokens: [], repeatTokens: [], releaseTokens: ['z'] } },
+      { delayMs: 1200, command: { kind: 'interrupt', reason: 'escape' } },
+    ]),
+  });
+
+  expect(summary.total).toBe(1);
+  expect(summary.bad).toBe(1);
+  expect(summary.poor).toBe(0);
 });
 
 test('player: LNMODE=2 keeps long notes active until the end timing', async () => {
