@@ -632,8 +632,11 @@ function pushHeaderLine(json: BeMusicJson, command: string, value: string): void
       }
       return;
     case 'PLAYLEVEL':
-      if (Number.isFinite(numericValue)) {
-        json.metadata.playLevel = numericValue;
+      {
+        const playLevelValue = parsePlayLevelValue(value);
+        if (playLevelValue !== undefined) {
+          json.metadata.playLevel = playLevelValue;
+        }
       }
       return;
     case 'RANK':
@@ -747,6 +750,20 @@ function pushHeaderLine(json: BeMusicJson, command: string, value: string): void
         json.metadata.extras[command] = value;
       }
   }
+}
+
+function parsePlayLevelValue(value: string): number | string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(trimmed)) {
+    const parsed = Number.parseFloat(trimmed);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return trimmed;
 }
 
 function applyIndexedHeaderLine(

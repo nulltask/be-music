@@ -18,7 +18,7 @@ import {
   resolveSongSelectNavigationAction,
   resolveVisibleEntryRange,
 } from './cli.ts';
-import { createSelectionColumnLayout, formatRankLabel, formatSelectionEntryLabel } from './cli/selection-format.ts';
+import { createSelectionColumnLayout, formatPlayLevelLabel, formatRankLabel, formatSelectionEntryLabel } from './cli/selection-format.ts';
 
 describe('player cli', () => {
   test('cli: parses --auto-scratch mode', () => {
@@ -229,6 +229,12 @@ describe('player cli', () => {
     ];
     const layout = createSelectionColumnLayout(64, entries);
     expect(formatSelectionEntryLabel(entries[0], layout)).toContain('RANDOM');
+  });
+
+  test('cli: formats PLAYLEVEL 0 as question mark and preserves strings/decimals', () => {
+    expect(formatPlayLevelLabel(0)).toBe('?');
+    expect(formatPlayLevelLabel(12.4)).toBe('12.4');
+    expect(formatPlayLevelLabel('安心')).toBe('安心');
   });
 
   test('cli: parses invisible-note display flag', () => {

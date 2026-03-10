@@ -1,3 +1,4 @@
+import type { BeMusicPlayLevel } from '@be-music/json';
 import { clamp } from '@be-music/utils';
 import type { PlayerSummary } from '../index.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../player-utils.ts';
@@ -29,7 +30,7 @@ interface TuiOptions {
   player?: number;
   rank?: number;
   rankLabel?: string;
-  playLevel?: number;
+  playLevel?: BeMusicPlayLevel;
   lanes: TuiLane[];
   speed: number;
   highSpeed: number;
@@ -2150,12 +2151,19 @@ function formatRankLabel(value: number | undefined): string {
   return String(normalized);
 }
 
-function formatPlayLevelLabel(value: number | undefined): string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+function formatPlayLevelLabel(value: BeMusicPlayLevel | undefined): string {
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : '-';
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     return '-';
   }
-  const normalized = Math.floor(value);
-  return String(normalized);
+  if (value === 0) {
+    return '?';
+  }
+  const rounded = Math.round(value * 100) / 100;
+  return rounded.toFixed(2).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
 }
 
 function formatNotesProgress(summary: PlayerSummary): string {

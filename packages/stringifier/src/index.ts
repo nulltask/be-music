@@ -308,6 +308,8 @@ function pushMetadataLines(lines: string[], json: BeMusicJson): void {
   lines.push(`#BPM ${formatNumber(json.metadata.bpm)}`);
   if (typeof json.metadata.playLevel === 'number') {
     lines.push(`#PLAYLEVEL ${formatNumber(json.metadata.playLevel)}`);
+  } else if (typeof json.metadata.playLevel === 'string' && json.metadata.playLevel.length > 0) {
+    lines.push(`#PLAYLEVEL ${json.metadata.playLevel}`);
   }
   if (typeof json.metadata.rank === 'number') {
     lines.push(`#RANK ${formatNumber(json.metadata.rank)}`);
@@ -1189,12 +1191,13 @@ function createBmsonInfoForOutput(
   playableChannelCount: number,
 ): Record<string, unknown> {
   const info = json.bmson.info;
+  const metadataPlayLevel = resolveBmsonCompatiblePlayLevel(json.metadata.playLevel);
   const output: Record<string, unknown> = {
     title: info.title ?? json.metadata.title ?? '',
     subtitle: info.subtitle ?? json.metadata.subtitle ?? '',
     artist: info.artist ?? json.metadata.artist ?? '',
     genre: info.genre ?? json.metadata.genre ?? '',
-    level: typeof info.level === 'number' ? info.level : (json.metadata.playLevel ?? 0),
+    level: typeof info.level === 'number' ? info.level : (metadataPlayLevel ?? 0),
     init_bpm: typeof info.initBpm === 'number' ? info.initBpm : json.metadata.bpm,
     mode_hint: info.modeHint ?? `beat-${Math.max(1, playableChannelCount)}k`,
     resolution,
@@ -1231,6 +1234,21 @@ function createBmsonInfoForOutput(
   }
 
   return output;
+}
+
+function resolveBmsonCompatiblePlayLevel(value: BeMusicJson['metadata']['playLevel']): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(trimmed)) {
+    return undefined;
+  }
+  const parsed = Number.parseFloat(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function createBmsonBgaForOutput(json: BeMusicJson):

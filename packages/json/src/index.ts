@@ -4,6 +4,8 @@ export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
 
 export type BeMusicSourceFormat = 'bms' | 'bmson' | 'json';
 
+export type BeMusicPlayLevel = number | string;
+
 export interface BeMusicMetadata {
   title?: string;
   subtitle?: string;
@@ -11,7 +13,7 @@ export interface BeMusicMetadata {
   genre?: string;
   comment?: string;
   stageFile?: string;
-  playLevel?: number;
+  playLevel?: BeMusicPlayLevel;
   rank?: number;
   total?: number;
   difficulty?: number;

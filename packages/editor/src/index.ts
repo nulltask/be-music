@@ -60,7 +60,7 @@ export function setMetadata(json: BeMusicJson, key: string, value: string): BeMu
       normalized.metadata.stageFile = value;
       return normalized;
     case 'playlevel':
-      normalized.metadata.playLevel = Number.parseFloat(value);
+      normalized.metadata.playLevel = parsePlayLevelValue(value);
       return normalized;
     case 'rank':
       normalized.metadata.rank = Number.parseFloat(value);
@@ -82,6 +82,17 @@ export function setMetadata(json: BeMusicJson, key: string, value: string): BeMu
       normalized.metadata.extras[key.toUpperCase()] = value;
       return normalized;
   }
+}
+
+function parsePlayLevelValue(value: string): number | string {
+  const trimmed = value.trim();
+  if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(trimmed)) {
+    const parsed = Number.parseFloat(trimmed);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return trimmed;
 }
 
 export function addNote(

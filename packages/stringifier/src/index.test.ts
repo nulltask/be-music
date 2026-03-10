@@ -452,6 +452,17 @@ test('BMS stringify: writes optional metadata and sorts extension/resource entri
   expect(output.indexOf('#00011:01')).toBeLessThan(output.indexOf('#00013:01'));
 });
 
+test('BMS stringify: writes string PLAYLEVEL values as-is', () => {
+  const json = createEmptyJson('bms');
+  json.metadata.title = 'String Level';
+  json.metadata.artist = 'Codex';
+  json.metadata.playLevel = '安心';
+
+  const output = stringifyBms(json);
+
+  expect(output).toContain('#PLAYLEVEL 安心');
+});
+
 test('BMS stringify: writes #RANK 4 without normalization', () => {
   const json = createEmptyJson('bms');
   json.metadata.title = 'Rank 4';

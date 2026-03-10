@@ -2,7 +2,11 @@ import { effect } from 'alien-signals';
 import { createAbortError } from '@be-music/utils';
 import type { BeMusicJson } from '@be-music/json';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
-import { resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from '../player-utils.ts';
+import {
+  resolveDisplayedJudgeRankLabel,
+  resolveDisplayedJudgeRankValue,
+  resolveDisplayedPlayLevelValue,
+} from '../player-utils.ts';
 import type {
   CreatePlayerInputRuntimeContext,
   CreatePlayerUiRuntimeContext,
@@ -285,7 +289,7 @@ async function bootstrap(): Promise<void> {
           player: json.bms.player,
           rank: resolveDisplayedJudgeRankValue(json),
           rankLabel: resolveDisplayedJudgeRankLabel(json),
-          playLevel: json.metadata.playLevel,
+          playLevel: resolveDisplayedPlayLevelValue(json),
         };
         postWorkerMessage({
           kind: 'resolved-chart',
