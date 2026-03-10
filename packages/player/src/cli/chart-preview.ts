@@ -269,7 +269,7 @@ async function renderChartPreview(filePath: string, signal?: AbortSignal): Promi
       };
     }
   }
-  const fallbackPreview = await renderFallbackChartPreview(resolved, filePath, chartWavGain, signal);
+  const fallbackPreview = await renderFallbackChartPreview(resolved, filePath, signal);
   if (!fallbackPreview) {
     return undefined;
   }
@@ -330,7 +330,6 @@ async function renderPreviewSampleFile(
 async function renderFallbackChartPreview(
   chart: BeMusicJson,
   chartPath: string,
-  gain: number,
   signal?: AbortSignal,
 ): Promise<RenderedPreviewSample | undefined> {
   const fallbackIdentity = await resolveFallbackPreviewIdentity(chart, signal);
@@ -341,7 +340,6 @@ async function renderFallbackChartPreview(
     baseDir: dirname(chartPath),
     tailSeconds: 0,
     startSeconds: fallbackIdentity.startSeconds,
-    gain,
     fallbackToneSeconds: 0.05,
     signal,
   });

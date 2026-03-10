@@ -405,6 +405,18 @@ pause 中は playback clock と audio session を同時に止め、resume で両
 `playVolume` は playable lane 側の音に適用します。
 `bgmVolume` はそれ以外の BGM 側に適用します。
 
+### `#VOLWAV`
+
+BMS の `#VOLWAV` は譜面全体の音量倍率として扱います。
+省略時は `100` を既定値とし、実効ゲインは `bms.volWav / 100` です。
+
+- `#VOLWAV 100`: 原音量のまま
+- `#VOLWAV 200`: 原音量の `2` 倍
+- `#VOLWAV 0`: 無音
+
+この倍率は、リアルタイム再生の keysound、曲選択プレビュー、`renderJson()` を使うオフライン音声レンダリングに適用します。
+現実装は線形 gain のみを適用し、歴史的な実装差やハードウェア依存の音量差までは再現しません。
+
 ### BGM headroom 制御
 
 `limiter === false` のときは auto mix 用の BGM headroom 制御を有効にします。

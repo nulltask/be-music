@@ -111,6 +111,14 @@ const DEFAULT_GAIN = 0.9;
 const EMPTY_EVENT_SET = new Set<BeMusicEvent>();
 const FALLBACK_SAMPLE_CACHE = new Map<string, StereoSample>();
 
+function resolveChartVolWavGain(json: BeMusicJson): number {
+  const volWav = json.bms.volWav;
+  if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
+    return 1;
+  }
+  return volWav / 100;
+}
+
 export function createTimingResolver(json: BeMusicJson): TimingResolver {
   return createTimingResolverWithContext(json, createTimingBuildContext(json));
 }
@@ -179,8 +187,8 @@ function collectSampleTriggersWithContext(
   const lnobjEndEvents = isBmsChart ? collectLnobjEndEvents(json) : EMPTY_EVENT_SET;
   const suppressedBmsLongNoteEvents = isBmsChart
     ? resolveBmsLongNotes(json, {
-      inferLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
-    }).suppressedTriggerEvents
+        inferLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+      }).suppressedTriggerEvents
     : EMPTY_EVENT_SET;
   const selectedEvents: Array<{ event: BeMusicEvent; normalizedChannel: string }> = [];
   for (const event of sortedEvents) {
@@ -225,7 +233,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const sampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
   const normalize = options.normalize ?? true;
   const tailSeconds = options.tailSeconds ?? DEFAULT_TAIL_SECONDS;
-  const gain = options.gain ?? DEFAULT_GAIN;
+  const gain = (options.gain ?? DEFAULT_GAIN) * resolveChartVolWavGain(json);
   const startSeconds = Number.isFinite(options.startSeconds) ? Math.max(0, options.startSeconds ?? 0) : 0;
   const fallbackToneSeconds = options.fallbackToneSeconds ?? 0.08;
   const baseDir = options.baseDir ?? process.cwd();
@@ -708,7 +716,10 @@ function createBmsonSamplePlaybackMap(
   sampleEvents: BeMusicEvent[],
   beatResolver: BeatResolver,
 ): Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }> {
-  const perSampleKey = new Map<string, Array<{ event: BeMusicEvent; beat: number; seconds: number; sampleKey: string }>>();
+  const perSampleKey = new Map<
+    string,
+    Array<{ event: BeMusicEvent; beat: number; seconds: number; sampleKey: string }>
+  >();
   for (const event of sampleEvents) {
     const sampleKey = normalizeObjectKey(event.value);
     let entries = perSampleKey.get(sampleKey);
@@ -732,7 +743,7 @@ function createBmsonSamplePlaybackMap(
     let hasAnchor = false;
     let sliceIndex = 0;
 
-    for (let index = 0; index < entries.length;) {
+    for (let index = 0; index < entries.length; ) {
       const firstEntry = entries[index]!;
       const currentBeat = firstEntry.beat;
       let end = index + 1;
