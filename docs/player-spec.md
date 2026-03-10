@@ -90,6 +90,13 @@ FREE ZONE (`17` / `27`) は 1 beat の終端を持つノートとして扱いま
 既知の固定レイアウトに存在しないチャンネルは、未使用キーへ順番にフォールバック割り当てします。
 FREE ZONE は、対応する scratch レーン (`17 -> 16`, `27 -> 26`) の入力トークンも共有します。
 
+IIDX 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とします。
+scratch は 1P が左 `Shift`、2P が右 `Shift` です。
+reverse scratch は 1P が左 `Ctrl`、2P が右 `Ctrl` を使います。macOS では `Ctrl` の代わりに左/右 `Option` を使います。
+
+left/right `Ctrl` と left/right `Option` の識別は kitty keyboard protocol で行います。
+kitty 非対応端末へフォールバックした場合、reverse scratch の side-specific 入力は保証しません。
+
 ## 判定幅
 
 ### 基準幅

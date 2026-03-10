@@ -291,8 +291,10 @@
 - BGA ビューポート背景は黒を使用（透明領域・BGA 未表示中も黒）
 - 制御構文を含む譜面では、選択された `#RANDOM` パターンを `RANDOM 現在/総数` 形式で表示
 - プレイ中に `Shift+R` で演奏を最初から再開し、`#RANDOM` は再抽選する
-- キー入力は kitty keyboard protocol を自動オプトインし、1P/2P スクラッチに左/右 Shift を利用
-- kitty 非対応端末では既存入力へフォールバック (`a` / `]` でもスクラッチ入力可能)
+- IIDX 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とする
+- キー入力は kitty keyboard protocol を自動オプトインし、1P/2P スクラッチに左/右 `Shift`、reverse scratch に左/右 `Ctrl` を利用する
+- macOS では reverse scratch に左/右 `Ctrl` の代わりに左/右 `Option` を利用する
+- kitty 非対応端末では既存入力へフォールバックし、reverse scratch の side-specific 入力は保証しない
 - HIGH-SPEED 操作は `Alt/Option` + レーン入力（奇数レーンで減速、偶数レーンで加速）で行う
 - 曲選択プレビューは `#PREVIEW` を優先し、未指定時は譜面先頭発音からフォールバック生成する
 - 曲選択プレビューのレンダリングはフォーカス移動時に中断するが、同一 `#PREVIEW`（同一実ファイル）または同一フォールバックシグネチャの場合は継続再生する（フォールバックは演奏チャンネル配置差分を無視）

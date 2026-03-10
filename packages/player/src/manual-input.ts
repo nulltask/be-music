@@ -64,10 +64,11 @@ interface FixedLaneDefinition {
 export interface LaneModeOptions {
   player?: number;
   chartExtension?: string;
+  platform?: NodeJS.Platform;
 }
 
 const IIDX_5KEY_SP_BINDINGS: FixedLaneDefinition[] = [
-  { channel: '16', keyLabel: 'LShift', inputTokens: ['shift-left', 'a'], side: '1P', isScratch: true },
+  { channel: '16', keyLabel: 'LShift', inputTokens: ['shift-left'], side: '1P', isScratch: true },
   { channel: '11', keyLabel: 'z', inputTokens: ['z'], side: '1P' },
   { channel: '12', keyLabel: 's', inputTokens: ['s'], side: '1P' },
   { channel: '13', keyLabel: 'x', inputTokens: ['x'], side: '1P' },
@@ -83,24 +84,24 @@ const IIDX_7KEY_SP_BINDINGS: FixedLaneDefinition[] = [
 
 const IIDX_5KEY_DP_BINDINGS: FixedLaneDefinition[] = [
   ...IIDX_5KEY_SP_BINDINGS,
-  { channel: '21', keyLabel: ',', inputTokens: [','], side: '2P' },
-  { channel: '22', keyLabel: 'l', inputTokens: ['l'], side: '2P' },
-  { channel: '23', keyLabel: '.', inputTokens: ['.'], side: '2P' },
-  { channel: '24', keyLabel: ';', inputTokens: [';'], side: '2P' },
-  { channel: '25', keyLabel: '/', inputTokens: ['/'], side: '2P' },
-  { channel: '26', keyLabel: 'RShift', inputTokens: ['shift-right', ']'], side: '2P', isScratch: true },
+  { channel: '21', keyLabel: 'b', inputTokens: ['b'], side: '2P' },
+  { channel: '22', keyLabel: 'h', inputTokens: ['h'], side: '2P' },
+  { channel: '23', keyLabel: 'n', inputTokens: ['n'], side: '2P' },
+  { channel: '24', keyLabel: 'j', inputTokens: ['j'], side: '2P' },
+  { channel: '25', keyLabel: 'm', inputTokens: ['m'], side: '2P' },
+  { channel: '26', keyLabel: 'RShift', inputTokens: ['shift-right'], side: '2P', isScratch: true },
 ];
 
 const IIDX_14KEY_DP_BINDINGS: FixedLaneDefinition[] = [
   ...IIDX_7KEY_SP_BINDINGS,
-  { channel: '21', keyLabel: ',', inputTokens: [','], side: '2P' },
-  { channel: '22', keyLabel: 'l', inputTokens: ['l'], side: '2P' },
-  { channel: '23', keyLabel: '.', inputTokens: ['.'], side: '2P' },
-  { channel: '24', keyLabel: ';', inputTokens: [';'], side: '2P' },
-  { channel: '25', keyLabel: '/', inputTokens: ['/'], side: '2P' },
-  { channel: '28', keyLabel: ':', inputTokens: [':'], side: '2P' },
-  { channel: '29', keyLabel: '_', inputTokens: ['_'], side: '2P' },
-  { channel: '26', keyLabel: 'RShift', inputTokens: ['shift-right', ']'], side: '2P', isScratch: true },
+  { channel: '21', keyLabel: 'b', inputTokens: ['b'], side: '2P' },
+  { channel: '22', keyLabel: 'h', inputTokens: ['h'], side: '2P' },
+  { channel: '23', keyLabel: 'n', inputTokens: ['n'], side: '2P' },
+  { channel: '24', keyLabel: 'j', inputTokens: ['j'], side: '2P' },
+  { channel: '25', keyLabel: 'm', inputTokens: ['m'], side: '2P' },
+  { channel: '28', keyLabel: 'k', inputTokens: ['k'], side: '2P' },
+  { channel: '29', keyLabel: ',', inputTokens: [','], side: '2P' },
+  { channel: '26', keyLabel: 'RShift', inputTokens: ['shift-right'], side: '2P', isScratch: true },
 ];
 
 const POPN_9KEY_BME_BINDINGS: FixedLaneDefinition[] = [
@@ -157,19 +158,21 @@ export function createLaneBindings(channels: string[], options: LaneModeOptions 
 
   const mode = resolveLaneMode(existing, options);
   const modeBindings = resolveModeBindings(mode, existing, options);
+  const scratchReverseTokensByChannel = createScratchReverseTokensByChannel(modeBindings, options.platform);
   const bindings: LaneBinding[] = [];
   const usedTokens = new Set<string>();
   const definedChannels = new Set(modeBindings.map((definition) => definition.channel));
 
   for (const definition of modeBindings) {
+    const inputTokens = [...definition.inputTokens, ...(scratchReverseTokensByChannel.get(definition.channel) ?? [])];
     bindings.push({
       channel: definition.channel,
       keyLabel: definition.keyLabel,
-      inputTokens: [...definition.inputTokens],
+      inputTokens,
       side: definition.side,
       isScratch: definition.isScratch ?? false,
     });
-    definition.inputTokens.forEach((token) => usedTokens.add(token));
+    inputTokens.forEach((token) => usedTokens.add(token));
   }
 
   const unknownChannels = [...existing].filter((channel) => {
@@ -324,6 +327,23 @@ function resolveModeBindings(
   return resolvePms9KeyBindings(existing, options.chartExtension);
 }
 
+function createScratchReverseTokensByChannel(
+  bindings: readonly FixedLaneDefinition[],
+  platform: NodeJS.Platform = process.platform,
+): Map<string, readonly string[]> {
+  const scratchChannels = bindings.filter((binding) => binding.isScratch === true).map((binding) => binding.channel);
+  const tokenMap = new Map<string, readonly string[]>();
+
+  if (scratchChannels.includes('16')) {
+    tokenMap.set('16', platform === 'darwin' ? ['option-left', 'alt-left'] : ['ctrl-left', 'control-left']);
+  }
+  if (scratchChannels.includes('26')) {
+    tokenMap.set('26', platform === 'darwin' ? ['option-right', 'alt-right'] : ['ctrl-right', 'control-right']);
+  }
+
+  return tokenMap;
+}
+
 function resolvePms9KeyBindings(
   existing: ReadonlySet<string>,
   chartExtension: string | undefined,
@@ -458,6 +478,10 @@ const KITTY_EVENT_TYPE_REPEAT = 2;
 const KITTY_EVENT_TYPE_RELEASE = 3;
 const KITTY_LEFT_SHIFT_KEY_CODES = new Set([57_441, 441]);
 const KITTY_RIGHT_SHIFT_KEY_CODES = new Set([57_447, 447]);
+const KITTY_LEFT_CTRL_KEY_CODES = new Set([57_442, 442]);
+const KITTY_RIGHT_CTRL_KEY_CODES = new Set([57_448, 448]);
+const KITTY_LEFT_ALT_KEY_CODES = new Set([57_443, 443]);
+const KITTY_RIGHT_ALT_KEY_CODES = new Set([57_449, 449]);
 
 export function beginKittyKeyboardProtocolOptIn(stdout: NodeJS.WriteStream = process.stdout): () => void {
   if (!stdout.isTTY || !process.stdin.isTTY) {
@@ -625,6 +649,34 @@ function resolveKittyInputTokens(event: KittyKeyboardEvent): Set<string> {
   if (KITTY_RIGHT_SHIFT_KEY_CODES.has(event.keyCode)) {
     tokens.add('shift-right');
     tokens.add('shift');
+    return tokens;
+  }
+  if (KITTY_LEFT_CTRL_KEY_CODES.has(event.keyCode)) {
+    tokens.add('ctrl-left');
+    tokens.add('control-left');
+    tokens.add('ctrl');
+    tokens.add('control');
+    return tokens;
+  }
+  if (KITTY_RIGHT_CTRL_KEY_CODES.has(event.keyCode)) {
+    tokens.add('ctrl-right');
+    tokens.add('control-right');
+    tokens.add('ctrl');
+    tokens.add('control');
+    return tokens;
+  }
+  if (KITTY_LEFT_ALT_KEY_CODES.has(event.keyCode)) {
+    tokens.add('alt-left');
+    tokens.add('option-left');
+    tokens.add('alt');
+    tokens.add('option');
+    return tokens;
+  }
+  if (KITTY_RIGHT_ALT_KEY_CODES.has(event.keyCode)) {
+    tokens.add('alt-right');
+    tokens.add('option-right');
+    tokens.add('alt');
+    tokens.add('option');
     return tokens;
   }
 

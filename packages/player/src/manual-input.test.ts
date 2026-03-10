@@ -10,11 +10,11 @@ import {
 
 describe('manual input', () => {
   test('manual-input: builds full 5-key SP lanes from used channels', () => {
-    const bindings = createLaneBindings(['11', '14']);
+    const bindings = createLaneBindings(['11', '14'], { platform: 'linux' });
     expect(bindings.map((binding) => binding.channel)).toEqual(['16', '11', '12', '13', '14', '15']);
     expect(bindings.find((binding) => binding.channel === '16')).toMatchObject({
       keyLabel: 'LShift',
-      inputTokens: ['shift-left', 'a'],
+      inputTokens: ['shift-left', 'ctrl-left', 'control-left'],
       isScratch: true,
     });
   });
@@ -25,7 +25,7 @@ describe('manual input', () => {
   });
 
   test('manual-input: builds full 5-key DP lanes when 2P channels are used', () => {
-    const bindings = createLaneBindings(['11', '22']);
+    const bindings = createLaneBindings(['11', '22'], { platform: 'linux' });
     expect(bindings.map((binding) => binding.channel)).toEqual([
       '16',
       '11',
@@ -40,9 +40,17 @@ describe('manual input', () => {
       '25',
       '26',
     ]);
+    expect(bindings.filter((binding) => binding.side === '2P').map((binding) => binding.keyLabel)).toEqual([
+      'b',
+      'h',
+      'n',
+      'j',
+      'm',
+      'RShift',
+    ]);
     expect(bindings.find((binding) => binding.channel === '26')).toMatchObject({
       keyLabel: 'RShift',
-      inputTokens: ['shift-right', ']'],
+      inputTokens: ['shift-right', 'ctrl-right', 'control-right'],
       isScratch: true,
     });
   });
@@ -66,6 +74,31 @@ describe('manual input', () => {
       '28',
       '29',
       '26',
+    ]);
+    expect(bindings.filter((binding) => binding.side === '2P').map((binding) => binding.keyLabel)).toEqual([
+      'b',
+      'h',
+      'n',
+      'j',
+      'm',
+      'k',
+      ',',
+      'RShift',
+    ]);
+  });
+
+  test('manual-input: uses Option for reverse scratch on macOS', () => {
+    const bindings = createLaneBindings(['11', '22'], { platform: 'darwin' });
+
+    expect(bindings.find((binding) => binding.channel === '16')?.inputTokens).toEqual([
+      'shift-left',
+      'option-left',
+      'alt-left',
+    ]);
+    expect(bindings.find((binding) => binding.channel === '26')?.inputTokens).toEqual([
+      'shift-right',
+      'option-right',
+      'alt-right',
     ]);
   });
 
@@ -199,7 +232,7 @@ describe('manual input', () => {
 
   test('manual-input: appends free-zone channels to scratch input mapping', () => {
     const channels = ['11', '12', '13', '14', '15', '17', '21', '22', '23', '24', '25', '26', '27'];
-    const bindings = createLaneBindings(channels);
+    const bindings = createLaneBindings(channels, { platform: 'linux' });
     const inputMap = createInputTokenToChannelsMap(bindings);
     appendFreeZoneInputChannels(inputMap, bindings, channels);
 
@@ -217,10 +250,10 @@ describe('manual input', () => {
       '25',
       '26',
     ]);
-    expect(inputMap.get('a')).toContain('17');
     expect(inputMap.get('shift-left')).toContain('17');
-    expect(inputMap.get(']')).toContain('27');
+    expect(inputMap.get('ctrl-left')).toContain('17');
     expect(inputMap.get('shift-right')).toContain('27');
+    expect(inputMap.get('ctrl-right')).toContain('27');
   });
 
   test('manual-input: resolves kitty keyboard protocol tokens for scratch and controls', () => {
@@ -239,6 +272,16 @@ describe('manual input', () => {
     expect(rightShiftRelease.repeatTokens).toEqual([]);
     expect(rightShiftRelease.releaseTokens).toContain('shift-right');
     expect(rightShiftRelease.kittyProtocolEvent).toBe(true);
+
+    const leftCtrl = resolveInputTokenEvent('\u001b[57442;1:1u', createKey(undefined, '\u001b[57442;1:1u'));
+    expect(leftCtrl.tokens).toContain('ctrl-left');
+    expect(leftCtrl.tokens).toContain('control-left');
+    expect(leftCtrl.tokens).toContain('ctrl');
+
+    const rightAlt = resolveInputTokenEvent('\u001b[57449;1:1u', createKey(undefined, '\u001b[57449;1:1u'));
+    expect(rightAlt.tokens).toContain('alt-right');
+    expect(rightAlt.tokens).toContain('option-right');
+    expect(rightAlt.tokens).toContain('alt');
 
     const ctrlC = resolveInputTokenEvent('\u001b[99;5:1u', createKey(undefined, '\u001b[99;5:1u'));
     expect(ctrlC.tokens).toContain('ctrl+c');
