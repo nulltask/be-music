@@ -20,9 +20,47 @@ import {
   resolveJudgeWindowsMs,
   resolveBmsControlFlowForPlayback,
 } from './index.ts';
+import type { PlayerInputCommand } from './core/player-input-signal-bus.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+
+function createLnobjLongNoteChart(lnMode?: 1 | 2 | 3) {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 480;
+  json.bms.lnObjs = ['AA'];
+  if (lnMode) {
+    json.bms.lnMode = lnMode;
+  }
+  json.events = [
+    { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+    { measure: 3, channel: '11', position: [0, 1] as const, value: 'AA' },
+  ];
+  return json;
+}
+
+function createScheduledInputRuntime(commands: Array<{ delayMs: number; command: PlayerInputCommand }>) {
+  return ({ inputSignals }: { inputSignals: { pushCommand: (command: PlayerInputCommand) => void } }) => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    return {
+      start: () => {
+        for (const { delayMs, command } of commands) {
+          timers.push(
+            setTimeout(() => {
+              inputSignals.pushCommand(command);
+            }, delayMs),
+          );
+        }
+      },
+      stop: () => {
+        for (const timer of timers) {
+          clearTimeout(timer);
+        }
+      },
+    };
+  };
+}
+
 describe('player', () => {
 
 
@@ -274,10 +312,12 @@ test('player: derives long-note end beat from bms #LNOBJ', () => {
   ];
 
   const notes = extractPlayableNotes(json);
-  expect(notes).toHaveLength(3);
+  expect(notes).toHaveLength(2);
   expect(notes[0].beat).toBe(0);
   expect(notes[0].endBeat).toBeCloseTo(1, 6);
   expect(notes[0].endSeconds).toBeCloseTo(0.5, 6);
+  expect(notes[0].longNoteMode).toBe(1);
+  expect(notes.some((note) => note.event.value === 'AA')).toBe(false);
   expect(notes[1].endBeat).toBeUndefined();
 });
 
@@ -431,6 +471,71 @@ test('player: assigns quarter-note length to free-zone notes', () => {
   expect(notes[0]?.beat).toBeCloseTo(0, 6);
   expect(notes[0]?.endBeat).toBeCloseTo(1, 6);
   expect(notes[0]?.endSeconds).toBeCloseTo(0.5, 6);
+});
+
+test('player: defaults BMS long notes to LNMODE=1 in manual play', async () => {
+  const summary = await manualPlay(createLnobjLongNoteChart(), {
+    speed: 1,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+    createInputRuntime: createScheduledInputRuntime([
+      { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+      { delayMs: 850, command: { kind: 'interrupt', reason: 'escape' } },
+    ]),
+  });
+
+  expect(summary.total).toBe(1);
+  expect(summary.bad).toBe(0);
+  expect(summary.poor).toBe(0);
+  expect(summary.perfect + summary.great + summary.good).toBe(1);
+});
+
+test('player: LNMODE=2 keeps long notes active until the end timing', async () => {
+  const summary = await manualPlay(createLnobjLongNoteChart(2), {
+    speed: 1,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+    createInputRuntime: createScheduledInputRuntime([
+      { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+      { delayMs: 1100, command: { kind: 'interrupt', reason: 'escape' } },
+    ]),
+  });
+
+  expect(summary.total).toBe(1);
+  expect(summary.perfect).toBe(0);
+  expect(summary.great).toBe(0);
+  expect(summary.good).toBe(0);
+  expect(summary.bad + summary.poor).toBe(1);
+});
+
+test('player: LNMODE=3 drains groove gauge while the hold is broken', async () => {
+  expect(extractPlayableNotes(createLnobjLongNoteChart(3))[0]?.longNoteMode).toBe(3);
+  const mode2Summary = await manualPlay(createLnobjLongNoteChart(2), {
+    speed: 1,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+    createInputRuntime: createScheduledInputRuntime([
+      { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+      { delayMs: 1100, command: { kind: 'interrupt', reason: 'escape' } },
+    ]),
+  });
+  const mode3Summary = await manualPlay(createLnobjLongNoteChart(3), {
+    speed: 1,
+    leadInMs: 0,
+    audio: false,
+    tui: false,
+    createInputRuntime: createScheduledInputRuntime([
+      { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+      { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
+    ]),
+  });
+
+  expect(mode3Summary.total).toBe(1);
+  expect(mode3Summary.bad + mode3Summary.poor).toBe(1);
+  expect(mode3Summary.gauge?.current ?? 0).toBeLessThan(mode2Summary.gauge?.current ?? Number.POSITIVE_INFINITY);
 });
 
 test('player: uses baseline judge windows for bms RANK=2', () => {

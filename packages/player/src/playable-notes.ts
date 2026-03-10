@@ -10,6 +10,10 @@ import {
 } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
 const FREE_ZONE_BEAT_LENGTH = 1;
+const DEFAULT_BMS_LONG_NOTE_MODE = 1;
+const DEFAULT_OTHER_LONG_NOTE_MODE = 2;
+
+export type LongNoteMode = 1 | 2 | 3;
 
 export interface TimedPlayableNote {
   event: BeMusicEvent;
@@ -17,6 +21,7 @@ export interface TimedPlayableNote {
   beat: number;
   endBeat?: number;
   endSeconds?: number;
+  longNoteMode?: LongNoteMode;
   visibleUntilBeat?: number;
   seconds: number;
   judged: boolean;
@@ -117,6 +122,7 @@ function collectPlayableNotes(context: TimedExtractionContext): TimedPlayableNot
       beat,
       endBeat,
       endSeconds: endBeat !== undefined ? context.resolver.beatToSeconds(endBeat) : undefined,
+      longNoteMode: endBeat !== undefined ? DEFAULT_OTHER_LONG_NOTE_MODE : undefined,
       seconds: context.resolver.beatToSeconds(beat),
       judged: false,
     });
@@ -172,8 +178,9 @@ function finalizePlayableNotes(
   resolver: ReturnType<typeof createTimingResolver>,
   options: Pick<ExtractTimedNotesOptions, 'inferBmsLnTypeWhenMissing'>,
 ): void {
-  applyLnobjEndBeatIfNeeded(json, notes, resolver);
-  appendLegacyLongNotesIfNeeded(json, notes, resolver, options);
+  const bmsLongNoteMode = resolveBmsLongNoteMode(json);
+  applyLnobjEndBeatIfNeeded(json, notes, resolver, bmsLongNoteMode);
+  appendLegacyLongNotesIfNeeded(json, notes, resolver, options, bmsLongNoteMode);
   notes.sort(comparePlayableNotes);
 }
 
@@ -194,6 +201,7 @@ function applyLnobjEndBeatIfNeeded(
   json: BeMusicJson,
   notes: TimedPlayableNote[],
   resolver: ReturnType<typeof createTimingResolver>,
+  longNoteMode: LongNoteMode,
 ): void {
   if (json.sourceFormat !== 'bms') {
     return;
@@ -202,17 +210,29 @@ function applyLnobjEndBeatIfNeeded(
   if (resolved.startToEndBeat.size === 0) {
     return;
   }
+  let writeIndex = 0;
   for (const note of notes) {
+    if (resolved.endEvents.has(note.event)) {
+      continue;
+    }
     if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
+      notes[writeIndex] = note;
+      writeIndex += 1;
       continue;
     }
     const endBeat = resolved.startToEndBeat.get(note.event);
     if (typeof endBeat !== 'number' || !Number.isFinite(endBeat) || endBeat <= note.beat) {
+      notes[writeIndex] = note;
+      writeIndex += 1;
       continue;
     }
     note.endBeat = endBeat;
     note.endSeconds = resolver.beatToSeconds(endBeat);
+    note.longNoteMode = longNoteMode;
+    notes[writeIndex] = note;
+    writeIndex += 1;
   }
+  notes.length = writeIndex;
 }
 
 function appendLegacyLongNotesIfNeeded(
@@ -220,6 +240,7 @@ function appendLegacyLongNotesIfNeeded(
   notes: TimedPlayableNote[],
   resolver: ReturnType<typeof createTimingResolver>,
   options: Pick<ExtractTimedNotesOptions, 'inferBmsLnTypeWhenMissing'>,
+  longNoteMode: LongNoteMode,
 ): void {
   if (json.sourceFormat !== 'bms') {
     return;
@@ -238,10 +259,21 @@ function appendLegacyLongNotesIfNeeded(
       beat: longNote.beat,
       endBeat,
       endSeconds: endBeat !== undefined ? resolver.beatToSeconds(endBeat) : undefined,
+      longNoteMode: endBeat !== undefined ? longNoteMode : undefined,
       seconds: resolver.beatToSeconds(longNote.beat),
       judged: false,
     });
   }
+}
+
+function resolveBmsLongNoteMode(json: BeMusicJson): LongNoteMode {
+  if (json.sourceFormat !== 'bms') {
+    return DEFAULT_OTHER_LONG_NOTE_MODE;
+  }
+  if (json.bms.lnMode === 2 || json.bms.lnMode === 3) {
+    return json.bms.lnMode;
+  }
+  return DEFAULT_BMS_LONG_NOTE_MODE;
 }
 
 function resolveLongNoteEndBeat(

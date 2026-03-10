@@ -30,7 +30,12 @@ import {
   resolveLaneDisplayMode,
   type LaneBinding,
 } from '../manual-input.ts';
-import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
+import {
+  extractTimedNotes,
+  type LongNoteMode,
+  type TimedLandmineNote,
+  type TimedPlayableNote,
+} from '../playable-notes.ts';
 import { formatSeconds, resolveAltModifierLabel, resolveChartVolWavGain } from '../player-utils.ts';
 import { createNodeAudioSink, type AudioSink } from '../audio-sink.ts';
 import {
@@ -41,7 +46,13 @@ import {
 } from './high-speed-control.ts';
 import { createPlayerUiSignalBus, type PlayerUiSignalBus } from './player-ui-signal-bus.ts';
 import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './player-input-signal-bus.ts';
-import { IIDX_EX_SCORE_PER_PGREAT, IIDX_SCORE_MAX, applyJudgeToSummary, createScoreTracker } from './scoring.ts';
+import {
+  IIDX_EX_SCORE_PER_PGREAT,
+  IIDX_SCORE_MAX,
+  applyJudgeToSummary,
+  createScoreTracker,
+  type JudgeKind,
+} from './scoring.ts';
 import {
   applyGrooveGaugeJudge,
   createGrooveGaugeState,
@@ -235,6 +246,20 @@ interface RealtimeAudioTrigger {
   channel: string;
 }
 
+interface TimedManualJudge {
+  kind: JudgeKind;
+  signedDeltaMs: number;
+}
+
+interface ActiveLongNoteState {
+  endSeconds: number;
+  note: TimedPlayableNote;
+  mode: 2 | 3;
+  headJudge: TimedManualJudge;
+  gaugeDrainCursorSeconds: number;
+  audioStopped: boolean;
+}
+
 const AUTO_AUDIO_CHUNK_FRAMES = 256;
 const MANUAL_AUDIO_CHUNK_FRAMES = 256;
 const MANUAL_AUDIO_TARGET_LEAD_MS = 10;
@@ -242,6 +267,7 @@ const AUTO_AUDIO_TARGET_LEAD_MS = MANUAL_AUDIO_TARGET_LEAD_MS;
 const TUI_FRAME_INTERVAL_MS = 1000 / 60;
 const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
 const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
+const HELL_CHARGE_GAUGE_DRAIN_PER_SECOND = 6;
 const IIDX_BAD_WINDOW_MS = 250;
 const PAUSE_POLL_INTERVAL_MS = 16;
 const AUDIO_TARGET_LEAD_MAX_MS = 32;
@@ -274,6 +300,72 @@ export function applyFastSlowForJudge(
       summary.slow += 1;
     }
   }
+}
+
+function resolveManualJudgeKind(
+  signedDeltaMs: number,
+  judgeWindows: ReturnType<typeof resolveJudgeWindowsMs>,
+  badWindowMs: number,
+): JudgeKind {
+  const deltaMs = Math.abs(signedDeltaMs);
+  if (deltaMs <= judgeWindows.pgreat) {
+    return 'PERFECT';
+  }
+  if (deltaMs <= judgeWindows.great) {
+    return 'GREAT';
+  }
+  if (deltaMs <= judgeWindows.good) {
+    return 'GOOD';
+  }
+  if (deltaMs <= badWindowMs) {
+    return 'BAD';
+  }
+  return 'POOR';
+}
+
+function resolveManualTimedJudge(
+  signedDeltaMs: number,
+  judgeWindows: ReturnType<typeof resolveJudgeWindowsMs>,
+  badWindowMs: number,
+): TimedManualJudge {
+  return {
+    kind: resolveManualJudgeKind(signedDeltaMs, judgeWindows, badWindowMs),
+    signedDeltaMs,
+  };
+}
+
+function resolveJudgeSeverity(judge: JudgeKind): number {
+  switch (judge) {
+    case 'PERFECT':
+      return 0;
+    case 'GREAT':
+      return 1;
+    case 'GOOD':
+      return 2;
+    case 'BAD':
+      return 3;
+    case 'POOR':
+      return 4;
+  }
+}
+
+function combineLongNoteJudges(head: TimedManualJudge, tail: TimedManualJudge): TimedManualJudge {
+  const headSeverity = resolveJudgeSeverity(head.kind);
+  const tailSeverity = resolveJudgeSeverity(tail.kind);
+  if (headSeverity > tailSeverity) {
+    return head;
+  }
+  if (tailSeverity > headSeverity) {
+    return tail;
+  }
+  return Math.abs(head.signedDeltaMs) >= Math.abs(tail.signedDeltaMs) ? head : tail;
+}
+
+function resolvePlayableLongNoteMode(note: TimedPlayableNote): LongNoteMode | undefined {
+  if (typeof note.endSeconds !== 'number' || !Number.isFinite(note.endSeconds) || note.endSeconds <= note.seconds) {
+    return undefined;
+  }
+  return note.longNoteMode ?? 2;
 }
 
 export {
@@ -431,6 +523,7 @@ function createInitialPlayerSummary(
 ): {
   summary: PlayerSummary;
   applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
+  applyGaugeDelta: (delta: number) => void;
 } {
   const grooveGauge = createGrooveGaugeState(totalNotes, totalValue);
   const gaugeSummary: PlayerGrooveGaugeSummary = {
@@ -466,6 +559,13 @@ function createInitialPlayerSummary(
     },
     applyGaugeJudge: (judge: GrooveGaugeJudgeKind): void => {
       applyGrooveGaugeJudge(grooveGauge, judge);
+      syncGrooveGaugeSummary();
+    },
+    applyGaugeDelta: (delta: number): void => {
+      if (!Number.isFinite(delta) || delta === 0) {
+        return;
+      }
+      grooveGauge.current = Math.max(grooveGauge.min, Math.min(grooveGauge.max, grooveGauge.current + delta));
       syncGrooveGaugeSummary();
     },
   };
@@ -885,7 +985,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);
   appendFreeZoneInputChannels(inputTokenToChannels, laneBindings, channels);
 
-  const { summary, applyGaugeJudge } = createInitialPlayerSummary(scorableNotes.length, resolvedJson.metadata.total);
+  const { summary, applyGaugeJudge, applyGaugeDelta } = createInitialPlayerSummary(
+    scorableNotes.length,
+    resolvedJson.metadata.total,
+  );
   const scoreTracker = createScoreTracker();
   let combo = 0;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
@@ -997,7 +1100,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const horizon = (totalSeconds * 1000) / speed + leadInMs + badWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
   const longHoldUntilMsByChannel = new Map<string, number>();
-  const activeLongNotesByChannel = new Map<string, { endSeconds: number; note: TimedPlayableNote }>();
+  const activeLongNotesByChannel = new Map<string, ActiveLongNoteState>();
   const longNoteSuppressUntilSecondsByChannel = new Map<string, number>();
   const activeKittyPressedChannels = new Set<string>();
   const badWindowSeconds = badWindowMs / 1000;
@@ -1130,50 +1233,22 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
   };
 
-  const applyManualTimingJudge = (channel: string, signedDeltaMs: number, atSeconds: number): void => {
-    const deltaMs = Math.abs(signedDeltaMs);
-    if (deltaMs <= judgeWindows.pgreat) {
-      applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
-      applyGaugeJudge('PERFECT');
-      applyFastSlowForJudge(summary, 'PERFECT', signedDeltaMs);
+  const applyResolvedManualJudge = (channel: string, judge: TimedManualJudge, atSeconds: number): void => {
+    const deltaMs = Math.abs(judge.signedDeltaMs);
+    applyJudgeToSummary(summary, judge.kind, scoreTracker);
+    applyGaugeJudge(judge.kind);
+    if (judge.kind === 'PERFECT' || judge.kind === 'GREAT' || judge.kind === 'GOOD') {
+      applyFastSlowForJudge(summary, judge.kind, judge.signedDeltaMs);
       uiSignals.pushCommand({ kind: 'clear-poor-bga' });
       combo += 1;
       if (!uiEnabled) {
-        writeOutput(`PERFECT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+        writeOutput(`${judge.kind} channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
       } else {
-        activeStateSignals?.publishJudgeCombo('PERFECT', combo, channel);
+        activeStateSignals?.publishJudgeCombo(judge.kind, combo, channel);
       }
       return;
     }
-    if (deltaMs <= judgeWindows.great) {
-      applyJudgeToSummary(summary, 'GREAT', scoreTracker);
-      applyGaugeJudge('GREAT');
-      applyFastSlowForJudge(summary, 'GREAT', signedDeltaMs);
-      uiSignals.pushCommand({ kind: 'clear-poor-bga' });
-      combo += 1;
-      if (!uiEnabled) {
-        writeOutput(`GREAT channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
-      } else {
-        activeStateSignals?.publishJudgeCombo('GREAT', combo, channel);
-      }
-      return;
-    }
-    if (deltaMs <= judgeWindows.good) {
-      applyJudgeToSummary(summary, 'GOOD', scoreTracker);
-      applyGaugeJudge('GOOD');
-      applyFastSlowForJudge(summary, 'GOOD', signedDeltaMs);
-      uiSignals.pushCommand({ kind: 'clear-poor-bga' });
-      combo += 1;
-      if (!uiEnabled) {
-        writeOutput(`GOOD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
-      } else {
-        activeStateSignals?.publishJudgeCombo('GOOD', combo, channel);
-      }
-      return;
-    }
-    if (deltaMs <= badWindowMs) {
-      applyJudgeToSummary(summary, 'BAD', scoreTracker);
-      applyGaugeJudge('BAD');
+    if (judge.kind === 'BAD') {
       combo = 0;
       if (!uiEnabled) {
         writeOutput(`BAD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
@@ -1182,9 +1257,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       return;
     }
-
-    applyJudgeToSummary(summary, 'POOR', scoreTracker);
-    applyGaugeJudge('POOR');
     uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: atSeconds });
     combo = 0;
     if (!uiEnabled) {
@@ -1192,6 +1264,21 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     } else {
       activeStateSignals?.publishJudgeCombo('POOR', combo, channel);
     }
+  };
+
+  const applyManualTimingJudge = (channel: string, signedDeltaMs: number, atSeconds: number): void => {
+    applyResolvedManualJudge(channel, resolveManualTimedJudge(signedDeltaMs, judgeWindows, badWindowMs), atSeconds);
+  };
+
+  const finalizeActiveLongNote = (
+    channel: string,
+    hold: ActiveLongNoteState,
+    tailJudge: TimedManualJudge,
+    atSeconds: number,
+  ): void => {
+    activeLongNotesByChannel.delete(channel);
+    longHoldUntilMsByChannel.delete(channel);
+    applyResolvedManualJudge(channel, combineLongNoteJudges(hold.headJudge, tailJudge), atSeconds);
   };
 
   const triggerNonPlayableRealtimeAudioEvents = (referenceSeconds: number): void => {
@@ -1311,26 +1398,45 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       return;
     }
     const channel = candidate.channel;
+    const signedDeltaMs = (nowSec - candidate.seconds) * 1000;
     if (uiEnabled) {
       uiSignals.pushCommand({ kind: 'flash-lane', channel });
     }
     audioSession?.triggerEvent?.(candidate.event);
     const endSeconds = candidate.endSeconds;
     if (typeof endSeconds === 'number' && Number.isFinite(endSeconds) && endSeconds > candidate.seconds) {
-      activeLongNotesByChannel.set(channel, { endSeconds, note: candidate });
-      longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
+      const longNoteMode = resolvePlayableLongNoteMode(candidate);
       const previousSuppressUntil = longNoteSuppressUntilSecondsByChannel.get(channel) ?? Number.NEGATIVE_INFINITY;
       if (endSeconds > previousSuppressUntil) {
         longNoteSuppressUntilSecondsByChannel.set(channel, endSeconds);
       }
       candidate.visibleUntilBeat = candidate.endBeat;
+      if (longNoteMode === 1) {
+        activeLongNotesByChannel.delete(channel);
+        longHoldUntilMsByChannel.delete(channel);
+        applyManualTimingJudge(channel, signedDeltaMs, nowSec);
+        return;
+      }
+      if (longNoteMode === 2 || longNoteMode === 3) {
+        activeLongNotesByChannel.set(channel, {
+          endSeconds,
+          note: candidate,
+          mode: longNoteMode,
+          headJudge: resolveManualTimedJudge(signedDeltaMs, judgeWindows, badWindowMs),
+          gaugeDrainCursorSeconds: nowSec,
+          audioStopped: false,
+        });
+        longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
+        return;
+      }
+      activeLongNotesByChannel.delete(channel);
+      longHoldUntilMsByChannel.delete(channel);
       return;
     } else {
       activeLongNotesByChannel.delete(channel);
       longHoldUntilMsByChannel.delete(channel);
     }
 
-    const signedDeltaMs = (nowSec - candidate.seconds) * 1000;
     applyManualTimingJudge(channel, signedDeltaMs, nowSec);
   };
 
@@ -1443,19 +1549,44 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
 
       for (const [channel, hold] of activeLongNotesByChannel.entries()) {
+        const holdUntilMs = longHoldUntilMsByChannel.get(channel);
+        const isHolding = holdUntilMs !== undefined && nowMs <= holdUntilMs;
+        if (hold.mode === 3) {
+          const drainUntilSeconds = Math.min(nowSec, hold.endSeconds);
+          if (!isHolding && drainUntilSeconds > hold.gaugeDrainCursorSeconds) {
+            applyGaugeDelta(-(drainUntilSeconds - hold.gaugeDrainCursorSeconds) * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND);
+          }
+          hold.gaugeDrainCursorSeconds = drainUntilSeconds;
+          if (!isHolding && !hold.audioStopped) {
+            audioSession?.stopChannel?.(channel);
+            hold.audioStopped = true;
+          }
+        }
+
         if (nowSec >= hold.endSeconds) {
-          activeLongNotesByChannel.delete(channel);
-          longHoldUntilMsByChannel.delete(channel);
-          applyManualTimingJudge(channel, (nowSec - hold.endSeconds) * 1000, nowSec);
+          if (hold.mode === 3 && !isHolding && hold.endSeconds > hold.gaugeDrainCursorSeconds) {
+            applyGaugeDelta(-(hold.endSeconds - hold.gaugeDrainCursorSeconds) * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND);
+            hold.gaugeDrainCursorSeconds = hold.endSeconds;
+          }
+          const tailJudge =
+            hold.mode === 3 && !isHolding
+              ? ({ kind: 'POOR', signedDeltaMs: (nowSec - hold.endSeconds) * 1000 } satisfies TimedManualJudge)
+              : resolveManualTimedJudge((nowSec - hold.endSeconds) * 1000, judgeWindows, badWindowMs);
+          finalizeActiveLongNote(channel, hold, tailJudge, nowSec);
           continue;
         }
 
-        const holdUntilMs = longHoldUntilMsByChannel.get(channel);
-        if (holdUntilMs !== undefined && nowMs > holdUntilMs) {
-          activeLongNotesByChannel.delete(channel);
-          longHoldUntilMsByChannel.delete(channel);
-          audioSession?.stopChannel?.(channel);
-          applyManualTimingJudge(channel, (nowSec - hold.endSeconds) * 1000, nowSec);
+        if (hold.mode === 2 && holdUntilMs !== undefined && nowMs > holdUntilMs) {
+          if (!hold.audioStopped) {
+            audioSession?.stopChannel?.(channel);
+            hold.audioStopped = true;
+          }
+          finalizeActiveLongNote(
+            channel,
+            hold,
+            resolveManualTimedJudge((nowSec - hold.endSeconds) * 1000, judgeWindows, badWindowMs),
+            nowSec,
+          );
         }
       }
 
@@ -1476,6 +1607,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         remainingScorableNotes === 0 &&
         remainingLandmineNotes === 0 &&
         remainingInvisibleNotes === 0 &&
+        activeLongNotesByChannel.size === 0 &&
         !audioSession
       ) {
         break;
