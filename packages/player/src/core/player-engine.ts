@@ -814,7 +814,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const realtimeAudioTriggers = collectRealtimeAudioTriggers(
     resolvedJson,
     inferBmsLnTypeWhenMissing,
-    undefined,
+    (channel) => !isInvisiblePlayLaneSoundChannel(channel),
     timingResolver,
   );
   const realtimeAudioEndSeconds =
@@ -2981,6 +2981,16 @@ function collectRealtimeAudioSampleKeys(json: BeMusicJson, inferBmsLnTypeWhenMis
     keys.add(trigger.sampleKey);
   }
   return [...keys];
+}
+
+function isInvisiblePlayLaneSoundChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  if (normalized.length !== 2) {
+    return false;
+  }
+  const high = normalized.charCodeAt(0);
+  const low = normalized.charCodeAt(1);
+  return (high === 0x33 || high === 0x34) && low >= 0x31 && low <= 0x39;
 }
 
 function createSilentRenderResult(sampleRate: number): RenderResult {

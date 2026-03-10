@@ -1,8 +1,29 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { parseChartFile } from '../../parser/src/index.ts';
+
+const audioSinkState = vi.hoisted(() => ({
+  writes: [] as Uint8Array[],
+}));
+
+vi.mock('./audio-sink.ts', () => ({
+  createNodeAudioSink: vi.fn(async () => ({
+    runtime: 'node',
+    engine: 'webaudio',
+    label: 'mock-audio',
+    write: (chunk: Uint8Array) => {
+      audioSinkState.writes.push(Uint8Array.from(chunk));
+      return true;
+    },
+    waitWritable: async () => undefined,
+    end: async () => undefined,
+    destroy: () => undefined,
+    onError: () => undefined,
+  })),
+}));
+
 import {
   applyFastSlowForJudge,
   applyHighSpeedControlAction,
@@ -68,6 +89,14 @@ function createDynamicExRankChart() {
     { measure: 2, channel: 'A0', position: [0, 1] as const, value: 'CC' },
     { measure: 3, channel: '11', position: [0, 1] as const, value: '02' },
   ];
+  return json;
+}
+
+function createInvisibleOnlyChart() {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'not-found.wav';
+  json.events = [{ measure: 0, channel: '31', position: [0, 1] as const, value: '01' }];
   return json;
 }
 
@@ -137,6 +166,21 @@ function createPlaybackEndRecorder(targetSeconds: number, records: number[]) {
   });
 }
 
+function hasAnyNonSilentAudioWrite(): boolean {
+  return audioSinkState.writes.some((chunk) => {
+    for (let index = 0; index < chunk.length; index += 1) {
+      if (chunk[index] !== 0) {
+        return true;
+      }
+    }
+    return false;
+  });
+}
+
+beforeEach(() => {
+  audioSinkState.writes = [];
+});
+
 describe('player', () => {
   test('player: auto play finishes successfully', async () => {
     const json = await parseChartFile(unifiedBmsChartPath);
@@ -176,6 +220,23 @@ describe('player', () => {
     });
 
     expect(frameEndSeconds.at(-1)).toBeGreaterThanOrEqual(2);
+  });
+
+  test('player: auto play does not sound invisible objects', async () => {
+    await autoPlay(createInvisibleOnlyChart(), {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      audio: true,
+      audioHeadPaddingMs: 0,
+      audioLeadMs: 0,
+      audioLeadMaxMs: 0,
+      limiter: false,
+      tui: false,
+      writeOutput: () => undefined,
+    });
+
+    expect(hasAnyNonSilentAudioWrite()).toBe(false);
   });
 
   test('player: manual play waits for UI BGA playback tail after notes are judged', async () => {
