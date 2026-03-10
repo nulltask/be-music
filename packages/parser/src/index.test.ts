@@ -86,6 +86,20 @@ test('BMS: parses #RANK 4 as metadata rank 4', () => {
   expect(parsed.metadata.rank).toBe(4);
 });
 
+test('BMS: parses #STAGEFILE into metadata.stageFile', () => {
+  const parsed = parseChart(
+    [
+      '#TITLE StageFile',
+      '#STAGEFILE loading.png',
+      '#00111:01',
+      '',
+    ].join('\n'),
+  );
+
+  expect(parsed.sourceFormat).toBe('bms');
+  expect(parsed.metadata.stageFile).toBe('loading.png');
+});
+
 test('BMS: keeps the last #DEFEXRANK with decimals', () => {
   const parsed = parseChart(
     [

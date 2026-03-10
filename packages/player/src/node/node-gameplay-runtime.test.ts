@@ -108,6 +108,16 @@ afterEach(() => {
 });
 
 describe('node gameplay runtime', () => {
+  test('passes source resolution condition to the gameplay worker in source runs', async () => {
+    const promise = runNodeGameplayRuntime(createOptions());
+    const workerExecArgv = workerState.lastWorkerOptions?.execArgv;
+
+    expect(workerExecArgv).toContain('--conditions=source');
+
+    getLastWorker().emit('message', { kind: 'result', summary: createSummary() });
+    await promise;
+  });
+
   test('creates input runtime and forwards input commands to the gameplay worker', async () => {
     const promise = runNodeGameplayRuntime(createOptions());
     const worker = getLastWorker();

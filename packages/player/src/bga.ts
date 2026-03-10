@@ -102,6 +102,50 @@ export interface BgaAnsiLoadProgress {
   detail: string;
 }
 
+export interface StageFileAnsiImage {
+  width: number;
+  height: number;
+  rgb: Uint8Array;
+  lines: string[];
+}
+
+export async function loadStageFileAnsiImage(
+  json: BeMusicJson,
+  options: Omit<BgaAnsiOptions, 'onLoadProgress'>,
+): Promise<StageFileAnsiImage | undefined> {
+  const stageFile = json.metadata.stageFile;
+  if (typeof stageFile !== 'string' || stageFile.length === 0) {
+    return undefined;
+  }
+
+  throwIfAborted(options.signal);
+  const displaySize = normalizeDisplaySize(options.width, options.height);
+  const stageFileSourceFrame = await loadStageFileLoadingSourceFrame(options.baseDir, stageFile, options.signal);
+  if (!stageFileSourceFrame) {
+    return undefined;
+  }
+
+  const stageFileFrame = resizeFrameSourceCover(stageFileSourceFrame, displaySize.width, displaySize.height);
+  const selected = selectFrameFromSource(stageFileFrame, 0);
+  if (!selected.frame) {
+    return undefined;
+  }
+  const filledFrame = fillAnsiFrameBackground(selected.frame, 0, 0, 0);
+  return {
+    width: filledFrame.width,
+    height: filledFrame.height,
+    rgb: filledFrame.rgb,
+    lines: composeAnsiLines(filledFrame.rgb, filledFrame.opaqueMask, filledFrame.width, filledFrame.height),
+  };
+}
+
+export async function loadStageFileAnsiLines(
+  json: BeMusicJson,
+  options: Omit<BgaAnsiOptions, 'onLoadProgress'>,
+): Promise<string[] | undefined> {
+  return (await loadStageFileAnsiImage(json, options))?.lines;
+}
+
 export class BgaAnsiRenderer {
   private readonly baseTimeline: BgaCue[];
 
@@ -118,8 +162,6 @@ export class BgaAnsiRenderer {
   private readonly layerSourceFramesByKey: Map<string, FrameSource>;
 
   private readonly layer2SourceFramesByKey: Map<string, FrameSource>;
-
-  private readonly stageFileSourceFrame?: FrameSource;
 
   private readonly missingBaseSourceFrame: AnsiFrame;
 
@@ -138,8 +180,6 @@ export class BgaAnsiRenderer {
   private layerFramesByKey = new Map<string, FrameSource>();
 
   private layer2FramesByKey = new Map<string, FrameSource>();
-
-  private stageFileFrame?: FrameSource;
 
   private missingBaseFrame: AnsiFrame;
 
@@ -186,7 +226,6 @@ export class BgaAnsiRenderer {
     poorSourceFramesByKey: Map<string, FrameSource>;
     layerSourceFramesByKey: Map<string, FrameSource>;
     layer2SourceFramesByKey: Map<string, FrameSource>;
-    stageFileSourceFrame?: FrameSource;
     missingBaseSourceFrame: AnsiFrame;
     missingPoorSourceFrame: AnsiFrame;
     missingLayerSourceFrame: AnsiFrame;
@@ -203,7 +242,6 @@ export class BgaAnsiRenderer {
     this.poorSourceFramesByKey = params.poorSourceFramesByKey;
     this.layerSourceFramesByKey = params.layerSourceFramesByKey;
     this.layer2SourceFramesByKey = params.layer2SourceFramesByKey;
-    this.stageFileSourceFrame = params.stageFileSourceFrame;
     this.missingBaseSourceFrame = params.missingBaseSourceFrame;
     this.missingPoorSourceFrame = params.missingPoorSourceFrame;
     this.missingLayerSourceFrame = params.missingLayerSourceFrame;
@@ -271,9 +309,6 @@ export class BgaAnsiRenderer {
     this.poorFramesByKey = resizeFrameSourceMap(this.poorSourceFramesByKey, this.displayWidth, this.displayHeight);
     this.layerFramesByKey = resizeFrameSourceMap(this.layerSourceFramesByKey, this.displayWidth, this.displayHeight);
     this.layer2FramesByKey = resizeFrameSourceMap(this.layer2SourceFramesByKey, this.displayWidth, this.displayHeight);
-    this.stageFileFrame = this.stageFileSourceFrame
-      ? resizeFrameSource(this.stageFileSourceFrame, this.displayWidth, this.displayHeight)
-      : undefined;
     this.missingBaseFrame = resizeAnsiFrame(this.missingBaseSourceFrame, this.displayWidth, this.displayHeight);
     this.missingPoorFrame = resizeAnsiFrame(this.missingPoorSourceFrame, this.displayWidth, this.displayHeight);
     this.missingLayerFrame = resizeAnsiFrame(this.missingLayerSourceFrame, this.displayWidth, this.displayHeight);
@@ -350,7 +385,10 @@ export class BgaAnsiRenderer {
 
   private resolveBaseFrame(baseKey: string, seconds: number): FrameSelection {
     if (!baseKey) {
-      return selectFrameFromSource(this.stageFileFrame, seconds);
+      return {
+        frame: undefined,
+        index: -1,
+      };
     }
     const source = this.baseFramesByKey.get(baseKey) ?? createStaticFrameSource(this.missingBaseFrame);
     return selectFrameFromSource(source, seconds);
@@ -440,8 +478,7 @@ export async function createBgaAnsiRenderer(
     countMappedBmpResourceTargets(baseKeys, json.resources.bmp) +
     countMappedBmpResourceTargets(poorKeys, json.resources.bmp) +
     countMappedBmpResourceTargets(layerKeys, json.resources.bmp) +
-    countMappedBmpResourceTargets(layer2Keys, json.resources.bmp) +
-    countMappedStageFileTarget(json.metadata.stageFile);
+    countMappedBmpResourceTargets(layer2Keys, json.resources.bmp);
   let loadedTargetCount = 0;
   const reportLoadProgress = (detail: string): void => {
     if (!options.onLoadProgress || totalLoadTargetCount <= 0) {
@@ -499,27 +536,15 @@ export async function createBgaAnsiRenderer(
   });
   throwIfAborted(options.signal);
 
-  let stageFileSourceFrame: FrameSource | undefined;
-  if (json.metadata.stageFile) {
-    reportLoadProgress(json.metadata.stageFile);
-    const resolved = await resolveMediaPath(options.baseDir, json.metadata.stageFile, options.signal);
-    if (resolved) {
-      stageFileSourceFrame = await loadFrameSource(
-        resolved,
-        'base',
-        displaySize.width,
-        displaySize.height,
-        options.signal,
-      );
-    }
-  }
-
   if (
     baseSourceFramesByKey.size === 0 &&
     poorSourceFramesByKey.size === 0 &&
     layerSourceFramesByKey.size === 0 &&
     layer2SourceFramesByKey.size === 0 &&
-    !stageFileSourceFrame
+    baseTimeline.length === 0 &&
+    poorTimeline.length === 0 &&
+    layerTimeline.length === 0 &&
+    layer2Timeline.length === 0
   ) {
     return undefined;
   }
@@ -537,7 +562,6 @@ export async function createBgaAnsiRenderer(
     poorSourceFramesByKey,
     layerSourceFramesByKey,
     layer2SourceFramesByKey,
-    stageFileSourceFrame,
     missingBaseSourceFrame,
     missingPoorSourceFrame,
     missingLayerSourceFrame,
@@ -599,13 +623,6 @@ function countMappedBmpResourceTargets(keys: ReadonlySet<string>, resources: Rec
   return count;
 }
 
-function countMappedStageFileTarget(stageFile: string | undefined): number {
-  if (typeof stageFile !== 'string' || stageFile.length === 0) {
-    return 0;
-  }
-  return 1;
-}
-
 function normalizeProgressDetail(detail: string): string {
   return detail.replaceAll('\\', '/');
 }
@@ -642,6 +659,19 @@ function createStaticFrameSource(frame: AnsiFrame): FrameSource {
   };
 }
 
+function fillFrameSourceBackground(source: FrameSource, r: number, g: number, b: number): FrameSource {
+  if (source.kind === 'static') {
+    return createStaticFrameSource(fillAnsiFrameBackground(source.frame, r, g, b));
+  }
+  return {
+    kind: 'video',
+    frames: source.frames.map((entry) => ({
+      seconds: entry.seconds,
+      frame: fillAnsiFrameBackground(entry.frame, r, g, b),
+    })),
+  };
+}
+
 function resizeFrameSource(source: FrameSource, width: number, height: number): FrameSource {
   if (source.kind === 'static') {
     return {
@@ -655,6 +685,23 @@ function resizeFrameSource(source: FrameSource, width: number, height: number): 
     frames: source.frames.map((entry) => ({
       seconds: entry.seconds,
       frame: resizeAnsiFrame(entry.frame, width, height),
+    })),
+  };
+}
+
+function resizeFrameSourceCover(source: FrameSource, width: number, height: number): FrameSource {
+  if (source.kind === 'static') {
+    return {
+      kind: 'static',
+      frame: resizeAnsiFrameCover(source.frame, width, height),
+    };
+  }
+
+  return {
+    kind: 'video',
+    frames: source.frames.map((entry) => ({
+      seconds: entry.seconds,
+      frame: resizeAnsiFrameCover(entry.frame, width, height),
     })),
   };
 }
@@ -774,6 +821,20 @@ function mergeCompositeFrames(...sourceFrames: Array<AnsiFrame | undefined>): Co
   };
 }
 
+function fillAnsiFrameBackground(source: AnsiFrame, r: number, g: number, b: number): AnsiFrame {
+  const frame = createSolidAnsiFrame(source.width, source.height, r, g, b, 1);
+  for (let pixelOffset = 0; pixelOffset < source.width * source.height; pixelOffset += 1) {
+    if (source.opaqueMask[pixelOffset] === 0) {
+      continue;
+    }
+    const rgbOffset = pixelOffset * 3;
+    frame.rgb[rgbOffset] = source.rgb[rgbOffset] ?? 0;
+    frame.rgb[rgbOffset + 1] = source.rgb[rgbOffset + 1] ?? 0;
+    frame.rgb[rgbOffset + 2] = source.rgb[rgbOffset + 2] ?? 0;
+  }
+  return frame;
+}
+
 function paintFrame(
   canvasRgb: Uint8Array,
   canvasMask: Uint8Array,
@@ -885,6 +946,30 @@ async function loadImageAsSpecFrame(
   }
 }
 
+async function loadImageAsSourceFrame(
+  imagePath: string,
+  mode: FrameMode,
+  signal?: AbortSignal,
+): Promise<AnsiFrame | undefined> {
+  const extension = extname(imagePath).toLowerCase();
+  if (extension !== '.bmp' && extension !== '.png' && extension !== '.jpg' && extension !== '.jpeg') {
+    return undefined;
+  }
+  try {
+    throwIfAborted(signal);
+    const buffer = await readFile(imagePath, { signal });
+    throwIfAborted(signal);
+    const decoded = decodeImageBuffer(buffer, imagePath);
+    throwIfAborted(signal);
+    return convertImageToSourceFrame(decoded, mode);
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    return undefined;
+  }
+}
+
 async function convertImageToSpecFrameOffThread(
   image: DecodedImage,
   mode: FrameMode,
@@ -985,6 +1070,23 @@ async function loadVideoAsFrameSource(
     kind: 'video',
     frames,
   };
+}
+
+async function loadStageFileLoadingSourceFrame(
+  baseDir: string,
+  stageFile: string,
+  signal?: AbortSignal,
+): Promise<FrameSource | undefined> {
+  throwIfAborted(signal);
+  const resolved = await resolveMediaPath(baseDir, stageFile, signal);
+  if (!resolved) {
+    return undefined;
+  }
+  const imageFrame = await loadImageAsSourceFrame(resolved, 'base', signal);
+  if (imageFrame) {
+    return createStaticFrameSource(imageFrame);
+  }
+  return loadVideoAsFrameSource(resolved, 'base', signal);
 }
 
 async function resolveMediaPath(baseDir: string, mediaPath: string, signal?: AbortSignal): Promise<string | undefined> {
@@ -1475,6 +1577,17 @@ function resizeAnsiFrame(source: AnsiFrame, maxWidth: number, maxHeight: number)
   return resizeAnsiFrameWithAspect(source, maxWidth, maxHeight, TERMINAL_PIXEL_ASPECT_X, TERMINAL_PIXEL_ASPECT_Y);
 }
 
+function resizeAnsiFrameCover(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {
+  return resizeAnsiFrameWithAspectMode(
+    source,
+    maxWidth,
+    maxHeight,
+    TERMINAL_PIXEL_ASPECT_X,
+    TERMINAL_PIXEL_ASPECT_Y,
+    'cover',
+  );
+}
+
 function resizeAnsiFrameWithAspect(
   source: AnsiFrame,
   maxWidth: number,
@@ -1482,17 +1595,36 @@ function resizeAnsiFrameWithAspect(
   aspectX: number,
   aspectY: number,
 ): AnsiFrame {
+  return resizeAnsiFrameWithAspectMode(source, maxWidth, maxHeight, aspectX, aspectY, 'contain');
+}
+
+function resizeAnsiFrameWithAspectMode(
+  source: AnsiFrame,
+  maxWidth: number,
+  maxHeight: number,
+  aspectX: number,
+  aspectY: number,
+  mode: 'contain' | 'cover',
+): AnsiFrame {
   const canvasWidth = Math.max(1, maxWidth);
   const canvasHeight = Math.max(1, maxHeight);
   if (source.width === canvasWidth && source.height === canvasHeight && aspectX === 1 && aspectY === 1) {
     return source;
   }
-  const fitted = fitSizeKeepingAspect(
-    source.width * Math.max(1, aspectX),
-    source.height * Math.max(1, aspectY),
-    canvasWidth,
-    canvasHeight,
-  );
+  const fitted =
+    mode === 'cover'
+      ? fitSizeCoveringAspect(
+          source.width * Math.max(1, aspectX),
+          source.height * Math.max(1, aspectY),
+          canvasWidth,
+          canvasHeight,
+        )
+      : fitSizeKeepingAspect(
+          source.width * Math.max(1, aspectX),
+          source.height * Math.max(1, aspectY),
+          canvasWidth,
+          canvasHeight,
+        );
   const offsetX = Math.floor((canvasWidth - fitted.width) / 2);
   const offsetY = Math.floor((canvasHeight - fitted.height) / 2);
   const rgb = new Uint8Array(canvasWidth * canvasHeight * 3);
@@ -1566,6 +1698,29 @@ function fitSizeKeepingAspect(
   if (height > safeMaxHeight) {
     height = safeMaxHeight;
     width = Math.max(1, Math.floor(height * aspect));
+  }
+
+  return { width, height };
+}
+
+function fitSizeCoveringAspect(
+  sourceWidth: number,
+  sourceHeight: number,
+  maxWidth: number,
+  maxHeight: number,
+): { width: number; height: number } {
+  const safeSourceWidth = Math.max(1, sourceWidth);
+  const safeSourceHeight = Math.max(1, sourceHeight);
+  const safeMaxWidth = Math.max(1, maxWidth);
+  const safeMaxHeight = Math.max(1, maxHeight);
+  const aspect = safeSourceWidth / safeSourceHeight;
+
+  let width = safeMaxWidth;
+  let height = Math.max(1, Math.ceil(width / aspect));
+
+  if (height < safeMaxHeight) {
+    height = safeMaxHeight;
+    width = Math.max(1, Math.ceil(height * aspect));
   }
 
   return { width, height };

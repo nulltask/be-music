@@ -62,6 +62,7 @@
 - [x] メタヘッダ `#GENRE` を解釈
 - [x] メタヘッダ `#COMMENT` を解釈
 - [x] メタヘッダ `#STAGEFILE` を解釈
+- [x] `#STAGEFILE` を選曲後の loading screen 専用画像として表示
 - [x] メタヘッダ `#PLAYLEVEL` を解釈
 - [x] メタヘッダ `#RANK` を解釈
 - [x] `#RANK 0-4` を判定難易度指定として保持

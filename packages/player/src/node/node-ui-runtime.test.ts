@@ -133,12 +133,14 @@ describe('node ui runtime', () => {
     const runtime = await createNodeUiRuntime(createContext(uiSignals));
     const workerEnv = workerState.lastWorkerOptions?.env;
     const workerEnvObject = typeof workerEnv === 'object' ? (workerEnv as NodeJS.ProcessEnv) : undefined;
+    const workerExecArgv = workerState.lastWorkerOptions?.execArgv;
     const workerData = workerState.lastWorkerOptions?.workerData as
       | { stdinIsTTY?: boolean; stdoutIsTTY?: boolean }
       | undefined;
 
     expect(typeof workerEnv).toBe('object');
     expect(workerEnvObject?.TSX_TSCONFIG_PATH).toContain('tsconfig.typecheck.json');
+    expect(workerExecArgv).toContain('--conditions=source');
     expect(workerData).toMatchObject({
       stdinIsTTY: Boolean(process.stdin.isTTY),
       stdoutIsTTY: Boolean(process.stdout.isTTY),

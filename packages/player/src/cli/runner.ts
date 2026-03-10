@@ -7,6 +7,7 @@ import readline from 'node:readline';
 import { parseChartFile } from '@be-music/parser';
 import { renderJson, writeAudioFile } from '@be-music/audio-renderer';
 import { PlayerInterruptedError, type PlayerLoadProgress, type PlayerSummary } from '../index.ts';
+import { loadStageFileAnsiImage, type StageFileAnsiImage } from '../bga.ts';
 import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
 import { resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from '../player-utils.ts';
 import {
@@ -110,6 +111,11 @@ interface PlayLoadingProgress {
   ratio: number;
   message: string;
   detail?: string;
+}
+
+interface PlayLoadingScreenRenderState {
+  initialized: boolean;
+  stageFileDrawn: boolean;
 }
 
 interface SelectChartInteractivelyOptions {
@@ -583,6 +589,11 @@ function resolveDirectoryStateFromResultAction(
 
 async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedChartResult> {
   let resolvedHighSpeed = normalizeHighSpeedValue(args.highSpeed);
+  let playLoadingStageFileImage: StageFileAnsiImage | undefined;
+  const playLoadingScreenRenderState: PlayLoadingScreenRenderState = {
+    initialized: false,
+    stageFileDrawn: false,
+  };
   let resolvedChartMetadata:
     | {
         title?: string;
@@ -595,7 +606,11 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     | undefined;
   const reportPlayLoadingProgress = process.stdout.isTTY
     ? (progress: PlayLoadingProgress): void => {
-        renderPlayLoadingProgress(chartPath, progress);
+        renderPlayLoadingProgress(chartPath, progress, {
+          columns: process.stdout.columns,
+          stageFileImage: playLoadingStageFileImage,
+          state: playLoadingScreenRenderState,
+        });
       }
     : undefined;
   const chartLoadingAbortCapture = beginLoadingAbortCapture();
@@ -608,6 +623,20 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     json = await parseChartFile(chartPath, {
       signal: chartLoadingAbortCapture?.signal,
     });
+    if (process.stdout.isTTY && typeof json.metadata.stageFile === 'string' && json.metadata.stageFile.length > 0) {
+      reportPlayLoadingProgress?.({
+        ratio: 0.12,
+        message: 'Loading stage image...',
+        detail: json.metadata.stageFile.replaceAll('\\', '/'),
+      });
+      const stageFileDisplaySize = resolvePlayLoadingStageFileDisplaySize(process.stdout.columns, process.stdout.rows);
+      playLoadingStageFileImage = await loadStageFileAnsiImage(json, {
+        baseDir: dirname(chartPath),
+        width: stageFileDisplaySize.width,
+        height: stageFileDisplaySize.height,
+        signal: chartLoadingAbortCapture?.signal,
+      });
+    }
     reportPlayLoadingProgress?.({
       ratio: 0.16,
       message: 'Chart parsed.',
@@ -1170,24 +1199,178 @@ function renderChartLoadingProgress(rootDir: string, progress: ChartSummaryLoadi
   process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J`);
 }
 
-function renderPlayLoadingProgress(chartPath: string, progress: PlayLoadingProgress): void {
-  const columns = process.stdout.columns ?? 80;
-  const lineWidth = Math.max(16, columns - 2);
+export function resolvePlayLoadingStageFileDisplaySize(
+  columns?: number,
+  rows?: number,
+): {
+  width: number;
+  height: number;
+} {
+  const safeColumns = Math.max(16, Math.floor(columns ?? 80));
+  const safeRows = Math.max(8, Math.floor(rows ?? 24));
+  return {
+    width: safeColumns,
+    height: safeRows,
+  };
+}
+
+export function createPlayLoadingProgressScreenLines(
+  chartPath: string,
+  progress: PlayLoadingProgress,
+  options: {
+    columns?: number;
+    stageFileImage?: StageFileAnsiImage;
+  } = {},
+): string[] {
+  const columns = options.columns ?? 80;
+  const lineWidth = Math.max(16, columns);
   const fileLabel = chartPath.replaceAll('\\', '/');
   const ratio = Math.max(0, Math.min(1, progress.ratio));
   const barWidth = Math.max(10, Math.min(48, lineWidth - 8));
   const filled = Math.max(0, Math.min(barWidth, Math.round(barWidth * ratio)));
   const bar = `[${'#'.repeat(filled)}${'-'.repeat(barWidth - filled)}] ${Math.round(ratio * 100)}%`;
-  const lines = [
+  const rawLines = [
     'Loading selected chart...',
-    truncateForDisplay(bar, lineWidth),
-    truncateForDisplay(`Step: ${progress.message}`, lineWidth),
-    truncateForDisplay(`File: ${fileLabel}`, lineWidth),
+    bar,
+    `Step: ${progress.message}`,
+    `File: ${fileLabel}`,
+    typeof progress.detail === 'string' && progress.detail.length > 0 ? `Detail: ${progress.detail}` : '',
   ];
-  if (typeof progress.detail === 'string' && progress.detail.length > 0) {
-    lines.push(truncateForDisplay(`Detail: ${progress.detail}`, lineWidth));
+  return rawLines.map((line, index) =>
+    options.stageFileImage
+      ? stylePlayLoadingOverlayLineOnImage(line, lineWidth, index, options.stageFileImage)
+      : stylePlayLoadingOverlayFallbackLine(line, lineWidth),
+  );
+}
+
+export function createPlayLoadingProgressScreenOutput(
+  chartPath: string,
+  progress: PlayLoadingProgress,
+  options: {
+    columns?: number;
+    stageFileImage?: StageFileAnsiImage;
+    resetScreen?: boolean;
+    includeStageFileImage?: boolean;
+  } = {},
+): string {
+  const overlayLines = createPlayLoadingProgressScreenLines(chartPath, progress, {
+    columns: options.columns,
+    stageFileImage: options.stageFileImage,
+  });
+  const imageBlock =
+    options.includeStageFileImage !== false && options.stageFileImage && options.stageFileImage.lines.length > 0
+      ? `${options.stageFileImage.lines.join('\n')}\u001b[H`
+      : '';
+  const prefix = options.resetScreen === false ? '\u001b[H' : '\u001b[2J\u001b[H';
+  return `${prefix}${imageBlock}${overlayLines.join('\n')}`;
+}
+
+function renderPlayLoadingProgress(
+  chartPath: string,
+  progress: PlayLoadingProgress,
+  options: {
+    columns?: number;
+    stageFileImage?: StageFileAnsiImage;
+    state: PlayLoadingScreenRenderState;
+  },
+): void {
+  const shouldRedrawStageFile = Boolean(options.stageFileImage) && !options.state.stageFileDrawn;
+  const shouldResetScreen = !options.state.initialized || shouldRedrawStageFile;
+  const output = createPlayLoadingProgressScreenOutput(chartPath, progress, {
+    columns: options.columns,
+    stageFileImage: options.stageFileImage,
+    resetScreen: shouldResetScreen,
+    includeStageFileImage: shouldRedrawStageFile,
+  });
+  process.stdout.write(output);
+  options.state.initialized = true;
+  if (options.stageFileImage) {
+    options.state.stageFileDrawn = true;
   }
-  process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J`);
+}
+
+function stylePlayLoadingOverlayFallbackLine(text: string, lineWidth: number): string {
+  return `\u001b[38;2;255;255;255;48;2;0;0;0m${truncateForDisplay(text, lineWidth).padEnd(lineWidth, ' ')}\u001b[0m`;
+}
+
+function stylePlayLoadingOverlayLineOnImage(
+  text: string,
+  lineWidth: number,
+  rowIndex: number,
+  stageFileImage: StageFileAnsiImage,
+): string {
+  const content = truncateForDisplay(text, lineWidth).padEnd(lineWidth, ' ');
+  if (rowIndex >= stageFileImage.height) {
+    return stylePlayLoadingOverlayFallbackLine(content, lineWidth);
+  }
+
+  let line = '';
+  let currentStyle = '';
+  for (let index = 0; index < content.length; index += 1) {
+    const bg = getStageFilePixel(stageFileImage, rowIndex, index);
+    const fg = resolveOverlayTextColor(bg.r, bg.g, bg.b);
+    const nextStyle = `\u001b[38;2;${fg.r};${fg.g};${fg.b};48;2;${bg.r};${bg.g};${bg.b}m`;
+    if (nextStyle !== currentStyle) {
+      line += nextStyle;
+      currentStyle = nextStyle;
+    }
+    line += content[index];
+  }
+  if (currentStyle.length > 0) {
+    line += '\u001b[0m';
+  }
+  return line;
+}
+
+function getStageFilePixel(
+  stageFileImage: StageFileAnsiImage,
+  rowIndex: number,
+  columnIndex: number,
+): { r: number; g: number; b: number } {
+  const x = Math.max(0, Math.min(stageFileImage.width - 1, columnIndex));
+  const y = Math.max(0, Math.min(stageFileImage.height - 1, rowIndex));
+  const rgbOffset = (y * stageFileImage.width + x) * 3;
+  return {
+    r: stageFileImage.rgb[rgbOffset] ?? 0,
+    g: stageFileImage.rgb[rgbOffset + 1] ?? 0,
+    b: stageFileImage.rgb[rgbOffset + 2] ?? 0,
+  };
+}
+
+function resolveOverlayTextColor(r: number, g: number, b: number): { r: 0 | 255; g: 0 | 255; b: 0 | 255 } {
+  const whiteContrast = calculateContrastRatio(r, g, b, 255, 255, 255);
+  const blackContrast = calculateContrastRatio(r, g, b, 0, 0, 0);
+  return whiteContrast >= blackContrast ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
+}
+
+function calculateContrastRatio(
+  backgroundR: number,
+  backgroundG: number,
+  backgroundB: number,
+  foregroundR: number,
+  foregroundG: number,
+  foregroundB: number,
+): number {
+  const backgroundLuminance = calculateRelativeLuminance(backgroundR, backgroundG, backgroundB);
+  const foregroundLuminance = calculateRelativeLuminance(foregroundR, foregroundG, foregroundB);
+  const lighter = Math.max(backgroundLuminance, foregroundLuminance);
+  const darker = Math.min(backgroundLuminance, foregroundLuminance);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function calculateRelativeLuminance(r: number, g: number, b: number): number {
+  const red = convertSrgbChannelToLinear(r);
+  const green = convertSrgbChannelToLinear(g);
+  const blue = convertSrgbChannelToLinear(b);
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function convertSrgbChannelToLinear(value: number): number {
+  const normalized = Math.max(0, Math.min(255, value)) / 255;
+  if (normalized <= 0.04045) {
+    return normalized / 12.92;
+  }
+  return ((normalized + 0.055) / 1.055) ** 2.4;
 }
 
 async function selectChartInteractively(
