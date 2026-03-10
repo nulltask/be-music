@@ -532,8 +532,20 @@ function createStopPoints(
   sortedEvents: BeMusicEvent[],
   beatResolver: BeatResolver,
 ): StopPoint[] {
-  const points: StopPoint[] = [];
-  let cumulativeSeconds = 0;
+  const rawPoints: Array<{ beat: number; seconds: number; order: number }> = [];
+  let order = 0;
+ 
+  for (const stp of json.bms.stp) {
+    const parsed = parseBemaniaDxStpStopPoint(stp, beatResolver);
+    if (!parsed) {
+      continue;
+    }
+    rawPoints.push({
+      ...parsed,
+      order,
+    });
+    order += 1;
+  }
 
   for (const event of sortedEvents) {
     const normalizedChannel = normalizeChannel(event.channel);
@@ -548,15 +560,57 @@ function createStopPoints(
     const bpm = bpmAtBeatFromTempoPoints(tempoPoints, beat);
     // BMS STOP uses 1/192 of a measure as the unit.
     const seconds = (duration / 192) * (240 / bpm);
-    cumulativeSeconds += seconds;
-    points.push({
+    rawPoints.push({
       beat,
       seconds,
+      order,
+    });
+    order += 1;
+  }
+
+  rawPoints.sort((left, right) => {
+    if (left.beat !== right.beat) {
+      return left.beat - right.beat;
+    }
+    return left.order - right.order;
+  });
+
+  const points: StopPoint[] = [];
+  let cumulativeSeconds = 0;
+
+  for (const point of rawPoints) {
+    cumulativeSeconds += point.seconds;
+    points.push({
+      beat: point.beat,
+      seconds: point.seconds,
       cumulativeSeconds,
     });
   }
 
   return points;
+}
+
+function parseBemaniaDxStpStopPoint(
+  rawValue: string,
+  beatResolver: BeatResolver,
+): { beat: number; seconds: number } | undefined {
+  const match =
+    /^\s*(\d{3})(?:\.(\d{3}))?(?:[ \t\u3000]{1,6})([+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:[^0-9].*)?$/u.exec(rawValue);
+  if (!match) {
+    return undefined;
+  }
+
+  const measure = Number.parseInt(match[1]!, 10);
+  const position = Number.parseInt(match[2] ?? '000', 10);
+  const durationMs = Number.parseFloat(match[3]!);
+  if (!Number.isFinite(measure) || !Number.isFinite(position) || !Number.isFinite(durationMs) || durationMs <= 0) {
+    return undefined;
+  }
+
+  return {
+    beat: beatResolver.measureToBeat(measure, position / 1000),
+    seconds: durationMs / 1000,
+  };
 }
 
 function bpmAtBeatFromTempoPoints(tempoPoints: TempoPoint[], beat: number): number {

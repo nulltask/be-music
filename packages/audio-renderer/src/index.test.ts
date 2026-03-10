@@ -546,6 +546,23 @@ describe('audio-renderer', () => {
     expect(resolver.stopPoints[0]?.seconds).toBeCloseTo((3 / 1920) * (240 / baseBpm), 6);
   });
 
+  test('audio-renderer: interprets bemaniaDX-style STP as millisecond stops at sub-measure positions', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.bms.stp = ['001.500 500', '001.500 4000', '002 250 trailing-comment'];
+
+    const resolver = createTimingResolver(json);
+    expect(resolver.stopPoints).toHaveLength(3);
+    expect(resolver.stopPoints[0]?.beat).toBeCloseTo(6, 9);
+    expect(resolver.stopPoints[0]?.seconds).toBeCloseTo(0.5, 9);
+    expect(resolver.stopPoints[1]?.beat).toBeCloseTo(6, 9);
+    expect(resolver.stopPoints[1]?.seconds).toBeCloseTo(4, 9);
+    expect(resolver.stopPoints[2]?.beat).toBeCloseTo(8, 9);
+    expect(resolver.stopPoints[2]?.seconds).toBeCloseTo(0.25, 9);
+    expect(resolver.beatToSeconds(7)).toBeCloseTo(8, 9);
+    expect(resolver.beatToSeconds(8.5)).toBeCloseTo(9, 9);
+  });
+
   test('audio-renderer: bms retrigger on same key cuts previous voice immediately', async () => {
     const retrigger = createEmptyJson('bms');
     retrigger.metadata.bpm = 120;

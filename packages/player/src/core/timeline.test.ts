@@ -39,6 +39,18 @@ describe('timeline', () => {
     expect(beatAtSeconds(3.5)).toBeCloseTo(3, 6);
   });
 
+  test('createBeatAtSecondsResolver: keeps beat fixed during bemaniaDX-style STP windows', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.bms.stp = ['001.500 500', '001.500 4000'];
+
+    const beatAtSeconds = createBeatAtSecondsResolver(json);
+    expect(beatAtSeconds(2.9)).toBeCloseTo(5.8, 6);
+    expect(beatAtSeconds(3.2)).toBeCloseTo(6, 6);
+    expect(beatAtSeconds(7.4)).toBeCloseTo(6, 6);
+    expect(beatAtSeconds(8.0)).toBeCloseTo(7, 6);
+  });
+
   test('SCROLL/BPM/STOP: keeps zero and negative scroll with LR2-style stop compensation', () => {
     const json = createEmptyJson('bms');
     const baseBpm = 150;
