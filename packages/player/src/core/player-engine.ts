@@ -20,6 +20,7 @@ import {
   type RenderResult,
   type RenderSampleLoadProgress,
   type TimedSampleTrigger,
+  type TimingResolver,
   collectSampleTriggers,
   createTimingResolver,
   renderSingleSample,
@@ -64,7 +65,7 @@ import {
   type GrooveGaugeJudgeKind,
 } from './groove-gauge.ts';
 import { resolveBmsJudgeWindowsMsForPercent, resolveJudgeWindowsMs } from './judge-window.ts';
-import { createBeatAtSecondsResolver } from './timeline.ts';
+import { createBeatAtSecondsResolverFromTimingResolver } from './timeline.ts';
 
 export interface PlayerUiRuntime {
   readonly tuiEnabled: boolean;
@@ -566,11 +567,13 @@ interface TimedAudioVolumeEvent {
   seconds: number;
 }
 
-function collectDynamicBmsJudgeRankChanges(json: BeMusicJson): DynamicBmsJudgeRankChange[] {
+function collectDynamicBmsJudgeRankChanges(
+  json: BeMusicJson,
+  resolver: TimingResolver = createTimingResolver(json),
+): DynamicBmsJudgeRankChange[] {
   if (json.sourceFormat !== 'bms') {
     return [];
   }
-  const resolver = createTimingResolver(json);
   const changes: DynamicBmsJudgeRankChange[] = [];
   for (const event of sortEvents(json.events)) {
     if (normalizeChannel(event.channel) !== 'A0') {
@@ -589,11 +592,13 @@ function collectDynamicBmsJudgeRankChanges(json: BeMusicJson): DynamicBmsJudgeRa
   return changes;
 }
 
-function collectRealtimeAudioVolumeEvents(json: BeMusicJson): TimedAudioVolumeEvent[] {
+function collectRealtimeAudioVolumeEvents(
+  json: BeMusicJson,
+  resolver: TimingResolver = createTimingResolver(json),
+): TimedAudioVolumeEvent[] {
   if (json.sourceFormat !== 'bms') {
     return [];
   }
-  const resolver = createTimingResolver(json);
   const events: TimedAudioVolumeEvent[] = [];
   for (const event of sortEvents(json.events)) {
     if (!isBmsDynamicVolumeChangeChannel(event.channel)) {
@@ -803,9 +808,15 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const speed = options.speed ?? 1;
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
-  const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
-  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson);
-  const realtimeAudioTriggers = collectRealtimeAudioTriggers(resolvedJson, inferBmsLnTypeWhenMissing);
+  const timingResolver = createTimingResolver(resolvedJson);
+  const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
+  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
+  const realtimeAudioTriggers = collectRealtimeAudioTriggers(
+    resolvedJson,
+    inferBmsLnTypeWhenMissing,
+    undefined,
+    timingResolver,
+  );
   const realtimeAudioEndSeconds =
     options.audio === false ? 0 : Math.max(realtimeAudioTriggers.at(-1)?.seconds ?? 0, realtimeAudioVolumeEvents.at(-1)?.seconds ?? 0);
   const playbackChart = preparePlaybackChartData(
@@ -1219,8 +1230,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let judgeWindows = resolveJudgeWindowsMs(resolvedJson, options.judgeWindowMs);
   let badWindowMs = judgeWindows.bad;
   let badWindowSeconds = badWindowMs / 1000;
-  const dynamicJudgeRankChanges = collectDynamicBmsJudgeRankChanges(resolvedJson);
-  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson);
+  const timingResolver = createTimingResolver(resolvedJson);
+  const dynamicJudgeRankChanges = collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver);
+  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
   let dynamicJudgeRankCursor = 0;
   let maxBadWindowMs = badWindowMs;
   for (const change of dynamicJudgeRankChanges) {
@@ -1231,11 +1243,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   }
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
-  const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
+  const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
   const nonPlayableRealtimeAudioTriggers = collectRealtimeAudioTriggers(
     resolvedJson,
     inferBmsLnTypeWhenMissing,
     (channel) => !isPlayLaneSoundChannel(channel),
+    timingResolver,
   );
   const nonPlayableRealtimeAudioEndSeconds =
     options.audio === false
@@ -2944,8 +2957,8 @@ function collectRealtimeAudioTriggers(
   json: BeMusicJson,
   inferBmsLnTypeWhenMissing: boolean,
   includeChannel: (channel: string) => boolean = () => true,
+  resolver: TimingResolver = createTimingResolver(json),
 ): Array<TimedSampleTrigger & RealtimeAudioTrigger> {
-  const resolver = createTimingResolver(json);
   const triggers = collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing });
   const filtered: Array<TimedSampleTrigger & RealtimeAudioTrigger> = [];
   for (const trigger of triggers) {

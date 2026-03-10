@@ -142,6 +142,10 @@ export function createSpeedTimeline(json: BeMusicJson, beatResolver: BeatResolve
 
 export function createBeatAtSecondsResolver(json: BeMusicJson): (seconds: number) => number {
   const resolver = createTimingResolver(json);
+  return createBeatAtSecondsResolverFromTimingResolver(resolver);
+}
+
+export function createBeatAtSecondsResolverFromTimingResolver(resolver: TimingResolver): (seconds: number) => number {
   const stopWindows = createStopBeatWindows(resolver);
   let lastSeconds = Number.NEGATIVE_INFINITY;
   let stopCursor = 0;
