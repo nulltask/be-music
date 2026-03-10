@@ -4,9 +4,14 @@ import {
   collectLnobjEndEvents,
   createBeatResolver,
   DEFAULT_BPM,
+  isBmsBgmVolumeChangeChannel,
+  isBmsDynamicVolumeChangeChannel,
+  isBmsKeyVolumeChangeChannel,
   isLandmineChannel,
+  isPlayLaneSoundChannel,
   isSampleTriggerChannel,
   isStopChannel,
+  parseBmsDynamicVolumeGain,
   resolveBmsLongNotes,
   normalizeChannel,
   normalizeObjectKey,
@@ -135,47 +140,6 @@ function resolveChartVolWavGain(json: BeMusicJson): number {
   return volWav / 100;
 }
 
-function isDynamicBmsBgmVolumeChannel(channel: string): boolean {
-  return normalizeChannel(channel) === '97';
-}
-
-function isDynamicBmsKeyVolumeChannel(channel: string): boolean {
-  return normalizeChannel(channel) === '98';
-}
-
-function isDynamicBmsVolumeChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  return normalized === '97' || normalized === '98';
-}
-
-function parseDynamicBmsVolumeGain(value: string): number | undefined {
-  const parsed = Number.parseInt(normalizeObjectKey(value), 16);
-  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 0xff) {
-    return undefined;
-  }
-  return parsed / 0xff;
-}
-
-function isPlayLaneChannelForVolumeControl(channel: string): boolean {
-  if (channel.length === 2) {
-    const sideCode = channel.charCodeAt(0);
-    const laneCode = channel.charCodeAt(1);
-    if (
-      laneCode >= 0x31 &&
-      laneCode <= 0x39 &&
-      (sideCode === 0x31 ||
-        sideCode === 0x32 ||
-        sideCode === 0x33 ||
-        sideCode === 0x34 ||
-        sideCode === 0x35 ||
-        sideCode === 0x36)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function collectDynamicVolumeChanges(
   json: BeMusicJson,
   resolver: TimingResolver,
@@ -187,17 +151,17 @@ function collectDynamicVolumeChanges(
   const changes: DynamicVolumeChange[] = [];
   for (const event of context.sortedEvents) {
     const normalizedChannel = normalizeChannel(event.channel);
-    if (!isDynamicBmsVolumeChannel(normalizedChannel)) {
+    if (!isBmsDynamicVolumeChangeChannel(normalizedChannel)) {
       continue;
     }
-    const gain = parseDynamicBmsVolumeGain(event.value);
+    const gain = parseBmsDynamicVolumeGain(event.value);
     if (gain === undefined) {
       continue;
     }
     changes.push({
-      bus: isDynamicBmsKeyVolumeChannel(normalizedChannel)
+      bus: isBmsKeyVolumeChangeChannel(normalizedChannel)
         ? 'play'
-        : isDynamicBmsBgmVolumeChannel(normalizedChannel)
+        : isBmsBgmVolumeChangeChannel(normalizedChannel)
           ? 'bgm'
           : 'play',
       seconds: resolver.eventToSeconds(event),
@@ -390,7 +354,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
       continue;
     }
     const rawTriggerGain = resolveTriggerGain?.(trigger) ?? 1;
-    const volumeBus = isPlayLaneChannelForVolumeControl(trigger.channel) ? 'play' : 'bgm';
+    const volumeBus = isPlayLaneSoundChannel(trigger.channel) ? 'play' : 'bgm';
     const dynamicGain =
       volumeBus === 'play'
         ? advanceDynamicVolumeGain(playVolumeChanges, trigger.seconds, playVolumeState)

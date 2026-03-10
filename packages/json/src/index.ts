@@ -777,6 +777,53 @@ export function isBmsLongNoteChannel(channel: string): boolean {
   return isBmsLongNoteNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
+export function isPlayLaneSoundChannel(channel: string): boolean {
+  const packed = tryPackChannel(channel);
+  if (packed >= 0) {
+    return isPackedPlayLaneSoundChannel(packed);
+  }
+  return isPlayLaneSoundNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
+}
+
+export function isBmsBgmVolumeChangeChannel(channel: string): boolean {
+  const packed = tryPackChannel(channel);
+  if (packed >= 0) {
+    return packed === PACKED_CHANNEL_97;
+  }
+  return resolveNormalizedChannelForPredicate(channel) === '97';
+}
+
+export function isBmsKeyVolumeChangeChannel(channel: string): boolean {
+  const packed = tryPackChannel(channel);
+  if (packed >= 0) {
+    return packed === PACKED_CHANNEL_98;
+  }
+  return resolveNormalizedChannelForPredicate(channel) === '98';
+}
+
+export function isBmsDynamicVolumeChangeChannel(channel: string): boolean {
+  const packed = tryPackChannel(channel);
+  if (packed >= 0) {
+    return packed === PACKED_CHANNEL_97 || packed === PACKED_CHANNEL_98;
+  }
+  const normalized = resolveNormalizedChannelForPredicate(channel);
+  return normalized === '97' || normalized === '98';
+}
+
+export function parseBmsDynamicVolumeGain(value: string): number | undefined {
+  const normalized = normalizeObjectKey(value);
+  const high = parseHexDigitFast(normalized.charCodeAt(0));
+  const low = parseHexDigitFast(normalized.charCodeAt(1));
+  if (high < 0 || low < 0) {
+    return undefined;
+  }
+  const parsed = (high << 4) | low;
+  if (parsed <= 0) {
+    return undefined;
+  }
+  return parsed / 0xff;
+}
+
 export function mapBmsLongNoteChannelToPlayable(channel: string): string | undefined {
   const packed = tryPackChannel(channel);
   if (packed >= 0) {
@@ -1306,6 +1353,15 @@ function isPackedBmsLongNoteChannel(packed: number): boolean {
   return high === 0x35 || high === 0x36;
 }
 
+function isPackedPlayLaneSoundChannel(packed: number): boolean {
+  const low = packed & 0xff;
+  if (low < 0x31 || low > 0x39) {
+    return false;
+  }
+  const high = (packed >> 8) & 0xff;
+  return high >= 0x31 && high <= 0x36;
+}
+
 function isTempoNormalizedChannel(normalized: string): boolean {
   return normalized === '03' || normalized === '08';
 }
@@ -1361,6 +1417,18 @@ function isBmsLongNoteNormalizedChannel(normalized: string): boolean {
   }
   const side = normalized.charCodeAt(0);
   return side === 0x35 || side === 0x36;
+}
+
+function isPlayLaneSoundNormalizedChannel(normalized: string): boolean {
+  if (normalized.length !== 2) {
+    return false;
+  }
+  const lane = normalized.charCodeAt(1);
+  if (lane < 0x31 || lane > 0x39) {
+    return false;
+  }
+  const side = normalized.charCodeAt(0);
+  return side >= 0x31 && side <= 0x36;
 }
 
 function mapBmsLongNoteNormalizedChannelToPlayable(normalized: string): string | undefined {

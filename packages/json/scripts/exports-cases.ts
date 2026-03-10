@@ -98,6 +98,11 @@ export function registerJsonExportsCases(define: DefineBenchmarkCase): void {
       jsonApi.isPlayableChannel('11');
     },
   });
+  define('json.isPlayLaneSoundChannel', {
+    run: () => {
+      jsonApi.isPlayLaneSoundChannel('31');
+    },
+  });
   define('json.mapBmsLongNoteChannelToPlayable', {
     run: () => {
       jsonApi.mapBmsLongNoteChannelToPlayable('51');
@@ -106,6 +111,26 @@ export function registerJsonExportsCases(define: DefineBenchmarkCase): void {
   define('json.isBmsLongNoteChannel', {
     run: () => {
       jsonApi.isBmsLongNoteChannel('61');
+    },
+  });
+  define('json.isBmsBgmVolumeChangeChannel', {
+    run: () => {
+      jsonApi.isBmsBgmVolumeChangeChannel('97');
+    },
+  });
+  define('json.isBmsKeyVolumeChangeChannel', {
+    run: () => {
+      jsonApi.isBmsKeyVolumeChangeChannel('98');
+    },
+  });
+  define('json.isBmsDynamicVolumeChangeChannel', {
+    run: () => {
+      jsonApi.isBmsDynamicVolumeChangeChannel('97');
+    },
+  });
+  define('json.parseBmsDynamicVolumeGain', {
+    run: () => {
+      jsonApi.parseBmsDynamicVolumeGain('80');
     },
   });
   define('json.resolveBmsLongNotes', {

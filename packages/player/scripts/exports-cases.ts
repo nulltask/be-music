@@ -62,11 +62,6 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playerApi.formatRandomPatternSummary(fixtures.randomPatterns);
     },
   });
-  define('player.isPlayLaneChannelForVolumeControl', {
-    run: () => {
-      playerApi.isPlayLaneChannelForVolumeControl('11');
-    },
-  });
   define('player.shouldUseAutoMixBgmHeadroomControl', {
     run: () => {
       playerApi.shouldUseAutoMixBgmHeadroomControl({ limiter: false });
