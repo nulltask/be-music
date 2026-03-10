@@ -66,6 +66,7 @@ export function extractTimedNotes(
 ): ExtractTimedNotesResult {
   const context = createTimedExtractionContext(json);
   const { playableNotes, landmineNotes, invisibleNotes } = collectTimedNotes(context, {
+    includePlayable: true,
     includeLandmine: options.includeLandmine !== false,
     includeInvisible: options.includeInvisible === true,
   });
@@ -83,17 +84,23 @@ export function extractPlayableNotes(
   options: ExtractPlayableNotesOptions = {},
 ): TimedPlayableNote[] {
   const context = createTimedExtractionContext(json);
-  const { playableNotes } = collectTimedNotes(context);
+  const { playableNotes } = collectTimedNotes(context, { includePlayable: true });
   finalizePlayableNotes(json, playableNotes, context.resolver, options);
   return playableNotes;
 }
 
 export function extractLandmineNotes(json: BeMusicJson): TimedLandmineNote[] {
-  return collectTimedNotes(createTimedExtractionContext(json), { includeLandmine: true }).landmineNotes;
+  return collectTimedNotes(createTimedExtractionContext(json), {
+    includePlayable: false,
+    includeLandmine: true,
+  }).landmineNotes;
 }
 
 export function extractInvisiblePlayableNotes(json: BeMusicJson): TimedPlayableNote[] {
-  return collectTimedNotes(createTimedExtractionContext(json), { includeInvisible: true }).invisibleNotes;
+  return collectTimedNotes(createTimedExtractionContext(json), {
+    includePlayable: false,
+    includeInvisible: true,
+  }).invisibleNotes;
 }
 
 function createTimedExtractionContext(json: BeMusicJson): TimedExtractionContext {
@@ -108,10 +115,12 @@ function createTimedExtractionContext(json: BeMusicJson): TimedExtractionContext
 function collectTimedNotes(
   context: TimedExtractionContext,
   options: {
+    includePlayable?: boolean;
     includeLandmine?: boolean;
     includeInvisible?: boolean;
   } = {},
 ): ExtractTimedNotesResult {
+  const includePlayable = options.includePlayable !== false;
   const includeLandmine = options.includeLandmine === true;
   const includeInvisible = options.includeInvisible === true;
   const playableNotes: TimedPlayableNote[] = [];
@@ -120,7 +129,7 @@ function collectTimedNotes(
 
   for (const event of context.sortedEvents) {
     const normalizedChannel = normalizeChannel(event.channel);
-    const playableChannel = isPlayableChannel(normalizedChannel) ? normalizedChannel : undefined;
+    const playableChannel = includePlayable && isPlayableChannel(normalizedChannel) ? normalizedChannel : undefined;
     const landmineChannel = includeLandmine
       ? mapLandmineNormalizedChannelToPlayableLane(normalizedChannel)
       : undefined;
