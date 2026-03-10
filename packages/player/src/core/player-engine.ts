@@ -260,6 +260,11 @@ interface ActiveLongNoteState {
   audioStopped: boolean;
 }
 
+interface PendingAutoLongNoteState {
+  endSeconds: number;
+  note: TimedPlayableNote;
+}
+
 const AUTO_AUDIO_CHUNK_FRAMES = 256;
 const MANUAL_AUDIO_CHUNK_FRAMES = 256;
 const MANUAL_AUDIO_TARGET_LEAD_MS = 10;
@@ -361,11 +366,41 @@ function combineLongNoteJudges(head: TimedManualJudge, tail: TimedManualJudge): 
   return Math.abs(head.signedDeltaMs) >= Math.abs(tail.signedDeltaMs) ? head : tail;
 }
 
-function resolvePlayableLongNoteMode(note: TimedPlayableNote): LongNoteMode | undefined {
+function resolveLongNoteEndSeconds(note: TimedPlayableNote): number | undefined {
   if (typeof note.endSeconds !== 'number' || !Number.isFinite(note.endSeconds) || note.endSeconds <= note.seconds) {
     return undefined;
   }
+  return note.endSeconds;
+}
+
+function resolvePlayableLongNoteMode(note: TimedPlayableNote): LongNoteMode | undefined {
+  if (resolveLongNoteEndSeconds(note) === undefined) {
+    return undefined;
+  }
   return note.longNoteMode ?? 2;
+}
+
+function resolvePlayableNotesTailSeconds(notes: ReadonlyArray<TimedPlayableNote>): number {
+  let tailSeconds = 0;
+  for (const note of notes) {
+    const endSeconds = resolveLongNoteEndSeconds(note) ?? note.seconds;
+    if (endSeconds > tailSeconds) {
+      tailSeconds = endSeconds;
+    }
+  }
+  return tailSeconds;
+}
+
+function insertPendingAutoLongNote(
+  pendingNotes: PendingAutoLongNoteState[],
+  note: TimedPlayableNote,
+  endSeconds: number,
+): void {
+  let insertIndex = pendingNotes.length;
+  while (insertIndex > 0 && pendingNotes[insertIndex - 1]!.endSeconds > endSeconds) {
+    insertIndex -= 1;
+  }
+  pendingNotes.splice(insertIndex, 0, { endSeconds, note });
 }
 
 export {
@@ -596,7 +631,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const invisibleNotes = extractedNotes.invisibleNotes;
   const renderNotes = mergeRenderNotesBySeconds(notes, landmineNotes, invisibleNotes);
   const totalSeconds = Math.max(
-    notes.at(-1)?.seconds ?? 0,
+    resolvePlayableNotesTailSeconds(notes),
     landmineNotes.at(-1)?.seconds ?? 0,
     invisibleNotes.at(-1)?.seconds ?? 0,
     realtimeAudioEndSeconds,
@@ -728,6 +763,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 
   let playbackClock: PlaybackClock | undefined;
   let realtimeAudioTriggerIndex = 0;
+  const pendingAutoLongNotes: PendingAutoLongNoteState[] = [];
 
   const togglePause = (): void => {
     if (!playbackClock) {
@@ -798,6 +834,32 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     }
   };
 
+  const applyAutoPerfectJudge = (note: TimedPlayableNote, judgeSeconds: number): void => {
+    applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
+    applyGaugeJudge('PERFECT');
+    combo += 1;
+
+    const key = resolveNoteKeyLabel(note.channel, keyMap);
+    if (!uiEnabled) {
+      writeOutput(`AUTO ${formatSeconds(judgeSeconds)} channel:${note.channel} key:${key}\n`);
+      return;
+    }
+    activeStateSignals?.publishJudgeCombo('PERFECT', combo, note.channel);
+    publishUiFrame(judgeSeconds, beatAtSeconds(judgeSeconds));
+  };
+
+  const drainPendingAutoLongNotes = (referenceSeconds: number): void => {
+    const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+    while (pendingAutoLongNotes.length > 0) {
+      const pending = pendingAutoLongNotes[0]!;
+      if (pending.endSeconds > safeReferenceSeconds) {
+        break;
+      }
+      pendingAutoLongNotes.shift();
+      applyAutoPerfectJudge(pending.note, pending.endSeconds);
+    }
+  };
+
   inputRuntime?.start();
 
   try {
@@ -851,6 +913,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           }
           const nowMs = chartClock.nowMs();
           if (nowMs >= targetMs) {
+            drainPendingAutoLongNotes(elapsedMsToGameSeconds(nowMs, speed));
             return;
           }
           if (chartClock.isPaused()) {
@@ -859,6 +922,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           }
           const nowSec = elapsedMsToGameSeconds(nowMs, speed);
           triggerRealtimeAudioEvents(nowSec);
+          drainPendingAutoLongNotes(nowSec);
           markExpiredLandmines(nowSec);
           markExpiredInvisibleNotes(nowSec);
           const nowBeat = beatAtSeconds(nowSec);
@@ -878,21 +942,24 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         }
 
         note.judged = true;
-        applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
-        applyGaugeJudge('PERFECT');
-        combo += 1;
-
-        const key = resolveNoteKeyLabel(note.channel, keyMap);
-        if (!uiEnabled) {
-          writeOutput(`AUTO ${formatSeconds(note.seconds)} channel:${note.channel} key:${key}\n`);
-        } else {
+        audioSession?.triggerEvent?.(note.event);
+        const endSeconds = resolveLongNoteEndSeconds(note);
+        if (uiEnabled) {
           uiSignals.pushCommand({ kind: 'flash-lane', channel: note.channel });
-          if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
-            note.visibleUntilBeat = note.endBeat;
+        }
+        if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
+          note.visibleUntilBeat = note.endBeat;
+          if (uiEnabled) {
             uiSignals.pushCommand({ kind: 'hold-lane-until-beat', channel: note.channel, beat: note.endBeat });
           }
-          activeStateSignals?.publishJudgeCombo('PERFECT', combo, note.channel);
-          publishUiFrame(note.seconds, note.beat);
+        }
+        if (endSeconds !== undefined) {
+          insertPendingAutoLongNote(pendingAutoLongNotes, note, endSeconds);
+          if (uiEnabled) {
+            publishUiFrame(note.seconds, note.beat);
+          }
+        } else {
+          applyAutoPerfectJudge(note, note.seconds);
         }
 
         markExpiredLandmines(note.seconds);
@@ -902,6 +969,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       if (!interruptedReason) {
         const totalScheduledMs = (totalSeconds * 1000) / speed;
         await renderUntil(totalScheduledMs);
+        drainPendingAutoLongNotes(totalSeconds);
         markExpiredLandmines(totalSeconds + badWindowSeconds);
         markExpiredInvisibleNotes(totalSeconds + badWindowSeconds);
         for (const landmine of landmineNotes) {
@@ -968,7 +1036,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const invisibleNotes = extractedNotes.invisibleNotes;
   const renderNotes = mergeRenderNotesBySeconds(notes, landmineNotes, invisibleNotes);
   const totalSeconds = Math.max(
-    notes.at(-1)?.seconds ?? 0,
+    resolvePlayableNotesTailSeconds(notes),
     landmineNotes.at(-1)?.seconds ?? 0,
     invisibleNotes.at(-1)?.seconds ?? 0,
     nonPlayableRealtimeAudioEndSeconds,
@@ -1115,6 +1183,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let remainingLandmineNotes = landmineNotes.length;
   let remainingInvisibleNotes = invisibleNotes.length;
   let nonPlayableRealtimeAudioTriggerIndex = 0;
+  const pendingAutoScratchLongNotes: PendingAutoLongNoteState[] = [];
 
   const markScorableJudged = (note: TimedPlayableNote): boolean => {
     if (note.judged) {
@@ -1190,11 +1259,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!markScorableJudged(note)) {
         continue;
       }
-      applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
-      applyGaugeJudge('PERFECT');
-      uiSignals.pushCommand({ kind: 'clear-poor-bga' });
-      combo += 1;
       audioSession?.triggerEvent?.(note.event);
+      const endSeconds = resolveLongNoteEndSeconds(note);
       if (uiEnabled) {
         uiSignals.pushCommand({ kind: 'flash-lane', channel: note.channel });
       }
@@ -1204,7 +1270,31 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           uiSignals.pushCommand({ kind: 'hold-lane-until-beat', channel: note.channel, beat: note.endBeat });
         }
       }
+      if (endSeconds !== undefined) {
+        insertPendingAutoLongNote(pendingAutoScratchLongNotes, note, endSeconds);
+        continue;
+      }
+      applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
+      applyGaugeJudge('PERFECT');
+      uiSignals.pushCommand({ kind: 'clear-poor-bga' });
+      combo += 1;
       activeStateSignals?.publishJudgeCombo('PERFECT', combo, note.channel);
+    }
+  };
+
+  const drainPendingAutoScratchLongNotes = (referenceSeconds: number): void => {
+    const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+    while (pendingAutoScratchLongNotes.length > 0) {
+      const pending = pendingAutoScratchLongNotes[0]!;
+      if (pending.endSeconds > safeReferenceSeconds) {
+        break;
+      }
+      pendingAutoScratchLongNotes.shift();
+      applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
+      applyGaugeJudge('PERFECT');
+      uiSignals.pushCommand({ kind: 'clear-poor-bga' });
+      combo += 1;
+      activeStateSignals?.publishJudgeCombo('PERFECT', combo, pending.note.channel);
     }
   };
 
@@ -1612,6 +1702,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
 
+      drainPendingAutoScratchLongNotes(nowSec);
       for (const [channel, suppressUntil] of longNoteSuppressUntilSecondsByChannel.entries()) {
         if (nowSec >= suppressUntil) {
           longNoteSuppressUntilSecondsByChannel.delete(channel);
@@ -1629,6 +1720,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         remainingScorableNotes === 0 &&
         remainingLandmineNotes === 0 &&
         remainingInvisibleNotes === 0 &&
+        pendingAutoScratchLongNotes.length === 0 &&
         activeLongNotesByChannel.size === 0 &&
         !audioSession
       ) {

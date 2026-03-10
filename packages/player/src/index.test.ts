@@ -7,6 +7,7 @@ import {
   applyFastSlowForJudge,
   applyHighSpeedControlAction,
   autoPlay,
+  type CreatePlayerUiRuntimeContext,
   extractInvisiblePlayableNotes,
   extractLandmineNotes,
   extractPlayableNotes,
@@ -39,6 +40,17 @@ function createLnobjLongNoteChart(lnMode?: 1 | 2 | 3) {
   return json;
 }
 
+function createScratchLnobjLongNoteChart() {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 480;
+  json.bms.lnObjs = ['AA'];
+  json.events = [
+    { measure: 1, channel: '16', position: [0, 1] as const, value: '01' },
+    { measure: 3, channel: '16', position: [0, 1] as const, value: 'AA' },
+  ];
+  return json;
+}
+
 function createScheduledInputRuntime(commands: Array<{ delayMs: number; command: PlayerInputCommand }>) {
   return ({ inputSignals }: { inputSignals: { pushCommand: (command: PlayerInputCommand) => void } }) => {
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -57,6 +69,36 @@ function createScheduledInputRuntime(commands: Array<{ delayMs: number; command:
           clearTimeout(timer);
         }
       },
+    };
+  };
+}
+
+interface RecordedJudgeCombo {
+  judge: string;
+  combo: number;
+  channel?: string;
+  seconds: number;
+}
+
+function createJudgeComboRecorder(records: RecordedJudgeCombo[]) {
+  return async (context: CreatePlayerUiRuntimeContext) => {
+    const originalPublishJudgeCombo = context.stateSignals.publishJudgeCombo;
+    context.stateSignals.publishJudgeCombo = (judge, combo, channel, updatedAtMs) => {
+      records.push({
+        judge,
+        combo,
+        channel,
+        seconds: context.uiSignals.getFrame().currentSeconds,
+      });
+      originalPublishJudgeCombo(judge, combo, channel, updatedAtMs);
+    };
+    return {
+      tuiEnabled: true,
+      start: () => undefined,
+      stop: () => undefined,
+      dispose: () => undefined,
+      triggerPoor: () => undefined,
+      clearPoor: () => undefined,
     };
   };
 }
@@ -193,6 +235,23 @@ test('player: auto play ignores landmine notes in score totals', async () => {
   expect(summary.poor).toBe(0);
 });
 
+test('player: auto play confirms long note combo at the end', async () => {
+  const judgeCombos: RecordedJudgeCombo[] = [];
+  const summary = await autoPlay(createLnobjLongNoteChart(1), {
+    auto: true,
+    speed: 4,
+    leadInMs: 0,
+    audio: false,
+    createUiRuntime: createJudgeComboRecorder(judgeCombos),
+  });
+
+  expect(summary.total).toBe(1);
+  expect(summary.perfect).toBe(1);
+  const perfect = judgeCombos.find((entry) => entry.judge === 'PERFECT');
+  expect(perfect?.combo).toBe(1);
+  expect(perfect?.seconds).toBeGreaterThan(1.2);
+});
+
 test('player: ignores free-zone channel for score and judgment totals', async () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
@@ -258,6 +317,23 @@ test('player: auto scratch judges 16ch/26ch notes in manual play', async () => {
   expect(summary.slow).toBe(0);
   expect(summary.poor).toBe(1);
   expect(summary.bad).toBe(0);
+});
+
+test('player: auto scratch confirms long note combo at the end', async () => {
+  const judgeCombos: RecordedJudgeCombo[] = [];
+  const summary = await manualPlay(createScratchLnobjLongNoteChart(), {
+    autoScratch: true,
+    speed: 4,
+    leadInMs: 0,
+    audio: false,
+    createUiRuntime: createJudgeComboRecorder(judgeCombos),
+  });
+
+  expect(summary.total).toBe(1);
+  expect(summary.perfect).toBe(1);
+  const perfect = judgeCombos.find((entry) => entry.judge === 'PERFECT');
+  expect(perfect?.combo).toBe(1);
+  expect(perfect?.seconds).toBeGreaterThan(1.2);
 });
 
 test('player: stray key applies LR2 empty-poor groove gauge damage without changing note judgments', async () => {
