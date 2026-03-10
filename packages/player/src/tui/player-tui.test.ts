@@ -9,6 +9,10 @@ function renderRowsContaining(
   notes: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>,
   fragment: string,
   currentBeat = 0,
+  options: {
+    scrollTimeline?: Array<{ beat: number; speed: number }>;
+    speedTimeline?: Array<{ beat: number; speed: number }>;
+  } = {},
 ): number[] {
   const chunks: string[] = [];
   const originalWrite = process.stdout.write.bind(process.stdout);
@@ -26,6 +30,8 @@ function renderRowsContaining(
       speed: 1,
       highSpeed: 1,
       judgeWindowMs: 100,
+      scrollTimeline: options.scrollTimeline,
+      speedTimeline: options.speedTimeline,
       stdoutIsTTY: true,
       stdinIsTTY: true,
     });
@@ -81,5 +87,24 @@ describe('player-tui', () => {
     expect(regularHeadRows.length).toBeGreaterThanOrEqual(2);
     expect(longNoteTailRows.length).toBeGreaterThanOrEqual(1);
     expect(longNoteTailRows[0]).toBe(regularHeadRows[0]);
+  });
+
+  test('speed timeline increases note spacing by interpolated keyframes', () => {
+    const baselineRows = renderRowsContaining([{ channel: '11', beat: 0.5, seconds: 0.25 }], '███');
+    const acceleratedRows = renderRowsContaining(
+      [{ channel: '11', beat: 0.5, seconds: 0.25 }],
+      '███',
+      0,
+      {
+        speedTimeline: [
+          { beat: 0, speed: 1 },
+          { beat: 0.5, speed: 4 },
+        ],
+      },
+    );
+
+    expect(baselineRows.length).toBeGreaterThanOrEqual(1);
+    expect(acceleratedRows.length).toBeGreaterThanOrEqual(1);
+    expect(acceleratedRows[0]).toBeLessThan(baselineRows[0]);
   });
 });

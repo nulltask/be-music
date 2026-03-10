@@ -186,6 +186,7 @@ export interface BmsExtensions {
   exBmp: Record<string, string>;
   bga: Record<string, string>;
   scroll: Record<string, number>;
+  speed: Record<string, number>;
   poorBga?: string;
   swBga: Record<string, string>;
   videoFile?: string;
@@ -229,6 +230,7 @@ const PACKED_CHANNEL_09 = 0x3039;
 const PACKED_CHANNEL_97 = 0x3937;
 const PACKED_CHANNEL_98 = 0x3938;
 const PACKED_CHANNEL_SC = 0x5343;
+const PACKED_CHANNEL_SP = 0x5350;
 
 export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMusicJson {
   return {
@@ -260,6 +262,7 @@ export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
       exBmp: {},
       bga: {},
       scroll: {},
+      speed: {},
       swBga: {},
     },
     bmson: {
@@ -381,6 +384,7 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
       exBmp: { ...json.bms.exBmp },
       bga: { ...json.bms.bga },
       scroll: { ...json.bms.scroll },
+      speed: { ...json.bms.speed },
       swBga: { ...json.bms.swBga },
     },
     bmson: {
@@ -709,6 +713,10 @@ export function isScrollChannel(channel: string): boolean {
   return isScrollNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
 }
 
+function isSpeedNormalizedChannel(normalized: string): boolean {
+  return normalized === 'SP';
+}
+
 export function isLandmineChannel(channel: string): boolean {
   if (channel.length === 2) {
     const high = channel.charCodeAt(0) & 0xdf;
@@ -738,6 +746,9 @@ export function isSampleTriggerChannel(channel: string): boolean {
       return false;
     }
     if ((highCode & 0xdf) === 0x53 && (lowCode & 0xdf) === 0x43) {
+      return false;
+    }
+    if ((highCode & 0xdf) === 0x53 && (lowCode & 0xdf) === 0x50) {
       return false;
     }
     return true;
@@ -1335,7 +1346,13 @@ function isPackedSampleTriggerChannel(packed: number): boolean {
   if (((packed >> 8) & 0xff) === 0x30) {
     return false;
   }
-  return packed !== PACKED_CHANNEL_03 && packed !== PACKED_CHANNEL_08 && packed !== PACKED_CHANNEL_09 && packed !== PACKED_CHANNEL_SC;
+  return (
+    packed !== PACKED_CHANNEL_03 &&
+    packed !== PACKED_CHANNEL_08 &&
+    packed !== PACKED_CHANNEL_09 &&
+    packed !== PACKED_CHANNEL_SC &&
+    packed !== PACKED_CHANNEL_SP
+  );
 }
 
 function isPackedPlayableChannel(packed: number): boolean {
@@ -1398,7 +1415,12 @@ function isSampleTriggerNormalizedChannel(normalized: string): boolean {
   if (normalized.length === 0 || normalized.charCodeAt(0) === 0x30) {
     return false;
   }
-  return !isTempoNormalizedChannel(normalized) && !isStopNormalizedChannel(normalized) && !isScrollNormalizedChannel(normalized);
+  return (
+    !isTempoNormalizedChannel(normalized) &&
+    !isStopNormalizedChannel(normalized) &&
+    !isScrollNormalizedChannel(normalized) &&
+    !isSpeedNormalizedChannel(normalized)
+  );
 }
 
 function isPlayableNormalizedChannel(normalized: string): boolean {

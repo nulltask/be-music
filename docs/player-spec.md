@@ -488,6 +488,7 @@ loading 文言はその上へオーバーレイし、各文字セルの背景色
 
 judge 済みノートでも、judge line を跨ぐまで、または `visibleUntilBeat` が切れるまでは描画を残します。
 long note は body と tail を持つ 1 本のノートとして描画し、保持中は lane highlight も継続します。
+ノートの視覚距離は、`#SCROLLxx` / `#xxxSC` の piecewise-constant 係数と、`#SPEEDxx` / `#xxxSP` の piecewise-linear 補間係数を掛け合わせて積分した値で決めます。`#SPEEDxx` がない場合は常に `1`、同一 beat の複数 keyframe は後勝ちです。`#SPEEDxx` の値が負数、非数、未定義参照の場合、その keyframe は描画計算から無視します。
 
 ### TUI 以外の出力
 

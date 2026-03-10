@@ -191,6 +191,7 @@ export function createBlankJson(): BeMusicJson {
       exBmp: {},
       bga: {},
       scroll: {},
+      speed: {},
       swBga: {},
     },
     bmson: {
@@ -288,6 +289,7 @@ function canCloneJsonFast(json: BeMusicJson): boolean {
     json.bms.exBmp !== undefined &&
     json.bms.bga !== undefined &&
     json.bms.scroll !== undefined &&
+    json.bms.speed !== undefined &&
     json.bms.swBga !== undefined &&
     json.bmson !== undefined &&
     Array.isArray(json.bmson.lines) &&

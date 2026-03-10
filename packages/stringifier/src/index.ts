@@ -429,6 +429,13 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
       lines.push(`#SCROLL${normalizeObjectKey(key)} ${formatNumber(value)}`);
     }
   }
+  for (const [key, value] of Object.entries(json.bms.speed ?? {}).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    if (Number.isFinite(value)) {
+      lines.push(`#SPEED${normalizeObjectKey(key)} ${formatNumber(value)}`);
+    }
+  }
   if (typeof json.bms.poorBga === 'string' && json.bms.poorBga.length > 0) {
     lines.push(`#POORBGA ${json.bms.poorBga}`);
   }
@@ -698,6 +705,7 @@ function areBmsExtensionsEqual(left: BeMusicJson['bms'], right: BeMusicJson['bms
     areStringMapsEqual(left.exBmp, right.exBmp) &&
     areStringMapsEqual(left.bga, right.bga) &&
     areNumberMapsEqual(left.scroll, right.scroll) &&
+    areNumberMapsEqual(left.speed, right.speed) &&
     left.poorBga === right.poorBga &&
     areStringMapsEqual(left.swBga, right.swBga) &&
     left.videoFile === right.videoFile &&
@@ -1158,6 +1166,7 @@ function isDedicatedBmsExtensionCommand(command: string): boolean {
     /^EXBMP[0-9A-Z]{2}$/.test(upper) ||
     /^BGA[0-9A-Z]{2}$/.test(upper) ||
     /^SCROLL[0-9A-Z]{2}$/.test(upper) ||
+    /^SPEED[0-9A-Z]{2}$/.test(upper) ||
     /^SWBGA[0-9A-Z]{2}$/.test(upper)
   ) {
     return true;

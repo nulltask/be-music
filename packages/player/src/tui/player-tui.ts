@@ -39,6 +39,7 @@ interface TuiOptions {
   randomPatternSummary?: string;
   bpmTimeline?: ReadonlyArray<BpmTimelinePoint>;
   scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>;
+  speedTimeline?: ReadonlyArray<SpeedTimelinePoint>;
   stopWindows?: ReadonlyArray<StopWindowPoint>;
   measureTimeline?: ReadonlyArray<MeasureTimelinePoint>;
   measureLengths?: ReadonlyMap<number, number>;
@@ -87,6 +88,11 @@ interface ScrollTimelinePoint {
   speed: number;
 }
 
+interface SpeedTimelinePoint {
+  beat: number;
+  speed: number;
+}
+
 interface StopWindowPoint {
   startSeconds: number;
   endSeconds: number;
@@ -94,7 +100,9 @@ interface StopWindowPoint {
 
 interface ScrollSegment {
   startBeat: number;
-  speed: number;
+  scrollSpeed: number;
+  speedStart: number;
+  speedSlope: number;
   startDistance: number;
 }
 
@@ -279,7 +287,7 @@ export class PlayerTui {
     this.targetHighSpeed = initialHighSpeed;
     this.highSpeedTransitionFrom = initialHighSpeed;
     this.laneChannels = options.lanes.map((lane) => lane.channel);
-    this.scrollDistanceMapper = new ScrollDistanceMapper(options.scrollTimeline);
+    this.scrollDistanceMapper = new ScrollDistanceMapper(options.scrollTimeline, options.speedTimeline);
     this.supported = Boolean(
       (options.stdoutIsTTY ?? process.stdout.isTTY) && (options.stdinIsTTY ?? process.stdin.isTTY),
     );
@@ -936,8 +944,11 @@ export class PlayerTui {
 class ScrollDistanceMapper {
   private readonly segments: ScrollSegment[];
 
-  constructor(timeline?: ReadonlyArray<ScrollTimelinePoint>) {
-    this.segments = buildScrollSegments(timeline);
+  constructor(
+    scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>,
+    speedTimeline?: ReadonlyArray<SpeedTimelinePoint>,
+  ) {
+    this.segments = buildScrollSegments(scrollTimeline, speedTimeline);
   }
 
   distanceBetween(fromBeat: number, toBeat: number): number {
@@ -969,16 +980,14 @@ class ScrollDistanceMapper {
         continue;
       }
 
-      const speed = Math.abs(segment.speed);
-      if (speed <= 1e-9) {
+      const traversableDistance = integratedAbsoluteSegmentDistance(segment, beat, segmentEndBeat);
+      if (traversableDistance <= 1e-9) {
         beat = segmentEndBeat;
         index += 1;
         continue;
       }
-
-      const traversableDistance = span * speed;
       if (traversableDistance >= remainingDistance) {
-        return Math.min(capBeat, beat + remainingDistance / speed);
+        return Math.min(capBeat, beat + solveBeatDeltaWithinSegment(segment, beat, remainingDistance));
       }
 
       remainingDistance -= traversableDistance;
@@ -992,11 +1001,61 @@ class ScrollDistanceMapper {
   private distanceAt(beat: number): number {
     const safeBeat = Number.isFinite(beat) ? Math.max(0, beat) : 0;
     const segment = this.segments[findLastSegmentIndexByBeat(this.segments, safeBeat)]!;
-    return segment.startDistance + (safeBeat - segment.startBeat) * segment.speed;
+    return segment.startDistance + integratedSignedSegmentDistance(segment, segment.startBeat, safeBeat);
   }
 }
 
-function buildScrollSegments(timeline?: ReadonlyArray<ScrollTimelinePoint>): ScrollSegment[] {
+function buildScrollSegments(
+  scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>,
+  speedTimeline?: ReadonlyArray<SpeedTimelinePoint>,
+): ScrollSegment[] {
+  const scrollPoints = normalizeScrollPoints(scrollTimeline);
+  const speedPoints = normalizeSpeedPoints(speedTimeline);
+  const breakpoints = [...new Set([...scrollPoints.map((point) => point.beat), ...speedPoints.map((point) => point.beat)])]
+    .filter((beat) => Number.isFinite(beat) && beat >= 0)
+    .sort((left, right) => left - right);
+  if (breakpoints.length === 0 || breakpoints[0] !== 0) {
+    breakpoints.unshift(0);
+  }
+
+  const segments: ScrollSegment[] = [];
+  let distance = 0;
+  for (let index = 0; index < breakpoints.length; index += 1) {
+    const startBeat = breakpoints[index]!;
+    const endBeat = breakpoints[index + 1];
+    const scrollSpeed = resolveScrollSpeedAtBeat(scrollPoints, startBeat);
+    const speedStart = resolveInterpolatedSpeedAtBeat(speedPoints, startBeat);
+    const speedEnd =
+      typeof endBeat === 'number' ? resolveInterpolatedSpeedAtBeat(speedPoints, endBeat) : speedStart;
+    const speedSlope =
+      typeof endBeat === 'number' && endBeat > startBeat ? (speedEnd - speedStart) / (endBeat - startBeat) : 0;
+    segments.push({
+      startBeat,
+      scrollSpeed,
+      speedStart,
+      speedSlope,
+      startDistance: distance,
+    });
+    if (typeof endBeat === 'number') {
+      distance += integratedSignedSegmentDistance(
+        {
+          startBeat,
+          scrollSpeed,
+          speedStart,
+          speedSlope,
+          startDistance: distance,
+        },
+        startBeat,
+        endBeat,
+      );
+    }
+  }
+  return segments.length > 0
+    ? segments
+    : [{ startBeat: 0, scrollSpeed: 1, speedStart: 1, speedSlope: 0, startDistance: 0 }];
+}
+
+function normalizeScrollPoints(timeline?: ReadonlyArray<ScrollTimelinePoint>): ScrollTimelinePoint[] {
   const points: ScrollTimelinePoint[] = [{ beat: 0, speed: 1 }];
   for (const point of timeline ?? []) {
     if (!Number.isFinite(point.beat) || !Number.isFinite(point.speed) || point.beat < 0) {
@@ -1025,21 +1084,113 @@ function buildScrollSegments(timeline?: ReadonlyArray<ScrollTimelinePoint>): Scr
     }
     merged.push({ ...point });
   }
+  return merged;
+}
 
-  const segments: ScrollSegment[] = [];
-  let distance = 0;
-  for (const point of merged) {
-    const previous = segments.at(-1);
-    if (previous) {
-      distance = previous.startDistance + (point.beat - previous.startBeat) * previous.speed;
+function normalizeSpeedPoints(timeline?: ReadonlyArray<SpeedTimelinePoint>): SpeedTimelinePoint[] {
+  const points: SpeedTimelinePoint[] = [{ beat: 0, speed: 1 }];
+  for (const point of timeline ?? []) {
+    if (!Number.isFinite(point.beat) || !Number.isFinite(point.speed) || point.beat < 0 || point.speed < 0) {
+      continue;
     }
-    segments.push({
-      startBeat: point.beat,
+    points.push({
+      beat: point.beat,
       speed: point.speed,
-      startDistance: distance,
     });
   }
-  return segments.length > 0 ? segments : [{ startBeat: 0, speed: 1, startDistance: 0 }];
+  points.sort((left, right) => left.beat - right.beat);
+
+  const merged: SpeedTimelinePoint[] = [];
+  for (const point of points) {
+    const previous = merged.at(-1);
+    if (!previous) {
+      merged.push({ ...point });
+      continue;
+    }
+    if (Math.abs(point.beat - previous.beat) < 1e-9) {
+      previous.speed = point.speed;
+      continue;
+    }
+    merged.push({ ...point });
+  }
+  return merged;
+}
+
+function resolveScrollSpeedAtBeat(points: ReadonlyArray<ScrollTimelinePoint>, beat: number): number {
+  const index = findLastTimelineIndexAtOrBefore(points, beat);
+  return points[Math.max(0, index)]?.speed ?? 1;
+}
+
+function resolveInterpolatedSpeedAtBeat(points: ReadonlyArray<SpeedTimelinePoint>, beat: number): number {
+  const index = findLastTimelineIndexAtOrBefore(points, beat);
+  const current = points[Math.max(0, index)] ?? { beat: 0, speed: 1 };
+  const next = points[index + 1];
+  if (!next || beat <= current.beat || Math.abs(next.beat - current.beat) < 1e-9) {
+    return current.speed;
+  }
+  const ratio = clamp((beat - current.beat) / (next.beat - current.beat), 0, 1);
+  return current.speed + (next.speed - current.speed) * ratio;
+}
+
+function integratedSignedSegmentDistance(segment: ScrollSegment, fromBeat: number, toBeat: number): number {
+  const delta = Math.max(0, toBeat - fromBeat);
+  if (delta <= 0) {
+    return 0;
+  }
+  const offset = Math.max(0, fromBeat - segment.startBeat);
+  const startSpeed = segment.speedStart + segment.speedSlope * offset;
+  return segment.scrollSpeed * (startSpeed * delta + 0.5 * segment.speedSlope * delta * delta);
+}
+
+function integratedAbsoluteSegmentDistance(segment: ScrollSegment, fromBeat: number, toBeat: number): number {
+  const delta = Math.max(0, toBeat - fromBeat);
+  if (delta <= 0) {
+    return 0;
+  }
+  const offset = Math.max(0, fromBeat - segment.startBeat);
+  const startSpeed = segment.speedStart + segment.speedSlope * offset;
+  return Math.abs(segment.scrollSpeed) * (startSpeed * delta + 0.5 * segment.speedSlope * delta * delta);
+}
+
+function solveBeatDeltaWithinSegment(segment: ScrollSegment, fromBeat: number, distance: number): number {
+  const safeDistance = Number.isFinite(distance) ? Math.max(0, distance) : 0;
+  if (safeDistance <= 0) {
+    return 0;
+  }
+
+  const offset = Math.max(0, fromBeat - segment.startBeat);
+  const baseSpeed = segment.speedStart + segment.speedSlope * offset;
+  const absScroll = Math.abs(segment.scrollSpeed);
+  if (absScroll <= 1e-9) {
+    return 0;
+  }
+  const linear = absScroll * baseSpeed;
+  const quadratic = 0.5 * absScroll * segment.speedSlope;
+  if (Math.abs(quadratic) <= 1e-9) {
+    return linear <= 1e-9 ? 0 : safeDistance / linear;
+  }
+  const discriminant = linear * linear + 4 * quadratic * safeDistance;
+  if (discriminant <= 0) {
+    return 0;
+  }
+  return Math.max(0, (-linear + Math.sqrt(discriminant)) / (2 * quadratic));
+}
+
+function findLastTimelineIndexAtOrBefore<T extends { beat: number }>(points: ReadonlyArray<T>, beat: number): number {
+  let low = 0;
+  let high = points.length - 1;
+  let index = 0;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const candidate = points[mid]!;
+    if (candidate.beat <= beat) {
+      index = mid;
+      low = mid + 1;
+      continue;
+    }
+    high = mid - 1;
+  }
+  return index;
 }
 
 function findLastSegmentIndexByBeat(segments: ScrollSegment[], beat: number): number {

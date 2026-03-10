@@ -229,6 +229,24 @@ test('BMS: parses extension headers into dedicated fields', async () => {
   expect(json.metadata.extras.CHARSET).toBeUndefined();
 });
 
+test('BMS: parses SPEED indexed headers and SP keyframes into bms extensions/events', () => {
+  const parsed = parseChart(
+    [
+      '#SPEED01 1',
+      '#SPEED02 0.5',
+      '#001SP:0102',
+      '',
+    ].join('\n'),
+  );
+
+  expect(parsed.bms.speed['01']).toBe(1);
+  expect(parsed.bms.speed['02']).toBe(0.5);
+  expect(parsed.events).toEqual([
+    { measure: 1, channel: 'SP', position: [0, 2], value: '01' },
+    { measure: 1, channel: 'SP', position: [1, 2], value: '02' },
+  ]);
+});
+
 test('BMS: keeps all LNOBJ declarations in declaration order', () => {
   const parsed = parseChart(
     [
@@ -506,6 +524,9 @@ test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and r
         scroll: {
           1: '0.5',
         },
+        speed: {
+          1: '1.5',
+        },
         poorBga: '02',
         swBga: {
           4: '03',
@@ -575,6 +596,7 @@ test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and r
   expect(parsed.bms.exBmp['02']).toBe('extended.bmp');
   expect(parsed.bms.bga['03']).toBe('01');
   expect(parsed.bms.scroll['01']).toBe(0.5);
+  expect(parsed.bms.speed['01']).toBe(1.5);
   expect(parsed.bms.poorBga).toBe('02');
   expect(parsed.bms.swBga['04']).toBe('03');
   expect(parsed.bms.videoFile).toBe('movie.mp4');
@@ -653,6 +675,7 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
           EXBMP0A: 'extended.bmp',
           BGA01: '01',
           SCROLL01: '1.25',
+          SPEED01: '1.5',
           POORBGA: '02',
           SWBGA01: '03',
           VIDEOFILE: 'movie.mp4',
@@ -696,6 +719,7 @@ test('JSON: migrates legacy metadata.extras extension headers to bms extensions'
   expect(parsed.bms.exBmp['0A']).toBe('extended.bmp');
   expect(parsed.bms.bga['01']).toBe('01');
   expect(parsed.bms.scroll['01']).toBe(1.25);
+  expect(parsed.bms.speed['01']).toBe(1.5);
   expect(parsed.bms.poorBga).toBe('02');
   expect(parsed.bms.swBga['01']).toBe('03');
   expect(parsed.bms.videoFile).toBe('movie.mp4');

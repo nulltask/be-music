@@ -6,6 +6,7 @@ import {
   createMeasureBoundariesBeats,
   createMeasureTimeline,
   createScrollTimeline,
+  createSpeedTimeline,
   createStopBeatWindows,
 } from '../core/timeline.ts';
 import { createBgaAnsiRenderer } from '../bga.ts';
@@ -59,6 +60,7 @@ async function bootstrap(): Promise<void> {
   const measureTimeline = createMeasureTimeline(initData.json, timingResolver, beatResolver);
   const bpmTimeline = createBpmTimeline(initData.json, timingResolver);
   const scrollTimeline = createScrollTimeline(initData.json, beatResolver);
+  const speedTimeline = createSpeedTimeline(initData.json, beatResolver);
   const stopWindows = createStopBeatWindows(timingResolver).map((window) => ({
     startSeconds: window.startSeconds,
     endSeconds: window.endSeconds,
@@ -83,6 +85,7 @@ async function bootstrap(): Promise<void> {
     randomPatternSummary: initData.randomPatternSummary,
     bpmTimeline,
     scrollTimeline,
+    speedTimeline,
     stopWindows,
     measureTimeline,
     measureLengths,

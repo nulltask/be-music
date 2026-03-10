@@ -1,5 +1,5 @@
 import { createTimingResolver, type TimingResolver } from '@be-music/audio-renderer';
-import { isScrollChannel, normalizeObjectKey, type BeatResolver, type BeMusicJson } from '@be-music/json';
+import { isScrollChannel, normalizeChannel, normalizeObjectKey, sortEvents, type BeatResolver, type BeMusicJson } from '@be-music/json';
 import { findLastIndexAtOrBefore } from '@be-music/utils';
 
 export interface MeasureTimelinePoint {
@@ -13,6 +13,11 @@ export interface BpmTimelinePoint {
 }
 
 export interface ScrollTimelinePoint {
+  beat: number;
+  speed: number;
+}
+
+export interface SpeedTimelinePoint {
   beat: number;
   speed: number;
 }
@@ -78,7 +83,7 @@ export function createScrollTimeline(json: BeMusicJson, beatResolver: BeatResolv
     return timeline;
   }
 
-  for (const event of json.events) {
+  for (const event of sortEvents(json.events)) {
     if (!isScrollChannel(event.channel)) {
       continue;
     }
@@ -88,6 +93,38 @@ export function createScrollTimeline(json: BeMusicJson, beatResolver: BeatResolv
     }
     const speed = scrollMap[key];
     if (typeof speed !== 'number' || !Number.isFinite(speed)) {
+      continue;
+    }
+    const beat = beatResolver.eventToBeat(event);
+    if (!Number.isFinite(beat) || beat < 0) {
+      continue;
+    }
+    timeline.push({
+      beat,
+      speed,
+    });
+  }
+
+  return timeline;
+}
+
+export function createSpeedTimeline(json: BeMusicJson, beatResolver: BeatResolver): SpeedTimelinePoint[] {
+  const timeline: SpeedTimelinePoint[] = [];
+  const speedMap = json.bms.speed;
+  if (Object.keys(speedMap).length === 0) {
+    return timeline;
+  }
+
+  for (const event of sortEvents(json.events)) {
+    if (normalizeChannel(event.channel) !== 'SP') {
+      continue;
+    }
+    const key = normalizeObjectKey(event.value);
+    if (!Object.hasOwn(speedMap, key)) {
+      continue;
+    }
+    const speed = speedMap[key];
+    if (typeof speed !== 'number' || !Number.isFinite(speed) || speed < 0) {
       continue;
     }
     const beat = beatResolver.eventToBeat(event);

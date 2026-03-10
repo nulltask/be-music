@@ -185,6 +185,7 @@
 - `exBmp`: `#EXBMPxx` のマップ
 - `bga`: `#BGAxx` のマップ
 - `scroll`: `#SCROLLxx` のマップ
+- `speed`: `#SPEEDxx` のマップ
 - `poorBga`: `#POORBGA` の値
 - `swBga`: `#SWBGAxx` のマップ
 - `videoFile`: `#VIDEOFILE` の値

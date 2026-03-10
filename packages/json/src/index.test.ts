@@ -66,6 +66,7 @@ describe('json', () => {
       name: 'sample.wav',
       notes: [{ x: 1, y: 0, l: 120, c: true }],
     });
+    source.bms.speed['01'] = 1.5;
 
     const cloned = cloneJson(source);
     cloned.metadata.title = 'changed';
@@ -73,12 +74,14 @@ describe('json', () => {
     cloned.bms.objectLines[0]!.events[0]!.value = '03';
     cloned.bms.sourceLines[0] = { kind: 'header', command: 'TITLE', value: 'changed' };
     cloned.bmson.soundChannels[0]!.notes[0]!.y = 240;
+    cloned.bms.speed['01'] = 2;
 
     expect(source.metadata.title).toBe('original');
     expect(source.events[0].value).toBe('01');
     expect(source.bms.objectLines[0]!.events[0]!.value).toBe('01');
     expect(source.bms.sourceLines[0]).toEqual({ kind: 'header', command: 'TITLE', value: 'original' });
     expect(source.bmson.soundChannels[0]!.notes[0]!.y).toBe(0);
+    expect(source.bms.speed['01']).toBe(1.5);
   });
 
   test('json: normalizeObjectKey / normalizeChannel', () => {
@@ -224,6 +227,7 @@ test('json: classifies channel types', () => {
     expect(isSampleTriggerChannel('98')).toBe(false);
     expect(isSampleTriggerChannel('A0')).toBe(false);
     expect(isSampleTriggerChannel('SC')).toBe(false);
+    expect(isSampleTriggerChannel('SP')).toBe(false);
     expect(isSampleTriggerChannel('11')).toBe(true);
 
   expect(isPlayableChannel('11')).toBe(true);

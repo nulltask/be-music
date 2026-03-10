@@ -146,6 +146,15 @@ test('BMS stringify: writes multiple LNOBJ declarations in order', () => {
   expect(lnObjLines).toEqual(['#LNOBJ AA', '#LNOBJ BB']);
 });
 
+test('BMS stringify: writes SPEED indexed headers', () => {
+  const json = createEmptyJson('bms');
+  json.bms.speed = { '01': 1, '02': 0.5 };
+
+  const output = stringifyBms(json);
+  expect(output).toMatch(/#SPEED01 1/);
+  expect(output).toMatch(/#SPEED02 0\.5/);
+});
+
 test('BMS stringify: preserves parsed duplicate object lines and BGM/A6 line boundaries', () => {
   const parsed = parseChart(
     [

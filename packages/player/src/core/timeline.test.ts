@@ -1,7 +1,13 @@
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { createBeatResolver, createEmptyJson, type BeMusicEvent } from '@be-music/json';
 import { describe, expect, test } from 'vitest';
-import { createBeatAtSecondsResolver, createBpmTimeline, createScrollTimeline, createStopBeatWindows } from './timeline.ts';
+import {
+  createBeatAtSecondsResolver,
+  createBpmTimeline,
+  createScrollTimeline,
+  createSpeedTimeline,
+  createStopBeatWindows,
+} from './timeline.ts';
 
 function createStopEvent(measure: number, numerator: number, denominator: number, value: string): BeMusicEvent {
   return {
@@ -81,5 +87,21 @@ describe('timeline', () => {
     const stopWindows = createStopBeatWindows(resolver);
     expect(stopWindows).toHaveLength(1);
     expect(stopWindows[0]?.durationSeconds).toBeCloseTo((3 / 1920) * (240 / baseBpm), 6);
+  });
+
+  test('SPEED: extracts visual speed keyframes from SP channel references', () => {
+    const json = createEmptyJson('bms');
+    json.bms.speed['01'] = 1;
+    json.bms.speed['02'] = 0.5;
+    json.events = [
+      { measure: 1, channel: 'SP', position: [1, 2], value: '02' },
+      { measure: 1, channel: 'SP', position: [0, 2], value: '01' },
+    ];
+
+    const beatResolver = createBeatResolver(json);
+    expect(createSpeedTimeline(json, beatResolver)).toEqual([
+      { beat: 4, speed: 1 },
+      { beat: 6, speed: 0.5 },
+    ]);
   });
 });

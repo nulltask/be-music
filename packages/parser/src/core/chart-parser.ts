@@ -44,7 +44,7 @@ import {
 } from './control-flow.ts';
 
 const INDEXED_HEADER_COMMAND =
-  /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SWBGA)([0-9A-Z]{2})$/;
+  /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SPEED|SWBGA)([0-9A-Z]{2})$/;
 const CONTROL_FLOW_COMMANDS: ReadonlySet<BmsControlFlowCommand> = new Set([
   'RANDOM',
   'SETRANDOM',
@@ -73,6 +73,7 @@ type IndexedHeaderDirective =
   | 'EXBMP'
   | 'BGA'
   | 'SCROLL'
+  | 'SPEED'
   | 'SWBGA';
 
 type MeasureLengthEntry = BeMusicJson['measures'][number];
@@ -819,6 +820,13 @@ function applyIndexedHeaderLine(
       }
       return;
     }
+    case 'SPEED': {
+      const numeric = Number.parseFloat(value);
+      if (Number.isFinite(numeric)) {
+        json.bms.speed[key] = numeric;
+      }
+      return;
+    }
     case 'SWBGA':
       if (value.length > 0) {
         json.bms.swBga[key] = value;
@@ -1025,6 +1033,16 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
       continue;
     }
 
+    const speedMatch = upper.match(/^SPEED([0-9A-Z]{2})$/);
+    if (speedMatch) {
+      const key = normalizeObjectKey(speedMatch[1]);
+      const parsed = normalizeNumericBmsExtensionValue(value);
+      if (!(key in json.bms.speed) && typeof parsed === 'number') {
+        json.bms.speed[key] = parsed;
+      }
+      continue;
+    }
+
     const swBgaMatch = upper.match(/^SWBGA([0-9A-Z]{2})$/);
     if (swBgaMatch) {
       const key = normalizeObjectKey(swBgaMatch[1]);
@@ -1054,6 +1072,7 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
     exBmp: {},
     bga: {},
     scroll: {},
+    speed: {},
     swBga: {},
   };
   if (!input || typeof input !== 'object') {
@@ -1159,6 +1178,7 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   normalized.exBmp = normalizeIndexedBmsExtensionMap(raw.exBmp ?? raw.ex_bmp ?? raw.exbmp);
   normalized.bga = normalizeIndexedBmsExtensionMap(raw.bga);
   normalized.scroll = normalizeIndexedBmsExtensionNumericMap(raw.scroll);
+  normalized.speed = normalizeIndexedBmsExtensionNumericMap(raw.speed);
   normalized.swBga = normalizeIndexedBmsExtensionMap(raw.swBga ?? raw.sw_bga ?? raw.swbga);
 
   const poorBga = raw.poorBga ?? raw.poor_bga;
