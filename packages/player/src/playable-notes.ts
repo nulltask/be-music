@@ -64,12 +64,11 @@ export function extractTimedNotes(
   json: BeMusicJson,
   options: ExtractTimedNotesOptions = {},
 ): ExtractTimedNotesResult {
-  const includeLandmine = options.includeLandmine !== false;
-  const includeInvisible = options.includeInvisible === true;
   const context = createTimedExtractionContext(json);
-  const playableNotes = collectPlayableNotes(context);
-  const landmineNotes = includeLandmine ? collectLandmineNotes(context) : [];
-  const invisibleNotes = includeInvisible ? collectInvisibleNotes(context) : [];
+  const { playableNotes, landmineNotes, invisibleNotes } = collectTimedNotes(context, {
+    includeLandmine: options.includeLandmine !== false,
+    includeInvisible: options.includeInvisible === true,
+  });
 
   finalizePlayableNotes(json, playableNotes, context.resolver, options);
   return {
@@ -84,17 +83,17 @@ export function extractPlayableNotes(
   options: ExtractPlayableNotesOptions = {},
 ): TimedPlayableNote[] {
   const context = createTimedExtractionContext(json);
-  const playableNotes = collectPlayableNotes(context);
+  const { playableNotes } = collectTimedNotes(context);
   finalizePlayableNotes(json, playableNotes, context.resolver, options);
   return playableNotes;
 }
 
 export function extractLandmineNotes(json: BeMusicJson): TimedLandmineNote[] {
-  return collectLandmineNotes(createTimedExtractionContext(json));
+  return collectTimedNotes(createTimedExtractionContext(json), { includeLandmine: true }).landmineNotes;
 }
 
 export function extractInvisiblePlayableNotes(json: BeMusicJson): TimedPlayableNote[] {
-  return collectInvisibleNotes(createTimedExtractionContext(json));
+  return collectTimedNotes(createTimedExtractionContext(json), { includeInvisible: true }).invisibleNotes;
 }
 
 function createTimedExtractionContext(json: BeMusicJson): TimedExtractionContext {
@@ -106,70 +105,78 @@ function createTimedExtractionContext(json: BeMusicJson): TimedExtractionContext
   };
 }
 
-function collectPlayableNotes(context: TimedExtractionContext): TimedPlayableNote[] {
-  const notes: TimedPlayableNote[] = [];
+function collectTimedNotes(
+  context: TimedExtractionContext,
+  options: {
+    includeLandmine?: boolean;
+    includeInvisible?: boolean;
+  } = {},
+): ExtractTimedNotesResult {
+  const includeLandmine = options.includeLandmine === true;
+  const includeInvisible = options.includeInvisible === true;
+  const playableNotes: TimedPlayableNote[] = [];
+  const landmineNotes: TimedLandmineNote[] = [];
+  const invisibleNotes: TimedPlayableNote[] = [];
+
   for (const event of context.sortedEvents) {
     const normalizedChannel = normalizeChannel(event.channel);
-    if (!isPlayableChannel(normalizedChannel)) {
+    const playableChannel = isPlayableChannel(normalizedChannel) ? normalizedChannel : undefined;
+    const landmineChannel = includeLandmine
+      ? mapLandmineNormalizedChannelToPlayableLane(normalizedChannel)
+      : undefined;
+    const invisibleChannel = includeInvisible
+      ? mapInvisibleNormalizedChannelToPlayableLane(normalizedChannel)
+      : undefined;
+
+    if (!playableChannel && !landmineChannel && !invisibleChannel) {
       continue;
     }
 
     const beat = context.beatResolver.eventToBeat(event);
-    const endBeat = resolveLongNoteEndBeat(event, beat, normalizedChannel, context.bmsonResolution);
-    notes.push({
-      event,
-      channel: normalizedChannel,
-      beat,
-      endBeat,
-      endSeconds: endBeat !== undefined ? context.resolver.beatToSeconds(endBeat) : undefined,
-      longNoteMode: endBeat !== undefined ? DEFAULT_OTHER_LONG_NOTE_MODE : undefined,
-      seconds: context.resolver.beatToSeconds(beat),
-      judged: false,
-    });
-  }
-  return notes;
-}
+    const seconds = context.resolver.beatToSeconds(beat);
 
-function collectLandmineNotes(context: TimedExtractionContext): TimedLandmineNote[] {
-  const notes: TimedLandmineNote[] = [];
-  for (const event of context.sortedEvents) {
-    const mappedChannel = mapLandmineNormalizedChannelToPlayableLane(normalizeChannel(event.channel));
-    if (!mappedChannel) {
-      continue;
+    if (playableChannel) {
+      const endBeat = resolveLongNoteEndBeat(event, beat, playableChannel, context.bmsonResolution);
+      playableNotes.push({
+        event,
+        channel: playableChannel,
+        beat,
+        endBeat,
+        endSeconds: endBeat !== undefined ? context.resolver.beatToSeconds(endBeat) : undefined,
+        longNoteMode: endBeat !== undefined ? DEFAULT_OTHER_LONG_NOTE_MODE : undefined,
+        seconds,
+        judged: false,
+      });
     }
 
-    const beat = context.beatResolver.eventToBeat(event);
-    notes.push({
-      event,
-      channel: mappedChannel,
-      beat,
-      seconds: context.resolver.beatToSeconds(beat),
-      judged: false,
-      mine: true,
-    });
-  }
-  return notes;
-}
-
-function collectInvisibleNotes(context: TimedExtractionContext): TimedPlayableNote[] {
-  const notes: TimedPlayableNote[] = [];
-  for (const event of context.sortedEvents) {
-    const mappedChannel = mapInvisibleNormalizedChannelToPlayableLane(normalizeChannel(event.channel));
-    if (!mappedChannel) {
-      continue;
+    if (landmineChannel) {
+      landmineNotes.push({
+        event,
+        channel: landmineChannel,
+        beat,
+        seconds,
+        judged: false,
+        mine: true,
+      });
     }
 
-    const beat = context.beatResolver.eventToBeat(event);
-    notes.push({
-      event,
-      channel: mappedChannel,
-      beat,
-      seconds: context.resolver.beatToSeconds(beat),
-      judged: false,
-      invisible: true,
-    });
+    if (invisibleChannel) {
+      invisibleNotes.push({
+        event,
+        channel: invisibleChannel,
+        beat,
+        seconds,
+        judged: false,
+        invisible: true,
+      });
+    }
   }
-  return notes;
+
+  return {
+    playableNotes,
+    landmineNotes,
+    invisibleNotes,
+  };
 }
 
 function finalizePlayableNotes(

@@ -11,6 +11,7 @@ import {
   extractInvisiblePlayableNotes,
   extractLandmineNotes,
   extractPlayableNotes,
+  extractTimedNotes,
   manualPlay,
   resolveBgmHeadroomGain,
   shouldUseAutoMixBgmHeadroomControl,
@@ -598,6 +599,65 @@ describe('player', () => {
     expect(invisible[0]?.channel).toBe('11');
     expect(invisible[1]?.channel).toBe('24');
     expect(invisible[0]?.invisible).toBe(true);
+  });
+
+  test('player: extractTimedNotes matches the individual extraction helpers', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [
+      { measure: 0, channel: '31', position: [0, 4], value: '10' },
+      { measure: 0, channel: '11', position: [1, 4], value: '01' },
+      { measure: 1, channel: 'D2', position: [0, 1], value: '20' },
+      { measure: 2, channel: '44', position: [0, 1], value: '30' },
+    ];
+
+    const timed = extractTimedNotes(json, {
+      includeLandmine: true,
+      includeInvisible: true,
+    });
+    const snapshot = {
+      playableNotes: timed.playableNotes.map((note) => ({
+        channel: note.channel,
+        beat: note.beat,
+        endBeat: note.endBeat,
+        invisible: note.invisible,
+        mine: (note as { mine?: boolean }).mine,
+      })),
+      landmineNotes: timed.landmineNotes.map((note) => ({
+        channel: note.channel,
+        beat: note.beat,
+        mine: note.mine,
+      })),
+      invisibleNotes: timed.invisibleNotes.map((note) => ({
+        channel: note.channel,
+        beat: note.beat,
+        invisible: note.invisible,
+      })),
+    };
+
+    expect(snapshot.playableNotes).toEqual(
+      extractPlayableNotes(json).map((note) => ({
+        channel: note.channel,
+        beat: note.beat,
+        endBeat: note.endBeat,
+        invisible: note.invisible,
+        mine: (note as { mine?: boolean }).mine,
+      })),
+    );
+    expect(snapshot.landmineNotes).toEqual(
+      extractLandmineNotes(json).map((note) => ({
+        channel: note.channel,
+        beat: note.beat,
+        mine: note.mine,
+      })),
+    );
+    expect(snapshot.invisibleNotes).toEqual(
+      extractInvisiblePlayableNotes(json).map((note) => ({
+        channel: note.channel,
+        beat: note.beat,
+        invisible: note.invisible,
+      })),
+    );
   });
 
   test('player: assigns quarter-note length to free-zone notes', () => {
