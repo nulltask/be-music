@@ -1496,13 +1496,14 @@ function resolveLaneCellPriority(symbol: string, isFreeZoneSourceChannel: boolea
   }
   if (
     symbol === NOTE_HEAD_SYMBOL ||
-    symbol === LONG_NOTE_BODY_SYMBOL ||
     symbol === LONG_NOTE_TAIL_SYMBOL ||
     symbol === INVISIBLE_NOTE_HEAD_SYMBOL ||
-    symbol === INVISIBLE_LONG_NOTE_BODY_SYMBOL ||
     symbol === INVISIBLE_LONG_NOTE_TAIL_SYMBOL
   ) {
     return isFreeZoneSourceChannel ? 3 : 4;
+  }
+  if (symbol === LONG_NOTE_BODY_SYMBOL || symbol === INVISIBLE_LONG_NOTE_BODY_SYMBOL) {
+    return isFreeZoneSourceChannel ? 2 : 3;
   }
   if (symbol === MEASURE_LINE_SYMBOL) {
     return 1;
