@@ -32,6 +32,31 @@ function createSingleTriggerBmsChart(samplePath: string, volWav?: number) {
   return json;
 }
 
+function createSingleBmsNoteChart(noteChannel: string, notePosition: readonly [number, number], samplePath = 'not-found.wav') {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = samplePath;
+  json.events = [{ measure: 0, channel: noteChannel, position: notePosition, value: '01' }];
+  return json;
+}
+
+function createDynamicVolumeChangeChart(
+  noteChannel: string,
+  notePosition: readonly [number, number],
+  changeChannel: '97' | '98',
+  changePosition: readonly [number, number],
+  changeValue = '80',
+) {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'not-found.wav';
+  json.events = [
+    { measure: 0, channel: noteChannel, position: notePosition, value: '01' },
+    { measure: 0, channel: changeChannel, position: changePosition, value: changeValue },
+  ];
+  return json;
+}
+
 function maxDeltaBetweenResults(left: RenderResult, right: RenderResult, startFrame: number, endFrame: number): number {
   const start = Math.max(0, startFrame);
   const end = Math.min(left.left.length, right.left.length, endFrame);
@@ -49,6 +74,20 @@ function maxDeltaBetweenResults(left: RenderResult, right: RenderResult, startFr
   }
 
   return maxDelta;
+}
+
+function scaleResultAfterFrame(result: RenderResult, startFrame: number, gain: number): RenderResult {
+  const left = Float32Array.from(result.left);
+  const right = Float32Array.from(result.right);
+  for (let index = Math.max(0, startFrame); index < left.length; index += 1) {
+    left[index] *= gain;
+    right[index] *= gain;
+  }
+  return {
+    ...result,
+    left,
+    right,
+  };
 }
 
 const codecCases = [
@@ -135,6 +174,102 @@ test('audio-renderer: scales rendered chart audio with #VOLWAV', async () => {
       normalRendered.left.length,
     ),
   ).toBeLessThan(1e-7);
+});
+
+test('audio-renderer: channel 97 does not change already-playing BGM samples', async () => {
+  const baseline = createSingleBmsNoteChart('01', [0, 1]);
+  const changed = createDynamicVolumeChangeChart('01', [0, 1], '97', [1, 8]);
+  const [baselineRendered, changedRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1,
+    }),
+    renderJson(changed, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1,
+    }),
+  ]);
+
+  expect(maxDeltaBetweenResults(baselineRendered, changedRendered, 0, baselineRendered.left.length)).toBeLessThan(1e-7);
+});
+
+test('audio-renderer: channel 97 changes the initial gain of later BGM samples', async () => {
+  const baseline = createSingleBmsNoteChart('01', [1, 8]);
+  const changed = createDynamicVolumeChangeChart('01', [1, 8], '97', [0, 1]);
+  const [baselineRendered, changedRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1,
+    }),
+    renderJson(changed, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1,
+    }),
+  ]);
+
+  const noteFrame = Math.round(0.25 * baselineRendered.sampleRate);
+  const expected = scaleResultAfterFrame(baselineRendered, noteFrame, 0x80 / 0xff);
+  expect(maxDeltaBetweenResults(expected, changedRendered, 0, baselineRendered.left.length)).toBeLessThan(1e-5);
+});
+
+test('audio-renderer: channel 98 does not change already-playing key samples', async () => {
+  const baseline = createSingleBmsNoteChart('11', [0, 1]);
+  const changed = createDynamicVolumeChangeChart('11', [0, 1], '98', [1, 8]);
+  const [baselineRendered, changedRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1,
+    }),
+    renderJson(changed, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1,
+    }),
+  ]);
+
+  expect(maxDeltaBetweenResults(baselineRendered, changedRendered, 0, baselineRendered.left.length)).toBeLessThan(1e-7);
+});
+
+test('audio-renderer: channel 98 changes the initial gain of later key samples', async () => {
+  const baseline = createSingleBmsNoteChart('11', [1, 8]);
+  const changed = createDynamicVolumeChangeChart('11', [1, 8], '98', [0, 1]);
+  const [baselineRendered, changedRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1,
+    }),
+    renderJson(changed, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 1,
+    }),
+  ]);
+
+  const noteFrame = Math.round(0.25 * baselineRendered.sampleRate);
+  const expected = scaleResultAfterFrame(baselineRendered, noteFrame, 0x80 / 0xff);
+  expect(maxDeltaBetweenResults(expected, changedRendered, 0, baselineRendered.left.length)).toBeLessThan(1e-5);
 });
 
 test('audio-renderer: startSeconds trims leading timeline before rendering', async () => {

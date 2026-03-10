@@ -224,6 +224,8 @@ const PACKED_CHANNEL_01 = 0x3031;
 const PACKED_CHANNEL_03 = 0x3033;
 const PACKED_CHANNEL_08 = 0x3038;
 const PACKED_CHANNEL_09 = 0x3039;
+const PACKED_CHANNEL_97 = 0x3937;
+const PACKED_CHANNEL_98 = 0x3938;
 const PACKED_CHANNEL_SC = 0x5343;
 
 export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMusicJson {
@@ -726,6 +728,9 @@ export function isSampleTriggerChannel(channel: string): boolean {
     const lowCode = channel.charCodeAt(1);
     if (highCode === 0x30) {
       return lowCode === 0x31;
+    }
+    if (highCode === 0x39 && (lowCode === 0x37 || lowCode === 0x38)) {
+      return false;
     }
     if ((highCode & 0xdf) === 0x41 && lowCode === 0x30) {
       return false;
@@ -1275,6 +1280,9 @@ function isPackedSampleTriggerChannel(packed: number): boolean {
   if (packed === PACKED_CHANNEL_01) {
     return true;
   }
+  if (packed === PACKED_CHANNEL_97 || packed === PACKED_CHANNEL_98) {
+    return false;
+  }
   if (((packed >> 8) & 0xff) === 0x30) {
     return false;
   }
@@ -1325,6 +1333,9 @@ function isLandmineNormalizedChannel(normalized: string): boolean {
 function isSampleTriggerNormalizedChannel(normalized: string): boolean {
   if (normalized === '01') {
     return true;
+  }
+  if (normalized === '97' || normalized === '98') {
+    return false;
   }
   if (normalized.length === 0 || normalized.charCodeAt(0) === 0x30) {
     return false;

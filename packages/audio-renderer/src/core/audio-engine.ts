@@ -105,6 +105,22 @@ interface TimingBuildContext {
   beatResolver: BeatResolver;
 }
 
+type DynamicVolumeBus = 'bgm' | 'play';
+
+interface DynamicVolumeChange {
+  bus: DynamicVolumeBus;
+  seconds: number;
+  gain: number;
+}
+
+interface ScheduledSampleRender {
+  start: number;
+  sample: StereoSample;
+  triggerGain: number;
+  sampleOffsetFrames: number;
+  sampleMaxFrames?: number;
+}
+
 const DEFAULT_SAMPLE_RATE = 44_100;
 const DEFAULT_TAIL_SECONDS = 2;
 const DEFAULT_GAIN = 0.9;
@@ -117,6 +133,90 @@ function resolveChartVolWavGain(json: BeMusicJson): number {
     return 1;
   }
   return volWav / 100;
+}
+
+function isDynamicBmsBgmVolumeChannel(channel: string): boolean {
+  return normalizeChannel(channel) === '97';
+}
+
+function isDynamicBmsKeyVolumeChannel(channel: string): boolean {
+  return normalizeChannel(channel) === '98';
+}
+
+function isDynamicBmsVolumeChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  return normalized === '97' || normalized === '98';
+}
+
+function parseDynamicBmsVolumeGain(value: string): number | undefined {
+  const parsed = Number.parseInt(normalizeObjectKey(value), 16);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 0xff) {
+    return undefined;
+  }
+  return parsed / 0xff;
+}
+
+function isPlayLaneChannelForVolumeControl(channel: string): boolean {
+  if (channel.length === 2) {
+    const sideCode = channel.charCodeAt(0);
+    const laneCode = channel.charCodeAt(1);
+    if (
+      laneCode >= 0x31 &&
+      laneCode <= 0x39 &&
+      (sideCode === 0x31 ||
+        sideCode === 0x32 ||
+        sideCode === 0x33 ||
+        sideCode === 0x34 ||
+        sideCode === 0x35 ||
+        sideCode === 0x36)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function collectDynamicVolumeChanges(
+  json: BeMusicJson,
+  resolver: TimingResolver,
+  context: TimingBuildContext,
+): DynamicVolumeChange[] {
+  if (json.sourceFormat !== 'bms') {
+    return [];
+  }
+  const changes: DynamicVolumeChange[] = [];
+  for (const event of context.sortedEvents) {
+    const normalizedChannel = normalizeChannel(event.channel);
+    if (!isDynamicBmsVolumeChannel(normalizedChannel)) {
+      continue;
+    }
+    const gain = parseDynamicBmsVolumeGain(event.value);
+    if (gain === undefined) {
+      continue;
+    }
+    changes.push({
+      bus: isDynamicBmsKeyVolumeChannel(normalizedChannel)
+        ? 'play'
+        : isDynamicBmsBgmVolumeChannel(normalizedChannel)
+          ? 'bgm'
+          : 'play',
+      seconds: resolver.eventToSeconds(event),
+      gain,
+    });
+  }
+  return changes;
+}
+
+function advanceDynamicVolumeGain(
+  changes: readonly DynamicVolumeChange[],
+  seconds: number,
+  state: { index: number; gain: number },
+): number {
+  while (state.index < changes.length && changes[state.index]!.seconds <= seconds) {
+    state.gain = changes[state.index]!.gain;
+    state.index += 1;
+  }
+  return state.gain;
 }
 
 export function createTimingResolver(json: BeMusicJson): TimingResolver {
@@ -244,6 +344,11 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
 
   const timingContext = createTimingBuildContext(json);
   const resolver = createTimingResolverWithContext(json, timingContext);
+  const dynamicVolumeChanges = collectDynamicVolumeChanges(json, resolver, timingContext);
+  const bgmVolumeChanges = dynamicVolumeChanges.filter((change) => change.bus === 'bgm');
+  const playVolumeChanges = dynamicVolumeChanges.filter((change) => change.bus === 'play');
+  const bgmVolumeState = { index: 0, gain: 1 };
+  const playVolumeState = { index: 0, gain: 1 };
   const triggers = collectSampleTriggersWithContext(json, resolver, timingContext, {
     inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
   });
@@ -251,13 +356,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const loadedSamples = new Map<string, StereoSample>();
   const resolvedPathCache = new Map<string, string | undefined>();
 
-  const scheduled: Array<{
-    start: number;
-    sample: StereoSample;
-    triggerGain: number;
-    sampleOffsetFrames: number;
-    sampleMaxFrames?: number;
-  }> = [];
+  const scheduled: ScheduledSampleRender[] = [];
   const bmsonScheduledSlices = new Set<string>();
   const latestBmsScheduleBySampleKey = new Map<string, number>();
   let maxFrame = Math.max(1, Math.round(tailSeconds * sampleRate));
@@ -291,7 +390,12 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
       continue;
     }
     const rawTriggerGain = resolveTriggerGain?.(trigger) ?? 1;
-    const triggerGain = Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1;
+    const volumeBus = isPlayLaneChannelForVolumeControl(trigger.channel) ? 'play' : 'bgm';
+    const dynamicGain =
+      volumeBus === 'play'
+        ? advanceDynamicVolumeGain(playVolumeChanges, trigger.seconds, playVolumeState)
+        : advanceDynamicVolumeGain(bgmVolumeChanges, trigger.seconds, bgmVolumeState);
+    const triggerGain = (Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1) * dynamicGain;
 
     const start = Math.max(0, Math.round((trigger.seconds - startSeconds) * sampleRate));
     if (json.sourceFormat === 'bmson' && trigger.sampleSliceId) {
@@ -312,7 +416,14 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
       }
     }
 
-    const scheduleIndex = scheduled.push({ start, sample, triggerGain, sampleOffsetFrames, sampleMaxFrames }) - 1;
+    const scheduleIndex =
+      scheduled.push({
+        start,
+        sample,
+        triggerGain,
+        sampleOffsetFrames,
+        sampleMaxFrames,
+      }) - 1;
     if (json.sourceFormat === 'bms') {
       latestBmsScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
     }
@@ -330,15 +441,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
       if (item.triggerGain <= 0) {
         continue;
       }
-      mixSample(
-        left,
-        right,
-        item.sample,
-        item.start,
-        gain * item.triggerGain,
-        item.sampleOffsetFrames,
-        item.sampleMaxFrames,
-      );
+      mixSample(left, right, item.sample, item.start, gain * item.triggerGain, item.sampleOffsetFrames, item.sampleMaxFrames);
     }
   } else {
     for (let scheduleIndex = 0; scheduleIndex < scheduled.length; scheduleIndex += 1) {

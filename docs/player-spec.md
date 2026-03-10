@@ -417,6 +417,25 @@ BMS の `#VOLWAV` は譜面全体の音量倍率として扱います。
 この倍率は、リアルタイム再生の keysound、曲選択プレビュー、`renderJson()` を使うオフライン音声レンダリングに適用します。
 現実装は線形 gain のみを適用し、歴史的な実装差やハードウェア依存の音量差までは再現しません。
 
+### `#xxx97` / `#xxx98`
+
+BMS の `97` / `98` channel は、演奏途中の bus volume automation として扱います。
+`97` は BGM 側、`98` は playable/key 側に対応し、値 `01-FF` を `value / 255` の gain へ変換します。
+
+- `#xxx97`: BGM 側の音量を更新する
+- `#xxx98`: playable/key 側の音量を更新する
+- `FF`: 原音量
+- `00`: 空トークンなのでイベントは生成されない
+
+player は同時刻の sample trigger より先に `97` / `98` を適用します。
+そのため、同じ beat に volume change と発音がある場合、発音時には新しい音量が使われます。
+
+この変更は、その時点以降に新しく trigger される音の初期 gain だけに反映します。
+すでに再生中の voice は変更しません。CLI の `playVolume` / `bgmVolume` や `#VOLWAV` がある場合は、それらと乗算で適用します。
+
+この解釈を採る理由は、再生中 PCM の gain を瞬時に掛け替えると不連続な段差が入りやすく、クリックや不安定な音量変化として聞こえやすいためです。
+また、`#xxx98` は playable/key sound の発音条件に近い命令として読めるので、「以後に鳴る音の初期 gain を変える」と解釈したほうが実装と結果の対応が分かりやすくなります。
+
 ### BGM headroom 制御
 
 `limiter === false` のときは auto mix 用の BGM headroom 制御を有効にします。

@@ -535,6 +535,13 @@ interface DynamicBmsJudgeRankChange {
   rankPercent: number;
 }
 
+type DynamicAudioVolumeBus = 'bgm' | 'play';
+
+interface TimedAudioVolumeEvent {
+  event: BeMusicEvent;
+  seconds: number;
+}
+
 function collectDynamicBmsJudgeRankChanges(json: BeMusicJson): DynamicBmsJudgeRankChange[] {
   if (json.sourceFormat !== 'bms') {
     return [];
@@ -556,6 +563,48 @@ function collectDynamicBmsJudgeRankChanges(json: BeMusicJson): DynamicBmsJudgeRa
     });
   }
   return changes;
+}
+
+function isDynamicBmsBgmVolumeChannel(channel: string): boolean {
+  return normalizeChannel(channel) === '97';
+}
+
+function isDynamicBmsKeyVolumeChannel(channel: string): boolean {
+  return normalizeChannel(channel) === '98';
+}
+
+function isDynamicBmsVolumeChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  return normalized === '97' || normalized === '98';
+}
+
+function parseDynamicBmsVolumeGain(value: string): number | undefined {
+  const parsed = Number.parseInt(normalizeObjectKey(value), 16);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 0xff) {
+    return undefined;
+  }
+  return parsed / 0xff;
+}
+
+function collectRealtimeAudioVolumeEvents(json: BeMusicJson): TimedAudioVolumeEvent[] {
+  if (json.sourceFormat !== 'bms') {
+    return [];
+  }
+  const resolver = createTimingResolver(json);
+  const events: TimedAudioVolumeEvent[] = [];
+  for (const event of sortEvents(json.events)) {
+    if (!isDynamicBmsVolumeChannel(event.channel)) {
+      continue;
+    }
+    if (parseDynamicBmsVolumeGain(event.value) === undefined) {
+      continue;
+    }
+    events.push({
+      event,
+      seconds: Math.max(0, resolver.eventToSeconds(event)),
+    });
+  }
+  return events;
 }
 
 function parsePositiveInteger(value?: string): number | undefined {
@@ -649,8 +698,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolver(resolvedJson);
+  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson);
   const realtimeAudioTriggers = collectRealtimeAudioTriggers(resolvedJson, inferBmsLnTypeWhenMissing);
-  const realtimeAudioEndSeconds = options.audio === false ? 0 : (realtimeAudioTriggers.at(-1)?.seconds ?? 0);
+  const realtimeAudioEndSeconds =
+    options.audio === false ? 0 : Math.max(realtimeAudioTriggers.at(-1)?.seconds ?? 0, realtimeAudioVolumeEvents.at(-1)?.seconds ?? 0);
 
   const extractedNotes = extractTimedNotes(resolvedJson, {
     includeLandmine: true,
@@ -793,6 +844,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   }
 
   let playbackClock: PlaybackClock | undefined;
+  let realtimeAudioVolumeEventIndex = 0;
   let realtimeAudioTriggerIndex = 0;
   const pendingAutoLongNotes: PendingAutoLongNoteState[] = [];
 
@@ -846,6 +898,22 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           writeOutput(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
         }
       }
+    }
+  };
+
+  const triggerRealtimeAudioVolumeEvents = (referenceSeconds: number): void => {
+    const triggerEvent = audioSession?.triggerEvent;
+    if (!triggerEvent) {
+      return;
+    }
+    const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+    while (realtimeAudioVolumeEventIndex < realtimeAudioVolumeEvents.length) {
+      const volumeEvent = realtimeAudioVolumeEvents[realtimeAudioVolumeEventIndex]!;
+      if (volumeEvent.seconds > safeReferenceSeconds) {
+        break;
+      }
+      triggerEvent(volumeEvent.event);
+      realtimeAudioVolumeEventIndex += 1;
     }
   };
 
@@ -944,7 +1012,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           }
           const nowMs = chartClock.nowMs();
           if (nowMs >= targetMs) {
-            drainPendingAutoLongNotes(elapsedMsToGameSeconds(nowMs, speed));
+            const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+            triggerRealtimeAudioVolumeEvents(nowSec);
+            triggerRealtimeAudioEvents(nowSec);
+            drainPendingAutoLongNotes(nowSec);
             return;
           }
           if (chartClock.isPaused()) {
@@ -952,6 +1023,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             continue;
           }
           const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+          triggerRealtimeAudioVolumeEvents(nowSec);
           triggerRealtimeAudioEvents(nowSec);
           drainPendingAutoLongNotes(nowSec);
           markExpiredLandmines(nowSec);
@@ -1049,6 +1121,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let badWindowMs = judgeWindows.bad;
   let badWindowSeconds = badWindowMs / 1000;
   const dynamicJudgeRankChanges = collectDynamicBmsJudgeRankChanges(resolvedJson);
+  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson);
   let dynamicJudgeRankCursor = 0;
   let maxBadWindowMs = badWindowMs;
   for (const change of dynamicJudgeRankChanges) {
@@ -1066,7 +1139,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     (channel) => !isPlayLaneChannelForVolumeControl(channel),
   );
   const nonPlayableRealtimeAudioEndSeconds =
-    options.audio === false ? 0 : (nonPlayableRealtimeAudioTriggers.at(-1)?.seconds ?? 0);
+    options.audio === false
+      ? 0
+      : Math.max(nonPlayableRealtimeAudioTriggers.at(-1)?.seconds ?? 0, realtimeAudioVolumeEvents.at(-1)?.seconds ?? 0);
 
   const extractedNotes = extractTimedNotes(resolvedJson, {
     includeLandmine: true,
@@ -1220,6 +1295,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let scorableMissCursor = 0;
   let landmineExpireCursor = 0;
   let invisibleExpireCursor = 0;
+  let realtimeAudioVolumeEventIndex = 0;
   let remainingScorableNotes = scorableNotes.length;
   let remainingLandmineNotes = landmineNotes.length;
   let remainingInvisibleNotes = invisibleNotes.length;
@@ -1419,6 +1495,22 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     activeLongNotesByChannel.delete(channel);
     longHoldUntilMsByChannel.delete(channel);
     applyResolvedManualJudge(channel, judge, atSeconds);
+  };
+
+  const triggerRealtimeAudioVolumeEvents = (referenceSeconds: number): void => {
+    const triggerEvent = audioSession?.triggerEvent;
+    if (!triggerEvent) {
+      return;
+    }
+    const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+    while (realtimeAudioVolumeEventIndex < realtimeAudioVolumeEvents.length) {
+      const volumeEvent = realtimeAudioVolumeEvents[realtimeAudioVolumeEventIndex]!;
+      if (volumeEvent.seconds > safeReferenceSeconds) {
+        break;
+      }
+      triggerEvent(volumeEvent.event);
+      realtimeAudioVolumeEventIndex += 1;
+    }
   };
 
   const triggerNonPlayableRealtimeAudioEvents = (referenceSeconds: number): void => {
@@ -1666,6 +1758,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (playbackClock.isPaused()) {
         continue;
       }
+      const nowSec = elapsedMsToGameSeconds(playbackClock.nowMs(), speed);
+      triggerRealtimeAudioVolumeEvents(nowSec);
       handleMappedInputTokens(command.tokens);
     }
   };
@@ -1687,6 +1781,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const nowBeat = beatAtSeconds(nowSec);
       advanceDynamicJudgeRankChanges(nowSec);
 
+      triggerRealtimeAudioVolumeEvents(nowSec);
       triggerNonPlayableRealtimeAudioEvents(nowSec);
 
       for (const channel of activeKittyPressedChannels) {
@@ -1956,6 +2051,8 @@ async function createAudioSessionIfEnabled(
   let paused = false;
   let playbackTask: Promise<void> | undefined;
   const activeVoices: ActiveVoice[] = [];
+  let currentBgmDynamicGain = 1;
+  let currentPlayDynamicGain = 1;
 
   output.onError(() => {
     writeOutput(`Audio playback stream error (${output.label}).\n`);
@@ -2028,6 +2125,19 @@ async function createAudioSessionIfEnabled(
       if (draining || abortRequested || paused) {
         return;
       }
+      const normalizedChannel = normalizeChannel(event.channel);
+      if (isDynamicBmsVolumeChannel(normalizedChannel)) {
+        const dynamicGain = parseDynamicBmsVolumeGain(event.value);
+        if (dynamicGain === undefined) {
+          return;
+        }
+        if (isDynamicBmsKeyVolumeChannel(normalizedChannel)) {
+          currentPlayDynamicGain = dynamicGain;
+        } else if (isDynamicBmsBgmVolumeChannel(normalizedChannel)) {
+          currentBgmDynamicGain = dynamicGain;
+        }
+        return;
+      }
       if (lnobjEndEvents.has(event)) {
         return;
       }
@@ -2053,7 +2163,10 @@ async function createAudioSessionIfEnabled(
       if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
         return;
       }
-      const voiceGain = resolveTriggerVoiceGain(event.channel, playVolume, bgmVolume);
+      const volumeBus = resolveDynamicAudioVolumeBus(normalizedChannel);
+      const voiceGain =
+        resolveTriggerVoiceBaseGain(volumeBus, playVolume, bgmVolume) *
+        (volumeBus === 'play' ? currentPlayDynamicGain : currentBgmDynamicGain);
       if (voiceGain <= 0) {
         return;
       }
@@ -2612,7 +2725,9 @@ function stripPlayableEvents(json: BeMusicJson): BeMusicJson {
 
 function stripNonPlayableEvents(json: BeMusicJson): BeMusicJson {
   const cloned = structuredClone(json);
-  cloned.events = cloned.events.filter((event) => isPlayLaneChannelForVolumeControl(event.channel));
+  cloned.events = cloned.events.filter((event) =>
+    isPlayLaneChannelForVolumeControl(event.channel) || isDynamicBmsKeyVolumeChannel(event.channel),
+  );
   return cloned;
 }
 
@@ -2796,8 +2911,16 @@ function collectRealtimeAudioSampleKeys(json: BeMusicJson, inferBmsLnTypeWhenMis
   return [...keys];
 }
 
-function resolveTriggerVoiceGain(channel: string, playVolume: number, bgmVolume: number): number {
-  return isPlayLaneChannelForVolumeControl(channel) ? playVolume : bgmVolume;
+function resolveDynamicAudioVolumeBus(channel: string): DynamicAudioVolumeBus {
+  return isPlayLaneChannelForVolumeControl(channel) ? 'play' : 'bgm';
+}
+
+function resolveTriggerVoiceBaseGain(
+  volumeBus: DynamicAudioVolumeBus,
+  playVolume: number,
+  bgmVolume: number,
+): number {
+  return volumeBus === 'play' ? playVolume : bgmVolume;
 }
 
 function createSilentRenderResult(sampleRate: number): RenderResult {

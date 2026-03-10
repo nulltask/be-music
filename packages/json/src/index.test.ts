@@ -215,6 +215,8 @@ test('json: classifies channel types', () => {
     expect(isSampleTriggerChannel('00')).toBe(false);
     expect(isSampleTriggerChannel('03')).toBe(false);
     expect(isSampleTriggerChannel('09')).toBe(false);
+    expect(isSampleTriggerChannel('97')).toBe(false);
+    expect(isSampleTriggerChannel('98')).toBe(false);
     expect(isSampleTriggerChannel('A0')).toBe(false);
     expect(isSampleTriggerChannel('SC')).toBe(false);
     expect(isSampleTriggerChannel('11')).toBe(true);
