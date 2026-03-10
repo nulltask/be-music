@@ -332,7 +332,6 @@ export function normalizeBmsonBgaForIr(input: BmsonDocument['bga'] | undefined):
 
 export function normalizeBmsonExtensions(input: unknown): BeMusicJson['bmson'] {
   const normalized: BeMusicJson['bmson'] = {
-    lines: [],
     info: {},
     bga: {
       header: [],
@@ -340,9 +339,6 @@ export function normalizeBmsonExtensions(input: unknown): BeMusicJson['bmson'] {
       layerEvents: [],
       poorEvents: [],
     },
-    bpmEvents: [],
-    stopEvents: [],
-    soundChannels: [],
   };
   if (!input || typeof input !== 'object') {
     return normalized;
@@ -353,12 +349,8 @@ export function normalizeBmsonExtensions(input: unknown): BeMusicJson['bmson'] {
     normalized.version = raw.version;
   }
 
-  normalized.lines = normalizeBmsonLines(raw.lines);
   normalized.info = normalizeBmsonInfoFromIr(raw.info);
   normalized.bga = normalizeBmsonBgaFromIr(raw.bga);
-  normalized.bpmEvents = normalizeBmsonBpmEvents(raw.bpmEvents ?? raw.bpm_events);
-  normalized.stopEvents = normalizeBmsonStopEvents(raw.stopEvents ?? raw.stop_events);
-  normalized.soundChannels = normalizeBmsonSoundChannels(raw.soundChannels ?? raw.sound_channels);
 
   return normalized;
 }

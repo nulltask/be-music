@@ -102,13 +102,13 @@ export function parseBms(input: string): BeMusicJson {
         const controlFlowObject = createControlFlowObjectEntry(measure, channel, data);
         if (controlFlowObject) {
           json.bms.controlFlow.push(controlFlowObject);
-          json.bms.sourceLines.push(controlFlowObject);
+          json.preservation.bms.sourceLines.push(controlFlowObject);
         }
       } else {
         const objectLine = createBmsObjectLineEntry(measure, channel, data);
         if (objectLine) {
-          json.bms.objectLines.push(objectLine);
-          json.bms.sourceLines.push({
+          json.preservation.bms.objectLines.push(objectLine);
+          json.preservation.bms.sourceLines.push({
             kind: 'object',
             ...objectLine,
           });
@@ -131,7 +131,7 @@ export function parseBms(input: string): BeMusicJson {
         value: value.length > 0 ? value : undefined,
       };
       json.bms.controlFlow.push(directiveEntry);
-      json.bms.sourceLines.push(directiveEntry);
+      json.preservation.bms.sourceLines.push(directiveEntry);
       updateControlFlowCaptureStack(controlFlowCaptureStack, command);
       return;
     }
@@ -143,11 +143,11 @@ export function parseBms(input: string): BeMusicJson {
         value,
       };
       json.bms.controlFlow.push(headerEntry);
-      json.bms.sourceLines.push(headerEntry);
+      json.preservation.bms.sourceLines.push(headerEntry);
       return;
     }
 
-    json.bms.sourceLines.push({
+    json.preservation.bms.sourceLines.push({
       kind: 'header',
       command,
       value,
@@ -188,7 +188,7 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   const lines = normalizeBmsonLines(document.lines);
   const positionResolver = createBmsonPositionResolver(resolution, lines);
   if (lines.length > 0) {
-    json.bmson.lines = lines;
+    json.preservation.bmson.lines = lines;
   }
   json.bmson.bga = normalizeBmsonBgaForIr(document.bga);
 
@@ -216,7 +216,7 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   }
 
   const soundChannels = normalizeBmsonSoundChannels(document.sound_channels);
-  json.bmson.soundChannels = soundChannels;
+  json.preservation.bmson.soundChannels = soundChannels;
   const laneMap = buildBmsonLaneMap(soundChannels);
   for (let index = 0; index < soundChannels.length; index += 1) {
     const soundChannel = soundChannels[index]!;
@@ -272,7 +272,7 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   }
 
   const bpmEvents = normalizeBmsonBpmEvents(document.bpm_events);
-  json.bmson.bpmEvents = bpmEvents;
+  json.preservation.bmson.bpmEvents = bpmEvents;
   bpmEvents.forEach((bpmEvent, index) => {
     const key = intToBase36(index + 1, 2);
     json.resources.bpm[key] = bpmEvent.bpm;
@@ -286,7 +286,7 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   });
 
   const stopEvents = normalizeBmsonStopEvents(document.stop_events);
-  json.bmson.stopEvents = stopEvents;
+  json.preservation.bmson.stopEvents = stopEvents;
   stopEvents.forEach((stopEvent, index) => {
     const key = intToBase36(index + 1, 2);
     json.resources.stop[key] = stopEvent.duration;
@@ -305,6 +305,9 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
 
 function parseJsonDocument(raw: Partial<BeMusicJson>): BeMusicJson {
   const json = createEmptyJson(raw.sourceFormat ?? 'json');
+  const structured = raw as Record<string, unknown>;
+  const rawBms = structured.bms;
+  const rawBmson = structured.bmson;
   json.sourceFormat = raw.sourceFormat ?? 'json';
   json.metadata = {
     ...json.metadata,
@@ -330,8 +333,9 @@ function parseJsonDocument(raw: Partial<BeMusicJson>): BeMusicJson {
   if (json.events.length !== rawEvents.length) {
     throw new Error('Invalid bms-json event: position [numerator, denominator] is required.');
   }
-  json.bms = normalizeBmsExtensions((raw as Record<string, unknown>).bms);
-  json.bmson = normalizeBmsonExtensions((raw as Record<string, unknown>).bmson);
+  json.bms = normalizeBmsExtensions(rawBms);
+  json.bmson = normalizeBmsonExtensions(rawBmson);
+  json.preservation = normalizePreservation(structured.preservation, rawBms, rawBmson);
   migrateBmsExtensionHeadersFromExtras(json);
   return json;
 }
@@ -1061,8 +1065,6 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
 function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   const normalized: BeMusicJson['bms'] = {
     controlFlow: [],
-    sourceLines: [],
-    objectLines: [],
     lnObjs: [],
     exRank: {},
     argb: {},
@@ -1089,30 +1091,6 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
       }
     }
     normalized.controlFlow = entries;
-  }
-
-  const rawSourceLines = raw.sourceLines ?? raw.source_lines;
-  if (Array.isArray(rawSourceLines)) {
-    const entries: BmsSourceLineEntry[] = [];
-    for (const item of rawSourceLines) {
-      const entry = normalizeBmsControlFlowEntry(item);
-      if (entry) {
-        entries.push(entry);
-      }
-    }
-    normalized.sourceLines = entries;
-  }
-
-  const rawObjectLines = raw.objectLines ?? raw.object_lines;
-  if (Array.isArray(rawObjectLines)) {
-    const entries: BmsObjectLineEntry[] = [];
-    for (const item of rawObjectLines) {
-      const entry = normalizeBmsObjectLineEntry(item);
-      if (entry) {
-        entries.push(entry);
-      }
-    }
-    normalized.objectLines = entries;
   }
 
   if (typeof raw.preview === 'string' && raw.preview.length > 0) {
@@ -1208,6 +1186,59 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   if (typeof raw.charset === 'string' && raw.charset.length > 0) {
     normalized.charset = raw.charset;
   }
+
+  return normalized;
+}
+
+function normalizePreservation(
+  input: unknown,
+  bmsInput: unknown,
+  bmsonInput: unknown,
+): BeMusicJson['preservation'] {
+  const normalized = createEmptyJson('json').preservation;
+
+  const raw = input && typeof input === 'object' ? (input as Record<string, unknown>) : undefined;
+  const rawBms =
+    raw?.bms && typeof raw.bms === 'object'
+      ? (raw.bms as Record<string, unknown>)
+      : bmsInput && typeof bmsInput === 'object'
+        ? (bmsInput as Record<string, unknown>)
+        : undefined;
+  const rawBmson =
+    raw?.bmson && typeof raw.bmson === 'object'
+      ? (raw.bmson as Record<string, unknown>)
+      : bmsonInput && typeof bmsonInput === 'object'
+        ? (bmsonInput as Record<string, unknown>)
+        : undefined;
+
+  const rawSourceLines = rawBms?.sourceLines ?? rawBms?.source_lines;
+  if (Array.isArray(rawSourceLines)) {
+    const entries: BmsSourceLineEntry[] = [];
+    for (const item of rawSourceLines) {
+      const entry = normalizeBmsControlFlowEntry(item);
+      if (entry) {
+        entries.push(entry);
+      }
+    }
+    normalized.bms.sourceLines = entries;
+  }
+
+  const rawObjectLines = rawBms?.objectLines ?? rawBms?.object_lines;
+  if (Array.isArray(rawObjectLines)) {
+    const entries: BmsObjectLineEntry[] = [];
+    for (const item of rawObjectLines) {
+      const entry = normalizeBmsObjectLineEntry(item);
+      if (entry) {
+        entries.push(entry);
+      }
+    }
+    normalized.bms.objectLines = entries;
+  }
+
+  normalized.bmson.lines = normalizeBmsonLines(rawBmson?.lines);
+  normalized.bmson.bpmEvents = normalizeBmsonBpmEvents(rawBmson?.bpmEvents ?? rawBmson?.bpm_events);
+  normalized.bmson.stopEvents = normalizeBmsonStopEvents(rawBmson?.stopEvents ?? rawBmson?.stop_events);
+  normalized.bmson.soundChannels = normalizeBmsonSoundChannels(rawBmson?.soundChannels ?? rawBmson?.sound_channels);
 
   return normalized;
 }

@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 
-const workspacePackages = ['utils', 'json', 'parser', 'stringifier', 'audio-renderer', 'player', 'editor'] as const;
+const workspacePackages = ['utils', 'json', 'chart', 'parser', 'stringifier', 'audio-renderer', 'player', 'editor'] as const;
 
 const workspaceAliases = Object.fromEntries(
   workspacePackages.map((name) => [`@be-music/${name}`, resolve(rootDir, `packages/${name}/src/index.ts`)]),
@@ -38,7 +38,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'text-summary', 'html', 'lcov'],
       reportsDirectory: './coverage',
-      include: ['packages/{json,stringifier,editor,utils}/src/**/*.ts'],
+      include: ['packages/{json,chart,stringifier,editor,utils}/src/**/*.ts'],
       exclude: ['packages/*/src/**/*.test.ts', 'packages/*/src/cli.ts', 'packages/*/src/**/*.d.ts'],
       thresholds: {
         lines: 90,

@@ -2,7 +2,7 @@ import type { RenderResult } from '@be-music/audio-renderer';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import type { RandomPatternSelection } from '@be-music/player';
 
-export const PACKAGE_NAMES = ['utils', 'json', 'parser', 'stringifier', 'editor', 'audio-renderer', 'player'] as const;
+export const PACKAGE_NAMES = ['utils', 'json', 'chart', 'parser', 'stringifier', 'editor', 'audio-renderer', 'player'] as const;
 
 export type PackageName = (typeof PACKAGE_NAMES)[number];
 

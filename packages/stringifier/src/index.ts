@@ -1,12 +1,14 @@
-import { parseBms, parseBmson } from '@be-music/parser';
 import {
   compareEvents,
   createBeatResolver,
   isSampleTriggerChannel,
-  normalizeChannel,
-  normalizeObjectKey,
   parseBpmFrom03Token,
   sortEvents,
+} from '@be-music/chart';
+import { parseBms, parseBmson } from '@be-music/parser';
+import {
+  normalizeChannel,
+  normalizeObjectKey,
   type BmsObjectLineEntry,
   type BmsSourceLineEntry,
   type BmsonBpmEventEntry,
@@ -151,7 +153,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
 }
 
 function resolvePreservedBmsSourceLinesForOutput(json: BeMusicJson): string[] | undefined {
-  const sourceLines = json.bms.sourceLines;
+  const sourceLines = json.preservation.bms.sourceLines;
   if (!Array.isArray(sourceLines) || sourceLines.length === 0) {
     return undefined;
   }
@@ -196,9 +198,9 @@ function resolvePreservedBmsonDocumentForOutput(
   resolution: number,
 ): Record<string, unknown> | undefined {
   if (
-    json.bmson.soundChannels.length === 0 &&
-    json.bmson.bpmEvents.length === 0 &&
-    json.bmson.stopEvents.length === 0
+    json.preservation.bmson.soundChannels.length === 0 &&
+    json.preservation.bmson.bpmEvents.length === 0 &&
+    json.preservation.bmson.stopEvents.length === 0
   ) {
     return undefined;
   }
@@ -214,17 +216,17 @@ function createPreservedBmsonDocumentForOutput(json: BeMusicJson, resolution: nu
   if (typeof json.bmson.version === 'string' && json.bmson.version.length > 0) {
     document.version = json.bmson.version;
   }
-  if (json.bmson.lines.length > 0) {
-    document.lines = mapBmsonLineValues(json.bmson.lines);
+  if (json.preservation.bmson.lines.length > 0) {
+    document.lines = mapBmsonLineValues(json.preservation.bmson.lines);
   }
-  if (json.bmson.bpmEvents.length > 0) {
-    document.bpm_events = json.bmson.bpmEvents.map(mapBmsonBpmEventForOutput);
+  if (json.preservation.bmson.bpmEvents.length > 0) {
+    document.bpm_events = json.preservation.bmson.bpmEvents.map(mapBmsonBpmEventForOutput);
   }
-  if (json.bmson.stopEvents.length > 0) {
-    document.stop_events = json.bmson.stopEvents.map(mapBmsonStopEventForOutput);
+  if (json.preservation.bmson.stopEvents.length > 0) {
+    document.stop_events = json.preservation.bmson.stopEvents.map(mapBmsonStopEventForOutput);
   }
-  if (json.bmson.soundChannels.length > 0) {
-    document.sound_channels = json.bmson.soundChannels.map(mapBmsonSoundChannelForOutput);
+  if (json.preservation.bmson.soundChannels.length > 0) {
+    document.sound_channels = json.preservation.bmson.soundChannels.map(mapBmsonSoundChannelForOutput);
   }
   const bga = createBmsonBgaForOutput(json);
   if (bga) {
@@ -541,7 +543,7 @@ function pushEventLines(
 }
 
 function resolvePreservedObjectLinesForOutput(json: BeMusicJson): BmsObjectLineEntry[] | undefined {
-  const objectLines = json.bms.objectLines;
+  const objectLines = json.preservation.bms.objectLines;
   if (!Array.isArray(objectLines) || objectLines.length === 0) {
     return undefined;
   }
@@ -610,7 +612,8 @@ function areBmsChartsEquivalent(left: BeMusicJson, right: BeMusicJson): boolean 
     areResourcesEqual(left.resources, right.resources) &&
     areMeasuresEqual(left.measures, right.measures) &&
     areEventsEqual(left.events, right.events) &&
-    areBmsExtensionsEqual(left.bms, right.bms)
+    areBmsExtensionsEqual(left.bms, right.bms) &&
+    areBmsPreservationEqual(left.preservation.bms, right.preservation.bms)
   );
 }
 
@@ -620,7 +623,8 @@ function areBmsonChartsEquivalent(left: BeMusicJson, right: BeMusicJson): boolea
     areResourcesEqual(left.resources, right.resources) &&
     areMeasuresEqual(left.measures, right.measures) &&
     areEventsEqual(left.events, right.events) &&
-    areBmsonExtensionsEqual(left.bmson, right.bmson)
+    areBmsonExtensionsEqual(left.bmson, right.bmson) &&
+    areBmsonPreservationEqual(left.preservation.bmson, right.preservation.bmson)
   );
 }
 
@@ -685,7 +689,6 @@ function areEventsEqual(left: BeMusicEvent[], right: BeMusicEvent[]): boolean {
 function areBmsExtensionsEqual(left: BeMusicJson['bms'], right: BeMusicJson['bms']): boolean {
   return (
     areControlFlowEntriesEqual(left.controlFlow, right.controlFlow) &&
-    areBmsObjectLinesEqual(left.objectLines, right.objectLines) &&
     left.preview === right.preview &&
     left.lnType === right.lnType &&
     left.lnMode === right.lnMode &&
@@ -719,9 +722,24 @@ function areBmsExtensionsEqual(left: BeMusicJson['bms'], right: BeMusicJson['bms
 function areBmsonExtensionsEqual(left: BeMusicJson['bmson'], right: BeMusicJson['bmson']): boolean {
   return (
     left.version === right.version &&
-    areNumberArraysEqual(left.lines, right.lines) &&
     areBmsonInfoEqual(left.info, right.info) &&
-    areBmsonBgaEqual(left.bga, right.bga) &&
+    areBmsonBgaEqual(left.bga, right.bga)
+  );
+}
+
+function areBmsPreservationEqual(
+  left: BeMusicJson['preservation']['bms'],
+  right: BeMusicJson['preservation']['bms'],
+): boolean {
+  return areControlFlowEntriesEqual(left.sourceLines, right.sourceLines) && areBmsObjectLinesEqual(left.objectLines, right.objectLines);
+}
+
+function areBmsonPreservationEqual(
+  left: BeMusicJson['preservation']['bmson'],
+  right: BeMusicJson['preservation']['bmson'],
+): boolean {
+  return (
+    areNumberArraysEqual(left.lines, right.lines) &&
     areBmsonBpmEventsEqual(left.bpmEvents, right.bpmEvents) &&
     areBmsonStopEventsEqual(left.stopEvents, right.stopEvents) &&
     areBmsonSoundChannelsEqual(left.soundChannels, right.soundChannels)
@@ -1299,8 +1317,8 @@ function normalizeBmsonSubartistsForOutput(value: string[] | undefined): string[
 }
 
 function resolveBmsonLinesForOutput(json: BeMusicJson, resolution: number): number[] {
-  if (json.bmson.lines.length > 0) {
-    return normalizeBmsonLines(json.bmson.lines);
+  if (json.preservation.bmson.lines.length > 0) {
+    return normalizeBmsonLines(json.preservation.bmson.lines);
   }
   return createDefaultBmsonLines(json, resolution);
 }

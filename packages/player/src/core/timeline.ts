@@ -1,5 +1,6 @@
 import { createTimingResolver, type TimingResolver } from '@be-music/audio-renderer';
-import { isScrollChannel, normalizeChannel, normalizeObjectKey, sortEvents, type BeatResolver, type BeMusicJson } from '@be-music/json';
+import { isScrollChannel, sortEvents, type BeatResolver } from '@be-music/chart';
+import { normalizeChannel, normalizeObjectKey, type BeMusicJson } from '@be-music/json';
 import { findLastIndexAtOrBefore } from '@be-music/utils';
 
 export interface MeasureTimelinePoint {

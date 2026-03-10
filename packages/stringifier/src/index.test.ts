@@ -516,7 +516,7 @@ test('bmson stringify: handles resolution/version/lines normalization and fallba
     { measure: 0, channel: '09', position: [3, 4], value: 'AB' },
     { measure: 0, channel: 'AA', position: [0, 1], value: 'FF' },
   ];
-  json.bmson.lines = [960, 960];
+  json.preservation.bmson.lines = [960, 960];
   json.bmson.info.subartists = ['A', 'B', ''];
   json.bmson.version = '';
 

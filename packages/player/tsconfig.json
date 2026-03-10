@@ -10,6 +10,7 @@
   "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"],
   "references": [
     { "path": "../json" },
+    { "path": "../chart" },
     { "path": "../parser" },
     { "path": "../audio-renderer" },
     { "path": "../utils" }

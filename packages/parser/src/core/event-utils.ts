@@ -1,5 +1,5 @@
+import { compareEvents } from '@be-music/chart';
 import {
-  compareEvents,
   normalizeChannel,
   normalizeObjectKey,
   type BeMusicEvent,
