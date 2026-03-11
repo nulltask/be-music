@@ -20,6 +20,7 @@ import {
 import {
   gcd,
   lcm,
+  normalizeAsciiBase36Code,
   normalizeFractionNumerator,
   normalizeNonNegativeInt,
   normalizePositiveInt,
@@ -180,7 +181,7 @@ function renderPreservedBmsSourceLines(sourceLines: BmsSourceLineEntry[]): strin
       lines.push(`#${toMeasure(entry.measure)}${normalizeChannel(entry.channel)}:${formatNumber(entry.measureLength)}`);
       continue;
     }
-    const serialized = serializeBmsObjectLineEvents(entry.measure, entry.channel, entry.events);
+    const serialized = renderStoredBmsObjectLine(entry);
     if (serialized) {
       lines.push(serialized);
     }
@@ -517,7 +518,7 @@ function pushEventLines(
 ): void {
   if (preservedObjectLines) {
     for (const objectLine of preservedObjectLines) {
-      const serialized = serializeBmsObjectLineEvents(objectLine.measure, objectLine.channel, objectLine.events);
+      const serialized = renderStoredBmsObjectLine(objectLine);
       if (serialized) {
         lines.push(serialized);
       }
@@ -558,7 +559,7 @@ function doPreservedObjectLinesMatchChart(json: BeMusicJson, objectLines: BmsObj
     if (typeof objectLine.measureLength === 'number' && objectLine.measureLength > 0) {
       preservedMeasureLengths.set(Math.max(0, Math.floor(objectLine.measure)), objectLine.measureLength);
     }
-    for (const event of objectLine.events) {
+    for (const event of resolveStoredObjectLineEvents(objectLine)) {
       if (normalizeObjectKey(event.value) === '00') {
         continue;
       }
@@ -798,7 +799,7 @@ function areBmsObjectLineEqual(left: BmsObjectLineEntry, right: BmsObjectLineEnt
     left.measure === right.measure &&
     normalizeChannel(left.channel) === normalizeChannel(right.channel) &&
     left.measureLength === right.measureLength &&
-    areEventsEqual(left.events, right.events)
+    areEventsEqual(resolveStoredObjectLineEvents(left), resolveStoredObjectLineEvents(right))
   );
 }
 
@@ -1021,7 +1022,7 @@ function pushControlFlowLines(lines: string[], json: BeMusicJson): void {
       lines.push(`#${toMeasure(entry.measure)}${normalizeChannel(entry.channel)}:${formatNumber(entry.measureLength)}`);
       continue;
     }
-    const serialized = serializeControlFlowObjectEvents(entry.measure, entry.channel, entry.events);
+    const serialized = renderStoredBmsObjectLine(entry);
     if (serialized) {
       lines.push(serialized);
     }
@@ -1034,10 +1035,6 @@ function pushBmsSectionComment(lines: string[], section: string): void {
   }
   lines.push(`*---------------------- ${section} FIELD`);
   lines.push('');
-}
-
-function serializeControlFlowObjectEvents(measure: number, channel: string, events: BeMusicEvent[]): string | undefined {
-  return serializeBmsObjectLineEvents(measure, channel, events);
 }
 
 function serializeBmsObjectLineEvents(measure: number, channel: string, events: BeMusicEvent[]): string | undefined {
@@ -1073,6 +1070,77 @@ function serializeBmsObjectLineEvents(measure: number, channel: string, events: 
   }
 
   return `#${toMeasure(measure)}${normalizedChannel}:${cells.join('')}`;
+}
+
+function renderStoredBmsObjectLine(
+  objectLine: Pick<BmsObjectLineEntry, 'measure' | 'channel' | 'data' | 'events'>,
+): string | undefined {
+  if (typeof objectLine.data === 'string' && objectLine.data.length > 0) {
+    return `#${toMeasure(objectLine.measure)}${normalizeChannel(objectLine.channel)}:${objectLine.data}`;
+  }
+  return serializeBmsObjectLineEvents(objectLine.measure, objectLine.channel, objectLine.events ?? []);
+}
+
+function resolveStoredObjectLineEvents(objectLine: BmsObjectLineEntry): BeMusicEvent[] {
+  if (typeof objectLine.data === 'string' && objectLine.data.length > 0) {
+    return parseStoredObjectLineData(objectLine.measure, objectLine.channel, objectLine.data);
+  }
+
+  const events = objectLine.events ?? [];
+  const measure = Math.max(0, Math.floor(objectLine.measure));
+  const channel = normalizeChannel(objectLine.channel);
+  const normalized: BeMusicEvent[] = [];
+  for (const event of events) {
+    const value = normalizeObjectKey(event.value);
+    if (value === '00') {
+      continue;
+    }
+    normalized.push({
+      measure,
+      channel,
+      position: event.position,
+      value,
+      ...(event.bmson ? { bmson: event.bmson } : {}),
+    });
+  }
+  return normalized;
+}
+
+function parseStoredObjectLineData(measure: number, channel: string, data: string): BeMusicEvent[] {
+  const events: BeMusicEvent[] = [];
+  const normalizedMeasure = Math.max(0, Math.floor(measure));
+  const normalizedChannel = normalizeChannel(channel);
+  let tokenCount = 0;
+  let highCode = -1;
+
+  for (let index = 0; index < data.length; index += 1) {
+    const normalizedCode = normalizeAsciiBase36Code(data.charCodeAt(index));
+    if (normalizedCode < 0) {
+      continue;
+    }
+    if (highCode < 0) {
+      highCode = normalizedCode;
+      continue;
+    }
+    if (!(highCode === 0x30 && normalizedCode === 0x30)) {
+      events.push({
+        measure: normalizedMeasure,
+        channel: normalizedChannel,
+        position: [tokenCount, 0],
+        value: String.fromCharCode(highCode, normalizedCode),
+      });
+    }
+    tokenCount += 1;
+    highCode = -1;
+  }
+
+  if (tokenCount > 0) {
+    for (let index = 0; index < events.length; index += 1) {
+      (events[index]!.position as [number, number])[1] = tokenCount;
+    }
+  }
+
+  return events;
 }
 
 interface GroupedEventLine {

@@ -144,7 +144,8 @@ export interface BmsControlFlowObjectEntry {
   kind: 'object';
   measure: number;
   channel: string;
-  events: BeMusicEvent[];
+  events?: BeMusicEvent[];
+  data?: string;
   measureLength?: number;
 }
 
@@ -153,7 +154,8 @@ export type BmsControlFlowEntry = BmsControlFlowDirectiveEntry | BmsControlFlowH
 export interface BmsObjectLineEntry {
   measure: number;
   channel: string;
-  events: BeMusicEvent[];
+  events?: BeMusicEvent[];
+  data?: string;
   measureLength?: number;
 }
 
@@ -474,7 +476,7 @@ function cloneControlFlowEntry(entry: BmsControlFlowEntry): BmsControlFlowEntry 
   if (entry.kind === 'object') {
     return {
       ...entry,
-      events: entry.events.map(cloneEvent),
+      events: entry.events?.map(cloneEvent),
     };
   }
   return { ...entry };
@@ -483,7 +485,7 @@ function cloneControlFlowEntry(entry: BmsControlFlowEntry): BmsControlFlowEntry 
 function cloneBmsObjectLineEntry(entry: BmsObjectLineEntry): BmsObjectLineEntry {
   return {
     ...entry,
-    events: entry.events.map(cloneEvent),
+    events: entry.events?.map(cloneEvent),
   };
 }
 

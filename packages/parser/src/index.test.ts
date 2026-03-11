@@ -344,16 +344,16 @@ test('BMS: preserves non-control-flow object line boundaries for roundtrip', () 
     'object',
     'object',
   ]);
-  expect(parsed.preservation.bms.objectLines.map((line) => `${line.measure}:${line.channel}:${line.events.length}:${line.measureLength ?? '-'}`)).toEqual([
-    '1:13:4:-',
-    '1:13:6:-',
-    '1:13:1:-',
-    '1:01:1:-',
-    '1:01:1:-',
-    '1:A6:1:-',
-    '1:A6:1:-',
-    '1:02:0:1.5',
-    '1:02:0:0.75',
+  expect(parsed.preservation.bms.objectLines.map((line) => `${line.measure}:${line.channel}:${line.data ?? '-'}:${line.measureLength ?? '-'}`)).toEqual([
+    '1:13:11111111:-',
+    '1:13:0022332255224400:-',
+    '1:13:0066:-',
+    '1:01:11:-',
+    '1:01:22:-',
+    '1:A6:11:-',
+    '1:A6:22:-',
+    '1:02:-:1.5',
+    '1:02:-:0.75',
   ]);
 });
 

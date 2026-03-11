@@ -54,8 +54,19 @@ export function collectNonZeroObjectTokens(input: string): {
 
 export function collectNonZeroObjectEvents(measure: number, channel: string, input: string): BeMusicEvent[] {
   const events: BeMusicEvent[] = [];
+  appendNonZeroObjectEvents(events, measure, channel, input);
+  return events;
+}
+
+export function appendNonZeroObjectEvents(
+  target: BeMusicEvent[],
+  measure: number,
+  channel: string,
+  input: string,
+): void {
   let tokenCount = 0;
   let highCode = -1;
+  const startIndex = target.length;
   for (let index = 0; index < input.length; index += 1) {
     const code = input.charCodeAt(index);
     const normalizedCode = normalizeAsciiBase36Code(code);
@@ -67,7 +78,7 @@ export function collectNonZeroObjectEvents(measure: number, channel: string, inp
       continue;
     }
     if (!(highCode === 0x30 && normalizedCode === 0x30)) {
-      events.push({
+      target.push({
         measure,
         channel,
         position: [tokenCount, 0],
@@ -79,12 +90,30 @@ export function collectNonZeroObjectEvents(measure: number, channel: string, inp
   }
 
   if (tokenCount > 0) {
-    for (let index = 0; index < events.length; index += 1) {
-      (events[index]!.position as [number, number])[1] = tokenCount;
+    for (let index = startIndex; index < target.length; index += 1) {
+      (target[index]!.position as [number, number])[1] = tokenCount;
     }
   }
+}
 
-  return events;
+export function hasNonZeroObjectEvents(input: string): boolean {
+  let highCode = -1;
+  for (let index = 0; index < input.length; index += 1) {
+    const normalizedCode = normalizeAsciiBase36Code(input.charCodeAt(index));
+    if (normalizedCode < 0) {
+      continue;
+    }
+    if (highCode < 0) {
+      highCode = normalizedCode;
+      continue;
+    }
+    const hasNonZero = !(highCode === 0x30 && normalizedCode === 0x30);
+    highCode = -1;
+    if (hasNonZero) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function cloneEvent(event: BeMusicEvent): BeMusicEvent {

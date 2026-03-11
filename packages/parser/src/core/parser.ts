@@ -16,8 +16,8 @@ import {
 import { normalizeAsciiBase36Code } from '@be-music/utils';
 import { decodeBmsText, decodeUtf8Text } from './bms-text-decoder.ts';
 import {
-  cloneEvents,
-  collectNonZeroObjectEvents,
+  appendNonZeroObjectEvents,
+  hasNonZeroObjectEvents,
   normalizeBmsonNoteLength,
   sortAndNormalizeEvents,
   sortNormalizedEvents,
@@ -107,19 +107,15 @@ export function parseBms(input: string): BeMusicJson {
           json.preservation.bms.sourceLines.push(controlFlowObject);
         }
       } else {
-        const parsedObjectLine = parseBmsObjectLineContent(measure, channel, data);
-        if (!parsedObjectLine) {
+        const preservationObjectLine = applyBmsObjectDataLine(json, measure, channel, data, measureByIndex);
+        if (!preservationObjectLine) {
           return;
         }
-        const preservationObjectLine = createParsedBmsObjectLineEntry(measure, channel, parsedObjectLine);
-        if (preservationObjectLine) {
-          json.preservation.bms.objectLines.push(preservationObjectLine);
-          json.preservation.bms.sourceLines.push({
-            kind: 'object',
-            ...preservationObjectLine,
-          });
-        }
-        applyParsedBmsObjectLine(json, parsedObjectLine, measureByIndex);
+        json.preservation.bms.objectLines.push(preservationObjectLine);
+        json.preservation.bms.sourceLines.push({
+          kind: 'object',
+          ...preservationObjectLine,
+        });
       }
       return;
     }
@@ -418,83 +414,65 @@ export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsCon
 
 export { decodeBmsText };
 
-interface ParsedBmsObjectLineContent {
-  measure: number;
-  channel: string;
-  events: BeMusicEvent[];
-  measureLength?: number;
-}
-
-function parseBmsObjectLineContent(
+function applyBmsObjectDataLine(
+  json: BeMusicJson,
   measure: number,
   channel: string,
   data: string,
-): ParsedBmsObjectLineContent | undefined {
+  measureByIndex?: Map<number, MeasureLengthEntry>,
+): BmsObjectLineEntry | undefined {
+  const trimmedData = data.trim();
+  if (trimmedData.length === 0) {
+    return undefined;
+  }
   if (channel === '02') {
-    const measureLength = Number.parseFloat(data);
+    const measureLength = Number.parseFloat(trimmedData);
+    if (!Number.isFinite(measureLength) || measureLength <= 0) {
+      return undefined;
+    }
+    upsertMeasureLength(json, measure, measureLength, measureByIndex);
+    return {
+      measure,
+      channel,
+      measureLength,
+    };
+  }
+  const eventStartIndex = json.events.length;
+  appendNonZeroObjectEvents(json.events, measure, channel, trimmedData);
+  if (json.events.length === eventStartIndex) {
+    return undefined;
+  }
+  return {
+    measure,
+    channel,
+    data: trimmedData,
+  };
+}
+
+function createBmsObjectLineEntry(measure: number, channel: string, data: string): BmsObjectLineEntry | undefined {
+  const trimmedData = data.trim();
+  if (trimmedData.length === 0) {
+    return undefined;
+  }
+  if (channel === '02') {
+    const measureLength = Number.parseFloat(trimmedData);
     if (!Number.isFinite(measureLength) || measureLength <= 0) {
       return undefined;
     }
     return {
       measure,
       channel,
-      events: [],
       measureLength,
     };
   }
-
-  const events = collectNonZeroObjectEvents(measure, channel, data);
-  if (events.length === 0) {
+  if (!hasNonZeroObjectEvents(trimmedData)) {
     return undefined;
   }
   return {
     measure,
     channel,
-    events,
+    data: trimmedData,
   };
-}
-
-function applyParsedBmsObjectLine(
-  json: BeMusicJson,
-  parsedObjectLine: ParsedBmsObjectLineContent,
-  measureByIndex?: Map<number, MeasureLengthEntry>,
-): void {
-  if (typeof parsedObjectLine.measureLength === 'number') {
-    upsertMeasureLength(json, parsedObjectLine.measure, parsedObjectLine.measureLength, measureByIndex);
-    return;
-  }
-  json.events.push(...cloneEvents(parsedObjectLine.events));
-}
-
-function createParsedBmsObjectLineEntry(
-  measure: number,
-  channel: string,
-  parsedObjectLine: ParsedBmsObjectLineContent,
-): BmsObjectLineEntry | undefined {
-  if (typeof parsedObjectLine.measureLength === 'number') {
-    return {
-      measure,
-      channel,
-      events: [],
-      measureLength: parsedObjectLine.measureLength,
-    };
-  }
-  if (parsedObjectLine.events.length === 0) {
-    return undefined;
-  }
-  return {
-    measure,
-    channel,
-    events: parsedObjectLine.events,
-  };
-}
-
-function createBmsObjectLineEntry(measure: number, channel: string, data: string): BmsObjectLineEntry | undefined {
-  const parsedObjectLine = parseBmsObjectLineContent(measure, channel, data);
-  if (!parsedObjectLine) {
-    return undefined;
-  }
-  return createParsedBmsObjectLineEntry(measure, channel, parsedObjectLine);
 }
 
 interface ParsedObjectDataLine {
@@ -1386,6 +1364,11 @@ function normalizeBmsObjectLineEntry(input: unknown): BmsObjectLineEntry | undef
   }
   const measure = Math.max(0, Math.floor(raw.measure));
   const channel = normalizeChannel(raw.channel);
+  const rawData = typeof raw.data === 'string' ? raw.data.trim() : '';
+
+  if (rawData.length > 0) {
+    return createBmsObjectLineEntry(measure, channel, rawData);
+  }
 
   const rawEvents = Array.isArray(raw.events) ? raw.events : [];
   const normalizedEvents = sortAndNormalizeEvents(rawEvents as Array<BeMusicEvent | Record<string, unknown>>)
@@ -1407,14 +1390,13 @@ function normalizeBmsObjectLineEntry(input: unknown): BmsObjectLineEntry | undef
       : undefined;
 
   if (normalizedEvents.length === 0 && measureLength === undefined) {
-    const fallbackData = typeof raw.data === 'string' ? raw.data.trim() : '';
-    return createBmsObjectLineEntry(measure, channel, fallbackData);
+    return undefined;
   }
 
   return {
     measure,
     channel,
-    events: normalizedEvents,
-    measureLength,
+    ...(normalizedEvents.length > 0 ? { events: normalizedEvents } : {}),
+    ...(measureLength !== undefined ? { measureLength } : {}),
   };
 }

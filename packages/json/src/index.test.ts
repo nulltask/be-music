@@ -37,7 +37,7 @@ describe('json', () => {
     source.preservation.bms.objectLines.push({
       measure: 0,
       channel: '11',
-      events: [{ measure: 0, channel: '11', position: [0, 1], value: '01' }],
+      data: '01',
     });
     source.preservation.bms.sourceLines.push({ kind: 'header', command: 'TITLE', value: 'original' });
     source.preservation.bmson.soundChannels.push({
@@ -49,14 +49,14 @@ describe('json', () => {
     const cloned = cloneJson(source);
     cloned.metadata.title = 'changed';
     cloned.events[0]!.value = '02';
-    cloned.preservation.bms.objectLines[0]!.events[0]!.value = '03';
+    cloned.preservation.bms.objectLines[0]!.data = '03';
     cloned.preservation.bms.sourceLines[0] = { kind: 'header', command: 'TITLE', value: 'changed' };
     cloned.preservation.bmson.soundChannels[0]!.notes[0]!.y = 240;
     cloned.bms.speed['01'] = 2;
 
     expect(source.metadata.title).toBe('original');
     expect(source.events[0]!.value).toBe('01');
-    expect(source.preservation.bms.objectLines[0]!.events[0]!.value).toBe('01');
+    expect(source.preservation.bms.objectLines[0]!.data).toBe('01');
     expect(source.preservation.bms.sourceLines[0]).toEqual({ kind: 'header', command: 'TITLE', value: 'original' });
     expect(source.preservation.bmson.soundChannels[0]!.notes[0]!.y).toBe(0);
     expect(source.bms.speed['01']).toBe(1.5);

@@ -4,7 +4,7 @@ import {
   type BmsControlFlowEntry,
   type BeMusicJson,
 } from '@be-music/json';
-import { cloneEvents, collectNonZeroObjectEvents, sortNormalizedEvents, upsertMeasureLength } from './event-utils.ts';
+import { appendNonZeroObjectEvents, cloneEvents, hasNonZeroObjectEvents, sortNormalizedEvents, upsertMeasureLength } from './event-utils.ts';
 
 type ControlFlowCommand = BmsControlFlowCommand;
 
@@ -102,8 +102,12 @@ export function createControlFlowObjectEntry(
   channel: string,
   data: string,
 ): Extract<BmsControlFlowEntry, { kind: 'object' }> | undefined {
+  const trimmedData = data.trim();
+  if (trimmedData.length === 0) {
+    return undefined;
+  }
   if (channel === '02') {
-    const measureLength = Number.parseFloat(data);
+    const measureLength = Number.parseFloat(trimmedData);
     if (!Number.isFinite(measureLength) || measureLength <= 0) {
       return undefined;
     }
@@ -111,20 +115,18 @@ export function createControlFlowObjectEntry(
       kind: 'object',
       measure,
       channel,
-      events: [],
       measureLength,
     };
   }
 
-  const events = collectNonZeroObjectEvents(measure, channel, data);
-  if (events.length === 0) {
+  if (!hasNonZeroObjectEvents(trimmedData)) {
     return undefined;
   }
   return {
     kind: 'object',
     measure,
     channel,
-    events,
+    data: trimmedData,
   };
 }
 
@@ -176,7 +178,13 @@ function applyActiveControlFlowEntry(
     if (typeof entry.measureLength === 'number' && entry.measureLength > 0) {
       upsertMeasureLength(json, entry.measure, entry.measureLength, measureByIndex);
     }
-    json.events.push(...cloneEvents(entry.events));
+    if (typeof entry.data === 'string' && entry.data.length > 0) {
+      appendNonZeroObjectEvents(json.events, entry.measure, entry.channel, entry.data);
+      return;
+    }
+    if (entry.events?.length) {
+      json.events.push(...cloneEvents(entry.events));
+    }
   }
 }
 
