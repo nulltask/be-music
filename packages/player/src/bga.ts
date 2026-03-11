@@ -24,6 +24,7 @@ const MAX_NORMAL_BGA_COMPOSITE_LAYERS = NORMAL_BGA_COMPOSITE_LAYER_ORDER.length;
 const DEFAULT_BGA_ASCII_WIDTH = 34;
 const DEFAULT_BGA_ASCII_HEIGHT = 20;
 const DEFAULT_POOR_BGA_DISPLAY_SECONDS = 2;
+const KITTY_GRAPHICS_PIXEL_SCALE = 4;
 const TRANSPARENT_ALPHA_THRESHOLD = 16;
 const VIDEO_BLACK_BORDER_THRESHOLD = 8;
 const ANSI_RESET = '\u001b[0m';
@@ -109,6 +110,24 @@ export interface StageFileAnsiImage {
   height: number;
   rgb: Uint8Array;
   lines: string[];
+  kittyImage?: StageFileKittyImage;
+}
+
+export interface StageFileKittyImage {
+  pixelWidth: number;
+  pixelHeight: number;
+  cellWidth: number;
+  cellHeight: number;
+  rgb: Uint8Array;
+}
+
+export interface BgaKittyImage {
+  pixelWidth: number;
+  pixelHeight: number;
+  cellWidth: number;
+  cellHeight: number;
+  rgb: Uint8Array;
+  token: string;
 }
 
 export async function loadStageFileAnsiImage(
@@ -133,11 +152,13 @@ export async function loadStageFileAnsiImage(
     return undefined;
   }
   const filledFrame = fillAnsiFrameBackground(selected.frame, 0, 0, 0);
+  const kittyFrame = buildStageFileKittyImage(stageFileSourceFrame, displaySize.width, displaySize.height);
   return {
     width: filledFrame.width,
     height: filledFrame.height,
     rgb: filledFrame.rgb,
     lines: composeAnsiLines(filledFrame.rgb, filledFrame.opaqueMask, filledFrame.width, filledFrame.height),
+    kittyImage: kittyFrame,
   };
 }
 
@@ -217,6 +238,8 @@ export class BgaAnsiRenderer {
 
   private cachedLines?: string[];
 
+  private cachedKittyImage?: BgaKittyImage;
+
   private blackBackgroundLines: string[];
 
   private poorActiveUntilSeconds = Number.NEGATIVE_INFINITY;
@@ -272,6 +295,7 @@ export class BgaAnsiRenderer {
     this.cachedPoorActive = false;
     this.cachedComposite = undefined;
     this.cachedLines = undefined;
+    this.cachedKittyImage = undefined;
   }
 
   clearPoor(): void {
@@ -282,6 +306,7 @@ export class BgaAnsiRenderer {
     this.cachedPoorActive = false;
     this.cachedComposite = undefined;
     this.cachedLines = undefined;
+    this.cachedKittyImage = undefined;
   }
 
   setDisplaySize(width: number, height: number): void {
@@ -310,6 +335,64 @@ export class BgaAnsiRenderer {
     return this.cachedLines;
   }
 
+  getKittyImage(currentSeconds: number): BgaKittyImage {
+    const state = this.resolveActiveState(currentSeconds);
+    const pixelWidth = Math.max(1, this.displayWidth * KITTY_GRAPHICS_PIXEL_SCALE);
+    const pixelHeight = Math.max(1, this.displayHeight * KITTY_GRAPHICS_PIXEL_SCALE);
+    const baseSelection = resolveFrameSelection(
+      this.baseSourceFramesByKey,
+      this.missingBaseSourceFrame,
+      state.baseKey,
+      state.baseSeconds,
+    );
+    const layerSelection = resolveFrameSelection(
+      this.layerSourceFramesByKey,
+      this.missingLayerSourceFrame,
+      state.layerKey,
+      state.layerSeconds,
+    );
+    const layer2Selection = resolveFrameSelection(
+      this.layer2SourceFramesByKey,
+      this.missingLayerSourceFrame,
+      state.layer2Key,
+      state.layer2Seconds,
+    );
+    const poorSelection = state.poorActive
+      ? resolveFrameSelection(this.poorSourceFramesByKey, this.missingPoorSourceFrame, state.poorKey, state.poorSeconds)
+      : { frame: undefined, index: -1 };
+    const token =
+      `${pixelWidth}x${pixelHeight}:` +
+      `${state.baseKey}:${baseSelection.index}:` +
+      `${state.layerKey}:${layerSelection.index}:` +
+      `${state.layer2Key}:${layer2Selection.index}:` +
+      `${state.poorActive ? '1' : '0'}:${state.poorKey}:${poorSelection.index}`;
+    if (this.cachedKittyImage?.token === token) {
+      return this.cachedKittyImage;
+    }
+
+    const composite =
+      state.poorActive && poorSelection.frame
+        ? mergeCompositeFrames(resizeAnsiFrame(poorSelection.frame, pixelWidth, pixelHeight))
+        : mergeCompositeFrames(
+            ...[baseSelection.frame, layerSelection.frame, layer2Selection.frame]
+              .slice(0, MAX_NORMAL_BGA_COMPOSITE_LAYERS)
+              .map((frame) => (frame ? resizeAnsiFrame(frame, pixelWidth, pixelHeight) : undefined)),
+          );
+    const filledFrame = composite
+      ? fillAnsiFrameBackground(composite, 0, 0, 0)
+      : createSolidAnsiFrame(1, 1, 0, 0, 0, 1);
+    const image = {
+      pixelWidth: filledFrame.width,
+      pixelHeight: filledFrame.height,
+      cellWidth: this.displayWidth,
+      cellHeight: this.displayHeight,
+      rgb: filledFrame.rgb,
+      token,
+    };
+    this.cachedKittyImage = image;
+    return image;
+  }
+
   private rebuildFrames(): void {
     this.baseFramesByKey = resizeFrameSourceMap(this.baseSourceFramesByKey, this.displayWidth, this.displayHeight);
     this.poorFramesByKey = resizeFrameSourceMap(this.poorSourceFramesByKey, this.displayWidth, this.displayHeight);
@@ -334,51 +417,43 @@ export class BgaAnsiRenderer {
     this.cachedPoorActive = false;
     this.cachedComposite = undefined;
     this.cachedLines = undefined;
+    this.cachedKittyImage = undefined;
   }
 
   private refreshComposite(currentSeconds: number): void {
-    const baseCue = findActiveCue(this.baseTimeline, currentSeconds);
-    const layerCue = findActiveCue(this.layerTimeline, currentSeconds);
-    const layer2Cue = findActiveCue(this.layer2Timeline, currentSeconds);
-
-    const baseKey = baseCue?.key ?? '';
-    const layerKey = layerCue?.key ?? '';
-    const layer2Key = layer2Cue?.key ?? '';
-    const baseSeconds = baseCue ? Math.max(0, currentSeconds - baseCue.seconds) : Math.max(0, currentSeconds);
-    const layerSeconds = layerCue ? Math.max(0, currentSeconds - layerCue.seconds) : 0;
-    const layer2Seconds = layer2Cue ? Math.max(0, currentSeconds - layer2Cue.seconds) : 0;
-
-    const baseSelection = this.resolveBaseFrame(baseKey, baseSeconds);
-    const layerSelection = this.resolveLayerFrame(layerKey, layerSeconds);
-    const layer2Selection = this.resolveLayer2Frame(layer2Key, layer2Seconds);
-    const poorActive = currentSeconds < this.poorActiveUntilSeconds;
-    const poorSelection = poorActive ? this.resolvePoorFrame(currentSeconds) : { key: '', index: -1, frame: undefined };
+    const state = this.resolveActiveState(currentSeconds);
+    const baseSelection = this.resolveBaseFrame(state.baseKey, state.baseSeconds);
+    const layerSelection = this.resolveLayerFrame(state.layerKey, state.layerSeconds);
+    const layer2Selection = this.resolveLayer2Frame(state.layer2Key, state.layer2Seconds);
+    const poorSelection = state.poorActive
+      ? resolveFrameSelection(this.poorFramesByKey, this.missingPoorFrame, state.poorKey, state.poorSeconds)
+      : { frame: undefined, index: -1 };
 
     if (
-      this.cachedBaseKey === baseKey &&
-      this.cachedLayerKey === layerKey &&
-      this.cachedLayer2Key === layer2Key &&
-      this.cachedPoorKey === poorSelection.key &&
+      this.cachedBaseKey === state.baseKey &&
+      this.cachedLayerKey === state.layerKey &&
+      this.cachedLayer2Key === state.layer2Key &&
+      this.cachedPoorKey === state.poorKey &&
       this.cachedBaseFrameIndex === baseSelection.index &&
       this.cachedLayerFrameIndex === layerSelection.index &&
       this.cachedLayer2FrameIndex === layer2Selection.index &&
       this.cachedPoorFrameIndex === poorSelection.index &&
-      this.cachedPoorActive === poorActive
+      this.cachedPoorActive === state.poorActive
     ) {
       return;
     }
 
-    this.cachedBaseKey = baseKey;
-    this.cachedLayerKey = layerKey;
-    this.cachedLayer2Key = layer2Key;
-    this.cachedPoorKey = poorSelection.key;
+    this.cachedBaseKey = state.baseKey;
+    this.cachedLayerKey = state.layerKey;
+    this.cachedLayer2Key = state.layer2Key;
+    this.cachedPoorKey = state.poorKey;
     this.cachedBaseFrameIndex = baseSelection.index;
     this.cachedLayerFrameIndex = layerSelection.index;
     this.cachedLayer2FrameIndex = layer2Selection.index;
     this.cachedPoorFrameIndex = poorSelection.index;
-    this.cachedPoorActive = poorActive;
+    this.cachedPoorActive = state.poorActive;
     this.cachedComposite =
-      poorActive && poorSelection.frame
+      state.poorActive && poorSelection.frame
         ? mergeCompositeFrames(poorSelection.frame)
         : mergeCompositeFrames(
             ...[baseSelection.frame, layerSelection.frame, layer2Selection.frame].slice(
@@ -387,59 +462,48 @@ export class BgaAnsiRenderer {
             ),
           );
     this.cachedLines = undefined;
+    this.cachedKittyImage = undefined;
+  }
+
+  private resolveActiveState(currentSeconds: number): {
+    baseKey: string;
+    layerKey: string;
+    layer2Key: string;
+    poorKey: string;
+    baseSeconds: number;
+    layerSeconds: number;
+    layer2Seconds: number;
+    poorSeconds: number;
+    poorActive: boolean;
+  } {
+    const baseCue = findActiveCue(this.baseTimeline, currentSeconds);
+    const layerCue = findActiveCue(this.layerTimeline, currentSeconds);
+    const layer2Cue = findActiveCue(this.layer2Timeline, currentSeconds);
+    const poorCue = findActiveCue(this.poorTimeline, currentSeconds);
+    const poorActive = currentSeconds < this.poorActiveUntilSeconds;
+    return {
+      baseKey: baseCue?.key ?? '',
+      layerKey: layerCue?.key ?? '',
+      layer2Key: layer2Cue?.key ?? '',
+      poorKey: poorActive ? this.resolvePoorKey(poorCue, currentSeconds) ?? '' : '',
+      baseSeconds: baseCue ? Math.max(0, currentSeconds - baseCue.seconds) : Math.max(0, currentSeconds),
+      layerSeconds: layerCue ? Math.max(0, currentSeconds - layerCue.seconds) : 0,
+      layer2Seconds: layer2Cue ? Math.max(0, currentSeconds - layer2Cue.seconds) : 0,
+      poorSeconds: poorCue ? Math.max(0, currentSeconds - poorCue.seconds) : Math.max(0, currentSeconds),
+      poorActive,
+    };
   }
 
   private resolveBaseFrame(baseKey: string, seconds: number): FrameSelection {
-    if (!baseKey) {
-      return {
-        frame: undefined,
-        index: -1,
-      };
-    }
-    const source = this.baseFramesByKey.get(baseKey) ?? createStaticFrameSource(this.missingBaseFrame);
-    return selectFrameFromSource(source, seconds);
+    return resolveFrameSelection(this.baseFramesByKey, this.missingBaseFrame, baseKey, seconds);
   }
 
   private resolveLayerFrame(layerKey: string, seconds: number): FrameSelection {
-    if (!layerKey) {
-      return {
-        frame: undefined,
-        index: -1,
-      };
-    }
-    const source = this.layerFramesByKey.get(layerKey) ?? createStaticFrameSource(this.missingLayerFrame);
-    return selectFrameFromSource(source, seconds);
+    return resolveFrameSelection(this.layerFramesByKey, this.missingLayerFrame, layerKey, seconds);
   }
 
   private resolveLayer2Frame(layer2Key: string, seconds: number): FrameSelection {
-    if (!layer2Key) {
-      return {
-        frame: undefined,
-        index: -1,
-      };
-    }
-    const source = this.layer2FramesByKey.get(layer2Key) ?? createStaticFrameSource(this.missingLayerFrame);
-    return selectFrameFromSource(source, seconds);
-  }
-
-  private resolvePoorFrame(currentSeconds: number): { key: string; frame?: AnsiFrame; index: number } {
-    const poorCue = findActiveCue(this.poorTimeline, currentSeconds);
-    const poorKey = this.resolvePoorKey(poorCue, currentSeconds);
-    if (!poorKey) {
-      return {
-        key: '',
-        frame: undefined,
-        index: -1,
-      };
-    }
-    const source = this.poorFramesByKey.get(poorKey) ?? createStaticFrameSource(this.missingPoorFrame);
-    const seconds = poorCue ? Math.max(0, currentSeconds - poorCue.seconds) : Math.max(0, currentSeconds);
-    const selected = selectFrameFromSource(source, seconds);
-    return {
-      key: poorKey,
-      frame: selected.frame,
-      index: selected.index,
-    };
+    return resolveFrameSelection(this.layer2FramesByKey, this.missingLayerFrame, layer2Key, seconds);
   }
 
   private resolvePoorKey(poorCue: BgaCue | undefined, currentSeconds: number): string | undefined {
@@ -667,6 +731,43 @@ function createStaticFrameSource(frame: AnsiFrame): FrameSource {
   return {
     kind: 'static',
     frame,
+  };
+}
+
+function resolveFrameSelection(
+  sourceFramesByKey: ReadonlyMap<string, FrameSource>,
+  missingFrame: AnsiFrame,
+  key: string,
+  seconds: number,
+): FrameSelection {
+  if (!key) {
+    return {
+      frame: undefined,
+      index: -1,
+    };
+  }
+  const source = sourceFramesByKey.get(key) ?? createStaticFrameSource(missingFrame);
+  return selectFrameFromSource(source, seconds);
+}
+
+function buildStageFileKittyImage(
+  source: FrameSource,
+  cellWidth: number,
+  cellHeight: number,
+): StageFileKittyImage | undefined {
+  const pixelWidth = Math.max(1, Math.floor(cellWidth) * KITTY_GRAPHICS_PIXEL_SCALE);
+  const pixelHeight = Math.max(1, Math.floor(cellHeight) * KITTY_GRAPHICS_PIXEL_SCALE);
+  const frame = selectFrameFromSource(resizeFrameSourceCover(source, pixelWidth, pixelHeight), 0).frame;
+  if (!frame) {
+    return undefined;
+  }
+  const filledFrame = fillAnsiFrameBackground(frame, 0, 0, 0);
+  return {
+    pixelWidth: filledFrame.width,
+    pixelHeight: filledFrame.height,
+    cellWidth: Math.max(1, Math.floor(cellWidth)),
+    cellHeight: Math.max(1, Math.floor(cellHeight)),
+    rgb: filledFrame.rgb,
   };
 }
 

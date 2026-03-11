@@ -18,6 +18,7 @@ import {
 } from '../utils.ts';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/ui-signal-bus.ts';
 import { PlayerTui } from '../tui.ts';
+import { supportsKittyGraphicsProtocol } from '../tui/kitty-graphics.ts';
 import { estimateBgaAnsiDisplaySize as resolveBgaDisplaySize, resolveLaneWidths } from '../tui/layout.ts';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';
 import { createUiWorkerFrameState } from './ui-worker-frame-state.ts';
@@ -108,6 +109,8 @@ async function bootstrap(): Promise<void> {
     splitAfterIndex,
     stdinIsTTY: initData.stdinIsTTY,
     stdoutIsTTY: initData.stdoutIsTTY,
+    terminalImageProtocol:
+      initData.kittyGraphics === true && supportsKittyGraphicsProtocol(process.env) ? 'kitty' : 'none',
   });
 
   if (!tui.isSupported()) {
@@ -115,6 +118,8 @@ async function bootstrap(): Promise<void> {
     process.exit(0);
     return;
   }
+
+  const useKittyGraphicsForBga = tui.usesKittyGraphicsForBga();
 
   const initialBgaSize = estimateBgaAnsiDisplaySize(initData.laneBindings);
   const bgaRenderer = await createBgaAnsiRenderer(initData.json, {
@@ -145,8 +150,6 @@ async function bootstrap(): Promise<void> {
     bgaRenderer?.setDisplaySize(size.width, size.height);
   };
 
-  let terminalColumns: number | undefined;
-  let terminalRows: number | undefined;
   const frameState = createUiWorkerFrameState({
     initialPaused: initData.initialPaused,
     initialHighSpeed: initData.highSpeed,
@@ -161,8 +164,6 @@ async function bootstrap(): Promise<void> {
       tui.setJudgeComboState(state);
     },
     applyTerminalSize: (columns, rows) => {
-      terminalColumns = columns;
-      terminalRows = rows;
       tui.setTerminalSize(columns, rows);
     },
     syncFrameLayout: (frame, columns, rows) => {
@@ -208,7 +209,8 @@ async function bootstrap(): Promise<void> {
     if (frame && latestFrame) {
       tui.render({
         ...latestFrame,
-        bgaAnsiLines: bgaRenderer?.getAnsiLines(latestFrame.currentSeconds),
+        bgaAnsiLines: useKittyGraphicsForBga ? undefined : bgaRenderer?.getAnsiLines(latestFrame.currentSeconds),
+        bgaKittyImage: useKittyGraphicsForBga ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds) : undefined,
       });
     }
   });

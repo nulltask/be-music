@@ -23,6 +23,7 @@ export interface NodeUiRuntimeOptions {
   highSpeed: number;
   showLaneChannels?: boolean;
   randomPatternSummary?: string;
+  kittyGraphics?: boolean;
   stateSignals?: PlayerStateSignals;
   uiSignals?: PlayerUiSignalBus;
   baseDir: string;
@@ -255,6 +256,7 @@ function createWorkerInitData(options: NodeUiRuntimeOptions): NodeUiWorkerInitDa
     showLaneChannels: options.showLaneChannels,
     randomPatternSummary: options.randomPatternSummary,
     baseDir: options.baseDir,
+    kittyGraphics: options.kittyGraphics,
     stdinIsTTY: Boolean(process.stdin.isTTY),
     stdoutIsTTY: Boolean(process.stdout.isTTY),
     initialPaused: options.initialPaused ?? options.stateSignals?.paused() ?? false,

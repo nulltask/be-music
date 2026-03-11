@@ -11,6 +11,11 @@ import { PlayerInterruptedError, type PlayerLoadProgress, type PlayerSummary } f
 import { loadStageFileAnsiImage, type StageFileAnsiImage } from '../bga.ts';
 import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
 import {
+  buildKittyGraphicsDeleteImageSequence,
+  buildKittyGraphicsRenderSequence,
+  supportsKittyGraphicsProtocol,
+} from '../tui/kitty-graphics.ts';
+import {
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
@@ -86,6 +91,7 @@ interface CliArgs {
   input?: string;
   auto: boolean;
   autoScratch: boolean;
+  kittyGraphics: boolean;
   inferBmsLnTypeWhenMissing: boolean;
   showInvisibleNotes: boolean;
   compressor: boolean;
@@ -126,6 +132,7 @@ interface PlayLoadingProgress {
 interface PlayLoadingScreenRenderState {
   initialized: boolean;
   stageFileDrawn: boolean;
+  stageFileKittyVisible: boolean;
 }
 
 interface SelectChartInteractivelyOptions {
@@ -212,6 +219,8 @@ interface ResultScreenOptions {
 type ResultScreenExitAction = Exclude<ResultScreenAction, 'replay'>;
 const SONG_SELECT_PREVIEW_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const SONG_SELECT_PREVIEW_SPINNER_INTERVAL_MS = 80;
+const DIRECTORY_CHART_EXTENSIONS_LABEL = '.bms, .bme, .bml, .pms, .bmson';
+const PLAY_LOADING_STAGEFILE_KITTY_IMAGE_ID = 7_331;
 
 export async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
@@ -313,7 +322,9 @@ async function runDirectoryInput(
     startupLoadingAbortCapture?.dispose();
   }
   if (candidates.length === 0) {
-    process.stdout.write(`No chart files found in directory: ${rootDir}\n`);
+    process.stdout.write(
+      `No chart files found in directory: ${rootDir} (searched for ${DIRECTORY_CHART_EXTENSIONS_LABEL})\n`,
+    );
     process.exitCode = 1;
     return persistedConfig;
   }
@@ -619,9 +630,12 @@ function resolveDirectoryStateFromResultAction(
 async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedChartResult> {
   let resolvedHighSpeed = normalizeHighSpeedValue(args.highSpeed);
   let playLoadingStageFileImage: StageFileAnsiImage | undefined;
+  const useKittyGraphicsForStageFile =
+    args.kittyGraphics === true && Boolean(process.stdout.isTTY) && supportsKittyGraphicsProtocol(process.env);
   const playLoadingScreenRenderState: PlayLoadingScreenRenderState = {
     initialized: false,
     stageFileDrawn: false,
+    stageFileKittyVisible: false,
   };
   let resolvedChartMetadata:
     | {
@@ -638,6 +652,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
         renderPlayLoadingProgress(chartPath, progress, {
           columns: process.stdout.columns,
           stageFileImage: playLoadingStageFileImage,
+          useKittyGraphics: useKittyGraphicsForStageFile,
           state: playLoadingScreenRenderState,
         });
       }
@@ -732,6 +747,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
       return extension.length > 0 ? extension : undefined;
     })(),
     tui: args.tui,
+    kittyGraphics: args.kittyGraphics,
   };
 
   let summary: PlayerSummary;
@@ -764,7 +780,10 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
               });
             }
           : undefined,
-        onLoadComplete: disposePlaybackLoadingAbortCapture,
+        onLoadComplete: () => {
+          clearPlayLoadingStageFileImage(playLoadingScreenRenderState);
+          disposePlaybackLoadingAbortCapture();
+        },
         onResolvedChart: (metadata) => {
           resolvedChartMetadata = metadata;
         },
@@ -776,6 +795,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
         throw new PlayerInterruptedError(cancelReason);
       }
       if (error instanceof PlayerInterruptedError && error.reason === 'restart') {
+        playLoadingScreenRenderState.stageFileDrawn = false;
         reportPlayLoadingProgress?.({
           ratio: 0.34,
           message: 'Restarting playback...',
@@ -784,6 +804,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
       }
       throw error;
     } finally {
+      clearPlayLoadingStageFileImage(playLoadingScreenRenderState);
       disposePlaybackLoadingAbortCapture();
       args.highSpeed = resolvedHighSpeed;
     }
@@ -833,6 +854,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
   const args: CliArgs = {
     auto: false,
     autoScratch: false,
+    kittyGraphics: false,
     inferBmsLnTypeWhenMissing: false,
     showInvisibleNotes: false,
     compressor: false,
@@ -1047,6 +1069,14 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       args.tui = true;
       continue;
     }
+    if (token === '--kitty-graphics') {
+      args.kittyGraphics = true;
+      continue;
+    }
+    if (token === '--no-kitty-graphics') {
+      args.kittyGraphics = false;
+      continue;
+    }
     positional.push(token);
   }
 
@@ -1090,6 +1120,7 @@ function printUsage(): void {
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
       '                           Audio backend: node-web-audio-api (fixed)',
       '  --tui / --no-tui          Enable or disable TUI play screen (default: on in TTY)',
+      '  --kitty-graphics          Enable Kitty graphics protocol BGA rendering when supported (default: off)',
       '',
       'Advanced tuning:',
       '  --show-invisible-notes    Show invisible channels (31-39/41-49) in TUI as green notes',
@@ -1286,6 +1317,7 @@ export function createPlayLoadingProgressScreenOutput(
   options: {
     columns?: number;
     stageFileImage?: StageFileAnsiImage;
+    useKittyGraphics?: boolean;
     resetScreen?: boolean;
     includeStageFileImage?: boolean;
   } = {},
@@ -1294,10 +1326,10 @@ export function createPlayLoadingProgressScreenOutput(
     columns: options.columns,
     stageFileImage: options.stageFileImage,
   });
-  const imageBlock =
-    options.includeStageFileImage !== false && options.stageFileImage && options.stageFileImage.lines.length > 0
-      ? `${options.stageFileImage.lines.join('\n')}\u001b[H`
-      : '';
+  const imageBlock = resolvePlayLoadingStageFileBlock(options.stageFileImage, {
+    includeStageFileImage: options.includeStageFileImage,
+    useKittyGraphics: options.useKittyGraphics,
+  });
   const prefix = options.resetScreen === false ? '\u001b[H' : '\u001b[2J\u001b[H';
   return `${prefix}${imageBlock}${overlayLines.join('\n')}`;
 }
@@ -1308,6 +1340,7 @@ function renderPlayLoadingProgress(
   options: {
     columns?: number;
     stageFileImage?: StageFileAnsiImage;
+    useKittyGraphics?: boolean;
     state: PlayLoadingScreenRenderState;
   },
 ): void {
@@ -1316,6 +1349,7 @@ function renderPlayLoadingProgress(
   const output = createPlayLoadingProgressScreenOutput(chartPath, progress, {
     columns: options.columns,
     stageFileImage: options.stageFileImage,
+    useKittyGraphics: options.useKittyGraphics,
     resetScreen: shouldResetScreen,
     includeStageFileImage: shouldRedrawStageFile,
   });
@@ -1323,7 +1357,43 @@ function renderPlayLoadingProgress(
   options.state.initialized = true;
   if (options.stageFileImage) {
     options.state.stageFileDrawn = true;
+    options.state.stageFileKittyVisible = options.useKittyGraphics === true && options.stageFileImage.kittyImage !== undefined;
   }
+}
+
+function resolvePlayLoadingStageFileBlock(
+  stageFileImage: StageFileAnsiImage | undefined,
+  options: {
+    includeStageFileImage?: boolean;
+    useKittyGraphics?: boolean;
+  },
+): string {
+  if (options.includeStageFileImage === false || !stageFileImage) {
+    return '';
+  }
+  if (options.useKittyGraphics === true && stageFileImage.kittyImage) {
+    return (
+      buildKittyGraphicsRenderSequence({
+        imageId: PLAY_LOADING_STAGEFILE_KITTY_IMAGE_ID,
+        placementId: 1,
+        row: 1,
+        column: 1,
+        image: stageFileImage.kittyImage,
+        zIndex: -1,
+        doNotMoveCursor: true,
+      }) +
+      '\u001b[H'
+    );
+  }
+  return stageFileImage.lines.length > 0 ? `${stageFileImage.lines.join('\n')}\u001b[H` : '';
+}
+
+function clearPlayLoadingStageFileImage(state: PlayLoadingScreenRenderState): void {
+  if (!state.stageFileKittyVisible) {
+    return;
+  }
+  process.stdout.write(buildKittyGraphicsDeleteImageSequence(PLAY_LOADING_STAGEFILE_KITTY_IMAGE_ID));
+  state.stageFileKittyVisible = false;
 }
 
 function stylePlayLoadingOverlayFallbackLine(text: string, lineWidth: number): string {

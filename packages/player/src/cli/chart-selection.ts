@@ -75,7 +75,7 @@ export interface ListChartFilesOptions {
   signal?: AbortSignal;
 }
 
-const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms']);
+const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
 let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
 
 export async function listChartFiles(rootDir: string, options: ListChartFilesOptions = {}): Promise<string[]> {

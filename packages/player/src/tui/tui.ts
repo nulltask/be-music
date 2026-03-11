@@ -1,9 +1,11 @@
 import { effect, effectScope } from 'alien-signals';
 import type { BeMusicPlayLevel } from '@be-music/json';
 import { clamp } from '@be-music/utils';
+import type { BgaKittyImage } from '../bga.ts';
 import type { PlayerSummary } from '../index.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../utils.ts';
 import type { PlayerStateSignals } from '../state-signals.ts';
+import { buildKittyGraphicsDeleteImageSequence, buildKittyGraphicsRenderSequence } from './kitty-graphics.ts';
 import { findStackableRowIndex } from './lane-stacking.ts';
 import { normalizeHighSpeed, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
 import {
@@ -50,6 +52,7 @@ interface TuiOptions {
   stateSignals?: PlayerStateSignals;
   stdinIsTTY?: boolean;
   stdoutIsTTY?: boolean;
+  terminalImageProtocol?: 'kitty' | 'none';
 }
 
 interface TuiNote {
@@ -73,6 +76,7 @@ interface TuiFrame {
   activeAudioFiles?: string[];
   activeAudioVoiceCount?: number;
   bgaAnsiLines?: string[];
+  bgaKittyImage?: BgaKittyImage;
 }
 
 interface MeasureTimelinePoint {
@@ -136,6 +140,7 @@ const INVISIBLE_NOTE_HEAD_SYMBOL = '◯';
 const INVISIBLE_LONG_NOTE_BODY_SYMBOL = '□';
 const INVISIBLE_LONG_NOTE_TAIL_SYMBOL = '◇';
 const ANSI_RESET = '\u001b[0m';
+const KITTY_BGA_IMAGE_ID = 1_337;
 const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
 const HIGH_SPEED_TRANSITION_MS = 180;
@@ -210,6 +215,8 @@ export class PlayerTui {
 
   private readonly stateSignals?: PlayerStateSignals;
 
+  private readonly terminalImageProtocol: 'kitty' | 'none';
+
   private readonly laneIndex = new Map<string, number>();
 
   private readonly laneChannels: string[];
@@ -276,6 +283,10 @@ export class PlayerTui {
 
   private lastRenderedBeat = Number.NaN;
 
+  private lastKittyBgaToken = '';
+
+  private kittyBgaVisible = false;
+
   constructor(options: TuiOptions) {
     const initialHighSpeed = normalizeHighSpeed(options.highSpeed);
     options.highSpeed = initialHighSpeed;
@@ -289,6 +300,7 @@ export class PlayerTui {
     this.supported = Boolean(
       (options.stdoutIsTTY ?? process.stdout.isTTY) && (options.stdinIsTTY ?? process.stdin.isTTY),
     );
+    this.terminalImageProtocol = options.terminalImageProtocol ?? 'none';
     const laneWidths = resolveLaneWidths(options.lanes);
     options.lanes.forEach((lane, index) => {
       this.laneIndex.set(lane.channel, index);
@@ -325,12 +337,18 @@ export class PlayerTui {
     return this.supported;
   }
 
+  usesKittyGraphicsForBga(): boolean {
+    return this.terminalImageProtocol === 'kitty';
+  }
+
   start(): void {
     if (!this.supported || this.active) {
       return;
     }
     this.active = true;
     this.needsFullRefresh = false;
+    this.lastKittyBgaToken = '';
+    this.kittyBgaVisible = false;
     process.stdout.write('\u001b[?1049h\u001b[2J\u001b[H\u001b[?25l');
   }
 
@@ -361,7 +379,10 @@ export class PlayerTui {
     this.smoothedFps = Number.NaN;
     this.lastFrameRenderedAtMs = 0;
     this.lastRenderedBeat = Number.NaN;
-    process.stdout.write('\u001b[0m\u001b[?25h\u001b[?1049l');
+    const clearKittyBga = this.kittyBgaVisible ? buildKittyGraphicsDeleteImageSequence(KITTY_BGA_IMAGE_ID) : '';
+    this.lastKittyBgaToken = '';
+    this.kittyBgaVisible = false;
+    process.stdout.write(`${clearKittyBga}\u001b[0m\u001b[?25h\u001b[?1049l`);
   }
 
   setLatestJudge(value: string, channel?: string): void {
@@ -771,7 +792,25 @@ export class PlayerTui {
       playfieldIndicatorEndIndex,
       hasLaneSplit(this.options.splitAfterIndex, this.laneWidths.length),
     );
-    lines.push(...renderLaneBlockWithBga(laneLinesWithProgress, frame.bgaAnsiLines));
+    const laneBlockStartRow = lines.length + 1;
+    let kittyBgaPlacement:
+      | {
+          row: number;
+          column: number;
+          image: BgaKittyImage;
+        }
+      | undefined;
+    if (this.terminalImageProtocol === 'kitty' && frame.bgaKittyImage) {
+      const renderedKittyBga = renderLaneBlockWithKittyPadding(laneLinesWithProgress, frame.bgaKittyImage.cellWidth);
+      lines.push(...renderedKittyBga.lines);
+      kittyBgaPlacement = {
+        row: laneBlockStartRow,
+        column: renderedKittyBga.column,
+        image: frame.bgaKittyImage,
+      };
+    } else {
+      lines.push(...renderLaneBlockWithBga(laneLinesWithProgress, frame.bgaAnsiLines));
+    }
     lines.push('');
     lines.push(formatGrooveGaugeLine(frame.summary, calculateLaneBlockVisibleWidth(this.laneWidths, this.options.splitAfterIndex ?? -1)));
     lines.push('');
@@ -787,7 +826,29 @@ export class PlayerTui {
         paddedLines.push(' '.repeat(columns));
       }
     }
-    process.stdout.write(`${this.needsFullRefresh ? '\u001b[2J' : ''}\u001b[H${paddedLines.join('\n')}`);
+    const needsFullRefresh = this.needsFullRefresh;
+    let overlaySequence = '';
+    if (kittyBgaPlacement) {
+      const kittyToken = `${kittyBgaPlacement.image.token}:${kittyBgaPlacement.row}:${kittyBgaPlacement.column}`;
+      if (needsFullRefresh || this.lastKittyBgaToken !== kittyToken) {
+        overlaySequence = buildKittyGraphicsRenderSequence({
+          imageId: KITTY_BGA_IMAGE_ID,
+          placementId: 1,
+          row: kittyBgaPlacement.row,
+          column: kittyBgaPlacement.column,
+          image: kittyBgaPlacement.image,
+          zIndex: -1,
+          doNotMoveCursor: true,
+        });
+        this.lastKittyBgaToken = kittyToken;
+        this.kittyBgaVisible = true;
+      }
+    } else if (this.kittyBgaVisible) {
+      overlaySequence = buildKittyGraphicsDeleteImageSequence(KITTY_BGA_IMAGE_ID);
+      this.lastKittyBgaToken = '';
+      this.kittyBgaVisible = false;
+    }
+    process.stdout.write(`${needsFullRefresh ? '\u001b[2J' : ''}\u001b[H${paddedLines.join('\n')}${overlaySequence}`);
     this.previousFrameLineCount = lines.length;
     this.needsFullRefresh = false;
     this.lastRenderedBeat = frame.currentBeat;
@@ -1932,6 +1993,22 @@ function renderLaneBlockWithBga(laneLines: string[], bgaAnsiLines?: string[]): s
   );
   const emptyBgaLine = renderBgaLineWithScopedBlackBackground(' '.repeat(bgaWidth), bgaWidth);
   return laneLines.map((laneLine, index) => `${laneLine}   ${normalizedBgaLines[index] ?? emptyBgaLine}`);
+}
+
+function renderLaneBlockWithKittyPadding(
+  laneLines: string[],
+  bgaWidth: number,
+): {
+  lines: string[];
+  column: number;
+} {
+  const safeBgaWidth = Math.max(1, Math.floor(bgaWidth));
+  const laneBlockWidth = Math.max(1, ...laneLines.map((line) => visibleWidth(line)));
+  const emptyBgaLine = renderBgaLineWithScopedBlackBackground(' '.repeat(safeBgaWidth), safeBgaWidth);
+  return {
+    lines: laneLines.map((laneLine) => `${padVisibleWidth(laneLine, laneBlockWidth)}   ${emptyBgaLine}`),
+    column: laneBlockWidth + 4,
+  };
 }
 
 function renderLaneLinesWithProgressIndicators(

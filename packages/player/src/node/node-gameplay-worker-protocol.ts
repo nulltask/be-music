@@ -37,6 +37,7 @@ export interface NodeGameplayWorkerPlayOptions {
   audioLeadStepDownMs?: number;
   laneModeExtension?: string;
   tui?: boolean;
+  kittyGraphics?: boolean;
 }
 
 export interface NodeGameplayWorkerInitData {
@@ -57,6 +58,7 @@ export interface NodeGameplayUiRuntimeInit {
   showLaneChannels: boolean;
   randomPatternSummary?: string;
   baseDir: string;
+  kittyGraphics?: boolean;
   initialFrame: PlayerUiFramePayload;
   initialPaused: boolean;
   initialJudgeCombo: PlayerJudgeComboSignalState;

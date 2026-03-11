@@ -15,6 +15,7 @@ export interface NodeUiWorkerInitData {
   showLaneChannels?: boolean;
   randomPatternSummary?: string;
   baseDir: string;
+  kittyGraphics?: boolean;
   stdinIsTTY: boolean;
   stdoutIsTTY: boolean;
   initialPaused: boolean;

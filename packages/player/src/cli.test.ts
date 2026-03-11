@@ -42,6 +42,12 @@ describe('player cli', () => {
     expect(parsed.inferBmsLnTypeWhenMissing).toBe(true);
   });
 
+  test('cli: keeps kitty graphics disabled by default and enables it explicitly', () => {
+    expect(parseArgs(['chart.bms']).kittyGraphics).toBe(false);
+    expect(parseArgs(['chart.bms', '--kitty-graphics']).kittyGraphics).toBe(true);
+    expect(parseArgs(['chart.bms', '--kitty-graphics', '--no-kitty-graphics']).kittyGraphics).toBe(false);
+  });
+
   test('cli: last explicit mode flag wins', () => {
     const parsedAuto = parseArgs(['chart.bms', '--auto-scratch', '--auto']);
     expect(resolvePlayModeFromArgs(parsedAuto)).toBe('auto');
@@ -194,6 +200,37 @@ describe('player cli', () => {
 
     expect(output).toContain('\u001b[2J\u001b[HANSI_STAGE_LINE_1\nANSI_STAGE_LINE_2\u001b[H');
     expect(output).toContain('Loading selected chart...');
+  });
+
+  test('cli: emits kitty graphics stagefile output when requested', () => {
+    const output = createPlayLoadingProgressScreenOutput(
+      '/charts/stagefile-test.bms',
+      {
+        ratio: 0.5,
+        message: 'Preparing audio...',
+      },
+      {
+        columns: 48,
+        useKittyGraphics: true,
+        stageFileImage: {
+          width: 48,
+          height: 2,
+          rgb: new Uint8Array(48 * 2 * 3),
+          lines: ['ANSI_STAGE_LINE_1', 'ANSI_STAGE_LINE_2'],
+          kittyImage: {
+            pixelWidth: 4,
+            pixelHeight: 2,
+            cellWidth: 48,
+            cellHeight: 2,
+            rgb: new Uint8Array(4 * 2 * 3),
+          },
+        },
+      },
+    );
+
+    expect(output).toContain('\u001b_Ga=T,t=d,f=24,s=4,v=2,c=48,r=2,i=7331,q=2,p=1,z=-1,C=1,m=0;');
+    expect(output).toContain('Loading selected chart...');
+    expect(output).not.toContain('ANSI_STAGE_LINE_1');
   });
 
   test('cli: updates loading overlay without redrawing the STAGEFILE background', () => {

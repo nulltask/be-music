@@ -5,7 +5,7 @@ import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test, vi } from 'vitest';
 import { encode as encodeBmp } from 'fast-bmp';
 import { encode as encodePng } from 'fast-png';
-import { BgaAnsiRenderer, createBgaAnsiRenderer, loadStageFileAnsiLines } from './bga.ts';
+import { BgaAnsiRenderer, createBgaAnsiRenderer, loadStageFileAnsiImage, loadStageFileAnsiLines } from './bga.ts';
 
 vi.mock('./bga-video.ts', () => ({
   decodeVideoFramesStream: vi.fn(async (videoPath: string, onFrame: (frame: unknown) => void) => {
@@ -99,6 +99,35 @@ describe('player bga', () => {
       expect(pixels[10]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
       expect(pixels[0]?.[0]).toEqual({ r: 0, g: 0, b: 255 });
       expect(pixels[19]?.[39]).toEqual({ r: 0, g: 0, b: 255 });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: prepares kitty graphics data for STAGEFILE splash images', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-stagefile-kitty-'));
+    try {
+      await writePng(join(baseDir, 'stage.png'), 64, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.metadata.stageFile = 'stage.png';
+
+      const image = await loadStageFileAnsiImage(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+
+      expect(image?.kittyImage).toEqual(
+        expect.objectContaining({
+          pixelWidth: 160,
+          pixelHeight: 80,
+          cellWidth: 40,
+          cellHeight: 20,
+        }),
+      );
+      expect(image?.kittyImage?.rgb.length).toBe(160 * 80 * 3);
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }
