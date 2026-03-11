@@ -230,6 +230,7 @@ async function handleUiInit(
       requestId: message.requestId,
       enabled: false,
       error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : undefined,
     });
   }
 }

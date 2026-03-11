@@ -79,7 +79,15 @@ export interface NodeGameplayResolvedChartMetadata {
 export type NodeGameplayWorkerInboundMessage =
   | { kind: 'abort'; reason?: string }
   | { kind: 'input-commands'; commands: PlayerInputCommand[] }
-  | { kind: 'ui-init-result'; requestId: number; enabled: boolean; port?: MessagePort; bgaPlaybackEndSeconds?: number; error?: string }
+  | {
+      kind: 'ui-init-result';
+      requestId: number;
+      enabled: boolean;
+      port?: MessagePort;
+      bgaPlaybackEndSeconds?: number;
+      error?: string;
+      errorName?: string;
+    }
   | { kind: 'ui-bga-load-progress'; requestId: number; progress: { ratio: number; detail?: string } }
   | { kind: 'ui-stop-result'; requestId: number; error?: string }
   | { kind: 'ui-dispose-result'; requestId: number; error?: string };

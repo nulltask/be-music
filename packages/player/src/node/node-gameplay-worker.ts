@@ -76,7 +76,7 @@ async function bootstrap(): Promise<void> {
       }
       pendingUiInit.delete(message.requestId);
       if (typeof message.error === 'string' && message.error.length > 0) {
-        pending.reject(new Error(message.error));
+        pending.reject(deserializeUiInitError(message.error, message.errorName));
         return;
       }
       pending.resolve({
@@ -386,6 +386,17 @@ function resolveAbortReason(reason?: string): Error {
   const error = createAbortError();
   if (typeof reason === 'string' && reason.length > 0) {
     error.message = reason;
+  }
+  return error;
+}
+
+function deserializeUiInitError(message: string, name: string | undefined): Error {
+  if (name === 'AbortError') {
+    return resolveAbortReason(message);
+  }
+  const error = new Error(message);
+  if (typeof name === 'string' && name.length > 0) {
+    error.name = name;
   }
   return error;
 }

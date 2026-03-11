@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { MessageChannel, type MessagePort, type WorkerOptions } from 'node:worker_threads';
-import { isAbortError } from '@be-music/utils';
+import { createAbortError, isAbortError } from '@be-music/utils';
 import { createEmptyJson } from '../../../json/src/index.ts';
 import type { NodeInputRuntime } from './node-input-runtime.ts';
 import type { NodeUiRuntime } from './node-ui-runtime.ts';
@@ -27,6 +27,7 @@ const uiRuntimeState = vi.hoisted(() => ({
   context: undefined as Parameters<(typeof import('./node-ui-runtime.ts'))['createNodeUiRuntime']>[0] | undefined,
   runtime: undefined as NodeUiRuntime | undefined,
   bridgePort: undefined as MessagePort | undefined,
+  createError: undefined as Error | undefined,
   start: vi.fn(),
   stop: vi.fn(async () => undefined),
   dispose: vi.fn(async () => undefined),
@@ -68,6 +69,9 @@ vi.mock('./node-input-runtime.ts', () => ({
 vi.mock('./node-ui-runtime.ts', () => ({
   createNodeUiRuntime: vi.fn(async (context) => {
     uiRuntimeState.context = context;
+    if (uiRuntimeState.createError) {
+      throw uiRuntimeState.createError;
+    }
     uiRuntimeState.bridgePort = new MessageChannel().port1;
     uiRuntimeState.runtime = {
       tuiEnabled: uiRuntimeState.tuiEnabled,
@@ -101,6 +105,7 @@ afterEach(() => {
   uiRuntimeState.context = undefined;
   uiRuntimeState.runtime = undefined;
   uiRuntimeState.bridgePort = undefined;
+  uiRuntimeState.createError = undefined;
   uiRuntimeState.start.mockReset();
   uiRuntimeState.stop.mockReset();
   uiRuntimeState.dispose.mockReset();
@@ -220,6 +225,34 @@ describe('node gameplay runtime', () => {
     });
 
     await expect(promise).rejects.toSatisfy((error: unknown) => isAbortError(error));
+  });
+
+  test('reports UI initialization aborts with AbortError metadata', async () => {
+    const abortError = createAbortError();
+    abortError.message = 'This operation was aborted';
+    uiRuntimeState.createError = abortError;
+
+    const promise = runNodeGameplayRuntime(createOptions());
+    const worker = getLastWorker();
+
+    worker.emit('message', {
+      kind: 'ui-init',
+      requestId: 8,
+      runtime: createUiInit(),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(messagesOfKind(worker, 'ui-init-result')).toContainEqual({
+      kind: 'ui-init-result',
+      requestId: 8,
+      enabled: false,
+      errorName: 'AbortError',
+      error: 'This operation was aborted',
+    });
+
+    worker.emit('message', { kind: 'result', summary: createSummary() });
+    await promise;
   });
 });
 
