@@ -16,9 +16,11 @@ import {
 import { normalizeAsciiBase36Code } from '@be-music/utils';
 import { decodeBmsText, decodeUtf8Text } from './bms-text-decoder.ts';
 import {
-  collectNonZeroObjectTokens,
+  cloneEvents,
+  collectNonZeroObjectEvents,
   normalizeBmsonNoteLength,
   sortAndNormalizeEvents,
+  sortNormalizedEvents,
   upsertMeasureLength,
 } from './event-utils.ts';
 import {
@@ -105,15 +107,19 @@ export function parseBms(input: string): BeMusicJson {
           json.preservation.bms.sourceLines.push(controlFlowObject);
         }
       } else {
-        const objectLine = createBmsObjectLineEntry(measure, channel, data);
-        if (objectLine) {
-          json.preservation.bms.objectLines.push(objectLine);
+        const parsedObjectLine = parseBmsObjectLineContent(measure, channel, data);
+        if (!parsedObjectLine) {
+          return;
+        }
+        const preservationObjectLine = createParsedBmsObjectLineEntry(measure, channel, parsedObjectLine);
+        if (preservationObjectLine) {
+          json.preservation.bms.objectLines.push(preservationObjectLine);
           json.preservation.bms.sourceLines.push({
             kind: 'object',
-            ...objectLine,
+            ...preservationObjectLine,
           });
         }
-        pushObjectDataLine(json, measure, channel, data, measureByIndex);
+        applyParsedBmsObjectLine(json, parsedObjectLine, measureByIndex);
       }
       return;
     }
@@ -166,7 +172,7 @@ export function parseBms(input: string): BeMusicJson {
     json.metadata.bpm = 130;
   }
   json.measures.sort((left, right) => left.index - right.index);
-  json.events = sortAndNormalizeEvents(json.events);
+  json.events = sortNormalizedEvents(json.events);
   return json;
 }
 
@@ -299,7 +305,7 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
     });
   });
 
-  json.events = sortAndNormalizeEvents(json.events);
+  json.events = sortNormalizedEvents(json.events);
   return json;
 }
 
@@ -412,33 +418,18 @@ export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsCon
 
 export { decodeBmsText };
 
-function pushObjectDataLine(
-  json: BeMusicJson,
+interface ParsedBmsObjectLineContent {
+  measure: number;
+  channel: string;
+  events: BeMusicEvent[];
+  measureLength?: number;
+}
+
+function parseBmsObjectLineContent(
   measure: number,
   channel: string,
   data: string,
-  measureByIndex?: Map<number, MeasureLengthEntry>,
-): void {
-  if (channel === '02') {
-    const length = Number.parseFloat(data);
-    if (Number.isFinite(length) && length > 0) {
-      upsertMeasureLength(json, measure, length, measureByIndex);
-    }
-    return;
-  }
-
-  const parsed = collectNonZeroObjectTokens(data);
-  for (const token of parsed.tokens) {
-    json.events.push({
-      measure,
-      channel,
-      position: [token.index, parsed.tokenCount],
-      value: token.value,
-    });
-  }
-}
-
-function createBmsObjectLineEntry(measure: number, channel: string, data: string): BmsObjectLineEntry | undefined {
+): ParsedBmsObjectLineContent | undefined {
   if (channel === '02') {
     const measureLength = Number.parseFloat(data);
     if (!Number.isFinite(measureLength) || measureLength <= 0) {
@@ -452,16 +443,7 @@ function createBmsObjectLineEntry(measure: number, channel: string, data: string
     };
   }
 
-  const parsed = collectNonZeroObjectTokens(data);
-  const events: BeMusicEvent[] = [];
-  for (const token of parsed.tokens) {
-    events.push({
-      measure,
-      channel,
-      position: [token.index, parsed.tokenCount],
-      value: token.value,
-    });
-  }
+  const events = collectNonZeroObjectEvents(measure, channel, data);
   if (events.length === 0) {
     return undefined;
   }
@@ -470,6 +452,49 @@ function createBmsObjectLineEntry(measure: number, channel: string, data: string
     channel,
     events,
   };
+}
+
+function applyParsedBmsObjectLine(
+  json: BeMusicJson,
+  parsedObjectLine: ParsedBmsObjectLineContent,
+  measureByIndex?: Map<number, MeasureLengthEntry>,
+): void {
+  if (typeof parsedObjectLine.measureLength === 'number') {
+    upsertMeasureLength(json, parsedObjectLine.measure, parsedObjectLine.measureLength, measureByIndex);
+    return;
+  }
+  json.events.push(...cloneEvents(parsedObjectLine.events));
+}
+
+function createParsedBmsObjectLineEntry(
+  measure: number,
+  channel: string,
+  parsedObjectLine: ParsedBmsObjectLineContent,
+): BmsObjectLineEntry | undefined {
+  if (typeof parsedObjectLine.measureLength === 'number') {
+    return {
+      measure,
+      channel,
+      events: [],
+      measureLength: parsedObjectLine.measureLength,
+    };
+  }
+  if (parsedObjectLine.events.length === 0) {
+    return undefined;
+  }
+  return {
+    measure,
+    channel,
+    events: parsedObjectLine.events,
+  };
+}
+
+function createBmsObjectLineEntry(measure: number, channel: string, data: string): BmsObjectLineEntry | undefined {
+  const parsedObjectLine = parseBmsObjectLineContent(measure, channel, data);
+  if (!parsedObjectLine) {
+    return undefined;
+  }
+  return createParsedBmsObjectLineEntry(measure, channel, parsedObjectLine);
 }
 
 interface ParsedObjectDataLine {

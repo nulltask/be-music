@@ -2,12 +2,9 @@ import {
   cloneJson,
   type BmsControlFlowCommand,
   type BmsControlFlowEntry,
-  type BeMusicEvent,
   type BeMusicJson,
-  normalizeChannel,
-  normalizeObjectKey,
 } from '@be-music/json';
-import { collectNonZeroObjectTokens, sortAndNormalizeEvents, upsertMeasureLength } from './event-utils.ts';
+import { cloneEvents, collectNonZeroObjectEvents, sortNormalizedEvents, upsertMeasureLength } from './event-utils.ts';
 
 type ControlFlowCommand = BmsControlFlowCommand;
 
@@ -67,7 +64,7 @@ export function resolveControlFlow(input: BeMusicJson, options: ResolveControlFl
   }
 
   json.measures.sort((left, right) => left.index - right.index);
-  json.events = sortAndNormalizeEvents(json.events);
+  json.events = sortNormalizedEvents(json.events);
   return json;
 }
 
@@ -119,17 +116,7 @@ export function createControlFlowObjectEntry(
     };
   }
 
-  const parsed = collectNonZeroObjectTokens(data);
-  const events: BeMusicEvent[] = [];
-  for (const token of parsed.tokens) {
-    events.push({
-      measure,
-      channel,
-      position: [token.index, parsed.tokenCount],
-      value: token.value,
-    });
-  }
-
+  const events = collectNonZeroObjectEvents(measure, channel, data);
   if (events.length === 0) {
     return undefined;
   }
@@ -189,15 +176,7 @@ function applyActiveControlFlowEntry(
     if (typeof entry.measureLength === 'number' && entry.measureLength > 0) {
       upsertMeasureLength(json, entry.measure, entry.measureLength, measureByIndex);
     }
-    for (const event of entry.events) {
-      json.events.push({
-        measure: entry.measure,
-        channel: normalizeChannel(entry.channel),
-        position: event.position,
-        value: normalizeObjectKey(event.value),
-        ...(event.bmson ? { bmson: event.bmson } : {}),
-      });
-    }
+    json.events.push(...cloneEvents(entry.events));
   }
 }
 

@@ -52,6 +52,68 @@ export function collectNonZeroObjectTokens(input: string): {
   return { tokenCount, tokens };
 }
 
+export function collectNonZeroObjectEvents(measure: number, channel: string, input: string): BeMusicEvent[] {
+  const events: BeMusicEvent[] = [];
+  let tokenCount = 0;
+  let highCode = -1;
+  for (let index = 0; index < input.length; index += 1) {
+    const code = input.charCodeAt(index);
+    const normalizedCode = normalizeAsciiBase36Code(code);
+    if (normalizedCode < 0) {
+      continue;
+    }
+    if (highCode < 0) {
+      highCode = normalizedCode;
+      continue;
+    }
+    if (!(highCode === 0x30 && normalizedCode === 0x30)) {
+      events.push({
+        measure,
+        channel,
+        position: [tokenCount, 0],
+        value: String.fromCharCode(highCode, normalizedCode),
+      });
+    }
+    tokenCount += 1;
+    highCode = -1;
+  }
+
+  if (tokenCount > 0) {
+    for (let index = 0; index < events.length; index += 1) {
+      (events[index]!.position as [number, number])[1] = tokenCount;
+    }
+  }
+
+  return events;
+}
+
+export function cloneEvent(event: BeMusicEvent): BeMusicEvent {
+  const cloned: BeMusicEvent = {
+    measure: event.measure,
+    channel: event.channel,
+    position: [event.position[0], event.position[1]],
+    value: event.value,
+  };
+  if (event.bmson) {
+    cloned.bmson = {};
+    if (typeof event.bmson.l === 'number') {
+      cloned.bmson.l = event.bmson.l;
+    }
+    if (typeof event.bmson.c === 'boolean') {
+      cloned.bmson.c = event.bmson.c;
+    }
+  }
+  return cloned;
+}
+
+export function cloneEvents(events: readonly BeMusicEvent[]): BeMusicEvent[] {
+  const cloned = new Array<BeMusicEvent>(events.length);
+  for (let index = 0; index < events.length; index += 1) {
+    cloned[index] = cloneEvent(events[index]!);
+  }
+  return cloned;
+}
+
 export function sortAndNormalizeEvents(events: Array<BeMusicEvent | Record<string, unknown>>): BeMusicEvent[] {
   const normalized: BeMusicEvent[] = [];
   for (const event of events) {
@@ -63,6 +125,11 @@ export function sortAndNormalizeEvents(events: Array<BeMusicEvent | Record<strin
 
   normalized.sort(compareEvents);
   return normalized;
+}
+
+export function sortNormalizedEvents(events: BeMusicEvent[]): BeMusicEvent[] {
+  events.sort(compareNormalizedEvents);
+  return events;
 }
 
 export function upsertMeasureLength(
@@ -107,6 +174,49 @@ function normalizeRawEvent(event: BeMusicEvent | Record<string, unknown>): BeMus
     value,
     ...(bmson ? { bmson } : {}),
   };
+}
+
+export function compareNormalizedEvents(left: BeMusicEvent, right: BeMusicEvent): number {
+  if (left.measure !== right.measure) {
+    return left.measure - right.measure;
+  }
+
+  const leftPosition = left.position;
+  const rightPosition = right.position;
+  if (leftPosition[1] === rightPosition[1]) {
+    const numeratorDelta = leftPosition[0] - rightPosition[0];
+    if (numeratorDelta !== 0) {
+      return numeratorDelta;
+    }
+  } else {
+    const leftScaled = leftPosition[0] * rightPosition[1];
+    const rightScaled = rightPosition[0] * leftPosition[1];
+    if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
+      if (leftScaled < rightScaled) {
+        return -1;
+      }
+      if (leftScaled > rightScaled) {
+        return 1;
+      }
+    } else {
+      const leftScaledBigInt = BigInt(leftPosition[0]) * BigInt(rightPosition[1]);
+      const rightScaledBigInt = BigInt(rightPosition[0]) * BigInt(leftPosition[1]);
+      if (leftScaledBigInt < rightScaledBigInt) {
+        return -1;
+      }
+      if (leftScaledBigInt > rightScaledBigInt) {
+        return 1;
+      }
+    }
+  }
+
+  if (left.channel !== right.channel) {
+    return left.channel < right.channel ? -1 : 1;
+  }
+  if (left.value !== right.value) {
+    return left.value < right.value ? -1 : 1;
+  }
+  return 0;
 }
 
 function normalizeMeasure(value: unknown): number | undefined {
