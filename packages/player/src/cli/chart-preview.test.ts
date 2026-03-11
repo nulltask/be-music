@@ -333,12 +333,21 @@ describe('player chart preview', () => {
   });
 });
 
-async function waitForMockCall(mock: { mock: { calls: unknown[][] } }): Promise<void> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+async function waitForMockCall(
+  mock: { mock: { calls: unknown[][] } },
+  options: {
+    timeoutMs?: number;
+    intervalMs?: number;
+  } = {},
+): Promise<void> {
+  const timeoutMs = Math.max(10, Math.floor(options.timeoutMs ?? 1_000));
+  const intervalMs = Math.max(1, Math.floor(options.intervalMs ?? 10));
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     if (mock.mock.calls.length > 0) {
       return;
     }
-    await delay(0);
+    await delay(intervalMs);
   }
-  throw new Error('mock was not called');
+  throw new Error(`mock was not called within ${timeoutMs}ms`);
 }
