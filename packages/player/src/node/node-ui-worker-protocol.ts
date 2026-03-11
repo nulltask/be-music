@@ -23,6 +23,7 @@ export interface NodeUiWorkerInitData {
 
 export type NodeUiWorkerInboundMessage =
   | { kind: 'attach-bridge-port'; port: MessagePort }
+  | { kind: 'abort'; reason?: string }
   | { kind: 'start' }
   | { kind: 'stop' }
   | { kind: 'dispose' }

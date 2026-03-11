@@ -132,6 +132,7 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
           setRuntime: (runtime) => {
             uiRuntime = runtime;
           },
+          loadSignal: signal,
         });
         return;
       }
@@ -183,6 +184,7 @@ async function handleUiInit(
   message: Extract<NodeGameplayWorkerOutboundMessage, { kind: 'ui-init' }>,
   runtimeStore: {
     setRuntime: (runtime: NodeUiRuntime | undefined) => void;
+    loadSignal?: AbortSignal;
   },
 ): Promise<void> {
   try {
@@ -199,6 +201,7 @@ async function handleUiInit(
       baseDir: message.runtime.baseDir,
       initialPaused: message.runtime.initialPaused,
       initialJudgeCombo: message.runtime.initialJudgeCombo,
+      loadSignal: runtimeStore.loadSignal,
       onBgaLoadProgress: (progress) => {
         postWorkerMessage(worker, {
           kind: 'ui-bga-load-progress',

@@ -191,6 +191,24 @@ describe('node gameplay runtime', () => {
     await promise;
   });
 
+  test('passes the gameplay abort signal through to the UI runtime initializer', async () => {
+    const controller = new AbortController();
+    const promise = runNodeGameplayRuntime(createOptions({ signal: controller.signal }));
+    const worker = getLastWorker();
+
+    worker.emit('message', {
+      kind: 'ui-init',
+      requestId: 7,
+      runtime: createUiInit(),
+    });
+    await Promise.resolve();
+
+    expect(uiRuntimeState.context?.loadSignal).toBe(controller.signal);
+
+    worker.emit('message', { kind: 'result', summary: createSummary() });
+    await promise;
+  });
+
   test('maps worker abort errors back to AbortError', async () => {
     const promise = runNodeGameplayRuntime(createOptions());
     const worker = getLastWorker();
@@ -205,7 +223,7 @@ describe('node gameplay runtime', () => {
   });
 });
 
-function createOptions(): Parameters<typeof runNodeGameplayRuntime>[0] {
+function createOptions(overrides: Partial<Parameters<typeof runNodeGameplayRuntime>[0]> = {}): Parameters<typeof runNodeGameplayRuntime>[0] {
   return {
     json: createEmptyJson('bms'),
     mode: 'manual',
@@ -214,6 +232,7 @@ function createOptions(): Parameters<typeof runNodeGameplayRuntime>[0] {
       speed: 1,
       audioBaseDir: process.cwd(),
     },
+    ...overrides,
   };
 }
 

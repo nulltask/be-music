@@ -1,3 +1,4 @@
+import { createAbortError, isAbortError } from '@be-music/utils';
 import { createBeatResolver } from '@be-music/chart';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import { createTimingResolver } from '@be-music/audio-renderer';
@@ -29,6 +30,11 @@ const port = parentPort;
 const initData = workerData as NodeUiWorkerInitData;
 
 void bootstrap().catch((error) => {
+  if (isAbortError(error)) {
+    port?.close();
+    process.exit(0);
+    return;
+  }
   postWorkerMessage({
     kind: 'error',
     message: error instanceof Error ? error.message : String(error),
@@ -40,6 +46,14 @@ async function bootstrap(): Promise<void> {
   if (!port) {
     throw new Error('UI worker parent port is unavailable');
   }
+  const abortController = new AbortController();
+  const handleAbortMessage = (message: NodeUiWorkerInboundMessage): void => {
+    if (message.kind !== 'abort' || abortController.signal.aborted) {
+      return;
+    }
+    abortController.abort(resolveAbortReason(message.reason));
+  };
+  port.on('message', handleAbortMessage);
 
   const splitAfterIndex = resolveSplitAfterIndex(initData.laneBindings);
   const lanes = initData.laneBindings.map((binding) => ({
@@ -109,6 +123,7 @@ async function bootstrap(): Promise<void> {
     baseDir: initData.baseDir,
     width: initialBgaSize.width,
     height: initialBgaSize.height,
+    signal: abortController.signal,
     onLoadProgress: (progress) => {
       postWorkerMessage({
         kind: 'bga-load-progress',
@@ -301,4 +316,12 @@ function estimateBgaAnsiDisplaySize(
 
 function postWorkerMessage(message: NodeUiWorkerOutboundMessage): void {
   port?.postMessage(message);
+}
+
+function resolveAbortReason(reason?: string): Error {
+  const error = createAbortError();
+  if (typeof reason === 'string' && reason.length > 0) {
+    error.message = reason;
+  }
+  return error;
 }

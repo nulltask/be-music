@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { isAbortError } from '@be-music/utils';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { WorkerOptions } from 'node:worker_threads';
 import { createEmptyJson } from '../../../json/src/index.ts';
@@ -14,6 +15,7 @@ const workerState = vi.hoisted(() => ({
   lastWorker: undefined as MockWorker | undefined,
   lastWorkerOptions: undefined as WorkerOptions | undefined,
   autoAckLifecycle: true,
+  autoReadyOnConstruct: true,
   readyMessage: { kind: 'ready' } as { kind: 'ready'; bgaPlaybackEndSeconds?: number },
 }));
 
@@ -45,9 +47,11 @@ vi.mock('node:worker_threads', async () => {
         super();
         workerState.lastWorkerOptions = _args[1] as WorkerOptions | undefined;
         workerState.lastWorker = this;
-        queueMicrotask(() => {
-          this.emit('message', workerState.readyMessage);
-        });
+        if (workerState.autoReadyOnConstruct) {
+          queueMicrotask(() => {
+            this.emit('message', workerState.readyMessage);
+          });
+        }
       }
     },
   };
@@ -61,6 +65,7 @@ afterEach(() => {
   workerState.lastWorker = undefined;
   workerState.lastWorkerOptions = undefined;
   workerState.autoAckLifecycle = true;
+  workerState.autoReadyOnConstruct = true;
   workerState.readyMessage = { kind: 'ready' };
 });
 
@@ -197,6 +202,24 @@ describe('node ui runtime', () => {
     expect(runtime.playbackEndSeconds).toBe(3.25);
 
     await runtime.dispose();
+  });
+
+  test('aborts UI worker initialization cooperatively through an abort message', async () => {
+    workerState.autoReadyOnConstruct = false;
+    const controller = new AbortController();
+    const uiSignals = createPlayerUiSignalBus(createFrame());
+    const promise = createNodeUiRuntime({
+      ...createContext(uiSignals),
+      loadSignal: controller.signal,
+    });
+    const worker = getLastWorker();
+
+    controller.abort();
+
+    await expect(promise).rejects.toSatisfy((error: unknown) => isAbortError(error));
+    expect(messagesOfKind(worker, 'abort')).toHaveLength(1);
+    expect(messagesOfKind(worker, 'abort')[0]).toMatchObject({ kind: 'abort' });
+    expect(worker.terminate).not.toHaveBeenCalled();
   });
 });
 

@@ -1,3 +1,4 @@
+import { createAbortError, isAbortError } from '@be-music/utils';
 import { effect } from 'alien-signals';
 import { fileURLToPath } from 'node:url';
 import { MessageChannel, type MessagePort, Worker } from 'node:worker_threads';
@@ -357,7 +358,7 @@ async function waitForWorkerReady(
 
     const onAbort = (): void => {
       settle(() => {
-        void worker.terminate();
+        postWorkerAbort(worker, signal);
         reject(resolveAbortReason(signal));
       });
     };
@@ -385,8 +386,27 @@ function attachResizeHandler(onResize: (columns: number | undefined, rows: numbe
 
 function resolveAbortReason(signal: AbortSignal | undefined): Error {
   const reason = signal?.reason;
-  if (reason instanceof Error) {
+  if (isAbortError(reason)) {
     return reason;
   }
-  return new Error(typeof reason === 'string' && reason.length > 0 ? reason : 'UI worker initialization aborted');
+  const error = createAbortError();
+  if (reason instanceof Error && typeof reason.message === 'string' && reason.message.length > 0) {
+    error.message = reason.message;
+    return error;
+  }
+  if (typeof reason === 'string' && reason.length > 0) {
+    error.message = reason;
+  }
+  return error;
+}
+
+function postWorkerAbort(worker: Worker, signal: AbortSignal | undefined): void {
+  try {
+    worker.postMessage({
+      kind: 'abort',
+      reason: resolveAbortReason(signal).message,
+    } satisfies NodeUiWorkerInboundMessage);
+  } catch {
+    void worker.terminate();
+  }
 }
