@@ -173,7 +173,7 @@ describe('player tui', () => {
         hasAudioDebugLine: true,
       }),
     ).toEqual({
-      width: 81,
+      width: 79,
       height: 15,
     });
   });
