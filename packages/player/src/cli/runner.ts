@@ -62,6 +62,7 @@ import {
   type ChartSelectionEntry,
   type ChartSummaryLoadingProgress,
 } from './chart-selection.ts';
+import { createChartFocusKey, createSongSelectState, getEntryFocusKey } from './song-select-state.ts';
 import { createChartPreviewController, formatSongSelectAudioBackendLabel } from './chart-preview.ts';
 
 export {
@@ -1413,53 +1414,6 @@ function formatSongSelectDifficultyFilterLabel(value: SongSelectDifficultyFilter
   return typeof value === 'number' ? String(value) : 'ALL';
 }
 
-function filterChartSelectionEntries(
-  entries: readonly ChartSelectionEntry[],
-  difficultyFilter: SongSelectDifficultyFilter | undefined,
-): ChartSelectionEntry[] {
-  if (typeof difficultyFilter !== 'number') {
-    return [...entries];
-  }
-
-  const filtered: ChartSelectionEntry[] = [];
-  let pendingGroup: Extract<ChartSelectionEntry, { kind: 'group' }> | undefined;
-  let groupHasVisibleCharts = false;
-  let hasVisibleCharts = false;
-
-  const flushPendingGroup = (): void => {
-    if (pendingGroup && groupHasVisibleCharts) {
-      filtered.push(pendingGroup);
-    }
-    pendingGroup = undefined;
-    groupHasVisibleCharts = false;
-  };
-
-  for (const entry of entries) {
-    if (entry.kind === 'random') {
-      continue;
-    }
-    if (entry.kind === 'group') {
-      flushPendingGroup();
-      pendingGroup = entry;
-      continue;
-    }
-    if (entry.difficulty !== difficultyFilter) {
-      continue;
-    }
-    if (pendingGroup && !groupHasVisibleCharts) {
-      filtered.push(pendingGroup);
-      groupHasVisibleCharts = true;
-    }
-    filtered.push(entry);
-    hasVisibleCharts = true;
-  }
-
-  if (hasVisibleCharts) {
-    filtered.unshift({ kind: 'random', label: '[Random] Select a chart randomly' });
-  }
-  return filtered;
-}
-
 async function selectChartInteractively(
   rootDir: string,
   files: string[],
@@ -1479,65 +1433,18 @@ async function selectChartInteractively(
   let wasSpinnerVisible = false;
 
   const inputCapture = beginRawInputCapture();
-  let difficultyFilter = options.initialDifficultyFilter;
-  let playMode: PlayMode = options.initialPlayMode ?? 'manual';
-  let highSpeed = normalizeHighSpeedValue(options.initialHighSpeed);
-  let selectedIndex = 0;
-
-  const resolveSelectionView = () => {
-    const entries = filterChartSelectionEntries(allEntries, difficultyFilter);
-    const selectableIndexes = entries.flatMap((entry, index) => (entry.kind === 'group' ? [] : [index]));
-    const chartIndexes = entries.flatMap((entry, index) => (entry.kind === 'chart' ? [index] : []));
-    const selectableIndexByEntryIndex = new Map<number, number>();
-    const chartIndexByEntryIndex = new Map<number, number>();
-    for (let index = 0; index < selectableIndexes.length; index += 1) {
-      selectableIndexByEntryIndex.set(selectableIndexes[index]!, index);
-    }
-    for (let index = 0; index < chartIndexes.length; index += 1) {
-      chartIndexByEntryIndex.set(chartIndexes[index]!, index);
-    }
-    return {
-      entries,
-      selectableIndexes,
-      chartIndexes,
-      chartCount: chartIndexes.length,
-      chartFiles: entries.flatMap((entry) => (entry.kind === 'chart' ? [entry.filePath] : [])),
-      selectableIndexByEntryIndex,
-      chartIndexByEntryIndex,
-    };
-  };
-
-  const ensureSelectedIndex = (preferredFocusKey?: string): void => {
-    const view = resolveSelectionView();
-    if (view.entries.length === 0) {
-      selectedIndex = 0;
-      return;
-    }
-    const clampedIndex = Math.max(0, Math.min(selectedIndex, view.entries.length - 1));
-    selectedIndex = clampedIndex;
-    if (view.selectableIndexes.length === 0) {
-      return;
-    }
-    const focusKey = preferredFocusKey ?? getEntryFocusKey(view.entries[selectedIndex]);
-    if (focusKey) {
-      const found = view.selectableIndexes.find((index) => getEntryFocusKey(view.entries[index]) === focusKey);
-      if (typeof found === 'number') {
-        selectedIndex = found;
-        return;
-      }
-    }
-    if (!view.selectableIndexByEntryIndex.has(selectedIndex)) {
-      selectedIndex = view.selectableIndexes[0]!;
-    }
-  };
-
-  ensureSelectedIndex(options.initialFocusKey);
+  const songSelectState = createSongSelectState(allEntries, {
+    initialDifficultyFilter: options.initialDifficultyFilter,
+    initialPlayMode: options.initialPlayMode,
+    initialHighSpeed: options.initialHighSpeed,
+    initialFocusKey: options.initialFocusKey,
+  });
 
   process.stdout.write('\u001b[?25l');
 
   const syncPreview = (): void => {
-    const view = resolveSelectionView();
-    const entry = view.entries[selectedIndex];
+    const view = songSelectState.view();
+    const entry = view.entries[songSelectState.selectedIndex()];
     if (entry?.kind === 'chart') {
       previewController?.focus({
         filePath: entry.filePath,
@@ -1554,7 +1461,7 @@ async function selectChartInteractively(
   };
 
   const render = (): void => {
-    const view = resolveSelectionView();
+    const view = songSelectState.view();
     const columns = process.stdout.columns ?? 80;
     const listRows = listRowsForViewport();
     const numberWidth = String(Math.max(1, view.chartCount)).length;
@@ -1562,7 +1469,7 @@ async function selectChartInteractively(
     const itemLabelWidth = Math.max(8, lineWidth - numberWidth - 4);
     const columnLayout = createSelectionColumnLayout(itemLabelWidth, view.entries);
 
-    const { start, end } = resolveVisibleEntryRange(selectedIndex, view.entries.length, listRows);
+    const { start, end } = resolveVisibleEntryRange(songSelectState.selectedIndex(), view.entries.length, listRows);
 
     const lines: string[] = [];
     lines.push(
@@ -1570,7 +1477,7 @@ async function selectChartInteractively(
     );
     lines.push(truncateForDisplay(`Directory: ${rootDir}`, lineWidth));
     lines.push(
-      `Mode: ${formatPlayModeLabel(playMode)}  HIGH-SPEED: x${formatHighSpeedLabel(highSpeed)}  DIFFICULTY: ${formatSongSelectDifficultyFilterLabel(difficultyFilter)}`,
+      `Mode: ${formatPlayModeLabel(songSelectState.playMode())}  HIGH-SPEED: x${formatHighSpeedLabel(songSelectState.highSpeed())}  DIFFICULTY: ${formatSongSelectDifficultyFilterLabel(songSelectState.difficultyFilter())}`,
     );
     lines.push(
       `Audio backend: ${formatSongSelectAudioBackendLabel(options.audio, previewController?.getActiveBackend())}`,
@@ -1587,13 +1494,13 @@ async function selectChartInteractively(
 
     for (let index = start; index < end; index += 1) {
       const entry = view.entries[index];
-      const marker = index === selectedIndex ? '>' : ' ';
+      const marker = index === songSelectState.selectedIndex() ? '>' : ' ';
       const chartNumber = view.chartIndexByEntryIndex.get(index);
       const number =
         typeof chartNumber === 'number' ? String(chartNumber + 1).padStart(numberWidth, ' ') : ' '.repeat(numberWidth);
       let displayEntry = entry;
       if (
-        index === selectedIndex &&
+        index === songSelectState.selectedIndex() &&
         entry.kind === 'chart' &&
         previewController?.getRenderingFilePath() === entry.filePath
       ) {
@@ -1604,7 +1511,7 @@ async function selectChartInteractively(
       }
       const label = truncateForDisplay(formatSelectionEntryLabel(displayEntry, columnLayout), itemLabelWidth);
       const line = `${marker} ${number} ${label}`;
-      if (index === selectedIndex) {
+      if (index === songSelectState.selectedIndex()) {
         lines.push(`\u001b[7m${line.padEnd(lineWidth, ' ')}\u001b[0m`);
       } else {
         lines.push(line);
@@ -1612,11 +1519,11 @@ async function selectChartInteractively(
     }
 
     lines.push('');
-    const selectedChartIndex = view.chartIndexByEntryIndex.get(selectedIndex);
+    const selectedChartIndex = view.chartIndexByEntryIndex.get(songSelectState.selectedIndex());
     if (typeof selectedChartIndex === 'number') {
       lines.push(`${selectedChartIndex + 1}/${view.chartCount}`);
     } else if (view.chartCount > 0) {
-      const selectedEntry = view.entries[selectedIndex];
+      const selectedEntry = view.entries[songSelectState.selectedIndex()];
       lines.push(selectedEntry?.kind === 'random' ? `RANDOM/${view.chartCount}` : `0/${view.chartCount}`);
     } else {
       lines.push('0/0');
@@ -1627,8 +1534,8 @@ async function selectChartInteractively(
   return new Promise<SelectChartInteractivelyResult>((resolvePromise) => {
     let finished = false;
     const isSelectedEntryPreviewRendering = (): boolean => {
-      const view = resolveSelectionView();
-      const selectedEntry = view.entries[selectedIndex];
+      const view = songSelectState.view();
+      const selectedEntry = view.entries[songSelectState.selectedIndex()];
       if (!previewController || selectedEntry?.kind !== 'chart') {
         return false;
       }
@@ -1672,33 +1579,35 @@ async function selectChartInteractively(
     };
 
     const moveSelection = (delta: number): void => {
-      const view = resolveSelectionView();
+      const view = songSelectState.view();
       if (view.selectableIndexes.length === 0) {
         return;
       }
-      const currentSelectableIndex = view.selectableIndexByEntryIndex.get(selectedIndex) ?? 0;
+      const currentSelectableIndex = view.selectableIndexByEntryIndex.get(songSelectState.selectedIndex()) ?? 0;
       const nextSelectableIndex = resolveCircularSelectableIndex(
         currentSelectableIndex,
         delta,
         view.selectableIndexes.length,
       );
-      selectedIndex = view.selectableIndexes[nextSelectableIndex]!;
+      songSelectState.selectedIndex(view.selectableIndexes[nextSelectableIndex]!);
       syncPreview();
       render();
     };
 
     const moveSelectionByPage = (direction: SongSelectPageDirection): void => {
-      const view = resolveSelectionView();
+      const view = songSelectState.view();
       if (view.selectableIndexes.length === 0) {
         return;
       }
       const pageSize = listRowsForViewport();
-      selectedIndex = resolvePageSelectableIndex(
-        view.selectableIndexes,
-        selectedIndex,
-        view.entries.length,
-        pageSize,
-        direction,
+      songSelectState.selectedIndex(
+        resolvePageSelectableIndex(
+          view.selectableIndexes,
+          songSelectState.selectedIndex(),
+          view.entries.length,
+          pageSize,
+          direction,
+        ),
       );
       syncPreview();
       render();
@@ -1707,9 +1616,9 @@ async function selectChartInteractively(
     const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
       const nextDifficultyFilter = resolveSongSelectDifficultyFilter(chunk);
       if (nextDifficultyFilter !== undefined) {
-        const focusKey = getEntryFocusKey(resolveSelectionView().entries[selectedIndex]);
-        difficultyFilter = nextDifficultyFilter ?? undefined;
-        ensureSelectedIndex(focusKey);
+        const focusKey = getEntryFocusKey(songSelectState.view().entries[songSelectState.selectedIndex()]);
+        songSelectState.difficultyFilter(nextDifficultyFilter ?? undefined);
+        songSelectState.ensureSelectedIndex(focusKey);
         syncPreview();
         render();
         return;
@@ -1717,13 +1626,13 @@ async function selectChartInteractively(
 
       const action = resolveSongSelectNavigationAction(chunk, key);
       if (action === 'ctrl-c') {
-        const view = resolveSelectionView();
+        const view = songSelectState.view();
         cleanup({
           reason: 'ctrl-c',
-          focusKey: getEntryFocusKey(view.entries[selectedIndex]),
-          playMode,
-          highSpeed,
-          difficultyFilter,
+          focusKey: getEntryFocusKey(view.entries[songSelectState.selectedIndex()]),
+          playMode: songSelectState.playMode(),
+          highSpeed: songSelectState.highSpeed(),
+          difficultyFilter: songSelectState.difficultyFilter(),
         });
         return;
       }
@@ -1744,37 +1653,37 @@ async function selectChartInteractively(
         return;
       }
       if (action === 'first') {
-        const view = resolveSelectionView();
+        const view = songSelectState.view();
         if (view.selectableIndexes.length === 0) {
           return;
         }
-        selectedIndex = view.selectableIndexes[0]!;
+        songSelectState.selectedIndex(view.selectableIndexes[0]!);
         syncPreview();
         render();
         return;
       }
       if (action === 'last') {
-        const view = resolveSelectionView();
+        const view = songSelectState.view();
         if (view.selectableIndexes.length === 0) {
           return;
         }
-        selectedIndex = view.selectableIndexes[view.selectableIndexes.length - 1]!;
+        songSelectState.selectedIndex(view.selectableIndexes[view.selectableIndexes.length - 1]!);
         syncPreview();
         render();
         return;
       }
       if (action === 'confirm') {
-        const view = resolveSelectionView();
-        const selectedEntry = view.entries[selectedIndex];
+        const view = songSelectState.view();
+        const selectedEntry = view.entries[songSelectState.selectedIndex()];
         if (selectedEntry?.kind === 'random') {
           const randomIndex = Math.floor(Math.random() * view.chartFiles.length);
           cleanup({
             reason: 'selected',
             selectedPath: view.chartFiles[randomIndex],
             focusKey: getEntryFocusKey(selectedEntry),
-            playMode,
-            highSpeed,
-            difficultyFilter,
+            playMode: songSelectState.playMode(),
+            highSpeed: songSelectState.highSpeed(),
+            difficultyFilter: songSelectState.difficultyFilter(),
           });
           return;
         }
@@ -1783,37 +1692,37 @@ async function selectChartInteractively(
             reason: 'selected',
             selectedPath: selectedEntry.filePath,
             focusKey: getEntryFocusKey(selectedEntry),
-            playMode,
-            highSpeed,
-            difficultyFilter,
+            playMode: songSelectState.playMode(),
+            highSpeed: songSelectState.highSpeed(),
+            difficultyFilter: songSelectState.difficultyFilter(),
           });
           return;
         }
         return;
       }
       if (action === 'toggle-auto') {
-        playMode = cyclePlayMode(playMode);
+        songSelectState.playMode(cyclePlayMode(songSelectState.playMode()));
         render();
         return;
       }
       if (action === 'increase-high-speed') {
-        highSpeed = increaseHighSpeed(highSpeed);
+        songSelectState.highSpeed(increaseHighSpeed(songSelectState.highSpeed()));
         render();
         return;
       }
       if (action === 'decrease-high-speed') {
-        highSpeed = decreaseHighSpeed(highSpeed);
+        songSelectState.highSpeed(decreaseHighSpeed(songSelectState.highSpeed()));
         render();
         return;
       }
       if (action === 'escape') {
-        const view = resolveSelectionView();
+        const view = songSelectState.view();
         cleanup({
           reason: 'escape',
-          focusKey: getEntryFocusKey(view.entries[selectedIndex]),
-          playMode,
-          highSpeed,
-          difficultyFilter,
+          focusKey: getEntryFocusKey(view.entries[songSelectState.selectedIndex()]),
+          playMode: songSelectState.playMode(),
+          highSpeed: songSelectState.highSpeed(),
+          difficultyFilter: songSelectState.difficultyFilter(),
         });
       }
     };
@@ -1823,23 +1732,6 @@ async function selectChartInteractively(
     syncPreview();
     render();
   });
-}
-
-function getEntryFocusKey(entry: ChartSelectionEntry | undefined): string | undefined {
-  if (!entry) {
-    return undefined;
-  }
-  if (entry.kind === 'random') {
-    return 'random';
-  }
-  if (entry.kind === 'chart') {
-    return createChartFocusKey(entry.filePath);
-  }
-  return undefined;
-}
-
-function createChartFocusKey(filePath: string): string {
-  return `chart:${filePath}`;
 }
 
 function resolveChartFileFromFocusKey(focusKey: string | undefined): string | undefined {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { formatMeasureSignature, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './tui.ts';
 import { PlayerTui } from './tui.ts';
+import { createPlayerStateSignals } from './state-signals.ts';
 import { estimateBgaAnsiDisplaySize, resolveLaneWidths } from './tui/layout.ts';
 
 const STDOUT_IS_TTY_DESCRIPTOR = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
@@ -94,6 +95,69 @@ describe('player tui', () => {
     });
 
     expect(tui.isSupported()).toBe(true);
+  });
+
+  test('tui: reacts to alien-signals driven HUD state updates', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    mockTerminal({ columns: 120, rows: 32 });
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
+    const stateSignals = createPlayerStateSignals(1);
+    const tui = new PlayerTui({
+      mode: 'MANUAL',
+      laneDisplayMode: '7 KEY',
+      title: 'Test Song',
+      lanes: [
+        { channel: '16', key: 'A', isScratch: true },
+        { channel: '11', key: 'S' },
+        { channel: '12', key: 'D' },
+      ],
+      speed: 1,
+      highSpeed: 1,
+      judgeWindowMs: 16.67,
+      stateSignals,
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+    });
+    const frame: Parameters<PlayerTui['render']>[0] = {
+      currentBeat: 0,
+      currentSeconds: 0,
+      totalSeconds: 120,
+      summary: {
+        total: 100,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+      },
+      notes: [],
+    };
+
+    tui.start();
+    vi.setSystemTime(100);
+    stateSignals.publishJudgeCombo('GREAT', 12, '11');
+    stateSignals.setPaused(true);
+    tui.render(frame);
+
+    let output = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
+    expect(output).toContain('PAUSE');
+
+    stateSignals.setPaused(false);
+    stateSignals.setHighSpeed(1.5);
+    vi.setSystemTime(350);
+    tui.render(frame);
+
+    output = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
+    expect(output).toContain('HS x1.5');
+    expect(output).toContain('GREAT');
+    expect(output).toContain('12');
+
+    tui.stop();
   });
 
   test('tui: clears and relayouts the frame after terminal resize', () => {
