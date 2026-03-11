@@ -25,8 +25,8 @@ import {
 } from '@be-music/json';
 import { findLastIndexAtOrBefore, findLastIndexBefore, isAbortError, throwIfAborted } from '@be-music/utils';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
-import { detectAudioFormat, encodeAiff16, encodeWav16 } from './audio-file-codec.ts';
-import { createFallbackTone, decodeAudioSample, resampleLinear } from './audio-decode.ts';
+import { detectAudioFormat, encodeAiff16, encodeWav16 } from './file-codec.ts';
+import { createFallbackTone, decodeAudioSample, resampleLinear } from './decode.ts';
 import { resolveSamplePath } from './sample-path.ts';
 export interface TempoPoint {
   beat: number;

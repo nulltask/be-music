@@ -14,8 +14,8 @@ import {
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
-} from '../player-utils.ts';
-import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/player-ui-signal-bus.ts';
+} from '../utils.ts';
+import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/ui-signal-bus.ts';
 import { PlayerTui } from '../tui.ts';
 import { estimateBgaAnsiDisplaySize as resolveBgaDisplaySize, resolveLaneWidths } from '../tui/layout.ts';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';

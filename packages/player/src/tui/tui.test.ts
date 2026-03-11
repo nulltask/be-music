@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { PlayerTui } from './player-tui.ts';
+import { PlayerTui } from './tui.ts';
 
 function stripAnsi(value: string): string {
   return value.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '');

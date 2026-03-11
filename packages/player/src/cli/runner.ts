@@ -14,7 +14,7 @@ import {
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
-} from '../player-utils.ts';
+} from '../utils.ts';
 import {
   HIGH_SPEED_STEP,
   MAX_HIGH_SPEED,
@@ -35,7 +35,7 @@ import {
   savePersistedPlayerConfig,
   type PersistedPlayerConfig,
   type PlayMode,
-} from './player-config.ts';
+} from './config.ts';
 import {
   resolveCircularSelectableIndex,
   resolvePageSelectableIndex,
@@ -71,7 +71,7 @@ export {
   resolveCliConfigOverrideFlags,
   resolvePersistedPlayerConfigFromArgs,
   resolvePlayModeFromArgs,
-} from './player-config.ts';
+} from './config.ts';
 export {
   resolveCircularSelectableIndex,
   resolvePageSelectableIndex,

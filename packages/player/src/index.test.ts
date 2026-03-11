@@ -42,12 +42,12 @@ import {
   resolveJudgeWindowsMs,
   resolveBmsControlFlowForPlayback,
 } from './index.ts';
-import type { PlayerInputCommand } from './core/player-input-signal-bus.ts';
+import type { PlayerInputCommand } from './core/input-signal-bus.ts';
 import {
   resolveChartVolWavGain,
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
-} from './player-utils.ts';
+} from './utils.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');

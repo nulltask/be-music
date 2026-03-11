@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { createPlayerInputSignalBus } from './player-input-signal-bus.ts';
-import { createPlayerUiSignalBus } from './player-ui-signal-bus.ts';
+import { createPlayerUiSignalBus } from './ui-signal-bus.ts';
 
-describe('player signal bus', () => {
-  test('ui bus publishes latest frame and drains commands in order', () => {
+describe('player ui signal bus', () => {
+  test('publishes latest frame and drains commands in order', () => {
     const uiBus = createPlayerUiSignalBus({
       currentBeat: 0,
       currentSeconds: 0,
@@ -50,19 +49,5 @@ describe('player signal bus', () => {
     expect(uiBus.commandTick()).toBe(2);
     expect(uiBus.drainCommands()).toEqual([{ kind: 'flash-lane', channel: '11' }, { kind: 'clear-poor-bga' }]);
     expect(uiBus.drainCommands()).toEqual([]);
-  });
-
-  test('input bus queues and drains commands', () => {
-    const inputBus = createPlayerInputSignalBus();
-    expect(inputBus.tick()).toBe(0);
-
-    inputBus.pushCommand({ kind: 'toggle-pause' });
-    inputBus.pushCommand({ kind: 'high-speed', action: 'increase' });
-    expect(inputBus.tick()).toBe(2);
-    expect(inputBus.drainCommands()).toEqual([
-      { kind: 'toggle-pause' },
-      { kind: 'high-speed', action: 'increase' },
-    ]);
-    expect(inputBus.drainCommands()).toEqual([]);
   });
 });

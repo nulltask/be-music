@@ -10,7 +10,7 @@ import {
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
-} from '../player-utils.ts';
+} from '../utils.ts';
 import { resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
 
 interface ChartSummaryItem {

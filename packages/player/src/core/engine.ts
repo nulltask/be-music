@@ -28,7 +28,7 @@ import {
   renderSingleSample,
   renderJson,
 } from '@be-music/audio-renderer';
-import { createPlayerStateSignals, type PlayerStateSignals } from '../player-state-signals.ts';
+import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
 import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
 import { type LaneBinding } from '../manual-input.ts';
 import {
@@ -36,7 +36,7 @@ import {
   type TimedLandmineNote,
   type TimedPlayableNote,
 } from '../playable-notes.ts';
-import { formatSeconds, resolveAltModifierLabel, resolveChartVolWavGain } from '../player-utils.ts';
+import { formatSeconds, resolveAltModifierLabel, resolveChartVolWavGain } from '../utils.ts';
 import { createNodeAudioSink, type AudioSink } from '../audio-sink.ts';
 import {
   applyHighSpeedControlAction,
@@ -44,8 +44,8 @@ import {
   resolveHighSpeedMultiplier,
   type HighSpeedControlAction,
 } from './high-speed-control.ts';
-import { createPlayerUiSignalBus, type PlayerUiSignalBus } from './player-ui-signal-bus.ts';
-import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './player-input-signal-bus.ts';
+import { createPlayerUiSignalBus, type PlayerUiSignalBus } from './ui-signal-bus.ts';
+import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './input-signal-bus.ts';
 import {
   IIDX_EX_SCORE_PER_PGREAT,
   IIDX_SCORE_MAX,
@@ -60,7 +60,7 @@ import {
   createInitialPlayerSummary,
   initializePlayerUiRuntime,
   preparePlaybackChartData,
-} from './player-bootstrap.ts';
+} from './bootstrap.ts';
 
 export interface PlayerUiRuntime {
   readonly tuiEnabled: boolean;

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { resolveAltModifierLabel, resolveDisplayedDifficultyValue, resolveDisplayedPlayLevelValue } from './player-utils.ts';
+import { resolveAltModifierLabel, resolveDisplayedDifficultyValue, resolveDisplayedPlayLevelValue } from './utils.ts';
 
 describe('player utils', () => {
   test('player-utils: uses Option label on macOS', () => {

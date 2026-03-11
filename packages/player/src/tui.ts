@@ -1,1 +1,1 @@
-export * from './tui/player-tui.ts';
+export * from './tui/tui.ts';

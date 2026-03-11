@@ -6,14 +6,14 @@ import {
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
-} from '../player-utils.ts';
+} from '../utils.ts';
 import type {
   CreatePlayerInputRuntimeContext,
   CreatePlayerUiRuntimeContext,
   PlayerInputRuntime,
-} from '../core/player-engine.ts';
-import { autoPlay, manualPlay, PlayerInterruptedError } from '../core/player-engine.ts';
-import type { PlayerLoadProgress } from '../core/player-engine.ts';
+} from '../core/engine.ts';
+import { autoPlay, manualPlay, PlayerInterruptedError } from '../core/engine.ts';
+import type { PlayerLoadProgress } from '../core/engine.ts';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';
 import type {
   NodeGameplayWorkerInboundMessage,

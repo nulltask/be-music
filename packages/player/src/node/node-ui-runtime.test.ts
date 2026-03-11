@@ -2,8 +2,8 @@ import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { WorkerOptions } from 'node:worker_threads';
 import { createEmptyJson } from '../../../json/src/index.ts';
-import { createPlayerUiSignalBus } from '../core/player-ui-signal-bus.ts';
-import { createPlayerStateSignals } from '../player-state-signals.ts';
+import { createPlayerUiSignalBus } from '../core/ui-signal-bus.ts';
+import { createPlayerStateSignals } from '../state-signals.ts';
 
 type MockWorker = EventEmitter & {
   postMessage: ReturnType<typeof vi.fn>;

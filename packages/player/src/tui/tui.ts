@@ -1,8 +1,8 @@
 import type { BeMusicPlayLevel } from '@be-music/json';
 import { clamp } from '@be-music/utils';
 import type { PlayerSummary } from '../index.ts';
-import { formatSeconds, resolveAltModifierLabel } from '../player-utils.ts';
-import type { PlayerStateSignals } from '../player-state-signals.ts';
+import { formatSeconds, resolveAltModifierLabel } from '../utils.ts';
+import type { PlayerStateSignals } from '../state-signals.ts';
 import { findStackableRowIndex } from './lane-stacking.ts';
 import { normalizeHighSpeed, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
 import {

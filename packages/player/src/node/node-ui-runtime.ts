@@ -2,8 +2,8 @@ import { effect } from 'alien-signals';
 import { fileURLToPath } from 'node:url';
 import { MessageChannel, type MessagePort, Worker } from 'node:worker_threads';
 import type { LaneBinding } from '../manual-input.ts';
-import type { PlayerStateSignals } from '../player-state-signals.ts';
-import type { PlayerUiSignalBus } from '../core/player-ui-signal-bus.ts';
+import type { PlayerStateSignals } from '../state-signals.ts';
+import type { PlayerUiSignalBus } from '../core/ui-signal-bus.ts';
 import { resolveHighSpeedMultiplier } from '../core/high-speed-control.ts';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';
 import type {

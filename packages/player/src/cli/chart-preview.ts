@@ -12,7 +12,7 @@ import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { collectSampleTriggers, createTimingResolver, type RenderResult, renderJson } from '@be-music/audio-renderer';
 import { createNodeAudioSink } from '../audio-sink.ts';
-import { resolveChartVolWavGain } from '../player-utils.ts';
+import { resolveChartVolWavGain } from '../utils.ts';
 
 interface PreviewPlaybackHandle {
   stop: () => void;

@@ -1,14 +1,14 @@
 import { throwIfAborted } from '@be-music/utils';
 import { normalizeChannel, type BeMusicJson } from '@be-music/json';
 import { createGrooveGaugeState, applyGrooveGaugeJudge, isGrooveGaugeCleared, type GrooveGaugeJudgeKind } from './groove-gauge.ts';
-import { type PlayerUiSignalBus } from './player-ui-signal-bus.ts';
+import { type PlayerUiSignalBus } from './ui-signal-bus.ts';
 import type {
   CreatePlayerUiRuntimeContext,
   PlayerGrooveGaugeSummary,
   PlayerOptions,
   PlayerSummary,
   PlayerUiRuntime,
-} from './player-engine.ts';
+} from './engine.ts';
 import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 import {
   appendFreeZoneInputChannels,
@@ -17,7 +17,7 @@ import {
   resolveLaneDisplayMode,
   type LaneBinding,
 } from '../manual-input.ts';
-import { type PlayerStateSignals } from '../player-state-signals.ts';
+import { type PlayerStateSignals } from '../state-signals.ts';
 
 export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];

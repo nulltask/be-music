@@ -3,9 +3,9 @@ import { createAbortError } from '@be-music/utils';
 import type { BeMusicJson } from '@be-music/json';
 import { fileURLToPath } from 'node:url';
 import { Worker, type TransferListItem } from 'node:worker_threads';
-import { createPlayerInputSignalBus } from '../core/player-input-signal-bus.ts';
-import type { PlayerLoadProgress, PlayerSummary } from '../core/player-engine.ts';
-import { PlayerInterruptedError } from '../core/player-engine.ts';
+import { createPlayerInputSignalBus } from '../core/input-signal-bus.ts';
+import type { PlayerLoadProgress, PlayerSummary } from '../core/engine.ts';
+import { PlayerInterruptedError } from '../core/engine.ts';
 import { createNodeInputRuntime, type NodeInputRuntime } from './node-input-runtime.ts';
 import { createNodeUiRuntime, type NodeUiRuntime } from './node-ui-runtime.ts';
 import type {

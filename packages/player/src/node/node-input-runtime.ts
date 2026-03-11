@@ -4,7 +4,7 @@ import {
   resolveInputTokenEvent,
 } from '../manual-input.ts';
 import { resolveHighSpeedControlActionFromLaneChannels, type HighSpeedControlAction } from '../core/high-speed-control.ts';
-import type { PlayerInputSignalBus } from '../core/player-input-signal-bus.ts';
+import type { PlayerInputSignalBus } from '../core/input-signal-bus.ts';
 
 export interface NodeInputRuntimeOptions {
   mode: 'auto' | 'manual';

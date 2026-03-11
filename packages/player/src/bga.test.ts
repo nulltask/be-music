@@ -2,10 +2,41 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { encode as encodeBmp } from 'fast-bmp';
 import { encode as encodePng } from 'fast-png';
 import { BgaAnsiRenderer, createBgaAnsiRenderer, loadStageFileAnsiLines } from './bga.ts';
+
+vi.mock('./bga-video.ts', () => ({
+  decodeVideoFramesStream: vi.fn(async (videoPath: string, onFrame: (frame: unknown) => void) => {
+    const hasBlackBorder = videoPath.includes('bordered');
+    const isPortrait = videoPath.includes('portrait');
+    const width = isPortrait ? 180 : 320;
+    const height = isPortrait ? 320 : 240;
+    const rgba = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const offset = (y * width + x) * 4;
+        const insideBorder = !hasBlackBorder || (x >= 32 && x < width - 32 && y >= 24 && y < height - 24);
+        rgba[offset] = insideBorder ? 255 : 0;
+        rgba[offset + 1] = 0;
+        rgba[offset + 2] = 0;
+        rgba[offset + 3] = 255;
+      }
+    }
+    onFrame({
+      seconds: 0,
+      width,
+      height,
+      rgba,
+    });
+    return {
+      codecName: 'h264',
+      frameCount: 1,
+      durationSeconds: 2.5,
+    };
+  }),
+}));
 
 interface RgbColor {
   r: number;
@@ -260,6 +291,121 @@ describe('player bga', () => {
 
       expect(pixels[4]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
       expect(pixels[16]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: fits landscape video frames into the BGA region with contain sizing', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-video-size-'));
+    try {
+      await writeFile(join(baseDir, 'movie.mp4'), '');
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'movie.mp4';
+      json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
+
+      const renderer = await createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+
+      expect(renderer).toBeDefined();
+      const pixels = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const bounds = findOpaqueBounds(pixels);
+      expect(bounds).toBeDefined();
+      expect(bounds).toMatchObject({
+        minX: 0,
+        minY: 2,
+        maxX: 39,
+        maxY: 16,
+      });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: fits portrait video frames into the BGA region with contain sizing', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-video-size-'));
+    try {
+      await writeFile(join(baseDir, 'portrait.mp4'), '');
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'portrait.mp4';
+      json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
+
+      const renderer = await createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+
+      expect(renderer).toBeDefined();
+      const pixels = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const bounds = findOpaqueBounds(pixels);
+      expect(bounds).toBeDefined();
+      expect(bounds).toMatchObject({
+        minX: 9,
+        minY: 0,
+        maxX: 30,
+        maxY: 19,
+      });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: trims black video borders before fitting into the BGA region', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-video-size-'));
+    try {
+      await writeFile(join(baseDir, 'bordered.mp4'), '');
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'bordered.mp4';
+      json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
+
+      const renderer = await createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+
+      expect(renderer).toBeDefined();
+      const pixels = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const bounds = findOpaqueBounds(pixels);
+      expect(bounds).toBeDefined();
+      expect(bounds).toMatchObject({
+        minX: 0,
+        minY: 2,
+        maxX: 39,
+        maxY: 16,
+      });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: tracks gameplay playback end through the last BGA video cue duration', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-video-size-'));
+    try {
+      await writeFile(join(baseDir, 'movie.mp4'), '');
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'movie.mp4';
+      json.events = [{ measure: 0, channel: '04', position: [1, 2], value: '01' }];
+
+      const renderer = await createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+
+      expect(renderer?.playbackEndSeconds).toBeCloseTo(3.5, 6);
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }

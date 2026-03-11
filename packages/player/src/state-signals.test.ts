@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { createPlayerStateSignals } from './player-state-signals.ts';
+import { createPlayerStateSignals } from './state-signals.ts';
 
 describe('player state signals', () => {
   test('publishes judge/combo updates with tick increments', () => {
