@@ -1,3 +1,4 @@
+import { effect, effectScope } from 'alien-signals';
 import type { BeMusicPlayLevel } from '@be-music/json';
 import { clamp } from '@be-music/utils';
 import type { PlayerSummary } from '../index.ts';
@@ -275,12 +276,6 @@ export class PlayerTui {
 
   private lastRenderedBeat = Number.NaN;
 
-  private lastSignalPaused?: boolean;
-
-  private lastSignalHighSpeed?: number;
-
-  private lastSignalJudgeComboTick = Number.NaN;
-
   constructor(options: TuiOptions) {
     const initialHighSpeed = normalizeHighSpeed(options.highSpeed);
     options.highSpeed = initialHighSpeed;
@@ -307,10 +302,23 @@ export class PlayerTui {
       this.freeZoneChannelToScratchChannel.set('27', '26');
       this.freeZoneSourceChannels.add('27');
     }
-    this.lastSignalPaused = this.paused;
-    this.lastSignalHighSpeed = this.targetHighSpeed;
-    this.lastSignalJudgeComboTick = Number.NaN;
-    this.syncStateSignals();
+    if (this.stateSignals) {
+      effectScope(() => {
+        effect(() => {
+          this.setPaused(this.stateSignals?.paused() ?? false);
+        });
+        effect(() => {
+          this.setHighSpeed(normalizeHighSpeed(this.stateSignals?.highSpeed() ?? this.targetHighSpeed));
+        });
+        effect(() => {
+          this.stateSignals?.judgeComboTick();
+          const judgeComboState = this.stateSignals?.getJudgeCombo();
+          if (judgeComboState) {
+            this.setJudgeComboState(judgeComboState);
+          }
+        });
+      });
+    }
   }
 
   isSupported(): boolean {
@@ -373,6 +381,14 @@ export class PlayerTui {
     }
   }
 
+  setJudgeComboState(state: Readonly<{ judge: string; combo: number; channel?: string; updatedAtMs: number }>): void {
+    for (const display of this.resolveJudgeComboTargets(state.channel)) {
+      display.latestJudge = state.judge;
+      display.combo = state.combo;
+      display.updatedAtMs = state.updatedAtMs;
+    }
+  }
+
   setPaused(value: boolean): void {
     this.paused = value;
   }
@@ -427,47 +443,10 @@ export class PlayerTui {
     this.needsFullRefresh = true;
   }
 
-  private syncStateSignals(): void {
-    const stateSignals = this.stateSignals;
-    if (!stateSignals) {
-      return;
-    }
-
-    const paused = stateSignals.paused();
-    if (this.lastSignalPaused !== paused) {
-      this.lastSignalPaused = paused;
-      this.setPaused(paused);
-    }
-
-    const highSpeed = normalizeHighSpeed(stateSignals.highSpeed());
-    if (this.lastSignalHighSpeed === undefined || Math.abs(this.lastSignalHighSpeed - highSpeed) > 1e-9) {
-      this.lastSignalHighSpeed = highSpeed;
-      this.setHighSpeed(highSpeed);
-    }
-
-    const judgeComboTick = stateSignals.judgeComboTick();
-    if (judgeComboTick === this.lastSignalJudgeComboTick) {
-      return;
-    }
-    this.lastSignalJudgeComboTick = judgeComboTick;
-    this.applyJudgeComboSignalState(stateSignals.getJudgeCombo());
-  }
-
-  private applyJudgeComboSignalState(
-    state: Readonly<{ judge: string; combo: number; channel?: string; updatedAtMs: number }>,
-  ): void {
-    for (const display of this.resolveJudgeComboTargets(state.channel)) {
-      display.latestJudge = state.judge;
-      display.combo = state.combo;
-      display.updatedAtMs = state.updatedAtMs;
-    }
-  }
-
   render(frame: TuiFrame): void {
     if (!this.active) {
       return;
     }
-    this.syncStateSignals();
 
     const terminalRows = this.terminalRows ?? process.stdout.rows;
     const debugLineCount = frame.activeAudioFiles === undefined && frame.activeAudioVoiceCount === undefined ? 0 : 1;

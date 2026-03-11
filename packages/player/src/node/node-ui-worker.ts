@@ -20,6 +20,7 @@ import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/ui-signal-bu
 import { PlayerTui } from '../tui.ts';
 import { estimateBgaAnsiDisplaySize as resolveBgaDisplaySize, resolveLaneWidths } from '../tui/layout.ts';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';
+import { createUiWorkerFrameState } from './ui-worker-frame-state.ts';
 import type {
   NodeUiWorkerInboundMessage,
   NodeUiWorkerInitData,
@@ -108,9 +109,6 @@ async function bootstrap(): Promise<void> {
     stdinIsTTY: initData.stdinIsTTY,
     stdoutIsTTY: initData.stdoutIsTTY,
   });
-  tui.setPaused(initData.initialPaused);
-  tui.setLatestJudge(initData.initialJudgeCombo.judge, initData.initialJudgeCombo.channel);
-  tui.setCombo(initData.initialJudgeCombo.combo, initData.initialJudgeCombo.channel);
 
   if (!tui.isSupported()) {
     postWorkerMessage({ kind: 'unsupported' });
@@ -135,16 +133,45 @@ async function bootstrap(): Promise<void> {
     },
   });
 
-  let latestFrame: PlayerUiFramePayload | undefined;
   const queuedCommands: PlayerUiCommand[] = [];
   let bridgePort: MessagePort | undefined;
-  let terminalColumns: number | undefined;
-  let terminalRows: number | undefined;
 
-  const syncBgaDisplaySize = (frame: PlayerUiFramePayload | undefined): void => {
-    const size = estimateBgaAnsiDisplaySize(initData.laneBindings, terminalColumns, terminalRows, frame);
+  const syncBgaDisplaySize = (
+    frame: PlayerUiFramePayload | undefined,
+    columns: number | undefined,
+    rows: number | undefined,
+  ): void => {
+    const size = estimateBgaAnsiDisplaySize(initData.laneBindings, columns, rows, frame);
     bgaRenderer?.setDisplaySize(size.width, size.height);
   };
+
+  let terminalColumns: number | undefined;
+  let terminalRows: number | undefined;
+  const frameState = createUiWorkerFrameState({
+    initialPaused: initData.initialPaused,
+    initialHighSpeed: initData.highSpeed,
+    initialJudgeCombo: initData.initialJudgeCombo,
+    applyPaused: (value) => {
+      tui.setPaused(value);
+    },
+    applyHighSpeed: (value) => {
+      tui.setHighSpeed(value);
+    },
+    applyJudgeCombo: (state) => {
+      tui.setJudgeComboState(state);
+    },
+    applyTerminalSize: (columns, rows) => {
+      terminalColumns = columns;
+      terminalRows = rows;
+      tui.setTerminalSize(columns, rows);
+    },
+    syncFrameLayout: (frame, columns, rows) => {
+      syncBgaDisplaySize(frame, columns, rows);
+    },
+    requestFrameRender: () => {
+      deferredUiFlush.markFrameDirty();
+    },
+  });
 
   const deferredUiFlush = createDeferredUiFlush(({ commands, frame }) => {
     if (commands) {
@@ -177,8 +204,8 @@ async function bootstrap(): Promise<void> {
       }
     }
 
+    const latestFrame = frameState.getFrame();
     if (frame && latestFrame) {
-      syncBgaDisplaySize(latestFrame);
       tui.render({
         ...latestFrame,
         bgaAnsiLines: bgaRenderer?.getAnsiLines(latestFrame.currentSeconds),
@@ -192,9 +219,7 @@ async function bootstrap(): Promise<void> {
       return true;
     }
     if (message.kind === 'frame') {
-      latestFrame = message.frame;
-      syncBgaDisplaySize(latestFrame);
-      deferredUiFlush.markFrameDirty();
+      frameState.setFrame(message.frame);
       return true;
     }
     if (message.kind === 'commands') {
@@ -203,39 +228,25 @@ async function bootstrap(): Promise<void> {
       return true;
     }
     if (message.kind === 'set-paused') {
-      tui.setPaused(message.value);
-      if (latestFrame) {
-        deferredUiFlush.markFrameDirty();
-      }
+      frameState.setPaused(message.value);
       return true;
     }
     if (message.kind === 'set-high-speed') {
-      tui.setHighSpeed(message.value);
-      if (latestFrame) {
-        deferredUiFlush.markFrameDirty();
-      }
+      frameState.setHighSpeed(message.value);
       return true;
     }
     if (message.kind === 'set-judge-combo') {
-      tui.setLatestJudge(message.state.judge, message.state.channel);
-      tui.setCombo(message.state.combo, message.state.channel);
-      if (latestFrame) {
-        deferredUiFlush.markFrameDirty();
-      }
+      frameState.setJudgeCombo(message.state);
       return true;
     }
     if (message.kind === 'trigger-poor') {
       bgaRenderer?.triggerPoor(message.seconds);
-      if (latestFrame) {
-        deferredUiFlush.markFrameDirty();
-      }
+      frameState.invalidateFrame();
       return true;
     }
     if (message.kind === 'clear-poor') {
       bgaRenderer?.clearPoor();
-      if (latestFrame) {
-        deferredUiFlush.markFrameDirty();
-      }
+      frameState.invalidateFrame();
       return true;
     }
     return false;
@@ -257,6 +268,7 @@ async function bootstrap(): Promise<void> {
       return;
     }
     if (message.kind === 'dispose') {
+      frameState.dispose();
       deferredUiFlush.dispose();
       bridgePort?.close();
       tui.stop();
@@ -269,13 +281,7 @@ async function bootstrap(): Promise<void> {
       return;
     }
 
-    tui.setTerminalSize(message.columns, message.rows);
-    terminalColumns = message.columns;
-    terminalRows = message.rows;
-    syncBgaDisplaySize(latestFrame);
-    if (latestFrame) {
-      deferredUiFlush.markFrameDirty();
-    }
+    frameState.setTerminalSize(message.columns, message.rows);
   };
 
   port.on('message', handleControlMessage);
