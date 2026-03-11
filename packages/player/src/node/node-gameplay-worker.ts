@@ -376,6 +376,7 @@ function serializeUiRuntimeInit(context: CreatePlayerUiRuntimeContext): NodeGame
     showLaneChannels: context.showLaneChannels,
     randomPatternSummary: context.randomPatternSummary,
     baseDir: context.baseDir,
+    kittyGraphics: initData.playOptions.kittyGraphics === true,
     initialFrame: context.uiSignals.getFrame(),
     initialPaused: context.stateSignals.paused(),
     initialJudgeCombo: context.stateSignals.getJudgeCombo(),

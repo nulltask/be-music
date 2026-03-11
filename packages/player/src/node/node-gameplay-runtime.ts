@@ -199,6 +199,7 @@ async function handleUiInit(
       showLaneChannels: message.runtime.showLaneChannels,
       randomPatternSummary: message.runtime.randomPatternSummary,
       baseDir: message.runtime.baseDir,
+      kittyGraphics: message.runtime.kittyGraphics,
       initialPaused: message.runtime.initialPaused,
       initialJudgeCombo: message.runtime.initialJudgeCombo,
       loadSignal: runtimeStore.loadSignal,

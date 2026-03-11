@@ -222,6 +222,7 @@ pnpm run editor export chart.json chart.bms
 
 - `04` (base) と `07` (layer) を合成して描画します。
 - layer の黒 (`#000000`) は透過色として扱います。
+- `--kitty-graphics` 指定時のみ、kitty graphics protocol 対応端末で gameplay BGA と `#STAGEFILE` loading 画面を画像として表示します。未指定時は ANSI 描画です。
 - BGA はウィンドウリサイズ時に再計算して表示サイズを更新します。
 - 動画 BGA は `@uwx/libav.js-fat` でデコードします。
   - 対応コーデック: `mpeg1video`, `h264`

@@ -214,6 +214,148 @@ describe('player tui', () => {
     tui.stop();
   });
 
+  test('tui: renders BGA with kitty graphics protocol when enabled', () => {
+    mockTerminal({ columns: 120, rows: 32 });
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
+    const tui = new PlayerTui({
+      mode: 'MANUAL',
+      laneDisplayMode: '7 KEY',
+      title: 'Test Song',
+      lanes: [
+        { channel: '16', key: 'A', isScratch: true },
+        { channel: '11', key: 'S' },
+        { channel: '12', key: 'D' },
+      ],
+      speed: 1,
+      highSpeed: 1,
+      judgeWindowMs: 16.67,
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+      terminalImageProtocol: 'kitty',
+    });
+
+    tui.start();
+    writeSpy.mockClear();
+
+    tui.render({
+      currentBeat: 0,
+      currentSeconds: 0,
+      totalSeconds: 120,
+      summary: {
+        total: 100,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+      },
+      notes: [],
+      bgaKittyImage: {
+        pixelWidth: 2,
+        pixelHeight: 2,
+        cellWidth: 4,
+        cellHeight: 2,
+        rgb: new Uint8Array([255, 0, 0, 0, 0, 0, 0, 255, 0, 0, 0, 255]),
+        token: 'frame-1',
+      },
+    });
+
+    const renderOutput = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
+    expect(renderOutput).toContain('\u001b_Ga=T,t=d,f=24,s=2,v=2,c=4,r=2,i=1337,q=2,p=1,z=-1,C=1,m=0;');
+
+    writeSpy.mockClear();
+    tui.render({
+      currentBeat: 0.5,
+      currentSeconds: 0.5,
+      totalSeconds: 120,
+      summary: {
+        total: 100,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+      },
+      notes: [],
+      bgaKittyImage: {
+        pixelWidth: 2,
+        pixelHeight: 2,
+        cellWidth: 4,
+        cellHeight: 2,
+        rgb: new Uint8Array([255, 0, 0, 0, 0, 0, 0, 255, 0, 0, 0, 255]),
+        token: 'frame-1',
+      },
+    });
+
+    const rerenderOutput = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
+    expect(rerenderOutput).not.toContain('\u001b_Ga=T,t=d,f=24');
+
+    tui.stop();
+  });
+
+  test('tui: clears kitty BGA image on stop', () => {
+    mockTerminal({ columns: 120, rows: 32 });
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
+    const tui = new PlayerTui({
+      mode: 'MANUAL',
+      laneDisplayMode: '7 KEY',
+      title: 'Test Song',
+      lanes: [
+        { channel: '16', key: 'A', isScratch: true },
+        { channel: '11', key: 'S' },
+        { channel: '12', key: 'D' },
+      ],
+      speed: 1,
+      highSpeed: 1,
+      judgeWindowMs: 16.67,
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+      terminalImageProtocol: 'kitty',
+    });
+
+    tui.start();
+    tui.render({
+      currentBeat: 0,
+      currentSeconds: 0,
+      totalSeconds: 120,
+      summary: {
+        total: 100,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+      },
+      notes: [],
+      bgaKittyImage: {
+        pixelWidth: 1,
+        pixelHeight: 1,
+        cellWidth: 4,
+        cellHeight: 2,
+        rgb: new Uint8Array([0, 0, 0]),
+        token: 'frame-1',
+      },
+    });
+
+    writeSpy.mockClear();
+    tui.stop();
+
+    const stopOutput = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
+    expect(stopOutput).toContain('\u001b_Ga=d,d=I,i=1337,q=2\u001b\\');
+  });
+
   test('tui: estimates BGA size from the actual lane block layout', () => {
     const laneWidths = resolveLaneWidths([
       { isScratch: true },
