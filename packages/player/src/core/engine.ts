@@ -120,6 +120,7 @@ export interface PlayerOptions {
   debugActiveAudio?: boolean;
   leadInMs?: number;
   audio?: boolean;
+  volume?: number;
   bgmVolume?: number;
   playVolume?: number;
   audioBaseDir?: string;
@@ -1899,8 +1900,9 @@ async function createAudioSessionIfEnabled(
   }
 
   const headPaddingMs = options.audioHeadPaddingMs ?? 0;
-  const bgmVolume = normalizeBgmVolume(options.bgmVolume);
-  const playVolume = normalizePlayVolume(options.playVolume);
+  const masterVolume = normalizeMasterVolume(options.volume);
+  const bgmVolume = normalizeBgmVolume(options.bgmVolume, masterVolume);
+  const playVolume = normalizePlayVolume(options.playVolume, masterVolume);
   const inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
   const chartWavGain = resolveChartVolWavGain(json);
   const lnobjEndEvents = collectLnobjEndEvents(json);
@@ -2819,18 +2821,23 @@ function createSilentRenderResult(sampleRate: number): RenderResult {
   };
 }
 
-function normalizeBgmVolume(value: number | undefined): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return 1;
-  }
-  return Math.max(0, value);
+function normalizeBgmVolume(value: number | undefined, masterVolume = 1): number {
+  return normalizeBusVolume(value, masterVolume);
 }
 
-function normalizePlayVolume(value: number | undefined): number {
+function normalizePlayVolume(value: number | undefined, masterVolume = 1): number {
+  return normalizeBusVolume(value, masterVolume);
+}
+
+function normalizeMasterVolume(value: number | undefined): number {
+  return normalizeBusVolume(value, 1);
+}
+
+function normalizeBusVolume(value: number | undefined, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return 1;
+    return fallback;
   }
-  return Math.max(0, value);
+  return Math.max(0, value) * fallback;
 }
 
 function applyGainToRenderResult(result: RenderResult, gain: number): RenderResult {

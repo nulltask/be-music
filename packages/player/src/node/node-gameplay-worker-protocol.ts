@@ -24,6 +24,7 @@ export interface NodeGameplayWorkerPlayOptions {
   debugActiveAudio?: boolean;
   leadInMs?: number;
   audio?: boolean;
+  volume?: number;
   bgmVolume?: number;
   playVolume?: number;
   audioBaseDir?: string;

@@ -1,8 +1,9 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { setTimeout as delay } from 'node:timers/promises';
 import { createEmptyJson } from '../../../json/src/index.ts';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
 
 interface PhraseNote {
@@ -212,4 +213,132 @@ describe('player chart preview', () => {
     expect(continueKeyA).toBeDefined();
     expect(continueKeyA).toBe(continueKeyB);
   });
+
+  test('applies global and BGM preview volumes to #PREVIEW sample rendering', async () => {
+    vi.resetModules();
+    const chart = createEmptyJson('bms');
+    chart.metadata.bpm = 120;
+    chart.bms.preview = 'preview.ogg';
+
+    const renderJson = vi.fn(async () => ({
+      sampleRate: 44_100,
+      left: new Float32Array([0.25, 0.25]),
+      right: new Float32Array([0.25, 0.25]),
+      durationSeconds: 2 / 44_100,
+      peak: 0.25,
+    }));
+
+    vi.doMock('@be-music/parser', async () => {
+      const actual = await vi.importActual<typeof import('@be-music/parser')>('@be-music/parser');
+      return {
+        ...actual,
+        parseChartFile: vi.fn(async () => chart),
+        resolveBmsControlFlow: vi.fn(() => chart),
+      };
+    });
+    vi.doMock('@be-music/audio-renderer', async () => {
+      const actual =
+        await vi.importActual<typeof import('@be-music/audio-renderer')>('@be-music/audio-renderer');
+      return {
+        ...actual,
+        renderJson,
+      };
+    });
+    vi.doMock('../audio-sink.ts', () => ({
+      createNodeAudioSink: vi.fn(async () => undefined),
+    }));
+
+    const { createChartPreviewController } = await import('./chart-preview.ts');
+    const controller = createChartPreviewController({
+      volume: 0.5,
+      bgmVolume: 0.4,
+      playVolume: 0.2,
+    });
+    controller.focus({ filePath: '/charts/preview-sample.bms' });
+    await waitForMockCall(renderJson);
+
+    const renderCalls = renderJson.mock.calls as unknown as Array<[unknown, { gain?: number }]>;
+    expect(renderCalls[0]?.[1]).toMatchObject({
+      gain: 0.2,
+    });
+
+    await controller.dispose();
+    vi.doUnmock('@be-music/parser');
+    vi.doUnmock('@be-music/audio-renderer');
+    vi.doUnmock('../audio-sink.ts');
+  });
+
+  test('applies global, BGM, and key preview volumes to fallback chart rendering', async () => {
+    vi.resetModules();
+    const chart = createEmptyJson('bms');
+    chart.metadata.bpm = 120;
+    chart.resources.wav['01'] = 'bgm.ogg';
+    chart.resources.wav['02'] = 'key.ogg';
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: '01' },
+      { measure: 0, channel: '11', position: [0, 1], value: '02' },
+    ];
+
+    const renderJson = vi.fn(async () => ({
+      sampleRate: 44_100,
+      left: new Float32Array([0.25, 0.25]),
+      right: new Float32Array([0.25, 0.25]),
+      durationSeconds: 2 / 44_100,
+      peak: 0.25,
+    }));
+
+    vi.doMock('@be-music/parser', async () => {
+      const actual = await vi.importActual<typeof import('@be-music/parser')>('@be-music/parser');
+      return {
+        ...actual,
+        parseChartFile: vi.fn(async () => chart),
+        resolveBmsControlFlow: vi.fn(() => chart),
+      };
+    });
+    vi.doMock('@be-music/audio-renderer', async () => {
+      const actual =
+        await vi.importActual<typeof import('@be-music/audio-renderer')>('@be-music/audio-renderer');
+      return {
+        ...actual,
+        renderJson,
+      };
+    });
+    vi.doMock('../audio-sink.ts', () => ({
+      createNodeAudioSink: vi.fn(async () => undefined),
+    }));
+
+    const { createChartPreviewController } = await import('./chart-preview.ts');
+    const controller = createChartPreviewController({
+      volume: 0.5,
+      bgmVolume: 0.4,
+      playVolume: 0.2,
+    });
+    controller.focus({ filePath: '/charts/fallback-preview.bms' });
+    await waitForMockCall(renderJson);
+
+    const renderCalls = renderJson.mock.calls as unknown as Array<
+      [unknown, { gain?: number; resolveTriggerGain?: (trigger: { channel: string }) => number }]
+    >;
+    const renderOptions = renderCalls[0]?.[1] as
+      | { gain?: number; resolveTriggerGain?: (trigger: { channel: string }) => number }
+      | undefined;
+    expect(renderOptions?.gain).toBe(0.5);
+    expect(renderOptions?.resolveTriggerGain?.({ channel: '01' })).toBe(0.4);
+    expect(renderOptions?.resolveTriggerGain?.({ channel: '11' })).toBe(0.2);
+
+    await controller.dispose();
+    vi.doUnmock('@be-music/parser');
+    vi.doUnmock('@be-music/audio-renderer');
+    vi.doUnmock('../audio-sink.ts');
+  });
 });
+
+async function waitForMockCall(mock: { mock: { calls: unknown[][] } }): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (mock.mock.calls.length > 0) {
+      return;
+    }
+    await delay(0);
+  }
+  throw new Error('mock was not called');
+}

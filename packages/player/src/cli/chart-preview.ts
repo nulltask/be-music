@@ -1,3 +1,4 @@
+import { isPlayLaneSoundChannel } from '@be-music/chart';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
@@ -63,6 +64,12 @@ export interface PreviewFocusTarget {
   previewContinueKey?: string;
 }
 
+export interface ChartPreviewAudioOptions {
+  volume?: number;
+  bgmVolume?: number;
+  playVolume?: number;
+}
+
 export interface ChartPreviewController {
   focus: (target: PreviewFocusTarget) => void;
   getActiveBackend: () => string | undefined;
@@ -77,7 +84,7 @@ const PREVIEW_BACKPRESSURE_TIMEOUT_MS = 800;
 const PREVIEW_CACHE_LIMIT = 8;
 let fallbackContinueKeyWorker = createFallbackContinueKeyWorker();
 
-export function createChartPreviewController(): ChartPreviewController {
+export function createChartPreviewController(options: ChartPreviewAudioOptions = {}): ChartPreviewController {
   const previewCache = new Map<string, ChartPreviewAsset | null>();
   let focusedFilePath: string | undefined;
   let focusedPreviewContinueKey: string | undefined;
@@ -141,7 +148,7 @@ export function createChartPreviewController(): ChartPreviewController {
           activeRenderAbortController = renderAbortController;
           activeRenderFilePath = filePath;
           try {
-            preview = (await renderChartPreview(filePath, renderAbortController.signal)) ?? null;
+            preview = (await renderChartPreview(filePath, renderAbortController.signal, options)) ?? null;
           } catch (error) {
             if (isAbortError(error)) {
               return;
@@ -253,15 +260,20 @@ export function formatSongSelectAudioBackendLabel(audioEnabled: boolean, active:
   return 'node-webaudio';
 }
 
-async function renderChartPreview(filePath: string, signal?: AbortSignal): Promise<ChartPreviewAsset | undefined> {
+async function renderChartPreview(
+  filePath: string,
+  signal?: AbortSignal,
+  options?: ChartPreviewAudioOptions,
+): Promise<ChartPreviewAsset | undefined> {
   throwIfAborted(signal);
   const chart = await parseChartFile(filePath, { signal });
   throwIfAborted(signal);
   const resolved = resolveBmsControlFlow(chart, { random: () => 0 });
   const chartWavGain = resolveChartVolWavGain(resolved);
+  const gains = resolvePreviewAudioGains(options);
   const previewPath = resolved.bms.preview;
   if (typeof previewPath === 'string' && previewPath.trim().length > 0) {
-    const previewSample = await renderPreviewSampleFile(resolved, filePath, previewPath, chartWavGain, signal);
+    const previewSample = await renderPreviewSampleFile(resolved, filePath, previewPath, chartWavGain, gains, signal);
     if (previewSample) {
       return {
         continueKey: previewSample.continueKey,
@@ -269,7 +281,7 @@ async function renderChartPreview(filePath: string, signal?: AbortSignal): Promi
       };
     }
   }
-  const fallbackPreview = await renderFallbackChartPreview(resolved, filePath, signal);
+  const fallbackPreview = await renderFallbackChartPreview(resolved, filePath, gains, signal);
   if (!fallbackPreview) {
     return undefined;
   }
@@ -284,6 +296,7 @@ async function renderPreviewSampleFile(
   chartPath: string,
   previewPath: string,
   gain: number,
+  gains: PreviewAudioGains,
   signal?: AbortSignal,
 ): Promise<RenderedPreviewSample | undefined> {
   const candidates = createPreviewPathCandidates(chart, previewPath);
@@ -300,7 +313,7 @@ async function renderPreviewSampleFile(
     const rendered = await renderJson(sampleJson, {
       baseDir,
       tailSeconds: 0,
-      gain,
+      gain: gain * gains.effectiveBgm,
       fallbackToneSeconds: 0.05,
       signal,
       onSampleLoadProgress: (progress) => {
@@ -330,6 +343,7 @@ async function renderPreviewSampleFile(
 async function renderFallbackChartPreview(
   chart: BeMusicJson,
   chartPath: string,
+  gains: PreviewAudioGains,
   signal?: AbortSignal,
 ): Promise<RenderedPreviewSample | undefined> {
   const fallbackIdentity = await resolveFallbackPreviewIdentity(chart, signal);
@@ -340,7 +354,9 @@ async function renderFallbackChartPreview(
     baseDir: dirname(chartPath),
     tailSeconds: 0,
     startSeconds: fallbackIdentity.startSeconds,
+    gain: gains.master,
     fallbackToneSeconds: 0.05,
+    resolveTriggerGain: (trigger) => (isPlayLaneSoundChannel(trigger.channel) ? gains.play : gains.bgm),
     signal,
   });
   return {
@@ -358,6 +374,32 @@ function resolvePreviewCandidatePath(baseDir: string, candidate: string): string
 
 function normalizePreviewContinueKey(value: string): string {
   return value.replaceAll('\\', '/');
+}
+
+interface PreviewAudioGains {
+  master: number;
+  bgm: number;
+  play: number;
+  effectiveBgm: number;
+}
+
+function resolvePreviewAudioGains(options: ChartPreviewAudioOptions | undefined): PreviewAudioGains {
+  const master = normalizePreviewVolume(options?.volume);
+  const bgm = normalizePreviewVolume(options?.bgmVolume);
+  const play = normalizePreviewVolume(options?.playVolume);
+  return {
+    master,
+    bgm,
+    play,
+    effectiveBgm: master * bgm,
+  };
+}
+
+function normalizePreviewVolume(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.max(0, value);
 }
 
 async function resolveFallbackPreviewIdentity(

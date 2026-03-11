@@ -419,10 +419,12 @@ describe('player cli', () => {
     expect(parsed.debugActiveAudio).toBe(true);
   });
 
-  test('cli: parses audio tuning and per-playable volume options', () => {
+  test('cli: parses global and per-playable volume options', () => {
     const parsed = parseArgs([
       'chart.bms',
-      '--play-volume',
+      '--volume',
+      '0.6',
+      '--key-volume',
       '0.75',
       '--audio-lead-ms',
       '9.5',
@@ -433,6 +435,7 @@ describe('player cli', () => {
       '--audio-lead-step-down-ms',
       '0.8',
     ]);
+    expect(parsed.volume).toBe(0.6);
     expect(parsed.playVolume).toBe(0.75);
     expect(parsed.audioLeadMs).toBe(9.5);
     expect(parsed.audioLeadMaxMs).toBe(20);

@@ -103,6 +103,7 @@ interface CliArgs {
   debugActiveAudio: boolean;
   renderAudioPath?: string;
   audio: boolean;
+  volume?: number;
   bgmVolume?: number;
   playVolume?: number;
   audioTailSeconds?: number;
@@ -128,6 +129,9 @@ interface PlayLoadingScreenRenderState {
 
 interface SelectChartInteractivelyOptions {
   audio: boolean;
+  volume?: number;
+  bgmVolume?: number;
+  playVolume?: number;
   entries?: ChartSelectionEntry[];
   initialFocusKey?: string;
   initialPlayMode?: PlayMode;
@@ -390,6 +394,9 @@ async function runDirectoryInput(
     if (state.kind === 'select') {
       const selection = await selectChartInteractively(rootDir, candidates, {
         audio: args.audio,
+        volume: args.volume,
+        bgmVolume: args.bgmVolume,
+        playVolume: args.playVolume,
         entries,
         initialFocusKey: state.focusKey,
         initialPlayMode: state.playMode,
@@ -708,6 +715,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     judgeWindowMs: args.judgeWindowMs,
     debugActiveAudio: args.debugActiveAudio,
     audio: args.audio,
+    volume: args.volume,
     bgmVolume: args.bgmVolume,
     playVolume: args.playVolume,
     audioBaseDir: dirname(chartPath),
@@ -829,6 +837,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     compressor: false,
     limiter: true,
     audio: true,
+    volume: undefined,
     tui: true,
     debugActiveAudio: false,
   };
@@ -950,7 +959,12 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       index += 1;
       continue;
     }
-    if (token === '--play-volume') {
+    if (token === '--volume') {
+      args.volume = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--play-volume' || token === '--key-volume') {
       args.playVolume = Number.parseFloat(rawArgs[index + 1]);
       index += 1;
       continue;
@@ -1080,8 +1094,9 @@ function printUsage(): void {
       '  --show-invisible-notes    Show invisible channels (31-39/41-49) in TUI as green notes',
       '  --ln-type-auto            Auto-detect BMS #LNTYPE when omitted (default: off)',
       '  --render-audio <path>     Render audio preview before playing',
+      '  --volume <value>          Global volume multiplier applied before bus-specific volumes (default: 1)',
       '  --bgm-volume <value>      Volume multiplier for non-play lanes (default: 1, 0 disables BGM)',
-      '  --play-volume <value>     Volume multiplier for playable/key sounds (default: 1)',
+      '  --key-volume <value>      Volume multiplier for playable/key sounds (alias: --play-volume, default: 1)',
       '  --audio-tail <seconds>    Audio tail length when rendering playback buffer (default: 1.5)',
       '  --audio-offset-ms <ms>    Timing offset for audio sync calibration (default: 0)',
       '  --compressor / --no-compressor',
@@ -1451,7 +1466,14 @@ async function selectChartInteractively(
   options: SelectChartInteractivelyOptions,
 ): Promise<SelectChartInteractivelyResult> {
   const allEntries = options.entries ?? (await buildChartSelectionEntries(rootDir, files));
-  const previewController = options.audio && process.stdout.isTTY ? createChartPreviewController() : undefined;
+  const previewController =
+    options.audio && process.stdout.isTTY
+      ? createChartPreviewController({
+          volume: options.volume,
+          bgmVolume: options.bgmVolume,
+          playVolume: options.playVolume,
+        })
+      : undefined;
   let previewSpinnerFrame = 0;
   let previewSpinnerTimer: NodeJS.Timeout | undefined;
   let wasSpinnerVisible = false;

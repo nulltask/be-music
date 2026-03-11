@@ -100,6 +100,22 @@ function createInvisibleOnlyChart() {
   return json;
 }
 
+function createPlayableOnlyChart() {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'not-found.wav';
+  json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
+  return json;
+}
+
+function createBgmOnlyChart() {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'not-found.wav';
+  json.events = [{ measure: 0, channel: '01', position: [0, 1] as const, value: '01' }];
+  return json;
+}
+
 function createScheduledInputRuntime(commands: Array<{ delayMs: number; command: PlayerInputCommand }>) {
   return ({ inputSignals }: { inputSignals: { pushCommand: (command: PlayerInputCommand) => void } }) => {
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -231,6 +247,42 @@ describe('player', () => {
       audioHeadPaddingMs: 0,
       audioLeadMs: 0,
       audioLeadMaxMs: 0,
+      limiter: false,
+      tui: false,
+      writeOutput: () => undefined,
+    });
+
+    expect(hasAnyNonSilentAudioWrite()).toBe(false);
+  });
+
+  test('player: global volume 0 mutes playable sounds', async () => {
+    await autoPlay(createPlayableOnlyChart(), {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      audio: true,
+      audioHeadPaddingMs: 0,
+      audioLeadMs: 0,
+      audioLeadMaxMs: 0,
+      volume: 0,
+      limiter: false,
+      tui: false,
+      writeOutput: () => undefined,
+    });
+
+    expect(hasAnyNonSilentAudioWrite()).toBe(false);
+  });
+
+  test('player: global volume 0 mutes BGM sounds', async () => {
+    await autoPlay(createBgmOnlyChart(), {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      audio: true,
+      audioHeadPaddingMs: 0,
+      audioLeadMs: 0,
+      audioLeadMaxMs: 0,
+      volume: 0,
       limiter: false,
       tui: false,
       writeOutput: () => undefined,
