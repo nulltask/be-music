@@ -1,5 +1,3 @@
-#!/usr/bin/env tsx
-
 import { execFileSync } from 'node:child_process';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';

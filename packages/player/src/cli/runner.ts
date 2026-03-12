@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { stat } from 'node:fs/promises';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

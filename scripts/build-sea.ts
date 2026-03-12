@@ -1,5 +1,3 @@
-#!/usr/bin/env tsx
-
 import { chmod, copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { builtinModules, createRequire } from 'node:module';

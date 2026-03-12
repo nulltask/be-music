@@ -1,5 +1,3 @@
-#!/usr/bin/env tsx
-
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
