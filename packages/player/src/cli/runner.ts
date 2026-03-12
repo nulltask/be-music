@@ -1501,6 +1501,13 @@ async function selectChartInteractively(
   let previewSpinnerFrame = 0;
   let previewSpinnerTimer: NodeJS.Timeout | undefined;
   let wasSpinnerVisible = false;
+  let cachedColumnLayoutEntries: readonly ChartSelectionEntry[] | undefined;
+  let cachedColumnLayoutWidth = -1;
+  let cachedColumnLayout: ReturnType<typeof createSelectionColumnLayout> | undefined;
+  let cachedColumnHeaderLayout: ReturnType<typeof createSelectionColumnLayout> | undefined;
+  let cachedColumnHeader = '';
+  let cachedEntryLabelsLayout: ReturnType<typeof createSelectionColumnLayout> | undefined;
+  let cachedEntryLabels = new WeakMap<ChartSelectionEntry, string>();
 
   const inputCapture = beginRawInputCapture();
   const songSelectState = createSongSelectState(allEntries, {
@@ -1530,6 +1537,53 @@ async function selectChartInteractively(
     return Math.max(5, rows - 8);
   };
 
+  const resolveSelectionColumnLayout = (
+    entries: readonly ChartSelectionEntry[],
+    itemLabelWidth: number,
+  ): ReturnType<typeof createSelectionColumnLayout> => {
+    if (
+      cachedColumnLayout &&
+      cachedColumnLayoutEntries === entries &&
+      cachedColumnLayoutWidth === itemLabelWidth
+    ) {
+      return cachedColumnLayout;
+    }
+    cachedColumnLayout = createSelectionColumnLayout(itemLabelWidth, entries);
+    cachedColumnLayoutEntries = entries;
+    cachedColumnLayoutWidth = itemLabelWidth;
+    return cachedColumnLayout;
+  };
+
+  const resolveSelectionColumnHeader = (
+    layout: ReturnType<typeof createSelectionColumnLayout>,
+    itemLabelWidth: number,
+  ): string => {
+    if (cachedColumnHeaderLayout === layout) {
+      return cachedColumnHeader;
+    }
+    cachedColumnHeader = truncateForDisplay(formatSelectionColumnHeader(layout), itemLabelWidth);
+    cachedColumnHeaderLayout = layout;
+    return cachedColumnHeader;
+  };
+
+  const resolveSelectionEntryLabel = (
+    entry: ChartSelectionEntry,
+    layout: ReturnType<typeof createSelectionColumnLayout>,
+    itemLabelWidth: number,
+  ): string => {
+    if (cachedEntryLabelsLayout !== layout) {
+      cachedEntryLabelsLayout = layout;
+      cachedEntryLabels = new WeakMap<ChartSelectionEntry, string>();
+    }
+    const cached = cachedEntryLabels.get(entry);
+    if (cached) {
+      return cached;
+    }
+    const label = truncateForDisplay(formatSelectionEntryLabel(entry, layout), itemLabelWidth);
+    cachedEntryLabels.set(entry, label);
+    return label;
+  };
+
   const render = (): void => {
     const view = songSelectState.view();
     const columns = process.stdout.columns ?? 80;
@@ -1537,7 +1591,7 @@ async function selectChartInteractively(
     const numberWidth = String(Math.max(1, view.chartCount)).length;
     const lineWidth = Math.max(16, columns - 2);
     const itemLabelWidth = Math.max(8, lineWidth - numberWidth - 4);
-    const columnLayout = createSelectionColumnLayout(itemLabelWidth, view.entries);
+    const columnLayout = resolveSelectionColumnLayout(view.entries, itemLabelWidth);
 
     const { start, end } = resolveVisibleEntryRange(songSelectState.selectedIndex(), view.entries.length, listRows);
 
@@ -1554,8 +1608,7 @@ async function selectChartInteractively(
     );
     lines.push('');
     const headerPrefix = `  ${' '.repeat(numberWidth)} `;
-    const columnHeader = formatSelectionColumnHeader(columnLayout);
-    lines.push(`${headerPrefix}${truncateForDisplay(columnHeader, itemLabelWidth)}`);
+    lines.push(`${headerPrefix}${resolveSelectionColumnHeader(columnLayout, itemLabelWidth)}`);
 
     if (view.entries.length === 0) {
       lines.push('');
@@ -1579,7 +1632,10 @@ async function selectChartInteractively(
           fileLabel: `${SONG_SELECT_PREVIEW_SPINNER_FRAMES[previewSpinnerFrame]} ${entry.fileLabel}`,
         };
       }
-      const label = truncateForDisplay(formatSelectionEntryLabel(displayEntry, columnLayout), itemLabelWidth);
+      const label =
+        displayEntry === entry
+          ? resolveSelectionEntryLabel(entry, columnLayout, itemLabelWidth)
+          : truncateForDisplay(formatSelectionEntryLabel(displayEntry, columnLayout), itemLabelWidth);
       const line = `${marker} ${number} ${label}`;
       if (index === songSelectState.selectedIndex()) {
         lines.push(`\u001b[7m${line.padEnd(lineWidth, ' ')}\u001b[0m`);
