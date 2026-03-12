@@ -21,6 +21,7 @@ import { PlayerTui } from '../tui.ts';
 import { supportsKittyGraphicsProtocol } from '../tui/kitty-graphics.ts';
 import { estimateBgaAnsiDisplaySize as resolveBgaDisplaySize, resolveLaneWidths } from '../tui/layout.ts';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';
+import { createRenderThrottle } from './render-throttle.ts';
 import { createUiWorkerFrameState } from './ui-worker-frame-state.ts';
 import type {
   NodeUiWorkerInboundMessage,
@@ -30,6 +31,7 @@ import type {
 
 const port = parentPort;
 const initData = workerData as NodeUiWorkerInitData;
+const TUI_RENDER_MIN_INTERVAL_MS = Math.floor(1000 / 30);
 
 void bootstrap().catch((error) => {
   if (isAbortError(error)) {
@@ -150,6 +152,7 @@ async function bootstrap(): Promise<void> {
     bgaRenderer?.setDisplaySize(size.width, size.height);
   };
 
+  let renderThrottle: ReturnType<typeof createRenderThrottle> | undefined;
   const frameState = createUiWorkerFrameState({
     initialPaused: initData.initialPaused,
     initialHighSpeed: initData.highSpeed,
@@ -205,15 +208,27 @@ async function bootstrap(): Promise<void> {
       }
     }
 
-    const latestFrame = frameState.getFrame();
-    if (frame && latestFrame) {
+    if (frame || commands) {
+      renderThrottle?.request();
+    }
+  });
+
+  renderThrottle = createRenderThrottle(
+    () => {
+      const latestFrame = frameState.getFrame();
+      if (!latestFrame) {
+        return;
+      }
       tui.render({
         ...latestFrame,
         bgaAnsiLines: useKittyGraphicsForBga ? undefined : bgaRenderer?.getAnsiLines(latestFrame.currentSeconds),
         bgaKittyImage: useKittyGraphicsForBga ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds) : undefined,
       });
-    }
-  });
+    },
+    {
+      minIntervalMs: TUI_RENDER_MIN_INTERVAL_MS,
+    },
+  );
 
   const handleRenderMessage = (message: NodeUiWorkerInboundMessage): boolean => {
     if (message.kind === 'start') {
@@ -272,6 +287,7 @@ async function bootstrap(): Promise<void> {
     if (message.kind === 'dispose') {
       frameState.dispose();
       deferredUiFlush.dispose();
+      renderThrottle?.dispose();
       bridgePort?.close();
       tui.stop();
       postWorkerMessage({ kind: 'disposed' });
