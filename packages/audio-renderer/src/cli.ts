@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveCliPath } from '@be-music/utils';

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { resolve } from 'node:path';
-import { defineConfig, type UserConfigExport } from 'vite';
+import { defineConfig, type Plugin, type UserConfigExport } from 'vite';
 
 interface PackageJson {
   dependencies?: Record<string, string>;
@@ -40,6 +40,21 @@ function resolveExternalModules(packageJson: PackageJson): string[] {
   return [...externals];
 }
 
+function createCliShebangPlugin(): Plugin {
+  return {
+    name: 'be-music-cli-shebang',
+    generateBundle(_options, bundle) {
+      const cliChunk = bundle['cli.js'];
+      if (!cliChunk || cliChunk.type !== 'chunk' || cliChunk.code.startsWith('#!')) {
+        return;
+      }
+
+      // Keep the shebang on published CLI output without carrying it in TS source files.
+      cliChunk.code = `#!/usr/bin/env node\n${cliChunk.code}`;
+    },
+  };
+}
+
 export function createPackageViteConfig(options: CreatePackageViteConfigOptions): UserConfigExport {
   const packageJson = readPackageJson(options.packageDir);
   const entries = Object.fromEntries(
@@ -47,6 +62,7 @@ export function createPackageViteConfig(options: CreatePackageViteConfigOptions)
   );
 
   return defineConfig({
+    plugins: Object.hasOwn(entries, 'cli') ? [createCliShebangPlugin()] : undefined,
     build: {
       target: 'node20',
       outDir: resolve(options.packageDir, 'dist'),

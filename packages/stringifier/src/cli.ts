@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolveCliPath } from '@be-music/utils';
 import { parseChart } from '@be-music/parser';

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { resolveCliPath } from '@be-music/utils';
 import {
   addNote,
