@@ -910,6 +910,9 @@ function mergeCompositeFrames(...sourceFrames: Array<AnsiFrame | undefined>): Co
   if (frames.length === 0) {
     return undefined;
   }
+  if (frames.length === 1) {
+    return frames[0];
+  }
 
   let canvasWidth = 0;
   let canvasHeight = 0;

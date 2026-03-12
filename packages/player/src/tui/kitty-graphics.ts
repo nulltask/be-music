@@ -1,6 +1,7 @@
 const KITTY_GRAPHICS_ESCAPE_PREFIX = '\u001b_G';
 const KITTY_GRAPHICS_ESCAPE_SUFFIX = '\u001b\\';
 const DEFAULT_BASE64_CHUNK_SIZE = 4096;
+const encodedChunkCache = new WeakMap<KittyGraphicsImage, Map<number, string[]>>();
 
 export interface KittyGraphicsImage {
   pixelWidth: number;
@@ -49,9 +50,8 @@ export function buildKittyGraphicsRenderSequence(options: {
   const safeCellHeight = Math.max(1, Math.floor(options.image.cellHeight));
   const zIndex =
     typeof options.zIndex === 'number' && Number.isFinite(options.zIndex) ? Math.floor(options.zIndex) : undefined;
-  const base64 = Buffer.from(options.image.rgb).toString('base64');
   const chunkSize = Math.max(256, Math.floor(options.chunkSize ?? DEFAULT_BASE64_CHUNK_SIZE));
-  const chunks = splitBase64IntoChunks(base64, chunkSize);
+  const chunks = resolveEncodedChunks(options.image, chunkSize);
   const parameters = [
     'a=T',
     't=d',
@@ -76,6 +76,21 @@ export function buildKittyGraphicsRenderSequence(options: {
     })
     .join('');
   return `\u001b[${safeRow};${safeColumn}H${commands}`;
+}
+
+function resolveEncodedChunks(image: KittyGraphicsImage, chunkSize: number): string[] {
+  const cachedByChunkSize = encodedChunkCache.get(image);
+  const cachedChunks = cachedByChunkSize?.get(chunkSize);
+  if (cachedChunks) {
+    return cachedChunks;
+  }
+  const chunks = splitBase64IntoChunks(Buffer.from(image.rgb).toString('base64'), chunkSize);
+  const nextCachedByChunkSize = cachedByChunkSize ?? new Map<number, string[]>();
+  nextCachedByChunkSize.set(chunkSize, chunks);
+  if (!cachedByChunkSize) {
+    encodedChunkCache.set(image, nextCachedByChunkSize);
+  }
+  return chunks;
 }
 
 function splitBase64IntoChunks(base64: string, chunkSize: number): string[] {
