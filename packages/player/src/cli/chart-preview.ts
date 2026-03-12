@@ -116,6 +116,16 @@ export function createChartPreviewController(options: ChartPreviewAudioOptions =
     await stopPlaybackSafely(playback);
   };
 
+  const isStale = (currentSequence: number): boolean => disposed || currentSequence !== sequence;
+
+  const clearActiveRender = (abort = false): void => {
+    if (abort) {
+      activeRenderAbortController?.abort();
+    }
+    activeRenderAbortController = undefined;
+    activeRenderFilePath = undefined;
+  };
+
   const clearPendingFocusTimer = (): void => {
     if (!pendingFocusTimer) {
       return;
@@ -124,12 +134,69 @@ export function createChartPreviewController(options: ChartPreviewAudioOptions =
     pendingFocusTimer = undefined;
   };
 
+  const cachePreview = (filePath: string, preview: ChartPreviewAsset | null): void => {
+    previewCache.set(filePath, preview);
+    while (previewCache.size > PREVIEW_CACHE_LIMIT) {
+      const oldest = previewCache.keys().next().value as string | undefined;
+      if (!oldest) {
+        break;
+      }
+      previewCache.delete(oldest);
+    }
+  };
+
+  const loadPreview = async (filePath: string, currentSequence: number): Promise<ChartPreviewAsset | null | undefined> => {
+    const cachedPreview = previewCache.get(filePath);
+    if (cachedPreview !== undefined) {
+      return cachedPreview;
+    }
+
+    const renderAbortController = new AbortController();
+    activeRenderAbortController = renderAbortController;
+    activeRenderFilePath = filePath;
+    let preview: ChartPreviewAsset | null;
+    try {
+      preview = (await renderChartPreview(filePath, renderAbortController.signal, options)) ?? null;
+    } catch (error) {
+      if (isAbortError(error)) {
+        return undefined;
+      }
+      preview = null;
+    } finally {
+      if (activeRenderAbortController === renderAbortController) {
+        clearActiveRender();
+      }
+    }
+
+    if (isStale(currentSequence)) {
+      return undefined;
+    }
+
+    cachePreview(filePath, preview);
+    return preview;
+  };
+
+  const scheduleFocusedPreview = (
+    filePath: string,
+    expectedPreviewKey: string | undefined,
+    currentSequence: number,
+  ): void => {
+    if (settleDelayMs <= 0) {
+      void processFocusedPreview(filePath, expectedPreviewKey, currentSequence);
+      return;
+    }
+    pendingFocusTimer = setTimeout(() => {
+      pendingFocusTimer = undefined;
+      void processFocusedPreview(filePath, expectedPreviewKey, currentSequence);
+    }, settleDelayMs);
+  };
+
   const processFocusedPreview = async (
     filePath: string,
     expectedPreviewKey: string | undefined,
     currentSequence: number,
   ): Promise<void> => {
-    if (disposed || currentSequence !== sequence) {
+    if (isStale(currentSequence)) {
       return;
     }
     if (expectedPreviewKey && activePlayback && activePreviewKey === expectedPreviewKey) {
@@ -137,43 +204,13 @@ export function createChartPreviewController(options: ChartPreviewAudioOptions =
     }
     if (activePlayback && (!expectedPreviewKey || activePreviewKey !== expectedPreviewKey)) {
       await stopActivePlayback();
-      if (disposed || currentSequence !== sequence) {
+      if (isStale(currentSequence)) {
         return;
       }
     }
 
-    let preview = previewCache.get(filePath);
-    if (preview === undefined) {
-      const renderAbortController = new AbortController();
-      activeRenderAbortController = renderAbortController;
-      activeRenderFilePath = filePath;
-      try {
-        preview = (await renderChartPreview(filePath, renderAbortController.signal, options)) ?? null;
-      } catch (error) {
-        if (isAbortError(error)) {
-          return;
-        }
-        preview = null;
-      } finally {
-        if (activeRenderAbortController === renderAbortController) {
-          activeRenderAbortController = undefined;
-          activeRenderFilePath = undefined;
-        }
-      }
-      if (disposed || currentSequence !== sequence) {
-        return;
-      }
-      previewCache.set(filePath, preview);
-      while (previewCache.size > PREVIEW_CACHE_LIMIT) {
-        const oldest = previewCache.keys().next().value as string | undefined;
-        if (!oldest) {
-          break;
-        }
-        previewCache.delete(oldest);
-      }
-    }
-
-    if (disposed || currentSequence !== sequence) {
+    const preview = await loadPreview(filePath, currentSequence);
+    if (preview === undefined || isStale(currentSequence)) {
       return;
     }
 
@@ -193,7 +230,7 @@ export function createChartPreviewController(options: ChartPreviewAudioOptions =
     if (!playback) {
       return;
     }
-    if (disposed || currentSequence !== sequence) {
+    if (isStale(currentSequence)) {
       await stopPlaybackSafely(playback);
       return;
     }
@@ -217,9 +254,7 @@ export function createChartPreviewController(options: ChartPreviewAudioOptions =
         return;
       }
       clearPendingFocusTimer();
-      activeRenderAbortController?.abort();
-      activeRenderAbortController = undefined;
-      activeRenderFilePath = undefined;
+      clearActiveRender(true);
       focusedFilePath = filePath;
       focusedPreviewContinueKey = expectedPreviewKey;
       sequence += 1;
@@ -228,14 +263,7 @@ export function createChartPreviewController(options: ChartPreviewAudioOptions =
         void stopActivePlayback();
         return;
       }
-      if (settleDelayMs <= 0) {
-        void processFocusedPreview(filePath, expectedPreviewKey, currentSequence);
-        return;
-      }
-      pendingFocusTimer = setTimeout(() => {
-        pendingFocusTimer = undefined;
-        void processFocusedPreview(filePath, expectedPreviewKey, currentSequence);
-      }, settleDelayMs);
+      scheduleFocusedPreview(filePath, expectedPreviewKey, currentSequence);
     },
     getActiveBackend: (): string | undefined => activeBackend,
     getRenderingFilePath: (): string | undefined => activeRenderFilePath,
@@ -246,9 +274,7 @@ export function createChartPreviewController(options: ChartPreviewAudioOptions =
       disposed = true;
       sequence += 1;
       clearPendingFocusTimer();
-      activeRenderAbortController?.abort();
-      activeRenderAbortController = undefined;
-      activeRenderFilePath = undefined;
+      clearActiveRender(true);
       focusedFilePath = undefined;
       focusedPreviewContinueKey = undefined;
       previewCache.clear();
