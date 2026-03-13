@@ -1,5 +1,5 @@
 export const DEFAULT_LANE_WIDTH = 3;
-export const WIDE_SCRATCH_LANE_WIDTH = DEFAULT_LANE_WIDTH * 2;
+export const WIDE_SCRATCH_LANE_WIDTH: number = DEFAULT_LANE_WIDTH * 2;
 export const DEFAULT_GRID_ROWS = 14;
 export const MIN_GRID_ROWS = 4;
 export const BASE_TUI_RESERVED_LINES = 18;

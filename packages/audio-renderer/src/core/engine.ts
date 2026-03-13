@@ -236,7 +236,7 @@ function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuild
 
 export function collectSampleTriggers(
   json: BeMusicJson,
-  resolver = createTimingResolver(json),
+  resolver: TimingResolver = createTimingResolver(json),
   options: CollectSampleTriggersOptions = {},
 ): TimedSampleTrigger[] {
   return collectSampleTriggersWithContext(json, resolver, createTimingBuildContext(json), options);
