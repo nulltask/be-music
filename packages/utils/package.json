@@ -16,8 +16,8 @@
     }
   },
   "scripts": {
-    "build:bundle": "vite build",
-    "build": "vite build && tsgo -b tsconfig.json",
+    "build:bundle": "tsdown",
+    "build": "tsdown",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
     "lint": "oxlint .",

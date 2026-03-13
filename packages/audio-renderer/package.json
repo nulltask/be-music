@@ -19,8 +19,8 @@
     }
   },
   "scripts": {
-    "build:bundle": "vite build",
-    "build": "vite build && tsgo -b tsconfig.json",
+    "build:bundle": "tsdown",
+    "build": "tsdown",
     "build:sea": "tsx ../../scripts/build-sea.ts --package audio-renderer",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "dev": "tsx --tsconfig ../../tsconfig.typecheck.json src/cli.ts",

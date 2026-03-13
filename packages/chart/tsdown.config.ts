@@ -1,10 +1,10 @@
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createPackageViteConfig } from '../../vite.package.config';
+import { createPackageTsdownConfig } from '../../tsdown.package.config.mts';
 
 const packageDir = dirname(fileURLToPath(import.meta.url));
 
-export default createPackageViteConfig({
+export default createPackageTsdownConfig({
   packageDir,
   entries: {
     index: 'src/index.ts',
