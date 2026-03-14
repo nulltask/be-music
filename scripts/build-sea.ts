@@ -207,7 +207,7 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
         plugins: workspaceAliasPlugin ? [workspaceAliasPlugin] : undefined,
         external: buildExternalModules(config.optionalExternalModules ?? []),
         output: {
-          codeSplitting: false,
+          inlineDynamicImports: true,
           banner: config.bundleBanner,
           entryFileNames: 'sea-entry.cjs',
         },
