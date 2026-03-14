@@ -81,7 +81,7 @@ describe('player tui', () => {
     const tui = new PlayerTui({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
-      title: 'Test Song',
+      title: 'Test Music',
       lanes: [
         { channel: '16', key: 'A', isScratch: true },
         { channel: '11', key: 'S' },
@@ -106,7 +106,7 @@ describe('player tui', () => {
     const tui = new PlayerTui({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
-      title: 'Test Song',
+      title: 'Test Music',
       lanes: [
         { channel: '16', key: 'A', isScratch: true },
         { channel: '11', key: 'S' },
@@ -166,7 +166,7 @@ describe('player tui', () => {
     const tui = new PlayerTui({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
-      title: 'Test Song',
+      title: 'Test Music',
       lanes: [
         { channel: '16', key: 'A', isScratch: true },
         { channel: '11', key: 'S' },
@@ -220,7 +220,7 @@ describe('player tui', () => {
     const tui = new PlayerTui({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
-      title: 'Test Song',
+      title: 'Test Music',
       lanes: [
         { channel: '16', key: 'A', isScratch: true },
         { channel: '11', key: 'S' },
@@ -307,7 +307,7 @@ describe('player tui', () => {
     const tui = new PlayerTui({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
-      title: 'Test Song',
+      title: 'Test Music',
       lanes: [
         { channel: '16', key: 'A', isScratch: true },
         { channel: '11', key: 'S' },
@@ -390,7 +390,7 @@ describe('player tui', () => {
     const tui = new PlayerTui({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
-      title: 'Test Song',
+      title: 'Test Music',
       lanes: [
         { channel: '16', key: 'A', isScratch: true },
         { channel: '11', key: 'S' },
@@ -443,7 +443,7 @@ describe('player tui', () => {
     const tui = new PlayerTui({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
-      title: 'Test Song',
+      title: 'Test Music',
       lanes: [
         { channel: '16', key: 'A', isScratch: true },
         { channel: '11', key: 'S' },
@@ -574,7 +574,7 @@ describe('player tui', () => {
     const tui = new PlayerTui({
       mode: 'MANUAL',
       laneDisplayMode: '7 KEY',
-      title: 'Test Song',
+      title: 'Test Music',
       lanes: [
         { channel: '16', key: 'A', isScratch: true },
         { channel: '11', key: 'S' },

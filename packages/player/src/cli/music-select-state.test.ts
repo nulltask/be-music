@@ -2,10 +2,10 @@ import { describe, expect, test } from 'vitest';
 import type { ChartSelectionEntry } from './chart-selection.ts';
 import {
   createChartFocusKey,
-  createSongSelectState,
+  createMusicSelectState,
   filterChartSelectionEntries,
   getEntryFocusKey,
-} from './song-select-state.ts';
+} from './music-select-state.ts';
 
 const SAMPLE_ENTRIES: ChartSelectionEntry[] = [
   { kind: 'group', label: 'Alpha' },
@@ -15,7 +15,7 @@ const SAMPLE_ENTRIES: ChartSelectionEntry[] = [
   { kind: 'chart', filePath: '/charts/c.bms', fileLabel: 'c.bms', difficulty: 2 },
 ];
 
-describe('song select state', () => {
+describe('music select state', () => {
   test('prepends random only when the difficulty filter leaves visible charts', () => {
     expect(filterChartSelectionEntries(SAMPLE_ENTRIES, 2).map((entry) => entry.kind)).toEqual([
       'random',
@@ -28,7 +28,7 @@ describe('song select state', () => {
   });
 
   test('retains chart focus across derived view updates', () => {
-    const state = createSongSelectState(SAMPLE_ENTRIES, {
+    const state = createMusicSelectState(SAMPLE_ENTRIES, {
       initialFocusKey: createChartFocusKey('/charts/b.bms'),
       initialDifficultyFilter: 2,
     });
@@ -43,7 +43,7 @@ describe('song select state', () => {
   });
 
   test('keeps the current entry index when the focused chart disappears but the slot stays selectable', () => {
-    const state = createSongSelectState(SAMPLE_ENTRIES, {
+    const state = createMusicSelectState(SAMPLE_ENTRIES, {
       initialFocusKey: createChartFocusKey('/charts/b.bms'),
     });
 

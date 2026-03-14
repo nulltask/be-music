@@ -2,14 +2,14 @@ import { computed, signal } from 'alien-signals';
 import type { ChartSelectionEntry } from './chart-selection.ts';
 import type { PlayMode } from './config.ts';
 import { normalizeHighSpeedValue } from './config.ts';
-import type { SongSelectDifficultyFilter } from './song-select-navigation.ts';
+import type { MusicSelectDifficultyFilter } from './music-select-navigation.ts';
 
 type WritableSignal<T> = {
   (): T;
   (value: T): void;
 };
 
-export interface SongSelectViewState {
+export interface MusicSelectViewState {
   entries: ChartSelectionEntry[];
   selectableIndexes: number[];
   chartIndexes: number[];
@@ -19,27 +19,27 @@ export interface SongSelectViewState {
   chartIndexByEntryIndex: Map<number, number>;
 }
 
-export interface SongSelectState {
-  readonly difficultyFilter: WritableSignal<SongSelectDifficultyFilter | undefined>;
+export interface MusicSelectState {
+  readonly difficultyFilter: WritableSignal<MusicSelectDifficultyFilter | undefined>;
   readonly playMode: WritableSignal<PlayMode>;
   readonly highSpeed: WritableSignal<number>;
   readonly selectedIndex: WritableSignal<number>;
-  readonly view: () => SongSelectViewState;
+  readonly view: () => MusicSelectViewState;
   ensureSelectedIndex: (preferredFocusKey?: string) => void;
 }
 
-export interface CreateSongSelectStateOptions {
-  initialDifficultyFilter?: SongSelectDifficultyFilter;
+export interface CreateMusicSelectStateOptions {
+  initialDifficultyFilter?: MusicSelectDifficultyFilter;
   initialPlayMode?: PlayMode;
   initialHighSpeed?: number;
   initialFocusKey?: string;
 }
 
-export function createSongSelectState(
+export function createMusicSelectState(
   allEntries: ChartSelectionEntry[],
-  options: CreateSongSelectStateOptions = {},
-): SongSelectState {
-  const difficultyFilter = signal<SongSelectDifficultyFilter | undefined>(options.initialDifficultyFilter);
+  options: CreateMusicSelectStateOptions = {},
+): MusicSelectState {
+  const difficultyFilter = signal<MusicSelectDifficultyFilter | undefined>(options.initialDifficultyFilter);
   const playMode = signal<PlayMode>(options.initialPlayMode ?? 'manual');
   const highSpeed = signal(normalizeHighSpeedValue(options.initialHighSpeed));
   const selectedIndex = signal(0);
@@ -64,7 +64,7 @@ export function createSongSelectState(
       chartFiles: entries.flatMap((entry) => (entry.kind === 'chart' ? [entry.filePath] : [])),
       selectableIndexByEntryIndex,
       chartIndexByEntryIndex,
-    } satisfies SongSelectViewState;
+    } satisfies MusicSelectViewState;
   });
 
   const ensureSelectedIndex = (preferredFocusKey?: string): void => {
@@ -107,7 +107,7 @@ export function createSongSelectState(
 
 export function filterChartSelectionEntries(
   entries: readonly ChartSelectionEntry[],
-  difficultyFilter: SongSelectDifficultyFilter | undefined,
+  difficultyFilter: MusicSelectDifficultyFilter | undefined,
 ): ChartSelectionEntry[] {
   if (typeof difficultyFilter !== 'number') {
     return [...entries];

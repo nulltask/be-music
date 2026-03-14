@@ -139,7 +139,7 @@ describe('player bga', () => {
     }
   });
 
-  test('player bga: loads banner images with contain sizing for song-select metadata blocks', async () => {
+  test('player bga: loads banner images with contain sizing for music-select metadata blocks', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-banner-ansi-'));
     try {
       await writePng(join(baseDir, 'banner.png'), 300, 80, () => ({ r: 0, g: 0, b: 255, a: 255 }));
@@ -162,7 +162,7 @@ describe('player bga', () => {
     }
   });
 
-  test('player bga: prepares kitty graphics data for song-select banners', async () => {
+  test('player bga: prepares kitty graphics data for music-select banners', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-banner-kitty-'));
     try {
       await writePng(join(baseDir, 'banner.png'), 300, 80, () => ({ r: 0, g: 0, b: 255, a: 255 }));

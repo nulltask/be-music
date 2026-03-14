@@ -44,7 +44,7 @@ describe('chart selection', () => {
     });
   });
 
-  test('buildChartSelectionEntries: includes song metadata extras used by song-select', async () => {
+  test('buildChartSelectionEntries: includes music metadata extras used by music-select', async () => {
     const bmsPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
     const bmsonPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
 
@@ -67,7 +67,7 @@ describe('chart selection', () => {
     });
   });
 
-  test('buildChartSelectionEntries: carries BMS #BANNER into song-select metadata', async () => {
+  test('buildChartSelectionEntries: carries BMS #BANNER into music-select metadata', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-banner-'));
     tempDirectories.push(tempRoot);
     const chartPath = join(tempRoot, 'banner-test.bms');

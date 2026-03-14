@@ -34,7 +34,7 @@ import {
   MAX_HIGH_SPEED,
   MIN_HIGH_SPEED,
   applyPersistedPlayerConfigToArgs,
-  applySongSelectConfigToArgs,
+  applyMusicSelectConfigToArgs,
   createDefaultPersistedPlayerConfig,
   cyclePlayMode,
   decreaseHighSpeed,
@@ -54,13 +54,13 @@ import {
   resolveCircularSelectableIndex,
   resolvePageSelectableIndex,
   resolveResultScreenActionFromKey,
-  resolveSongSelectDifficultyFilter,
-  resolveSongSelectNavigationAction,
+  resolveMusicSelectDifficultyFilter,
+  resolveMusicSelectNavigationAction,
   resolveVisibleEntryRange,
   type ResultScreenAction,
-  type SongSelectDifficultyFilter,
-  type SongSelectPageDirection,
-} from './song-select-navigation.ts';
+  type MusicSelectDifficultyFilter,
+  type MusicSelectPageDirection,
+} from './music-select-navigation.ts';
 import {
   createSelectionColumnLayout,
   formatPlayLevelLabel,
@@ -76,8 +76,8 @@ import {
   type ChartSelectionEntry,
   type ChartSummaryLoadingProgress,
 } from './chart-selection.ts';
-import { createChartFocusKey, createSongSelectState, getEntryFocusKey } from './song-select-state.ts';
-import { createChartPreviewController, formatSongSelectAudioBackendLabel } from './chart-preview.ts';
+import { createChartFocusKey, createMusicSelectState, getEntryFocusKey } from './music-select-state.ts';
+import { createChartPreviewController, formatMusicSelectAudioBackendLabel } from './chart-preview.ts';
 
 export {
   applyPersistedPlayerConfigToArgs,
@@ -91,10 +91,10 @@ export {
   resolveCircularSelectableIndex,
   resolvePageSelectableIndex,
   resolveResultScreenActionFromKey,
-  resolveSongSelectDifficultyFilter,
-  resolveSongSelectNavigationAction,
+  resolveMusicSelectDifficultyFilter,
+  resolveMusicSelectNavigationAction,
   resolveVisibleEntryRange,
-} from './song-select-navigation.ts';
+} from './music-select-navigation.ts';
 
 interface CliArgs {
   input?: string;
@@ -157,7 +157,7 @@ interface SelectChartInteractivelyOptions {
   initialFocusKey?: string;
   initialPlayMode?: PlayMode;
   initialHighSpeed?: number;
-  initialDifficultyFilter?: SongSelectDifficultyFilter;
+  initialDifficultyFilter?: MusicSelectDifficultyFilter;
 }
 
 type SelectChartInteractivelyExitReason = 'selected' | 'escape' | 'ctrl-c';
@@ -168,20 +168,20 @@ interface SelectChartInteractivelyResult {
   focusKey?: string;
   playMode: PlayMode;
   highSpeed: number;
-  difficultyFilter?: SongSelectDifficultyFilter;
+  difficultyFilter?: MusicSelectDifficultyFilter;
 }
 
-interface SongSelectMetadataRenderOptions {
+interface MusicSelectMetadataRenderOptions {
   bannerLines?: readonly string[];
   bannerWidth?: number;
 }
 
-interface SongSelectBannerLayout {
+interface MusicSelectBannerLayout {
   visibleBannerLines: readonly string[];
   requestedBannerWidth: number;
 }
 
-interface SongSelectBannerState {
+interface MusicSelectBannerState {
   cache: Map<string, TerminalAnsiImage | null>;
   activeCacheKey?: string;
   activeImage?: TerminalAnsiImage;
@@ -190,7 +190,7 @@ interface SongSelectBannerState {
   kittyVisible: boolean;
 }
 
-interface SongSelectBannerDisplayState {
+interface MusicSelectBannerDisplayState {
   reservedWidth?: number;
 }
 
@@ -205,7 +205,7 @@ interface PlayedChartResult {
   playLevel?: BeMusicPlayLevel;
 }
 
-const SONG_SELECT_NON_ENTRY_ROWS = 13;
+const MUSIC_SELECT_NON_ENTRY_ROWS = 13;
 
 type DirectorySceneState =
   | {
@@ -213,7 +213,7 @@ type DirectorySceneState =
       focusKey?: string;
       playMode: PlayMode;
       highSpeed: number;
-      difficultyFilter?: SongSelectDifficultyFilter;
+      difficultyFilter?: MusicSelectDifficultyFilter;
     }
   | {
       kind: 'play';
@@ -221,7 +221,7 @@ type DirectorySceneState =
       focusKey?: string;
       playMode: PlayMode;
       highSpeed: number;
-      difficultyFilter?: SongSelectDifficultyFilter;
+      difficultyFilter?: MusicSelectDifficultyFilter;
     }
   | {
       kind: 'result';
@@ -229,7 +229,7 @@ type DirectorySceneState =
       focusKey?: string;
       playMode: PlayMode;
       highSpeed: number;
-      difficultyFilter?: SongSelectDifficultyFilter;
+      difficultyFilter?: MusicSelectDifficultyFilter;
     }
   | {
       kind: 'exit';
@@ -255,21 +255,21 @@ interface ResultScreenOptions {
 }
 
 type ResultScreenExitAction = Exclude<ResultScreenAction, 'replay'>;
-const SONG_SELECT_PREVIEW_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
-const SONG_SELECT_PREVIEW_SPINNER_INTERVAL_MS = 80;
-const SONG_SELECT_HELP_LINE =
+const MUSIC_SELECT_PREVIEW_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
+const MUSIC_SELECT_PREVIEW_SPINNER_INTERVAL_MS = 80;
+const MUSIC_SELECT_HELP_LINE =
   'Select chart  [↑/↓ or k/j: move]  [←/→ or h/l: page]  [Ctrl+b/f: page]  [1-5: DIFF filter]  [0: clear DIFF]  [a: MANUAL/AUTO SCRATCH/AUTO]  [s/S: HS +/-]  [Enter: play]  [Ctrl+C/Esc: exit]';
 const DIRECTORY_CHART_EXTENSIONS_LABEL = '.bms, .bme, .bml, .pms, .bmson';
 const PLAY_LOADING_STAGEFILE_KITTY_IMAGE_ID = 7_331;
-const SONG_SELECT_BANNER_KITTY_IMAGE_ID = 7_332;
-const SONG_SELECT_METADATA_SECONDARY_COLOR = '\u001b[38;2;160;160;160m';
+const MUSIC_SELECT_BANNER_KITTY_IMAGE_ID = 7_332;
+const MUSIC_SELECT_METADATA_SECONDARY_COLOR = '\u001b[38;2;160;160;160m';
 const ANSI_RESET = '\u001b[0m';
 const DEFAULT_TUI_FPS = 60;
-const SONG_SELECT_BANNER_HEIGHT = 4;
-const SONG_SELECT_BANNER_GAP = 2;
-const SONG_SELECT_BANNER_MAX_WIDTH = 18;
-const SONG_SELECT_BANNER_MIN_WIDTH = 10;
-const SONG_SELECT_BANNER_MIN_TEXT_WIDTH = 36;
+const MUSIC_SELECT_BANNER_HEIGHT = 4;
+const MUSIC_SELECT_BANNER_GAP = 2;
+const MUSIC_SELECT_BANNER_MAX_WIDTH = 18;
+const MUSIC_SELECT_BANNER_MIN_WIDTH = 10;
+const MUSIC_SELECT_BANNER_MIN_TEXT_WIDTH = 36;
 
 export async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
@@ -345,7 +345,7 @@ async function runDirectoryInput(
   args: CliArgs,
   initialConfig: PersistedPlayerConfig,
 ): Promise<PersistedPlayerConfig> {
-  let persistedConfig = resolvePersistedConfigForSongSelect(
+  let persistedConfig = resolvePersistedConfigForMusicSelect(
     {
       playMode: initialConfig.playMode,
       highSpeed: normalizeHighSpeedValue(initialConfig.highSpeed),
@@ -384,7 +384,7 @@ async function runDirectoryInput(
     process.stdout.write(`Selected chart: ${selected}\n`);
     try {
       await playChartOnce(selected, args);
-      persistedConfig = resolvePersistedConfigForSongSelect(
+      persistedConfig = resolvePersistedConfigForMusicSelect(
         resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
         rootDir,
         selected,
@@ -393,7 +393,7 @@ async function runDirectoryInput(
       );
     } catch (error) {
       if (error instanceof PlayerInterruptedError) {
-        persistedConfig = resolvePersistedConfigForSongSelect(
+        persistedConfig = resolvePersistedConfigForMusicSelect(
           resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
           rootDir,
           selected,
@@ -413,7 +413,7 @@ async function runDirectoryInput(
     process.stdout.write(`Selected chart: ${selected}\n`);
     try {
       const action = await playSingleChartUntilExit(selected, rootDir, args);
-      persistedConfig = resolvePersistedConfigForSongSelect(
+      persistedConfig = resolvePersistedConfigForMusicSelect(
         resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
         rootDir,
         selected,
@@ -425,7 +425,7 @@ async function runDirectoryInput(
       }
     } catch (error) {
       if (error instanceof PlayerInterruptedError) {
-        persistedConfig = resolvePersistedConfigForSongSelect(
+        persistedConfig = resolvePersistedConfigForMusicSelect(
           resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
           rootDir,
           selected,
@@ -447,10 +447,10 @@ async function runDirectoryInput(
 
   let state: DirectorySceneState = {
     kind: 'select',
-    focusKey: resolveSongSelectInitialFocusKey(
+    focusKey: resolveMusicSelectInitialFocusKey(
       candidates,
       resolveLastSelectedChartFileForDirectory(initialConfig, rootDir),
-      resolveLastSongSelectFocusKeyForDirectory(initialConfig, rootDir),
+      resolveLastMusicSelectFocusKeyForDirectory(initialConfig, rootDir),
     ),
     playMode: persistedConfig.playMode,
     highSpeed: persistedConfig.highSpeed,
@@ -471,7 +471,7 @@ async function runDirectoryInput(
         initialHighSpeed: state.highSpeed,
         initialDifficultyFilter: state.difficultyFilter,
       });
-      persistedConfig = resolvePersistedConfigForSongSelect(
+      persistedConfig = resolvePersistedConfigForMusicSelect(
         {
           playMode: selection.playMode,
           highSpeed: normalizeHighSpeedValue(selection.highSpeed),
@@ -487,8 +487,8 @@ async function runDirectoryInput(
 
     if (state.kind === 'play') {
       const playState = state;
-      const playArgs = applySongSelectConfigToArgs(args, playState.playMode, playState.highSpeed);
-      persistedConfig = resolvePersistedConfigForSongSelect(
+      const playArgs = applyMusicSelectConfigToArgs(args, playState.playMode, playState.highSpeed);
+      persistedConfig = resolvePersistedConfigForMusicSelect(
         {
           playMode: playState.playMode,
           highSpeed: normalizeHighSpeedValue(playArgs.highSpeed),
@@ -501,7 +501,7 @@ async function runDirectoryInput(
       try {
         const played = await playChartOnce(playState.chartPath, playArgs);
         const resolvedHighSpeed = normalizeHighSpeedValue(playArgs.highSpeed);
-        persistedConfig = resolvePersistedConfigForSongSelect(
+        persistedConfig = resolvePersistedConfigForMusicSelect(
           {
             playMode: playState.playMode,
             highSpeed: resolvedHighSpeed,
@@ -522,7 +522,7 @@ async function runDirectoryInput(
       } catch (error) {
         if (error instanceof PlayerInterruptedError) {
           const resolvedHighSpeed = normalizeHighSpeedValue(playArgs.highSpeed);
-          persistedConfig = resolvePersistedConfigForSongSelect(
+          persistedConfig = resolvePersistedConfigForMusicSelect(
             {
               playMode: playState.playMode,
               highSpeed: resolvedHighSpeed,
@@ -551,7 +551,7 @@ async function runDirectoryInput(
   return persistedConfig;
 }
 
-function resolvePersistedConfigForSongSelect(
+function resolvePersistedConfigForMusicSelect(
   base: Pick<PersistedPlayerConfig, 'playMode' | 'highSpeed'>,
   directoryPath: string | undefined,
   preferredLastSelectedChartFile?: string,
@@ -565,8 +565,8 @@ function resolvePersistedConfigForSongSelect(
   if (previous?.lastSelectedChartFileByDirectory) {
     resolved.lastSelectedChartFileByDirectory = { ...previous.lastSelectedChartFileByDirectory };
   }
-  if (previous?.lastSongSelectFocusKeyByDirectory) {
-    resolved.lastSongSelectFocusKeyByDirectory = { ...previous.lastSongSelectFocusKeyByDirectory };
+  if (previous?.lastMusicSelectFocusKeyByDirectory) {
+    resolved.lastMusicSelectFocusKeyByDirectory = { ...previous.lastMusicSelectFocusKeyByDirectory };
   }
   const preferred = preferredLastSelectedChartFile?.trim();
   if (preferred) {
@@ -579,9 +579,9 @@ function resolvePersistedConfigForSongSelect(
   const normalizedFocusKey = preferredFocusKey?.trim();
   if (normalizedFocusKey) {
     if (directoryPath && directoryPath.length > 0) {
-      const byDirectory = { ...(resolved.lastSongSelectFocusKeyByDirectory ?? {}) };
+      const byDirectory = { ...(resolved.lastMusicSelectFocusKeyByDirectory ?? {}) };
       byDirectory[directoryPath] = normalizedFocusKey;
-      resolved.lastSongSelectFocusKeyByDirectory = byDirectory;
+      resolved.lastMusicSelectFocusKeyByDirectory = byDirectory;
     }
   }
   if (
@@ -591,10 +591,10 @@ function resolvePersistedConfigForSongSelect(
     delete resolved.lastSelectedChartFileByDirectory;
   }
   if (
-    resolved.lastSongSelectFocusKeyByDirectory &&
-    Object.keys(resolved.lastSongSelectFocusKeyByDirectory).length === 0
+    resolved.lastMusicSelectFocusKeyByDirectory &&
+    Object.keys(resolved.lastMusicSelectFocusKeyByDirectory).length === 0
   ) {
-    delete resolved.lastSongSelectFocusKeyByDirectory;
+    delete resolved.lastMusicSelectFocusKeyByDirectory;
   }
   return resolved;
 }
@@ -620,11 +620,11 @@ function resolveLastSelectedChartFileForDirectory(
   return undefined;
 }
 
-function resolveLastSongSelectFocusKeyForDirectory(
+function resolveLastMusicSelectFocusKeyForDirectory(
   config: PersistedPlayerConfig,
   directoryPath: string,
 ): string | undefined {
-  const byDirectory = config.lastSongSelectFocusKeyByDirectory;
+  const byDirectory = config.lastMusicSelectFocusKeyByDirectory;
   if (byDirectory) {
     const scoped = byDirectory[directoryPath];
     if (typeof scoped === 'string' && scoped.trim().length > 0) {
@@ -945,14 +945,14 @@ function sanitizeMetadataText(value: string | undefined): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
-export function createSongSelectSelectedMetadataLines(
+export function createMusicSelectSelectedMetadataLines(
   entry: ChartSelectionEntry | undefined,
   lineWidth: number,
-  options: SongSelectMetadataRenderOptions = {},
+  options: MusicSelectMetadataRenderOptions = {},
 ): string[] {
-  const bannerLayout = resolveSongSelectMetadataBannerLayout(lineWidth, options);
+  const bannerLayout = resolveMusicSelectMetadataBannerLayout(lineWidth, options);
   const metadataWidth = bannerLayout
-    ? Math.max(8, lineWidth - bannerLayout.requestedBannerWidth - SONG_SELECT_BANNER_GAP)
+    ? Math.max(8, lineWidth - bannerLayout.requestedBannerWidth - MUSIC_SELECT_BANNER_GAP)
     : lineWidth;
   const title =
     entry?.kind === 'chart' ? (sanitizeMetadataText(entry.title) ?? sanitizeMetadataText(entry.fileLabel)) : '-';
@@ -962,24 +962,24 @@ export function createSongSelectSelectedMetadataLines(
   const genre = entry?.kind === 'chart' ? sanitizeMetadataText(entry.genre) : '-';
   const comment = entry?.kind === 'chart' ? sanitizeMetadataText(entry.comment) : '-';
   const baseLines = [
-    formatSongSelectMetadataLine('TITLE', title ?? '-', subtitle, metadataWidth),
-    formatSongSelectMetadataLine('ARTIST', artist ?? '-', subartist, metadataWidth),
-    formatSongSelectMetadataLine('GENRE', genre ?? '-', undefined, metadataWidth),
-    formatSongSelectMetadataLine('COMMENT', comment ?? '-', undefined, metadataWidth),
+    formatMusicSelectMetadataLine('TITLE', title ?? '-', subtitle, metadataWidth),
+    formatMusicSelectMetadataLine('ARTIST', artist ?? '-', subartist, metadataWidth),
+    formatMusicSelectMetadataLine('GENRE', genre ?? '-', undefined, metadataWidth),
+    formatMusicSelectMetadataLine('COMMENT', comment ?? '-', undefined, metadataWidth),
   ];
-  return bannerLayout ? composeSongSelectMetadataLinesWithBanner(baseLines, lineWidth, bannerLayout) : baseLines;
+  return bannerLayout ? composeMusicSelectMetadataLinesWithBanner(baseLines, lineWidth, bannerLayout) : baseLines;
 }
 
-function resolveSongSelectMetadataBannerLayout(
+function resolveMusicSelectMetadataBannerLayout(
   lineWidth: number,
-  options: SongSelectMetadataRenderOptions,
-): SongSelectBannerLayout | undefined {
-  const visibleBannerLines = options.bannerLines?.filter((line) => measureSongSelectDisplayWidth(line) > 0) ?? [];
+  options: MusicSelectMetadataRenderOptions,
+): MusicSelectBannerLayout | undefined {
+  const visibleBannerLines = options.bannerLines?.filter((line) => measureMusicSelectDisplayWidth(line) > 0) ?? [];
   const requestedBannerWidth =
     visibleBannerLines.length > 0
-      ? visibleBannerLines.reduce((max, line) => Math.max(max, measureSongSelectDisplayWidth(line)), 0)
+      ? visibleBannerLines.reduce((max, line) => Math.max(max, measureMusicSelectDisplayWidth(line)), 0)
       : Math.max(0, Math.floor(options.bannerWidth ?? 0));
-  if (requestedBannerWidth <= 0 || requestedBannerWidth + SONG_SELECT_BANNER_GAP >= lineWidth) {
+  if (requestedBannerWidth <= 0 || requestedBannerWidth + MUSIC_SELECT_BANNER_GAP >= lineWidth) {
     return undefined;
   }
   return {
@@ -988,16 +988,16 @@ function resolveSongSelectMetadataBannerLayout(
   };
 }
 
-function composeSongSelectMetadataLinesWithBanner(
+function composeMusicSelectMetadataLinesWithBanner(
   baseLines: readonly string[],
   lineWidth: number,
-  layout: SongSelectBannerLayout,
+  layout: MusicSelectBannerLayout,
 ): string[] {
   return baseLines.map((line, index) => {
     const bannerLine = layout.visibleBannerLines[index];
-    const leftVisibleWidth = measureSongSelectDisplayWidth(line);
+    const leftVisibleWidth = measureMusicSelectDisplayWidth(line);
     const paddingWidth = Math.max(
-      bannerLine ? SONG_SELECT_BANNER_GAP : 0,
+      bannerLine ? MUSIC_SELECT_BANNER_GAP : 0,
       lineWidth - layout.requestedBannerWidth - leftVisibleWidth,
     );
     if (!bannerLine) {
@@ -1007,7 +1007,7 @@ function composeSongSelectMetadataLinesWithBanner(
   });
 }
 
-function formatSongSelectMetadataLine(
+function formatMusicSelectMetadataLine(
   label: 'TITLE' | 'ARTIST' | 'GENRE' | 'COMMENT',
   primary: string,
   secondary: string | undefined,
@@ -1018,7 +1018,7 @@ function formatSongSelectMetadataLine(
     return base;
   }
 
-  const baseWidth = measureSongSelectDisplayWidth(base);
+  const baseWidth = measureMusicSelectDisplayWidth(base);
   if (baseWidth >= lineWidth) {
     return base;
   }
@@ -1029,10 +1029,10 @@ function formatSongSelectMetadataLine(
   }
 
   const suffix = truncateForDisplay(secondary, secondaryWidthBudget);
-  return suffix.length > 0 ? `${base} ${SONG_SELECT_METADATA_SECONDARY_COLOR}${suffix}${ANSI_RESET}` : base;
+  return suffix.length > 0 ? `${base} ${MUSIC_SELECT_METADATA_SECONDARY_COLOR}${suffix}${ANSI_RESET}` : base;
 }
 
-function measureSongSelectDisplayWidth(value: string): number {
+function measureMusicSelectDisplayWidth(value: string): number {
   let width = 0;
   let escape = false;
   for (let index = 0; index < value.length; index += 1) {
@@ -1047,12 +1047,12 @@ function measureSongSelectDisplayWidth(value: string): number {
       escape = true;
       continue;
     }
-    width += measureSongSelectCharacterDisplayWidth(char);
+    width += measureMusicSelectCharacterDisplayWidth(char);
   }
   return width;
 }
 
-function measureSongSelectCharacterDisplayWidth(char: string): number {
+function measureMusicSelectCharacterDisplayWidth(char: string): number {
   const codePoint = char.codePointAt(0);
   if (codePoint === undefined) {
     return 0;
@@ -1068,10 +1068,10 @@ function measureSongSelectCharacterDisplayWidth(char: string): number {
   ) {
     return 0;
   }
-  return isSongSelectFullWidthCodePoint(codePoint) ? 2 : 1;
+  return isMusicSelectFullWidthCodePoint(codePoint) ? 2 : 1;
 }
 
-function isSongSelectFullWidthCodePoint(codePoint: number): boolean {
+function isMusicSelectFullWidthCodePoint(codePoint: number): boolean {
   if (codePoint < 0x1100) {
     return false;
   }
@@ -1093,15 +1093,15 @@ function isSongSelectFullWidthCodePoint(codePoint: number): boolean {
   );
 }
 
-function resolveSongSelectBannerDisplayWidth(lineWidth: number): number {
+function resolveMusicSelectBannerDisplayWidth(lineWidth: number): number {
   const available = Math.min(
-    SONG_SELECT_BANNER_MAX_WIDTH,
-    lineWidth - SONG_SELECT_BANNER_MIN_TEXT_WIDTH - SONG_SELECT_BANNER_GAP,
+    MUSIC_SELECT_BANNER_MAX_WIDTH,
+    lineWidth - MUSIC_SELECT_BANNER_MIN_TEXT_WIDTH - MUSIC_SELECT_BANNER_GAP,
   );
-  return available >= SONG_SELECT_BANNER_MIN_WIDTH ? available : 0;
+  return available >= MUSIC_SELECT_BANNER_MIN_WIDTH ? available : 0;
 }
 
-function createSongSelectBannerState(): SongSelectBannerState {
+function createMusicSelectBannerState(): MusicSelectBannerState {
   return {
     cache: new Map<string, TerminalAnsiImage | null>(),
     loadSequence: 0,
@@ -1109,7 +1109,7 @@ function createSongSelectBannerState(): SongSelectBannerState {
   };
 }
 
-function resolveSongSelectBannerCacheKey(
+function resolveMusicSelectBannerCacheKey(
   entry: ChartSelectionEntry | undefined,
   bannerWidth: number,
 ): string | undefined {
@@ -1119,23 +1119,23 @@ function resolveSongSelectBannerCacheKey(
   return `${entry.filePath}\u0000${entry.bannerPath}\u0000${bannerWidth}`;
 }
 
-function clearSongSelectBannerLoad(state: SongSelectBannerState): void {
+function clearMusicSelectBannerLoad(state: MusicSelectBannerState): void {
   state.loadController?.abort();
   state.loadController = undefined;
 }
 
-function syncSongSelectBanner(params: {
-  state: SongSelectBannerState;
+function syncMusicSelectBanner(params: {
+  state: MusicSelectBannerState;
   entry: ChartSelectionEntry | undefined;
   lineWidth: number;
   useKittyGraphics: boolean;
   finished: boolean;
   onReady: () => void;
 }): void {
-  const bannerWidth = resolveSongSelectBannerDisplayWidth(params.lineWidth);
-  const cacheKey = resolveSongSelectBannerCacheKey(params.entry, bannerWidth);
+  const bannerWidth = resolveMusicSelectBannerDisplayWidth(params.lineWidth);
+  const cacheKey = resolveMusicSelectBannerCacheKey(params.entry, bannerWidth);
   if (!cacheKey || params.entry?.kind !== 'chart' || typeof params.entry.bannerPath !== 'string') {
-    clearSongSelectBannerLoad(params.state);
+    clearMusicSelectBannerLoad(params.state);
     params.state.activeCacheKey = undefined;
     params.state.activeImage = undefined;
     return;
@@ -1144,7 +1144,7 @@ function syncSongSelectBanner(params: {
     return;
   }
 
-  clearSongSelectBannerLoad(params.state);
+  clearMusicSelectBannerLoad(params.state);
   params.state.activeCacheKey = cacheKey;
   const cached = params.state.cache.get(cacheKey);
   if (cached !== undefined) {
@@ -1158,7 +1158,7 @@ function syncSongSelectBanner(params: {
   const requestSequence = ++params.state.loadSequence;
   void loadTerminalAnsiImage(dirname(params.entry.filePath), params.entry.bannerPath, {
     width: bannerWidth,
-    height: SONG_SELECT_BANNER_HEIGHT,
+    height: MUSIC_SELECT_BANNER_HEIGHT,
     signal: controller.signal,
     fitMode: 'contain',
     includeKittyImage: params.useKittyGraphics,
@@ -1189,14 +1189,14 @@ function syncSongSelectBanner(params: {
     });
 }
 
-function resolveSongSelectBannerDisplayState(
+function resolveMusicSelectBannerDisplayState(
   entry: ChartSelectionEntry | undefined,
   lineWidth: number,
   useKittyGraphics: boolean,
-  state: SongSelectBannerState,
-): SongSelectBannerDisplayState {
-  const bannerWidth = resolveSongSelectBannerDisplayWidth(lineWidth);
-  const cacheKey = resolveSongSelectBannerCacheKey(entry, bannerWidth);
+  state: MusicSelectBannerState,
+): MusicSelectBannerDisplayState {
+  const bannerWidth = resolveMusicSelectBannerDisplayWidth(lineWidth);
+  const cacheKey = resolveMusicSelectBannerCacheKey(entry, bannerWidth);
   const cachedImage = cacheKey ? state.cache.get(cacheKey) : undefined;
   return {
     reservedWidth:
@@ -1209,20 +1209,20 @@ function resolveSongSelectBannerDisplayState(
   };
 }
 
-function resolveSongSelectBannerOverlaySequence(params: {
+function resolveMusicSelectBannerOverlaySequence(params: {
   lineWidth: number;
   reservedWidth?: number;
   useKittyGraphics: boolean;
-  state: SongSelectBannerState;
+  state: MusicSelectBannerState;
 }): string {
   if (!(params.useKittyGraphics && params.state.activeImage?.kittyImage)) {
-    return buildSongSelectBannerCleanupSequence(params.state);
+    return buildMusicSelectBannerCleanupSequence(params.state);
   }
   const bannerBlockWidth = params.reservedWidth ?? params.state.activeImage.kittyImage.cellWidth;
   const column = Math.max(1, params.lineWidth - bannerBlockWidth + 1);
   params.state.kittyVisible = true;
   return buildKittyGraphicsRenderSequence({
-    imageId: SONG_SELECT_BANNER_KITTY_IMAGE_ID,
+    imageId: MUSIC_SELECT_BANNER_KITTY_IMAGE_ID,
     placementId: 1,
     row: 1,
     column,
@@ -1232,15 +1232,15 @@ function resolveSongSelectBannerOverlaySequence(params: {
   });
 }
 
-function buildSongSelectBannerCleanupSequence(state: SongSelectBannerState): string {
+function buildMusicSelectBannerCleanupSequence(state: MusicSelectBannerState): string {
   if (!state.kittyVisible) {
     return '';
   }
   state.kittyVisible = false;
-  return buildKittyGraphicsDeleteImageSequence(SONG_SELECT_BANNER_KITTY_IMAGE_ID);
+  return buildKittyGraphicsDeleteImageSequence(MUSIC_SELECT_BANNER_KITTY_IMAGE_ID);
 }
 
-export function createSongSelectControlLines(options: {
+export function createMusicSelectControlLines(options: {
   rootDir: string;
   lineWidth: number;
   playModeLabel: string;
@@ -1249,7 +1249,7 @@ export function createSongSelectControlLines(options: {
   audioBackendLabel: string;
 }): string[] {
   return [
-    truncateForDisplay(SONG_SELECT_HELP_LINE, options.lineWidth),
+    truncateForDisplay(MUSIC_SELECT_HELP_LINE, options.lineWidth),
     truncateForDisplay(`Directory: ${options.rootDir}`, options.lineWidth),
     truncateForDisplay(
       `Mode: ${options.playModeLabel}  HIGH-SPEED: x${options.highSpeedLabel}  DIFFICULTY: ${options.difficultyFilterLabel}`,
@@ -1474,7 +1474,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       continue;
     }
     if (token === '--no-preview' || token === '--no-preview-audio') {
-      throw new Error(`${token} is no longer supported; song preview is always enabled`);
+      throw new Error(`${token} is no longer supported; music preview is always enabled`);
     }
     if (token === '--no-tui') {
       args.tui = false;
@@ -1934,7 +1934,7 @@ function convertSrgbChannelToLinear(value: number): number {
   return ((normalized + 0.055) / 1.055) ** 2.4;
 }
 
-function formatSongSelectDifficultyFilterLabel(value: SongSelectDifficultyFilter | undefined): string {
+function formatMusicSelectDifficultyFilterLabel(value: MusicSelectDifficultyFilter | undefined): string {
   return typeof value === 'number' ? String(value) : 'ALL';
 }
 
@@ -1964,11 +1964,11 @@ async function selectChartInteractively(
   let cachedEntryLabels = new WeakMap<ChartSelectionEntry, string>();
   const useKittyGraphicsForBanner =
     options.kittyGraphics === true && Boolean(process.stdout.isTTY) && supportsKittyGraphicsProtocol(process.env);
-  const bannerState = createSongSelectBannerState();
+  const bannerState = createMusicSelectBannerState();
   let finished = false;
 
   const inputCapture = beginRawInputCapture();
-  const songSelectState = createSongSelectState(allEntries, {
+  const musicSelectState = createMusicSelectState(allEntries, {
     initialDifficultyFilter: options.initialDifficultyFilter,
     initialPlayMode: options.initialPlayMode,
     initialHighSpeed: options.initialHighSpeed,
@@ -1978,8 +1978,8 @@ async function selectChartInteractively(
   process.stdout.write('\u001b[?25l');
 
   const syncPreview = (): void => {
-    const view = songSelectState.view();
-    const entry = view.entries[songSelectState.selectedIndex()];
+    const view = musicSelectState.view();
+    const entry = view.entries[musicSelectState.selectedIndex()];
     if (entry?.kind === 'chart') {
       previewController?.focus({
         filePath: entry.filePath,
@@ -1992,7 +1992,7 @@ async function selectChartInteractively(
 
   const listRowsForViewport = (): number => {
     const rows = process.stdout.rows ?? 24;
-    return Math.max(5, rows - SONG_SELECT_NON_ENTRY_ROWS);
+    return Math.max(5, rows - MUSIC_SELECT_NON_ENTRY_ROWS);
   };
 
   const resolveSelectionColumnLayout = (
@@ -2039,7 +2039,7 @@ async function selectChartInteractively(
   };
 
   const render = (): void => {
-    const view = songSelectState.view();
+    const view = musicSelectState.view();
     const columns = process.stdout.columns ?? 80;
     const listRows = listRowsForViewport();
     const numberWidth = String(Math.max(1, view.chartCount)).length;
@@ -2047,11 +2047,11 @@ async function selectChartInteractively(
     const itemLabelWidth = Math.max(8, lineWidth - numberWidth - 4);
     const columnLayout = resolveSelectionColumnLayout(view.entries, itemLabelWidth);
 
-    const { start, end } = resolveVisibleEntryRange(songSelectState.selectedIndex(), view.entries.length, listRows);
+    const { start, end } = resolveVisibleEntryRange(musicSelectState.selectedIndex(), view.entries.length, listRows);
 
     const lines: string[] = [];
-    const selectedEntry = view.entries[songSelectState.selectedIndex()];
-    syncSongSelectBanner({
+    const selectedEntry = view.entries[musicSelectState.selectedIndex()];
+    syncMusicSelectBanner({
       state: bannerState,
       entry: selectedEntry,
       lineWidth,
@@ -2059,14 +2059,14 @@ async function selectChartInteractively(
       finished,
       onReady: render,
     });
-    const bannerDisplayState = resolveSongSelectBannerDisplayState(
+    const bannerDisplayState = resolveMusicSelectBannerDisplayState(
       selectedEntry,
       lineWidth,
       useKittyGraphicsForBanner,
       bannerState,
     );
     lines.push(
-      ...createSongSelectSelectedMetadataLines(selectedEntry, lineWidth, {
+      ...createMusicSelectSelectedMetadataLines(selectedEntry, lineWidth, {
         bannerLines:
           useKittyGraphicsForBanner && bannerState.activeImage?.kittyImage !== undefined
             ? undefined
@@ -2085,19 +2085,19 @@ async function selectChartInteractively(
 
     for (let index = start; index < end; index += 1) {
       const entry = view.entries[index];
-      const marker = index === songSelectState.selectedIndex() ? '>' : ' ';
+      const marker = index === musicSelectState.selectedIndex() ? '>' : ' ';
       const chartNumber = view.chartIndexByEntryIndex.get(index);
       const number =
         typeof chartNumber === 'number' ? String(chartNumber + 1).padStart(numberWidth, ' ') : ' '.repeat(numberWidth);
       let displayEntry = entry;
       if (
-        index === songSelectState.selectedIndex() &&
+        index === musicSelectState.selectedIndex() &&
         entry.kind === 'chart' &&
         previewController?.getRenderingFilePath() === entry.filePath
       ) {
         displayEntry = {
           ...entry,
-          fileLabel: `${SONG_SELECT_PREVIEW_SPINNER_FRAMES[previewSpinnerFrame]} ${entry.fileLabel}`,
+          fileLabel: `${MUSIC_SELECT_PREVIEW_SPINNER_FRAMES[previewSpinnerFrame]} ${entry.fileLabel}`,
         };
       }
       const label =
@@ -2105,7 +2105,7 @@ async function selectChartInteractively(
           ? resolveSelectionEntryLabel(entry, columnLayout, itemLabelWidth)
           : truncateForDisplay(formatSelectionEntryLabel(displayEntry, columnLayout), itemLabelWidth);
       const line = `${marker} ${number} ${label}`;
-      if (index === songSelectState.selectedIndex()) {
+      if (index === musicSelectState.selectedIndex()) {
         lines.push(`\u001b[7m${line.padEnd(lineWidth, ' ')}\u001b[0m`);
       } else {
         lines.push(line);
@@ -2114,26 +2114,26 @@ async function selectChartInteractively(
 
     lines.push('');
     lines.push(
-      ...createSongSelectControlLines({
+      ...createMusicSelectControlLines({
         rootDir,
         lineWidth,
-        playModeLabel: formatPlayModeLabel(songSelectState.playMode()),
-        highSpeedLabel: formatHighSpeedLabel(songSelectState.highSpeed()),
-        difficultyFilterLabel: formatSongSelectDifficultyFilterLabel(songSelectState.difficultyFilter()),
-        audioBackendLabel: formatSongSelectAudioBackendLabel(options.audio, previewController?.getActiveBackend()),
+        playModeLabel: formatPlayModeLabel(musicSelectState.playMode()),
+        highSpeedLabel: formatHighSpeedLabel(musicSelectState.highSpeed()),
+        difficultyFilterLabel: formatMusicSelectDifficultyFilterLabel(musicSelectState.difficultyFilter()),
+        audioBackendLabel: formatMusicSelectAudioBackendLabel(options.audio, previewController?.getActiveBackend()),
       }),
     );
     lines.push('');
-    const selectedChartIndex = view.chartIndexByEntryIndex.get(songSelectState.selectedIndex());
+    const selectedChartIndex = view.chartIndexByEntryIndex.get(musicSelectState.selectedIndex());
     if (typeof selectedChartIndex === 'number') {
       lines.push(`${selectedChartIndex + 1}/${view.chartCount}`);
     } else if (view.chartCount > 0) {
-      const selectedEntry = view.entries[songSelectState.selectedIndex()];
+      const selectedEntry = view.entries[musicSelectState.selectedIndex()];
       lines.push(selectedEntry?.kind === 'random' ? `RANDOM/${view.chartCount}` : `0/${view.chartCount}`);
     } else {
       lines.push('0/0');
     }
-    const overlaySequence = resolveSongSelectBannerOverlaySequence({
+    const overlaySequence = resolveMusicSelectBannerOverlaySequence({
       lineWidth,
       reservedWidth: bannerDisplayState.reservedWidth,
       useKittyGraphics: useKittyGraphicsForBanner,
@@ -2144,8 +2144,8 @@ async function selectChartInteractively(
 
   return new Promise<SelectChartInteractivelyResult>((resolvePromise) => {
     const isSelectedEntryPreviewRendering = (): boolean => {
-      const view = songSelectState.view();
-      const selectedEntry = view.entries[songSelectState.selectedIndex()];
+      const view = musicSelectState.view();
+      const selectedEntry = view.entries[musicSelectState.selectedIndex()];
       if (!previewController || selectedEntry?.kind !== 'chart') {
         return false;
       }
@@ -2165,9 +2165,9 @@ async function selectChartInteractively(
           return;
         }
         wasSpinnerVisible = true;
-        previewSpinnerFrame = (previewSpinnerFrame + 1) % SONG_SELECT_PREVIEW_SPINNER_FRAMES.length;
+        previewSpinnerFrame = (previewSpinnerFrame + 1) % MUSIC_SELECT_PREVIEW_SPINNER_FRAMES.length;
         render();
-      }, SONG_SELECT_PREVIEW_SPINNER_INTERVAL_MS);
+      }, MUSIC_SELECT_PREVIEW_SPINNER_INTERVAL_MS);
     };
 
     const cleanup = (result: SelectChartInteractivelyResult): void => {
@@ -2179,8 +2179,8 @@ async function selectChartInteractively(
         clearInterval(previewSpinnerTimer);
         previewSpinnerTimer = undefined;
       }
-      clearSongSelectBannerLoad(bannerState);
-      process.stdout.write(buildSongSelectBannerCleanupSequence(bannerState));
+      clearMusicSelectBannerLoad(bannerState);
+      process.stdout.write(buildMusicSelectBannerCleanupSequence(bannerState));
       inputCapture.stdin.removeListener('keypress', onKeyPress);
       inputCapture.restore();
       process.stdout.write('\u001b[?25h\u001b[2J\u001b[H');
@@ -2191,31 +2191,31 @@ async function selectChartInteractively(
     };
 
     const moveSelection = (delta: number): void => {
-      const view = songSelectState.view();
+      const view = musicSelectState.view();
       if (view.selectableIndexes.length === 0) {
         return;
       }
-      const currentSelectableIndex = view.selectableIndexByEntryIndex.get(songSelectState.selectedIndex()) ?? 0;
+      const currentSelectableIndex = view.selectableIndexByEntryIndex.get(musicSelectState.selectedIndex()) ?? 0;
       const nextSelectableIndex = resolveCircularSelectableIndex(
         currentSelectableIndex,
         delta,
         view.selectableIndexes.length,
       );
-      songSelectState.selectedIndex(view.selectableIndexes[nextSelectableIndex]!);
+      musicSelectState.selectedIndex(view.selectableIndexes[nextSelectableIndex]!);
       syncPreview();
       render();
     };
 
-    const moveSelectionByPage = (direction: SongSelectPageDirection): void => {
-      const view = songSelectState.view();
+    const moveSelectionByPage = (direction: MusicSelectPageDirection): void => {
+      const view = musicSelectState.view();
       if (view.selectableIndexes.length === 0) {
         return;
       }
       const pageSize = listRowsForViewport();
-      songSelectState.selectedIndex(
+      musicSelectState.selectedIndex(
         resolvePageSelectableIndex(
           view.selectableIndexes,
-          songSelectState.selectedIndex(),
+          musicSelectState.selectedIndex(),
           view.entries.length,
           pageSize,
           direction,
@@ -2226,25 +2226,25 @@ async function selectChartInteractively(
     };
 
     const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
-      const nextDifficultyFilter = resolveSongSelectDifficultyFilter(chunk);
+      const nextDifficultyFilter = resolveMusicSelectDifficultyFilter(chunk);
       if (nextDifficultyFilter !== undefined) {
-        const focusKey = getEntryFocusKey(songSelectState.view().entries[songSelectState.selectedIndex()]);
-        songSelectState.difficultyFilter(nextDifficultyFilter ?? undefined);
-        songSelectState.ensureSelectedIndex(focusKey);
+        const focusKey = getEntryFocusKey(musicSelectState.view().entries[musicSelectState.selectedIndex()]);
+        musicSelectState.difficultyFilter(nextDifficultyFilter ?? undefined);
+        musicSelectState.ensureSelectedIndex(focusKey);
         syncPreview();
         render();
         return;
       }
 
-      const action = resolveSongSelectNavigationAction(chunk, key);
+      const action = resolveMusicSelectNavigationAction(chunk, key);
       if (action === 'ctrl-c') {
-        const view = songSelectState.view();
+        const view = musicSelectState.view();
         cleanup({
           reason: 'ctrl-c',
-          focusKey: getEntryFocusKey(view.entries[songSelectState.selectedIndex()]),
-          playMode: songSelectState.playMode(),
-          highSpeed: songSelectState.highSpeed(),
-          difficultyFilter: songSelectState.difficultyFilter(),
+          focusKey: getEntryFocusKey(view.entries[musicSelectState.selectedIndex()]),
+          playMode: musicSelectState.playMode(),
+          highSpeed: musicSelectState.highSpeed(),
+          difficultyFilter: musicSelectState.difficultyFilter(),
         });
         return;
       }
@@ -2265,37 +2265,37 @@ async function selectChartInteractively(
         return;
       }
       if (action === 'first') {
-        const view = songSelectState.view();
+        const view = musicSelectState.view();
         if (view.selectableIndexes.length === 0) {
           return;
         }
-        songSelectState.selectedIndex(view.selectableIndexes[0]!);
+        musicSelectState.selectedIndex(view.selectableIndexes[0]!);
         syncPreview();
         render();
         return;
       }
       if (action === 'last') {
-        const view = songSelectState.view();
+        const view = musicSelectState.view();
         if (view.selectableIndexes.length === 0) {
           return;
         }
-        songSelectState.selectedIndex(view.selectableIndexes[view.selectableIndexes.length - 1]!);
+        musicSelectState.selectedIndex(view.selectableIndexes[view.selectableIndexes.length - 1]!);
         syncPreview();
         render();
         return;
       }
       if (action === 'confirm') {
-        const view = songSelectState.view();
-        const selectedEntry = view.entries[songSelectState.selectedIndex()];
+        const view = musicSelectState.view();
+        const selectedEntry = view.entries[musicSelectState.selectedIndex()];
         if (selectedEntry?.kind === 'random') {
           const randomIndex = Math.floor(Math.random() * view.chartFiles.length);
           cleanup({
             reason: 'selected',
             selectedPath: view.chartFiles[randomIndex],
             focusKey: getEntryFocusKey(selectedEntry),
-            playMode: songSelectState.playMode(),
-            highSpeed: songSelectState.highSpeed(),
-            difficultyFilter: songSelectState.difficultyFilter(),
+            playMode: musicSelectState.playMode(),
+            highSpeed: musicSelectState.highSpeed(),
+            difficultyFilter: musicSelectState.difficultyFilter(),
           });
           return;
         }
@@ -2304,37 +2304,37 @@ async function selectChartInteractively(
             reason: 'selected',
             selectedPath: selectedEntry.filePath,
             focusKey: getEntryFocusKey(selectedEntry),
-            playMode: songSelectState.playMode(),
-            highSpeed: songSelectState.highSpeed(),
-            difficultyFilter: songSelectState.difficultyFilter(),
+            playMode: musicSelectState.playMode(),
+            highSpeed: musicSelectState.highSpeed(),
+            difficultyFilter: musicSelectState.difficultyFilter(),
           });
           return;
         }
         return;
       }
       if (action === 'toggle-auto') {
-        songSelectState.playMode(cyclePlayMode(songSelectState.playMode()));
+        musicSelectState.playMode(cyclePlayMode(musicSelectState.playMode()));
         render();
         return;
       }
       if (action === 'increase-high-speed') {
-        songSelectState.highSpeed(increaseHighSpeed(songSelectState.highSpeed()));
+        musicSelectState.highSpeed(increaseHighSpeed(musicSelectState.highSpeed()));
         render();
         return;
       }
       if (action === 'decrease-high-speed') {
-        songSelectState.highSpeed(decreaseHighSpeed(songSelectState.highSpeed()));
+        musicSelectState.highSpeed(decreaseHighSpeed(musicSelectState.highSpeed()));
         render();
         return;
       }
       if (action === 'escape') {
-        const view = songSelectState.view();
+        const view = musicSelectState.view();
         cleanup({
           reason: 'escape',
-          focusKey: getEntryFocusKey(view.entries[songSelectState.selectedIndex()]),
-          playMode: songSelectState.playMode(),
-          highSpeed: songSelectState.highSpeed(),
-          difficultyFilter: songSelectState.difficultyFilter(),
+          focusKey: getEntryFocusKey(view.entries[musicSelectState.selectedIndex()]),
+          playMode: musicSelectState.playMode(),
+          highSpeed: musicSelectState.highSpeed(),
+          difficultyFilter: musicSelectState.difficultyFilter(),
         });
       }
     };
@@ -2357,7 +2357,7 @@ function resolveChartFileFromFocusKey(focusKey: string | undefined): string | un
   return filePath.length > 0 ? filePath : undefined;
 }
 
-export function resolveSongSelectInitialFocusKey(
+export function resolveMusicSelectInitialFocusKey(
   files: readonly string[],
   selectedChartFile: string | undefined,
   persistedFocusKey?: string,
@@ -2391,7 +2391,7 @@ async function showResultScreen(
   options: ResultScreenOptions = {},
 ): Promise<ResultScreenAction> {
   const allowReplay = options.allowReplay ?? true;
-  const nextActionLabel = options.nextActionLabel ?? 'return to song selection';
+  const nextActionLabel = options.nextActionLabel ?? 'return to music selection';
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     return 'enter';
   }

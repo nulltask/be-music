@@ -17,7 +17,7 @@ export interface PersistedPlayerConfig {
   playMode: PlayMode;
   highSpeed: number;
   lastSelectedChartFileByDirectory?: Record<string, string>;
-  lastSongSelectFocusKeyByDirectory?: Record<string, string>;
+  lastMusicSelectFocusKeyByDirectory?: Record<string, string>;
 }
 
 export interface CliConfigOverrideFlags {
@@ -49,7 +49,7 @@ function applyPlayModeToArgs<T extends PlayModeArgs>(args: T, playMode: PlayMode
   };
 }
 
-export function applySongSelectConfigToArgs<T extends PlayerConfigArgs>(args: T, playMode: PlayMode, highSpeed: number): T {
+export function applyMusicSelectConfigToArgs<T extends PlayerConfigArgs>(args: T, playMode: PlayMode, highSpeed: number): T {
   return {
     ...applyPlayModeToArgs(args, playMode),
     highSpeed: normalizeHighSpeedValue(highSpeed),
@@ -108,10 +108,10 @@ export function resolvePersistedPlayerConfigFromArgs(
       resolved.lastSelectedChartFileByDirectory = copied;
     }
   }
-  if (previous?.lastSongSelectFocusKeyByDirectory) {
-    const copied = copyStringByDirectory(previous.lastSongSelectFocusKeyByDirectory);
+  if (previous?.lastMusicSelectFocusKeyByDirectory) {
+    const copied = copyStringByDirectory(previous.lastMusicSelectFocusKeyByDirectory);
     if (copied) {
-      resolved.lastSongSelectFocusKeyByDirectory = copied;
+      resolved.lastMusicSelectFocusKeyByDirectory = copied;
     }
   }
   return resolved;
@@ -186,8 +186,9 @@ function parsePersistedPlayerConfig(value: unknown): PersistedPlayerConfig {
     playMode?: unknown;
     highSpeed?: unknown;
     lastSelectedChartFileByDirectory?: unknown;
-    lastSongSelectFocusKeyByDirectory?: unknown;
+    lastMusicSelectFocusKeyByDirectory?: unknown;
   };
+  const legacyMusicSelectFocusKeys = (value as Record<string, unknown>)['lastSongSelectFocusKeyByDirectory'];
   const resolved: PersistedPlayerConfig = {
     playMode: parsePersistedPlayMode(objectValue.playMode) ?? defaults.playMode,
     highSpeed: parsePersistedHighSpeed(objectValue.highSpeed) ?? defaults.highSpeed,
@@ -198,10 +199,16 @@ function parsePersistedPlayerConfig(value: unknown): PersistedPlayerConfig {
       resolved.lastSelectedChartFileByDirectory = copied;
     }
   }
-  if (typeof objectValue.lastSongSelectFocusKeyByDirectory === 'object' && objectValue.lastSongSelectFocusKeyByDirectory) {
-    const copied = copyStringByDirectory(objectValue.lastSongSelectFocusKeyByDirectory);
+  const rawMusicSelectFocusKeys =
+    typeof objectValue.lastMusicSelectFocusKeyByDirectory === 'object' && objectValue.lastMusicSelectFocusKeyByDirectory
+      ? objectValue.lastMusicSelectFocusKeyByDirectory
+      : typeof legacyMusicSelectFocusKeys === 'object' && legacyMusicSelectFocusKeys
+        ? legacyMusicSelectFocusKeys
+        : undefined;
+  if (rawMusicSelectFocusKeys) {
+    const copied = copyStringByDirectory(rawMusicSelectFocusKeys);
     if (copied) {
-      resolved.lastSongSelectFocusKeyByDirectory = copied;
+      resolved.lastMusicSelectFocusKeyByDirectory = copied;
     }
   }
   return resolved;
@@ -234,10 +241,10 @@ export async function savePersistedPlayerConfig(config: PersistedPlayerConfig): 
       normalized.lastSelectedChartFileByDirectory = copied;
     }
   }
-  if (config.lastSongSelectFocusKeyByDirectory) {
-    const copied = copyStringByDirectory(config.lastSongSelectFocusKeyByDirectory);
+  if (config.lastMusicSelectFocusKeyByDirectory) {
+    const copied = copyStringByDirectory(config.lastMusicSelectFocusKeyByDirectory);
     if (copied) {
-      normalized.lastSongSelectFocusKeyByDirectory = copied;
+      normalized.lastMusicSelectFocusKeyByDirectory = copied;
     }
   }
   await writeFile(configPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');

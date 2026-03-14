@@ -1,9 +1,9 @@
 import type readline from 'node:readline';
 
 export type ResultScreenAction = 'enter' | 'escape' | 'ctrl-c' | 'replay';
-export type SongSelectPageDirection = 'up' | 'down';
-export type SongSelectDifficultyFilter = 1 | 2 | 3 | 4 | 5;
-export type SongSelectNavigationAction =
+export type MusicSelectPageDirection = 'up' | 'down';
+export type MusicSelectDifficultyFilter = 1 | 2 | 3 | 4 | 5;
+export type MusicSelectNavigationAction =
   | 'move-up'
   | 'move-down'
   | 'page-up'
@@ -17,10 +17,10 @@ export type SongSelectNavigationAction =
   | 'escape'
   | 'ctrl-c';
 
-export function resolveSongSelectNavigationAction(
+export function resolveMusicSelectNavigationAction(
   chunk: string | undefined,
   key: readline.Key,
-): SongSelectNavigationAction | undefined {
+): MusicSelectNavigationAction | undefined {
   if (key.sequence === '\u0003') {
     return 'ctrl-c';
   }
@@ -63,14 +63,14 @@ export function resolveSongSelectNavigationAction(
   return undefined;
 }
 
-export function resolveSongSelectDifficultyFilter(
+export function resolveMusicSelectDifficultyFilter(
   chunk: string | undefined,
-): SongSelectDifficultyFilter | null | undefined {
+): MusicSelectDifficultyFilter | null | undefined {
   if (chunk === '0') {
     return null;
   }
   if (chunk === '1' || chunk === '2' || chunk === '3' || chunk === '4' || chunk === '5') {
-    return Number.parseInt(chunk, 10) as SongSelectDifficultyFilter;
+    return Number.parseInt(chunk, 10) as MusicSelectDifficultyFilter;
   }
   return undefined;
 }
@@ -109,7 +109,7 @@ export function resolvePageSelectableIndex(
   selectedIndex: number,
   entryCount: number,
   listRows: number,
-  direction: SongSelectPageDirection,
+  direction: MusicSelectPageDirection,
 ): number {
   if (selectableIndexes.length === 0) {
     return 0;

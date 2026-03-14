@@ -305,7 +305,7 @@ export async function resolvePreviewContinueKeyFromChart(
   return (await resolveFallbackPreviewIdentity(chart, signal))?.continueKey;
 }
 
-export function formatSongSelectAudioBackendLabel(audioEnabled: boolean, active: string | undefined): string {
+export function formatMusicSelectAudioBackendLabel(audioEnabled: boolean, active: string | undefined): string {
   if (!audioEnabled) {
     return 'disabled';
   }

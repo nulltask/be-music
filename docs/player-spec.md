@@ -370,12 +370,12 @@ combo bonus は 1 ノートごとに最大 10 段階まで加算します。
 
 - `NORMAL` groove gauge は Lunatic Rave 2 の既定値に合わせます。
 - ゲージ表示範囲は `0-100%` ではなく、内部値 `2-100%` を使います。
-- クリア判定は楽曲終了時のゲージ `80%以上` です。
+- クリア判定は演奏終了時のゲージ `80%以上` です。
 
 ### 初期値と既定値
 
 - 初期ゲージは `20%`
-- 曲中の下限は `2%`
+- 演奏中の下限は `2%`
 - 上限は `100%`
 - クリアラインは `80%`
 - `#TOTAL` 未指定時の既定値は `160`
@@ -493,7 +493,7 @@ BMS の `#VOLWAV` は譜面全体の音量倍率として扱います。
 - `#VOLWAV 200`: 原音量の `2` 倍
 - `#VOLWAV 0`: 無音
 
-この倍率は、リアルタイム再生の keysound、曲選択プレビュー、`renderJson()` を使うオフライン音声レンダリングに適用します。
+この倍率は、リアルタイム再生の keysound、選曲画面プレビュー、`renderJson()` を使うオフライン音声レンダリングに適用します。
 現実装は線形 gain のみを適用し、歴史的な実装差やハードウェア依存の音量差までは再現しません。
 
 ### `#xxx97` / `#xxx98`
@@ -548,7 +548,7 @@ loading 文言はその上へオーバーレイし、各文字セルの背景色
 `#STAGEFILE` は loading 専用であり、gameplay 中の BGA renderer は参照しません。最初の base BGA cue がまだ有効でない間は、viewport は黒背景のままです。
 `--kitty-graphics` が有効で、対応端末なら `#STAGEFILE` は Kitty graphics protocol の画像 overlay として表示します。未指定時は ANSI 表示です。
 
-### Song Select
+### Music Select (選曲画面)
 
 選曲画面は次の情報を表示します。
 
@@ -562,7 +562,7 @@ banner は metadata block の右側に表示し、縦横比を維持したまま
 
 選曲画面では `#PREVIEW` を優先してプレビュー再生します。
 プレビュー開始前には短い settle delay を置き、カーソル連打中に preview 処理が走り続けないようにします。
-song select の focus は directory ごとに保存し、chart だけでなく `random` entry も復元します。
+Music Select の focus は directory ごとに保存し、chart だけでなく `random` entry も復元します。
 
 ### TUI
 
@@ -579,7 +579,7 @@ TUI の描画上限はデフォルト `60fps` です。
 
 ノート描画では、head と tail を long note body より優先して描画します。
 地雷はさらに高優先度で描画します。
-レーン外側には曲進捗 indicator を表示し、現在位置に最も近い行ほど明るい縦バーで表示します。
+レーン外側には再生進捗 indicator を表示し、現在位置に最も近い行ほど明るい縦バーで表示します。
 
 ### 可視化ルール
 

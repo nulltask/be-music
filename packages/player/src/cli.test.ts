@@ -4,8 +4,8 @@ import {
   applyPersistedPlayerConfigToArgs,
   createPlayLoadingProgressScreenOutput,
   createPlayLoadingProgressScreenLines,
-  createSongSelectControlLines,
-  createSongSelectSelectedMetadataLines,
+  createMusicSelectControlLines,
+  createMusicSelectSelectedMetadataLines,
   cyclePlayMode,
   formatPlayModeLabel,
   parseArgs,
@@ -16,9 +16,9 @@ import {
   resolvePageSelectableIndex,
   resolvePlayModeFromArgs,
   resolveResultScreenActionFromKey,
-  resolveSongSelectDifficultyFilter,
-  resolveSongSelectInitialFocusKey,
-  resolveSongSelectNavigationAction,
+  resolveMusicSelectDifficultyFilter,
+  resolveMusicSelectInitialFocusKey,
+  resolveMusicSelectNavigationAction,
   resolveVisibleEntryRange,
 } from './cli.ts';
 import {
@@ -31,7 +31,7 @@ import {
   truncateForDisplay,
 } from './cli/selection-format.ts';
 
-function measureSongSelectTestDisplayWidth(value: string): number {
+function measureMusicSelectTestDisplayWidth(value: string): number {
   let width = 0;
   let escape = false;
   for (const char of value) {
@@ -45,12 +45,12 @@ function measureSongSelectTestDisplayWidth(value: string): number {
       escape = true;
       continue;
     }
-    width += measureSongSelectTestCharacterWidth(char);
+    width += measureMusicSelectTestCharacterWidth(char);
   }
   return width;
 }
 
-function measureSongSelectTestCharacterWidth(char: string): number {
+function measureMusicSelectTestCharacterWidth(char: string): number {
   const codePoint = char.codePointAt(0);
   if (codePoint === undefined) {
     return 0;
@@ -175,50 +175,50 @@ describe('player cli', () => {
     });
   });
 
-  test('cli: preserves per-directory song-select focus keys when resolving persisted config from args', () => {
+  test('cli: preserves per-directory music-select focus keys when resolving persisted config from args', () => {
     const parsed = parseArgs(['chart.bms']);
     const resolved = resolvePersistedPlayerConfigFromArgs(parsed, {
       playMode: 'manual',
       highSpeed: 1,
-      lastSongSelectFocusKeyByDirectory: {
+      lastMusicSelectFocusKeyByDirectory: {
         '/songs/a': 'random',
         '/songs/b': 'chart:/songs/b/beta.bms',
       },
     });
-    expect(resolved.lastSongSelectFocusKeyByDirectory).toEqual({
+    expect(resolved.lastMusicSelectFocusKeyByDirectory).toEqual({
       '/songs/a': 'random',
       '/songs/b': 'chart:/songs/b/beta.bms',
     });
   });
 
-  test('cli: restores song-select focus by persisted chart filename when available', () => {
+  test('cli: restores music-select focus by persisted chart filename when available', () => {
     const files = ['/charts/a.bms', '/charts/b.bms', '/charts/c.bms'];
-    expect(resolveSongSelectInitialFocusKey(files, '/charts/b.bms')).toBe('chart:/charts/b.bms');
-    expect(resolveSongSelectInitialFocusKey(files, '/charts/missing.bms')).toBeUndefined();
-    expect(resolveSongSelectInitialFocusKey(files, undefined)).toBeUndefined();
+    expect(resolveMusicSelectInitialFocusKey(files, '/charts/b.bms')).toBe('chart:/charts/b.bms');
+    expect(resolveMusicSelectInitialFocusKey(files, '/charts/missing.bms')).toBeUndefined();
+    expect(resolveMusicSelectInitialFocusKey(files, undefined)).toBeUndefined();
   });
 
-  test('cli: restores song-select focus by persisted focus key including random', () => {
+  test('cli: restores music-select focus by persisted focus key including random', () => {
     const files = ['/charts/a.bms', '/charts/b.bms', '/charts/c.bms'];
-    expect(resolveSongSelectInitialFocusKey(files, '/charts/a.bms', 'random')).toBe('random');
-    expect(resolveSongSelectInitialFocusKey(files, undefined, 'chart:/charts/b.bms')).toBe('chart:/charts/b.bms');
-    expect(resolveSongSelectInitialFocusKey(files, '/charts/a.bms', 'chart:/charts/missing.bms')).toBe('chart:/charts/a.bms');
+    expect(resolveMusicSelectInitialFocusKey(files, '/charts/a.bms', 'random')).toBe('random');
+    expect(resolveMusicSelectInitialFocusKey(files, undefined, 'chart:/charts/b.bms')).toBe('chart:/charts/b.bms');
+    expect(resolveMusicSelectInitialFocusKey(files, '/charts/a.bms', 'chart:/charts/missing.bms')).toBe('chart:/charts/a.bms');
   });
 
-  test('cli: cycles song-select mode by a key in three states', () => {
+  test('cli: cycles music-select mode by a key in three states', () => {
     expect(cyclePlayMode('manual')).toBe('auto-scratch');
     expect(cyclePlayMode('auto-scratch')).toBe('auto');
     expect(cyclePlayMode('auto')).toBe('manual');
   });
 
-  test('cli: formats play mode labels for song-select', () => {
+  test('cli: formats play mode labels for music-select', () => {
     expect(formatPlayModeLabel('manual')).toBe('MANUAL');
     expect(formatPlayModeLabel('auto-scratch')).toBe('AUTO SCRATCH');
     expect(formatPlayModeLabel('auto')).toBe('AUTO');
   });
 
-  test('cli: renders selected chart metadata lines for song-select', () => {
-    const lines = createSongSelectSelectedMetadataLines(
+  test('cli: renders selected chart metadata lines for music-select', () => {
+    const lines = createMusicSelectSelectedMetadataLines(
       {
         kind: 'chart',
         filePath: '/charts/sample.bms',
@@ -241,8 +241,8 @@ describe('player cli', () => {
     expect(lines[3]).toContain('COMMENT Each 4-measure block targets a different command combination set.');
   });
 
-  test('cli: right-aligns song-select banner lines beside metadata text', () => {
-    const lines = createSongSelectSelectedMetadataLines(
+  test('cli: right-aligns music-select banner lines beside metadata text', () => {
+    const lines = createMusicSelectSelectedMetadataLines(
       {
         kind: 'chart',
         filePath: '/charts/sample.bms',
@@ -264,8 +264,8 @@ describe('player cli', () => {
     expect(lines[3]).toMatch(/COMMENT Ready\s+\[04\]$/);
   });
 
-  test('cli: reserves song-select metadata space for kitty banner overlays', () => {
-    const lines = createSongSelectSelectedMetadataLines(
+  test('cli: reserves music-select metadata space for kitty banner overlays', () => {
+    const lines = createMusicSelectSelectedMetadataLines(
       {
         kind: 'chart',
         filePath: '/charts/sample.bms',
@@ -287,9 +287,9 @@ describe('player cli', () => {
     expect(lines[3]).toMatch(/COMMENT Ready\s{12,}$/);
   });
 
-  test('cli: keeps colorized song-select metadata within the reserved block width', () => {
+  test('cli: keeps colorized music-select metadata within the reserved block width', () => {
     const lineWidth = 48;
-    const lines = createSongSelectSelectedMetadataLines(
+    const lines = createMusicSelectSelectedMetadataLines(
       {
         kind: 'chart',
         filePath: '/charts/sample.bms',
@@ -307,11 +307,11 @@ describe('player cli', () => {
       },
     );
 
-    expect(lines.every((line) => measureSongSelectTestDisplayWidth(line) <= lineWidth)).toBe(true);
+    expect(lines.every((line) => measureMusicSelectTestDisplayWidth(line) <= lineWidth)).toBe(true);
   });
 
-  test('cli: renders song-select control block for below-list placement', () => {
-    const lines = createSongSelectControlLines({
+  test('cli: renders music-select control block for below-list placement', () => {
+    const lines = createMusicSelectControlLines({
       rootDir: '/charts',
       lineWidth: 120,
       playModeLabel: 'MANUAL',
@@ -537,7 +537,7 @@ describe('player cli', () => {
     expect(formatSelectionColumnHeader(layout)).toContain('NOTES');
   });
 
-  test('cli: shrinks file column before dropping NOTES in narrow song-select layouts', () => {
+  test('cli: shrinks file column before dropping NOTES in narrow music-select layouts', () => {
     const entries = [
       {
         kind: 'chart' as const,
@@ -629,12 +629,12 @@ describe('player cli', () => {
     expect(formatSelectionEntryLabel(entries[0], layout)).toContain('NORMAL    12.4');
   });
 
-  test('cli: resolves DIFFICULTY filter keys in song-select', () => {
-    expect(resolveSongSelectDifficultyFilter('1')).toBe(1);
-    expect(resolveSongSelectDifficultyFilter('5')).toBe(5);
-    expect(resolveSongSelectDifficultyFilter('0')).toBeNull();
-    expect(resolveSongSelectDifficultyFilter('6')).toBeUndefined();
-    expect(resolveSongSelectDifficultyFilter(undefined)).toBeUndefined();
+  test('cli: resolves DIFFICULTY filter keys in music-select', () => {
+    expect(resolveMusicSelectDifficultyFilter('1')).toBe(1);
+    expect(resolveMusicSelectDifficultyFilter('5')).toBe(5);
+    expect(resolveMusicSelectDifficultyFilter('0')).toBeNull();
+    expect(resolveMusicSelectDifficultyFilter('6')).toBeUndefined();
+    expect(resolveMusicSelectDifficultyFilter(undefined)).toBeUndefined();
   });
 
   test('cli: parses invisible-note display flag', () => {
@@ -712,7 +712,7 @@ describe('player cli', () => {
 
   test('cli: rejects --no-preview because preview is always enabled', () => {
     expect(() => parseArgs(['chart.bms', '--no-preview'])).toThrow(
-      '--no-preview is no longer supported; song preview is always enabled',
+      '--no-preview is no longer supported; music preview is always enabled',
     );
   });
 
@@ -786,29 +786,29 @@ describe('player cli', () => {
     expect(action).toBe('ctrl-c');
   });
 
-  test('cli: interprets Right as song-select next page', () => {
-    const action = resolveSongSelectNavigationAction(undefined, createKey('right'));
+  test('cli: interprets Right as music-select next page', () => {
+    const action = resolveMusicSelectNavigationAction(undefined, createKey('right'));
     expect(action).toBe('page-down');
   });
 
-  test('cli: interprets Left as song-select previous page', () => {
-    const action = resolveSongSelectNavigationAction(undefined, createKey('left'));
+  test('cli: interprets Left as music-select previous page', () => {
+    const action = resolveMusicSelectNavigationAction(undefined, createKey('left'));
     expect(action).toBe('page-up');
   });
 
-  test('cli: interprets vim h/l as song-select page keys', () => {
-    expect(resolveSongSelectNavigationAction('h', createKey())).toBe('page-up');
-    expect(resolveSongSelectNavigationAction('l', createKey())).toBe('page-down');
+  test('cli: interprets vim h/l as music-select page keys', () => {
+    expect(resolveMusicSelectNavigationAction('h', createKey())).toBe('page-up');
+    expect(resolveMusicSelectNavigationAction('l', createKey())).toBe('page-down');
   });
 
-  test('cli: interprets Ctrl+b/Ctrl+f as song-select page keys', () => {
-    expect(resolveSongSelectNavigationAction(undefined, createKey('b', undefined, true))).toBe('page-up');
-    expect(resolveSongSelectNavigationAction(undefined, createKey('f', undefined, true))).toBe('page-down');
+  test('cli: interprets Ctrl+b/Ctrl+f as music-select page keys', () => {
+    expect(resolveMusicSelectNavigationAction(undefined, createKey('b', undefined, true))).toBe('page-up');
+    expect(resolveMusicSelectNavigationAction(undefined, createKey('f', undefined, true))).toBe('page-down');
   });
 
-  test('cli: interprets s/S as song-select HIGH-SPEED controls', () => {
-    expect(resolveSongSelectNavigationAction('s', createKey('s'))).toBe('increase-high-speed');
-    expect(resolveSongSelectNavigationAction('S', createKey('s', 'S', false))).toBe('decrease-high-speed');
+  test('cli: interprets s/S as music-select HIGH-SPEED controls', () => {
+    expect(resolveMusicSelectNavigationAction('s', createKey('s'))).toBe('increase-high-speed');
+    expect(resolveMusicSelectNavigationAction('S', createKey('s', 'S', false))).toBe('decrease-high-speed');
   });
 
   test('cli: resolves circular selectable index', () => {
