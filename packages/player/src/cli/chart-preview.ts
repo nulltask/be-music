@@ -312,7 +312,7 @@ export function formatMusicSelectAudioBackendLabel(audioEnabled: boolean, active
   if (active) {
     return active;
   }
-  return 'node-webaudio';
+  return '-';
 }
 
 async function renderChartPreview(

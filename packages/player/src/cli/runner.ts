@@ -1713,12 +1713,39 @@ function formatPlayLoadingComponentStatus(label: string, status: PlayerLoadCompo
   if (!status) {
     return `${label}: -`;
   }
+  const { message, countLabel } = resolvePlayLoadingComponentStatusDisplay(status);
   if (status.state === 'ready' || status.state === 'disabled') {
-    return `${label}: ${status.message}`;
+    return `${label}: ${message}`;
   }
-  return typeof status.detail === 'string' && status.detail.length > 0
-    ? `${label}: ${status.message} (${status.detail})`
-    : `${label}: ${status.message}`;
+  const detailParts = [
+    countLabel,
+    typeof status.detail === 'string' && status.detail.length > 0 ? status.detail : undefined,
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+  return detailParts.length > 0 ? `${label}: ${message} (${detailParts.join(', ')})` : `${label}: ${message}`;
+}
+
+function resolvePlayLoadingComponentStatusDisplay(
+  status: PlayerLoadComponentStatus,
+): {
+  message: string;
+  countLabel?: string;
+} {
+  if (status.state !== 'pending') {
+    return { message: status.message };
+  }
+  const countLabel = extractPlayLoadingProgressCountLabel(status.message);
+  if (status.message.startsWith('Waiting')) {
+    return { message: 'Waiting...', countLabel };
+  }
+  if (status.message.startsWith('Initializing')) {
+    return { message: 'Initializing...', countLabel };
+  }
+  return { message: 'Loading...', countLabel };
+}
+
+function extractPlayLoadingProgressCountLabel(message: string): string | undefined {
+  const match = /\((\d+\/\d+)\)\s*$/.exec(message);
+  return match?.[1];
 }
 
 function resolvePlayLoadingStepLabel(progress: PlayLoadingProgress): string {

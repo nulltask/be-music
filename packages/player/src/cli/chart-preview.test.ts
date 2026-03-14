@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createEmptyJson } from '../../../json/src/index.ts';
 import { describe, expect, test, vi } from 'vitest';
-import { resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
+import { formatMusicSelectAudioBackendLabel, resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
 
 interface PhraseNote {
   measure: number;
@@ -60,6 +60,12 @@ function createComplexFallbackChart(
 }
 
 describe('player chart preview', () => {
+  test('formats music-select audio backend label conservatively before preview starts', () => {
+    expect(formatMusicSelectAudioBackendLabel(false, undefined)).toBe('disabled');
+    expect(formatMusicSelectAudioBackendLabel(true, undefined)).toBe('-');
+    expect(formatMusicSelectAudioBackendLabel(true, 'CoreAudio')).toBe('CoreAudio');
+  });
+
   test('returns shared fallback continue key when #PREVIEW is missing and phrase is identical', async () => {
     const chartA = createEmptyJson('bms');
     chartA.metadata.bpm = 130;

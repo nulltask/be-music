@@ -362,7 +362,7 @@ describe('player cli', () => {
     expect(lines.some((line) => line.includes('Step: Loading playback resources...'))).toBe(true);
     expect(lines.some((line) => line.includes('Step: Preparing audio...'))).toBe(false);
     expect(lines.some((line) => line.includes('Sound: Ready'))).toBe(true);
-    expect(lines.some((line) => line.includes('Visual: Preparing BGA... (intro.mpg)'))).toBe(true);
+    expect(lines.some((line) => line.includes('Visual: Loading... (intro.mpg)'))).toBe(true);
     expect(lines.some((line) => line.includes('/charts/stagefile-test.bms'))).toBe(true);
     expect(lines.some((line) => line.includes('Detail:'))).toBe(false);
     expect(lines.every((line) => line.startsWith('\u001b[38;2;255;255;255;48;2;0;0;0m'))).toBe(true);
@@ -469,7 +469,7 @@ describe('player cli', () => {
         detail: 'sample.wav',
         audioStatus: {
           state: 'pending',
-          message: 'Loading key sounds...',
+          message: 'Loading key sounds... (3/24)',
           detail: 'sample.wav',
         },
       },
@@ -489,7 +489,7 @@ describe('player cli', () => {
     expect(output.startsWith('\u001b[H')).toBe(true);
     expect(output).not.toContain('\u001b[2J');
     expect(output).not.toContain('ANSI_STAGE_LINE_1');
-    expect(output).toContain('Sound: Loading key sounds... (sample.wav)');
+    expect(output).toContain('Sound: Loading... (3/24, sample.wav)');
     expect(output).not.toContain('Detail: sample.wav');
   });
 
