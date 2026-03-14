@@ -379,7 +379,7 @@ describe('player tui', () => {
         hasAudioDebugLine: true,
       }),
     ).toEqual({
-      width: 79,
+      width: 80,
       height: 15,
     });
   });
@@ -486,9 +486,12 @@ describe('player tui', () => {
 
     const renderOutput = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
     const visibleLines = extractVisibleFrame(renderOutput).split('\n');
-    const laneLine = visibleLines.find((line) => (line.includes('╎') || line.includes('●')) && line.includes('┃'));
+    const laneLine = visibleLines.find(
+      (line) => !line.includes('%') && !line.includes('Space:') && (line.match(/┃/g)?.length ?? 0) >= 3,
+    );
     const gaugeLine = visibleLines.find((line) => line.includes('64%'));
-    const laneStart = laneLine?.indexOf('┃') ?? -1;
+    const laneIndicatorStart = laneLine?.indexOf('┃') ?? -1;
+    const laneStart = laneLine?.indexOf('┃', laneIndicatorStart + 1) ?? -1;
     const laneEnd = laneLine?.lastIndexOf('┃') ?? -1;
     const gaugeStart = gaugeLine?.indexOf('┃') ?? -1;
     const gaugeEnd = gaugeLine?.lastIndexOf('┃') ?? -1;

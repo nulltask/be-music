@@ -8,7 +8,7 @@ export const BGA_LANE_GAP = 3;
 export const MIN_BGA_ASCII_WIDTH = 8;
 export const MIN_BGA_ASCII_HEIGHT = 6;
 export const DEFAULT_TERMINAL_COLUMNS = 120;
-export const PLAY_PROGRESS_INDICATOR_SIDE_WIDTH = 2;
+export const PLAY_PROGRESS_INDICATOR_SIDE_WIDTH = 1;
 
 interface TuiLayoutOptions {
   showLaneChannels?: boolean;

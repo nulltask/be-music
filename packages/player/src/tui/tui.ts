@@ -198,7 +198,7 @@ const GROOVE_GAUGE_SAFE_RGB: RgbColor = { r: 72, g: 238, b: 255 };
 const GROOVE_GAUGE_SAFE_EMPTY_RGB: RgbColor = { r: 18, g: 74, b: 86 };
 const GROOVE_GAUGE_CLEAR_RGB: RgbColor = { r: 255, g: 72, b: 72 };
 const GROOVE_GAUGE_CLEAR_EMPTY_RGB: RgbColor = { r: 84, g: 18, b: 18 };
-const PLAY_PROGRESS_RAIL_RGB: RgbColor = { r: 52, g: 128, b: 184 };
+const PLAY_PROGRESS_GROOVE_RGB: RgbColor = { r: 18, g: 18, b: 18 };
 const PLAY_PROGRESS_HEAD_RGB: RgbColor = { r: 255, g: 186, b: 54 };
 const RAINBOW_RGB_STEPS: RgbColor[] = [
   { r: 255, g: 0, b: 0 },
@@ -1988,6 +1988,15 @@ function dimRgb(color: RgbColor, factor: number): RgbColor {
   };
 }
 
+function blendRgb(from: RgbColor, to: RgbColor, ratio: number): RgbColor {
+  const safeRatio = clamp(ratio, 0, 1);
+  return {
+    r: clampColorByte(from.r + (to.r - from.r) * safeRatio),
+    g: clampColorByte(from.g + (to.g - from.g) * safeRatio),
+    b: clampColorByte(from.b + (to.b - from.b) * safeRatio),
+  };
+}
+
 function renderLaneBlockWithBga(laneLines: string[], bgaAnsiLines?: string[]): string[] {
   if (!bgaAnsiLines || bgaAnsiLines.length === 0) {
     return laneLines;
@@ -2039,21 +2048,21 @@ function renderLaneLinesWithProgressIndicators(
   if (laneLines.length <= 0) {
     return laneLines;
   }
-  const markerRow = resolveProgressIndicatorMarkerRow(startRowIndex, endRowIndex, currentSeconds, totalSeconds);
+  const markerPosition = resolveProgressIndicatorMarkerPosition(startRowIndex, endRowIndex, currentSeconds, totalSeconds);
   return laneLines.map((line, index) => {
     if (index < startRowIndex || index > endRowIndex) {
       const emptySide = renderProgressIndicatorPadding();
       return renderRightIndicator ? `${emptySide}${line}${emptySide}` : `${emptySide}${line}`;
     }
-    const left = renderProgressIndicatorSide(index, markerRow);
+    const left = renderProgressIndicatorSide(index, markerPosition);
     if (!renderRightIndicator) {
       return `${left}${line}`;
     }
-    return `${left}${line}${renderProgressIndicatorSide(index, markerRow, 'right')}`;
+    return `${left}${line}${renderProgressIndicatorSide(index, markerPosition, 'right')}`;
   });
 }
 
-function resolveProgressIndicatorMarkerRow(
+function resolveProgressIndicatorMarkerPosition(
   startRowIndex: number,
   endRowIndex: number,
   currentSeconds: number,
@@ -2065,21 +2074,21 @@ function resolveProgressIndicatorMarkerRow(
   const safeTotal = Number.isFinite(totalSeconds) && totalSeconds > 0 ? totalSeconds : 1;
   const safeCurrent = Number.isFinite(currentSeconds) ? currentSeconds : 0;
   const ratio = clamp(safeCurrent / safeTotal, 0, 1);
-  return safeStart + Math.round((safeLineCount - 1) * ratio);
+  return safeStart + (safeLineCount - 1) * ratio;
 }
 
 function renderProgressIndicatorSide(
   rowIndex: number,
-  markerRow: number,
+  markerPosition: number,
   side: 'left' | 'right' = 'left',
 ): string {
-  const symbol = rowIndex === markerRow ? '●' : '╎';
-  const color = rowIndex === markerRow ? PLAY_PROGRESS_HEAD_RGB : PLAY_PROGRESS_RAIL_RGB;
-  const coloredSymbol = colorizeText(symbol, color);
+  const glow = clamp(1 - Math.abs(markerPosition - rowIndex), 0, 1);
+  const color = blendRgb(PLAY_PROGRESS_GROOVE_RGB, PLAY_PROGRESS_HEAD_RGB, glow);
+  const groove = colorizeText('┃', color);
   if (side === 'right') {
-    return `${' '.repeat(Math.max(0, PLAY_PROGRESS_INDICATOR_SIDE_WIDTH - 1))}${coloredSymbol}`;
+    return groove;
   }
-  return `${coloredSymbol}${' '.repeat(Math.max(0, PLAY_PROGRESS_INDICATOR_SIDE_WIDTH - 1))}`;
+  return groove;
 }
 
 function renderProgressIndicatorPadding(): string {
