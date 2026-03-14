@@ -8,16 +8,17 @@ export function writeStereoPcm16Le(
   startFrame = 0,
   frameCount: number = Math.min(left.length, right.length) - startFrame,
 ): void {
-  const framesToWrite = resolveFrameCount(destination, byteOffset, left, right, startFrame, frameCount);
+  const safeStartFrame = normalizeStartFrame(startFrame);
+  const framesToWrite = resolveFrameCount(destination, byteOffset, left, right, safeStartFrame, frameCount);
   if (framesToWrite <= 0) {
     return;
   }
   if (HOST_IS_LITTLE_ENDIAN && (byteOffset & 1) === 0) {
     const samples = new Int16Array(destination.buffer, destination.byteOffset + byteOffset, framesToWrite * 2);
-    fillInterleavedInt16(samples, left, right, startFrame, framesToWrite);
+    fillInterleavedInt16(samples, left, right, safeStartFrame, framesToWrite);
     return;
   }
-  writeStereoPcm16Fallback(destination, byteOffset, left, right, startFrame, framesToWrite, false);
+  writeStereoPcm16Fallback(destination, byteOffset, left, right, safeStartFrame, framesToWrite, false);
 }
 
 export function writeStereoPcm16Be(
@@ -28,7 +29,8 @@ export function writeStereoPcm16Be(
   startFrame = 0,
   frameCount: number = Math.min(left.length, right.length) - startFrame,
 ): void {
-  const framesToWrite = resolveFrameCount(destination, byteOffset, left, right, startFrame, frameCount);
+  const safeStartFrame = normalizeStartFrame(startFrame);
+  const framesToWrite = resolveFrameCount(destination, byteOffset, left, right, safeStartFrame, frameCount);
   if (framesToWrite <= 0) {
     return;
   }
@@ -36,13 +38,17 @@ export function writeStereoPcm16Be(
     const bytes = framesToWrite * 4;
     const segment = destination.subarray(byteOffset, byteOffset + bytes);
     const samples = new Int16Array(segment.buffer, segment.byteOffset, framesToWrite * 2);
-    fillInterleavedInt16(samples, left, right, startFrame, framesToWrite);
+    fillInterleavedInt16(samples, left, right, safeStartFrame, framesToWrite);
     if (HOST_IS_LITTLE_ENDIAN) {
       segment.swap16();
     }
     return;
   }
-  writeStereoPcm16Fallback(destination, byteOffset, left, right, startFrame, framesToWrite, true);
+  writeStereoPcm16Fallback(destination, byteOffset, left, right, safeStartFrame, framesToWrite, true);
+}
+
+function normalizeStartFrame(startFrame: number): number {
+  return Math.max(0, Math.floor(startFrame));
 }
 
 function resolveFrameCount(
@@ -53,7 +59,7 @@ function resolveFrameCount(
   startFrame: number,
   frameCount: number,
 ): number {
-  const safeStartFrame = Math.max(0, Math.floor(startFrame));
+  const safeStartFrame = normalizeStartFrame(startFrame);
   const availableSourceFrames = Math.min(left.length, right.length) - safeStartFrame;
   if (availableSourceFrames <= 0) {
     return 0;
