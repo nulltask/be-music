@@ -5,7 +5,13 @@ import { createEmptyJson } from '../../json/src/index.ts';
 import { describe, expect, test, vi } from 'vitest';
 import { encode as encodeBmp } from 'fast-bmp';
 import { encode as encodePng } from 'fast-png';
-import { BgaAnsiRenderer, createBgaAnsiRenderer, loadStageFileAnsiImage, loadStageFileAnsiLines } from './bga.ts';
+import {
+  BgaAnsiRenderer,
+  createBgaAnsiRenderer,
+  loadStageFileAnsiImage,
+  loadStageFileAnsiLines,
+  loadTerminalAnsiImage,
+} from './bga.ts';
 
 vi.mock('./bga-video.ts', () => ({
   decodeVideoFramesStream: vi.fn(async (videoPath: string, onFrame: (frame: unknown) => void) => {
@@ -128,6 +134,56 @@ describe('player bga', () => {
         }),
       );
       expect(image?.kittyImage?.rgb.length).toBe(160 * 80 * 3);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: loads banner images with contain sizing for song-select metadata blocks', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-banner-ansi-'));
+    try {
+      await writePng(join(baseDir, 'banner.png'), 300, 80, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+
+      const image = await loadTerminalAnsiImage(baseDir, 'banner.png', {
+        width: 16,
+        height: 4,
+        fitMode: 'contain',
+      });
+
+      expect(image).toBeDefined();
+      expect(image?.width).toBe(16);
+      expect(image?.height).toBe(2);
+      const pixels = parseAnsiPixels(image?.lines ?? []);
+      expect(pixels[0]?.[0]).toEqual({ r: 0, g: 0, b: 255 });
+      expect(pixels[1]?.[8]).toEqual({ r: 0, g: 0, b: 255 });
+      expect(pixels[0]?.[15]).toEqual({ r: 0, g: 0, b: 255 });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: prepares kitty graphics data for song-select banners', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-banner-kitty-'));
+    try {
+      await writePng(join(baseDir, 'banner.png'), 300, 80, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+
+      const image = await loadTerminalAnsiImage(baseDir, 'banner.png', {
+        width: 16,
+        height: 4,
+        fitMode: 'contain',
+        includeKittyImage: true,
+      });
+
+      expect(image).toBeDefined();
+      expect(image?.kittyImage).toEqual(
+        expect.objectContaining({
+          pixelWidth: 64,
+          pixelHeight: 8,
+          cellWidth: 16,
+          cellHeight: 2,
+        }),
+      );
+      expect(image?.kittyImage?.rgb.length).toBe(64 * 8 * 3);
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }

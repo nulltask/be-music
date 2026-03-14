@@ -105,21 +105,29 @@ export interface BgaAnsiLoadProgress {
   detail: string;
 }
 
-export interface StageFileAnsiImage {
+interface TerminalAnsiImageOptions extends Omit<BgaAnsiOptions, 'baseDir' | 'onLoadProgress'> {
+  fitMode?: 'contain' | 'cover';
+  includeKittyImage?: boolean;
+}
+
+export interface TerminalAnsiImage {
   width: number;
   height: number;
   rgb: Uint8Array;
   lines: string[];
-  kittyImage?: StageFileKittyImage;
+  kittyImage?: TerminalKittyImage;
 }
 
-export interface StageFileKittyImage {
+export interface TerminalKittyImage {
   pixelWidth: number;
   pixelHeight: number;
   cellWidth: number;
   cellHeight: number;
   rgb: Uint8Array;
 }
+
+export type StageFileAnsiImage = TerminalAnsiImage;
+export type StageFileKittyImage = TerminalKittyImage;
 
 export interface BgaKittyImage {
   pixelWidth: number;
@@ -128,6 +136,15 @@ export interface BgaKittyImage {
   cellHeight: number;
   rgb: Uint8Array;
   token: string;
+}
+
+export async function loadTerminalAnsiImage(
+  baseDir: string,
+  mediaPath: string,
+  options: TerminalAnsiImageOptions = {},
+): Promise<TerminalAnsiImage | undefined> {
+  const loaded = await loadTerminalAnsiImageInternal(baseDir, mediaPath, options);
+  return loaded?.image;
 }
 
 export async function loadStageFileAnsiImage(
@@ -141,25 +158,14 @@ export async function loadStageFileAnsiImage(
 
   throwIfAborted(options.signal);
   const displaySize = normalizeDisplaySize(options.width, options.height);
-  const stageFileSourceFrame = await loadStageFileLoadingSourceFrame(options.baseDir, stageFile, options.signal);
-  if (!stageFileSourceFrame) {
-    return undefined;
-  }
-
-  const stageFileFrame = resizeFrameSourceCover(stageFileSourceFrame, displaySize.width, displaySize.height);
-  const selected = selectFrameFromSource(stageFileFrame, 0);
-  if (!selected.frame) {
-    return undefined;
-  }
-  const filledFrame = fillAnsiFrameBackground(selected.frame, 0, 0, 0);
-  const kittyFrame = buildStageFileKittyImage(stageFileSourceFrame, displaySize.width, displaySize.height);
-  return {
-    width: filledFrame.width,
-    height: filledFrame.height,
-    rgb: filledFrame.rgb,
-    lines: composeAnsiLines(filledFrame.rgb, filledFrame.opaqueMask, filledFrame.width, filledFrame.height),
-    kittyImage: kittyFrame,
-  };
+  const loaded = await loadTerminalAnsiImageInternal(options.baseDir, stageFile, {
+    width: displaySize.width,
+    height: displaySize.height,
+    signal: options.signal,
+    fitMode: 'cover',
+    includeKittyImage: true,
+  });
+  return loaded?.image;
 }
 
 export async function loadStageFileAnsiLines(
@@ -485,7 +491,7 @@ export class BgaAnsiRenderer {
       baseKey: baseCue?.key ?? '',
       layerKey: layerCue?.key ?? '',
       layer2Key: layer2Cue?.key ?? '',
-      poorKey: poorActive ? this.resolvePoorKey(poorCue, currentSeconds) ?? '' : '',
+      poorKey: poorActive ? (this.resolvePoorKey(poorCue, currentSeconds) ?? '') : '',
       baseSeconds: baseCue ? Math.max(0, currentSeconds - baseCue.seconds) : Math.max(0, currentSeconds),
       layerSeconds: layerCue ? Math.max(0, currentSeconds - layerCue.seconds) : 0,
       layer2Seconds: layer2Cue ? Math.max(0, currentSeconds - layer2Cue.seconds) : 0,
@@ -750,14 +756,18 @@ function resolveFrameSelection(
   return selectFrameFromSource(source, seconds);
 }
 
-function buildStageFileKittyImage(
+function buildTerminalKittyImage(
   source: FrameSource,
   cellWidth: number,
   cellHeight: number,
-): StageFileKittyImage | undefined {
+  fitMode: 'contain' | 'cover',
+  aspectX = TERMINAL_PIXEL_ASPECT_X,
+  aspectY = TERMINAL_PIXEL_ASPECT_Y,
+): TerminalKittyImage | undefined {
   const pixelWidth = Math.max(1, Math.floor(cellWidth) * KITTY_GRAPHICS_PIXEL_SCALE);
   const pixelHeight = Math.max(1, Math.floor(cellHeight) * KITTY_GRAPHICS_PIXEL_SCALE);
-  const frame = selectFrameFromSource(resizeFrameSourceCover(source, pixelWidth, pixelHeight), 0).frame;
+  const resizedSource = resizeFrameSourceWithAspectMode(source, pixelWidth, pixelHeight, aspectX, aspectY, fitMode);
+  const frame = selectFrameFromSource(resizedSource, 0).frame;
   if (!frame) {
     return undefined;
   }
@@ -786,10 +796,39 @@ function fillFrameSourceBackground(source: FrameSource, r: number, g: number, b:
 }
 
 function resizeFrameSource(source: FrameSource, width: number, height: number): FrameSource {
+  return resizeFrameSourceWithAspectMode(
+    source,
+    width,
+    height,
+    TERMINAL_PIXEL_ASPECT_X,
+    TERMINAL_PIXEL_ASPECT_Y,
+    'contain',
+  );
+}
+
+function resizeFrameSourceCover(source: FrameSource, width: number, height: number): FrameSource {
+  return resizeFrameSourceWithAspectMode(
+    source,
+    width,
+    height,
+    TERMINAL_PIXEL_ASPECT_X,
+    TERMINAL_PIXEL_ASPECT_Y,
+    'cover',
+  );
+}
+
+function resizeFrameSourceWithAspectMode(
+  source: FrameSource,
+  width: number,
+  height: number,
+  aspectX: number,
+  aspectY: number,
+  mode: 'contain' | 'cover',
+): FrameSource {
   if (source.kind === 'static') {
     return {
       kind: 'static',
-      frame: resizeAnsiFrame(source.frame, width, height),
+      frame: resizeAnsiFrameWithAspectMode(source.frame, width, height, aspectX, aspectY, mode),
     };
   }
 
@@ -798,27 +837,57 @@ function resizeFrameSource(source: FrameSource, width: number, height: number): 
     durationSeconds: source.durationSeconds,
     frames: source.frames.map((entry) => ({
       seconds: entry.seconds,
-      frame: resizeAnsiFrame(entry.frame, width, height),
+      frame: resizeAnsiFrameWithAspectMode(entry.frame, width, height, aspectX, aspectY, mode),
     })),
   };
 }
 
-function resizeFrameSourceCover(source: FrameSource, width: number, height: number): FrameSource {
-  if (source.kind === 'static') {
-    return {
-      kind: 'static',
-      frame: resizeAnsiFrameCover(source.frame, width, height),
-    };
+function cropAnsiFrameToOpaqueBounds(source: AnsiFrame): AnsiFrame {
+  let minX = source.width;
+  let minY = source.height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < source.height; y += 1) {
+    for (let x = 0; x < source.width; x += 1) {
+      if (source.opaqueMask[y * source.width + x] === 0) {
+        continue;
+      }
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
   }
 
-  return {
-    kind: 'video',
-    durationSeconds: source.durationSeconds,
-    frames: source.frames.map((entry) => ({
-      seconds: entry.seconds,
-      frame: resizeAnsiFrameCover(entry.frame, width, height),
-    })),
-  };
+  if (maxX < 0 || maxY < 0) {
+    return createSolidAnsiFrame(1, 1, 0, 0, 0, 0);
+  }
+  if (minX === 0 && minY === 0 && maxX === source.width - 1 && maxY === source.height - 1) {
+    return source;
+  }
+
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+  const cropped = createSolidAnsiFrame(width, height, 0, 0, 0, 0);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const sourcePixelOffset = (minY + y) * source.width + (minX + x);
+      if (source.opaqueMask[sourcePixelOffset] === 0) {
+        continue;
+      }
+      const targetPixelOffset = y * width + x;
+      const sourceRgbOffset = sourcePixelOffset * 3;
+      const targetRgbOffset = targetPixelOffset * 3;
+      cropped.rgb[targetRgbOffset] = source.rgb[sourceRgbOffset] ?? 0;
+      cropped.rgb[targetRgbOffset + 1] = source.rgb[sourceRgbOffset + 1] ?? 0;
+      cropped.rgb[targetRgbOffset + 2] = source.rgb[sourceRgbOffset + 2] ?? 0;
+      cropped.opaqueMask[targetPixelOffset] = 1;
+    }
+  }
+
+  return cropped;
 }
 
 function selectFrameFromSource(source: FrameSource | undefined, seconds: number): FrameSelection {
@@ -1151,6 +1220,46 @@ async function loadFrameSource(
   return loadVideoAsFrameSource(resourcePath, mode, signal);
 }
 
+async function loadTerminalAnsiImageInternal(
+  baseDir: string,
+  mediaPath: string,
+  options: TerminalAnsiImageOptions = {},
+): Promise<{ image: TerminalAnsiImage; sourceFrame: FrameSource } | undefined> {
+  throwIfAborted(options.signal);
+  const displaySize = normalizeTerminalImageDisplaySize(options.width, options.height);
+  const sourceFrame = await loadTerminalImageSourceFrame(baseDir, mediaPath, options.signal);
+  if (!sourceFrame) {
+    return undefined;
+  }
+
+  const resizedSource =
+    options.fitMode === 'cover'
+      ? resizeFrameSourceCover(sourceFrame, displaySize.width, displaySize.height)
+      : resizeFrameSource(sourceFrame, displaySize.width, displaySize.height);
+  const selected = selectFrameFromSource(resizedSource, 0);
+  if (!selected.frame) {
+    return undefined;
+  }
+  const outputFrame = options.fitMode === 'cover' ? selected.frame : cropAnsiFrameToOpaqueBounds(selected.frame);
+  const filledFrame = fillAnsiFrameBackground(outputFrame, 0, 0, 0);
+  const kittyImage =
+    options.includeKittyImage === true
+      ? options.fitMode === 'cover'
+        ? buildTerminalKittyImage(sourceFrame, displaySize.width, displaySize.height, 'cover')
+        : buildTerminalKittyImage(sourceFrame, filledFrame.width, filledFrame.height, 'contain')
+      : undefined;
+  return {
+    sourceFrame,
+    image: {
+      width: filledFrame.width,
+      height: filledFrame.height,
+      rgb: filledFrame.rgb,
+      lines: composeAnsiLines(filledFrame.rgb, filledFrame.opaqueMask, filledFrame.width, filledFrame.height),
+      kittyImage,
+    },
+  };
+}
+
 async function loadVideoAsFrameSource(
   videoPath: string,
   mode: FrameMode,
@@ -1191,13 +1300,13 @@ async function loadVideoAsFrameSource(
   };
 }
 
-async function loadStageFileLoadingSourceFrame(
+async function loadTerminalImageSourceFrame(
   baseDir: string,
-  stageFile: string,
+  mediaPath: string,
   signal?: AbortSignal,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
-  const resolved = await resolveMediaPath(baseDir, stageFile, signal);
+  const resolved = await resolveMediaPath(baseDir, mediaPath, signal);
   if (!resolved) {
     return undefined;
   }
@@ -1206,6 +1315,13 @@ async function loadStageFileLoadingSourceFrame(
     return createStaticFrameSource(imageFrame);
   }
   return loadVideoAsFrameSource(resolved, 'base', signal);
+}
+
+function normalizeTerminalImageDisplaySize(width?: number, height?: number): { width: number; height: number } {
+  return {
+    width: Math.max(1, Math.floor(width ?? DEFAULT_BGA_ASCII_WIDTH)),
+    height: Math.max(1, Math.floor(height ?? DEFAULT_BGA_ASCII_HEIGHT)),
+  };
 }
 
 async function resolveMediaPath(baseDir: string, mediaPath: string, signal?: AbortSignal): Promise<string | undefined> {

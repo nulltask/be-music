@@ -24,6 +24,7 @@ interface ChartSummaryItem {
   subartist?: string;
   genre?: string;
   comment?: string;
+  bannerPath?: string;
   previewContinueKey?: string;
   totalNotes?: number;
   player?: number;
@@ -60,6 +61,7 @@ export type ChartSelectionEntry =
       subartist?: string;
       genre?: string;
       comment?: string;
+      bannerPath?: string;
       previewContinueKey?: string;
       totalNotes?: number;
       player?: number;
@@ -252,6 +254,7 @@ function buildChartSelectionEntriesFromSummaries(summariesInput: readonly ChartS
         subartist: chart.subartist,
         genre: chart.genre,
         comment: chart.comment,
+        bannerPath: chart.bannerPath,
         previewContinueKey: chart.previewContinueKey,
         totalNotes: chart.totalNotes,
         player: chart.player,
@@ -326,6 +329,7 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
   let subartist: string | undefined;
   let genre: string | undefined;
   let comment: string | undefined;
+  let bannerPath: string | undefined;
   let previewContinueKey: string | undefined;
   let difficulty: number | undefined;
   try {
@@ -340,6 +344,7 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     subartist = resolveChartSelectionSubartist(chart);
     genre = sanitizeChartSelectionMetadataText(chart.metadata.genre);
     comment = sanitizeChartSelectionMetadataText(chart.metadata.comment);
+    bannerPath = resolveChartSelectionBannerPath(chart);
     totalNotes = extractPlayableNotes(resolvedChart).length;
     player = chart.bms.player;
     difficulty = resolveDisplayedDifficultyValue(chart);
@@ -369,6 +374,7 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     subartist,
     genre,
     comment,
+    bannerPath,
     previewContinueKey,
     totalNotes,
     player,
@@ -401,6 +407,14 @@ function resolveChartSelectionSubartist(json: BeMusicJson): string | undefined {
   }
 
   return sanitizeChartSelectionMetadataText(json.metadata.extras.SUBARTIST);
+}
+
+function resolveChartSelectionBannerPath(json: BeMusicJson): string | undefined {
+  const bmsonBanner = sanitizeChartSelectionMetadataText(json.bmson.info.bannerImage);
+  if (bmsonBanner) {
+    return bmsonBanner;
+  }
+  return sanitizeChartSelectionMetadataText(json.metadata.extras.BANNER);
 }
 
 function extractChartBpmSummary(json: BeMusicJson): { initial: number; min: number; max: number } | undefined {

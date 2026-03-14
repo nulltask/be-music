@@ -63,6 +63,25 @@ describe('chart selection', () => {
       subtitle: 'Strict',
       subartist: 'Alice, Bob',
       genre: 'TEST',
+      bannerPath: 'banner.png',
+    });
+  });
+
+  test('buildChartSelectionEntries: carries BMS #BANNER into song-select metadata', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-banner-'));
+    tempDirectories.push(tempRoot);
+    const chartPath = join(tempRoot, 'banner-test.bms');
+    await writeFile(
+      chartPath,
+      ['#TITLE Banner Test', '#ARTIST Codex', '#BANNER banner.bmp', '#PLAYER 1', '#BPM 120'].join('\n'),
+    );
+
+    const entries = await buildChartSelectionEntries(tempRoot, [chartPath]);
+    const chartEntry = entries.find((entry) => entry.kind === 'chart' && entry.filePath === chartPath);
+
+    expect(chartEntry).toMatchObject({
+      kind: 'chart',
+      bannerPath: 'banner.bmp',
     });
   });
 });

@@ -31,6 +31,62 @@ import {
   truncateForDisplay,
 } from './cli/selection-format.ts';
 
+function measureSongSelectTestDisplayWidth(value: string): number {
+  let width = 0;
+  let escape = false;
+  for (const char of value) {
+    if (escape) {
+      if (char === 'm') {
+        escape = false;
+      }
+      continue;
+    }
+    if (char === '\u001b') {
+      escape = true;
+      continue;
+    }
+    width += measureSongSelectTestCharacterWidth(char);
+  }
+  return width;
+}
+
+function measureSongSelectTestCharacterWidth(char: string): number {
+  const codePoint = char.codePointAt(0);
+  if (codePoint === undefined) {
+    return 0;
+  }
+  if (
+    codePoint === 0 ||
+    codePoint < 32 ||
+    (codePoint >= 0x7f && codePoint < 0xa0) ||
+    codePoint === 0x200d ||
+    codePoint === 0xfe0e ||
+    codePoint === 0xfe0f ||
+    /\p{Mark}/u.test(char)
+  ) {
+    return 0;
+  }
+  if (codePoint < 0x1100) {
+    return 1;
+  }
+  return codePoint <= 0x115f ||
+    codePoint === 0x2329 ||
+    codePoint === 0x232a ||
+    (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
+    (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
+    (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
+    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
+    (codePoint >= 0x1f300 && codePoint <= 0x1f64f) ||
+    (codePoint >= 0x1f680 && codePoint <= 0x1f6ff) ||
+    (codePoint >= 0x1f900 && codePoint <= 0x1f9ff) ||
+    (codePoint >= 0x20000 && codePoint <= 0x3fffd)
+    ? 2
+    : 1;
+}
+
 describe('player cli', () => {
   test('cli: parses --auto-scratch mode', () => {
     const parsed = parseArgs(['chart.bms', '--auto-scratch']);
@@ -160,6 +216,75 @@ describe('player cli', () => {
     expect(lines[1]).toContain('\u001b[38;2;160;160;160mAlice, Bob\u001b[0m');
     expect(lines[2]).toContain('GENRE TEST');
     expect(lines[3]).toContain('COMMENT Each 4-measure block targets a different command combination set.');
+  });
+
+  test('cli: right-aligns song-select banner lines beside metadata text', () => {
+    const lines = createSongSelectSelectedMetadataLines(
+      {
+        kind: 'chart',
+        filePath: '/charts/sample.bms',
+        fileLabel: 'sample.bms',
+        title: 'Sample',
+        artist: 'Codex',
+        genre: 'TEST',
+        comment: 'Ready',
+      },
+      64,
+      {
+        bannerLines: ['[01]', '[02]', '[03]', '[04]'],
+      },
+    );
+
+    expect(lines[0]).toMatch(/TITLE Sample\s+\[01\]$/);
+    expect(lines[1]).toMatch(/ARTIST Codex\s+\[02\]$/);
+    expect(lines[2]).toMatch(/GENRE TEST\s+\[03\]$/);
+    expect(lines[3]).toMatch(/COMMENT Ready\s+\[04\]$/);
+  });
+
+  test('cli: reserves song-select metadata space for kitty banner overlays', () => {
+    const lines = createSongSelectSelectedMetadataLines(
+      {
+        kind: 'chart',
+        filePath: '/charts/sample.bms',
+        fileLabel: 'sample.bms',
+        title: 'Sample',
+        artist: 'Codex',
+        genre: 'TEST',
+        comment: 'Ready',
+      },
+      64,
+      {
+        bannerWidth: 12,
+      },
+    );
+
+    expect(lines[0]).toMatch(/TITLE Sample\s{12,}$/);
+    expect(lines[1]).toMatch(/ARTIST Codex\s{12,}$/);
+    expect(lines[2]).toMatch(/GENRE TEST\s{12,}$/);
+    expect(lines[3]).toMatch(/COMMENT Ready\s{12,}$/);
+  });
+
+  test('cli: keeps colorized song-select metadata within the reserved block width', () => {
+    const lineWidth = 48;
+    const lines = createSongSelectSelectedMetadataLines(
+      {
+        kind: 'chart',
+        filePath: '/charts/sample.bms',
+        fileLabel: 'sample.bms',
+        title: 'Four-Measure Command Combo Test',
+        subtitle: 'Visual 4-Bar Command Blocks',
+        artist: 'Codex',
+        subartist: 'Alice, Bob',
+        genre: 'TEST',
+        comment: 'Each 4-measure block targets a different command combination set.',
+      },
+      lineWidth,
+      {
+        bannerWidth: 12,
+      },
+    );
+
+    expect(lines.every((line) => measureSongSelectTestDisplayWidth(line) <= lineWidth)).toBe(true);
   });
 
   test('cli: renders song-select control block for below-list placement', () => {
