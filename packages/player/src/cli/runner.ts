@@ -171,6 +171,29 @@ interface SelectChartInteractivelyResult {
   difficultyFilter?: SongSelectDifficultyFilter;
 }
 
+interface SongSelectMetadataRenderOptions {
+  bannerLines?: readonly string[];
+  bannerWidth?: number;
+}
+
+interface SongSelectBannerLayout {
+  visibleBannerLines: readonly string[];
+  requestedBannerWidth: number;
+}
+
+interface SongSelectBannerState {
+  cache: Map<string, TerminalAnsiImage | null>;
+  activeCacheKey?: string;
+  activeImage?: TerminalAnsiImage;
+  loadController?: AbortController;
+  loadSequence: number;
+  kittyVisible: boolean;
+}
+
+interface SongSelectBannerDisplayState {
+  reservedWidth?: number;
+}
+
 interface PlayedChartResult {
   chartPath: string;
   summary: PlayerSummary;
@@ -883,10 +906,7 @@ function sanitizeMetadataText(value: string | undefined): string | undefined {
 export function createSongSelectSelectedMetadataLines(
   entry: ChartSelectionEntry | undefined,
   lineWidth: number,
-  options: {
-    bannerLines?: readonly string[];
-    bannerWidth?: number;
-  } = {},
+  options: SongSelectMetadataRenderOptions = {},
 ): string[] {
   const bannerLayout = resolveSongSelectMetadataBannerLayout(lineWidth, options);
   const metadataWidth = bannerLayout
@@ -910,11 +930,8 @@ export function createSongSelectSelectedMetadataLines(
 
 function resolveSongSelectMetadataBannerLayout(
   lineWidth: number,
-  options: {
-    bannerLines?: readonly string[];
-    bannerWidth?: number;
-  },
-): { visibleBannerLines: readonly string[]; requestedBannerWidth: number } | undefined {
+  options: SongSelectMetadataRenderOptions,
+): SongSelectBannerLayout | undefined {
   const visibleBannerLines = options.bannerLines?.filter((line) => measureSongSelectDisplayWidth(line) > 0) ?? [];
   const requestedBannerWidth =
     visibleBannerLines.length > 0
@@ -932,10 +949,7 @@ function resolveSongSelectMetadataBannerLayout(
 function composeSongSelectMetadataLinesWithBanner(
   baseLines: readonly string[],
   lineWidth: number,
-  layout: {
-    visibleBannerLines: readonly string[];
-    requestedBannerWidth: number;
-  },
+  layout: SongSelectBannerLayout,
 ): string[] {
   return baseLines.map((line, index) => {
     const bannerLine = layout.visibleBannerLines[index];
@@ -1043,6 +1057,145 @@ function resolveSongSelectBannerDisplayWidth(lineWidth: number): number {
     lineWidth - SONG_SELECT_BANNER_MIN_TEXT_WIDTH - SONG_SELECT_BANNER_GAP,
   );
   return available >= SONG_SELECT_BANNER_MIN_WIDTH ? available : 0;
+}
+
+function createSongSelectBannerState(): SongSelectBannerState {
+  return {
+    cache: new Map<string, TerminalAnsiImage | null>(),
+    loadSequence: 0,
+    kittyVisible: false,
+  };
+}
+
+function resolveSongSelectBannerCacheKey(
+  entry: ChartSelectionEntry | undefined,
+  bannerWidth: number,
+): string | undefined {
+  if (entry?.kind !== 'chart' || typeof entry.bannerPath !== 'string' || bannerWidth <= 0) {
+    return undefined;
+  }
+  return `${entry.filePath}\u0000${entry.bannerPath}\u0000${bannerWidth}`;
+}
+
+function clearSongSelectBannerLoad(state: SongSelectBannerState): void {
+  state.loadController?.abort();
+  state.loadController = undefined;
+}
+
+function syncSongSelectBanner(params: {
+  state: SongSelectBannerState;
+  entry: ChartSelectionEntry | undefined;
+  lineWidth: number;
+  useKittyGraphics: boolean;
+  finished: boolean;
+  onReady: () => void;
+}): void {
+  const bannerWidth = resolveSongSelectBannerDisplayWidth(params.lineWidth);
+  const cacheKey = resolveSongSelectBannerCacheKey(params.entry, bannerWidth);
+  if (!cacheKey || params.entry?.kind !== 'chart' || typeof params.entry.bannerPath !== 'string') {
+    clearSongSelectBannerLoad(params.state);
+    params.state.activeCacheKey = undefined;
+    params.state.activeImage = undefined;
+    return;
+  }
+  if (params.state.activeCacheKey === cacheKey) {
+    return;
+  }
+
+  clearSongSelectBannerLoad(params.state);
+  params.state.activeCacheKey = cacheKey;
+  const cached = params.state.cache.get(cacheKey);
+  if (cached !== undefined) {
+    params.state.activeImage = cached ?? undefined;
+    return;
+  }
+
+  params.state.activeImage = undefined;
+  const controller = new AbortController();
+  params.state.loadController = controller;
+  const requestSequence = ++params.state.loadSequence;
+  void loadTerminalAnsiImage(dirname(params.entry.filePath), params.entry.bannerPath, {
+    width: bannerWidth,
+    height: SONG_SELECT_BANNER_HEIGHT,
+    signal: controller.signal,
+    fitMode: 'contain',
+    includeKittyImage: params.useKittyGraphics,
+  })
+    .then((image) => {
+      if (
+        params.finished ||
+        controller.signal.aborted ||
+        requestSequence !== params.state.loadSequence ||
+        params.state.activeCacheKey !== cacheKey
+      ) {
+        return;
+      }
+      params.state.cache.set(cacheKey, image ?? null);
+      params.state.activeImage = image;
+      params.onReady();
+    })
+    .catch((error) => {
+      if (params.finished || controller.signal.aborted || requestSequence !== params.state.loadSequence) {
+        return;
+      }
+      if (isAbortError(error)) {
+        return;
+      }
+      params.state.cache.set(cacheKey, null);
+      params.state.activeImage = undefined;
+      params.onReady();
+    });
+}
+
+function resolveSongSelectBannerDisplayState(
+  entry: ChartSelectionEntry | undefined,
+  lineWidth: number,
+  useKittyGraphics: boolean,
+  state: SongSelectBannerState,
+): SongSelectBannerDisplayState {
+  const bannerWidth = resolveSongSelectBannerDisplayWidth(lineWidth);
+  const cacheKey = resolveSongSelectBannerCacheKey(entry, bannerWidth);
+  const cachedImage = cacheKey ? state.cache.get(cacheKey) : undefined;
+  return {
+    reservedWidth:
+      useKittyGraphics &&
+      bannerWidth > 0 &&
+      cacheKey !== undefined &&
+      (cachedImage === undefined || (cachedImage !== null && cachedImage.kittyImage !== undefined))
+        ? bannerWidth
+        : undefined,
+  };
+}
+
+function resolveSongSelectBannerOverlaySequence(params: {
+  lineWidth: number;
+  reservedWidth?: number;
+  useKittyGraphics: boolean;
+  state: SongSelectBannerState;
+}): string {
+  if (!(params.useKittyGraphics && params.state.activeImage?.kittyImage)) {
+    return buildSongSelectBannerCleanupSequence(params.state);
+  }
+  const bannerBlockWidth = params.reservedWidth ?? params.state.activeImage.kittyImage.cellWidth;
+  const column = Math.max(1, params.lineWidth - bannerBlockWidth + 1);
+  params.state.kittyVisible = true;
+  return buildKittyGraphicsRenderSequence({
+    imageId: SONG_SELECT_BANNER_KITTY_IMAGE_ID,
+    placementId: 1,
+    row: 1,
+    column,
+    image: params.state.activeImage.kittyImage,
+    zIndex: -1,
+    doNotMoveCursor: true,
+  });
+}
+
+function buildSongSelectBannerCleanupSequence(state: SongSelectBannerState): string {
+  if (!state.kittyVisible) {
+    return '';
+  }
+  state.kittyVisible = false;
+  return buildKittyGraphicsDeleteImageSequence(SONG_SELECT_BANNER_KITTY_IMAGE_ID);
 }
 
 export function createSongSelectControlLines(options: {
@@ -1769,12 +1922,7 @@ async function selectChartInteractively(
   let cachedEntryLabels = new WeakMap<ChartSelectionEntry, string>();
   const useKittyGraphicsForBanner =
     options.kittyGraphics === true && Boolean(process.stdout.isTTY) && supportsKittyGraphicsProtocol(process.env);
-  const bannerCache = new Map<string, TerminalAnsiImage | null>();
-  let activeBannerCacheKey: string | undefined;
-  let activeBannerImage: TerminalAnsiImage | undefined;
-  let bannerLoadController: AbortController | undefined;
-  let bannerLoadSequence = 0;
-  let bannerKittyVisible = false;
+  const bannerState = createSongSelectBannerState();
   let finished = false;
 
   const inputCapture = beginRawInputCapture();
@@ -1848,76 +1996,6 @@ async function selectChartInteractively(
     return label;
   };
 
-  const resolveBannerCacheKey = (entry: ChartSelectionEntry | undefined, bannerWidth: number): string | undefined => {
-    if (entry?.kind !== 'chart' || typeof entry.bannerPath !== 'string' || bannerWidth <= 0) {
-      return undefined;
-    }
-    return `${entry.filePath}\u0000${entry.bannerPath}\u0000${bannerWidth}`;
-  };
-
-  const clearBannerLoad = (): void => {
-    bannerLoadController?.abort();
-    bannerLoadController = undefined;
-  };
-
-  const syncSelectedBanner = (entry: ChartSelectionEntry | undefined, lineWidth: number): void => {
-    const bannerWidth = resolveSongSelectBannerDisplayWidth(lineWidth);
-    const cacheKey = resolveBannerCacheKey(entry, bannerWidth);
-    if (!cacheKey || entry?.kind !== 'chart' || typeof entry.bannerPath !== 'string') {
-      clearBannerLoad();
-      activeBannerCacheKey = undefined;
-      activeBannerImage = undefined;
-      return;
-    }
-    if (activeBannerCacheKey === cacheKey) {
-      return;
-    }
-
-    clearBannerLoad();
-    activeBannerCacheKey = cacheKey;
-    const cached = bannerCache.get(cacheKey);
-    if (cached !== undefined) {
-      activeBannerImage = cached ?? undefined;
-      return;
-    }
-
-    activeBannerImage = undefined;
-    const controller = new AbortController();
-    bannerLoadController = controller;
-    const requestSequence = ++bannerLoadSequence;
-    void loadTerminalAnsiImage(dirname(entry.filePath), entry.bannerPath, {
-      width: bannerWidth,
-      height: SONG_SELECT_BANNER_HEIGHT,
-      signal: controller.signal,
-      fitMode: 'contain',
-      includeKittyImage: useKittyGraphicsForBanner,
-    })
-      .then((image) => {
-        if (
-          finished ||
-          controller.signal.aborted ||
-          requestSequence !== bannerLoadSequence ||
-          activeBannerCacheKey !== cacheKey
-        ) {
-          return;
-        }
-        bannerCache.set(cacheKey, image ?? null);
-        activeBannerImage = image;
-        render();
-      })
-      .catch((error) => {
-        if (finished || controller.signal.aborted || requestSequence !== bannerLoadSequence) {
-          return;
-        }
-        if (isAbortError(error)) {
-          return;
-        }
-        bannerCache.set(cacheKey, null);
-        activeBannerImage = undefined;
-        render();
-      });
-  };
-
   const render = (): void => {
     const view = songSelectState.view();
     const columns = process.stdout.columns ?? 80;
@@ -1931,25 +2009,27 @@ async function selectChartInteractively(
 
     const lines: string[] = [];
     const selectedEntry = view.entries[songSelectState.selectedIndex()];
-    syncSelectedBanner(selectedEntry, lineWidth);
-    const bannerWidth = resolveSongSelectBannerDisplayWidth(lineWidth);
-    const selectedBannerCacheKey = resolveBannerCacheKey(selectedEntry, bannerWidth);
-    const cachedSelectedBanner = selectedBannerCacheKey ? bannerCache.get(selectedBannerCacheKey) : undefined;
-    const reserveKittyBannerWidth =
-      useKittyGraphicsForBanner &&
-      bannerWidth > 0 &&
-      selectedBannerCacheKey !== undefined &&
-      (cachedSelectedBanner === undefined ||
-        (cachedSelectedBanner !== null && cachedSelectedBanner.kittyImage !== undefined))
-        ? bannerWidth
-        : undefined;
+    syncSongSelectBanner({
+      state: bannerState,
+      entry: selectedEntry,
+      lineWidth,
+      useKittyGraphics: useKittyGraphicsForBanner,
+      finished,
+      onReady: render,
+    });
+    const bannerDisplayState = resolveSongSelectBannerDisplayState(
+      selectedEntry,
+      lineWidth,
+      useKittyGraphicsForBanner,
+      bannerState,
+    );
     lines.push(
       ...createSongSelectSelectedMetadataLines(selectedEntry, lineWidth, {
         bannerLines:
-          useKittyGraphicsForBanner && activeBannerImage?.kittyImage !== undefined
+          useKittyGraphicsForBanner && bannerState.activeImage?.kittyImage !== undefined
             ? undefined
-            : activeBannerImage?.lines,
-        bannerWidth: reserveKittyBannerWidth,
+            : bannerState.activeImage?.lines,
+        bannerWidth: bannerDisplayState.reservedWidth,
       }),
     );
     lines.push('');
@@ -2011,26 +2091,12 @@ async function selectChartInteractively(
     } else {
       lines.push('0/0');
     }
-    let overlaySequence = '';
-    if (useKittyGraphicsForBanner && activeBannerImage?.kittyImage) {
-      const bannerBlockWidth = reserveKittyBannerWidth ?? activeBannerImage.kittyImage.cellWidth;
-      const column = Math.max(1, lineWidth - bannerBlockWidth + 1);
-      overlaySequence = buildKittyGraphicsRenderSequence({
-        imageId: SONG_SELECT_BANNER_KITTY_IMAGE_ID,
-        placementId: 1,
-        row: 1,
-        column,
-        image: activeBannerImage.kittyImage,
-        zIndex: -1,
-        doNotMoveCursor: true,
-      });
-      bannerKittyVisible = true;
-    } else {
-      if (bannerKittyVisible) {
-        overlaySequence = buildKittyGraphicsDeleteImageSequence(SONG_SELECT_BANNER_KITTY_IMAGE_ID);
-        bannerKittyVisible = false;
-      }
-    }
+    const overlaySequence = resolveSongSelectBannerOverlaySequence({
+      lineWidth,
+      reservedWidth: bannerDisplayState.reservedWidth,
+      useKittyGraphics: useKittyGraphicsForBanner,
+      state: bannerState,
+    });
     process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J${overlaySequence}`);
   };
 
@@ -2071,11 +2137,8 @@ async function selectChartInteractively(
         clearInterval(previewSpinnerTimer);
         previewSpinnerTimer = undefined;
       }
-      clearBannerLoad();
-      if (bannerKittyVisible) {
-        process.stdout.write(buildKittyGraphicsDeleteImageSequence(SONG_SELECT_BANNER_KITTY_IMAGE_ID));
-        bannerKittyVisible = false;
-      }
+      clearSongSelectBannerLoad(bannerState);
+      process.stdout.write(buildSongSelectBannerCleanupSequence(bannerState));
       inputCapture.stdin.removeListener('keypress', onKeyPress);
       inputCapture.restore();
       process.stdout.write('\u001b[?25h\u001b[2J\u001b[H');
