@@ -34,7 +34,7 @@ pnpm run lint
 pnpm run test
 ```
 
-`pnpm run build` は各ワークスペースの `vite build` を依存関係を満たしながら並列実行し、続けて型定義 (`.d.ts`) を一括出力します。`pnpm run typecheck` / `pnpm run lint` / `pnpm run format` もワークスペース単位で並列実行します。
+`pnpm run build` は各ワークスペースの `tsdown` build を依存関係を満たしながら並列実行し、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run typecheck` / `pnpm run lint` / `pnpm run format` もワークスペース単位で並列実行します。
 
 ## 仕様書
 
@@ -75,12 +75,15 @@ pnpm run test
 
 - MANUAL / AUTO SCRATCH / AUTO の 3 モード
 - TUI プレイ画面と選曲画面
+- 選曲画面の metadata / preview / banner 表示
 - HIGH-SPEED (`0.5` 〜 `10.0`, `0.5` 刻み)
+- TUI refresh rate 設定 (`--tui-fps`, default `60`)
 - 判定: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR`（`FAST` / `SLOW` 集計あり）
 - 20 万点満点 SCORE と IIDX 準拠 EX-SCORE
 - 不可視ノート表示 (`--show-invisible-notes`)
 - FREE ZONE (`17` / `27`) の専用扱い
 - BGA 画像描画 (`BMP` / `PNG` / `JPEG`) と動画描画 (`mpeg1video` / `h264`)
+- `--kitty-graphics` による opt-in の Kitty graphics protocol 描画
 - `node-web-audio-api` 固定バックエンドで再生
 
 ### editor (`@be-music/editor`)
@@ -127,8 +130,14 @@ pnpm run player chart.bms --no-tui
 # HIGH-SPEED 初期値
 pnpm run player chart.bms --high-speed 3.5
 
+# TUI refresh rate
+pnpm run player chart.bms --tui-fps 120
+
 # 不可視チャンネル (31-39/41-49) を緑ノートで表示
 pnpm run player chart.bms --show-invisible-notes
+
+# Kitty graphics protocol を使って BGA / STAGEFILE / BANNER を画像表示
+pnpm run player chart.bms --kitty-graphics
 
 # 音声オフ
 pnpm run player chart.bms --no-audio
@@ -155,6 +164,8 @@ pnpm run editor export chart.json chart.bms
 - `↑/↓` or `k/j`: 移動
 - `←/→` or `h/l`: ページ移動
 - `Ctrl+b / Ctrl+f`: ページ移動
+- `1-5`: DIFFICULTY フィルタ
+- `0`: DIFFICULTY フィルタ解除
 - `a`: `MANUAL -> AUTO SCRATCH -> AUTO` 切り替え
 - `s`: HIGH-SPEED 増加 (`+0.5`)
 - `S`: HIGH-SPEED 減少 (`-0.5`)
@@ -164,8 +175,8 @@ pnpm run editor export chart.json chart.bms
 ### プレイ中
 
 - `Space`: 一時停止 / 再開
-- `W`: HIGH-SPEED 増加 (`+0.5`)
-- `E`: HIGH-SPEED 減少 (`-0.5`)
+- `Alt`/`Option` + 奇数レーン入力: HIGH-SPEED 減少 (`-0.5`)
+- `Alt`/`Option` + 偶数レーン入力: HIGH-SPEED 増加 (`+0.5`)
 - `Esc`: 演奏終了してリザルトへ
 - `Ctrl+C`: 終了
 
@@ -197,11 +208,11 @@ pnpm run editor export chart.json chart.bms
 
 | Mode | Channel -> Input |
 | --- | --- |
-| `5 KEY SP` | `16 -> LShift/a`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c` |
-| `5 KEY DP` | `16 -> LShift/a`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> ,`, `22 -> l`, `23 -> .`, `24 -> ;`, `25 -> /`, `26 -> RShift/]` |
+| `5 KEY SP` | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c` |
+| `5 KEY DP` | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift` |
 | `7 KEY SP` | `5 KEY SP` + `18 -> f`, `19 -> v` |
-| `14 KEY DP` | `7 KEY SP` + `21 -> ,`, `22 -> l`, `23 -> .`, `24 -> ;`, `25 -> /`, `28 -> :`, `29 -> _`, `26 -> RShift/]` |
-| `9 KEY` | `11 -> a`, `12 -> s`, `13 -> d`, `14 -> f`, `15 -> g`, `16 -> h`, `17 -> j`, `18 -> k`, `19 -> l` |
+| `14 KEY DP` | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift` |
+| `9 KEY` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b` |
 
 ## FREE ZONE (`17` / `27`)
 
@@ -222,7 +233,8 @@ pnpm run editor export chart.json chart.bms
 
 - `04` (base) と `07` (layer) を合成して描画します。
 - layer の黒 (`#000000`) は透過色として扱います。
-- `--kitty-graphics` 指定時のみ、kitty graphics protocol 対応端末で gameplay BGA と `#STAGEFILE` loading 画面を画像として表示します。未指定時は ANSI 描画です。
+- `#BANNER` / bmson `banner_image` は選曲画面の曲紹介 block に表示します。
+- `--kitty-graphics` 指定時のみ、kitty graphics protocol 対応端末で gameplay BGA、`#STAGEFILE` loading 画面、選曲画面 banner を画像として表示します。未指定時は ANSI 描画です。
 - BGA はウィンドウリサイズ時に再計算して表示サイズを更新します。
 - 動画 BGA は `@uwx/libav.js-fat` でデコードします。
   - 対応コーデック: `mpeg1video`, `h264`
@@ -231,7 +243,8 @@ pnpm run editor export chart.json chart.bms
 ## スコアと判定
 
 - 判定種別: `PERFECT`, `GREAT`, `GOOD`, `BAD`, `POOR`
-- `FAST` / `SLOW` は `PERFECT` の早押し/遅押し時のみ加算
+- `FAST` / `SLOW` は `GREAT` / `GOOD` の早押し・遅押し時のみ加算
+- 対応する未判定ノートが存在しない空打鍵は、判定も groove gauge 変動も発生しません
 - EX-SCORE:
   - `PERFECT = +2`
   - `GREAT = +1`
@@ -245,6 +258,7 @@ pnpm run editor export chart.json chart.bms
 
 - Play Mode (`manual` / `auto-scratch` / `auto`)
 - HIGH-SPEED
+- ディレクトリごとの選曲フォーカス (`chart` / `random`)
 
 保存先:
 
