@@ -175,11 +175,34 @@ describe('player cli', () => {
     });
   });
 
+  test('cli: preserves per-directory song-select focus keys when resolving persisted config from args', () => {
+    const parsed = parseArgs(['chart.bms']);
+    const resolved = resolvePersistedPlayerConfigFromArgs(parsed, {
+      playMode: 'manual',
+      highSpeed: 1,
+      lastSongSelectFocusKeyByDirectory: {
+        '/songs/a': 'random',
+        '/songs/b': 'chart:/songs/b/beta.bms',
+      },
+    });
+    expect(resolved.lastSongSelectFocusKeyByDirectory).toEqual({
+      '/songs/a': 'random',
+      '/songs/b': 'chart:/songs/b/beta.bms',
+    });
+  });
+
   test('cli: restores song-select focus by persisted chart filename when available', () => {
     const files = ['/charts/a.bms', '/charts/b.bms', '/charts/c.bms'];
     expect(resolveSongSelectInitialFocusKey(files, '/charts/b.bms')).toBe('chart:/charts/b.bms');
     expect(resolveSongSelectInitialFocusKey(files, '/charts/missing.bms')).toBeUndefined();
     expect(resolveSongSelectInitialFocusKey(files, undefined)).toBeUndefined();
+  });
+
+  test('cli: restores song-select focus by persisted focus key including random', () => {
+    const files = ['/charts/a.bms', '/charts/b.bms', '/charts/c.bms'];
+    expect(resolveSongSelectInitialFocusKey(files, '/charts/a.bms', 'random')).toBe('random');
+    expect(resolveSongSelectInitialFocusKey(files, undefined, 'chart:/charts/b.bms')).toBe('chart:/charts/b.bms');
+    expect(resolveSongSelectInitialFocusKey(files, '/charts/a.bms', 'chart:/charts/missing.bms')).toBe('chart:/charts/a.bms');
   });
 
   test('cli: cycles song-select mode by a key in three states', () => {

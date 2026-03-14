@@ -17,6 +17,7 @@ export interface PersistedPlayerConfig {
   playMode: PlayMode;
   highSpeed: number;
   lastSelectedChartFileByDirectory?: Record<string, string>;
+  lastSongSelectFocusKeyByDirectory?: Record<string, string>;
 }
 
 export interface CliConfigOverrideFlags {
@@ -102,9 +103,15 @@ export function resolvePersistedPlayerConfigFromArgs(
     highSpeed: normalizeHighSpeedValue(args.highSpeed),
   };
   if (previous?.lastSelectedChartFileByDirectory) {
-    const copied = copyLastSelectedChartFileByDirectory(previous.lastSelectedChartFileByDirectory);
+    const copied = copyStringByDirectory(previous.lastSelectedChartFileByDirectory);
     if (copied) {
       resolved.lastSelectedChartFileByDirectory = copied;
+    }
+  }
+  if (previous?.lastSongSelectFocusKeyByDirectory) {
+    const copied = copyStringByDirectory(previous.lastSongSelectFocusKeyByDirectory);
+    if (copied) {
+      resolved.lastSongSelectFocusKeyByDirectory = copied;
     }
   }
   return resolved;
@@ -179,15 +186,22 @@ function parsePersistedPlayerConfig(value: unknown): PersistedPlayerConfig {
     playMode?: unknown;
     highSpeed?: unknown;
     lastSelectedChartFileByDirectory?: unknown;
+    lastSongSelectFocusKeyByDirectory?: unknown;
   };
   const resolved: PersistedPlayerConfig = {
     playMode: parsePersistedPlayMode(objectValue.playMode) ?? defaults.playMode,
     highSpeed: parsePersistedHighSpeed(objectValue.highSpeed) ?? defaults.highSpeed,
   };
   if (typeof objectValue.lastSelectedChartFileByDirectory === 'object' && objectValue.lastSelectedChartFileByDirectory) {
-    const copied = copyLastSelectedChartFileByDirectory(objectValue.lastSelectedChartFileByDirectory);
+    const copied = copyStringByDirectory(objectValue.lastSelectedChartFileByDirectory);
     if (copied) {
       resolved.lastSelectedChartFileByDirectory = copied;
+    }
+  }
+  if (typeof objectValue.lastSongSelectFocusKeyByDirectory === 'object' && objectValue.lastSongSelectFocusKeyByDirectory) {
+    const copied = copyStringByDirectory(objectValue.lastSongSelectFocusKeyByDirectory);
+    if (copied) {
+      resolved.lastSongSelectFocusKeyByDirectory = copied;
     }
   }
   return resolved;
@@ -215,15 +229,21 @@ export async function savePersistedPlayerConfig(config: PersistedPlayerConfig): 
     highSpeed: normalizeHighSpeedValue(config.highSpeed),
   };
   if (config.lastSelectedChartFileByDirectory) {
-    const copied = copyLastSelectedChartFileByDirectory(config.lastSelectedChartFileByDirectory);
+    const copied = copyStringByDirectory(config.lastSelectedChartFileByDirectory);
     if (copied) {
       normalized.lastSelectedChartFileByDirectory = copied;
+    }
+  }
+  if (config.lastSongSelectFocusKeyByDirectory) {
+    const copied = copyStringByDirectory(config.lastSongSelectFocusKeyByDirectory);
+    if (copied) {
+      normalized.lastSongSelectFocusKeyByDirectory = copied;
     }
   }
   await writeFile(configPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
 }
 
-function copyLastSelectedChartFileByDirectory(value: unknown): Record<string, string> | undefined {
+function copyStringByDirectory(value: unknown): Record<string, string> | undefined {
   if (typeof value !== 'object' || value === null) {
     return undefined;
   }

@@ -352,6 +352,7 @@ async function runDirectoryInput(
     },
     rootDir,
     undefined,
+    undefined,
     initialConfig,
   );
   let candidates: string[];
@@ -387,6 +388,7 @@ async function runDirectoryInput(
         resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
         rootDir,
         selected,
+        createChartFocusKey(selected),
         persistedConfig,
       );
     } catch (error) {
@@ -395,6 +397,7 @@ async function runDirectoryInput(
           resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
           rootDir,
           selected,
+          createChartFocusKey(selected),
           persistedConfig,
         );
         process.exitCode = error.exitCode;
@@ -414,6 +417,7 @@ async function runDirectoryInput(
         resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
         rootDir,
         selected,
+        createChartFocusKey(selected),
         persistedConfig,
       );
       if (action === 'ctrl-c') {
@@ -425,6 +429,7 @@ async function runDirectoryInput(
           resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
           rootDir,
           selected,
+          createChartFocusKey(selected),
           persistedConfig,
         );
         process.exitCode = error.exitCode;
@@ -445,6 +450,7 @@ async function runDirectoryInput(
     focusKey: resolveSongSelectInitialFocusKey(
       candidates,
       resolveLastSelectedChartFileForDirectory(initialConfig, rootDir),
+      resolveLastSongSelectFocusKeyForDirectory(initialConfig, rootDir),
     ),
     playMode: persistedConfig.playMode,
     highSpeed: persistedConfig.highSpeed,
@@ -472,6 +478,7 @@ async function runDirectoryInput(
         },
         rootDir,
         resolveLastSelectedChartFile(selection),
+        selection.focusKey,
         persistedConfig,
       );
       state = resolveDirectoryStateFromSelection(selection);
@@ -488,6 +495,7 @@ async function runDirectoryInput(
         },
         rootDir,
         playState.chartPath,
+        playState.focusKey,
         persistedConfig,
       );
       try {
@@ -500,6 +508,7 @@ async function runDirectoryInput(
           },
           rootDir,
           playState.chartPath,
+          playState.focusKey,
           persistedConfig,
         );
         state = {
@@ -520,6 +529,7 @@ async function runDirectoryInput(
             },
             rootDir,
             playState.chartPath,
+            playState.focusKey,
             persistedConfig,
           );
           state = resolveDirectoryStateFromPlayInterrupt(error.reason, {
@@ -545,6 +555,7 @@ function resolvePersistedConfigForSongSelect(
   base: Pick<PersistedPlayerConfig, 'playMode' | 'highSpeed'>,
   directoryPath: string | undefined,
   preferredLastSelectedChartFile?: string,
+  preferredFocusKey?: string,
   previous?: PersistedPlayerConfig,
 ): PersistedPlayerConfig {
   const resolved: PersistedPlayerConfig = {
@@ -554,6 +565,9 @@ function resolvePersistedConfigForSongSelect(
   if (previous?.lastSelectedChartFileByDirectory) {
     resolved.lastSelectedChartFileByDirectory = { ...previous.lastSelectedChartFileByDirectory };
   }
+  if (previous?.lastSongSelectFocusKeyByDirectory) {
+    resolved.lastSongSelectFocusKeyByDirectory = { ...previous.lastSongSelectFocusKeyByDirectory };
+  }
   const preferred = preferredLastSelectedChartFile?.trim();
   if (preferred) {
     if (directoryPath && directoryPath.length > 0) {
@@ -562,11 +576,25 @@ function resolvePersistedConfigForSongSelect(
       resolved.lastSelectedChartFileByDirectory = byDirectory;
     }
   }
+  const normalizedFocusKey = preferredFocusKey?.trim();
+  if (normalizedFocusKey) {
+    if (directoryPath && directoryPath.length > 0) {
+      const byDirectory = { ...(resolved.lastSongSelectFocusKeyByDirectory ?? {}) };
+      byDirectory[directoryPath] = normalizedFocusKey;
+      resolved.lastSongSelectFocusKeyByDirectory = byDirectory;
+    }
+  }
   if (
     resolved.lastSelectedChartFileByDirectory &&
     Object.keys(resolved.lastSelectedChartFileByDirectory).length === 0
   ) {
     delete resolved.lastSelectedChartFileByDirectory;
+  }
+  if (
+    resolved.lastSongSelectFocusKeyByDirectory &&
+    Object.keys(resolved.lastSongSelectFocusKeyByDirectory).length === 0
+  ) {
+    delete resolved.lastSongSelectFocusKeyByDirectory;
   }
   return resolved;
 }
@@ -583,6 +611,20 @@ function resolveLastSelectedChartFileForDirectory(
   directoryPath: string,
 ): string | undefined {
   const byDirectory = config.lastSelectedChartFileByDirectory;
+  if (byDirectory) {
+    const scoped = byDirectory[directoryPath];
+    if (typeof scoped === 'string' && scoped.trim().length > 0) {
+      return scoped;
+    }
+  }
+  return undefined;
+}
+
+function resolveLastSongSelectFocusKeyForDirectory(
+  config: PersistedPlayerConfig,
+  directoryPath: string,
+): string | undefined {
+  const byDirectory = config.lastSongSelectFocusKeyByDirectory;
   if (byDirectory) {
     const scoped = byDirectory[directoryPath];
     if (typeof scoped === 'string' && scoped.trim().length > 0) {
@@ -2318,7 +2360,18 @@ function resolveChartFileFromFocusKey(focusKey: string | undefined): string | un
 export function resolveSongSelectInitialFocusKey(
   files: readonly string[],
   selectedChartFile: string | undefined,
+  persistedFocusKey?: string,
 ): string | undefined {
+  if (typeof persistedFocusKey === 'string') {
+    const normalizedFocusKey = persistedFocusKey.trim();
+    if (normalizedFocusKey === 'random') {
+      return normalizedFocusKey;
+    }
+    const focusedChartFile = resolveChartFileFromFocusKey(normalizedFocusKey);
+    if (focusedChartFile && files.includes(focusedChartFile)) {
+      return normalizedFocusKey;
+    }
+  }
   if (typeof selectedChartFile !== 'string') {
     return undefined;
   }
