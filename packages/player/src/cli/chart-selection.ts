@@ -1,8 +1,10 @@
-import { readdir } from 'node:fs/promises';
-import { relative, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, extname, relative, resolve } from 'node:path';
 import { invokeWorkerizedFunction, isAbortError, throwIfAborted, workerize } from '@be-music/utils';
 import { type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
-import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
+import { decodeBmsText, parseChart, resolveBmsControlFlow } from '@be-music/parser';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { extractPlayableNotes } from '../index.ts';
 import {
@@ -35,6 +37,26 @@ interface ChartSummaryItem {
   bpmInitial?: number;
   bpmMin?: number;
   bpmMax?: number;
+}
+
+interface PersistedChartSelectionCacheFileEntry {
+  contentHash: string;
+  summary: ChartSummaryItem;
+}
+
+interface PersistedChartSelectionCacheDirectoryEntry {
+  files: Record<string, PersistedChartSelectionCacheFileEntry>;
+}
+
+interface PersistedChartSelectionCache {
+  format: typeof CHART_SELECTION_CACHE_FORMAT;
+  directories: Record<string, PersistedChartSelectionCacheDirectoryEntry>;
+}
+
+interface ResolvedChartSummaryCacheEntry {
+  summary: ChartSummaryItem;
+  cacheEntry?: PersistedChartSelectionCacheFileEntry;
+  cacheHit: boolean;
 }
 
 type WorkerizedChartSelectionEntriesBuilder = ((
@@ -90,6 +112,7 @@ export interface ListChartFilesOptions {
 }
 
 const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
+const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/2';
 let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
 
 export async function listChartFiles(rootDir: string, options: ListChartFilesOptions = {}): Promise<string[]> {
@@ -129,11 +152,19 @@ export async function buildChartSelectionEntries(
   options: BuildChartSelectionEntriesOptions = {},
 ): Promise<ChartSelectionEntry[]> {
   throwIfAborted(options.signal);
-  let summaries: ChartSummaryItem[];
+  const cache = await loadPersistedChartSelectionCache();
+  const cachedEntries = cache.directories[rootDir]?.files ?? {};
+  const nextCachedEntries: Record<string, PersistedChartSelectionCacheFileEntry> = {};
+  let cacheDirty = cache.directories[rootDir] === undefined || Object.keys(cachedEntries).length !== files.length;
+  let resolvedEntries: ResolvedChartSummaryCacheEntry[];
   if (!options.onLoadingFile) {
-    summaries = await Promise.all(files.map((filePath) => buildChartSummary(rootDir, filePath, options.signal)));
+    resolvedEntries = await Promise.all(
+      files.map((filePath) =>
+        buildChartSummaryWithCache(rootDir, filePath, cachedEntries[filePath], options.signal),
+      ),
+    );
   } else {
-    summaries = [];
+    resolvedEntries = [];
     for (let index = 0; index < files.length; index += 1) {
       throwIfAborted(options.signal);
       const filePath = files[index];
@@ -142,11 +173,66 @@ export async function buildChartSelectionEntries(
         currentIndex: index + 1,
         totalCount: files.length,
       });
-      summaries.push(await buildChartSummary(rootDir, filePath, options.signal));
+      resolvedEntries.push(await buildChartSummaryWithCache(rootDir, filePath, cachedEntries[filePath], options.signal));
     }
+  }
+  const summaries = resolvedEntries.map((entry) => entry.summary);
+  for (let index = 0; index < files.length; index += 1) {
+    const filePath = files[index]!;
+    const resolvedEntry = resolvedEntries[index]!;
+    if (!resolvedEntry.cacheHit) {
+      cacheDirty = true;
+    }
+    if (resolvedEntry.cacheEntry) {
+      nextCachedEntries[filePath] = resolvedEntry.cacheEntry;
+    }
+  }
+  if (cacheDirty) {
+    cache.directories[rootDir] = { files: nextCachedEntries };
+    await savePersistedChartSelectionCache(cache);
   }
   throwIfAborted(options.signal);
   return buildChartSelectionEntriesFromSummariesOffThread(summaries, options.signal);
+}
+
+async function buildChartSummaryWithCache(
+  rootDir: string,
+  filePath: string,
+  cachedEntry: PersistedChartSelectionCacheFileEntry | undefined,
+  signal?: AbortSignal,
+): Promise<ResolvedChartSummaryCacheEntry> {
+  throwIfAborted(signal);
+
+  let sourceBuffer: Buffer | undefined;
+  try {
+    sourceBuffer = await readFile(filePath, { signal });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+  }
+
+  const contentHash = sourceBuffer ? buildChartSelectionContentHash(sourceBuffer) : undefined;
+  if (cachedEntry && typeof contentHash === 'string' && cachedEntry.contentHash === contentHash) {
+    return {
+      summary: cachedEntry.summary,
+      cacheEntry: cachedEntry,
+      cacheHit: true,
+    };
+  }
+
+  const summary = await buildChartSummary(rootDir, filePath, signal, sourceBuffer);
+  return {
+    summary,
+    cacheEntry:
+      typeof contentHash === 'string'
+        ? {
+            contentHash,
+            summary,
+          }
+        : undefined,
+    cacheHit: false,
+  };
 }
 
 async function buildChartSelectionEntriesFromSummariesOffThread(
@@ -308,7 +394,12 @@ function compareOptionalPlayLevel(left: BeMusicPlayLevel | undefined, right: BeM
   return 0;
 }
 
-async function buildChartSummary(rootDir: string, filePath: string, signal?: AbortSignal): Promise<ChartSummaryItem> {
+async function buildChartSummary(
+  rootDir: string,
+  filePath: string,
+  signal?: AbortSignal,
+  sourceBuffer?: Buffer,
+): Promise<ChartSummaryItem> {
   throwIfAborted(signal);
   const relativePath = relative(rootDir, filePath).replaceAll('\\', '/');
   const slashIndex = relativePath.lastIndexOf('/');
@@ -334,7 +425,7 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
   let difficulty: number | undefined;
   try {
     throwIfAborted(signal);
-    const chart = await parseChartFile(filePath, { signal });
+    const chart = sourceBuffer ? parseChartSelectionSourceBuffer(filePath, sourceBuffer) : await parseChartFileWithCacheMiss(filePath, signal);
     throwIfAborted(signal);
     const resolvedChart = resolveBmsControlFlow(chart, { random: () => 0 });
     throwIfAborted(signal);
@@ -386,6 +477,34 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     bpmMin,
     bpmMax,
   };
+}
+
+async function parseChartFileWithCacheMiss(filePath: string, signal?: AbortSignal): Promise<BeMusicJson> {
+  const sourceBuffer = await readFile(filePath, { signal });
+  return parseChartSelectionSourceBuffer(filePath, sourceBuffer);
+}
+
+function parseChartSelectionSourceBuffer(filePath: string, sourceBuffer: Buffer): BeMusicJson {
+  const extension = extname(filePath).toLowerCase();
+  if (extension === '.bmson') {
+    return parseChart(decodeUtf8Buffer(sourceBuffer), 'bmson');
+  }
+  if (extension === '.json') {
+    return parseChart(decodeUtf8Buffer(sourceBuffer), 'json');
+  }
+  return parseChart(decodeBmsText(sourceBuffer).text);
+}
+
+function decodeUtf8Buffer(buffer: Buffer): string {
+  let text = buffer.toString('utf8');
+  if (text.charCodeAt(0) === 0xfeff) {
+    text = text.slice(1);
+  }
+  return text;
+}
+
+function buildChartSelectionContentHash(sourceBuffer: Buffer): string {
+  return createHash('sha256').update(sourceBuffer).digest('hex');
 }
 
 function sanitizeChartSelectionMetadataText(value: string | undefined): string | undefined {
@@ -442,4 +561,98 @@ function extractChartBpmSummary(json: BeMusicJson): { initial: number; min: numb
     min,
     max,
   };
+}
+
+function resolveChartSelectionCachePath(): string {
+  return resolve(homedir(), '.be-music', 'chart-selection-cache.json');
+}
+
+function createDefaultPersistedChartSelectionCache(): PersistedChartSelectionCache {
+  return {
+    format: CHART_SELECTION_CACHE_FORMAT,
+    directories: {},
+  };
+}
+
+function parsePersistedChartSelectionCache(value: unknown): PersistedChartSelectionCache {
+  if (typeof value !== 'object' || value === null) {
+    return createDefaultPersistedChartSelectionCache();
+  }
+  const objectValue = value as {
+    format?: unknown;
+    directories?: unknown;
+  };
+  if (objectValue.format !== CHART_SELECTION_CACHE_FORMAT) {
+    return createDefaultPersistedChartSelectionCache();
+  }
+  if (typeof objectValue.directories !== 'object' || objectValue.directories === null) {
+    return createDefaultPersistedChartSelectionCache();
+  }
+
+  const directories: PersistedChartSelectionCache['directories'] = {};
+  for (const [directoryPath, rawDirectoryEntry] of Object.entries(objectValue.directories as Record<string, unknown>)) {
+    if (typeof rawDirectoryEntry !== 'object' || rawDirectoryEntry === null) {
+      continue;
+    }
+    const filesValue = (rawDirectoryEntry as { files?: unknown }).files;
+    if (typeof filesValue !== 'object' || filesValue === null) {
+      continue;
+    }
+    const files: PersistedChartSelectionCacheDirectoryEntry['files'] = {};
+    for (const [filePath, rawFileEntry] of Object.entries(filesValue as Record<string, unknown>)) {
+      if (typeof rawFileEntry !== 'object' || rawFileEntry === null) {
+        continue;
+      }
+      const fileEntry = rawFileEntry as {
+        contentHash?: unknown;
+        summary?: unknown;
+      };
+      if (typeof fileEntry.contentHash !== 'string' || fileEntry.contentHash.length === 0) {
+        continue;
+      }
+      if (typeof fileEntry.summary !== 'object' || fileEntry.summary === null) {
+        continue;
+      }
+      files[filePath] = {
+        contentHash: fileEntry.contentHash,
+        summary: fileEntry.summary as ChartSummaryItem,
+      };
+    }
+    if (Object.keys(files).length > 0) {
+      directories[directoryPath] = { files };
+    }
+  }
+  return {
+    format: CHART_SELECTION_CACHE_FORMAT,
+    directories,
+  };
+}
+
+async function loadPersistedChartSelectionCache(): Promise<PersistedChartSelectionCache> {
+  const cachePath = resolveChartSelectionCachePath();
+  let content: string;
+  try {
+    content = await readFile(cachePath, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+      return createDefaultPersistedChartSelectionCache();
+    }
+    return createDefaultPersistedChartSelectionCache();
+  }
+
+  try {
+    return parsePersistedChartSelectionCache(JSON.parse(content));
+  } catch {
+    return createDefaultPersistedChartSelectionCache();
+  }
+}
+
+async function savePersistedChartSelectionCache(cache: PersistedChartSelectionCache): Promise<void> {
+  const cachePath = resolveChartSelectionCachePath();
+  try {
+    await mkdir(dirname(cachePath), { recursive: true });
+    await writeFile(cachePath, `${JSON.stringify(cache, null, 2)}\n`, 'utf8');
+  } catch {
+    // Chart list caching is a performance optimization only.
+  }
 }

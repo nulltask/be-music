@@ -1,14 +1,21 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { buildChartSelectionEntries, listChartFiles } from './chart-selection.ts';
 
 const tempDirectories: string[] = [];
+const originalHome = process.env.HOME;
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
 afterEach(async () => {
+  if (typeof originalHome === 'string') {
+    process.env.HOME = originalHome;
+  } else {
+    delete process.env.HOME;
+  }
+  vi.restoreAllMocks();
   await Promise.all(
     tempDirectories
       .splice(0, tempDirectories.length)
@@ -82,6 +89,76 @@ describe('chart selection', () => {
     expect(chartEntry).toMatchObject({
       kind: 'chart',
       bannerPath: 'banner.bmp',
+    });
+  });
+
+  test('buildChartSelectionEntries: reuses cached summaries when chart content is unchanged', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-hit-'));
+    const tempHome = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-home-'));
+    tempDirectories.push(tempRoot, tempHome);
+    process.env.HOME = tempHome;
+
+    const chartPath = join(tempRoot, 'cached-hit.bms');
+    const originalSource = ['#TITLE Cache Hit', '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n');
+    await writeFile(chartPath, originalSource);
+
+    const firstEntries = await buildChartSelectionEntries(tempRoot, [chartPath]);
+    const firstChart = firstEntries.find((entry) => entry.kind === 'chart' && entry.filePath === chartPath);
+    expect(firstChart).toMatchObject({
+      kind: 'chart',
+      title: 'Cache Hit',
+      artist: 'Codex',
+    });
+
+    const initialStat = await stat(chartPath);
+    const parser = await import('@be-music/parser');
+    const parseChartSpy = vi.spyOn(parser, 'parseChart');
+    const shiftedMtime = new Date(initialStat.mtimeMs + 10_000);
+    await utimes(chartPath, shiftedMtime, shiftedMtime);
+
+    const secondEntries = await buildChartSelectionEntries(tempRoot, [chartPath]);
+    const secondChart = secondEntries.find((entry) => entry.kind === 'chart' && entry.filePath === chartPath);
+    expect(secondChart).toMatchObject({
+      kind: 'chart',
+      title: 'Cache Hit',
+      artist: 'Codex',
+    });
+    expect(parseChartSpy).not.toHaveBeenCalled();
+
+    const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
+    const cacheContent = await readFile(cachePath, 'utf8');
+    expect(cacheContent).toContain('cached-hit.bms');
+    expect(cacheContent).toContain('contentHash');
+  });
+
+  test('buildChartSelectionEntries: invalidates cached summaries when chart contents change without size or mtime changes', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-miss-'));
+    const tempHome = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-home-'));
+    tempDirectories.push(tempRoot, tempHome);
+    process.env.HOME = tempHome;
+
+    const chartPath = join(tempRoot, 'cached-miss.bms');
+    const firstSource = ['#TITLE First', '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n');
+    const secondSource = ['#TITLE Other', '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n');
+    expect(Buffer.byteLength(firstSource)).toBe(Buffer.byteLength(secondSource));
+    await writeFile(chartPath, firstSource);
+
+    const firstEntries = await buildChartSelectionEntries(tempRoot, [chartPath]);
+    const firstChart = firstEntries.find((entry) => entry.kind === 'chart' && entry.filePath === chartPath);
+    expect(firstChart).toMatchObject({
+      kind: 'chart',
+      title: 'First',
+    });
+
+    const initialStat = await stat(chartPath);
+    await writeFile(chartPath, secondSource);
+    await utimes(chartPath, initialStat.atime, initialStat.mtime);
+
+    const secondEntries = await buildChartSelectionEntries(tempRoot, [chartPath]);
+    const secondChart = secondEntries.find((entry) => entry.kind === 'chart' && entry.filePath === chartPath);
+    expect(secondChart).toMatchObject({
+      kind: 'chart',
+      title: 'Other',
     });
   });
 });
