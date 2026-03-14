@@ -812,7 +812,13 @@ export class PlayerTui {
       lines.push(...renderLaneBlockWithBga(laneLinesWithProgress, frame.bgaAnsiLines));
     }
     lines.push('');
-    lines.push(formatGrooveGaugeLine(frame.summary, calculateLaneBlockVisibleWidth(this.laneWidths, this.options.splitAfterIndex ?? -1)));
+    lines.push(
+      formatGrooveGaugeLine(
+        frame.summary,
+        calculateLaneBlockVisibleWidth(this.laneWidths, this.options.splitAfterIndex ?? -1),
+        resolveGrooveGaugeLeftPadding(this.laneWidths.length),
+      ),
+    );
     lines.push('');
     lines.push(
       `Space: pause/resume  Shift+R: restart  ${HIGH_SPEED_MODIFIER_LABEL}+odd/even lane: HS -/+  Ctrl+C/Esc: quit`,
@@ -2003,12 +2009,23 @@ function renderLaneBlockWithKittyPadding(
   column: number;
 } {
   const safeBgaWidth = Math.max(1, Math.floor(bgaWidth));
-  const laneBlockWidth = Math.max(1, ...laneLines.map((line) => visibleWidth(line)));
+  const laneBlockWidth = calculateRenderedLineBlockWidth(laneLines);
   const emptyBgaLine = renderBgaLineWithScopedBlackBackground(' '.repeat(safeBgaWidth), safeBgaWidth);
   return {
     lines: laneLines.map((laneLine) => `${padVisibleWidth(laneLine, laneBlockWidth)}   ${emptyBgaLine}`),
     column: laneBlockWidth + 4,
   };
+}
+
+function calculateRenderedLineBlockWidth(lines: string[]): number {
+  return Math.max(1, ...lines.map((line) => visibleWidth(line)));
+}
+
+function resolveGrooveGaugeLeftPadding(laneCount: number): number {
+  if (laneCount <= 0) {
+    return 0;
+  }
+  return PLAY_PROGRESS_INDICATOR_SIDE_WIDTH;
 }
 
 function renderLaneLinesWithProgressIndicators(
@@ -2450,7 +2467,7 @@ function formatNotesProgress(summary: PlayerSummary): string {
   return `${Math.min(total, judged)}/${total}`;
 }
 
-function formatGrooveGaugeLine(summary: PlayerSummary, laneBlockWidth: number): string {
+function formatGrooveGaugeLine(summary: PlayerSummary, laneBlockWidth: number, leftPadding = 0): string {
   const gauge = summary.gauge;
   if (!gauge) {
     return '-';
@@ -2458,7 +2475,8 @@ function formatGrooveGaugeLine(summary: PlayerSummary, laneBlockWidth: number): 
   const percentLabel = `${formatGrooveGaugePercent(gauge.current)}%`;
   const safeLaneBlockWidth = Math.max(3, Math.floor(laneBlockWidth));
   const barWidth = Math.max(1, safeLaneBlockWidth - 2);
-  return `${colorizeLaneOuterBorder('┃')}${renderGrooveGaugeBar(gauge.current, gauge.clearThreshold, gauge.max, barWidth)}${colorizeLaneOuterBorder('┃')} ${percentLabel}`;
+  const safeLeftPadding = Math.max(0, Math.floor(leftPadding));
+  return `${' '.repeat(safeLeftPadding)}${colorizeLaneOuterBorder('┃')}${renderGrooveGaugeBar(gauge.current, gauge.clearThreshold, gauge.max, barWidth)}${colorizeLaneOuterBorder('┃')} ${percentLabel}`;
 }
 
 function renderGrooveGaugeBar(current: number, clearThreshold: number, max: number, width: number): string {

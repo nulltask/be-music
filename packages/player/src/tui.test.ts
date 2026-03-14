@@ -437,6 +437,71 @@ describe('player tui', () => {
     tui.stop();
   });
 
+  test('tui: aligns the groove gauge start and width with the lane block', () => {
+    mockTerminal({ columns: 120, rows: 32 });
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
+    const tui = new PlayerTui({
+      mode: 'MANUAL',
+      laneDisplayMode: '7 KEY',
+      title: 'Test Song',
+      lanes: [
+        { channel: '16', key: 'A', isScratch: true },
+        { channel: '11', key: 'S' },
+        { channel: '12', key: 'D' },
+      ],
+      speed: 1,
+      highSpeed: 1,
+      judgeWindowMs: 16.67,
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+    });
+
+    tui.start();
+    tui.render({
+      currentBeat: 0,
+      currentSeconds: 30,
+      totalSeconds: 120,
+      summary: {
+        total: 100,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+        gauge: {
+          current: 64,
+          max: 100,
+          clearThreshold: 80,
+          initial: 20,
+          effectiveTotal: 160,
+          cleared: false,
+        },
+      },
+      notes: [],
+    });
+
+    const renderOutput = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
+    const visibleLines = extractVisibleFrame(renderOutput).split('\n');
+    const laneLine = visibleLines.find((line) => (line.includes('╎') || line.includes('●')) && line.includes('┃'));
+    const gaugeLine = visibleLines.find((line) => line.includes('64%'));
+    const laneStart = laneLine?.indexOf('┃') ?? -1;
+    const laneEnd = laneLine?.lastIndexOf('┃') ?? -1;
+    const gaugeStart = gaugeLine?.indexOf('┃') ?? -1;
+    const gaugeEnd = gaugeLine?.lastIndexOf('┃') ?? -1;
+
+    expect(laneLine).toBeDefined();
+    expect(gaugeLine).toBeDefined();
+    expect(laneStart).toBeGreaterThanOrEqual(0);
+    expect(gaugeStart).toBe(laneStart);
+    expect(gaugeEnd - gaugeStart).toBe(laneEnd - laneStart);
+
+    tui.stop();
+  });
+
   test('tui: renders long-note head and tail in the correct order', () => {
     mockTerminal({ columns: 60, rows: 24 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
