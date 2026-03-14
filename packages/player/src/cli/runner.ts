@@ -6,7 +6,12 @@ import readline from 'node:readline';
 import type { BeMusicPlayLevel } from '@be-music/json';
 import { parseChartFile } from '@be-music/parser';
 import { renderJson, writeAudioFile } from '@be-music/audio-renderer';
-import { PlayerInterruptedError, type PlayerLoadProgress, type PlayerSummary } from '../index.ts';
+import {
+  PlayerInterruptedError,
+  type PlayerLoadComponentStatus,
+  type PlayerLoadProgress,
+  type PlayerSummary,
+} from '../index.ts';
 import { loadStageFileAnsiImage, type StageFileAnsiImage } from '../bga.ts';
 import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
 import {
@@ -126,6 +131,8 @@ interface PlayLoadingProgress {
   ratio: number;
   message: string;
   detail?: string;
+  audioStatus?: PlayerLoadComponentStatus;
+  graphicsStatus?: PlayerLoadComponentStatus;
 }
 
 interface PlayLoadingScreenRenderState {
@@ -776,6 +783,8 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
                 ratio: mappedRatio,
                 message: progress.message,
                 detail: progress.detail,
+                audioStatus: progress.audioStatus,
+                graphicsStatus: progress.graphicsStatus,
               });
             }
           : undefined,
@@ -1281,6 +1290,32 @@ export function resolvePlayLoadingStageFileDisplaySize(
   };
 }
 
+function formatPlayLoadingComponentStatus(label: string, status: PlayerLoadComponentStatus | undefined): string {
+  if (!status) {
+    return `${label}: -`;
+  }
+  if (status.state === 'ready' || status.state === 'disabled') {
+    return `${label}: ${status.message}`;
+  }
+  return typeof status.detail === 'string' && status.detail.length > 0
+    ? `${label}: ${status.message} (${status.detail})`
+    : `${label}: ${status.message}`;
+}
+
+function resolvePlayLoadingStepLabel(progress: PlayLoadingProgress): string {
+  if (progress.audioStatus || progress.graphicsStatus) {
+    return 'Loading playback resources...';
+  }
+  if (
+    progress.message === 'Parsing chart file...' ||
+    progress.message === 'Loading stage image...' ||
+    progress.message === 'Chart parsed.'
+  ) {
+    return 'Loading chart resources...';
+  }
+  return progress.message;
+}
+
 export function createPlayLoadingProgressScreenLines(
   chartPath: string,
   progress: PlayLoadingProgress,
@@ -1299,9 +1334,10 @@ export function createPlayLoadingProgressScreenLines(
   const rawLines = [
     'Loading selected chart...',
     bar,
-    `Step: ${progress.message}`,
+    `Step: ${resolvePlayLoadingStepLabel(progress)}`,
+    formatPlayLoadingComponentStatus('Sound', progress.audioStatus),
+    formatPlayLoadingComponentStatus('Visual', progress.graphicsStatus),
     `File: ${fileLabel}`,
-    typeof progress.detail === 'string' && progress.detail.length > 0 ? `Detail: ${progress.detail}` : '',
   ];
   return rawLines.map((line, index) =>
     options.stageFileImage
@@ -1356,7 +1392,8 @@ function renderPlayLoadingProgress(
   options.state.initialized = true;
   if (options.stageFileImage) {
     options.state.stageFileDrawn = true;
-    options.state.stageFileKittyVisible = options.useKittyGraphics === true && options.stageFileImage.kittyImage !== undefined;
+    options.state.stageFileKittyVisible =
+      options.useKittyGraphics === true && options.stageFileImage.kittyImage !== undefined;
   }
 }
 
@@ -1380,8 +1417,7 @@ function resolvePlayLoadingStageFileBlock(
         image: stageFileImage.kittyImage,
         zIndex: -1,
         doNotMoveCursor: true,
-      }) +
-      '\u001b[H'
+      }) + '\u001b[H'
     );
   }
   return stageFileImage.lines.length > 0 ? `${stageFileImage.lines.join('\n')}\u001b[H` : '';
@@ -1540,11 +1576,7 @@ async function selectChartInteractively(
     entries: readonly ChartSelectionEntry[],
     itemLabelWidth: number,
   ): ReturnType<typeof createSelectionColumnLayout> => {
-    if (
-      cachedColumnLayout &&
-      cachedColumnLayoutEntries === entries &&
-      cachedColumnLayoutWidth === itemLabelWidth
-    ) {
+    if (cachedColumnLayout && cachedColumnLayoutEntries === entries && cachedColumnLayoutWidth === itemLabelWidth) {
       return cachedColumnLayout;
     }
     cachedColumnLayout = createSelectionColumnLayout(itemLabelWidth, entries);

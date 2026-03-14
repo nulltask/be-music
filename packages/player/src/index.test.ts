@@ -29,6 +29,7 @@ import {
   applyHighSpeedControlAction,
   autoPlay,
   type CreatePlayerUiRuntimeContext,
+  type PlayerLoadProgress,
   extractInvisiblePlayableNotes,
   extractLandmineNotes,
   extractPlayableNotes,
@@ -43,11 +44,7 @@ import {
   resolveBmsControlFlowForPlayback,
 } from './index.ts';
 import type { PlayerInputCommand } from './core/input-signal-bus.ts';
-import {
-  resolveChartVolWavGain,
-  resolveDisplayedJudgeRankLabel,
-  resolveDisplayedJudgeRankValue,
-} from './utils.ts';
+import { resolveChartVolWavGain, resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from './utils.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
@@ -236,6 +233,45 @@ describe('player', () => {
     });
 
     expect(frameEndSeconds.at(-1)).toBeGreaterThanOrEqual(2);
+  });
+
+  test('player: starts audio preparation while UI BGA initialization is still pending', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
+
+    let resolveUiInitialization: (() => void) | undefined;
+    const uiInitialization = new Promise<void>((resolve) => {
+      resolveUiInitialization = resolve;
+    });
+    const progressUpdates: PlayerLoadProgress[] = [];
+
+    const playPromise = autoPlay(json, {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      onLoadProgress: (progress) => {
+        progressUpdates.push(progress);
+      },
+      createUiRuntime: async () => {
+        await uiInitialization;
+        return undefined;
+      },
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(progressUpdates.some((progress) => progress.message === 'Audio disabled; skipping audio setup.')).toBe(true);
+    expect(
+      progressUpdates.some(
+        (progress) => progress.audioStatus?.state === 'disabled' && progress.graphicsStatus?.state === 'pending',
+      ),
+    ).toBe(true);
+
+    resolveUiInitialization?.();
+    await playPromise;
   });
 
   test('player: auto play does not sound invisible objects', async () => {

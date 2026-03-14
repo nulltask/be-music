@@ -144,15 +144,41 @@ describe('player cli', () => {
         ratio: 0.5,
         message: 'Preparing audio...',
         detail: 'sample.wav',
+        audioStatus: {
+          state: 'ready',
+          message: 'Ready',
+        },
+        graphicsStatus: {
+          state: 'pending',
+          message: 'Preparing BGA...',
+          detail: 'intro.mpg',
+        },
       },
       { columns: 48 },
     );
 
     expect(lines[0]).toContain('Loading selected chart...');
-    expect(lines.some((line) => line.includes('Preparing audio...'))).toBe(true);
+    expect(lines.some((line) => line.includes('Step: Loading playback resources...'))).toBe(true);
+    expect(lines.some((line) => line.includes('Step: Preparing audio...'))).toBe(false);
+    expect(lines.some((line) => line.includes('Sound: Ready'))).toBe(true);
+    expect(lines.some((line) => line.includes('Visual: Preparing BGA... (intro.mpg)'))).toBe(true);
     expect(lines.some((line) => line.includes('/charts/stagefile-test.bms'))).toBe(true);
-    expect(lines.some((line) => line.includes('sample.wav'))).toBe(true);
+    expect(lines.some((line) => line.includes('Detail:'))).toBe(false);
     expect(lines.every((line) => line.startsWith('\u001b[38;2;255;255;255;48;2;0;0;0m'))).toBe(true);
+  });
+
+  test('cli: summarizes chart parsing under chart resource loading step', () => {
+    const lines = createPlayLoadingProgressScreenLines(
+      '/charts/stagefile-test.bms',
+      {
+        ratio: 0.12,
+        message: 'Loading stage image...',
+      },
+      { columns: 48 },
+    );
+
+    expect(lines.some((line) => line.includes('Step: Loading chart resources...'))).toBe(true);
+    expect(lines.some((line) => line.includes('Step: Loading stage image...'))).toBe(false);
   });
 
   test('cli: chooses black text on bright stage pixels and white text on dark stage pixels', () => {
@@ -240,6 +266,11 @@ describe('player cli', () => {
         ratio: 0.75,
         message: 'Preparing audio...',
         detail: 'sample.wav',
+        audioStatus: {
+          state: 'pending',
+          message: 'Loading key sounds...',
+          detail: 'sample.wav',
+        },
       },
       {
         columns: 48,
@@ -257,7 +288,8 @@ describe('player cli', () => {
     expect(output.startsWith('\u001b[H')).toBe(true);
     expect(output).not.toContain('\u001b[2J');
     expect(output).not.toContain('ANSI_STAGE_LINE_1');
-    expect(output).toContain('Detail: sample.wav');
+    expect(output).toContain('Sound: Loading key sounds... (sample.wav)');
+    expect(output).not.toContain('Detail: sample.wav');
   });
 
   test('cli: expands STAGEFILE splash bounds to the available loading screen area', () => {
@@ -371,18 +403,12 @@ describe('player cli', () => {
   });
 
   test('cli: rejects out-of-range --high-speed', () => {
-    expect(() => parseArgs(['chart.bms', '--high-speed', '0.25'])).toThrow(
-      '--high-speed must be between 0.5 and 10',
-    );
-    expect(() => parseArgs(['chart.bms', '--high-speed', '10.5'])).toThrow(
-      '--high-speed must be between 0.5 and 10',
-    );
+    expect(() => parseArgs(['chart.bms', '--high-speed', '0.25'])).toThrow('--high-speed must be between 0.5 and 10');
+    expect(() => parseArgs(['chart.bms', '--high-speed', '10.5'])).toThrow('--high-speed must be between 0.5 and 10');
   });
 
   test('cli: rejects --high-speed values outside 0.5 increments', () => {
-    expect(() => parseArgs(['chart.bms', '--high-speed', '1.3'])).toThrow(
-      '--high-speed must be in 0.5 increments',
-    );
+    expect(() => parseArgs(['chart.bms', '--high-speed', '1.3'])).toThrow('--high-speed must be in 0.5 increments');
   });
 
   test('cli: uses limiter on and compressor off by default', () => {

@@ -11,12 +11,7 @@ import {
 import { basename } from 'node:path';
 import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
 import { floatToInt16, throwIfAborted } from '@be-music/utils';
-import {
-  type BeMusicEvent,
-  type BeMusicJson,
-  normalizeChannel,
-  normalizeObjectKey,
-} from '@be-music/json';
+import { type BeMusicEvent, type BeMusicJson, normalizeChannel, normalizeObjectKey } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
   type RenderResult,
@@ -31,11 +26,7 @@ import {
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
 import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
 import { type LaneBinding } from '../manual-input.ts';
-import {
-  type LongNoteMode,
-  type TimedLandmineNote,
-  type TimedPlayableNote,
-} from '../playable-notes.ts';
+import { type LongNoteMode, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 import { formatSeconds, resolveAltModifierLabel, resolveChartVolWavGain } from '../utils.ts';
 import { createNodeAudioSink, type AudioSink } from '../audio-sink.ts';
 import {
@@ -56,11 +47,7 @@ import {
 import { type GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import { resolveBmsJudgeWindowsMsForPercent, resolveJudgeWindowsMs } from './judge-window.ts';
 import { createBeatAtSecondsResolverFromTimingResolver } from './timeline.ts';
-import {
-  createInitialPlayerSummary,
-  initializePlayerUiRuntime,
-  preparePlaybackChartData,
-} from './bootstrap.ts';
+import { createInitialPlayerSummary, initializePlayerUiRuntime, preparePlaybackChartData } from './bootstrap.ts';
 
 export interface PlayerUiRuntime {
   readonly tuiEnabled: boolean;
@@ -168,6 +155,14 @@ export interface PlayerGrooveGaugeSummary {
 
 export interface PlayerLoadProgress {
   ratio: number;
+  message: string;
+  detail?: string;
+  audioStatus?: PlayerLoadComponentStatus;
+  graphicsStatus?: PlayerLoadComponentStatus;
+}
+
+export interface PlayerLoadComponentStatus {
+  state: 'pending' | 'ready' | 'disabled';
   message: string;
   detail?: string;
 }
@@ -402,7 +397,13 @@ export {
   extractTimedNotes,
 } from '../playable-notes.ts';
 
-function reportLoadProgress(options: PlayerOptions, ratio: number, message: string, detail?: string): void {
+function reportLoadProgress(
+  options: PlayerOptions,
+  ratio: number,
+  message: string,
+  detail?: string,
+  componentStatuses?: Partial<Pick<PlayerLoadProgress, 'audioStatus' | 'graphicsStatus'>>,
+): void {
   const listener = options.onLoadProgress;
   if (!listener) {
     return;
@@ -412,7 +413,110 @@ function reportLoadProgress(options: PlayerOptions, ratio: number, message: stri
     ratio: normalizedRatio,
     message,
     detail,
+    ...componentStatuses,
   });
+}
+
+function createTrackedPromise<T>(task: Promise<T>): TrackedPromise<T> {
+  let state: TrackedPromiseState<T> = { status: 'pending' };
+  const promise = task.then(
+    (value) => {
+      state = { status: 'fulfilled', value };
+      return value;
+    },
+    (reason) => {
+      state = { status: 'rejected', reason };
+      throw reason;
+    },
+  );
+  return {
+    promise,
+    getState: () => state,
+  };
+}
+
+function createPlaybackPreparationProgressReporter(options: PlayerOptions): PlaybackPreparationProgressReporter {
+  let uiRatio = 0;
+  let audioRatio = 0;
+  let audioStatus: PlayerLoadComponentStatus = createPendingLoadComponentStatus('Waiting for audio setup...');
+  let graphicsStatus: PlayerLoadComponentStatus = createPendingLoadComponentStatus('Waiting for graphics setup...');
+
+  const emit = (message: string, detail?: string): void => {
+    reportLoadProgress(
+      options,
+      PLAYBACK_PREPARATION_BASE_RATIO +
+        uiRatio * PLAYBACK_PREPARATION_UI_RATIO_WEIGHT +
+        audioRatio * PLAYBACK_PREPARATION_AUDIO_RATIO_WEIGHT,
+      message,
+      detail,
+      {
+        audioStatus,
+        graphicsStatus,
+      },
+    );
+  };
+
+  return {
+    reportUiProgress: (ratio, message, detail) => {
+      uiRatio = Math.max(0, Math.min(1, ratio));
+      graphicsStatus = createPendingLoadComponentStatus(message, detail);
+      emit(message, detail);
+    },
+    reportAudioProgress: (progress) => {
+      audioRatio = Math.max(0, Math.min(1, progress.ratio));
+      audioStatus = resolveAudioLoadComponentStatus(progress);
+      emit(progress.message, progress.detail);
+    },
+    markUiReady: (enabled) => {
+      graphicsStatus = enabled
+        ? createReadyLoadComponentStatus('Ready')
+        : createDisabledLoadComponentStatus('Disabled');
+    },
+    markAudioReady: (audioSession, audioRequested) => {
+      if (audioRequested === false) {
+        audioStatus = createDisabledLoadComponentStatus('Disabled');
+        return;
+      }
+      audioStatus = audioSession
+        ? createReadyLoadComponentStatus('Ready')
+        : createDisabledLoadComponentStatus('Unavailable');
+    },
+  };
+}
+
+function createPendingLoadComponentStatus(message: string, detail?: string): PlayerLoadComponentStatus {
+  return {
+    state: 'pending',
+    message,
+    detail,
+  };
+}
+
+function createReadyLoadComponentStatus(message: string): PlayerLoadComponentStatus {
+  return {
+    state: 'ready',
+    message,
+  };
+}
+
+function createDisabledLoadComponentStatus(message: string): PlayerLoadComponentStatus {
+  return {
+    state: 'disabled',
+    message,
+  };
+}
+
+function resolveAudioLoadComponentStatus(progress: AudioSessionLoadProgress): PlayerLoadComponentStatus {
+  if (progress.message === 'Audio ready.') {
+    return createReadyLoadComponentStatus('Ready');
+  }
+  if (progress.message === 'Audio disabled; skipping audio setup.') {
+    return createDisabledLoadComponentStatus('Disabled');
+  }
+  if (progress.message === 'node-web-audio-api is unavailable; continuing without audio.') {
+    return createDisabledLoadComponentStatus('Unavailable');
+  }
+  return createPendingLoadComponentStatus(progress.message, progress.detail);
 }
 
 function resolveOutputWriter(options: PlayerOptions): (text: string) => void {
@@ -435,6 +539,28 @@ interface AudioSessionLoadProgress {
   detail?: string;
 }
 
+interface PlaybackPreparationProgressReporter {
+  reportUiProgress: (ratio: number, message: string, detail?: string) => void;
+  reportAudioProgress: (progress: AudioSessionLoadProgress) => void;
+  markUiReady: (enabled: boolean) => void;
+  markAudioReady: (audioSession: AudioSession | undefined, audioRequested: boolean | undefined) => void;
+}
+
+type TrackedPromiseState<T> =
+  | { status: 'pending' }
+  | { status: 'fulfilled'; value: T }
+  | { status: 'rejected'; reason: unknown };
+
+interface TrackedPromise<T> {
+  promise: Promise<T>;
+  getState: () => TrackedPromiseState<T>;
+}
+
+const PLAYBACK_PREPARATION_BASE_RATIO = 0.18;
+const PLAYBACK_PREPARATION_UI_RATIO_WEIGHT = 0.12;
+const PLAYBACK_PREPARATION_AUDIO_RATIO_WEIGHT = 0.68;
+const PREPARED_UI_RUNTIME_SETTLE_TIMEOUT_MS = 300;
+
 function formatSampleLoadDetail(progress: RenderSampleLoadProgress): string {
   if (typeof progress.resolvedPath === 'string' && progress.resolvedPath.length > 0) {
     return basename(progress.resolvedPath);
@@ -443,6 +569,98 @@ function formatSampleLoadDetail(progress: RenderSampleLoadProgress): string {
     return progress.samplePath;
   }
   return `#WAV${progress.sampleKey}`;
+}
+
+async function disposePreparedUiRuntime(
+  initializedUiRuntime: Awaited<ReturnType<typeof initializePlayerUiRuntime>>,
+): Promise<void> {
+  await settleMaybeAsyncWithTimeout(initializedUiRuntime.uiRuntime?.stop(), PREPARED_UI_RUNTIME_SETTLE_TIMEOUT_MS);
+  await settleMaybeAsyncWithTimeout(initializedUiRuntime.uiRuntime?.dispose(), PREPARED_UI_RUNTIME_SETTLE_TIMEOUT_MS);
+}
+
+async function cleanupFailedPlaybackPreparation(
+  uiInitialization: TrackedPromise<Awaited<ReturnType<typeof initializePlayerUiRuntime>>>,
+  audioInitialization: TrackedPromise<AudioSession | undefined>,
+): Promise<void> {
+  const uiState = uiInitialization.getState();
+  if (uiState.status === 'fulfilled') {
+    await disposePreparedUiRuntime(uiState.value);
+  } else if (uiState.status === 'pending') {
+    void uiInitialization.promise.then(disposePreparedUiRuntime).catch(() => undefined);
+  }
+
+  const audioState = audioInitialization.getState();
+  if (audioState.status === 'fulfilled') {
+    await disposeAudioSessionSafely(audioState.value);
+  } else if (audioState.status === 'pending') {
+    void audioInitialization.promise
+      .then((audioSession) => disposeAudioSessionSafely(audioSession))
+      .catch(() => undefined);
+  }
+}
+
+async function initializePlaybackRuntimeResources(params: {
+  resolvedJson: BeMusicJson;
+  options: PlayerOptions;
+  mode: CreatePlayerUiRuntimeContext['mode'];
+  laneDisplayMode: string;
+  laneBindings: LaneBinding[];
+  speed: number;
+  judgeWindowMs: number;
+  highSpeed: number;
+  randomPatternSummary: string | undefined;
+  stateSignals: PlayerStateSignals;
+  uiSignals: PlayerUiSignalBus;
+  totalSeconds: number;
+  audioMode: 'auto' | 'manual';
+}): Promise<
+  Awaited<ReturnType<typeof initializePlayerUiRuntime>> & {
+    audioSession: AudioSession | undefined;
+  }
+> {
+  const progressReporter = createPlaybackPreparationProgressReporter(params.options);
+  const uiInitialization = createTrackedPromise(
+    initializePlayerUiRuntime({
+      options: params.options,
+      resolvedJson: params.resolvedJson,
+      mode: params.mode,
+      laneDisplayMode: params.laneDisplayMode,
+      laneBindings: params.laneBindings,
+      speed: params.speed,
+      judgeWindowMs: params.judgeWindowMs,
+      highSpeed: params.highSpeed,
+      randomPatternSummary: params.randomPatternSummary,
+      stateSignals: params.stateSignals,
+      uiSignals: params.uiSignals,
+      totalSeconds: params.totalSeconds,
+      onLoadProgress: progressReporter.reportUiProgress,
+    }).then((initializedUiRuntime) => {
+      progressReporter.markUiReady(initializedUiRuntime.uiEnabled);
+      return initializedUiRuntime;
+    }),
+  );
+  const audioInitialization = createTrackedPromise(
+    createAudioSessionIfEnabled(
+      params.resolvedJson,
+      params.options,
+      params.audioMode,
+      progressReporter.reportAudioProgress,
+    ).then((audioSession) => {
+      progressReporter.markAudioReady(audioSession, params.options.audio);
+      return audioSession;
+    }),
+  );
+
+  try {
+    const [uiInitResult, audioSession] = await Promise.all([uiInitialization.promise, audioInitialization.promise]);
+    return {
+      ...uiInitResult,
+      audioSession,
+    };
+  } catch (error) {
+    await cleanupFailedPlaybackPreparation(uiInitialization, audioInitialization);
+    throw error;
+  }
 }
 
 export function resolveBmsControlFlowForPlayback(
@@ -624,7 +842,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     timingResolver,
   );
   const realtimeAudioEndSeconds =
-    options.audio === false ? 0 : Math.max(realtimeAudioTriggers.at(-1)?.seconds ?? 0, realtimeAudioVolumeEvents.at(-1)?.seconds ?? 0);
+    options.audio === false
+      ? 0
+      : Math.max(realtimeAudioTriggers.at(-1)?.seconds ?? 0, realtimeAudioVolumeEvents.at(-1)?.seconds ?? 0);
   const playbackChart = preparePlaybackChartData(
     resolvedJson,
     {
@@ -666,9 +886,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     totalSeconds: playbackTotalSeconds,
     uiEnabled,
     activeStateSignals,
-  } = await initializePlayerUiRuntime({
-    options,
+    audioSession,
+  } = await initializePlaybackRuntimeResources({
     resolvedJson,
+    options,
     mode: 'AUTO',
     laneDisplayMode,
     laneBindings,
@@ -679,9 +900,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     stateSignals,
     uiSignals,
     totalSeconds,
-    onLoadProgress: (ratio, message, detail) => {
-      reportLoadProgress(options, ratio, message, detail);
-    },
+    audioMode: 'auto',
   });
   totalSeconds = playbackTotalSeconds;
 
@@ -691,10 +910,6 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     inputTokenToChannels,
   });
 
-  reportLoadProgress(options, 0.3, 'Preparing audio...');
-  const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'auto', (progress) => {
-    reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
-  });
   throwIfAborted(options.signal);
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
   const autoDebugAudioEstimator = options.debugActiveAudio
@@ -1109,9 +1324,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     totalSeconds: playbackTotalSeconds,
     uiEnabled,
     activeStateSignals,
-  } = await initializePlayerUiRuntime({
-    options,
+    audioSession,
+  } = await initializePlaybackRuntimeResources({
     resolvedJson,
+    options,
     mode: autoScratchEnabled ? 'AUTO SCRATCH' : 'MANUAL',
     laneDisplayMode,
     laneBindings,
@@ -1122,9 +1338,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     stateSignals,
     uiSignals,
     totalSeconds,
-    onLoadProgress: (ratio, message, detail) => {
-      reportLoadProgress(options, ratio, message, detail);
-    },
+    audioMode: 'manual',
   });
   totalSeconds = playbackTotalSeconds;
 
@@ -1134,10 +1348,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     inputTokenToChannels,
   });
 
-  reportLoadProgress(options, 0.3, 'Preparing audio...');
-  const audioSession = await createAudioSessionIfEnabled(resolvedJson, options, 'manual', (progress) => {
-    reportLoadProgress(options, 0.3 + progress.ratio * 0.68, progress.message, progress.detail);
-  });
   throwIfAborted(options.signal);
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
   reportLoadProgress(options, 1, 'Ready');
@@ -1408,7 +1618,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     applyResolvedManualJudge(channel, resolveManualTimedJudge(signedDeltaMs, judgeWindows, badWindowMs), atSeconds);
   };
 
-  const finalizeActiveLongNote = (channel: string, hold: ActiveLongNoteState, judge: TimedManualJudge, atSeconds: number): void => {
+  const finalizeActiveLongNote = (
+    channel: string,
+    hold: ActiveLongNoteState,
+    judge: TimedManualJudge,
+    atSeconds: number,
+  ): void => {
     activeLongNotesByChannel.delete(channel);
     longHoldUntilMsByChannel.delete(channel);
     applyResolvedManualJudge(channel, judge, atSeconds);
@@ -1716,7 +1931,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             audioSession?.stopChannel?.(channel);
             hold.audioStopped = true;
           }
-          finalizeActiveLongNote(channel, hold, { kind: 'BAD', signedDeltaMs: (nowSec - hold.endSeconds) * 1000 }, nowSec);
+          finalizeActiveLongNote(
+            channel,
+            hold,
+            { kind: 'BAD', signedDeltaMs: (nowSec - hold.endSeconds) * 1000 },
+            nowSec,
+          );
           continue;
         }
         if (hold.mode === 3) {
@@ -1742,14 +1962,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           }
           const finalJudge =
             hold.mode === 3 && !isHolding
-              ? combineLongNoteJudges(
-                hold.headJudge,
-                { kind: 'POOR', signedDeltaMs: (nowSec - hold.endSeconds) * 1000 } satisfies TimedManualJudge,
-              )
+              ? combineLongNoteJudges(hold.headJudge, {
+                  kind: 'POOR',
+                  signedDeltaMs: (nowSec - hold.endSeconds) * 1000,
+                } satisfies TimedManualJudge)
               : combineLongNoteJudges(
-                hold.headJudge,
-                resolveManualTimedJudge((nowSec - hold.endSeconds) * 1000, judgeWindows, badWindowMs),
-              );
+                  hold.headJudge,
+                  resolveManualTimedJudge((nowSec - hold.endSeconds) * 1000, judgeWindows, badWindowMs),
+                );
           finalizeActiveLongNote(channel, hold, finalJudge, nowSec);
           continue;
         }
@@ -2085,8 +2305,7 @@ async function createAudioSessionIfEnabled(
       }
       const isPlayLaneSound = isPlayLaneSoundChannel(normalizedChannel);
       const voiceGain =
-        (isPlayLaneSound ? playVolume : bgmVolume) *
-        (isPlayLaneSound ? currentPlayDynamicGain : currentBgmDynamicGain);
+        (isPlayLaneSound ? playVolume : bgmVolume) * (isPlayLaneSound ? currentPlayDynamicGain : currentBgmDynamicGain);
       if (voiceGain <= 0) {
         return;
       }
@@ -2645,8 +2864,8 @@ function stripPlayableEvents(json: BeMusicJson): BeMusicJson {
 
 function stripNonPlayableEvents(json: BeMusicJson): BeMusicJson {
   const cloned = structuredClone(json);
-  cloned.events = cloned.events.filter((event) =>
-    isPlayLaneSoundChannel(event.channel) || isBmsKeyVolumeChangeChannel(event.channel),
+  cloned.events = cloned.events.filter(
+    (event) => isPlayLaneSoundChannel(event.channel) || isBmsKeyVolumeChangeChannel(event.channel),
   );
   return cloned;
 }
