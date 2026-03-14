@@ -39,9 +39,11 @@ interface ChartSummaryItem {
   bpmMax?: number;
 }
 
+type PersistedChartSummaryItem = Omit<ChartSummaryItem, 'filePath' | 'relativePath' | 'directoryLabel' | 'fileLabel'>;
+
 interface PersistedChartSelectionCacheFileEntry {
   contentHash: string;
-  summary: ChartSummaryItem;
+  summary: PersistedChartSummaryItem;
 }
 
 interface PersistedChartSelectionCacheDirectoryEntry {
@@ -112,7 +114,7 @@ export interface ListChartFilesOptions {
 }
 
 const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
-const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/2';
+const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/3';
 let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
 
 export async function listChartFiles(rootDir: string, options: ListChartFilesOptions = {}): Promise<string[]> {
@@ -159,9 +161,10 @@ export async function buildChartSelectionEntries(
   let resolvedEntries: ResolvedChartSummaryCacheEntry[];
   if (!options.onLoadingFile) {
     resolvedEntries = await Promise.all(
-      files.map((filePath) =>
-        buildChartSummaryWithCache(rootDir, filePath, cachedEntries[filePath], options.signal),
-      ),
+      files.map((filePath) => {
+        const relativePath = resolveChartSummaryRelativePath(rootDir, filePath);
+        return buildChartSummaryWithCache(rootDir, filePath, relativePath, cachedEntries[relativePath], options.signal);
+      }),
     );
   } else {
     resolvedEntries = [];
@@ -173,18 +176,22 @@ export async function buildChartSelectionEntries(
         currentIndex: index + 1,
         totalCount: files.length,
       });
-      resolvedEntries.push(await buildChartSummaryWithCache(rootDir, filePath, cachedEntries[filePath], options.signal));
+      const relativePath = resolveChartSummaryRelativePath(rootDir, filePath);
+      resolvedEntries.push(
+        await buildChartSummaryWithCache(rootDir, filePath, relativePath, cachedEntries[relativePath], options.signal),
+      );
     }
   }
   const summaries = resolvedEntries.map((entry) => entry.summary);
   for (let index = 0; index < files.length; index += 1) {
     const filePath = files[index]!;
+    const relativePath = resolveChartSummaryRelativePath(rootDir, filePath);
     const resolvedEntry = resolvedEntries[index]!;
     if (!resolvedEntry.cacheHit) {
       cacheDirty = true;
     }
     if (resolvedEntry.cacheEntry) {
-      nextCachedEntries[filePath] = resolvedEntry.cacheEntry;
+      nextCachedEntries[relativePath] = resolvedEntry.cacheEntry;
     }
   }
   if (cacheDirty) {
@@ -198,10 +205,12 @@ export async function buildChartSelectionEntries(
 async function buildChartSummaryWithCache(
   rootDir: string,
   filePath: string,
+  relativePath: string,
   cachedEntry: PersistedChartSelectionCacheFileEntry | undefined,
   signal?: AbortSignal,
 ): Promise<ResolvedChartSummaryCacheEntry> {
   throwIfAborted(signal);
+  const pathFields = createChartSummaryPathFields(rootDir, filePath, relativePath);
 
   let sourceBuffer: Buffer | undefined;
   try {
@@ -215,7 +224,7 @@ async function buildChartSummaryWithCache(
   const contentHash = sourceBuffer ? buildChartSelectionContentHash(sourceBuffer) : undefined;
   if (cachedEntry && typeof contentHash === 'string' && cachedEntry.contentHash === contentHash) {
     return {
-      summary: cachedEntry.summary,
+      summary: restoreChartSummary(pathFields, cachedEntry.summary),
       cacheEntry: cachedEntry,
       cacheHit: true,
     };
@@ -228,7 +237,7 @@ async function buildChartSummaryWithCache(
       typeof contentHash === 'string'
         ? {
             contentHash,
-            summary,
+            summary: persistChartSummary(summary),
           }
         : undefined,
     cacheHit: false,
@@ -401,10 +410,7 @@ async function buildChartSummary(
   sourceBuffer?: Buffer,
 ): Promise<ChartSummaryItem> {
   throwIfAborted(signal);
-  const relativePath = relative(rootDir, filePath).replaceAll('\\', '/');
-  const slashIndex = relativePath.lastIndexOf('/');
-  const directoryLabel = slashIndex >= 0 ? relativePath.slice(0, slashIndex) : '.';
-  const fileLabel = slashIndex >= 0 ? relativePath.slice(slashIndex + 1) : relativePath;
+  const pathFields = createChartSummaryPathFields(rootDir, filePath);
 
   let player: number | undefined;
   let rank: number | undefined;
@@ -455,10 +461,7 @@ async function buildChartSummary(
   }
 
   return {
-    filePath,
-    relativePath,
-    directoryLabel,
-    fileLabel,
+    ...pathFields,
     title,
     subtitle,
     artist,
@@ -505,6 +508,39 @@ function decodeUtf8Buffer(buffer: Buffer): string {
 
 function buildChartSelectionContentHash(sourceBuffer: Buffer): string {
   return createHash('sha256').update(sourceBuffer).digest('hex');
+}
+
+function createChartSummaryPathFields(
+  rootDir: string,
+  filePath: string,
+  relativePath = resolveChartSummaryRelativePath(rootDir, filePath),
+): Pick<ChartSummaryItem, 'filePath' | 'relativePath' | 'directoryLabel' | 'fileLabel'> {
+  const slashIndex = relativePath.lastIndexOf('/');
+  return {
+    filePath,
+    relativePath,
+    directoryLabel: slashIndex >= 0 ? relativePath.slice(0, slashIndex) : '.',
+    fileLabel: slashIndex >= 0 ? relativePath.slice(slashIndex + 1) : relativePath,
+  };
+}
+
+function resolveChartSummaryRelativePath(rootDir: string, filePath: string): string {
+  return relative(rootDir, filePath).replaceAll('\\', '/');
+}
+
+function persistChartSummary(summary: ChartSummaryItem): PersistedChartSummaryItem {
+  const { filePath: _filePath, relativePath: _relativePath, directoryLabel: _directoryLabel, fileLabel: _fileLabel, ...persisted } = summary;
+  return persisted;
+}
+
+function restoreChartSummary(
+  pathFields: Pick<ChartSummaryItem, 'filePath' | 'relativePath' | 'directoryLabel' | 'fileLabel'>,
+  summary: PersistedChartSummaryItem,
+): ChartSummaryItem {
+  return {
+    ...pathFields,
+    ...summary,
+  };
 }
 
 function sanitizeChartSelectionMetadataText(value: string | undefined): string | undefined {
@@ -615,7 +651,7 @@ function parsePersistedChartSelectionCache(value: unknown): PersistedChartSelect
       }
       files[filePath] = {
         contentHash: fileEntry.contentHash,
-        summary: fileEntry.summary as ChartSummaryItem,
+        summary: fileEntry.summary as PersistedChartSummaryItem,
       };
     }
     if (Object.keys(files).length > 0) {

@@ -126,9 +126,24 @@ describe('chart selection', () => {
     expect(parseChartSpy).not.toHaveBeenCalled();
 
     const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
-    const cacheContent = await readFile(cachePath, 'utf8');
-    expect(cacheContent).toContain('cached-hit.bms');
-    expect(cacheContent).toContain('contentHash');
+    const cacheJson = JSON.parse(await readFile(cachePath, 'utf8')) as {
+      directories: Record<
+        string,
+        {
+          files: Record<
+            string,
+            {
+              contentHash: string;
+              summary: Record<string, unknown>;
+            }
+          >;
+        }
+      >;
+    };
+    expect(cacheJson.directories[tempRoot]?.files['cached-hit.bms']).toBeDefined();
+    expect(cacheJson.directories[tempRoot]?.files[chartPath]).toBeUndefined();
+    expect(cacheJson.directories[tempRoot]?.files['cached-hit.bms']?.contentHash).toEqual(expect.any(String));
+    expect(cacheJson.directories[tempRoot]?.files['cached-hit.bms']?.summary.filePath).toBeUndefined();
   });
 
   test('buildChartSelectionEntries: invalidates cached summaries when chart contents change without size or mtime changes', async () => {
