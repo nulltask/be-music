@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import {
   clamp,
   clampSignedUnit,
+  compareFractions,
   findLastIndexAtOrBefore,
   findLastIndexBefore,
   gcd,
@@ -10,6 +11,7 @@ import {
   normalizeAsciiBase36Code,
   normalizeFractionNumerator,
   normalizeNonNegativeInt,
+  normalizeSortedUniqueNonNegativeIntegers,
   normalizePositiveInt,
   resolveCliPath,
 } from './index.ts';
@@ -61,6 +63,36 @@ test('gcd/lcm: computes greatest common divisor and least common multiple', () =
   expect(lcm(6, 8)).toBe(24);
   expect(lcm(-6, 8)).toBe(24);
   expect(lcm(0, 8)).toBe(0);
+});
+
+test('compareFractions: handles equal denominators, safe integer math, and BigInt fallback', () => {
+  expect(compareFractions(1, 4, 2, 4)).toBe(-1);
+  expect(compareFractions(1, 3, 2, 6)).toBe(0);
+  expect(compareFractions(3, 5, 1, 2)).toBe(1);
+  expect(compareFractions(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER - 1)).toBe(-1);
+  expect(compareFractions(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER - 1, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)).toBe(1);
+});
+
+test('normalizeSortedUniqueNonNegativeIntegers: normalizes, sorts, and deduplicates small inputs', () => {
+  expect(
+    normalizeSortedUniqueNonNegativeIntegers([
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      -5,
+      3.8,
+      1.2,
+      3.2,
+      0x8000_0000 + 0.9,
+      0,
+    ]),
+  ).toEqual([0, 1, 3, 0x8000_0000]);
+});
+
+test('normalizeSortedUniqueNonNegativeIntegers: uses the large-input sort path', () => {
+  expect(
+    normalizeSortedUniqueNonNegativeIntegers([16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1.8, 0]),
+  ).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
 });
 
 test('findLastIndexAtOrBefore/findLastIndexBefore: returns binary-search index bounds', () => {

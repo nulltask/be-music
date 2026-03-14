@@ -186,6 +186,37 @@ describe('chart', () => {
     expect(parseBmsDynamicVolumeGain('GG')).toBeUndefined();
   });
 
+  test('classifies normalized fallback inputs after trimming and case normalization', () => {
+    expect(isScrollChannel(' sc ')).toBe(true);
+    expect(isStopChannel(' 09 ')).toBe(true);
+    expect(isPlayableChannel(' 11 ')).toBe(true);
+    expect(isBmsLongNoteChannel(' 69 ')).toBe(true);
+    expect(isSampleTriggerChannel(' a0 ')).toBe(false);
+    expect(isBmsDynamicVolumeChangeChannel(' 98 ')).toBe(true);
+    expect(mapBmsLongNoteChannelToPlayable(' 61 ')).toBe('21');
+  });
+
+  test('resolve long note helpers return empty results for non-BMS charts and missing LNOBJ markers', () => {
+    const nonBms = createEmptyJson('json');
+    const nonBmsLongNotes = resolveBmsLongNotes(nonBms);
+    const nonBmsLnobj = resolveLnobjLongNotes(nonBms);
+    expect(nonBmsLongNotes.notes).toEqual([]);
+    expect(nonBmsLongNotes.suppressedTriggerEvents.size).toBe(0);
+    expect(nonBmsLnobj.startToEndBeat.size).toBe(0);
+    expect(nonBmsLnobj.endEvents.size).toBe(0);
+
+    const bms = createEmptyJson('bms');
+    bms.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+    const missingLnobj = resolveLnobjLongNotes(bms);
+    expect(missingLnobj.startToEndBeat.size).toBe(0);
+    expect(missingLnobj.endEvents.size).toBe(0);
+
+    const noLongNoteChannels = resolveBmsLongNotes(bms);
+    expect(noLongNoteChannels.notes).toEqual([]);
+    expect(noLongNoteChannels.suppressedTriggerEvents.size).toBe(0);
+  });
+
   test('collectLnobjEndEvents returns only paired LNOBJ end markers', () => {
     const json = createEmptyJson('bms');
     json.bms.lnObjs = ['AA'];
@@ -356,5 +387,23 @@ describe('chart', () => {
     expect(inferredResolved.notes[0]?.endBeat).toBeCloseTo(3, 6);
     expect(inferredResolved.suppressedTriggerEvents.has(contA)).toBe(true);
     expect(inferredResolved.suppressedTriggerEvents.has(contB)).toBe(true);
+  });
+
+  test('resolveBmsLongNotes keeps LNTYPE=1 inference when events are not a type-2 continuation run', () => {
+    const json = createEmptyJson('bms');
+    const start: BeMusicEvent = { measure: 0, channel: '51', position: [0, 4], value: '01' };
+    const later: BeMusicEvent = { measure: 1, channel: '51', position: [1, 4], value: '01' };
+    json.events = [start, later];
+
+    const resolved = resolveBmsLongNotes(json, { inferLnTypeWhenMissing: true });
+    expect(resolved.notes).toHaveLength(1);
+    expect(resolved.notes[0]).toMatchObject({
+      event: start,
+      sourceChannel: '51',
+      channel: '11',
+      beat: 0,
+    });
+    expect(resolved.notes[0]?.endBeat).toBeCloseTo(5, 6);
+    expect(resolved.suppressedTriggerEvents.has(later)).toBe(true);
   });
 });

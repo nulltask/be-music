@@ -62,19 +62,36 @@ describe('json', () => {
     expect(source.bms.speed['01']).toBe(1.5);
   });
 
+  test('json: cloneJson preserves omitted optional fields', () => {
+    const source = createEmptyJson('bms');
+    source.bms.lnObjs = undefined;
+    source.bmson.info.subartists = undefined;
+
+    const cloned = cloneJson(source);
+    expect(cloned.bms.lnObjs).toBeUndefined();
+    expect(cloned.bmson.info.subartists).toBeUndefined();
+  });
+
   test('json: normalizeObjectKey / normalizeChannel', () => {
     expect(normalizeObjectKey('')).toBe('00');
     expect(normalizeObjectKey('a')).toBe('0A');
+    expect(normalizeObjectKey(' a ')).toBe('0A');
+    expect(normalizeObjectKey('!')).toBe('0!');
+    expect(normalizeObjectKey('a!')).toBe('A!');
+    expect(normalizeObjectKey('a1')).toBe('A1');
     expect(normalizeObjectKey(' abc ')).toBe('AB');
     expect(normalizeObjectKey('xyz')).toBe('XY');
     expect(normalizeChannel('1a')).toBe('1A');
+    expect(normalizeChannel(' abc ')).toBe('AB');
   });
 
   test('json: intToBase36 encodes compact identifiers', () => {
     expect(intToBase36(0)).toBe('00');
     expect(intToBase36(35)).toBe('0Z');
     expect(intToBase36(36)).toBe('10');
+    expect(intToBase36(37, 1)).toBe('1');
     expect(intToBase36(-1)).toBe('00');
+    expect(intToBase36(Number.POSITIVE_INFINITY, 3)).toBe('000');
     expect(intToBase36(1, 4)).toBe('0001');
   });
 
@@ -85,5 +102,18 @@ describe('json', () => {
     const found = ensureMeasure(json, 2);
     expect(found).toBe(created);
     expect(json.measures.find((measure) => measure.index === 2)?.length).toBe(0.75);
+  });
+
+  test('json: ensureMeasure appends after the last measure and finds earlier entries', () => {
+    const json = createEmptyJson();
+    const early = { index: 1, length: 0.75 };
+    const late = { index: 4, length: 1.5 };
+    json.measures.push(early, late);
+
+    expect(ensureMeasure(json, 1)).toBe(early);
+
+    const created = ensureMeasure(json, 6);
+    expect(created).toEqual({ index: 6, length: 1 });
+    expect(json.measures.at(-1)).toBe(created);
   });
 });
