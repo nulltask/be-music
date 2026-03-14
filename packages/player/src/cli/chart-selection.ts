@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { availableParallelism, homedir } from 'node:os';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { invokeWorkerizedFunction, isAbortError, throwIfAborted, workerize } from '@be-music/utils';
 import { type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
@@ -115,6 +115,7 @@ export interface ListChartFilesOptions {
 
 const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
 const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/3';
+const CHART_SELECTION_BUILD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
 let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
 
 export async function listChartFiles(rootDir: string, options: ListChartFilesOptions = {}): Promise<string[]> {
@@ -158,30 +159,30 @@ export async function buildChartSelectionEntries(
   const cachedEntries = cache.directories[rootDir]?.files ?? {};
   const nextCachedEntries: Record<string, PersistedChartSelectionCacheFileEntry> = {};
   let cacheDirty = cache.directories[rootDir] === undefined || Object.keys(cachedEntries).length !== files.length;
-  let resolvedEntries: ResolvedChartSummaryCacheEntry[];
-  if (!options.onLoadingFile) {
-    resolvedEntries = await Promise.all(
-      files.map((filePath) => {
-        const relativePath = resolveChartSummaryRelativePath(rootDir, filePath);
-        return buildChartSummaryWithCache(rootDir, filePath, relativePath, cachedEntries[relativePath], options.signal);
-      }),
-    );
-  } else {
-    resolvedEntries = [];
-    for (let index = 0; index < files.length; index += 1) {
+  let completedFileCount = 0;
+  const resolvedEntries = await mapWithConcurrency(
+    files,
+    Math.min(files.length || 1, CHART_SELECTION_BUILD_CONCURRENCY),
+    async (filePath) => {
       throwIfAborted(options.signal);
-      const filePath = files[index];
+      const relativePath = resolveChartSummaryRelativePath(rootDir, filePath);
+      const resolvedEntry = await buildChartSummaryWithCache(
+        rootDir,
+        filePath,
+        relativePath,
+        cachedEntries[relativePath],
+        options.signal,
+      );
+      completedFileCount += 1;
       options.onLoadingFile?.({
         filePath,
-        currentIndex: index + 1,
+        currentIndex: completedFileCount,
         totalCount: files.length,
       });
-      const relativePath = resolveChartSummaryRelativePath(rootDir, filePath);
-      resolvedEntries.push(
-        await buildChartSummaryWithCache(rootDir, filePath, relativePath, cachedEntries[relativePath], options.signal),
-      );
-    }
-  }
+      return resolvedEntry;
+    },
+    options.signal,
+  );
   const summaries = resolvedEntries.map((entry) => entry.summary);
   for (let index = 0; index < files.length; index += 1) {
     const filePath = files[index]!;
@@ -242,6 +243,34 @@ async function buildChartSummaryWithCache(
         : undefined,
     cacheHit: false,
   };
+}
+
+async function mapWithConcurrency<TInput, TOutput>(
+  items: readonly TInput[],
+  concurrency: number,
+  worker: (item: TInput, index: number) => Promise<TOutput>,
+  signal?: AbortSignal,
+): Promise<TOutput[]> {
+  if (items.length === 0) {
+    return [];
+  }
+  const results = new Array<TOutput>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length));
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        throwIfAborted(signal);
+        const currentIndex = nextIndex;
+        if (currentIndex >= items.length) {
+          return;
+        }
+        nextIndex += 1;
+        results[currentIndex] = await worker(items[currentIndex]!, currentIndex);
+      }
+    }),
+  );
+  return results;
 }
 
 async function buildChartSelectionEntriesFromSummariesOffThread(

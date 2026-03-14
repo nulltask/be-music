@@ -145,6 +145,7 @@ interface PlayLoadingScreenRenderState {
   initialized: boolean;
   stageFileDrawn: boolean;
   stageFileKittyVisible: boolean;
+  lastOutput?: string;
 }
 
 interface SelectChartInteractivelyOptions {
@@ -1834,8 +1835,12 @@ function renderPlayLoadingProgress(
     resetScreen: shouldResetScreen,
     includeStageFileImage: shouldRedrawStageFile,
   });
+  if (options.state.lastOutput === output) {
+    return;
+  }
   process.stdout.write(output);
   options.state.initialized = true;
+  options.state.lastOutput = output;
   if (options.stageFileImage) {
     options.state.stageFileDrawn = true;
     options.state.stageFileKittyVisible =
@@ -1870,6 +1875,7 @@ function resolvePlayLoadingStageFileBlock(
 }
 
 function clearPlayLoadingStageFileImage(state: PlayLoadingScreenRenderState): void {
+  state.lastOutput = undefined;
   if (!state.stageFileKittyVisible) {
     return;
   }

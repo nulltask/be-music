@@ -85,6 +85,45 @@ describe('player bga', () => {
     }
   });
 
+  test('player bga: reuses identical base-mode assets across layers during initialization', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-shared-load-'));
+    try {
+      const sharedPath = join(baseDir, 'shared.png');
+      await writePng(sharedPath, 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'shared.png';
+      json.events = [
+        { measure: 0, channel: '04', position: [0, 1], value: '01' },
+        { measure: 0, channel: '06', position: [0, 1], value: '01' },
+      ];
+
+      const fsPromises = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+      const readFileMock = vi.fn(fsPromises.readFile);
+      vi.resetModules();
+      vi.doMock('node:fs/promises', () => ({
+        ...fsPromises,
+        readFile: readFileMock,
+      }));
+      const { createBgaAnsiRenderer: createBgaAnsiRendererWithMock } = await import('./bga.ts');
+
+      const renderer = await createBgaAnsiRendererWithMock(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+
+      expect(renderer).toBeDefined();
+      const sharedReads = readFileMock.mock.calls.filter(([filePath]) => filePath === sharedPath);
+      expect(sharedReads).toHaveLength(1);
+    } finally {
+      vi.doUnmock('node:fs/promises');
+      vi.resetModules();
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   test('player bga: loads STAGEFILE splash lines as a full-screen cover image', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-stagefile-splash-'));
     try {

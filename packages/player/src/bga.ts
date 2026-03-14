@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { availableParallelism } from 'node:os';
 import { extname } from 'node:path';
 import {
   invokeWorkerizedFunction,
@@ -31,6 +32,7 @@ const ANSI_RESET = '\u001b[0m';
 const SPEC_BGA_CANVAS_SIZE = 256;
 const TERMINAL_PIXEL_ASPECT_X = 2;
 const TERMINAL_PIXEL_ASPECT_Y = 1;
+const BGA_SOURCE_LOAD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
 
 type ImageFormat = 'bmp' | 'png' | 'jpeg' | 'video';
 type FrameMode = 'base' | 'layer';
@@ -128,6 +130,8 @@ export interface TerminalKittyImage {
 
 export type StageFileAnsiImage = TerminalAnsiImage;
 export type StageFileKittyImage = TerminalKittyImage;
+
+type FrameSourceLoadCache = Map<string, Promise<FrameSource | null>>;
 
 export interface BgaKittyImage {
   pixelWidth: number;
@@ -567,49 +571,54 @@ export async function createBgaAnsiRenderer(
     });
   };
 
-  const baseSourceFramesByKey = await loadFramesByKeys({
-    keys: baseKeys,
-    resources: json.resources.bmp,
-    baseDir: options.baseDir,
-    mode: 'base',
-    width: displaySize.width,
-    height: displaySize.height,
-    onLoadProgress: reportLoadProgress,
-    signal: options.signal,
-  });
-  throwIfAborted(options.signal);
-  const poorSourceFramesByKey = await loadFramesByKeys({
-    keys: poorKeys,
-    resources: json.resources.bmp,
-    baseDir: options.baseDir,
-    mode: 'base',
-    width: displaySize.width,
-    height: displaySize.height,
-    onLoadProgress: reportLoadProgress,
-    signal: options.signal,
-  });
-  throwIfAborted(options.signal);
-  const layerSourceFramesByKey = await loadFramesByKeys({
-    keys: layerKeys,
-    resources: json.resources.bmp,
-    baseDir: options.baseDir,
-    mode: 'layer',
-    width: displaySize.width,
-    height: displaySize.height,
-    onLoadProgress: reportLoadProgress,
-    signal: options.signal,
-  });
-  throwIfAborted(options.signal);
-  const layer2SourceFramesByKey = await loadFramesByKeys({
-    keys: layer2Keys,
-    resources: json.resources.bmp,
-    baseDir: options.baseDir,
-    mode: 'layer',
-    width: displaySize.width,
-    height: displaySize.height,
-    onLoadProgress: reportLoadProgress,
-    signal: options.signal,
-  });
+  const sharedSourceCache: FrameSourceLoadCache = new Map();
+  const [baseSourceFramesByKey, poorSourceFramesByKey, layerSourceFramesByKey, layer2SourceFramesByKey] =
+    await Promise.all([
+      loadFramesByKeys({
+        keys: baseKeys,
+        resources: json.resources.bmp,
+        baseDir: options.baseDir,
+        mode: 'base',
+        width: displaySize.width,
+        height: displaySize.height,
+        onLoadProgress: reportLoadProgress,
+        signal: options.signal,
+        sharedSourceCache,
+      }),
+      loadFramesByKeys({
+        keys: poorKeys,
+        resources: json.resources.bmp,
+        baseDir: options.baseDir,
+        mode: 'base',
+        width: displaySize.width,
+        height: displaySize.height,
+        onLoadProgress: reportLoadProgress,
+        signal: options.signal,
+        sharedSourceCache,
+      }),
+      loadFramesByKeys({
+        keys: layerKeys,
+        resources: json.resources.bmp,
+        baseDir: options.baseDir,
+        mode: 'layer',
+        width: displaySize.width,
+        height: displaySize.height,
+        onLoadProgress: reportLoadProgress,
+        signal: options.signal,
+        sharedSourceCache,
+      }),
+      loadFramesByKeys({
+        keys: layer2Keys,
+        resources: json.resources.bmp,
+        baseDir: options.baseDir,
+        mode: 'layer',
+        width: displaySize.width,
+        height: displaySize.height,
+        onLoadProgress: reportLoadProgress,
+        signal: options.signal,
+        sharedSourceCache,
+      }),
+    ]);
   throwIfAborted(options.signal);
 
   if (
@@ -662,34 +671,41 @@ async function loadFramesByKeys(params: {
   height: number;
   onLoadProgress?: (detail: string) => void;
   signal?: AbortSignal;
+  sharedSourceCache: FrameSourceLoadCache;
 }): Promise<Map<string, FrameSource>> {
-  const { keys, resources, baseDir, mode, width, height, onLoadProgress, signal } = params;
+  const { keys, resources, baseDir, mode, width, height, onLoadProgress, signal, sharedSourceCache } = params;
   const map = new Map<string, FrameSource>();
-  const cache = new Map<string, FrameSource | null>();
+  const orderedKeys = [...keys];
+  await mapWithConcurrency(
+    orderedKeys,
+    Math.min(orderedKeys.length || 1, BGA_SOURCE_LOAD_CONCURRENCY),
+    async (key) => {
+      throwIfAborted(signal);
+      const resourcePath = resources[key];
+      if (!resourcePath) {
+        return;
+      }
+      const resolved = await resolveMediaPath(baseDir, resourcePath, signal);
+      if (!resolved) {
+        onLoadProgress?.(resourcePath);
+        return;
+      }
 
-  for (const key of keys) {
-    throwIfAborted(signal);
-    const resourcePath = resources[key];
-    if (!resourcePath) {
-      continue;
-    }
-    onLoadProgress?.(resourcePath);
-    const resolved = await resolveMediaPath(baseDir, resourcePath, signal);
-    if (!resolved) {
-      continue;
-    }
+      const cacheKey = `${mode}:${width}x${height}:${resolved}`;
+      let sourcePromise = sharedSourceCache.get(cacheKey);
+      if (!sourcePromise) {
+        sourcePromise = loadFrameSource(resolved, mode, width, height, signal).then((source) => source ?? null);
+        sharedSourceCache.set(cacheKey, sourcePromise);
+      }
 
-    const cacheKey = `${mode}:${width}x${height}:${resolved}`;
-    if (!cache.has(cacheKey)) {
-      const source = await loadFrameSource(resolved, mode, width, height, signal);
-      cache.set(cacheKey, source ?? null);
-    }
-
-    const source = cache.get(cacheKey);
-    if (source) {
-      map.set(key, source);
-    }
-  }
+      const source = await sourcePromise;
+      if (source) {
+        map.set(key, source);
+      }
+      onLoadProgress?.(resourcePath);
+    },
+    signal,
+  );
 
   return map;
 }
@@ -713,6 +729,32 @@ function normalizeDisplaySize(width?: number, height?: number): { width: number;
     width: Math.max(8, Math.floor(width ?? DEFAULT_BGA_ASCII_WIDTH)),
     height: Math.max(6, Math.floor(height ?? DEFAULT_BGA_ASCII_HEIGHT)),
   };
+}
+
+async function mapWithConcurrency<TInput>(
+  items: readonly TInput[],
+  concurrency: number,
+  worker: (item: TInput, index: number) => Promise<void>,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (items.length === 0) {
+    return;
+  }
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length));
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        throwIfAborted(signal);
+        const currentIndex = nextIndex;
+        if (currentIndex >= items.length) {
+          return;
+        }
+        nextIndex += 1;
+        await worker(items[currentIndex]!, currentIndex);
+      }
+    }),
+  );
 }
 
 function resizeFrameSourceMap(

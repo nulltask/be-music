@@ -5,7 +5,10 @@ function stripAnsi(value: string): string {
   return value.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '');
 }
 
-function renderOutput(
+const PLAY_PROGRESS_HEAD_MARKER = '\u001b[38;2;255;186;54m┃\u001b[0m';
+const PLAY_PROGRESS_GROOVE_MARKER = '\u001b[38;2;18;18;18m┃\u001b[0m';
+
+function renderOutputRaw(
   notes: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>,
   options: {
     currentBeat?: number;
@@ -68,7 +71,23 @@ function renderOutput(
     process.stdout.write = originalWrite;
   }
 
-  return stripAnsi(chunks.join('')).split('\n');
+  return chunks.join('').split('\n');
+}
+
+function renderOutput(
+  notes: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>,
+  options: {
+    currentBeat?: number;
+    currentSeconds?: number;
+    totalSeconds?: number;
+    lanes?: Array<{ channel: string; key: string; isScratch?: boolean }>;
+    laneDisplayMode?: string;
+    splitAfterIndex?: number;
+    scrollTimeline?: Array<{ beat: number; speed: number }>;
+    speedTimeline?: Array<{ beat: number; speed: number }>;
+  } = {},
+): string[] {
+  return stripAnsi(renderOutputRaw(notes, options).join('\n')).split('\n');
 }
 
 function renderRowsContaining(
@@ -90,6 +109,18 @@ function renderRowsContaining(
     .map((line, index) => [index, line] as const)
     .filter(([, line]) => line.includes(fragment))
     .map(([index]) => index);
+}
+
+function isLeftProgressRailLine(line: string): boolean {
+  return line.startsWith('┃');
+}
+
+function isRightProgressRailLine(line: string): boolean {
+  return line.trimEnd().endsWith('┃');
+}
+
+function isLeftProgressRailLineRaw(line: string): boolean {
+  return line.startsWith(PLAY_PROGRESS_HEAD_MARKER) || line.startsWith(PLAY_PROGRESS_GROOVE_MARKER);
 }
 
 describe('player-tui', () => {
@@ -132,34 +163,34 @@ describe('player-tui', () => {
 
   test('renders play progress indicator on the left side of a single playfield', () => {
     const lines = renderOutput([]);
-    const playfieldLines = lines.filter((line) => line.startsWith('● ') || line.startsWith('╎ '));
+    const playfieldLines = lines.filter((line) => isLeftProgressRailLine(line));
 
     expect(playfieldLines.length).toBeGreaterThan(0);
-    expect(playfieldLines.every((line) => line.startsWith('● ') || line.startsWith('╎ '))).toBe(true);
+    expect(playfieldLines.every((line) => isLeftProgressRailLine(line))).toBe(true);
   });
 
   test('moves the play progress marker from top to bottom over time', () => {
-    const openingLines = renderOutput([], { currentSeconds: 0, totalSeconds: 10 }).filter(
-      (line) => line.startsWith('● ') || line.startsWith('╎ '),
+    const openingLines = renderOutputRaw([], { currentSeconds: 0, totalSeconds: 10 }).filter(
+      (line) => isLeftProgressRailLineRaw(line),
     );
-    const endingLines = renderOutput([], { currentSeconds: 10, totalSeconds: 10 }).filter(
-      (line) => line.startsWith('● ') || line.startsWith('╎ '),
+    const endingLines = renderOutputRaw([], { currentSeconds: 10, totalSeconds: 10 }).filter(
+      (line) => isLeftProgressRailLineRaw(line),
     );
 
-    expect(openingLines.findIndex((line) => line.startsWith('● '))).toBe(0);
-    expect(endingLines.findIndex((line) => line.startsWith('● '))).toBe(endingLines.length - 1);
+    expect(openingLines.findIndex((line) => line.includes(PLAY_PROGRESS_HEAD_MARKER))).toBe(0);
+    expect(endingLines.findIndex((line) => line.includes(PLAY_PROGRESS_HEAD_MARKER))).toBe(endingLines.length - 1);
   });
 
   test('stops the play progress rail at the judge line', () => {
     const lines = renderOutput([], { currentSeconds: 10, totalSeconds: 10 });
     const playfieldLineIndices = lines
       .map((line, index) => ({ line, index }))
-      .filter(({ line }) => line.startsWith('● ') || line.startsWith('╎ '))
+      .filter(({ line }) => isLeftProgressRailLine(line))
       .map(({ index }) => index);
     const postPlayfieldLines = lines.slice((playfieldLineIndices.at(-1) ?? -1) + 1);
 
     expect(playfieldLineIndices.length).toBeGreaterThan(0);
-    expect(postPlayfieldLines.some((line) => line.startsWith('● ') || line.startsWith('╎ '))).toBe(false);
+    expect(postPlayfieldLines.some((line) => isLeftProgressRailLine(line))).toBe(false);
   });
 
   test('renders the 2P play progress indicator on the right side of split lanes', () => {
@@ -173,9 +204,9 @@ describe('player-tui', () => {
     });
     const playfieldLines = lines
       .map((line) => line.trimEnd())
-      .filter((line) => line.startsWith('● ') || line.startsWith('╎ '));
+      .filter((line) => isLeftProgressRailLine(line));
 
     expect(playfieldLines.length).toBeGreaterThan(0);
-    expect(playfieldLines.every((line) => line.endsWith(' ●') || line.endsWith(' ╎'))).toBe(true);
+    expect(playfieldLines.every((line) => isRightProgressRailLine(line))).toBe(true);
   });
 });
