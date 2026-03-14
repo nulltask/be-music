@@ -4,6 +4,8 @@ import {
   applyPersistedPlayerConfigToArgs,
   createPlayLoadingProgressScreenOutput,
   createPlayLoadingProgressScreenLines,
+  createSongSelectControlLines,
+  createSongSelectSelectedMetadataLines,
   cyclePlayMode,
   formatPlayModeLabel,
   parseArgs,
@@ -123,6 +125,46 @@ describe('player cli', () => {
     expect(formatPlayModeLabel('manual')).toBe('MANUAL');
     expect(formatPlayModeLabel('auto-scratch')).toBe('AUTO SCRATCH');
     expect(formatPlayModeLabel('auto')).toBe('AUTO');
+  });
+
+  test('cli: renders selected chart metadata lines for song-select', () => {
+    const lines = createSongSelectSelectedMetadataLines(
+      {
+        kind: 'chart',
+        filePath: '/charts/sample.bms',
+        fileLabel: 'sample.bms',
+        title: 'Four-Measure Command Combo Test',
+        subtitle: 'Visual 4-Bar Command Blocks',
+        artist: 'Codex',
+        subartist: 'Alice, Bob',
+        genre: 'TEST',
+        comment: 'Each 4-measure block targets a different command combination set.',
+      },
+      96,
+    );
+
+    expect(lines[0]).toContain('TITLE Four-Measure Command Combo Test');
+    expect(lines[0]).toContain('\u001b[38;2;160;160;160mVisual 4-Bar Command Blocks\u001b[0m');
+    expect(lines[1]).toContain('ARTIST Codex');
+    expect(lines[1]).toContain('\u001b[38;2;160;160;160mAlice, Bob\u001b[0m');
+    expect(lines[2]).toContain('GENRE TEST');
+    expect(lines[3]).toContain('COMMENT Each 4-measure block targets a different command combination set.');
+  });
+
+  test('cli: renders song-select control block for below-list placement', () => {
+    const lines = createSongSelectControlLines({
+      rootDir: '/charts',
+      lineWidth: 120,
+      playModeLabel: 'MANUAL',
+      highSpeedLabel: '2.5',
+      difficultyFilterLabel: 'ALL',
+      audioBackendLabel: 'CoreAudio',
+    });
+
+    expect(lines[0]).toContain('Select chart');
+    expect(lines[1]).toBe('Directory: /charts');
+    expect(lines[2]).toBe('Mode: MANUAL  HIGH-SPEED: x2.5  DIFFICULTY: ALL');
+    expect(lines[3]).toBe('Audio backend: CoreAudio');
   });
 
   test('cli: formats DEFEXRANK values without dropping decimals', () => {
@@ -316,7 +358,7 @@ describe('player cli', () => {
     expect(formatSelectionEntryLabel(entries[0], layout)).toContain('RANDOM');
   });
 
-  test('cli: uses compact PLEVEL header so NOTES stays visible', () => {
+  test('cli: uses PLEVEL header and keeps NOTES visible', () => {
     const entries = [
       {
         kind: 'chart' as const,
@@ -382,6 +424,50 @@ describe('player cli', () => {
     expect(formatPlayLevelLabel(0)).toBe('?');
     expect(formatPlayLevelLabel(12.4)).toBe('12.4');
     expect(formatPlayLevelLabel('安心')).toBe('安心');
+  });
+
+  test('cli: caps textual PLEVEL cells to 4 columns with ellipsis', () => {
+    const entries = [
+      {
+        kind: 'chart' as const,
+        fileLabel: 'sample.bms',
+        player: 1,
+        difficulty: 3,
+        rank: 2,
+        playLevel: 'HYPER',
+        bpmInitial: 180,
+        bpmMin: 180,
+        bpmMax: 180,
+        totalNotes: 1234,
+      },
+    ];
+
+    const layout = createSelectionColumnLayout(48, entries);
+
+    expect(layout.playLevelWidth).toBe(6);
+    expect(formatSelectionEntryLabel(entries[0], layout)).toContain('HYP…');
+  });
+
+  test('cli: right-aligns numeric PLEVEL cells', () => {
+    const entries = [
+      {
+        kind: 'chart' as const,
+        fileLabel: 'sample.bms',
+        player: 1,
+        difficulty: 3,
+        rank: 2,
+        playLevel: 12.4,
+        bpmInitial: 180,
+        bpmMin: 180,
+        bpmMax: 180,
+        totalNotes: 1234,
+      },
+    ];
+
+    const layout = createSelectionColumnLayout(48, entries);
+
+    expect(layout.playLevelWidth).toBe(6);
+    expect(formatSelectionEntryLabel(entries[0], layout)).toContain('NORMAL    12.4');
   });
 
   test('cli: resolves DIFFICULTY filter keys in song-select', () => {

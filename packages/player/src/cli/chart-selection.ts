@@ -18,6 +18,12 @@ interface ChartSummaryItem {
   relativePath: string;
   directoryLabel: string;
   fileLabel: string;
+  title?: string;
+  subtitle?: string;
+  artist?: string;
+  subartist?: string;
+  genre?: string;
+  comment?: string;
   previewContinueKey?: string;
   totalNotes?: number;
   player?: number;
@@ -48,6 +54,12 @@ export type ChartSelectionEntry =
       kind: 'chart';
       filePath: string;
       fileLabel: string;
+      title?: string;
+      subtitle?: string;
+      artist?: string;
+      subartist?: string;
+      genre?: string;
+      comment?: string;
       previewContinueKey?: string;
       totalNotes?: number;
       player?: number;
@@ -234,6 +246,12 @@ function buildChartSelectionEntriesFromSummaries(summariesInput: readonly ChartS
         kind: 'chart',
         filePath: chart.filePath,
         fileLabel: chart.fileLabel,
+        title: chart.title,
+        subtitle: chart.subtitle,
+        artist: chart.artist,
+        subartist: chart.subartist,
+        genre: chart.genre,
+        comment: chart.comment,
         previewContinueKey: chart.previewContinueKey,
         totalNotes: chart.totalNotes,
         player: chart.player,
@@ -267,7 +285,8 @@ function compareOptionalNumber(left: number | undefined, right: number | undefin
 
 function compareOptionalPlayLevel(left: BeMusicPlayLevel | undefined, right: BeMusicPlayLevel | undefined): number {
   const hasLeft = typeof left === 'number' ? Number.isFinite(left) : typeof left === 'string' && left.trim().length > 0;
-  const hasRight = typeof right === 'number' ? Number.isFinite(right) : typeof right === 'string' && right.trim().length > 0;
+  const hasRight =
+    typeof right === 'number' ? Number.isFinite(right) : typeof right === 'string' && right.trim().length > 0;
   if (hasLeft && hasRight) {
     if (typeof left === 'number' && typeof right === 'number') {
       return left - right;
@@ -301,6 +320,12 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
   let bpmInitial: number | undefined;
   let bpmMin: number | undefined;
   let bpmMax: number | undefined;
+  let title: string | undefined;
+  let subtitle: string | undefined;
+  let artist: string | undefined;
+  let subartist: string | undefined;
+  let genre: string | undefined;
+  let comment: string | undefined;
   let previewContinueKey: string | undefined;
   let difficulty: number | undefined;
   try {
@@ -309,6 +334,12 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     throwIfAborted(signal);
     const resolvedChart = resolveBmsControlFlow(chart, { random: () => 0 });
     throwIfAborted(signal);
+    title = sanitizeChartSelectionMetadataText(chart.metadata.title);
+    subtitle = sanitizeChartSelectionMetadataText(chart.metadata.subtitle);
+    artist = sanitizeChartSelectionMetadataText(chart.metadata.artist);
+    subartist = resolveChartSelectionSubartist(chart);
+    genre = sanitizeChartSelectionMetadataText(chart.metadata.genre);
+    comment = sanitizeChartSelectionMetadataText(chart.metadata.comment);
     totalNotes = extractPlayableNotes(resolvedChart).length;
     player = chart.bms.player;
     difficulty = resolveDisplayedDifficultyValue(chart);
@@ -332,6 +363,12 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     relativePath,
     directoryLabel,
     fileLabel,
+    title,
+    subtitle,
+    artist,
+    subartist,
+    genre,
+    comment,
     previewContinueKey,
     totalNotes,
     player,
@@ -343,6 +380,27 @@ async function buildChartSummary(rootDir: string, filePath: string, signal?: Abo
     bpmMin,
     bpmMax,
   };
+}
+
+function sanitizeChartSelectionMetadataText(value: string | undefined): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function resolveChartSelectionSubartist(json: BeMusicJson): string | undefined {
+  if (Array.isArray(json.bmson.info.subartists) && json.bmson.info.subartists.length > 0) {
+    const subartists = json.bmson.info.subartists
+      .map((value) => sanitizeChartSelectionMetadataText(value))
+      .filter((value): value is string => value !== undefined);
+    if (subartists.length > 0) {
+      return subartists.join(', ');
+    }
+  }
+
+  return sanitizeChartSelectionMetadataText(json.metadata.extras.SUBARTIST);
 }
 
 function extractChartBpmSummary(json: BeMusicJson): { initial: number; min: number; max: number } | undefined {

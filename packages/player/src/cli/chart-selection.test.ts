@@ -1,14 +1,18 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, test } from 'vitest';
-import { listChartFiles } from './chart-selection.ts';
+import { buildChartSelectionEntries, listChartFiles } from './chart-selection.ts';
 
 const tempDirectories: string[] = [];
+const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
 afterEach(async () => {
   await Promise.all(
-    tempDirectories.splice(0, tempDirectories.length).map((directory) => rm(directory, { recursive: true, force: true })),
+    tempDirectories
+      .splice(0, tempDirectories.length)
+      .map((directory) => rm(directory, { recursive: true, force: true })),
   );
 });
 
@@ -25,5 +29,40 @@ describe('chart selection', () => {
     const files = await listChartFiles(rootDir);
 
     expect(files).toEqual([join(rootDir, 'alpha.bms'), join(rootDir, 'nested', 'beta.bmson')]);
+  });
+
+  test('buildChartSelectionEntries: includes chart TITLE and ARTIST metadata', async () => {
+    const chartPath = resolve(rootDir, 'examples/test/sample.bms');
+
+    const entries = await buildChartSelectionEntries(rootDir, [chartPath]);
+    const chartEntry = entries.find((entry) => entry.kind === 'chart' && entry.filePath === chartPath);
+
+    expect(chartEntry).toMatchObject({
+      kind: 'chart',
+      title: 'Sample',
+      artist: 'Codex',
+    });
+  });
+
+  test('buildChartSelectionEntries: includes song metadata extras used by song-select', async () => {
+    const bmsPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+    const bmsonPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
+
+    const entries = await buildChartSelectionEntries(rootDir, [bmsPath, bmsonPath]);
+    const bmsEntry = entries.find((entry) => entry.kind === 'chart' && entry.filePath === bmsPath);
+    const bmsonEntry = entries.find((entry) => entry.kind === 'chart' && entry.filePath === bmsonPath);
+
+    expect(bmsEntry).toMatchObject({
+      kind: 'chart',
+      subtitle: 'Visual 4-Bar Command Blocks',
+      genre: 'TEST',
+      comment: 'Each 4-measure block targets a different command combination set.',
+    });
+    expect(bmsonEntry).toMatchObject({
+      kind: 'chart',
+      subtitle: 'Strict',
+      subartist: 'Alice, Bob',
+      genre: 'TEST',
+    });
   });
 });

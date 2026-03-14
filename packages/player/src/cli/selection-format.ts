@@ -1,5 +1,8 @@
 import type { BeMusicPlayLevel } from '@be-music/json';
 
+const PLAY_LEVEL_HEADER = 'PLEVEL';
+const PLAY_LEVEL_TEXT_MAX_WIDTH = 4;
+
 export interface SelectionDisplayEntry {
   kind: 'random' | 'group' | 'chart';
   label?: string;
@@ -32,7 +35,7 @@ export function createSelectionColumnLayout(
   let playerWidth = 'PLAYER'.length;
   let difficultyWidth = 'DIFF'.length;
   let rankWidth = 'RANK'.length;
-  let playLevelWidth = 'PLEVEL'.length;
+  let playLevelWidth = PLAY_LEVEL_HEADER.length;
   let bpmWidth = 'BPM'.length;
   let notesWidth = 'NOTES'.length;
   for (const entry of entries) {
@@ -42,13 +45,14 @@ export function createSelectionColumnLayout(
     playerWidth = Math.max(playerWidth, formatPlayerLabel(entry.player).length);
     difficultyWidth = Math.max(difficultyWidth, formatDifficultyLabel(entry.difficulty).length);
     rankWidth = Math.max(rankWidth, formatRankCellValue(entry).length);
-    playLevelWidth = Math.max(playLevelWidth, formatPlayLevelLabel(entry.playLevel).length);
+    playLevelWidth = Math.max(playLevelWidth, measureDisplayWidth(formatPlayLevelCellValue(entry.playLevel)));
     bpmWidth = Math.max(bpmWidth, formatBpmLabel(entry.bpmMin, entry.bpmInitial, entry.bpmMax).length);
     notesWidth = Math.max(notesWidth, formatTotalNotesLabel(entry.totalNotes).length);
   }
 
   const spacingWidth = 12;
-  const fixedMetaWidth = playerWidth + difficultyWidth + rankWidth + playLevelWidth + bpmWidth + notesWidth + spacingWidth;
+  const fixedMetaWidth =
+    playerWidth + difficultyWidth + rankWidth + playLevelWidth + bpmWidth + notesWidth + spacingWidth;
   const fileWidth = Math.max(1, itemLabelWidth - fixedMetaWidth);
 
   return {
@@ -67,7 +71,7 @@ export function formatSelectionColumnHeader(layout: SelectionColumnLayout): stri
   const player = formatColumnCell('PLAYER', layout.playerWidth, 'right');
   const difficulty = formatColumnCell('DIFF', layout.difficultyWidth, 'right');
   const rank = formatColumnCell('RANK', layout.rankWidth, 'right');
-  const playLevel = formatColumnCell('PLEVEL', layout.playLevelWidth, 'left');
+  const playLevel = formatColumnCell(PLAY_LEVEL_HEADER, layout.playLevelWidth, 'left');
   const bpm = formatColumnCell('BPM', layout.bpmWidth, 'right');
   const notes = formatColumnCell('NOTES', layout.notesWidth, 'right');
   return `${file}  ${player}  ${difficulty}  ${rank}  ${playLevel}  ${bpm}  ${notes}`;
@@ -82,7 +86,7 @@ export function formatSelectionEntryLabel(entry: SelectionDisplayEntry, layout: 
     const player = formatColumnCell('-', layout.playerWidth, 'right');
     const difficulty = formatColumnCell('-', layout.difficultyWidth, 'right');
     const rank = formatColumnCell('-', layout.rankWidth, 'right');
-    const playLevel = formatColumnCell('-', layout.playLevelWidth, 'left');
+    const playLevel = formatColumnCell('-', layout.playLevelWidth, 'right');
     const bpm = formatColumnCell('-', layout.bpmWidth, 'right');
     const notes = formatColumnCell('-', layout.notesWidth, 'right');
     return `${file}  ${player}  ${difficulty}  ${rank}  ${playLevel}  ${bpm}  ${notes}`;
@@ -92,7 +96,11 @@ export function formatSelectionEntryLabel(entry: SelectionDisplayEntry, layout: 
   const player = formatColumnCell(formatPlayerLabel(entry.player), layout.playerWidth, 'right');
   const difficulty = formatColumnCell(formatDifficultyLabel(entry.difficulty), layout.difficultyWidth, 'right');
   const rank = formatColumnCell(formatRankCellValue(entry), layout.rankWidth, 'right');
-  const playLevel = formatColumnCell(formatPlayLevelLabel(entry.playLevel), layout.playLevelWidth, 'left');
+  const playLevel = formatColumnCell(
+    formatPlayLevelCellValue(entry.playLevel),
+    layout.playLevelWidth,
+    resolvePlayLevelCellAlign(entry.playLevel),
+  );
   const bpm = formatColumnCell(formatBpmLabel(entry.bpmMin, entry.bpmInitial, entry.bpmMax), layout.bpmWidth, 'right');
   const notes = formatColumnCell(formatTotalNotesLabel(entry.totalNotes), layout.notesWidth, 'right');
   return `${file}  ${player}  ${difficulty}  ${rank}  ${playLevel}  ${bpm}  ${notes}`;
@@ -184,6 +192,18 @@ export function formatPlayLevelLabel(value: BeMusicPlayLevel | undefined): strin
   }
   const rounded = Math.round(value * 100) / 100;
   return rounded.toFixed(2).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
+}
+
+function formatPlayLevelCellValue(value: BeMusicPlayLevel | undefined): string {
+  const label = formatPlayLevelLabel(value);
+  if (typeof value === 'string') {
+    return truncateForDisplay(label, PLAY_LEVEL_TEXT_MAX_WIDTH);
+  }
+  return label;
+}
+
+function resolvePlayLevelCellAlign(value: BeMusicPlayLevel | undefined): 'left' | 'right' {
+  return typeof value === 'number' ? 'right' : 'left';
 }
 
 function formatTotalNotesLabel(value: number | undefined): string {

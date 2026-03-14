@@ -175,6 +175,8 @@ interface PlayedChartResult {
   playLevel?: BeMusicPlayLevel;
 }
 
+const SONG_SELECT_NON_ENTRY_ROWS = 13;
+
 type DirectorySceneState =
   | {
       kind: 'select';
@@ -225,8 +227,12 @@ interface ResultScreenOptions {
 type ResultScreenExitAction = Exclude<ResultScreenAction, 'replay'>;
 const SONG_SELECT_PREVIEW_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const SONG_SELECT_PREVIEW_SPINNER_INTERVAL_MS = 80;
+const SONG_SELECT_HELP_LINE =
+  'Select chart  [↑/↓ or k/j: move]  [←/→ or h/l: page]  [Ctrl+b/f: page]  [1-5: DIFF filter]  [0: clear DIFF]  [a: MANUAL/AUTO SCRATCH/AUTO]  [s/S: HS +/-]  [Enter: play]  [Ctrl+C/Esc: exit]';
 const DIRECTORY_CHART_EXTENSIONS_LABEL = '.bms, .bme, .bml, .pms, .bmson';
 const PLAY_LOADING_STAGEFILE_KITTY_IMAGE_ID = 7_331;
+const SONG_SELECT_METADATA_SECONDARY_COLOR = '\u001b[38;2;160;160;160m';
+const ANSI_RESET = '\u001b[0m';
 
 export async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
@@ -856,6 +862,130 @@ function sanitizeMetadataText(value: string | undefined): string | undefined {
   }
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : undefined;
+}
+
+export function createSongSelectSelectedMetadataLines(
+  entry: ChartSelectionEntry | undefined,
+  lineWidth: number,
+): string[] {
+  const title =
+    entry?.kind === 'chart' ? (sanitizeMetadataText(entry.title) ?? sanitizeMetadataText(entry.fileLabel)) : '-';
+  const subtitle = entry?.kind === 'chart' ? sanitizeMetadataText(entry.subtitle) : undefined;
+  const artist = entry?.kind === 'chart' ? sanitizeMetadataText(entry.artist) : '-';
+  const subartist = entry?.kind === 'chart' ? sanitizeMetadataText(entry.subartist) : undefined;
+  const genre = entry?.kind === 'chart' ? sanitizeMetadataText(entry.genre) : '-';
+  const comment = entry?.kind === 'chart' ? sanitizeMetadataText(entry.comment) : '-';
+  return [
+    formatSongSelectMetadataLine('TITLE', title ?? '-', subtitle, lineWidth),
+    formatSongSelectMetadataLine('ARTIST', artist ?? '-', subartist, lineWidth),
+    formatSongSelectMetadataLine('GENRE', genre ?? '-', undefined, lineWidth),
+    formatSongSelectMetadataLine('COMMENT', comment ?? '-', undefined, lineWidth),
+  ];
+}
+
+function formatSongSelectMetadataLine(
+  label: 'TITLE' | 'ARTIST' | 'GENRE' | 'COMMENT',
+  primary: string,
+  secondary: string | undefined,
+  lineWidth: number,
+): string {
+  const base = truncateForDisplay(`${label} ${primary}`, lineWidth);
+  if (!secondary) {
+    return base;
+  }
+
+  const baseWidth = measureSongSelectDisplayWidth(base);
+  if (baseWidth >= lineWidth) {
+    return base;
+  }
+
+  const secondaryWidthBudget = lineWidth - baseWidth - 1;
+  if (secondaryWidthBudget <= 0) {
+    return base;
+  }
+
+  const suffix = truncateForDisplay(secondary, secondaryWidthBudget);
+  return suffix.length > 0 ? `${base} ${SONG_SELECT_METADATA_SECONDARY_COLOR}${suffix}${ANSI_RESET}` : base;
+}
+
+function measureSongSelectDisplayWidth(value: string): number {
+  let width = 0;
+  let escape = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index]!;
+    if (escape) {
+      if (char === 'm') {
+        escape = false;
+      }
+      continue;
+    }
+    if (char === '\u001b') {
+      escape = true;
+      continue;
+    }
+    width += measureSongSelectCharacterDisplayWidth(char);
+  }
+  return width;
+}
+
+function measureSongSelectCharacterDisplayWidth(char: string): number {
+  const codePoint = char.codePointAt(0);
+  if (codePoint === undefined) {
+    return 0;
+  }
+  if (
+    codePoint === 0 ||
+    codePoint < 32 ||
+    (codePoint >= 0x7f && codePoint < 0xa0) ||
+    codePoint === 0x200d ||
+    codePoint === 0xfe0e ||
+    codePoint === 0xfe0f ||
+    /\p{Mark}/u.test(char)
+  ) {
+    return 0;
+  }
+  return isSongSelectFullWidthCodePoint(codePoint) ? 2 : 1;
+}
+
+function isSongSelectFullWidthCodePoint(codePoint: number): boolean {
+  if (codePoint < 0x1100) {
+    return false;
+  }
+  return (
+    codePoint <= 0x115f ||
+    codePoint === 0x2329 ||
+    codePoint === 0x232a ||
+    (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
+    (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
+    (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
+    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
+    (codePoint >= 0x1f300 && codePoint <= 0x1f64f) ||
+    (codePoint >= 0x1f680 && codePoint <= 0x1f6ff) ||
+    (codePoint >= 0x1f900 && codePoint <= 0x1f9ff) ||
+    (codePoint >= 0x20000 && codePoint <= 0x3fffd)
+  );
+}
+
+export function createSongSelectControlLines(options: {
+  rootDir: string;
+  lineWidth: number;
+  playModeLabel: string;
+  highSpeedLabel: string;
+  difficultyFilterLabel: string;
+  audioBackendLabel: string;
+}): string[] {
+  return [
+    truncateForDisplay(SONG_SELECT_HELP_LINE, options.lineWidth),
+    truncateForDisplay(`Directory: ${options.rootDir}`, options.lineWidth),
+    truncateForDisplay(
+      `Mode: ${options.playModeLabel}  HIGH-SPEED: x${options.highSpeedLabel}  DIFFICULTY: ${options.difficultyFilterLabel}`,
+      options.lineWidth,
+    ),
+    truncateForDisplay(`Audio backend: ${options.audioBackendLabel}`, options.lineWidth),
+  ];
 }
 
 export function parseArgs(rawArgs: string[]): CliArgs {
@@ -1569,7 +1699,7 @@ async function selectChartInteractively(
 
   const listRowsForViewport = (): number => {
     const rows = process.stdout.rows ?? 24;
-    return Math.max(5, rows - 8);
+    return Math.max(5, rows - SONG_SELECT_NON_ENTRY_ROWS);
   };
 
   const resolveSelectionColumnLayout = (
@@ -1627,16 +1757,8 @@ async function selectChartInteractively(
     const { start, end } = resolveVisibleEntryRange(songSelectState.selectedIndex(), view.entries.length, listRows);
 
     const lines: string[] = [];
-    lines.push(
-      'Select chart  [↑/↓ or k/j: move]  [←/→ or h/l: page]  [Ctrl+b/f: page]  [1-5: DIFF filter]  [0: clear DIFF]  [a: MANUAL/AUTO SCRATCH/AUTO]  [s/S: HS +/-]  [Enter: play]  [Ctrl+C/Esc: exit]',
-    );
-    lines.push(truncateForDisplay(`Directory: ${rootDir}`, lineWidth));
-    lines.push(
-      `Mode: ${formatPlayModeLabel(songSelectState.playMode())}  HIGH-SPEED: x${formatHighSpeedLabel(songSelectState.highSpeed())}  DIFFICULTY: ${formatSongSelectDifficultyFilterLabel(songSelectState.difficultyFilter())}`,
-    );
-    lines.push(
-      `Audio backend: ${formatSongSelectAudioBackendLabel(options.audio, previewController?.getActiveBackend())}`,
-    );
+    const selectedEntry = view.entries[songSelectState.selectedIndex()];
+    lines.push(...createSongSelectSelectedMetadataLines(selectedEntry, lineWidth));
     lines.push('');
     const headerPrefix = `  ${' '.repeat(numberWidth)} `;
     lines.push(`${headerPrefix}${resolveSelectionColumnHeader(columnLayout, itemLabelWidth)}`);
@@ -1675,6 +1797,17 @@ async function selectChartInteractively(
       }
     }
 
+    lines.push('');
+    lines.push(
+      ...createSongSelectControlLines({
+        rootDir,
+        lineWidth,
+        playModeLabel: formatPlayModeLabel(songSelectState.playMode()),
+        highSpeedLabel: formatHighSpeedLabel(songSelectState.highSpeed()),
+        difficultyFilterLabel: formatSongSelectDifficultyFilterLabel(songSelectState.difficultyFilter()),
+        audioBackendLabel: formatSongSelectAudioBackendLabel(options.audio, previewController?.getActiveBackend()),
+      }),
+    );
     lines.push('');
     const selectedChartIndex = view.chartIndexByEntryIndex.get(songSelectState.selectedIndex());
     if (typeof selectedChartIndex === 'number') {
