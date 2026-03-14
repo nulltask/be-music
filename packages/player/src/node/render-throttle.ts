@@ -8,10 +8,7 @@ export interface CreateRenderThrottleOptions {
   now?: () => number;
 }
 
-export function createRenderThrottle(
-  render: () => void,
-  options: CreateRenderThrottleOptions = {},
-): RenderThrottle {
+export function createRenderThrottle(render: () => void, options: CreateRenderThrottleOptions = {}): RenderThrottle {
   const minIntervalMs = normalizeMinInterval(options.minIntervalMs);
   const now = options.now ?? Date.now;
   let disposed = false;
@@ -29,6 +26,11 @@ export function createRenderThrottle(
   const run = (): void => {
     timer = undefined;
     if (disposed) {
+      return;
+    }
+    const remainingMs = minIntervalMs - (now() - lastRenderAtMs);
+    if (remainingMs > 0) {
+      timer = setTimeout(run, remainingMs);
       return;
     }
     lastRenderAtMs = now();
@@ -62,5 +64,5 @@ function normalizeMinInterval(value: number | undefined): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return 0;
   }
-  return Math.max(0, Math.floor(value));
+  return Math.max(0, value);
 }

@@ -371,6 +371,7 @@ function serializeUiRuntimeInit(context: CreatePlayerUiRuntimeContext): NodeGame
     laneDisplayMode: context.laneDisplayMode,
     laneBindings: [...context.laneBindings],
     speed: context.speed,
+    uiFps: context.uiFps,
     judgeWindowMs: context.judgeWindowMs,
     highSpeed: context.highSpeed,
     showLaneChannels: context.showLaneChannels,

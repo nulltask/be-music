@@ -10,6 +10,7 @@ export interface NodeUiWorkerInitData {
   laneDisplayMode: string;
   laneBindings: LaneBinding[];
   speed: number;
+  uiFps?: number;
   judgeWindowMs: number;
   highSpeed: number;
   showLaneChannels?: boolean;

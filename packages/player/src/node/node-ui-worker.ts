@@ -31,7 +31,7 @@ import type {
 
 const port = parentPort;
 const initData = workerData as NodeUiWorkerInitData;
-const TUI_RENDER_MIN_INTERVAL_MS = Math.floor(1000 / 30);
+const DEFAULT_UI_FPS = 60;
 
 void bootstrap().catch((error) => {
   if (isAbortError(error)) {
@@ -226,7 +226,7 @@ async function bootstrap(): Promise<void> {
       });
     },
     {
-      minIntervalMs: TUI_RENDER_MIN_INTERVAL_MS,
+      minIntervalMs: resolveTuiRenderMinIntervalMs(initData.uiFps),
     },
   );
 
@@ -318,6 +318,11 @@ function resolveSplitAfterIndex(bindings: NodeUiWorkerInitData['laneBindings']):
     }
   }
   return -1;
+}
+
+function resolveTuiRenderMinIntervalMs(uiFps: number | undefined): number {
+  const fps = typeof uiFps === 'number' && Number.isFinite(uiFps) && uiFps > 0 ? uiFps : DEFAULT_UI_FPS;
+  return 1000 / fps;
 }
 
 function estimateBgaAnsiDisplaySize(

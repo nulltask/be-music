@@ -19,6 +19,7 @@ export interface NodeUiRuntimeOptions {
   laneDisplayMode: string;
   laneBindings: LaneBinding[];
   speed: number;
+  uiFps?: number;
   judgeWindowMs: number;
   highSpeed: number;
   showLaneChannels?: boolean;
@@ -251,6 +252,7 @@ function createWorkerInitData(options: NodeUiRuntimeOptions): NodeUiWorkerInitDa
     laneDisplayMode: options.laneDisplayMode,
     laneBindings: options.laneBindings,
     speed: options.speed,
+    uiFps: options.uiFps,
     judgeWindowMs: options.judgeWindowMs,
     highSpeed: resolveHighSpeedMultiplier(options.highSpeed),
     showLaneChannels: options.showLaneChannels,

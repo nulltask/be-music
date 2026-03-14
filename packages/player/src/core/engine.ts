@@ -70,6 +70,7 @@ export interface CreatePlayerUiRuntimeContext {
   laneDisplayMode: string;
   laneBindings: LaneBinding[];
   speed: number;
+  uiFps?: number;
   judgeWindowMs: number;
   highSpeed: number;
   showLaneChannels: boolean;
@@ -102,6 +103,7 @@ export interface PlayerOptions {
   limiterCeilingDb?: number;
   limiterReleaseMs?: number;
   speed?: number;
+  uiFps?: number;
   highSpeed?: number;
   judgeWindowMs?: number;
   debugActiveAudio?: boolean;

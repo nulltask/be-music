@@ -1,6 +1,11 @@
 import { throwIfAborted } from '@be-music/utils';
 import { normalizeChannel, type BeMusicJson } from '@be-music/json';
-import { createGrooveGaugeState, applyGrooveGaugeJudge, isGrooveGaugeCleared, type GrooveGaugeJudgeKind } from './groove-gauge.ts';
+import {
+  createGrooveGaugeState,
+  applyGrooveGaugeJudge,
+  isGrooveGaugeCleared,
+  type GrooveGaugeJudgeKind,
+} from './groove-gauge.ts';
 import { type PlayerUiSignalBus } from './ui-signal-bus.ts';
 import type {
   CreatePlayerUiRuntimeContext,
@@ -174,6 +179,7 @@ export async function initializePlayerUiRuntime({
     laneDisplayMode,
     laneBindings,
     speed,
+    uiFps: options.uiFps,
     judgeWindowMs,
     highSpeed,
     showLaneChannels: options.debugActiveAudio === true,
@@ -226,7 +232,11 @@ function mergeRenderNotesBySeconds(
     const note = notes[noteIndex];
     const landmine = landmineNotes[landmineIndex];
     const invisible = invisibleNotes[invisibleIndex];
-    const nextSeconds = Math.min(note?.seconds ?? Number.POSITIVE_INFINITY, landmine?.seconds ?? Number.POSITIVE_INFINITY, invisible?.seconds ?? Number.POSITIVE_INFINITY);
+    const nextSeconds = Math.min(
+      note?.seconds ?? Number.POSITIVE_INFINITY,
+      landmine?.seconds ?? Number.POSITIVE_INFINITY,
+      invisible?.seconds ?? Number.POSITIVE_INFINITY,
+    );
 
     if (note && note.seconds === nextSeconds) {
       merged.push(note);

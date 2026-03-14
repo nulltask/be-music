@@ -194,6 +194,7 @@ async function handleUiInit(
       laneDisplayMode: message.runtime.laneDisplayMode,
       laneBindings: message.runtime.laneBindings,
       speed: message.runtime.speed,
+      uiFps: message.runtime.uiFps,
       judgeWindowMs: message.runtime.judgeWindowMs,
       highSpeed: message.runtime.highSpeed,
       showLaneChannels: message.runtime.showLaneChannels,

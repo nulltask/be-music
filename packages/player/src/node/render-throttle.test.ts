@@ -53,4 +53,23 @@ describe('render throttle', () => {
 
     expect(renderSpy).toHaveBeenCalledTimes(1);
   });
+
+  test('preserves fractional intervals for higher frame-rate caps', async () => {
+    vi.useFakeTimers();
+    const renderSpy = vi.fn();
+    const throttle = createRenderThrottle(renderSpy, {
+      minIntervalMs: 16.5,
+    });
+
+    throttle.request();
+    throttle.request();
+
+    expect(renderSpy).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(16);
+    expect(renderSpy).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(renderSpy).toHaveBeenCalledTimes(2);
+  });
 });

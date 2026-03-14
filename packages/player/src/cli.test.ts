@@ -50,6 +50,17 @@ describe('player cli', () => {
     expect(parseArgs(['chart.bms', '--kitty-graphics', '--no-kitty-graphics']).kittyGraphics).toBe(false);
   });
 
+  test('cli: defaults TUI rendering to 60fps and accepts custom fps', () => {
+    expect(parseArgs(['chart.bms']).uiFps).toBe(60);
+    expect(parseArgs(['chart.bms', '--tui-fps', '120']).uiFps).toBe(120);
+    expect(parseArgs(['chart.bms', '--tui-fps', '59.94']).uiFps).toBe(59.94);
+  });
+
+  test('cli: rejects invalid --tui-fps values', () => {
+    expect(() => parseArgs(['chart.bms', '--tui-fps', '0'])).toThrow('--tui-fps must be greater than 0');
+    expect(() => parseArgs(['chart.bms', '--tui-fps', 'abc'])).toThrow('--tui-fps expects a numeric value');
+  });
+
   test('cli: last explicit mode flag wins', () => {
     const parsedAuto = parseArgs(['chart.bms', '--auto-scratch', '--auto']);
     expect(resolvePlayModeFromArgs(parsedAuto)).toBe('auto');

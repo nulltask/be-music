@@ -108,6 +108,7 @@ interface CliArgs {
   limiterCeilingDb?: number;
   limiterReleaseMs?: number;
   speed?: number;
+  uiFps: number;
   highSpeed?: number;
   judgeWindowMs?: number;
   judgeWindowSource?: 'debug' | 'legacy';
@@ -233,6 +234,7 @@ const DIRECTORY_CHART_EXTENSIONS_LABEL = '.bms, .bme, .bml, .pms, .bmson';
 const PLAY_LOADING_STAGEFILE_KITTY_IMAGE_ID = 7_331;
 const SONG_SELECT_METADATA_SECONDARY_COLOR = '\u001b[38;2;160;160;160m';
 const ANSI_RESET = '\u001b[0m';
+const DEFAULT_TUI_FPS = 60;
 
 export async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
@@ -739,6 +741,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     limiterCeilingDb: args.limiterCeilingDb,
     limiterReleaseMs: args.limiterReleaseMs,
     speed: args.speed,
+    uiFps: args.uiFps,
     highSpeed: args.highSpeed,
     judgeWindowMs: args.judgeWindowMs,
     debugActiveAudio: args.debugActiveAudio,
@@ -1000,6 +1003,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     audio: true,
     volume: undefined,
     tui: true,
+    uiFps: DEFAULT_TUI_FPS,
     debugActiveAudio: false,
   };
   const positional: string[] = [];
@@ -1035,6 +1039,11 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     }
     if (token === '--high-speed') {
       args.highSpeed = parseHighSpeedArg(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--tui-fps') {
+      args.uiFps = parseTuiFpsArg(rawArgs[index + 1]);
       index += 1;
       continue;
     }
@@ -1238,6 +1247,17 @@ function parseHighSpeedArg(raw: string | undefined): number {
   return roundedSteps * HIGH_SPEED_STEP;
 }
 
+function parseTuiFpsArg(raw: string | undefined): number {
+  const parsed = Number.parseFloat(raw ?? '');
+  if (!Number.isFinite(parsed)) {
+    throw new Error('--tui-fps expects a numeric value');
+  }
+  if (parsed <= 0) {
+    throw new Error('--tui-fps must be greater than 0');
+  }
+  return parsed;
+}
+
 function formatCliParseError(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -1254,6 +1274,7 @@ function printUsage(): void {
       '  --auto                    Enable auto play mode (default: off)',
       '  --auto-scratch            Enable scratch auto mode (16ch/26ch only)',
       '  --speed <rate>            Playback speed multiplier (default: 1)',
+      `  --tui-fps <value>        Target TUI refresh rate while playing (default: ${DEFAULT_TUI_FPS})`,
       '  --high-speed <rate>       TUI note fall speed multiplier, 0.5-10.0 in 0.5 steps (default: 1.0)',
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
       '                           Audio backend: node-web-audio-api (fixed)',

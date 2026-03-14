@@ -142,7 +142,7 @@ describe('node ui runtime', () => {
     const workerEnvObject = typeof workerEnv === 'object' ? (workerEnv as NodeJS.ProcessEnv) : undefined;
     const workerExecArgv = workerState.lastWorkerOptions?.execArgv;
     const workerData = workerState.lastWorkerOptions?.workerData as
-      | { stdinIsTTY?: boolean; stdoutIsTTY?: boolean }
+      | { stdinIsTTY?: boolean; stdoutIsTTY?: boolean; uiFps?: number }
       | undefined;
 
     expect(typeof workerEnv).toBe('object');
@@ -151,6 +151,7 @@ describe('node ui runtime', () => {
     expect(workerData).toMatchObject({
       stdinIsTTY: Boolean(process.stdin.isTTY),
       stdoutIsTTY: Boolean(process.stdout.isTTY),
+      uiFps: 60,
     });
 
     await runtime.dispose();
@@ -237,6 +238,7 @@ function createContext(
       { channel: '12', keyLabel: 'D', inputTokens: ['d'], isScratch: false, side: '1P' },
     ],
     speed: 1,
+    uiFps: 60,
     judgeWindowMs: 16.67,
     highSpeed: 1,
     stateSignals,

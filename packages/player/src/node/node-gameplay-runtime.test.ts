@@ -171,6 +171,7 @@ describe('node gameplay runtime', () => {
     await Promise.resolve();
 
     expect(uiRuntimeState.context?.laneDisplayMode).toBe('7 KEY');
+    expect(uiRuntimeState.context?.uiFps).toBe(60);
     const uiInitResults = messagesOfKind(worker, 'ui-init-result');
     expect(uiInitResults).toHaveLength(1);
     expect(uiInitResults[0]).toMatchObject({
@@ -256,7 +257,9 @@ describe('node gameplay runtime', () => {
   });
 });
 
-function createOptions(overrides: Partial<Parameters<typeof runNodeGameplayRuntime>[0]> = {}): Parameters<typeof runNodeGameplayRuntime>[0] {
+function createOptions(
+  overrides: Partial<Parameters<typeof runNodeGameplayRuntime>[0]> = {},
+): Parameters<typeof runNodeGameplayRuntime>[0] {
   return {
     json: createEmptyJson('bms'),
     mode: 'manual',
@@ -276,6 +279,7 @@ function createUiInit() {
     laneDisplayMode: '7 KEY',
     laneBindings: [{ channel: '11', keyLabel: 'A', inputTokens: ['a'], isScratch: false, side: '1P' as const }],
     speed: 1,
+    uiFps: 60,
     judgeWindowMs: 16.67,
     highSpeed: 1,
     showLaneChannels: false,
