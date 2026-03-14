@@ -42,7 +42,9 @@ pnpm run test
 - [BMS 実装仕様](./docs/bms-spec.md)
 - [BMSON 実装仕様](./docs/bmson-spec.md)
 - [Bemuse 実装仕様](./docs/bemuse-spec.md)
+- [Player 実装仕様](./docs/player-spec.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./docs/json-spec.md)
+- [用語集](./docs/glossary.md)
 
 `@be-music/json` は Be-Music の内部データモデルです。配布フォーマットや他ツールとの再利用可能な交換フォーマットとしては設計していません。
 譜面の意味論 helper は `@be-music/chart` に分離しており、`@be-music/json` 自体は pure IR と round-trip preservation を担当します。

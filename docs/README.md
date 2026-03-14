@@ -7,6 +7,7 @@
 - [Bemuse 実装仕様](./bemuse-spec.md)
 - [Player 実装仕様](./player-spec.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./json-spec.md)
+- [用語集](./glossary.md)
 
 補足:
 
