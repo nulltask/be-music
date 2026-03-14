@@ -550,7 +550,7 @@ describe('player', () => {
     expect(perfect?.seconds).toBeGreaterThan(1.2);
   });
 
-  test('player: stray key applies LR2 empty-poor groove gauge damage without changing note judgments', async () => {
+  test('player: stray key without a candidate note does not change judgments or groove gauge', async () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 60;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
@@ -575,7 +575,7 @@ describe('player', () => {
     expect(summary.good).toBe(0);
     expect(summary.bad).toBe(0);
     expect(summary.poor).toBe(0);
-    expect(summary.gauge?.current).toBeCloseTo(18, 9);
+    expect(summary.gauge?.current).toBeCloseTo(20, 9);
     expect(summary.gauge?.cleared).toBe(false);
   });
 

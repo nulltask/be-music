@@ -1754,10 +1754,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           return;
         }
       }
-      if (!uiEnabled) {
-        writeOutput(`POOR-KEY ${tokens[0] ?? '?'}\n`);
-      }
-      applyGaugeJudge('EMPTY_POOR');
       return;
     }
 
