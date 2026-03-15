@@ -142,7 +142,7 @@ describe('node ui runtime', () => {
     const workerEnvObject = typeof workerEnv === 'object' ? (workerEnv as NodeJS.ProcessEnv) : undefined;
     const workerExecArgv = workerState.lastWorkerOptions?.execArgv;
     const workerData = workerState.lastWorkerOptions?.workerData as
-      | { stdinIsTTY?: boolean; stdoutIsTTY?: boolean; uiFps?: number }
+      | { stdinIsTTY?: boolean; stdoutIsTTY?: boolean; uiFps?: number; videoBgaStreaming?: boolean }
       | undefined;
 
     expect(typeof workerEnv).toBe('object');
@@ -152,6 +152,7 @@ describe('node ui runtime', () => {
       stdinIsTTY: Boolean(process.stdin.isTTY),
       stdoutIsTTY: Boolean(process.stdout.isTTY),
       uiFps: 60,
+      videoBgaStreaming: true,
     });
 
     await runtime.dispose();
@@ -205,6 +206,35 @@ describe('node ui runtime', () => {
     await runtime.dispose();
   });
 
+  test('forwards UI worker log messages to the caller', async () => {
+    const onLog = vi.fn();
+    const uiSignals = createPlayerUiSignalBus(createFrame());
+    const runtime = await createNodeUiRuntime({
+      ...createContext(uiSignals),
+      onLog,
+    });
+    const worker = getLastWorker();
+
+    worker.emit('message', {
+      kind: 'log',
+      entry: {
+        source: 'ui-worker',
+        level: 'info',
+        event: 'ui-worker.ready',
+        fields: { hasBgaRenderer: true },
+      },
+    });
+
+    expect(onLog).toHaveBeenCalledWith({
+      source: 'ui-worker',
+      level: 'info',
+      event: 'ui-worker.ready',
+      fields: { hasBgaRenderer: true },
+    });
+
+    await runtime.dispose();
+  });
+
   test('aborts UI worker initialization cooperatively through an abort message', async () => {
     workerState.autoReadyOnConstruct = false;
     const controller = new AbortController();
@@ -241,6 +271,7 @@ function createContext(
     uiFps: 60,
     judgeWindowMs: 16.67,
     highSpeed: 1,
+    videoBgaStreaming: true,
     stateSignals,
     uiSignals,
     baseDir: process.cwd(),

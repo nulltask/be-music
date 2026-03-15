@@ -123,6 +123,22 @@ function isLeftProgressRailLineRaw(line: string): boolean {
   return line.startsWith(PLAY_PROGRESS_HEAD_MARKER) || line.startsWith(PLAY_PROGRESS_GROOVE_MARKER);
 }
 
+function createKittyTestImage(token: string, color: { r: number; g: number; b: number }) {
+  const rgb = new Uint8Array(4 * 4 * 3);
+  for (let index = 0; index < rgb.length; index += 3) {
+    rgb[index] = color.r;
+    rgb[index + 1] = color.g;
+    rgb[index + 2] = color.b;
+  }
+  return {
+    pixelWidth: 4,
+    pixelHeight: 4,
+    cellWidth: 1,
+    cellHeight: 1,
+    rgb,
+    token,
+  };
+}
 describe('player-tui', () => {
   test('long note head stays on the same row as a regular note at the same beat', () => {
     const regularHeadRows = renderRowsContaining([{ channel: '11', beat: 1, seconds: 0.5 }], '███');
@@ -208,5 +224,84 @@ describe('player-tui', () => {
 
     expect(playfieldLines.length).toBeGreaterThan(0);
     expect(playfieldLines.every((line) => isRightProgressRailLine(line))).toBe(true);
+  });
+
+  test('updates kitty BGA by double-buffering image ids instead of overwriting the visible image', () => {
+    const chunks: string[] = [];
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stdout.write;
+
+    try {
+      const tui = new PlayerTui({
+        mode: 'AUTO',
+        laneDisplayMode: '5 KEY SP',
+        title: 'test',
+        lanes: [{ channel: '11', key: 'z' }],
+        speed: 1,
+        highSpeed: 1,
+        judgeWindowMs: 100,
+        stdoutIsTTY: true,
+        stdinIsTTY: true,
+        terminalImageProtocol: 'kitty',
+      });
+      tui.setTerminalSize(40, 24);
+      tui.start();
+      chunks.length = 0;
+
+      tui.render({
+        currentBeat: 0,
+        currentSeconds: 0,
+        totalSeconds: 10,
+        summary: {
+          total: 1,
+          perfect: 0,
+          fast: 0,
+          slow: 0,
+          great: 0,
+          good: 0,
+          bad: 0,
+          poor: 0,
+          exScore: 0,
+          score: 0,
+        },
+        notes: [],
+        bgaKittyImage: createKittyTestImage('frame-1', { r: 255, g: 0, b: 0 }),
+      });
+      const firstRender = chunks.join('');
+      chunks.length = 0;
+
+      tui.render({
+        currentBeat: 1,
+        currentSeconds: 1,
+        totalSeconds: 10,
+        summary: {
+          total: 1,
+          perfect: 0,
+          fast: 0,
+          slow: 0,
+          great: 0,
+          good: 0,
+          bad: 0,
+          poor: 0,
+          exScore: 0,
+          score: 0,
+        },
+        notes: [],
+        bgaKittyImage: createKittyTestImage('frame-2', { r: 0, g: 255, b: 0 }),
+      });
+      const secondRender = chunks.join('');
+      tui.stop();
+
+      expect(firstRender).toContain('i=1337');
+      expect(firstRender).toContain('a=T');
+      expect(secondRender).toContain('i=1338');
+      expect(secondRender).toContain('a=T');
+      expect(secondRender).toContain('a=d,d=I,i=1337');
+    } finally {
+      process.stdout.write = originalWrite;
+    }
   });
 });

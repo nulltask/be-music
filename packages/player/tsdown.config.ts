@@ -9,6 +9,7 @@ export default createPackageTsdownConfig({
   entries: {
     index: 'src/index.ts',
     cli: 'src/cli.ts',
+    'bga-video-worker': 'src/bga-video-worker.ts',
     'node-gameplay-worker': 'src/node/node-gameplay-worker.ts',
     'node-ui-worker': 'src/node/node-ui-worker.ts',
   },

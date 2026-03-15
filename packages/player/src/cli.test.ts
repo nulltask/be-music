@@ -10,6 +10,7 @@ import {
   formatPlayModeLabel,
   parseArgs,
   resolveCliConfigOverrideFlags,
+  resolveDefaultPlayerLogPath,
   resolvePlayLoadingStageFileDisplaySize,
   resolvePersistedPlayerConfigFromArgs,
   resolveCircularSelectableIndex,
@@ -106,10 +107,27 @@ describe('player cli', () => {
     expect(parseArgs(['chart.bms', '--kitty-graphics', '--no-kitty-graphics']).kittyGraphics).toBe(false);
   });
 
+  test('cli: enables video BGA streaming by default and lets the user switch back to legacy decode', () => {
+    expect(parseArgs(['chart.bms']).videoBgaStreaming).toBe(true);
+    expect(parseArgs(['chart.bms', '--no-video-bga-streaming']).videoBgaStreaming).toBe(false);
+    expect(parseArgs(['chart.bms', '--no-video-bga-streaming', '--video-bga-streaming']).videoBgaStreaming).toBe(
+      true,
+    );
+  });
+
   test('cli: defaults TUI rendering to 60fps and accepts custom fps', () => {
     expect(parseArgs(['chart.bms']).uiFps).toBe(60);
     expect(parseArgs(['chart.bms', '--tui-fps', '120']).uiFps).toBe(120);
     expect(parseArgs(['chart.bms', '--tui-fps', '59.94']).uiFps).toBe(59.94);
+  });
+
+  test('cli: accepts --log-file for structured file logging', () => {
+    expect(parseArgs(['chart.bms', '--log-file', '/tmp/be-music.log']).logFile).toBe('/tmp/be-music.log');
+    expect(() => parseArgs(['chart.bms', '--log-file'])).toThrow('--log-file expects a path');
+  });
+
+  test('cli: resolves the default structured log path under ~/.be-music/logs', () => {
+    expect(resolveDefaultPlayerLogPath()).toMatch(/\.be-music\/logs\/player\.ndjson$/);
   });
 
   test('cli: rejects invalid --tui-fps values', () => {

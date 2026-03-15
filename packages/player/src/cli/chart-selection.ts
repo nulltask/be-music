@@ -43,6 +43,7 @@ type PersistedChartSummaryItem = Omit<ChartSummaryItem, 'filePath' | 'relativePa
 
 interface PersistedChartSelectionCacheFileEntry {
   contentHash: string;
+  cacheHash: string;
   summary: PersistedChartSummaryItem;
 }
 
@@ -114,7 +115,7 @@ export interface ListChartFilesOptions {
 }
 
 const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
-const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/3';
+const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/4';
 const CHART_SELECTION_BUILD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
 let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
 
@@ -223,7 +224,12 @@ async function buildChartSummaryWithCache(
   }
 
   const contentHash = sourceBuffer ? buildChartSelectionContentHash(sourceBuffer) : undefined;
-  if (cachedEntry && typeof contentHash === 'string' && cachedEntry.contentHash === contentHash) {
+  if (
+    cachedEntry &&
+    typeof contentHash === 'string' &&
+    cachedEntry.contentHash === contentHash &&
+    isPersistedChartSelectionCacheFileEntryValid(cachedEntry)
+  ) {
     return {
       summary: restoreChartSummary(pathFields, cachedEntry.summary),
       cacheEntry: cachedEntry,
@@ -236,10 +242,7 @@ async function buildChartSummaryWithCache(
     summary,
     cacheEntry:
       typeof contentHash === 'string'
-        ? {
-            contentHash,
-            summary: persistChartSummary(summary),
-          }
+        ? createPersistedChartSelectionCacheFileEntry(persistChartSummary(summary), contentHash)
         : undefined,
     cacheHit: false,
   };
@@ -539,6 +542,36 @@ function buildChartSelectionContentHash(sourceBuffer: Buffer): string {
   return createHash('sha256').update(sourceBuffer).digest('hex');
 }
 
+function buildChartSelectionCacheHash(entry: {
+  contentHash: string;
+  summary: PersistedChartSummaryItem;
+}): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        entry.contentHash,
+        entry.summary.title ?? null,
+        entry.summary.subtitle ?? null,
+        entry.summary.artist ?? null,
+        entry.summary.subartist ?? null,
+        entry.summary.genre ?? null,
+        entry.summary.comment ?? null,
+        entry.summary.bannerPath ?? null,
+        entry.summary.previewContinueKey ?? null,
+        entry.summary.totalNotes ?? null,
+        entry.summary.player ?? null,
+        entry.summary.difficulty ?? null,
+        entry.summary.rank ?? null,
+        entry.summary.rankLabel ?? null,
+        entry.summary.playLevel ?? null,
+        entry.summary.bpmInitial ?? null,
+        entry.summary.bpmMin ?? null,
+        entry.summary.bpmMax ?? null,
+      ]),
+    )
+    .digest('hex');
+}
+
 function createChartSummaryPathFields(
   rootDir: string,
   filePath: string,
@@ -560,6 +593,24 @@ function resolveChartSummaryRelativePath(rootDir: string, filePath: string): str
 function persistChartSummary(summary: ChartSummaryItem): PersistedChartSummaryItem {
   const { filePath: _filePath, relativePath: _relativePath, directoryLabel: _directoryLabel, fileLabel: _fileLabel, ...persisted } = summary;
   return persisted;
+}
+
+function createPersistedChartSelectionCacheFileEntry(
+  summary: PersistedChartSummaryItem,
+  contentHash: string,
+): PersistedChartSelectionCacheFileEntry {
+  return {
+    contentHash,
+    cacheHash: buildChartSelectionCacheHash({ contentHash, summary }),
+    summary,
+  };
+}
+
+function isPersistedChartSelectionCacheFileEntryValid(entry: PersistedChartSelectionCacheFileEntry): boolean {
+  return entry.cacheHash === buildChartSelectionCacheHash({
+    contentHash: entry.contentHash,
+    summary: entry.summary,
+  });
 }
 
 function restoreChartSummary(
@@ -670,18 +721,31 @@ function parsePersistedChartSelectionCache(value: unknown): PersistedChartSelect
       }
       const fileEntry = rawFileEntry as {
         contentHash?: unknown;
+        cacheHash?: unknown;
         summary?: unknown;
       };
       if (typeof fileEntry.contentHash !== 'string' || fileEntry.contentHash.length === 0) {
         continue;
       }
+      if (typeof fileEntry.cacheHash !== 'string' || fileEntry.cacheHash.length === 0) {
+        continue;
+      }
       if (typeof fileEntry.summary !== 'object' || fileEntry.summary === null) {
         continue;
       }
-      files[filePath] = {
+      const summary = parsePersistedChartSummary(fileEntry.summary);
+      if (!summary) {
+        continue;
+      }
+      const parsedEntry: PersistedChartSelectionCacheFileEntry = {
         contentHash: fileEntry.contentHash,
-        summary: fileEntry.summary as PersistedChartSummaryItem,
+        cacheHash: fileEntry.cacheHash,
+        summary,
       };
+      if (!isPersistedChartSelectionCacheFileEntryValid(parsedEntry)) {
+        continue;
+      }
+      files[filePath] = parsedEntry;
     }
     if (Object.keys(files).length > 0) {
       directories[directoryPath] = { files };
@@ -709,6 +773,58 @@ async function loadPersistedChartSelectionCache(): Promise<PersistedChartSelecti
     return parsePersistedChartSelectionCache(JSON.parse(content));
   } catch {
     return createDefaultPersistedChartSelectionCache();
+  }
+}
+
+function parsePersistedChartSummary(value: unknown): PersistedChartSummaryItem | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const objectValue = value as Record<string, unknown>;
+  const summary: PersistedChartSummaryItem = {};
+
+  assignOptionalString(summary, 'title', objectValue.title);
+  assignOptionalString(summary, 'subtitle', objectValue.subtitle);
+  assignOptionalString(summary, 'artist', objectValue.artist);
+  assignOptionalString(summary, 'subartist', objectValue.subartist);
+  assignOptionalString(summary, 'genre', objectValue.genre);
+  assignOptionalString(summary, 'comment', objectValue.comment);
+  assignOptionalString(summary, 'bannerPath', objectValue.bannerPath);
+  assignOptionalString(summary, 'previewContinueKey', objectValue.previewContinueKey);
+  assignOptionalNumber(summary, 'totalNotes', objectValue.totalNotes);
+  assignOptionalNumber(summary, 'player', objectValue.player);
+  assignOptionalNumber(summary, 'difficulty', objectValue.difficulty);
+  assignOptionalNumber(summary, 'rank', objectValue.rank);
+  assignOptionalString(summary, 'rankLabel', objectValue.rankLabel);
+  if (typeof objectValue.playLevel === 'number' && Number.isFinite(objectValue.playLevel)) {
+    summary.playLevel = objectValue.playLevel;
+  } else if (typeof objectValue.playLevel === 'string') {
+    summary.playLevel = objectValue.playLevel;
+  }
+  assignOptionalNumber(summary, 'bpmInitial', objectValue.bpmInitial);
+  assignOptionalNumber(summary, 'bpmMin', objectValue.bpmMin);
+  assignOptionalNumber(summary, 'bpmMax', objectValue.bpmMax);
+
+  return summary;
+}
+
+function assignOptionalString<TKey extends keyof PersistedChartSummaryItem>(
+  target: PersistedChartSummaryItem,
+  key: TKey,
+  value: unknown,
+): void {
+  if (typeof value === 'string') {
+    target[key] = value as PersistedChartSummaryItem[TKey];
+  }
+}
+
+function assignOptionalNumber<TKey extends keyof PersistedChartSummaryItem>(
+  target: PersistedChartSummaryItem,
+  key: TKey,
+  value: unknown,
+): void {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    target[key] = value as PersistedChartSummaryItem[TKey];
   }
 }
 

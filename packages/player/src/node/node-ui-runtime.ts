@@ -1,4 +1,4 @@
-import { createAbortError, isAbortError } from '@be-music/utils';
+import { createAbortError, isAbortError, type LogEntry } from '@be-music/utils';
 import { effect } from 'alien-signals';
 import { fileURLToPath } from 'node:url';
 import { MessageChannel, type MessagePort, Worker } from 'node:worker_threads';
@@ -25,11 +25,13 @@ export interface NodeUiRuntimeOptions {
   showLaneChannels?: boolean;
   randomPatternSummary?: string;
   kittyGraphics?: boolean;
+  videoBgaStreaming?: boolean;
   stateSignals?: PlayerStateSignals;
   uiSignals?: PlayerUiSignalBus;
   baseDir: string;
   loadSignal?: AbortSignal;
   onBgaLoadProgress?: (progress: { ratio: number; detail?: string }) => void;
+  onLog?: (entry: LogEntry) => void;
   initialPaused?: boolean;
   initialJudgeCombo?: ReturnType<PlayerStateSignals['getJudgeCombo']>;
 }
@@ -51,7 +53,7 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
     execArgv: resolveNodeUiWorkerExecArgv(),
     env: resolveNodeUiWorkerEnv(),
   });
-  const workerReady = await waitForWorkerReady(worker, options.loadSignal, options.onBgaLoadProgress);
+  const workerReady = await waitForWorkerReady(worker, options.loadSignal, options.onBgaLoadProgress, options.onLog);
   if (!workerReady.enabled) {
     return {
       tuiEnabled: false,
@@ -70,6 +72,12 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
   let stopPromise: Promise<void> | undefined;
   let disposePromise: Promise<void> | undefined;
   let bridgePortAttached = false;
+  const handleWorkerMessage = (message: NodeUiWorkerOutboundMessage): void => {
+    if (message.kind === 'log') {
+      options.onLog?.(message.entry);
+    }
+  };
+  worker.on('message', handleWorkerMessage);
   const postWorkerMessage = (message: NodeUiWorkerInboundMessage): void => {
     if (disposed) {
       return;
@@ -168,6 +176,7 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
       stopHighSpeedEffect();
       stopJudgeComboEffect();
       detachResizeHandler();
+      worker.off('message', handleWorkerMessage);
       disposePromise = postWorkerMessageAndWaitForAck(worker, { kind: 'dispose' }, 'disposed', true);
       return disposePromise;
     },
@@ -259,6 +268,7 @@ function createWorkerInitData(options: NodeUiRuntimeOptions): NodeUiWorkerInitDa
     randomPatternSummary: options.randomPatternSummary,
     baseDir: options.baseDir,
     kittyGraphics: options.kittyGraphics,
+    videoBgaStreaming: options.videoBgaStreaming,
     stdinIsTTY: Boolean(process.stdin.isTTY),
     stdoutIsTTY: Boolean(process.stdout.isTTY),
     initialPaused: options.initialPaused ?? options.stateSignals?.paused() ?? false,
@@ -301,6 +311,7 @@ async function waitForWorkerReady(
   worker: Worker,
   signal: AbortSignal | undefined,
   onBgaLoadProgress: NodeUiRuntimeOptions['onBgaLoadProgress'],
+  onLog: NodeUiRuntimeOptions['onLog'],
 ): Promise<{ enabled: boolean; bgaPlaybackEndSeconds?: number }> {
   if (signal?.aborted) {
     await worker.terminate();
@@ -327,6 +338,10 @@ async function waitForWorkerReady(
     };
 
     const onMessage = (message: NodeUiWorkerOutboundMessage): void => {
+      if (message.kind === 'log') {
+        onLog?.(message.entry);
+        return;
+      }
       if (message.kind === 'bga-load-progress') {
         onBgaLoadProgress?.(message.progress);
         return;

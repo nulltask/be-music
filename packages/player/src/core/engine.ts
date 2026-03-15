@@ -10,7 +10,7 @@ import {
 } from '@be-music/chart';
 import { basename } from 'node:path';
 import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
-import { floatToInt16, throwIfAborted } from '@be-music/utils';
+import { floatToInt16, throwIfAborted, type LogEntry, type LogLevel } from '@be-music/utils';
 import { type BeMusicEvent, type BeMusicJson, normalizeChannel, normalizeObjectKey } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
@@ -73,6 +73,7 @@ export interface CreatePlayerUiRuntimeContext {
   uiFps?: number;
   judgeWindowMs: number;
   highSpeed: number;
+  videoBgaStreaming?: boolean;
   showLaneChannels: boolean;
   randomPatternSummary?: string;
   stateSignals: PlayerStateSignals;
@@ -121,6 +122,7 @@ export interface PlayerOptions {
   audioLeadStepUpMs?: number;
   audioLeadStepDownMs?: number;
   tui?: boolean;
+  videoBgaStreaming?: boolean;
   signal?: AbortSignal;
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
   onLoadComplete?: () => void;
@@ -129,6 +131,7 @@ export interface PlayerOptions {
   createUiRuntime?: (context: CreatePlayerUiRuntimeContext) => Promise<PlayerUiRuntime | undefined>;
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
   onResolvedChart?: (json: BeMusicJson) => void;
+  onLog?: (entry: LogEntry) => void;
   writeOutput?: (text: string) => void;
 }
 
@@ -535,6 +538,24 @@ function resolveOutputWriter(options: PlayerOptions): (text: string) => void {
   return (): void => undefined;
 }
 
+function emitPlayerLog(
+  options: PlayerOptions,
+  level: LogLevel,
+  event: string,
+  fields?: Record<string, unknown>,
+): void {
+  options.onLog?.({
+    source: 'engine',
+    level,
+    event,
+    fields: {
+      emittedAtUnixMs: Date.now(),
+      emittedAtMonotonicMs: performance.now(),
+      ...fields,
+    },
+  });
+}
+
 interface AudioSessionLoadProgress {
   ratio: number;
   message: string;
@@ -924,6 +945,12 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   throwIfAborted(options.signal);
   reportLoadProgress(options, 1, 'Ready');
   options.onLoadComplete?.();
+  emitPlayerLog(options, 'info', 'playback.prepared', {
+    mode: 'auto',
+    uiEnabled,
+    audioEnabled: audioSession !== undefined,
+    totalSeconds,
+  });
   const resolveDebugActiveAudioState = (
     nowSeconds: number,
   ): { activeAudioFiles?: string[]; activeAudioVoiceCount?: number } => {
@@ -974,9 +1001,17 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     writeOutput(`Press ${highSpeedModifierLabel}+odd lane key to decrease HIGH-SPEED.\n`);
     writeOutput(`Press ${highSpeedModifierLabel}+even lane key to increase HIGH-SPEED.\n`);
   } else {
+    emitPlayerLog(options, 'info', 'ui.start', {
+      mode: 'auto',
+    });
     uiRuntime?.start();
     activeStateSignals?.publishJudgeCombo('READY', 0);
     publishUiFrame(0, 0);
+    emitPlayerLog(options, 'debug', 'ui.initial-frame.published', {
+      mode: 'auto',
+      seconds: 0,
+      beat: 0,
+    });
   }
 
   let playbackClock: PlaybackClock | undefined;
@@ -1101,6 +1136,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     await delay(leadInMs);
     consumeInputCommands();
     if (!interruptedReason) {
+      emitPlayerLog(options, 'info', 'audio.start', {
+        mode: 'auto',
+      });
       audioSession?.start();
 
       const chartClock = createPlaybackClock(
@@ -1354,6 +1392,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
   reportLoadProgress(options, 1, 'Ready');
   options.onLoadComplete?.();
+  emitPlayerLog(options, 'info', 'playback.prepared', {
+    mode: 'manual',
+    uiEnabled,
+    audioEnabled: audioSession !== undefined,
+    totalSeconds,
+  });
   const resolveDebugActiveAudioState = (): { activeAudioFiles?: string[]; activeAudioVoiceCount?: number } => {
     if (options.debugActiveAudio !== true) {
       return {};
@@ -1401,13 +1445,24 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     writeOutput('Press Esc to stop and open result.\n');
     printLaneMap(writeOutput, laneBindings);
   } else {
+    emitPlayerLog(options, 'info', 'ui.start', {
+      mode: 'manual',
+    });
     uiRuntime?.start();
     activeStateSignals?.publishJudgeCombo('READY', 0);
     publishUiFrame(0, 0);
+    emitPlayerLog(options, 'debug', 'ui.initial-frame.published', {
+      mode: 'manual',
+      seconds: 0,
+      beat: 0,
+    });
   }
 
   await delay(leadInMs);
   inputRuntime?.start();
+  emitPlayerLog(options, 'info', 'audio.start', {
+    mode: 'manual',
+  });
   audioSession?.start();
 
   const playbackClock = createPlaybackClock(performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0));

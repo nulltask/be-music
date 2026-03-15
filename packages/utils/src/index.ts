@@ -228,6 +228,7 @@ export function normalizeAsciiBase36Code(code: number): number {
 }
 
 export * from './abort.ts';
+export * from './log.ts';
 export * from './path.ts';
 export * from './pcm.ts';
 export * from './workerize.ts';

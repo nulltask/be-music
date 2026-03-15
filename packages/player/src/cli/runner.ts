@@ -1,7 +1,15 @@
 import { stat } from 'node:fs/promises';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isAbortError, resolveCliPath } from '@be-music/utils';
+import {
+  createFileLogger,
+  createNoopLogger,
+  isAbortError,
+  resolveCliPath,
+  type LogEntry,
+  type Logger,
+  type LogLevel,
+} from '@be-music/utils';
 import readline from 'node:readline';
 import type { BeMusicPlayLevel } from '@be-music/json';
 import { parseChartFile } from '@be-music/parser';
@@ -44,6 +52,7 @@ import {
   loadPersistedPlayerConfig,
   normalizeHighSpeedValue,
   resolveCliConfigOverrideFlags,
+  resolveDefaultPlayerLogPath,
   resolvePersistedPlayerConfigFromArgs,
   resolvePlayModeFromArgs,
   savePersistedPlayerConfig,
@@ -84,6 +93,7 @@ export {
   cyclePlayMode,
   formatPlayModeLabel,
   resolveCliConfigOverrideFlags,
+  resolveDefaultPlayerLogPath,
   resolvePersistedPlayerConfigFromArgs,
   resolvePlayModeFromArgs,
 } from './config.ts';
@@ -98,9 +108,11 @@ export {
 
 interface CliArgs {
   input?: string;
+  logFile?: string;
   auto: boolean;
   autoScratch: boolean;
   kittyGraphics: boolean;
+  videoBgaStreaming: boolean;
   inferBmsLnTypeWhenMissing: boolean;
   showInvisibleNotes: boolean;
   compressor: boolean;
@@ -271,6 +283,7 @@ const MUSIC_SELECT_BANNER_GAP = 2;
 const MUSIC_SELECT_BANNER_MAX_WIDTH = 18;
 const MUSIC_SELECT_BANNER_MIN_WIDTH = 10;
 const MUSIC_SELECT_BANNER_MIN_TEXT_WIDTH = 36;
+let activePlayerLogger: Logger = createNoopLogger();
 
 export async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
@@ -303,6 +316,14 @@ export async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+
+  const resolvedLogFilePath =
+    typeof args.logFile === 'string' && args.logFile.length > 0 ? resolveCliPath(args.logFile) : resolveDefaultPlayerLogPath();
+  activePlayerLogger = await createFileLogger(resolvedLogFilePath);
+  logCli('info', 'cli.start', {
+    input: args.input,
+    logFile: resolvedLogFilePath,
+  });
 
   if (args.judgeWindowSource === 'legacy') {
     process.stdout.write('Warning: --judge-window is deprecated. Use --debug-judge-window for debugging only.\n');
@@ -338,6 +359,15 @@ export async function main(): Promise<void> {
     } catch (error) {
       process.stdout.write(`Warning: failed to save ~/.be-music/player.json (${formatCliParseError(error)}).\n`);
     }
+    logCli('info', 'cli.finish', {
+      exitCode: process.exitCode ?? 0,
+    });
+    try {
+      await activePlayerLogger.close();
+    } catch (error) {
+      process.stderr.write(`Warning: failed to close log file (${formatCliParseError(error)}).\n`);
+    }
+    activePlayerLogger = createNoopLogger();
   }
 }
 
@@ -842,7 +872,14 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     })(),
     tui: args.tui,
     kittyGraphics: args.kittyGraphics,
+    videoBgaStreaming: args.videoBgaStreaming,
   };
+  logCli('info', 'play.start', {
+    chartPath,
+    mode: args.auto ? 'auto' : 'manual',
+    kittyGraphics: args.kittyGraphics === true,
+    videoBgaStreaming: args.videoBgaStreaming === true,
+  });
 
   let summary: PlayerSummary;
   while (true) {
@@ -877,8 +914,14 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
             }
           : undefined,
         onLoadComplete: () => {
-          clearPlayLoadingStageFileImage(playLoadingScreenRenderState);
+          logCli('info', 'play.loading.complete', {
+            chartPath,
+          });
+          clearPlayLoadingScreen(playLoadingScreenRenderState);
           disposePlaybackLoadingAbortCapture();
+        },
+        onLog: (entry) => {
+          activePlayerLogger.log(entry);
         },
         onResolvedChart: (metadata) => {
           resolvedChartMetadata = metadata;
@@ -944,6 +987,16 @@ function sanitizeMetadataText(value: string | undefined): string | undefined {
   }
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : undefined;
+}
+
+function logCli(level: LogLevel, event: string, fields?: Record<string, unknown>): void {
+  const entry: LogEntry = {
+    source: 'cli',
+    level,
+    event,
+    fields,
+  };
+  activePlayerLogger.log(entry);
 }
 
 export function createMusicSelectSelectedMetadataLines(
@@ -1265,6 +1318,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     auto: false,
     autoScratch: false,
     kittyGraphics: false,
+    videoBgaStreaming: true,
     inferBmsLnTypeWhenMissing: false,
     showInvisibleNotes: false,
     compressor: false,
@@ -1313,6 +1367,15 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     }
     if (token === '--tui-fps') {
       args.uiFps = parseTuiFpsArg(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--log-file') {
+      const value = rawArgs[index + 1];
+      if (typeof value !== 'string' || value.length === 0) {
+        throw new Error('--log-file expects a path');
+      }
+      args.logFile = value;
       index += 1;
       continue;
     }
@@ -1493,6 +1556,14 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       args.kittyGraphics = false;
       continue;
     }
+    if (token === '--video-bga-streaming') {
+      args.videoBgaStreaming = true;
+      continue;
+    }
+    if (token === '--no-video-bga-streaming') {
+      args.videoBgaStreaming = false;
+      continue;
+    }
     positional.push(token);
   }
 
@@ -1549,6 +1620,10 @@ function printUsage(): void {
       '                           Audio backend: node-web-audio-api (fixed)',
       '  --tui / --no-tui          Enable or disable TUI play screen (default: on in TTY)',
       '  --kitty-graphics          Enable Kitty graphics protocol BGA rendering when supported (default: off)',
+      '  --video-bga-streaming     Stream video BGA frames progressively (default: on)',
+      '  --no-video-bga-streaming  Decode full video BGA before playback (legacy behavior)',
+      '  --log-file <path>         Write structured NDJSON logs to a file',
+      '                           Default: ~/.be-music/logs/player.ndjson',
       '',
       'Advanced tuning:',
       '  --show-invisible-notes    Show invisible channels (31-39/41-49) in TUI as green notes',
@@ -1872,6 +1947,14 @@ function resolvePlayLoadingStageFileBlock(
     );
   }
   return stageFileImage.lines.length > 0 ? `${stageFileImage.lines.join('\n')}\u001b[H` : '';
+}
+
+function clearPlayLoadingScreen(state: PlayLoadingScreenRenderState): void {
+  clearPlayLoadingStageFileImage(state);
+  if (state.initialized) {
+    process.stdout.write('\u001b[2J\u001b[H');
+    state.initialized = false;
+  }
 }
 
 function clearPlayLoadingStageFileImage(state: PlayLoadingScreenRenderState): void {

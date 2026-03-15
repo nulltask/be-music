@@ -1,4 +1,5 @@
 import type { MessagePort } from 'node:worker_threads';
+import type { LogEntry } from '@be-music/utils';
 import type { BeMusicJson } from '@be-music/json';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/ui-signal-bus.ts';
 import type { LaneBinding } from '../manual-input.ts';
@@ -17,6 +18,7 @@ export interface NodeUiWorkerInitData {
   randomPatternSummary?: string;
   baseDir: string;
   kittyGraphics?: boolean;
+  videoBgaStreaming?: boolean;
   stdinIsTTY: boolean;
   stdoutIsTTY: boolean;
   initialPaused: boolean;
@@ -40,6 +42,7 @@ export type NodeUiWorkerInboundMessage =
 
 export type NodeUiWorkerOutboundMessage =
   | { kind: 'ready'; bgaPlaybackEndSeconds?: number }
+  | { kind: 'log'; entry: LogEntry }
   | { kind: 'unsupported' }
   | { kind: 'stopped' }
   | { kind: 'disposed' }

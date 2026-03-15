@@ -172,6 +172,7 @@ describe('node gameplay runtime', () => {
 
     expect(uiRuntimeState.context?.laneDisplayMode).toBe('7 KEY');
     expect(uiRuntimeState.context?.uiFps).toBe(60);
+    expect(uiRuntimeState.context?.videoBgaStreaming).toBe(true);
     const uiInitResults = messagesOfKind(worker, 'ui-init-result');
     expect(uiInitResults).toHaveLength(1);
     expect(uiInitResults[0]).toMatchObject({
@@ -210,6 +211,50 @@ describe('node gameplay runtime', () => {
     await Promise.resolve();
 
     expect(uiRuntimeState.context?.loadSignal).toBe(controller.signal);
+
+    worker.emit('message', { kind: 'result', summary: createSummary() });
+    await promise;
+  });
+
+  test('forwards gameplay and UI runtime log messages to the caller', async () => {
+    const onLog = vi.fn();
+    const promise = runNodeGameplayRuntime(createOptions({ onLog }));
+    const worker = getLastWorker();
+
+    worker.emit('message', {
+      kind: 'log',
+      entry: {
+        source: 'gameplay-worker',
+        level: 'info',
+        event: 'playback.prepared',
+      },
+    });
+
+    worker.emit('message', {
+      kind: 'ui-init',
+      requestId: 9,
+      runtime: createUiInit(),
+    });
+    await Promise.resolve();
+
+    uiRuntimeState.context?.onLog?.({
+      source: 'ui-worker',
+      level: 'info',
+      event: 'ui-worker.first-frame.rendered',
+      fields: { seconds: 0 },
+    });
+
+    expect(onLog).toHaveBeenNthCalledWith(1, {
+      source: 'gameplay-worker',
+      level: 'info',
+      event: 'playback.prepared',
+    });
+    expect(onLog).toHaveBeenNthCalledWith(2, {
+      source: 'ui-worker',
+      level: 'info',
+      event: 'ui-worker.first-frame.rendered',
+      fields: { seconds: 0 },
+    });
 
     worker.emit('message', { kind: 'result', summary: createSummary() });
     await promise;
@@ -267,6 +312,7 @@ function createOptions(
       tui: true,
       speed: 1,
       audioBaseDir: process.cwd(),
+      videoBgaStreaming: true,
     },
     ...overrides,
   };
@@ -284,6 +330,7 @@ function createUiInit() {
     highSpeed: 1,
     showLaneChannels: false,
     baseDir: process.cwd(),
+    videoBgaStreaming: true,
     initialFrame: {
       currentBeat: 0,
       currentSeconds: 0,

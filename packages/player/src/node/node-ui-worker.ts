@@ -1,4 +1,4 @@
-import { createAbortError, isAbortError } from '@be-music/utils';
+import { createAbortError, isAbortError, type LogLevel } from '@be-music/utils';
 import { createBeatResolver } from '@be-music/chart';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import { createTimingResolver } from '@be-music/audio-renderer';
@@ -50,6 +50,10 @@ async function bootstrap(): Promise<void> {
   if (!port) {
     throw new Error('UI worker parent port is unavailable');
   }
+  postLog('info', 'ui-worker.bootstrap.start', {
+    kittyGraphics: initData.kittyGraphics === true,
+    uiFps: initData.uiFps ?? DEFAULT_UI_FPS,
+  });
   const abortController = new AbortController();
   const handleAbortMessage = (message: NodeUiWorkerInboundMessage): void => {
     if (message.kind !== 'abort' || abortController.signal.aborted) {
@@ -116,6 +120,7 @@ async function bootstrap(): Promise<void> {
   });
 
   if (!tui.isSupported()) {
+    postLog('warn', 'ui-worker.unsupported');
     postWorkerMessage({ kind: 'unsupported' });
     process.exit(0);
     return;
@@ -128,6 +133,7 @@ async function bootstrap(): Promise<void> {
     baseDir: initData.baseDir,
     width: initialBgaSize.width,
     height: initialBgaSize.height,
+    videoBgaStreaming: initData.videoBgaStreaming,
     signal: abortController.signal,
     onLoadProgress: (progress) => {
       postWorkerMessage({
@@ -139,9 +145,15 @@ async function bootstrap(): Promise<void> {
       });
     },
   });
+  postLog('info', 'ui-worker.ready', {
+    hasBgaRenderer: bgaRenderer !== undefined,
+    bgaPlaybackEndSeconds: bgaRenderer?.playbackEndSeconds,
+    videoBgaStreaming: initData.videoBgaStreaming !== false,
+  });
 
   const queuedCommands: PlayerUiCommand[] = [];
   let bridgePort: MessagePort | undefined;
+  let firstFrameRendered = false;
 
   const syncBgaDisplaySize = (
     frame: PlayerUiFramePayload | undefined,
@@ -153,6 +165,7 @@ async function bootstrap(): Promise<void> {
   };
 
   let renderThrottle: ReturnType<typeof createRenderThrottle> | undefined;
+  let bgaStreamingScheduled = false;
   const frameState = createUiWorkerFrameState({
     initialPaused: initData.initialPaused,
     initialHighSpeed: initData.highSpeed,
@@ -224,6 +237,12 @@ async function bootstrap(): Promise<void> {
         bgaAnsiLines: useKittyGraphicsForBga ? undefined : bgaRenderer?.getAnsiLines(latestFrame.currentSeconds),
         bgaKittyImage: useKittyGraphicsForBga ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds) : undefined,
       });
+      if (!firstFrameRendered) {
+        firstFrameRendered = true;
+        postLog('info', 'ui-worker.first-frame.rendered', {
+          seconds: latestFrame.currentSeconds,
+        });
+      }
     },
     {
       minIntervalMs: resolveTuiRenderMinIntervalMs(initData.uiFps),
@@ -232,7 +251,15 @@ async function bootstrap(): Promise<void> {
 
   const handleRenderMessage = (message: NodeUiWorkerInboundMessage): boolean => {
     if (message.kind === 'start') {
+      postLog('info', 'ui-worker.start.received');
       tui.start();
+      if (!bgaStreamingScheduled) {
+        bgaStreamingScheduled = true;
+        setImmediate(() => {
+          bgaRenderer?.startStreaming();
+        });
+      }
+      deferredUiFlush.markFrameDirty();
       return true;
     }
     if (message.kind === 'frame') {
@@ -274,6 +301,7 @@ async function bootstrap(): Promise<void> {
       bridgePort?.off('message', handleControlMessage);
       bridgePort = message.port;
       bridgePort.on('message', handleControlMessage);
+      postLog('info', 'ui-worker.bridge-port.attached');
       return;
     }
     if (handleRenderMessage(message)) {
@@ -345,6 +373,22 @@ function estimateBgaAnsiDisplaySize(
 
 function postWorkerMessage(message: NodeUiWorkerOutboundMessage): void {
   port?.postMessage(message);
+}
+
+function postLog(level: LogLevel, event: string, fields?: Record<string, unknown>): void {
+  postWorkerMessage({
+    kind: 'log',
+    entry: {
+      source: 'ui-worker',
+      level,
+      event,
+      fields: {
+        emittedAtUnixMs: Date.now(),
+        emittedAtMonotonicMs: performance.now(),
+        ...fields,
+      },
+    },
+  });
 }
 
 function resolveAbortReason(reason?: string): Error {

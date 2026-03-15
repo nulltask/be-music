@@ -27,6 +27,7 @@
     "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts"
   },
   "dependencies": {
-    "isoworker": "^0.2.4"
+    "isoworker": "^0.2.4",
+    "pino": "^10.3.1"
   }
 }

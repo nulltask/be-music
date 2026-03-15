@@ -1,5 +1,5 @@
 import { effect } from 'alien-signals';
-import { createAbortError } from '@be-music/utils';
+import { createAbortError, type LogEntry, type LogLevel } from '@be-music/utils';
 import type { BeMusicJson } from '@be-music/json';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import {
@@ -40,6 +40,10 @@ async function bootstrap(): Promise<void> {
   if (!port) {
     throw new Error('Gameplay worker parent port is unavailable');
   }
+  postLog('info', 'gameplay-worker.bootstrap.start', {
+    mode: initData.mode,
+    tui: initData.playOptions.tui === true,
+  });
 
   const abortController = new AbortController();
   let bridgedInputContext: CreatePlayerInputRuntimeContext | undefined;
@@ -140,7 +144,16 @@ async function bootstrap(): Promise<void> {
   const createUiRuntime = async (context: CreatePlayerUiRuntimeContext) => {
     const initRequestId = nextUiRequestId;
     nextUiRequestId += 1;
+    postLog('debug', 'ui.init.requested', {
+      requestId: initRequestId,
+      mode: context.mode,
+    });
     const uiInitResult = await requestUiInit(initRequestId, context, pendingUiInit);
+    postLog('info', 'ui.init.resolved', {
+      requestId: initRequestId,
+      enabled: uiInitResult.enabled,
+      bgaPlaybackEndSeconds: uiInitResult.bgaPlaybackEndSeconds,
+    });
     if (!uiInitResult.enabled) {
       postWorkerMessage({
         kind: 'output',
@@ -220,6 +233,7 @@ async function bootstrap(): Promise<void> {
         if (disposed) {
           return;
         }
+        postLog('info', 'ui.start.posted');
         postUiMessage({ kind: 'start' });
       },
       stop: () => {
@@ -296,6 +310,12 @@ async function bootstrap(): Promise<void> {
         postWorkerMessage({
           kind: 'resolved-chart',
           metadata,
+        });
+      },
+      onLog: (entry: LogEntry) => {
+        postWorkerMessage({
+          kind: 'log',
+          entry,
         });
       },
     };
@@ -378,6 +398,7 @@ function serializeUiRuntimeInit(context: CreatePlayerUiRuntimeContext): NodeGame
     randomPatternSummary: context.randomPatternSummary,
     baseDir: context.baseDir,
     kittyGraphics: initData.playOptions.kittyGraphics === true,
+    videoBgaStreaming: context.videoBgaStreaming !== false,
     initialFrame: context.uiSignals.getFrame(),
     initialPaused: context.stateSignals.paused(),
     initialJudgeCombo: context.stateSignals.getJudgeCombo(),
@@ -405,4 +426,20 @@ function deserializeUiInitError(message: string, name: string | undefined): Erro
 
 function postWorkerMessage(message: NodeGameplayWorkerOutboundMessage): void {
   port?.postMessage(message);
+}
+
+function postLog(level: LogLevel, event: string, fields?: Record<string, unknown>): void {
+  postWorkerMessage({
+    kind: 'log',
+    entry: {
+      source: 'gameplay-worker',
+      level,
+      event,
+      fields: {
+        emittedAtUnixMs: Date.now(),
+        emittedAtMonotonicMs: performance.now(),
+        ...fields,
+      },
+    },
+  });
 }
