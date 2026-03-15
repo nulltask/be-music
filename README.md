@@ -78,15 +78,18 @@ pnpm run test
 - MANUAL / AUTO SCRATCH / AUTO の 3 モード
 - TUI プレイ画面と選曲画面
 - 選曲画面の metadata / preview / banner 表示
+- 楽曲一覧 metadata のローカル cache (`~/.be-music/chart-selection-cache.json`)
 - HIGH-SPEED (`0.5` 〜 `10.0`, `0.5` 刻み)
 - TUI refresh rate 設定 (`--tui-fps`, default `60`)
 - 判定: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR`（`FAST` / `SLOW` 集計あり）
 - 20 万点満点 SCORE と IIDX 準拠 EX-SCORE
 - 不可視ノート表示 (`--show-invisible-notes`)
 - FREE ZONE (`17` / `27`) の専用扱い
-- BGA 画像描画 (`BMP` / `PNG` / `JPEG`) と動画描画 (`mpeg1video` / `h264`)
+- BGA 画像描画 (`BMP` / `PNG` / `JPEG`) と動画描画 (`mpeg1video` / `h264` / `mjpeg`)
+- 動画 BGA の progressive decode (`--no-video-bga-streaming` で旧方式へ切り替え)
 - `--kitty-graphics` による opt-in の Kitty graphics protocol 描画
 - `node-web-audio-api` 固定バックエンドで再生
+- 構造化ログ出力 (`~/.be-music/logs/player.ndjson`, `--log-file` で上書き)
 
 ### editor (`@be-music/editor`)
 
@@ -135,11 +138,17 @@ pnpm run player chart.bms --high-speed 3.5
 # TUI refresh rate
 pnpm run player chart.bms --tui-fps 120
 
+# 動画 BGA の progressive decode を無効化
+pnpm run player chart.bms --no-video-bga-streaming
+
 # 不可視チャンネル (31-39/41-49) を緑ノートで表示
 pnpm run player chart.bms --show-invisible-notes
 
 # Kitty graphics protocol を使って BGA / STAGEFILE / BANNER を画像表示
 pnpm run player chart.bms --kitty-graphics
+
+# 構造化ログ出力先を上書き
+pnpm run player chart.bms --log-file /tmp/be-music.ndjson
 
 # 音声オフ
 pnpm run player chart.bms --no-audio
@@ -239,8 +248,10 @@ pnpm run editor export chart.json chart.bms
 - `--kitty-graphics` 指定時のみ、kitty graphics protocol 対応端末で gameplay BGA、`#STAGEFILE` loading 画面、選曲画面 banner を画像として表示します。未指定時は ANSI 描画です。
 - BGA はウィンドウリサイズ時に再計算して表示サイズを更新します。
 - 動画 BGA は `@uwx/libav.js-fat` でデコードします。
-  - 対応コーデック: `mpeg1video`, `h264`
+  - 対応コーデック: `mpeg1video`, `h264`, `mjpeg`
   - 音声トラックはデコードしません。
+  - 既定では最初のフレーム取得後に再生を開始し、残りフレームはバックグラウンドで段階的にデコードします。
+  - `--no-video-bga-streaming` を付けると、再生前に全フレームをデコードする旧方式へ戻せます。
 
 ## スコアと判定
 
@@ -254,17 +265,24 @@ pnpm run editor export chart.json chart.bms
   - 判定基礎点 150000 + コンボ加点 50000
   - `BAD` / `POOR` は加点なし、コンボを切断
 
-## 設定の永続化
+## 設定・キャッシュ・ログ
 
-`player` は次を保存し、次回起動時に復元します。
+`player` は次をローカルへ保存します。
 
 - Play Mode (`manual` / `auto-scratch` / `auto`)
 - HIGH-SPEED
 - ディレクトリごとの選曲フォーカス (`chart` / `random`)
 
-保存先:
+保存先と用途:
 
 - `~/.be-music/player.json`
+  - Play Mode, HIGH-SPEED, directory ごとの Music Select focus
+- `~/.be-music/chart-selection-cache.json`
+  - 楽曲一覧 metadata cache
+  - chart 本文の `contentHash` で再利用判定し、保存済み entry は `cacheHash` で検証します
+- `~/.be-music/logs/player.ndjson`
+  - `player` 実行時の構造化ログ
+  - `--log-file <path>` を指定した場合はその path を使います
 
 ## SEA (Single Executable Applications)
 
@@ -298,6 +316,15 @@ pnpm run bench
 
 # 単一パッケージ（例: parser）
 pnpm --filter @be-music/parser run bench
+
+# 複数 run を集約
+pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
+
+# 2 revision を比較して Markdown を生成
+pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json --output tmp/bench/benchmark.md
 ```
 
-- 出力: `tmp/bench/exports*.json`
+- snapshot 出力: `tmp/bench/exports*.json`
+- compare 出力: 任意の Markdown と summary JSON
+- GitHub Actions では、`devel` / `main` 向け PR で base/head 比較を PR comment として投稿します
+- GitHub Actions では、`devel` / `main` への push でも直前 revision 比較を実行し、対象 commit へ commit comment を投稿します

@@ -82,7 +82,11 @@
 - **render throttle**: TUI 描画を target fps に抑える仕組みです。描画更新が来ても、最終 render は一定間隔以下に間引きます。
 - **settle delay**: 選曲 preview をすぐには始めず、カーソルが少し落ち着くまで待つ短い遅延です。連続移動時の引っかかりを減らします。
 - **focus key**: Music Select で最後に選んでいた項目を directory ごとに保存するための識別子です。通常 chart だけでなく `random` entry も含みます。
+- **content hash**: 楽曲一覧 cache で、元の chart 本文が同一かを判定するための hash 値です。現行実装では raw bytes の `SHA-256` を使います。
+- **cache hash**: 保存済み cache entry 自体の改竄や破損を検知するための hash 値です。`content hash` と persisted summary から再計算して検証します。
 - **Sound / Visual status**: loading screen で別々に表示する audio 側・graphics 側の進捗状態です。並列読み込み時に、どちらで待っているかを見分けるために使います。
+- **structured log**: `player` が NDJSON で出力する実行ログです。`stdout` / `stderr` の TUI 描画とは分離し、既定では `~/.be-music/logs/player.ndjson` を使います。
+- **video BGA streaming**: 動画 BGA の最初のフレームだけ先に確保して再生開始を許可し、残りフレームを gameplay 開始後に段階的にデコードする実装方針です。
 - **PlayerSummary**: 再生終了後に得られる集計結果です。judge counts、`FAST` / `SLOW`、`EX-SCORE`、`SCORE`、`gauge` などを含みます。
 
 ## 関連文書

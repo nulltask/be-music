@@ -62,6 +62,8 @@
 - [x] メタヘッダ `#ARTIST` を解釈
 - [x] メタヘッダ `#GENRE` を解釈
 - [x] メタヘッダ `#COMMENT` を解釈
+- [x] `#SUBARTIST` を `metadata.extras.SUBARTIST` として保持し、player の選曲画面 metadata に使用
+- [x] `#BANNER` を `metadata.extras.BANNER` として保持し、player の選曲画面 banner に使用
 - [x] メタヘッダ `#STAGEFILE` を解釈
 - [x] `#STAGEFILE` を選曲後の loading screen 専用画像として表示
 - [x] メタヘッダ `#PLAYLEVEL` を解釈
@@ -113,7 +115,7 @@
 - [x] BGA 画像を通常は拡大縮小しない
 - [x] 256x256 未満の画像を X 軸中央 / Y 軸上詰めで配置
 - [x] `04` / `07` / `0A` で未定義 `#BMPxx` 参照時は 256x256 黒として扱う
-- [x] BGA 動画を ANSI 描画で再生 (`mpeg1video` / `h264`, 音声は無視)
+- [x] BGA 動画を描画で再生 (`mpeg1video` / `h264` / `mjpeg`, 音声は無視)
 - [x] 制御構文 `#RANDOM` を保持して実行時評価
 - [x] 制御構文 `#SETRANDOM` を保持して実行時評価
 - [x] 制御構文 `#ENDRANDOM` を保持して実行時評価
@@ -206,7 +208,7 @@
 - [x] `#LNOBJ` 複数宣言時の扱い（`bms.lnObjs` に宣言順保持）
 - [x] `#LNOBJ` 終端での Keyup 発音拡張の互換方針（HDX Keyup は非採用、終端トリガは抑止）
 - [x] `#xxx51-69` と `#LNOBJ` が競合する譜面での優先順位定義（同一レーン・同一位置は `#xxx51-69` 優先）
-- [ ] ヘッダ `#BACKBMP` / `#BANNER` / `#SUBARTIST` / `#MAKER` の専用解釈
+- [ ] ヘッダ `#BACKBMP` / `#MAKER` の専用解釈
 - [ ] `#SUBTITLE` / `#SUBARTIST` / `#COMMENT` の複数行定義（Multiplex）の解釈
 - [ ] 旧式互換ヘッダ `#SONGxx` を `#TEXTxx` 相当として扱う規則
 - [ ] 互換ヘッダ `#EXBPMxx` の読み取り方針（`#BPMxx` との差分）

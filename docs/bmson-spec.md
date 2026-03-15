@@ -90,6 +90,8 @@
 ### player / audio-renderer (bmson 再生挙動)
 
 - [x] bmson 入力再生 (`parseChartFile` 経由)
+- [x] `info.banner_image` を player の選曲画面 banner に使用
+- [x] `info.preview_music` を player の選曲画面 preview に使用
 - [x] `lines` を使った時刻解決
 - [x] `resolution` を使った時刻解決
 - [x] `bpm_events` を使った時刻解決
