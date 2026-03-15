@@ -92,6 +92,37 @@ describe('chart selection', () => {
     });
   });
 
+  test('buildChartSelectionEntries: reports progress for every chart while building in parallel', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-progress-'));
+    tempDirectories.push(tempRoot);
+
+    const chartPaths = [
+      join(tempRoot, 'alpha.bms'),
+      join(tempRoot, 'beta.bms'),
+      join(tempRoot, 'gamma.bms'),
+    ];
+    await Promise.all(
+      chartPaths.map((chartPath, index) =>
+        writeFile(chartPath, [`#TITLE Chart ${index + 1}`, '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n')),
+      ),
+    );
+
+    const progressUpdates: Array<{ filePath: string; currentIndex: number; totalCount: number }> = [];
+    const entries = await buildChartSelectionEntries(tempRoot, chartPaths, {
+      onLoadingFile: (progress) => {
+        progressUpdates.push(progress);
+      },
+    });
+
+    expect(entries.filter((entry) => entry.kind === 'chart')).toHaveLength(chartPaths.length);
+    expect(progressUpdates).toHaveLength(chartPaths.length);
+    expect(progressUpdates.at(-1)).toMatchObject({
+      currentIndex: chartPaths.length,
+      totalCount: chartPaths.length,
+    });
+    expect(new Set(progressUpdates.map((progress) => progress.filePath))).toEqual(new Set(chartPaths));
+  });
+
   test('buildChartSelectionEntries: reuses cached summaries when chart content is unchanged', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-hit-'));
     const tempHome = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-home-'));

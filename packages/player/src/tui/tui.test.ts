@@ -139,7 +139,6 @@ function createKittyTestImage(token: string, color: { r: number; g: number; b: n
     token,
   };
 }
-
 describe('player-tui', () => {
   test('long note head stays on the same row as a regular note at the same beat', () => {
     const regularHeadRows = renderRowsContaining([{ channel: '11', beat: 1, seconds: 0.5 }], '███');
