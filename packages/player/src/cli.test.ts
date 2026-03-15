@@ -96,15 +96,22 @@ describe('player cli', () => {
     expect(resolvePlayModeFromArgs(parsed)).toBe('auto-scratch');
   });
 
-  test('cli: parses --ln-type-auto mode', () => {
+  test('cli: keeps BMS LN type auto-detection enabled by default and lets the user disable it', () => {
+    expect(parseArgs(['chart.bms']).inferBmsLnTypeWhenMissing).toBe(true);
+    const parsed = parseArgs(['chart.bms', '--no-ln-type-auto']);
+    expect(parsed.inferBmsLnTypeWhenMissing).toBe(false);
+    expect(parseArgs(['chart.bms', '--no-ln-type-auto', '--ln-type-auto']).inferBmsLnTypeWhenMissing).toBe(true);
+  });
+
+  test('cli: accepts --ln-type-auto explicitly', () => {
     const parsed = parseArgs(['chart.bms', '--ln-type-auto']);
     expect(parsed.inferBmsLnTypeWhenMissing).toBe(true);
   });
 
-  test('cli: keeps kitty graphics disabled by default and enables it explicitly', () => {
-    expect(parseArgs(['chart.bms']).kittyGraphics).toBe(false);
-    expect(parseArgs(['chart.bms', '--kitty-graphics']).kittyGraphics).toBe(true);
-    expect(parseArgs(['chart.bms', '--kitty-graphics', '--no-kitty-graphics']).kittyGraphics).toBe(false);
+  test('cli: keeps kitty graphics enabled by default and lets the user disable it', () => {
+    expect(parseArgs(['chart.bms']).kittyGraphics).toBe(true);
+    expect(parseArgs(['chart.bms', '--no-kitty-graphics']).kittyGraphics).toBe(false);
+    expect(parseArgs(['chart.bms', '--no-kitty-graphics', '--kitty-graphics']).kittyGraphics).toBe(true);
   });
 
   test('cli: enables video BGA streaming by default and lets the user switch back to legacy decode', () => {
@@ -674,15 +681,16 @@ describe('player cli', () => {
     expect(() => parseArgs(['chart.bms', '--high-speed', '1.3'])).toThrow('--high-speed must be in 0.5 increments');
   });
 
-  test('cli: uses limiter on and compressor off by default', () => {
+  test('cli: uses limiter on and compressor on by default', () => {
     const parsed = parseArgs(['chart.bms']);
     expect(parsed.limiter).toBe(true);
-    expect(parsed.compressor).toBe(false);
+    expect(parsed.compressor).toBe(true);
   });
 
   test('cli: parses compressor and limiter tuning options', () => {
     const parsed = parseArgs([
       'chart.bms',
+      '--no-compressor',
       '--compressor',
       '--compressor-threshold-db',
       '-10',
@@ -778,10 +786,15 @@ describe('player cli', () => {
     );
   });
 
-  test('cli: parses --judge-window as a deprecated alias', () => {
-    const parsed = parseArgs(['chart.bms', '--judge-window', '260']);
-    expect(parsed.judgeWindowMs).toBe(260);
-    expect(parsed.judgeWindowSource).toBe('legacy');
+  test('cli: ignores legacy --judge-window without affecting positional args', () => {
+    const parsed = parseArgs(['--judge-window', '260', 'chart.bms']);
+    expect(parsed.input).toBe('chart.bms');
+    expect(parsed.judgeWindowMs).toBeUndefined();
+  });
+
+  test('cli: ignores legacy --audio-offset-ms without affecting positional args', () => {
+    const parsed = parseArgs(['--audio-offset-ms', '12', 'chart.bms']);
+    expect(parsed.input).toBe('chart.bms');
   });
 
   test('cli: interprets r as replay on result screen', () => {

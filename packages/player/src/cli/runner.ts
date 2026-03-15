@@ -128,7 +128,7 @@ interface CliArgs {
   uiFps: number;
   highSpeed?: number;
   judgeWindowMs?: number;
-  judgeWindowSource?: 'debug' | 'legacy';
+  judgeWindowSource?: 'debug';
   debugActiveAudio: boolean;
   renderAudioPath?: string;
   audio: boolean;
@@ -136,7 +136,6 @@ interface CliArgs {
   bgmVolume?: number;
   playVolume?: number;
   audioTailSeconds?: number;
-  audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
   audioLeadMs?: number;
   audioLeadMaxMs?: number;
@@ -325,9 +324,6 @@ export async function main(): Promise<void> {
     logFile: resolvedLogFilePath,
   });
 
-  if (args.judgeWindowSource === 'legacy') {
-    process.stdout.write('Warning: --judge-window is deprecated. Use --debug-judge-window for debugging only.\n');
-  }
   if (typeof args.judgeWindowMs === 'number' && Number.isFinite(args.judgeWindowMs)) {
     process.stdout.write(`Warning: debug judge override enabled (BAD window: ${Math.round(args.judgeWindowMs)}ms).\n`);
   }
@@ -860,7 +856,6 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     playVolume: args.playVolume,
     audioBaseDir: dirname(chartPath),
     audioTailSeconds: args.audioTailSeconds,
-    audioOffsetMs: args.audioOffsetMs,
     audioHeadPaddingMs: args.audioHeadPaddingMs,
     audioLeadMs: args.audioLeadMs,
     audioLeadMaxMs: args.audioLeadMaxMs,
@@ -1317,11 +1312,11 @@ export function parseArgs(rawArgs: string[]): CliArgs {
   const args: CliArgs = {
     auto: false,
     autoScratch: false,
-    kittyGraphics: false,
+    kittyGraphics: true,
     videoBgaStreaming: true,
-    inferBmsLnTypeWhenMissing: false,
+    inferBmsLnTypeWhenMissing: true,
     showInvisibleNotes: false,
-    compressor: false,
+    compressor: true,
     limiter: true,
     audio: true,
     volume: undefined,
@@ -1345,6 +1340,10 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     }
     if (token === '--ln-type-auto') {
       args.inferBmsLnTypeWhenMissing = true;
+      continue;
+    }
+    if (token === '--no-ln-type-auto') {
+      args.inferBmsLnTypeWhenMissing = false;
       continue;
     }
     if (token === '--show-invisible-notes') {
@@ -1441,9 +1440,9 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       continue;
     }
     if (token === '--judge-window') {
-      args.judgeWindowMs = Number.parseInt(rawArgs[index + 1], 10);
-      args.judgeWindowSource = 'legacy';
-      index += 1;
+      if (index + 1 < rawArgs.length) {
+        index += 1;
+      }
       continue;
     }
     if (token === '--render-audio') {
@@ -1472,8 +1471,9 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       continue;
     }
     if (token === '--audio-offset-ms') {
-      args.audioOffsetMs = Number.parseInt(rawArgs[index + 1], 10);
-      index += 1;
+      if (index + 1 < rawArgs.length) {
+        index += 1;
+      }
       continue;
     }
     if (token === '--audio-head-padding-ms') {
@@ -1519,6 +1519,12 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     }
     if (token.startsWith('--audio-backend=')) {
       throw new Error('--audio-backend is no longer supported; node-web-audio-api is always used');
+    }
+    if (token.startsWith('--judge-window=')) {
+      continue;
+    }
+    if (token.startsWith('--audio-offset-ms=')) {
+      continue;
     }
     if (token.startsWith('--audify-')) {
       throw new Error(`${token.split('=')[0]} is no longer supported; audify backend has been removed`);
@@ -1619,7 +1625,8 @@ function printUsage(): void {
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
       '                           Audio backend: node-web-audio-api (fixed)',
       '  --tui / --no-tui          Enable or disable TUI play screen (default: on in TTY)',
-      '  --kitty-graphics          Enable Kitty graphics protocol BGA rendering when supported (default: off)',
+      '  --kitty-graphics          Enable Kitty graphics protocol BGA rendering when supported (default: on)',
+      '  --no-kitty-graphics       Disable Kitty graphics protocol BGA rendering',
       '  --video-bga-streaming     Stream video BGA frames progressively (default: on)',
       '  --no-video-bga-streaming  Decode full video BGA before playback (legacy behavior)',
       '  --log-file <path>         Write structured NDJSON logs to a file',
@@ -1627,15 +1634,15 @@ function printUsage(): void {
       '',
       'Advanced tuning:',
       '  --show-invisible-notes    Show invisible channels (31-39/41-49) in TUI as green notes',
-      '  --ln-type-auto            Auto-detect BMS #LNTYPE when omitted (default: off)',
+      '  --ln-type-auto            Auto-detect BMS #LNTYPE when omitted (default: on)',
+      '  --no-ln-type-auto         Disable BMS #LNTYPE auto-detection when omitted',
       '  --render-audio <path>     Render audio preview before playing',
       '  --volume <value>          Global volume multiplier applied before bus-specific volumes (default: 1)',
       '  --bgm-volume <value>      Volume multiplier for non-play lanes (default: 1, 0 disables BGM)',
       '  --key-volume <value>      Volume multiplier for playable/key sounds (alias: --play-volume, default: 1)',
       '  --audio-tail <seconds>    Audio tail length when rendering playback buffer (default: 1.5)',
-      '  --audio-offset-ms <ms>    Timing offset for audio sync calibration (default: 0)',
       '  --compressor / --no-compressor',
-      '                            Enable or disable output compressor (default: off)',
+      '                            Enable or disable output compressor (default: on)',
       '  --compressor-threshold-db Compressor threshold in dBFS (default: -12)',
       '  --compressor-ratio        Compressor ratio (default: 2.5)',
       '  --compressor-attack-ms    Compressor attack time in ms (default: 8)',
@@ -1653,7 +1660,6 @@ function printUsage(): void {
       'Developer/debug:',
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
       '  --debug-judge-window <ms> Override BAD window for debugging',
-      '  --judge-window <ms>       Deprecated alias for --debug-judge-window',
     ].join('\n') + '\n',
   );
 }

@@ -78,7 +78,7 @@
 - **UI runtime**: gameplay 中の表示実装をまとめた層です。player 本体と TUI/CLI 表示の橋渡しをします。
 - **gameplay worker / UI worker**: Node 実装で重い処理を分離する worker です。UI 描画や BGA 処理は UI worker 側で扱います。
 - **ANSI rendering**: 画像や BGA を terminal の文字セルと色付き文字列へ落とし込んで表示する方式です。
-- **Kitty graphics protocol**: 対応端末で画像を overlay として直接表示する方式です。このリポジトリでは opt-in の `--kitty-graphics` で有効化します。
+- **Kitty graphics protocol**: 対応端末で画像を overlay として直接表示する方式です。このリポジトリでは `player` で既定有効とし、`--no-kitty-graphics` で無効化できます。
 - **render throttle**: TUI 描画を target fps に抑える仕組みです。描画更新が来ても、最終 render は一定間隔以下に間引きます。
 - **settle delay**: 選曲 preview をすぐには始めず、カーソルが少し落ち着くまで待つ短い遅延です。連続移動時の引っかかりを減らします。
 - **focus key**: Music Select で最後に選んでいた項目を directory ごとに保存するための識別子です。通常 chart だけでなく `random` entry も含みます。

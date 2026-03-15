@@ -87,7 +87,7 @@ pnpm run test
 - FREE ZONE (`17` / `27`) の専用扱い
 - BGA 画像描画 (`BMP` / `PNG` / `JPEG`) と動画描画 (`mpeg1video` / `h264` / `mjpeg`)
 - 動画 BGA の progressive decode (`--no-video-bga-streaming` で旧方式へ切り替え)
-- `--kitty-graphics` による opt-in の Kitty graphics protocol 描画
+- `--kitty-graphics` / `--no-kitty-graphics` による Kitty graphics protocol 描画切り替え (default: on)
 - `node-web-audio-api` 固定バックエンドで再生
 - 構造化ログ出力 (`~/.be-music/logs/player.ndjson`, `--log-file` で上書き)
 
@@ -245,7 +245,8 @@ pnpm run editor export chart.json chart.bms
 - `04` (base) と `07` (layer) を合成して描画します。
 - layer の黒 (`#000000`) は透過色として扱います。
 - `#BANNER` / bmson `banner_image` は選曲画面の曲紹介 block に表示します。
-- `--kitty-graphics` 指定時のみ、kitty graphics protocol 対応端末で gameplay BGA、`#STAGEFILE` loading 画面、選曲画面 banner を画像として表示します。未指定時は ANSI 描画です。
+- 対応端末では、既定で kitty graphics protocol を使って gameplay BGA、`#STAGEFILE` loading 画面、選曲画面 banner を画像として表示します。
+- `--no-kitty-graphics` を付けると ANSI 描画へ戻せます。
 - BGA はウィンドウリサイズ時に再計算して表示サイズを更新します。
 - 動画 BGA は `@uwx/libav.js-fat` でデコードします。
   - 対応コーデック: `mpeg1video`, `h264`, `mjpeg`
