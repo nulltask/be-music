@@ -31,7 +31,6 @@ export interface NodeGameplayWorkerPlayOptions {
   playVolume?: number;
   audioBaseDir?: string;
   audioTailSeconds?: number;
-  audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
   audioLeadMs?: number;
   audioLeadMaxMs?: number;

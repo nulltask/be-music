@@ -851,7 +851,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const resolvedJson = controlFlowResolution.resolvedJson;
   options.onResolvedChart?.(resolvedJson);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
-  const inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
+  const inferBmsLnTypeWhenMissing = Boolean(options.inferBmsLnTypeWhenMissing);
   const speed = options.speed ?? 1;
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
@@ -1288,7 +1288,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const resolvedJson = controlFlowResolution.resolvedJson;
   options.onResolvedChart?.(resolvedJson);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
-  const inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
+  const inferBmsLnTypeWhenMissing = Boolean(options.inferBmsLnTypeWhenMissing);
   const autoScratchEnabled = options.autoScratch === true;
   const speed = options.speed ?? 1;
   let judgeWindows = resolveJudgeWindowsMs(resolvedJson, options.judgeWindowMs);
@@ -2176,7 +2176,7 @@ async function createAudioSessionIfEnabled(
   const masterVolume = normalizeMasterVolume(options.volume);
   const bgmVolume = normalizeBgmVolume(options.bgmVolume, masterVolume);
   const playVolume = normalizePlayVolume(options.playVolume, masterVolume);
-  const inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
+  const inferBmsLnTypeWhenMissing = Boolean(options.inferBmsLnTypeWhenMissing);
   const chartWavGain = resolveChartVolWavGain(json);
   const lnobjEndEvents = collectLnobjEndEvents(json);
   const runtimeSampleRate = RUNTIME_AUDIO_SAMPLE_RATE;
@@ -2436,7 +2436,7 @@ async function createDebugActiveAudioEstimator(
   throwIfAborted(options.signal);
   const resolver = createTimingResolver(json);
   const triggers = collectSampleTriggers(json, resolver, {
-    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+    inferBmsLnTypeWhenMissing: Boolean(options.inferBmsLnTypeWhenMissing),
   });
   const sampleDurationSecondsByKey = await buildDebugSampleDurationSecondsMap(
     triggers,
@@ -2844,7 +2844,7 @@ function createAudioLeadTuning(options: PlayerOptions, mode: 'auto' | 'manual'):
 
 function createOutputDynamicsConfig(options: PlayerOptions, sampleRate: number): OutputDynamicsConfig | undefined {
   const limiterEnabled = options.limiter !== false;
-  const compressorEnabled = options.compressor === true;
+  const compressorEnabled = Boolean(options.compressor);
   if (!limiterEnabled && !compressorEnabled) {
     return undefined;
   }

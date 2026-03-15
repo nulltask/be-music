@@ -745,7 +745,6 @@ describe('player cli', () => {
   test('cli: parses --debug-judge-window', () => {
     const parsed = parseArgs(['chart.bms', '--debug-judge-window', '280']);
     expect(parsed.judgeWindowMs).toBe(280);
-    expect(parsed.judgeWindowSource).toBe('debug');
   });
 
   test('cli: enables active audio debug overlay', () => {

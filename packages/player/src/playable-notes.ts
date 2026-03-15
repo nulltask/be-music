@@ -264,7 +264,7 @@ function appendLegacyLongNotesIfNeeded(
     return;
   }
   const resolved = resolveBmsLongNotes(json, {
-    inferLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+    inferLnTypeWhenMissing: Boolean(options.inferBmsLnTypeWhenMissing),
   });
   if (resolved.notes.length === 0) {
     return;

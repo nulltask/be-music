@@ -128,7 +128,6 @@ interface CliArgs {
   uiFps: number;
   highSpeed?: number;
   judgeWindowMs?: number;
-  judgeWindowSource?: 'debug';
   debugActiveAudio: boolean;
   renderAudioPath?: string;
   audio: boolean;
@@ -750,7 +749,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   let resolvedHighSpeed = normalizeHighSpeedValue(args.highSpeed);
   let playLoadingStageFileImage: StageFileAnsiImage | undefined;
   const useKittyGraphicsForStageFile =
-    args.kittyGraphics === true && Boolean(process.stdout.isTTY) && supportsKittyGraphicsProtocol(process.env);
+    args.kittyGraphics && Boolean(process.stdout.isTTY) && supportsKittyGraphicsProtocol(process.env);
   const playLoadingScreenRenderState: PlayLoadingScreenRenderState = {
     initialized: false,
     stageFileDrawn: false,
@@ -872,8 +871,8 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   logCli('info', 'play.start', {
     chartPath,
     mode: args.auto ? 'auto' : 'manual',
-    kittyGraphics: args.kittyGraphics === true,
-    videoBgaStreaming: args.videoBgaStreaming === true,
+    kittyGraphics: args.kittyGraphics,
+    videoBgaStreaming: args.videoBgaStreaming,
   });
 
   let summary: PlayerSummary;
@@ -1431,7 +1430,6 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     }
     if (token === '--debug-judge-window') {
       args.judgeWindowMs = Number.parseInt(rawArgs[index + 1], 10);
-      args.judgeWindowSource = 'debug';
       index += 1;
       continue;
     }
@@ -2085,7 +2083,7 @@ async function selectChartInteractively(
   let cachedEntryLabelsLayout: ReturnType<typeof createSelectionColumnLayout> | undefined;
   let cachedEntryLabels = new WeakMap<ChartSelectionEntry, string>();
   const useKittyGraphicsForBanner =
-    options.kittyGraphics === true && Boolean(process.stdout.isTTY) && supportsKittyGraphicsProtocol(process.env);
+    Boolean(options.kittyGraphics) && Boolean(process.stdout.isTTY) && supportsKittyGraphicsProtocol(process.env);
   const bannerState = createMusicSelectBannerState();
   let finished = false;
 

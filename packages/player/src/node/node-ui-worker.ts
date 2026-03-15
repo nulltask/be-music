@@ -51,7 +51,7 @@ async function bootstrap(): Promise<void> {
     throw new Error('UI worker parent port is unavailable');
   }
   postLog('info', 'ui-worker.bootstrap.start', {
-    kittyGraphics: initData.kittyGraphics === true,
+    kittyGraphics: Boolean(initData.kittyGraphics),
     uiFps: initData.uiFps ?? DEFAULT_UI_FPS,
   });
   const abortController = new AbortController();
@@ -115,8 +115,7 @@ async function bootstrap(): Promise<void> {
     splitAfterIndex,
     stdinIsTTY: initData.stdinIsTTY,
     stdoutIsTTY: initData.stdoutIsTTY,
-    terminalImageProtocol:
-      initData.kittyGraphics === true && supportsKittyGraphicsProtocol(process.env) ? 'kitty' : 'none',
+    terminalImageProtocol: Boolean(initData.kittyGraphics) && supportsKittyGraphicsProtocol(process.env) ? 'kitty' : 'none',
   });
 
   if (!tui.isSupported()) {
