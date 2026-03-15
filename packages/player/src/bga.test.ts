@@ -89,6 +89,16 @@ interface RgbColor {
 
 type Pixel = RgbColor | undefined;
 
+async function resolvePromiseState<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<'ready' | 'pending'> {
+  return await Promise.race([
+    promise.then(() => 'ready' as const),
+    new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), timeoutMs)),
+  ]);
+}
+
 function createSolidSourceVideoFrame(width: number, height: number, color: RgbColor): {
   rgb: Uint8Array;
   opaqueMask: Uint8Array;
@@ -666,10 +676,7 @@ describe('player bga', () => {
         width: 40,
         height: 20,
       });
-      const readyState = await Promise.race([
-        rendererPromise.then(() => 'ready' as const),
-        new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0)),
-      ]);
+      const readyState = await resolvePromiseState(rendererPromise, 50);
       expect(readyState).toBe('ready');
 
       const renderer = await rendererPromise;
@@ -738,10 +745,7 @@ describe('player bga', () => {
       for (let attempt = 0; attempt < 10 && !releaseRemainingFrames; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
-      const readyState = await Promise.race([
-        rendererPromise.then(() => 'ready' as const),
-        new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0)),
-      ]);
+      const readyState = await resolvePromiseState(rendererPromise, 50);
       expect(readyState).toBe('pending');
 
       releaseRemainingFrames?.();
