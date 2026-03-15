@@ -975,6 +975,57 @@ function orderRuntimeEventFields(fields: readonly RuntimeEventField[]): RuntimeE
   return [...timeFields, ...otherFields];
 }
 
+function createScheduledPlaybackEvent(
+  seconds: number,
+  order: number,
+  text: string,
+): NoTuiScheduledPlaybackEvent | undefined {
+  if (!Number.isFinite(seconds)) {
+    return undefined;
+  }
+  return {
+    seconds: Math.max(0, seconds),
+    order,
+    text,
+  };
+}
+
+function mergeScheduledPlaybackEventGroups(
+  groups: ReadonlyArray<ReadonlyArray<NoTuiScheduledPlaybackEvent>>,
+): NoTuiScheduledPlaybackEvent[] {
+  const cursors = new Array<number>(groups.length).fill(0);
+  const merged: NoTuiScheduledPlaybackEvent[] = [];
+
+  while (true) {
+    let selectedGroupIndex = -1;
+    let selectedEvent: NoTuiScheduledPlaybackEvent | undefined;
+
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+      const event = groups[groupIndex]?.[cursors[groupIndex] ?? 0];
+      if (!event) {
+        continue;
+      }
+      if (
+        !selectedEvent ||
+        event.seconds < selectedEvent.seconds ||
+        (event.seconds === selectedEvent.seconds && event.order < selectedEvent.order)
+      ) {
+        selectedEvent = event;
+        selectedGroupIndex = groupIndex;
+      }
+    }
+
+    if (selectedGroupIndex < 0 || !selectedEvent) {
+      break;
+    }
+
+    merged.push(selectedEvent);
+    cursors[selectedGroupIndex] = (cursors[selectedGroupIndex] ?? 0) + 1;
+  }
+
+  return merged;
+}
+
 function createNoopPlaybackEventTracer(): NoTuiPlaybackEventTracer {
   return {
     flushUntil: () => undefined,
@@ -992,92 +1043,93 @@ function createNoTuiPlaybackEventTracer(params: {
   const { json, resolver, writeOutput, judgeWindowMs } = params;
   const beatResolver = createBeatResolver(json);
   const sortedEvents = sortEvents(json.events);
-  const scheduledEvents: NoTuiScheduledPlaybackEvent[] = [];
   let nextOrder = 0;
-  const pushScheduledEvent = (seconds: number, text: string): void => {
-    if (!Number.isFinite(seconds)) {
-      return;
-    }
-    scheduledEvents.push({
-      seconds: Math.max(0, seconds),
-      order: nextOrder,
-      text,
-    });
-    nextOrder += 1;
-  };
-
-  for (const point of resolveLoggedMeasureLengthTimeline(json, resolver, beatResolver)) {
-    pushScheduledEvent(
-      point.seconds,
-      createRuntimeEventLine('measure-length-change', [
-        ['time', formatSeconds(point.seconds)],
-        ['measure', point.measure],
-        ['length', formatLoggedNumericValue(point.length)],
-      ]),
-    );
-  }
-
-  for (const point of createBpmTimeline(json, resolver)) {
-    pushScheduledEvent(
-      point.seconds,
-      createRuntimeEventLine('bpm-change', [
-        ['time', formatSeconds(point.seconds)],
-        ['value', formatLoggedNumericValue(point.bpm)],
-      ]),
-    );
-  }
-
-  for (const point of createScrollTimeline(json, beatResolver)) {
-    const seconds = resolver.beatToSeconds(point.beat);
-    pushScheduledEvent(
-      seconds,
-      createRuntimeEventLine('scroll-change', [
-        ['time', formatSeconds(seconds)],
-        ['value', formatLoggedNumericValue(point.speed)],
-      ]),
-    );
-  }
-
-  for (const point of createSpeedTimeline(json, beatResolver)) {
-    const seconds = resolver.beatToSeconds(point.beat);
-    pushScheduledEvent(
-      seconds,
-      createRuntimeEventLine('speed-change', [
-        ['time', formatSeconds(seconds)],
-        ['value', formatLoggedNumericValue(point.speed)],
-      ]),
-    );
-  }
-
-  for (const window of createStopBeatWindows(resolver)) {
-    pushScheduledEvent(
-      window.startSeconds,
-      createRuntimeEventLine('stop', [
-        ['time', formatSeconds(window.startSeconds)],
-        ['state', 'start'],
-        ['duration', `${formatLoggedNumericValue(window.durationSeconds)}s`],
-      ]),
-    );
-    pushScheduledEvent(
-      window.endSeconds,
-      createRuntimeEventLine('stop', [
-        ['time', formatSeconds(window.endSeconds)],
-        ['state', 'end'],
-      ]),
-    );
-  }
-
-  for (const change of collectDynamicBmsJudgeRankChanges(json, resolver)) {
-    const badWindow = resolveBmsJudgeWindowsMsForPercent(change.rankPercent, judgeWindowMs).bad;
-    pushScheduledEvent(
-      change.seconds,
-      createRuntimeEventLine('judge-rank-change', [
-        ['time', formatSeconds(change.seconds)],
-        ['rank', formatLoggedNumericValue(change.rankPercent)],
-        ['bad', `${formatLoggedNumericValue(badWindow)}ms`],
-      ]),
-    );
-  }
+  const measureLengthEvents = resolveLoggedMeasureLengthTimeline(json, resolver, beatResolver)
+    .map((point) =>
+      createScheduledPlaybackEvent(
+        point.seconds,
+        nextOrder++,
+        createRuntimeEventLine('measure-length-change', [
+          ['time', formatSeconds(point.seconds)],
+          ['measure', point.measure],
+          ['length', formatLoggedNumericValue(point.length)],
+        ]),
+      ),
+    )
+    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+  const bpmEvents = createBpmTimeline(json, resolver)
+    .map((point) =>
+      createScheduledPlaybackEvent(
+        point.seconds,
+        nextOrder++,
+        createRuntimeEventLine('bpm-change', [
+          ['time', formatSeconds(point.seconds)],
+          ['value', formatLoggedNumericValue(point.bpm)],
+        ]),
+      ),
+    )
+    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+  const scrollEvents = createScrollTimeline(json, beatResolver)
+    .map((point) => {
+      const seconds = resolver.beatToSeconds(point.beat);
+      return createScheduledPlaybackEvent(
+        seconds,
+        nextOrder++,
+        createRuntimeEventLine('scroll-change', [
+          ['time', formatSeconds(seconds)],
+          ['value', formatLoggedNumericValue(point.speed)],
+        ]),
+      );
+    })
+    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+  const speedEvents = createSpeedTimeline(json, beatResolver)
+    .map((point) => {
+      const seconds = resolver.beatToSeconds(point.beat);
+      return createScheduledPlaybackEvent(
+        seconds,
+        nextOrder++,
+        createRuntimeEventLine('speed-change', [
+          ['time', formatSeconds(seconds)],
+          ['value', formatLoggedNumericValue(point.speed)],
+        ]),
+      );
+    })
+    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+  const stopEvents = createStopBeatWindows(resolver)
+    .flatMap((window) => [
+      createScheduledPlaybackEvent(
+        window.startSeconds,
+        nextOrder++,
+        createRuntimeEventLine('stop', [
+          ['time', formatSeconds(window.startSeconds)],
+          ['state', 'start'],
+          ['duration', `${formatLoggedNumericValue(window.durationSeconds)}s`],
+        ]),
+      ),
+      createScheduledPlaybackEvent(
+        window.endSeconds,
+        nextOrder++,
+        createRuntimeEventLine('stop', [
+          ['time', formatSeconds(window.endSeconds)],
+          ['state', 'end'],
+        ]),
+      ),
+    ])
+    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+  const judgeRankEvents = collectDynamicBmsJudgeRankChanges(json, resolver)
+    .map((change) => {
+      const badWindow = resolveBmsJudgeWindowsMsForPercent(change.rankPercent, judgeWindowMs).bad;
+      return createScheduledPlaybackEvent(
+        change.seconds,
+        nextOrder++,
+        createRuntimeEventLine('judge-rank-change', [
+          ['time', formatSeconds(change.seconds)],
+          ['rank', formatLoggedNumericValue(change.rankPercent)],
+          ['bad', `${formatLoggedNumericValue(badWindow)}ms`],
+        ]),
+      );
+    })
+    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
 
   const baseBgaTimeline = buildLoggedBgaCueTimeline(
     sortedEvents,
@@ -1107,12 +1159,30 @@ function createNoTuiPlaybackEventTracer(params: {
     BGA_LAYER2_CHANNEL,
     'layer2',
   );
-
-  for (const cue of [...baseBgaTimeline, ...poorBgaTimeline, ...layerBgaTimeline, ...layer2BgaTimeline]) {
-    pushScheduledEvent(cue.seconds, formatLoggedBgaCueText(cue));
-  }
-
-  scheduledEvents.sort((left, right) => left.seconds - right.seconds || left.order - right.order);
+  const baseBgaEvents = baseBgaTimeline
+    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBgaCueText(cue)))
+    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+  const poorBgaEvents = poorBgaTimeline
+    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBgaCueText(cue)))
+    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+  const layerBgaEvents = layerBgaTimeline
+    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBgaCueText(cue)))
+    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+  const layer2BgaEvents = layer2BgaTimeline
+    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBgaCueText(cue)))
+    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+  const scheduledEvents = mergeScheduledPlaybackEventGroups([
+    measureLengthEvents,
+    bpmEvents,
+    scrollEvents,
+    speedEvents,
+    stopEvents,
+    judgeRankEvents,
+    baseBgaEvents,
+    poorBgaEvents,
+    layerBgaEvents,
+    layer2BgaEvents,
+  ]);
 
   const shouldUsePoorBmp00Fallback =
     typeof json.bms.poorBga !== 'string' &&

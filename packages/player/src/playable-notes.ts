@@ -1,6 +1,5 @@
 import {
   createBeatResolver,
-  isPlayableChannel,
   resolveBmsLongNotes,
   resolveLnobjLongNotes,
   sortEvents,
@@ -60,6 +59,12 @@ interface TimedExtractionContext {
   beatResolver: ReturnType<typeof createBeatResolver>;
   sortedEvents: BeMusicEvent[];
   bmsonResolution?: number;
+}
+
+interface TimedEventChannels {
+  playable?: string;
+  landmine?: string;
+  invisible?: string;
 }
 
 export function extractTimedNotes(
@@ -131,13 +136,11 @@ function collectTimedNotes(
 
   for (const event of context.sortedEvents) {
     const normalizedChannel = normalizeChannel(event.channel);
-    const playableChannel = includePlayable && isPlayableChannel(normalizedChannel) ? normalizedChannel : undefined;
-    const landmineChannel = includeLandmine
-      ? mapLandmineNormalizedChannelToPlayableLane(normalizedChannel)
-      : undefined;
-    const invisibleChannel = includeInvisible
-      ? mapInvisibleNormalizedChannelToPlayableLane(normalizedChannel)
-      : undefined;
+    const {
+      playable: playableChannel,
+      landmine: landmineChannel,
+      invisible: invisibleChannel,
+    } = resolveTimedEventChannels(normalizedChannel, includePlayable, includeLandmine, includeInvisible);
 
     if (!playableChannel && !landmineChannel && !invisibleChannel) {
       continue;
@@ -188,6 +191,43 @@ function collectTimedNotes(
     landmineNotes,
     invisibleNotes,
   };
+}
+
+function resolveTimedEventChannels(
+  normalizedChannel: string,
+  includePlayable: boolean,
+  includeLandmine: boolean,
+  includeInvisible: boolean,
+): TimedEventChannels {
+  if (normalizedChannel.length !== 2) {
+    return {};
+  }
+
+  const laneCode = normalizedChannel.charCodeAt(1);
+  if (laneCode < 0x31 || laneCode > 0x39) {
+    return {};
+  }
+
+  const sideCode = normalizedChannel.charCodeAt(0);
+  const lane = normalizedChannel[1]!;
+  const playableLane = sideCode === 0x44 || sideCode === 0x33 ? `1${lane}` : `2${lane}`;
+
+  if (includePlayable && (sideCode === 0x31 || sideCode === 0x32)) {
+    return {
+      playable: normalizedChannel,
+    };
+  }
+  if (includeLandmine && (sideCode === 0x44 || sideCode === 0x45)) {
+    return {
+      landmine: playableLane,
+    };
+  }
+  if (includeInvisible && (sideCode === 0x33 || sideCode === 0x34)) {
+    return {
+      invisible: playableLane,
+    };
+  }
+  return {};
 }
 
 function finalizePlayableNotes(
@@ -312,42 +352,4 @@ function resolveLongNoteEndBeat(
 
 function isFreeZoneNormalizedChannel(normalized: string): boolean {
   return normalized === '17' || normalized === '27';
-}
-
-function mapLandmineNormalizedChannelToPlayableLane(normalized: string): string | undefined {
-  if (normalized.length !== 2) {
-    return undefined;
-  }
-  const lane = normalized[1];
-  const laneCode = normalized.charCodeAt(1);
-  if (laneCode < 0x31 || laneCode > 0x39) {
-    return undefined;
-  }
-  const sideCode = normalized.charCodeAt(0);
-  if (sideCode === 0x44) {
-    return `1${lane}`;
-  }
-  if (sideCode === 0x45) {
-    return `2${lane}`;
-  }
-  return undefined;
-}
-
-function mapInvisibleNormalizedChannelToPlayableLane(normalized: string): string | undefined {
-  if (normalized.length !== 2) {
-    return undefined;
-  }
-  const lane = normalized[1];
-  const laneCode = normalized.charCodeAt(1);
-  if (laneCode < 0x31 || laneCode > 0x39) {
-    return undefined;
-  }
-  const sideCode = normalized.charCodeAt(0);
-  if (sideCode === 0x33) {
-    return `1${lane}`;
-  }
-  if (sideCode === 0x34) {
-    return `2${lane}`;
-  }
-  return undefined;
 }
