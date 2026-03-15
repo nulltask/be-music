@@ -363,7 +363,7 @@ function estimateBgaAnsiDisplaySize(
     splitAfterIndex: resolveSplitAfterIndex(bindings),
     columns,
     rows,
-    showLaneChannels: initData.showLaneChannels === true,
+    showLaneChannels: Boolean(initData.showLaneChannels),
     hasRandomPatternSummary:
       typeof initData.randomPatternSummary === 'string' && initData.randomPatternSummary.length > 0,
     hasAudioDebugLine: frame?.activeAudioFiles !== undefined || frame?.activeAudioVoiceCount !== undefined,

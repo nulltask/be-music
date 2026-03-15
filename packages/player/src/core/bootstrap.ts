@@ -106,7 +106,7 @@ export function preparePlaybackChartData(
 ): PreparedPlaybackChartData {
   const extractedNotes = extractTimedNotes(resolvedJson, {
     includeLandmine: true,
-    includeInvisible: options.showInvisibleNotes === true,
+    includeInvisible: Boolean(options.showInvisibleNotes),
     inferBmsLnTypeWhenMissing,
   });
   const notes = extractedNotes.playableNotes;
@@ -183,7 +183,7 @@ export async function initializePlayerUiRuntime({
     judgeWindowMs,
     highSpeed,
     videoBgaStreaming: options.videoBgaStreaming,
-    showLaneChannels: options.debugActiveAudio === true,
+    showLaneChannels: Boolean(options.debugActiveAudio),
     randomPatternSummary,
     stateSignals,
     uiSignals,
@@ -195,7 +195,7 @@ export async function initializePlayerUiRuntime({
   });
   throwIfAborted(options.signal);
   const updatedTotalSeconds = Math.max(totalSeconds, uiRuntime?.playbackEndSeconds ?? 0);
-  const uiEnabled = uiRuntime?.tuiEnabled === true;
+  const uiEnabled = Boolean(uiRuntime?.tuiEnabled);
 
   return {
     uiRuntime,

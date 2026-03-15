@@ -200,7 +200,7 @@ export async function decodeVideoFramesStreamDirect(
         frameRef,
         onFrame,
         signal,
-        options.stopAfterFirstFrame === true,
+        Boolean(options.stopAfterFirstFrame),
       );
       if (frameCount === undefined || frameCount <= 0) {
         return undefined;
@@ -239,7 +239,7 @@ export async function decodeVideoFramesToSourceFramesInWorker(
     workerData: {
       videoPath,
       mode,
-      stopAfterFirstFrame: options.stopAfterFirstFrame === true,
+      stopAfterFirstFrame: Boolean(options.stopAfterFirstFrame),
     } satisfies VideoDecodeWorkerInitData,
     execArgv: resolveBgaVideoWorkerExecArgv(),
     env: resolveBgaVideoWorkerEnv(),

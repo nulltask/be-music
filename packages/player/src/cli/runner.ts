@@ -371,16 +371,10 @@ async function runDirectoryInput(
   args: CliArgs,
   initialConfig: PersistedPlayerConfig,
 ): Promise<PersistedPlayerConfig> {
-  let persistedConfig = resolvePersistedConfigForMusicSelect(
-    {
-      playMode: initialConfig.playMode,
-      highSpeed: normalizeHighSpeedValue(initialConfig.highSpeed),
-    },
-    rootDir,
-    undefined,
-    undefined,
-    initialConfig,
-  );
+  let persistedConfig = persistMusicSelectConfig(initialConfig, rootDir, {
+    playMode: initialConfig.playMode,
+    highSpeed: initialConfig.highSpeed,
+  });
   let candidates: string[];
   const startupLoadingAbortCapture = beginLoadingAbortCapture();
   try {
@@ -410,21 +404,27 @@ async function runDirectoryInput(
     process.stdout.write(`Selected chart: ${selected}\n`);
     try {
       await playChartOnce(selected, args);
-      persistedConfig = resolvePersistedConfigForMusicSelect(
+      persistedConfig = persistMusicSelectConfig(
         resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
         rootDir,
-        selected,
-        createChartFocusKey(selected),
-        persistedConfig,
+        {
+          playMode: resolvePlayModeFromArgs(args),
+          highSpeed: args.highSpeed,
+          selectedChartFile: selected,
+          focusKey: createChartFocusKey(selected),
+        },
       );
     } catch (error) {
       if (error instanceof PlayerInterruptedError) {
-        persistedConfig = resolvePersistedConfigForMusicSelect(
+        persistedConfig = persistMusicSelectConfig(
           resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
           rootDir,
-          selected,
-          createChartFocusKey(selected),
-          persistedConfig,
+          {
+            playMode: resolvePlayModeFromArgs(args),
+            highSpeed: args.highSpeed,
+            selectedChartFile: selected,
+            focusKey: createChartFocusKey(selected),
+          },
         );
         process.exitCode = error.exitCode;
         return persistedConfig;
@@ -439,25 +439,23 @@ async function runDirectoryInput(
     process.stdout.write(`Selected chart: ${selected}\n`);
     try {
       const action = await playSingleChartUntilExit(selected, rootDir, args);
-      persistedConfig = resolvePersistedConfigForMusicSelect(
-        resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
-        rootDir,
-        selected,
-        createChartFocusKey(selected),
-        persistedConfig,
-      );
+      persistedConfig = persistMusicSelectConfig(resolvePersistedPlayerConfigFromArgs(args, persistedConfig), rootDir, {
+        playMode: resolvePlayModeFromArgs(args),
+        highSpeed: args.highSpeed,
+        selectedChartFile: selected,
+        focusKey: createChartFocusKey(selected),
+      });
       if (action === 'ctrl-c') {
         process.exitCode = 130;
       }
     } catch (error) {
       if (error instanceof PlayerInterruptedError) {
-        persistedConfig = resolvePersistedConfigForMusicSelect(
-          resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
-          rootDir,
-          selected,
-          createChartFocusKey(selected),
-          persistedConfig,
-        );
+        persistedConfig = persistMusicSelectConfig(resolvePersistedPlayerConfigFromArgs(args, persistedConfig), rootDir, {
+          playMode: resolvePlayModeFromArgs(args),
+          highSpeed: args.highSpeed,
+          selectedChartFile: selected,
+          focusKey: createChartFocusKey(selected),
+        });
         process.exitCode = error.exitCode;
         return persistedConfig;
       }
@@ -497,16 +495,12 @@ async function runDirectoryInput(
         initialHighSpeed: state.highSpeed,
         initialDifficultyFilter: state.difficultyFilter,
       });
-      persistedConfig = resolvePersistedConfigForMusicSelect(
-        {
-          playMode: selection.playMode,
-          highSpeed: normalizeHighSpeedValue(selection.highSpeed),
-        },
-        rootDir,
-        resolveLastSelectedChartFile(selection),
-        selection.focusKey,
-        persistedConfig,
-      );
+      persistedConfig = persistMusicSelectConfig(persistedConfig, rootDir, {
+        playMode: selection.playMode,
+        highSpeed: selection.highSpeed,
+        selectedChartFile: resolveLastSelectedChartFile(selection),
+        focusKey: selection.focusKey,
+      });
       state = resolveDirectoryStateFromSelection(selection);
       continue;
     }
@@ -514,29 +508,21 @@ async function runDirectoryInput(
     if (state.kind === 'play') {
       const playState = state;
       const playArgs = applyMusicSelectConfigToArgs(args, playState.playMode, playState.highSpeed);
-      persistedConfig = resolvePersistedConfigForMusicSelect(
-        {
-          playMode: playState.playMode,
-          highSpeed: normalizeHighSpeedValue(playArgs.highSpeed),
-        },
-        rootDir,
-        playState.chartPath,
-        playState.focusKey,
-        persistedConfig,
-      );
+      persistedConfig = persistMusicSelectConfig(persistedConfig, rootDir, {
+        playMode: playState.playMode,
+        highSpeed: playArgs.highSpeed,
+        selectedChartFile: playState.chartPath,
+        focusKey: playState.focusKey,
+      });
       try {
         const played = await playChartOnce(playState.chartPath, playArgs);
         const resolvedHighSpeed = normalizeHighSpeedValue(playArgs.highSpeed);
-        persistedConfig = resolvePersistedConfigForMusicSelect(
-          {
-            playMode: playState.playMode,
-            highSpeed: resolvedHighSpeed,
-          },
-          rootDir,
-          playState.chartPath,
-          playState.focusKey,
-          persistedConfig,
-        );
+        persistedConfig = persistMusicSelectConfig(persistedConfig, rootDir, {
+          playMode: playState.playMode,
+          highSpeed: resolvedHighSpeed,
+          selectedChartFile: playState.chartPath,
+          focusKey: playState.focusKey,
+        });
         state = {
           kind: 'result',
           played,
@@ -548,16 +534,12 @@ async function runDirectoryInput(
       } catch (error) {
         if (error instanceof PlayerInterruptedError) {
           const resolvedHighSpeed = normalizeHighSpeedValue(playArgs.highSpeed);
-          persistedConfig = resolvePersistedConfigForMusicSelect(
-            {
-              playMode: playState.playMode,
-              highSpeed: resolvedHighSpeed,
-            },
-            rootDir,
-            playState.chartPath,
-            playState.focusKey,
-            persistedConfig,
-          );
+          persistedConfig = persistMusicSelectConfig(persistedConfig, rootDir, {
+            playMode: playState.playMode,
+            highSpeed: resolvedHighSpeed,
+            selectedChartFile: playState.chartPath,
+            focusKey: playState.focusKey,
+          });
           state = resolveDirectoryStateFromPlayInterrupt(error.reason, {
             ...playState,
             highSpeed: resolvedHighSpeed,
@@ -623,6 +605,28 @@ function resolvePersistedConfigForMusicSelect(
     delete resolved.lastMusicSelectFocusKeyByDirectory;
   }
   return resolved;
+}
+
+function persistMusicSelectConfig(
+  previous: PersistedPlayerConfig,
+  directoryPath: string | undefined,
+  state: {
+    playMode: PlayMode;
+    highSpeed: number | undefined;
+    selectedChartFile?: string;
+    focusKey?: string;
+  },
+): PersistedPlayerConfig {
+  return resolvePersistedConfigForMusicSelect(
+    {
+      playMode: state.playMode,
+      highSpeed: normalizeHighSpeedValue(state.highSpeed),
+    },
+    directoryPath,
+    state.selectedChartFile,
+    state.focusKey,
+    previous,
+  );
 }
 
 function resolveLastSelectedChartFile(selection: SelectChartInteractivelyResult): string | undefined {
@@ -832,42 +836,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     chartLoadingAbortCapture?.dispose();
   }
 
-  const playOptions = {
-    inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
-    showInvisibleNotes: args.showInvisibleNotes,
-    compressor: args.compressor,
-    compressorThresholdDb: args.compressorThresholdDb,
-    compressorRatio: args.compressorRatio,
-    compressorAttackMs: args.compressorAttackMs,
-    compressorReleaseMs: args.compressorReleaseMs,
-    compressorMakeupDb: args.compressorMakeupDb,
-    limiter: args.limiter,
-    limiterCeilingDb: args.limiterCeilingDb,
-    limiterReleaseMs: args.limiterReleaseMs,
-    speed: args.speed,
-    uiFps: args.uiFps,
-    highSpeed: args.highSpeed,
-    judgeWindowMs: args.judgeWindowMs,
-    debugActiveAudio: args.debugActiveAudio,
-    audio: args.audio,
-    volume: args.volume,
-    bgmVolume: args.bgmVolume,
-    playVolume: args.playVolume,
-    audioBaseDir: dirname(chartPath),
-    audioTailSeconds: args.audioTailSeconds,
-    audioHeadPaddingMs: args.audioHeadPaddingMs,
-    audioLeadMs: args.audioLeadMs,
-    audioLeadMaxMs: args.audioLeadMaxMs,
-    audioLeadStepUpMs: args.audioLeadStepUpMs,
-    audioLeadStepDownMs: args.audioLeadStepDownMs,
-    laneModeExtension: (() => {
-      const extension = extname(chartPath).toLowerCase();
-      return extension.length > 0 ? extension : undefined;
-    })(),
-    tui: args.tui,
-    kittyGraphics: args.kittyGraphics,
-    videoBgaStreaming: args.videoBgaStreaming,
-  };
+  const playOptions = createPlayOptionsFromCliArgs(args, chartPath);
   logCli('info', 'play.start', {
     chartPath,
     mode: args.auto ? 'auto' : 'manual',
@@ -955,6 +924,47 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     rankLabel: resolvedChartMetadata?.rankLabel ?? resolveDisplayedJudgeRankLabel(json),
     playLevel: resolvedChartMetadata?.playLevel ?? resolveDisplayedPlayLevelValue(json),
   };
+}
+
+function createPlayOptionsFromCliArgs(args: CliArgs, chartPath: string) {
+  return {
+    inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
+    showInvisibleNotes: args.showInvisibleNotes,
+    compressor: args.compressor,
+    compressorThresholdDb: args.compressorThresholdDb,
+    compressorRatio: args.compressorRatio,
+    compressorAttackMs: args.compressorAttackMs,
+    compressorReleaseMs: args.compressorReleaseMs,
+    compressorMakeupDb: args.compressorMakeupDb,
+    limiter: args.limiter,
+    limiterCeilingDb: args.limiterCeilingDb,
+    limiterReleaseMs: args.limiterReleaseMs,
+    speed: args.speed,
+    uiFps: args.uiFps,
+    highSpeed: args.highSpeed,
+    judgeWindowMs: args.judgeWindowMs,
+    debugActiveAudio: args.debugActiveAudio,
+    audio: args.audio,
+    volume: args.volume,
+    bgmVolume: args.bgmVolume,
+    playVolume: args.playVolume,
+    audioBaseDir: dirname(chartPath),
+    audioTailSeconds: args.audioTailSeconds,
+    audioHeadPaddingMs: args.audioHeadPaddingMs,
+    audioLeadMs: args.audioLeadMs,
+    audioLeadMaxMs: args.audioLeadMaxMs,
+    audioLeadStepUpMs: args.audioLeadStepUpMs,
+    audioLeadStepDownMs: args.audioLeadStepDownMs,
+    laneModeExtension: resolveChartLaneModeExtension(chartPath),
+    tui: args.tui,
+    kittyGraphics: args.kittyGraphics,
+    videoBgaStreaming: args.videoBgaStreaming,
+  };
+}
+
+function resolveChartLaneModeExtension(chartPath: string): string | undefined {
+  const extension = extname(chartPath).toLowerCase();
+  return extension.length > 0 ? extension : undefined;
 }
 
 async function playSingleChartUntilExit(

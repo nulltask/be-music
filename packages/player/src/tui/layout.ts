@@ -30,9 +30,9 @@ export function resolveLaneWidths(lanes: ReadonlyArray<{ isScratch?: boolean }>)
 export function calculateTuiReservedLineCount(options: TuiLayoutOptions): number {
   return (
     BASE_TUI_RESERVED_LINES +
-    (options.showLaneChannels === true ? 1 : 0) +
-    (options.hasRandomPatternSummary === true ? 1 : 0) +
-    (options.hasAudioDebugLine === true ? 1 : 0)
+    (options.showLaneChannels ? 1 : 0) +
+    (options.hasRandomPatternSummary ? 1 : 0) +
+    (options.hasAudioDebugLine ? 1 : 0)
   );
 }
 
@@ -75,7 +75,7 @@ export function estimateBgaAnsiDisplaySize(options: TuiBgaDisplaySizeOptions): {
   const rowCount = calculateTuiGridRowCount(options.rows, options);
   const height = Math.max(
     MIN_BGA_ASCII_HEIGHT,
-    calculateTuiLaneLinesCount(rowCount, options.showLaneChannels === true),
+    calculateTuiLaneLinesCount(rowCount, Boolean(options.showLaneChannels)),
   );
   return { width, height };
 }

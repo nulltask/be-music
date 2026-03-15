@@ -1328,7 +1328,7 @@ async function loadTerminalAnsiImageInternal(
   const outputFrame = options.fitMode === 'cover' ? selected.frame : cropAnsiFrameToOpaqueBounds(selected.frame);
   const filledFrame = fillAnsiFrameBackground(outputFrame, 0, 0, 0);
   const kittyImage =
-    options.includeKittyImage === true
+    options.includeKittyImage
       ? options.fitMode === 'cover'
         ? buildTerminalKittyImage(sourceFrame, displaySize.width, displaySize.height, 'cover')
         : buildTerminalKittyImage(sourceFrame, filledFrame.width, filledFrame.height, 'contain')

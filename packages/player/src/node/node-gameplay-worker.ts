@@ -42,7 +42,7 @@ async function bootstrap(): Promise<void> {
   }
   postLog('info', 'gameplay-worker.bootstrap.start', {
     mode: initData.mode,
-    tui: initData.playOptions.tui === true,
+    tui: Boolean(initData.playOptions.tui),
   });
 
   const abortController = new AbortController();
@@ -285,7 +285,7 @@ async function bootstrap(): Promise<void> {
       ...initData.playOptions,
       signal: abortController.signal,
       createInputRuntime,
-      createUiRuntime: initData.playOptions.tui === true ? createUiRuntime : undefined,
+      createUiRuntime: initData.playOptions.tui ? createUiRuntime : undefined,
       writeOutput: (text: string): void => {
         postWorkerMessage({ kind: 'output', text });
       },
@@ -328,7 +328,7 @@ async function bootstrap(): Promise<void> {
           })
         : await manualPlay(initData.json, {
             ...playOptions,
-            autoScratch: initData.autoScratch === true,
+            autoScratch: Boolean(initData.autoScratch),
           });
     postWorkerMessage({ kind: 'result', summary });
   } catch (error) {

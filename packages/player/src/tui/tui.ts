@@ -484,10 +484,14 @@ export class PlayerTui {
 
     const terminalRows = this.terminalRows ?? process.stdout.rows;
     const debugLineCount = frame.activeAudioFiles === undefined && frame.activeAudioVoiceCount === undefined ? 0 : 1;
+    const showLaneChannels = Boolean(this.options.showLaneChannels);
+    const randomPatternSummary =
+      typeof this.options.randomPatternSummary === 'string' && this.options.randomPatternSummary.length > 0
+        ? this.options.randomPatternSummary
+        : undefined;
     const rowCount = calculateTuiGridRowCount(terminalRows, {
-      showLaneChannels: this.options.showLaneChannels === true,
-      hasRandomPatternSummary:
-        typeof this.options.randomPatternSummary === 'string' && this.options.randomPatternSummary.length > 0,
+      showLaneChannels,
+      hasRandomPatternSummary: randomPatternSummary !== undefined,
       hasAudioDebugLine: debugLineCount > 0,
     });
     const laneCount = Math.max(1, this.options.lanes.length);
@@ -551,7 +555,7 @@ export class PlayerTui {
         continue;
       }
 
-      if (note.mine === true) {
+      if (note.mine) {
         const distance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
         const visibleDistance = normalizeNoteApproachDistance(distance, frame.currentBeat, note.beat);
         if (!isDistanceWithinWindow(visibleDistance, scrollWindowBeats)) {
@@ -711,8 +715,8 @@ export class PlayerTui {
       `CHART   LANE ${this.options.laneDisplayMode}  PLAYER ${formatPlayerLabel(this.options.player)}  RANK ${this.options.rankLabel ?? formatRankLabel(this.options.rank)}  PLAYLEVEL ${formatPlayLevelLabel(this.options.playLevel)}`,
     );
     lines.push(`PERF    FPS ${formatFps(currentFps)}`);
-    if (typeof this.options.randomPatternSummary === 'string' && this.options.randomPatternSummary.length > 0) {
-      lines.push(this.options.randomPatternSummary);
+    if (randomPatternSummary) {
+      lines.push(randomPatternSummary);
     }
     const animatedScore = this.resolveAnimatedScore(frame.summary.score, now);
     const maxExScore = Math.max(0, frame.summary.total * 2);
@@ -731,7 +735,7 @@ export class PlayerTui {
     }
     lines.push('');
     const laneLines: string[] = [];
-    if (this.options.showLaneChannels === true) {
+    if (showLaneChannels) {
       laneLines.push(
         renderLaneRow(
           this.options.lanes.map((lane) => lane.channel),
@@ -1910,7 +1914,7 @@ function resolveInputKeyLaneGroup(lane: TuiLane): 'white' | 'black' {
 }
 
 function resolveInputKeyLaneStyle(lane: TuiLane): 'white' | 'black' | 'scratch' {
-  if (lane.isScratch === true) {
+  if (lane.isScratch) {
     return 'scratch';
   }
   return resolveInputKeyLaneGroup(lane) === 'black' ? 'black' : 'white';

@@ -194,7 +194,7 @@ function isRestartKeyPress(chunk: string | undefined, key: readline.Key): boolea
   if (typeof chunk === 'string' && chunk === 'R') {
     return true;
   }
-  return key.name?.toLowerCase() === 'r' && key.shift === true;
+  return key.name?.toLowerCase() === 'r' && Boolean(key.shift);
 }
 
 function resolveHighSpeedControlActionFromAltLaneTokens(

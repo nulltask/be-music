@@ -70,7 +70,7 @@ export function extractTimedNotes(
   const { playableNotes, landmineNotes, invisibleNotes } = collectTimedNotes(context, {
     includePlayable: true,
     includeLandmine: options.includeLandmine !== false,
-    includeInvisible: options.includeInvisible === true,
+    includeInvisible: Boolean(options.includeInvisible),
   });
 
   finalizePlayableNotes(json, playableNotes, context.resolver, options);
@@ -123,8 +123,8 @@ function collectTimedNotes(
   } = {},
 ): ExtractTimedNotesResult {
   const includePlayable = options.includePlayable !== false;
-  const includeLandmine = options.includeLandmine === true;
-  const includeInvisible = options.includeInvisible === true;
+  const includeLandmine = Boolean(options.includeLandmine);
+  const includeInvisible = Boolean(options.includeInvisible);
   const playableNotes: TimedPlayableNote[] = [];
   const landmineNotes: TimedLandmineNote[] = [];
   const invisibleNotes: TimedPlayableNote[] = [];

@@ -64,7 +64,7 @@ export function buildKittyGraphicsRenderSequence(options: {
     'q=2',
     safePlacementId ? `p=${safePlacementId}` : '',
     zIndex !== undefined ? `z=${zIndex}` : '',
-    options.doNotMoveCursor === true ? 'C=1' : '',
+    options.doNotMoveCursor ? 'C=1' : '',
   ]
     .filter((value) => value.length > 0)
     .join(',');

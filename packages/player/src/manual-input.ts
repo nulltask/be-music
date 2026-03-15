@@ -331,7 +331,7 @@ function createScratchReverseTokensByChannel(
   bindings: readonly FixedLaneDefinition[],
   platform: NodeJS.Platform = process.platform,
 ): Map<string, readonly string[]> {
-  const scratchChannels = bindings.filter((binding) => binding.isScratch === true).map((binding) => binding.channel);
+  const scratchChannels = bindings.filter((binding) => binding.isScratch).map((binding) => binding.channel);
   const tokenMap = new Map<string, readonly string[]>();
 
   if (scratchChannels.includes('16')) {
