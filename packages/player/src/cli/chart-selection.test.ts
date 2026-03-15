@@ -134,6 +134,7 @@ describe('chart selection', () => {
             string,
             {
               contentHash: string;
+              cacheHash: string;
               summary: Record<string, unknown>;
             }
           >;
@@ -143,7 +144,51 @@ describe('chart selection', () => {
     expect(cacheJson.directories[tempRoot]?.files['cached-hit.bms']).toBeDefined();
     expect(cacheJson.directories[tempRoot]?.files[chartPath]).toBeUndefined();
     expect(cacheJson.directories[tempRoot]?.files['cached-hit.bms']?.contentHash).toEqual(expect.any(String));
+    expect(cacheJson.directories[tempRoot]?.files['cached-hit.bms']?.cacheHash).toEqual(expect.any(String));
     expect(cacheJson.directories[tempRoot]?.files['cached-hit.bms']?.summary.filePath).toBeUndefined();
+  });
+
+  test('buildChartSelectionEntries: invalidates cached summaries when cache contents are tampered without updating cacheHash', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-tamper-'));
+    const tempHome = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-home-'));
+    tempDirectories.push(tempRoot, tempHome);
+    process.env.HOME = tempHome;
+
+    const chartPath = join(tempRoot, 'cached-tamper.bms');
+    await writeFile(chartPath, ['#TITLE Original', '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n'));
+
+    await buildChartSelectionEntries(tempRoot, [chartPath]);
+
+    const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
+    const cacheJson = JSON.parse(await readFile(cachePath, 'utf8')) as {
+      directories: Record<
+        string,
+        {
+          files: Record<
+            string,
+            {
+              contentHash: string;
+              cacheHash: string;
+              summary: Record<string, unknown>;
+            }
+          >;
+        }
+      >;
+    };
+    cacheJson.directories[tempRoot]!.files['cached-tamper.bms']!.summary.title = 'Tampered';
+    await writeFile(cachePath, `${JSON.stringify(cacheJson, null, 2)}\n`, 'utf8');
+
+    const parser = await import('@be-music/parser');
+    const parseChartSpy = vi.spyOn(parser, 'parseChart');
+
+    const secondEntries = await buildChartSelectionEntries(tempRoot, [chartPath]);
+    const secondChart = secondEntries.find((entry) => entry.kind === 'chart' && entry.filePath === chartPath);
+
+    expect(secondChart).toMatchObject({
+      kind: 'chart',
+      title: 'Original',
+    });
+    expect(parseChartSpy).toHaveBeenCalled();
   });
 
   test('buildChartSelectionEntries: invalidates cached summaries when chart contents change without size or mtime changes', async () => {
