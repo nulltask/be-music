@@ -364,7 +364,15 @@ jobs:
   sea:
     name: SEA (${{ matrix.os }})
     needs: changes
-    if: github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_player_changed == 'true' || needs.changes.outputs.sea_audio_renderer_changed == 'true')
+    if: |
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'pull_request' && github.base_ref == 'main')
+      ) &&
+      (
+        needs.changes.outputs.sea_player_changed == 'true' ||
+        needs.changes.outputs.sea_audio_renderer_changed == 'true'
+      )
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -395,16 +403,16 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Build player SEA executable
-        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_player_changed == 'true'
+        if: needs.changes.outputs.sea_player_changed == 'true'
         run: pnpm --filter @be-music/player run build:sea
 
       - name: Build audio-renderer SEA executable
-        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_audio_renderer_changed == 'true'
+        if: needs.changes.outputs.sea_audio_renderer_changed == 'true'
         run: pnpm --filter @be-music/audio-renderer run build:sea
 
       - name: Select player SEA binary path
         id: sea-player-binary
-        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_player_changed == 'true'
+        if: needs.changes.outputs.sea_player_changed == 'true'
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
@@ -415,7 +423,7 @@ jobs:
 
       - name: Select audio-renderer SEA binary path
         id: sea-audio-renderer-binary
-        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_audio_renderer_changed == 'true'
+        if: needs.changes.outputs.sea_audio_renderer_changed == 'true'
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
@@ -425,7 +433,7 @@ jobs:
           fi
 
       - name: Upload player SEA artifact
-        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_player_changed == 'true'
+        if: needs.changes.outputs.sea_player_changed == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: be-music-player-${{ runner.os }}-${{ runner.arch }}
@@ -433,7 +441,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload audio-renderer SEA artifact
-        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.sea_audio_renderer_changed == 'true'
+        if: needs.changes.outputs.sea_audio_renderer_changed == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: be-music-audio-renderer-${{ runner.os }}-${{ runner.arch }}
