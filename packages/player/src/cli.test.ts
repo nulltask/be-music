@@ -10,6 +10,7 @@ import {
   formatPlayModeLabel,
   parseArgs,
   resolveCliConfigOverrideFlags,
+  resolveDefaultPlayerLogPath,
   resolvePlayLoadingStageFileDisplaySize,
   resolvePersistedPlayerConfigFromArgs,
   resolveCircularSelectableIndex,
@@ -110,6 +111,15 @@ describe('player cli', () => {
     expect(parseArgs(['chart.bms']).uiFps).toBe(60);
     expect(parseArgs(['chart.bms', '--tui-fps', '120']).uiFps).toBe(120);
     expect(parseArgs(['chart.bms', '--tui-fps', '59.94']).uiFps).toBe(59.94);
+  });
+
+  test('cli: accepts --log-file for structured file logging', () => {
+    expect(parseArgs(['chart.bms', '--log-file', '/tmp/be-music.log']).logFile).toBe('/tmp/be-music.log');
+    expect(() => parseArgs(['chart.bms', '--log-file'])).toThrow('--log-file expects a path');
+  });
+
+  test('cli: resolves the default structured log path under ~/.be-music/logs', () => {
+    expect(resolveDefaultPlayerLogPath()).toMatch(/\.be-music\/logs\/player\.ndjson$/);
   });
 
   test('cli: rejects invalid --tui-fps values', () => {

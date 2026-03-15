@@ -1,4 +1,5 @@
 import type { MessagePort } from 'node:worker_threads';
+import type { LogEntry } from '@be-music/utils';
 import type { BeMusicJson, BeMusicPlayLevel } from '@be-music/json';
 import type { PlayerInputCommand } from '../core/input-signal-bus.ts';
 import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '../core/engine.ts';
@@ -99,6 +100,7 @@ export type NodeGameplayWorkerInboundMessage =
 export type NodeGameplayWorkerOutboundMessage =
   | { kind: 'load-progress'; progress: PlayerLoadProgress }
   | { kind: 'load-complete' }
+  | { kind: 'log'; entry: LogEntry }
   | { kind: 'resolved-chart'; metadata: NodeGameplayResolvedChartMetadata }
   | { kind: 'output'; text: string }
   | { kind: 'high-speed'; value: number }

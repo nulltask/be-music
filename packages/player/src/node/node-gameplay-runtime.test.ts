@@ -215,6 +215,50 @@ describe('node gameplay runtime', () => {
     await promise;
   });
 
+  test('forwards gameplay and UI runtime log messages to the caller', async () => {
+    const onLog = vi.fn();
+    const promise = runNodeGameplayRuntime(createOptions({ onLog }));
+    const worker = getLastWorker();
+
+    worker.emit('message', {
+      kind: 'log',
+      entry: {
+        source: 'gameplay-worker',
+        level: 'info',
+        event: 'playback.prepared',
+      },
+    });
+
+    worker.emit('message', {
+      kind: 'ui-init',
+      requestId: 9,
+      runtime: createUiInit(),
+    });
+    await Promise.resolve();
+
+    uiRuntimeState.context?.onLog?.({
+      source: 'ui-worker',
+      level: 'info',
+      event: 'ui-worker.first-frame.rendered',
+      fields: { seconds: 0 },
+    });
+
+    expect(onLog).toHaveBeenNthCalledWith(1, {
+      source: 'gameplay-worker',
+      level: 'info',
+      event: 'playback.prepared',
+    });
+    expect(onLog).toHaveBeenNthCalledWith(2, {
+      source: 'ui-worker',
+      level: 'info',
+      event: 'ui-worker.first-frame.rendered',
+      fields: { seconds: 0 },
+    });
+
+    worker.emit('message', { kind: 'result', summary: createSummary() });
+    await promise;
+  });
+
   test('maps worker abort errors back to AbortError', async () => {
     const promise = runNodeGameplayRuntime(createOptions());
     const worker = getLastWorker();

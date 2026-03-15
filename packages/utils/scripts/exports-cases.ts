@@ -93,6 +93,23 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       utilsApi.createAbortError();
     },
   });
+  define('utils.createFileLogger', {
+    run: async (fixtures) => {
+      const logger = await utilsApi.createFileLogger(`${fixtures.tmpDir}/bench-log.ndjson`);
+      await logger.close();
+    },
+  });
+  define('utils.createNoopLogger', {
+    run: async () => {
+      const logger = utilsApi.createNoopLogger();
+      logger.log({
+        source: 'bench',
+        level: 'debug',
+        event: 'utils.createNoopLogger',
+      });
+      await logger.close();
+    },
+  });
   define('utils.isAbortError', {
     run: () => {
       utilsApi.isAbortError(new Error('x'));

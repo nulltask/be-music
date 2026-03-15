@@ -1,5 +1,5 @@
 import { effect } from 'alien-signals';
-import { createAbortError } from '@be-music/utils';
+import { createAbortError, type LogEntry } from '@be-music/utils';
 import type { BeMusicJson } from '@be-music/json';
 import { fileURLToPath } from 'node:url';
 import { Worker, type TransferListItem } from 'node:worker_threads';
@@ -24,6 +24,7 @@ export interface NodeGameplayRuntimeOptions {
   signal?: AbortSignal;
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
   onLoadComplete?: () => void;
+  onLog?: (entry: LogEntry) => void;
   onResolvedChart?: (metadata: NodeGameplayResolvedChartMetadata) => void;
   onHighSpeedChange?: (value: number) => void;
   writeOutput?: (text: string) => void;
@@ -84,6 +85,10 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
         options.onLoadComplete?.();
         return;
       }
+      if (message.kind === 'log') {
+        options.onLog?.(message.entry);
+        return;
+      }
       if (message.kind === 'resolved-chart') {
         options.onResolvedChart?.(message.metadata);
         return;
@@ -133,6 +138,7 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
             uiRuntime = runtime;
           },
           loadSignal: signal,
+          onLog: options.onLog,
         });
         return;
       }
@@ -185,6 +191,7 @@ async function handleUiInit(
   runtimeStore: {
     setRuntime: (runtime: NodeUiRuntime | undefined) => void;
     loadSignal?: AbortSignal;
+    onLog?: (entry: LogEntry) => void;
   },
 ): Promise<void> {
   try {
@@ -204,6 +211,7 @@ async function handleUiInit(
       initialPaused: message.runtime.initialPaused,
       initialJudgeCombo: message.runtime.initialJudgeCombo,
       loadSignal: runtimeStore.loadSignal,
+      onLog: runtimeStore.onLog,
       onBgaLoadProgress: (progress) => {
         postWorkerMessage(worker, {
           kind: 'ui-bga-load-progress',

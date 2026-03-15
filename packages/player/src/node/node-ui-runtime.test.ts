@@ -205,6 +205,35 @@ describe('node ui runtime', () => {
     await runtime.dispose();
   });
 
+  test('forwards UI worker log messages to the caller', async () => {
+    const onLog = vi.fn();
+    const uiSignals = createPlayerUiSignalBus(createFrame());
+    const runtime = await createNodeUiRuntime({
+      ...createContext(uiSignals),
+      onLog,
+    });
+    const worker = getLastWorker();
+
+    worker.emit('message', {
+      kind: 'log',
+      entry: {
+        source: 'ui-worker',
+        level: 'info',
+        event: 'ui-worker.ready',
+        fields: { hasBgaRenderer: true },
+      },
+    });
+
+    expect(onLog).toHaveBeenCalledWith({
+      source: 'ui-worker',
+      level: 'info',
+      event: 'ui-worker.ready',
+      fields: { hasBgaRenderer: true },
+    });
+
+    await runtime.dispose();
+  });
+
   test('aborts UI worker initialization cooperatively through an abort message', async () => {
     workerState.autoReadyOnConstruct = false;
     const controller = new AbortController();

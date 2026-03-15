@@ -163,6 +163,10 @@ function resolvePlayerConfigPath(): string {
   return resolve(homedir(), '.be-music', 'player.json');
 }
 
+export function resolveDefaultPlayerLogPath(): string {
+  return resolve(homedir(), '.be-music', 'logs', 'player.ndjson');
+}
+
 function parsePersistedPlayMode(value: unknown): PlayMode | undefined {
   if (value === 'manual' || value === 'auto-scratch' || value === 'auto') {
     return value;
