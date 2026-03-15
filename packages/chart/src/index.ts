@@ -382,6 +382,12 @@ interface ResolvedBmsLongNoteEvent {
   event: BeMusicEvent;
   sourceChannel: string;
   channel: string;
+  normalizedValue: string;
+}
+
+interface NormalizedChartEvent {
+  event: BeMusicEvent;
+  normalizedChannel: string;
 }
 
 export function resolveBmsLongNotes(
@@ -395,16 +401,7 @@ export function resolveBmsLongNotes(
     };
   }
 
-  const longNoteEvents: ResolvedBmsLongNoteEvent[] = [];
-  const sortedEvents = sortEvents(json.events);
-  for (const event of sortedEvents) {
-    const sourceChannel = normalizeChannel(event.channel);
-    const mapped = mapBmsLongNoteNormalizedChannelToPlayable(sourceChannel);
-    if (!mapped) {
-      continue;
-    }
-    longNoteEvents.push({ event, sourceChannel, channel: mapped });
-  }
+  const longNoteEvents = prepareResolvedBmsLongNoteEvents(json.events);
   if (longNoteEvents.length === 0) {
     return {
       notes: [],
@@ -445,25 +442,26 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
   }
 
   const beatResolver = createBeatResolver(json);
-  const legacyLongNoteTicks = collectLegacyLongNoteTickKeys(json);
+  const preparedEvents = prepareNormalizedChartEvents(json.events);
+  const legacyLongNoteTicks = collectLegacyLongNoteTickKeysFromPreparedEvents(preparedEvents);
   const pendingStartByChannel = new Map<string, { event: BeMusicEvent; beat: number }>();
   const startToEndBeat = new Map<BeMusicEvent, number>();
   const endEvents = new Set<BeMusicEvent>();
 
-  const sortedEvents = sortEvents(json.events);
-  for (const event of sortedEvents) {
-    const normalizedChannel = normalizeChannel(event.channel);
+  for (const item of preparedEvents) {
+    const { event, normalizedChannel } = item;
     if (!isPlayableNormalizedChannel(normalizedChannel)) {
       continue;
     }
-    if (legacyLongNoteTicks.has(createNormalizedChannelTickKey(normalizedChannel, event))) {
+    const tickKey = createEventTickKey(event);
+    if (legacyLongNoteTicks.has(`${normalizedChannel}:${tickKey}`)) {
       pendingStartByChannel.delete(normalizedChannel);
       continue;
     }
 
     const beat = beatResolver.eventToBeat(event);
-    const value = normalizeObjectKey(event.value);
-    if (lnObjValues.has(value)) {
+    const normalizedValue = normalizeObjectKey(event.value);
+    if (lnObjValues.has(normalizedValue)) {
       const start = pendingStartByChannel.get(normalizedChannel);
       if (start && beat > start.beat) {
         startToEndBeat.set(start.event, beat);
@@ -522,15 +520,43 @@ function resolveLnobjValues(json: BeMusicJson): Set<string> {
   return values;
 }
 
-function collectLegacyLongNoteTickKeys(json: BeMusicJson): Set<string> {
-  const keys = new Set<string>();
-  for (const event of json.events) {
+function prepareNormalizedChartEvents(events: ReadonlyArray<BeMusicEvent>): NormalizedChartEvent[] {
+  const prepared: NormalizedChartEvent[] = [];
+  for (const event of sortEvents(events as BeMusicEvent[])) {
+    prepared.push({
+      event,
+      normalizedChannel: normalizeChannel(event.channel),
+    });
+  }
+  return prepared;
+}
+
+function prepareResolvedBmsLongNoteEvents(events: ReadonlyArray<BeMusicEvent>): ResolvedBmsLongNoteEvent[] {
+  const prepared: ResolvedBmsLongNoteEvent[] = [];
+  for (const event of sortEvents(events as BeMusicEvent[])) {
     const sourceChannel = normalizeChannel(event.channel);
-    const playableChannel = mapBmsLongNoteNormalizedChannelToPlayable(sourceChannel);
+    const mapped = mapBmsLongNoteNormalizedChannelToPlayable(sourceChannel);
+    if (!mapped) {
+      continue;
+    }
+    prepared.push({
+      event,
+      sourceChannel,
+      channel: mapped,
+      normalizedValue: normalizeObjectKey(event.value),
+    });
+  }
+  return prepared;
+}
+
+function collectLegacyLongNoteTickKeysFromPreparedEvents(events: ReadonlyArray<NormalizedChartEvent>): Set<string> {
+  const keys = new Set<string>();
+  for (const item of events) {
+    const playableChannel = mapBmsLongNoteNormalizedChannelToPlayable(item.normalizedChannel);
     if (!playableChannel) {
       continue;
     }
-    keys.add(createNormalizedChannelTickKey(playableChannel, event));
+    keys.add(createNormalizedChannelTickKey(playableChannel, item.event));
   }
   return keys;
 }
@@ -552,13 +578,7 @@ function resolveBmsLongNotesType2(
 ): BmsLongNoteResolution {
   const notes: BmsLongNote[] = [];
   const suppressedTriggerEvents = new Set<BeMusicEvent>();
-  const eventsByChannel = new Map<string, ResolvedBmsLongNoteEvent[]>();
-
-  for (const event of events) {
-    const bucket = eventsByChannel.get(event.sourceChannel) ?? [];
-    bucket.push(event);
-    eventsByChannel.set(event.sourceChannel, bucket);
-  }
+  const eventsByChannel = groupResolvedLongNoteEventsBySourceChannel(events);
 
   for (const channelEvents of eventsByChannel.values()) {
     let runNote: BmsLongNote | undefined;
@@ -645,28 +665,38 @@ function inferBmsLongNoteType(events: ResolvedBmsLongNoteEvent[]): 1 | 2 {
     }
   }
 
-  const eventsByChannel = new Map<string, ResolvedBmsLongNoteEvent[]>();
-  for (const item of events) {
-    const bucket = eventsByChannel.get(item.sourceChannel) ?? [];
-    bucket.push(item);
-    eventsByChannel.set(item.sourceChannel, bucket);
-  }
-
-  for (const channelEvents of eventsByChannel.values()) {
+  for (const channelEvents of groupResolvedLongNoteEventsBySourceChannel(events).values()) {
     let previous: BeMusicEvent | undefined;
+    let previousValue: string | undefined;
     for (const item of channelEvents) {
       if (
         previous &&
-        normalizeObjectKey(previous.value) === normalizeObjectKey(item.event.value) &&
+        previousValue === item.normalizedValue &&
         isBmsLongNoteType2Continuation(previous, item.event)
       ) {
         return 2;
       }
       previous = item.event;
+      previousValue = item.normalizedValue;
     }
   }
 
   return 1;
+}
+
+function groupResolvedLongNoteEventsBySourceChannel(
+  events: ReadonlyArray<ResolvedBmsLongNoteEvent>,
+): Map<string, ResolvedBmsLongNoteEvent[]> {
+  const grouped = new Map<string, ResolvedBmsLongNoteEvent[]>();
+  for (const item of events) {
+    const bucket = grouped.get(item.sourceChannel);
+    if (bucket) {
+      bucket.push(item);
+      continue;
+    }
+    grouped.set(item.sourceChannel, [item]);
+  }
+  return grouped;
 }
 
 function isBmsLongNoteType2Continuation(previous: BeMusicEvent, current: BeMusicEvent): boolean {
