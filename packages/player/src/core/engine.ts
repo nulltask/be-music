@@ -46,7 +46,13 @@ import {
 } from './scoring.ts';
 import { type GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import { resolveBmsJudgeWindowsMsForPercent, resolveJudgeWindowsMs } from './judge-window.ts';
-import { createBeatAtSecondsResolverFromTimingResolver } from './timeline.ts';
+import {
+  createBeatAtSecondsResolverFromTimingResolver,
+  createBpmTimeline,
+  createScrollTimeline,
+  createSpeedTimeline,
+  createStopBeatWindows,
+} from './timeline.ts';
 import { createInitialPlayerSummary, initializePlayerUiRuntime, preparePlaybackChartData } from './bootstrap.ts';
 
 export interface PlayerUiRuntime {
@@ -249,6 +255,63 @@ interface RealtimeAudioTrigger {
   channel: string;
 }
 
+type LoggedBgaLayer = 'base' | 'poor' | 'layer' | 'layer2';
+
+interface LoggedBgaCue {
+  seconds: number;
+  key?: string;
+  resourcePath?: string;
+  layer: LoggedBgaLayer;
+}
+
+interface NoTuiScheduledPlaybackEvent {
+  seconds: number;
+  order: number;
+  text: string;
+}
+
+type RuntimeEventFieldValue = string | number | boolean;
+
+type RuntimeEventField = readonly [key: string, value: RuntimeEventFieldValue | undefined];
+
+interface NoTuiPlaybackEventTracer {
+  flushUntil: (seconds: number) => void;
+  logPoorTriggered: (seconds: number) => void;
+  logPoorCleared: (seconds: number) => void;
+}
+
+interface NoTuiPlaybackStateLogger {
+  logGaugeChange: (
+    seconds: number,
+    params: {
+      reason: string;
+      judge?: string;
+      delta?: number;
+    },
+  ) => void;
+  logComboChange: (
+    seconds: number,
+    params: {
+      value: number;
+      reason: string;
+      judge?: string;
+      channel?: string;
+    },
+  ) => void;
+  logLongNoteState: (
+    seconds: number,
+    params: {
+      channel: string;
+      state: 'start' | 'release' | 'break' | 'complete';
+      mode: 1 | 2 | 3;
+      event: BeMusicEvent;
+      resources: Readonly<Record<string, string>>;
+      endSeconds?: number;
+    },
+  ) => void;
+  logResult: (seconds: number, params: { reason: string; summary: PlayerSummary }) => void;
+}
+
 interface TimedManualJudge {
   kind: JudgeKind;
   signedDeltaMs: number;
@@ -292,6 +355,10 @@ const DEFAULT_COMPRESSOR_RELEASE_MS = 120;
 const DEFAULT_COMPRESSOR_MAKEUP_DB = 0;
 const DEFAULT_LIMITER_CEILING_DB = -0.3;
 const DEFAULT_LIMITER_RELEASE_MS = 80;
+const BGA_BASE_CHANNEL = '04';
+const BGA_POOR_CHANNEL = '06';
+const BGA_LAYER_CHANNEL = '07';
+const BGA_LAYER2_CHANNEL = '0A';
 
 export { applyHighSpeedControlAction, resolveHighSpeedControlActionFromLaneChannels, type HighSpeedControlAction };
 export { resolveJudgeWindowsMs };
@@ -554,6 +621,565 @@ function emitPlayerLog(
       ...fields,
     },
   });
+}
+
+function writeRealtimeTriggeredEventLog(
+  writeOutput: (text: string) => void,
+  trigger: Pick<TimedSampleTrigger, 'seconds' | 'channel' | 'sampleKey' | 'event'>,
+  resourcePath?: string,
+  source = 'realtime',
+): void {
+  const normalizedResourcePath = typeof resourcePath === 'string' ? normalizeLoggedResourcePath(resourcePath) : undefined;
+  writeRuntimeEventLog(writeOutput, 'sample-trigger', [
+    ['time', formatSeconds(trigger.seconds)],
+    ['source', source],
+    ['channel', normalizeChannel(trigger.channel)],
+    ['value', trigger.event.value],
+    ['sample', trigger.sampleKey],
+    ['asset', normalizedResourcePath],
+    ['file', normalizedResourcePath ? basename(normalizedResourcePath) : undefined],
+  ]);
+}
+
+function writeRuntimeEventLog(
+  writeOutput: (text: string) => void,
+  kind: string,
+  fields: readonly RuntimeEventField[],
+): void {
+  const orderedFields = orderRuntimeEventFields(fields);
+  let line = 'EVENT';
+  const timeField = orderedFields.find(([key]) => key === 'time');
+  if (timeField && timeField[1] !== undefined) {
+    line += ` time:${String(timeField[1])}`;
+  }
+  line += ` kind:${kind}`;
+  for (const [key, value] of orderedFields) {
+    if (value === undefined) {
+      continue;
+    }
+    if (key === 'time') {
+      continue;
+    }
+    line += ` ${key}:${String(value)}`;
+  }
+  writeOutput(`${line}\n`);
+}
+
+function resolveEventResourceInfo(
+  resources: Readonly<Record<string, string>>,
+  event: Pick<BeMusicEvent, 'value'>,
+): { sampleKey: string; resourcePath?: string } {
+  const sampleKey = normalizeObjectKey(event.value);
+  return {
+    sampleKey,
+    resourcePath: resources[sampleKey],
+  };
+}
+
+function writePlayableSampleTriggerEventLog(
+  writeOutput: (text: string) => void,
+  event: BeMusicEvent,
+  seconds: number,
+  resources: Readonly<Record<string, string>>,
+  source: 'auto-note' | 'auto-scratch' | 'manual-note' | 'lane-fallback',
+  channel?: string,
+): void {
+  const { sampleKey, resourcePath } = resolveEventResourceInfo(resources, event);
+  writeRealtimeTriggeredEventLog(
+    writeOutput,
+    {
+      seconds,
+      channel: channel ?? event.channel,
+      sampleKey,
+      event,
+    },
+    resourcePath,
+    source,
+  );
+}
+
+function writeSampleStopEventLog(
+  writeOutput: (text: string) => void,
+  channel: string,
+  seconds: number,
+  reason: 'long-note-release' | 'long-note-break',
+  event?: BeMusicEvent,
+  resources?: Readonly<Record<string, string>>,
+): void {
+  const resourceInfo = event && resources ? resolveEventResourceInfo(resources, event) : undefined;
+  const normalizedResourcePath =
+    typeof resourceInfo?.resourcePath === 'string' ? normalizeLoggedResourcePath(resourceInfo.resourcePath) : undefined;
+  writeRuntimeEventLog(writeOutput, 'sample-stop', [
+    ['time', formatSeconds(seconds)],
+    ['channel', normalizeChannel(channel)],
+    ['reason', reason],
+    ['sample', resourceInfo?.sampleKey],
+    ['asset', normalizedResourcePath],
+    ['file', normalizedResourcePath ? basename(normalizedResourcePath) : undefined],
+  ]);
+}
+
+function createNoTuiPlaybackStateLogger(params: {
+  writeOutput: (text: string) => void;
+  summary: PlayerSummary;
+}): NoTuiPlaybackStateLogger {
+  const { writeOutput, summary } = params;
+
+  return {
+    logGaugeChange: (seconds, logParams): void => {
+      const gauge = summary.gauge;
+      if (!gauge) {
+        return;
+      }
+      writeRuntimeEventLog(writeOutput, 'gauge-change', [
+        ['time', formatSeconds(seconds)],
+        ['value', formatLoggedNumericValue(gauge.current)],
+        ['max', formatLoggedNumericValue(gauge.max)],
+        ['delta', logParams.delta === undefined ? undefined : formatLoggedNumericValue(logParams.delta)],
+        ['reason', logParams.reason],
+        ['judge', logParams.judge],
+        ['cleared', gauge.cleared],
+      ]);
+    },
+    logComboChange: (seconds, logParams): void => {
+      writeRuntimeEventLog(writeOutput, 'combo-change', [
+        ['time', formatSeconds(seconds)],
+        ['value', logParams.value],
+        ['reason', logParams.reason],
+        ['judge', logParams.judge],
+        ['channel', logParams.channel ? normalizeChannel(logParams.channel) : undefined],
+      ]);
+    },
+    logLongNoteState: (seconds, logParams): void => {
+      const { sampleKey, resourcePath } = resolveEventResourceInfo(logParams.resources, logParams.event);
+      const normalizedResourcePath =
+        typeof resourcePath === 'string' ? normalizeLoggedResourcePath(resourcePath) : undefined;
+      writeRuntimeEventLog(writeOutput, 'long-note', [
+        ['time', formatSeconds(seconds)],
+        ['channel', normalizeChannel(logParams.channel)],
+        ['state', logParams.state],
+        ['mode', logParams.mode],
+        ['sample', sampleKey],
+        ['asset', normalizedResourcePath],
+        ['file', normalizedResourcePath ? basename(normalizedResourcePath) : undefined],
+        ['end', logParams.endSeconds === undefined ? undefined : formatSeconds(logParams.endSeconds)],
+      ]);
+    },
+    logResult: (seconds, logParams): void => {
+      const gauge = logParams.summary.gauge;
+      writeRuntimeEventLog(writeOutput, 'result', [
+        ['time', formatSeconds(seconds)],
+        ['reason', logParams.reason],
+        ['total', logParams.summary.total],
+        ['perfect', logParams.summary.perfect],
+        ['great', logParams.summary.great],
+        ['good', logParams.summary.good],
+        ['bad', logParams.summary.bad],
+        ['poor', logParams.summary.poor],
+        ['fast', logParams.summary.fast],
+        ['slow', logParams.summary.slow],
+        ['exScore', logParams.summary.exScore],
+        ['score', logParams.summary.score],
+        ['gauge', gauge ? formatLoggedNumericValue(gauge.current) : undefined],
+        ['gaugeMax', gauge ? formatLoggedNumericValue(gauge.max) : undefined],
+        ['gaugeCleared', gauge?.cleared],
+      ]);
+    },
+  };
+}
+
+function createNoopPlaybackStateLogger(): NoTuiPlaybackStateLogger {
+  return {
+    logGaugeChange: () => undefined,
+    logComboChange: () => undefined,
+    logLongNoteState: () => undefined,
+    logResult: () => undefined,
+  };
+}
+
+function writeRealtimeVolumeEventLog(
+  writeOutput: (text: string) => void,
+  seconds: number,
+  event: BeMusicEvent,
+): void {
+  const normalizedChannel = normalizeChannel(event.channel);
+  const target =
+    isBmsKeyVolumeChangeChannel(normalizedChannel)
+      ? 'key'
+      : isBmsBgmVolumeChangeChannel(normalizedChannel)
+        ? 'bgm'
+        : 'master';
+  writeRuntimeEventLog(writeOutput, 'volume-change', [
+    ['time', formatSeconds(seconds)],
+    ['target', target],
+    ['channel', normalizedChannel],
+    ['value', event.value],
+  ]);
+}
+
+function formatLoggedNumericValue(value: number, maximumFractionDigits = 3): string {
+  if (!Number.isFinite(value)) {
+    return '0';
+  }
+  const rounded = value.toFixed(maximumFractionDigits);
+  return rounded.replace(/(?:\.0+|(\.\d*?[1-9])0+)$/, '$1');
+}
+
+function normalizeLoggedResourcePath(resourcePath: string): string {
+  return resourcePath.replaceAll('\\', '/');
+}
+
+function resolveLoggedLongNoteMode(note: TimedPlayableNote): 1 | 2 | 3 {
+  const mode = resolvePlayableLongNoteMode(note);
+  return mode === 2 || mode === 3 ? mode : 1;
+}
+
+function resolveLoggedMeasureLengthTimeline(
+  json: BeMusicJson,
+  resolver: TimingResolver,
+  beatResolver: ReturnType<typeof createBeatResolver>,
+): Array<{ measure: number; length: number; seconds: number }> {
+  const measureLengths = new Map<number, number>();
+  let maxMeasure = 0;
+  for (const event of json.events) {
+    if (event.measure > maxMeasure) {
+      maxMeasure = event.measure;
+    }
+  }
+  for (const measure of json.measures) {
+    const index = Math.max(0, Math.floor(measure.index));
+    if (index > maxMeasure) {
+      maxMeasure = index;
+    }
+    if (!Number.isFinite(measure.length) || measure.length <= 0) {
+      continue;
+    }
+    measureLengths.set(index, measure.length);
+  }
+
+  const timeline: Array<{ measure: number; length: number; seconds: number }> = [];
+  let previousLength = 1;
+  for (let measure = 0; measure <= maxMeasure; measure += 1) {
+    const length = measureLengths.get(measure) ?? 1;
+    if (measure > 0 && Math.abs(length - previousLength) < 1e-9) {
+      previousLength = length;
+      continue;
+    }
+    const seconds = resolver.beatToSeconds(beatResolver.measureToBeat(measure, 0));
+    if (!Number.isFinite(seconds)) {
+      previousLength = length;
+      continue;
+    }
+    timeline.push({
+      measure,
+      length,
+      seconds: Math.max(0, seconds),
+    });
+    previousLength = length;
+  }
+
+  return timeline;
+}
+
+function buildLoggedBgaCueTimeline(
+  sortedEvents: readonly BeMusicEvent[],
+  resolver: TimingResolver,
+  resources: Record<string, string>,
+  channel: string,
+  layer: LoggedBgaLayer,
+): LoggedBgaCue[] {
+  const normalizedChannel = normalizeChannel(channel);
+  const timeline: LoggedBgaCue[] = [];
+  for (const event of sortedEvents) {
+    if (normalizeChannel(event.channel) !== normalizedChannel) {
+      continue;
+    }
+    const key = normalizeObjectKey(event.value);
+    const normalizedKey = key === '00' ? undefined : key;
+    timeline.push({
+      seconds: Math.max(0, resolver.eventToSeconds(event)),
+      key: normalizedKey,
+      resourcePath: normalizedKey ? resources[normalizedKey] : undefined,
+      layer,
+    });
+  }
+  return timeline;
+}
+
+function findActiveLoggedBgaCue(timeline: readonly LoggedBgaCue[], seconds: number): LoggedBgaCue | undefined {
+  let low = 0;
+  let high = timeline.length - 1;
+  let answer = -1;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (timeline[mid]!.seconds <= seconds) {
+      answer = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  return answer >= 0 ? timeline[answer] : undefined;
+}
+
+function formatLoggedBgaCueText(cue: LoggedBgaCue): string {
+  if (!cue.key) {
+    return createRuntimeEventLine('bga-cue', [
+      ['time', formatSeconds(cue.seconds)],
+      ['layer', cue.layer],
+      ['state', 'clear'],
+    ]);
+  }
+  const normalizedResourcePath = cue.resourcePath ? normalizeLoggedResourcePath(cue.resourcePath) : undefined;
+  return createRuntimeEventLine('bga-cue', [
+    ['time', formatSeconds(cue.seconds)],
+    ['layer', cue.layer],
+    ['key', cue.key],
+    ['asset', normalizedResourcePath],
+    ['file', normalizedResourcePath ? basename(normalizedResourcePath) : undefined],
+  ]);
+}
+
+function createRuntimeEventLine(kind: string, fields: readonly RuntimeEventField[]): string {
+  const orderedFields = orderRuntimeEventFields(fields);
+  let line = 'EVENT';
+  const timeField = orderedFields.find(([key]) => key === 'time');
+  if (timeField && timeField[1] !== undefined) {
+    line += ` time:${String(timeField[1])}`;
+  }
+  line += ` kind:${kind}`;
+  for (const [key, value] of orderedFields) {
+    if (value === undefined) {
+      continue;
+    }
+    if (key === 'time') {
+      continue;
+    }
+    line += ` ${key}:${String(value)}`;
+  }
+  return `${line}\n`;
+}
+
+function orderRuntimeEventFields(fields: readonly RuntimeEventField[]): RuntimeEventField[] {
+  const timeFields: RuntimeEventField[] = [];
+  const otherFields: RuntimeEventField[] = [];
+  for (const field of fields) {
+    if (field[0] === 'time') {
+      timeFields.push(field);
+      continue;
+    }
+    otherFields.push(field);
+  }
+  return [...timeFields, ...otherFields];
+}
+
+function createNoopPlaybackEventTracer(): NoTuiPlaybackEventTracer {
+  return {
+    flushUntil: () => undefined,
+    logPoorTriggered: () => undefined,
+    logPoorCleared: () => undefined,
+  };
+}
+
+function createNoTuiPlaybackEventTracer(params: {
+  json: BeMusicJson;
+  resolver: TimingResolver;
+  writeOutput: (text: string) => void;
+  judgeWindowMs?: number;
+}): NoTuiPlaybackEventTracer {
+  const { json, resolver, writeOutput, judgeWindowMs } = params;
+  const beatResolver = createBeatResolver(json);
+  const sortedEvents = sortEvents(json.events);
+  const scheduledEvents: NoTuiScheduledPlaybackEvent[] = [];
+  let nextOrder = 0;
+  const pushScheduledEvent = (seconds: number, text: string): void => {
+    if (!Number.isFinite(seconds)) {
+      return;
+    }
+    scheduledEvents.push({
+      seconds: Math.max(0, seconds),
+      order: nextOrder,
+      text,
+    });
+    nextOrder += 1;
+  };
+
+  for (const point of resolveLoggedMeasureLengthTimeline(json, resolver, beatResolver)) {
+    pushScheduledEvent(
+      point.seconds,
+      createRuntimeEventLine('measure-length-change', [
+        ['time', formatSeconds(point.seconds)],
+        ['measure', point.measure],
+        ['length', formatLoggedNumericValue(point.length)],
+      ]),
+    );
+  }
+
+  for (const point of createBpmTimeline(json, resolver)) {
+    pushScheduledEvent(
+      point.seconds,
+      createRuntimeEventLine('bpm-change', [
+        ['time', formatSeconds(point.seconds)],
+        ['value', formatLoggedNumericValue(point.bpm)],
+      ]),
+    );
+  }
+
+  for (const point of createScrollTimeline(json, beatResolver)) {
+    const seconds = resolver.beatToSeconds(point.beat);
+    pushScheduledEvent(
+      seconds,
+      createRuntimeEventLine('scroll-change', [
+        ['time', formatSeconds(seconds)],
+        ['value', formatLoggedNumericValue(point.speed)],
+      ]),
+    );
+  }
+
+  for (const point of createSpeedTimeline(json, beatResolver)) {
+    const seconds = resolver.beatToSeconds(point.beat);
+    pushScheduledEvent(
+      seconds,
+      createRuntimeEventLine('speed-change', [
+        ['time', formatSeconds(seconds)],
+        ['value', formatLoggedNumericValue(point.speed)],
+      ]),
+    );
+  }
+
+  for (const window of createStopBeatWindows(resolver)) {
+    pushScheduledEvent(
+      window.startSeconds,
+      createRuntimeEventLine('stop', [
+        ['time', formatSeconds(window.startSeconds)],
+        ['state', 'start'],
+        ['duration', `${formatLoggedNumericValue(window.durationSeconds)}s`],
+      ]),
+    );
+    pushScheduledEvent(
+      window.endSeconds,
+      createRuntimeEventLine('stop', [
+        ['time', formatSeconds(window.endSeconds)],
+        ['state', 'end'],
+      ]),
+    );
+  }
+
+  for (const change of collectDynamicBmsJudgeRankChanges(json, resolver)) {
+    const badWindow = resolveBmsJudgeWindowsMsForPercent(change.rankPercent, judgeWindowMs).bad;
+    pushScheduledEvent(
+      change.seconds,
+      createRuntimeEventLine('judge-rank-change', [
+        ['time', formatSeconds(change.seconds)],
+        ['rank', formatLoggedNumericValue(change.rankPercent)],
+        ['bad', `${formatLoggedNumericValue(badWindow)}ms`],
+      ]),
+    );
+  }
+
+  const baseBgaTimeline = buildLoggedBgaCueTimeline(
+    sortedEvents,
+    resolver,
+    json.resources.bmp,
+    BGA_BASE_CHANNEL,
+    'base',
+  );
+  const poorBgaTimeline = buildLoggedBgaCueTimeline(
+    sortedEvents,
+    resolver,
+    json.resources.bmp,
+    BGA_POOR_CHANNEL,
+    'poor',
+  );
+  const layerBgaTimeline = buildLoggedBgaCueTimeline(
+    sortedEvents,
+    resolver,
+    json.resources.bmp,
+    BGA_LAYER_CHANNEL,
+    'layer',
+  );
+  const layer2BgaTimeline = buildLoggedBgaCueTimeline(
+    sortedEvents,
+    resolver,
+    json.resources.bmp,
+    BGA_LAYER2_CHANNEL,
+    'layer2',
+  );
+
+  for (const cue of [...baseBgaTimeline, ...poorBgaTimeline, ...layerBgaTimeline, ...layer2BgaTimeline]) {
+    pushScheduledEvent(cue.seconds, formatLoggedBgaCueText(cue));
+  }
+
+  scheduledEvents.sort((left, right) => left.seconds - right.seconds || left.order - right.order);
+
+  const shouldUsePoorBmp00Fallback =
+    typeof json.bms.poorBga !== 'string' &&
+    typeof json.resources.bmp['00'] === 'string' &&
+    json.resources.bmp['00'].length > 0;
+  const poorFallbackKey = shouldUsePoorBmp00Fallback ? '00' : undefined;
+  const poorFallbackResourcePath = poorFallbackKey ? json.resources.bmp[poorFallbackKey] : undefined;
+  const poorFallbackUntilSeconds = poorBgaTimeline[0]?.seconds ?? Number.POSITIVE_INFINITY;
+  let cursor = 0;
+  let poorActive = false;
+
+  const resolvePoorCueAt = (seconds: number): LoggedBgaCue | undefined => {
+    const activeCue = findActiveLoggedBgaCue(poorBgaTimeline, seconds);
+    if (activeCue?.key) {
+      return activeCue;
+    }
+    if (poorFallbackKey && seconds < poorFallbackUntilSeconds) {
+      return {
+        seconds,
+        key: poorFallbackKey,
+        resourcePath: poorFallbackResourcePath,
+        layer: 'poor',
+      };
+    }
+    return undefined;
+  };
+
+  return {
+    flushUntil: (seconds) => {
+      const safeSeconds = Math.max(0, seconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+      while (cursor < scheduledEvents.length) {
+        const scheduledEvent = scheduledEvents[cursor]!;
+        if (scheduledEvent.seconds > safeSeconds) {
+          break;
+        }
+        writeOutput(scheduledEvent.text);
+        cursor += 1;
+      }
+    },
+    logPoorTriggered: (seconds) => {
+      const cue = resolvePoorCueAt(seconds);
+      const normalizedResourcePath =
+        typeof cue?.resourcePath === 'string' ? normalizeLoggedResourcePath(cue.resourcePath) : undefined;
+      poorActive = true;
+      writeOutput(
+        createRuntimeEventLine('bga-poor', [
+          ['time', formatSeconds(seconds)],
+          ['state', 'trigger'],
+          ['key', cue?.key],
+          ['asset', normalizedResourcePath],
+          ['file', normalizedResourcePath ? basename(normalizedResourcePath) : undefined],
+        ]),
+      );
+    },
+    logPoorCleared: (seconds) => {
+      if (!poorActive) {
+        return;
+      }
+      poorActive = false;
+      writeOutput(
+        createRuntimeEventLine('bga-poor', [
+          ['time', formatSeconds(seconds)],
+          ['state', 'clear'],
+        ]),
+      );
+    },
+  };
 }
 
 interface AudioSessionLoadProgress {
@@ -932,6 +1558,33 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     inputSignals,
     inputTokenToChannels,
   });
+  const playbackEventTracer = uiEnabled
+    ? createNoopPlaybackEventTracer()
+    : createNoTuiPlaybackEventTracer({
+        json: resolvedJson,
+        resolver: timingResolver,
+        writeOutput,
+      });
+  const playbackStateLogger = uiEnabled ? createNoopPlaybackStateLogger() : createNoTuiPlaybackStateLogger({ writeOutput, summary });
+  const applyLoggedGaugeJudge = (seconds: number, judge: GrooveGaugeJudgeKind, reason = 'judge'): void => {
+    const previousGauge = summary.gauge?.current;
+    applyGaugeJudge(judge);
+    const nextGauge = summary.gauge?.current;
+    playbackStateLogger.logGaugeChange(seconds, {
+      reason,
+      judge,
+      delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
+    });
+  };
+  const setLoggedCombo = (seconds: number, value: number, reason: string, judge?: string, channel?: string): void => {
+    combo = value;
+    playbackStateLogger.logComboChange(seconds, {
+      value,
+      reason,
+      judge,
+      channel,
+    });
+  };
 
   throwIfAborted(options.signal);
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
@@ -1030,7 +1683,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       audioSession?.resume();
       activeStateSignals?.setPaused(false);
       if (!uiEnabled) {
-        writeOutput('RESUME\n');
+        writeRuntimeEventLog(writeOutput, 'playback-state', [
+          ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
+          ['state', 'resume'],
+        ]);
       }
       return;
     }
@@ -1041,7 +1697,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     audioSession?.pause();
     activeStateSignals?.setPaused(true);
     if (!uiEnabled) {
-      writeOutput('PAUSE\n');
+      writeRuntimeEventLog(writeOutput, 'playback-state', [
+        ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
+        ['state', 'pause'],
+      ]);
     }
   };
   const consumeInputCommands = (): void => {
@@ -1051,6 +1710,12 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         continue;
       }
       if (command.kind === 'interrupt') {
+        if (!uiEnabled && playbackClock) {
+          writeRuntimeEventLog(writeOutput, 'interrupt', [
+            ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
+            ['reason', command.reason],
+          ]);
+        }
         interruptedReason = command.reason;
         continue;
       }
@@ -1066,7 +1731,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           options.onHighSpeedChange?.(highSpeed);
         }
         if (!uiEnabled) {
-          writeOutput(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
+          writeRuntimeEventLog(writeOutput, 'high-speed-change', [
+            ['time', formatSeconds(playbackClock ? elapsedMsToGameSeconds(playbackClock.nowMs(), speed) : 0)],
+            ['value', `x${highSpeed.toFixed(1)}`],
+          ]);
         }
       }
     }
@@ -1082,6 +1750,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       const volumeEvent = realtimeAudioVolumeEvents[realtimeAudioVolumeEventIndex]!;
       if (volumeEvent.seconds > safeReferenceSeconds) {
         break;
+      }
+      if (!uiEnabled) {
+        writeRealtimeVolumeEventLog(writeOutput, volumeEvent.seconds, volumeEvent.event);
       }
       triggerEvent(volumeEvent.event);
       realtimeAudioVolumeEventIndex += 1;
@@ -1099,6 +1770,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       if (trigger.seconds > safeReferenceSeconds) {
         break;
       }
+      if (!uiEnabled) {
+        writeRealtimeTriggeredEventLog(writeOutput, trigger, resolvedJson.resources.wav[trigger.sampleKey], 'realtime');
+      }
       triggerEvent(trigger.event);
       realtimeAudioTriggerIndex += 1;
     }
@@ -1106,12 +1780,17 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 
   const applyAutoPerfectJudge = (note: TimedPlayableNote, judgeSeconds: number): void => {
     applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
-    applyGaugeJudge('PERFECT');
-    combo += 1;
+    applyLoggedGaugeJudge(judgeSeconds, 'PERFECT');
+    setLoggedCombo(judgeSeconds, combo + 1, 'judge', 'PERFECT', note.channel);
 
     const key = resolveNoteKeyLabel(note.channel, keyMap);
     if (!uiEnabled) {
-      writeOutput(`AUTO ${formatSeconds(judgeSeconds)} channel:${note.channel} key:${key}\n`);
+      writeRuntimeEventLog(writeOutput, 'auto-judge', [
+        ['time', formatSeconds(judgeSeconds)],
+        ['result', 'PERFECT'],
+        ['channel', note.channel],
+        ['key', key],
+      ]);
       return;
     }
     activeStateSignals?.publishJudgeCombo('PERFECT', combo, note.channel);
@@ -1126,6 +1805,14 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         break;
       }
       pendingAutoLongNotes.shift();
+      playbackStateLogger.logLongNoteState(pending.endSeconds, {
+        channel: pending.note.channel,
+        state: 'complete',
+        mode: resolveLoggedLongNoteMode(pending.note),
+        event: pending.note.event,
+        resources: resolvedJson.resources.wav,
+        endSeconds: pending.endSeconds,
+      });
       applyAutoPerfectJudge(pending.note, pending.endSeconds);
     }
   };
@@ -1140,11 +1827,18 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         mode: 'auto',
       });
       audioSession?.start();
+      if (!uiEnabled) {
+        writeRuntimeEventLog(writeOutput, 'playback-start', [
+          ['time', formatSeconds(0)],
+          ['mode', 'auto'],
+        ]);
+      }
 
       const chartClock = createPlaybackClock(
         performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0),
       );
       playbackClock = chartClock;
+      playbackEventTracer.flushUntil(0);
       const badWindowSeconds = IIDX_BAD_WINDOW_MS / 1000;
       let landmineExpireCursor = 0;
       let invisibleExpireCursor = 0;
@@ -1187,6 +1881,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           const nowMs = chartClock.nowMs();
           if (nowMs >= targetMs) {
             const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+            playbackEventTracer.flushUntil(nowSec);
             triggerRealtimeAudioVolumeEvents(nowSec);
             triggerRealtimeAudioEvents(nowSec);
             drainPendingAutoLongNotes(nowSec);
@@ -1197,6 +1892,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             continue;
           }
           const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+          playbackEventTracer.flushUntil(nowSec);
           triggerRealtimeAudioVolumeEvents(nowSec);
           triggerRealtimeAudioEvents(nowSec);
           drainPendingAutoLongNotes(nowSec);
@@ -1219,6 +1915,16 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         }
 
         note.judged = true;
+        if (!uiEnabled) {
+          writePlayableSampleTriggerEventLog(
+            writeOutput,
+            note.event,
+            note.seconds,
+            resolvedJson.resources.wav,
+            'auto-note',
+            note.channel,
+          );
+        }
         audioSession?.triggerEvent?.(note.event);
         const endSeconds = resolveLongNoteEndSeconds(note);
         if (uiEnabled) {
@@ -1231,6 +1937,14 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           }
         }
         if (endSeconds !== undefined) {
+          playbackStateLogger.logLongNoteState(note.seconds, {
+            channel: note.channel,
+            state: 'start',
+            mode: resolveLoggedLongNoteMode(note),
+            event: note.event,
+            resources: resolvedJson.resources.wav,
+            endSeconds,
+          });
           insertPendingAutoLongNote(pendingAutoLongNotes, note, endSeconds);
           if (uiEnabled) {
             publishUiFrame(note.seconds, note.beat);
@@ -1246,6 +1960,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       if (!interruptedReason) {
         const totalScheduledMs = (totalSeconds * 1000) / speed;
         await renderUntil(totalScheduledMs);
+        playbackEventTracer.flushUntil(totalSeconds);
         drainPendingAutoLongNotes(totalSeconds);
         markExpiredLandmines(totalSeconds + badWindowSeconds);
         markExpiredInvisibleNotes(totalSeconds + badWindowSeconds);
@@ -1276,6 +1991,16 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     throw new PlayerInterruptedError(interruptedReason);
   }
 
+  if (!uiEnabled) {
+    writeRuntimeEventLog(writeOutput, 'playback-end', [
+      ['time', formatSeconds(totalSeconds)],
+      ['reason', 'complete'],
+    ]);
+    playbackStateLogger.logResult(totalSeconds, {
+      reason: 'complete',
+      summary,
+    });
+  }
   writeOutput(renderSummary(summary));
   return summary;
 }
@@ -1387,6 +2112,46 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     inputSignals,
     inputTokenToChannels,
   });
+  const playbackEventTracer = uiEnabled
+    ? createNoopPlaybackEventTracer()
+    : createNoTuiPlaybackEventTracer({
+        json: resolvedJson,
+        resolver: timingResolver,
+        writeOutput,
+        judgeWindowMs: options.judgeWindowMs,
+      });
+  const playbackStateLogger = uiEnabled ? createNoopPlaybackStateLogger() : createNoTuiPlaybackStateLogger({ writeOutput, summary });
+  const applyLoggedGaugeJudge = (seconds: number, judge: GrooveGaugeJudgeKind, reason = 'judge'): void => {
+    const previousGauge = summary.gauge?.current;
+    applyGaugeJudge(judge);
+    const nextGauge = summary.gauge?.current;
+    playbackStateLogger.logGaugeChange(seconds, {
+      reason,
+      judge,
+      delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
+    });
+  };
+  const applyLoggedGaugeDelta = (seconds: number, delta: number, reason: string): void => {
+    const previousGauge = summary.gauge?.current;
+    applyGaugeDelta(delta);
+    const nextGauge = summary.gauge?.current;
+    if (previousGauge === nextGauge) {
+      return;
+    }
+    playbackStateLogger.logGaugeChange(seconds, {
+      reason,
+      delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
+    });
+  };
+  const setLoggedCombo = (seconds: number, value: number, reason: string, judge?: string, channel?: string): void => {
+    combo = value;
+    playbackStateLogger.logComboChange(seconds, {
+      value,
+      reason,
+      judge,
+      channel,
+    });
+  };
 
   throwIfAborted(options.signal);
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
@@ -1464,8 +2229,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     mode: 'manual',
   });
   audioSession?.start();
+  if (!uiEnabled) {
+    writeRuntimeEventLog(writeOutput, 'playback-start', [
+      ['time', formatSeconds(0)],
+      ['mode', autoScratchEnabled ? 'auto-scratch' : 'manual'],
+    ]);
+  }
 
   const playbackClock = createPlaybackClock(performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0));
+  playbackEventTracer.flushUntil(0);
   const horizon = (totalSeconds * 1000) / speed + leadInMs + maxBadWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
   const longHoldUntilMsByChannel = new Map<string, number>();
@@ -1574,6 +2346,16 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!markScorableJudged(note)) {
         continue;
       }
+      if (!uiEnabled) {
+        writePlayableSampleTriggerEventLog(
+          writeOutput,
+          note.event,
+          note.seconds,
+          resolvedJson.resources.wav,
+          'auto-scratch',
+          note.channel,
+        );
+      }
       audioSession?.triggerEvent?.(note.event);
       const endSeconds = resolveLongNoteEndSeconds(note);
       if (uiEnabled) {
@@ -1586,14 +2368,32 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
       if (endSeconds !== undefined) {
+        playbackStateLogger.logLongNoteState(note.seconds, {
+          channel: note.channel,
+          state: 'start',
+          mode: resolveLoggedLongNoteMode(note),
+          event: note.event,
+          resources: resolvedJson.resources.wav,
+          endSeconds,
+        });
         insertPendingAutoLongNote(pendingAutoScratchLongNotes, note, endSeconds);
         continue;
       }
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
-      applyGaugeJudge('PERFECT');
+      applyLoggedGaugeJudge(referenceSeconds, 'PERFECT');
       uiSignals.pushCommand({ kind: 'clear-poor-bga' });
-      combo += 1;
+      setLoggedCombo(referenceSeconds, combo + 1, 'judge', 'PERFECT', note.channel);
+      if (!uiEnabled) {
+        writeRuntimeEventLog(writeOutput, 'auto-judge', [
+          ['time', formatSeconds(referenceSeconds)],
+          ['result', 'PERFECT'],
+          ['channel', note.channel],
+        ]);
+      }
       activeStateSignals?.publishJudgeCombo('PERFECT', combo, note.channel);
+      if (!uiEnabled) {
+        playbackEventTracer.logPoorCleared(referenceSeconds);
+      }
     }
   };
 
@@ -1605,10 +2405,25 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         break;
       }
       pendingAutoScratchLongNotes.shift();
+      playbackStateLogger.logLongNoteState(pending.endSeconds, {
+        channel: pending.note.channel,
+        state: 'complete',
+        mode: resolveLoggedLongNoteMode(pending.note),
+        event: pending.note.event,
+        resources: resolvedJson.resources.wav,
+        endSeconds: pending.endSeconds,
+      });
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
-      applyGaugeJudge('PERFECT');
+      applyLoggedGaugeJudge(referenceSeconds, 'PERFECT');
       uiSignals.pushCommand({ kind: 'clear-poor-bga' });
-      combo += 1;
+      setLoggedCombo(referenceSeconds, combo + 1, 'judge', 'PERFECT', pending.note.channel);
+      if (!uiEnabled) {
+        writeRuntimeEventLog(writeOutput, 'auto-judge', [
+          ['time', formatSeconds(referenceSeconds)],
+          ['result', 'PERFECT'],
+          ['channel', pending.note.channel],
+        ]);
+      }
       activeStateSignals?.publishJudgeCombo('PERFECT', combo, pending.note.channel);
     }
   };
@@ -1631,9 +2446,19 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         note.visibleUntilBeat = note.endBeat;
       }
       applyJudgeToSummary(summary, 'POOR', scoreTracker);
-      applyGaugeJudge('POOR');
+      applyLoggedGaugeJudge(referenceSeconds, 'POOR', 'miss');
       uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: referenceSeconds });
-      combo = 0;
+      if (!uiEnabled) {
+        writeRuntimeEventLog(writeOutput, 'judge', [
+          ['time', formatSeconds(referenceSeconds)],
+          ['result', 'POOR'],
+          ['channel', note.channel],
+          ['deltaMs', Math.round((referenceSeconds - note.seconds) * 1000)],
+          ['reason', 'miss'],
+        ]);
+        playbackEventTracer.logPoorTriggered(referenceSeconds);
+      }
+      setLoggedCombo(referenceSeconds, 0, 'miss', 'POOR', note.channel);
       activeStateSignals?.publishJudgeCombo('POOR', combo, note.channel);
     }
   };
@@ -1641,31 +2466,52 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const applyResolvedManualJudge = (channel: string, judge: TimedManualJudge, atSeconds: number): void => {
     const deltaMs = Math.abs(judge.signedDeltaMs);
     applyJudgeToSummary(summary, judge.kind, scoreTracker);
-    applyGaugeJudge(judge.kind);
+    applyLoggedGaugeJudge(atSeconds, judge.kind);
     if (judge.kind === 'PERFECT' || judge.kind === 'GREAT' || judge.kind === 'GOOD') {
       applyFastSlowForJudge(summary, judge.kind, judge.signedDeltaMs);
       uiSignals.pushCommand({ kind: 'clear-poor-bga' });
-      combo += 1;
+      setLoggedCombo(atSeconds, combo + 1, 'judge', judge.kind, channel);
       if (!uiEnabled) {
-        writeOutput(`${judge.kind} channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+        writeRuntimeEventLog(writeOutput, 'judge', [
+          ['time', formatSeconds(atSeconds)],
+          ['result', judge.kind],
+          ['channel', channel],
+          ['deltaMs', Math.round(deltaMs)],
+        ]);
       } else {
         activeStateSignals?.publishJudgeCombo(judge.kind, combo, channel);
+      }
+      if (!uiEnabled) {
+        playbackEventTracer.logPoorCleared(atSeconds);
       }
       return;
     }
     if (judge.kind === 'BAD') {
-      combo = 0;
+      setLoggedCombo(atSeconds, 0, 'judge', 'BAD', channel);
       if (!uiEnabled) {
-        writeOutput(`BAD channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+        writeRuntimeEventLog(writeOutput, 'judge', [
+          ['time', formatSeconds(atSeconds)],
+          ['result', 'BAD'],
+          ['channel', channel],
+          ['deltaMs', Math.round(deltaMs)],
+        ]);
       } else {
         activeStateSignals?.publishJudgeCombo('BAD', combo, channel);
       }
       return;
     }
     uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: atSeconds });
-    combo = 0;
     if (!uiEnabled) {
-      writeOutput(`POOR channel:${channel} delta:${Math.round(deltaMs)}ms\n`);
+      playbackEventTracer.logPoorTriggered(atSeconds);
+    }
+    setLoggedCombo(atSeconds, 0, 'judge', 'POOR', channel);
+    if (!uiEnabled) {
+      writeRuntimeEventLog(writeOutput, 'judge', [
+        ['time', formatSeconds(atSeconds)],
+        ['result', 'POOR'],
+        ['channel', channel],
+        ['deltaMs', Math.round(deltaMs)],
+      ]);
     } else {
       activeStateSignals?.publishJudgeCombo('POOR', combo, channel);
     }
@@ -1697,6 +2543,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (volumeEvent.seconds > safeReferenceSeconds) {
         break;
       }
+      if (!uiEnabled) {
+        writeRealtimeVolumeEventLog(writeOutput, volumeEvent.seconds, volumeEvent.event);
+      }
       triggerEvent(volumeEvent.event);
       realtimeAudioVolumeEventIndex += 1;
     }
@@ -1712,6 +2561,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const trigger = nonPlayableRealtimeAudioTriggers[nonPlayableRealtimeAudioTriggerIndex]!;
       if (trigger.seconds > safeReferenceSeconds) {
         break;
+      }
+      if (!uiEnabled) {
+        writeRealtimeTriggeredEventLog(
+          writeOutput,
+          trigger,
+          resolvedJson.resources.wav[trigger.sampleKey],
+          'realtime',
+        );
       }
       triggerEvent(trigger.event);
       nonPlayableRealtimeAudioTriggerIndex += 1;
@@ -1782,10 +2639,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         return;
       }
       applyJudgeToSummary(summary, 'BAD', scoreTracker);
-      applyGaugeJudge('BAD');
-      combo = 0;
+      applyLoggedGaugeJudge(nowSec, 'BAD', 'mine-hit');
+      setLoggedCombo(nowSec, 0, 'mine-hit', 'BAD', landmineCandidate.channel);
       if (!uiEnabled) {
-        writeOutput(`MINE channel:${landmineCandidate.channel} delta:${Math.round(landmineDelta * 1000)}ms\n`);
+        writeRuntimeEventLog(writeOutput, 'mine-hit', [
+          ['time', formatSeconds(nowSec)],
+          ['channel', landmineCandidate.channel],
+          ['deltaMs', Math.round(landmineDelta * 1000)],
+        ]);
       } else {
         activeStateSignals?.publishJudgeCombo('BAD', combo, landmineCandidate.channel);
       }
@@ -1801,6 +2662,16 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         const suppressUntil = longNoteSuppressUntilSecondsByChannel.get(fallback.channel);
         const shouldSuppressFallback = suppressUntil !== undefined && nowSec < suppressUntil;
         if (!shouldSuppressFallback) {
+          if (!uiEnabled) {
+            writePlayableSampleTriggerEventLog(
+              writeOutput,
+              fallback.event,
+              nowSec,
+              resolvedJson.resources.wav,
+              'lane-fallback',
+              fallback.channel,
+            );
+          }
           audioSession?.triggerEvent?.(fallback.event);
           if (activeFreeZoneChannels.has(fallback.channel)) {
             return;
@@ -1820,17 +2691,35 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (uiEnabled) {
       uiSignals.pushCommand({ kind: 'flash-lane', channel });
     }
+    if (!uiEnabled) {
+      writePlayableSampleTriggerEventLog(
+        writeOutput,
+        candidate.event,
+        nowSec,
+        resolvedJson.resources.wav,
+        'manual-note',
+        channel,
+      );
+    }
     audioSession?.triggerEvent?.(candidate.event);
     const endSeconds = candidate.endSeconds;
-    if (typeof endSeconds === 'number' && Number.isFinite(endSeconds) && endSeconds > candidate.seconds) {
-      const longNoteMode = resolvePlayableLongNoteMode(candidate);
-      const previousSuppressUntil = longNoteSuppressUntilSecondsByChannel.get(channel) ?? Number.NEGATIVE_INFINITY;
-      if (endSeconds > previousSuppressUntil) {
-        longNoteSuppressUntilSecondsByChannel.set(channel, endSeconds);
-      }
-      candidate.visibleUntilBeat = candidate.endBeat;
-      if (longNoteMode === 2 || longNoteMode === 3) {
-        activeLongNotesByChannel.set(channel, {
+      if (typeof endSeconds === 'number' && Number.isFinite(endSeconds) && endSeconds > candidate.seconds) {
+        const longNoteMode = resolvePlayableLongNoteMode(candidate);
+        const previousSuppressUntil = longNoteSuppressUntilSecondsByChannel.get(channel) ?? Number.NEGATIVE_INFINITY;
+        if (endSeconds > previousSuppressUntil) {
+          longNoteSuppressUntilSecondsByChannel.set(channel, endSeconds);
+        }
+        playbackStateLogger.logLongNoteState(nowSec, {
+          channel,
+          state: 'start',
+          mode: longNoteMode === 2 || longNoteMode === 3 ? longNoteMode : 1,
+          event: candidate.event,
+          resources: resolvedJson.resources.wav,
+          endSeconds,
+        });
+        candidate.visibleUntilBeat = candidate.endBeat;
+        if (longNoteMode === 2 || longNoteMode === 3) {
+          activeLongNotesByChannel.set(channel, {
           endSeconds,
           note: candidate,
           mode: longNoteMode,
@@ -1875,7 +2764,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       options.onHighSpeedChange?.(highSpeed);
     }
     if (!uiEnabled) {
-      writeOutput(`HIGH-SPEED x${highSpeed.toFixed(1)}\n`);
+      writeRuntimeEventLog(writeOutput, 'high-speed-change', [
+        ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
+        ['value', `x${highSpeed.toFixed(1)}`],
+      ]);
     }
     return true;
   };
@@ -1888,7 +2780,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       audioSession?.resume();
       activeStateSignals?.setPaused(false);
       if (!uiEnabled) {
-        writeOutput('RESUME\n');
+        writeRuntimeEventLog(writeOutput, 'playback-state', [
+          ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
+          ['state', 'resume'],
+        ]);
       }
       return;
     }
@@ -1898,7 +2793,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     audioSession?.pause();
     activeStateSignals?.setPaused(true);
     if (!uiEnabled) {
-      writeOutput('PAUSE\n');
+      writeRuntimeEventLog(writeOutput, 'playback-state', [
+        ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
+        ['state', 'pause'],
+      ]);
     }
   };
 
@@ -1909,6 +2807,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         continue;
       }
       if (command.kind === 'interrupt') {
+        if (!uiEnabled && playbackClock) {
+          writeRuntimeEventLog(writeOutput, 'interrupt', [
+            ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
+            ['reason', command.reason],
+          ]);
+        }
         interruptedReason = command.reason;
         continue;
       }
@@ -1921,6 +2825,29 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         continue;
       }
       if (command.kind === 'kitty-state') {
+        if (!uiEnabled) {
+          if (command.pressTokens.length > 0) {
+            writeRuntimeEventLog(writeOutput, 'input', [
+              ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
+              ['action', 'press'],
+              ['tokens', command.pressTokens.join(',')],
+            ]);
+          }
+          if (command.repeatTokens.length > 0) {
+            writeRuntimeEventLog(writeOutput, 'input', [
+              ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
+              ['action', 'repeat'],
+              ['tokens', command.repeatTokens.join(',')],
+            ]);
+          }
+          if (command.releaseTokens.length > 0) {
+            writeRuntimeEventLog(writeOutput, 'input', [
+              ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
+              ['action', 'release'],
+              ['tokens', command.releaseTokens.join(',')],
+            ]);
+          }
+        }
         const pressedChannels = resolveMappedInputChannels(command.pressTokens, command.repeatTokens);
         for (const channel of pressedChannels) {
           activeKittyPressedChannels.add(channel);
@@ -1943,8 +2870,16 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (playbackClock.isPaused()) {
         continue;
       }
+      if (!uiEnabled) {
+        writeRuntimeEventLog(writeOutput, 'input', [
+          ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
+          ['action', 'lane-input'],
+          ['tokens', command.tokens.join(',')],
+        ]);
+      }
       const nowSec = elapsedMsToGameSeconds(playbackClock.nowMs(), speed);
       triggerRealtimeAudioVolumeEvents(nowSec);
+      playbackEventTracer.flushUntil(nowSec);
       handleMappedInputTokens(command.tokens);
     }
   };
@@ -1965,6 +2900,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const nowSec = elapsedMsToGameSeconds(nowMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
       advanceDynamicJudgeRankChanges(nowSec);
+      playbackEventTracer.flushUntil(nowSec);
 
       triggerRealtimeAudioVolumeEvents(nowSec);
       triggerNonPlayableRealtimeAudioEvents(nowSec);
@@ -1981,6 +2917,24 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         const isHolding = holdUntilMs !== undefined && nowMs <= holdUntilMs;
         if (hold.mode === 1 && holdUntilMs !== undefined && nowMs > holdUntilMs) {
           if (!hold.audioStopped) {
+            playbackStateLogger.logLongNoteState(nowSec, {
+              channel,
+              state: 'release',
+              mode: hold.mode,
+              event: hold.note.event,
+              resources: resolvedJson.resources.wav,
+              endSeconds: hold.endSeconds,
+            });
+            if (!uiEnabled) {
+              writeSampleStopEventLog(
+                writeOutput,
+                channel,
+                nowSec,
+                'long-note-release',
+                hold.note.event,
+                resolvedJson.resources.wav,
+              );
+            }
             audioSession?.stopChannel?.(channel);
             hold.audioStopped = true;
           }
@@ -1995,10 +2949,32 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         if (hold.mode === 3) {
           const drainUntilSeconds = Math.min(nowSec, hold.endSeconds);
           if (!isHolding && drainUntilSeconds > hold.gaugeDrainCursorSeconds) {
-            applyGaugeDelta(-(drainUntilSeconds - hold.gaugeDrainCursorSeconds) * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND);
+            applyLoggedGaugeDelta(
+              nowSec,
+              -(drainUntilSeconds - hold.gaugeDrainCursorSeconds) * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
+              'hold-drain',
+            );
           }
           hold.gaugeDrainCursorSeconds = drainUntilSeconds;
           if (!isHolding && !hold.audioStopped) {
+            playbackStateLogger.logLongNoteState(nowSec, {
+              channel,
+              state: 'break',
+              mode: hold.mode,
+              event: hold.note.event,
+              resources: resolvedJson.resources.wav,
+              endSeconds: hold.endSeconds,
+            });
+            if (!uiEnabled) {
+              writeSampleStopEventLog(
+                writeOutput,
+                channel,
+                nowSec,
+                'long-note-break',
+                hold.note.event,
+                resolvedJson.resources.wav,
+              );
+            }
             audioSession?.stopChannel?.(channel);
             hold.audioStopped = true;
           }
@@ -2006,13 +2982,33 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
         if (nowSec >= hold.endSeconds) {
           if (hold.mode === 1) {
+            playbackStateLogger.logLongNoteState(nowSec, {
+              channel,
+              state: 'complete',
+              mode: hold.mode,
+              event: hold.note.event,
+              resources: resolvedJson.resources.wav,
+              endSeconds: hold.endSeconds,
+            });
             finalizeActiveLongNote(channel, hold, hold.headJudge, nowSec);
             continue;
           }
           if (hold.mode === 3 && !isHolding && hold.endSeconds > hold.gaugeDrainCursorSeconds) {
-            applyGaugeDelta(-(hold.endSeconds - hold.gaugeDrainCursorSeconds) * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND);
+            applyLoggedGaugeDelta(
+              nowSec,
+              -(hold.endSeconds - hold.gaugeDrainCursorSeconds) * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
+              'hold-drain',
+            );
             hold.gaugeDrainCursorSeconds = hold.endSeconds;
           }
+          playbackStateLogger.logLongNoteState(nowSec, {
+            channel,
+            state: 'complete',
+            mode: hold.mode,
+            event: hold.note.event,
+            resources: resolvedJson.resources.wav,
+            endSeconds: hold.endSeconds,
+          });
           const finalJudge =
             hold.mode === 3 && !isHolding
               ? combineLongNoteJudges(hold.headJudge, {
@@ -2029,6 +3025,24 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
         if (hold.mode === 2 && holdUntilMs !== undefined && nowMs > holdUntilMs) {
           if (!hold.audioStopped) {
+            playbackStateLogger.logLongNoteState(nowSec, {
+              channel,
+              state: 'release',
+              mode: hold.mode,
+              event: hold.note.event,
+              resources: resolvedJson.resources.wav,
+              endSeconds: hold.endSeconds,
+            });
+            if (!uiEnabled) {
+              writeSampleStopEventLog(
+                writeOutput,
+                channel,
+                nowSec,
+                'long-note-release',
+                hold.note.event,
+                resolvedJson.resources.wav,
+              );
+            }
             audioSession?.stopChannel?.(channel);
             hold.audioStopped = true;
           }
@@ -2075,18 +3089,28 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
 
     if (!interruptedReason) {
-      const judgedCount = summary.perfect + summary.great + summary.good + summary.bad + summary.poor;
-      if (judgedCount < summary.total) {
-        const missingCount = summary.total - judgedCount;
-        for (let index = 0; index < missingCount; index += 1) {
-          applyJudgeToSummary(summary, 'POOR', scoreTracker);
-          applyGaugeJudge('POOR');
-        }
-        uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: totalSeconds });
-        combo = 0;
-        if (uiEnabled) {
-          activeStateSignals?.publishJudgeCombo('POOR', combo);
-          publishUiFrame(totalSeconds, beatAtSeconds(totalSeconds));
+      playbackEventTracer.flushUntil(totalSeconds);
+        const judgedCount = summary.perfect + summary.great + summary.good + summary.bad + summary.poor;
+        if (judgedCount < summary.total) {
+          const missingCount = summary.total - judgedCount;
+          for (let index = 0; index < missingCount; index += 1) {
+            applyJudgeToSummary(summary, 'POOR', scoreTracker);
+            applyLoggedGaugeJudge(totalSeconds, 'POOR', 'remaining-notes');
+          }
+          uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: totalSeconds });
+          if (!uiEnabled) {
+          writeRuntimeEventLog(writeOutput, 'judge', [
+            ['time', formatSeconds(totalSeconds)],
+            ['result', 'POOR'],
+            ['reason', 'remaining-notes'],
+            ['count', missingCount],
+            ]);
+            playbackEventTracer.logPoorTriggered(totalSeconds);
+          }
+          setLoggedCombo(totalSeconds, 0, 'remaining-notes', 'POOR');
+          if (uiEnabled) {
+            activeStateSignals?.publishJudgeCombo('POOR', combo);
+            publishUiFrame(totalSeconds, beatAtSeconds(totalSeconds));
         }
       }
     }
@@ -2103,12 +3127,32 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
   if (interruptedReason) {
     if (interruptedReason === 'escape') {
+      if (!uiEnabled) {
+        writeRuntimeEventLog(writeOutput, 'playback-end', [
+          ['time', formatSeconds(totalSeconds)],
+          ['reason', interruptedReason],
+        ]);
+        playbackStateLogger.logResult(totalSeconds, {
+          reason: interruptedReason,
+          summary,
+        });
+      }
       writeOutput(renderSummary(summary));
       return summary;
     }
     throw new PlayerInterruptedError(interruptedReason);
   }
 
+  if (!uiEnabled) {
+    writeRuntimeEventLog(writeOutput, 'playback-end', [
+      ['time', formatSeconds(totalSeconds)],
+      ['reason', 'complete'],
+    ]);
+    playbackStateLogger.logResult(totalSeconds, {
+      reason: 'complete',
+      summary,
+    });
+  }
   writeOutput(renderSummary(summary));
   return summary;
 }

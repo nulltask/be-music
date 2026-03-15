@@ -9,6 +9,7 @@ import {
   cyclePlayMode,
   formatPlayModeLabel,
   parseArgs,
+  resolveEffectivePlayModeFromCliArgs,
   resolveCliConfigOverrideFlags,
   resolveDefaultPlayerLogPath,
   resolvePlayLoadingStageFileDisplaySize,
@@ -148,6 +149,12 @@ describe('player cli', () => {
 
     const parsedAutoScratch = parseArgs(['chart.bms', '--auto', '--auto-scratch']);
     expect(resolvePlayModeFromArgs(parsedAutoScratch)).toBe('auto-scratch');
+  });
+
+  test('cli: forces AUTO playback when TUI is disabled', () => {
+    expect(resolveEffectivePlayModeFromCliArgs(parseArgs(['chart.bms', '--no-tui']))).toBe('auto');
+    expect(resolveEffectivePlayModeFromCliArgs(parseArgs(['chart.bms', '--no-tui', '--auto-scratch']))).toBe('auto');
+    expect(resolveEffectivePlayModeFromCliArgs(parseArgs(['chart.bms', '--auto-scratch']))).toBe('auto-scratch');
   });
 
   test('cli: detects explicit play-mode and high-speed override flags', () => {

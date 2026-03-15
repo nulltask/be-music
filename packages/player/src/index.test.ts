@@ -53,6 +53,7 @@ function createLnobjLongNoteChart(lnMode?: 1 | 2 | 3) {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 480;
   json.bms.lnObjs = ['AA'];
+  json.resources.wav['01'] = 'ln.wav';
   if (lnMode) {
     json.bms.lnMode = lnMode;
   }
@@ -110,6 +111,45 @@ function createBgmOnlyChart() {
   json.metadata.bpm = 120;
   json.resources.wav['01'] = 'not-found.wav';
   json.events = [{ measure: 0, channel: '01', position: [0, 1] as const, value: '01' }];
+  return json;
+}
+
+function createTimelineLoggingChart() {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.measures.push({ index: 1, length: 0.5 });
+  json.resources.wav['01'] = 'not-found.wav';
+  json.resources.bmp['00'] = 'fallback.png';
+  json.resources.bmp['01'] = 'base.png';
+  json.resources.bmp['02'] = 'poor.png';
+  json.resources.bmp['03'] = 'layer.png';
+  json.resources.bmp['04'] = 'layer2.png';
+  json.resources.bpm['01'] = 180;
+  json.resources.stop['01'] = 192;
+  json.bms.scroll['01'] = 0.5;
+  json.bms.speed['01'] = 1.5;
+  json.bms.exRank['01'] = '48';
+  json.events = [
+    { measure: 0, channel: '04', position: [0, 1] as const, value: '01' },
+    { measure: 0, channel: '06', position: [0, 1] as const, value: '02' },
+    { measure: 0, channel: '07', position: [0, 1] as const, value: '03' },
+    { measure: 0, channel: '0A', position: [0, 1] as const, value: '04' },
+    { measure: 0, channel: 'A0', position: [0, 1] as const, value: '01' },
+    { measure: 0, channel: 'SC', position: [0, 1] as const, value: '01' },
+    { measure: 0, channel: '09', position: [1, 2] as const, value: '01' },
+    { measure: 1, channel: '08', position: [0, 1] as const, value: '01' },
+    { measure: 1, channel: 'SP', position: [0, 1] as const, value: '01' },
+    { measure: 2, channel: '11', position: [0, 1] as const, value: '01' },
+  ];
+  return json;
+}
+
+function createPoorBgaLoggingChart() {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  json.resources.wav['01'] = 'not-found.wav';
+  json.resources.bmp['00'] = 'fallback.png';
+  json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
   return json;
 }
 
@@ -289,6 +329,144 @@ describe('player', () => {
     });
 
     expect(hasAnyNonSilentAudioWrite()).toBe(false);
+  });
+
+  test('player: logs real-time triggered events when running without TUI', async () => {
+    const json = createBgmOnlyChart();
+    const output: string[] = [];
+
+    await autoPlay(json, {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      tui: false,
+      audio: true,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+    });
+
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:sample-trigger') &&
+          line.includes('time:0:00.00') &&
+          line.includes('source:realtime') &&
+          line.includes('channel:01') &&
+          line.includes('sample:01') &&
+          line.includes('file:not-found.wav'),
+      ),
+    ).toBe(true);
+  });
+
+  test('player: logs timing and BGA timeline events when running without TUI', async () => {
+    const json = createTimelineLoggingChart();
+    const output: string[] = [];
+
+    await autoPlay(json, {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      tui: false,
+      audio: false,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+    });
+
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:measure-length-change') &&
+          line.includes('measure:1') &&
+          line.includes('length:0.5'),
+      ),
+    ).toBe(true);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:measure-length-change') &&
+          line.includes('measure:2') &&
+          line.includes('length:1'),
+      ),
+    ).toBe(true);
+    expect(output.some((line) => line.includes('kind:bpm-change') && line.includes('time:0:00.00') && line.includes('value:120'))).toBe(true);
+    expect(output.some((line) => line.includes('kind:bpm-change') && line.includes('value:180'))).toBe(true);
+    expect(
+      output.some(
+        (line) => line.includes('kind:scroll-change') && line.includes('time:0:00.00') && line.includes('value:0.5'),
+      ),
+    ).toBe(true);
+    expect(output.some((line) => line.includes('kind:speed-change') && line.includes('value:1.5'))).toBe(true);
+    expect(output.some((line) => line.includes('kind:stop') && line.includes('state:start'))).toBe(true);
+    expect(output.some((line) => line.includes('kind:stop') && line.includes('state:end'))).toBe(true);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:judge-rank-change') &&
+          line.includes('time:0:00.00') &&
+          line.includes('rank:48'),
+      ),
+    ).toBe(true);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:bga-cue') &&
+          line.includes('time:0:00.00') &&
+          line.includes('layer:base') &&
+          line.includes('key:01') &&
+          line.includes('asset:base.png') &&
+          line.includes('file:base.png'),
+      ),
+    ).toBe(true);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:bga-cue') &&
+          line.includes('layer:poor') &&
+          line.includes('key:02') &&
+          line.includes('asset:poor.png') &&
+          line.includes('file:poor.png'),
+      ),
+    ).toBe(true);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:bga-cue') &&
+          line.includes('layer:layer') &&
+          line.includes('key:03') &&
+          line.includes('asset:layer.png') &&
+          line.includes('file:layer.png'),
+      ),
+    ).toBe(true);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:bga-cue') &&
+          line.includes('layer:layer2') &&
+          line.includes('key:04') &&
+          line.includes('asset:layer2.png') &&
+          line.includes('file:layer2.png'),
+      ),
+    ).toBe(true);
+  });
+
+  test('player: logs POOR BGA activity when running without TUI', async () => {
+    const json = createPoorBgaLoggingChart();
+    const output: string[] = [];
+
+    await manualPlay(json, {
+      speed: 240,
+      leadInMs: 0,
+      tui: false,
+      audio: false,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+    });
+
+    expect(output.some((line) => line.includes('kind:bga-poor') && line.includes('state:trigger'))).toBe(true);
+    expect(output.some((line) => line.includes('key:00 asset:fallback.png file:fallback.png'))).toBe(true);
   });
 
   test('player: global volume 0 mutes playable sounds', async () => {
@@ -905,6 +1083,63 @@ describe('player', () => {
     expect(mode3Summary.total).toBe(1);
     expect(mode3Summary.bad + mode3Summary.poor).toBe(1);
     expect(mode3Summary.gauge?.current ?? 0).toBeLessThan(mode2Summary.gauge?.current ?? Number.POSITIVE_INFINITY);
+  });
+
+  test('player: no-TUI logs long-note, gauge, combo, sample-stop, and result events', async () => {
+    const output: string[] = [];
+
+    await manualPlay(createLnobjLongNoteChart(3), {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:long-note') &&
+          line.includes('state:start') &&
+          line.includes('mode:3') &&
+          line.includes('file:ln.wav'),
+      ),
+    ).toBe(true);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:long-note') &&
+          line.includes('state:break') &&
+          line.includes('mode:3') &&
+          line.includes('file:ln.wav'),
+      ),
+    ).toBe(true);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:sample-stop') &&
+          line.includes('reason:long-note-break') &&
+          line.includes('sample:01') &&
+          line.includes('file:ln.wav'),
+      ),
+    ).toBe(true);
+    expect(output.some((line) => line.includes('kind:gauge-change') && line.includes('reason:hold-drain'))).toBe(true);
+    expect(output.some((line) => line.includes('kind:combo-change') && line.includes('value:0') && line.includes('judge:POOR'))).toBe(true);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:result') &&
+          line.includes('reason:complete') &&
+          line.includes('poor:1') &&
+          line.includes('gaugeCleared:false'),
+      ),
+    ).toBe(true);
   });
 
   test('player: uses baseline judge windows for bms RANK=2', () => {

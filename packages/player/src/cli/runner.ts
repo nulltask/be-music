@@ -751,6 +751,7 @@ function resolveDirectoryStateFromResultAction(
 
 async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedChartResult> {
   let resolvedHighSpeed = normalizeHighSpeedValue(args.highSpeed);
+  const effectivePlayMode = resolveEffectivePlayModeFromCliArgs(args);
   let playLoadingStageFileImage: StageFileAnsiImage | undefined;
   const useKittyGraphicsForStageFile =
     args.kittyGraphics && Boolean(process.stdout.isTTY) && supportsKittyGraphicsProtocol(process.env);
@@ -839,7 +840,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   const playOptions = createPlayOptionsFromCliArgs(args, chartPath);
   logCli('info', 'play.start', {
     chartPath,
-    mode: args.auto ? 'auto' : 'manual',
+    mode: effectivePlayMode,
     kittyGraphics: args.kittyGraphics,
     videoBgaStreaming: args.videoBgaStreaming,
   });
@@ -854,8 +855,8 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     try {
       summary = await runNodeGameplayRuntime({
         json,
-        mode: args.auto ? 'auto' : 'manual',
-        autoScratch: args.autoScratch,
+        mode: effectivePlayMode === 'auto' ? 'auto' : 'manual',
+        autoScratch: effectivePlayMode === 'auto-scratch',
         playOptions,
         signal: playbackLoadingAbortCapture?.signal,
         writeOutput: (text: string): void => {
@@ -960,6 +961,15 @@ function createPlayOptionsFromCliArgs(args: CliArgs, chartPath: string) {
     kittyGraphics: args.kittyGraphics,
     videoBgaStreaming: args.videoBgaStreaming,
   };
+}
+
+export function resolveEffectivePlayModeFromCliArgs(
+  args: Pick<CliArgs, 'auto' | 'autoScratch' | 'tui'>,
+): PlayMode {
+  if (!args.tui) {
+    return 'auto';
+  }
+  return resolvePlayModeFromArgs(args);
 }
 
 function resolveChartLaneModeExtension(chartPath: string): string | undefined {
@@ -1633,6 +1643,7 @@ function printUsage(): void {
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
       '                           Audio backend: node-web-audio-api (fixed)',
       '  --tui / --no-tui          Enable or disable TUI play screen (default: on in TTY)',
+      '                           When disabled, playback runs in AUTO mode and prints realtime trigger logs',
       '  --kitty-graphics          Enable Kitty graphics protocol BGA rendering when supported (default: on)',
       '  --no-kitty-graphics       Disable Kitty graphics protocol BGA rendering',
       '  --video-bga-streaming     Stream video BGA frames progressively (default: on)',
