@@ -1,12 +1,15 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { isAbortError, throwIfAborted } from '@be-music/utils';
+import { fileURLToPath } from 'node:url';
+import { Worker } from 'node:worker_threads';
+import { createAbortError, isAbortError, throwIfAborted } from '@be-music/utils';
 
 const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264', 'mjpeg']);
 // Keep chunks small so ff_decode_multi never allocates too many full-size frames at once.
 const PACKET_READ_CHUNK_BYTES = 65_536;
 const MAX_PACKET_READ_ITERATIONS = 16_384;
 const FALLBACK_FPS = 30;
+type FrameMode = 'base' | 'layer';
 
 interface LibAvPlaneLayout {
   offset: number;
@@ -83,10 +86,78 @@ export interface DecodedVideoFrame {
   rgba: Uint8Array;
 }
 
+export interface DecodedVideoStreamInfo {
+  codecName: 'mpeg1video' | 'h264' | 'mjpeg';
+  durationSeconds?: number;
+}
+
+export interface DecodedSourceVideoFrame {
+  seconds: number;
+  width: number;
+  height: number;
+  rgb: Uint8Array;
+  opaqueMask: Uint8Array;
+}
+
+interface VideoDecodeWorkerInitData {
+  videoPath: string;
+  mode: FrameMode;
+  stopAfterFirstFrame: boolean;
+}
+
+interface VideoDecodeWorkerAbortMessage {
+  kind: 'abort';
+}
+
+type VideoDecodeWorkerInboundMessage = VideoDecodeWorkerAbortMessage;
+
+interface VideoDecodeWorkerReadyMessage {
+  kind: 'ready';
+  info: DecodedVideoStreamInfo;
+}
+
+interface VideoDecodeWorkerFrameMessage {
+  kind: 'frame';
+  frame: DecodedSourceVideoFrame;
+}
+
+interface VideoDecodeWorkerDoneMessage {
+  kind: 'done';
+  result?: { codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number };
+}
+
+interface VideoDecodeWorkerErrorMessage {
+  kind: 'error';
+  name?: string;
+  message: string;
+}
+
+type VideoDecodeWorkerOutboundMessage =
+  | VideoDecodeWorkerReadyMessage
+  | VideoDecodeWorkerFrameMessage
+  | VideoDecodeWorkerDoneMessage
+  | VideoDecodeWorkerErrorMessage;
+
 export async function decodeVideoFramesStream(
   videoPath: string,
   onFrame: (frame: DecodedVideoFrame) => void,
   signal?: AbortSignal,
+  options: {
+    onReady?: (info: DecodedVideoStreamInfo) => void;
+    stopAfterFirstFrame?: boolean;
+  } = {},
+): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
+  return await decodeVideoFramesStreamDirect(videoPath, onFrame, signal, options);
+}
+
+export async function decodeVideoFramesStreamDirect(
+  videoPath: string,
+  onFrame: (frame: DecodedVideoFrame) => void,
+  signal?: AbortSignal,
+  options: {
+    onReady?: (info: DecodedVideoStreamInfo) => void;
+    stopAfterFirstFrame?: boolean;
+  } = {},
 ): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
   let libav: LibAvInstance | undefined;
   try {
@@ -109,13 +180,17 @@ export async function decodeVideoFramesStream(
     if (!isSupportedVideoCodec(codecName)) {
       return undefined;
     }
+    const durationSeconds = resolveStreamDurationSeconds(videoStream);
+    options.onReady?.({
+      codecName,
+      durationSeconds,
+    });
 
     const [, decoderContext, packetRef, frameRef] = await libavInstance.ff_init_decoder(
       videoStream.codec_id,
       videoStream.codecpar,
     );
     try {
-      const durationSeconds = resolveStreamDurationSeconds(videoStream);
       const frameCount = await decodeVideoFramesWithCallback(
         libavInstance,
         formatContext,
@@ -125,6 +200,7 @@ export async function decodeVideoFramesStream(
         frameRef,
         onFrame,
         signal,
+        options.stopAfterFirstFrame === true,
       );
       if (frameCount === undefined || frameCount <= 0) {
         return undefined;
@@ -148,6 +224,91 @@ export async function decodeVideoFramesStream(
   }
 }
 
+export async function decodeVideoFramesToSourceFramesInWorker(
+  videoPath: string,
+  mode: FrameMode,
+  onFrame: (frame: DecodedSourceVideoFrame) => void,
+  signal?: AbortSignal,
+  options: {
+    onReady?: (info: DecodedVideoStreamInfo) => void;
+    stopAfterFirstFrame?: boolean;
+  } = {},
+): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
+  throwIfAborted(signal);
+  const worker = new Worker(resolveBgaVideoWorkerUrl(), {
+    workerData: {
+      videoPath,
+      mode,
+      stopAfterFirstFrame: options.stopAfterFirstFrame === true,
+    } satisfies VideoDecodeWorkerInitData,
+    execArgv: resolveBgaVideoWorkerExecArgv(),
+    env: resolveBgaVideoWorkerEnv(),
+  });
+
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+
+    const cleanup = (): void => {
+      worker.off('message', onMessage);
+      worker.off('error', onError);
+      worker.off('exit', onExit);
+      signal?.removeEventListener('abort', onAbort);
+    };
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      callback();
+    };
+
+    const onMessage = (message: VideoDecodeWorkerOutboundMessage): void => {
+      if (message.kind === 'ready') {
+        options.onReady?.(message.info);
+        return;
+      }
+      if (message.kind === 'frame') {
+        onFrame(message.frame);
+        return;
+      }
+      if (message.kind === 'done') {
+        settle(() => resolve(message.result));
+        return;
+      }
+      settle(() =>
+        reject(
+          message.name === 'AbortError'
+            ? createAbortError()
+            : new Error(message.message),
+        ),
+      );
+    };
+
+    const onError = (error: Error): void => {
+      settle(() => reject(error));
+    };
+
+    const onExit = (code: number): void => {
+      if (settled) {
+        return;
+      }
+      settle(() => reject(new Error(`Video decode worker exited unexpectedly (code ${code})`)));
+    };
+
+    const onAbort = (): void => {
+      void worker.terminate();
+      settle(() => reject(createAbortError()));
+    };
+
+    worker.on('message', onMessage);
+    worker.on('error', onError);
+    worker.on('exit', onExit);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 function isSupportedVideoCodec(codecName: string): codecName is 'mpeg1video' | 'h264' | 'mjpeg' {
   return SUPPORTED_VIDEO_CODECS.has(codecName);
 }
@@ -161,6 +322,7 @@ async function decodeVideoFramesWithCallback(
   frameRef: number,
   onFrame: (frame: DecodedVideoFrame) => void,
   signal?: AbortSignal,
+  stopAfterFirstFrame = false,
 ): Promise<number | undefined> {
   const timeScale = resolveTimeScale(stream);
   const fallbackStep = resolveFallbackStep();
@@ -218,6 +380,9 @@ async function decodeVideoFramesWithCallback(
         ignoreErrors: true,
       });
       consume(decoded);
+      if (stopAfterFirstFrame && frameCount > 0) {
+        return frameCount;
+      }
     }
 
     if (readResult === libav.AVERROR_EOF) {
@@ -477,4 +642,30 @@ async function createLibAvInstance(): Promise<LibAvInstance> {
     noworker: true,
     variant: 'fat',
   });
+}
+
+function resolveBgaVideoWorkerUrl(): URL {
+  return new URL(import.meta.url.endsWith('.ts') ? './bga-video-worker.ts' : './bga-video-worker.js', import.meta.url);
+}
+
+function resolveBgaVideoWorkerExecArgv(): string[] {
+  if (!import.meta.url.endsWith('.ts')) {
+    return process.execArgv;
+  }
+  if (process.execArgv.includes('--conditions=source')) {
+    return process.execArgv;
+  }
+  return [...process.execArgv, '--conditions=source'];
+}
+
+function resolveBgaVideoWorkerEnv(): NodeJS.ProcessEnv {
+  if (!import.meta.url.endsWith('.ts')) {
+    return process.env;
+  }
+
+  return {
+    ...process.env,
+    TSX_TSCONFIG_PATH:
+      process.env.TSX_TSCONFIG_PATH ?? fileURLToPath(new URL('../../../tsconfig.typecheck.json', import.meta.url)),
+  };
 }

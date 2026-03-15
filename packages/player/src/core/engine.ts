@@ -73,6 +73,7 @@ export interface CreatePlayerUiRuntimeContext {
   uiFps?: number;
   judgeWindowMs: number;
   highSpeed: number;
+  videoBgaStreaming?: boolean;
   showLaneChannels: boolean;
   randomPatternSummary?: string;
   stateSignals: PlayerStateSignals;
@@ -121,6 +122,7 @@ export interface PlayerOptions {
   audioLeadStepUpMs?: number;
   audioLeadStepDownMs?: number;
   tui?: boolean;
+  videoBgaStreaming?: boolean;
   signal?: AbortSignal;
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
   onLoadComplete?: () => void;
@@ -546,7 +548,11 @@ function emitPlayerLog(
     source: 'engine',
     level,
     event,
-    fields,
+    fields: {
+      emittedAtUnixMs: Date.now(),
+      emittedAtMonotonicMs: performance.now(),
+      ...fields,
+    },
   });
 }
 

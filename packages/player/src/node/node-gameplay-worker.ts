@@ -233,6 +233,7 @@ async function bootstrap(): Promise<void> {
         if (disposed) {
           return;
         }
+        postLog('info', 'ui.start.posted');
         postUiMessage({ kind: 'start' });
       },
       stop: () => {
@@ -397,6 +398,7 @@ function serializeUiRuntimeInit(context: CreatePlayerUiRuntimeContext): NodeGame
     randomPatternSummary: context.randomPatternSummary,
     baseDir: context.baseDir,
     kittyGraphics: initData.playOptions.kittyGraphics === true,
+    videoBgaStreaming: context.videoBgaStreaming !== false,
     initialFrame: context.uiSignals.getFrame(),
     initialPaused: context.stateSignals.paused(),
     initialJudgeCombo: context.stateSignals.getJudgeCombo(),
@@ -433,7 +435,11 @@ function postLog(level: LogLevel, event: string, fields?: Record<string, unknown
       source: 'gameplay-worker',
       level,
       event,
-      fields,
+      fields: {
+        emittedAtUnixMs: Date.now(),
+        emittedAtMonotonicMs: performance.now(),
+        ...fields,
+      },
     },
   });
 }

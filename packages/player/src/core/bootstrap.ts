@@ -182,6 +182,7 @@ export async function initializePlayerUiRuntime({
     uiFps: options.uiFps,
     judgeWindowMs,
     highSpeed,
+    videoBgaStreaming: options.videoBgaStreaming,
     showLaneChannels: options.debugActiveAudio === true,
     randomPatternSummary,
     stateSignals,

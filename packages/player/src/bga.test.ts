@@ -12,9 +12,10 @@ import {
   loadStageFileAnsiLines,
   loadTerminalAnsiImage,
 } from './bga.ts';
+import { decodeVideoFramesStream, decodeVideoFramesToSourceFramesInWorker } from './bga-video.ts';
 
 vi.mock('./bga-video.ts', () => ({
-  decodeVideoFramesStream: vi.fn(async (videoPath: string, onFrame: (frame: unknown) => void) => {
+  decodeVideoFramesStream: vi.fn(async (videoPath: string, onFrame: (frame: unknown) => void, _signal: AbortSignal | undefined, options?: { onReady?: (info: { codecName: 'mpeg1video' | 'h264' | 'mjpeg'; durationSeconds?: number }) => void }) => {
     const hasBlackBorder = videoPath.includes('bordered');
     const isPortrait = videoPath.includes('portrait');
     const width = isPortrait ? 180 : 320;
@@ -30,6 +31,10 @@ vi.mock('./bga-video.ts', () => ({
         rgba[offset + 3] = 255;
       }
     }
+    options?.onReady?.({
+      codecName: 'h264',
+      durationSeconds: 2.5,
+    });
     onFrame({
       seconds: 0,
       width,
@@ -42,7 +47,39 @@ vi.mock('./bga-video.ts', () => ({
       durationSeconds: 2.5,
     };
   }),
+  decodeVideoFramesToSourceFramesInWorker: vi.fn(
+    async (
+      videoPath: string,
+      _mode: 'base' | 'layer',
+      onFrame: (frame: unknown) => void,
+      _signal: AbortSignal | undefined,
+      options?: { onReady?: (info: { codecName: 'mpeg1video' | 'h264' | 'mjpeg'; durationSeconds?: number }) => void },
+    ) => {
+      const hasBlackBorder = videoPath.includes('bordered');
+      const isPortrait = videoPath.includes('portrait');
+      const width = isPortrait ? 180 : 320;
+      const height = isPortrait ? 320 : 240;
+      options?.onReady?.({
+        codecName: 'h264',
+        durationSeconds: 2.5,
+      });
+      onFrame({
+        seconds: 0,
+        width,
+        height,
+        ...createSolidSourceVideoFrame(width, height, { r: hasBlackBorder ? 0 : 255, g: 0, b: 0 }),
+      });
+      return {
+        codecName: 'h264',
+        frameCount: 1,
+        durationSeconds: 2.5,
+      };
+    },
+  ),
 }));
+
+const decodeVideoFramesStreamMock = vi.mocked(decodeVideoFramesStream);
+const decodeVideoFramesToSourceFramesInWorkerMock = vi.mocked(decodeVideoFramesToSourceFramesInWorker);
 
 interface RgbColor {
   r: number;
@@ -51,6 +88,26 @@ interface RgbColor {
 }
 
 type Pixel = RgbColor | undefined;
+
+function createSolidSourceVideoFrame(width: number, height: number, color: RgbColor): {
+  rgb: Uint8Array;
+  opaqueMask: Uint8Array;
+} {
+  const rgb = new Uint8Array(width * height * 3);
+  const opaqueMask = new Uint8Array(width * height);
+  for (let pixelOffset = 0; pixelOffset < width * height; pixelOffset += 1) {
+    const rgbOffset = pixelOffset * 3;
+    rgb[rgbOffset] = color.r;
+    rgb[rgbOffset + 1] = color.g;
+    rgb[rgbOffset + 2] = color.b;
+    opaqueMask[pixelOffset] = 1;
+  }
+  return {
+    rgb,
+    opaqueMask,
+  };
+}
+
 describe('player bga', () => {
   test('player bga: reports loading progress details with target file names', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-progress-'));
@@ -496,6 +553,170 @@ describe('player bga', () => {
     }
   });
 
+  test('player bga: returns after the first decoded video frame and only streams later frames after startStreaming', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-video-stream-'));
+    let releaseRemainingFrames: (() => void) | undefined;
+    try {
+      await writeFile(join(baseDir, 'streaming.mp4'), '');
+      const initialDecodeCallCount = decodeVideoFramesStreamMock.mock.calls.length;
+      const initialWorkerDecodeCallCount = decodeVideoFramesToSourceFramesInWorkerMock.mock.calls.length;
+      decodeVideoFramesStreamMock.mockImplementationOnce(
+        async (_videoPath, onFrame, _signal, options) => {
+          options?.onReady?.({
+            codecName: 'h264',
+            durationSeconds: 2.5,
+          });
+          onFrame({
+            seconds: 0,
+            width: 320,
+            height: 240,
+            rgba: createSolidVideoRgba(320, 240, { r: 255, g: 0, b: 0 }),
+          });
+          await new Promise<void>((resolve) => {
+            releaseRemainingFrames = resolve;
+          });
+          onFrame({
+            seconds: 1,
+            width: 320,
+            height: 240,
+            rgba: createSolidVideoRgba(320, 240, { r: 0, g: 255, b: 0 }),
+          });
+          return {
+            codecName: 'h264',
+            frameCount: 1,
+            durationSeconds: 2.5,
+          };
+        },
+      );
+      decodeVideoFramesToSourceFramesInWorkerMock.mockImplementationOnce(
+        async (_videoPath, _mode, onFrame, _signal, options) => {
+          options?.onReady?.({
+            codecName: 'h264',
+            durationSeconds: 2.5,
+          });
+          onFrame({
+            seconds: 0,
+            width: 320,
+            height: 240,
+            ...createSolidSourceVideoFrame(320, 240, { r: 255, g: 0, b: 0 }),
+          });
+          await new Promise<void>((resolve) => {
+            releaseRemainingFrames = resolve;
+          });
+          onFrame({
+            seconds: 1,
+            width: 320,
+            height: 240,
+            ...createSolidSourceVideoFrame(320, 240, { r: 0, g: 255, b: 0 }),
+          });
+          return {
+            codecName: 'h264',
+            frameCount: 2,
+            durationSeconds: 2.5,
+          };
+        },
+      );
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'streaming.mp4';
+      json.events = [{ measure: 0, channel: '04', position: [1, 2], value: '01' }];
+
+      const rendererPromise = createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+      const readyState = await Promise.race([
+        rendererPromise.then(() => 'ready' as const),
+        new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0)),
+      ]);
+      expect(readyState).toBe('ready');
+
+      const renderer = await rendererPromise;
+      expect(renderer?.playbackEndSeconds).toBeCloseTo(3.5, 6);
+      expect(parseAnsiPixels(renderer?.getAnsiLines(1.1) ?? [])[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
+      expect(decodeVideoFramesStreamMock.mock.calls.length - initialDecodeCallCount).toBe(1);
+
+      renderer?.startStreaming();
+      expect(decodeVideoFramesToSourceFramesInWorkerMock.mock.calls.length - initialWorkerDecodeCallCount).toBe(1);
+      releaseRemainingFrames?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? [])[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
+    } finally {
+      releaseRemainingFrames?.();
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: waits for full video decode when streaming is disabled', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-video-legacy-'));
+    let releaseRemainingFrames: (() => void) | undefined;
+    try {
+      await writeFile(join(baseDir, 'legacy.mp4'), '');
+      const initialDecodeCallCount = decodeVideoFramesStreamMock.mock.calls.length;
+      decodeVideoFramesStreamMock.mockImplementationOnce(
+        async (_videoPath, onFrame, _signal, options) => {
+          options?.onReady?.({
+            codecName: 'h264',
+            durationSeconds: 2.5,
+          });
+          onFrame({
+            seconds: 0,
+            width: 320,
+            height: 240,
+            rgba: createSolidVideoRgba(320, 240, { r: 255, g: 0, b: 0 }),
+          });
+          await new Promise<void>((resolve) => {
+            releaseRemainingFrames = resolve;
+          });
+          onFrame({
+            seconds: 1,
+            width: 320,
+            height: 240,
+            rgba: createSolidVideoRgba(320, 240, { r: 0, g: 255, b: 0 }),
+          });
+          return {
+            codecName: 'h264',
+            frameCount: 2,
+            durationSeconds: 2.5,
+          };
+        },
+      );
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'legacy.mp4';
+      json.events = [{ measure: 0, channel: '04', position: [1, 2], value: '01' }];
+
+      const rendererPromise = createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+        videoBgaStreaming: false,
+      });
+      for (let attempt = 0; attempt < 10 && !releaseRemainingFrames; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      const readyState = await Promise.race([
+        rendererPromise.then(() => 'ready' as const),
+        new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0)),
+      ]);
+      expect(readyState).toBe('pending');
+
+      releaseRemainingFrames?.();
+      const renderer = await rendererPromise;
+
+      expect(decodeVideoFramesStreamMock.mock.calls.length - initialDecodeCallCount).toBe(1);
+      expect(renderer?.playbackEndSeconds).toBeCloseTo(3.5, 6);
+      expect(parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? [])[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
+    } finally {
+      releaseRemainingFrames?.();
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   test('player bga: renders undefined base keys as black instead of STAGEFILE', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-undefined-base-'));
     try {
@@ -915,6 +1136,17 @@ describe('player bga', () => {
     }
 
     await writeFile(path, data);
+  }
+
+  function createSolidVideoRgba(width: number, height: number, color: RgbColor): Uint8Array {
+    const rgba = new Uint8Array(width * height * 4);
+    for (let index = 0; index < rgba.length; index += 4) {
+      rgba[index] = color.r;
+      rgba[index + 1] = color.g;
+      rgba[index + 2] = color.b;
+      rgba[index + 3] = 255;
+    }
+    return rgba;
   }
 
   function parseAnsiPixels(lines: string[]): Pixel[][] {
