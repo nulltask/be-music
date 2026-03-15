@@ -172,6 +172,7 @@ describe('node gameplay runtime', () => {
 
     expect(uiRuntimeState.context?.laneDisplayMode).toBe('7 KEY');
     expect(uiRuntimeState.context?.uiFps).toBe(60);
+    expect(uiRuntimeState.context?.videoBgaStreaming).toBe(true);
     const uiInitResults = messagesOfKind(worker, 'ui-init-result');
     expect(uiInitResults).toHaveLength(1);
     expect(uiInitResults[0]).toMatchObject({
@@ -311,6 +312,7 @@ function createOptions(
       tui: true,
       speed: 1,
       audioBaseDir: process.cwd(),
+      videoBgaStreaming: true,
     },
     ...overrides,
   };
@@ -328,6 +330,7 @@ function createUiInit() {
     highSpeed: 1,
     showLaneChannels: false,
     baseDir: process.cwd(),
+    videoBgaStreaming: true,
     initialFrame: {
       currentBeat: 0,
       currentSeconds: 0,

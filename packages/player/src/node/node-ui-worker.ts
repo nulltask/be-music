@@ -133,6 +133,7 @@ async function bootstrap(): Promise<void> {
     baseDir: initData.baseDir,
     width: initialBgaSize.width,
     height: initialBgaSize.height,
+    videoBgaStreaming: initData.videoBgaStreaming,
     signal: abortController.signal,
     onLoadProgress: (progress) => {
       postWorkerMessage({
@@ -147,6 +148,7 @@ async function bootstrap(): Promise<void> {
   postLog('info', 'ui-worker.ready', {
     hasBgaRenderer: bgaRenderer !== undefined,
     bgaPlaybackEndSeconds: bgaRenderer?.playbackEndSeconds,
+    videoBgaStreaming: initData.videoBgaStreaming !== false,
   });
 
   const queuedCommands: PlayerUiCommand[] = [];
@@ -163,6 +165,7 @@ async function bootstrap(): Promise<void> {
   };
 
   let renderThrottle: ReturnType<typeof createRenderThrottle> | undefined;
+  let bgaStreamingScheduled = false;
   const frameState = createUiWorkerFrameState({
     initialPaused: initData.initialPaused,
     initialHighSpeed: initData.highSpeed,
@@ -250,6 +253,13 @@ async function bootstrap(): Promise<void> {
     if (message.kind === 'start') {
       postLog('info', 'ui-worker.start.received');
       tui.start();
+      if (!bgaStreamingScheduled) {
+        bgaStreamingScheduled = true;
+        setImmediate(() => {
+          bgaRenderer?.startStreaming();
+        });
+      }
+      deferredUiFlush.markFrameDirty();
       return true;
     }
     if (message.kind === 'frame') {
@@ -291,6 +301,7 @@ async function bootstrap(): Promise<void> {
       bridgePort?.off('message', handleControlMessage);
       bridgePort = message.port;
       bridgePort.on('message', handleControlMessage);
+      postLog('info', 'ui-worker.bridge-port.attached');
       return;
     }
     if (handleRenderMessage(message)) {
@@ -371,7 +382,11 @@ function postLog(level: LogLevel, event: string, fields?: Record<string, unknown
       source: 'ui-worker',
       level,
       event,
-      fields,
+      fields: {
+        emittedAtUnixMs: Date.now(),
+        emittedAtMonotonicMs: performance.now(),
+        ...fields,
+      },
     },
   });
 }

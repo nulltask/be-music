@@ -2,7 +2,7 @@ import { effect } from 'alien-signals';
 import { createAbortError, type LogEntry } from '@be-music/utils';
 import type { BeMusicJson } from '@be-music/json';
 import { fileURLToPath } from 'node:url';
-import { Worker, type TransferListItem } from 'node:worker_threads';
+import { Worker, type MessagePort } from 'node:worker_threads';
 import { createPlayerInputSignalBus } from '../core/input-signal-bus.ts';
 import type { PlayerLoadProgress, PlayerSummary } from '../core/engine.ts';
 import { PlayerInterruptedError } from '../core/engine.ts';
@@ -208,6 +208,7 @@ async function handleUiInit(
       randomPatternSummary: message.runtime.randomPatternSummary,
       baseDir: message.runtime.baseDir,
       kittyGraphics: message.runtime.kittyGraphics,
+      videoBgaStreaming: message.runtime.videoBgaStreaming,
       initialPaused: message.runtime.initialPaused,
       initialJudgeCombo: message.runtime.initialJudgeCombo,
       loadSignal: runtimeStore.loadSignal,
@@ -221,7 +222,7 @@ async function handleUiInit(
       },
     });
     runtimeStore.setRuntime(runtime.tuiEnabled ? runtime : undefined);
-    const transferList: TransferListItem[] = [];
+    const transferList: MessagePort[] = [];
     const response: NodeGameplayWorkerInboundMessage = {
       kind: 'ui-init-result',
       requestId: message.requestId,
@@ -304,7 +305,7 @@ function resolveNodeGameplayWorkerEnv(): NodeJS.ProcessEnv {
 function postWorkerMessage(
   worker: Worker,
   message: NodeGameplayWorkerInboundMessage,
-  transferList?: TransferListItem[],
+  transferList?: MessagePort[],
 ): void {
   worker.postMessage(message, transferList ?? []);
 }

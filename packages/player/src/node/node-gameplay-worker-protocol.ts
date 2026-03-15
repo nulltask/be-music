@@ -40,6 +40,7 @@ export interface NodeGameplayWorkerPlayOptions {
   laneModeExtension?: string;
   tui?: boolean;
   kittyGraphics?: boolean;
+  videoBgaStreaming?: boolean;
 }
 
 export interface NodeGameplayWorkerInitData {
@@ -62,6 +63,7 @@ export interface NodeGameplayUiRuntimeInit {
   randomPatternSummary?: string;
   baseDir: string;
   kittyGraphics?: boolean;
+  videoBgaStreaming?: boolean;
   initialFrame: PlayerUiFramePayload;
   initialPaused: boolean;
   initialJudgeCombo: PlayerJudgeComboSignalState;

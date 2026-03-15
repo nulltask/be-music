@@ -112,6 +112,7 @@ interface CliArgs {
   auto: boolean;
   autoScratch: boolean;
   kittyGraphics: boolean;
+  videoBgaStreaming: boolean;
   inferBmsLnTypeWhenMissing: boolean;
   showInvisibleNotes: boolean;
   compressor: boolean;
@@ -870,11 +871,13 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     })(),
     tui: args.tui,
     kittyGraphics: args.kittyGraphics,
+    videoBgaStreaming: args.videoBgaStreaming,
   };
   logCli('info', 'play.start', {
     chartPath,
     mode: args.auto ? 'auto' : 'manual',
     kittyGraphics: args.kittyGraphics === true,
+    videoBgaStreaming: args.videoBgaStreaming === true,
   });
 
   let summary: PlayerSummary;
@@ -913,7 +916,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
           logCli('info', 'play.loading.complete', {
             chartPath,
           });
-          clearPlayLoadingStageFileImage(playLoadingScreenRenderState);
+          clearPlayLoadingScreen(playLoadingScreenRenderState);
           disposePlaybackLoadingAbortCapture();
         },
         onLog: (entry) => {
@@ -1314,6 +1317,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     auto: false,
     autoScratch: false,
     kittyGraphics: false,
+    videoBgaStreaming: true,
     inferBmsLnTypeWhenMissing: false,
     showInvisibleNotes: false,
     compressor: false,
@@ -1551,6 +1555,14 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       args.kittyGraphics = false;
       continue;
     }
+    if (token === '--video-bga-streaming') {
+      args.videoBgaStreaming = true;
+      continue;
+    }
+    if (token === '--no-video-bga-streaming') {
+      args.videoBgaStreaming = false;
+      continue;
+    }
     positional.push(token);
   }
 
@@ -1607,6 +1619,8 @@ function printUsage(): void {
       '                           Audio backend: node-web-audio-api (fixed)',
       '  --tui / --no-tui          Enable or disable TUI play screen (default: on in TTY)',
       '  --kitty-graphics          Enable Kitty graphics protocol BGA rendering when supported (default: off)',
+      '  --video-bga-streaming     Stream video BGA frames progressively (default: on)',
+      '  --no-video-bga-streaming  Decode full video BGA before playback (legacy behavior)',
       '  --log-file <path>         Write structured NDJSON logs to a file',
       '                           Default: ~/.be-music/logs/player.ndjson',
       '',
@@ -1928,6 +1942,14 @@ function resolvePlayLoadingStageFileBlock(
     );
   }
   return stageFileImage.lines.length > 0 ? `${stageFileImage.lines.join('\n')}\u001b[H` : '';
+}
+
+function clearPlayLoadingScreen(state: PlayLoadingScreenRenderState): void {
+  clearPlayLoadingStageFileImage(state);
+  if (state.initialized) {
+    process.stdout.write('\u001b[2J\u001b[H');
+    state.initialized = false;
+  }
 }
 
 function clearPlayLoadingStageFileImage(state: PlayLoadingScreenRenderState): void {

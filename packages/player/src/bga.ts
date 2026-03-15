@@ -13,7 +13,7 @@ import { createTimingResolver } from '@be-music/audio-renderer';
 import { decode as decodeBmpFast } from 'fast-bmp';
 import { decode as decodePngFast } from 'fast-png';
 import jpeg from 'jpeg-js';
-import { decodeVideoFramesStream } from './bga-video.ts';
+import { decodeVideoFramesStream, decodeVideoFramesToSourceFramesInWorker } from './bga-video.ts';
 
 const BASE_BGA_CHANNEL = '04';
 const POOR_BGA_CHANNEL = '06';
@@ -68,6 +68,7 @@ interface VideoFrameSource {
   kind: 'video';
   frames: TimedAnsiFrame[];
   durationSeconds?: number;
+  ensureStreaming?: () => void;
 }
 
 type FrameSource = StaticFrameSource | VideoFrameSource;
@@ -96,6 +97,7 @@ export interface BgaAnsiOptions {
   baseDir: string;
   width?: number;
   height?: number;
+  videoBgaStreaming?: boolean;
   onLoadProgress?: (progress: BgaAnsiLoadProgress) => void;
   signal?: AbortSignal;
 }
@@ -313,6 +315,14 @@ export class BgaAnsiRenderer {
     this.cachedComposite = undefined;
     this.cachedLines = undefined;
     this.cachedKittyImage = undefined;
+  }
+
+  startStreaming(): void {
+    const seen = new Set<FrameSource>();
+    startStreamingFrameSourceMap(this.baseSourceFramesByKey, seen);
+    startStreamingFrameSourceMap(this.poorSourceFramesByKey, seen);
+    startStreamingFrameSourceMap(this.layerSourceFramesByKey, seen);
+    startStreamingFrameSourceMap(this.layer2SourceFramesByKey, seen);
   }
 
   setDisplaySize(width: number, height: number): void {
@@ -574,6 +584,7 @@ export async function createBgaAnsiRenderer(
     mode: 'base',
     width: displaySize.width,
     height: displaySize.height,
+    videoBgaStreaming: options.videoBgaStreaming,
     onLoadProgress: reportLoadProgress,
     signal: options.signal,
   });
@@ -585,6 +596,7 @@ export async function createBgaAnsiRenderer(
     mode: 'base',
     width: displaySize.width,
     height: displaySize.height,
+    videoBgaStreaming: options.videoBgaStreaming,
     onLoadProgress: reportLoadProgress,
     signal: options.signal,
   });
@@ -596,6 +608,7 @@ export async function createBgaAnsiRenderer(
     mode: 'layer',
     width: displaySize.width,
     height: displaySize.height,
+    videoBgaStreaming: options.videoBgaStreaming,
     onLoadProgress: reportLoadProgress,
     signal: options.signal,
   });
@@ -607,6 +620,7 @@ export async function createBgaAnsiRenderer(
     mode: 'layer',
     width: displaySize.width,
     height: displaySize.height,
+    videoBgaStreaming: options.videoBgaStreaming,
     onLoadProgress: reportLoadProgress,
     signal: options.signal,
   });
@@ -660,10 +674,11 @@ async function loadFramesByKeys(params: {
   mode: FrameMode;
   width: number;
   height: number;
+  videoBgaStreaming?: boolean;
   onLoadProgress?: (detail: string) => void;
   signal?: AbortSignal;
 }): Promise<Map<string, FrameSource>> {
-  const { keys, resources, baseDir, mode, width, height, onLoadProgress, signal } = params;
+  const { keys, resources, baseDir, mode, width, height, videoBgaStreaming, onLoadProgress, signal } = params;
   const map = new Map<string, FrameSource>();
   const cache = new Map<string, FrameSource | null>();
 
@@ -679,9 +694,9 @@ async function loadFramesByKeys(params: {
       continue;
     }
 
-    const cacheKey = `${mode}:${width}x${height}:${resolved}`;
+    const cacheKey = `${mode}:${width}x${height}:${videoBgaStreaming === false ? 'full' : 'stream'}:${resolved}`;
     if (!cache.has(cacheKey)) {
-      const source = await loadFrameSource(resolved, mode, width, height, signal);
+      const source = await loadFrameSource(resolved, mode, width, height, videoBgaStreaming, signal);
       cache.set(cacheKey, source ?? null);
     }
 
@@ -785,13 +800,25 @@ function fillFrameSourceBackground(source: FrameSource, r: number, g: number, b:
   if (source.kind === 'static') {
     return createStaticFrameSource(fillAnsiFrameBackground(source.frame, r, g, b));
   }
+  const filledFrames: TimedAnsiFrame[] = [];
   return {
     kind: 'video',
-    durationSeconds: source.durationSeconds,
-    frames: source.frames.map((entry) => ({
-      seconds: entry.seconds,
-      frame: fillAnsiFrameBackground(entry.frame, r, g, b),
-    })),
+    get durationSeconds() {
+      return source.durationSeconds;
+    },
+    ensureStreaming: () => {
+      source.ensureStreaming?.();
+    },
+    get frames() {
+      for (let index = filledFrames.length; index < source.frames.length; index += 1) {
+        const entry = source.frames[index]!;
+        filledFrames.push({
+          seconds: entry.seconds,
+          frame: fillAnsiFrameBackground(entry.frame, r, g, b),
+        });
+      }
+      return filledFrames;
+    },
   };
 }
 
@@ -832,13 +859,25 @@ function resizeFrameSourceWithAspectMode(
     };
   }
 
+  const resizedFrames: TimedAnsiFrame[] = [];
   return {
     kind: 'video',
-    durationSeconds: source.durationSeconds,
-    frames: source.frames.map((entry) => ({
-      seconds: entry.seconds,
-      frame: resizeAnsiFrameWithAspectMode(entry.frame, width, height, aspectX, aspectY, mode),
-    })),
+    get durationSeconds() {
+      return source.durationSeconds;
+    },
+    ensureStreaming: () => {
+      source.ensureStreaming?.();
+    },
+    get frames() {
+      for (let index = resizedFrames.length; index < source.frames.length; index += 1) {
+        const entry = source.frames[index]!;
+        resizedFrames.push({
+          seconds: entry.seconds,
+          frame: resizeAnsiFrameWithAspectMode(entry.frame, width, height, aspectX, aspectY, mode),
+        });
+      }
+      return resizedFrames;
+    },
   };
 }
 
@@ -1209,6 +1248,7 @@ async function loadFrameSource(
   mode: FrameMode,
   _width: number,
   _height: number,
+  videoBgaStreaming = true,
   signal?: AbortSignal,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
@@ -1217,7 +1257,7 @@ async function loadFrameSource(
     return createStaticFrameSource(imageFrame);
   }
 
-  return loadVideoAsFrameSource(resourcePath, mode, signal);
+  return loadVideoAsFrameSource(resourcePath, mode, videoBgaStreaming, signal);
 }
 
 async function loadTerminalAnsiImageInternal(
@@ -1263,41 +1303,154 @@ async function loadTerminalAnsiImageInternal(
 async function loadVideoAsFrameSource(
   videoPath: string,
   mode: FrameMode,
+  videoBgaStreaming = true,
   signal?: AbortSignal,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
   const frames: TimedAnsiFrame[] = [];
-  const decoded = await decodeVideoFramesStream(
+  const source: VideoFrameSource = {
+    kind: 'video',
+    frames,
+    durationSeconds: undefined,
+  };
+
+  let settleFirstFrame: ((hasFrame: boolean) => void) | undefined;
+  let rejectFirstFrame: ((error: unknown) => void) | undefined;
+  let firstFrameSettled = false;
+  const firstFramePromise = new Promise<boolean>((resolve, reject) => {
+    settleFirstFrame = resolve;
+    rejectFirstFrame = reject;
+  });
+
+  const settleHasFirstFrame = (hasFrame: boolean): void => {
+    if (firstFrameSettled) {
+      return;
+    }
+    firstFrameSettled = true;
+    settleFirstFrame?.(hasFrame);
+  };
+
+  const appendFrame = (frame: { seconds: number; width: number; height: number; rgba: Uint8Array }): void => {
+    throwIfAborted(signal);
+    const sourceFrame = convertImageToSourceFrame(
+      {
+        width: frame.width,
+        height: frame.height,
+        data: frame.rgba,
+        format: 'video',
+      },
+      mode,
+    );
+    frames.push({
+      seconds: frame.seconds,
+      frame: sourceFrame,
+    });
+  };
+
+  if (!videoBgaStreaming) {
+    const decoded = await decodeVideoFramesStream(
+      videoPath,
+      (frame) => {
+        appendFrame(frame);
+      },
+      signal,
+      {
+        onReady: (info) => {
+          source.durationSeconds = info.durationSeconds;
+        },
+      },
+    );
+    if (decoded) {
+      source.durationSeconds = decoded.durationSeconds;
+    }
+    throwIfAborted(signal);
+    return frames.length > 0 ? source : undefined;
+  }
+
+  void decodeVideoFramesStream(
     videoPath,
     (frame) => {
-      throwIfAborted(signal);
-      const sourceFrame = convertImageToSourceFrame(
-        {
-          width: frame.width,
-          height: frame.height,
-          data: frame.rgba,
-          format: 'video',
-        },
-        mode,
-      );
-      frames.push({
-        seconds: frame.seconds,
-        frame: sourceFrame,
-      });
+      appendFrame(frame);
+      settleHasFirstFrame(true);
     },
     signal,
-  );
-  throwIfAborted(signal);
+    {
+      onReady: (info) => {
+        source.durationSeconds = info.durationSeconds;
+      },
+      stopAfterFirstFrame: true,
+    },
+  )
+    .then((decoded) => {
+      if (decoded) {
+        source.durationSeconds = decoded.durationSeconds;
+      }
+      settleHasFirstFrame(frames.length > 0);
+    })
+    .catch((error) => {
+      if (isAbortError(error)) {
+        if (!firstFrameSettled) {
+          firstFrameSettled = true;
+          rejectFirstFrame?.(error);
+        }
+        return;
+      }
+      settleHasFirstFrame(false);
+    });
 
-  if (!decoded || frames.length === 0) {
+  const hasFirstFrame = await firstFramePromise;
+  throwIfAborted(signal);
+  if (!hasFirstFrame) {
     return undefined;
   }
 
-  return {
-    kind: 'video',
-    durationSeconds: decoded.durationSeconds,
-    frames,
+  let streamingStarted = false;
+  source.ensureStreaming = () => {
+    if (streamingStarted) {
+      return;
+    }
+    streamingStarted = true;
+    void (async () => {
+      let skipFrameCount = frames.length;
+      try {
+        throwIfAborted(signal);
+        const decoded = await decodeVideoFramesToSourceFramesInWorker(
+          videoPath,
+          mode,
+          (frame) => {
+            if (skipFrameCount > 0) {
+              skipFrameCount -= 1;
+              return;
+            }
+            frames.push({
+              seconds: frame.seconds,
+              frame: {
+                width: frame.width,
+                height: frame.height,
+                rgb: frame.rgb,
+                opaqueMask: frame.opaqueMask,
+              },
+            });
+          },
+          signal,
+          {
+            onReady: (info) => {
+              source.durationSeconds = info.durationSeconds;
+            },
+          },
+        );
+        if (decoded) {
+          source.durationSeconds = decoded.durationSeconds;
+        }
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
+        }
+      }
+    })();
   };
+
+  return source;
 }
 
 async function loadTerminalImageSourceFrame(
@@ -1314,7 +1467,7 @@ async function loadTerminalImageSourceFrame(
   if (imageFrame) {
     return createStaticFrameSource(imageFrame);
   }
-  return loadVideoAsFrameSource(resolved, 'base', signal);
+  return loadVideoAsFrameSource(resolved, 'base', true, signal);
 }
 
 function normalizeTerminalImageDisplaySize(width?: number, height?: number): { width: number; height: number } {
@@ -1354,6 +1507,23 @@ function resolveFrameSourceDurationSeconds(source: FrameSource | undefined): num
   const previousFrameSeconds = source.frames.at(-2)?.seconds ?? 0;
   const estimatedTailSeconds = Math.max(0, lastFrameSeconds - previousFrameSeconds);
   return Math.max(streamDuration, lastFrameSeconds + estimatedTailSeconds);
+}
+
+function startStreamingFrameSourceMap(
+  sourceMap: ReadonlyMap<string, FrameSource>,
+  seen: Set<FrameSource>,
+): void {
+  for (const source of sourceMap.values()) {
+    startStreamingFrameSource(source, seen);
+  }
+}
+
+function startStreamingFrameSource(source: FrameSource | undefined, seen: Set<FrameSource>): void {
+  if (!source || source.kind === 'static' || seen.has(source)) {
+    return;
+  }
+  seen.add(source);
+  source.ensureStreaming?.();
 }
 
 function createMediaPathCandidates(mediaPath: string): string[] {

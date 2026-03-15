@@ -18,6 +18,7 @@ export interface NodeUiWorkerInitData {
   randomPatternSummary?: string;
   baseDir: string;
   kittyGraphics?: boolean;
+  videoBgaStreaming?: boolean;
   stdinIsTTY: boolean;
   stdoutIsTTY: boolean;
   initialPaused: boolean;

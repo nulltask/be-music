@@ -5,7 +5,10 @@ import type { BgaKittyImage } from '../bga.ts';
 import type { PlayerSummary } from '../index.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../utils.ts';
 import type { PlayerStateSignals } from '../state-signals.ts';
-import { buildKittyGraphicsDeleteImageSequence, buildKittyGraphicsRenderSequence } from './kitty-graphics.ts';
+import {
+  buildKittyGraphicsDeleteImageSequence,
+  buildKittyGraphicsRenderSequence,
+} from './kitty-graphics.ts';
 import { findStackableRowIndex } from './lane-stacking.ts';
 import { normalizeHighSpeed, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
 import {
@@ -140,7 +143,7 @@ const INVISIBLE_NOTE_HEAD_SYMBOL = '◯';
 const INVISIBLE_LONG_NOTE_BODY_SYMBOL = '□';
 const INVISIBLE_LONG_NOTE_TAIL_SYMBOL = '◇';
 const ANSI_RESET = '\u001b[0m';
-const KITTY_BGA_IMAGE_ID = 1_337;
+const KITTY_BGA_IMAGE_IDS = [1_337, 1_338] as const;
 const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
 const HIGH_SPEED_TRANSITION_MS = 180;
@@ -285,6 +288,10 @@ export class PlayerTui {
 
   private lastKittyBgaToken = '';
 
+  private lastKittyBgaPlacementToken = '';
+
+  private activeKittyBgaImageIndex = 0;
+
   private kittyBgaVisible = false;
 
   constructor(options: TuiOptions) {
@@ -348,6 +355,8 @@ export class PlayerTui {
     this.active = true;
     this.needsFullRefresh = false;
     this.lastKittyBgaToken = '';
+    this.lastKittyBgaPlacementToken = '';
+    this.activeKittyBgaImageIndex = 0;
     this.kittyBgaVisible = false;
     process.stdout.write('\u001b[?1049h\u001b[2J\u001b[H\u001b[?25l');
   }
@@ -379,8 +388,12 @@ export class PlayerTui {
     this.smoothedFps = Number.NaN;
     this.lastFrameRenderedAtMs = 0;
     this.lastRenderedBeat = Number.NaN;
-    const clearKittyBga = this.kittyBgaVisible ? buildKittyGraphicsDeleteImageSequence(KITTY_BGA_IMAGE_ID) : '';
+    const clearKittyBga = this.kittyBgaVisible
+      ? KITTY_BGA_IMAGE_IDS.map((imageId) => buildKittyGraphicsDeleteImageSequence(imageId)).join('')
+      : '';
     this.lastKittyBgaToken = '';
+    this.lastKittyBgaPlacementToken = '';
+    this.activeKittyBgaImageIndex = 0;
     this.kittyBgaVisible = false;
     process.stdout.write(`${clearKittyBga}\u001b[0m\u001b[?25h\u001b[?1049l`);
   }
@@ -835,10 +848,14 @@ export class PlayerTui {
     const needsFullRefresh = this.needsFullRefresh;
     let overlaySequence = '';
     if (kittyBgaPlacement) {
-      const kittyToken = `${kittyBgaPlacement.image.token}:${kittyBgaPlacement.row}:${kittyBgaPlacement.column}`;
-      if (needsFullRefresh || this.lastKittyBgaToken !== kittyToken) {
+      const placementToken =
+        `${kittyBgaPlacement.row}:${kittyBgaPlacement.column}:` +
+        `${kittyBgaPlacement.image.cellWidth}:${kittyBgaPlacement.image.cellHeight}`;
+      if (needsFullRefresh || !this.kittyBgaVisible || this.lastKittyBgaPlacementToken !== placementToken) {
+        const activeImageId = KITTY_BGA_IMAGE_IDS[this.activeKittyBgaImageIndex]!;
+        const inactiveImageId = KITTY_BGA_IMAGE_IDS[(this.activeKittyBgaImageIndex + 1) % KITTY_BGA_IMAGE_IDS.length]!;
         overlaySequence = buildKittyGraphicsRenderSequence({
-          imageId: KITTY_BGA_IMAGE_ID,
+          imageId: activeImageId,
           placementId: 1,
           row: kittyBgaPlacement.row,
           column: kittyBgaPlacement.column,
@@ -846,12 +863,32 @@ export class PlayerTui {
           zIndex: -1,
           doNotMoveCursor: true,
         });
-        this.lastKittyBgaToken = kittyToken;
+        overlaySequence += buildKittyGraphicsDeleteImageSequence(inactiveImageId);
+        this.lastKittyBgaToken = kittyBgaPlacement.image.token;
+        this.lastKittyBgaPlacementToken = placementToken;
         this.kittyBgaVisible = true;
+      } else if (this.lastKittyBgaToken !== kittyBgaPlacement.image.token) {
+        const nextImageIndex = (this.activeKittyBgaImageIndex + 1) % KITTY_BGA_IMAGE_IDS.length;
+        const nextImageId = KITTY_BGA_IMAGE_IDS[nextImageIndex]!;
+        const previousImageId = KITTY_BGA_IMAGE_IDS[this.activeKittyBgaImageIndex]!;
+        overlaySequence = buildKittyGraphicsRenderSequence({
+          imageId: nextImageId,
+          placementId: 1,
+          row: kittyBgaPlacement.row,
+          column: kittyBgaPlacement.column,
+          image: kittyBgaPlacement.image,
+          zIndex: -1,
+          doNotMoveCursor: true,
+        });
+        overlaySequence += buildKittyGraphicsDeleteImageSequence(previousImageId);
+        this.lastKittyBgaToken = kittyBgaPlacement.image.token;
+        this.activeKittyBgaImageIndex = nextImageIndex;
       }
     } else if (this.kittyBgaVisible) {
-      overlaySequence = buildKittyGraphicsDeleteImageSequence(KITTY_BGA_IMAGE_ID);
+      overlaySequence = KITTY_BGA_IMAGE_IDS.map((imageId) => buildKittyGraphicsDeleteImageSequence(imageId)).join('');
       this.lastKittyBgaToken = '';
+      this.lastKittyBgaPlacementToken = '';
+      this.activeKittyBgaImageIndex = 0;
       this.kittyBgaVisible = false;
     }
     process.stdout.write(`${needsFullRefresh ? '\u001b[2J' : ''}\u001b[H${paddedLines.join('\n')}${overlaySequence}`);
