@@ -6,22 +6,69 @@ import { parseChartFile } from '../../parser/src/index.ts';
 
 const audioSinkState = vi.hoisted(() => ({
   writes: [] as Uint8Array[],
+  startMs: 0,
+  pausedAtMs: 0,
+  pausedDurationMs: 0,
+  paused: false,
+  scheduledSeconds: 0,
 }));
 
 vi.mock('./audio-sink.ts', () => ({
-  createNodeAudioSink: vi.fn(async () => ({
-    runtime: 'node',
-    engine: 'webaudio',
-    label: 'mock-audio',
-    write: (chunk: Uint8Array) => {
-      audioSinkState.writes.push(Uint8Array.from(chunk));
-      return true;
-    },
-    waitWritable: async () => undefined,
-    end: async () => undefined,
-    destroy: () => undefined,
-    onError: () => undefined,
-  })),
+  createNodeAudioSink: vi.fn(async (options: { sampleRate: number; channels: number }) => {
+    audioSinkState.startMs = performance.now();
+    audioSinkState.pausedAtMs = 0;
+    audioSinkState.pausedDurationMs = 0;
+    audioSinkState.paused = false;
+    audioSinkState.scheduledSeconds = 0;
+
+    const resolveOutputSeconds = (): number => {
+      const referenceMs = audioSinkState.paused ? audioSinkState.pausedAtMs : performance.now();
+      return Math.max(0, (referenceMs - audioSinkState.startMs - audioSinkState.pausedDurationMs) / 1000);
+    };
+
+    return {
+      runtime: 'node',
+      engine: 'webaudio',
+      label: 'mock-audio',
+      write: (chunk: Uint8Array) => {
+        audioSinkState.writes.push(Uint8Array.from(chunk));
+        const bytesPerFrame = Math.max(2, options.channels * 2);
+        const frameCount = Math.floor(chunk.byteLength / bytesPerFrame);
+        if (frameCount > 0) {
+          const outputSeconds = resolveOutputSeconds();
+          audioSinkState.scheduledSeconds =
+            Math.max(outputSeconds, audioSinkState.scheduledSeconds) + frameCount / options.sampleRate;
+        }
+        return true;
+      },
+      waitWritable: async () => undefined,
+      end: async () => undefined,
+      destroy: () => undefined,
+      onError: () => undefined,
+      getClockState: () => {
+        const outputSeconds = resolveOutputSeconds();
+        return {
+          outputSeconds,
+          scheduledSeconds: Math.max(outputSeconds, audioSinkState.scheduledSeconds),
+        };
+      },
+      suspend: async () => {
+        if (audioSinkState.paused) {
+          return;
+        }
+        audioSinkState.paused = true;
+        audioSinkState.pausedAtMs = performance.now();
+      },
+      resume: async () => {
+        if (!audioSinkState.paused) {
+          return;
+        }
+        audioSinkState.pausedDurationMs += Math.max(0, performance.now() - audioSinkState.pausedAtMs);
+        audioSinkState.paused = false;
+        audioSinkState.pausedAtMs = 0;
+      },
+    };
+  }),
 }));
 
 import {
@@ -232,6 +279,11 @@ function hasAnyNonSilentAudioWrite(): boolean {
 
 beforeEach(() => {
   audioSinkState.writes = [];
+  audioSinkState.startMs = 0;
+  audioSinkState.pausedAtMs = 0;
+  audioSinkState.pausedDurationMs = 0;
+  audioSinkState.paused = false;
+  audioSinkState.scheduledSeconds = 0;
 });
 
 describe('player', () => {

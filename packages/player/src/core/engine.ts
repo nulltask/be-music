@@ -28,7 +28,7 @@ import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
 import { type LaneBinding } from '../manual-input.ts';
 import { type LongNoteMode, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 import { formatSeconds, resolveAltModifierLabel, resolveChartVolWavGain } from '../utils.ts';
-import { createNodeAudioSink, type AudioSink } from '../audio-sink.ts';
+import { createNodeAudioSink, type AudioSink, type AudioSinkClockState } from '../audio-sink.ts';
 import {
   applyHighSpeedControlAction,
   resolveHighSpeedControlActionFromLaneChannels,
@@ -200,6 +200,7 @@ interface AudioSession {
   backendLabel: string;
   pause: () => void;
   resume: () => void;
+  getClockState?: () => AudioSinkClockState;
   getActiveAudioFiles?: () => string[];
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
@@ -238,9 +239,15 @@ interface OutputDynamicsConfig {
 
 interface PlaybackClock {
   nowMs: () => number;
+  scheduledMs: () => number;
   isPaused: () => boolean;
   pause: () => boolean;
   resume: () => boolean;
+}
+
+interface PlaybackClockSource {
+  nowMs: () => number;
+  scheduledMs?: () => number;
 }
 
 interface PlayableNotePlayback {
@@ -1905,13 +1912,16 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       }
 
       const chartClock = createPlaybackClock(
-        performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0),
+        createAudioPlaybackClockSource(audioSession),
+        audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0),
       );
       playbackClock = chartClock;
       playbackEventTracer.flushUntil(0);
       const badWindowSeconds = IIDX_BAD_WINDOW_MS / 1000;
       let landmineExpireCursor = 0;
       let invisibleExpireCursor = 0;
+      let autoPlayableAudioIndex = 0;
+      let autoPlayableJudgeIndex = 0;
 
       const markExpiredLandmines = (referenceSeconds: number): void => {
         while (landmineExpireCursor < landmineNotes.length) {
@@ -1942,94 +1952,122 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         }
       };
 
-      const renderUntil = async (targetMs: number): Promise<void> => {
-        while (true) {
-          consumeInputCommands();
-          if (interruptedReason) {
-            return;
+      const triggerAutoPlayableNoteAudio = (referenceSeconds: number): void => {
+        const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+        while (autoPlayableAudioIndex < scorableNotes.length) {
+          const note = scorableNotes[autoPlayableAudioIndex]!;
+          if (note.seconds > safeReferenceSeconds) {
+            break;
           }
-          const nowMs = chartClock.nowMs();
-          if (nowMs >= targetMs) {
-            const nowSec = elapsedMsToGameSeconds(nowMs, speed);
-            playbackEventTracer.flushUntil(nowSec);
-            triggerRealtimeAudioVolumeEvents(nowSec);
-            triggerRealtimeAudioEvents(nowSec);
-            drainPendingAutoLongNotes(nowSec);
-            return;
+          if (!uiEnabled) {
+            writePlayableSampleTriggerEventLog(
+              writeOutput,
+              note.event,
+              note.seconds,
+              resolvedJson.resources.wav,
+              'auto-note',
+              note.channel,
+            );
           }
-          if (chartClock.isPaused()) {
-            await waitPrecise(PAUSE_POLL_INTERVAL_MS);
-            continue;
-          }
-          const nowSec = elapsedMsToGameSeconds(nowMs, speed);
-          playbackEventTracer.flushUntil(nowSec);
-          triggerRealtimeAudioVolumeEvents(nowSec);
-          triggerRealtimeAudioEvents(nowSec);
-          drainPendingAutoLongNotes(nowSec);
-          markExpiredLandmines(nowSec);
-          markExpiredInvisibleNotes(nowSec);
-          const nowBeat = beatAtSeconds(nowSec);
-          publishUiFrame(nowSec, nowBeat);
-          await waitPrecise(Math.max(1, Math.min(TUI_FRAME_INTERVAL_MS, targetMs - nowMs)));
+          audioSession?.triggerEvent?.(note.event);
+          autoPlayableAudioIndex += 1;
         }
       };
 
-      for (const note of scorableNotes) {
-        if (interruptedReason) {
-          break;
+      const applyDueAutoPlayableJudgements = (referenceSeconds: number): void => {
+        const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+        while (autoPlayableJudgeIndex < scorableNotes.length) {
+          const note = scorableNotes[autoPlayableJudgeIndex]!;
+          if (note.seconds > safeReferenceSeconds) {
+            break;
+          }
+          note.judged = true;
+          autoPlayableJudgeIndex += 1;
+
+          const endSeconds = resolveLongNoteEndSeconds(note);
+          if (uiEnabled) {
+            uiSignals.pushCommand({ kind: 'flash-lane', channel: note.channel });
+          }
+          if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
+            note.visibleUntilBeat = note.endBeat;
+            if (uiEnabled) {
+              uiSignals.pushCommand({ kind: 'hold-lane-until-beat', channel: note.channel, beat: note.endBeat });
+            }
+          }
+          if (endSeconds !== undefined) {
+            playbackStateLogger.logLongNoteState(note.seconds, {
+              channel: note.channel,
+              state: 'start',
+              mode: resolveLoggedLongNoteMode(note),
+              event: note.event,
+              resources: resolvedJson.resources.wav,
+              endSeconds,
+            });
+            insertPendingAutoLongNote(pendingAutoLongNotes, note, endSeconds);
+            if (uiEnabled) {
+              publishUiFrame(note.seconds, note.beat);
+            }
+          } else {
+            applyAutoPerfectJudge(note, note.seconds);
+          }
+
+          markExpiredLandmines(note.seconds);
+          markExpiredInvisibleNotes(note.seconds);
         }
-        const scheduledMs = (note.seconds * 1000) / speed;
-        await renderUntil(scheduledMs);
+      };
+
+      const playbackHorizonMs = (totalSeconds * 1000) / speed + 1000;
+      while (chartClock.nowMs() < playbackHorizonMs) {
+        consumeInputCommands();
         if (interruptedReason) {
           break;
         }
 
-        note.judged = true;
-        if (!uiEnabled) {
-          writePlayableSampleTriggerEventLog(
-            writeOutput,
-            note.event,
-            note.seconds,
-            resolvedJson.resources.wav,
-            'auto-note',
-            note.channel,
-          );
-        }
-        audioSession?.triggerEvent?.(note.event);
-        const endSeconds = resolveLongNoteEndSeconds(note);
-        if (uiEnabled) {
-          uiSignals.pushCommand({ kind: 'flash-lane', channel: note.channel });
-        }
-        if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
-          note.visibleUntilBeat = note.endBeat;
-          if (uiEnabled) {
-            uiSignals.pushCommand({ kind: 'hold-lane-until-beat', channel: note.channel, beat: note.endBeat });
-          }
-        }
-        if (endSeconds !== undefined) {
-          playbackStateLogger.logLongNoteState(note.seconds, {
-            channel: note.channel,
-            state: 'start',
-            mode: resolveLoggedLongNoteMode(note),
-            event: note.event,
-            resources: resolvedJson.resources.wav,
-            endSeconds,
-          });
-          insertPendingAutoLongNote(pendingAutoLongNotes, note, endSeconds);
-          if (uiEnabled) {
-            publishUiFrame(note.seconds, note.beat);
-          }
-        } else {
-          applyAutoPerfectJudge(note, note.seconds);
+        const nowMs = chartClock.nowMs();
+        if (chartClock.isPaused()) {
+          const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+          publishUiFrame(nowSec, beatAtSeconds(nowSec));
+          await waitPrecise(PAUSE_POLL_INTERVAL_MS);
+          continue;
         }
 
-        markExpiredLandmines(note.seconds);
-        markExpiredInvisibleNotes(note.seconds);
+        const scheduledMs = chartClock.scheduledMs();
+        const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+        const scheduledSec = elapsedMsToGameSeconds(scheduledMs, speed);
+        playbackEventTracer.flushUntil(nowSec);
+        // Queue audio against the write head, then judge and render against what is actually audible.
+        triggerRealtimeAudioVolumeEvents(scheduledSec);
+        triggerRealtimeAudioEvents(scheduledSec);
+        triggerAutoPlayableNoteAudio(scheduledSec);
+        applyDueAutoPlayableJudgements(nowSec);
+        drainPendingAutoLongNotes(nowSec);
+        markExpiredLandmines(nowSec);
+        markExpiredInvisibleNotes(nowSec);
+        publishUiFrame(nowSec, beatAtSeconds(nowSec));
+
+        const safeNowSeconds = Math.max(0, nowSec) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+        if (
+          autoPlayableAudioIndex >= scorableNotes.length &&
+          autoPlayableJudgeIndex >= scorableNotes.length &&
+          pendingAutoLongNotes.length === 0 &&
+          safeNowSeconds >= totalSeconds
+        ) {
+          break;
+        }
+
+        await waitPrecise(TUI_FRAME_INTERVAL_MS);
       }
 
       if (!interruptedReason) {
+        triggerRealtimeAudioVolumeEvents(totalSeconds);
+        triggerRealtimeAudioEvents(totalSeconds);
+        triggerAutoPlayableNoteAudio(totalSeconds);
+        applyDueAutoPlayableJudgements(totalSeconds);
         const totalScheduledMs = (totalSeconds * 1000) / speed;
-        await renderUntil(totalScheduledMs);
+        const totalWaitMs = Math.max(0, totalScheduledMs - chartClock.nowMs());
+        if (totalWaitMs > 0) {
+          await waitPrecise(Math.min(totalWaitMs, TUI_FRAME_INTERVAL_MS));
+        }
         playbackEventTracer.flushUntil(totalSeconds);
         drainPendingAutoLongNotes(totalSeconds);
         markExpiredLandmines(totalSeconds + badWindowSeconds);
@@ -2306,7 +2344,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     ]);
   }
 
-  const playbackClock = createPlaybackClock(performance.now() + audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0));
+  const playbackClock = createPlaybackClock(
+    createAudioPlaybackClockSource(audioSession),
+    audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0),
+  );
   playbackEventTracer.flushUntil(0);
   const horizon = (totalSeconds * 1000) / speed + leadInMs + maxBadWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
@@ -2948,7 +2989,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         ]);
       }
       const nowSec = elapsedMsToGameSeconds(playbackClock.nowMs(), speed);
-      triggerRealtimeAudioVolumeEvents(nowSec);
+      const scheduledSec = elapsedMsToGameSeconds(playbackClock.scheduledMs(), speed);
+      triggerRealtimeAudioVolumeEvents(scheduledSec);
       playbackEventTracer.flushUntil(nowSec);
       handleMappedInputTokens(command.tokens);
     }
@@ -2967,13 +3009,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         await waitPrecise(PAUSE_POLL_INTERVAL_MS);
         continue;
       }
+      const scheduledMs = playbackClock.scheduledMs();
       const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+      const scheduledSec = elapsedMsToGameSeconds(scheduledMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
       advanceDynamicJudgeRankChanges(nowSec);
       playbackEventTracer.flushUntil(nowSec);
 
-      triggerRealtimeAudioVolumeEvents(nowSec);
-      triggerNonPlayableRealtimeAudioEvents(nowSec);
+      triggerRealtimeAudioVolumeEvents(scheduledSec);
+      triggerNonPlayableRealtimeAudioEvents(scheduledSec);
 
       for (const channel of activeKittyPressedChannels) {
         if (!activeLongNotesByChannel.has(channel)) {
@@ -3414,17 +3458,20 @@ async function createAudioSessionIfEnabled(
     finish,
     dispose,
     chartStartDelayMs: headPaddingMs,
+    getClockState: () => output.getClockState(),
     pause: () => {
       if (closed) {
         return;
       }
       paused = true;
+      void output.suspend();
     },
     resume: () => {
       if (closed) {
         return;
       }
       paused = false;
+      void output.resume();
     },
     getActiveAudioFiles: () => collectActiveAudioFileNames(activeVoices),
     getActiveAudioVoiceCount: () => activeVoices.length,
@@ -3735,10 +3782,7 @@ async function playMixedPcmThroughOutput(params: {
   const backgroundRight = background.right;
   const backgroundLength = backgroundLeft.length;
   let playhead = 0;
-  const playbackStartMs = performance.now();
-  let pausedAtMs = 0;
-  let pausedDurationMs = 0;
-  let pauseActive = false;
+  const outputStartSeconds = output.getClockState().outputSeconds;
   let adaptiveLeadMs = leadTuning.baseLeadMs;
   const chunkDurationMs = (chunkFrames / playbackSampleRate) * 1000;
   const outputDynamics = params.outputDynamics;
@@ -3747,23 +3791,16 @@ async function playMixedPcmThroughOutput(params: {
 
   while (!shouldStop()) {
     if (isPaused()) {
-      if (!pauseActive) {
-        pauseActive = true;
-        pausedAtMs = performance.now();
-      }
       await delay(PAUSE_POLL_INTERVAL_MS);
       continue;
-    }
-    if (pauseActive) {
-      pauseActive = false;
-      pausedDurationMs += performance.now() - pausedAtMs;
     }
 
     const mixStartedAtMs = performance.now();
     await waitForPlaybackRealtime(
+      output,
       playhead,
       playbackSampleRate,
-      playbackStartMs + pausedDurationMs,
+      outputStartSeconds,
       shouldStop,
       adaptiveLeadMs,
     );
@@ -3884,9 +3921,10 @@ async function playMixedPcmThroughOutput(params: {
 }
 
 async function waitForPlaybackRealtime(
+  output: AudioSink,
   playheadFrames: number,
   sampleRate: number,
-  startMs: number,
+  startOutputSeconds: number,
   shouldStop: () => boolean,
   targetLeadMs: number,
 ): Promise<void> {
@@ -3894,7 +3932,8 @@ async function waitForPlaybackRealtime(
   const targetLeadFrames = Math.max(0, Math.round((safeTargetLeadMs / 1000) * sampleRate));
 
   while (!shouldStop()) {
-    const elapsedFrames = Math.floor(((performance.now() - startMs) / 1000) * sampleRate);
+    const outputSeconds = Math.max(0, output.getClockState().outputSeconds - startOutputSeconds);
+    const elapsedFrames = Math.floor(outputSeconds * sampleRate);
     const leadFrames = playheadFrames - elapsedFrames;
     if (leadFrames <= targetLeadFrames) {
       return;
@@ -4323,35 +4362,70 @@ function measureRenderPeak(left: Float32Array, right: Float32Array): number {
   return peak;
 }
 
-function createPlaybackClock(startAtMs: number): PlaybackClock {
-  const anchorMs = Number.isFinite(startAtMs) ? startAtMs : performance.now();
-  let paused = false;
-  let pausedAtMs = 0;
-  let pausedDurationMs = 0;
-
-  const nowMs = (): number => {
-    const reference = paused ? pausedAtMs : performance.now();
-    return Math.max(0, reference - anchorMs - pausedDurationMs);
+function createPerformancePlaybackClockSource(): PlaybackClockSource {
+  return {
+    nowMs: () => performance.now(),
   };
+}
+
+function createAudioPlaybackClockSource(audioSession: AudioSession | undefined): PlaybackClockSource {
+  if (!audioSession?.getClockState) {
+    return createPerformancePlaybackClockSource();
+  }
+  return {
+    // Keep gameplay on the audible clock while exposing the buffered write head separately.
+    nowMs: () => audioSession.getClockState!().outputSeconds * 1000,
+    scheduledMs: () => {
+      const clockState = audioSession.getClockState!();
+      return Math.max(clockState.outputSeconds, clockState.scheduledSeconds) * 1000;
+    },
+  };
+}
+
+function createPlaybackClock(source: PlaybackClockSource, startOffsetMs = 0): PlaybackClock {
+  const sourceScheduledMs = source.scheduledMs ?? source.nowMs;
+  const anchorMs = source.nowMs() + (Number.isFinite(startOffsetMs) ? startOffsetMs : 0);
+  let paused = false;
+  let pausedScheduledMs = 0;
+  let pauseSourceMs = 0;
+  let pausedSourceDurationMs = 0;
+
+  const resolveNowMs = (): number => {
+    const referenceSourceMs = paused ? pauseSourceMs : source.nowMs();
+    return Math.max(0, referenceSourceMs - anchorMs - pausedSourceDurationMs);
+  };
+
+  const resolveScheduledMs = (): number => {
+    if (paused) {
+      return pausedScheduledMs;
+    }
+    const scheduledSourceMs = Math.max(source.nowMs(), sourceScheduledMs());
+    return Math.max(0, scheduledSourceMs - anchorMs - pausedSourceDurationMs);
+  };
+
+  const nowMs = (): number => resolveNowMs();
 
   return {
     nowMs,
+    scheduledMs: () => resolveScheduledMs(),
     isPaused: () => paused,
     pause: () => {
       if (paused) {
         return false;
       }
       paused = true;
-      pausedAtMs = performance.now();
+      pauseSourceMs = source.nowMs();
+      pausedScheduledMs = resolveScheduledMs();
       return true;
     },
     resume: () => {
       if (!paused) {
         return false;
       }
-      pausedDurationMs += Math.max(0, performance.now() - pausedAtMs);
+      pausedSourceDurationMs += Math.max(0, source.nowMs() - pauseSourceMs);
       paused = false;
-      pausedAtMs = 0;
+      pausedScheduledMs = 0;
+      pauseSourceMs = 0;
       return true;
     },
   };

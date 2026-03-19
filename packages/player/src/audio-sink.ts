@@ -13,6 +13,9 @@ export interface AudioSink {
   end: () => Promise<void>;
   destroy: () => void;
   onError: (listener: () => void) => void;
+  getClockState: () => AudioSinkClockState;
+  suspend: () => Promise<void>;
+  resume: () => Promise<void>;
 }
 
 export interface AudioSinkCreateOptions {
@@ -39,6 +42,13 @@ export interface WebAudioContextLike {
   createBuffer: (numberOfChannels: number, length: number, sampleRate: number) => WebAudioBufferLike;
   createBufferSource: () => WebAudioBufferSourceLike;
   close?: () => Promise<void>;
+  suspend?: () => Promise<void>;
+  resume?: () => Promise<void>;
+}
+
+export interface AudioSinkClockState {
+  outputSeconds: number;
+  scheduledSeconds: number;
 }
 
 interface NodeWebAudioModule {
@@ -192,6 +202,33 @@ function createWebAudioSink(
     },
     onError: (listener: () => void) => {
       errorListeners.add(listener);
+    },
+    getClockState: () => {
+      const outputSeconds = Math.max(0, context.currentTime);
+      return {
+        outputSeconds,
+        scheduledSeconds: Math.max(outputSeconds, scheduledUntilSeconds),
+      };
+    },
+    suspend: async () => {
+      if (closed) {
+        return;
+      }
+      try {
+        await context.suspend?.();
+      } catch {
+        emitError();
+      }
+    },
+    resume: async () => {
+      if (closed) {
+        return;
+      }
+      try {
+        await context.resume?.();
+      } catch {
+        emitError();
+      }
     },
   };
 }
