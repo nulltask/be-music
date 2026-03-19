@@ -106,7 +106,7 @@ jobs:
   benchmark-pr-head:
     name: Benchmark Head (PR)
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.code_changed == 'true'
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -164,7 +164,7 @@ jobs:
   benchmark-pr-base:
     name: Benchmark Base (PR)
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.code_changed == 'true'
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -265,7 +265,7 @@ jobs:
       - changes
       - benchmark-pr-head
       - benchmark-pr-base
-    if: github.event_name == 'pull_request' && needs.changes.outputs.code_changed == 'true'
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
