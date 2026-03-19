@@ -2,11 +2,9 @@ import { isPlayLaneSoundChannel } from '@be-music/chart';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
-  invokeWorkerizedFunction,
   isAbortError,
   resolveFirstExistingPath,
   throwIfAborted,
-  workerize,
   writeStereoPcm16Le,
 } from '@be-music/utils';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
@@ -54,11 +52,6 @@ interface FallbackSignaturePayload {
   >;
 }
 
-type WorkerizedFallbackContinueKey = ((
-  payload: FallbackSignaturePayload,
-  callback: (error: unknown, result: string) => void,
-) => void) & { close: () => void };
-
 export interface PreviewFocusTarget {
   filePath?: string;
   previewContinueKey?: string;
@@ -84,7 +77,6 @@ const PREVIEW_STOP_TIMEOUT_MS = 180;
 const PREVIEW_BACKPRESSURE_TIMEOUT_MS = 800;
 const PREVIEW_CACHE_LIMIT = 8;
 const PREVIEW_FOCUS_SETTLE_DELAY_MS = 120;
-let fallbackContinueKeyWorker = createFallbackContinueKeyWorker();
 
 export function createChartPreviewController(options: ChartPreviewAudioOptions = {}): ChartPreviewController {
   const previewCache = new Map<string, ChartPreviewAsset | null>();
@@ -497,52 +489,12 @@ async function resolveFallbackPreviewIdentity(
       trigger.sampleSliceId,
     ]),
   };
-  const continueKey = await computeFallbackContinueKeyOffThread(payload, signal);
+  const continueKey = computeFallbackContinueKey(payload);
 
   return {
     continueKey,
     startSeconds: firstTriggerSeconds,
   };
-}
-
-async function computeFallbackContinueKeyOffThread(
-  payload: FallbackSignaturePayload,
-  signal?: AbortSignal,
-): Promise<string> {
-  throwIfAborted(signal);
-  const activeWorker = fallbackContinueKeyWorker;
-  try {
-    const continueKey = await invokeWorkerizedFunction(activeWorker, [payload], {
-      signal,
-      onAbort: () => {
-        if (fallbackContinueKeyWorker === activeWorker) {
-          fallbackContinueKeyWorker.close();
-          fallbackContinueKeyWorker = createFallbackContinueKeyWorker();
-        }
-      },
-    });
-    if (typeof continueKey !== 'string' || continueKey.length === 0) {
-      return computeFallbackContinueKey(payload);
-    }
-    return continueKey;
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw error;
-    }
-    if (fallbackContinueKeyWorker === activeWorker) {
-      fallbackContinueKeyWorker.close();
-      fallbackContinueKeyWorker = createFallbackContinueKeyWorker();
-    }
-    return computeFallbackContinueKey(payload);
-  }
-}
-
-function createFallbackContinueKeyWorker(): WorkerizedFallbackContinueKey {
-  return workerize(
-    (payload: FallbackSignaturePayload) => computeFallbackContinueKey(payload),
-    () => [computeFallbackContinueKey],
-    true,
-  ) as WorkerizedFallbackContinueKey;
 }
 
 function computeFallbackContinueKey(payload: FallbackSignaturePayload): string {

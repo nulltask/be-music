@@ -123,6 +123,26 @@ describe('chart selection', () => {
     expect(new Set(progressUpdates.map((progress) => progress.filePath))).toEqual(new Set(chartPaths));
   });
 
+  test('buildChartSelectionEntries: completes large parallel loads without stalling on preview key resolution', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-stress-'));
+    tempDirectories.push(tempRoot);
+
+    const chartSource = ['#TITLE Stress', '#ARTIST Codex', '#PLAYER 1', '#BPM 120', '#WAV01 sample.wav', '#00101:01'].join(
+      '\n',
+    );
+    const chartPaths = Array.from({ length: 128 }, (_, index) => join(tempRoot, `stress-${index}.bms`));
+    await Promise.all(chartPaths.map((chartPath) => writeFile(chartPath, chartSource)));
+
+    const entries = await Promise.race([
+      buildChartSelectionEntries(tempRoot, chartPaths),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('chart selection build timed out')), 3_000);
+      }),
+    ]);
+
+    expect(entries.filter((entry) => entry.kind === 'chart')).toHaveLength(chartPaths.length);
+  });
+
   test('buildChartSelectionEntries: reuses cached summaries when chart content is unchanged', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-hit-'));
     const tempHome = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-home-'));
