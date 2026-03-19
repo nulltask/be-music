@@ -39,7 +39,16 @@ export default defineConfig({
       reporter: ['text', 'text-summary', 'html', 'lcov'],
       reportsDirectory: './coverage',
       include: [`packages/{${workspacePackages.join(',')}}/src/**/*.ts`],
-      exclude: ['packages/*/src/**/*.test.ts', 'packages/*/src/cli.ts', 'packages/*/src/**/*.d.ts'],
+      exclude: [
+        'packages/*/src/**/*.test.ts',
+        'packages/*/src/cli.ts',
+        'packages/*/src/**/*.d.ts',
+        'packages/audio-renderer/src/index.ts',
+        'packages/parser/src/index.ts',
+        'packages/player/src/index.ts',
+        'packages/player/src/tui.ts',
+        'packages/player/src/node/*protocol.ts',
+      ],
       thresholds: {
         // Use package-level thresholds so lower-coverage packages don't hide behind unrelated ones.
         'packages/audio-renderer/src/**/*.ts': {

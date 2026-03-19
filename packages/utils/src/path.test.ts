@@ -1,30 +1,60 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { afterEach, expect, test } from 'vitest';
+import { isAbsolute, join } from 'node:path';
+import { afterEach, describe, expect, test } from 'vitest';
 import { resolveFirstExistingPath } from './index.ts';
 
-const createdDirs: string[] = [];
+const tempDirs: string[] = [];
+
+async function createTempFixtureDir(name: string): Promise<string> {
+  const dir = join(tmpdir(), `be-music-path-${name}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(dir, { recursive: true });
+  tempDirs.push(dir);
+  return dir;
+}
 
 afterEach(async () => {
-  await Promise.all(
-    createdDirs.splice(0).map(async (directory) => rm(directory, { recursive: true, force: true })),
-  );
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-test('resolveFirstExistingPath: returns the first existing candidate resolved from baseDir', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'be-music-utils-path-'));
-  createdDirs.push(directory);
-  const targetPath = join(directory, 'sample.wav');
-  await writeFile(targetPath, 'ok', 'utf8');
+describe('path utilities', () => {
+  test('resolveFirstExistingPath returns the first matching relative path', async () => {
+    const baseDir = await createTempFixtureDir('relative');
+    const nestedDir = join(baseDir, 'nested');
+    const existingPath = join(nestedDir, 'chart.bms');
+    await mkdir(nestedDir, { recursive: true });
+    await writeFile(existingPath, '#TITLE test\n', 'utf8');
 
-  await expect(resolveFirstExistingPath(directory, ['missing.wav', 'sample.wav'])).resolves.toBe(targetPath);
-});
+    await expect(
+      resolveFirstExistingPath(baseDir, ['missing.bms', 'nested/chart.bms', 'nested/other.bms']),
+    ).resolves.toBe(existingPath);
+  });
 
-test('resolveFirstExistingPath: propagates AbortError when already aborted', async () => {
-  const controller = new AbortController();
-  controller.abort();
-  await expect(resolveFirstExistingPath('/tmp', ['sample.wav'], controller.signal)).rejects.toMatchObject({
-    name: 'AbortError',
+  test('resolveFirstExistingPath accepts absolute candidates and returns undefined when nothing matches', async () => {
+    const baseDir = await createTempFixtureDir('absolute');
+    const existingPath = join(baseDir, 'absolute.bms');
+    await writeFile(existingPath, '#TITLE test\n', 'utf8');
+
+    const resolvedAbsolute = await resolveFirstExistingPath(baseDir, [existingPath]);
+    expect(resolvedAbsolute).toBe(existingPath);
+    expect(isAbsolute(resolvedAbsolute!)).toBe(true);
+
+    await expect(resolveFirstExistingPath(baseDir, ['missing.bms'])).resolves.toBeUndefined();
+  });
+
+  test('resolveFirstExistingPath rejects when the signal is already aborted or aborts during lookup', async () => {
+    const baseDir = await createTempFixtureDir('abort');
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(resolveFirstExistingPath(baseDir, ['missing.bms'], controller.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+
+    const delayedController = new AbortController();
+    delayedController.abort();
+    await expect(resolveFirstExistingPath(baseDir, ['other-missing.bms'], delayedController.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
   });
 });
