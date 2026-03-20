@@ -139,6 +139,21 @@ function createKittyTestImage(token: string, color: { r: number; g: number; b: n
     token,
   };
 }
+
+function createSummary(score = 0) {
+  return {
+    total: 1,
+    perfect: 0,
+    fast: 0,
+    slow: 0,
+    great: 0,
+    good: 0,
+    bad: 0,
+    poor: 0,
+    exScore: 0,
+    score,
+  };
+}
 describe('player-tui', () => {
   test('long note head stays on the same row as a regular note at the same beat', () => {
     const regularHeadRows = renderRowsContaining([{ channel: '11', beat: 1, seconds: 0.5 }], '███');
@@ -255,18 +270,7 @@ describe('player-tui', () => {
         currentBeat: 0,
         currentSeconds: 0,
         totalSeconds: 10,
-        summary: {
-          total: 1,
-          perfect: 0,
-          fast: 0,
-          slow: 0,
-          great: 0,
-          good: 0,
-          bad: 0,
-          poor: 0,
-          exScore: 0,
-          score: 0,
-        },
+        summary: createSummary(),
         notes: [],
         bgaKittyImage: createKittyTestImage('frame-1', { r: 255, g: 0, b: 0 }),
       });
@@ -277,18 +281,7 @@ describe('player-tui', () => {
         currentBeat: 1,
         currentSeconds: 1,
         totalSeconds: 10,
-        summary: {
-          total: 1,
-          perfect: 0,
-          fast: 0,
-          slow: 0,
-          great: 0,
-          good: 0,
-          bad: 0,
-          poor: 0,
-          exScore: 0,
-          score: 0,
-        },
+        summary: createSummary(),
         notes: [],
         bgaKittyImage: createKittyTestImage('frame-2', { r: 0, g: 255, b: 0 }),
       });
@@ -300,6 +293,62 @@ describe('player-tui', () => {
       expect(secondRender).toContain('i=1338');
       expect(secondRender).toContain('a=T');
       expect(secondRender).toContain('a=d,d=I,i=1337');
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+  });
+
+  test('updates only changed rows after the first frame render', () => {
+    const chunks: string[] = [];
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stdout.write;
+
+    try {
+      const tui = new PlayerTui({
+        mode: 'AUTO',
+        laneDisplayMode: '5 KEY SP',
+        title: 'test',
+        lanes: [{ channel: '11', key: 'z' }],
+        speed: 1,
+        highSpeed: 1,
+        judgeWindowMs: 100,
+        stdoutIsTTY: true,
+        stdinIsTTY: true,
+      });
+      tui.setTerminalSize(40, 24);
+      tui.start();
+      chunks.length = 0;
+
+      tui.render({
+        currentBeat: 0,
+        currentSeconds: 0,
+        totalSeconds: 10,
+        summary: createSummary(),
+        notes: [],
+      });
+      const firstRender = chunks.join('');
+      chunks.length = 0;
+
+      tui.render({
+        currentBeat: 0.5,
+        currentSeconds: 0.25,
+        totalSeconds: 10,
+        summary: createSummary(),
+        notes: [],
+      });
+      const secondRender = chunks.join('');
+      tui.stop();
+
+      expect(firstRender).toContain('\u001b[H');
+      expect(firstRender).toContain('\n');
+      expect(secondRender).not.toContain('\u001b[2J');
+      expect(secondRender).not.toContain('\u001b[H');
+      expect(secondRender).toMatch(/\u001b\[\d+;1H/);
+      expect(secondRender).not.toContain('\n');
+      expect(secondRender.length).toBeLessThan(firstRender.length);
     } finally {
       process.stdout.write = originalWrite;
     }

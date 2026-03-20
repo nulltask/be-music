@@ -258,7 +258,7 @@ export class PlayerTui {
 
   private lastScoreAnimationMs = 0;
 
-  private previousFrameLineCount = 0;
+  private previousRenderedLines: string[] = [];
 
   private noteWindowSource?: TuiNote[];
 
@@ -354,6 +354,7 @@ export class PlayerTui {
     }
     this.active = true;
     this.needsFullRefresh = false;
+    this.previousRenderedLines = [];
     this.lastKittyBgaToken = '';
     this.lastKittyBgaPlacementToken = '';
     this.activeKittyBgaImageIndex = 0;
@@ -373,7 +374,7 @@ export class PlayerTui {
     this.lastScoreAnimationMs = 0;
     this.laneHoldUntilBeat.clear();
     this.pressedLaneChannels.clear();
-    this.previousFrameLineCount = 0;
+    this.previousRenderedLines = [];
     this.noteWindowSource = undefined;
     this.noteWindowStartIndex = 0;
     this.noteWindowEndIndex = 0;
@@ -473,7 +474,7 @@ export class PlayerTui {
     }
     this.terminalColumns = nextColumns;
     this.terminalRows = nextRows;
-    this.previousFrameLineCount = 0;
+    this.previousRenderedLines = [];
     this.needsFullRefresh = true;
   }
 
@@ -843,13 +844,15 @@ export class PlayerTui {
 
     const columns = this.terminalColumns ?? process.stdout.columns ?? 120;
     const paddedLines = lines.map((line) => padVisibleWidth(line, columns));
-    if (this.previousFrameLineCount > paddedLines.length) {
-      const diff = this.previousFrameLineCount - paddedLines.length;
+    const renderedLineCount = Math.max(this.previousRenderedLines.length, paddedLines.length);
+    if (renderedLineCount > paddedLines.length) {
+      const diff = renderedLineCount - paddedLines.length;
       for (let index = 0; index < diff; index += 1) {
         paddedLines.push(' '.repeat(columns));
       }
     }
     const needsFullRefresh = this.needsFullRefresh;
+    const needsFullFrameWrite = needsFullRefresh || this.previousRenderedLines.length === 0;
     let overlaySequence = '';
     if (kittyBgaPlacement) {
       const placementToken =
@@ -895,10 +898,41 @@ export class PlayerTui {
       this.activeKittyBgaImageIndex = 0;
       this.kittyBgaVisible = false;
     }
-    process.stdout.write(`${needsFullRefresh ? '\u001b[2J' : ''}\u001b[H${paddedLines.join('\n')}${overlaySequence}`);
-    this.previousFrameLineCount = lines.length;
+    const frameSequence = this.buildFrameWriteSequence(paddedLines, {
+      clearBeforeWrite: needsFullRefresh,
+      writeFullFrame: needsFullFrameWrite,
+    });
+    const output = `${frameSequence}${overlaySequence}`;
+    if (output.length > 0) {
+      process.stdout.write(output);
+    }
+    this.previousRenderedLines = paddedLines;
     this.needsFullRefresh = false;
     this.lastRenderedBeat = frame.currentBeat;
+  }
+
+  private buildFrameWriteSequence(
+    lines: string[],
+    options: Readonly<{
+      clearBeforeWrite: boolean;
+      writeFullFrame: boolean;
+    }>,
+  ): string {
+    if (options.writeFullFrame) {
+      return `${options.clearBeforeWrite ? '\u001b[2J' : ''}\u001b[H${lines.join('\n')}`;
+    }
+
+    let output = '';
+    const previousLines = this.previousRenderedLines;
+    const lineCount = Math.max(previousLines.length, lines.length);
+    for (let index = 0; index < lineCount; index += 1) {
+      const nextLine = lines[index];
+      if (nextLine === undefined || previousLines[index] === nextLine) {
+        continue;
+      }
+      output += `\u001b[${index + 1};1H${nextLine}`;
+    }
+    return output;
   }
 
   private resolveNoteWindow(
