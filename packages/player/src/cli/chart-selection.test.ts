@@ -178,25 +178,20 @@ describe('chart selection', () => {
 
     const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
     const cacheJson = JSON.parse(await readFile(cachePath, 'utf8')) as {
-      directories: Record<
+      entries: Record<
         string,
         {
-          files: Record<
-            string,
-            {
-              contentHash: string;
-              cacheHash: string;
-              summary: Record<string, unknown>;
-            }
-          >;
+          contentHash: string;
+          cacheHash: string;
+          summary: Record<string, unknown>;
         }
       >;
     };
-    expect(cacheJson.directories[tempRoot]?.files['cached-hit.bms']).toBeDefined();
-    expect(cacheJson.directories[tempRoot]?.files[chartPath]).toBeUndefined();
-    expect(cacheJson.directories[tempRoot]?.files['cached-hit.bms']?.contentHash).toEqual(expect.any(String));
-    expect(cacheJson.directories[tempRoot]?.files['cached-hit.bms']?.cacheHash).toEqual(expect.any(String));
-    expect(cacheJson.directories[tempRoot]?.files['cached-hit.bms']?.summary.filePath).toBeUndefined();
+    const [cacheEntry] = Object.values(cacheJson.entries);
+    expect(cacheEntry).toBeDefined();
+    expect(cacheEntry?.contentHash).toEqual(expect.any(String));
+    expect(cacheEntry?.cacheHash).toEqual(expect.any(String));
+    expect(cacheEntry?.summary.filePath).toBeUndefined();
   });
 
   test('buildChartSelectionEntries: invalidates cached summaries when cache contents are tampered without updating cacheHash', async () => {
@@ -212,21 +207,17 @@ describe('chart selection', () => {
 
     const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
     const cacheJson = JSON.parse(await readFile(cachePath, 'utf8')) as {
-      directories: Record<
+      entries: Record<
         string,
         {
-          files: Record<
-            string,
-            {
-              contentHash: string;
-              cacheHash: string;
-              summary: Record<string, unknown>;
-            }
-          >;
+          contentHash: string;
+          cacheHash: string;
+          summary: Record<string, unknown>;
         }
       >;
     };
-    cacheJson.directories[tempRoot]!.files['cached-tamper.bms']!.summary.title = 'Tampered';
+    const [contentHash] = Object.keys(cacheJson.entries);
+    cacheJson.entries[contentHash]!.summary.title = 'Tampered';
     await writeFile(cachePath, `${JSON.stringify(cacheJson, null, 2)}\n`, 'utf8');
 
     const parser = await import('@be-music/parser');
@@ -271,5 +262,44 @@ describe('chart selection', () => {
       kind: 'chart',
       title: 'Other',
     });
+  });
+
+  test('buildChartSelectionEntries: reuses cached summaries for newly added files with identical content at different paths', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-path-agnostic-'));
+    const tempHome = await mkdtemp(join(tmpdir(), 'be-music-chart-cache-home-'));
+    tempDirectories.push(tempRoot, tempHome);
+    process.env.HOME = tempHome;
+
+    const firstPath = join(tempRoot, 'first.bms');
+    const secondPath = join(tempRoot, 'nested', 'second.bms');
+    const source = ['#TITLE Shared', '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n');
+    await mkdir(dirname(secondPath), { recursive: true });
+    await writeFile(firstPath, source);
+
+    await buildChartSelectionEntries(tempRoot, [firstPath]);
+
+    const parser = await import('@be-music/parser');
+    const parseChartSpy = vi.spyOn(parser, 'parseChart');
+    await writeFile(secondPath, source);
+
+    const entries = await buildChartSelectionEntries(tempRoot, [firstPath, secondPath]);
+    const chartEntries = entries.filter((entry) => entry.kind === 'chart');
+
+    expect(chartEntries).toHaveLength(2);
+    expect(chartEntries).toContainEqual(
+      expect.objectContaining({
+        kind: 'chart',
+        filePath: secondPath,
+        title: 'Shared',
+        artist: 'Codex',
+      }),
+    );
+    expect(parseChartSpy).not.toHaveBeenCalled();
+
+    const cachePath = join(tempHome, '.be-music', 'chart-selection-cache.json');
+    const cacheJson = JSON.parse(await readFile(cachePath, 'utf8')) as {
+      entries: Record<string, unknown>;
+    };
+    expect(Object.keys(cacheJson.entries)).toHaveLength(1);
   });
 });

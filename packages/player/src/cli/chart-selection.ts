@@ -47,17 +47,14 @@ interface PersistedChartSelectionCacheFileEntry {
   summary: PersistedChartSummaryItem;
 }
 
-interface PersistedChartSelectionCacheDirectoryEntry {
-  files: Record<string, PersistedChartSelectionCacheFileEntry>;
-}
-
 interface PersistedChartSelectionCache {
   format: typeof CHART_SELECTION_CACHE_FORMAT;
-  directories: Record<string, PersistedChartSelectionCacheDirectoryEntry>;
+  entries: Record<string, PersistedChartSelectionCacheFileEntry>;
 }
 
 interface ResolvedChartSummaryCacheEntry {
   summary: ChartSummaryItem;
+  contentHash?: string;
   cacheEntry?: PersistedChartSelectionCacheFileEntry;
   cacheHit: boolean;
 }
@@ -115,7 +112,7 @@ export interface ListChartFilesOptions {
 }
 
 const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
-const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/4';
+const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/5';
 const CHART_SELECTION_BUILD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
 let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
 
@@ -157,9 +154,9 @@ export async function buildChartSelectionEntries(
 ): Promise<ChartSelectionEntry[]> {
   throwIfAborted(options.signal);
   const cache = await loadPersistedChartSelectionCache();
-  const cachedEntries = cache.directories[rootDir]?.files ?? {};
-  const nextCachedEntries: Record<string, PersistedChartSelectionCacheFileEntry> = {};
-  let cacheDirty = cache.directories[rootDir] === undefined || Object.keys(cachedEntries).length !== files.length;
+  const cachedEntries = cache.entries;
+  const nextCachedEntries: Record<string, PersistedChartSelectionCacheFileEntry> = { ...cachedEntries };
+  let cacheDirty = false;
   let completedFileCount = 0;
   const resolvedEntries = await mapWithConcurrency(
     files,
@@ -171,7 +168,7 @@ export async function buildChartSelectionEntries(
         rootDir,
         filePath,
         relativePath,
-        cachedEntries[relativePath],
+        cachedEntries,
         options.signal,
       );
       completedFileCount += 1;
@@ -186,18 +183,16 @@ export async function buildChartSelectionEntries(
   );
   const summaries = resolvedEntries.map((entry) => entry.summary);
   for (let index = 0; index < files.length; index += 1) {
-    const filePath = files[index]!;
-    const relativePath = resolveChartSummaryRelativePath(rootDir, filePath);
     const resolvedEntry = resolvedEntries[index]!;
     if (!resolvedEntry.cacheHit) {
       cacheDirty = true;
     }
-    if (resolvedEntry.cacheEntry) {
-      nextCachedEntries[relativePath] = resolvedEntry.cacheEntry;
+    if (resolvedEntry.contentHash && resolvedEntry.cacheEntry) {
+      nextCachedEntries[resolvedEntry.contentHash] = resolvedEntry.cacheEntry;
     }
   }
   if (cacheDirty) {
-    cache.directories[rootDir] = { files: nextCachedEntries };
+    cache.entries = nextCachedEntries;
     await savePersistedChartSelectionCache(cache);
   }
   throwIfAborted(options.signal);
@@ -208,7 +203,7 @@ async function buildChartSummaryWithCache(
   rootDir: string,
   filePath: string,
   relativePath: string,
-  cachedEntry: PersistedChartSelectionCacheFileEntry | undefined,
+  cachedEntries: Readonly<Record<string, PersistedChartSelectionCacheFileEntry>>,
   signal?: AbortSignal,
 ): Promise<ResolvedChartSummaryCacheEntry> {
   throwIfAborted(signal);
@@ -224,6 +219,7 @@ async function buildChartSummaryWithCache(
   }
 
   const contentHash = sourceBuffer ? buildChartSelectionContentHash(sourceBuffer) : undefined;
+  const cachedEntry = typeof contentHash === 'string' ? cachedEntries[contentHash] : undefined;
   if (
     cachedEntry &&
     typeof contentHash === 'string' &&
@@ -233,6 +229,7 @@ async function buildChartSummaryWithCache(
     return {
       summary: restoreChartSummary(pathFields, cachedEntry.summary),
       cacheEntry: cachedEntry,
+      contentHash,
       cacheHit: true,
     };
   }
@@ -244,6 +241,7 @@ async function buildChartSummaryWithCache(
       typeof contentHash === 'string'
         ? createPersistedChartSelectionCacheFileEntry(persistChartSummary(summary), contentHash)
         : undefined,
+    contentHash,
     cacheHit: false,
   };
 }
@@ -686,7 +684,7 @@ function resolveChartSelectionCachePath(): string {
 function createDefaultPersistedChartSelectionCache(): PersistedChartSelectionCache {
   return {
     format: CHART_SELECTION_CACHE_FORMAT,
-    directories: {},
+    entries: {},
   };
 }
 
@@ -696,64 +694,51 @@ function parsePersistedChartSelectionCache(value: unknown): PersistedChartSelect
   }
   const objectValue = value as {
     format?: unknown;
-    directories?: unknown;
+    entries?: unknown;
   };
   if (objectValue.format !== CHART_SELECTION_CACHE_FORMAT) {
     return createDefaultPersistedChartSelectionCache();
   }
-  if (typeof objectValue.directories !== 'object' || objectValue.directories === null) {
+  if (typeof objectValue.entries !== 'object' || objectValue.entries === null) {
     return createDefaultPersistedChartSelectionCache();
   }
 
-  const directories: PersistedChartSelectionCache['directories'] = {};
-  for (const [directoryPath, rawDirectoryEntry] of Object.entries(objectValue.directories as Record<string, unknown>)) {
-    if (typeof rawDirectoryEntry !== 'object' || rawDirectoryEntry === null) {
+  const entries: PersistedChartSelectionCache['entries'] = {};
+  for (const [_contentHashKey, rawEntry] of Object.entries(objectValue.entries as Record<string, unknown>)) {
+    if (typeof rawEntry !== 'object' || rawEntry === null) {
       continue;
     }
-    const filesValue = (rawDirectoryEntry as { files?: unknown }).files;
-    if (typeof filesValue !== 'object' || filesValue === null) {
+    const fileEntry = rawEntry as {
+      contentHash?: unknown;
+      cacheHash?: unknown;
+      summary?: unknown;
+    };
+    if (typeof fileEntry.contentHash !== 'string' || fileEntry.contentHash.length === 0) {
       continue;
     }
-    const files: PersistedChartSelectionCacheDirectoryEntry['files'] = {};
-    for (const [filePath, rawFileEntry] of Object.entries(filesValue as Record<string, unknown>)) {
-      if (typeof rawFileEntry !== 'object' || rawFileEntry === null) {
-        continue;
-      }
-      const fileEntry = rawFileEntry as {
-        contentHash?: unknown;
-        cacheHash?: unknown;
-        summary?: unknown;
-      };
-      if (typeof fileEntry.contentHash !== 'string' || fileEntry.contentHash.length === 0) {
-        continue;
-      }
-      if (typeof fileEntry.cacheHash !== 'string' || fileEntry.cacheHash.length === 0) {
-        continue;
-      }
-      if (typeof fileEntry.summary !== 'object' || fileEntry.summary === null) {
-        continue;
-      }
-      const summary = parsePersistedChartSummary(fileEntry.summary);
-      if (!summary) {
-        continue;
-      }
-      const parsedEntry: PersistedChartSelectionCacheFileEntry = {
-        contentHash: fileEntry.contentHash,
-        cacheHash: fileEntry.cacheHash,
-        summary,
-      };
-      if (!isPersistedChartSelectionCacheFileEntryValid(parsedEntry)) {
-        continue;
-      }
-      files[filePath] = parsedEntry;
+    if (typeof fileEntry.cacheHash !== 'string' || fileEntry.cacheHash.length === 0) {
+      continue;
     }
-    if (Object.keys(files).length > 0) {
-      directories[directoryPath] = { files };
+    if (typeof fileEntry.summary !== 'object' || fileEntry.summary === null) {
+      continue;
     }
+    const summary = parsePersistedChartSummary(fileEntry.summary);
+    if (!summary) {
+      continue;
+    }
+    const parsedEntry: PersistedChartSelectionCacheFileEntry = {
+      contentHash: fileEntry.contentHash,
+      cacheHash: fileEntry.cacheHash,
+      summary,
+    };
+    if (!isPersistedChartSelectionCacheFileEntryValid(parsedEntry)) {
+      continue;
+    }
+    entries[parsedEntry.contentHash] = parsedEntry;
   }
   return {
     format: CHART_SELECTION_CACHE_FORMAT,
-    directories,
+    entries,
   };
 }
 
