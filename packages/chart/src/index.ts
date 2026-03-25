@@ -659,22 +659,24 @@ function resolveBmsLongNoteType(
 }
 
 function inferBmsLongNoteType(events: ResolvedBmsLongNoteEvent[]): 1 | 2 {
-  for (const item of events) {
-    if (item.sourceChannel.startsWith('6')) {
-      return 2;
-    }
-  }
-
   for (const channelEvents of groupResolvedLongNoteEventsBySourceChannel(events).values()) {
     let previous: BeMusicEvent | undefined;
     let previousValue: string | undefined;
+    let continuationCount = 0;
     for (const item of channelEvents) {
       if (
         previous &&
         previousValue === item.normalizedValue &&
         isBmsLongNoteType2Continuation(previous, item.event)
       ) {
-        return 2;
+        // A single same-value continuation is ambiguous because legacy LNTYPE=1
+        // charts also use same-value pairs for their start/end markers.
+        continuationCount += 1;
+        if (continuationCount >= 2) {
+          return 2;
+        }
+      } else {
+        continuationCount = 0;
       }
       previous = item.event;
       previousValue = item.normalizedValue;

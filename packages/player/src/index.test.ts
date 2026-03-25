@@ -948,6 +948,22 @@ describe('player', () => {
     expect(inferredNotes[0]?.endBeat).toBeCloseTo(3, 6);
   });
 
+  test('player: keeps a two-event same-value legacy LN pair as LNTYPE=1 when auto inference is enabled', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [
+      { measure: 0, channel: '55', position: [0, 4], value: 'AA' },
+      { measure: 0, channel: '55', position: [1, 4], value: 'AA' },
+    ];
+
+    const notes = extractPlayableNotes(json, { inferBmsLnTypeWhenMissing: true });
+
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.channel).toBe('15');
+    expect(notes[0]?.beat).toBe(0);
+    expect(notes[0]?.endBeat).toBeCloseTo(1, 6);
+  });
+
   test('player: extracts landmine objects and maps them to playable lanes', () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;

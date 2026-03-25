@@ -406,4 +406,42 @@ describe('chart', () => {
     expect(resolved.notes[0]?.endBeat).toBeCloseTo(5, 6);
     expect(resolved.suppressedTriggerEvents.has(later)).toBe(true);
   });
+
+  test('resolveBmsLongNotes keeps LNTYPE=1 inference for a two-event same-value pair', () => {
+    const json = createEmptyJson('bms');
+    const start: BeMusicEvent = { measure: 0, channel: '55', position: [0, 4], value: 'AA' };
+    const end: BeMusicEvent = { measure: 0, channel: '55', position: [1, 4], value: 'AA' };
+    json.events = [start, end];
+
+    const resolved = resolveBmsLongNotes(json, { inferLnTypeWhenMissing: true });
+
+    expect(resolved.notes).toHaveLength(1);
+    expect(resolved.notes[0]).toMatchObject({
+      event: start,
+      sourceChannel: '55',
+      channel: '15',
+      beat: 0,
+    });
+    expect(resolved.notes[0]?.endBeat).toBeCloseTo(1, 6);
+    expect(resolved.suppressedTriggerEvents.has(end)).toBe(true);
+  });
+
+  test('resolveBmsLongNotes keeps LNTYPE=1 inference for a cross-measure same-value pair', () => {
+    const json = createEmptyJson('bms');
+    const start: BeMusicEvent = { measure: 0, channel: '55', position: [3, 4], value: 'AA' };
+    const end: BeMusicEvent = { measure: 1, channel: '55', position: [0, 4], value: 'AA' };
+    json.events = [start, end];
+
+    const resolved = resolveBmsLongNotes(json, { inferLnTypeWhenMissing: true });
+
+    expect(resolved.notes).toHaveLength(1);
+    expect(resolved.notes[0]).toMatchObject({
+      event: start,
+      sourceChannel: '55',
+      channel: '15',
+      beat: 3,
+    });
+    expect(resolved.notes[0]?.endBeat).toBeCloseTo(4, 6);
+    expect(resolved.suppressedTriggerEvents.has(end)).toBe(true);
+  });
 });
