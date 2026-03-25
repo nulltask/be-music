@@ -668,6 +668,15 @@ export class PlayerTui {
     for (const [channel, untilBeat] of this.laneHoldUntilBeat.entries()) {
       if (untilBeat <= frame.currentBeat) {
         this.laneHoldUntilBeat.delete(channel);
+        const lane = this.laneIndex.get(channel);
+        if (lane !== undefined) {
+          laneHighlightRatios.set(lane, 1);
+        }
+        const existingFlashUntil = this.laneFlashUntil.get(channel) ?? Number.NEGATIVE_INFINITY;
+        const nextFlashUntil = now + FLASH_DURATION_MS;
+        if (nextFlashUntil > existingFlashUntil) {
+          this.laneFlashUntil.set(channel, nextFlashUntil);
+        }
         continue;
       }
       const lane = this.laneIndex.get(channel);

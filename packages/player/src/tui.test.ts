@@ -160,6 +160,60 @@ describe('player tui', () => {
     tui.stop();
   });
 
+  test('tui: auto long note lane highlight decays after the hold ends', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    mockTerminal({ columns: 120, rows: 32 });
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
+    const tui = new PlayerTui({
+      mode: 'AUTO',
+      laneDisplayMode: '5 KEY SP',
+      title: 'Test Music',
+      lanes: [{ channel: '11', key: 'z' }],
+      speed: 1,
+      highSpeed: 1,
+      judgeWindowMs: 16.67,
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+    });
+    const frame = {
+      currentBeat: 0,
+      currentSeconds: 0,
+      totalSeconds: 120,
+      summary: {
+        total: 1,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+      },
+      notes: [],
+    } satisfies Parameters<PlayerTui['render']>[0];
+
+    tui.start();
+    tui.holdLaneUntilBeat('11', 1);
+
+    writeSpy.mockClear();
+    vi.setSystemTime(100);
+    tui.render({ ...frame, currentBeat: 1.01, currentSeconds: 0.505 });
+    const immediateOutput = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
+
+    writeSpy.mockClear();
+    vi.setSystemTime(100 + 200);
+    tui.render({ ...frame, currentBeat: 1.5, currentSeconds: 0.75 });
+    const settledOutput = String(writeSpy.mock.calls.at(-1)?.[0] ?? '');
+
+    expect(immediateOutput).toContain('\u001b[48;2;80;98;130m');
+    expect(settledOutput).not.toContain('\u001b[48;2;80;98;130m');
+
+    tui.stop();
+  });
+
   test('tui: clears and relayouts the frame after terminal resize', () => {
     mockTerminal({ columns: 120, rows: 32 });
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
