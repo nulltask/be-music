@@ -43,8 +43,5 @@
     "fast-png": "^8.0.0",
     "jpeg-js": "^0.4.4",
     "node-web-audio-api": "^1.0.8"
-  },
-  "devDependencies": {
-    "postject": "^1.0.0-alpha.6"
   }
 }

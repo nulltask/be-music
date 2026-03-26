@@ -35,7 +35,7 @@ export function createPackageTsdownConfig(options: CreatePackageTsdownConfigOpti
     outDir: 'dist',
     platform: 'node',
     sourcemap: true,
-    target: 'node20',
+    target: 'node25',
     plugins: Object.hasOwn(entry, 'cli') ? [createCliShebangPlugin()] : undefined,
   });
 }

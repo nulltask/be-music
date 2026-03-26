@@ -305,9 +305,8 @@ pnpm run audio-renderer:sea --node-binary /path/to/node
 
 補足:
 
-- Node.js 24+ が必要です。
-- Node.js 25+ では `--build-sea` を使用します。
-- Node.js 24 系では `--experimental-sea-config + postject` へ自動フォールバックします。
+- Node.js 25.5+ が必要です。
+- SEA 生成は built-in の `--build-sea` を使用します。
 
 ## Exports ベンチマーク
 
