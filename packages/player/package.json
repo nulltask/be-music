@@ -24,6 +24,8 @@
     "build:sea": "tsx ../../scripts/build-sea.ts --package player",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "dev": "tsx --tsconfig ../../tsconfig.typecheck.json src/cli.ts",
+    "diag:keyboard": "tsx --tsconfig ../../tsconfig.typecheck.json src/keyboard-diagnostic.ts",
+    "diag:gameplay-input": "tsx --tsconfig ../../tsconfig.typecheck.json src/gameplay-input-diagnostic.ts",
     "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",

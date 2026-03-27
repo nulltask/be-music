@@ -68,6 +68,10 @@ async function bootstrap(): Promise<void> {
       return;
     }
     if (message.kind === 'input-commands') {
+      postLog('info', 'input-runtime.bridge.commands', {
+        count: message.commands.length,
+        commands: message.commands.map((command) => command.kind).join(','),
+      });
       for (const command of message.commands) {
         bridgedInputContext?.inputSignals.pushCommand(command);
       }

@@ -269,6 +269,7 @@ function createWorkerInitData(options: NodeUiRuntimeOptions): NodeUiWorkerInitDa
     baseDir: options.baseDir,
     kittyGraphics: options.kittyGraphics,
     videoBgaStreaming: options.videoBgaStreaming,
+    useAlternateScreen: shouldUseAlternateScreen(process.platform),
     stdinIsTTY: Boolean(process.stdin.isTTY),
     stdoutIsTTY: Boolean(process.stdout.isTTY),
     initialPaused: options.initialPaused ?? options.stateSignals?.paused() ?? false,
@@ -279,6 +280,10 @@ function createWorkerInitData(options: NodeUiRuntimeOptions): NodeUiWorkerInitDa
         updatedAtMs: 0,
       },
   };
+}
+
+function shouldUseAlternateScreen(platform: NodeJS.Platform): boolean {
+  return platform !== 'win32';
 }
 
 function resolveNodeUiWorkerUrl(): URL {

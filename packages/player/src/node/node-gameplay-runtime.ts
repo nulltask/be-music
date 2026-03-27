@@ -111,11 +111,23 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
           inputTokenToChannels: new Map(
             message.runtime.inputTokenToChannelsEntries.map(([token, channels]) => [token, [...channels]]),
           ),
+          onLog: options.onLog,
         });
         stopInputEffect = effect(() => {
           inputSignals.tick();
           const commands = inputSignals.drainCommands();
           if (commands.length > 0) {
+            options.onLog?.({
+              source: 'input-runtime',
+              level: 'info',
+              event: 'input-runtime.commands.forwarded',
+              fields: {
+                emittedAtUnixMs: Date.now(),
+                emittedAtMonotonicMs: performance.now(),
+                commands: commands.map((command) => command.kind).join(','),
+                count: commands.length,
+              },
+            });
             postWorkerMessage(worker, {
               kind: 'input-commands',
               commands,

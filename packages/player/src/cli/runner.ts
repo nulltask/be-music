@@ -37,6 +37,7 @@ import {
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
 } from '../utils.ts';
+import { beginSharedRawInputCapture } from '../raw-input-capture.ts';
 import {
   HIGH_SPEED_STEP,
   MAX_HIGH_SPEED,
@@ -328,8 +329,19 @@ export async function main(): Promise<void> {
   }
 
   const inputPath = resolveCliPath(args.input);
+  let sessionInputCapture: RawInputCapture | undefined;
   try {
     const inputStat = await stat(inputPath);
+    if (process.stdin.isTTY && process.stdout.isTTY && (inputStat.isDirectory() || args.tui)) {
+      sessionInputCapture = beginSharedRawInputCapture({
+        forceResetRawMode: process.platform === 'win32',
+      });
+      logCli('info', 'cli.session-input-capture.started', {
+        inputIsDirectory: inputStat.isDirectory(),
+        tui: args.tui,
+        stdinIsRaw: Boolean(sessionInputCapture.stdin.isRaw),
+      });
+    }
     if (inputStat.isDirectory()) {
       nextPersistedConfig = await runDirectoryInput(inputPath, args, nextPersistedConfig);
       return;
@@ -349,6 +361,13 @@ export async function main(): Promise<void> {
     }
     throw error;
   } finally {
+    sessionInputCapture?.restore();
+    if (sessionInputCapture) {
+      logCli('info', 'cli.session-input-capture.stopped', {
+        stdinIsRaw: Boolean((process.stdin as NodeJS.ReadStream & { isRaw?: boolean }).isRaw),
+      });
+      sessionInputCapture = undefined;
+    }
     try {
       await savePersistedPlayerConfig(nextPersistedConfig);
     } catch (error) {
@@ -1684,26 +1703,7 @@ function printUsage(): void {
 }
 
 function beginRawInputCapture(): RawInputCapture {
-  const stdin = process.stdin as NodeJS.ReadStream & { isRaw?: boolean };
-  const wasRawMode = Boolean(stdin.isRaw);
-  let restored = false;
-  readline.emitKeypressEvents(process.stdin);
-  if (stdin.isTTY) {
-    stdin.setRawMode(true);
-  }
-  stdin.resume();
-  return {
-    stdin,
-    restore: () => {
-      if (restored) {
-        return;
-      }
-      restored = true;
-      if (stdin.isTTY) {
-        stdin.setRawMode(wasRawMode);
-      }
-    },
-  };
+  return beginSharedRawInputCapture();
 }
 
 function beginLoadingAbortCapture(): LoadingAbortCapture | undefined {

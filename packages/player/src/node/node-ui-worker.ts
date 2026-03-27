@@ -115,6 +115,7 @@ async function bootstrap(): Promise<void> {
     splitAfterIndex,
     stdinIsTTY: initData.stdinIsTTY,
     stdoutIsTTY: initData.stdoutIsTTY,
+    useAlternateScreen: initData.useAlternateScreen,
     terminalImageProtocol: Boolean(initData.kittyGraphics) && supportsKittyGraphicsProtocol(process.env) ? 'kitty' : 'none',
   });
 

@@ -55,6 +55,7 @@ interface TuiOptions {
   stateSignals?: PlayerStateSignals;
   stdinIsTTY?: boolean;
   stdoutIsTTY?: boolean;
+  useAlternateScreen?: boolean;
   terminalImageProtocol?: 'kitty' | 'none';
 }
 
@@ -220,6 +221,8 @@ export class PlayerTui {
 
   private readonly terminalImageProtocol: 'kitty' | 'none';
 
+  private readonly useAlternateScreen: boolean;
+
   private readonly laneIndex = new Map<string, number>();
 
   private readonly laneChannels: string[];
@@ -307,6 +310,7 @@ export class PlayerTui {
     this.supported = Boolean(
       (options.stdoutIsTTY ?? process.stdout.isTTY) && (options.stdinIsTTY ?? process.stdin.isTTY),
     );
+    this.useAlternateScreen = options.useAlternateScreen ?? true;
     this.terminalImageProtocol = options.terminalImageProtocol ?? 'none';
     const laneWidths = resolveLaneWidths(options.lanes);
     options.lanes.forEach((lane, index) => {
@@ -359,7 +363,9 @@ export class PlayerTui {
     this.lastKittyBgaPlacementToken = '';
     this.activeKittyBgaImageIndex = 0;
     this.kittyBgaVisible = false;
-    process.stdout.write('\u001b[?1049h\u001b[2J\u001b[H\u001b[?25l');
+    process.stdout.write(
+      this.useAlternateScreen ? '\u001b[?1049h\u001b[2J\u001b[H\u001b[?25l' : '\u001b[2J\u001b[H\u001b[?25l',
+    );
   }
 
   stop(): void {
@@ -396,7 +402,11 @@ export class PlayerTui {
     this.lastKittyBgaPlacementToken = '';
     this.activeKittyBgaImageIndex = 0;
     this.kittyBgaVisible = false;
-    process.stdout.write(`${clearKittyBga}\u001b[0m\u001b[?25h\u001b[?1049l`);
+    process.stdout.write(
+      this.useAlternateScreen
+        ? `${clearKittyBga}\u001b[0m\u001b[?25h\u001b[?1049l`
+        : `${clearKittyBga}\u001b[0m\u001b[?25h\u001b[2J\u001b[H`,
+    );
   }
 
   setLatestJudge(value: string, channel?: string): void {

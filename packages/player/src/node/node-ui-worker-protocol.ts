@@ -19,6 +19,7 @@ export interface NodeUiWorkerInitData {
   baseDir: string;
   kittyGraphics?: boolean;
   videoBgaStreaming?: boolean;
+  useAlternateScreen?: boolean;
   stdinIsTTY: boolean;
   stdoutIsTTY: boolean;
   initialPaused: boolean;

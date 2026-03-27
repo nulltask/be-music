@@ -2,8 +2,10 @@ import type readline from 'node:readline';
 import { describe, expect, test } from 'vitest';
 import {
   appendFreeZoneInputChannels,
+  beginStatefulKeyboardProtocolOptIn,
   createInputTokenToChannelsMap,
   createLaneBindings,
+  inspectInputTokenEvent,
   resolveLaneDisplayMode,
   resolveInputTokenEvent,
 } from './manual-input.ts';
@@ -322,6 +324,77 @@ describe('manual input', () => {
     expect(altS.tokens).toContain('alt');
     expect(altS.tokens).toContain('alt+s');
     expect(altS.tokens).toContain('option+s');
+  });
+
+  test('manual-input: resolves win32 input mode tokens for printable keys and modifiers', () => {
+    const leftCtrl = resolveInputTokenEvent('\u001b[17;29;0;1;8;1_', createKey(undefined, '\u001b[17;29;0;1;8;1_'));
+    expect(leftCtrl.protocol).toBe('win32');
+    expect(leftCtrl.tokens).toContain('ctrl-left');
+    expect(leftCtrl.tokens).toContain('control');
+
+    const ctrlC = resolveInputTokenEvent('\u001b[67;46;3;1;8;1_', createKey(undefined, '\u001b[67;46;3;1;8;1_'));
+    expect(ctrlC.protocol).toBe('win32');
+    expect(ctrlC.tokens).toContain('ctrl+c');
+
+    const repeatedZ = resolveInputTokenEvent('\u001b[90;44;122;1;16;2_', createKey(undefined, '\u001b[90;44;122;1;16;2_'));
+    expect(repeatedZ.protocol).toBe('win32');
+    expect(repeatedZ.repeatTokens).toContain('z');
+    expect(repeatedZ.repeatTokens).toContain('shift+z');
+
+    const releasedAlt = resolveInputTokenEvent('\u001b[18;56;0;0;1;1_', createKey(undefined, '\u001b[18;56;0;0;1;1_'));
+    expect(releasedAlt.protocol).toBe('win32');
+    expect(releasedAlt.releaseTokens).toContain('alt-right');
+    expect(releasedAlt.releaseTokens).toContain('option');
+  });
+
+  test('manual-input: prefers kitty over win32 over legacy when inspecting input', () => {
+    const kitty = inspectInputTokenEvent('\u001b[99;5:1u', createKey(undefined, '\u001b[99;5:1u'));
+    expect(kitty.selected.protocol).toBe('kitty');
+    expect(kitty.protocols.kitty.detected).toBe(true);
+    expect(kitty.protocols.win32.detected).toBe(false);
+
+    const win32 = inspectInputTokenEvent('\u001b[67;46;3;1;8;1_', createKey(undefined, '\u001b[67;46;3;1;8;1_'));
+    expect(win32.selected.protocol).toBe('win32');
+    expect(win32.protocols.win32.detected).toBe(true);
+
+    const legacy = inspectInputTokenEvent('a', createKey('a', 'a'));
+    expect(legacy.selected.protocol).toBe('legacy');
+    expect(legacy.protocols.legacy.tokens).toContain('a');
+  });
+
+  test('manual-input: opt-in defaults to kitty on non-Windows and win32 on Windows', () => {
+    const writes: string[] = [];
+    const stdout = {
+      isTTY: true,
+      write(value: string) {
+        writes.push(value);
+        return true;
+      },
+    } as unknown as NodeJS.WriteStream;
+    const stdin = process.stdin as NodeJS.ReadStream & { isTTY?: boolean };
+    const originalIsTTY = stdin.isTTY;
+    stdin.isTTY = true;
+
+    try {
+      const stopWin32 = beginStatefulKeyboardProtocolOptIn(stdout, 'win32');
+      stopWin32();
+      expect(writes).toEqual(['\u001b[?9001h', '\u001b[?9001l']);
+
+      writes.length = 0;
+      const stopLinux = beginStatefulKeyboardProtocolOptIn(stdout, 'linux');
+      stopLinux();
+      expect(writes).toEqual(['\u001b[>11u', '\u001b[<u']);
+
+      writes.length = 0;
+      const stopOverride = beginStatefulKeyboardProtocolOptIn(stdout, 'win32', {
+        ...process.env,
+        BE_MUSIC_KEYBOARD_PROTOCOLS: 'kitty,win32',
+      });
+      stopOverride();
+      expect(writes).toEqual(['\u001b[>11u', '\u001b[?9001h', '\u001b[?9001l', '\u001b[<u']);
+    } finally {
+      stdin.isTTY = originalIsTTY;
+    }
   });
 
   test('manual-input: resolves lane display mode labels', () => {

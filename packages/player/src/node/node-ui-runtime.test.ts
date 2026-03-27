@@ -151,11 +151,24 @@ describe('node ui runtime', () => {
     expect(workerData).toMatchObject({
       stdinIsTTY: Boolean(process.stdin.isTTY),
       stdoutIsTTY: Boolean(process.stdout.isTTY),
+      useAlternateScreen: false,
       uiFps: 60,
       videoBgaStreaming: true,
     });
 
     await runtime.dispose();
+  });
+
+  test('disables alternate screen for Windows worker init', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+    const uiSignals = createPlayerUiSignalBus(createFrame());
+    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const workerData = workerState.lastWorkerOptions?.workerData as { useAlternateScreen?: boolean } | undefined;
+
+    expect(workerData?.useAlternateScreen).toBe(false);
+
+    await runtime.dispose();
+    platformSpy.mockRestore();
   });
 
   test('waits for stop acknowledgement before resolving lifecycle cleanup', async () => {

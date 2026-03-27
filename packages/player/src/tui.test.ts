@@ -678,6 +678,33 @@ describe('player tui', () => {
 
     tui.stop();
   });
+
+  test('tui: can render without alternate screen', () => {
+    mockTerminal({ columns: 120, rows: 32 });
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as typeof process.stdout.write);
+    const tui = new PlayerTui({
+      mode: 'MANUAL',
+      laneDisplayMode: '7 KEY',
+      title: 'Test Music',
+      lanes: [
+        { channel: '16', key: 'A', isScratch: true },
+        { channel: '11', key: 'S' },
+      ],
+      speed: 1,
+      highSpeed: 1,
+      judgeWindowMs: 16.67,
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+      useAlternateScreen: false,
+    });
+
+    tui.start();
+    expect(String(writeSpy.mock.calls.at(0)?.[0] ?? '')).toBe('\u001b[2J\u001b[H\u001b[?25l');
+
+    writeSpy.mockClear();
+    tui.stop();
+    expect(String(writeSpy.mock.calls.at(-1)?.[0] ?? '')).toContain('\u001b[0m\u001b[?25h\u001b[2J\u001b[H');
+  });
 });
 
 function mockTerminal({ columns, rows }: { columns: number; rows: number }): void {

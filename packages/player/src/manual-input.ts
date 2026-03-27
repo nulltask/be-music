@@ -465,7 +465,25 @@ export interface ResolvedInputTokenEvent {
   tokens: string[];
   repeatTokens: string[];
   releaseTokens: string[];
+  protocol: 'legacy' | 'kitty' | 'win32';
   kittyProtocolEvent: boolean;
+}
+
+export interface InputProtocolInspection {
+  protocol: 'legacy' | 'kitty' | 'win32';
+  detected: boolean;
+  tokens: string[];
+  repeatTokens: string[];
+  releaseTokens: string[];
+}
+
+export interface InspectedInputTokenEvent {
+  selected: ResolvedInputTokenEvent;
+  protocols: {
+    legacy: InputProtocolInspection;
+    kitty: InputProtocolInspection;
+    win32: InputProtocolInspection;
+  };
 }
 
 const KITTY_KEYBOARD_PROTOCOL_ENABLE_FLAGS = 11;
@@ -482,6 +500,20 @@ const KITTY_LEFT_CTRL_KEY_CODES = new Set([57_442, 442]);
 const KITTY_RIGHT_CTRL_KEY_CODES = new Set([57_448, 448]);
 const KITTY_LEFT_ALT_KEY_CODES = new Set([57_443, 443]);
 const KITTY_RIGHT_ALT_KEY_CODES = new Set([57_449, 449]);
+const WIN32_INPUT_MODE_ENABLE_SEQUENCE = '\u001b[?9001h';
+const WIN32_INPUT_MODE_DISABLE_SEQUENCE = '\u001b[?9001l';
+const WIN32_CONTROL_STATE_RIGHT_ALT = 0x0001;
+const WIN32_CONTROL_STATE_LEFT_ALT = 0x0002;
+const WIN32_CONTROL_STATE_RIGHT_CTRL = 0x0004;
+const WIN32_CONTROL_STATE_LEFT_CTRL = 0x0008;
+const WIN32_CONTROL_STATE_SHIFT = 0x0010;
+const WIN32_VK_SHIFT = 0x10;
+const WIN32_VK_CONTROL = 0x11;
+const WIN32_VK_MENU = 0x12;
+const WIN32_VK_RETURN = 0x0d;
+const WIN32_VK_ESCAPE = 0x1b;
+const WIN32_VK_SPACE = 0x20;
+const WIN32_VK_TAB = 0x09;
 
 export function beginKittyKeyboardProtocolOptIn(stdout: NodeJS.WriteStream = process.stdout): () => void {
   if (!stdout.isTTY || !process.stdin.isTTY) {
@@ -498,37 +530,179 @@ export function beginKittyKeyboardProtocolOptIn(stdout: NodeJS.WriteStream = pro
   };
 }
 
-export function resolveInputTokenEvent(chunk: string, key: readline.Key): ResolvedInputTokenEvent {
-  const kittyEvents = parseKittyKeyboardEvents(chunk, key);
-  if (kittyEvents.length > 0) {
-    const tokens = new Set<string>();
-    const repeatTokens = new Set<string>();
-    const releaseTokens = new Set<string>();
-    for (const kittyEvent of kittyEvents) {
-      const kittyTokens = resolveKittyInputTokens(kittyEvent);
-      if (kittyEvent.eventType === KITTY_EVENT_TYPE_RELEASE) {
-        kittyTokens.forEach((token) => releaseTokens.add(token));
-        continue;
-      }
-      if (kittyEvent.eventType === KITTY_EVENT_TYPE_REPEAT) {
-        kittyTokens.forEach((token) => repeatTokens.add(token));
-        continue;
-      }
-      kittyTokens.forEach((token) => tokens.add(token));
+export function beginWin32InputModeOptIn(stdout: NodeJS.WriteStream = process.stdout): () => void {
+  if (!stdout.isTTY || !process.stdin.isTTY) {
+    return () => undefined;
+  }
+  stdout.write(WIN32_INPUT_MODE_ENABLE_SEQUENCE);
+  let ended = false;
+  return () => {
+    if (ended) {
+      return;
     }
+    ended = true;
+    stdout.write(WIN32_INPUT_MODE_DISABLE_SEQUENCE);
+  };
+}
+
+export function beginStatefulKeyboardProtocolOptIn(
+  stdout: NodeJS.WriteStream = process.stdout,
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): () => void {
+  const protocols = resolveEnabledStatefulKeyboardProtocols(platform, env);
+  const stopKitty = protocols.kitty ? beginKittyKeyboardProtocolOptIn(stdout) : () => undefined;
+  const stopWin32 = protocols.win32 ? beginWin32InputModeOptIn(stdout) : () => undefined;
+  let ended = false;
+  return () => {
+    if (ended) {
+      return;
+    }
+    ended = true;
+    stopWin32();
+    stopKitty();
+  };
+}
+
+function resolveEnabledStatefulKeyboardProtocols(
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+): { kitty: boolean; win32: boolean } {
+  const override = env.BE_MUSIC_KEYBOARD_PROTOCOLS?.trim().toLowerCase();
+  if (override) {
+    const values = new Set(
+      override
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    );
     return {
-      tokens: [...tokens],
-      repeatTokens: [...repeatTokens],
-      releaseTokens: [...releaseTokens],
-      kittyProtocolEvent: true,
+      kitty: values.has('kitty'),
+      win32: values.has('win32'),
+    };
+  }
+
+  if (platform === 'win32') {
+    return {
+      kitty: false,
+      win32: true,
     };
   }
 
   return {
+    kitty: true,
+    win32: false,
+  };
+}
+
+export function resolveInputTokenEvent(chunk: string, key: readline.Key): ResolvedInputTokenEvent {
+  return inspectInputTokenEvent(chunk, key).selected;
+}
+
+export function inspectInputTokenEvent(chunk: string, key: readline.Key): InspectedInputTokenEvent {
+  const kittyResolved = resolveKittyInputTokenEvent(chunk, key);
+  const win32Resolved = resolveWin32InputTokenEvent(chunk, key);
+  const legacyResolved = resolveLegacyInputTokenEvent(chunk, key);
+
+  const selected =
+    kittyResolved.detected
+      ? kittyResolved
+      : win32Resolved.detected
+        ? win32Resolved
+        : legacyResolved;
+
+  return {
+    selected: {
+      tokens: [...selected.tokens],
+      repeatTokens: [...selected.repeatTokens],
+      releaseTokens: [...selected.releaseTokens],
+      protocol: selected.protocol,
+      kittyProtocolEvent: selected.protocol === 'kitty',
+    },
+    protocols: {
+      legacy: legacyResolved,
+      kitty: kittyResolved,
+      win32: win32Resolved,
+    },
+  };
+}
+
+function resolveKittyInputTokenEvent(chunk: string, key: readline.Key): InputProtocolInspection {
+  const kittyEvents = parseKittyKeyboardEvents(chunk, key);
+  if (kittyEvents.length === 0) {
+    return {
+      protocol: 'kitty',
+      detected: false,
+      tokens: [],
+      repeatTokens: [],
+      releaseTokens: [],
+    };
+  }
+
+  const tokens = new Set<string>();
+  const repeatTokens = new Set<string>();
+  const releaseTokens = new Set<string>();
+  for (const kittyEvent of kittyEvents) {
+    const kittyTokens = resolveKittyInputTokens(kittyEvent);
+    if (kittyEvent.eventType === KITTY_EVENT_TYPE_RELEASE) {
+      kittyTokens.forEach((token) => releaseTokens.add(token));
+      continue;
+    }
+    if (kittyEvent.eventType === KITTY_EVENT_TYPE_REPEAT) {
+      kittyTokens.forEach((token) => repeatTokens.add(token));
+      continue;
+    }
+    kittyTokens.forEach((token) => tokens.add(token));
+  }
+  return {
+    protocol: 'kitty',
+    detected: true,
+    tokens: [...tokens],
+    repeatTokens: [...repeatTokens],
+    releaseTokens: [...releaseTokens],
+  };
+}
+
+function resolveWin32InputTokenEvent(chunk: string, key: readline.Key): InputProtocolInspection {
+  const win32Events = parseWin32InputEvents(chunk, key);
+  if (win32Events.length === 0) {
+    return {
+      protocol: 'win32',
+      detected: false,
+      tokens: [],
+      repeatTokens: [],
+      releaseTokens: [],
+    };
+  }
+
+  const tokens = new Set<string>();
+  const repeatTokens = new Set<string>();
+  const releaseTokens = new Set<string>();
+  for (const event of win32Events) {
+    const eventTokens = resolveWin32InputTokens(event);
+    if (event.keyDown) {
+      const target = event.repeatCount > 1 ? repeatTokens : tokens;
+      eventTokens.forEach((token) => target.add(token));
+      continue;
+    }
+    eventTokens.forEach((token) => releaseTokens.add(token));
+  }
+  return {
+    protocol: 'win32',
+    detected: true,
+    tokens: [...tokens],
+    repeatTokens: [...repeatTokens],
+    releaseTokens: [...releaseTokens],
+  };
+}
+
+function resolveLegacyInputTokenEvent(chunk: string, key: readline.Key): InputProtocolInspection {
+  return {
+    protocol: 'legacy',
+    detected: true,
     tokens: resolveLegacyInputTokens(chunk, key),
     repeatTokens: [],
     releaseTokens: [],
-    kittyProtocolEvent: false,
   };
 }
 
@@ -577,6 +751,14 @@ function resolveLegacyInputTokens(chunk: string, key: readline.Key): string[] {
   return [...tokens];
 }
 
+interface Win32InputEvent {
+  virtualKeyCode: number;
+  unicodeChar: number;
+  keyDown: boolean;
+  controlState: number;
+  repeatCount: number;
+}
+
 function parseKittyKeyboardEvents(chunk: string, key: readline.Key): KittyKeyboardEvent[] {
   const sequence = chunk.length > 0 ? chunk : (key.sequence ?? '');
   if (sequence.length === 0) {
@@ -619,6 +801,39 @@ function parseKittyKeyboardEvents(chunk: string, key: readline.Key): KittyKeyboa
       baseKeyCode,
       modifiers,
       eventType,
+    });
+  }
+  return events;
+}
+
+function parseWin32InputEvents(chunk: string, key: readline.Key): Win32InputEvent[] {
+  const sequence = chunk.length > 0 ? chunk : (key.sequence ?? '');
+  if (sequence.length === 0) {
+    return [];
+  }
+
+  const events: Win32InputEvent[] = [];
+  const regex = /\u001b\[([0-9]+);([0-9]+);([0-9]+);([01]);([0-9]+);([0-9]+)_/g;
+  for (const match of sequence.matchAll(regex)) {
+    const virtualKeyCode = parseNumericPart(match[1]);
+    const unicodeChar = parseNumericPart(match[3]);
+    const keyDown = match[4] === '1';
+    const controlState = parseNumericPart(match[5]);
+    const repeatCount = parseNumericPart(match[6]);
+    if (
+      virtualKeyCode === undefined ||
+      unicodeChar === undefined ||
+      controlState === undefined ||
+      repeatCount === undefined
+    ) {
+      continue;
+    }
+    events.push({
+      virtualKeyCode,
+      unicodeChar,
+      keyDown,
+      controlState,
+      repeatCount,
     });
   }
   return events;
@@ -711,6 +926,116 @@ function resolveKittyInputTokens(event: KittyKeyboardEvent): Set<string> {
   }
 
   return tokens;
+}
+
+function resolveWin32InputTokens(event: Win32InputEvent): Set<string> {
+  const tokens = new Set<string>();
+  const hasLeftAlt = (event.controlState & WIN32_CONTROL_STATE_LEFT_ALT) !== 0;
+  const hasRightAlt = (event.controlState & WIN32_CONTROL_STATE_RIGHT_ALT) !== 0;
+  const hasLeftCtrl = (event.controlState & WIN32_CONTROL_STATE_LEFT_CTRL) !== 0;
+  const hasRightCtrl = (event.controlState & WIN32_CONTROL_STATE_RIGHT_CTRL) !== 0;
+  const hasShift = (event.controlState & WIN32_CONTROL_STATE_SHIFT) !== 0;
+  const hasAlt = hasLeftAlt || hasRightAlt;
+  const hasCtrl = hasLeftCtrl || hasRightCtrl;
+
+  if (event.virtualKeyCode === WIN32_VK_SHIFT) {
+    if (hasRightAlt || hasRightCtrl) {
+      tokens.add('shift-right');
+    } else {
+      tokens.add('shift-left');
+    }
+    tokens.add('shift');
+    return tokens;
+  }
+  if (event.virtualKeyCode === WIN32_VK_CONTROL) {
+    if (hasRightCtrl && !hasLeftCtrl) {
+      tokens.add('ctrl-right');
+      tokens.add('control-right');
+    } else {
+      tokens.add('ctrl-left');
+      tokens.add('control-left');
+    }
+    tokens.add('ctrl');
+    tokens.add('control');
+    return tokens;
+  }
+  if (event.virtualKeyCode === WIN32_VK_MENU) {
+    if (hasRightAlt && !hasLeftAlt) {
+      tokens.add('alt-right');
+      tokens.add('option-right');
+    } else {
+      tokens.add('alt-left');
+      tokens.add('option-left');
+    }
+    tokens.add('alt');
+    tokens.add('option');
+    return tokens;
+  }
+
+  if (event.virtualKeyCode === WIN32_VK_ESCAPE) {
+    tokens.add('escape');
+  } else if (event.virtualKeyCode === WIN32_VK_RETURN) {
+    tokens.add('enter');
+    tokens.add('return');
+  } else if (event.virtualKeyCode === WIN32_VK_SPACE) {
+    tokens.add('space');
+  } else if (event.virtualKeyCode === WIN32_VK_TAB) {
+    tokens.add('tab');
+  }
+
+  const printableToken = resolveWin32PrintableToken(event);
+  if (printableToken) {
+    tokens.add(printableToken);
+    if (hasShift && /^[a-z]$/.test(printableToken)) {
+      tokens.add(`shift+${printableToken}`);
+    }
+  }
+  if (hasLeftCtrl) {
+    tokens.add('ctrl-left');
+    tokens.add('control-left');
+  }
+  if (hasRightCtrl) {
+    tokens.add('ctrl-right');
+    tokens.add('control-right');
+  }
+  if (hasCtrl) {
+    tokens.add('ctrl');
+    tokens.add('control');
+    if (printableToken) {
+      tokens.add(`ctrl+${printableToken}`);
+    }
+  }
+  if (hasLeftAlt) {
+    tokens.add('alt-left');
+    tokens.add('option-left');
+  }
+  if (hasRightAlt) {
+    tokens.add('alt-right');
+    tokens.add('option-right');
+  }
+  if (hasAlt) {
+    tokens.add('alt');
+    tokens.add('option');
+    if (printableToken) {
+      tokens.add(`alt+${printableToken}`);
+      tokens.add(`option+${printableToken}`);
+    }
+  }
+
+  return tokens;
+}
+
+function resolveWin32PrintableToken(event: Win32InputEvent): string | undefined {
+  if (event.unicodeChar >= 32 && event.unicodeChar <= 126) {
+    return normalizeKey(String.fromCodePoint(event.unicodeChar));
+  }
+  if (event.virtualKeyCode >= 65 && event.virtualKeyCode <= 90) {
+    return String.fromCodePoint(event.virtualKeyCode).toLowerCase();
+  }
+  if (event.virtualKeyCode >= 48 && event.virtualKeyCode <= 57) {
+    return String.fromCodePoint(event.virtualKeyCode);
+  }
+  return undefined;
 }
 
 function resolveKittyPrintableToken(event: KittyKeyboardEvent): string | undefined {
