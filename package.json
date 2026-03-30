@@ -30,7 +30,7 @@
     "@types/node": "^25.5.0",
     "@typescript/native-preview": "7.0.0-dev.20260322.1",
     "@vitest/coverage-v8": "^4.0.18",
-    "oxfmt": "^0.41.0",
+    "oxfmt": "^0.42.0",
     "oxlint": "^1.57.0",
     "rimraf": "^6.0.1",
     "tinybench": "^6.0.0",
