@@ -77,11 +77,19 @@ interface TuiFrame {
   totalSeconds: number;
   summary: PlayerSummary;
   notes: TuiNote[];
+  invisibleNotes?: TuiNote[];
   audioBackend?: string;
   activeAudioFiles?: string[];
   activeAudioVoiceCount?: number;
   bgaAnsiLines?: string[];
   bgaKittyImage?: BgaKittyImage;
+}
+
+interface NoteWindowState {
+  source?: TuiNote[];
+  startIndex: number;
+  endIndex: number;
+  beat: number;
 }
 
 interface MeasureTimelinePoint {
@@ -120,6 +128,7 @@ interface ScrollSegment {
 const IIDX_MEASURE_BEATS = 4;
 const MAX_SCROLL_LOOKAHEAD_BEATS = IIDX_MEASURE_BEATS * 64;
 const DEFAULT_VISIBLE_NOTES_LIMIT = 8192;
+const DEFAULT_INVISIBLE_NOTES_PER_CELL = 2;
 const BEAT_EPSILON = 1e-9;
 const FLASH_DURATION_MS = 180;
 const MEASURE_LINE_SYMBOL = '▔';
@@ -264,17 +273,21 @@ export class PlayerTui {
 
   private previousRenderedLines: string[] = [];
 
-  private noteWindowSource?: TuiNote[];
+  private readonly primaryNoteWindowState: NoteWindowState = {
+    source: undefined,
+    startIndex: 0,
+    endIndex: 0,
+    beat: Number.NEGATIVE_INFINITY,
+  };
 
-  private noteWindowStartIndex = 0;
+  private readonly invisibleNoteWindowState: NoteWindowState = {
+    source: undefined,
+    startIndex: 0,
+    endIndex: 0,
+    beat: Number.NEGATIVE_INFINITY,
+  };
 
-  private noteWindowEndIndex = 0;
-
-  private noteWindowBeat = Number.NEGATIVE_INFINITY;
-
-  private visibleNoteIndices = new Set<number>();
-
-  private visibleNoteRows = new Map<number, number>();
+  private visibleNoteRows = new Map<string, number>();
 
   private displayedHighSpeed: number;
 
@@ -382,11 +395,14 @@ export class PlayerTui {
     this.laneHoldUntilBeat.clear();
     this.pressedLaneChannels.clear();
     this.previousRenderedLines = [];
-    this.noteWindowSource = undefined;
-    this.noteWindowStartIndex = 0;
-    this.noteWindowEndIndex = 0;
-    this.noteWindowBeat = Number.NEGATIVE_INFINITY;
-    this.visibleNoteIndices.clear();
+    this.primaryNoteWindowState.source = undefined;
+    this.primaryNoteWindowState.startIndex = 0;
+    this.primaryNoteWindowState.endIndex = 0;
+    this.primaryNoteWindowState.beat = Number.NEGATIVE_INFINITY;
+    this.invisibleNoteWindowState.source = undefined;
+    this.invisibleNoteWindowState.startIndex = 0;
+    this.invisibleNoteWindowState.endIndex = 0;
+    this.invisibleNoteWindowState.beat = Number.NEGATIVE_INFINITY;
     this.visibleNoteRows.clear();
     this.needsFullRefresh = false;
     this.displayedHighSpeed = normalizeHighSpeed(this.options.highSpeed);
@@ -533,137 +549,155 @@ export class PlayerTui {
       }
     }
 
-    const { start: noteStartIndex, end: noteEndIndex } = this.resolveNoteWindow(
-      frame.notes,
-      frame.currentBeat,
-      scrollWindowBeats,
-    );
-    const visibleNoteIndices = new Set<number>();
-    const visibleNoteRows = new Map<number, number>();
+    const nextVisibleNoteRows = new Map<string, number>();
+    const renderNoteCollection = (
+      notes: TuiNote[],
+      keyPrefix: 'main' | 'invisible',
+      state: NoteWindowState,
+      visibleNotesLimit: number,
+    ): void => {
+      const { start: noteStartIndex, end: noteEndIndex } = this.resolveNoteWindow(
+        notes,
+        frame.currentBeat,
+        scrollWindowBeats,
+        state,
+        visibleNotesLimit,
+      );
 
-    for (let noteIndex = noteStartIndex; noteIndex < noteEndIndex; noteIndex += 1) {
-      const note = frame.notes[noteIndex];
-      const previousRow = this.visibleNoteRows.get(noteIndex);
-      let visibleThisFrame = false;
-      const keepVisible =
-        typeof note.visibleUntilBeat === 'number' &&
-        Number.isFinite(note.visibleUntilBeat) &&
-        note.visibleUntilBeat > frame.currentBeat;
-      const crossedJudgeLineSinceLastFrame =
-        note.judged &&
-        Number.isFinite(this.lastRenderedBeat) &&
-        note.beat + BEAT_EPSILON >= this.lastRenderedBeat &&
-        note.beat <= frame.currentBeat + BEAT_EPSILON;
-      const keepJudgedUntilJudgeLine =
-        note.judged &&
-        !keepVisible &&
-        Number.isFinite(note.beat) &&
-        (note.beat + BEAT_EPSILON >= frame.currentBeat || crossedJudgeLineSinceLastFrame);
-      if (note.judged && !keepVisible && !keepJudgedUntilJudgeLine) {
-        continue;
-      }
-      const lane = this.laneIndex.get(this.resolveRenderLaneChannel(note.channel));
-      if (lane === undefined) {
-        continue;
-      }
-
-      if (note.mine) {
-        const distance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
-        const visibleDistance = normalizeNoteApproachDistance(distance, frame.currentBeat, note.beat);
-        if (!isDistanceWithinWindow(visibleDistance, scrollWindowBeats)) {
+      for (let noteIndex = noteStartIndex; noteIndex < noteEndIndex; noteIndex += 1) {
+        const note = notes[noteIndex]!;
+        const noteKey = `${keyPrefix}:${noteIndex}`;
+        const previousRow = this.visibleNoteRows.get(noteKey);
+        let visibleThisFrame = false;
+        const keepVisible =
+          typeof note.visibleUntilBeat === 'number' &&
+          Number.isFinite(note.visibleUntilBeat) &&
+          note.visibleUntilBeat > frame.currentBeat;
+        const crossedJudgeLineSinceLastFrame =
+          note.judged &&
+          Number.isFinite(this.lastRenderedBeat) &&
+          note.beat + BEAT_EPSILON >= this.lastRenderedBeat &&
+          note.beat <= frame.currentBeat + BEAT_EPSILON;
+        const keepJudgedUntilJudgeLine =
+          note.judged &&
+          !keepVisible &&
+          Number.isFinite(note.beat) &&
+          (note.beat + BEAT_EPSILON >= frame.currentBeat || crossedJudgeLineSinceLastFrame);
+        if (note.judged && !keepVisible && !keepJudgedUntilJudgeLine) {
           continue;
         }
-        const row = distanceToNoteRow(visibleDistance, rowCount, scrollWindowBeats, previousRow);
+        const lane = this.laneIndex.get(this.resolveRenderLaneChannel(note.channel));
+        if (lane === undefined) {
+          continue;
+        }
+
+        if (note.mine) {
+          const distance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
+          const visibleDistance = normalizeNoteApproachDistance(distance, frame.currentBeat, note.beat);
+          if (!isDistanceWithinWindow(visibleDistance, scrollWindowBeats)) {
+            continue;
+          }
+          const row = distanceToNoteRow(visibleDistance, rowCount, scrollWindowBeats, previousRow);
+          const placedRow = setLaneCell(
+            grid,
+            gridSourceChannels,
+            row,
+            lane,
+            MINE_NOTE_SYMBOL,
+            note.channel,
+            this.freeZoneSourceChannels,
+            true,
+          );
+          nextVisibleNoteRows.set(noteKey, placedRow);
+          continue;
+        }
+
+        if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
+          const longBodySymbol = note.invisible ? INVISIBLE_LONG_NOTE_BODY_SYMBOL : LONG_NOTE_BODY_SYMBOL;
+          const longTailSymbol = note.invisible ? INVISIBLE_LONG_NOTE_TAIL_SYMBOL : LONG_NOTE_TAIL_SYMBOL;
+          const bodyStartBeat = Math.max(note.beat, frame.currentBeat);
+          const bodyEndBeat = note.endBeat;
+          const bodyStartDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyStartBeat);
+          const bodyEndDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyEndBeat);
+          const normalizedBodyStart = normalizeNoteApproachDistance(bodyStartDistance, frame.currentBeat, bodyStartBeat);
+          const normalizedBodyEnd = normalizeNoteApproachDistance(bodyEndDistance, frame.currentBeat, bodyEndBeat);
+          const hasBodyStart = Number.isFinite(normalizedBodyStart);
+          const hasBodyEnd = Number.isFinite(normalizedBodyEnd);
+
+          const bodyStartInWindow = isDistanceWithinWindow(normalizedBodyStart, scrollWindowBeats);
+          const bodyEndInWindow = isDistanceWithinWindow(normalizedBodyEnd, scrollWindowBeats);
+          if (bodyStartInWindow || bodyEndInWindow) {
+            const bodyVisibleFrom = clamp(hasBodyStart ? normalizedBodyStart : normalizedBodyEnd, 0, scrollWindowBeats);
+            const bodyVisibleTo = clamp(hasBodyEnd ? normalizedBodyEnd : normalizedBodyStart, 0, scrollWindowBeats);
+            const startRow = distanceToNoteRow(bodyVisibleFrom, rowCount, scrollWindowBeats);
+            const endRow = distanceToNoteRow(bodyVisibleTo, rowCount, scrollWindowBeats);
+            const from = Math.min(startRow, endRow);
+            const to = Math.max(startRow, endRow);
+            for (let row = from; row <= to; row += 1) {
+              if (row < 0 || row >= rowCount) {
+                continue;
+              }
+              setLaneCell(
+                grid,
+                gridSourceChannels,
+                row,
+                lane,
+                longBodySymbol,
+                note.channel,
+                this.freeZoneSourceChannels,
+              );
+            }
+            visibleThisFrame = true;
+          }
+
+          const tailDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.endBeat);
+          const tailVisibleDistance = normalizeNoteApproachDistance(tailDistance, frame.currentBeat, note.endBeat);
+          if (isDistanceWithinWindow(tailVisibleDistance, scrollWindowBeats)) {
+            const tailRow = distanceToNoteRow(tailVisibleDistance, rowCount, scrollWindowBeats);
+            if (tailRow >= 0 && tailRow < rowCount) {
+              setLaneCell(
+                grid,
+                gridSourceChannels,
+                tailRow,
+                lane,
+                longTailSymbol,
+                note.channel,
+                this.freeZoneSourceChannels,
+                true,
+              );
+              visibleThisFrame = true;
+            }
+          }
+        }
+
+        const headDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
+        const headVisibleDistance = normalizeNoteApproachDistance(headDistance, frame.currentBeat, note.beat);
+        if (!isDistanceWithinWindow(headVisibleDistance, scrollWindowBeats)) {
+          continue;
+        }
+        const row = distanceToNoteRow(headVisibleDistance, rowCount, scrollWindowBeats, previousRow);
         const placedRow = setLaneCell(
           grid,
           gridSourceChannels,
           row,
           lane,
-          MINE_NOTE_SYMBOL,
+          note.invisible ? INVISIBLE_NOTE_HEAD_SYMBOL : NOTE_HEAD_SYMBOL,
           note.channel,
           this.freeZoneSourceChannels,
           true,
         );
-        visibleNoteIndices.add(noteIndex);
-        visibleNoteRows.set(noteIndex, placedRow);
-        continue;
+        nextVisibleNoteRows.set(noteKey, placedRow);
       }
+    };
 
-      if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
-        const longBodySymbol = note.invisible ? INVISIBLE_LONG_NOTE_BODY_SYMBOL : LONG_NOTE_BODY_SYMBOL;
-        const longTailSymbol = note.invisible ? INVISIBLE_LONG_NOTE_TAIL_SYMBOL : LONG_NOTE_TAIL_SYMBOL;
-        const bodyStartBeat = Math.max(note.beat, frame.currentBeat);
-        const bodyEndBeat = note.endBeat;
-        const bodyStartDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyStartBeat);
-        const bodyEndDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyEndBeat);
-        const normalizedBodyStart = normalizeNoteApproachDistance(bodyStartDistance, frame.currentBeat, bodyStartBeat);
-        const normalizedBodyEnd = normalizeNoteApproachDistance(bodyEndDistance, frame.currentBeat, bodyEndBeat);
-        const hasBodyStart = Number.isFinite(normalizedBodyStart);
-        const hasBodyEnd = Number.isFinite(normalizedBodyEnd);
-
-        const bodyStartInWindow = isDistanceWithinWindow(normalizedBodyStart, scrollWindowBeats);
-        const bodyEndInWindow = isDistanceWithinWindow(normalizedBodyEnd, scrollWindowBeats);
-        if (bodyStartInWindow || bodyEndInWindow) {
-          const bodyVisibleFrom = clamp(hasBodyStart ? normalizedBodyStart : normalizedBodyEnd, 0, scrollWindowBeats);
-          const bodyVisibleTo = clamp(hasBodyEnd ? normalizedBodyEnd : normalizedBodyStart, 0, scrollWindowBeats);
-          const startRow = distanceToNoteRow(bodyVisibleFrom, rowCount, scrollWindowBeats);
-          const endRow = distanceToNoteRow(bodyVisibleTo, rowCount, scrollWindowBeats);
-          const from = Math.min(startRow, endRow);
-          const to = Math.max(startRow, endRow);
-          for (let row = from; row <= to; row += 1) {
-            if (row < 0 || row >= rowCount) {
-              continue;
-            }
-            setLaneCell(grid, gridSourceChannels, row, lane, longBodySymbol, note.channel, this.freeZoneSourceChannels);
-          }
-          visibleThisFrame = true;
-        }
-
-        const tailDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.endBeat);
-        const tailVisibleDistance = normalizeNoteApproachDistance(tailDistance, frame.currentBeat, note.endBeat);
-        if (isDistanceWithinWindow(tailVisibleDistance, scrollWindowBeats)) {
-          const tailRow = distanceToNoteRow(tailVisibleDistance, rowCount, scrollWindowBeats);
-          if (tailRow >= 0 && tailRow < rowCount) {
-            setLaneCell(
-              grid,
-              gridSourceChannels,
-              tailRow,
-              lane,
-              longTailSymbol,
-              note.channel,
-              this.freeZoneSourceChannels,
-              true,
-            );
-            visibleThisFrame = true;
-          }
-        }
-      }
-
-      const headDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
-      const headVisibleDistance = normalizeNoteApproachDistance(headDistance, frame.currentBeat, note.beat);
-      if (!isDistanceWithinWindow(headVisibleDistance, scrollWindowBeats)) {
-        if (visibleThisFrame) {
-          visibleNoteIndices.add(noteIndex);
-        }
-        continue;
-      }
-      const row = distanceToNoteRow(headVisibleDistance, rowCount, scrollWindowBeats, previousRow);
-      const placedRow = setLaneCell(
-        grid,
-        gridSourceChannels,
-        row,
-        lane,
-        note.invisible ? INVISIBLE_NOTE_HEAD_SYMBOL : NOTE_HEAD_SYMBOL,
-        note.channel,
-        this.freeZoneSourceChannels,
-        true,
-      );
-      visibleThisFrame = true;
-      visibleNoteIndices.add(noteIndex);
-      visibleNoteRows.set(noteIndex, placedRow);
-    }
-    this.visibleNoteIndices = visibleNoteIndices;
-    this.visibleNoteRows = visibleNoteRows;
+    renderNoteCollection(
+      frame.invisibleNotes ?? [],
+      'invisible',
+      this.invisibleNoteWindowState,
+      this.resolveInvisibleNotesLimit(rowCount, laneCount),
+    );
+    renderNoteCollection(frame.notes, 'main', this.primaryNoteWindowState, this.resolveVisibleNotesLimit());
+    this.visibleNoteRows = nextVisibleNoteRows;
 
     for (const [channel, until] of this.laneFlashUntil.entries()) {
       if (until <= now) {
@@ -961,23 +995,25 @@ export class PlayerTui {
     notes: TuiNote[],
     currentBeat: number,
     scrollWindowBeats: number,
+    state: NoteWindowState,
+    visibleNotesLimit: number,
   ): { start: number; end: number } {
-    if (this.noteWindowSource !== notes || currentBeat < this.noteWindowBeat) {
-      this.noteWindowSource = notes;
-      this.noteWindowStartIndex = 0;
-      this.noteWindowEndIndex = 0;
+    if (state.source !== notes || currentBeat < state.beat) {
+      state.source = notes;
+      state.startIndex = 0;
+      state.endIndex = 0;
     }
-    this.noteWindowBeat = currentBeat;
+    state.beat = currentBeat;
 
-    let start = this.noteWindowStartIndex;
+    let start = state.startIndex;
     while (start < notes.length && canDropNoteFromRenderWindow(notes[start], currentBeat, scrollWindowBeats)) {
       start += 1;
     }
 
-    let end = Math.max(this.noteWindowEndIndex, start);
+    let end = Math.max(state.endIndex, start);
     if (this.scrollDistanceMapper.hasBidirectionalScrollWithinLookahead(currentBeat)) {
       const capBeat = Math.max(0, currentBeat) + MAX_SCROLL_LOOKAHEAD_BEATS;
-      while (end < notes.length && notes[end].beat <= capBeat && end - start < this.resolveVisibleNotesLimit()) {
+      while (end < notes.length && notes[end].beat <= capBeat && end - start < visibleNotesLimit) {
         end += 1;
       }
     } else {
@@ -988,15 +1024,15 @@ export class PlayerTui {
         while (
           end < notes.length &&
           notes[end].beat <= maxBeat &&
-          end - start < this.resolveVisibleNotesLimit()
+          end - start < visibleNotesLimit
         ) {
           end += 1;
         }
       }
     }
 
-    this.noteWindowStartIndex = start;
-    this.noteWindowEndIndex = end;
+    state.startIndex = start;
+    state.endIndex = end;
     return { start, end };
   }
 
@@ -1032,6 +1068,12 @@ export class PlayerTui {
       return DEFAULT_VISIBLE_NOTES_LIMIT;
     }
     return Math.max(1, Math.floor(configured));
+  }
+
+  private resolveInvisibleNotesLimit(rowCount: number, laneCount: number): number {
+    const gridCapacity = Math.max(1, rowCount) * Math.max(1, laneCount);
+    const gridBoundedLimit = gridCapacity * DEFAULT_INVISIBLE_NOTES_PER_CELL;
+    return Math.max(128, Math.min(this.resolveVisibleNotesLimit(), gridBoundedLimit));
   }
 
   private resolveDisplayHighSpeed(nowMs: number): number {

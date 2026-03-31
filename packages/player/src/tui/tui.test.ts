@@ -14,10 +14,12 @@ function renderOutputRaw(
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
+    invisibleNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     lanes?: Array<{ channel: string; key: string; isScratch?: boolean }>;
     laneDisplayMode?: string;
     splitAfterIndex?: number;
     highSpeed?: number;
+    visibleNotesLimit?: number;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
     speedTimeline?: Array<{ beat: number; speed: number }>;
   } = {},
@@ -37,6 +39,7 @@ function renderOutputRaw(
       lanes: options.lanes ?? [{ channel: '11', key: 'z' }],
       speed: 1,
       highSpeed: options.highSpeed ?? 1,
+      visibleNotesLimit: options.visibleNotesLimit,
       judgeWindowMs: 100,
       splitAfterIndex: options.splitAfterIndex,
       scrollTimeline: options.scrollTimeline,
@@ -66,6 +69,11 @@ function renderOutputRaw(
         ...note,
         judged: false,
       })),
+      invisibleNotes: options.invisibleNotes?.map((note) => ({
+        ...note,
+        judged: false,
+        invisible: true,
+      })),
     });
     tui.stop();
   } finally {
@@ -81,10 +89,12 @@ function renderOutput(
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
+    invisibleNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     lanes?: Array<{ channel: string; key: string; isScratch?: boolean }>;
     laneDisplayMode?: string;
     splitAfterIndex?: number;
     highSpeed?: number;
+    visibleNotesLimit?: number;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
     speedTimeline?: Array<{ beat: number; speed: number }>;
   } = {},
@@ -97,7 +107,10 @@ function renderRowsContaining(
   fragment: string,
   currentBeat = 0,
   options: {
+    invisibleNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     highSpeed?: number;
+    lanes?: Array<{ channel: string; key: string; isScratch?: boolean }>;
+    visibleNotesLimit?: number;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
     speedTimeline?: Array<{ beat: number; speed: number }>;
   } = {},
@@ -106,7 +119,10 @@ function renderRowsContaining(
     currentBeat,
     currentSeconds: currentBeat / 2,
     totalSeconds: 10,
+    invisibleNotes: options.invisibleNotes,
     highSpeed: options.highSpeed,
+    lanes: options.lanes,
+    visibleNotesLimit: options.visibleNotesLimit,
     scrollTimeline: options.scrollTimeline,
     speedTimeline: options.speedTimeline,
   })
@@ -209,6 +225,30 @@ describe('player-tui', () => {
       {
         highSpeed: 3.5,
         scrollTimeline: oscillatingScrollTimeline,
+      },
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  test('keeps rendering visible notes when invisible notes saturate their own window', () => {
+    const invisibleNotes = Array.from({ length: 64 }, (_, index) => ({
+      channel: '12',
+      beat: 0.05 + index * 0.05,
+      seconds: 0.025 + index * 0.025,
+    }));
+
+    const rows = renderRowsContaining(
+      [{ channel: '11', beat: 1, seconds: 0.5 }],
+      '███',
+      0,
+      {
+        invisibleNotes,
+        visibleNotesLimit: 8,
+        lanes: [
+          { channel: '11', key: 'z' },
+          { channel: '12', key: 's' },
+        ],
       },
     );
 
