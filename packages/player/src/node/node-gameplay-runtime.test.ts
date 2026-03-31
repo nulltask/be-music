@@ -174,6 +174,11 @@ describe('node gameplay runtime', () => {
     expect(uiRuntimeState.context?.uiFps).toBe(60);
     expect(uiRuntimeState.context?.tuiVisibleNotesLimit).toBe(8192);
     expect(uiRuntimeState.context?.videoBgaStreaming).toBe(true);
+    expect(uiRuntimeState.context?.initialFrame).toMatchObject({
+      currentBeat: 0,
+      currentSeconds: 0,
+      notes: [],
+    });
     const uiInitResults = messagesOfKind(worker, 'ui-init-result');
     expect(uiInitResults).toHaveLength(1);
     expect(uiInitResults[0]).toMatchObject({

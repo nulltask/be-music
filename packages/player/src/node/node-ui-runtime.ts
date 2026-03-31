@@ -29,6 +29,7 @@ export interface NodeUiRuntimeOptions {
   videoBgaStreaming?: boolean;
   stateSignals?: PlayerStateSignals;
   uiSignals?: PlayerUiSignalBus;
+  initialFrame?: ReturnType<PlayerUiSignalBus['getFrame']>;
   baseDir: string;
   loadSignal?: AbortSignal;
   onBgaLoadProgress?: (progress: { ratio: number; detail?: string }) => void;
@@ -85,6 +86,25 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
     }
     worker.postMessage(message);
   };
+  let staticFrameCollectionsPosted = false;
+  const postUiFrame = (frameState: Readonly<ReturnType<PlayerUiSignalBus['getFrame']>>): void => {
+    postWorkerMessage({
+      kind: 'frame',
+      frame: staticFrameCollectionsPosted
+        ? {
+            ...frameState,
+            landmineNotes: undefined,
+            invisibleNotes: undefined,
+          }
+        : frameState,
+    });
+    staticFrameCollectionsPosted = true;
+  };
+
+  const initialFrame = options.initialFrame ?? options.uiSignals?.getFrame();
+  if (initialFrame) {
+    postUiFrame(initialFrame);
+  }
 
   const deferredUiFlush =
     options.uiSignals && options.stateSignals
@@ -98,7 +118,7 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
           if (frame) {
             const frameState = options.uiSignals?.getFrame();
             if (frameState) {
-              postWorkerMessage({ kind: 'frame', frame: frameState });
+              postUiFrame(frameState);
             }
           }
         })

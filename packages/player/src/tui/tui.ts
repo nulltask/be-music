@@ -77,6 +77,7 @@ interface TuiFrame {
   totalSeconds: number;
   summary: PlayerSummary;
   notes: TuiNote[];
+  landmineNotes?: TuiNote[];
   invisibleNotes?: TuiNote[];
   audioBackend?: string;
   activeAudioFiles?: string[];
@@ -128,6 +129,7 @@ interface ScrollSegment {
 const IIDX_MEASURE_BEATS = 4;
 const MAX_SCROLL_LOOKAHEAD_BEATS = IIDX_MEASURE_BEATS * 64;
 const DEFAULT_VISIBLE_NOTES_LIMIT = 8192;
+const DEFAULT_LANDMINE_NOTES_PER_CELL = 2;
 const DEFAULT_INVISIBLE_NOTES_PER_CELL = 2;
 const BEAT_EPSILON = 1e-9;
 const FLASH_DURATION_MS = 180;
@@ -280,6 +282,13 @@ export class PlayerTui {
     beat: Number.NEGATIVE_INFINITY,
   };
 
+  private readonly landmineNoteWindowState: NoteWindowState = {
+    source: undefined,
+    startIndex: 0,
+    endIndex: 0,
+    beat: Number.NEGATIVE_INFINITY,
+  };
+
   private readonly invisibleNoteWindowState: NoteWindowState = {
     source: undefined,
     startIndex: 0,
@@ -399,6 +408,10 @@ export class PlayerTui {
     this.primaryNoteWindowState.startIndex = 0;
     this.primaryNoteWindowState.endIndex = 0;
     this.primaryNoteWindowState.beat = Number.NEGATIVE_INFINITY;
+    this.landmineNoteWindowState.source = undefined;
+    this.landmineNoteWindowState.startIndex = 0;
+    this.landmineNoteWindowState.endIndex = 0;
+    this.landmineNoteWindowState.beat = Number.NEGATIVE_INFINITY;
     this.invisibleNoteWindowState.source = undefined;
     this.invisibleNoteWindowState.startIndex = 0;
     this.invisibleNoteWindowState.endIndex = 0;
@@ -552,7 +565,7 @@ export class PlayerTui {
     const nextVisibleNoteRows = new Map<string, number>();
     const renderNoteCollection = (
       notes: TuiNote[],
-      keyPrefix: 'main' | 'invisible',
+      keyPrefix: 'main' | 'landmine' | 'invisible',
       state: NoteWindowState,
       visibleNotesLimit: number,
     ): void => {
@@ -690,6 +703,12 @@ export class PlayerTui {
       }
     };
 
+    renderNoteCollection(
+      frame.landmineNotes ?? [],
+      'landmine',
+      this.landmineNoteWindowState,
+      this.resolveLandmineNotesLimit(rowCount, laneCount),
+    );
     renderNoteCollection(
       frame.invisibleNotes ?? [],
       'invisible',
@@ -1068,6 +1087,12 @@ export class PlayerTui {
       return DEFAULT_VISIBLE_NOTES_LIMIT;
     }
     return Math.max(1, Math.floor(configured));
+  }
+
+  private resolveLandmineNotesLimit(rowCount: number, laneCount: number): number {
+    const gridCapacity = Math.max(1, rowCount) * Math.max(1, laneCount);
+    const gridBoundedLimit = gridCapacity * DEFAULT_LANDMINE_NOTES_PER_CELL;
+    return Math.max(128, Math.min(this.resolveVisibleNotesLimit(), gridBoundedLimit));
   }
 
   private resolveInvisibleNotesLimit(rowCount: number, laneCount: number): number {

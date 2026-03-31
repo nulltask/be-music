@@ -43,6 +43,7 @@ export interface PlayerUiFramePayload {
   totalSeconds: number;
   summary: PlayerUiFrameSummary;
   notes: PlayerUiFrameNote[];
+  landmineNotes?: PlayerUiFrameNote[];
   invisibleNotes?: PlayerUiFrameNote[];
   audioBackend?: string;
   activeAudioFiles?: string[];
@@ -78,6 +79,7 @@ export function createPlayerUiSignalBus(initialFrame: PlayerUiFramePayload): Pla
     frameState.totalSeconds = frame.totalSeconds;
     frameState.summary = frame.summary;
     frameState.notes = frame.notes;
+    frameState.landmineNotes = frame.landmineNotes;
     frameState.invisibleNotes = frame.invisibleNotes;
     frameState.audioBackend = frame.audioBackend;
     frameState.activeAudioFiles = frame.activeAudioFiles;

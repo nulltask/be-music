@@ -28,7 +28,7 @@ export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
   invisibleNotes: TimedPlayableNote[];
-  renderNotes: Array<TimedPlayableNote | TimedLandmineNote>;
+  renderNotes: TimedPlayableNote[];
   totalSeconds: number;
   laneBindings: LaneBinding[];
   laneDisplayMode: string;
@@ -112,7 +112,7 @@ export function preparePlaybackChartData(
   const notes = extractedNotes.playableNotes;
   const landmineNotes = extractedNotes.landmineNotes;
   const invisibleNotes = extractedNotes.invisibleNotes;
-  const renderNotes = mergeRenderNotesBySeconds(notes, landmineNotes);
+  const renderNotes = notes;
   const totalSeconds = Math.max(
     resolvePlayableNotesTailSeconds(notes),
     landmineNotes.at(-1)?.seconds ?? 0,
@@ -218,37 +218,6 @@ function resolvePlayableNotesTailSeconds(notes: ReadonlyArray<TimedPlayableNote>
     }
   }
   return tailSeconds;
-}
-
-function mergeRenderNotesBySeconds(
-  notes: ReadonlyArray<TimedPlayableNote>,
-  landmineNotes: ReadonlyArray<TimedLandmineNote>,
-): Array<TimedPlayableNote | TimedLandmineNote> {
-  const merged: Array<TimedPlayableNote | TimedLandmineNote> = [];
-  let noteIndex = 0;
-  let landmineIndex = 0;
-
-  while (noteIndex < notes.length || landmineIndex < landmineNotes.length) {
-    const note = notes[noteIndex];
-    const landmine = landmineNotes[landmineIndex];
-    const nextSeconds = Math.min(
-      note?.seconds ?? Number.POSITIVE_INFINITY,
-      landmine?.seconds ?? Number.POSITIVE_INFINITY,
-    );
-
-    if (note && note.seconds === nextSeconds) {
-      merged.push(note);
-      noteIndex += 1;
-      continue;
-    }
-    if (landmine && landmine.seconds === nextSeconds) {
-      merged.push(landmine);
-      landmineIndex += 1;
-      continue;
-    }
-  }
-
-  return merged;
 }
 
 function collectUniqueNoteChannels(

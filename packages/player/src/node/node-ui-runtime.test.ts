@@ -97,6 +97,49 @@ describe('node ui runtime', () => {
     runtime.dispose();
   });
 
+  test('posts static landmine and invisible note collections only once', async () => {
+    vi.useFakeTimers();
+    const uiSignals = createPlayerUiSignalBus(
+      createFrame({
+        landmineNotes: [{ channel: 'D1', beat: 1, seconds: 0.5, judged: false, mine: true }],
+        invisibleNotes: [{ channel: '11', beat: 2, seconds: 1, judged: false, invisible: true }],
+      }),
+    );
+    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const worker = getLastWorker();
+
+    const initialFrameMessages = messagesOfKind(worker, 'frame');
+    expect(initialFrameMessages).toHaveLength(1);
+    expect(initialFrameMessages[0]).toMatchObject({
+      kind: 'frame',
+      frame: {
+        landmineNotes: [{ channel: 'D1' }],
+        invisibleNotes: [{ channel: '11' }],
+      },
+    });
+
+    worker.postMessage.mockClear();
+    uiSignals.publishFrame(createFrame({ currentBeat: 4, currentSeconds: 2 }));
+    await vi.runAllTimersAsync();
+
+    const frameMessages = messagesOfKind(worker, 'frame');
+    expect(frameMessages).toHaveLength(1);
+    expect(frameMessages[0]).toMatchObject({
+      kind: 'frame',
+      frame: {
+        currentBeat: 4,
+        currentSeconds: 2,
+      },
+    });
+    const frameMessage = frameMessages[0] as
+      | { frame?: { landmineNotes?: unknown; invisibleNotes?: unknown } }
+      | undefined;
+    expect(frameMessage?.frame?.landmineNotes).toBeUndefined();
+    expect(frameMessage?.frame?.invisibleNotes).toBeUndefined();
+
+    await runtime.dispose();
+  });
+
   test('posts lifecycle and state updates to the UI worker', async () => {
     vi.useFakeTimers();
     const stateSignals = createPlayerStateSignals(1);

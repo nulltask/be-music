@@ -86,7 +86,17 @@ export function createUiWorkerFrameState(options: CreateUiWorkerFrameStateOption
   return {
     getFrame: () => frame(),
     setFrame: (nextFrame) => {
-      frame(nextFrame);
+      const current = frame();
+      if (!current) {
+        frame(nextFrame);
+        return;
+      }
+      frame({
+        ...current,
+        ...nextFrame,
+        landmineNotes: nextFrame.landmineNotes ?? current.landmineNotes,
+        invisibleNotes: nextFrame.invisibleNotes ?? current.invisibleNotes,
+      });
     },
     setPaused: (value) => {
       updateSignal(paused, value, (left, right) => left === right);

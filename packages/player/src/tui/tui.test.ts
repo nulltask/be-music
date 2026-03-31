@@ -14,6 +14,7 @@ function renderOutputRaw(
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
+    landmineNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     invisibleNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     lanes?: Array<{ channel: string; key: string; isScratch?: boolean }>;
     laneDisplayMode?: string;
@@ -69,6 +70,11 @@ function renderOutputRaw(
         ...note,
         judged: false,
       })),
+      landmineNotes: options.landmineNotes?.map((note) => ({
+        ...note,
+        judged: false,
+        mine: true,
+      })),
       invisibleNotes: options.invisibleNotes?.map((note) => ({
         ...note,
         judged: false,
@@ -89,6 +95,7 @@ function renderOutput(
     currentBeat?: number;
     currentSeconds?: number;
     totalSeconds?: number;
+    landmineNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     invisibleNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     lanes?: Array<{ channel: string; key: string; isScratch?: boolean }>;
     laneDisplayMode?: string;
@@ -107,6 +114,7 @@ function renderRowsContaining(
   fragment: string,
   currentBeat = 0,
   options: {
+    landmineNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     invisibleNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     highSpeed?: number;
     lanes?: Array<{ channel: string; key: string; isScratch?: boolean }>;
@@ -119,6 +127,7 @@ function renderRowsContaining(
     currentBeat,
     currentSeconds: currentBeat / 2,
     totalSeconds: 10,
+    landmineNotes: options.landmineNotes,
     invisibleNotes: options.invisibleNotes,
     highSpeed: options.highSpeed,
     lanes: options.lanes,
@@ -245,6 +254,30 @@ describe('player-tui', () => {
       {
         invisibleNotes,
         visibleNotesLimit: 8,
+        lanes: [
+          { channel: '11', key: 'z' },
+          { channel: '12', key: 's' },
+        ],
+      },
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  test('keeps rendering visible notes when landmines saturate their own window', () => {
+    const landmineNotes = Array.from({ length: 256 }, (_, index) => ({
+      channel: '12',
+      beat: 0.05 + index * 0.01,
+      seconds: 0.025 + index * 0.005,
+    }));
+
+    const rows = renderRowsContaining(
+      [{ channel: '11', beat: 1, seconds: 0.5 }],
+      '███',
+      0,
+      {
+        landmineNotes,
+        visibleNotesLimit: 16,
         lanes: [
           { channel: '11', key: 'z' },
           { channel: '12', key: 's' },

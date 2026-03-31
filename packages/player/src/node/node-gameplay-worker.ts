@@ -190,6 +190,16 @@ async function bootstrap(): Promise<void> {
     ): void => {
       bridgePort.postMessage(message);
     };
+    const createUiFrameMessage = (
+      frame: ReturnType<CreatePlayerUiRuntimeContext['uiSignals']['getFrame']>,
+    ): { kind: 'frame'; frame: ReturnType<CreatePlayerUiRuntimeContext['uiSignals']['getFrame']> } => ({
+      kind: 'frame',
+      frame: {
+        ...frame,
+        landmineNotes: undefined,
+        invisibleNotes: undefined,
+      },
+    });
 
     let disposed = false;
     let stopPromise: Promise<void> | undefined;
@@ -203,7 +213,7 @@ async function bootstrap(): Promise<void> {
         }
       }
       if (frame) {
-        postUiMessage({ kind: 'frame', frame: context.uiSignals.getFrame() });
+        postUiMessage(createUiFrameMessage(context.uiSignals.getFrame()));
       }
     });
 

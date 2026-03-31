@@ -1607,6 +1607,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     totalSeconds,
     summary,
     notes: renderNotes,
+    landmineNotes,
     invisibleNotes,
   });
   const inputSignals = createPlayerInputSignalBus();
@@ -1716,6 +1717,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       totalSeconds,
       summary,
       notes: renderNotes,
+      landmineNotes,
       invisibleNotes,
       audioBackend: audioBackendLabel,
       activeAudioFiles: debugState.activeAudioFiles,
@@ -2194,6 +2196,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     totalSeconds,
     summary,
     notes: renderNotes,
+    landmineNotes,
     invisibleNotes,
   });
   const inputSignals = createPlayerInputSignalBus();
@@ -2297,6 +2300,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       totalSeconds,
       summary,
       notes: renderNotes,
+      landmineNotes,
       invisibleNotes,
       audioBackend: audioBackendLabel,
       activeAudioFiles: debugState.activeAudioFiles,

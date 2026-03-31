@@ -222,6 +222,7 @@ async function handleUiInit(
       baseDir: message.runtime.baseDir,
       kittyGraphics: message.runtime.kittyGraphics,
       videoBgaStreaming: message.runtime.videoBgaStreaming,
+      initialFrame: message.runtime.initialFrame,
       initialPaused: message.runtime.initialPaused,
       initialJudgeCombo: message.runtime.initialJudgeCombo,
       loadSignal: runtimeStore.loadSignal,
