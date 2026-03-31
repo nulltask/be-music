@@ -21,6 +21,7 @@ export interface NodeGameplayWorkerPlayOptions {
   limiterReleaseMs?: number;
   speed?: number;
   uiFps?: number;
+  tuiVisibleNotesLimit?: number;
   highSpeed?: number;
   judgeWindowMs?: number;
   debugActiveAudio?: boolean;
@@ -56,6 +57,7 @@ export interface NodeGameplayUiRuntimeInit {
   laneBindings: LaneBinding[];
   speed: number;
   uiFps?: number;
+  tuiVisibleNotesLimit?: number;
   judgeWindowMs: number;
   highSpeed: number;
   showLaneChannels: boolean;

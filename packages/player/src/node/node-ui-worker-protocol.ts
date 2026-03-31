@@ -12,6 +12,7 @@ export interface NodeUiWorkerInitData {
   laneBindings: LaneBinding[];
   speed: number;
   uiFps?: number;
+  tuiVisibleNotesLimit?: number;
   judgeWindowMs: number;
   highSpeed: number;
   showLaneChannels?: boolean;

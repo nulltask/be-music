@@ -142,7 +142,13 @@ describe('node ui runtime', () => {
     const workerEnvObject = typeof workerEnv === 'object' ? (workerEnv as NodeJS.ProcessEnv) : undefined;
     const workerExecArgv = workerState.lastWorkerOptions?.execArgv;
     const workerData = workerState.lastWorkerOptions?.workerData as
-      | { stdinIsTTY?: boolean; stdoutIsTTY?: boolean; uiFps?: number; videoBgaStreaming?: boolean }
+      | {
+          stdinIsTTY?: boolean;
+          stdoutIsTTY?: boolean;
+          uiFps?: number;
+          tuiVisibleNotesLimit?: number;
+          videoBgaStreaming?: boolean;
+        }
       | undefined;
 
     expect(typeof workerEnv).toBe('object');
@@ -151,8 +157,9 @@ describe('node ui runtime', () => {
     expect(workerData).toMatchObject({
       stdinIsTTY: Boolean(process.stdin.isTTY),
       stdoutIsTTY: Boolean(process.stdout.isTTY),
-      useAlternateScreen: false,
+      useAlternateScreen: true,
       uiFps: 60,
+      tuiVisibleNotesLimit: 8192,
       videoBgaStreaming: true,
     });
 
@@ -282,6 +289,7 @@ function createContext(
     ],
     speed: 1,
     uiFps: 60,
+    tuiVisibleNotesLimit: 8192,
     judgeWindowMs: 16.67,
     highSpeed: 1,
     videoBgaStreaming: true,

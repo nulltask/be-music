@@ -53,6 +53,7 @@ async function bootstrap(): Promise<void> {
   postLog('info', 'ui-worker.bootstrap.start', {
     kittyGraphics: Boolean(initData.kittyGraphics),
     uiFps: initData.uiFps ?? DEFAULT_UI_FPS,
+    tuiVisibleNotesLimit: initData.tuiVisibleNotesLimit,
   });
   const abortController = new AbortController();
   const handleAbortMessage = (message: NodeUiWorkerInboundMessage): void => {
@@ -102,6 +103,7 @@ async function bootstrap(): Promise<void> {
     lanes,
     speed: initData.speed,
     highSpeed: initData.highSpeed,
+    visibleNotesLimit: initData.tuiVisibleNotesLimit,
     judgeWindowMs: initData.judgeWindowMs,
     showLaneChannels: initData.showLaneChannels,
     randomPatternSummary: initData.randomPatternSummary,

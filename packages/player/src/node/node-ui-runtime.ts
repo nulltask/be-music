@@ -20,6 +20,7 @@ export interface NodeUiRuntimeOptions {
   laneBindings: LaneBinding[];
   speed: number;
   uiFps?: number;
+  tuiVisibleNotesLimit?: number;
   judgeWindowMs: number;
   highSpeed: number;
   showLaneChannels?: boolean;
@@ -262,6 +263,7 @@ function createWorkerInitData(options: NodeUiRuntimeOptions): NodeUiWorkerInitDa
     laneBindings: options.laneBindings,
     speed: options.speed,
     uiFps: options.uiFps,
+    tuiVisibleNotesLimit: options.tuiVisibleNotesLimit,
     judgeWindowMs: options.judgeWindowMs,
     highSpeed: resolveHighSpeedMultiplier(options.highSpeed),
     showLaneChannels: options.showLaneChannels,

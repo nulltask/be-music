@@ -77,6 +77,7 @@ export interface CreatePlayerUiRuntimeContext {
   laneBindings: LaneBinding[];
   speed: number;
   uiFps?: number;
+  tuiVisibleNotesLimit?: number;
   judgeWindowMs: number;
   highSpeed: number;
   videoBgaStreaming?: boolean;
@@ -111,6 +112,7 @@ export interface PlayerOptions {
   limiterReleaseMs?: number;
   speed?: number;
   uiFps?: number;
+  tuiVisibleNotesLimit?: number;
   highSpeed?: number;
   judgeWindowMs?: number;
   debugActiveAudio?: boolean;

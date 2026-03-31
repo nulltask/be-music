@@ -129,6 +129,11 @@ describe('player cli', () => {
     expect(parseArgs(['chart.bms', '--tui-fps', '59.94']).uiFps).toBe(59.94);
   });
 
+  test('cli: defaults visible notes limit to 8192 and accepts custom values', () => {
+    expect(parseArgs(['chart.bms']).tuiVisibleNotesLimit).toBe(8192);
+    expect(parseArgs(['chart.bms', '--tui-visible-notes-limit', '16384']).tuiVisibleNotesLimit).toBe(16384);
+  });
+
   test('cli: accepts --log-file for structured file logging', () => {
     expect(parseArgs(['chart.bms', '--log-file', '/tmp/be-music.log']).logFile).toBe('/tmp/be-music.log');
     expect(() => parseArgs(['chart.bms', '--log-file'])).toThrow('--log-file expects a path');
@@ -141,6 +146,15 @@ describe('player cli', () => {
   test('cli: rejects invalid --tui-fps values', () => {
     expect(() => parseArgs(['chart.bms', '--tui-fps', '0'])).toThrow('--tui-fps must be greater than 0');
     expect(() => parseArgs(['chart.bms', '--tui-fps', 'abc'])).toThrow('--tui-fps expects a numeric value');
+  });
+
+  test('cli: rejects invalid --tui-visible-notes-limit values', () => {
+    expect(() => parseArgs(['chart.bms', '--tui-visible-notes-limit', '0'])).toThrow(
+      '--tui-visible-notes-limit must be greater than 0',
+    );
+    expect(() => parseArgs(['chart.bms', '--tui-visible-notes-limit', 'abc'])).toThrow(
+      '--tui-visible-notes-limit expects an integer value',
+    );
   });
 
   test('cli: last explicit mode flag wins', () => {

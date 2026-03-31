@@ -180,6 +180,7 @@ export async function initializePlayerUiRuntime({
     laneBindings,
     speed,
     uiFps: options.uiFps,
+    tuiVisibleNotesLimit: options.tuiVisibleNotesLimit,
     judgeWindowMs,
     highSpeed,
     videoBgaStreaming: options.videoBgaStreaming,

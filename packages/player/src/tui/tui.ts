@@ -41,6 +41,7 @@ interface TuiOptions {
   lanes: TuiLane[];
   speed: number;
   highSpeed: number;
+  visibleNotesLimit?: number;
   judgeWindowMs: number;
   showLaneChannels?: boolean;
   randomPatternSummary?: string;
@@ -118,7 +119,7 @@ interface ScrollSegment {
 
 const IIDX_MEASURE_BEATS = 4;
 const MAX_SCROLL_LOOKAHEAD_BEATS = IIDX_MEASURE_BEATS * 64;
-const MAX_NOTES_PER_RENDER_WINDOW = 2048;
+const DEFAULT_VISIBLE_NOTES_LIMIT = 8192;
 const BEAT_EPSILON = 1e-9;
 const FLASH_DURATION_MS = 180;
 const MEASURE_LINE_SYMBOL = '▔';
@@ -976,7 +977,11 @@ export class PlayerTui {
     if (!Number.isFinite(maxBeat)) {
       end = notes.length;
     } else {
-      while (end < notes.length && notes[end].beat <= maxBeat && end - start < MAX_NOTES_PER_RENDER_WINDOW) {
+      while (
+        end < notes.length &&
+        notes[end].beat <= maxBeat &&
+        end - start < this.resolveVisibleNotesLimit()
+      ) {
         end += 1;
       }
     }
@@ -1010,6 +1015,14 @@ export class PlayerTui {
     const step = Math.max(1, Math.floor((countupPerSec * elapsedMs) / 1000));
     this.displayedScore = Math.min(safeTarget, this.displayedScore + step);
     return this.displayedScore;
+  }
+
+  private resolveVisibleNotesLimit(): number {
+    const configured = this.options.visibleNotesLimit;
+    if (typeof configured !== 'number' || !Number.isFinite(configured) || configured <= 0) {
+      return DEFAULT_VISIBLE_NOTES_LIMIT;
+    }
+    return Math.max(1, Math.floor(configured));
   }
 
   private resolveDisplayHighSpeed(nowMs: number): number {

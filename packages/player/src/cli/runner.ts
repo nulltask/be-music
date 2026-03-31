@@ -127,6 +127,7 @@ interface CliArgs {
   limiterReleaseMs?: number;
   speed?: number;
   uiFps: number;
+  tuiVisibleNotesLimit: number;
   highSpeed?: number;
   judgeWindowMs?: number;
   debugActiveAudio: boolean;
@@ -277,6 +278,7 @@ const MUSIC_SELECT_BANNER_KITTY_IMAGE_ID = 7_332;
 const MUSIC_SELECT_METADATA_SECONDARY_COLOR = '\u001b[38;2;160;160;160m';
 const ANSI_RESET = '\u001b[0m';
 const DEFAULT_TUI_FPS = 60;
+const DEFAULT_TUI_VISIBLE_NOTES_LIMIT = 8192;
 const MUSIC_SELECT_BANNER_HEIGHT = 4;
 const MUSIC_SELECT_BANNER_GAP = 2;
 const MUSIC_SELECT_BANNER_MAX_WIDTH = 18;
@@ -961,6 +963,7 @@ function createPlayOptionsFromCliArgs(args: CliArgs, chartPath: string) {
     limiterReleaseMs: args.limiterReleaseMs,
     speed: args.speed,
     uiFps: args.uiFps,
+    tuiVisibleNotesLimit: args.tuiVisibleNotesLimit,
     highSpeed: args.highSpeed,
     judgeWindowMs: args.judgeWindowMs,
     debugActiveAudio: args.debugActiveAudio,
@@ -1360,6 +1363,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     volume: undefined,
     tui: true,
     uiFps: DEFAULT_TUI_FPS,
+    tuiVisibleNotesLimit: DEFAULT_TUI_VISIBLE_NOTES_LIMIT,
     debugActiveAudio: false,
   };
   const positional: string[] = [];
@@ -1404,6 +1408,11 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     }
     if (token === '--tui-fps') {
       args.uiFps = parseTuiFpsArg(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--tui-visible-notes-limit') {
+      args.tuiVisibleNotesLimit = parseTuiVisibleNotesLimitArg(rawArgs[index + 1]);
       index += 1;
       continue;
     }
@@ -1641,6 +1650,17 @@ function parseTuiFpsArg(raw: string | undefined): number {
   return parsed;
 }
 
+function parseTuiVisibleNotesLimitArg(raw: string | undefined): number {
+  const parsed = Number.parseInt(raw ?? '', 10);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('--tui-visible-notes-limit expects an integer value');
+  }
+  if (parsed <= 0) {
+    throw new Error('--tui-visible-notes-limit must be greater than 0');
+  }
+  return parsed;
+}
+
 function formatCliParseError(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -1658,6 +1678,7 @@ function printUsage(): void {
       '  --auto-scratch            Enable scratch auto mode (16ch/26ch only)',
       '  --speed <rate>            Playback speed multiplier (default: 1)',
       `  --tui-fps <value>        Target TUI refresh rate while playing (default: ${DEFAULT_TUI_FPS})`,
+      `  --tui-visible-notes-limit <count>  Max notes considered in the visible render window (default: ${DEFAULT_TUI_VISIBLE_NOTES_LIMIT})`,
       '  --high-speed <rate>       TUI note fall speed multiplier, 0.5-10.0 in 0.5 steps (default: 1.0)',
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
       '                           Audio backend: node-web-audio-api (fixed)',
