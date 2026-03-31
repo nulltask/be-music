@@ -17,6 +17,7 @@ function renderOutputRaw(
     lanes?: Array<{ channel: string; key: string; isScratch?: boolean }>;
     laneDisplayMode?: string;
     splitAfterIndex?: number;
+    highSpeed?: number;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
     speedTimeline?: Array<{ beat: number; speed: number }>;
   } = {},
@@ -35,7 +36,7 @@ function renderOutputRaw(
       title: 'test',
       lanes: options.lanes ?? [{ channel: '11', key: 'z' }],
       speed: 1,
-      highSpeed: 1,
+      highSpeed: options.highSpeed ?? 1,
       judgeWindowMs: 100,
       splitAfterIndex: options.splitAfterIndex,
       scrollTimeline: options.scrollTimeline,
@@ -83,6 +84,7 @@ function renderOutput(
     lanes?: Array<{ channel: string; key: string; isScratch?: boolean }>;
     laneDisplayMode?: string;
     splitAfterIndex?: number;
+    highSpeed?: number;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
     speedTimeline?: Array<{ beat: number; speed: number }>;
   } = {},
@@ -95,6 +97,7 @@ function renderRowsContaining(
   fragment: string,
   currentBeat = 0,
   options: {
+    highSpeed?: number;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
     speedTimeline?: Array<{ beat: number; speed: number }>;
   } = {},
@@ -103,6 +106,7 @@ function renderRowsContaining(
     currentBeat,
     currentSeconds: currentBeat / 2,
     totalSeconds: 10,
+    highSpeed: options.highSpeed,
     scrollTimeline: options.scrollTimeline,
     speedTimeline: options.speedTimeline,
   })
@@ -190,6 +194,45 @@ describe('player-tui', () => {
     expect(baselineRows.length).toBeGreaterThanOrEqual(1);
     expect(acceleratedRows.length).toBeGreaterThanOrEqual(1);
     expect(acceleratedRows[0]).toBeLessThan(baselineRows[0]);
+  });
+
+  test('renders notes that re-enter the visible window under bidirectional scroll', () => {
+    const oscillatingScrollTimeline = Array.from({ length: 16 }, (_, index) => ({
+      beat: index * 0.5,
+      speed: index % 2 === 0 ? 1 : -1,
+    }));
+
+    const rows = renderRowsContaining(
+      [{ channel: '11', beat: 8, seconds: 4 }],
+      '███',
+      0,
+      {
+        highSpeed: 3.5,
+        scrollTimeline: oscillatingScrollTimeline,
+      },
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  test('does not render future long note bodies at the top edge under bidirectional scroll', () => {
+    const bidirectionalScrollTimeline = [
+      { beat: 0, speed: 1 },
+      { beat: 0.5, speed: -1 },
+      { beat: 1, speed: 1 },
+    ];
+
+    const bodyRows = renderRowsContaining(
+      [{ channel: '11', beat: 8, endBeat: 8.5, seconds: 4 }],
+      '▓▓▓',
+      0,
+      {
+        highSpeed: 3.5,
+        scrollTimeline: bidirectionalScrollTimeline,
+      },
+    );
+
+    expect(bodyRows).toHaveLength(0);
   });
 
   test('renders play progress indicator on the left side of a single playfield', () => {

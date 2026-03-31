@@ -601,7 +601,9 @@ export class PlayerTui {
         const hasBodyStart = Number.isFinite(normalizedBodyStart);
         const hasBodyEnd = Number.isFinite(normalizedBodyEnd);
 
-        if (hasBodyStart || hasBodyEnd) {
+        const bodyStartInWindow = isDistanceWithinWindow(normalizedBodyStart, scrollWindowBeats);
+        const bodyEndInWindow = isDistanceWithinWindow(normalizedBodyEnd, scrollWindowBeats);
+        if (bodyStartInWindow || bodyEndInWindow) {
           const bodyVisibleFrom = clamp(hasBodyStart ? normalizedBodyStart : normalizedBodyEnd, 0, scrollWindowBeats);
           const bodyVisibleTo = clamp(hasBodyEnd ? normalizedBodyEnd : normalizedBodyStart, 0, scrollWindowBeats);
           const startRow = distanceToNoteRow(bodyVisibleFrom, rowCount, scrollWindowBeats);
@@ -973,16 +975,23 @@ export class PlayerTui {
     }
 
     let end = Math.max(this.noteWindowEndIndex, start);
-    const maxBeat = this.scrollDistanceMapper.maxBeatWithinDistance(currentBeat, scrollWindowBeats);
-    if (!Number.isFinite(maxBeat)) {
-      end = notes.length;
-    } else {
-      while (
-        end < notes.length &&
-        notes[end].beat <= maxBeat &&
-        end - start < this.resolveVisibleNotesLimit()
-      ) {
+    if (this.scrollDistanceMapper.hasBidirectionalScrollWithinLookahead(currentBeat)) {
+      const capBeat = Math.max(0, currentBeat) + MAX_SCROLL_LOOKAHEAD_BEATS;
+      while (end < notes.length && notes[end].beat <= capBeat && end - start < this.resolveVisibleNotesLimit()) {
         end += 1;
+      }
+    } else {
+      const maxBeat = this.scrollDistanceMapper.maxBeatWithinDistance(currentBeat, scrollWindowBeats);
+      if (!Number.isFinite(maxBeat)) {
+        end = notes.length;
+      } else {
+        while (
+          end < notes.length &&
+          notes[end].beat <= maxBeat &&
+          end - start < this.resolveVisibleNotesLimit()
+        ) {
+          end += 1;
+        }
       }
     }
 
@@ -1122,6 +1131,45 @@ class ScrollDistanceMapper {
       return Number.NaN;
     }
     return this.distanceAt(toBeat) - this.distanceAt(fromBeat);
+  }
+
+  hasBidirectionalScrollWithinLookahead(fromBeat: number): boolean {
+    const safeFromBeat = Number.isFinite(fromBeat) ? Math.max(0, fromBeat) : 0;
+    const capBeat = safeFromBeat + MAX_SCROLL_LOOKAHEAD_BEATS;
+    let index = findLastSegmentIndexByBeat(this.segments, safeFromBeat);
+    let sawPositive = false;
+    let sawNegative = false;
+
+    while (index < this.segments.length) {
+      const segment = this.segments[index]!;
+      const segmentStartBeat = Math.max(safeFromBeat, segment.startBeat);
+      const nextStartBeat = this.segments[index + 1]?.startBeat ?? Number.POSITIVE_INFINITY;
+      const segmentEndBeat = Math.min(capBeat, nextStartBeat);
+      if (segmentEndBeat - segmentStartBeat <= 1e-9) {
+        if (segmentEndBeat >= capBeat) {
+          break;
+        }
+        index += 1;
+        continue;
+      }
+
+      const signedDistance = integratedSignedSegmentDistance(segment, segmentStartBeat, segmentEndBeat);
+      if (signedDistance > 1e-9) {
+        sawPositive = true;
+      } else if (signedDistance < -1e-9) {
+        sawNegative = true;
+      }
+
+      if (sawPositive && sawNegative) {
+        return true;
+      }
+      if (segmentEndBeat >= capBeat) {
+        break;
+      }
+      index += 1;
+    }
+
+    return false;
   }
 
   maxBeatWithinDistance(fromBeat: number, distance: number): number {
