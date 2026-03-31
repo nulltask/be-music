@@ -15,6 +15,7 @@ import type {
 import { autoPlay, manualPlay, PlayerInterruptedError } from '../core/engine.ts';
 import type { PlayerLoadProgress } from '../core/engine.ts';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';
+import { createUiFramePatchBuilder } from './ui-frame-patch.ts';
 import type {
   NodeGameplayWorkerInboundMessage,
   NodeGameplayWorkerInitData,
@@ -177,10 +178,11 @@ async function bootstrap(): Promise<void> {
     }
     const bridgePort = uiInitResult.port;
 
+    const buildUiFramePatch = createUiFramePatchBuilder();
     const postUiMessage = (
       message:
         | { kind: 'start' }
-        | { kind: 'frame'; frame: ReturnType<CreatePlayerUiRuntimeContext['uiSignals']['getFrame']> }
+        | { kind: 'frame'; frame: ReturnType<typeof buildUiFramePatch> }
         | { kind: 'commands'; commands: ReturnType<CreatePlayerUiRuntimeContext['uiSignals']['drainCommands']> }
         | { kind: 'set-paused'; value: boolean }
         | { kind: 'set-high-speed'; value: number }
@@ -192,13 +194,9 @@ async function bootstrap(): Promise<void> {
     };
     const createUiFrameMessage = (
       frame: ReturnType<CreatePlayerUiRuntimeContext['uiSignals']['getFrame']>,
-    ): { kind: 'frame'; frame: ReturnType<CreatePlayerUiRuntimeContext['uiSignals']['getFrame']> } => ({
+    ): { kind: 'frame'; frame: ReturnType<typeof buildUiFramePatch> } => ({
       kind: 'frame',
-      frame: {
-        ...frame,
-        landmineNotes: undefined,
-        invisibleNotes: undefined,
-      },
+      frame: buildUiFramePatch(frame),
     });
 
     let disposed = false;

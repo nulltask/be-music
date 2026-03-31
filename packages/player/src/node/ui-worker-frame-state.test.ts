@@ -132,4 +132,64 @@ describe('ui worker frame state', () => {
 
     frameState.dispose();
   });
+
+  test('merges note state updates into the retained frame notes', () => {
+    const frameState = createUiWorkerFrameState({
+      initialPaused: false,
+      initialHighSpeed: 1,
+      initialJudgeCombo: {
+        judge: 'READY',
+        combo: 0,
+        updatedAtMs: 0,
+      },
+      applyPaused: vi.fn(),
+      applyHighSpeed: vi.fn(),
+      applyJudgeCombo: vi.fn(),
+      applyTerminalSize: vi.fn(),
+      syncFrameLayout: vi.fn(),
+      requestFrameRender: vi.fn(),
+    });
+
+    frameState.setFrame({
+      currentBeat: 0,
+      currentSeconds: 0,
+      totalSeconds: 120,
+      summary: {
+        total: 1,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+      },
+      notes: [{ channel: '11', beat: 1, seconds: 0.5, judged: false }],
+    });
+
+    frameState.setFrame({
+      currentBeat: 0.5,
+      currentSeconds: 0.25,
+      totalSeconds: 120,
+      summary: {
+        total: 1,
+        perfect: 0,
+        fast: 0,
+        slow: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        exScore: 0,
+        score: 0,
+      },
+      noteStateUpdates: [{ index: 0, judged: true, visibleUntilBeat: 2 }],
+    });
+
+    expect(frameState.getFrame()?.notes).toMatchObject([{ channel: '11', judged: true, visibleUntilBeat: 2 }]);
+
+    frameState.dispose();
+  });
 });

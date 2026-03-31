@@ -1,6 +1,7 @@
 import { effect, effectScope, signal } from 'alien-signals';
 import type { PlayerUiFramePayload } from '../core/ui-signal-bus.ts';
 import type { PlayerJudgeComboSignalState } from '../state-signals.ts';
+import type { PlayerUiFramePatch } from './ui-frame-patch.ts';
 
 type WritableSignal<T> = {
   (): T;
@@ -30,7 +31,7 @@ export interface CreateUiWorkerFrameStateOptions {
 
 export interface UiWorkerFrameState {
   getFrame: () => PlayerUiFramePayload | undefined;
-  setFrame: (frame: PlayerUiFramePayload) => void;
+  setFrame: (frame: PlayerUiFramePatch) => void;
   setPaused: (value: boolean) => void;
   setHighSpeed: (value: number) => void;
   setJudgeCombo: (state: PlayerJudgeComboSignalState) => void;
@@ -88,12 +89,30 @@ export function createUiWorkerFrameState(options: CreateUiWorkerFrameStateOption
     setFrame: (nextFrame) => {
       const current = frame();
       if (!current) {
-        frame(nextFrame);
+        frame(nextFrame as PlayerUiFramePayload);
         return;
+      }
+      let nextNotes = nextFrame.notes ?? current.notes;
+      if (nextFrame.noteStateUpdates && nextNotes.length > 0) {
+        const mutableNotes = nextNotes.map((note) => ({ ...note }));
+        for (const update of nextFrame.noteStateUpdates) {
+          const target = mutableNotes[update.index];
+          if (!target) {
+            continue;
+          }
+          target.judged = update.judged;
+          if (typeof update.visibleUntilBeat === 'number' && Number.isFinite(update.visibleUntilBeat)) {
+            target.visibleUntilBeat = update.visibleUntilBeat;
+          } else {
+            delete target.visibleUntilBeat;
+          }
+        }
+        nextNotes = mutableNotes;
       }
       frame({
         ...current,
         ...nextFrame,
+        notes: nextNotes,
         landmineNotes: nextFrame.landmineNotes ?? current.landmineNotes,
         invisibleNotes: nextFrame.invisibleNotes ?? current.invisibleNotes,
       });

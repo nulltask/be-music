@@ -140,6 +140,45 @@ describe('node ui runtime', () => {
     await runtime.dispose();
   });
 
+  test('posts note state updates without resending static note arrays', async () => {
+    vi.useFakeTimers();
+    const notes: Array<{
+      channel: string;
+      beat: number;
+      seconds: number;
+      judged: boolean;
+      visibleUntilBeat?: number;
+    }> = [{ channel: '11', beat: 1, seconds: 0.5, judged: false }];
+    const uiSignals = createPlayerUiSignalBus(createFrame({ notes }));
+    const runtime = await createNodeUiRuntime(createContext(uiSignals));
+    const worker = getLastWorker();
+
+    worker.postMessage.mockClear();
+    notes[0]!.judged = true;
+    notes[0]!.visibleUntilBeat = 2;
+    uiSignals.publishFrame(createFrame({ currentBeat: 1, currentSeconds: 0.5, notes }));
+    await vi.runAllTimersAsync();
+
+    const frameMessages = messagesOfKind(worker, 'frame');
+    expect(frameMessages).toHaveLength(1);
+    expect(frameMessages[0]).toMatchObject({
+      kind: 'frame',
+      frame: {
+        currentBeat: 1,
+        currentSeconds: 0.5,
+        noteStateUpdates: [{ index: 0, judged: true, visibleUntilBeat: 2 }],
+      },
+    });
+    const frameMessage = frameMessages[0] as
+      | { frame?: { notes?: unknown; landmineNotes?: unknown; invisibleNotes?: unknown } }
+      | undefined;
+    expect(frameMessage?.frame?.notes).toBeUndefined();
+    expect(frameMessage?.frame?.landmineNotes).toBeUndefined();
+    expect(frameMessage?.frame?.invisibleNotes).toBeUndefined();
+
+    await runtime.dispose();
+  });
+
   test('posts lifecycle and state updates to the UI worker', async () => {
     vi.useFakeTimers();
     const stateSignals = createPlayerStateSignals(1);

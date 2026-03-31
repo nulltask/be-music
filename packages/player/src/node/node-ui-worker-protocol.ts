@@ -4,6 +4,7 @@ import type { BeMusicJson } from '@be-music/json';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/ui-signal-bus.ts';
 import type { LaneBinding } from '../manual-input.ts';
 import type { PlayerJudgeComboSignalState } from '../state-signals.ts';
+import type { PlayerUiFramePatch } from './ui-frame-patch.ts';
 
 export interface NodeUiWorkerInitData {
   json: BeMusicJson;
@@ -33,7 +34,7 @@ export type NodeUiWorkerInboundMessage =
   | { kind: 'start' }
   | { kind: 'stop' }
   | { kind: 'dispose' }
-  | { kind: 'frame'; frame: PlayerUiFramePayload }
+  | { kind: 'frame'; frame: PlayerUiFramePatch }
   | { kind: 'commands'; commands: PlayerUiCommand[] }
   | { kind: 'set-paused'; value: boolean }
   | { kind: 'set-high-speed'; value: number }

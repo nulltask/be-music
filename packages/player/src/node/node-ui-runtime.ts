@@ -7,6 +7,7 @@ import type { PlayerStateSignals } from '../state-signals.ts';
 import type { PlayerUiSignalBus } from '../core/ui-signal-bus.ts';
 import { resolveHighSpeedMultiplier } from '../core/high-speed-control.ts';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';
+import { createUiFramePatchBuilder } from './ui-frame-patch.ts';
 import type {
   NodeUiWorkerInboundMessage,
   NodeUiWorkerInitData,
@@ -86,19 +87,12 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
     }
     worker.postMessage(message);
   };
-  let staticFrameCollectionsPosted = false;
+  const buildUiFramePatch = createUiFramePatchBuilder();
   const postUiFrame = (frameState: Readonly<ReturnType<PlayerUiSignalBus['getFrame']>>): void => {
     postWorkerMessage({
       kind: 'frame',
-      frame: staticFrameCollectionsPosted
-        ? {
-            ...frameState,
-            landmineNotes: undefined,
-            invisibleNotes: undefined,
-          }
-        : frameState,
+      frame: buildUiFramePatch(frameState),
     });
-    staticFrameCollectionsPosted = true;
   };
 
   const initialFrame = options.initialFrame ?? options.uiSignals?.getFrame();
