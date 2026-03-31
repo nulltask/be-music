@@ -288,6 +288,43 @@ describe('player-tui', () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
+  test('renders playable notes in front of overlapping landmines', () => {
+    const lines = renderOutput(
+      [{ channel: '11', beat: 1, seconds: 0.5 }],
+      {
+        currentBeat: 0,
+        landmineNotes: [{ channel: '11', beat: 1, seconds: 0.5 }],
+      },
+    );
+
+    expect(lines.some((line) => line.includes('███'))).toBe(true);
+    expect(lines.some((line) => line.includes('✕'))).toBe(false);
+  });
+
+  test('renders landmines in front of overlapping invisible notes', () => {
+    const lines = renderOutput([], {
+      currentBeat: 0,
+      landmineNotes: [{ channel: '11', beat: 1, seconds: 0.5 }],
+      invisibleNotes: [{ channel: '11', beat: 1, seconds: 0.5 }],
+    });
+
+    expect(lines.some((line) => line.includes('✕'))).toBe(true);
+    expect(lines.some((line) => line.includes('◯'))).toBe(false);
+  });
+
+  test('renders playable notes in front of overlapping invisible notes', () => {
+    const lines = renderOutput(
+      [{ channel: '11', beat: 1, seconds: 0.5 }],
+      {
+        currentBeat: 0,
+        invisibleNotes: [{ channel: '11', beat: 1, seconds: 0.5 }],
+      },
+    );
+
+    expect(lines.some((line) => line.includes('███'))).toBe(true);
+    expect(lines.some((line) => line.includes('◯'))).toBe(false);
+  });
+
   test('does not render future long note bodies at the top edge under bidirectional scroll', () => {
     const bidirectionalScrollTimeline = [
       { beat: 0, speed: 1 },

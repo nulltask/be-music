@@ -1925,19 +1925,20 @@ function findStackableRow(
 }
 
 function resolveLaneCellPriority(symbol: string, isFreeZoneSourceChannel: boolean): number {
+  if (symbol === NOTE_HEAD_SYMBOL || symbol === LONG_NOTE_TAIL_SYMBOL) {
+    return isFreeZoneSourceChannel ? 5 : 6;
+  }
+  if (symbol === LONG_NOTE_BODY_SYMBOL) {
+    return isFreeZoneSourceChannel ? 4 : 5;
+  }
   if (symbol === MINE_NOTE_SYMBOL) {
-    return 5;
+    return 3;
   }
-  if (
-    symbol === NOTE_HEAD_SYMBOL ||
-    symbol === LONG_NOTE_TAIL_SYMBOL ||
-    symbol === INVISIBLE_NOTE_HEAD_SYMBOL ||
-    symbol === INVISIBLE_LONG_NOTE_TAIL_SYMBOL
-  ) {
-    return isFreeZoneSourceChannel ? 3 : 4;
+  if (symbol === INVISIBLE_NOTE_HEAD_SYMBOL || symbol === INVISIBLE_LONG_NOTE_TAIL_SYMBOL) {
+    return 2;
   }
-  if (symbol === LONG_NOTE_BODY_SYMBOL || symbol === INVISIBLE_LONG_NOTE_BODY_SYMBOL) {
-    return isFreeZoneSourceChannel ? 2 : 3;
+  if (symbol === INVISIBLE_LONG_NOTE_BODY_SYMBOL) {
+    return 1;
   }
   if (symbol === MEASURE_LINE_SYMBOL) {
     return 1;
