@@ -1,17 +1,51 @@
-name: Release Assets
+name: Release
 
 on:
-  release:
+  pull_request:
+    branches:
+      - main
     types:
-      - published
+      - closed
 
 permissions:
   actions: read
   contents: write
 
+concurrency:
+  group: release-${{ github.event.pull_request.merge_commit_sha || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
+  prepare:
+    name: Prepare Release
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'devel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_tag: ${{ steps.version.outputs.release_tag }}
+      release_target: ${{ github.event.pull_request.merge_commit_sha }}
+
+    steps:
+      - name: Checkout merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+
+      - name: Read release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "release_tag=$(node -p 'require("./package.json").version' | tr -d '\n')" >> "$GITHUB_OUTPUT"
+
   sea:
     name: SEA Release (${{ matrix.os }})
+    needs: prepare
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -23,10 +57,10 @@ jobs:
           - windows-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout merge commit
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ needs.prepare.outputs.release_target }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -68,7 +102,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag="${{ github.event.release.tag_name }}"
+          tag="${{ needs.prepare.outputs.release_tag }}"
           suffix="${{ steps.meta.outputs.archive_suffix }}"
 
           mkdir -p tmp/release-assets/player tmp/release-assets/audio-renderer
@@ -91,7 +125,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $tag = '${{ github.event.release.tag_name }}'
+          $tag = '${{ needs.prepare.outputs.release_tag }}'
           $suffix = '${{ steps.meta.outputs.archive_suffix }}'
           $assetDir = 'tmp/release-assets'
 
@@ -106,9 +140,11 @@ jobs:
           path: tmp/release-assets/*.zip
           if-no-files-found: error
 
-  upload:
-    name: Upload Release Assets
-    needs: sea
+  publish:
+    name: Publish Release
+    needs:
+      - prepare
+      - sea
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -120,12 +156,13 @@ jobs:
           merge-multiple: true
           path: tmp/release-assets
 
-      - name: Upload archives to GitHub Release
+      - name: Create or update GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          RELEASE_TARGET: ${{ needs.prepare.outputs.release_target }}
         run: |
           set -euo pipefail
           mapfile -t assets < <(find tmp/release-assets -type f -name '*.zip' | sort)
@@ -133,4 +170,13 @@ jobs:
             echo "No SEA archives found to upload." >&2
             exit 1
           fi
-          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$RELEASE_TARGET" \
+              --title "$RELEASE_TAG" \
+              --generate-notes
+          fi
