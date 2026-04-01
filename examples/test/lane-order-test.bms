@@ -1,7 +1,19 @@
+*---------------------- METADATA FIELD
+
 #TITLE Lane Order Test
 #ARTIST codex
 #BPM 120
+
+*---------------------- EXTENDED HEADER FIELD
+
+*---------------------- RESOURCES FIELD
+
 #WAV01 test.wav
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
 #00011:01
 #00012:01
 #00013:01
@@ -18,3 +30,5 @@
 #00026:01
 #00028:01
 #00029:01
+
+*---------------------- CONTROL FLOW FIELD

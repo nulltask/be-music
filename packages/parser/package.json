@@ -14,20 +14,26 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
       "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "vite build && tsgo -b tsconfig.json --emitDeclarationOnly --force",
+    "build:bundle": "tsdown",
+    "build": "tsdown",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "dev": "tsx --tsconfig ../../tsconfig.dev.json src/cli.ts",
-    "bench": "tsx --tsconfig ../../tsconfig.dev.json src/benchmark.ts",
-    "bench:check": "npm run bench -- --check",
-    "bench:update-baseline": "npm run bench -- --write-baseline"
+    "dev": "tsx --tsconfig ../../tsconfig.typecheck.json src/cli.ts",
+    "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt . --write",
+    "format:check": "oxfmt . --check",
+    "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts"
   },
   "dependencies": {
-    "@be-music/json": "0.1.0",
-    "@be-music/utils": "0.1.0",
+    "@be-music/chart": "workspace:*",
+    "@be-music/json": "workspace:*",
+    "@be-music/utils": "workspace:*",
     "iconv-lite": "^0.7.0"
   }
 }

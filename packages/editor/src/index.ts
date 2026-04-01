@@ -1,67 +1,42 @@
+import { compareEvents, sortEvents } from '@be-music/chart';
 import { readFile, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import {
+  BMS_JSON_FORMAT,
+  DEFAULT_BPM,
+  cloneJson,
   createEmptyJson,
   ensureMeasure,
   normalizeChannel,
   normalizeObjectKey,
-  sortEvents,
-  type BmsEvent,
-  type BmsJson,
+  type BeMusicEvent,
+  type BeMusicJson,
 } from '@be-music/json';
 import { parseChart, parseChartFile } from '@be-music/parser';
 import { stringifyBmson, stringifyBms } from '@be-music/stringifier';
 
-/**
- * 非同期でimport Chart に対応する処理を実行します。
- * @param inputPath - 対象ファイルまたはディレクトリのパス。
- * @returns 非同期処理完了後の結果（BmsJson）を解決する Promise。
- */
-export async function importChart(inputPath: string): Promise<BmsJson> {
+export async function importChart(inputPath: string): Promise<BeMusicJson> {
   return parseChartFile(resolve(inputPath));
 }
 
-/**
- * 非同期で外部データを読み込み、処理可能な形式で返します。
- * @param filePath - 対象ファイルまたはディレクトリのパス。
- * @returns 非同期処理完了後の結果（BmsJson）を解決する Promise。
- */
-export async function loadJsonFile(filePath: string): Promise<BmsJson> {
+export async function loadJsonFile(filePath: string): Promise<BeMusicJson> {
   const content = await readFile(resolve(filePath), 'utf8');
   return parseChart(content, 'json');
 }
 
-/**
- * 非同期で指定先へデータを書き込みます。
- * @param filePath - 対象ファイルまたはディレクトリのパス。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 戻り値はありません。
- */
-export async function saveJsonFile(filePath: string, json: BmsJson): Promise<void> {
-  await writeFile(resolve(filePath), `${JSON.stringify(normalizeJson(json), null, 2)}\n`, 'utf8');
+export async function saveJsonFile(filePath: string, json: BeMusicJson): Promise<void> {
+  const normalized = canSerializeJsonAsIs(json) ? json : normalizeJson(json);
+  await writeFile(resolve(filePath), `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
 }
 
-/**
- * 非同期でexport Chart に対応する処理を実行します。
- * @param filePath - 対象ファイルまたはディレクトリのパス。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 戻り値はありません。
- */
-export async function exportChart(filePath: string, json: BmsJson): Promise<void> {
+export async function exportChart(filePath: string, json: BeMusicJson): Promise<void> {
   const outputPath = resolve(filePath);
   const extension = extname(outputPath).toLowerCase();
   const content = extension === '.bmson' ? stringifyBmson(json) : stringifyBms(json);
   await writeFile(outputPath, content, 'utf8');
 }
 
-/**
- * set Metadata に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param key - キー入力イベント情報。
- * @param value - 処理対象の値。
- * @returns 処理結果（BmsJson）。
- */
-export function setMetadata(json: BmsJson, key: string, value: string): BmsJson {
+export function setMetadata(json: BeMusicJson, key: string, value: string): BeMusicJson {
   const normalized = normalizeJson(json);
   const property = key.toLowerCase();
 
@@ -85,7 +60,7 @@ export function setMetadata(json: BmsJson, key: string, value: string): BmsJson 
       normalized.metadata.stageFile = value;
       return normalized;
     case 'playlevel':
-      normalized.metadata.playLevel = Number.parseFloat(value);
+      normalized.metadata.playLevel = parsePlayLevelValue(value);
       return normalized;
     case 'rank':
       normalized.metadata.rank = Number.parseFloat(value);
@@ -109,14 +84,19 @@ export function setMetadata(json: BmsJson, key: string, value: string): BmsJson 
   }
 }
 
-/**
- * add Note に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param params - params に対応する入力値。
- * @returns 処理結果（BmsJson）。
- */
+function parsePlayLevelValue(value: string): number | string {
+  const trimmed = value.trim();
+  if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(trimmed)) {
+    const parsed = Number.parseFloat(trimmed);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return trimmed;
+}
+
 export function addNote(
-  json: BmsJson,
+  json: BeMusicJson,
   params: {
     measure: number;
     channel: string;
@@ -124,31 +104,24 @@ export function addNote(
     positionDenominator: number;
     value: string;
   },
-): BmsJson {
+): BeMusicJson {
   const normalized = normalizeJson(json);
   ensureMeasure(normalized, params.measure);
   const position = normalizePositionFraction(params.positionNumerator, params.positionDenominator);
 
-  const event: BmsEvent = {
+  const event: BeMusicEvent = {
     measure: Math.max(0, Math.floor(params.measure)),
     channel: normalizeChannel(params.channel),
     position: [position.numerator, position.denominator],
     value: normalizeObjectKey(params.value),
   };
 
-  normalized.events.push(event);
-  normalized.events = sortEvents(normalized.events);
+  insertSortedEvent(normalized.events, event);
   return normalized;
 }
 
-/**
- * delete Note に対応する処理を実行します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param params - params に対応する入力値。
- * @returns 処理結果（BmsJson）。
- */
 export function deleteNote(
-  json: BmsJson,
+  json: BeMusicJson,
   params: {
     measure: number;
     channel: string;
@@ -156,7 +129,7 @@ export function deleteNote(
     positionDenominator: number;
     value?: string;
   },
-): BmsJson {
+): BeMusicJson {
   const normalized = normalizeJson(json);
   const channel = normalizeChannel(params.channel);
   const position = normalizePositionFraction(params.positionNumerator, params.positionDenominator);
@@ -180,40 +153,29 @@ export function deleteNote(
   return normalized;
 }
 
-/**
- * 対象データの一覧を返します。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @param measure - 対象小節番号。
- * @returns 処理結果の配列。
- */
-export function listNotes(json: BmsJson, measure?: number): BmsEvent[] {
+export function listNotes(json: BeMusicJson, measure?: number): BeMusicEvent[] {
   const target = normalizeJson(json);
-  return sortEvents(target.events).filter((event) => (measure === undefined ? true : event.measure === measure));
+  if (measure === undefined) {
+    return [...target.events];
+  }
+  return target.events.filter((event) => event.measure === measure);
 }
 
-/**
- * 処理に必要な初期データを生成します。
- * @returns 処理結果（BmsJson）。
- */
-export function createBlankJson(): BmsJson {
+export function createBlankJson(): BeMusicJson {
   return createEmptyJson('json');
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param json - 処理対象の BMS/BMSON 中間表現。
- * @returns 処理結果（BmsJson）。
- */
-function normalizeJson(json: BmsJson): BmsJson {
-  const cloned = structuredClone(json);
+function normalizeJson(json: BeMusicJson): BeMusicJson {
+  const cloned = canCloneJsonFast(json) ? cloneJson(json) : structuredClone(json);
   if (!cloned.metadata) {
     cloned.metadata = {
-      bpm: 120,
+      bpm: DEFAULT_BPM,
       extras: {},
     };
   }
   cloned.metadata.extras = cloned.metadata.extras ?? {};
-  cloned.metadata.bpm = Number.isFinite(cloned.metadata.bpm) && cloned.metadata.bpm > 0 ? cloned.metadata.bpm : 120;
+  cloned.metadata.bpm =
+    Number.isFinite(cloned.metadata.bpm) && cloned.metadata.bpm > 0 ? cloned.metadata.bpm : DEFAULT_BPM;
   cloned.resources = cloned.resources ?? {
     wav: {},
     bmp: {},
@@ -226,19 +188,129 @@ function normalizeJson(json: BmsJson): BmsJson {
   cloned.resources.bpm = cloned.resources.bpm ?? {};
   cloned.resources.stop = cloned.resources.stop ?? {};
   cloned.resources.text = cloned.resources.text ?? {};
-  cloned.measures = (cloned.measures ?? []).filter(
-    (measure) => Number.isFinite(measure.index) && Number.isFinite(measure.length),
-  );
-  cloned.events = sortEvents(cloned.events ?? []);
+  cloned.preservation = cloned.preservation ?? createEmptyJson('json').preservation;
+  cloned.preservation.bms = cloned.preservation.bms ?? { sourceLines: [], objectLines: [] };
+  cloned.preservation.bms.sourceLines = cloned.preservation.bms.sourceLines ?? [];
+  cloned.preservation.bms.objectLines = cloned.preservation.bms.objectLines ?? [];
+  cloned.preservation.bmson = cloned.preservation.bmson ?? {
+    lines: [],
+    bpmEvents: [],
+    stopEvents: [],
+    soundChannels: [],
+  };
+  cloned.preservation.bmson.lines = cloned.preservation.bmson.lines ?? [];
+  cloned.preservation.bmson.bpmEvents = cloned.preservation.bmson.bpmEvents ?? [];
+  cloned.preservation.bmson.stopEvents = cloned.preservation.bmson.stopEvents ?? [];
+  cloned.preservation.bmson.soundChannels = cloned.preservation.bmson.soundChannels ?? [];
+  if (!hasOnlyFiniteMeasures(cloned.measures)) {
+    cloned.measures = (cloned.measures ?? []).filter(
+      (measure) => Number.isFinite(measure.index) && Number.isFinite(measure.length),
+    );
+  }
+  if (!areEventsSorted(cloned.events)) {
+    cloned.events = sortEvents(cloned.events ?? []);
+  }
   return cloned;
 }
 
-/**
- * 入力値を仕様に沿う正規形に整えます。
- * @param numerator - numerator に対応する入力値。
- * @param denominator - denominator に対応する入力値。
- * @returns 処理結果（{ numerator: number; denominator: number }）。
- */
+function canSerializeJsonAsIs(json: BeMusicJson): boolean {
+  return (
+    json.format === BMS_JSON_FORMAT &&
+    json.metadata !== undefined &&
+    Number.isFinite(json.metadata.bpm) &&
+    json.metadata.bpm > 0 &&
+    json.metadata.extras !== undefined &&
+    json.resources !== undefined &&
+    json.resources.wav !== undefined &&
+    json.resources.bmp !== undefined &&
+    json.resources.bpm !== undefined &&
+    json.resources.stop !== undefined &&
+    json.resources.text !== undefined &&
+    json.preservation !== undefined &&
+    json.preservation.bms !== undefined &&
+    json.preservation.bmson !== undefined &&
+    Array.isArray(json.preservation.bms.sourceLines) &&
+    Array.isArray(json.preservation.bms.objectLines) &&
+    Array.isArray(json.preservation.bmson.lines) &&
+    Array.isArray(json.preservation.bmson.bpmEvents) &&
+    Array.isArray(json.preservation.bmson.stopEvents) &&
+    Array.isArray(json.preservation.bmson.soundChannels) &&
+    Array.isArray(json.measures) &&
+    hasOnlyFiniteMeasures(json.measures) &&
+    Array.isArray(json.events) &&
+    areEventsSorted(json.events)
+  );
+}
+
+function canCloneJsonFast(json: BeMusicJson): boolean {
+  return (
+    json.metadata !== undefined &&
+    json.metadata.extras !== undefined &&
+    json.resources !== undefined &&
+    json.resources.wav !== undefined &&
+    json.resources.bmp !== undefined &&
+    json.resources.bpm !== undefined &&
+    json.resources.stop !== undefined &&
+    json.resources.text !== undefined &&
+    Array.isArray(json.measures) &&
+    Array.isArray(json.events) &&
+    json.bms !== undefined &&
+    json.preservation !== undefined &&
+    json.preservation.bms !== undefined &&
+    json.preservation.bmson !== undefined &&
+    Array.isArray(json.bms.controlFlow) &&
+    Array.isArray(json.preservation.bms.sourceLines) &&
+    Array.isArray(json.preservation.bms.objectLines) &&
+    (json.bms.lnObjs === undefined || Array.isArray(json.bms.lnObjs)) &&
+    json.bms.exRank !== undefined &&
+    json.bms.argb !== undefined &&
+    Array.isArray(json.bms.stp) &&
+    json.bms.changeOption !== undefined &&
+    json.bms.exWav !== undefined &&
+    json.bms.exBmp !== undefined &&
+    json.bms.bga !== undefined &&
+    json.bms.scroll !== undefined &&
+    json.bms.speed !== undefined &&
+    json.bms.swBga !== undefined &&
+    json.bmson !== undefined &&
+    Array.isArray(json.preservation.bmson.lines) &&
+    Array.isArray(json.preservation.bmson.bpmEvents) &&
+    Array.isArray(json.preservation.bmson.stopEvents) &&
+    Array.isArray(json.preservation.bmson.soundChannels) &&
+    json.bmson.info !== undefined &&
+    json.bmson.bga !== undefined &&
+    Array.isArray(json.bmson.bga.header) &&
+    Array.isArray(json.bmson.bga.events) &&
+    Array.isArray(json.bmson.bga.layerEvents) &&
+    Array.isArray(json.bmson.bga.poorEvents)
+  );
+}
+
+function hasOnlyFiniteMeasures(measures: BeMusicJson['measures'] | undefined): boolean {
+  if (!Array.isArray(measures)) {
+    return false;
+  }
+  for (let index = 0; index < measures.length; index += 1) {
+    const measure = measures[index]!;
+    if (!Number.isFinite(measure.index) || !Number.isFinite(measure.length)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areEventsSorted(events: BeMusicJson['events'] | undefined): boolean {
+  if (!Array.isArray(events)) {
+    return false;
+  }
+  for (let index = 1; index < events.length; index += 1) {
+    if (compareEvents(events[index - 1]!, events[index]!) > 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function normalizePositionFraction(numerator: number, denominator: number): { numerator: number; denominator: number } {
   const safeDenominator = Number.isFinite(denominator) && denominator > 0 ? Math.max(1, Math.floor(denominator)) : 1;
   if (!Number.isFinite(numerator)) {
@@ -251,17 +323,29 @@ function normalizePositionFraction(numerator: number, denominator: number): { nu
   };
 }
 
-/**
- * 条件判定を行い、真偽値を返します。
- * @param event - 処理対象のイベント。
- * @param target - target に対応する入力値。
- * @returns 条件を満たす場合は `true`、それ以外は `false`。
- */
-function isSamePosition(event: BmsEvent, target: { numerator: number; denominator: number }): boolean {
+function isSamePosition(event: BeMusicEvent, target: { numerator: number; denominator: number }): boolean {
   const left = BigInt(event.position[0]) * BigInt(target.denominator);
   const right = BigInt(target.numerator) * BigInt(event.position[1]);
   if (left !== right) {
     return false;
   }
   return true;
+}
+
+function insertSortedEvent(events: BeMusicEvent[], event: BeMusicEvent): void {
+  if (events.length === 0) {
+    events.push(event);
+    return;
+  }
+  let low = 0;
+  let high = events.length;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (compareEvents(events[mid]!, event) <= 0) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  events.splice(low, 0, event);
 }

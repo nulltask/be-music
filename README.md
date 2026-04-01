@@ -1,237 +1,330 @@
-# bms-monorepo
+# be-music
 
-TypeScript + npm workspaces で構成した BMS/BMSON ツールチェーンです。
+TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンです。
 
 ## パッケージ
 
-- `@be-music/json`: BMS/BMSON 中間表現 (JSON互換) の型と共通ユーティリティ
+- `@be-music/json`: Be-Music 内部処理専用の BMS/BMSON 中間表現 (JSON互換) の pure IR
+- `@be-music/chart`: beat 解決、イベント順序、ロングノート解決などの譜面意味論 helper
 - `@be-music/utils`: 全パッケージで再利用する汎用ユーティリティ
-- `@be-music/parser`: `.bms` / `.bmson` / JSON のパーサ
+- `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON のパーサ
 - `@be-music/stringifier`: JSON から `.bms` / `.bmson` への文字列化
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
-- `@be-music/player`: CLI プレイヤー (オートプレイ / キーボード演奏)
+- `@be-music/player`: CLI プレイヤー (オートプレイ / キーボード演奏 / TUI)
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
+
+## 必要環境
+
+- Node.js `>= 22`
+- pnpm workspaces
 
 ## セットアップ
 
 ```bash
-npm install
+pnpm install
 ```
 
-## ビルド
+## ビルド・検証
 
 ```bash
-npm run build
+pnpm run clean
+pnpm run build
+pnpm run typecheck
+pnpm run lint
+pnpm run test
 ```
 
-`npm run build` は各ワークスペースを依存順で `vite build` し、続けて型定義 (`.d.ts`) を出力します。
-
-## TypeScript 設定
-
-- `tsconfig.json`: ソリューション設定（project references 管理、`togo -b` 用）
-- `tsconfig.options.json`: 共通 compiler options
-- `tsconfig.dev.json`: 開発実行用（`tsx` 向け `paths` 解決）
-
-## Lint / Format
-
-```bash
-# Lint
-npm run lint
-npm run lint:fix
-
-# Format
-npm run format
-npm run format:check
-
-# Test
-npm run test
-```
-
-`vitest` で `packages/*/src/**/*.test.ts` を実行します（テストファイルは対象実装と同じディレクトリに配置）。
-
-## parser ベンチマーク
-
-`parser` のパース性能退行を確認するためのベンチマークを用意しています。
-
-```bash
-# 1) 基準値を更新（初回 or 意図的に更新する時）
-npm run bench:parser:update-baseline
-
-# 2) 変更後の退行チェック（しきい値超過で失敗）
-npm run bench:parser:check
-
-# 3) 単純計測（失敗判定なし）
-npm run bench:parser
-```
-
-- 既定では `examples` 配下の譜面からサイズ上位ファイルを選び、`parseChart`（in-memory）と `parseChartFile`（read+parse）を計測します。
-- ベースラインは `tmp/parser-benchmark-baseline.json` に保存されます。
-- `bench:parser:check` は平均時間が既定しきい値（`+50%`）を超えると失敗します。
+`pnpm run build` は各ワークスペースの `tsdown` build を依存関係を満たしながら並列実行し、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run typecheck` / `pnpm run lint` / `pnpm run format` もワークスペース単位で並列実行します。
 
 ## 仕様書
 
-- [BMS / BMSON 仕様書リンク](./docs/README.md)
+- [仕様書トップ](./docs/README.md)
+- [BMS 実装仕様](./docs/bms-spec.md)
+- [BMSON 実装仕様](./docs/bmson-spec.md)
+- [Bemuse 実装仕様](./docs/bemuse-spec.md)
+- [Player 実装仕様](./docs/player-spec.md)
+- [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./docs/json-spec.md)
+- [用語集](./docs/glossary.md)
 
-## 対応状況 (機能別)
+`@be-music/json` は Be-Music の内部データモデルです。配布フォーマットや他ツールとの再利用可能な交換フォーマットとしては設計していません。
+譜面の意味論 helper は `@be-music/chart` に分離しており、`@be-music/json` 自体は pure IR と round-trip preservation を担当します。
 
-一次参照に対して、現状はいずれも「部分対応」です。
-
-### BMS 対応状況サマリ
-
-- 対応レベル: 部分対応
-- [x] parser: `#mmmcc:data` / `#COMMAND value` を読み込み
-- [x] parser: 主要ヘッダ/リソース (`TITLE`, `ARTIST`, `BPM`, `WAVxx`, `BMPxx`, `BPMxx`, `STOPxx`, `TEXTxx`) を解釈
-- [x] parser: 小節長/BPM/STOP/背景音/演奏チャンネル (`02`, `03`, `08`, `09`, `01`, `1x`/`2x`) を解釈
-- [x] parser: BMS テキストの文字コード推測 (Shift_JIS, UTF-8, EUC-JP, latin1 など)
-- [x] parser: 制御構文 (`#RANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#SETRANDOM`, `#ENDRANDOM`, `#SWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#SETSWITCH`, `#ENDSW`) の保持
-- [x] player / audio-renderer: 制御構文の実行時評価
-- [x] parser / stringifier: 拡張ヘッダ (`#LNTYPE`, `#LNOBJ`, `#DEFEXRANK`, `#EXRANKxx`, `#ARGBxx`, `#PLAYER`, `#PATH_WAV`, `#BASEBPM`, `#STP`, `#OPTION`, `#CHANGEOPTIONxx`, `#WAVCMD`, `#EXWAVxx`, `#EXBMPxx`, `#BGAxx`, `#POORBGA`, `#SWBGAxx`, `#VIDEOFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET`) の保持と書き出し
-- [x] player / audio-renderer: 小節長/BPM/STOP を反映した再生
-- [x] player / audio-renderer: 同一定義番号の再トリガで先行音を即カット
-- [x] player: `#LNOBJ` によるロングノート終端判定
-- [x] 拡張ヘッダの専用解釈 (`#PLAYER`, `#PATH_WAV`, `#BASEBPM`, `#STP`, `#OPTION`, `#CHANGEOPTIONxx`, `#WAVCMD`, `#EXWAVxx`, `#EXBMPxx`, `#BGAxx`, `#POORBGA`, `#SWBGAxx`, `#VIDEOFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET` など)
-- [ ] 拡張チャンネルの専用挙動 (`#xxx51-69` (LN), `#xxxD1-E9` (地雷) など)
-- [ ] 動画 BGA 再生
-- 詳細: [`docs/bms-spec.md`](./docs/bms-spec.md)
-
-### BMSON 対応状況サマリ
-
-- 対応レベル: 部分対応
-- [x] parser: `version` / `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga` / `notes.l/c` を読み込み
-- [x] stringifier: 上記主要要素の書き出し (`lines` 自動生成含む)
-- [x] player / audio-renderer: `lines` / `resolution` / `bpm_events` / `stop_events` / `notes.l/c` を使った再生
-- [ ] 未知ルートキーの透過保持
-- [ ] `bga_events` / `layer_events` / `poor_events` の再生反映
-- [ ] 動画 BGA 再生
-- 詳細: [`docs/bmson-spec.md`](./docs/bmson-spec.md)
+## 対応状況サマリ
 
 ### parser (`@be-music/parser`)
 
-- [x] BMS の `#mmmcc:data` / `#COMMAND value` を読み込み
-- [x] BMS の主要ヘッダ/リソース (`TITLE`, `ARTIST`, `BPM`, `WAVxx`, `BMPxx`, `STOPxx` など) を解釈
-- [x] BMS の小節長/BPM/STOP/背景音/演奏チャンネル (`02`, `03`, `08`, `09`, `01`, `1x`/`2x`) を解釈
-- [x] BMS テキストの文字コード推測 (Shift_JIS, UTF-8, EUC-JP, latin1 など)
-- [x] BMSON の基本要素 (`info`, `sound_channels`, `bpm_events`, `stop_events`) を読み込み
-- [x] BMSON の `version` / `lines` / `info.resolution` を読み込み
-- [x] BMSON の `bga` / `info` 拡張項目 / `notes.l/c` を読み込み
-- [x] BMS 制御構文 (`#RANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#SETRANDOM`, `#ENDRANDOM`, `#SWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#SETSWITCH`, `#ENDSW`) の保持と実行時評価
-- [x] BMS 拡張仕様 (`#LNTYPE`, `#LNOBJ`, `#EXRANKxx`, `#ARGBxx` など) の専用解釈
-- [x] BMSON の厳密準拠 (`bga`, `info` 拡張項目, `notes.l/c` など)
+- BMS のヘッダ / オブジェクト行 / 制御構文を保持
+- `#WAVxx` / `#BMPxx` / `#BPMxx` / `#STOPxx` / `#TEXTxx` を解釈
+- BMS 拡張ヘッダ (`#PREVIEW`, `#LNTYPE`, `#LNMODE`, `#LNOBJ`, `#VOLWAV`, `#SCROLLxx`, `#VIDEOFILE` など) を保持
+- BMSON の `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga` を解釈
+- BMS テキストの文字コード推測 (`Shift_JIS`, `UTF-8`, `EUC-JP`, `latin1` など)
 
 ### stringifier (`@be-music/stringifier`)
 
-- [x] 中間表現(JSON) -> BMS の書き出し
-- [x] 分数位置 `position: [numerator, denominator]` を使った小節解像度生成
-- [x] 中間表現(JSON) -> BMSON の基本書き出し (`sound_channels`, `bpm_events`, `stop_events`)
-- [x] BMSON の `notes.l/c` を保持して書き出し (未指定時は `l=0`, `c=false`)
-- [x] BMSON の `version` / `lines` / `info.resolution` を書き出し
-- [x] BMSON の `bga` / `info` 拡張項目の完全書き出し
+- 中間表現(JSON) から BMS/BMSON を出力
+- `position: [numerator, denominator]` を使って小節解像度を安定再現
+- BMSON 拡張情報 (`info` 拡張, `bga`, `notes.l/c`) を出力
 
 ### audio-renderer (`@be-music/audio-renderer`)
 
-- [x] BMS / BMSON / JSON 入力に対応
-- [x] 出力形式 `.wav` / `.aiff` に対応
-- [x] サンプル読込 `WAV` (RIFF/WAVE) / `MP3` / `OGG` (Vorbis/Opus) / `OPUS` に対応
-- [x] 小節長/BPM/STOP を使ったタイミング解決
-- [ ] BGA/動画を含む映像レンダリング出力
+- BMS / BMSON / JSON 入力に対応
+- 出力形式 `.wav` / `.aiff`
+- サンプル読込: `WAV` / `MP3` / `OGG` (Vorbis/Opus) / `OPUS`
+- 小節長 / BPM / STOP を反映
+- LR2 系の 100001 倍 BPM ギミック値を時刻解決で処理
 
 ### player (`@be-music/player`)
 
-- [x] オートプレイ
-- [x] キーボード手動演奏
-- [x] 手動時は演奏チャンネルをキー押下時のみ発音 (背景音チャンネルは自動再生)
-- [x] BGM 音量調整 (`--bgm-volume`) / 無音化 (`0`)
-- [x] TUI プレイ画面 (判定、進行バー、小節線、チャンネル配列表示、直近判定 `PERFECT` / `GOOD` / `MISS`、コンボ数表示)
-- [x] BGA 表示 (ANSI Color)
-- [x] Sixel 対応端末での BGA 画像表示 (非対応端末は ANSI Color にフォールバック)
-- [ ] 動画 BGA の再生
+- MANUAL / AUTO SCRATCH / AUTO の 3 モード
+- TUI プレイ画面と選曲画面
+- 選曲画面の metadata / preview / banner 表示
+- 楽曲一覧 metadata のローカル cache (`~/.be-music/chart-selection-cache.json`)
+- HIGH-SPEED (`0.5` 〜 `10.0`, `0.5` 刻み)
+- TUI refresh rate 設定 (`--tui-fps`, default `60`)
+- 判定: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR`（`FAST` / `SLOW` 集計あり）
+- 20 万点満点 SCORE と IIDX 準拠 EX-SCORE
+- 不可視ノート表示 (`--show-invisible-notes`)
+- FREE ZONE (`17` / `27`) の専用扱い
+- BGA 画像描画 (`BMP` / `PNG` / `JPEG`) と動画描画 (`mpeg1video` / `h264` / `mjpeg`)
+- 動画 BGA の progressive decode (`--no-video-bga-streaming` で旧方式へ切り替え)
+- `--kitty-graphics` / `--no-kitty-graphics` による Kitty graphics protocol 描画切り替え (default: on)
+- `node-web-audio-api` 固定バックエンドで再生
+- 構造化ログ出力 (`~/.be-music/logs/player.ndjson`, `--log-file` で上書き)
 
 ### editor (`@be-music/editor`)
 
-- [x] `import` (BMS/BMSON -> JSON)
-- [x] `export` (JSON -> BMS/BMSON)
-- [x] `set-meta`
-- [x] `add-note` / `delete-note` / `list-notes`
-- [x] `init` (空の JSON 初期化)
-
-詳細は `docs` の実装仕様を参照してください。
+- `init`, `import`, `export`, `set-meta`, `add-note`, `delete-note`, `list-notes`
 
 ## 主要コマンド
 
 ### 1. BMS/BMSON を JSON に変換
 
 ```bash
-npm run parse -- chart.bms chart.json
+pnpm run parse chart.bms chart.json
 ```
 
-### 2. JSON を BMS に変換
+### 2. JSON を BMS/BMSON に変換
 
 ```bash
-npm run stringify -- chart.json chart.bms --format bms
+pnpm run stringify chart.json chart.bms --format bms
+pnpm run stringify chart.json chart.bmson --format bmson
 ```
 
 ### 3. 音声レンダリング
 
 ```bash
-npm run audio-render -- chart.bms out.wav
-npm run audio-render -- chart.bms out.aiff --sample-rate 48000
+pnpm run audio-render chart.bms out.wav
+pnpm run audio-render chart.bms out.aiff --sample-rate 48000
 ```
 
 ### 4. プレイヤー
 
 ```bash
 # オートプレイ
-npm run player -- chart.bms --auto
+pnpm run player chart.bms --auto
+
+# スクラッチのみオート (16ch/26ch)
+pnpm run player chart.bms --auto-scratch
 
 # 手動演奏
-npm run player -- chart.bms
+pnpm run player chart.bms
 
-# TUI 画面を無効化
-npm run player -- chart.bms --no-tui
+# TUI 無効
+pnpm run player chart.bms --no-tui
 
-# 音声レイテンシ補正 (例: +35ms)
-npm run player -- chart.bms --audio-offset-ms 35
+# HIGH-SPEED 初期値
+pnpm run player chart.bms --high-speed 3.5
 
-# 曲頭欠け対策の無音パディング調整 (例: 180ms)
-npm run player -- chart.bms --audio-head-padding-ms 180
+# TUI refresh rate
+pnpm run player chart.bms --tui-fps 120
 
-# 音声再生を無効化
-npm run player -- chart.bms --no-audio
+# 動画 BGA の progressive decode を無効化
+pnpm run player chart.bms --no-video-bga-streaming
 
-# 音声バックエンドを指定 (auto | speaker | audify | audio-io)
-npm run player -- chart.bms --audio-backend audio-io
+# 不可視チャンネル (31-39/41-49) を緑ノートで表示
+pnpm run player chart.bms --show-invisible-notes
+
+# Kitty graphics protocol を使って BGA / STAGEFILE / BANNER を画像表示
+pnpm run player chart.bms --kitty-graphics
+
+# 構造化ログ出力先を上書き
+pnpm run player chart.bms --log-file /tmp/be-music.ndjson
+
+# 音声オフ
+pnpm run player chart.bms --no-audio
+
+# 出力リミッタを無効化
+pnpm run player chart.bms --no-limiter
+
+# コンプレッサを有効化
+pnpm run player chart.bms --compressor --compressor-threshold-db -10 --compressor-ratio 3
 ```
 
 ### 5. エディタ
 
 ```bash
-# インポート
-npm run editor -- import chart.bms chart.json
-
-# ノート追加
-npm run editor -- add-note chart.json 0 11 1 2 01
-
-# エクスポート
-npm run editor -- export chart.json chart.bms
+pnpm run editor import chart.bms chart.json
+pnpm run editor add-note chart.json 0 11 1 2 01
+pnpm run editor export chart.json chart.bms
 ```
 
-## 実装メモ
+## player 操作
 
-- 内部データモデルは `@be-music/json` を BMS/BMSON 中間表現(IR)として使用し、`bmson` は入出力フォーマットとして扱います。
-- BMS/BMSON 中間表現のイベント位置は `position: [numerator, denominator]` の分数タプルで保持します。
-- BMS 制御構文は `bms.controlFlow` として IR に保持し、`player`/`audio-renderer` は実行時に分岐を評価します（パース時には確定しません）。
-- 仕様差分や拡張要素は、`@be-music/json` 側を拡張して吸収します（`bmson` を唯一の内部表現にはしません）。
-- 汎用処理 (CLI パス解決、数値クランプ、整数演算) は `@be-music/utils` に集約しています。
-- `audio-renderer` のサンプル読込は `WAV` (RIFF/WAVE), `MP3`, `OGG` (Vorbis/Opus), `OPUS` に対応しています。
-- `#WAVxx` の探索順は、拡張子未指定時 `wav -> mp3 -> ogg -> opus`、`.wav` 指定時 `wav -> mp3 -> ogg -> opus`、`.mp3` 指定時 `mp3 -> ogg -> opus`、`.ogg/.oga` 指定時 `ogg/oga -> opus`、`.opus` 指定時 `opus -> ogg/oga` です。
-- `player` は TUI プレイ画面付きの CLI です。音声再生は `--audio-backend` で `speaker` / `audify` / `audio-io` を選択でき、未指定時は `auto` で利用可能な実装へフォールバックします（外部コマンド起動なし）。
-- `player` の手動演奏では、演奏チャンネルはキー押下時のみ発音します（背景系チャンネルのみ自動再生）。
-- `player` の標準チャンネル順とキー割り当ては IIDX 配列（1P/2P）です。2P チャンネルがある場合、TUI は 1P/2P 間にスペースを入れて表示します。
-- `player` の TUI では、直近判定を `PERFECT` / `GOOD` / `MISS` で表示し、コンボ数（`> 0` のときのみ）をレーン下端と入力キー行の間に中央揃えで表示します。`GREAT` 判定は表示上 `GOOD` に集約します。
-- `parser` は BMS テキスト読込時に文字コードを推測し、Shift_JIS などのマルチバイト入力を扱います。
-- `#LNTYPE` / `#LNOBJ` / `#DEFEXRANK` / `#EXRANKxx` / `#ARGBxx` は `bms` 拡張領域に専用フィールドとして保持します。
-- `bmson` の `info` 拡張項目 (`subartists`, `chart_name`, `judge_rank`, `total`, 画像/プレビュー系) と `bga`、`notes.l/c` は `bmson` / `events[].bmson` 拡張領域で保持します。
-- `examples/test/control-flow-test.bms` は `#SETRANDOM` / `#SETSWITCH` を使った決定論的テスト用です。
-- `examples/test/control-flow-random-demo.bms` は分岐ごとにノート数・チャンネル・BGMを大きく変えたランダム挙動確認用です。
-- `examples/test/retrigger-same-key-cut.bms` は同一定義番号の再トリガで先行音をカットする挙動確認用、`examples/test/retrigger-different-key-overlap.bms` は同一ファイルでも別定義番号なら重なる挙動確認用です（`retrigger_a.wav`, `retrigger_b.wav` を使用）。
-- 仕様全域の完全対応ではなく、拡張しやすい基盤実装を優先しています。
+### 選曲画面
+
+- `↑/↓` or `k/j`: 移動
+- `←/→` or `h/l`: ページ移動
+- `Ctrl+b / Ctrl+f`: ページ移動
+- `1-5`: DIFFICULTY フィルタ
+- `0`: DIFFICULTY フィルタ解除
+- `a`: `MANUAL -> AUTO SCRATCH -> AUTO` 切り替え
+- `s`: HIGH-SPEED 増加 (`+0.5`)
+- `S`: HIGH-SPEED 減少 (`-0.5`)
+- `Enter`: 開始
+- `Esc` or `Ctrl+C`: 終了
+
+### プレイ中
+
+- `Space`: 一時停止 / 再開
+- `Alt`/`Option` + 奇数レーン入力: HIGH-SPEED 減少 (`-0.5`)
+- `Alt`/`Option` + 偶数レーン入力: HIGH-SPEED 増加 (`+0.5`)
+- `Esc`: 演奏終了してリザルトへ
+- `Ctrl+C`: 終了
+
+### リザルト画面
+
+- `Enter` または `Esc`: 選曲画面へ戻る
+
+## レーンモード自動判定と入力割り当て
+
+### 自動判定
+
+使用チャンネルから次のモードを自動判定します。
+
+- `5 KEY SP`
+- `5 KEY DP`
+- `7 KEY SP`
+- `14 KEY DP`
+- `9 KEY`
+- `24 KEY SP`
+- `48 KEY DP`
+
+自動判定が曖昧な場合は拡張子で補完します。
+
+- `.bms` -> `5 KEY SP/DP`
+- `.bme` -> `7 KEY SP/14 KEY DP`
+- `.pms` -> `9 KEY`
+
+### 代表モードのチャンネルと入力
+
+| Mode | Channel -> Input |
+| --- | --- |
+| `5 KEY SP` | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c` |
+| `5 KEY DP` | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift` |
+| `7 KEY SP` | `5 KEY SP` + `18 -> f`, `19 -> v` |
+| `14 KEY DP` | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift` |
+| `9 KEY` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b` |
+
+## FREE ZONE (`17` / `27`)
+
+- 9KEY 以外では FREE ZONE として扱います。
+- 独立レーンは作らず、スクラッチレーン (`16` / `26`) に重ねて描画します。
+- ノート長は 4 分音符固定です。
+- 判定対象外のため、`TOTAL` / `EX-SCORE` / `SCORE` には含めません。
+- 9KEY 判定時は `17` を通常レーンノートとして扱います。
+
+## キーボード入力 (kitty keyboard protocol)
+
+- プレイ開始時に kitty keyboard protocol へ自動オプトインします。
+- 対応端末では左 Shift / 右 Shift の押下・離上を個別に処理します。
+- 非対応端末では従来入力へフォールバックします。
+- フォールバック時でもスクラッチ入力は `a` (1P) / `]` (2P) で代替できます。
+
+## BGA 実装
+
+- `04` (base) と `07` (layer) を合成して描画します。
+- layer の黒 (`#000000`) は透過色として扱います。
+- `#BANNER` / bmson `banner_image` は選曲画面の曲紹介 block に表示します。
+- 対応端末では、既定で kitty graphics protocol を使って gameplay BGA、`#STAGEFILE` loading 画面、選曲画面 banner を画像として表示します。
+- `--no-kitty-graphics` を付けると ANSI 描画へ戻せます。
+- BGA はウィンドウリサイズ時に再計算して表示サイズを更新します。
+- 動画 BGA は `@uwx/libav.js-fat` でデコードします。
+  - 対応コーデック: `mpeg1video`, `h264`, `mjpeg`
+  - 音声トラックはデコードしません。
+  - 既定では最初のフレーム取得後に再生を開始し、残りフレームはバックグラウンドで段階的にデコードします。
+  - `--no-video-bga-streaming` を付けると、再生前に全フレームをデコードする旧方式へ戻せます。
+
+## スコアと判定
+
+- 判定種別: `PERFECT`, `GREAT`, `GOOD`, `BAD`, `POOR`
+- `FAST` / `SLOW` は `GREAT` / `GOOD` の早押し・遅押し時のみ加算
+- 対応する未判定ノートが存在しない空打鍵は、判定も groove gauge 変動も発生しません
+- EX-SCORE:
+  - `PERFECT = +2`
+  - `GREAT = +1`
+- SCORE (200000 満点):
+  - 判定基礎点 150000 + コンボ加点 50000
+  - `BAD` / `POOR` は加点なし、コンボを切断
+
+## 設定・キャッシュ・ログ
+
+`player` は次をローカルへ保存します。
+
+- Play Mode (`manual` / `auto-scratch` / `auto`)
+- HIGH-SPEED
+- ディレクトリごとの選曲フォーカス (`chart` / `random`)
+
+保存先と用途:
+
+- `~/.be-music/player.json`
+  - Play Mode, HIGH-SPEED, directory ごとの Music Select focus
+- `~/.be-music/chart-selection-cache.json`
+  - 楽曲一覧 metadata cache
+  - chart 本文の `contentHash` で再利用判定し、保存済み entry は `cacheHash` で検証します
+- `~/.be-music/logs/player.ndjson`
+  - `player` 実行時の構造化ログ
+  - `--log-file <path>` を指定した場合はその path を使います
+
+## SEA (Single Executable Applications)
+
+```bash
+# player の SEA バイナリを生成
+pnpm run player:sea
+
+# audio-renderer の SEA バイナリを生成
+pnpm run audio-renderer:sea
+
+# 生成物
+./packages/player/dist-sea/be-music-player chart.bms
+./packages/audio-renderer/dist-sea/be-music-audio-render chart.bms output.wav
+
+# Node 実行ファイルを明示する場合
+pnpm run player:sea --node-binary /path/to/node
+pnpm run audio-renderer:sea --node-binary /path/to/node
+```
+
+補足:
+
+- Node.js 25.5+ が必要です。
+- SEA 生成は built-in の `--build-sea` を使用します。
+
+## Exports ベンチマーク
+
+```bash
+# 全パッケージ
+pnpm run bench
+
+# 単一パッケージ（例: parser）
+pnpm --filter @be-music/parser run bench
+
+# 複数 run を集約
+pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
+
+# 2 revision を比較して Markdown を生成
+pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json --output tmp/bench/benchmark.md
+```
+
+- snapshot 出力: `tmp/bench/exports*.json`
+- compare 出力: 任意の Markdown と summary JSON
+- GitHub Actions では、`devel` / `main` 向け PR で base/head 比較を PR comment として投稿します
+- GitHub Actions では、`devel` / `main` への push でも直前 revision 比較を実行し、対象 commit へ commit comment を投稿します

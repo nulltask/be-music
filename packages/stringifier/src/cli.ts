@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolveCliPath } from '@be-music/utils';
 import { parseChart } from '@be-music/parser';
@@ -10,12 +9,13 @@ interface CliArgs {
   format: 'bms' | 'bmson';
 }
 
-/**
- * 非同期でmain に対応する処理を実行します。
- * @returns 戻り値はありません。
- */
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
+    printUsage();
+    return;
+  }
+  const args = parseArgs(rawArgs);
   if (!args.input || !args.output) {
     printUsage();
     process.exitCode = 1;
@@ -33,11 +33,6 @@ async function main(): Promise<void> {
   process.stdout.write(`Wrote ${args.format.toUpperCase()} to ${outputPath}\n`);
 }
 
-/**
- * 入力データを解析し、内部処理で扱う形式に変換します。
- * @param rawArgs - CLI から渡される引数配列。
- * @returns 処理結果（CliArgs）。
- */
 function parseArgs(rawArgs: string[]): CliArgs {
   const args: CliArgs = {
     format: 'bms',
@@ -62,14 +57,16 @@ function parseArgs(rawArgs: string[]): CliArgs {
   return args;
 }
 
-/**
- * print Usage に対応する処理を実行します。
- * @returns 戻り値はありません。
- */
 function printUsage(): void {
   process.stdout.write(
     [
       'Usage: bms-stringify <input.json> <output> [--format bms|bmson]',
+      '',
+      'Essential usage:',
+      '  bms-stringify <input.json> <output>',
+      '',
+      'Advanced options:',
+      '  --format, -f <bms|bmson>  Select output format (default: bms)',
       '',
       'Examples:',
       '  bms-stringify chart.json chart.bms --format bms',

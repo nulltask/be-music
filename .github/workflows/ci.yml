@@ -1,0 +1,711 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - devel
+      - main
+  pull_request:
+    branches:
+      - devel
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code_changed: ${{ steps.filter.outputs.code }}
+      sea_player_changed: ${{ steps.filter.outputs.sea_player }}
+      sea_audio_renderer_changed: ${{ steps.filter.outputs.sea_audio_renderer }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+            sea_player:
+              - 'packages/player/**'
+              - 'packages/audio-renderer/**'
+              - 'packages/parser/**'
+              - 'packages/json/**'
+              - 'packages/utils/**'
+              - 'scripts/build-sea.ts'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.node-version'
+              - 'tsconfig*.json'
+              - 'packages/*/tsconfig*.json'
+            sea_audio_renderer:
+              - 'packages/audio-renderer/**'
+              - 'packages/parser/**'
+              - 'packages/json/**'
+              - 'packages/utils/**'
+              - 'scripts/build-sea.ts'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.node-version'
+              - 'tsconfig*.json'
+              - 'packages/*/tsconfig*.json'
+
+  verify:
+    name: Verify (${{ matrix.task }})
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        task:
+          - lint
+          - typecheck
+          - build
+          - test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run ${{ matrix.task }}
+        run: pnpm run ${{ matrix.task }}
+
+  benchmark-pr-head:
+    name: Benchmark Head (PR)
+    needs: changes
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      snapshot_b64: ${{ steps.aggregate-head.outputs.snapshot_b64 }}
+    env:
+      BENCH_TIME_MS: 200
+      BENCH_WARMUP_TIME_MS: 100
+      BENCH_REPEATS: 3
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run head benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/bench/head-runs
+          for run_index in $(seq 1 "$BENCH_REPEATS"); do
+            BENCH_GIT_SHA="${{ github.event.pull_request.head.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+          done
+
+      - name: Aggregate head benchmark snapshots
+        id: aggregate-head
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
+          {
+            echo "snapshot_b64<<__SNAPSHOT__"
+            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/head.json').toString('base64'));"
+            echo
+            echo "__SNAPSHOT__"
+          } >> "$GITHUB_OUTPUT"
+
+  benchmark-pr-base:
+    name: Benchmark Base (PR)
+    needs: changes
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      available: ${{ steps.detect-bench.outputs.available }}
+      snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
+    env:
+      BENCH_TIME_MS: 200
+      BENCH_WARMUP_TIME_MS: 100
+      BENCH_REPEATS: 3
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Detect benchmark support
+        id: detect-bench
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          BASE_PKG_JSON="$(mktemp)"
+          trap 'rm -f "$BASE_PKG_JSON"' EXIT
+          if ! git show "${BASE_SHA}:package.json" > "$BASE_PKG_JSON" 2>/dev/null; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); process.exit(pkg.scripts && pkg.scripts['bench'] ? 0 : 1);" "$BASE_PKG_JSON"; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.detect-bench.outputs.available == 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run base benchmark
+        if: steps.detect-bench.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          BASE_DIR="$(mktemp -d)"
+
+          cleanup() {
+            git worktree remove --force "$BASE_DIR" >/dev/null 2>&1 || true
+            rm -rf "$BASE_DIR" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          git worktree add --detach "$BASE_DIR" "$BASE_SHA"
+          mkdir -p tmp/bench/base-runs
+
+          (
+            cd "$BASE_DIR"
+            pnpm install --frozen-lockfile --prefer-offline
+            for run_index in $(seq 1 "$BENCH_REPEATS"); do
+              BENCH_GIT_SHA="$BASE_SHA" pnpm run bench --output "tmp/bench/base-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+            done
+          )
+
+          cp "$BASE_DIR"/tmp/bench/base-runs/*.json tmp/bench/base-runs/
+
+      - name: Aggregate base benchmark snapshots
+        if: steps.detect-bench.outputs.available == 'true'
+        id: aggregate-base
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
+          {
+            echo "snapshot_b64<<__SNAPSHOT__"
+            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/base.json').toString('base64'));"
+            echo
+            echo "__SNAPSHOT__"
+          } >> "$GITHUB_OUTPUT"
+
+  benchmark-pr:
+    name: Benchmark (PR)
+    needs:
+      - changes
+      - benchmark-pr-head
+      - benchmark-pr-base
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BENCH_REGRESSION_THRESHOLD: 8
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Restore head benchmark snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/bench
+          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/head.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-pr-head.outputs.snapshot_b64 }}'
+
+      - name: Restore base benchmark snapshot
+        if: needs.benchmark-pr-base.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/bench
+          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/base.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-pr-base.outputs.snapshot_b64 }}'
+
+      - name: Generate benchmark report
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.benchmark-pr-base.outputs.available }}" = "true" ]; then
+            pnpm run bench:compare --head tmp/bench/head.json --base tmp/bench/base.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
+          else
+            pnpm run bench:compare --head tmp/bench/head.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
+          fi
+
+      - name: Post benchmark comment
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const marker = '<!-- be-music-exports-benchmark -->';
+            const body = fs.readFileSync('tmp/bench/pr-benchmark.md', 'utf8').trim();
+            const issue_number = context.issue.number;
+            const { owner, repo } = context.repo;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((comment) => {
+              return (
+                comment.user?.type === 'Bot' &&
+                typeof comment.body === 'string' &&
+                comment.body.includes(marker)
+              );
+            });
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
+  benchmark-push-head:
+    name: Benchmark Head (Push)
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      snapshot_b64: ${{ steps.aggregate-head.outputs.snapshot_b64 }}
+    env:
+      BENCH_TIME_MS: 200
+      BENCH_WARMUP_TIME_MS: 100
+      BENCH_REPEATS: 3
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run head benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/bench/head-runs
+          for run_index in $(seq 1 "$BENCH_REPEATS"); do
+            BENCH_GIT_SHA="${{ github.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+          done
+
+      - name: Aggregate head benchmark snapshots
+        id: aggregate-head
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
+          {
+            echo "snapshot_b64<<__SNAPSHOT__"
+            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/head.json').toString('base64'));"
+            echo
+            echo "__SNAPSHOT__"
+          } >> "$GITHUB_OUTPUT"
+
+  benchmark-push-base:
+    name: Benchmark Base (Push)
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      available: ${{ steps.detect-bench.outputs.available }}
+      snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
+    env:
+      BENCH_TIME_MS: 200
+      BENCH_WARMUP_TIME_MS: 100
+      BENCH_REPEATS: 3
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Detect benchmark support
+        id: detect-bench
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.before }}"
+          ZERO_SHA="0000000000000000000000000000000000000000"
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "$ZERO_SHA" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          BASE_PKG_JSON="$(mktemp)"
+          trap 'rm -f "$BASE_PKG_JSON"' EXIT
+          if ! git show "${BASE_SHA}:package.json" > "$BASE_PKG_JSON" 2>/dev/null; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); process.exit(pkg.scripts && pkg.scripts['bench'] ? 0 : 1);" "$BASE_PKG_JSON"; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.detect-bench.outputs.available == 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run base benchmark
+        if: steps.detect-bench.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.before }}"
+          BASE_DIR="$(mktemp -d)"
+
+          cleanup() {
+            git worktree remove --force "$BASE_DIR" >/dev/null 2>&1 || true
+            rm -rf "$BASE_DIR" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          git worktree add --detach "$BASE_DIR" "$BASE_SHA"
+          mkdir -p tmp/bench/base-runs
+
+          (
+            cd "$BASE_DIR"
+            pnpm install --frozen-lockfile --prefer-offline
+            for run_index in $(seq 1 "$BENCH_REPEATS"); do
+              BENCH_GIT_SHA="$BASE_SHA" pnpm run bench --output "tmp/bench/base-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+            done
+          )
+
+          cp "$BASE_DIR"/tmp/bench/base-runs/*.json tmp/bench/base-runs/
+
+      - name: Aggregate base benchmark snapshots
+        if: steps.detect-bench.outputs.available == 'true'
+        id: aggregate-base
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
+          {
+            echo "snapshot_b64<<__SNAPSHOT__"
+            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/base.json').toString('base64'));"
+            echo
+            echo "__SNAPSHOT__"
+          } >> "$GITHUB_OUTPUT"
+
+  benchmark-push:
+    name: Benchmark (Push)
+    needs:
+      - changes
+      - benchmark-push-head
+      - benchmark-push-base
+    if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BENCH_REGRESSION_THRESHOLD: 8
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Restore head benchmark snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/bench
+          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/head.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-push-head.outputs.snapshot_b64 }}'
+
+      - name: Restore base benchmark snapshot
+        if: needs.benchmark-push-base.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/bench
+          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/base.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-push-base.outputs.snapshot_b64 }}'
+
+      - name: Generate benchmark report
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.benchmark-push-base.outputs.available }}" = "true" ]; then
+            pnpm run bench:compare --head tmp/bench/head.json --base tmp/bench/base.json --output tmp/bench/push-benchmark.md --summary tmp/bench/push-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
+          else
+            pnpm run bench:compare --head tmp/bench/head.json --output tmp/bench/push-benchmark.md --summary tmp/bench/push-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
+          fi
+
+      - name: Post benchmark comment
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const marker = '<!-- be-music-exports-benchmark -->';
+            const body = fs.readFileSync('tmp/bench/push-benchmark.md', 'utf8').trim();
+            const commit_sha = context.sha;
+            const { owner, repo } = context.repo;
+
+            const comments = await github.paginate(github.rest.repos.listCommentsForCommit, {
+              owner,
+              repo,
+              commit_sha,
+              per_page: 100,
+            });
+
+            const existing = comments.find((comment) => {
+              return (
+                comment.user?.type === 'Bot' &&
+                typeof comment.body === 'string' &&
+                comment.body.includes(marker)
+              );
+            });
+
+            if (existing) {
+              await github.rest.repos.updateCommitComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.repos.createCommitComment({
+                owner,
+                repo,
+                commit_sha,
+                body,
+              });
+            }
+
+  sea:
+    name: SEA (${{ matrix.os }})
+    needs: changes
+    if: |
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'pull_request' && github.base_ref == 'main')
+      ) &&
+      (
+        needs.changes.outputs.sea_player_changed == 'true' ||
+        needs.changes.outputs.sea_audio_renderer_changed == 'true'
+      )
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build player SEA executable
+        if: needs.changes.outputs.sea_player_changed == 'true'
+        run: pnpm --filter @be-music/player run build:sea
+
+      - name: Build audio-renderer SEA executable
+        if: needs.changes.outputs.sea_audio_renderer_changed == 'true'
+        run: pnpm --filter @be-music/audio-renderer run build:sea
+
+      - name: Select player SEA binary path
+        id: sea-player-binary
+        if: needs.changes.outputs.sea_player_changed == 'true'
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            echo "path=packages/player/dist-sea/be-music-player.exe" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=packages/player/dist-sea/be-music-player" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select audio-renderer SEA binary path
+        id: sea-audio-renderer-binary
+        if: needs.changes.outputs.sea_audio_renderer_changed == 'true'
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            echo "path=packages/audio-renderer/dist-sea/be-music-audio-render.exe" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=packages/audio-renderer/dist-sea/be-music-audio-render" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload player SEA artifact
+        if: needs.changes.outputs.sea_player_changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: be-music-player-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ steps.sea-player-binary.outputs.path }}
+          if-no-files-found: error
+
+      - name: Upload audio-renderer SEA artifact
+        if: needs.changes.outputs.sea_audio_renderer_changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: be-music-audio-renderer-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ steps.sea-audio-renderer-binary.outputs.path }}
+          if-no-files-found: error

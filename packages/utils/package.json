@@ -11,11 +11,23 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
       "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "vite build && tsgo -b tsconfig.json --emitDeclarationOnly --force",
-    "clean": "rimraf dist tsconfig.tsbuildinfo"
+    "build:bundle": "tsdown",
+    "build": "tsdown",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt . --write",
+    "format:check": "oxfmt . --check",
+    "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts"
+  },
+  "dependencies": {
+    "isoworker": "^0.2.4",
+    "pino": "^10.3.1"
   }
 }

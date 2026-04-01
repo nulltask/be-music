@@ -1,5 +1,19 @@
+*---------------------- METADATA FIELD
+
 #TITLE OGG TEST
 #ARTIST codex
 #BPM 120
+
+*---------------------- EXTENDED HEADER FIELD
+
+*---------------------- RESOURCES FIELD
+
 #WAV01 ogg-test.ogg
-#00011:01000100
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+#00011:0101
+
+*---------------------- CONTROL FLOW FIELD

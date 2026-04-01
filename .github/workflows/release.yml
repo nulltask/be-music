@@ -1,0 +1,133 @@
+name: Release Assets
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  sea:
+    name: SEA Release (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Compute asset metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $os = switch ($env:RUNNER_OS) {
+            'Linux' { 'linux' }
+            'macOS' { 'macos' }
+            'Windows' { 'windows' }
+            default { throw "Unsupported RUNNER_OS: $env:RUNNER_OS" }
+          }
+          $arch = $env:RUNNER_ARCH.ToLowerInvariant()
+
+          "archive_suffix=$os-$arch" >> $env:GITHUB_OUTPUT
+
+      - name: Build player SEA executable
+        run: pnpm --filter @be-music/player run build:sea
+
+      - name: Build audio-renderer SEA executable
+        run: pnpm --filter @be-music/audio-renderer run build:sea
+
+      - name: Package SEA archives (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.release.tag_name }}"
+          suffix="${{ steps.meta.outputs.archive_suffix }}"
+
+          mkdir -p tmp/release-assets/player tmp/release-assets/audio-renderer
+          cp packages/player/dist-sea/be-music-player tmp/release-assets/player/
+          cp packages/audio-renderer/dist-sea/be-music-audio-render tmp/release-assets/audio-renderer/
+          chmod +x tmp/release-assets/player/be-music-player
+          chmod +x tmp/release-assets/audio-renderer/be-music-audio-render
+
+          (
+            cd tmp/release-assets/player
+            zip -9 -q "../be-music-player-${tag}-${suffix}.zip" be-music-player
+          )
+
+          (
+            cd tmp/release-assets/audio-renderer
+            zip -9 -q "../be-music-audio-render-${tag}-${suffix}.zip" be-music-audio-render
+          )
+
+      - name: Package SEA archives (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tag = '${{ github.event.release.tag_name }}'
+          $suffix = '${{ steps.meta.outputs.archive_suffix }}'
+          $assetDir = 'tmp/release-assets'
+
+          New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
+          Compress-Archive -Path 'packages/player/dist-sea/be-music-player.exe' -DestinationPath "$assetDir/be-music-player-$tag-$suffix.zip" -CompressionLevel Optimal -Force
+          Compress-Archive -Path 'packages/audio-renderer/dist-sea/be-music-audio-render.exe' -DestinationPath "$assetDir/be-music-audio-render-$tag-$suffix.zip" -CompressionLevel Optimal -Force
+
+      - name: Upload SEA archives
+        uses: actions/upload-artifact@v7
+        with:
+          name: sea-release-assets-${{ steps.meta.outputs.archive_suffix }}
+          path: tmp/release-assets/*.zip
+          if-no-files-found: error
+
+  upload:
+    name: Upload Release Assets
+    needs: sea
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Download SEA archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${{ github.run_id }}" --dir tmp/release-assets
+
+      - name: Upload archives to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          mapfile -t assets < <(find tmp/release-assets -type f -name '*.zip' | sort)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No SEA archives found to upload." >&2
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { resolveCliPath } from '@be-music/utils';
 import {
   addNote,
@@ -12,10 +11,6 @@ import {
   setMetadata,
 } from './index.ts';
 
-/**
- * 非同期でmain に対応する処理を実行します。
- * @returns 戻り値はありません。
- */
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
 
@@ -129,24 +124,21 @@ async function main(): Promise<void> {
   }
 }
 
-/**
- * print Usage に対応する処理を実行します。
- * @param exitCode - exitCode に対応する入力値。
- * @returns 戻り値はありません。
- */
 function printUsage(exitCode: number): void {
   process.stdout.write(
     [
       'Usage: bms-editor <command> [args]',
       '',
-      'Commands:',
+      'Essential commands:',
       '  init <output.json>',
       '  import <input.(bms|bmson)> <output.json>',
       '  export <input.json> <output.(bms|bmson)>',
+      '  list-notes <input.json> [measure]',
+      '',
+      'Advanced edit commands:',
       '  set-meta <input.json> <key> <value...>',
       '  add-note <input.json> <measure> <channel> <positionNumerator> <positionDenominator> <value>',
       '  delete-note <input.json> <measure> <channel> <positionNumerator> <positionDenominator> [value]',
-      '  list-notes <input.json> [measure]',
     ].join('\n') + '\n',
   );
   process.exitCode = exitCode;

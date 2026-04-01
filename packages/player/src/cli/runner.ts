@@ -1,0 +1,2766 @@
+import { stat } from 'node:fs/promises';
+import { dirname, extname, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  createFileLogger,
+  createNoopLogger,
+  isAbortError,
+  resolveCliPath,
+  type LogEntry,
+  type Logger,
+  type LogLevel,
+} from '@be-music/utils';
+import readline from 'node:readline';
+import type { BeMusicPlayLevel } from '@be-music/json';
+import { parseChartFile } from '@be-music/parser';
+import { renderJson, writeAudioFile } from '@be-music/audio-renderer';
+import {
+  PlayerInterruptedError,
+  type PlayerLoadComponentStatus,
+  type PlayerLoadProgress,
+  type PlayerSummary,
+} from '../index.ts';
+import {
+  loadStageFileAnsiImage,
+  loadTerminalAnsiImage,
+  type StageFileAnsiImage,
+  type TerminalAnsiImage,
+} from '../bga.ts';
+import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
+import {
+  buildKittyGraphicsDeleteImageSequence,
+  buildKittyGraphicsRenderSequence,
+  supportsKittyGraphicsProtocol,
+} from '../tui/kitty-graphics.ts';
+import {
+  resolveDisplayedJudgeRankLabel,
+  resolveDisplayedJudgeRankValue,
+  resolveDisplayedPlayLevelValue,
+} from '../utils.ts';
+import { beginSharedRawInputCapture } from '../raw-input-capture.ts';
+import {
+  HIGH_SPEED_STEP,
+  MAX_HIGH_SPEED,
+  MIN_HIGH_SPEED,
+  applyPersistedPlayerConfigToArgs,
+  applyMusicSelectConfigToArgs,
+  createDefaultPersistedPlayerConfig,
+  cyclePlayMode,
+  decreaseHighSpeed,
+  formatHighSpeedLabel,
+  formatPlayModeLabel,
+  increaseHighSpeed,
+  loadPersistedPlayerConfig,
+  normalizeHighSpeedValue,
+  resolveCliConfigOverrideFlags,
+  resolveDefaultPlayerLogPath,
+  resolvePersistedPlayerConfigFromArgs,
+  resolvePlayModeFromArgs,
+  savePersistedPlayerConfig,
+  type PersistedPlayerConfig,
+  type PlayMode,
+} from './config.ts';
+import {
+  resolveCircularSelectableIndex,
+  resolvePageSelectableIndex,
+  resolveResultScreenActionFromKey,
+  resolveMusicSelectDifficultyFilter,
+  resolveMusicSelectNavigationAction,
+  resolveVisibleEntryRange,
+  type ResultScreenAction,
+  type MusicSelectDifficultyFilter,
+  type MusicSelectPageDirection,
+} from './music-select-navigation.ts';
+import {
+  createSelectionColumnLayout,
+  formatPlayLevelLabel,
+  formatPlayerLabel,
+  formatRankLabel,
+  formatSelectionColumnHeader,
+  formatSelectionEntryLabel,
+  truncateForDisplay,
+} from './selection-format.ts';
+import {
+  buildChartSelectionEntries,
+  listChartFiles,
+  type ChartSelectionEntry,
+  type ChartSummaryLoadingProgress,
+} from './chart-selection.ts';
+import { createChartFocusKey, createMusicSelectState, getEntryFocusKey } from './music-select-state.ts';
+import { createChartPreviewController, formatMusicSelectAudioBackendLabel } from './chart-preview.ts';
+
+export {
+  applyPersistedPlayerConfigToArgs,
+  cyclePlayMode,
+  formatPlayModeLabel,
+  resolveCliConfigOverrideFlags,
+  resolveDefaultPlayerLogPath,
+  resolvePersistedPlayerConfigFromArgs,
+  resolvePlayModeFromArgs,
+} from './config.ts';
+export {
+  resolveCircularSelectableIndex,
+  resolvePageSelectableIndex,
+  resolveResultScreenActionFromKey,
+  resolveMusicSelectDifficultyFilter,
+  resolveMusicSelectNavigationAction,
+  resolveVisibleEntryRange,
+} from './music-select-navigation.ts';
+
+interface CliArgs {
+  input?: string;
+  logFile?: string;
+  auto: boolean;
+  autoScratch: boolean;
+  kittyGraphics: boolean;
+  videoBgaStreaming: boolean;
+  inferBmsLnTypeWhenMissing: boolean;
+  showInvisibleNotes: boolean;
+  compressor: boolean;
+  compressorThresholdDb?: number;
+  compressorRatio?: number;
+  compressorAttackMs?: number;
+  compressorReleaseMs?: number;
+  compressorMakeupDb?: number;
+  limiter: boolean;
+  limiterCeilingDb?: number;
+  limiterReleaseMs?: number;
+  speed?: number;
+  uiFps: number;
+  tuiVisibleNotesLimit: number;
+  highSpeed?: number;
+  judgeWindowMs?: number;
+  debugActiveAudio: boolean;
+  renderAudioPath?: string;
+  audio: boolean;
+  volume?: number;
+  bgmVolume?: number;
+  playVolume?: number;
+  audioTailSeconds?: number;
+  audioHeadPaddingMs?: number;
+  audioLeadMs?: number;
+  audioLeadMaxMs?: number;
+  audioLeadStepUpMs?: number;
+  audioLeadStepDownMs?: number;
+  tui: boolean;
+}
+
+interface PlayLoadingProgress {
+  ratio: number;
+  message: string;
+  detail?: string;
+  audioStatus?: PlayerLoadComponentStatus;
+  graphicsStatus?: PlayerLoadComponentStatus;
+}
+
+interface PlayLoadingScreenRenderState {
+  initialized: boolean;
+  stageFileDrawn: boolean;
+  stageFileKittyVisible: boolean;
+  stageFileRenderLogged?: boolean;
+  lastOutput?: string;
+}
+
+interface SelectChartInteractivelyOptions {
+  audio: boolean;
+  kittyGraphics?: boolean;
+  volume?: number;
+  bgmVolume?: number;
+  playVolume?: number;
+  entries?: ChartSelectionEntry[];
+  initialFocusKey?: string;
+  initialPlayMode?: PlayMode;
+  initialHighSpeed?: number;
+  initialDifficultyFilter?: MusicSelectDifficultyFilter;
+}
+
+type SelectChartInteractivelyExitReason = 'selected' | 'escape' | 'ctrl-c';
+
+interface SelectChartInteractivelyResult {
+  reason: SelectChartInteractivelyExitReason;
+  selectedPath?: string;
+  focusKey?: string;
+  playMode: PlayMode;
+  highSpeed: number;
+  difficultyFilter?: MusicSelectDifficultyFilter;
+}
+
+interface MusicSelectMetadataRenderOptions {
+  bannerLines?: readonly string[];
+  bannerWidth?: number;
+}
+
+interface MusicSelectBannerLayout {
+  visibleBannerLines: readonly string[];
+  requestedBannerWidth: number;
+}
+
+interface MusicSelectBannerState {
+  cache: Map<string, TerminalAnsiImage | null>;
+  activeCacheKey?: string;
+  activeImage?: TerminalAnsiImage;
+  loadController?: AbortController;
+  loadSequence: number;
+  kittyVisible: boolean;
+}
+
+interface MusicSelectBannerDisplayState {
+  reservedWidth?: number;
+}
+
+interface PlayedChartResult {
+  chartPath: string;
+  summary: PlayerSummary;
+  title?: string;
+  artist?: string;
+  player?: number;
+  rank?: number;
+  rankLabel?: string;
+  playLevel?: BeMusicPlayLevel;
+}
+
+const MUSIC_SELECT_NON_ENTRY_ROWS = 13;
+
+type DirectorySceneState =
+  | {
+      kind: 'select';
+      focusKey?: string;
+      playMode: PlayMode;
+      highSpeed: number;
+      difficultyFilter?: MusicSelectDifficultyFilter;
+    }
+  | {
+      kind: 'play';
+      chartPath: string;
+      focusKey?: string;
+      playMode: PlayMode;
+      highSpeed: number;
+      difficultyFilter?: MusicSelectDifficultyFilter;
+    }
+  | {
+      kind: 'result';
+      played: PlayedChartResult;
+      focusKey?: string;
+      playMode: PlayMode;
+      highSpeed: number;
+      difficultyFilter?: MusicSelectDifficultyFilter;
+    }
+  | {
+      kind: 'exit';
+      exitCode: number;
+    };
+
+interface RawInputCapture {
+  stdin: NodeJS.ReadStream & { isRaw?: boolean };
+  restore: () => void;
+}
+
+type LoadingCancelReason = 'escape' | 'ctrl-c';
+
+interface LoadingAbortCapture {
+  signal: AbortSignal;
+  getReason: () => LoadingCancelReason | undefined;
+  dispose: () => void;
+}
+
+interface ResultScreenOptions {
+  allowReplay?: boolean;
+  nextActionLabel?: string;
+}
+
+type ResultScreenExitAction = Exclude<ResultScreenAction, 'replay'>;
+const MUSIC_SELECT_PREVIEW_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
+const MUSIC_SELECT_PREVIEW_SPINNER_INTERVAL_MS = 80;
+const MUSIC_SELECT_HELP_LINE =
+  'Select chart  [↑/↓ or k/j: move]  [←/→ or h/l: page]  [Ctrl+b/f: page]  [1-5: DIFF filter]  [0: clear DIFF]  [a: MANUAL/AUTO SCRATCH/AUTO]  [s/S: HS +/-]  [Enter: play]  [Ctrl+C/Esc: exit]';
+const DIRECTORY_CHART_EXTENSIONS_LABEL = '.bms, .bme, .bml, .pms, .bmson';
+const PLAY_LOADING_STAGEFILE_KITTY_IMAGE_ID = 7_331;
+const MUSIC_SELECT_BANNER_KITTY_IMAGE_ID = 7_332;
+const MUSIC_SELECT_METADATA_SECONDARY_COLOR = '\u001b[38;2;160;160;160m';
+const ANSI_RESET = '\u001b[0m';
+const DEFAULT_TUI_FPS = 60;
+const DEFAULT_TUI_VISIBLE_NOTES_LIMIT = 8192;
+const MUSIC_SELECT_BANNER_HEIGHT = 4;
+const MUSIC_SELECT_BANNER_GAP = 2;
+const MUSIC_SELECT_BANNER_MAX_WIDTH = 18;
+const MUSIC_SELECT_BANNER_MIN_WIDTH = 10;
+const MUSIC_SELECT_BANNER_MIN_TEXT_WIDTH = 36;
+let activePlayerLogger: Logger = createNoopLogger();
+
+export async function main(): Promise<void> {
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
+    printUsage();
+    return;
+  }
+  const overrideFlags = resolveCliConfigOverrideFlags(rawArgs);
+  let args: CliArgs;
+  try {
+    args = parseArgs(rawArgs);
+  } catch (error) {
+    process.stdout.write(`${formatCliParseError(error)}\n\n`);
+    printUsage();
+    process.exitCode = 1;
+    return;
+  }
+
+  let persistedConfig = createDefaultPersistedPlayerConfig();
+  try {
+    persistedConfig = await loadPersistedPlayerConfig();
+  } catch (error) {
+    process.stdout.write(`Warning: failed to load ~/.be-music/player.json (${formatCliParseError(error)}).\n`);
+  }
+  args = applyPersistedPlayerConfigToArgs(args, persistedConfig, overrideFlags);
+  let nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args, persistedConfig);
+
+  if (!args.input) {
+    printUsage();
+    process.exitCode = 1;
+    return;
+  }
+
+  const resolvedLogFilePath =
+    typeof args.logFile === 'string' && args.logFile.length > 0 ? resolveCliPath(args.logFile) : resolveDefaultPlayerLogPath();
+  activePlayerLogger = await createFileLogger(resolvedLogFilePath);
+  logCli('info', 'cli.start', {
+    input: args.input,
+    logFile: resolvedLogFilePath,
+  });
+
+  if (typeof args.judgeWindowMs === 'number' && Number.isFinite(args.judgeWindowMs)) {
+    process.stdout.write(`Warning: debug judge override enabled (BAD window: ${Math.round(args.judgeWindowMs)}ms).\n`);
+  }
+
+  const inputPath = resolveCliPath(args.input);
+  let sessionInputCapture: RawInputCapture | undefined;
+  try {
+    const inputStat = await stat(inputPath);
+    if (process.stdin.isTTY && process.stdout.isTTY && (inputStat.isDirectory() || args.tui)) {
+      sessionInputCapture = beginSharedRawInputCapture({
+        forceResetRawMode: process.platform === 'win32',
+      });
+      logCli('info', 'cli.session-input-capture.started', {
+        inputIsDirectory: inputStat.isDirectory(),
+        tui: args.tui,
+        stdinIsRaw: Boolean(sessionInputCapture.stdin.isRaw),
+      });
+    }
+    if (inputStat.isDirectory()) {
+      nextPersistedConfig = await runDirectoryInput(inputPath, args, nextPersistedConfig);
+      return;
+    }
+    const action = await playSingleChartUntilExit(inputPath, dirname(inputPath), args);
+    if (action === 'ctrl-c') {
+      nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args, nextPersistedConfig);
+      process.exitCode = 130;
+      return;
+    }
+    nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args, nextPersistedConfig);
+  } catch (error) {
+    if (error instanceof PlayerInterruptedError) {
+      nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args, nextPersistedConfig);
+      process.exitCode = error.exitCode;
+      return;
+    }
+    throw error;
+  } finally {
+    sessionInputCapture?.restore();
+    if (sessionInputCapture) {
+      logCli('info', 'cli.session-input-capture.stopped', {
+        stdinIsRaw: Boolean((process.stdin as NodeJS.ReadStream & { isRaw?: boolean }).isRaw),
+      });
+      sessionInputCapture = undefined;
+    }
+    try {
+      await savePersistedPlayerConfig(nextPersistedConfig);
+    } catch (error) {
+      process.stdout.write(`Warning: failed to save ~/.be-music/player.json (${formatCliParseError(error)}).\n`);
+    }
+    logCli('info', 'cli.finish', {
+      exitCode: process.exitCode ?? 0,
+    });
+    try {
+      await activePlayerLogger.close();
+    } catch (error) {
+      process.stderr.write(`Warning: failed to close log file (${formatCliParseError(error)}).\n`);
+    }
+    activePlayerLogger = createNoopLogger();
+  }
+}
+
+async function runDirectoryInput(
+  rootDir: string,
+  args: CliArgs,
+  initialConfig: PersistedPlayerConfig,
+): Promise<PersistedPlayerConfig> {
+  let persistedConfig = persistMusicSelectConfig(initialConfig, rootDir, {
+    playMode: initialConfig.playMode,
+    highSpeed: initialConfig.highSpeed,
+  });
+  let candidates: string[];
+  const startupLoadingAbortCapture = beginLoadingAbortCapture();
+  try {
+    candidates = await listChartFiles(rootDir, {
+      signal: startupLoadingAbortCapture?.signal,
+    });
+  } catch (error) {
+    const cancelReason = resolveLoadingCancelReason(error, startupLoadingAbortCapture);
+    if (cancelReason) {
+      applyLoadingCancel(cancelReason);
+      return persistedConfig;
+    }
+    throw error;
+  } finally {
+    startupLoadingAbortCapture?.dispose();
+  }
+  if (candidates.length === 0) {
+    process.stdout.write(
+      `No chart files found in directory: ${rootDir} (searched for ${DIRECTORY_CHART_EXTENSIONS_LABEL})\n`,
+    );
+    process.exitCode = 1;
+    return persistedConfig;
+  }
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    const selected = candidates[0];
+    process.stdout.write(`Selected chart: ${selected}\n`);
+    try {
+      await playChartOnce(selected, args);
+      persistedConfig = persistMusicSelectConfig(
+        resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
+        rootDir,
+        {
+          playMode: resolvePlayModeFromArgs(args),
+          highSpeed: args.highSpeed,
+          selectedChartFile: selected,
+          focusKey: createChartFocusKey(selected),
+        },
+      );
+    } catch (error) {
+      if (error instanceof PlayerInterruptedError) {
+        persistedConfig = persistMusicSelectConfig(
+          resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
+          rootDir,
+          {
+            playMode: resolvePlayModeFromArgs(args),
+            highSpeed: args.highSpeed,
+            selectedChartFile: selected,
+            focusKey: createChartFocusKey(selected),
+          },
+        );
+        process.exitCode = error.exitCode;
+        return persistedConfig;
+      }
+      throw error;
+    }
+    return persistedConfig;
+  }
+
+  if (candidates.length === 1) {
+    const selected = candidates[0];
+    process.stdout.write(`Selected chart: ${selected}\n`);
+    try {
+      const action = await playSingleChartUntilExit(selected, rootDir, args);
+      persistedConfig = persistMusicSelectConfig(resolvePersistedPlayerConfigFromArgs(args, persistedConfig), rootDir, {
+        playMode: resolvePlayModeFromArgs(args),
+        highSpeed: args.highSpeed,
+        selectedChartFile: selected,
+        focusKey: createChartFocusKey(selected),
+      });
+      if (action === 'ctrl-c') {
+        process.exitCode = 130;
+      }
+    } catch (error) {
+      if (error instanceof PlayerInterruptedError) {
+        persistedConfig = persistMusicSelectConfig(resolvePersistedPlayerConfigFromArgs(args, persistedConfig), rootDir, {
+          playMode: resolvePlayModeFromArgs(args),
+          highSpeed: args.highSpeed,
+          selectedChartFile: selected,
+          focusKey: createChartFocusKey(selected),
+        });
+        process.exitCode = error.exitCode;
+        return persistedConfig;
+      }
+      throw error;
+    }
+    return persistedConfig;
+  }
+
+  const entries = await loadChartSelectionEntries(rootDir, candidates);
+  if (!entries) {
+    return persistedConfig;
+  }
+
+  let state: DirectorySceneState = {
+    kind: 'select',
+    focusKey: resolveMusicSelectInitialFocusKey(
+      candidates,
+      resolveLastSelectedChartFileForDirectory(initialConfig, rootDir),
+      resolveLastMusicSelectFocusKeyForDirectory(initialConfig, rootDir),
+    ),
+    playMode: persistedConfig.playMode,
+    highSpeed: persistedConfig.highSpeed,
+    difficultyFilter: undefined,
+  };
+
+  while (state.kind !== 'exit') {
+    if (state.kind === 'select') {
+      const selection = await selectChartInteractively(rootDir, candidates, {
+        audio: args.audio,
+        kittyGraphics: args.kittyGraphics,
+        volume: args.volume,
+        bgmVolume: args.bgmVolume,
+        playVolume: args.playVolume,
+        entries,
+        initialFocusKey: state.focusKey,
+        initialPlayMode: state.playMode,
+        initialHighSpeed: state.highSpeed,
+        initialDifficultyFilter: state.difficultyFilter,
+      });
+      persistedConfig = persistMusicSelectConfig(persistedConfig, rootDir, {
+        playMode: selection.playMode,
+        highSpeed: selection.highSpeed,
+        selectedChartFile: resolveLastSelectedChartFile(selection),
+        focusKey: selection.focusKey,
+      });
+      state = resolveDirectoryStateFromSelection(selection);
+      continue;
+    }
+
+    if (state.kind === 'play') {
+      const playState = state;
+      const playArgs = applyMusicSelectConfigToArgs(args, playState.playMode, playState.highSpeed);
+      persistedConfig = persistMusicSelectConfig(persistedConfig, rootDir, {
+        playMode: playState.playMode,
+        highSpeed: playArgs.highSpeed,
+        selectedChartFile: playState.chartPath,
+        focusKey: playState.focusKey,
+      });
+      try {
+        const played = await playChartOnce(playState.chartPath, playArgs);
+        const resolvedHighSpeed = normalizeHighSpeedValue(playArgs.highSpeed);
+        persistedConfig = persistMusicSelectConfig(persistedConfig, rootDir, {
+          playMode: playState.playMode,
+          highSpeed: resolvedHighSpeed,
+          selectedChartFile: playState.chartPath,
+          focusKey: playState.focusKey,
+        });
+        state = {
+          kind: 'result',
+          played,
+          focusKey: playState.focusKey,
+          playMode: playState.playMode,
+          highSpeed: resolvedHighSpeed,
+          difficultyFilter: playState.difficultyFilter,
+        };
+      } catch (error) {
+        if (error instanceof PlayerInterruptedError) {
+          const resolvedHighSpeed = normalizeHighSpeedValue(playArgs.highSpeed);
+          persistedConfig = persistMusicSelectConfig(persistedConfig, rootDir, {
+            playMode: playState.playMode,
+            highSpeed: resolvedHighSpeed,
+            selectedChartFile: playState.chartPath,
+            focusKey: playState.focusKey,
+          });
+          state = resolveDirectoryStateFromPlayInterrupt(error.reason, {
+            ...playState,
+            highSpeed: resolvedHighSpeed,
+          });
+          continue;
+        }
+        throw error;
+      }
+      continue;
+    }
+
+    const resultAction = await showResultScreen(rootDir, state.played);
+    state = resolveDirectoryStateFromResultAction(resultAction, state);
+  }
+
+  process.exitCode = state.exitCode;
+  return persistedConfig;
+}
+
+function resolvePersistedConfigForMusicSelect(
+  base: Pick<PersistedPlayerConfig, 'playMode' | 'highSpeed'>,
+  directoryPath: string | undefined,
+  preferredLastSelectedChartFile?: string,
+  preferredFocusKey?: string,
+  previous?: PersistedPlayerConfig,
+): PersistedPlayerConfig {
+  const resolved: PersistedPlayerConfig = {
+    playMode: base.playMode,
+    highSpeed: normalizeHighSpeedValue(base.highSpeed),
+  };
+  if (previous?.lastSelectedChartFileByDirectory) {
+    resolved.lastSelectedChartFileByDirectory = { ...previous.lastSelectedChartFileByDirectory };
+  }
+  if (previous?.lastMusicSelectFocusKeyByDirectory) {
+    resolved.lastMusicSelectFocusKeyByDirectory = { ...previous.lastMusicSelectFocusKeyByDirectory };
+  }
+  const preferred = preferredLastSelectedChartFile?.trim();
+  if (preferred) {
+    if (directoryPath && directoryPath.length > 0) {
+      const byDirectory = { ...(resolved.lastSelectedChartFileByDirectory ?? {}) };
+      byDirectory[directoryPath] = preferred;
+      resolved.lastSelectedChartFileByDirectory = byDirectory;
+    }
+  }
+  const normalizedFocusKey = preferredFocusKey?.trim();
+  if (normalizedFocusKey) {
+    if (directoryPath && directoryPath.length > 0) {
+      const byDirectory = { ...(resolved.lastMusicSelectFocusKeyByDirectory ?? {}) };
+      byDirectory[directoryPath] = normalizedFocusKey;
+      resolved.lastMusicSelectFocusKeyByDirectory = byDirectory;
+    }
+  }
+  if (
+    resolved.lastSelectedChartFileByDirectory &&
+    Object.keys(resolved.lastSelectedChartFileByDirectory).length === 0
+  ) {
+    delete resolved.lastSelectedChartFileByDirectory;
+  }
+  if (
+    resolved.lastMusicSelectFocusKeyByDirectory &&
+    Object.keys(resolved.lastMusicSelectFocusKeyByDirectory).length === 0
+  ) {
+    delete resolved.lastMusicSelectFocusKeyByDirectory;
+  }
+  return resolved;
+}
+
+function persistMusicSelectConfig(
+  previous: PersistedPlayerConfig,
+  directoryPath: string | undefined,
+  state: {
+    playMode: PlayMode;
+    highSpeed: number | undefined;
+    selectedChartFile?: string;
+    focusKey?: string;
+  },
+): PersistedPlayerConfig {
+  return resolvePersistedConfigForMusicSelect(
+    {
+      playMode: state.playMode,
+      highSpeed: normalizeHighSpeedValue(state.highSpeed),
+    },
+    directoryPath,
+    state.selectedChartFile,
+    state.focusKey,
+    previous,
+  );
+}
+
+function resolveLastSelectedChartFile(selection: SelectChartInteractivelyResult): string | undefined {
+  if (typeof selection.selectedPath === 'string' && selection.selectedPath.length > 0) {
+    return selection.selectedPath;
+  }
+  return resolveChartFileFromFocusKey(selection.focusKey);
+}
+
+function resolveLastSelectedChartFileForDirectory(
+  config: PersistedPlayerConfig,
+  directoryPath: string,
+): string | undefined {
+  const byDirectory = config.lastSelectedChartFileByDirectory;
+  if (byDirectory) {
+    const scoped = byDirectory[directoryPath];
+    if (typeof scoped === 'string' && scoped.trim().length > 0) {
+      return scoped;
+    }
+  }
+  return undefined;
+}
+
+function resolveLastMusicSelectFocusKeyForDirectory(
+  config: PersistedPlayerConfig,
+  directoryPath: string,
+): string | undefined {
+  const byDirectory = config.lastMusicSelectFocusKeyByDirectory;
+  if (byDirectory) {
+    const scoped = byDirectory[directoryPath];
+    if (typeof scoped === 'string' && scoped.trim().length > 0) {
+      return scoped;
+    }
+  }
+  return undefined;
+}
+
+function resolveDirectoryStateFromSelection(selection: SelectChartInteractivelyResult): DirectorySceneState {
+  if (selection.reason === 'ctrl-c') {
+    return {
+      kind: 'exit',
+      exitCode: 130,
+    };
+  }
+
+  if (selection.reason === 'escape' || !selection.selectedPath) {
+    return {
+      kind: 'exit',
+      exitCode: 0,
+    };
+  }
+
+  return {
+    kind: 'play',
+    chartPath: selection.selectedPath,
+    focusKey: selection.focusKey,
+    playMode: selection.playMode,
+    highSpeed: selection.highSpeed,
+    difficultyFilter: selection.difficultyFilter,
+  };
+}
+
+function resolveDirectoryStateFromPlayInterrupt(
+  reason: PlayerInterruptedError['reason'],
+  state: Extract<DirectorySceneState, { kind: 'play' }>,
+): DirectorySceneState {
+  if (reason === 'restart') {
+    return {
+      kind: 'play',
+      chartPath: state.chartPath,
+      focusKey: state.focusKey,
+      playMode: state.playMode,
+      highSpeed: state.highSpeed,
+      difficultyFilter: state.difficultyFilter,
+    };
+  }
+  if (reason === 'escape') {
+    return {
+      kind: 'select',
+      focusKey: state.focusKey,
+      playMode: state.playMode,
+      highSpeed: state.highSpeed,
+      difficultyFilter: state.difficultyFilter,
+    };
+  }
+  return {
+    kind: 'exit',
+    exitCode: 130,
+  };
+}
+
+function resolveDirectoryStateFromResultAction(
+  action: ResultScreenAction,
+  state: Extract<DirectorySceneState, { kind: 'result' }>,
+): DirectorySceneState {
+  if (action === 'replay') {
+    return {
+      kind: 'play',
+      chartPath: state.played.chartPath,
+      focusKey: state.focusKey,
+      playMode: state.playMode,
+      highSpeed: state.highSpeed,
+      difficultyFilter: state.difficultyFilter,
+    };
+  }
+
+  if (action === 'enter' || action === 'escape') {
+    return {
+      kind: 'select',
+      focusKey: state.focusKey,
+      playMode: state.playMode,
+      highSpeed: state.highSpeed,
+      difficultyFilter: state.difficultyFilter,
+    };
+  }
+
+  return {
+    kind: 'exit',
+    exitCode: action === 'ctrl-c' ? 130 : 0,
+  };
+}
+
+async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedChartResult> {
+  let resolvedHighSpeed = normalizeHighSpeedValue(args.highSpeed);
+  const effectivePlayMode = resolveEffectivePlayModeFromCliArgs(args);
+  let playLoadingStageFileImage: StageFileAnsiImage | undefined;
+  const stageFileKittySupported = supportsKittyGraphicsProtocol(process.env);
+  const useKittyGraphicsForStageFile = args.kittyGraphics && Boolean(process.stdout.isTTY) && stageFileKittySupported;
+  logCli('info', 'play.loading.stagefile.mode', {
+    chartPath,
+    kittyGraphicsRequested: Boolean(args.kittyGraphics),
+    stdoutIsTTY: Boolean(process.stdout.isTTY),
+    kittyGraphicsSupported: stageFileKittySupported,
+    useKittyGraphicsForStageFile,
+  });
+  const playLoadingScreenRenderState: PlayLoadingScreenRenderState = {
+    initialized: false,
+    stageFileDrawn: false,
+    stageFileKittyVisible: false,
+  };
+  let resolvedChartMetadata:
+    | {
+        title?: string;
+        artist?: string;
+        player?: number;
+        rank: number;
+        rankLabel?: string;
+        playLevel?: BeMusicPlayLevel;
+      }
+    | undefined;
+  const reportPlayLoadingProgress = process.stdout.isTTY
+    ? (progress: PlayLoadingProgress): void => {
+        renderPlayLoadingProgress(chartPath, progress, {
+          columns: process.stdout.columns,
+          stageFileImage: playLoadingStageFileImage,
+          useKittyGraphics: useKittyGraphicsForStageFile,
+          state: playLoadingScreenRenderState,
+        });
+      }
+    : undefined;
+  const chartLoadingAbortCapture = beginLoadingAbortCapture();
+  let json: Awaited<ReturnType<typeof parseChartFile>>;
+  try {
+    reportPlayLoadingProgress?.({
+      ratio: 0.03,
+      message: 'Parsing chart file...',
+    });
+    json = await parseChartFile(chartPath, {
+      signal: chartLoadingAbortCapture?.signal,
+    });
+    if (process.stdout.isTTY && typeof json.metadata.stageFile === 'string' && json.metadata.stageFile.length > 0) {
+      reportPlayLoadingProgress?.({
+        ratio: 0.12,
+        message: 'Loading stage image...',
+        detail: json.metadata.stageFile.replaceAll('\\', '/'),
+      });
+      const stageFileDisplaySize = resolvePlayLoadingStageFileDisplaySize(process.stdout.columns, process.stdout.rows);
+      playLoadingStageFileImage = await loadStageFileAnsiImage(json, {
+        baseDir: dirname(chartPath),
+        width: stageFileDisplaySize.width,
+        height: stageFileDisplaySize.height,
+        signal: chartLoadingAbortCapture?.signal,
+      });
+      logCli('info', 'play.loading.stagefile.loaded', {
+        chartPath,
+        stageFile: json.metadata.stageFile.replaceAll('\\', '/'),
+        requestedWidth: stageFileDisplaySize.width,
+        requestedHeight: stageFileDisplaySize.height,
+        loaded: Boolean(playLoadingStageFileImage),
+        width: playLoadingStageFileImage?.width,
+        height: playLoadingStageFileImage?.height,
+        hasKittyImage: Boolean(playLoadingStageFileImage?.kittyImage),
+        kittyCellWidth: playLoadingStageFileImage?.kittyImage?.cellWidth,
+        kittyCellHeight: playLoadingStageFileImage?.kittyImage?.cellHeight,
+        kittyPixelWidth: playLoadingStageFileImage?.kittyImage?.pixelWidth,
+        kittyPixelHeight: playLoadingStageFileImage?.kittyImage?.pixelHeight,
+      });
+    }
+    reportPlayLoadingProgress?.({
+      ratio: 0.16,
+      message: 'Chart parsed.',
+    });
+
+    if (args.renderAudioPath) {
+      reportPlayLoadingProgress?.({
+        ratio: 0.2,
+        message: 'Rendering preview audio...',
+      });
+      const outputPath = resolveCliPath(args.renderAudioPath);
+      const audioRendered = await renderJson(json, {
+        baseDir: dirname(chartPath),
+        inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
+        signal: chartLoadingAbortCapture?.signal,
+      });
+      await writeAudioFile(outputPath, audioRendered);
+      process.stdout.write(`Rendered preview audio: ${outputPath}\n`);
+      reportPlayLoadingProgress?.({
+        ratio: 0.32,
+        message: 'Preview audio rendered.',
+      });
+    }
+  } catch (error) {
+    const cancelReason = resolveLoadingCancelReason(error, chartLoadingAbortCapture);
+    if (cancelReason) {
+      throw new PlayerInterruptedError(cancelReason);
+    }
+    throw error;
+  } finally {
+    chartLoadingAbortCapture?.dispose();
+  }
+
+  const playOptions = createPlayOptionsFromCliArgs(args, chartPath);
+  logCli('info', 'play.start', {
+    chartPath,
+    mode: effectivePlayMode,
+    kittyGraphics: args.kittyGraphics,
+    videoBgaStreaming: args.videoBgaStreaming,
+  });
+
+  let summary: PlayerSummary;
+  while (true) {
+    let playbackLoadingAbortCapture = beginLoadingAbortCapture();
+    const disposePlaybackLoadingAbortCapture = (): void => {
+      playbackLoadingAbortCapture?.dispose();
+      playbackLoadingAbortCapture = undefined;
+    };
+    try {
+      summary = await runNodeGameplayRuntime({
+        json,
+        mode: effectivePlayMode === 'auto' ? 'auto' : 'manual',
+        autoScratch: effectivePlayMode === 'auto-scratch',
+        playOptions,
+        signal: playbackLoadingAbortCapture?.signal,
+        writeOutput: (text: string): void => {
+          process.stdout.write(text);
+        },
+        onHighSpeedChange: (value: number): void => {
+          resolvedHighSpeed = normalizeHighSpeedValue(value);
+        },
+        onLoadProgress: reportPlayLoadingProgress
+          ? (progress: PlayerLoadProgress): void => {
+              const mappedRatio = 0.22 + Math.max(0, Math.min(1, progress.ratio)) * 0.76;
+              reportPlayLoadingProgress({
+                ratio: mappedRatio,
+                message: progress.message,
+                detail: progress.detail,
+                audioStatus: progress.audioStatus,
+                graphicsStatus: progress.graphicsStatus,
+              });
+            }
+          : undefined,
+        onLoadComplete: () => {
+          logCli('info', 'play.loading.complete', {
+            chartPath,
+          });
+          clearPlayLoadingScreen(playLoadingScreenRenderState);
+          disposePlaybackLoadingAbortCapture();
+        },
+        onLog: (entry) => {
+          activePlayerLogger.log(entry);
+        },
+        onResolvedChart: (metadata) => {
+          resolvedChartMetadata = metadata;
+        },
+      });
+      break;
+    } catch (error) {
+      const cancelReason = resolveLoadingCancelReason(error, playbackLoadingAbortCapture);
+      if (cancelReason) {
+        throw new PlayerInterruptedError(cancelReason);
+      }
+      if (error instanceof PlayerInterruptedError && error.reason === 'restart') {
+        playLoadingScreenRenderState.stageFileDrawn = false;
+        reportPlayLoadingProgress?.({
+          ratio: 0.34,
+          message: 'Restarting playback...',
+        });
+        continue;
+      }
+      throw error;
+    } finally {
+      clearPlayLoadingStageFileImage(playLoadingScreenRenderState);
+      disposePlaybackLoadingAbortCapture();
+      args.highSpeed = resolvedHighSpeed;
+    }
+  }
+  const title = sanitizeMetadataText(json.metadata.title);
+  const artist = sanitizeMetadataText(json.metadata.artist);
+
+  return {
+    chartPath,
+    summary,
+    title: sanitizeMetadataText(resolvedChartMetadata?.title) ?? title,
+    artist: sanitizeMetadataText(resolvedChartMetadata?.artist) ?? artist,
+    player: resolvedChartMetadata?.player ?? json.bms.player,
+    rank: resolvedChartMetadata?.rank ?? resolveDisplayedJudgeRankValue(json),
+    rankLabel: resolvedChartMetadata?.rankLabel ?? resolveDisplayedJudgeRankLabel(json),
+    playLevel: resolvedChartMetadata?.playLevel ?? resolveDisplayedPlayLevelValue(json),
+  };
+}
+
+function createPlayOptionsFromCliArgs(args: CliArgs, chartPath: string) {
+  return {
+    inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
+    showInvisibleNotes: args.showInvisibleNotes,
+    compressor: args.compressor,
+    compressorThresholdDb: args.compressorThresholdDb,
+    compressorRatio: args.compressorRatio,
+    compressorAttackMs: args.compressorAttackMs,
+    compressorReleaseMs: args.compressorReleaseMs,
+    compressorMakeupDb: args.compressorMakeupDb,
+    limiter: args.limiter,
+    limiterCeilingDb: args.limiterCeilingDb,
+    limiterReleaseMs: args.limiterReleaseMs,
+    speed: args.speed,
+    uiFps: args.uiFps,
+    tuiVisibleNotesLimit: args.tuiVisibleNotesLimit,
+    highSpeed: args.highSpeed,
+    judgeWindowMs: args.judgeWindowMs,
+    debugActiveAudio: args.debugActiveAudio,
+    audio: args.audio,
+    volume: args.volume,
+    bgmVolume: args.bgmVolume,
+    playVolume: args.playVolume,
+    audioBaseDir: dirname(chartPath),
+    audioTailSeconds: args.audioTailSeconds,
+    audioHeadPaddingMs: args.audioHeadPaddingMs,
+    audioLeadMs: args.audioLeadMs,
+    audioLeadMaxMs: args.audioLeadMaxMs,
+    audioLeadStepUpMs: args.audioLeadStepUpMs,
+    audioLeadStepDownMs: args.audioLeadStepDownMs,
+    laneModeExtension: resolveChartLaneModeExtension(chartPath),
+    tui: args.tui,
+    kittyGraphics: args.kittyGraphics,
+    videoBgaStreaming: args.videoBgaStreaming,
+  };
+}
+
+export function resolveEffectivePlayModeFromCliArgs(
+  args: Pick<CliArgs, 'auto' | 'autoScratch' | 'tui'>,
+): PlayMode {
+  if (!args.tui) {
+    return 'auto';
+  }
+  return resolvePlayModeFromArgs(args);
+}
+
+function resolveChartLaneModeExtension(chartPath: string): string | undefined {
+  const extension = extname(chartPath).toLowerCase();
+  return extension.length > 0 ? extension : undefined;
+}
+
+async function playSingleChartUntilExit(
+  chartPath: string,
+  rootDir: string,
+  args: CliArgs,
+): Promise<ResultScreenExitAction> {
+  while (true) {
+    const played = await playChartOnce(chartPath, args);
+    const action = await showResultScreen(rootDir, played, {
+      allowReplay: true,
+      nextActionLabel: 'exit player',
+    });
+    if (action === 'replay') {
+      continue;
+    }
+    return action;
+  }
+}
+
+function sanitizeMetadataText(value: string | undefined): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function logCli(level: LogLevel, event: string, fields?: Record<string, unknown>): void {
+  const entry: LogEntry = {
+    source: 'cli',
+    level,
+    event,
+    fields,
+  };
+  activePlayerLogger.log(entry);
+}
+
+export function createMusicSelectSelectedMetadataLines(
+  entry: ChartSelectionEntry | undefined,
+  lineWidth: number,
+  options: MusicSelectMetadataRenderOptions = {},
+): string[] {
+  const bannerLayout = resolveMusicSelectMetadataBannerLayout(lineWidth, options);
+  const metadataWidth = bannerLayout
+    ? Math.max(8, lineWidth - bannerLayout.requestedBannerWidth - MUSIC_SELECT_BANNER_GAP)
+    : lineWidth;
+  const title =
+    entry?.kind === 'chart' ? (sanitizeMetadataText(entry.title) ?? sanitizeMetadataText(entry.fileLabel)) : '-';
+  const subtitle = entry?.kind === 'chart' ? sanitizeMetadataText(entry.subtitle) : undefined;
+  const artist = entry?.kind === 'chart' ? sanitizeMetadataText(entry.artist) : '-';
+  const subartist = entry?.kind === 'chart' ? sanitizeMetadataText(entry.subartist) : undefined;
+  const genre = entry?.kind === 'chart' ? sanitizeMetadataText(entry.genre) : '-';
+  const comment = entry?.kind === 'chart' ? sanitizeMetadataText(entry.comment) : '-';
+  const baseLines = [
+    formatMusicSelectMetadataLine('TITLE', title ?? '-', subtitle, metadataWidth),
+    formatMusicSelectMetadataLine('ARTIST', artist ?? '-', subartist, metadataWidth),
+    formatMusicSelectMetadataLine('GENRE', genre ?? '-', undefined, metadataWidth),
+    formatMusicSelectMetadataLine('COMMENT', comment ?? '-', undefined, metadataWidth),
+  ];
+  return bannerLayout ? composeMusicSelectMetadataLinesWithBanner(baseLines, lineWidth, bannerLayout) : baseLines;
+}
+
+function resolveMusicSelectMetadataBannerLayout(
+  lineWidth: number,
+  options: MusicSelectMetadataRenderOptions,
+): MusicSelectBannerLayout | undefined {
+  const visibleBannerLines = options.bannerLines?.filter((line) => measureMusicSelectDisplayWidth(line) > 0) ?? [];
+  const requestedBannerWidth =
+    visibleBannerLines.length > 0
+      ? visibleBannerLines.reduce((max, line) => Math.max(max, measureMusicSelectDisplayWidth(line)), 0)
+      : Math.max(0, Math.floor(options.bannerWidth ?? 0));
+  if (requestedBannerWidth <= 0 || requestedBannerWidth + MUSIC_SELECT_BANNER_GAP >= lineWidth) {
+    return undefined;
+  }
+  return {
+    visibleBannerLines,
+    requestedBannerWidth,
+  };
+}
+
+function composeMusicSelectMetadataLinesWithBanner(
+  baseLines: readonly string[],
+  lineWidth: number,
+  layout: MusicSelectBannerLayout,
+): string[] {
+  return baseLines.map((line, index) => {
+    const bannerLine = layout.visibleBannerLines[index];
+    const leftVisibleWidth = measureMusicSelectDisplayWidth(line);
+    const paddingWidth = Math.max(
+      bannerLine ? MUSIC_SELECT_BANNER_GAP : 0,
+      lineWidth - layout.requestedBannerWidth - leftVisibleWidth,
+    );
+    if (!bannerLine) {
+      return `${line}${' '.repeat(Math.max(0, lineWidth - leftVisibleWidth))}`;
+    }
+    return `${line}${' '.repeat(paddingWidth)}${bannerLine}`;
+  });
+}
+
+function formatMusicSelectMetadataLine(
+  label: 'TITLE' | 'ARTIST' | 'GENRE' | 'COMMENT',
+  primary: string,
+  secondary: string | undefined,
+  lineWidth: number,
+): string {
+  const base = truncateForDisplay(`${label} ${primary}`, lineWidth);
+  if (!secondary) {
+    return base;
+  }
+
+  const baseWidth = measureMusicSelectDisplayWidth(base);
+  if (baseWidth >= lineWidth) {
+    return base;
+  }
+
+  const secondaryWidthBudget = lineWidth - baseWidth - 1;
+  if (secondaryWidthBudget <= 0) {
+    return base;
+  }
+
+  const suffix = truncateForDisplay(secondary, secondaryWidthBudget);
+  return suffix.length > 0 ? `${base} ${MUSIC_SELECT_METADATA_SECONDARY_COLOR}${suffix}${ANSI_RESET}` : base;
+}
+
+function measureMusicSelectDisplayWidth(value: string): number {
+  let width = 0;
+  let escape = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index]!;
+    if (escape) {
+      if (char === 'm') {
+        escape = false;
+      }
+      continue;
+    }
+    if (char === '\u001b') {
+      escape = true;
+      continue;
+    }
+    width += measureMusicSelectCharacterDisplayWidth(char);
+  }
+  return width;
+}
+
+function measureMusicSelectCharacterDisplayWidth(char: string): number {
+  const codePoint = char.codePointAt(0);
+  if (codePoint === undefined) {
+    return 0;
+  }
+  if (
+    codePoint === 0 ||
+    codePoint < 32 ||
+    (codePoint >= 0x7f && codePoint < 0xa0) ||
+    codePoint === 0x200d ||
+    codePoint === 0xfe0e ||
+    codePoint === 0xfe0f ||
+    /\p{Mark}/u.test(char)
+  ) {
+    return 0;
+  }
+  return isMusicSelectFullWidthCodePoint(codePoint) ? 2 : 1;
+}
+
+function isMusicSelectFullWidthCodePoint(codePoint: number): boolean {
+  if (codePoint < 0x1100) {
+    return false;
+  }
+  return (
+    codePoint <= 0x115f ||
+    codePoint === 0x2329 ||
+    codePoint === 0x232a ||
+    (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
+    (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
+    (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
+    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
+    (codePoint >= 0x1f300 && codePoint <= 0x1f64f) ||
+    (codePoint >= 0x1f680 && codePoint <= 0x1f6ff) ||
+    (codePoint >= 0x1f900 && codePoint <= 0x1f9ff) ||
+    (codePoint >= 0x20000 && codePoint <= 0x3fffd)
+  );
+}
+
+function resolveMusicSelectBannerDisplayWidth(lineWidth: number): number {
+  const available = Math.min(
+    MUSIC_SELECT_BANNER_MAX_WIDTH,
+    lineWidth - MUSIC_SELECT_BANNER_MIN_TEXT_WIDTH - MUSIC_SELECT_BANNER_GAP,
+  );
+  return available >= MUSIC_SELECT_BANNER_MIN_WIDTH ? available : 0;
+}
+
+function createMusicSelectBannerState(): MusicSelectBannerState {
+  return {
+    cache: new Map<string, TerminalAnsiImage | null>(),
+    loadSequence: 0,
+    kittyVisible: false,
+  };
+}
+
+function resolveMusicSelectBannerCacheKey(
+  entry: ChartSelectionEntry | undefined,
+  bannerWidth: number,
+): string | undefined {
+  if (entry?.kind !== 'chart' || typeof entry.bannerPath !== 'string' || bannerWidth <= 0) {
+    return undefined;
+  }
+  return `${entry.filePath}\u0000${entry.bannerPath}\u0000${bannerWidth}`;
+}
+
+function clearMusicSelectBannerLoad(state: MusicSelectBannerState): void {
+  state.loadController?.abort();
+  state.loadController = undefined;
+}
+
+function syncMusicSelectBanner(params: {
+  state: MusicSelectBannerState;
+  entry: ChartSelectionEntry | undefined;
+  lineWidth: number;
+  useKittyGraphics: boolean;
+  finished: boolean;
+  onReady: () => void;
+}): void {
+  const bannerWidth = resolveMusicSelectBannerDisplayWidth(params.lineWidth);
+  const cacheKey = resolveMusicSelectBannerCacheKey(params.entry, bannerWidth);
+  if (!cacheKey || params.entry?.kind !== 'chart' || typeof params.entry.bannerPath !== 'string') {
+    clearMusicSelectBannerLoad(params.state);
+    params.state.activeCacheKey = undefined;
+    params.state.activeImage = undefined;
+    return;
+  }
+  if (params.state.activeCacheKey === cacheKey) {
+    return;
+  }
+
+  clearMusicSelectBannerLoad(params.state);
+  params.state.activeCacheKey = cacheKey;
+  const cached = params.state.cache.get(cacheKey);
+  if (cached !== undefined) {
+    params.state.activeImage = cached ?? undefined;
+    return;
+  }
+
+  params.state.activeImage = undefined;
+  const controller = new AbortController();
+  params.state.loadController = controller;
+  const requestSequence = ++params.state.loadSequence;
+  void loadTerminalAnsiImage(dirname(params.entry.filePath), params.entry.bannerPath, {
+    width: bannerWidth,
+    height: MUSIC_SELECT_BANNER_HEIGHT,
+    signal: controller.signal,
+    fitMode: 'contain',
+    includeKittyImage: params.useKittyGraphics,
+  })
+    .then((image) => {
+      if (
+        params.finished ||
+        controller.signal.aborted ||
+        requestSequence !== params.state.loadSequence ||
+        params.state.activeCacheKey !== cacheKey
+      ) {
+        return;
+      }
+      params.state.cache.set(cacheKey, image ?? null);
+      params.state.activeImage = image;
+      params.onReady();
+    })
+    .catch((error) => {
+      if (params.finished || controller.signal.aborted || requestSequence !== params.state.loadSequence) {
+        return;
+      }
+      if (isAbortError(error)) {
+        return;
+      }
+      params.state.cache.set(cacheKey, null);
+      params.state.activeImage = undefined;
+      params.onReady();
+    });
+}
+
+function resolveMusicSelectBannerDisplayState(
+  entry: ChartSelectionEntry | undefined,
+  lineWidth: number,
+  useKittyGraphics: boolean,
+  state: MusicSelectBannerState,
+): MusicSelectBannerDisplayState {
+  const bannerWidth = resolveMusicSelectBannerDisplayWidth(lineWidth);
+  const cacheKey = resolveMusicSelectBannerCacheKey(entry, bannerWidth);
+  const cachedImage = cacheKey ? state.cache.get(cacheKey) : undefined;
+  return {
+    reservedWidth:
+      useKittyGraphics &&
+      bannerWidth > 0 &&
+      cacheKey !== undefined &&
+      (cachedImage === undefined || (cachedImage !== null && cachedImage.kittyImage !== undefined))
+        ? bannerWidth
+        : undefined,
+  };
+}
+
+function resolveMusicSelectBannerOverlaySequence(params: {
+  lineWidth: number;
+  reservedWidth?: number;
+  useKittyGraphics: boolean;
+  state: MusicSelectBannerState;
+}): string {
+  if (!(params.useKittyGraphics && params.state.activeImage?.kittyImage)) {
+    return buildMusicSelectBannerCleanupSequence(params.state);
+  }
+  const bannerBlockWidth = params.reservedWidth ?? params.state.activeImage.kittyImage.cellWidth;
+  const column = Math.max(1, params.lineWidth - bannerBlockWidth + 1);
+  params.state.kittyVisible = true;
+  return buildKittyGraphicsRenderSequence({
+    imageId: MUSIC_SELECT_BANNER_KITTY_IMAGE_ID,
+    placementId: 1,
+    row: 1,
+    column,
+    image: params.state.activeImage.kittyImage,
+    zIndex: -1,
+    doNotMoveCursor: true,
+  });
+}
+
+function buildMusicSelectBannerCleanupSequence(state: MusicSelectBannerState): string {
+  if (!state.kittyVisible) {
+    return '';
+  }
+  state.kittyVisible = false;
+  return buildKittyGraphicsDeleteImageSequence(MUSIC_SELECT_BANNER_KITTY_IMAGE_ID);
+}
+
+export function createMusicSelectControlLines(options: {
+  rootDir: string;
+  lineWidth: number;
+  playModeLabel: string;
+  highSpeedLabel: string;
+  difficultyFilterLabel: string;
+  audioBackendLabel: string;
+}): string[] {
+  return [
+    truncateForDisplay(MUSIC_SELECT_HELP_LINE, options.lineWidth),
+    truncateForDisplay(`Directory: ${options.rootDir}`, options.lineWidth),
+    truncateForDisplay(
+      `Mode: ${options.playModeLabel}  HIGH-SPEED: x${options.highSpeedLabel}  DIFFICULTY: ${options.difficultyFilterLabel}`,
+      options.lineWidth,
+    ),
+    truncateForDisplay(`Audio backend: ${options.audioBackendLabel}`, options.lineWidth),
+  ];
+}
+
+export function parseArgs(rawArgs: string[]): CliArgs {
+  const args: CliArgs = {
+    auto: false,
+    autoScratch: false,
+    kittyGraphics: true,
+    videoBgaStreaming: true,
+    inferBmsLnTypeWhenMissing: true,
+    showInvisibleNotes: false,
+    compressor: true,
+    limiter: true,
+    audio: true,
+    volume: undefined,
+    tui: true,
+    uiFps: DEFAULT_TUI_FPS,
+    tuiVisibleNotesLimit: DEFAULT_TUI_VISIBLE_NOTES_LIMIT,
+    debugActiveAudio: false,
+  };
+  const positional: string[] = [];
+
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const token = rawArgs[index];
+    if (token === '--auto') {
+      args.auto = true;
+      args.autoScratch = false;
+      continue;
+    }
+    if (token === '--auto-scratch') {
+      args.auto = false;
+      args.autoScratch = true;
+      continue;
+    }
+    if (token === '--ln-type-auto') {
+      args.inferBmsLnTypeWhenMissing = true;
+      continue;
+    }
+    if (token === '--no-ln-type-auto') {
+      args.inferBmsLnTypeWhenMissing = false;
+      continue;
+    }
+    if (token === '--show-invisible-notes') {
+      args.showInvisibleNotes = true;
+      continue;
+    }
+    if (token === '--no-show-invisible-notes') {
+      args.showInvisibleNotes = false;
+      continue;
+    }
+    if (token === '--speed') {
+      args.speed = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--high-speed') {
+      args.highSpeed = parseHighSpeedArg(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--tui-fps') {
+      args.uiFps = parseTuiFpsArg(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--tui-visible-notes-limit') {
+      args.tuiVisibleNotesLimit = parseTuiVisibleNotesLimitArg(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--log-file') {
+      const value = rawArgs[index + 1];
+      if (typeof value !== 'string' || value.length === 0) {
+        throw new Error('--log-file expects a path');
+      }
+      args.logFile = value;
+      index += 1;
+      continue;
+    }
+    if (token === '--compressor') {
+      args.compressor = true;
+      continue;
+    }
+    if (token === '--no-compressor') {
+      args.compressor = false;
+      continue;
+    }
+    if (token === '--compressor-threshold-db') {
+      args.compressorThresholdDb = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--compressor-ratio') {
+      args.compressorRatio = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--compressor-attack-ms') {
+      args.compressorAttackMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--compressor-release-ms') {
+      args.compressorReleaseMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--compressor-makeup-db') {
+      args.compressorMakeupDb = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--limiter') {
+      args.limiter = true;
+      continue;
+    }
+    if (token === '--no-limiter') {
+      args.limiter = false;
+      continue;
+    }
+    if (token === '--limiter-ceiling-db') {
+      args.limiterCeilingDb = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--limiter-release-ms') {
+      args.limiterReleaseMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--debug-judge-window') {
+      args.judgeWindowMs = Number.parseInt(rawArgs[index + 1], 10);
+      index += 1;
+      continue;
+    }
+    if (token === '--debug-active-audio') {
+      args.debugActiveAudio = true;
+      continue;
+    }
+    if (token === '--judge-window') {
+      if (index + 1 < rawArgs.length) {
+        index += 1;
+      }
+      continue;
+    }
+    if (token === '--render-audio') {
+      args.renderAudioPath = rawArgs[index + 1];
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-tail') {
+      args.audioTailSeconds = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--bgm-volume') {
+      args.bgmVolume = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--volume') {
+      args.volume = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--play-volume' || token === '--key-volume') {
+      args.playVolume = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-offset-ms') {
+      if (index + 1 < rawArgs.length) {
+        index += 1;
+      }
+      continue;
+    }
+    if (token === '--audio-head-padding-ms') {
+      args.audioHeadPaddingMs = Number.parseInt(rawArgs[index + 1], 10);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-lead-ms') {
+      args.audioLeadMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-lead-max-ms') {
+      args.audioLeadMaxMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-lead-step-up-ms') {
+      args.audioLeadStepUpMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--audio-lead-step-down-ms') {
+      args.audioLeadStepDownMs = Number.parseFloat(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (
+      token === '--audio-io-buffer-ms' ||
+      token === '--audio-io-high-water-ms' ||
+      token === '--audio-io-low-water-ms'
+    ) {
+      throw new Error(`${token} is no longer supported; audio-io backend has been removed`);
+    }
+    if (token === '--audio-backend') {
+      throw new Error('--audio-backend is no longer supported; node-web-audio-api is always used');
+    }
+    if (token === '--audify-high-water-ms' || token === '--audify-low-water-ms') {
+      throw new Error(`${token} is no longer supported; audify backend has been removed`);
+    }
+    if (token === '--speaker-buffer-size' || token === '--speaker-samples-per-frame') {
+      throw new Error(`${token} is no longer supported; speaker backend has been removed`);
+    }
+    if (token.startsWith('--audio-backend=')) {
+      throw new Error('--audio-backend is no longer supported; node-web-audio-api is always used');
+    }
+    if (token.startsWith('--judge-window=')) {
+      continue;
+    }
+    if (token.startsWith('--audio-offset-ms=')) {
+      continue;
+    }
+    if (token.startsWith('--audify-')) {
+      throw new Error(`${token.split('=')[0]} is no longer supported; audify backend has been removed`);
+    }
+    if (token.startsWith('--speaker-')) {
+      throw new Error(`${token.split('=')[0]} is no longer supported; speaker backend has been removed`);
+    }
+    if (token === '--no-audio') {
+      args.audio = false;
+      continue;
+    }
+    if (token === '--audio') {
+      args.audio = true;
+      continue;
+    }
+    if (token === '--preview' || token === '--preview-audio') {
+      continue;
+    }
+    if (token === '--no-preview' || token === '--no-preview-audio') {
+      throw new Error(`${token} is no longer supported; music preview is always enabled`);
+    }
+    if (token === '--no-tui') {
+      args.tui = false;
+      continue;
+    }
+    if (token === '--tui') {
+      args.tui = true;
+      continue;
+    }
+    if (token === '--kitty-graphics') {
+      args.kittyGraphics = true;
+      continue;
+    }
+    if (token === '--no-kitty-graphics') {
+      args.kittyGraphics = false;
+      continue;
+    }
+    if (token === '--video-bga-streaming') {
+      args.videoBgaStreaming = true;
+      continue;
+    }
+    if (token === '--no-video-bga-streaming') {
+      args.videoBgaStreaming = false;
+      continue;
+    }
+    positional.push(token);
+  }
+
+  args.input = positional[0];
+  return args;
+}
+
+function parseHighSpeedArg(raw: string | undefined): number {
+  const parsed = Number.parseFloat(raw ?? '');
+  if (!Number.isFinite(parsed)) {
+    throw new Error('--high-speed expects a numeric value');
+  }
+  if (parsed < MIN_HIGH_SPEED || parsed > MAX_HIGH_SPEED) {
+    throw new Error(`--high-speed must be between ${MIN_HIGH_SPEED} and ${MAX_HIGH_SPEED}`);
+  }
+  const steps = parsed / HIGH_SPEED_STEP;
+  const roundedSteps = Math.round(steps);
+  if (Math.abs(steps - roundedSteps) > 1e-9) {
+    throw new Error(`--high-speed must be in ${HIGH_SPEED_STEP} increments`);
+  }
+  return roundedSteps * HIGH_SPEED_STEP;
+}
+
+function parseTuiFpsArg(raw: string | undefined): number {
+  const parsed = Number.parseFloat(raw ?? '');
+  if (!Number.isFinite(parsed)) {
+    throw new Error('--tui-fps expects a numeric value');
+  }
+  if (parsed <= 0) {
+    throw new Error('--tui-fps must be greater than 0');
+  }
+  return parsed;
+}
+
+function parseTuiVisibleNotesLimitArg(raw: string | undefined): number {
+  const parsed = Number.parseInt(raw ?? '', 10);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('--tui-visible-notes-limit expects an integer value');
+  }
+  if (parsed <= 0) {
+    throw new Error('--tui-visible-notes-limit must be greater than 0');
+  }
+  return parsed;
+}
+
+function formatCliParseError(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return 'Failed to parse CLI arguments';
+}
+
+function printUsage(): void {
+  process.stdout.write(
+    [
+      'Usage: bms-player <input.(bms|bme|bml|pms|bmson|json)|directory> [options]',
+      '',
+      'Essential options:',
+      '  --auto                    Enable auto play mode (default: off)',
+      '  --auto-scratch            Enable scratch auto mode (16ch/26ch only)',
+      '  --speed <rate>            Playback speed multiplier (default: 1)',
+      `  --tui-fps <value>        Target TUI refresh rate while playing (default: ${DEFAULT_TUI_FPS})`,
+      `  --tui-visible-notes-limit <count>  Max notes considered in the visible render window (default: ${DEFAULT_TUI_VISIBLE_NOTES_LIMIT})`,
+      '  --high-speed <rate>       TUI note fall speed multiplier, 0.5-10.0 in 0.5 steps (default: 1.0)',
+      '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
+      '                           Audio backend: node-web-audio-api (fixed)',
+      '  --tui / --no-tui          Enable or disable TUI play screen (default: on in TTY)',
+      '                           When disabled, playback runs in AUTO mode and prints realtime trigger logs',
+      '  --kitty-graphics          Enable Kitty graphics protocol BGA rendering when supported (default: on)',
+      '  --no-kitty-graphics       Disable Kitty graphics protocol BGA rendering',
+      '  --video-bga-streaming     Stream video BGA frames progressively (default: on)',
+      '  --no-video-bga-streaming  Decode full video BGA before playback (legacy behavior)',
+      '  --log-file <path>         Write structured NDJSON logs to a file',
+      '                           Default: ~/.be-music/logs/player.ndjson',
+      '',
+      'Advanced tuning:',
+      '  --show-invisible-notes    Show invisible channels (31-39/41-49) in TUI as green notes',
+      '  --ln-type-auto            Auto-detect BMS #LNTYPE when omitted (default: on)',
+      '  --no-ln-type-auto         Disable BMS #LNTYPE auto-detection when omitted',
+      '  --render-audio <path>     Render audio preview before playing',
+      '  --volume <value>          Global volume multiplier applied before bus-specific volumes (default: 1)',
+      '  --bgm-volume <value>      Volume multiplier for non-play lanes (default: 1, 0 disables BGM)',
+      '  --key-volume <value>      Volume multiplier for playable/key sounds (alias: --play-volume, default: 1)',
+      '  --audio-tail <seconds>    Audio tail length when rendering playback buffer (default: 1.5)',
+      '  --compressor / --no-compressor',
+      '                            Enable or disable output compressor (default: on)',
+      '  --compressor-threshold-db Compressor threshold in dBFS (default: -12)',
+      '  --compressor-ratio        Compressor ratio (default: 2.5)',
+      '  --compressor-attack-ms    Compressor attack time in ms (default: 8)',
+      '  --compressor-release-ms   Compressor release time in ms (default: 120)',
+      '  --compressor-makeup-db    Compressor makeup gain in dB (default: 0)',
+      '  --limiter / --no-limiter  Enable or disable output limiter (default: on)',
+      '  --limiter-ceiling-db      Limiter ceiling in dBFS (default: -0.3)',
+      '  --limiter-release-ms      Limiter release time in ms (default: 80)',
+      '  --audio-head-padding-ms   Silent head padding before chart start (default: 0)',
+      '  --audio-lead-ms <ms>      Base lead time for real-time mixer scheduling (default: 10)',
+      '  --audio-lead-max-ms <ms>  Maximum adaptive lead time under heavy load (default: 32)',
+      '  --audio-lead-step-up-ms   Adaptive lead increment step (default: 1.5)',
+      '  --audio-lead-step-down-ms Adaptive lead decrement step (default: 0.5)',
+      '',
+      'Developer/debug:',
+      '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
+      '  --debug-judge-window <ms> Override BAD window for debugging',
+    ].join('\n') + '\n',
+  );
+}
+
+function beginRawInputCapture(): RawInputCapture {
+  return beginSharedRawInputCapture();
+}
+
+function beginLoadingAbortCapture(): LoadingAbortCapture | undefined {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return undefined;
+  }
+  const inputCapture = beginRawInputCapture();
+  const controller = new AbortController();
+  let reason: LoadingCancelReason | undefined;
+  const onKeyPress = (_chunk: string | undefined, key: readline.Key): void => {
+    if (key.sequence === '\u0003') {
+      reason = 'ctrl-c';
+      controller.abort();
+      return;
+    }
+    if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b') {
+      reason = 'escape';
+      controller.abort();
+    }
+  };
+  inputCapture.stdin.on('keypress', onKeyPress);
+  return {
+    signal: controller.signal,
+    getReason: () => reason,
+    dispose: () => {
+      inputCapture.stdin.removeListener('keypress', onKeyPress);
+      inputCapture.restore();
+    },
+  };
+}
+
+function resolveLoadingCancelReason(
+  error: unknown,
+  capture: LoadingAbortCapture | undefined,
+): LoadingCancelReason | undefined {
+  if (!isAbortError(error)) {
+    return undefined;
+  }
+  return capture?.getReason();
+}
+
+function applyLoadingCancel(reason: LoadingCancelReason): void {
+  process.exitCode = reason === 'ctrl-c' ? 130 : 0;
+  if (process.stdout.isTTY) {
+    process.stdout.write('\u001b[2J\u001b[H');
+  }
+}
+
+async function loadChartSelectionEntries(rootDir: string, files: string[]): Promise<ChartSelectionEntry[] | undefined> {
+  const loadingAbortCapture = beginLoadingAbortCapture();
+  process.stdout.write('\u001b[?25l');
+
+  try {
+    const entries = await buildChartSelectionEntries(rootDir, files, {
+      onLoadingFile: (progress) => {
+        renderChartLoadingProgress(rootDir, progress);
+      },
+      signal: loadingAbortCapture?.signal,
+    });
+    return entries;
+  } catch (error) {
+    const cancelReason = resolveLoadingCancelReason(error, loadingAbortCapture);
+    if (cancelReason) {
+      applyLoadingCancel(cancelReason);
+      return undefined;
+    }
+    throw error;
+  } finally {
+    loadingAbortCapture?.dispose();
+    process.stdout.write('\u001b[?25h');
+  }
+}
+
+function renderChartLoadingProgress(rootDir: string, progress: ChartSummaryLoadingProgress): void {
+  const columns = process.stdout.columns ?? 80;
+  const lineWidth = Math.max(16, columns - 2);
+  const relativePath = relative(rootDir, progress.filePath).replaceAll('\\', '/');
+  const ratio = progress.totalCount > 0 ? progress.currentIndex / progress.totalCount : 0;
+  const barWidth = Math.max(10, Math.min(48, lineWidth - 8));
+  const filled = Math.max(0, Math.min(barWidth, Math.round(barWidth * ratio)));
+  const bar = `[${'#'.repeat(filled)}${'-'.repeat(barWidth - filled)}] ${Math.round(ratio * 100)}%`;
+  const lines = [
+    `Loading charts... (${progress.currentIndex}/${progress.totalCount})`,
+    truncateForDisplay(bar, lineWidth),
+    truncateForDisplay(`Loading: ${relativePath}`, lineWidth),
+    '',
+    'Press Ctrl+C or Esc to exit.',
+  ];
+  process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J`);
+}
+
+export function resolvePlayLoadingStageFileDisplaySize(
+  columns?: number,
+  rows?: number,
+): {
+  width: number;
+  height: number;
+} {
+  const safeColumns = Math.max(16, Math.floor(columns ?? 80));
+  const safeRows = Math.max(8, Math.floor(rows ?? 24));
+  return {
+    width: safeColumns,
+    height: safeRows,
+  };
+}
+
+function formatPlayLoadingComponentStatus(label: string, status: PlayerLoadComponentStatus | undefined): string {
+  if (!status) {
+    return `${label}: -`;
+  }
+  const { message, countLabel } = resolvePlayLoadingComponentStatusDisplay(status);
+  if (status.state === 'ready' || status.state === 'disabled') {
+    return `${label}: ${message}`;
+  }
+  const detailParts = [
+    countLabel,
+    typeof status.detail === 'string' && status.detail.length > 0 ? status.detail : undefined,
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+  return detailParts.length > 0 ? `${label}: ${message} (${detailParts.join(', ')})` : `${label}: ${message}`;
+}
+
+function resolvePlayLoadingComponentStatusDisplay(
+  status: PlayerLoadComponentStatus,
+): {
+  message: string;
+  countLabel?: string;
+} {
+  if (status.state !== 'pending') {
+    return { message: status.message };
+  }
+  const countLabel = extractPlayLoadingProgressCountLabel(status.message);
+  if (status.message.startsWith('Waiting')) {
+    return { message: 'Waiting...', countLabel };
+  }
+  if (status.message.startsWith('Initializing')) {
+    return { message: 'Initializing...', countLabel };
+  }
+  return { message: 'Loading...', countLabel };
+}
+
+function extractPlayLoadingProgressCountLabel(message: string): string | undefined {
+  const match = /\((\d+\/\d+)\)\s*$/.exec(message);
+  return match?.[1];
+}
+
+function resolvePlayLoadingStepLabel(progress: PlayLoadingProgress): string {
+  if (progress.audioStatus || progress.graphicsStatus) {
+    return 'Loading playback resources...';
+  }
+  if (
+    progress.message === 'Parsing chart file...' ||
+    progress.message === 'Loading stage image...' ||
+    progress.message === 'Chart parsed.'
+  ) {
+    return 'Loading chart resources...';
+  }
+  return progress.message;
+}
+
+export function createPlayLoadingProgressScreenLines(
+  chartPath: string,
+  progress: PlayLoadingProgress,
+  options: {
+    columns?: number;
+    stageFileImage?: StageFileAnsiImage;
+    useKittyGraphics?: boolean;
+  } = {},
+): string[] {
+  const columns = options.columns ?? 80;
+  const lineWidth = Math.max(16, columns);
+  const fileLabel = chartPath.replaceAll('\\', '/');
+  const ratio = Math.max(0, Math.min(1, progress.ratio));
+  const barWidth = Math.max(10, Math.min(48, lineWidth - 8));
+  const filled = Math.max(0, Math.min(barWidth, Math.round(barWidth * ratio)));
+  const bar = `[${'#'.repeat(filled)}${'-'.repeat(barWidth - filled)}] ${Math.round(ratio * 100)}%`;
+  const rawLines = [
+    'Loading selected chart...',
+    bar,
+    `Step: ${resolvePlayLoadingStepLabel(progress)}`,
+    formatPlayLoadingComponentStatus('Sound', progress.audioStatus),
+    formatPlayLoadingComponentStatus('Visual', progress.graphicsStatus),
+    `File: ${fileLabel}`,
+  ];
+  return rawLines.map((line, index) =>
+    options.stageFileImage
+      ? options.useKittyGraphics === true && options.stageFileImage.kittyImage
+        ? stylePlayLoadingOverlayLineOnKittyImage(line, lineWidth, index, options.stageFileImage)
+        : stylePlayLoadingOverlayLineOnImage(line, lineWidth, index, options.stageFileImage)
+      : stylePlayLoadingOverlayFallbackLine(line, lineWidth),
+  );
+}
+
+export function createPlayLoadingProgressScreenOutput(
+  chartPath: string,
+  progress: PlayLoadingProgress,
+  options: {
+    columns?: number;
+    stageFileImage?: StageFileAnsiImage;
+    useKittyGraphics?: boolean;
+    resetScreen?: boolean;
+    includeStageFileImage?: boolean;
+  } = {},
+): string {
+  const overlayLines = createPlayLoadingProgressScreenLines(chartPath, progress, {
+    columns: options.columns,
+    stageFileImage: options.stageFileImage,
+    useKittyGraphics: options.useKittyGraphics,
+  });
+  const imageBlock = resolvePlayLoadingStageFileBlock(options.stageFileImage, {
+    includeStageFileImage: options.includeStageFileImage,
+    useKittyGraphics: options.useKittyGraphics,
+  });
+  const prefix = options.resetScreen === false ? '\u001b[H' : '\u001b[2J\u001b[H';
+  return `${prefix}${imageBlock}${overlayLines.join('\n')}`;
+}
+
+function renderPlayLoadingProgress(
+  chartPath: string,
+  progress: PlayLoadingProgress,
+  options: {
+    columns?: number;
+    stageFileImage?: StageFileAnsiImage;
+    useKittyGraphics?: boolean;
+    state: PlayLoadingScreenRenderState;
+  },
+): void {
+  const shouldRedrawStageFile = Boolean(options.stageFileImage) && !options.state.stageFileDrawn;
+  const shouldResetScreen = !options.state.initialized || shouldRedrawStageFile;
+  const output = createPlayLoadingProgressScreenOutput(chartPath, progress, {
+    columns: options.columns,
+    stageFileImage: options.stageFileImage,
+    useKittyGraphics: options.useKittyGraphics,
+    resetScreen: shouldResetScreen,
+    includeStageFileImage: shouldRedrawStageFile,
+  });
+  if (options.state.lastOutput === output) {
+    return;
+  }
+  if (shouldRedrawStageFile && options.stageFileImage && !options.state.stageFileRenderLogged) {
+    logCli('info', 'play.loading.stagefile.render', {
+      useKittyGraphics: options.useKittyGraphics === true && options.stageFileImage.kittyImage !== undefined,
+      width: options.stageFileImage.width,
+      height: options.stageFileImage.height,
+      hasKittyImage: Boolean(options.stageFileImage.kittyImage),
+    });
+    options.state.stageFileRenderLogged = true;
+  }
+  process.stdout.write(output);
+  options.state.initialized = true;
+  options.state.lastOutput = output;
+  if (options.stageFileImage) {
+    options.state.stageFileDrawn = true;
+    options.state.stageFileKittyVisible =
+      options.useKittyGraphics === true && options.stageFileImage.kittyImage !== undefined;
+  }
+}
+
+function resolvePlayLoadingStageFileBlock(
+  stageFileImage: StageFileAnsiImage | undefined,
+  options: {
+    includeStageFileImage?: boolean;
+    useKittyGraphics?: boolean;
+  },
+): string {
+  if (options.includeStageFileImage === false || !stageFileImage) {
+    return '';
+  }
+  if (options.useKittyGraphics === true && stageFileImage.kittyImage) {
+    return (
+      buildKittyGraphicsRenderSequence({
+        imageId: PLAY_LOADING_STAGEFILE_KITTY_IMAGE_ID,
+        placementId: 1,
+        row: 1,
+        column: 1,
+        image: stageFileImage.kittyImage,
+        zIndex: -1,
+        doNotMoveCursor: true,
+      }) + '\u001b[H'
+    );
+  }
+  return stageFileImage.lines.length > 0 ? `${stageFileImage.lines.join('\n')}\u001b[H` : '';
+}
+
+function clearPlayLoadingScreen(state: PlayLoadingScreenRenderState): void {
+  clearPlayLoadingStageFileImage(state);
+  if (state.initialized) {
+    process.stdout.write('\u001b[2J\u001b[H');
+    state.initialized = false;
+  }
+  state.stageFileRenderLogged = false;
+}
+
+function clearPlayLoadingStageFileImage(state: PlayLoadingScreenRenderState): void {
+  state.lastOutput = undefined;
+  if (!state.stageFileKittyVisible) {
+    return;
+  }
+  process.stdout.write(buildKittyGraphicsDeleteImageSequence(PLAY_LOADING_STAGEFILE_KITTY_IMAGE_ID));
+  state.stageFileKittyVisible = false;
+}
+
+function stylePlayLoadingOverlayFallbackLine(text: string, lineWidth: number): string {
+  return `\u001b[38;2;255;255;255;48;2;0;0;0m${truncateForDisplay(text, lineWidth).padEnd(lineWidth, ' ')}\u001b[0m`;
+}
+
+function stylePlayLoadingOverlayLineOnImage(
+  text: string,
+  lineWidth: number,
+  rowIndex: number,
+  stageFileImage: StageFileAnsiImage,
+): string {
+  const content = truncateForDisplay(text, lineWidth).padEnd(lineWidth, ' ');
+  if (rowIndex >= stageFileImage.height) {
+    return stylePlayLoadingOverlayFallbackLine(content, lineWidth);
+  }
+
+  let line = '';
+  let currentStyle = '';
+  for (let index = 0; index < content.length; index += 1) {
+    const bg = getStageFilePixel(stageFileImage, rowIndex, index);
+    const fg = resolveOverlayTextColor(bg.r, bg.g, bg.b);
+    const nextStyle = `\u001b[38;2;${fg.r};${fg.g};${fg.b};48;2;${bg.r};${bg.g};${bg.b}m`;
+    if (nextStyle !== currentStyle) {
+      line += nextStyle;
+      currentStyle = nextStyle;
+    }
+    line += content[index];
+  }
+  if (currentStyle.length > 0) {
+    line += '\u001b[0m';
+  }
+  return line;
+}
+
+function stylePlayLoadingOverlayLineOnKittyImage(
+  text: string,
+  lineWidth: number,
+  rowIndex: number,
+  stageFileImage: StageFileAnsiImage,
+): string {
+  const content = truncateForDisplay(text, lineWidth).padEnd(lineWidth, ' ');
+  if (rowIndex >= stageFileImage.height) {
+    return truncateForDisplay(text, lineWidth);
+  }
+
+  let line = '';
+  let currentStyle = '';
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index] ?? ' ';
+    if (character === ' ') {
+      if (currentStyle.length > 0) {
+        line += '\u001b[0m';
+        currentStyle = '';
+      }
+      line += character;
+      continue;
+    }
+
+    const bg = getStageFilePixel(stageFileImage, rowIndex, index);
+    const fg = resolveOverlayTextColor(bg.r, bg.g, bg.b);
+    const nextStyle = `\u001b[38;2;${fg.r};${fg.g};${fg.b}m`;
+    if (nextStyle !== currentStyle) {
+      line += nextStyle;
+      currentStyle = nextStyle;
+    }
+    line += character;
+  }
+  if (currentStyle.length > 0) {
+    line += '\u001b[0m';
+  }
+  return line;
+}
+
+function getStageFilePixel(
+  stageFileImage: StageFileAnsiImage,
+  rowIndex: number,
+  columnIndex: number,
+): { r: number; g: number; b: number } {
+  const x = Math.max(0, Math.min(stageFileImage.width - 1, columnIndex));
+  const y = Math.max(0, Math.min(stageFileImage.height - 1, rowIndex));
+  const rgbOffset = (y * stageFileImage.width + x) * 3;
+  return {
+    r: stageFileImage.rgb[rgbOffset] ?? 0,
+    g: stageFileImage.rgb[rgbOffset + 1] ?? 0,
+    b: stageFileImage.rgb[rgbOffset + 2] ?? 0,
+  };
+}
+
+function resolveOverlayTextColor(r: number, g: number, b: number): { r: 0 | 255; g: 0 | 255; b: 0 | 255 } {
+  const whiteContrast = calculateContrastRatio(r, g, b, 255, 255, 255);
+  const blackContrast = calculateContrastRatio(r, g, b, 0, 0, 0);
+  return whiteContrast >= blackContrast ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
+}
+
+function calculateContrastRatio(
+  backgroundR: number,
+  backgroundG: number,
+  backgroundB: number,
+  foregroundR: number,
+  foregroundG: number,
+  foregroundB: number,
+): number {
+  const backgroundLuminance = calculateRelativeLuminance(backgroundR, backgroundG, backgroundB);
+  const foregroundLuminance = calculateRelativeLuminance(foregroundR, foregroundG, foregroundB);
+  const lighter = Math.max(backgroundLuminance, foregroundLuminance);
+  const darker = Math.min(backgroundLuminance, foregroundLuminance);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function calculateRelativeLuminance(r: number, g: number, b: number): number {
+  const red = convertSrgbChannelToLinear(r);
+  const green = convertSrgbChannelToLinear(g);
+  const blue = convertSrgbChannelToLinear(b);
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function convertSrgbChannelToLinear(value: number): number {
+  const normalized = Math.max(0, Math.min(255, value)) / 255;
+  if (normalized <= 0.04045) {
+    return normalized / 12.92;
+  }
+  return ((normalized + 0.055) / 1.055) ** 2.4;
+}
+
+function formatMusicSelectDifficultyFilterLabel(value: MusicSelectDifficultyFilter | undefined): string {
+  return typeof value === 'number' ? String(value) : 'ALL';
+}
+
+async function selectChartInteractively(
+  rootDir: string,
+  files: string[],
+  options: SelectChartInteractivelyOptions,
+): Promise<SelectChartInteractivelyResult> {
+  const allEntries = options.entries ?? (await buildChartSelectionEntries(rootDir, files));
+  const previewController =
+    options.audio && process.stdout.isTTY
+      ? createChartPreviewController({
+          volume: options.volume,
+          bgmVolume: options.bgmVolume,
+          playVolume: options.playVolume,
+        })
+      : undefined;
+  let previewSpinnerFrame = 0;
+  let previewSpinnerTimer: NodeJS.Timeout | undefined;
+  let wasSpinnerVisible = false;
+  let cachedColumnLayoutEntries: readonly ChartSelectionEntry[] | undefined;
+  let cachedColumnLayoutWidth = -1;
+  let cachedColumnLayout: ReturnType<typeof createSelectionColumnLayout> | undefined;
+  let cachedColumnHeaderLayout: ReturnType<typeof createSelectionColumnLayout> | undefined;
+  let cachedColumnHeader = '';
+  let cachedEntryLabelsLayout: ReturnType<typeof createSelectionColumnLayout> | undefined;
+  let cachedEntryLabels = new WeakMap<ChartSelectionEntry, string>();
+  const useKittyGraphicsForBanner =
+    Boolean(options.kittyGraphics) && Boolean(process.stdout.isTTY) && supportsKittyGraphicsProtocol(process.env);
+  const bannerState = createMusicSelectBannerState();
+  let finished = false;
+
+  const inputCapture = beginRawInputCapture();
+  const musicSelectState = createMusicSelectState(allEntries, {
+    initialDifficultyFilter: options.initialDifficultyFilter,
+    initialPlayMode: options.initialPlayMode,
+    initialHighSpeed: options.initialHighSpeed,
+    initialFocusKey: options.initialFocusKey,
+  });
+
+  process.stdout.write('\u001b[?25l');
+
+  const syncPreview = (): void => {
+    const view = musicSelectState.view();
+    const entry = view.entries[musicSelectState.selectedIndex()];
+    if (entry?.kind === 'chart') {
+      previewController?.focus({
+        filePath: entry.filePath,
+        previewContinueKey: entry.previewContinueKey,
+      });
+      return;
+    }
+    previewController?.focus({});
+  };
+
+  const listRowsForViewport = (): number => {
+    const rows = process.stdout.rows ?? 24;
+    return Math.max(5, rows - MUSIC_SELECT_NON_ENTRY_ROWS);
+  };
+
+  const resolveSelectionColumnLayout = (
+    entries: readonly ChartSelectionEntry[],
+    itemLabelWidth: number,
+  ): ReturnType<typeof createSelectionColumnLayout> => {
+    if (cachedColumnLayout && cachedColumnLayoutEntries === entries && cachedColumnLayoutWidth === itemLabelWidth) {
+      return cachedColumnLayout;
+    }
+    cachedColumnLayout = createSelectionColumnLayout(itemLabelWidth, entries);
+    cachedColumnLayoutEntries = entries;
+    cachedColumnLayoutWidth = itemLabelWidth;
+    return cachedColumnLayout;
+  };
+
+  const resolveSelectionColumnHeader = (
+    layout: ReturnType<typeof createSelectionColumnLayout>,
+    itemLabelWidth: number,
+  ): string => {
+    if (cachedColumnHeaderLayout === layout) {
+      return cachedColumnHeader;
+    }
+    cachedColumnHeader = truncateForDisplay(formatSelectionColumnHeader(layout), itemLabelWidth);
+    cachedColumnHeaderLayout = layout;
+    return cachedColumnHeader;
+  };
+
+  const resolveSelectionEntryLabel = (
+    entry: ChartSelectionEntry,
+    layout: ReturnType<typeof createSelectionColumnLayout>,
+    itemLabelWidth: number,
+  ): string => {
+    if (cachedEntryLabelsLayout !== layout) {
+      cachedEntryLabelsLayout = layout;
+      cachedEntryLabels = new WeakMap<ChartSelectionEntry, string>();
+    }
+    const cached = cachedEntryLabels.get(entry);
+    if (cached) {
+      return cached;
+    }
+    const label = truncateForDisplay(formatSelectionEntryLabel(entry, layout), itemLabelWidth);
+    cachedEntryLabels.set(entry, label);
+    return label;
+  };
+
+  const render = (): void => {
+    const view = musicSelectState.view();
+    const columns = process.stdout.columns ?? 80;
+    const listRows = listRowsForViewport();
+    const numberWidth = String(Math.max(1, view.chartCount)).length;
+    const lineWidth = Math.max(16, columns - 2);
+    const itemLabelWidth = Math.max(8, lineWidth - numberWidth - 4);
+    const columnLayout = resolveSelectionColumnLayout(view.entries, itemLabelWidth);
+
+    const { start, end } = resolveVisibleEntryRange(musicSelectState.selectedIndex(), view.entries.length, listRows);
+
+    const lines: string[] = [];
+    const selectedEntry = view.entries[musicSelectState.selectedIndex()];
+    syncMusicSelectBanner({
+      state: bannerState,
+      entry: selectedEntry,
+      lineWidth,
+      useKittyGraphics: useKittyGraphicsForBanner,
+      finished,
+      onReady: render,
+    });
+    const bannerDisplayState = resolveMusicSelectBannerDisplayState(
+      selectedEntry,
+      lineWidth,
+      useKittyGraphicsForBanner,
+      bannerState,
+    );
+    lines.push(
+      ...createMusicSelectSelectedMetadataLines(selectedEntry, lineWidth, {
+        bannerLines:
+          useKittyGraphicsForBanner && bannerState.activeImage?.kittyImage !== undefined
+            ? undefined
+            : bannerState.activeImage?.lines,
+        bannerWidth: bannerDisplayState.reservedWidth,
+      }),
+    );
+    lines.push('');
+    const headerPrefix = `  ${' '.repeat(numberWidth)} `;
+    lines.push(`${headerPrefix}${resolveSelectionColumnHeader(columnLayout, itemLabelWidth)}`);
+
+    if (view.entries.length === 0) {
+      lines.push('');
+      lines.push(truncateForDisplay('No charts match the current DIFFICULTY filter.', lineWidth));
+    }
+
+    for (let index = start; index < end; index += 1) {
+      const entry = view.entries[index];
+      const marker = index === musicSelectState.selectedIndex() ? '>' : ' ';
+      const chartNumber = view.chartIndexByEntryIndex.get(index);
+      const number =
+        typeof chartNumber === 'number' ? String(chartNumber + 1).padStart(numberWidth, ' ') : ' '.repeat(numberWidth);
+      let displayEntry = entry;
+      if (
+        index === musicSelectState.selectedIndex() &&
+        entry.kind === 'chart' &&
+        previewController?.getRenderingFilePath() === entry.filePath
+      ) {
+        displayEntry = {
+          ...entry,
+          fileLabel: `${MUSIC_SELECT_PREVIEW_SPINNER_FRAMES[previewSpinnerFrame]} ${entry.fileLabel}`,
+        };
+      }
+      const label =
+        displayEntry === entry
+          ? resolveSelectionEntryLabel(entry, columnLayout, itemLabelWidth)
+          : truncateForDisplay(formatSelectionEntryLabel(displayEntry, columnLayout), itemLabelWidth);
+      const line = `${marker} ${number} ${label}`;
+      if (index === musicSelectState.selectedIndex()) {
+        lines.push(`\u001b[7m${line.padEnd(lineWidth, ' ')}\u001b[0m`);
+      } else {
+        lines.push(line);
+      }
+    }
+
+    lines.push('');
+    lines.push(
+      ...createMusicSelectControlLines({
+        rootDir,
+        lineWidth,
+        playModeLabel: formatPlayModeLabel(musicSelectState.playMode()),
+        highSpeedLabel: formatHighSpeedLabel(musicSelectState.highSpeed()),
+        difficultyFilterLabel: formatMusicSelectDifficultyFilterLabel(musicSelectState.difficultyFilter()),
+        audioBackendLabel: formatMusicSelectAudioBackendLabel(options.audio, previewController?.getActiveBackend()),
+      }),
+    );
+    lines.push('');
+    const selectedChartIndex = view.chartIndexByEntryIndex.get(musicSelectState.selectedIndex());
+    if (typeof selectedChartIndex === 'number') {
+      lines.push(`${selectedChartIndex + 1}/${view.chartCount}`);
+    } else if (view.chartCount > 0) {
+      const selectedEntry = view.entries[musicSelectState.selectedIndex()];
+      lines.push(selectedEntry?.kind === 'random' ? `RANDOM/${view.chartCount}` : `0/${view.chartCount}`);
+    } else {
+      lines.push('0/0');
+    }
+    const overlaySequence = resolveMusicSelectBannerOverlaySequence({
+      lineWidth,
+      reservedWidth: bannerDisplayState.reservedWidth,
+      useKittyGraphics: useKittyGraphicsForBanner,
+      state: bannerState,
+    });
+    process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J${overlaySequence}`);
+  };
+
+  return new Promise<SelectChartInteractivelyResult>((resolvePromise) => {
+    const isSelectedEntryPreviewRendering = (): boolean => {
+      const view = musicSelectState.view();
+      const selectedEntry = view.entries[musicSelectState.selectedIndex()];
+      if (!previewController || selectedEntry?.kind !== 'chart') {
+        return false;
+      }
+      return previewController.getRenderingFilePath() === selectedEntry.filePath;
+    };
+    const ensurePreviewSpinnerTimer = (): void => {
+      if (!previewController || previewSpinnerTimer) {
+        return;
+      }
+      previewSpinnerTimer = setInterval(() => {
+        if (!isSelectedEntryPreviewRendering()) {
+          if (wasSpinnerVisible) {
+            wasSpinnerVisible = false;
+            previewSpinnerFrame = 0;
+            render();
+          }
+          return;
+        }
+        wasSpinnerVisible = true;
+        previewSpinnerFrame = (previewSpinnerFrame + 1) % MUSIC_SELECT_PREVIEW_SPINNER_FRAMES.length;
+        render();
+      }, MUSIC_SELECT_PREVIEW_SPINNER_INTERVAL_MS);
+    };
+
+    const cleanup = (result: SelectChartInteractivelyResult): void => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      if (previewSpinnerTimer) {
+        clearInterval(previewSpinnerTimer);
+        previewSpinnerTimer = undefined;
+      }
+      clearMusicSelectBannerLoad(bannerState);
+      process.stdout.write(buildMusicSelectBannerCleanupSequence(bannerState));
+      inputCapture.stdin.removeListener('keypress', onKeyPress);
+      inputCapture.restore();
+      process.stdout.write('\u001b[?25h\u001b[2J\u001b[H');
+      void (async () => {
+        await previewController?.dispose();
+        resolvePromise(result);
+      })();
+    };
+
+    const moveSelection = (delta: number): void => {
+      const view = musicSelectState.view();
+      if (view.selectableIndexes.length === 0) {
+        return;
+      }
+      const currentSelectableIndex = view.selectableIndexByEntryIndex.get(musicSelectState.selectedIndex()) ?? 0;
+      const nextSelectableIndex = resolveCircularSelectableIndex(
+        currentSelectableIndex,
+        delta,
+        view.selectableIndexes.length,
+      );
+      musicSelectState.selectedIndex(view.selectableIndexes[nextSelectableIndex]!);
+      syncPreview();
+      render();
+    };
+
+    const moveSelectionByPage = (direction: MusicSelectPageDirection): void => {
+      const view = musicSelectState.view();
+      if (view.selectableIndexes.length === 0) {
+        return;
+      }
+      const pageSize = listRowsForViewport();
+      musicSelectState.selectedIndex(
+        resolvePageSelectableIndex(
+          view.selectableIndexes,
+          musicSelectState.selectedIndex(),
+          view.entries.length,
+          pageSize,
+          direction,
+        ),
+      );
+      syncPreview();
+      render();
+    };
+
+    const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
+      const nextDifficultyFilter = resolveMusicSelectDifficultyFilter(chunk);
+      if (nextDifficultyFilter !== undefined) {
+        const focusKey = getEntryFocusKey(musicSelectState.view().entries[musicSelectState.selectedIndex()]);
+        musicSelectState.difficultyFilter(nextDifficultyFilter ?? undefined);
+        musicSelectState.ensureSelectedIndex(focusKey);
+        syncPreview();
+        render();
+        return;
+      }
+
+      const action = resolveMusicSelectNavigationAction(chunk, key);
+      if (action === 'ctrl-c') {
+        const view = musicSelectState.view();
+        cleanup({
+          reason: 'ctrl-c',
+          focusKey: getEntryFocusKey(view.entries[musicSelectState.selectedIndex()]),
+          playMode: musicSelectState.playMode(),
+          highSpeed: musicSelectState.highSpeed(),
+          difficultyFilter: musicSelectState.difficultyFilter(),
+        });
+        return;
+      }
+      if (action === 'move-up') {
+        moveSelection(-1);
+        return;
+      }
+      if (action === 'move-down') {
+        moveSelection(1);
+        return;
+      }
+      if (action === 'page-up') {
+        moveSelectionByPage('up');
+        return;
+      }
+      if (action === 'page-down') {
+        moveSelectionByPage('down');
+        return;
+      }
+      if (action === 'first') {
+        const view = musicSelectState.view();
+        if (view.selectableIndexes.length === 0) {
+          return;
+        }
+        musicSelectState.selectedIndex(view.selectableIndexes[0]!);
+        syncPreview();
+        render();
+        return;
+      }
+      if (action === 'last') {
+        const view = musicSelectState.view();
+        if (view.selectableIndexes.length === 0) {
+          return;
+        }
+        musicSelectState.selectedIndex(view.selectableIndexes[view.selectableIndexes.length - 1]!);
+        syncPreview();
+        render();
+        return;
+      }
+      if (action === 'confirm') {
+        const view = musicSelectState.view();
+        const selectedEntry = view.entries[musicSelectState.selectedIndex()];
+        if (selectedEntry?.kind === 'random') {
+          const randomIndex = Math.floor(Math.random() * view.chartFiles.length);
+          cleanup({
+            reason: 'selected',
+            selectedPath: view.chartFiles[randomIndex],
+            focusKey: getEntryFocusKey(selectedEntry),
+            playMode: musicSelectState.playMode(),
+            highSpeed: musicSelectState.highSpeed(),
+            difficultyFilter: musicSelectState.difficultyFilter(),
+          });
+          return;
+        }
+        if (selectedEntry?.kind === 'chart') {
+          cleanup({
+            reason: 'selected',
+            selectedPath: selectedEntry.filePath,
+            focusKey: getEntryFocusKey(selectedEntry),
+            playMode: musicSelectState.playMode(),
+            highSpeed: musicSelectState.highSpeed(),
+            difficultyFilter: musicSelectState.difficultyFilter(),
+          });
+          return;
+        }
+        return;
+      }
+      if (action === 'toggle-auto') {
+        musicSelectState.playMode(cyclePlayMode(musicSelectState.playMode()));
+        render();
+        return;
+      }
+      if (action === 'increase-high-speed') {
+        musicSelectState.highSpeed(increaseHighSpeed(musicSelectState.highSpeed()));
+        render();
+        return;
+      }
+      if (action === 'decrease-high-speed') {
+        musicSelectState.highSpeed(decreaseHighSpeed(musicSelectState.highSpeed()));
+        render();
+        return;
+      }
+      if (action === 'escape') {
+        const view = musicSelectState.view();
+        cleanup({
+          reason: 'escape',
+          focusKey: getEntryFocusKey(view.entries[musicSelectState.selectedIndex()]),
+          playMode: musicSelectState.playMode(),
+          highSpeed: musicSelectState.highSpeed(),
+          difficultyFilter: musicSelectState.difficultyFilter(),
+        });
+      }
+    };
+
+    inputCapture.stdin.on('keypress', onKeyPress);
+    ensurePreviewSpinnerTimer();
+    syncPreview();
+    render();
+  });
+}
+
+function resolveChartFileFromFocusKey(focusKey: string | undefined): string | undefined {
+  if (typeof focusKey !== 'string') {
+    return undefined;
+  }
+  if (!focusKey.startsWith('chart:')) {
+    return undefined;
+  }
+  const filePath = focusKey.slice('chart:'.length).trim();
+  return filePath.length > 0 ? filePath : undefined;
+}
+
+export function resolveMusicSelectInitialFocusKey(
+  files: readonly string[],
+  selectedChartFile: string | undefined,
+  persistedFocusKey?: string,
+): string | undefined {
+  if (typeof persistedFocusKey === 'string') {
+    const normalizedFocusKey = persistedFocusKey.trim();
+    if (normalizedFocusKey === 'random') {
+      return normalizedFocusKey;
+    }
+    const focusedChartFile = resolveChartFileFromFocusKey(normalizedFocusKey);
+    if (focusedChartFile && files.includes(focusedChartFile)) {
+      return normalizedFocusKey;
+    }
+  }
+  if (typeof selectedChartFile !== 'string') {
+    return undefined;
+  }
+  const normalized = selectedChartFile.trim();
+  if (normalized.length === 0) {
+    return undefined;
+  }
+  if (!files.includes(normalized)) {
+    return undefined;
+  }
+  return createChartFocusKey(normalized);
+}
+
+async function showResultScreen(
+  rootDir: string,
+  played: PlayedChartResult,
+  options: ResultScreenOptions = {},
+): Promise<ResultScreenAction> {
+  const allowReplay = options.allowReplay ?? true;
+  const nextActionLabel = options.nextActionLabel ?? 'return to music selection';
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return 'enter';
+  }
+
+  const relativePath = relative(rootDir, played.chartPath).replaceAll('\\', '/');
+  const titleLine = played.title ?? relativePath;
+  const artistLine = played.artist ? `ARTIST ${played.artist}` : undefined;
+  const totalNotes = Math.max(0, Math.floor(played.summary.total));
+  const maxExScore = Math.max(0, totalNotes * 2);
+  const judgedNotes = Math.max(
+    0,
+    Math.floor(
+      played.summary.perfect + played.summary.great + played.summary.good + played.summary.bad + played.summary.poor,
+    ),
+  );
+  const notesProgress = `${Math.min(totalNotes, judgedNotes)}/${totalNotes}`;
+  const gaugeLine = formatGrooveGaugeResultLine(played.summary);
+
+  const inputCapture = beginRawInputCapture();
+  process.stdout.write('\u001b[?25l');
+
+  const render = (): void => {
+    const columns = process.stdout.columns ?? 80;
+    const lineWidth = Math.max(16, columns - 2);
+    const lines: string[] = [];
+    lines.push('RESULT');
+    lines.push(truncateForDisplay(titleLine, lineWidth));
+    if (artistLine) {
+      lines.push(truncateForDisplay(artistLine, lineWidth));
+    }
+    lines.push(truncateForDisplay(`FILE ${relativePath}`, lineWidth));
+    lines.push('');
+    lines.push(
+      `PLAYER ${formatPlayerLabel(played.player)}  RANK ${played.rankLabel ?? formatRankLabel(played.rank)}  PLAYLEVEL ${formatPlayLevelLabel(played.playLevel)}`,
+    );
+    if (gaugeLine) {
+      lines.push(truncateForDisplay(gaugeLine, lineWidth));
+    }
+    lines.push(`NOTES ${notesProgress}`);
+    lines.push(`EX-SCORE ${played.summary.exScore}/${maxExScore}  SCORE ${played.summary.score}/200000`);
+    lines.push(
+      `PGREAT ${played.summary.perfect}  GREAT ${played.summary.great}  GOOD ${played.summary.good}  BAD ${played.summary.bad}  POOR ${played.summary.poor}`,
+    );
+    lines.push(`FAST ${played.summary.fast}  SLOW ${played.summary.slow}`);
+    lines.push('');
+    if (allowReplay) {
+      lines.push('Press r to replay this chart.');
+    }
+    lines.push('Press Enter or Esc to close result screen.');
+    lines.push(`Next: ${nextActionLabel}.`);
+    lines.push('Press Ctrl+C to quit.');
+    process.stdout.write(`\u001b[2J\u001b[H${lines.join('\n')}\u001b[J`);
+  };
+
+  return new Promise<ResultScreenAction>((resolvePromise) => {
+    let finished = false;
+
+    const cleanup = (action: ResultScreenAction): void => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      inputCapture.stdin.removeListener('keypress', onKeyPress);
+      inputCapture.restore();
+      process.stdout.write('\u001b[?25h\u001b[2J\u001b[H');
+      resolvePromise(action);
+    };
+
+    const onKeyPress = (chunk: string | undefined, key: readline.Key): void => {
+      const action = resolveResultScreenActionFromKey(chunk, key);
+      if (!action) {
+        return;
+      }
+      if (action === 'replay' && !allowReplay) {
+        return;
+      }
+      cleanup(action);
+    };
+
+    inputCapture.stdin.on('keypress', onKeyPress);
+    render();
+  });
+}
+
+function formatGrooveGaugeResultLine(summary: PlayerSummary): string | undefined {
+  const gauge = summary.gauge;
+  if (!gauge) {
+    return undefined;
+  }
+  const status = gauge.cleared ? 'CLEAR' : 'FAILED';
+  return `GAUGE ${renderPlainGrooveGaugeBar(gauge.current, gauge.max, 24)} ${gauge.current.toFixed(2)}% ${status} TOTAL ${formatGrooveGaugeNumber(gauge.effectiveTotal)}`;
+}
+
+function renderPlainGrooveGaugeBar(current: number, max: number, width: number): string {
+  const safeWidth = Math.max(1, Math.floor(width));
+  const safeMax = Number.isFinite(max) && max > 0 ? max : 100;
+  const filled = Math.round(safeWidth * Math.max(0, Math.min(1, current / safeMax)));
+  return `[${'#'.repeat(filled)}${'-'.repeat(safeWidth - filled)}]`;
+}
+
+function formatGrooveGaugeNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    return '-';
+  }
+  const rounded = Math.round(value);
+  return Math.abs(value - rounded) <= 1e-9 ? String(rounded) : value.toFixed(2);
+}
+
+function isCliEntryPoint(): boolean {
+  const entry = process.argv[1];
+  if (!entry) {
+    return false;
+  }
+
+  try {
+    const moduleUrl = (import.meta as { url?: unknown }).url;
+    if (typeof moduleUrl !== 'string' || moduleUrl.length === 0) {
+      return false;
+    }
+    return resolve(entry) === fileURLToPath(moduleUrl);
+  } catch {
+    return false;
+  }
+}
+
+if (isCliEntryPoint()) {
+  void main()
+    .then(() => {
+      process.exit(process.exitCode ?? 0);
+    })
+    .catch((error) => {
+      process.stderr.write(`${formatCliParseError(error)}\n`);
+      process.exit(1);
+    });
+}

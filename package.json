@@ -3,40 +3,49 @@
   "version": "0.1.0",
   "private": true,
   "description": "Be-Music tooling monorepo",
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "clean": "npm run clean --workspaces --if-present",
-    "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint . --fix",
-    "format": "oxfmt . --write",
-    "format:check": "oxfmt . --check",
+    "build": "pnpm -r --sort --workspace-concurrency=Infinity run build",
+    "clean": "pnpm -r run clean",
+    "typecheck": "pnpm -r --parallel run typecheck",
+    "lint": "pnpm -r --parallel run lint",
+    "lint:fix": "pnpm -r --parallel run lint:fix",
+    "format": "pnpm -r --parallel run format",
+    "format:check": "pnpm -r --parallel run format:check",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "bench:parser": "npm run bench --workspace @be-music/parser --",
-    "bench:parser:check": "npm run bench:check --workspace @be-music/parser --",
-    "bench:parser:update-baseline": "npm run bench:update-baseline --workspace @be-music/parser --",
-    "player": "npm run dev --workspace @be-music/player --",
-    "editor": "npm run dev --workspace @be-music/editor --",
-    "audio-render": "npm run dev --workspace @be-music/audio-renderer --",
-    "parse": "npm run dev --workspace @be-music/parser --",
-    "stringify": "npm run dev --workspace @be-music/stringifier --"
+    "bench": "tsx --tsconfig tsconfig.typecheck.json scripts/bench/exports.ts",
+    "bench:aggregate": "tsx --tsconfig tsconfig.typecheck.json scripts/bench/aggregate-results.ts",
+    "bench:compare": "tsx --tsconfig tsconfig.typecheck.json scripts/bench/compare-results.ts",
+    "player": "pnpm --filter @be-music/player run dev",
+    "player:diag:keyboard": "pnpm --filter @be-music/player run diag:keyboard",
+    "player:diag:gameplay-input": "pnpm --filter @be-music/player run diag:gameplay-input",
+    "player:sea": "pnpm --filter @be-music/player run build:sea",
+    "audio-renderer:sea": "pnpm --filter @be-music/audio-renderer run build:sea",
+    "editor": "pnpm --filter @be-music/editor run dev",
+    "audio-render": "pnpm --filter @be-music/audio-renderer run dev",
+    "parse": "pnpm --filter @be-music/parser run dev",
+    "stringify": "pnpm --filter @be-music/stringifier run dev"
   },
   "devDependencies": {
-    "@types/node": "^24.3.1",
-    "@typescript/native-preview": "7.0.0-dev.20260228.1",
+    "@types/node": "^25.5.0",
+    "@typescript/native-preview": "7.0.0-dev.20260322.1",
     "@vitest/coverage-v8": "^4.0.18",
-    "oxfmt": "^0.35.0",
-    "oxlint": "^1.50.0",
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
     "rimraf": "^6.0.1",
+    "tinybench": "^6.0.0",
+    "tsdown": "^0.21.7",
     "tsx": "^4.20.3",
-    "vite": "^7.1.7",
+    "vite": "^8.0.3",
     "vitest": "^4.0.18"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=25"
+  },
+  "packageManager": "pnpm@10.30.3",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

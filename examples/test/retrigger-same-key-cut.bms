@@ -1,6 +1,19 @@
+*---------------------- METADATA FIELD
+
 #TITLE Retrigger Same Key Cut
 #ARTIST Codex
 #BPM 120
+
+*---------------------- EXTENDED HEADER FIELD
+
+*---------------------- RESOURCES FIELD
+
 #WAV01 retrigger_a.wav
 
-#00011:01000100
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+#00011:0101
+
+*---------------------- CONTROL FLOW FIELD

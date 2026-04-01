@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { resolveCliPath } from '@be-music/utils';
 import { renderChartFile } from './index.ts';
 
@@ -11,12 +12,13 @@ interface CliArgs {
   baseDir?: string;
 }
 
-/**
- * 非同期でmain に対応する処理を実行します。
- * @returns 戻り値はありません。
- */
-async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+export async function main(): Promise<void> {
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
+    printUsage();
+    return;
+  }
+  const args = parseArgs(rawArgs);
   if (!args.input || !args.output) {
     printUsage();
     process.exitCode = 1;
@@ -43,11 +45,6 @@ async function main(): Promise<void> {
   );
 }
 
-/**
- * 入力データを解析し、内部処理で扱う形式に変換します。
- * @param rawArgs - CLI から渡される引数配列。
- * @returns 処理結果（CliArgs）。
- */
 function parseArgs(rawArgs: string[]): CliArgs {
   const args: CliArgs = {};
   const positional: string[] = [];
@@ -85,18 +82,16 @@ function parseArgs(rawArgs: string[]): CliArgs {
   return args;
 }
 
-/**
- * print Usage に対応する処理を実行します。
- * @returns 戻り値はありません。
- */
 function printUsage(): void {
   process.stdout.write(
     [
       'Usage: bms-audio-render <input.(bms|bmson|json)> <output.(wav|aiff)> [options]',
       '',
-      'Options:',
+      'Essential options:',
       '  --sample-rate, -r <hz>   Output sample rate (default: 44100)',
       '  --tail <seconds>          Tail silence duration (default: 2)',
+      '',
+      'Advanced options:',
       '  --base-dir <path>         Base directory to resolve audio samples',
       '  --normalize               Enable peak normalization (default)',
       '  --no-normalize            Disable normalization',
@@ -104,4 +99,28 @@ function printUsage(): void {
   );
 }
 
-void main();
+function isCliEntryPoint(): boolean {
+  const entry = process.argv[1];
+  if (!entry) {
+    return false;
+  }
+
+  try {
+    const moduleUrl = (import.meta as { url?: unknown }).url;
+    if (typeof moduleUrl === 'string' && moduleUrl.length > 0) {
+      return resolve(entry) === fileURLToPath(moduleUrl);
+    }
+  } catch {
+    // SEA/CJS bundles may not provide import.meta.url.
+  }
+
+  return resolve(entry) === resolve(process.execPath);
+}
+
+if (isCliEntryPoint()) {
+  void main().catch((error) => {
+    const message = error instanceof Error && error.message ? error.message : String(error);
+    process.stderr.write(`${message}\n`);
+    process.exit(1);
+  });
+}
