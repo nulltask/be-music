@@ -44,6 +44,7 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
     bundleBanner: SEA_WORKER_BANNER,
     aliases: {
       '@be-music/audio-renderer': resolve(repositoryDir, 'packages/audio-renderer/src/index.ts'),
+      '@be-music/chart': resolve(repositoryDir, 'packages/chart/src/index.ts'),
       '@be-music/json': resolve(repositoryDir, 'packages/json/src/index.ts'),
       '@be-music/parser': resolve(repositoryDir, 'packages/parser/src/index.ts'),
       '@be-music/utils': resolve(repositoryDir, 'packages/utils/src/index.ts'),
@@ -54,6 +55,7 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
     outputBaseName: 'be-music-audio-render',
     bundleBanner: SEA_WORKER_BANNER,
     aliases: {
+      '@be-music/chart': resolve(repositoryDir, 'packages/chart/src/index.ts'),
       '@be-music/json': resolve(repositoryDir, 'packages/json/src/index.ts'),
       '@be-music/parser': resolve(repositoryDir, 'packages/parser/src/index.ts'),
       '@be-music/utils': resolve(repositoryDir, 'packages/utils/src/index.ts'),
