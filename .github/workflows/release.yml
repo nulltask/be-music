@@ -114,14 +114,17 @@ jobs:
 
     steps:
       - name: Download SEA archives
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run download "${{ github.run_id }}" --dir tmp/release-assets
+        uses: actions/download-artifact@v5
+        with:
+          pattern: sea-release-assets-*
+          merge-multiple: true
+          path: tmp/release-assets
 
       - name: Upload archives to GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
@@ -130,4 +133,4 @@ jobs:
             echo "No SEA archives found to upload." >&2
             exit 1
           fi
-          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
