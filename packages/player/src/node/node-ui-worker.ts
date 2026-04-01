@@ -129,6 +129,12 @@ async function bootstrap(): Promise<void> {
   }
 
   const useKittyGraphicsForBga = tui.usesKittyGraphicsForBga();
+  postLog('info', 'ui-worker.bga.render-mode', {
+    terminalImageProtocol: useKittyGraphicsForBga ? 'kitty' : 'none',
+    kittyGraphicsRequested: Boolean(initData.kittyGraphics),
+    kittyGraphicsSupported: supportsKittyGraphicsProtocol(process.env),
+    useKittyGraphicsForBga,
+  });
 
   const initialBgaSize = estimateBgaAnsiDisplaySize(initData.laneBindings);
   const bgaRenderer = await createBgaAnsiRenderer(initData.json, {
@@ -168,6 +174,9 @@ async function bootstrap(): Promise<void> {
 
   let renderThrottle: ReturnType<typeof createRenderThrottle> | undefined;
   let bgaStreamingScheduled = false;
+  let loggedFirstKittyImageReady = false;
+  let loggedFirstKittyImageMissing = false;
+  let loggedFirstAnsiFrameReady = false;
   const frameState = createUiWorkerFrameState({
     initialPaused: initData.initialPaused,
     initialHighSpeed: initData.highSpeed,
@@ -234,10 +243,36 @@ async function bootstrap(): Promise<void> {
       if (!latestFrame) {
         return;
       }
+      const bgaAnsiLines = useKittyGraphicsForBga ? undefined : bgaRenderer?.getAnsiLines(latestFrame.currentSeconds);
+      const bgaKittyImage = useKittyGraphicsForBga ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds) : undefined;
+      if (useKittyGraphicsForBga) {
+        if (bgaKittyImage && !loggedFirstKittyImageReady) {
+          loggedFirstKittyImageReady = true;
+          postLog('info', 'ui-worker.bga.kitty-image.ready', {
+            seconds: latestFrame.currentSeconds,
+            cellWidth: bgaKittyImage.cellWidth,
+            cellHeight: bgaKittyImage.cellHeight,
+            pixelWidth: bgaKittyImage.pixelWidth,
+            pixelHeight: bgaKittyImage.pixelHeight,
+          });
+        } else if (!bgaKittyImage && !loggedFirstKittyImageMissing) {
+          loggedFirstKittyImageMissing = true;
+          postLog('warn', 'ui-worker.bga.kitty-image.missing', {
+            seconds: latestFrame.currentSeconds,
+            hasBgaRenderer: Boolean(bgaRenderer),
+          });
+        }
+      } else if (bgaAnsiLines && bgaAnsiLines.length > 0 && !loggedFirstAnsiFrameReady) {
+        loggedFirstAnsiFrameReady = true;
+        postLog('info', 'ui-worker.bga.ansi-frame.ready', {
+          seconds: latestFrame.currentSeconds,
+          lineCount: bgaAnsiLines.length,
+        });
+      }
       tui.render({
         ...latestFrame,
-        bgaAnsiLines: useKittyGraphicsForBga ? undefined : bgaRenderer?.getAnsiLines(latestFrame.currentSeconds),
-        bgaKittyImage: useKittyGraphicsForBga ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds) : undefined,
+        bgaAnsiLines,
+        bgaKittyImage,
       });
       if (!firstFrameRendered) {
         firstFrameRendered = true;

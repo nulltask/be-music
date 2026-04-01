@@ -157,6 +157,7 @@ interface PlayLoadingScreenRenderState {
   initialized: boolean;
   stageFileDrawn: boolean;
   stageFileKittyVisible: boolean;
+  stageFileRenderLogged?: boolean;
   lastOutput?: string;
 }
 
@@ -774,8 +775,15 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   let resolvedHighSpeed = normalizeHighSpeedValue(args.highSpeed);
   const effectivePlayMode = resolveEffectivePlayModeFromCliArgs(args);
   let playLoadingStageFileImage: StageFileAnsiImage | undefined;
-  const useKittyGraphicsForStageFile =
-    args.kittyGraphics && Boolean(process.stdout.isTTY) && supportsKittyGraphicsProtocol(process.env);
+  const stageFileKittySupported = supportsKittyGraphicsProtocol(process.env);
+  const useKittyGraphicsForStageFile = args.kittyGraphics && Boolean(process.stdout.isTTY) && stageFileKittySupported;
+  logCli('info', 'play.loading.stagefile.mode', {
+    chartPath,
+    kittyGraphicsRequested: Boolean(args.kittyGraphics),
+    stdoutIsTTY: Boolean(process.stdout.isTTY),
+    kittyGraphicsSupported: stageFileKittySupported,
+    useKittyGraphicsForStageFile,
+  });
   const playLoadingScreenRenderState: PlayLoadingScreenRenderState = {
     initialized: false,
     stageFileDrawn: false,
@@ -823,6 +831,20 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
         width: stageFileDisplaySize.width,
         height: stageFileDisplaySize.height,
         signal: chartLoadingAbortCapture?.signal,
+      });
+      logCli('info', 'play.loading.stagefile.loaded', {
+        chartPath,
+        stageFile: json.metadata.stageFile.replaceAll('\\', '/'),
+        requestedWidth: stageFileDisplaySize.width,
+        requestedHeight: stageFileDisplaySize.height,
+        loaded: Boolean(playLoadingStageFileImage),
+        width: playLoadingStageFileImage?.width,
+        height: playLoadingStageFileImage?.height,
+        hasKittyImage: Boolean(playLoadingStageFileImage?.kittyImage),
+        kittyCellWidth: playLoadingStageFileImage?.kittyImage?.cellWidth,
+        kittyCellHeight: playLoadingStageFileImage?.kittyImage?.cellHeight,
+        kittyPixelWidth: playLoadingStageFileImage?.kittyImage?.pixelWidth,
+        kittyPixelHeight: playLoadingStageFileImage?.kittyImage?.pixelHeight,
       });
     }
     reportPlayLoadingProgress?.({
@@ -1890,6 +1912,7 @@ export function createPlayLoadingProgressScreenLines(
   options: {
     columns?: number;
     stageFileImage?: StageFileAnsiImage;
+    useKittyGraphics?: boolean;
   } = {},
 ): string[] {
   const columns = options.columns ?? 80;
@@ -1909,7 +1932,9 @@ export function createPlayLoadingProgressScreenLines(
   ];
   return rawLines.map((line, index) =>
     options.stageFileImage
-      ? stylePlayLoadingOverlayLineOnImage(line, lineWidth, index, options.stageFileImage)
+      ? options.useKittyGraphics === true && options.stageFileImage.kittyImage
+        ? stylePlayLoadingOverlayLineOnKittyImage(line, lineWidth, index, options.stageFileImage)
+        : stylePlayLoadingOverlayLineOnImage(line, lineWidth, index, options.stageFileImage)
       : stylePlayLoadingOverlayFallbackLine(line, lineWidth),
   );
 }
@@ -1928,6 +1953,7 @@ export function createPlayLoadingProgressScreenOutput(
   const overlayLines = createPlayLoadingProgressScreenLines(chartPath, progress, {
     columns: options.columns,
     stageFileImage: options.stageFileImage,
+    useKittyGraphics: options.useKittyGraphics,
   });
   const imageBlock = resolvePlayLoadingStageFileBlock(options.stageFileImage, {
     includeStageFileImage: options.includeStageFileImage,
@@ -1958,6 +1984,15 @@ function renderPlayLoadingProgress(
   });
   if (options.state.lastOutput === output) {
     return;
+  }
+  if (shouldRedrawStageFile && options.stageFileImage && !options.state.stageFileRenderLogged) {
+    logCli('info', 'play.loading.stagefile.render', {
+      useKittyGraphics: options.useKittyGraphics === true && options.stageFileImage.kittyImage !== undefined,
+      width: options.stageFileImage.width,
+      height: options.stageFileImage.height,
+      hasKittyImage: Boolean(options.stageFileImage.kittyImage),
+    });
+    options.state.stageFileRenderLogged = true;
   }
   process.stdout.write(output);
   options.state.initialized = true;
@@ -2001,6 +2036,7 @@ function clearPlayLoadingScreen(state: PlayLoadingScreenRenderState): void {
     process.stdout.write('\u001b[2J\u001b[H');
     state.initialized = false;
   }
+  state.stageFileRenderLogged = false;
 }
 
 function clearPlayLoadingStageFileImage(state: PlayLoadingScreenRenderState): void {
@@ -2038,6 +2074,45 @@ function stylePlayLoadingOverlayLineOnImage(
       currentStyle = nextStyle;
     }
     line += content[index];
+  }
+  if (currentStyle.length > 0) {
+    line += '\u001b[0m';
+  }
+  return line;
+}
+
+function stylePlayLoadingOverlayLineOnKittyImage(
+  text: string,
+  lineWidth: number,
+  rowIndex: number,
+  stageFileImage: StageFileAnsiImage,
+): string {
+  const content = truncateForDisplay(text, lineWidth).padEnd(lineWidth, ' ');
+  if (rowIndex >= stageFileImage.height) {
+    return truncateForDisplay(text, lineWidth);
+  }
+
+  let line = '';
+  let currentStyle = '';
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index] ?? ' ';
+    if (character === ' ') {
+      if (currentStyle.length > 0) {
+        line += '\u001b[0m';
+        currentStyle = '';
+      }
+      line += character;
+      continue;
+    }
+
+    const bg = getStageFilePixel(stageFileImage, rowIndex, index);
+    const fg = resolveOverlayTextColor(bg.r, bg.g, bg.b);
+    const nextStyle = `\u001b[38;2;${fg.r};${fg.g};${fg.b}m`;
+    if (nextStyle !== currentStyle) {
+      line += nextStyle;
+      currentStyle = nextStyle;
+    }
+    line += character;
   }
   if (currentStyle.length > 0) {
     line += '\u001b[0m';
