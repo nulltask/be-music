@@ -624,7 +624,7 @@ jobs:
             }
 
   sea:
-    name: SEA (${{ matrix.os }})
+    name: SEA
     needs: changes
     if: |
       (
@@ -635,15 +635,8 @@ jobs:
         needs.changes.outputs.sea_player_changed == 'true' ||
         needs.changes.outputs.sea_audio_renderer_changed == 'true'
       )
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -664,48 +657,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: Build player SEA executable
+      - name: Verify player SEA bundle
         if: needs.changes.outputs.sea_player_changed == 'true'
-        run: pnpm --filter @be-music/player run build:sea
+        run: pnpm exec tsx scripts/build-sea.ts --package player --bundle-only
 
-      - name: Build audio-renderer SEA executable
+      - name: Verify audio-renderer SEA bundle
         if: needs.changes.outputs.sea_audio_renderer_changed == 'true'
-        run: pnpm --filter @be-music/audio-renderer run build:sea
-
-      - name: Select player SEA binary path
-        id: sea-player-binary
-        if: needs.changes.outputs.sea_player_changed == 'true'
-        shell: bash
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            echo "path=packages/player/dist-sea/be-music-player.exe" >> "$GITHUB_OUTPUT"
-          else
-            echo "path=packages/player/dist-sea/be-music-player" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Select audio-renderer SEA binary path
-        id: sea-audio-renderer-binary
-        if: needs.changes.outputs.sea_audio_renderer_changed == 'true'
-        shell: bash
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            echo "path=packages/audio-renderer/dist-sea/be-music-audio-render.exe" >> "$GITHUB_OUTPUT"
-          else
-            echo "path=packages/audio-renderer/dist-sea/be-music-audio-render" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Upload player SEA artifact
-        if: needs.changes.outputs.sea_player_changed == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: be-music-player-${{ runner.os }}-${{ runner.arch }}
-          path: ${{ steps.sea-player-binary.outputs.path }}
-          if-no-files-found: error
-
-      - name: Upload audio-renderer SEA artifact
-        if: needs.changes.outputs.sea_audio_renderer_changed == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: be-music-audio-renderer-${{ runner.os }}-${{ runner.arch }}
-          path: ${{ steps.sea-audio-renderer-binary.outputs.path }}
-          if-no-files-found: error
+        run: pnpm exec tsx scripts/build-sea.ts --package audio-renderer --bundle-only
