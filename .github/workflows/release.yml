@@ -211,18 +211,22 @@ jobs:
           signing_dir="tmp/signing/macos"
           keychain_path="$RUNNER_TEMP/be-music-signing.keychain-db"
           keychain_password="$(openssl rand -hex 16)"
+          pkcs12_args=()
 
           mkdir -p "$asset_dir" "$signing_dir"
+          if openssl pkcs12 -help 2>&1 | grep -q -- ' -legacy '; then
+            pkcs12_args+=(-legacy)
+          fi
           printf '%s' "$MACOS_SIGNING_P12_BASE64" | base64 -D >"$signing_dir/self-signed.p12"
           openssl pkcs12 \
-            -legacy \
+            "${pkcs12_args[@]}" \
             -in "$signing_dir/self-signed.p12" \
             -clcerts \
             -nokeys \
             -passin "pass:$MACOS_SIGNING_P12_PASSWORD" |
             openssl x509 -out "$asset_dir/be-music-self-signed-macos-$tag.pem"
           openssl pkcs12 \
-            -legacy \
+            "${pkcs12_args[@]}" \
             -in "$signing_dir/self-signed.p12" \
             -nocerts \
             -nodes \
@@ -233,7 +237,7 @@ jobs:
             -in "$signing_dir/self-signed.key.pem" \
             -out "$signing_dir/self-signed.key.rsa"
           openssl pkcs12 \
-            -legacy \
+            "${pkcs12_args[@]}" \
             -in "$signing_dir/self-signed.p12" \
             -clcerts \
             -nokeys \
