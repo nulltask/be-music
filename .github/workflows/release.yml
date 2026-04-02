@@ -159,22 +159,13 @@ jobs:
           if (-not $certificate) {
             throw 'Failed to import the Windows signing certificate.'
           }
+          if (-not $certificate.HasPrivateKey) {
+            throw 'The imported Windows signing certificate does not include a private key.'
+          }
 
           Export-Certificate -Cert $certificate -FilePath $cerPath -Type CERT | Out-Null
           Import-Certificate -FilePath $cerPath -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
           Import-Certificate -FilePath $cerPath -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher' | Out-Null
-
-          $signTool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
-          if (-not $signTool) {
-            $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-              Where-Object { $_.FullName -like '*\x64\signtool.exe' } |
-              Sort-Object FullName -Descending |
-              Select-Object -First 1 -ExpandProperty FullName
-          }
-
-          if (-not $signTool) {
-            throw 'signtool.exe was not found on the GitHub runner.'
-          }
 
           $files = @(
             'packages/player/dist-sea/be-music-player.exe',
@@ -182,14 +173,14 @@ jobs:
           )
 
           foreach ($file in $files) {
-            & $signTool sign /fd SHA256 /f $pfxPath /p $env:WINDOWS_SIGNING_PFX_PASSWORD $file
-            if ($LASTEXITCODE -ne 0) {
-              throw "Failed to sign $file"
+            $signature = Set-AuthenticodeSignature -FilePath $file -Certificate $certificate -HashAlgorithm SHA256
+            if ($signature.Status -ne 'Valid') {
+              throw "Failed to sign $file: $($signature.Status) $($signature.StatusMessage)"
             }
 
-            & $signTool verify /pa /v $file
-            if ($LASTEXITCODE -ne 0) {
-              throw "Failed to verify the embedded signature for $file"
+            $verification = Get-AuthenticodeSignature -FilePath $file
+            if ($verification.Status -ne 'Valid') {
+              throw "Failed to verify the embedded signature for $file: $($verification.Status) $($verification.StatusMessage)"
             }
           }
 
