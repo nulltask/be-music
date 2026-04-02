@@ -75,5 +75,5 @@
   },
   "oxc.fmt.configPath": ".oxfmtrc.json",
   "terminal.integrated.enableKittyKeyboardProtocol": true,
-  "typescript.experimental.useTsgo": true
+  "js/ts.experimental.useTsgo": true
 }

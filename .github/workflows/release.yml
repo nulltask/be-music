@@ -1,17 +1,88 @@
-name: Release Assets
+name: Release
 
 on:
-  release:
+  pull_request:
+    branches:
+      - main
     types:
-      - published
+      - closed
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to create or update
+        required: true
+        type: string
+      release_target:
+        description: Commit SHA or ref to build from
+        required: true
+        type: string
+      release_notes:
+        description: Release notes body
+        required: false
+        default: ''
+        type: string
 
 permissions:
   actions: read
   contents: write
 
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.event.pull_request.merge_commit_sha || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
+  prepare:
+    name: Prepare Release
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'devel')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_tag: ${{ steps.release_metadata.outputs.release_tag }}
+      release_target: ${{ steps.release_metadata.outputs.release_target }}
+      release_notes: ${{ steps.release_metadata.outputs.release_notes }}
+
+    steps:
+      - name: Checkout release target
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_target || github.event.pull_request.merge_commit_sha }}
+
+      - name: Setup Node.js
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+
+      - name: Resolve release metadata
+        id: release_metadata
+        shell: bash
+        env:
+          MANUAL_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+          MANUAL_RELEASE_TARGET: ${{ github.event.inputs.release_target }}
+          MANUAL_RELEASE_NOTES: ${{ github.event.inputs.release_notes }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "release_tag=$MANUAL_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+            echo "release_target=$MANUAL_RELEASE_TARGET" >> "$GITHUB_OUTPUT"
+            {
+              echo 'release_notes<<EOF'
+              printf '%s\n' "$MANUAL_RELEASE_NOTES"
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "release_tag=$(node -p 'require("./package.json").version' | tr -d '\n')" >> "$GITHUB_OUTPUT"
+            echo "release_target=${{ github.event.pull_request.merge_commit_sha }}" >> "$GITHUB_OUTPUT"
+            {
+              echo 'release_notes<<EOF'
+              echo ''
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          fi
+
   sea:
     name: SEA Release (${{ matrix.os }})
+    needs: prepare
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -23,10 +94,10 @@ jobs:
           - windows-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout merge commit
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ needs.prepare.outputs.release_target }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -63,12 +134,92 @@ jobs:
       - name: Build audio-renderer SEA executable
         run: pnpm --filter @be-music/audio-renderer run build:sea
 
+      - name: Sign macOS SEA executables
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_SIGNING_P12_BASE64: ${{ secrets.MACOS_SIGNING_P12_BASE64 }}
+          MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MACOS_SIGNING_P12_BASE64:-}" ] || [ -z "${MACOS_SIGNING_P12_PASSWORD:-}" ]; then
+            echo "MACOS_SIGNING_P12_BASE64 and MACOS_SIGNING_P12_PASSWORD secrets must be configured for release signing." >&2
+            exit 1
+          fi
+
+          tag="${{ needs.prepare.outputs.release_tag }}"
+          asset_dir="tmp/release-assets"
+          signing_dir="tmp/signing/macos"
+          keychain_path="$RUNNER_TEMP/be-music-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 16)"
+          pkcs12_legacy_flag=''
+          rsa_traditional_cmd=''
+
+          mkdir -p "$asset_dir" "$signing_dir"
+          if openssl pkcs12 -help 2>&1 | grep -q -- ' -legacy '; then
+            pkcs12_legacy_flag='-legacy'
+          fi
+          if openssl pkey -help 2>&1 | grep -q -- ' -traditional '; then
+            rsa_traditional_cmd='openssl pkey -traditional'
+          elif openssl rsa -help 2>&1 | grep -q -- ' -traditional '; then
+            rsa_traditional_cmd='openssl rsa -traditional'
+          else
+            echo "The available OpenSSL build cannot export a traditional RSA key for macOS signing." >&2
+            exit 1
+          fi
+          printf '%s' "$MACOS_SIGNING_P12_BASE64" | base64 -D >"$signing_dir/self-signed.p12"
+          openssl pkcs12 \
+            ${pkcs12_legacy_flag:+$pkcs12_legacy_flag} \
+            -in "$signing_dir/self-signed.p12" \
+            -clcerts \
+            -nokeys \
+            -passin "pass:$MACOS_SIGNING_P12_PASSWORD" |
+            openssl x509 -out "$asset_dir/be-music-self-signed-macos-$tag.pem"
+          openssl pkcs12 \
+            ${pkcs12_legacy_flag:+$pkcs12_legacy_flag} \
+            -in "$signing_dir/self-signed.p12" \
+            -nocerts \
+            -nodes \
+            -out "$signing_dir/self-signed.key.pem" \
+            -passin "pass:$MACOS_SIGNING_P12_PASSWORD"
+          $rsa_traditional_cmd \
+            -in "$signing_dir/self-signed.key.pem" \
+            -out "$signing_dir/self-signed.key.rsa"
+          openssl pkcs12 \
+            ${pkcs12_legacy_flag:+$pkcs12_legacy_flag} \
+            -in "$signing_dir/self-signed.p12" \
+            -clcerts \
+            -nokeys \
+            -out "$signing_dir/self-signed.cert.pem" \
+            -passin "pass:$MACOS_SIGNING_P12_PASSWORD"
+
+          certtool i "$signing_dir/self-signed.cert.pem" k="$keychain_path" r="$signing_dir/self-signed.key.rsa" c p="$keychain_password" >/dev/null
+          security list-keychains -d user -s "$keychain_path"
+          security default-keychain -d user -s "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+
+          identity="$(security find-certificate -a -Z "$keychain_path" | awk '/SHA-1 hash:/ { print $3; exit }')"
+          if [ -z "$identity" ]; then
+            echo "Failed to find the imported macOS signing certificate." >&2
+            exit 1
+          fi
+
+          files=(
+            packages/player/dist-sea/be-music-player
+            packages/audio-renderer/dist-sea/be-music-audio-render
+          )
+
+          for file in "${files[@]}"; do
+            codesign --force --sign "$identity" --keychain "$keychain_path" "$file"
+            codesign --verify --strict --verbose=2 "$file"
+          done
+
       - name: Package SEA archives (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
-          tag="${{ github.event.release.tag_name }}"
+          tag="${{ needs.prepare.outputs.release_tag }}"
           suffix="${{ steps.meta.outputs.archive_suffix }}"
 
           mkdir -p tmp/release-assets/player tmp/release-assets/audio-renderer
@@ -91,43 +242,131 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $tag = '${{ github.event.release.tag_name }}'
-          $suffix = '${{ steps.meta.outputs.archive_suffix }}'
           $assetDir = 'tmp/release-assets'
 
           New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
-          Compress-Archive -Path 'packages/player/dist-sea/be-music-player.exe' -DestinationPath "$assetDir/be-music-player-$tag-$suffix.zip" -CompressionLevel Optimal -Force
-          Compress-Archive -Path 'packages/audio-renderer/dist-sea/be-music-audio-render.exe' -DestinationPath "$assetDir/be-music-audio-render-$tag-$suffix.zip" -CompressionLevel Optimal -Force
+          Copy-Item 'packages/player/dist-sea/be-music-player.exe' "$assetDir/be-music-player.exe"
+          Copy-Item 'packages/audio-renderer/dist-sea/be-music-audio-render.exe' "$assetDir/be-music-audio-render.exe"
 
       - name: Upload SEA archives
         uses: actions/upload-artifact@v7
         with:
           name: sea-release-assets-${{ steps.meta.outputs.archive_suffix }}
-          path: tmp/release-assets/*.zip
+          path: tmp/release-assets/*
           if-no-files-found: error
 
-  upload:
-    name: Upload Release Assets
-    needs: sea
+  publish:
+    name: Publish Release
+    needs:
+      - prepare
+      - sea
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
       - name: Download SEA archives
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run download "${{ github.run_id }}" --dir tmp/release-assets
+        uses: actions/download-artifact@v5
+        with:
+          pattern: sea-release-assets-*
+          merge-multiple: true
+          path: tmp/release-assets
 
-      - name: Upload archives to GitHub Release
+      - name: Sign and package Windows SEA archives
+        shell: bash
+        env:
+          WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WINDOWS_SIGNING_PFX_BASE64:-}" ] || [ -z "${WINDOWS_SIGNING_PFX_PASSWORD:-}" ]; then
+            echo "WINDOWS_SIGNING_PFX_BASE64 and WINDOWS_SIGNING_PFX_PASSWORD secrets must be configured for release signing." >&2
+            exit 1
+          fi
+          if [ ! -f tmp/release-assets/be-music-player.exe ] || [ ! -f tmp/release-assets/be-music-audio-render.exe ]; then
+            echo "Unsigned Windows SEA executables are missing from tmp/release-assets." >&2
+            exit 1
+          fi
+
+          sudo apt-get update
+          sudo apt-get install -y osslsigncode
+
+          signing_dir="tmp/signing/windows"
+          mkdir -p "$signing_dir" "$signing_dir/player" "$signing_dir/audio-renderer"
+
+          printf '%s' "$WINDOWS_SIGNING_PFX_BASE64" | base64 -d >"$signing_dir/self-signed.pfx"
+          openssl pkcs12 \
+            -in "$signing_dir/self-signed.pfx" \
+            -clcerts \
+            -nokeys \
+            -passin "pass:$WINDOWS_SIGNING_PFX_PASSWORD" |
+            openssl x509 -outform DER -out "tmp/release-assets/be-music-self-signed-windows-$RELEASE_TAG.cer"
+
+          osslsigncode sign \
+            -pkcs12 "$signing_dir/self-signed.pfx" \
+            -pass "$WINDOWS_SIGNING_PFX_PASSWORD" \
+            -h sha256 \
+            -in tmp/release-assets/be-music-player.exe \
+            -out "$signing_dir/player/be-music-player.exe"
+          osslsigncode sign \
+            -pkcs12 "$signing_dir/self-signed.pfx" \
+            -pass "$WINDOWS_SIGNING_PFX_PASSWORD" \
+            -h sha256 \
+            -in tmp/release-assets/be-music-audio-render.exe \
+            -out "$signing_dir/audio-renderer/be-music-audio-render.exe"
+
+          (
+            cd "$signing_dir/player"
+            zip -9 -q "../../../release-assets/be-music-player-$RELEASE_TAG-windows-x64.zip" be-music-player.exe
+          )
+
+          (
+            cd "$signing_dir/audio-renderer"
+            zip -9 -q "../../../release-assets/be-music-audio-render-$RELEASE_TAG-windows-x64.zip" be-music-audio-render.exe
+          )
+
+          rm -f tmp/release-assets/be-music-player.exe tmp/release-assets/be-music-audio-render.exe
+
+      - name: Create or update GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          RELEASE_TARGET: ${{ needs.prepare.outputs.release_target }}
+          RELEASE_NOTES: ${{ needs.prepare.outputs.release_notes }}
         run: |
           set -euo pipefail
-          mapfile -t assets < <(find tmp/release-assets -type f -name '*.zip' | sort)
+          mapfile -t assets < <(find tmp/release-assets -maxdepth 1 -type f | sort)
           if [ "${#assets[@]}" -eq 0 ]; then
-            echo "No SEA archives found to upload." >&2
+            echo "No release assets found to upload." >&2
             exit 1
           fi
-          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+
+          if ! printf '%s\n' "${assets[@]}" | grep -q '\.zip$'; then
+            echo "SEA archives are missing from tmp/release-assets." >&2
+            exit 1
+          fi
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            if [ -n "$RELEASE_NOTES" ]; then
+              gh release edit "$RELEASE_TAG" --notes "$RELEASE_NOTES" --repo "$GITHUB_REPOSITORY"
+            fi
+          else
+            create_args=(
+              "$RELEASE_TAG"
+              "${assets[@]}"
+              --repo "$GITHUB_REPOSITORY"
+              --target "$RELEASE_TARGET"
+              --title "$RELEASE_TAG"
+            )
+
+            if [ -n "$RELEASE_NOTES" ]; then
+              create_args+=(--notes "$RELEASE_NOTES")
+            else
+              create_args+=(--generate-notes)
+            fi
+
+            gh release create "${create_args[@]}"
+          fi

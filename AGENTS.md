@@ -7,6 +7,11 @@
 - Keep one logical change per commit when possible.
 - For documentation-only updates, append `[ci skip]` at the end of the commit message.
 
+# Pull Request Rules
+
+- Do not prefix pull request titles with `[codex]`.
+- Use plain, descriptive pull request titles.
+
 # Benchmark Rules
 
 - When exported functions are added or removed, update benchmarks accordingly (add or delete benchmark cases).
