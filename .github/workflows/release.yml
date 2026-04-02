@@ -134,56 +134,6 @@ jobs:
       - name: Build audio-renderer SEA executable
         run: pnpm --filter @be-music/audio-renderer run build:sea
 
-      - name: Sign Windows SEA executables
-        if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
-          WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_PFX_PASSWORD)) {
-            throw 'WINDOWS_SIGNING_PFX_BASE64 and WINDOWS_SIGNING_PFX_PASSWORD secrets must be configured for release signing.'
-          }
-
-          $tag = '${{ needs.prepare.outputs.release_tag }}'
-          $assetDir = 'tmp/release-assets'
-          $signingDir = 'tmp/signing/windows'
-          $pfxPath = Join-Path $signingDir 'be-music-self-signed-windows.pfx'
-          $cerPath = Join-Path $assetDir "be-music-self-signed-windows-$tag.cer"
-
-          New-Item -ItemType Directory -Force -Path $assetDir, $signingDir | Out-Null
-          [System.IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_PFX_BASE64))
-
-          $securePassword = ConvertTo-SecureString -String $env:WINDOWS_SIGNING_PFX_PASSWORD -AsPlainText -Force
-          $certificate = Import-PfxCertificate -FilePath $pfxPath -Password $securePassword -CertStoreLocation 'Cert:\CurrentUser\My'
-          if (-not $certificate) {
-            throw 'Failed to import the Windows signing certificate.'
-          }
-          if (-not $certificate.HasPrivateKey) {
-            throw 'The imported Windows signing certificate does not include a private key.'
-          }
-
-          Export-Certificate -Cert $certificate -FilePath $cerPath -Type CERT | Out-Null
-          Import-Certificate -FilePath $cerPath -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
-          Import-Certificate -FilePath $cerPath -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher' | Out-Null
-
-          $files = @(
-            'packages/player/dist-sea/be-music-player.exe',
-            'packages/audio-renderer/dist-sea/be-music-audio-render.exe'
-          )
-
-          foreach ($file in $files) {
-            $signature = Set-AuthenticodeSignature -FilePath $file -Certificate $certificate -HashAlgorithm SHA256
-            if ($signature.Status -ne 'Valid') {
-              throw "Failed to sign ${file}: $($signature.Status) $($signature.StatusMessage)"
-            }
-
-            $verification = Get-AuthenticodeSignature -FilePath $file
-            if ($verification.Status -ne 'Valid') {
-              throw "Failed to verify the embedded signature for ${file}: $($verification.Status) $($verification.StatusMessage)"
-            }
-          }
-
       - name: Sign macOS SEA executables
         if: runner.os == 'macOS'
         shell: bash
@@ -292,13 +242,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $tag = '${{ needs.prepare.outputs.release_tag }}'
-          $suffix = '${{ steps.meta.outputs.archive_suffix }}'
           $assetDir = 'tmp/release-assets'
 
           New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
-          Compress-Archive -Path 'packages/player/dist-sea/be-music-player.exe' -DestinationPath "$assetDir/be-music-player-$tag-$suffix.zip" -CompressionLevel Optimal -Force
-          Compress-Archive -Path 'packages/audio-renderer/dist-sea/be-music-audio-render.exe' -DestinationPath "$assetDir/be-music-audio-render-$tag-$suffix.zip" -CompressionLevel Optimal -Force
+          Copy-Item 'packages/player/dist-sea/be-music-player.exe' "$assetDir/be-music-player.exe"
+          Copy-Item 'packages/audio-renderer/dist-sea/be-music-audio-render.exe' "$assetDir/be-music-audio-render.exe"
 
       - name: Upload SEA archives
         uses: actions/upload-artifact@v7
@@ -322,6 +270,62 @@ jobs:
           pattern: sea-release-assets-*
           merge-multiple: true
           path: tmp/release-assets
+
+      - name: Sign and package Windows SEA archives
+        shell: bash
+        env:
+          WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WINDOWS_SIGNING_PFX_BASE64:-}" ] || [ -z "${WINDOWS_SIGNING_PFX_PASSWORD:-}" ]; then
+            echo "WINDOWS_SIGNING_PFX_BASE64 and WINDOWS_SIGNING_PFX_PASSWORD secrets must be configured for release signing." >&2
+            exit 1
+          fi
+          if [ ! -f tmp/release-assets/be-music-player.exe ] || [ ! -f tmp/release-assets/be-music-audio-render.exe ]; then
+            echo "Unsigned Windows SEA executables are missing from tmp/release-assets." >&2
+            exit 1
+          fi
+
+          sudo apt-get update
+          sudo apt-get install -y osslsigncode
+
+          signing_dir="tmp/signing/windows"
+          mkdir -p "$signing_dir" "$signing_dir/player" "$signing_dir/audio-renderer"
+
+          printf '%s' "$WINDOWS_SIGNING_PFX_BASE64" | base64 -d >"$signing_dir/self-signed.pfx"
+          openssl pkcs12 \
+            -in "$signing_dir/self-signed.pfx" \
+            -clcerts \
+            -nokeys \
+            -passin "pass:$WINDOWS_SIGNING_PFX_PASSWORD" |
+            openssl x509 -outform DER -out "tmp/release-assets/be-music-self-signed-windows-$RELEASE_TAG.cer"
+
+          osslsigncode sign \
+            -pkcs12 "$signing_dir/self-signed.pfx" \
+            -pass "$WINDOWS_SIGNING_PFX_PASSWORD" \
+            -h sha256 \
+            -in tmp/release-assets/be-music-player.exe \
+            -out "$signing_dir/player/be-music-player.exe"
+          osslsigncode sign \
+            -pkcs12 "$signing_dir/self-signed.pfx" \
+            -pass "$WINDOWS_SIGNING_PFX_PASSWORD" \
+            -h sha256 \
+            -in tmp/release-assets/be-music-audio-render.exe \
+            -out "$signing_dir/audio-renderer/be-music-audio-render.exe"
+
+          (
+            cd "$signing_dir/player"
+            zip -9 -q "../../../tmp/release-assets/be-music-player-$RELEASE_TAG-windows-x64.zip" be-music-player.exe
+          )
+
+          (
+            cd "$signing_dir/audio-renderer"
+            zip -9 -q "../../../tmp/release-assets/be-music-audio-render-$RELEASE_TAG-windows-x64.zip" be-music-audio-render.exe
+          )
+
+          rm -f tmp/release-assets/be-music-player.exe tmp/release-assets/be-music-audio-render.exe
 
       - name: Create or update GitHub Release
         shell: bash
