@@ -97,33 +97,32 @@ jobs:
       - name: Build audio-renderer SEA executable
         run: pnpm --filter @be-music/audio-renderer run build:sea
 
-      - name: Prepare Windows self-signed certificate
-        id: windows_signing
+      - name: Sign Windows SEA executables
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_PFX_PASSWORD)) {
+            throw 'WINDOWS_SIGNING_PFX_BASE64 and WINDOWS_SIGNING_PFX_PASSWORD secrets must be configured for release signing.'
+          }
+
           $tag = '${{ needs.prepare.outputs.release_tag }}'
           $assetDir = 'tmp/release-assets'
           $signingDir = 'tmp/signing/windows'
-
-          New-Item -ItemType Directory -Force -Path $assetDir, $signingDir | Out-Null
-
-          $certificate = New-SelfSignedCertificate `
-            -Type CodeSigningCert `
-            -Subject 'CN=be-music Self-Signed Release' `
-            -CertStoreLocation 'Cert:\CurrentUser\My' `
-            -HashAlgorithm 'SHA256' `
-            -KeyAlgorithm 'RSA' `
-            -KeyLength 4096 `
-            -KeyExportPolicy Exportable `
-            -NotAfter (Get-Date).AddYears(10)
-
-          $password = [guid]::NewGuid().ToString('N')
-          $securePassword = ConvertTo-SecureString -String $password -AsPlainText -Force
           $pfxPath = Join-Path $signingDir 'be-music-self-signed-windows.pfx'
           $cerPath = Join-Path $assetDir "be-music-self-signed-windows-$tag.cer"
 
-          Export-PfxCertificate -Cert $certificate -FilePath $pfxPath -Password $securePassword | Out-Null
+          New-Item -ItemType Directory -Force -Path $assetDir, $signingDir | Out-Null
+          [System.IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_PFX_BASE64))
+
+          $securePassword = ConvertTo-SecureString -String $env:WINDOWS_SIGNING_PFX_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $pfxPath -Password $securePassword -CertStoreLocation 'Cert:\CurrentUser\My'
+          if (-not $certificate) {
+            throw 'Failed to import the Windows signing certificate.'
+          }
+
           Export-Certificate -Cert $certificate -FilePath $cerPath -Type CERT | Out-Null
           Import-Certificate -FilePath $cerPath -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
           Import-Certificate -FilePath $cerPath -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher' | Out-Null
@@ -140,24 +139,13 @@ jobs:
             throw 'signtool.exe was not found on the GitHub runner.'
           }
 
-          "pfx_path=$pfxPath" >> $env:GITHUB_OUTPUT
-          "pfx_password=$password" >> $env:GITHUB_OUTPUT
-          "signtool=$signTool" >> $env:GITHUB_OUTPUT
-
-      - name: Sign Windows SEA executables
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $signTool = '${{ steps.windows_signing.outputs.signtool }}'
-          $pfxPath = '${{ steps.windows_signing.outputs.pfx_path }}'
-          $password = '${{ steps.windows_signing.outputs.pfx_password }}'
           $files = @(
             'packages/player/dist-sea/be-music-player.exe',
             'packages/audio-renderer/dist-sea/be-music-audio-render.exe'
           )
 
           foreach ($file in $files) {
-            & $signTool sign /fd SHA256 /f $pfxPath /p $password $file
+            & $signTool sign /fd SHA256 /f $pfxPath /p $env:WINDOWS_SIGNING_PFX_PASSWORD $file
             if ($LASTEXITCODE -ne 0) {
               throw "Failed to sign $file"
             }
@@ -168,81 +156,53 @@ jobs:
             }
           }
 
-      - name: Prepare macOS self-signed certificate
-        id: macos_signing
+      - name: Sign macOS SEA executables
         if: runner.os == 'macOS'
         shell: bash
+        env:
+          MACOS_SIGNING_P12_BASE64: ${{ secrets.MACOS_SIGNING_P12_BASE64 }}
+          MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
         run: |
           set -euo pipefail
+          if [ -z "${MACOS_SIGNING_P12_BASE64:-}" ] || [ -z "${MACOS_SIGNING_P12_PASSWORD:-}" ]; then
+            echo "MACOS_SIGNING_P12_BASE64 and MACOS_SIGNING_P12_PASSWORD secrets must be configured for release signing." >&2
+            exit 1
+          fi
+
           tag="${{ needs.prepare.outputs.release_tag }}"
           asset_dir="tmp/release-assets"
           signing_dir="tmp/signing/macos"
-          certificate_name="be-music Self-Signed Release"
           keychain_path="$RUNNER_TEMP/be-music-signing.keychain-db"
           keychain_password="$(openssl rand -hex 16)"
-          p12_password="$(openssl rand -hex 16)"
 
           mkdir -p "$asset_dir" "$signing_dir"
-
-          cat >"$signing_dir/openssl.cnf" <<'EOF'
-          [req]
-          distinguished_name = req_distinguished_name
-          x509_extensions = v3_ca
-          prompt = no
-
-          [req_distinguished_name]
-          CN = be-music Self-Signed Release
-
-          [v3_ca]
-          basicConstraints = critical,CA:FALSE
-          keyUsage = critical,digitalSignature
-          extendedKeyUsage = codeSigning
-          subjectKeyIdentifier = hash
-          authorityKeyIdentifier = keyid:always,issuer
-          EOF
-
-          openssl req -x509 -newkey rsa:4096 \
-            -keyout "$signing_dir/self-signed.key.pem" \
-            -out "$signing_dir/self-signed.crt.pem" \
-            -days 3650 \
-            -sha256 \
-            -nodes \
-            -config "$signing_dir/openssl.cnf"
-
-          openssl pkcs12 -export \
-            -inkey "$signing_dir/self-signed.key.pem" \
-            -in "$signing_dir/self-signed.crt.pem" \
-            -out "$signing_dir/self-signed.p12" \
-            -name "$certificate_name" \
-            -passout "pass:$p12_password"
+          printf '%s' "$MACOS_SIGNING_P12_BASE64" | base64 -D >"$signing_dir/self-signed.p12"
+          openssl pkcs12 \
+            -in "$signing_dir/self-signed.p12" \
+            -clcerts \
+            -nokeys \
+            -passin "pass:$MACOS_SIGNING_P12_PASSWORD" |
+            openssl x509 -out "$asset_dir/be-music-self-signed-macos-$tag.pem"
 
           security create-keychain -p "$keychain_password" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
           security unlock-keychain -p "$keychain_password" "$keychain_path"
-          security import "$signing_dir/self-signed.p12" -k "$keychain_path" -P "$p12_password" -T /usr/bin/codesign -T /usr/bin/security
+          security import "$signing_dir/self-signed.p12" -k "$keychain_path" -P "$MACOS_SIGNING_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
 
-          cp "$signing_dir/self-signed.crt.pem" "$asset_dir/be-music-self-signed-macos-$tag.pem"
+          identity="$(security find-identity -v -p codesigning "$keychain_path" | awk '/"/ { print $2; exit }')"
+          if [ -z "$identity" ]; then
+            echo "Failed to find a code signing identity in the imported macOS certificate." >&2
+            exit 1
+          fi
 
-          {
-            echo "certificate_name=$certificate_name"
-            echo "keychain_path=$keychain_path"
-          } >>"$GITHUB_OUTPUT"
-
-      - name: Sign macOS SEA executables
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          certificate_name="${{ steps.macos_signing.outputs.certificate_name }}"
-          keychain_path="${{ steps.macos_signing.outputs.keychain_path }}"
           files=(
             packages/player/dist-sea/be-music-player
             packages/audio-renderer/dist-sea/be-music-audio-render
           )
 
           for file in "${files[@]}"; do
-            codesign --force --sign "$certificate_name" --keychain "$keychain_path" "$file"
+            codesign --force --sign "$identity" --keychain "$keychain_path" "$file"
             codesign --verify --strict --verbose=2 "$file"
           done
 
