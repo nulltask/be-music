@@ -175,12 +175,12 @@ jobs:
           foreach ($file in $files) {
             $signature = Set-AuthenticodeSignature -FilePath $file -Certificate $certificate -HashAlgorithm SHA256
             if ($signature.Status -ne 'Valid') {
-              throw "Failed to sign $file: $($signature.Status) $($signature.StatusMessage)"
+              throw "Failed to sign ${file}: $($signature.Status) $($signature.StatusMessage)"
             }
 
             $verification = Get-AuthenticodeSignature -FilePath $file
             if ($verification.Status -ne 'Valid') {
-              throw "Failed to verify the embedded signature for $file: $($verification.Status) $($verification.StatusMessage)"
+              throw "Failed to verify the embedded signature for ${file}: $($verification.Status) $($verification.StatusMessage)"
             }
           }
 
