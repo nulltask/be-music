@@ -178,21 +178,39 @@ jobs:
           mkdir -p "$asset_dir" "$signing_dir"
           printf '%s' "$MACOS_SIGNING_P12_BASE64" | base64 -D >"$signing_dir/self-signed.p12"
           openssl pkcs12 \
+            -legacy \
             -in "$signing_dir/self-signed.p12" \
             -clcerts \
             -nokeys \
             -passin "pass:$MACOS_SIGNING_P12_PASSWORD" |
             openssl x509 -out "$asset_dir/be-music-self-signed-macos-$tag.pem"
+          openssl pkcs12 \
+            -legacy \
+            -in "$signing_dir/self-signed.p12" \
+            -nocerts \
+            -nodes \
+            -out "$signing_dir/self-signed.key.pem" \
+            -passin "pass:$MACOS_SIGNING_P12_PASSWORD"
+          openssl rsa \
+            -traditional \
+            -in "$signing_dir/self-signed.key.pem" \
+            -out "$signing_dir/self-signed.key.rsa"
+          openssl pkcs12 \
+            -legacy \
+            -in "$signing_dir/self-signed.p12" \
+            -clcerts \
+            -nokeys \
+            -out "$signing_dir/self-signed.cert.pem" \
+            -passin "pass:$MACOS_SIGNING_P12_PASSWORD"
 
-          security create-keychain -p "$keychain_password" "$keychain_path"
-          security set-keychain-settings -lut 21600 "$keychain_path"
+          certtool i "$signing_dir/self-signed.cert.pem" k="$keychain_path" r="$signing_dir/self-signed.key.rsa" c p="$keychain_password" >/dev/null
+          security list-keychains -d user -s "$keychain_path"
+          security default-keychain -d user -s "$keychain_path"
           security unlock-keychain -p "$keychain_password" "$keychain_path"
-          security import "$signing_dir/self-signed.p12" -k "$keychain_path" -P "$MACOS_SIGNING_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
 
-          identity="$(security find-identity -v -p codesigning "$keychain_path" | awk '/"/ { print $2; exit }')"
+          identity="$(security find-certificate -a -Z "$keychain_path" | awk '/SHA-1 hash:/ { print $3; exit }')"
           if [ -z "$identity" ]; then
-            echo "Failed to find a code signing identity in the imported macOS certificate." >&2
+            echo "Failed to find the imported macOS signing certificate." >&2
             exit 1
           fi
 
