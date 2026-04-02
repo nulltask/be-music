@@ -317,12 +317,12 @@ jobs:
 
           (
             cd "$signing_dir/player"
-            zip -9 -q "../../../tmp/release-assets/be-music-player-$RELEASE_TAG-windows-x64.zip" be-music-player.exe
+            zip -9 -q "../../../release-assets/be-music-player-$RELEASE_TAG-windows-x64.zip" be-music-player.exe
           )
 
           (
             cd "$signing_dir/audio-renderer"
-            zip -9 -q "../../../tmp/release-assets/be-music-audio-render-$RELEASE_TAG-windows-x64.zip" be-music-audio-render.exe
+            zip -9 -q "../../../release-assets/be-music-audio-render-$RELEASE_TAG-windows-x64.zip" be-music-audio-render.exe
           )
 
           rm -f tmp/release-assets/be-music-player.exe tmp/release-assets/be-music-audio-render.exe
