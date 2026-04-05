@@ -1,7 +1,7 @@
 {
   "name": "@be-music/player",
   "version": "0.1.0",
-  "description": "CLI BMS player",
+  "description": "CLI BMS player with TUI, autoplay, and keyboard input",
   "license": "MIT",
   "bin": {
     "bms-player": "dist/cli.js"
