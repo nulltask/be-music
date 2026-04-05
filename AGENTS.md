@@ -12,6 +12,13 @@
 - Do not prefix pull request titles with `[codex]`.
 - Use plain, descriptive pull request titles.
 
+# Markdown Localization Rules
+
+- Keep English as the canonical `.md` document and Japanese as the `.ja.md` counterpart, except for `AGENTS.md`, which remains English only.
+- When a Japanese markdown document is translated, move the Japanese source content to the matching `.ja.md` file and keep the translated English content in the original `.md` path.
+- Add mutual links at the top of each pair: English files must link to the Japanese file, and Japanese files must link to the English file.
+- Keep links within Japanese markdown files pointing to other Japanese markdown files when those counterparts exist.
+
 # Benchmark Rules
 
 - When exported functions are added or removed, update benchmarks accordingly (add or delete benchmark cases).

@@ -1,38 +1,40 @@
-# Bemuse 実装仕様
+[Japanese version](./bemuse-spec.ja.md)
 
-この文書は、`packages/parser` / `packages/stringifier` / `packages/player` が Bemuse 形式（Music Server + assets package）をどう扱うかを定義します。
+# Bemuse implementation specifications
 
-## 一次参照
+This document defines how `packages/parser` / `packages/stringifier` / `packages/player` handles the Bemuse format (Music Server + assets package).
 
-- 公式ドキュメント: The `.bemuse` File Format  
+## Primary reference
+
+- Official documentation: The `.bemuse` File Format
   https://bemuse.ninja/project/docs/bemusepack/
-- 公式ドキュメント: Music Server  
+- Official Document: Music Server
   https://bemuse.ninja/project/docs/music-server/
-- 公式ドキュメント: Preparing BMS Song for Online Play in Bemuse [new method]  
+- Official Document: Preparing BMS Song for Online Play in Bemuse [new method]
   https://bemuse.ninja/project/docs/song-workshop/
-- 公式実装 (`*.bemuse` 書き出し): `bemuse-packer.js`  
+- Official implementation (`*.bemuse` export): `bemuse-packer.js`
   https://github.com/bemusic/bemuse/blob/master/packages/bemuse-tools/src/bemuse-packer.js
-- 公式実装 (`*.bemuse` 読み込み): `bemuse-package.ts`  
+- Official implementation (`*.bemuse` reading): `bemuse-package.ts`
   https://github.com/bemusic/bemuse/blob/master/bemuse/src/resources/bemuse-package.ts
-- 公式実装 (`bemusepack_url` 解決): `getSongResources.ts`  
+- Official implementation (`bemusepack_url` resolved): `getSongResources.ts`
   https://github.com/bemusic/bemuse/blob/master/bemuse/src/music-collection/getSongResources.ts
-- 公式型定義 (`index.json` / song metadata): `bemuse-types`  
+- Official type definition (`index.json` / song metadata): `bemuse-types`
   https://github.com/bemusic/bemuse/blob/master/packages/bemuse-types/index.d.ts
 
-## 対応状況の要約
+## Compliance status summary
 
-- 対応レベル: 未対応
-- 方針: bemuse を「譜面形式」ではなく「配布コンテナ」として扱う
-- 変換方針: `@be-music/json` の `sourceFormat` は `bms` / `bmson` を維持し、bemuse は入力解決レイヤで吸収する
+- Compatibility level: Not supported
+- Policy: Treat bemuse as a "distribution container" rather than a "musical score format"
+- Conversion policy: `sourceFormat` of `@be-music/json` maintains `bms` / `bmson`, bemuse is absorbed in the input resolution layer
 
-## 形式概要
+## Format overview
 
 - Music Server index: `index.json`
-- Song metadata: `bemuse-song.json`（または `index.json` 内の `songs[]`）
+- Song metadata: `bemuse-song.json` (or `songs[]` in `index.json`)
 - Asset index: `assets/metadata.json`
 - Asset chunk: `*.bemuse`
 
-## `assets/metadata.json` 構造
+## `assets/metadata.json` structure
 
 ```json
 {
@@ -50,84 +52,84 @@
 ```
 
 - `files[].ref = [index, start, end]`
-- `index`: `refs[index]` のチャンクを参照
-- `start`, `end`: チャンク payload に対するバイト範囲 (`[start, end)`)
-- 読み込み時はファイル名を大小文字非区別で解決する（公式実装は `toLowerCase()` マップ）
-- `refs[].size` は公式 docs では提示されるが、公式読み込み実装では必須ではない
+- `index`: refer to chunk of `refs[index]`
+- `start`, `end`: Byte range for chunk payload (`[start, end)`)
+- Resolve file names case-insensitively when loading (official implementation is `toLowerCase()` map)
+- `refs[].size` is provided in the official docs, but is not required in the official loading implementation
 
-## `*.bemuse` 構造
+## `*.bemuse` structure
 
-- 先頭 10 byte: ASCII `BEMUSEPACK`
-- 続く 4 byte: `metadataLength` (UInt32LE)
-- 続く `metadataLength` byte: メタデータ領域（現行ツール出力では空）
-- 残り: payload（連結バイナリ）
+- First 10 bytes: ASCII `BEMUSEPACK`
+- Next 4 bytes: `metadataLength` (UInt32LE)
+- followed by `metadataLength` byte: metadata area (empty in current tool output)
+- Remaining: payload (concatenated binary)
 
-抽出式:
+Extraction formula:
 
 - `payloadOffset = 14 + metadataLength`
 - `fileBytes = chunk.slice(payloadOffset + start, payloadOffset + end)`
 
-## `bemusepack_url` 解決ルール
+## `bemusepack_url` resolution rule
 
-- `bemusepack_url === undefined`: `assets/metadata.json` を使う
-- `bemusepack_url === null`: bemuse package を無効化し、実ファイルを直接読む
-- `bemusepack_url` が文字列: song base URL から相対解決して使う
+- `bemusepack_url === undefined`: Use `assets/metadata.json`
+- `bemusepack_url === null`: Disable bemuse package and read the actual file directly
+- `bemusepack_url` is a string: Relative resolution from song base URL is used.
 
-## 一次資料間の差分と採用ルール
+## Differences between primary sources and adoption rules
 
-| 論点 | 公式 docs | 公式コード | このリポジトリでの採用 |
+| Discussion points | Official docs | Official code | Adoption in this repository |
 | --- | --- | --- | --- |
-| ヘッダ 4byte | すべて `0x00` | `metadataLength` として読み取り | `UInt32LE metadataLength` として解釈し、0固定を前提にしない |
-| `refs[].size` | フィールドあり | 型上は未使用 | 任意項目として受理 |
-| 画像/動画ファイル | 明示なし | fallback パターンあり (`png/jpg/webm/mp4/m4v`) | keysound は package 優先、画像/動画は fallback を許可 |
+| Header 4byte | All `0x00` | Read as `metadataLength` | Interpret as `UInt32LE metadataLength` and do not assume 0 fixation |
+| `refs[].size` | Field included | Unused in type | Accepted as an optional item |
+| Image/video file | Not specified | With fallback pattern (`png/jpg/webm/mp4/m4v`) | keysound prioritizes package, image/video allows fallback |
 
-## 対応チェックリスト
+## Compatibility checklist
 
 ### parser (bemuse -> `@be-music/json`)
 
-- [ ] `index.json` (`MusicServerIndex`) を受理し、`songs[]` を列挙
-- [ ] `songs[].id` / `songs[].path` を保持し、`path` 末尾 `/` を正規化
-- [ ] `song.path` + `charts[].file` から譜面ファイル URL/パスを解決
-- [ ] `bemuse-song.json` 単体入力を受理
-- [ ] `?server=<url>` で `index.json` 省略時に自動補完して解決
-- [ ] `?server=<url/to/bemuse-song.json>` を single-song server として解決
-- [ ] `bemusepack_url` の `undefined/null/string` を規則通りに解決
-- [ ] `bemusepack_url` 文字列を `assetsBase` と `metadataFilename` に分解して解決
-- [ ] `assets/metadata.json` を読み、`files[].name` を大小文字非区別で参照
-- [ ] `*.bemuse` の `BEMUSEPACK` / `metadataLength` を検証
-- [ ] `ref = [index,start,end]` で payload 範囲を抽出
-- [ ] 参照不正（index 範囲外、`start > end`、payload 範囲外）をエラー化
-- [ ] `SongMetadata` の拡張項目（`replaygain`, `preview_start`, `preview_url`, `video_url`, `video_offset`, `readme`, `chart_names`）を保持
-- [ ] `charts[]` の付帯情報（`md5`, `noteCount`, `bpm`, `duration`, `keys`, `scratch`, `bga`）を保持
-- [ ] 取得した譜面文字列を既存 `parseBms` / `parseBmson` に委譲
+- [ ] Accept `index.json` (`MusicServerIndex`) and enumerate `songs[]`
+- [ ] Keep `songs[].id` / `songs[].path` and normalize `/` at the end of `path`
+- [ ] Resolve music file URL/path from `song.path` + `charts[].file`
+- [ ] `bemuse-song.json` Accept single input
+- [ ] `?server=<url>` resolves by auto-completion when `index.json` is omitted.
+- [ ] Resolve `?server=<url/to/bemuse-song.json>` as single-song server
+- [ ] Resolve `undefined/null/string` in `bemusepack_url` according to rules.
+- [ ] Solved by decomposing `bemusepack_url` string into `assetsBase` and `metadataFilename`
+- [ ] Read `assets/metadata.json` and refer to `files[].name` case-insensitively
+- [ ] Verify `BEMUSEPACK` / `metadataLength` of `*.bemuse`
+- [ ] Extract payload range with `ref = [index,start,end]`
+- [ ] Invalid reference (outside index range, `start > end`, out of payload range) is treated as an error.
+- [ ] Retains extended items of `SongMetadata` (`replaygain`, `preview_start`, `preview_url`, `video_url`, `video_offset`, `readme`, `chart_names`)
+- [ ] Retains additional information of `charts[]` (`md5`, `noteCount`, `bpm`, `duration`, `keys`, `scratch`, `bga`)
+- [ ] Delegate the obtained music score string to the existing `parseBms` / `parseBmson`
 
 ### stringifier (`@be-music/json` -> bemuse assets)
 
-- [ ] `resources.wav` で参照される音声ファイルを収集
-- [ ] チャンク分割の上限を `1,474,560` byte（公式実装の `max`）で適用
-- [ ] ファイルをサイズ降順で詰める
-- [ ] `files[].ref` の `[start,end)` を payload 連結順で生成
-- [ ] チャンク名を `<group>.<seq>.<md5-8>.bemuse` 形式で出力
-- [ ] `refs[].hash` を payload の MD5 で出力
-- [ ] `refs[].size` の出力方針（省略/出力）を実装方針どおり固定
-- [ ] `BEMUSEPACK` + `metadataLength` + payload でバイナリを書き出す
-- [ ] 非空 `metadata` ブロック (`metadataLength > 0`) の書き出し可否を方針化
-- [ ] `assets/metadata.json` を同時出力
-- [ ] `bemuse-song.json` / `index.json` の生成（single-song / multi-song server）をサポート
+- [ ] Collect audio files referenced in `resources.wav`
+- [ ] Apply the upper limit of chunk division to `1,474,560` byte (`max` in official implementation)
+- [ ] Pack files in descending size order
+- [ ] Generate `[start,end)` of `files[].ref` in payload concatenation order
+- [ ] Output chunk name in `<group>.<seq>.<md5-8>.bemuse` format
+- [ ] Output `refs[].hash` in MD5 of payload
+- [ ] Fixed the output policy (omission/output) of `refs[].size` as per the implementation policy.
+- [ ] Export binary with `BEMUSEPACK` + `metadataLength` + payload
+- [ ] Policy on whether or not non-empty `metadata` blocks (`metadataLength > 0`) can be written
+- [ ] Simultaneously output `assets/metadata.json`
+- [ ] Supports `bemuse-song.json` / `index.json` generation (single-song / multi-song server)
 
 ### player / audio-renderer
 
-- [ ] 入力として `index.json` / `bemuse-song.json` を受理
-- [ ] keysound は `assets/metadata.json` + `*.bemuse` から解決
-- [ ] package 未収録の画像/動画は base resources へ fallback
-- [ ] `refs[].hash` をキーにキャッシュ戦略を適用
-- [ ] 画像/動画 fallback の対象拡張子を `png|jpg|webm|mp4|m4v` に固定
-- [ ] `preview_url` 未指定時の既定値 `_bemuse_preview.mp3` を解決
-- [ ] `video_url` が `video_file` を上書きする規則を適用
-- [ ] `video_offset` を動画再生開始位置へ反映
+- [ ] Accept `index.json` / `bemuse-song.json` as input
+- [ ] keysound resolved from `assets/metadata.json` + `*.bemuse`
+- [ ] Images/videos that are not included in the package fallback to base resources
+- [ ] Apply caching strategy using `refs[].hash` as key
+- [ ] Fixed target extension of image/video fallback to `png|jpg|webm|mp4|m4v`
+- [ ] `preview_url` Resolved default value `_bemuse_preview.mp3` when not specified.
+- [ ] Apply rule that `video_url` overwrites `video_file`
+- [ ] Reflect `video_offset` to the video playback start position
 
-## MVP 受け入れ基準
+## MVP Acceptance Criteria
 
-- ローカルの 1 曲フォルダ（`bemuse-song.json` + `assets/*` + `.bms/.bmson`）を `parse` で読み込める
-- keysound を bemuse package から取り出して `player --auto` / `audio-render` で再生できる
-- 破損チャンク（magic 不正、範囲不正）で説明可能なエラーを返す
+- You can read a local single song folder (`bemuse-song.json` + `assets/*` + `.bms/.bmson`) with `parse`.
+- keysound can be extracted from bemuse package and played with `player --auto` / `audio-render`
+- Returns an explainable error with corrupted chunks (magic invalid, range invalid)

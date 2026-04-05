@@ -1,350 +1,352 @@
-# BMS 実装仕様
+[Japanese version](./bms-spec.ja.md)
 
-この文書は、`packages/parser` / `packages/stringifier` / `packages/player` が BMS をどう扱うかを定義します。
+# BMS implementation specification
 
-## 一次参照
+This document defines how `packages/parser` / `packages/stringifier` / `packages/player` handles BMS.
 
-- コマンド仕様 (日本語): https://hitkey.nekokan.dyndns.info/cmdsJP.htm
-- コマンド仕様 (英語): https://hitkey.nekokan.dyndns.info/cmds.htm
+## Primary References
+
+- Command specifications (Japanese): https://hitkey.nekokan.dyndns.info/cmdsJP.htm
+- Command specifications (English): https://hitkey.nekokan.dyndns.info/cmds.htm
 - BMS Format Specification (1998-11-26): http://bm98.yaneu.com/bm98/bmsformat.html
 - Bms:Spec (wiki.bms.ms, Wayback 2009-02-13): https://web.archive.org/web/20090213050609/http://wiki.bms.ms/Bms:Spec
 - Basic specification of BML (RDM): https://nvyu.net/rdm/rby_ex.php
 - STOP Sequence (`#STOPxx` / `#STP`): https://hitkey.nekokan.dyndns.info/exstop.htm
 - Extended BPM (`#BPMxx` / `#EXBPM`): https://hitkey.nekokan.dyndns.info/exbpm-object.htm
-- `#OPTION` / `#CHANGEOPTION` 仕様: https://hitkey.nekokan.dyndns.info/option.htm
-- Sonorous 提案拡張 (補助一次参照): https://hitkey.nekokan.dyndns.info/bmsexts-ja.htm
-- Bemuse BMS Extensions (補助一次参照): https://bemuse.ninja/project/docs/bms-extensions
-- beatoraja 楽曲製作者向け資料: https://github.com/exch-bms2/beatoraja/wiki/%E6%A5%BD%E6%9B%B2%E8%A3%BD%E4%BD%9C%E8%80%85%E5%90%91%E3%81%91%E8%B3%87%E6%96%99
+- `#OPTION` / `#CHANGEOPTION` Specification: https://hitkey.nekokan.dyndns.info/option.htm
+- Sonorous Proposal Extension (Supplementary Primary Reference): https://hitkey.nekokan.dyndns.info/bmsexts-ja.htm
+- Bemuse BMS Extensions (auxiliary primary reference): https://bemuse.ninja/project/docs/bms-extensions
+- beatoraja Materials for music producers: https://github.com/exch-bms2/beatoraja/wiki/%E6%A5%BD%E6%9B%B2%E8%A3%BD%E4%BD%9C%E8%80%85%E5%90%91%E3%81%91%E8%B3%87%E6%96%99
 
-## 参考資料
+## Reference materials
 
-- `bms benchmark` (実装比較): https://hitkey.nekokan.dyndns.info/bmsbench.shtml
-- `bmsplayer data` (互換性調査): https://hitkey.nekokan.dyndns.info/bmsplayer_data2010.shtml
-- Numuther: BMS Scroll ギミック解説（SCROLL/BPM/STOP 実例）: https://note.com/numuther/n/n57bf895e7969
+- `bms benchmark` (implementation comparison): https://hitkey.nekokan.dyndns.info/bmsbench.shtml
+- `bmsplayer data` (compatibility check): https://hitkey.nekokan.dyndns.info/bmsplayer_data2010.shtml
+- Numuther: BMS Scroll gimmick explanation (SCROLL/BPM/STOP example): https://note.com/numuther/n/n57bf895e7969
 
-## 対応状況の要約
+## Compliance Status Summary
 
-- 対応レベル: 部分対応
-- 方針: 仕様全域の完全再現ではなく、主要な譜面再生要素を優先して実装
+- Compatibility level: Partial compliance
+- Policy: Rather than fully reproducing the entire specification, prioritize implementation of major score playback elements
 
-## リビジョン追従情報
+## Revision tracking information
 
-- 監査起点: `78dfb931952e617518629627f84919a5b2deeeaf` (`feat: initial commit`)
-- 監査時点: `335200e` (`fix(player): formalize scroll compatibility policy and tests`)
-- 監査対象: `packages/parser` / `packages/player` / `packages/audio-renderer` / `packages/json` / `packages/stringifier` / `docs`
-- 監査対象コミット数 (no-merge): `135` (`feat=52`, `fix=44`, `refactor=22`, `perf=2`, `test=4`, `docs=9`, `chore=2`)
-- この文書は上記範囲の実装差分を反映する
+- Audit origin: `78dfb931952e617518629627f84919a5b2deeeaf` (`feat: initial commit`)
+- Audit point: `335200e` (`fix(player): formalize scroll compatibility policy and tests`)
+- Audit target: `packages/parser` / `packages/player` / `packages/audio-renderer` / `packages/json` / `packages/stringifier` / `docs`
+- Number of audited commits (no-merge): `135` (`feat=52`, `fix=44`, `refactor=22`, `perf=2`, `test=4`, `docs=9`, `chore=2`)
+- This document reflects implementation differences in the above range.
 
-## 対応 (構文受理)
+## Supported (syntax accepted)
 
-- [x] オブジェクトデータ行 `#mmmcc:data` を受理
-- [x] ヘッダ行 `#COMMAND value` を受理
-- [x] `#` で始まらない行を無視
-- [x] 行終端として `LF` を受理
-- [x] 行末 `CR` を除去することで `CRLF` を受理
-- [x] 末尾改行なしファイルでも EOF を 1 行終端として受理
-- [x] `CR` 単独改行を行終端として受理
-- [x] 未知ヘッダを `metadata.extras` に保持
-- [x] 既知/未知を問わず `#mmmcc` をイベントとして保持
+- [x] Accept object data line `#mmmcc:data`
+- [x] Accept header line `#COMMAND value`
+- [x] Ignore lines that do not start with `#`
+- [x] Accept `LF` as line terminator
+- [x] Accept `CRLF` by removing `CR` at the end of the line
+- [x] Accept EOF as end of line even in files without trailing newline
+- [x] `CR` Accept single newline as line end
+- [x] Keep unknown header in `metadata.extras`
+- [x] Keep `#mmmcc` as an event, whether known or unknown
 
-### 行終端
+### line end
 
-現実装の `parser` は、BMS テキストを `LF` / `CRLF` / `CR` のいずれでも区切ります。
-`CRLF` は 1 つの行終端として扱い、`CR` 単独改行も `LF` と同様に受理します。
+The actual `parser` separates the BMS text as either `LF` / `CRLF` / `CR`.
+`CRLF` is treated as a single line terminator, and `CR` single line breaks are accepted as well as `LF`.
 
-入力末尾に改行がなくても、EOF を最終行の終端として扱います。
-ただし `CRLF` と `LF` が混在するファイルに対する制御構文互換の厳密仕様は、後述の未対応項目のままです。
+Treats EOF as the end of the last line even if there is no newline at the end of the input.
+However, the exact specification of control syntax compatibility for files containing a mixture of `CRLF` and `LF` remains an unsupported item, which will be discussed later.
 
-## 対応 (意味解釈)
+## Supported Semantics
 
-- [x] メタヘッダ `#TITLE` を解釈
-- [x] メタヘッダ `#SUBTITLE` を解釈
-- [x] メタヘッダ `#ARTIST` を解釈
-- [x] メタヘッダ `#GENRE` を解釈
-- [x] メタヘッダ `#COMMENT` を解釈
-- [x] `#SUBARTIST` を `metadata.extras.SUBARTIST` として保持し、player の選曲画面 metadata に使用
-- [x] `#BANNER` を `metadata.extras.BANNER` として保持し、player の選曲画面 banner に使用
-- [x] メタヘッダ `#STAGEFILE` を解釈
-- [x] `#STAGEFILE` を選曲後の loading screen 専用画像として表示
-- [x] メタヘッダ `#PLAYLEVEL` を解釈
-- [x] player: BMS で `#PLAYLEVEL` 未指定時は表示用既定値 `3` を選曲画面・TUI・結果表示へ反映
-- [x] `#PLAYLEVEL 0` を保持
-- [x] 文字列 `#PLAYLEVEL` を保持
-- [x] メタヘッダ `#RANK` を解釈
-- [x] `#RANK 0-4` を判定難易度指定として保持
-- [x] メタヘッダ `#TOTAL` を解釈
-- [x] メタヘッダ `#DIFFICULTY` を解釈
-- [x] player: `#DIFFICULTY 1-5` を選曲一覧の表示・ソート・フィルタに使用
-- [x] メタヘッダ `#BPM` を解釈
-- [x] BMS で `#BPM` 未指定時は互換既定値 `130` を適用（IR 既定値も `130` に統一）
-- [x] リソースヘッダ `#WAVxx` を解釈
-- [x] リソースヘッダ `#BMPxx` を解釈
-- [x] リソースヘッダ `#BPMxx` を解釈
-- [x] リソースヘッダ `#STOPxx` を解釈
-- [x] リソースヘッダ `#TEXTxx` を解釈
-- [x] チャンネル `02` (小節長: `#mmm02:length`) を解釈
-- [x] チャンネル `03` (16進直値 BPM) を解釈
-- [x] チャンネル `08` (`#BPMxx` 参照 BPM) を解釈
-- [x] チャンネル `09` (`#STOPxx` 参照 STOP) を解釈
-- [x] チャンネル `01` (背景音) を解釈
-- [x] チャンネル `1x` (演奏) を解釈
-- [x] チャンネル `2x` (演奏) を解釈
-- [x] チャンネル `17` / `27` を FREE ZONE として解釈 (9KEY 以外)
-- [x] 9KEY 判定時はチャンネル `17` を通常レーンノートとして解釈
-- [x] `#PLAYER=1` は SINGLE メタ情報として保持し、レーン判定はチャンネル構成を優先
-- [x] `#PLAYER=2` (COUPLE) はメタ情報として保持し、現状は専用の 1P/2P 分離プレイを実装しない
-- [x] `#PLAYER=3` は `17` チャンネルが存在する場合のみ 9KEY 判定ヒントとして使用
-- [x] `#PLAYER=4` (BATTLE) はメタ情報として保持し、現状は専用の 2 人対戦プレイを実装しない
-- [x] チャンネル `D1-D9` (地雷) を解釈
-- [x] チャンネル `E1-E9` (地雷) を解釈
-- [x] MANUAL モードで地雷タイミング入力を `BAD` 判定に反映
-- [x] 地雷を `TOTAL` / `EX-SCORE` の対象ノート数から除外
-- [x] チャンネル `SC` を `#SCROLLxx` 参照イベントとして保持
-- [x] チャンネル `SC` を音声トリガー対象から除外
-- [x] チャンネル `SC` のスクロール速度を player 描画へ反映
-- [x] チャンネル `SP` を `#SPEEDxx` 参照イベントとして保持
-- [x] チャンネル `SP` を音声トリガー対象から除外
-- [x] チャンネル `SP` の視覚間隔補間を player 描画へ反映
-- [x] チャンネル `04` を BGA base として表示に使用
-- [x] チャンネル `07` を BGA layer として表示に使用
-- [x] チャンネル `0A` を BGA layer2 として表示に使用
-- [x] `04` / `07` / `0A` を合成表示（優先順位: `04` < `07` < `0A`）
-- [x] layer (`07`) で黒 (`#000000`) を透過色として扱う
-- [x] layer2 (`0A`) でも layer (`07`) と同じ透過ルールを適用
-- [x] BGA 画像を 256x256 キャンバス前提で扱う
-- [x] BGA 画像を通常は拡大縮小しない
-- [x] 256x256 未満の画像を X 軸中央 / Y 軸上詰めで配置
-- [x] `04` / `07` / `0A` で未定義 `#BMPxx` 参照時は 256x256 黒として扱う
-- [x] BGA 動画を描画で再生 (`mpeg1video` / `h264` / `mjpeg`, 音声は無視)
-- [x] 制御構文 `#RANDOM` を保持して実行時評価
-- [x] 制御構文 `#SETRANDOM` を保持して実行時評価
-- [x] 制御構文 `#ENDRANDOM` を保持して実行時評価
-- [x] 制御構文 `#IF` を保持して実行時評価
-- [x] 制御構文 `#ELSEIF` を保持して実行時評価
-- [x] 制御構文 `#ELSE` を保持して実行時評価
-- [x] 制御構文 `#ENDIF` を保持して実行時評価
-- [x] 制御構文 `#SWITCH` を保持して実行時評価
-- [x] 制御構文 `#SETSWITCH` を保持して実行時評価
-- [x] 制御構文 `#CASE` を保持して実行時評価
-- [x] 制御構文 `#DEF` を保持して実行時評価
-- [x] 制御構文 `#SKIP` を保持して実行時評価
-- [x] 制御構文 `#ENDSW` を保持して実行時評価
-- [x] 拡張ヘッダ `#PREVIEW` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#LNTYPE` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#LNMODE` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#LNOBJ` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#VOLWAV` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#DEFEXRANK` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#EXRANKxx` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#ARGBxx` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#PLAYER` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#PATH_WAV` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#BASEBPM` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#STP` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#OPTION` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#CHANGEOPTIONxx` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#WAVCMD` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#EXWAVxx` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#EXBMPxx` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#BGAxx` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#SCROLLxx` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#SPEEDxx` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#POORBGA` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#SWBGAxx` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#VIDEOFILE` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#MIDIFILE` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#MATERIALS` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#DIVIDEPROP` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#CHARSET` を `bms` 拡張領域へ保持
-- [x] 単一値ヘッダ・索引付きヘッダ・`#mmm02` の重複定義は EOF 側を採用
-- [x] `#STP` / `#LNOBJ` / 制御構文は重複行を宣言順で保持
-- [x] `#PREVIEW` を選曲画面プレビュー再生で優先的に使用
-- [x] `#VOLWAV` を player / audio-renderer の再生ゲインに反映
-- [x] `#xxx97` を BGM 側の動的音量変更として解釈
-- [x] `#xxx98` を playable/key 側の動的音量変更として解釈
-- [x] `#EXRANKxx` と `#xxxA0` を player の動的判定幅変更として解釈
-- [x] `#BPMxx` による LR2 100001倍 BPM 系ギミックを時刻解決でサポート
+- [x] Interpret meta header `#TITLE`
+- [x] Interpret meta header `#SUBTITLE`
+- [x] Interpret meta header `#ARTIST`
+- [x] Interpret meta header `#GENRE`
+- [x] Interpret meta header `#COMMENT`
+- [x] Keep `#SUBARTIST` as `metadata.extras.SUBARTIST` and use it for player's music selection screen metadata
+- [x] Keep `#BANNER` as `metadata.extras.BANNER` and use it for the player's song selection screen banner
+- [x] Interpret meta header `#STAGEFILE`
+- [x] Display `#STAGEFILE` as a loading screen exclusive image after song selection
+- [x] Interpret meta header `#PLAYLEVEL`
+- [x] player: When `#PLAYLEVEL` is not specified in BMS, the display default value `3` is reflected on the song selection screen, TUI, and result display.
+- [x] Keep `#PLAYLEVEL 0`
+- [x] Hold string `#PLAYLEVEL`
+- [x] Interpret meta header `#RANK`
+- [x] Keep `#RANK 0-4` as judgment difficulty level specification
+- [x] Interpret meta header `#TOTAL`
+- [x] Interpret meta header `#DIFFICULTY`
+- [x] player: Use `#DIFFICULTY 1-5` to display, sort, and filter the song selection list
+- [x] Interpret meta header `#BPM`
+- [x] When `#BPM` is not specified in BMS, the compatible default value `130` is applied (IR default value is also unified to `130`)
+- [x] Interpret resource header `#WAVxx`
+- [x] Interpret resource header `#BMPxx`
+- [x] Interpret resource header `#BPMxx`
+- [x] Interpret resource header `#STOPxx`
+- [x] Interpret resource header `#TEXTxx`
+- [x] Interpret channel `02` (bar length: `#mmm02:length`)
+- [x] Interpret channel `03` (hexadecimal direct value BPM)
+- [x] Interpret channel `08` (`#BPMxx` reference BPM)
+- [x] Interpret channel `09` (`#STOPxx` reference STOP)
+- [x] Interpret channel `01` (background sound)
+- [x] Interpret channel `1x` (play)
+- [x] Interpret channel `2x` (play)
+- [x] Interpret channels `17` / `27` as FREE ZONE (other than 9KEY)
+- [x] When judging 9KEY, channel `17` is interpreted as a normal lane note.
+- [x] `#PLAYER=1` is retained as SINGLE meta information, and lane determination prioritizes channel configuration.
+- [x] `#PLAYER=2` (COUPLE) is retained as meta information, and dedicated 1P/2P separation play is not currently implemented.
+- [x] `#PLAYER=3` is used as a 9KEY determination hint only when `17` channel exists
+- [x] `#PLAYER=4` (BATTLE) will be retained as meta information, and dedicated two-player competitive play will not be implemented at this time.
+- [x] Interpret channel `D1-D9` (mine)
+- [x] Interpret channel `E1-E9` (mine)
+- [x] Reflect mine timing input in `BAD` judgment in MANUAL mode
+- [x] Exclude landmines from the number of target notes for `TOTAL` / `EX-SCORE`
+- [x] Keep channel `SC` as `#SCROLLxx` reference event
+- [x] Exclude channel `SC` from audio triggering
+- [x] Reflect scroll speed of channel `SC` to player drawing
+- [x] Keep channel `SP` as `#SPEEDxx` reference event
+- [x] Exclude channel `SP` from audio triggering
+- [x] Reflect visual interval interpolation of channel `SP` to player drawing
+- [x] Use channel `04` as BGA base for display
+- [x] Channel `07` is used for display as BGA layer
+- [x] Use channel `0A` for display as BGA layer2
+- [x] Combine display of `04` / `07` / `0A` (priority: `04` < `07` < `0A`)
+- [x] Treat black (`#000000`) as a transparent color in layer (`07`)
+- [x] Apply the same transparency rules to layer2 (`0A`) as layer (`07`)
+- [x] Handle BGA images assuming a 256x256 canvas
+- [x] Do not normally scale BGA images
+- [x] Images smaller than 256x256 aligned on the center of the X axis / top aligned on the Y axis
+- [x] Undefined in `04` / `07` / `0A` Treated as 256x256 black when referencing `#BMPxx`
+- [x] Play BGA video by drawing (`mpeg1video` / `h264` / `mjpeg`, ignore audio)
+- [x] Preserve control construct `#RANDOM` and evaluate at runtime
+- [x] Preserve control construct `#SETRANDOM` and evaluate at runtime
+- [x] Preserve control construct `#ENDRANDOM` and evaluate at runtime
+- [x] Preserve control construct `#IF` and evaluate at runtime
+- [x] Preserve control construct `#ELSEIF` and evaluate at runtime
+- [x] Preserve control construct `#ELSE` and evaluate at runtime
+- [x] Preserve control construct `#ENDIF` and evaluate at runtime
+- [x] Preserve control construct `#SWITCH` and evaluate at runtime
+- [x] Preserve control construct `#SETSWITCH` and evaluate at runtime
+- [x] Preserve control construct `#CASE` and evaluate at runtime
+- [x] Preserve control construct `#DEF` and evaluate at runtime
+- [x] Preserve control construct `#SKIP` and evaluate at runtime
+- [x] Preserve control construct `#ENDSW` and evaluate at runtime
+- [x] Keep extension header `#PREVIEW` in `bms` extension area
+- [x] Keep extension header `#LNTYPE` in `bms` extension area
+- [x] Keep extension header `#LNMODE` in `bms` extension area
+- [x] Keep extension header `#LNOBJ` in `bms` extension area
+- [x] Keep extension header `#VOLWAV` in `bms` extension area
+- [x] Keep extension header `#DEFEXRANK` in `bms` extension area
+- [x] Keep extension header `#EXRANKxx` in `bms` extension area
+- [x] Keep extension header `#ARGBxx` in `bms` extension area
+- [x] Keep extension header `#PLAYER` in `bms` extension area
+- [x] Keep extension header `#PATH_WAV` in `bms` extension area
+- [x] Keep extension header `#BASEBPM` in `bms` extension area
+- [x] Keep extension header `#STP` in `bms` extension area
+- [x] Keep extension header `#OPTION` in `bms` extension area
+- [x] Keep extension header `#CHANGEOPTIONxx` in `bms` extension area
+- [x] Keep extension header `#WAVCMD` in `bms` extension area
+- [x] Keep extension header `#EXWAVxx` in `bms` extension area
+- [x] Keep extension header `#EXBMPxx` in `bms` extension area
+- [x] Keep extension header `#BGAxx` in `bms` extension area
+- [x] Keep extension header `#SCROLLxx` in `bms` extension area
+- [x] Keep extension header `#SPEEDxx` in `bms` extension area
+- [x] Keep extension header `#POORBGA` in `bms` extension area
+- [x] Keep extension header `#SWBGAxx` in `bms` extension area
+- [x] Keep extension header `#VIDEOFILE` in `bms` extension area
+- [x] Keep extension header `#MIDIFILE` in `bms` extension area
+- [x] Keep extension header `#MATERIALS` in `bms` extension area
+- [x] Keep extension header `#DIVIDEPROP` in `bms` extension area
+- [x] Keep extension header `#CHARSET` in `bms` extension area
+- [x] Adopt EOF side for single value header, indexed header, and duplicate definition of `#mmm02`
+- [x] `#STP` / `#LNOBJ` / Control constructs keep duplicate lines in declaration order
+- [x] `#PREVIEW` is used preferentially in song selection screen preview playback
+- [x] Reflect `#VOLWAV` to player / audio-renderer playback gain
+- [x] Interpret `#xxx97` as dynamic volume change on BGM side
+- [x] Interpret `#xxx98` as dynamic volume change on playable/key side
+- [x] Interpret `#EXRANKxx` and `#xxxA0` as dynamic decision width changes of player
+- [x] Supports LR2 100001x BPM gimmick by `#BPMxx` with time resolution
 
 ### `#VOLWAV`
 
-`parser` は `#VOLWAV` を非負の数値として `bms.volWav` に保持します。
-`stringifier` は `bms.volWav` が存在する場合、その値を `#VOLWAV n` としてそのまま出力します。
+`parser` holds `#VOLWAV` as a non-negative number in `bms.volWav`.
+`stringifier` outputs the value of `bms.volWav` as is if it exists, as `#VOLWAV n`.
 
-再生時とレンダリング時は、`#VOLWAV` を譜面全体へ掛かる線形 gain として扱います。
-省略時は `100` を既定値とし、実効倍率は `n / 100` です。
+During playback and rendering, `#VOLWAV` is treated as a linear gain applied to the entire score.
+If omitted, the default value is `100` and the effective magnification is `n / 100`.
 
-- `#VOLWAV 100`: 原音量
-- `#VOLWAV 200`: 原音量の `2` 倍
-- `#VOLWAV 0`: 無音
+- `#VOLWAV 100`: Original volume
+- `#VOLWAV 200`: `2` times the original volume
+- `#VOLWAV 0`: Silence
 
-この倍率は `player` のリアルタイム再生、選曲画面プレビュー、`audio-renderer` の `renderJson()` / `renderChartFile()` に適用します。
-各 historical player やハードウェア固有の音量差は再現せず、現実装では単純な gain 倍率としてのみ扱います。
+This magnification applies to real-time playback of `player`, song selection screen preview, and `renderJson()` / `renderChartFile()` of `audio-renderer`.
+It does not reproduce the volume differences specific to each historical player or hardware, and is treated as a simple gain multiplication factor in actual equipment.
 
 ### `#xxx97` / `#xxx98`
 
-`parser` / `stringifier` は `97` / `98` を通常の object channel として保持します。
-`00` は通常どおり空トークンとして扱い、`01-FF` の非ゼロ値だけがイベントになります。
+`parser` / `stringifier` keep `97` / `98` as regular object channels.
+`00` is treated as an empty token as usual, and only non-zero values ​​of `01-FF` are events.
 
-再生時とレンダリング時は、`97` を BGM 側、`98` を playable/key 側の動的 bus volume として扱います。
-値は 16 進整数 `1-255` を `value / 255` の gain へ変換し、その時点以降に適用します。
+During playback and rendering, `97` is treated as a dynamic bus volume on the BGM side and `98` on the playable/key side.
+The value converts the hex integer `1-255` to the gain of `value / 255` and applies it from that point forward.
 
-- `#xxx97`: `01` / BGM の最小音量から `FF` / 原音量までを切り替える
-- `#xxx98`: `01` / KEY SOUND の最小音量から `FF` / 原音量までを切り替える
-- `00`: 休符なのでイベント化されず、音量変更も発生しない
+- `#xxx97`: Switch from `01` / BGM minimum volume to `FF` / original volume
+- `#xxx98`: Switch from the minimum volume of `01` / KEY SOUND to the original volume of `FF` /
+- `00`: Since it is a rest, it is not turned into an event, and the volume does not change.
 
-現実装では、これらの channel 自体は sample trigger としては扱いません。
-また、音量変更はその時点以後に新しく鳴る音の初期 gain にだけ反映し、すでに再生中の同系統 voice には反映しません。
+In actual implementation, these channels themselves are not treated as sample triggers.
+Also, volume changes will only be reflected in the initial gain of new sounds that are played after that point, and will not be reflected in the voices of the same type that are already playing.
 
-## 未対応 (一次参照に対する差分)
+## Not supported (difference to primary reference)
 
-- [x] 拡張チャンネル `#mmm51-59` (LN: `LNTYPE=1`) の専用挙動
-- [x] 拡張チャンネル `#mmm61-69` (LN: `LNTYPE=2`) の専用挙動
-- [x] ヘッダ `#MIDIFILE` の専用解釈（現在は未知ヘッダ扱い）
-- [x] チャンネル `06` (POOR-BMP/BGA 切替) の再生時挙動
-- [x] `#POORBGA` 未指定時に `#BMP00` を POOR 画像として扱う既定挙動
-- [x] `#BPM` 未指定時の既定値 `130` を互換動作として扱う方針整理（IR 既定値 `130` に統一）
-- [x] `#PLAYER` の仕様値 `1-4`（特に `2` / `4`）に対する互換方針の明文化
-- [x] `#LNTYPE` 未指定時の既定値 `1` を前提にした LN 解釈規則の定義（`51-69` 実装時）
-- [x] `#LNOBJ` 複数宣言時の扱い（`bms.lnObjs` に宣言順保持）
-- [x] `#LNOBJ` 終端での Keyup 発音拡張の互換方針（HDX Keyup は非採用、終端トリガは抑止）
-- [x] `#xxx51-69` と `#LNOBJ` が競合する譜面での優先順位定義（同一レーン・同一位置は `#xxx51-69` 優先）
-- [ ] ヘッダ `#BACKBMP` / `#MAKER` の専用解釈
-- [ ] `#SUBTITLE` / `#SUBARTIST` / `#COMMENT` の複数行定義（Multiplex）の解釈
-- [ ] 旧式互換ヘッダ `#SONGxx` を `#TEXTxx` 相当として扱う規則
-- [ ] 互換ヘッダ `#EXBPMxx` の読み取り方針（`#BPMxx` との差分）
-- [ ] BM98 拡張 `#CHARFILE` / `#ExtChr` の扱い（無視・保持・再生反映の方針）
-- [ ] ヘッダ `#CDDA` の扱い（無視・保持・再生反映の方針）
-- [ ] 旧動画系ヘッダ `#VIDEOFPS` / `#VIDEODLY` / `#VIDEOCOLORS` / `#SEEK` 系の扱い
-- [ ] 素材分離ヘッダ `#MATERIALSBMP` / `#MATERIALSWAV` の扱い
-- [x] `#STP` の実時間反映
-- [ ] `#WAVCMD` の実行仕様（現状は保持のみ）
-- [ ] `#OPTION` 複数行の同時適用ルール（現状は単一値保持）
-- [ ] オブジェクトチャンネル `#xxxA6`（`#CHANGEOPTIONxx`）の実行時反映
-- [ ] `#TEXTxx` / `#TEXT00` のプレイ中表示挙動（現状は保持のみ）
-- [ ] `#STOPxx` の負数・小数を含む入力に対する互換方針の明文化
-- [ ] `#EXBPM` 互換ヘッダの読み取り方針（`#BPMxx` との優先順位含む）
-- [ ] `#BPMxx` / `#STOPxx` のインデックス範囲（`01-FF` / `01-ZZ`）と `00` 扱いの明文化
-- [ ] `#WAVxx` / `#BMPxx` のインデックス範囲（`01-FF` / `01-ZZ` / `00` を含む運用差）と大文字小文字の扱い
-- [ ] 同一タイムラインでの `#xxx03` と `#xxx08` の競合時優先順位
-- [ ] 同一タイムラインでの `#xxx08` と `#xxx09` の競合時優先順位
-- [ ] `#BPMxx` の不正値（負数/ゼロ/文字列/指数表記など）入力時の互換挙動
-- [x] `#STP` 書式 `xxx[.yyy] zzzz` と省略形 `xxx zzzz` の timing 解釈
-- [ ] `#BGAxx` 詳細定義（切り出し/配置パラメータ）の解釈と描画反映
-- [ ] `#@BGAxx` の実行時反映（分岐/条件付き BGA 定義）
-- [ ] `#SWBGAxx` の実行時反映（条件に応じた BGA 切替）
-- [ ] `#ARGBxx` の実行時反映（透過・合成パラメータ）
-- [ ] `#DEFEXRANK 0` を含む境界値の判定幅解釈
-- [ ] `#PATH_WAV` を再生/レンダリング時の実ファイル解決に適用
-- [x] チャンネル `0A` (BGA LAYER2) の描画対応
-- [ ] 互換ディレクティブ `#RONDAM` / `#SETRONDAM` / `#IFEND` の受理方針
-- [ ] 全角コマンド・全角スペース混在入力の受理方針
-- [ ] オブジェクトデータ文字列が奇数長の場合の末尾トークン処理方針
-- [ ] CRLF+LF 混在ファイルの制御構文評価互換（行終端揺れ）
-- [ ] 末尾改行なしファイルの厳密互換（パーサ/制御構文）
-- [ ] 大量/入れ子 `#RANDOM`・`#SWITCH` を含む譜面の評価安定性
-- [ ] `#RANDOM` の大きな上限値を使う譜面での乱数生成仕様固定
-- [ ] `#000` 小節の演奏オブジェクトを含む譜面の時刻/判定互換
-- [ ] 高分解能譜面（例: 小節分解能 4032 以上）の精度検証と上限方針
-- [ ] 小節番号上限（`#999` 近傍）および `#1000` 以降入力時の取り扱い
-- [x] `#STOPxx` / `#BPMxx` のマルチ定義時は EOF 側の行を採用
-- [x] `#WAVxx` / `#BMPxx` のマルチ定義時は EOF 側の行を採用
-- [x] 一般ヘッダ・索引付き拡張ヘッダ・`#mmm02` の重複定義は原則 EOF 側優先
-- [ ] 音声フォーマット互換（μ-law WAV など）に対する対応方針
-- [ ] `#WAV00` 定義時の扱い（`00` を空イベントとみなす規則との整合）
-- [ ] `#WAVxx` の拡張子省略/不一致時における代替ファイル探索（拡張子フォールバック）
-- [ ] `#BMPxx` の拡張子省略/不一致時における代替ファイル探索（拡張子フォールバック）
-- [ ] 未定義 `#BPMxx` / `#STOPxx` 参照時の互換挙動（無視・既定値・エラー）
-- [ ] `#STOPxx` 空定義参照（例: `#05209:` の未定義トークン）時の互換挙動
-- [ ] 行頭インデント付きコマンド（先頭空白 + `#COMMAND`）の受理方針
-- [ ] 制御構文の別表記 `#ELSE IF` / `#END IF` / `#END` の受理方針
-- [ ] `#IF` / `#SWITCH` ブロック未終端（`#ENDIF` / `#ENDSW` 欠落）時の EOF 補完規則
-- [ ] Bemuse 拡張ヘッダ `#SPEEDxx` の受理と実行時反映
-- [ ] Bemuse 拡張チャンネル `#xxxSP`（spacing factor）の受理と描画反映
-- [ ] Bemuse 拡張行 `#EXT #xxxyy:...` の受理規則（通常オブジェクトとの差分）
-- [ ] 256x256 超過 BGA（oversize BGA）の描画方針（切り抜き・縮小・配置）
-- [x] BGA 合成の最大レイヤ数と優先順位（通常時は 3 層: `04` < `07` < `0A`、POOR 表示中は POOR を最優先）
-- [ ] 動画 BGA に対する `#ARGBxx` / `#BGAxx` パラメータ適用の有無
-- [ ] `#BASEBPM` の実時間反映（速度表示・HI-SPEED 計算・内部時刻計算）方針
-- [ ] player: `#PLAYER` 未指定時の既定値 `1` を選曲画面・TUI・結果表示へ反映
-- [ ] player: `#PLAYER=2` / `#PLAYER=4` の表示と実装実態を一致させる（meta only 明示 or 専用モード実装）
-- [ ] editor: `setMetadata` / `set-meta` で `#PLAYER` を `metadata.extras` ではなく `bms.player` へ書き込む
-- [ ] editor: dedicated BMS 拡張ヘッダを API/CLI 編集後に save/load ラウンドトリップなしで export できるようにする
-- [ ] 超長行（例: 100KB 級）入力時の受理上限とエラーハンドリング
-- [ ] 演奏/内部オブジェクトが数十万規模の譜面に対する上限と性能保証方針
+- [x] Dedicated behavior of extended channel `#mmm51-59` (LN: `LNTYPE=1`)
+- [x] Dedicated behavior of extended channel `#mmm61-69` (LN: `LNTYPE=2`)
+- [x] Dedicated interpretation of header `#MIDIFILE` (currently treated as unknown header)
+- [x] Playback behavior of channel `06` (POOR-BMP/BGA switching)
+- [x] Default behavior of treating `#BMP00` as a POOR image when `#POORBGA` is not specified
+- [x] `#BPM` Default value when not specified `130` is treated as compatible behavior (unified to IR default value `130`)
+- [x] Clarification of compatibility policy for `#PLAYER` specification value `1-4` (especially `2` / `4`)
+- [x] Definition of LN interpretation rules based on the default value `1` when `#LNTYPE` is not specified (when `51-69` is implemented)
+- [x] `#LNOBJ` Handling when multiple declarations are made (declaration order maintained in `bms.lnObjs`)
+- [x] `#LNOBJ` Compatibility policy for Keyup pronunciation extension at the end (HDX Keyup is not adopted, end trigger is suppressed)
+- [x] Priority definition in a score where `#xxx51-69` and `#LNOBJ` conflict (`#xxx51-69` takes precedence in the same lane and position)
+- [ ] Dedicated interpretation of header `#BACKBMP` / `#MAKER`
+- [ ] Interpretation of multiple line definition (Multiplex) of `#SUBTITLE` / `#SUBARTIST` / `#COMMENT`
+- [ ] Rules for treating the old-style compatible header `#SONGxx` as equivalent to `#TEXTxx`
+- [ ] Compatible header `#EXBPMxx` reading policy (difference with `#BPMxx`)
+- [ ] Handling of BM98 extension `#CHARFILE` / `#ExtChr` (policy of ignoring, retaining, and replaying)
+- [ ] Handling of header `#CDDA` (policy of ignoring, retaining, and replaying)
+- [ ] Handling of old video headers `#VIDEOFPS` / `#VIDEODLY` / `#VIDEOCOLORS` / `#SEEK`
+- [ ] Handling of material separation header `#MATERIALSBMP` / `#MATERIALSWAV`
+- [x] Real-time reflection of `#STP`
+- [ ] Execution specifications of `#WAVCMD` (currently only retained)
+- [ ] `#OPTION` Simultaneous application rule for multiple lines (currently holds a single value)
+- [ ] Runtime reflection of object channel `#xxxA6` (`#CHANGEOPTIONxx`)
+- [ ] `#TEXTxx` / `#TEXT00` display behavior during play (currently only retained)
+- [ ] Clarification of compatibility policy for inputs containing negative numbers and decimal numbers for `#STOPxx`
+- [ ] `#EXBPM` Compatible header reading policy (including priority with `#BPMxx`)
+- [ ] Clarification of index range of `#BPMxx` / `#STOPxx` (`01-FF` / `01-ZZ`) and handling of `00`
+- [ ] Index range of `#WAVxx` / `#BMPxx` (operational difference including `01-FF` / `01-ZZ` / `00`) and case handling
+- [ ] Conflict priority between `#xxx03` and `#xxx08` on the same timeline
+- [ ] Conflict priority between `#xxx08` and `#xxx09` on the same timeline
+- [ ] Compatibility behavior when inputting invalid values ​​(negative numbers/zero/character strings/exponential notation, etc.) for `#BPMxx`
+- [x] Timing interpretation of `#STP` format `xxx[.yyy] zzzz` and abbreviation `xxx zzzz`
+- [ ] `#BGAxx` Interpretation of detailed definition (cutting/placement parameters) and drawing reflection
+- [ ] Runtime reflection of `#@BGAxx` (branch/conditional BGA definition)
+- [ ] Reflection of `#SWBGAxx` at runtime (BGA switching according to conditions)
+- [ ] Runtime reflection of `#ARGBxx` (transparency/composition parameters)
+- [ ] Decision width interpretation of boundary values ​​including `#DEFEXRANK 0`
+- [ ] Apply `#PATH_WAV` to real file resolution during playback/rendering.
+- [x] Support for drawing channel `0A` (BGA LAYER2)
+- [ ] Acceptance policy for compatible directives `#RONDAM` / `#SETRONDAM` / `#IFEND`
+- [ ] Acceptance policy for mixed input of full-width commands and full-width spaces
+- [ ] End token processing policy when object data string has odd length
+- [ ] Compatible with control syntax evaluation for CRLF+LF mixed files (line end shaking)
+- [ ] Strict compatibility for files without trailing newlines (parser/control syntax)
+- [ ] Evaluation stability of scores containing large numbers/nested `#RANDOM` and `#SWITCH`
+- [ ] Fixed random number generation specifications for musical scores that use a large upper limit of `#RANDOM`
+- [ ] `#000` Time/judgment compatibility for musical scores containing measure performance objects
+- [ ] Accuracy verification and upper limit policy for high-resolution musical scores (e.g. measure resolution 4032 or higher)
+- [ ] Upper limit of measure number (near `#999`) and handling when inputting after `#1000`
+- [x] When `#STOPxx` / `#BPMxx` are multi-defined, the line on the EOF side is adopted.
+- [x] When `#WAVxx` / `#BMPxx` are multi-defined, the line on the EOF side is adopted.
+- [x] Duplicate definitions of general headers, indexed extension headers, and `#mmm02` are generally prioritized on the EOF side.
+- [ ] Policy for audio format compatibility (μ-law WAV, etc.)
+- [ ] Handling of `#WAV00` at definition (consistency with rules regarding `00` as an empty event)
+- [ ] Search for alternative files when extension omitted/mismatches for `#WAVxx` (extension fallback)
+- [ ] Search for alternative files when extension omitted/mismatches for `#BMPxx` (extension fallback)
+- [ ] Compatible behavior when referencing undefined `#BPMxx` / `#STOPxx` (ignored, default value, error)
+- [ ] `#STOPxx` Compatibility behavior when empty definition reference (e.g. undefined token of `#05209:`)
+- [ ] Acceptance policy for commands with leading indentation (leading blank + `#COMMAND`)
+- [ ] Acceptance policy for alternative notation of control syntax `#ELSE IF` / `#END IF` / `#END`
+- [ ] EOF completion rules when `#IF` / `#SWITCH` block is unterminated (`#ENDIF` / `#ENDSW` is missing)
+- [ ] Acceptance of Bemuse extension header `#SPEEDxx` and reflection at runtime
+- [ ] Bemuse expansion channel `#xxxSP` (spacing factor) acceptance and drawing reflection
+- [ ] Acceptance rules for Bemuse extension line `#EXT #xxxyy:...` (differences from normal objects)
+- [ ] 256x256 Oversize BGA drawing policy (cropping, reduction, placement)
+- [x] Maximum number of layers and priority for BGA composition (normally 3 layers: `04` < `07` < `0A`, while POOR is displayed, POOR has the highest priority)
+- [ ] Whether to apply `#ARGBxx` / `#BGAxx` parameters to video BGA
+- [ ] `#BASEBPM` real time reflection (speed display, HI-SPEED calculation, internal time calculation) policy
+- [ ] player: `#PLAYER` When not specified, the default value `1` is reflected on the song selection screen, TUI, and result display.
+- [ ] player: Match the display of `#PLAYER=2` / `#PLAYER=4` with the actual implementation (meta only explicit or dedicated mode implementation)
+- [ ] editor: `setMetadata` / `set-meta` write `#PLAYER` to `bms.player` instead of `metadata.extras`
+- [ ] editor: Allow dedicated BMS extension headers to be exported without save/load roundtrips after API/CLI editing
+- [ ] Acceptance limit and error handling when inputting extremely long lines (e.g. 100KB class)
+- [ ] Upper limit and performance guarantee policy for musical scores with hundreds of thousands of performance/internal objects
 
-### 参考資料由来 TODO（SCROLL/BPM/STOP）
+### TODO (SCROLL/BPM/STOP) from reference materials
 
-| TODO                                                                              | 現状 | 備考                                                                                                     |
+| TODO                                                                              | current situation | remarks                                                                                                     |
 | --------------------------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------- |
-| [x] `#SCROLL 0` 区間で同一レーンに重なったノートの前後表示優先順位を仕様化        | 対応 | 同一セルに重なった場合は先に来るノートを基準行に置き、後続ノートは判定ラインから遠ざかる方向へ積み上げる |
-| [x] `#SCROLL < 0` の逆走表示（方向・判定ライン付近・画面外）を互換仕様として固定  | 対応 | 現行実装方針として「接近表示優先」を採用し、描画距離は絶対値で扱う（逆方向スクロール再現は行わない）     |
-| [x] `#SCROLL 0` 長区間での先読み上限と可視範囲を仕様化                            | 対応 | 先読みは `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 小節) で打ち切り、可視範囲外ノートは描画対象外とする         |
-| [x] BPM×`100001` + `#STOPxx` 補正時の「表示 BPM」互換方針を明文化                 | 対応 | 時刻解決と同じ BPM 値をそのまま表示し、LR2 互換の表示置換・丸めは実施しない                              |
-| [x] SCROLL/BPM/STOP 複合ギミック（部分ワープ・空打鍵・逆走）の回帰テストを追加     | 対応 | `timeline` に複合ケースを追加し、POOR 系は既存 `bga` テスト群で継続検証する                              |
-| [x] beatoraja 固有の出現/消失バグ依存譜面の扱い（非対応明記 or 再現モード）を決定 | 対応 | 互換対象外として明記し、将来必要なら別オプションで再現モードを検討する                                   |
+| [x] `#SCROLL 0` Specify the display priority of notes that overlap in the same lane in the section before and after.        | correspondence | If they overlap in the same cell, place the note that comes first on the reference line, and stack subsequent notes in the direction away from the judgment line. |
+| [x] `#SCROLL < 0`'s reverse running display (direction, near the judgment line, off-screen) is fixed as a compatible specification.  | correspondence | The current implementation policy is "proximity display priority", and the drawing distance is treated as an absolute value (reverse scrolling will not be reproduced)     |
+| [x] `#SCROLL 0` Specify the upper limit of lookahead and visible range in long intervals                            | correspondence | Read-ahead is discontinued at `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 measures), and notes outside the visible range are excluded from drawing.         |
+| [x] BPM×`100001` + `#STOPxx` Clarified "display BPM" compatibility policy when correcting                 | correspondence | The same BPM value as the time resolution is displayed as is, and LR2 compatible display replacement and rounding are not performed.                              |
+| [x] SCROLL/BPM/STOP Added regression test for complex gimmicks (partial warp, blank keystroke, reverse run)     | correspondence | Add complex cases to `timeline` and continue to verify POOR system with existing `bga` test group                              |
+| [x] Determined the handling of beatoraja-specific appearance/disappearance bug-dependent scores (unsupported clearly or reproduction mode) | correspondence | Specify that it is not compatible and consider reproducing mode with another option if necessary in the future.                                   |
 
-## player 固有挙動
+## Player-Specific Behavior
 
-- 使用チャンネルからレーンモードを自動判定 (`5 KEY SP`, `5 KEY DP`, `7 KEY SP`, `14 KEY DP`, `9 KEY`, `24 KEY SP`, `48 KEY DP`)
-- レーンモードを自動判定できない場合は拡張子で補完 (`.bms -> 5 KEY`, `.bme -> 7 KEY`, `.pms -> 9 KEY`)
-- `.pms` 譜面の 9KEY は標準配列 (`PMS-STD`) / 互換配列 (`PMS-COMPAT`) をチャンネル分布から推定し、`LANE` 表示に反映
-- FREE ZONE (`17` / `27`) は独立レーンを作らずスクラッチレーン (`16` / `26`) 上に描画
-- FREE ZONE ノート長は 4 分音符固定
-- FREE ZONE は判定対象外 (`TOTAL` / `EX-SCORE` / `SCORE` に含めない)
-- BGA ビューポート背景は黒を使用（透明領域・BGA 未表示中も黒）
-- 制御構文を含む譜面では、選択された `#RANDOM` パターンを `RANDOM 現在/総数` 形式で表示
-- プレイ中に `Shift+R` で演奏を最初から再開し、`#RANDOM` は再抽選する
-- IIDX 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とする
-- キー入力は kitty keyboard protocol を自動オプトインし、1P/2P スクラッチに左/右 `Shift`、reverse scratch に左/右 `Ctrl` を利用する
-- macOS では reverse scratch に左/右 `Ctrl` の代わりに左/右 `Option` を利用する
-- kitty 非対応端末では既存入力へフォールバックし、reverse scratch の side-specific 入力は保証しない
-- HIGH-SPEED 操作は `Alt/Option` + レーン入力（奇数レーンで減速、偶数レーンで加速）で行う
-- 選曲画面プレビューは `#PREVIEW` を優先し、未指定時は譜面先頭発音からフォールバック生成する
-- 選曲画面プレビューのレンダリングはフォーカス移動時に中断するが、同一 `#PREVIEW`（同一実ファイル）または同一フォールバックシグネチャの場合は継続再生する（フォールバックは演奏チャンネル配置差分を無視）
-- 単曲モード（および譜面1件ディレクトリ）では、リザルトを `Enter` / `Esc` 待ちにし、`r` でリプレイできる
-- リザルト遷移は固定待機時間ではなく、再生中音声のドレイン完了を待って実行する
+- Automatically determine lane mode from used channel (`5 KEY SP`, `5 KEY DP`, `7 KEY SP`, `14 KEY DP`, `9 KEY`, `24 KEY SP`, `48 KEY DP`)
+- If lane mode cannot be automatically determined, complete with extension (`.bms -> 5 KEY`, `.bme -> 7 KEY`, `.pms -> 9 KEY`)
+- `.pms` The 9KEY of the musical score is estimated from the standard array (`PMS-STD`) / compatible array (`PMS-COMPAT`) from the channel distribution and reflected in the `LANE` display.
+- FREE ZONE (`17` / `27`) does not create an independent lane and draws on the scratch lane (`16` / `26`)
+- FREE ZONE Note length is fixed at quarter note
+- FREE ZONE is not subject to judgment (not included in `TOTAL` / `EX-SCORE` / `SCORE`)
+- BGA viewport background uses black (black even when transparent area/BGA is not displayed)
+- For scores containing control syntax, the selected `#RANDOM` pattern is displayed in `RANDOM current/total` format.
+- During play, `Shift+R` will restart the performance from the beginning, and `#RANDOM` will be redrawn.
+- The default keyboard layout for IIDX series is `Z S X D C F V` for 1P and `B H N J M K ,` for 2P.
+- Automatically opt-in to kitty keyboard protocol for key input, use left/right `Shift` for 1P/2P scratch, left/right `Ctrl` for reverse scratch
+- On macOS, use left/right `Option` instead of left/right `Ctrl` for reverse scratch
+- On terminals that do not support kitty, fall back to existing input, and side-specific input of reverse scratch is not guaranteed.
+- HIGH-SPEED operation is performed with `Alt/Option` + lane input (decelerate on odd lanes, accelerate on even lanes)
+- The song selection screen preview gives priority to `#PREVIEW`, and if it is not specified, it will generate a fallback from the first pronunciation of the score.
+- Rendering of the song selection screen preview is interrupted when the focus moves, but if it is the same `#PREVIEW` (same real file) or the same fallback signature, it will continue playing (fallback ignores performance channel arrangement differences)
+- In single song mode (and one score directory), you can wait for the result in `Enter` / `Esc` and replay it in `r`.
+- Result transition is executed after waiting for the draining of the audio being played, instead of a fixed waiting time.
 
-### player 判定/音声ルール
+### player judgment/audio rules
 
-- FAST/SLOW は `GREAT` / `GOOD` のみで加算し、`PERFECT` では加算しない
-- ロングノートは終端時刻で判定し、終端オブジェクトの発音は行わない
-- `AUTO` / `AUTO SCRATCH` / `MANUAL` のいずれでも、再生音声はリアルタイムトリガ方式を使用する
-- `--play-volume` は演奏レーン系、`--bgm-volume` は非演奏レーン系へ適用する
-- `SC` / 地雷 / `LNOBJ` 終端抑止対象イベントは音声トリガ対象から除外する
+- FAST/SLOW adds only `GREAT` / `GOOD`, not `PERFECT`
+- Long notes are determined by the end time, and the end object is not sounded.
+- Playback audio uses real-time trigger method for any of `AUTO` / `AUTO SCRATCH` / `MANUAL`
+- `--play-volume` applies to performance lanes, `--bgm-volume` applies to non-performance lanes.
+- `SC` / Landmine / `LNOBJ` Exclude terminal suppression target events from audio trigger targets
 
-### SCROLL/BPM/STOP 互換ポリシー
+### SCROLL/BPM/STOP compatibility policy
 
-- `SCROLL 0` で同一レーン・同一描画セルに複数ノートが重なる場合、先行ノートを基準位置に置き、後続ノートは判定ラインから遠ざかる側（上方向）へ順に積み上げる
-- `SCROLL < 0` は「逆走表示の忠実再現」ではなく「ノート接近表示の維持」を優先し、描画距離は `abs(distance)` で扱う
-- `SCROLL` の可視探索は `MAX_SCROLL_LOOKAHEAD_BEATS`（`4 * 64` beat）で上限を設ける
-- BPM×`100001` + `STOP` 補正を含むギミックでも、BPM 表示は内部時刻計算で使用する値をそのまま採用する
-- beatoraja 固有の描画バグ依存譜面は互換対象外とし、現時点では再現モードを実装しない
-- 上記ポリシーの回帰は `packages/player/src/tui/lane-stacking.test.ts`・`packages/player/src/core/timeline.test.ts`・`packages/player/src/bga.test.ts` で検証する
+- In `SCROLL 0`, when multiple notes overlap in the same lane and same drawing cell, the preceding note is placed at the reference position, and the subsequent notes are stacked in order toward the side (upward) away from the judgment line.
+- `SCROLL < 0` prioritizes "maintaining note approach display" rather than "faithful reproduction of backward running display", and drawing distance is handled by `abs(distance)`
+- Visible search for `SCROLL` is capped at `MAX_SCROLL_LOOKAHEAD_BEATS` (`4 * 64` beat)
+- Even with gimmicks that include BPM×`100001` + `STOP` correction, the BPM display uses the value used in internal time calculation as is.
+- Beatoraja-specific drawing bug-dependent scores are not compatible, and a reproduction mode is not implemented at this time.
+- Verify regression of the above policy with `packages/player/src/tui/lane-stacking.test.ts`, `packages/player/src/core/timeline.test.ts`, `packages/player/src/bga.test.ts`
 
-## イベント位置の扱い
+## Handling of event location
 
-- `data` は 2文字単位で分割し、`00` は空イベント
-- 位置は `position: [numerator, denominator]` として保持
-- `denominator = トークン数`
-- `numerator = トークンの0始まりインデックス`
+- `data` splits by two characters, `00` is empty event
+- Position is kept as `position: [numerator, denominator]`
+- `denominator = number of tokens`
+- `numerator = zero-based token index`
 
-## 文字コード
+## Character Encoding
 
-- BOM 付き UTF-8 / UTF-16LE / UTF-16BE を優先
-- BOM がない場合は `shift_jis`, `utf8`, `euc-jp`, `latin1` をスコアリングして推測
+- Prefer UTF-8 / UTF-16LE / UTF-16BE with BOM
+- If BOM is missing, infer by scoring `shift_jis`, `utf8`, `euc-jp`, `latin1`
 
-## stringifier ルール
+## stringifier rules
 
-- `position` の分母情報から小節内解像度を決定
-- 同一小節・同一チャンネルでは分母の最小公倍数を採用
-- `--maxResolution` 指定時は上限で打ち切り
+- Determine intra-measure resolution from denominator information of `position`
+- For the same measure and same channel, the least common multiple of the denominator is used.
+- If `--maxResolution` is specified, it will be aborted at the upper limit.
 
-## 制御構文の評価ルール
+## Evaluation rules for control constructs
 
-- `parser` は制御構文を `bms.controlFlow` として保持し、パース時には分岐を確定しない
-- `player` / `audio-renderer` は実行時に `bms.controlFlow` を評価して有効ブロックを展開する
-- `#RANDOM n` / `#SWITCH n` は `1..n` の整数を生成して選択値にする
-- `#SETRANDOM n` / `#SETSWITCH n` は選択値を固定する
-- `#IF` チェーンは現在の RANDOM 選択値で分岐し、`#ELSEIF` / `#ELSE` は先に成立した枝がある場合は無効
-- `#SWITCH` チェーンは `#CASE` / `#DEF` を評価し、`#SKIP` で `#ENDSW` まで打ち切る
-- `#SWITCH` では `#SKIP` がない場合、後続 `#CASE` / `#DEF` にフォールスルーする
+- `parser` retains control syntax as `bms.controlFlow` and does not commit branches when parsing
+- `player` / `audio-renderer` evaluate `bms.controlFlow` and expand valid blocks at runtime
+- `#RANDOM n` / `#SWITCH n` generate integers of `1..n` and use them as selection values
+- `#SETRANDOM n` / `#SETSWITCH n` fix the selection value
+- `#IF` chain branches at the current RANDOM selection value, `#ELSEIF` / `#ELSE` are invalid if there is a previously established branch
+- `#SWITCH` chain evaluates `#CASE` / `#DEF` and aborts at `#SKIP` until `#ENDSW`
+- `#SWITCH` falls through to subsequent `#CASE` / `#DEF` if `#SKIP` is missing

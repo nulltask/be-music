@@ -1,17 +1,19 @@
-# 仕様書
+[Japanese version](./README.ja.md)
 
-このディレクトリは、`be-music` リポジトリで使う仕様を Markdown でまとめたものです。
+# Specifications
 
-- [BMS 実装仕様](./bms-spec.md)
-- [BMSON 実装仕様](./bmson-spec.md)
-- [Bemuse 実装仕様](./bemuse-spec.md)
-- [Player 実装仕様](./player-spec.md)
-- [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./json-spec.md)
-- [用語集](./glossary.md)
+This directory is a Markdown collection of specifications used in the `be-music` repository.
 
-補足:
+- [BMS implementation specification](./bms-spec.md)
+- [BMSON implementation specification](./bmson-spec.md)
+- [Bemuse implementation specification](./bemuse-spec.md)
+- [Player implementation specification](./player-spec.md)
+- [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./json-spec.md)
+- [Glossary](./glossary.md)
 
-- 公式仕様そのものではなく、**このリポジトリの実装がどう解釈するか**を優先して記述しています。
-- 公式仕様と齟齬が出る場合は、まず実装方針を決めてからこのドキュメントを更新してください。
-- 大規模な追従更新時は、各仕様書に「監査起点コミット / 監査時点コミット / 監査対象範囲」を明記してください。
-- `@be-music/json` は pure IR、`@be-music/chart` は beat 解決やイベント順序などの譜面意味論を担当します。
+Supplement:
+
+- These documents prioritize how this repository implements and interprets the formats over the original specifications themselves.
+- If there is a discrepancy with the official specifications, please first decide on an implementation policy and then update this document.
+- When performing large-scale follow-up updates, please specify the "audit starting point commit/audit point commit/audit scope" in each specification.
+- `@be-music/json` is responsible for pure IR, and `@be-music/chart` is responsible for score semantics such as beat resolution and event order.

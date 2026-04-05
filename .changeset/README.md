@@ -1,18 +1,20 @@
+[Japanese version](./README.ja.md)
+
 # Changesets
 
-`be-music` は package ごとに個別 release するため、変更が入った PR では `.changeset/*.md` を追加します。
+Since `be-music` is released individually for each package, add `.changeset/*.md` to the PR containing changes.
 
-## 普段の流れ
+## Usual flow
 
-1. feature ブランチで package を変更する
-2. `pnpm changeset` を実行して、変更した package と bump 種別を記録する
-3. feature PR を `devel` に merge する
+1. Change package in feature branch
+2. Run `pnpm changeset` and record the changed package and bump type.
+3. Merge feature PR into `devel`
 
-## release の流れ
+## Release flow
 
-1. `devel` で `pnpm release:version` を実行する
-2. 生成された各 `package.json` と `CHANGELOG.md` をコミットする
-3. `devel -> main` の release PR を作る
-4. PR を merge すると、version が上がった package だけ GitHub Release が個別に作成される
+1. Run `pnpm release:version` in `devel`
+2. Commit each generated `package.json` and `CHANGELOG.md`
+3. Create release PR for `devel -> main`
+4. When merging PRs, GitHub Releases are created individually for packages whose versions have increased.
 
-`@be-music/player` と `@be-music/audio-renderer` は個別 release に SEA zip が添付され、それ以外の package は changelog ベースの GitHub Release のみが作成されます。
+`@be-music/player` and `@be-music/audio-renderer` have SEA zips attached to individual releases, and only changelog-based GitHub releases are created for other packages.

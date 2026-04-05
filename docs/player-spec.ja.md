@@ -1,11 +1,11 @@
-[日本語版](./player-spec.ja.md)
+[English version](./player-spec.md)
 
 [Japanese version](./player-spec.ja.md)
 
 # Player implementation specifications
 
 This document defines the runtime specification for `@be-music/player`.
-Regarding the acceptance rules of musical score formats and the meaning of IR, priority is given to [`bms-spec.md`](./bms-spec.md), [`bmson-spec.md`](./bmson-spec.md), and [`json-spec.md`](./json-spec.md), and this document only deals with how the player plays, judges, and displays them.
+Regarding the acceptance rules of musical score formats and the meaning of IR, priority is given to [`bms-spec.md`](./bms-spec.ja.md), [`bmson-spec.md`](./bmson-spec.ja.md), and [`json-spec.md`](./json-spec.ja.md), and this document only deals with how the player plays, judges, and displays them.
 
 ## the purpose
 
@@ -23,7 +23,7 @@ The only gauge currently implemented is the `NORMAL` groove gauge which is compa
 
 ## BMS compatible range
 
-This section classifies the BMS commands and channels that appear in the primary reference in [`bms-spec.md`](./bms-spec.md) relative to the current `player` implementation.
+This section classifies the BMS commands and channels that appear in the primary reference in [`bms-spec.md`](./bms-spec.ja.md) relative to the current `player` implementation.
 "Compatible" here means that the player refers to the value at runtime and reflects it in playback, judgment, display, song selection screen, preview, and loading screen.
 Items that are only stored in the IR by the parser and not referenced by the player during execution are treated as unsupported.
 
@@ -60,7 +60,7 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 | `#PREVIEW` | Used preferentially for preview playback on the song selection screen. |
 | `#PATH_WAV` | Used only to search for files on the song selection screen preview. It is not used to solve samples during normal play. |
 | `#LNTYPE`, `#LNMODE`, `#LNOBJ` | Used to interpret BMS long notes. |
-| `#PLAYER` | Used for mode estimation and display player lane metadata. |
+| `#PLAYER` | Used for lane mode estimation and display player metadata. |
 | `#VOLWAV` | Used as a volume multiplier for the entire score. |
 | `#POORBGA` | Used to override the default value of POOR images. |
 | `#SCROLLxx`, `#SPEEDxx` | Used to calculate note drawing distance. |
@@ -93,7 +93,7 @@ player executes the score in the following order:
 
 1. Resolve the BMS control syntax at runtime and create a branched score to be used for the current playback.
 2. Extract performance notes, mines, invisible notes, and real-time audio triggers from the branched score.
-3. Confirm the mode, key assignment, and lane FREE ZONE alias from the actual channels.
+3. Confirm the lane mode, key assignment, and FREE ZONE alias from the actual channels.
 4. Initialize gauges, scores, UI state, input runtime, and audio runtime.
 5. Execute either `AUTO` / `MANUAL` / `AUTO SCRATCH` main loop and return `PlayerSummary` at the end.
 
@@ -192,10 +192,10 @@ BMS determines the judgment range at the start of playback using the following p
 
 `#DEFEXRANK` is treated as a percentage value.
 `100` is the standard value and has the same width as `NORMAL`.
-The player interprets `#DEFEXRANK` with `Number.parseFloat()` and only accepts values ​​​​that are finite and greater than `0`.
+The player interprets `#DEFEXRANK` with `Number.parseFloat()` and only accepts values ​​that are finite and greater than `0`.
 
 `#RANK` is treated as a beatoraja-compatible scaling table `[25, 50, 75, 100, 125]`.
-`metadata.rank` is interpreted by rounding down to an integer, and values ​​​​outside the range are invalidated and fallback to the default value.
+`metadata.rank` is interpreted by rounding down to an integer, and values ​​outside the range are invalidated and fallback to the default value.
 
 - `#RANK 0`: `25%` (`VERY HARD`)
 - `#RANK 1`: `50%` (`HARD`)
@@ -256,8 +256,8 @@ This means that even if `#EXRANKxx` changes, the `BAD` width with debug override
 The rank display resolved from the current chart is displayed on the song selection list, TUI, and result screen.
 BMS with `#DEFEXRANK` will display that number, and normal `#RANK 0-4` will display the corresponding label.
 Similarly, `PLAYLEVEL` uses the display value resolved from the chart, and if `#PLAYLEVEL` is omitted in BMS, it will give a BM98-compatible default value of `3`.
-When `PLAYLEVEL` is `0`, player uses `?` for display. The string `PLAYLEVEL` is displayed as is, and decimal values ​​​​are also displayed without rounding.
-`DIFFICULTY` only displays integers between `1-5`. In the song selection list, arrange them in the order of `PLAYER -> DIFFICULTY -> PLAYLEVEL -> filename`, use the keys `1-5` to switch the `DIFFICULTY` filter, and press `0` to cancel it. `DIFFICULTY` Unspecified values ​​​​or values ​​​​outside the range are not filtered and will be displayed as `-`.
+When `PLAYLEVEL` is `0`, player uses `?` for display. The string `PLAYLEVEL` is displayed as is, and decimal values ​​are also displayed without rounding.
+`DIFFICULTY` only displays integers between `1-5`. In the song selection list, arrange them in the order of `PLAYER -> DIFFICULTY -> PLAYLEVEL -> filename`, use the keys `1-5` to switch the `DIFFICULTY` filter, and press `0` to cancel it. `DIFFICULTY` Unspecified values ​​or values ​​outside the range are not filtered and will be displayed as `-`.
 
 A BMS that has dynamic changes using `#EXRANKxx` will have a displayed rank of `RANDOM`.
 This is because the judgment range changes midway through the score, and it cannot be expressed with a single fixed label.
@@ -312,7 +312,7 @@ When a blank key is pressed, the settings remain as follows.
 
 - Do not update `summary`.
 - Don't cut the combo.
-- Do not change gauge groove.
+- Do not change groove gauge.
 - Do not fire POOR BGA.
 - Don't update judge/combo display.
 
