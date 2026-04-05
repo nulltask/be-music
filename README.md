@@ -17,7 +17,7 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 
 ## Required environment
 
-- Node.js `>= 22`
+- Node.js `>= 25`
 - pnpm workspaces
 
 ## Setup
@@ -49,9 +49,10 @@ pnpm run release:version
 ```
 
 - Normal feature PR adds `.changeset/*.md` for the changed package
-- When you want to release, run `pnpm run release:version` on `devel` and commit the version bump and `CHANGELOG.md` update at once.
+- When you want to release, run `pnpm run release:version` on `devel` and commit the generated `packages/*/package.json` and `packages/*/CHANGELOG.md` updates together.
 - In that state, if you merge the release PR of `devel -> main`, a separate GitHub Release will be created only for the package whose version has increased.
 - `@be-music/player` and `@be-music/audio-renderer` have SEA zips attached to individual releases
+- The private repository root `package.json` stays at `0.0.0`; releasable versions are tracked in `packages/*/package.json`.
 
 The tag is created in the format `@be-music/package-name@x.y.z`.
 
@@ -108,6 +109,9 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Video BGA progressive decoding (switch to old method with `--no-video-bga-streaming`)
 - Kitty graphics protocol drawing switching using `--kitty-graphics` / `--no-kitty-graphics` (default: on)
 - Play with `node-web-audio-api` fixed backend
+- Optional BMS `#LNTYPE` auto-detection when omitted (`--ln-type-auto` / `--no-ln-type-auto`)
+- Optional pre-playback audio rendering (`--render-audio`) and per-bus volume tuning (`--volume`, `--bgm-volume`, `--key-volume`)
+- Output dynamics tuning with compressor/limiter switches and threshold/release controls
 - Structured log output (`~/.be-music/logs/player.ndjson`, overwritten with `--log-file`)
 
 ### editor (`@be-music/editor`)
@@ -177,6 +181,15 @@ pnpm run player chart.bms --no-limiter
 
 # Enable the compressor
 pnpm run player chart.bms --compressor --compressor-threshold-db -10 --compressor-ratio 3
+
+# Render audio before playback without in-game audio
+pnpm run player chart.bms --render-audio preview.wav --no-audio
+
+# Tune visible-note cap for dense charts
+pnpm run player chart.bms --tui-visible-notes-limit 4096
+
+# Disable automatic #LNTYPE inference when missing
+pnpm run player chart.bms --no-ln-type-auto
 ```
 
 ### 5. Editor
@@ -290,13 +303,13 @@ If the automatic judgment is ambiguous, it will be supplemented with an extensio
 `player` saves the following locally.
 
 - Play Mode (`manual` / `auto-scratch` / `auto`)
--HIGH-SPEED
-- Song selection focus by directory (`chart` / `random`)
+- HIGH-SPEED
+- Per-directory last selected chart file and music-select focus key
 
 Storage location and usage:
 
 - `~/.be-music/player.json`
-  - Play Mode, HIGH-SPEED, Music Select focus by directory
+  - Play Mode, HIGH-SPEED, last selected chart file by directory, and music-select focus key by directory
 - `~/.be-music/chart-selection-cache.json`
   - Song list metadata cache
   - Reuse is determined by `contentHash` in the chart body, and saved entries are verified by `cacheHash`

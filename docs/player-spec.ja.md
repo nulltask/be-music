@@ -1,153 +1,151 @@
 [English version](./player-spec.md)
 
-[Japanese version](./player-spec.ja.md)
+# Player 実装仕様
 
-# Player implementation specifications
+この文書は、`@be-music/player` の実行時仕様を定義します。
+譜面フォーマットの受理規則や IR の意味は [`bms-spec.md`](./bms-spec.ja.md)、[`bmson-spec.md`](./bmson-spec.ja.md)、[`json-spec.md`](./json-spec.ja.md) を優先し、この文書では player がそれらをどのように再生・判定・表示するかだけを扱います。
 
-This document defines the runtime specification for `@be-music/player`.
-Regarding the acceptance rules of musical score formats and the meaning of IR, priority is given to [`bms-spec.md`](./bms-spec.ja.md), [`bmson-spec.md`](./bmson-spec.ja.md), and [`json-spec.md`](./json-spec.ja.md), and this document only deals with how the player plays, judges, and displays them.
+## 目的
 
-## the purpose
+- `@be-music/player` のモード別挙動を 1 か所に集約する。
+- 判定、スコア、ゲージ、音声、表示の基準を明文化する。
+- 実装変更時に確認すべき互換方針を残す。
 
-- Consolidate the behavior of `@be-music/player` by mode in one place.
-- Clarify criteria for judgment, scores, gauges, audio, and display.
-- Leave a compatibility policy that should be checked when changing the implementation.
+## 対象範囲
 
-## Scope
+この文書が対象にするのは、`autoPlay()` と `manualPlay()` が返す結果、およびそれらが内部で使う判定・表示・音声処理です。
+CLI 引数、設定ファイル永続化、Node ワーカー間通信などの呼び出し方法は対象外です。
 
-This document covers the results returned by `autoPlay()` and `manualPlay()`, as well as the judgment, display, and audio processing they use internally.
-Invocation methods such as CLI arguments, configuration file persistence, and Node worker communication are not covered.
+現時点で実装しているゲージは Lunatic Rave 2 互換の `NORMAL` groove gauge のみです。
+`HARD` / `EX-HARD` / `HAZARD` / 段位ゲージは未実装です。
 
-The only gauge currently implemented is the `NORMAL` groove gauge which is compatible with Lunatic Rave 2.
-`HARD` / `EX-HARD` / `HAZARD` / Level gauge is not implemented.
+## BMS 対応範囲
 
-## BMS compatible range
+この節では、[`bms-spec.md`](./bms-spec.ja.md) の一次参照に現れる BMS コマンドとチャンネルを、現在の `player` 実装に対して分類します。
+ここでの「対応」は、player が実行時にその値を参照して、再生、判定、表示、選曲画面、プレビュー、loading screen のいずれかに反映することを意味します。
+parser が IR へ保持するだけで、player が実行時に参照しないものは未対応として扱います。
 
-This section classifies the BMS commands and channels that appear in the primary reference in [`bms-spec.md`](./bms-spec.ja.md) relative to the current `player` implementation.
-"Compatible" here means that the player refers to the value at runtime and reflects it in playback, judgment, display, song selection screen, preview, and loading screen.
-Items that are only stored in the IR by the parser and not referenced by the player during execution are treated as unsupported.
+### 対応チャンネル
 
-### Supported channels
-
-| channel | Handling in player |
+| channel | player における扱い |
 | --- | --- |
-| `#xxx01` | Play as BGM / sample trigger. |
-| `#xxx02` | Reflected in time resolution and beat resolution as bar length. |
-| `#xxx03`, `#xxx08` | Reflected in time resolution as BPM change. |
-| `#xxx04`, `#xxx07`, `#xxx0A` | Render as BGA base / layer / layer2. |
-| `#xxx06` | Treated as POOR BGA cue. If `#POORBGA` is not specified, `#BMP00` is used as fallback. |
-| `#xxx09` | Reflects in time resolution as STOP. |
-| `#xxx11-19`, `#xxx21-29` | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY, and normal note for 9KEY. |
-| `#xxx31-39`, `#xxx41-49` | Treated as invisible notes. It is used for manual input suggestions and display aids, but is not included in `summary.total`. `AUTO` does not produce a sound. |
-| `#xxx51-59`, `#xxx61-69` | Treated as BMS legacy long note. |
-| `#xxx97`, `#xxx98` | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that. |
-| `#xxxA0` | Treated as a dynamic judgment width change that refers to `#EXRANKxx`. |
-| `#xxxSC` | Reflects in the drawing distance as a scroll segment of the `#SCROLLxx` reference. |
-| `#xxxSP` | Reflects in the drawing distance as a speed keyframe of `#SPEEDxx` reference. |
-| `#xxxD1-D9`, `#xxxE1-E9` | Treated as a landmine. |
+| `#xxx01` | BGM / sample trigger として再生します。 |
+| `#xxx02` | 小節長として時間解決と beat 解決に反映します。 |
+| `#xxx03`, `#xxx08` | BPM change として時間解決に反映します。 |
+| `#xxx04`, `#xxx07`, `#xxx0A` | BGA base / layer / layer2 として描画します。 |
+| `#xxx06` | POOR BGA cue として扱います。`#POORBGA` 未指定時は `#BMP00` を fallback に使います。 |
+| `#xxx09` | STOP として時間解決に反映します。 |
+| `#xxx11-19`, `#xxx21-29` | 可視演奏ノートとして扱います。`16` / `26` は scratch、`17` / `27` は 9KEY 以外では FREE ZONE、9KEY では通常ノートです。 |
+| `#xxx31-39`, `#xxx41-49` | 不可視ノートとして扱います。手動入力の候補と表示補助には使いますが、`summary.total` には含めません。`AUTO` では発音しません。 |
+| `#xxx51-59`, `#xxx61-69` | BMS legacy long note として扱います。 |
+| `#xxx97`, `#xxx98` | 以後に鳴る BGM / playable sound の初期 gain を変更する動的音量変更として扱います。 |
+| `#xxxA0` | `#EXRANKxx` を参照する動的判定幅変更として扱います。 |
+| `#xxxSC` | `#SCROLLxx` 参照の scroll segment として描画距離へ反映します。 |
+| `#xxxSP` | `#SPEEDxx` 参照の speed keyframe として描画距離へ反映します。 |
+| `#xxxD1-D9`, `#xxxE1-E9` | 地雷として扱います。 |
 
-### Supported commands
+### 対応コマンド
 
-| command | Handling in player |
+| command | player における扱い |
 | --- | --- |
-| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT` | Used to display metadata on the song selection screen. `#TITLE` / `#ARTIST` / `#GENRE` are also used for TUI and results screens. |
-| `#BANNER` | Used to display the banner on the song selection screen. bmson uses `info.banner_image` for the same purpose. |
-| `#STAGEFILE` | Used as a dedicated image for the loading screen after song selection. It is not referenced by the BGA renderer during gameplay. |
-| `#PLAYLEVEL`, `#DIFFICULTY` | Used to display, sort, filter, and display the results of the song selection screen. |
-| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP` | Used for time resolution. |
-| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL` | Used for judgment range, display rank, groove gauge calculation. |
-| `#WAVxx`, `#BMPxx` | Used for audio/BGA resource resolution. |
-| `#PREVIEW` | Used preferentially for preview playback on the song selection screen. |
-| `#PATH_WAV` | Used only to search for files on the song selection screen preview. It is not used to solve samples during normal play. |
-| `#LNTYPE`, `#LNMODE`, `#LNOBJ` | Used to interpret BMS long notes. |
-| `#PLAYER` | Used for lane mode estimation and display player metadata. |
-| `#VOLWAV` | Used as a volume multiplier for the entire score. |
-| `#POORBGA` | Used to override the default value of POOR images. |
-| `#SCROLLxx`, `#SPEEDxx` | Used to calculate note drawing distance. |
-`#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | Resolved as control syntax before playback starts. |
+| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT` | 選曲画面の metadata 表示に使います。`#TITLE` / `#ARTIST` / `#GENRE` は TUI と結果画面にも使います。 |
+| `#BANNER` | 選曲画面の banner 表示に使います。bmson では `info.banner_image` を同用途で使います。 |
+| `#STAGEFILE` | 選曲後の loading screen 専用画像として使います。gameplay 中の BGA renderer では参照しません。 |
+| `#PLAYLEVEL`, `#DIFFICULTY` | 選曲画面の表示、ソート、フィルタ、結果表示に使います。 |
+| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP` | 時間解決に使います。 |
+| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL` | 判定幅、表示ランク、groove gauge 計算に使います。 |
+| `#WAVxx`, `#BMPxx` | 音声・BGA リソース解決に使います。 |
+| `#PREVIEW` | 選曲画面のプレビュー再生で優先的に使います。 |
+| `#PATH_WAV` | 選曲画面プレビューのファイル探索にだけ使います。通常プレイ中の sample 解決には使いません。 |
+| `#LNTYPE`, `#LNMODE`, `#LNOBJ` | BMS long note の解釈に使います。 |
+| `#PLAYER` | レーンモード推定と表示上の player metadata に使います。 |
+| `#VOLWAV` | 譜面全体の音量倍率として使います。 |
+| `#POORBGA` | POOR 画像の既定値上書きに使います。 |
+| `#SCROLLxx`, `#SPEEDxx` | ノート描画距離の計算に使います。 |
+| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | 再生開始前に制御構文として解決します。 |
 
-### Unsupported channels
+### 未対応チャンネル
 
-| channel | Current player implementation |
+| channel | 現在の player 実装 |
 | --- | --- |
-| `#xxxA6` | It is not supported as a runtime reflection channel for `#CHANGEOPTIONxx`. Even if it is kept as an event, the player runtime does not refer to it. |
-| Performance-related expansion channels such as `#xxx1A-1Z` and `#xxx2A-2Z` that are not included in the above supported list | are not treated as playable note channels in the current runtime. Although there is display mode estimation and input assignment for `24 KEY SP` / `48 KEY DP`, these channels themselves do not become the target notes for score/judge. |
-| Other object channels that are not included in the above list of correspondence | Even if the parser holds them, the player runtime does not interpret them. |
+| `#xxxA6` | `#CHANGEOPTIONxx` の実行時反映チャンネルとしては未対応です。event として保持されても player runtime は参照しません。 |
+| `#xxx1A-1Z`, `#xxx2A-2Z` など、上の対応一覧に含まれない演奏系拡張チャンネル | 現在の runtime では playable note channel として扱いません。`24 KEY SP` / `48 KEY DP` の表示モード推定と入力割り当てはありますが、これらのチャンネル自体は score/judge 対象ノートになりません。 |
+| 上の対応一覧に含まれないその他の object channel | parser が保持しても、player runtime は意味解釈しません。 |
 
-### Unsupported commands
+### 未対応コマンド
 
-| command | Current player implementation |
+| command | 現在の player 実装 |
 | --- | --- |
-| `#TEXTxx`, `#TEXT00` | The parser is retained, but it is not used for player display or runtime performance. |
-| `#OPTION`, `#CHANGEOPTIONxx`, `#WAVCMD` | Parser is retained, but forced change of play option and `WAVCMD` execution are not supported. |
-| `#BACKBMP`, `#MAKER` | Display and behavior exclusive to player runtime are not implemented. |
-| `#EXWAVxx`, `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx` | Contains parser but does not refer to player runtime. |
-| `#BASEBPM` | The parser is retained, but the player is not used for time resolution. |
-| `#VIDEOFILE` | The parser is retained, but it is not used for BGA video resolution in the player. Real-world video playback only handles video files referenced with `#BMPxx`. |
-| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET` | Retains the parser but does not refer to the player runtime. |
-| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | Not supported by the current player implementation. |
+| `#TEXTxx`, `#TEXT00` | parser は保持しますが、player の表示や runtime 演出には使いません。 |
+| `#OPTION`, `#CHANGEOPTIONxx`, `#WAVCMD` | parser は保持しますが、play option の強制変更や `WAVCMD` 実行は未対応です。 |
+| `#BACKBMP`, `#MAKER` | player runtime 専用の表示・挙動は未実装です。 |
+| `#EXWAVxx`, `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx` | parser は保持しますが、player runtime は参照しません。 |
+| `#BASEBPM` | parser は保持しますが、player は時間解決に使いません。 |
+| `#VIDEOFILE` | parser は保持しますが、player の BGA 動画解決には使いません。現実装の動画再生は `#BMPxx` で参照した動画ファイルだけを扱います。 |
+| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET` | parser は保持しますが、player runtime は参照しません。 |
+| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | 現在の player 実装では未対応です。 |
 
-## Execution flow
+## 実行フロー
 
-player executes the score in the following order:
+player は次の順序で譜面を実行します。
 
-1. Resolve the BMS control syntax at runtime and create a branched score to be used for the current playback.
-2. Extract performance notes, mines, invisible notes, and real-time audio triggers from the branched score.
-3. Confirm the lane mode, key assignment, and FREE ZONE alias from the actual channels.
-4. Initialize gauges, scores, UI state, input runtime, and audio runtime.
-5. Execute either `AUTO` / `MANUAL` / `AUTO SCRATCH` main loop and return `PlayerSummary` at the end.
+1. BMS 制御構文を実行時に解決し、今回の再生で使う分岐済み譜面を作ります。
+2. 分岐後の譜面から、演奏ノート、地雷、不可視ノート、リアルタイム音声トリガを抽出します。
+3. 実際に存在するチャンネル群からレーンモード、キー割り当て、FREE ZONE のエイリアスを確定します。
+4. ゲージ、スコア、UI state、入力 runtime、音声 runtime を初期化します。
+5. `AUTO` / `MANUAL` / `AUTO SCRATCH` のいずれかのメインループを実行し、最後に `PlayerSummary` を返します。
 
-In addition to the regular `#STOPxx`, time resolution also treats the BMS extension `#STP` as a stop event.
-`#STP` interprets `xxx[.yyy] zzzz` as a stop of `zzzz ms` at `yyy / 1000` position of `measure xxx`, and multiple definitions at the same position are added together. If `.yyy` is omitted, it is treated as `000`. Malformed `bms.stp` elements are retained in the IR but ignored by the player's time resolution.
+時間解決では、通常の `#STOPxx` に加えて、BMS 拡張 `#STP` も停止イベントとして扱います。
+`#STP` は `xxx[.yyy] zzzz` を `measure xxx` の `yyy / 1000` 位置にある `zzzz ms` の停止として解釈し、同位置の複数定義は加算します。`.yyy` が省略された場合は `000` として扱います。書式に合わない `bms.stp` 要素は IR には保持されますが、player の時間解決では無視します。
 
-## Handling control syntax
+## 制御構文の扱い
 
-BMS's `#RANDOM` / `#SETRANDOM` / `#SWITCH` control syntax is resolved before playback starts.
-`#RANDOM` draws a random number once at runtime and reinjects that value into `resolveBmsControlFlow()` to reproduce the branch.
+BMS の `#RANDOM` / `#SETRANDOM` / `#SWITCH` 系制御構文は、再生開始前に解決します。
+`#RANDOM` は実行時に乱数を 1 回引き、その値を `resolveBmsControlFlow()` へ再注入して分岐を再現します。
 
-The player also maintains the RANDOM pattern selected for this playback for UI display.
-`#SETRANDOM` is recorded as a fixed value, and if there are multiple RANDOM types, they are formatted as `RANDOM #1 2/3 #2 1/2` in the order of declaration.
+player は UI 表示用に、今回の再生で選ばれた RANDOM パターンも保持します。
+`#SETRANDOM` は固定値として記録し、複数の RANDOM 系がある場合は宣言順で `RANDOM #1 2/3  #2 1/2` のように整形します。
 
-## Note model
+## ノートモデル
 
-### Notes to be played
+### 演奏対象ノート
 
-The player first normalizes the IR `events` into a sequence of performance notes with beats/seconds.
-Only the playable channel is included, and each note has at least the following information:
+player はまず IR の `events` を beat/seconds 付きの演奏ノート列へ正規化します。
+演奏対象に含めるのは playable channel のみで、各ノートは少なくとも次の情報を持ちます。
 
 - `channel`
 - `beat`
 - `seconds`
 - `judged`
-- `endBeat` / `endSeconds` / `longNoteMode` as required
+- 必要に応じて `endBeat` / `endSeconds` / `longNoteMode`
 
-### Long Note
+### ロングノート
 
-The player handles long notes by normalizing them to "1 note from the starting point + information about the ending point."
-bmson's `l`, FREE ZONE (`17` / `27`), BMS's `#LNOBJ`, and BMS legacy LN (`#mmm51-69`) all fold into this shape.
+player はロングノートを「始点 1 ノート + 終点情報」に正規化して扱います。
+bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mmm51-69`) はすべてこの形へ畳み込みます。
 
-The terminal object of `#LNOBJ` itself is not left in the performance note string.
-Therefore, both LNs derived from `#LNOBJ` and LNs derived from `#mmm51-69` are worth 1 note per book on the player.
+`#LNOBJ` の終端オブジェクト自体は演奏ノート列に残しません。
+そのため、`#LNOBJ` 由来の LN も `#mmm51-69` 由来の LN も、player では 1 本につき 1 ノートです。
 
-### Landmine
+### 地雷
 
-The mine channel is mapped to the corresponding playable lane and stored as a separate array.
-Landmines are not included in `summary.total`, but when manually input, they may generate `BAD` with priority over normal notes.
+地雷チャンネルは、対応する playable lane に写像したうえで別配列として保持します。
+地雷は `summary.total` に含めませんが、手動入力時には通常ノートより優先して `BAD` を発生させることがあります。
 
-### Invisible Note
+### 不可視ノート
 
-Invisible notes are kept separate from the normal playing target.
-It is included in the UI drawing target only when `showInvisibleNotes` is enabled, but it is not included in the number of judgments or `summary.total`.
+不可視ノートは通常の演奏対象とは別に保持します。
+`showInvisibleNotes` が有効な場合だけ UI 描画対象へ含めますが、判定数や `summary.total` には含めません。
 
 ### FREE ZONE
 
-FREE ZONE (`17` / `27`) is treated as a note with a 1 beat ending.
-It is excluded from the normal score/gauge target and treated as a keysound fallback and a drawing aid target.
+FREE ZONE (`17` / `27`) は 1 beat の終端を持つノートとして扱います。
+通常の score/gauge 対象からは除外し、keysound fallback と描画上の補助対象として扱います。
 
-## Lane mode and input
+## レーンモードと入力
 
-The lane mode is estimated from the actual channels in the music score, `bms.player`, and `chartExtension`.
-The main modes that can be automatically determined with real equipment are as follows.
+レーンモードは、譜面に実在するチャンネル、`bms.player`、`chartExtension` から推定します。
+現実装で自動判定できる主なモードは次のとおりです。
 
 - `5 KEY SP`
 - `5 KEY DP`
@@ -157,45 +155,45 @@ The main modes that can be automatically determined with real equipment are as f
 - `24 KEY SP`
 - `48 KEY DP`
 
-Channels that do not exist in a known fixed layout will fallback to unused keys in order.
-FREE ZONE also shares the input tokens of the corresponding scratch lanes (`17 -> 16`, `27 -> 26`).
+既知の固定レイアウトに存在しないチャンネルは、未使用キーへ順番にフォールバック割り当てします。
+FREE ZONE は、対応する scratch レーン (`17 -> 16`, `27 -> 26`) の入力トークンも共有します。
 
-The default keyboard layout for the IIDX series is 1P as `Z S X D C F V` and 2P as `B H N J M K,`.
-For scratch, 1P is left `Shift`, 2P is right `Shift`.
-For reverse scratch, 1P uses left `Ctrl` and 2P uses right `Ctrl`. On macOS, use left/right `Option` instead of `Ctrl`.
+IIDX 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とします。
+scratch は 1P が左 `Shift`、2P が右 `Shift` です。
+reverse scratch は 1P が左 `Ctrl`、2P が右 `Ctrl` を使います。macOS では `Ctrl` の代わりに左/右 `Option` を使います。
 
-Distinguishing between left/right `Ctrl` and left/right `Option` is done using the kitty keyboard protocol.
-If you fall back to a terminal that does not support kitty, side-specific input of reverse scratch is not guaranteed.
+left/right `Ctrl` と left/right `Option` の識別は kitty keyboard protocol で行います。
+kitty 非対応端末へフォールバックした場合、reverse scratch の side-specific 入力は保証しません。
 
-## Judgment width
+## 判定幅
 
-### Standard width
+### 基準幅
 
-The player first has an IIDX-based reference judgment width.
-Subsequent rank resolution and expansion instructions will apply this reference value by scaling it.
+player はまず IIDX 系の基準判定幅を持ちます。
+以後の rank 解決や拡張命令は、この基準値を倍率で拡縮する形で適用します。
 
 - `PGREAT`: `16.67ms`
 - `GREAT`: `33.33ms`
 - `GOOD`: `116.67ms`
 - `BAD`: `250ms`
 
-The boundaries of `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` are determined by the width of these four lines.
-`POOR` occurs when an input exceeds the `BAD` width or a note is missed.
+`PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` の境界は、この 4 本の幅から決まります。
+`POOR` は `BAD` 幅を超えた入力、またはノートの取り逃しで発生します。
 
-### BMS initial judgment width
+### BMS の初期判定幅
 
-BMS determines the judgment range at the start of playback using the following priority order.
+BMS では、再生開始時点の判定幅を次の優先順位で決めます。
 
 1. `#DEFEXRANK`
 2. `metadata.rank` (`#RANK`)
-3. Default value `#RANK 2`
+3. 既定値 `#RANK 2`
 
-`#DEFEXRANK` is treated as a percentage value.
-`100` is the standard value and has the same width as `NORMAL`.
-The player interprets `#DEFEXRANK` with `Number.parseFloat()` and only accepts values ​​that are finite and greater than `0`.
+`#DEFEXRANK` はパーセンテージ値として扱います。
+`100` は基準値であり、`NORMAL` と同じ幅です。
+player は `#DEFEXRANK` を `Number.parseFloat()` で解釈し、有限かつ `0` より大きい値だけを採用します。
 
-`#RANK` is treated as a beatoraja-compatible scaling table `[25, 50, 75, 100, 125]`.
-`metadata.rank` is interpreted by rounding down to an integer, and values ​​outside the range are invalidated and fallback to the default value.
+`#RANK` は beatoraja 互換の倍率テーブル `[25, 50, 75, 100, 125]` として扱います。
+`metadata.rank` は整数へ切り捨てて解釈し、範囲外の値は無効として既定値へフォールバックします。
 
 - `#RANK 0`: `25%` (`VERY HARD`)
 - `#RANK 1`: `50%` (`HARD`)
@@ -203,192 +201,192 @@ The player interprets `#DEFEXRANK` with `Number.parseFloat()` and only accepts v
 - `#RANK 3`: `100%` (`EASY`)
 - `#RANK 4`: `125%` (`VERY EASY`)
 
-### BMS conversion formula
+### BMS の換算式
 
-The actual decision width of BMS is calculated based on `NORMAL = 75%`.
-For example, `#DEFEXRANK 120` is ``1.2` times the standard judgment width'' and is treated as `PGREAT=20.004ms`, `GREAT=39.996ms`, `GOOD=140.004ms`, `BAD=300ms`.
+BMS の実際の判定幅は、`NORMAL = 75%` を基準にして計算します。
+たとえば `#DEFEXRANK 120` は「基準判定幅の `1.2` 倍」であり、`PGREAT=20.004ms`, `GREAT=39.996ms`, `GOOD=140.004ms`, `BAD=300ms` として扱います。
 
-The same expression handles the value resolved from `#RANK`.
-For example, `#RANK 4` is `125 / 75` times, so `VERY EASY` is about `1.666...` times wider than `NORMAL`.
+`#RANK` から解決した値も同じ式で扱います。
+たとえば `#RANK 4` は `125 / 75` 倍なので、`VERY EASY` は `NORMAL` より約 `1.666...` 倍広い判定幅です。
 
-### BMS dynamic judgment width change
+### BMS の動的判定幅変更
 
-In BMS, you can use the `#xxxA0` channel and `#EXRANKxx` to change the judgment range during the performance.
-The player resolves the event value of the `A0` channel as a key in `#EXRANKxx`, reads the value with `Number.parseFloat()`, and uses it only if it is finite and greater than `0`.
+BMS では `#xxxA0` チャンネルと `#EXRANKxx` を使って、演奏途中で判定幅を変更できます。
+player は `A0` チャンネルのイベント値を `#EXRANKxx` のキーとして解決し、その値を `Number.parseFloat()` で読んで、有限かつ `0` より大きい場合だけ採用します。
 
-If `#EXRANKxx` is undefined, an empty string, a non-number, or less than or equal to `0`, the event does not change the judgment width.
-If there are multiple `A0` events, they are applied in chronological order, and the value reached later becomes the subsequent judgment width.
+`#EXRANKxx` が未定義、空文字列、非数、`0` 以下の場合、そのイベントは判定幅を変更しません。
+複数の `A0` イベントがある場合は、時刻順に適用し、後から到達した値が以後の判定幅になります。
 
-In the current implementation, this dynamic change is applied on the manual judgment side of `manualPlay()` and `AUTO SCRATCH`.
-Normal `AUTO` treats all notes as `PERFECT`, so the judgment width derived from chart rank does not affect the score result.
+この動的変更は現在の実装では `manualPlay()` と `AUTO SCRATCH` の手動判定側で適用します。
+通常の `AUTO` は全ノートを `PERFECT` 扱いするため、chart rank 由来の判定幅はスコア結果に影響しません。
 
-After changing the dynamic judgment width, use the new `BAD` width for the next process.
+動的判定幅の変更後は、次の処理に新しい `BAD` 幅を使います。
 
-- Input candidate note search
-- Classification of `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR`
-- Missed note detection
-- Determination of expiration of mines/invisible notes
-- Determining the end point of a long note
+- 入力候補ノート探索
+- `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` の分類
+- ノート取り逃し判定
+- 地雷・不可視ノートの失効判定
+- ロングノート終点の判定
 
-### bmson initial judgment width
+### bmson の初期判定幅
 
-bmson determines the judgment width using the following priority order.
+bmson では次の優先順位で判定幅を決めます。
 
 1. `bmson.info.judgeRank`
 2. `metadata.rank`
-3. Default value `100`
+3. 既定値 `100`
 
-The standard value for bmson is `100%`.
-Therefore, `judgeRank=100` is treated as the IIDX standard judgment width, `50` is treated as half, and `150` is treated as `1.5` times.
+bmson の基準値は `100%` です。
+そのため `judgeRank=100` は IIDX 系の基準判定幅そのままで、`50` は半分、`150` は `1.5` 倍として扱います。
 
-In the current implementation, bmson does not have dynamic judgment width change equivalent to BMS's `#EXRANKxx`.
+現在の実装では、bmson に BMS の `#EXRANKxx` 相当の動的判定幅変更はありません。
 
-### Override for debugging
+### デバッグ用上書き
 
-The `judgeWindowMs` option directly overrides only the `BAD` width.
-`PGREAT` / `GREAT` / `GOOD` use the scaling result derived from rank as is.
+`judgeWindowMs` オプションは `BAD` 幅だけを直接上書きします。
+`PGREAT` / `GREAT` / `GOOD` は rank 由来のスケーリング結果をそのまま使います。
 
-This override applies not only to the initial judgment width but also after dynamic changes by `#EXRANKxx` in BMS.
-This means that even if `#EXRANKxx` changes, the `BAD` width with debug overrides will always be that fixed value.
+この上書きは、初期判定幅だけでなく BMS の `#EXRANKxx` による動的変更後にも適用します。
+つまり `#EXRANKxx` が変わっても、デバッグ上書きがある場合の `BAD` 幅は常にその固定値です。
 
-### Display treatment
+### 表示上の扱い
 
-The rank display resolved from the current chart is displayed on the song selection list, TUI, and result screen.
-BMS with `#DEFEXRANK` will display that number, and normal `#RANK 0-4` will display the corresponding label.
-Similarly, `PLAYLEVEL` uses the display value resolved from the chart, and if `#PLAYLEVEL` is omitted in BMS, it will give a BM98-compatible default value of `3`.
-When `PLAYLEVEL` is `0`, player uses `?` for display. The string `PLAYLEVEL` is displayed as is, and decimal values ​​are also displayed without rounding.
-`DIFFICULTY` only displays integers between `1-5`. In the song selection list, arrange them in the order of `PLAYER -> DIFFICULTY -> PLAYLEVEL -> filename`, use the keys `1-5` to switch the `DIFFICULTY` filter, and press `0` to cancel it. `DIFFICULTY` Unspecified values ​​or values ​​outside the range are not filtered and will be displayed as `-`.
+選曲一覧、TUI、結果画面には、現在の chart から解決した rank 表示を出します。
+`#DEFEXRANK` がある BMS はその数値を、通常の `#RANK 0-4` は対応ラベルを表示します。
+同じく `PLAYLEVEL` は chart から解決した表示値を使い、BMS で `#PLAYLEVEL` が省略された場合は BM98 互換の既定値 `3` を出します。
+`PLAYLEVEL` が `0` のとき、player は表示上 `?` を使います。文字列 `PLAYLEVEL` はそのまま表示し、小数値も丸め落とさず表示します。
+`DIFFICULTY` は `1-5` の整数だけを表示対象として扱います。選曲一覧では `PLAYER -> DIFFICULTY -> PLAYLEVEL -> filename` の順で並べ、キー `1-5` で `DIFFICULTY` フィルタを切り替え、`0` で解除します。`DIFFICULTY` 未指定、または範囲外の値はフィルタ対象外で、表示上も `-` とします。
 
-A BMS that has dynamic changes using `#EXRANKxx` will have a displayed rank of `RANDOM`.
-This is because the judgment range changes midway through the score, and it cannot be expressed with a single fixed label.
+`#EXRANKxx` による動的変更が存在する BMS は、表示上の rank を `RANDOM` とします。
+これは途中で判定幅が変わる譜面で、固定ラベル 1 つでは表現できないためです。
 
-However, there is still no ability to dynamically update the TUI's `BAD` width display after play has started.
-The `Judge window: ...` line that appears on the current TUI/standard output only displays the width at the start of playback.
+ただし、プレイ開始後に TUI の `BAD` 幅表示を動的更新する機能はまだありません。
+現在の TUI/標準出力に出る `Judge window: ...` 行は、再生開始時点の幅を表示するだけです。
 
-## Judgment words and side effects
+## 判定語と副作用
 
 ### `PERFECT` / `GREAT` / `GOOD`
 
-These are success tests.
-When the judgment is confirmed, do the following:
+これらは成功判定です。
+判定確定時に次を行います。
 
-- Increment the corresponding `summary` counter.
-- Add EX-SCORE.
-- Increase combo by 1.
-- Update score.
-- Add groove gauge.
+- 対応する `summary` カウンタを加算する。
+- EX-SCORE を加算する。
+- combo を 1 増やす。
+- score を更新する。
+- groove gauge を加算する。
 
-`FAST` / `SLOW` records only `GREAT` and `GOOD`.
-`PERFECT` does not increase FAST/SLOW.
+`FAST` / `SLOW` は `GREAT` と `GOOD` のみで記録します。
+`PERFECT` は FAST/SLOW を増やしません。
 
 ### `BAD`
 
-`BAD` is a failure judgment.
-When the judgment is confirmed, do the following:
+`BAD` は失敗判定です。
+判定確定時に次を行います。
 
-- Add `summary.bad`.
-- Set combo back to 0.
-- Update score.
-- Set groove gauge to `-4`.
+- `summary.bad` を加算する。
+- combo を 0 に戻す。
+- score を更新する。
+- groove gauge を `-4` する。
 
 ### `POOR`
 
-`POOR` is a failure for the note being played.
-Occurs when a note passes the `BAD` window, or when a manual input deviation exceeds the `BAD` window.
+`POOR` は演奏対象ノートに対する失敗です。
+ノートが `BAD` 窓を過ぎた場合、または手動入力のズレが `BAD` 窓を超えた場合に発生します。
 
-When `POOR` occurs, do the following:
+`POOR` 発生時は次を行います。
 
-- Add `summary.poor`.
-- Set combo back to 0.
-- Set groove gauge to `-6`.
-- Fire POOR BGA.
-- Update judge/combo display to `POOR`.
+- `summary.poor` を加算する。
+- combo を 0 に戻す。
+- groove gauge を `-6` する。
+- POOR BGA を発火する。
+- judge/combo 表示を `POOR` に更新する。
 
-### Blank keystroke (no candidate)
+### 空打鍵（candidate なし）
 
-If there is an input, but there are no undecided notes in the `BAD` window for that lane set, that input will not cause a decision.
+入力はあったが、そのレーン集合に対して `BAD` 窓内の未判定ノートが存在しない場合、その入力は判定を発生させません。
 
-When a blank key is pressed, the settings remain as follows.
+空打鍵時は次のままです。
 
-- Do not update `summary`.
-- Don't cut the combo.
-- Do not change groove gauge.
-- Do not fire POOR BGA.
-- Don't update judge/combo display.
+- `summary` を更新しない。
+- combo を切らない。
+- groove gauge を変化させない。
+- POOR BGA を発火しない。
+- judge/combo 表示を更新しない。
 
-If a keysound fallback exists, the fallback sound can be played first.
-However, even in that case, no additional judgments or gauge changes occur.
-Similarly, the fallback pronunciation of FREE ZONE also returns as is.
+keysound fallback が存在する場合は、fallback 音を先に再生できます。
+ただしその場合でも追加の判定や gauge 変動は発生しません。
+FREE ZONE の fallback 発音も同様に、そのまま return します。
 
-### Landmine
+### 地雷
 
-During manual input, if a mine candidate is closer or the same distance as a normal note candidate, the landmine will be prioritized.
-Treat mines as `BAD`, turn off the combo, and set the groove gauge to `-4`.
+手動入力時に地雷候補が通常ノート候補より近いか同距離なら、地雷を優先します。
+地雷は `BAD` として扱い、combo を切り、groove gauge を `-4` します。
 
 ## NOTES・combo・score
 
 ### `summary.total`
 
-`summary.total` is the number of notes played.
-It does not contain the following elements:
+`summary.total` は演奏対象ノート数です。
+次の要素は含みません。
 
 - FREE ZONE
-- Landmine
-- invisible note
-- Terminal object of `#LNOBJ`
+- 地雷
+- 不可視ノート
+- `#LNOBJ` の終端オブジェクト
 
 ### combo
 
-combo is increased only by `PERFECT` / `GREAT` / `GOOD`.
-`BAD` and `POOR` return combo to 0.
+combo は `PERFECT` / `GREAT` / `GOOD` のみで増加します。
+`BAD` と `POOR` は combo を 0 に戻します。
 
 ### EX-SCORE
 
-EX-SCORE is IIDX compatible.
+EX-SCORE は IIDX 互換です。
 
 - `PERFECT`: `+2`
 - `GREAT`: `+1`
-- Otherwise: `+0`
+- それ以外: `+0`
 
 ### SCORE
 
-The display `score` is an integer between `0-200000`.
-Internally, the following two systems are added together and then normalized to `200000`.
+表示用 `score` は `0-200000` の整数です。
+内部では次の 2 系統を合算してから `200000` へ正規化します。
 
-- Judgment basic points: maximum `150000`
-- combo bonus: up to `50000`
+- 判定基本点: 最大 `150000`
+- combo bonus: 最大 `50000`
 
-The magnification of the judgment basic points is as follows.
+判定基本点の倍率は次のとおりです。
 
 - `PERFECT`: `1.5`
 - `GREAT`: `1.0`
 - `GOOD`: `0.2`
 - `BAD` / `POOR`: `0`
 
-Combo bonuses are added up to 10 steps per note.
-Calculate the bonus unit price for each number of notes so that it is always `200000` for all notes `PERFECT`.
+combo bonus は 1 ノートごとに最大 10 段階まで加算します。
+全ノート `PERFECT` で必ず `200000` になるよう、ノート数ごとに bonus 単価を計算します。
 
 ## Groove Gauge
 
-### Basic policy
+### 基本方針
 
-- `NORMAL` groove gauge matches Lunatic Rave 2 default value.
-- Gauge display range uses internal value `2-100%` instead of `0-100%`.
-- Clear judgment is when the gauge is ``80% or more'' at the end of the performance.
+- `NORMAL` groove gauge は Lunatic Rave 2 の既定値に合わせます。
+- ゲージ表示範囲は `0-100%` ではなく、内部値 `2-100%` を使います。
+- クリア判定は演奏終了時のゲージ `80%以上` です。
 
-### Initial and default values
+### 初期値と既定値
 
-- Initial gauge is `20%`
-- The lower limit during playing is `2%`
-- Upper limit is `100%`
-- Clear line is `80%`
-- If `#TOTAL` is not specified, the default value is `160`
-- When `#TOTAL` is specified, use that value as is
+- 初期ゲージは `20%`
+- 演奏中の下限は `2%`
+- 上限は `100%`
+- クリアラインは `80%`
+- `#TOTAL` 未指定時の既定値は `160`
+- `#TOTAL` 指定時はその値をそのまま使います
 
-### Increase/Decrease
+### 増減量
 
-`noteCount` is the number of notes played for TOTAL / EX-SCORE / SCORE.
-FREE ZONE, mines, and invisible objects are not included in `noteCount`.
+`noteCount` は TOTAL / EX-SCORE / SCORE の対象になる演奏ノート数です。
+FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めません。
 
 `baseGain = effectiveTotal / noteCount`
 
@@ -398,211 +396,211 @@ FREE ZONE, mines, and invisible objects are not included in `noteCount`.
 - `BAD`: `-4`
 - `POOR`: `-6`
 
-The value after gauge update is clamped to `2-100%`.
+ゲージ更新後の値は `2-100%` に clamp します。
 
-## Long Note
+## ロングノート
 
-### How to count NOTES
+### NOTES の数え方
 
-The player treats each long note as one note.
-The terminal object of `#LNOBJ` itself is not included in the number of notes played.
-Long notes derived from `#mmm51-69` are also counted as one starting note.
+player はロングノートを 1 本につき 1 ノートとして扱います。
+`#LNOBJ` の終端オブジェクト自体は演奏ノート数に含めません。
+`#mmm51-69` 由来のロングノートも、始点 1 件の演奏ノートとして数えます。
 
 ### `#LNMODE`
 
-If `#LNMODE` of BMS is not specified, it is treated as `1`.
-bmson and FREE ZONE are not subject to `#LNMODE` and are treated as notes with a terminal.
+BMS の `#LNMODE` 未指定時は `1` として扱います。
+bmson と FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱います。
 
 ### Manual Play
 
-In manual performance, the start point side judgment is calculated when inputting the long note start point.
-However, the final decision timing depends on `#LNMODE`.
+手動演奏では、ロングノートの始点入力時に始点側の判定を計算します。
+ただし最終的な判定確定タイミングは `#LNMODE` に依存します。
 
-- `LNMODE=1`: Only if you keep pressing until the end point, the judgment on the start point side will be confirmed only once when the end point is reached. If you release it midway, it will become `BAD` at that point and the lane sound will also stop.
-- `LNMODE=2`: Calculate the judgment on the end point side when reaching the end point or leaving halfway, and confirm the worse one of the starting point side and the ending point side as the final judgment only once. The lane sound will also stop when you leave midway.
-- `LNMODE=3`: The basic final judgment is the same as `LNMODE=2`. In addition, the groove gauge will continue to decrease while the hold expires. If the end point is reached while the hold is broken, the end point side is treated as `POOR`. The lane sound will also stop when you leave midway.
+- `LNMODE=1`: 終点まで押し続けた場合のみ、終点到達時に始点側の判定を 1 回だけ確定します。途中で離した場合はその時点で `BAD` とし、レーン音も停止します。
+- `LNMODE=2`: 終点到達時、または途中離し時に終点側の判定を計算し、始点側と終点側のうち悪い方を最終判定として 1 回だけ確定します。途中離し時はレーン音も停止します。
+- `LNMODE=3`: 基本の最終判定は `LNMODE=2` と同じです。加えて、保持が切れている間は groove gauge を継続的に減少させます。保持が切れたまま終点へ到達した場合、終点側は `POOR` として扱います。途中離し時はレーン音も停止します。
 
 ### Auto Play
 
-Autoplay does not currently branch to `#LNMODE`.
-A long note starts keysound playback and lane holding display at the start point, and `PGREAT` / combo / score / gauge is confirmed only once at the end point.
+自動演奏は現時点で `#LNMODE` を分岐しません。
+ロングノートは始点で keysound 再生とレーン保持表示を開始し、`PGREAT` / combo / score / gauge の確定は終点で 1 回だけ行います。
 
 ### AUTO SCRATCH
 
-`AUTO SCRATCH` is a mode that automatically processes only the scratch lane (`16` / `26`) on the manual loop.
-The confirmation timing of long note is the end point, same as `AUTO`.
+`AUTO SCRATCH` は manual ループ上で scratch レーン (`16` / `26`) だけを自動処理するモードです。
+long note の確定タイミングは `AUTO` と同じく終点です。
 
-## Behavior by mode
+## モード別挙動
 
 ### `AUTO`
 
-`AUTO` automatically processes all notes to be played.
-A normal note confirms `PERFECT` once when the time is reached, and a long note confirms `PERFECT` at the end point.
+`AUTO` は演奏対象ノートをすべて自動で処理します。
+通常ノートは時刻到達時に `PERFECT` を 1 回確定し、long note は終点で `PERFECT` を確定します。
 
-`AUTO` accepts pause/resume, restart, and high-speed changes.
-No judgment window or manual input candidate search is used.
+`AUTO` は pause/resume、restart、high-speed 変更を受け付けます。
+判定窓や手動入力候補探索は使いません。
 
 ### `MANUAL`
 
-`MANUAL` selects the most appropriate candidate note within the `BAD` window from the set of lanes corresponding to the input token.
-If there are no candidates, nothing happens.
-If a keysound fallback exists, only that sound will be played.
+`MANUAL` は入力トークンに対応するレーン集合から、`BAD` 窓内で最も適切な候補ノートを選びます。
+候補がない場合は何も起こりません。
+keysound fallback が存在する場合は、その音だけを鳴らせます。
 
-In manual input, objects that pass the `BAD` window without any note input are automatically set to `POOR`.
-Invisible notes are not included in this miss judgment.
+手動入力では、ノート未入力のまま `BAD` 窓を過ぎた対象を自動的に `POOR` とします。
+不可視ノートはこの miss 判定の対象に含めません。
 
 ### `AUTO SCRATCH`
 
-`AUTO SCRATCH` is a derivative of `MANUAL`.
-Only the notes on the scratch playable channel are automatically processed, and the rest are subjected to normal manual judgment.
+`AUTO SCRATCH` は `MANUAL` の派生です。
+scratch playable channel 上の演奏ノートだけを自動で処理し、それ以外は通常の manual 判定を行います。
 
-## Time control and interrupts
+## 時間制御と割り込み
 
 ### `speed`
 
-`speed` is the speed at which in-game time progresses.
-Both `AUTO` and `MANUAL` are used to convert seconds on the musical score to real time.
+`speed` はゲーム内時間の進行速度です。
+`AUTO` / `MANUAL` ともに、譜面上の seconds を実時間へ換算する際に使います。
 
 ### `highSpeed`
 
-`highSpeed` is a display parameter that primarily changes the visible range and scrolling density of the TUI.
-The judgment window itself cannot be changed.
+`highSpeed` は主に TUI の可視範囲とスクロール密度を変える表示用パラメータです。
+判定窓そのものは変えません。
 
 ### pause / restart / interrupt
 
-The player can handle input events for pause/resume, restart, and high-speed changes.
-During pause, the playback clock and audio session are stopped at the same time, and resume restarts them both.
+player は pause/resume、restart、high-speed 変更の入力イベントを処理できます。
+pause 中は playback clock と audio session を同時に止め、resume で両方を再開します。
 
-`escape` returns the current `summary` and exits.
-`ctrl-c` and `restart` raise `PlayerInterruptedError` and have exit codes of `130` and `0`, respectively.
+`escape` はその時点の `summary` を返して終了します。
+`ctrl-c` と `restart` は `PlayerInterruptedError` を送出し、終了コードはそれぞれ `130` と `0` です。
 
-## Audio processing
+## 音声処理
 
-### Play timing
+### 再生タイミング
 
-Real-time playback uses the trigger sequence generated by `collectSampleTriggers()` from the score after branch resolution.
-Clamp the playback time so that it does not become negative.
+リアルタイム再生は、分岐解決後の譜面から `collectSampleTriggers()` で生成したトリガ列を使います。
+再生時刻は負にならないように clamp します。
 
-### Volume separation
+### 音量分離
 
-`playVolume` applies to the sound on the playable lane side.
-`bgmVolume` applies to the other BGM side.
+`playVolume` は playable lane 側の音に適用します。
+`bgmVolume` はそれ以外の BGM 側に適用します。
 
 ### `#VOLWAV`
 
-BMS's `#VOLWAV` is treated as the volume multiplier for the entire score.
-If omitted, the default value is `100`, and the effective gain is `bms.volWav / 100`.
+BMS の `#VOLWAV` は譜面全体の音量倍率として扱います。
+省略時は `100` を既定値とし、実効ゲインは `bms.volWav / 100` です。
 
-- `#VOLWAV 100`: Keep the original volume
-- `#VOLWAV 200`: `2` times the original volume
-- `#VOLWAV 0`: Silence
+- `#VOLWAV 100`: 原音量のまま
+- `#VOLWAV 200`: 原音量の `2` 倍
+- `#VOLWAV 0`: 無音
 
-This scaling factor applies to keysound for real-time playback, song selection screen preview, and offline audio rendering using `renderJson()`.
-The actual device applies only linear gain and does not reproduce historical implementation differences or hardware-dependent volume differences.
+この倍率は、リアルタイム再生の keysound、選曲画面プレビュー、`renderJson()` を使うオフライン音声レンダリングに適用します。
+現実装は線形 gain のみを適用し、歴史的な実装差やハードウェア依存の音量差までは再現しません。
 
 ### `#xxx97` / `#xxx98`
 
-BMS's `97` / `98` channels are treated as bus volume automation during play.
-`97` corresponds to the BGM side, `98` corresponds to the playable/key side, and converts the value `01-FF` to a gain of `value / 255`.
+BMS の `97` / `98` channel は、演奏途中の bus volume automation として扱います。
+`97` は BGM 側、`98` は playable/key 側に対応し、値 `01-FF` を `value / 255` の gain へ変換します。
 
-- `#xxx97`: Update the volume on the BGM side
-- `#xxx98`: Update the volume on the playable/key side
-- `FF`: Original volume
-- `00`: No event is generated because it is an empty token.
+- `#xxx97`: BGM 側の音量を更新する
+- `#xxx98`: playable/key 側の音量を更新する
+- `FF`: 原音量
+- `00`: 空トークンなのでイベントは生成されない
 
-The player applies `97` / `98` before the sample trigger at the same time.
-Therefore, if the same beat is pronounced as volume change, the new volume will be used when pronouncing it.
+player は同時刻の sample trigger より先に `97` / `98` を適用します。
+そのため、同じ beat に volume change と発音がある場合、発音時には新しい音量が使われます。
 
-This change only affects the initial gain of newly triggered notes from that point on.
-Voices that are already playing will not be changed. If CLI's `playVolume` / `bgmVolume` or `#VOLWAV` exists, apply them by multiplying them.
+この変更は、その時点以降に新しく trigger される音の初期 gain だけに反映します。
+すでに再生中の voice は変更しません。CLI の `playVolume` / `bgmVolume` や `#VOLWAV` がある場合は、それらと乗算で適用します。
 
-The reason for this interpretation is that if the PCM gain is changed instantly during playback, discontinuous steps are likely to occur, which can easily be heard as clicks or unstable volume changes.
-Also, since `#xxx98` can be read as a command close to the pronunciation conditions of a playable/key sound, it is easier to understand the correspondence between the implementation and the result if you interpret it as ``change the initial gain of the sound that will be played afterward.''
+この解釈を採る理由は、再生中 PCM の gain を瞬時に掛け替えると不連続な段差が入りやすく、クリックや不安定な音量変化として聞こえやすいためです。
+また、`#xxx98` は playable/key sound の発音条件に近い命令として読めるので、「以後に鳴る音の初期 gain を変える」と解釈したほうが実装と結果の対応が分かりやすくなります。
 
-### BGM headroom control
+### BGM headroom 制御
 
-When `limiter === false`, enable BGM headroom control for auto mix.
-In this mode, while maintaining the amplitude of the playable/key-sound side, only the BGM side is reduced to the extent that the peak after addition does not clip.
+`limiter === false` のときは auto mix 用の BGM headroom 制御を有効にします。
+このモードでは playable/key-sound 側の振幅を維持したまま、加算後のピークがクリップしない範囲まで BGM 側だけを縮小します。
 
-### Long stop
+### 長音停止
 
-If the retention expires with manual long note, the playback sound of the corresponding channel will be stopped.
-With `LNMODE=3`, the gauge continues to decrease even during hold break.
+manual long note で保持が切れた場合は、対応チャンネルの再生音を停止します。
+`LNMODE=3` では hold break 中もゲージ減少だけ継続します。
 
-## UI and display
+## UI と表示
 
 ### UI runtime
 
-The player body is independent of the UI implementation and notifies the state through `stateSignals` and `uiSignals`.
-Judge/combo, frame information, POOR BGA, lane flash, and lane hold indication are communicated via this signal.
+player 本体は UI 実装に依存せず、`stateSignals` と `uiSignals` を通じて状態を通知します。
+judge/combo、フレーム情報、POOR BGA、レーンフラッシュ、レーン保持表示はこの信号経由で伝えます。
 
 ### Loading screen
 
-During loading after song selection, the CLI draws a progress bar and current steps to standard output.
-At this time, if `metadata.stageFile` exists and the image can be resolved, the image will be converted to ANSI and drawn across the terminal, and the loading text will be overlaid on top of it.
+選曲後の loading 中は、CLI が progress bar と現在の手順を標準出力へ描画します。
+このとき `metadata.stageFile` が存在し、画像を解決できる場合は、その画像を ANSI 化して terminal 全体へ描画し、loading 文言はその上にオーバーレイします。
 
-The loading statement displays the high-level `Step` as well as the separate states of `Sound` and `Visual`.
-The audio and graphics loads proceed in parallel, so you can tell on the screen which one you're waiting on.
-The detail of each line also displays the name of the file currently being processed and the number of items, such as `3/24`, if necessary.
+loading 文言は高レベルの `Step` に加えて、`Sound` と `Visual` の個別状態を表示します。
+audio 読み込みと graphics 読み込みは並列に進むため、どちらで待っているかを画面上で判別できます。
+各行の detail には、必要に応じて現在処理中のファイル名や `3/24` のような件数も表示します。
 
-The display size of `#STAGEFILE` is used up to the current terminal size.
-When drawing, the image is enlarged using the equivalent of `cover` to cover the entire terminal while maintaining the image's aspect ratio. If it does not match the terminal ratio, crop a part based on the center.
-The loading text is overlaid on top of it, and the background color of each character cell uses the corresponding `STAGEFILE` pixel color. The font color is chosen to have a higher contrast ratio with the background, so it can be either white or black.
+`#STAGEFILE` の表示サイズは現在の端末サイズいっぱいまで使います。
+描画時は画像の縦横比を維持したまま、terminal 全体を覆うように `cover` 相当で拡大します。端末比率と合わない場合は中央基準で一部を crop します。
+loading 文言はその上へオーバーレイし、各文字セルの背景色には対応する `STAGEFILE` ピクセル色を使います。文字色は背景とのコントラスト比が高いほうを選ぶため、白または黒のどちらかになります。
 
-If `#STAGEFILE` is not specified, the file is not found, the format is not supported, or decoding fails, it will fall back to a text loading screen without an image.
-`#STAGEFILE` is only for loading and does not refer to the BGA renderer during gameplay. The viewport remains a black background while the first base BGA cue is not yet enabled.
-If `--kitty-graphics` is enabled and the device supports it, `#STAGEFILE` will be displayed as an image overlay using the Kitty graphics protocol. If not specified, ANSI display will be displayed.
-The default implementation of video BGA is progressive decode. The UI runtime is set to ready when the first frame is ready, and the remaining frames are decoded step by step with another worker after the gameplay starts.
+`#STAGEFILE` が未指定、ファイル未発見、非対応形式、デコード失敗の場合は、画像なしのテキスト loading screen へフォールバックします。
+`#STAGEFILE` は loading 専用であり、gameplay 中の BGA renderer は参照しません。最初の base BGA cue がまだ有効でない間は、viewport は黒背景のままです。
+`--kitty-graphics` が有効で、対応端末なら `#STAGEFILE` は Kitty graphics protocol の画像 overlay として表示します。未指定時は ANSI 表示です。
+動画 BGA の既定実装は progressive decode です。最初のフレームが用意できた時点で UI runtime を ready にし、残りのフレームは gameplay 開始後に別 worker で段階的にデコードします。
 
-### Music Select (song selection screen)
+### Music Select (選曲画面)
 
-The song selection screen displays the following information:
+選曲画面は次の情報を表示します。
 
-- `TITLE` / `SUBTITLE` / `ARTIST` / `SUBARTIST` / `GENRE` / `COMMENT` of the selected chart
-- List of music scores (`PLAYER`, `DIFF`, `RANK`, `PLEVEL`, `BPM`, `NOTES`)
-- Operation help, current directory, play mode, HIGH-SPEED, audio backend
-- `#BANNER` or bmson `info.banner_image`
+- 選択中チャートの `TITLE` / `SUBTITLE` / `ARTIST` / `SUBARTIST` / `GENRE` / `COMMENT`
+- 譜面一覧 (`PLAYER`, `DIFF`, `RANK`, `PLEVEL`, `BPM`, `NOTES`)
+- 操作ヘルプ、現在 directory、play mode、HIGH-SPEED、audio backend
+- `#BANNER` または bmson `info.banner_image`
 
-The banner will be displayed on the right side of the metadata block and will fit within the block while maintaining the aspect ratio.
-If `--kitty-graphics` is enabled and the terminal supports it, the banner will also be displayed using the Kitty graphics protocol. If not specified, ANSI display will be displayed.
+banner は metadata block の右側に表示し、縦横比を維持したまま block 内に収めます。
+`--kitty-graphics` が有効で、対応端末なら banner も Kitty graphics protocol で表示します。未指定時は ANSI 表示です。
 
-On the song selection screen, `#PREVIEW` is given priority for preview playback.
-Place a short settle delay before starting the preview to prevent the preview process from continuing to run while the cursor is being hit.
-The focus of Music Select is saved for each directory and restores not only the chart but also the `random` entry.
-The chart summary of the song list is reused using the local cache for each user, and re-parsing is omitted as long as the content hash of the chart body matches.
+選曲画面では `#PREVIEW` を優先してプレビュー再生します。
+プレビュー開始前には短い settle delay を置き、カーソル連打中に preview 処理が走り続けないようにします。
+Music Select の focus は directory ごとに保存し、chart だけでなく `random` entry も復元します。
+楽曲一覧の chart summary はユーザーごとの local cache を使って再利用し、chart 本文の content hash が一致する間は再 parse を省略します。
 
 ### TUI
 
-The standard TUI displays the following information:
+標準 TUI は次の情報を表示します。
 
-- Song title, genre, play mode, BPM, SCROLL, STOP
-- progress, current measure, judgment window, HIGH-SPEED
+- 曲名、ジャンル、プレイモード、BPM、SCROLL、STOP
+- progress、現在小節、判定窓、HIGH-SPEED
 - NOTES / EX-SCORE / SCORE / judge counts / FAST / SLOW
-- Lane body, judge/combo, input key, groove gauge
-- RANDOM summary, BGA, audio debug lines as needed
+- レーン本体、judge/combo、入力キー、groove gauge
+- 必要に応じて RANDOM 要約、BGA、audio debug 行
 
-The default drawing limit for TUI is `60fps`.
-By specifying `--tui-fps <value>`, you can change the target refresh rate during playback to any positive value.
+TUI の描画上限はデフォルト `60fps` です。
+`--tui-fps <value>` を指定すると、再生中の target refresh rate を任意の正の値へ変更できます。
 
-When drawing a note, the head and tail are drawn with priority over the long note body.
-Mines are drawn with even higher priority.
-A playback progress indicator is displayed outside the lane, and the line closest to the current position is displayed as a brighter vertical bar.
+ノート描画では、head と tail を long note body より優先して描画します。
+地雷はさらに高優先度で描画します。
+レーン外側には再生進捗 indicator を表示し、現在位置に最も近い行ほど明るい縦バーで表示します。
 
-### Visualization rules
+### 可視化ルール
 
-Even on judged notes, drawing will remain until the judge line is crossed or the `visibleUntilBeat` expires.
-A long note is drawn as a single note with a body and tail lane, and the highlight continues while being held.
-The visual distance of a note is determined by the integral of the piecewise-constant coefficient of `#SCROLLxx` / `#xxxSC` multiplied by the piecewise-linear interpolation coefficient of `#SPEEDxx` / `#xxxSP`. If there is no `#SPEEDxx`, it is always `1`, and multiple keyframes with the same beat are the last to win. If the value of `#SPEEDxx` is a negative number, a non-number, or an undefined reference, that keyframe will be ignored from drawing calculations.
+judge 済みノートでも、judge line を跨ぐまで、または `visibleUntilBeat` が切れるまでは描画を残します。
+long note は body と tail を持つ 1 本のノートとして描画し、保持中は lane highlight も継続します。
+ノートの視覚距離は、`#SCROLLxx` / `#xxxSC` の piecewise-constant 係数と、`#SPEEDxx` / `#xxxSP` の piecewise-linear 補間係数を掛け合わせて積分した値で決めます。`#SPEEDxx` がない場合は常に `1`、同一 beat の複数 keyframe は後勝ちです。`#SPEEDxx` の値が負数、非数、未定義参照の場合、その keyframe は描画計算から無視します。
 
-### Non-TUI output
+### TUI 以外の出力
 
-If TUI is disabled, the mode start message, lane assignment, judgment log, and final result are output as text.
-`renderSummary()` formats the result in the following order: `TOTAL / GAUGE / PGREAT / GREAT / GOOD / BAD / POOR / FAST / SLOW / EX-SCORE / SCORE`.
+TUI が無効な場合は、モード開始メッセージ、レーン割り当て、判定ログ、最終 result をテキストで出力します。
+`renderSummary()` は `TOTAL / GAUGE / PGREAT / GREAT / GOOD / BAD / POOR / FAST / SLOW / EX-SCORE / SCORE` の順で結果を整形します。
 
 ## `PlayerSummary`
 
-`PlayerSummary` is the final playback result.
-The main items are:
+`PlayerSummary` は最終的な再生結果です。
+主な項目は次のとおりです。
 
 - `total`
 - `perfect`
@@ -616,12 +614,12 @@ The main items are:
 - `score`
 - `gauge`
 
-`gauge` includes `current` / `max` / `clearThreshold` / `initial` / `effectiveTotal` / `cleared`.
+`gauge` には `current` / `max` / `clearThreshold` / `initial` / `effectiveTotal` / `cleared` を含みます。
 
-## Known unsupported
+## 既知の未対応
 
-- Gauge type other than `NORMAL` of LR2
-- Gauge type switching option
-- Gauge history display
-- `#LNMODE` branch on `AUTO`
-- Compatibility mode that introduces `EMPTY_POOR` for empty keys
+- LR2 の `NORMAL` 以外のゲージ種別
+- ゲージ種別切り替えオプション
+- ゲージ推移の履歴表示
+- `AUTO` での `#LNMODE` 分岐
+- 空打鍵に `EMPTY_POOR` を導入する互換モード

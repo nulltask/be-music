@@ -1,5 +1,3 @@
-[日本語版](./player-spec.ja.md)
-
 [Japanese version](./player-spec.ja.md)
 
 # Player implementation specifications

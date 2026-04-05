@@ -17,7 +17,7 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 
 ## 必要環境
 
-- Node.js `>= 22`
+- Node.js `>= 25`
 - pnpm workspaces
 
 ## セットアップ
@@ -49,9 +49,10 @@ pnpm run release:version
 ```
 
 - 通常の feature PR では、変更した package に対する `.changeset/*.md` を追加します
-- release したいタイミングで `devel` 上で `pnpm run release:version` を実行し、version bump と `CHANGELOG.md` 更新をまとめてコミットします
+- release したいタイミングで `devel` 上で `pnpm run release:version` を実行し、生成された `packages/*/package.json` と `packages/*/CHANGELOG.md` の更新をまとめてコミットします
 - その状態で `devel -> main` の release PR を merge すると、version が上がった package だけ GitHub Release が個別に作成されます
 - `@be-music/player` と `@be-music/audio-renderer` は個別 release に SEA zip が添付されます
+- private な repository root の `package.json` は `0.0.0` のままで、release 対象 version は `packages/*/package.json` で管理します
 
 tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
@@ -108,6 +109,9 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - 動画 BGA の progressive decode (`--no-video-bga-streaming` で旧方式へ切り替え)
 - `--kitty-graphics` / `--no-kitty-graphics` による Kitty graphics protocol 描画切り替え (default: on)
 - `node-web-audio-api` 固定バックエンドで再生
+- `#LNTYPE` 未指定時の自動推測 (`--ln-type-auto` / `--no-ln-type-auto`)
+- 再生前 audio render (`--render-audio`) と bus ごとの音量調整 (`--volume`, `--bgm-volume`, `--key-volume`)
+- compressor / limiter の有効化切り替えと threshold / release 系の出力ダイナミクス調整
 - 構造化ログ出力 (`~/.be-music/logs/player.ndjson`, `--log-file` で上書き)
 
 ### editor (`@be-music/editor`)
@@ -177,6 +181,15 @@ pnpm run player chart.bms --no-limiter
 
 # コンプレッサを有効化
 pnpm run player chart.bms --compressor --compressor-threshold-db -10 --compressor-ratio 3
+
+# 再生前に音声を書き出しつつ、in-game audio は無効化
+pnpm run player chart.bms --render-audio preview.wav --no-audio
+
+# 高密度譜面向けに可視ノート上限を調整
+pnpm run player chart.bms --tui-visible-notes-limit 4096
+
+# #LNTYPE 未指定時の自動推測を無効化
+pnpm run player chart.bms --no-ln-type-auto
 ```
 
 ### 5. エディタ
@@ -291,12 +304,12 @@ pnpm run editor export chart.json chart.bms
 
 - Play Mode (`manual` / `auto-scratch` / `auto`)
 - HIGH-SPEED
-- ディレクトリごとの選曲フォーカス (`chart` / `random`)
+- ディレクトリごとの最後に選んだ chart file と選曲フォーカス key
 
 保存先と用途:
 
 - `~/.be-music/player.json`
-  - Play Mode, HIGH-SPEED, directory ごとの Music Select focus
+  - Play Mode, HIGH-SPEED, directory ごとの最後に選んだ chart file と Music Select focus key
 - `~/.be-music/chart-selection-cache.json`
   - 楽曲一覧 metadata cache
   - chart 本文の `contentHash` で再利用判定し、保存済み entry は `cacheHash` で検証します
