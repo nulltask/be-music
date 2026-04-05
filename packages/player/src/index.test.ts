@@ -211,18 +211,6 @@ function createLandmineOnlyChart(options: { includeExplosionSound?: boolean; val
   return json;
 }
 
-function createStopPauseChart(stopValue = 384) {
-  const json = createEmptyJson('bms');
-  json.metadata.bpm = 120;
-  json.resources.wav['01'] = 'tone.wav';
-  json.resources.stop['01'] = stopValue;
-  json.events = [
-    { measure: 0, channel: '09', position: [0, 1] as const, value: '01' },
-    { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
-  ];
-  return json;
-}
-
 function createScheduledInputRuntime(commands: Array<{ delayMs: number; command: PlayerInputCommand }>) {
   return ({ inputSignals }: { inputSignals: { pushCommand: (command: PlayerInputCommand) => void } }) => {
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -432,34 +420,6 @@ describe('player', () => {
           line.includes('file:not-found.wav'),
       ),
     ).toBe(true);
-  });
-
-  test('player: auto play resumes after pausing during a STOP window', async () => {
-    const output: string[] = [];
-
-    const summary = await autoPlay(createStopPauseChart(), {
-      auto: true,
-      speed: 48,
-      leadInMs: 0,
-      tui: false,
-      audio: true,
-      audioHeadPaddingMs: 0,
-      audioLeadMs: 0,
-      audioLeadMaxMs: 0,
-      limiter: false,
-      writeOutput: (text) => {
-        output.push(text);
-      },
-      createInputRuntime: createScheduledInputRuntime([
-        { delayMs: 20, command: { kind: 'toggle-pause' } },
-        { delayMs: 60, command: { kind: 'toggle-pause' } },
-      ]),
-    });
-
-    expect(summary.total).toBe(1);
-    expect(summary.perfect).toBe(1);
-    expect(output.some((line) => line.includes('kind:playback-state') && line.includes('state:pause'))).toBe(true);
-    expect(output.some((line) => line.includes('kind:playback-state') && line.includes('state:resume'))).toBe(true);
   });
 
   test('player: logs timing and BGA timeline events when running without TUI', async () => {

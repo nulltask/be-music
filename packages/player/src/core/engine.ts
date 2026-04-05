@@ -3873,7 +3873,6 @@ async function playMixedPcmThroughOutput(params: {
       playbackSampleRate,
       outputStartSeconds,
       shouldStop,
-      isPaused,
       adaptiveLeadMs,
     );
 
@@ -3998,17 +3997,12 @@ async function waitForPlaybackRealtime(
   sampleRate: number,
   startOutputSeconds: number,
   shouldStop: () => boolean,
-  isPaused: () => boolean,
   targetLeadMs: number,
 ): Promise<void> {
   const safeTargetLeadMs = Number.isFinite(targetLeadMs) ? Math.max(0, targetLeadMs) : MANUAL_AUDIO_TARGET_LEAD_MS;
   const targetLeadFrames = Math.max(0, Math.round((safeTargetLeadMs / 1000) * sampleRate));
 
   while (!shouldStop()) {
-    if (isPaused()) {
-      await delay(PAUSE_POLL_INTERVAL_MS);
-      continue;
-    }
     const outputSeconds = Math.max(0, output.getClockState().outputSeconds - startOutputSeconds);
     const elapsedFrames = Math.floor(outputSeconds * sampleRate);
     const leadFrames = playheadFrames - elapsedFrames;
@@ -4505,11 +4499,9 @@ function createPlaybackClock(source: PlaybackClockSource, startOffsetMs = 0): Pl
       if (paused) {
         return false;
       }
-      const sourceNowMs = source.nowMs();
-      const scheduledSourceMs = Math.max(sourceNowMs, sourceScheduledMs());
-      pauseSourceMs = sourceNowMs;
-      pausedScheduledMs = Math.max(0, scheduledSourceMs - anchorMs - pausedSourceDurationMs);
       paused = true;
+      pauseSourceMs = source.nowMs();
+      pausedScheduledMs = resolveScheduledMs();
       return true;
     },
     resume: () => {
