@@ -29,7 +29,7 @@ jobs:
   prepare:
     name: Prepare Releases
     if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'devel')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
     outputs:
       release_target: ${{ steps.release_refs.outputs.release_target }}
@@ -287,7 +287,7 @@ jobs:
       - prepare
       - sea
     if: always() && needs.prepare.outputs.has_releases == 'true' && (needs.sea.result == 'success' || needs.sea.result == 'skipped')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
 
     steps:

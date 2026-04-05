@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     outputs:
       code_changed: ${{ steps.filter.outputs.code }}
       sea_player_changed: ${{ steps.filter.outputs.sea_player }}
@@ -70,7 +70,7 @@ jobs:
     name: Verify (${{ matrix.task }})
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -107,7 +107,7 @@ jobs:
     name: Benchmark Head (PR)
     needs: changes
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     outputs:
       snapshot_b64: ${{ steps.aggregate-head.outputs.snapshot_b64 }}
@@ -165,7 +165,7 @@ jobs:
     name: Benchmark Base (PR)
     needs: changes
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     outputs:
       available: ${{ steps.detect-bench.outputs.available }}
@@ -266,7 +266,7 @@ jobs:
       - benchmark-pr-head
       - benchmark-pr-base
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     env:
       BENCH_REGRESSION_THRESHOLD: 8
@@ -365,7 +365,7 @@ jobs:
     name: Benchmark Head (Push)
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     outputs:
       snapshot_b64: ${{ steps.aggregate-head.outputs.snapshot_b64 }}
@@ -423,7 +423,7 @@ jobs:
     name: Benchmark Base (Push)
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     outputs:
       available: ${{ steps.detect-bench.outputs.available }}
@@ -529,7 +529,7 @@ jobs:
       - benchmark-push-head
       - benchmark-push-base
     if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     env:
       BENCH_REGRESSION_THRESHOLD: 8
