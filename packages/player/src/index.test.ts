@@ -200,13 +200,14 @@ function createPoorBgaLoggingChart() {
   return json;
 }
 
-function createLandmineOnlyChart(includeExplosionSound = true) {
+function createLandmineOnlyChart(options: { includeExplosionSound?: boolean; value?: string } = {}) {
+  const { includeExplosionSound = true, value = '10' } = options;
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
   if (includeExplosionSound) {
     json.resources.wav['00'] = 'explode.wav';
   }
-  json.events = [{ measure: 0, channel: 'D1', position: [0, 1] as const, value: '10' }];
+  json.events = [{ measure: 0, channel: 'D1', position: [0, 1] as const, value }];
   return json;
 }
 
@@ -853,6 +854,46 @@ describe('player', () => {
       ),
     ).toBe(true);
     expect(output.some((line) => line.includes('kind:mine-hit') && line.includes('channel:11'))).toBe(true);
+  });
+
+  test('player: manual landmine hit applies value-based damage while keeping BAD judgment', async () => {
+    const summary = await manualPlay(createLandmineOnlyChart({ value: '08' }), {
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(summary.total).toBe(0);
+    expect(summary.bad).toBe(1);
+    expect(summary.poor).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(16, 9);
+  });
+
+  test('player: manual landmine hit clamps large mine damage at the groove gauge minimum', async () => {
+    const summary = await manualPlay(createLandmineOnlyChart({ value: 'ZZ' }), {
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(summary.bad).toBe(1);
+    expect(summary.gauge?.current).toBeCloseTo(2, 9);
   });
 
   test('player: manual landmine hit sounds #WAV00 when audio is enabled', async () => {

@@ -288,7 +288,8 @@ bmson の基準値は `100%` です。
 - `summary.bad` を加算する。
 - combo を 0 に戻す。
 - score を更新する。
-- groove gauge を `-4` する。
+- 通常ノートの `BAD` では groove gauge を `-4` する。
+- 手動地雷ヒットでは判定表示を `BAD` のままにして、地雷値ベースのダメージを別途適用する。
 
 ### `POOR`
 
@@ -322,8 +323,12 @@ FREE ZONE の fallback 発音も同様に、そのまま return します。
 ### 地雷
 
 手動入力時に地雷候補が通常ノート候補より近いか同距離なら、地雷を優先します。
-地雷は `BAD` として扱い、combo を切り、groove gauge を `-4` します。
+地雷は `BAD` として扱い、combo を切ります。
+groove gauge ダメージは地雷オブジェクト値を大文字 base36 として解釈し、`damage = value / 2` で計算します。
+適用後のゲージ値は `2-100%` に clamp されるため、`ZZ` のような大きい値では実質 `2%` まで下がります。
 `#WAV00` が定義されている場合は、地雷ヒット経路でそのサンプルを鳴らします。
+
+このルールの根拠は [`bms-spec.ja.md`](./bms-spec.ja.md) に記載しています。`value / 2` の直接根拠は Hitkey の command memo で、`#WAV00` / `ZZ` の歴史的文脈は Obj Tech Lovers chapter3-2 / chapter4-7 を補助一次参照として採っています。
 
 ## NOTES・combo・score
 
@@ -397,6 +402,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 - `GOOD`: `+baseGain / 2`
 - `BAD`: `-4`
 - `POOR`: `-6`
+- 手動地雷ヒット: `-(mineValue(base36) / 2)`
 
 ゲージ更新後の値は `2-100%` に clamp します。
 

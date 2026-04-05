@@ -16,6 +16,7 @@
 - `#OPTION` / `#CHANGEOPTION` 仕様: https://hitkey.nekokan.dyndns.info/option.htm
 - Sonorous 提案拡張 (補助一次参照): https://hitkey.nekokan.dyndns.info/bmsexts-ja.htm
 - Obj Tech Lovers | Guidance chapter3-2（`#WAV00` / 休符解釈 / 地雷の歴史的整理に関する補助一次参照）: https://nekokan.dyndns.info/~otlovers/guidance/guidance_3a_txt.html
+- Obj Tech Lovers | Guidance chapter4-7（地雷ダメージ解釈に関する補助一次参照）: https://nekokan.dyndns.info/~otlovers/guidance/guidance_4b.html
 - Bemuse BMS Extensions (補助一次参照): https://bemuse.ninja/project/docs/bms-extensions
 - beatoraja 楽曲製作者向け資料: https://github.com/exch-bms2/beatoraja/wiki/%E6%A5%BD%E6%9B%B2%E8%A3%BD%E4%BD%9C%E8%80%85%E5%90%91%E3%81%91%E8%B3%87%E6%96%99
 
@@ -101,8 +102,17 @@
 - [x] チャンネル `D1-D9` (地雷) を解釈
 - [x] チャンネル `E1-E9` (地雷) を解釈
 - [x] MANUAL モードで地雷タイミング入力を `BAD` 判定に反映
+- [x] MANUAL モードの地雷ダメージにオブジェクト値 (`base36 / 2`) を適用しつつ、判定表示は `BAD` のままにする
 - [x] `#WAV00` が定義されている場合、MANUAL モードの地雷ヒットで爆発音として使用
 - [x] 地雷を `TOTAL` / `EX-SCORE` の対象ノート数から除外
+
+#### 地雷ダメージの根拠
+
+地雷ダメージは BM98 時代の基礎 BMS 仕様には含まれていないため、現実装では後年公開された地雷拡張系の資料を根拠にしています。
+
+- 地雷ダメージを `value / 2` とする根拠は Hitkey の command memo です。`[01-ZZ]` をダメージ量とし、ゲージが `value / 2` だけ減る整理に従います。
+- `#WAV00` を地雷リアクション専用とする扱いと、`ZZ` を即死級の値とみなす歴史的文脈は Obj Tech Lovers chapter3-2 / chapter4-7 で補強しています。
+- `be-music` では groove gauge を LR2 互換の `2-100%` で実装しているため、`ZZ` の実際の効果はゲージ下限 `2%` への clamp です。
 - [x] チャンネル `SC` を `#SCROLLxx` 参照イベントとして保持
 - [x] チャンネル `SC` を音声トリガー対象から除外
 - [x] チャンネル `SC` のスクロール速度を player 描画へ反映

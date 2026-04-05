@@ -288,7 +288,8 @@ When the judgment is confirmed, do the following:
 - Add `summary.bad`.
 - Set combo back to 0.
 - Update score.
-- Set groove gauge to `-4`.
+- For ordinary note `BAD`, set groove gauge to `-4`.
+- For manual landmine hit, keep the displayed judgment as `BAD` and apply mine damage separately.
 
 ### `POOR`
 
@@ -322,8 +323,12 @@ Similarly, the fallback pronunciation of FREE ZONE also returns as is.
 ### Landmine
 
 During manual input, if a mine candidate is closer or the same distance as a normal note candidate, the landmine will be prioritized.
-Treat mines as `BAD`, turn off the combo, and set the groove gauge to `-4`.
+Treat mines as `BAD` and turn off the combo.
+Groove gauge damage is calculated from the mine object value as uppercase base36, using `damage = value / 2`.
+The applied gauge result is still clamped to `2-100%`, so a large value such as `ZZ` practically drops the gauge to `2%`.
 If `#WAV00` is defined, trigger that sample on the mine hit path.
+
+The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md): the `value / 2` interpretation follows Hitkey's command memo, and the `#WAV00` / `ZZ` historical context is supplemented by Obj Tech Lovers chapter3-2 and chapter4-7.
 
 ## NOTES・combo・score
 
@@ -397,6 +402,7 @@ FREE ZONE, mines, and invisible objects are not included in `noteCount`.
 - `GOOD`: `+baseGain / 2`
 - `BAD`: `-4`
 - `POOR`: `-6`
+- Manual landmine hit: `-(mineValue(base36) / 2)`
 
 The value after gauge update is clamped to `2-100%`.
 

@@ -16,6 +16,7 @@ This document defines how `packages/parser` / `packages/stringifier` / `packages
 - `#OPTION` / `#CHANGEOPTION` Specification: https://hitkey.nekokan.dyndns.info/option.htm
 - Sonorous Proposal Extension (Supplementary Primary Reference): https://hitkey.nekokan.dyndns.info/bmsexts-ja.htm
 - Obj Tech Lovers | Guidance chapter3-2 (Supplementary Primary Reference for `#WAV00` / rest semantics / landmine historical notes): https://nekokan.dyndns.info/~otlovers/guidance/guidance_3a_txt.html
+- Obj Tech Lovers | Guidance chapter4-7 (Supplementary Primary Reference for landmine damage semantics): https://nekokan.dyndns.info/~otlovers/guidance/guidance_4b.html
 - Bemuse BMS Extensions (auxiliary primary reference): https://bemuse.ninja/project/docs/bms-extensions
 - beatoraja Materials for music producers: https://github.com/exch-bms2/beatoraja/wiki/%E6%A5%BD%E6%9B%B2%E8%A3%BD%E4%BD%9C%E8%80%85%E5%90%91%E3%81%91%E8%B3%87%E6%96%99
 
@@ -101,8 +102,17 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
 - [x] Reflect mine timing input in `BAD` judgment in MANUAL mode
+- [x] Apply mine object value as MANUAL mode groove gauge damage (`base36 / 2`) while keeping the judgment display as `BAD`
 - [x] When `#WAV00` is defined, use it as the landmine explosion sound on manual mine hit
 - [x] Exclude landmines from the number of target notes for `TOTAL` / `EX-SCORE`
+
+#### Landmine damage basis
+
+The original BM98-era core BMS specifications do not define landmine damage as part of the base format, so this implementation follows later public extension references.
+
+- `value / 2` for landmine damage is based on Hitkey's command memo (`[01-ZZ]` damage amount, gauge decreases by `value / 2`).
+- `#WAV00` as the dedicated landmine reaction sound and the historical `ZZ` instant-death convention are corroborated by Obj Tech Lovers chapter3-2 and chapter4-7.
+- In `be-music`, the practical effect of `ZZ` is a clamp to the implemented groove gauge minimum `2%`, because the player keeps the LR2-compatible `2-100%` gauge range.
 - [x] Keep channel `SC` as `#SCROLLxx` reference event
 - [x] Exclude channel `SC` from audio triggering
 - [x] Reflect scroll speed of channel `SC` to player drawing

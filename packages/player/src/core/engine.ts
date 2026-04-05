@@ -240,6 +240,8 @@ interface OutputDynamicsConfig {
 }
 
 const LANDMINE_EXPLOSION_SAMPLE_KEY = '00';
+const DEFAULT_LANDMINE_GAUGE_DAMAGE = 4;
+const BASE36_OBJECT_KEY_PATTERN = /^[0-9A-Z]{2}$/;
 
 interface PlaybackClock {
   nowMs: () => number;
@@ -720,6 +722,32 @@ function resolveLandmineExplosionEvent(
   return {
     ...landmineEvent,
     value: LANDMINE_EXPLOSION_SAMPLE_KEY,
+  };
+}
+
+function resolveLandmineGaugeEffect(
+  landmineEvent: Pick<BeMusicEvent, 'value'>,
+): { objectValue: string; damage: number; gaugeDelta: number } {
+  const objectValue = normalizeObjectKey(landmineEvent.value);
+  if (!BASE36_OBJECT_KEY_PATTERN.test(objectValue)) {
+    return {
+      objectValue,
+      damage: DEFAULT_LANDMINE_GAUGE_DAMAGE,
+      gaugeDelta: -DEFAULT_LANDMINE_GAUGE_DAMAGE,
+    };
+  }
+  const parsedDamage = Number.parseInt(objectValue, 36) / 2;
+  if (!Number.isFinite(parsedDamage) || parsedDamage <= 0) {
+    return {
+      objectValue,
+      damage: DEFAULT_LANDMINE_GAUGE_DAMAGE,
+      gaugeDelta: -DEFAULT_LANDMINE_GAUGE_DAMAGE,
+    };
+  }
+  return {
+    objectValue,
+    damage: parsedDamage,
+    gaugeDelta: -parsedDamage,
   };
 }
 
@@ -2775,6 +2803,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!markLandmineJudged(landmineCandidate)) {
         return;
       }
+      const landmineGaugeEffect = resolveLandmineGaugeEffect(landmineCandidate.event);
       const landmineExplosionEvent = resolveLandmineExplosionEvent(landmineCandidate.event, resolvedJson.resources.wav);
       if (landmineExplosionEvent) {
         if (!uiEnabled) {
@@ -2790,12 +2819,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         audioSession?.triggerEvent?.(landmineExplosionEvent);
       }
       applyJudgeToSummary(summary, 'BAD', scoreTracker);
-      applyLoggedGaugeJudge(nowSec, 'BAD', 'mine-hit');
+      applyLoggedGaugeDelta(nowSec, landmineGaugeEffect.gaugeDelta, 'mine-hit');
       setLoggedCombo(nowSec, 0, 'mine-hit', 'BAD', landmineCandidate.channel);
       if (!uiEnabled) {
         writeRuntimeEventLog(writeOutput, 'mine-hit', [
           ['time', formatSeconds(nowSec)],
           ['channel', landmineCandidate.channel],
+          ['value', landmineGaugeEffect.objectValue],
+          ['damage', landmineGaugeEffect.damage],
           ['deltaMs', Math.round(landmineDelta * 1000)],
         ]);
       } else {
