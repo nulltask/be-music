@@ -1,5 +1,3 @@
-[Japanese version](./README.ja.md)
-
 # Changesets
 
 Since `be-music` is released individually for each package, add `.changeset/*.md` to the PR containing changes.
