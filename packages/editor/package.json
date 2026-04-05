@@ -2,6 +2,7 @@
   "name": "@be-music/editor",
   "version": "0.1.0",
   "description": "CLI BMS editor",
+  "license": "MIT",
   "bin": {
     "bms-editor": "dist/cli.js"
   },

@@ -2,6 +2,7 @@
   "name": "@be-music/utils",
   "version": "0.1.0",
   "description": "Shared utility helpers for be-music packages",
+  "license": "MIT",
   "files": [
     "dist"
   ],

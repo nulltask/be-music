@@ -2,6 +2,7 @@
   "name": "@be-music/json",
   "version": "0.1.0",
   "description": "Internal Be-Music intermediate representation (not an exchange/distribution format)",
+  "license": "MIT",
   "files": [
     "dist"
   ],

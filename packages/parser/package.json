@@ -2,6 +2,7 @@
   "name": "@be-music/parser",
   "version": "0.1.0",
   "description": "BMS/BMSON parser",
+  "license": "MIT",
   "bin": {
     "bms-parse": "dist/cli.js"
   },

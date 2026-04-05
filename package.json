@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Be-Music tooling monorepo",
+  "license": "MIT",
   "scripts": {
     "build": "pnpm -r --sort --workspace-concurrency=Infinity run build",
     "clean": "pnpm -r run clean",

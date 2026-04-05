@@ -2,6 +2,7 @@
   "name": "@be-music/audio-renderer",
   "version": "0.1.0",
   "description": "BMS audio-renderer",
+  "license": "MIT",
   "bin": {
     "bms-audio-render": "dist/cli.js"
   },
