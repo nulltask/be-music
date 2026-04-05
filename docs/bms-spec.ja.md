@@ -15,6 +15,7 @@
 - Extended BPM (`#BPMxx` / `#EXBPM`): https://hitkey.nekokan.dyndns.info/exbpm-object.htm
 - `#OPTION` / `#CHANGEOPTION` 仕様: https://hitkey.nekokan.dyndns.info/option.htm
 - Sonorous 提案拡張 (補助一次参照): https://hitkey.nekokan.dyndns.info/bmsexts-ja.htm
+- Obj Tech Lovers | Guidance chapter3-2（`#WAV00` / 休符解釈 / 地雷の歴史的整理に関する補助一次参照）: https://nekokan.dyndns.info/~otlovers/guidance/guidance_3a_txt.html
 - Bemuse BMS Extensions (補助一次参照): https://bemuse.ninja/project/docs/bms-extensions
 - beatoraja 楽曲製作者向け資料: https://github.com/exch-bms2/beatoraja/wiki/%E6%A5%BD%E6%9B%B2%E8%A3%BD%E4%BD%9C%E8%80%85%E5%90%91%E3%81%91%E8%B3%87%E6%96%99
 
@@ -100,6 +101,7 @@
 - [x] チャンネル `D1-D9` (地雷) を解釈
 - [x] チャンネル `E1-E9` (地雷) を解釈
 - [x] MANUAL モードで地雷タイミング入力を `BAD` 判定に反映
+- [x] `#WAV00` が定義されている場合、MANUAL モードの地雷ヒットで爆発音として使用
 - [x] 地雷を `TOTAL` / `EX-SCORE` の対象ノート数から除外
 - [x] チャンネル `SC` を `#SCROLLxx` 参照イベントとして保持
 - [x] チャンネル `SC` を音声トリガー対象から除外
@@ -252,7 +254,7 @@
 - [x] `#WAVxx` / `#BMPxx` のマルチ定義時は EOF 側の行を採用
 - [x] 一般ヘッダ・索引付き拡張ヘッダ・`#mmm02` の重複定義は原則 EOF 側優先
 - [ ] 音声フォーマット互換（μ-law WAV など）に対する対応方針
-- [ ] `#WAV00` 定義時の扱い（`00` を空イベントとみなす規則との整合）
+- [ ] 地雷再生以外で `00` オブジェクトを通常の `#WAV00` 参照として扱う互換方針
 - [ ] `#WAVxx` の拡張子省略/不一致時における代替ファイル探索（拡張子フォールバック）
 - [ ] `#BMPxx` の拡張子省略/不一致時における代替ファイル探索（拡張子フォールバック）
 - [ ] 未定義 `#BPMxx` / `#STOPxx` 参照時の互換挙動（無視・既定値・エラー）

@@ -131,6 +131,7 @@ Therefore, both LNs derived from `#LNOBJ` and LNs derived from `#mmm51-69` are w
 
 The mine channel is mapped to the corresponding playable lane and stored as a separate array.
 Landmines are not included in `summary.total`, but when manually input, they may generate `BAD` with priority over normal notes.
+If `#WAV00` is defined, the player uses it as the explosion sound when a landmine is hit manually.
 
 ### Invisible Note
 
@@ -322,6 +323,7 @@ Similarly, the fallback pronunciation of FREE ZONE also returns as is.
 
 During manual input, if a mine candidate is closer or the same distance as a normal note candidate, the landmine will be prioritized.
 Treat mines as `BAD`, turn off the combo, and set the groove gauge to `-4`.
+If `#WAV00` is defined, trigger that sample on the mine hit path.
 
 ## NOTES・combo・score
 

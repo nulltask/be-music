@@ -15,6 +15,7 @@ This document defines how `packages/parser` / `packages/stringifier` / `packages
 - Extended BPM (`#BPMxx` / `#EXBPM`): https://hitkey.nekokan.dyndns.info/exbpm-object.htm
 - `#OPTION` / `#CHANGEOPTION` Specification: https://hitkey.nekokan.dyndns.info/option.htm
 - Sonorous Proposal Extension (Supplementary Primary Reference): https://hitkey.nekokan.dyndns.info/bmsexts-ja.htm
+- Obj Tech Lovers | Guidance chapter3-2 (Supplementary Primary Reference for `#WAV00` / rest semantics / landmine historical notes): https://nekokan.dyndns.info/~otlovers/guidance/guidance_3a_txt.html
 - Bemuse BMS Extensions (auxiliary primary reference): https://bemuse.ninja/project/docs/bms-extensions
 - beatoraja Materials for music producers: https://github.com/exch-bms2/beatoraja/wiki/%E6%A5%BD%E6%9B%B2%E8%A3%BD%E4%BD%9C%E8%80%85%E5%90%91%E3%81%91%E8%B3%87%E6%96%99
 
@@ -100,6 +101,7 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
 - [x] Reflect mine timing input in `BAD` judgment in MANUAL mode
+- [x] When `#WAV00` is defined, use it as the landmine explosion sound on manual mine hit
 - [x] Exclude landmines from the number of target notes for `TOTAL` / `EX-SCORE`
 - [x] Keep channel `SC` as `#SCROLLxx` reference event
 - [x] Exclude channel `SC` from audio triggering
@@ -252,7 +254,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [x] When `#WAVxx` / `#BMPxx` are multi-defined, the line on the EOF side is adopted.
 - [x] Duplicate definitions of general headers, indexed extension headers, and `#mmm02` are generally prioritized on the EOF side.
 - [ ] Policy for audio format compatibility (μ-law WAV, etc.)
-- [ ] Handling of `#WAV00` at definition (consistency with rules regarding `00` as an empty event)
+- [ ] Compatibility policy for treating `00` object tokens as ordinary `#WAV00` references outside landmine playback
 - [ ] Search for alternative files when extension omitted/mismatches for `#WAVxx` (extension fallback)
 - [ ] Search for alternative files when extension omitted/mismatches for `#BMPxx` (extension fallback)
 - [ ] Compatible behavior when referencing undefined `#BPMxx` / `#STOPxx` (ignored, default value, error)

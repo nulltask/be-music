@@ -200,6 +200,16 @@ function createPoorBgaLoggingChart() {
   return json;
 }
 
+function createLandmineOnlyChart(includeExplosionSound = true) {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  if (includeExplosionSound) {
+    json.resources.wav['00'] = 'explode.wav';
+  }
+  json.events = [{ measure: 0, channel: 'D1', position: [0, 1] as const, value: '10' }];
+  return json;
+}
+
 function createScheduledInputRuntime(commands: Array<{ delayMs: number; command: PlayerInputCommand }>) {
   return ({ inputSignals }: { inputSignals: { pushCommand: (command: PlayerInputCommand) => void } }) => {
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -807,6 +817,64 @@ describe('player', () => {
     expect(summary.poor).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
     expect(summary.gauge?.cleared).toBe(false);
+  });
+
+  test('player: manual landmine hit triggers #WAV00 in runtime logs', async () => {
+    const json = createLandmineOnlyChart();
+    const output: string[] = [];
+
+    const summary = await manualPlay(json, {
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(summary.total).toBe(0);
+    expect(summary.bad).toBe(1);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:sample-trigger') &&
+          line.includes('source:mine-hit') &&
+          line.includes('channel:11') &&
+          line.includes('sample:00') &&
+          line.includes('file:explode.wav'),
+      ),
+    ).toBe(true);
+    expect(output.some((line) => line.includes('kind:mine-hit') && line.includes('channel:11'))).toBe(true);
+  });
+
+  test('player: manual landmine hit sounds #WAV00 when audio is enabled', async () => {
+    await manualPlay(createLandmineOnlyChart(), {
+      speed: 240,
+      leadInMs: 0,
+      audio: true,
+      audioHeadPaddingMs: 0,
+      audioLeadMs: 0,
+      audioLeadMaxMs: 0,
+      limiter: false,
+      tui: false,
+      writeOutput: () => undefined,
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(hasAnyNonSilentAudioWrite()).toBe(true);
   });
 
   test('player: derives long-note end beat from bmson notes.l', () => {

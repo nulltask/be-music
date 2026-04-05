@@ -239,6 +239,8 @@ interface OutputDynamicsConfig {
   limiterReleaseCoef: number;
 }
 
+const LANDMINE_EXPLOSION_SAMPLE_KEY = '00';
+
 interface PlaybackClock {
   nowMs: () => number;
   scheduledMs: () => number;
@@ -690,7 +692,7 @@ function writePlayableSampleTriggerEventLog(
   event: BeMusicEvent,
   seconds: number,
   resources: Readonly<Record<string, string>>,
-  source: 'auto-note' | 'auto-scratch' | 'manual-note' | 'lane-fallback',
+  source: 'auto-note' | 'auto-scratch' | 'manual-note' | 'lane-fallback' | 'mine-hit',
   channel?: string,
 ): void {
   const { sampleKey, resourcePath } = resolveEventResourceInfo(resources, event);
@@ -705,6 +707,20 @@ function writePlayableSampleTriggerEventLog(
     resourcePath,
     source,
   );
+}
+
+function resolveLandmineExplosionEvent(
+  landmineEvent: BeMusicEvent,
+  resources: Readonly<Record<string, string>>,
+): BeMusicEvent | undefined {
+  const sourcePath = resources[LANDMINE_EXPLOSION_SAMPLE_KEY];
+  if (typeof sourcePath !== 'string' || sourcePath.length === 0) {
+    return undefined;
+  }
+  return {
+    ...landmineEvent,
+    value: LANDMINE_EXPLOSION_SAMPLE_KEY,
+  };
 }
 
 function writeSampleStopEventLog(
@@ -2759,6 +2775,20 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!markLandmineJudged(landmineCandidate)) {
         return;
       }
+      const landmineExplosionEvent = resolveLandmineExplosionEvent(landmineCandidate.event, resolvedJson.resources.wav);
+      if (landmineExplosionEvent) {
+        if (!uiEnabled) {
+          writePlayableSampleTriggerEventLog(
+            writeOutput,
+            landmineExplosionEvent,
+            nowSec,
+            resolvedJson.resources.wav,
+            'mine-hit',
+            landmineCandidate.channel,
+          );
+        }
+        audioSession?.triggerEvent?.(landmineExplosionEvent);
+      }
       applyJudgeToSummary(summary, 'BAD', scoreTracker);
       applyLoggedGaugeJudge(nowSec, 'BAD', 'mine-hit');
       setLoggedCombo(nowSec, 0, 'mine-hit', 'BAD', landmineCandidate.channel);
@@ -4227,6 +4257,21 @@ function collectRealtimeAudioSampleKeys(json: BeMusicJson, inferBmsLnTypeWhenMis
   const keys = new Set<string>();
   for (const trigger of collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing })) {
     keys.add(trigger.sampleKey);
+  }
+  if (
+    typeof json.resources.wav[LANDMINE_EXPLOSION_SAMPLE_KEY] === 'string' &&
+    json.resources.wav[LANDMINE_EXPLOSION_SAMPLE_KEY].length > 0 &&
+    json.events.some((event) => {
+      const normalized = normalizeChannel(event.channel);
+      if (normalized.length !== 2) {
+        return false;
+      }
+      const side = normalized.charCodeAt(0);
+      const lane = normalized.charCodeAt(1);
+      return (side === 0x44 || side === 0x45) && lane >= 0x31 && lane <= 0x39;
+    })
+  ) {
+    keys.add(LANDMINE_EXPLOSION_SAMPLE_KEY);
   }
   return [...keys];
 }
