@@ -36,6 +36,23 @@ pnpm run test
 
 `pnpm run build` は各ワークスペースの `tsdown` build を依存関係を満たしながら並列実行し、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run typecheck` / `pnpm run lint` / `pnpm run format` もワークスペース単位で並列実行します。
 
+## package ごとの release
+
+このリポジトリでは `Changesets` で package ごとの version と changelog を管理します。
+
+```bash
+pnpm run changeset
+pnpm run release:status
+pnpm run release:version
+```
+
+- 通常の feature PR では、変更した package に対する `.changeset/*.md` を追加します
+- release したいタイミングで `devel` 上で `pnpm run release:version` を実行し、version bump と `CHANGELOG.md` 更新をまとめてコミットします
+- その状態で `devel -> main` の release PR を merge すると、version が上がった package だけ GitHub Release が個別に作成されます
+- `@be-music/player` と `@be-music/audio-renderer` は個別 release に SEA zip が添付されます
+
+tag は `@be-music/package-name@x.y.z` 形式で作成されます。
+
 ## 仕様書
 
 - [仕様書トップ](./docs/README.md)

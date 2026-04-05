@@ -6,6 +6,9 @@
   "scripts": {
     "build": "pnpm -r --sort --workspace-concurrency=Infinity run build",
     "clean": "pnpm -r run clean",
+    "changeset": "changeset",
+    "release:status": "changeset status --verbose",
+    "release:version": "changeset version",
     "typecheck": "pnpm -r --parallel run typecheck",
     "lint": "pnpm -r --parallel run lint",
     "lint:fix": "pnpm -r --parallel run lint:fix",
@@ -27,6 +30,7 @@
     "stringify": "pnpm --filter @be-music/stringifier run dev"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.30.0",
     "@types/node": "^25.5.0",
     "@typescript/native-preview": "7.0.0-dev.20260322.1",
     "@vitest/coverage-v8": "^4.0.18",
