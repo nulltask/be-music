@@ -34,6 +34,8 @@ const SPEC_BGA_CANVAS_SIZE = 256;
 const TERMINAL_PIXEL_ASPECT_X = 2;
 const TERMINAL_PIXEL_ASPECT_Y = 1;
 const BGA_SOURCE_LOAD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
+const lanczosAxisContributionCache = new Map<string, LanczosAxisContribution[]>();
+const resizedAnsiFrameCache = new WeakMap<AnsiFrame, Map<string, AnsiFrame>>();
 
 type ImageFormat = 'bmp' | 'png' | 'jpeg' | 'video';
 type FrameMode = 'base' | 'layer';
@@ -86,6 +88,11 @@ interface CompositeFrame {
   height: number;
   rgb: Uint8Array;
   opaqueMask: Uint8Array;
+}
+
+interface LanczosAxisContribution {
+  sourceIndices: Int32Array;
+  weights: Float32Array;
 }
 
 type WorkerizedSpecFrameConverter = ((
@@ -1401,11 +1408,10 @@ function createConvertImageToSpecFrameWorker(): WorkerizedSpecFrameConverter {
       createSolidAnsiFrame,
       fitSizeWithinSpecCanvas,
       isOpaquePixel,
-      sampleImagePixel,
-      createNearestSampleContribution,
-      createLanczosSampleContribution,
-      accumulateImageSample,
-      normalizeWeightedSample,
+      resolveNearestImageSampleOffset,
+      resampleDecodedImageRgbaLanczos,
+      createLanczosAxisContributions,
+      clampToByte,
       lanczosKernel,
       sinc,
       DEFAULT_IMAGE_RESIZE_ALGORITHM,
@@ -2045,6 +2051,8 @@ function convertImageToSpecFrame(
       : fitSizeWithinSpecCanvas(image.width, image.height);
   const offsetX = image.format === 'video' ? 0 : Math.floor((SPEC_BGA_CANVAS_SIZE - fittedSize.width) / 2);
   const offsetY = 0;
+  const resizedRgba =
+    resizeAlgorithm === 'lanczos' ? resampleDecodedImageRgbaLanczos(image, fittedSize.width, fittedSize.height) : undefined;
 
   for (let targetYWithinImage = 0; targetYWithinImage < fittedSize.height; targetYWithinImage += 1) {
     const targetY = targetYWithinImage + offsetY;
@@ -2058,14 +2066,21 @@ function convertImageToSpecFrame(
         continue;
       }
 
-      const { r, g, b, a } = sampleImagePixel(
-        image,
-        targetXWithinImage,
-        targetYWithinImage,
-        fittedSize.width,
-        fittedSize.height,
-        resizeAlgorithm,
-      );
+      const sampleOffset =
+        resizedRgba !== undefined
+          ? (targetYWithinImage * fittedSize.width + targetXWithinImage) * 4
+          : resolveNearestImageSampleOffset(
+              image.width,
+              image.height,
+              targetXWithinImage,
+              targetYWithinImage,
+              fittedSize.width,
+              fittedSize.height,
+            );
+      const r = (resizedRgba ?? image.data)[sampleOffset] ?? 0;
+      const g = (resizedRgba ?? image.data)[sampleOffset + 1] ?? 0;
+      const b = (resizedRgba ?? image.data)[sampleOffset + 2] ?? 0;
+      const a = (resizedRgba ?? image.data)[sampleOffset + 3] ?? 255;
       if (!isOpaquePixel(r, g, b, a, image.format, mode)) {
         continue;
       }
@@ -2082,158 +2097,158 @@ function convertImageToSpecFrame(
   return specFrame;
 }
 
-function sampleImagePixel(
-  image: DecodedImage,
+function resolveNearestImageSampleOffset(
+  sourceWidth: number,
+  sourceHeight: number,
   targetX: number,
   targetY: number,
   targetWidth: number,
   targetHeight: number,
-  resizeAlgorithm: ImageResizeAlgorithm,
-): { r: number; g: number; b: number; a: number } {
-  const contribution =
-    resizeAlgorithm === 'lanczos'
-      ? createLanczosSampleContribution(image.width, image.height, targetX, targetY, targetWidth, targetHeight)
-      : createNearestSampleContribution(image.width, image.height, targetX, targetY, targetWidth, targetHeight);
-  return accumulateImageSample(image, contribution);
+): number {
+  const sourceX = Math.min(sourceWidth - 1, Math.max(0, Math.floor(((targetX + 0.5) * sourceWidth) / targetWidth)));
+  const sourceY = Math.min(sourceHeight - 1, Math.max(0, Math.floor(((targetY + 0.5) * sourceHeight) / targetHeight)));
+  return (sourceY * sourceWidth + sourceX) * 4;
 }
 
-function accumulateImageSample(
-  image: DecodedImage,
-  contribution: {
-    startX: number;
-    endX: number;
-    startY: number;
-    endY: number;
-    centerX: number;
-    centerY: number;
-    scaleX: number;
-    scaleY: number;
-    useLanczos: boolean;
-  },
-): { r: number; g: number; b: number; a: number } {
-  if (!contribution.useLanczos) {
-    const sourceOffset = (contribution.startY * image.width + contribution.startX) * 4;
-    return {
-      r: image.data[sourceOffset] ?? 0,
-      g: image.data[sourceOffset + 1] ?? 0,
-      b: image.data[sourceOffset + 2] ?? 0,
-      a: image.data[sourceOffset + 3] ?? 255,
-    };
+function resampleDecodedImageRgbaLanczos(image: DecodedImage, targetWidth: number, targetHeight: number): Uint8Array {
+  const horizontalPlan = createLanczosAxisContributions(image.width, targetWidth);
+  const verticalPlan = createLanczosAxisContributions(image.height, targetHeight);
+  const horizontal = new Float32Array(targetWidth * image.height * 4);
+
+  for (let sourceY = 0; sourceY < image.height; sourceY += 1) {
+    const sourceRowOffset = sourceY * image.width * 4;
+    const horizontalRowOffset = sourceY * targetWidth * 4;
+    for (let targetX = 0; targetX < targetWidth; targetX += 1) {
+      const contribution = horizontalPlan[targetX]!;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      for (let index = 0; index < contribution.sourceIndices.length; index += 1) {
+        const sourceOffset = sourceRowOffset + contribution.sourceIndices[index]! * 4;
+        const weight = contribution.weights[index] ?? 0;
+        r += (image.data[sourceOffset] ?? 0) * weight;
+        g += (image.data[sourceOffset + 1] ?? 0) * weight;
+        b += (image.data[sourceOffset + 2] ?? 0) * weight;
+        a += (image.data[sourceOffset + 3] ?? 255) * weight;
+      }
+      const horizontalOffset = horizontalRowOffset + targetX * 4;
+      horizontal[horizontalOffset] = r;
+      horizontal[horizontalOffset + 1] = g;
+      horizontal[horizontalOffset + 2] = b;
+      horizontal[horizontalOffset + 3] = a;
+    }
   }
 
-  let weightedR = 0;
-  let weightedG = 0;
-  let weightedB = 0;
-  let weightedA = 0;
-  let totalWeight = 0;
-  for (let sourceY = contribution.startY; sourceY <= contribution.endY; sourceY += 1) {
-    const weightY = lanczosKernel((sourceY - contribution.centerY) / contribution.scaleY) / contribution.scaleY;
-    if (weightY === 0) {
-      continue;
+  const output = new Uint8Array(targetWidth * targetHeight * 4);
+  for (let targetY = 0; targetY < targetHeight; targetY += 1) {
+    const contribution = verticalPlan[targetY]!;
+    const outputRowOffset = targetY * targetWidth * 4;
+    for (let targetX = 0; targetX < targetWidth; targetX += 1) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      for (let index = 0; index < contribution.sourceIndices.length; index += 1) {
+        const sourceOffset = (contribution.sourceIndices[index]! * targetWidth + targetX) * 4;
+        const weight = contribution.weights[index] ?? 0;
+        r += horizontal[sourceOffset] * weight;
+        g += horizontal[sourceOffset + 1] * weight;
+        b += horizontal[sourceOffset + 2] * weight;
+        a += horizontal[sourceOffset + 3] * weight;
+      }
+      const outputOffset = outputRowOffset + targetX * 4;
+      output[outputOffset] = clampToByte(r);
+      output[outputOffset + 1] = clampToByte(g);
+      output[outputOffset + 2] = clampToByte(b);
+      output[outputOffset + 3] = clampToByte(a);
     }
-    for (let sourceX = contribution.startX; sourceX <= contribution.endX; sourceX += 1) {
-      const weightX = lanczosKernel((sourceX - contribution.centerX) / contribution.scaleX) / contribution.scaleX;
-      const weight = weightX * weightY;
+  }
+
+  return output;
+}
+
+function createLanczosAxisContributions(sourceSize: number, targetSize: number): LanczosAxisContribution[] {
+  const safeSourceSize = Math.max(1, Math.floor(sourceSize));
+  const safeTargetSize = Math.max(1, Math.floor(targetSize));
+  const contributions: LanczosAxisContribution[] = [];
+  const scale = Math.max(1, safeSourceSize / safeTargetSize);
+  const support = 3 * scale;
+
+  for (let targetIndex = 0; targetIndex < safeTargetSize; targetIndex += 1) {
+    const center = ((targetIndex + 0.5) * safeSourceSize) / safeTargetSize - 0.5;
+    const start = Math.max(0, Math.floor(center - support + 1));
+    const end = Math.min(safeSourceSize - 1, Math.ceil(center + support - 1));
+    const sourceIndices: number[] = [];
+    const weights: number[] = [];
+    let totalWeight = 0;
+
+    for (let sourceIndex = start; sourceIndex <= end; sourceIndex += 1) {
+      const weight = lanczosKernel((sourceIndex - center) / scale) / scale;
       if (weight === 0) {
         continue;
       }
-      const sourceOffset = (sourceY * image.width + sourceX) * 4;
-      weightedR += (image.data[sourceOffset] ?? 0) * weight;
-      weightedG += (image.data[sourceOffset + 1] ?? 0) * weight;
-      weightedB += (image.data[sourceOffset + 2] ?? 0) * weight;
-      weightedA += (image.data[sourceOffset + 3] ?? 255) * weight;
+      sourceIndices.push(sourceIndex);
+      weights.push(weight);
       totalWeight += weight;
     }
+
+    if (!Number.isFinite(totalWeight) || totalWeight === 0 || sourceIndices.length === 0) {
+      const nearestIndex = Math.min(
+        safeSourceSize - 1,
+        Math.max(0, Math.floor(((targetIndex + 0.5) * safeSourceSize) / safeTargetSize)),
+      );
+      contributions.push({
+        sourceIndices: Int32Array.of(nearestIndex),
+        weights: Float32Array.of(1),
+      });
+      continue;
+    }
+
+    const normalizedWeights = new Float32Array(weights.length);
+    for (let index = 0; index < weights.length; index += 1) {
+      normalizedWeights[index] = weights[index]! / totalWeight;
+    }
+    contributions.push({
+      sourceIndices: Int32Array.from(sourceIndices),
+      weights: normalizedWeights,
+    });
   }
-  return normalizeWeightedSample(weightedR, weightedG, weightedB, weightedA, totalWeight);
+
+  return contributions;
 }
 
-function createNearestSampleContribution(
-  sourceWidth: number,
-  sourceHeight: number,
-  targetX: number,
-  targetY: number,
-  targetWidth: number,
-  targetHeight: number,
-): {
-  startX: number;
-  endX: number;
-  startY: number;
-  endY: number;
-  centerX: number;
-  centerY: number;
-  scaleX: number;
-  scaleY: number;
-  useLanczos: false;
-} {
-  const sourceX = Math.min(sourceWidth - 1, Math.max(0, Math.floor(((targetX + 0.5) * sourceWidth) / targetWidth)));
-  const sourceY = Math.min(sourceHeight - 1, Math.max(0, Math.floor(((targetY + 0.5) * sourceHeight) / targetHeight)));
-  return {
-    startX: sourceX,
-    endX: sourceX,
-    startY: sourceY,
-    endY: sourceY,
-    centerX: sourceX,
-    centerY: sourceY,
-    scaleX: 1,
-    scaleY: 1,
-    useLanczos: false,
-  };
-}
-
-function createLanczosSampleContribution(
-  sourceWidth: number,
-  sourceHeight: number,
-  targetX: number,
-  targetY: number,
-  targetWidth: number,
-  targetHeight: number,
-): {
-  startX: number;
-  endX: number;
-  startY: number;
-  endY: number;
-  centerX: number;
-  centerY: number;
-  scaleX: number;
-  scaleY: number;
-  useLanczos: true;
-} {
-  const centerX = ((targetX + 0.5) * sourceWidth) / targetWidth - 0.5;
-  const centerY = ((targetY + 0.5) * sourceHeight) / targetHeight - 0.5;
-  const scaleX = Math.max(1, sourceWidth / Math.max(1, targetWidth));
-  const scaleY = Math.max(1, sourceHeight / Math.max(1, targetHeight));
-  const supportX = 3 * scaleX;
-  const supportY = 3 * scaleY;
-  return {
-    startX: Math.max(0, Math.floor(centerX - supportX + 1)),
-    endX: Math.min(sourceWidth - 1, Math.ceil(centerX + supportX - 1)),
-    startY: Math.max(0, Math.floor(centerY - supportY + 1)),
-    endY: Math.min(sourceHeight - 1, Math.ceil(centerY + supportY - 1)),
-    centerX,
-    centerY,
-    scaleX,
-    scaleY,
-    useLanczos: true,
-  };
-}
-
-function normalizeWeightedSample(
-  weightedR: number,
-  weightedG: number,
-  weightedB: number,
-  weightedA: number,
-  totalWeight: number,
-): { r: number; g: number; b: number; a: number } {
-  if (!Number.isFinite(totalWeight) || totalWeight === 0) {
-    return { r: 0, g: 0, b: 0, a: 0 };
+function getCachedLanczosAxisContributions(sourceSize: number, targetSize: number): LanczosAxisContribution[] {
+  const safeSourceSize = Math.max(1, Math.floor(sourceSize));
+  const safeTargetSize = Math.max(1, Math.floor(targetSize));
+  const cacheKey = `${safeSourceSize}:${safeTargetSize}`;
+  const cached = lanczosAxisContributionCache.get(cacheKey);
+  if (cached) {
+    return cached;
   }
-  return {
-    r: Math.max(0, Math.min(255, Math.round(weightedR / totalWeight))),
-    g: Math.max(0, Math.min(255, Math.round(weightedG / totalWeight))),
-    b: Math.max(0, Math.min(255, Math.round(weightedB / totalWeight))),
-    a: Math.max(0, Math.min(255, Math.round(weightedA / totalWeight))),
-  };
+  const contributions = createLanczosAxisContributions(safeSourceSize, safeTargetSize);
+  lanczosAxisContributionCache.set(cacheKey, contributions);
+  return contributions;
+}
+
+function clampToByte(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function getCachedResizedAnsiFrame(source: AnsiFrame, cacheKey: string): AnsiFrame | undefined {
+  return resizedAnsiFrameCache.get(source)?.get(cacheKey);
+}
+
+function setCachedResizedAnsiFrame(source: AnsiFrame, cacheKey: string, resized: AnsiFrame): void {
+  let cache = resizedAnsiFrameCache.get(source);
+  if (!cache) {
+    cache = new Map();
+    resizedAnsiFrameCache.set(source, cache);
+  }
+  cache.set(cacheKey, resized);
 }
 
 function sinc(value: number): number {
@@ -2422,8 +2437,17 @@ function resizeAnsiFrameWithAspectMode(
           canvasWidth,
           canvasHeight,
         );
+  const cacheKey =
+    `${canvasWidth}x${canvasHeight}:${fitted.width}x${fitted.height}:` +
+    `${aspectX}:${aspectY}:${mode}:${resizeAlgorithm}`;
+  const cached = getCachedResizedAnsiFrame(source, cacheKey);
+  if (cached) {
+    return cached;
+  }
   const offsetX = Math.floor((canvasWidth - fitted.width) / 2);
   const offsetY = Math.floor((canvasHeight - fitted.height) / 2);
+  const resizedFrame =
+    resizeAlgorithm === 'lanczos' ? resampleAnsiFrameLanczos(source, fitted.width, fitted.height) : undefined;
   const rgb = new Uint8Array(canvasWidth * canvasHeight * 3);
   const opaqueMask = new Uint8Array(canvasWidth * canvasHeight);
 
@@ -2439,94 +2463,106 @@ function resizeAnsiFrameWithAspectMode(
         continue;
       }
 
-      const sampled = sampleAnsiPixel(source, x, y, fitted.width, fitted.height, resizeAlgorithm);
-      if (sampled.alpha <= 0) {
+      const sourcePixelOffset =
+        resizedFrame !== undefined
+          ? y * resizedFrame.width + x
+          : Math.min(source.height - 1, Math.max(0, Math.floor(((y + 0.5) * source.height) / fitted.height))) *
+              source.width +
+            Math.min(source.width - 1, Math.max(0, Math.floor(((x + 0.5) * source.width) / fitted.width)));
+      const sourceMask = resizedFrame !== undefined ? resizedFrame.opaqueMask : source.opaqueMask;
+      if (sourceMask[sourcePixelOffset] === 0) {
         continue;
       }
 
+      const sourceRgb = resizedFrame !== undefined ? resizedFrame.rgb : source.rgb;
+      const sourceRgbOffset = sourcePixelOffset * 3;
       const targetPixelOffset = targetY * canvasWidth + targetX;
       const targetRgbOffset = targetPixelOffset * 3;
-      rgb[targetRgbOffset] = sampled.r;
-      rgb[targetRgbOffset + 1] = sampled.g;
-      rgb[targetRgbOffset + 2] = sampled.b;
-      opaqueMask[targetPixelOffset] = sampled.alpha >= 128 ? 1 : 0;
+      rgb[targetRgbOffset] = sourceRgb[sourceRgbOffset] ?? 0;
+      rgb[targetRgbOffset + 1] = sourceRgb[sourceRgbOffset + 1] ?? 0;
+      rgb[targetRgbOffset + 2] = sourceRgb[sourceRgbOffset + 2] ?? 0;
+      opaqueMask[targetPixelOffset] = 1;
     }
   }
 
-  return {
+  const result = {
     width: canvasWidth,
     height: canvasHeight,
     rgb,
     opaqueMask,
   };
+  setCachedResizedAnsiFrame(source, cacheKey, result);
+  return result;
 }
 
-function sampleAnsiPixel(
-  source: AnsiFrame,
-  targetX: number,
-  targetY: number,
-  targetWidth: number,
-  targetHeight: number,
-  resizeAlgorithm: ImageResizeAlgorithm,
-): { r: number; g: number; b: number; alpha: number } {
-  const contribution =
-    resizeAlgorithm === 'lanczos'
-      ? createLanczosSampleContribution(source.width, source.height, targetX, targetY, targetWidth, targetHeight)
-      : createNearestSampleContribution(source.width, source.height, targetX, targetY, targetWidth, targetHeight);
-
-  if (!contribution.useLanczos) {
-    const sourcePixelOffset = contribution.startY * source.width + contribution.startX;
-    if (source.opaqueMask[sourcePixelOffset] === 0) {
-      return { r: 0, g: 0, b: 0, alpha: 0 };
-    }
-    const sourceRgbOffset = sourcePixelOffset * 3;
-    return {
-      r: source.rgb[sourceRgbOffset] ?? 0,
-      g: source.rgb[sourceRgbOffset + 1] ?? 0,
-      b: source.rgb[sourceRgbOffset + 2] ?? 0,
-      alpha: 255,
-    };
+function resampleAnsiFrameLanczos(source: AnsiFrame, targetWidth: number, targetHeight: number): AnsiFrame {
+  if (source.width === targetWidth && source.height === targetHeight) {
+    return source;
   }
 
-  let weightedR = 0;
-  let weightedG = 0;
-  let weightedB = 0;
-  let alphaWeight = 0;
-  let totalWeight = 0;
-  for (let sourceY = contribution.startY; sourceY <= contribution.endY; sourceY += 1) {
-    const weightY = lanczosKernel((sourceY - contribution.centerY) / contribution.scaleY) / contribution.scaleY;
-    if (weightY === 0) {
-      continue;
+  const horizontalPlan = getCachedLanczosAxisContributions(source.width, targetWidth);
+  const verticalPlan = getCachedLanczosAxisContributions(source.height, targetHeight);
+  const horizontal = new Float32Array(targetWidth * source.height * 4);
+
+  for (let sourceY = 0; sourceY < source.height; sourceY += 1) {
+    const horizontalRowOffset = sourceY * targetWidth * 4;
+    for (let targetX = 0; targetX < targetWidth; targetX += 1) {
+      const contribution = horizontalPlan[targetX]!;
+      let premultipliedR = 0;
+      let premultipliedG = 0;
+      let premultipliedB = 0;
+      let alpha = 0;
+      for (let index = 0; index < contribution.sourceIndices.length; index += 1) {
+        const sourceX = contribution.sourceIndices[index]!;
+        const weight = contribution.weights[index] ?? 0;
+        const sourcePixelOffset = sourceY * source.width + sourceX;
+        if (source.opaqueMask[sourcePixelOffset] === 0) {
+          continue;
+        }
+        const sourceRgbOffset = sourcePixelOffset * 3;
+        premultipliedR += (source.rgb[sourceRgbOffset] ?? 0) * weight;
+        premultipliedG += (source.rgb[sourceRgbOffset + 1] ?? 0) * weight;
+        premultipliedB += (source.rgb[sourceRgbOffset + 2] ?? 0) * weight;
+        alpha += 255 * weight;
+      }
+      const horizontalOffset = horizontalRowOffset + targetX * 4;
+      horizontal[horizontalOffset] = premultipliedR;
+      horizontal[horizontalOffset + 1] = premultipliedG;
+      horizontal[horizontalOffset + 2] = premultipliedB;
+      horizontal[horizontalOffset + 3] = alpha;
     }
-    for (let sourceX = contribution.startX; sourceX <= contribution.endX; sourceX += 1) {
-      const weightX = lanczosKernel((sourceX - contribution.centerX) / contribution.scaleX) / contribution.scaleX;
-      const weight = weightX * weightY;
-      if (weight === 0) {
+  }
+
+  const resized = createSolidAnsiFrame(targetWidth, targetHeight, 0, 0, 0, 0);
+  for (let targetY = 0; targetY < targetHeight; targetY += 1) {
+    const contribution = verticalPlan[targetY]!;
+    for (let targetX = 0; targetX < targetWidth; targetX += 1) {
+      let premultipliedR = 0;
+      let premultipliedG = 0;
+      let premultipliedB = 0;
+      let alpha = 0;
+      for (let index = 0; index < contribution.sourceIndices.length; index += 1) {
+        const sourceOffset = (contribution.sourceIndices[index]! * targetWidth + targetX) * 4;
+        const weight = contribution.weights[index] ?? 0;
+        premultipliedR += horizontal[sourceOffset] * weight;
+        premultipliedG += horizontal[sourceOffset + 1] * weight;
+        premultipliedB += horizontal[sourceOffset + 2] * weight;
+        alpha += horizontal[sourceOffset + 3] * weight;
+      }
+
+      if (alpha <= 0) {
         continue;
       }
-      const sourcePixelOffset = sourceY * source.width + sourceX;
-      const sampleAlpha = source.opaqueMask[sourcePixelOffset] === 0 ? 0 : 255;
-      if (sampleAlpha > 0) {
-        const sourceRgbOffset = sourcePixelOffset * 3;
-        weightedR += (source.rgb[sourceRgbOffset] ?? 0) * weight;
-        weightedG += (source.rgb[sourceRgbOffset + 1] ?? 0) * weight;
-        weightedB += (source.rgb[sourceRgbOffset + 2] ?? 0) * weight;
-        alphaWeight += sampleAlpha * weight;
-      }
-      totalWeight += weight;
+      const targetPixelOffset = targetY * targetWidth + targetX;
+      const targetRgbOffset = targetPixelOffset * 3;
+      resized.rgb[targetRgbOffset] = clampToByte((premultipliedR * 255) / alpha);
+      resized.rgb[targetRgbOffset + 1] = clampToByte((premultipliedG * 255) / alpha);
+      resized.rgb[targetRgbOffset + 2] = clampToByte((premultipliedB * 255) / alpha);
+      resized.opaqueMask[targetPixelOffset] = alpha >= 128 ? 1 : 0;
     }
   }
 
-  if (alphaWeight <= 0 || totalWeight <= 0) {
-    return { r: 0, g: 0, b: 0, alpha: 0 };
-  }
-  const normalized = normalizeWeightedSample(weightedR, weightedG, weightedB, alphaWeight, alphaWeight / 255);
-  return {
-    r: normalized.r,
-    g: normalized.g,
-    b: normalized.b,
-    alpha: Math.max(0, Math.min(255, Math.round(alphaWeight / totalWeight))),
-  };
+  return resized;
 }
 
 function isOpaquePixel(r: number, g: number, b: number, a: number, format: ImageFormat, mode: FrameMode): boolean {
