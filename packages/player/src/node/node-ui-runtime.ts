@@ -6,6 +6,7 @@ import type { LaneBinding } from '../manual-input.ts';
 import type { PlayerStateSignals } from '../state-signals.ts';
 import type { PlayerUiSignalBus } from '../core/ui-signal-bus.ts';
 import { resolveHighSpeedMultiplier } from '../core/high-speed-control.ts';
+import type { TuiNoteHeight } from '../tui-note-height.ts';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';
 import { createUiFramePatchBuilder } from './ui-frame-patch.ts';
 import type {
@@ -22,6 +23,7 @@ export interface NodeUiRuntimeOptions {
   speed: number;
   uiFps?: number;
   tuiVisibleNotesLimit?: number;
+  tuiNoteHeight: TuiNoteHeight;
   judgeWindowMs: number;
   highSpeed: number;
   showLaneChannels?: boolean;
@@ -278,6 +280,7 @@ function createWorkerInitData(options: NodeUiRuntimeOptions): NodeUiWorkerInitDa
     speed: options.speed,
     uiFps: options.uiFps,
     tuiVisibleNotesLimit: options.tuiVisibleNotesLimit,
+    tuiNoteHeight: options.tuiNoteHeight,
     judgeWindowMs: options.judgeWindowMs,
     highSpeed: resolveHighSpeedMultiplier(options.highSpeed),
     showLaneChannels: options.showLaneChannels,

@@ -104,6 +104,7 @@ async function bootstrap(): Promise<void> {
     speed: initData.speed,
     highSpeed: initData.highSpeed,
     visibleNotesLimit: initData.tuiVisibleNotesLimit,
+    noteHeight: initData.tuiNoteHeight,
     judgeWindowMs: initData.judgeWindowMs,
     showLaneChannels: initData.showLaneChannels,
     randomPatternSummary: initData.randomPatternSummary,

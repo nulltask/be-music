@@ -6,6 +6,7 @@ import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '.
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/ui-signal-bus.ts';
 import type { LaneBinding } from '../manual-input.ts';
 import type { PlayerJudgeComboSignalState } from '../state-signals.ts';
+import type { TuiNoteHeight } from '../tui-note-height.ts';
 
 export interface NodeGameplayWorkerPlayOptions {
   inferBmsLnTypeWhenMissing?: boolean;
@@ -22,6 +23,7 @@ export interface NodeGameplayWorkerPlayOptions {
   speed?: number;
   uiFps?: number;
   tuiVisibleNotesLimit?: number;
+  tuiNoteHeight?: TuiNoteHeight;
   highSpeed?: number;
   judgeWindowMs?: number;
   debugActiveAudio?: boolean;
@@ -58,6 +60,7 @@ export interface NodeGameplayUiRuntimeInit {
   speed: number;
   uiFps?: number;
   tuiVisibleNotesLimit?: number;
+  tuiNoteHeight: TuiNoteHeight;
   judgeWindowMs: number;
   highSpeed: number;
   showLaneChannels: boolean;

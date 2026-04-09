@@ -5,6 +5,7 @@ import type { BgaKittyImage } from '../bga.ts';
 import type { PlayerSummary } from '../index.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../utils.ts';
 import type { PlayerStateSignals } from '../state-signals.ts';
+import { DEFAULT_TUI_NOTE_HEIGHT, type TuiNoteHeight } from '../tui-note-height.ts';
 import {
   buildKittyGraphicsDeleteImageSequence,
   buildKittyGraphicsRenderSequence,
@@ -42,6 +43,7 @@ interface TuiOptions {
   speed: number;
   highSpeed: number;
   visibleNotesLimit?: number;
+  noteHeight?: TuiNoteHeight;
   judgeWindowMs: number;
   showLaneChannels?: boolean;
   randomPatternSummary?: string;
@@ -138,7 +140,6 @@ const MEASURE_LINE_DIVIDER_SYMBOL = '┬';
 const LANE_FILL_SYMBOL = '│';
 const LANE_DIVIDER_SYMBOL = '│';
 const LANE_OUTER_BORDER_SYMBOL = '┃';
-const JUDGE_LINE_SYMBOL = '█';
 const HIGHLIGHT_DECAY_POWER = 0.72;
 const HIGHLIGHT_R_BOOST = 56;
 const HIGHLIGHT_G_BOOST = 62;
@@ -149,10 +150,12 @@ const WHITE_NOTE_CHANNELS = new Set(['11', '13', '15', '19', '21', '23', '25', '
 const BLUE_NOTE_CHANNELS = new Set(['12', '14', '17', '18', '22', '24', '27', '28']);
 const SCRATCH_LANE_CHANNELS = new Set(['16', '26']);
 const NOTE_HEAD_SYMBOL = '●';
+const LONG_NOTE_HEAD_SYMBOL = '▲';
 const LONG_NOTE_BODY_SYMBOL = '■';
 const LONG_NOTE_TAIL_SYMBOL = '◆';
 const MINE_NOTE_SYMBOL = '✕';
 const INVISIBLE_NOTE_HEAD_SYMBOL = '◯';
+const INVISIBLE_LONG_NOTE_HEAD_SYMBOL = '△';
 const INVISIBLE_LONG_NOTE_BODY_SYMBOL = '□';
 const INVISIBLE_LONG_NOTE_TAIL_SYMBOL = '◇';
 const ANSI_RESET = '\u001b[0m';
@@ -323,6 +326,7 @@ export class PlayerTui {
   constructor(options: TuiOptions) {
     const initialHighSpeed = normalizeHighSpeed(options.highSpeed);
     options.highSpeed = initialHighSpeed;
+    options.noteHeight = options.noteHeight ?? DEFAULT_TUI_NOTE_HEIGHT;
     this.options = options;
     this.stateSignals = options.stateSignals;
     this.displayedHighSpeed = initialHighSpeed;
@@ -625,7 +629,9 @@ export class PlayerTui {
           continue;
         }
 
+        let headSymbol = note.invisible ? INVISIBLE_NOTE_HEAD_SYMBOL : NOTE_HEAD_SYMBOL;
         if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
+          headSymbol = note.invisible ? INVISIBLE_LONG_NOTE_HEAD_SYMBOL : LONG_NOTE_HEAD_SYMBOL;
           const longBodySymbol = note.invisible ? INVISIBLE_LONG_NOTE_BODY_SYMBOL : LONG_NOTE_BODY_SYMBOL;
           const longTailSymbol = note.invisible ? INVISIBLE_LONG_NOTE_TAIL_SYMBOL : LONG_NOTE_TAIL_SYMBOL;
           const bodyStartBeat = Math.max(note.beat, frame.currentBeat);
@@ -694,7 +700,7 @@ export class PlayerTui {
           gridSourceChannels,
           row,
           lane,
-          note.invisible ? INVISIBLE_NOTE_HEAD_SYMBOL : NOTE_HEAD_SYMBOL,
+          headSymbol,
           note.channel,
           this.freeZoneSourceChannels,
           true,
@@ -818,6 +824,7 @@ export class PlayerTui {
           this.laneChannels,
           this.laneWidths,
           this.options.splitAfterIndex,
+          this.options.noteHeight,
         ),
       );
     }
@@ -832,6 +839,7 @@ export class PlayerTui {
             this.laneChannels,
             this.laneWidths,
             this.options.splitAfterIndex,
+            this.options.noteHeight,
             laneHighlightRatios,
             gridSourceChannels[rowIndex],
           ),
@@ -845,6 +853,7 @@ export class PlayerTui {
             this.laneChannels,
             this.laneWidths,
             this.options.splitAfterIndex,
+            this.options.noteHeight,
             laneHighlightRatios,
             gridSourceChannels[rowIndex],
           ),
@@ -857,6 +866,7 @@ export class PlayerTui {
           this.laneChannels,
           this.laneWidths,
           this.options.splitAfterIndex,
+          this.options.noteHeight,
           laneHighlightRatios,
           gridSourceChannels[rowIndex],
         ),
@@ -1565,6 +1575,7 @@ function renderLaneRow(
   channels: string[],
   laneWidths: number[],
   splitAfterIndex = -1,
+  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
   laneHighlightRatios = new Map<number, number>(),
   sourceChannels?: string[],
   applyLaneBackground = true,
@@ -1573,33 +1584,39 @@ function renderLaneRow(
     const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
     const laneChannel = resolveLaneRenderChannel(index, channels, sourceChannels);
     const isHead = value === NOTE_HEAD_SYMBOL;
+    const isLongHead = value === LONG_NOTE_HEAD_SYMBOL;
     const isBody = value === LONG_NOTE_BODY_SYMBOL;
     const isTail = value === LONG_NOTE_TAIL_SYMBOL;
     const isInvisibleHead = value === INVISIBLE_NOTE_HEAD_SYMBOL;
+    const isInvisibleLongHead = value === INVISIBLE_LONG_NOTE_HEAD_SYMBOL;
     const isInvisibleBody = value === INVISIBLE_LONG_NOTE_BODY_SYMBOL;
     const isInvisibleTail = value === INVISIBLE_LONG_NOTE_TAIL_SYMBOL;
     const isMine = value === MINE_NOTE_SYMBOL;
     const isLaneFill = value === LANE_FILL_SYMBOL;
     const isLaneCeiling = value === '═';
-    const isInvisibleNote = isInvisibleHead || isInvisibleBody || isInvisibleTail;
-    const isNote = isHead || isBody || isTail || isInvisibleNote || isMine;
-    const noteUnderline = isHead || isTail || isInvisibleHead || isInvisibleTail;
+    const isInvisibleNote = isInvisibleHead || isInvisibleLongHead || isInvisibleBody || isInvisibleTail;
+    const isNote = isHead || isLongHead || isBody || isTail || isInvisibleNote || isMine;
+    const noteUnderline = isHead || isLongHead || isTail || isInvisibleHead || isInvisibleLongHead || isInvisibleTail;
     const cell = isLaneFill
       ? renderLaneBackdropCell(laneWidth)
       : isLaneCeiling
         ? colorizeLaneCeiling('─'.repeat(Math.max(1, laneWidth)))
         : isHead
-          ? renderNoteCell(laneWidth, 'head')
+          ? renderNoteCell(laneWidth, 'head', noteHeight)
+          : isLongHead
+            ? renderNoteCell(laneWidth, 'long-head', noteHeight)
           : isBody
-            ? renderNoteCell(laneWidth, 'body')
+            ? renderNoteCell(laneWidth, 'body', noteHeight)
             : isTail
-              ? renderNoteCell(laneWidth, 'tail')
+              ? renderNoteCell(laneWidth, 'tail', noteHeight)
               : isInvisibleHead
-                ? renderNoteCell(laneWidth, 'head')
+                ? renderNoteCell(laneWidth, 'head', noteHeight)
+                : isInvisibleLongHead
+                  ? renderNoteCell(laneWidth, 'long-head', noteHeight)
                 : isInvisibleBody
-                  ? renderNoteCell(laneWidth, 'body')
+                  ? renderNoteCell(laneWidth, 'body', noteHeight)
                   : isInvisibleTail
-                    ? renderNoteCell(laneWidth, 'tail')
+                    ? renderNoteCell(laneWidth, 'tail', noteHeight)
                     : isMine
                       ? center(MINE_NOTE_SYMBOL, laneWidth)
                       : center(value, laneWidth);
@@ -1709,6 +1726,7 @@ function renderMeasureRow(
   channels: string[],
   laneWidths: number[],
   splitAfterIndex = -1,
+  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
   laneHighlightRatios = new Map<number, number>(),
   sourceChannels?: string[],
 ): string {
@@ -1717,7 +1735,7 @@ function renderMeasureRow(
     for (let index = startIndex; index < endIndex; index += 1) {
       const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
       const channel = resolveLaneRenderChannel(index, channels, sourceChannels);
-      let cell = renderMeasureLaneCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel);
+      let cell = renderMeasureLaneCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel, noteHeight);
       const highlightRatio = laneHighlightRatios.get(index);
       if (highlightRatio !== undefined) {
         cell = highlightCell(cell, channel, highlightRatio);
@@ -1744,25 +1762,36 @@ function renderMeasureSection(cells: string[]): string {
   return `${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}${body}${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}`;
 }
 
-function renderMeasureLaneCell(value: string, laneWidth: number, sourceChannel: string): string {
+function renderMeasureLaneCell(
+  value: string,
+  laneWidth: number,
+  sourceChannel: string,
+  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
+): string {
   const safeWidth = Math.max(1, laneWidth);
   if (value === NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'head'), sourceChannel, false, true);
+    return colorizeNote(renderNoteCell(safeWidth, 'head', noteHeight), sourceChannel, false, true);
+  }
+  if (value === LONG_NOTE_HEAD_SYMBOL) {
+    return colorizeNote(renderNoteCell(safeWidth, 'long-head', noteHeight), sourceChannel, false, true);
   }
   if (value === LONG_NOTE_BODY_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'body'), sourceChannel, false, false);
+    return colorizeNote(renderNoteCell(safeWidth, 'body', noteHeight), sourceChannel, false, false);
   }
   if (value === LONG_NOTE_TAIL_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'tail'), sourceChannel, false, true);
+    return colorizeNote(renderNoteCell(safeWidth, 'tail', noteHeight), sourceChannel, false, true);
   }
   if (value === INVISIBLE_NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'head'), sourceChannel, true, true);
+    return colorizeNote(renderNoteCell(safeWidth, 'head', noteHeight), sourceChannel, true, true);
+  }
+  if (value === INVISIBLE_LONG_NOTE_HEAD_SYMBOL) {
+    return colorizeNote(renderNoteCell(safeWidth, 'long-head', noteHeight), sourceChannel, true, true);
   }
   if (value === INVISIBLE_LONG_NOTE_BODY_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'body'), sourceChannel, true, false);
+    return colorizeNote(renderNoteCell(safeWidth, 'body', noteHeight), sourceChannel, true, false);
   }
   if (value === INVISIBLE_LONG_NOTE_TAIL_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'tail'), sourceChannel, true, true);
+    return colorizeNote(renderNoteCell(safeWidth, 'tail', noteHeight), sourceChannel, true, true);
   }
   if (value === MINE_NOTE_SYMBOL) {
     return colorizeMine(center(MINE_NOTE_SYMBOL, safeWidth));
@@ -1775,6 +1804,7 @@ function renderJudgeRow(
   channels: string[],
   laneWidths: number[],
   splitAfterIndex = -1,
+  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
   laneHighlightRatios = new Map<number, number>(),
   sourceChannels?: string[],
 ): string {
@@ -1783,7 +1813,7 @@ function renderJudgeRow(
     for (let index = startIndex; index < endIndex; index += 1) {
       const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
       const channel = resolveLaneRenderChannel(index, channels, sourceChannels);
-      let cell = renderJudgeLaneCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel);
+      let cell = renderJudgeLaneCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel, noteHeight);
       const highlightRatio = laneHighlightRatios.get(index);
       if (highlightRatio !== undefined) {
         cell = highlightCell(cell, channel, highlightRatio);
@@ -1792,7 +1822,7 @@ function renderJudgeRow(
       }
       cells.push(cell);
     }
-    return renderJudgeSection(cells);
+    return renderJudgeSection(cells, noteHeight);
   };
 
   if (splitAfterIndex < 0 || splitAfterIndex >= values.length - 1) {
@@ -1804,36 +1834,47 @@ function renderJudgeRow(
   return `${left}${renderLaneSplitPanel()}${right}`;
 }
 
-function renderJudgeSection(cells: string[]): string {
-  const divider = colorizeJudgeLine(JUDGE_LINE_SYMBOL);
+function renderJudgeSection(cells: string[], noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT): string {
+  const divider = colorizeJudgeLine(resolveJudgeLineSymbol(noteHeight));
   const body = cells.join(divider);
   return `${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}${body}${colorizeLaneOuterBorder(LANE_OUTER_BORDER_SYMBOL)}`;
 }
 
-function renderJudgeLaneCell(value: string, laneWidth: number, sourceChannel: string): string {
+function renderJudgeLaneCell(
+  value: string,
+  laneWidth: number,
+  sourceChannel: string,
+  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
+): string {
   const safeWidth = Math.max(1, laneWidth);
   if (value === NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'head'), sourceChannel, false, true);
+    return colorizeNote(renderNoteCell(safeWidth, 'head', noteHeight), sourceChannel, false, true);
+  }
+  if (value === LONG_NOTE_HEAD_SYMBOL) {
+    return colorizeNote(renderNoteCell(safeWidth, 'long-head', noteHeight), sourceChannel, false, true);
   }
   if (value === LONG_NOTE_BODY_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'body'), sourceChannel, false, false);
+    return colorizeNote(renderNoteCell(safeWidth, 'body', noteHeight), sourceChannel, false, false);
   }
   if (value === LONG_NOTE_TAIL_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'tail'), sourceChannel, false, true);
+    return colorizeNote(renderNoteCell(safeWidth, 'tail', noteHeight), sourceChannel, false, true);
   }
   if (value === INVISIBLE_NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'head'), sourceChannel, true, true);
+    return colorizeNote(renderNoteCell(safeWidth, 'head', noteHeight), sourceChannel, true, true);
+  }
+  if (value === INVISIBLE_LONG_NOTE_HEAD_SYMBOL) {
+    return colorizeNote(renderNoteCell(safeWidth, 'long-head', noteHeight), sourceChannel, true, true);
   }
   if (value === INVISIBLE_LONG_NOTE_BODY_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'body'), sourceChannel, true, false);
+    return colorizeNote(renderNoteCell(safeWidth, 'body', noteHeight), sourceChannel, true, false);
   }
   if (value === INVISIBLE_LONG_NOTE_TAIL_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'tail'), sourceChannel, true, true);
+    return colorizeNote(renderNoteCell(safeWidth, 'tail', noteHeight), sourceChannel, true, true);
   }
   if (value === MINE_NOTE_SYMBOL) {
     return colorizeMine(center(MINE_NOTE_SYMBOL, safeWidth));
   }
-  return colorizeJudgeLine(JUDGE_LINE_SYMBOL.repeat(safeWidth));
+  return colorizeJudgeLine(resolveJudgeLineSymbol(noteHeight).repeat(safeWidth));
 }
 
 function setLaneCell(
@@ -1907,8 +1948,10 @@ function setLaneCell(
 function isStackableLaneSymbol(symbol: string): boolean {
   return (
     symbol === NOTE_HEAD_SYMBOL ||
+    symbol === LONG_NOTE_HEAD_SYMBOL ||
     symbol === LONG_NOTE_TAIL_SYMBOL ||
     symbol === INVISIBLE_NOTE_HEAD_SYMBOL ||
+    symbol === INVISIBLE_LONG_NOTE_HEAD_SYMBOL ||
     symbol === INVISIBLE_LONG_NOTE_TAIL_SYMBOL ||
     symbol === MINE_NOTE_SYMBOL
   );
@@ -1925,7 +1968,7 @@ function findStackableRow(
 }
 
 function resolveLaneCellPriority(symbol: string, isFreeZoneSourceChannel: boolean): number {
-  if (symbol === NOTE_HEAD_SYMBOL || symbol === LONG_NOTE_TAIL_SYMBOL) {
+  if (symbol === NOTE_HEAD_SYMBOL || symbol === LONG_NOTE_HEAD_SYMBOL || symbol === LONG_NOTE_TAIL_SYMBOL) {
     return isFreeZoneSourceChannel ? 5 : 6;
   }
   if (symbol === LONG_NOTE_BODY_SYMBOL) {
@@ -1934,7 +1977,11 @@ function resolveLaneCellPriority(symbol: string, isFreeZoneSourceChannel: boolea
   if (symbol === MINE_NOTE_SYMBOL) {
     return 3;
   }
-  if (symbol === INVISIBLE_NOTE_HEAD_SYMBOL || symbol === INVISIBLE_LONG_NOTE_TAIL_SYMBOL) {
+  if (
+    symbol === INVISIBLE_NOTE_HEAD_SYMBOL ||
+    symbol === INVISIBLE_LONG_NOTE_HEAD_SYMBOL ||
+    symbol === INVISIBLE_LONG_NOTE_TAIL_SYMBOL
+  ) {
     return 2;
   }
   if (symbol === INVISIBLE_LONG_NOTE_BODY_SYMBOL) {
@@ -1972,15 +2019,43 @@ function centerVisible(value: string, width: number): string {
   return `${' '.repeat(leftPadding)}${clipped}${' '.repeat(rightPadding)}`;
 }
 
-function renderNoteCell(width: number, kind: 'head' | 'body' | 'tail'): string {
+function resolveRegularNoteSymbol(noteHeight: TuiNoteHeight): string {
+  const symbols: Record<TuiNoteHeight, string> = {
+    1: '▁',
+    2: '▂',
+    3: '▃',
+    4: '▄',
+    5: '▅',
+    6: '▆',
+    7: '▇',
+    8: '█',
+  };
+  return symbols[noteHeight];
+}
+
+function resolveJudgeLineSymbol(noteHeight: TuiNoteHeight): string {
+  return resolveRegularNoteSymbol(noteHeight);
+}
+
+function renderNoteCell(
+  width: number,
+  kind: 'head' | 'long-head' | 'body' | 'tail',
+  noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
+): string {
   const safeWidth = Math.max(1, width);
+  if (kind === 'head') {
+    return resolveRegularNoteSymbol(noteHeight).repeat(safeWidth);
+  }
+  if (kind === 'long-head') {
+    return '█'.repeat(safeWidth);
+  }
   if (kind === 'body') {
     return '▓'.repeat(safeWidth);
   }
   if (kind === 'tail') {
     return '▒'.repeat(safeWidth);
   }
-  return '█'.repeat(safeWidth);
+  return resolveRegularNoteSymbol(noteHeight).repeat(safeWidth);
 }
 
 function highlightCell(value: string, channel: string, ratio: number): string {
