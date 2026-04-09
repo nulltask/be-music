@@ -33,7 +33,7 @@
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
     "@types/node": "^25.5.0",
-    "@typescript/native-preview": "7.0.0-dev.20260405.1",
+    "@typescript/native-preview": "7.0.0-dev.20260409.1",
     "@vitest/coverage-v8": "^4.0.18",
     "oxfmt": "^0.43.0",
     "oxlint": "^1.59.0",
