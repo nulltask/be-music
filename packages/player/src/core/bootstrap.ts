@@ -22,6 +22,7 @@ import {
   resolveLaneDisplayMode,
   type LaneBinding,
 } from '../manual-input.ts';
+import { DEFAULT_IMAGE_RESIZE_ALGORITHM } from '../image-resize-algorithm.ts';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { DEFAULT_TUI_NOTE_HEIGHT } from '../tui-note-height.ts';
 
@@ -185,6 +186,7 @@ export async function initializePlayerUiRuntime({
     tuiNoteHeight: options.tuiNoteHeight ?? DEFAULT_TUI_NOTE_HEIGHT,
     judgeWindowMs,
     highSpeed,
+    imageResizeAlgorithm: options.imageResizeAlgorithm ?? DEFAULT_IMAGE_RESIZE_ALGORITHM,
     videoBgaStreaming: options.videoBgaStreaming,
     showLaneChannels: Boolean(options.debugActiveAudio),
     randomPatternSummary,

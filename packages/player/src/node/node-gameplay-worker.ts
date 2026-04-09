@@ -408,6 +408,7 @@ function serializeUiRuntimeInit(context: CreatePlayerUiRuntimeContext): NodeGame
     tuiNoteHeight: context.tuiNoteHeight,
     judgeWindowMs: context.judgeWindowMs,
     highSpeed: context.highSpeed,
+    imageResizeAlgorithm: context.imageResizeAlgorithm,
     showLaneChannels: context.showLaneChannels,
     randomPatternSummary: context.randomPatternSummary,
     baseDir: context.baseDir,

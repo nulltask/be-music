@@ -230,6 +230,7 @@ describe('node ui runtime', () => {
           uiFps?: number;
           tuiVisibleNotesLimit?: number;
           tuiNoteHeight?: string;
+          imageResizeAlgorithm?: string;
           videoBgaStreaming?: boolean;
         }
       | undefined;
@@ -244,6 +245,7 @@ describe('node ui runtime', () => {
       uiFps: 60,
       tuiVisibleNotesLimit: 8192,
       tuiNoteHeight: 8,
+      imageResizeAlgorithm: 'nearest',
       videoBgaStreaming: true,
     });
 
@@ -375,6 +377,7 @@ function createContext(
     uiFps: 60,
     tuiVisibleNotesLimit: 8192,
     tuiNoteHeight: 8,
+    imageResizeAlgorithm: 'nearest',
     judgeWindowMs: 16.67,
     highSpeed: 1,
     videoBgaStreaming: true,

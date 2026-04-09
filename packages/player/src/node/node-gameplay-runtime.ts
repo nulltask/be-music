@@ -218,6 +218,7 @@ async function handleUiInit(
       tuiNoteHeight: message.runtime.tuiNoteHeight,
       judgeWindowMs: message.runtime.judgeWindowMs,
       highSpeed: message.runtime.highSpeed,
+      imageResizeAlgorithm: message.runtime.imageResizeAlgorithm,
       showLaneChannels: message.runtime.showLaneChannels,
       randomPatternSummary: message.runtime.randomPatternSummary,
       baseDir: message.runtime.baseDir,

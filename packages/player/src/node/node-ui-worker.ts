@@ -142,6 +142,7 @@ async function bootstrap(): Promise<void> {
     baseDir: initData.baseDir,
     width: initialBgaSize.width,
     height: initialBgaSize.height,
+    imageResizeAlgorithm: initData.imageResizeAlgorithm,
     videoBgaStreaming: initData.videoBgaStreaming,
     signal: abortController.signal,
     onLoadProgress: (progress) => {

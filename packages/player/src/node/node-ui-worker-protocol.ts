@@ -4,6 +4,7 @@ import type { BeMusicJson } from '@be-music/json';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/ui-signal-bus.ts';
 import type { LaneBinding } from '../manual-input.ts';
 import type { PlayerJudgeComboSignalState } from '../state-signals.ts';
+import type { ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
 import type { TuiNoteHeight } from '../tui-note-height.ts';
 import type { PlayerUiFramePatch } from './ui-frame-patch.ts';
 
@@ -18,6 +19,7 @@ export interface NodeUiWorkerInitData {
   tuiNoteHeight: TuiNoteHeight;
   judgeWindowMs: number;
   highSpeed: number;
+  imageResizeAlgorithm: ImageResizeAlgorithm;
   showLaneChannels?: boolean;
   randomPatternSummary?: string;
   baseDir: string;

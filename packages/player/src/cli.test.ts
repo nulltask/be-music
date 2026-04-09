@@ -134,6 +134,11 @@ describe('player cli', () => {
     );
   });
 
+  test('cli: defaults image resize algorithm to nearest and accepts lanczos', () => {
+    expect(parseArgs(['chart.bms']).imageResizeAlgorithm).toBe('nearest');
+    expect(parseArgs(['chart.bms', '--image-resize-algorithm', 'lanczos']).imageResizeAlgorithm).toBe('lanczos');
+  });
+
   test('cli: defaults TUI rendering to 60fps and accepts custom fps', () => {
     expect(parseArgs(['chart.bms']).uiFps).toBe(60);
     expect(parseArgs(['chart.bms', '--tui-fps', '120']).uiFps).toBe(120);
@@ -165,6 +170,12 @@ describe('player cli', () => {
     );
     expect(() => parseArgs(['chart.bms', '--tui-visible-notes-limit', 'abc'])).toThrow(
       '--tui-visible-notes-limit expects an integer value',
+    );
+  });
+
+  test('cli: rejects invalid image resize algorithms', () => {
+    expect(() => parseArgs(['chart.bms', '--image-resize-algorithm', 'bicubic'])).toThrow(
+      '--image-resize-algorithm must be one of: nearest, lanczos',
     );
   });
 

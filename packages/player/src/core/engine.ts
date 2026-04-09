@@ -27,6 +27,7 @@ import { createPlayerStateSignals, type PlayerStateSignals } from '../state-sign
 import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
 import { type LaneBinding } from '../manual-input.ts';
 import { type LongNoteMode, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
+import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
 import { type TuiNoteHeight } from '../tui-note-height.ts';
 import { formatSeconds, resolveAltModifierLabel, resolveChartVolWavGain } from '../utils.ts';
 import { createNodeAudioSink, type AudioSink, type AudioSinkClockState } from '../audio-sink.ts';
@@ -93,6 +94,7 @@ export interface CreatePlayerUiRuntimeContext {
   tuiNoteHeight: TuiNoteHeight;
   judgeWindowMs: number;
   highSpeed: number;
+  imageResizeAlgorithm: ImageResizeAlgorithm;
   videoBgaStreaming?: boolean;
   showLaneChannels: boolean;
   randomPatternSummary?: string;
@@ -127,6 +129,7 @@ export interface PlayerOptions {
   uiFps?: number;
   tuiVisibleNotesLimit?: number;
   tuiNoteHeight?: TuiNoteHeight;
+  imageResizeAlgorithm?: ImageResizeAlgorithm;
   highSpeed?: number;
   judgeWindowMs?: number;
   debugActiveAudio?: boolean;

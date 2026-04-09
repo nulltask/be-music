@@ -245,6 +245,43 @@ describe('player bga', () => {
     }
   });
 
+  test('player bga: supports lanczos resizing for STAGEFILE images', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-stagefile-lanczos-'));
+    try {
+      await writePng(join(baseDir, 'stage.png'), 512, 512, (x) =>
+        x < 256 ? { r: 255, g: 0, b: 0, a: 255 } : { r: 0, g: 0, b: 255, a: 255 },
+      );
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.metadata.stageFile = 'stage.png';
+
+      const nearest = await loadStageFileAnsiImage(json, {
+        baseDir,
+        width: 8,
+        height: 6,
+        imageResizeAlgorithm: 'nearest',
+      });
+      const lanczos = await loadStageFileAnsiImage(json, {
+        baseDir,
+        width: 8,
+        height: 6,
+        imageResizeAlgorithm: 'lanczos',
+      });
+
+      const nearestPixels = parseAnsiPixels(nearest?.lines ?? []);
+      const lanczosPixels = parseAnsiPixels(lanczos?.lines ?? []);
+      expect(nearestPixels[3]?.[3]).toEqual({ r: 255, g: 0, b: 0 });
+      expect(nearestPixels[3]?.[4]).toEqual({ r: 0, g: 0, b: 255 });
+      expect((lanczosPixels[3]?.[3]?.r ?? 0) > 0).toBe(true);
+      expect((lanczosPixels[3]?.[3]?.b ?? 0) > 0).toBe(true);
+      expect((lanczosPixels[3]?.[4]?.r ?? 0) > 0).toBe(true);
+      expect((lanczosPixels[3]?.[4]?.b ?? 0) > 0).toBe(true);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   test('player bga: loads banner images with contain sizing for music-select metadata blocks', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-banner-ansi-'));
     try {
@@ -290,6 +327,36 @@ describe('player bga', () => {
         }),
       );
       expect(image?.kittyImage?.rgb.length).toBe(64 * 8 * 3);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: supports lanczos resizing for banner images', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-banner-lanczos-'));
+    try {
+      await writePng(join(baseDir, 'banner.png'), 512, 64, (x) =>
+        x < 256 ? { r: 255, g: 0, b: 0, a: 255 } : { r: 0, g: 0, b: 255, a: 255 },
+      );
+
+      const nearest = await loadTerminalAnsiImage(baseDir, 'banner.png', {
+        width: 1,
+        height: 1,
+        fitMode: 'contain',
+        imageResizeAlgorithm: 'nearest',
+      });
+      const lanczos = await loadTerminalAnsiImage(baseDir, 'banner.png', {
+        width: 1,
+        height: 1,
+        fitMode: 'contain',
+        imageResizeAlgorithm: 'lanczos',
+      });
+
+      const nearestPixels = parseAnsiPixels(nearest?.lines ?? []);
+      const lanczosPixels = parseAnsiPixels(lanczos?.lines ?? []);
+      expect(nearestPixels[0]?.[0]).toEqual({ r: 0, g: 0, b: 255 });
+      expect((lanczosPixels[0]?.[0]?.r ?? 0) > 0).toBe(true);
+      expect((lanczosPixels[0]?.[0]?.b ?? 0) > 0).toBe(true);
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }
@@ -482,6 +549,44 @@ describe('player bga', () => {
 
       expect(pixels[4]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
       expect(pixels[16]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test('player bga: supports lanczos resizing for gameplay image BGA', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-lanczos-'));
+    try {
+      await writePng(join(baseDir, 'base.png'), 512, 512, (x) =>
+        x < 256 ? { r: 255, g: 0, b: 0, a: 255 } : { r: 0, g: 0, b: 255, a: 255 },
+      );
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'base.png';
+      json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
+
+      const nearest = await createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 8,
+        height: 6,
+        imageResizeAlgorithm: 'nearest',
+      });
+      const lanczos = await createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 8,
+        height: 6,
+        imageResizeAlgorithm: 'lanczos',
+      });
+
+      const nearestPixels = parseAnsiPixels(nearest?.getAnsiLines(0) ?? []);
+      const lanczosPixels = parseAnsiPixels(lanczos?.getAnsiLines(0) ?? []);
+      expect(nearestPixels[3]?.[3]).toEqual({ r: 255, g: 0, b: 0 });
+      expect(nearestPixels[3]?.[4]).toEqual({ r: 0, g: 0, b: 255 });
+      expect((lanczosPixels[3]?.[3]?.r ?? 0) > 0).toBe(true);
+      expect((lanczosPixels[3]?.[3]?.b ?? 0) > 0).toBe(true);
+      expect((lanczosPixels[3]?.[4]?.r ?? 0) > 0).toBe(true);
+      expect((lanczosPixels[3]?.[4]?.b ?? 0) > 0).toBe(true);
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }
@@ -1055,6 +1160,7 @@ describe('player bga', () => {
       playbackEndSeconds: 0,
       width: 40,
       height: 20,
+      resizeAlgorithm: 'nearest',
     });
 
     const pixels = parseAnsiPixels(renderer.getAnsiLines(0) ?? []);
