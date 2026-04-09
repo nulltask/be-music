@@ -779,76 +779,65 @@ function applyIndexedHeaderLine(
 ): void {
   switch (directive) {
     case 'WAV':
-      json.resources.wav[key] = value;
+      applyIndexedStringValue(json.resources.wav, key, value);
       return;
     case 'BMP':
-      json.resources.bmp[key] = value;
+      applyIndexedStringValue(json.resources.bmp, key, value);
       return;
     case 'TEXT':
-      json.resources.text[key] = value;
+      applyIndexedStringValue(json.resources.text, key, value);
       return;
     case 'EXRANK':
-      if (value.length > 0) {
-        json.bms.exRank[key] = value;
-      }
+      applyIndexedStringValue(json.bms.exRank, key, value);
       return;
     case 'ARGB':
-      if (value.length > 0) {
-        json.bms.argb[key] = value;
-      }
+      applyIndexedStringValue(json.bms.argb, key, value);
       return;
     case 'CHANGEOPTION':
-      if (value.length > 0) {
-        json.bms.changeOption[key] = value;
-      }
+      applyIndexedStringValue(json.bms.changeOption, key, value);
       return;
     case 'EXWAV':
-      if (value.length > 0) {
-        json.bms.exWav[key] = value;
-      }
+      applyIndexedStringValue(json.bms.exWav, key, value);
       return;
     case 'EXBMP':
-      if (value.length > 0) {
-        json.bms.exBmp[key] = value;
-      }
+      applyIndexedStringValue(json.bms.exBmp, key, value);
       return;
     case 'BGA':
-      if (value.length > 0) {
-        json.bms.bga[key] = value;
-      }
+      applyIndexedStringValue(json.bms.bga, key, value);
       return;
     case 'SCROLL': {
-      const numeric = Number.parseFloat(value);
-      if (Number.isFinite(numeric)) {
-        json.bms.scroll[key] = numeric;
-      }
+      applyIndexedNumberValue(json.bms.scroll, key, value);
       return;
     }
     case 'SPEED': {
-      const numeric = Number.parseFloat(value);
-      if (Number.isFinite(numeric)) {
-        json.bms.speed[key] = numeric;
-      }
+      applyIndexedNumberValue(json.bms.speed, key, value);
       return;
     }
     case 'SWBGA':
-      if (value.length > 0) {
-        json.bms.swBga[key] = value;
-      }
+      applyIndexedStringValue(json.bms.swBga, key, value);
       return;
     case 'BPM':
     case 'STOP': {
-      const numericValue = Number.parseFloat(value);
-      if (!Number.isFinite(numericValue)) {
-        return;
-      }
       if (directive === 'BPM') {
-        json.resources.bpm[key] = numericValue;
+        applyIndexedNumberValue(json.resources.bpm, key, value);
       } else {
-        json.resources.stop[key] = numericValue;
+        applyIndexedNumberValue(json.resources.stop, key, value);
       }
       return;
     }
+  }
+}
+
+function applyIndexedStringValue(values: Record<string, string>, key: string, value: string): void {
+  if (value.length > 0) {
+    values[key] = value;
+  }
+}
+
+function applyIndexedNumberValue(values: Record<string, number>, key: string, value: string): void {
+  const numericValue = Number.parseFloat(value);
+  if (Number.isFinite(numericValue)) {
+    values[key] = numericValue;
   }
 }
 

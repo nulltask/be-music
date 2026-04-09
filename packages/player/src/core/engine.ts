@@ -39,6 +39,17 @@ import {
 import { createPlayerUiSignalBus, type PlayerUiSignalBus } from './ui-signal-bus.ts';
 import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './input-signal-bus.ts';
 import {
+  applyGaugeDeltaWithLogging,
+  applyGaugeJudgeWithLogging,
+  applyPlaybackHighSpeedAction,
+  consumePlaybackInputCommands,
+  createNoopPlaybackStateLogger,
+  createUiFramePublisher,
+  setLoggedComboValue,
+  togglePlaybackPause,
+  type PlaybackStateLogger,
+} from './playback-support.ts';
+import {
   IIDX_EX_SCORE_PER_PGREAT,
   IIDX_SCORE_MAX,
   applyJudgeToSummary,
@@ -294,38 +305,6 @@ interface NoTuiPlaybackEventTracer {
   flushUntil: (seconds: number) => void;
   logPoorTriggered: (seconds: number) => void;
   logPoorCleared: (seconds: number) => void;
-}
-
-interface NoTuiPlaybackStateLogger {
-  logGaugeChange: (
-    seconds: number,
-    params: {
-      reason: string;
-      judge?: string;
-      delta?: number;
-    },
-  ) => void;
-  logComboChange: (
-    seconds: number,
-    params: {
-      value: number;
-      reason: string;
-      judge?: string;
-      channel?: string;
-    },
-  ) => void;
-  logLongNoteState: (
-    seconds: number,
-    params: {
-      channel: string;
-      state: 'start' | 'release' | 'break' | 'complete';
-      mode: 1 | 2 | 3;
-      event: BeMusicEvent;
-      resources: Readonly<Record<string, string>>;
-      endSeconds?: number;
-    },
-  ) => void;
-  logResult: (seconds: number, params: { reason: string; summary: PlayerSummary }) => void;
 }
 
 interface TimedManualJudge {
@@ -778,7 +757,7 @@ function writeSampleStopEventLog(
 function createNoTuiPlaybackStateLogger(params: {
   writeOutput: (text: string) => void;
   summary: PlayerSummary;
-}): NoTuiPlaybackStateLogger {
+}): PlaybackStateLogger {
   const { writeOutput, summary } = params;
 
   return {
@@ -841,15 +820,6 @@ function createNoTuiPlaybackStateLogger(params: {
         ['gaugeCleared', gauge?.cleared],
       ]);
     },
-  };
-}
-
-function createNoopPlaybackStateLogger(): NoTuiPlaybackStateLogger {
-  return {
-    logGaugeChange: () => undefined,
-    logComboChange: () => undefined,
-    logLongNoteState: () => undefined,
-    logResult: () => undefined,
   };
 }
 
@@ -1695,23 +1665,17 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       });
   const playbackStateLogger = uiEnabled ? createNoopPlaybackStateLogger() : createNoTuiPlaybackStateLogger({ writeOutput, summary });
   const applyLoggedGaugeJudge = (seconds: number, judge: GrooveGaugeJudgeKind, reason = 'judge'): void => {
-    const previousGauge = summary.gauge?.current;
-    applyGaugeJudge(judge);
-    const nextGauge = summary.gauge?.current;
-    playbackStateLogger.logGaugeChange(seconds, {
-      reason,
+    applyGaugeJudgeWithLogging({
+      summary,
+      applyGaugeJudge,
+      playbackStateLogger,
+      seconds,
       judge,
-      delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
+      reason,
     });
   };
   const setLoggedCombo = (seconds: number, value: number, reason: string, judge?: string, channel?: string): void => {
-    combo = value;
-    playbackStateLogger.logComboChange(seconds, {
-      value,
-      reason,
-      judge,
-      channel,
-    });
+    combo = setLoggedComboValue(playbackStateLogger, seconds, value, reason, judge, channel);
   };
 
   throwIfAborted(options.signal);
@@ -1753,24 +1717,17 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     };
   };
   const highSpeedModifierLabel = resolveAltModifierLabel();
-  const publishUiFrame = (seconds: number, beat: number): void => {
-    if (!uiEnabled) {
-      return;
-    }
-    const debugState = resolveDebugActiveAudioState(seconds);
-    uiSignals.publishFrame({
-      currentBeat: beat,
-      currentSeconds: seconds,
-      totalSeconds,
-      summary,
-      notes: renderNotes,
-      landmineNotes,
-      invisibleNotes,
-      audioBackend: audioBackendLabel,
-      activeAudioFiles: debugState.activeAudioFiles,
-      activeAudioVoiceCount: debugState.activeAudioVoiceCount,
-    });
-  };
+  const publishUiFrame = createUiFramePublisher({
+    uiEnabled,
+    uiSignals,
+    totalSeconds,
+    summary,
+    notes: renderNotes,
+    landmineNotes,
+    invisibleNotes,
+    audioBackend: audioBackendLabel,
+    resolveDebugActiveAudioState,
+  });
 
   if (!uiEnabled) {
     writeOutput('Auto play start\n');
@@ -1801,73 +1758,63 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   let realtimeAudioVolumeEventIndex = 0;
   let realtimeAudioTriggerIndex = 0;
   const pendingAutoLongNotes: PendingAutoLongNoteState[] = [];
+  const resolveAutoCommandSeconds = (): number =>
+    playbackClock ? elapsedMsToGameSeconds(playbackClock.nowMs(), speed) : 0;
+  const resolveAutoInterruptSeconds = (): number | undefined =>
+    playbackClock ? elapsedMsToGameSeconds(playbackClock.nowMs(), speed) : undefined;
 
   const togglePause = (): void => {
-    if (!playbackClock) {
-      return;
-    }
-    if (playbackClock.isPaused()) {
-      if (!playbackClock.resume()) {
-        return;
-      }
-      audioSession?.resume();
-      activeStateSignals?.setPaused(false);
-      if (!uiEnabled) {
-        writeRuntimeEventLog(writeOutput, 'playback-state', [
-          ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
-          ['state', 'resume'],
-        ]);
-      }
-      return;
-    }
-
-    if (!playbackClock.pause()) {
-      return;
-    }
-    audioSession?.pause();
-    activeStateSignals?.setPaused(true);
-    if (!uiEnabled) {
-      writeRuntimeEventLog(writeOutput, 'playback-state', [
-        ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
-        ['state', 'pause'],
-      ]);
-    }
+    togglePlaybackPause({
+      playbackClock,
+      audioSession,
+      activeStateSignals,
+      onStateChange: !uiEnabled
+        ? (state, nowMs) => {
+            writeRuntimeEventLog(writeOutput, 'playback-state', [
+              ['time', formatSeconds(elapsedMsToGameSeconds(nowMs, speed))],
+              ['state', state],
+            ]);
+          }
+        : undefined,
+    });
   };
   const consumeInputCommands = (): void => {
-    const commands = inputSignals.drainCommands();
-    for (const command of commands) {
-      if (interruptedReason) {
-        continue;
-      }
-      if (command.kind === 'interrupt') {
-        if (!uiEnabled && playbackClock) {
-          writeRuntimeEventLog(writeOutput, 'interrupt', [
-            ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
-            ['reason', command.reason],
-          ]);
-        }
-        interruptedReason = command.reason;
-        continue;
-      }
-      if (command.kind === 'toggle-pause') {
-        togglePause();
-        continue;
-      }
-      if (command.kind === 'high-speed') {
-        const nextHighSpeed = applyHighSpeedControlAction(highSpeed, command.action);
-        if (nextHighSpeed !== highSpeed) {
-          highSpeed = nextHighSpeed;
-          activeStateSignals?.setHighSpeed(highSpeed);
-          options.onHighSpeedChange?.(highSpeed);
-        }
-        if (!uiEnabled) {
-          writeRuntimeEventLog(writeOutput, 'high-speed-change', [
-            ['time', formatSeconds(playbackClock ? elapsedMsToGameSeconds(playbackClock.nowMs(), speed) : 0)],
-            ['value', `x${highSpeed.toFixed(1)}`],
-          ]);
-        }
-      }
-    }
+    consumePlaybackInputCommands({
+      inputSignals,
+      isInterrupted: () => interruptedReason !== undefined,
+      setInterruptedReason: (reason) => {
+        interruptedReason = reason;
+      },
+      onTogglePause: togglePause,
+      onHighSpeedAction: (action) => {
+        highSpeed = applyPlaybackHighSpeedAction({
+          action,
+          currentHighSpeed: highSpeed,
+          activeStateSignals,
+          onHighSpeedChange: options.onHighSpeedChange,
+          logHighSpeedChange: !uiEnabled
+            ? (nextHighSpeed) => {
+                writeRuntimeEventLog(writeOutput, 'high-speed-change', [
+                  ['time', formatSeconds(resolveAutoCommandSeconds())],
+                  ['value', `x${nextHighSpeed.toFixed(1)}`],
+                ]);
+              }
+            : undefined,
+        });
+      },
+      logInterrupt: !uiEnabled
+        ? (reason) => {
+            const interruptSeconds = resolveAutoInterruptSeconds();
+            if (interruptSeconds === undefined) {
+              return;
+            }
+            writeRuntimeEventLog(writeOutput, 'interrupt', [
+              ['time', formatSeconds(interruptSeconds)],
+              ['reason', reason],
+            ]);
+          }
+        : undefined,
+    });
   };
 
   const triggerRealtimeAudioVolumeEvents = (referenceSeconds: number): void => {
@@ -2285,35 +2232,27 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       });
   const playbackStateLogger = uiEnabled ? createNoopPlaybackStateLogger() : createNoTuiPlaybackStateLogger({ writeOutput, summary });
   const applyLoggedGaugeJudge = (seconds: number, judge: GrooveGaugeJudgeKind, reason = 'judge'): void => {
-    const previousGauge = summary.gauge?.current;
-    applyGaugeJudge(judge);
-    const nextGauge = summary.gauge?.current;
-    playbackStateLogger.logGaugeChange(seconds, {
-      reason,
+    applyGaugeJudgeWithLogging({
+      summary,
+      applyGaugeJudge,
+      playbackStateLogger,
+      seconds,
       judge,
-      delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
+      reason,
     });
   };
   const applyLoggedGaugeDelta = (seconds: number, delta: number, reason: string): void => {
-    const previousGauge = summary.gauge?.current;
-    applyGaugeDelta(delta);
-    const nextGauge = summary.gauge?.current;
-    if (previousGauge === nextGauge) {
-      return;
-    }
-    playbackStateLogger.logGaugeChange(seconds, {
+    applyGaugeDeltaWithLogging({
+      summary,
+      applyGaugeDelta,
+      playbackStateLogger,
+      seconds,
+      delta,
       reason,
-      delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
     });
   };
   const setLoggedCombo = (seconds: number, value: number, reason: string, judge?: string, channel?: string): void => {
-    combo = value;
-    playbackStateLogger.logComboChange(seconds, {
-      value,
-      reason,
-      judge,
-      channel,
-    });
+    combo = setLoggedComboValue(playbackStateLogger, seconds, value, reason, judge, channel);
   };
 
   throwIfAborted(options.signal);
@@ -2336,24 +2275,17 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     };
   };
   const highSpeedModifierLabel = resolveAltModifierLabel();
-  const publishUiFrame = (seconds: number, beat: number): void => {
-    if (!uiEnabled) {
-      return;
-    }
-    const debugState = resolveDebugActiveAudioState();
-    uiSignals.publishFrame({
-      currentBeat: beat,
-      currentSeconds: seconds,
-      totalSeconds,
-      summary,
-      notes: renderNotes,
-      landmineNotes,
-      invisibleNotes,
-      audioBackend: audioBackendLabel,
-      activeAudioFiles: debugState.activeAudioFiles,
-      activeAudioVoiceCount: debugState.activeAudioVoiceCount,
-    });
-  };
+  const publishUiFrame = createUiFramePublisher({
+    uiEnabled,
+    uiSignals,
+    totalSeconds,
+    summary,
+    notes: renderNotes,
+    landmineNotes,
+    invisibleNotes,
+    audioBackend: audioBackendLabel,
+    resolveDebugActiveAudioState: () => resolveDebugActiveAudioState(),
+  });
 
   if (!uiEnabled) {
     writeOutput('Manual play start\n');
@@ -2772,7 +2704,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     return candidateChannelsBuffer;
   };
 
-  const handleMappedInputTokens = (tokens: readonly string[]): void => {
+  const handleMappedInputTokens = (tokens: readonly string[], nowMs: number, nowSec: number): void => {
     const candidateChannels = resolveMappedInputChannels(tokens);
     if (candidateChannels.size === 0) {
       return;
@@ -2784,8 +2716,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
     }
 
-    const nowMs = playbackClock.nowMs();
-    const nowSec = elapsedMsToGameSeconds(nowMs, speed);
     advanceDynamicJudgeRankChanges(nowSec);
 
     let refreshedHold = false;
@@ -2938,136 +2868,127 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     applyManualTimingJudge(channel, signedDeltaMs, nowSec);
   };
 
-  const applyHighSpeedAction = (action: HighSpeedControlAction | undefined): boolean => {
-    if (!action) {
-      return false;
-    }
-    const nextHighSpeed = applyHighSpeedControlAction(highSpeed, action);
-    if (nextHighSpeed !== highSpeed) {
-      highSpeed = nextHighSpeed;
-      activeStateSignals?.setHighSpeed(highSpeed);
-      options.onHighSpeedChange?.(highSpeed);
-    }
-    if (!uiEnabled) {
-      writeRuntimeEventLog(writeOutput, 'high-speed-change', [
-        ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
-        ['value', `x${highSpeed.toFixed(1)}`],
-      ]);
-    }
-    return true;
-  };
-
   const togglePause = (): void => {
-    if (playbackClock.isPaused()) {
-      if (!playbackClock.resume()) {
-        return;
-      }
-      audioSession?.resume();
-      activeStateSignals?.setPaused(false);
-      if (!uiEnabled) {
-        writeRuntimeEventLog(writeOutput, 'playback-state', [
-          ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
-          ['state', 'resume'],
-        ]);
-      }
-      return;
-    }
-    if (!playbackClock.pause()) {
-      return;
-    }
-    audioSession?.pause();
-    activeStateSignals?.setPaused(true);
-    if (!uiEnabled) {
-      writeRuntimeEventLog(writeOutput, 'playback-state', [
-        ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
-        ['state', 'pause'],
-      ]);
-    }
+    togglePlaybackPause({
+      playbackClock,
+      audioSession,
+      activeStateSignals,
+      onStateChange: !uiEnabled
+        ? (state, nowMs) => {
+            writeRuntimeEventLog(writeOutput, 'playback-state', [
+              ['time', formatSeconds(elapsedMsToGameSeconds(nowMs, speed))],
+              ['state', state],
+            ]);
+          }
+        : undefined,
+    });
   };
+  const resolveManualCommandSeconds = (): number => elapsedMsToGameSeconds(playbackClock.nowMs(), speed);
 
   const consumeInputCommands = (): void => {
-    const commands = inputSignals.drainCommands();
-    for (const command of commands) {
-      if (interruptedReason) {
-        continue;
-      }
-      if (command.kind === 'interrupt') {
-        if (!uiEnabled && playbackClock) {
-          writeRuntimeEventLog(writeOutput, 'interrupt', [
-            ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
-            ['reason', command.reason],
-          ]);
+    consumePlaybackInputCommands({
+      inputSignals,
+      isInterrupted: () => interruptedReason !== undefined,
+      setInterruptedReason: (reason) => {
+        interruptedReason = reason;
+      },
+      onTogglePause: togglePause,
+      onHighSpeedAction: (action) => {
+        highSpeed = applyPlaybackHighSpeedAction({
+          action,
+          currentHighSpeed: highSpeed,
+          activeStateSignals,
+          onHighSpeedChange: options.onHighSpeedChange,
+          logHighSpeedChange: !uiEnabled
+            ? (nextHighSpeed) => {
+                writeRuntimeEventLog(writeOutput, 'high-speed-change', [
+                  ['time', formatSeconds(resolveManualCommandSeconds())],
+                  ['value', `x${nextHighSpeed.toFixed(1)}`],
+                ]);
+              }
+            : undefined,
+        });
+      },
+      onUnhandledCommand: (command) => {
+        if (command.kind === 'kitty-state') {
+          if (!uiEnabled) {
+            if (command.pressTokens.length > 0) {
+              writeRuntimeEventLog(writeOutput, 'input', [
+                ['time', formatSeconds(resolveManualCommandSeconds())],
+                ['action', 'press'],
+                ['tokens', command.pressTokens.join(',')],
+              ]);
+            }
+            if (command.repeatTokens.length > 0) {
+              writeRuntimeEventLog(writeOutput, 'input', [
+                ['time', formatSeconds(resolveManualCommandSeconds())],
+                ['action', 'repeat'],
+                ['tokens', command.repeatTokens.join(',')],
+              ]);
+            }
+            if (command.releaseTokens.length > 0) {
+              writeRuntimeEventLog(writeOutput, 'input', [
+                ['time', formatSeconds(resolveManualCommandSeconds())],
+                ['action', 'release'],
+                ['tokens', command.releaseTokens.join(',')],
+              ]);
+            }
+          }
+          const pressedChannels = resolveMappedInputChannels(command.pressTokens, command.repeatTokens);
+          for (const channel of pressedChannels) {
+            activeKittyPressedChannels.add(channel);
+            if (uiEnabled) {
+              uiSignals.pushCommand({ kind: 'press-lane', channel });
+            }
+          }
+          const releasedChannels = resolveMappedInputChannels(command.releaseTokens);
+          for (const channel of releasedChannels) {
+            activeKittyPressedChannels.delete(channel);
+            if (uiEnabled) {
+              uiSignals.pushCommand({ kind: 'release-lane', channel });
+            }
+            if (activeLongNotesByChannel.has(channel)) {
+              longHoldUntilMsByChannel.set(channel, playbackClock.nowMs());
+            }
+          }
+          return;
         }
-        interruptedReason = command.reason;
-        continue;
-      }
-      if (command.kind === 'toggle-pause') {
-        togglePause();
-        continue;
-      }
-      if (command.kind === 'high-speed') {
-        applyHighSpeedAction(command.action);
-        continue;
-      }
-      if (command.kind === 'kitty-state') {
+        if (playbackClock.isPaused()) {
+          return;
+        }
+        if (command.kind !== 'lane-input') {
+          return;
+        }
         if (!uiEnabled) {
-          if (command.pressTokens.length > 0) {
-            writeRuntimeEventLog(writeOutput, 'input', [
-              ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
-              ['action', 'press'],
-              ['tokens', command.pressTokens.join(',')],
+          const commandNowMs = playbackClock.nowMs();
+          const commandNowSec = elapsedMsToGameSeconds(commandNowMs, speed);
+          writeRuntimeEventLog(writeOutput, 'input', [
+            ['time', formatSeconds(commandNowSec)],
+            ['action', 'lane-input'],
+            ['tokens', command.tokens.join(',')],
+          ]);
+          const scheduledSec = elapsedMsToGameSeconds(playbackClock.scheduledMs(), speed);
+          triggerRealtimeAudioVolumeEvents(scheduledSec);
+          playbackEventTracer.flushUntil(commandNowSec);
+          handleMappedInputTokens(command.tokens, commandNowMs, commandNowSec);
+          return;
+        }
+        const nowMs = playbackClock.nowMs();
+        const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+        const scheduledSec = elapsedMsToGameSeconds(playbackClock.scheduledMs(), speed);
+        triggerRealtimeAudioVolumeEvents(scheduledSec);
+        playbackEventTracer.flushUntil(nowSec);
+        handleMappedInputTokens(command.tokens, nowMs, nowSec);
+      },
+      logInterrupt: !uiEnabled
+        ? (reason) => {
+            writeRuntimeEventLog(writeOutput, 'interrupt', [
+              ['time', formatSeconds(resolveManualCommandSeconds())],
+              ['reason', reason],
             ]);
           }
-          if (command.repeatTokens.length > 0) {
-            writeRuntimeEventLog(writeOutput, 'input', [
-              ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
-              ['action', 'repeat'],
-              ['tokens', command.repeatTokens.join(',')],
-            ]);
-          }
-          if (command.releaseTokens.length > 0) {
-            writeRuntimeEventLog(writeOutput, 'input', [
-              ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
-              ['action', 'release'],
-              ['tokens', command.releaseTokens.join(',')],
-            ]);
-          }
-        }
-        const pressedChannels = resolveMappedInputChannels(command.pressTokens, command.repeatTokens);
-        for (const channel of pressedChannels) {
-          activeKittyPressedChannels.add(channel);
-          if (uiEnabled) {
-            uiSignals.pushCommand({ kind: 'press-lane', channel });
-          }
-        }
-        const releasedChannels = resolveMappedInputChannels(command.releaseTokens);
-        for (const channel of releasedChannels) {
-          activeKittyPressedChannels.delete(channel);
-          if (uiEnabled) {
-            uiSignals.pushCommand({ kind: 'release-lane', channel });
-          }
-          if (activeLongNotesByChannel.has(channel)) {
-            longHoldUntilMsByChannel.set(channel, playbackClock.nowMs());
-          }
-        }
-        continue;
-      }
-      if (playbackClock.isPaused()) {
-        continue;
-      }
-      if (!uiEnabled) {
-        writeRuntimeEventLog(writeOutput, 'input', [
-          ['time', formatSeconds(elapsedMsToGameSeconds(playbackClock.nowMs(), speed))],
-          ['action', 'lane-input'],
-          ['tokens', command.tokens.join(',')],
-        ]);
-      }
-      const nowSec = elapsedMsToGameSeconds(playbackClock.nowMs(), speed);
-      const scheduledSec = elapsedMsToGameSeconds(playbackClock.scheduledMs(), speed);
-      triggerRealtimeAudioVolumeEvents(scheduledSec);
-      playbackEventTracer.flushUntil(nowSec);
-      handleMappedInputTokens(command.tokens);
-    }
+        : undefined,
+    });
   };
 
   try {

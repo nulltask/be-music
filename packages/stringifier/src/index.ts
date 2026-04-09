@@ -360,13 +360,7 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
   if (typeof json.bms.option === 'string' && json.bms.option.length > 0) {
     lines.push(`#OPTION ${json.bms.option}`);
   }
-  for (const [key, value] of Object.entries(json.bms.changeOption ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (value.length > 0) {
-      lines.push(`#CHANGEOPTION${normalizeObjectKey(key)} ${value}`);
-    }
-  }
+  pushIndexedStringLines(lines, 'CHANGEOPTION', json.bms.changeOption);
 
   if (typeof json.bms.wavCmd === 'string' && json.bms.wavCmd.length > 0) {
     lines.push(`#WAVCMD ${json.bms.wavCmd}`);
@@ -392,62 +386,17 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
     lines.push(`#DEFEXRANK ${formatNumber(json.bms.defExRank)}`);
   }
 
-  for (const [key, value] of Object.entries(json.bms.exRank ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (value.length > 0) {
-      lines.push(`#EXRANK${normalizeObjectKey(key)} ${value}`);
-    }
-  }
-  for (const [key, value] of Object.entries(json.bms.argb ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
-    if (value.length > 0) {
-      lines.push(`#ARGB${normalizeObjectKey(key)} ${value}`);
-    }
-  }
-
-  for (const [key, value] of Object.entries(json.bms.exWav ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (value.length > 0) {
-      lines.push(`#EXWAV${normalizeObjectKey(key)} ${value}`);
-    }
-  }
-  for (const [key, value] of Object.entries(json.bms.exBmp ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (value.length > 0) {
-      lines.push(`#EXBMP${normalizeObjectKey(key)} ${value}`);
-    }
-  }
-  for (const [key, value] of Object.entries(json.bms.bga ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
-    if (value.length > 0) {
-      lines.push(`#BGA${normalizeObjectKey(key)} ${value}`);
-    }
-  }
-  for (const [key, value] of Object.entries(json.bms.scroll ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (Number.isFinite(value)) {
-      lines.push(`#SCROLL${normalizeObjectKey(key)} ${formatNumber(value)}`);
-    }
-  }
-  for (const [key, value] of Object.entries(json.bms.speed ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (Number.isFinite(value)) {
-      lines.push(`#SPEED${normalizeObjectKey(key)} ${formatNumber(value)}`);
-    }
-  }
+  pushIndexedStringLines(lines, 'EXRANK', json.bms.exRank);
+  pushIndexedStringLines(lines, 'ARGB', json.bms.argb);
+  pushIndexedStringLines(lines, 'EXWAV', json.bms.exWav);
+  pushIndexedStringLines(lines, 'EXBMP', json.bms.exBmp);
+  pushIndexedStringLines(lines, 'BGA', json.bms.bga);
+  pushIndexedNumberLines(lines, 'SCROLL', json.bms.scroll);
+  pushIndexedNumberLines(lines, 'SPEED', json.bms.speed);
   if (typeof json.bms.poorBga === 'string' && json.bms.poorBga.length > 0) {
     lines.push(`#POORBGA ${json.bms.poorBga}`);
   }
-  for (const [key, value] of Object.entries(json.bms.swBga ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (value.length > 0) {
-      lines.push(`#SWBGA${normalizeObjectKey(key)} ${value}`);
-    }
-  }
+  pushIndexedStringLines(lines, 'SWBGA', json.bms.swBga);
 
   if (typeof json.bms.videoFile === 'string' && json.bms.videoFile.length > 0) {
     lines.push(`#VIDEOFILE ${json.bms.videoFile}`);
@@ -467,26 +416,28 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
 }
 
 function pushResourceLines(lines: string[], json: BeMusicJson): void {
-  pushObjectResourceLines(lines, 'WAV', json.resources.wav);
-  pushObjectResourceLines(lines, 'BMP', json.resources.bmp);
-
-  const bpmEntries = Object.entries(json.resources.bpm).sort(([left], [right]) => left.localeCompare(right));
-  for (const [key, value] of bpmEntries) {
-    lines.push(`#BPM${normalizeObjectKey(key)} ${formatNumber(value)}`);
-  }
-
-  const stopEntries = Object.entries(json.resources.stop).sort(([left], [right]) => left.localeCompare(right));
-  for (const [key, value] of stopEntries) {
-    lines.push(`#STOP${normalizeObjectKey(key)} ${formatNumber(value)}`);
-  }
-
-  pushObjectResourceLines(lines, 'TEXT', json.resources.text);
+  pushIndexedStringLines(lines, 'WAV', json.resources.wav);
+  pushIndexedStringLines(lines, 'BMP', json.resources.bmp);
+  pushIndexedNumberLines(lines, 'BPM', json.resources.bpm);
+  pushIndexedNumberLines(lines, 'STOP', json.resources.stop);
+  pushIndexedStringLines(lines, 'TEXT', json.resources.text);
 }
 
-function pushObjectResourceLines(lines: string[], command: string, values: Record<string, string>): void {
-  const entries = Object.entries(values).sort(([left], [right]) => left.localeCompare(right));
+function pushIndexedStringLines(lines: string[], command: string, values?: Record<string, string>): void {
+  const entries = Object.entries(values ?? {}).sort(([left], [right]) => left.localeCompare(right));
   for (const [key, value] of entries) {
-    lines.push(`#${command}${normalizeObjectKey(key)} ${value}`);
+    if (value.length > 0) {
+      lines.push(`#${command}${normalizeObjectKey(key)} ${value}`);
+    }
+  }
+}
+
+function pushIndexedNumberLines(lines: string[], command: string, values?: Record<string, number>): void {
+  const entries = Object.entries(values ?? {}).sort(([left], [right]) => left.localeCompare(right));
+  for (const [key, value] of entries) {
+    if (Number.isFinite(value)) {
+      lines.push(`#${command}${normalizeObjectKey(key)} ${formatNumber(value)}`);
+    }
   }
 }
 

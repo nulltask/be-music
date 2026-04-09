@@ -10,6 +10,16 @@ export interface DecodedAudio {
   right?: Float32Array;
 }
 
+interface DecoderOutput {
+  sampleRate: number;
+  channelData?: readonly Float32Array[];
+}
+
+interface ManagedDecoder<TDecoded extends DecoderOutput> {
+  ready: Promise<unknown>;
+  free(): void;
+}
+
 const MPG123_SUPPRESSED_LOG_PATTERNS = [
   /\bcoreaudio\.c:\d+\]\s*warning:\s*didn't have any audio data in callback \(buffer underflow\)/i,
 ];
@@ -47,14 +57,9 @@ export async function decodeAudioSample(buffer: Buffer, pathHint?: string, signa
   }
 
   const extension = pathHint ? extname(pathHint).toLowerCase() : '';
-  if (extension === '.ogg' || extension === '.oga' || extension === '.opus') {
-    return decodeOggLike(buffer, signal);
-  }
-  if (extension === '.mp3') {
-    return decodeMp3(buffer, signal);
-  }
-  if (extension === '.wav') {
-    return decodeWav(buffer, signal);
+  const extensionDecoded = decodeAudioSampleByExtension(buffer, extension, signal);
+  if (extensionDecoded) {
+    return extensionDecoded;
   }
 
   try {
@@ -72,6 +77,23 @@ export async function decodeAudioSample(buffer: Buffer, pathHint?: string, signa
       return decodeOggLike(buffer, signal);
     }
   }
+}
+
+function decodeAudioSampleByExtension(
+  buffer: Buffer,
+  extension: string,
+  signal?: AbortSignal,
+): Promise<DecodedAudio> | DecodedAudio | undefined {
+  if (extension === '.ogg' || extension === '.oga' || extension === '.opus') {
+    return decodeOggLike(buffer, signal);
+  }
+  if (extension === '.mp3') {
+    return decodeMp3(buffer, signal);
+  }
+  if (extension === '.wav') {
+    return decodeWav(buffer, signal);
+  }
+  return undefined;
 }
 
 export function resampleLinear(
@@ -187,77 +209,72 @@ function decodeWav(buffer: Buffer, signal?: AbortSignal): DecodedAudio {
 }
 
 async function decodeOggVorbis(buffer: Buffer, signal?: AbortSignal): Promise<DecodedAudio> {
-  throwIfAborted(signal);
-  const decoder = new OggVorbisDecoder();
-  await decoder.ready;
-  throwIfAborted(signal);
-  try {
-    throwIfAborted(signal);
-    const decoded = await decoder.decodeFile(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
-    throwIfAborted(signal);
-    const channels = decoded.channelData ?? [];
-    if (channels.length === 0) {
-      throw new Error('Failed to decode OGG file: no channel data.');
-    }
-
-    return {
-      sampleRate: decoded.sampleRate,
-      left: channels[0],
-      right: channels[1],
-    };
-  } finally {
-    decoder.free();
-  }
+  return decodeWithManagedDecoder(
+    () => new OggVorbisDecoder(),
+    (decoder, input) => decoder.decodeFile(input),
+    buffer,
+    signal,
+    'OGG',
+  );
 }
 
 async function decodeMp3(buffer: Buffer, signal?: AbortSignal): Promise<DecodedAudio> {
   return withSuppressedMpg123Warnings(async () => {
-    throwIfAborted(signal);
-    const decoder = new MPEGDecoder();
-    await decoder.ready;
-    throwIfAborted(signal);
-    try {
-      throwIfAborted(signal);
-      const decoded = decoder.decode(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
-      throwIfAborted(signal);
-      const channels = decoded.channelData ?? [];
-      if (channels.length === 0) {
-        throw new Error('Failed to decode MP3 file: no channel data.');
-      }
-
-      return {
-        sampleRate: decoded.sampleRate,
-        left: channels[0],
-        right: channels[1],
-      };
-    } finally {
-      decoder.free();
-    }
+    return decodeWithManagedDecoder(
+      () => new MPEGDecoder(),
+      (decoder, input) => decoder.decode(input),
+      buffer,
+      signal,
+      'MP3',
+    );
   });
 }
 
 async function decodeOggOpus(buffer: Buffer, signal?: AbortSignal): Promise<DecodedAudio> {
+  return decodeWithManagedDecoder(
+    () => new OggOpusDecoder(),
+    (decoder, input) => decoder.decodeFile(input),
+    buffer,
+    signal,
+    'Opus',
+  );
+}
+
+async function decodeWithManagedDecoder<TDecoded extends DecoderOutput, TDecoder extends ManagedDecoder<TDecoded>>(
+  createDecoder: () => TDecoder,
+  decode: (decoder: TDecoder, input: Uint8Array) => Promise<TDecoded> | TDecoded,
+  buffer: Buffer,
+  signal: AbortSignal | undefined,
+  formatLabel: string,
+): Promise<DecodedAudio> {
   throwIfAborted(signal);
-  const decoder = new OggOpusDecoder();
+  const decoder = createDecoder();
   await decoder.ready;
   throwIfAborted(signal);
   try {
     throwIfAborted(signal);
-    const decoded = await decoder.decodeFile(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
+    const decoded = await decode(decoder, createDecoderInput(buffer));
     throwIfAborted(signal);
-    const channels = decoded.channelData ?? [];
-    if (channels.length === 0) {
-      throw new Error('Failed to decode Opus file: no channel data.');
-    }
-
-    return {
-      sampleRate: decoded.sampleRate,
-      left: channels[0],
-      right: channels[1],
-    };
+    return createDecodedAudioResult(decoded, formatLabel);
   } finally {
     decoder.free();
   }
+}
+
+function createDecoderInput(buffer: Buffer): Uint8Array {
+  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+}
+
+function createDecodedAudioResult(decoded: DecoderOutput, formatLabel: string): DecodedAudio {
+  const channels = decoded.channelData ?? [];
+  if (channels.length === 0) {
+    throw new Error(`Failed to decode ${formatLabel} file: no channel data.`);
+  }
+  return {
+    sampleRate: decoded.sampleRate,
+    left: channels[0],
+    right: channels[1],
+  };
 }
 
 function decodeSample(view: DataView, offset: number, audioFormat: number, bitsPerSample: number): number {
