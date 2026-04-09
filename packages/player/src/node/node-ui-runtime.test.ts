@@ -229,6 +229,7 @@ describe('node ui runtime', () => {
           stdoutIsTTY?: boolean;
           uiFps?: number;
           tuiVisibleNotesLimit?: number;
+          tuiNoteHeight?: string;
           videoBgaStreaming?: boolean;
         }
       | undefined;
@@ -242,6 +243,7 @@ describe('node ui runtime', () => {
       useAlternateScreen: true,
       uiFps: 60,
       tuiVisibleNotesLimit: 8192,
+      tuiNoteHeight: 8,
       videoBgaStreaming: true,
     });
 
@@ -372,6 +374,7 @@ function createContext(
     speed: 1,
     uiFps: 60,
     tuiVisibleNotesLimit: 8192,
+    tuiNoteHeight: 8,
     judgeWindowMs: 16.67,
     highSpeed: 1,
     videoBgaStreaming: true,

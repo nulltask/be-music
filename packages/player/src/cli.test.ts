@@ -119,6 +119,13 @@ describe('player cli', () => {
     expect(parseArgs(['chart.bms', '--no-kitty-graphics', '--kitty-graphics']).kittyGraphics).toBe(true);
   });
 
+  test('cli: uses full-height TUI notes by default and parses gradual --tui-note-height values', () => {
+    expect(parseArgs(['chart.bms']).tuiNoteHeight).toBe(8);
+    expect(parseArgs(['chart.bms', '--tui-note-height', '6']).tuiNoteHeight).toBe(6);
+    expect(parseArgs(['chart.bms', '--tui-note-height', 'half']).tuiNoteHeight).toBe(4);
+    expect(parseArgs(['chart.bms', '--tui-note-height', 'full']).tuiNoteHeight).toBe(8);
+  });
+
   test('cli: enables video BGA streaming by default and lets the user switch back to legacy decode', () => {
     expect(parseArgs(['chart.bms']).videoBgaStreaming).toBe(true);
     expect(parseArgs(['chart.bms', '--no-video-bga-streaming']).videoBgaStreaming).toBe(false);
@@ -734,6 +741,18 @@ describe('player cli', () => {
 
   test('cli: rejects --high-speed values outside 0.5 increments', () => {
     expect(() => parseArgs(['chart.bms', '--high-speed', '1.3'])).toThrow('--high-speed must be in 0.5 increments');
+  });
+
+  test('cli: rejects invalid --tui-note-height values', () => {
+    expect(() => parseArgs(['chart.bms', '--tui-note-height', 'tiny'])).toThrow(
+      '--tui-note-height must be an integer from 1 to 8, or the alias full or half',
+    );
+    expect(() => parseArgs(['chart.bms', '--tui-note-height', '0'])).toThrow(
+      '--tui-note-height must be an integer from 1 to 8, or the alias full or half',
+    );
+    expect(() => parseArgs(['chart.bms', '--tui-note-height', '9'])).toThrow(
+      '--tui-note-height must be an integer from 1 to 8, or the alias full or half',
+    );
   });
 
   test('cli: uses limiter on and compressor on by default', () => {

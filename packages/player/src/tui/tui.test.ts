@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { PlayerTui } from './tui.ts';
+import type { TuiNoteHeight } from '../tui-note-height.ts';
 
 function stripAnsi(value: string): string {
   return value.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '');
@@ -21,6 +22,7 @@ function renderOutputRaw(
     splitAfterIndex?: number;
     highSpeed?: number;
     visibleNotesLimit?: number;
+    noteHeight?: TuiNoteHeight;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
     speedTimeline?: Array<{ beat: number; speed: number }>;
   } = {},
@@ -41,6 +43,7 @@ function renderOutputRaw(
       speed: 1,
       highSpeed: options.highSpeed ?? 1,
       visibleNotesLimit: options.visibleNotesLimit,
+      noteHeight: options.noteHeight,
       judgeWindowMs: 100,
       splitAfterIndex: options.splitAfterIndex,
       scrollTimeline: options.scrollTimeline,
@@ -102,6 +105,7 @@ function renderOutput(
     splitAfterIndex?: number;
     highSpeed?: number;
     visibleNotesLimit?: number;
+    noteHeight?: TuiNoteHeight;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
     speedTimeline?: Array<{ beat: number; speed: number }>;
   } = {},
@@ -117,6 +121,7 @@ function renderRowsContaining(
     landmineNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     invisibleNotes?: Array<{ channel: string; beat: number; seconds: number; endBeat?: number }>;
     highSpeed?: number;
+    noteHeight?: TuiNoteHeight;
     lanes?: Array<{ channel: string; key: string; isScratch?: boolean }>;
     visibleNotesLimit?: number;
     scrollTimeline?: Array<{ beat: number; speed: number }>;
@@ -130,6 +135,7 @@ function renderRowsContaining(
     landmineNotes: options.landmineNotes,
     invisibleNotes: options.invisibleNotes,
     highSpeed: options.highSpeed,
+    noteHeight: options.noteHeight,
     lanes: options.lanes,
     visibleNotesLimit: options.visibleNotesLimit,
     scrollTimeline: options.scrollTimeline,
@@ -184,12 +190,46 @@ function createSummary(score = 0) {
   };
 }
 describe('player-tui', () => {
-  test('long note head stays on the same row as a regular note at the same beat', () => {
-    const regularHeadRows = renderRowsContaining([{ channel: '11', beat: 1, seconds: 0.5 }], '███');
-    const longNoteHeadRows = renderRowsContaining([{ channel: '11', beat: 1, endBeat: 2, seconds: 0.5 }], '███');
+  test('renders regular notes with full-height blocks by default', () => {
+    const lines = renderOutput([{ channel: '11', beat: 1, seconds: 0.5 }]);
 
-    expect(regularHeadRows.length).toBeGreaterThanOrEqual(2);
-    expect(longNoteHeadRows.length).toBeGreaterThanOrEqual(2);
+    expect(lines.some((line) => line.includes('███'))).toBe(true);
+    expect(lines.some((line) => line.includes('▄▄▄'))).toBe(false);
+  });
+
+  test('renders regular notes and judge line with half-height blocks when configured', () => {
+    const lines = renderOutput([{ channel: '11', beat: 1, seconds: 0.5 }], {
+      noteHeight: 4,
+    });
+
+    expect(lines.some((line) => line.includes('▄▄▄'))).toBe(true);
+    expect(lines.some((line) => line.includes('┃▄▄▄┃'))).toBe(true);
+  });
+
+  test('renders regular notes with gradual block heights', () => {
+    const lines = renderOutput([{ channel: '11', beat: 1, seconds: 0.5 }], {
+      noteHeight: 6,
+    });
+
+    expect(lines.some((line) => line.includes('▆▆▆'))).toBe(true);
+    expect(lines.some((line) => line.includes('┃▆▆▆┃'))).toBe(true);
+  });
+
+  test('half-height regular notes keep long note heads on the same row at the same beat', () => {
+    const regularHeadRows = renderRowsContaining([{ channel: '11', beat: 1, seconds: 0.5 }], '▄▄▄', 0, {
+      noteHeight: 4,
+    });
+    const longNoteHeadRows = renderRowsContaining(
+      [{ channel: '11', beat: 1, endBeat: 2, seconds: 0.5 }],
+      '███',
+      0,
+      {
+        noteHeight: 4,
+      },
+    );
+
+    expect(regularHeadRows.length).toBeGreaterThanOrEqual(1);
+    expect(longNoteHeadRows.length).toBeGreaterThanOrEqual(1);
     expect(longNoteHeadRows[0]).toBe(regularHeadRows[0]);
   });
 

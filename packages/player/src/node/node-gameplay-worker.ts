@@ -405,6 +405,7 @@ function serializeUiRuntimeInit(context: CreatePlayerUiRuntimeContext): NodeGame
     speed: context.speed,
     uiFps: context.uiFps,
     tuiVisibleNotesLimit: context.tuiVisibleNotesLimit,
+    tuiNoteHeight: context.tuiNoteHeight,
     judgeWindowMs: context.judgeWindowMs,
     highSpeed: context.highSpeed,
     showLaneChannels: context.showLaneChannels,

@@ -215,6 +215,7 @@ async function handleUiInit(
       speed: message.runtime.speed,
       uiFps: message.runtime.uiFps,
       tuiVisibleNotesLimit: message.runtime.tuiVisibleNotesLimit,
+      tuiNoteHeight: message.runtime.tuiNoteHeight,
       judgeWindowMs: message.runtime.judgeWindowMs,
       highSpeed: message.runtime.highSpeed,
       showLaneChannels: message.runtime.showLaneChannels,

@@ -4,6 +4,7 @@ import type { BeMusicJson } from '@be-music/json';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/ui-signal-bus.ts';
 import type { LaneBinding } from '../manual-input.ts';
 import type { PlayerJudgeComboSignalState } from '../state-signals.ts';
+import type { TuiNoteHeight } from '../tui-note-height.ts';
 import type { PlayerUiFramePatch } from './ui-frame-patch.ts';
 
 export interface NodeUiWorkerInitData {
@@ -14,6 +15,7 @@ export interface NodeUiWorkerInitData {
   speed: number;
   uiFps?: number;
   tuiVisibleNotesLimit?: number;
+  tuiNoteHeight: TuiNoteHeight;
   judgeWindowMs: number;
   highSpeed: number;
   showLaneChannels?: boolean;

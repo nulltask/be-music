@@ -173,6 +173,7 @@ describe('node gameplay runtime', () => {
     expect(uiRuntimeState.context?.laneDisplayMode).toBe('7 KEY');
     expect(uiRuntimeState.context?.uiFps).toBe(60);
     expect(uiRuntimeState.context?.tuiVisibleNotesLimit).toBe(8192);
+    expect(uiRuntimeState.context?.tuiNoteHeight).toBe(8);
     expect(uiRuntimeState.context?.videoBgaStreaming).toBe(true);
     expect(uiRuntimeState.context?.initialFrame).toMatchObject({
       currentBeat: 0,
@@ -318,6 +319,7 @@ function createOptions(
       tui: true,
       speed: 1,
       tuiVisibleNotesLimit: 8192,
+      tuiNoteHeight: 8,
       audioBaseDir: process.cwd(),
       videoBgaStreaming: true,
     },
@@ -334,6 +336,7 @@ function createUiInit() {
     speed: 1,
     uiFps: 60,
     tuiVisibleNotesLimit: 8192,
+    tuiNoteHeight: 8,
     judgeWindowMs: 16.67,
     highSpeed: 1,
     showLaneChannels: false,

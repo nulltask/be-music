@@ -33,6 +33,13 @@ import {
   supportsKittyGraphicsProtocol,
 } from '../tui/kitty-graphics.ts';
 import {
+  DEFAULT_TUI_NOTE_HEIGHT,
+  MAX_TUI_NOTE_HEIGHT,
+  MIN_TUI_NOTE_HEIGHT,
+  TUI_NOTE_HEIGHT_HALF,
+  type TuiNoteHeight,
+} from '../tui-note-height.ts';
+import {
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
@@ -128,6 +135,7 @@ interface CliArgs {
   speed?: number;
   uiFps: number;
   tuiVisibleNotesLimit: number;
+  tuiNoteHeight: TuiNoteHeight;
   highSpeed?: number;
   judgeWindowMs?: number;
   debugActiveAudio: boolean;
@@ -986,6 +994,7 @@ function createPlayOptionsFromCliArgs(args: CliArgs, chartPath: string) {
     speed: args.speed,
     uiFps: args.uiFps,
     tuiVisibleNotesLimit: args.tuiVisibleNotesLimit,
+    tuiNoteHeight: args.tuiNoteHeight,
     highSpeed: args.highSpeed,
     judgeWindowMs: args.judgeWindowMs,
     debugActiveAudio: args.debugActiveAudio,
@@ -1386,6 +1395,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     tui: true,
     uiFps: DEFAULT_TUI_FPS,
     tuiVisibleNotesLimit: DEFAULT_TUI_VISIBLE_NOTES_LIMIT,
+    tuiNoteHeight: DEFAULT_TUI_NOTE_HEIGHT,
     debugActiveAudio: false,
   };
   const positional: string[] = [];
@@ -1435,6 +1445,11 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     }
     if (token === '--tui-visible-notes-limit') {
       args.tuiVisibleNotesLimit = parseTuiVisibleNotesLimitArg(rawArgs[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === '--tui-note-height') {
+      args.tuiNoteHeight = parseTuiNoteHeightArg(rawArgs[index + 1]);
       index += 1;
       continue;
     }
@@ -1683,6 +1698,25 @@ function parseTuiVisibleNotesLimitArg(raw: string | undefined): number {
   return parsed;
 }
 
+function parseTuiNoteHeightArg(raw: string | undefined): TuiNoteHeight {
+  if (raw === 'full') {
+    return MAX_TUI_NOTE_HEIGHT;
+  }
+  if (raw === 'half') {
+    return TUI_NOTE_HEIGHT_HALF;
+  }
+  const parsed = Number.parseInt(raw ?? '', 10);
+  if (
+    Number.isFinite(parsed) &&
+    parsed >= MIN_TUI_NOTE_HEIGHT &&
+    parsed <= MAX_TUI_NOTE_HEIGHT &&
+    Number.isInteger(parsed)
+  ) {
+    return parsed as TuiNoteHeight;
+  }
+  throw new Error('--tui-note-height must be an integer from 1 to 8, or the alias full or half');
+}
+
 function formatCliParseError(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -1701,6 +1735,7 @@ function printUsage(): void {
       '  --speed <rate>            Playback speed multiplier (default: 1)',
       `  --tui-fps <value>        Target TUI refresh rate while playing (default: ${DEFAULT_TUI_FPS})`,
       `  --tui-visible-notes-limit <count>  Max notes considered in the visible render window (default: ${DEFAULT_TUI_VISIBLE_NOTES_LIMIT})`,
+      `  --tui-note-height <level> Height of regular notes and judge line: 1-8, or full/half aliases (default: ${DEFAULT_TUI_NOTE_HEIGHT})`,
       '  --high-speed <rate>       TUI note fall speed multiplier, 0.5-10.0 in 0.5 steps (default: 1.0)',
       '  --audio / --no-audio      Enable or disable in-game audio playback (default: on)',
       '                           Audio backend: node-web-audio-api (fixed)',

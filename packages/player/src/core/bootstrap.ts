@@ -23,6 +23,7 @@ import {
   type LaneBinding,
 } from '../manual-input.ts';
 import { type PlayerStateSignals } from '../state-signals.ts';
+import { DEFAULT_TUI_NOTE_HEIGHT } from '../tui-note-height.ts';
 
 export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];
@@ -181,6 +182,7 @@ export async function initializePlayerUiRuntime({
     speed,
     uiFps: options.uiFps,
     tuiVisibleNotesLimit: options.tuiVisibleNotesLimit,
+    tuiNoteHeight: options.tuiNoteHeight ?? DEFAULT_TUI_NOTE_HEIGHT,
     judgeWindowMs,
     highSpeed,
     videoBgaStreaming: options.videoBgaStreaming,
