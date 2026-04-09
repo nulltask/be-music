@@ -322,7 +322,7 @@ jobs:
 
       - name: Download SEA archives
         if: needs.prepare.outputs.has_sea_releases == 'true'
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: sea-release-assets-*
           merge-multiple: true
