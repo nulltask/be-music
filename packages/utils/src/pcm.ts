@@ -1,4 +1,5 @@
 const HOST_IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([0x00ff]).buffer)[0] === 0xff;
+type Pcm16ByteOrder = 'le' | 'be';
 
 export function writeStereoPcm16Le(
   destination: Buffer,
@@ -8,17 +9,7 @@ export function writeStereoPcm16Le(
   startFrame = 0,
   frameCount: number = Math.min(left.length, right.length) - startFrame,
 ): void {
-  const safeStartFrame = normalizeStartFrame(startFrame);
-  const framesToWrite = resolveFrameCount(destination, byteOffset, left, right, safeStartFrame, frameCount);
-  if (framesToWrite <= 0) {
-    return;
-  }
-  if (HOST_IS_LITTLE_ENDIAN && (byteOffset & 1) === 0) {
-    const samples = new Int16Array(destination.buffer, destination.byteOffset + byteOffset, framesToWrite * 2);
-    fillInterleavedInt16(samples, left, right, safeStartFrame, framesToWrite);
-    return;
-  }
-  writeStereoPcm16Fallback(destination, byteOffset, left, right, safeStartFrame, framesToWrite, false);
+  writeStereoPcm16(destination, byteOffset, left, right, startFrame, frameCount, 'le');
 }
 
 export function writeStereoPcm16Be(
@@ -29,22 +20,27 @@ export function writeStereoPcm16Be(
   startFrame = 0,
   frameCount: number = Math.min(left.length, right.length) - startFrame,
 ): void {
+  writeStereoPcm16(destination, byteOffset, left, right, startFrame, frameCount, 'be');
+}
+
+function writeStereoPcm16(
+  destination: Buffer,
+  byteOffset: number,
+  left: ArrayLike<number>,
+  right: ArrayLike<number>,
+  startFrame: number,
+  frameCount: number,
+  byteOrder: Pcm16ByteOrder,
+): void {
   const safeStartFrame = normalizeStartFrame(startFrame);
   const framesToWrite = resolveFrameCount(destination, byteOffset, left, right, safeStartFrame, frameCount);
   if (framesToWrite <= 0) {
     return;
   }
-  if ((byteOffset & 1) === 0) {
-    const bytes = framesToWrite * 4;
-    const segment = destination.subarray(byteOffset, byteOffset + bytes);
-    const samples = new Int16Array(segment.buffer, segment.byteOffset, framesToWrite * 2);
-    fillInterleavedInt16(samples, left, right, safeStartFrame, framesToWrite);
-    if (HOST_IS_LITTLE_ENDIAN) {
-      segment.swap16();
-    }
+  if (tryWriteStereoPcm16Aligned(destination, byteOffset, left, right, safeStartFrame, framesToWrite, byteOrder)) {
     return;
   }
-  writeStereoPcm16Fallback(destination, byteOffset, left, right, safeStartFrame, framesToWrite, true);
+  writeStereoPcm16Fallback(destination, byteOffset, left, right, safeStartFrame, framesToWrite, byteOrder === 'be');
 }
 
 function normalizeStartFrame(startFrame: number): number {
@@ -90,6 +86,30 @@ function fillInterleavedInt16(
     sourceFrame += 1;
     sampleIndex += 2;
   }
+}
+
+function tryWriteStereoPcm16Aligned(
+  destination: Buffer,
+  byteOffset: number,
+  left: ArrayLike<number>,
+  right: ArrayLike<number>,
+  startFrame: number,
+  frameCount: number,
+  byteOrder: Pcm16ByteOrder,
+): boolean {
+  if ((byteOffset & 1) !== 0) {
+    return false;
+  }
+  const bytes = frameCount * 4;
+  const segment = destination.subarray(byteOffset, byteOffset + bytes);
+  const samples = new Int16Array(segment.buffer, segment.byteOffset, frameCount * 2);
+  fillInterleavedInt16(samples, left, right, startFrame, frameCount);
+  const writesLittleEndian = HOST_IS_LITTLE_ENDIAN;
+  const wantsLittleEndian = byteOrder === 'le';
+  if (writesLittleEndian !== wantsLittleEndian) {
+    segment.swap16();
+  }
+  return true;
 }
 
 function writeStereoPcm16Fallback(

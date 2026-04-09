@@ -106,16 +106,8 @@ export function addNote(
   },
 ): BeMusicJson {
   const normalized = normalizeJson(json);
-  ensureMeasure(normalized, params.measure);
-  const position = normalizePositionFraction(params.positionNumerator, params.positionDenominator);
-
-  const event: BeMusicEvent = {
-    measure: Math.max(0, Math.floor(params.measure)),
-    channel: normalizeChannel(params.channel),
-    position: [position.numerator, position.denominator],
-    value: normalizeObjectKey(params.value),
-  };
-
+  const event = createNormalizedNoteEvent(params);
+  ensureMeasure(normalized, event.measure);
   insertSortedEvent(normalized.events, event);
   return normalized;
 }
@@ -131,20 +123,19 @@ export function deleteNote(
   },
 ): BeMusicJson {
   const normalized = normalizeJson(json);
-  const channel = normalizeChannel(params.channel);
-  const position = normalizePositionFraction(params.positionNumerator, params.positionDenominator);
+  const target = createNormalizedNoteTarget(params);
 
   normalized.events = normalized.events.filter((event) => {
-    if (event.measure !== params.measure) {
+    if (event.measure !== target.measure) {
       return true;
     }
-    if (normalizeChannel(event.channel) !== channel) {
+    if (normalizeChannel(event.channel) !== target.channel) {
       return true;
     }
-    if (!isSamePosition(event, position)) {
+    if (!isSamePosition(event, target.position)) {
       return true;
     }
-    if (params.value && normalizeObjectKey(event.value) !== normalizeObjectKey(params.value)) {
+    if (target.value !== undefined && normalizeObjectKey(event.value) !== target.value) {
       return true;
     }
     return false;
@@ -220,21 +211,8 @@ function canSerializeJsonAsIs(json: BeMusicJson): boolean {
     Number.isFinite(json.metadata.bpm) &&
     json.metadata.bpm > 0 &&
     json.metadata.extras !== undefined &&
-    json.resources !== undefined &&
-    json.resources.wav !== undefined &&
-    json.resources.bmp !== undefined &&
-    json.resources.bpm !== undefined &&
-    json.resources.stop !== undefined &&
-    json.resources.text !== undefined &&
-    json.preservation !== undefined &&
-    json.preservation.bms !== undefined &&
-    json.preservation.bmson !== undefined &&
-    Array.isArray(json.preservation.bms.sourceLines) &&
-    Array.isArray(json.preservation.bms.objectLines) &&
-    Array.isArray(json.preservation.bmson.lines) &&
-    Array.isArray(json.preservation.bmson.bpmEvents) &&
-    Array.isArray(json.preservation.bmson.stopEvents) &&
-    Array.isArray(json.preservation.bmson.soundChannels) &&
+    hasCompleteResources(json) &&
+    hasCompletePreservation(json) &&
     Array.isArray(json.measures) &&
     hasOnlyFiniteMeasures(json.measures) &&
     Array.isArray(json.events) &&
@@ -246,21 +224,44 @@ function canCloneJsonFast(json: BeMusicJson): boolean {
   return (
     json.metadata !== undefined &&
     json.metadata.extras !== undefined &&
+    hasCompleteResources(json) &&
+    Array.isArray(json.measures) &&
+    Array.isArray(json.events) &&
+    hasFastCloneBmsState(json) &&
+    hasFastCloneBmsonState(json)
+  );
+}
+
+function hasCompleteResources(json: BeMusicJson): boolean {
+  return (
     json.resources !== undefined &&
     json.resources.wav !== undefined &&
     json.resources.bmp !== undefined &&
     json.resources.bpm !== undefined &&
     json.resources.stop !== undefined &&
-    json.resources.text !== undefined &&
-    Array.isArray(json.measures) &&
-    Array.isArray(json.events) &&
-    json.bms !== undefined &&
+    json.resources.text !== undefined
+  );
+}
+
+function hasCompletePreservation(json: BeMusicJson): boolean {
+  return (
     json.preservation !== undefined &&
     json.preservation.bms !== undefined &&
     json.preservation.bmson !== undefined &&
-    Array.isArray(json.bms.controlFlow) &&
     Array.isArray(json.preservation.bms.sourceLines) &&
     Array.isArray(json.preservation.bms.objectLines) &&
+    Array.isArray(json.preservation.bmson.lines) &&
+    Array.isArray(json.preservation.bmson.bpmEvents) &&
+    Array.isArray(json.preservation.bmson.stopEvents) &&
+    Array.isArray(json.preservation.bmson.soundChannels)
+  );
+}
+
+function hasFastCloneBmsState(json: BeMusicJson): boolean {
+  return (
+    json.bms !== undefined &&
+    hasCompletePreservation(json) &&
+    Array.isArray(json.bms.controlFlow) &&
     (json.bms.lnObjs === undefined || Array.isArray(json.bms.lnObjs)) &&
     json.bms.exRank !== undefined &&
     json.bms.argb !== undefined &&
@@ -271,12 +272,14 @@ function canCloneJsonFast(json: BeMusicJson): boolean {
     json.bms.bga !== undefined &&
     json.bms.scroll !== undefined &&
     json.bms.speed !== undefined &&
-    json.bms.swBga !== undefined &&
+    json.bms.swBga !== undefined
+  );
+}
+
+function hasFastCloneBmsonState(json: BeMusicJson): boolean {
+  return (
     json.bmson !== undefined &&
-    Array.isArray(json.preservation.bmson.lines) &&
-    Array.isArray(json.preservation.bmson.bpmEvents) &&
-    Array.isArray(json.preservation.bmson.stopEvents) &&
-    Array.isArray(json.preservation.bmson.soundChannels) &&
+    hasCompletePreservation(json) &&
     json.bmson.info !== undefined &&
     json.bmson.bga !== undefined &&
     Array.isArray(json.bmson.bga.header) &&
@@ -320,6 +323,42 @@ function normalizePositionFraction(numerator: number, denominator: number): { nu
   return {
     numerator: Math.max(0, Math.min(safeDenominator - 1, safeNumerator)),
     denominator: safeDenominator,
+  };
+}
+
+function createNormalizedNoteTarget(params: {
+  measure: number;
+  channel: string;
+  positionNumerator: number;
+  positionDenominator: number;
+  value?: string;
+}): {
+  measure: number;
+  channel: string;
+  position: { numerator: number; denominator: number };
+  value?: string;
+} {
+  return {
+    measure: Math.max(0, Math.floor(params.measure)),
+    channel: normalizeChannel(params.channel),
+    position: normalizePositionFraction(params.positionNumerator, params.positionDenominator),
+    value: params.value === undefined ? undefined : normalizeObjectKey(params.value),
+  };
+}
+
+function createNormalizedNoteEvent(params: {
+  measure: number;
+  channel: string;
+  positionNumerator: number;
+  positionDenominator: number;
+  value: string;
+}): BeMusicEvent {
+  const target = createNormalizedNoteTarget(params);
+  return {
+    measure: target.measure,
+    channel: target.channel,
+    position: [target.position.numerator, target.position.denominator],
+    value: target.value!,
   };
 }
 

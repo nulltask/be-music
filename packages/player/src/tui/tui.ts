@@ -182,6 +182,21 @@ interface JudgeComboDisplayState {
   updatedAtMs: number;
 }
 
+interface NoteLikeLaneCell {
+  kind: 'head' | 'long-head' | 'body' | 'tail';
+  invisible: boolean;
+  underline: boolean;
+}
+
+type StructuredLaneCellRenderer = (
+  value: string,
+  laneWidth: number,
+  sourceChannel: string,
+  noteHeight: TuiNoteHeight,
+) => string;
+
+type StructuredLaneSectionRenderer = (cells: string[], noteHeight: TuiNoteHeight) => string;
+
 const BLACK_RGB: RgbColor = { r: 0, g: 0, b: 0 };
 const WHITE_KEY_LANE_BG_RGB: RgbColor = { r: 24, g: 36, b: 56 };
 const BLACK_KEY_LANE_BG_RGB: RgbColor = { r: 2, g: 4, b: 8 };
@@ -1583,46 +1598,25 @@ function renderLaneRow(
   const cells = values.map((value, index) => {
     const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
     const laneChannel = resolveLaneRenderChannel(index, channels, sourceChannels);
-    const isHead = value === NOTE_HEAD_SYMBOL;
-    const isLongHead = value === LONG_NOTE_HEAD_SYMBOL;
-    const isBody = value === LONG_NOTE_BODY_SYMBOL;
-    const isTail = value === LONG_NOTE_TAIL_SYMBOL;
-    const isInvisibleHead = value === INVISIBLE_NOTE_HEAD_SYMBOL;
-    const isInvisibleLongHead = value === INVISIBLE_LONG_NOTE_HEAD_SYMBOL;
-    const isInvisibleBody = value === INVISIBLE_LONG_NOTE_BODY_SYMBOL;
-    const isInvisibleTail = value === INVISIBLE_LONG_NOTE_TAIL_SYMBOL;
+    const noteCell = resolveNoteLikeLaneCell(value);
     const isMine = value === MINE_NOTE_SYMBOL;
     const isLaneFill = value === LANE_FILL_SYMBOL;
     const isLaneCeiling = value === '═';
-    const isInvisibleNote = isInvisibleHead || isInvisibleLongHead || isInvisibleBody || isInvisibleTail;
-    const isNote = isHead || isLongHead || isBody || isTail || isInvisibleNote || isMine;
-    const noteUnderline = isHead || isLongHead || isTail || isInvisibleHead || isInvisibleLongHead || isInvisibleTail;
+    const isInvisibleNote = noteCell?.invisible ?? false;
+    const isNote = noteCell !== undefined || isMine;
+    const noteUnderline = noteCell?.underline ?? false;
     const cell = isLaneFill
       ? renderLaneBackdropCell(laneWidth)
       : isLaneCeiling
         ? colorizeLaneCeiling('─'.repeat(Math.max(1, laneWidth)))
-        : isHead
-          ? renderNoteCell(laneWidth, 'head', noteHeight)
-          : isLongHead
-            ? renderNoteCell(laneWidth, 'long-head', noteHeight)
-          : isBody
-            ? renderNoteCell(laneWidth, 'body', noteHeight)
-            : isTail
-              ? renderNoteCell(laneWidth, 'tail', noteHeight)
-              : isInvisibleHead
-                ? renderNoteCell(laneWidth, 'head', noteHeight)
-                : isInvisibleLongHead
-                  ? renderNoteCell(laneWidth, 'long-head', noteHeight)
-                : isInvisibleBody
-                  ? renderNoteCell(laneWidth, 'body', noteHeight)
-                  : isInvisibleTail
-                    ? renderNoteCell(laneWidth, 'tail', noteHeight)
-                    : isMine
-                      ? center(MINE_NOTE_SYMBOL, laneWidth)
-                      : center(value, laneWidth);
+        : noteCell
+          ? renderNoteCell(laneWidth, noteCell.kind, noteHeight)
+          : isMine
+            ? center(MINE_NOTE_SYMBOL, laneWidth)
+            : center(value, laneWidth);
     const decoratedCell = isMine
       ? colorizeMine(cell)
-      : isNote
+      : noteCell
         ? colorizeNote(cell, laneChannel, isInvisibleNote, noteUnderline)
         : value === MEASURE_LINE_SYMBOL
           ? colorizeMeasureLine(cell)
@@ -1730,30 +1724,17 @@ function renderMeasureRow(
   laneHighlightRatios = new Map<number, number>(),
   sourceChannels?: string[],
 ): string {
-  const renderSection = (startIndex: number, endIndex: number): string => {
-    const cells: string[] = [];
-    for (let index = startIndex; index < endIndex; index += 1) {
-      const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
-      const channel = resolveLaneRenderChannel(index, channels, sourceChannels);
-      let cell = renderMeasureLaneCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel, noteHeight);
-      const highlightRatio = laneHighlightRatios.get(index);
-      if (highlightRatio !== undefined) {
-        cell = highlightCell(cell, channel, highlightRatio);
-      } else {
-        cell = colorizeLaneBackground(cell, channel);
-      }
-      cells.push(cell);
-    }
-    return renderMeasureSection(cells);
-  };
-
-  if (splitAfterIndex < 0 || splitAfterIndex >= values.length - 1) {
-    return renderSection(0, values.length);
-  }
-
-  const left = renderSection(0, splitAfterIndex + 1);
-  const right = renderSection(splitAfterIndex + 1, values.length);
-  return `${left}${renderLaneSplitPanel()}${right}`;
+  return renderStructuredLaneRow(
+    values,
+    channels,
+    laneWidths,
+    splitAfterIndex,
+    noteHeight,
+    laneHighlightRatios,
+    sourceChannels,
+    renderMeasureLaneCell,
+    (cells) => renderMeasureSection(cells),
+  );
 }
 
 function renderMeasureSection(cells: string[]): string {
@@ -1769,29 +1750,14 @@ function renderMeasureLaneCell(
   noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
 ): string {
   const safeWidth = Math.max(1, laneWidth);
-  if (value === NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'head', noteHeight), sourceChannel, false, true);
-  }
-  if (value === LONG_NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'long-head', noteHeight), sourceChannel, false, true);
-  }
-  if (value === LONG_NOTE_BODY_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'body', noteHeight), sourceChannel, false, false);
-  }
-  if (value === LONG_NOTE_TAIL_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'tail', noteHeight), sourceChannel, false, true);
-  }
-  if (value === INVISIBLE_NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'head', noteHeight), sourceChannel, true, true);
-  }
-  if (value === INVISIBLE_LONG_NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'long-head', noteHeight), sourceChannel, true, true);
-  }
-  if (value === INVISIBLE_LONG_NOTE_BODY_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'body', noteHeight), sourceChannel, true, false);
-  }
-  if (value === INVISIBLE_LONG_NOTE_TAIL_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'tail', noteHeight), sourceChannel, true, true);
+  const noteCell = resolveNoteLikeLaneCell(value);
+  if (noteCell) {
+    return colorizeNote(
+      renderNoteCell(safeWidth, noteCell.kind, noteHeight),
+      sourceChannel,
+      noteCell.invisible,
+      noteCell.underline,
+    );
   }
   if (value === MINE_NOTE_SYMBOL) {
     return colorizeMine(center(MINE_NOTE_SYMBOL, safeWidth));
@@ -1808,12 +1774,36 @@ function renderJudgeRow(
   laneHighlightRatios = new Map<number, number>(),
   sourceChannels?: string[],
 ): string {
-  const renderSection = (startIndex: number, endIndex: number): string => {
+  return renderStructuredLaneRow(
+    values,
+    channels,
+    laneWidths,
+    splitAfterIndex,
+    noteHeight,
+    laneHighlightRatios,
+    sourceChannels,
+    renderJudgeLaneCell,
+    renderJudgeSection,
+  );
+}
+
+function renderStructuredLaneRow(
+  values: string[],
+  channels: string[],
+  laneWidths: number[],
+  splitAfterIndex: number,
+  noteHeight: TuiNoteHeight,
+  laneHighlightRatios: ReadonlyMap<number, number>,
+  sourceChannels: string[] | undefined,
+  renderCell: StructuredLaneCellRenderer,
+  renderSectionCells: StructuredLaneSectionRenderer,
+): string {
+  const renderSlice = (startIndex: number, endIndex: number): string => {
     const cells: string[] = [];
     for (let index = startIndex; index < endIndex; index += 1) {
       const laneWidth = laneWidths[index] ?? DEFAULT_LANE_WIDTH;
       const channel = resolveLaneRenderChannel(index, channels, sourceChannels);
-      let cell = renderJudgeLaneCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel, noteHeight);
+      let cell = renderCell(values[index] ?? LANE_FILL_SYMBOL, laneWidth, channel, noteHeight);
       const highlightRatio = laneHighlightRatios.get(index);
       if (highlightRatio !== undefined) {
         cell = highlightCell(cell, channel, highlightRatio);
@@ -1822,15 +1812,15 @@ function renderJudgeRow(
       }
       cells.push(cell);
     }
-    return renderJudgeSection(cells, noteHeight);
+    return renderSectionCells(cells, noteHeight);
   };
 
   if (splitAfterIndex < 0 || splitAfterIndex >= values.length - 1) {
-    return renderSection(0, values.length);
+    return renderSlice(0, values.length);
   }
 
-  const left = renderSection(0, splitAfterIndex + 1);
-  const right = renderSection(splitAfterIndex + 1, values.length);
+  const left = renderSlice(0, splitAfterIndex + 1);
+  const right = renderSlice(splitAfterIndex + 1, values.length);
   return `${left}${renderLaneSplitPanel()}${right}`;
 }
 
@@ -1847,29 +1837,14 @@ function renderJudgeLaneCell(
   noteHeight: TuiNoteHeight = DEFAULT_TUI_NOTE_HEIGHT,
 ): string {
   const safeWidth = Math.max(1, laneWidth);
-  if (value === NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'head', noteHeight), sourceChannel, false, true);
-  }
-  if (value === LONG_NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'long-head', noteHeight), sourceChannel, false, true);
-  }
-  if (value === LONG_NOTE_BODY_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'body', noteHeight), sourceChannel, false, false);
-  }
-  if (value === LONG_NOTE_TAIL_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'tail', noteHeight), sourceChannel, false, true);
-  }
-  if (value === INVISIBLE_NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'head', noteHeight), sourceChannel, true, true);
-  }
-  if (value === INVISIBLE_LONG_NOTE_HEAD_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'long-head', noteHeight), sourceChannel, true, true);
-  }
-  if (value === INVISIBLE_LONG_NOTE_BODY_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'body', noteHeight), sourceChannel, true, false);
-  }
-  if (value === INVISIBLE_LONG_NOTE_TAIL_SYMBOL) {
-    return colorizeNote(renderNoteCell(safeWidth, 'tail', noteHeight), sourceChannel, true, true);
+  const noteCell = resolveNoteLikeLaneCell(value);
+  if (noteCell) {
+    return colorizeNote(
+      renderNoteCell(safeWidth, noteCell.kind, noteHeight),
+      sourceChannel,
+      noteCell.invisible,
+      noteCell.underline,
+    );
   }
   if (value === MINE_NOTE_SYMBOL) {
     return colorizeMine(center(MINE_NOTE_SYMBOL, safeWidth));
@@ -2031,6 +2006,29 @@ function resolveRegularNoteSymbol(noteHeight: TuiNoteHeight): string {
     8: '█',
   };
   return symbols[noteHeight];
+}
+
+function resolveNoteLikeLaneCell(value: string): NoteLikeLaneCell | undefined {
+  switch (value) {
+    case NOTE_HEAD_SYMBOL:
+      return { kind: 'head', invisible: false, underline: true };
+    case LONG_NOTE_HEAD_SYMBOL:
+      return { kind: 'long-head', invisible: false, underline: true };
+    case LONG_NOTE_BODY_SYMBOL:
+      return { kind: 'body', invisible: false, underline: false };
+    case LONG_NOTE_TAIL_SYMBOL:
+      return { kind: 'tail', invisible: false, underline: true };
+    case INVISIBLE_NOTE_HEAD_SYMBOL:
+      return { kind: 'head', invisible: true, underline: true };
+    case INVISIBLE_LONG_NOTE_HEAD_SYMBOL:
+      return { kind: 'long-head', invisible: true, underline: true };
+    case INVISIBLE_LONG_NOTE_BODY_SYMBOL:
+      return { kind: 'body', invisible: true, underline: false };
+    case INVISIBLE_LONG_NOTE_TAIL_SYMBOL:
+      return { kind: 'tail', invisible: true, underline: true };
+    default:
+      return undefined;
+  }
 }
 
 function resolveJudgeLineSymbol(noteHeight: TuiNoteHeight): string {

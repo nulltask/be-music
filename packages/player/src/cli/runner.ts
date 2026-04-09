@@ -1381,7 +1381,34 @@ export function createMusicSelectControlLines(options: {
 }
 
 export function parseArgs(rawArgs: string[]): CliArgs {
-  const args: CliArgs = {
+  const args = createDefaultCliArgs();
+  const positional: string[] = [];
+
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const token = rawArgs[index];
+    if (applyCliToggleArg(args, token)) {
+      continue;
+    }
+    const nextIndex = consumeCliValueArg(args, rawArgs, index);
+    if (nextIndex !== undefined) {
+      index = nextIndex;
+      continue;
+    }
+    if (consumeDeprecatedCliArg(token)) {
+      if ((token === '--judge-window' || token === '--audio-offset-ms') && index + 1 < rawArgs.length) {
+        index += 1;
+      }
+      continue;
+    }
+    positional.push(token);
+  }
+
+  args.input = positional[0];
+  return args;
+}
+
+function createDefaultCliArgs(): CliArgs {
+  return {
     auto: false,
     autoScratch: false,
     kittyGraphics: true,
@@ -1398,266 +1425,206 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     tuiNoteHeight: DEFAULT_TUI_NOTE_HEIGHT,
     debugActiveAudio: false,
   };
-  const positional: string[] = [];
+}
 
-  for (let index = 0; index < rawArgs.length; index += 1) {
-    const token = rawArgs[index];
-    if (token === '--auto') {
+function applyCliToggleArg(args: CliArgs, token: string): boolean {
+  switch (token) {
+    case '--auto':
       args.auto = true;
       args.autoScratch = false;
-      continue;
-    }
-    if (token === '--auto-scratch') {
+      return true;
+    case '--auto-scratch':
       args.auto = false;
       args.autoScratch = true;
-      continue;
-    }
-    if (token === '--ln-type-auto') {
+      return true;
+    case '--ln-type-auto':
       args.inferBmsLnTypeWhenMissing = true;
-      continue;
-    }
-    if (token === '--no-ln-type-auto') {
+      return true;
+    case '--no-ln-type-auto':
       args.inferBmsLnTypeWhenMissing = false;
-      continue;
-    }
-    if (token === '--show-invisible-notes') {
+      return true;
+    case '--show-invisible-notes':
       args.showInvisibleNotes = true;
-      continue;
-    }
-    if (token === '--no-show-invisible-notes') {
+      return true;
+    case '--no-show-invisible-notes':
       args.showInvisibleNotes = false;
-      continue;
-    }
-    if (token === '--speed') {
-      args.speed = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--high-speed') {
-      args.highSpeed = parseHighSpeedArg(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--tui-fps') {
-      args.uiFps = parseTuiFpsArg(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--tui-visible-notes-limit') {
-      args.tuiVisibleNotesLimit = parseTuiVisibleNotesLimitArg(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--tui-note-height') {
-      args.tuiNoteHeight = parseTuiNoteHeightArg(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--log-file') {
-      const value = rawArgs[index + 1];
-      if (typeof value !== 'string' || value.length === 0) {
-        throw new Error('--log-file expects a path');
-      }
-      args.logFile = value;
-      index += 1;
-      continue;
-    }
-    if (token === '--compressor') {
+      return true;
+    case '--compressor':
       args.compressor = true;
-      continue;
-    }
-    if (token === '--no-compressor') {
+      return true;
+    case '--no-compressor':
       args.compressor = false;
-      continue;
-    }
-    if (token === '--compressor-threshold-db') {
-      args.compressorThresholdDb = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--compressor-ratio') {
-      args.compressorRatio = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--compressor-attack-ms') {
-      args.compressorAttackMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--compressor-release-ms') {
-      args.compressorReleaseMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--compressor-makeup-db') {
-      args.compressorMakeupDb = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--limiter') {
+      return true;
+    case '--limiter':
       args.limiter = true;
-      continue;
-    }
-    if (token === '--no-limiter') {
+      return true;
+    case '--no-limiter':
       args.limiter = false;
-      continue;
-    }
-    if (token === '--limiter-ceiling-db') {
-      args.limiterCeilingDb = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--limiter-release-ms') {
-      args.limiterReleaseMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--debug-judge-window') {
-      args.judgeWindowMs = Number.parseInt(rawArgs[index + 1], 10);
-      index += 1;
-      continue;
-    }
-    if (token === '--debug-active-audio') {
+      return true;
+    case '--debug-active-audio':
       args.debugActiveAudio = true;
-      continue;
-    }
-    if (token === '--judge-window') {
-      if (index + 1 < rawArgs.length) {
-        index += 1;
-      }
-      continue;
-    }
-    if (token === '--render-audio') {
-      args.renderAudioPath = rawArgs[index + 1];
-      index += 1;
-      continue;
-    }
-    if (token === '--audio-tail') {
-      args.audioTailSeconds = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--bgm-volume') {
-      args.bgmVolume = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--volume') {
-      args.volume = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--play-volume' || token === '--key-volume') {
-      args.playVolume = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--audio-offset-ms') {
-      if (index + 1 < rawArgs.length) {
-        index += 1;
-      }
-      continue;
-    }
-    if (token === '--audio-head-padding-ms') {
-      args.audioHeadPaddingMs = Number.parseInt(rawArgs[index + 1], 10);
-      index += 1;
-      continue;
-    }
-    if (token === '--audio-lead-ms') {
-      args.audioLeadMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--audio-lead-max-ms') {
-      args.audioLeadMaxMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--audio-lead-step-up-ms') {
-      args.audioLeadStepUpMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (token === '--audio-lead-step-down-ms') {
-      args.audioLeadStepDownMs = Number.parseFloat(rawArgs[index + 1]);
-      index += 1;
-      continue;
-    }
-    if (
-      token === '--audio-io-buffer-ms' ||
-      token === '--audio-io-high-water-ms' ||
-      token === '--audio-io-low-water-ms'
-    ) {
-      throw new Error(`${token} is no longer supported; audio-io backend has been removed`);
-    }
-    if (token === '--audio-backend') {
-      throw new Error('--audio-backend is no longer supported; node-web-audio-api is always used');
-    }
-    if (token === '--audify-high-water-ms' || token === '--audify-low-water-ms') {
-      throw new Error(`${token} is no longer supported; audify backend has been removed`);
-    }
-    if (token === '--speaker-buffer-size' || token === '--speaker-samples-per-frame') {
-      throw new Error(`${token} is no longer supported; speaker backend has been removed`);
-    }
-    if (token.startsWith('--audio-backend=')) {
-      throw new Error('--audio-backend is no longer supported; node-web-audio-api is always used');
-    }
-    if (token.startsWith('--judge-window=')) {
-      continue;
-    }
-    if (token.startsWith('--audio-offset-ms=')) {
-      continue;
-    }
-    if (token.startsWith('--audify-')) {
-      throw new Error(`${token.split('=')[0]} is no longer supported; audify backend has been removed`);
-    }
-    if (token.startsWith('--speaker-')) {
-      throw new Error(`${token.split('=')[0]} is no longer supported; speaker backend has been removed`);
-    }
-    if (token === '--no-audio') {
+      return true;
+    case '--no-audio':
       args.audio = false;
-      continue;
-    }
-    if (token === '--audio') {
+      return true;
+    case '--audio':
       args.audio = true;
-      continue;
-    }
-    if (token === '--preview' || token === '--preview-audio') {
-      continue;
-    }
-    if (token === '--no-preview' || token === '--no-preview-audio') {
-      throw new Error(`${token} is no longer supported; music preview is always enabled`);
-    }
-    if (token === '--no-tui') {
-      args.tui = false;
-      continue;
-    }
-    if (token === '--tui') {
+      return true;
+    case '--tui':
       args.tui = true;
-      continue;
-    }
-    if (token === '--kitty-graphics') {
+      return true;
+    case '--no-tui':
+      args.tui = false;
+      return true;
+    case '--kitty-graphics':
       args.kittyGraphics = true;
-      continue;
-    }
-    if (token === '--no-kitty-graphics') {
+      return true;
+    case '--no-kitty-graphics':
       args.kittyGraphics = false;
-      continue;
-    }
-    if (token === '--video-bga-streaming') {
+      return true;
+    case '--video-bga-streaming':
       args.videoBgaStreaming = true;
-      continue;
-    }
-    if (token === '--no-video-bga-streaming') {
+      return true;
+    case '--no-video-bga-streaming':
       args.videoBgaStreaming = false;
-      continue;
-    }
-    positional.push(token);
+      return true;
+    default:
+      return false;
   }
+}
 
-  args.input = positional[0];
-  return args;
+function consumeCliValueArg(args: CliArgs, rawArgs: string[], index: number): number | undefined {
+  const token = rawArgs[index];
+  const rawValue = rawArgs[index + 1];
+
+  switch (token) {
+    case '--speed':
+      args.speed = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--high-speed':
+      args.highSpeed = parseHighSpeedArg(rawValue);
+      return index + 1;
+    case '--tui-fps':
+      args.uiFps = parseTuiFpsArg(rawValue);
+      return index + 1;
+    case '--tui-visible-notes-limit':
+      args.tuiVisibleNotesLimit = parseTuiVisibleNotesLimitArg(rawValue);
+      return index + 1;
+    case '--tui-note-height':
+      args.tuiNoteHeight = parseTuiNoteHeightArg(rawValue);
+      return index + 1;
+    case '--log-file':
+      args.logFile = readRequiredCliPathArg(rawValue, '--log-file');
+      return index + 1;
+    case '--compressor-threshold-db':
+      args.compressorThresholdDb = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--compressor-ratio':
+      args.compressorRatio = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--compressor-attack-ms':
+      args.compressorAttackMs = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--compressor-release-ms':
+      args.compressorReleaseMs = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--compressor-makeup-db':
+      args.compressorMakeupDb = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--limiter-ceiling-db':
+      args.limiterCeilingDb = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--limiter-release-ms':
+      args.limiterReleaseMs = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--debug-judge-window':
+      args.judgeWindowMs = Number.parseInt(rawValue, 10);
+      return index + 1;
+    case '--render-audio':
+      args.renderAudioPath = rawValue;
+      return index + 1;
+    case '--audio-tail':
+      args.audioTailSeconds = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--bgm-volume':
+      args.bgmVolume = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--volume':
+      args.volume = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--play-volume':
+    case '--key-volume':
+      args.playVolume = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--audio-head-padding-ms':
+      args.audioHeadPaddingMs = Number.parseInt(rawValue, 10);
+      return index + 1;
+    case '--audio-lead-ms':
+      args.audioLeadMs = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--audio-lead-max-ms':
+      args.audioLeadMaxMs = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--audio-lead-step-up-ms':
+      args.audioLeadStepUpMs = Number.parseFloat(rawValue);
+      return index + 1;
+    case '--audio-lead-step-down-ms':
+      args.audioLeadStepDownMs = Number.parseFloat(rawValue);
+      return index + 1;
+    default:
+      return undefined;
+  }
+}
+
+function consumeDeprecatedCliArg(token: string): boolean {
+  if (
+    token === '--audio-io-buffer-ms' ||
+    token === '--audio-io-high-water-ms' ||
+    token === '--audio-io-low-water-ms'
+  ) {
+    throw new Error(`${token} is no longer supported; audio-io backend has been removed`);
+  }
+  if (token === '--audio-backend') {
+    throw new Error('--audio-backend is no longer supported; node-web-audio-api is always used');
+  }
+  if (token === '--audify-high-water-ms' || token === '--audify-low-water-ms') {
+    throw new Error(`${token} is no longer supported; audify backend has been removed`);
+  }
+  if (token === '--speaker-buffer-size' || token === '--speaker-samples-per-frame') {
+    throw new Error(`${token} is no longer supported; speaker backend has been removed`);
+  }
+  if (token === '--preview' || token === '--preview-audio') {
+    return true;
+  }
+  if (token === '--no-preview' || token === '--no-preview-audio') {
+    throw new Error(`${token} is no longer supported; music preview is always enabled`);
+  }
+  if (token === '--judge-window' || token === '--audio-offset-ms') {
+    return true;
+  }
+  if (token.startsWith('--audio-backend=')) {
+    throw new Error('--audio-backend is no longer supported; node-web-audio-api is always used');
+  }
+  if (token.startsWith('--judge-window=')) {
+    return true;
+  }
+  if (token.startsWith('--audio-offset-ms=')) {
+    return true;
+  }
+  if (token.startsWith('--audify-')) {
+    throw new Error(`${token.split('=')[0]} is no longer supported; audify backend has been removed`);
+  }
+  if (token.startsWith('--speaker-')) {
+    throw new Error(`${token.split('=')[0]} is no longer supported; speaker backend has been removed`);
+  }
+  return false;
+}
+
+function readRequiredCliPathArg(raw: string | undefined, option: string): string {
+  if (typeof raw === 'string' && raw.length > 0) {
+    return raw;
+  }
+  throw new Error(`${option} expects a path`);
 }
 
 function parseHighSpeedArg(raw: string | undefined): number {

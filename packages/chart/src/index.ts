@@ -195,22 +195,14 @@ export function isTempoChannel(channel: string): boolean {
       return true;
     }
   }
-  const packed = tryPackChannel(channel);
-  if (packed >= 0) {
-    return packed === PACKED_CHANNEL_03 || packed === PACKED_CHANNEL_08;
-  }
-  return isTempoNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
+  return matchesPackedOrNormalizedChannel(channel, isPackedTempoChannel, isTempoNormalizedChannel);
 }
 
 export function isStopChannel(channel: string): boolean {
   if (channel.length === 2 && channel.charCodeAt(0) === 0x30 && channel.charCodeAt(1) === 0x39) {
     return true;
   }
-  const packed = tryPackChannel(channel);
-  if (packed >= 0) {
-    return packed === PACKED_CHANNEL_09;
-  }
-  return isStopNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
+  return matchesPackedOrNormalizedChannel(channel, isPackedStopChannel, isStopNormalizedChannel);
 }
 
 export function isScrollChannel(channel: string): boolean {
@@ -221,11 +213,7 @@ export function isScrollChannel(channel: string): boolean {
       return true;
     }
   }
-  const packed = tryPackChannel(channel);
-  if (packed >= 0) {
-    return packed === PACKED_CHANNEL_SC;
-  }
-  return isScrollNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
+  return matchesPackedOrNormalizedChannel(channel, isPackedScrollChannel, isScrollNormalizedChannel);
 }
 
 export function isLandmineChannel(channel: string): boolean {
@@ -236,11 +224,7 @@ export function isLandmineChannel(channel: string): boolean {
       return true;
     }
   }
-  const packed = tryPackChannel(channel);
-  if (packed >= 0) {
-    return isPackedLandmineChannel(packed);
-  }
-  return isLandmineNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
+  return matchesPackedOrNormalizedChannel(channel, isPackedLandmineChannel, isLandmineNormalizedChannel);
 }
 
 export function isSampleTriggerChannel(channel: string): boolean {
@@ -264,11 +248,7 @@ export function isSampleTriggerChannel(channel: string): boolean {
     }
     return true;
   }
-  const packed = tryPackChannel(channel);
-  if (packed >= 0) {
-    return isPackedSampleTriggerChannel(packed);
-  }
-  return isSampleTriggerNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
+  return matchesPackedOrNormalizedChannel(channel, isPackedSampleTriggerChannel, isSampleTriggerNormalizedChannel);
 }
 
 export function isPlayableChannel(channel: string): boolean {
@@ -279,11 +259,7 @@ export function isPlayableChannel(channel: string): boolean {
       return true;
     }
   }
-  const packed = tryPackChannel(channel);
-  if (packed >= 0) {
-    return isPackedPlayableChannel(packed);
-  }
-  return isPlayableNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
+  return matchesPackedOrNormalizedChannel(channel, isPackedPlayableChannel, isPlayableNormalizedChannel);
 }
 
 export function isBmsLongNoteChannel(channel: string): boolean {
@@ -294,44 +270,27 @@ export function isBmsLongNoteChannel(channel: string): boolean {
       return true;
     }
   }
-  const packed = tryPackChannel(channel);
-  if (packed >= 0) {
-    return isPackedBmsLongNoteChannel(packed);
-  }
-  return isBmsLongNoteNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
+  return matchesPackedOrNormalizedChannel(channel, isPackedBmsLongNoteChannel, isBmsLongNoteNormalizedChannel);
 }
 
 export function isPlayLaneSoundChannel(channel: string): boolean {
-  const packed = tryPackChannel(channel);
-  if (packed >= 0) {
-    return isPackedPlayLaneSoundChannel(packed);
-  }
-  return isPlayLaneSoundNormalizedChannel(resolveNormalizedChannelForPredicate(channel));
+  return matchesPackedOrNormalizedChannel(channel, isPackedPlayLaneSoundChannel, isPlayLaneSoundNormalizedChannel);
 }
 
 export function isBmsBgmVolumeChangeChannel(channel: string): boolean {
-  const packed = tryPackChannel(channel);
-  if (packed >= 0) {
-    return packed === PACKED_CHANNEL_97;
-  }
-  return resolveNormalizedChannelForPredicate(channel) === '97';
+  return matchesPackedOrNormalizedChannel(channel, isPackedBmsBgmVolumeChangeChannel, isBmsBgmVolumeChangeNormalizedChannel);
 }
 
 export function isBmsKeyVolumeChangeChannel(channel: string): boolean {
-  const packed = tryPackChannel(channel);
-  if (packed >= 0) {
-    return packed === PACKED_CHANNEL_98;
-  }
-  return resolveNormalizedChannelForPredicate(channel) === '98';
+  return matchesPackedOrNormalizedChannel(channel, isPackedBmsKeyVolumeChangeChannel, isBmsKeyVolumeChangeNormalizedChannel);
 }
 
 export function isBmsDynamicVolumeChangeChannel(channel: string): boolean {
-  const packed = tryPackChannel(channel);
-  if (packed >= 0) {
-    return packed === PACKED_CHANNEL_97 || packed === PACKED_CHANNEL_98;
-  }
-  const normalized = resolveNormalizedChannelForPredicate(channel);
-  return normalized === '97' || normalized === '98';
+  return matchesPackedOrNormalizedChannel(
+    channel,
+    isPackedBmsDynamicVolumeChangeChannel,
+    isBmsDynamicVolumeChangeNormalizedChannel,
+  );
 }
 
 export function parseBmsDynamicVolumeGain(value: string): number | undefined {
@@ -794,6 +753,18 @@ function resolveNormalizedChannelForPredicate(channel: string): string {
   return normalizeChannel(channel);
 }
 
+function matchesPackedOrNormalizedChannel(
+  channel: string,
+  packedMatcher: (packed: number) => boolean,
+  normalizedMatcher: (normalized: string) => boolean,
+): boolean {
+  const packed = tryPackChannel(channel);
+  if (packed >= 0) {
+    return packedMatcher(packed);
+  }
+  return normalizedMatcher(resolveNormalizedChannelForPredicate(channel));
+}
+
 function isNormalizedBase36Code(code: number): boolean {
   return (code >= 0x30 && code <= 0x39) || (code >= 0x41 && code <= 0x5a);
 }
@@ -830,12 +801,24 @@ function isTempoNormalizedChannel(normalized: string): boolean {
   return normalized === '03' || normalized === '08';
 }
 
+function isPackedTempoChannel(packed: number): boolean {
+  return packed === PACKED_CHANNEL_03 || packed === PACKED_CHANNEL_08;
+}
+
 function isStopNormalizedChannel(normalized: string): boolean {
   return normalized === '09';
 }
 
+function isPackedStopChannel(packed: number): boolean {
+  return packed === PACKED_CHANNEL_09;
+}
+
 function isScrollNormalizedChannel(normalized: string): boolean {
   return normalized === 'SC';
+}
+
+function isPackedScrollChannel(packed: number): boolean {
+  return packed === PACKED_CHANNEL_SC;
 }
 
 function isLandmineNormalizedChannel(normalized: string): boolean {
@@ -861,6 +844,18 @@ function isPlayLaneSoundNormalizedChannel(normalized: string): boolean {
   return /^[1-6][1-9]$/.test(normalized);
 }
 
+function isBmsBgmVolumeChangeNormalizedChannel(normalized: string): boolean {
+  return normalized === '97';
+}
+
+function isBmsKeyVolumeChangeNormalizedChannel(normalized: string): boolean {
+  return normalized === '98';
+}
+
+function isBmsDynamicVolumeChangeNormalizedChannel(normalized: string): boolean {
+  return isBmsBgmVolumeChangeNormalizedChannel(normalized) || isBmsKeyVolumeChangeNormalizedChannel(normalized);
+}
+
 function mapBmsLongNoteNormalizedChannelToPlayable(normalized: string): string | undefined {
   if (!isBmsLongNoteNormalizedChannel(normalized)) {
     return undefined;
@@ -871,10 +866,14 @@ function mapBmsLongNoteNormalizedChannelToPlayable(normalized: string): string |
     : BMS_LONG_NOTE_PLAYABLE_2P[laneIndex];
 }
 
-function isPackedLandmineChannel(packed: number): boolean {
+function isPackedLaneRange(packed: number, highStart: number, highEnd: number): boolean {
   const high = (packed >> 8) & 0xff;
   const low = packed & 0xff;
-  return (high === 0x44 || high === 0x45) && low >= 0x31 && low <= 0x39;
+  return high >= highStart && high <= highEnd && low >= 0x31 && low <= 0x39;
+}
+
+function isPackedLandmineChannel(packed: number): boolean {
+  return isPackedLaneRange(packed, 0x44, 0x45);
 }
 
 function isPackedSampleTriggerChannel(packed: number): boolean {
@@ -888,19 +887,25 @@ function isPackedSampleTriggerChannel(packed: number): boolean {
 }
 
 function isPackedPlayableChannel(packed: number): boolean {
-  const high = (packed >> 8) & 0xff;
-  const low = packed & 0xff;
-  return (high === 0x31 || high === 0x32) && low >= 0x31 && low <= 0x39;
+  return isPackedLaneRange(packed, 0x31, 0x32);
 }
 
 function isPackedBmsLongNoteChannel(packed: number): boolean {
-  const high = (packed >> 8) & 0xff;
-  const low = packed & 0xff;
-  return (high === 0x35 || high === 0x36) && low >= 0x31 && low <= 0x39;
+  return isPackedLaneRange(packed, 0x35, 0x36);
 }
 
 function isPackedPlayLaneSoundChannel(packed: number): boolean {
-  const high = (packed >> 8) & 0xff;
-  const low = packed & 0xff;
-  return high >= 0x31 && high <= 0x36 && low >= 0x31 && low <= 0x39;
+  return isPackedLaneRange(packed, 0x31, 0x36);
+}
+
+function isPackedBmsBgmVolumeChangeChannel(packed: number): boolean {
+  return packed === PACKED_CHANNEL_97;
+}
+
+function isPackedBmsKeyVolumeChangeChannel(packed: number): boolean {
+  return packed === PACKED_CHANNEL_98;
+}
+
+function isPackedBmsDynamicVolumeChangeChannel(packed: number): boolean {
+  return isPackedBmsBgmVolumeChangeChannel(packed) || isPackedBmsKeyVolumeChangeChannel(packed);
 }
