@@ -174,6 +174,7 @@ describe('node gameplay runtime', () => {
     expect(uiRuntimeState.context?.uiFps).toBe(60);
     expect(uiRuntimeState.context?.tuiVisibleNotesLimit).toBe(8192);
     expect(uiRuntimeState.context?.tuiNoteHeight).toBe(8);
+    expect(uiRuntimeState.context?.imageResizeAlgorithm).toBe('nearest');
     expect(uiRuntimeState.context?.videoBgaStreaming).toBe(true);
     expect(uiRuntimeState.context?.initialFrame).toMatchObject({
       currentBeat: 0,
@@ -320,6 +321,7 @@ function createOptions(
       speed: 1,
       tuiVisibleNotesLimit: 8192,
       tuiNoteHeight: 8,
+      imageResizeAlgorithm: 'nearest' as const,
       audioBaseDir: process.cwd(),
       videoBgaStreaming: true,
     },
@@ -339,6 +341,7 @@ function createUiInit() {
     tuiNoteHeight: 8,
     judgeWindowMs: 16.67,
     highSpeed: 1,
+    imageResizeAlgorithm: 'nearest' as const,
     showLaneChannels: false,
     baseDir: process.cwd(),
     videoBgaStreaming: true,

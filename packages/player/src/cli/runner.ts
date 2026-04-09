@@ -26,6 +26,11 @@ import {
   type StageFileAnsiImage,
   type TerminalAnsiImage,
 } from '../bga.ts';
+import {
+  DEFAULT_IMAGE_RESIZE_ALGORITHM,
+  isImageResizeAlgorithm,
+  type ImageResizeAlgorithm,
+} from '../image-resize-algorithm.ts';
 import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
 import {
   buildKittyGraphicsDeleteImageSequence,
@@ -136,6 +141,7 @@ interface CliArgs {
   uiFps: number;
   tuiVisibleNotesLimit: number;
   tuiNoteHeight: TuiNoteHeight;
+  imageResizeAlgorithm: ImageResizeAlgorithm;
   highSpeed?: number;
   judgeWindowMs?: number;
   debugActiveAudio: boolean;
@@ -172,6 +178,7 @@ interface PlayLoadingScreenRenderState {
 interface SelectChartInteractivelyOptions {
   audio: boolean;
   kittyGraphics?: boolean;
+  imageResizeAlgorithm: ImageResizeAlgorithm;
   volume?: number;
   bgmVolume?: number;
   playVolume?: number;
@@ -516,6 +523,7 @@ async function runDirectoryInput(
       const selection = await selectChartInteractively(rootDir, candidates, {
         audio: args.audio,
         kittyGraphics: args.kittyGraphics,
+        imageResizeAlgorithm: args.imageResizeAlgorithm,
         volume: args.volume,
         bgmVolume: args.bgmVolume,
         playVolume: args.playVolume,
@@ -838,6 +846,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
         baseDir: dirname(chartPath),
         width: stageFileDisplaySize.width,
         height: stageFileDisplaySize.height,
+        imageResizeAlgorithm: args.imageResizeAlgorithm,
         signal: chartLoadingAbortCapture?.signal,
       });
       logCli('info', 'play.loading.stagefile.loaded', {
@@ -995,6 +1004,7 @@ function createPlayOptionsFromCliArgs(args: CliArgs, chartPath: string) {
     uiFps: args.uiFps,
     tuiVisibleNotesLimit: args.tuiVisibleNotesLimit,
     tuiNoteHeight: args.tuiNoteHeight,
+    imageResizeAlgorithm: args.imageResizeAlgorithm,
     highSpeed: args.highSpeed,
     judgeWindowMs: args.judgeWindowMs,
     debugActiveAudio: args.debugActiveAudio,
@@ -1250,6 +1260,7 @@ function syncMusicSelectBanner(params: {
   entry: ChartSelectionEntry | undefined;
   lineWidth: number;
   useKittyGraphics: boolean;
+  imageResizeAlgorithm: ImageResizeAlgorithm;
   finished: boolean;
   onReady: () => void;
 }): void {
@@ -1283,6 +1294,7 @@ function syncMusicSelectBanner(params: {
     signal: controller.signal,
     fitMode: 'contain',
     includeKittyImage: params.useKittyGraphics,
+    imageResizeAlgorithm: params.imageResizeAlgorithm,
   })
     .then((image) => {
       if (
@@ -1413,6 +1425,7 @@ function createDefaultCliArgs(): CliArgs {
     autoScratch: false,
     kittyGraphics: true,
     videoBgaStreaming: true,
+    imageResizeAlgorithm: DEFAULT_IMAGE_RESIZE_ALGORITHM,
     inferBmsLnTypeWhenMissing: true,
     showInvisibleNotes: false,
     compressor: true,
@@ -1512,6 +1525,9 @@ function consumeCliValueArg(args: CliArgs, rawArgs: string[], index: number): nu
       return index + 1;
     case '--tui-note-height':
       args.tuiNoteHeight = parseTuiNoteHeightArg(rawValue);
+      return index + 1;
+    case '--image-resize-algorithm':
+      args.imageResizeAlgorithm = parseImageResizeAlgorithmArg(rawValue);
       return index + 1;
     case '--log-file':
       args.logFile = readRequiredCliPathArg(rawValue, '--log-file');
@@ -1684,6 +1700,13 @@ function parseTuiNoteHeightArg(raw: string | undefined): TuiNoteHeight {
   throw new Error('--tui-note-height must be an integer from 1 to 8, or the alias full or half');
 }
 
+function parseImageResizeAlgorithmArg(raw: string | undefined): ImageResizeAlgorithm {
+  if (typeof raw === 'string' && isImageResizeAlgorithm(raw)) {
+    return raw;
+  }
+  throw new Error('--image-resize-algorithm must be one of: nearest, lanczos');
+}
+
 function formatCliParseError(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -1712,6 +1735,7 @@ function printUsage(): void {
       '  --no-kitty-graphics       Disable Kitty graphics protocol BGA rendering',
       '  --video-bga-streaming     Stream video BGA frames progressively (default: on)',
       '  --no-video-bga-streaming  Decode full video BGA before playback (legacy behavior)',
+      `  --image-resize-algorithm <nearest|lanczos>  Resize algorithm for BGA/BANNER/STAGEFILE images (default: ${DEFAULT_IMAGE_RESIZE_ALGORITHM})`,
       '  --log-file <path>         Write structured NDJSON logs to a file',
       '                           Default: ~/.be-music/logs/player.ndjson',
       '',
@@ -2295,6 +2319,7 @@ async function selectChartInteractively(
       entry: selectedEntry,
       lineWidth,
       useKittyGraphics: useKittyGraphicsForBanner,
+      imageResizeAlgorithm: options.imageResizeAlgorithm,
       finished,
       onReady: render,
     });

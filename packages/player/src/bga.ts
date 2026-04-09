@@ -15,6 +15,7 @@ import { decode as decodeBmpFast } from 'fast-bmp';
 import { decode as decodePngFast } from 'fast-png';
 import jpeg from 'jpeg-js';
 import { decodeVideoFramesStream, decodeVideoFramesToSourceFramesInWorker } from './bga-video.ts';
+import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from './image-resize-algorithm.ts';
 
 const BASE_BGA_CHANNEL = '04';
 const POOR_BGA_CHANNEL = '06';
@@ -90,6 +91,7 @@ interface CompositeFrame {
 type WorkerizedSpecFrameConverter = ((
   image: DecodedImage,
   mode: FrameMode,
+  resizeAlgorithm: ImageResizeAlgorithm,
   callback: (error: unknown, result: AnsiFrame) => void,
 ) => void) & { close: () => void };
 
@@ -99,6 +101,7 @@ export interface BgaAnsiOptions {
   baseDir: string;
   width?: number;
   height?: number;
+  imageResizeAlgorithm?: ImageResizeAlgorithm;
   videoBgaStreaming?: boolean;
   onLoadProgress?: (progress: BgaAnsiLoadProgress) => void;
   signal?: AbortSignal;
@@ -167,6 +170,7 @@ export async function loadStageFileAnsiImage(
   const loaded = await loadTerminalAnsiImageInternal(options.baseDir, stageFile, {
     width: displaySize.width,
     height: displaySize.height,
+    imageResizeAlgorithm: options.imageResizeAlgorithm,
     signal: options.signal,
     fitMode: 'cover',
     includeKittyImage: true,
@@ -228,6 +232,8 @@ export class BgaAnsiRenderer {
 
   private displayHeight: number;
 
+  private readonly resizeAlgorithm: ImageResizeAlgorithm;
+
   private cachedBaseKey = '__INIT__';
 
   private cachedLayerKey = '__INIT__';
@@ -273,6 +279,7 @@ export class BgaAnsiRenderer {
     playbackEndSeconds: number;
     width: number;
     height: number;
+    resizeAlgorithm: ImageResizeAlgorithm;
   }) {
     this.baseTimeline = params.baseTimeline;
     this.poorTimeline = params.poorTimeline;
@@ -290,10 +297,26 @@ export class BgaAnsiRenderer {
     this.playbackEndSeconds = params.playbackEndSeconds;
     this.displayWidth = params.width;
     this.displayHeight = params.height;
+    this.resizeAlgorithm = params.resizeAlgorithm;
     this.blackBackgroundLines = [];
-    this.missingBaseFrame = resizeAnsiFrame(this.missingBaseSourceFrame, this.displayWidth, this.displayHeight);
-    this.missingPoorFrame = resizeAnsiFrame(this.missingPoorSourceFrame, this.displayWidth, this.displayHeight);
-    this.missingLayerFrame = resizeAnsiFrame(this.missingLayerSourceFrame, this.displayWidth, this.displayHeight);
+    this.missingBaseFrame = resizeAnsiFrame(
+      this.missingBaseSourceFrame,
+      this.displayWidth,
+      this.displayHeight,
+      this.resizeAlgorithm,
+    );
+    this.missingPoorFrame = resizeAnsiFrame(
+      this.missingPoorSourceFrame,
+      this.displayWidth,
+      this.displayHeight,
+      this.resizeAlgorithm,
+    );
+    this.missingLayerFrame = resizeAnsiFrame(
+      this.missingLayerSourceFrame,
+      this.displayWidth,
+      this.displayHeight,
+      this.resizeAlgorithm,
+    );
     this.rebuildFrames();
   }
 
@@ -392,11 +415,13 @@ export class BgaAnsiRenderer {
 
     const composite =
       state.poorActive && poorSelection.frame
-        ? mergeCompositeFrames(resizeAnsiFrame(poorSelection.frame, pixelWidth, pixelHeight))
+        ? mergeCompositeFrames(resizeAnsiFrame(poorSelection.frame, pixelWidth, pixelHeight, this.resizeAlgorithm))
         : mergeCompositeFrames(
             ...[baseSelection.frame, layerSelection.frame, layer2Selection.frame]
               .slice(0, MAX_NORMAL_BGA_COMPOSITE_LAYERS)
-              .map((frame) => (frame ? resizeAnsiFrame(frame, pixelWidth, pixelHeight) : undefined)),
+              .map((frame) =>
+                frame ? resizeAnsiFrame(frame, pixelWidth, pixelHeight, this.resizeAlgorithm) : undefined,
+              ),
           );
     const filledFrame = composite
       ? fillAnsiFrameBackground(composite, 0, 0, 0)
@@ -414,13 +439,48 @@ export class BgaAnsiRenderer {
   }
 
   private rebuildFrames(): void {
-    this.baseFramesByKey = resizeFrameSourceMap(this.baseSourceFramesByKey, this.displayWidth, this.displayHeight);
-    this.poorFramesByKey = resizeFrameSourceMap(this.poorSourceFramesByKey, this.displayWidth, this.displayHeight);
-    this.layerFramesByKey = resizeFrameSourceMap(this.layerSourceFramesByKey, this.displayWidth, this.displayHeight);
-    this.layer2FramesByKey = resizeFrameSourceMap(this.layer2SourceFramesByKey, this.displayWidth, this.displayHeight);
-    this.missingBaseFrame = resizeAnsiFrame(this.missingBaseSourceFrame, this.displayWidth, this.displayHeight);
-    this.missingPoorFrame = resizeAnsiFrame(this.missingPoorSourceFrame, this.displayWidth, this.displayHeight);
-    this.missingLayerFrame = resizeAnsiFrame(this.missingLayerSourceFrame, this.displayWidth, this.displayHeight);
+    this.baseFramesByKey = resizeFrameSourceMap(
+      this.baseSourceFramesByKey,
+      this.displayWidth,
+      this.displayHeight,
+      this.resizeAlgorithm,
+    );
+    this.poorFramesByKey = resizeFrameSourceMap(
+      this.poorSourceFramesByKey,
+      this.displayWidth,
+      this.displayHeight,
+      this.resizeAlgorithm,
+    );
+    this.layerFramesByKey = resizeFrameSourceMap(
+      this.layerSourceFramesByKey,
+      this.displayWidth,
+      this.displayHeight,
+      this.resizeAlgorithm,
+    );
+    this.layer2FramesByKey = resizeFrameSourceMap(
+      this.layer2SourceFramesByKey,
+      this.displayWidth,
+      this.displayHeight,
+      this.resizeAlgorithm,
+    );
+    this.missingBaseFrame = resizeAnsiFrame(
+      this.missingBaseSourceFrame,
+      this.displayWidth,
+      this.displayHeight,
+      this.resizeAlgorithm,
+    );
+    this.missingPoorFrame = resizeAnsiFrame(
+      this.missingPoorSourceFrame,
+      this.displayWidth,
+      this.displayHeight,
+      this.resizeAlgorithm,
+    );
+    this.missingLayerFrame = resizeAnsiFrame(
+      this.missingLayerSourceFrame,
+      this.displayWidth,
+      this.displayHeight,
+      this.resizeAlgorithm,
+    );
     this.blackBackgroundLines = createBlackBackgroundAnsiLines(this.displayWidth, this.displayHeight);
     this.resetCache();
   }
@@ -543,6 +603,7 @@ export async function createBgaAnsiRenderer(
 ): Promise<BgaAnsiRenderer | undefined> {
   throwIfAborted(options.signal);
   const displaySize = normalizeDisplaySize(options.width, options.height);
+  const resizeAlgorithm = options.imageResizeAlgorithm ?? DEFAULT_IMAGE_RESIZE_ALGORITHM;
   const resolver = createTimingResolver(json);
   const sortedEvents = sortEvents(json.events);
 
@@ -591,6 +652,7 @@ export async function createBgaAnsiRenderer(
         mode: 'base',
         width: displaySize.width,
         height: displaySize.height,
+        imageResizeAlgorithm: resizeAlgorithm,
         videoBgaStreaming: options.videoBgaStreaming,
         onLoadProgress: reportLoadProgress,
         signal: options.signal,
@@ -603,6 +665,7 @@ export async function createBgaAnsiRenderer(
         mode: 'base',
         width: displaySize.width,
         height: displaySize.height,
+        imageResizeAlgorithm: resizeAlgorithm,
         videoBgaStreaming: options.videoBgaStreaming,
         onLoadProgress: reportLoadProgress,
         signal: options.signal,
@@ -615,6 +678,7 @@ export async function createBgaAnsiRenderer(
         mode: 'layer',
         width: displaySize.width,
         height: displaySize.height,
+        imageResizeAlgorithm: resizeAlgorithm,
         videoBgaStreaming: options.videoBgaStreaming,
         onLoadProgress: reportLoadProgress,
         signal: options.signal,
@@ -627,6 +691,7 @@ export async function createBgaAnsiRenderer(
         mode: 'layer',
         width: displaySize.width,
         height: displaySize.height,
+        imageResizeAlgorithm: resizeAlgorithm,
         videoBgaStreaming: options.videoBgaStreaming,
         onLoadProgress: reportLoadProgress,
         signal: options.signal,
@@ -673,6 +738,7 @@ export async function createBgaAnsiRenderer(
     ),
     width: displaySize.width,
     height: displaySize.height,
+    resizeAlgorithm,
   });
 }
 
@@ -683,13 +749,25 @@ async function loadFramesByKeys(params: {
   mode: FrameMode;
   width: number;
   height: number;
+  imageResizeAlgorithm: ImageResizeAlgorithm;
   videoBgaStreaming?: boolean;
   onLoadProgress?: (detail: string) => void;
   signal?: AbortSignal;
   sharedSourceCache: FrameSourceLoadCache;
 }): Promise<Map<string, FrameSource>> {
-  const { keys, resources, baseDir, mode, width, height, videoBgaStreaming, onLoadProgress, signal, sharedSourceCache } =
-    params;
+  const {
+    keys,
+    resources,
+    baseDir,
+    mode,
+    width,
+    height,
+    imageResizeAlgorithm,
+    videoBgaStreaming,
+    onLoadProgress,
+    signal,
+    sharedSourceCache,
+  } = params;
   const map = new Map<string, FrameSource>();
   const orderedKeys = [...keys];
   await mapWithConcurrency(
@@ -707,12 +785,20 @@ async function loadFramesByKeys(params: {
         return;
       }
 
-      const cacheKey = `${mode}:${width}x${height}:${videoBgaStreaming === false ? 'full' : 'stream'}:${resolved}`;
+      const cacheKey =
+        `${mode}:${width}x${height}:${imageResizeAlgorithm}:` +
+        `${videoBgaStreaming === false ? 'full' : 'stream'}:${resolved}`;
       let sourcePromise = sharedSourceCache.get(cacheKey);
       if (!sourcePromise) {
-        sourcePromise = loadFrameSource(resolved, mode, width, height, videoBgaStreaming, signal).then(
-          (source) => source ?? null,
-        );
+        sourcePromise = loadFrameSource(
+          resolved,
+          mode,
+          width,
+          height,
+          imageResizeAlgorithm,
+          videoBgaStreaming,
+          signal,
+        ).then((source) => source ?? null);
         sharedSourceCache.set(cacheKey, sourcePromise);
       }
 
@@ -779,13 +865,14 @@ function resizeFrameSourceMap(
   sourceMap: Map<string, FrameSource>,
   width: number,
   height: number,
+  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
 ): Map<string, FrameSource> {
   const map = new Map<string, FrameSource>();
   const cache = new WeakMap<FrameSource, FrameSource>();
   for (const [key, source] of sourceMap) {
     let resized = cache.get(source);
     if (!resized) {
-      resized = resizeFrameSource(source, width, height);
+      resized = resizeFrameSource(source, width, height, resizeAlgorithm);
       cache.set(source, resized);
     }
     map.set(key, resized);
@@ -821,12 +908,21 @@ function buildTerminalKittyImage(
   cellWidth: number,
   cellHeight: number,
   fitMode: 'contain' | 'cover',
+  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
   aspectX = TERMINAL_PIXEL_ASPECT_X,
   aspectY = TERMINAL_PIXEL_ASPECT_Y,
 ): TerminalKittyImage | undefined {
   const pixelWidth = Math.max(1, Math.floor(cellWidth) * KITTY_GRAPHICS_PIXEL_SCALE);
   const pixelHeight = Math.max(1, Math.floor(cellHeight) * KITTY_GRAPHICS_PIXEL_SCALE);
-  const resizedSource = resizeFrameSourceWithAspectMode(source, pixelWidth, pixelHeight, aspectX, aspectY, fitMode);
+  const resizedSource = resizeFrameSourceWithAspectMode(
+    source,
+    pixelWidth,
+    pixelHeight,
+    aspectX,
+    aspectY,
+    fitMode,
+    resizeAlgorithm,
+  );
   const frame = selectFrameFromSource(resizedSource, 0).frame;
   if (!frame) {
     return undefined;
@@ -867,7 +963,12 @@ function fillFrameSourceBackground(source: FrameSource, r: number, g: number, b:
   };
 }
 
-function resizeFrameSource(source: FrameSource, width: number, height: number): FrameSource {
+function resizeFrameSource(
+  source: FrameSource,
+  width: number,
+  height: number,
+  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
+): FrameSource {
   return resizeFrameSourceWithAspectMode(
     source,
     width,
@@ -875,10 +976,16 @@ function resizeFrameSource(source: FrameSource, width: number, height: number): 
     TERMINAL_PIXEL_ASPECT_X,
     TERMINAL_PIXEL_ASPECT_Y,
     'contain',
+    resizeAlgorithm,
   );
 }
 
-function resizeFrameSourceCover(source: FrameSource, width: number, height: number): FrameSource {
+function resizeFrameSourceCover(
+  source: FrameSource,
+  width: number,
+  height: number,
+  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
+): FrameSource {
   return resizeFrameSourceWithAspectMode(
     source,
     width,
@@ -886,6 +993,7 @@ function resizeFrameSourceCover(source: FrameSource, width: number, height: numb
     TERMINAL_PIXEL_ASPECT_X,
     TERMINAL_PIXEL_ASPECT_Y,
     'cover',
+    resizeAlgorithm,
   );
 }
 
@@ -896,11 +1004,12 @@ function resizeFrameSourceWithAspectMode(
   aspectX: number,
   aspectY: number,
   mode: 'contain' | 'cover',
+  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
 ): FrameSource {
   if (source.kind === 'static') {
     return {
       kind: 'static',
-      frame: resizeAnsiFrameWithAspectMode(source.frame, width, height, aspectX, aspectY, mode),
+      frame: resizeAnsiFrameWithAspectMode(source.frame, width, height, aspectX, aspectY, mode, resizeAlgorithm),
     };
   }
 
@@ -918,7 +1027,15 @@ function resizeFrameSourceWithAspectMode(
         const entry = source.frames[index]!;
         resizedFrames.push({
           seconds: entry.seconds,
-          frame: resizeAnsiFrameWithAspectMode(entry.frame, width, height, aspectX, aspectY, mode),
+          frame: resizeAnsiFrameWithAspectMode(
+            entry.frame,
+            width,
+            height,
+            aspectX,
+            aspectY,
+            mode,
+            resizeAlgorithm,
+          ),
         });
       }
       return resizedFrames;
@@ -1196,6 +1313,7 @@ function createBlackBackgroundAnsiLines(width: number, height: number): string[]
 async function loadImageAsSpecFrame(
   imagePath: string,
   mode: FrameMode,
+  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
   signal?: AbortSignal,
 ): Promise<AnsiFrame | undefined> {
   const extension = extname(imagePath).toLowerCase();
@@ -1208,7 +1326,7 @@ async function loadImageAsSpecFrame(
     throwIfAborted(signal);
     const decoded = decodeImageBuffer(buffer, imagePath);
     throwIfAborted(signal);
-    return await convertImageToSpecFrameOffThread(decoded, mode, signal);
+    return await convertImageToSpecFrameOffThread(decoded, mode, resizeAlgorithm, signal);
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
@@ -1244,11 +1362,12 @@ async function loadImageAsSourceFrame(
 async function convertImageToSpecFrameOffThread(
   image: DecodedImage,
   mode: FrameMode,
+  resizeAlgorithm: ImageResizeAlgorithm,
   signal?: AbortSignal,
 ): Promise<AnsiFrame> {
   const activeWorker = convertImageToSpecFrameWorker;
   try {
-    const frame = await invokeWorkerizedFunction(activeWorker, [image, mode], {
+    const frame = await invokeWorkerizedFunction(activeWorker, [image, mode, resizeAlgorithm], {
       signal,
       onAbort: () => {
         if (convertImageToSpecFrameWorker === activeWorker) {
@@ -1258,7 +1377,7 @@ async function convertImageToSpecFrameOffThread(
       },
     });
     if (!frame || typeof frame.width !== 'number' || typeof frame.height !== 'number') {
-      return convertImageToSpecFrame(image, mode);
+      return convertImageToSpecFrame(image, mode, resizeAlgorithm);
     }
     return frame;
   } catch (error) {
@@ -1269,18 +1388,27 @@ async function convertImageToSpecFrameOffThread(
       convertImageToSpecFrameWorker.close();
       convertImageToSpecFrameWorker = createConvertImageToSpecFrameWorker();
     }
-    return convertImageToSpecFrame(image, mode);
+    return convertImageToSpecFrame(image, mode, resizeAlgorithm);
   }
 }
 
 function createConvertImageToSpecFrameWorker(): WorkerizedSpecFrameConverter {
   return workerize(
-    (image: DecodedImage, mode: FrameMode) => convertImageToSpecFrame(image, mode),
+    (image: DecodedImage, mode: FrameMode, resizeAlgorithm: ImageResizeAlgorithm) =>
+      convertImageToSpecFrame(image, mode, resizeAlgorithm),
     () => [
       convertImageToSpecFrame,
       createSolidAnsiFrame,
       fitSizeWithinSpecCanvas,
       isOpaquePixel,
+      sampleImagePixel,
+      createNearestSampleContribution,
+      createLanczosSampleContribution,
+      accumulateImageSample,
+      normalizeWeightedSample,
+      lanczosKernel,
+      sinc,
+      DEFAULT_IMAGE_RESIZE_ALGORITHM,
       SPEC_BGA_CANVAS_SIZE,
       TRANSPARENT_ALPHA_THRESHOLD,
     ],
@@ -1293,11 +1421,12 @@ async function loadFrameSource(
   mode: FrameMode,
   _width: number,
   _height: number,
+  imageResizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
   videoBgaStreaming = true,
   signal?: AbortSignal,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
-  const imageFrame = await loadImageAsSpecFrame(resourcePath, mode, signal);
+  const imageFrame = await loadImageAsSpecFrame(resourcePath, mode, imageResizeAlgorithm, signal);
   if (imageFrame) {
     return createStaticFrameSource(imageFrame);
   }
@@ -1312,6 +1441,7 @@ async function loadTerminalAnsiImageInternal(
 ): Promise<{ image: TerminalAnsiImage; sourceFrame: FrameSource } | undefined> {
   throwIfAborted(options.signal);
   const displaySize = normalizeTerminalImageDisplaySize(options.width, options.height);
+  const resizeAlgorithm = options.imageResizeAlgorithm ?? DEFAULT_IMAGE_RESIZE_ALGORITHM;
   const sourceFrame = await loadTerminalImageSourceFrame(baseDir, mediaPath, options.signal);
   if (!sourceFrame) {
     return undefined;
@@ -1319,8 +1449,8 @@ async function loadTerminalAnsiImageInternal(
 
   const resizedSource =
     options.fitMode === 'cover'
-      ? resizeFrameSourceCover(sourceFrame, displaySize.width, displaySize.height)
-      : resizeFrameSource(sourceFrame, displaySize.width, displaySize.height);
+      ? resizeFrameSourceCover(sourceFrame, displaySize.width, displaySize.height, resizeAlgorithm)
+      : resizeFrameSource(sourceFrame, displaySize.width, displaySize.height, resizeAlgorithm);
   const selected = selectFrameFromSource(resizedSource, 0);
   if (!selected.frame) {
     return undefined;
@@ -1330,8 +1460,8 @@ async function loadTerminalAnsiImageInternal(
   const kittyImage =
     options.includeKittyImage
       ? options.fitMode === 'cover'
-        ? buildTerminalKittyImage(sourceFrame, displaySize.width, displaySize.height, 'cover')
-        : buildTerminalKittyImage(sourceFrame, filledFrame.width, filledFrame.height, 'contain')
+        ? buildTerminalKittyImage(sourceFrame, displaySize.width, displaySize.height, 'cover', resizeAlgorithm)
+        : buildTerminalKittyImage(sourceFrame, filledFrame.width, filledFrame.height, 'contain', resizeAlgorithm)
       : undefined;
   return {
     sourceFrame,
@@ -1900,7 +2030,11 @@ function createSolidAnsiFrame(
   };
 }
 
-function convertImageToSpecFrame(image: DecodedImage, mode: FrameMode): AnsiFrame {
+function convertImageToSpecFrame(
+  image: DecodedImage,
+  mode: FrameMode,
+  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
+): AnsiFrame {
   const specFrame = createSolidAnsiFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, 0);
   const fittedSize =
     image.format === 'video'
@@ -1913,30 +2047,25 @@ function convertImageToSpecFrame(image: DecodedImage, mode: FrameMode): AnsiFram
   const offsetY = 0;
 
   for (let targetYWithinImage = 0; targetYWithinImage < fittedSize.height; targetYWithinImage += 1) {
-    const sourceY = Math.min(
-      image.height - 1,
-      Math.max(0, Math.floor(((targetYWithinImage + 0.5) * image.height) / fittedSize.height)),
-    );
     const targetY = targetYWithinImage + offsetY;
     if (targetY < 0 || targetY >= SPEC_BGA_CANVAS_SIZE) {
       continue;
     }
 
     for (let targetXWithinImage = 0; targetXWithinImage < fittedSize.width; targetXWithinImage += 1) {
-      const sourceX = Math.min(
-        image.width - 1,
-        Math.max(0, Math.floor(((targetXWithinImage + 0.5) * image.width) / fittedSize.width)),
-      );
       const targetX = targetXWithinImage + offsetX;
       if (targetX < 0 || targetX >= SPEC_BGA_CANVAS_SIZE) {
         continue;
       }
 
-      const sourceOffset = (sourceY * image.width + sourceX) * 4;
-      const r = image.data[sourceOffset] ?? 0;
-      const g = image.data[sourceOffset + 1] ?? 0;
-      const b = image.data[sourceOffset + 2] ?? 0;
-      const a = image.data[sourceOffset + 3] ?? 255;
+      const { r, g, b, a } = sampleImagePixel(
+        image,
+        targetXWithinImage,
+        targetYWithinImage,
+        fittedSize.width,
+        fittedSize.height,
+        resizeAlgorithm,
+      );
       if (!isOpaquePixel(r, g, b, a, image.format, mode)) {
         continue;
       }
@@ -1951,6 +2080,176 @@ function convertImageToSpecFrame(image: DecodedImage, mode: FrameMode): AnsiFram
   }
 
   return specFrame;
+}
+
+function sampleImagePixel(
+  image: DecodedImage,
+  targetX: number,
+  targetY: number,
+  targetWidth: number,
+  targetHeight: number,
+  resizeAlgorithm: ImageResizeAlgorithm,
+): { r: number; g: number; b: number; a: number } {
+  const contribution =
+    resizeAlgorithm === 'lanczos'
+      ? createLanczosSampleContribution(image.width, image.height, targetX, targetY, targetWidth, targetHeight)
+      : createNearestSampleContribution(image.width, image.height, targetX, targetY, targetWidth, targetHeight);
+  return accumulateImageSample(image, contribution);
+}
+
+function accumulateImageSample(
+  image: DecodedImage,
+  contribution: {
+    startX: number;
+    endX: number;
+    startY: number;
+    endY: number;
+    centerX: number;
+    centerY: number;
+    scaleX: number;
+    scaleY: number;
+    useLanczos: boolean;
+  },
+): { r: number; g: number; b: number; a: number } {
+  if (!contribution.useLanczos) {
+    const sourceOffset = (contribution.startY * image.width + contribution.startX) * 4;
+    return {
+      r: image.data[sourceOffset] ?? 0,
+      g: image.data[sourceOffset + 1] ?? 0,
+      b: image.data[sourceOffset + 2] ?? 0,
+      a: image.data[sourceOffset + 3] ?? 255,
+    };
+  }
+
+  let weightedR = 0;
+  let weightedG = 0;
+  let weightedB = 0;
+  let weightedA = 0;
+  let totalWeight = 0;
+  for (let sourceY = contribution.startY; sourceY <= contribution.endY; sourceY += 1) {
+    const weightY = lanczosKernel((sourceY - contribution.centerY) / contribution.scaleY) / contribution.scaleY;
+    if (weightY === 0) {
+      continue;
+    }
+    for (let sourceX = contribution.startX; sourceX <= contribution.endX; sourceX += 1) {
+      const weightX = lanczosKernel((sourceX - contribution.centerX) / contribution.scaleX) / contribution.scaleX;
+      const weight = weightX * weightY;
+      if (weight === 0) {
+        continue;
+      }
+      const sourceOffset = (sourceY * image.width + sourceX) * 4;
+      weightedR += (image.data[sourceOffset] ?? 0) * weight;
+      weightedG += (image.data[sourceOffset + 1] ?? 0) * weight;
+      weightedB += (image.data[sourceOffset + 2] ?? 0) * weight;
+      weightedA += (image.data[sourceOffset + 3] ?? 255) * weight;
+      totalWeight += weight;
+    }
+  }
+  return normalizeWeightedSample(weightedR, weightedG, weightedB, weightedA, totalWeight);
+}
+
+function createNearestSampleContribution(
+  sourceWidth: number,
+  sourceHeight: number,
+  targetX: number,
+  targetY: number,
+  targetWidth: number,
+  targetHeight: number,
+): {
+  startX: number;
+  endX: number;
+  startY: number;
+  endY: number;
+  centerX: number;
+  centerY: number;
+  scaleX: number;
+  scaleY: number;
+  useLanczos: false;
+} {
+  const sourceX = Math.min(sourceWidth - 1, Math.max(0, Math.floor(((targetX + 0.5) * sourceWidth) / targetWidth)));
+  const sourceY = Math.min(sourceHeight - 1, Math.max(0, Math.floor(((targetY + 0.5) * sourceHeight) / targetHeight)));
+  return {
+    startX: sourceX,
+    endX: sourceX,
+    startY: sourceY,
+    endY: sourceY,
+    centerX: sourceX,
+    centerY: sourceY,
+    scaleX: 1,
+    scaleY: 1,
+    useLanczos: false,
+  };
+}
+
+function createLanczosSampleContribution(
+  sourceWidth: number,
+  sourceHeight: number,
+  targetX: number,
+  targetY: number,
+  targetWidth: number,
+  targetHeight: number,
+): {
+  startX: number;
+  endX: number;
+  startY: number;
+  endY: number;
+  centerX: number;
+  centerY: number;
+  scaleX: number;
+  scaleY: number;
+  useLanczos: true;
+} {
+  const centerX = ((targetX + 0.5) * sourceWidth) / targetWidth - 0.5;
+  const centerY = ((targetY + 0.5) * sourceHeight) / targetHeight - 0.5;
+  const scaleX = Math.max(1, sourceWidth / Math.max(1, targetWidth));
+  const scaleY = Math.max(1, sourceHeight / Math.max(1, targetHeight));
+  const supportX = 3 * scaleX;
+  const supportY = 3 * scaleY;
+  return {
+    startX: Math.max(0, Math.floor(centerX - supportX + 1)),
+    endX: Math.min(sourceWidth - 1, Math.ceil(centerX + supportX - 1)),
+    startY: Math.max(0, Math.floor(centerY - supportY + 1)),
+    endY: Math.min(sourceHeight - 1, Math.ceil(centerY + supportY - 1)),
+    centerX,
+    centerY,
+    scaleX,
+    scaleY,
+    useLanczos: true,
+  };
+}
+
+function normalizeWeightedSample(
+  weightedR: number,
+  weightedG: number,
+  weightedB: number,
+  weightedA: number,
+  totalWeight: number,
+): { r: number; g: number; b: number; a: number } {
+  if (!Number.isFinite(totalWeight) || totalWeight === 0) {
+    return { r: 0, g: 0, b: 0, a: 0 };
+  }
+  return {
+    r: Math.max(0, Math.min(255, Math.round(weightedR / totalWeight))),
+    g: Math.max(0, Math.min(255, Math.round(weightedG / totalWeight))),
+    b: Math.max(0, Math.min(255, Math.round(weightedB / totalWeight))),
+    a: Math.max(0, Math.min(255, Math.round(weightedA / totalWeight))),
+  };
+}
+
+function sinc(value: number): number {
+  if (value === 0) {
+    return 1;
+  }
+  const scaled = Math.PI * value;
+  return Math.sin(scaled) / scaled;
+}
+
+function lanczosKernel(value: number): number {
+  const distance = Math.abs(value);
+  if (distance >= 3) {
+    return 0;
+  }
+  return sinc(distance) * sinc(distance / 3);
 }
 
 function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode): AnsiFrame {
@@ -2051,11 +2350,28 @@ function fitSizeWithinSpecCanvas(sourceWidth: number, sourceHeight: number): { w
   };
 }
 
-function resizeAnsiFrame(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {
-  return resizeAnsiFrameWithAspect(source, maxWidth, maxHeight, TERMINAL_PIXEL_ASPECT_X, TERMINAL_PIXEL_ASPECT_Y);
+function resizeAnsiFrame(
+  source: AnsiFrame,
+  maxWidth: number,
+  maxHeight: number,
+  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
+): AnsiFrame {
+  return resizeAnsiFrameWithAspect(
+    source,
+    maxWidth,
+    maxHeight,
+    TERMINAL_PIXEL_ASPECT_X,
+    TERMINAL_PIXEL_ASPECT_Y,
+    resizeAlgorithm,
+  );
 }
 
-function resizeAnsiFrameCover(source: AnsiFrame, maxWidth: number, maxHeight: number): AnsiFrame {
+function resizeAnsiFrameCover(
+  source: AnsiFrame,
+  maxWidth: number,
+  maxHeight: number,
+  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
+): AnsiFrame {
   return resizeAnsiFrameWithAspectMode(
     source,
     maxWidth,
@@ -2063,6 +2379,7 @@ function resizeAnsiFrameCover(source: AnsiFrame, maxWidth: number, maxHeight: nu
     TERMINAL_PIXEL_ASPECT_X,
     TERMINAL_PIXEL_ASPECT_Y,
     'cover',
+    resizeAlgorithm,
   );
 }
 
@@ -2072,8 +2389,9 @@ function resizeAnsiFrameWithAspect(
   maxHeight: number,
   aspectX: number,
   aspectY: number,
+  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
 ): AnsiFrame {
-  return resizeAnsiFrameWithAspectMode(source, maxWidth, maxHeight, aspectX, aspectY, 'contain');
+  return resizeAnsiFrameWithAspectMode(source, maxWidth, maxHeight, aspectX, aspectY, 'contain', resizeAlgorithm);
 }
 
 function resizeAnsiFrameWithAspectMode(
@@ -2083,6 +2401,7 @@ function resizeAnsiFrameWithAspectMode(
   aspectX: number,
   aspectY: number,
   mode: 'contain' | 'cover',
+  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
 ): AnsiFrame {
   const canvasWidth = Math.max(1, maxWidth);
   const canvasHeight = Math.max(1, maxHeight);
@@ -2109,31 +2428,28 @@ function resizeAnsiFrameWithAspectMode(
   const opaqueMask = new Uint8Array(canvasWidth * canvasHeight);
 
   for (let y = 0; y < fitted.height; y += 1) {
-    const sourceY = Math.min(source.height - 1, Math.max(0, Math.floor(((y + 0.5) * source.height) / fitted.height)));
     const targetY = y + offsetY;
     if (targetY < 0 || targetY >= canvasHeight) {
       continue;
     }
 
     for (let x = 0; x < fitted.width; x += 1) {
-      const sourceX = Math.min(source.width - 1, Math.max(0, Math.floor(((x + 0.5) * source.width) / fitted.width)));
       const targetX = x + offsetX;
       if (targetX < 0 || targetX >= canvasWidth) {
         continue;
       }
 
-      const sourcePixelOffset = sourceY * source.width + sourceX;
-      if (source.opaqueMask[sourcePixelOffset] === 0) {
+      const sampled = sampleAnsiPixel(source, x, y, fitted.width, fitted.height, resizeAlgorithm);
+      if (sampled.alpha <= 0) {
         continue;
       }
 
-      const sourceRgbOffset = sourcePixelOffset * 3;
       const targetPixelOffset = targetY * canvasWidth + targetX;
       const targetRgbOffset = targetPixelOffset * 3;
-      rgb[targetRgbOffset] = source.rgb[sourceRgbOffset] ?? 0;
-      rgb[targetRgbOffset + 1] = source.rgb[sourceRgbOffset + 1] ?? 0;
-      rgb[targetRgbOffset + 2] = source.rgb[sourceRgbOffset + 2] ?? 0;
-      opaqueMask[targetPixelOffset] = 1;
+      rgb[targetRgbOffset] = sampled.r;
+      rgb[targetRgbOffset + 1] = sampled.g;
+      rgb[targetRgbOffset + 2] = sampled.b;
+      opaqueMask[targetPixelOffset] = sampled.alpha >= 128 ? 1 : 0;
     }
   }
 
@@ -2142,6 +2458,74 @@ function resizeAnsiFrameWithAspectMode(
     height: canvasHeight,
     rgb,
     opaqueMask,
+  };
+}
+
+function sampleAnsiPixel(
+  source: AnsiFrame,
+  targetX: number,
+  targetY: number,
+  targetWidth: number,
+  targetHeight: number,
+  resizeAlgorithm: ImageResizeAlgorithm,
+): { r: number; g: number; b: number; alpha: number } {
+  const contribution =
+    resizeAlgorithm === 'lanczos'
+      ? createLanczosSampleContribution(source.width, source.height, targetX, targetY, targetWidth, targetHeight)
+      : createNearestSampleContribution(source.width, source.height, targetX, targetY, targetWidth, targetHeight);
+
+  if (!contribution.useLanczos) {
+    const sourcePixelOffset = contribution.startY * source.width + contribution.startX;
+    if (source.opaqueMask[sourcePixelOffset] === 0) {
+      return { r: 0, g: 0, b: 0, alpha: 0 };
+    }
+    const sourceRgbOffset = sourcePixelOffset * 3;
+    return {
+      r: source.rgb[sourceRgbOffset] ?? 0,
+      g: source.rgb[sourceRgbOffset + 1] ?? 0,
+      b: source.rgb[sourceRgbOffset + 2] ?? 0,
+      alpha: 255,
+    };
+  }
+
+  let weightedR = 0;
+  let weightedG = 0;
+  let weightedB = 0;
+  let alphaWeight = 0;
+  let totalWeight = 0;
+  for (let sourceY = contribution.startY; sourceY <= contribution.endY; sourceY += 1) {
+    const weightY = lanczosKernel((sourceY - contribution.centerY) / contribution.scaleY) / contribution.scaleY;
+    if (weightY === 0) {
+      continue;
+    }
+    for (let sourceX = contribution.startX; sourceX <= contribution.endX; sourceX += 1) {
+      const weightX = lanczosKernel((sourceX - contribution.centerX) / contribution.scaleX) / contribution.scaleX;
+      const weight = weightX * weightY;
+      if (weight === 0) {
+        continue;
+      }
+      const sourcePixelOffset = sourceY * source.width + sourceX;
+      const sampleAlpha = source.opaqueMask[sourcePixelOffset] === 0 ? 0 : 255;
+      if (sampleAlpha > 0) {
+        const sourceRgbOffset = sourcePixelOffset * 3;
+        weightedR += (source.rgb[sourceRgbOffset] ?? 0) * weight;
+        weightedG += (source.rgb[sourceRgbOffset + 1] ?? 0) * weight;
+        weightedB += (source.rgb[sourceRgbOffset + 2] ?? 0) * weight;
+        alphaWeight += sampleAlpha * weight;
+      }
+      totalWeight += weight;
+    }
+  }
+
+  if (alphaWeight <= 0 || totalWeight <= 0) {
+    return { r: 0, g: 0, b: 0, alpha: 0 };
+  }
+  const normalized = normalizeWeightedSample(weightedR, weightedG, weightedB, alphaWeight, alphaWeight / 255);
+  return {
+    r: normalized.r,
+    g: normalized.g,
+    b: normalized.b,
+    alpha: Math.max(0, Math.min(255, Math.round(alphaWeight / totalWeight))),
   };
 }
 

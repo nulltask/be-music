@@ -6,6 +6,7 @@ import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '.
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../core/ui-signal-bus.ts';
 import type { LaneBinding } from '../manual-input.ts';
 import type { PlayerJudgeComboSignalState } from '../state-signals.ts';
+import type { ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
 import type { TuiNoteHeight } from '../tui-note-height.ts';
 
 export interface NodeGameplayWorkerPlayOptions {
@@ -24,6 +25,7 @@ export interface NodeGameplayWorkerPlayOptions {
   uiFps?: number;
   tuiVisibleNotesLimit?: number;
   tuiNoteHeight?: TuiNoteHeight;
+  imageResizeAlgorithm?: ImageResizeAlgorithm;
   highSpeed?: number;
   judgeWindowMs?: number;
   debugActiveAudio?: boolean;
@@ -63,6 +65,7 @@ export interface NodeGameplayUiRuntimeInit {
   tuiNoteHeight: TuiNoteHeight;
   judgeWindowMs: number;
   highSpeed: number;
+  imageResizeAlgorithm: ImageResizeAlgorithm;
   showLaneChannels: boolean;
   randomPatternSummary?: string;
   baseDir: string;
