@@ -8,6 +8,7 @@
 - [BMSON 実装仕様](bmson-spec.ja.md)
 - [Bemuse 実装仕様](bemuse-spec.ja.md)
 - [Player 実装仕様](player-spec.ja.md)
+- [Player Web 実装仕様](player-web-spec.ja.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](json-spec.ja.md)
 - [用語集](glossary.ja.md)
 
