@@ -12,7 +12,13 @@ import {
   resolveLandmineGaugeEffect,
   type BrowserJudgeKind,
 } from './browser-manual-judge.ts';
-import { decreaseBrowserHighSpeed, formatBrowserHighSpeed, increaseBrowserHighSpeed, normalizeBrowserHighSpeed } from './browser-high-speed.ts';
+import {
+  decreaseBrowserHighSpeed,
+  formatBrowserHighSpeed,
+  increaseBrowserHighSpeed,
+  loadPersistedBrowserHighSpeed,
+  persistBrowserHighSpeed,
+} from './browser-high-speed.ts';
 import { resolvePixiRendererResolution, syncPixiRendererDensity } from './pixi-density.ts';
 import { createPixiLaneMetrics, resolveVisualLaneChannels, type PixiLaneMetrics } from './pixi-lane-layout.ts';
 import { createTimingResolver } from './timing.ts';
@@ -283,7 +289,7 @@ export class PixiGameplayView {
     this.keyCodeToBindings = createKeyCodeToBindingsMap(this.laneBindings);
     this.currentBpm = this.timingResolver.bpmAtBeat(0);
     this.maxBeat = resolveMaxBeat(song.chart, this.timingResolver.beatResolver);
-    this.highSpeed = normalizeBrowserHighSpeed(1);
+    this.highSpeed = loadPersistedBrowserHighSpeed();
     this.audioStatusText = 'Audio unavailable';
     this.judgeWindows = resolveJudgeWindowsMs(song.chart);
     this.summary = createManualSummary(this.playableNotes.filter((note) => isBrowserScoreTargetChannel(note.channel)).length);
@@ -339,13 +345,13 @@ export class PixiGameplayView {
     }
     if (event.code === 'BracketRight' || event.code === 'PageUp' || event.key === 'ArrowUp') {
       event.preventDefault();
-      this.highSpeed = increaseBrowserHighSpeed(this.highSpeed);
+      this.highSpeed = persistBrowserHighSpeed(increaseBrowserHighSpeed(this.highSpeed));
       this.render(this.getCurrentSeconds());
       return;
     }
     if (event.code === 'BracketLeft' || event.code === 'PageDown' || event.key === 'ArrowDown') {
       event.preventDefault();
-      this.highSpeed = decreaseBrowserHighSpeed(this.highSpeed);
+      this.highSpeed = persistBrowserHighSpeed(decreaseBrowserHighSpeed(this.highSpeed));
       this.render(this.getCurrentSeconds());
       return;
     }
