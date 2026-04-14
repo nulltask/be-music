@@ -1,4 +1,5 @@
 import { Application, Color, Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { resolvePixiRendererResolution, syncPixiRendererDensity } from './pixi-density.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
 const BACKGROUND_COLOR = new Color('#07111f');
@@ -80,6 +81,8 @@ export class PixiSongListView {
       backgroundAlpha: 0,
       eventMode: 'static',
       resizeTo: container,
+      resolution: resolvePixiRendererResolution(),
+      autoDensity: true,
     });
     this.mountedContainer = container;
     this.app.canvas.tabIndex = 0;
@@ -90,7 +93,10 @@ export class PixiSongListView {
     this.app.canvas.addEventListener('wheel', this.handleWheel, { passive: false });
     this.app.canvas.addEventListener('keydown', this.handleKeyDown);
     this.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
-    this.resizeObserver = new ResizeObserver(() => this.render());
+    this.resizeObserver = new ResizeObserver(() => {
+      this.syncRendererDensity();
+      this.render();
+    });
     this.resizeObserver.observe(container);
     this.render();
   }
@@ -188,6 +194,7 @@ export class PixiSongListView {
   };
 
   private render(): void {
+    this.syncRendererDensity();
     const width = this.app.screen.width;
     const height = this.app.screen.height;
 
@@ -228,6 +235,13 @@ export class PixiSongListView {
       row.position.set(PADDING * 2, y);
       this.rows.addChild(row);
     }
+  }
+
+  private syncRendererDensity(): void {
+    if (!this.mountedContainer) {
+      return;
+    }
+    syncPixiRendererDensity(this.app, this.mountedContainer);
   }
 
   private createRow(song: BrowserSongEntry, width: number): Container {

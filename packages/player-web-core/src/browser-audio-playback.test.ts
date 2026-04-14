@@ -4,6 +4,7 @@ import {
   BrowserAudioPlayback,
   type BrowserAudioBufferSourceNodeLike,
   type BrowserAudioContextLike,
+  type BrowserDecodedAudioBuffer,
   type BrowserAudioDestinationLike,
   type BrowserAudioGainNodeLike,
 } from './browser-audio-playback.ts';
@@ -42,10 +43,14 @@ class FakeAudioContext implements BrowserAudioContextLike {
   public resumeCalls = 0;
   public suspendCalls = 0;
   public closeCalls = 0;
+  public readonly pendingDecodes: Array<{ bytes: Uint8Array; resolve: (value: BrowserDecodedAudioBuffer) => void }> = [];
 
-  public async decodeAudioData(audioData: ArrayBuffer): Promise<object> {
-    this.decodedAudio.push(new Uint8Array(audioData));
-    return {};
+  public decodeAudioData(audioData: ArrayBuffer): Promise<BrowserDecodedAudioBuffer> {
+    const bytes = new Uint8Array(audioData);
+    this.decodedAudio.push(bytes);
+    return new Promise((resolve) => {
+      this.pendingDecodes.push({ bytes, resolve });
+    });
   }
 
   public createBufferSource(): FakeBufferSourceNode {
@@ -77,7 +82,7 @@ class FakeAudioContext implements BrowserAudioContextLike {
 }
 
 describe('player-web-core browser audio playback', () => {
-  test('decodes resolved samples and schedules them on start', async () => {
+  test('starts before all sample decodes finish and schedules audio in real time', async () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;
     json.resources.wav['01'] = 'keys/kick.wav';
@@ -102,18 +107,87 @@ describe('player-web-core browser audio playback', () => {
 
     const preparation = await playback.prepare();
     const leadSeconds = playback.start();
-    await playback.pause();
-    await playback.resume();
-    await playback.dispose();
+    playback.update(0);
 
     expect(preparation.status).toBe('ready');
-    expect(preparation.decodedSampleCount).toBe(1);
+    expect(preparation.decodedSampleCount).toBe(0);
     expect(audioContext.decodedAudio).toHaveLength(1);
+    expect(audioContext.pendingDecodes).toHaveLength(1);
+    expect(audioContext.sourceNodes).toHaveLength(0);
+
+    await playback.pause();
+    await playback.resume();
+
+    audioContext.pendingDecodes[0]?.resolve({ duration: 1 });
+    await flushPromises();
+    await flushPromises();
+    playback.update(0);
+    await playback.dispose();
+
     expect(leadSeconds).toBeCloseTo(0.125, 9);
     expect(audioContext.sourceNodes).toHaveLength(1);
-    expect(audioContext.sourceNodes[0]?.starts).toEqual([{ when: 10.125, offset: 0, duration: undefined }]);
+    expect(audioContext.sourceNodes[0]?.starts).toEqual([{ when: 10.125, offset: 0, duration: 1 }]);
     expect(audioContext.resumeCalls).toBe(2);
     expect(audioContext.suspendCalls).toBe(1);
     expect(audioContext.closeCalls).toBe(1);
   });
+
+  test('manual mode skips autoplay note scheduling but still allows manual triggers', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.wav['01'] = 'audio/bgm.wav';
+    json.resources.wav['02'] = 'audio/key.wav';
+    json.events.push(
+      {
+        measure: 0,
+        channel: '01',
+        position: [0, 1],
+        value: '01',
+      },
+      {
+        measure: 0,
+        channel: '11',
+        position: [0, 1],
+        value: '02',
+      },
+    );
+
+    const source: BrowserSongAssetSource = {
+      id: 'source',
+      kind: 'directory',
+      label: 'Source',
+      files: new Map([
+        ['audio/bgm.wav', Uint8Array.of(1, 2, 3, 4)],
+        ['audio/key.wav', Uint8Array.of(5, 6, 7, 8)],
+      ]),
+    };
+    const audioContext = new FakeAudioContext();
+    const playback = new BrowserAudioPlayback(json, source, 'chart.bms', {
+      createAudioContext: () => audioContext,
+      startLeadSeconds: 0.125,
+      mode: 'manual',
+    });
+
+    const preparation = await playback.prepare();
+    playback.start();
+    audioContext.pendingDecodes.splice(0).forEach((decode) => decode.resolve({ duration: 1 }));
+    await flushPromises();
+    await flushPromises();
+    playback.update(0);
+
+    expect(preparation.scheduledTriggerCount).toBe(1);
+    expect(audioContext.sourceNodes).toHaveLength(1);
+    expect(audioContext.sourceNodes[0]?.starts).toEqual([{ when: 10.125, offset: 0, duration: 1 }]);
+
+    playback.triggerEvent(json.events[1]!);
+
+    expect(audioContext.sourceNodes).toHaveLength(2);
+    expect(audioContext.sourceNodes[1]?.starts).toEqual([{ when: 10.01, offset: 0, duration: 1 }]);
+
+    await playback.dispose();
+  });
 });
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+}

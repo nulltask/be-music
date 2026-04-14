@@ -20,31 +20,37 @@ body {
 }
 
 .shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 20px;
+  position: relative;
   box-sizing: border-box;
-  min-height: 100%;
-  padding: 20px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-right: 360px;
 }
 
 .canvas-panel {
-  min-height: 720px;
+  height: 100vh;
+  height: 100dvh;
   border: 1px solid rgba(146, 182, 214, 0.18);
   border-radius: 24px;
   overflow: hidden;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(18px);
-}
-
-.canvas-panel {
-  height: 100%;
+  box-sizing: border-box;
 }
 
 .sidebar {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 320px;
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
 }
 
 .sidebar-card {
@@ -112,11 +118,20 @@ body {
 
 @media (max-width: 1000px) {
   .shell {
-    grid-template-columns: 1fr;
+    min-height: auto;
+    padding-right: 0;
   }
 
   .canvas-panel {
+    height: min(100dvh, 720px);
     min-height: 560px;
   }
 
+  .sidebar {
+    position: static;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
 }
