@@ -6,7 +6,7 @@ import type {
   BmsonSoundNoteEntry,
   BmsonStopEventEntry,
 } from '@be-music/json';
-import { normalizeSortedUniqueNonNegativeIntegers } from '@be-music/utils';
+import { normalizeSortedUniqueNonNegativeIntegers } from './number-utils.ts';
 
 export interface BmsonInfo {
   title?: string;

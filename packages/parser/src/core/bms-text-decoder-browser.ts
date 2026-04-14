@@ -1,5 +1,3 @@
-import iconv from 'iconv-lite';
-
 const OBJECT_DATA_LINE = /^#(\d{3})([0-9A-Z]{2})\s*:\s*(.+)\s*$/i;
 const HEADER_LINE = /^#([A-Z][A-Z0-9_]*)(?:\s+(.+))?$/i;
 const BMS_KNOWN_COMMAND_LINE =
@@ -7,10 +5,23 @@ const BMS_KNOWN_COMMAND_LINE =
 
 type DetectedBmsEncoding = 'utf8' | 'shift_jis' | 'euc-jp' | 'latin1' | 'utf16le' | 'utf16be';
 
+type BrowserDecodeCandidate = {
+  encoding: DetectedBmsEncoding;
+  label: string;
+  bias: number;
+};
+
 export interface DecodedBmsText {
   encoding: DetectedBmsEncoding;
   text: string;
 }
+
+const BROWSER_DECODE_CANDIDATES: readonly BrowserDecodeCandidate[] = [
+  { encoding: 'shift_jis', label: 'shift-jis', bias: 5 },
+  { encoding: 'utf8', label: 'utf-8', bias: 4 },
+  { encoding: 'euc-jp', label: 'euc-jp', bias: 3 },
+  { encoding: 'latin1', label: 'iso-8859-1', bias: -5 },
+] as const;
 
 export function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
   if (hasUtf8Bom(buffer)) {
@@ -38,18 +49,14 @@ export function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
     };
   }
 
-  const candidates: Array<{ encoding: DetectedBmsEncoding; bias: number }> = [
-    { encoding: 'shift_jis', bias: 5 },
-    { encoding: 'utf8', bias: 4 },
-    { encoding: 'euc-jp', bias: 3 },
-    { encoding: 'latin1', bias: -5 },
-  ];
-
   let best: DecodedBmsText | undefined;
   let bestScore = Number.NEGATIVE_INFINITY;
 
-  for (const candidate of candidates) {
-    const text = iconv.decode(buffer, candidate.encoding);
+  for (const candidate of BROWSER_DECODE_CANDIDATES) {
+    const text = tryDecodeText(buffer, candidate.label);
+    if (!text) {
+      continue;
+    }
     const score = scoreDecodedBmsText(text, candidate.bias);
     if (score > bestScore) {
       bestScore = score;
@@ -66,6 +73,18 @@ export function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
       text: decodeUtf8Text(buffer),
     }
   );
+}
+
+export function decodeUtf8Text(buffer: Uint8Array): string {
+  return decodeText(buffer, 'utf-8', hasUtf8Bom(buffer) ? 3 : 0);
+}
+
+function tryDecodeText(buffer: Uint8Array, encoding: string, offset = 0): string | undefined {
+  try {
+    return decodeText(buffer, encoding, offset);
+  } catch {
+    return undefined;
+  }
 }
 
 function scoreDecodedBmsText(text: string, bias: number): number {
@@ -168,10 +187,6 @@ function collectTextStatistics(text: string): {
   };
 }
 
-export function decodeUtf8Text(buffer: Uint8Array): string {
-  return decodeText(buffer, 'utf-8', hasUtf8Bom(buffer) ? 3 : 0);
-}
-
 function decodeUtf16LeText(buffer: Uint8Array): string {
   const offset = hasUtf16LeBom(buffer) ? 2 : 0;
   return decodeText(buffer, 'utf-16le', offset);
@@ -184,8 +199,8 @@ function decodeUtf16BeText(buffer: Uint8Array): string {
   const swapped = new Uint8Array(evenLength);
 
   for (let index = 0; index < evenLength; index += 2) {
-    swapped[index] = source[index + 1];
-    swapped[index + 1] = source[index];
+    swapped[index] = source[index + 1]!;
+    swapped[index + 1] = source[index]!;
   }
   return decodeText(swapped, 'utf-16le');
 }

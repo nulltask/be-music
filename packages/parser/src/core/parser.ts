@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises';
-import { extname } from 'node:path';
 import {
   BMS_JSON_FORMAT,
   type BmsControlFlowCommand,
@@ -13,8 +11,7 @@ import {
   normalizeChannel,
   normalizeObjectKey,
 } from '@be-music/json';
-import { normalizeAsciiBase36Code } from '@be-music/utils';
-import { decodeBmsText, decodeUtf8Text } from './bms-text-decoder.ts';
+import { normalizeAsciiBase36Code } from './number-utils.ts';
 import {
   collectNonZeroObjectTokens,
   normalizeBmsonNoteLength,
@@ -380,25 +377,6 @@ export function parseChart(input: string, formatHint?: string): BeMusicJson {
   return parseBms(input);
 }
 
-export interface ParseChartFileOptions {
-  signal?: AbortSignal;
-}
-
-export async function parseChartFile(filePath: string, options: ParseChartFileOptions = {}): Promise<BeMusicJson> {
-  const buffer = await readFile(filePath, {
-    signal: options.signal,
-  });
-  const extension = extname(filePath).toLowerCase();
-  if (extension === '.bmson') {
-    return parseBmson(decodeUtf8Text(buffer));
-  }
-  if (extension === '.json') {
-    return parseChart(decodeUtf8Text(buffer), 'json');
-  }
-  const decoded = decodeBmsText(buffer);
-  return parseBms(decoded.text);
-}
-
 export interface ResolveBmsControlFlowOptions {
   random?: () => number;
 }
@@ -409,8 +387,6 @@ export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsCon
     applyHeader: pushHeaderLine,
   });
 }
-
-export { decodeBmsText };
 
 function pushObjectDataLine(
   json: BeMusicJson,

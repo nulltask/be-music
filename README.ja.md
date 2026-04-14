@@ -13,6 +13,9 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/stringifier`: JSON から `.bms` / `.bmson` への文字列化
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
 - `@be-music/player`: CLI プレイヤー (オートプレイ / キーボード演奏 / TUI)
+- `@be-music/player-web-core`: 楽曲ブラウズと将来の gameplay 描画に向けた Vanilla + PixiJS の browser core
+- `@be-music/player-react`: browser PixiJS core 向けの React adapter
+- `@be-music/player-vue`: browser PixiJS core 向けの Vue adapter
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
 
 ## 必要環境
@@ -55,6 +58,15 @@ pnpm run release:version
 - private な repository root の `package.json` は `0.0.0` のままで、release 対象 version は `packages/*/package.json` で管理します
 
 tag は `@be-music/package-name@x.y.z` 形式で作成されます。
+
+## browser player の土台
+
+browser 実装は、framework 非依存の PixiJS core と薄い UI adapter に分けています。
+
+- `@be-music/player-web-core` は browser 向けの楽曲ライブラリモデル、drag-and-drop 読み込み、ZIP/folder 取り込み、PixiJS 描画を担当します
+- `@be-music/player-react` と `@be-music/player-vue` は同じ core を framework component として mount します
+- 現状の demo はローカル source 前提で、ローカル folder または ZIP archive を drop すると browser 上に楽曲一覧を構築します
+- この source model は、将来的な registry server 経由の ZIP 読み込みへも renderer 境界を変えずに拡張する想定です
 
 ## 仕様書
 
@@ -199,6 +211,18 @@ pnpm run editor import chart.bms chart.json
 pnpm run editor add-note chart.json 0 11 1 2 01
 pnpm run editor export chart.json chart.bms
 ```
+
+### 6. browser 楽曲ライブラリ demo
+
+```bash
+pnpm run player:web
+```
+
+terminal に表示された Vite dev server を開いて、browser surface に次のどれかを drop してください。
+
+- ローカルの楽曲 folder
+- BMS/BMSON を含む ZIP archive
+- fallback 用の単体 chart file 群
 
 ## player 操作
 

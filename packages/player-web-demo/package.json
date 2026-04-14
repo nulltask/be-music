@@ -1,0 +1,30 @@
+{
+  "name": "@be-music/player-web-demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Vite demo app for the be-music browser song library",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "prebuild": "pnpm --filter @be-music/json build && pnpm --filter @be-music/chart build && pnpm --filter @be-music/utils build && pnpm --filter @be-music/parser build && pnpm --filter @be-music/player-web-core build && pnpm --filter @be-music/player-react build",
+    "build": "vite build",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "predev": "pnpm --filter @be-music/json build && pnpm --filter @be-music/chart build && pnpm --filter @be-music/utils build && pnpm --filter @be-music/parser build && pnpm --filter @be-music/player-web-core build && pnpm --filter @be-music/player-react build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
+    "lint": "oxlint src",
+    "lint:fix": "oxlint src --fix",
+    "format": "oxfmt src --write",
+    "format:check": "oxfmt src --check"
+  },
+  "dependencies": {
+    "@be-music/player-react": "workspace:*",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2"
+  }
+}

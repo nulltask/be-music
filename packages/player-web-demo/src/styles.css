@@ -1,0 +1,122 @@
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, rgba(55, 94, 148, 0.24), transparent 35%),
+    linear-gradient(180deg, #040912 0%, #08111d 100%);
+  color: #e8eef7;
+  font-family:
+    "Avenir Next",
+    "Helvetica Neue",
+    Helvetica,
+    Arial,
+    sans-serif;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 20px;
+}
+
+.canvas-panel {
+  min-height: 720px;
+  border: 1px solid rgba(146, 182, 214, 0.18);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(18px);
+}
+
+.canvas-panel {
+  height: 100%;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sidebar-card {
+  background: rgba(9, 20, 34, 0.88);
+  border: 1px solid rgba(146, 182, 214, 0.14);
+  border-radius: 20px;
+  padding: 18px;
+}
+
+.sidebar-card h1,
+.sidebar-card h2,
+.sidebar-card p {
+  margin: 0;
+}
+
+.sidebar-card h1 {
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+
+.sidebar-card h2 {
+  font-size: 14px;
+  color: #8ba3bb;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sidebar-card p,
+.sidebar-card li {
+  color: #d9e3ef;
+  line-height: 1.55;
+}
+
+.sidebar-card ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stat {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(19, 39, 61, 0.92);
+}
+
+.stat-label {
+  display: block;
+  color: #7dd3fc;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.stat-value {
+  display: block;
+  font-size: 24px;
+  margin-top: 6px;
+}
+
+@media (max-width: 1000px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .canvas-panel {
+    min-height: 560px;
+  }
+
+}

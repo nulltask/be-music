@@ -1,7 +1,7 @@
 {
-  "name": "@be-music/json",
+  "name": "@be-music/player-react",
   "version": "0.1.0",
-  "description": "Internal BMS/BMSON intermediate representation for be-music",
+  "description": "React adapter for the be-music browser PixiJS core",
   "license": "MIT",
   "files": [
     "dist"
@@ -17,14 +17,24 @@
     }
   },
   "scripts": {
-    "build:bundle": "tsdown",
     "build": "tsdown",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt . --write",
-    "format:check": "oxfmt . --check",
-    "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts"
+    "format:check": "oxfmt . --check"
+  },
+  "dependencies": {
+    "@be-music/player-web-core": "workspace:*",
+    "react": "^19.2.5"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2"
   }
 }

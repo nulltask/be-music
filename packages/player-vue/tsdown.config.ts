@@ -1,14 +1,12 @@
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createPackageTsdownConfig } from '../../tsdown.package.config.mts';
+import { createBrowserPackageTsdownConfig } from '../../tsdown.browser.package.config.mts';
 
 const packageDir = dirname(fileURLToPath(import.meta.url));
 
-export default createPackageTsdownConfig({
+export default createBrowserPackageTsdownConfig({
   packageDir,
   entries: {
     index: 'src/index.ts',
-    browser: 'src/browser.ts',
-    cli: 'src/cli.ts',
   },
 });

@@ -4,11 +4,22 @@ import { defineConfig } from 'vitest/config';
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 
-const workspacePackages = ['utils', 'json', 'chart', 'parser', 'stringifier', 'audio-renderer', 'player', 'editor'] as const;
+const workspacePackages = [
+  'utils',
+  'json',
+  'chart',
+  'parser',
+  'stringifier',
+  'audio-renderer',
+  'player',
+  'editor',
+  'player-web-core',
+] as const;
 
 const workspaceAliases = Object.fromEntries(
   workspacePackages.map((name) => [`@be-music/${name}`, resolve(rootDir, `packages/${name}/src/index.ts`)]),
 );
+workspaceAliases['@be-music/parser/browser'] = resolve(rootDir, 'packages/parser/src/browser.ts');
 
 const workspaceProjects = workspacePackages.map((name) => ({
   extends: true as const,
@@ -86,6 +97,12 @@ export default defineConfig({
           branches: 51,
           functions: 64,
           lines: 59,
+        },
+        'packages/player-web-core/src/**/*.ts': {
+          statements: 70,
+          branches: 58,
+          functions: 72,
+          lines: 70,
         },
         'packages/stringifier/src/**/*.ts': {
           statements: 87,

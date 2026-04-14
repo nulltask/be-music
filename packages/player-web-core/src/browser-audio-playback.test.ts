@@ -1,0 +1,119 @@
+import { createEmptyJson } from '@be-music/json';
+import { describe, expect, test } from 'vitest';
+import {
+  BrowserAudioPlayback,
+  type BrowserAudioBufferSourceNodeLike,
+  type BrowserAudioContextLike,
+  type BrowserAudioDestinationLike,
+  type BrowserAudioGainNodeLike,
+} from './browser-audio-playback.ts';
+import type { BrowserSongAssetSource } from './types.ts';
+
+class FakeGainNode implements BrowserAudioGainNodeLike {
+  public readonly gain = { value: 1 };
+  public readonly destinations: BrowserAudioDestinationLike[] = [];
+
+  public connect(destination: BrowserAudioDestinationLike): void {
+    this.destinations.push(destination);
+  }
+}
+
+class FakeBufferSourceNode implements BrowserAudioBufferSourceNodeLike {
+  public buffer = null;
+  public readonly starts: Array<{ when: number; offset?: number; duration?: number }> = [];
+  public readonly destinations: Array<BrowserAudioGainNodeLike | BrowserAudioDestinationLike> = [];
+
+  public connect(destination: BrowserAudioGainNodeLike | BrowserAudioDestinationLike): void {
+    this.destinations.push(destination);
+  }
+
+  public start(when: number, offset?: number, duration?: number): void {
+    this.starts.push({ when, offset, duration });
+  }
+}
+
+class FakeAudioContext implements BrowserAudioContextLike {
+  public currentTime = 10;
+  public state = 'suspended';
+  public readonly destination: BrowserAudioDestinationLike = {};
+  public readonly decodedAudio: Uint8Array[] = [];
+  public readonly gainNodes: FakeGainNode[] = [];
+  public readonly sourceNodes: FakeBufferSourceNode[] = [];
+  public resumeCalls = 0;
+  public suspendCalls = 0;
+  public closeCalls = 0;
+
+  public async decodeAudioData(audioData: ArrayBuffer): Promise<object> {
+    this.decodedAudio.push(new Uint8Array(audioData));
+    return {};
+  }
+
+  public createBufferSource(): FakeBufferSourceNode {
+    const node = new FakeBufferSourceNode();
+    this.sourceNodes.push(node);
+    return node;
+  }
+
+  public createGain(): FakeGainNode {
+    const node = new FakeGainNode();
+    this.gainNodes.push(node);
+    return node;
+  }
+
+  public async resume(): Promise<void> {
+    this.state = 'running';
+    this.resumeCalls += 1;
+  }
+
+  public async suspend(): Promise<void> {
+    this.state = 'suspended';
+    this.suspendCalls += 1;
+  }
+
+  public async close(): Promise<void> {
+    this.state = 'closed';
+    this.closeCalls += 1;
+  }
+}
+
+describe('player-web-core browser audio playback', () => {
+  test('decodes resolved samples and schedules them on start', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.wav['01'] = 'keys/kick.wav';
+    json.events.push({
+      measure: 0,
+      channel: '11',
+      position: [0, 1],
+      value: '01',
+    });
+
+    const source: BrowserSongAssetSource = {
+      id: 'source',
+      kind: 'directory',
+      label: 'Source',
+      files: new Map([['keys/kick.wav', Uint8Array.of(1, 2, 3, 4)]]),
+    };
+    const audioContext = new FakeAudioContext();
+    const playback = new BrowserAudioPlayback(json, source, 'chart.bms', {
+      createAudioContext: () => audioContext,
+      startLeadSeconds: 0.125,
+    });
+
+    const preparation = await playback.prepare();
+    const leadSeconds = playback.start();
+    await playback.pause();
+    await playback.resume();
+    await playback.dispose();
+
+    expect(preparation.status).toBe('ready');
+    expect(preparation.decodedSampleCount).toBe(1);
+    expect(audioContext.decodedAudio).toHaveLength(1);
+    expect(leadSeconds).toBeCloseTo(0.125, 9);
+    expect(audioContext.sourceNodes).toHaveLength(1);
+    expect(audioContext.sourceNodes[0]?.starts).toEqual([{ when: 10.125, offset: 0, duration: undefined }]);
+    expect(audioContext.resumeCalls).toBe(2);
+    expect(audioContext.suspendCalls).toBe(1);
+    expect(audioContext.closeCalls).toBe(1);
+  });
+});

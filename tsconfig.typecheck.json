@@ -7,7 +7,8 @@
     "declaration": false,
     "declarationMap": false,
     "paths": {
-      "@be-music/*": ["./packages/*/src/index.ts"]
+      "@be-music/*": ["./packages/*/src/index.ts"],
+      "@be-music/parser/browser": ["./packages/parser/src/browser.ts"]
     }
   },
   "include": ["packages/*/src/**/*.ts", "scripts/**/*.ts", "vite.package.config.ts", "vitest.config.ts"],

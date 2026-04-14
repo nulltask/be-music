@@ -13,6 +13,9 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/stringifier`: Stringization from JSON to `.bms` / `.bmson`
 - `@be-music/audio-renderer`: Render the music score and output `.wav` / `.aiff`
 - `@be-music/player`: CLI player (autoplay / keyboard performance / TUI)
+- `@be-music/player-web-core`: Vanilla + PixiJS browser core for song browsing and future gameplay rendering
+- `@be-music/player-react`: React adapter for the browser PixiJS core
+- `@be-music/player-vue`: Vue adapter for the browser PixiJS core
 - `@be-music/editor`: CLI editor (import/edit/export)
 
 ## Required environment
@@ -55,6 +58,15 @@ pnpm run release:version
 - The private repository root `package.json` stays at `0.0.0`; releasable versions are tracked in `packages/*/package.json`.
 
 The tag is created in the format `@be-music/package-name@x.y.z`.
+
+## Browser Player Foundation
+
+The browser implementation is split into a framework-agnostic PixiJS core plus thin UI adapters.
+
+- `@be-music/player-web-core` provides the browser song library model, drag-and-drop loading, ZIP/folder ingestion, and PixiJS rendering
+- `@be-music/player-react` and `@be-music/player-vue` mount the same core as framework components
+- The current demo focuses on local sources: dropping a local folder or ZIP archive builds a song list in the browser
+- This source model is intended to evolve into registry-backed ZIP loading later without changing the renderer boundary
 
 ## Specifications
 
@@ -199,6 +211,18 @@ pnpm run editor import chart.bms chart.json
 pnpm run editor add-note chart.json 0 11 1 2 01
 pnpm run editor export chart.json chart.bms
 ```
+
+### 6. Browser song library demo
+
+```bash
+pnpm run player:web
+```
+
+Then open the Vite dev server shown in the terminal and drop one of the following onto the browser surface:
+
+- a local song folder
+- a ZIP archive containing BMS/BMSON files
+- loose chart files as a fallback
 
 ## Player Operations
 
