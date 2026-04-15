@@ -18,6 +18,7 @@
   },
   "scripts": {
     "build": "tsdown",
+    "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
     "lint": "oxlint .",

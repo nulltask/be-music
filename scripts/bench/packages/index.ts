@@ -10,6 +10,8 @@ import { editorBenchmarkPackage } from './editor.ts';
 import { jsonBenchmarkPackage } from './json.ts';
 import { parserBenchmarkPackage } from './parser.ts';
 import { playerBenchmarkPackage } from './player.ts';
+import { playerReactBenchmarkPackage } from './player-react.ts';
+import { playerWebCoreBenchmarkPackage } from './player-web-core.ts';
 import { stringifierBenchmarkPackage } from './stringifier.ts';
 import { utilsBenchmarkPackage } from './utils.ts';
 
@@ -22,6 +24,8 @@ export const PACKAGE_DEFINITIONS: Record<PackageName, BenchmarkPackageDefinition
   editor: editorBenchmarkPackage,
   'audio-renderer': audioRendererBenchmarkPackage,
   player: playerBenchmarkPackage,
+  'player-web-core': playerWebCoreBenchmarkPackage,
+  'player-react': playerReactBenchmarkPackage,
 };
 
 export function registerAllExportsBenchmarkCases(define: DefineBenchmarkCase): void {
