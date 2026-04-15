@@ -1,4 +1,7 @@
 {
   "extends": "../../tsconfig.typecheck.json",
-  "include": ["src/**/*.ts"]
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

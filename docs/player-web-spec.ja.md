@@ -63,6 +63,10 @@ CLI / Node 側 player の正規 runtime 仕様は [`player-spec.ja.md`](./player
 - LNOBJ と BMS legacy LN の抽出
 - 全譜面 prerender を行わない Web Audio ベースのリアルタイム再生
 - browser High Speed の変更
+- gameplay 開始前の BMS control flow 解決
+- `subartist`, `bannerPath`, `totalNotes`, `player`, `rank`, `rankLabel`, `bpmInitial`, `bpmMin`, `bpmMax` を含む song summary 拡張
+- browser song summary 向けの決定的な `previewContinueKey` 導出
+- `#PREVIEW` 優先と fallback preview scheduler を備えた song-list preview playback
 
 ### 実装済みだが CLI より簡略化されているもの
 
@@ -74,17 +78,7 @@ CLI / Node 側 player の正規 runtime 仕様は [`player-spec.ja.md`](./player
 
 以下は CLI player には実装されているが、browser player ではまだ未実装または未追従の chart 関連挙動です。
 
-### 1. BMS 制御構文の解決
-
-CLI player は再生開始前に `#RANDOM`, `#IF`, `#ELSE`, `#ENDIF`, `#SWITCH` などの制御構文を解決します。
-現在の browser player は、楽曲一覧生成時も gameplay 生成時も、読み込んだ chart をそのまま使っており、BMS control flow を先に解いていません。
-
-影響:
-
-- 分岐依存のノート配置が CLI と一致しない
-- total notes、preview identity、BGA cue、scroll 挙動などの下流情報もずれる
-
-### 2. `#SCROLLxx` と `#SPEEDxx`
+### 1. `#SCROLLxx` と `#SPEEDxx`
 
 CLI player は専用の scroll timeline / speed timeline を構築し、ノート描画距離へ反映します。
 browser player は現在、固定の time-to-distance 変換で描画しており、scroll/speed timeline の変化を gameplay 描画に反映していません。
@@ -94,7 +88,7 @@ browser player は現在、固定の time-to-distance 変換で描画してお�
 - scroll gimmick が CLI と一致しない
 - 0、負値、往復、振動系の scroll 挙動が再現されない
 
-### 3. BGA / layer / POOR / video / loading assets
+### 2. BGA / layer / POOR / video / loading assets
 
 CLI player は次を扱います。
 
@@ -110,38 +104,17 @@ CLI player は次を扱います。
 
 browser player には、gameplay 中や楽曲一覧における同等の BGA パイプラインがまだありません。
 
-### 4. 不可視ノートと lane-fallback keysound
+### 3. 不可視ノートと lane-fallback keysound
 
 CLI player は不可視ノートを別抽出し、manual input 補助と lane-fallback keysound に使います。
 browser player は現在、可視ノートと地雷だけを判定対象にしており、不可視ノート抽出と lane-fallback sample trigger を実装していません。
 
-### 5. 動的判定幅変更
+### 4. 動的判定幅変更
 
 CLI player は `#xxxA0` と `#EXRANKxx` による runtime 中の judge window 変更に対応しています。
 browser player は gameplay 開始時に 1 回 judge window を解決するだけで、再生中の変更を反映しません。
 
-### 6. より豊富な chart summary
-
-CLI の選曲フローは次のような summary を持ちます。
-
-- `subartist`
-- `bannerPath`
-- `previewContinueKey`
-- `totalNotes`
-- `player`
-- `rank`
-- `rankLabel`
-- `bpmMin`
-- `bpmMax`
-
-browser の song library はまだこの一式を露出していません。
-
-### 7. Preview 音声
-
-CLI player には、`#PREVIEW` を優先し、必要なら fallback preview も使う専用 preview controller があります。
-browser player の楽曲一覧には、まだ同等の preview playback がありません。
-
-### 8. UI/BGA 由来の再生終了延長
+### 5. UI/BGA 由来の再生終了延長
 
 CLI player は、UI/BGA runtime の都合で playback end を延長できます。
 browser player は現在、主に chart event と note tail から duration を決めています。
@@ -152,24 +125,21 @@ browser player は次の順序で拡張するのが望ましいです。
 
 ### Phase 1: chart 解釈の正しさを揃える
 
-目標:
+状態:
+
+- 完了
+
+完了済み:
 
 - BMS control flow を song summary と gameplay の前に解決する
 - browser 側 song metadata を CLI 選曲 summary に近づける
-- preview identity と preview playback の土台を入れる
-
-作業項目:
-
-1. `BrowserSongEntry` の gameplay data を組む前に browser 側で control flow を解決する
-2. browser song summary に `subartist`, `bannerPath`, `previewContinueKey`, `totalNotes`, `player`, `rank`, `rankLabel`, `bpmMin`, `bpmMax` を追加する
-3. `#PREVIEW` 優先 + CLI 互換 fallback 方針で song-list preview playback を追加する
-
-この順にする理由:
-
-- control flow の正しさは後続のすべての chart 派生機能に影響する
-- summary parity と preview playback は UX 改善効果が大きく、後で作り直しにくい
+- 決定的な preview identity と song-list preview playback を追加する
 
 ### Phase 2: gameplay 意味論の追従
+
+状態:
+
+- 次のステップ
 
 目標:
 
@@ -227,4 +197,3 @@ browser player は現在 local-first です。
 - asset resolution policy
 - caching policy
 - browser security constraints
-

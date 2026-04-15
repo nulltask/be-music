@@ -17,9 +17,9 @@
     }
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "vite build && vue-tsc -p tsconfig.declarations.json --declaration --emitDeclarationOnly",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
+    "typecheck": "vue-tsc -p tsconfig.typecheck.json --pretty",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt . --write",
@@ -31,5 +31,9 @@
   },
   "peerDependencies": {
     "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "vue-tsc": "^3.2.6"
   }
 }

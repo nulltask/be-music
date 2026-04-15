@@ -7,6 +7,6 @@ const packageDir = dirname(fileURLToPath(import.meta.url));
 export default createBrowserPackageTsdownConfig({
   packageDir,
   entries: {
-    index: 'src/index.ts',
+    index: 'src/index.tsx',
   },
 });

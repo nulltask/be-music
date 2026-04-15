@@ -267,10 +267,12 @@ export class PixiSongListView {
     title.position.set(16, 10);
 
     const metaText = compactMeta([
-      song.artist,
+      compactMeta([song.artist, song.subartist]),
       song.genre,
       typeof song.playLevel === 'number' || typeof song.playLevel === 'string' ? `LEVEL ${song.playLevel}` : undefined,
-      typeof song.bpm === 'number' ? `BPM ${formatBpm(song.bpm)}` : undefined,
+      song.rankLabel ? `RANK ${song.rankLabel}` : undefined,
+      resolveSongBpmLabel(song),
+      typeof song.totalNotes === 'number' ? `NOTES ${song.totalNotes}` : undefined,
     ]);
     const meta = new Text({
       text: metaText,
@@ -378,6 +380,19 @@ function compactMeta(parts: Array<string | undefined>): string {
 
 function formatBpm(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
+}
+
+function resolveSongBpmLabel(song: BrowserSongEntry): string | undefined {
+  if (typeof song.bpmMin === 'number' && typeof song.bpmMax === 'number') {
+    if (song.bpmMin === song.bpmMax) {
+      return `BPM ${formatBpm(song.bpmMin)}`;
+    }
+    return `BPM ${formatBpm(song.bpmMin)}-${formatBpm(song.bpmMax)}`;
+  }
+  if (typeof song.bpm === 'number') {
+    return `BPM ${formatBpm(song.bpm)}`;
+  }
+  return undefined;
 }
 
 function clamp(value: number, min: number, max: number): number {

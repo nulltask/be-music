@@ -1,4 +1,4 @@
-import { createElement, useEffect, useRef, type ReactElement } from 'react';
+import { useEffect, useRef, type DragEvent, type ReactElement } from 'react';
 import { BrowserSongLibrary, type BrowserSongLibraryOptions, type BrowserSongCollection, type BrowserSongEntry } from '@be-music/player-web-core';
 
 export interface BeMusicBrowserLibraryProps {
@@ -67,23 +67,27 @@ export function BeMusicBrowserLibrary(props: BeMusicBrowserLibraryProps): ReactE
     }
   }, [props.statusText]);
 
-  return createElement('div', {
-    className: props.className,
-    onDragOver: props.enableDrop ? handleDragOver : undefined,
-    onDrop: props.enableDrop
-      ? (event: DragEvent) => {
-          handleDragOver(event);
-          const transfer = event.dataTransfer;
-          if (!transfer) {
-            return;
-          }
-          void libraryRef.current?.loadFromDrop(transfer);
-        }
-      : undefined,
-    ref: hostRef,
-  });
+  return (
+    <div
+      className={props.className}
+      onDragOver={props.enableDrop ? handleDragOver : undefined}
+      onDrop={
+        props.enableDrop
+          ? (event) => {
+              handleDragOver(event);
+              const transfer = event.dataTransfer;
+              if (!transfer) {
+                return;
+              }
+              void libraryRef.current?.loadFromDrop(transfer);
+            }
+          : undefined
+      }
+      ref={hostRef}
+    />
+  );
 }
 
-function handleDragOver(event: DragEvent): void {
+function handleDragOver(event: DragEvent<HTMLDivElement>): void {
   event.preventDefault();
 }

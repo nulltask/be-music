@@ -63,6 +63,10 @@ The browser player is intentionally split into a framework-agnostic rendering co
 - LNOBJ and legacy BMS long note extraction
 - Browser audio playback in real time without prerendering the whole chart
 - Browser High Speed adjustment
+- Runtime BMS control flow resolution before gameplay starts
+- Extended song summary fields for `subartist`, `bannerPath`, `totalNotes`, `player`, `rank`, `rankLabel`, `bpmInitial`, `bpmMin`, and `bpmMax`
+- Deterministic `previewContinueKey` derivation for browser song summaries
+- Song-list preview playback with `#PREVIEW` priority and fallback preview scheduling
 
 ### Implemented but simplified relative to the CLI player
 
@@ -74,17 +78,7 @@ The browser player is intentionally split into a framework-agnostic rendering co
 
 The following chart-related behaviors exist in the CLI player but are not yet fully implemented in the browser player.
 
-### 1. BMS control flow resolution
-
-The CLI player resolves `#RANDOM`, `#IF`, `#ELSE`, `#ENDIF`, `#SWITCH`, and related control syntax before playback starts.
-The current browser player uses the loaded chart directly and does not yet resolve BMS control flow before building song summaries or gameplay state.
-
-Impact:
-
-- Branch-dependent note patterns can differ from the CLI player.
-- Downstream metadata such as total notes, preview identity, BGA cues, and scroll behavior can also differ.
-
-### 2. `#SCROLLxx` and `#SPEEDxx`
+### 1. `#SCROLLxx` and `#SPEEDxx`
 
 The CLI player builds dedicated scroll and speed timelines and reflects them in note drawing distance.
 The browser player currently uses a fixed time-to-distance mapping and does not yet interpret scroll/speed timeline changes for gameplay rendering.
@@ -94,7 +88,7 @@ Impact:
 - Scroll gimmicks do not match the CLI player.
 - Zero, negative, oscillating, and bidirectional scroll behavior is not yet reproduced.
 
-### 3. BGA / layer / POOR / video / loading assets
+### 2. BGA / layer / POOR / video / loading assets
 
 The CLI player supports:
 
@@ -110,38 +104,17 @@ The CLI player supports:
 
 The browser player does not yet provide an equivalent BGA pipeline in gameplay or song selection.
 
-### 4. Invisible notes and lane-fallback keysounds
+### 3. Invisible notes and lane-fallback keysounds
 
 The CLI player extracts invisible notes separately and uses them for manual-input assistance and lane-fallback keysound behavior.
 The browser player currently judges only visible notes and landmines and does not implement invisible-note extraction or lane-fallback sample triggering.
 
-### 5. Dynamic judgment rank changes
+### 4. Dynamic judgment rank changes
 
 The CLI player supports runtime judge-window changes through `#xxxA0` and `#EXRANKxx`.
 The browser player currently resolves judge windows once at gameplay start and does not yet update them during playback.
 
-### 6. Richer chart summary fields
-
-The CLI song selection flow computes additional chart summary fields such as:
-
-- `subartist`
-- `bannerPath`
-- `previewContinueKey`
-- `totalNotes`
-- `player`
-- `rank`
-- `rankLabel`
-- `bpmMin`
-- `bpmMax`
-
-The browser song library does not yet expose the full equivalent set.
-
-### 7. Preview audio
-
-The CLI player has a dedicated chart preview controller that prefers `#PREVIEW` and falls back to rendered preview material when needed.
-The browser player currently has no equivalent preview playback in the song list.
-
-### 8. Playback-end extension from UI/BGA assets
+### 5. Playback-end extension from UI/BGA assets
 
 The CLI player can extend playback end based on UI/BGA runtime playback requirements.
 The browser player currently derives duration primarily from chart event timing and note tails.
@@ -152,24 +125,21 @@ The browser player should be expanded in the following order.
 
 ### Phase 1: Correct chart interpretation
 
-Goals:
+Status:
+
+- Complete
+
+Completed work:
 
 - Resolve BMS control flow before song summary generation and gameplay
 - Expand browser song metadata to match the CLI selection summary more closely
-- Add preview identity and preview playback hooks
-
-Tasks:
-
-1. Resolve control flow in the browser before building `BrowserSongEntry` gameplay data.
-2. Extend browser song summary fields with `subartist`, `bannerPath`, `previewContinueKey`, `totalNotes`, `player`, `rank`, `rankLabel`, `bpmMin`, and `bpmMax`.
-3. Add song-list preview playback with `#PREVIEW` priority and a fallback strategy compatible with the CLI player.
-
-Why first:
-
-- Control flow correctness affects every later chart-derived feature.
-- Summary parity and preview playback improve library UX immediately and reduce duplicated rework later.
+- Add deterministic preview identity and song-list preview playback
 
 ### Phase 2: Gameplay semantic parity
+
+Status:
+
+- Next
 
 Goals:
 
@@ -227,4 +197,3 @@ When that remote-loading path is introduced, this document should be extended wi
 - asset resolution policy
 - caching policy
 - browser security constraints
-

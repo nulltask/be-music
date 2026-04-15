@@ -1,6 +1,13 @@
 import { unzipSync } from 'fflate';
 import { type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
-import { decodeBmsText, parseChart } from '@be-music/parser/browser';
+import { decodeBmsText, parseChart, resolveBmsControlFlow } from '@be-music/parser/browser';
+import {
+  resolveDisplayedDifficultyValue,
+  resolveDisplayedJudgeRankLabel,
+  resolveDisplayedJudgeRankValue,
+  resolveDisplayedPlayLevelValue,
+} from '../../player/src/utils.ts';
+import { resolveBrowserPreviewContinueKey } from './browser-preview-identity.ts';
 import type {
   BrowserSongAssetSource,
   BrowserSongCollection,
@@ -8,6 +15,8 @@ import type {
   BrowserSongEntry,
   BrowserSongSourceKind,
 } from './types.ts';
+import { createTimingResolver } from './timing.ts';
+import { extractWebTimedNotes } from './web-playable-notes.ts';
 
 type DropDirectoryEntry = {
   isDirectory: true;
@@ -167,6 +176,8 @@ function parseChartBytes(path: string, bytes: Uint8Array): BeMusicJson {
 }
 
 function createSongEntry(source: BrowserSongAssetSource, chartPath: string, chart: BeMusicJson): BrowserSongEntry {
+  const summaryChart = resolveChartForSongSummary(chart);
+  const bpmSummary = extractChartBpmSummary(summaryChart);
   const normalizedPath = normalizePath(chartPath);
   const slashIndex = normalizedPath.lastIndexOf('/');
   const fileLabel = slashIndex >= 0 ? normalizedPath.slice(slashIndex + 1) : normalizedPath;
@@ -182,11 +193,21 @@ function createSongEntry(source: BrowserSongAssetSource, chartPath: string, char
     title: resolveTitle(chart, fileLabel),
     subtitle: sanitizeText(chart.metadata.subtitle),
     artist: sanitizeText(chart.metadata.artist),
+    subartist: resolveSubartist(chart),
     genre: sanitizeText(chart.metadata.genre),
     comment: sanitizeText(chart.metadata.comment),
-    difficulty: resolveDifficulty(chart),
-    playLevel: resolvePlayLevel(chart),
-    bpm: Number.isFinite(chart.metadata.bpm) && chart.metadata.bpm > 0 ? chart.metadata.bpm : undefined,
+    bannerPath: resolveBannerPath(chart),
+    previewContinueKey: resolveBrowserPreviewContinueKey(summaryChart, source, normalizedPath),
+    totalNotes: extractWebTimedNotes(summaryChart).playableNotes.length,
+    player: Number.isFinite(chart.bms.player) ? chart.bms.player : undefined,
+    difficulty: resolveDisplayedDifficultyValue(chart),
+    rank: resolveDisplayedJudgeRankValue(summaryChart),
+    rankLabel: resolveDisplayedJudgeRankLabel(summaryChart),
+    playLevel: resolveDisplayedPlayLevelValue(chart),
+    bpm: bpmSummary?.initial ?? (Number.isFinite(chart.metadata.bpm) && chart.metadata.bpm > 0 ? chart.metadata.bpm : undefined),
+    bpmInitial: bpmSummary?.initial,
+    bpmMin: bpmSummary?.min,
+    bpmMax: bpmSummary?.max,
     chart,
   };
 }
@@ -195,28 +216,60 @@ function resolveTitle(chart: BeMusicJson, fallbackFileLabel: string): string {
   return sanitizeText(chart.metadata.title) ?? fallbackFileLabel.replace(/\.[^.]+$/, '');
 }
 
-function resolveDifficulty(chart: BeMusicJson): number | undefined {
-  const difficulty = chart.metadata.difficulty;
-  if (typeof difficulty !== 'number' || !Number.isFinite(difficulty)) {
-    return undefined;
+function resolveSubartist(chart: BeMusicJson): string | undefined {
+  if (Array.isArray(chart.bmson.info.subartists) && chart.bmson.info.subartists.length > 0) {
+    const values = chart.bmson.info.subartists
+      .map((value) => sanitizeText(value))
+      .filter((value): value is string => value !== undefined);
+    if (values.length > 0) {
+      return values.join(', ');
+    }
   }
-  const normalized = Math.trunc(difficulty);
-  return normalized >= 1 && normalized <= 5 ? normalized : undefined;
+  return sanitizeText(chart.metadata.extras.SUBARTIST);
 }
 
-function resolvePlayLevel(chart: BeMusicJson): BeMusicPlayLevel | undefined {
-  const playLevel = chart.metadata.playLevel;
-  if (typeof playLevel === 'number') {
-    return Number.isFinite(playLevel) && playLevel >= 0 ? playLevel : undefined;
+function resolveBannerPath(chart: BeMusicJson): string | undefined {
+  const bmsonBanner = sanitizeText(chart.bmson.info.bannerImage);
+  if (bmsonBanner) {
+    return bmsonBanner;
   }
-  if (typeof playLevel === 'string') {
-    const trimmed = playLevel.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
+  return sanitizeText(chart.metadata.extras.BANNER);
+}
+
+function resolveChartForSongSummary(chart: BeMusicJson): BeMusicJson {
+  if (chart.sourceFormat !== 'bms' || chart.bms.controlFlow.length === 0) {
+    return chart;
   }
-  if (chart.sourceFormat === 'bms') {
-    return 3;
+  return resolveBmsControlFlow(chart, {
+    random: () => 0,
+  });
+}
+
+function extractChartBpmSummary(chart: BeMusicJson): { initial: number; min: number; max: number } | undefined {
+  const resolver = createTimingResolver(chart);
+  const bpmValues = resolver.tempoPoints
+    .map((point) => point.bpm)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (bpmValues.length === 0) {
+    return undefined;
   }
-  return undefined;
+
+  let min = bpmValues[0]!;
+  let max = bpmValues[0]!;
+  for (const bpm of bpmValues) {
+    if (bpm < min) {
+      min = bpm;
+    }
+    if (bpm > max) {
+      max = bpm;
+    }
+  }
+
+  return {
+    initial: bpmValues[0]!,
+    min,
+    max,
+  };
 }
 
 function sanitizeText(value: string | undefined): string | undefined {

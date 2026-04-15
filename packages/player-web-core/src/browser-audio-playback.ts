@@ -22,6 +22,7 @@ export interface BrowserAudioDestinationLike {}
 
 export interface BrowserAudioBufferSourceNodeLike {
   buffer: BrowserDecodedAudioBuffer | null;
+  loop?: boolean;
   connect: (...args: any[]) => unknown;
   start: (when: number, offset?: number, duration?: number) => void;
   stop?: (when?: number) => void;
@@ -50,6 +51,7 @@ export interface BrowserAudioPlaybackOptions {
   createAudioContext?: BrowserAudioContextFactory;
   outputGain?: number;
   startLeadSeconds?: number;
+  timelineStartSeconds?: number;
   mode?: 'autoplay' | 'manual';
 }
 
@@ -232,12 +234,17 @@ export class BrowserAudioPlayback {
 
     this.started = true;
     this.pendingTriggers = [];
-    this.upcomingTriggerIndex = 0;
+    const timelineStartSeconds = resolveTimelineStartSeconds(this.options.timelineStartSeconds);
+    this.upcomingTriggerIndex = findFirstIndexAtOrAfter(
+      this.scheduledTriggers,
+      timelineStartSeconds,
+      (trigger) => trigger.seconds,
+    );
     this.latestBmsSourceNodeBySampleKey.clear();
     this.scheduledBmsonSlices.clear();
     const leadSeconds = this.options.startLeadSeconds ?? DEFAULT_START_LEAD_SECONDS;
-    this.sessionStartContextTime = this.context.currentTime + leadSeconds;
-    this.update(0);
+    this.sessionStartContextTime = this.context.currentTime + leadSeconds - timelineStartSeconds;
+    this.update(timelineStartSeconds);
     return leadSeconds;
   }
 
@@ -515,6 +522,13 @@ function createDefaultAudioContext(): BrowserAudioContextLike | undefined {
   return AudioContextConstructor ? new AudioContextConstructor() : undefined;
 }
 
+function resolveTimelineStartSeconds(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, value);
+}
+
 function shouldAutoScheduleTrigger(channel: string, mode: BrowserAudioPlaybackOptions['mode']): boolean {
   if (mode !== 'manual') {
     return true;
@@ -567,4 +581,22 @@ async function runWithConcurrency<T>(
       }
     }),
   );
+}
+
+function findFirstIndexAtOrAfter<T>(
+  items: ReadonlyArray<T>,
+  target: number,
+  resolveValue: (item: T) => number,
+): number {
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (resolveValue(items[mid]!) < target) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
 }

@@ -20,11 +20,21 @@ export interface BrowserSongEntry {
   title: string;
   subtitle?: string;
   artist?: string;
+  subartist?: string;
   genre?: string;
   comment?: string;
+  bannerPath?: string;
+  previewContinueKey?: string;
+  totalNotes?: number;
+  player?: number;
   difficulty?: number;
+  rank?: number;
+  rankLabel?: string;
   playLevel?: BeMusicPlayLevel;
   bpm?: number;
+  bpmInitial?: number;
+  bpmMin?: number;
+  bpmMax?: number;
   chart: BeMusicJson;
 }
 

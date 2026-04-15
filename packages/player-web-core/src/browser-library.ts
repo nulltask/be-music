@@ -1,3 +1,5 @@
+import { resolveBrowserSongForGameplay } from './browser-control-flow.ts';
+import { createBrowserSongPreviewController, type BrowserSongPreviewController } from './browser-preview-playback.ts';
 import { loadSongCollectionFromDrop, loadSongCollectionFromFiles } from './chart-library.ts';
 import { PixiGameplayView } from './pixi-gameplay-view.ts';
 import { PixiSongListView, type PixiSongListViewOptions } from './pixi-song-list-view.ts';
@@ -14,7 +16,9 @@ export class BrowserSongLibrary {
   private gameplayView: PixiGameplayView | undefined;
   private mountedContainer: HTMLElement | undefined;
   private collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
+  private selectedSong: BrowserSongEntry | undefined;
   private currentSong: BrowserSongEntry | undefined;
+  private previewController: BrowserSongPreviewController | undefined;
 
   public constructor(options: BrowserSongLibraryOptions = {}) {
     this.options = options;
@@ -28,6 +32,11 @@ export class BrowserSongLibrary {
   public setCollection(collection: BrowserSongCollection): void {
     this.collection = collection;
     this.listView?.setCollection(collection);
+    this.selectedSong = resolveSelectedSong(collection, this.selectedSong?.id ?? this.currentSong?.id);
+    if (this.selectedSong) {
+      this.listView?.setSelectedSong(this.selectedSong.id);
+    }
+    this.syncPreviewFocus();
     this.options.onCollectionChange?.(collection);
   }
 
@@ -54,6 +63,7 @@ export class BrowserSongLibrary {
   }
 
   public async startSong(song: BrowserSongEntry): Promise<void> {
+    this.selectedSong = song;
     this.currentSong = song;
     this.options.onSongActivate?.(song);
     await this.showGameplayView(song);
@@ -69,17 +79,23 @@ export class BrowserSongLibrary {
   }
 
   public dispose(): void {
+    void this.previewController?.dispose();
     this.listView?.dispose();
     this.gameplayView?.dispose();
     this.listView = undefined;
     this.gameplayView = undefined;
+    this.previewController = undefined;
     this.mountedContainer = undefined;
   }
 
   private ensureListView(): PixiSongListView {
     if (!this.listView) {
       this.listView = new PixiSongListView({
-        onSongSelect: (song) => this.options.onSongSelect?.(song),
+        onSongSelect: (song) => {
+          this.selectedSong = song;
+          this.syncPreviewFocus();
+          this.options.onSongSelect?.(song);
+        },
         onSongActivate: (song) => {
           void this.startSong(song);
         },
@@ -97,15 +113,19 @@ export class BrowserSongLibrary {
     await view.mount(container);
     view.setCollection(this.collection);
     view.setStatus(buildStatusMessage(this.collection));
-    if (this.currentSong) {
-      view.setSelectedSong(this.currentSong.id);
+    this.selectedSong = resolveSelectedSong(this.collection, this.selectedSong?.id ?? this.currentSong?.id);
+    if (this.selectedSong) {
+      view.setSelectedSong(this.selectedSong.id);
     }
     view.focus();
+    this.syncPreviewFocus();
   }
 
   private async showGameplayView(song: BrowserSongEntry): Promise<void> {
     const container = this.requireMountedContainer();
     const source = resolveSongSource(this.collection.sources, song);
+    const gameplaySong = resolveBrowserSongForGameplay(song);
+    this.ensurePreviewController().clear();
     this.listView?.dispose();
     this.listView = undefined;
     this.gameplayView?.dispose();
@@ -115,7 +135,7 @@ export class BrowserSongLibrary {
       },
     });
     container.replaceChildren();
-    await this.gameplayView.mount(container, song, source);
+    await this.gameplayView.mount(container, gameplaySong, source);
   }
 
   private requireMountedContainer(): HTMLElement {
@@ -124,6 +144,23 @@ export class BrowserSongLibrary {
     }
     return this.mountedContainer;
   }
+
+  private ensurePreviewController(): BrowserSongPreviewController {
+    if (!this.previewController) {
+      this.previewController = createBrowserSongPreviewController();
+    }
+    return this.previewController;
+  }
+
+  private syncPreviewFocus(): void {
+    const selectedSong = this.selectedSong;
+    if (!selectedSong) {
+      this.ensurePreviewController().clear();
+      return;
+    }
+    const source = resolveSongSource(this.collection.sources, selectedSong);
+    this.ensurePreviewController().focus(selectedSong, source);
+  }
 }
 
 function resolveSongSource(
@@ -131,6 +168,19 @@ function resolveSongSource(
   song: BrowserSongEntry,
 ): BrowserSongAssetSource | undefined {
   return sources.find((source) => source.id === song.sourceId);
+}
+
+function resolveSelectedSong(
+  collection: BrowserSongCollection,
+  preferredSongId: string | undefined,
+): BrowserSongEntry | undefined {
+  if (preferredSongId) {
+    const preferredSong = collection.songs.find((song) => song.id === preferredSongId);
+    if (preferredSong) {
+      return preferredSong;
+    }
+  }
+  return collection.songs[0];
 }
 
 function buildStatusMessage(collection: BrowserSongCollection): string {

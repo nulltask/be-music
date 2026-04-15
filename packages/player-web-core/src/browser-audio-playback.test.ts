@@ -186,6 +186,42 @@ describe('player-web-core browser audio playback', () => {
 
     await playback.dispose();
   });
+
+  test('timeline start seconds skips leading silence when starting preview-like playback', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.wav['01'] = 'audio/lead.wav';
+    json.events.push({
+      measure: 1,
+      channel: '01',
+      position: [0, 1],
+      value: '01',
+    });
+
+    const source: BrowserSongAssetSource = {
+      id: 'source',
+      kind: 'directory',
+      label: 'Source',
+      files: new Map([['audio/lead.wav', Uint8Array.of(1, 2, 3, 4)]]),
+    };
+    const audioContext = new FakeAudioContext();
+    const playback = new BrowserAudioPlayback(json, source, 'chart.bms', {
+      createAudioContext: () => audioContext,
+      startLeadSeconds: 0.125,
+      timelineStartSeconds: 2,
+    });
+
+    await playback.prepare();
+    playback.start();
+    audioContext.pendingDecodes[0]?.resolve({ duration: 1 });
+    await flushPromises();
+    await flushPromises();
+    playback.update(2);
+    await playback.dispose();
+
+    expect(audioContext.sourceNodes).toHaveLength(1);
+    expect(audioContext.sourceNodes[0]?.starts).toEqual([{ when: 10.125, offset: 0, duration: 1 }]);
+  });
 });
 
 async function flushPromises(): Promise<void> {
