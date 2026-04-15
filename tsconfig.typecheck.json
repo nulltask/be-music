@@ -7,6 +7,7 @@
     "declaration": false,
     "declarationMap": false,
     "paths": {
+      "@be-music/player-react": ["./packages/player-react/src/index.tsx"],
       "@be-music/*": ["./packages/*/src/index.ts"],
       "@be-music/parser/browser": ["./packages/parser/src/browser.ts"]
     }

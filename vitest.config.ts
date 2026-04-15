@@ -16,10 +16,14 @@ const workspacePackages = [
   'player-web-core',
 ] as const;
 
-const workspaceAliases = Object.fromEntries(
-  workspacePackages.map((name) => [`@be-music/${name}`, resolve(rootDir, `packages/${name}/src/index.ts`)]),
-);
-workspaceAliases['@be-music/parser/browser'] = resolve(rootDir, 'packages/parser/src/browser.ts');
+const workspaceAliases = [
+  { find: '@be-music/parser/browser', replacement: resolve(rootDir, 'packages/parser/src/browser.ts') },
+  { find: '@be-music/player-react', replacement: resolve(rootDir, 'packages/player-react/src/index.tsx') },
+  ...workspacePackages.map((name) => ({
+    find: `@be-music/${name}`,
+    replacement: resolve(rootDir, `packages/${name}/src/index.ts`),
+  })),
+];
 
 const workspaceProjects = workspacePackages.map((name) => ({
   extends: true as const,
