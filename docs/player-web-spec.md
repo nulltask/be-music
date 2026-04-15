@@ -64,6 +64,7 @@ The browser player is intentionally split into a framework-agnostic rendering co
 - Browser audio playback in real time without prerendering the whole chart
 - Browser High Speed adjustment
 - Runtime BMS control flow resolution before gameplay starts
+- Gameplay rendering support for `#SCROLLxx` and `#SPEEDxx`
 - Extended song summary fields for `subartist`, `bannerPath`, `totalNotes`, `player`, `rank`, `rankLabel`, `bpmInitial`, `bpmMin`, and `bpmMax`
 - Deterministic `previewContinueKey` derivation for browser song summaries
 - Song-list preview playback with `#PREVIEW` priority and fallback preview scheduling
@@ -78,17 +79,7 @@ The browser player is intentionally split into a framework-agnostic rendering co
 
 The following chart-related behaviors exist in the CLI player but are not yet fully implemented in the browser player.
 
-### 1. `#SCROLLxx` and `#SPEEDxx`
-
-The CLI player builds dedicated scroll and speed timelines and reflects them in note drawing distance.
-The browser player currently uses a fixed time-to-distance mapping and does not yet interpret scroll/speed timeline changes for gameplay rendering.
-
-Impact:
-
-- Scroll gimmicks do not match the CLI player.
-- Zero, negative, oscillating, and bidirectional scroll behavior is not yet reproduced.
-
-### 2. BGA / layer / POOR / video / loading assets
+### 1. BGA / layer / POOR / video / loading assets
 
 The CLI player supports:
 
@@ -104,17 +95,17 @@ The CLI player supports:
 
 The browser player does not yet provide an equivalent BGA pipeline in gameplay or song selection.
 
-### 3. Invisible notes and lane-fallback keysounds
+### 2. Invisible notes and lane-fallback keysounds
 
 The CLI player extracts invisible notes separately and uses them for manual-input assistance and lane-fallback keysound behavior.
 The browser player currently judges only visible notes and landmines and does not implement invisible-note extraction or lane-fallback sample triggering.
 
-### 4. Dynamic judgment rank changes
+### 3. Dynamic judgment rank changes
 
 The CLI player supports runtime judge-window changes through `#xxxA0` and `#EXRANKxx`.
 The browser player currently resolves judge windows once at gameplay start and does not yet update them during playback.
 
-### 5. Playback-end extension from UI/BGA assets
+### 4. Playback-end extension from UI/BGA assets
 
 The CLI player can extend playback end based on UI/BGA runtime playback requirements.
 The browser player currently derives duration primarily from chart event timing and note tails.
@@ -139,7 +130,11 @@ Completed work:
 
 Status:
 
-- Next
+- In progress
+
+Completed work:
+
+- Added `#SCROLLxx` and `#SPEEDxx` timeline support to browser gameplay rendering
 
 Goals:
 

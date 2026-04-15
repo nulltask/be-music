@@ -19,9 +19,16 @@ import {
   loadPersistedBrowserHighSpeed,
   persistBrowserHighSpeed,
 } from './browser-high-speed.ts';
+import { BrowserScrollDistanceMapper } from './browser-scroll-distance.ts';
 import { resolvePixiRendererResolution, syncPixiRendererDensity } from './pixi-density.ts';
 import { createPixiLaneMetrics, resolveVisualLaneChannels, type PixiLaneMetrics } from './pixi-lane-layout.ts';
-import { createTimingResolver } from './timing.ts';
+import {
+  createBeatAtSecondsResolverFromTimingResolver,
+  createMeasureBoundariesBeats,
+  createScrollTimeline,
+  createSpeedTimeline,
+  createTimingResolver,
+} from './timing.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 import { extractWebTimedNotes, type WebTimedLandmineNote, type WebTimedPlayableNote } from './web-playable-notes.ts';
 
@@ -57,7 +64,7 @@ const PANEL_PADDING = 24;
 const HEADER_HEIGHT = 92;
 const FOOTER_HEIGHT = 56;
 const KEYBED_HEIGHT = 52;
-const BASE_NOTE_WINDOW_SECONDS = 2.8;
+const BASE_NOTE_WINDOW_BEATS = 8;
 const JUDGE_FEEDBACK_DURATION_SECONDS = 0.5;
 
 interface RuntimePlayableNote extends WebTimedPlayableNote {
@@ -157,7 +164,7 @@ export class PixiGameplayView {
   private audioPlayback: BrowserAudioPlayback | undefined;
   private playableNotes: RuntimePlayableNote[] = [];
   private landmineNotes: RuntimeLandmineNote[] = [];
-  private measureTimes: number[] = [];
+  private measureBeats: number[] = [];
   private laneChannels: string[] = ['16', '11', '12', '13', '14', '15', '18', '19'];
   private laneBindings: BrowserLaneBinding[] = [];
   private inputChannelMap = new Map<string, string[]>();
@@ -166,6 +173,8 @@ export class PixiGameplayView {
   private activeLongNotesByLane = new Map<string, ActiveLongNoteHold>();
   private durationSeconds = 0;
   private timingResolver = createTimingResolver(createEmptyJson('json'));
+  private beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(this.timingResolver);
+  private scrollDistanceMapper = new BrowserScrollDistanceMapper();
   private maxBeat = 0;
   private startTimestampMs = 0;
   private pauseStartedMs = 0;
@@ -278,8 +287,13 @@ export class PixiGameplayView {
       judged: false,
       displayChannel: normalizeDisplayLaneChannel(note.channel),
     }));
-    this.measureTimes = timedNotes.measureTimes;
+    this.measureBeats = createMeasureBoundariesBeats(song.chart, this.timingResolver.beatResolver);
     this.durationSeconds = timedNotes.durationSeconds;
+    this.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(this.timingResolver);
+    this.scrollDistanceMapper = new BrowserScrollDistanceMapper(
+      createScrollTimeline(song.chart, this.timingResolver.beatResolver),
+      createSpeedTimeline(song.chart, this.timingResolver.beatResolver),
+    );
     this.laneChannels = resolveLaneChannels(this.playableNotes, this.landmineNotes);
     this.laneBindings = createBrowserLaneBindings(
       this.laneChannels,
@@ -579,7 +593,8 @@ export class PixiGameplayView {
     const judgeY = laneAreaBottom - 14;
     const laneAreaWidth = Math.max(0, width - PANEL_PADDING * 4);
     const laneMetrics = createPixiLaneMetrics(this.laneChannels, PANEL_PADDING * 2, laneAreaWidth, LANE_GAP, SIDE_SPLIT_GAP);
-    const pixelsPerSecond = Math.max(90, (judgeY - laneAreaTop - 28) / (BASE_NOTE_WINDOW_SECONDS / this.highSpeed));
+    const currentBeat = this.beatAtSeconds(currentSeconds);
+    const pixelsPerBeatDistance = Math.max(36, (judgeY - laneAreaTop - 28) / (BASE_NOTE_WINDOW_BEATS / this.highSpeed));
 
     this.background.clear().rect(0, 0, width, height).fill(BACKGROUND_COLOR);
     this.panel
@@ -600,9 +615,9 @@ export class PixiGameplayView {
     this.footerText.position.set(PANEL_PADDING * 2, height - FOOTER_HEIGHT);
     this.footerText.text = `Space pause • Esc back • HS x${formatBrowserHighSpeed(this.highSpeed)} • [/] or PgUp/PgDn • ${formatBindingHints(this.laneBindings)} • ${this.audioStatusText}`;
 
-    this.drawMeasures(laneAreaTop, judgeY, laneAreaWidth, currentSeconds, pixelsPerSecond);
+    this.drawMeasures(laneAreaTop, judgeY, laneAreaWidth, currentBeat, pixelsPerBeatDistance);
     this.drawLanes(laneAreaTop, laneAreaHeight, judgeY, laneMetrics, laneAreaBottom);
-    this.drawNotes(laneAreaTop, judgeY, laneMetrics, currentSeconds, pixelsPerSecond);
+    this.drawNotes(laneAreaTop, judgeY, laneMetrics, currentBeat, pixelsPerBeatDistance);
     this.updateStats(currentSeconds);
 
     this.judgeText.visible = !this.loadingAudio && !this.paused && !this.finished && Boolean(this.lastJudgeKind) && currentSeconds <= this.judgeFeedbackUntilSeconds;
@@ -691,12 +706,16 @@ export class PixiGameplayView {
     laneAreaTop: number,
     judgeY: number,
     laneAreaWidth: number,
-    currentSeconds: number,
-    pixelsPerSecond: number,
+    currentBeat: number,
+    pixelsPerBeatDistance: number,
   ): void {
     const laneStartX = PANEL_PADDING * 2;
-    for (const measureSeconds of this.measureTimes) {
-      const y = resolveNoteY(measureSeconds, currentSeconds, judgeY, pixelsPerSecond);
+    for (const measureBeat of this.measureBeats) {
+      const y = resolveNoteYFromBeat(
+        this.scrollDistanceMapper.distanceBetween(currentBeat, measureBeat),
+        judgeY,
+        pixelsPerBeatDistance,
+      );
       if (y < laneAreaTop || y > judgeY + 8) {
         continue;
       }
@@ -708,8 +727,8 @@ export class PixiGameplayView {
     laneAreaTop: number,
     judgeY: number,
     laneMetrics: ReadonlyArray<PixiLaneMetrics>,
-    currentSeconds: number,
-    pixelsPerSecond: number,
+    currentBeat: number,
+    pixelsPerBeatDistance: number,
   ): void {
     for (const note of this.playableNotes) {
       if (note.judged) {
@@ -720,10 +739,18 @@ export class PixiGameplayView {
         continue;
       }
       const laneX = laneMetric.x;
-      const y = resolveNoteY(note.seconds, currentSeconds, judgeY, pixelsPerSecond);
+      const y = resolveNoteYFromBeat(
+        this.scrollDistanceMapper.distanceBetween(currentBeat, note.beat),
+        judgeY,
+        pixelsPerBeatDistance,
+      );
       const laneColor = noteColorForRole(laneMetric.role);
       if (typeof note.endSeconds === 'number' && note.endSeconds > note.seconds) {
-        const endY = resolveNoteY(note.endSeconds, currentSeconds, judgeY, pixelsPerSecond);
+        const endY = resolveNoteYFromBeat(
+          this.scrollDistanceMapper.distanceBetween(currentBeat, note.endBeat ?? note.beat),
+          judgeY,
+          pixelsPerBeatDistance,
+        );
         const topY = Math.min(y, endY);
         const bottomY = Math.max(y, endY);
         if (bottomY >= laneAreaTop && topY <= judgeY + 20) {
@@ -749,7 +776,11 @@ export class PixiGameplayView {
         continue;
       }
       const laneX = laneMetric.x;
-      const y = resolveNoteY(note.seconds, currentSeconds, judgeY, pixelsPerSecond);
+      const y = resolveNoteYFromBeat(
+        this.scrollDistanceMapper.distanceBetween(currentBeat, note.beat),
+        judgeY,
+        pixelsPerBeatDistance,
+      );
       if (y < laneAreaTop - 16 || y > judgeY + 20) {
         continue;
       }
@@ -770,14 +801,15 @@ export class PixiGameplayView {
   }
 
   private updateStats(currentSeconds: number): void {
-    const progress = this.durationSeconds <= 0 ? 0 : Math.min(1, currentSeconds / this.durationSeconds);
-    const currentBeat = progress * this.maxBeat;
+    const currentBeat = this.beatAtSeconds(currentSeconds);
     this.currentBpm = this.timingResolver.bpmAtBeat(currentBeat);
     const judgedCount = this.summary.perfect + this.summary.great + this.summary.good + this.summary.bad + this.summary.poor;
     this.statsText.text = [
       `Manual`,
       `${formatTime(currentSeconds)} / ${formatTime(this.durationSeconds)}`,
       `BPM ${formatBpm(this.currentBpm)}`,
+      `SCROLL ${formatScrollValue(this.scrollDistanceMapper.scrollAtBeat(currentBeat))}`,
+      `SPEED ${formatScrollValue(this.scrollDistanceMapper.speedAtBeat(currentBeat))}`,
       `HS x${formatBrowserHighSpeed(this.highSpeed)}`,
       `Gauge ${this.gaugeState.current.toFixed(2)}${isGrooveGaugeCleared(this.gaugeState) ? ' CLEAR' : ''}`,
       `Combo ${this.summary.combo}`,
@@ -843,8 +875,8 @@ function resolveLaneChannels(
   return resolveVisualLaneChannels([...used]);
 }
 
-function resolveNoteY(noteSeconds: number, currentSeconds: number, judgeY: number, pixelsPerSecond: number): number {
-  return judgeY - (noteSeconds - currentSeconds) * pixelsPerSecond;
+function resolveNoteYFromBeat(distanceFromJudgeBeat: number, judgeY: number, pixelsPerBeatDistance: number): number {
+  return judgeY - distanceFromJudgeBeat * pixelsPerBeatDistance;
 }
 
 function normalizeDisplayLaneChannel(channel: string): string {
@@ -918,6 +950,10 @@ function compactMeta(parts: Array<string | undefined>): string {
 }
 
 function formatBpm(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
+}
+
+function formatScrollValue(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
 }
 

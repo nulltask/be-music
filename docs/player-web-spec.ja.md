@@ -64,6 +64,7 @@ CLI / Node 側 player の正規 runtime 仕様は [`player-spec.ja.md`](./player
 - 全譜面 prerender を行わない Web Audio ベースのリアルタイム再生
 - browser High Speed の変更
 - gameplay 開始前の BMS control flow 解決
+- gameplay 描画における `#SCROLLxx` と `#SPEEDxx` の反映
 - `subartist`, `bannerPath`, `totalNotes`, `player`, `rank`, `rankLabel`, `bpmInitial`, `bpmMin`, `bpmMax` を含む song summary 拡張
 - browser song summary 向けの決定的な `previewContinueKey` 導出
 - `#PREVIEW` 優先と fallback preview scheduler を備えた song-list preview playback
@@ -78,17 +79,7 @@ CLI / Node 側 player の正規 runtime 仕様は [`player-spec.ja.md`](./player
 
 以下は CLI player には実装されているが、browser player ではまだ未実装または未追従の chart 関連挙動です。
 
-### 1. `#SCROLLxx` と `#SPEEDxx`
-
-CLI player は専用の scroll timeline / speed timeline を構築し、ノート描画距離へ反映します。
-browser player は現在、固定の time-to-distance 変換で描画しており、scroll/speed timeline の変化を gameplay 描画に反映していません。
-
-影響:
-
-- scroll gimmick が CLI と一致しない
-- 0、負値、往復、振動系の scroll 挙動が再現されない
-
-### 2. BGA / layer / POOR / video / loading assets
+### 1. BGA / layer / POOR / video / loading assets
 
 CLI player は次を扱います。
 
@@ -104,17 +95,17 @@ CLI player は次を扱います。
 
 browser player には、gameplay 中や楽曲一覧における同等の BGA パイプラインがまだありません。
 
-### 3. 不可視ノートと lane-fallback keysound
+### 2. 不可視ノートと lane-fallback keysound
 
 CLI player は不可視ノートを別抽出し、manual input 補助と lane-fallback keysound に使います。
 browser player は現在、可視ノートと地雷だけを判定対象にしており、不可視ノート抽出と lane-fallback sample trigger を実装していません。
 
-### 4. 動的判定幅変更
+### 3. 動的判定幅変更
 
 CLI player は `#xxxA0` と `#EXRANKxx` による runtime 中の judge window 変更に対応しています。
 browser player は gameplay 開始時に 1 回 judge window を解決するだけで、再生中の変更を反映しません。
 
-### 5. UI/BGA 由来の再生終了延長
+### 4. UI/BGA 由来の再生終了延長
 
 CLI player は、UI/BGA runtime の都合で playback end を延長できます。
 browser player は現在、主に chart event と note tail から duration を決めています。
@@ -139,7 +130,11 @@ browser player は次の順序で拡張するのが望ましいです。
 
 状態:
 
-- 次のステップ
+- 進行中
+
+完了済み:
+
+- browser gameplay 描画に `#SCROLLxx` と `#SPEEDxx` timeline を追加
 
 目標:
 
