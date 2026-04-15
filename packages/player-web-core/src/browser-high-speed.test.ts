@@ -6,6 +6,8 @@ import {
   loadPersistedBrowserHighSpeed,
   normalizeBrowserHighSpeed,
   persistBrowserHighSpeed,
+  resolveBrowserHighSpeedActionFromManualInput,
+  resolveBrowserHighSpeedModifierLabel,
 } from './browser-high-speed.ts';
 
 describe('player-web-core browser high speed', () => {
@@ -23,9 +25,22 @@ describe('player-web-core browser high speed', () => {
     expect(increaseBrowserHighSpeed(10)).toBe(10);
   });
 
+  test('resolves manual high-speed actions from odd/even lane input only with Alt or Option held', () => {
+    expect(resolveBrowserHighSpeedActionFromManualInput(['11'], false)).toBeUndefined();
+    expect(resolveBrowserHighSpeedActionFromManualInput(['11'], true)).toBe('decrease');
+    expect(resolveBrowserHighSpeedActionFromManualInput(['12'], true)).toBe('increase');
+    expect(resolveBrowserHighSpeedActionFromManualInput(['11', '12'], true)).toBeUndefined();
+  });
+
   test('formats high speed consistently', () => {
     expect(formatBrowserHighSpeed(1)).toBe('1.0');
     expect(formatBrowserHighSpeed(3.5)).toBe('3.5');
+  });
+
+  test('resolves the platform-specific modifier label for manual high-speed control', () => {
+    expect(resolveBrowserHighSpeedModifierLabel('MacIntel')).toBe('Option');
+    expect(resolveBrowserHighSpeedModifierLabel('iPhone')).toBe('Option');
+    expect(resolveBrowserHighSpeedModifierLabel('Win32')).toBe('Alt');
   });
 
   test('loads persisted high speed from browser storage', () => {

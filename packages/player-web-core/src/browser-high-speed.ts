@@ -1,7 +1,11 @@
+import {
+  applyHighSpeedControlAction,
+  resolveHighSpeedControlActionFromLaneChannels,
+  resolveHighSpeedMultiplier,
+  type HighSpeedControlAction,
+} from '../../player/src/core/high-speed-control.ts';
+
 const DEFAULT_HIGH_SPEED = 1;
-const MIN_HIGH_SPEED = 0.5;
-const MAX_HIGH_SPEED = 10;
-const HIGH_SPEED_STEP = 0.5;
 const BROWSER_HIGH_SPEED_STORAGE_KEY = 'be-music.player-web.high-speed';
 
 interface BrowserStorageLike {
@@ -10,19 +14,25 @@ interface BrowserStorageLike {
 }
 
 export function normalizeBrowserHighSpeed(value: number | undefined): number {
-  if (!Number.isFinite(value) || (value ?? 0) <= 0) {
-    return DEFAULT_HIGH_SPEED;
-  }
-  const clamped = Math.min(MAX_HIGH_SPEED, Math.max(MIN_HIGH_SPEED, Number(value)));
-  return Math.round(clamped / HIGH_SPEED_STEP) * HIGH_SPEED_STEP;
+  return resolveHighSpeedMultiplier(value);
 }
 
 export function increaseBrowserHighSpeed(current: number): number {
-  return normalizeBrowserHighSpeed(current + HIGH_SPEED_STEP);
+  return applyHighSpeedControlAction(current, 'increase');
 }
 
 export function decreaseBrowserHighSpeed(current: number): number {
-  return normalizeBrowserHighSpeed(current - HIGH_SPEED_STEP);
+  return applyHighSpeedControlAction(current, 'decrease');
+}
+
+export function resolveBrowserHighSpeedActionFromManualInput(
+  channels: ReadonlyArray<string>,
+  altModifier: boolean,
+): HighSpeedControlAction | undefined {
+  if (!altModifier) {
+    return undefined;
+  }
+  return resolveHighSpeedControlActionFromLaneChannels(channels);
 }
 
 export function formatBrowserHighSpeed(value: number): string {
@@ -70,5 +80,27 @@ function resolveBrowserStorage(): BrowserStorageLike | undefined {
     return storage;
   } catch {
     return undefined;
+  }
+}
+
+export function resolveBrowserHighSpeedModifierLabel(userAgentPlatform = resolveBrowserPlatform()): 'Alt' | 'Option' {
+  return /mac|iphone|ipad|ipod/i.test(userAgentPlatform) ? 'Option' : 'Alt';
+}
+
+function resolveBrowserPlatform(): string {
+  try {
+    const navigatorValue = globalThis.navigator;
+    if (!navigatorValue) {
+      return '';
+    }
+    if (typeof navigatorValue.userAgent === 'string' && navigatorValue.userAgent.length > 0) {
+      return navigatorValue.userAgent;
+    }
+    if ('platform' in navigatorValue && typeof navigatorValue.platform === 'string') {
+      return navigatorValue.platform;
+    }
+    return '';
+  } catch {
+    return '';
   }
 }

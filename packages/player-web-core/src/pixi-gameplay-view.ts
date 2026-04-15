@@ -18,6 +18,8 @@ import {
   increaseBrowserHighSpeed,
   loadPersistedBrowserHighSpeed,
   persistBrowserHighSpeed,
+  resolveBrowserHighSpeedActionFromManualInput,
+  resolveBrowserHighSpeedModifierLabel,
 } from './browser-high-speed.ts';
 import { BrowserScrollDistanceMapper } from './browser-scroll-distance.ts';
 import { resolvePixiRendererResolution, syncPixiRendererDensity } from './pixi-density.ts';
@@ -64,8 +66,8 @@ const PANEL_PADDING = 24;
 const HEADER_HEIGHT = 92;
 const FOOTER_HEIGHT = 56;
 const KEYBED_HEIGHT = 52;
-const BASE_NOTE_WINDOW_BEATS = 8;
 const JUDGE_FEEDBACK_DURATION_SECONDS = 0.5;
+const PIXELS_PER_BEAT_AT_HIGH_SPEED_1 = 64;
 
 interface RuntimePlayableNote extends WebTimedPlayableNote {
   judged: boolean;
@@ -186,6 +188,7 @@ export class PixiGameplayView {
   private lastRenderedSeconds = 0;
   private currentBpm = 0;
   private highSpeed = 1;
+  private readonly highSpeedModifierLabel = resolveBrowserHighSpeedModifierLabel();
   private audioStatusText = 'Audio unavailable';
   private judgeWindows: JudgeWindowsMs = resolveJudgeWindowsMs(createEmptyJson('json'));
   private summary: BrowserManualSummary = createManualSummary(0);
@@ -391,10 +394,22 @@ export class PixiGameplayView {
     const currentSeconds = this.getCurrentSeconds();
     const candidateChannels = new Set<string>();
     for (const binding of bindings) {
-      this.pressedDisplayChannels.add(binding.displayChannel);
       for (const channel of binding.triggerChannels) {
         candidateChannels.add(channel);
       }
+    }
+    const highSpeedAction = resolveBrowserHighSpeedActionFromManualInput([...candidateChannels], event.altKey);
+    if (highSpeedAction) {
+      this.highSpeed = persistBrowserHighSpeed(
+        highSpeedAction === 'increase'
+          ? increaseBrowserHighSpeed(this.highSpeed)
+          : decreaseBrowserHighSpeed(this.highSpeed),
+      );
+      this.render(currentSeconds);
+      return;
+    }
+    for (const binding of bindings) {
+      this.pressedDisplayChannels.add(binding.displayChannel);
     }
     this.handleManualInput([...candidateChannels], currentSeconds);
     this.render(currentSeconds);
@@ -594,7 +609,7 @@ export class PixiGameplayView {
     const laneAreaWidth = Math.max(0, width - PANEL_PADDING * 4);
     const laneMetrics = createPixiLaneMetrics(this.laneChannels, PANEL_PADDING * 2, laneAreaWidth, LANE_GAP, SIDE_SPLIT_GAP);
     const currentBeat = this.beatAtSeconds(currentSeconds);
-    const pixelsPerBeatDistance = Math.max(36, (judgeY - laneAreaTop - 28) / (BASE_NOTE_WINDOW_BEATS / this.highSpeed));
+    const pixelsPerBeatDistance = resolvePixelsPerBeatDistance(this.highSpeed);
 
     this.background.clear().rect(0, 0, width, height).fill(BACKGROUND_COLOR);
     this.panel
@@ -613,7 +628,7 @@ export class PixiGameplayView {
     this.headerText.position.set(PANEL_PADDING * 2, PANEL_PADDING * 2);
     this.metaText.position.set(PANEL_PADDING * 2, PANEL_PADDING * 2 + 40);
     this.footerText.position.set(PANEL_PADDING * 2, height - FOOTER_HEIGHT);
-    this.footerText.text = `Space pause • Esc back • HS x${formatBrowserHighSpeed(this.highSpeed)} • [/] or PgUp/PgDn • ${formatBindingHints(this.laneBindings)} • ${this.audioStatusText}`;
+    this.footerText.text = `Space pause • Esc back • HS x${formatBrowserHighSpeed(this.highSpeed)} • [/] or PgUp/PgDn or ${this.highSpeedModifierLabel}+odd/even lane • ${formatBindingHints(this.laneBindings)} • ${this.audioStatusText}`;
 
     this.drawMeasures(laneAreaTop, judgeY, laneAreaWidth, currentBeat, pixelsPerBeatDistance);
     this.drawLanes(laneAreaTop, laneAreaHeight, judgeY, laneMetrics, laneAreaBottom);
@@ -955,6 +970,11 @@ function formatBpm(value: number): string {
 
 function formatScrollValue(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
+}
+
+function resolvePixelsPerBeatDistance(highSpeed: number): number {
+  const normalizedHighSpeed = Number.isFinite(highSpeed) && highSpeed > 0 ? highSpeed : 1;
+  return PIXELS_PER_BEAT_AT_HIGH_SPEED_1 * normalizedHighSpeed;
 }
 
 function formatLaneLabel(channel: string): string {
