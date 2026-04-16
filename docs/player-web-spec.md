@@ -98,7 +98,8 @@ The browser player does not yet provide an equivalent BGA pipeline in gameplay o
 ### 2. Invisible notes and lane-fallback keysounds
 
 The CLI player extracts invisible notes separately and uses them for manual-input assistance and lane-fallback keysound behavior.
-The browser player currently judges only visible notes and landmines and does not implement invisible-note extraction or lane-fallback sample triggering.
+The browser player now extracts invisible play-lane notes and uses them for manual-input lane-fallback sample triggering.
+Invisible notes are also expired alongside visible notes so fallback playback does not keep selecting stale objects forever.
 
 ### 3. Dynamic judgment rank changes
 
@@ -135,6 +136,7 @@ Status:
 Completed work:
 
 - Added `#SCROLLxx` and `#SPEEDxx` timeline support to browser gameplay rendering
+- Added invisible-note extraction and lane-fallback keysound triggering
 
 Goals:
 
@@ -143,10 +145,8 @@ Goals:
 
 Tasks:
 
-1. Add `#SCROLLxx` and `#SPEEDxx` timeline support to browser gameplay rendering.
-2. Add invisible note extraction and lane-fallback keysound triggering.
-3. Add runtime `#EXRANKxx` / `A0` judge-window updates.
-4. Tighten long-note behavior toward full CLI parity.
+1. Add runtime `#EXRANKxx` / `A0` judge-window updates.
+2. Tighten long-note behavior toward full CLI parity.
 
 Why second:
 

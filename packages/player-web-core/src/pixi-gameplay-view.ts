@@ -5,6 +5,7 @@ import { resolveJudgeWindowsMs, type JudgeWindowsMs } from '../../player/src/cor
 import { applyJudgeToSummary, createScoreTracker, type ScoreSummary, type ScoreTracker } from '../../player/src/core/scoring.ts';
 import { BrowserAudioPlayback, type BrowserAudioPreparationProgress, type BrowserAudioPreparationResult } from './browser-audio-playback.ts';
 import { createBrowserInputChannelMap, createBrowserLaneBindings, type BrowserLaneBinding } from './browser-lane-input.ts';
+import { findBestBrowserLaneFallbackCandidate } from './browser-lane-fallback.ts';
 import {
   applyFastSlowForBrowserJudge,
   isBrowserScoreTargetChannel,
@@ -32,7 +33,12 @@ import {
   createTimingResolver,
 } from './timing.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
-import { extractWebTimedNotes, type WebTimedLandmineNote, type WebTimedPlayableNote } from './web-playable-notes.ts';
+import {
+  extractWebTimedNotes,
+  type WebTimedInvisibleNote,
+  type WebTimedLandmineNote,
+  type WebTimedPlayableNote,
+} from './web-playable-notes.ts';
 
 const BACKGROUND_COLOR = new Color('#040507');
 const PANEL_COLOR = new Color('#0a0c10');
@@ -76,6 +82,11 @@ interface RuntimePlayableNote extends WebTimedPlayableNote {
 }
 
 interface RuntimeLandmineNote extends WebTimedLandmineNote {
+  judged: boolean;
+  displayChannel: string;
+}
+
+interface RuntimeInvisibleNote extends WebTimedInvisibleNote {
   judged: boolean;
   displayChannel: string;
 }
@@ -166,6 +177,7 @@ export class PixiGameplayView {
   private audioPlayback: BrowserAudioPlayback | undefined;
   private playableNotes: RuntimePlayableNote[] = [];
   private landmineNotes: RuntimeLandmineNote[] = [];
+  private invisibleNotes: RuntimeInvisibleNote[] = [];
   private measureBeats: number[] = [];
   private laneChannels: string[] = ['16', '11', '12', '13', '14', '15', '18', '19'];
   private laneBindings: BrowserLaneBinding[] = [];
@@ -196,6 +208,7 @@ export class PixiGameplayView {
   private gaugeState: GrooveGaugeState = createGrooveGaugeState(0, undefined);
   private playableExpireCursor = 0;
   private landmineExpireCursor = 0;
+  private invisibleExpireCursor = 0;
   private lastJudgeKind: BrowserJudgeKind | undefined;
   private judgeFeedbackUntilSeconds = 0;
 
@@ -290,6 +303,11 @@ export class PixiGameplayView {
       judged: false,
       displayChannel: normalizeDisplayLaneChannel(note.channel),
     }));
+    this.invisibleNotes = timedNotes.invisibleNotes.map((note) => ({
+      ...note,
+      judged: false,
+      displayChannel: normalizeDisplayLaneChannel(note.channel),
+    }));
     this.measureBeats = createMeasureBoundariesBeats(song.chart, this.timingResolver.beatResolver);
     this.durationSeconds = timedNotes.durationSeconds;
     this.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(this.timingResolver);
@@ -297,7 +315,7 @@ export class PixiGameplayView {
       createScrollTimeline(song.chart, this.timingResolver.beatResolver),
       createSpeedTimeline(song.chart, this.timingResolver.beatResolver),
     );
-    this.laneChannels = resolveLaneChannels(this.playableNotes, this.landmineNotes);
+    this.laneChannels = resolveLaneChannels(this.playableNotes, this.landmineNotes, this.invisibleNotes);
     this.laneBindings = createBrowserLaneBindings(
       this.laneChannels,
       this.playableNotes.map((note) => note.channel),
@@ -314,6 +332,7 @@ export class PixiGameplayView {
     this.gaugeState = createGrooveGaugeState(this.summary.total, song.chart.metadata.total);
     this.playableExpireCursor = 0;
     this.landmineExpireCursor = 0;
+    this.invisibleExpireCursor = 0;
     this.pressedDisplayChannels.clear();
     this.activeLongNotesByLane.clear();
     this.lastJudgeKind = undefined;
@@ -461,6 +480,15 @@ export class PixiGameplayView {
     }
 
     if (!noteCandidate) {
+      const laneFallbackCandidate = findBestBrowserLaneFallbackCandidate(
+        this.playableNotes,
+        this.invisibleNotes,
+        candidateChannels,
+        nowSeconds,
+      );
+      if (laneFallbackCandidate) {
+        this.audioPlayback?.triggerEvent(laneFallbackCandidate.event);
+      }
       return;
     }
 
@@ -555,6 +583,19 @@ export class PixiGameplayView {
         note.judged = true;
       }
       this.playableExpireCursor += 1;
+    }
+
+    while (this.invisibleExpireCursor < this.invisibleNotes.length) {
+      const note = this.invisibleNotes[this.invisibleExpireCursor]!;
+      if (note.judged) {
+        this.invisibleExpireCursor += 1;
+        continue;
+      }
+      if (currentSeconds - note.seconds <= badWindowSeconds) {
+        break;
+      }
+      note.judged = true;
+      this.invisibleExpireCursor += 1;
     }
   }
 
@@ -879,12 +920,16 @@ export class PixiGameplayView {
 function resolveLaneChannels(
   playableNotes: ReadonlyArray<Pick<RuntimePlayableNote, 'displayChannel'>>,
   landmineNotes: ReadonlyArray<Pick<RuntimeLandmineNote, 'displayChannel'>>,
+  invisibleNotes: ReadonlyArray<Pick<RuntimeInvisibleNote, 'displayChannel'>>,
 ): string[] {
   const used = new Set<string>();
   for (const note of playableNotes) {
     used.add(note.displayChannel);
   }
   for (const note of landmineNotes) {
+    used.add(note.displayChannel);
+  }
+  for (const note of invisibleNotes) {
     used.add(note.displayChannel);
   }
   return resolveVisualLaneChannels([...used]);

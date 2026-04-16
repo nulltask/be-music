@@ -26,9 +26,17 @@ export interface WebTimedLandmineNote {
   seconds: number;
 }
 
+export interface WebTimedInvisibleNote {
+  event: BeMusicEvent;
+  channel: string;
+  beat: number;
+  seconds: number;
+}
+
 export interface WebTimedNotes {
   playableNotes: WebTimedPlayableNote[];
   landmineNotes: WebTimedLandmineNote[];
+  invisibleNotes: WebTimedInvisibleNote[];
   measureTimes: number[];
   durationSeconds: number;
 }
@@ -41,6 +49,7 @@ export function extractWebTimedNotes(json: BeMusicJson): WebTimedNotes {
 
   const playableNotes: WebTimedPlayableNote[] = [];
   const landmineNotes: WebTimedLandmineNote[] = [];
+  const invisibleNotes: WebTimedInvisibleNote[] = [];
 
   for (const event of sortedEvents) {
     const normalizedChannel = normalizeChannel(event.channel);
@@ -69,6 +78,17 @@ export function extractWebTimedNotes(json: BeMusicJson): WebTimedNotes {
         beat,
         seconds,
       });
+      continue;
+    }
+
+    const invisibleChannel = resolveInvisibleChannel(normalizedChannel);
+    if (invisibleChannel) {
+      invisibleNotes.push({
+        event,
+        channel: invisibleChannel,
+        beat,
+        seconds,
+      });
     }
   }
 
@@ -81,6 +101,7 @@ export function extractWebTimedNotes(json: BeMusicJson): WebTimedNotes {
   return {
     playableNotes,
     landmineNotes,
+    invisibleNotes,
     measureTimes: createMeasureTimes(json, resolver),
     durationSeconds,
   };
@@ -109,6 +130,18 @@ function resolveLandmineChannel(normalizedChannel: string): string | undefined {
   }
   if ((high === 0x45 || high === 0x34) && low >= 0x31 && low <= 0x39) {
     return `2${normalizedChannel[1]!}`;
+  }
+  return undefined;
+}
+
+function resolveInvisibleChannel(normalizedChannel: string): string | undefined {
+  if (normalizedChannel.length !== 2) {
+    return undefined;
+  }
+  const high = normalizedChannel.charCodeAt(0);
+  const low = normalizedChannel.charCodeAt(1);
+  if ((high === 0x33 || high === 0x34) && low >= 0x31 && low <= 0x39) {
+    return `${high === 0x33 ? '1' : '2'}${normalizedChannel[1]!}`;
   }
   return undefined;
 }

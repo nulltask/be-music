@@ -98,7 +98,8 @@ browser player には、gameplay 中や楽曲一覧における同等の BGA パ
 ### 2. 不可視ノートと lane-fallback keysound
 
 CLI player は不可視ノートを別抽出し、manual input 補助と lane-fallback keysound に使います。
-browser player は現在、可視ノートと地雷だけを判定対象にしており、不可視ノート抽出と lane-fallback sample trigger を実装していません。
+browser player でも不可視 play-lane note を抽出し、manual input 時の lane-fallback sample trigger に使うようになりました。
+また、fallback 再生が古い object を選び続けないように、不可視ノートも可視ノートと同様に期限切れ処理します。
 
 ### 3. 動的判定幅変更
 
@@ -135,6 +136,7 @@ browser player は次の順序で拡張するのが望ましいです。
 完了済み:
 
 - browser gameplay 描画に `#SCROLLxx` と `#SPEEDxx` timeline を追加
+- 不可視ノート抽出と lane-fallback keysound を追加
 
 目標:
 
@@ -143,10 +145,8 @@ browser player は次の順序で拡張するのが望ましいです。
 
 作業項目:
 
-1. browser gameplay 描画に `#SCROLLxx` と `#SPEEDxx` timeline を追加する
-2. 不可視ノート抽出と lane-fallback keysound を追加する
-3. runtime 中の `#EXRANKxx` / `A0` judge window 変更を追加する
-4. long note 挙動を CLI parity に近づける
+1. runtime 中の `#EXRANKxx` / `A0` judge window 変更を追加する
+2. long note 挙動を CLI parity に近づける
 
 この順にする理由:
 

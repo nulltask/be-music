@@ -54,6 +54,22 @@ describe('player-web-core gameplay timing', () => {
     expect(timed.playableNotes[0]!.endBeat).toBeCloseTo(4, 6);
   });
 
+  test('extractWebTimedNotes collects invisible play-lane notes', () => {
+    const json = createEmptyJson('bms');
+    json.events.push({
+      measure: 0,
+      channel: '31',
+      position: [0, 1],
+      value: '01',
+    });
+
+    const timed = extractWebTimedNotes(json);
+
+    expect(timed.invisibleNotes).toHaveLength(1);
+    expect(timed.invisibleNotes[0]!.channel).toBe('11');
+    expect(timed.invisibleNotes[0]!.seconds).toBeCloseTo(0, 6);
+  });
+
   test('scroll and speed timelines preserve zero, negative, and interpolated visual motion', () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;
