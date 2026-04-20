@@ -7,6 +7,11 @@ export function registerParserExportsCases(define: DefineBenchmarkCase): void {
       parserApi.decodeBmsText(fixtures.bmsBuffer);
     },
   });
+  define('parser.decodeUtf8Text', {
+    run: (fixtures) => {
+      parserApi.decodeUtf8Text(fixtures.bmsBuffer);
+    },
+  });
   define('parser.parseBms', {
     run: (fixtures) => {
       parserApi.parseBms(fixtures.bmsText);
