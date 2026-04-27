@@ -38,38 +38,169 @@ import {
   type Lr2TextElement,
   resolveLr2AssetBytes,
 } from './lr2-skin.ts';
+import { normalizeChannel, normalizeObjectKey } from '@be-music/json';
 
-const BG = new Color('#05070b');
-const PANEL = new Color('#10141d');
-const WHITE = new Color('#edf2f7');
-const BLUE = new Color('#56b6f7');
-const RED = new Color('#ff6b6b');
-const YELLOW = new Color('#ffd166');
-const MUTED = new Color('#98a5b3');
+// -- Fallback palette (skin-less demo only) ---------------------------------
+// These colours are only used when no LR2 skin is loaded; once a skin
+// supplies its own image atlas every visible pixel comes from the skin.
+// The palette is a generic dark-mode UI scheme picked for readability,
+// not derived from any LR2 spec.
+const BG = new Color('#05070b'); // playfield background fill
+const PANEL = new Color('#10141d'); // lane background panels
+const WHITE = new Color('#edf2f7'); // notes / judgement bar
+const BLUE = new Color('#56b6f7'); // judgement display ("GREAT" etc.)
+const RED = new Color('#ff6b6b'); // scratch lane / scratch notes
+const YELLOW = new Color('#ffd166'); // accent + below-judgement ledge
+const MUTED = new Color('#98a5b3'); // status text
+
+// -- Tunable gameplay constants ---------------------------------------------
+/**
+ * Pixels per chart beat at hi-speed 1.0×. Empirical — chosen so the LR2
+ * default 7-keys playfield (≈ 315 px tall lane area) shows roughly
+ * 4.4 beats at HS = 1.0 with the 1.5× default. There is no LR2 spec
+ * value for this; tweak together with `HISPEED_*` if you want a
+ * different default density.
+ */
 const PIXELS_PER_BEAT = 72;
+/**
+ * LR2 spec — every coordinate inside an `.lr2skin` / `#INCLUDE` CSV is
+ * authored against a 640×480 logical canvas. Skins may override via
+ * `#RESOLUTION` (we honour `skin.width` / `skin.height` at render time);
+ * when no skin is loaded these constants double as the fallback design
+ * canvas size that gets letterboxed into the host viewport.
+ */
 const DESIGN_WIDTH = 640;
 const DESIGN_HEIGHT = 480;
+/**
+ * Fallback bomb sprite-sheet layout for the **demo placeholder asset**
+ * (8 × 4 frames @ 30 ms / frame ≈ 960 ms one-shot). The LR2 default
+ * 7-keys skin packs its bomb as a 9 × 1 strip at 150 ms, which we detect
+ * automatically by aspect ratio in `renderBombs()` — so these constants
+ * never fire against a real LR2 skin.
+ */
 const BOMB_DIVX = 8;
 const BOMB_DIVY = 4;
 const BOMB_CYCLE_MS = 30;
+/**
+ * Hi-Speed knob bounds — set by user request. 0.125× lets dense
+ * high-BPM charts breathe; 6.0× is the upper end most LR2 skins use
+ * before the HS NUMBER (`num=10`) glyph atlas runs out of digits. The
+ * step matches the lower bound so the slider walks a clean 1/8 grid.
+ */
 const HISPEED_MIN = 0.125;
 const HISPEED_MAX = 6.0;
 const HISPEED_STEP = 0.125;
-/** Wall-clock delay between mount() and the first audible/visible note. */
+/**
+ * Wall-clock delay between `mount()` and the first audible/visible
+ * note. Matches the LR2 default 7-keys skin's combined intro budget
+ * (#LOADSTART 2200 + #LOADEND 2800 + #PLAYSTART 1000 ≈ 3.8 s) rounded
+ * down for a snappier start. **Temporary** — the proper fix is to
+ * parse the `#LOADSTART / #LOADEND / #PLAYSTART` directives off the
+ * loaded skin and derive this per-skin (see audit item C3).
+ */
 const INTRO_DELAY_MS = 3000;
+// -- LR2 timer index bases (per spec, lr2skinhelp/timer.txt) -----------------
 /** LR2 1P key-on timers: 100=SC, 101=key1 .. 107=key7 (8=key8, 9=key9). */
 const LR2_1P_KEYON_TIMER_BASE = 100;
 /** LR2 2P key-on timers: 110=SC, 111=key1 .. 117=key7. */
 const LR2_2P_KEYON_TIMER_BASE = 110;
 /** LR2 1P bomb timers: 50=SC, 51=key1 .. 57=key7. */
 const LR2_1P_BOMB_TIMER_BASE = 50;
+/** LR2 2P bomb timers: 60=SC, 61=key1 .. 67=key7. */
 const LR2_2P_BOMB_TIMER_BASE = 60;
+// -- Skin-less fallback rectangles (demo only) ------------------------------
+// Used by `renderFallbackLr2Frame` and the `if (!skin)` branches in
+// `renderLanes`. All values are empirical and intentionally evoke the
+// LR2 default 7-keys layout so the skin-less demo is recognisable; once
+// a real `Lr2Skin` is loaded these are completely overridden by
+// `skin.laneRects`, `skin.bgas`, `skin.grooveGauges`, etc.
 const PLAYFIELD = { x: 84, y: 72, w: 204, judgementY: 322 };
 const BGA = { x: 291, y: 49, w: 174, h: 274 };
 const GROOVE = { x: 500, y: 72, w: 116, h: 250 };
 
 interface RuntimeNote extends TimedPlayableNote {
   hit: boolean;
+}
+
+interface BgaCue {
+  /** Chart-time seconds when this cue takes effect. */
+  seconds: number;
+  /** Texture cache key, or undefined for "clear" (BGA off after this point). */
+  bmpKey: string | undefined;
+}
+
+const BGA_BASE_CHANNEL = '04';
+const BGA_POOR_CHANNEL = '06';
+const BGA_LAYER_CHANNEL = '07';
+const BGA_LAYER2_CHANNEL = '0A';
+
+/**
+ * BMS spec defines the BGA buffer as a 256x256 canvas. Source images
+ * that aren't 1:1 are letterboxed/pillarboxed inside this square (without
+ * upscaling), then the whole square is stretched to the skin's
+ * `#DST_BGA` rectangle. Mirrors the `SPEC_BGA_CANVAS_SIZE` constant in
+ * `packages/player/src/bga.ts`, which performs the same fit on its
+ * terminal-side renderer.
+ */
+const SPEC_BGA_CANVAS_SIZE = 256;
+
+/**
+ * Builds per-layer BGA cue timelines from a chart. Handles both BMS
+ * (channel 04 / 06 / 07 / 0A events with BMP-id values) and bmson
+ * (`bmson.bga.events` / `layerEvents` / `poorEvents`). The returned cues
+ * are sorted ascending by `seconds` so the renderer can pick "the latest
+ * cue at or before the playhead" with a simple linear walk.
+ */
+function buildBgaTimeline(
+  chart: import('@be-music/json').BeMusicJson,
+  resolver: ReturnType<typeof createTimingResolver>,
+): { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] } {
+  const base: BgaCue[] = [];
+  const layer: BgaCue[] = [];
+  const poor: BgaCue[] = [];
+
+  // BMS-format: scan channel events for BMP triggers.
+  for (const event of chart.events) {
+    const channel = normalizeChannel(event.channel);
+    if (
+      channel !== BGA_BASE_CHANNEL &&
+      channel !== BGA_POOR_CHANNEL &&
+      channel !== BGA_LAYER_CHANNEL &&
+      channel !== BGA_LAYER2_CHANNEL
+    ) {
+      continue;
+    }
+    const seconds = resolver.eventToSeconds(event);
+    const rawKey = normalizeObjectKey(event.value);
+    const bmpKey = rawKey === '00' ? undefined : rawKey;
+    const cue: BgaCue = { seconds, bmpKey };
+    if (channel === BGA_BASE_CHANNEL) base.push(cue);
+    else if (channel === BGA_POOR_CHANNEL) poor.push(cue);
+    else layer.push(cue);
+  }
+
+  // bmson-format: dedicated event arrays keyed by `bga.header[].id`.
+  const bgaSection = chart.bmson.bga;
+  if (bgaSection.events.length > 0 || bgaSection.layerEvents.length > 0 || bgaSection.poorEvents.length > 0) {
+    const headerById = new Map(bgaSection.header.map((entry) => [entry.id, entry.name]));
+    const resolution =
+      chart.bmson.info?.resolution && chart.bmson.info.resolution > 0 ? chart.bmson.info.resolution : 240;
+    const pulseToBeat = (y: number): number => y / resolution;
+    const toCue = (entry: { y: number; id: number }): BgaCue => {
+      const beat = pulseToBeat(entry.y);
+      const seconds = resolver.beatToSeconds(beat);
+      const name = entry.id === 0 ? undefined : headerById.get(entry.id);
+      return { seconds, bmpKey: name };
+    };
+    for (const ev of bgaSection.events) base.push(toCue(ev));
+    for (const ev of bgaSection.layerEvents) layer.push(toCue(ev));
+    for (const ev of bgaSection.poorEvents) poor.push(toCue(ev));
+  }
+
+  base.sort((left, right) => left.seconds - right.seconds);
+  layer.sort((left, right) => left.seconds - right.seconds);
+  poor.sort((left, right) => left.seconds - right.seconds);
+  return { base, layer, poor };
 }
 
 export interface PixiGameplayViewOptions {
@@ -84,6 +215,13 @@ export class PixiGameplayView {
   private readonly root = new Container();
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
+  /**
+   * BGA composite layer. Sits below `skinLayer` so the skin's "BGA frame"
+   * decoration draws on top, and above `background` so the BGA is visible
+   * inside the play screen. One `Sprite` per layer (base / layer1+2 /
+   * POOR override) is reused frame-to-frame to avoid Pixi child churn.
+   */
+  private readonly bgaLayer = new Container();
   private readonly skinLayer = new Container();
   private readonly laneLayer = new Graphics();
   private readonly noteLayer = new Container();
@@ -164,6 +302,38 @@ export class PixiGameplayView {
    * initial BPM, which made notes drift through tempo transitions.
    */
   private timingResolver: ReturnType<typeof createTimingResolver> | undefined;
+  /**
+   * Per-layer BGA cue lists, sorted by chart-time seconds. Each cue's
+   * `bmpKey` is the resource key our texture cache is keyed by (BMS id
+   * like "01" for BMS charts, header.name like "base.png" for bmson).
+   * `bmpKey === undefined` is the "clear / hide" command (BMS `00`).
+   */
+  private bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] } = {
+    base: [],
+    layer: [],
+    poor: [],
+  };
+  /**
+   * BMP-resource → decoded `Texture` cache for the **base** + **POOR**
+   * tracks. Loaded lazily during `prepareBga()` so the playfield can
+   * start displaying samples while background images keep streaming in.
+   * Black pixels are preserved (this is the bottommost BGA layer).
+   */
+  private bgaTextures = new Map<string, Texture>();
+  /**
+   * BMP-resource → decoded `Texture` cache for the **layer** track
+   * (`#BMP` channels 07 and 0A). Decoded separately from
+   * {@link bgaTextures} with a chroma-key that turns pure-black pixels
+   * transparent — mirrors the BMS BGA "layer" convention used by
+   * `packages/player/src/bga.ts` so the foreground composites cleanly
+   * over the base track. Even when the same BMP id appears on both
+   * tracks we keep two textures because `chroma-key` is destructive.
+   */
+  private bgaLayerTextures = new Map<string, Texture>();
+  /** `performance.now()` of the most recent POOR judgement, drives the POOR-BGA window. */
+  private lastPoorAt = 0;
+  /** Whether the chart actually carries any BGA events (drives op 170/171). */
+  private hasBga = false;
   /** Smoothed score for the count-up animation. Lerps toward `score.score`. */
   private displayedScore = 0;
   /**
@@ -185,12 +355,18 @@ export class PixiGameplayView {
       antialias: true,
       autoDensity: true,
       resolution: globalThis.devicePixelRatio || 1,
+      // Snap sprite positions to integer device pixels to disable
+      // sub-pixel filtering. LR2 skins are pixel-art and BGA frames
+      // tend to be small (256x256), so any half-pixel offset shows up
+      // as visible blurring along edges.
+      roundPixels: true,
     });
     this.app.canvas.tabIndex = 0;
     this.app.canvas.setAttribute('aria-label', 'be-music gameplay');
     container.appendChild(this.app.canvas);
     this.root.addChild(
       this.background,
+      this.bgaLayer,
       this.skinLayer,
       this.laneLayer,
       this.noteLayer,
@@ -252,6 +428,9 @@ export class PixiGameplayView {
     this.prepareSong(song);
     await this.prepareSkin();
     await this.prepareAudio();
+    // BGA preload runs concurrently after audio so the playfield can mount
+    // immediately; missing or slow-loading bitmaps fade in mid-play.
+    void this.prepareBga();
     // Hold notes off the playfield until the LR2 intro animation finishes.
     // The default 7-keys skin's slide-ins terminate around t=2000–3000ms;
     // we use 3 seconds to leave a small breathing room before the first
@@ -289,6 +468,14 @@ export class PixiGameplayView {
     for (const texture of this.textures.values()) {
       texture.destroy(true);
     }
+    for (const texture of this.bgaTextures.values()) {
+      texture.destroy(true);
+    }
+    this.bgaTextures.clear();
+    for (const texture of this.bgaLayerTextures.values()) {
+      texture.destroy(true);
+    }
+    this.bgaLayerTextures.clear();
     this.bombTexture?.destroy(true);
     this.app.destroy(true, { children: true });
   }
@@ -307,6 +494,9 @@ export class PixiGameplayView {
     this.autoTriggerNextIndex = 0;
     this.gauge = 20;
     this.displayedScore = 0;
+    this.bgaTimeline = buildBgaTimeline(song.chart, resolver);
+    this.hasBga =
+      this.bgaTimeline.base.length > 0 || this.bgaTimeline.layer.length > 0 || this.bgaTimeline.poor.length > 0;
     this.initializeRuntimeOps();
   }
 
@@ -383,7 +573,6 @@ export class PixiGameplayView {
       61, // score saveable
       81, // load complete
       82, // replay off
-      170, // BGA absent (until BGA is implemented)
       174, // attached text absent
       178, // RANDOM absent
       182, // judge normal
@@ -405,6 +594,16 @@ export class PixiGameplayView {
     // BPM change presence flag (176 = absent, 177 = present).
     const hasBpmChanges = (this.timingResolver?.tempoPoints.length ?? 0) > 1;
     this.runtimeOps.add(hasBpmChanges ? 177 : 176);
+    // BGA presence flag (170 = absent, 171 = present). Drives the LR2
+    // default skin's BGA-frame visibility — without 171 the borders and
+    // per-side gating fail to switch on.
+    this.runtimeOps.add(this.hasBga ? 171 : 170);
+    // BGA size: op 30 = normal, op 31 = large. We expose the user's
+    // preference via `customOptions` defaults; here we pick "normal" as
+    // a sane fallback so the default `#DST_BGA` (op 30) is selected.
+    if (!this.runtimeOps.has(30) && !this.runtimeOps.has(31)) {
+      this.runtimeOps.add(30);
+    }
   }
 
   /**
@@ -552,17 +751,11 @@ export class PixiGameplayView {
   }
 
   private async loadSkinAssetTexture(skin: Lr2Skin, path: string): Promise<Texture | undefined> {
-    // For debugging color/decoding issues, prefer a same-name PNG sibling when the requested asset is a TGA.
-    if (path.toLowerCase().endsWith('.tga')) {
-      const pngPath = `${path.slice(0, -4)}.png`;
-      const pngBytes = resolveLr2AssetBytes(skin, pngPath);
-      if (pngBytes) {
-        const texture = await loadTextureFromBytes(pngPath, pngBytes, skin.transparentColor);
-        if (texture) {
-          return texture;
-        }
-      }
-    }
+    // Load the asset at its declared path. For `.tga` references we go
+    // through the bundled TGA decoder (`loadTextureFromBytes` dispatches
+    // by extension). The earlier PNG-sibling fallback was a debugging aid
+    // and has been removed so the rendered colours come from the actual
+    // skin asset, not a possibly-out-of-date PNG copy alongside it.
     const bytes = resolveLr2AssetBytes(skin, path);
     if (!bytes) {
       return undefined;
@@ -591,6 +784,84 @@ export class PixiGameplayView {
           );
         } catch {
           // Browsers vary in codec support; unsupported samples are skipped.
+        }
+      }),
+    );
+  }
+
+  /**
+   * Decodes every BMP resource referenced by the chart's BGA timelines
+   * into a Pixi `Texture`, keyed by the same string the timeline cues
+   * reference. Loads run in parallel so a long preamble doesn't gate the
+   * playfield, and unsupported formats (video) are silently skipped.
+   */
+  private async prepareBga(): Promise<void> {
+    const song = this.song;
+    const source = this.source;
+    if (!song || !source || !this.hasBga) {
+      return;
+    }
+    // Partition the referenced BMP keys by which track(s) they appear in.
+    // The base + POOR tracks share decode settings (no chroma key, since
+    // they sit at the bottom of the BGA composite); the layer track gets
+    // a black→transparent decode so the foreground can punch through.
+    // Mirrors the per-mode load split in `packages/player/src/bga.ts`
+    // (`baseKeys` / `poorKeys` use `mode: 'base'`; `layerKeys` /
+    // `layer2Keys` use `mode: 'layer'`).
+    const baseTrackKeys = new Set<string>();
+    const layerTrackKeys = new Set<string>();
+    for (const cue of [...this.bgaTimeline.base, ...this.bgaTimeline.poor]) {
+      if (cue.bmpKey) baseTrackKeys.add(cue.bmpKey);
+    }
+    for (const cue of this.bgaTimeline.layer) {
+      if (cue.bmpKey) layerTrackKeys.add(cue.bmpKey);
+    }
+    // Build a map of `bmpKey → file path` covering both BMS-style ids and
+    // bmson `bga.header[].name`s. The bmson header carries the actual
+    // resource name; the id-keyed `resources.bmp` map is fed from BMS
+    // `#BMPxx` directives (and ignored for bmson charts).
+    const refs = new Map<string, string>();
+    const referencedKeys = new Set<string>([...baseTrackKeys, ...layerTrackKeys]);
+    for (const [id, path] of Object.entries(song.chart.resources.bmp)) {
+      if (typeof path === 'string' && referencedKeys.has(id)) {
+        refs.set(id, path);
+      }
+    }
+    for (const entry of song.chart.bmson.bga.header) {
+      if (referencedKeys.has(entry.name)) {
+        refs.set(entry.name, entry.name);
+      }
+    }
+    await Promise.all(
+      [...refs.entries()].map(async ([key, path]) => {
+        if (isVideoExtension(path)) {
+          // Video BGA isn't supported yet — leaving the slot empty makes
+          // the renderer fall back to "BGA off" between cues that point
+          // at videos, which is preferable to a jarring still frame.
+          return;
+        }
+        const bytes = resolveChartAsset(source, song.chartPath, path);
+        if (!bytes) {
+          return;
+        }
+        const usedAsBase = baseTrackKeys.has(key);
+        const usedAsLayer = layerTrackKeys.has(key);
+        try {
+          if (usedAsBase) {
+            const texture = await loadTextureFromBytes(path, bytes);
+            if (texture) {
+              this.bgaTextures.set(key, texture);
+            }
+          }
+          if (usedAsLayer) {
+            const texture = await loadTextureFromBytes(path, bytes, { keyOutBlack: true });
+            if (texture) {
+              this.bgaLayerTextures.set(key, texture);
+            }
+          }
+        } catch {
+          // Decode failures (corrupt files, unsupported encodings) are
+          // skipped silently so the rest of the chart still renders.
         }
       }),
     );
@@ -1033,6 +1304,12 @@ export class PixiGameplayView {
     // per hit. Without this the keyframe playhead drifts hours into the
     // song and the post-hit fade-out keyframes have long since passed.
     this.timerStartedAt.set(46, performance.now());
+    // POOR / BAD judgements briefly swap the base BGA for the chart's
+    // POOR BGA. We trigger the same window for `BAD` because the LR2
+    // spec doesn't distinguish the two for the BGA channel.
+    if (judge === 'POOR' || judge === 'BAD') {
+      this.lastPoorAt = performance.now();
+    }
   }
 
   /**
@@ -1115,6 +1392,7 @@ export class PixiGameplayView {
     this.root.scale.set(viewport.scale);
     this.background.clear().rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
     this.renderSkin(DESIGN_WIDTH, DESIGN_HEIGHT);
+    this.renderBga(seconds);
     this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT);
     this.renderNotes(seconds, DESIGN_HEIGHT);
     this.renderBombs();
@@ -1198,6 +1476,80 @@ export class PixiGameplayView {
     }
   }
 
+  /**
+   * Composites the chart's BGA into the LR2 skin's `#DST_BGA` rectangle.
+   * Three layers stack from back to front: base (channel 04 / bmson
+   * `bga.events`), layer (channel 07 / 0A / bmson `layerEvents`), and a
+   * POOR override (channel 06 / `poorEvents`) that briefly replaces the
+   * base while the player is in a 2-second POOR-judgement window.
+   *
+   * The renderer is idempotent per frame — it tears down any existing
+   * sprites and rebuilds from the active cues, so cue switches show up
+   * the next frame without explicit dirty tracking.
+   */
+  private renderBga(seconds: number): void {
+    this.bgaLayer.removeChildren().forEach((child) => child.destroy());
+    const skin = this.options.skin;
+    if (!skin || !this.hasBga || skin.bgas.length === 0) {
+      return;
+    }
+    // Pick the first DST_BGA whose op gating is currently true (e.g. the
+    // LR2 default skin defines two — op 30 = "normal size", op 31 =
+    // "large" — and we set op 30 by default so the normal one wins).
+    const bga = skin.bgas.find((entry) => this.isDestinationVisible(entry.destination));
+    if (!bga) {
+      return;
+    }
+    const dst = this.evaluateElementDst(bga);
+    const { x, y, w, h } = normaliseRect(dst);
+    if (w <= 0 || h <= 0) {
+      return;
+    }
+    const baseKey = bga.noBase ? undefined : pickActiveBgaKey(this.bgaTimeline.base, seconds);
+    const layerKey = bga.noLayer ? undefined : pickActiveBgaKey(this.bgaTimeline.layer, seconds);
+    // POOR override: show the POOR BGA for a short window after a missed
+    // / BAD judgement, then revert to the base+layer composite.
+    const poorWindowMs = 2000;
+    const inPoorWindow = !bga.noPoor && this.lastPoorAt > 0 && performance.now() - this.lastPoorAt < poorWindowMs;
+    const poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, seconds) : undefined;
+
+    const drawLayer = (key: string | undefined, textures: ReadonlyMap<string, Texture>): void => {
+      if (!key) {
+        return;
+      }
+      const texture = textures.get(key);
+      if (!texture) {
+        return;
+      }
+      // Aspect-preserving fit: emulate the BMS 256x256 spec canvas
+      // (`packages/player/src/bga.ts`'s `convertImageToSpecFrame` /
+      // `fitSizeWithinSpecCanvas`). The source image is centered
+      // horizontally and top-aligned within the spec square (no
+      // upscaling), then the whole square is stretched to the skin's
+      // `#DST_BGA` rectangle (w, h).
+      const fit = fitTextureWithinSpecCanvas(texture.width, texture.height);
+      const scaleX = w / SPEC_BGA_CANVAS_SIZE;
+      const scaleY = h / SPEC_BGA_CANVAS_SIZE;
+      const sprite = new Sprite(texture);
+      sprite.position.set(x + fit.offsetX * scaleX, y + fit.offsetY * scaleY);
+      sprite.width = fit.width * scaleX;
+      sprite.height = fit.height * scaleY;
+      applyDestinationToSprite(sprite, dst);
+      this.bgaLayer.addChild(sprite);
+    };
+
+    if (poorKey) {
+      // POOR uses base-mode decoding (no chroma key) since it replaces
+      // the entire base+layer composite during its window.
+      drawLayer(poorKey, this.bgaTextures);
+    } else {
+      drawLayer(baseKey, this.bgaTextures);
+      // Layer track is composited on top with black→transparent so the
+      // base track shows through where the foreground BMP is empty.
+      drawLayer(layerKey, this.bgaLayerTextures);
+    }
+  }
+
   private renderSkin(width: number, height: number): void {
     this.skinLayer.removeChildren().forEach((child) => child.destroy());
     this.overlayLayer.removeChildren().forEach((child) => child.destroy());
@@ -1209,10 +1561,12 @@ export class PixiGameplayView {
     const scale = Math.min(width / skin.width, height / skin.height);
     this.skinLayer.scale.set(scale);
     this.skinLayer.position.set((width - skin.width * scale) / 2, (height - skin.height * scale) / 2);
-    // Mirror the skin transform onto the overlay so judge/combo/autoplay
-    // sprites use the same design-pixel coordinate system as `renderSkin`.
+    // Mirror the skin transform onto the overlay AND BGA layers so they
+    // share the same design-pixel coordinate system as `renderSkin`.
     this.overlayLayer.scale.set(scale);
     this.overlayLayer.position.copyFrom(this.skinLayer.position);
+    this.bgaLayer.scale.set(scale);
+    this.bgaLayer.position.copyFrom(this.skinLayer.position);
     // Two-pass image render so the judgement line lands at the right
     // z-depth: drawn AFTER the static frame / lane background (so the red
     // bar isn't covered by the lane area) but BEFORE on-top overlays —
@@ -2718,28 +3072,60 @@ function renderNumberElement(
   }
 }
 
+interface LoadTextureOptions {
+  /** Skin-declared `#TRANSCOLOR` chroma key (rare on BGA assets, common on UI sprites). */
+  transparentColor?: { r: number; g: number; b: number };
+  /**
+   * Treat pure-black pixels as transparent. Mirrors the BMS BGA "layer"
+   * convention (`packages/player/src/bga.ts`'s `isOpaquePixel` for `mode
+   * === 'layer'`): the foreground BGA layer is composited over the base
+   * with `(0, 0, 0)` acting as a chroma-key. Only enabled for layer-track
+   * decodes — base / POOR retain their black pixels because they're the
+   * bottommost BGA layer (nothing visible behind them).
+   */
+  keyOutBlack?: boolean;
+}
+
 async function loadTextureFromBytes(
   path: string,
   bytes: Uint8Array,
-  transparentColor?: { r: number; g: number; b: number },
+  transparentColorOrOptions?: { r: number; g: number; b: number } | LoadTextureOptions,
 ): Promise<Texture | undefined> {
+  const options = normalizeLoadTextureOptions(transparentColorOrOptions);
   if (path.toLowerCase().endsWith('.tga')) {
-    return decodeTgaTexture(bytes, transparentColor, path);
+    return decodeTgaTexture(bytes, options, path);
   }
   const blob = new Blob([new Uint8Array(bytes)]);
-  return loadTextureFromBlob(blob, path, transparentColor);
+  return loadTextureFromBlob(blob, path, options);
+}
+
+function normalizeLoadTextureOptions(
+  input: { r: number; g: number; b: number } | LoadTextureOptions | undefined,
+): LoadTextureOptions {
+  if (!input) {
+    return {};
+  }
+  // The legacy positional `transparentColor` shape has flat `r/g/b`
+  // numbers; the new options shape has a nested `transparentColor` /
+  // `keyOutBlack`. Discriminate on `r` so call sites that still pass
+  // the bare color triple keep working without a typed cast.
+  if (typeof (input as { r?: unknown }).r === 'number') {
+    return { transparentColor: input as { r: number; g: number; b: number } };
+  }
+  return input as LoadTextureOptions;
 }
 
 async function loadTextureFromBlob(
   blob: Blob,
   label?: string,
-  transparentColor?: { r: number; g: number; b: number },
+  options: LoadTextureOptions = {},
 ): Promise<Texture | undefined> {
   try {
     const imageBitmap = await createImageBitmap(blob);
-    const finalBitmap = transparentColor
-      ? ((await applyTransparentColorToBitmap(imageBitmap, transparentColor)) ?? imageBitmap)
-      : imageBitmap;
+    const finalBitmap =
+      options.transparentColor || options.keyOutBlack
+        ? ((await applyChromaKeyToBitmap(imageBitmap, options)) ?? imageBitmap)
+        : imageBitmap;
     const texture = Texture.from(finalBitmap);
     if (label) {
       texture.label = label;
@@ -2751,9 +3137,9 @@ async function loadTextureFromBlob(
   }
 }
 
-async function applyTransparentColorToBitmap(
+async function applyChromaKeyToBitmap(
   imageBitmap: ImageBitmap,
-  transparentColor: { r: number; g: number; b: number },
+  options: LoadTextureOptions,
 ): Promise<ImageBitmap | undefined> {
   const canvas = document.createElement('canvas');
   canvas.width = imageBitmap.width;
@@ -2765,9 +3151,17 @@ async function applyTransparentColorToBitmap(
   context.drawImage(imageBitmap, 0, 0);
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const { data } = imageData;
-  const { r, g, b } = transparentColor;
+  const transparent = options.transparentColor;
+  const keyOutBlack = options.keyOutBlack === true;
   for (let index = 0; index < data.length; index += 4) {
-    if (data[index] === r && data[index + 1] === g && data[index + 2] === b) {
+    const r = data[index] ?? 0;
+    const g = data[index + 1] ?? 0;
+    const b = data[index + 2] ?? 0;
+    if (transparent && r === transparent.r && g === transparent.g && b === transparent.b) {
+      data[index + 3] = 0;
+      continue;
+    }
+    if (keyOutBlack && r === 0 && g === 0 && b === 0) {
       data[index + 3] = 0;
     }
   }
@@ -2777,9 +3171,11 @@ async function applyTransparentColorToBitmap(
 
 async function decodeTgaTexture(
   bytes: Uint8Array,
-  transparentColor?: { r: number; g: number; b: number },
+  options: LoadTextureOptions = {},
   label?: string,
 ): Promise<Texture | undefined> {
+  const transparentColor = options.transparentColor;
+  const keyOutBlack = options.keyOutBlack === true;
   if (bytes.length < 18) {
     return undefined;
   }
@@ -2834,6 +3230,8 @@ async function decodeTgaTexture(
       const b = bytes[source] ?? 0;
       let a = bitsPerPixel === 32 ? (bytes[source + 3] ?? 255) : 255;
       if (transparentColor && r === transparentColor.r && g === transparentColor.g && b === transparentColor.b) {
+        a = 0;
+      } else if (keyOutBlack && r === 0 && g === 0 && b === 0) {
         a = 0;
       }
       imageData.data[target] = r;
@@ -2973,6 +3371,68 @@ function formatTime(seconds: number): string {
     .toString()
     .padStart(2, '0');
   return `${minute}:${second}`;
+}
+
+/**
+ * Walks a sorted-by-seconds BGA cue list and returns the key currently
+ * "in effect" at the given playhead. Returns `undefined` when the most
+ * recent cue is a clear command (BMS `00` / bmson id=0) or when no cue
+ * has fired yet.
+ */
+function pickActiveBgaKey(cues: ReadonlyArray<BgaCue>, seconds: number): string | undefined {
+  let active: string | undefined;
+  for (const cue of cues) {
+    if (cue.seconds > seconds) {
+      break;
+    }
+    active = cue.bmpKey;
+  }
+  return active;
+}
+
+/**
+ * Fits a source image of `(sourceWidth, sourceHeight)` inside the BMS
+ * 256x256 spec canvas while preserving aspect ratio. Mirrors
+ * `fitSizeWithinSpecCanvas` + the centering offsets from
+ * `convertImageToSpecFrame` in `packages/player/src/bga.ts`:
+ *
+ * - Never upscales (`Math.min(1, ...)` on the scale factor) — sub-256
+ *   sprites stay at their native pixel size, matching how LR2 paints
+ *   small BMPs onto the BGA buffer.
+ * - Centers horizontally inside the canvas.
+ * - Top-aligns vertically (LR2's `#BGA` uses (0, 0) as the buffer
+ *   origin, and the player-side renderer matches that).
+ *
+ * The returned `(offsetX, offsetY, width, height)` is in spec-canvas
+ * coordinates (0..256); the caller scales those into `#DST_BGA` space.
+ */
+function fitTextureWithinSpecCanvas(
+  sourceWidth: number,
+  sourceHeight: number,
+): { offsetX: number; offsetY: number; width: number; height: number } {
+  const safeW = Math.max(1, Math.floor(sourceWidth));
+  const safeH = Math.max(1, Math.floor(sourceHeight));
+  const widthScale = SPEC_BGA_CANVAS_SIZE / safeW;
+  const heightScale = SPEC_BGA_CANVAS_SIZE / safeH;
+  const scale = Math.min(1, widthScale, heightScale);
+  const fittedWidth = Math.max(1, Math.floor(safeW * scale));
+  const fittedHeight = Math.max(1, Math.floor(safeH * scale));
+  const offsetX = Math.floor((SPEC_BGA_CANVAS_SIZE - fittedWidth) / 2);
+  const offsetY = 0;
+  return { offsetX, offsetY, width: fittedWidth, height: fittedHeight };
+}
+
+/**
+ * Treats a file path as referencing a video so the BGA preloader can
+ * skip it instead of trying to feed video bytes to the still-image
+ * decoder. We intentionally cover the broad set of formats a BMS chart
+ * might reference (.mp4 / .webm / .mpg / .avi / .mov / .wmv) — all of
+ * which would need an `HTMLVideoElement` + frame extraction pipeline
+ * that we don't ship yet.
+ */
+function isVideoExtension(path: string): boolean {
+  const lower = path.toLowerCase();
+  return /\.(mpg|mpeg|mp4|m4v|avi|mov|wmv|webm|mkv)$/u.test(lower);
 }
 
 function basenameOnly(path: string): string {

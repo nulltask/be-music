@@ -525,4 +525,29 @@ describe('loadLr2SkinFromSourceFiles', () => {
     }
     expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['b_900_905_910.png']);
   });
+
+  it('parses #SRC_BGA / #DST_BGA with nobase / nolayer / nopoor flags', () => {
+    const files = new Map<string, Uint8Array>([
+      [
+        'skin/main.csv',
+        lines(
+          // LR2 default-style "normal" (op 30) BGA with all three layers visible.
+          '#SRC_BGA,0,0,0,0,0,0,0,0,0,0,0,0,0',
+          '#DST_BGA,0,0,291,56,256,256,0,255,255,255,255,0,0,0,0,0,0,30,0,0',
+          // "no-layer + no-poor" alternative, gated on op 31 (large) —
+          // verifies that the column 11 / 12 / 13 flags translate to the
+          // per-layer suppression booleans (column 11 = nobase = 0,
+          // 12 = nolayer = 1, 13 = nopoor = 1).
+          '#SRC_BGA,0,0,0,0,0,0,0,0,0,0,0,1,1',
+          '#DST_BGA,0,0,230,0,392,392,0,255,255,255,255,0,1,0,0,0,0,31,0,0',
+        ),
+      ],
+    ]);
+    const skin = loadLr2SkinFromSourceFiles(files);
+    expect(skin?.bgas).toHaveLength(2);
+    expect(skin?.bgas[0]?.destination).toMatchObject({ x: 291, y: 56, w: 256, h: 256 });
+    expect(skin?.bgas[0]).toMatchObject({ noBase: false, noLayer: false, noPoor: false });
+    expect(skin?.bgas[1]?.destination).toMatchObject({ x: 230, y: 0, w: 392, h: 392 });
+    expect(skin?.bgas[1]).toMatchObject({ noBase: false, noLayer: true, noPoor: true });
+  });
 });

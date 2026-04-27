@@ -149,6 +149,25 @@ export interface Lr2MeasureLineElement {
 }
 
 /**
+ * `#SRC_BGA` + `#DST_BGA` — defines the rectangle where the chart's BGA
+ * (background animation) is composited. The SRC is mostly a placeholder
+ * in the LR2 spec; columns 11/12/13 carry the **nobase / nolayer / nopoor**
+ * flags (set to 1 to suppress that layer for this DST entry). Multiple
+ * `#DST_BGA` entries can coexist when gated on different ops (e.g. one
+ * for "normal" BGA size, another for "large" BGA size).
+ */
+export interface Lr2BgaElement {
+  destination: Lr2DestinationRect;
+  keyframes: Lr2DestinationRect[];
+  /** When true the base BGA layer (channel 04 / bmson `bga.events`) is hidden. */
+  noBase: boolean;
+  /** When true the layer BGAs (channels 07 / 0A / bmson `bga.layerEvents`) are hidden. */
+  noLayer: boolean;
+  /** When true the POOR BGA (channel 06 / bmson `bga.poorEvents`) is hidden. */
+  noPoor: boolean;
+}
+
+/**
  * `#SRC_TEXT` text alignment. LR2 spec column 4 of #SRC_TEXT:
  * 0 = left, 1 = center, 2 = right.
  */
@@ -240,6 +259,7 @@ export interface Lr2Skin {
   nowCombos: Lr2NowComboElement[];
   judgeLines: Lr2JudgeLineElement[];
   measureLines: Lr2MeasureLineElement[];
+  bgas: Lr2BgaElement[];
   texts: Lr2TextElement[];
   bargraphs: Lr2BarGraphElement[];
   sliders: Lr2SliderElement[];
@@ -292,6 +312,12 @@ interface MeasureLineSourceEntry {
   index: number;
 }
 
+interface BgaSourceEntry {
+  noBase: boolean;
+  noLayer: boolean;
+  noPoor: boolean;
+}
+
 interface TextSourceEntry {
   font: number;
   st: number;
@@ -333,6 +359,8 @@ interface ParseContext {
   judgeLineDstGroups: Lr2DestinationRect[][];
   measureLineSources: MeasureLineSourceEntry[];
   measureLineDstGroups: Lr2DestinationRect[][];
+  bgaSources: BgaSourceEntry[];
+  bgaDstGroups: Lr2DestinationRect[][];
   textSources: TextSourceEntry[];
   textDstGroups: Lr2DestinationRect[][];
   bargraphSources: BarGraphSourceEntry[];
@@ -427,6 +455,8 @@ export function loadLr2SkinFromSourceFiles(sourceFiles: ReadonlyMap<string, Uint
     judgeLineDstGroups: [],
     measureLineSources: [],
     measureLineDstGroups: [],
+    bgaSources: [],
+    bgaDstGroups: [],
     textSources: [],
     textDstGroups: [],
     bargraphSources: [],
@@ -481,6 +511,7 @@ export function loadLr2SkinFromSourceFiles(sourceFiles: ReadonlyMap<string, Uint
     nowCombos: createNowComboElements(context),
     judgeLines: createJudgeLineElements(context),
     measureLines: createMeasureLineElements(context),
+    bgas: createBgaElements(context),
     texts: createTextElements(context),
     bargraphs: createBarGraphElements(context),
     sliders: createSliderElements(context),
@@ -669,6 +700,21 @@ function readLr2Path(
       context.measureLineDstGroups.push([]);
     } else if (command === '#DST_LINE') {
       const group = context.measureLineDstGroups.at(-1);
+      if (group) {
+        appendDestinationKeyframe(group, row);
+      }
+    } else if (command === '#SRC_BGA') {
+      // #SRC_BGA,(NULL),(NULL),…(unused),nobase,nolayer,nopoor
+      // Columns 11/12/13 are the per-DST suppression flags; everything
+      // before them is a placeholder kept for SRC-row format symmetry.
+      context.bgaSources.push({
+        noBase: toNumber(row[11], 0) === 1,
+        noLayer: toNumber(row[12], 0) === 1,
+        noPoor: toNumber(row[13], 0) === 1,
+      });
+      context.bgaDstGroups.push([]);
+    } else if (command === '#DST_BGA') {
+      const group = context.bgaDstGroups.at(-1);
       if (group) {
         appendDestinationKeyframe(group, row);
       }
@@ -1019,6 +1065,26 @@ function createMeasureLineElements(context: ParseContext): Lr2MeasureLineElement
       destination,
       keyframes: [...dstGroup],
       index: entry.index,
+    });
+  }
+  return elements;
+}
+
+function createBgaElements(context: ParseContext): Lr2BgaElement[] {
+  const elements: Lr2BgaElement[] = [];
+  for (let index = 0; index < context.bgaSources.length; index += 1) {
+    const entry = context.bgaSources[index]!;
+    const dstGroup = context.bgaDstGroups[index];
+    if (!dstGroup || dstGroup.length === 0) {
+      continue;
+    }
+    const destination = dstGroup[dstGroup.length - 1]!;
+    elements.push({
+      destination,
+      keyframes: [...dstGroup],
+      noBase: entry.noBase,
+      noLayer: entry.noLayer,
+      noPoor: entry.noPoor,
     });
   }
   return elements;

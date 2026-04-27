@@ -46,6 +46,9 @@ export class PixiSongSelectView {
       antialias: true,
       autoDensity: true,
       resolution: globalThis.devicePixelRatio || 1,
+      // Match the gameplay view: snap sprites to integer device pixels
+      // so LR2 skin assets render crisply without sub-pixel filtering.
+      roundPixels: true,
     });
     this.app.canvas.tabIndex = 0;
     this.app.canvas.setAttribute('aria-label', 'be-music song select');
