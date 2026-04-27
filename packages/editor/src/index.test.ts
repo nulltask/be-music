@@ -20,8 +20,6 @@ import {
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
 describe('editor', () => {
-
-
   test('editor: createBlankJson returns an empty JSON-based chart', () => {
     const json = createBlankJson();
     expect(json.sourceFormat).toBe('json');

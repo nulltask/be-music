@@ -1,10 +1,10 @@
 import readline from 'node:readline';
 import type { LogEntry } from '@be-music/utils';
+import { beginStatefulKeyboardProtocolOptIn, resolveInputTokenEvent } from '../manual-input.ts';
 import {
-  beginStatefulKeyboardProtocolOptIn,
-  resolveInputTokenEvent,
-} from '../manual-input.ts';
-import { resolveHighSpeedControlActionFromLaneChannels, type HighSpeedControlAction } from '../core/high-speed-control.ts';
+  resolveHighSpeedControlActionFromLaneChannels,
+  type HighSpeedControlAction,
+} from '../core/high-speed-control.ts';
 import type { PlayerInputSignalBus } from '../core/input-signal-bus.ts';
 import { beginSharedRawInputCapture, type RawInputCapture } from '../raw-input-capture.ts';
 
@@ -419,8 +419,7 @@ function consumeProtocolKeypressSequences(buffer: string): {
 
 const KITTY_KEYPRESS_SEQUENCE = /^\u001b\[[0-9:]+(?:;[0-9:]+)*u$/;
 const WIN32_KEYPRESS_SEQUENCE = /^\u001b\[[0-9]+(?:;[0-9]+){5}_$/;
-const PROTOCOL_KEYPRESS_SEQUENCE =
-  /\u001b\[[0-9]+(?:;[0-9]+){5}_|\u001b\[[0-9:]+(?:;[0-9:]+)*u/;
+const PROTOCOL_KEYPRESS_SEQUENCE = /\u001b\[[0-9]+(?:;[0-9]+){5}_|\u001b\[[0-9:]+(?:;[0-9:]+)*u/;
 
 function isSpaceKey(key: readline.Key): boolean {
   return key.name?.toLowerCase() === 'space' || key.sequence === ' ';

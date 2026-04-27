@@ -461,7 +461,9 @@ async function buildChartSummary(
   let difficulty: number | undefined;
   try {
     throwIfAborted(signal);
-    const chart = sourceBuffer ? parseChartSelectionSourceBuffer(filePath, sourceBuffer) : await parseChartFileWithCacheMiss(filePath, signal);
+    const chart = sourceBuffer
+      ? parseChartSelectionSourceBuffer(filePath, sourceBuffer)
+      : await parseChartFileWithCacheMiss(filePath, signal);
     throwIfAborted(signal);
     const resolvedChart = resolveBmsControlFlow(chart, { random: () => 0 });
     throwIfAborted(signal);
@@ -540,10 +542,7 @@ function buildChartSelectionContentHash(sourceBuffer: Buffer): string {
   return createHash('sha256').update(sourceBuffer).digest('hex');
 }
 
-function buildChartSelectionCacheHash(entry: {
-  contentHash: string;
-  summary: PersistedChartSummaryItem;
-}): string {
+function buildChartSelectionCacheHash(entry: { contentHash: string; summary: PersistedChartSummaryItem }): string {
   return createHash('sha256')
     .update(
       JSON.stringify([
@@ -589,7 +588,13 @@ function resolveChartSummaryRelativePath(rootDir: string, filePath: string): str
 }
 
 function persistChartSummary(summary: ChartSummaryItem): PersistedChartSummaryItem {
-  const { filePath: _filePath, relativePath: _relativePath, directoryLabel: _directoryLabel, fileLabel: _fileLabel, ...persisted } = summary;
+  const {
+    filePath: _filePath,
+    relativePath: _relativePath,
+    directoryLabel: _directoryLabel,
+    fileLabel: _fileLabel,
+    ...persisted
+  } = summary;
   return persisted;
 }
 
@@ -605,10 +610,13 @@ function createPersistedChartSelectionCacheFileEntry(
 }
 
 function isPersistedChartSelectionCacheFileEntryValid(entry: PersistedChartSelectionCacheFileEntry): boolean {
-  return entry.cacheHash === buildChartSelectionCacheHash({
-    contentHash: entry.contentHash,
-    summary: entry.summary,
-  });
+  return (
+    entry.cacheHash ===
+    buildChartSelectionCacheHash({
+      contentHash: entry.contentHash,
+      summary: entry.summary,
+    })
+  );
 }
 
 function restoreChartSummary(

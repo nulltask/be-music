@@ -13,9 +13,11 @@ interface SharedRawInputCaptureState {
 
 let sharedRawInputCaptureState: SharedRawInputCaptureState | undefined;
 
-export function beginSharedRawInputCapture(options: {
-  forceResetRawMode?: boolean;
-} = {}): RawInputCapture {
+export function beginSharedRawInputCapture(
+  options: {
+    forceResetRawMode?: boolean;
+  } = {},
+): RawInputCapture {
   const stdin = process.stdin as NodeJS.ReadStream & { isRaw?: boolean };
   if (!stdin.isTTY) {
     return {

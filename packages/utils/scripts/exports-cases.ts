@@ -74,13 +74,19 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
   });
   define('utils.workerize', {
     run: () => {
-      const worker = utilsApi.workerize((value: number) => value + 1, () => []);
+      const worker = utilsApi.workerize(
+        (value: number) => value + 1,
+        () => [],
+      );
       worker.close();
     },
   });
   define('utils.invokeWorkerizedFunction', {
     run: async () => {
-      const worker = utilsApi.workerize((value: number) => value + 1, () => []);
+      const worker = utilsApi.workerize(
+        (value: number) => value + 1,
+        () => [],
+      );
       try {
         await utilsApi.invokeWorkerizedFunction(worker, [41]);
       } finally {

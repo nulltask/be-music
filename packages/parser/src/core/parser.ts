@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises';
-import { extname } from 'node:path';
 import {
   BMS_JSON_FORMAT,
   type BmsControlFlowCommand,
@@ -13,8 +11,7 @@ import {
   normalizeChannel,
   normalizeObjectKey,
 } from '@be-music/json';
-import { normalizeAsciiBase36Code } from '@be-music/utils';
-import { decodeBmsText, decodeUtf8Text } from './bms-text-decoder.ts';
+import { normalizeAsciiBase36Code } from '@be-music/utils/core';
 import {
   collectNonZeroObjectTokens,
   normalizeBmsonNoteLength,
@@ -385,6 +382,7 @@ export interface ParseChartFileOptions {
 }
 
 export async function parseChartFile(filePath: string, options: ParseChartFileOptions = {}): Promise<BeMusicJson> {
+  const [{ readFile }, { extname }] = await Promise.all([import('node:fs/promises'), import('node:path')]);
   const buffer = await readFile(filePath, {
     signal: options.signal,
   });
@@ -411,6 +409,35 @@ export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsCon
 }
 
 export { decodeBmsText };
+
+export interface DecodedBmsText {
+  encoding: 'utf8' | 'shift_jis';
+  text: string;
+}
+
+function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
+  if (buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    return {
+      encoding: 'utf8',
+      text: decodeUtf8Text(buffer),
+    };
+  }
+  try {
+    return {
+      encoding: 'shift_jis',
+      text: new TextDecoder('shift_jis').decode(buffer),
+    };
+  } catch {
+    return {
+      encoding: 'utf8',
+      text: decodeUtf8Text(buffer),
+    };
+  }
+}
+
+function decodeUtf8Text(buffer: Uint8Array): string {
+  return new TextDecoder('utf-8').decode(buffer).replace(/^\ufeff/u, '');
+}
 
 function pushObjectDataLine(
   json: BeMusicJson,
@@ -486,14 +513,7 @@ function parseObjectDataLine(line: string): ParsedObjectDataLine | undefined {
   const digit0 = line.charCodeAt(1);
   const digit1 = line.charCodeAt(2);
   const digit2 = line.charCodeAt(3);
-  if (
-    digit0 < 0x30 ||
-    digit0 > 0x39 ||
-    digit1 < 0x30 ||
-    digit1 > 0x39 ||
-    digit2 < 0x30 ||
-    digit2 > 0x39
-  ) {
+  if (digit0 < 0x30 || digit0 > 0x39 || digit1 < 0x30 || digit1 > 0x39 || digit2 < 0x30 || digit2 > 0x39) {
     return undefined;
   }
 
@@ -1179,11 +1199,7 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   return normalized;
 }
 
-function normalizePreservation(
-  input: unknown,
-  bmsInput: unknown,
-  bmsonInput: unknown,
-): BeMusicJson['preservation'] {
+function normalizePreservation(input: unknown, bmsInput: unknown, bmsonInput: unknown): BeMusicJson['preservation'] {
   const normalized = createEmptyJson('json').preservation;
 
   const raw = input && typeof input === 'object' ? (input as Record<string, unknown>) : undefined;
@@ -1355,7 +1371,9 @@ function normalizeBmsObjectLineEntry(input: unknown): BmsObjectLineEntry | undef
   const normalizedEvents = sortAndNormalizeEvents(rawEvents as Array<BeMusicEvent | Record<string, unknown>>)
     .filter(
       (event) =>
-        event.measure === measure && normalizeChannel(event.channel) === channel && normalizeObjectKey(event.value) !== '00',
+        event.measure === measure &&
+        normalizeChannel(event.channel) === channel &&
+        normalizeObjectKey(event.value) !== '00',
     )
     .map((event) => ({
       measure,

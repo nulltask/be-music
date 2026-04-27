@@ -46,7 +46,9 @@ describe.sequential('cli config', () => {
       highSpeed: true,
     });
 
-    expect(config.applyMusicSelectConfigToArgs({ auto: false, autoScratch: false, highSpeed: 11 }, 'auto', 2.74)).toEqual({
+    expect(
+      config.applyMusicSelectConfigToArgs({ auto: false, autoScratch: false, highSpeed: 11 }, 'auto', 2.74),
+    ).toEqual({
       auto: true,
       autoScratch: false,
       highSpeed: 2.5,
@@ -105,7 +107,10 @@ describe.sequential('cli config', () => {
       lastMusicSelectFocusKeyByDirectory: { '/songs': ' random ' },
     });
 
-    const saved = JSON.parse(await readFile(join(homeDir, '.be-music', 'player.json'), 'utf8')) as Record<string, unknown>;
+    const saved = JSON.parse(await readFile(join(homeDir, '.be-music', 'player.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >;
     expect(saved).toEqual({
       playMode: 'auto-scratch',
       highSpeed: 3,

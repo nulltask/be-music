@@ -3,7 +3,10 @@ import { invokeWorkerizedFunction, workerize } from './index.ts';
 
 describe('workerize utilities', () => {
   test('invokeWorkerizedFunction: resolves workerized results', async () => {
-    const worker = workerize((value: number) => value + 1, () => []);
+    const worker = workerize(
+      (value: number) => value + 1,
+      () => [],
+    );
     try {
       await expect(invokeWorkerizedFunction(worker, [41])).resolves.toBe(42);
     } finally {

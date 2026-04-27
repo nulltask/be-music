@@ -1,4 +1,4 @@
-import { normalizeAsciiBase36Code } from '@be-music/utils';
+import { normalizeAsciiBase36Code } from '@be-music/utils/core';
 
 export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
 

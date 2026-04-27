@@ -6,10 +6,7 @@ import type { PlayerSummary } from '../index.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../utils.ts';
 import type { PlayerStateSignals } from '../state-signals.ts';
 import { DEFAULT_TUI_NOTE_HEIGHT, type TuiNoteHeight } from '../tui-note-height.ts';
-import {
-  buildKittyGraphicsDeleteImageSequence,
-  buildKittyGraphicsRenderSequence,
-} from './kitty-graphics.ts';
+import { buildKittyGraphicsDeleteImageSequence, buildKittyGraphicsRenderSequence } from './kitty-graphics.ts';
 import { findStackableRowIndex } from './lane-stacking.ts';
 import { normalizeHighSpeed, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
 import {
@@ -653,7 +650,11 @@ export class PlayerTui {
           const bodyEndBeat = note.endBeat;
           const bodyStartDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyStartBeat);
           const bodyEndDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyEndBeat);
-          const normalizedBodyStart = normalizeNoteApproachDistance(bodyStartDistance, frame.currentBeat, bodyStartBeat);
+          const normalizedBodyStart = normalizeNoteApproachDistance(
+            bodyStartDistance,
+            frame.currentBeat,
+            bodyStartBeat,
+          );
           const normalizedBodyEnd = normalizeNoteApproachDistance(bodyEndDistance, frame.currentBeat, bodyEndBeat);
           const hasBodyStart = Number.isFinite(normalizedBodyStart);
           const hasBodyEnd = Number.isFinite(normalizedBodyEnd);
@@ -1065,11 +1066,7 @@ export class PlayerTui {
       if (!Number.isFinite(maxBeat)) {
         end = notes.length;
       } else {
-        while (
-          end < notes.length &&
-          notes[end].beat <= maxBeat &&
-          end - start < visibleNotesLimit
-        ) {
+        while (end < notes.length && notes[end].beat <= maxBeat && end - start < visibleNotesLimit) {
           end += 1;
         }
       }
@@ -1211,10 +1208,7 @@ export class PlayerTui {
 class ScrollDistanceMapper {
   private readonly segments: ScrollSegment[];
 
-  constructor(
-    scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>,
-    speedTimeline?: ReadonlyArray<SpeedTimelinePoint>,
-  ) {
+  constructor(scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>, speedTimeline?: ReadonlyArray<SpeedTimelinePoint>) {
     this.segments = buildScrollSegments(scrollTimeline, speedTimeline);
   }
 
@@ -1317,7 +1311,9 @@ function buildScrollSegments(
 ): ScrollSegment[] {
   const scrollPoints = normalizeScrollPoints(scrollTimeline);
   const speedPoints = normalizeSpeedPoints(speedTimeline);
-  const breakpoints = [...new Set([...scrollPoints.map((point) => point.beat), ...speedPoints.map((point) => point.beat)])]
+  const breakpoints = [
+    ...new Set([...scrollPoints.map((point) => point.beat), ...speedPoints.map((point) => point.beat)]),
+  ]
     .filter((beat) => Number.isFinite(beat) && beat >= 0)
     .sort((left, right) => left - right);
   if (breakpoints.length === 0 || breakpoints[0] !== 0) {
@@ -1331,8 +1327,7 @@ function buildScrollSegments(
     const endBeat = breakpoints[index + 1];
     const scrollSpeed = resolveScrollSpeedAtBeat(scrollPoints, startBeat);
     const speedStart = resolveInterpolatedSpeedAtBeat(speedPoints, startBeat);
-    const speedEnd =
-      typeof endBeat === 'number' ? resolveInterpolatedSpeedAtBeat(speedPoints, endBeat) : speedStart;
+    const speedEnd = typeof endBeat === 'number' ? resolveInterpolatedSpeedAtBeat(speedPoints, endBeat) : speedStart;
     const speedSlope =
       typeof endBeat === 'number' && endBeat > startBeat ? (speedEnd - speedStart) / (endBeat - startBeat) : 0;
     segments.push({
@@ -2344,7 +2339,12 @@ function renderLaneLinesWithProgressIndicators(
   if (laneLines.length <= 0) {
     return laneLines;
   }
-  const markerPosition = resolveProgressIndicatorMarkerPosition(startRowIndex, endRowIndex, currentSeconds, totalSeconds);
+  const markerPosition = resolveProgressIndicatorMarkerPosition(
+    startRowIndex,
+    endRowIndex,
+    currentSeconds,
+    totalSeconds,
+  );
   return laneLines.map((line, index) => {
     if (index < startRowIndex || index > endRowIndex) {
       const emptySide = renderProgressIndicatorPadding();
@@ -2796,8 +2796,12 @@ function renderGrooveGaugeBar(current: number, clearThreshold: number, max: numb
     const inClearZone = index >= clearIndex;
     const filledCell = index < filled;
     const color = inClearZone
-      ? (filledCell ? GROOVE_GAUGE_CLEAR_RGB : GROOVE_GAUGE_CLEAR_EMPTY_RGB)
-      : (filledCell ? GROOVE_GAUGE_SAFE_RGB : GROOVE_GAUGE_SAFE_EMPTY_RGB);
+      ? filledCell
+        ? GROOVE_GAUGE_CLEAR_RGB
+        : GROOVE_GAUGE_CLEAR_EMPTY_RGB
+      : filledCell
+        ? GROOVE_GAUGE_SAFE_RGB
+        : GROOVE_GAUGE_SAFE_EMPTY_RGB;
     output += colorizeText(filledCell ? '█' : '░', color);
   }
   return output;

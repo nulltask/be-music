@@ -1,12 +1,7 @@
 import { isPlayLaneSoundChannel } from '@be-music/chart';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import {
-  isAbortError,
-  resolveFirstExistingPath,
-  throwIfAborted,
-  writeStereoPcm16Le,
-} from '@be-music/utils';
+import { isAbortError, resolveFirstExistingPath, throwIfAborted, writeStereoPcm16Le } from '@be-music/utils';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { collectSampleTriggers, createTimingResolver, type RenderResult, renderJson } from '@be-music/audio-renderer';
@@ -137,7 +132,10 @@ export function createChartPreviewController(options: ChartPreviewAudioOptions =
     }
   };
 
-  const loadPreview = async (filePath: string, currentSequence: number): Promise<ChartPreviewAsset | null | undefined> => {
+  const loadPreview = async (
+    filePath: string,
+    currentSequence: number,
+  ): Promise<ChartPreviewAsset | null | undefined> => {
     const cachedPreview = previewCache.get(filePath);
     if (cachedPreview !== undefined) {
       return cachedPreview;

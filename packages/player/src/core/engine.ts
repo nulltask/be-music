@@ -603,12 +603,7 @@ function resolveOutputWriter(options: PlayerOptions): (text: string) => void {
   return (): void => undefined;
 }
 
-function emitPlayerLog(
-  options: PlayerOptions,
-  level: LogLevel,
-  event: string,
-  fields?: Record<string, unknown>,
-): void {
+function emitPlayerLog(options: PlayerOptions, level: LogLevel, event: string, fields?: Record<string, unknown>): void {
   options.onLog?.({
     source: 'engine',
     level,
@@ -627,7 +622,8 @@ function writeRealtimeTriggeredEventLog(
   resourcePath?: string,
   source = 'realtime',
 ): void {
-  const normalizedResourcePath = typeof resourcePath === 'string' ? normalizeLoggedResourcePath(resourcePath) : undefined;
+  const normalizedResourcePath =
+    typeof resourcePath === 'string' ? normalizeLoggedResourcePath(resourcePath) : undefined;
   writeRuntimeEventLog(writeOutput, 'sample-trigger', [
     ['time', formatSeconds(trigger.seconds)],
     ['source', source],
@@ -710,9 +706,11 @@ function resolveLandmineExplosionEvent(
   };
 }
 
-function resolveLandmineGaugeEffect(
-  landmineEvent: Pick<BeMusicEvent, 'value'>,
-): { objectValue: string; damage: number; gaugeDelta: number } {
+function resolveLandmineGaugeEffect(landmineEvent: Pick<BeMusicEvent, 'value'>): {
+  objectValue: string;
+  damage: number;
+  gaugeDelta: number;
+} {
   const objectValue = normalizeObjectKey(landmineEvent.value);
   if (!BASE36_OBJECT_KEY_PATTERN.test(objectValue)) {
     return {
@@ -826,18 +824,13 @@ function createNoTuiPlaybackStateLogger(params: {
   };
 }
 
-function writeRealtimeVolumeEventLog(
-  writeOutput: (text: string) => void,
-  seconds: number,
-  event: BeMusicEvent,
-): void {
+function writeRealtimeVolumeEventLog(writeOutput: (text: string) => void, seconds: number, event: BeMusicEvent): void {
   const normalizedChannel = normalizeChannel(event.channel);
-  const target =
-    isBmsKeyVolumeChangeChannel(normalizedChannel)
-      ? 'key'
-      : isBmsBgmVolumeChangeChannel(normalizedChannel)
-        ? 'bgm'
-        : 'master';
+  const target = isBmsKeyVolumeChangeChannel(normalizedChannel)
+    ? 'key'
+    : isBmsBgmVolumeChangeChannel(normalizedChannel)
+      ? 'bgm'
+      : 'master';
   writeRuntimeEventLog(writeOutput, 'volume-change', [
     ['time', formatSeconds(seconds)],
     ['target', target],
@@ -1666,7 +1659,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         resolver: timingResolver,
         writeOutput,
       });
-  const playbackStateLogger = uiEnabled ? createNoopPlaybackStateLogger() : createNoTuiPlaybackStateLogger({ writeOutput, summary });
+  const playbackStateLogger = uiEnabled
+    ? createNoopPlaybackStateLogger()
+    : createNoTuiPlaybackStateLogger({ writeOutput, summary });
   const applyLoggedGaugeJudge = (seconds: number, judge: GrooveGaugeJudgeKind, reason = 'judge'): void => {
     applyGaugeJudgeWithLogging({
       summary,
@@ -2233,7 +2228,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         writeOutput,
         judgeWindowMs: options.judgeWindowMs,
       });
-  const playbackStateLogger = uiEnabled ? createNoopPlaybackStateLogger() : createNoTuiPlaybackStateLogger({ writeOutput, summary });
+  const playbackStateLogger = uiEnabled
+    ? createNoopPlaybackStateLogger()
+    : createNoTuiPlaybackStateLogger({ writeOutput, summary });
   const applyLoggedGaugeJudge = (seconds: number, judge: GrooveGaugeJudgeKind, reason = 'judge'): void => {
     applyGaugeJudgeWithLogging({
       summary,
@@ -2666,12 +2663,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         break;
       }
       if (!uiEnabled) {
-        writeRealtimeTriggeredEventLog(
-          writeOutput,
-          trigger,
-          resolvedJson.resources.wav[trigger.sampleKey],
-          'realtime',
-        );
+        writeRealtimeTriggeredEventLog(writeOutput, trigger, resolvedJson.resources.wav[trigger.sampleKey], 'realtime');
       }
       triggerEvent(trigger.event);
       nonPlayableRealtimeAudioTriggerIndex += 1;
@@ -2821,23 +2813,23 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     audioSession?.triggerEvent?.(candidate.event);
     const endSeconds = candidate.endSeconds;
-      if (typeof endSeconds === 'number' && Number.isFinite(endSeconds) && endSeconds > candidate.seconds) {
-        const longNoteMode = resolvePlayableLongNoteMode(candidate);
-        const previousSuppressUntil = longNoteSuppressUntilSecondsByChannel.get(channel) ?? Number.NEGATIVE_INFINITY;
-        if (endSeconds > previousSuppressUntil) {
-          longNoteSuppressUntilSecondsByChannel.set(channel, endSeconds);
-        }
-        playbackStateLogger.logLongNoteState(nowSec, {
-          channel,
-          state: 'start',
-          mode: longNoteMode === 2 || longNoteMode === 3 ? longNoteMode : 1,
-          event: candidate.event,
-          resources: resolvedJson.resources.wav,
-          endSeconds,
-        });
-        candidate.visibleUntilBeat = candidate.endBeat;
-        if (longNoteMode === 2 || longNoteMode === 3) {
-          activeLongNotesByChannel.set(channel, {
+    if (typeof endSeconds === 'number' && Number.isFinite(endSeconds) && endSeconds > candidate.seconds) {
+      const longNoteMode = resolvePlayableLongNoteMode(candidate);
+      const previousSuppressUntil = longNoteSuppressUntilSecondsByChannel.get(channel) ?? Number.NEGATIVE_INFINITY;
+      if (endSeconds > previousSuppressUntil) {
+        longNoteSuppressUntilSecondsByChannel.set(channel, endSeconds);
+      }
+      playbackStateLogger.logLongNoteState(nowSec, {
+        channel,
+        state: 'start',
+        mode: longNoteMode === 2 || longNoteMode === 3 ? longNoteMode : 1,
+        event: candidate.event,
+        resources: resolvedJson.resources.wav,
+        endSeconds,
+      });
+      candidate.visibleUntilBeat = candidate.endBeat;
+      if (longNoteMode === 2 || longNoteMode === 3) {
+        activeLongNotesByChannel.set(channel, {
           endSeconds,
           note: candidate,
           mode: longNoteMode,
@@ -3202,27 +3194,27 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
     if (!interruptedReason) {
       playbackEventTracer.flushUntil(totalSeconds);
-        const judgedCount = summary.perfect + summary.great + summary.good + summary.bad + summary.poor;
-        if (judgedCount < summary.total) {
-          const missingCount = summary.total - judgedCount;
-          for (let index = 0; index < missingCount; index += 1) {
-            applyJudgeToSummary(summary, 'POOR', scoreTracker);
-            applyLoggedGaugeJudge(totalSeconds, 'POOR', 'remaining-notes');
-          }
-          uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: totalSeconds });
-          if (!uiEnabled) {
+      const judgedCount = summary.perfect + summary.great + summary.good + summary.bad + summary.poor;
+      if (judgedCount < summary.total) {
+        const missingCount = summary.total - judgedCount;
+        for (let index = 0; index < missingCount; index += 1) {
+          applyJudgeToSummary(summary, 'POOR', scoreTracker);
+          applyLoggedGaugeJudge(totalSeconds, 'POOR', 'remaining-notes');
+        }
+        uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: totalSeconds });
+        if (!uiEnabled) {
           writeRuntimeEventLog(writeOutput, 'judge', [
             ['time', formatSeconds(totalSeconds)],
             ['result', 'POOR'],
             ['reason', 'remaining-notes'],
             ['count', missingCount],
-            ]);
-            playbackEventTracer.logPoorTriggered(totalSeconds);
-          }
-          setLoggedCombo(totalSeconds, 0, 'remaining-notes', 'POOR');
-          if (uiEnabled) {
-            activeStateSignals?.publishJudgeCombo('POOR', combo);
-            publishUiFrame(totalSeconds, beatAtSeconds(totalSeconds));
+          ]);
+          playbackEventTracer.logPoorTriggered(totalSeconds);
+        }
+        setLoggedCombo(totalSeconds, 0, 'remaining-notes', 'POOR');
+        if (uiEnabled) {
+          activeStateSignals?.publishJudgeCombo('POOR', combo);
+          publishUiFrame(totalSeconds, beatAtSeconds(totalSeconds));
         }
       }
     }
@@ -3794,14 +3786,7 @@ async function playMixedPcmThroughOutput(params: {
     }
 
     const mixStartedAtMs = performance.now();
-    await waitForPlaybackRealtime(
-      output,
-      playhead,
-      playbackSampleRate,
-      outputStartSeconds,
-      shouldStop,
-      adaptiveLeadMs,
-    );
+    await waitForPlaybackRealtime(output, playhead, playbackSampleRate, outputStartSeconds, shouldStop, adaptiveLeadMs);
 
     const backgroundEnded = playhead >= background.left.length;
     if (isDraining() && backgroundEnded && activeVoices.length === 0) {

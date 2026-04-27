@@ -243,8 +243,7 @@ describe('player chart preview', () => {
       };
     });
     vi.doMock('@be-music/audio-renderer', async () => {
-      const actual =
-        await vi.importActual<typeof import('@be-music/audio-renderer')>('@be-music/audio-renderer');
+      const actual = await vi.importActual<typeof import('@be-music/audio-renderer')>('@be-music/audio-renderer');
       return {
         ...actual,
         renderJson,
@@ -303,8 +302,7 @@ describe('player chart preview', () => {
       };
     });
     vi.doMock('@be-music/audio-renderer', async () => {
-      const actual =
-        await vi.importActual<typeof import('@be-music/audio-renderer')>('@be-music/audio-renderer');
+      const actual = await vi.importActual<typeof import('@be-music/audio-renderer')>('@be-music/audio-renderer');
       return {
         ...actual,
         renderJson,
@@ -364,8 +362,7 @@ describe('player chart preview', () => {
       };
     });
     vi.doMock('@be-music/audio-renderer', async () => {
-      const actual =
-        await vi.importActual<typeof import('@be-music/audio-renderer')>('@be-music/audio-renderer');
+      const actual = await vi.importActual<typeof import('@be-music/audio-renderer')>('@be-music/audio-renderer');
       return {
         ...actual,
         renderJson,
@@ -423,8 +420,7 @@ describe('player chart preview', () => {
       };
     });
     vi.doMock('@be-music/audio-renderer', async () => {
-      const actual =
-        await vi.importActual<typeof import('@be-music/audio-renderer')>('@be-music/audio-renderer');
+      const actual = await vi.importActual<typeof import('@be-music/audio-renderer')>('@be-music/audio-renderer');
       return {
         ...actual,
         renderJson,

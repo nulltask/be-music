@@ -119,7 +119,8 @@ async function bootstrap(): Promise<void> {
     stdinIsTTY: initData.stdinIsTTY,
     stdoutIsTTY: initData.stdoutIsTTY,
     useAlternateScreen: initData.useAlternateScreen,
-    terminalImageProtocol: Boolean(initData.kittyGraphics) && supportsKittyGraphicsProtocol(process.env) ? 'kitty' : 'none',
+    terminalImageProtocol:
+      Boolean(initData.kittyGraphics) && supportsKittyGraphicsProtocol(process.env) ? 'kitty' : 'none',
   });
 
   if (!tui.isSupported()) {

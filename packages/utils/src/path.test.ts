@@ -53,7 +53,9 @@ describe('path utilities', () => {
 
     const delayedController = new AbortController();
     delayedController.abort();
-    await expect(resolveFirstExistingPath(baseDir, ['other-missing.bms'], delayedController.signal)).rejects.toMatchObject({
+    await expect(
+      resolveFirstExistingPath(baseDir, ['other-missing.bms'], delayedController.signal),
+    ).rejects.toMatchObject({
       name: 'AbortError',
     });
   });

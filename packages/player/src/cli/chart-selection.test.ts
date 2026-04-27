@@ -96,11 +96,7 @@ describe('chart selection', () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-progress-'));
     tempDirectories.push(tempRoot);
 
-    const chartPaths = [
-      join(tempRoot, 'alpha.bms'),
-      join(tempRoot, 'beta.bms'),
-      join(tempRoot, 'gamma.bms'),
-    ];
+    const chartPaths = [join(tempRoot, 'alpha.bms'), join(tempRoot, 'beta.bms'), join(tempRoot, 'gamma.bms')];
     await Promise.all(
       chartPaths.map((chartPath, index) =>
         writeFile(chartPath, [`#TITLE Chart ${index + 1}`, '#ARTIST Codex', '#PLAYER 1', '#BPM 120'].join('\n')),
@@ -127,9 +123,14 @@ describe('chart selection', () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'be-music-chart-stress-'));
     tempDirectories.push(tempRoot);
 
-    const chartSource = ['#TITLE Stress', '#ARTIST Codex', '#PLAYER 1', '#BPM 120', '#WAV01 sample.wav', '#00101:01'].join(
-      '\n',
-    );
+    const chartSource = [
+      '#TITLE Stress',
+      '#ARTIST Codex',
+      '#PLAYER 1',
+      '#BPM 120',
+      '#WAV01 sample.wav',
+      '#00101:01',
+    ].join('\n');
     const chartPaths = Array.from({ length: 128 }, (_, index) => join(tempRoot, `stress-${index}.bms`));
     await Promise.all(chartPaths.map((chartPath) => writeFile(chartPath, chartSource)));
 

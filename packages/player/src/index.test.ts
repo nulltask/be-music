@@ -440,20 +440,20 @@ describe('player', () => {
     expect(
       output.some(
         (line) =>
-          line.includes('kind:measure-length-change') &&
-          line.includes('measure:1') &&
-          line.includes('length:0.5'),
+          line.includes('kind:measure-length-change') && line.includes('measure:1') && line.includes('length:0.5'),
       ),
     ).toBe(true);
     expect(
       output.some(
         (line) =>
-          line.includes('kind:measure-length-change') &&
-          line.includes('measure:2') &&
-          line.includes('length:1'),
+          line.includes('kind:measure-length-change') && line.includes('measure:2') && line.includes('length:1'),
       ),
     ).toBe(true);
-    expect(output.some((line) => line.includes('kind:bpm-change') && line.includes('time:0:00.00') && line.includes('value:120'))).toBe(true);
+    expect(
+      output.some(
+        (line) => line.includes('kind:bpm-change') && line.includes('time:0:00.00') && line.includes('value:120'),
+      ),
+    ).toBe(true);
     expect(output.some((line) => line.includes('kind:bpm-change') && line.includes('value:180'))).toBe(true);
     expect(
       output.some(
@@ -465,10 +465,7 @@ describe('player', () => {
     expect(output.some((line) => line.includes('kind:stop') && line.includes('state:end'))).toBe(true);
     expect(
       output.some(
-        (line) =>
-          line.includes('kind:judge-rank-change') &&
-          line.includes('time:0:00.00') &&
-          line.includes('rank:48'),
+        (line) => line.includes('kind:judge-rank-change') && line.includes('time:0:00.00') && line.includes('rank:48'),
       ),
     ).toBe(true);
     expect(
@@ -1307,7 +1304,11 @@ describe('player', () => {
       ),
     ).toBe(true);
     expect(output.some((line) => line.includes('kind:gauge-change') && line.includes('reason:hold-drain'))).toBe(true);
-    expect(output.some((line) => line.includes('kind:combo-change') && line.includes('value:0') && line.includes('judge:POOR'))).toBe(true);
+    expect(
+      output.some(
+        (line) => line.includes('kind:combo-change') && line.includes('value:0') && line.includes('judge:POOR'),
+      ),
+    ).toBe(true);
     expect(
       output.some(
         (line) =>

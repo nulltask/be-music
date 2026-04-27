@@ -15,38 +15,45 @@ import {
 import { decodeVideoFramesStream, decodeVideoFramesToSourceFramesInWorker } from './bga-video.ts';
 
 vi.mock('./bga-video.ts', () => ({
-  decodeVideoFramesStream: vi.fn(async (videoPath: string, onFrame: (frame: unknown) => void, _signal: AbortSignal | undefined, options?: { onReady?: (info: { codecName: 'mpeg1video' | 'h264' | 'mjpeg'; durationSeconds?: number }) => void }) => {
-    const hasBlackBorder = videoPath.includes('bordered');
-    const isPortrait = videoPath.includes('portrait');
-    const width = isPortrait ? 180 : 320;
-    const height = isPortrait ? 320 : 240;
-    const rgba = new Uint8Array(width * height * 4);
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const offset = (y * width + x) * 4;
-        const insideBorder = !hasBlackBorder || (x >= 32 && x < width - 32 && y >= 24 && y < height - 24);
-        rgba[offset] = insideBorder ? 255 : 0;
-        rgba[offset + 1] = 0;
-        rgba[offset + 2] = 0;
-        rgba[offset + 3] = 255;
+  decodeVideoFramesStream: vi.fn(
+    async (
+      videoPath: string,
+      onFrame: (frame: unknown) => void,
+      _signal: AbortSignal | undefined,
+      options?: { onReady?: (info: { codecName: 'mpeg1video' | 'h264' | 'mjpeg'; durationSeconds?: number }) => void },
+    ) => {
+      const hasBlackBorder = videoPath.includes('bordered');
+      const isPortrait = videoPath.includes('portrait');
+      const width = isPortrait ? 180 : 320;
+      const height = isPortrait ? 320 : 240;
+      const rgba = new Uint8Array(width * height * 4);
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const offset = (y * width + x) * 4;
+          const insideBorder = !hasBlackBorder || (x >= 32 && x < width - 32 && y >= 24 && y < height - 24);
+          rgba[offset] = insideBorder ? 255 : 0;
+          rgba[offset + 1] = 0;
+          rgba[offset + 2] = 0;
+          rgba[offset + 3] = 255;
+        }
       }
-    }
-    options?.onReady?.({
-      codecName: 'h264',
-      durationSeconds: 2.5,
-    });
-    onFrame({
-      seconds: 0,
-      width,
-      height,
-      rgba,
-    });
-    return {
-      codecName: 'h264',
-      frameCount: 1,
-      durationSeconds: 2.5,
-    };
-  }),
+      options?.onReady?.({
+        codecName: 'h264',
+        durationSeconds: 2.5,
+      });
+      onFrame({
+        seconds: 0,
+        width,
+        height,
+        rgba,
+      });
+      return {
+        codecName: 'h264',
+        frameCount: 1,
+        durationSeconds: 2.5,
+      };
+    },
+  ),
   decodeVideoFramesToSourceFramesInWorker: vi.fn(
     async (
       videoPath: string,
@@ -89,17 +96,18 @@ interface RgbColor {
 
 type Pixel = RgbColor | undefined;
 
-async function resolvePromiseState<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-): Promise<'ready' | 'pending'> {
+async function resolvePromiseState<T>(promise: Promise<T>, timeoutMs: number): Promise<'ready' | 'pending'> {
   return await Promise.race([
     promise.then(() => 'ready' as const),
     new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), timeoutMs)),
   ]);
 }
 
-function createSolidSourceVideoFrame(width: number, height: number, color: RgbColor): {
+function createSolidSourceVideoFrame(
+  width: number,
+  height: number,
+  color: RgbColor,
+): {
   rgb: Uint8Array;
   opaqueMask: Uint8Array;
 } {
@@ -714,34 +722,32 @@ describe('player bga', () => {
       await writeFile(join(baseDir, 'streaming.mp4'), '');
       const initialDecodeCallCount = decodeVideoFramesStreamMock.mock.calls.length;
       const initialWorkerDecodeCallCount = decodeVideoFramesToSourceFramesInWorkerMock.mock.calls.length;
-      decodeVideoFramesStreamMock.mockImplementationOnce(
-        async (_videoPath, onFrame, _signal, options) => {
-          options?.onReady?.({
-            codecName: 'h264',
-            durationSeconds: 2.5,
-          });
-          onFrame({
-            seconds: 0,
-            width: 320,
-            height: 240,
-            rgba: createSolidVideoRgba(320, 240, { r: 255, g: 0, b: 0 }),
-          });
-          await new Promise<void>((resolve) => {
-            releaseRemainingFrames = resolve;
-          });
-          onFrame({
-            seconds: 1,
-            width: 320,
-            height: 240,
-            rgba: createSolidVideoRgba(320, 240, { r: 0, g: 255, b: 0 }),
-          });
-          return {
-            codecName: 'h264',
-            frameCount: 1,
-            durationSeconds: 2.5,
-          };
-        },
-      );
+      decodeVideoFramesStreamMock.mockImplementationOnce(async (_videoPath, onFrame, _signal, options) => {
+        options?.onReady?.({
+          codecName: 'h264',
+          durationSeconds: 2.5,
+        });
+        onFrame({
+          seconds: 0,
+          width: 320,
+          height: 240,
+          rgba: createSolidVideoRgba(320, 240, { r: 255, g: 0, b: 0 }),
+        });
+        await new Promise<void>((resolve) => {
+          releaseRemainingFrames = resolve;
+        });
+        onFrame({
+          seconds: 1,
+          width: 320,
+          height: 240,
+          rgba: createSolidVideoRgba(320, 240, { r: 0, g: 255, b: 0 }),
+        });
+        return {
+          codecName: 'h264',
+          frameCount: 1,
+          durationSeconds: 2.5,
+        };
+      });
       decodeVideoFramesToSourceFramesInWorkerMock.mockImplementationOnce(
         async (_videoPath, _mode, onFrame, _signal, options) => {
           options?.onReady?.({
@@ -807,34 +813,32 @@ describe('player bga', () => {
     try {
       await writeFile(join(baseDir, 'legacy.mp4'), '');
       const initialDecodeCallCount = decodeVideoFramesStreamMock.mock.calls.length;
-      decodeVideoFramesStreamMock.mockImplementationOnce(
-        async (_videoPath, onFrame, _signal, options) => {
-          options?.onReady?.({
-            codecName: 'h264',
-            durationSeconds: 2.5,
-          });
-          onFrame({
-            seconds: 0,
-            width: 320,
-            height: 240,
-            rgba: createSolidVideoRgba(320, 240, { r: 255, g: 0, b: 0 }),
-          });
-          await new Promise<void>((resolve) => {
-            releaseRemainingFrames = resolve;
-          });
-          onFrame({
-            seconds: 1,
-            width: 320,
-            height: 240,
-            rgba: createSolidVideoRgba(320, 240, { r: 0, g: 255, b: 0 }),
-          });
-          return {
-            codecName: 'h264',
-            frameCount: 2,
-            durationSeconds: 2.5,
-          };
-        },
-      );
+      decodeVideoFramesStreamMock.mockImplementationOnce(async (_videoPath, onFrame, _signal, options) => {
+        options?.onReady?.({
+          codecName: 'h264',
+          durationSeconds: 2.5,
+        });
+        onFrame({
+          seconds: 0,
+          width: 320,
+          height: 240,
+          rgba: createSolidVideoRgba(320, 240, { r: 255, g: 0, b: 0 }),
+        });
+        await new Promise<void>((resolve) => {
+          releaseRemainingFrames = resolve;
+        });
+        onFrame({
+          seconds: 1,
+          width: 320,
+          height: 240,
+          rgba: createSolidVideoRgba(320, 240, { r: 0, g: 255, b: 0 }),
+        });
+        return {
+          codecName: 'h264',
+          frameCount: 2,
+          durationSeconds: 2.5,
+        };
+      });
 
       const json = createEmptyJson('bms');
       json.metadata.bpm = 120;

@@ -335,7 +335,9 @@ export async function main(): Promise<void> {
   }
 
   const resolvedLogFilePath =
-    typeof args.logFile === 'string' && args.logFile.length > 0 ? resolveCliPath(args.logFile) : resolveDefaultPlayerLogPath();
+    typeof args.logFile === 'string' && args.logFile.length > 0
+      ? resolveCliPath(args.logFile)
+      : resolveDefaultPlayerLogPath();
   activePlayerLogger = await createFileLogger(resolvedLogFilePath);
   logCli('info', 'cli.start', {
     input: args.input,
@@ -441,16 +443,12 @@ async function runDirectoryInput(
     process.stdout.write(`Selected chart: ${selected}\n`);
     try {
       await playChartOnce(selected, args);
-      persistedConfig = persistMusicSelectConfig(
-        resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
-        rootDir,
-        {
-          playMode: resolvePlayModeFromArgs(args),
-          highSpeed: args.highSpeed,
-          selectedChartFile: selected,
-          focusKey: createChartFocusKey(selected),
-        },
-      );
+      persistedConfig = persistMusicSelectConfig(resolvePersistedPlayerConfigFromArgs(args, persistedConfig), rootDir, {
+        playMode: resolvePlayModeFromArgs(args),
+        highSpeed: args.highSpeed,
+        selectedChartFile: selected,
+        focusKey: createChartFocusKey(selected),
+      });
     } catch (error) {
       if (error instanceof PlayerInterruptedError) {
         persistedConfig = persistMusicSelectConfig(
@@ -487,12 +485,16 @@ async function runDirectoryInput(
       }
     } catch (error) {
       if (error instanceof PlayerInterruptedError) {
-        persistedConfig = persistMusicSelectConfig(resolvePersistedPlayerConfigFromArgs(args, persistedConfig), rootDir, {
-          playMode: resolvePlayModeFromArgs(args),
-          highSpeed: args.highSpeed,
-          selectedChartFile: selected,
-          focusKey: createChartFocusKey(selected),
-        });
+        persistedConfig = persistMusicSelectConfig(
+          resolvePersistedPlayerConfigFromArgs(args, persistedConfig),
+          rootDir,
+          {
+            playMode: resolvePlayModeFromArgs(args),
+            highSpeed: args.highSpeed,
+            selectedChartFile: selected,
+            focusKey: createChartFocusKey(selected),
+          },
+        );
         process.exitCode = error.exitCode;
         return persistedConfig;
       }
@@ -1026,9 +1028,7 @@ function createPlayOptionsFromCliArgs(args: CliArgs, chartPath: string) {
   };
 }
 
-export function resolveEffectivePlayModeFromCliArgs(
-  args: Pick<CliArgs, 'auto' | 'autoScratch' | 'tui'>,
-): PlayMode {
+export function resolveEffectivePlayModeFromCliArgs(args: Pick<CliArgs, 'auto' | 'autoScratch' | 'tui'>): PlayMode {
   if (!args.tui) {
     return 'auto';
   }
@@ -1593,11 +1593,7 @@ function consumeCliValueArg(args: CliArgs, rawArgs: string[], index: number): nu
 }
 
 function consumeDeprecatedCliArg(token: string): boolean {
-  if (
-    token === '--audio-io-buffer-ms' ||
-    token === '--audio-io-high-water-ms' ||
-    token === '--audio-io-low-water-ms'
-  ) {
+  if (token === '--audio-io-buffer-ms' || token === '--audio-io-high-water-ms' || token === '--audio-io-low-water-ms') {
     throw new Error(`${token} is no longer supported; audio-io backend has been removed`);
   }
   if (token === '--audio-backend') {
@@ -1894,9 +1890,7 @@ function formatPlayLoadingComponentStatus(label: string, status: PlayerLoadCompo
   return detailParts.length > 0 ? `${label}: ${message} (${detailParts.join(', ')})` : `${label}: ${message}`;
 }
 
-function resolvePlayLoadingComponentStatusDisplay(
-  status: PlayerLoadComponentStatus,
-): {
+function resolvePlayLoadingComponentStatusDisplay(status: PlayerLoadComponentStatus): {
   message: string;
   countLabel?: string;
 } {

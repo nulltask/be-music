@@ -33,7 +33,10 @@ describe('workerize SEA fallback', () => {
   test('uses inline execution when running inside SEA', async () => {
     const { workerize, workerizeUntyped } = await loadWorkerizeModuleWithSeaMock(true);
 
-    const worker = workerize((value: number) => value + 1, () => []);
+    const worker = workerize(
+      (value: number) => value + 1,
+      () => [],
+    );
     try {
       await expect(
         new Promise<number>((resolve, reject) => {
@@ -56,7 +59,10 @@ describe('workerize SEA fallback', () => {
   test('uses isoworker outside SEA', async () => {
     const { workerize, workerizeUntyped } = await loadWorkerizeModuleWithSeaMock(false);
 
-    const worker = workerize((value: number) => value + 1, () => []);
+    const worker = workerize(
+      (value: number) => value + 1,
+      () => [],
+    );
     worker.close();
 
     expect(workerizeUntyped).toHaveBeenCalledTimes(1);

@@ -9,10 +9,7 @@ describe('player input signal bus', () => {
     inputBus.pushCommand({ kind: 'toggle-pause' });
     inputBus.pushCommand({ kind: 'high-speed', action: 'increase' });
     expect(inputBus.tick()).toBe(2);
-    expect(inputBus.drainCommands()).toEqual([
-      { kind: 'toggle-pause' },
-      { kind: 'high-speed', action: 'increase' },
-    ]);
+    expect(inputBus.drainCommands()).toEqual([{ kind: 'toggle-pause' }, { kind: 'high-speed', action: 'increase' }]);
     expect(inputBus.drainCommands()).toEqual([]);
   });
 });

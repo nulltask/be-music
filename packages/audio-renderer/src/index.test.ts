@@ -32,7 +32,11 @@ function createSingleTriggerBmsChart(samplePath: string, volWav?: number) {
   return json;
 }
 
-function createSingleBmsNoteChart(noteChannel: string, notePosition: readonly [number, number], samplePath = 'not-found.wav') {
+function createSingleBmsNoteChart(
+  noteChannel: string,
+  notePosition: readonly [number, number],
+  samplePath = 'not-found.wav',
+) {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
   json.resources.wav['01'] = samplePath;

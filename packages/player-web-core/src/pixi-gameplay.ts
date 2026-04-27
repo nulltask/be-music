@@ -1,0 +1,3070 @@
+import {
+  Application,
+  Color,
+  Container,
+  Graphics,
+  Rectangle,
+  Sprite,
+  Text,
+  TextStyle,
+  Texture,
+  type BLEND_MODES,
+} from 'pixi.js';
+import {
+  collectSampleTriggers,
+  createTimingResolver,
+  type TimedSampleTrigger,
+} from '@be-music/audio-renderer/triggers';
+import {
+  createScoreTracker,
+  applyJudgeToSummary,
+  type JudgeKind,
+  type ScoreSummary,
+} from '../../player/src/core/scoring.ts';
+import { resolveJudgeWindowsMs } from '../../player/src/core/judge-window.ts';
+import { extractTimedNotes, type TimedPlayableNote } from '../../player/src/playable-notes.ts';
+import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
+import { dirname, normalizePath } from './library.ts';
+import {
+  type Lr2BarGraphElement,
+  type Lr2DestinationRect,
+  type Lr2GrooveGaugeElement,
+  type Lr2JudgeLineElement,
+  type Lr2NowComboElement,
+  type Lr2NowComboKind,
+  type Lr2NumberElement,
+  type Lr2Skin,
+  type Lr2SliderElement,
+  type Lr2TextElement,
+  resolveLr2AssetBytes,
+} from './lr2-skin.ts';
+
+const BG = new Color('#05070b');
+const PANEL = new Color('#10141d');
+const WHITE = new Color('#edf2f7');
+const BLUE = new Color('#56b6f7');
+const RED = new Color('#ff6b6b');
+const YELLOW = new Color('#ffd166');
+const MUTED = new Color('#98a5b3');
+const PIXELS_PER_BEAT = 72;
+const DESIGN_WIDTH = 640;
+const DESIGN_HEIGHT = 480;
+const BOMB_DIVX = 8;
+const BOMB_DIVY = 4;
+const BOMB_CYCLE_MS = 30;
+const HISPEED_MIN = 0.125;
+const HISPEED_MAX = 6.0;
+const HISPEED_STEP = 0.125;
+/** Wall-clock delay between mount() and the first audible/visible note. */
+const INTRO_DELAY_MS = 3000;
+/** LR2 1P key-on timers: 100=SC, 101=key1 .. 107=key7 (8=key8, 9=key9). */
+const LR2_1P_KEYON_TIMER_BASE = 100;
+/** LR2 2P key-on timers: 110=SC, 111=key1 .. 117=key7. */
+const LR2_2P_KEYON_TIMER_BASE = 110;
+/** LR2 1P bomb timers: 50=SC, 51=key1 .. 57=key7. */
+const LR2_1P_BOMB_TIMER_BASE = 50;
+const LR2_2P_BOMB_TIMER_BASE = 60;
+const PLAYFIELD = { x: 84, y: 72, w: 204, judgementY: 322 };
+const BGA = { x: 291, y: 49, w: 174, h: 274 };
+const GROOVE = { x: 500, y: 72, w: 116, h: 250 };
+
+interface RuntimeNote extends TimedPlayableNote {
+  hit: boolean;
+}
+
+export interface PixiGameplayViewOptions {
+  skin?: Lr2Skin;
+  onExit?: () => void;
+  /** When true, every note is auto-judged as PERFECT at its scheduled time. */
+  autoPlay?: boolean;
+}
+
+export class PixiGameplayView {
+  private readonly app = new Application();
+  private readonly root = new Container();
+  private readonly viewportBackground = new Graphics();
+  private readonly background = new Graphics();
+  private readonly skinLayer = new Container();
+  private readonly laneLayer = new Graphics();
+  private readonly noteLayer = new Container();
+  private readonly bombLayer = new Container();
+  /**
+   * Sits above `noteLayer` / `bombLayer` and below `textLayer`. Holds the
+   * skin elements that should visually punch through the note stream:
+   * the judgement plate, NOWCOMBO digits, and the AUTOPLAY indicator.
+   */
+  private readonly overlayLayer = new Container();
+  private readonly textLayer = new Container();
+  private readonly overlay = new Text({
+    text: '',
+    style: new TextStyle({
+      fill: 0xf8fafc,
+      fontSize: 22,
+      fontWeight: '700',
+      align: 'center',
+      fontFamily: 'Avenir Next, Helvetica, sans-serif',
+    }),
+  });
+  private song: BrowserSongEntry | undefined;
+  private source: BrowserSongAssetSource | undefined;
+  private notes: RuntimeNote[] = [];
+  private laneChannels: string[] = [];
+  private laneX = new Map<string, { x: number; w: number; top: number; bottom: number }>();
+  private textures = new Map<string, Texture>();
+  /**
+   * `performance.now()` value captured at `mount()`. Skin animations (LR2
+   * timer 0/40/41 — scene-start / READY / play-start) anchor here so the
+   * intro slide-ins, scratch turntable rotation, and similar visuals play
+   * from the moment the gameplay view appears, not from the moment notes
+   * begin scrolling.
+   */
+  private sceneStartTime = 0;
+  private startTime = 0;
+  /**
+   * `audioContext.currentTime` value that corresponds to chart-second 0.
+   * Used to schedule background samples with sample-accurate Web Audio timing.
+   */
+  private audioContextStartTime = 0;
+  private paused = false;
+  private pauseTime = 0;
+  private pauseTotal = 0;
+  private audioContext: AudioContext | undefined;
+  private decodedSamples = new Map<string, AudioBuffer>();
+  private scheduled = new Set<RuntimeNote>();
+  private autoSampleTriggers: TimedSampleTrigger[] = [];
+  private autoTriggerNextIndex = 0;
+  private score: ScoreSummary = createEmptyScore(0);
+  private tracker = createScoreTracker();
+  private lastJudge = '';
+  private lastJudgeUntil = 0;
+  private frame: number | undefined;
+  private readonly pressedChannels = new Set<string>();
+  private readonly bombStartedAt = new Map<string, number>();
+  private bombTexture: Texture | undefined;
+  private readonly runtimeOps = new Set<number>();
+  /** Groove-gauge percentage (0..100). LR2 NORMAL gauge starts at 20%. */
+  private gauge = 20;
+  /**
+   * High-speed multiplier. 1.0 = base PIXELS_PER_BEAT. Adjustable at runtime
+   * via Arrow Up / Arrow Down (steps of 0.25, clamped to [0.5, 6.0]). Mirrors
+   * LR2's "hi-speed" knob: only affects the visual scroll rate, never timing.
+   */
+  private hiSpeed = 1.5;
+  /**
+   * Map of timer-id → performance.now() timestamp at which the timer started.
+   * Populated for the LR2 timers we currently drive: bomb (50–69), key-on
+   * (100–119), and full-combo (48/49). Removed when the timer "stops"
+   * (e.g. key release for key-on, animation completion for bombs).
+   */
+  private readonly timerStartedAt = new Map<number, number>();
+  /**
+   * BPM-aware seconds → beat resolver, prepared once per song. Used by
+   * `renderNotes` to position scrolling notes correctly across `#BPM`
+   * change events; the previous hand-rolled `beatAtSeconds` only saw the
+   * initial BPM, which made notes drift through tempo transitions.
+   */
+  private timingResolver: ReturnType<typeof createTimingResolver> | undefined;
+  /** Smoothed score for the count-up animation. Lerps toward `score.score`. */
+  private displayedScore = 0;
+  /**
+   * Frame-rate sampling state. We accumulate frames over a one-second
+   * window and publish the rate to the LR2 RATE NUMBER panel.
+   */
+  private fpsFrameCount = 0;
+  private fpsWindowStart = 0;
+  private fps = 0;
+
+  public constructor(private readonly options: PixiGameplayViewOptions = {}) {}
+
+  public async mount(container: HTMLElement, song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
+    this.song = song;
+    this.source = source;
+    await this.app.init({
+      backgroundAlpha: 0,
+      resizeTo: container,
+      antialias: true,
+      autoDensity: true,
+      resolution: globalThis.devicePixelRatio || 1,
+    });
+    this.app.canvas.tabIndex = 0;
+    this.app.canvas.setAttribute('aria-label', 'be-music gameplay');
+    container.appendChild(this.app.canvas);
+    this.root.addChild(
+      this.background,
+      this.skinLayer,
+      this.laneLayer,
+      this.noteLayer,
+      this.bombLayer,
+      this.overlayLayer,
+      this.textLayer,
+      this.overlay,
+    );
+    this.app.stage.addChild(this.viewportBackground, this.root);
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
+    this.app.canvas.addEventListener('pointerdown', this.focus);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
+    // `visibilitychange` covers tab switching but not always app switching
+    // (Cmd-Tab / Alt-Tab) — fall back to window blur/focus so the gameplay
+    // also pauses when the user moves to another OS app entirely. Use the
+    // capture phase so we still see the events even if PixiJS or another
+    // listener decides to stop propagation along the bubbling path.
+    window.addEventListener('blur', this.handleWindowBlur, true);
+    window.addEventListener('focus', this.handleWindowFocus, true);
+    window.addEventListener('pagehide', this.handleWindowBlur);
+    window.addEventListener('pageshow', this.handleWindowFocus);
+    // Polling safety net. Some embedded environments / OS-window managers
+    // suppress the `visibilitychange` and `blur` events entirely (notably
+    // when the dev-tools panel takes focus on the same window). A 250 ms
+    // poll on `document.hidden` and `document.hasFocus()` catches those
+    // cases without measurable cost.
+    this.lastHidden = document.hidden;
+    this.lastFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
+    this.visibilityPollHandle = window.setInterval(() => {
+      const hiddenNow = document.hidden;
+      const focusNow = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
+      if (hiddenNow !== this.lastHidden) {
+        this.lastHidden = hiddenNow;
+        // eslint-disable-next-line no-console
+        console.log('[gameplay] poll detected hidden change', { hidden: hiddenNow });
+        if (hiddenNow) {
+          this.handleWindowBlur();
+        } else {
+          this.handleWindowFocus();
+        }
+      } else if (focusNow !== this.lastFocus) {
+        this.lastFocus = focusNow;
+        // eslint-disable-next-line no-console
+        console.log('[gameplay] poll detected focus change', { focus: focusNow });
+        if (!focusNow) {
+          this.handleWindowBlur();
+        } else {
+          this.handleWindowFocus();
+        }
+      }
+    }, 250);
+    // eslint-disable-next-line no-console
+    console.log('[gameplay] listeners attached', {
+      visibilityState: document.visibilityState,
+      hidden: document.hidden,
+      hasFocus: typeof document.hasFocus === 'function' ? document.hasFocus() : 'n/a',
+    });
+    this.prepareSong(song);
+    await this.prepareSkin();
+    await this.prepareAudio();
+    // Hold notes off the playfield until the LR2 intro animation finishes.
+    // The default 7-keys skin's slide-ins terminate around t=2000–3000ms;
+    // we use 3 seconds to leave a small breathing room before the first
+    // chart event fires.
+    this.sceneStartTime = performance.now();
+    this.startTime = this.sceneStartTime + INTRO_DELAY_MS;
+    // Anchor the chart's seconds=0 to the same precise audio-context
+    // timestamp so background samples and visual notes share one clock.
+    if (this.audioContext) {
+      this.audioContextStartTime = this.audioContext.currentTime + INTRO_DELAY_MS / 1000;
+    }
+    this.app.canvas.focus();
+    this.tick();
+  }
+
+  public dispose(): void {
+    if (this.frame !== undefined) {
+      cancelAnimationFrame(this.frame);
+    }
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
+    this.app.canvas.removeEventListener('pointerdown', this.focus);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    window.removeEventListener('blur', this.handleWindowBlur, true);
+    window.removeEventListener('focus', this.handleWindowFocus, true);
+    window.removeEventListener('pagehide', this.handleWindowBlur);
+    window.removeEventListener('pageshow', this.handleWindowFocus);
+    if (this.visibilityPollHandle !== undefined) {
+      window.clearInterval(this.visibilityPollHandle);
+      this.visibilityPollHandle = undefined;
+    }
+    // eslint-disable-next-line no-console
+    console.log('[gameplay] listeners detached');
+    void this.audioContext?.close();
+    for (const texture of this.textures.values()) {
+      texture.destroy(true);
+    }
+    this.bombTexture?.destroy(true);
+    this.app.destroy(true, { children: true });
+  }
+
+  private prepareSong(song: BrowserSongEntry): void {
+    const extracted = extractTimedNotes(song.chart, { includeLandmine: true, inferBmsLnTypeWhenMissing: true });
+    this.notes = extracted.playableNotes.map((note) => ({ ...note, hit: false }));
+    this.laneChannels = resolveLaneChannels(this.notes);
+    this.score = createEmptyScore(this.notes.filter((note) => isPlayableInputChannel(note.channel)).length);
+    this.tracker = createScoreTracker();
+    const resolver = createTimingResolver(song.chart);
+    this.timingResolver = resolver;
+    this.autoSampleTriggers = collectSampleTriggers(song.chart, resolver, { inferBmsLnTypeWhenMissing: true })
+      .filter((trigger) => !isPlayableInputChannel(trigger.channel))
+      .sort((left, right) => left.seconds - right.seconds);
+    this.autoTriggerNextIndex = 0;
+    this.gauge = 20;
+    this.displayedScore = 0;
+    this.initializeRuntimeOps();
+  }
+
+  /**
+   * Locates the song's current beat from `currentSeconds` using the BPM-aware
+   * tempo points. Required because BMS charts can change tempo mid-song
+   * (`#BPM` events) — using the initial BPM alone makes notes after a tempo
+   * change drift visibly out of sync with the audio.
+   */
+  /** True while the wall-clock playhead is still inside the intro buffer. */
+  private isIntroPlaying(): boolean {
+    if (this.startTime === 0) {
+      return true;
+    }
+    return performance.now() < this.startTime;
+  }
+
+  private currentBeat(seconds: number): number {
+    const resolver = this.timingResolver;
+    if (!resolver || resolver.tempoPoints.length === 0) {
+      const bpm = this.song?.bpm ?? 130;
+      return Math.max(0, seconds * (bpm / 60));
+    }
+    // Walk back through the tempo points until we find the one in effect.
+    let active = resolver.tempoPoints[0]!;
+    for (const point of resolver.tempoPoints) {
+      if (point.seconds <= seconds) {
+        active = point;
+      } else {
+        break;
+      }
+    }
+    return Math.max(0, active.beat + ((seconds - active.seconds) * active.bpm) / 60);
+  }
+
+  /** LR2 NORMAL gauge deltas: PG/GR +1.0, GD +0.5, BD -2, PR -6. */
+  private applyGaugeDelta(judge: JudgeKind): void {
+    let delta = 0;
+    switch (judge) {
+      case 'PERFECT':
+      case 'GREAT':
+        delta = 1;
+        break;
+      case 'GOOD':
+        delta = 0.5;
+        break;
+      case 'BAD':
+        delta = -2;
+        break;
+      case 'POOR':
+        delta = -6;
+        break;
+    }
+    this.gauge = Math.max(0, Math.min(100, this.gauge + delta));
+  }
+
+  /** Reset runtime DST-op state to a sensible default for a play session. */
+  private initializeRuntimeOps(): void {
+    this.runtimeOps.clear();
+    // CUSTOMOPTION defaults declared by the loaded skin.
+    this.options.skin?.customOptions.forEach((option) => this.runtimeOps.add(option.defaultOp));
+    // Static-ish play-session ops that are conventionally true while gameplay runs.
+    const defaults = [
+      5, // selected bar is playable
+      34, // ghost off
+      38, // scoregraph off
+      40, // BGA off
+      42, // 1P normal gauge
+      44, // 2P normal gauge
+      47, // difficulty filter disabled
+      50, // offline
+      54,
+      56, // autoscratch off (1P/2P)
+      61, // score saveable
+      81, // load complete
+      82, // replay off
+      170, // BGA absent (until BGA is implemented)
+      174, // attached text absent
+      178, // RANDOM absent
+      182, // judge normal
+      191, // STAGEFILE absent
+      193, // BANNER absent
+      195, // BACKBMP absent
+      196, // replay absent
+    ];
+    defaults.forEach((op) => this.runtimeOps.add(op));
+    // op 32 = autoplay off, op 33 = autoplay on (mutually exclusive).
+    this.runtimeOps.add(this.options.autoPlay ? 33 : 32);
+    // Keymode op (160=7keys / 161=5keys / 162=14keys / 163=10keys / 164=9keys)
+    // — derived from the chart's actual lane usage so 5K-only charts get
+    // the LR2 default skin's "DISABLE LANE" overlay on keys 6 & 7.
+    this.runtimeOps.add(this.resolveKeymodeOp());
+    // Long-note presence flag (172 = absent, 173 = present).
+    const hasLongNotes = this.notes.some((note) => note.endBeat !== undefined);
+    this.runtimeOps.add(hasLongNotes ? 173 : 172);
+    // BPM change presence flag (176 = absent, 177 = present).
+    const hasBpmChanges = (this.timingResolver?.tempoPoints.length ?? 0) > 1;
+    this.runtimeOps.add(hasBpmChanges ? 177 : 176);
+  }
+
+  /**
+   * Detects the chart's effective LR2 keymode op from its lane usage and
+   * the player option. We treat any chart that puts notes on key 6 or 7
+   * as a 7-keys chart and the rest as 5-keys; double-play modes are not
+   * yet wired and fall back to the single-side defaults.
+   */
+  private resolveKeymodeOp(): number {
+    const usesPlayer2 = this.laneChannels.some((channel) => channel.startsWith('2'));
+    const uses6or7 = this.laneChannels.some(
+      (channel) => channel === '18' || channel === '19' || channel === '28' || channel === '29',
+    );
+    if (usesPlayer2) {
+      return uses6or7 ? 162 : 163; // 14keys vs 10keys
+    }
+    return uses6or7 ? 160 : 161; // 7keys vs 5keys
+  }
+
+  private isOpActive(op: number): boolean {
+    if (op === 0) {
+      return true;
+    }
+    if (op === 999) {
+      return false;
+    }
+    return this.runtimeOps.has(op);
+  }
+
+  private evaluateOps(ops: ReadonlyArray<number>): boolean {
+    for (const op of ops) {
+      if (op > 0) {
+        if (!this.isOpActive(op)) {
+          return false;
+        }
+      } else if (this.isOpActive(-op)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Returns whether the given LR2 timer id is "running" right now.
+   *
+   * LR2 attaches every `#DST_*` to a base timer (`timer=N` argument) and the
+   * destination is only meant to be visible while that timer is actively
+   * counting up. During gameplay only a small subset of timers run -- in
+   * particular `0` (main, scene start) and `41` (play start). Result/fadeout/
+   * close timers (`2`, `3`, `90`, `91`, ...) are dormant and their attached
+   * DSTs (e.g. "STAGE FAILED" plates) should not appear on the play field.
+   */
+  /**
+   * Milliseconds elapsed since the given LR2 timer started counting. Used to
+   * advance both `cycle`-based SRC animations and `loop`-based DST keyframe
+   * playback. For "always-on" timers (0, 40, 41) we anchor to the play
+   * session start; for explicit timers (50–69, 100–119) we use the recorded
+   * `timerStartedAt` time.
+   */
+  private elapsedSinceTimer(timer: number): number {
+    // Judge timers (46 = 1P, 47 = 2P) restart on every judgement so the
+    // attached NOWJUDGE / NOWCOMBO keyframe chain replays per hit. We use
+    // the recorded timestamp when present, falling back to scene start so
+    // the slot doesn't go invisible before the first judgement happens.
+    if (timer === 46 || timer === 47) {
+      const judgedAt = this.timerStartedAt.get(timer);
+      if (judgedAt !== undefined) {
+        return Math.max(0, performance.now() - judgedAt);
+      }
+      return Math.max(0, performance.now() - this.sceneStartTime);
+    }
+    // Scene-anchored timers (scene start / READY / play start) start
+    // ticking at `sceneStartTime` — the moment the gameplay view mounted
+    // — so LR2 intro slide-ins, the scratch turntable rotation, and the
+    // AUTOPLAY label all animate during the pre-play window. This is
+    // intentionally separate from `startTime`, which only ticks once
+    // notes/audio actually begin (after the 3 s intro delay).
+    if (timer === 0 || timer === 40 || timer === 41) {
+      return Math.max(0, performance.now() - this.sceneStartTime);
+    }
+    const started = this.timerStartedAt.get(timer);
+    if (started === undefined) {
+      return 0;
+    }
+    return Math.max(0, performance.now() - started);
+  }
+
+  private isTimerActive(timer: number): boolean {
+    if (timer === 0 || timer === 40 || timer === 41) {
+      // 0  = scene main, 40 = READY (post-LOADEND), 41 = play start.
+      // For a play session in progress, all three are active.
+      return true;
+    }
+    // Judgement display timers (1P/2P). LR2 fires these on every judgement so
+    // the attached NOWJUDGE/NOWCOMBO destinations animate from time=0. We don't
+    // model the timer instant directly -- our `lastJudge` window already gates
+    // the rendering -- so we simply mark them as always active and rely on the
+    // higher-level renderer to draw only while a judgement is fresh.
+    if (timer === 46 || timer === 47) {
+      return true;
+    }
+    // Bomb (50-69) and key-on (100-119) timers are tracked explicitly via
+    // `timerStartedAt`. They become active the moment we record a start time
+    // and stay active until `stopKeyOnTimer` removes the entry (key-on) or
+    // the bomb's animation cycle finishes (bomb).
+    if ((timer >= 50 && timer <= 69) || (timer >= 100 && timer <= 119)) {
+      return this.timerStartedAt.has(timer);
+    }
+    // Long-note hold timers (70-89) are not yet driven; treat as inactive so
+    // skin elements gated on them stay hidden rather than always visible.
+    return false;
+  }
+
+  private isDestinationVisible(destination: Lr2DestinationRect): boolean {
+    if (!this.isTimerActive(destination.timer)) {
+      return false;
+    }
+    return this.evaluateOps(destination.ops);
+  }
+
+  private async prepareSkin(): Promise<void> {
+    if (!this.options.skin) {
+      return;
+    }
+    const skin = this.options.skin;
+    const imagePaths = new Set<string>();
+    skin.images.forEach((image) => imagePaths.add(image.source.imagePath));
+    Object.values(skin.notes).forEach((group) => group?.forEach((note) => imagePaths.add(note.imagePath)));
+    Object.values(skin.judges).forEach((group) => group?.forEach((judge) => imagePaths.add(judge.source.imagePath)));
+    skin.numbers.forEach((number) => imagePaths.add(number.source.imagePath));
+    skin.grooveGauges.forEach((gauge) => imagePaths.add(gauge.source.imagePath));
+    skin.nowCombos.forEach((combo) => imagePaths.add(combo.source.imagePath));
+    await Promise.all(
+      [...imagePaths].map(async (path) => {
+        const texture = await this.loadSkinAssetTexture(skin, path);
+        if (texture) {
+          this.textures.set(path, texture);
+        }
+      }),
+    );
+    const bombFile = skin.customFiles.find((file) => file.name === 'BOMB');
+    if (bombFile) {
+      this.bombTexture = await this.loadSkinAssetTexture(skin, bombFile.path);
+    }
+  }
+
+  private async loadSkinAssetTexture(skin: Lr2Skin, path: string): Promise<Texture | undefined> {
+    // For debugging color/decoding issues, prefer a same-name PNG sibling when the requested asset is a TGA.
+    if (path.toLowerCase().endsWith('.tga')) {
+      const pngPath = `${path.slice(0, -4)}.png`;
+      const pngBytes = resolveLr2AssetBytes(skin, pngPath);
+      if (pngBytes) {
+        const texture = await loadTextureFromBytes(pngPath, pngBytes, skin.transparentColor);
+        if (texture) {
+          return texture;
+        }
+      }
+    }
+    const bytes = resolveLr2AssetBytes(skin, path);
+    if (!bytes) {
+      return undefined;
+    }
+    return loadTextureFromBytes(path, bytes, skin.transparentColor);
+  }
+
+  private async prepareAudio(): Promise<void> {
+    if (!this.source || !this.song) {
+      return;
+    }
+    this.audioContext = new AudioContext();
+    const wavPaths = Object.values(this.song.chart.resources.wav).filter(
+      (path): path is string => typeof path === 'string',
+    );
+    await Promise.all(
+      wavPaths.slice(0, 256).map(async (path) => {
+        const bytes = resolveChartAsset(this.source!, this.song!.chartPath, path);
+        if (!bytes) {
+          return;
+        }
+        try {
+          this.decodedSamples.set(
+            normalizePath(path).toLowerCase(),
+            await this.audioContext!.decodeAudioData(bytes.slice().buffer),
+          );
+        } catch {
+          // Browsers vary in codec support; unsupported samples are skipped.
+        }
+      }),
+    );
+  }
+
+  /**
+   * Auto-pause when the document tab / window goes to the background and
+   * auto-resume when it comes back to the foreground (matching the LR2
+   * desktop client behaviour). The user can still toggle manually with
+   * Space without conflicting with this listener — `togglePause` is a
+   * symmetric flip, and we only fire it when the visibility state actually
+   * changes.
+   */
+  private readonly handleVisibilityChange = (): void => {
+    // eslint-disable-next-line no-console
+    console.log('[gameplay] visibilitychange', {
+      visibilityState: document.visibilityState,
+      hidden: document.hidden,
+      paused: this.paused,
+      autoPaused: this.autoPaused,
+    });
+    if (document.hidden) {
+      if (!this.paused) {
+        this.togglePause();
+        this.autoPaused = true;
+      }
+    } else if (this.autoPaused && this.paused) {
+      this.togglePause();
+      this.autoPaused = false;
+    }
+  };
+
+  /** True iff we paused because the tab/window backgrounded itself. */
+  private autoPaused = false;
+  /** Last sampled `document.hidden`, used by the polling safety net. */
+  private lastHidden = false;
+  /** Last sampled `document.hasFocus()`, used by the polling safety net. */
+  private lastFocus = true;
+  /** `setInterval` handle for the visibility/focus poll loop. */
+  private visibilityPollHandle: number | undefined;
+
+  /**
+   * Window-level blur/focus fallback for the auto-pause behaviour. Some
+   * platforms (notably macOS with Chrome) keep the document `visible`
+   * across Cmd-Tab app switches, so `visibilitychange` alone misses those
+   * cases. We treat `blur` / `focus` the same way as `visibilitychange`,
+   * gated on the same `autoPaused` flag so the two listeners cooperate.
+   */
+  private readonly handleWindowBlur = (): void => {
+    // eslint-disable-next-line no-console
+    console.log('[gameplay] window blur', { paused: this.paused, autoPaused: this.autoPaused });
+    if (!this.paused) {
+      this.togglePause();
+      this.autoPaused = true;
+    }
+  };
+
+  private readonly handleWindowFocus = (): void => {
+    // eslint-disable-next-line no-console
+    console.log('[gameplay] window focus', { paused: this.paused, autoPaused: this.autoPaused });
+    if (this.autoPaused && this.paused) {
+      this.togglePause();
+      this.autoPaused = false;
+    }
+  };
+
+  private readonly focus = (): void => {
+    this.app.canvas.focus();
+  };
+
+  private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.options.onExit?.();
+      return;
+    }
+    if (event.code === 'Space') {
+      event.preventDefault();
+      this.togglePause();
+      return;
+    }
+    if (event.code === 'ArrowUp') {
+      event.preventDefault();
+      this.adjustHiSpeed(HISPEED_STEP);
+      return;
+    }
+    if (event.code === 'ArrowDown') {
+      event.preventDefault();
+      this.adjustHiSpeed(-HISPEED_STEP);
+      return;
+    }
+    const channel = resolveKeyChannel(event, this.laneChannels);
+    if (!channel || this.paused) {
+      return;
+    }
+    event.preventDefault();
+    if (!event.repeat) {
+      this.pressedChannels.add(channel);
+      // Start the LR2 key-on timer for this lane so skin elements gated on
+      // timer 100..107 (lane lasers etc.) become visible while the key is
+      // held down.
+      this.startKeyOnTimer(channel);
+      if (!this.options.autoPlay) {
+        // Bomb is triggered inside judge() when the press lands on a note --
+        // empty presses (no note in window) do not produce a bomb flash.
+        this.judge(channel, this.currentSeconds());
+      }
+    }
+  };
+
+  private readonly handleKeyUp = (event: KeyboardEvent): void => {
+    const channel = resolveKeyChannel(event, this.laneChannels);
+    if (channel) {
+      this.pressedChannels.delete(channel);
+      this.stopKeyOnTimer(channel);
+      // Don't delete bombStartedAt here -- let renderBombs decide when the
+      // animation has finished. Otherwise releasing the key cuts off the
+      // bomb flash mid-animation.
+    }
+  };
+
+  /**
+   * Adjust the visual hi-speed and clamp to [HISPEED_MIN, HISPEED_MAX].
+   * Snap to a 1/1000 grid so values like 0.125 + 0.125 stay exact (the
+   * 1/100 grid we used previously would round 0.125 → 0.13 every press).
+   */
+  private adjustHiSpeed(delta: number): void {
+    const next = Math.round((this.hiSpeed + delta) * 1000) / 1000;
+    this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, next));
+  }
+
+  private resolveKeyOnTimerId(channel: string): number | undefined {
+    const laneIndex = resolveLaneIndex(channel);
+    if (laneIndex < 0 || laneIndex > 7) {
+      return undefined;
+    }
+    // LR2 lane index → timer id. The first lane (#DST_NOTE,0) is the scratch,
+    // which maps to timer 100/110. Subsequent lanes are 101..107 (1P) and
+    // 111..117 (2P).
+    const isPlayer2 = channel.startsWith('2');
+    const base = isPlayer2 ? LR2_2P_KEYON_TIMER_BASE : LR2_1P_KEYON_TIMER_BASE;
+    return base + laneIndex;
+  }
+
+  private startKeyOnTimer(channel: string): void {
+    const timerId = this.resolveKeyOnTimerId(channel);
+    if (timerId === undefined) {
+      return;
+    }
+    this.timerStartedAt.set(timerId, performance.now());
+  }
+
+  private stopKeyOnTimer(channel: string): void {
+    const timerId = this.resolveKeyOnTimerId(channel);
+    if (timerId === undefined) {
+      return;
+    }
+    this.timerStartedAt.delete(timerId);
+  }
+
+  private togglePause(): void {
+    if (this.paused) {
+      this.paused = false;
+      this.pauseTotal += performance.now() - this.pauseTime;
+      void this.audioContext?.resume();
+    } else {
+      this.paused = true;
+      this.pauseTime = performance.now();
+      void this.audioContext?.suspend();
+    }
+  }
+
+  private judge(channel: string, seconds: number): void {
+    const windows = resolveJudgeWindowsMs(this.song!.chart);
+    const note = this.notes
+      .filter((candidate) => !candidate.hit && candidate.channel === channel)
+      .sort((left, right) => Math.abs(left.seconds - seconds) - Math.abs(right.seconds - seconds))[0];
+    if (!note || Math.abs(note.seconds - seconds) * 1000 > windows.bad) {
+      return;
+    }
+    note.hit = true;
+    const delta = Math.abs(note.seconds - seconds) * 1000;
+    const judge: JudgeKind =
+      delta <= windows.pgreat ? 'PERFECT' : delta <= windows.great ? 'GREAT' : delta <= windows.good ? 'GOOD' : 'BAD';
+    applyJudgeToSummary(this.score, judge, this.tracker);
+    this.applyGaugeDelta(judge);
+    this.publishJudge(judge, seconds);
+    this.playSample(note);
+    if (judge !== 'BAD') {
+      // LR2 bomb timer (50-69) fires on GREAT-or-better. Treat any non-BAD as
+      // a "good enough" judgement and trigger the bomb animation on the lane.
+      this.triggerBomb(channel);
+    }
+  }
+
+  private triggerBomb(channel: string): void {
+    const now = performance.now();
+    this.bombStartedAt.set(channel, now);
+    // LR2 bomb timer (50+laneIndex / 60+laneIndex). The LR2 default 7keys
+    // skin attaches its bomb sprite to `timer=50..57` (1P), so we mirror
+    // that here. The timer auto-clears once `renderBombs` completes the
+    // animation.
+    const laneIndex = resolveLaneIndex(channel);
+    if (laneIndex >= 0) {
+      const isPlayer2 = channel.startsWith('2');
+      const base = isPlayer2 ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE;
+      this.timerStartedAt.set(base + laneIndex, now);
+    }
+  }
+
+  /** Forced-clear utility used by `flashKeyOnTimer` after the fade window. */
+  private clearKeyOnTimerIfNotHeld(channel: string): void {
+    if (this.pressedChannels.has(channel)) {
+      return;
+    }
+    this.stopKeyOnTimer(channel);
+  }
+
+  private tick = (): void => {
+    const seconds = this.currentSeconds();
+    if (!this.paused) {
+      if (this.options.autoPlay) {
+        this.autoJudge(seconds);
+      } else {
+        this.autoMiss(seconds);
+      }
+      this.scheduleAutoSamples(seconds);
+      this.checkChartEnd(seconds);
+    }
+    this.updateFps();
+    this.updateDisplayedScore();
+    this.updateRankOps();
+    this.updateGaugeOps();
+    this.render(seconds);
+    this.frame = requestAnimationFrame(this.tick);
+  };
+
+  /**
+   * Sample frame rate over a sliding 1-second window. The published value
+   * drives the LR2 RATE NUMBER panel (which we re-purpose as a frame-rate
+   * read-out per the user's request).
+   */
+  private updateFps(): void {
+    const now = performance.now();
+    if (this.fpsWindowStart === 0) {
+      this.fpsWindowStart = now;
+      this.fpsFrameCount = 0;
+      return;
+    }
+    this.fpsFrameCount += 1;
+    const elapsed = now - this.fpsWindowStart;
+    if (elapsed >= 1000) {
+      this.fps = (this.fpsFrameCount * 1000) / elapsed;
+      this.fpsWindowStart = now;
+      this.fpsFrameCount = 0;
+    }
+  }
+
+  /**
+   * Lerps the displayed score toward the real score so the SCORE panel
+   * rolls up after each judgement instead of jumping. Speed is tuned so
+   * a single PERFECT (~1000 score) catches up in ~6 frames at 60 fps.
+   */
+  private updateDisplayedScore(): void {
+    const target = this.score.score;
+    if (this.displayedScore === target) {
+      return;
+    }
+    const diff = target - this.displayedScore;
+    if (Math.abs(diff) < 1) {
+      this.displayedScore = target;
+      return;
+    }
+    // Frame-rate independent ease: cover ~30 % of remaining distance per frame.
+    const next = this.displayedScore + diff * 0.3;
+    this.displayedScore = diff > 0 ? Math.min(next, target) : Math.max(next, target);
+  }
+
+  /**
+   * Sets the LR2 1P rank ops (200=AAA, 201=AA, …, 207=F) based on the
+   * current EX-score rate so the corresponding rank graphic in the skin
+   * (e.g. the "AAA" indicator above the gauge percentage) lights up.
+   */
+  private updateRankOps(): void {
+    // Clear the entire rank slot first; only one of these should be active.
+    for (let op = 200; op <= 207; op += 1) {
+      this.runtimeOps.delete(op);
+    }
+    const rank = computeRankOp(this.score);
+    if (rank !== undefined) {
+      this.runtimeOps.add(rank);
+    }
+  }
+
+  /**
+   * Drives the LR2 1P gauge state ops:
+   *   - **230–240**: 10 %-bucket flags (230 = 0–9 %, 231 = 10–19 %, …,
+   *     240 = 100 %). Skin elements like the "WARNING" overlay light up by
+   *     gating on these buckets.
+   *   - **42 / 43**: NORMAL (gauge-up animation) vs HARD (red-zone) flag.
+   *     The NORMAL gauge fires 42; we don't currently model HARD/EX.
+   */
+  private updateGaugeOps(): void {
+    for (let op = 230; op <= 240; op += 1) {
+      this.runtimeOps.delete(op);
+    }
+    const bucket = Math.min(10, Math.max(0, Math.floor(this.gauge / 10)));
+    this.runtimeOps.add(230 + bucket);
+    // NORMAL gauge is the default play-session gauge type; keep op 42 set
+    // so the matching frame plate (`#IF op42`) remains visible.
+    this.runtimeOps.add(42);
+    // op 43 = 1P HARD/EX (not modelled yet — leave clear).
+    this.runtimeOps.delete(43);
+  }
+
+  /**
+   * Detects when the chart has finished playing — every playable note has
+   * been processed *and* the playhead is past the last note (with a small
+   * tail buffer for cymbal/sample decay) — and invokes `onExit` once so
+   * the demo shell returns to the song-select view. We guard with
+   * `chartEnded` so the callback fires at most once.
+   */
+  private chartEnded = false;
+  private checkChartEnd(seconds: number): void {
+    if (this.chartEnded || !this.song) {
+      return;
+    }
+    const lastNoteEnd = this.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
+    const lastTrigger = this.autoSampleTriggers.at(-1)?.seconds ?? 0;
+    const endAt = Math.max(lastNoteEnd, lastTrigger) + 3;
+    if (seconds < endAt) {
+      return;
+    }
+    if (!this.notes.every((note) => note.hit)) {
+      // Manual play may still be working through trailing notes; only end
+      // once they are all judged or auto-missed.
+      return;
+    }
+    this.chartEnded = true;
+    // Defer one frame so the final render (with last judgement plate) is
+    // committed before we tear down — without this the user would see the
+    // playfield blank-flash to song select.
+    window.setTimeout(() => this.options.onExit?.(), 50);
+  }
+
+  /**
+   * Auto-play loop: when enabled, every playable note is judged as PERFECT
+   * exactly at its scheduled time. Background lane sounds (`scheduleAutoSamples`)
+   * still handle non-input channels separately. We also briefly fire the
+   * lane's key-on timer so the LR2 skin's lane laser + key-press graphics
+   * flash on every auto-judged note, matching the reference video.
+   */
+  private autoJudge(seconds: number): void {
+    for (const note of this.notes) {
+      if (note.hit) {
+        continue;
+      }
+      if (note.seconds > seconds) {
+        continue;
+      }
+      if (!isPlayableInputChannel(note.channel)) {
+        // Non-playable lanes (BGM-style notes that snuck into the playable
+        // collection, e.g. landmines) are left to autoMiss / scheduleAutoSamples.
+        continue;
+      }
+      note.hit = true;
+      applyJudgeToSummary(this.score, 'PERFECT', this.tracker);
+      this.applyGaugeDelta('PERFECT');
+      this.publishJudge('PERFECT', seconds);
+      this.playSample(note);
+      this.triggerBomb(note.channel);
+      this.flashKeyOnTimer(note.channel);
+    }
+  }
+
+  /**
+   * Brief key-on flash. We start the per-lane LR2 key-on timer (100..107 /
+   * 110..117) and schedule it to clear after a short interval so the laser
+   * fades like a real keystroke. Used by autoplay (no real keyboard event)
+   * so the player still sees the lane / key visuals react.
+   */
+  private flashKeyOnTimer(channel: string): void {
+    const timerId = this.resolveKeyOnTimerId(channel);
+    if (timerId === undefined) {
+      return;
+    }
+    this.timerStartedAt.set(timerId, performance.now());
+    // Clear after ~120 ms — long enough for the LR2 laser sprite to fade in
+    // and back out without lingering through subsequent notes.
+    const flashDurationMs = 120;
+    window.setTimeout(() => {
+      // Only drop the timer if no real keypress overrode it during the flash.
+      if (!this.pressedChannels.has(channel)) {
+        this.timerStartedAt.delete(timerId);
+      }
+    }, flashDurationMs);
+  }
+
+  /**
+   * Chart-time seconds since the first beat, derived from the audio
+   * context clock so it stays *bit-exact* with scheduled `node.start()`
+   * times across pause / resume cycles. The wall-clock approach we used
+   * previously (`performance.now() - pauseTotal`) drifted out of sync
+   * with the audio context on every pause because `suspend()` and
+   * `resume()` are asynchronous: the audio clock paused a few ms after
+   * we recorded `pauseTime` and resumed a few ms before we credited
+   * `pauseTotal`, so each toggle slid the two clocks apart by ~10–30 ms.
+   *
+   * Anchoring everything on `audioContext.currentTime` removes that
+   * accumulating drift entirely. For environments where the audio
+   * context isn't ready yet we fall back to the wall-clock model.
+   */
+  private currentSeconds(): number {
+    if (this.audioContext && this.audioContextStartTime > 0) {
+      return Math.max(0, this.audioContext.currentTime - this.audioContextStartTime);
+    }
+    if (this.paused) {
+      return Math.max(0, (this.pauseTime - this.startTime - this.pauseTotal) / 1000);
+    }
+    return Math.max(0, (performance.now() - this.startTime - this.pauseTotal) / 1000);
+  }
+
+  private autoMiss(seconds: number): void {
+    const bad = resolveJudgeWindowsMs(this.song!.chart).bad / 1000;
+    for (const note of this.notes) {
+      if (!note.hit && seconds - note.seconds > bad) {
+        note.hit = true;
+        applyJudgeToSummary(this.score, 'POOR', this.tracker);
+        this.applyGaugeDelta('POOR');
+        this.publishJudge('POOR', seconds);
+      }
+    }
+  }
+
+  private publishJudge(judge: JudgeKind, seconds: number): void {
+    this.lastJudge = judge;
+    this.lastJudgeUntil = seconds + 0.6;
+    // LR2 spec: timer 46 (1P judge) restarts on every 1P judgement so the
+    // attached `#DST_NOWJUDGE` / `#DST_NOWCOMBO` chains animate from time=0
+    // per hit. Without this the keyframe playhead drifts hours into the
+    // song and the post-hit fade-out keyframes have long since passed.
+    this.timerStartedAt.set(46, performance.now());
+  }
+
+  /**
+   * Pre-schedules every background sample whose chart-time is within the next
+   * `lookAhead` seconds. We hand each sample a precise audio-context start time
+   * (`audioContextStartTime + trigger.seconds`) so the Web Audio engine can fire
+   * it sample-accurately, independent of when this method is next polled. The
+   * ~0.5s look-ahead is large enough to absorb GC/stutters in the JS frame loop
+   * yet small enough that pause/resume timing remains responsive.
+   */
+  private scheduleAutoSamples(seconds: number): void {
+    const lookAhead = 0.5;
+    while (this.autoTriggerNextIndex < this.autoSampleTriggers.length) {
+      const trigger = this.autoSampleTriggers[this.autoTriggerNextIndex]!;
+      if (trigger.seconds > seconds + lookAhead) {
+        break;
+      }
+      this.autoTriggerNextIndex += 1;
+      this.playSampleByKey(trigger.sampleKey, trigger.seconds);
+    }
+  }
+
+  /**
+   * Plays a WAV sample by its `#WAV` key. When `scheduledChartSeconds` is given,
+   * the buffer is *scheduled* to start at the corresponding audio-context
+   * timestamp (precise Web Audio timing). Without it, the buffer starts
+   * immediately -- used for input-driven hit sounds, where the player's key
+   * press defines the start time.
+   */
+  private playSampleByKey(sampleKey: string, scheduledChartSeconds?: number): void {
+    if (!this.audioContext || !this.song) {
+      return;
+    }
+    const path = this.song.chart.resources.wav[sampleKey];
+    if (!path) {
+      return;
+    }
+    const buffer = this.decodedSamples.get(normalizePath(path).toLowerCase());
+    if (!buffer) {
+      return;
+    }
+    const node = this.audioContext.createBufferSource();
+    node.buffer = buffer;
+    node.connect(this.audioContext.destination);
+    if (scheduledChartSeconds !== undefined) {
+      // Map chart seconds → audio-context time. Clamp to "now" so a slightly
+      // late trigger (look-ahead just elapsed) still fires immediately rather
+      // than throwing for a past timestamp.
+      const startAt = Math.max(this.audioContext.currentTime, this.audioContextStartTime + scheduledChartSeconds);
+      node.start(startAt);
+    } else {
+      node.start();
+    }
+  }
+
+  private playSample(note: RuntimeNote): void {
+    if (!this.audioContext || !this.song) {
+      return;
+    }
+    const path = this.song.chart.resources.wav[note.event.value.toUpperCase()];
+    if (!path) {
+      return;
+    }
+    const buffer = this.decodedSamples.get(normalizePath(path).toLowerCase());
+    if (!buffer) {
+      return;
+    }
+    const node = this.audioContext.createBufferSource();
+    node.buffer = buffer;
+    node.connect(this.audioContext.destination);
+    node.start();
+  }
+
+  private render(seconds: number): void {
+    const screenWidth = this.app.screen.width;
+    const screenHeight = this.app.screen.height;
+    const viewport = resolveScaledViewport(screenWidth, screenHeight);
+    this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
+    this.root.position.set(viewport.x, viewport.y);
+    this.root.scale.set(viewport.scale);
+    this.background.clear().rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
+    this.renderSkin(DESIGN_WIDTH, DESIGN_HEIGHT);
+    this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT);
+    this.renderNotes(seconds, DESIGN_HEIGHT);
+    this.renderBombs();
+    this.renderText(DESIGN_WIDTH, DESIGN_HEIGHT, seconds);
+  }
+
+  /**
+   * One-shot bomb timer cleanup. Runs every frame regardless of whether
+   * we own a bomb texture, so the LR2 timer 50–69 stops being "active"
+   * once the explosion's natural duration (150 ms) has elapsed. Without
+   * this, the skin's `#DST_IMAGE` (which is gated on those timers and
+   * has `loop=-1` "play once and clamp") would keep displaying the last
+   * frame of the explosion forever.
+   */
+  private cleanupBombTimers(): void {
+    if (this.bombStartedAt.size === 0) {
+      return;
+    }
+    const now = performance.now();
+    const totalDurationMs = 150; // LR2 default bomb cycle.
+    for (const [channel, startedAt] of Array.from(this.bombStartedAt.entries())) {
+      if (now - startedAt < totalDurationMs) {
+        continue;
+      }
+      this.bombStartedAt.delete(channel);
+      const laneIndex = resolveLaneIndex(channel);
+      if (laneIndex >= 0) {
+        const base = channel.startsWith('2') ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE;
+        this.timerStartedAt.delete(base + laneIndex);
+      }
+    }
+  }
+
+  private renderBombs(): void {
+    this.bombLayer.removeChildren().forEach((child) => child.destroy());
+    this.cleanupBombTimers();
+    // When an LR2 skin is loaded the bomb sprite is already part of the
+    // skin's `#DST_IMAGE` set (one entry per lane, gated on bomb timer
+    // 50–57 / 60–67). Drawing our own copy on top would double-render the
+    // explosion, so this fallback only fires for the default (skinless)
+    // demo experience.
+    if (this.options.skin !== undefined || !this.bombTexture || this.bombStartedAt.size === 0) {
+      return;
+    }
+    const naturalRatio = this.bombTexture.frame.width / Math.max(1, this.bombTexture.frame.height);
+    const lr2Layout = naturalRatio >= 6;
+    const divx = lr2Layout ? 9 : BOMB_DIVX;
+    const divy = lr2Layout ? 1 : BOMB_DIVY;
+    const totalFrames = divx * divy;
+    const cellWidth = this.bombTexture.frame.width / divx;
+    const cellHeight = this.bombTexture.frame.height / divy;
+    const cycle = lr2Layout ? 150 / totalFrames : BOMB_CYCLE_MS;
+    const now = performance.now();
+    for (const [channel, startedAt] of Array.from(this.bombStartedAt.entries())) {
+      const elapsed = now - startedAt;
+      const lane = this.laneX.get(channel);
+      if (!lane) {
+        continue;
+      }
+      // Frame is clamped — never wraps — so the explosion plays exactly once.
+      const frameIndex = Math.min(totalFrames - 1, Math.max(0, Math.floor(elapsed / cycle)));
+      const cellX = frameIndex % divx;
+      const cellY = Math.floor(frameIndex / divx);
+      const cropped = createCroppedTexture(this.bombTexture, {
+        x: cellWidth * cellX,
+        y: cellHeight * cellY,
+        w: cellWidth,
+        h: cellHeight,
+      });
+      if (!cropped) {
+        continue;
+      }
+      const sprite = new Sprite(cropped);
+      const displayWidth = Math.max(cellWidth * 0.6, lane.w * (lr2Layout ? 4.5 : 3));
+      const displayHeight = displayWidth * (cellHeight / cellWidth);
+      sprite.position.set(lane.x + lane.w / 2 - displayWidth / 2, lane.bottom - displayHeight * 0.45);
+      sprite.width = displayWidth;
+      sprite.height = displayHeight;
+      sprite.blendMode = 'add';
+      this.bombLayer.addChild(sprite);
+    }
+  }
+
+  private renderSkin(width: number, height: number): void {
+    this.skinLayer.removeChildren().forEach((child) => child.destroy());
+    this.overlayLayer.removeChildren().forEach((child) => child.destroy());
+    const skin = this.options.skin;
+    if (!skin) {
+      renderFallbackLr2Frame(this.skinLayer);
+      return;
+    }
+    const scale = Math.min(width / skin.width, height / skin.height);
+    this.skinLayer.scale.set(scale);
+    this.skinLayer.position.set((width - skin.width * scale) / 2, (height - skin.height * scale) / 2);
+    // Mirror the skin transform onto the overlay so judge/combo/autoplay
+    // sprites use the same design-pixel coordinate system as `renderSkin`.
+    this.overlayLayer.scale.set(scale);
+    this.overlayLayer.position.copyFrom(this.skinLayer.position);
+    // Two-pass image render so the judgement line lands at the right
+    // z-depth: drawn AFTER the static frame / lane background (so the red
+    // bar isn't covered by the lane area) but BEFORE on-top overlays —
+    // bombs (timer 50–69), LN holds (70–89), key-on lasers (100–139) — so
+    // those visually punch through the line.
+    for (const image of skin.images) {
+      if (isLr2OverlayImage(image)) {
+        continue;
+      }
+      this.renderSkinImage(image);
+    }
+    for (const judgeLine of skin.judgeLines) {
+      if (judgeLine.index !== 0) {
+        // 1P side only for now.
+        continue;
+      }
+      this.renderJudgeLineElement(judgeLine);
+    }
+    for (const image of skin.images) {
+      if (!isLr2OverlayImage(image)) {
+        continue;
+      }
+      this.renderSkinImage(image);
+    }
+    for (const number of skin.numbers) {
+      if (!this.isDestinationVisible(number.destination)) {
+        continue;
+      }
+      const value = resolveNumberValue(
+        number.source.num,
+        this.score,
+        this.song,
+        this.gauge,
+        this.tracker.combo,
+        this.hiSpeed,
+        this.currentSeconds(),
+        this.displayedScore,
+        this.fps,
+        this.timingResolver?.bpmAtBeat(this.currentBeat(this.currentSeconds())),
+        this.resolveSongDurationSeconds(),
+      );
+      if (value === undefined) {
+        continue;
+      }
+      renderNumberElement(this.skinLayer, number, value, this.textures, this.evaluateElementDst(number), {
+        // Groove-gauge percentage is naturally variable-length; LR2 default
+        // skins specify keta=3 which would print "020" / "100". Suppress
+        // leading zeros so the displayed value reads like a normal integer.
+        suppressLeadingZeros: number.source.num === 107,
+      });
+    }
+    for (const gauge of skin.grooveGauges) {
+      if (gauge.index !== 0) {
+        // 1P only for now -- 2P side requires battle/dp wiring.
+        continue;
+      }
+      if (!this.isDestinationVisible(gauge.destination)) {
+        continue;
+      }
+      renderGrooveGaugeElement(this.skinLayer, gauge, this.gauge, this.textures, this.evaluateElementDst(gauge));
+    }
+    for (const bargraph of skin.bargraphs) {
+      if (!this.isDestinationVisible(bargraph.destination)) {
+        continue;
+      }
+      this.renderBarGraphElement(bargraph);
+    }
+    for (const slider of skin.sliders) {
+      if (!this.isDestinationVisible(slider.destination)) {
+        continue;
+      }
+      this.renderSliderElement(slider);
+    }
+    for (const text of skin.texts) {
+      if (!this.isDestinationVisible(text.destination)) {
+        continue;
+      }
+      this.renderTextElement(text);
+    }
+    this.renderJudgeAndComboOnOverlay(skin);
+  }
+
+  /**
+   * Renders a single LR2 `#SRC_IMAGE` + `#DST_IMAGE` element to the skin
+   * layer. Factored out so the caller can interleave `judgeLines` between
+   * the static frame images and the timer-driven overlays (bombs, lasers,
+   * key-on flashes) — see `renderSkin`.
+   */
+  private renderSkinImage(image: import('./lr2-skin.ts').Lr2ImageElement): void {
+    if (!this.isDestinationVisible(image.destination)) {
+      return;
+    }
+    // Interpolate the destination keyframes against the timer-anchored
+    // elapsed time so multi-keyframe `#DST_IMAGE` sequences animate smoothly.
+    const elapsed = this.elapsedSinceTimer(image.destination.timer);
+    const dst = image.keyframes.length > 1 ? evaluateKeyframes(image.keyframes, elapsed) : image.destination;
+    // LR2: a DST with explicit w=0 or h=0 is effectively a no-op. Negative
+    // w/h is valid (grow-in-opposite-direction); only zero is hidden.
+    if (dst.w === 0 || dst.h === 0) {
+      return;
+    }
+    const baseTexture = this.textures.get(image.source.imagePath);
+    if (!baseTexture) {
+      return;
+    }
+    // Pick the current SRC cell from the divx*divy animation grid; a `loop=-1`
+    // destination clamps SRC frames at the last cell (one-shot effects).
+    const cellRect = pickAnimatedCell(image.source, this.elapsedSinceTimer(image.source.timer), dst.loop);
+    if (cellRect.w <= 0 || cellRect.h <= 0) {
+      return;
+    }
+    const texture = createCroppedTexture(baseTexture, cellRect);
+    if (!texture) {
+      return;
+    }
+    const sprite = new Sprite(texture);
+    const { x, y, w, h } = normaliseRect(dst);
+    // op4=1 on the destination is the LR2 scratch-turntable spin marker.
+    // We rotate the sprite around its own centre at a fixed cadence so the
+    // disc visibly turns regardless of input. The rotation is anchored at
+    // `sceneStartTime` (scene mount), not `startTime` (notes start), so
+    // the disc spins continuously — including during the intro window.
+    // PixiJS uses a y-down coordinate system, so positive `rotation`
+    // values produce a clockwise spin visually.
+    if (dst.op4 === 1) {
+      sprite.anchor.set(0.5, 0.5);
+      sprite.position.set(x + w / 2, y + h / 2);
+      const rps = 0.5;
+      const elapsedMs = Math.max(0, performance.now() - this.sceneStartTime);
+      sprite.rotation = (elapsedMs / 1000) * rps * Math.PI * 2;
+    } else {
+      sprite.position.set(x, y);
+    }
+    sprite.width = w;
+    sprite.height = h;
+    applyDestinationToSprite(sprite, dst);
+    // The AUTOPLAY label (any image gated on op 33) belongs in the same
+    // visual layer as the judgement plate — i.e. above the falling notes.
+    // All other skin images stay in the regular skin layer.
+    const targetLayer = image.destination.ops.includes(33) ? this.overlayLayer : this.skinLayer;
+    targetLayer.addChild(sprite);
+  }
+
+  /**
+   * Renders the LR2 `#DST_JUDGELINE` sprite (the horizontal bar at the
+   * judgement line, typically a thin red strip in the LR2 default 7-keys
+   * skin). The skin's source frame already encodes the colour; we only need
+   * to honour the destination rectangle.
+   */
+  private renderJudgeLineElement(judgeLine: Lr2JudgeLineElement): void {
+    if (!this.isDestinationVisible(judgeLine.destination)) {
+      return;
+    }
+    const dst = this.evaluateElementDst(judgeLine);
+    if (dst.w === 0 || dst.h === 0) {
+      return;
+    }
+    const baseTexture = this.textures.get(judgeLine.source.imagePath);
+    if (!baseTexture) {
+      return;
+    }
+    const texture = createCroppedTexture(baseTexture, judgeLine.source);
+    if (!texture) {
+      return;
+    }
+    const sprite = new Sprite(texture);
+    sprite.position.set(dst.x, dst.y);
+    sprite.width = dst.w;
+    sprite.height = dst.h;
+    applyDestinationToSprite(sprite, dst);
+    this.skinLayer.addChild(sprite);
+  }
+
+  /**
+   * Picks the current destination rect for any element type. When the
+   * element has a multi-keyframe DST chain, interpolates against the
+   * timer-anchored elapsed time. Otherwise returns the static destination.
+   */
+  private evaluateElementDst(element: {
+    destination: Lr2DestinationRect;
+    keyframes: Lr2DestinationRect[];
+  }): Lr2DestinationRect {
+    if (element.keyframes.length > 1) {
+      return evaluateKeyframes(element.keyframes, this.elapsedSinceTimer(element.destination.timer));
+    }
+    return element.destination;
+  }
+
+  /**
+   * Renders an LR2 `#DST_TEXT` element. We currently use a system font (no
+   * `#LR2FONT` bitmap-font support yet), which means custom-styled labels in
+   * the LR2 skin will look generic. The string content for each `st` code is
+   * resolved from the loaded chart metadata.
+   */
+  private renderTextElement(text: Lr2TextElement): void {
+    const interpolated = this.evaluateElementDst(text);
+    const { x, y, w, h } = normaliseRect(interpolated);
+    if (w === 0 || h === 0) {
+      return;
+    }
+    const value = this.resolveTextValue(text.st);
+    if (!value) {
+      return;
+    }
+    // Match the LR2 destination height as the font size; this gives roughly
+    // the right size for system fonts even though the original skin used a
+    // bitmap font that pre-baked size and glyph spacing.
+    const fontSize = Math.max(8, Math.min(64, h * 0.8));
+    const tint = (interpolated.r << 16) | (interpolated.g << 8) | interpolated.b;
+    const node = new Text({
+      text: value,
+      style: new TextStyle({
+        fill: tint,
+        fontSize,
+        fontWeight: '600',
+        fontFamily: 'Avenir Next, Helvetica, "Hiragino Kaku Gothic ProN", sans-serif',
+      }),
+    });
+    node.alpha = interpolated.alpha;
+    if (text.alignment === 'center') {
+      node.anchor.set(0.5, 0.5);
+      node.position.set(x + w / 2, y + h / 2);
+    } else if (text.alignment === 'right') {
+      node.anchor.set(1, 0.5);
+      node.position.set(x + w, y + h / 2);
+    } else {
+      node.anchor.set(0, 0.5);
+      node.position.set(x, y + h / 2);
+    }
+    this.skinLayer.addChild(node);
+  }
+
+  /**
+   * Resolves the string content for an `#SRC_TEXT,st=…` slot. This is a
+   * minimal subset focused on values that are meaningful during a play
+   * session — title / subtitle / artist / genre / difficulty.
+   */
+  private resolveTextValue(st: number): string | undefined {
+    const song = this.song;
+    if (!song) {
+      return undefined;
+    }
+    const subartists = song.chart.bmson.info?.subartists?.join(' / ');
+    switch (st) {
+      case 1:
+        // Target / rival name. We don't have a multiplayer rival, so just
+        // show "TARGET" as a placeholder so the slot isn't visually missing.
+        return 'TARGET';
+      case 2:
+        return 'PLAYER';
+      case 10:
+      case 20:
+        return song.title;
+      case 11:
+      case 21:
+        return song.subtitle ?? '';
+      case 12:
+      case 22:
+        return [song.title, song.subtitle].filter((value): value is string => Boolean(value)).join(' ');
+      case 13:
+      case 23:
+        return song.genre ?? '';
+      case 14:
+      case 24:
+        return song.artist ?? '';
+      case 15:
+      case 25:
+        return subartists ?? '';
+      case 17:
+      case 27:
+        return song.playLevel?.toString() ?? '';
+      case 18:
+      case 28:
+        return resolveDifficultyName(song.chart.metadata.difficulty);
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Renders an LR2 `#SRC_BARGRAPH` element. The bar is drawn by clipping the
+   * destination rect to a `progress`-fraction of its width (or height for
+   * vertical bars). Only the most common types — gauge, score graph, song
+   * progress — are wired; others fall back to a 0-progress (hidden) draw.
+   */
+  private renderBarGraphElement(bargraph: Lr2BarGraphElement): void {
+    const interpolated = this.evaluateElementDst(bargraph);
+    const { x, y, w, h } = normaliseRect(interpolated);
+    if (w === 0 || h === 0) {
+      return;
+    }
+    const baseTexture = this.textures.get(bargraph.source.imagePath);
+    if (!baseTexture) {
+      return;
+    }
+    const progress = this.resolveBarGraphProgress(bargraph.type);
+    if (progress <= 0) {
+      return;
+    }
+    // Stretch the SRC rect over the (clipped) DST rect. For horizontal bars
+    // we shrink the width by `progress`; for vertical bars we shrink height
+    // and shift the top edge down so the bar fills upward.
+    const cropTexture = createCroppedTexture(baseTexture, bargraph.source);
+    if (!cropTexture) {
+      return;
+    }
+    const sprite = new Sprite(cropTexture);
+    if (bargraph.muki === 'vertical') {
+      const filledHeight = Math.round(h * progress);
+      sprite.position.set(x, y + (h - filledHeight));
+      sprite.width = w;
+      sprite.height = filledHeight;
+    } else {
+      sprite.position.set(x, y);
+      sprite.width = Math.round(w * progress);
+      sprite.height = h;
+    }
+    applyDestinationToSprite(sprite, interpolated);
+    this.skinLayer.addChild(sprite);
+  }
+
+  /**
+   * Returns the 0..1 progress fraction for a given LR2 bargraph `type`. See
+   * `lr2skinhelp/bargraph.txt` for the full enum; the play screen mostly
+   * uses 1 (song progress) and 10/11 (1P EX score).
+   */
+  private resolveBarGraphProgress(type: number): number {
+    switch (type) {
+      case 1: {
+        // 曲進行状態: ratio of currentSeconds to total chart duration.
+        const total = this.resolveSongDurationSeconds();
+        if (total <= 0) {
+          return 0;
+        }
+        return Math.max(0, Math.min(1, this.currentSeconds() / total));
+      }
+      case 2:
+        // ロード状態 — we always finish loading before play, so 1.
+        return 1;
+      case 10:
+      case 11:
+      case 12:
+      case 13: {
+        // 1P EX-score (current / predicted / highscore current/final).
+        // We don't yet track predicted/highscore; reuse the live EX rate.
+        if (this.score.total <= 0) {
+          return 0;
+        }
+        return Math.max(0, Math.min(1, this.score.exScore / (this.score.total * 2)));
+      }
+      default:
+        return 0;
+    }
+  }
+
+  /** Approximate total duration of the loaded chart in seconds. */
+  private resolveSongDurationSeconds(): number {
+    if (!this.song) {
+      return 0;
+    }
+    const triggerEnd = this.autoSampleTriggers.at(-1)?.seconds ?? 0;
+    const noteEnd = this.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
+    return Math.max(triggerEnd, noteEnd);
+  }
+
+  /**
+   * Renders an LR2 `#SRC_SLIDER` element. We treat sliders as static
+   * "knob" sprites positioned along the `range` axis according to the
+   * runtime value. Most play-screen sliders (hi-speed, song progress) read
+   * back nicely from existing state.
+   */
+  private renderSliderElement(slider: Lr2SliderElement): void {
+    const interpolated = this.evaluateElementDst(slider);
+    const { x, y, w, h } = normaliseRect(interpolated);
+    if (w === 0 || h === 0) {
+      return;
+    }
+    const baseTexture = this.textures.get(slider.source.imagePath);
+    if (!baseTexture) {
+      return;
+    }
+    const cropTexture = createCroppedTexture(baseTexture, slider.source);
+    if (!cropTexture) {
+      return;
+    }
+    const value = this.resolveSliderValue(slider.type); // 0..1
+    const offset = slider.range * value;
+    let drawX = x;
+    let drawY = y;
+    switch (slider.muki) {
+      case 'down':
+        drawY = y + offset;
+        break;
+      case 'up':
+        drawY = y - offset;
+        break;
+      case 'right':
+        drawX = x + offset;
+        break;
+      case 'left':
+        drawX = x - offset;
+        break;
+    }
+    const sprite = new Sprite(cropTexture);
+    sprite.position.set(drawX, drawY);
+    sprite.width = w;
+    sprite.height = h;
+    applyDestinationToSprite(sprite, interpolated);
+    this.skinLayer.addChild(sprite);
+  }
+
+  /** Returns the 0..1 value for a slider type. */
+  private resolveSliderValue(type: number): number {
+    switch (type) {
+      case 2: {
+        // ハイスピ1P: map the multiplier into [0..1] over the supported range.
+        const span = HISPEED_MAX - HISPEED_MIN;
+        return span <= 0 ? 0 : Math.max(0, Math.min(1, (this.hiSpeed - HISPEED_MIN) / span));
+      }
+      case 6: {
+        // 曲進行度
+        const total = this.resolveSongDurationSeconds();
+        return total <= 0 ? 0 : Math.max(0, Math.min(1, this.currentSeconds() / total));
+      }
+      default:
+        return 0;
+    }
+  }
+
+  /**
+   * Renders the judgement plate + NOWCOMBO digits as a single horizontally
+   * centred assembly. The two are drawn together so the relative gap stays
+   * stable while the whole group slides left/right to centre on the lane
+   * area as the combo gets longer.
+   *
+   * Called from `renderSkin` and emits to `overlayLayer` so the assembly
+   * sits *above* falling notes — matching the LR2 reference where the
+   * "GREAT 158" text punches through the note stream.
+   */
+  private renderJudgeAndComboOnOverlay(skin: Lr2Skin): void {
+    const seconds = this.currentSeconds();
+    if (!this.lastJudge || seconds > this.lastJudgeUntil) {
+      return;
+    }
+    const judgeKind = resolveJudgeSkinKind(this.lastJudge);
+    const judgeElements = judgeKind ? skin.judges[judgeKind] : undefined;
+    const judgeAnchor = judgeElements?.[0]?.destination;
+    if (!judgeElements?.length || !judgeAnchor) {
+      return;
+    }
+    const comboKind = lastJudgeToNowComboKind(this.lastJudge);
+    const combo = this.tracker.combo;
+    const visibleCombo = comboKind && combo > 0 ? combo : 0;
+    const comboElement = comboKind
+      ? skin.nowCombos.find((entry) => entry.kind === comboKind && this.isDestinationVisible(entry.destination))
+      : undefined;
+    // Compute centring offset so that judge plate + combo sits centred on
+    // the lane area. Without this the assembly was anchored at LR2's static
+    // x=73 / x=185 coordinates, biased ~10px to the left of the lane centre
+    // and drifting further as the combo grew.
+    const laneCenter = this.resolveLaneCenter(skin);
+    const judgeRight = judgeAnchor.x + judgeAnchor.w;
+    let assemblyRight = judgeRight;
+    if (comboElement && visibleCombo > 0) {
+      const totalDigits = visibleCombo.toString().length;
+      const comboLeft = judgeAnchor.x + comboElement.destination.x;
+      assemblyRight = Math.max(judgeRight, comboLeft + comboElement.destination.w * totalDigits);
+    }
+    const offsetX = laneCenter - (judgeAnchor.x + assemblyRight) / 2;
+
+    // 1) Judge plate. The full keyframe chain animates against timer 46
+    // (which we restart on every judgement in `publishJudge`), so the LR2
+    // default fade-in / fade-out timing comes through naturally.
+    const judgeElapsed = this.elapsedSinceTimer(46);
+    for (const element of judgeElements) {
+      if (!this.isDestinationVisible(element.destination)) {
+        continue;
+      }
+      const dst = this.evaluateElementDst(element);
+      if (dst.w === 0 || dst.h === 0) {
+        continue;
+      }
+      const baseTexture = this.textures.get(element.source.imagePath);
+      if (!baseTexture) {
+        continue;
+      }
+      const cellRect = pickAnimatedCell(element.source, judgeElapsed);
+      const texture = createCroppedTexture(baseTexture, cellRect);
+      if (!texture) {
+        continue;
+      }
+      const sprite = new Sprite(texture);
+      sprite.position.set(dst.x + offsetX, dst.y);
+      sprite.width = dst.w;
+      sprite.height = dst.h;
+      applyDestinationToSprite(sprite, dst);
+      this.overlayLayer.addChild(sprite);
+    }
+
+    // 2) Combo digits (animated for PERFECT — divx*divy with cycle).
+    if (comboElement && visibleCombo > 0) {
+      renderNowComboElement(
+        this.overlayLayer,
+        comboElement,
+        visibleCombo,
+        judgeAnchor,
+        this.textures,
+        judgeElapsed,
+        offsetX,
+        this.evaluateElementDst(comboElement),
+      );
+    }
+  }
+
+  /**
+   * Returns the horizontal centre of the play-field (in design pixels)
+   * derived from the LR2 skin's `#DST_NOTE` rectangles. Falls back to the
+   * fallback playfield constant when no skin is loaded.
+   */
+  private resolveLaneCenter(skin: Lr2Skin): number {
+    const lanes = skin.laneRects.filter((rect): rect is Lr2DestinationRect => Boolean(rect));
+    if (lanes.length === 0) {
+      return PLAYFIELD.x + PLAYFIELD.w / 2;
+    }
+    const leftmost = lanes.reduce((acc, lane) => Math.min(acc, lane.x), lanes[0]!.x);
+    const rightmost = lanes.reduce((acc, lane) => Math.max(acc, lane.x + lane.w), lanes[0]!.x + lanes[0]!.w);
+    return (leftmost + rightmost) / 2;
+  }
+
+  private renderLanes(width: number, height: number): void {
+    this.laneLayer.clear();
+    this.laneX.clear();
+    const skin = this.options.skin;
+    const scale = skin ? Math.min(width / skin.width, height / skin.height) : 1;
+    const skinX = skin ? (width - skin.width * scale) / 2 : 0;
+    const skinY = skin ? (height - skin.height * scale) / 2 : 0;
+    const fallbackTop = PLAYFIELD.y;
+    const fallbackBottom = PLAYFIELD.judgementY;
+    const laneWidth = PLAYFIELD.w / Math.max(1, this.laneChannels.length);
+    const startX = PLAYFIELD.x;
+
+    this.laneChannels.forEach((channel, index) => {
+      const lr2Lane = skin?.laneRects[index];
+      const x = lr2Lane ? skinX + lr2Lane.x * scale : startX + index * laneWidth;
+      const w = lr2Lane ? Math.max(4, lr2Lane.w * scale) : laneWidth - 2;
+      const top = lr2Lane ? skinY : fallbackTop;
+      // `lr2Lane.y` is the TOP of the judgement-line bar (LR2 #DST_NOTE
+      // convention); the just-timing reference is the BOTTOM edge of that
+      // bar, which is `y + h`. For the LR2 default 7-keys skin (y=315,
+      // h=6) that puts the just line at y=321 — exactly where the white
+      // piano keys begin and notes "land" visually.
+      const lr2JudgeBottom = lr2Lane ? lr2Lane.y + Math.abs(lr2Lane.h) : 0;
+      const bottom = lr2Lane ? skinY + lr2JudgeBottom * scale : fallbackBottom;
+      this.laneX.set(channel, { x, w, top, bottom });
+
+      if (skin) {
+        // With an LR2 skin loaded, the playfield background, judgement line
+        // and key lasers are all rendered by the skin itself (driven by
+        // `#DST_IMAGE` + key-on / judgement timers). Drawing our own coloured
+        // rectangles on top of that just paints over the skin -- which is
+        // exactly the "scratch lane is too red" / "judgement line is white"
+        // problem we want to avoid. Skip the fallback overlays here.
+        return;
+      }
+
+      this.laneLayer
+        .rect(x, top, w, Math.max(1, bottom - top))
+        .fill({ color: isScratch(channel) ? RED : PANEL, alpha: isScratch(channel) ? 0.72 : 0.62 });
+      if (this.pressedChannels.has(channel)) {
+        this.laneLayer
+          .rect(x, top, w, Math.max(1, bottom - top))
+          .fill({ color: isScratch(channel) ? YELLOW : WHITE, alpha: 0.45 });
+      }
+      this.laneLayer.rect(x, bottom - 4, w, 6).fill(isScratch(channel) ? RED : WHITE);
+      this.laneLayer.rect(x, bottom + 2, w, 4).fill(YELLOW);
+    });
+  }
+
+  private renderNotes(seconds: number, _height: number): void {
+    this.noteLayer.removeChildren().forEach((child) => child.destroy());
+    if (this.isIntroPlaying()) {
+      // Intro period — the LR2 skin is sliding its frame chrome in. Notes
+      // and measure lines stay off-screen until the playhead is live.
+      return;
+    }
+    const currentBeat = this.currentBeat(seconds);
+    const skin = this.options.skin;
+    const pixelsPerBeat = PIXELS_PER_BEAT * this.hiSpeed;
+    this.renderMeasureLines(currentBeat, pixelsPerBeat);
+    // Note: the BPM-linked judgement-line glow is drawn by the LR2 skin
+    // itself (the "判定グロー" `#DST_IMAGE` at SRC y=2007 in the default
+    // 7-keys skin). The custom `renderBeatAura` we used to call here was
+    // duplicate visual noise and has been removed.
+    for (const note of this.notes) {
+      // Judged notes (hit / auto-missed) intentionally stay on screen and
+      // continue scrolling — only their *position* governs visibility.
+      const lane = this.laneX.get(note.channel);
+      if (!lane) {
+        continue;
+      }
+      const y = lane.bottom - (note.beat - currentBeat) * pixelsPerBeat;
+      const laneIndex = resolveLaneIndex(note.channel);
+      // Long-note render: draw LN_BODY between start and end beats, capped
+      // with LN_START / LN_END sprites. Falls through to single-note render
+      // if the chart has no long-note end-beat for this entry.
+      if (note.endBeat !== undefined) {
+        const yEnd = lane.bottom - (note.endBeat - currentBeat) * pixelsPerBeat;
+        // yEnd is *above* y (smaller value, since beats grow upward
+        // visually). Hide the LN once its tail (yEnd) has visually crossed
+        // the judgement-line bottom — at that point every part of the long
+        // note is below the line and shouldn't paint over the keys area.
+        // Also clip when the head is still off-screen above the playfield.
+        if (yEnd > lane.bottom || y < lane.top - 48) {
+          continue;
+        }
+        this.renderLongNote(skin, laneIndex, note.channel, lane, y, yEnd);
+        continue;
+      }
+      // Single notes hide the moment their bottom edge passes the
+      // judgement-line bottom (= `lane.bottom`). Until then the note is
+      // free to scroll through the line normally — judged or not.
+      if (y < lane.top - 48 || y > lane.bottom) {
+        continue;
+      }
+      this.renderSingleNote(skin, laneIndex, note.channel, lane, y);
+    }
+  }
+
+  /**
+   * Cached cumulative beats at each measure boundary, keyed by song
+   * identity. Computed on first access so we don't walk the measure list
+   * every frame. Each entry is the beat count at the *start* of the measure
+   * with that index (measure 0 starts at beat 0).
+   */
+  private measureBeatCache: { songId: string | undefined; beats: number[] } = { songId: undefined, beats: [] };
+
+  private resolveMeasureBeats(): number[] {
+    const song = this.song;
+    if (!song) {
+      return [];
+    }
+    if (this.measureBeatCache.songId === song.id) {
+      return this.measureBeatCache.beats;
+    }
+    const beats: number[] = [];
+    let cumulative = 0;
+    // BMS measure length is the relative size of the measure, where 1.0 is a
+    // full 4/4 measure (= 4 beats). Walk the chart's measure list and record
+    // the beat at the start of each measure.
+    const measures = song.chart.measures;
+    if (measures.length === 0) {
+      this.measureBeatCache = { songId: song.id, beats };
+      return beats;
+    }
+    const maxIndex = Math.max(...measures.map((m) => m.index));
+    const lengthByIndex = new Map(measures.map((m) => [m.index, m.length]));
+    for (let i = 0; i <= maxIndex + 1; i += 1) {
+      beats.push(cumulative);
+      const length = lengthByIndex.get(i) ?? 1;
+      cumulative += length * 4;
+    }
+    this.measureBeatCache = { songId: song.id, beats };
+    return beats;
+  }
+
+  /**
+   * Draws horizontal measure lines on the playfield at every `#MEASURE`
+   * boundary. When the LR2 skin defines `#SRC_LINE` / `#DST_LINE`, we use
+   * its texture & geometry; otherwise we fall back to a thin white bar
+   * spanning the lane area.
+   */
+  private renderMeasureLines(currentBeat: number, pixelsPerBeat: number): void {
+    const beats = this.resolveMeasureBeats();
+    if (beats.length === 0 || this.laneChannels.length === 0) {
+      return;
+    }
+    const firstChannel = this.laneChannels[0]!;
+    const lastChannel = this.laneChannels[this.laneChannels.length - 1]!;
+    const left = this.laneX.get(firstChannel);
+    const right = this.laneX.get(lastChannel);
+    if (!left || !right) {
+      return;
+    }
+    const top = left.top;
+    const bottom = left.bottom;
+    const skin = this.options.skin;
+    // Prefer the LR2 skin's `#DST_LINE` (e.g. the LR2 default 7-keys skin's
+    // 1-px white strip at y=320) when present. The DST encodes per-side x/w
+    // and texture; we replicate it at every measure boundary, scrolled.
+    const skinLine = skin?.measureLines.find((entry) => entry.index === 0);
+    const baseTexture = skinLine ? this.textures.get(skinLine.source.imagePath) : undefined;
+    if (skinLine && baseTexture) {
+      const lineDst = this.evaluateElementDst(skinLine);
+      const cell = pickAnimatedCell(skinLine.source, this.elapsedSinceTimer(skinLine.source.timer));
+      for (const beat of beats) {
+        const y = bottom - (beat - currentBeat) * pixelsPerBeat;
+        if (y < top - 1 || y > bottom + 1) {
+          continue;
+        }
+        const cropped = createCroppedTexture(baseTexture, cell);
+        if (!cropped) {
+          continue;
+        }
+        const sprite = new Sprite(cropped);
+        sprite.position.set(lineDst.x, Math.round(y));
+        sprite.width = lineDst.w;
+        sprite.height = Math.max(1, Math.abs(lineDst.h));
+        applyDestinationToSprite(sprite, lineDst);
+        this.noteLayer.addChild(sprite);
+      }
+      return;
+    }
+    // Fallback: simple white strip when no skin or no #SRC_LINE.
+    const x0 = left.x;
+    const x1 = right.x + right.w;
+    const graphic = new Graphics();
+    for (const beat of beats) {
+      const y = bottom - (beat - currentBeat) * pixelsPerBeat;
+      if (y < top - 1 || y > bottom + 1) {
+        continue;
+      }
+      graphic.rect(x0, Math.round(y), x1 - x0, 1).fill({ color: 0xffffff, alpha: 0.65 });
+    }
+    this.noteLayer.addChild(graphic);
+  }
+
+  /**
+   * Picks the best note SRC for the given kind + lane index.
+   *
+   * The LR2 `#SRC_AUTO_*` variants ("dummy notes") are *not* a global
+   * "use this when autoplay is on" override — they only kick in for lanes
+   * that the per-lane autoscratch / autolane options (op 53/55) handle
+   * automatically, with `AUTOPLAY LANE = DUMMY NOTES` (op 915) selected.
+   * Full-game autoplay (op 33) keeps the regular note sprite, exactly like
+   * the LR2 reference video.
+   */
+  private resolveNoteSource(
+    skin: Lr2Skin | undefined,
+    kind: 'note' | 'lnstart' | 'lnend' | 'lnbody' | 'mine',
+    laneIndex: number,
+  ): import('./lr2-skin.ts').Lr2ImageRect | undefined {
+    if (!skin) {
+      return undefined;
+    }
+    if (this.isAutoLane(laneIndex) && this.runtimeOps.has(915)) {
+      const autoKind = ('auto' + kind) as keyof Lr2Skin['notes'];
+      const auto = skin.notes[autoKind];
+      const direct = auto?.[laneIndex];
+      const fallback = auto?.find((entry): entry is import('./lr2-skin.ts').Lr2ImageRect => Boolean(entry));
+      const autoSrc = direct ?? fallback;
+      if (autoSrc) {
+        return autoSrc;
+      }
+    }
+    return skin.notes[kind]?.[laneIndex];
+  }
+
+  /**
+   * Returns true when the given lane index is currently auto-handled by the
+   * per-lane play options — autoscratch on (op 55) → scratch lane auto, or
+   * autolane on (op 53) → all lanes auto. Global autoplay (op 33) is
+   * deliberately not counted here so notes still render in their normal
+   * colour during autoplay demonstrations, matching the LR2 reference.
+   */
+  private isAutoLane(laneIndex: number): boolean {
+    if (this.runtimeOps.has(53)) {
+      return true;
+    }
+    if (laneIndex === 0 && this.runtimeOps.has(55)) {
+      return true;
+    }
+    return false;
+  }
+
+  private renderSingleNote(
+    skin: Lr2Skin | undefined,
+    laneIndex: number,
+    channel: string,
+    lane: { x: number; w: number; top: number; bottom: number },
+    y: number,
+  ): void {
+    // `y` is where the chart timing intersects the judgement line for this
+    // note. We anchor the sprite by its **bottom edge** so the just-timing
+    // moment lines up with the bottom edge of the visual note (LR2 / BMS
+    // convention) instead of the centre.
+    const skinNote = this.resolveNoteSource(skin, 'note', laneIndex);
+    const baseTexture = skinNote ? this.textures.get(skinNote.imagePath) : undefined;
+    if (skinNote && baseTexture) {
+      // Some LR2 skins animate notes (shimmer / pulse). Pick the current
+      // SRC cell from divx*divy/cycle. For non-animated notes (cycle=0)
+      // this returns cell (0,0) which matches the static behaviour.
+      const cell = pickAnimatedCell(skinNote, this.elapsedSinceTimer(skinNote.timer));
+      const texture = createCroppedTexture(baseTexture, cell);
+      if (texture) {
+        const sprite = new Sprite(texture);
+        sprite.x = lane.x + (lane.w - cell.w) / 2;
+        sprite.y = y - cell.h;
+        sprite.width = cell.w;
+        sprite.height = cell.h;
+        this.noteLayer.addChild(sprite);
+        return;
+      }
+    }
+    const graphic = new Graphics();
+    graphic.roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2).fill(isScratch(channel) ? RED : WHITE);
+    this.noteLayer.addChild(graphic);
+  }
+
+  /**
+   * Renders a long note as a vertical band: LN_BODY tiled (or stretched)
+   * between LN_START (lower) and LN_END (upper). The body sprite is taken
+   * from the LR2 skin per lane index when available; otherwise we fall back
+   * to a tinted rectangle.
+   */
+  private renderLongNote(
+    skin: Lr2Skin | undefined,
+    laneIndex: number,
+    channel: string,
+    lane: { x: number; w: number; top: number; bottom: number },
+    yStart: number,
+    yEnd: number,
+  ): void {
+    // `yStart` / `yEnd` are the chart-time intersections with the judgement
+    // line. With the bottom-edge anchor convention (matching LR2 / BMS):
+    //   - LN_START's *bottom edge* sits at `yStart` (just-timing of the head)
+    //   - LN_END's   *bottom edge* sits at `yEnd`   (just-timing of the tail)
+    // The body fills the band between them; we clamp the bottom to the
+    // judgement-line bottom (= `lane.bottom`) so the body never paints over
+    // the keys area below the line — even mid-LN where the head has
+    // already passed but the tail is still above.
+    const top = Math.max(lane.top - 48, Math.min(yStart, yEnd));
+    const bottom = Math.min(lane.bottom, Math.max(yStart, yEnd));
+    const startSrc = this.resolveNoteSource(skin, 'lnstart', laneIndex);
+    const bodySrc = this.resolveNoteSource(skin, 'lnbody', laneIndex);
+    const endSrc = this.resolveNoteSource(skin, 'lnend', laneIndex);
+    const bodyBase = bodySrc ? this.textures.get(bodySrc.imagePath) : undefined;
+    if (bodySrc && bodyBase) {
+      const cell = pickAnimatedCell(bodySrc, this.elapsedSinceTimer(bodySrc.timer));
+      const cropped = createCroppedTexture(bodyBase, cell);
+      if (cropped) {
+        const sprite = new Sprite(cropped);
+        sprite.x = lane.x + (lane.w - cell.w) / 2;
+        // Shift the body up by one cell-height so the body's bottom edge
+        // aligns with the LN_START's bottom edge (= judgement line at the
+        // head's just-timing). Without this, the body sticks out ~half a
+        // note below the line at perfect timing.
+        sprite.y = top - cell.h;
+        sprite.width = cell.w;
+        sprite.height = Math.max(1, bottom - top);
+        this.noteLayer.addChild(sprite);
+      }
+    } else {
+      const graphic = new Graphics();
+      graphic
+        .rect(lane.x + 2, top - 10, Math.max(4, lane.w - 4), Math.max(1, bottom - top))
+        .fill({ color: isScratch(channel) ? RED : YELLOW, alpha: 0.6 });
+      this.noteLayer.addChild(graphic);
+    }
+    // LN_END at the top (yEnd), LN_START at the bottom (yStart).
+    if (endSrc) {
+      const cell = pickAnimatedCell(endSrc, this.elapsedSinceTimer(endSrc.timer));
+      const endTexture = createCroppedTexture(this.textures.get(endSrc.imagePath), cell);
+      if (endTexture) {
+        const sprite = new Sprite(endTexture);
+        sprite.x = lane.x + (lane.w - cell.w) / 2;
+        sprite.y = yEnd - cell.h;
+        sprite.width = cell.w;
+        sprite.height = cell.h;
+        this.noteLayer.addChild(sprite);
+      }
+    }
+    // Hide the LN head once it has visually passed the judgement-line
+    // bottom. The body+end keep showing until the tail crosses (handled by
+    // the caller's `yEnd > lane.bottom` early-out).
+    if (startSrc && yStart <= lane.bottom) {
+      const cell = pickAnimatedCell(startSrc, this.elapsedSinceTimer(startSrc.timer));
+      const startTexture = createCroppedTexture(this.textures.get(startSrc.imagePath), cell);
+      if (startTexture) {
+        const sprite = new Sprite(startTexture);
+        sprite.x = lane.x + (lane.w - cell.w) / 2;
+        sprite.y = yStart - cell.h;
+        sprite.width = cell.w;
+        sprite.height = cell.h;
+        this.noteLayer.addChild(sprite);
+      }
+    }
+  }
+
+  private renderText(width: number, height: number, seconds: number): void {
+    this.textLayer.removeChildren().forEach((child) => child.destroy());
+    const status = new Text({
+      text: `${this.song?.title ?? ''}  ${formatTime(seconds)}  HS×${this.hiSpeed.toFixed(2)}  PG:${this.score.perfect} GR:${this.score.great} GD:${this.score.good} BD:${this.score.bad} PR:${this.score.poor}`,
+      style: new TextStyle({ fill: MUTED, fontSize: 10, fontFamily: 'Avenir Next, Helvetica, sans-serif' }),
+    });
+    status.position.set(18, height - 22);
+    this.textLayer.addChild(status);
+    if (this.lastJudge && seconds <= this.lastJudgeUntil && !this.hasSkinnedJudge()) {
+      const judge = new Text({
+        text: this.lastJudge,
+        style: new TextStyle({
+          fill: BLUE,
+          stroke: { color: 0xffffff, width: 2 },
+          fontSize: 32,
+          fontWeight: '800',
+          fontFamily: 'Avenir Next, Helvetica, sans-serif',
+        }),
+      });
+      judge.anchor.set(0.5);
+      judge.position.set(PLAYFIELD.x + PLAYFIELD.w / 2, 246);
+      this.textLayer.addChild(judge);
+    }
+    this.overlay.visible = this.paused;
+    this.overlay.text = 'Paused';
+    this.overlay.anchor.set(0.5);
+    this.overlay.position.set(width / 2, height / 2);
+  }
+
+  private hasSkinnedJudge(): boolean {
+    const skin = this.options.skin;
+    if (!skin) {
+      return false;
+    }
+    const kind = resolveJudgeSkinKind(this.lastJudge);
+    const elements = kind ? skin.judges[kind] : undefined;
+    return Boolean(elements?.length);
+  }
+}
+
+/**
+ * Identifies "on-top overlay" images from the LR2 image stream — bombs
+ * (timer 50–69), long-note hold effects (70–89), and key-on / key-off
+ * lasers (100–139). The renderer draws these AFTER the judgement line so
+ * they visually punch through the red bar instead of being hidden by it.
+ */
+function isLr2OverlayImage(image: import('./lr2-skin.ts').Lr2ImageElement): boolean {
+  const t = image.destination.timer;
+  return (t >= 50 && t <= 89) || (t >= 100 && t <= 139);
+}
+
+function applyDestinationToSprite(sprite: Sprite, destination: Lr2DestinationRect): void {
+  sprite.alpha = destination.alpha;
+  sprite.tint = (destination.r << 16) | (destination.g << 8) | destination.b;
+  sprite.blendMode = mapLr2BlendMode(destination.blend);
+  if (destination.angle !== 0) {
+    sprite.rotation = (destination.angle * Math.PI) / 180;
+  }
+}
+
+function mapLr2BlendMode(blend: number): BLEND_MODES {
+  switch (blend) {
+    case 2:
+      return 'add';
+    case 4:
+    case 11:
+      return 'multiply';
+    case 3:
+      // LR2 "減算" -- PixiJS v8 has no native subtractive blend; fall back to normal.
+      return 'normal';
+    default:
+      return 'normal';
+  }
+}
+
+function createCroppedTexture(
+  texture: Texture | undefined,
+  rect: { x: number; y: number; w: number; h: number },
+): Texture | undefined {
+  if (!texture || rect.w <= 0 || rect.h <= 0) {
+    return undefined;
+  }
+  return new Texture({ source: texture.source, frame: new Rectangle(rect.x, rect.y, rect.w, rect.h) });
+}
+
+/**
+ * LR2 sprite destinations may carry negative `w`/`h` values to indicate the
+ * rectangle "grows" in the opposite direction (e.g. h=-321 at y=321 means a
+ * 321-tall rect whose bottom edge sits at y=321). PixiJS expects positive
+ * extents anchored at the top-left, so we convert here.
+ */
+function normaliseRect(rect: { x: number; y: number; w: number; h: number }): {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+} {
+  let { x, y, w, h } = rect;
+  if (w < 0) {
+    x += w;
+    w = -w;
+  }
+  if (h < 0) {
+    y += h;
+    h = -h;
+  }
+  return { x, y, w, h };
+}
+
+/**
+ * Interpolates an LR2 destination keyframe sequence at the given elapsed time.
+ *
+ * Semantics — note the LR2 `loop` field is a **jump-to time**, *not* a cycle
+ * length:
+ * - With one keyframe: that keyframe is returned verbatim.
+ * - Before the first keyframe's `time`: the first keyframe is held.
+ * - After the last keyframe's `time`:
+ *   - `loop < 0` (and especially `-1`): play once and clamp at the last
+ *     keyframe forever (used for one-shot effects like bombs and the
+ *     start-screen circle fade).
+ *   - `loop >= finalTime`: effectively no loop — wrapping would return
+ *     straight to the final state. Many LR2 intro animations encode
+ *     "play once and hold" this way (e.g. score-panel slide-in with
+ *     `loop=700, finalTime=700`).
+ *   - `0 <= loop < finalTime`: real loop — the playhead wraps from
+ *     `finalTime` back to `loop`, so the *interval [loop, finalTime]* is
+ *     the actual cycle (everything before `loop` plays only once).
+ * - Between two keyframes A (`time=tA`) and B (`time=tB`): position, size,
+ *   colour, alpha, and angle are linearly interpolated by `(t - tA)/(tB - tA)`.
+ *
+ * Discrete attributes (blend, filter, center, timer, ops, op4) come from the
+ * *target* keyframe so visibility / blending change cleanly at boundaries.
+ */
+function evaluateKeyframes(keyframes: ReadonlyArray<Lr2DestinationRect>, elapsedMs: number): Lr2DestinationRect {
+  if (keyframes.length === 1 || elapsedMs < 0) {
+    return keyframes[0]!;
+  }
+  const first = keyframes[0]!;
+  const last = keyframes[keyframes.length - 1]!;
+  const finalTime = last.time;
+  let t = elapsedMs;
+  if (elapsedMs > finalTime) {
+    // Past the final keyframe — decide between hold vs. real loop.
+    if (last.loop < 0 || last.loop >= finalTime) {
+      return last;
+    }
+    const period = finalTime - last.loop;
+    if (period <= 0) {
+      return last;
+    }
+    t = last.loop + ((elapsedMs - last.loop) % period);
+  }
+  if (t <= first.time) {
+    return first;
+  }
+  for (let index = 0; index < keyframes.length - 1; index += 1) {
+    const lower = keyframes[index]!;
+    const upper = keyframes[index + 1]!;
+    if (t < lower.time || t > upper.time) {
+      continue;
+    }
+    const span = upper.time - lower.time;
+    const u = span <= 0 ? 0 : (t - lower.time) / span;
+    return interpolateKeyframe(lower, upper, u);
+  }
+  return last;
+}
+
+function interpolateKeyframe(a: Lr2DestinationRect, b: Lr2DestinationRect, t: number): Lr2DestinationRect {
+  return {
+    time: a.time + (b.time - a.time) * t,
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    w: a.w + (b.w - a.w) * t,
+    h: a.h + (b.h - a.h) * t,
+    alpha: a.alpha + (b.alpha - a.alpha) * t,
+    r: Math.round(a.r + (b.r - a.r) * t),
+    g: Math.round(a.g + (b.g - a.g) * t),
+    b: Math.round(a.b + (b.b - a.b) * t),
+    blend: b.blend,
+    filter: b.filter,
+    angle: a.angle + (b.angle - a.angle) * t,
+    center: b.center,
+    loop: b.loop,
+    timer: b.timer,
+    ops: b.ops,
+    op4: b.op4,
+  };
+}
+
+/**
+ * Picks the current source-rect cell for an animated `#SRC_*` element.
+ * LR2 sources may divide their rect into a `divx`×`divy` grid that cycles
+ * over `cycle` ms. When `cycle` is 0 (or there is only one cell) we just
+ * return cell (0,0). Frames advance row-major (left-to-right, top-to-bottom),
+ * matching LR2's playback order.
+ *
+ * When `loop === -1` (LR2's "play once and stop" marker on the destination),
+ * the elapsed time is clamped to the cycle length so the animation stops on
+ * its final frame instead of wrapping back to frame 0. This is what makes a
+ * bomb explosion play exactly once even when its SRC has a non-zero cycle.
+ */
+function pickAnimatedCell(
+  source: { x: number; y: number; w: number; h: number; divx: number; divy: number; cycle: number },
+  elapsedMs: number,
+  loop: number = 0,
+): { x: number; y: number; w: number; h: number } {
+  const divx = Math.max(1, source.divx);
+  const divy = Math.max(1, source.divy);
+  const totalFrames = divx * divy;
+  const cellW = source.w / divx;
+  const cellH = source.h / divy;
+  if (totalFrames <= 1 || source.cycle <= 0) {
+    return { x: source.x, y: source.y, w: cellW, h: cellH };
+  }
+  const frameMs = source.cycle / totalFrames;
+  const safeElapsed = Math.max(0, elapsedMs);
+  const noLoop = loop === -1;
+  const reduced = noLoop ? Math.min(safeElapsed, source.cycle - frameMs) : safeElapsed % source.cycle;
+  const frame = Math.min(totalFrames - 1, Math.floor(reduced / Math.max(1, frameMs)));
+  const cellX = frame % divx;
+  const cellY = Math.floor(frame / divx);
+  return {
+    x: source.x + cellX * cellW,
+    y: source.y + cellY * cellH,
+    w: cellW,
+    h: cellH,
+  };
+}
+
+function resolveNumberValue(
+  num: number,
+  score: ScoreSummary,
+  song: BrowserSongEntry | undefined,
+  gauge: number,
+  combo: number,
+  hiSpeed: number,
+  seconds: number,
+  displayedScore: number,
+  fps: number,
+  liveBpm: number | undefined,
+  totalSeconds: number,
+): number | undefined {
+  const rate = computeRate(score);
+  const ratePct = Math.round(rate * 100);
+  const rateDecimals = Math.round(rate * 10000) % 100;
+  const remaining = Math.max(0, totalSeconds - seconds);
+  switch (num) {
+    case 10:
+      // HS-1P: LR2 displays the player's hi-speed knob as an integer
+      // multiplied by 100 (e.g. 2.30× is shown as "230").
+      return Math.round(hiSpeed * 100);
+    case 20:
+      // 20 is the LR2 spec slot for "fps".
+      return Math.round(fps);
+    case 100:
+      // Use the count-up "displayed" value so the SCORE panel rolls up
+      // smoothly instead of jumping after each judgement.
+      return Math.round(displayedScore);
+    case 101:
+      return score.exScore;
+    case 102:
+      // Frame-rate read-out per the user's prior request — the LR2 default
+      // 7-keys skin attaches num=102 to its bottom-right "RATE" panel and
+      // we re-purpose that slot to display FPS instead of accuracy.
+      return Math.round(fps);
+    case 103:
+      // Spec slot for "rate decimal" (two decimal places of the accuracy).
+      return Math.round(rate * 10000);
+    case 104:
+      return combo;
+    case 105:
+      return score.perfect + score.great; // approximation for max-combo until tracked separately
+    case 106:
+      return score.total;
+    case 107:
+      return Math.round(gauge);
+    case 108:
+      // 1P – 2P EX-score difference. We don't track 2P score yet.
+      return 0;
+    case 110:
+      return score.perfect;
+    case 111:
+      return score.great;
+    case 112:
+      return score.good;
+    case 113:
+      return score.bad;
+    case 114:
+      return score.poor;
+    case 115:
+      // Total rate (integer %) — same source value as `case 102` in the
+      // spec; published here separately so skins that use the dedicated
+      // total-rate slot still see the right number.
+      return ratePct;
+    case 116:
+      // Two decimal places of the total rate.
+      return rateDecimals;
+    case 150:
+    case 151:
+      // High-score / target current value — not yet tracked. 0 keeps the
+      // panel readable instead of leaving the slot blank.
+      return 0;
+    case 152:
+    case 153:
+      // High-score / target *delta* against the live 1P score. Without a
+      // saved high-score we report the negative of the live exScore (i.e.
+      // "you're this many points ahead of nothing").
+      return score.exScore;
+    case 154: {
+      // Distance to the next rank threshold in EX-score points.
+      if (score.total <= 0) {
+        return 0;
+      }
+      const max = score.total * 2;
+      const thresholds = [8 / 9, 7 / 9, 6 / 9, 5 / 9, 4 / 9, 3 / 9, 2 / 9, 1 / 9];
+      const next = thresholds.find((threshold) => score.exScore < max * threshold) ?? 0;
+      return Math.max(0, Math.ceil(max * next - score.exScore));
+    }
+    case 160:
+      // Live tempo (varies on `#BPM` mid-song) so the displayed BPM
+      // matches what the player is currently hearing.
+      return liveBpm ?? song?.bpm;
+    case 161:
+      return Math.floor(seconds / 60);
+    case 162:
+      return Math.floor(seconds % 60);
+    case 163:
+      return Math.floor(remaining / 60);
+    case 164:
+      return Math.floor(remaining % 60);
+    case 165:
+      // Load progress %. We block notes until the intro window expires, so
+      // pre-play this is 0..100, post-play it is always 100.
+      return 100;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Maps EX-score accuracy to the LR2 rank op (200=AAA, 201=AA, …, 207=F).
+ * Thresholds follow the standard LR2 fractional rates: AAA = 8/9, AA = 7/9,
+ * A = 6/9, B = 5/9, C = 4/9, D = 3/9, E = 2/9, F = 1/9.
+ */
+function computeRankOp(score: ScoreSummary): number | undefined {
+  if (score.total <= 0) {
+    return undefined;
+  }
+  const rate = score.exScore / (score.total * 2);
+  if (rate >= 8 / 9) return 200;
+  if (rate >= 7 / 9) return 201;
+  if (rate >= 6 / 9) return 202;
+  if (rate >= 5 / 9) return 203;
+  if (rate >= 4 / 9) return 204;
+  if (rate >= 3 / 9) return 205;
+  if (rate >= 2 / 9) return 206;
+  return 207;
+}
+
+/** Accuracy ratio (0.0–1.0) per LR2 EX-score model. */
+function computeRate(score: ScoreSummary): number {
+  if (score.total <= 0) {
+    return 0;
+  }
+  const max = score.total * 2;
+  return Math.max(0, Math.min(1, score.exScore / max));
+}
+
+function lastJudgeToNowComboKind(lastJudge: string): Lr2NowComboKind | undefined {
+  switch (lastJudge) {
+    case 'PERFECT':
+      return 'perfect';
+    case 'GREAT':
+      return 'great';
+    case 'GOOD':
+      return 'good';
+    default:
+      return undefined;
+  }
+}
+
+function renderNowComboElement(
+  layer: Container,
+  element: Lr2NowComboElement,
+  combo: number,
+  judgeAnchor: Lr2DestinationRect,
+  textures: ReadonlyMap<string, Texture>,
+  elapsedMs: number,
+  offsetX: number,
+  dst: Lr2DestinationRect,
+): void {
+  if (dst.w === 0 || dst.h === 0) {
+    return;
+  }
+  const baseTexture = textures.get(element.source.imagePath);
+  if (!baseTexture) {
+    return;
+  }
+  const divx = Math.max(1, element.source.divx);
+  const divy = Math.max(1, element.source.divy);
+  const cellWidth = element.source.w / divx;
+  const cellHeight = element.source.h / divy;
+  if (cellWidth <= 0 || cellHeight <= 0) {
+    return;
+  }
+  // NOWCOMBO does not use back-zero padding; render only the significant digits.
+  const text = Math.max(0, Math.trunc(combo)).toString();
+  const display = text.split('');
+  const totalDigits = display.length;
+  const dstWidth = dst.w;
+  // LR2 spec: DST_NOWCOMBO_xy is relative to DST_NOWJUDGE_xy. The skin's
+  // own `x` coordinate already encodes the desired gap from the judgement
+  // plate (e.g. x=112 with judge plate w=102 → 10 px gap), so we don't add
+  // any extra space here.
+  const absX = judgeAnchor.x + dst.x + offsetX;
+  const absY = judgeAnchor.y + dst.y;
+  let startX = absX;
+  if (element.source.alignment === 'center') {
+    startX = absX - (dstWidth * totalDigits) / 2;
+  } else if (element.source.alignment === 'right') {
+    startX = absX - dstWidth * totalDigits;
+  }
+  // For PERFECT (and other multi-row combo SRCs) the divy>1 cell grid
+  // encodes a per-frame "sparkle" animation: each row shows the same digit
+  // in a different glow state, cycling through `cycle` ms. We pick the
+  // current row by elapsed time so the digits flicker like the LR2
+  // reference plate animation.
+  const cycle = element.source.cycle;
+  let animRow = 0;
+  if (divy > 1 && cycle > 0) {
+    const frameMs = cycle / divy;
+    animRow = Math.floor((Math.max(0, elapsedMs) % cycle) / Math.max(1, frameMs)) % divy;
+  }
+  for (let index = 0; index < totalDigits; index += 1) {
+    const character = display[index]!;
+    const digit = Number.parseInt(character, 10);
+    if (!Number.isFinite(digit) || digit < 0 || digit >= divx) {
+      continue;
+    }
+    const cellTexture = createCroppedTexture(baseTexture, {
+      x: element.source.x + cellWidth * digit,
+      y: element.source.y + cellHeight * animRow,
+      w: cellWidth,
+      h: cellHeight,
+    });
+    if (!cellTexture) {
+      continue;
+    }
+    const sprite = new Sprite(cellTexture);
+    sprite.position.set(startX + dstWidth * index, absY);
+    sprite.width = dstWidth;
+    sprite.height = dst.h;
+    // Use the interpolated keyframe directly. With timer 46 restarting on
+    // every judgement, the LR2 fade-in/fade-out chain plays correctly per
+    // hit, so we no longer need to force-alpha the digits.
+    applyDestinationToSprite(sprite, dst);
+    layer.addChild(sprite);
+  }
+}
+
+function renderGrooveGaugeElement(
+  layer: Container,
+  gauge: Lr2GrooveGaugeElement,
+  percent: number,
+  textures: ReadonlyMap<string, Texture>,
+  dst: Lr2DestinationRect,
+): void {
+  if (dst.w === 0 || dst.h === 0) {
+    return;
+  }
+  const baseTexture = textures.get(gauge.source.imagePath);
+  if (!baseTexture) {
+    return;
+  }
+  const divx = Math.max(1, gauge.source.divx);
+  const divy = Math.max(1, gauge.source.divy);
+  const totalCells = divx * divy;
+  if (totalCells < 4) {
+    return;
+  }
+  const cellWidth = gauge.source.w / divx;
+  const cellHeight = gauge.source.h / divy;
+  if (cellWidth <= 0 || cellHeight <= 0) {
+    return;
+  }
+  // LR2 default 7-keys SRC cell layout (verified visually from the atlas
+  // at x=407,y=339,w=16,h=14 / divx=4):
+  //   0 = active cyan  (normal-zone bead)
+  //   1 = active red   (clear-zone bead, ≥ 80 %)
+  //   2 = inactive dim cyan
+  //   3 = inactive dim red
+  // The colour is chosen *per-bead position*, not by the overall threshold:
+  // beads representing 0–80 % stay cyan, beads representing 80–100 % flip
+  // to red. So at any gauge level the bar reads "cyan up to 80 %, red on
+  // the right end", with the active/inactive distinction marking how far
+  // the player has filled it.
+  const totalUnits = 50;
+  const clearThresholdUnit = Math.round((80 / 100) * totalUnits); // 40
+  const activeUnits = Math.round((percent / 100) * totalUnits);
+  for (let unitIndex = 0; unitIndex < totalUnits; unitIndex += 1) {
+    const isActive = unitIndex < activeUnits;
+    const isClearZone = unitIndex >= clearThresholdUnit;
+    // active + cyan → 0, active + red → 1, inactive + cyan → 2, inactive + red → 3.
+    const cellIndex = (isActive ? 0 : 2) + (isClearZone ? 1 : 0);
+    const cellX = cellIndex % divx;
+    const cellY = Math.floor(cellIndex / divx);
+    const cellTexture = createCroppedTexture(baseTexture, {
+      x: gauge.source.x + cellWidth * cellX,
+      y: gauge.source.y + cellHeight * cellY,
+      w: cellWidth,
+      h: cellHeight,
+    });
+    if (!cellTexture) {
+      continue;
+    }
+    const sprite = new Sprite(cellTexture);
+    sprite.position.set(dst.x + gauge.addX * unitIndex, dst.y + gauge.addY * unitIndex);
+    sprite.width = dst.w;
+    sprite.height = dst.h;
+    applyDestinationToSprite(sprite, dst);
+    layer.addChild(sprite);
+  }
+}
+
+function renderNumberElement(
+  layer: Container,
+  element: Lr2NumberElement,
+  value: number,
+  textures: ReadonlyMap<string, Texture>,
+  dst: Lr2DestinationRect,
+  options: { suppressLeadingZeros?: boolean } = {},
+): void {
+  const baseTexture = textures.get(element.source.imagePath);
+  if (!baseTexture) {
+    return;
+  }
+  const divx = Math.max(1, element.source.divx);
+  const divy = Math.max(1, element.source.divy);
+  const cellWidth = element.source.w / divx;
+  const cellHeight = element.source.h / divy;
+  if (cellWidth <= 0 || cellHeight <= 0) {
+    return;
+  }
+  if (dst.w === 0 || dst.h === 0) {
+    return;
+  }
+  // LR2 spec on divx*divy:
+  //   ×10  → cells are 0..9 only
+  //   ×11  → cells are 0..9 + blank (used as a "back-zero" for padding)
+  //   ×24  → cells are 0..9 + blank + "+" sign + 0..9 (negated) + blank + "-" sign
+  // We currently treat ×11 as blank-padded and fall back to "0"-padded for ×10.
+  // ×24 (signed numbers) is not implemented yet -- we only render the value's
+  // unsigned absolute portion.
+  const totalCells = divx * divy;
+  const hasBlankCell = totalCells % 11 === 0 || totalCells % 24 === 0;
+  const text = Math.max(0, Math.trunc(value)).toString();
+  // `fieldKeta` is the layout slot width (in digits) — always the source's
+  // configured `padding` so the alignment math anchors at the same place
+  // regardless of value. `displayKeta` is how many digits we actually
+  // render; when `suppressLeadingZeros` is on it shrinks to the value's
+  // own length, leaving the leading slots blank but keeping the right edge
+  // anchored to the LR2 skin's intended position (i.e. "20" lines up at
+  // the right edge of the 3-slot field instead of the left).
+  const fieldKeta = element.source.padding > 0 ? element.source.padding : text.length;
+  const displayKeta = options.suppressLeadingZeros ? text.length : fieldKeta;
+  const fillChar = hasBlankCell ? ' ' : '0';
+  const display = (
+    text.length >= displayKeta ? text.slice(-displayKeta) : fillChar.repeat(displayKeta - text.length) + text
+  ).split('');
+  const totalDigits = display.length;
+  const dstWidth = dst.w || cellWidth;
+  // LR2: DST_x is the *left edge* of a `fieldKeta * dstWidth` field; the value
+  // is aligned within that field according to `align`. We use `fieldKeta`
+  // (the layout slot) rather than `displayKeta` (the rendered digits) so
+  // suppressed leading zeros still right-anchor at the original position.
+  const fieldWidth = dstWidth * fieldKeta;
+  let startX = dst.x;
+  if (element.source.alignment === 'center') {
+    startX = dst.x + (fieldWidth - dstWidth * totalDigits) / 2;
+  } else if (element.source.alignment === 'right') {
+    startX = dst.x + fieldWidth - dstWidth * totalDigits;
+  }
+  for (let index = 0; index < totalDigits; index += 1) {
+    const character = display[index]!;
+    let cellIndex: number;
+    if (character === ' ') {
+      if (!hasBlankCell) {
+        continue;
+      }
+      cellIndex = 10;
+    } else {
+      cellIndex = Number.parseInt(character, 10);
+    }
+    if (!Number.isFinite(cellIndex) || cellIndex < 0 || cellIndex >= totalCells) {
+      continue;
+    }
+    const cellX = cellIndex % divx;
+    const cellY = Math.floor(cellIndex / divx);
+    const cellTexture = createCroppedTexture(baseTexture, {
+      x: element.source.x + cellWidth * cellX,
+      y: element.source.y + cellHeight * cellY,
+      w: cellWidth,
+      h: cellHeight,
+    });
+    if (!cellTexture) {
+      continue;
+    }
+    const sprite = new Sprite(cellTexture);
+    sprite.position.set(startX + dstWidth * index, dst.y);
+    sprite.width = dstWidth;
+    sprite.height = dst.h || cellHeight;
+    applyDestinationToSprite(sprite, dst);
+    layer.addChild(sprite);
+  }
+}
+
+async function loadTextureFromBytes(
+  path: string,
+  bytes: Uint8Array,
+  transparentColor?: { r: number; g: number; b: number },
+): Promise<Texture | undefined> {
+  if (path.toLowerCase().endsWith('.tga')) {
+    return decodeTgaTexture(bytes, transparentColor, path);
+  }
+  const blob = new Blob([new Uint8Array(bytes)]);
+  return loadTextureFromBlob(blob, path, transparentColor);
+}
+
+async function loadTextureFromBlob(
+  blob: Blob,
+  label?: string,
+  transparentColor?: { r: number; g: number; b: number },
+): Promise<Texture | undefined> {
+  try {
+    const imageBitmap = await createImageBitmap(blob);
+    const finalBitmap = transparentColor
+      ? ((await applyTransparentColorToBitmap(imageBitmap, transparentColor)) ?? imageBitmap)
+      : imageBitmap;
+    const texture = Texture.from(finalBitmap);
+    if (label) {
+      texture.label = label;
+      texture.source.label = label;
+    }
+    return texture;
+  } catch {
+    return undefined;
+  }
+}
+
+async function applyTransparentColorToBitmap(
+  imageBitmap: ImageBitmap,
+  transparentColor: { r: number; g: number; b: number },
+): Promise<ImageBitmap | undefined> {
+  const canvas = document.createElement('canvas');
+  canvas.width = imageBitmap.width;
+  canvas.height = imageBitmap.height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return undefined;
+  }
+  context.drawImage(imageBitmap, 0, 0);
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const { data } = imageData;
+  const { r, g, b } = transparentColor;
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index] === r && data[index + 1] === g && data[index + 2] === b) {
+      data[index + 3] = 0;
+    }
+  }
+  context.putImageData(imageData, 0, 0);
+  return createImageBitmap(canvas);
+}
+
+async function decodeTgaTexture(
+  bytes: Uint8Array,
+  transparentColor?: { r: number; g: number; b: number },
+  label?: string,
+): Promise<Texture | undefined> {
+  if (bytes.length < 18) {
+    return undefined;
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const idLength = bytes[0] ?? 0;
+  const colorMapType = bytes[1] ?? 0;
+  const imageType = bytes[2] ?? 0;
+  const width = view.getUint16(12, true);
+  const height = view.getUint16(14, true);
+  const bitsPerPixel = bytes[16] ?? 0;
+  const descriptor = bytes[17] ?? 0;
+  const bytesPerPixel = bitsPerPixel / 8;
+  const isRle = imageType === 10 || imageType === 11;
+  const isTrueColor = imageType === 2 || imageType === 10;
+  const isGrayscale = imageType === 3 || imageType === 11;
+
+  if (
+    colorMapType !== 0 ||
+    width <= 0 ||
+    height <= 0 ||
+    !Number.isInteger(bytesPerPixel) ||
+    !((isTrueColor && (bitsPerPixel === 24 || bitsPerPixel === 32)) || (isGrayscale && bitsPerPixel === 8))
+  ) {
+    return undefined;
+  }
+
+  const pixelCount = width * height;
+  const imageData = new ImageData(width, height);
+  const topOrigin = (descriptor & 0x20) !== 0;
+  const rightOrigin = (descriptor & 0x10) !== 0;
+  let sourceOffset = 18 + idLength;
+  let written = 0;
+
+  const writePixel = (source: number): boolean => {
+    if (source + bytesPerPixel > bytes.length || written >= pixelCount) {
+      return false;
+    }
+    const sourceX = written % width;
+    const sourceY = Math.floor(written / width);
+    const x = rightOrigin ? width - 1 - sourceX : sourceX;
+    const y = topOrigin ? sourceY : height - 1 - sourceY;
+    const target = (y * width + x) * 4;
+    if (isGrayscale) {
+      const value = bytes[source] ?? 0;
+      imageData.data[target] = value;
+      imageData.data[target + 1] = value;
+      imageData.data[target + 2] = value;
+      imageData.data[target + 3] = 255;
+    } else {
+      const r = bytes[source + 2] ?? 0;
+      const g = bytes[source + 1] ?? 0;
+      const b = bytes[source] ?? 0;
+      let a = bitsPerPixel === 32 ? (bytes[source + 3] ?? 255) : 255;
+      if (transparentColor && r === transparentColor.r && g === transparentColor.g && b === transparentColor.b) {
+        a = 0;
+      }
+      imageData.data[target] = r;
+      imageData.data[target + 1] = g;
+      imageData.data[target + 2] = b;
+      imageData.data[target + 3] = a;
+    }
+    written += 1;
+    return true;
+  };
+
+  if (isRle) {
+    while (written < pixelCount && sourceOffset < bytes.length) {
+      const packet = bytes[sourceOffset++] ?? 0;
+      const count = (packet & 0x7f) + 1;
+      if ((packet & 0x80) !== 0) {
+        const pixelOffset = sourceOffset;
+        sourceOffset += bytesPerPixel;
+        for (let index = 0; index < count; index += 1) {
+          if (!writePixel(pixelOffset)) {
+            return undefined;
+          }
+        }
+      } else {
+        for (let index = 0; index < count; index += 1) {
+          if (!writePixel(sourceOffset)) {
+            return undefined;
+          }
+          sourceOffset += bytesPerPixel;
+        }
+      }
+    }
+  } else {
+    while (written < pixelCount) {
+      if (!writePixel(sourceOffset)) {
+        return undefined;
+      }
+      sourceOffset += bytesPerPixel;
+    }
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return undefined;
+  }
+  context.putImageData(imageData, 0, 0);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) {
+    return undefined;
+  }
+  return loadTextureFromBlob(blob, label);
+}
+
+function resolveChartAsset(
+  source: BrowserSongAssetSource,
+  chartPath: string,
+  assetPath: string,
+): Uint8Array | undefined {
+  const base = dirname(chartPath);
+  const normalized = normalizePath(assetPath);
+  const candidates = [
+    normalizePath(`${base}/${normalized}`),
+    normalized,
+    normalizePath(`${base}/${basenameOnly(normalized)}`),
+    basenameOnly(normalized),
+  ];
+  return candidates.map((path) => source.files.get(path)).find(Boolean);
+}
+
+const CHANNEL_KEY_BINDINGS: Record<string, ReadonlySet<string>> = {
+  '16': new Set(['ShiftLeft']),
+  '11': new Set(['KeyZ']),
+  '12': new Set(['KeyS']),
+  '13': new Set(['KeyX']),
+  '14': new Set(['KeyD']),
+  '15': new Set(['KeyC']),
+  '18': new Set(['KeyF']),
+  '19': new Set(['KeyV']),
+  '26': new Set(['ShiftRight']),
+  '21': new Set(['KeyB']),
+  '22': new Set(['KeyH']),
+  '23': new Set(['KeyN']),
+  '24': new Set(['KeyJ']),
+  '25': new Set(['KeyM']),
+  '28': new Set(['KeyK']),
+};
+
+function resolveKeyChannel(event: KeyboardEvent, channels: ReadonlyArray<string>): string | undefined {
+  for (const channel of channels) {
+    if (CHANNEL_KEY_BINDINGS[channel]?.has(event.code)) {
+      return channel;
+    }
+  }
+  return undefined;
+}
+
+function resolveLaneIndex(channel: string): number {
+  const order = ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'];
+  return Math.max(0, order.indexOf(channel));
+}
+
+function isScratch(channel: string): boolean {
+  return channel === '16' || channel === '26';
+}
+
+function isPlayableInputChannel(channel: string): boolean {
+  return channel.startsWith('1') || channel.startsWith('2');
+}
+
+function resolveJudgeSkinKind(judge: string): keyof Lr2Skin['judges'] | undefined {
+  switch (judge) {
+    case 'PERFECT':
+      return 'perfect';
+    case 'GREAT':
+      return 'great';
+    case 'GOOD':
+      return 'good';
+    case 'BAD':
+      return 'bad';
+    case 'POOR':
+      return 'poor';
+    default:
+      return undefined;
+  }
+}
+
+function createEmptyScore(total: number): ScoreSummary {
+  return { total, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, exScore: 0, score: 0 };
+}
+
+function formatTime(seconds: number): string {
+  const minute = Math.floor(seconds / 60);
+  const second = Math.floor(seconds % 60)
+    .toString()
+    .padStart(2, '0');
+  return `${minute}:${second}`;
+}
+
+function basenameOnly(path: string): string {
+  const index = path.lastIndexOf('/');
+  return index >= 0 ? path.slice(index + 1) : path;
+}
+
+/**
+ * BMS `#DIFFICULTY` numeric → LR2 label string mapping. The reference video
+ * shows "ANOTHER" — that's level 4 in the LR2 convention.
+ */
+function resolveDifficultyName(difficulty: number | undefined): string {
+  switch (difficulty) {
+    case 1:
+      return 'BEGINNER';
+    case 2:
+      return 'NORMAL';
+    case 3:
+      return 'HYPER';
+    case 4:
+      return 'ANOTHER';
+    case 5:
+      return 'INSANE';
+    default:
+      return '';
+  }
+}
+
+function renderFallbackLr2Frame(layer: Container): void {
+  const frame = new Graphics();
+  frame.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
+
+  frame.rect(20, 0, 268, 128).fill(0x2b2d30);
+  frame.rect(34, 0, 70, 122).fill(0x494b4d);
+  frame.rect(116, 0, 90, 122).fill(0x3a3c3f);
+  frame.rect(214, 0, 62, 122).fill(0x444649);
+  frame.rect(22, 124, 266, 4).fill(WHITE);
+
+  frame.rect(PLAYFIELD.x, PLAYFIELD.y, PLAYFIELD.w, PLAYFIELD.judgementY - PLAYFIELD.y).fill(0x080a0e);
+  for (let x = PLAYFIELD.x; x <= PLAYFIELD.x + PLAYFIELD.w; x += PLAYFIELD.w / 8) {
+    frame.rect(x, PLAYFIELD.y, 1, PLAYFIELD.judgementY - PLAYFIELD.y).fill({ color: 0x9da6b5, alpha: 0.35 });
+  }
+
+  frame.rect(BGA.x, BGA.y, BGA.w, BGA.h).fill(0x031008);
+  frame
+    .poly([BGA.x + 22, BGA.y, BGA.x + BGA.w, BGA.y, BGA.x + 76, BGA.y + BGA.h, BGA.x, BGA.y + BGA.h])
+    .fill({ color: 0x0b4e1f, alpha: 0.55 });
+  frame.rect(BGA.x, BGA.y, 1, BGA.h).fill(YELLOW);
+
+  frame.rect(GROOVE.x, GROOVE.y, GROOVE.w, GROOVE.h).stroke({ color: 0xffffff, width: 1, alpha: 0.85 });
+  frame.rect(GROOVE.x + 40, GROOVE.y, 40, GROOVE.h).fill({ color: 0x72d677, alpha: 0.28 });
+  frame.rect(GROOVE.x, GROOVE.y + GROOVE.h - 42, 38, 22).fill(0x1167ff);
+  frame.rect(GROOVE.x + 38, GROOVE.y + GROOVE.h - 42, 40, 22).fill(0x17c447);
+  frame.rect(GROOVE.x + 78, GROOVE.y + GROOVE.h - 42, 38, 22).fill(0xef2020);
+  for (let y = GROOVE.y + 28; y < GROOVE.y + GROOVE.h - 48; y += 29) {
+    frame.rect(GROOVE.x, y, GROOVE.w, 1).fill({ color: 0xffffff, alpha: 0.8 });
+  }
+
+  frame.roundRect(24, 324, 42, 52, 4).fill(0x31363b).stroke({ color: 0xadb5bd, width: 2 });
+  frame.circle(45, 350, 13).stroke({ color: 0x9bd6ff, width: 3 });
+  for (let index = 0; index < 7; index += 1) {
+    const x = 84 + index * 29;
+    frame
+      .rect(x, 330, 20, 40)
+      .fill(index % 2 ? 0x1d2128 : 0xf2f4f7)
+      .stroke({ color: 0x101318, width: 2 });
+  }
+  frame.rect(40, 386, 210, 18).fill(0x111418).stroke({ color: 0x9da6b5, width: 2 });
+  frame.rect(45, 389, 200, 12).fill(0xf01924);
+  frame.rect(272, 382, 52, 20).fill(0x0e52a8).stroke({ color: 0x9da6b5, width: 2 });
+  frame.rect(16, 408, 608, 62).fill(0x262a2e).stroke({ color: 0x9da6b5, width: 1 });
+  frame.rect(338, 430, 198, 12).fill(0x4b4f55);
+  frame.rect(546, 392, 50, 56).fill(0x1d343c).stroke({ color: 0x9bd6ff, width: 2 });
+
+  layer.addChild(frame);
+}
+
+function resolveLaneChannels(notes: ReadonlyArray<RuntimeNote>): string[] {
+  const preferred = ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'];
+  const used = new Set(notes.map((note) => note.channel).filter(isPlayableInputChannel));
+  return preferred.filter((channel) => used.has(channel));
+}
+
+function resolveScaledViewport(screenWidth: number, screenHeight: number): { x: number; y: number; scale: number } {
+  const scale = Math.min(screenWidth / DESIGN_WIDTH, screenHeight / DESIGN_HEIGHT);
+  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  // Centre the 640×480 design in the host viewport on *both* axes when the
+  // window's aspect ratio doesn't match — letterbox vertically as well as
+  // horizontally so the playfield never hugs the top edge of a wide window.
+  return {
+    x: (screenWidth - DESIGN_WIDTH * safeScale) / 2,
+    y: (screenHeight - DESIGN_HEIGHT * safeScale) / 2,
+    scale: safeScale,
+  };
+}

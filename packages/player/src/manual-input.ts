@@ -354,10 +354,7 @@ function resolvePms9KeyBindings(
   return POPN_9KEY_BME_BINDINGS;
 }
 
-function resolvePms9KeyLayout(
-  existing: ReadonlySet<string>,
-  chartExtension: string | undefined,
-): Pms9KeyLayout {
+function resolvePms9KeyLayout(existing: ReadonlySet<string>, chartExtension: string | undefined): Pms9KeyLayout {
   const pmsLayoutChannels = ['22', '23', '24', '25'];
   const bmeLayoutChannels = ['16', '17', '18', '19'];
   const pmsLayoutScore = countExistingChannels(existing, pmsLayoutChannels);
@@ -604,12 +601,7 @@ export function inspectInputTokenEvent(chunk: string, key: readline.Key): Inspec
   const win32Resolved = resolveWin32InputTokenEvent(chunk, key);
   const legacyResolved = resolveLegacyInputTokenEvent(chunk, key);
 
-  const selected =
-    kittyResolved.detected
-      ? kittyResolved
-      : win32Resolved.detected
-        ? win32Resolved
-        : legacyResolved;
+  const selected = kittyResolved.detected ? kittyResolved : win32Resolved.detected ? win32Resolved : legacyResolved;
 
   return {
     selected: {

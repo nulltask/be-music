@@ -55,7 +55,7 @@ function renderOutputRaw(
     tui.start();
     tui.render({
       currentBeat: options.currentBeat ?? 0,
-      currentSeconds: options.currentSeconds ?? ((options.currentBeat ?? 0) / 2),
+      currentSeconds: options.currentSeconds ?? (options.currentBeat ?? 0) / 2,
       totalSeconds: options.totalSeconds ?? 10,
       summary: {
         total: 1,
@@ -219,14 +219,9 @@ describe('player-tui', () => {
     const regularHeadRows = renderRowsContaining([{ channel: '11', beat: 1, seconds: 0.5 }], '▄▄▄', 0, {
       noteHeight: 4,
     });
-    const longNoteHeadRows = renderRowsContaining(
-      [{ channel: '11', beat: 1, endBeat: 2, seconds: 0.5 }],
-      '███',
-      0,
-      {
-        noteHeight: 4,
-      },
-    );
+    const longNoteHeadRows = renderRowsContaining([{ channel: '11', beat: 1, endBeat: 2, seconds: 0.5 }], '███', 0, {
+      noteHeight: 4,
+    });
 
     expect(regularHeadRows.length).toBeGreaterThanOrEqual(1);
     expect(longNoteHeadRows.length).toBeGreaterThanOrEqual(1);
@@ -244,17 +239,12 @@ describe('player-tui', () => {
 
   test('speed timeline increases note spacing by interpolated keyframes', () => {
     const baselineRows = renderRowsContaining([{ channel: '11', beat: 0.5, seconds: 0.25 }], '███');
-    const acceleratedRows = renderRowsContaining(
-      [{ channel: '11', beat: 0.5, seconds: 0.25 }],
-      '███',
-      0,
-      {
-        speedTimeline: [
-          { beat: 0, speed: 1 },
-          { beat: 0.5, speed: 4 },
-        ],
-      },
-    );
+    const acceleratedRows = renderRowsContaining([{ channel: '11', beat: 0.5, seconds: 0.25 }], '███', 0, {
+      speedTimeline: [
+        { beat: 0, speed: 1 },
+        { beat: 0.5, speed: 4 },
+      ],
+    });
 
     expect(baselineRows.length).toBeGreaterThanOrEqual(1);
     expect(acceleratedRows.length).toBeGreaterThanOrEqual(1);
@@ -267,15 +257,10 @@ describe('player-tui', () => {
       speed: index % 2 === 0 ? 1 : -1,
     }));
 
-    const rows = renderRowsContaining(
-      [{ channel: '11', beat: 8, seconds: 4 }],
-      '███',
-      0,
-      {
-        highSpeed: 3.5,
-        scrollTimeline: oscillatingScrollTimeline,
-      },
-    );
+    const rows = renderRowsContaining([{ channel: '11', beat: 8, seconds: 4 }], '███', 0, {
+      highSpeed: 3.5,
+      scrollTimeline: oscillatingScrollTimeline,
+    });
 
     expect(rows.length).toBeGreaterThan(0);
   });
@@ -287,19 +272,14 @@ describe('player-tui', () => {
       seconds: 0.025 + index * 0.025,
     }));
 
-    const rows = renderRowsContaining(
-      [{ channel: '11', beat: 1, seconds: 0.5 }],
-      '███',
-      0,
-      {
-        invisibleNotes,
-        visibleNotesLimit: 8,
-        lanes: [
-          { channel: '11', key: 'z' },
-          { channel: '12', key: 's' },
-        ],
-      },
-    );
+    const rows = renderRowsContaining([{ channel: '11', beat: 1, seconds: 0.5 }], '███', 0, {
+      invisibleNotes,
+      visibleNotesLimit: 8,
+      lanes: [
+        { channel: '11', key: 'z' },
+        { channel: '12', key: 's' },
+      ],
+    });
 
     expect(rows.length).toBeGreaterThan(0);
   });
@@ -311,31 +291,23 @@ describe('player-tui', () => {
       seconds: 0.025 + index * 0.005,
     }));
 
-    const rows = renderRowsContaining(
-      [{ channel: '11', beat: 1, seconds: 0.5 }],
-      '███',
-      0,
-      {
-        landmineNotes,
-        visibleNotesLimit: 16,
-        lanes: [
-          { channel: '11', key: 'z' },
-          { channel: '12', key: 's' },
-        ],
-      },
-    );
+    const rows = renderRowsContaining([{ channel: '11', beat: 1, seconds: 0.5 }], '███', 0, {
+      landmineNotes,
+      visibleNotesLimit: 16,
+      lanes: [
+        { channel: '11', key: 'z' },
+        { channel: '12', key: 's' },
+      ],
+    });
 
     expect(rows.length).toBeGreaterThan(0);
   });
 
   test('renders playable notes in front of overlapping landmines', () => {
-    const lines = renderOutput(
-      [{ channel: '11', beat: 1, seconds: 0.5 }],
-      {
-        currentBeat: 0,
-        landmineNotes: [{ channel: '11', beat: 1, seconds: 0.5 }],
-      },
-    );
+    const lines = renderOutput([{ channel: '11', beat: 1, seconds: 0.5 }], {
+      currentBeat: 0,
+      landmineNotes: [{ channel: '11', beat: 1, seconds: 0.5 }],
+    });
 
     expect(lines.some((line) => line.includes('███'))).toBe(true);
     expect(lines.some((line) => line.includes('✕'))).toBe(false);
@@ -353,13 +325,10 @@ describe('player-tui', () => {
   });
 
   test('renders playable notes in front of overlapping invisible notes', () => {
-    const lines = renderOutput(
-      [{ channel: '11', beat: 1, seconds: 0.5 }],
-      {
-        currentBeat: 0,
-        invisibleNotes: [{ channel: '11', beat: 1, seconds: 0.5 }],
-      },
-    );
+    const lines = renderOutput([{ channel: '11', beat: 1, seconds: 0.5 }], {
+      currentBeat: 0,
+      invisibleNotes: [{ channel: '11', beat: 1, seconds: 0.5 }],
+    });
 
     expect(lines.some((line) => line.includes('███'))).toBe(true);
     expect(lines.some((line) => line.includes('◯'))).toBe(false);
@@ -372,15 +341,10 @@ describe('player-tui', () => {
       { beat: 1, speed: 1 },
     ];
 
-    const bodyRows = renderRowsContaining(
-      [{ channel: '11', beat: 8, endBeat: 8.5, seconds: 4 }],
-      '▓▓▓',
-      0,
-      {
-        highSpeed: 3.5,
-        scrollTimeline: bidirectionalScrollTimeline,
-      },
-    );
+    const bodyRows = renderRowsContaining([{ channel: '11', beat: 8, endBeat: 8.5, seconds: 4 }], '▓▓▓', 0, {
+      highSpeed: 3.5,
+      scrollTimeline: bidirectionalScrollTimeline,
+    });
 
     expect(bodyRows).toHaveLength(0);
   });
@@ -394,11 +358,11 @@ describe('player-tui', () => {
   });
 
   test('moves the play progress marker from top to bottom over time', () => {
-    const openingLines = renderOutputRaw([], { currentSeconds: 0, totalSeconds: 10 }).filter(
-      (line) => isLeftProgressRailLineRaw(line),
+    const openingLines = renderOutputRaw([], { currentSeconds: 0, totalSeconds: 10 }).filter((line) =>
+      isLeftProgressRailLineRaw(line),
     );
-    const endingLines = renderOutputRaw([], { currentSeconds: 10, totalSeconds: 10 }).filter(
-      (line) => isLeftProgressRailLineRaw(line),
+    const endingLines = renderOutputRaw([], { currentSeconds: 10, totalSeconds: 10 }).filter((line) =>
+      isLeftProgressRailLineRaw(line),
     );
 
     expect(openingLines.findIndex((line) => line.includes(PLAY_PROGRESS_HEAD_MARKER))).toBe(0);
@@ -426,9 +390,7 @@ describe('player-tui', () => {
       ],
       splitAfterIndex: 0,
     });
-    const playfieldLines = lines
-      .map((line) => line.trimEnd())
-      .filter((line) => isLeftProgressRailLine(line));
+    const playfieldLines = lines.map((line) => line.trimEnd()).filter((line) => isLeftProgressRailLine(line));
 
     expect(playfieldLines.length).toBeGreaterThan(0);
     expect(playfieldLines.every((line) => isRightProgressRailLine(line))).toBe(true);

@@ -64,7 +64,8 @@ export function stringifyBms(json: BeMusicJson, options: BmsStringifyOptions = {
 export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions = {}): string {
   const resolution = resolveBmsonResolutionForOutput(json, options);
   const indent = options.indent ?? 2;
-  const preservedDocument = options.resolution === undefined ? resolvePreservedBmsonDocumentForOutput(json, resolution) : undefined;
+  const preservedDocument =
+    options.resolution === undefined ? resolvePreservedBmsonDocumentForOutput(json, resolution) : undefined;
   if (preservedDocument) {
     return `${JSON.stringify(preservedDocument, null, indent)}\n`;
   }
@@ -613,7 +614,10 @@ function areMeasuresEqual(left: BeMusicJson['measures'], right: BeMusicJson['mea
     return false;
   }
   for (let index = 0; index < sortedLeft.length; index += 1) {
-    if (sortedLeft[index]!.index !== sortedRight[index]!.index || sortedLeft[index]!.length !== sortedRight[index]!.length) {
+    if (
+      sortedLeft[index]!.index !== sortedRight[index]!.index ||
+      sortedLeft[index]!.length !== sortedRight[index]!.length
+    ) {
       return false;
     }
   }
@@ -672,9 +676,7 @@ function areBmsExtensionsEqual(left: BeMusicJson['bms'], right: BeMusicJson['bms
 
 function areBmsonExtensionsEqual(left: BeMusicJson['bmson'], right: BeMusicJson['bmson']): boolean {
   return (
-    left.version === right.version &&
-    areBmsonInfoEqual(left.info, right.info) &&
-    areBmsonBgaEqual(left.bga, right.bga)
+    left.version === right.version && areBmsonInfoEqual(left.info, right.info) && areBmsonBgaEqual(left.bga, right.bga)
   );
 }
 
@@ -682,7 +684,10 @@ function areBmsPreservationEqual(
   left: BeMusicJson['preservation']['bms'],
   right: BeMusicJson['preservation']['bms'],
 ): boolean {
-  return areControlFlowEntriesEqual(left.sourceLines, right.sourceLines) && areBmsObjectLinesEqual(left.objectLines, right.objectLines);
+  return (
+    areControlFlowEntriesEqual(left.sourceLines, right.sourceLines) &&
+    areBmsObjectLinesEqual(left.objectLines, right.objectLines)
+  );
 }
 
 function areBmsonPreservationEqual(
@@ -876,10 +881,7 @@ function areStringMapsEqual(left: Record<string, string>, right: Record<string, 
     return false;
   }
   for (let index = 0; index < leftEntries.length; index += 1) {
-    if (
-      leftEntries[index]![0] !== rightEntries[index]![0] ||
-      leftEntries[index]![1] !== rightEntries[index]![1]
-    ) {
+    if (leftEntries[index]![0] !== rightEntries[index]![0] || leftEntries[index]![1] !== rightEntries[index]![1]) {
       return false;
     }
   }
@@ -893,10 +895,7 @@ function areNumberMapsEqual(left: Record<string, number>, right: Record<string, 
     return false;
   }
   for (let index = 0; index < leftEntries.length; index += 1) {
-    if (
-      leftEntries[index]![0] !== rightEntries[index]![0] ||
-      leftEntries[index]![1] !== rightEntries[index]![1]
-    ) {
+    if (leftEntries[index]![0] !== rightEntries[index]![0] || leftEntries[index]![1] !== rightEntries[index]![1]) {
       return false;
     }
   }
@@ -987,7 +986,11 @@ function pushBmsSectionComment(lines: string[], section: string): void {
   lines.push('');
 }
 
-function serializeControlFlowObjectEvents(measure: number, channel: string, events: BeMusicEvent[]): string | undefined {
+function serializeControlFlowObjectEvents(
+  measure: number,
+  channel: string,
+  events: BeMusicEvent[],
+): string | undefined {
   return serializeBmsObjectLineEvents(measure, channel, events);
 }
 
@@ -1231,11 +1234,11 @@ function resolveBmsonCompatiblePlayLevel(value: BeMusicJson['metadata']['playLev
 
 function createBmsonBgaForOutput(json: BeMusicJson):
   | {
-    bga_header: Array<{ id: number; name: string }>;
-    bga_events: Array<{ y: number; id: number }>;
-    layer_events: Array<{ y: number; id: number }>;
-    poor_events: Array<{ y: number; id: number }>;
-  }
+      bga_header: Array<{ id: number; name: string }>;
+      bga_events: Array<{ y: number; id: number }>;
+      layer_events: Array<{ y: number; id: number }>;
+      poor_events: Array<{ y: number; id: number }>;
+    }
   | undefined {
   const header: Array<{ id: number; name: string }> = [];
   for (const entry of json.bmson.bga.header ?? []) {
@@ -1320,7 +1323,9 @@ function mapBmsonLineValues(lines: ReadonlyArray<number>): Array<{ y: number }> 
   return mapped;
 }
 
-function normalizeBmsonBgaEventEntries(entries: ReadonlyArray<{ y: number; id: number }>): Array<{ y: number; id: number }> {
+function normalizeBmsonBgaEventEntries(
+  entries: ReadonlyArray<{ y: number; id: number }>,
+): Array<{ y: number; id: number }> {
   const normalized: Array<{ y: number; id: number }> = [];
   for (const entry of entries) {
     normalized.push({

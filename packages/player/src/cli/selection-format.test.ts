@@ -39,14 +39,7 @@ describe('selection-format', () => {
 
   test('formatSelectionColumnHeader and entry labels render placeholders and alignment', () => {
     const layout = createSelectionColumnLayout(60, [
-      { kind: 'chart', fileLabel: 'song.bms', player: 1, difficulty: 2, rank: 3, playLevel: 12, bpmMin: 120, bpmInitial: 120, bpmMax: 120, totalNotes: 456 },
-    ]);
-
-    expect(formatSelectionColumnHeader(layout)).toContain('PLEVEL');
-    expect(formatSelectionEntryLabel({ kind: 'random', label: 'RANDOM SELECT' }, layout)).toContain('-');
-    expect(formatSelectionEntryLabel({ kind: 'group', label: 'folder' }, layout)).toBe('folder');
-    expect(
-      formatSelectionEntryLabel({
+      {
         kind: 'chart',
         fileLabel: 'song.bms',
         player: 1,
@@ -57,7 +50,28 @@ describe('selection-format', () => {
         bpmInitial: 120,
         bpmMax: 120,
         totalNotes: 456,
-      }, layout),
+      },
+    ]);
+
+    expect(formatSelectionColumnHeader(layout)).toContain('PLEVEL');
+    expect(formatSelectionEntryLabel({ kind: 'random', label: 'RANDOM SELECT' }, layout)).toContain('-');
+    expect(formatSelectionEntryLabel({ kind: 'group', label: 'folder' }, layout)).toBe('folder');
+    expect(
+      formatSelectionEntryLabel(
+        {
+          kind: 'chart',
+          fileLabel: 'song.bms',
+          player: 1,
+          difficulty: 2,
+          rank: 3,
+          playLevel: 12,
+          bpmMin: 120,
+          bpmInitial: 120,
+          bpmMax: 120,
+          totalNotes: 456,
+        },
+        layout,
+      ),
     ).toContain('song.bms');
   });
 

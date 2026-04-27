@@ -24,7 +24,11 @@ const MPG123_SUPPRESSED_LOG_PATTERNS = [
   /\bcoreaudio\.c:\d+\]\s*warning:\s*didn't have any audio data in callback \(buffer underflow\)/i,
 ];
 
-export function createFallbackTone(sampleKey: string, sampleRate: number, seconds: number): {
+export function createFallbackTone(
+  sampleKey: string,
+  sampleRate: number,
+  seconds: number,
+): {
   left: Float32Array;
   right: Float32Array;
 } {
@@ -44,7 +48,11 @@ export function createFallbackTone(sampleKey: string, sampleRate: number, second
   return { left, right };
 }
 
-export async function decodeAudioSample(buffer: Buffer, pathHint?: string, signal?: AbortSignal): Promise<DecodedAudio> {
+export async function decodeAudioSample(
+  buffer: Buffer,
+  pathHint?: string,
+  signal?: AbortSignal,
+): Promise<DecodedAudio> {
   throwIfAborted(signal);
   if (isWavBuffer(buffer)) {
     return decodeWav(buffer, signal);
@@ -149,12 +157,12 @@ function decodeWav(buffer: Buffer, signal?: AbortSignal): DecodedAudio {
   let offset = 12;
   let format:
     | {
-      audioFormat: number;
-      channels: number;
-      sampleRate: number;
-      blockAlign: number;
-      bitsPerSample: number;
-    }
+        audioFormat: number;
+        channels: number;
+        sampleRate: number;
+        blockAlign: number;
+        bitsPerSample: number;
+      }
     | undefined;
   let pcmOffset = -1;
   let pcmSize = 0;
