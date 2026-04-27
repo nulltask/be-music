@@ -253,6 +253,14 @@ export class PixiSongSelectView {
    */
   private mouseX = -1;
   private mouseY = -1;
+  /**
+   * Whether the canvas is currently shown. Tracked separately from
+   * the DOM `display` style so the keyboard handler can short-circuit
+   * when the host has hidden the view (e.g. while the gameplay view
+   * is on top — both views' keydown listeners are bound at the
+   * window level so we'd otherwise compete for arrow keys).
+   */
+  private visible = true;
 
   public constructor(private options: PixiSongSelectViewOptions = {}) {}
 
@@ -287,7 +295,13 @@ export class PixiSongSelectView {
     this.app.stage.addChild(this.viewportBackground, this.root);
     this.root.addChild(this.background, this.skinLayer, this.listLayer, this.title, this.hint);
     container.appendChild(this.app.canvas);
-    this.app.canvas.addEventListener('keydown', this.handleKeyDown);
+    // Bind keyboard handlers at the window level so the user can
+    // navigate without first clicking the canvas. The canvas itself
+    // is a child of the document body and naturally won't have focus
+    // until interacted with — which would otherwise eat ↑/↓/Enter/Esc.
+    // Pointer events still bind on the canvas because their offset
+    // coordinates are canvas-relative.
+    window.addEventListener('keydown', this.handleKeyDown);
     this.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
     this.app.canvas.addEventListener('pointermove', this.handlePointerMove);
     this.app.canvas.addEventListener('pointerleave', this.handlePointerLeave);
@@ -324,7 +338,7 @@ export class PixiSongSelectView {
       cancelAnimationFrame(this.animationFrame);
       this.animationFrame = 0;
     }
-    this.app.canvas.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keydown', this.handleKeyDown);
     this.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
     this.app.canvas.removeEventListener('pointermove', this.handlePointerMove);
     this.app.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
@@ -385,6 +399,7 @@ export class PixiSongSelectView {
    * doesn't tolerate well on a quick destroy+init cycle).
    */
   public setVisible(visible: boolean): void {
+    this.visible = visible;
     this.app.canvas.style.display = visible ? '' : 'none';
   }
 
@@ -600,7 +615,9 @@ export class PixiSongSelectView {
   };
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
-    this.app.canvas.focus();
+    // No `canvas.focus()` — we listen for `keydown` on `window`, so
+    // capturing focus here would needlessly pull it away from any
+    // form input the user might already be typing into.
     const skin = this.options.skin;
     const useSkin = skin !== undefined && skin.barLayout.slots.length > 0;
     const designWidth = useSkin ? skin!.width : FALLBACK_DESIGN_WIDTH;
@@ -663,6 +680,18 @@ export class PixiSongSelectView {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    // Don't navigate while the view is hidden — e.g. when gameplay is
+    // on top. Both views attach `keydown` to the window so they can
+    // capture input without canvas focus, but only the visible one
+    // should react.
+    if (!this.visible) {
+      return;
+    }
+    // Skip when the user is typing into a form / contenteditable
+    // element so arrow keys / Enter aren't hijacked from text input.
+    if (isEditableTarget(event.target)) {
+      return;
+    }
     const entries = this.currentEntries();
     if (event.key === 'ArrowDown') {
       event.preventDefault();
@@ -1428,6 +1457,38 @@ function clampSlot(value: number, slotCount: number): number {
 function wrapIndex(target: number, count: number): number | undefined {
   if (count <= 0) return undefined;
   return ((target % count) + count) % count;
+}
+
+/**
+ * Returns `true` when the keydown target is a text-editable element
+ * (`<input>` / `<textarea>` / `<select>` / `contenteditable`). The
+ * select view's keyboard handlers use this to bail so the user can
+ * type into form fields without arrow keys hijacking the bar list.
+ *
+ * `<input type="checkbox">` / `<input type="file">` pass through —
+ * those don't capture text input and the user expects arrow keys to
+ * still drive the song list while a checkbox happens to be focused.
+ */
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag === 'INPUT') {
+    const type = (target as HTMLInputElement).type.toLowerCase();
+    // text-like input types we want to leave alone.
+    return (
+      type === 'text' ||
+      type === 'search' ||
+      type === 'url' ||
+      type === 'email' ||
+      type === 'password' ||
+      type === 'number' ||
+      type === 'tel' ||
+      type === ''
+    );
+  }
+  return false;
 }
 
 function containsPoint(rect: Lr2DestinationRect, x: number, y: number): boolean {
