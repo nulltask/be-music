@@ -211,6 +211,19 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   if (Number.isFinite(json.bmson.info.total)) {
     json.metadata.total = json.bmson.info.total;
   }
+  // Mirror bmson's `info.backImage` / `bannerImage` / `eyecatchImage`
+  // onto the unified `metadata` slots so consumers (the select view's
+  // BACKBMP loader, rendered banner, etc.) don't need to branch on
+  // chart format.
+  if (json.bmson.info.backImage) {
+    json.metadata.backBmp = json.bmson.info.backImage;
+  }
+  if (json.bmson.info.bannerImage) {
+    json.metadata.banner = json.bmson.info.bannerImage;
+  }
+  if (json.bmson.info.eyecatchImage && !json.metadata.stageFile) {
+    json.metadata.stageFile = json.bmson.info.eyecatchImage;
+  }
 
   const soundChannels = normalizeBmsonSoundChannels(document.sound_channels);
   json.preservation.bmson.soundChannels = soundChannels;
@@ -650,6 +663,12 @@ function pushHeaderLine(json: BeMusicJson, command: string, value: string): void
       return;
     case 'STAGEFILE':
       json.metadata.stageFile = value;
+      return;
+    case 'BACKBMP':
+      json.metadata.backBmp = value;
+      return;
+    case 'BANNER':
+      json.metadata.banner = value;
       return;
     case 'PREVIEW':
       if (value.length > 0) {

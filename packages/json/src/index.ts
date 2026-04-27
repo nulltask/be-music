@@ -12,7 +12,12 @@ export interface BeMusicMetadata {
   artist?: string;
   genre?: string;
   comment?: string;
+  /** `#STAGEFILE`: full-size loading screen image. */
   stageFile?: string;
+  /** `#BACKBMP`: select-screen banner / preview image (typically 256×256). */
+  backBmp?: string;
+  /** `#BANNER`: small banner image (typically 300×80). */
+  banner?: string;
   playLevel?: BeMusicPlayLevel;
   rank?: number;
   total?: number;

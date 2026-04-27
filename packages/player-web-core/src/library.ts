@@ -3,6 +3,7 @@ import { normalizeChannel } from '@be-music/json';
 import { parseBms, parseBmson } from '@be-music/parser';
 import { extractPlayableNotes } from '../../player/src/playable-notes.ts';
 import type {
+  BrowserFolderNode,
   BrowserSongAssetSource,
   BrowserSongCollection,
   BrowserSongEntry,
@@ -222,6 +223,70 @@ export function resolveSongSource(
   song: BrowserSongEntry,
 ): BrowserSongAssetSource | undefined {
   return collection.sources.find((source) => source.id === song.sourceId);
+}
+
+/**
+ * Resolves a chart-relative asset path (BMP, WAV, banner, …) to its
+ * decoded byte array within a song asset source. Mirrors the BMS
+ * convention of looking next to the chart file first, then falling
+ * back to the source's root and the basename. Used by both gameplay
+ * (BGA/audio) and select (banner / preview) loaders.
+ */
+export function resolveChartAsset(
+  source: BrowserSongAssetSource,
+  chartPath: string,
+  assetPath: string,
+): Uint8Array | undefined {
+  const base = dirname(chartPath);
+  const normalized = normalizePath(assetPath);
+  const baseName = basenameOnly(normalized);
+  const candidates = [
+    normalizePath(`${base}/${normalized}`),
+    normalized,
+    normalizePath(`${base}/${baseName}`),
+    baseName,
+  ];
+  return candidates.map((path) => source.files.get(path)).find(Boolean);
+}
+
+function basenameOnly(path: string): string {
+  const index = path.lastIndexOf('/');
+  return index >= 0 ? path.slice(index + 1) : path;
+}
+
+/**
+ * Groups a flat song list into top-level folders for the select-screen
+ * bar list. The grouping key is the **first segment** of each song's
+ * `directoryLabel` (relative to its source) — so a song at
+ * `LunaticCrave/SongA/song.bms` lands in the `LunaticCrave` folder.
+ * Songs without a directory (e.g. dropped a single file) fall back to
+ * their source label so they still appear under a sensible group.
+ *
+ * The result is sorted by label using Japanese-aware locale ordering,
+ * matching how LR2 sorts folders alphabetically. Each folder's songs
+ * preserve their original order, which keeps the chart-difficulty
+ * sequence stable when iterating inside a folder.
+ */
+export function groupSongsByFolder(songs: readonly BrowserSongEntry[]): BrowserFolderNode[] {
+  const buckets = new Map<string, BrowserSongEntry[]>();
+  for (const song of songs) {
+    const label = topLevelFolderLabel(song);
+    const bucket = buckets.get(label) ?? [];
+    bucket.push(song);
+    buckets.set(label, bucket);
+  }
+  return [...buckets.entries()]
+    .map(([label, entries]): BrowserFolderNode => ({ label, songs: entries }))
+    .sort((left, right) => left.label.localeCompare(right.label, 'ja'));
+}
+
+function topLevelFolderLabel(song: BrowserSongEntry): string {
+  const dir = song.directoryLabel;
+  if (!dir) {
+    return song.sourceLabel;
+  }
+  const slash = dir.indexOf('/');
+  return slash >= 0 ? dir.slice(0, slash) : dir;
 }
 
 export function normalizePath(path: string): string {

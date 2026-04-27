@@ -28,6 +28,13 @@ export interface Lr2DestinationRect {
   y: number;
   w: number;
   h: number;
+  /**
+   * Easing applied to the segment **into** this keyframe (LR2 spec):
+   *
+   *   0 = constant (linear) / 1 = accelerate (ease-in) /
+   *   2 = decelerate (ease-out) / 3 = discontinuous (snap).
+   */
+  acc: number;
   /** 0..1 normalised from LR2's 0..255 alpha. */
   alpha: number;
   /** 0..255 colour tint. 255 means no tint (LR2 only allows reducing channels). */
@@ -185,6 +192,18 @@ export interface Lr2TextElement {
   /** Source type — what string to render (10 = title, 14 = artist, …). */
   st: number;
   alignment: Lr2TextAlignment;
+  /**
+   * `edit=1` makes the text field clickable for in-place editing. We
+   * don't yet ship a text-edit UI, so this is purely informational
+   * for skins that gate UI on it.
+   */
+  edit: number;
+  /**
+   * Panel gate (-1 = only when no panel open, 0 = always, 1..9 =
+   * matching panel only). LR2 default skins use this to scope option
+   * labels to their respective option panel.
+   */
+  panel: number;
   destination: Lr2DestinationRect;
   keyframes: Lr2DestinationRect[];
 }
@@ -232,6 +251,313 @@ export interface Lr2SliderElement {
   range: number;
 }
 
+/**
+ * `#SRC_BUTTON` + `#DST_BUTTON`. A button element shows a per-state
+ * cell from a sprite sheet: `divx*divy` cells correspond to the
+ * possible states of the button's `type` (sort, difficulty filter,
+ * play-mode, panel toggle, etc.) — see `# button_type 一覧` in
+ * `docs/LR2SkinHelp.md` (lines 5887+) for the full enum.
+ *
+ * State management & click handling aren't wired yet; the renderer
+ * just paints the cell at the current button state index (cell 0 by
+ * default) so the static frame shows the right artwork.
+ */
+export interface Lr2ButtonElement {
+  source: Lr2ImageRect;
+  destination: Lr2DestinationRect;
+  keyframes: Lr2DestinationRect[];
+  /** Button type code (see button_type list in `LR2SkinHelp.md`). */
+  type: number;
+  /** 0 = display only, 1 = clickable. */
+  click: number;
+  /** Panel gate: -1 = only when no panel open, 0 = always, 1..9 = only when that panel is open. */
+  panel: number;
+  /** -1 = `value -` only, 0 = both, 1 = `value +` only. Optional in spec. */
+  plusOnly: number;
+}
+
+/**
+ * `#SRC_ONMOUSE` + `#DST_ONMOUSE`. The element is only painted when
+ * the mouse cursor is inside its hit-test rectangle — used for hover
+ * highlights on buttons and links. Hit-test coordinates `(x2, y2,
+ * w2, h2)` are **relative to the DST `(x, y)`** per LR2 spec; the
+ * `panel` field gates the element to a specific option panel.
+ */
+export interface Lr2OnMouseElement {
+  source: Lr2ImageRect;
+  destination: Lr2DestinationRect;
+  keyframes: Lr2DestinationRect[];
+  /** Panel gate (-1 = only when no panel open, 0 = always, 1..9 = matching panel only). */
+  panel: number;
+  /** Hit-test rect, expressed as offset from DST top-left (`x2`, `y2`, `w2`, `h2`). */
+  hitOffsetX: number;
+  hitOffsetY: number;
+  hitWidth: number;
+  hitHeight: number;
+}
+
+/**
+ * `#SRC_BAR_FLASH` + `#DST_BAR_FLASH`. Animated overlay drawn on top
+ * of the focused (`BAR_BODY_ON`) bar — typically a glow or pulse.
+ * DST coordinates are relative to the focused bar's top-left, like
+ * `#SRC_BAR_TITLE` / `#SRC_BAR_LEVEL`.
+ */
+export interface Lr2BarFlashElement {
+  source: Lr2ImageRect;
+  destination: Lr2DestinationRect;
+  keyframes: Lr2DestinationRect[];
+}
+
+/**
+ * `#SRC_BAR_RIVAL` (rival mode WIN/LOSE/DRAW per-bar overlay). One
+ * SRC per outcome (`win` / `lose` / `draw`) plus a single shared DST
+ * keyframe set. Renderer skipped until rival mode lands; parsed so
+ * the data is available when it does.
+ */
+export type Lr2BarRivalKind = 'win' | 'lose' | 'draw';
+export interface Lr2BarRivalSource {
+  kind: Lr2BarRivalKind;
+  source: Lr2ImageRect;
+}
+
+/**
+ * `#SRC_BAR_MY_LAMP` / `#SRC_BAR_RIVAL_LAMP` rival-folder lamp
+ * variants. Use the same `Lr2BarLampKind` enum as the regular
+ * `#SRC_BAR_LAMP`. Parsed but not yet rendered (rival mode is TBD).
+ */
+export interface Lr2BarRivalLampSet {
+  myLamps: Lr2BarLampSource[];
+  myLampDestination?: Lr2DestinationRect;
+  myLampKeyframes: Lr2DestinationRect[];
+  rivalLamps: Lr2BarLampSource[];
+  rivalLampDestination?: Lr2DestinationRect;
+  rivalLampKeyframes: Lr2DestinationRect[];
+}
+
+/**
+ * `#SRC_README` + `#DST_README`. Scrollable text viewer used by the
+ * `READTEXT` button on the select screen. The renderer is gated on
+ * a "readme open" state we don't yet model, so the parser stores
+ * the entry but the select view doesn't draw it.
+ */
+export interface Lr2ReadmeElement {
+  /** Font index (`#LR2FONT` order). */
+  font: number;
+  /** Pixel spacing between lines. */
+  lineSpacing: number;
+  destination: Lr2DestinationRect;
+  keyframes: Lr2DestinationRect[];
+}
+
+/**
+ * `#SRC_MOUSECURSOR` + `#DST_MOUSECURSOR`. Replaces the system
+ * cursor with a skin sprite that follows the pointer. DST `(x, y)`
+ * is the offset from the actual mouse position (typically `(0, 0)`).
+ */
+export interface Lr2MouseCursorElement {
+  source: Lr2ImageRect;
+  destination: Lr2DestinationRect;
+  keyframes: Lr2DestinationRect[];
+}
+
+/**
+ * `#SRC_BAR_BODY` index → which kind of song-select bar this sprite
+ * decorates. The renderer picks the appropriate sprite per song / folder
+ * row when populating the on-screen bar list.
+ *
+ * 0 song / 1 folder / 2 custom folder / 3 new song folder /
+ * 4 rival folder / 5 song (rival mode) / 6 course folder /
+ * 7 course create / 8 course / 9 random course
+ */
+export type Lr2BarBodyKind =
+  | 'song'
+  | 'folder'
+  | 'customFolder'
+  | 'newSongFolder'
+  | 'rivalFolder'
+  | 'rivalSong'
+  | 'courseFolder'
+  | 'courseCreate'
+  | 'course'
+  | 'randomCourse';
+
+/**
+ * Sprite definition for one kind of song-select bar (`#SRC_BAR_BODY`).
+ * The select-screen renderer cross-references the bar slot's kind with
+ * this map to pick the right artwork.
+ */
+export interface Lr2BarBodySource {
+  kind: Lr2BarBodyKind;
+  source: Lr2ImageRect;
+}
+
+/**
+ * One song-select bar slot (`#DST_BAR_BODY_OFF` / `_ON` index 0..29).
+ * `off` is the inactive layout, `on` is the focused layout. LR2 uses up
+ * to 30 slots — typically 10 above the focus, 1 at the centre, 10 below.
+ */
+export interface Lr2BarBodySlot {
+  index: number;
+  off?: Lr2DestinationRect;
+  offKeyframes: Lr2DestinationRect[];
+  on?: Lr2DestinationRect;
+  onKeyframes: Lr2DestinationRect[];
+}
+
+/**
+ * `#SRC_BAR_TITLE` / `#DST_BAR_TITLE`: the per-bar song title overlay.
+ * DST coordinates are **relative** to the bar slot's `BAR_BODY` rect
+ * (LR2 spec: "DST coordinates are relative to the bar's xy"). Only one
+ * SRC + DST pair is allowed per skin.
+ */
+export interface Lr2BarTitleElement {
+  /** Font index (references the skin's `#LR2FONT` order). */
+  font: number;
+  destination: Lr2DestinationRect;
+  keyframes: Lr2DestinationRect[];
+}
+
+/**
+ * `#SRC_BAR_LEVEL` index → difficulty kind. Renders the song's level
+ * number using a NUMBER-style cell sheet. DST coordinates are
+ * **relative** to the bar's xy.
+ *
+ * 0 = undefined / 1 = BEGINNER / 2 = NORMAL / 3 = HYPER / 4 = ANOTHER /
+ * 5 = INSANE / 6 = IR RANKING.
+ */
+export type Lr2BarLevelKind = 'undefined' | 'beginner' | 'normal' | 'hyper' | 'another' | 'insane' | 'irRanking';
+
+export interface Lr2BarLevelSource {
+  kind: Lr2BarLevelKind;
+  source: Lr2NumberSourceRect;
+}
+
+/**
+ * `#SRC_BAR_LAMP` index → clear-lamp kind.
+ *   0 = NO PLAY / 1 = FAILED / 2 = EASY / 3 = CLEAR / 4 = HARD /
+ *   5 = full combo.
+ * `#SRC_BAR_MY_LAMP` / `#SRC_BAR_RIVAL_LAMP` (rival-folder variants)
+ * aren't parsed yet — only the plain track is.
+ */
+export type Lr2BarLampKind = 'noplay' | 'failed' | 'easy' | 'clear' | 'hard' | 'fullcombo';
+
+export interface Lr2BarLampSource {
+  kind: Lr2BarLampKind;
+  source: Lr2ImageRect;
+}
+
+/**
+ * `#SRC_BAR_RANK` index → clear-rank kind.
+ *   0 = no play / 1 = F / 2 = E / 3 = D / 4 = C / 5 = B / 6 = A /
+ *   7 = AA / 8 = AAA.
+ */
+export type Lr2BarRankKind = 'noplay' | 'F' | 'E' | 'D' | 'C' | 'B' | 'A' | 'AA' | 'AAA';
+
+export interface Lr2BarRankSource {
+  kind: Lr2BarRankKind;
+  source: Lr2ImageRect;
+}
+
+/**
+ * Aggregate of the song-select-bar definitions in an LR2 skin. When a
+ * skin has no bar definitions (e.g. play-only skins) `slots` is empty
+ * and the renderer falls back to its built-in list layout.
+ */
+export interface Lr2BarLayout {
+  bodies: Lr2BarBodySource[];
+  slots: Lr2BarBodySlot[];
+  /** `#BAR_CENTER`: the slot index that should hold the focused song. */
+  center: number;
+  /**
+   * `#BAR_AVAILABLE`: number of slots that are clickable / focus-able.
+   * Slots outside this range only render as scrolling decoration.
+   */
+  available: number;
+  title?: Lr2BarTitleElement;
+  /**
+   * `#SRC_BAR_LEVEL` artworks keyed by difficulty. The renderer picks
+   * one entry based on the focused-song's `#DIFFICULTY` and uses the
+   * single shared `levelDestination` (DST_BAR_LEVEL keyframes are not
+   * indexed per kind in LR2).
+   */
+  levels: Lr2BarLevelSource[];
+  levelDestination?: Lr2DestinationRect;
+  levelKeyframes: Lr2DestinationRect[];
+  /** `#SRC_BAR_LAMP` artworks per clear-lamp kind. */
+  lamps: Lr2BarLampSource[];
+  lampDestination?: Lr2DestinationRect;
+  lampKeyframes: Lr2DestinationRect[];
+  /** `#SRC_BAR_RANK` artworks per clear-rank kind. */
+  ranks: Lr2BarRankSource[];
+  rankDestination?: Lr2DestinationRect;
+  rankKeyframes: Lr2DestinationRect[];
+  /**
+   * `#SRC_BAR_FLASH` overlay on the focused bar. LR2 spec: only one
+   * SRC + DST pair allowed. Rendered relative to the focused bar's
+   * `BAR_BODY_ON` rect.
+   */
+  flash?: Lr2BarFlashElement;
+  /**
+   * `#SRC_BAR_RIVAL` artworks (WIN/LOSE/DRAW) drawn on rival-folder
+   * bars. Parsed; renderer skipped until rival mode lands.
+   */
+  rivalIndicators: Lr2BarRivalSource[];
+  rivalDestination?: Lr2DestinationRect;
+  rivalKeyframes: Lr2DestinationRect[];
+  /** Rival-mode lamp variants (`#SRC_BAR_MY_LAMP` / `_RIVAL_LAMP`). */
+  rivalLamps: Lr2BarRivalLampSet;
+}
+
+/**
+ * Scene-timing directives (`#STARTINPUT` / `#FADEOUT` / `#CLOSE` /
+ * `#LOADSTART` / `#LOADEND` / `#PLAYSTART` / `#SKIP`). Each value is a
+ * millisecond offset from the scene's main timer (timer 0). The
+ * select-screen renderer uses `startInput` to gate timer-1 anchored
+ * elements; `fadeOut` / `close` would drive scene-exit transitions.
+ */
+export interface Lr2SkinTiming {
+  /** ms after scene mount before timer 1 (input start) fires. */
+  startInput?: number;
+  /** ms duration of fade-out before scene exits (drives timer 2). */
+  fadeOut?: number;
+  /** ms before the scene closes (drives timer 3). */
+  close?: number;
+  /** Play-skin only: load-start / load-end / play-start anchors. */
+  loadStart?: number;
+  loadEnd?: number;
+  playStart?: number;
+  /** Result skin only: `#SKIP` ms — minimum input wait before chart-draw skip. */
+  skip?: number;
+}
+
+/**
+ * Scratch-side / DP-flip behaviour declared by the skin (`#SCRATCH`,
+ * `#FLIPSIDE`, `#FLIPRESULT`, `#DISABLEFLIP`). All optional — the
+ * renderer reads these to decide which side renders the scratch and
+ * whether to apply the LR2 "DP flip" mirror.
+ *
+ * Spec values (`docs/LR2SkinHelp.md`):
+ * - `#SCRATCH,1P,2P` — `1P` / `2P` flag for which side has scratch.
+ *   `0 = no scratch`, `1 = has scratch` per side.
+ * - `#FLIPSIDE` — declares the skin is the flippable kind.
+ * - `#FLIPRESULT` — flip persists into the result screen.
+ * - `#DISABLEFLIP` — skin opts out of flip entirely.
+ */
+export interface Lr2ScratchFlip {
+  /** `1` if the 1P side has a scratch lane, `0` otherwise. */
+  scratch1P?: number;
+  /** `1` if the 2P side has a scratch lane, `0` otherwise. */
+  scratch2P?: number;
+  /** True when the skin declares `#FLIPSIDE`. */
+  flipSide: boolean;
+  /** True when `#FLIPRESULT` is present (flip carries into result). */
+  flipResult: boolean;
+  /** True when `#DISABLEFLIP` is present (skin disables flip). */
+  disableFlip: boolean;
+  /** True when the skin declares `#RELOADBANNER` (banner reloads on cursor move). */
+  reloadBanner: boolean;
+}
+
 export interface Lr2Skin {
   name: string;
   width: number;
@@ -263,6 +589,22 @@ export interface Lr2Skin {
   texts: Lr2TextElement[];
   bargraphs: Lr2BarGraphElement[];
   sliders: Lr2SliderElement[];
+  buttons: Lr2ButtonElement[];
+  onMouseElements: Lr2OnMouseElement[];
+  /** `#SRC_README` viewer entries. Parsed; renderer integration is TBD. */
+  readmes: Lr2ReadmeElement[];
+  /**
+   * `#SRC_MOUSECURSOR`. Generally one entry per skin; we keep an
+   * array for parity with the other element collections and so a
+   * skin that overrides via `#IF` branches works.
+   */
+  mouseCursors: Lr2MouseCursorElement[];
+  /** Scene-timing directives (`#STARTINPUT` / `#FADEOUT` / `#CLOSE` / …). */
+  timing: Lr2SkinTiming;
+  /** Scratch-side / DP-flip behaviour declared by the skin. */
+  scratchFlip: Lr2ScratchFlip;
+  /** Song-select bar layout. Only populated when the skin defines `#SRC_BAR_BODY` etc. */
+  barLayout: Lr2BarLayout;
   customOptions: Lr2CustomOption[];
   customFiles: Lr2CustomFile[];
   transparentColor?: { r: number; g: number; b: number };
@@ -322,6 +664,8 @@ interface TextSourceEntry {
   font: number;
   st: number;
   alignment: Lr2TextAlignment;
+  edit: number;
+  panel: number;
 }
 
 interface BarGraphSourceEntry {
@@ -335,6 +679,59 @@ interface SliderSourceEntry {
   type: number;
   muki: Lr2SliderMuki;
   range: number;
+}
+
+interface ButtonSourceEntry {
+  source: SourceRect;
+  type: number;
+  click: number;
+  panel: number;
+  plusOnly: number;
+}
+
+interface OnMouseSourceEntry {
+  source: SourceRect;
+  panel: number;
+  hitOffsetX: number;
+  hitOffsetY: number;
+  hitWidth: number;
+  hitHeight: number;
+}
+
+interface ReadmeSourceEntry {
+  font: number;
+  lineSpacing: number;
+}
+
+interface BarRivalSourceEntry {
+  kind: Lr2BarRivalKind;
+  source: SourceRect;
+}
+
+interface BarBodySourceEntry {
+  kind: Lr2BarBodyKind;
+  source: SourceRect;
+}
+
+interface BarTitleSourceEntry {
+  font: number;
+}
+
+interface BarLevelSourceEntry {
+  kind: Lr2BarLevelKind;
+  source: SourceRect;
+  alignment: Lr2NumberAlignment;
+  padding: number;
+}
+
+interface BarLampSourceEntry {
+  kind: Lr2BarLampKind;
+  source: SourceRect;
+}
+
+interface BarRankSourceEntry {
+  kind: Lr2BarRankKind;
+  source: SourceRect;
 }
 
 interface ParseContext {
@@ -367,12 +764,70 @@ interface ParseContext {
   bargraphDstGroups: Lr2DestinationRect[][];
   sliderSources: SliderSourceEntry[];
   sliderDstGroups: Lr2DestinationRect[][];
+  buttonSources: ButtonSourceEntry[];
+  buttonDstGroups: Lr2DestinationRect[][];
+  onMouseSources: OnMouseSourceEntry[];
+  onMouseDstGroups: Lr2DestinationRect[][];
+  readmeSources: ReadmeSourceEntry[];
+  readmeDstGroups: Lr2DestinationRect[][];
+  mouseCursorSources: SourceRect[];
+  mouseCursorDstGroups: Lr2DestinationRect[][];
+  /** `#SRC_BAR_FLASH` source (single SRC per spec, last-wins). */
+  barFlashSource?: SourceRect;
+  /** `#DST_BAR_FLASH` keyframes. */
+  barFlashDst: Lr2DestinationRect[];
+  /** `#SRC_BAR_RIVAL` per-outcome sources. */
+  barRivalSources: BarRivalSourceEntry[];
+  barRivalDst: Lr2DestinationRect[];
+  /** Rival-mode lamp variants. */
+  barMyLampSources: BarLampSourceEntry[];
+  barMyLampDst: Lr2DestinationRect[];
+  barRivalLampSources: BarLampSourceEntry[];
+  barRivalLampDst: Lr2DestinationRect[];
+  /**
+   * Song-select bar `#SRC_BAR_BODY` definitions (one per kind id 0..9).
+   * Sparse — only kinds the skin actually defines have an entry.
+   */
+  barBodySources: BarBodySourceEntry[];
+  /**
+   * `#DST_BAR_BODY_OFF` keyframes per slot index 0..29. Sparse like the
+   * play-skin DST groups — slot 0 is the topmost off-state position.
+   */
+  barBodyOffDstGroups: Lr2DestinationRect[][];
+  /** `#DST_BAR_BODY_ON` keyframes per slot index 0..29 (focus-state). */
+  barBodyOnDstGroups: Lr2DestinationRect[][];
+  /** `#BAR_CENTER` value (clamped to slot range at finalization). */
+  barCenter: number;
+  /** `#BAR_AVAILABLE` value (clamped to slot range at finalization). */
+  barAvailable: number;
+  /**
+   * `#SRC_BAR_TITLE` source. LR2 spec only allows one. We keep the
+   * latest one wins to mirror how the LR2 default skin chains an
+   * `#IF`-gated alt definition for the focus state.
+   */
+  barTitleSource?: BarTitleSourceEntry;
+  /** `#DST_BAR_TITLE` keyframes (relative to the bar's xy). */
+  barTitleDst: Lr2DestinationRect[];
+  /** `#SRC_BAR_LEVEL` per-difficulty cell sheets (sparse by kind). */
+  barLevelSources: BarLevelSourceEntry[];
+  /** `#DST_BAR_LEVEL` shared keyframes (LR2 only ships one DST chain). */
+  barLevelDst: Lr2DestinationRect[];
+  /** `#SRC_BAR_LAMP` per-clear-lamp sprites. */
+  barLampSources: BarLampSourceEntry[];
+  /** `#DST_BAR_LAMP` shared keyframes. */
+  barLampDst: Lr2DestinationRect[];
+  /** `#SRC_BAR_RANK` per-clear-rank sprites. */
+  barRankSources: BarRankSourceEntry[];
+  /** `#DST_BAR_RANK` shared keyframes. */
+  barRankDst: Lr2DestinationRect[];
   laneRects: Lr2DestinationRect[];
   customOptions: Lr2CustomOption[];
   customFiles: Lr2CustomFile[];
   customFileLookup: Map<string, string>;
   transparentColor?: { r: number; g: number; b: number };
   trueOps: Set<number>;
+  timing: Lr2SkinTiming;
+  scratchFlip: Lr2ScratchFlip;
   name: string;
   width: number;
   height: number;
@@ -419,21 +874,51 @@ const NOW_COMBO_1P_KIND_BY_INDEX: ReadonlyMap<number, 'good' | 'great' | 'perfec
   [5, 'perfect'],
 ]);
 
-export async function loadLr2SkinFromFiles(files: Iterable<File>): Promise<Lr2Skin | undefined> {
+/**
+ * Which screen's `.lr2skin` to pick when a theme bundle ships multiple
+ * (play, select, result, etc.). Defaults to `'play'` for backward
+ * compatibility — the original `loadLr2SkinFromFiles()` callers were all
+ * the gameplay view.
+ */
+export type Lr2SkinKind = 'play' | 'select';
+
+export interface LoadLr2SkinOptions {
+  /** Which kind of skin to load. Defaults to `'play'`. */
+  kind?: Lr2SkinKind;
+}
+
+export async function loadLr2SkinFromFiles(
+  files: Iterable<File>,
+  options: LoadLr2SkinOptions = {},
+): Promise<Lr2Skin | undefined> {
   const sourceFiles = new Map<string, Uint8Array>();
   for (const file of files) {
     const path = normalizePath(file.webkitRelativePath || file.name);
     sourceFiles.set(path, new Uint8Array(await file.arrayBuffer()));
   }
-  return loadLr2SkinFromSourceFiles(sourceFiles);
+  return loadLr2SkinFromSourceFiles(sourceFiles, options);
 }
 
-export function loadLr2SkinFromSourceFiles(sourceFiles: ReadonlyMap<string, Uint8Array>): Lr2Skin | undefined {
+export function loadLr2SkinFromSourceFiles(
+  sourceFiles: ReadonlyMap<string, Uint8Array>,
+  options: LoadLr2SkinOptions = {},
+): Lr2Skin | undefined {
+  const kind = options.kind ?? 'play';
+  // Filter `.lr2skin` candidates to the requested kind first so a theme
+  // bundle that contains both `Play/play_7.lr2skin` and
+  // `Select/select.lr2skin` doesn't accidentally feed the play skin into
+  // the select view (or vice versa). Falls back to ANY `.lr2skin` if the
+  // kind-specific filter matches nothing — useful for one-off skins that
+  // ship a single CSV.
+  const lr2SkinPaths = [...sourceFiles.keys()].filter((path) => path.toLowerCase().endsWith('.lr2skin'));
+  const filtered = lr2SkinPaths.filter((path) => isSkinPathOfKind(path, kind));
+  const candidates = filtered.length > 0 ? filtered : lr2SkinPaths;
   const entryPath =
-    [...sourceFiles.keys()]
-      .filter((path) => path.toLowerCase().endsWith('.lr2skin'))
-      .sort((left, right) => scoreSkinPath(left) - scoreSkinPath(right) || left.localeCompare(right, 'ja'))[0] ??
-    [...sourceFiles.keys()].find((path) => path.toLowerCase().endsWith('.csv'));
+    candidates
+      .slice()
+      .sort(
+        (left, right) => scoreSkinPath(left, kind) - scoreSkinPath(right, kind) || left.localeCompare(right, 'ja'),
+      )[0] ?? [...sourceFiles.keys()].find((path) => path.toLowerCase().endsWith('.csv'));
   if (!entryPath) {
     return undefined;
   }
@@ -463,11 +948,45 @@ export function loadLr2SkinFromSourceFiles(sourceFiles: ReadonlyMap<string, Uint
     bargraphDstGroups: [],
     sliderSources: [],
     sliderDstGroups: [],
+    buttonSources: [],
+    buttonDstGroups: [],
+    onMouseSources: [],
+    onMouseDstGroups: [],
+    readmeSources: [],
+    readmeDstGroups: [],
+    mouseCursorSources: [],
+    mouseCursorDstGroups: [],
+    barFlashDst: [],
+    barRivalSources: [],
+    barRivalDst: [],
+    barMyLampSources: [],
+    barMyLampDst: [],
+    barRivalLampSources: [],
+    barRivalLampDst: [],
+    barBodySources: [],
+    barBodyOffDstGroups: [],
+    barBodyOnDstGroups: [],
+    barCenter: 0,
+    barAvailable: 0,
+    barTitleDst: [],
+    barLevelSources: [],
+    barLevelDst: [],
+    barLampSources: [],
+    barLampDst: [],
+    barRankSources: [],
+    barRankDst: [],
     laneRects: [],
     customOptions: [],
     customFiles: [],
     customFileLookup: new Map(),
     trueOps: defaultParseOps(),
+    timing: {},
+    scratchFlip: {
+      flipSide: false,
+      flipResult: false,
+      disableFlip: false,
+      reloadBanner: false,
+    },
     name: basename(entryPath),
     width: 640,
     height: 480,
@@ -483,7 +1002,15 @@ export function loadLr2SkinFromSourceFiles(sourceFiles: ReadonlyMap<string, Uint
       if (!dstGroup || dstGroup.length === 0) {
         return [];
       }
-      const imagePath = context.imagePaths[source.gr];
+      // LR2 reserves a few special gr indices for textures that are
+      // resolved at runtime instead of from `#IMAGE` declarations:
+      //   100 = STAGEFILE, 101 = BACKBMP, 102 = BANNER,
+      //   105 = skin-select thumbnail, 110 = solid black, 111 = solid white.
+      // We mark them with a sentinel path so the renderer can swap in
+      // the appropriate texture (per-song banner, generated 1-dot, etc.)
+      // without needing to pre-register them in the `#IMAGE` table.
+      const specialPath = specialGraphicPath(source.gr);
+      const imagePath = specialPath ?? context.imagePaths[source.gr];
       if (!imagePath) {
         return [];
       }
@@ -515,6 +1042,13 @@ export function loadLr2SkinFromSourceFiles(sourceFiles: ReadonlyMap<string, Uint
     texts: createTextElements(context),
     bargraphs: createBarGraphElements(context),
     sliders: createSliderElements(context),
+    buttons: createButtonElements(context),
+    onMouseElements: createOnMouseElements(context),
+    readmes: createReadmeElements(context),
+    mouseCursors: createMouseCursorElements(context),
+    timing: { ...context.timing },
+    scratchFlip: { ...context.scratchFlip },
+    barLayout: createBarLayout(context),
     customOptions: context.customOptions,
     customFiles: context.customFiles,
     transparentColor: context.transparentColor,
@@ -616,6 +1150,71 @@ function readLr2Path(
       const g = clampColorByte(toNumber(row[2], 0));
       const b = clampColorByte(toNumber(row[3], 0));
       context.transparentColor = { r, g, b };
+    } else if (
+      command === '#STARTINPUT' ||
+      command === '#FADEOUT' ||
+      command === '#CLOSE' ||
+      command === '#LOADSTART' ||
+      command === '#LOADEND' ||
+      command === '#PLAYSTART' ||
+      command === '#SKIP'
+    ) {
+      // Scene-timing directives — single ms argument. The renderer
+      // anchors timer 1/2/3/40/41 off these offsets.
+      const ms = Math.max(0, Math.trunc(toNumber(row[1], 0)));
+      switch (command) {
+        case '#STARTINPUT':
+          context.timing.startInput = ms;
+          break;
+        case '#FADEOUT':
+          context.timing.fadeOut = ms;
+          break;
+        case '#CLOSE':
+          context.timing.close = ms;
+          break;
+        case '#LOADSTART':
+          context.timing.loadStart = ms;
+          break;
+        case '#LOADEND':
+          context.timing.loadEnd = ms;
+          break;
+        case '#PLAYSTART':
+          context.timing.playStart = ms;
+          break;
+        case '#SKIP':
+          context.timing.skip = ms;
+          break;
+      }
+    } else if (command === '#SETOPTION') {
+      // `#SETOPTION,opCode` — overrides a CUSTOMOPTION's default by
+      // marking that op true at parse time. LR2 uses this to lock a
+      // skin into a specific branch even when the user hasn't
+      // selected the matching option (e.g. force the wide-lane layout
+      // when the skin author wants it as the default).
+      const op = Math.trunc(toNumber(row[1], 0));
+      if (op > 0) {
+        context.trueOps.add(op);
+      } else if (op < 0) {
+        context.trueOps.delete(-op);
+      }
+    } else if (command === '#SCRATCH') {
+      // `#SCRATCH,1P,2P` — flag (0/1) per side for "has scratch lane".
+      context.scratchFlip.scratch1P = Math.max(0, Math.trunc(toNumber(row[1], 0)));
+      context.scratchFlip.scratch2P = Math.max(0, Math.trunc(toNumber(row[2], 0)));
+    } else if (command === '#FLIPSIDE') {
+      // Marker — the skin declares itself flippable.
+      context.scratchFlip.flipSide = true;
+    } else if (command === '#FLIPRESULT') {
+      // Flip should persist into the result scene.
+      context.scratchFlip.flipResult = true;
+    } else if (command === '#DISABLEFLIP') {
+      // Skin opts out of flip. Mutually exclusive with `#FLIPSIDE`,
+      // but we honour whichever directive appears latest.
+      context.scratchFlip.disableFlip = true;
+    } else if (command === '#RELOADBANNER') {
+      // Banner reloads on cursor move (BACKBMP / BANNER refresh).
+      // We always reload anyway, so this just records the intent.
+      context.scratchFlip.reloadBanner = true;
     } else if (command === '#INCLUDE') {
       const includePath = resolveIncludePath(sourceFiles, dirname(path), row[1] ?? '');
       if (includePath) {
@@ -724,6 +1323,10 @@ function readLr2Path(
         font: Math.max(0, Math.trunc(toNumber(row[2], 0))),
         st: Math.max(0, Math.trunc(toNumber(row[3], 0))),
         alignment: parseTextAlignment(row[4]),
+        edit: Math.max(0, Math.trunc(toNumber(row[5], 0))),
+        // `panel` may legitimately be negative (-1 = "only when no
+        // panel open") so we keep the sign.
+        panel: Math.trunc(toNumber(row[6], 0)),
       });
       context.textDstGroups.push([]);
     } else if (command === '#DST_TEXT') {
@@ -758,6 +1361,193 @@ function readLr2Path(
       if (group) {
         appendDestinationKeyframe(group, row);
       }
+    } else if (command === '#SRC_BUTTON') {
+      // #SRC_BUTTON,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,type,click,panel,plusonly
+      // `plusonly` is optional in the LR2 spec — `toNumber(..., 0)` keeps
+      // it at 0 (= both directions allowed) when the column is missing.
+      context.buttonSources.push({
+        source: parseSource(row),
+        type: Math.max(0, Math.trunc(toNumber(row[11], 0))),
+        click: Math.max(0, Math.trunc(toNumber(row[12], 0))),
+        panel: Math.trunc(toNumber(row[13], 0)),
+        plusOnly: Math.trunc(toNumber(row[14], 0)),
+      });
+      context.buttonDstGroups.push([]);
+    } else if (command === '#DST_BUTTON') {
+      const group = context.buttonDstGroups.at(-1);
+      if (group) {
+        appendDestinationKeyframe(group, row);
+      }
+    } else if (command === '#SRC_ONMOUSE') {
+      // #SRC_ONMOUSE,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,panel,x2,y2,w2,h2
+      context.onMouseSources.push({
+        source: parseSource(row),
+        panel: Math.trunc(toNumber(row[11], 0)),
+        hitOffsetX: Math.trunc(toNumber(row[12], 0)),
+        hitOffsetY: Math.trunc(toNumber(row[13], 0)),
+        hitWidth: Math.trunc(toNumber(row[14], 0)),
+        hitHeight: Math.trunc(toNumber(row[15], 0)),
+      });
+      context.onMouseDstGroups.push([]);
+    } else if (command === '#DST_ONMOUSE') {
+      const group = context.onMouseDstGroups.at(-1);
+      if (group) {
+        appendDestinationKeyframe(group, row);
+      }
+    } else if (command === '#SRC_README') {
+      // #SRC_README,(NULL),font,(NULL),(NULL),kankaku
+      context.readmeSources.push({
+        font: Math.max(0, Math.trunc(toNumber(row[2], 0))),
+        lineSpacing: Math.max(0, Math.trunc(toNumber(row[5], 0))),
+      });
+      context.readmeDstGroups.push([]);
+    } else if (command === '#DST_README') {
+      const group = context.readmeDstGroups.at(-1);
+      if (group) {
+        appendDestinationKeyframe(group, row);
+      }
+    } else if (command === '#SRC_MOUSECURSOR') {
+      // #SRC_MOUSECURSOR,(NULL),gr,x,y,w,h,divx,divy,cycle,timer
+      context.mouseCursorSources.push(parseSource(row));
+      context.mouseCursorDstGroups.push([]);
+    } else if (command === '#DST_MOUSECURSOR') {
+      const group = context.mouseCursorDstGroups.at(-1);
+      if (group) {
+        appendDestinationKeyframe(group, row);
+      }
+    } else if (command === '#SRC_BAR_FLASH') {
+      // Spec only allows one — last wins. Used as the focused-bar
+      // pulse / glow overlay; DST coordinates are relative to the
+      // focused bar's `BAR_BODY_ON` rect.
+      context.barFlashSource = parseSource(row);
+    } else if (command === '#DST_BAR_FLASH') {
+      appendDestinationKeyframe(context.barFlashDst, row);
+    } else if (command === '#SRC_BAR_RIVAL') {
+      // #SRC_BAR_RIVAL,index,gr,x,y,w,h,divx,divy,cycle,timer
+      // index 0=WIN / 1=LOSE / 2=DRAW (3=NOT PLAYED is recommended
+      // omitted by the spec; we accept it but don't model it).
+      const kind = parseBarRivalKind(row[1]);
+      if (kind) {
+        const entry: BarRivalSourceEntry = { kind, source: parseSource(row) };
+        const existingIndex = context.barRivalSources.findIndex((existing) => existing.kind === kind);
+        if (existingIndex >= 0) {
+          context.barRivalSources[existingIndex] = entry;
+        } else {
+          context.barRivalSources.push(entry);
+        }
+      }
+    } else if (command === '#DST_BAR_RIVAL') {
+      appendDestinationKeyframe(context.barRivalDst, row);
+    } else if (command === '#SRC_BAR_MY_LAMP') {
+      // Rival-mode self lamp. Same kind enum as `#SRC_BAR_LAMP`.
+      const kind = parseBarLampKind(row[1]);
+      if (kind) {
+        const entry: BarLampSourceEntry = { kind, source: parseSource(row) };
+        const existingIndex = context.barMyLampSources.findIndex((existing) => existing.kind === kind);
+        if (existingIndex >= 0) {
+          context.barMyLampSources[existingIndex] = entry;
+        } else {
+          context.barMyLampSources.push(entry);
+        }
+      }
+    } else if (command === '#DST_BAR_MY_LAMP') {
+      appendDestinationKeyframe(context.barMyLampDst, row);
+    } else if (command === '#SRC_BAR_RIVAL_LAMP') {
+      // Rival-mode opponent lamp. Same kind enum.
+      const kind = parseBarLampKind(row[1]);
+      if (kind) {
+        const entry: BarLampSourceEntry = { kind, source: parseSource(row) };
+        const existingIndex = context.barRivalLampSources.findIndex((existing) => existing.kind === kind);
+        if (existingIndex >= 0) {
+          context.barRivalLampSources[existingIndex] = entry;
+        } else {
+          context.barRivalLampSources.push(entry);
+        }
+      }
+    } else if (command === '#DST_BAR_RIVAL_LAMP') {
+      appendDestinationKeyframe(context.barRivalLampDst, row);
+    } else if (command === '#SRC_BAR_BODY') {
+      // #SRC_BAR_BODY,kind,gr,x,y,w,h,divx,divy,cycle,timer
+      const kind = parseBarBodyKind(row[1]);
+      if (kind) {
+        // Last definition for a given kind wins, mirroring LR2's
+        // "later #IF branch overrides earlier" convention.
+        const existingIndex = context.barBodySources.findIndex((entry) => entry.kind === kind);
+        const entry: BarBodySourceEntry = { kind, source: parseSource(row) };
+        if (existingIndex >= 0) {
+          context.barBodySources[existingIndex] = entry;
+        } else {
+          context.barBodySources.push(entry);
+        }
+      }
+    } else if (command === '#DST_BAR_BODY_OFF') {
+      const slot = Math.max(0, Math.trunc(toNumber(row[1], 0)));
+      const group = context.barBodyOffDstGroups[slot] ?? [];
+      appendDestinationKeyframe(group, row);
+      context.barBodyOffDstGroups[slot] = group;
+    } else if (command === '#DST_BAR_BODY_ON') {
+      const slot = Math.max(0, Math.trunc(toNumber(row[1], 0)));
+      const group = context.barBodyOnDstGroups[slot] ?? [];
+      appendDestinationKeyframe(group, row);
+      context.barBodyOnDstGroups[slot] = group;
+    } else if (command === '#BAR_CENTER') {
+      context.barCenter = Math.max(0, Math.trunc(toNumber(row[1], 0)));
+    } else if (command === '#BAR_AVAILABLE') {
+      context.barAvailable = Math.max(0, Math.trunc(toNumber(row[1], 0)));
+    } else if (command === '#SRC_BAR_TITLE') {
+      // #SRC_BAR_TITLE,(NULL),font,(NULL)... — only the font index is
+      // meaningful; everything else is a placeholder kept for SRC-row
+      // format symmetry with #SRC_TEXT.
+      context.barTitleSource = { font: Math.max(0, Math.trunc(toNumber(row[2], 0))) };
+    } else if (command === '#DST_BAR_TITLE') {
+      appendDestinationKeyframe(context.barTitleDst, row);
+    } else if (command === '#SRC_BAR_LEVEL') {
+      // #SRC_BAR_LEVEL,index,gr,x,y,w,h,divx,divy,cycle,timer,(null),align,keta
+      const kind = parseBarLevelKind(row[1]);
+      if (kind) {
+        const entry: BarLevelSourceEntry = {
+          kind,
+          source: parseSource(row),
+          alignment: parseNumberAlignment(row[12]),
+          padding: Math.max(0, Math.trunc(toNumber(row[13], 0))),
+        };
+        const existingIndex = context.barLevelSources.findIndex((existing) => existing.kind === kind);
+        if (existingIndex >= 0) {
+          context.barLevelSources[existingIndex] = entry;
+        } else {
+          context.barLevelSources.push(entry);
+        }
+      }
+    } else if (command === '#DST_BAR_LEVEL') {
+      appendDestinationKeyframe(context.barLevelDst, row);
+    } else if (command === '#SRC_BAR_LAMP') {
+      // #SRC_BAR_LAMP,index,gr,x,y,w,h,divx,divy,cycle,timer
+      const kind = parseBarLampKind(row[1]);
+      if (kind) {
+        const entry: BarLampSourceEntry = { kind, source: parseSource(row) };
+        const existingIndex = context.barLampSources.findIndex((existing) => existing.kind === kind);
+        if (existingIndex >= 0) {
+          context.barLampSources[existingIndex] = entry;
+        } else {
+          context.barLampSources.push(entry);
+        }
+      }
+    } else if (command === '#DST_BAR_LAMP') {
+      appendDestinationKeyframe(context.barLampDst, row);
+    } else if (command === '#SRC_BAR_RANK') {
+      // #SRC_BAR_RANK,index,gr,x,y,w,h,divx,divy,cycle,timer
+      const kind = parseBarRankKind(row[1]);
+      if (kind) {
+        const entry: BarRankSourceEntry = { kind, source: parseSource(row) };
+        const existingIndex = context.barRankSources.findIndex((existing) => existing.kind === kind);
+        if (existingIndex >= 0) {
+          context.barRankSources[existingIndex] = entry;
+        } else {
+          context.barRankSources.push(entry);
+        }
+      }
+    } else if (command === '#DST_BAR_RANK') {
+      appendDestinationKeyframe(context.barRankDst, row);
     } else if (command in NOTE_COMMANDS) {
       const kind = NOTE_COMMANDS[command]!;
       const lane = toNumber(row[1], 0);
@@ -799,6 +1589,58 @@ function registerCustomFile(
   if (resolvedPath) {
     context.customFiles.push({ name, path: resolvedPath });
     context.customFileLookup.set(normalizeLr2Path(pattern).toLowerCase(), resolvedPath);
+  }
+}
+
+/**
+ * Sentinel paths used in `Lr2ImageRect.imagePath` for LR2's runtime-bound
+ * textures (`#SRC_IMAGE,gr=...`):
+ *
+ *   100 → STAGEFILE / 101 → BACKBMP / 102 → BANNER /
+ *   105 → skin-select thumbnail / 110 → solid black / 111 → solid white.
+ *
+ * Renderers detect these paths and substitute the appropriate live
+ * texture (e.g. the focused song's banner) instead of looking the path
+ * up in the bundled `#IMAGE` map.
+ */
+export const LR2_SPECIAL_GRAPHIC = {
+  STAGEFILE: '__lr2_special:stagefile',
+  BACKBMP: '__lr2_special:backbmp',
+  BANNER: '__lr2_special:banner',
+  SKIN_THUMBNAIL: '__lr2_special:skin_thumbnail',
+  BLACK: '__lr2_special:black',
+  WHITE: '__lr2_special:white',
+} as const;
+
+export type Lr2SpecialGraphic = (typeof LR2_SPECIAL_GRAPHIC)[keyof typeof LR2_SPECIAL_GRAPHIC];
+
+export function isLr2SpecialGraphic(path: string): path is Lr2SpecialGraphic {
+  return (
+    path === LR2_SPECIAL_GRAPHIC.STAGEFILE ||
+    path === LR2_SPECIAL_GRAPHIC.BACKBMP ||
+    path === LR2_SPECIAL_GRAPHIC.BANNER ||
+    path === LR2_SPECIAL_GRAPHIC.SKIN_THUMBNAIL ||
+    path === LR2_SPECIAL_GRAPHIC.BLACK ||
+    path === LR2_SPECIAL_GRAPHIC.WHITE
+  );
+}
+
+function specialGraphicPath(gr: number): Lr2SpecialGraphic | undefined {
+  switch (gr) {
+    case 100:
+      return LR2_SPECIAL_GRAPHIC.STAGEFILE;
+    case 101:
+      return LR2_SPECIAL_GRAPHIC.BACKBMP;
+    case 102:
+      return LR2_SPECIAL_GRAPHIC.BANNER;
+    case 105:
+      return LR2_SPECIAL_GRAPHIC.SKIN_THUMBNAIL;
+    case 110:
+      return LR2_SPECIAL_GRAPHIC.BLACK;
+    case 111:
+      return LR2_SPECIAL_GRAPHIC.WHITE;
+    default:
+      return undefined;
   }
 }
 
@@ -897,6 +1739,7 @@ function parseDestination(row: string[]): Lr2DestinationRect {
     y: toNumber(row[4], 0),
     w: toNumber(row[5], 0),
     h: toNumber(row[6], 0),
+    acc: Math.max(0, Math.min(3, Math.trunc(toNumber(row[7], 0)))),
     alpha: Math.max(0, Math.min(1, toNumber(row[8], 255) / 255)),
     r: clampColorByte(toNumber(row[9], 255)),
     g: clampColorByte(toNumber(row[10], 255)),
@@ -934,10 +1777,14 @@ function appendDestinationKeyframe(group: Lr2DestinationRect[], row: string[]): 
     dst.timer = previous?.timer ?? 0;
   }
   if (previous) {
-    // `loop` and the trailing op fields are blank-inherited the same way:
-    // a row that only specifies `time,x,y,w,h,...` keeps the original gate.
+    // `loop`, `acc`, and the trailing op fields are blank-inherited
+    // the same way: a row that only specifies `time,x,y,w,h,...` keeps
+    // the original easing / loop gate / op gate.
     if (isBlank(row[16])) {
       dst.loop = previous.loop;
+    }
+    if (isBlank(row[7])) {
+      dst.acc = previous.acc;
     }
     if (isBlank(row[18]) && isBlank(row[19]) && isBlank(row[20])) {
       dst.ops = previous.ops;
@@ -1194,6 +2041,8 @@ function createTextElements(context: ParseContext): Lr2TextElement[] {
       font: entry.font,
       st: entry.st,
       alignment: entry.alignment,
+      edit: entry.edit,
+      panel: entry.panel,
       destination,
       keyframes: [...dstGroup],
     });
@@ -1225,6 +2074,251 @@ function createBarGraphElements(context: ParseContext): Lr2BarGraphElement[] {
   return elements;
 }
 
+function parseBarBodyKind(value: string | undefined): Lr2BarBodyKind | undefined {
+  switch (Math.trunc(toNumber(value, -1))) {
+    case 0:
+      return 'song';
+    case 1:
+      return 'folder';
+    case 2:
+      return 'customFolder';
+    case 3:
+      return 'newSongFolder';
+    case 4:
+      return 'rivalFolder';
+    case 5:
+      return 'rivalSong';
+    case 6:
+      return 'courseFolder';
+    case 7:
+      return 'courseCreate';
+    case 8:
+      return 'course';
+    case 9:
+      return 'randomCourse';
+    default:
+      return undefined;
+  }
+}
+
+function createBarLayout(context: ParseContext): Lr2BarLayout {
+  const bodies: Lr2BarBodySource[] = context.barBodySources.flatMap((entry) => {
+    const imagePath = context.imagePaths[entry.source.gr];
+    if (!imagePath) {
+      return [];
+    }
+    return [{ kind: entry.kind, source: { ...entry.source, imagePath } }];
+  });
+
+  const slotCount = Math.max(context.barBodyOffDstGroups.length, context.barBodyOnDstGroups.length);
+  const slots: Lr2BarBodySlot[] = [];
+  for (let index = 0; index < slotCount; index += 1) {
+    const offGroup = context.barBodyOffDstGroups[index];
+    const onGroup = context.barBodyOnDstGroups[index];
+    if ((!offGroup || offGroup.length === 0) && (!onGroup || onGroup.length === 0)) {
+      continue;
+    }
+    slots.push({
+      index,
+      off: offGroup && offGroup.length > 0 ? offGroup[offGroup.length - 1] : undefined,
+      offKeyframes: offGroup ? [...offGroup] : [],
+      on: onGroup && onGroup.length > 0 ? onGroup[onGroup.length - 1] : undefined,
+      onKeyframes: onGroup ? [...onGroup] : [],
+    });
+  }
+
+  let title: Lr2BarTitleElement | undefined;
+  if (context.barTitleSource && context.barTitleDst.length > 0) {
+    const dstGroup = context.barTitleDst;
+    title = {
+      font: context.barTitleSource.font,
+      destination: dstGroup[dstGroup.length - 1]!,
+      keyframes: [...dstGroup],
+    };
+  }
+
+  // BAR_LEVEL: keep the alignment / padding from each per-difficulty
+  // entry so the renderer can use `renderNumberElement` directly.
+  const levels: Lr2BarLevelSource[] = context.barLevelSources.flatMap((entry) => {
+    const imagePath = context.imagePaths[entry.source.gr];
+    if (!imagePath) {
+      return [];
+    }
+    const numberSource: Lr2NumberSourceRect = {
+      ...entry.source,
+      imagePath,
+      num: 0, // unused — BAR_LEVEL pulls its value from the song, not the LR2 num field
+      alignment: entry.alignment,
+      padding: entry.padding,
+    };
+    return [{ kind: entry.kind, source: numberSource }];
+  });
+
+  const lamps: Lr2BarLampSource[] = context.barLampSources.flatMap((entry) => {
+    const imagePath = context.imagePaths[entry.source.gr];
+    if (!imagePath) {
+      return [];
+    }
+    return [{ kind: entry.kind, source: { ...entry.source, imagePath } }];
+  });
+
+  const ranks: Lr2BarRankSource[] = context.barRankSources.flatMap((entry) => {
+    const imagePath = context.imagePaths[entry.source.gr];
+    if (!imagePath) {
+      return [];
+    }
+    return [{ kind: entry.kind, source: { ...entry.source, imagePath } }];
+  });
+
+  const levelDestination = context.barLevelDst.at(-1);
+  const lampDestination = context.barLampDst.at(-1);
+  const rankDestination = context.barRankDst.at(-1);
+
+  // BAR_FLASH — focused-bar overlay. Spec only allows one, so we
+  // pick the latest source / DST chain and resolve its image path.
+  let flash: Lr2BarFlashElement | undefined;
+  if (context.barFlashSource && context.barFlashDst.length > 0) {
+    const imagePath = context.imagePaths[context.barFlashSource.gr];
+    if (imagePath) {
+      const dstGroup = context.barFlashDst;
+      flash = {
+        source: { ...context.barFlashSource, imagePath },
+        destination: dstGroup[dstGroup.length - 1]!,
+        keyframes: [...dstGroup],
+      };
+    }
+  }
+
+  // BAR_RIVAL — rival-mode WIN/LOSE/DRAW per-bar overlay.
+  const rivalIndicators: Lr2BarRivalSource[] = context.barRivalSources.flatMap((entry) => {
+    const imagePath = context.imagePaths[entry.source.gr];
+    if (!imagePath) {
+      return [];
+    }
+    return [{ kind: entry.kind, source: { ...entry.source, imagePath } }];
+  });
+  const rivalDestination = context.barRivalDst.at(-1);
+
+  // BAR_MY_LAMP / BAR_RIVAL_LAMP — rival-folder lamp variants.
+  const myLamps: Lr2BarLampSource[] = context.barMyLampSources.flatMap((entry) => {
+    const imagePath = context.imagePaths[entry.source.gr];
+    if (!imagePath) return [];
+    return [{ kind: entry.kind, source: { ...entry.source, imagePath } }];
+  });
+  const rivalLampSprites: Lr2BarLampSource[] = context.barRivalLampSources.flatMap((entry) => {
+    const imagePath = context.imagePaths[entry.source.gr];
+    if (!imagePath) return [];
+    return [{ kind: entry.kind, source: { ...entry.source, imagePath } }];
+  });
+
+  return {
+    bodies,
+    slots,
+    center: context.barCenter,
+    available: context.barAvailable,
+    title,
+    levels,
+    levelDestination,
+    levelKeyframes: [...context.barLevelDst],
+    lamps,
+    lampDestination,
+    lampKeyframes: [...context.barLampDst],
+    ranks,
+    rankDestination,
+    rankKeyframes: [...context.barRankDst],
+    flash,
+    rivalIndicators,
+    rivalDestination,
+    rivalKeyframes: [...context.barRivalDst],
+    rivalLamps: {
+      myLamps,
+      myLampDestination: context.barMyLampDst.at(-1),
+      myLampKeyframes: [...context.barMyLampDst],
+      rivalLamps: rivalLampSprites,
+      rivalLampDestination: context.barRivalLampDst.at(-1),
+      rivalLampKeyframes: [...context.barRivalLampDst],
+    },
+  };
+}
+
+function parseBarLevelKind(value: string | undefined): Lr2BarLevelKind | undefined {
+  switch (Math.trunc(toNumber(value, -1))) {
+    case 0:
+      return 'undefined';
+    case 1:
+      return 'beginner';
+    case 2:
+      return 'normal';
+    case 3:
+      return 'hyper';
+    case 4:
+      return 'another';
+    case 5:
+      return 'insane';
+    case 6:
+      return 'irRanking';
+    default:
+      return undefined;
+  }
+}
+
+function parseBarLampKind(value: string | undefined): Lr2BarLampKind | undefined {
+  switch (Math.trunc(toNumber(value, -1))) {
+    case 0:
+      return 'noplay';
+    case 1:
+      return 'failed';
+    case 2:
+      return 'easy';
+    case 3:
+      return 'clear';
+    case 4:
+      return 'hard';
+    case 5:
+      return 'fullcombo';
+    default:
+      return undefined;
+  }
+}
+
+function parseBarRankKind(value: string | undefined): Lr2BarRankKind | undefined {
+  switch (Math.trunc(toNumber(value, -1))) {
+    case 0:
+      return 'noplay';
+    case 1:
+      return 'F';
+    case 2:
+      return 'E';
+    case 3:
+      return 'D';
+    case 4:
+      return 'C';
+    case 5:
+      return 'B';
+    case 6:
+      return 'A';
+    case 7:
+      return 'AA';
+    case 8:
+      return 'AAA';
+    default:
+      return undefined;
+  }
+}
+
+function parseBarRivalKind(value: string | undefined): Lr2BarRivalKind | undefined {
+  switch (Math.trunc(toNumber(value, -1))) {
+    case 0:
+      return 'win';
+    case 1:
+      return 'lose';
+    case 2:
+      return 'draw';
+    default:
+      return undefined;
+  }
+}
+
 function createSliderElements(context: ParseContext): Lr2SliderElement[] {
   const elements: Lr2SliderElement[] = [];
   for (let index = 0; index < context.sliderSources.length; index += 1) {
@@ -1245,6 +2339,100 @@ function createSliderElements(context: ParseContext): Lr2SliderElement[] {
       type: entry.type,
       muki: entry.muki,
       range: entry.range,
+    });
+  }
+  return elements;
+}
+
+function createButtonElements(context: ParseContext): Lr2ButtonElement[] {
+  const elements: Lr2ButtonElement[] = [];
+  for (let index = 0; index < context.buttonSources.length; index += 1) {
+    const entry = context.buttonSources[index]!;
+    const dstGroup = context.buttonDstGroups[index];
+    if (!dstGroup || dstGroup.length === 0) {
+      continue;
+    }
+    const imagePath = context.imagePaths[entry.source.gr];
+    if (!imagePath) {
+      continue;
+    }
+    const destination = dstGroup[dstGroup.length - 1]!;
+    elements.push({
+      source: { ...entry.source, imagePath },
+      destination,
+      keyframes: [...dstGroup],
+      type: entry.type,
+      click: entry.click,
+      panel: entry.panel,
+      plusOnly: entry.plusOnly,
+    });
+  }
+  return elements;
+}
+
+function createOnMouseElements(context: ParseContext): Lr2OnMouseElement[] {
+  const elements: Lr2OnMouseElement[] = [];
+  for (let index = 0; index < context.onMouseSources.length; index += 1) {
+    const entry = context.onMouseSources[index]!;
+    const dstGroup = context.onMouseDstGroups[index];
+    if (!dstGroup || dstGroup.length === 0) {
+      continue;
+    }
+    const imagePath = context.imagePaths[entry.source.gr];
+    if (!imagePath) {
+      continue;
+    }
+    const destination = dstGroup[dstGroup.length - 1]!;
+    elements.push({
+      source: { ...entry.source, imagePath },
+      destination,
+      keyframes: [...dstGroup],
+      panel: entry.panel,
+      hitOffsetX: entry.hitOffsetX,
+      hitOffsetY: entry.hitOffsetY,
+      hitWidth: entry.hitWidth,
+      hitHeight: entry.hitHeight,
+    });
+  }
+  return elements;
+}
+
+function createReadmeElements(context: ParseContext): Lr2ReadmeElement[] {
+  const elements: Lr2ReadmeElement[] = [];
+  for (let index = 0; index < context.readmeSources.length; index += 1) {
+    const entry = context.readmeSources[index]!;
+    const dstGroup = context.readmeDstGroups[index];
+    if (!dstGroup || dstGroup.length === 0) {
+      continue;
+    }
+    const destination = dstGroup[dstGroup.length - 1]!;
+    elements.push({
+      font: entry.font,
+      lineSpacing: entry.lineSpacing,
+      destination,
+      keyframes: [...dstGroup],
+    });
+  }
+  return elements;
+}
+
+function createMouseCursorElements(context: ParseContext): Lr2MouseCursorElement[] {
+  const elements: Lr2MouseCursorElement[] = [];
+  for (let index = 0; index < context.mouseCursorSources.length; index += 1) {
+    const source = context.mouseCursorSources[index]!;
+    const dstGroup = context.mouseCursorDstGroups[index];
+    if (!dstGroup || dstGroup.length === 0) {
+      continue;
+    }
+    const imagePath = context.imagePaths[source.gr];
+    if (!imagePath) {
+      continue;
+    }
+    const destination = dstGroup[dstGroup.length - 1]!;
+    elements.push({
+      source: { ...source, imagePath },
+      destination,
+      keyframes: [...dstGroup],
     });
   }
   return elements;
@@ -1405,8 +2593,35 @@ function toNumber(value: string | undefined, fallback: number): number {
   return Number.isFinite(number) ? number : fallback;
 }
 
-function scoreSkinPath(path: string): number {
+/**
+ * Returns `true` when the path looks like an `.lr2skin` of the given
+ * kind. Matches the LR2 default theme's directory layout (`/Play/...`,
+ * `/Select/...`) AND the conventional filenames (`play_7.lr2skin`,
+ * `select.lr2skin`).
+ */
+function isSkinPathOfKind(path: string, kind: Lr2SkinKind): boolean {
   const lower = path.toLowerCase();
+  if (kind === 'play') {
+    return lower.includes('/play') || lower.includes('\\play');
+  }
+  return lower.includes('/select') || lower.includes('\\select');
+}
+
+function scoreSkinPath(path: string, kind: Lr2SkinKind): number {
+  const lower = path.toLowerCase();
+  if (kind === 'select') {
+    // The LR2 default theme ships a single `select.lr2skin`, but other
+    // themes occasionally bundle variants (`select_7.lr2skin`, etc.).
+    // Plain `select.lr2skin` wins; anything inside a `/Select/` folder
+    // ranks next; everything else is last.
+    if (lower.endsWith('/select.lr2skin')) {
+      return 0;
+    }
+    if (lower.includes('/select') && lower.endsWith('.lr2skin')) {
+      return 10;
+    }
+    return 100;
+  }
   if (lower.endsWith('/play_7.lr2skin')) {
     return 0;
   }

@@ -526,6 +526,146 @@ describe('loadLr2SkinFromSourceFiles', () => {
     expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['b_900_905_910.png']);
   });
 
+  it('picks the play skin for kind=play and the select skin for kind=select from a mixed bundle', () => {
+    const files = new Map<string, Uint8Array>([
+      [
+        'LR2files/Theme/LR2/Play/play_7.lr2skin',
+        lines(
+          '#INFORMATION,7,LR2 PLAY,author,',
+          '#IMAGE,play.png',
+          '#SRC_IMAGE,0,0,0,0,10,10,1,1,0,0',
+          '#DST_IMAGE,0,0,0,0,10,10,0,255,255,255,255',
+        ),
+      ],
+      [
+        'LR2files/Theme/LR2/Select/select.lr2skin',
+        lines(
+          '#INFORMATION,5,LR2 SELECT,author,',
+          '#IMAGE,bar.png',
+          '#SRC_BAR_BODY,0,0,0,0,300,40,1,1,0,0',
+          '#DST_BAR_BODY_OFF,0,0,300,80,300,40,0,255,255,255,255',
+          '#BAR_CENTER,0',
+          '#BAR_AVAILABLE,1',
+        ),
+      ],
+    ]);
+    const playSkin = loadLr2SkinFromSourceFiles(files, { kind: 'play' });
+    const selectSkin = loadLr2SkinFromSourceFiles(files, { kind: 'select' });
+    expect(playSkin?.name).toBe('LR2 PLAY');
+    expect(playSkin?.barLayout.slots).toHaveLength(0);
+    expect(selectSkin?.name).toBe('LR2 SELECT');
+    expect(selectSkin?.barLayout.slots).toHaveLength(1);
+  });
+
+  it('parses select-screen #SRC_BAR_BODY / #DST_BAR_BODY_OFF/_ON with #BAR_CENTER and #BAR_AVAILABLE', () => {
+    const files = new Map<string, Uint8Array>([
+      [
+        'skin/select.csv',
+        lines(
+          '#IMAGE,bar.png',
+          '#IMAGE,folder.png',
+          // Two bar kinds: kind=0 (song) uses bar.png (gr=0),
+          // kind=1 (folder) uses folder.png (gr=1).
+          '#SRC_BAR_BODY,0,0,0,0,300,40,1,1,0,0',
+          '#SRC_BAR_BODY,1,1,0,0,300,40,1,1,0,0',
+          // Slot 0 (off + on) and slot 1 (off only) -- exercises the
+          // sparse storage and verifies that on-keyframe absence is
+          // tolerated. acc=0 a=255 r=g=b=255.
+          '#DST_BAR_BODY_OFF,0,0,300,80,300,40,0,255,255,255,255',
+          '#DST_BAR_BODY_ON,0,0,280,80,340,40,0,255,255,255,255',
+          '#DST_BAR_BODY_OFF,1,0,300,124,300,40,0,255,255,255,255',
+          '#BAR_CENTER,5',
+          '#BAR_AVAILABLE,11',
+        ),
+      ],
+    ]);
+    const skin = loadLr2SkinFromSourceFiles(files);
+    expect(skin?.barLayout.bodies).toHaveLength(2);
+    expect(skin?.barLayout.bodies[0]).toMatchObject({ kind: 'song' });
+    expect(skin?.barLayout.bodies[0]?.source.imagePath).toBe('bar.png');
+    expect(skin?.barLayout.bodies[1]).toMatchObject({ kind: 'folder' });
+    expect(skin?.barLayout.bodies[1]?.source.imagePath).toBe('folder.png');
+    expect(skin?.barLayout.slots).toHaveLength(2);
+    expect(skin?.barLayout.slots[0]?.off).toMatchObject({ x: 300, y: 80, w: 300, h: 40 });
+    expect(skin?.barLayout.slots[0]?.on).toMatchObject({ x: 280, y: 80, w: 340, h: 40 });
+    expect(skin?.barLayout.slots[1]?.off).toMatchObject({ x: 300, y: 124 });
+    expect(skin?.barLayout.slots[1]?.on).toBeUndefined();
+    expect(skin?.barLayout.center).toBe(5);
+    expect(skin?.barLayout.available).toBe(11);
+  });
+
+  it('parses #SRC_BAR_LEVEL / _LAMP / _RANK with their per-difficulty / per-state kinds', () => {
+    const files = new Map<string, Uint8Array>([
+      [
+        'skin/select.csv',
+        lines(
+          '#IMAGE,levels.png',
+          '#IMAGE,lamps.png',
+          '#IMAGE,ranks.png',
+          // BAR_LEVEL: 3 difficulties (1=BEGINNER, 3=HYPER, 4=ANOTHER) using
+          // the same image sheet, sliced into 10 cells horizontally.
+          '#SRC_BAR_LEVEL,1,0,0,0,200,30,10,1,0,0,0,0,2',
+          '#SRC_BAR_LEVEL,3,0,0,30,200,30,10,1,0,0,0,0,2',
+          '#SRC_BAR_LEVEL,4,0,0,60,200,30,10,1,0,0,0,0,2',
+          '#DST_BAR_LEVEL,0,0,260,2,20,16,0,255,255,255,255',
+          // BAR_LAMP kinds 2 (EASY) and 4 (HARD)
+          '#SRC_BAR_LAMP,2,1,0,0,40,16,1,1,0,0',
+          '#SRC_BAR_LAMP,4,1,0,16,40,16,1,1,0,0',
+          '#DST_BAR_LAMP,0,0,290,12,40,16,0,255,255,255,255',
+          // BAR_RANK kinds 1 (F), 8 (AAA)
+          '#SRC_BAR_RANK,1,2,0,0,32,32,1,1,0,0',
+          '#SRC_BAR_RANK,8,2,32,0,32,32,1,1,0,0',
+          '#DST_BAR_RANK,0,0,330,4,32,32,0,255,255,255,255',
+        ),
+      ],
+    ]);
+    const skin = loadLr2SkinFromSourceFiles(files);
+    expect(skin?.barLayout.levels.map((entry) => entry.kind)).toEqual(['beginner', 'hyper', 'another']);
+    expect(skin?.barLayout.levels[0]?.source.imagePath).toBe('levels.png');
+    expect(skin?.barLayout.levels[0]?.source).toMatchObject({ alignment: 'right', padding: 2 });
+    expect(skin?.barLayout.levelDestination).toMatchObject({ x: 260, y: 2, w: 20, h: 16 });
+    expect(skin?.barLayout.lamps.map((entry) => entry.kind)).toEqual(['easy', 'hard']);
+    expect(skin?.barLayout.lamps[0]?.source.imagePath).toBe('lamps.png');
+    expect(skin?.barLayout.lampDestination).toMatchObject({ x: 290, y: 12, w: 40, h: 16 });
+    expect(skin?.barLayout.ranks.map((entry) => entry.kind)).toEqual(['F', 'AAA']);
+    expect(skin?.barLayout.ranks[0]?.source.imagePath).toBe('ranks.png');
+    expect(skin?.barLayout.rankDestination).toMatchObject({ x: 330, y: 4, w: 32, h: 32 });
+  });
+
+  it('marks LR2 special-graphic gr indices (100=STAGEFILE / 101=BACKBMP / 102=BANNER) with sentinel paths', () => {
+    const files = new Map<string, Uint8Array>([
+      [
+        'skin/select.csv',
+        lines(
+          '#IMAGE,plain.png',
+          // gr=101 references the song's #BACKBMP at runtime. Skin must
+          // tolerate the absence of a #IMAGE,...,101 declaration.
+          '#SRC_IMAGE,0,101,0,0,300,80,1,1,0,0',
+          '#DST_IMAGE,0,0,40,30,300,80,0,255,255,255,255',
+        ),
+      ],
+    ]);
+    const skin = loadLr2SkinFromSourceFiles(files);
+    expect(skin?.images).toHaveLength(1);
+    expect(skin?.images[0]?.source.imagePath).toBe('__lr2_special:backbmp');
+  });
+
+  it('parses #SRC_BAR_TITLE / #DST_BAR_TITLE for the focused bar text overlay', () => {
+    const files = new Map<string, Uint8Array>([
+      [
+        'skin/select.csv',
+        lines(
+          // SRC col 2 is the font index. Other slots are spec-padding.
+          '#SRC_BAR_TITLE,0,3,0,0,0,0,0,0,0,0',
+          '#DST_BAR_TITLE,0,0,8,4,260,24,0,255,255,255,255',
+        ),
+      ],
+    ]);
+    const skin = loadLr2SkinFromSourceFiles(files);
+    expect(skin?.barLayout.title?.font).toBe(3);
+    expect(skin?.barLayout.title?.destination).toMatchObject({ x: 8, y: 4, w: 260, h: 24 });
+  });
+
   it('parses #SRC_BGA / #DST_BGA with nobase / nolayer / nopoor flags', () => {
     const files = new Map<string, Uint8Array>([
       [

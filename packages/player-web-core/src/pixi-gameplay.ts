@@ -1,15 +1,4 @@
-import {
-  Application,
-  Color,
-  Container,
-  Graphics,
-  Rectangle,
-  Sprite,
-  Text,
-  TextStyle,
-  Texture,
-  type BLEND_MODES,
-} from 'pixi.js';
+import { Application, Color, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
 import {
   collectSampleTriggers,
   createTimingResolver,
@@ -24,7 +13,7 @@ import {
 import { resolveJudgeWindowsMs } from '../../player/src/core/judge-window.ts';
 import { extractTimedNotes, type TimedPlayableNote } from '../../player/src/playable-notes.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
-import { dirname, normalizePath } from './library.ts';
+import { normalizePath, resolveChartAsset } from './library.ts';
 import {
   type Lr2BarGraphElement,
   type Lr2DestinationRect,
@@ -32,12 +21,19 @@ import {
   type Lr2JudgeLineElement,
   type Lr2NowComboElement,
   type Lr2NowComboKind,
-  type Lr2NumberElement,
   type Lr2Skin,
   type Lr2SliderElement,
   type Lr2TextElement,
-  resolveLr2AssetBytes,
 } from './lr2-skin.ts';
+import { loadSkinAssetTexture, loadTextureFromBytes } from './lr2-textures.ts';
+import {
+  applyDestinationToSprite,
+  createCroppedTexture,
+  evaluateKeyframes,
+  normaliseRect,
+  pickAnimatedCell,
+  renderNumberElement,
+} from './lr2-render.ts';
 import { normalizeChannel, normalizeObjectKey } from '@be-music/json';
 
 // -- Fallback palette (skin-less demo only) ---------------------------------
@@ -240,7 +236,7 @@ export class PixiGameplayView {
       fontSize: 22,
       fontWeight: '700',
       align: 'center',
-      fontFamily: 'Avenir Next, Helvetica, sans-serif',
+      fontFamily: 'system-ui, sans-serif',
     }),
   });
   private song: BrowserSongEntry | undefined;
@@ -352,7 +348,11 @@ export class PixiGameplayView {
     await this.app.init({
       backgroundAlpha: 0,
       resizeTo: container,
-      antialias: true,
+      // Antialiasing is intentionally off — LR2 skins and BGA frames
+      // are pixel-art assets that look blurry under MSAA. Combined
+      // with `roundPixels: true` and per-texture `scaleMode = 'nearest'`,
+      // this gives a fully crisp pixel-art-style render.
+      antialias: false,
       autoDensity: true,
       resolution: globalThis.devicePixelRatio || 1,
       // Snap sprite positions to integer device pixels to disable
@@ -364,6 +364,21 @@ export class PixiGameplayView {
     this.app.canvas.tabIndex = 0;
     this.app.canvas.setAttribute('aria-label', 'be-music gameplay');
     container.appendChild(this.app.canvas);
+    // Label every top-level node so the PixiJS Devtools "Scene Graph"
+    // panel reads as `gameplay > {bga,skin,lane,…}` instead of a wall
+    // of `Container` rows. Layer ordering matches `addChild` below.
+    this.app.stage.label = 'gameplay/stage';
+    this.root.label = 'gameplay/root';
+    this.viewportBackground.label = 'gameplay/viewport-bg';
+    this.background.label = 'gameplay/background';
+    this.bgaLayer.label = 'gameplay/bga';
+    this.skinLayer.label = 'gameplay/skin';
+    this.laneLayer.label = 'gameplay/lanes';
+    this.noteLayer.label = 'gameplay/notes';
+    this.bombLayer.label = 'gameplay/bombs';
+    this.overlayLayer.label = 'gameplay/overlay';
+    this.textLayer.label = 'gameplay/text';
+    this.overlay.label = 'gameplay/pause-overlay';
     this.root.addChild(
       this.background,
       this.bgaLayer,
@@ -444,6 +459,16 @@ export class PixiGameplayView {
     }
     this.app.canvas.focus();
     this.tick();
+  }
+
+  /**
+   * Toggles canvas visibility without tearing down the WebGL context.
+   * The host hides the gameplay view while the select view is on top
+   * (and vice versa), so we don't pay the destroy+re-init cost — and
+   * don't trip the PixiJS Devtools extension's init hook either.
+   */
+  public setVisible(visible: boolean): void {
+    this.app.canvas.style.display = visible ? '' : 'none';
   }
 
   public dispose(): void {
@@ -750,17 +775,11 @@ export class PixiGameplayView {
     }
   }
 
-  private async loadSkinAssetTexture(skin: Lr2Skin, path: string): Promise<Texture | undefined> {
-    // Load the asset at its declared path. For `.tga` references we go
-    // through the bundled TGA decoder (`loadTextureFromBytes` dispatches
-    // by extension). The earlier PNG-sibling fallback was a debugging aid
-    // and has been removed so the rendered colours come from the actual
-    // skin asset, not a possibly-out-of-date PNG copy alongside it.
-    const bytes = resolveLr2AssetBytes(skin, path);
-    if (!bytes) {
-      return undefined;
-    }
-    return loadTextureFromBytes(path, bytes, skin.transparentColor);
+  private loadSkinAssetTexture(skin: Lr2Skin, path: string): Promise<Texture | undefined> {
+    // Delegates to the shared loader in `lr2-textures.ts`. For `.tga`
+    // assets it routes through the bundled TGA decoder; everything else
+    // goes via `createImageBitmap`. Honours the skin's `#TRANSCOLOR`.
+    return loadSkinAssetTexture(skin, path);
   }
 
   private async prepareAudio(): Promise<void> {
@@ -1466,6 +1485,7 @@ export class PixiGameplayView {
         continue;
       }
       const sprite = new Sprite(cropped);
+      sprite.label = `bomb[ch=${channel},frame=${frameIndex}]`;
       const displayWidth = Math.max(cellWidth * 0.6, lane.w * (lr2Layout ? 4.5 : 3));
       const displayHeight = displayWidth * (cellHeight / cellWidth);
       sprite.position.set(lane.x + lane.w / 2 - displayWidth / 2, lane.bottom - displayHeight * 0.45);
@@ -1513,7 +1533,7 @@ export class PixiGameplayView {
     const inPoorWindow = !bga.noPoor && this.lastPoorAt > 0 && performance.now() - this.lastPoorAt < poorWindowMs;
     const poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, seconds) : undefined;
 
-    const drawLayer = (key: string | undefined, textures: ReadonlyMap<string, Texture>): void => {
+    const drawLayer = (key: string | undefined, textures: ReadonlyMap<string, Texture>, layerName: string): void => {
       if (!key) {
         return;
       }
@@ -1531,6 +1551,7 @@ export class PixiGameplayView {
       const scaleX = w / SPEC_BGA_CANVAS_SIZE;
       const scaleY = h / SPEC_BGA_CANVAS_SIZE;
       const sprite = new Sprite(texture);
+      sprite.label = `bga/${layerName}[key=${key}]`;
       sprite.position.set(x + fit.offsetX * scaleX, y + fit.offsetY * scaleY);
       sprite.width = fit.width * scaleX;
       sprite.height = fit.height * scaleY;
@@ -1541,12 +1562,12 @@ export class PixiGameplayView {
     if (poorKey) {
       // POOR uses base-mode decoding (no chroma key) since it replaces
       // the entire base+layer composite during its window.
-      drawLayer(poorKey, this.bgaTextures);
+      drawLayer(poorKey, this.bgaTextures, 'poor');
     } else {
-      drawLayer(baseKey, this.bgaTextures);
+      drawLayer(baseKey, this.bgaTextures, 'base');
       // Layer track is composited on top with black→transparent so the
       // base track shows through where the foreground BMP is empty.
-      drawLayer(layerKey, this.bgaLayerTextures);
+      drawLayer(layerKey, this.bgaLayerTextures, 'layer');
     }
   }
 
@@ -1683,6 +1704,7 @@ export class PixiGameplayView {
       return;
     }
     const sprite = new Sprite(texture);
+    sprite.label = `image[${image.source.imagePath}]`;
     const { x, y, w, h } = normaliseRect(dst);
     // op4=1 on the destination is the LR2 scratch-turntable spin marker.
     // We rotate the sprite around its own centre at a fixed cadence so the
@@ -1733,6 +1755,7 @@ export class PixiGameplayView {
       return;
     }
     const sprite = new Sprite(texture);
+    sprite.label = `judgeline[idx=${judgeLine.index}]`;
     sprite.position.set(dst.x, dst.y);
     sprite.width = dst.w;
     sprite.height = dst.h;
@@ -1782,9 +1805,10 @@ export class PixiGameplayView {
         fill: tint,
         fontSize,
         fontWeight: '600',
-        fontFamily: 'Avenir Next, Helvetica, "Hiragino Kaku Gothic ProN", sans-serif',
+        fontFamily: 'system-ui, sans-serif',
       }),
     });
+    node.label = `text[st=${text.st}]`;
     node.alpha = interpolated.alpha;
     if (text.alignment === 'center') {
       node.anchor.set(0.5, 0.5);
@@ -1874,6 +1898,7 @@ export class PixiGameplayView {
       return;
     }
     const sprite = new Sprite(cropTexture);
+    sprite.label = `bargraph[type=${bargraph.type}]`;
     if (bargraph.muki === 'vertical') {
       const filledHeight = Math.round(h * progress);
       sprite.position.set(x, y + (h - filledHeight));
@@ -1971,6 +1996,7 @@ export class PixiGameplayView {
         break;
     }
     const sprite = new Sprite(cropTexture);
+    sprite.label = `slider[type=${slider.type}]`;
     sprite.position.set(drawX, drawY);
     sprite.width = w;
     sprite.height = h;
@@ -2059,6 +2085,7 @@ export class PixiGameplayView {
         continue;
       }
       const sprite = new Sprite(texture);
+      sprite.label = `nowjudge[kind=${judgeKind ?? 'unknown'}]`;
       sprite.position.set(dst.x + offsetX, dst.y);
       sprite.width = dst.w;
       sprite.height = dst.h;
@@ -2271,6 +2298,7 @@ export class PixiGameplayView {
           continue;
         }
         const sprite = new Sprite(cropped);
+        sprite.label = `measure-line[beat=${beat}]`;
         sprite.position.set(lineDst.x, Math.round(y));
         sprite.width = lineDst.w;
         sprite.height = Math.max(1, Math.abs(lineDst.h));
@@ -2362,6 +2390,7 @@ export class PixiGameplayView {
       const texture = createCroppedTexture(baseTexture, cell);
       if (texture) {
         const sprite = new Sprite(texture);
+        sprite.label = `note[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         sprite.y = y - cell.h;
         sprite.width = cell.w;
@@ -2371,6 +2400,7 @@ export class PixiGameplayView {
       }
     }
     const graphic = new Graphics();
+    graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
     graphic.roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2).fill(isScratch(channel) ? RED : WHITE);
     this.noteLayer.addChild(graphic);
   }
@@ -2408,6 +2438,7 @@ export class PixiGameplayView {
       const cropped = createCroppedTexture(bodyBase, cell);
       if (cropped) {
         const sprite = new Sprite(cropped);
+        sprite.label = `ln-body[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         // Shift the body up by one cell-height so the body's bottom edge
         // aligns with the LN_START's bottom edge (= judgement line at the
@@ -2420,6 +2451,7 @@ export class PixiGameplayView {
       }
     } else {
       const graphic = new Graphics();
+      graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
       graphic
         .rect(lane.x + 2, top - 10, Math.max(4, lane.w - 4), Math.max(1, bottom - top))
         .fill({ color: isScratch(channel) ? RED : YELLOW, alpha: 0.6 });
@@ -2431,6 +2463,7 @@ export class PixiGameplayView {
       const endTexture = createCroppedTexture(this.textures.get(endSrc.imagePath), cell);
       if (endTexture) {
         const sprite = new Sprite(endTexture);
+        sprite.label = `ln-end[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         sprite.y = yEnd - cell.h;
         sprite.width = cell.w;
@@ -2446,6 +2479,7 @@ export class PixiGameplayView {
       const startTexture = createCroppedTexture(this.textures.get(startSrc.imagePath), cell);
       if (startTexture) {
         const sprite = new Sprite(startTexture);
+        sprite.label = `ln-start[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         sprite.y = yStart - cell.h;
         sprite.width = cell.w;
@@ -2457,12 +2491,19 @@ export class PixiGameplayView {
 
   private renderText(width: number, height: number, seconds: number): void {
     this.textLayer.removeChildren().forEach((child) => child.destroy());
-    const status = new Text({
-      text: `${this.song?.title ?? ''}  ${formatTime(seconds)}  HS×${this.hiSpeed.toFixed(2)}  PG:${this.score.perfect} GR:${this.score.great} GD:${this.score.good} BD:${this.score.bad} PR:${this.score.poor}`,
-      style: new TextStyle({ fill: MUTED, fontSize: 10, fontFamily: 'Avenir Next, Helvetica, sans-serif' }),
-    });
-    status.position.set(18, height - 22);
-    this.textLayer.addChild(status);
+    // Bottom-left status (title / time / HS / judge counts) is only
+    // useful when there's no LR2 skin painting the same information
+    // via NUMBER / TEXT elements. With a skin loaded we'd duplicate
+    // every figure on top of the skin's panels, so suppress it.
+    if (!this.options.skin) {
+      const status = new Text({
+        text: `${this.song?.title ?? ''}  ${formatTime(seconds)}  HS×${this.hiSpeed.toFixed(2)}  PG:${this.score.perfect} GR:${this.score.great} GD:${this.score.good} BD:${this.score.bad} PR:${this.score.poor}`,
+        style: new TextStyle({ fill: MUTED, fontSize: 10, fontFamily: 'system-ui, sans-serif' }),
+      });
+      status.label = 'fallback-status';
+      status.position.set(18, height - 22);
+      this.textLayer.addChild(status);
+    }
     if (this.lastJudge && seconds <= this.lastJudgeUntil && !this.hasSkinnedJudge()) {
       const judge = new Text({
         text: this.lastJudge,
@@ -2471,9 +2512,10 @@ export class PixiGameplayView {
           stroke: { color: 0xffffff, width: 2 },
           fontSize: 32,
           fontWeight: '800',
-          fontFamily: 'Avenir Next, Helvetica, sans-serif',
+          fontFamily: 'system-ui, sans-serif',
         }),
       });
+      judge.label = `fallback-judge[${this.lastJudge}]`;
       judge.anchor.set(0.5);
       judge.position.set(PLAYFIELD.x + PLAYFIELD.w / 2, 246);
       this.textLayer.addChild(judge);
@@ -2504,185 +2546,6 @@ export class PixiGameplayView {
 function isLr2OverlayImage(image: import('./lr2-skin.ts').Lr2ImageElement): boolean {
   const t = image.destination.timer;
   return (t >= 50 && t <= 89) || (t >= 100 && t <= 139);
-}
-
-function applyDestinationToSprite(sprite: Sprite, destination: Lr2DestinationRect): void {
-  sprite.alpha = destination.alpha;
-  sprite.tint = (destination.r << 16) | (destination.g << 8) | destination.b;
-  sprite.blendMode = mapLr2BlendMode(destination.blend);
-  if (destination.angle !== 0) {
-    sprite.rotation = (destination.angle * Math.PI) / 180;
-  }
-}
-
-function mapLr2BlendMode(blend: number): BLEND_MODES {
-  switch (blend) {
-    case 2:
-      return 'add';
-    case 4:
-    case 11:
-      return 'multiply';
-    case 3:
-      // LR2 "減算" -- PixiJS v8 has no native subtractive blend; fall back to normal.
-      return 'normal';
-    default:
-      return 'normal';
-  }
-}
-
-function createCroppedTexture(
-  texture: Texture | undefined,
-  rect: { x: number; y: number; w: number; h: number },
-): Texture | undefined {
-  if (!texture || rect.w <= 0 || rect.h <= 0) {
-    return undefined;
-  }
-  return new Texture({ source: texture.source, frame: new Rectangle(rect.x, rect.y, rect.w, rect.h) });
-}
-
-/**
- * LR2 sprite destinations may carry negative `w`/`h` values to indicate the
- * rectangle "grows" in the opposite direction (e.g. h=-321 at y=321 means a
- * 321-tall rect whose bottom edge sits at y=321). PixiJS expects positive
- * extents anchored at the top-left, so we convert here.
- */
-function normaliseRect(rect: { x: number; y: number; w: number; h: number }): {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-} {
-  let { x, y, w, h } = rect;
-  if (w < 0) {
-    x += w;
-    w = -w;
-  }
-  if (h < 0) {
-    y += h;
-    h = -h;
-  }
-  return { x, y, w, h };
-}
-
-/**
- * Interpolates an LR2 destination keyframe sequence at the given elapsed time.
- *
- * Semantics — note the LR2 `loop` field is a **jump-to time**, *not* a cycle
- * length:
- * - With one keyframe: that keyframe is returned verbatim.
- * - Before the first keyframe's `time`: the first keyframe is held.
- * - After the last keyframe's `time`:
- *   - `loop < 0` (and especially `-1`): play once and clamp at the last
- *     keyframe forever (used for one-shot effects like bombs and the
- *     start-screen circle fade).
- *   - `loop >= finalTime`: effectively no loop — wrapping would return
- *     straight to the final state. Many LR2 intro animations encode
- *     "play once and hold" this way (e.g. score-panel slide-in with
- *     `loop=700, finalTime=700`).
- *   - `0 <= loop < finalTime`: real loop — the playhead wraps from
- *     `finalTime` back to `loop`, so the *interval [loop, finalTime]* is
- *     the actual cycle (everything before `loop` plays only once).
- * - Between two keyframes A (`time=tA`) and B (`time=tB`): position, size,
- *   colour, alpha, and angle are linearly interpolated by `(t - tA)/(tB - tA)`.
- *
- * Discrete attributes (blend, filter, center, timer, ops, op4) come from the
- * *target* keyframe so visibility / blending change cleanly at boundaries.
- */
-function evaluateKeyframes(keyframes: ReadonlyArray<Lr2DestinationRect>, elapsedMs: number): Lr2DestinationRect {
-  if (keyframes.length === 1 || elapsedMs < 0) {
-    return keyframes[0]!;
-  }
-  const first = keyframes[0]!;
-  const last = keyframes[keyframes.length - 1]!;
-  const finalTime = last.time;
-  let t = elapsedMs;
-  if (elapsedMs > finalTime) {
-    // Past the final keyframe — decide between hold vs. real loop.
-    if (last.loop < 0 || last.loop >= finalTime) {
-      return last;
-    }
-    const period = finalTime - last.loop;
-    if (period <= 0) {
-      return last;
-    }
-    t = last.loop + ((elapsedMs - last.loop) % period);
-  }
-  if (t <= first.time) {
-    return first;
-  }
-  for (let index = 0; index < keyframes.length - 1; index += 1) {
-    const lower = keyframes[index]!;
-    const upper = keyframes[index + 1]!;
-    if (t < lower.time || t > upper.time) {
-      continue;
-    }
-    const span = upper.time - lower.time;
-    const u = span <= 0 ? 0 : (t - lower.time) / span;
-    return interpolateKeyframe(lower, upper, u);
-  }
-  return last;
-}
-
-function interpolateKeyframe(a: Lr2DestinationRect, b: Lr2DestinationRect, t: number): Lr2DestinationRect {
-  return {
-    time: a.time + (b.time - a.time) * t,
-    x: a.x + (b.x - a.x) * t,
-    y: a.y + (b.y - a.y) * t,
-    w: a.w + (b.w - a.w) * t,
-    h: a.h + (b.h - a.h) * t,
-    alpha: a.alpha + (b.alpha - a.alpha) * t,
-    r: Math.round(a.r + (b.r - a.r) * t),
-    g: Math.round(a.g + (b.g - a.g) * t),
-    b: Math.round(a.b + (b.b - a.b) * t),
-    blend: b.blend,
-    filter: b.filter,
-    angle: a.angle + (b.angle - a.angle) * t,
-    center: b.center,
-    loop: b.loop,
-    timer: b.timer,
-    ops: b.ops,
-    op4: b.op4,
-  };
-}
-
-/**
- * Picks the current source-rect cell for an animated `#SRC_*` element.
- * LR2 sources may divide their rect into a `divx`×`divy` grid that cycles
- * over `cycle` ms. When `cycle` is 0 (or there is only one cell) we just
- * return cell (0,0). Frames advance row-major (left-to-right, top-to-bottom),
- * matching LR2's playback order.
- *
- * When `loop === -1` (LR2's "play once and stop" marker on the destination),
- * the elapsed time is clamped to the cycle length so the animation stops on
- * its final frame instead of wrapping back to frame 0. This is what makes a
- * bomb explosion play exactly once even when its SRC has a non-zero cycle.
- */
-function pickAnimatedCell(
-  source: { x: number; y: number; w: number; h: number; divx: number; divy: number; cycle: number },
-  elapsedMs: number,
-  loop: number = 0,
-): { x: number; y: number; w: number; h: number } {
-  const divx = Math.max(1, source.divx);
-  const divy = Math.max(1, source.divy);
-  const totalFrames = divx * divy;
-  const cellW = source.w / divx;
-  const cellH = source.h / divy;
-  if (totalFrames <= 1 || source.cycle <= 0) {
-    return { x: source.x, y: source.y, w: cellW, h: cellH };
-  }
-  const frameMs = source.cycle / totalFrames;
-  const safeElapsed = Math.max(0, elapsedMs);
-  const noLoop = loop === -1;
-  const reduced = noLoop ? Math.min(safeElapsed, source.cycle - frameMs) : safeElapsed % source.cycle;
-  const frame = Math.min(totalFrames - 1, Math.floor(reduced / Math.max(1, frameMs)));
-  const cellX = frame % divx;
-  const cellY = Math.floor(frame / divx);
-  return {
-    x: source.x + cellX * cellW,
-    y: source.y + cellY * cellH,
-    w: cellW,
-    h: cellH,
-  };
 }
 
 function resolveNumberValue(
@@ -2905,6 +2768,7 @@ function renderNowComboElement(
       continue;
     }
     const sprite = new Sprite(cellTexture);
+    sprite.label = `nowcombo[digit=${digit}]`;
     sprite.position.set(startX + dstWidth * index, absY);
     sprite.width = dstWidth;
     sprite.height = dst.h;
@@ -2972,336 +2836,13 @@ function renderGrooveGaugeElement(
       continue;
     }
     const sprite = new Sprite(cellTexture);
+    sprite.label = `gauge-bead[idx=${unitIndex},cell=${cellX + cellY * divx}]`;
     sprite.position.set(dst.x + gauge.addX * unitIndex, dst.y + gauge.addY * unitIndex);
     sprite.width = dst.w;
     sprite.height = dst.h;
     applyDestinationToSprite(sprite, dst);
     layer.addChild(sprite);
   }
-}
-
-function renderNumberElement(
-  layer: Container,
-  element: Lr2NumberElement,
-  value: number,
-  textures: ReadonlyMap<string, Texture>,
-  dst: Lr2DestinationRect,
-  options: { suppressLeadingZeros?: boolean } = {},
-): void {
-  const baseTexture = textures.get(element.source.imagePath);
-  if (!baseTexture) {
-    return;
-  }
-  const divx = Math.max(1, element.source.divx);
-  const divy = Math.max(1, element.source.divy);
-  const cellWidth = element.source.w / divx;
-  const cellHeight = element.source.h / divy;
-  if (cellWidth <= 0 || cellHeight <= 0) {
-    return;
-  }
-  if (dst.w === 0 || dst.h === 0) {
-    return;
-  }
-  // LR2 spec on divx*divy:
-  //   ×10  → cells are 0..9 only
-  //   ×11  → cells are 0..9 + blank (used as a "back-zero" for padding)
-  //   ×24  → cells are 0..9 + blank + "+" sign + 0..9 (negated) + blank + "-" sign
-  // We currently treat ×11 as blank-padded and fall back to "0"-padded for ×10.
-  // ×24 (signed numbers) is not implemented yet -- we only render the value's
-  // unsigned absolute portion.
-  const totalCells = divx * divy;
-  const hasBlankCell = totalCells % 11 === 0 || totalCells % 24 === 0;
-  const text = Math.max(0, Math.trunc(value)).toString();
-  // `fieldKeta` is the layout slot width (in digits) — always the source's
-  // configured `padding` so the alignment math anchors at the same place
-  // regardless of value. `displayKeta` is how many digits we actually
-  // render; when `suppressLeadingZeros` is on it shrinks to the value's
-  // own length, leaving the leading slots blank but keeping the right edge
-  // anchored to the LR2 skin's intended position (i.e. "20" lines up at
-  // the right edge of the 3-slot field instead of the left).
-  const fieldKeta = element.source.padding > 0 ? element.source.padding : text.length;
-  const displayKeta = options.suppressLeadingZeros ? text.length : fieldKeta;
-  const fillChar = hasBlankCell ? ' ' : '0';
-  const display = (
-    text.length >= displayKeta ? text.slice(-displayKeta) : fillChar.repeat(displayKeta - text.length) + text
-  ).split('');
-  const totalDigits = display.length;
-  const dstWidth = dst.w || cellWidth;
-  // LR2: DST_x is the *left edge* of a `fieldKeta * dstWidth` field; the value
-  // is aligned within that field according to `align`. We use `fieldKeta`
-  // (the layout slot) rather than `displayKeta` (the rendered digits) so
-  // suppressed leading zeros still right-anchor at the original position.
-  const fieldWidth = dstWidth * fieldKeta;
-  let startX = dst.x;
-  if (element.source.alignment === 'center') {
-    startX = dst.x + (fieldWidth - dstWidth * totalDigits) / 2;
-  } else if (element.source.alignment === 'right') {
-    startX = dst.x + fieldWidth - dstWidth * totalDigits;
-  }
-  for (let index = 0; index < totalDigits; index += 1) {
-    const character = display[index]!;
-    let cellIndex: number;
-    if (character === ' ') {
-      if (!hasBlankCell) {
-        continue;
-      }
-      cellIndex = 10;
-    } else {
-      cellIndex = Number.parseInt(character, 10);
-    }
-    if (!Number.isFinite(cellIndex) || cellIndex < 0 || cellIndex >= totalCells) {
-      continue;
-    }
-    const cellX = cellIndex % divx;
-    const cellY = Math.floor(cellIndex / divx);
-    const cellTexture = createCroppedTexture(baseTexture, {
-      x: element.source.x + cellWidth * cellX,
-      y: element.source.y + cellHeight * cellY,
-      w: cellWidth,
-      h: cellHeight,
-    });
-    if (!cellTexture) {
-      continue;
-    }
-    const sprite = new Sprite(cellTexture);
-    sprite.position.set(startX + dstWidth * index, dst.y);
-    sprite.width = dstWidth;
-    sprite.height = dst.h || cellHeight;
-    applyDestinationToSprite(sprite, dst);
-    layer.addChild(sprite);
-  }
-}
-
-interface LoadTextureOptions {
-  /** Skin-declared `#TRANSCOLOR` chroma key (rare on BGA assets, common on UI sprites). */
-  transparentColor?: { r: number; g: number; b: number };
-  /**
-   * Treat pure-black pixels as transparent. Mirrors the BMS BGA "layer"
-   * convention (`packages/player/src/bga.ts`'s `isOpaquePixel` for `mode
-   * === 'layer'`): the foreground BGA layer is composited over the base
-   * with `(0, 0, 0)` acting as a chroma-key. Only enabled for layer-track
-   * decodes — base / POOR retain their black pixels because they're the
-   * bottommost BGA layer (nothing visible behind them).
-   */
-  keyOutBlack?: boolean;
-}
-
-async function loadTextureFromBytes(
-  path: string,
-  bytes: Uint8Array,
-  transparentColorOrOptions?: { r: number; g: number; b: number } | LoadTextureOptions,
-): Promise<Texture | undefined> {
-  const options = normalizeLoadTextureOptions(transparentColorOrOptions);
-  if (path.toLowerCase().endsWith('.tga')) {
-    return decodeTgaTexture(bytes, options, path);
-  }
-  const blob = new Blob([new Uint8Array(bytes)]);
-  return loadTextureFromBlob(blob, path, options);
-}
-
-function normalizeLoadTextureOptions(
-  input: { r: number; g: number; b: number } | LoadTextureOptions | undefined,
-): LoadTextureOptions {
-  if (!input) {
-    return {};
-  }
-  // The legacy positional `transparentColor` shape has flat `r/g/b`
-  // numbers; the new options shape has a nested `transparentColor` /
-  // `keyOutBlack`. Discriminate on `r` so call sites that still pass
-  // the bare color triple keep working without a typed cast.
-  if (typeof (input as { r?: unknown }).r === 'number') {
-    return { transparentColor: input as { r: number; g: number; b: number } };
-  }
-  return input as LoadTextureOptions;
-}
-
-async function loadTextureFromBlob(
-  blob: Blob,
-  label?: string,
-  options: LoadTextureOptions = {},
-): Promise<Texture | undefined> {
-  try {
-    const imageBitmap = await createImageBitmap(blob);
-    const finalBitmap =
-      options.transparentColor || options.keyOutBlack
-        ? ((await applyChromaKeyToBitmap(imageBitmap, options)) ?? imageBitmap)
-        : imageBitmap;
-    const texture = Texture.from(finalBitmap);
-    if (label) {
-      texture.label = label;
-      texture.source.label = label;
-    }
-    return texture;
-  } catch {
-    return undefined;
-  }
-}
-
-async function applyChromaKeyToBitmap(
-  imageBitmap: ImageBitmap,
-  options: LoadTextureOptions,
-): Promise<ImageBitmap | undefined> {
-  const canvas = document.createElement('canvas');
-  canvas.width = imageBitmap.width;
-  canvas.height = imageBitmap.height;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return undefined;
-  }
-  context.drawImage(imageBitmap, 0, 0);
-  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-  const { data } = imageData;
-  const transparent = options.transparentColor;
-  const keyOutBlack = options.keyOutBlack === true;
-  for (let index = 0; index < data.length; index += 4) {
-    const r = data[index] ?? 0;
-    const g = data[index + 1] ?? 0;
-    const b = data[index + 2] ?? 0;
-    if (transparent && r === transparent.r && g === transparent.g && b === transparent.b) {
-      data[index + 3] = 0;
-      continue;
-    }
-    if (keyOutBlack && r === 0 && g === 0 && b === 0) {
-      data[index + 3] = 0;
-    }
-  }
-  context.putImageData(imageData, 0, 0);
-  return createImageBitmap(canvas);
-}
-
-async function decodeTgaTexture(
-  bytes: Uint8Array,
-  options: LoadTextureOptions = {},
-  label?: string,
-): Promise<Texture | undefined> {
-  const transparentColor = options.transparentColor;
-  const keyOutBlack = options.keyOutBlack === true;
-  if (bytes.length < 18) {
-    return undefined;
-  }
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const idLength = bytes[0] ?? 0;
-  const colorMapType = bytes[1] ?? 0;
-  const imageType = bytes[2] ?? 0;
-  const width = view.getUint16(12, true);
-  const height = view.getUint16(14, true);
-  const bitsPerPixel = bytes[16] ?? 0;
-  const descriptor = bytes[17] ?? 0;
-  const bytesPerPixel = bitsPerPixel / 8;
-  const isRle = imageType === 10 || imageType === 11;
-  const isTrueColor = imageType === 2 || imageType === 10;
-  const isGrayscale = imageType === 3 || imageType === 11;
-
-  if (
-    colorMapType !== 0 ||
-    width <= 0 ||
-    height <= 0 ||
-    !Number.isInteger(bytesPerPixel) ||
-    !((isTrueColor && (bitsPerPixel === 24 || bitsPerPixel === 32)) || (isGrayscale && bitsPerPixel === 8))
-  ) {
-    return undefined;
-  }
-
-  const pixelCount = width * height;
-  const imageData = new ImageData(width, height);
-  const topOrigin = (descriptor & 0x20) !== 0;
-  const rightOrigin = (descriptor & 0x10) !== 0;
-  let sourceOffset = 18 + idLength;
-  let written = 0;
-
-  const writePixel = (source: number): boolean => {
-    if (source + bytesPerPixel > bytes.length || written >= pixelCount) {
-      return false;
-    }
-    const sourceX = written % width;
-    const sourceY = Math.floor(written / width);
-    const x = rightOrigin ? width - 1 - sourceX : sourceX;
-    const y = topOrigin ? sourceY : height - 1 - sourceY;
-    const target = (y * width + x) * 4;
-    if (isGrayscale) {
-      const value = bytes[source] ?? 0;
-      imageData.data[target] = value;
-      imageData.data[target + 1] = value;
-      imageData.data[target + 2] = value;
-      imageData.data[target + 3] = 255;
-    } else {
-      const r = bytes[source + 2] ?? 0;
-      const g = bytes[source + 1] ?? 0;
-      const b = bytes[source] ?? 0;
-      let a = bitsPerPixel === 32 ? (bytes[source + 3] ?? 255) : 255;
-      if (transparentColor && r === transparentColor.r && g === transparentColor.g && b === transparentColor.b) {
-        a = 0;
-      } else if (keyOutBlack && r === 0 && g === 0 && b === 0) {
-        a = 0;
-      }
-      imageData.data[target] = r;
-      imageData.data[target + 1] = g;
-      imageData.data[target + 2] = b;
-      imageData.data[target + 3] = a;
-    }
-    written += 1;
-    return true;
-  };
-
-  if (isRle) {
-    while (written < pixelCount && sourceOffset < bytes.length) {
-      const packet = bytes[sourceOffset++] ?? 0;
-      const count = (packet & 0x7f) + 1;
-      if ((packet & 0x80) !== 0) {
-        const pixelOffset = sourceOffset;
-        sourceOffset += bytesPerPixel;
-        for (let index = 0; index < count; index += 1) {
-          if (!writePixel(pixelOffset)) {
-            return undefined;
-          }
-        }
-      } else {
-        for (let index = 0; index < count; index += 1) {
-          if (!writePixel(sourceOffset)) {
-            return undefined;
-          }
-          sourceOffset += bytesPerPixel;
-        }
-      }
-    }
-  } else {
-    while (written < pixelCount) {
-      if (!writePixel(sourceOffset)) {
-        return undefined;
-      }
-      sourceOffset += bytesPerPixel;
-    }
-  }
-
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return undefined;
-  }
-  context.putImageData(imageData, 0, 0);
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) {
-    return undefined;
-  }
-  return loadTextureFromBlob(blob, label);
-}
-
-function resolveChartAsset(
-  source: BrowserSongAssetSource,
-  chartPath: string,
-  assetPath: string,
-): Uint8Array | undefined {
-  const base = dirname(chartPath);
-  const normalized = normalizePath(assetPath);
-  const candidates = [
-    normalizePath(`${base}/${normalized}`),
-    normalized,
-    normalizePath(`${base}/${basenameOnly(normalized)}`),
-    basenameOnly(normalized),
-  ];
-  return candidates.map((path) => source.files.get(path)).find(Boolean);
 }
 
 const CHANNEL_KEY_BINDINGS: Record<string, ReadonlySet<string>> = {
@@ -3433,11 +2974,6 @@ function fitTextureWithinSpecCanvas(
 function isVideoExtension(path: string): boolean {
   const lower = path.toLowerCase();
   return /\.(mpg|mpeg|mp4|m4v|avi|mov|wmv|webm|mkv)$/u.test(lower);
-}
-
-function basenameOnly(path: string): string {
-  const index = path.lastIndexOf('/');
-  return index >= 0 ? path.slice(index + 1) : path;
 }
 
 /**

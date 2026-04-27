@@ -13,11 +13,7 @@ body,
 body {
   background: #08090d;
   color: #f8fafc;
-  font-family:
-    Avenir Next,
-    Helvetica,
-    Arial,
-    sans-serif;
+  font-family: system-ui, sans-serif;
   overflow: hidden;
 }
 

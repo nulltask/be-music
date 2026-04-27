@@ -32,3 +32,23 @@ export interface BrowserSongCollection {
   songs: BrowserSongEntry[];
   errors: Array<{ sourceId: string; path?: string; message: string }>;
 }
+
+/**
+ * One folder of songs surfaced by `groupSongsByFolder`. The label is
+ * the human-readable folder name (top-level directory inside the
+ * source, falling back to the source label) and `songs` are all the
+ * BMS charts whose `directoryLabel` resolves to it.
+ */
+export interface BrowserFolderNode {
+  label: string;
+  songs: readonly BrowserSongEntry[];
+}
+
+/**
+ * One entry in the bar list when navigating the song collection. A
+ * select view either shows folder bars (when at the root) or song
+ * bars (when inside a folder).
+ */
+export type BrowserBrowseEntry =
+  | { kind: 'folder'; folder: BrowserFolderNode }
+  | { kind: 'song'; song: BrowserSongEntry };
