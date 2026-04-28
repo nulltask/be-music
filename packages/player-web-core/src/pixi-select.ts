@@ -464,6 +464,9 @@ export class PixiSongSelectView {
   }
 
   public dispose(): void {
+    // Stop PixiJS's internal Application ticker first so no auto-render
+    // can fire mid-teardown — matches the gameplay-view dispose pattern.
+    this.app.ticker?.stop();
     if (this.animationFrame !== 0) {
       cancelAnimationFrame(this.animationFrame);
       this.animationFrame = 0;

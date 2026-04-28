@@ -509,13 +509,22 @@ export class PixiGameplayView {
     // eslint-disable-next-line no-console
     console.log('[gameplay] listeners detached');
     void this.audioContext?.close();
-    // Destroy `app` (and its children) BEFORE we destroy the textures we
-    // own. `app.destroy({ children: true })` walks the scene graph and
-    // releases sprite-attached textures cleanly; doing it in the other
-    // order leaves the renderer with sprites pointing at freed textures
-    // for one final render pass — same null-batcher class of bug as the
-    // ticker race above.
-    this.app.destroy(true, { children: true });
+    // Order matters here. We need to destroy textures BEFORE
+    // `app.destroy()`, because `Texture.destroy()` emits a
+    // `styleChange` event that bubbles up to PixiJS's
+    // `GlTextureSystem`. After `app.destroy()` the renderer (and its
+    // texture system) have been nulled out, and the event handler
+    // crashes with "Cannot read properties of null (reading 'gc')"
+    // when it tries to release the GPU resource.
+    //
+    // The reverse order — textures first, app.destroy after — was
+    // previously broken for a different reason: any auto-render
+    // firing between texture destroys hit a half-cleared batcher.
+    // We've already stopped the ticker above (`app.ticker.stop()`),
+    // so no auto-render can fire during this teardown — making the
+    // textures-first order safe again. The remaining sprites still
+    // reference the freed textures by the time `app.destroy()` walks
+    // them, but they never render so it's fine.
     for (const texture of this.textures.values()) {
       texture.destroy(true);
     }
@@ -530,6 +539,7 @@ export class PixiGameplayView {
     this.bgaLayerTextures.clear();
     this.bombTexture?.destroy(true);
     this.bombTexture = undefined;
+    this.app.destroy(true, { children: true });
   }
 
   private prepareSong(song: BrowserSongEntry): void {
