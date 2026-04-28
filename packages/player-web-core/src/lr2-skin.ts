@@ -1678,9 +1678,17 @@ function defaultParseOps(): Set<number> {
     176, // BPM change absent
     178, // RANDOM absent
     182, // judge normal
-    191, // STAGEFILE absent
-    193, // BANNER absent
-    195, // BACKBMP absent
+    // 190..195 — skins typically gate the STAGEFILE / BANNER /
+    // BACKBMP display block on the "present" op, so we mark those
+    // true at parse time even though the chart-level state is
+    // unknown until runtime. Without 191/193/195 the load-screen
+    // branch never gets included by `#IF`, so the runtime renderer
+    // wouldn't have the SRC/DST entries to draw at all.
+    191, // STAGEFILE present (per LR2 spec — the comment in the
+    //   previous revision said "absent", which was wrong: 190 is
+    //   absent, 191 is present)
+    193, // BANNER present
+    195, // BACKBMP present
     196, // replay absent
   ]);
 }

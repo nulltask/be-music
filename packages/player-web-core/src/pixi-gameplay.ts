@@ -23,7 +23,10 @@ import {
   type Lr2NowComboKind,
   type Lr2Skin,
   type Lr2SliderElement,
+  type Lr2SpecialGraphic,
   type Lr2TextElement,
+  LR2_SPECIAL_GRAPHIC,
+  isLr2SpecialGraphic,
 } from './lr2-skin.ts';
 import { loadSkinAssetTexture, loadTextureFromBytes } from './lr2-textures.ts';
 import {
@@ -472,8 +475,16 @@ export class PixiGameplayView {
   }
 
   public dispose(): void {
+    // Stop PixiJS's internal Application ticker BEFORE tearing anything
+    // down. Otherwise the ticker keeps auto-rendering between our texture
+    // destroys and the final `app.destroy`, hitting a half-cleared
+    // batcher with `Cannot read properties of null (reading 'clear')` at
+    // `_DefaultBatcher.break`. Stopping the ticker first means the next
+    // auto-render is the one inside `app.destroy` itself, which is safe.
+    this.app.ticker?.stop();
     if (this.frame !== undefined) {
       cancelAnimationFrame(this.frame);
+      this.frame = undefined;
     }
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
@@ -490,9 +501,17 @@ export class PixiGameplayView {
     // eslint-disable-next-line no-console
     console.log('[gameplay] listeners detached');
     void this.audioContext?.close();
+    // Destroy `app` (and its children) BEFORE we destroy the textures we
+    // own. `app.destroy({ children: true })` walks the scene graph and
+    // releases sprite-attached textures cleanly; doing it in the other
+    // order leaves the renderer with sprites pointing at freed textures
+    // for one final render pass — same null-batcher class of bug as the
+    // ticker race above.
+    this.app.destroy(true, { children: true });
     for (const texture of this.textures.values()) {
       texture.destroy(true);
     }
+    this.textures.clear();
     for (const texture of this.bgaTextures.values()) {
       texture.destroy(true);
     }
@@ -502,7 +521,7 @@ export class PixiGameplayView {
     }
     this.bgaLayerTextures.clear();
     this.bombTexture?.destroy(true);
-    this.app.destroy(true, { children: true });
+    this.bombTexture = undefined;
   }
 
   private prepareSong(song: BrowserSongEntry): void {
@@ -601,9 +620,6 @@ export class PixiGameplayView {
       174, // attached text absent
       178, // RANDOM absent
       182, // judge normal
-      191, // STAGEFILE absent
-      193, // BANNER absent
-      195, // BACKBMP absent
       196, // replay absent
     ];
     defaults.forEach((op) => this.runtimeOps.add(op));
@@ -623,6 +639,20 @@ export class PixiGameplayView {
     // default skin's BGA-frame visibility — without 171 the borders and
     // per-side gating fail to switch on.
     this.runtimeOps.add(this.hasBga ? 171 : 170);
+    // Resource-presence flags (per LR2 spec — see `dst_option` table
+    // in `docs/LR2SkinHelp.md`):
+    //   190 / 191 = STAGEFILE absent / present
+    //   192 / 193 = BANNER    absent / present
+    //   194 / 195 = BACKBMP   absent / present
+    // The previous revision swapped these — it set 191 (=present) any
+    // time a chart was loaded, regardless of whether `#STAGEFILE` was
+    // actually defined, while leaving 190 (=absent) unset. Drive both
+    // halves dynamically from the chart's metadata so skin elements
+    // gated on either branch render correctly.
+    const meta = this.song?.chart.metadata;
+    this.runtimeOps.add(meta?.stageFile ? 191 : 190);
+    this.runtimeOps.add(meta?.banner ? 193 : 192);
+    this.runtimeOps.add(meta?.backBmp ? 195 : 194);
     // BGA size: op 30 = normal, op 31 = large. We expose the user's
     // preference via `customOptions` defaults; here we pick "normal" as
     // a sane fallback so the default `#DST_BGA` (op 30) is selected.
@@ -763,6 +793,12 @@ export class PixiGameplayView {
     skin.nowCombos.forEach((combo) => imagePaths.add(combo.source.imagePath));
     await Promise.all(
       [...imagePaths].map(async (path) => {
+        // LR2 special graphics (`gr=100..111`) point at runtime-bound
+        // textures, not files in the skin bundle. Skip them here and
+        // load them via `prepareChartGraphics()` below.
+        if (isLr2SpecialGraphic(path)) {
+          return;
+        }
         const texture = await this.loadSkinAssetTexture(skin, path);
         if (texture) {
           this.textures.set(path, texture);
@@ -773,6 +809,53 @@ export class PixiGameplayView {
     if (bombFile) {
       this.bombTexture = await this.loadSkinAssetTexture(skin, bombFile.path);
     }
+    // Chart-side `#STAGEFILE` / `#BACKBMP` / `#BANNER`. These are
+    // referenced by skin elements via `gr=100/101/102`; they live in
+    // the chart bundle (next to the .bms file), not the skin bundle.
+    await this.prepareChartGraphics();
+  }
+
+  /**
+   * Loads the chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` images
+   * into the skin texture map under their LR2 sentinel paths so the
+   * existing `renderSkinImage` flow picks them up when a skin element
+   * uses `gr=100`/`101`/`102`. Skipped for charts that don't declare
+   * the corresponding metadata field (the runtime ops also flip to
+   * `190`/`192`/`194` in that case so the skin's "absent" branch
+   * handles the missing-asset path).
+   */
+  private async prepareChartGraphics(): Promise<void> {
+    const song = this.song;
+    const source = this.source;
+    if (!song || !source) {
+      return;
+    }
+    const meta = song.chart.metadata;
+    const candidates: Array<{ key: Lr2SpecialGraphic; assetPath: string }> = [];
+    if (meta.stageFile) {
+      candidates.push({ key: LR2_SPECIAL_GRAPHIC.STAGEFILE, assetPath: meta.stageFile });
+    }
+    if (meta.backBmp) {
+      candidates.push({ key: LR2_SPECIAL_GRAPHIC.BACKBMP, assetPath: meta.backBmp });
+    }
+    if (meta.banner) {
+      candidates.push({ key: LR2_SPECIAL_GRAPHIC.BANNER, assetPath: meta.banner });
+    }
+    await Promise.all(
+      candidates.map(async ({ key, assetPath }) => {
+        const bytes = resolveChartAsset(source, song.chartPath, assetPath);
+        if (!bytes) return;
+        try {
+          const texture = await loadTextureFromBytes(assetPath, bytes);
+          if (texture) {
+            this.textures.set(key, texture);
+          }
+        } catch {
+          // Decode failures are silently skipped — the skin's
+          // "asset absent" branch (gated on op 190/192/194) takes over.
+        }
+      }),
+    );
   }
 
   private loadSkinAssetTexture(skin: Lr2Skin, path: string): Promise<Texture | undefined> {
@@ -1693,13 +1776,24 @@ export class PixiGameplayView {
     if (!baseTexture) {
       return;
     }
-    // Pick the current SRC cell from the divx*divy animation grid; a `loop=-1`
-    // destination clamps SRC frames at the last cell (one-shot effects).
-    const cellRect = pickAnimatedCell(image.source, this.elapsedSinceTimer(image.source.timer), dst.loop);
-    if (cellRect.w <= 0 || cellRect.h <= 0) {
-      return;
+    // For LR2 special-graphic slots (`gr=100..111`) the chart's actual
+    // STAGEFILE / BACKBMP / BANNER is loaded under the sentinel path
+    // and is the WHOLE image — not a cell of a divx*divy grid. Skip
+    // the cell crop and use the live texture as-is so its native
+    // dimensions are preserved (the DST rectangle still scales it
+    // into the skin's intended slot).
+    let texture: Texture | undefined;
+    if (isLr2SpecialGraphic(image.source.imagePath)) {
+      texture = baseTexture;
+    } else {
+      // Pick the current SRC cell from the divx*divy animation grid; a `loop=-1`
+      // destination clamps SRC frames at the last cell (one-shot effects).
+      const cellRect = pickAnimatedCell(image.source, this.elapsedSinceTimer(image.source.timer), dst.loop);
+      if (cellRect.w <= 0 || cellRect.h <= 0) {
+        return;
+      }
+      texture = createCroppedTexture(baseTexture, cellRect);
     }
-    const texture = createCroppedTexture(baseTexture, cellRect);
     if (!texture) {
       return;
     }
@@ -1786,8 +1880,16 @@ export class PixiGameplayView {
    */
   private renderTextElement(text: Lr2TextElement): void {
     const interpolated = this.evaluateElementDst(text);
-    const { x, y, w, h } = normaliseRect(interpolated);
-    if (w === 0 || h === 0) {
+    // `w` is intentionally unread — LR2 uses it as a max-width /
+    // shrink-to-fit hint for the rendered glyphs, not for anchor
+    // positioning. We anchor at `(x, y)` per the alignment field below.
+    const { x, y, h } = normaliseRect(interpolated);
+    // `w === 0` is an LR2-spec "no width constraint" hint (the field
+    // shrinks to fit the rendered string), so we must NOT bail just
+    // because of it — skipping would hide every auto-sized label,
+    // including the centered song-title display in the LR2 default
+    // play skin. Only `h === 0` is fatal (no glyph height to size on).
+    if (h === 0) {
       return;
     }
     const value = this.resolveTextValue(text.st);
@@ -1810,16 +1912,22 @@ export class PixiGameplayView {
     });
     node.label = `text[st=${text.st}]`;
     node.alpha = interpolated.alpha;
+    // LR2 #SRC_TEXT spec (`docs/LR2SkinHelp.md` lines 1350+):
+    //   align=0 → DST x is the LEFT edge of the rendered string
+    //   align=1 → DST x is the CENTER of the rendered string
+    //   align=2 → DST x is the RIGHT edge of the rendered string
+    // `w` is a max-width / shrink-to-fit constraint, not part of the
+    // anchor calculation (the previous code added `w` to `x` for
+    // right-aligned text which pushed the title / artist / genre
+    // labels into the bar-list area on the right side of the screen).
     if (text.alignment === 'center') {
       node.anchor.set(0.5, 0.5);
-      node.position.set(x + w / 2, y + h / 2);
     } else if (text.alignment === 'right') {
       node.anchor.set(1, 0.5);
-      node.position.set(x + w, y + h / 2);
     } else {
       node.anchor.set(0, 0.5);
-      node.position.set(x, y + h / 2);
     }
+    node.position.set(x, y + h / 2);
     this.skinLayer.addChild(node);
   }
 

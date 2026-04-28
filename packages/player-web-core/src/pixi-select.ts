@@ -246,6 +246,44 @@ export class PixiSongSelectView {
   /** rAF handle so dispose can cancel the keyframe-driven render loop. */
   private animationFrame = 0;
   /**
+   * Per-timer start timestamps (`performance.now()`). LR2 select-screen
+   * timers we drive:
+   *
+   *   - **0** — scene main, set at mount.
+   *   - **1** — input start, fires `#STARTINPUT` ms after mount.
+   *   - **10** — list-scroll active, set whenever the cursor moves.
+   *   - **11** — song change, reset on every cursor move so
+   *     `#DST_BAR_BODY` keyframes anchored to it replay their slide
+   *     animation each time the user advances.
+   *   - **12** — list-up scroll, set on `ArrowUp` / scroll-up moves.
+   *   - **13** — list-down scroll, set on `ArrowDown` / scroll-down.
+   *
+   * A missing entry means the timer hasn't fired yet (`elapsed = 0`,
+   * `active = false`). Inserting a new timestamp for an existing key
+   * is the LR2 "timer reset" operation — DST keyframes anchored to
+   * that timer will play again from time=0.
+   */
+  private readonly timerStartedAt = new Map<number, number>();
+  /**
+   * Pixel offset applied to `listLayer` during a scroll transition.
+   * Right after a cursor move, the entry-to-slot mapping shifts
+   * instantly; we counter that by pushing `listLayer.y` so the bars
+   * appear to stay where they were, then decay the offset back to 0
+   * over a few frames to produce a smooth slide.
+   *
+   * Convention: positive offset = "bars look like they're still at
+   * the previous song's positions". For a `down` press (selectedIndex
+   * +1) the entries move up one slot, so we add `+slotHeight` and
+   * decay to 0 — visually this looks like the bars sliding up.
+   */
+  private listScrollOffset = 0;
+  /**
+   * `performance.now()` of the previous render frame, used to compute
+   * `dt` for the scroll-offset decay so the slide speed is wall-clock
+   * consistent across refresh rates.
+   */
+  private lastScrollUpdate = 0;
+  /**
    * Last known pointer position in **design-space** coordinates, used
    * by `#SRC_ONMOUSE` hit-tests and `#SRC_MOUSECURSOR` follow. `-1`
    * means "no pointer over canvas yet"; both renderers skip drawing
@@ -312,8 +350,76 @@ export class PixiSongSelectView {
       void this.prepareSkinTextures(this.options.skin);
     }
     this.sceneStartedAt = performance.now();
+    // Seed timer 0 (scene main) — every static skin element is
+    // anchored to it, so the keyframe interpolator needs to know
+    // when "now=0" was. We don't seed timer 1 yet; `elapsedSinceTimer`
+    // computes its fire moment from `#STARTINPUT` lazily.
+    this.timerStartedAt.clear();
+    this.timerStartedAt.set(0, this.sceneStartedAt);
+    // Fire timer 11 (song change) at scene start so the BAR_BODY
+    // slide-in animations play once on first appearance, just like
+    // they do in real LR2 when the cursor lands on the initial song.
+    this.timerStartedAt.set(11, this.sceneStartedAt);
     this.render();
     this.startAnimationLoop();
+  }
+
+  /**
+   * Re-stamps the song-list timers (10, 11, 12 / 13) so DST keyframes
+   * anchored to them replay from the new "time = 0", and seeds the
+   * smooth-scroll offset so the bars visually slide between their
+   * old and new slot positions. Called whenever the cursor moves —
+   * by keyboard, click, or folder navigation.
+   *
+   * `delta` is the **wrapped** offset applied to `selectedIndex`
+   * (always within `(-length/2, length/2]`) — wrap-around moves
+   * (e.g. last → first via ↓) animate as a single step in the visual
+   * direction rather than a long slide across the whole list.
+   *
+   * Direction-specific timers (12=up, 13=down) follow the LR2 spec
+   * (`docs/LR2SkinHelp.md` lines 5097+); the canonical "song change"
+   * slide is anchored to timer 11 in the LR2 default play-side and
+   * select-side skins, so we always restart that one regardless of
+   * direction.
+   */
+  private noteCursorChange(delta: number): void {
+    const now = performance.now();
+    this.timerStartedAt.set(10, now);
+    this.timerStartedAt.set(11, now);
+    this.timerStartedAt.set(delta < 0 ? 12 : 13, now);
+    // Seed the scroll offset. Adding `delta * slotHeight` offsets the
+    // listLayer to keep the bars visually pinned at their previous
+    // positions; the per-frame decay slides them to the new slots.
+    const slotHeight = this.estimateSlotHeight();
+    this.listScrollOffset += delta * slotHeight;
+  }
+
+  /**
+   * Estimates the vertical pitch between adjacent bar slots — used
+   * to scale `listScrollOffset` so a 1-step cursor move produces a
+   * 1-slot worth of visual slide. Picks the most-occupied y-delta
+   * between adjacent off-slot rectangles since LR2 default skins
+   * tend to have one "centre" slot at a different y than the
+   * uniformly-spaced off-centre slots; the median of pairwise
+   * deltas excludes that outlier.
+   */
+  private estimateSlotHeight(): number {
+    const slots = this.options.skin?.barLayout.slots ?? [];
+    const ys: number[] = [];
+    for (const slot of slots) {
+      const dst = slot.off ?? slot.on;
+      if (dst) ys.push(dst.y);
+    }
+    ys.sort((left, right) => left - right);
+    if (ys.length < 2) return 30;
+    const deltas: number[] = [];
+    for (let index = 1; index < ys.length; index += 1) {
+      const dy = Math.abs(ys[index]! - ys[index - 1]!);
+      if (dy > 0) deltas.push(dy);
+    }
+    if (deltas.length === 0) return 30;
+    deltas.sort((left, right) => left - right);
+    return deltas[Math.floor(deltas.length / 2)]!;
   }
 
   /**
@@ -642,18 +748,23 @@ export class PixiSongSelectView {
           // is near `entries[0]` reaches `entries[length-1]` — the
           // circular-list expectation also applies to clicks.
           const target = wrapIndex(this.selectedIndex + offset, entries.length);
-          if (target !== undefined) {
+          if (target !== undefined && target !== this.selectedIndex) {
+            // The clicked slot's offset directly tells us which way
+            // the cursor is moving — pass `offset` as the cursor
+            // delta so the slide spans `|offset|` slots.
+            this.noteCursorChange(offset);
             this.selectedIndex = target;
             this.render();
-            const entry = entries[target];
-            if (slot.index === center && entry) {
-              if (entry.kind === 'folder') {
-                this.browseStack = [...this.browseStack, entry.folder];
-                this.selectedIndex = 0;
-                this.render();
-              } else {
-                this.options.onSongSelected?.(entry.song);
-              }
+          }
+          const entry = target !== undefined ? entries[target] : undefined;
+          if (slot.index === center && entry) {
+            if (entry.kind === 'folder') {
+              this.browseStack = [...this.browseStack, entry.folder];
+              this.selectedIndex = 0;
+              this.noteCursorChange(1);
+              this.render();
+            } else {
+              this.options.onSongSelected?.(entry.song);
             }
           }
           return;
@@ -666,12 +777,17 @@ export class PixiSongSelectView {
     const fallbackEntries = this.currentEntries();
     const row = Math.floor((virtualY - 104) / 52);
     if (row >= 0 && row < fallbackEntries.length) {
+      const previous = this.selectedIndex;
+      if (row !== previous) {
+        this.noteCursorChange(wrappedCursorDelta(row - previous, fallbackEntries.length));
+      }
       this.selectedIndex = row;
       this.render();
       const entry = fallbackEntries[row];
       if (entry?.kind === 'folder') {
         this.browseStack = [...this.browseStack, entry.folder];
         this.selectedIndex = 0;
+        this.noteCursorChange(1);
         this.render();
       } else if (entry?.kind === 'song') {
         this.options.onSongSelected?.(entry.song);
@@ -695,13 +811,19 @@ export class PixiSongSelectView {
     const entries = this.currentEntries();
     if (event.key === 'ArrowDown') {
       event.preventDefault();
+      if (entries.length === 0) return;
       // Wrap past the end → first entry. Matches LR2's circular bar
       // list (the rail keeps scrolling forever in either direction).
-      this.selectedIndex = entries.length > 0 ? (this.selectedIndex + 1) % entries.length : 0;
+      const previous = this.selectedIndex;
+      this.selectedIndex = (this.selectedIndex + 1) % entries.length;
+      this.noteCursorChange(wrappedCursorDelta(this.selectedIndex - previous, entries.length));
       this.render();
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      this.selectedIndex = entries.length > 0 ? (this.selectedIndex - 1 + entries.length) % entries.length : 0;
+      if (entries.length === 0) return;
+      const previous = this.selectedIndex;
+      this.selectedIndex = (this.selectedIndex - 1 + entries.length) % entries.length;
+      this.noteCursorChange(wrappedCursorDelta(this.selectedIndex - previous, entries.length));
       this.render();
     } else if (event.key === 'Enter') {
       event.preventDefault();
@@ -713,6 +835,9 @@ export class PixiSongSelectView {
         // root cursor happened to be.
         this.browseStack = [...this.browseStack, entry.folder];
         this.selectedIndex = 0;
+        // Folder traversal: animate as a single "down" step regardless
+        // of how big the index jump was, so the slide stays bounded.
+        this.noteCursorChange(1);
         this.render();
       } else {
         this.options.onSongSelected?.(entry.song);
@@ -725,6 +850,7 @@ export class PixiSongSelectView {
       event.preventDefault();
       this.browseStack = this.browseStack.slice(0, -1);
       this.selectedIndex = 0;
+      this.noteCursorChange(-1);
       this.render();
     }
   };
@@ -750,6 +876,25 @@ export class PixiSongSelectView {
 
     this.skinLayer.removeChildren().forEach((child) => child.destroy());
     this.listLayer.removeChildren().forEach((child) => child.destroy());
+
+    // Decay the smooth-scroll offset toward 0. Exponential decay with
+    // a ~80 ms time constant gives a snappy slide that's substantially
+    // complete in a quarter second; rapid cursor presses compose
+    // naturally because each new step adds onto the residual offset.
+    const now = performance.now();
+    if (this.lastScrollUpdate === 0) {
+      this.lastScrollUpdate = now;
+    }
+    const dt = now - this.lastScrollUpdate;
+    this.lastScrollUpdate = now;
+    if (this.listScrollOffset !== 0) {
+      const decay = Math.exp(-dt / 80);
+      this.listScrollOffset *= decay;
+      if (Math.abs(this.listScrollOffset) < 0.5) {
+        this.listScrollOffset = 0;
+      }
+    }
+    this.listLayer.y = this.listScrollOffset;
 
     if (useSkin && skin) {
       this.title.visible = false;
@@ -823,27 +968,49 @@ export class PixiSongSelectView {
 
   /**
    * Returns the elapsed milliseconds since `timer` started, or 0 when
-   * the timer isn't currently driven. The select view honours:
-   *
-   * - **0** — scene main, anchored at mount.
-   * - **1** — input start. Anchored at `mount + #STARTINPUT`; before
-   *   that point the timer is treated as not-yet-fired (elapsed = 0
-   *   *and* `isSelectTimerActive(1)` returning false in the future).
-   *
-   * Other LR2 timers (10–18 list / scroll, 21–39 panels, 40+ play)
-   * stay unfired here.
+   * the timer isn't currently driven. Reads `timerStartedAt` for any
+   * timer the host has fired (0 / 11 at mount; 10 / 11 / 12 / 13 on
+   * cursor moves). Timer 1 is computed from `#STARTINPUT` lazily so
+   * we don't need a setTimeout.
    */
   private elapsedSinceTimer(timer: number): number {
-    const sceneElapsed = performance.now() - this.sceneStartedAt;
-    if (timer === 0) {
-      return sceneElapsed;
-    }
     if (timer === 1) {
       const startInput = this.options.skin?.timing.startInput ?? 0;
-      return Math.max(0, sceneElapsed - startInput);
+      const fireAt = this.sceneStartedAt + startInput;
+      return Math.max(0, performance.now() - fireAt);
     }
-    return 0;
+    const startedAt = this.timerStartedAt.get(timer);
+    if (startedAt === undefined) {
+      return 0;
+    }
+    return Math.max(0, performance.now() - startedAt);
   }
+
+  /**
+   * Returns whether `timer` is currently active (i.e. has fired and
+   * is producing meaningful elapsed-time output). Used by
+   * `isDestinationVisible` so DST elements anchored to a not-yet-fired
+   * timer (e.g. an idle panel-open animation) stay hidden.
+   *
+   * Defined as an arrow-property so callers can pass it through to
+   * the free `isDestinationVisible` helper without losing `this`.
+   */
+  private readonly timerActive = (timer: number): boolean => {
+    if (timer === 0) return true;
+    if (timer === 1) {
+      const startInput = this.options.skin?.timing.startInput ?? 0;
+      return performance.now() - this.sceneStartedAt >= startInput;
+    }
+    // Song-list timers 10..13 — active once we've recorded a start
+    // (i.e. the cursor moved at least once or scene-mount seeded
+    // timer 11). The keyframe interpolator clamps past the final
+    // frame, so leaving them "active" forever is fine.
+    if (timer >= 10 && timer <= 13) {
+      return this.timerStartedAt.has(timer);
+    }
+    // Panel timers (21..39), play timers (40+) etc. stay inactive.
+    return false;
+  };
 
   /**
    * Renders the skin's static `#IMAGE` decorations (background, frame
@@ -856,7 +1023,7 @@ export class PixiSongSelectView {
       // Visibility uses the interpolated DST so an alpha=0 keyframe
       // still keeps the element technically visible — only the per-DST
       // op gating (and timer activity) controls hidden vs shown.
-      if (!isDestinationVisible(this.evaluateElementDst(image), ops)) {
+      if (!isDestinationVisible(this.evaluateElementDst(image), ops, this.timerActive)) {
         continue;
       }
       const sprite = this.makeStaticImageSprite(image);
@@ -873,7 +1040,7 @@ export class PixiSongSelectView {
     // blank when shown here, which matches LR2's behaviour off-stage.
     for (const number of skin.numbers) {
       const dst = this.evaluateElementDst(number);
-      if (!isDestinationVisible(dst, ops)) {
+      if (!isDestinationVisible(dst, ops, this.timerActive)) {
         continue;
       }
       const value = resolveSelectNumber(number.source.num, focusedSong);
@@ -892,7 +1059,7 @@ export class PixiSongSelectView {
         continue;
       }
       const dst = this.evaluateElementDst(text);
-      if (!isDestinationVisible(dst, ops)) {
+      if (!isDestinationVisible(dst, ops, this.timerActive)) {
         continue;
       }
       const value = resolveSelectText(text.st, focusedSong);
@@ -910,7 +1077,7 @@ export class PixiSongSelectView {
       if (!isPanelOpen(button.panel)) {
         continue;
       }
-      if (!isDestinationVisible(this.evaluateElementDst(button), ops)) {
+      if (!isDestinationVisible(this.evaluateElementDst(button), ops, this.timerActive)) {
         continue;
       }
       this.renderButtonElement(button);
@@ -924,7 +1091,7 @@ export class PixiSongSelectView {
         continue;
       }
       const dst = this.evaluateElementDst(onMouse);
-      if (!isDestinationVisible(dst, ops)) {
+      if (!isDestinationVisible(dst, ops, this.timerActive)) {
         continue;
       }
       if (!this.isPointerInHitRect(dst, onMouse)) {
@@ -941,7 +1108,7 @@ export class PixiSongSelectView {
     if (this.mouseX >= 0 && this.mouseY >= 0) {
       for (const cursor of skin.mouseCursors) {
         const dst = this.evaluateElementDst(cursor);
-        if (!isDestinationVisible(dst, ops)) {
+        if (!isDestinationVisible(dst, ops, this.timerActive)) {
           continue;
         }
         const sprite = this.makeMouseCursorSprite(cursor, dst);
@@ -1090,8 +1257,17 @@ export class PixiSongSelectView {
       const targetIndex = wrapIndex(this.selectedIndex + offset, entries.length);
       const entry = targetIndex !== undefined ? entries[targetIndex] : undefined;
       const isCenter = slot.index === center;
-      const dst = isCenter && slot.on ? slot.on : (slot.off ?? slot.on);
-      if (!dst || !isDestinationVisible(dst, ops)) {
+      // Interpolate the slot's keyframe chain instead of pinning to
+      // the final keyframe. The skin typically anchors `#DST_BAR_BODY`
+      // animations to timer 11 (song change), which we re-stamp on
+      // every cursor move via `noteCursorChange`, so the bars slide
+      // into their new positions over the keyframe duration.
+      const keyframes = isCenter && slot.onKeyframes.length > 0 ? slot.onKeyframes : slot.offKeyframes;
+      const fallbackDst = isCenter && slot.on ? slot.on : (slot.off ?? slot.on);
+      if (!fallbackDst) continue;
+      const dst =
+        keyframes.length > 1 ? evaluateKeyframes(keyframes, this.elapsedSinceTimer(fallbackDst.timer)) : fallbackDst;
+      if (!isDestinationVisible(dst, ops, this.timerActive)) {
         continue;
       }
       const body = pickBarBody(layout.bodies, entry);
@@ -1357,26 +1533,10 @@ export class PixiSongSelectView {
     titleText.label = `bar-title[${entry.kind}=${primaryText}]`;
     titleText.position.set(x, y);
     this.listLayer.addChild(titleText);
-    // Sub-line: artist for songs, "<n> charts" for folders.
-    const subText =
-      entry.kind === 'song'
-        ? entry.song.artist
-        : `${entry.folder.songs.length} ${entry.folder.songs.length === 1 ? 'chart' : 'charts'}`;
-    if (subText) {
-      const sub = new Text({
-        text: subText,
-        style: new TextStyle({
-          fill: MUTED,
-          fontSize: clampFontSize(Math.floor(titleFontSize * 0.78), 8, 11),
-          fontFamily: 'system-ui, sans-serif',
-          wordWrap: true,
-          wordWrapWidth: w,
-        }),
-      });
-      sub.label = `bar-subtitle[${entry.kind}]`;
-      sub.position.set(x, y + titleFontSize + 1);
-      this.listLayer.addChild(sub);
-    }
+    // No artist sub-line: LR2's bar list shows just the title (or
+    // folder name). Per-song artist / genre live in the dedicated
+    // info panel on the left side of the screen, populated by the
+    // skin's #SRC_TEXT slots — not the bar list itself.
   }
 
   private drawFallbackSongRow(song: BrowserSongEntry, songIndex: number, visibleIndex: number, width: number): void {
@@ -1460,6 +1620,24 @@ function wrapIndex(target: number, count: number): number | undefined {
 }
 
 /**
+ * Maps a raw `(new - old)` cursor delta into a wrapped delta in the
+ * range `(-count/2, count/2]`. Used so a wrap-around move (e.g. from
+ * `entries[0]` ↑ to `entries[length-1]`) animates as a single
+ * "back by 1" step rather than a long slide spanning the whole list.
+ *
+ * Examples (length = 10):
+ *   delta=+1 → +1  (forward 1 step)
+ *   delta=-1 → -1  (backward 1 step)
+ *   delta=+9 → -1  (wrap forward = visually 1 step back)
+ *   delta=-9 → +1  (wrap backward = visually 1 step forward)
+ */
+function wrappedCursorDelta(rawDelta: number, count: number): number {
+  if (count <= 0) return 0;
+  const half = count / 2;
+  return ((((rawDelta + half) % count) + count) % count) - half;
+}
+
+/**
  * Returns `true` when the keydown target is a text-editable element
  * (`<input>` / `<textarea>` / `<select>` / `contenteditable`). The
  * select view's keyboard handlers use this to bail so the user can
@@ -1520,14 +1698,19 @@ function pickBarBody(
 /**
  * Slot DST gating: applies the same "all `op > 0` must be true,
  * negative ops mean negation" rule the parser uses, but against the
- * dynamic op set computed for the currently-focused song. Also
- * filters by `timer` — LR2 default skins commonly define duplicate
- * `#SRC_TEXT` slots (e.g. st=10 for the select panel with timer=0
- * and st=20 for the play overlay with timer=41); without the timer
- * check both render and the title appears twice.
+ * dynamic op set computed for the currently-focused song.
+ *
+ * `timerActive` is a closure over `PixiSongSelectView.isTimerActive`
+ * — pulled in as a callback so this function can stay outside the
+ * class while still respecting per-instance timer state (the
+ * song-change timer 11 only fires while *this* view's cursor moves).
  */
-function isDestinationVisible(destination: Lr2DestinationRect, ops: ReadonlySet<number>): boolean {
-  if (!isSelectTimerActive(destination.timer)) {
+function isDestinationVisible(
+  destination: Lr2DestinationRect,
+  ops: ReadonlySet<number>,
+  timerActive: (timer: number) => boolean,
+): boolean {
+  if (!timerActive(destination.timer)) {
     return false;
   }
   for (const op of destination.ops) {
@@ -1541,30 +1724,6 @@ function isDestinationVisible(destination: Lr2DestinationRect, ops: ReadonlySet<
     }
   }
   return true;
-}
-
-/**
- * Returns `true` for the LR2 timer ids that are conventionally active
- * on the select screen. Anything play-side (40 = READY, 41 = play
- * start, 46/47 = judge, 50–69 = bomb, 100–119 = key-on, …) is filtered
- * out so duplicate slots gated on those timers don't paint over the
- * select-panel slots gated on timer 0.
- *
- * Active timers we honour:
- * - **0** — scene main (always on).
- * - **1..7** — select-screen cursor / scroll timers. We don't drive
- *   them yet, but skin elements gated on them aren't supposed to be
- *   permanently hidden; treat as active so e.g. the focused-bar
- *   highlight (timer=1) still renders.
- *
- * Panel timers (21..39) are explicitly inactive — they would flip on
- * when the option / effect / IR panels open, which we don't simulate
- * yet. Skin elements inside those panels stay hidden as a result.
- */
-function isSelectTimerActive(timer: number): boolean {
-  if (timer === 0) return true;
-  if (timer >= 1 && timer <= 7) return true;
-  return false;
 }
 
 /**
@@ -2057,17 +2216,22 @@ function makeTextSprite(value: string, element: Lr2TextElement, dst: Lr2Destinat
   });
   text.label = `text[st=${element.st}]`;
   text.alpha = dst.alpha;
-  // LR2 #SRC_TEXT alignment: 0=left, 1=center, 2=right. The element's
-  // DST x/y is the anchor side per alignment.
+  // LR2 #SRC_TEXT alignment (`docs/LR2SkinHelp.md` lines 1350+):
+  //   0 = left   — DST x is the **left edge** of the rendered string
+  //   1 = center — DST x is the **center**   of the rendered string
+  //   2 = right  — DST x is the **right edge** of the rendered string
+  // The earlier code was treating (x, y, w, h) as a bounding box and
+  // adding `w` / `w/2` for center / right, which shifted right-aligned
+  // text by an extra `w` pixels — pushing the title / artist / genre
+  // panel into the bar-list area on the right side of the screen.
   if (element.alignment === 'center') {
     text.anchor.set(0.5, 0);
-    text.position.set(rect.x + rect.w / 2, rect.y);
   } else if (element.alignment === 'right') {
     text.anchor.set(1, 0);
-    text.position.set(rect.x + rect.w, rect.y);
   } else {
-    text.position.set(rect.x, rect.y);
+    text.anchor.set(0, 0);
   }
+  text.position.set(rect.x, rect.y);
   return text;
 }
 
