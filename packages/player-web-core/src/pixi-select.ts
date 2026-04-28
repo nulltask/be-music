@@ -26,7 +26,6 @@ import {
   normaliseRect,
   pickAnimatedCell,
   renderNumberElement,
-  SpritePool,
 } from './lr2-render.ts';
 import { groupSongsByFolder, resolveChartAsset, resolveSongSource } from './library.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongCollection, BrowserSongEntry } from './types.ts';
@@ -192,27 +191,8 @@ export class PixiSongSelectView {
   private readonly background = new Graphics();
   /** Skin static images (gated on `SELECT_DEFAULT_OPS`). */
   private readonly skinLayer = new Container();
-  /**
-   * Sprite pool for `skinLayer`. Replaces the
-   * `removeChildren().forEach(destroy)` + `new Sprite + addChild`
-   * pattern that was the dominant per-frame allocation source on the
-   * song select rAF loop. See `SpritePool` for the cursor-based
-   * acquisition contract.
-   */
-  private readonly skinPool = new SpritePool();
   /** Song-bar slots — one sprite per visible bar plus its overlay text. */
   private readonly listLayer = new Container();
-  /** Sprite pool for the bar list (`#DST_BAR_BODY` slots + flash overlay). */
-  private readonly listPool = new SpritePool();
-  /**
-   * Reusable `Text` nodes for bar titles, keyed by entry identity
-   * (song id or folder path). Persisting these across frames avoids
-   * the repeated `new Text` + `new TextStyle` allocation that was
-   * triggering full font measurement / glyph rasterisation on every
-   * tick — measurably the heaviest single per-frame cost in the select
-   * view.
-   */
-  private readonly barTitleNodes = new Map<string, Text>();
   private readonly title = new Text({
     text: 'Drop a BMS folder or ZIP',
     style: new TextStyle({
@@ -460,10 +440,6 @@ export class PixiSongSelectView {
   }
 
   public dispose(): void {
-    // Stop PixiJS's internal Application ticker first — same race-fix
-    // pattern as the gameplay view: without it the auto-render can
-    // fire mid-teardown against half-destroyed sprite state.
-    this.app.ticker?.stop();
     if (this.animationFrame !== 0) {
       cancelAnimationFrame(this.animationFrame);
       this.animationFrame = 0;
@@ -472,10 +448,6 @@ export class PixiSongSelectView {
     this.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
     this.app.canvas.removeEventListener('pointermove', this.handlePointerMove);
     this.app.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
-    this.app.destroy(true, { children: true });
-    this.skinPool.destroy();
-    this.listPool.destroy();
-    this.barTitleNodes.clear();
     for (const texture of this.skinTextures.values()) {
       texture.destroy(true);
     }
@@ -484,6 +456,7 @@ export class PixiSongSelectView {
       texture.destroy(true);
     }
     this.chartGraphicTextures.clear();
+    this.app.destroy(true, { children: true });
     this.mountedContainer = undefined;
   }
 
@@ -901,18 +874,8 @@ export class PixiSongSelectView {
     this.root.scale.set(viewport.scale);
     this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
 
-    // Cursor-based reuse instead of removeChildren+destroy: see
-    // `SpritePool`. End-of-frame `pool.end()` calls (after each
-    // sub-render) hide any leftover sprites from a denser previous
-    // frame.
-    this.skinPool.begin();
-    this.listPool.begin();
-    // Reset visibility on every cached bar-title `Text` so titles for
-    // entries that scroll out of the visible window go invisible
-    // instead of lingering with stale text.
-    for (const node of this.barTitleNodes.values()) {
-      if (node.visible) node.visible = false;
-    }
+    this.skinLayer.removeChildren().forEach((child) => child.destroy());
+    this.listLayer.removeChildren().forEach((child) => child.destroy());
 
     // Decay the smooth-scroll offset toward 0. Exponential decay with
     // a ~80 ms time constant gives a snappy slide that's substantially
@@ -951,8 +914,6 @@ export class PixiSongSelectView {
       if (this.collection.songs.length === 0) {
         this.renderEmptyStateHint();
       }
-      this.skinPool.end();
-      this.listPool.end();
       return;
     }
 
@@ -982,12 +943,6 @@ export class PixiSongSelectView {
       }
       this.drawFallbackSongRow(song, songIndex, visibleIndex, designWidth);
     }
-    // Mirror the skin path: hide any leftover pooled sprites. The
-    // fallback row itself uses `Graphics`/`Text` directly (it doesn't
-    // go through the pool) but the pool still needs to be wound down
-    // in case a previous frame painted skin sprites.
-    this.skinPool.end();
-    this.listPool.end();
   }
 
   /**
@@ -1071,8 +1026,10 @@ export class PixiSongSelectView {
       if (!isDestinationVisible(this.evaluateElementDst(image), ops, this.timerActive)) {
         continue;
       }
-      // `makeStaticImageSprite` pools onto `skinLayer` directly.
-      this.makeStaticImageSprite(image);
+      const sprite = this.makeStaticImageSprite(image);
+      if (sprite) {
+        this.skinLayer.addChild(sprite);
+      }
     }
 
     const focusedSong = this.collection.songs[this.selectedIndex];
@@ -1090,7 +1047,7 @@ export class PixiSongSelectView {
       if (value === undefined) {
         continue;
       }
-      renderNumberElement(this.skinLayer, number, value, this.skinTextures, dst, undefined, this.skinPool);
+      renderNumberElement(this.skinLayer, number, value, this.skinTextures, dst);
     }
 
     // TEXT panels — title / artist / genre / level label / etc. LR2
@@ -1140,9 +1097,10 @@ export class PixiSongSelectView {
       if (!this.isPointerInHitRect(dst, onMouse)) {
         continue;
       }
-      // `makeSlicedSprite` acquires from the requested pool/layer
-      // directly — no addChild needed at the call site.
-      this.makeSlicedSprite(onMouse.source, dst, this.skinPool, this.skinLayer, 'onmouse');
+      const sprite = this.makeSlicedSprite(onMouse.source, dst, 'onmouse');
+      if (sprite) {
+        this.skinLayer.addChild(sprite);
+      }
     }
 
     // MOUSECURSOR — replaces the system cursor with the skin's
@@ -1153,8 +1111,10 @@ export class PixiSongSelectView {
         if (!isDestinationVisible(dst, ops, this.timerActive)) {
           continue;
         }
-        // `makeMouseCursorSprite` already pools onto `skinLayer`.
-        this.makeMouseCursorSprite(cursor, dst);
+        const sprite = this.makeMouseCursorSprite(cursor, dst);
+        if (sprite) {
+          this.skinLayer.addChild(sprite);
+        }
       }
     }
   }
@@ -1181,13 +1141,7 @@ export class PixiSongSelectView {
    * (`source.cycle > 0`) are picked via `pickAnimatedCell` so spinner
    * / pulse sprites animate correctly.
    */
-  private makeSlicedSprite(
-    source: Lr2ImageRect,
-    dst: Lr2DestinationRect,
-    pool: SpritePool,
-    layer: Container,
-    label?: string,
-  ): Sprite | undefined {
+  private makeSlicedSprite(source: Lr2ImageRect, dst: Lr2DestinationRect, label?: string): Sprite | undefined {
     const baseTexture = this.skinTextures.get(source.imagePath);
     if (!baseTexture) {
       return undefined;
@@ -1199,8 +1153,7 @@ export class PixiSongSelectView {
     const elapsed = this.elapsedSinceTimer(source.timer);
     const cell = pickAnimatedCell(source, elapsed, dst.loop);
     const cropped = createCroppedTexture(baseTexture, cell) ?? baseTexture;
-    const sprite = pool.acquire(layer);
-    sprite.texture = cropped;
+    const sprite = new Sprite(cropped);
     sprite.label = label ?? `sliced[${source.imagePath}]`;
     sprite.position.set(rect.x, rect.y);
     sprite.width = rect.w;
@@ -1226,8 +1179,7 @@ export class PixiSongSelectView {
     const elapsed = this.elapsedSinceTimer(cursor.source.timer);
     const cell = pickAnimatedCell(cursor.source, elapsed, dst.loop);
     const cropped = createCroppedTexture(baseTexture, cell) ?? baseTexture;
-    const sprite = this.skinPool.acquire(this.skinLayer);
-    sprite.texture = cropped;
+    const sprite = new Sprite(cropped);
     sprite.label = 'mouse-cursor';
     sprite.position.set(this.mouseX + rect.x, this.mouseY + rect.y);
     sprite.width = rect.w;
@@ -1271,13 +1223,13 @@ export class PixiSongSelectView {
         w: cellWidth,
         h: cellHeight,
       }) ?? baseTexture;
-    const sprite = this.skinPool.acquire(this.skinLayer);
-    sprite.texture = cellTexture;
+    const sprite = new Sprite(cellTexture);
     sprite.label = `button[type=${button.type},state=${stateIndex}]`;
     sprite.position.set(rect.x, rect.y);
     sprite.width = rect.w;
     sprite.height = rect.h;
     applyDestinationToSprite(sprite, dst);
+    this.skinLayer.addChild(sprite);
   }
 
   /**
@@ -1323,10 +1275,10 @@ export class PixiSongSelectView {
         const texture = this.skinTextures.get(body.source.imagePath);
         if (texture) {
           const label = `bar-body[slot=${slot.index},kind=${body.kind}${isCenter ? ',center' : ''}]`;
-          // `makeBarBodySprite` now acquires from `listPool` directly,
-          // so the parent layer is already set; just call for side
-          // effects.
-          this.makeBarBodySprite(texture, body.source, dst, label);
+          const sprite = this.makeBarBodySprite(texture, body.source, dst, label);
+          if (sprite) {
+            this.listLayer.addChild(sprite);
+          }
         }
       }
       if (entry) {
@@ -1368,9 +1320,10 @@ export class PixiSongSelectView {
       x: bar.x + flashDst.x,
       y: bar.y + flashDst.y,
     };
-    // `bar-flash` belongs to the bar list (not the static skin chrome),
-    // so route through `listPool`.
-    this.makeSlicedSprite(flash.source, absoluteDst, this.listPool, this.listLayer, 'bar-flash');
+    const sprite = this.makeSlicedSprite(flash.source, absoluteDst, 'bar-flash');
+    if (sprite) {
+      this.listLayer.addChild(sprite);
+    }
   }
 
   /**
@@ -1409,15 +1362,7 @@ export class PixiSongSelectView {
       destination: absoluteDst,
       keyframes: [absoluteDst],
     };
-    renderNumberElement(
-      this.listLayer,
-      fakeNumberElement,
-      playLevel,
-      this.skinTextures,
-      absoluteDst,
-      undefined,
-      this.listPool,
-    );
+    renderNumberElement(this.listLayer, fakeNumberElement, playLevel, this.skinTextures, absoluteDst);
   }
 
   private makeStaticImageSprite(image: Lr2ImageElement): Sprite | undefined {
@@ -1449,8 +1394,7 @@ export class PixiSongSelectView {
       const cell = pickAnimatedCell(image.source, elapsed, dst.loop);
       cropped = createCroppedTexture(texture, cell) ?? texture;
     }
-    const sprite = this.skinPool.acquire(this.skinLayer);
-    sprite.texture = cropped;
+    const sprite = new Sprite(cropped);
     sprite.label = `image[${path}]`;
     sprite.position.set(rect.x, rect.y);
     sprite.width = rect.w;
@@ -1541,8 +1485,7 @@ export class PixiSongSelectView {
     const elapsed = this.elapsedSinceTimer(source.timer);
     const cell = pickAnimatedCell(source, elapsed, destination.loop);
     const cropped = createCroppedTexture(texture, cell) ?? texture;
-    const sprite = this.listPool.acquire(this.listLayer);
-    sprite.texture = cropped;
+    const sprite = new Sprite(cropped);
     sprite.label = label ?? 'bar-body';
     sprite.position.set(rect.x, rect.y);
     sprite.width = rect.w;
@@ -1573,46 +1516,22 @@ export class PixiSongSelectView {
     // the title overflow horizontally on narrow bars.
     const titleFontSize = clampFontSize(h - 2, 8, 14);
     const primaryText = entry.kind === 'song' ? entry.song.title : entry.folder.label;
-    // Reuse a per-entry `Text` node so we don't pay PixiJS's font
-    // measurement / glyph rasterisation cost on every frame for the
-    // same bar. Allocating fresh `Text` + `TextStyle` per visible bar
-    // (~30 bars × 60 fps = 1800 measurements/sec) was the heaviest
-    // single per-frame cost in the select view.
-    // Folders don't carry a stable id, but their `label` is unique
-    // within a flat folder list (the library deduplicates) so it's a
-    // safe cache key. Songs use their id directly.
-    const cacheKey = entry.kind === 'song' ? `song:${entry.song.id}` : `folder:${entry.folder.label}`;
-    let titleText = this.barTitleNodes.get(cacheKey);
-    if (!titleText) {
-      titleText = new Text({
-        text: primaryText,
-        style: new TextStyle({
-          fill: TEXT,
-          fontSize: titleFontSize,
-          // System sans-serif looks too "thick" at small sizes vs an
-          // image font. A regular weight reads cleaner — bold should
-          // come back once we wire up `#LR2FONT`.
-          fontWeight: '500',
-          fontFamily: 'system-ui, sans-serif',
-          wordWrap: true,
-          wordWrapWidth: w,
-        }),
-      });
-      titleText.label = `bar-title[${entry.kind}=${primaryText}]`;
-      this.barTitleNodes.set(cacheKey, titleText);
-    } else {
-      // Title text is fixed per entry; only update the wrap width
-      // and font size when the bar geometry changes (skin reload).
-      const style = titleText.style;
-      if (style.fontSize !== titleFontSize) style.fontSize = titleFontSize;
-      if (style.wordWrapWidth !== w) style.wordWrapWidth = w;
-    }
-    titleText.visible = true;
+    const titleText = new Text({
+      text: primaryText,
+      style: new TextStyle({
+        fill: TEXT,
+        fontSize: titleFontSize,
+        // System sans-serif looks too "thick" at small sizes vs an
+        // image font. A regular weight reads cleaner — bold should
+        // come back once we wire up `#LR2FONT`.
+        fontWeight: '500',
+        fontFamily: 'system-ui, sans-serif',
+        wordWrap: true,
+        wordWrapWidth: w,
+      }),
+    });
+    titleText.label = `bar-title[${entry.kind}=${primaryText}]`;
     titleText.position.set(x, y);
-    // Always re-addChild so the title stays above any pooled list
-    // sprites that get appended to `listLayer` later in the frame
-    // (PixiJS's `addChild` is a cheap splice when the node is already
-    // a child).
     this.listLayer.addChild(titleText);
     // No artist sub-line: LR2's bar list shows just the title (or
     // folder name). Per-song artist / genre live in the dedicated
