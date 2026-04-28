@@ -36,6 +36,7 @@ import {
   normaliseRect,
   pickAnimatedCell,
   renderNumberElement,
+  SpritePool,
 } from './lr2-render.ts';
 import { normalizeChannel, normalizeObjectKey } from '@be-music/json';
 
@@ -242,6 +243,44 @@ export class PixiGameplayView {
       fontFamily: 'system-ui, sans-serif',
     }),
   });
+  // Per-frame sprite pools. Replaces the
+  // `removeChildren().forEach(destroy)` + `new Sprite + addChild` pattern
+  // that produced ~hundreds of throwaway Pixi nodes per tick on a busy
+  // chart and was the dominant per-frame GC source. See `SpritePool`.
+  private readonly notePool = new SpritePool();
+  private readonly skinPool = new SpritePool();
+  private readonly overlayPool = new SpritePool();
+  private readonly bgaPool = new SpritePool();
+  private readonly bombPool = new SpritePool();
+  // Reusable Graphics for the no-skin fallback paths (notes, measure
+  // lines). Cleared with `.clear()` each frame instead of being
+  // recreated — same idea as the sprite pools but for Graphics, which
+  // doesn't fit the Sprite contract.
+  private readonly noteFallbackGraphics = new Graphics();
+  private readonly measureLineFallbackGraphics = new Graphics();
+  /**
+   * Cache of `Text` nodes for skin `#DST_TEXT` elements, keyed by the
+   * element identity. The Text node is created on first render and
+   * reused on subsequent frames — `Text` construction triggers font
+   * measurement and glyph rasterisation, both of which are expensive
+   * enough to swallow several ms per text element if redone every tick.
+   *
+   * Iterable (not a WeakMap) so we can reset visibility at the start of
+   * each frame and only re-show nodes that pass the gating checks.
+   */
+  private readonly textElementNodes = new Map<Lr2TextElement, Text>();
+  /**
+   * Persistent fallback labels (status / judge) used only when no LR2
+   * skin is loaded. Created once and re-styled in place so we don't
+   * re-rasterise the system font every frame.
+   */
+  private fallbackStatusText: Text | undefined;
+  private fallbackJudgeText: Text | undefined;
+  /**
+   * Persistent fallback skin frame (no-LR2 demo mode). Drawn once and
+   * reused — the chrome is fully static.
+   */
+  private fallbackSkinFrame: Graphics | undefined;
   private song: BrowserSongEntry | undefined;
   private source: BrowserSongAssetSource | undefined;
   private notes: RuntimeNote[] = [];
@@ -508,6 +547,19 @@ export class PixiGameplayView {
     // for one final render pass — same null-batcher class of bug as the
     // ticker race above.
     this.app.destroy(true, { children: true });
+    // Pools' sprites are children of (now-destroyed) layers; we still
+    // need to clear the pool's internal arrays so the references go
+    // away. `destroy()` here is a no-op on already-destroyed sprites
+    // but cheap, and it resets the cursor for safety.
+    this.notePool.destroy();
+    this.skinPool.destroy();
+    this.overlayPool.destroy();
+    this.bgaPool.destroy();
+    this.bombPool.destroy();
+    this.textElementNodes.clear();
+    this.fallbackStatusText = undefined;
+    this.fallbackJudgeText = undefined;
+    this.fallbackSkinFrame = undefined;
     for (const texture of this.textures.values()) {
       texture.destroy(true);
     }
@@ -1529,7 +1581,7 @@ export class PixiGameplayView {
   }
 
   private renderBombs(): void {
-    this.bombLayer.removeChildren().forEach((child) => child.destroy());
+    this.bombPool.begin();
     this.cleanupBombTimers();
     // When an LR2 skin is loaded the bomb sprite is already part of the
     // skin's `#DST_IMAGE` set (one entry per lane, gated on bomb timer
@@ -1537,6 +1589,7 @@ export class PixiGameplayView {
     // explosion, so this fallback only fires for the default (skinless)
     // demo experience.
     if (this.options.skin !== undefined || !this.bombTexture || this.bombStartedAt.size === 0) {
+      this.bombPool.end();
       return;
     }
     const naturalRatio = this.bombTexture.frame.width / Math.max(1, this.bombTexture.frame.height);
@@ -1567,7 +1620,8 @@ export class PixiGameplayView {
       if (!cropped) {
         continue;
       }
-      const sprite = new Sprite(cropped);
+      const sprite = this.bombPool.acquire(this.bombLayer);
+      sprite.texture = cropped;
       sprite.label = `bomb[ch=${channel},frame=${frameIndex}]`;
       const displayWidth = Math.max(cellWidth * 0.6, lane.w * (lr2Layout ? 4.5 : 3));
       const displayHeight = displayWidth * (cellHeight / cellWidth);
@@ -1575,8 +1629,8 @@ export class PixiGameplayView {
       sprite.width = displayWidth;
       sprite.height = displayHeight;
       sprite.blendMode = 'add';
-      this.bombLayer.addChild(sprite);
     }
+    this.bombPool.end();
   }
 
   /**
@@ -1591,9 +1645,10 @@ export class PixiGameplayView {
    * the next frame without explicit dirty tracking.
    */
   private renderBga(seconds: number): void {
-    this.bgaLayer.removeChildren().forEach((child) => child.destroy());
+    this.bgaPool.begin();
     const skin = this.options.skin;
     if (!skin || !this.hasBga || skin.bgas.length === 0) {
+      this.bgaPool.end();
       return;
     }
     // Pick the first DST_BGA whose op gating is currently true (e.g. the
@@ -1601,11 +1656,13 @@ export class PixiGameplayView {
     // "large" — and we set op 30 by default so the normal one wins).
     const bga = skin.bgas.find((entry) => this.isDestinationVisible(entry.destination));
     if (!bga) {
+      this.bgaPool.end();
       return;
     }
     const dst = this.evaluateElementDst(bga);
     const { x, y, w, h } = normaliseRect(dst);
     if (w <= 0 || h <= 0) {
+      this.bgaPool.end();
       return;
     }
     const baseKey = bga.noBase ? undefined : pickActiveBgaKey(this.bgaTimeline.base, seconds);
@@ -1633,13 +1690,13 @@ export class PixiGameplayView {
       const fit = fitTextureWithinSpecCanvas(texture.width, texture.height);
       const scaleX = w / SPEC_BGA_CANVAS_SIZE;
       const scaleY = h / SPEC_BGA_CANVAS_SIZE;
-      const sprite = new Sprite(texture);
+      const sprite = this.bgaPool.acquire(this.bgaLayer);
+      sprite.texture = texture;
       sprite.label = `bga/${layerName}[key=${key}]`;
       sprite.position.set(x + fit.offsetX * scaleX, y + fit.offsetY * scaleY);
       sprite.width = fit.width * scaleX;
       sprite.height = fit.height * scaleY;
       applyDestinationToSprite(sprite, dst);
-      this.bgaLayer.addChild(sprite);
     };
 
     if (poorKey) {
@@ -1652,15 +1709,36 @@ export class PixiGameplayView {
       // base track shows through where the foreground BMP is empty.
       drawLayer(layerKey, this.bgaLayerTextures, 'layer');
     }
+    this.bgaPool.end();
   }
 
   private renderSkin(width: number, height: number): void {
-    this.skinLayer.removeChildren().forEach((child) => child.destroy());
-    this.overlayLayer.removeChildren().forEach((child) => child.destroy());
+    this.skinPool.begin();
+    this.overlayPool.begin();
+    // Reset visibility on every cached text node — `renderTextElement`
+    // re-flips the visible ones to true. This keeps elements that get
+    // gated out by `#IF` from lingering with stale text from a frame
+    // when they were visible.
+    for (const node of this.textElementNodes.values()) {
+      if (node.visible) node.visible = false;
+    }
     const skin = this.options.skin;
     if (!skin) {
-      renderFallbackLr2Frame(this.skinLayer);
+      // Fallback frame is a single Graphics-only path; pool stays
+      // empty. End the pools immediately so the previous frame's skin
+      // sprites are hidden. The fallback chrome is static, so we draw
+      // it once and let it stay.
+      this.skinPool.end();
+      this.overlayPool.end();
+      if (!this.fallbackSkinFrame) {
+        this.fallbackSkinFrame = renderFallbackLr2Frame(this.skinLayer);
+      }
       return;
+    }
+    // Hide the fallback frame once a skin is loaded — the skin paints
+    // its own chrome.
+    if (this.fallbackSkinFrame) {
+      this.fallbackSkinFrame.visible = false;
     }
     const scale = Math.min(width / skin.width, height / skin.height);
     this.skinLayer.scale.set(scale);
@@ -1715,12 +1793,21 @@ export class PixiGameplayView {
       if (value === undefined) {
         continue;
       }
-      renderNumberElement(this.skinLayer, number, value, this.textures, this.evaluateElementDst(number), {
-        // Groove-gauge percentage is naturally variable-length; LR2 default
-        // skins specify keta=3 which would print "020" / "100". Suppress
-        // leading zeros so the displayed value reads like a normal integer.
-        suppressLeadingZeros: number.source.num === 107,
-      });
+      renderNumberElement(
+        this.skinLayer,
+        number,
+        value,
+        this.textures,
+        this.evaluateElementDst(number),
+        {
+          // Groove-gauge percentage is naturally variable-length; LR2
+          // default skins specify keta=3 which would print "020" /
+          // "100". Suppress leading zeros so the displayed value reads
+          // like a normal integer.
+          suppressLeadingZeros: number.source.num === 107,
+        },
+        this.skinPool,
+      );
     }
     for (const gauge of skin.grooveGauges) {
       if (gauge.index !== 0) {
@@ -1730,7 +1817,14 @@ export class PixiGameplayView {
       if (!this.isDestinationVisible(gauge.destination)) {
         continue;
       }
-      renderGrooveGaugeElement(this.skinLayer, gauge, this.gauge, this.textures, this.evaluateElementDst(gauge));
+      renderGrooveGaugeElement(
+        this.skinLayer,
+        gauge,
+        this.gauge,
+        this.textures,
+        this.evaluateElementDst(gauge),
+        this.skinPool,
+      );
     }
     for (const bargraph of skin.bargraphs) {
       if (!this.isDestinationVisible(bargraph.destination)) {
@@ -1751,6 +1845,12 @@ export class PixiGameplayView {
       this.renderTextElement(text);
     }
     this.renderJudgeAndComboOnOverlay(skin);
+    // Hide any leftover pooled sprites from a frame when more skin
+    // elements were visible. Order: end the pools AFTER
+    // `renderJudgeAndComboOnOverlay` because that path also acquires
+    // from `overlayPool`.
+    this.skinPool.end();
+    this.overlayPool.end();
   }
 
   /**
@@ -1797,7 +1897,13 @@ export class PixiGameplayView {
     if (!texture) {
       return;
     }
-    const sprite = new Sprite(texture);
+    // The AUTOPLAY label (any image gated on op 33) belongs in the same
+    // visual layer as the judgement plate — i.e. above the falling notes.
+    // All other skin images stay in the regular skin layer.
+    const isOverlay = image.destination.ops.includes(33);
+    const targetLayer = isOverlay ? this.overlayLayer : this.skinLayer;
+    const sprite = (isOverlay ? this.overlayPool : this.skinPool).acquire(targetLayer);
+    sprite.texture = texture;
     sprite.label = `image[${image.source.imagePath}]`;
     const { x, y, w, h } = normaliseRect(dst);
     // op4=1 on the destination is the LR2 scratch-turntable spin marker.
@@ -1819,11 +1925,6 @@ export class PixiGameplayView {
     sprite.width = w;
     sprite.height = h;
     applyDestinationToSprite(sprite, dst);
-    // The AUTOPLAY label (any image gated on op 33) belongs in the same
-    // visual layer as the judgement plate — i.e. above the falling notes.
-    // All other skin images stay in the regular skin layer.
-    const targetLayer = image.destination.ops.includes(33) ? this.overlayLayer : this.skinLayer;
-    targetLayer.addChild(sprite);
   }
 
   /**
@@ -1848,13 +1949,13 @@ export class PixiGameplayView {
     if (!texture) {
       return;
     }
-    const sprite = new Sprite(texture);
+    const sprite = this.skinPool.acquire(this.skinLayer);
+    sprite.texture = texture;
     sprite.label = `judgeline[idx=${judgeLine.index}]`;
     sprite.position.set(dst.x, dst.y);
     sprite.width = dst.w;
     sprite.height = dst.h;
     applyDestinationToSprite(sprite, dst);
-    this.skinLayer.addChild(sprite);
   }
 
   /**
@@ -1901,17 +2002,36 @@ export class PixiGameplayView {
     // bitmap font that pre-baked size and glyph spacing.
     const fontSize = Math.max(8, Math.min(64, h * 0.8));
     const tint = (interpolated.r << 16) | (interpolated.g << 8) | interpolated.b;
-    const node = new Text({
-      text: value,
-      style: new TextStyle({
-        fill: tint,
-        fontSize,
-        fontWeight: '600',
-        fontFamily: 'system-ui, sans-serif',
-      }),
-    });
-    node.label = `text[st=${text.st}]`;
+    // Reuse a per-element Text node. Constructing `Text` + `TextStyle`
+    // each frame triggers font measurement / glyph rasterisation, the
+    // single most expensive per-element step in the render loop. With
+    // the node persistent we only re-rasterise when `text` actually
+    // changes (PixiJS internally caches), so the per-frame cost
+    // collapses to a few property assignments.
+    let node = this.textElementNodes.get(text);
+    if (!node) {
+      node = new Text({
+        text: value,
+        style: new TextStyle({
+          fill: tint,
+          fontSize,
+          fontWeight: '600',
+          fontFamily: 'system-ui, sans-serif',
+        }),
+      });
+      node.label = `text[st=${text.st}]`;
+      this.textElementNodes.set(text, node);
+    } else {
+      if (node.text !== value) node.text = value;
+      const style = node.style;
+      if (style.fontSize !== fontSize) style.fontSize = fontSize;
+      // `style.fill` is normalised to a Color/array internally; comparing
+      // against a packed-int hint is unreliable, so just assign — the
+      // hot path is `text` change, which is the rasterisation trigger.
+      style.fill = tint;
+    }
     node.alpha = interpolated.alpha;
+    node.visible = true;
     // LR2 #SRC_TEXT spec (`docs/LR2SkinHelp.md` lines 1350+):
     //   align=0 → DST x is the LEFT edge of the rendered string
     //   align=1 → DST x is the CENTER of the rendered string
@@ -1928,6 +2048,14 @@ export class PixiGameplayView {
       node.anchor.set(0, 0.5);
     }
     node.position.set(x, y + h / 2);
+    // Always (re-)addChild — `addChild` on an existing child is a cheap
+    // splice that moves it to the top of the layer's children list.
+    // We need the move because the sprite pool can grow mid-session,
+    // and a freshly-allocated pool sprite gets `addChild`'d to the end
+    // too — that would push it above any text added on a previous
+    // frame. Re-adding the text every frame guarantees `#DST_TEXT`
+    // labels stay on top of the rest of the skin (the LR2 spec puts
+    // them last in the iteration order, i.e. at the top of the z-stack).
     this.skinLayer.addChild(node);
   }
 
@@ -2005,7 +2133,8 @@ export class PixiGameplayView {
     if (!cropTexture) {
       return;
     }
-    const sprite = new Sprite(cropTexture);
+    const sprite = this.skinPool.acquire(this.skinLayer);
+    sprite.texture = cropTexture;
     sprite.label = `bargraph[type=${bargraph.type}]`;
     if (bargraph.muki === 'vertical') {
       const filledHeight = Math.round(h * progress);
@@ -2018,7 +2147,6 @@ export class PixiGameplayView {
       sprite.height = h;
     }
     applyDestinationToSprite(sprite, interpolated);
-    this.skinLayer.addChild(sprite);
   }
 
   /**
@@ -2103,13 +2231,13 @@ export class PixiGameplayView {
         drawX = x - offset;
         break;
     }
-    const sprite = new Sprite(cropTexture);
+    const sprite = this.skinPool.acquire(this.skinLayer);
+    sprite.texture = cropTexture;
     sprite.label = `slider[type=${slider.type}]`;
     sprite.position.set(drawX, drawY);
     sprite.width = w;
     sprite.height = h;
     applyDestinationToSprite(sprite, interpolated);
-    this.skinLayer.addChild(sprite);
   }
 
   /** Returns the 0..1 value for a slider type. */
@@ -2192,13 +2320,13 @@ export class PixiGameplayView {
       if (!texture) {
         continue;
       }
-      const sprite = new Sprite(texture);
+      const sprite = this.overlayPool.acquire(this.overlayLayer);
+      sprite.texture = texture;
       sprite.label = `nowjudge[kind=${judgeKind ?? 'unknown'}]`;
       sprite.position.set(dst.x + offsetX, dst.y);
       sprite.width = dst.w;
       sprite.height = dst.h;
       applyDestinationToSprite(sprite, dst);
-      this.overlayLayer.addChild(sprite);
     }
 
     // 2) Combo digits (animated for PERFECT — divx*divy with cycle).
@@ -2212,6 +2340,7 @@ export class PixiGameplayView {
         judgeElapsed,
         offsetX,
         this.evaluateElementDst(comboElement),
+        this.overlayPool,
       );
     }
   }
@@ -2281,10 +2410,16 @@ export class PixiGameplayView {
   }
 
   private renderNotes(seconds: number, _height: number): void {
-    this.noteLayer.removeChildren().forEach((child) => child.destroy());
+    this.notePool.begin();
+    // Reset the persistent fallback Graphics so we don't accumulate
+    // strokes from prior frames. `clear()` is much cheaper than
+    // destroy + recreate.
+    this.noteFallbackGraphics.clear();
+    this.measureLineFallbackGraphics.clear();
     if (this.isIntroPlaying()) {
       // Intro period — the LR2 skin is sliding its frame chrome in. Notes
       // and measure lines stay off-screen until the playhead is live.
+      this.notePool.end();
       return;
     }
     const currentBeat = this.currentBeat(seconds);
@@ -2328,6 +2463,7 @@ export class PixiGameplayView {
       }
       this.renderSingleNote(skin, laneIndex, note.channel, lane, y);
     }
+    this.notePool.end();
   }
 
   /**
@@ -2396,29 +2532,32 @@ export class PixiGameplayView {
     if (skinLine && baseTexture) {
       const lineDst = this.evaluateElementDst(skinLine);
       const cell = pickAnimatedCell(skinLine.source, this.elapsedSinceTimer(skinLine.source.timer));
+      const cropped = createCroppedTexture(baseTexture, cell);
+      if (!cropped) {
+        return;
+      }
       for (const beat of beats) {
         const y = bottom - (beat - currentBeat) * pixelsPerBeat;
         if (y < top - 1 || y > bottom + 1) {
           continue;
         }
-        const cropped = createCroppedTexture(baseTexture, cell);
-        if (!cropped) {
-          continue;
-        }
-        const sprite = new Sprite(cropped);
+        const sprite = this.notePool.acquire(this.noteLayer);
+        sprite.texture = cropped;
         sprite.label = `measure-line[beat=${beat}]`;
         sprite.position.set(lineDst.x, Math.round(y));
         sprite.width = lineDst.w;
         sprite.height = Math.max(1, Math.abs(lineDst.h));
         applyDestinationToSprite(sprite, lineDst);
-        this.noteLayer.addChild(sprite);
       }
       return;
     }
     // Fallback: simple white strip when no skin or no #SRC_LINE.
+    // Reuse a persistent Graphics — same idea as the sprite pool: avoid
+    // per-frame allocation. The Graphics was already cleared at the
+    // start of `renderNotes`.
     const x0 = left.x;
     const x1 = right.x + right.w;
-    const graphic = new Graphics();
+    const graphic = this.measureLineFallbackGraphics;
     for (const beat of beats) {
       const y = bottom - (beat - currentBeat) * pixelsPerBeat;
       if (y < top - 1 || y > bottom + 1) {
@@ -2426,7 +2565,9 @@ export class PixiGameplayView {
       }
       graphic.rect(x0, Math.round(y), x1 - x0, 1).fill({ color: 0xffffff, alpha: 0.65 });
     }
-    this.noteLayer.addChild(graphic);
+    if (graphic.parent !== this.noteLayer) {
+      this.noteLayer.addChild(graphic);
+    }
   }
 
   /**
@@ -2497,20 +2638,26 @@ export class PixiGameplayView {
       const cell = pickAnimatedCell(skinNote, this.elapsedSinceTimer(skinNote.timer));
       const texture = createCroppedTexture(baseTexture, cell);
       if (texture) {
-        const sprite = new Sprite(texture);
+        const sprite = this.notePool.acquire(this.noteLayer);
+        sprite.texture = texture;
         sprite.label = `note[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         sprite.y = y - cell.h;
         sprite.width = cell.w;
         sprite.height = cell.h;
-        this.noteLayer.addChild(sprite);
         return;
       }
     }
-    const graphic = new Graphics();
-    graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
-    graphic.roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2).fill(isScratch(channel) ? RED : WHITE);
-    this.noteLayer.addChild(graphic);
+    // Fallback: paint into the persistent Graphics. We share a single
+    // Graphics across all fallback notes per frame — Pixi batches the
+    // resulting strokes/fills into one draw call.
+    const graphic = this.noteFallbackGraphics;
+    graphic
+      .roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2)
+      .fill(isScratch(channel) ? RED : WHITE);
+    if (graphic.parent !== this.noteLayer) {
+      this.noteLayer.addChild(graphic);
+    }
   }
 
   /**
@@ -2545,7 +2692,8 @@ export class PixiGameplayView {
       const cell = pickAnimatedCell(bodySrc, this.elapsedSinceTimer(bodySrc.timer));
       const cropped = createCroppedTexture(bodyBase, cell);
       if (cropped) {
-        const sprite = new Sprite(cropped);
+        const sprite = this.notePool.acquire(this.noteLayer);
+        sprite.texture = cropped;
         sprite.label = `ln-body[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         // Shift the body up by one cell-height so the body's bottom edge
@@ -2555,28 +2703,30 @@ export class PixiGameplayView {
         sprite.y = top - cell.h;
         sprite.width = cell.w;
         sprite.height = Math.max(1, bottom - top);
-        this.noteLayer.addChild(sprite);
       }
     } else {
-      const graphic = new Graphics();
-      graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
+      // Same persistent-Graphics pattern as `renderSingleNote`'s
+      // fallback — strokes pile into the one shared Graphics.
+      const graphic = this.noteFallbackGraphics;
       graphic
         .rect(lane.x + 2, top - 10, Math.max(4, lane.w - 4), Math.max(1, bottom - top))
         .fill({ color: isScratch(channel) ? RED : YELLOW, alpha: 0.6 });
-      this.noteLayer.addChild(graphic);
+      if (graphic.parent !== this.noteLayer) {
+        this.noteLayer.addChild(graphic);
+      }
     }
     // LN_END at the top (yEnd), LN_START at the bottom (yStart).
     if (endSrc) {
       const cell = pickAnimatedCell(endSrc, this.elapsedSinceTimer(endSrc.timer));
       const endTexture = createCroppedTexture(this.textures.get(endSrc.imagePath), cell);
       if (endTexture) {
-        const sprite = new Sprite(endTexture);
+        const sprite = this.notePool.acquire(this.noteLayer);
+        sprite.texture = endTexture;
         sprite.label = `ln-end[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         sprite.y = yEnd - cell.h;
         sprite.width = cell.w;
         sprite.height = cell.h;
-        this.noteLayer.addChild(sprite);
       }
     }
     // Hide the LN head once it has visually passed the judgement-line
@@ -2586,52 +2736,76 @@ export class PixiGameplayView {
       const cell = pickAnimatedCell(startSrc, this.elapsedSinceTimer(startSrc.timer));
       const startTexture = createCroppedTexture(this.textures.get(startSrc.imagePath), cell);
       if (startTexture) {
-        const sprite = new Sprite(startTexture);
+        const sprite = this.notePool.acquire(this.noteLayer);
+        sprite.texture = startTexture;
         sprite.label = `ln-start[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         sprite.y = yStart - cell.h;
         sprite.width = cell.w;
         sprite.height = cell.h;
-        this.noteLayer.addChild(sprite);
       }
     }
   }
 
   private renderText(width: number, height: number, seconds: number): void {
-    this.textLayer.removeChildren().forEach((child) => child.destroy());
     // Bottom-left status (title / time / HS / judge counts) is only
     // useful when there's no LR2 skin painting the same information
     // via NUMBER / TEXT elements. With a skin loaded we'd duplicate
     // every figure on top of the skin's panels, so suppress it.
     if (!this.options.skin) {
-      const status = new Text({
-        text: `${this.song?.title ?? ''}  ${formatTime(seconds)}  HS×${this.hiSpeed.toFixed(2)}  PG:${this.score.perfect} GR:${this.score.great} GD:${this.score.good} BD:${this.score.bad} PR:${this.score.poor}`,
-        style: new TextStyle({ fill: MUTED, fontSize: 10, fontFamily: 'system-ui, sans-serif' }),
-      });
-      status.label = 'fallback-status';
+      // Lazily create the persistent fallback labels and reuse the same
+      // Text node frame-to-frame. PixiJS only re-rasterises on `text`
+      // changes, so the per-frame cost is just one string assignment +
+      // a position update. Compare to the previous code which built a
+      // fresh `Text` + `TextStyle` every frame, triggering full font
+      // measurement and a hot path through PixiJS's text cache.
+      let status = this.fallbackStatusText;
+      if (!status) {
+        status = new Text({
+          text: '',
+          style: new TextStyle({ fill: MUTED, fontSize: 10, fontFamily: 'system-ui, sans-serif' }),
+        });
+        status.label = 'fallback-status';
+        this.fallbackStatusText = status;
+        this.textLayer.addChild(status);
+      }
+      const nextStatusText = `${this.song?.title ?? ''}  ${formatTime(seconds)}  HS×${this.hiSpeed.toFixed(2)}  PG:${this.score.perfect} GR:${this.score.great} GD:${this.score.good} BD:${this.score.bad} PR:${this.score.poor}`;
+      if (status.text !== nextStatusText) status.text = nextStatusText;
       status.position.set(18, height - 22);
-      this.textLayer.addChild(status);
+      status.visible = true;
+    } else if (this.fallbackStatusText) {
+      this.fallbackStatusText.visible = false;
     }
     if (this.lastJudge && seconds <= this.lastJudgeUntil && !this.hasSkinnedJudge()) {
-      const judge = new Text({
-        text: this.lastJudge,
-        style: new TextStyle({
-          fill: BLUE,
-          stroke: { color: 0xffffff, width: 2 },
-          fontSize: 32,
-          fontWeight: '800',
-          fontFamily: 'system-ui, sans-serif',
-        }),
-      });
-      judge.label = `fallback-judge[${this.lastJudge}]`;
-      judge.anchor.set(0.5);
+      let judge = this.fallbackJudgeText;
+      if (!judge) {
+        judge = new Text({
+          text: '',
+          style: new TextStyle({
+            fill: BLUE,
+            stroke: { color: 0xffffff, width: 2 },
+            fontSize: 32,
+            fontWeight: '800',
+            fontFamily: 'system-ui, sans-serif',
+          }),
+        });
+        judge.label = 'fallback-judge';
+        judge.anchor.set(0.5);
+        this.fallbackJudgeText = judge;
+        this.textLayer.addChild(judge);
+      }
+      if (judge.text !== this.lastJudge) judge.text = this.lastJudge;
       judge.position.set(PLAYFIELD.x + PLAYFIELD.w / 2, 246);
-      this.textLayer.addChild(judge);
+      judge.visible = true;
+    } else if (this.fallbackJudgeText) {
+      this.fallbackJudgeText.visible = false;
     }
     this.overlay.visible = this.paused;
-    this.overlay.text = 'Paused';
-    this.overlay.anchor.set(0.5);
-    this.overlay.position.set(width / 2, height / 2);
+    if (this.paused) {
+      if (this.overlay.text !== 'Paused') this.overlay.text = 'Paused';
+      this.overlay.anchor.set(0.5);
+      this.overlay.position.set(width / 2, height / 2);
+    }
   }
 
   private hasSkinnedJudge(): boolean {
@@ -2817,6 +2991,7 @@ function renderNowComboElement(
   elapsedMs: number,
   offsetX: number,
   dst: Lr2DestinationRect,
+  pool?: SpritePool,
 ): void {
   if (dst.w === 0 || dst.h === 0) {
     return;
@@ -2875,7 +3050,8 @@ function renderNowComboElement(
     if (!cellTexture) {
       continue;
     }
-    const sprite = new Sprite(cellTexture);
+    const sprite = pool ? pool.acquire(layer) : new Sprite();
+    sprite.texture = cellTexture;
     sprite.label = `nowcombo[digit=${digit}]`;
     sprite.position.set(startX + dstWidth * index, absY);
     sprite.width = dstWidth;
@@ -2884,7 +3060,7 @@ function renderNowComboElement(
     // every judgement, the LR2 fade-in/fade-out chain plays correctly per
     // hit, so we no longer need to force-alpha the digits.
     applyDestinationToSprite(sprite, dst);
-    layer.addChild(sprite);
+    if (!pool) layer.addChild(sprite);
   }
 }
 
@@ -2894,6 +3070,7 @@ function renderGrooveGaugeElement(
   percent: number,
   textures: ReadonlyMap<string, Texture>,
   dst: Lr2DestinationRect,
+  pool?: SpritePool,
 ): void {
   if (dst.w === 0 || dst.h === 0) {
     return;
@@ -2943,13 +3120,14 @@ function renderGrooveGaugeElement(
     if (!cellTexture) {
       continue;
     }
-    const sprite = new Sprite(cellTexture);
+    const sprite = pool ? pool.acquire(layer) : new Sprite();
+    sprite.texture = cellTexture;
     sprite.label = `gauge-bead[idx=${unitIndex},cell=${cellX + cellY * divx}]`;
     sprite.position.set(dst.x + gauge.addX * unitIndex, dst.y + gauge.addY * unitIndex);
     sprite.width = dst.w;
     sprite.height = dst.h;
     applyDestinationToSprite(sprite, dst);
-    layer.addChild(sprite);
+    if (!pool) layer.addChild(sprite);
   }
 }
 
@@ -3105,7 +3283,7 @@ function resolveDifficultyName(difficulty: number | undefined): string {
   }
 }
 
-function renderFallbackLr2Frame(layer: Container): void {
+function renderFallbackLr2Frame(layer: Container): Graphics {
   const frame = new Graphics();
   frame.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
 
@@ -3152,6 +3330,7 @@ function renderFallbackLr2Frame(layer: Container): void {
   frame.rect(546, 392, 50, 56).fill(0x1d343c).stroke({ color: 0x9bd6ff, width: 2 });
 
   layer.addChild(frame);
+  return frame;
 }
 
 function resolveLaneChannels(notes: ReadonlyArray<RuntimeNote>): string[] {

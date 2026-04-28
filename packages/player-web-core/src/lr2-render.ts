@@ -2,6 +2,97 @@ import { type BLEND_MODES, type Container, Rectangle, Sprite, Texture } from 'pi
 import type { Lr2DestinationRect, Lr2NumberElement } from './lr2-skin.ts';
 
 /**
+ * Per-frame sprite pool. PixiJS rendering is dominated by sprite-allocation
+ * and destruction cost: tearing down `noteLayer` / `skinLayer` etc. with
+ * `removeChildren().forEach(destroy)` and rebuilding them fresh every frame
+ * costs ~hundreds of GC allocations per tick on a busy chart, which is the
+ * main reason the gameplay view drops below 60 fps on slower machines.
+ *
+ * Usage pattern:
+ *
+ *   pool.begin();
+ *   for (...) {
+ *     const sprite = pool.acquire(layer);
+ *     sprite.texture = ...;
+ *     sprite.position.set(...);
+ *     // mutate as needed
+ *   }
+ *   pool.end();   // hides any leftover sprites from a previous frame
+ *
+ * Sprites are reused frame-to-frame: previously acquired ones stay parented
+ * to the layer with `visible=false` (cheap z-order skip), and the next
+ * frame's `acquire()` flips them visible again. The cursor advances as we
+ * acquire so the call sequence implicitly defines the z-order — Pixi's
+ * `addChild` moves an existing child to the top, but since we skip the
+ * `addChild` call when the sprite is already a child of the layer, the
+ * stable index in `this.sprites` *is* its layer-children index.
+ */
+export class SpritePool {
+  private readonly sprites: Sprite[] = [];
+  private cursor = 0;
+
+  public begin(): void {
+    this.cursor = 0;
+  }
+
+  public acquire(layer: Container): Sprite {
+    let sprite = this.sprites[this.cursor];
+    if (!sprite) {
+      sprite = new Sprite();
+      this.sprites.push(sprite);
+    }
+    // Reset transform / colour state so the caller starts from a clean
+    // slate. `applyDestinationToSprite` (and other mutators) compose on
+    // top of these defaults.
+    sprite.alpha = 1;
+    sprite.tint = 0xffffff;
+    sprite.angle = 0;
+    sprite.rotation = 0;
+    sprite.scale.set(1, 1);
+    sprite.anchor.set(0, 0);
+    sprite.blendMode = 'normal';
+    sprite.visible = true;
+    sprite.label = '';
+    if (sprite.parent !== layer) {
+      sprite.parent?.removeChild(sprite);
+      layer.addChild(sprite);
+    }
+    this.cursor += 1;
+    return sprite;
+  }
+
+  public end(): void {
+    for (let i = this.cursor; i < this.sprites.length; i += 1) {
+      const s = this.sprites[i]!;
+      if (s.visible) s.visible = false;
+    }
+  }
+
+  public destroy(): void {
+    for (const sprite of this.sprites) {
+      sprite.destroy({ children: false, texture: false });
+    }
+    this.sprites.length = 0;
+    this.cursor = 0;
+  }
+}
+
+/**
+ * Per-base-texture cache of cropped sub-textures. LR2 skins reference the
+ * same atlas crops every frame (frame chrome, lane decorations, fixed UI
+ * panels), so allocating a fresh `Texture` + `Rectangle` per call from
+ * `createCroppedTexture` was producing a steady stream of GC-eligible
+ * objects each tick. Caching by `(baseTexture, x|y|w|h)` collapses that
+ * to a one-time allocation per crop region.
+ *
+ * Stored on the base `Texture` (WeakMap key) so the cache evaporates as
+ * soon as the base is dropped from its owning view. The cropped values
+ * themselves reference `texture.source`, but that's the same source the
+ * base texture already pins, so caching adds no extra GPU lifetime.
+ */
+const cropCache = new WeakMap<Texture, Map<string, Texture>>();
+
+/**
  * Shared LR2 sprite-rendering helpers used by both the gameplay view
  * (`pixi-gameplay.ts`) and the song-select view (`pixi-select.ts`).
  *
@@ -94,6 +185,12 @@ export function mapLr2BlendMode(blend: number): BLEND_MODES {
  * Returns a `Texture` view that crops `texture` to `rect`. Reuses the
  * same `BaseTexture` (no GPU re-upload). Returns `undefined` for empty
  * or absent rectangles.
+ *
+ * Cached on the base texture (see `cropCache` above). Repeated calls
+ * with the same `(texture, x, y, w, h)` return the same `Texture`
+ * instance — important because most LR2 skin elements crop a fixed
+ * cell from the atlas each frame, and allocating a fresh `Texture` +
+ * `Rectangle` per call was a measurable per-frame GC source.
  */
 export function createCroppedTexture(
   texture: Texture | undefined,
@@ -102,7 +199,21 @@ export function createCroppedTexture(
   if (!texture || rect.w <= 0 || rect.h <= 0) {
     return undefined;
   }
-  return new Texture({ source: texture.source, frame: new Rectangle(rect.x, rect.y, rect.w, rect.h) });
+  let bySource = cropCache.get(texture);
+  if (!bySource) {
+    bySource = new Map();
+    cropCache.set(texture, bySource);
+  }
+  // Animation cells can have fractional widths when the source w/h
+  // doesn't divide evenly by divx/divy. Encode the full numeric value
+  // so two near-identical frames don't collapse into the same crop.
+  const key = `${rect.x}|${rect.y}|${rect.w}|${rect.h}`;
+  let cached = bySource.get(key);
+  if (!cached) {
+    cached = new Texture({ source: texture.source, frame: new Rectangle(rect.x, rect.y, rect.w, rect.h) });
+    bySource.set(key, cached);
+  }
+  return cached;
 }
 
 /**
@@ -310,6 +421,7 @@ export function renderNumberElement(
   textures: ReadonlyMap<string, Texture>,
   dst: Lr2DestinationRect,
   options: RenderNumberOptions = {},
+  pool?: SpritePool,
 ): void {
   const baseTexture = textures.get(element.source.imagePath);
   if (!baseTexture) {
@@ -390,12 +502,13 @@ export function renderNumberElement(
     if (!cellTexture) {
       continue;
     }
-    const sprite = new Sprite(cellTexture);
+    const sprite = pool ? pool.acquire(layer) : new Sprite();
+    sprite.texture = cellTexture;
     sprite.label = `number[num=${element.source.num},cell=${cellIndex}]`;
     sprite.position.set(startX + dstWidth * index, dst.y);
     sprite.width = dstWidth;
     sprite.height = dst.h || cellHeight;
     applyDestinationToSprite(sprite, dst);
-    layer.addChild(sprite);
+    if (!pool) layer.addChild(sprite);
   }
 }
