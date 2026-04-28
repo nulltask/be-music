@@ -27,6 +27,7 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from './lr2-render.ts';
+import { PerfTracker } from './pixi-perf.ts';
 import { groupSongsByFolder, resolveChartAsset, resolveSongSource } from './library.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
@@ -191,6 +192,11 @@ export class PixiSongSelectView {
   private readonly background = new Graphics();
   /** Skin static images (gated on `SELECT_DEFAULT_OPS`). */
   private readonly skinLayer = new Container();
+  /**
+   * Per-frame section timing tracker. Logs every second when enabled
+   * via `?perf` URL flag or `globalThis.__BE_MUSIC_PERF__ = true`.
+   */
+  private readonly perf = new PerfTracker('select');
   /** Song-bar slots — one sprite per visible bar plus its overlay text. */
   private readonly listLayer = new Container();
   private readonly title = new Text({
@@ -433,7 +439,16 @@ export class PixiSongSelectView {
       this.animationFrame = requestAnimationFrame(tick);
       const skin = this.options.skin;
       if (skin && skin.barLayout.slots.length > 0) {
-        this.render();
+        this.perf.time('render', () => this.render());
+      }
+      const report = this.perf.endFrame(() => ({
+        skin: this.skinLayer.children.length,
+        list: this.listLayer.children.length,
+        songs: this.collection.songs.length,
+      }));
+      if (report) {
+        // eslint-disable-next-line no-console
+        console.log(report);
       }
     };
     this.animationFrame = requestAnimationFrame(tick);
@@ -910,9 +925,9 @@ export class PixiSongSelectView {
       //      BACKBMP presence, …) onto static frame elements that
       //      LR2 skins gate with op 70..195.
       //   2. Avoid recomputing the same `Set` per element.
-      const ops = computeSelectOps(this.focusedSong());
-      this.renderSkinFrame(skin, ops);
-      this.renderSkinBars(skin, ops);
+      const ops = this.perf.time('computeOps', () => computeSelectOps(this.focusedSong()));
+      this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, ops));
+      this.perf.time('renderSkinBars', () => this.renderSkinBars(skin, ops));
       // Empty-state hint — shown over the skin when nothing was
       // loaded, so the user understands they need to drop content.
       if (this.collection.songs.length === 0) {

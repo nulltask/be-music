@@ -37,6 +37,7 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from './lr2-render.ts';
+import { PerfTracker } from './pixi-perf.ts';
 import { normalizeChannel, normalizeObjectKey } from '@be-music/json';
 
 // -- Fallback palette (skin-less demo only) ---------------------------------
@@ -342,6 +343,13 @@ export class PixiGameplayView {
   private fpsFrameCount = 0;
   private fpsWindowStart = 0;
   private fps = 0;
+  /**
+   * Per-frame section timing tracker. Logs a console summary every
+   * second when enabled (via `?perf` URL flag or
+   * `globalThis.__BE_MUSIC_PERF__ = true`). When disabled the wrapper
+   * adds no measurable overhead.
+   */
+  private readonly perf = new PerfTracker('gameplay');
 
   public constructor(private readonly options: PixiGameplayViewOptions = {}) {}
 
@@ -1185,19 +1193,37 @@ export class PixiGameplayView {
   private tick = (): void => {
     const seconds = this.currentSeconds();
     if (!this.paused) {
-      if (this.options.autoPlay) {
-        this.autoJudge(seconds);
-      } else {
-        this.autoMiss(seconds);
-      }
-      this.scheduleAutoSamples(seconds);
-      this.checkChartEnd(seconds);
+      this.perf.time('autoJudge', () => {
+        if (this.options.autoPlay) {
+          this.autoJudge(seconds);
+        } else {
+          this.autoMiss(seconds);
+        }
+      });
+      this.perf.time('autoSamples', () => this.scheduleAutoSamples(seconds));
+      this.perf.time('checkChartEnd', () => this.checkChartEnd(seconds));
     }
-    this.updateFps();
-    this.updateDisplayedScore();
-    this.updateRankOps();
-    this.updateGaugeOps();
-    this.render(seconds);
+    this.perf.time('updateFps', () => this.updateFps());
+    this.perf.time('updateScores', () => {
+      this.updateDisplayedScore();
+      this.updateRankOps();
+      this.updateGaugeOps();
+    });
+    this.perf.time('render', () => this.render(seconds));
+    const report = this.perf.endFrame(() => ({
+      stage: this.app.stage.children.length,
+      skin: this.skinLayer.children.length,
+      overlay: this.overlayLayer.children.length,
+      bga: this.bgaLayer.children.length,
+      note: this.noteLayer.children.length,
+      bomb: this.bombLayer.children.length,
+      text: this.textLayer.children.length,
+      notesTotal: this.notes.length,
+    }));
+    if (report) {
+      // eslint-disable-next-line no-console
+      console.log(report);
+    }
     this.frame = requestAnimationFrame(this.tick);
   };
 
@@ -1493,12 +1519,12 @@ export class PixiGameplayView {
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
     this.background.clear().rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
-    this.renderSkin(DESIGN_WIDTH, DESIGN_HEIGHT);
-    this.renderBga(seconds);
-    this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT);
-    this.renderNotes(seconds, DESIGN_HEIGHT);
-    this.renderBombs();
-    this.renderText(DESIGN_WIDTH, DESIGN_HEIGHT, seconds);
+    this.perf.time('renderSkin', () => this.renderSkin(DESIGN_WIDTH, DESIGN_HEIGHT));
+    this.perf.time('renderBga', () => this.renderBga(seconds));
+    this.perf.time('renderLanes', () => this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT));
+    this.perf.time('renderNotes', () => this.renderNotes(seconds, DESIGN_HEIGHT));
+    this.perf.time('renderBombs', () => this.renderBombs());
+    this.perf.time('renderText', () => this.renderText(DESIGN_WIDTH, DESIGN_HEIGHT, seconds));
   }
 
   /**
