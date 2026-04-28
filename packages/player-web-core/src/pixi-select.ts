@@ -874,8 +874,12 @@ export class PixiSongSelectView {
     this.root.scale.set(viewport.scale);
     this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
 
-    this.skinLayer.removeChildren().forEach((child) => child.destroy());
-    this.listLayer.removeChildren().forEach((child) => child.destroy());
+    // Just orphan old children — `child.destroy()` per child each
+    // frame had measurable overhead and isn't necessary: orphaned
+    // sprites are GC-eligible and their textures stay owned by the
+    // view-level texture map.
+    this.skinLayer.removeChildren();
+    this.listLayer.removeChildren();
 
     // Decay the smooth-scroll offset toward 0. Exponential decay with
     // a ~80 ms time constant gives a snappy slide that's substantially

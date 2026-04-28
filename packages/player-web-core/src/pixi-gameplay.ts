@@ -1529,7 +1529,11 @@ export class PixiGameplayView {
   }
 
   private renderBombs(): void {
-    this.bombLayer.removeChildren().forEach((child) => child.destroy());
+    // Just orphan old children — `child.destroy()` per child each
+    // frame had measurable overhead and isn't necessary: orphaned
+    // sprites are GC-eligible and their textures stay owned by the
+    // view-level texture map.
+    this.bombLayer.removeChildren();
     this.cleanupBombTimers();
     // When an LR2 skin is loaded the bomb sprite is already part of the
     // skin's `#DST_IMAGE` set (one entry per lane, gated on bomb timer
@@ -1591,7 +1595,7 @@ export class PixiGameplayView {
    * the next frame without explicit dirty tracking.
    */
   private renderBga(seconds: number): void {
-    this.bgaLayer.removeChildren().forEach((child) => child.destroy());
+    this.bgaLayer.removeChildren();
     const skin = this.options.skin;
     if (!skin || !this.hasBga || skin.bgas.length === 0) {
       return;
@@ -1655,8 +1659,8 @@ export class PixiGameplayView {
   }
 
   private renderSkin(width: number, height: number): void {
-    this.skinLayer.removeChildren().forEach((child) => child.destroy());
-    this.overlayLayer.removeChildren().forEach((child) => child.destroy());
+    this.skinLayer.removeChildren();
+    this.overlayLayer.removeChildren();
     const skin = this.options.skin;
     if (!skin) {
       renderFallbackLr2Frame(this.skinLayer);
@@ -2281,7 +2285,7 @@ export class PixiGameplayView {
   }
 
   private renderNotes(seconds: number, _height: number): void {
-    this.noteLayer.removeChildren().forEach((child) => child.destroy());
+    this.noteLayer.removeChildren();
     if (this.isIntroPlaying()) {
       // Intro period — the LR2 skin is sliding its frame chrome in. Notes
       // and measure lines stay off-screen until the playhead is live.
@@ -2598,7 +2602,7 @@ export class PixiGameplayView {
   }
 
   private renderText(width: number, height: number, seconds: number): void {
-    this.textLayer.removeChildren().forEach((child) => child.destroy());
+    this.textLayer.removeChildren();
     // Bottom-left status (title / time / HS / judge counts) is only
     // useful when there's no LR2 skin painting the same information
     // via NUMBER / TEXT elements. With a skin loaded we'd duplicate

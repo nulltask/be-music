@@ -91,9 +91,28 @@ export function mapLr2BlendMode(blend: number): BLEND_MODES {
 }
 
 /**
+ * Per-base-texture cache of cropped sub-textures.
+ *
+ * LR2 skins reference the same atlas crops every frame (frame chrome,
+ * lane decorations, fixed UI panels, animated cells with a small
+ * cycle). Allocating a fresh `Texture` + `Rectangle` per call from
+ * `createCroppedTexture` was producing a steady stream of GC-eligible
+ * objects each tick — measurable as occasional sub-60 fps stutters
+ * during gameplay.
+ *
+ * The cache is keyed on the base `Texture` (WeakMap → entry vanishes
+ * once the base is dropped from its owning view) and an `(x, y, w, h)`
+ * string sub-key. The cropped values reference `texture.source`, which
+ * is the same source the base texture already pins, so caching adds no
+ * extra GPU lifetime.
+ */
+const cropCache = new WeakMap<Texture, Map<string, Texture>>();
+
+/**
  * Returns a `Texture` view that crops `texture` to `rect`. Reuses the
  * same `BaseTexture` (no GPU re-upload). Returns `undefined` for empty
- * or absent rectangles.
+ * or absent rectangles. Cached: repeated calls with the same
+ * `(texture, x, y, w, h)` return the same `Texture` instance.
  */
 export function createCroppedTexture(
   texture: Texture | undefined,
@@ -102,7 +121,21 @@ export function createCroppedTexture(
   if (!texture || rect.w <= 0 || rect.h <= 0) {
     return undefined;
   }
-  return new Texture({ source: texture.source, frame: new Rectangle(rect.x, rect.y, rect.w, rect.h) });
+  let bySource = cropCache.get(texture);
+  if (!bySource) {
+    bySource = new Map();
+    cropCache.set(texture, bySource);
+  }
+  // Animation cells can have fractional widths when the source w/h
+  // doesn't divide evenly by divx/divy, so encode the full numeric
+  // value rather than rounding.
+  const key = `${rect.x}|${rect.y}|${rect.w}|${rect.h}`;
+  let cached = bySource.get(key);
+  if (!cached) {
+    cached = new Texture({ source: texture.source, frame: new Rectangle(rect.x, rect.y, rect.w, rect.h) });
+    bySource.set(key, cached);
+  }
+  return cached;
 }
 
 /**
