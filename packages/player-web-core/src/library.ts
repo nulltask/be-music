@@ -249,6 +249,63 @@ export function resolveChartAsset(
   return candidates.map((path) => source.files.get(path)).find(Boolean);
 }
 
+/**
+ * Audio-asset variant of `resolveChartAsset` that walks codec
+ * substitutions when the chart's declared file isn't present.
+ *
+ * BMS charts almost always declare `#WAVxx test.wav`, but real-world
+ * archives ship the audio as `.opus` / `.ogg` / `.mp3` to save space.
+ * Mirrors the `packages/player` audio loader's "try the alternative
+ * codecs before giving up" behaviour, with the order tweaked for the
+ * browser case:
+ *
+ *   1. `.opus` (highest compression-to-quality ratio)
+ *   2. `.ogg` (broadly supported, small)
+ *   3. `.mp3` (universal, slightly larger)
+ *   4. `.wav` (always-correct fallback)
+ *   5. the original path verbatim (covers `.flac` / `.oga` / etc.)
+ *
+ * Each step also tries the upper-case variant for case-sensitive
+ * source maps (zip drops, `webkitRelativePath` directories on
+ * non-Mac). Returns the first matching byte array, or undefined.
+ */
+export function resolveChartAudioAsset(
+  source: BrowserSongAssetSource,
+  chartPath: string,
+  assetPath: string,
+): Uint8Array | undefined {
+  for (const candidate of audioFallbackPaths(assetPath)) {
+    const bytes = resolveChartAsset(source, chartPath, candidate);
+    if (bytes) {
+      return bytes;
+    }
+  }
+  return undefined;
+}
+
+function audioFallbackPaths(path: string): string[] {
+  const lastSlash = path.lastIndexOf('/');
+  const dotIndex = path.lastIndexOf('.');
+  if (dotIndex < 0 || dotIndex < lastSlash) {
+    return [path];
+  }
+  const base = path.slice(0, dotIndex);
+  const candidates = [
+    `${base}.opus`,
+    `${base}.OPUS`,
+    `${base}.ogg`,
+    `${base}.OGG`,
+    `${base}.mp3`,
+    `${base}.MP3`,
+    `${base}.wav`,
+    `${base}.WAV`,
+  ];
+  if (!candidates.includes(path)) {
+    candidates.push(path);
+  }
+  return candidates;
+}
+
 function basenameOnly(path: string): string {
   const index = path.lastIndexOf('/');
   return index >= 0 ? path.slice(index + 1) : path;

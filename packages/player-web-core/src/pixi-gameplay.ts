@@ -11,9 +11,21 @@ import {
   type ScoreSummary,
 } from '../../player/src/core/scoring.ts';
 import { resolveJudgeWindowsMs } from '../../player/src/core/judge-window.ts';
+import {
+  applyGrooveGaugeJudge,
+  createGrooveGaugeState,
+  type GrooveGaugeJudgeKind,
+  type GrooveGaugeState,
+} from '../../player/src/core/groove-gauge.ts';
+import {
+  createBeatAtSecondsResolverFromTimingResolver,
+  createScrollTimeline,
+  createSpeedTimeline,
+} from './chart-timing.ts';
+import { createScrollDistanceMapper, type ScrollDistanceMapper } from './scroll-distance.ts';
 import { extractTimedNotes, type TimedPlayableNote } from '../../player/src/playable-notes.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
-import { normalizePath, resolveChartAsset } from './library.ts';
+import { normalizePath, resolveChartAsset, resolveChartAudioAsset } from './library.ts';
 import {
   type Lr2BarGraphElement,
   type Lr2DestinationRect,
@@ -38,7 +50,9 @@ import {
   renderNumberElement,
 } from './lr2-render.ts';
 import { PerfTracker } from './pixi-perf.ts';
-import { normalizeChannel, normalizeObjectKey } from '@be-music/json';
+import { normalizeChannel, normalizeObjectKey, type BeMusicJson } from '@be-music/json';
+import { resolveBmsControlFlow } from '@be-music/parser';
+import { createBeatResolver } from '@be-music/chart';
 
 // -- Fallback palette (skin-less demo only) ---------------------------------
 // These colours are only used when no LR2 skin is loaded; once a skin
@@ -245,6 +259,42 @@ export class PixiGameplayView {
   });
   private song: BrowserSongEntry | undefined;
   private source: BrowserSongAssetSource | undefined;
+  /**
+   * The chart's `#RANDOM` / `#IF` control flow resolved for THIS play
+   * session. `song.chart` is the raw parsed JSON (kept for metadata
+   * stability), but every gameplay-time consumer — note extraction,
+   * timing resolver, sample triggers, BGA timeline, measure walk —
+   * reads `resolvedChart` so the rolled random branches actually
+   * take effect. Without this step BMS charts using `#RANDOM` /
+   * `#SETRANDOM` / `#SWITCH` either omit every conditional section or
+   * include them all (depending on parser default), neither of which
+   * matches LR2 behaviour.
+   */
+  private resolvedChart: BeMusicJson | undefined;
+  /**
+   * `seconds → beat` resolver that properly accounts for `#STOP`
+   * windows. During a STOP, this returns the same beat across the
+   * window's duration so the playfield freezes in place. Without it
+   * the previous hand-rolled `currentBeat` extrapolation would scroll
+   * notes through STOP zones at the prevailing BPM, breaking many
+   * BMS arrangements that lean on STOP for visual emphasis.
+   */
+  private beatAtSeconds: ((seconds: number) => number) | undefined;
+  /**
+   * Distance integrator that consumes `#SCROLL` and `#SPEED` events.
+   * Note Y positions are computed as
+   * `lane.bottom - distanceBetween(currentBeat, note.beat) *
+   * pixelsPerBeat` instead of `(note.beat - currentBeat) *
+   * pixelsPerBeat`, so:
+   *   - `#SCROLL,2` doubles the local scroll rate (notes pass twice
+   *     as fast),
+   *   - `#SCROLL,-1` reverses the scroll direction (notes scroll
+   *     backwards through the playfield), and
+   *   - `#SPEED` lerps the visual speed between control points.
+   * Falls back to plain beat-difference math when no scroll/speed
+   * events are present.
+   */
+  private scrollMapper: ScrollDistanceMapper | undefined;
   private notes: RuntimeNote[] = [];
   private laneChannels: string[] = [];
   private laneX = new Map<string, { x: number; w: number; top: number; bottom: number }>();
@@ -280,8 +330,28 @@ export class PixiGameplayView {
   private readonly bombStartedAt = new Map<string, number>();
   private bombTexture: Texture | undefined;
   private readonly runtimeOps = new Set<number>();
-  /** Groove-gauge percentage (0..100). LR2 NORMAL gauge starts at 20%. */
-  private gauge = 20;
+  /**
+   * LR2 groove-gauge state. Replaces the simpler hard-coded
+   * +1/+0.5/-2/-6 deltas with the proper LR2 formula:
+   *
+   *   gain = effectiveTotal / playableNoteCount
+   *
+   * where `effectiveTotal` comes from the chart's `#TOTAL`
+   * directive (or 160 if absent) and `playableNoteCount` is the
+   * number of judgeable notes after `#RANDOM` resolution. PERFECT /
+   * GREAT each grant `gain`, GOOD grants `gain / 2`, BAD = -4,
+   * POOR (chart-side miss) = -6, EMPTY_POOR (input on empty lane) =
+   * -2. Min/max clamped at 2 / 100, initial value 20.
+   */
+  private gaugeState: GrooveGaugeState = createGrooveGaugeState(0, undefined);
+  /**
+   * FAST / SLOW counts. Incremented on every GREAT or GOOD judgement
+   * — PERFECT is "on time" so it doesn't count, BAD/POOR break combo
+   * and aren't tracked here. Mirrors `applyFastSlowForJudge` in
+   * `packages/player`'s engine. Reset per play in `prepareSong`.
+   */
+  private fastCount = 0;
+  private slowCount = 0;
   /**
    * High-speed multiplier. 1.0 = base PIXELS_PER_BEAT. Adjustable at runtime
    * via Arrow Up / Arrow Down (steps of 0.25, clamped to [0.5, 6.0]). Mirrors
@@ -543,20 +613,46 @@ export class PixiGameplayView {
   }
 
   private prepareSong(song: BrowserSongEntry): void {
-    const extracted = extractTimedNotes(song.chart, { includeLandmine: true, inferBmsLnTypeWhenMissing: true });
+    // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow first
+    // so every play-time consumer below sees the same chosen branches.
+    // `Math.random` is the random source (LR2 re-rolls each play) —
+    // for deterministic playback (replays, tests) the host can swap
+    // this for a seeded PRNG later.
+    const resolved = resolveBmsControlFlow(song.chart, { random: Math.random });
+    this.resolvedChart = resolved;
+    const extracted = extractTimedNotes(resolved, { includeLandmine: true, inferBmsLnTypeWhenMissing: true });
     this.notes = extracted.playableNotes.map((note) => ({ ...note, hit: false }));
     this.laneChannels = resolveLaneChannels(this.notes);
     this.score = createEmptyScore(this.notes.filter((note) => isPlayableInputChannel(note.channel)).length);
     this.tracker = createScoreTracker();
-    const resolver = createTimingResolver(song.chart);
+    const resolver = createTimingResolver(resolved);
     this.timingResolver = resolver;
-    this.autoSampleTriggers = collectSampleTriggers(song.chart, resolver, { inferBmsLnTypeWhenMissing: true })
+    // Build a STOP-aware seconds→beat resolver for `currentBeat`.
+    this.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolver);
+    // Build the #SCROLL / #SPEED distance integrator. Skipped when
+    // the chart has no such events, so the common case stays on the
+    // plain beat-diff path with no extra cost.
+    const beatResolver = createBeatResolver(resolved);
+    const scrollTimeline = createScrollTimeline(resolved, beatResolver);
+    const speedTimeline = createSpeedTimeline(resolved, beatResolver);
+    this.scrollMapper =
+      scrollTimeline.length > 0 || speedTimeline.length > 0
+        ? createScrollDistanceMapper(scrollTimeline, speedTimeline)
+        : undefined;
+    this.autoSampleTriggers = collectSampleTriggers(resolved, resolver, { inferBmsLnTypeWhenMissing: true })
       .filter((trigger) => !isPlayableInputChannel(trigger.channel))
       .sort((left, right) => left.seconds - right.seconds);
     this.autoTriggerNextIndex = 0;
-    this.gauge = 20;
+    // Initialize gauge with the actual playable-note count and the
+    // chart's #TOTAL value so PG/GR gain matches LR2: a long chart
+    // with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a
+    // short TOTAL=160 100-note chart gets +1.6 per PG/GR.
+    const playableNoteCount = this.notes.filter((note) => isPlayableInputChannel(note.channel)).length;
+    this.gaugeState = createGrooveGaugeState(playableNoteCount, resolved.metadata.total);
+    this.fastCount = 0;
+    this.slowCount = 0;
     this.displayedScore = 0;
-    this.bgaTimeline = buildBgaTimeline(song.chart, resolver);
+    this.bgaTimeline = buildBgaTimeline(resolved, resolver);
     this.hasBga =
       this.bgaTimeline.base.length > 0 || this.bgaTimeline.layer.length > 0 || this.bgaTimeline.poor.length > 0;
     this.initializeRuntimeOps();
@@ -577,12 +673,17 @@ export class PixiGameplayView {
   }
 
   private currentBeat(seconds: number): number {
+    // Prefer the proper STOP-aware resolver (built once per song in
+    // `prepareSong`). Falls back to a flat-BPM extrapolation when the
+    // resolver isn't ready yet (very early frames during mount).
     const resolver = this.timingResolver;
+    if (this.beatAtSeconds && resolver && resolver.tempoPoints.length > 0) {
+      return this.beatAtSeconds(seconds);
+    }
     if (!resolver || resolver.tempoPoints.length === 0) {
       const bpm = this.song?.bpm ?? 130;
       return Math.max(0, seconds * (bpm / 60));
     }
-    // Walk back through the tempo points until we find the one in effect.
     let active = resolver.tempoPoints[0]!;
     for (const point of resolver.tempoPoints) {
       if (point.seconds <= seconds) {
@@ -594,25 +695,12 @@ export class PixiGameplayView {
     return Math.max(0, active.beat + ((seconds - active.seconds) * active.bpm) / 60);
   }
 
-  /** LR2 NORMAL gauge deltas: PG/GR +1.0, GD +0.5, BD -2, PR -6. */
-  private applyGaugeDelta(judge: JudgeKind): void {
-    let delta = 0;
-    switch (judge) {
-      case 'PERFECT':
-      case 'GREAT':
-        delta = 1;
-        break;
-      case 'GOOD':
-        delta = 0.5;
-        break;
-      case 'BAD':
-        delta = -2;
-        break;
-      case 'POOR':
-        delta = -6;
-        break;
-    }
-    this.gauge = Math.max(0, Math.min(100, this.gauge + delta));
+  /**
+   * Applies an LR2 NORMAL-gauge judge to the current state. Accepts
+   * `EMPTY_POOR` for input-on-empty-lane mispresses (-2 to gauge).
+   */
+  private applyGaugeDelta(judge: GrooveGaugeJudgeKind): void {
+    applyGrooveGaugeJudge(this.gaugeState, judge);
   }
 
   /** Reset runtime DST-op state to a sensible default for a play session. */
@@ -888,16 +976,25 @@ export class PixiGameplayView {
       return;
     }
     this.audioContext = new AudioContext();
-    const wavPaths = Object.values(this.song.chart.resources.wav).filter(
+    // Use the control-flow-resolved chart so #IF-gated #WAVxx
+    // declarations match the chosen #RANDOM branch.
+    const chart = this.resolvedChart ?? this.song.chart;
+    const wavPaths = Object.values(chart.resources.wav).filter(
       (path): path is string => typeof path === 'string',
     );
     await Promise.all(
       wavPaths.slice(0, 256).map(async (path) => {
-        const bytes = resolveChartAsset(this.source!, this.song!.chartPath, path);
+        // Audio-aware asset lookup: charts almost universally declare
+        // `.wav` paths but archives often ship `.ogg` / `.mp3`. Try
+        // the codec fallback chain (ogg → mp3 → wav → original).
+        const bytes = resolveChartAudioAsset(this.source!, this.song!.chartPath, path);
         if (!bytes) {
           return;
         }
         try {
+          // Cache key is the chart-declared path (not the actually
+          // loaded codec path) so `playSampleByKey` / `playSample`
+          // continue to look up by the chart's `#WAV` value.
           this.decodedSamples.set(
             normalizePath(path).toLowerCase(),
             await this.audioContext!.decodeAudioData(bytes.slice().buffer),
@@ -942,12 +1039,15 @@ export class PixiGameplayView {
     // `#BMPxx` directives (and ignored for bmson charts).
     const refs = new Map<string, string>();
     const referencedKeys = new Set<string>([...baseTrackKeys, ...layerTrackKeys]);
-    for (const [id, path] of Object.entries(song.chart.resources.bmp)) {
+    // Use the control-flow-resolved chart so #IF-gated BMP / bga
+    // header declarations match the chosen #RANDOM branch.
+    const chart = this.resolvedChart ?? song.chart;
+    for (const [id, path] of Object.entries(chart.resources.bmp)) {
       if (typeof path === 'string' && referencedKeys.has(id)) {
         refs.set(id, path);
       }
     }
-    for (const entry of song.chart.bmson.bga.header) {
+    for (const entry of chart.bmson.bga.header) {
       if (referencedKeys.has(entry.name)) {
         refs.set(entry.name, entry.name);
       }
@@ -1160,13 +1260,26 @@ export class PixiGameplayView {
       .filter((candidate) => !candidate.hit && candidate.channel === channel)
       .sort((left, right) => Math.abs(left.seconds - seconds) - Math.abs(right.seconds - seconds))[0];
     if (!note || Math.abs(note.seconds - seconds) * 1000 > windows.bad) {
+      // Empty press (no note in the BAD window for this lane) — apply
+      // LR2's "空プア" gauge penalty (-2) without breaking combo or
+      // counting against the score summary. Matches the per-press
+      // gauge behaviour seen in the LR2 reference.
+      this.applyGaugeDelta('EMPTY_POOR');
       return;
     }
     note.hit = true;
-    const delta = Math.abs(note.seconds - seconds) * 1000;
+    // Signed delta (ms): positive = player late, negative = player
+    // early. Used for FAST/SLOW classification on GREAT / GOOD
+    // judgements (PERFECT is "on time" by definition).
+    const signedDeltaMs = (seconds - note.seconds) * 1000;
+    const delta = Math.abs(signedDeltaMs);
     const judge: JudgeKind =
       delta <= windows.pgreat ? 'PERFECT' : delta <= windows.great ? 'GREAT' : delta <= windows.good ? 'GOOD' : 'BAD';
     applyJudgeToSummary(this.score, judge, this.tracker);
+    if (judge === 'GREAT' || judge === 'GOOD') {
+      if (signedDeltaMs < 0) this.fastCount += 1;
+      else if (signedDeltaMs > 0) this.slowCount += 1;
+    }
     this.applyGaugeDelta(judge);
     this.publishJudge(judge, seconds);
     this.playSample(note);
@@ -1307,7 +1420,7 @@ export class PixiGameplayView {
     for (let op = 230; op <= 240; op += 1) {
       this.runtimeOps.delete(op);
     }
-    const bucket = Math.min(10, Math.max(0, Math.floor(this.gauge / 10)));
+    const bucket = Math.min(10, Math.max(0, Math.floor(this.gaugeState.current / 10)));
     this.runtimeOps.add(230 + bucket);
     // NORMAL gauge is the default play-session gauge type; keep op 42 set
     // so the matching frame plate (`#IF op42`) remains visible.
@@ -1482,7 +1595,7 @@ export class PixiGameplayView {
     if (!this.audioContext || !this.song) {
       return;
     }
-    const path = this.song.chart.resources.wav[sampleKey];
+    const path = (this.resolvedChart ?? this.song.chart).resources.wav[sampleKey];
     if (!path) {
       return;
     }
@@ -1508,7 +1621,7 @@ export class PixiGameplayView {
     if (!this.audioContext || !this.song) {
       return;
     }
-    const path = this.song.chart.resources.wav[note.event.value.toUpperCase()];
+    const path = (this.resolvedChart ?? this.song.chart).resources.wav[note.event.value.toUpperCase()];
     if (!path) {
       return;
     }
@@ -1744,7 +1857,7 @@ export class PixiGameplayView {
         number.source.num,
         this.score,
         this.song,
-        this.gauge,
+        this.gaugeState.current,
         this.tracker.combo,
         this.hiSpeed,
         this.currentSeconds(),
@@ -1771,7 +1884,13 @@ export class PixiGameplayView {
       if (!this.isDestinationVisible(gauge.destination)) {
         continue;
       }
-      renderGrooveGaugeElement(this.skinLayer, gauge, this.gauge, this.textures, this.evaluateElementDst(gauge));
+      renderGrooveGaugeElement(
+        this.skinLayer,
+        gauge,
+        this.gaugeState.current,
+        this.textures,
+        this.evaluateElementDst(gauge),
+      );
     }
     for (const bargraph of skin.bargraphs) {
       if (!this.isDestinationVisible(bargraph.destination)) {
@@ -2336,6 +2455,13 @@ export class PixiGameplayView {
     // itself (the "判定グロー" `#DST_IMAGE` at SRC y=2007 in the default
     // 7-keys skin). The custom `renderBeatAura` we used to call here was
     // duplicate visual noise and has been removed.
+    // Distance integrator. With `#SCROLL` / `#SPEED` events present
+    // we let the mapper compute the integrated distance; otherwise
+    // we fall back to a flat `(beat - currentBeat)` to skip the
+    // segment-walking overhead.
+    const beatDistance = this.scrollMapper
+      ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
+      : (toBeat: number): number => toBeat - currentBeat;
     for (const note of this.notes) {
       // Judged notes (hit / auto-missed) intentionally stay on screen and
       // continue scrolling — only their *position* governs visibility.
@@ -2343,13 +2469,13 @@ export class PixiGameplayView {
       if (!lane) {
         continue;
       }
-      const y = lane.bottom - (note.beat - currentBeat) * pixelsPerBeat;
+      const y = lane.bottom - beatDistance(note.beat) * pixelsPerBeat;
       const laneIndex = resolveLaneIndex(note.channel);
       // Long-note render: draw LN_BODY between start and end beats, capped
       // with LN_START / LN_END sprites. Falls through to single-note render
       // if the chart has no long-note end-beat for this entry.
       if (note.endBeat !== undefined) {
-        const yEnd = lane.bottom - (note.endBeat - currentBeat) * pixelsPerBeat;
+        const yEnd = lane.bottom - beatDistance(note.endBeat) * pixelsPerBeat;
         // yEnd is *above* y (smaller value, since beats grow upward
         // visually). Hide the LN once its tail (yEnd) has visually crossed
         // the judgement-line bottom — at that point every part of the long
@@ -2392,7 +2518,9 @@ export class PixiGameplayView {
     // BMS measure length is the relative size of the measure, where 1.0 is a
     // full 4/4 measure (= 4 beats). Walk the chart's measure list and record
     // the beat at the start of each measure.
-    const measures = song.chart.measures;
+    // Use the resolved chart so #IF-gated #xx02 (measure-length)
+    // declarations match the chosen #RANDOM branch.
+    const measures = (this.resolvedChart ?? song.chart).measures;
     if (measures.length === 0) {
       this.measureBeatCache = { songId: song.id, beats };
       return beats;
@@ -2437,8 +2565,11 @@ export class PixiGameplayView {
     if (skinLine && baseTexture) {
       const lineDst = this.evaluateElementDst(skinLine);
       const cell = pickAnimatedCell(skinLine.source, this.elapsedSinceTimer(skinLine.source.timer));
+      const beatDistance = this.scrollMapper
+        ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
+        : (toBeat: number): number => toBeat - currentBeat;
       for (const beat of beats) {
-        const y = bottom - (beat - currentBeat) * pixelsPerBeat;
+        const y = bottom - beatDistance(beat) * pixelsPerBeat;
         if (y < top - 1 || y > bottom + 1) {
           continue;
         }
@@ -2460,8 +2591,11 @@ export class PixiGameplayView {
     const x0 = left.x;
     const x1 = right.x + right.w;
     const graphic = new Graphics();
+    const beatDistance = this.scrollMapper
+      ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
+      : (toBeat: number): number => toBeat - currentBeat;
     for (const beat of beats) {
-      const y = bottom - (beat - currentBeat) * pixelsPerBeat;
+      const y = bottom - beatDistance(beat) * pixelsPerBeat;
       if (y < top - 1 || y > bottom + 1) {
         continue;
       }
@@ -2646,7 +2780,7 @@ export class PixiGameplayView {
     // every figure on top of the skin's panels, so suppress it.
     if (!this.options.skin) {
       const status = new Text({
-        text: `${this.song?.title ?? ''}  ${formatTime(seconds)}  HS×${this.hiSpeed.toFixed(2)}  PG:${this.score.perfect} GR:${this.score.great} GD:${this.score.good} BD:${this.score.bad} PR:${this.score.poor}`,
+        text: `${this.song?.title ?? ''}  ${formatTime(seconds)}  HS×${this.hiSpeed.toFixed(2)}  PG:${this.score.perfect} GR:${this.score.great} GD:${this.score.good} BD:${this.score.bad} PR:${this.score.poor}  F:${this.fastCount} S:${this.slowCount}`,
         style: new TextStyle({ fill: MUTED, fontSize: 10, fontFamily: 'system-ui, sans-serif' }),
       });
       status.label = 'fallback-status';
