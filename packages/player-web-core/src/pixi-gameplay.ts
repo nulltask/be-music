@@ -1191,6 +1191,7 @@ export class PixiGameplayView {
   }
 
   private tick = (): void => {
+    this.perf.beginTick();
     const seconds = this.currentSeconds();
     if (!this.paused) {
       this.perf.time('autoJudge', () => {

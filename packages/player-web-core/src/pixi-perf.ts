@@ -19,6 +19,13 @@ export class PerfTracker {
   private readonly samples = new Map<string, number[]>();
   private frameCount = 0;
   private lastReport = performance.now();
+  /**
+   * Timestamp of the previous tick start (rAF callback entry). Used to
+   * derive `frameInterval` — the actual wall-clock time between ticks,
+   * which captures everything the JS-only `time()` wrappers can't see
+   * (PixiJS auto-render, GPU dispatch, browser composite, GC pauses).
+   */
+  private prevTickStart = 0;
 
   public constructor(label: string) {
     this.label = label;
@@ -27,6 +34,28 @@ export class PerfTracker {
 
   public isEnabled(): boolean {
     return this.enabled;
+  }
+
+  /**
+   * Call once at the very start of the rAF callback. Records the gap
+   * between this tick and the previous one as a `frameInterval`
+   * sample, so the periodic report shows e.g. `frameInterval avg=24ms`
+   * even when our `time()`-wrapped JS work sums to under 1 ms — that
+   * difference is where we should look for the real bottleneck.
+   */
+  public beginTick(): void {
+    if (!this.enabled) return;
+    const now = performance.now();
+    if (this.prevTickStart > 0) {
+      const interval = now - this.prevTickStart;
+      let arr = this.samples.get('frameInterval');
+      if (!arr) {
+        arr = [];
+        this.samples.set('frameInterval', arr);
+      }
+      arr.push(interval);
+    }
+    this.prevTickStart = now;
   }
 
   /**

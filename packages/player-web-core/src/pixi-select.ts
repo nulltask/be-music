@@ -436,6 +436,15 @@ export class PixiSongSelectView {
    */
   private startAnimationLoop(): void {
     const tick = (): void => {
+      // Bail when hidden (host swapped to gameplay). Without this the
+      // select view's rAF tick + PixiJS auto-render keep running on a
+      // `display:none` canvas, eating ~10–15 ms per frame for nothing
+      // and starving the gameplay view of frame budget.
+      if (!this.visible) {
+        this.animationFrame = 0;
+        return;
+      }
+      this.perf.beginTick();
       this.animationFrame = requestAnimationFrame(tick);
       const skin = this.options.skin;
       if (skin && skin.barLayout.slots.length > 0) {
@@ -518,10 +527,33 @@ export class PixiSongSelectView {
    * hide the select view while gameplay is on screen, instead of
    * disposing and re-creating it (which the PixiJS Devtools extension
    * doesn't tolerate well on a quick destroy+init cycle).
+   *
+   * Also pauses BOTH the rAF tick AND PixiJS's internal Application
+   * ticker when hidden — without that, the select view's auto-render
+   * keeps firing on a `display:none` canvas every frame while
+   * gameplay is up, costing ~10–15 ms per frame (most of the
+   * "missing" frame budget the perf tracker can't see). On
+   * `setVisible(true)` we restart both so the keyframe animations
+   * resume seamlessly.
    */
   public setVisible(visible: boolean): void {
+    if (this.visible === visible) {
+      return;
+    }
     this.visible = visible;
     this.app.canvas.style.display = visible ? '' : 'none';
+    if (visible) {
+      this.app.ticker?.start();
+      if (this.animationFrame === 0) {
+        this.startAnimationLoop();
+      }
+    } else {
+      this.app.ticker?.stop();
+      if (this.animationFrame !== 0) {
+        cancelAnimationFrame(this.animationFrame);
+        this.animationFrame = 0;
+      }
+    }
   }
 
   public setCollection(collection: BrowserSongCollection): void {
