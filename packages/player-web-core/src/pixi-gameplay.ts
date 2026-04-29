@@ -419,6 +419,17 @@ export class PixiGameplayView {
    */
   private fullComboFired = false;
   /**
+   * Duration in milliseconds of the longest FC-anchored keyframe
+   * sequence in the loaded skin. Used by `cleanupFullComboTimer`
+   * to remove timer 48 / 49 from `timerStartedAt` once the
+   * animation has finished — without that, the skin's FC graphic
+   * (typically authored with `loop = -1` "play once and clamp")
+   * would stay frozen on its final frame for the rest of the play
+   * session, mirroring the bomb-cleanup pattern. Defaults to
+   * 3000 ms when no FC element is present in the skin.
+   */
+  private fullComboDurationMs = 3000;
+  /**
    * High-speed multiplier. 1.0 = base PIXELS_PER_BEAT. Adjustable at runtime
    * via Arrow Up / Arrow Down (steps of 0.25, clamped to [0.5, 6.0]). Mirrors
    * LR2's "hi-speed" knob: only affects the visual scroll rate, never timing.
@@ -1055,6 +1066,13 @@ export class PixiGameplayView {
       return;
     }
     const skin = this.options.skin;
+    // Compute the FC animation duration from the skin's keyframes.
+    // Walk every element type that can be anchored to a timer and
+    // pick the longest keyframe time across those whose `timer` is
+    // 48 (1P FC) or 49 (2P FC). `cleanupFullComboTimer` later uses
+    // this value to retire timer 48 / 49 once the animation has
+    // played out, matching the bomb-cleanup pattern.
+    this.fullComboDurationMs = computeFullComboDurationMs(skin);
     const imagePaths = new Set<string>();
     skin.images.forEach((image) => imagePaths.add(image.source.imagePath));
     Object.values(skin.notes).forEach((group) => group?.forEach((note) => imagePaths.add(note.imagePath)));
@@ -1985,7 +2003,35 @@ export class PixiGameplayView {
     this.perf.time('renderLanes', () => this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT));
     this.perf.time('renderNotes', () => this.renderNotes(seconds, DESIGN_HEIGHT));
     this.perf.time('renderBombs', () => this.renderBombs());
+    // Retire timer 48 / 49 once the FC animation has played out.
+    // Same pattern as bomb-timer cleanup: without this the skin's
+    // `loop = -1` FC graphic stays clamped to its final frame for
+    // the remainder of the play session. Cheap O(1) lookup so we
+    // can run it unconditionally every frame.
+    this.cleanupFullComboTimer();
     this.perf.time('renderText', () => this.renderText(DESIGN_WIDTH, DESIGN_HEIGHT, seconds));
+  }
+
+  /**
+   * One-shot full-combo timer cleanup. Same pattern as
+   * {@link cleanupBombTimers}: once the FC animation's full
+   * keyframe-time window has elapsed, retire timer 48 / 49 from
+   * `timerStartedAt` so the skin's FC graphic (`loop = -1` "play
+   * once and clamp" by convention) doesn't stay frozen on its
+   * final frame for the rest of the play session. Idempotent —
+   * the lookups are O(1) and the second call after retirement is
+   * a no-op.
+   */
+  private cleanupFullComboTimer(): void {
+    const startedAt = this.timerStartedAt.get(48);
+    if (startedAt === undefined) {
+      return;
+    }
+    if (performance.now() - startedAt < this.fullComboDurationMs) {
+      return;
+    }
+    this.timerStartedAt.delete(48);
+    this.timerStartedAt.delete(49);
   }
 
   /**
@@ -3662,6 +3708,41 @@ function resolveJudgeSkinKind(judge: string): keyof Lr2Skin['judges'] | undefine
     default:
       return undefined;
   }
+}
+
+/**
+ * Returns the longest keyframe time (in ms) across every skin
+ * element whose `timer` is 48 (1P full combo) or 49 (2P full
+ * combo). Used to size the cleanup window in
+ * {@link PixiGameplayView.cleanupFullComboTimer}: any element
+ * still animating at `(now - achieved) > durationMs` has finished
+ * its keyframe chain and the FC timer can safely be retired so
+ * `loop = -1` "play once and clamp" elements don't sit on their
+ * final frame indefinitely.
+ *
+ * Falls back to 3000 ms (a comfortable upper bound for the LR2
+ * default 7keys skin's slide-in / fade-out) when no FC element
+ * is present in the loaded skin.
+ */
+function computeFullComboDurationMs(skin: Lr2Skin): number {
+  let max = 0;
+  const visit = (entry: { destination?: Lr2DestinationRect; keyframes?: Lr2DestinationRect[] }): void => {
+    const dst = entry.destination;
+    if (!dst) return;
+    if (dst.timer !== 48 && dst.timer !== 49) return;
+    const frames = entry.keyframes && entry.keyframes.length > 0 ? entry.keyframes : [dst];
+    for (const frame of frames) {
+      if (Number.isFinite(frame.time) && frame.time > max) {
+        max = frame.time;
+      }
+    }
+  };
+  for (const image of skin.images) visit(image);
+  for (const number of skin.numbers) visit(number);
+  for (const text of skin.texts) visit(text);
+  for (const bargraph of skin.bargraphs) visit(bargraph);
+  for (const slider of skin.sliders) visit(slider);
+  return max > 0 ? max : 3000;
 }
 
 function createEmptyScore(total: number): ScoreSummary {
