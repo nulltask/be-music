@@ -1957,8 +1957,21 @@ function resolveDifficultyOp(song: BrowserSongEntry): number {
 
 /**
  * Picks the LR2 op slot (160..164) for the focused chart's key mode.
- * Always returns a value — falls back to 7K when no other hint is
- * available, since play_7.lr2skin is the standard theme.
+ * Always returns a value.
+ *
+ * Detection priority:
+ *   1. bmson `info.modeHint` (`"beat-7k"`, `"beat-5k"`, etc.) when
+ *      present — bmson authors set this explicitly, so trust it.
+ *   2. **The chart's actual note channels** — the ground truth for
+ *      BMS files (which don't carry `modeHint`). The spec assigns
+ *      keys 6/7 to channels `18` / `19` (1P) and `28` / `29` (2P),
+ *      so a chart that never touches those is by definition a 5K
+ *      chart even if `#PLAYER 1` would otherwise look like SP-7K.
+ *   3. `#PLAYER 3` (DP) when no key signal is present.
+ *   4. 7K fallback (the most common single-side mode).
+ *
+ * The previous implementation skipped step 2 entirely and 5K BMS
+ * charts surfaced as 7K in the keymode panel.
  */
 function resolveKeyModeOp(song: BrowserSongEntry): number {
   const modeHint = song.chart.bmson.info?.modeHint?.toLowerCase() ?? '';
@@ -1969,9 +1982,24 @@ function resolveKeyModeOp(song: BrowserSongEntry): number {
   if (modeHint.includes('9k')) return SELECT_DYNAMIC_OPS.KEYS_9;
   if (modeHint.includes('7k')) return SELECT_DYNAMIC_OPS.KEYS_7;
   if (modeHint.includes('5k')) return SELECT_DYNAMIC_OPS.KEYS_5;
-  // BMS `#PLAYER` 1=SP, 3=DP — DP charts default to 14K.
-  if (song.chart.bms.player === 3) return SELECT_DYNAMIC_OPS.KEYS_14;
-  return SELECT_DYNAMIC_OPS.KEYS_7;
+  // Walk the chart events once and remember which input channels
+  // were touched. Cheap: a typical chart has a few thousand events
+  // and we exit early-ish via a Set lookup.
+  let usesPlayer2 = false;
+  let uses6or7 = false;
+  for (const event of song.chart.events) {
+    const ch = event.channel;
+    if (!ch || ch.length !== 2) continue;
+    if (ch[0] === '2') usesPlayer2 = true;
+    // Channels 18 / 19 / 28 / 29 are keys 6 / 7 + extension. Their
+    // presence is what makes a chart 7K (or 14K) vs 5K (or 10K).
+    if (ch === '18' || ch === '19' || ch === '28' || ch === '29') uses6or7 = true;
+    if (usesPlayer2 && uses6or7) break;
+  }
+  if (usesPlayer2 || song.chart.bms.player === 3) {
+    return uses6or7 ? SELECT_DYNAMIC_OPS.KEYS_14 : SELECT_DYNAMIC_OPS.KEYS_10;
+  }
+  return uses6or7 ? SELECT_DYNAMIC_OPS.KEYS_7 : SELECT_DYNAMIC_OPS.KEYS_5;
 }
 
 /**
