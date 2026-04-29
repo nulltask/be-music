@@ -214,6 +214,36 @@ function isScoreTargetChannel(channel: string): boolean {
   return normalized.startsWith('1') || normalized.startsWith('2');
 }
 
+/**
+ * Inspects a chart entry's playable note channels and reports which
+ * `play_<variant>.lr2skin` should be loaded for it. Mapping:
+ *
+ *   - any `2X` channel → DP
+ *     - any 6/7 key (18 / 19 / 28 / 29) → `'14'`
+ *     - otherwise                       → `'10'`
+ *   - SP only
+ *     - any 6/7 key → `'7'`
+ *     - otherwise   → `'5'`
+ *
+ * Pop'n (9K) detection isn't wired yet — those charts still resolve
+ * to `'7'` which the LR2 default skin tolerates.
+ */
+export function resolveChartPlayVariant(song: BrowserSongEntry): '5' | '7' | '10' | '14' {
+  const channels = new Set<string>();
+  for (const event of song.chart.events) {
+    const ch = normalizeChannel(event.channel);
+    if (isScoreTargetChannel(ch)) {
+      channels.add(ch);
+    }
+  }
+  const usesPlayer2 = [...channels].some((ch) => ch.startsWith('2'));
+  const uses6or7 = ['18', '19', '28', '29'].some((ch) => channels.has(ch));
+  if (usesPlayer2) {
+    return uses6or7 ? '14' : '10';
+  }
+  return uses6or7 ? '7' : '5';
+}
+
 function inferSourceKind(files: ReadonlyMap<string, Uint8Array>): BrowserSongSourceKind {
   return [...files.keys()].some((path) => path.includes('/')) ? 'directory' : 'files';
 }

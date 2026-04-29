@@ -40,7 +40,7 @@ import {
   LR2_SPECIAL_GRAPHIC,
   isLr2SpecialGraphic,
 } from './lr2-skin.ts';
-import { loadSkinAssetTexture, loadTextureFromBytes } from './lr2-textures.ts';
+import { loadSkinAssetTexture, loadTextureFromBytes, loadVideoTextureFromBytes } from './lr2-textures.ts';
 import {
   applyDestinationToSprite,
   createCroppedTexture,
@@ -50,6 +50,7 @@ import {
   renderNumberElement,
 } from './lr2-render.ts';
 import { PerfTracker } from './pixi-perf.ts';
+import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { normalizeChannel, normalizeObjectKey, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import { createBeatResolver } from '@be-music/chart';
@@ -220,12 +221,42 @@ function buildBgaTimeline(
 export interface PixiGameplayViewOptions {
   skin?: Lr2Skin;
   onExit?: () => void;
+  /**
+   * Restart hook. Fired when the player presses the restart hotkey
+   * (`R` by default) — host should dispose this view and mount a
+   * fresh one with the same song. The view itself can't recreate
+   * its `Application` cleanly, so re-mount is the host's job.
+   */
+  onRestart?: () => void;
   /** When true, every note is auto-judged as PERFECT at its scheduled time. */
   autoPlay?: boolean;
+  /**
+   * When true (default), routes all sample playback through a
+   * Web Audio `DynamicsCompressorNode` to soften clipping when many
+   * BMS samples fire simultaneously (jacks, dense BGM stacks).
+   * Set to `false` to bypass the compressor and feed sources to
+   * `audioContext.destination` directly.
+   */
+  audioCompressor?: boolean;
 }
 
 export class PixiGameplayView {
-  private readonly app = new Application();
+  /**
+   * The host that owns the underlying `Application`. Set by
+   * {@link mount}; before that, accessing `this.app` throws — the
+   * scene must always be mounted to a host before any rendering or
+   * input interaction can happen. See `PixiSceneHost` for the
+   * single-Application architecture rationale.
+   */
+  private host: PixiSceneHost | undefined;
+  /**
+   * Top-level Container the scene host attaches to its `app.stage`
+   * while gameplay is active. All visible nodes
+   * (`viewportBackground` + `root`) live as children of this
+   * sceneRoot, so the host can mount/unmount the whole gameplay
+   * subtree as one operation.
+   */
+  private readonly sceneRoot = new Container();
   private readonly root = new Container();
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
@@ -316,7 +347,32 @@ export class PixiGameplayView {
   private paused = false;
   private pauseTime = 0;
   private pauseTotal = 0;
+  /**
+   * Idempotency / re-entrancy guard for {@link dispose}. ESC →
+   * `onExit` → `showSelect` → `dispose` is fine on a single press,
+   * but a quick double-tap (or a chart-end `setTimeout` racing the
+   * keypress) used to fire `dispose` twice and crash on the second
+   * pass when `app` was already torn down. Now the second call
+   * short-circuits immediately.
+   */
+  private disposed = false;
   private audioContext: AudioContext | undefined;
+  /**
+   * Stable mixing bus that every sample source connects to. The
+   * downstream wiring (`mixer → compressor → makeup → destination`
+   * vs `mixer → destination`) can be swapped at runtime via
+   * {@link setAudioCompressor} without needing to reconnect each
+   * sample source. The compressor's parameters (threshold -8 dB,
+   * ratio 4:1, fast attack, mild release, makeup +1 dB) target
+   * dense BMS jacks where 16+ samples can fire within a few ms —
+   * without the limiter the summed waveform clips audibly on most
+   * devices.
+   */
+  private audioMixer: GainNode | undefined;
+  /** Compressor node, lazily created on first `prepareAudio`. */
+  private audioCompressorNode: DynamicsCompressorNode | undefined;
+  /** Whether the compressor is currently in the signal path. */
+  private audioCompressorActive = true;
   private decodedSamples = new Map<string, AudioBuffer>();
   private scheduled = new Set<RuntimeNote>();
   private autoSampleTriggers: TimedSampleTrigger[] = [];
@@ -400,6 +456,26 @@ export class PixiGameplayView {
    * tracks we keep two textures because `chroma-key` is destructive.
    */
   private bgaLayerTextures = new Map<string, Texture>();
+  /**
+   * BMP-key → `<video>` element for video BGA cues (`.mp4` /
+   * `.webm` / etc.). `renderBga` seeks + plays these on cue
+   * transitions; `dispose` revokes their object URLs.
+   *
+   * Stored separately from {@link bgaTextures} only because the
+   * sync logic needs the underlying media element — the texture
+   * itself is also added to `bgaTextures` / `bgaLayerTextures` so
+   * the existing renderer paths pick it up unchanged.
+   */
+  private bgaVideos = new Map<string, { video: HTMLVideoElement; objectUrl: string }>();
+  /**
+   * Tracks which video is currently associated with each BGA layer
+   * and the chart-time it was seeded at. We use this to detect cue
+   * transitions in `renderBga` (start the new cue's video, pause
+   * the previous one) and to compute the `currentTime` offset
+   * relative to the cue's start seconds.
+   */
+  private bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } } =
+    {};
   /** `performance.now()` of the most recent POOR judgement, drives the POOR-BGA window. */
   private lastPoorAt = 0;
   /** Whether the chart actually carries any BGA events (drives op 170/171). */
@@ -423,32 +499,26 @@ export class PixiGameplayView {
 
   public constructor(private readonly options: PixiGameplayViewOptions = {}) {}
 
-  public async mount(container: HTMLElement, song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
+  /**
+   * Convenience accessor for the host's `Application`. Throws if
+   * called before {@link mount}; this is intentional — every code
+   * path that touches `this.app` runs after mount completes.
+   */
+  private get app(): Application {
+    if (!this.host) {
+      throw new Error('PixiGameplayView: app accessed before mount');
+    }
+    return this.host.app;
+  }
+
+  public async mount(host: PixiSceneHost, song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
+    this.host = host;
     this.song = song;
     this.source = source;
-    await this.app.init({
-      backgroundAlpha: 0,
-      resizeTo: container,
-      // Antialiasing is intentionally off — LR2 skins and BGA frames
-      // are pixel-art assets that look blurry under MSAA. Combined
-      // with `roundPixels: true` and per-texture `scaleMode = 'nearest'`,
-      // this gives a fully crisp pixel-art-style render.
-      antialias: false,
-      autoDensity: true,
-      resolution: globalThis.devicePixelRatio || 1,
-      // Snap sprite positions to integer device pixels to disable
-      // sub-pixel filtering. LR2 skins are pixel-art and BGA frames
-      // tend to be small (256x256), so any half-pixel offset shows up
-      // as visible blurring along edges.
-      roundPixels: true,
-    });
-    this.app.canvas.tabIndex = 0;
-    this.app.canvas.setAttribute('aria-label', 'be-music gameplay');
-    container.appendChild(this.app.canvas);
     // Label every top-level node so the PixiJS Devtools "Scene Graph"
     // panel reads as `gameplay > {bga,skin,lane,…}` instead of a wall
     // of `Container` rows. Layer ordering matches `addChild` below.
-    this.app.stage.label = 'gameplay/stage';
+    this.sceneRoot.label = 'gameplay/scene';
     this.root.label = 'gameplay/root';
     this.viewportBackground.label = 'gameplay/viewport-bg';
     this.background.label = 'gameplay/background';
@@ -471,7 +541,11 @@ export class PixiGameplayView {
       this.textLayer,
       this.overlay,
     );
-    this.app.stage.addChild(this.viewportBackground, this.root);
+    this.sceneRoot.addChild(this.viewportBackground, this.root);
+    // Attach to the host's already-initialised stage. The host owns
+    // the `Application` (canvas, ticker, WebGL context) — we just
+    // contribute our scene-graph subtree.
+    host.app.stage.addChild(this.sceneRoot);
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
     this.app.canvas.addEventListener('pointerdown', this.focus);
@@ -523,7 +597,9 @@ export class PixiGameplayView {
     });
     this.prepareSong(song);
     await this.prepareSkin();
+    if (this.disposed) return;
     await this.prepareAudio();
+    if (this.disposed) return;
     // BGA preload runs concurrently after audio so the playfield can mount
     // immediately; missing or slow-loading bitmaps fade in mid-play.
     void this.prepareBga();
@@ -543,30 +619,65 @@ export class PixiGameplayView {
   }
 
   /**
-   * Toggles canvas visibility without tearing down the WebGL context.
-   * The host hides the gameplay view while the select view is on top
-   * (and vice versa), so we don't pay the destroy+re-init cost — and
-   * don't trip the PixiJS Devtools extension's init hook either.
+   * Hides / shows the scene's subtree on the shared stage. Toggles
+   * `sceneRoot.visible` (cheap) instead of touching the canvas
+   * display — the canvas is shared with the select scene now, so
+   * we mustn't make it `display: none` from here.
    */
   public setVisible(visible: boolean): void {
-    this.app.canvas.style.display = visible ? '' : 'none';
+    this.sceneRoot.visible = visible;
+  }
+
+  /**
+   * Toggles the dynamics compressor on the master audio bus at
+   * runtime. Re-routes the mixer's downstream connection between
+   * `compressor → makeup → destination` and `destination` directly.
+   * Sample sources connect to the always-on mixer, so this toggle
+   * is a single `disconnect` + `connect` instead of a graph rebuild
+   * — safe to call mid-play even with samples in flight.
+   *
+   * Idempotent. Has no effect when `prepareAudio` hasn't run yet
+   * (i.e. before the first chart mounts); the constructor's
+   * `audioCompressor` option still seeds the initial state at that
+   * point.
+   */
+  public setAudioCompressor(enabled: boolean): void {
+    if (this.audioCompressorActive === enabled) {
+      return;
+    }
+    this.audioCompressorActive = enabled;
+    if (!this.audioMixer || !this.audioContext) {
+      // Compressor will be wired with the new state once
+      // `prepareAudio` runs.
+      return;
+    }
+    this.audioMixer.disconnect();
+    if (enabled && this.audioCompressorNode) {
+      this.audioMixer.connect(this.audioCompressorNode);
+    } else {
+      this.audioMixer.connect(this.audioContext.destination);
+    }
   }
 
   public dispose(): void {
-    // Stop PixiJS's internal Application ticker BEFORE tearing anything
-    // down. Otherwise the ticker keeps auto-rendering between our texture
-    // destroys and the final `app.destroy`, hitting a half-cleared
-    // batcher with `Cannot read properties of null (reading 'clear')` at
-    // `_DefaultBatcher.break`. Stopping the ticker first means the next
-    // auto-render is the one inside `app.destroy` itself, which is safe.
-    this.app.ticker?.stop();
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    // Cancel our own rAF (the gameplay tick loop). The shared
+    // `Application` and its ticker keep running for the next active
+    // scene — only the per-scene state below is freed.
     if (this.frame !== undefined) {
       cancelAnimationFrame(this.frame);
       this.frame = undefined;
     }
+    // Detach window-level event listeners so a stray keypress
+    // doesn't hit a disposed view.
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
-    this.app.canvas.removeEventListener('pointerdown', this.focus);
+    if (this.host) {
+      this.host.app.canvas.removeEventListener('pointerdown', this.focus);
+    }
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     window.removeEventListener('blur', this.handleWindowBlur, true);
     window.removeEventListener('focus', this.handleWindowFocus, true);
@@ -578,38 +689,69 @@ export class PixiGameplayView {
     }
     // eslint-disable-next-line no-console
     console.log('[gameplay] listeners detached');
+    // Pause every BGA video BEFORE we touch textures. The Pixi
+    // `VideoSource` wrapping each video registers a
+    // `requestVideoFrameCallback` that re-uploads frames into the
+    // GL texture as they decode — leaving those callbacks in
+    // flight while we destroy the textures throws inside the GL
+    // texture system. Pausing also revokes the Blob URL so the
+    // underlying buffer can be released.
+    for (const { video, objectUrl } of this.bgaVideos.values()) {
+      try {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      } catch {
+        // Defensive — `load()` can throw on detached videos.
+      }
+      URL.revokeObjectURL(objectUrl);
+    }
+    this.bgaVideos.clear();
+    this.bgaActiveVideos = {};
     void this.audioContext?.close();
-    // Order matters here. We need to destroy textures BEFORE
-    // `app.destroy()`, because `Texture.destroy()` emits a
-    // `styleChange` event that bubbles up to PixiJS's
-    // `GlTextureSystem`. After `app.destroy()` the renderer (and its
-    // texture system) have been nulled out, and the event handler
-    // crashes with "Cannot read properties of null (reading 'gc')"
-    // when it tries to release the GPU resource.
-    //
-    // The reverse order — textures first, app.destroy after — was
-    // previously broken for a different reason: any auto-render
-    // firing between texture destroys hit a half-cleared batcher.
-    // We've already stopped the ticker above (`app.ticker.stop()`),
-    // so no auto-render can fire during this teardown — making the
-    // textures-first order safe again. The remaining sprites still
-    // reference the freed textures by the time `app.destroy()` walks
-    // them, but they never render so it's fine.
-    for (const texture of this.textures.values()) {
-      texture.destroy(true);
+    // Detach our subtree from the host's stage. The host owns the
+    // `Application` lifetime; we just stop contributing to its
+    // scene graph. The sceneRoot Container itself stays alive in
+    // case the host wants to re-enter the same view (we don't, but
+    // it's harmless).
+    if (this.sceneRoot.parent) {
+      this.sceneRoot.parent.removeChild(this.sceneRoot);
     }
-    this.textures.clear();
-    for (const texture of this.bgaTextures.values()) {
-      texture.destroy(true);
+    // Free per-view textures. Order matters: textures BEFORE we
+    // destroy the sceneRoot / sprites, because `Texture.destroy()`
+    // emits a `styleChange` event that traverses up to the live
+    // `GlTextureSystem` (still alive on the shared host). With our
+    // sprites still parented to sceneRoot, the events route
+    // correctly.
+    try {
+      for (const texture of this.textures.values()) {
+        texture.destroy(true);
+      }
+      this.textures.clear();
+      for (const texture of this.bgaTextures.values()) {
+        texture.destroy(true);
+      }
+      this.bgaTextures.clear();
+      for (const texture of this.bgaLayerTextures.values()) {
+        texture.destroy(true);
+      }
+      this.bgaLayerTextures.clear();
+      this.bombTexture?.destroy(true);
+      this.bombTexture = undefined;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[gameplay] texture cleanup threw', error);
     }
-    this.bgaTextures.clear();
-    for (const texture of this.bgaLayerTextures.values()) {
-      texture.destroy(true);
+    // Destroy our scene-graph subtree. With the shared host pattern
+    // we never call `app.destroy` here — that would nuke the canvas
+    // and the select scene would lose its rendering target.
+    try {
+      this.sceneRoot.destroy({ children: true });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[gameplay] sceneRoot.destroy threw', error);
     }
-    this.bgaLayerTextures.clear();
-    this.bombTexture?.destroy(true);
-    this.bombTexture = undefined;
-    this.app.destroy(true, { children: true });
+    this.host = undefined;
   }
 
   private prepareSong(song: BrowserSongEntry): void {
@@ -976,6 +1118,34 @@ export class PixiGameplayView {
       return;
     }
     this.audioContext = new AudioContext();
+    // Build the audio bus. The graph always looks like
+    //
+    //   sample sources ─▶ mixer ─▶ compressor ─▶ makeup ─▶ destination
+    //                          └────────(bypass)─────────▶ destination
+    //
+    // and `setAudioCompressor` swaps the mixer's downstream
+    // connection between the two paths. Sample sources always feed
+    // `mixer`, so they don't need to be re-wired when the compressor
+    // toggles — important because hundreds of one-shot
+    // `BufferSourceNode`s come and go per second on dense charts.
+    const mixer = this.audioContext.createGain();
+    const compressor = this.audioContext.createDynamicsCompressor();
+    compressor.threshold.value = -8;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.12;
+    compressor.knee.value = 6;
+    const makeup = this.audioContext.createGain();
+    makeup.gain.value = 1.12; // ~+1 dB to recover the level the compressor took.
+    compressor.connect(makeup).connect(this.audioContext.destination);
+    this.audioMixer = mixer;
+    this.audioCompressorNode = compressor;
+    this.audioCompressorActive = this.options.audioCompressor !== false;
+    if (this.audioCompressorActive) {
+      mixer.connect(compressor);
+    } else {
+      mixer.connect(this.audioContext.destination);
+    }
     // Use the control-flow-resolved chart so #IF-gated #WAVxx
     // declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? this.song.chart;
@@ -984,10 +1154,11 @@ export class PixiGameplayView {
     );
     await Promise.all(
       wavPaths.slice(0, 256).map(async (path) => {
+        if (this.disposed || !this.source || !this.song || !this.audioContext) return;
         // Audio-aware asset lookup: charts almost universally declare
         // `.wav` paths but archives often ship `.ogg` / `.mp3`. Try
-        // the codec fallback chain (ogg → mp3 → wav → original).
-        const bytes = resolveChartAudioAsset(this.source!, this.song!.chartPath, path);
+        // the codec fallback chain (opus → ogg → mp3 → wav → original).
+        const bytes = resolveChartAudioAsset(this.source, this.song.chartPath, path);
         if (!bytes) {
           return;
         }
@@ -995,12 +1166,14 @@ export class PixiGameplayView {
           // Cache key is the chart-declared path (not the actually
           // loaded codec path) so `playSampleByKey` / `playSample`
           // continue to look up by the chart's `#WAV` value.
-          this.decodedSamples.set(
-            normalizePath(path).toLowerCase(),
-            await this.audioContext!.decodeAudioData(bytes.slice().buffer),
-          );
+          const decoded = await this.audioContext.decodeAudioData(bytes.slice().buffer);
+          if (this.disposed) return;
+          this.decodedSamples.set(normalizePath(path).toLowerCase(), decoded);
         } catch {
           // Browsers vary in codec support; unsupported samples are skipped.
+          // `decodeAudioData` also rejects when the AudioContext is
+          // closed mid-decode (e.g. ESC pressed during loading) — the
+          // catch swallows that as well so dispose can complete cleanly.
         }
       }),
     );
@@ -1054,12 +1227,7 @@ export class PixiGameplayView {
     }
     await Promise.all(
       [...refs.entries()].map(async ([key, path]) => {
-        if (isVideoExtension(path)) {
-          // Video BGA isn't supported yet — leaving the slot empty makes
-          // the renderer fall back to "BGA off" between cues that point
-          // at videos, which is preferable to a jarring still frame.
-          return;
-        }
+        if (this.disposed) return;
         const bytes = resolveChartAsset(source, song.chartPath, path);
         if (!bytes) {
           return;
@@ -1067,14 +1235,53 @@ export class PixiGameplayView {
         const usedAsBase = baseTrackKeys.has(key);
         const usedAsLayer = layerTrackKeys.has(key);
         try {
+          if (isVideoExtension(path)) {
+            // Video BGA — wraps a `<video>` element in a Pixi texture.
+            // The same texture handle is used on both tracks (no
+            // chroma-key on layer; black-keying a moving video looks
+            // worse than just letting the artist's blacks show).
+            const handle = await loadVideoTextureFromBytes(path, bytes);
+            if (!handle) return;
+            // Late-arriving video decode after the player ESC'd
+            // back to the song select — drop the texture / video
+            // immediately so we don't leak it onto a dead app.
+            if (this.disposed) {
+              try {
+                handle.video.pause();
+                handle.video.removeAttribute('src');
+                handle.video.load();
+              } catch {
+                // Best effort; the video will be GC'd anyway.
+              }
+              URL.revokeObjectURL(handle.objectUrl);
+              try {
+                handle.texture.destroy(true);
+              } catch {
+                // Already-destroyed Pixi resources throw; swallow.
+              }
+              return;
+            }
+            this.bgaVideos.set(key, { video: handle.video, objectUrl: handle.objectUrl });
+            if (usedAsBase) this.bgaTextures.set(key, handle.texture);
+            if (usedAsLayer) this.bgaLayerTextures.set(key, handle.texture);
+            return;
+          }
           if (usedAsBase) {
             const texture = await loadTextureFromBytes(path, bytes);
+            if (this.disposed) {
+              texture?.destroy(true);
+              return;
+            }
             if (texture) {
               this.bgaTextures.set(key, texture);
             }
           }
           if (usedAsLayer) {
             const texture = await loadTextureFromBytes(path, bytes, { keyOutBlack: true });
+            if (this.disposed) {
+              texture?.destroy(true);
+              return;
+            }
             if (texture) {
               this.bgaLayerTextures.set(key, texture);
             }
@@ -1158,6 +1365,15 @@ export class PixiGameplayView {
       this.options.onExit?.();
       return;
     }
+    if (event.code === 'F5') {
+      // Restart: convention follows beatoraja / LR2's F5-restart key.
+      // `preventDefault` blocks the browser-reload default; if the
+      // host hasn't supplied an `onRestart` handler we fall through
+      // to a no-op (still preventing the reload).
+      event.preventDefault();
+      this.options.onRestart?.();
+      return;
+    }
     if (event.code === 'Space') {
       event.preventDefault();
       this.togglePause();
@@ -1214,13 +1430,16 @@ export class PixiGameplayView {
   }
 
   private resolveKeyOnTimerId(channel: string): number | undefined {
-    const laneIndex = resolveLaneIndex(channel);
+    const laneIndex = resolveSideRelativeLaneIndex(channel);
     if (laneIndex < 0 || laneIndex > 7) {
       return undefined;
     }
-    // LR2 lane index → timer id. The first lane (#DST_NOTE,0) is the scratch,
-    // which maps to timer 100/110. Subsequent lanes are 101..107 (1P) and
-    // 111..117 (2P).
+    // LR2 spec: timer 100 = 1P SC, 101..107 = 1P key1..7;
+    //          timer 110 = 2P SC, 111..117 = 2P key1..7.
+    // Side-relative lane index keeps the offset 0..7 within each
+    // side, so adding it to the per-side base lands on the correct
+    // timer id even for 2P channels (which would otherwise yield
+    // timer 100+8 = 108 from a position-based laneIndex).
     const isPlayer2 = channel.startsWith('2');
     const base = isPlayer2 ? LR2_2P_KEYON_TIMER_BASE : LR2_1P_KEYON_TIMER_BASE;
     return base + laneIndex;
@@ -1281,7 +1500,7 @@ export class PixiGameplayView {
       else if (signedDeltaMs > 0) this.slowCount += 1;
     }
     this.applyGaugeDelta(judge);
-    this.publishJudge(judge, seconds);
+    this.publishJudge(judge, seconds, channel);
     this.playSample(note);
     if (judge !== 'BAD') {
       // LR2 bomb timer (50-69) fires on GREAT-or-better. Treat any non-BAD as
@@ -1293,16 +1512,15 @@ export class PixiGameplayView {
   private triggerBomb(channel: string): void {
     const now = performance.now();
     this.bombStartedAt.set(channel, now);
-    // LR2 bomb timer (50+laneIndex / 60+laneIndex). The LR2 default 7keys
-    // skin attaches its bomb sprite to `timer=50..57` (1P), so we mirror
-    // that here. The timer auto-clears once `renderBombs` completes the
-    // animation.
-    const laneIndex = resolveLaneIndex(channel);
-    if (laneIndex >= 0) {
-      const isPlayer2 = channel.startsWith('2');
-      const base = isPlayer2 ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE;
-      this.timerStartedAt.set(base + laneIndex, now);
-    }
+    // LR2 bomb timer (50+sideLaneIndex / 60+sideLaneIndex). The LR2
+    // default 7keys skin attaches its bomb sprite to `timer=50..57`
+    // (1P), so we mirror that here. The timer auto-clears once
+    // `renderBombs` completes the animation. Side-relative lane index
+    // is used so 2P SC fires timer 60 (not 60+8).
+    const laneIndex = resolveSideRelativeLaneIndex(channel);
+    const isPlayer2 = channel.startsWith('2');
+    const base = isPlayer2 ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE;
+    this.timerStartedAt.set(base + laneIndex, now);
   }
 
   /** Forced-clear utility used by `flashKeyOnTimer` after the fade window. */
@@ -1314,6 +1532,14 @@ export class PixiGameplayView {
   }
 
   private tick = (): void => {
+    // Belt-and-suspenders for the rAF-after-dispose race. Even with
+    // `app.stop()` removing the renderer's tick listener, our own
+    // `cancelAnimationFrame` can lose to a tick that's already
+    // mid-flight when ESC fires. Bailing here keeps `render()` from
+    // touching destroyed Pixi state.
+    if (this.disposed) {
+      return;
+    }
     this.perf.beginTick();
     const seconds = this.currentSeconds();
     if (!this.paused) {
@@ -1482,7 +1708,7 @@ export class PixiGameplayView {
       note.hit = true;
       applyJudgeToSummary(this.score, 'PERFECT', this.tracker);
       this.applyGaugeDelta('PERFECT');
-      this.publishJudge('PERFECT', seconds);
+      this.publishJudge('PERFECT', seconds, note.channel);
       this.playSample(note);
       this.triggerBomb(note.channel);
       this.flashKeyOnTimer(note.channel);
@@ -1543,19 +1769,23 @@ export class PixiGameplayView {
         note.hit = true;
         applyJudgeToSummary(this.score, 'POOR', this.tracker);
         this.applyGaugeDelta('POOR');
-        this.publishJudge('POOR', seconds);
+        this.publishJudge('POOR', seconds, note.channel);
       }
     }
   }
 
-  private publishJudge(judge: JudgeKind, seconds: number): void {
+  private publishJudge(judge: JudgeKind, seconds: number, channel?: string): void {
     this.lastJudge = judge;
     this.lastJudgeUntil = seconds + 0.6;
-    // LR2 spec: timer 46 (1P judge) restarts on every 1P judgement so the
-    // attached `#DST_NOWJUDGE` / `#DST_NOWCOMBO` chains animate from time=0
-    // per hit. Without this the keyframe playhead drifts hours into the
-    // song and the post-hit fade-out keyframes have long since passed.
-    this.timerStartedAt.set(46, performance.now());
+    // LR2 spec: timer 46 (1P judge) / 47 (2P judge) restarts on every
+    // judgement on its respective side so the attached
+    // `#DST_NOWJUDGE` / `#DST_NOWCOMBO` chains animate from time=0
+    // per hit. Without this the keyframe playhead drifts hours into
+    // the song and the post-hit fade-out keyframes have long since
+    // passed. When `channel` isn't supplied (legacy callers) we
+    // default to the 1P timer.
+    const isPlayer2 = typeof channel === 'string' && channel.startsWith('2');
+    this.timerStartedAt.set(isPlayer2 ? 47 : 46, performance.now());
     // POOR / BAD judgements briefly swap the base BGA for the chart's
     // POOR BGA. We trigger the same window for `BAD` because the LR2
     // spec doesn't distinguish the two for the BGA channel.
@@ -1605,7 +1835,16 @@ export class PixiGameplayView {
     }
     const node = this.audioContext.createBufferSource();
     node.buffer = buffer;
-    node.connect(this.audioContext.destination);
+    // Route through the master bus so the dynamics compressor (when
+    // enabled) sees this sample's contribution. Falls back to direct
+    // destination if `prepareAudio` hasn't run yet (defensive — in
+    // practice `audioOutput` is always set before any `play*` call).
+    // Route through the always-on mixer so the compressor toggle
+    // (`setAudioCompressor`) takes effect without reconnecting each
+    // sample. Falls back to direct destination if `prepareAudio`
+    // hasn't run yet (defensive — in practice the mixer is always
+    // set before any `play*` call).
+    node.connect(this.audioMixer ?? this.audioContext.destination);
     if (scheduledChartSeconds !== undefined) {
       // Map chart seconds → audio-context time. Clamp to "now" so a slightly
       // late trigger (look-ahead just elapsed) still fires immediately rather
@@ -1631,7 +1870,16 @@ export class PixiGameplayView {
     }
     const node = this.audioContext.createBufferSource();
     node.buffer = buffer;
-    node.connect(this.audioContext.destination);
+    // Route through the master bus so the dynamics compressor (when
+    // enabled) sees this sample's contribution. Falls back to direct
+    // destination if `prepareAudio` hasn't run yet (defensive — in
+    // practice `audioOutput` is always set before any `play*` call).
+    // Route through the always-on mixer so the compressor toggle
+    // (`setAudioCompressor`) takes effect without reconnecting each
+    // sample. Falls back to direct destination if `prepareAudio`
+    // hasn't run yet (defensive — in practice the mixer is always
+    // set before any `play*` call).
+    node.connect(this.audioMixer ?? this.audioContext.destination);
     node.start();
   }
 
@@ -1670,11 +1918,9 @@ export class PixiGameplayView {
         continue;
       }
       this.bombStartedAt.delete(channel);
-      const laneIndex = resolveLaneIndex(channel);
-      if (laneIndex >= 0) {
-        const base = channel.startsWith('2') ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE;
-        this.timerStartedAt.delete(base + laneIndex);
-      }
+      const laneIndex = resolveSideRelativeLaneIndex(channel);
+      const base = channel.startsWith('2') ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE;
+      this.timerStartedAt.delete(base + laneIndex);
     }
   }
 
@@ -1762,13 +2008,22 @@ export class PixiGameplayView {
     if (w <= 0 || h <= 0) {
       return;
     }
-    const baseKey = bga.noBase ? undefined : pickActiveBgaKey(this.bgaTimeline.base, seconds);
-    const layerKey = bga.noLayer ? undefined : pickActiveBgaKey(this.bgaTimeline.layer, seconds);
+    const baseCue = bga.noBase ? undefined : pickActiveBgaCue(this.bgaTimeline.base, seconds);
+    const layerCue = bga.noLayer ? undefined : pickActiveBgaCue(this.bgaTimeline.layer, seconds);
+    const baseKey = baseCue?.bmpKey;
+    const layerKey = layerCue?.bmpKey;
     // POOR override: show the POOR BGA for a short window after a missed
     // / BAD judgement, then revert to the base+layer composite.
     const poorWindowMs = 2000;
     const inPoorWindow = !bga.noPoor && this.lastPoorAt > 0 && performance.now() - this.lastPoorAt < poorWindowMs;
     const poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, seconds) : undefined;
+    // Drive video BGA playback: when the active cue points at a
+    // video, seek it to (currentSeconds - cueSeconds) and resume
+    // playback. When the cue switches away from a previous video,
+    // pause it. Tracked per-track because base / layer can run
+    // independent videos.
+    this.syncBgaVideo('base', baseCue, seconds);
+    this.syncBgaVideo('layer', layerCue, seconds);
 
     const drawLayer = (key: string | undefined, textures: ReadonlyMap<string, Texture>, layerName: string): void => {
       if (!key) {
@@ -1808,6 +2063,66 @@ export class PixiGameplayView {
     }
   }
 
+  /**
+   * Drives playback of a video BGA on a single track (`base` or
+   * `layer`). When the cue's key matches a known video:
+   *   - first time it fires, `play()` from the cue's start offset
+   *   - re-firing the same cue is a no-op (video keeps playing)
+   *   - switching keys pauses the previous video, then plays the new
+   *
+   * Static (non-video) cues just clear the active-video record so
+   * the next video transition starts fresh. The seek offset uses
+   * `seconds - cue.seconds` directly because BMS BGA semantics are
+   * "start playing this video from t=0 the moment the cue fires".
+   */
+  private syncBgaVideo(
+    track: 'base' | 'layer',
+    cue: BgaCue | undefined,
+    seconds: number,
+  ): void {
+    const previous = this.bgaActiveVideos[track];
+    const key = cue?.bmpKey;
+    const handle = key ? this.bgaVideos.get(key) : undefined;
+    if (!handle) {
+      // Cue points at a still image (or nothing). If we were
+      // playing a video, pause it.
+      if (previous) {
+        const prevHandle = this.bgaVideos.get(previous.key);
+        if (prevHandle && !prevHandle.video.paused) {
+          prevHandle.video.pause();
+        }
+        this.bgaActiveVideos[track] = undefined;
+      }
+      return;
+    }
+    if (previous?.key === key) {
+      // Same cue still active — nothing to do; the video plays
+      // forward on its own and the Pixi VideoSource pulls fresh
+      // frames each tick.
+      return;
+    }
+    if (previous) {
+      const prevHandle = this.bgaVideos.get(previous.key);
+      if (prevHandle && !prevHandle.video.paused) {
+        prevHandle.video.pause();
+      }
+    }
+    const cueSeconds = cue?.seconds ?? 0;
+    this.bgaActiveVideos[track] = { key: key!, cueSeconds };
+    const offset = Math.max(0, seconds - cueSeconds);
+    try {
+      handle.video.currentTime = Math.min(offset, Math.max(0, handle.video.duration - 0.05) || offset);
+    } catch {
+      // Some browsers throw on currentTime assignment before the
+      // video has its initial buffer. Best-effort — play() below
+      // will retry once the buffer arrives.
+    }
+    void handle.video.play().catch(() => {
+      // Autoplay policy / codec rejections — silently swallow so
+      // the still-image fallback keeps working.
+    });
+  }
+
   private renderSkin(width: number, height: number): void {
     this.skinLayer.removeChildren();
     this.overlayLayer.removeChildren();
@@ -1837,10 +2152,11 @@ export class PixiGameplayView {
       this.renderSkinImage(image);
     }
     for (const judgeLine of skin.judgeLines) {
-      if (judgeLine.index !== 0) {
-        // 1P side only for now.
-        continue;
-      }
+      // Render every side's judgement line. DP charts authored with
+      // both `#DST_JUDGELINE,0,...` (1P) and `#DST_JUDGELINE,1,...`
+      // (2P) get both bars drawn at their respective playfield
+      // positions. SP charts only have one entry, so this is a
+      // no-cost loop in the common case.
       this.renderJudgeLineElement(judgeLine);
     }
     for (const image of skin.images) {
@@ -2404,7 +2720,12 @@ export class PixiGameplayView {
     const startX = PLAYFIELD.x;
 
     this.laneChannels.forEach((channel, index) => {
-      const lr2Lane = skin?.laneRects[index];
+      // Skin's `#DST_NOTE,index,...` puts 1P-side rects at 0..9 and
+      // 2P-side rects at 10..19. We index with the LR2-spec lane id
+      // (channel-derived) so a DP chart's 2P notes land on the
+      // 2P-side rects the skin actually authored — not on whatever
+      // happens to sit at iteration position 8..15 in `laneRects`.
+      const lr2Lane = skin?.laneRects[resolveLr2LaneIndex(channel)];
       const x = lr2Lane ? skinX + lr2Lane.x * scale : startX + index * laneWidth;
       const w = lr2Lane ? Math.max(4, lr2Lane.w * scale) : laneWidth - 2;
       const top = lr2Lane ? skinY : fallbackTop;
@@ -2470,7 +2791,11 @@ export class PixiGameplayView {
         continue;
       }
       const y = lane.bottom - beatDistance(note.beat) * pixelsPerBeat;
-      const laneIndex = resolveLaneIndex(note.channel);
+      // Use the LR2-spec lane index for skin SRC lookups (`#SRC_NOTE,...,index`):
+      // 2P side notes need to read `skin.notes[kind][10..17]`, not
+      // the position-based `[8..15]` that `resolveLaneIndex` would
+      // give.
+      const laneIndex = resolveLr2LaneIndex(note.channel);
       // Long-note render: draw LN_BODY between start and end beats, capped
       // with LN_START / LN_END sprites. Falls through to single-note render
       // if the chart has no long-note end-beat for this entry.
@@ -2560,30 +2885,37 @@ export class PixiGameplayView {
     // Prefer the LR2 skin's `#DST_LINE` (e.g. the LR2 default 7-keys skin's
     // 1-px white strip at y=320) when present. The DST encodes per-side x/w
     // and texture; we replicate it at every measure boundary, scrolled.
-    const skinLine = skin?.measureLines.find((entry) => entry.index === 0);
-    const baseTexture = skinLine ? this.textures.get(skinLine.source.imagePath) : undefined;
-    if (skinLine && baseTexture) {
-      const lineDst = this.evaluateElementDst(skinLine);
-      const cell = pickAnimatedCell(skinLine.source, this.elapsedSinceTimer(skinLine.source.timer));
+    // Iterate every `#DST_LINE,index,...` the skin authored. SP
+    // charts only have `index === 0` so this is a one-line loop;
+    // DP charts add `index === 1` for the 2P-side strip and we
+    // draw both at the same beat boundaries.
+    const skinLines = (skin?.measureLines ?? []).filter((entry) =>
+      this.textures.has(entry.source.imagePath),
+    );
+    if (skinLines.length > 0) {
       const beatDistance = this.scrollMapper
         ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
         : (toBeat: number): number => toBeat - currentBeat;
-      for (const beat of beats) {
-        const y = bottom - beatDistance(beat) * pixelsPerBeat;
-        if (y < top - 1 || y > bottom + 1) {
-          continue;
-        }
+      for (const skinLine of skinLines) {
+        const baseTexture = this.textures.get(skinLine.source.imagePath);
+        if (!baseTexture) continue;
+        const lineDst = this.evaluateElementDst(skinLine);
+        const cell = pickAnimatedCell(skinLine.source, this.elapsedSinceTimer(skinLine.source.timer));
         const cropped = createCroppedTexture(baseTexture, cell);
-        if (!cropped) {
-          continue;
+        if (!cropped) continue;
+        for (const beat of beats) {
+          const y = bottom - beatDistance(beat) * pixelsPerBeat;
+          if (y < top - 1 || y > bottom + 1) {
+            continue;
+          }
+          const sprite = new Sprite(cropped);
+          sprite.label = `measure-line[idx=${skinLine.index},beat=${beat}]`;
+          sprite.position.set(lineDst.x, Math.round(y));
+          sprite.width = lineDst.w;
+          sprite.height = Math.max(1, Math.abs(lineDst.h));
+          applyDestinationToSprite(sprite, lineDst);
+          this.noteLayer.addChild(sprite);
         }
-        const sprite = new Sprite(cropped);
-        sprite.label = `measure-line[beat=${beat}]`;
-        sprite.position.set(lineDst.x, Math.round(y));
-        sprite.width = lineDst.w;
-        sprite.height = Math.max(1, Math.abs(lineDst.h));
-        applyDestinationToSprite(sprite, lineDst);
-        this.noteLayer.addChild(sprite);
       }
       return;
     }
@@ -3155,9 +3487,38 @@ function resolveKeyChannel(event: KeyboardEvent, channels: ReadonlyArray<string>
   return undefined;
 }
 
-function resolveLaneIndex(channel: string): number {
-  const order = ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'];
-  return Math.max(0, order.indexOf(channel));
+/**
+ * LR2 lane index per `#DST_NOTE,index` / `#SRC_NOTE,...,index`
+ * conventions. 1P side is 0..9 (SC=0, key1..7=1..7, ext=8..9); 2P
+ * side is 10..19 (SC=10, key1..7=11..17, ext=18..19). Used for
+ * `skin.laneRects[idx]` and `skin.notes[kind][idx]` lookups so the
+ * DP playfield places its 2P notes on the 2P-side rects the skin
+ * actually authored, instead of falling off the end of the 1P rect
+ * array.
+ */
+function resolveLr2LaneIndex(channel: string): number {
+  if (channel === '16') return 0;
+  if (channel === '26') return 10;
+  if (channel.length !== 2) return -1;
+  const k = Number.parseInt(channel[1]!, 10);
+  if (!Number.isFinite(k)) return -1;
+  if (channel.startsWith('1')) return k;
+  if (channel.startsWith('2')) return 10 + k;
+  return -1;
+}
+
+/**
+ * Side-relative lane index (0..9) used as the offset within LR2's
+ * per-side timer ranges — bomb 50+/60+, key-on 100+/110+, etc.
+ * 0 = scratch, 1..7 = keys 1..7, 8/9 = extension. Distinct from
+ * {@link resolveLr2LaneIndex} because timers reset their numbering
+ * per side: `2P key1 bomb` is timer `60 + 1 = 61`, not `60 + 11`.
+ */
+function resolveSideRelativeLaneIndex(channel: string): number {
+  if (channel === '16' || channel === '26') return 0;
+  if (channel.length !== 2) return 0;
+  const k = Number.parseInt(channel[1]!, 10);
+  return Number.isFinite(k) ? k : 0;
 }
 
 function isScratch(channel: string): boolean {
@@ -3204,12 +3565,24 @@ function formatTime(seconds: number): string {
  * has fired yet.
  */
 function pickActiveBgaKey(cues: ReadonlyArray<BgaCue>, seconds: number): string | undefined {
-  let active: string | undefined;
+  return pickActiveBgaCue(cues, seconds)?.bmpKey;
+}
+
+/**
+ * Like {@link pickActiveBgaKey} but returns the matching `BgaCue`
+ * itself so callers can read the cue's `seconds` (start time of the
+ * current video, etc.). Returns `undefined` only when no cue has
+ * fired yet — a "clear" cue is still returned (with `bmpKey =
+ * undefined`) so callers can detect transitions from "showing X" to
+ * "showing nothing".
+ */
+function pickActiveBgaCue(cues: ReadonlyArray<BgaCue>, seconds: number): BgaCue | undefined {
+  let active: BgaCue | undefined;
   for (const cue of cues) {
     if (cue.seconds > seconds) {
       break;
     }
-    active = cue.bmpKey;
+    active = cue;
   }
   return active;
 }

@@ -882,9 +882,26 @@ const NOW_COMBO_1P_KIND_BY_INDEX: ReadonlyMap<number, 'good' | 'great' | 'perfec
  */
 export type Lr2SkinKind = 'play' | 'select';
 
+/**
+ * `play_N.lr2skin` variant hint for the play-skin loader. Themes
+ * conventionally bundle one CSV per key-mode (`play_5.lr2skin` SP
+ * 5-keys, `play_7.lr2skin` SP 7-keys, `play_9.lr2skin` pop'n,
+ * `play_10.lr2skin` DP 10-keys, `play_14.lr2skin` DP 14-keys); the
+ * default scoring picks `play_7.lr2skin` because that's the most
+ * common chart kind, but DP / 5K / 9K charts need their matching
+ * variant for the playfield layout to make sense.
+ */
+export type Lr2PlayVariant = '5' | '7' | '9' | '10' | '14';
+
 export interface LoadLr2SkinOptions {
   /** Which kind of skin to load. Defaults to `'play'`. */
   kind?: Lr2SkinKind;
+  /**
+   * For `kind: 'play'` only — biases the candidate scoring towards
+   * `play_<variant>.lr2skin`. Falls back to the default scoring
+   * (7K-preferred) if no file matches the requested variant.
+   */
+  playVariant?: Lr2PlayVariant;
 }
 
 export async function loadLr2SkinFromFiles(
@@ -913,11 +930,14 @@ export function loadLr2SkinFromSourceFiles(
   const lr2SkinPaths = [...sourceFiles.keys()].filter((path) => path.toLowerCase().endsWith('.lr2skin'));
   const filtered = lr2SkinPaths.filter((path) => isSkinPathOfKind(path, kind));
   const candidates = filtered.length > 0 ? filtered : lr2SkinPaths;
+  const variant = kind === 'play' ? options.playVariant : undefined;
   const entryPath =
     candidates
       .slice()
       .sort(
-        (left, right) => scoreSkinPath(left, kind) - scoreSkinPath(right, kind) || left.localeCompare(right, 'ja'),
+        (left, right) =>
+          scoreSkinPath(left, kind, variant) - scoreSkinPath(right, kind, variant) ||
+          left.localeCompare(right, 'ja'),
       )[0] ?? [...sourceFiles.keys()].find((path) => path.toLowerCase().endsWith('.csv'));
   if (!entryPath) {
     return undefined;
@@ -2615,7 +2635,7 @@ function isSkinPathOfKind(path: string, kind: Lr2SkinKind): boolean {
   return lower.includes('/select') || lower.includes('\\select');
 }
 
-function scoreSkinPath(path: string, kind: Lr2SkinKind): number {
+function scoreSkinPath(path: string, kind: Lr2SkinKind, variant?: Lr2PlayVariant): number {
   const lower = path.toLowerCase();
   if (kind === 'select') {
     // The LR2 default theme ships a single `select.lr2skin`, but other
@@ -2629,6 +2649,14 @@ function scoreSkinPath(path: string, kind: Lr2SkinKind): number {
       return 10;
     }
     return 100;
+  }
+  // When the caller supplies a variant hint, the matching
+  // `play_<variant>.lr2skin` wins outright. Other play variants
+  // still score (so the loader can fall back if the requested
+  // variant isn't bundled), just at a lower priority than the
+  // hinted one.
+  if (variant && lower.endsWith(`/play_${variant}.lr2skin`)) {
+    return -1;
   }
   if (lower.endsWith('/play_7.lr2skin')) {
     return 0;

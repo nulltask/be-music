@@ -28,6 +28,7 @@ import {
   renderNumberElement,
 } from './lr2-render.ts';
 import { PerfTracker } from './pixi-perf.ts';
+import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { groupSongsByFolder, resolveChartAsset, resolveSongSource } from './library.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
@@ -186,7 +187,19 @@ export interface PixiSongSelectViewOptions {
 }
 
 export class PixiSongSelectView {
-  private readonly app = new Application();
+  /**
+   * Host owning the shared `Application`. Set in {@link mount}; the
+   * `app` accessor below throws before that. With one Application
+   * shared across scenes we sidestep the Pixi v8 module-shared
+   * `batchPool` race that two-Application setups hit.
+   */
+  private host: PixiSceneHost | undefined;
+  /**
+   * Top-level Container the host attaches to its `app.stage` while
+   * the select scene is active. Holds `viewportBackground` + `root`
+   * so the host can mount/unmount as one operation.
+   */
+  private readonly sceneRoot = new Container();
   private readonly root = new Container();
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
@@ -251,6 +264,8 @@ export class PixiSongSelectView {
   private sceneStartedAt = 0;
   /** rAF handle so dispose can cancel the keyframe-driven render loop. */
   private animationFrame = 0;
+  /** Idempotency guard for {@link dispose}. */
+  private disposed = false;
   /**
    * Per-timer start timestamps (`performance.now()`). LR2 select-screen
    * timers we drive:
@@ -308,27 +323,25 @@ export class PixiSongSelectView {
 
   public constructor(private options: PixiSongSelectViewOptions = {}) {}
 
-  public async mount(container: HTMLElement): Promise<void> {
-    this.mountedContainer = container;
-    await this.app.init({
-      backgroundAlpha: 0,
-      resizeTo: container,
-      // Antialiasing off — see the matching note in `pixi-gameplay.ts`.
-      // LR2 skins are pixel-art; combined with `roundPixels` and the
-      // per-texture nearest scaleMode this renders crisply at any zoom.
-      antialias: false,
-      autoDensity: true,
-      resolution: globalThis.devicePixelRatio || 1,
-      // Match the gameplay view: snap sprites to integer device pixels
-      // so LR2 skin assets render crisply without sub-pixel filtering.
-      roundPixels: true,
-    });
-    this.app.canvas.tabIndex = 0;
-    this.app.canvas.setAttribute('aria-label', 'be-music song select');
+  /**
+   * Convenience accessor for the host's `Application`. Throws if
+   * called before {@link mount}; same contract as the gameplay
+   * scene.
+   */
+  private get app(): Application {
+    if (!this.host) {
+      throw new Error('PixiSongSelectView: app accessed before mount');
+    }
+    return this.host.app;
+  }
+
+  public async mount(host: PixiSceneHost): Promise<void> {
+    this.host = host;
+    this.mountedContainer = host.app.canvas.parentElement ?? undefined;
     // Label every top-level node so PixiJS Devtools renders the scene
     // graph as `select > {viewport-bg, root > {bg, skin, list, title,
     // hint}}` instead of an unlabelled tower of `Container`s.
-    this.app.stage.label = 'select/stage';
+    this.sceneRoot.label = 'select/scene';
     this.root.label = 'select/root';
     this.viewportBackground.label = 'select/viewport-bg';
     this.background.label = 'select/background';
@@ -336,9 +349,11 @@ export class PixiSongSelectView {
     this.listLayer.label = 'select/list';
     this.title.label = 'select/title';
     this.hint.label = 'select/hint';
-    this.app.stage.addChild(this.viewportBackground, this.root);
+    this.sceneRoot.addChild(this.viewportBackground, this.root);
     this.root.addChild(this.background, this.skinLayer, this.listLayer, this.title, this.hint);
-    container.appendChild(this.app.canvas);
+    // Attach to the host's already-initialised stage. The canvas is
+    // owned by the host and shared across scenes.
+    host.app.stage.addChild(this.sceneRoot);
     // Bind keyboard handlers at the window level so the user can
     // navigate without first clicking the canvas. The canvas itself
     // is a child of the document body and naturally won't have focus
@@ -346,9 +361,9 @@ export class PixiSongSelectView {
     // Pointer events still bind on the canvas because their offset
     // coordinates are canvas-relative.
     window.addEventListener('keydown', this.handleKeyDown);
-    this.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
-    this.app.canvas.addEventListener('pointermove', this.handlePointerMove);
-    this.app.canvas.addEventListener('pointerleave', this.handlePointerLeave);
+    host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
+    host.app.canvas.addEventListener('pointermove', this.handlePointerMove);
+    host.app.canvas.addEventListener('pointerleave', this.handlePointerLeave);
     // Only preload skin assets if the skin has select-screen definitions —
     // a play-only skin would otherwise pull in the STAGE FAILED graphic,
     // gauge frame, etc. that don't belong on the select view.
@@ -464,26 +479,46 @@ export class PixiSongSelectView {
   }
 
   public dispose(): void {
-    // Stop PixiJS's internal Application ticker first so no auto-render
-    // can fire mid-teardown — matches the gameplay-view dispose pattern.
-    this.app.ticker?.stop();
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
     if (this.animationFrame !== 0) {
       cancelAnimationFrame(this.animationFrame);
       this.animationFrame = 0;
     }
     window.removeEventListener('keydown', this.handleKeyDown);
-    this.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
-    this.app.canvas.removeEventListener('pointermove', this.handlePointerMove);
-    this.app.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
-    for (const texture of this.skinTextures.values()) {
-      texture.destroy(true);
+    if (this.host) {
+      this.host.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
+      this.host.app.canvas.removeEventListener('pointermove', this.handlePointerMove);
+      this.host.app.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
     }
-    this.skinTextures.clear();
-    for (const texture of this.chartGraphicTextures.values()) {
-      texture.destroy(true);
+    // Detach our scene-graph subtree from the host's stage. The
+    // host owns the `Application` lifetime; it (or whoever else
+    // owns the host) is responsible for `app.destroy()`.
+    if (this.sceneRoot.parent) {
+      this.sceneRoot.parent.removeChild(this.sceneRoot);
     }
-    this.chartGraphicTextures.clear();
-    this.app.destroy(true, { children: true });
+    try {
+      for (const texture of this.skinTextures.values()) {
+        texture.destroy(true);
+      }
+      this.skinTextures.clear();
+      for (const texture of this.chartGraphicTextures.values()) {
+        texture.destroy(true);
+      }
+      this.chartGraphicTextures.clear();
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[select] texture cleanup threw', error);
+    }
+    try {
+      this.sceneRoot.destroy({ children: true });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[select] sceneRoot.destroy threw', error);
+    }
+    this.host = undefined;
     this.mountedContainer = undefined;
   }
 
@@ -526,36 +561,28 @@ export class PixiSongSelectView {
   }
 
   /**
-   * Toggles the underlying canvas's visibility. Used by the host to
-   * hide the select view while gameplay is on screen, instead of
-   * disposing and re-creating it (which the PixiJS Devtools extension
-   * doesn't tolerate well on a quick destroy+init cycle).
-   *
-   * Also pauses BOTH the rAF tick AND PixiJS's internal Application
-   * ticker when hidden — without that, the select view's auto-render
-   * keeps firing on a `display:none` canvas every frame while
-   * gameplay is up, costing ~10–15 ms per frame (most of the
-   * "missing" frame budget the perf tracker can't see). On
-   * `setVisible(true)` we restart both so the keyframe animations
-   * resume seamlessly.
+   * Hides / shows the select scene's subtree on the shared host
+   * stage. Toggles `sceneRoot.visible` (so we keep contributing
+   * zero pixels while hidden) and pauses our rAF tick — the
+   * keyframe-driven re-render is wasted CPU when nothing is being
+   * shown. Re-entering re-arms the rAF loop so DST animations
+   * resume cleanly. The host's `Application` ticker keeps running
+   * either way; we no longer touch it from here because gameplay
+   * shares the same ticker.
    */
   public setVisible(visible: boolean): void {
     if (this.visible === visible) {
       return;
     }
     this.visible = visible;
-    this.app.canvas.style.display = visible ? '' : 'none';
+    this.sceneRoot.visible = visible;
     if (visible) {
-      this.app.ticker?.start();
       if (this.animationFrame === 0) {
         this.startAnimationLoop();
       }
-    } else {
-      this.app.ticker?.stop();
-      if (this.animationFrame !== 0) {
-        cancelAnimationFrame(this.animationFrame);
-        this.animationFrame = 0;
-      }
+    } else if (this.animationFrame !== 0) {
+      cancelAnimationFrame(this.animationFrame);
+      this.animationFrame = 0;
     }
   }
 

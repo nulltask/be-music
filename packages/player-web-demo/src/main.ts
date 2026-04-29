@@ -1,12 +1,15 @@
 import {
   BrowserSongLibrary,
   PixiGameplayView,
+  PixiSceneHost,
   PixiSongSelectView,
   loadLr2SkinFromFiles,
   readDroppedFiles,
+  resolveChartPlayVariant,
   resolveSongSource,
   type BrowserSongCollection,
   type BrowserSongEntry,
+  type Lr2PlayVariant,
   type Lr2Skin,
   type PixiSongSelectNavigation,
 } from '@be-music/player-web-core';
@@ -22,6 +25,7 @@ app.innerHTML = `
     <div class="toolbar">
       <label>BMS folder / ZIP<input id="songs" type="file" webkitdirectory multiple /></label>
       <label class="autoplay"><input id="autoplay" type="checkbox" /> Auto play</label>
+      <label class="autoplay"><input id="compressor" type="checkbox" checked /> Compressor</label>
       <button id="back" type="button">Song select</button>
       <span class="status" id="status">Ready</span>
     </div>
@@ -34,13 +38,38 @@ const shell = document.querySelector<HTMLDivElement>('.shell')!;
 const status = document.querySelector<HTMLSpanElement>('#status')!;
 const songInput = document.querySelector<HTMLInputElement>('#songs')!;
 const autoPlayInput = document.querySelector<HTMLInputElement>('#autoplay')!;
+const compressorInput = document.querySelector<HTMLInputElement>('#compressor')!;
 const backButton = document.querySelector<HTMLButtonElement>('#back')!;
 const library = new BrowserSongLibrary();
 let collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
-let skin: Lr2Skin | undefined;
+/**
+ * Per-variant play skins, keyed by `Lr2PlayVariant`. Loaded once at
+ * theme-drop time so a DP chart can pick `playSkins['14']` while a
+ * regular SP chart picks `playSkins['7']`. Falls back through
+ * variants on a per-song basis (`pickPlaySkin`) when the requested
+ * one isn't bundled — many themes ship only `play_7.lr2skin`.
+ */
+const playSkins: Partial<Record<Lr2PlayVariant, Lr2Skin>> = {};
 let selectSkin: Lr2Skin | undefined;
 let selectView: PixiSongSelectView | undefined;
 let gameplayView: PixiGameplayView | undefined;
+/**
+ * Single PixiJS host shared by every scene (select / gameplay).
+ * Owns the canvas, the WebGL context, the `Application` ticker —
+ * scenes are added/removed from `host.app.stage` on transitions
+ * (`PixiSceneHost.setScene`) instead of having each create its own
+ * `Application`. This avoids Pixi v8's module-shared `batchPool`
+ * race that two-Application setups hit on dispose, and matches the
+ * official "use a single Application for the lifetime of your app"
+ * guidance.
+ */
+const sceneHost = new PixiSceneHost();
+let hostMounted = false;
+async function ensureHostMounted(): Promise<void> {
+  if (hostMounted) return;
+  hostMounted = true;
+  await sceneHost.mount(stage);
+}
 /**
  * Last-known cursor / folder state of the select view, captured just
  * before we transition into gameplay so we can restore it when the
@@ -63,6 +92,13 @@ songInput.addEventListener('change', () => {
 
 backButton.addEventListener('click', () => {
   void showSelect();
+});
+
+compressorInput.addEventListener('change', () => {
+  // Live toggle — applies to the currently-playing gameplay view
+  // (no restart needed). On the next mount the new `playSong` call
+  // also picks up this state via the constructor option.
+  gameplayView?.setAudioCompressor(compressorInput.checked);
 });
 
 window.addEventListener('dragover', (event) => {
@@ -106,9 +142,14 @@ async function handleDrop(dataTransfer: DataTransfer): Promise<void> {
     return;
   }
   await Promise.all(tasks);
+  const playSkinSummary = (Object.entries(playSkins) as Array<[Lr2PlayVariant, Lr2Skin]>)
+    .map(([variant, value]) => `${variant}K=${value.name}`)
+    .join(',');
   // eslint-disable-next-line no-console
   console.log(
-    `[drop] loaded · songs=${collection.songs.length} · errors=${collection.errors.length} · play-skin=${skin?.name ?? 'none'} · select-skin=${selectSkin?.name ?? 'none'}`,
+    `[drop] loaded · songs=${collection.songs.length} · errors=${collection.errors.length} · play-skins=${
+      playSkinSummary || 'none'
+    } · select-skin=${selectSkin?.name ?? 'none'}`,
   );
   if (collection.errors.length > 0) {
     // eslint-disable-next-line no-console
@@ -116,8 +157,8 @@ async function handleDrop(dataTransfer: DataTransfer): Promise<void> {
   }
   // Both loaders set their own status; merge into a combined readout.
   const parts: string[] = [];
-  if (skin) {
-    parts.push(`Theme: ${skin.name}`);
+  if (playSkinSummary) {
+    parts.push(`Theme: ${playSkinSummary}`);
   }
   if (collection.songs.length > 0) {
     parts.push(describeLoadResult(collection));
@@ -204,29 +245,71 @@ function describeLoadResult(result: BrowserSongCollection): string {
 
 async function loadTheme(files: File[]): Promise<void> {
   status.textContent = 'Loading LR2 theme...';
-  // Load both the play skin (for gameplay) and the select skin (for the
-  // song-select view) from the same dropped theme bundle. The loader
-  // picks one .lr2skin per kind based on filename / directory hints —
-  // see `scoreSkinPath` and `isSkinPathOfKind` in `lr2-skin.ts`.
-  [skin, selectSkin] = await Promise.all([
-    loadLr2SkinFromFiles(files, { kind: 'play' }),
+  // Load every play-skin variant the bundle ships in parallel so a
+  // DP chart can pick `playSkins['14']` and a SP-7K chart picks
+  // `playSkins['7']` without re-parsing files mid-session. The
+  // loader returns `undefined` for variants that don't exist —
+  // we just skip those slots, and `pickPlaySkin` falls through to
+  // whatever IS available at play time.
+  const variants: Lr2PlayVariant[] = ['7', '14', '10', '5', '9'];
+  const [variantSkins, loadedSelectSkin] = await Promise.all([
+    Promise.all(variants.map((v) => loadLr2SkinFromFiles(files, { kind: 'play', playVariant: v }))),
     loadLr2SkinFromFiles(files, { kind: 'select' }),
   ]);
+  // Reset previous slots so an old DP skin doesn't leak into a new
+  // SP-only theme drop.
+  for (const v of variants) {
+    delete playSkins[v];
+  }
+  variants.forEach((v, i) => {
+    const result = variantSkins[i];
+    if (result) {
+      playSkins[v] = result;
+    }
+  });
+  selectSkin = loadedSelectSkin;
   const parts: string[] = [];
-  if (skin) parts.push(`Play: ${skin.name}`);
+  const playEntries = Object.entries(playSkins) as Array<[Lr2PlayVariant, Lr2Skin]>;
+  if (playEntries.length > 0) {
+    parts.push(
+      `Play: ${playEntries.map(([variant, value]) => `${variant}K=${value.name}`).join(' / ')}`,
+    );
+  }
   if (selectSkin) parts.push(`Select: ${selectSkin.name}`);
   status.textContent = parts.length > 0 ? `Theme — ${parts.join(', ')}` : 'No LR2 skin found';
 }
 
+/**
+ * Picks the best-matching `play_<variant>.lr2skin` for the given
+ * song. Tries the exact variant first, then steps through sensible
+ * fallbacks (DP→SP if no DP skin, 5K→7K, etc.). Returns
+ * `undefined` only when no play skin was bundled at all.
+ */
+function pickPlaySkin(song: BrowserSongEntry): Lr2Skin | undefined {
+  const target = resolveChartPlayVariant(song);
+  // Per-target fallback chain: most-specific first, then the
+  // closest-fitting alternates.
+  const fallbacks: Record<Lr2PlayVariant, Lr2PlayVariant[]> = {
+    '14': ['14', '10', '7', '5', '9'],
+    '10': ['10', '14', '7', '5', '9'],
+    '7': ['7', '14', '5', '10', '9'],
+    '5': ['5', '7', '14', '10', '9'],
+    '9': ['9', '7', '14', '5', '10'],
+  };
+  for (const variant of fallbacks[target]) {
+    const candidate = playSkins[variant];
+    if (candidate) return candidate;
+  }
+  return undefined;
+}
+
 async function showSelect(): Promise<void> {
   shell.classList.remove('playing');
+  await ensureHostMounted();
   // Tear down gameplay (we always recreate it per play session — its
-  // chart / audio state isn't reusable). Reuse the select view across
-  // calls so the PixiJS `Application` only initialises once: a quick
-  // destroy → re-init cycle trips the PixiJS Devtools browser
-  // extension with a "Cannot read properties of null (reading
-  // 'batch')" error during render-target setup. Reusing the view also
-  // avoids the WebGL context churn.
+  // chart / audio state isn't reusable). The select view stays alive
+  // across plays so we only mount it once; subsequent visits flip
+  // `setVisible(true)` and refresh state.
   gameplayView?.dispose();
   gameplayView = undefined;
   if (selectView) {
@@ -245,25 +328,47 @@ async function showSelect(): Promise<void> {
       void playSong(song);
     },
   });
-  await selectView.mount(stage);
+  await selectView.mount(sceneHost);
   selectView.setCollection(collection);
 }
 
 async function playSong(song: BrowserSongEntry): Promise<void> {
   shell.classList.add('playing');
+  await ensureHostMounted();
   // Capture the cursor / folder state so the next `showSelect` can
-  // restore it. Hide the select canvas instead of disposing — same
-  // rationale as `showSelect`: avoid the Pixi destroy → re-init cycle.
+  // restore it. Hide the select view's subtree (now via
+  // `sceneRoot.visible = false`) instead of disposing — the host's
+  // `Application` keeps it alive and we save the re-init cost.
   lastSelectNavigation = selectView?.getNavigation();
   selectView?.setVisible(false);
   gameplayView?.dispose();
+  // Pick the play skin variant matching the song's mode (SP-7K /
+  // DP-14K / etc.). With no DP skin in the bundle, `pickPlaySkin`
+  // falls back to whatever is available — typically the SP 7K
+  // skin, which still renders the chart but with the "wrong" lane
+  // layout for DP charts (no 2P-side rects).
+  const playSkin = pickPlaySkin(song);
   gameplayView = new PixiGameplayView({
-    skin,
+    skin: playSkin,
     autoPlay: autoPlayInput.checked,
+    // The compressor decision is captured at gameplay-mount time —
+    // toggling the checkbox mid-play has no effect because the
+    // master bus is wired up once during `prepareAudio`. Restart
+    // (F5) picks up the latest checkbox state on the next mount.
+    audioCompressor: compressorInput.checked,
     onExit: () => {
       void showSelect();
     },
+    onRestart: () => {
+      // Re-mount with the same song. The chart / audio / video
+      // state is bound to the song so a clean dispose+create is
+      // simpler than threading reset hooks through every loader.
+      // The shared `PixiSceneHost` keeps the canvas + WebGL context
+      // alive across the cycle, so this is now a much lighter
+      // operation than it used to be (no app destroy / re-init).
+      void playSong(song);
+    },
   });
   status.textContent = `Playing: ${song.title}`;
-  await gameplayView.mount(stage, song, resolveSongSource(collection, song));
+  await gameplayView.mount(sceneHost, song, resolveSongSource(collection, song));
 }

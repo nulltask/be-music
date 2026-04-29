@@ -1,5 +1,111 @@
-import { Texture } from 'pixi.js';
+import { Texture, VideoSource } from 'pixi.js';
 import { resolveLr2AssetBytes, type Lr2Skin } from './lr2-skin.ts';
+
+/**
+ * Result of `loadVideoTextureFromBytes`. The texture is a Pixi
+ * `Texture` whose source is a `VideoSource` wrapping the same
+ * `<video>` element returned alongside it. Callers seek / play the
+ * video element directly to drive frame updates; the Pixi source
+ * polls `requestVideoFrameCallback` (or a rAF fallback) to push
+ * fresh frames into the GL texture.
+ *
+ * The associated `objectUrl` is created from the bytes' `Blob` and
+ * MUST be revoked (via `URL.revokeObjectURL`) once the texture is
+ * disposed to free the underlying memory.
+ */
+export interface VideoTextureHandle {
+  texture: Texture;
+  video: HTMLVideoElement;
+  objectUrl: string;
+}
+
+/**
+ * Loads a video file (`mp4` / `webm` / etc.) into a Pixi `Texture`
+ * backed by an HTML `<video>` element. The video starts paused and
+ * muted — the caller is expected to seek + `.play()` it on cue.
+ *
+ * Returns `undefined` if `loadedmetadata` doesn't fire within ~5 s
+ * (probably an unsupported codec) so the BGA preloader can move on
+ * without blocking on a stuck video forever.
+ */
+export async function loadVideoTextureFromBytes(
+  path: string,
+  bytes: Uint8Array,
+): Promise<VideoTextureHandle | undefined> {
+  const blob = new Blob([new Uint8Array(bytes)], { type: guessVideoMimeType(path) });
+  const objectUrl = URL.createObjectURL(blob);
+  const video = document.createElement('video');
+  video.src = objectUrl;
+  // BMS BGA video has no soundtrack of its own — audio comes from
+  // `#WAV` samples on the chart timeline. Muting also lets some
+  // browsers skip the autoplay-policy gating since silent media is
+  // exempt.
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.crossOrigin = 'anonymous';
+  // `loop` is left at false — BGA cues drive when the video starts;
+  // looping would replay forever after the cue ends, which doesn't
+  // match BMS semantics.
+  video.loop = false;
+
+  try {
+    await waitForVideoMetadata(video, 5000);
+  } catch {
+    URL.revokeObjectURL(objectUrl);
+    return undefined;
+  }
+
+  const source = new VideoSource({ resource: video, autoPlay: false, autoLoad: true });
+  // BGA video should look as the artist authored it; nearest-pixel
+  // sampling matches our per-skin default for low-res BGA frames
+  // and avoids the smeary look the GPU's bilinear gives on 256x256
+  // BMS-spec frames scaled up to 800px+ playfields.
+  source.scaleMode = 'nearest';
+  source.label = path;
+  const texture = new Texture({ source });
+  texture.label = path;
+  return { texture, video, objectUrl };
+}
+
+function waitForVideoMetadata(video: HTMLVideoElement, timeoutMs: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cleanup = (): void => {
+      video.removeEventListener('loadedmetadata', onLoaded);
+      video.removeEventListener('error', onError);
+      window.clearTimeout(timeoutHandle);
+    };
+    const onLoaded = (): void => {
+      cleanup();
+      resolve();
+    };
+    const onError = (): void => {
+      cleanup();
+      reject(new Error('video error'));
+    };
+    const timeoutHandle = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('video metadata timeout'));
+    }, timeoutMs);
+    video.addEventListener('loadedmetadata', onLoaded);
+    video.addEventListener('error', onError);
+  });
+}
+
+function guessVideoMimeType(path: string): string {
+  const lower = path.toLowerCase();
+  if (lower.endsWith('.mp4') || lower.endsWith('.m4v')) return 'video/mp4';
+  if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.ogv') || lower.endsWith('.ogg')) return 'video/ogg';
+  if (lower.endsWith('.mov')) return 'video/quicktime';
+  // Older BMS archives sometimes ship `.mpg` / `.mpeg` / `.avi` /
+  // `.wmv` — modern browsers won't decode those so the video element
+  // will fire `error` and `loadVideoTextureFromBytes` returns
+  // `undefined`. We still tag a sensible MIME type so the rare
+  // browser-supported codec works.
+  if (lower.endsWith('.mpg') || lower.endsWith('.mpeg')) return 'video/mpeg';
+  return 'video/mp4';
+}
 
 export interface LoadTextureOptions {
   /** Skin-declared `#TRANSCOLOR` chroma key (rare on BGA assets, common on UI sprites). */
