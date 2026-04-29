@@ -1616,6 +1616,11 @@ export class PixiSongSelectView {
         fontFamily: 'system-ui, sans-serif',
         wordWrap: true,
         wordWrapWidth: w,
+        // 袋文字 (outlined text) — LR2 reference skins bake a 1–2 px
+        // black outline into their bar-title bitmaps so titles read
+        // cleanly against the colored BAR_BODY artwork. Match that
+        // by stroking the system-font fallback.
+        stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
       }),
     });
     titleText.label = `bar-title[${entry.kind}=${primaryText}]`;
@@ -2300,6 +2305,14 @@ function makeTextSprite(value: string, element: Lr2TextElement, dst: Lr2Destinat
       fontFamily: 'system-ui, sans-serif',
       wordWrap: rect.w > 0,
       wordWrapWidth: rect.w > 0 ? rect.w : undefined,
+      // 袋文字 (outlined text) — LR2 reference skins use bitmap
+      // fonts pre-baked with a 1–2 px black outline so titles read
+      // cleanly against busy stagefile / banner backgrounds. We
+      // approximate that by stroking the system-font fallback.
+      // `alignment: 0.5` puts half the stroke inside the glyph and
+      // half outside, which matches the LR2 look without bloating
+      // glyph metrics.
+      stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
     }),
   });
   text.label = `text[st=${element.st}]`;
