@@ -1113,7 +1113,14 @@ export class PixiSongSelectView {
       }
     }
 
-    const focusedSong = this.collection.songs[this.selectedIndex];
+    // Resolve the song the cursor is sitting on by going through the
+    // browse stack — `selectedIndex` indexes `currentEntries()`, which
+    // is per-folder (or the folder list at root). Indexing
+    // `collection.songs` (the flat global list) directly would surface
+    // metadata from a totally different folder once the cursor moved
+    // inside any folder past the first, because the cursor index there
+    // refers to a position WITHIN that folder, not a global offset.
+    const focusedSong = this.focusedSong();
 
     // Song-info NUMBER panels: BPM, total notes, play level. We resolve
     // a small whitelist of LR2 number ids relevant to the select view —
