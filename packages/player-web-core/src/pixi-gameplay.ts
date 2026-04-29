@@ -409,6 +409,16 @@ export class PixiGameplayView {
   private fastCount = 0;
   private slowCount = 0;
   /**
+   * Set to `true` once the player has hit every chart note without
+   * a single BAD / POOR break. Latches on first achievement so the
+   * LR2 FC timers (48 / 49) only fire once per play — replaying the
+   * chart resets this in `prepareSong`. Note: AUTO mode reaches FC
+   * the moment the last note's auto-PERFECT lands, so the FC
+   * presentation also plays during autoplay sessions (the player
+   * specifically asked for that behaviour).
+   */
+  private fullComboFired = false;
+  /**
    * High-speed multiplier. 1.0 = base PIXELS_PER_BEAT. Adjustable at runtime
    * via Arrow Up / Arrow Down (steps of 0.25, clamped to [0.5, 6.0]). Mirrors
    * LR2's "hi-speed" knob: only affects the visual scroll rate, never timing.
@@ -793,6 +803,7 @@ export class PixiGameplayView {
     this.gaugeState = createGrooveGaugeState(playableNoteCount, resolved.metadata.total);
     this.fastCount = 0;
     this.slowCount = 0;
+    this.fullComboFired = false;
     this.displayedScore = 0;
     this.bgaTimeline = buildBgaTimeline(resolved, resolver);
     this.hasBga =
@@ -1012,7 +1023,19 @@ export class PixiGameplayView {
     // `timerStartedAt`. They become active the moment we record a start time
     // and stay active until `stopKeyOnTimer` removes the entry (key-on) or
     // the bomb's animation cycle finishes (bomb).
-    if ((timer >= 50 && timer <= 69) || (timer >= 100 && timer <= 119)) {
+    //
+    // Full-combo timers (48 = 1P, 49 = 2P) are tracked the same way:
+    // `maybeFireFullCombo` stamps them once when the player's combo
+    // hits the chart's note count, and elements anchored to those
+    // timers (the `Play/fullcombo/...` skin graphic) read the
+    // running elapsed time afterward to slide in / fade out per the
+    // skin's keyframe chain.
+    if (
+      timer === 48 ||
+      timer === 49 ||
+      (timer >= 50 && timer <= 69) ||
+      (timer >= 100 && timer <= 119)
+    ) {
       return this.timerStartedAt.has(timer);
     }
     // Long-note hold timers (70-89) are not yet driven; treat as inactive so
@@ -1826,6 +1849,38 @@ export class PixiGameplayView {
     if (judge === 'POOR' || judge === 'BAD') {
       this.lastPoorAt = performance.now();
     }
+    this.maybeFireFullCombo();
+  }
+
+  /**
+   * Fires the LR2 full-combo timers (48 = 1P, 49 = 2P) the moment
+   * the player's running combo equals the chart's playable note
+   * count — i.e. every note has been hit GREAT-or-better and the
+   * chain never broke. Latches `fullComboFired` so subsequent
+   * judges don't re-trigger the timer (which would replay the
+   * skin's FC slide-in animation from time=0).
+   *
+   * AUTO mode also reaches this state on the very last note (every
+   * judge is auto-PERFECT, so combo === total at the end) — the
+   * player specifically asked for the FC presentation to fire in
+   * AUTO too, which falls out for free since the path is the same
+   * `applyJudgeToSummary` → `publishJudge` chain manual play uses.
+   *
+   * Both 48 and 49 are stamped at the same `performance.now()`
+   * because we don't yet model per-side combos. For DP this is
+   * correct (one player, one combo). Battle mode would split.
+   */
+  private maybeFireFullCombo(): void {
+    if (this.fullComboFired) return;
+    if (this.score.bad > 0 || this.score.poor > 0) return;
+    if (this.score.total <= 0) return;
+    if (this.tracker.combo < this.score.total) return;
+    this.fullComboFired = true;
+    const now = performance.now();
+    this.timerStartedAt.set(48, now);
+    this.timerStartedAt.set(49, now);
+    // eslint-disable-next-line no-console
+    console.log('[gameplay] FULL COMBO');
   }
 
   /**
@@ -3522,6 +3577,42 @@ function resolveKeyChannel(event: KeyboardEvent, channels: ReadonlyArray<string>
 }
 
 /**
+ * Translates a BMS channel digit (the second character of `1X`/`2X`
+ * input channels) into the side-relative lane slot used by every
+ * LR2 layout key — `#DST_NOTE,index`, key-on / bomb timer offsets,
+ * `#SRC_NOTE[kind][index]`, etc.
+ *
+ * BMS encodes inputs as:
+ *
+ *   chan 11 → key 1   chan 16 → scratch (handled separately)
+ *   chan 12 → key 2   chan 18 → key 6
+ *   chan 13 → key 3   chan 19 → key 7
+ *   chan 14 → key 4
+ *   chan 15 → key 5
+ *
+ * LR2's lane slot ordering is `[scratch=0, key1..key7=1..7, ext=8..9]`
+ * — i.e. **digit 8/9 maps to slot 6/7**, NOT slot 8/9. Reading the
+ * digit directly (the previous bug) put 7-keys' 6th and 7th lanes
+ * at undefined `laneRects[8]` / `laneRects[9]` slots in the LR2
+ * default skin, which only authors `#DST_NOTE,0..7`. That's why
+ * keys 6 and 7 fell off the visible playfield with no skin sprite.
+ */
+function resolveSideKeySlot(channel: string): number {
+  if (channel === '16' || channel === '26') return 0;
+  if (channel.length !== 2) return -1;
+  const digit = Number.parseInt(channel[1]!, 10);
+  if (!Number.isFinite(digit)) return -1;
+  if (digit >= 1 && digit <= 5) return digit;
+  if (digit === 8) return 6;
+  if (digit === 9) return 7;
+  // Digit 7 (BMS "free zone" / 9K extension) and any other value
+  // fall through. We don't model 9K yet, and no LR2 7K skin
+  // references slot 8/9, so returning -1 (effectively "not in
+  // skin") is safer than guessing.
+  return -1;
+}
+
+/**
  * LR2 lane index per `#DST_NOTE,index` / `#SRC_NOTE,...,index`
  * conventions. 1P side is 0..9 (SC=0, key1..7=1..7, ext=8..9); 2P
  * side is 10..19 (SC=10, key1..7=11..17, ext=18..19). Used for
@@ -3531,28 +3622,21 @@ function resolveKeyChannel(event: KeyboardEvent, channels: ReadonlyArray<string>
  * array.
  */
 function resolveLr2LaneIndex(channel: string): number {
-  if (channel === '16') return 0;
-  if (channel === '26') return 10;
-  if (channel.length !== 2) return -1;
-  const k = Number.parseInt(channel[1]!, 10);
-  if (!Number.isFinite(k)) return -1;
-  if (channel.startsWith('1')) return k;
-  if (channel.startsWith('2')) return 10 + k;
-  return -1;
+  const slot = resolveSideKeySlot(channel);
+  if (slot < 0) return -1;
+  return channel.startsWith('2') ? 10 + slot : slot;
 }
 
 /**
  * Side-relative lane index (0..9) used as the offset within LR2's
  * per-side timer ranges — bomb 50+/60+, key-on 100+/110+, etc.
- * 0 = scratch, 1..7 = keys 1..7, 8/9 = extension. Distinct from
+ * 0 = scratch, 1..7 = keys 1..7. Distinct from
  * {@link resolveLr2LaneIndex} because timers reset their numbering
  * per side: `2P key1 bomb` is timer `60 + 1 = 61`, not `60 + 11`.
  */
 function resolveSideRelativeLaneIndex(channel: string): number {
-  if (channel === '16' || channel === '26') return 0;
-  if (channel.length !== 2) return 0;
-  const k = Number.parseInt(channel[1]!, 10);
-  return Number.isFinite(k) ? k : 0;
+  const slot = resolveSideKeySlot(channel);
+  return slot < 0 ? 0 : slot;
 }
 
 function isScratch(channel: string): boolean {
