@@ -1117,7 +1117,41 @@ export class PixiGameplayView {
     if (!this.source || !this.song) {
       return;
     }
-    this.audioContext = new AudioContext();
+    // `latencyHint: 'interactive'` asks the browser for the lowest
+    // round-trip latency it can offer — at the cost of CPU
+    // efficiency vs `'playback'`. For a rhythm game the trade-off
+    // is right: keypress → sample audible delay is the player's
+    // primary perception of "responsiveness", and we'd rather
+    // burn a few extra cycles than land samples on a 20–30 ms
+    // late. Browsers that don't honour the hint silently ignore it.
+    this.audioContext = new AudioContext({ latencyHint: 'interactive' });
+    // AudioContext starts in `suspended` state on most browsers
+    // until a user gesture, and the *first* `node.start()` call on
+    // a still-suspended context can sit in the queue for ~30ms while
+    // the browser ramps the audio graph up. Calling `resume()` here
+    // — we're inside the user-gesture chain that started the play
+    // session — pre-warms it so the very first sample fires at
+    // baseline latency. Errors (no-gesture / already-running) are
+    // swallowed because both are harmless.
+    void this.audioContext.resume().catch(() => undefined);
+    // Surface the device-reported latency so the player has visibility
+    // into how much "free" delay the audio stack is adding before our
+    // schedule even begins. `baseLatency` is "how late the audio
+    // graph commits a buffer" (driver / hardware buffer headroom);
+    // `outputLatency` (when populated) tracks the OS audio queue.
+    // Combined they form the floor of "press → hear" latency we
+    // can't optimise away from JS.
+    const ctx = this.audioContext;
+    // eslint-disable-next-line no-console
+    console.log('[gameplay] AudioContext ready', {
+      sampleRate: ctx.sampleRate,
+      state: ctx.state,
+      baseLatencyMs: typeof ctx.baseLatency === 'number' ? +(ctx.baseLatency * 1000).toFixed(2) : 'n/a',
+      outputLatencyMs:
+        typeof (ctx as { outputLatency?: number }).outputLatency === 'number'
+          ? +((ctx as { outputLatency: number }).outputLatency * 1000).toFixed(2)
+          : 'n/a',
+    });
     // Build the audio bus. The graph always looks like
     //
     //   sample sources ─▶ mixer ─▶ compressor ─▶ makeup ─▶ destination
