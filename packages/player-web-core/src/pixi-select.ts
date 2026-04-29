@@ -587,11 +587,24 @@ export class PixiSongSelectView {
   }
 
   public setCollection(collection: BrowserSongCollection): void {
+    // When the host re-asserts the same collection reference (e.g.
+    // returning to the select view from a play session) we MUST
+    // NOT clobber the live cursor / browse stack — the host has
+    // already (or is about to) call `setNavigation` with the
+    // snapshot it captured before play started, and re-resetting
+    // here would discard that. Identity comparison is enough
+    // because `library.loadFromFiles` always returns a fresh
+    // collection object on a real reload.
+    if (this.collection === collection) {
+      this.render();
+      return;
+    }
     this.collection = collection;
     this.browseStack = [];
     this.selectedIndex = 0;
-    // Restore the user's prior navigation when the host passed an
-    // `initialNavigation` (typical: returning from a play session).
+    // Brand-new collection: try the constructor-time
+    // `initialNavigation` (typical: dropped a folder mid-session
+    // and there's a saved snapshot in the URL or local storage).
     // Falls back to the auto-enter-single-folder behaviour when no
     // saved state exists or the saved labels no longer match.
     const restored = this.options.initialNavigation ? this.restoreNavigation(this.options.initialNavigation) : false;

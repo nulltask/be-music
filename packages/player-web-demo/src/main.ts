@@ -315,10 +315,17 @@ async function showSelect(): Promise<void> {
   if (selectView) {
     selectView.setVisible(true);
     selectView.setSkin(selectSkin);
+    // Order matters: `setCollection` first (no-op when the
+    // collection reference is unchanged, full state reset when it
+    // isn't), then `setNavigation` so the live snapshot wins over
+    // any constructor-time `initialNavigation` and over the
+    // single-folder auto-enter behaviour the reset triggers. With
+    // the reverse order the live snapshot would be discarded by
+    // the subsequent `setCollection`.
+    selectView.setCollection(collection);
     if (lastSelectNavigation) {
       selectView.setNavigation(lastSelectNavigation);
     }
-    selectView.setCollection(collection);
     return;
   }
   selectView = new PixiSongSelectView({
