@@ -218,6 +218,72 @@ function buildBgaTimeline(
   return { base, layer, poor };
 }
 
+/**
+ * Snapshot of the play session, captured at chart-end (or whenever
+ * the host asks for it via {@link PixiGameplayView.getResultData}).
+ * Routed through the host into the result scene so it can render
+ * the LR2 result skin without holding onto the gameplay view.
+ *
+ * Field meaning:
+ * - `score` — same shape as {@link ScoreSummary}: per-judge counts,
+ *   total notes, EX-score, and the displayed (count-up smoothed)
+ *   IIDX score.
+ * - `maxCombo` — longest GREAT-or-better streak observed during
+ *   the play (resets on every BAD/POOR).
+ * - `gauge` — final gauge percentage (0–100), used to drive
+ *   pass / fail ops on the result skin.
+ * - `cleared` — `true` when the gauge ended at-or-above the chart's
+ *   pass threshold (≥ 80 % for HARD-style charts; we use NORMAL's
+ *   80 % default for now since gauge type isn't user-selectable).
+ * - `playSeconds` — clock time the player spent on the chart, for
+ *   the result skin's "TIME" readout.
+ * - `song` — chart metadata (title, artist, BPM, …) for the song
+ *   info panel; the same `BrowserSongEntry` the gameplay view was
+ *   mounted with.
+ */
+/**
+ * One sample of the gauge polyline. `progress` is the chart-time
+ * fraction (0 = first note, 1 = last playable / sample trigger);
+ * `value` is the gauge percentage at that moment (0..100).
+ *
+ * Used by the result scene's `Lr2GaugeChartElement` renderer —
+ * see `pixi-result.ts`. The series always contains at least one
+ * entry (the chart-start origin seeded in `prepareSong`).
+ */
+export interface GaugeHistorySample {
+  progress: number;
+  value: number;
+}
+
+/**
+ * One sample of the EX-score polyline. Same shape as
+ * {@link GaugeHistorySample} but the value is an absolute
+ * EX-score count (0..`total*2`). The result scene normalises by
+ * the chart's theoretical max when drawing.
+ */
+export interface ScoreHistorySample {
+  progress: number;
+  exScore: number;
+}
+
+export interface PixiGameplayResultData {
+  score: ScoreSummary;
+  maxCombo: number;
+  gauge: number;
+  cleared: boolean;
+  playSeconds: number;
+  song: BrowserSongEntry;
+  /**
+   * Per-judge samples of `(progress, gauge%)`. Populated through the
+   * play session by `publishJudge`. The result scene uses this to
+   * draw `#SRC_GAUGECHART_1P` / `_2P` polylines that animate left-
+   * to-right between the SRC's `start` and `end` ms.
+   */
+  gaugeHistory: GaugeHistorySample[];
+  /** Per-judge samples of `(progress, exScore)`. Drives `#SRC_SCORECHART`. */
+  scoreHistory: ScoreHistorySample[];
+}
+
 export interface PixiGameplayViewOptions {
   skin?: Lr2Skin;
   onExit?: () => void;
@@ -228,6 +294,18 @@ export interface PixiGameplayViewOptions {
    * its `Application` cleanly, so re-mount is the host's job.
    */
   onRestart?: () => void;
+  /**
+   * Natural-end hook. Fires once when the chart has finished playing
+   * (every playable note judged + a small audio tail buffer). The
+   * snapshot is the same payload {@link PixiGameplayView.getResultData}
+   * returns — passed eagerly so the host doesn't have to reach back
+   * into the soon-to-be-disposed gameplay view to read it. When this
+   * hook is supplied, `onExit` is **not** called for natural completion;
+   * `onExit` is reserved for the user-initiated escape (ESC). Hosts that
+   * don't want a result screen can leave this unset and rely on `onExit`
+   * for both paths (legacy behaviour).
+   */
+  onChartFinished?: (result: PixiGameplayResultData) => void;
   /** When true, every note is auto-judged as PERFECT at its scheduled time. */
   autoPlay?: boolean;
   /**
@@ -379,6 +457,30 @@ export class PixiGameplayView {
   private autoTriggerNextIndex = 0;
   private score: ScoreSummary = createEmptyScore(0);
   private tracker = createScoreTracker();
+  /**
+   * Highest value of `tracker.combo` reached during the current play.
+   * `tracker.combo` resets to 0 on every BAD / POOR, so we mirror it
+   * here whenever it exceeds the previous max. Used as the
+   * authoritative "MAX COMBO" readout for the result screen — the
+   * old fallback (`score.perfect + score.great`) overcounted on
+   * broken-combo plays since it tallies hit count rather than the
+   * longest unbroken streak.
+   */
+  private maxCombo = 0;
+  /**
+   * Per-play sampled history of `(progress, gauge%)` pairs. Recorded
+   * inside `publishJudge` (the single chokepoint for every judge
+   * event) and seeded with a `(0, initialGauge)` entry on
+   * `prepareSong` so the polyline starts from the LR2 default
+   * starting gauge (20 %) instead of the first judge's value.
+   *
+   * `progress` is `seconds / totalSongSeconds` clamped to `[0, 1]`.
+   * Drives `Lr2GaugeChartElement` rendering on the result scene —
+   * see `pixi-result.ts` for the polyline reveal animation.
+   */
+  private gaugeHistory: Array<{ progress: number; value: number }> = [];
+  /** Same shape as `gaugeHistory`, but tracking running EX score. */
+  private scoreHistory: Array<{ progress: number; exScore: number }> = [];
   private lastJudge = '';
   private lastJudgeUntil = 0;
   private frame: number | undefined;
@@ -788,6 +890,15 @@ export class PixiGameplayView {
     this.laneChannels = resolveLaneChannels(this.notes);
     this.score = createEmptyScore(this.notes.filter((note) => isPlayableInputChannel(note.channel)).length);
     this.tracker = createScoreTracker();
+    // Reset the result-screen "MAX COMBO" tracker whenever a fresh
+    // chart is prepared — restart (R), song-pick from select, etc.
+    // Otherwise the previous play's max would leak into the new one.
+    this.maxCombo = 0;
+    // Result-screen polyline histories. Seeding waits until after
+    // `gaugeState` is reinitialised below — at this point we'd still
+    // be reading the **previous** play's gauge value.
+    this.gaugeHistory = [];
+    this.scoreHistory = [];
     const resolver = createTimingResolver(resolved);
     this.timingResolver = resolver;
     // Build a STOP-aware seconds→beat resolver for `currentBeat`.
@@ -812,6 +923,11 @@ export class PixiGameplayView {
     // short TOTAL=160 100-note chart gets +1.6 per PG/GR.
     const playableNoteCount = this.notes.filter((note) => isPlayableInputChannel(note.channel)).length;
     this.gaugeState = createGrooveGaugeState(playableNoteCount, resolved.metadata.total);
+    // Now that the gauge has its starting value (LR2 default 20 %),
+    // seed the polyline history so the result-screen graph starts at
+    // the correct origin instead of the first judge's value.
+    this.gaugeHistory.push({ progress: 0, value: this.gaugeState.current });
+    this.scoreHistory.push({ progress: 0, exScore: 0 });
     this.fastCount = 0;
     this.slowCount = 0;
     this.fullComboFired = false;
@@ -1733,9 +1849,11 @@ export class PixiGameplayView {
   /**
    * Detects when the chart has finished playing — every playable note has
    * been processed *and* the playhead is past the last note (with a small
-   * tail buffer for cymbal/sample decay) — and invokes `onExit` once so
-   * the demo shell returns to the song-select view. We guard with
-   * `chartEnded` so the callback fires at most once.
+   * tail buffer for cymbal/sample decay) — and invokes the host's chart-end
+   * hook so the demo shell can transition out of gameplay. `onChartFinished`
+   * fires when supplied (host wants the result screen); otherwise we fall
+   * back to `onExit` for backwards compatibility (no-result-screen demos).
+   * We guard with `chartEnded` so the callback fires at most once.
    */
   private chartEnded = false;
   private checkChartEnd(seconds: number): void {
@@ -1754,10 +1872,56 @@ export class PixiGameplayView {
       return;
     }
     this.chartEnded = true;
+    // Snapshot before we defer — the gameplay state may keep changing
+    // for a few frames and we want the result data captured at the
+    // moment the chart "ended" (last note judged + tail buffer).
+    const result = this.getResultData();
     // Defer one frame so the final render (with last judgement plate) is
     // committed before we tear down — without this the user would see the
-    // playfield blank-flash to song select.
-    window.setTimeout(() => this.options.onExit?.(), 50);
+    // playfield blank-flash to whatever scene comes next.
+    window.setTimeout(() => {
+      if (this.options.onChartFinished && result) {
+        this.options.onChartFinished(result);
+        return;
+      }
+      this.options.onExit?.();
+    }, 50);
+  }
+
+  /**
+   * Captures the current play session as a {@link PixiGameplayResultData}
+   * snapshot. Returns `undefined` when no song is mounted (defensive —
+   * normal flow only calls this after `prepareSong` has run). The
+   * snapshot is a plain object so the host can hand it to a result
+   * scene that outlives this view.
+   */
+  public getResultData(): PixiGameplayResultData | undefined {
+    if (!this.song) {
+      return undefined;
+    }
+    // Append a final "current values @ now" sample so the polyline
+    // reaches the right edge of the chart area even when the last
+    // judge fired well before the chart's natural end (e.g. AUTO
+    // PERFECTs the final note 5 s before the audio tail clears).
+    const totalSeconds = this.resolveSongDurationSeconds();
+    const finalProgress = totalSeconds > 0 ? Math.max(0, Math.min(1, this.currentSeconds() / totalSeconds)) : 1;
+    const gaugeHistory = [...this.gaugeHistory, { progress: finalProgress, value: this.gaugeState.current }];
+    const scoreHistory = [...this.scoreHistory, { progress: finalProgress, exScore: this.score.exScore }];
+    return {
+      // Shallow-clone the score so a downstream consumer mutating
+      // their copy doesn't accidentally rewrite our live state.
+      score: { ...this.score },
+      maxCombo: this.maxCombo,
+      gauge: this.gaugeState.current,
+      // Pass threshold for the LR2 NORMAL gauge is 80 %. Until
+      // gauge-type selection lands, every chart is treated as
+      // NORMAL — see `applyGrooveGaugeJudge` for the same default.
+      cleared: this.gaugeState.current >= 80,
+      playSeconds: this.currentSeconds(),
+      song: this.song,
+      gaugeHistory,
+      scoreHistory,
+    };
   }
 
   /**
@@ -1867,6 +2031,22 @@ export class PixiGameplayView {
     if (judge === 'POOR' || judge === 'BAD') {
       this.lastPoorAt = performance.now();
     }
+    // Mirror the running combo into our high-water mark. `tracker.combo`
+    // resets on every BAD/POOR, so this captures the longest unbroken
+    // GREAT-or-better streak the player has reached so far. Used as the
+    // "MAX COMBO" readout for the result screen — see `getResultData`.
+    if (this.tracker.combo > this.maxCombo) {
+      this.maxCombo = this.tracker.combo;
+    }
+    // Append a sample to the result-screen polyline histories. We do
+    // this in `publishJudge` (rather than at each judge call site)
+    // because every gauge / EX-score change funnels through the same
+    // judgement path — adding the sample once here keeps the three
+    // judge sites (manual hit, auto-PERFECT, auto-miss) symmetric.
+    const totalSeconds = this.resolveSongDurationSeconds();
+    const progress = totalSeconds > 0 ? Math.max(0, Math.min(1, seconds / totalSeconds)) : 0;
+    this.gaugeHistory.push({ progress, value: this.gaugeState.current });
+    this.scoreHistory.push({ progress, exScore: this.score.exScore });
     this.maybeFireFullCombo();
   }
 
@@ -2316,6 +2496,7 @@ export class PixiGameplayView {
         this.fps,
         this.timingResolver?.bpmAtBeat(this.currentBeat(this.currentSeconds())),
         this.resolveSongDurationSeconds(),
+        this.maxCombo,
       );
       if (value === undefined) {
         continue;
@@ -3310,6 +3491,7 @@ function resolveNumberValue(
   fps: number,
   liveBpm: number | undefined,
   totalSeconds: number,
+  maxCombo: number,
 ): number | undefined {
   const rate = computeRate(score);
   const ratePct = Math.round(rate * 100);
@@ -3340,7 +3522,9 @@ function resolveNumberValue(
     case 104:
       return combo;
     case 105:
-      return score.perfect + score.great; // approximation for max-combo until tracked separately
+      // Authoritative MAX COMBO — the longest GREAT-or-better streak so
+      // far. (`PixiGameplayView.maxCombo` is updated in `publishJudge`.)
+      return maxCombo;
     case 106:
       return score.total;
     case 107:

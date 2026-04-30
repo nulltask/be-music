@@ -252,6 +252,81 @@ export interface Lr2SliderElement {
 }
 
 /**
+ * `#SRC_GAUGECHART_1P` / `#SRC_GAUGECHART_2P` source-rect plus the
+ * extra columns LR2 uses to size the chart area and time the
+ * animated reveal. Used by the result scene to draw a polyline
+ * tracking gauge percentage over chart progress.
+ *
+ * Spec (`docs/LR2SkinHelp.md` lines 10238+):
+ * - `index` 0 = green (NORMAL gauge), 1 = red (HARD-style gauge).
+ * - `gr` / `x` / `y` / `w` / `h` / `divx` / `divy` / `cycle` /
+ *   `timer` follow the `#SRC_IMAGE` template — they pick the
+ *   `#IMAGE` cell whose **tint** colours the line. Most LR2
+ *   default skins set `gr = 0`, `w = h = 2` (a 2×2 sample of the
+ *   skin atlas) so the line carries the atlas pixel's colour.
+ * - `fieldWidth` / `fieldHeight` are the polyline drawing area
+ *   in design pixels; the curve maps `progress 0..1 → 0..fieldW`
+ *   and `value 0..100 → fieldH..0` (LR2 anchors the DST at the
+ *   bottom-left, so y grows upward in graph space).
+ * - `start` / `end` (ms relative to the controlling timer)
+ *   gate the **animated reveal**: until `start` ms elapsed
+ *   nothing is drawn, between `start` and `end` the polyline
+ *   reveals left-to-right, after `end` it stays fully visible.
+ */
+export interface Lr2GaugeChartSourceRect extends Lr2ImageRect {
+  /** 0 = 1P green / NORMAL gauge, 1 = 1P red / HARD-style gauge. */
+  index: number;
+  fieldWidth: number;
+  fieldHeight: number;
+  start: number;
+  end: number;
+}
+
+/**
+ * `#SRC_GAUGECHART_1P` / `#SRC_GAUGECHART_2P` plus its DST
+ * keyframe set. The DST `(x, y)` anchors the **bottom-left** of
+ * the chart (LR2 spec, `docs/LR2SkinHelp.md` line 10244), and
+ * `(w, h)` is the line thickness — NOT the chart size, which
+ * comes from the SRC's `fieldWidth` / `fieldHeight`.
+ *
+ * `side` distinguishes the 1P / 2P data source. The result scene
+ * always has 1P data, but DP / battle plays would also populate
+ * 2P. Either side may have multiple `index` slots (green / red).
+ */
+export interface Lr2GaugeChartElement {
+  source: Lr2GaugeChartSourceRect;
+  destination: Lr2DestinationRect;
+  keyframes: Lr2DestinationRect[];
+  side: '1P' | '2P';
+}
+
+/**
+ * `#SRC_SCORECHART` source-rect — same extra columns as
+ * gauge-chart but the `index` enum is different per spec
+ * (`docs/LR2SkinHelp.md` lines 10392+):
+ * - 0 = 今回のスコア (this play)
+ * - 1 = 自己ベストスコア (personal best)
+ * - 2 = ライバルスコア (rival / target)
+ *
+ * The `value` axis runs 0..1 (EX-score / theoretical max) so
+ * the polyline maps the same way GAUGECHART does.
+ */
+export interface Lr2ScoreChartSourceRect extends Lr2ImageRect {
+  /** 0 = this play, 1 = personal best, 2 = rival / target. */
+  index: number;
+  fieldWidth: number;
+  fieldHeight: number;
+  start: number;
+  end: number;
+}
+
+export interface Lr2ScoreChartElement {
+  source: Lr2ScoreChartSourceRect;
+  destination: Lr2DestinationRect;
+  keyframes: Lr2DestinationRect[];
+}
+
+/**
  * `#SRC_BUTTON` + `#DST_BUTTON`. A button element shows a per-state
  * cell from a sprite sheet: `divx*divy` cells correspond to the
  * possible states of the button's `type` (sort, difficulty filter,
@@ -589,6 +664,17 @@ export interface Lr2Skin {
   texts: Lr2TextElement[];
   bargraphs: Lr2BarGraphElement[];
   sliders: Lr2SliderElement[];
+  /**
+   * `#SRC_GAUGECHART_1P` / `#SRC_GAUGECHART_2P` entries. Result-screen
+   * gauge polylines; populated by `result_sc_l.csv` / `result_sc_r.csv`
+   * variants (the no-chart `result_normal.csv` leaves this empty).
+   */
+  gaugeCharts: Lr2GaugeChartElement[];
+  /**
+   * `#SRC_SCORECHART` entries (1P only — the spec uses `index` to
+   * distinguish current / best / target instead of a 2P sibling).
+   */
+  scoreCharts: Lr2ScoreChartElement[];
   buttons: Lr2ButtonElement[];
   onMouseElements: Lr2OnMouseElement[];
   /** `#SRC_README` viewer entries. Parsed; renderer integration is TBD. */
@@ -681,6 +767,25 @@ interface SliderSourceEntry {
   range: number;
 }
 
+interface GaugeChartSourceEntry {
+  source: SourceRect;
+  index: number;
+  fieldWidth: number;
+  fieldHeight: number;
+  start: number;
+  end: number;
+  side: '1P' | '2P';
+}
+
+interface ScoreChartSourceEntry {
+  source: SourceRect;
+  index: number;
+  fieldWidth: number;
+  fieldHeight: number;
+  start: number;
+  end: number;
+}
+
 interface ButtonSourceEntry {
   source: SourceRect;
   type: number;
@@ -764,6 +869,17 @@ interface ParseContext {
   bargraphDstGroups: Lr2DestinationRect[][];
   sliderSources: SliderSourceEntry[];
   sliderDstGroups: Lr2DestinationRect[][];
+  /**
+   * `#SRC_GAUGECHART_1P` and `#SRC_GAUGECHART_2P` staging arrays.
+   * Pairing with `#DST_*` mirrors the `imageSources` / `imageDstGroups`
+   * pattern: each new SRC starts a new keyframe group; the next DST
+   * extends the group at the same array index.
+   */
+  gaugeChartSources: GaugeChartSourceEntry[];
+  gaugeChartDstGroups: Lr2DestinationRect[][];
+  /** `#SRC_SCORECHART` staging arrays (1P only — `index` carries side meaning). */
+  scoreChartSources: ScoreChartSourceEntry[];
+  scoreChartDstGroups: Lr2DestinationRect[][];
   buttonSources: ButtonSourceEntry[];
   buttonDstGroups: Lr2DestinationRect[][];
   onMouseSources: OnMouseSourceEntry[];
@@ -880,7 +996,7 @@ const NOW_COMBO_1P_KIND_BY_INDEX: ReadonlyMap<number, 'good' | 'great' | 'perfec
  * compatibility — the original `loadLr2SkinFromFiles()` callers were all
  * the gameplay view.
  */
-export type Lr2SkinKind = 'play' | 'select';
+export type Lr2SkinKind = 'play' | 'select' | 'result';
 
 /**
  * `play_N.lr2skin` variant hint for the play-skin loader. Themes
@@ -929,7 +1045,16 @@ export function loadLr2SkinFromSourceFiles(
   // ship a single CSV.
   const lr2SkinPaths = [...sourceFiles.keys()].filter((path) => path.toLowerCase().endsWith('.lr2skin'));
   const filtered = lr2SkinPaths.filter((path) => isSkinPathOfKind(path, kind));
-  const candidates = filtered.length > 0 ? filtered : lr2SkinPaths;
+  // Falling back to ANY `.lr2skin` is only safe for `play`: a single-skin
+  // bundle is most often a play skin (the gameplay scene has been the
+  // only consumer for most of this loader's lifetime). For `select` and
+  // `result` we'd otherwise pick up `play_7.lr2skin` and parse it as a
+  // select / result skin — every DST element gates on play-specific ops
+  // and timers, so the resulting "skin" renders as a blank canvas. Cleaner
+  // to return `undefined` and let the caller fall through to its built-in
+  // panel than silently feed the wrong CSV through the parser.
+  const candidates =
+    filtered.length > 0 ? filtered : kind === 'play' ? lr2SkinPaths : [];
   const variant = kind === 'play' ? options.playVariant : undefined;
   const entryPath =
     candidates
@@ -938,7 +1063,10 @@ export function loadLr2SkinFromSourceFiles(
         (left, right) =>
           scoreSkinPath(left, kind, variant) - scoreSkinPath(right, kind, variant) ||
           left.localeCompare(right, 'ja'),
-      )[0] ?? [...sourceFiles.keys()].find((path) => path.toLowerCase().endsWith('.csv'));
+      )[0] ??
+    // Last-resort `.csv` lookup mirrors the play-only "single-CSV bundle"
+    // behaviour. Skipped for non-play kinds for the same reason as above.
+    (kind === 'play' ? [...sourceFiles.keys()].find((path) => path.toLowerCase().endsWith('.csv')) : undefined);
   if (!entryPath) {
     return undefined;
   }
@@ -968,6 +1096,10 @@ export function loadLr2SkinFromSourceFiles(
     bargraphDstGroups: [],
     sliderSources: [],
     sliderDstGroups: [],
+    gaugeChartSources: [],
+    gaugeChartDstGroups: [],
+    scoreChartSources: [],
+    scoreChartDstGroups: [],
     buttonSources: [],
     buttonDstGroups: [],
     onMouseSources: [],
@@ -1062,6 +1194,8 @@ export function loadLr2SkinFromSourceFiles(
     texts: createTextElements(context),
     bargraphs: createBarGraphElements(context),
     sliders: createSliderElements(context),
+    gaugeCharts: createGaugeChartElements(context),
+    scoreCharts: createScoreChartElements(context),
     buttons: createButtonElements(context),
     onMouseElements: createOnMouseElements(context),
     readmes: createReadmeElements(context),
@@ -1381,6 +1515,58 @@ function readLr2Path(
       if (group) {
         appendDestinationKeyframe(group, row);
       }
+    } else if (command === '#SRC_GAUGECHART_1P' || command === '#SRC_GAUGECHART_2P') {
+      // #SRC_GAUGECHART_*,index,gr,x,y,w,h,divx,divy,cycle,timer,field_w,field_h,start,end
+      // The LR2 spec puts `index` at row[1] (where #SRC_IMAGE has the
+      // `(NULL)` placeholder), and the per-chart-area / animation
+      // fields at row[11..14]. `parseSource` already reads gr/x/y/w/h/
+      // /divx/divy/cycle/timer from row[2..10] which aligns; we only
+      // need to pull the chart-specific extras separately.
+      context.gaugeChartSources.push({
+        source: parseSource(row),
+        index: Math.max(0, Math.trunc(toNumber(row[1], 0))),
+        fieldWidth: Math.max(0, Math.trunc(toNumber(row[11], 0))),
+        fieldHeight: Math.max(0, Math.trunc(toNumber(row[12], 0))),
+        start: Math.max(0, Math.trunc(toNumber(row[13], 0))),
+        end: Math.max(0, Math.trunc(toNumber(row[14], 0))),
+        side: command === '#SRC_GAUGECHART_2P' ? '2P' : '1P',
+      });
+      context.gaugeChartDstGroups.push([]);
+    } else if (command === '#DST_GAUGECHART_1P' || command === '#DST_GAUGECHART_2P') {
+      // The DST keyframe attaches to the most-recently-pushed SRC of
+      // the matching side. The LR2 default skins interleave 1P / 2P
+      // SRC + DST so "last SRC of this side" picks the right group.
+      const targetSide = command === '#DST_GAUGECHART_2P' ? '2P' : '1P';
+      let lastSideIndex = -1;
+      for (let index = context.gaugeChartSources.length - 1; index >= 0; index -= 1) {
+        if (context.gaugeChartSources[index]!.side === targetSide) {
+          lastSideIndex = index;
+          break;
+        }
+      }
+      if (lastSideIndex >= 0) {
+        const group = context.gaugeChartDstGroups[lastSideIndex];
+        if (group) {
+          appendDestinationKeyframe(group, row);
+        }
+      }
+    } else if (command === '#SRC_SCORECHART') {
+      // Same layout as `#SRC_GAUGECHART_*` minus the side dimension
+      // (the spec uses `index` for current/best/target instead).
+      context.scoreChartSources.push({
+        source: parseSource(row),
+        index: Math.max(0, Math.trunc(toNumber(row[1], 0))),
+        fieldWidth: Math.max(0, Math.trunc(toNumber(row[11], 0))),
+        fieldHeight: Math.max(0, Math.trunc(toNumber(row[12], 0))),
+        start: Math.max(0, Math.trunc(toNumber(row[13], 0))),
+        end: Math.max(0, Math.trunc(toNumber(row[14], 0))),
+      });
+      context.scoreChartDstGroups.push([]);
+    } else if (command === '#DST_SCORECHART') {
+      const group = context.scoreChartDstGroups.at(-1);
+      if (group) {
+        appendDestinationKeyframe(group, row);
+      }
     } else if (command === '#SRC_BUTTON') {
       // #SRC_BUTTON,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,type,click,panel,plusonly
       // `plusonly` is optional in the LR2 spec — `toNumber(..., 0)` keeps
@@ -1679,6 +1865,18 @@ function defaultParseOps(): Set<number> {
   return new Set<number>([
     5, // selected bar is playable
     32, // autoplay off (default branch)
+    // Result-screen clear / fail flags. These are runtime-resolved (the
+    // parser doesn't know whether the player cleared), but the LR2
+    // default `Result/result_normal.csv` gates `#IF,90` / `#IF,91` blocks
+    // around the **`#IMAGE` declarations themselves** (parts.tga vs
+    // parts_fail.tga). Without both ops marked true at parse time, one
+    // of the two atlases never reaches `skin.images` — and the runtime
+    // op gate downstream is moot because there's no DST/SRC pointing at
+    // the missing texture. Setting both makes the parser load both
+    // atlases; runtime DST gating on op 90 vs 91 then picks which one
+    // is drawn on a per-frame basis.
+    90, // result: cleared
+    91, // result: failed
     34, // ghost off
     38, // scoregraph off
     40, // BGA off
@@ -2347,6 +2545,74 @@ function parseBarRivalKind(value: string | undefined): Lr2BarRivalKind | undefin
   }
 }
 
+/**
+ * Finalises `#SRC_GAUGECHART_*` / `#DST_*` pairs into the
+ * runtime-friendly element shape. Mirrors `createSliderElements`'
+ * structure so the failure modes (unmatched DST, missing image)
+ * surface the same way: silently drop the entry, no throw.
+ *
+ * `imagePath` resolution differs slightly from sliders: gauge-chart
+ * SRCs in real LR2 default skins use `gr = 0` (the main atlas),
+ * but the **tint** drives the line colour rather than the sampled
+ * pixel — even so we still pin a path for `loadSkinAssetTexture`
+ * fallback consumers, falling back to the first declared `#IMAGE`
+ * when `gr` indexes outside the table.
+ */
+function createGaugeChartElements(context: ParseContext): Lr2GaugeChartElement[] {
+  const elements: Lr2GaugeChartElement[] = [];
+  for (let index = 0; index < context.gaugeChartSources.length; index += 1) {
+    const entry = context.gaugeChartSources[index]!;
+    const dstGroup = context.gaugeChartDstGroups[index];
+    if (!dstGroup || dstGroup.length === 0) {
+      continue;
+    }
+    const imagePath = context.imagePaths[entry.source.gr] ?? context.imagePaths[0] ?? '';
+    const destination = dstGroup[dstGroup.length - 1]!;
+    elements.push({
+      source: {
+        ...entry.source,
+        imagePath,
+        index: entry.index,
+        fieldWidth: entry.fieldWidth,
+        fieldHeight: entry.fieldHeight,
+        start: entry.start,
+        end: entry.end,
+      },
+      destination,
+      keyframes: [...dstGroup],
+      side: entry.side,
+    });
+  }
+  return elements;
+}
+
+function createScoreChartElements(context: ParseContext): Lr2ScoreChartElement[] {
+  const elements: Lr2ScoreChartElement[] = [];
+  for (let index = 0; index < context.scoreChartSources.length; index += 1) {
+    const entry = context.scoreChartSources[index]!;
+    const dstGroup = context.scoreChartDstGroups[index];
+    if (!dstGroup || dstGroup.length === 0) {
+      continue;
+    }
+    const imagePath = context.imagePaths[entry.source.gr] ?? context.imagePaths[0] ?? '';
+    const destination = dstGroup[dstGroup.length - 1]!;
+    elements.push({
+      source: {
+        ...entry.source,
+        imagePath,
+        index: entry.index,
+        fieldWidth: entry.fieldWidth,
+        fieldHeight: entry.fieldHeight,
+        start: entry.start,
+        end: entry.end,
+      },
+      destination,
+      keyframes: [...dstGroup],
+    });
+  }
+  return elements;
+}
+
 function createSliderElements(context: ParseContext): Lr2SliderElement[] {
   const elements: Lr2SliderElement[] = [];
   for (let index = 0; index < context.sliderSources.length; index += 1) {
@@ -2624,13 +2890,25 @@ function toNumber(value: string | undefined, fallback: number): number {
 /**
  * Returns `true` when the path looks like an `.lr2skin` of the given
  * kind. Matches the LR2 default theme's directory layout (`/Play/...`,
- * `/Select/...`) AND the conventional filenames (`play_7.lr2skin`,
- * `select.lr2skin`).
+ * `/Select/...`, `/Result/...`) AND the conventional filenames
+ * (`play_7.lr2skin`, `select.lr2skin`, `result.lr2skin`).
+ *
+ * `result` matching is tightened to **not** match `/CourseResult/` —
+ * the LR2 default theme ships a separate course-result skin in a
+ * sibling folder that uses its own SRC/DST schema (per-stage chart
+ * graphs, grade-by-rank backgrounds, etc.) and would otherwise win
+ * the path filter for `kind === 'result'` purely on substring match.
  */
 function isSkinPathOfKind(path: string, kind: Lr2SkinKind): boolean {
   const lower = path.toLowerCase();
   if (kind === 'play') {
     return lower.includes('/play') || lower.includes('\\play');
+  }
+  if (kind === 'result') {
+    // Strip course-result paths first so `/CourseResult/result.lr2skin`
+    // never qualifies as the regular result skin (different schema).
+    const sansCourse = lower.replace(/\/courseresult\//gu, '/').replace(/\\courseresult\\/gu, '\\');
+    return sansCourse.includes('/result') || sansCourse.includes('\\result');
   }
   return lower.includes('/select') || lower.includes('\\select');
 }
@@ -2646,6 +2924,22 @@ function scoreSkinPath(path: string, kind: Lr2SkinKind, variant?: Lr2PlayVariant
       return 0;
     }
     if (lower.includes('/select') && lower.endsWith('.lr2skin')) {
+      return 10;
+    }
+    return 100;
+  }
+  if (kind === 'result') {
+    // `result.lr2skin` directly under `/Result/` wins outright; we
+    // explicitly de-rank `/CourseResult/` candidates so a theme that
+    // ships both kinds (like the LR2 default) picks the per-song
+    // result, not the per-course one.
+    if (lower.includes('/courseresult')) {
+      return 90;
+    }
+    if (lower.endsWith('/result.lr2skin')) {
+      return 0;
+    }
+    if (lower.includes('/result') && lower.endsWith('.lr2skin')) {
       return 10;
     }
     return 100;

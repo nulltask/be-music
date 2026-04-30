@@ -1,6 +1,7 @@
 import {
   BrowserSongLibrary,
   PixiGameplayView,
+  PixiResultView,
   PixiSceneHost,
   PixiSongSelectView,
   loadLr2SkinFromFiles,
@@ -11,6 +12,7 @@ import {
   type BrowserSongEntry,
   type Lr2PlayVariant,
   type Lr2Skin,
+  type PixiGameplayResultData,
   type PixiSongSelectNavigation,
 } from '@be-music/player-web-core';
 import './styles.css';
@@ -51,8 +53,17 @@ let collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
  */
 const playSkins: Partial<Record<Lr2PlayVariant, Lr2Skin>> = {};
 let selectSkin: Lr2Skin | undefined;
+/**
+ * Result-screen LR2 skin, loaded once per theme drop. Mounted into
+ * `PixiResultView` when the chart finishes; falls back to the
+ * built-in summary panel when no result skin is present in the
+ * theme bundle.
+ */
+let resultSkin: Lr2Skin | undefined;
 let selectView: PixiSongSelectView | undefined;
 let gameplayView: PixiGameplayView | undefined;
+/** Active result scene, if any. Disposed on transition away. */
+let resultView: PixiResultView | undefined;
 /**
  * Single PixiJS host shared by every scene (select / gameplay).
  * Owns the canvas, the WebGL context, the `Application` ticker —
@@ -252,9 +263,13 @@ async function loadTheme(files: File[]): Promise<void> {
   // we just skip those slots, and `pickPlaySkin` falls through to
   // whatever IS available at play time.
   const variants: Lr2PlayVariant[] = ['7', '14', '10', '5', '9'];
-  const [variantSkins, loadedSelectSkin] = await Promise.all([
+  const [variantSkins, loadedSelectSkin, loadedResultSkin] = await Promise.all([
     Promise.all(variants.map((v) => loadLr2SkinFromFiles(files, { kind: 'play', playVariant: v }))),
     loadLr2SkinFromFiles(files, { kind: 'select' }),
+    // Result skin parsed alongside play / select so the chart-end
+    // transition doesn't have to wait on a fresh file scan. The
+    // loader returns `undefined` when the bundle has no result CSV.
+    loadLr2SkinFromFiles(files, { kind: 'result' }),
   ]);
   // Reset previous slots so an old DP skin doesn't leak into a new
   // SP-only theme drop.
@@ -268,6 +283,7 @@ async function loadTheme(files: File[]): Promise<void> {
     }
   });
   selectSkin = loadedSelectSkin;
+  resultSkin = loadedResultSkin;
   const parts: string[] = [];
   const playEntries = Object.entries(playSkins) as Array<[Lr2PlayVariant, Lr2Skin]>;
   if (playEntries.length > 0) {
@@ -276,6 +292,7 @@ async function loadTheme(files: File[]): Promise<void> {
     );
   }
   if (selectSkin) parts.push(`Select: ${selectSkin.name}`);
+  if (resultSkin) parts.push(`Result: ${resultSkin.name}`);
   status.textContent = parts.length > 0 ? `Theme — ${parts.join(', ')}` : 'No LR2 skin found';
 }
 
@@ -312,6 +329,12 @@ async function showSelect(): Promise<void> {
   // `setVisible(true)` and refresh state.
   gameplayView?.dispose();
   gameplayView = undefined;
+  // Tear down any active result scene too — both gameplay-end
+  // transitions and ESC-from-result land here, and we don't want
+  // an old result panel lingering on top of the select view's
+  // canvas attachments.
+  resultView?.dispose();
+  resultView = undefined;
   if (selectView) {
     selectView.setVisible(true);
     selectView.setSkin(selectSkin);
@@ -364,7 +387,17 @@ async function playSong(song: BrowserSongEntry): Promise<void> {
     // (F5) picks up the latest checkbox state on the next mount.
     audioCompressor: compressorInput.checked,
     onExit: () => {
+      // ESC from gameplay — skip the result screen and head
+      // straight back to select, mirroring LR2's behaviour where
+      // a mid-chart escape doesn't post a score.
       void showSelect();
+    },
+    onChartFinished: (result) => {
+      // Natural end of the chart: show the result scene before
+      // returning to select. The gameplay view detached itself
+      // already (chartEnded latch); we just need to mount the
+      // next scene with the captured snapshot.
+      void showResult(result);
     },
     onRestart: () => {
       // Re-mount with the same song. The chart / audio / video
@@ -378,4 +411,37 @@ async function playSong(song: BrowserSongEntry): Promise<void> {
   });
   status.textContent = `Playing: ${song.title}`;
   await gameplayView.mount(sceneHost, song, resolveSongSource(collection, song));
+}
+
+/**
+ * Mounts the result scene with the gameplay view's score snapshot,
+ * then defers the gameplay teardown until after the result is on
+ * stage so the canvas doesn't blank-flash through the transition.
+ *
+ * The `Esc` key (and the result scene's "advance past timer 152"
+ * input) both route into `showSelect` via the `onContinue` hook,
+ * so this function is the only place the gameplay → result hand-
+ * off lives.
+ */
+async function showResult(data: PixiGameplayResultData): Promise<void> {
+  await ensureHostMounted();
+  resultView?.dispose();
+  resultView = new PixiResultView({
+    skin: resultSkin,
+    collection,
+    onContinue: () => {
+      // User dismissed the result — back to select. `showSelect`
+      // tears down the result view as part of its teardown
+      // routine, so we don't dispose it here.
+      void showSelect();
+    },
+  });
+  await resultView.mount(sceneHost, data);
+  // Tear down gameplay AFTER the result scene is on stage. Doing
+  // it before would briefly leave the canvas with no scene
+  // attached, producing a single-frame BG flash between gameplay
+  // and result on some GPUs.
+  gameplayView?.dispose();
+  gameplayView = undefined;
+  status.textContent = `Result: ${data.song.title}`;
 }
