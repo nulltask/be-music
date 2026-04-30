@@ -1,11 +1,27 @@
 import type { BeMusicEvent } from '@be-music/json';
 import { describe, expect, test } from 'vitest';
-import { pickLr2PlaySkin, summarizeLr2PlaySkins, type Lr2PlaySkinMap } from './lr2-play-skin.ts';
+import {
+  pickLr2PlaySkin,
+  pickLr2ThemeBgmFile,
+  summarizeLr2PlaySkins,
+  type Lr2PlaySkinMap,
+} from './lr2-play-skin.ts';
 import type { Lr2Skin } from './lr2-skin.ts';
 import type { BrowserSongEntry } from './types.ts';
 
 function skin(name: string): Lr2Skin {
   return { name } as Lr2Skin;
+}
+
+/**
+ * Builds a fake `File` carrying just the path metadata
+ * `pickLr2ThemeBgmFile` consults. The matcher only inspects
+ * `webkitRelativePath` / `name`, so casting an object literal
+ * is enough — this avoids the `new File([...], ...)` boilerplate
+ * that needs an actual Blob payload we don't use here.
+ */
+function pathFile(path: string): File {
+  return { webkitRelativePath: path, name: path.split('/').pop() ?? path } as unknown as File;
 }
 
 function songWithChannels(channels: string[]): BrowserSongEntry {
@@ -35,5 +51,66 @@ describe('LR2 play-skin helpers', () => {
 
   test('summarizeLr2PlaySkins formats loaded variants', () => {
     expect(summarizeLr2PlaySkins({ '7': skin('seven'), '14': skin('double') }, ' / ')).toBe('7K=seven / 14K=double');
+  });
+});
+
+describe('pickLr2ThemeBgmFile', () => {
+  test('picks select.wav inside an LR2files/Bgm path', () => {
+    const files = [
+      pathFile('LR2files/Bgm/LR2 ver sta/select.wav'),
+      pathFile('LR2files/Bgm/LR2 ver sta/decide.wav'),
+    ];
+    expect(pickLr2ThemeBgmFile(files, 'select')?.webkitRelativePath).toBe('LR2files/Bgm/LR2 ver sta/select.wav');
+    expect(pickLr2ThemeBgmFile(files, 'decide')?.webkitRelativePath).toBe('LR2files/Bgm/LR2 ver sta/decide.wav');
+  });
+
+  test('returns the first matching variant when several themes are bundled', () => {
+    // The LR2 default ships three theme variants (`LR2 ver sta`,
+    // `LR2 ver Yamajet`, `LR2 ver syatten`). Picking the first in
+    // input order keeps the choice deterministic without forcing
+    // an alphabetical sort that would surprise users who expect
+    // their drag order to win.
+    const files = [
+      pathFile('LR2files/Bgm/LR2 ver sta/select.wav'),
+      pathFile('LR2files/Bgm/LR2 ver Yamajet/select.wav'),
+    ];
+    expect(pickLr2ThemeBgmFile(files, 'select')?.webkitRelativePath).toBe('LR2files/Bgm/LR2 ver sta/select.wav');
+  });
+
+  test('matches case-insensitively on path and basename', () => {
+    expect(pickLr2ThemeBgmFile([pathFile('LR2files/BGM/Theme/Select.WAV')], 'select')?.name).toBe('Select.WAV');
+    expect(pickLr2ThemeBgmFile([pathFile('lr2files/bgm/foo/decide.wav')], 'decide')?.name).toBe('decide.wav');
+  });
+
+  test('accepts alternate audio extensions (ogg, mp3, opus, flac)', () => {
+    expect(pickLr2ThemeBgmFile([pathFile('LR2files/Bgm/x/select.ogg')], 'select')?.name).toBe('select.ogg');
+    expect(pickLr2ThemeBgmFile([pathFile('LR2files/Bgm/x/select.mp3')], 'select')?.name).toBe('select.mp3');
+    expect(pickLr2ThemeBgmFile([pathFile('LR2files/Bgm/x/select.opus')], 'select')?.name).toBe('select.opus');
+    expect(pickLr2ThemeBgmFile([pathFile('LR2files/Bgm/x/select.flac')], 'select')?.name).toBe('select.flac');
+  });
+
+  test('rejects non-Bgm paths', () => {
+    // A file named `select.wav` outside an `Bgm/` directory could
+    // be a chart's keysound — must NOT be picked as theme BGM.
+    expect(pickLr2ThemeBgmFile([pathFile('Songs/MyChart/select.wav')], 'select')).toBeUndefined();
+    expect(pickLr2ThemeBgmFile([pathFile('LR2files/Theme/LR2/Select/select.wav')], 'select')).toBeUndefined();
+  });
+
+  test('rejects unsupported extensions', () => {
+    expect(pickLr2ThemeBgmFile([pathFile('LR2files/Bgm/x/select.txt')], 'select')).toBeUndefined();
+    expect(pickLr2ThemeBgmFile([pathFile('LR2files/Bgm/x/select.exe')], 'select')).toBeUndefined();
+  });
+
+  test('rejects basenames that just contain the role substring', () => {
+    // Strict basename match: `select.wav` matches, `selecting.wav`
+    // doesn't. Without this guard a song folder happening to ship
+    // a `selecting_loop.wav` keysound would hijack the BGM slot.
+    expect(pickLr2ThemeBgmFile([pathFile('LR2files/Bgm/x/selecting.wav')], 'select')).toBeUndefined();
+    expect(pickLr2ThemeBgmFile([pathFile('LR2files/Bgm/x/decided.wav')], 'decide')).toBeUndefined();
+  });
+
+  test('returns undefined when the bundle has no BGM file', () => {
+    expect(pickLr2ThemeBgmFile([], 'select')).toBeUndefined();
+    expect(pickLr2ThemeBgmFile([pathFile('LR2files/Theme/LR2/Select/select.lr2skin')], 'select')).toBeUndefined();
   });
 });

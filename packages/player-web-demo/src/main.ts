@@ -93,6 +93,14 @@ class PlayerWebDemoApp {
   private collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
   private selectSkin: Lr2Skin | undefined;
   private resultSkin: Lr2Skin | undefined;
+  /**
+   * Loop-playable BGM bytes for the song-select scene
+   * (`LR2files/Bgm/<theme>/select.wav` from the dropped theme).
+   * Forwarded to `PixiSongSelectView` via the constructor option
+   * on first mount and via `setSelectBgm` on subsequent theme
+   * drops mid-session.
+   */
+  private selectBgmBytes: Uint8Array | undefined;
   private selectView: PixiSongSelectView | undefined;
   private gameplayView: PixiGameplayView | undefined;
   private resultView: PixiResultView | undefined;
@@ -314,6 +322,11 @@ class PlayerWebDemoApp {
     Object.assign(this.playSkins, loadedTheme.playSkins);
     this.selectSkin = loadedTheme.selectSkin;
     this.resultSkin = loadedTheme.resultSkin;
+    this.selectBgmBytes = loadedTheme.selectBgm?.bytes;
+    // If a select view is already mounted (theme dropped mid-
+    // session), swap in the new BGM live. The view handles decode
+    // + loop start internally.
+    this.selectView?.setSelectBgm(this.selectBgmBytes);
     const parts: string[] = [];
     const playSummary = summarizeLr2PlaySkins(this.playSkins, ' / ');
     if (playSummary) {
@@ -342,6 +355,7 @@ class PlayerWebDemoApp {
     }
     this.selectView = new PixiSongSelectView({
       skin: this.selectSkin,
+      selectBgm: this.selectBgmBytes,
       initialNavigation: this.lastSelectNavigation,
       onSongSelected: (song) => {
         void this.playSong(song);

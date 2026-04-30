@@ -188,6 +188,14 @@ export interface PixiSongSelectViewOptions {
    */
   onSearchActivate?: () => void;
   /**
+   * Looping song-select BGM bytes (typically
+   * `LR2files/Bgm/<theme>/select.wav`). When supplied, the view
+   * decodes lazily on first user gesture and loops while visible.
+   * Pass `undefined` (or omit) to skip BGM entirely. Runtime swap
+   * via {@link PixiSongSelectView.setSelectBgm}.
+   */
+  selectBgm?: Uint8Array;
+  /**
    * LR2 skin to render the select screen with. When provided, static
    * `#IMAGE` elements decorate the frame and `#SRC_BAR_BODY` /
    * `#DST_BAR_BODY_OFF` / `_ON` slots host the song list. Without a
@@ -346,8 +354,77 @@ export class PixiSongSelectView {
    * on its own.
    */
   private searchQuery = '';
+  /**
+   * Encoded select-screen BGM bytes (typically WAV / OGG). Set
+   * via the `selectBgm` constructor option or
+   * {@link setSelectBgm}; decoded lazily on the first user
+   * gesture so we don't trip the browser's autoplay policy on
+   * mount.
+   */
+  private selectBgmBytes: Uint8Array | undefined;
+  /**
+   * Decoded BGM buffer. Populated once after a successful
+   * `decodeAudioData`; `setSelectBgm` invalidates it when new
+   * bytes arrive.
+   */
+  private selectBgmBuffer: AudioBuffer | undefined;
+  /**
+   * Active source node for the looping BGM. Nullable because Web
+   * Audio `BufferSourceNode`s are one-shot — pausing means
+   * stopping the current source and constructing a fresh one on
+   * resume. Holds a reference so `pauseSelectBgm` can stop it
+   * cleanly without leaking residual playback into hidden state.
+   */
+  private selectBgmSource: AudioBufferSourceNode | undefined;
+  /**
+   * AudioContext owned by this view, created lazily inside
+   * `ensureSelectBgmContext` on the first user gesture. Distinct
+   * from gameplay's AudioContext so the two scenes' audio
+   * lifecycles don't tangle (gameplay closes its context on
+   * dispose; the select view persists across plays).
+   */
+  private selectBgmContext: AudioContext | undefined;
+  /**
+   * Master gain for the select BGM. ~0.5 keeps it audible without
+   * drowning out future preview-sample playback we might add at
+   * the same time. Held as a node ref so the volume can be
+   * tweaked at runtime if the demo wires a slider later.
+   */
+  private selectBgmGain: GainNode | undefined;
+  /**
+   * `true` when a decode pass is in flight. Suppresses redundant
+   * decodes while the user mashes keys before the first one
+   * resolves.
+   */
+  private selectBgmDecodeInFlight = false;
 
-  public constructor(private options: PixiSongSelectViewOptions = {}) {}
+  public constructor(private options: PixiSongSelectViewOptions = {}) {
+    this.selectBgmBytes = options.selectBgm;
+  }
+
+  /**
+   * Replaces the looping select-screen BGM. Pass `undefined` to
+   * mute. Existing playback is stopped (and its decoded buffer
+   * discarded) before the new bytes are queued for decode on the
+   * next user gesture.
+   *
+   * Hosts use this to swap BGM when the user drops a fresh theme
+   * mid-session — the constructor-time `selectBgm` option only
+   * seeds the initial state.
+   */
+  public setSelectBgm(bytes: Uint8Array | undefined): void {
+    if (this.selectBgmBytes === bytes) return;
+    this.stopSelectBgm();
+    this.selectBgmBytes = bytes;
+    this.selectBgmBuffer = undefined;
+    if (bytes && this.visible) {
+      // Trigger decode + start eagerly. If autoplay policy hasn't
+      // been satisfied yet (no user gesture) the AudioContext stays
+      // suspended; the next pointerdown / keydown handler resumes
+      // it via `ensureSelectBgmContext`.
+      void this.startSelectBgm();
+    }
+  }
 
   /**
    * Convenience accessor for the host's `Application`. Throws if
@@ -404,6 +481,11 @@ export class PixiSongSelectView {
     this.resetSceneTimers();
     this.render();
     this.startAnimationLoop();
+    // Try to start the BGM eagerly. Browsers gate
+    // `AudioContext.resume()` behind a user gesture; if no gesture
+    // has happened yet the start sits idle until the first
+    // pointerdown / keydown handler retries it.
+    void this.startSelectBgm();
   }
 
   /**
@@ -552,6 +634,13 @@ export class PixiSongSelectView {
       this.host.app.canvas.removeEventListener('wheel', this.handleWheel);
       this.host.app.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
     }
+    // Tear down BGM playback before scene-graph teardown so any
+    // in-flight `BufferSourceNode` doesn't outlive the view.
+    this.pauseSelectBgm();
+    void this.selectBgmContext?.close().catch(() => undefined);
+    this.selectBgmContext = undefined;
+    this.selectBgmGain = undefined;
+    this.selectBgmBuffer = undefined;
     // Detach our scene-graph subtree from the host's stage. The
     // host owns the `Application` lifetime; it (or whoever else
     // owns the host) is responsible for `app.destroy()`.
@@ -645,9 +734,18 @@ export class PixiSongSelectView {
       if (this.animationFrame === 0) {
         this.startAnimationLoop();
       }
-    } else if (this.animationFrame !== 0) {
-      cancelAnimationFrame(this.animationFrame);
-      this.animationFrame = 0;
+      // Resume the BGM. Always safe — a no-op if no BGM is set or
+      // if a gesture hasn't unlocked the AudioContext yet.
+      void this.startSelectBgm();
+    } else {
+      // Hidden — pause BGM so it doesn't bleed into gameplay
+      // audio. Decoded buffer stays cached so the next show is
+      // an instant resume (no re-decode).
+      this.pauseSelectBgm();
+      if (this.animationFrame !== 0) {
+        cancelAnimationFrame(this.animationFrame);
+        this.animationFrame = 0;
+      }
     }
   }
 
@@ -767,6 +865,108 @@ export class PixiSongSelectView {
     this.searchQuery = normalized;
     this.selectedIndex = 0;
     this.render();
+  }
+
+  /**
+   * Starts the looping select-screen BGM. Idempotent — safe to
+   * call repeatedly; only the first call after a stop reaches the
+   * decode + `start()` codepath. No-op when `selectBgmBytes` is
+   * unset (host didn't supply BGM).
+   *
+   * Browsers gate `AudioContext.resume()` behind a user gesture;
+   * if this is called before any pointer / key event the context
+   * stays suspended and playback waits silently. The first user
+   * gesture in `handlePointerDown` / `handleKeyDown` calls this
+   * again so the resume actually lands inside the gesture handler.
+   */
+  private async startSelectBgm(): Promise<void> {
+    if (this.disposed) return;
+    if (!this.selectBgmBytes) return;
+    if (this.selectBgmSource) return;
+    const audioContext = this.ensureSelectBgmContext();
+    if (!audioContext) return;
+    // Decode lazily on first start. The `selectBgmDecodeInFlight`
+    // guard short-circuits parallel decode attempts when several
+    // gestures land before the first decode resolves.
+    if (!this.selectBgmBuffer) {
+      if (this.selectBgmDecodeInFlight) return;
+      this.selectBgmDecodeInFlight = true;
+      try {
+        // `decodeAudioData` consumes the ArrayBuffer in some
+        // browsers (detaches it). Slice a fresh copy so re-decoding
+        // after `setSelectBgm(sameBytes)` still works.
+        const buffer = await audioContext.decodeAudioData(this.selectBgmBytes.slice().buffer);
+        if (this.disposed) return;
+        this.selectBgmBuffer = buffer;
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn('[select] BGM decode failed', error);
+        return;
+      } finally {
+        this.selectBgmDecodeInFlight = false;
+      }
+    }
+    if (!this.visible) return; // Hidden during decode — bail.
+    // Resume in case a previous `pause` or autoplay-blocked init
+    // left the context suspended. Errors (e.g. still no user
+    // gesture) are swallowed; the next gesture-driven call will
+    // retry.
+    void audioContext.resume().catch(() => undefined);
+    const source = audioContext.createBufferSource();
+    source.buffer = this.selectBgmBuffer;
+    source.loop = true;
+    source.connect(this.selectBgmGain ?? audioContext.destination);
+    source.start();
+    this.selectBgmSource = source;
+  }
+
+  /**
+   * Pauses the BGM by stopping the active source. Web Audio
+   * `BufferSourceNode`s are one-shot, so resume rebuilds a fresh
+   * source from the cached `selectBgmBuffer` — no re-decode.
+   */
+  private pauseSelectBgm(): void {
+    if (!this.selectBgmSource) return;
+    try {
+      this.selectBgmSource.stop();
+    } catch {
+      // `stop()` throws when called on a node that hasn't started
+      // or has already stopped. Both states are fine for our
+      // purposes; we just want the source gone.
+    }
+    this.selectBgmSource.disconnect();
+    this.selectBgmSource = undefined;
+  }
+
+  /**
+   * Hard-stops the BGM and forgets the decoded buffer. Used when
+   * the BGM bytes themselves change — the next start call will
+   * decode from scratch.
+   */
+  private stopSelectBgm(): void {
+    this.pauseSelectBgm();
+    this.selectBgmBuffer = undefined;
+  }
+
+  /**
+   * Constructs (lazily) the AudioContext + master gain that the
+   * BGM plays through. Returns `undefined` if `AudioContext` isn't
+   * available (Node test environments etc.) so callers degrade
+   * gracefully into a "no BGM" mode.
+   */
+  private ensureSelectBgmContext(): AudioContext | undefined {
+    if (this.selectBgmContext) return this.selectBgmContext;
+    if (typeof globalThis.AudioContext === 'undefined') return undefined;
+    const audioContext = new globalThis.AudioContext();
+    const gain = audioContext.createGain();
+    // ~-6 dB so the BGM doesn't drown out future preview-sample
+    // playback we might add at the same time. Adjustable via a
+    // future runtime knob if the demo wires a slider.
+    gain.gain.value = 0.5;
+    gain.connect(audioContext.destination);
+    this.selectBgmContext = audioContext;
+    this.selectBgmGain = gain;
+    return audioContext;
   }
 
   /**
@@ -1005,6 +1205,12 @@ export class PixiSongSelectView {
   };
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
+    // Retry BGM start on the first user gesture — browsers gate
+    // `AudioContext.resume()` behind a user-input event, so the
+    // mount-time / setVisible-time start may have left the
+    // context suspended. Cheap to call repeatedly (early-returns
+    // when a source is already playing).
+    void this.startSelectBgm();
     // No `canvas.focus()` — we listen for `keydown` on `window`, so
     // capturing focus here would needlessly pull it away from any
     // form input the user might already be typing into.
@@ -1089,6 +1295,10 @@ export class PixiSongSelectView {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    // Same gesture-retry as `handlePointerDown` — most users will
+    // arrive at the select view via the keyboard rather than a
+    // mouse on macOS / touchpad-only devices, so we hook here too.
+    void this.startSelectBgm();
     // Don't navigate while the view is hidden — e.g. when gameplay is
     // on top. Both views attach `keydown` to the window so they can
     // capture input without canvas focus, but only the visible one
