@@ -1,4 +1,10 @@
 import { basename, dirname, normalizePath } from '@be-music/utils/core';
+import { normalizeLr2Path, resolveLr2IncludePath } from './lr2-skin-assets.ts';
+import { decodeText, parseRows } from './lr2-skin-csv.ts';
+import { isSkinPathOfKind, scoreSkinPath, type Lr2PlayVariant, type Lr2SkinKind } from './lr2-skin-paths.ts';
+
+export { resolveLr2AssetBytes } from './lr2-skin-assets.ts';
+export type { Lr2PlayVariant, Lr2SkinKind } from './lr2-skin-paths.ts';
 
 export interface Lr2ImageRect {
   imagePath: string;
@@ -990,25 +996,6 @@ const NOW_COMBO_1P_KIND_BY_INDEX: ReadonlyMap<number, 'good' | 'great' | 'perfec
   [5, 'perfect'],
 ]);
 
-/**
- * Which screen's `.lr2skin` to pick when a theme bundle ships multiple
- * (play, select, result, etc.). Defaults to `'play'` for backward
- * compatibility — the original `loadLr2SkinFromFiles()` callers were all
- * the gameplay view.
- */
-export type Lr2SkinKind = 'play' | 'select' | 'result';
-
-/**
- * `play_N.lr2skin` variant hint for the play-skin loader. Themes
- * conventionally bundle one CSV per key-mode (`play_5.lr2skin` SP
- * 5-keys, `play_7.lr2skin` SP 7-keys, `play_9.lr2skin` pop'n,
- * `play_10.lr2skin` DP 10-keys, `play_14.lr2skin` DP 14-keys); the
- * default scoring picks `play_7.lr2skin` because that's the most
- * common chart kind, but DP / 5K / 9K charts need their matching
- * variant for the playfield layout to make sense.
- */
-export type Lr2PlayVariant = '5' | '7' | '9' | '10' | '14';
-
 export interface LoadLr2SkinOptions {
   /** Which kind of skin to load. Defaults to `'play'`. */
   kind?: Lr2SkinKind;
@@ -1368,7 +1355,7 @@ function readLr2Path(
       // We always reload anyway, so this just records the intent.
       context.scratchFlip.reloadBanner = true;
     } else if (command === '#INCLUDE') {
-      const includePath = resolveIncludePath(sourceFiles, dirname(path), row[1] ?? '');
+      const includePath = resolveLr2IncludePath(sourceFiles, dirname(path), row[1] ?? '');
       if (includePath) {
         readLr2Path(sourceFiles, includePath, context, visited);
       }
@@ -1789,7 +1776,7 @@ function registerCustomFile(
     return;
   }
   const expanded = pattern.replaceAll('*', defaultName);
-  const resolvedPath = resolveIncludePath(sourceFiles, baseDirectory, expanded);
+  const resolvedPath = resolveLr2IncludePath(sourceFiles, baseDirectory, expanded);
   if (resolvedPath) {
     context.customFiles.push({ name, path: resolvedPath });
     context.customFileLookup.set(normalizeLr2Path(pattern).toLowerCase(), resolvedPath);
@@ -2765,211 +2752,7 @@ function createJudgeElements(context: ParseContext): Lr2Skin['judges'] {
   return judges;
 }
 
-function resolveIncludePath(
-  sourceFiles: ReadonlyMap<string, Uint8Array>,
-  baseDirectory: string,
-  rawPath: string,
-): string | undefined {
-  const normalized = normalizeLr2Path(rawPath);
-  const fileName = basename(normalized).toLowerCase();
-  const parentDir = dirname(normalized);
-  const parentName = basename(parentDir).toLowerCase();
-  const grandParent = basename(dirname(parentDir)).toLowerCase();
-  const candidates = [
-    normalizePath(`${baseDirectory}/${normalized}`),
-    normalized,
-    normalizePath(`${baseDirectory}/${basename(normalized)}`),
-  ];
-  const exact = candidates.find((candidate) => sourceFiles.has(candidate));
-  if (exact) {
-    return exact;
-  }
-  // Match progressively shorter trailing path segments. Trying the deeper
-  // suffix first prevents `Play_half/frame/...` from being selected when the
-  // request is for `Play/frame/...`.
-  if (grandParent && parentName) {
-    const withGrandparent = [...sourceFiles.keys()].find((path) =>
-      path.toLowerCase().endsWith(`/${grandParent}/${parentName}/${fileName}`),
-    );
-    if (withGrandparent) {
-      return withGrandparent;
-    }
-  }
-  if (parentName) {
-    const withParent = [...sourceFiles.keys()].find((path) =>
-      path.toLowerCase().endsWith(`/${parentName}/${fileName}`),
-    );
-    if (withParent) {
-      return withParent;
-    }
-  }
-  return [...sourceFiles.keys()].find(
-    (path) => path.toLowerCase().endsWith(`/${fileName}`) || path.toLowerCase() === fileName,
-  );
-}
-
-export function resolveLr2AssetBytes(skin: Lr2Skin, rawPath: string): Uint8Array | undefined {
-  const normalized = normalizeLr2Path(rawPath);
-  const candidates = [normalized, basename(normalized)];
-  for (const candidate of candidates) {
-    const bytes = skin.files.get(candidate);
-    if (bytes) {
-      return bytes;
-    }
-  }
-  const fileNamePattern = wildcardToRegExp(basename(normalized));
-  const parentDir = dirname(normalized);
-  const parentName = basename(parentDir).toLowerCase();
-  const grandParent = basename(dirname(parentDir)).toLowerCase();
-  if (grandParent && parentName) {
-    const matchWithGrand = [...skin.files.keys()].find((path) => {
-      const lower = path.toLowerCase();
-      const segments = lower.split('/');
-      const baseNameLower = segments.at(-1) ?? '';
-      const parentLower = segments.at(-2) ?? '';
-      const grandLower = segments.at(-3) ?? '';
-      return grandLower === grandParent && parentLower === parentName && fileNamePattern.test(baseNameLower);
-    });
-    if (matchWithGrand) {
-      return skin.files.get(matchWithGrand);
-    }
-  }
-  if (parentName) {
-    const matchWithParent = [...skin.files.keys()].find((path) => {
-      const lower = path.toLowerCase();
-      return basename(dirname(lower)) === parentName && fileNamePattern.test(basename(path));
-    });
-    if (matchWithParent) {
-      return skin.files.get(matchWithParent);
-    }
-  }
-  const match = [...skin.files.keys()].find((path) => fileNamePattern.test(basename(path)));
-  return match ? skin.files.get(match) : undefined;
-}
-
-function wildcardToRegExp(pattern: string): RegExp {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, '\\$&').replaceAll('*', '.*');
-  return new RegExp(`^${escaped}$`, 'iu');
-}
-
-function parseRows(text: string): string[][] {
-  return text
-    .split(/\r?\n/u)
-    .map((line) => parseRow(stripComment(line).trim()))
-    .filter((row) => row.length > 0 && row[0]?.startsWith('#'));
-}
-
-function parseRow(line: string): string[] {
-  if (!line) {
-    return [];
-  }
-  const delimiter = line.includes('\t') ? '\t' : ',';
-  return line.split(delimiter).map((value) => value.trim().replace(/^["']|["']$/gu, ''));
-}
-
-function stripComment(line: string): string {
-  const index = line.indexOf('//');
-  return index >= 0 ? line.slice(0, index) : line;
-}
-
-function normalizeLr2Path(path: string): string {
-  return normalizePath(path.replace(/^\.\\?/u, ''));
-}
-
-function decodeText(bytes: Uint8Array): string {
-  return new TextDecoder('shift_jis').decode(bytes).replace(/^\ufeff/u, '');
-}
-
 function toNumber(value: string | undefined, fallback: number): number {
   const number = Number.parseFloat(value ?? '');
   return Number.isFinite(number) ? number : fallback;
-}
-
-/**
- * Returns `true` when the path looks like an `.lr2skin` of the given
- * kind. Matches the LR2 default theme's directory layout (`/Play/...`,
- * `/Select/...`, `/Result/...`) AND the conventional filenames
- * (`play_7.lr2skin`, `select.lr2skin`, `result.lr2skin`).
- *
- * `result` matching is tightened to **not** match `/CourseResult/` —
- * the LR2 default theme ships a separate course-result skin in a
- * sibling folder that uses its own SRC/DST schema (per-stage chart
- * graphs, grade-by-rank backgrounds, etc.) and would otherwise win
- * the path filter for `kind === 'result'` purely on substring match.
- */
-function isSkinPathOfKind(path: string, kind: Lr2SkinKind): boolean {
-  const lower = path.toLowerCase();
-  if (kind === 'play') {
-    return lower.includes('/play') || lower.includes('\\play');
-  }
-  if (kind === 'result') {
-    // Strip course-result paths first so `/CourseResult/result.lr2skin`
-    // never qualifies as the regular result skin (different schema).
-    const sansCourse = lower.replace(/\/courseresult\//gu, '/').replace(/\\courseresult\\/gu, '\\');
-    return sansCourse.includes('/result') || sansCourse.includes('\\result');
-  }
-  return lower.includes('/select') || lower.includes('\\select');
-}
-
-function scoreSkinPath(path: string, kind: Lr2SkinKind, variant?: Lr2PlayVariant): number {
-  const lower = path.toLowerCase();
-  if (kind === 'select') {
-    // The LR2 default theme ships a single `select.lr2skin`, but other
-    // themes occasionally bundle variants (`select_7.lr2skin`, etc.).
-    // Plain `select.lr2skin` wins; anything inside a `/Select/` folder
-    // ranks next; everything else is last.
-    if (lower.endsWith('/select.lr2skin')) {
-      return 0;
-    }
-    if (lower.includes('/select') && lower.endsWith('.lr2skin')) {
-      return 10;
-    }
-    return 100;
-  }
-  if (kind === 'result') {
-    // `result.lr2skin` directly under `/Result/` wins outright; we
-    // explicitly de-rank `/CourseResult/` candidates so a theme that
-    // ships both kinds (like the LR2 default) picks the per-song
-    // result, not the per-course one.
-    if (lower.includes('/courseresult')) {
-      return 90;
-    }
-    if (lower.endsWith('/result.lr2skin')) {
-      return 0;
-    }
-    if (lower.includes('/result') && lower.endsWith('.lr2skin')) {
-      return 10;
-    }
-    return 100;
-  }
-  // When the caller supplies a variant hint, the matching
-  // `play_<variant>.lr2skin` wins outright. Other play variants
-  // still score (so the loader can fall back if the requested
-  // variant isn't bundled), just at a lower priority than the
-  // hinted one.
-  if (variant && lower.endsWith(`/play_${variant}.lr2skin`)) {
-    return -1;
-  }
-  if (lower.endsWith('/play_7.lr2skin')) {
-    return 0;
-  }
-  if (lower.endsWith('/play_5.lr2skin')) {
-    return 1;
-  }
-  if (lower.endsWith('/play_9.lr2skin')) {
-    return 2;
-  }
-  if (lower.endsWith('/play_10.lr2skin')) {
-    return 3;
-  }
-  if (lower.endsWith('/play_14.lr2skin')) {
-    return 4;
-  }
-  if (lower.includes('/play_') && !lower.includes('play_half')) {
-    return 30;
-  }
-  if (lower.includes('play_half')) {
-    return 50;
-  }
-  return 100;
 }
