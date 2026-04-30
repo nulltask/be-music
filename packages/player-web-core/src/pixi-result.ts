@@ -128,7 +128,7 @@ const RESULT_BASE_OPS: ReadonlySet<number> = new Set<number>([
  * 300/340 ranges, so binding to 200..207 (as an earlier revision
  * of this file did) leaves every rank panel hidden.
  */
-const RESULT_DYNAMIC_OPS = {
+export const RESULT_DYNAMIC_OPS = {
   // Cleared / failed at the play-result level. These gate the
   // background atlas (`parts.tga` vs `parts_fail.tga`) plus the
   // big "CLEARED" / "FAILED" graphic. Runtime-only — pre-set in
@@ -1113,7 +1113,7 @@ export class PixiResultView {
  * - **Result flip** (op 350/351) — toggled from the played skin's
  *   `scratchFlip.flipResult`.
  */
-function computeResultOps(data: PixiGameplayResultData, skin: Lr2Skin): ReadonlySet<number> {
+export function computeResultOps(data: PixiGameplayResultData, skin: Lr2Skin): ReadonlySet<number> {
   const ops = new Set<number>(RESULT_BASE_OPS);
   ops.add(data.cleared ? RESULT_DYNAMIC_OPS.RESULT_CLEARED : RESULT_DYNAMIC_OPS.RESULT_FAILED);
   ops.add(RESULT_DYNAMIC_OPS.BAR_IS_SONG);

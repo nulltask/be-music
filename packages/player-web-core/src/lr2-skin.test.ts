@@ -690,4 +690,224 @@ describe('loadLr2SkinFromSourceFiles', () => {
     expect(skin?.bgas[1]?.destination).toMatchObject({ x: 230, y: 0, w: 392, h: 392 });
     expect(skin?.bgas[1]).toMatchObject({ noBase: false, noLayer: true, noPoor: true });
   });
+
+  // -- Result-screen path filtering ---------------------------------
+  // Covers the `Lr2SkinKind === 'result'` branch in `isSkinPathOfKind`
+  // / `scoreSkinPath` plus the loader fallback policy: non-play kinds
+  // must NOT silently grab a play skin when no kind-specific path
+  // exists (that's how the result scene used to render blank).
+  describe('result skin loader', () => {
+    it('selects Result/result.lr2skin when present and de-ranks /CourseResult/', () => {
+      const files = new Map<string, Uint8Array>([
+        ['Theme/LR2/Result/result.lr2skin', imageCsv('result')],
+        // Same filename in a sibling /CourseResult/ folder must NOT
+        // be picked when the user asks for kind: 'result' — the LR2
+        // default theme ships both and the per-song one wins.
+        ['Theme/LR2/CourseResult/result.lr2skin', imageCsv('course')],
+        ['Theme/LR2/Play/play_7.lr2skin', imageCsv('play')],
+      ]);
+      const skin = loadLr2SkinFromSourceFiles(files, { kind: 'result' });
+      expect(imagePathsOf(skin)).toEqual(['result.png']);
+    });
+
+    it('returns undefined for kind: result when no Result/ skin is bundled', () => {
+      const files = new Map<string, Uint8Array>([
+        ['Theme/LR2/Play/play_7.lr2skin', imageCsv('play')],
+        ['Theme/LR2/Select/select.lr2skin', imageCsv('select')],
+      ]);
+      // Earlier the loader fell through to "any .lr2skin" which would
+      // hand back play_7.lr2skin and the result scene rendered blank
+      // because every play DST gates on play-only ops / timers.
+      // Asserting `undefined` here locks in the "fall through to
+      // built-in fallback panel" contract.
+      expect(loadLr2SkinFromSourceFiles(files, { kind: 'result' })).toBeUndefined();
+    });
+
+    it('returns undefined for kind: select when no Select/ skin is bundled', () => {
+      const files = new Map<string, Uint8Array>([['Theme/LR2/Play/play_7.lr2skin', imageCsv('play')]]);
+      expect(loadLr2SkinFromSourceFiles(files, { kind: 'select' })).toBeUndefined();
+    });
+
+    it('still falls back to any .lr2skin for kind: play (legacy single-skin bundle)', () => {
+      // Some user bundles ship just one CSV and expect the play
+      // loader to pick it up regardless of folder layout. Keep that
+      // behaviour for `play` only — it's the fallback path that
+      // pre-dates select / result kind support.
+      const files = new Map<string, Uint8Array>([['skin/main.lr2skin', imageCsv('main')]]);
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['main.png']);
+    });
+  });
+
+  // -- defaultParseOps ----------------------------------------------
+  // Op 90 (cleared) and 91 (failed) are runtime-only flags but the
+  // LR2 default `Result/result_normal.csv` wraps the `#IMAGE`
+  // declarations themselves in `#IF,90` / `#IF,91`. The parser has
+  // to enter BOTH branches at parse time so both atlases (parts.tga
+  // and parts_fail.tga) reach the runtime — runtime DST gating then
+  // picks which is drawn on a per-frame basis.
+  describe('defaultParseOps retains result-screen IF branches', () => {
+    it('parses #IF,90 (cleared) and #IF,91 (failed) blocks together', () => {
+      // Each #IMAGE declaration appends to the parser's `imagePaths`
+      // array; subsequent `#SRC_IMAGE,...,gr=N` indexes back into it.
+      // Using gr=0 for both atlases would have the second SRC alias
+      // the first atlas — so the clear / fail entries reference
+      // gr=0 and gr=1 respectively to verify both #IMAGE declarations
+      // (one per #IF branch) reached the parser.
+      const files = new Map<string, Uint8Array>([
+        [
+          'skin/main.csv',
+          lines(
+            '#IF,90',
+            '#IMAGE,parts.png',
+            '#SRC_IMAGE,0,0,0,0,100,100,1,1,0,0',
+            '#DST_IMAGE,0,0,0,0,100,100,0,255,255,255,255',
+            '#ENDIF',
+            '#IF,91',
+            '#IMAGE,parts_fail.png',
+            '#SRC_IMAGE,0,1,0,0,100,100,1,1,0,0',
+            '#DST_IMAGE,0,0,0,0,100,100,0,255,255,255,255',
+            '#ENDIF',
+          ),
+        ],
+      ]);
+      // Both atlases should be present after parse — the runtime op
+      // gate decides which DST_IMAGE actually paints, but neither
+      // can paint if its #IMAGE was filtered out at parse time.
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['parts.png', 'parts_fail.png']);
+    });
+  });
+
+  // -- #SRC_GAUGECHART_* / #SRC_SCORECHART --------------------------
+  // These directives extend the `#SRC_*` template with four extra
+  // columns (field_w, field_h, start, end) that drive the polyline
+  // chart-area sizing and reveal animation on the result screen.
+  // Verifying the parser captures them correctly is critical because
+  // the renderer uses them directly without secondary fallbacks.
+  describe('#SRC_GAUGECHART_* / #SRC_SCORECHART', () => {
+    it('parses 1P green / red gauge charts with the per-spec columns', () => {
+      // SRC layout: command,index,gr,x,y,w,h,divx,divy,cycle,timer,
+      //             field_w,field_h,start,end
+      // DST layout: command,index,time,x,y,w,h,acc,a,r,g,b,blend,
+      //             filter,angle,center,loop,timer
+      const files = new Map<string, Uint8Array>([
+        [
+          'skin/main.csv',
+          lines(
+            '#IMAGE,parts.png',
+            // Index 0 = green gauge; 254×174 chart area, 500..2000ms reveal.
+            '#SRC_GAUGECHART_1P,0,0,450,191,2,2,1,1,0,0,254,174,500,2000',
+            '#DST_GAUGECHART_1P,0,0,20,206,2,2,0,255,0,255,0,0,0,0,0,0,0',
+            // Index 1 = red gauge; same chart area, different tint.
+            '#SRC_GAUGECHART_1P,1,0,446,191,2,2,1,1,0,0,254,174,500,2000',
+            '#DST_GAUGECHART_1P,1,0,20,206,2,2,0,255,255,0,0,0,0,0,0,0,0',
+          ),
+        ],
+      ]);
+      const skin = loadLr2SkinFromSourceFiles(files);
+      expect(skin?.gaugeCharts).toHaveLength(2);
+      const green = skin?.gaugeCharts[0];
+      expect(green?.side).toBe('1P');
+      expect(green?.source).toMatchObject({
+        index: 0,
+        fieldWidth: 254,
+        fieldHeight: 174,
+        start: 500,
+        end: 2000,
+      });
+      // DST `(x, y) = (20, 206)` is the LR2 bottom-left anchor; the
+      // tint `(0, 255, 0)` is what colours the polyline. The renderer
+      // depends on both surfacing through `keyframes[0]`.
+      expect(green?.destination).toMatchObject({ x: 20, y: 206, r: 0, g: 255, b: 0 });
+      const red = skin?.gaugeCharts[1];
+      expect(red?.source.index).toBe(1);
+      expect(red?.destination).toMatchObject({ r: 255, g: 0, b: 0 });
+    });
+
+    it('pairs interleaved 1P / 2P SRC + DST entries by side', () => {
+      // The spec template alternates 1P SRC, 1P DST, 2P SRC, 2P DST.
+      // The DST attaches to the most recent SRC of the matching side
+      // — a naive "last SRC overall" attach would mis-pair.
+      const files = new Map<string, Uint8Array>([
+        [
+          'skin/main.csv',
+          lines(
+            '#IMAGE,parts.png',
+            '#SRC_GAUGECHART_1P,0,0,0,0,2,2,1,1,0,0,100,80,0,0',
+            '#SRC_GAUGECHART_2P,0,0,0,0,2,2,1,1,0,0,100,80,0,0',
+            '#DST_GAUGECHART_2P,0,0,300,200,2,2,0,255,0,128,255,0,0,0,0,0,0',
+            '#DST_GAUGECHART_1P,0,0,20,200,2,2,0,255,255,128,0,0,0,0,0,0,0',
+          ),
+        ],
+      ]);
+      const skin = loadLr2SkinFromSourceFiles(files);
+      expect(skin?.gaugeCharts).toHaveLength(2);
+      const onesP = skin?.gaugeCharts.find((c) => c.side === '1P');
+      const twoP = skin?.gaugeCharts.find((c) => c.side === '2P');
+      // 1P DST anchors at x=20; 2P DST anchors at x=300. Wrong
+      // pairing would swap them.
+      expect(onesP?.destination.x).toBe(20);
+      expect(twoP?.destination.x).toBe(300);
+    });
+
+    it('parses #SRC_SCORECHART with current / best / target indices', () => {
+      const files = new Map<string, Uint8Array>([
+        [
+          'skin/main.csv',
+          lines(
+            '#IMAGE,parts.png',
+            // index 0 = this play, 1 = personal best, 2 = target.
+            '#SRC_SCORECHART,0,0,454,191,2,2,1,1,0,0,254,180,500,2000',
+            '#DST_SCORECHART,0,0,366,208,2,2,0,255,255,255,255,0,0,0,0,0,0',
+            '#SRC_SCORECHART,1,0,450,191,2,2,1,1,0,0,254,180,500,2000',
+            '#DST_SCORECHART,1,0,366,208,2,2,0,255,128,128,128,0,0,0,0,0,0',
+            '#SRC_SCORECHART,2,0,446,191,2,2,1,1,0,0,254,180,500,2000',
+            '#DST_SCORECHART,2,0,366,208,2,2,0,255,255,200,0,0,0,0,0,0,0',
+          ),
+        ],
+      ]);
+      const skin = loadLr2SkinFromSourceFiles(files);
+      expect(skin?.scoreCharts).toHaveLength(3);
+      expect(skin?.scoreCharts.map((c) => c.source.index)).toEqual([0, 1, 2]);
+      expect(skin?.scoreCharts[0]?.source).toMatchObject({
+        fieldWidth: 254,
+        fieldHeight: 180,
+        start: 500,
+        end: 2000,
+      });
+    });
+
+    it('drops chart entries whose DST is missing', () => {
+      // No #DST_GAUGECHART_1P after the SRC — the entry should be
+      // pruned in `createGaugeChartElements` rather than surface a
+      // half-formed `keyframes: []` element to the renderer.
+      const files = new Map<string, Uint8Array>([
+        [
+          'skin/main.csv',
+          lines('#IMAGE,parts.png', '#SRC_GAUGECHART_1P,0,0,0,0,2,2,1,1,0,0,100,80,0,0'),
+        ],
+      ]);
+      expect(loadLr2SkinFromSourceFiles(files)?.gaugeCharts).toEqual([]);
+    });
+  });
+
+  // -- resolveLr2AssetBytes case-insensitive lookup -----------------
+  // Real LR2 themes routinely mix `parts.tga` / `Parts.TGA`, and the
+  // chart side has the same problem with `#WAVxx kick.WAV`. Verify
+  // the resolver picks up a case-mismatched key without the caller
+  // having to enumerate variants.
+  describe('resolveLr2AssetBytes', () => {
+    it('finds an asset whose key differs only by casing', () => {
+      const files = new Map<string, Uint8Array>([
+        ['skin/main.csv', imageCsv('parts')],
+        // The skin CSV declared `#IMAGE,parts.png`; here the actual
+        // file lives at `Parts.PNG`. With case-insensitive lookup
+        // the resolver still hands back the bytes.
+        ['skin/Parts.PNG', new Uint8Array([0xde, 0xad, 0xbe, 0xef])],
+      ]);
+      const skin = loadLr2SkinFromSourceFiles(files);
+      expect(skin).toBeDefined();
+      const bytes = resolveLr2AssetBytes(skin!, 'parts.png');
+      expect(bytes).toEqual(new Uint8Array([0xde, 0xad, 0xbe, 0xef]));
+    });
+  });
 });
