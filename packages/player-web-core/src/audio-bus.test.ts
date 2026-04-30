@@ -101,6 +101,10 @@ function reachesDestination(start: FakeNode, destination: FakeNode): boolean {
   return reachable(start).has(destination);
 }
 
+function compressorsReachableFrom(start: FakeNode): number {
+  return [...reachable(start)].filter((node) => node.type === 'compressor').length;
+}
+
 // -- Param sanity ----------------------------------------------------------
 
 describe('compressor parameter constants', () => {
@@ -196,14 +200,40 @@ describe('buildAudioBus graph topology', () => {
     expect(sharedTargets[0]?.type).toBe('compressor');
   });
 
-  it('connects mixers directly to destination in off mode', () => {
+  it('routes mixers through the universal tap (then destination) in off mode', () => {
     const { context, destination } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'off');
     const keyMixer = bus.keyMixer as unknown as FakeNode;
     const bgmMixer = bus.bgmMixer as unknown as FakeNode;
-    // Direct edge — no compressor stages between mixer and dest.
-    expect([...keyMixer.outgoing]).toEqual([destination]);
-    expect([...bgmMixer.outgoing]).toEqual([destination]);
+    // No compressor stages on the audible path — the mixers go
+    // straight into the unity-gain tap node, which then feeds the
+    // destination. Mid-chain `tap` is required so external taps
+    // (recording / analysers) see the signal even when no
+    // compressor is engaged; without it the recorder would
+    // capture silence whenever the user toggles compression off.
+    expect(reachesDestination(keyMixer, destination)).toBe(true);
+    expect(reachesDestination(bgmMixer, destination)).toBe(true);
+    expect(compressorsReachableFrom(keyMixer)).toBe(0);
+    expect(compressorsReachableFrom(bgmMixer)).toBe(0);
+    // Both mixers share their immediate downstream — the tap.
+    const sharedTargets = [...keyMixer.outgoing].filter((node) => bgmMixer.outgoing.has(node));
+    expect(sharedTargets).toHaveLength(1);
+    expect(sharedTargets[0]?.type).toBe('gain');
+    // The bus's `outputNode` IS that shared tap.
+    expect(sharedTargets[0]).toBe(bus.outputNode);
+  });
+
+  it('exposes the tap as a stable outputNode across mode switches', () => {
+    // Recording / analysers connect to `outputNode` once and
+    // expect that tap point to keep delivering signal across
+    // mode flips. Identity stability locks that in.
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    const tapBefore = bus.outputNode;
+    bus.setMode('legacy');
+    bus.setMode('off');
+    bus.setMode('split');
+    expect(bus.outputNode).toBe(tapBefore);
   });
 
   it('preserves mixer identity across mode switches (no re-allocation)', () => {
@@ -307,10 +337,6 @@ describe('buildAudioBus per-stage toggles', () => {
     const { context, destination } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split', { initialStages });
     return { bus, context, destination };
-  };
-
-  const compressorsReachableFrom = (start: FakeNode): number => {
-    return [...reachable(start)].filter((node) => node.type === 'compressor').length;
   };
 
   it('starts every stage enabled by default', () => {

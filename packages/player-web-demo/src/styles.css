@@ -75,6 +75,45 @@ body {
 }
 
 /*
+ * Record toggle button. Idle = same flat dark style as the
+ * other toolbar buttons; active (`.recording`) lights up red
+ * with a soft pulse so the user can tell at a glance that
+ * capture is running. Disabled briefly while the WebM blob is
+ * being assembled on stop, so the toolbar shows the
+ * "finalising" state without flickering between modes.
+ */
+.toolbar button.record {
+  /* Mirrors the default `.toolbar button` palette so idle
+   * buttons read consistently next to the rest of the strip;
+   * the active state below tinkers with colour only. */
+  color: #f5f5f5;
+}
+
+.toolbar button.record.recording {
+  background: #c33b3b;
+  border-color: #c33b3b;
+  color: #fff;
+  /* Subtle pulse — readable as "live" without distracting
+   * from gameplay below. */
+  animation: record-pulse 1.4s ease-in-out infinite;
+}
+
+.toolbar button.record:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+@keyframes record-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(195 59 59 / 0.6);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px rgb(195 59 59 / 0.6);
+  }
+}
+
+/*
  * Per-stage compressor toggle group. Sits inline with the rest of
  * the toolbar controls but bunches its three checkboxes together
  * with a thin separator background so it reads as a sub-group of

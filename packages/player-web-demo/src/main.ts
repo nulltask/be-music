@@ -5,6 +5,7 @@ import {
   PixiSceneHost,
   PixiSongSelectView,
   describeSongCollection,
+  downloadBlob,
   loadLr2ThemeSkinsFromFiles,
   parseCompressorMode,
   pickLr2PlaySkin,
@@ -39,6 +40,7 @@ app.innerHTML = `
         <label class="autoplay"><input id="comp-bgm" type="checkbox" checked /> BGM</label>
         <label class="autoplay"><input id="comp-master" type="checkbox" checked /> Master</label>
       </span>
+      <button id="record" class="record" type="button">● Record</button>
       <button id="back" type="button">Song select</button>
       <span class="status" id="status">Ready</span>
     </div>
@@ -74,6 +76,14 @@ interface PlayerWebDemoElements {
    * `PixiSongSelectView.setSearchQuery`.
    */
   searchInput: HTMLInputElement;
+  /**
+   * Toggle button that flips the gameplay view's recorder on /
+   * off. Active state is reflected with a `.recording` class
+   * (red glow) so the user can tell they're capturing. Only
+   * meaningful while a chart is playing — the click handler
+   * silently no-ops when no gameplay view is mounted.
+   */
+  recordButton: HTMLButtonElement;
 }
 
 class PlayerWebDemoApp {
@@ -177,6 +187,13 @@ class PlayerWebDemoApp {
     });
     this.refreshCompressorStageVisibility();
 
+    // Record toggle: starts the gameplay recorder while a chart
+    // is playing, stops + downloads the WebM blob on a second
+    // click. Silently no-ops when no gameplay view exists.
+    this.elements.recordButton.addEventListener('click', () => {
+      void this.toggleRecording();
+    });
+
     // Global `/` shortcut focuses the search input. Standard
     // editor convention — same as GitHub / Slack / Discord. We
     // suppress the actual `/` character so it doesn't end up in
@@ -261,6 +278,59 @@ class PlayerWebDemoApp {
     const visible = this.elements.compressorInput.checked && this.compressorMode === 'split';
     this.elements.compStages.classList.toggle('hidden', !visible);
   }
+
+  /**
+   * Flip the gameplay recorder on / off. First click during a
+   * play session begins capture; second click finalizes the
+   * blob and triggers a browser download as
+   * `<song>.webm`. Errors (codec unavailable, no gameplay view)
+   * surface to the status panel.
+   */
+  private async toggleRecording(): Promise<void> {
+    const gameplay = this.gameplayView;
+    if (!gameplay) {
+      this.elements.status.textContent = 'Recording: start a chart first';
+      return;
+    }
+    if (gameplay.isRecording()) {
+      this.elements.recordButton.disabled = true;
+      try {
+        const result = await gameplay.stopRecording();
+        if (result) {
+          const filename = `${this.recordingFilenameBase}.webm`;
+          downloadBlob(result.blob, filename);
+          const seconds = (result.durationMs / 1000).toFixed(1);
+          const sizeMb = (result.blob.size / (1024 * 1024)).toFixed(1);
+          this.elements.status.textContent = `Saved ${filename} (${seconds}s, ${sizeMb} MB)`;
+        }
+      } finally {
+        this.elements.recordButton.classList.remove('recording');
+        this.elements.recordButton.textContent = '● Record';
+        this.elements.recordButton.disabled = false;
+      }
+      return;
+    }
+    try {
+      gameplay.startRecording();
+      this.elements.recordButton.classList.add('recording');
+      this.elements.recordButton.textContent = '■ Stop';
+      this.elements.status.textContent = 'Recording…';
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[record] start failed', error);
+      this.elements.status.textContent = `Recording unavailable: ${(error as Error).message}`;
+    }
+  }
+
+  /**
+   * Filename base for the next saved recording. Derived from the
+   * currently-playing song's title (sanitised for filesystem
+   * safety) or `gameplay-<timestamp>` when no song info is
+   * available. Updated on every `playSong` so back-to-back
+   * recordings don't overwrite each other in the user's
+   * downloads folder.
+   */
+  private recordingFilenameBase = 'gameplay';
 
   private async handleDrop(dataTransfer: DataTransfer): Promise<void> {
     const files = await readDroppedFiles(dataTransfer);
@@ -382,6 +452,10 @@ class PlayerWebDemoApp {
     this.lastSelectNavigation = this.selectView?.getNavigation();
     this.selectView?.setVisible(false);
     this.gameplayView?.dispose();
+    // Refresh the recording filename base for the upcoming play —
+    // each session writes to a unique file in the user's downloads
+    // folder rather than overwriting the previous one.
+    this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
     const playSkin = pickLr2PlaySkin(this.playSkins, song);
     this.gameplayView = new PixiGameplayView({
       skin: playSkin,
@@ -394,17 +468,39 @@ class PlayerWebDemoApp {
         master: this.elements.compMasterInput.checked,
       },
       onExit: () => {
+        // Stop + download any in-flight recording before we
+        // unmount; otherwise the chunk buffer would be discarded
+        // on dispose. ESC = "I'm done with this take" semantics
+        // are friendlier than silently throwing the bytes away.
+        void this.finalizeRecordingIfActive();
         void this.showSelect();
       },
       onChartFinished: (result) => {
+        // Same finalise-then-transition flow as the ESC path; a
+        // chart that ran to completion deserves the same auto-
+        // download convenience.
+        void this.finalizeRecordingIfActive();
         void this.showResult(result);
       },
       onRestart: () => {
+        void this.finalizeRecordingIfActive();
         void this.playSong(song);
       },
     });
     this.elements.status.textContent = `Playing: ${song.title}`;
     await this.gameplayView.mount(this.sceneHost, song, resolveSongSource(this.collection, song));
+  }
+
+  /**
+   * If a recording is active, calls {@link toggleRecording} to
+   * finalise + download. Used at chart end / exit / restart so
+   * the user doesn't lose footage when transitioning out of
+   * gameplay.
+   */
+  private async finalizeRecordingIfActive(): Promise<void> {
+    if (this.gameplayView?.isRecording()) {
+      await this.toggleRecording();
+    }
   }
 
   private async showResult(data: PixiGameplayResultData): Promise<void> {
@@ -437,4 +533,21 @@ new PlayerWebDemoApp({
   compMasterInput: document.querySelector<HTMLInputElement>('#comp-master')!,
   backButton: document.querySelector<HTMLButtonElement>('#back')!,
   searchInput: document.querySelector<HTMLInputElement>('#search')!,
+  recordButton: document.querySelector<HTMLButtonElement>('#record')!,
 }).start();
+
+/**
+ * Produces a filesystem-safe base for the auto-downloaded
+ * recording filename. Strips characters that browsers / OSes
+ * reject (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`),
+ * collapses runs of whitespace into single spaces, and trims
+ * the result to a sensible cap so an absurdly long song title
+ * doesn't produce a path the OS rejects on save.
+ */
+function sanitizeFilenameStem(input: string): string {
+  return input
+    .replace(/[/\\:*?"<>|]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .slice(0, 80);
+}

@@ -52,6 +52,7 @@ import {
   type CompressorStage,
   buildAudioBus,
 } from './audio-bus.ts';
+import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-recorder.ts';
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import type { BeMusicJson } from '@be-music/json';
@@ -385,6 +386,15 @@ export class PixiGameplayView {
    * the constructor / URL flag selected).
    */
   private audioCompressorMode: CompressorMode = 'split';
+  /**
+   * Active recorder (canvas video + audio bus tap → WebM blob)
+   * when the host has started a recording session via
+   * {@link startRecording}. `undefined` while idle. We hold the
+   * instance across the play session so `stopRecording` /
+   * `dispose` can finalize cleanly even if the chart ends mid-
+   * recording.
+   */
+  private recorder: GameplayRecorder | undefined;
   private decodedSamples = new Map<string, AudioBuffer>();
   private scheduled = new Set<RuntimeNote>();
   private autoSampleTriggers: TimedSampleTrigger[] = [];
@@ -763,6 +773,52 @@ export class PixiGameplayView {
     this.audioBus?.setStageEnabled(stage, enabled);
   }
 
+  /**
+   * Begins recording the play scene (canvas video + bus audio
+   * mix) into a WebM Blob. Throws when `prepareAudio` hasn't
+   * finished setting up the audio context yet, or when the
+   * browser doesn't expose `MediaRecorder` /
+   * `canvas.captureStream` / a usable codec — UI hosts should
+   * surface these failures to the user (the codec case is
+   * common on older Safari).
+   *
+   * Idempotent in the sense that calling while a recording is
+   * already active is a no-op (`isRecording()` is the canonical
+   * gate hosts should check).
+   */
+  public startRecording(): void {
+    if (this.recorder?.isActive()) return;
+    if (!this.host || !this.audioContext || !this.audioBus) {
+      throw new Error('PixiGameplayView.startRecording: gameplay audio is not ready yet');
+    }
+    // Recreate the recorder per session — instances are one-shot
+    // by design (chunk buffer + audio tap lifecycle), so the
+    // host gets a clean blob on every start.
+    this.recorder = new GameplayRecorder({
+      canvas: this.host.app.canvas,
+      audioContext: this.audioContext,
+      audioOutput: this.audioBus.outputNode,
+    });
+    this.recorder.start();
+  }
+
+  /**
+   * Ends the active recording and resolves with the assembled
+   * Blob plus its MIME type / duration. Resolves with
+   * `undefined` when no recording is in progress, so callers
+   * can call this unconditionally on chart end / unmount.
+   */
+  public async stopRecording(): Promise<GameplayRecorderResult | undefined> {
+    const recorder = this.recorder;
+    if (!recorder) return undefined;
+    this.recorder = undefined;
+    return recorder.stop();
+  }
+
+  public isRecording(): boolean {
+    return this.recorder?.isActive() ?? false;
+  }
+
   public dispose(): void {
     if (this.disposed) {
       return;
@@ -812,6 +868,13 @@ export class PixiGameplayView {
     }
     this.bgaVideos.clear();
     this.bgaActiveVideos = {};
+    // Hard-stop any active recording before tearing down the bus.
+    // `GameplayRecorder.dispose` calls `MediaRecorder.stop()`
+    // synchronously (no chunk-flush wait) and disconnects its
+    // audio tap from the bus's output node, so the bus can be
+    // disposed cleanly afterwards.
+    this.recorder?.dispose();
+    this.recorder = undefined;
     // Tear down the bus before closing the AudioContext so its
     // `disconnect()` calls don't race with context shutdown. The bus
     // doesn't own the AudioContext itself; closing that is the next

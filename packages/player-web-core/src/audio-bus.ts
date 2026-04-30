@@ -196,6 +196,21 @@ export interface CompressorStages {
 export interface AudioBusHandle {
   readonly keyMixer: GainNode;
   readonly bgmMixer: GainNode;
+  /**
+   * Final node before `audioContext.destination` — i.e. the stage
+   * the playback actually reaches the speakers from. Exposed so
+   * external taps (recording, analysers, level meters) can
+   * `connect` to their own destinations without disrupting the
+   * main path.
+   *
+   * Internally a unity-gain `GainNode` that every mode
+   * (`'off'` / `'legacy'` / `'split'`) routes through. Unity gain
+   * means the tap is acoustically transparent — even `'off'`
+   * mode's "raw signal" goes through it without level / phase
+   * change. Recording therefore captures whatever the user is
+   * hearing regardless of the active compressor configuration.
+   */
+  readonly outputNode: AudioNode;
   readonly mode: CompressorMode;
   setMode(next: CompressorMode): void;
   getMode(): CompressorMode;
@@ -264,9 +279,22 @@ export function buildAudioBus(
   const legacyComp = createCompressor(audioContext, LEGACY_COMPRESSOR_PARAMS);
   const makeup = audioContext.createGain();
   makeup.gain.value = MASTER_MAKEUP_GAIN_LINEAR;
-  // The makeup → destination tail is shared by `'split'` and
-  // `'legacy'`; only `'off'` skips it entirely.
-  makeup.connect(audioContext.destination);
+  // Universal output tap. Every mode routes through this unity-
+  // gain node before reaching `audioContext.destination`, so
+  // external consumers (the recorder, future analysers, level
+  // meters) can `connect` to a single stable point and capture
+  // whatever the user is hearing — including `'off'` mode where
+  // the makeup gain is bypassed for the audible path. Unity gain
+  // means the tap is acoustically transparent: it sums its inputs
+  // with no level / phase change, so the "raw signal" intent of
+  // `'off'` is preserved.
+  const tap = audioContext.createGain();
+  tap.gain.value = 1.0;
+  tap.connect(audioContext.destination);
+  // `makeup → tap` is wired once and never re-disconnected; modes
+  // that use makeup (legacy / split) just connect their last
+  // compressor to makeup and let the rest of the chain ride.
+  makeup.connect(tap);
 
   let activeMode: CompressorMode = initialMode;
   // Stage on/off state. Persisted across mode changes so a UI
@@ -295,8 +323,12 @@ export function buildAudioBus(
     masterComp.disconnect();
     legacyComp.disconnect();
     if (activeMode === 'off') {
-      keyMixer.connect(audioContext.destination);
-      bgmMixer.connect(audioContext.destination);
+      // Bypass every compressor + makeup — but route through the
+      // shared `tap` node anyway so the recorder (and any other
+      // tap-side consumer) sees the signal. `tap.gain = 1.0`
+      // keeps this transparent for the audible path.
+      keyMixer.connect(tap);
+      bgmMixer.connect(tap);
       return;
     }
     if (activeMode === 'legacy') {
@@ -336,6 +368,7 @@ export function buildAudioBus(
   return {
     keyMixer,
     bgmMixer,
+    outputNode: tap,
     get mode(): CompressorMode {
       return activeMode;
     },
@@ -369,6 +402,7 @@ export function buildAudioBus(
         masterComp.disconnect();
         legacyComp.disconnect();
         makeup.disconnect();
+        tap.disconnect();
       } catch {
         // `disconnect()` throws when called on an already-disposed
         // node. Swallowing is safe — `dispose()` is idempotent and
