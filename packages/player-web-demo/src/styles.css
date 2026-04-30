@@ -74,6 +74,40 @@ body {
   display: none;
 }
 
+/*
+ * Per-stage compressor toggle group. Sits inline with the rest of
+ * the toolbar controls but bunches its three checkboxes together
+ * with a thin separator background so it reads as a sub-group of
+ * the "Compressor" checkbox to its left.
+ *
+ * `.hidden` collapses the whole group when the active mode doesn't
+ * support per-stage gating (legacy / off).
+ */
+.toolbar .comp-stages {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid #2a3242;
+  border-radius: 6px;
+  background: rgb(11 14 22 / 0.6);
+}
+
+.toolbar .comp-stages.hidden {
+  display: none;
+}
+
+.toolbar .comp-stages > label {
+  /*
+   * The bordered group already contains them, so individual labels
+   * drop their own border + background to avoid a double frame.
+   */
+  border: 0;
+  background: transparent;
+  padding: 0 4px;
+  min-height: 26px;
+}
+
 .toolbar label.autoplay {
   gap: 8px;
 }

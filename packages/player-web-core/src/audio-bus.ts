@@ -162,6 +162,27 @@ export const LEGACY_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
 export const MASTER_MAKEUP_GAIN_LINEAR = 1.12;
 
 /**
+ * Per-compressor-stage identifier used by {@link AudioBusHandle.setStageEnabled}.
+ *
+ * - `'key'` — key bus compressor (between `keyMixer` and master).
+ * - `'bgm'` — BGM bus compressor (between `bgmMixer` and master).
+ * - `'master'` — final master bus compressor.
+ *
+ * Stage toggles only have an effect in `'split'` mode. `'legacy'`
+ * has just a single compressor (toggling individual stages there
+ * is meaningless — use mode `'off'` to bypass it) and `'off'` is
+ * already a complete bypass.
+ */
+export type CompressorStage = 'key' | 'bgm' | 'master';
+
+/** Per-stage on/off state. Defaults to all `true` (every stage engaged). */
+export interface CompressorStages {
+  key: boolean;
+  bgm: boolean;
+  master: boolean;
+}
+
+/**
  * Single bus-mode handle. The keys are stable references that
  * sample sources connect to (their own connections never need to
  * be touched after creation). `setMode(next)` re-routes the
@@ -178,7 +199,35 @@ export interface AudioBusHandle {
   readonly mode: CompressorMode;
   setMode(next: CompressorMode): void;
   getMode(): CompressorMode;
+  /**
+   * Toggle one compressor stage in `'split'` mode. With every stage
+   * off the split bus collapses to `keyMixer → makeup → destination`
+   * and `bgmMixer → makeup → destination` (the per-bus / master
+   * compressors are all bypassed but the makeup gain still applies,
+   * distinct from the global `'off'` mode that bypasses everything).
+   *
+   * No-op in `'legacy'` / `'off'` modes — but the state is still
+   * remembered, so a later `setMode('split')` picks it up.
+   */
+  setStageEnabled(stage: CompressorStage, enabled: boolean): void;
+  /**
+   * Returns the cached stage flag. Reflects the **requested** state
+   * even when the active mode isn't `'split'` (so a UI checkbox can
+   * round-trip its value through the bus without losing it on a
+   * temporary mode change).
+   */
+  getStageEnabled(stage: CompressorStage): boolean;
   dispose(): void;
+}
+
+export interface BuildAudioBusOptions {
+  /**
+   * Initial per-stage flags (only relevant in `'split'` mode).
+   * Missing fields default to `true`. Used by hosts that surface
+   * a UI for per-stage bypass and want the bus's state to come up
+   * matching the pre-mount UI selection.
+   */
+  initialStages?: Partial<CompressorStages>;
 }
 
 /**
@@ -192,7 +241,11 @@ export interface AudioBusHandle {
  * the demo's `?compressor=...` flag can pass `'legacy'` or `'off'`
  * for A/B comparison.
  */
-export function buildAudioBus(audioContext: AudioContext, initialMode: CompressorMode = 'split'): AudioBusHandle {
+export function buildAudioBus(
+  audioContext: AudioContext,
+  initialMode: CompressorMode = 'split',
+  options: BuildAudioBusOptions = {},
+): AudioBusHandle {
   const keyMixer = audioContext.createGain();
   const bgmMixer = audioContext.createGain();
   // Per-bus compressors plus the master — created up front, wired
@@ -216,40 +269,68 @@ export function buildAudioBus(audioContext: AudioContext, initialMode: Compresso
   makeup.connect(audioContext.destination);
 
   let activeMode: CompressorMode = initialMode;
-  applyMode(activeMode);
+  // Stage on/off state. Persisted across mode changes so a UI
+  // checkbox can flip the architecture mid-play without forgetting
+  // which stages the user had disabled. `initialStages` lets the
+  // host seed this from a pre-mount UI selection.
+  const stages: CompressorStages = {
+    key: options.initialStages?.key ?? true,
+    bgm: options.initialStages?.bgm ?? true,
+    master: options.initialStages?.master ?? true,
+  };
+  applyRouting();
 
-  function applyMode(mode: CompressorMode): void {
-    // Tear down every routing edge we own. `disconnect()` with no
-    // arg removes ALL outgoing edges; sample sources connect TO
-    // keyMixer / bgmMixer (incoming edges) and aren't affected.
+  /**
+   * Rebuilds every downstream edge based on the current `activeMode`
+   * + `stages`. Source-side connections (TO `keyMixer` / `bgmMixer`)
+   * stay untouched because `disconnect()` only removes a node's
+   * **outgoing** edges, and we never disconnect on the source-side
+   * mixers' inputs.
+   */
+  function applyRouting(): void {
     keyMixer.disconnect();
     bgmMixer.disconnect();
     keyComp.disconnect();
     bgmComp.disconnect();
     masterComp.disconnect();
     legacyComp.disconnect();
-    if (mode === 'off') {
+    if (activeMode === 'off') {
       keyMixer.connect(audioContext.destination);
       bgmMixer.connect(audioContext.destination);
       return;
     }
-    if (mode === 'legacy') {
+    if (activeMode === 'legacy') {
       // keyMixer + bgmMixer → legacyComp → makeup → destination.
+      // Stage toggles are intentionally ignored here — legacy is a
+      // single-comp architecture, "disable key only" doesn't map
+      // onto its topology. The flags persist so toggling back to
+      // split mode picks them up.
       keyMixer.connect(legacyComp);
       bgmMixer.connect(legacyComp);
       legacyComp.connect(makeup);
       return;
     }
-    // 'split' — full 3-stage architecture.
+    // 'split' — 3-stage architecture with per-stage bypass.
     //
-    //   keyMixer → keyComp ↘
-    //                       masterComp → makeup → destination
-    //   bgmMixer → bgmComp ↗
-    keyMixer.connect(keyComp);
-    bgmMixer.connect(bgmComp);
-    keyComp.connect(masterComp);
-    bgmComp.connect(masterComp);
-    masterComp.connect(makeup);
+    // `stages.key`     — engage `keyComp`        (else keyMixer skips ahead)
+    // `stages.bgm`     — engage `bgmComp`        (else bgmMixer skips ahead)
+    // `stages.master`  — engage `masterComp`     (else key/BGM tails meet at `makeup`)
+    //
+    // The branch graph stays the same shape; only which intermediate
+    // node each path threads through changes. Sample-source mixers
+    // never see the difference.
+    const keyTail: AudioNode = stages.key ? keyComp : keyMixer;
+    const bgmTail: AudioNode = stages.bgm ? bgmComp : bgmMixer;
+    if (stages.key) keyMixer.connect(keyComp);
+    if (stages.bgm) bgmMixer.connect(bgmComp);
+    if (stages.master) {
+      keyTail.connect(masterComp);
+      bgmTail.connect(masterComp);
+      masterComp.connect(makeup);
+    } else {
+      keyTail.connect(makeup);
+      bgmTail.connect(makeup);
+    }
   }
 
   return {
@@ -261,10 +342,23 @@ export function buildAudioBus(audioContext: AudioContext, initialMode: Compresso
     setMode(next: CompressorMode): void {
       if (activeMode === next) return;
       activeMode = next;
-      applyMode(next);
+      applyRouting();
     },
     getMode(): CompressorMode {
       return activeMode;
+    },
+    setStageEnabled(stage: CompressorStage, enabled: boolean): void {
+      if (stages[stage] === enabled) return;
+      stages[stage] = enabled;
+      // Only re-route when the active mode is one that uses stage
+      // flags. Persisting the flag for legacy/off is the right
+      // thing — see the doc comment on `setStageEnabled`.
+      if (activeMode === 'split') {
+        applyRouting();
+      }
+    },
+    getStageEnabled(stage: CompressorStage): boolean {
+      return stages[stage];
     },
     dispose(): void {
       try {

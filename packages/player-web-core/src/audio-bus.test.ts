@@ -293,3 +293,120 @@ describe('buildAudioBus graph topology', () => {
     }
   });
 });
+
+// -- Per-stage on/off toggles ---------------------------------------------
+
+describe('buildAudioBus per-stage toggles', () => {
+  // Each stage flip should rebuild the routing so the corresponding
+  // compressor node is bypassed. We track this by counting the
+  // total number of compressor nodes the source-side mixers can
+  // reach: in the all-on baseline we expect both keyComp + masterComp
+  // (or bgmComp + masterComp) on each path, and disabling one stage
+  // drops one compressor from the path's reachable set.
+  const setupSplit = (initialStages?: { key?: boolean; bgm?: boolean; master?: boolean }) => {
+    const { context, destination } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split', { initialStages });
+    return { bus, context, destination };
+  };
+
+  const compressorsReachableFrom = (start: FakeNode): number => {
+    return [...reachable(start)].filter((node) => node.type === 'compressor').length;
+  };
+
+  it('starts every stage enabled by default', () => {
+    const { bus } = setupSplit();
+    expect(bus.getStageEnabled('key')).toBe(true);
+    expect(bus.getStageEnabled('bgm')).toBe(true);
+    expect(bus.getStageEnabled('master')).toBe(true);
+  });
+
+  it('respects initialStages when seeding the bus', () => {
+    const { bus } = setupSplit({ key: false, master: false });
+    expect(bus.getStageEnabled('key')).toBe(false);
+    expect(bus.getStageEnabled('bgm')).toBe(true);
+    expect(bus.getStageEnabled('master')).toBe(false);
+  });
+
+  it('routes keyMixer through 2 compressors with all stages on', () => {
+    const { bus, destination } = setupSplit();
+    const keyMixer = bus.keyMixer as unknown as FakeNode;
+    expect(reachesDestination(keyMixer, destination)).toBe(true);
+    // keyComp + masterComp = 2 compressors on the key path. The
+    // legacy comp + bgmComp aren't reachable from the key mixer
+    // (different branches), so we shouldn't see them.
+    expect(compressorsReachableFrom(keyMixer)).toBe(2);
+  });
+
+  it('drops keyComp from the key path when stage.key is off', () => {
+    const { bus, destination } = setupSplit();
+    bus.setStageEnabled('key', false);
+    const keyMixer = bus.keyMixer as unknown as FakeNode;
+    expect(reachesDestination(keyMixer, destination)).toBe(true);
+    // Now only masterComp is on the key path.
+    expect(compressorsReachableFrom(keyMixer)).toBe(1);
+    // The BGM path is unaffected (still bgmComp + masterComp).
+    const bgmMixer = bus.bgmMixer as unknown as FakeNode;
+    expect(compressorsReachableFrom(bgmMixer)).toBe(2);
+  });
+
+  it('drops bgmComp from the BGM path when stage.bgm is off', () => {
+    const { bus } = setupSplit();
+    bus.setStageEnabled('bgm', false);
+    const bgmMixer = bus.bgmMixer as unknown as FakeNode;
+    expect(compressorsReachableFrom(bgmMixer)).toBe(1);
+    const keyMixer = bus.keyMixer as unknown as FakeNode;
+    expect(compressorsReachableFrom(keyMixer)).toBe(2);
+  });
+
+  it('drops masterComp from BOTH paths when stage.master is off', () => {
+    const { bus, destination } = setupSplit();
+    bus.setStageEnabled('master', false);
+    const keyMixer = bus.keyMixer as unknown as FakeNode;
+    const bgmMixer = bus.bgmMixer as unknown as FakeNode;
+    // Just keyComp on the key path; just bgmComp on the BGM path.
+    expect(compressorsReachableFrom(keyMixer)).toBe(1);
+    expect(compressorsReachableFrom(bgmMixer)).toBe(1);
+    expect(reachesDestination(keyMixer, destination)).toBe(true);
+    expect(reachesDestination(bgmMixer, destination)).toBe(true);
+  });
+
+  it('routes through makeup-only when every stage is off', () => {
+    const { bus, destination } = setupSplit();
+    bus.setStageEnabled('key', false);
+    bus.setStageEnabled('bgm', false);
+    bus.setStageEnabled('master', false);
+    const keyMixer = bus.keyMixer as unknown as FakeNode;
+    const bgmMixer = bus.bgmMixer as unknown as FakeNode;
+    // No compressors on either path, but the makeup gain is still
+    // there — distinct from `'off'` mode which bypasses makeup too.
+    expect(compressorsReachableFrom(keyMixer)).toBe(0);
+    expect(compressorsReachableFrom(bgmMixer)).toBe(0);
+    expect(reachesDestination(keyMixer, destination)).toBe(true);
+    expect(reachesDestination(bgmMixer, destination)).toBe(true);
+  });
+
+  it('remembers stage state across mode switches', () => {
+    // The split → legacy switch should be a no-op for stage state
+    // (legacy doesn't use it), and switching back to split should
+    // bring the disabled stages back without the user having to
+    // re-toggle.
+    const { bus, destination } = setupSplit();
+    bus.setStageEnabled('key', false);
+    bus.setMode('legacy');
+    expect(bus.getStageEnabled('key')).toBe(false);
+    bus.setMode('split');
+    const keyMixer = bus.keyMixer as unknown as FakeNode;
+    expect(compressorsReachableFrom(keyMixer)).toBe(1);
+    expect(reachesDestination(keyMixer, destination)).toBe(true);
+  });
+
+  it('treats setStageEnabled as a no-op for unchanged values', () => {
+    // Asserting no exception + idempotent state is the practical
+    // contract; flipping the same stage twice shouldn't accidentally
+    // re-route on the second call.
+    const { bus } = setupSplit();
+    bus.setStageEnabled('master', true); // already true
+    bus.setStageEnabled('master', true);
+    expect(bus.getStageEnabled('master')).toBe(true);
+  });
+});

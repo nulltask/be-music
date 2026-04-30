@@ -46,7 +46,12 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from './lr2-render.ts';
-import { type AudioBusHandle, type CompressorMode, buildAudioBus } from './audio-bus.ts';
+import {
+  type AudioBusHandle,
+  type CompressorMode,
+  type CompressorStage,
+  buildAudioBus,
+} from './audio-bus.ts';
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import type { BeMusicJson } from '@be-music/json';
@@ -233,6 +238,15 @@ export interface PixiGameplayViewOptions {
    * topology to use when compression is on.
    */
   audioCompressorMode?: 'split' | 'legacy';
+  /**
+   * Initial per-stage on/off flags for the split-bus architecture.
+   * Defaults to all `true` (every stage engaged). Hosts that
+   * surface a UI for per-stage bypass should pass the current UI
+   * state here so the bus comes up matching the visible selection
+   * — otherwise the user's stage choices on the select screen
+   * would be silently reset every gameplay re-mount.
+   */
+  audioCompressorStages?: { key?: boolean; bgm?: boolean; master?: boolean };
 }
 
 export class PixiGameplayView {
@@ -715,6 +729,19 @@ export class PixiGameplayView {
     if (this.audioBus && this.audioBus.getMode() !== 'off') {
       this.audioBus.setMode(mode);
     }
+  }
+
+  /**
+   * Toggle one compressor stage (`'key'` / `'bgm'` / `'master'`)
+   * within the split-bus architecture. The stage flag is remembered
+   * even when the active mode isn't `'split'` — a future toggle to
+   * split mode will pick the user's choice back up.
+   *
+   * No-op before `prepareAudio` has run; the stage state will be
+   * applied via the bus's defaults the next time gameplay mounts.
+   */
+  public setAudioCompressorStageEnabled(stage: CompressorStage, enabled: boolean): void {
+    this.audioBus?.setStageEnabled(stage, enabled);
   }
 
   public dispose(): void {
@@ -1260,7 +1287,9 @@ export class PixiGameplayView {
     // come and go per second on dense charts.
     this.audioCompressorMode = this.options.audioCompressorMode ?? 'split';
     const initialMode: CompressorMode = this.options.audioCompressor === false ? 'off' : this.audioCompressorMode;
-    this.audioBus = buildAudioBus(this.audioContext, initialMode);
+    this.audioBus = buildAudioBus(this.audioContext, initialMode, {
+      initialStages: this.options.audioCompressorStages,
+    });
     // Use the control-flow-resolved chart so #IF-gated #WAVxx
     // declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? this.song.chart;

@@ -33,7 +33,12 @@ app.innerHTML = `
     <div class="toolbar">
       <label>BMS folder / ZIP<input id="songs" type="file" webkitdirectory multiple /></label>
       <label class="autoplay"><input id="autoplay" type="checkbox" /> Auto play</label>
-      <label class="autoplay"><input id="compressor" type="checkbox" checked /> Compressor</label>
+      <label class="autoplay"><input id="compressor" type="checkbox" /> Compressor</label>
+      <span class="comp-stages" id="comp-stages">
+        <label class="autoplay"><input id="comp-key" type="checkbox" checked /> Key</label>
+        <label class="autoplay"><input id="comp-bgm" type="checkbox" checked /> BGM</label>
+        <label class="autoplay"><input id="comp-master" type="checkbox" checked /> Master</label>
+      </span>
       <button id="back" type="button">Song select</button>
       <span class="status" id="status">Ready</span>
     </div>
@@ -48,6 +53,17 @@ interface PlayerWebDemoElements {
   songInput: HTMLInputElement;
   autoPlayInput: HTMLInputElement;
   compressorInput: HTMLInputElement;
+  /**
+   * Container for the per-stage compressor toggles (`Key` / `BGM`
+   * / `Master`). Hidden via a CSS class when the active compressor
+   * mode is `'legacy'` (single-comp architecture has no per-stage
+   * concept) or `'off'` (every stage is bypassed wholesale, so
+   * showing per-stage toggles would be misleading).
+   */
+  compStages: HTMLSpanElement;
+  compKeyInput: HTMLInputElement;
+  compBgmInput: HTMLInputElement;
+  compMasterInput: HTMLInputElement;
   backButton: HTMLButtonElement;
 }
 
@@ -92,15 +108,20 @@ class PlayerWebDemoApp {
     // boot. We resolve it through `parseCompressorMode` (the same
     // helper exported from `audio-bus.ts`) so the recognised values
     // stay synced with the runtime API. Unrecognised / missing flag
-    // → fall through to the `'split'` default. `?compressor=off`
-    // simulates the user unchecking the compressor checkbox before
-    // playing — the architecture itself stays at `'split'` so
-    // re-checking the box flips back to the new bus, not legacy.
+    // → fall through to defaults: architecture `'split'`, checkbox
+    // unchecked (compressor off).
+    //
+    // `?compressor=split|legacy` is an explicit opt-in to that
+    // architecture and implies compression should be ON, so the
+    // checkbox is checked too. `?compressor=off` is redundant with
+    // the new default (checkbox starts unchecked) but kept as an
+    // explicit form for documentation / scripted launches.
     const flag: CompressorMode | undefined = parseCompressorMode(
       new URL(window.location.href).searchParams.get('compressor'),
     );
-    if (flag === 'legacy' || flag === 'split') {
+    if (flag === 'split' || flag === 'legacy') {
       this.compressorMode = flag;
+      this.elements.compressorInput.checked = true;
     } else if (flag === 'off') {
       this.elements.compressorInput.checked = false;
     }
@@ -126,7 +147,18 @@ class PlayerWebDemoApp {
 
     this.elements.compressorInput.addEventListener('change', () => {
       this.gameplayView?.setAudioCompressor(this.elements.compressorInput.checked);
+      this.refreshCompressorStageVisibility();
     });
+    this.elements.compKeyInput.addEventListener('change', () => {
+      this.gameplayView?.setAudioCompressorStageEnabled('key', this.elements.compKeyInput.checked);
+    });
+    this.elements.compBgmInput.addEventListener('change', () => {
+      this.gameplayView?.setAudioCompressorStageEnabled('bgm', this.elements.compBgmInput.checked);
+    });
+    this.elements.compMasterInput.addEventListener('change', () => {
+      this.gameplayView?.setAudioCompressorStageEnabled('master', this.elements.compMasterInput.checked);
+    });
+    this.refreshCompressorStageVisibility();
 
     window.addEventListener('dragover', (event) => {
       event.preventDefault();
@@ -150,6 +182,23 @@ class PlayerWebDemoApp {
     if (this.hostMounted) return;
     this.hostMounted = true;
     await this.sceneHost.mount(this.elements.stage);
+  }
+
+  /**
+   * Hide the per-stage `Key` / `BGM` / `Master` checkboxes when
+   * they don't apply to the current state:
+   *
+   * - Compressor checkbox unchecked → bus is in `'off'` mode, every
+   *   stage is bypassed already.
+   * - `?compressor=legacy` → the legacy architecture has just one
+   *   compressor; per-stage toggles don't map onto it.
+   *
+   * The CSS class drives `display: none` on the container so the
+   * toolbar reflows around the missing element.
+   */
+  private refreshCompressorStageVisibility(): void {
+    const visible = this.elements.compressorInput.checked && this.compressorMode === 'split';
+    this.elements.compStages.classList.toggle('hidden', !visible);
   }
 
   private async handleDrop(dataTransfer: DataTransfer): Promise<void> {
@@ -261,6 +310,11 @@ class PlayerWebDemoApp {
       autoPlay: this.elements.autoPlayInput.checked,
       audioCompressor: this.elements.compressorInput.checked,
       audioCompressorMode: this.compressorMode,
+      audioCompressorStages: {
+        key: this.elements.compKeyInput.checked,
+        bgm: this.elements.compBgmInput.checked,
+        master: this.elements.compMasterInput.checked,
+      },
       onExit: () => {
         void this.showSelect();
       },
@@ -299,5 +353,9 @@ new PlayerWebDemoApp({
   songInput: document.querySelector<HTMLInputElement>('#songs')!,
   autoPlayInput: document.querySelector<HTMLInputElement>('#autoplay')!,
   compressorInput: document.querySelector<HTMLInputElement>('#compressor')!,
+  compStages: document.querySelector<HTMLSpanElement>('#comp-stages')!,
+  compKeyInput: document.querySelector<HTMLInputElement>('#comp-key')!,
+  compBgmInput: document.querySelector<HTMLInputElement>('#comp-bgm')!,
+  compMasterInput: document.querySelector<HTMLInputElement>('#comp-master')!,
   backButton: document.querySelector<HTMLButtonElement>('#back')!,
 }).start();
