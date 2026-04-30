@@ -5,6 +5,7 @@ export * from './gameplay-recorder.ts';
 export * from './library.ts';
 export * from './lr2-play-skin.ts';
 export * from './lr2-skin.ts';
+export * from './pixi-decide.ts';
 export * from './pixi-gameplay.ts';
 export * from './pixi-result.ts';
 export * from './pixi-scene-host.ts';

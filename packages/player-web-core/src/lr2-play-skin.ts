@@ -26,6 +26,15 @@ export interface Lr2ThemeSkins {
   selectSkin?: Lr2Skin;
   resultSkin?: Lr2Skin;
   /**
+   * Decide-screen skin (the brief "song confirmation" splash that
+   * plays between the select view and gameplay). Conventionally
+   * lives at `LR2files/Theme/<name>/Decide/decide.lr2skin`.
+   * Undefined when the theme bundle has no Decide directory —
+   * the demo simply skips the splash and moves straight from
+   * select to play in that case.
+   */
+  decideSkin?: Lr2Skin;
+  /**
    * Looping song-select screen BGM, conventionally
    * `LR2files/Bgm/<theme>/select.wav`. Undefined when the theme
    * bundle didn't ship a matching file.
@@ -87,11 +96,12 @@ export async function loadLr2ThemeSkinsFromFiles(
   const sourceFiles = [...files];
   const onProgress = options.onProgress;
   // Total = play variants (one per LR2_PLAY_VARIANTS entry) +
-  // select skin + result skin + 2 theme BGMs + 3 system sounds.
-  // Hard-coding it to the structural shape below keeps the count
-  // honest if anyone adds another sub-task later (compile breaks
-  // when the awaited tuple disagrees with this constant).
-  const totalSubTasks = LR2_PLAY_VARIANTS.length + 7;
+  // select skin + result skin + decide skin + 2 theme BGMs +
+  // 3 system sounds. Hard-coding it to the structural shape
+  // below keeps the count honest if anyone adds another
+  // sub-task later (compile breaks when the awaited tuple
+  // disagrees with this constant).
+  const totalSubTasks = LR2_PLAY_VARIANTS.length + 8;
   let completed = 0;
   onProgress?.({ phase: 'theme', current: 0, total: totalSubTasks });
   const track = <T>(label: string, task: Promise<T>): Promise<T> =>
@@ -103,17 +113,27 @@ export async function loadLr2ThemeSkinsFromFiles(
   const playSkinTasks = LR2_PLAY_VARIANTS.map((variant) =>
     track(`play/${variant}K`, loadLr2SkinFromFiles(sourceFiles, { kind: 'play', playVariant: variant })),
   );
-  const [variantSkins, selectSkin, resultSkin, selectBgm, decideBgm, cursorMove, folderOpen, folderClose] =
-    await Promise.all([
-      Promise.all(playSkinTasks),
-      track('select', loadLr2SkinFromFiles(sourceFiles, { kind: 'select' })),
-      track('result', loadLr2SkinFromFiles(sourceFiles, { kind: 'result' })),
-      track('bgm/select', loadLr2ThemeBgm(sourceFiles, 'select')),
-      track('bgm/decide', loadLr2ThemeBgm(sourceFiles, 'decide')),
-      track('sound/scratch', loadLr2SystemSound(sourceFiles, 'scratch')),
-      track('sound/f-open', loadLr2SystemSound(sourceFiles, 'f-open')),
-      track('sound/f-close', loadLr2SystemSound(sourceFiles, 'f-close')),
-    ]);
+  const [
+    variantSkins,
+    selectSkin,
+    resultSkin,
+    decideSkin,
+    selectBgm,
+    decideBgm,
+    cursorMove,
+    folderOpen,
+    folderClose,
+  ] = await Promise.all([
+    Promise.all(playSkinTasks),
+    track('select', loadLr2SkinFromFiles(sourceFiles, { kind: 'select' })),
+    track('result', loadLr2SkinFromFiles(sourceFiles, { kind: 'result' })),
+    track('decide', loadLr2SkinFromFiles(sourceFiles, { kind: 'decide' })),
+    track('bgm/select', loadLr2ThemeBgm(sourceFiles, 'select')),
+    track('bgm/decide', loadLr2ThemeBgm(sourceFiles, 'decide')),
+    track('sound/scratch', loadLr2SystemSound(sourceFiles, 'scratch')),
+    track('sound/f-open', loadLr2SystemSound(sourceFiles, 'f-open')),
+    track('sound/f-close', loadLr2SystemSound(sourceFiles, 'f-close')),
+  ]);
 
   const playSkins: Lr2PlaySkinMap = {};
   LR2_PLAY_VARIANTS.forEach((variant, index) => {
@@ -126,6 +146,7 @@ export async function loadLr2ThemeSkinsFromFiles(
     playSkins,
     selectSkin,
     resultSkin,
+    decideSkin,
     selectBgm,
     decideBgm,
     systemSounds: {

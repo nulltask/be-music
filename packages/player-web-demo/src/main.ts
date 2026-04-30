@@ -1,6 +1,7 @@
 import {
   BrowserSongLibrary,
   PixiGameplayView,
+  PixiDecideView,
   PixiResultView,
   PixiSceneHost,
   PixiSongSelectView,
@@ -154,6 +155,13 @@ class PlayerWebDemoApp {
   private selectSkin: Lr2Skin | undefined;
   private resultSkin: Lr2Skin | undefined;
   /**
+   * LR2 Decide-screen skin (the brief splash between song select
+   * and gameplay). Loaded from `Theme/<name>/Decide/decide.lr2skin`
+   * by `loadLr2ThemeSkinsFromFiles`. When undefined, the host
+   * skips the splash and transitions directly to gameplay.
+   */
+  private decideSkin: Lr2Skin | undefined;
+  /**
    * Loop-playable BGM bytes for the song-select scene
    * (`LR2files/Bgm/<theme>/select.wav` from the dropped theme).
    * Forwarded to `PixiSongSelectView` via the constructor option
@@ -180,6 +188,7 @@ class PlayerWebDemoApp {
   private selectView: PixiSongSelectView | undefined;
   private gameplayView: PixiGameplayView | undefined;
   private resultView: PixiResultView | undefined;
+  private decideView: PixiDecideView | undefined;
   private hostMounted = false;
   /**
    * Last-known cursor / folder state of the select view, captured before
@@ -705,6 +714,7 @@ class PlayerWebDemoApp {
     Object.assign(this.playSkins, loadedTheme.playSkins);
     this.selectSkin = loadedTheme.selectSkin;
     this.resultSkin = loadedTheme.resultSkin;
+    this.decideSkin = loadedTheme.decideSkin;
     this.selectBgmBytes = loadedTheme.selectBgm?.bytes;
     this.decideBgmBytes = loadedTheme.decideBgm?.bytes;
     this.systemSoundBundle = {
@@ -740,6 +750,11 @@ class PlayerWebDemoApp {
     this.gameplayView = undefined;
     this.resultView?.dispose();
     this.resultView = undefined;
+    // Decide splash is cleared too — Escape from the splash
+    // should land back on the select scene rather than leave the
+    // splash drawing over it.
+    this.decideView?.dispose();
+    this.decideView = undefined;
     if (this.selectView) {
       // Push the latest theme assets onto the view BEFORE flipping
       // it visible. Order matters — `setSelectBgm` no-ops when the
@@ -772,7 +787,7 @@ class PlayerWebDemoApp {
         // after the view is hidden, so the cue isn't cut by the
         // gameplay mount.
         void this.selectView?.playDecideSound();
-        void this.playSong(song);
+        void this.showDecide(song);
       },
       onSongAutoPlay: (song) => {
         // The skin's AUTOPLAY button forces the auto flag on for
@@ -780,7 +795,7 @@ class PlayerWebDemoApp {
         // We DON'T mutate the checkbox here — the user might want
         // to keep it off for the next manual play.
         void this.selectView?.playDecideSound();
-        void this.playSong(song, { autoPlay: true });
+        void this.showDecide(song, { autoPlay: true });
       },
       onSearchActivate: () => {
         this.elements.searchInput.focus();
@@ -791,11 +806,57 @@ class PlayerWebDemoApp {
     this.selectView.setCollection(this.collection);
   }
 
+  /**
+   * Mounts the decide-screen splash and routes the user into
+   * gameplay when it dismisses (auto-advance OR Enter / Space /
+   * Escape input). Without a decide skin, falls straight through
+   * to `playSong` so themes that don't ship a Decide directory
+   * still play the chart immediately.
+   *
+   * The decide view runs alongside the select view's AudioContext
+   * — `playDecideSound` was already fired at song-pick time, and
+   * the splash visually masks the chart-load + gameplay-mount
+   * window that comes next.
+   */
+  private async showDecide(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
+    if (!this.decideSkin) {
+      // No decide skin in the bundle (or skinless demo) — skip
+      // the splash entirely. The select view's `playDecideSound`
+      // already fired so the audio cue still plays.
+      await this.playSong(song, overrides);
+      return;
+    }
+    await this.ensureHostMounted();
+    this.lastSelectNavigation = this.selectView?.getNavigation();
+    this.selectView?.setVisible(false);
+    this.decideView?.dispose();
+    let advanced = false;
+    const advance = (then: () => void): void => {
+      // Idempotent — the auto-advance timer, key input, and
+      // pointer click can all race; whichever lands first wins
+      // and re-entries no-op.
+      if (advanced) return;
+      advanced = true;
+      then();
+    };
+    this.decideView = new PixiDecideView({
+      skin: this.decideSkin,
+      onContinue: () => advance(() => void this.playSong(song, overrides)),
+      onCancel: () => advance(() => void this.showSelect()),
+    });
+    await this.decideView.mount(this.sceneHost, { song, collection: this.collection });
+  }
+
   private async playSong(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
     this.elements.shell.classList.add('playing');
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
     this.selectView?.setVisible(false);
+    // Tear down the decide splash before mounting gameplay —
+    // both share the host stage, so leaving the decide layer
+    // alive would draw the splash on top of the gameplay scene.
+    this.decideView?.dispose();
+    this.decideView = undefined;
     this.gameplayView?.dispose();
     // Refresh the recording filename base for the upcoming play —
     // each session writes to a unique file in the user's downloads

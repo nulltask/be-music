@@ -1,8 +1,8 @@
 /**
  * Which screen's `.lr2skin` to pick when a theme bundle ships multiple
- * (play, select, result, etc.).
+ * (play, select, result, decide, etc.).
  */
-export type Lr2SkinKind = 'play' | 'select' | 'result';
+export type Lr2SkinKind = 'play' | 'select' | 'result' | 'decide';
 
 /**
  * `play_N.lr2skin` variant hint for the play-skin loader.
@@ -17,6 +17,9 @@ export function isSkinPathOfKind(path: string, kind: Lr2SkinKind): boolean {
   if (kind === 'result') {
     const sansCourse = lower.replace(/\/courseresult\//gu, '/').replace(/\\courseresult\\/gu, '\\');
     return sansCourse.includes('/result') || sansCourse.includes('\\result');
+  }
+  if (kind === 'decide') {
+    return lower.includes('/decide') || lower.includes('\\decide');
   }
   return lower.includes('/select') || lower.includes('\\select');
 }
@@ -40,6 +43,15 @@ export function scoreSkinPath(path: string, kind: Lr2SkinKind, variant?: Lr2Play
       return 0;
     }
     if (lower.includes('/result') && lower.endsWith('.lr2skin')) {
+      return 10;
+    }
+    return 100;
+  }
+  if (kind === 'decide') {
+    if (lower.endsWith('/decide.lr2skin')) {
+      return 0;
+    }
+    if (lower.includes('/decide') && lower.endsWith('.lr2skin')) {
       return 10;
     }
     return 100;
