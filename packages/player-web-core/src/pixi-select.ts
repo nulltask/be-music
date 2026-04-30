@@ -370,19 +370,46 @@ export class PixiSongSelectView {
     if (this.options.skin && this.options.skin.barLayout.slots.length > 0) {
       void this.prepareSkinTextures(this.options.skin);
     }
+    this.resetSceneTimers();
+    this.render();
+    this.startAnimationLoop();
+  }
+
+  /**
+   * Re-seeds every scene-mount timer to "now" plus clears any
+   * leftover scroll state. Called by both {@link mount} (initial
+   * entry) and {@link setVisible}`(true)` (returning from a play
+   * session) so DST keyframe sequences anchored to timer 0
+   * re-fire on every entry — matching what real LR2 does, where
+   * each `select` scene transition restarts the slide-in / fade-
+   * in animations from `time = 0`.
+   *
+   * Without this on the round-trip path, the persistent select
+   * scene would keep its mount-time `sceneStartedAt` across the
+   * play session: by the time the player returns, the elapsed
+   * time is well past every keyframe window in the LR2 default
+   * skin (150–450 ms per slot), so bars appear pinned at their
+   * final positions with no animation.
+   */
+  private resetSceneTimers(): void {
     this.sceneStartedAt = performance.now();
     // Seed timer 0 (scene main) — every static skin element is
     // anchored to it, so the keyframe interpolator needs to know
-    // when "now=0" was. We don't seed timer 1 yet; `elapsedSinceTimer`
+    // when "now=0" was. We don't seed timer 1 here; `elapsedSinceTimer`
     // computes its fire moment from `#STARTINPUT` lazily.
     this.timerStartedAt.clear();
     this.timerStartedAt.set(0, this.sceneStartedAt);
     // Fire timer 11 (song change) at scene start so the BAR_BODY
-    // slide-in animations play once on first appearance, just like
+    // slide-in animations play once on every appearance, just like
     // they do in real LR2 when the cursor lands on the initial song.
     this.timerStartedAt.set(11, this.sceneStartedAt);
-    this.render();
-    this.startAnimationLoop();
+    // Drop any leftover smooth-scroll state from a previous session
+    // — the cursor isn't moving on re-entry, and a stale `dt` from
+    // before the play round-trip would otherwise feed the decay
+    // formula a multi-minute interval and either NaN or instantly
+    // zero out a fresh offset (depending on Math.exp's behaviour).
+    this.listScrollOffset = 0;
+    this.lastScrollUpdate = 0;
   }
 
   /**
@@ -577,6 +604,12 @@ export class PixiSongSelectView {
     this.visible = visible;
     this.sceneRoot.visible = visible;
     if (visible) {
+      // Re-seed scene-mount timers so DST animations anchored to
+      // timer 0 / 11 (slide-in, fade-in, bar pulses) replay on
+      // re-entry from a play session — see `resetSceneTimers`
+      // for the rationale. Without this the persistent select
+      // scene's `sceneStartedAt` would be minutes-stale on return.
+      this.resetSceneTimers();
       if (this.animationFrame === 0) {
         this.startAnimationLoop();
       }
