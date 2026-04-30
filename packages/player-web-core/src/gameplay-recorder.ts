@@ -287,6 +287,65 @@ export class GameplayRecorder {
   }
 }
 
+// Static import of `ts-ebml` so Vite handles its CJS interop
+// during the initial pre-bundle pass. The previous dynamic
+// import deferred the resolution to a second optimisation pass
+// where the named-export re-export `tools.readVint` would land
+// as `undefined` and crash the recording-stop flow.
+import { Decoder, Reader, tools } from 'ts-ebml';
+
+/**
+ * Rewrites a `MediaRecorder`-produced WebM blob so external video
+ * players can seek inside it.
+ *
+ * The problem: `MediaRecorder` writes a streaming WebM container
+ * with no `Duration` field on the EBML header and no `Cues`
+ * (seek index) at all — the spec doesn't require them for live
+ * captures. Most players (Chrome's <video>, Safari, VLC,
+ * QuickTime, Finder previews, Discord embeds) refuse to seek
+ * inside such a file: the scrub bar drags but the playhead
+ * snaps back to wherever the next cluster boundary happens to
+ * be. The user-visible symptom is exactly what was reported —
+ * the saved `.webm` plays, but you can't jump around inside it.
+ *
+ * The fix is to walk the EBML tree once, collect the cluster
+ * timestamps + their byte offsets, then splice a fresh
+ * `SeekHead` + `Cues` + `Duration` block in front of the
+ * original body. `ts-ebml` is the canonical browser-side library
+ * for this dance — it ships a `Decoder` that emits typed EBML
+ * elements, an `EBMLReader` that accumulates the metadata we
+ * need, and a `tools.makeMetadataSeekable` that builds the
+ * patched header buffer.
+ *
+ * Returns a fresh `Blob` of the same MIME type with seekable
+ * metadata. Falls back to the original blob (and logs a warning)
+ * when the input isn't a recognisable WebM container or the
+ * patch fails — better to hand the user the play-only file than
+ * to lose the recording outright.
+ */
+export async function makeWebmSeekable(blob: Blob): Promise<Blob> {
+  if (blob.size === 0) return blob;
+  const buffer = await blob.arrayBuffer();
+  try {
+    const decoder = new Decoder();
+    const reader = new Reader();
+    reader.logging = false;
+    reader.drop_default_duration = false;
+    const elements = decoder.decode(buffer);
+    for (const element of elements) {
+      reader.read(element);
+    }
+    reader.stop();
+    const refinedMetadata = tools.makeMetadataSeekable(reader.metadatas, reader.duration, reader.cues);
+    const body = buffer.slice(reader.metadataSize);
+    return new Blob([refinedMetadata, body], { type: blob.type });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('[recorder] failed to inject seekable metadata; downloading raw blob', error);
+    return blob;
+  }
+}
+
 /**
  * Triggers a browser download of `blob` under `filename`. Pure
  * convenience — the caller wires up the click handler.

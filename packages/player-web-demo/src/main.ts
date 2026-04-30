@@ -7,6 +7,7 @@ import {
   describeSongCollection,
   downloadBlob,
   loadLr2ThemeSkinsFromFiles,
+  makeWebmSeekable,
   parseCompressorMode,
   pickLr2PlaySkin,
   readDroppedFiles,
@@ -493,13 +494,22 @@ class PlayerWebDemoApp {
     }
     if (gameplay.isRecording()) {
       controller?.disable();
+      this.setStatus('Finalising recording…');
       try {
         const result = await gameplay.stopRecording();
         if (result) {
+          // `MediaRecorder`'s native WebM stream is play-only —
+          // post-process the blob to inject `Duration` + `Cues`
+          // so external players can seek inside it. Cheap on the
+          // typical chart-length take (a few hundred ms for a
+          // 1-3 minute recording on M-series hardware) and
+          // gracefully falls back to the raw blob if the patch
+          // fails, so a corrupt take is never silently lost.
+          const seekable = await makeWebmSeekable(result.blob);
           const filename = `${this.recordingFilenameBase}.webm`;
-          downloadBlob(result.blob, filename);
+          downloadBlob(seekable, filename);
           const seconds = (result.durationMs / 1000).toFixed(1);
-          const sizeMb = (result.blob.size / (1024 * 1024)).toFixed(1);
+          const sizeMb = (seekable.size / (1024 * 1024)).toFixed(1);
           this.setStatus(`Saved ${filename} (${seconds}s, ${sizeMb} MB)`);
         }
       } finally {
@@ -803,23 +813,22 @@ class PlayerWebDemoApp {
         master: this.guiState.compressorMaster,
       },
       onExit: () => {
-        // Stop + download any in-flight recording before we
-        // unmount; otherwise the chunk buffer would be discarded
-        // on dispose. ESC = "I'm done with this take" semantics
-        // are friendlier than silently throwing the bytes away.
-        void this.finalizeRecordingIfActive();
-        void this.showSelect();
+        // Sequence finalize → transition. The transition methods
+        // (`showSelect` / `showResult` / `playSong`) all dispose
+        // the gameplay view, which closes its AudioContext and
+        // tears down the bus the recorder taps. If we kicked the
+        // transition off in parallel with `finalizeRecordingIfActive`,
+        // `MediaRecorder.stop()` would race the dispose and lose
+        // its `'stop'` event under the closed context — the user
+        // would never see the auto-download. ESC / chart-end /
+        // restart all converge on the same flow for that reason.
+        void this.finishGameplayThen(() => this.showSelect());
       },
       onChartFinished: (result) => {
-        // Same finalise-then-transition flow as the ESC path; a
-        // chart that ran to completion deserves the same auto-
-        // download convenience.
-        void this.finalizeRecordingIfActive();
-        void this.showResult(result);
+        void this.finishGameplayThen(() => this.showResult(result));
       },
       onRestart: () => {
-        void this.finalizeRecordingIfActive();
-        void this.playSong(song);
+        void this.finishGameplayThen(() => this.playSong(song));
       },
     });
     this.setStatus(`Playing: ${song.title}`);
@@ -860,6 +869,24 @@ class PlayerWebDemoApp {
     if (this.gameplayView?.isRecording()) {
       await this.toggleRecording();
     }
+  }
+
+  /**
+   * Closes out an in-flight recording (if any) and then runs the
+   * caller-supplied transition (`showSelect` / `showResult` /
+   * `playSong`). Sequencing here is non-negotiable: every one of
+   * those transitions disposes the gameplay view, which in turn
+   * closes the AudioContext the `MediaRecorder` is tapping. Doing
+   * the dispose first leaves `MediaRecorder.stop()` waiting on a
+   * `'stop'` event that never fires because its source stream
+   * died — the user would see the result screen pop up but never
+   * get the saved WebM. Awaiting `finalizeRecordingIfActive`
+   * first lets the recorder flush + download cleanly before the
+   * graph it depends on goes away.
+   */
+  private async finishGameplayThen(transition: () => Promise<void>): Promise<void> {
+    await this.finalizeRecordingIfActive();
+    await transition();
   }
 
   private async showResult(data: PixiGameplayResultData): Promise<void> {
