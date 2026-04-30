@@ -1,4 +1,4 @@
-import { Application, type ApplicationOptions, Container } from 'pixi.js';
+import { Application, type ApplicationOptions, Container, RendererType } from 'pixi.js';
 
 /**
  * A single PixiJS scene that lives inside a {@link PixiSceneHost}.
@@ -87,7 +87,22 @@ export class PixiSceneHost {
       return;
     }
     this.mounted = true;
+    // Renderer preference. Defaults to WebGPU per the project's
+    // perf goals (lower per-frame CPU on dense charts, room for
+    // future compute-shader BGA effects). PixiJS auto-falls-back
+    // to WebGL2 when the browser doesn't expose WebGPU, so this is
+    // safe to leave on for old browsers — `app.renderer.type`
+    // logged below confirms which path actually came up.
+    //
+    // The `?renderer=webgl` URL flag forces WebGL2 for A/B testing
+    // (regression triage on devices where WebGPU happens to be
+    // slower or buggier). Anything else falls through to the
+    // default. `?renderer=webgpu` is accepted as the explicit form
+    // even though it's the default, useful for documenting the
+    // intent in deployed URLs.
+    const preference = resolveRendererPreference();
     await this.app.init({
+      preference,
       backgroundAlpha: 0,
       resizeTo: container,
       // LR2 skins and BGA frames are pixel-art; bilinear filtering
@@ -99,6 +114,14 @@ export class PixiSceneHost {
       resolution: globalThis.devicePixelRatio || 1,
       roundPixels: true,
       ...options?.appOptions,
+    });
+    // Surface the actual renderer type — the `preference` field is
+    // a *hint*, and the real backend may differ if WebGPU init
+    // failed silently or if the override flag was used.
+    // eslint-disable-next-line no-console
+    console.log('[scene-host] renderer ready', {
+      requested: preference,
+      actual: rendererTypeLabel(this.app.renderer.type),
     });
     this.app.canvas.tabIndex = 0;
     this.app.canvas.setAttribute('aria-label', 'be-music stage');
@@ -176,5 +199,50 @@ export class PixiSceneHost {
       // eslint-disable-next-line no-console
       console.warn('[scene-host] app.destroy threw', error);
     }
+  }
+}
+
+/**
+ * Reads `?renderer=...` from `window.location.search` and maps it
+ * onto a PixiJS `preference` value. Defaults to `'webgpu'`; only
+ * the explicit `webgl` form opts out (any other value, missing
+ * window object, or unrecognised input falls through to the
+ * default). PixiJS auto-falls-back to WebGL2 if WebGPU isn't
+ * available, so the default is safe across the entire browser
+ * matrix.
+ *
+ * Exported for testability — callers should normally let
+ * {@link PixiSceneHost.mount} resolve this internally.
+ */
+export function resolveRendererPreference(rawSearch?: string): 'webgl' | 'webgpu' {
+  const search =
+    rawSearch ??
+    (typeof globalThis !== 'undefined' && typeof globalThis.location !== 'undefined'
+      ? globalThis.location.search
+      : '');
+  if (!search) return 'webgpu';
+  const params = new URLSearchParams(search);
+  const flag = params.get('renderer');
+  if (flag === 'webgl') return 'webgl';
+  return 'webgpu';
+}
+
+/**
+ * Maps a PixiJS `RendererType` enum value to a human-readable
+ * label for the post-init console log. Falls back to the numeric
+ * tag if the enum gets a new variant we haven't accounted for.
+ */
+function rendererTypeLabel(type: RendererType): string {
+  switch (type) {
+    case RendererType.WEBGL:
+      return 'webgl';
+    case RendererType.WEBGPU:
+      return 'webgpu';
+    case RendererType.CANVAS:
+      return 'canvas';
+    case RendererType.BOTH:
+      return 'both';
+    default:
+      return `unknown(${type})`;
   }
 }
