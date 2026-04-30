@@ -1,3 +1,4 @@
+export * from './audio-bus.ts';
 export * from './drop.ts';
 export * from './library.ts';
 export * from './lr2-play-skin.ts';

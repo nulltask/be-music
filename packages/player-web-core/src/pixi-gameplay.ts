@@ -46,6 +46,7 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from './lr2-render.ts';
+import { type AudioBusHandle, type CompressorMode, buildAudioBus } from './audio-bus.ts';
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import type { BeMusicJson } from '@be-music/json';
@@ -202,13 +203,36 @@ export interface PixiGameplayViewOptions {
   /** When true, every note is auto-judged as PERFECT at its scheduled time. */
   autoPlay?: boolean;
   /**
-   * When true (default), routes all sample playback through a
-   * Web Audio `DynamicsCompressorNode` to soften clipping when many
-   * BMS samples fire simultaneously (jacks, dense BGM stacks).
-   * Set to `false` to bypass the compressor and feed sources to
-   * `audioContext.destination` directly.
+   * When true (default), the audio bus runs through dynamics
+   * compressors that soften clipping when many BMS samples fire
+   * simultaneously (jacks, dense BGM stacks). Set to `false` to
+   * bypass every compressor and feed sample sources directly to
+   * `audioContext.destination`.
+   *
+   * Equivalent to `audioCompressorMode === 'off'` when `false`.
+   * When `true` (or omitted), the active mode comes from
+   * `audioCompressorMode` (defaults to `'split'`).
    */
   audioCompressor?: boolean;
+  /**
+   * Compressor architecture when `audioCompressor` is enabled.
+   *
+   * - `'split'` (default) — separate compressors on the key /
+   *   BGM buses plus a master limiter; key bus tuned aggressively
+   *   for transient peaks, BGM bus tuned for musical glue, master
+   *   for clip protection. Prevents BGM ducking under dense input
+   *   bursts (a known failure mode of the legacy single-bus
+   *   compressor).
+   * - `'legacy'` — original single-compressor topology, kept for
+   *   A/B comparison via the demo's `?compressor=legacy` URL flag
+   *   so behaviour can be diff-tested directly.
+   *
+   * `'off'` is reachable via `audioCompressor: false` rather than
+   * being a valid value here — `audioCompressor` is the user-
+   * facing toggle, this option only chooses **which** compressed
+   * topology to use when compression is on.
+   */
+  audioCompressorMode?: 'split' | 'legacy';
 }
 
 export class PixiGameplayView {
@@ -329,21 +353,24 @@ export class PixiGameplayView {
   private disposed = false;
   private audioContext: AudioContext | undefined;
   /**
-   * Stable mixing bus that every sample source connects to. The
-   * downstream wiring (`mixer → compressor → makeup → destination`
-   * vs `mixer → destination`) can be swapped at runtime via
-   * {@link setAudioCompressor} without needing to reconnect each
-   * sample source. The compressor's parameters (threshold -8 dB,
-   * ratio 4:1, fast attack, mild release, makeup +1 dB) target
-   * dense BMS jacks where 16+ samples can fire within a few ms —
-   * without the limiter the summed waveform clips audibly on most
-   * devices.
+   * Audio routing handle. Owns two stable mixers (`keyMixer` for
+   * player-input keysounds, `bgmMixer` for auto-triggered BGM) plus
+   * the per-bus and master compressor stages. Sample sources
+   * connect to the appropriate mixer; the bus's `setMode` method
+   * swaps the downstream wiring without disturbing those source-
+   * side connections.
+   *
+   * See `audio-bus.ts` for the architecture and per-mode topology.
    */
-  private audioMixer: GainNode | undefined;
-  /** Compressor node, lazily created on first `prepareAudio`. */
-  private audioCompressorNode: DynamicsCompressorNode | undefined;
-  /** Whether the compressor is currently in the signal path. */
-  private audioCompressorActive = true;
+  private audioBus: AudioBusHandle | undefined;
+  /**
+   * Most-recently-applied compressor mode. Distinct from the bus's
+   * `mode` getter so we can decide what to flip back to when
+   * `setAudioCompressor(true)` re-enables compression after a
+   * temporary `'off'` (we restore whatever `audioCompressorMode`
+   * the constructor / URL flag selected).
+   */
+  private audioCompressorMode: CompressorMode = 'split';
   private decodedSamples = new Map<string, AudioBuffer>();
   private scheduled = new Set<RuntimeNote>();
   private autoSampleTriggers: TimedSampleTrigger[] = [];
@@ -645,33 +672,48 @@ export class PixiGameplayView {
   }
 
   /**
-   * Toggles the dynamics compressor on the master audio bus at
-   * runtime. Re-routes the mixer's downstream connection between
-   * `compressor → makeup → destination` and `destination` directly.
-   * Sample sources connect to the always-on mixer, so this toggle
-   * is a single `disconnect` + `connect` instead of a graph rebuild
-   * — safe to call mid-play even with samples in flight.
+   * Toggles the dynamics compressor stack on the audio bus at
+   * runtime. Mid-play safe: the bus's `setMode` only re-wires
+   * downstream stages, so in-flight `BufferSourceNode`s keep
+   * playing through the unchanged `keyMixer` / `bgmMixer` nodes.
    *
-   * Idempotent. Has no effect when `prepareAudio` hasn't run yet
-   * (i.e. before the first chart mounts); the constructor's
-   * `audioCompressor` option still seeds the initial state at that
-   * point.
+   * - `setAudioCompressor(false)` → bus mode `'off'` (every stage
+   *   bypassed; both mixers connect directly to destination).
+   * - `setAudioCompressor(true)` → bus mode is restored to the
+   *   architecture the constructor chose (`audioCompressorMode`,
+   *   default `'split'`). To switch architectures at runtime use
+   *   {@link setAudioCompressorMode} instead.
+   *
+   * Idempotent and a no-op before `prepareAudio` has run; the
+   * constructor's `audioCompressor` option seeds the initial state
+   * at mount time.
    */
   public setAudioCompressor(enabled: boolean): void {
-    if (this.audioCompressorActive === enabled) {
+    if (!this.audioBus) {
+      // Bus will be wired with the right mode the next time
+      // `prepareAudio` runs. We can't pre-seed `audioCompressorMode`
+      // here either: the constructor option is the source of truth
+      // until then.
       return;
     }
-    this.audioCompressorActive = enabled;
-    if (!this.audioMixer || !this.audioContext) {
-      // Compressor will be wired with the new state once
-      // `prepareAudio` runs.
-      return;
-    }
-    this.audioMixer.disconnect();
-    if (enabled && this.audioCompressorNode) {
-      this.audioMixer.connect(this.audioCompressorNode);
-    } else {
-      this.audioMixer.connect(this.audioContext.destination);
+    const next = enabled ? this.audioCompressorMode : 'off';
+    this.audioBus.setMode(next);
+  }
+
+  /**
+   * Switches the compressor architecture between `'split'` (default
+   * 3-stage) and `'legacy'` (original single-compressor) at
+   * runtime. Mostly useful for the demo's `?compressor=` URL flag
+   * and for live A/B comparison while debugging.
+   *
+   * Calling this while `setAudioCompressor(false)` has the bus in
+   * `'off'` mode just remembers the choice — the new architecture
+   * will be applied next time compression is re-enabled.
+   */
+  public setAudioCompressorMode(mode: 'split' | 'legacy'): void {
+    this.audioCompressorMode = mode;
+    if (this.audioBus && this.audioBus.getMode() !== 'off') {
+      this.audioBus.setMode(mode);
     }
   }
 
@@ -724,6 +766,12 @@ export class PixiGameplayView {
     }
     this.bgaVideos.clear();
     this.bgaActiveVideos = {};
+    // Tear down the bus before closing the AudioContext so its
+    // `disconnect()` calls don't race with context shutdown. The bus
+    // doesn't own the AudioContext itself; closing that is the next
+    // step.
+    this.audioBus?.dispose();
+    this.audioBus = undefined;
     void this.audioContext?.close();
     // Detach our subtree from the host's stage. The host owns the
     // `Application` lifetime; we just stop contributing to its
@@ -1197,34 +1245,22 @@ export class PixiGameplayView {
           ? +((ctx as { outputLatency: number }).outputLatency * 1000).toFixed(2)
           : 'n/a',
     });
-    // Build the audio bus. The graph always looks like
+    // Build the audio bus. See `audio-bus.ts` for the full
+    // architecture; in short:
     //
-    //   sample sources ─▶ mixer ─▶ compressor ─▶ makeup ─▶ destination
-    //                          └────────(bypass)─────────▶ destination
+    //   key sources    → keyMixer → keyComp ↘
+    //                                          masterComp → makeup → destination   ('split')
+    //   BGM sources    → bgmMixer → bgmComp ↗
     //
-    // and `setAudioCompressor` swaps the mixer's downstream
-    // connection between the two paths. Sample sources always feed
-    // `mixer`, so they don't need to be re-wired when the compressor
-    // toggles — important because hundreds of one-shot
-    // `BufferSourceNode`s come and go per second on dense charts.
-    const mixer = this.audioContext.createGain();
-    const compressor = this.audioContext.createDynamicsCompressor();
-    compressor.threshold.value = -8;
-    compressor.ratio.value = 4;
-    compressor.attack.value = 0.003;
-    compressor.release.value = 0.12;
-    compressor.knee.value = 6;
-    const makeup = this.audioContext.createGain();
-    makeup.gain.value = 1.12; // ~+1 dB to recover the level the compressor took.
-    compressor.connect(makeup).connect(this.audioContext.destination);
-    this.audioMixer = mixer;
-    this.audioCompressorNode = compressor;
-    this.audioCompressorActive = this.options.audioCompressor !== false;
-    if (this.audioCompressorActive) {
-      mixer.connect(compressor);
-    } else {
-      mixer.connect(this.audioContext.destination);
-    }
+    // 'legacy' collapses both buses onto a single compressor; 'off'
+    // bypasses every compressor stage. Sample sources always feed
+    // `keyMixer` / `bgmMixer`, never directly to the destination,
+    // so a mode switch never has to reconnect in-flight
+    // `BufferSourceNode`s — important because hundreds of one-shots
+    // come and go per second on dense charts.
+    this.audioCompressorMode = this.options.audioCompressorMode ?? 'split';
+    const initialMode: CompressorMode = this.options.audioCompressor === false ? 'off' : this.audioCompressorMode;
+    this.audioBus = buildAudioBus(this.audioContext, initialMode);
     // Use the control-flow-resolved chart so #IF-gated #WAVxx
     // declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? this.song.chart;
@@ -1993,6 +2029,11 @@ export class PixiGameplayView {
    * timestamp (precise Web Audio timing). Without it, the buffer starts
    * immediately -- used for input-driven hit sounds, where the player's key
    * press defines the start time.
+   *
+   * **Bus routing**: this is the auto-trigger path (`scheduleAutoSamples`
+   * is the only caller), so the sample is the BMS BGM bed and routes
+   * through `bgmMixer`. The split-bus compressor handles BGM and key
+   * sounds independently — see `audio-bus.ts` for why.
    */
   private playSampleByKey(sampleKey: string, scheduledChartSeconds?: number): void {
     if (!this.audioContext || !this.song) {
@@ -2008,16 +2049,10 @@ export class PixiGameplayView {
     }
     const node = this.audioContext.createBufferSource();
     node.buffer = buffer;
-    // Route through the master bus so the dynamics compressor (when
-    // enabled) sees this sample's contribution. Falls back to direct
-    // destination if `prepareAudio` hasn't run yet (defensive — in
-    // practice `audioOutput` is always set before any `play*` call).
-    // Route through the always-on mixer so the compressor toggle
-    // (`setAudioCompressor`) takes effect without reconnecting each
-    // sample. Falls back to direct destination if `prepareAudio`
-    // hasn't run yet (defensive — in practice the mixer is always
-    // set before any `play*` call).
-    node.connect(this.audioMixer ?? this.audioContext.destination);
+    // BGM bus. Falls back to direct destination if `prepareAudio`
+    // hasn't run yet (defensive — in practice the bus is always
+    // built before any `play*` call).
+    node.connect(this.audioBus?.bgmMixer ?? this.audioContext.destination);
     if (scheduledChartSeconds !== undefined) {
       // Map chart seconds → audio-context time. Clamp to "now" so a slightly
       // late trigger (look-ahead just elapsed) still fires immediately rather
@@ -2029,6 +2064,11 @@ export class PixiGameplayView {
     }
   }
 
+  /**
+   * Plays the keysound attached to a judged input note. Routes
+   * through `keyMixer` so the key-bus compressor (split mode) sees
+   * the input transient stream independently of the BGM.
+   */
   private playSample(note: RuntimeNote): void {
     if (!this.audioContext || !this.song) {
       return;
@@ -2043,16 +2083,10 @@ export class PixiGameplayView {
     }
     const node = this.audioContext.createBufferSource();
     node.buffer = buffer;
-    // Route through the master bus so the dynamics compressor (when
-    // enabled) sees this sample's contribution. Falls back to direct
-    // destination if `prepareAudio` hasn't run yet (defensive — in
-    // practice `audioOutput` is always set before any `play*` call).
-    // Route through the always-on mixer so the compressor toggle
-    // (`setAudioCompressor`) takes effect without reconnecting each
-    // sample. Falls back to direct destination if `prepareAudio`
-    // hasn't run yet (defensive — in practice the mixer is always
-    // set before any `play*` call).
-    node.connect(this.audioMixer ?? this.audioContext.destination);
+    // Key bus. Falls back to direct destination if `prepareAudio`
+    // hasn't run yet (defensive — in practice the bus is always
+    // built before any `play*` call).
+    node.connect(this.audioBus?.keyMixer ?? this.audioContext.destination);
     node.start();
   }
 

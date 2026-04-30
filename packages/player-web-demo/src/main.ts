@@ -6,6 +6,7 @@ import {
   PixiSongSelectView,
   describeSongCollection,
   loadLr2ThemeSkinsFromFiles,
+  parseCompressorMode,
   pickLr2PlaySkin,
   readDroppedFiles,
   resolveSongSource,
@@ -13,6 +14,7 @@ import {
   summarizeLr2PlaySkins,
   type BrowserSongCollection,
   type BrowserSongEntry,
+  type CompressorMode,
   type Lr2PlayVariant,
   type Lr2PlaySkinMap,
   type Lr2Skin,
@@ -75,8 +77,34 @@ class PlayerWebDemoApp {
    * gameplay so returning to song select restores the user's position.
    */
   private lastSelectNavigation: PixiSongSelectNavigation | undefined;
-
-  public constructor(private readonly elements: PlayerWebDemoElements) {}
+  /**
+   * Compressor architecture for `audioCompressorMode` on every
+   * gameplay mount. Defaults to `'split'` (the new 3-stage bus —
+   * see `audio-bus.ts` for the design rationale); the demo accepts
+   * a `?compressor=legacy` URL flag for A/B comparison against the
+   * old single-compressor topology, and `?compressor=off` to spawn
+   * gameplay with the bypass path active out of the gate (the
+   * checkbox can also reach `off` mid-session).
+   */
+  private compressorMode: 'split' | 'legacy' = 'split';
+  public constructor(private readonly elements: PlayerWebDemoElements) {
+    // Pick up the `?compressor=split|legacy|off` URL flag once at
+    // boot. We resolve it through `parseCompressorMode` (the same
+    // helper exported from `audio-bus.ts`) so the recognised values
+    // stay synced with the runtime API. Unrecognised / missing flag
+    // → fall through to the `'split'` default. `?compressor=off`
+    // simulates the user unchecking the compressor checkbox before
+    // playing — the architecture itself stays at `'split'` so
+    // re-checking the box flips back to the new bus, not legacy.
+    const flag: CompressorMode | undefined = parseCompressorMode(
+      new URL(window.location.href).searchParams.get('compressor'),
+    );
+    if (flag === 'legacy' || flag === 'split') {
+      this.compressorMode = flag;
+    } else if (flag === 'off') {
+      this.elements.compressorInput.checked = false;
+    }
+  }
 
   public start(): void {
     void this.showSelect();
@@ -232,6 +260,7 @@ class PlayerWebDemoApp {
       skin: playSkin,
       autoPlay: this.elements.autoPlayInput.checked,
       audioCompressor: this.elements.compressorInput.checked,
+      audioCompressorMode: this.compressorMode,
       onExit: () => {
         void this.showSelect();
       },
