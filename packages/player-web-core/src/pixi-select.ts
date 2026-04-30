@@ -31,6 +31,7 @@ import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { disposeChildren } from './pixi-utils.ts';
 import { groupSongsByFolder, resolveChartAsset, resolveSongSource } from './library.ts';
+import { ChartPreviewEngine } from './chart-preview.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
 const BG = new Color('#08090d');
@@ -440,6 +441,32 @@ export class PixiSongSelectView {
    */
   private selectBgmDecodeInFlight = false;
   /**
+   * Lazily-constructed song-preview engine — fires the focused
+   * chart's `#PREVIEW` audio (or, when absent, schedules the
+   * chart's keysounds in-place) after the LR2 focus-settle
+   * delay. Built once on the first cursor settle so the
+   * AudioContext is shared with the select BGM, and disposed
+   * with the scene.
+   */
+  private chartPreviewEngine: ChartPreviewEngine | undefined;
+  /**
+   * Output gain for the preview engine. Routed in parallel with
+   * the BGM gain to `audioContext.destination` so the two can
+   * mix-down together; the value sits at unity so the chart's
+   * encoded loudness reaches the user as authored. Held as a
+   * field so we can duck the BGM (zero its gain) for the
+   * duration of any active preview playback.
+   */
+  private chartPreviewGain: GainNode | undefined;
+  /**
+   * `selectBgmGain.gain.value` captured at the moment the
+   * preview engine reported `onPlaybackStart`. Restored when
+   * playback stops so the BGM returns to whatever level the
+   * host configured (rather than overwriting it with our
+   * default-knee).
+   */
+  private bgmGainBeforeDuck: number | undefined;
+  /**
    * Encoded one-shot sound effects keyed by name. Stems include
    * `'decide'` (select → gameplay cue) and the LR2 system
    * effects (`'cursor-move'` / `'folder-open'` / `'folder-close'`
@@ -652,6 +679,12 @@ export class PixiSongSelectView {
     // has happened yet the start sits idle until the first
     // pointerdown / keydown handler retries it.
     void this.startSelectBgm();
+    // Arm the preview engine for the initial focus so the user
+    // hears the bar-under-cursor without having to first nudge
+    // the cursor. Same gesture-gating caveat as BGM applies — the
+    // engine schedules a `setTimeout`, but the underlying
+    // AudioContext stays suspended until the first user input.
+    this.refreshChartPreview();
   }
 
   /**
@@ -724,6 +757,11 @@ export class PixiSongSelectView {
     // one-shot decode caches after the first use so a fast
     // wheel-scroll doesn't thrash the audio decoder.
     void this.playOneShotSound('cursor-move');
+    // Re-arm the chart preview against the (potentially) new
+    // focused song. The engine owns the focus-settle delay, so a
+    // fast scroll past dozens of bars only ever schedules one
+    // start once the cursor finally rests.
+    this.refreshChartPreview();
   }
 
   /**
@@ -843,8 +881,15 @@ export class PixiSongSelectView {
       this.host.app.canvas.removeEventListener('wheel', this.handleWheel);
       this.host.app.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
     }
-    // Tear down BGM playback before scene-graph teardown so any
-    // in-flight `BufferSourceNode` doesn't outlive the view.
+    // Tear down BGM + preview playback before scene-graph teardown
+    // so no `BufferSourceNode` outlives the view. The preview
+    // engine MUST go first — it shares this AudioContext, and
+    // disposing it after the context is closed throws inside
+    // `disconnect()`.
+    this.chartPreviewEngine?.dispose();
+    this.chartPreviewEngine = undefined;
+    this.chartPreviewGain = undefined;
+    this.bgmGainBeforeDuck = undefined;
     this.pauseSelectBgm();
     void this.selectBgmContext?.close().catch(() => undefined);
     this.selectBgmContext = undefined;
@@ -916,6 +961,11 @@ export class PixiSongSelectView {
   public setNavigation(navigation: PixiSongSelectNavigation): void {
     if (this.restoreNavigation(navigation)) {
       this.render();
+      // Cursor / folder state changed → focused chart likely
+      // changed too. Same reasoning as `setCollection` — bring
+      // the preview engine back in sync with whatever bar is now
+      // under the cursor.
+      this.refreshChartPreview();
     }
   }
 
@@ -948,11 +998,24 @@ export class PixiSongSelectView {
       // Resume the BGM. Always safe — a no-op if no BGM is set or
       // if a gesture hasn't unlocked the AudioContext yet.
       void this.startSelectBgm();
+      // Re-arm the chart preview against the focused song. On
+      // back-from-play the engine was stopped by the prior
+      // `setVisible(false)` and the cursor likely moved while
+      // hidden (folder unwind etc.); kicking it here makes the
+      // preview start matching the current focus rather than
+      // the stale one we left mid-play with.
+      this.refreshChartPreview();
     } else {
       // Hidden — pause BGM so it doesn't bleed into gameplay
       // audio. Decoded buffer stays cached so the next show is
       // an instant resume (no re-decode).
       this.pauseSelectBgm();
+      // Always silence the preview when leaving the scene.
+      // Otherwise a 1-second focus delay that hadn't fired
+      // would have spent its `setTimeout` budget while the user
+      // was already in gameplay and start blasting keysounds
+      // through the gameplay AudioContext on top of the chart.
+      this.chartPreviewEngine?.stop();
       if (this.animationFrame !== 0) {
         cancelAnimationFrame(this.animationFrame);
         this.animationFrame = 0;
@@ -989,6 +1052,10 @@ export class PixiSongSelectView {
       }
     }
     this.render();
+    // Collection changed → focused song's identity / source map
+    // changed. Re-arm the preview engine so it sees the new
+    // target (or no target, if we landed on a folder bar).
+    this.refreshChartPreview();
   }
 
   /**
@@ -1178,6 +1245,80 @@ export class PixiSongSelectView {
     this.selectBgmContext = audioContext;
     this.selectBgmGain = gain;
     return audioContext;
+  }
+
+  /**
+   * Constructs the preview engine + its master gain on the same
+   * AudioContext as the select BGM. Returns `undefined` when
+   * AudioContext isn't available (Node tests) so callers can
+   * silently skip preview wiring.
+   *
+   * The preview gain is a sibling of `selectBgmGain` rather than
+   * a child of it: routing both to `audioContext.destination`
+   * directly keeps the BGM ducking logic (zeroing
+   * `selectBgmGain.gain.value` while preview plays) from also
+   * attenuating the preview output. Unity gain on the preview
+   * side preserves the chart's encoded loudness.
+   */
+  private ensureChartPreviewEngine(): ChartPreviewEngine | undefined {
+    if (this.chartPreviewEngine) return this.chartPreviewEngine;
+    if (this.disposed) return undefined;
+    const audioContext = this.ensureSelectBgmContext();
+    if (!audioContext) return undefined;
+    const gain = audioContext.createGain();
+    gain.gain.value = 1;
+    gain.connect(audioContext.destination);
+    this.chartPreviewGain = gain;
+    this.chartPreviewEngine = new ChartPreviewEngine(audioContext, gain, {
+      onPlaybackStart: () => {
+        // Duck the BGM to silence while a preview is audible.
+        // We capture the pre-duck level so a future host-side
+        // volume tweak (e.g. a slider that updates
+        // `selectBgmGain.gain`) is restored verbatim, not
+        // overwritten with the constructor default.
+        if (this.selectBgmGain && this.bgmGainBeforeDuck === undefined) {
+          this.bgmGainBeforeDuck = this.selectBgmGain.gain.value;
+          this.selectBgmGain.gain.value = 0;
+        }
+      },
+      onPlaybackStop: () => {
+        if (this.selectBgmGain && this.bgmGainBeforeDuck !== undefined) {
+          this.selectBgmGain.gain.value = this.bgmGainBeforeDuck;
+          this.bgmGainBeforeDuck = undefined;
+        }
+      },
+    });
+    return this.chartPreviewEngine;
+  }
+
+  /**
+   * Hands the engine the song currently under the cursor (or
+   * `undefined` when the cursor sits on a folder bar). The
+   * engine swallows redundant focuses internally — calling this
+   * on every cursor move is cheap, and centralising the call
+   * here means new focus-changing call sites (`setNavigation`,
+   * `setCollection`) only have to invoke this single helper.
+   *
+   * Skipped while the scene is hidden — there's no scenario in
+   * which we want a preview firing through a hidden select view
+   * (every visibility toggle re-arms via the
+   * `setVisible(true)` branch).
+   */
+  private refreshChartPreview(): void {
+    if (this.disposed || !this.visible) return;
+    const song = this.focusedSong();
+    if (!song) {
+      this.chartPreviewEngine?.focus(undefined);
+      return;
+    }
+    const engine = this.ensureChartPreviewEngine();
+    if (!engine) return;
+    const source = resolveSongSource(this.collection, song);
+    if (!source) {
+      engine.focus(undefined);
+      return;
+    }
+    engine.focus({ song, source });
   }
 
   /**

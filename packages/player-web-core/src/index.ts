@@ -1,4 +1,5 @@
 export * from './audio-bus.ts';
+export * from './chart-preview.ts';
 export * from './drop.ts';
 export * from './gameplay-recorder.ts';
 export * from './library.ts';
