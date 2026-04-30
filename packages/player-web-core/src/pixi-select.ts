@@ -313,6 +313,7 @@ export class PixiSongSelectView {
    * still loading (next render tick will fill them in).
    */
   private readonly skinTextures = new Map<string, Texture>();
+  private skinTextureLoadSerial = 0;
   /**
    * Per-song chart-asset texture cache for LR2 runtime-bound graphics
    * (`#SRC_IMAGE,gr=100/101/102` → STAGEFILE / BACKBMP / BANNER).
@@ -830,6 +831,7 @@ export class PixiSongSelectView {
       return;
     }
     this.disposed = true;
+    this.skinTextureLoadSerial += 1;
     if (this.animationFrame !== 0) {
       cancelAnimationFrame(this.animationFrame);
       this.animationFrame = 0;
@@ -863,6 +865,7 @@ export class PixiSongSelectView {
         texture.destroy(true);
       }
       this.chartGraphicTextures.clear();
+      this.chartGraphicPending.clear();
     } catch (error) {
       // eslint-disable-next-line no-console
       console.warn('[select] texture cleanup threw', error);
@@ -889,6 +892,7 @@ export class PixiSongSelectView {
    */
   public setSkin(skin: Lr2Skin | undefined): void {
     this.options = { ...this.options, skin };
+    this.skinTextureLoadSerial += 1;
     // Drop the previous skin's textures — `prepareSkinTextures` will
     // populate fresh ones for the new skin, and the chart-graphic
     // (BACKBMP / BANNER / STAGEFILE) cache stays valid since it's
@@ -1231,6 +1235,7 @@ export class PixiSongSelectView {
    * isn't ready yet (we re-render after each load resolves).
    */
   private async prepareSkinTextures(skin: Lr2Skin): Promise<void> {
+    const serial = ++this.skinTextureLoadSerial;
     const referencedPaths = new Set<string>();
     for (const image of skin.images) {
       // Skip LR2-special graphic sentinels (BACKBMP / BANNER / STAGEFILE
@@ -1280,10 +1285,17 @@ export class PixiSongSelectView {
       [...referencedPaths].map(async (path) => {
         const texture = await loadSkinAssetTexture(skin, path);
         if (texture) {
+          if (this.disposed || this.options.skin !== skin || serial !== this.skinTextureLoadSerial) {
+            texture.destroy(true);
+            return;
+          }
           this.skinTextures.set(path, texture);
         }
       }),
     );
+    if (this.disposed || this.options.skin !== skin || serial !== this.skinTextureLoadSerial) {
+      return;
+    }
     this.render();
   }
 
@@ -1294,6 +1306,7 @@ export class PixiSongSelectView {
    * undo the viewport scale & offset to land in skin design pixels.
    */
   private readonly handlePointerMove = (event: PointerEvent): void => {
+    if (!this.visible) return;
     const skin = this.options.skin;
     const useSkin = skin !== undefined && skin.barLayout.slots.length > 0;
     const designWidth = useSkin ? skin!.width : FALLBACK_DESIGN_WIDTH;
@@ -1412,6 +1425,7 @@ export class PixiSongSelectView {
   };
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
+    if (!this.visible) return;
     // Retry BGM start on the first user gesture — browsers gate
     // `AudioContext.resume()` behind a user-input event, so the
     // mount-time / setVisible-time start may have left the
@@ -2177,6 +2191,10 @@ export class PixiSongSelectView {
       }
       const texture = await loadTextureFromBytes(assetPath, bytes);
       if (texture) {
+        if (this.disposed) {
+          texture.destroy(true);
+          return;
+        }
         this.chartGraphicTextures.set(cacheKey, texture);
         this.render();
       }

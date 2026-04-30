@@ -338,6 +338,12 @@ export class PixiGameplayView {
    */
   private scrollMapper: ScrollDistanceMapperLike | undefined;
   private notes: RuntimeNote[] = [];
+  private maxLongNoteBeatSpan = 0;
+  private chartLastNoteEndSeconds = 0;
+  private songDurationSeconds = 0;
+  private remainingNotes = 0;
+  private autoJudgeCursor = 0;
+  private autoMissCursor = 0;
   private laneChannels: string[] = [];
   private laneX = new Map<string, { x: number; w: number; top: number; bottom: number }>();
   private textures = new Map<string, Texture>();
@@ -429,6 +435,8 @@ export class PixiGameplayView {
   private lastJudge = '';
   private lastJudgeUntil = 0;
   private frame: number | undefined;
+  private chartEndTimeout: number | undefined;
+  private readonly keyFlashTimeouts = new Set<number>();
   private readonly pressedChannels = new Set<string>();
   /**
    * In-flight long-note holds keyed by channel. Populated when the
@@ -848,6 +856,14 @@ export class PixiGameplayView {
       window.clearInterval(this.visibilityPollHandle);
       this.visibilityPollHandle = undefined;
     }
+    if (this.chartEndTimeout !== undefined) {
+      window.clearTimeout(this.chartEndTimeout);
+      this.chartEndTimeout = undefined;
+    }
+    for (const timeout of this.keyFlashTimeouts) {
+      window.clearTimeout(timeout);
+    }
+    this.keyFlashTimeouts.clear();
     // eslint-disable-next-line no-console
     console.log('[gameplay] listeners detached');
     // Pause every BGA video BEFORE we touch textures. The Pixi
@@ -898,15 +914,22 @@ export class PixiGameplayView {
     // sprites still parented to sceneRoot, the events route
     // correctly.
     try {
+      const destroyedTextures = new Set<Texture>();
       for (const texture of this.textures.values()) {
+        if (destroyedTextures.has(texture)) continue;
+        destroyedTextures.add(texture);
         texture.destroy(true);
       }
       this.textures.clear();
       for (const texture of this.bgaTextures.values()) {
+        if (destroyedTextures.has(texture)) continue;
+        destroyedTextures.add(texture);
         texture.destroy(true);
       }
       this.bgaTextures.clear();
       for (const texture of this.bgaLayerTextures.values()) {
+        if (destroyedTextures.has(texture)) continue;
+        destroyedTextures.add(texture);
         texture.destroy(true);
       }
       this.bgaLayerTextures.clear();
@@ -937,7 +960,21 @@ export class PixiGameplayView {
     const resolved = resolveBmsControlFlow(song.chart, { random: Math.random });
     this.resolvedChart = resolved;
     const extracted = extractTimedNotes(resolved, { includeLandmine: true, inferBmsLnTypeWhenMissing: true });
-    this.notes = extracted.playableNotes.map((note) => ({ ...note, hit: false }));
+    this.notes = extracted.playableNotes
+      .map((note) => ({ ...note, hit: false }))
+      .sort((left, right) => left.beat - right.beat || left.seconds - right.seconds);
+    this.maxLongNoteBeatSpan = this.notes.reduce((max, note) => {
+      if (note.endBeat === undefined) {
+        return max;
+      }
+      return Math.max(max, Math.max(0, note.endBeat - note.beat));
+    }, 0);
+    this.chartLastNoteEndSeconds = this.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
+    this.songDurationSeconds = this.chartLastNoteEndSeconds;
+    this.remainingNotes = this.notes.length;
+    this.autoJudgeCursor = 0;
+    this.autoMissCursor = 0;
+    this.chartEnded = false;
     // Drop any held LN state from a previous song / restart. Without
     // this the next chart's first release on a cleared channel would
     // try to finalize the prior chart's hold and double-commit.
@@ -972,6 +1009,7 @@ export class PixiGameplayView {
       .filter((trigger) => !isPlayableInputChannel(trigger.channel))
       .sort((left, right) => left.seconds - right.seconds);
     this.autoTriggerNextIndex = 0;
+    this.songDurationSeconds = Math.max(this.chartLastNoteEndSeconds, this.autoSampleTriggers.at(-1)?.seconds ?? 0);
     // Initialize gauge with the actual playable-note count and the
     // chart's #TOTAL value so PG/GR gain matches LR2: a long chart
     // with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a
@@ -1248,6 +1286,9 @@ export class PixiGameplayView {
     skin.nowCombos.forEach((combo) => imagePaths.add(combo.source.imagePath));
     await Promise.all(
       [...imagePaths].map(async (path) => {
+        if (this.disposed) {
+          return;
+        }
         // LR2 special graphics (`gr=100..111`) point at runtime-bound
         // textures, not files in the skin bundle. Skip them here and
         // load them via `prepareChartGraphics()` below.
@@ -1256,13 +1297,28 @@ export class PixiGameplayView {
         }
         const texture = await this.loadSkinAssetTexture(skin, path);
         if (texture) {
+          if (this.disposed) {
+            texture.destroy(true);
+            return;
+          }
           this.textures.set(path, texture);
         }
       }),
     );
+    if (this.disposed) {
+      return;
+    }
     const bombFile = skin.customFiles.find((file) => file.name === 'BOMB');
     if (bombFile) {
-      this.bombTexture = await this.loadSkinAssetTexture(skin, bombFile.path);
+      const texture = await this.loadSkinAssetTexture(skin, bombFile.path);
+      if (this.disposed) {
+        texture?.destroy(true);
+        return;
+      }
+      this.bombTexture = texture;
+    }
+    if (this.disposed) {
+      return;
     }
     // Chart-side `#STAGEFILE` / `#BACKBMP` / `#BANNER`. These are
     // referenced by skin elements via `gr=100/101/102`; they live in
@@ -1303,6 +1359,10 @@ export class PixiGameplayView {
         try {
           const texture = await loadTextureFromBytes(assetPath, bytes);
           if (texture) {
+            if (this.disposed) {
+              texture.destroy(true);
+              return;
+            }
             this.textures.set(key, texture);
           }
         } catch {
@@ -1726,10 +1786,26 @@ export class PixiGameplayView {
 
   private judge(channel: string, seconds: number): void {
     const windows = resolveJudgeWindowsMs(this.song!.chart);
-    const note = this.notes
-      .filter((candidate) => !candidate.hit && candidate.channel === channel)
-      .sort((left, right) => Math.abs(left.seconds - seconds) - Math.abs(right.seconds - seconds))[0];
-    if (!note || Math.abs(note.seconds - seconds) * 1000 > windows.bad) {
+    const badSeconds = windows.bad / 1000;
+    const firstCandidateIndex = lowerBoundBy(this.notes, seconds - badSeconds, (note) => note.seconds);
+    let note: RuntimeNote | undefined;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (let index = firstCandidateIndex; index < this.notes.length; index += 1) {
+      const candidate = this.notes[index]!;
+      const signedDistance = candidate.seconds - seconds;
+      if (signedDistance > badSeconds) {
+        break;
+      }
+      if (candidate.hit || candidate.channel !== channel) {
+        continue;
+      }
+      const distance = Math.abs(signedDistance);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        note = candidate;
+      }
+    }
+    if (!note) {
       // Empty press (no note in the BAD window for this lane) — apply
       // LR2's "空プア" gauge penalty (-2) without breaking combo or
       // counting against the score summary. Matches the per-press
@@ -1737,7 +1813,7 @@ export class PixiGameplayView {
       this.applyGaugeDelta('EMPTY_POOR');
       return;
     }
-    note.hit = true;
+    this.markNoteHit(note);
     // Signed delta (ms): positive = player late, negative = player
     // early. Used for FAST/SLOW classification on GREAT / GOOD
     // judgements (PERFECT is "on time" by definition).
@@ -2055,13 +2131,11 @@ export class PixiGameplayView {
     if (this.chartEnded || !this.song) {
       return;
     }
-    const lastNoteEnd = this.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
-    const lastTrigger = this.autoSampleTriggers.at(-1)?.seconds ?? 0;
-    const endAt = Math.max(lastNoteEnd, lastTrigger) + 3;
+    const endAt = this.songDurationSeconds + 3;
     if (seconds < endAt) {
       return;
     }
-    if (!this.notes.every((note) => note.hit)) {
+    if (this.remainingNotes > 0) {
       // Manual play may still be working through trailing notes; only end
       // once they are all judged or auto-missed.
       return;
@@ -2074,7 +2148,11 @@ export class PixiGameplayView {
     // Defer one frame so the final render (with last judgement plate) is
     // committed before we tear down — without this the user would see the
     // playfield blank-flash to whatever scene comes next.
-    window.setTimeout(() => {
+    this.chartEndTimeout = window.setTimeout(() => {
+      this.chartEndTimeout = undefined;
+      if (this.disposed) {
+        return;
+      }
       if (this.options.onChartFinished && result) {
         this.options.onChartFinished(result);
         return;
@@ -2136,19 +2214,23 @@ export class PixiGameplayView {
    * than at its start.
    */
   private autoJudge(seconds: number): void {
-    for (const note of this.notes) {
-      if (note.hit) {
-        continue;
-      }
+    while (this.autoJudgeCursor < this.notes.length) {
+      const note = this.notes[this.autoJudgeCursor]!;
       if (note.seconds > seconds) {
+        break;
+      }
+      this.autoJudgeCursor += 1;
+      if (note.hit) {
         continue;
       }
       if (!isPlayableInputChannel(note.channel)) {
         // Non-playable lanes (BGM-style notes that snuck into the playable
-        // collection, e.g. landmines) are left to autoMiss / scheduleAutoSamples.
+        // collection, e.g. landmines) are not scored here; mark them consumed
+        // so chart-end bookkeeping does not keep revisiting them.
+        this.markNoteHit(note);
         continue;
       }
-      note.hit = true;
+      this.markNoteHit(note);
       this.playSample(note);
       this.triggerBomb(note.channel);
       if (isLongNote(note)) {
@@ -2212,12 +2294,17 @@ export class PixiGameplayView {
     // Clear after ~120 ms — long enough for the LR2 laser sprite to fade in
     // and back out without lingering through subsequent notes.
     const flashDurationMs = 120;
-    window.setTimeout(() => {
+    const timeout = window.setTimeout(() => {
+      this.keyFlashTimeouts.delete(timeout);
+      if (this.disposed) {
+        return;
+      }
       // Only drop the timer if no real keypress overrode it during the flash.
       if (!this.pressedChannels.has(channel)) {
         this.timerStartedAt.delete(timerId);
       }
     }, flashDurationMs);
+    this.keyFlashTimeouts.add(timeout);
   }
 
   /**
@@ -2246,13 +2333,29 @@ export class PixiGameplayView {
 
   private autoMiss(seconds: number): void {
     const bad = resolveJudgeWindowsMs(this.song!.chart).bad / 1000;
-    for (const note of this.notes) {
-      if (!note.hit && seconds - note.seconds > bad) {
-        note.hit = true;
-        applyJudgeToSummary(this.score, 'POOR', this.tracker);
-        this.applyGaugeDelta('POOR');
-        this.publishJudge('POOR', seconds, note.channel);
+    while (this.autoMissCursor < this.notes.length) {
+      const note = this.notes[this.autoMissCursor]!;
+      if (seconds - note.seconds <= bad) {
+        break;
       }
+      this.autoMissCursor += 1;
+      if (note.hit) {
+        continue;
+      }
+      this.markNoteHit(note);
+      applyJudgeToSummary(this.score, 'POOR', this.tracker);
+      this.applyGaugeDelta('POOR');
+      this.publishJudge('POOR', seconds, note.channel);
+    }
+  }
+
+  private markNoteHit(note: RuntimeNote): void {
+    if (note.hit) {
+      return;
+    }
+    note.hit = true;
+    if (this.remainingNotes > 0) {
+      this.remainingNotes -= 1;
     }
   }
 
@@ -2370,6 +2473,13 @@ export class PixiGameplayView {
     }
     const node = this.audioContext.createBufferSource();
     node.buffer = buffer;
+    node.onended = () => {
+      try {
+        node.disconnect();
+      } catch {
+        // Already disconnected or context closed.
+      }
+    };
     // BGM bus. Falls back to direct destination if `prepareAudio`
     // hasn't run yet (defensive — in practice the bus is always
     // built before any `play*` call).
@@ -2404,6 +2514,13 @@ export class PixiGameplayView {
     }
     const node = this.audioContext.createBufferSource();
     node.buffer = buffer;
+    node.onended = () => {
+      try {
+        node.disconnect();
+      } catch {
+        // Already disconnected or context closed.
+      }
+    };
     // Key bus. Falls back to direct destination if `prepareAudio`
     // hasn't run yet (defensive — in practice the bus is always
     // built before any `play*` call).
@@ -3090,9 +3207,7 @@ export class PixiGameplayView {
     if (!this.song) {
       return 0;
     }
-    const triggerEnd = this.autoSampleTriggers.at(-1)?.seconds ?? 0;
-    const noteEnd = this.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
-    return Math.max(triggerEnd, noteEnd);
+    return this.songDurationSeconds;
   }
 
   /**
@@ -3337,7 +3452,19 @@ export class PixiGameplayView {
     const beatDistance = this.scrollMapper
       ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
       : (toBeat: number): number => toBeat - currentBeat;
-    for (const note of this.notes) {
+    let laneHeight = 1;
+    for (const lane of this.laneX.values()) {
+      laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
+    }
+    const maxVisibleBeat = currentBeat + (laneHeight + 48) / Math.max(1, pixelsPerBeat);
+    const firstNoteIndex = this.scrollMapper
+      ? 0
+      : lowerBoundBy(this.notes, currentBeat - this.maxLongNoteBeatSpan, (note) => note.beat);
+    for (let noteIndex = firstNoteIndex; noteIndex < this.notes.length; noteIndex += 1) {
+      const note = this.notes[noteIndex]!;
+      if (!this.scrollMapper && note.beat > maxVisibleBeat) {
+        break;
+      }
       // Judged notes (hit / auto-missed) intentionally stay on screen and
       // continue scrolling — only their *position* governs visibility.
       const lane = this.laneX.get(note.channel);
@@ -3436,6 +3563,12 @@ export class PixiGameplayView {
     const top = left.top;
     const bottom = left.bottom;
     const skin = this.options.skin;
+    const firstBeatIndex = this.scrollMapper
+      ? 0
+      : lowerBoundNumber(beats, currentBeat - 1 / Math.max(1, pixelsPerBeat));
+    const maxBeat = this.scrollMapper
+      ? Number.POSITIVE_INFINITY
+      : currentBeat + (bottom - top + 1) / Math.max(1, pixelsPerBeat);
     // Prefer the LR2 skin's `#DST_LINE` (e.g. the LR2 default 7-keys skin's
     // 1-px white strip at y=320) when present. The DST encodes per-side x/w
     // and texture; we replicate it at every measure boundary, scrolled.
@@ -3455,7 +3588,11 @@ export class PixiGameplayView {
         const cell = pickAnimatedCell(skinLine.source, this.elapsedSinceTimer(skinLine.source.timer));
         const cropped = createCroppedTexture(baseTexture, cell);
         if (!cropped) continue;
-        for (const beat of beats) {
+        for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
+          const beat = beats[beatIndex]!;
+          if (!this.scrollMapper && beat > maxBeat) {
+            break;
+          }
           const y = bottom - beatDistance(beat) * pixelsPerBeat;
           if (y < top - 1 || y > bottom + 1) {
             continue;
@@ -3478,7 +3615,11 @@ export class PixiGameplayView {
     const beatDistance = this.scrollMapper
       ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
       : (toBeat: number): number => toBeat - currentBeat;
-    for (const beat of beats) {
+    for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
+      const beat = beats[beatIndex]!;
+      if (!this.scrollMapper && beat > maxBeat) {
+        break;
+      }
       const y = bottom - beatDistance(beat) * pixelsPerBeat;
       if (y < top - 1 || y > bottom + 1) {
         continue;
@@ -3713,6 +3854,34 @@ export class PixiGameplayView {
  */
 function isLongNote(note: RuntimeNote): boolean {
   return typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
+}
+
+function lowerBoundBy<T>(items: ReadonlyArray<T>, value: number, pick: (item: T) => number): number {
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (pick(items[mid]!) < value) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
+function lowerBoundNumber(items: ReadonlyArray<number>, value: number): number {
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (items[mid]! < value) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
 }
 
 /**

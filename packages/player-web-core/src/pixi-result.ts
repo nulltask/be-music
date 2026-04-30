@@ -273,9 +273,11 @@ export class PixiResultView {
    * that resolve to per-song chart assets).
    */
   private readonly skinTextures = new Map<string, Texture>();
+  private skinTextureLoadSerial = 0;
   /** Per-song chart graphic textures (BANNER / STAGEFILE / BACKBMP). */
   private readonly chartGraphicTextures = new Map<string, Texture>();
   private readonly chartGraphicPending = new Set<string>();
+  private readonly timeoutHandles = new Set<number>();
   /** Fallback summary panel (used when no skin or as overlay). */
   private readonly fallbackLayer = new Container();
   private result: PixiGameplayResultData | undefined;
@@ -343,7 +345,7 @@ export class PixiResultView {
     // without user interaction. Timer 151 fires automatically once
     // the chart-draw window elapses; 152 needs an input.
     const startInput = this.options.skin?.timing.startInput ?? DEFAULT_STARTINPUT_MS;
-    window.setTimeout(
+    this.setTimer(
       () => {
         if (this.disposed) return;
         this.timerStartedAt.set(1, performance.now());
@@ -354,7 +356,7 @@ export class PixiResultView {
       },
       Math.max(0, startInput),
     );
-    window.setTimeout(
+    this.setTimer(
       () => {
         if (this.disposed) return;
         if (this.timerStartedAt.has(151)) return;
@@ -371,6 +373,11 @@ export class PixiResultView {
       return;
     }
     this.disposed = true;
+    this.skinTextureLoadSerial += 1;
+    for (const timeout of this.timeoutHandles) {
+      window.clearTimeout(timeout);
+    }
+    this.timeoutHandles.clear();
     if (this.animationFrame !== 0) {
       cancelAnimationFrame(this.animationFrame);
       this.animationFrame = 0;
@@ -391,6 +398,7 @@ export class PixiResultView {
         texture.destroy(true);
       }
       this.chartGraphicTextures.clear();
+      this.chartGraphicPending.clear();
     } catch (error) {
       // eslint-disable-next-line no-console
       console.warn('[result] texture cleanup threw', error);
@@ -404,6 +412,14 @@ export class PixiResultView {
     this.host = undefined;
   }
 
+  private setTimer(callback: () => void, delayMs: number): void {
+    const timeout = window.setTimeout(() => {
+      this.timeoutHandles.delete(timeout);
+      callback();
+    }, delayMs);
+    this.timeoutHandles.add(timeout);
+  }
+
   /**
    * Pre-loads atlas textures referenced by the skin's `#IMAGE` /
    * `#SRC_NUMBER` / `#SRC_BARGRAPH` / `#SRC_SLIDER` declarations.
@@ -411,6 +427,7 @@ export class PixiResultView {
    * those bind to per-song chart assets and are loaded lazily.
    */
   private async prepareSkinTextures(skin: Lr2Skin): Promise<void> {
+    const serial = ++this.skinTextureLoadSerial;
     const referencedPaths = new Set<string>();
     for (const image of skin.images) {
       if (!isLr2SpecialGraphic(image.source.imagePath)) {
@@ -430,10 +447,17 @@ export class PixiResultView {
       [...referencedPaths].map(async (path) => {
         const texture = await loadSkinAssetTexture(skin, path);
         if (texture) {
+          if (this.disposed || this.options.skin !== skin || serial !== this.skinTextureLoadSerial) {
+            texture.destroy(true);
+            return;
+          }
           this.skinTextures.set(path, texture);
         }
       }),
     );
+    if (this.disposed || this.options.skin !== skin || serial !== this.skinTextureLoadSerial) {
+      return;
+    }
     this.render();
   }
 
@@ -1005,6 +1029,10 @@ export class PixiResultView {
       if (!bytes) return;
       const texture = await loadTextureFromBytes(assetPath, bytes);
       if (texture) {
+        if (this.disposed) {
+          texture.destroy(true);
+          return;
+        }
         this.chartGraphicTextures.set(cacheKey, texture);
         this.render();
       }

@@ -52,6 +52,7 @@ export async function loadVideoTextureFromBytes(
   try {
     await waitForVideoMetadata(video, 5000);
   } catch {
+    releaseVideoElement(video);
     URL.revokeObjectURL(objectUrl);
     return undefined;
   }
@@ -66,6 +67,16 @@ export async function loadVideoTextureFromBytes(
   const texture = new Texture({ source });
   texture.label = path;
   return { texture, video, objectUrl };
+}
+
+function releaseVideoElement(video: HTMLVideoElement): void {
+  try {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  } catch {
+    // Defensive: detached / unsupported media elements can throw on load().
+  }
 }
 
 function waitForVideoMetadata(video: HTMLVideoElement, timeoutMs: number): Promise<void> {
@@ -179,11 +190,21 @@ async function loadTextureFromBlob(
 ): Promise<Texture | undefined> {
   try {
     const imageBitmap = await createImageBitmap(blob);
-    const finalBitmap =
-      options.transparentColor || options.keyOutBlack
-        ? ((await applyChromaKeyToBitmap(imageBitmap, options)) ?? imageBitmap)
-        : imageBitmap;
-    const texture = Texture.from(finalBitmap);
+    let finalBitmap = imageBitmap;
+    if (options.transparentColor || options.keyOutBlack) {
+      const keyedBitmap = await applyChromaKeyToBitmap(imageBitmap, options);
+      if (keyedBitmap) {
+        imageBitmap.close();
+        finalBitmap = keyedBitmap;
+      }
+    }
+    let texture: Texture;
+    try {
+      texture = Texture.from(finalBitmap);
+    } catch (error) {
+      finalBitmap.close();
+      throw error;
+    }
     // Force nearest-neighbour sampling on every loaded texture. LR2
     // skin / BGA assets are pixel-art; bilinear filtering blurs them
     // when the design space is scaled up to the canvas. Mirrors the
