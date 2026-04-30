@@ -317,6 +317,15 @@ export class PixiSongSelectView {
    * extend later.
    */
   private browseStack: BrowserFolderNode[] = [];
+  /**
+   * Parallel stack of the parent's `selectedIndex` at the moment
+   * each folder on `browseStack` was entered. Used by
+   * {@link leaveFolder} to land the cursor back on the folder bar
+   * the user just exited rather than jumping to the top of the
+   * parent list. Always satisfies
+   * `parentCursorStack.length === browseStack.length`.
+   */
+  private parentCursorStack: number[] = [];
   private mountedContainer: HTMLElement | undefined;
   /**
    * Skin asset path → decoded texture cache. Populated by
@@ -799,6 +808,9 @@ export class PixiSongSelectView {
    * semantics identical.
    */
   private enterFolder(folder: BrowserFolderNode): void {
+    // Stash the parent's cursor BEFORE pushing so leaveFolder can
+    // land the cursor back on this folder bar.
+    this.parentCursorStack = [...this.parentCursorStack, this.selectedIndex];
     this.browseStack = [...this.browseStack, folder];
     this.selectedIndex = 0;
     // Folder traversal: animate as a single "down" step
@@ -814,11 +826,25 @@ export class PixiSongSelectView {
    * (mirroring the old inline branch that bailed when
    * `browseStack.length === 0`). Fires the LR2 folder-close
    * cue (`Sound/lr2/f-close.wav`).
+   *
+   * Restores the parent's `selectedIndex` from the parallel
+   * cursor stack so the user lands back on the folder bar they
+   * just left. The restored index is clamped to the parent
+   * list's current length to handle the rare case where the
+   * collection / search filter changed while inside the folder.
    */
   private leaveFolder(): boolean {
     if (this.browseStack.length === 0) return false;
     this.browseStack = this.browseStack.slice(0, -1);
-    this.selectedIndex = 0;
+    const remembered = this.parentCursorStack[this.parentCursorStack.length - 1];
+    this.parentCursorStack = this.parentCursorStack.slice(0, -1);
+    if (remembered !== undefined) {
+      const parentEntries = this.currentEntries();
+      const upperBound = Math.max(0, parentEntries.length - 1);
+      this.selectedIndex = Math.max(0, Math.min(remembered, upperBound));
+    } else {
+      this.selectedIndex = 0;
+    }
     this.noteCursorChange(-1);
     this.render();
     void this.playOneShotSound('folder-close');
@@ -1062,6 +1088,7 @@ export class PixiSongSelectView {
     }
     this.collection = collection;
     this.browseStack = [];
+    this.parentCursorStack = [];
     this.selectedIndex = 0;
     // Brand-new collection: try the constructor-time
     // `initialNavigation` (typical: dropped a folder mid-session
@@ -1073,6 +1100,11 @@ export class PixiSongSelectView {
       const folders = groupSongsByFolder(collection.songs);
       if (folders.length === 1) {
         this.browseStack = [folders[0]!];
+        // Keep parentCursorStack length-aligned with browseStack
+        // even on the auto-enter-single-folder fast path — a
+        // mismatch would feed `leaveFolder` a stale entry from a
+        // previous session.
+        this.parentCursorStack = [0];
       }
     }
     this.render();
@@ -1124,6 +1156,12 @@ export class PixiSongSelectView {
       return false;
     }
     this.browseStack = stack;
+    // No saved per-level cursor history yet — fill the parallel
+    // stack with zeros so its length matches `browseStack`. If the
+    // user backs out without entering further, they land on the
+    // first folder bar of the parent (acceptable fallback for a
+    // restored session that has no prior entry-time snapshot).
+    this.parentCursorStack = stack.map(() => 0);
     const entries =
       stack.length > 0 ? stack[stack.length - 1]!.songs.length : groupSongsByFolder(this.collection.songs).length;
     this.selectedIndex = Math.max(0, Math.min(navigation.selectedIndex, Math.max(0, entries - 1)));
