@@ -1603,8 +1603,10 @@ export class PixiGameplayView {
 
   /**
    * Adjust the visual hi-speed and clamp to [HISPEED_MIN, HISPEED_MAX].
-   * Snap to a 1/1000 grid so values like 0.125 + 0.125 stay exact (the
-   * 1/100 grid we used previously would round 0.125 → 0.13 every press).
+   * Snap to a 1/1000 grid so accumulated press deltas don't drift
+   * off the natural 0.25 grid through float-rounding noise (a 1/100
+   * grid would round 0.25 → 0.25 cleanly but break smaller steps if
+   * the unit ever shrinks again).
    */
   private adjustHiSpeed(delta: number): void {
     const next = Math.round((this.hiSpeed + delta) * 1000) / 1000;

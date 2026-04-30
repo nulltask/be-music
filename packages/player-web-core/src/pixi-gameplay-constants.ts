@@ -18,9 +18,9 @@ export const BOMB_DIVX = 8;
 export const BOMB_DIVY = 4;
 export const BOMB_CYCLE_MS = 30;
 
-export const HISPEED_MIN = 0.125;
+export const HISPEED_MIN = 0.25;
 export const HISPEED_MAX = 6.0;
-export const HISPEED_STEP = 0.125;
+export const HISPEED_STEP = 0.25;
 
 export const INTRO_DELAY_MS = 3000;
 
