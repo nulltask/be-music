@@ -186,8 +186,24 @@ body {
   opacity: 0.6;
 }
 
+/*
+ * Render stage. Fills the shell's full viewport so PixiJS's
+ * `resizeTo: container` sees the entire window size and the
+ * `resolveScaledViewport` math can scale the LR2 design space
+ * (640×480 / 1280×720 etc.) up as far as the aspect-correct fit
+ * allows.
+ *
+ * Both `width` and `height` need to be explicit `100%`: the shell
+ * itself is `position: relative` (no grid / flex) since the
+ * toolbar is absolute-positioned, so a default `display: block`
+ * stage would have `height: auto` and collapse to its (zero)
+ * content height — which would in turn shrink the canvas inside
+ * down to nothing.
+ */
 .stage {
   position: relative;
+  width: 100%;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
