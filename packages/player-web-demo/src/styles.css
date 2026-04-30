@@ -18,29 +18,41 @@ body {
 }
 
 .shell {
-  display: grid;
-  grid-template-rows: auto 1fr;
+  position: relative;
   width: 100%;
   height: 100%;
 }
 
-.shell.playing {
-  grid-template-rows: 1fr;
-}
-
-.shell.playing .toolbar {
-  display: none;
-}
-
+/*
+ * Debug toolbar.
+ *
+ * Positioned absolutely in the top-right of `.shell` so it floats
+ * above the canvas instead of taking a top-row slice from it. Lets
+ * the player select / autoplay / compressor toggles stay reachable
+ * during gameplay (the previous header layout hid them under the
+ * `.playing` class). Compact spacing and a translucent background
+ * keep the toolbar from drowning out whatever is rendering behind.
+ */
 .toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  justify-content: flex-end;
+  gap: 8px;
   align-items: center;
-  min-height: 58px;
-  padding: 10px 14px;
-  background: #111620;
-  border-bottom: 1px solid #293141;
+  padding: 6px 8px;
+  background: rgb(17 22 32 / 0.78);
+  border: 1px solid #293141;
+  border-radius: 8px;
+  /*
+   * The toolbar isn't full-width anymore, so wrap when it grows
+   * past whatever right-side space is available. `max-width` keeps
+   * it from creeping all the way across narrow viewports.
+   */
+  max-width: calc(100vw - 16px);
 }
 
 .toolbar button,
@@ -48,14 +60,14 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 30px;
+  padding: 0 10px;
   border: 1px solid #3a4354;
   border-radius: 6px;
   background: #1b2230;
   color: #f8fafc;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .toolbar input[type='file'] {
@@ -82,9 +94,17 @@ body {
 }
 
 .status {
-  min-width: 180px;
+  /*
+   * Status reads as a hint, not a button — drop the min-width so
+   * the toolbar stays compact, and shrink the font slightly to
+   * match the surrounding controls.
+   */
   color: #aab4c2;
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .stage {
