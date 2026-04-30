@@ -42,6 +42,7 @@ app.innerHTML = `
       <button id="back" type="button">Song select</button>
       <span class="status" id="status">Ready</span>
     </div>
+    <input id="search" class="search-input" type="search" placeholder="Search title / artist / genre..." />
     <div class="stage" id="stage"><div class="drop">Drop BMS folder + LR2 theme together (or either one)</div></div>
   </div>
 `;
@@ -65,6 +66,14 @@ interface PlayerWebDemoElements {
   compBgmInput: HTMLInputElement;
   compMasterInput: HTMLInputElement;
   backButton: HTMLButtonElement;
+  /**
+   * Floating DOM `<input>` overlay positioned near the LR2 default
+   * skin's search-text rect. Focus is given to it when the user
+   * clicks the skin's `#SRC_TEXT,st=30,edit=1` region or hits the
+   * `/` shortcut; typing into it filters the song list via
+   * `PixiSongSelectView.setSearchQuery`.
+   */
+  searchInput: HTMLInputElement;
 }
 
 class PlayerWebDemoApp {
@@ -159,6 +168,50 @@ class PlayerWebDemoApp {
       this.gameplayView?.setAudioCompressorStageEnabled('master', this.elements.compMasterInput.checked);
     });
     this.refreshCompressorStageVisibility();
+
+    // Global `/` shortcut focuses the search input. Standard
+    // editor convention — same as GitHub / Slack / Discord. We
+    // suppress the actual `/` character so it doesn't end up in
+    // the input field.
+    window.addEventListener('keydown', (event) => {
+      if (event.key !== '/') return;
+      const target = event.target as HTMLElement | null;
+      // Don't hijack `/` when the user is already typing into
+      // some other input.
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      event.preventDefault();
+      this.elements.searchInput.focus();
+      this.elements.searchInput.select();
+    });
+    // Search input: forward every keystroke to the select view so
+    // the bar list filters live. Escape clears the filter and
+    // returns focus to the canvas (so arrow-key navigation works
+    // again immediately).
+    this.elements.searchInput.addEventListener('input', () => {
+      this.selectView?.setSearchQuery(this.elements.searchInput.value);
+    });
+    this.elements.searchInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.elements.searchInput.value = '';
+        this.selectView?.setSearchQuery('');
+        this.elements.searchInput.blur();
+      } else if (event.key === 'Enter') {
+        // Pressing Enter while typing should let the user pick the
+        // currently-focused (filtered) result without leaving the
+        // input first. `keydown` on the window won't fire on the
+        // select view (the input has focus), so route the action
+        // explicitly.
+        event.preventDefault();
+        // No public "trigger Enter" API on the view; setSearchQuery
+        // already moved the cursor to 0 after each keystroke, so
+        // closing the input + giving focus back to the canvas is
+        // enough for the user's next Enter press to pick that song.
+        this.elements.searchInput.blur();
+      }
+    });
 
     window.addEventListener('dragover', (event) => {
       event.preventDefault();
@@ -293,12 +346,23 @@ class PlayerWebDemoApp {
       onSongSelected: (song) => {
         void this.playSong(song);
       },
+      onSongAutoPlay: (song) => {
+        // The skin's AUTOPLAY button forces the auto flag on for
+        // this session regardless of the toolbar checkbox state.
+        // We DON'T mutate the checkbox here — the user might want
+        // to keep it off for the next manual play.
+        void this.playSong(song, { autoPlay: true });
+      },
+      onSearchActivate: () => {
+        this.elements.searchInput.focus();
+        this.elements.searchInput.select();
+      },
     });
     await this.selectView.mount(this.sceneHost);
     this.selectView.setCollection(this.collection);
   }
 
-  private async playSong(song: BrowserSongEntry): Promise<void> {
+  private async playSong(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
     this.elements.shell.classList.add('playing');
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
@@ -307,7 +371,7 @@ class PlayerWebDemoApp {
     const playSkin = pickLr2PlaySkin(this.playSkins, song);
     this.gameplayView = new PixiGameplayView({
       skin: playSkin,
-      autoPlay: this.elements.autoPlayInput.checked,
+      autoPlay: overrides.autoPlay ?? this.elements.autoPlayInput.checked,
       audioCompressor: this.elements.compressorInput.checked,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {
@@ -358,4 +422,5 @@ new PlayerWebDemoApp({
   compBgmInput: document.querySelector<HTMLInputElement>('#comp-bgm')!,
   compMasterInput: document.querySelector<HTMLInputElement>('#comp-master')!,
   backButton: document.querySelector<HTMLButtonElement>('#back')!,
+  searchInput: document.querySelector<HTMLInputElement>('#search')!,
 }).start();

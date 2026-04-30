@@ -141,6 +141,51 @@ body {
   text-overflow: ellipsis;
 }
 
+/*
+ * Floating search input. Rendered as a DOM overlay rather than as
+ * a Pixi-side text widget because Web Audio editing UI (IME, copy
+ * / paste, keyboard-shortcut handling) is dramatically easier with
+ * a real `<input>` element. The input is invisible until focused
+ * — we don't want a stark form widget hovering over the LR2 skin
+ * by default; clicking the skin's search-text region (or pressing
+ * `/`) gives it focus and shows the editor on top of the skin.
+ *
+ * Pinned bottom-left so it doesn't compete with the floating
+ * top-right toolbar. Width matches the LR2 default search rect's
+ * approximate scaled width without trying to mirror it exactly —
+ * keeping the overlay independent of skin geometry means it works
+ * with any skin or no skin at all.
+ */
+.search-input {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 10;
+  width: 320px;
+  padding: 6px 10px;
+  border: 1px solid #3a4354;
+  border-radius: 6px;
+  background: rgb(11 14 22 / 0.85);
+  color: #f8fafc;
+  font-size: 13px;
+  font-family: system-ui, sans-serif;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: #ffd166;
+  background: rgb(11 14 22 / 0.95);
+}
+
+.search-input:not(:focus):placeholder-shown {
+  /*
+   * Dim the placeholder when the user hasn't focused yet so the
+   * input feels like a passive "click here to search" affordance
+   * rather than a primary widget.
+   */
+  opacity: 0.6;
+}
+
 .stage {
   position: relative;
   min-height: 0;

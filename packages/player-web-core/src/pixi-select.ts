@@ -171,6 +171,23 @@ export interface PixiSongSelectNavigation {
 export interface PixiSongSelectViewOptions {
   onSongSelected?: (song: BrowserSongEntry) => void;
   /**
+   * AUTOPLAY-mode launch hook. Fired when the user clicks the
+   * skin's AUTOPLAY button (#SRC_BUTTON `type = 16`) or presses the
+   * AUTOPLAY hotkey. Hosts launch gameplay with autoplay forced
+   * ON. Falls through to `onSongSelected` semantics-wise (the song
+   * still starts) but lets the host distinguish manual play from
+   * auto-judged play and pre-set the gameplay's `autoPlay` flag.
+   */
+  onSongAutoPlay?: (song: BrowserSongEntry) => void;
+  /**
+   * Fired when the user clicks the skin's search-input region
+   * (#SRC_TEXT `st = 30, edit = 1`). The host typically focuses a
+   * DOM `<input>` overlay so the user can type. Subsequent calls
+   * to {@link PixiSongSelectView.setSearchQuery} filter the
+   * visible bar list.
+   */
+  onSearchActivate?: () => void;
+  /**
    * LR2 skin to render the select screen with. When provided, static
    * `#IMAGE` elements decorate the frame and `#SRC_BAR_BODY` /
    * `#DST_BAR_BODY_OFF` / `_ON` slots host the song list. Without a
@@ -320,6 +337,15 @@ export class PixiSongSelectView {
    * window level so we'd otherwise compete for arrow keys).
    */
   private visible = true;
+  /**
+   * Lower-cased search query. When non-empty, `currentEntries` is
+   * filtered to bars whose title / subtitle / artist / genre /
+   * file label / folder label contains the substring (case-
+   * insensitive). Empty string disables the filter — hosts call
+   * {@link setSearchQuery} to seed it; the view never mutates it
+   * on its own.
+   */
+  private searchQuery = '';
 
   public constructor(private options: PixiSongSelectViewOptions = {}) {}
 
@@ -364,6 +390,11 @@ export class PixiSongSelectView {
     host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
     host.app.canvas.addEventListener('pointermove', this.handlePointerMove);
     host.app.canvas.addEventListener('pointerleave', this.handlePointerLeave);
+    // Wheel scroll → cursor move. `passive: false` so we can call
+    // preventDefault and stop the page from scrolling under the
+    // floating debug toolbar (which would otherwise compete for
+    // wheel events when the canvas is full-screen).
+    host.app.canvas.addEventListener('wheel', this.handleWheel, { passive: false });
     // Only preload skin assets if the skin has select-screen definitions —
     // a play-only skin would otherwise pull in the STAGE FAILED graphic,
     // gauge frame, etc. that don't belong on the select view.
@@ -518,6 +549,7 @@ export class PixiSongSelectView {
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
       this.host.app.canvas.removeEventListener('pointermove', this.handlePointerMove);
+      this.host.app.canvas.removeEventListener('wheel', this.handleWheel);
       this.host.app.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
     }
     // Detach our scene-graph subtree from the host's stage. The
@@ -702,13 +734,39 @@ export class PixiSongSelectView {
    * Returns the entries to render in the bar list at the current
    * navigation depth. At the root we surface one bar per top-level
    * folder; inside a folder we surface the folder's songs.
+   *
+   * Honours `searchQuery` (lower-cased substring match) when set —
+   * the filter applies at every depth so a user can type while
+   * inside a folder and only see matching songs in that folder.
    */
   private currentEntries(): BrowserBrowseEntry[] {
     const top = this.browseStack[this.browseStack.length - 1];
-    if (top) {
-      return top.songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }));
+    const baseEntries: BrowserBrowseEntry[] = top
+      ? top.songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }))
+      : groupSongsByFolder(this.collection.songs).map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
+    if (this.searchQuery.length === 0) {
+      return baseEntries;
     }
-    return groupSongsByFolder(this.collection.songs).map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
+    return baseEntries.filter((entry) => matchesSearchQuery(entry, this.searchQuery));
+  }
+
+  /**
+   * Sets the lower-cased search query and re-renders. The bar list
+   * filters entries by title / subtitle / artist / genre / file
+   * label / folder label (case-insensitive substring). Pass `''`
+   * (empty) to clear the filter. Resets the cursor to 0 so the
+   * focused entry is always one that satisfies the filter — without
+   * this, narrowing the list could leave the cursor pointing past
+   * the new end and `focusedSong()` would return undefined.
+   */
+  public setSearchQuery(query: string): void {
+    const normalized = query.trim().toLowerCase();
+    if (this.searchQuery === normalized) {
+      return;
+    }
+    this.searchQuery = normalized;
+    this.selectedIndex = 0;
+    this.render();
   }
 
   /**
@@ -843,6 +901,109 @@ export class PixiSongSelectView {
     this.mouseY = -1;
   };
 
+  /**
+   * Wheel-scroll → cursor move. `deltaY > 0` (wheel down) advances
+   * to the next entry; `deltaY < 0` (wheel up) rewinds. Multiple
+   * notches per event (`deltaMode` lines / pages) are clamped to
+   * one cursor step so a fast trackpad flick doesn't send the
+   * cursor flying past dozens of entries — `noteCursorChange`
+   * only animates one slot worth of slide and large jumps would
+   * make the smooth-scroll look broken.
+   *
+   * Wraps at the list ends, matching the keyboard navigation.
+   * Skipped while hidden (gameplay on top) so a wheel event over
+   * the canvas doesn't navigate the select view in the background.
+   */
+  /**
+   * Hit-tests interactive skin elements at the click point and
+   * dispatches per-element actions. Returns `true` when a hit was
+   * consumed so the bar-list pointerdown branch doesn't also fire.
+   *
+   * Currently handles:
+   *
+   * - `#SRC_BUTTON` (`click = 1`) — AUTOPLAY (`type = 16`) is
+   *   wired to `onSongAutoPlay` for the focused song. Other
+   *   button types are recognised but currently no-op (panel /
+   *   filter / sort buttons land here for future wiring).
+   * - `#SRC_TEXT` (`edit = 1`, `st = 30`) — fires `onSearchActivate`
+   *   so the host can focus a DOM `<input>` overlay.
+   *
+   * Buttons / texts are only considered when their DST passes the
+   * standard visibility / panel gate; we re-use `evaluateElementDst`
+   * to honour keyframe interpolation (so a click during a slide-in
+   * animation hits the rectangle the user actually sees, not a
+   * static endpoint).
+   */
+  private handleSkinHitTest(skin: Lr2Skin, virtualX: number, virtualY: number): boolean {
+    const ops = computeSelectOps(this.focusedSong());
+    for (const button of skin.buttons) {
+      if (button.click !== 1) continue;
+      if (!isPanelOpen(button.panel)) continue;
+      const dst = this.evaluateElementDst(button);
+      if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
+      if (!containsPoint(dst, virtualX, virtualY)) continue;
+      this.dispatchButtonClick(button.type);
+      return true;
+    }
+    for (const text of skin.texts) {
+      if (text.edit !== 1) continue;
+      if (text.st !== 30) continue; // 30 = search word
+      if (!isPanelOpen(text.panel)) continue;
+      const dst = this.evaluateElementDst(text);
+      if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
+      if (!containsPoint(dst, virtualX, virtualY)) continue;
+      this.options.onSearchActivate?.();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Routes a clicked `#SRC_BUTTON` to the matching action. The
+   * button-type table comes from `docs/LR2SkinHelp.md` lines 5901+;
+   * we currently honour:
+   *
+   * - **15** — start play (treat as Enter on the focused song)
+   * - **16** — start autoplay (`onSongAutoPlay`)
+   * - **17** — readtext (no host hook yet; fall through to play)
+   * - **19** — replay (no replay system yet; no-op)
+   *
+   * Other types are no-ops for now. Filter / sort / panel buttons
+   * (types 1..12) land here too once their state machines exist.
+   */
+  private dispatchButtonClick(type: number): void {
+    const focused = this.focusedSong();
+    if (!focused) return;
+    if (type === 15) {
+      this.options.onSongSelected?.(focused);
+    } else if (type === 16) {
+      // AUTOPLAY: prefer the dedicated callback when supplied,
+      // otherwise fall through to the regular start path so the
+      // button isn't a dead end on hosts that haven't wired it.
+      if (this.options.onSongAutoPlay) {
+        this.options.onSongAutoPlay(focused);
+      } else {
+        this.options.onSongSelected?.(focused);
+      }
+    }
+    // Types 17 / 19 / 13 / 14 / etc. — readtext / replay / config
+    // / skin-select. Not yet implemented; intentionally silent so
+    // a click doesn't trigger the wrong action.
+  }
+
+  private readonly handleWheel = (event: WheelEvent): void => {
+    if (!this.visible) return;
+    if (event.deltaY === 0) return;
+    event.preventDefault();
+    const entries = this.currentEntries();
+    if (entries.length === 0) return;
+    const direction = event.deltaY > 0 ? 1 : -1;
+    const previous = this.selectedIndex;
+    this.selectedIndex = (this.selectedIndex + direction + entries.length) % entries.length;
+    this.noteCursorChange(wrappedCursorDelta(this.selectedIndex - previous, entries.length));
+    this.render();
+  };
+
   private readonly handlePointerDown = (event: PointerEvent): void => {
     // No `canvas.focus()` — we listen for `keydown` on `window`, so
     // capturing focus here would needlessly pull it away from any
@@ -856,8 +1017,21 @@ export class PixiSongSelectView {
     const virtualY = (event.offsetY - viewport.y) / viewport.scale;
 
     if (useSkin && skin) {
+      // Hit-test interactive skin elements first — buttons, search
+      // input — before bars, since they often overlap the bar-list
+      // area on the LR2 default skin (e.g. AUTOPLAY at y=319 sits
+      // adjacent to the song-info column).
+      if (this.handleSkinHitTest(skin, virtualX, virtualY)) {
+        return;
+      }
       // Skin layout: hit-test each available slot's BAR_BODY rect and
       // jump the selection so the clicked slot becomes the centre.
+      // Any slot click both moves the cursor (if needed) AND triggers
+      // the selection action — earlier the click on a non-centre
+      // slot only moved the cursor and required a second click on
+      // the centre slot to actually pick the song. The 1-click flow
+      // is what mouse users expect; keyboard navigation still uses
+      // the 2-step "land on cursor → press Enter" model.
       const center = clampSlot(skin.barLayout.center, skin.barLayout.slots.length);
       const available = skin.barLayout.available > 0 ? skin.barLayout.available : skin.barLayout.slots.length;
       const slots = skin.barLayout.slots.slice(0, available);
@@ -867,28 +1041,24 @@ export class PixiSongSelectView {
         if (!dst) continue;
         if (containsPoint(dst, virtualX, virtualY)) {
           const offset = slot.index - center;
-          // Wrap so clicking a slot above slot[center] when the cursor
-          // is near `entries[0]` reaches `entries[length-1]` — the
-          // circular-list expectation also applies to clicks.
           const target = wrapIndex(this.selectedIndex + offset, entries.length);
-          if (target !== undefined && target !== this.selectedIndex) {
-            // The clicked slot's offset directly tells us which way
-            // the cursor is moving — pass `offset` as the cursor
-            // delta so the slide spans `|offset|` slots.
+          if (target === undefined) {
+            return;
+          }
+          if (target !== this.selectedIndex) {
             this.noteCursorChange(offset);
             this.selectedIndex = target;
             this.render();
           }
-          const entry = target !== undefined ? entries[target] : undefined;
-          if (slot.index === center && entry) {
-            if (entry.kind === 'folder') {
-              this.browseStack = [...this.browseStack, entry.folder];
-              this.selectedIndex = 0;
-              this.noteCursorChange(1);
-              this.render();
-            } else {
-              this.options.onSongSelected?.(entry.song);
-            }
+          const entry = entries[target];
+          if (!entry) return;
+          if (entry.kind === 'folder') {
+            this.browseStack = [...this.browseStack, entry.folder];
+            this.selectedIndex = 0;
+            this.noteCursorChange(1);
+            this.render();
+          } else {
+            this.options.onSongSelected?.(entry.song);
           }
           return;
         }
@@ -2444,6 +2614,37 @@ function clampFontSize(value: number, min: number, max: number): number {
 function isPanelOpen(panel: number): boolean {
   if (panel === 0) return true;
   if (panel === -1) return true;
+  return false;
+}
+
+/**
+ * Returns whether `entry` matches the lower-cased search query.
+ * Folder bars match on label only (no per-song fan-out — folders
+ * are coarse navigation, not searchable content). Song bars match
+ * if any of title / subtitle / artist / genre / file label
+ * contain the query as a substring.
+ *
+ * Pure / exported for testing. Hosts shouldn't call this directly
+ * — `PixiSongSelectView.setSearchQuery` is the front door.
+ */
+export function matchesSearchQuery(entry: BrowserBrowseEntry, lowerQuery: string): boolean {
+  if (lowerQuery.length === 0) return true;
+  if (entry.kind === 'folder') {
+    return entry.folder.label.toLowerCase().includes(lowerQuery);
+  }
+  const song = entry.song;
+  const haystacks: Array<string | undefined> = [
+    song.title,
+    song.subtitle,
+    song.artist,
+    song.genre,
+    song.fileLabel,
+  ];
+  for (const value of haystacks) {
+    if (typeof value === 'string' && value.toLowerCase().includes(lowerQuery)) {
+      return true;
+    }
+  }
   return false;
 }
 
