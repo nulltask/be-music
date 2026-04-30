@@ -1496,7 +1496,17 @@ export class PixiSongSelectView {
       destination: absoluteDst,
       keyframes: [absoluteDst],
     };
-    renderNumberElement(this.listLayer, fakeNumberElement, playLevel, this.skinTextures, absoluteDst);
+    // Suppress leading zeros — `keta` on BAR_LEVEL means "max number
+    // of digits" (slot reservation for centering math), NOT "force
+    // pad to that width". Without this flag a level of 7 would render
+    // as "07" inside a 2-digit field, pushing the visible "7" half a
+    // field-width to the right and leaving a stray "0" at the left
+    // edge of the bar — visibly offset from where the LR2 default
+    // skin places it. Centering math still uses the full field width
+    // so single-digit numbers sit at the field's middle.
+    renderNumberElement(this.listLayer, fakeNumberElement, playLevel, this.skinTextures, absoluteDst, {
+      suppressLeadingZeros: true,
+    });
   }
 
   private makeStaticImageSprite(image: Lr2ImageElement): Sprite | undefined {
