@@ -1559,9 +1559,16 @@ export class PixiSongSelectView {
     const entries = this.currentEntries();
     if (entries.length === 0) return;
     const direction = event.deltaY > 0 ? 1 : -1;
-    const previous = this.selectedIndex;
     this.selectedIndex = (this.selectedIndex + direction + entries.length) % entries.length;
-    this.noteCursorChange(wrappedCursorDelta(this.selectedIndex - previous, entries.length));
+    // Use the wheel direction directly rather than the wrapped
+    // (new - old) delta. With a tiny list (e.g. 2 entries),
+    // wrapping from `last` back to `first` produces a `rawDelta`
+    // of `-(N-1)` whose shortest-path interpretation is "back by
+    // one", which would slide the bars in the wrong direction
+    // even though the user wheeled DOWN. Treating wheel input as
+    // an "infinite rail" — every notch always slides one slot in
+    // the wheel's direction — preserves the LR2 selection feel.
+    this.noteCursorChange(direction);
     this.render();
   };
 
@@ -1673,16 +1680,24 @@ export class PixiSongSelectView {
       if (entries.length === 0) return;
       // Wrap past the end → first entry. Matches LR2's circular bar
       // list (the rail keeps scrolling forever in either direction).
-      const previous = this.selectedIndex;
+      // Pass `+1` directly to `noteCursorChange` rather than the
+      // `(new - old)` wrapped delta: with very short lists (2 / 3
+      // entries) the wrap brings the cursor back to a lower index,
+      // which would otherwise drive the slide animation in the
+      // OPPOSITE direction of the keypress. The user pressed down,
+      // so the bars should always slide as if going down — every
+      // press, regardless of whether the cursor wraps.
       this.selectedIndex = (this.selectedIndex + 1) % entries.length;
-      this.noteCursorChange(wrappedCursorDelta(this.selectedIndex - previous, entries.length));
+      this.noteCursorChange(1);
       this.render();
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       if (entries.length === 0) return;
-      const previous = this.selectedIndex;
+      // Symmetric to ArrowDown — pass `-1` directly so the slide
+      // animation always matches the keypress direction even when
+      // the cursor wraps from `0` to `entries.length - 1`.
       this.selectedIndex = (this.selectedIndex - 1 + entries.length) % entries.length;
-      this.noteCursorChange(wrappedCursorDelta(this.selectedIndex - previous, entries.length));
+      this.noteCursorChange(-1);
       this.render();
     } else if (event.key === 'Enter') {
       event.preventDefault();
@@ -2501,20 +2516,35 @@ function wrapIndex(target: number, count: number): number | undefined {
 }
 
 /**
- * Maps a raw `(new - old)` cursor delta into a wrapped delta in the
- * range `(-count/2, count/2]`. Used so a wrap-around move (e.g. from
- * `entries[0]` ↑ to `entries[length-1]`) animates as a single
- * "back by 1" step rather than a long slide spanning the whole list.
+ * Maps a raw `(new - old)` cursor delta into a "shortest visible
+ * step" delta. Used so a wrap-around move (e.g. from `entries[0]`
+ * ↑ to `entries[length-1]`) animates as a single "back by 1" step
+ * rather than a long slide spanning the whole list.
  *
  * Examples (length = 10):
  *   delta=+1 → +1  (forward 1 step)
  *   delta=-1 → -1  (backward 1 step)
  *   delta=+9 → -1  (wrap forward = visually 1 step back)
  *   delta=-9 → +1  (wrap backward = visually 1 step forward)
+ *
+ * Special case for tiny lists (notably `count = 2`): forward 1 and
+ * backward 1 are the same distance around a 2-element ring, and
+ * the symmetric `((rawDelta + half) % count) - half` formula
+ * collapses both onto `-1`. That made pressing the down arrow on
+ * a folder list of length 2 visually slide the cursor *upward* —
+ * confusing and inconsistent with the keypress. We fix this by
+ * preferring the raw direction when the move already fits inside
+ * the half-window (`|rawDelta| <= half`), which is exactly the
+ * "short trip, no wrap needed" case. Wrapping kicks in only for
+ * genuine long jumps that should be re-interpreted as a short
+ * step in the opposite direction.
  */
-function wrappedCursorDelta(rawDelta: number, count: number): number {
+export function wrappedCursorDelta(rawDelta: number, count: number): number {
   if (count <= 0) return 0;
   const half = count / 2;
+  if (Math.abs(rawDelta) <= half) {
+    return rawDelta;
+  }
   return ((((rawDelta + half) % count) + count) % count) - half;
 }
 

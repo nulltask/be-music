@@ -1,6 +1,6 @@
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it } from 'vitest';
-import { matchesSearchQuery } from './pixi-select.ts';
+import { matchesSearchQuery, wrappedCursorDelta } from './pixi-select.ts';
 import type { BrowserBrowseEntry, BrowserSongEntry } from './types.ts';
 
 /**
@@ -94,5 +94,56 @@ describe('matchesSearchQuery', () => {
     };
     expect(matchesSearchQuery(folderEntry, 'lunatic')).toBe(true);
     expect(matchesSearchQuery(folderEntry, 'unrelated')).toBe(false);
+  });
+});
+
+describe('wrappedCursorDelta', () => {
+  it('returns 0 when the list is empty', () => {
+    // Defensive — divide-by-zero math would yield NaN otherwise,
+    // which downstream `listScrollOffset` accumulation would then
+    // poison for the rest of the session.
+    expect(wrappedCursorDelta(0, 0)).toBe(0);
+    expect(wrappedCursorDelta(5, 0)).toBe(0);
+  });
+
+  it('passes short trips through unchanged', () => {
+    // A move that already fits inside the half-window doesn't
+    // need wrapping — wrapping is only useful for collapsing a
+    // big jump back to a "short visible step in the opposite
+    // direction".
+    expect(wrappedCursorDelta(1, 10)).toBe(1);
+    expect(wrappedCursorDelta(-1, 10)).toBe(-1);
+    expect(wrappedCursorDelta(3, 10)).toBe(3);
+    expect(wrappedCursorDelta(-4, 10)).toBe(-4);
+  });
+
+  it('collapses long forward jumps to a backward step (and vice versa)', () => {
+    // Last → first via a single down keypress: rawDelta = -(N-1).
+    // With N=10 that's -9, which should animate as +1 step
+    // forward (the visually shorter path around the ring).
+    expect(wrappedCursorDelta(9, 10)).toBe(-1);
+    expect(wrappedCursorDelta(-9, 10)).toBe(1);
+    expect(wrappedCursorDelta(8, 10)).toBe(-2);
+  });
+
+  it('preserves keypress direction for 2-element rings', () => {
+    // Regression: with 2 folders/songs in the list, pressing the
+    // down arrow used to wrap to -1 (slide cursor visually
+    // upward) instead of the expected +1. Pin the fix so a
+    // future tweak doesn't reintroduce the inversion.
+    expect(wrappedCursorDelta(1, 2)).toBe(1);
+    expect(wrappedCursorDelta(-1, 2)).toBe(-1);
+  });
+
+  it('preserves keypress direction for 3-element rings', () => {
+    // Same reasoning as the 2-element case — a +1 forward step
+    // is the natural interpretation of pressing down even when
+    // the ring is small.
+    expect(wrappedCursorDelta(1, 3)).toBe(1);
+    expect(wrappedCursorDelta(-1, 3)).toBe(-1);
+    // Cross-ring wrap (last → first via down): rawDelta = -2,
+    // shorter path is +1.
+    expect(wrappedCursorDelta(-2, 3)).toBe(1);
+    expect(wrappedCursorDelta(2, 3)).toBe(-1);
   });
 });
