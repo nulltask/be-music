@@ -80,13 +80,11 @@ import {
   PIXELS_PER_BEAT,
   PLAYFIELD,
   RED,
-  SPEC_BGA_CANVAS_SIZE,
   WHITE,
   YELLOW,
 } from './pixi-gameplay-constants.ts';
 import {
   buildBgaTimeline,
-  fitTextureWithinSpecCanvas,
   isVideoExtension,
   pickActiveBgaCue,
   pickActiveBgaKey,
@@ -2786,20 +2784,19 @@ export class PixiGameplayView {
       if (!texture) {
         return;
       }
-      // Aspect-preserving fit: emulate the BMS 256x256 spec canvas
-      // (`packages/player/src/bga.ts`'s `convertImageToSpecFrame` /
-      // `fitSizeWithinSpecCanvas`). The source image is centered
-      // horizontally and top-aligned within the spec square (no
-      // upscaling), then the whole square is stretched to the skin's
-      // `#DST_BGA` rectangle (w, h).
-      const fit = fitTextureWithinSpecCanvas(texture.width, texture.height);
-      const scaleX = w / SPEC_BGA_CANVAS_SIZE;
-      const scaleY = h / SPEC_BGA_CANVAS_SIZE;
+      // Stretch the BGA texture to fill the skin's `#DST_BGA`
+      // rectangle exactly. The previous version routed through a
+      // BMS 256×256 spec canvas (centred + top-aligned, no
+      // upscaling) which left non-256 sources covering only part
+      // of the DST and produced visible "letterbox" gaps inside
+      // the skin's BGA window. The LR2 reference video stretches
+      // the source straight to the skin rect, so that's what we
+      // emit here too.
       const sprite = new Sprite(texture);
       sprite.label = `bga/${layerName}[key=${key}]`;
-      sprite.position.set(x + fit.offsetX * scaleX, y + fit.offsetY * scaleY);
-      sprite.width = fit.width * scaleX;
-      sprite.height = fit.height * scaleY;
+      sprite.position.set(x, y);
+      sprite.width = w;
+      sprite.height = h;
       applyDestinationToSprite(sprite, dst);
       this.bgaLayer.addChild(sprite);
     };
