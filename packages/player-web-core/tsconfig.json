@@ -13,6 +13,7 @@
     { "path": "../chart" },
     { "path": "../json" },
     { "path": "../parser" },
-    { "path": "../player" }
+    { "path": "../player" },
+    { "path": "../utils" }
   ]
 }

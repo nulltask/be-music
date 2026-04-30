@@ -1,7 +1,8 @@
 import { unzipSync } from 'fflate';
 import { normalizeChannel } from '@be-music/json';
 import { parseBms, parseBmson } from '@be-music/parser';
-import { extractPlayableNotes } from '../../player/src/playable-notes.ts';
+import { extractPlayableNotes } from '@be-music/player/playable-notes';
+import { basename, dirname, normalizePath } from '@be-music/utils/core';
 import type {
   BrowserFolderNode,
   BrowserSongAssetSource,
@@ -9,8 +10,9 @@ import type {
   BrowserSongEntry,
   BrowserSongSourceKind,
 } from './types.ts';
+import { isChartFilePath } from './drop.ts';
 
-const CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
+export { basename, dirname, normalizePath } from '@be-music/utils/core';
 
 export class BrowserSongLibrary {
   public collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
@@ -136,7 +138,7 @@ export async function loadSongCollectionFromFiles(files: Iterable<File>): Promis
   const errors: BrowserSongCollection['errors'] = [];
   for (const source of sources) {
     for (const path of [...source.files.keys()].sort((left, right) => left.localeCompare(right, 'ja'))) {
-      if (!CHART_EXTENSIONS.has(extensionOf(path))) {
+      if (!isChartFilePath(path)) {
         continue;
       }
       try {
@@ -170,6 +172,12 @@ export async function loadSongCollectionFromFiles(files: Iterable<File>): Promis
   }
 
   return { sources, songs, errors };
+}
+
+export function describeSongCollection(collection: BrowserSongCollection): string {
+  return `${collection.songs.length} charts loaded${
+    collection.errors.length > 0 ? `, ${collection.errors.length} errors` : ''
+  }`;
 }
 
 function createZipSource(name: string, bytes: Uint8Array): BrowserSongAssetSource {
@@ -269,7 +277,7 @@ export function resolveChartAsset(
 ): Uint8Array | undefined {
   const base = dirname(chartPath);
   const normalized = normalizePath(assetPath);
-  const baseName = basenameOnly(normalized);
+  const baseName = basename(normalized);
   const candidates = [
     normalizePath(`${base}/${normalized}`),
     normalized,
@@ -336,11 +344,6 @@ function audioFallbackPaths(path: string): string[] {
   return candidates;
 }
 
-function basenameOnly(path: string): string {
-  const index = path.lastIndexOf('/');
-  return index >= 0 ? path.slice(index + 1) : path;
-}
-
 /**
  * Groups a flat song list into top-level folders for the select-screen
  * bar list. The grouping key is the **first segment** of each song's
@@ -374,34 +377,6 @@ function topLevelFolderLabel(song: BrowserSongEntry): string {
   }
   const slash = dir.indexOf('/');
   return slash >= 0 ? dir.slice(0, slash) : dir;
-}
-
-export function normalizePath(path: string): string {
-  const segments = path.replaceAll('\\', '/').split('/');
-  const normalizedSegments: string[] = [];
-  for (const segment of segments) {
-    if (!segment || segment === '.') {
-      continue;
-    }
-    if (segment === '..') {
-      normalizedSegments.pop();
-      continue;
-    }
-    normalizedSegments.push(segment);
-  }
-  return normalizedSegments.join('/');
-}
-
-export function dirname(path: string): string {
-  const normalizedPath = normalizePath(path);
-  const slashIndex = normalizedPath.lastIndexOf('/');
-  return slashIndex >= 0 ? normalizedPath.slice(0, slashIndex) : '';
-}
-
-export function basename(path: string): string {
-  const normalizedPath = normalizePath(path);
-  const slashIndex = normalizedPath.lastIndexOf('/');
-  return slashIndex >= 0 ? normalizedPath.slice(slashIndex + 1) : normalizedPath;
 }
 
 function basenameWithoutExtension(path: string): string {

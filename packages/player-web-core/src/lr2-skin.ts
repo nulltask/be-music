@@ -1,4 +1,4 @@
-import { dirname, basename, normalizePath } from './library.ts';
+import { basename, dirname, normalizePath } from '@be-music/utils/core';
 
 export interface Lr2ImageRect {
   imagePath: string;
@@ -1053,16 +1053,14 @@ export function loadLr2SkinFromSourceFiles(
   // and timers, so the resulting "skin" renders as a blank canvas. Cleaner
   // to return `undefined` and let the caller fall through to its built-in
   // panel than silently feed the wrong CSV through the parser.
-  const candidates =
-    filtered.length > 0 ? filtered : kind === 'play' ? lr2SkinPaths : [];
+  const candidates = filtered.length > 0 ? filtered : kind === 'play' ? lr2SkinPaths : [];
   const variant = kind === 'play' ? options.playVariant : undefined;
   const entryPath =
     candidates
       .slice()
       .sort(
         (left, right) =>
-          scoreSkinPath(left, kind, variant) - scoreSkinPath(right, kind, variant) ||
-          left.localeCompare(right, 'ja'),
+          scoreSkinPath(left, kind, variant) - scoreSkinPath(right, kind, variant) || left.localeCompare(right, 'ja'),
       )[0] ??
     // Last-resort `.csv` lookup mirrors the play-only "single-CSV bundle"
     // behaviour. Skipped for non-play kinds for the same reason as above.

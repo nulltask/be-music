@@ -8,6 +8,8 @@
     "declarationMap": false,
     "paths": {
       "@be-music/audio-renderer/triggers": ["./packages/audio-renderer/src/core/triggers.ts"],
+      "@be-music/player/playable-notes": ["./packages/player/src/playable-notes.ts"],
+      "@be-music/player/core/*": ["./packages/player/src/core/*.ts"],
       "@be-music/utils/core": ["./packages/utils/src/core.ts"],
       "@be-music/*": ["./packages/*/src/index.ts"]
     }

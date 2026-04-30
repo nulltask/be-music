@@ -4,13 +4,17 @@ import {
   PixiResultView,
   PixiSceneHost,
   PixiSongSelectView,
-  loadLr2SkinFromFiles,
+  describeSongCollection,
+  loadLr2ThemeSkinsFromFiles,
+  pickLr2PlaySkin,
   readDroppedFiles,
-  resolveChartPlayVariant,
   resolveSongSource,
+  splitDroppedSongAndThemeFiles,
+  summarizeLr2PlaySkins,
   type BrowserSongCollection,
   type BrowserSongEntry,
   type Lr2PlayVariant,
+  type Lr2PlaySkinMap,
   type Lr2Skin,
   type PixiGameplayResultData,
   type PixiSongSelectNavigation,
@@ -48,10 +52,10 @@ let collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
  * Per-variant play skins, keyed by `Lr2PlayVariant`. Loaded once at
  * theme-drop time so a DP chart can pick `playSkins['14']` while a
  * regular SP chart picks `playSkins['7']`. Falls back through
- * variants on a per-song basis (`pickPlaySkin`) when the requested
+ * variants on a per-song basis (`pickLr2PlaySkin`) when the requested
  * one isn't bundled — many themes ship only `play_7.lr2skin`.
  */
-const playSkins: Partial<Record<Lr2PlayVariant, Lr2Skin>> = {};
+const playSkins: Lr2PlaySkinMap = {};
 let selectSkin: Lr2Skin | undefined;
 /**
  * Result-screen LR2 skin, loaded once per theme drop. Mounted into
@@ -137,7 +141,7 @@ async function handleDrop(dataTransfer: DataTransfer): Promise<void> {
   // Split the drop into theme files and chart files so the user can drop
   // BOTH a BMS song folder AND the LR2 theme tree in a single gesture and
   // have each end up at the right loader.
-  const { themeFiles, songFiles } = splitDrop(files);
+  const { themeFiles, songFiles } = splitDroppedSongAndThemeFiles(files);
   // eslint-disable-next-line no-console
   console.log(`[drop] received ${files.length} file(s) · theme=${themeFiles.length} · songs=${songFiles.length}`);
   const tasks: Array<Promise<unknown>> = [];
@@ -153,9 +157,7 @@ async function handleDrop(dataTransfer: DataTransfer): Promise<void> {
     return;
   }
   await Promise.all(tasks);
-  const playSkinSummary = (Object.entries(playSkins) as Array<[Lr2PlayVariant, Lr2Skin]>)
-    .map(([variant, value]) => `${variant}K=${value.name}`)
-    .join(',');
+  const playSkinSummary = summarizeLr2PlaySkins(playSkins);
   // eslint-disable-next-line no-console
   console.log(
     `[drop] loaded · songs=${collection.songs.length} · errors=${collection.errors.length} · play-skins=${
@@ -172,7 +174,7 @@ async function handleDrop(dataTransfer: DataTransfer): Promise<void> {
     parts.push(`Theme: ${playSkinSummary}`);
   }
   if (collection.songs.length > 0) {
-    parts.push(describeLoadResult(collection));
+    parts.push(describeSongCollection(collection));
   }
   if (parts.length > 0) {
     status.textContent = parts.join('  •  ');
@@ -180,144 +182,29 @@ async function handleDrop(dataTransfer: DataTransfer): Promise<void> {
   await showSelect();
 }
 
-/**
- * Classifies dropped files into "LR2 theme" and "BMS chart" buckets.
- *
- * Strategy:
- *   1. Find every directory containing a chart file (`.bms` / `.bme` /
- *      `.bml` / `.pms` / `.bmson`). Those are **chart directories**.
- *   2. A file is "song" if it lives in any chart directory or one of
- *      its descendants — the BMS spec keeps WAV / BMP assets next to
- *      the chart, so this captures all needed song assets.
- *   3. Every remaining file is "theme" (skin CSV / PNG / TGA / fonts /
- *      etc.).
- *
- * The previous "any `.lr2skin` in a top-level folder → whole folder is
- * theme" rule misclassified the common case of dropping a single root
- * (`LR2files/`) that contains both `Theme/` and `Sound/`, routing
- * 100 % of files to the theme bucket. Driving the split off chart
- * directories instead handles arbitrary nestings — including the
- * standard layout where songs and theme share a root — because BMS
- * files always sit in their own per-song folder.
- */
-function splitDrop(files: File[]): { themeFiles: File[]; songFiles: File[] } {
-  const songDirPrefixes = new Set<string>();
-  for (const file of files) {
-    if (isChartFile(file)) {
-      const path = file.webkitRelativePath || file.name;
-      songDirPrefixes.add(directoryOf(path));
-    }
-  }
-  // No chart files found — treat the whole drop as theme material so a
-  // user dropping just a theme bundle doesn't end up with both buckets
-  // empty (and the chart bucket isn't useful anyway).
-  if (songDirPrefixes.size === 0) {
-    return { themeFiles: files, songFiles: [] };
-  }
-  const isSongPath = (path: string): boolean => {
-    for (const dir of songDirPrefixes) {
-      if (dir === '') return true; // chart at the drop root → everything is song
-      if (path === dir || path.startsWith(`${dir}/`)) return true;
-    }
-    return false;
-  };
-
-  const themeFiles: File[] = [];
-  const songFiles: File[] = [];
-  for (const file of files) {
-    const path = file.webkitRelativePath || file.name;
-    if (isSongPath(path)) {
-      songFiles.push(file);
-    } else {
-      themeFiles.push(file);
-    }
-  }
-  return { themeFiles, songFiles };
-}
-
-function isChartFile(file: File): boolean {
-  return /\.(bms|bme|bml|pms|bmson)$/iu.test(file.webkitRelativePath || file.name);
-}
-
-function directoryOf(path: string): string {
-  const slash = path.lastIndexOf('/');
-  return slash >= 0 ? path.slice(0, slash) : '';
-}
-
 async function loadSongs(files: File[]): Promise<void> {
   status.textContent = 'Loading songs...';
   collection = await library.loadFromFiles(files);
-  status.textContent = describeLoadResult(collection);
-}
-
-function describeLoadResult(result: BrowserSongCollection): string {
-  return `${result.songs.length} charts loaded${result.errors.length > 0 ? `, ${result.errors.length} errors` : ''}`;
+  status.textContent = describeSongCollection(collection);
 }
 
 async function loadTheme(files: File[]): Promise<void> {
   status.textContent = 'Loading LR2 theme...';
-  // Load every play-skin variant the bundle ships in parallel so a
-  // DP chart can pick `playSkins['14']` and a SP-7K chart picks
-  // `playSkins['7']` without re-parsing files mid-session. The
-  // loader returns `undefined` for variants that don't exist —
-  // we just skip those slots, and `pickPlaySkin` falls through to
-  // whatever IS available at play time.
-  const variants: Lr2PlayVariant[] = ['7', '14', '10', '5', '9'];
-  const [variantSkins, loadedSelectSkin, loadedResultSkin] = await Promise.all([
-    Promise.all(variants.map((v) => loadLr2SkinFromFiles(files, { kind: 'play', playVariant: v }))),
-    loadLr2SkinFromFiles(files, { kind: 'select' }),
-    // Result skin parsed alongside play / select so the chart-end
-    // transition doesn't have to wait on a fresh file scan. The
-    // loader returns `undefined` when the bundle has no result CSV.
-    loadLr2SkinFromFiles(files, { kind: 'result' }),
-  ]);
-  // Reset previous slots so an old DP skin doesn't leak into a new
-  // SP-only theme drop.
-  for (const v of variants) {
-    delete playSkins[v];
+  const loadedTheme = await loadLr2ThemeSkinsFromFiles(files);
+  for (const variant of Object.keys(playSkins) as Lr2PlayVariant[]) {
+    delete playSkins[variant];
   }
-  variants.forEach((v, i) => {
-    const result = variantSkins[i];
-    if (result) {
-      playSkins[v] = result;
-    }
-  });
-  selectSkin = loadedSelectSkin;
-  resultSkin = loadedResultSkin;
+  Object.assign(playSkins, loadedTheme.playSkins);
+  selectSkin = loadedTheme.selectSkin;
+  resultSkin = loadedTheme.resultSkin;
   const parts: string[] = [];
-  const playEntries = Object.entries(playSkins) as Array<[Lr2PlayVariant, Lr2Skin]>;
-  if (playEntries.length > 0) {
-    parts.push(
-      `Play: ${playEntries.map(([variant, value]) => `${variant}K=${value.name}`).join(' / ')}`,
-    );
+  const playSummary = summarizeLr2PlaySkins(playSkins, ' / ');
+  if (playSummary) {
+    parts.push(`Play: ${playSummary}`);
   }
   if (selectSkin) parts.push(`Select: ${selectSkin.name}`);
   if (resultSkin) parts.push(`Result: ${resultSkin.name}`);
   status.textContent = parts.length > 0 ? `Theme — ${parts.join(', ')}` : 'No LR2 skin found';
-}
-
-/**
- * Picks the best-matching `play_<variant>.lr2skin` for the given
- * song. Tries the exact variant first, then steps through sensible
- * fallbacks (DP→SP if no DP skin, 5K→7K, etc.). Returns
- * `undefined` only when no play skin was bundled at all.
- */
-function pickPlaySkin(song: BrowserSongEntry): Lr2Skin | undefined {
-  const target = resolveChartPlayVariant(song);
-  // Per-target fallback chain: most-specific first, then the
-  // closest-fitting alternates.
-  const fallbacks: Record<Lr2PlayVariant, Lr2PlayVariant[]> = {
-    '14': ['14', '10', '7', '5', '9'],
-    '10': ['10', '14', '7', '5', '9'],
-    '7': ['7', '14', '5', '10', '9'],
-    '5': ['5', '7', '14', '10', '9'],
-    '9': ['9', '7', '14', '5', '10'],
-  };
-  for (const variant of fallbacks[target]) {
-    const candidate = playSkins[variant];
-    if (candidate) return candidate;
-  }
-  return undefined;
 }
 
 async function showSelect(): Promise<void> {
@@ -373,11 +260,11 @@ async function playSong(song: BrowserSongEntry): Promise<void> {
   selectView?.setVisible(false);
   gameplayView?.dispose();
   // Pick the play skin variant matching the song's mode (SP-7K /
-  // DP-14K / etc.). With no DP skin in the bundle, `pickPlaySkin`
+  // DP-14K / etc.). With no DP skin in the bundle, `pickLr2PlaySkin`
   // falls back to whatever is available — typically the SP 7K
   // skin, which still renders the chart but with the "wrong" lane
   // layout for DP charts (no 2P-side rects).
-  const playSkin = pickPlaySkin(song);
+  const playSkin = pickLr2PlaySkin(playSkins, song);
   gameplayView = new PixiGameplayView({
     skin: playSkin,
     autoPlay: autoPlayInput.checked,

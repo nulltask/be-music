@@ -32,6 +32,7 @@
     "@be-music/json": "workspace:*",
     "@be-music/parser": "workspace:*",
     "@be-music/player": "workspace:*",
+    "@be-music/utils": "workspace:*",
     "fflate": "^0.8.2",
     "pixi.js": "^8.17.1"
   }

@@ -342,14 +342,17 @@ export class PixiResultView {
     // without user interaction. Timer 151 fires automatically once
     // the chart-draw window elapses; 152 needs an input.
     const startInput = this.options.skin?.timing.startInput ?? DEFAULT_STARTINPUT_MS;
-    window.setTimeout(() => {
-      if (this.disposed) return;
-      this.timerStartedAt.set(1, performance.now());
-      // The LR2 reference timeline starts the chart draw the moment
-      // input becomes available — keep the same anchor so the
-      // numbers panel slide-in lines up with the chrome animation.
-      this.timerStartedAt.set(150, performance.now());
-    }, Math.max(0, startInput));
+    window.setTimeout(
+      () => {
+        if (this.disposed) return;
+        this.timerStartedAt.set(1, performance.now());
+        // The LR2 reference timeline starts the chart draw the moment
+        // input becomes available — keep the same anchor so the
+        // numbers panel slide-in lines up with the chrome animation.
+        this.timerStartedAt.set(150, performance.now());
+      },
+      Math.max(0, startInput),
+    );
     window.setTimeout(
       () => {
         if (this.disposed) return;
@@ -559,10 +562,7 @@ export class PixiResultView {
    * index 1. (A future gauge-type selector would gate which index
    * actually renders.)
    */
-  private makeGaugeChartGraphic(
-    chart: Lr2GaugeChartElement,
-    dst: Lr2DestinationRect,
-  ): Graphics | undefined {
+  private makeGaugeChartGraphic(chart: Lr2GaugeChartElement, dst: Lr2DestinationRect): Graphics | undefined {
     const result = this.result;
     if (!result) return undefined;
     const { fieldWidth, fieldHeight, start, end } = chart.source;
@@ -600,10 +600,7 @@ export class PixiResultView {
    * - 1 = personal best (we don't persist scores yet → skipped).
    * - 2 = rival / target (no rival mode → skipped).
    */
-  private makeScoreChartGraphic(
-    chart: Lr2ScoreChartElement,
-    dst: Lr2DestinationRect,
-  ): Graphics | undefined {
+  private makeScoreChartGraphic(chart: Lr2ScoreChartElement, dst: Lr2DestinationRect): Graphics | undefined {
     const result = this.result;
     if (!result) return undefined;
     if (chart.source.index !== 0) return undefined;

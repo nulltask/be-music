@@ -72,6 +72,21 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       utilsApi.normalizeAsciiBase36Code(0x66);
     },
   });
+  define('utils.normalizePath', {
+    run: () => {
+      utilsApi.normalizePath(String.raw`Songs\\set/../chart/./main.bms`);
+    },
+  });
+  define('utils.dirname', {
+    run: () => {
+      utilsApi.dirname(String.raw`Songs\\chart/main.bms`);
+    },
+  });
+  define('utils.basename', {
+    run: () => {
+      utilsApi.basename(String.raw`Songs\\chart/main.bms`);
+    },
+  });
   define('utils.workerize', {
     run: () => {
       const worker = utilsApi.workerize(

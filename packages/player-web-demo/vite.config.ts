@@ -11,6 +11,11 @@ const workspaceAliases = [
     find: '@be-music/audio-renderer/triggers',
     replacement: resolve(repositoryDir, 'packages/audio-renderer/src/core/triggers.ts'),
   },
+  {
+    find: '@be-music/player/playable-notes',
+    replacement: resolve(repositoryDir, 'packages/player/src/playable-notes.ts'),
+  },
+  { find: '@be-music/player/core', replacement: resolve(repositoryDir, 'packages/player/src/core') },
   { find: '@be-music/utils/core', replacement: resolve(repositoryDir, 'packages/utils/src/core.ts') },
   { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },
   { find: '@be-music/json', replacement: resolve(repositoryDir, 'packages/json/src/index.ts') },

@@ -1,7 +1,7 @@
-import { createTimingResolver, type TimingResolver } from '@be-music/audio-renderer';
+import { createTimingResolver, type TimingResolver } from '@be-music/audio-renderer/triggers';
 import { isScrollChannel, sortEvents, type BeatResolver } from '@be-music/chart';
 import { normalizeChannel, normalizeObjectKey, type BeMusicJson } from '@be-music/json';
-import { findLastIndexAtOrBefore } from '@be-music/utils';
+import { findLastIndexAtOrBefore } from '@be-music/utils/core';
 
 export interface MeasureTimelinePoint {
   measure: number;

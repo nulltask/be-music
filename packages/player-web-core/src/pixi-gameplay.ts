@@ -9,21 +9,21 @@ import {
   applyJudgeToSummary,
   type JudgeKind,
   type ScoreSummary,
-} from '../../player/src/core/scoring.ts';
-import { resolveJudgeWindowsMs } from '../../player/src/core/judge-window.ts';
+} from '@be-music/player/core/scoring';
+import { resolveJudgeWindowsMs } from '@be-music/player/core/judge-window';
 import {
   applyGrooveGaugeJudge,
   createGrooveGaugeState,
   type GrooveGaugeJudgeKind,
   type GrooveGaugeState,
-} from '../../player/src/core/groove-gauge.ts';
+} from '@be-music/player/core/groove-gauge';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   createScrollTimeline,
   createSpeedTimeline,
-} from './chart-timing.ts';
-import { createScrollDistanceMapper, type ScrollDistanceMapper } from './scroll-distance.ts';
-import { extractTimedNotes, type TimedPlayableNote } from '../../player/src/playable-notes.ts';
+} from '@be-music/player/core/timeline';
+import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
+import { extractTimedNotes, type TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 import { normalizePath, resolveChartAsset, resolveChartAudioAsset } from './library.ts';
 import {
@@ -403,7 +403,7 @@ export class PixiGameplayView {
    * Falls back to plain beat-difference math when no scroll/speed
    * events are present.
    */
-  private scrollMapper: ScrollDistanceMapper | undefined;
+  private scrollMapper: ScrollDistanceMapperLike | undefined;
   private notes: RuntimeNote[] = [];
   private laneChannels: string[] = [];
   private laneX = new Map<string, { x: number; w: number; top: number; bottom: number }>();
@@ -911,7 +911,7 @@ export class PixiGameplayView {
     const speedTimeline = createSpeedTimeline(resolved, beatResolver);
     this.scrollMapper =
       scrollTimeline.length > 0 || speedTimeline.length > 0
-        ? createScrollDistanceMapper(scrollTimeline, speedTimeline)
+        ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
         : undefined;
     this.autoSampleTriggers = collectSampleTriggers(resolved, resolver, { inferBmsLnTypeWhenMissing: true })
       .filter((trigger) => !isPlayableInputChannel(trigger.channel))
@@ -1157,12 +1157,7 @@ export class PixiGameplayView {
     // timers (the `Play/fullcombo/...` skin graphic) read the
     // running elapsed time afterward to slide in / fade out per the
     // skin's keyframe chain.
-    if (
-      timer === 48 ||
-      timer === 49 ||
-      (timer >= 50 && timer <= 69) ||
-      (timer >= 100 && timer <= 119)
-    ) {
+    if (timer === 48 || timer === 49 || (timer >= 50 && timer <= 69) || (timer >= 100 && timer <= 119)) {
       return this.timerStartedAt.has(timer);
     }
     // Long-note hold timers (70-89) are not yet driven; treat as inactive so
@@ -1340,9 +1335,7 @@ export class PixiGameplayView {
     // Use the control-flow-resolved chart so #IF-gated #WAVxx
     // declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? this.song.chart;
-    const wavPaths = Object.values(chart.resources.wav).filter(
-      (path): path is string => typeof path === 'string',
-    );
+    const wavPaths = Object.values(chart.resources.wav).filter((path): path is string => typeof path === 'string');
     await Promise.all(
       wavPaths.slice(0, 256).map(async (path) => {
         if (this.disposed || !this.source || !this.song || !this.audioContext) return;
@@ -2390,11 +2383,7 @@ export class PixiGameplayView {
    * `seconds - cue.seconds` directly because BMS BGA semantics are
    * "start playing this video from t=0 the moment the cue fires".
    */
-  private syncBgaVideo(
-    track: 'base' | 'layer',
-    cue: BgaCue | undefined,
-    seconds: number,
-  ): void {
+  private syncBgaVideo(track: 'base' | 'layer', cue: BgaCue | undefined, seconds: number): void {
     const previous = this.bgaActiveVideos[track];
     const key = cue?.bmpKey;
     const handle = key ? this.bgaVideos.get(key) : undefined;
@@ -3205,9 +3194,7 @@ export class PixiGameplayView {
     // charts only have `index === 0` so this is a one-line loop;
     // DP charts add `index === 1` for the 2P-side strip and we
     // draw both at the same beat boundaries.
-    const skinLines = (skin?.measureLines ?? []).filter((entry) =>
-      this.textures.has(entry.source.imagePath),
-    );
+    const skinLines = (skin?.measureLines ?? []).filter((entry) => this.textures.has(entry.source.imagePath));
     if (skinLines.length > 0) {
       const beatDistance = this.scrollMapper
         ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)

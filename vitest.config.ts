@@ -23,6 +23,8 @@ const workspaceAliases = [
     find: '@be-music/audio-renderer/triggers',
     replacement: resolve(rootDir, 'packages/audio-renderer/src/core/triggers.ts'),
   },
+  { find: '@be-music/player/playable-notes', replacement: resolve(rootDir, 'packages/player/src/playable-notes.ts') },
+  { find: '@be-music/player/core', replacement: resolve(rootDir, 'packages/player/src/core') },
   { find: '@be-music/utils/core', replacement: resolve(rootDir, 'packages/utils/src/core.ts') },
   ...workspacePackages.map((name) => ({
     find: `@be-music/${name}`,

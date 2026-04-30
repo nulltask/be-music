@@ -203,4 +203,32 @@ export function normalizeAsciiBase36Code(code: number): number {
   return -1;
 }
 
+export function normalizePath(path: string): string {
+  const segments = path.replaceAll('\\', '/').split('/');
+  const normalizedSegments: string[] = [];
+  for (const segment of segments) {
+    if (!segment || segment === '.') {
+      continue;
+    }
+    if (segment === '..') {
+      normalizedSegments.pop();
+      continue;
+    }
+    normalizedSegments.push(segment);
+  }
+  return normalizedSegments.join('/');
+}
+
+export function dirname(path: string): string {
+  const normalizedPath = normalizePath(path);
+  const slashIndex = normalizedPath.lastIndexOf('/');
+  return slashIndex >= 0 ? normalizedPath.slice(0, slashIndex) : '';
+}
+
+export function basename(path: string): string {
+  const normalizedPath = normalizePath(path);
+  const slashIndex = normalizedPath.lastIndexOf('/');
+  return slashIndex >= 0 ? normalizedPath.slice(slashIndex + 1) : normalizedPath;
+}
+
 export * from './abort.ts';

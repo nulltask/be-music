@@ -1,9 +1,4 @@
 {
   "extends": "../../tsconfig.typecheck.json",
-  "include": [
-    "src/**/*.ts",
-    "../player/src/playable-notes.ts",
-    "../player/src/core/scoring.ts",
-    "../player/src/core/judge-window.ts"
-  ]
+  "include": ["src/**/*.ts"]
 }

@@ -3,11 +3,14 @@ import { describe, expect, test } from 'vitest';
 import {
   clamp,
   clampSignedUnit,
+  basename,
   compareFractions,
+  dirname,
   findLastIndexAtOrBefore,
   findLastIndexBefore,
   gcd,
   lcm,
+  normalizePath,
   normalizeAsciiBase36Code,
   normalizeFractionNumerator,
   normalizeNonNegativeInt,
@@ -125,5 +128,13 @@ describe('utils', () => {
     expect(normalizeAsciiBase36Code(0x61)).toBe(0x41);
     expect(normalizeAsciiBase36Code(0x7a)).toBe(0x5a);
     expect(normalizeAsciiBase36Code(0x2d)).toBe(-1);
+  });
+
+  test('normalizePath/dirname/basename: normalizes browser and archive-style paths', () => {
+    expect(normalizePath(String.raw`Songs\\set/../chart/./main.bms`)).toBe('Songs/chart/main.bms');
+    expect(normalizePath('/root//song/../theme/')).toBe('root/theme');
+    expect(dirname(String.raw`root\\song/main.bms`)).toBe('root/song');
+    expect(dirname('main.bms')).toBe('');
+    expect(basename(String.raw`root\\song/main.bms`)).toBe('main.bms');
   });
 });

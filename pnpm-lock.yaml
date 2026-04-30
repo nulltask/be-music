@@ -167,6 +167,9 @@ importers:
       '@be-music/player':
         specifier: workspace:*
         version: link:../player
+      '@be-music/utils':
+        specifier: workspace:*
+        version: link:../utils
       fflate:
         specifier: ^0.8.2
         version: 0.8.2
