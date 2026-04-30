@@ -419,6 +419,25 @@ export class PixiGameplayView {
   private lastJudgeUntil = 0;
   private frame: number | undefined;
   private readonly pressedChannels = new Set<string>();
+  /**
+   * In-flight long-note holds keyed by channel. Populated when the
+   * head of an LN is judged (the press lands inside the note's
+   * judge window) and cleared either on release or when the chart
+   * times out the hold (see `finalizeOverheldLongNotes`). Until
+   * the tail is finalized the head's `applyJudgeToSummary` /
+   * `applyGaugeDelta` calls are deferred — earlier the gameplay
+   * committed the head verdict on press, which made every LN
+   * effectively a single-tap note and ignored the release timing
+   * entirely.
+   */
+  private readonly activeLongNotes = new Map<
+    string,
+    {
+      readonly note: RuntimeNote;
+      readonly headJudge: JudgeKind;
+      readonly headSignedDeltaMs: number;
+    }
+  >();
   private readonly bombStartedAt = new Map<string, number>();
   private bombTexture: Texture | undefined;
   private readonly runtimeOps = new Set<number>();
@@ -855,6 +874,10 @@ export class PixiGameplayView {
     this.resolvedChart = resolved;
     const extracted = extractTimedNotes(resolved, { includeLandmine: true, inferBmsLnTypeWhenMissing: true });
     this.notes = extracted.playableNotes.map((note) => ({ ...note, hit: false }));
+    // Drop any held LN state from a previous song / restart. Without
+    // this the next chart's first release on a cleared channel would
+    // try to finalize the prior chart's hold and double-commit.
+    this.activeLongNotes.clear();
     this.laneChannels = resolveLaneChannels(this.notes);
     this.score = createEmptyScore(this.notes.filter((note) => isPlayableInputChannel(note.channel)).length);
     this.tracker = createScoreTracker();
@@ -1568,6 +1591,13 @@ export class PixiGameplayView {
       // Don't delete bombStartedAt here -- let renderBombs decide when the
       // animation has finished. Otherwise releasing the key cuts off the
       // bomb flash mid-animation.
+      // Manual play: a release on a channel currently holding an LN
+      // is the trigger to finalize the tail judgement. Auto-play
+      // never reaches this branch (the auto-judge path handles its
+      // own LN end timing).
+      if (!this.options.autoPlay) {
+        this.finalizeActiveLongNote(channel, this.currentSeconds());
+      }
     }
   };
 
@@ -1646,6 +1676,35 @@ export class PixiGameplayView {
     const delta = Math.abs(signedDeltaMs);
     const judge: JudgeKind =
       delta <= windows.pgreat ? 'PERFECT' : delta <= windows.great ? 'GREAT' : delta <= windows.good ? 'GOOD' : 'BAD';
+    // Always play the keysound + bomb-flash on press so the player
+    // gets immediate audio / visual feedback even though the score
+    // commit might be deferred for an LN.
+    this.playSample(note);
+    if (judge !== 'BAD') {
+      // LR2 bomb timer (50-69) fires on GREAT-or-better. Treat any non-BAD as
+      // a "good enough" judgement and trigger the bomb animation on the lane.
+      this.triggerBomb(channel);
+    }
+    if (isLongNote(note)) {
+      // LN: defer scoreboard / gauge / publish until the tail is
+      // finalized in `finalizeActiveLongNote`. The note is marked
+      // `hit = true` so subsequent presses on this channel target
+      // the next note rather than re-judging the same head.
+      this.activeLongNotes.set(channel, { note, headJudge: judge, headSignedDeltaMs: signedDeltaMs });
+      return;
+    }
+    this.commitFinalJudge(judge, signedDeltaMs, seconds, channel);
+  }
+
+  /**
+   * Commits a finalized note judgement to every downstream sink:
+   * scoreboard counter, FAST/SLOW classifier, gauge delta, and the
+   * per-judge UI signal (`publishJudge`). Used by both the regular
+   * single-note path and the LN finalize-on-release path so the
+   * commit semantics stay consistent regardless of how the verdict
+   * was reached.
+   */
+  private commitFinalJudge(judge: JudgeKind, signedDeltaMs: number, seconds: number, channel: string): void {
     applyJudgeToSummary(this.score, judge, this.tracker);
     if (judge === 'GREAT' || judge === 'GOOD') {
       if (signedDeltaMs < 0) this.fastCount += 1;
@@ -1653,11 +1712,91 @@ export class PixiGameplayView {
     }
     this.applyGaugeDelta(judge);
     this.publishJudge(judge, seconds, channel);
-    this.playSample(note);
-    if (judge !== 'BAD') {
-      // LR2 bomb timer (50-69) fires on GREAT-or-better. Treat any non-BAD as
-      // a "good enough" judgement and trigger the bomb animation on the lane.
-      this.triggerBomb(channel);
+  }
+
+  /**
+   * Finalizes the LN currently held on `channel` (if any) using the
+   * release timing relative to the note's `endSeconds`. Behaviour
+   * branches on `note.longNoteMode`:
+   *
+   * - **Mode 1** (BMS `#LNOBJ` default) — tail auto-completes on
+   *   release within the bad-window of `endSeconds`. Releasing
+   *   significantly early downgrades the verdict to BAD. Late
+   *   release after `endSeconds` is fine; the head verdict stands.
+   * - **Mode 2 / 3** — tail timing matters. Release delta vs
+   *   `endSeconds` produces a tail judgement on the same window
+   *   table the head uses; the final commit is the worst severity
+   *   between head and tail (LR2 standard).
+   *
+   * If the matching LN was already finalized (e.g. by chart-end
+   * timeout via {@link finalizeOverheldLongNotes}) this is a no-op.
+   */
+  private finalizeActiveLongNote(channel: string, seconds: number): void {
+    const active = this.activeLongNotes.get(channel);
+    if (!active || !this.song) {
+      return;
+    }
+    this.activeLongNotes.delete(channel);
+    const { note, headJudge, headSignedDeltaMs } = active;
+    const endSeconds = note.endSeconds!;
+    const windows = resolveJudgeWindowsMs(this.song.chart);
+    const mode: 1 | 2 | 3 = note.longNoteMode ?? 1;
+    if (mode === 1) {
+      // Mode 1: tail auto-completes — only penalise *significant*
+      // early release. Within the bad window of `endSeconds` (or
+      // any time after) the head verdict carries.
+      const earlyByMs = (endSeconds - seconds) * 1000;
+      if (earlyByMs > windows.bad) {
+        this.commitFinalJudge('BAD', headSignedDeltaMs, seconds, channel);
+      } else {
+        this.commitFinalJudge(headJudge, headSignedDeltaMs, seconds, channel);
+      }
+      return;
+    }
+    // Mode 2 / 3: tail judgement based on release-vs-end delta.
+    const tailSignedDeltaMs = (seconds - endSeconds) * 1000;
+    const tailDelta = Math.abs(tailSignedDeltaMs);
+    const tailJudge: JudgeKind =
+      tailDelta <= windows.pgreat
+        ? 'PERFECT'
+        : tailDelta <= windows.great
+          ? 'GREAT'
+          : tailDelta <= windows.good
+            ? 'GOOD'
+            : tailDelta <= windows.bad
+              ? 'BAD'
+              : 'POOR';
+    // Combine: pick the worst severity (LR2 convention). On a tie
+    // we prefer the verdict whose delta is larger so FAST/SLOW
+    // classification reflects the genuinely-off side of the hold.
+    const finalJudge =
+      judgeSeverity(headJudge) >= judgeSeverity(tailJudge)
+        ? headJudge
+        : tailJudge;
+    const finalSignedDeltaMs = finalJudge === headJudge ? headSignedDeltaMs : tailSignedDeltaMs;
+    this.commitFinalJudge(finalJudge, finalSignedDeltaMs, seconds, channel);
+  }
+
+  /**
+   * Auto-finalizes any active LN whose `endSeconds + bad-window`
+   * has passed without a release event. Maps to "user kept holding
+   * past the end" which LR2 treats as a clean tail (head verdict
+   * carries) so the chart can complete cleanly. Without this the
+   * `checkChartEnd` "every note hit" guard would be satisfied (the
+   * head set `hit = true`) but the LN's score would never reach
+   * the scoreboard.
+   */
+  private finalizeOverheldLongNotes(seconds: number): void {
+    if (this.activeLongNotes.size === 0 || !this.song) {
+      return;
+    }
+    const windows = resolveJudgeWindowsMs(this.song.chart);
+    const graceSec = windows.bad / 1000;
+    for (const [channel, active] of this.activeLongNotes) {
+      if (active.note.endSeconds! + graceSec < seconds) {
+        this.activeLongNotes.delete(channel);
+        this.commitFinalJudge(active.headJudge, active.headSignedDeltaMs, seconds, channel);
+      }
     }
   }
 
@@ -1698,8 +1837,17 @@ export class PixiGameplayView {
       this.perf.time('autoJudge', () => {
         if (this.options.autoPlay) {
           this.autoJudge(seconds);
+          // Drain LN holds whose tail timing has been reached. Fires
+          // the deferred PERFECT verdict + combo increment + lane
+          // laser release exactly at `endSeconds` so the visual
+          // completion lines up with the score event.
+          this.autoFinalizeLongNotes(seconds);
         } else {
           this.autoMiss(seconds);
+          // Manual play safety net: auto-finalise LNs the user
+          // forgot to release. Uses the head verdict (treats
+          // continued hold past end as a clean tail).
+          this.finalizeOverheldLongNotes(seconds);
         }
       });
       this.perf.time('autoSamples', () => this.scheduleAutoSamples(seconds));
@@ -1888,9 +2036,18 @@ export class PixiGameplayView {
   /**
    * Auto-play loop: when enabled, every playable note is judged as PERFECT
    * exactly at its scheduled time. Background lane sounds (`scheduleAutoSamples`)
-   * still handle non-input channels separately. We also briefly fire the
-   * lane's key-on timer so the LR2 skin's lane laser + key-press graphics
-   * flash on every auto-judged note, matching the reference video.
+   * still handle non-input channels separately.
+   *
+   * Long notes are NOT judged on the head; instead the head time
+   * marks the LN as actively held (sample + bomb + sustained
+   * key-on timer for the visual lane laser) and the actual
+   * scoreboard / gauge / combo commit is deferred to
+   * {@link autoFinalizeLongNotes} when chart-time crosses
+   * `endSeconds`. This mirrors what real LR2 does (and what
+   * `@be-music/player`'s engine does via `pendingAutoLongNotes`):
+   * one judgement event per LN, fired at the tail timing so the
+   * combo pulse aligns with the LN visually completing rather
+   * than at its start.
    */
   private autoJudge(seconds: number): void {
     for (const note of this.notes) {
@@ -1906,12 +2063,50 @@ export class PixiGameplayView {
         continue;
       }
       note.hit = true;
-      applyJudgeToSummary(this.score, 'PERFECT', this.tracker);
-      this.applyGaugeDelta('PERFECT');
-      this.publishJudge('PERFECT', seconds, note.channel);
       this.playSample(note);
       this.triggerBomb(note.channel);
+      if (isLongNote(note)) {
+        // Defer the verdict — the tail timing is what the player
+        // actually sees as the LN body finishing. Hold the lane
+        // laser on (sustained key-on timer, no auto-fade) until
+        // `autoFinalizeLongNotes` releases it at endSeconds.
+        this.activeLongNotes.set(note.channel, {
+          note,
+          headJudge: 'PERFECT',
+          headSignedDeltaMs: 0,
+        });
+        this.startKeyOnTimer(note.channel);
+        continue;
+      }
+      this.commitFinalJudge('PERFECT', 0, seconds, note.channel);
       this.flashKeyOnTimer(note.channel);
+    }
+  }
+
+  /**
+   * Drains active LN holds whose tail timing has been reached
+   * during autoplay. Each finalization commits PERFECT (head
+   * PERFECT + tail PERFECT, signedDelta 0 because auto-release
+   * is sample-accurate), increments the combo by one, and
+   * releases the lane laser. Mirrors `pendingAutoLongNotes` /
+   * `drainPendingAutoLongNotes` in the standalone engine.
+   *
+   * Distinct from {@link finalizeOverheldLongNotes}: that one
+   * fires only after the bad-window grace expires (manual-play
+   * safety net) and uses the **head** verdict; here we fire
+   * exactly at endSeconds with a clean PERFECT.
+   */
+  private autoFinalizeLongNotes(seconds: number): void {
+    if (this.activeLongNotes.size === 0) {
+      return;
+    }
+    for (const [channel, active] of this.activeLongNotes) {
+      const endSeconds = active.note.endSeconds!;
+      if (endSeconds <= seconds) {
+        this.activeLongNotes.delete(channel);
+        this.commitFinalJudge('PERFECT', 0, endSeconds, channel);
+        this.stopKeyOnTimer(channel);
+      }
     }
   }
 
@@ -3418,5 +3613,36 @@ export class PixiGameplayView {
     const kind = resolveJudgeSkinKind(this.lastJudge);
     const elements = kind ? skin.judges[kind] : undefined;
     return Boolean(elements?.length);
+  }
+}
+
+/**
+ * Returns whether `note` carries a finite long-note tail. Mirrors
+ * the engine package's `resolveLongNoteEndSeconds`: a missing /
+ * non-finite / non-positive `endSeconds` collapses to "single
+ * tap", and the judge / finalize logic falls back to single-note
+ * semantics for it.
+ */
+function isLongNote(note: RuntimeNote): boolean {
+  return typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
+}
+
+/**
+ * 0..4 severity ordering used by `finalizeActiveLongNote` to pick
+ * the worst verdict between an LN's head and tail (matches the
+ * engine's `resolveJudgeSeverity`). Higher = worse.
+ */
+function judgeSeverity(judge: JudgeKind): number {
+  switch (judge) {
+    case 'PERFECT':
+      return 0;
+    case 'GREAT':
+      return 1;
+    case 'GOOD':
+      return 2;
+    case 'BAD':
+      return 3;
+    case 'POOR':
+      return 4;
   }
 }
