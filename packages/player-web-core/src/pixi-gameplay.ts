@@ -1293,9 +1293,19 @@ export class PixiGameplayView {
     // Use the control-flow-resolved chart so #IF-gated #WAVxx
     // declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? this.song.chart;
+    // BMS spec: `#WAVxx` slot index is base-36 (`00..ZZ`), so a chart
+    // can declare up to 1296 unique samples. An earlier revision
+    // capped this preload at the first 256 entries, which silently
+    // dropped audio for any sample referenced by a slot 100+ on
+    // dense charts (a typical "Lunatic Crave"-tier chart easily
+    // hits 500+ unique WAVs). The parser already enforces the
+    // spec ceiling, so iterating every declared path here is safe;
+    // memory on a fully-populated chart is at most ~1300 decoded
+    // buffers, dominated by the underlying PCM rather than any
+    // per-entry overhead.
     const wavPaths = Object.values(chart.resources.wav).filter((path): path is string => typeof path === 'string');
     await Promise.all(
-      wavPaths.slice(0, 256).map(async (path) => {
+      wavPaths.map(async (path) => {
         if (this.disposed || !this.source || !this.song || !this.audioContext) return;
         // Audio-aware asset lookup: charts almost universally declare
         // `.wav` paths but archives often ship `.ogg` / `.mp3`. Try
