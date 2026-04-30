@@ -1,6 +1,6 @@
 import { normalizePath, resolveChartPlayVariant } from './library.ts';
 import { loadLr2SkinFromFiles, type Lr2PlayVariant, type Lr2Skin } from './lr2-skin.ts';
-import type { BrowserSongEntry } from './types.ts';
+import type { BrowserSongEntry, LoadProgressCallback } from './types.ts';
 
 export const LR2_PLAY_VARIANTS = ['7', '14', '10', '5', '9'] as const satisfies readonly Lr2PlayVariant[];
 
@@ -63,20 +63,56 @@ const PLAY_SKIN_FALLBACKS: Record<Lr2PlayVariant, readonly Lr2PlayVariant[]> = {
   '9': ['9', '7', '14', '5', '10'],
 };
 
-export async function loadLr2ThemeSkinsFromFiles(files: Iterable<File>): Promise<Lr2ThemeSkins> {
+export interface LoadLr2ThemeOptions {
+  /**
+   * Optional progress hook fired as each skin / BGM / system-sound
+   * sub-task lands. Useful for the host UI to advance a determinate
+   * progress bar — without this, theme loading on a heavy LR2
+   * bundle (multiple play variants + BGM + ~5 system effects) just
+   * shows a static "Loading…" for several seconds while
+   * `decodeAudioData` chews through every audio file.
+   *
+   * The total is the count of internal sub-tasks (play variants +
+   * select + result + select-bgm + decide-bgm + 3 system sounds).
+   * Sub-tasks fire in parallel; the callback receives the running
+   * "completed so far" tally.
+   */
+  onProgress?: LoadProgressCallback;
+}
+
+export async function loadLr2ThemeSkinsFromFiles(
+  files: Iterable<File>,
+  options: LoadLr2ThemeOptions = {},
+): Promise<Lr2ThemeSkins> {
   const sourceFiles = [...files];
+  const onProgress = options.onProgress;
+  // Total = play variants (one per LR2_PLAY_VARIANTS entry) +
+  // select skin + result skin + 2 theme BGMs + 3 system sounds.
+  // Hard-coding it to the structural shape below keeps the count
+  // honest if anyone adds another sub-task later (compile breaks
+  // when the awaited tuple disagrees with this constant).
+  const totalSubTasks = LR2_PLAY_VARIANTS.length + 7;
+  let completed = 0;
+  onProgress?.({ phase: 'theme', current: 0, total: totalSubTasks });
+  const track = <T>(label: string, task: Promise<T>): Promise<T> =>
+    task.then((value) => {
+      completed += 1;
+      onProgress?.({ phase: 'theme', current: completed, total: totalSubTasks, label });
+      return value;
+    });
+  const playSkinTasks = LR2_PLAY_VARIANTS.map((variant) =>
+    track(`play/${variant}K`, loadLr2SkinFromFiles(sourceFiles, { kind: 'play', playVariant: variant })),
+  );
   const [variantSkins, selectSkin, resultSkin, selectBgm, decideBgm, cursorMove, folderOpen, folderClose] =
     await Promise.all([
-      Promise.all(
-        LR2_PLAY_VARIANTS.map((variant) => loadLr2SkinFromFiles(sourceFiles, { kind: 'play', playVariant: variant })),
-      ),
-      loadLr2SkinFromFiles(sourceFiles, { kind: 'select' }),
-      loadLr2SkinFromFiles(sourceFiles, { kind: 'result' }),
-      loadLr2ThemeBgm(sourceFiles, 'select'),
-      loadLr2ThemeBgm(sourceFiles, 'decide'),
-      loadLr2SystemSound(sourceFiles, 'scratch'),
-      loadLr2SystemSound(sourceFiles, 'f-open'),
-      loadLr2SystemSound(sourceFiles, 'f-close'),
+      Promise.all(playSkinTasks),
+      track('select', loadLr2SkinFromFiles(sourceFiles, { kind: 'select' })),
+      track('result', loadLr2SkinFromFiles(sourceFiles, { kind: 'result' })),
+      track('bgm/select', loadLr2ThemeBgm(sourceFiles, 'select')),
+      track('bgm/decide', loadLr2ThemeBgm(sourceFiles, 'decide')),
+      track('sound/scratch', loadLr2SystemSound(sourceFiles, 'scratch')),
+      track('sound/f-open', loadLr2SystemSound(sourceFiles, 'f-open')),
+      track('sound/f-close', loadLr2SystemSound(sourceFiles, 'f-close')),
     ]);
 
   const playSkins: Lr2PlaySkinMap = {};
@@ -200,10 +236,7 @@ export function pickLr2SystemSoundFile(files: readonly File[], stem: string): Fi
  * `f-open`, `f-close`) from the dropped bundle. Returns
  * `undefined` when the theme doesn't ship that effect.
  */
-export async function loadLr2SystemSound(
-  files: Iterable<File>,
-  stem: string,
-): Promise<Lr2ThemeBgm | undefined> {
+export async function loadLr2SystemSound(files: Iterable<File>, stem: string): Promise<Lr2ThemeBgm | undefined> {
   const match = pickLr2SystemSoundFile([...files], stem);
   if (!match) return undefined;
   const buffer = await match.arrayBuffer();

@@ -210,38 +210,26 @@ describe('computeResultOps', () => {
   describe('key mode', () => {
     it('sets 160 (7K) and 400 (7+14K) for an SP-7K chart', () => {
       // 7K means the chart uses key 6/7 (channels 18 / 19).
-      const ops = computeResultOps(
-        makeResult({ channels: ['11', '12', '13', '14', '15', '18', '19'] }),
-        makeSkin(),
-      );
+      const ops = computeResultOps(makeResult({ channels: ['11', '12', '13', '14', '15', '18', '19'] }), makeSkin());
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_7)).toBe(true);
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_7_14)).toBe(true);
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_5)).toBe(false);
     });
 
     it('sets 161 (5K) and 402 (5+10K) for an SP-5K chart (no channel 18/19)', () => {
-      const ops = computeResultOps(
-        makeResult({ channels: ['11', '12', '13', '14', '15'] }),
-        makeSkin(),
-      );
+      const ops = computeResultOps(makeResult({ channels: ['11', '12', '13', '14', '15'] }), makeSkin());
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_5)).toBe(true);
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_5_10)).toBe(true);
     });
 
     it('sets 162 (14K) and 400 for a DP-14K chart (#PLAYER 3 + 6/7 keys)', () => {
-      const ops = computeResultOps(
-        makeResult({ player: 3, channels: ['11', '18', '21', '28'] }),
-        makeSkin(),
-      );
+      const ops = computeResultOps(makeResult({ player: 3, channels: ['11', '18', '21', '28'] }), makeSkin());
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_14)).toBe(true);
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_7_14)).toBe(true);
     });
 
     it('sets 163 (10K) and 402 for a DP-10K chart (#PLAYER 3, no 6/7)', () => {
-      const ops = computeResultOps(
-        makeResult({ player: 3, channels: ['11', '21'] }),
-        makeSkin(),
-      );
+      const ops = computeResultOps(makeResult({ player: 3, channels: ['11', '21'] }), makeSkin());
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_10)).toBe(true);
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_5_10)).toBe(true);
     });

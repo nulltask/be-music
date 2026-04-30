@@ -9,36 +9,57 @@ import type {
   BrowserSongCollection,
   BrowserSongEntry,
   BrowserSongSourceKind,
+  LoadProgressCallback,
 } from './types.ts';
 import { isChartFilePath } from './drop.ts';
 import { lookupBytesCaseInsensitive } from './file-lookup.ts';
 
 export { basename, dirname, normalizePath } from '@be-music/utils/core';
 
+/**
+ * Optional progress hook for the dropped-folder loaders. When
+ * supplied, the loader fires the callback as it walks through the
+ * `enumerating` / `reading` / `parsing` phases. UIs can use this
+ * to render a determinate progress bar so a multi-thousand-file
+ * drop doesn't look like a frozen page.
+ */
+export interface LoadProgressOptions {
+  onProgress?: LoadProgressCallback;
+}
+
 export class BrowserSongLibrary {
   public collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
 
-  public async loadFromFiles(files: Iterable<File>): Promise<BrowserSongCollection> {
-    this.collection = await loadSongCollectionFromFiles(files);
+  public async loadFromFiles(files: Iterable<File>, options: LoadProgressOptions = {}): Promise<BrowserSongCollection> {
+    this.collection = await loadSongCollectionFromFiles(files, options);
     return this.collection;
   }
 
-  public async loadFromDrop(dataTransfer: DataTransfer): Promise<BrowserSongCollection> {
-    this.collection = await loadSongCollectionFromDrop(dataTransfer);
+  public async loadFromDrop(
+    dataTransfer: DataTransfer,
+    options: LoadProgressOptions = {},
+  ): Promise<BrowserSongCollection> {
+    this.collection = await loadSongCollectionFromDrop(dataTransfer, options);
     return this.collection;
   }
 }
 
-export async function loadSongCollectionFromDrop(dataTransfer: DataTransfer): Promise<BrowserSongCollection> {
-  const files = await collectFilesFromDataTransfer(dataTransfer);
-  return loadSongCollectionFromFiles(files);
+export async function loadSongCollectionFromDrop(
+  dataTransfer: DataTransfer,
+  options: LoadProgressOptions = {},
+): Promise<BrowserSongCollection> {
+  const files = await collectFilesFromDataTransfer(dataTransfer, options.onProgress);
+  return loadSongCollectionFromFiles(files, options);
 }
 
-export async function readDroppedFiles(dataTransfer: DataTransfer): Promise<File[]> {
-  return collectFilesFromDataTransfer(dataTransfer);
+export async function readDroppedFiles(dataTransfer: DataTransfer, options: LoadProgressOptions = {}): Promise<File[]> {
+  return collectFilesFromDataTransfer(dataTransfer, options.onProgress);
 }
 
-async function collectFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<File[]> {
+async function collectFilesFromDataTransfer(
+  dataTransfer: DataTransfer,
+  onProgress?: LoadProgressCallback,
+): Promise<File[]> {
   const items = dataTransfer.items;
   if (items && items.length > 0) {
     const entries: FileSystemEntry[] = [];
@@ -50,22 +71,38 @@ async function collectFilesFromDataTransfer(dataTransfer: DataTransfer): Promise
     }
     if (entries.length > 0) {
       const collected: File[] = [];
+      // Total is unknown while we're still walking the FileSystem
+      // tree (the FileSystemEntry API doesn't expose a directory's
+      // file count up-front), so we report `total: -1` and let the
+      // host UI show an indeterminate "Collecting…" indicator.
+      onProgress?.({ phase: 'enumerating', current: 0, total: -1 });
       for (const entry of entries) {
-        await collectFilesFromEntry(entry, '', collected);
+        await collectFilesFromEntry(entry, '', collected, onProgress);
       }
+      onProgress?.({ phase: 'enumerating', current: collected.length, total: collected.length });
       return collected;
     }
   }
-  return dataTransfer.files ? [...dataTransfer.files] : [];
+  const fallback = dataTransfer.files ? [...dataTransfer.files] : [];
+  if (fallback.length > 0) {
+    onProgress?.({ phase: 'enumerating', current: fallback.length, total: fallback.length });
+  }
+  return fallback;
 }
 
-async function collectFilesFromEntry(entry: FileSystemEntry, prefix: string, files: File[]): Promise<void> {
+async function collectFilesFromEntry(
+  entry: FileSystemEntry,
+  prefix: string,
+  files: File[],
+  onProgress?: LoadProgressCallback,
+): Promise<void> {
   if (entry.isFile) {
     const file = await new Promise<File>((resolve, reject) => {
       (entry as FileSystemFileEntry).file(resolve, reject);
     });
     const relativePath = prefix ? `${prefix}${file.name}` : file.name;
     files.push(withRelativePath(file, relativePath));
+    onProgress?.({ phase: 'enumerating', current: files.length, total: -1, label: relativePath });
     return;
   }
   if (entry.isDirectory) {
@@ -79,7 +116,7 @@ async function collectFilesFromEntry(entry: FileSystemEntry, prefix: string, fil
         return;
       }
       for (const child of batch) {
-        await collectFilesFromEntry(child, nextPrefix, files);
+        await collectFilesFromEntry(child, nextPrefix, files, onProgress);
       }
     }
   }
@@ -110,20 +147,31 @@ function withRelativePath(file: File, relativePath: string): File {
   }
 }
 
-export async function loadSongCollectionFromFiles(files: Iterable<File>): Promise<BrowserSongCollection> {
+export async function loadSongCollectionFromFiles(
+  files: Iterable<File>,
+  options: LoadProgressOptions = {},
+): Promise<BrowserSongCollection> {
+  const onProgress = options.onProgress;
   const sources: BrowserSongAssetSource[] = [];
   const looseFiles = new Map<string, Uint8Array>();
   const looseLabels = new Set<string>();
 
-  for (const file of files) {
+  // Materialise the iterable so we can report "X / N" totals up
+  // front. The callers always pass an array today, so this is a
+  // no-op spread; it just lets the typing accept any iterable.
+  const fileList = [...files];
+  onProgress?.({ phase: 'reading', current: 0, total: fileList.length });
+  for (let index = 0; index < fileList.length; index += 1) {
+    const file = fileList[index]!;
     const relativePath = normalizePath(file.webkitRelativePath || file.name);
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (extensionOf(file.name) === '.zip' && !file.webkitRelativePath) {
       sources.push(createZipSource(file.name, bytes));
-      continue;
+    } else {
+      looseFiles.set(relativePath, bytes);
+      looseLabels.add(firstPathSegment(relativePath) || file.name);
     }
-    looseFiles.set(relativePath, bytes);
-    looseLabels.add(firstPathSegment(relativePath) || file.name);
+    onProgress?.({ phase: 'reading', current: index + 1, total: fileList.length, label: relativePath });
   }
 
   if (looseFiles.size > 0) {
@@ -137,6 +185,18 @@ export async function loadSongCollectionFromFiles(files: Iterable<File>): Promis
 
   const songs: BrowserSongEntry[] = [];
   const errors: BrowserSongCollection['errors'] = [];
+  // Pre-flight pass to count chart files across all sources so the
+  // parsing-phase progress is determinate. Walks the same path
+  // lists the parser loop walks below; cheap (no decoding) and
+  // makes "Parsing X / N charts" hit zero at the very end.
+  const chartCount = sources.reduce(
+    (acc, source) => acc + [...source.files.keys()].filter((path) => isChartFilePath(path)).length,
+    0,
+  );
+  let parsedSoFar = 0;
+  if (chartCount > 0) {
+    onProgress?.({ phase: 'parsing', current: 0, total: chartCount });
+  }
   for (const source of sources) {
     for (const path of [...source.files.keys()].sort((left, right) => left.localeCompare(right, 'ja'))) {
       if (!isChartFilePath(path)) {
@@ -169,6 +229,8 @@ export async function loadSongCollectionFromFiles(files: Iterable<File>): Promis
           message: error instanceof Error ? error.message : 'failed to parse chart',
         });
       }
+      parsedSoFar += 1;
+      onProgress?.({ phase: 'parsing', current: parsedSoFar, total: chartCount, label: path });
     }
   }
 
@@ -344,12 +406,7 @@ function audioFallbackPaths(path: string): string[] {
     return [path];
   }
   const base = path.slice(0, dotIndex);
-  const candidates = [
-    `${base}.opus`,
-    `${base}.ogg`,
-    `${base}.mp3`,
-    `${base}.wav`,
-  ];
+  const candidates = [`${base}.opus`, `${base}.ogg`, `${base}.mp3`, `${base}.wav`];
   if (!candidates.includes(path)) {
     candidates.push(path);
   }

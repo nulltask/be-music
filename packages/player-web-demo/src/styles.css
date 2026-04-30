@@ -266,8 +266,170 @@ body {
   font-weight: 700;
   pointer-events: none;
   z-index: 2;
+  /*
+   * Long string — wrap inside the dashed frame on narrow
+   * viewports rather than sticking out beyond it.
+   */
+  text-align: center;
+  padding: 16px;
 }
 
-.dragging .drop {
+.dragging .drop,
+.shell.empty .drop {
   display: grid;
+}
+
+/*
+ * Loading overlay shown while a dropped folder / ZIP is being
+ * read and parsed. Positioned over the whole shell with a soft
+ * dim so the loading card reads above whatever scene is currently
+ * mounted (the select view, gameplay, or the empty drop hint).
+ *
+ * Hidden by default — `.visible` toggles it on. We use `display`
+ * (not `visibility`) so the indeterminate-bar animation stops
+ * paying CPU while idle, but fade the opacity for a less-jarring
+ * pop when the heavy phase ends.
+ */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  place-items: center;
+  background: rgb(8 9 13 / 0.65);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.loading-overlay.visible {
+  display: grid;
+}
+
+.loading-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /*
+   * Fixed width — the counter line shows the current filename,
+   * so without this the card would jitter horizontally with
+   * every progress event as paths of different lengths flowed
+   * in. `min(...)` keeps the layout sane on narrow viewports
+   * (< 480 px) while pinning the card to 480 px otherwise so
+   * the visual width is stable across phases.
+   */
+  width: min(80vw, 480px);
+  padding: 18px 22px;
+  border: 1px solid #3a4354;
+  border-radius: 10px;
+  background: rgb(17 22 32 / 0.94);
+  color: #f8fafc;
+  font-family: system-ui, sans-serif;
+  /*
+   * Card has its own pointer-events so a future "Cancel" button
+   * inside it would be clickable; the parent overlay stays
+   * pointer-event-none so the user can still interact with the
+   * background canvas in case loading runs in the background.
+   */
+  pointer-events: auto;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.4);
+}
+
+.loading-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+  /*
+   * Pin the line height in pixels (not em / unitless) so a CJK
+   * glyph in the label — should one ever sneak in via a future
+   * status string — doesn't pull a taller fallback font's line
+   * box and bump the card up by a couple of pixels. The fixed
+   * `height` plus `nowrap` makes this row exactly one line tall
+   * regardless of which fallback the browser picks.
+   */
+  line-height: 20px;
+  height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.loading-bar {
+  /*
+   * Track. Height kept tight (6 px) so the card reads as a hint
+   * rather than a hero element; rounded ends keep the fill from
+   * looking like a sharp data-cell on small percentages.
+   */
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #1b2230;
+  overflow: hidden;
+}
+
+.loading-bar-fill {
+  /*
+   * Determinate state — the inline `width` set by JS drives the
+   * fill. Default to a yellow accent so the bar matches the rest
+   * of the demo's highlight colour (toolbar :checked label, drop
+   * border).
+   */
+  height: 100%;
+  width: 0;
+  background: #ffd166;
+  border-radius: 3px;
+  transition: width 80ms linear;
+}
+
+.loading-bar-fill.indeterminate {
+  /*
+   * Indeterminate state — the bar slides a 30 %-wide segment
+   * back-and-forth so the user sees motion even when the loader
+   * doesn't yet know the total. Kicks in for the `enumerating`
+   * phase (FileSystem-tree walk) and as a default before the
+   * first determinate event lands.
+   */
+  width: 30%;
+  animation: loading-indeterminate 1.4s ease-in-out infinite;
+  transition: none;
+}
+
+@keyframes loading-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(333%);
+  }
+}
+
+.loading-counter {
+  /*
+   * Compact monospace-ish line that holds "X / N · path/to/file".
+   * Smaller and dimmer than the phase label so it reads as a
+   * supporting detail.
+   *
+   * Pinned to a single line via `nowrap` + `text-overflow: ellipsis`:
+   * the counter text changes on every progress tick (filename
+   * varies wildly in length) and any wrapping would make the card
+   * grow / shrink vertically, which combined with the fixed-width
+   * card makes the overlay look unstable.
+   *
+   * Width AND height are locked: a Japanese filename pulls in a
+   * CJK fallback font (Hiragino, Yu Gothic, etc.) whose intrinsic
+   * line-box is taller than the monospace primary; without a
+   * pixel-fixed `line-height` + `height` the card would jiggle
+   * vertically by ~2 px every time an ASCII path was followed by
+   * a Japanese path. Pinning to 18 px gives the 12 px font enough
+   * breathing room for the worst-case fallback's descender while
+   * staying constant across any locale.
+   */
+  font-size: 12px;
+  color: #aab4c2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 18px;
+  height: 18px;
 }

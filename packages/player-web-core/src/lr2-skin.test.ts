@@ -881,10 +881,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
       // pruned in `createGaugeChartElements` rather than surface a
       // half-formed `keyframes: []` element to the renderer.
       const files = new Map<string, Uint8Array>([
-        [
-          'skin/main.csv',
-          lines('#IMAGE,parts.png', '#SRC_GAUGECHART_1P,0,0,0,0,2,2,1,1,0,0,100,80,0,0'),
-        ],
+        ['skin/main.csv', lines('#IMAGE,parts.png', '#SRC_GAUGECHART_1P,0,0,0,0,2,2,1,1,0,0,100,80,0,0')],
       ]);
       expect(loadLr2SkinFromSourceFiles(files)?.gaugeCharts).toEqual([]);
     });

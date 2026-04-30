@@ -110,7 +110,13 @@ function compressorsReachableFrom(start: FakeNode): number {
 describe('compressor parameter constants', () => {
   // Spec-required clamps and a couple of sanity bounds — protects
   // accidentally typing `0.3` instead of `0.003` for an attack value.
-  const inSpecRange = (params: { threshold: number; ratio: number; attack: number; release: number; knee: number }): boolean =>
+  const inSpecRange = (params: {
+    threshold: number;
+    ratio: number;
+    attack: number;
+    release: number;
+    knee: number;
+  }): boolean =>
     params.threshold <= 0 &&
     params.threshold >= -100 &&
     params.ratio >= 1 &&

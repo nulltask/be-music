@@ -1,6 +1,7 @@
 import type { BeMusicEvent } from '@be-music/json';
 import { describe, expect, test } from 'vitest';
 import {
+  loadLr2ThemeSkinsFromFiles,
   pickLr2PlaySkin,
   pickLr2SystemSoundFile,
   pickLr2ThemeBgmFile,
@@ -8,7 +9,7 @@ import {
   type Lr2PlaySkinMap,
 } from './lr2-play-skin.ts';
 import type { Lr2Skin } from './lr2-skin.ts';
-import type { BrowserSongEntry } from './types.ts';
+import type { BrowserSongEntry, LoadProgress } from './types.ts';
 
 function skin(name: string): Lr2Skin {
   return { name } as Lr2Skin;
@@ -57,10 +58,7 @@ describe('LR2 play-skin helpers', () => {
 
 describe('pickLr2ThemeBgmFile', () => {
   test('picks select.wav inside an LR2files/Bgm path', () => {
-    const files = [
-      pathFile('LR2files/Bgm/LR2 ver sta/select.wav'),
-      pathFile('LR2files/Bgm/LR2 ver sta/decide.wav'),
-    ];
+    const files = [pathFile('LR2files/Bgm/LR2 ver sta/select.wav'), pathFile('LR2files/Bgm/LR2 ver sta/decide.wav')];
     expect(pickLr2ThemeBgmFile(files, 'select')?.webkitRelativePath).toBe('LR2files/Bgm/LR2 ver sta/select.wav');
     expect(pickLr2ThemeBgmFile(files, 'decide')?.webkitRelativePath).toBe('LR2files/Bgm/LR2 ver sta/decide.wav');
   });
@@ -134,9 +132,7 @@ describe('pickLr2SystemSoundFile', () => {
   });
 
   test('matches case-insensitively on path and basename', () => {
-    expect(pickLr2SystemSoundFile([pathFile('LR2FILES/SOUND/LR2/SCRATCH.WAV')], 'scratch')?.name).toBe(
-      'SCRATCH.WAV',
-    );
+    expect(pickLr2SystemSoundFile([pathFile('LR2FILES/SOUND/LR2/SCRATCH.WAV')], 'scratch')?.name).toBe('SCRATCH.WAV');
   });
 
   test('rejects scratch.wav outside the Sound/lr2 path', () => {
@@ -155,16 +151,39 @@ describe('pickLr2SystemSoundFile', () => {
   test('accepts alternate audio extensions', () => {
     // Same as the BGM picker — themes occasionally ship .ogg /
     // .mp3 mirrors of the WAV originals to save space.
-    expect(pickLr2SystemSoundFile([pathFile('LR2files/Sound/lr2/scratch.ogg')], 'scratch')?.name).toBe(
-      'scratch.ogg',
-    );
-    expect(pickLr2SystemSoundFile([pathFile('LR2files/Sound/lr2/scratch.opus')], 'scratch')?.name).toBe(
-      'scratch.opus',
-    );
+    expect(pickLr2SystemSoundFile([pathFile('LR2files/Sound/lr2/scratch.ogg')], 'scratch')?.name).toBe('scratch.ogg');
+    expect(pickLr2SystemSoundFile([pathFile('LR2files/Sound/lr2/scratch.opus')], 'scratch')?.name).toBe('scratch.opus');
   });
 
   test('returns undefined when the bundle has no matching effect', () => {
     expect(pickLr2SystemSoundFile([], 'scratch')).toBeUndefined();
     expect(pickLr2SystemSoundFile([pathFile('LR2files/Sound/lr2/clear.wav')], 'scratch')).toBeUndefined();
+  });
+});
+
+describe('loadLr2ThemeSkinsFromFiles progress events', () => {
+  test('fires a theme-phase event for every internal sub-task', async () => {
+    // No real theme files supplied — every sub-task resolves with
+    // `undefined`, but the progress emitter must still tick to
+    // completion so the host UI's "Theme: X / N" readout reaches
+    // the bottom-right corner of the bar.
+    const events: LoadProgress[] = [];
+    await loadLr2ThemeSkinsFromFiles([], { onProgress: (event) => events.push(event) });
+    const themeEvents = events.filter((event) => event.phase === 'theme');
+    // Initial 0 / N prelude + one per sub-task.
+    expect(themeEvents.length).toBeGreaterThan(1);
+    expect(themeEvents[0]).toMatchObject({ current: 0 });
+    const last = themeEvents.at(-1)!;
+    // Each event reports the same total, and the final one matches
+    // the running tally — i.e. the bar reaches 100 %.
+    expect(last.current).toBe(last.total);
+    // Every event after the prelude carries a sub-task label
+    // (`play/7K`, `select`, `bgm/decide`, …) — handy for the UI.
+    const labelled = themeEvents.slice(1);
+    expect(labelled.every((event) => typeof event.label === 'string' && event.label.length > 0)).toBe(true);
+  });
+
+  test('survives without an onProgress callback', async () => {
+    await expect(loadLr2ThemeSkinsFromFiles([])).resolves.toBeDefined();
   });
 });

@@ -194,10 +194,7 @@ export class GameplayRecorder {
     // Combine canvas video + bus audio into a single stream so the
     // recorder treats them as one timeline.
     const videoStream = this.canvas.captureStream(this.fps);
-    const combined = new MediaStream([
-      ...videoStream.getVideoTracks(),
-      ...audioDestination.stream.getAudioTracks(),
-    ]);
+    const combined = new MediaStream([...videoStream.getVideoTracks(), ...audioDestination.stream.getAudioTracks()]);
     const recorder = new MediaRecorder(combined, {
       mimeType,
       videoBitsPerSecond: this.videoBitsPerSecond,

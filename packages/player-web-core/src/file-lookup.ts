@@ -56,10 +56,7 @@ function getCaseInsensitiveIndex(files: ReadonlyMap<string, Uint8Array>): Readon
  * fast path with no Map allocation; only on a miss do we touch the
  * lazy index.
  */
-export function findCaseInsensitivePath(
-  files: ReadonlyMap<string, Uint8Array>,
-  candidate: string,
-): string | undefined {
+export function findCaseInsensitivePath(files: ReadonlyMap<string, Uint8Array>, candidate: string): string | undefined {
   if (files.has(candidate)) {
     return candidate;
   }

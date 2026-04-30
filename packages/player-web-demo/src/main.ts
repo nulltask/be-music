@@ -16,6 +16,7 @@ import {
   type BrowserSongCollection,
   type BrowserSongEntry,
   type CompressorMode,
+  type LoadProgress,
   type Lr2PlayVariant,
   type Lr2PlaySkinMap,
   type Lr2Skin,
@@ -30,7 +31,7 @@ if (!app) {
 }
 
 app.innerHTML = `
-  <div class="shell">
+  <div class="shell empty">
     <div class="toolbar">
       <label>BMS folder / ZIP<input id="songs" type="file" webkitdirectory multiple /></label>
       <label class="autoplay"><input id="autoplay" type="checkbox" /> Auto play</label>
@@ -45,7 +46,32 @@ app.innerHTML = `
       <span class="status" id="status">Ready</span>
     </div>
     <input id="search" class="search-input" type="search" placeholder="Search title / artist / genre..." />
-    <div class="stage" id="stage"><div class="drop">Drop BMS folder + LR2 theme together (or either one)</div></div>
+    <div class="stage" id="stage">
+      <!--
+        Drop hint. Visible whenever the shell carries the
+        \`.empty\` class (no songs loaded yet) so the user has a
+        clear "drop a folder here" target up-front, plus during
+        an active drag (\`.dragging\`) so the hint reappears even
+        once charts are loaded. Falls behind the canvas otherwise.
+      -->
+      <div class="drop">Drop BMS folder + LR2 theme together (or either one)</div>
+    </div>
+    <!--
+      Loading overlay. Hidden by default; revealed via the
+      "visible" class while a folder / ZIP drop is mid-load. The
+      bar below moves between "indeterminate" (CSS animation) and
+      "determinate" (inline width %) states depending on whether
+      the active phase reports a known total. The card sits in the
+      centre of the shell so it's visible regardless of which
+      scene is currently mounted (select / gameplay / result).
+    -->
+    <div class="loading-overlay" id="loading-overlay" aria-hidden="true">
+      <div class="loading-card" role="status" aria-live="polite">
+        <div class="loading-label" id="loading-label">Loading…</div>
+        <div class="loading-bar"><div class="loading-bar-fill" id="loading-bar-fill"></div></div>
+        <div class="loading-counter" id="loading-counter"></div>
+      </div>
+    </div>
   </div>
 `;
 
@@ -84,6 +110,16 @@ interface PlayerWebDemoElements {
    * silently no-ops when no gameplay view is mounted.
    */
   recordButton: HTMLButtonElement;
+  /**
+   * Centred overlay shown while a dropped folder / ZIP is being
+   * read + parsed. Toggled via the `.visible` class so CSS
+   * controls the fade-in / fade-out, and the `aria-hidden`
+   * attribute mirrors the visibility for screen readers.
+   */
+  loadingOverlay: HTMLDivElement;
+  loadingLabel: HTMLDivElement;
+  loadingBarFill: HTMLDivElement;
+  loadingCounter: HTMLDivElement;
 }
 
 class PlayerWebDemoApp {
@@ -179,7 +215,18 @@ class PlayerWebDemoApp {
         return;
       }
       void (async () => {
-        await this.loadSongs([...files]);
+        // Browser file-picker drops go through the same loading
+        // overlay as drag-drop so a folder picked via the toolbar
+        // shows progress too. Hide the select scene up-front so
+        // its rendering / BGM stays paused while we read + parse
+        // — the user shouldn't see the song list flicker mid-load.
+        this.showLoadingOverlay();
+        this.selectView?.setVisible(false);
+        try {
+          await this.loadSongs([...files]);
+        } finally {
+          this.hideLoadingOverlay();
+        }
         await this.showSelect();
       })();
     });
@@ -348,60 +395,164 @@ class PlayerWebDemoApp {
    */
   private recordingFilenameBase = 'gameplay';
 
+  /**
+   * Reveals the centred loading overlay and reset its readout to a
+   * neutral "Loading…" state. The actual phase / counter text fills
+   * in via `applyLoadProgress` as events fire from the loaders.
+   */
+  private showLoadingOverlay(): void {
+    this.elements.loadingOverlay.classList.add('visible');
+    this.elements.loadingOverlay.setAttribute('aria-hidden', 'false');
+    this.elements.loadingLabel.textContent = 'Loading…';
+    this.elements.loadingCounter.textContent = '';
+    // Reset to indeterminate (no inline width) until the first
+    // `applyLoadProgress` lands. The CSS animates the bar so the
+    // user sees motion even before the first phase event fires.
+    this.elements.loadingBarFill.classList.add('indeterminate');
+    this.elements.loadingBarFill.style.width = '';
+  }
+
+  private hideLoadingOverlay(): void {
+    this.elements.loadingOverlay.classList.remove('visible');
+    this.elements.loadingOverlay.setAttribute('aria-hidden', 'true');
+  }
+
+  /**
+   * Maps a `LoadProgress` event from the player-web-core loaders
+   * onto the overlay DOM. Phases:
+   *
+   * - `enumerating` — total is `-1` (we're still walking the drop
+   *   tree). Show the running file count + the current path,
+   *   leave the bar in indeterminate animation mode.
+   * - `reading` / `parsing` / `theme` — total is known. Switch
+   *   the bar to determinate mode and set its width to
+   *   `current / total`.
+   *
+   * Phase prefixes (`Reading files…` etc.) come from the
+   * `phaseLabels` map; the per-item label surfaces the underlying
+   * filename / sub-task so the user can see which file is the
+   * current bottleneck.
+   */
+  private applyLoadProgress(progress: LoadProgress): void {
+    const phaseLabel = phaseLabels[progress.phase];
+    const counterFragments: string[] = [];
+    if (progress.total > 0) {
+      // Determinate phase — set explicit width and pin the
+      // counter to "X / N (P%)" so the user can eyeball ETA.
+      const ratio = Math.max(0, Math.min(1, progress.current / progress.total));
+      this.elements.loadingBarFill.classList.remove('indeterminate');
+      this.elements.loadingBarFill.style.width = `${(ratio * 100).toFixed(1)}%`;
+      counterFragments.push(`${progress.current} / ${progress.total}`);
+    } else {
+      // Indeterminate (enumeration) — only `current` is meaningful.
+      this.elements.loadingBarFill.classList.add('indeterminate');
+      this.elements.loadingBarFill.style.width = '';
+      if (progress.current > 0) {
+        counterFragments.push(`${progress.current}`);
+      }
+    }
+    if (progress.label) {
+      counterFragments.push(progress.label);
+    }
+    this.elements.loadingLabel.textContent = phaseLabel;
+    this.elements.loadingCounter.textContent = counterFragments.join(' · ');
+  }
+
   private async handleDrop(dataTransfer: DataTransfer): Promise<void> {
-    const files = await readDroppedFiles(dataTransfer);
-    if (files.length === 0) {
-      return;
-    }
-    const { themeFiles, songFiles } = splitDroppedSongAndThemeFiles(files);
-    // eslint-disable-next-line no-console
-    console.log(`[drop] received ${files.length} file(s) · theme=${themeFiles.length} · songs=${songFiles.length}`);
-    const tasks: Array<Promise<unknown>> = [];
-    if (themeFiles.length > 0) {
-      tasks.push(this.loadTheme(themeFiles));
-    }
-    if (songFiles.length > 0) {
-      tasks.push(this.loadSongs(songFiles));
-    }
-    if (tasks.length === 0) {
+    // Show the overlay before we even start enumerating files —
+    // walking a deep `webkitGetAsEntry` tree on a chart pack with
+    // tens of thousands of WAVs visibly stalls the UI for several
+    // seconds, and we want the user to see "we're working on it"
+    // immediately rather than after the slow phase finishes.
+    this.showLoadingOverlay();
+    // Take the select scene offline for the duration of the load.
+    // `setVisible(false)` pauses BGM + the rAF tick + the song
+    // list rendering, so:
+    //
+    // - the loaded LR2 theme's `select.wav` doesn't start the
+    //   moment the (small) theme bundle finishes parsing while
+    //   the (large) song collection is still being read,
+    // - the song list doesn't visually shuffle as new entries
+    //   land,
+    // - and the user only sees the overlay until everything is
+    //   ready — not a half-rendered scene behind it.
+    //
+    // `showSelect()` at the end of the try block re-enables the
+    // scene with the freshly populated state in one shot.
+    this.selectView?.setVisible(false);
+    try {
+      const files = await readDroppedFiles(dataTransfer, {
+        onProgress: (progress) => this.applyLoadProgress(progress),
+      });
+      if (files.length === 0) {
+        return;
+      }
+      const { themeFiles, songFiles } = splitDroppedSongAndThemeFiles(files);
       // eslint-disable-next-line no-console
-      console.warn('[drop] nothing to load — neither theme nor chart files matched');
-      return;
-    }
-    await Promise.all(tasks);
-    const playSkinSummary = summarizeLr2PlaySkins(this.playSkins);
-    // eslint-disable-next-line no-console
-    console.log(
-      `[drop] loaded · songs=${this.collection.songs.length} · errors=${
-        this.collection.errors.length
-      } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin?.name ?? 'none'}`,
-    );
-    if (this.collection.errors.length > 0) {
+      console.log(`[drop] received ${files.length} file(s) · theme=${themeFiles.length} · songs=${songFiles.length}`);
+      const tasks: Array<Promise<unknown>> = [];
+      if (themeFiles.length > 0) {
+        tasks.push(this.loadTheme(themeFiles));
+      }
+      if (songFiles.length > 0) {
+        tasks.push(this.loadSongs(songFiles));
+      }
+      if (tasks.length === 0) {
+        // eslint-disable-next-line no-console
+        console.warn('[drop] nothing to load — neither theme nor chart files matched');
+        return;
+      }
+      await Promise.all(tasks);
+      const playSkinSummary = summarizeLr2PlaySkins(this.playSkins);
       // eslint-disable-next-line no-console
-      console.warn('[drop] parse errors:', this.collection.errors);
+      console.log(
+        `[drop] loaded · songs=${this.collection.songs.length} · errors=${
+          this.collection.errors.length
+        } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin?.name ?? 'none'}`,
+      );
+      if (this.collection.errors.length > 0) {
+        // eslint-disable-next-line no-console
+        console.warn('[drop] parse errors:', this.collection.errors);
+      }
+      // Status panel stays terse on purpose — only show "loaded"
+      // when there's something to celebrate, and skip the
+      // per-key-mode skin enumeration since the user can see the
+      // active skin in-canvas. "0 charts loaded" is suppressed so
+      // a theme-only drop doesn't read like an error.
+      if (this.collection.songs.length > 0) {
+        this.elements.status.textContent = describeSongCollection(this.collection);
+      } else if (this.selectSkin || this.resultSkin || Object.keys(this.playSkins).length > 0) {
+        this.elements.status.textContent = 'Theme loaded';
+      }
+      await this.showSelect();
+    } finally {
+      // Always tear the overlay down — even when one of the
+      // sub-loaders threw or `splitDroppedSongAndThemeFiles`
+      // produced an empty bucket. Otherwise a failed drop would
+      // leave the UI permanently masked.
+      this.hideLoadingOverlay();
     }
-    const parts: string[] = [];
-    if (playSkinSummary) {
-      parts.push(`Theme: ${playSkinSummary}`);
-    }
-    if (this.collection.songs.length > 0) {
-      parts.push(describeSongCollection(this.collection));
-    }
-    if (parts.length > 0) {
-      this.elements.status.textContent = parts.join('  •  ');
-    }
-    await this.showSelect();
   }
 
   private async loadSongs(files: File[]): Promise<void> {
     this.elements.status.textContent = 'Loading songs...';
-    this.collection = await this.library.loadFromFiles(files);
-    this.elements.status.textContent = describeSongCollection(this.collection);
+    this.collection = await this.library.loadFromFiles(files, {
+      onProgress: (progress) => this.applyLoadProgress(progress),
+    });
+    // Suppress the "0 charts loaded" reading — that text reads
+    // like a parse error to the user. The post-load status text
+    // is set by `handleDrop` once both theme + songs land, so a
+    // mid-flight transient is plenty.
+    if (this.collection.songs.length > 0) {
+      this.elements.status.textContent = describeSongCollection(this.collection);
+    }
   }
 
   private async loadTheme(files: File[]): Promise<void> {
     this.elements.status.textContent = 'Loading LR2 theme...';
-    const loadedTheme = await loadLr2ThemeSkinsFromFiles(files);
+    const loadedTheme = await loadLr2ThemeSkinsFromFiles(files, {
+      onProgress: (progress) => this.applyLoadProgress(progress),
+    });
     for (const variant of Object.keys(this.playSkins) as Lr2PlayVariant[]) {
       delete this.playSkins[variant];
     }
@@ -415,34 +566,49 @@ class PlayerWebDemoApp {
       folderOpen: loadedTheme.systemSounds.folderOpen?.bytes,
       folderClose: loadedTheme.systemSounds.folderClose?.bytes,
     };
-    // If a select view is already mounted (theme dropped mid-
-    // session), swap in the new BGM / decide / system-effect
-    // bytes live. The view handles decode + loop start (and the
-    // one-shot lazy decodes) internally.
-    this.selectView?.setSelectBgm(this.selectBgmBytes);
-    this.selectView?.setDecideBgm(this.decideBgmBytes);
-    this.selectView?.setSystemSounds(this.systemSoundBundle);
-    const parts: string[] = [];
-    const playSummary = summarizeLr2PlaySkins(this.playSkins, ' / ');
-    if (playSummary) {
-      parts.push(`Play: ${playSummary}`);
-    }
-    if (this.selectSkin) parts.push(`Select: ${this.selectSkin.name}`);
-    if (this.resultSkin) parts.push(`Result: ${this.resultSkin.name}`);
-    this.elements.status.textContent = parts.length > 0 ? `Theme — ${parts.join(', ')}` : 'No LR2 skin found';
+    // BGM / decide / system-sound bytes are stashed on the host
+    // here, but NOT pushed onto the live select view yet — that
+    // happens in `showSelect()` once every load task has resolved.
+    // Otherwise the small theme bundle would land first and start
+    // BGM playing before the larger song collection has even
+    // finished parsing, which felt jarring with a loading
+    // overlay still on screen.
+    //
+    // We deliberately don't paint a per-skin "Play: 7K=… / 14K=…"
+    // status here. The skin is observable in-canvas the moment
+    // the user enters song-select; spelling it out in the toolbar
+    // status panel was redundant and made the toolbar wider than
+    // it needed to be. `handleDrop` writes a terse "Theme
+    // loaded" / "N charts loaded" once everything lands.
   }
 
   private async showSelect(): Promise<void> {
     this.elements.shell.classList.remove('playing');
+    // The `.empty` class drives the centred "Drop BMS folder…"
+    // hint. Toggle it off the moment we have charts to show, and
+    // back on after a wipe / failed drop so the hint comes back
+    // instead of leaving the user staring at a blank canvas.
+    this.elements.shell.classList.toggle('empty', this.collection.songs.length === 0);
     await this.ensureHostMounted();
     this.gameplayView?.dispose();
     this.gameplayView = undefined;
     this.resultView?.dispose();
     this.resultView = undefined;
     if (this.selectView) {
-      this.selectView.setVisible(true);
+      // Push the latest theme assets onto the view BEFORE flipping
+      // it visible. Order matters — `setSelectBgm` no-ops when the
+      // bytes haven't changed, so back-from-play is silent; on a
+      // fresh theme drop it stops the old loop, swaps the bytes,
+      // and (because we're still hidden) defers the actual
+      // `start()` until `setVisible(true)` lands a moment later.
+      // Doing it the other way round would briefly start the
+      // prior theme's BGM during the visibility flip.
       this.selectView.setSkin(this.selectSkin);
+      this.selectView.setSelectBgm(this.selectBgmBytes);
+      this.selectView.setDecideBgm(this.decideBgmBytes);
+      this.selectView.setSystemSounds(this.systemSoundBundle);
       this.selectView.setCollection(this.collection);
+      this.selectView.setVisible(true);
       if (this.lastSelectNavigation) {
         this.selectView.setNavigation(this.lastSelectNavigation);
       }
@@ -567,7 +733,25 @@ new PlayerWebDemoApp({
   backButton: document.querySelector<HTMLButtonElement>('#back')!,
   searchInput: document.querySelector<HTMLInputElement>('#search')!,
   recordButton: document.querySelector<HTMLButtonElement>('#record')!,
+  loadingOverlay: document.querySelector<HTMLDivElement>('#loading-overlay')!,
+  loadingLabel: document.querySelector<HTMLDivElement>('#loading-label')!,
+  loadingBarFill: document.querySelector<HTMLDivElement>('#loading-bar-fill')!,
+  loadingCounter: document.querySelector<HTMLDivElement>('#loading-counter')!,
 }).start();
+
+/**
+ * Human-readable labels shown alongside the loading-overlay
+ * progress bar. Keyed by the `LoadProgressPhase` discriminator the
+ * `player-web-core` loaders emit. The web UI is English-only, so
+ * these strings stay in English even though the surrounding
+ * project conversation is in Japanese.
+ */
+const phaseLabels: Record<LoadProgress['phase'], string> = {
+  enumerating: 'Collecting files…',
+  reading: 'Reading files…',
+  parsing: 'Parsing charts…',
+  theme: 'Loading LR2 theme…',
+};
 
 /**
  * Produces a filesystem-safe base for the auto-downloaded

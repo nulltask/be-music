@@ -217,9 +217,7 @@ export class PixiSceneHost {
 export function resolveRendererPreference(rawSearch?: string): 'webgl' | 'webgpu' {
   const search =
     rawSearch ??
-    (typeof globalThis !== 'undefined' && typeof globalThis.location !== 'undefined'
-      ? globalThis.location.search
-      : '');
+    (typeof globalThis !== 'undefined' && typeof globalThis.location !== 'undefined' ? globalThis.location.search : '');
   if (!search) return 'webgpu';
   const params = new URLSearchParams(search);
   const flag = params.get('renderer');

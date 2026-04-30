@@ -48,7 +48,10 @@ describe('lookupBytesCaseInsensitive', () => {
     // Not a strict invariant test — just confirms a second lookup on
     // the same map works the same way (which would surface obvious
     // cache-key bugs even though we can't probe the WeakMap directly).
-    const files = new Map([['A.png', BYTES_A], ['B.png', BYTES_B]]);
+    const files = new Map([
+      ['A.png', BYTES_A],
+      ['B.png', BYTES_B],
+    ]);
     expect(lookupBytesCaseInsensitive(files, 'a.png')).toBe(BYTES_A);
     expect(lookupBytesCaseInsensitive(files, 'b.png')).toBe(BYTES_B);
     expect(lookupBytesCaseInsensitive(files, 'A.PNG')).toBe(BYTES_A);
