@@ -84,6 +84,13 @@ export interface Lr2ImageElement {
    * / alpha across a play session.
    */
   keyframes: Lr2DestinationRect[];
+  /**
+   * Monotonic CSV-stream index — see {@link Lr2SliderElement.declarationOrder}.
+   * Renderers stratify chrome around the bar list using this field
+   * (e.g. `#IMAGE` declared after `#SRC_BAR_BODY` should overlay
+   * the bars).
+   */
+  declarationOrder: number;
 }
 
 export interface Lr2CustomOption {
@@ -109,6 +116,8 @@ export interface Lr2NumberElement {
   source: Lr2NumberSourceRect;
   destination: Lr2DestinationRect;
   keyframes: Lr2DestinationRect[];
+  /** See {@link Lr2ImageElement.declarationOrder}. */
+  declarationOrder: number;
 }
 
 export interface Lr2GrooveGaugeElement {
@@ -212,6 +221,8 @@ export interface Lr2TextElement {
   panel: number;
   destination: Lr2DestinationRect;
   keyframes: Lr2DestinationRect[];
+  /** See {@link Lr2ImageElement.declarationOrder}. */
+  declarationOrder: number;
 }
 
 /**
@@ -233,6 +244,8 @@ export interface Lr2BarGraphElement {
   /** Bargraph type code (see lr2skinhelp/bargraph.txt). */
   type: number;
   muki: Lr2BarGraphMuki;
+  /** See {@link Lr2ImageElement.declarationOrder}. */
+  declarationOrder: number;
 }
 
 /**
@@ -255,6 +268,18 @@ export interface Lr2SliderElement {
   muki: Lr2SliderMuki;
   /** Travel range in design pixels. */
   range: number;
+  /**
+   * Monotonic counter capturing where this slider's `#SRC_SLIDER`
+   * appeared in the skin's CSV stream relative to the other
+   * tagged elements (`Lr2BarLayout.declarationOrder` for bars).
+   * The renderer uses this to decide whether the slider is
+   * drawn behind or in front of the song-list bars — a slider
+   * declared AFTER `#SRC_BAR_BODY` should overlay the list
+   * (e.g. the LR2 default scroll-position slider on the right
+   * edge of the bar area), while one declared before sits in
+   * the chrome behind everything.
+   */
+  declarationOrder: number;
 }
 
 /**
@@ -355,6 +380,8 @@ export interface Lr2ButtonElement {
   panel: number;
   /** -1 = `value -` only, 0 = both, 1 = `value +` only. Optional in spec. */
   plusOnly: number;
+  /** See {@link Lr2ImageElement.declarationOrder}. */
+  declarationOrder: number;
 }
 
 /**
@@ -375,6 +402,8 @@ export interface Lr2OnMouseElement {
   hitOffsetY: number;
   hitWidth: number;
   hitHeight: number;
+  /** See {@link Lr2ImageElement.declarationOrder}. */
+  declarationOrder: number;
 }
 
 /**
@@ -439,6 +468,8 @@ export interface Lr2MouseCursorElement {
   source: Lr2ImageRect;
   destination: Lr2DestinationRect;
   keyframes: Lr2DestinationRect[];
+  /** See {@link Lr2ImageElement.declarationOrder}. */
+  declarationOrder: number;
 }
 
 /**
@@ -587,6 +618,16 @@ export interface Lr2BarLayout {
   rivalKeyframes: Lr2DestinationRect[];
   /** Rival-mode lamp variants (`#SRC_BAR_MY_LAMP` / `_RIVAL_LAMP`). */
   rivalLamps: Lr2BarRivalLampSet;
+  /**
+   * Monotonic counter capturing where the FIRST `#SRC_BAR_BODY`
+   * appeared in the skin's CSV stream. Compared against
+   * `Lr2SliderElement.declarationOrder` so the renderer can
+   * stratify chrome elements into "before bars" (skinLayer,
+   * drawn behind the list) vs "after bars" (foreground layer,
+   * drawn on top of the list). `undefined` when the skin has
+   * no bar list.
+   */
+  declarationOrder: number | undefined;
 }
 
 /**
@@ -713,6 +754,17 @@ interface SourceRect {
   divy: number;
   cycle: number;
   timer: number;
+  /**
+   * CSV-stream declaration index assigned by `parseSource` from
+   * `ParseContext.nextDeclarationOrder`. Captures the relative
+   * order this `#SRC_*` line appeared at so the renderer can
+   * stratify chrome elements (`#SRC_IMAGE` / `#SRC_NUMBER` /
+   * `#SRC_SLIDER` / `#SRC_TEXT` / `#SRC_BUTTON` / `#SRC_ONMOUSE`)
+   * around the bar list (`#SRC_BAR_BODY`). Internal — only
+   * propagated to public element types via the typed
+   * `declarationOrder` field on each `Lr2*Element`.
+   */
+  declarationOrder: number;
 }
 
 interface NumberSourceEntry {
@@ -758,6 +810,12 @@ interface TextSourceEntry {
   alignment: Lr2TextAlignment;
   edit: number;
   panel: number;
+  /**
+   * `#SRC_TEXT` doesn't carry an embedded `SourceRect`, so we
+   * stamp the CSV-stream order here directly. Same semantics as
+   * the other entries' `source.declarationOrder`.
+   */
+  declarationOrder: number;
 }
 
 interface BarGraphSourceEntry {
@@ -953,6 +1011,24 @@ interface ParseContext {
   name: string;
   width: number;
   height: number;
+  /**
+   * Monotonic counter that increments every time we record a
+   * `#SRC_*` declaration the renderer wants z-order context for
+   * (currently `#SRC_SLIDER` and the first `#SRC_BAR_BODY`).
+   * The counter is process-local to a single skin parse — so a
+   * later reference's `declarationOrder > earlier reference's`
+   * iff it appeared later in the CSV stream (including across
+   * `#INCLUDE`s, which feed back into the same `readLr2Path`
+   * call chain).
+   */
+  nextDeclarationOrder: number;
+  /**
+   * `nextDeclarationOrder` value assigned to the first
+   * `#SRC_BAR_BODY` we saw, or `undefined` when the skin has
+   * no bar layout. Used to decide which side of the bar list
+   * each chrome element sits on.
+   */
+  barLayoutDeclarationOrder?: number;
 }
 
 interface ConditionalFrame {
@@ -1127,6 +1203,7 @@ export function loadLr2SkinFromSourceFiles(
     name: basename(entryPath),
     width: 640,
     height: 480,
+    nextDeclarationOrder: 0,
   };
   readLr2Path(sourceFiles, entryPath, context, new Set());
 
@@ -1157,7 +1234,14 @@ export function loadLr2SkinFromSourceFiles(
       // (latest-`time`) keyframe, used for visibility checks and as the
       // fallback for static elements.
       const destination = dstGroup[dstGroup.length - 1]!;
-      return [{ source: { ...source, imagePath }, destination, keyframes: [...dstGroup] }];
+      return [
+        {
+          source: { ...source, imagePath },
+          destination,
+          keyframes: [...dstGroup],
+          declarationOrder: source.declarationOrder,
+        },
+      ];
     }),
     laneRects: context.laneRects,
     notes: Object.fromEntries(
@@ -1360,7 +1444,7 @@ function readLr2Path(
         readLr2Path(sourceFiles, includePath, context, visited);
       }
     } else if (command === '#SRC_IMAGE') {
-      context.imageSources.push(parseSource(row));
+      context.imageSources.push(parseSource(row, context));
       context.imageDstGroups.push([]);
     } else if (command === '#DST_IMAGE') {
       const group = context.imageDstGroups.at(-1);
@@ -1370,7 +1454,7 @@ function readLr2Path(
     } else if (command === '#SRC_NOWJUDGE_1P') {
       const id = toNumber(row[1], 0);
       if (context.nowJudge1PSources[id] === undefined) {
-        context.nowJudge1PSources[id] = parseSource(row);
+        context.nowJudge1PSources[id] = parseSource(row, context);
       }
     } else if (command === '#DST_NOWJUDGE_1P') {
       const id = toNumber(row[1], 0);
@@ -1379,7 +1463,7 @@ function readLr2Path(
       context.nowJudge1PDstGroups[id] = group;
     } else if (command === '#SRC_NUMBER') {
       context.numberSources.push({
-        source: parseSource(row),
+        source: parseSource(row, context),
         num: toNumber(row[11], 0),
         alignment: parseNumberAlignment(row[12]),
         padding: Math.max(0, Math.trunc(toNumber(row[13], 0))),
@@ -1392,7 +1476,7 @@ function readLr2Path(
       }
     } else if (command === '#SRC_GROOVEGAUGE') {
       context.grooveGaugeSources.push({
-        source: parseSource(row),
+        source: parseSource(row, context),
         index: Math.max(0, Math.trunc(toNumber(row[1], 0))),
         addX: toNumber(row[11], 0),
         addY: toNumber(row[12], 0),
@@ -1406,7 +1490,7 @@ function readLr2Path(
     } else if (command === '#SRC_NOWCOMBO_1P') {
       // #SRC_NOWCOMBO_1P,index,gr,x,y,w,h,divx,divy,cycle,timer,(null),align,keta
       context.nowComboSources.push({
-        source: parseSource(row),
+        source: parseSource(row, context),
         index: Math.max(0, Math.trunc(toNumber(row[1], 0))),
         alignment: parseNowComboAlignment(row[12]),
         padding: Math.max(0, Math.trunc(toNumber(row[13], 0))),
@@ -1420,7 +1504,7 @@ function readLr2Path(
     } else if (command === '#SRC_JUDGELINE') {
       // #SRC_JUDGELINE,index,gr,x,y,w,h,divx,divy,cycle,timer,op1,op2,op3
       context.judgeLineSources.push({
-        source: parseSource(row),
+        source: parseSource(row, context),
         index: Math.max(0, Math.trunc(toNumber(row[1], 0))),
       });
       context.judgeLineDstGroups.push([]);
@@ -1432,7 +1516,7 @@ function readLr2Path(
     } else if (command === '#SRC_LINE') {
       // #SRC_LINE,index,gr,x,y,w,h,divx,divy,cycle,timer,op1,op2,op3
       context.measureLineSources.push({
-        source: parseSource(row),
+        source: parseSource(row, context),
         index: Math.max(0, Math.trunc(toNumber(row[1], 0))),
       });
       context.measureLineDstGroups.push([]);
@@ -1466,6 +1550,9 @@ function readLr2Path(
         // `panel` may legitimately be negative (-1 = "only when no
         // panel open") so we keep the sign.
         panel: Math.trunc(toNumber(row[6], 0)),
+        // TEXT bypasses `parseSource` (no SourceRect) so stamp
+        // the CSV-stream order on the entry directly.
+        declarationOrder: context.nextDeclarationOrder++,
       });
       context.textDstGroups.push([]);
     } else if (command === '#DST_TEXT') {
@@ -1476,7 +1563,7 @@ function readLr2Path(
     } else if (command === '#SRC_BARGRAPH') {
       // #SRC_BARGRAPH,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,type,muki
       context.bargraphSources.push({
-        source: parseSource(row),
+        source: parseSource(row, context),
         type: Math.max(0, Math.trunc(toNumber(row[11], 0))),
         muki: parseBarGraphMuki(row[12]),
       });
@@ -1488,8 +1575,11 @@ function readLr2Path(
       }
     } else if (command === '#SRC_SLIDER') {
       // #SRC_SLIDER,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,muki,range,type,disable
+      // `parseSource` already stamps `source.declarationOrder`
+      // for the z-order stratification — no need for a second
+      // counter on the entry itself.
       context.sliderSources.push({
-        source: parseSource(row),
+        source: parseSource(row, context),
         muki: parseSliderMuki(row[11]),
         range: Math.max(0, Math.trunc(toNumber(row[12], 0))),
         type: Math.max(0, Math.trunc(toNumber(row[13], 0))),
@@ -1508,7 +1598,7 @@ function readLr2Path(
       // /divx/divy/cycle/timer from row[2..10] which aligns; we only
       // need to pull the chart-specific extras separately.
       context.gaugeChartSources.push({
-        source: parseSource(row),
+        source: parseSource(row, context),
         index: Math.max(0, Math.trunc(toNumber(row[1], 0))),
         fieldWidth: Math.max(0, Math.trunc(toNumber(row[11], 0))),
         fieldHeight: Math.max(0, Math.trunc(toNumber(row[12], 0))),
@@ -1539,7 +1629,7 @@ function readLr2Path(
       // Same layout as `#SRC_GAUGECHART_*` minus the side dimension
       // (the spec uses `index` for current/best/target instead).
       context.scoreChartSources.push({
-        source: parseSource(row),
+        source: parseSource(row, context),
         index: Math.max(0, Math.trunc(toNumber(row[1], 0))),
         fieldWidth: Math.max(0, Math.trunc(toNumber(row[11], 0))),
         fieldHeight: Math.max(0, Math.trunc(toNumber(row[12], 0))),
@@ -1557,7 +1647,7 @@ function readLr2Path(
       // `plusonly` is optional in the LR2 spec — `toNumber(..., 0)` keeps
       // it at 0 (= both directions allowed) when the column is missing.
       context.buttonSources.push({
-        source: parseSource(row),
+        source: parseSource(row, context),
         type: Math.max(0, Math.trunc(toNumber(row[11], 0))),
         click: Math.max(0, Math.trunc(toNumber(row[12], 0))),
         panel: Math.trunc(toNumber(row[13], 0)),
@@ -1572,7 +1662,7 @@ function readLr2Path(
     } else if (command === '#SRC_ONMOUSE') {
       // #SRC_ONMOUSE,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,panel,x2,y2,w2,h2
       context.onMouseSources.push({
-        source: parseSource(row),
+        source: parseSource(row, context),
         panel: Math.trunc(toNumber(row[11], 0)),
         hitOffsetX: Math.trunc(toNumber(row[12], 0)),
         hitOffsetY: Math.trunc(toNumber(row[13], 0)),
@@ -1599,7 +1689,7 @@ function readLr2Path(
       }
     } else if (command === '#SRC_MOUSECURSOR') {
       // #SRC_MOUSECURSOR,(NULL),gr,x,y,w,h,divx,divy,cycle,timer
-      context.mouseCursorSources.push(parseSource(row));
+      context.mouseCursorSources.push(parseSource(row, context));
       context.mouseCursorDstGroups.push([]);
     } else if (command === '#DST_MOUSECURSOR') {
       const group = context.mouseCursorDstGroups.at(-1);
@@ -1610,7 +1700,7 @@ function readLr2Path(
       // Spec only allows one — last wins. Used as the focused-bar
       // pulse / glow overlay; DST coordinates are relative to the
       // focused bar's `BAR_BODY_ON` rect.
-      context.barFlashSource = parseSource(row);
+      context.barFlashSource = parseSource(row, context);
     } else if (command === '#DST_BAR_FLASH') {
       appendDestinationKeyframe(context.barFlashDst, row);
     } else if (command === '#SRC_BAR_RIVAL') {
@@ -1619,7 +1709,7 @@ function readLr2Path(
       // omitted by the spec; we accept it but don't model it).
       const kind = parseBarRivalKind(row[1]);
       if (kind) {
-        const entry: BarRivalSourceEntry = { kind, source: parseSource(row) };
+        const entry: BarRivalSourceEntry = { kind, source: parseSource(row, context) };
         const existingIndex = context.barRivalSources.findIndex((existing) => existing.kind === kind);
         if (existingIndex >= 0) {
           context.barRivalSources[existingIndex] = entry;
@@ -1633,7 +1723,7 @@ function readLr2Path(
       // Rival-mode self lamp. Same kind enum as `#SRC_BAR_LAMP`.
       const kind = parseBarLampKind(row[1]);
       if (kind) {
-        const entry: BarLampSourceEntry = { kind, source: parseSource(row) };
+        const entry: BarLampSourceEntry = { kind, source: parseSource(row, context) };
         const existingIndex = context.barMyLampSources.findIndex((existing) => existing.kind === kind);
         if (existingIndex >= 0) {
           context.barMyLampSources[existingIndex] = entry;
@@ -1647,7 +1737,7 @@ function readLr2Path(
       // Rival-mode opponent lamp. Same kind enum.
       const kind = parseBarLampKind(row[1]);
       if (kind) {
-        const entry: BarLampSourceEntry = { kind, source: parseSource(row) };
+        const entry: BarLampSourceEntry = { kind, source: parseSource(row, context) };
         const existingIndex = context.barRivalLampSources.findIndex((existing) => existing.kind === kind);
         if (existingIndex >= 0) {
           context.barRivalLampSources[existingIndex] = entry;
@@ -1661,10 +1751,19 @@ function readLr2Path(
       // #SRC_BAR_BODY,kind,gr,x,y,w,h,divx,divy,cycle,timer
       const kind = parseBarBodyKind(row[1]);
       if (kind) {
+        // Stamp the FIRST `#SRC_BAR_BODY` we see — that's the
+        // anchor `Lr2BarLayout.declarationOrder` ends up at, and
+        // every chrome element compared against it. Later
+        // bar-body declarations (e.g. inside an #IF branch
+        // overriding the kind) don't shift the anchor — the
+        // bar list as a whole is "declared" at its first slot.
+        if (context.barLayoutDeclarationOrder === undefined) {
+          context.barLayoutDeclarationOrder = context.nextDeclarationOrder++;
+        }
         // Last definition for a given kind wins, mirroring LR2's
         // "later #IF branch overrides earlier" convention.
         const existingIndex = context.barBodySources.findIndex((entry) => entry.kind === kind);
-        const entry: BarBodySourceEntry = { kind, source: parseSource(row) };
+        const entry: BarBodySourceEntry = { kind, source: parseSource(row, context) };
         if (existingIndex >= 0) {
           context.barBodySources[existingIndex] = entry;
         } else {
@@ -1698,7 +1797,7 @@ function readLr2Path(
       if (kind) {
         const entry: BarLevelSourceEntry = {
           kind,
-          source: parseSource(row),
+          source: parseSource(row, context),
           alignment: parseNumberAlignment(row[12]),
           padding: Math.max(0, Math.trunc(toNumber(row[13], 0))),
         };
@@ -1715,7 +1814,7 @@ function readLr2Path(
       // #SRC_BAR_LAMP,index,gr,x,y,w,h,divx,divy,cycle,timer
       const kind = parseBarLampKind(row[1]);
       if (kind) {
-        const entry: BarLampSourceEntry = { kind, source: parseSource(row) };
+        const entry: BarLampSourceEntry = { kind, source: parseSource(row, context) };
         const existingIndex = context.barLampSources.findIndex((existing) => existing.kind === kind);
         if (existingIndex >= 0) {
           context.barLampSources[existingIndex] = entry;
@@ -1729,7 +1828,7 @@ function readLr2Path(
       // #SRC_BAR_RANK,index,gr,x,y,w,h,divx,divy,cycle,timer
       const kind = parseBarRankKind(row[1]);
       if (kind) {
-        const entry: BarRankSourceEntry = { kind, source: parseSource(row) };
+        const entry: BarRankSourceEntry = { kind, source: parseSource(row, context) };
         const existingIndex = context.barRankSources.findIndex((existing) => existing.kind === kind);
         if (existingIndex >= 0) {
           context.barRankSources[existingIndex] = entry;
@@ -1743,7 +1842,7 @@ function readLr2Path(
       const kind = NOTE_COMMANDS[command]!;
       const lane = toNumber(row[1], 0);
       const sources = context.noteSources.get(kind) ?? [];
-      sources[lane] = parseSource(row);
+      sources[lane] = parseSource(row, context);
       context.noteSources.set(kind, sources);
     } else if (command === '#DST_NOTE') {
       const lane = toNumber(row[1], 0);
@@ -1913,7 +2012,7 @@ function evaluateOps(values: string[], trueOps: ReadonlySet<number>): boolean {
   return true;
 }
 
-function parseSource(row: string[]): SourceRect {
+function parseSource(row: string[], context: ParseContext): SourceRect {
   return {
     gr: toNumber(row[2], 0),
     x: toNumber(row[3], 0),
@@ -1925,6 +2024,11 @@ function parseSource(row: string[]): SourceRect {
     divy: Math.max(1, Math.trunc(toNumber(row[8], 1)) || 1),
     cycle: Math.max(0, Math.trunc(toNumber(row[9], 0))),
     timer: Math.max(0, Math.trunc(toNumber(row[10], 0))),
+    // Stamp every parsed source with the next free CSV-stream
+    // index so the renderer can compare it against the bar
+    // layout's own index to decide which side of the bar list
+    // this element sits on.
+    declarationOrder: context.nextDeclarationOrder++,
   };
 }
 
@@ -2038,6 +2142,7 @@ function createNumberElements(context: ParseContext): Lr2NumberElement[] {
       },
       destination,
       keyframes: [...dstGroup],
+      declarationOrder: entry.source.declarationOrder,
     });
   }
   return elements;
@@ -2256,6 +2361,7 @@ function createTextElements(context: ParseContext): Lr2TextElement[] {
       panel: entry.panel,
       destination,
       keyframes: [...dstGroup],
+      declarationOrder: entry.declarationOrder,
     });
   }
   return elements;
@@ -2280,6 +2386,7 @@ function createBarGraphElements(context: ParseContext): Lr2BarGraphElement[] {
       keyframes: [...dstGroup],
       type: entry.type,
       muki: entry.muki,
+      declarationOrder: entry.source.declarationOrder,
     });
   }
   return elements;
@@ -2449,6 +2556,7 @@ function createBarLayout(context: ParseContext): Lr2BarLayout {
       rivalLampDestination: context.barRivalLampDst.at(-1),
       rivalLampKeyframes: [...context.barRivalLampDst],
     },
+    declarationOrder: context.barLayoutDeclarationOrder,
   };
 }
 
@@ -2618,6 +2726,7 @@ function createSliderElements(context: ParseContext): Lr2SliderElement[] {
       type: entry.type,
       muki: entry.muki,
       range: entry.range,
+      declarationOrder: entry.source.declarationOrder,
     });
   }
   return elements;
@@ -2644,6 +2753,7 @@ function createButtonElements(context: ParseContext): Lr2ButtonElement[] {
       click: entry.click,
       panel: entry.panel,
       plusOnly: entry.plusOnly,
+      declarationOrder: entry.source.declarationOrder,
     });
   }
   return elements;
@@ -2671,6 +2781,7 @@ function createOnMouseElements(context: ParseContext): Lr2OnMouseElement[] {
       hitOffsetY: entry.hitOffsetY,
       hitWidth: entry.hitWidth,
       hitHeight: entry.hitHeight,
+      declarationOrder: entry.source.declarationOrder,
     });
   }
   return elements;
@@ -2712,6 +2823,7 @@ function createMouseCursorElements(context: ParseContext): Lr2MouseCursorElement
       source: { ...source, imagePath },
       destination,
       keyframes: [...dstGroup],
+      declarationOrder: source.declarationOrder,
     });
   }
   return elements;
@@ -2746,6 +2858,7 @@ function createJudgeElements(context: ParseContext): Lr2Skin['judges'] {
         },
         destination,
         keyframes: [...dstGroup],
+        declarationOrder: source.declarationOrder,
       },
     ];
   }

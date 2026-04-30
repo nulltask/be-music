@@ -14,6 +14,7 @@ import type {
   Lr2NumberElement,
   Lr2OnMouseElement,
   Lr2Skin,
+  Lr2SliderElement,
   Lr2SpecialGraphic,
   Lr2TextElement,
 } from './lr2-skin.ts';
@@ -272,6 +273,16 @@ export class PixiSongSelectView {
   private readonly background = new Graphics();
   /** Skin static images (gated on `SELECT_DEFAULT_OPS`). */
   private readonly skinLayer = new Container();
+  /**
+   * Skin elements that the LR2 CSV declared AFTER the bar list
+   * (`#SRC_BAR_BODY`). They overlay the bar list — the canonical
+   * use case is the song-list scroll-position slider that lives
+   * to the right of the bars. Routing happens via each
+   * element's `declarationOrder` compared to the bar layout's;
+   * `pre-bar` elements stay in `skinLayer` (drawn behind bars),
+   * `post-bar` elements come here.
+   */
+  private readonly skinForegroundLayer = new Container();
   /**
    * Per-frame section timing tracker. Logs every second when enabled
    * via `?perf` URL flag or `globalThis.__BE_MUSIC_PERF__ = true`.
@@ -643,10 +654,23 @@ export class PixiSongSelectView {
     this.background.label = 'select/background';
     this.skinLayer.label = 'select/skin';
     this.listLayer.label = 'select/list';
+    this.skinForegroundLayer.label = 'select/skin-fg';
     this.title.label = 'select/title';
     this.hint.label = 'select/hint';
     this.sceneRoot.addChild(this.viewportBackground, this.root);
-    this.root.addChild(this.background, this.skinLayer, this.listLayer, this.title, this.hint);
+    // Stack order (back → front):
+    //   background → skinLayer (chrome behind bars) → listLayer
+    //   (the song bars) → skinForegroundLayer (chrome that the
+    //   CSV declared AFTER bars, e.g. scroll slider) →
+    //   title / hint (Drop hints, fallback chrome).
+    this.root.addChild(
+      this.background,
+      this.skinLayer,
+      this.listLayer,
+      this.skinForegroundLayer,
+      this.title,
+      this.hint,
+    );
     // Attach to the host's already-initialised stage. The canvas is
     // owned by the host and shared across scenes.
     host.app.stage.addChild(this.sceneRoot);
@@ -1422,6 +1446,14 @@ export class PixiSongSelectView {
     if (skin.barLayout.flash) {
       referencedPaths.add(skin.barLayout.flash.source.imagePath);
     }
+    // SLIDER atlases — the LR2 default Select skin draws the
+    // song-list scroll-position knob (slider type=1) using the
+    // same shared atlas as the rest of the chrome, but a custom
+    // skin could route it through a dedicated sheet, so preload
+    // every referenced source path here too.
+    for (const slider of skin.sliders) {
+      referencedPaths.add(slider.source.imagePath);
+    }
     await Promise.all(
       [...referencedPaths].map(async (path) => {
         const texture = await loadSkinAssetTexture(skin, path);
@@ -1746,6 +1778,7 @@ export class PixiSongSelectView {
     // the gameplay scene).
     disposeChildren(this.skinLayer);
     disposeChildren(this.listLayer);
+    disposeChildren(this.skinForegroundLayer);
 
     // Decay the smooth-scroll offset toward 0. Exponential decay with
     // a ~80 ms time constant gives a snappy slide that's substantially
@@ -1888,6 +1921,26 @@ export class PixiSongSelectView {
    * that depend on the currently-selected song. Op-gated against `ops`
    * (built by `computeSelectOps` so per-song flags affect the frame).
    */
+  /**
+   * Picks the right scene-graph layer for a chrome element based
+   * on its CSV-stream declaration order vs the bar layout's. The
+   * routing rule mirrors LR2's "later declarations paint on
+   * top": elements declared after `#SRC_BAR_BODY` go to
+   * `skinForegroundLayer` (drawn on top of the song-list bars);
+   * everything else stays on `skinLayer` behind the bars.
+   *
+   * Falls back to `skinLayer` for skins without a bar list
+   * (no `barLayout.declarationOrder`) — every chrome element is
+   * effectively "before bars" because there are no bars.
+   */
+  private pickChromeLayer(declarationOrder: number): Container {
+    const barOrder = this.options.skin?.barLayout.declarationOrder;
+    if (barOrder !== undefined && declarationOrder > barOrder) {
+      return this.skinForegroundLayer;
+    }
+    return this.skinLayer;
+  }
+
   private renderSkinFrame(skin: Lr2Skin, ops: ReadonlySet<number>): void {
     for (const image of skin.images) {
       // Visibility uses the interpolated DST so an alpha=0 keyframe
@@ -1898,7 +1951,7 @@ export class PixiSongSelectView {
       }
       const sprite = this.makeStaticImageSprite(image);
       if (sprite) {
-        this.skinLayer.addChild(sprite);
+        this.pickChromeLayer(image.declarationOrder).addChild(sprite);
       }
     }
 
@@ -1924,7 +1977,7 @@ export class PixiSongSelectView {
       if (value === undefined) {
         continue;
       }
-      renderNumberElement(this.skinLayer, number, value, this.skinTextures, dst);
+      renderNumberElement(this.pickChromeLayer(number.declarationOrder), number, value, this.skinTextures, dst);
     }
 
     // TEXT panels — title / artist / genre / level label / etc. LR2
@@ -1943,7 +1996,7 @@ export class PixiSongSelectView {
       if (value === undefined || value.length === 0) {
         continue;
       }
-      this.skinLayer.addChild(makeTextSprite(value, text, dst));
+      this.pickChromeLayer(text.declarationOrder).addChild(makeTextSprite(value, text, dst));
     }
 
     // BUTTON panels — sort / filter / panel-toggle / play / replay /
@@ -1957,7 +2010,7 @@ export class PixiSongSelectView {
       if (!isDestinationVisible(this.evaluateElementDst(button), ops, this.timerActive)) {
         continue;
       }
-      this.renderButtonElement(button);
+      this.renderButtonElement(button, this.pickChromeLayer(button.declarationOrder));
     }
 
     // ONMOUSE — hover overlays. Drawn on top of buttons / images
@@ -1976,12 +2029,38 @@ export class PixiSongSelectView {
       }
       const sprite = this.makeSlicedSprite(onMouse.source, dst, 'onmouse');
       if (sprite) {
-        this.skinLayer.addChild(sprite);
+        this.pickChromeLayer(onMouse.declarationOrder).addChild(sprite);
+      }
+    }
+
+    // SLIDER — runtime-positioned indicator knobs. The select
+    // scene cares mainly about `type=1` (曲セレクトポジション,
+    // i.e. song-list scroll position): the LR2 default skin
+    // draws the long vertical orange/teal bar to the right of
+    // the bar list whose top edge tracks the cursor through
+    // the entries. `pickChromeLayer` routes each slider into
+    // the right side of the bar list per its CSV declaration
+    // order (see helper for the layering contract).
+    for (const slider of skin.sliders) {
+      const dst = this.evaluateElementDst(slider);
+      if (!isDestinationVisible(dst, ops, this.timerActive)) {
+        continue;
+      }
+      const value = this.resolveSelectSliderValue(slider.type);
+      if (value === undefined) {
+        continue;
+      }
+      const sprite = this.makeSliderSprite(slider, dst, value);
+      if (sprite) {
+        this.pickChromeLayer(slider.declarationOrder).addChild(sprite);
       }
     }
 
     // MOUSECURSOR — replaces the system cursor with the skin's
-    // sprite. Drawn last so it sits on top of everything else.
+    // sprite. Always lands on the foreground layer regardless of
+    // its CSV declaration order: a custom cursor that sat behind
+    // the bar list would defeat the point of having a custom
+    // cursor in the first place.
     if (this.mouseX >= 0 && this.mouseY >= 0) {
       for (const cursor of skin.mouseCursors) {
         const dst = this.evaluateElementDst(cursor);
@@ -1990,10 +2069,84 @@ export class PixiSongSelectView {
         }
         const sprite = this.makeMouseCursorSprite(cursor, dst);
         if (sprite) {
-          this.skinLayer.addChild(sprite);
+          this.skinForegroundLayer.addChild(sprite);
         }
       }
     }
+  }
+
+  /**
+   * Returns a 0..1 value for an `#SRC_SLIDER` element on the
+   * select screen, or `undefined` when the type isn't meaningful
+   * here (e.g. play-time hi-speed / shutter sliders that LR2
+   * still allows in select skins as decoration).
+   *
+   * The only slider we currently drive is `type=1` ("曲セレクト
+   * ポジション") — the orange / teal scroll-position bar that
+   * lives to the right of the bar list. Its value is the
+   * cursor's index normalised against the visible entry count,
+   * so a 1-entry list pins to 0 (top) and the last entry of an
+   * N-entry list pins to 1 (bottom).
+   */
+  private resolveSelectSliderValue(type: number): number | undefined {
+    if (type === 1) {
+      const entries = this.currentEntries();
+      if (entries.length <= 1) return 0;
+      return Math.max(0, Math.min(1, this.selectedIndex / (entries.length - 1)));
+    }
+    return undefined;
+  }
+
+  /**
+   * Builds a `Sprite` for an LR2 `#SRC_SLIDER` element placed at
+   * a position along its DST track determined by `value` (0..1)
+   * and the source's `muki` direction. Mirrors
+   * `pixi-result.ts::makeSliderSprite` — keeping the two
+   * implementations in lockstep avoids subtle slider-position
+   * drift between the two scenes.
+   *
+   * Drag interaction (clicking the knob to scroll the list) is
+   * NOT wired here; the bar is read-only on the select view for
+   * now. Adding drag support would mean intercepting
+   * pointer events on the slider's hit rect and translating drag
+   * delta back into a `selectedIndex` jump.
+   */
+  private makeSliderSprite(element: Lr2SliderElement, dst: Lr2DestinationRect, value: number): Sprite | undefined {
+    const texture = this.skinTextures.get(element.source.imagePath);
+    if (!texture) return undefined;
+    const rect = normaliseRect(dst);
+    if (rect.w <= 0 || rect.h <= 0) return undefined;
+    const ratio = Math.max(0, Math.min(1, value));
+    const cropped = createCroppedTexture(texture, {
+      x: element.source.x,
+      y: element.source.y,
+      w: element.source.w / Math.max(1, element.source.divx),
+      h: element.source.h / Math.max(1, element.source.divy),
+    });
+    if (!cropped) return undefined;
+    const sprite = new Sprite(cropped);
+    sprite.label = `slider[type=${element.type}]`;
+    let x = rect.x;
+    let y = rect.y;
+    switch (element.muki) {
+      case 'down':
+        y = rect.y + element.range * ratio;
+        break;
+      case 'up':
+        y = rect.y - element.range * ratio;
+        break;
+      case 'right':
+        x = rect.x + element.range * ratio;
+        break;
+      case 'left':
+        x = rect.x - element.range * ratio;
+        break;
+    }
+    sprite.position.set(x, y);
+    sprite.width = rect.w;
+    sprite.height = rect.h;
+    applyDestinationToSprite(sprite, dst);
+    return sprite;
   }
 
   /**
@@ -2073,7 +2226,7 @@ export class PixiSongSelectView {
    * button type. Switching the displayed cell is a one-line change
    * (`resolveButtonState(button.type)`) once option state is live.
    */
-  private renderButtonElement(button: Lr2ButtonElement): void {
+  private renderButtonElement(button: Lr2ButtonElement, target: Container): void {
     const baseTexture = this.skinTextures.get(button.source.imagePath);
     if (!baseTexture) {
       return;
@@ -2106,7 +2259,7 @@ export class PixiSongSelectView {
     sprite.width = rect.w;
     sprite.height = rect.h;
     applyDestinationToSprite(sprite, dst);
-    this.skinLayer.addChild(sprite);
+    target.addChild(sprite);
   }
 
   /**
@@ -2238,6 +2391,12 @@ export class PixiSongSelectView {
       source: level.source,
       destination: absoluteDst,
       keyframes: [absoluteDst],
+      // Synthetic element built per-frame for digit rendering;
+      // never enters the pre/post-bar layer routing, so a `-1`
+      // sentinel is fine here. The renderer pumps it directly
+      // through `renderNumberElement` rather than the chrome
+      // dispatcher.
+      declarationOrder: -1,
     };
     // Suppress leading zeros — `keta` on BAR_LEVEL means "max number
     // of digits" (slot reservation for centering math), NOT "force
