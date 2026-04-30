@@ -70,7 +70,7 @@ import {
   HISPEED_MAX,
   HISPEED_MIN,
   HISPEED_STEP,
-  INTRO_DELAY_MS,
+  FALLBACK_INTRO_DELAY_MS,
   LR2_1P_BOMB_TIMER_BASE,
   LR2_1P_KEYON_TIMER_BASE,
   LR2_2P_BOMB_TIMER_BASE,
@@ -698,19 +698,87 @@ export class PixiGameplayView {
     // BGA preload runs concurrently after audio so the playfield can mount
     // immediately; missing or slow-loading bitmaps fade in mid-play.
     void this.prepareBga();
-    // Hold notes off the playfield until the LR2 intro animation finishes.
-    // The default 7-keys skin's slide-ins terminate around t=2000–3000ms;
-    // we use 3 seconds to leave a small breathing room before the first
-    // chart event fires.
-    this.sceneStartTime = performance.now();
-    this.startTime = this.sceneStartTime + INTRO_DELAY_MS;
+    // Compute the LR2 intro timeline. Per `docs/LR2SkinHelp.md`:
+    //
+    //   t=0                                 scene start (timer 0)
+    //   t=LOADSTART                         load begins
+    //   t=LOADSTART + LOADEND               load ends, "READY" fires
+    //                                       (timer 40)
+    //   t=LOADSTART + LOADEND + PLAYSTART   chart begins, play-start
+    //                                       fires (timer 41)
+    //
+    // `#PLAYSTART` is therefore the gap between load-end and chart
+    // start, not the full intro length. The LR2 default 7-keys
+    // ships LOADSTART=0, LOADEND≈1500, PLAYSTART≈1500 → ~3 s before
+    // notes begin, which lines up with how the skin's title
+    // overlay fades out (anchored to timer 40 with a fade keyframe
+    // landing at ~PLAYSTART ms after that). Treating PLAYSTART as
+    // the full intro length (the previous version) made the chart
+    // start while the title was still on screen.
+    const now = performance.now();
+    this.sceneStartTime = now;
+    const timing = this.options.skin?.timing ?? {};
+    const loadStartMs = Math.max(0, timing.loadStart ?? 0);
+    const loadEndOffsetMs = loadStartMs + Math.max(0, timing.loadEnd ?? 0);
+    const playStartOffsetMs = loadEndOffsetMs + Math.max(0, timing.playStart ?? 0);
+    // Skinless / non-LR2 demos have no timing directives; fall
+    // back to the legacy 3-second wait so the slide-in chrome of
+    // the built-in fallback frame still has room to land before
+    // notes begin.
+    const introMs = playStartOffsetMs > 0 ? playStartOffsetMs : FALLBACK_INTRO_DELAY_MS;
+    this.startTime = now + introMs;
+    // Seed the LR2 scene-stage timers so the skin's
+    // `#STARTINPUT` / `#LOADSTART` / `#LOADEND` / `#PLAYSTART`
+    // directives drive their attached `#DST_*` keyframes
+    // (without seeds, anything anchored to those timers would
+    // pin to time 0 and never animate). Each entry is a ms
+    // offset from scene mount; offsets <= 0 fire the timer
+    // immediately, larger offsets defer the seed via
+    // `setTimeout`.
+    //
+    // Timer 2 (FADEOUT) and timer 3 (CLOSE) are deliberately NOT
+    // seeded here even when the skin authored `#FADEOUT` /
+    // `#CLOSE` durations: those directives describe scene-EXIT
+    // phase animations (= "when the scene starts to close, fade
+    // out for N ms then close"), not offsets from scene mount.
+    // Seeding timer 3 mid-play makes the LR2 default skin's
+    // "STAGE FAILED" plate (anchored to timer 3) draw on top of
+    // the gameplay field. We'll seed them properly when the host
+    // wires an explicit "begin exit" event later.
+    this.timerStartedAt.set(0, now);
+    this.seedSceneStageTimer(1, timing.startInput);
+    this.seedSceneStageTimer(40, loadEndOffsetMs);
+    this.seedSceneStageTimer(41, playStartOffsetMs);
     // Anchor the chart's seconds=0 to the same precise audio-context
     // timestamp so background samples and visual notes share one clock.
     if (this.audioContext) {
-      this.audioContextStartTime = this.audioContext.currentTime + INTRO_DELAY_MS / 1000;
+      this.audioContextStartTime = this.audioContext.currentTime + introMs / 1000;
     }
     this.app.canvas.focus();
     this.tick();
+  }
+
+  /**
+   * Schedules a scene-stage timer to fire at `offsetMs` after
+   * scene mount. Used for LR2 timing directives
+   * (`#STARTINPUT` / `#LOADSTART` / `#LOADEND` / `#FADEOUT` /
+   * `#CLOSE`) — see `mount()` for the full mapping.
+   *
+   * `undefined` offset → fall back to "fire immediately" so a
+   * skin that omits the directive still has the timer
+   * available to elements that gated on it (matches the
+   * pre-skin-timing default behaviour).
+   */
+  private seedSceneStageTimer(timer: number, offsetMs: number | undefined): void {
+    const safeOffset = offsetMs === undefined ? 0 : Math.max(0, offsetMs);
+    if (safeOffset <= 0) {
+      this.timerStartedAt.set(timer, this.sceneStartTime);
+      return;
+    }
+    window.setTimeout(() => {
+      if (this.disposed) return;
+      this.timerStartedAt.set(timer, performance.now());
+    }, safeOffset);
   }
 
   /**
@@ -1209,26 +1277,37 @@ export class PixiGameplayView {
       }
       return Math.max(0, performance.now() - this.sceneStartTime);
     }
-    // Scene-anchored timers (scene start / READY / play start) start
-    // ticking at `sceneStartTime` — the moment the gameplay view mounted
-    // — so LR2 intro slide-ins, the scratch turntable rotation, and the
-    // AUTOPLAY label all animate during the pre-play window. This is
-    // intentionally separate from `startTime`, which only ticks once
-    // notes/audio actually begin (after the 3 s intro delay).
-    if (timer === 0 || timer === 40 || timer === 41) {
-      return Math.max(0, performance.now() - this.sceneStartTime);
-    }
+    // Explicit seed wins. `mount()` seeds the LR2 scene-stage
+    // timers (0 / 1 / 40 / 41) based on the skin's
+    // `#STARTINPUT` / `#LOADSTART` / `#LOADEND` / `#PLAYSTART`
+    // directives, so anchored keyframes animate from the right
+    // moment. NO fallback for unsigned 40 / 41 here: a
+    // pre-fire fallback would make the title plate / loading
+    // ring (anchored to timer 40 in the LR2 default skin) start
+    // ticking from scene mount instead of from `READY`, jumping
+    // backwards once the deferred seed lands and producing the
+    // "title appears at the wrong time" symptom. Timer 0 is
+    // always seeded immediately at mount, so it doesn't need a
+    // fallback either.
     const started = this.timerStartedAt.get(timer);
-    if (started === undefined) {
-      return 0;
+    if (started !== undefined) {
+      return Math.max(0, performance.now() - started);
     }
-    return Math.max(0, performance.now() - started);
+    return 0;
   }
 
   private isTimerActive(timer: number): boolean {
-    if (timer === 0 || timer === 40 || timer === 41) {
-      // 0  = scene main, 40 = READY (post-LOADEND), 41 = play start.
-      // For a play session in progress, all three are active.
+    // Explicit seed = active. Scene-stage timers (0 / 1 / 40 /
+    // 41) are seeded by `mount()` based on the skin's LR2
+    // timing directives, so checking `timerStartedAt` here
+    // honours their actual fire moment — e.g. timer 40
+    // (READY) stays inactive until `#LOADSTART + #LOADEND` ms
+    // have elapsed, and the LR2 default skin's title plate +
+    // loading ring (anchored to timer 40) only paint from
+    // that moment onward, just as the LR2 reference video
+    // shows them appearing mid-intro rather than at scene
+    // mount.
+    if (this.timerStartedAt.has(timer)) {
       return true;
     }
     // Judgement display timers (1P/2P). LR2 fires these on every judgement so

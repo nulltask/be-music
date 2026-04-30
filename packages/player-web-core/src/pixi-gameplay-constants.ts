@@ -22,7 +22,14 @@ export const HISPEED_MIN = 0.1;
 export const HISPEED_MAX = 6.0;
 export const HISPEED_STEP = 0.1;
 
-export const INTRO_DELAY_MS = 3000;
+/**
+ * Fallback time-to-chart-start (in ms) used when the active LR2
+ * skin doesn't author a `#PLAYSTART` directive. The skin's
+ * timing wins when it specifies one — see `Lr2SkinTiming.playStart`.
+ * 3 s leaves enough breathing room for the slide-in chrome of
+ * skinless / non-LR2 demos before notes begin.
+ */
+export const FALLBACK_INTRO_DELAY_MS = 3000;
 
 export const LR2_1P_KEYON_TIMER_BASE = 100;
 export const LR2_2P_KEYON_TIMER_BASE = 110;
