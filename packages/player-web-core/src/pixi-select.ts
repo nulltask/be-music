@@ -2084,15 +2084,30 @@ export class PixiSongSelectView {
    * The only slider we currently drive is `type=1` ("曲セレクト
    * ポジション") — the orange / teal scroll-position bar that
    * lives to the right of the bar list. Its value is the
-   * cursor's index normalised against the visible entry count,
-   * so a 1-entry list pins to 0 (top) and the last entry of an
-   * N-entry list pins to 1 (bottom).
+   * **visual** cursor index normalised against the visible entry
+   * count, where "visual" means we lag the discrete selectedIndex
+   * by the active smooth-scroll offset so the knob slides in
+   * lockstep with the bars (LR2 itself doesn't define slider
+   * easing in the skin format — `#SRC_SLIDER` / `#DST_SLIDER`
+   * just specify rail geometry — so the smoothing has to come
+   * from the runtime).
+   *
+   * Convention: `listScrollOffset` is positive when the bars are
+   * visually still at their previous slot (e.g. right after a
+   * `down` press the offset is `+slotHeight` and decays toward 0).
+   * The apparent cursor index is therefore
+   * `selectedIndex - listScrollOffset / slotHeight`, which equals
+   * the previous index right at the press and converges to the
+   * new index as the offset decays. A 1-entry list pins to 0.
    */
   private resolveSelectSliderValue(type: number): number | undefined {
     if (type === 1) {
       const entries = this.currentEntries();
       if (entries.length <= 1) return 0;
-      return Math.max(0, Math.min(1, this.selectedIndex / (entries.length - 1)));
+      const slotHeight = this.estimateSlotHeight();
+      const visualIndex =
+        slotHeight > 0 ? this.selectedIndex - this.listScrollOffset / slotHeight : this.selectedIndex;
+      return Math.max(0, Math.min(1, visualIndex / (entries.length - 1)));
     }
     return undefined;
   }
