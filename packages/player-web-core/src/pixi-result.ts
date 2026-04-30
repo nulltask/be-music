@@ -22,6 +22,7 @@ import {
   renderNumberElement,
 } from './lr2-render.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
+import { disposeChildren } from './pixi-utils.ts';
 import { resolveChartAsset, resolveSongSource } from './library.ts';
 import type { BrowserSongCollection } from './types.ts';
 import type { PixiGameplayResultData } from './pixi-gameplay.ts';
@@ -469,8 +470,16 @@ export class PixiResultView {
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
     this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
-    this.skinLayer.removeChildren();
-    this.fallbackLayer.removeChildren();
+    // `disposeChildren` (vs bare `removeChildren`) is essential
+    // here: the per-frame skin / fallback rebuild allocates fresh
+    // `Sprite`, `Text` and (for polylines) `Graphics` nodes every
+    // tick. Bare detach leaves their renderer-side state alive,
+    // which the original report described as "browser freezes
+    // after the song ends" — accumulated GraphicsContext + glyph
+    // atlas slots stalled the next reconcile pass. See
+    // `pixi-utils.ts` for the full rationale.
+    disposeChildren(this.skinLayer);
+    disposeChildren(this.fallbackLayer);
     if (useSkin && skin) {
       const ops = computeResultOps(this.result, skin);
       this.renderSkin(skin, ops);

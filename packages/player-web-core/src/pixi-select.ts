@@ -29,6 +29,7 @@ import {
 } from './lr2-render.ts';
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
+import { disposeChildren } from './pixi-utils.ts';
 import { groupSongsByFolder, resolveChartAsset, resolveSongSource } from './library.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
@@ -1565,12 +1566,16 @@ export class PixiSongSelectView {
     this.root.scale.set(viewport.scale);
     this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
 
-    // Just orphan old children — `child.destroy()` per child each
-    // frame had measurable overhead and isn't necessary: orphaned
-    // sprites are GC-eligible and their textures stay owned by the
-    // view-level texture map.
-    this.skinLayer.removeChildren();
-    this.listLayer.removeChildren();
+    // `disposeChildren` (vs bare `removeChildren`) frees the
+    // GraphicsContext / glyph-atlas state Pixi v8 keeps registered
+    // for every detached node. The select scene rebuilds its skin
+    // and song-list sprites every frame, so without this we'd
+    // leak renderer-side resources for as long as the player
+    // browses the song list. See `pixi-utils.ts` for the full
+    // story (the same leak caused the post-chart browser hang on
+    // the gameplay scene).
+    disposeChildren(this.skinLayer);
+    disposeChildren(this.listLayer);
 
     // Decay the smooth-scroll offset toward 0. Exponential decay with
     // a ~80 ms time constant gives a snappy slide that's substantially

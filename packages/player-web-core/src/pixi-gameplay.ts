@@ -55,6 +55,7 @@ import {
 import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-recorder.ts';
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
+import { disposeChildren } from './pixi-utils.ts';
 import type { BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import { createBeatResolver } from '@be-music/chart';
@@ -2480,11 +2481,12 @@ export class PixiGameplayView {
   }
 
   private renderBombs(): void {
-    // Just orphan old children — `child.destroy()` per child each
-    // frame had measurable overhead and isn't necessary: orphaned
-    // sprites are GC-eligible and their textures stay owned by the
-    // view-level texture map.
-    this.bombLayer.removeChildren();
+    // Pixi v8 holds renderer-side state (Graphics contexts, glyph
+    // atlas tiles) for every detached child until each one is
+    // explicitly destroyed. `disposeChildren` does both — see
+    // `pixi-utils.ts` for why a bare `removeChildren()` was the
+    // root cause of the post-chart browser hang.
+    disposeChildren(this.bombLayer);
     this.cleanupBombTimers();
     // When an LR2 skin is loaded the bomb sprite is already part of the
     // skin's `#DST_IMAGE` set (one entry per lane, gated on bomb timer
@@ -2546,7 +2548,7 @@ export class PixiGameplayView {
    * the next frame without explicit dirty tracking.
    */
   private renderBga(seconds: number): void {
-    this.bgaLayer.removeChildren();
+    disposeChildren(this.bgaLayer);
     const skin = this.options.skin;
     if (!skin || !this.hasBga || skin.bgas.length === 0) {
       return;
@@ -2675,8 +2677,8 @@ export class PixiGameplayView {
   }
 
   private renderSkin(width: number, height: number): void {
-    this.skinLayer.removeChildren();
-    this.overlayLayer.removeChildren();
+    disposeChildren(this.skinLayer);
+    disposeChildren(this.overlayLayer);
     const skin = this.options.skin;
     if (!skin) {
       renderFallbackLr2Frame(this.skinLayer);
@@ -3314,7 +3316,7 @@ export class PixiGameplayView {
   }
 
   private renderNotes(seconds: number, _height: number): void {
-    this.noteLayer.removeChildren();
+    disposeChildren(this.noteLayer);
     if (this.isIntroPlaying()) {
       // Intro period — the LR2 skin is sliding its frame chrome in. Notes
       // and measure lines stay off-screen until the playhead is live.
@@ -3655,7 +3657,7 @@ export class PixiGameplayView {
   }
 
   private renderText(width: number, height: number, seconds: number): void {
-    this.textLayer.removeChildren();
+    disposeChildren(this.textLayer);
     // Bottom-left status (title / time / HS / judge counts) is only
     // useful when there's no LR2 skin painting the same information
     // via NUMBER / TEXT elements. With a skin loaded we'd duplicate
