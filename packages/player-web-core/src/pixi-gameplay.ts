@@ -1752,6 +1752,7 @@ export class PixiGameplayView {
         this.commitFinalJudge('BAD', headSignedDeltaMs, seconds, channel);
       } else {
         this.commitFinalJudge(headJudge, headSignedDeltaMs, seconds, channel);
+        this.triggerBombOnNonMiss(channel, headJudge);
       }
       return;
     }
@@ -1777,6 +1778,21 @@ export class PixiGameplayView {
         : tailJudge;
     const finalSignedDeltaMs = finalJudge === headJudge ? headSignedDeltaMs : tailSignedDeltaMs;
     this.commitFinalJudge(finalJudge, finalSignedDeltaMs, seconds, channel);
+    this.triggerBombOnNonMiss(channel, finalJudge);
+  }
+
+  /**
+   * Fires a lane bomb only when the verdict is "successful enough"
+   * (PERFECT / GREAT / GOOD). Single-note presses already gate
+   * inline at the call-site (`if (judge !== 'BAD')`); the LN
+   * finalize paths funnel through this helper instead so all four
+   * commit sites — single-note, manual LN release, manual auto-
+   * over-hold, auto LN tail — share the same gate without
+   * duplicating the predicate.
+   */
+  private triggerBombOnNonMiss(channel: string, judge: JudgeKind): void {
+    if (judge === 'BAD' || judge === 'POOR') return;
+    this.triggerBomb(channel);
   }
 
   /**
@@ -1798,6 +1814,7 @@ export class PixiGameplayView {
       if (active.note.endSeconds! + graceSec < seconds) {
         this.activeLongNotes.delete(channel);
         this.commitFinalJudge(active.headJudge, active.headSignedDeltaMs, seconds, channel);
+        this.triggerBombOnNonMiss(channel, active.headJudge);
       }
     }
   }
@@ -2107,6 +2124,7 @@ export class PixiGameplayView {
       if (endSeconds <= seconds) {
         this.activeLongNotes.delete(channel);
         this.commitFinalJudge('PERFECT', 0, endSeconds, channel);
+        this.triggerBombOnNonMiss(channel, 'PERFECT');
         this.stopKeyOnTimer(channel);
       }
     }
