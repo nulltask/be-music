@@ -11,6 +11,7 @@ import type {
   BrowserSongSourceKind,
 } from './types.ts';
 import { isChartFilePath } from './drop.ts';
+import { lookupBytesCaseInsensitive } from './file-lookup.ts';
 
 export { basename, dirname, normalizePath } from '@be-music/utils/core';
 
@@ -269,6 +270,14 @@ export function resolveSongSource(
  * convention of looking next to the chart file first, then falling
  * back to the source's root and the basename. Used by both gameplay
  * (BGA/audio) and select (banner / preview) loaders.
+ *
+ * Lookup is **case-insensitive** at every candidate step: real-world
+ * BMS archives routinely mix `KICK.WAV` / `kick.WAV` / `Kick.wav`,
+ * and demanding the chart's casing match the file's would scuttle a
+ * large fraction of legitimate drops on case-sensitive filesystems
+ * (and in `webkitRelativePath` directory drops). The
+ * `lookupBytesCaseInsensitive` helper builds a lazy lower-key index
+ * the first time it's called per source and caches it via WeakMap.
  */
 export function resolveChartAsset(
   source: BrowserSongAssetSource,
@@ -284,7 +293,13 @@ export function resolveChartAsset(
     normalizePath(`${base}/${baseName}`),
     baseName,
   ];
-  return candidates.map((path) => source.files.get(path)).find(Boolean);
+  for (const candidate of candidates) {
+    const bytes = lookupBytesCaseInsensitive(source.files, candidate);
+    if (bytes) {
+      return bytes;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -303,9 +318,10 @@ export function resolveChartAsset(
  *   4. `.wav` (always-correct fallback)
  *   5. the original path verbatim (covers `.flac` / `.oga` / etc.)
  *
- * Each step also tries the upper-case variant for case-sensitive
- * source maps (zip drops, `webkitRelativePath` directories on
- * non-Mac). Returns the first matching byte array, or undefined.
+ * Case is handled by `resolveChartAsset` itself (case-insensitive
+ * lookup), so this list no longer needs explicit upper-case
+ * duplicates — `kick.OPUS` and `kick.opus` both resolve through
+ * the lower-cased extension variant.
  */
 export function resolveChartAudioAsset(
   source: BrowserSongAssetSource,
@@ -330,13 +346,9 @@ function audioFallbackPaths(path: string): string[] {
   const base = path.slice(0, dotIndex);
   const candidates = [
     `${base}.opus`,
-    `${base}.OPUS`,
     `${base}.ogg`,
-    `${base}.OGG`,
     `${base}.mp3`,
-    `${base}.MP3`,
     `${base}.wav`,
-    `${base}.WAV`,
   ];
   if (!candidates.includes(path)) {
     candidates.push(path);

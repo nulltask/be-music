@@ -1,4 +1,5 @@
 import { basename, dirname, normalizePath } from '@be-music/utils/core';
+import { findCaseInsensitivePath, lookupBytesCaseInsensitive } from './file-lookup.ts';
 import type { Lr2Skin } from './lr2-skin.ts';
 
 export function resolveLr2IncludePath(
@@ -16,9 +17,18 @@ export function resolveLr2IncludePath(
     normalized,
     normalizePath(`${baseDirectory}/${basename(normalized)}`),
   ];
-  const exact = candidates.find((candidate) => sourceFiles.has(candidate));
-  if (exact) {
-    return exact;
+  // Case-insensitive exact-match: real LR2 themes reference paths
+  // like `LR2files\Theme\LR2\Result\result_normal.csv` while the
+  // dropped directory layout might be `LR2files/theme/lr2/Result/...`.
+  // `findCaseInsensitivePath` returns the original key (so the
+  // recursive `readLr2Path(sourceFiles.get(returnedKey))` lookup hits
+  // a real entry), or undefined to fall through to the partial-path
+  // walks below.
+  for (const candidate of candidates) {
+    const matched = findCaseInsensitivePath(sourceFiles, candidate);
+    if (matched) {
+      return matched;
+    }
   }
   if (grandParent && parentName) {
     const withGrandparent = [...sourceFiles.keys()].find((path) =>
@@ -44,8 +54,13 @@ export function resolveLr2IncludePath(
 export function resolveLr2AssetBytes(skin: Lr2Skin, rawPath: string): Uint8Array | undefined {
   const normalized = normalizeLr2Path(rawPath);
   const candidates = [normalized, basename(normalized)];
+  // Case-insensitive exact-match: skin elements that reference
+  // `LR2files\Theme\LR2\Result\parts.tga` should resolve when the
+  // dropped tree spells the file `Parts.TGA`. Falls through to the
+  // wildcard / parent-suffix walks below for genuinely partial-path
+  // references (e.g. `*.bmp` `#CUSTOMFILE` patterns).
   for (const candidate of candidates) {
-    const bytes = skin.files.get(candidate);
+    const bytes = lookupBytesCaseInsensitive(skin.files, candidate);
     if (bytes) {
       return bytes;
     }
