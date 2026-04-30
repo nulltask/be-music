@@ -24,83 +24,95 @@ body {
 }
 
 /*
- * Debug toolbar.
- *
- * Positioned absolutely in the top-right of `.shell` so it floats
- * above the canvas instead of taking a top-row slice from it. Lets
- * the player select / autoplay / compressor toggles stay reachable
- * during gameplay (the previous header layout hid them under the
- * `.playing` class). Compact spacing and a translucent background
- * keep the toolbar from drowning out whatever is rendering behind.
+ * Hidden file input behind the GUI's "Open folder / ZIP"
+ * button. lil-gui's function controllers fire the GUI's
+ * `onChange` on click, which we use to forward `.click()` to
+ * this input — but the input itself never needs to be visible.
  */
-.toolbar {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 10;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  align-items: center;
-  padding: 6px 8px;
-  background: rgb(17 22 32 / 0.78);
-  border: 1px solid #293141;
-  border-radius: 8px;
-  /*
-   * The toolbar isn't full-width anymore, so wrap when it grows
-   * past whatever right-side space is available. `max-width` keeps
-   * it from creeping all the way across narrow viewports.
-   */
-  max-width: calc(100vw - 16px);
-}
-
-.toolbar button,
-.toolbar label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid #3a4354;
-  border-radius: 6px;
-  background: #1b2230;
-  color: #f8fafc;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.toolbar input[type='file'] {
+.hidden-file-input {
   display: none;
 }
 
 /*
- * Record toggle button. Idle = same flat dark style as the
- * other toolbar buttons; active (`.recording`) lights up red
- * with a soft pulse so the user can tell at a glance that
- * capture is running. Disabled briefly while the WebM blob is
- * being assembled on stop, so the toolbar shows the
- * "finalising" state without flickering between modes.
+ * lil-gui custom theming — match the rest of the demo's
+ * dark / yellow accent palette. lil-gui ships CSS variables we
+ * can override at the root level rather than fighting its
+ * built-in selectors.
+ *
+ * `backdrop-filter: blur` lets the gameplay canvas + drop hint
+ * subtly read through the panel, so the controls don't feel
+ * like a hard rectangle pasted on top of the scene. The
+ * background colours therefore drop to fairly low alpha values;
+ * widget / row backgrounds keep slightly more opacity for
+ * legibility against busy chart graphics. `-webkit-backdrop-filter`
+ * is paired in for Safari / iOS WebKit support.
  */
-.toolbar button.record {
-  /* Mirrors the default `.toolbar button` palette so idle
-   * buttons read consistently next to the rest of the strip;
-   * the active state below tinkers with colour only. */
-  color: #f5f5f5;
+.lil-gui.root {
+  --background-color: rgb(17 22 32 / 0.45);
+  --text-color: #f8fafc;
+  --title-background-color: rgb(11 14 22 / 0.55);
+  --title-text-color: #f8fafc;
+  --widget-color: rgb(27 34 48 / 0.7);
+  --hover-color: #ffd166;
+  --focus-color: #ffd166;
+  --number-color: #ffd166;
+  --string-color: #ffd166;
+  --font-family: system-ui, sans-serif;
+  z-index: 10;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
 }
 
-.toolbar button.record.recording {
+/*
+ * Folder children inherit the root's `--background-color` (transparent),
+ * so blur applied to .lil-gui.root covers the whole panel. We
+ * deliberately don't add a separate `backdrop-filter` to the
+ * folder, otherwise stacked filters would re-blur an already
+ * blurred image and over-soften the chart visuals.
+ */
+
+/*
+ * Record-button accent. lil-gui paints function controllers as
+ * a single-row button — when capture is live we colour it red
+ * via the `.recording` class on the controller's row element
+ * and pulse the box-shadow so it stays visible without dominating
+ * gameplay rendered behind it.
+ */
+.lil-gui .controller.recording {
   background: #c33b3b;
-  border-color: #c33b3b;
-  color: #fff;
-  /* Subtle pulse — readable as "live" without distracting
-   * from gameplay below. */
   animation: record-pulse 1.4s ease-in-out infinite;
 }
 
-.toolbar button.record:disabled {
-  opacity: 0.6;
-  cursor: progress;
+.lil-gui .controller.recording .name,
+.lil-gui .controller.recording .widget {
+  color: #fff;
+}
+
+/*
+ * Armed state — the user clicked Record on the select screen
+ * before picking a song. The button is in standby until the
+ * next play kicks off, at which point the `recording` class
+ * takes over. We use a softer amber + slower pulse so it reads
+ * as "ready, but not yet capturing".
+ */
+.lil-gui .controller.arming {
+  background: #b8841d;
+  animation: record-arming 2s ease-in-out infinite;
+}
+
+.lil-gui .controller.arming .name,
+.lil-gui .controller.arming .widget {
+  color: #fff;
+}
+
+@keyframes record-arming {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(184 132 29 / 0.5);
+  }
+  50% {
+    box-shadow: 0 0 6px 2px rgb(184 132 29 / 0.5);
+  }
 }
 
 @keyframes record-pulse {
@@ -111,73 +123,6 @@ body {
   50% {
     box-shadow: 0 0 8px 2px rgb(195 59 59 / 0.6);
   }
-}
-
-/*
- * Per-stage compressor toggle group. Sits inline with the rest of
- * the toolbar controls but bunches its three checkboxes together
- * with a thin separator background so it reads as a sub-group of
- * the "Compressor" checkbox to its left.
- *
- * `.hidden` collapses the whole group when the active mode doesn't
- * support per-stage gating (legacy / off).
- */
-.toolbar .comp-stages {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border: 1px solid #2a3242;
-  border-radius: 6px;
-  background: rgb(11 14 22 / 0.6);
-}
-
-.toolbar .comp-stages.hidden {
-  display: none;
-}
-
-.toolbar .comp-stages > label {
-  /*
-   * The bordered group already contains them, so individual labels
-   * drop their own border + background to avoid a double frame.
-   */
-  border: 0;
-  background: transparent;
-  padding: 0 4px;
-  min-height: 26px;
-}
-
-.toolbar label.autoplay {
-  gap: 8px;
-}
-
-.toolbar label.autoplay input[type='checkbox'] {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: #ffd166;
-  cursor: pointer;
-}
-
-.toolbar label.autoplay:has(input:checked) {
-  background: #ffd166;
-  color: #1b2230;
-  border-color: #ffd166;
-}
-
-.status {
-  /*
-   * Status reads as a hint, not a button — drop the min-width so
-   * the toolbar stays compact, and shrink the font slightly to
-   * match the surrounding controls.
-   */
-  color: #aab4c2;
-  font-size: 12px;
-  white-space: nowrap;
-  max-width: 360px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /*

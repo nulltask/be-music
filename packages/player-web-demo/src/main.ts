@@ -23,6 +23,11 @@ import {
   type PixiGameplayResultData,
   type PixiSongSelectNavigation,
 } from '@be-music/player-web-core';
+// lil-gui auto-injects its stylesheet at construction time (see
+// `injectStyles` option, default `true`), so we don't import its
+// CSS explicitly — its package.json doesn't expose the file via
+// `exports` anyway.
+import GUI, { type Controller } from 'lil-gui';
 import './styles.css';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -32,19 +37,15 @@ if (!app) {
 
 app.innerHTML = `
   <div class="shell empty">
-    <div class="toolbar">
-      <label>BMS folder / ZIP<input id="songs" type="file" webkitdirectory multiple /></label>
-      <label class="autoplay"><input id="autoplay" type="checkbox" /> Auto play</label>
-      <label class="autoplay"><input id="compressor" type="checkbox" /> Compressor</label>
-      <span class="comp-stages" id="comp-stages">
-        <label class="autoplay"><input id="comp-key" type="checkbox" checked /> Key</label>
-        <label class="autoplay"><input id="comp-bgm" type="checkbox" checked /> BGM</label>
-        <label class="autoplay"><input id="comp-master" type="checkbox" checked /> Master</label>
-      </span>
-      <button id="record" class="record" type="button">● Record</button>
-      <button id="back" type="button">Song select</button>
-      <span class="status" id="status">Ready</span>
-    </div>
+    <!--
+      Hidden file input — triggered by the GUI's "Open folder /
+      ZIP" button. lil-gui has no native file controller, so we
+      forward a synthetic click to this hidden input from the
+      function controller's handler. \`webkitdirectory\` makes the
+      browser show a folder picker on Chromium / Safari; multiple
+      ZIPs / charts can also be selected via the same input.
+    -->
+    <input id="songs" type="file" webkitdirectory multiple class="hidden-file-input" />
     <input id="search" class="search-input" type="search" placeholder="Search title / artist / genre..." />
     <div class="stage" id="stage">
       <!--
@@ -78,22 +79,13 @@ app.innerHTML = `
 interface PlayerWebDemoElements {
   stage: HTMLDivElement;
   shell: HTMLDivElement;
-  status: HTMLSpanElement;
-  songInput: HTMLInputElement;
-  autoPlayInput: HTMLInputElement;
-  compressorInput: HTMLInputElement;
   /**
-   * Container for the per-stage compressor toggles (`Key` / `BGM`
-   * / `Master`). Hidden via a CSS class when the active compressor
-   * mode is `'legacy'` (single-comp architecture has no per-stage
-   * concept) or `'off'` (every stage is bypassed wholesale, so
-   * showing per-stage toggles would be misleading).
+   * Hidden `<input type="file" webkitdirectory>` triggered from a
+   * lil-gui function controller. The DOM element survives across
+   * lil-gui rebuilds (e.g. theme changes) so the underlying
+   * `change` listener stays bound through the session.
    */
-  compStages: HTMLSpanElement;
-  compKeyInput: HTMLInputElement;
-  compBgmInput: HTMLInputElement;
-  compMasterInput: HTMLInputElement;
-  backButton: HTMLButtonElement;
+  songInput: HTMLInputElement;
   /**
    * Floating DOM `<input>` overlay positioned near the LR2 default
    * skin's search-text rect. Focus is given to it when the user
@@ -102,14 +94,6 @@ interface PlayerWebDemoElements {
    * `PixiSongSelectView.setSearchQuery`.
    */
   searchInput: HTMLInputElement;
-  /**
-   * Toggle button that flips the gameplay view's recorder on /
-   * off. Active state is reflected with a `.recording` class
-   * (red glow) so the user can tell they're capturing. Only
-   * meaningful while a chart is playing — the click handler
-   * silently no-ops when no gameplay view is mounted.
-   */
-  recordButton: HTMLButtonElement;
   /**
    * Centred overlay shown while a dropped folder / ZIP is being
    * read + parsed. Toggled via the `.visible` class so CSS
@@ -120,6 +104,35 @@ interface PlayerWebDemoElements {
   loadingLabel: HTMLDivElement;
   loadingBarFill: HTMLDivElement;
   loadingCounter: HTMLDivElement;
+}
+
+/**
+ * Plain-data state object backing the lil-gui controllers. Each
+ * key matches a controller; reads / writes go through the
+ * same `state.foo` reference so a programmatic update (e.g.
+ * `setAudioCompressor` triggered by a URL flag) can call
+ * `controller.updateDisplay()` and the GUI reflects the new
+ * value. Function members are bound to the host so `this` keeps
+ * its meaning when lil-gui invokes them.
+ */
+interface DemoGuiState {
+  autoPlay: boolean;
+  compressor: boolean;
+  compressorKey: boolean;
+  compressorBgm: boolean;
+  compressorMaster: boolean;
+  /**
+   * Read-only status text (loading summaries, "Playing: …",
+   * recording state, etc.). Bound to a disabled string
+   * controller so users can copy it out of the GUI but can't
+   * edit it. The runtime updates this via {@link setStatus}
+   * which also pushes the new value into the controller.
+   */
+  status: string;
+  /** Triggered by clicking the GUI's "Open folder / ZIP" button. */
+  openFolder: () => void;
+  /** Triggered by clicking the GUI's record toggle. */
+  record: () => void;
 }
 
 class PlayerWebDemoApp {
@@ -182,31 +195,83 @@ class PlayerWebDemoApp {
    * checkbox can also reach `off` mid-session).
    */
   private compressorMode: 'split' | 'legacy' = 'split';
+  /**
+   * GUI state object the lil-gui controllers read / write. Held
+   * on the instance so the GUI build code and the runtime
+   * handlers (`toggleRecording` etc.) share a single source of
+   * truth — programmatic updates go through `state.foo = …` +
+   * `controller.updateDisplay()`.
+   */
+  private readonly guiState: DemoGuiState;
+  /**
+   * lil-gui handles for controllers we need to address by name
+   * after construction — toggling the per-stage folder
+   * visibility, renaming the record button, and reflecting URL-
+   * flag-driven compressor changes back into the GUI.
+   */
+  private gui: GUI | undefined;
+  private compressorStageFolder: GUI | undefined;
+  private recordController: Controller | undefined;
+  /**
+   * Disabled string controller used as the read-only status
+   * row inside the lil-gui panel. We hold a reference so
+   * {@link setStatus} can call `updateDisplay()` directly
+   * rather than relying on lil-gui's `.listen()` polling.
+   */
+  private statusController: Controller | undefined;
+  /**
+   * `true` after the user clicks Record on the song-select
+   * screen but before they actually pick a song. Consumed (and
+   * cleared) by `playSong` immediately after the gameplay view
+   * mounts, kicking off `startRecording()` so the very first
+   * frame of the chart is captured.
+   *
+   * A second click on Record before picking a song flips this
+   * back to `false` ("disarm"), and any non-pick path that
+   * leaves the select view (e.g. dropping a new folder mid-
+   * armed) is responsible for clearing it via {@link disarmAutoRecord}
+   * so the flag doesn't survive into a future session that
+   * shouldn't be auto-captured.
+   */
+  private autoRecordArmed = false;
   public constructor(private readonly elements: PlayerWebDemoElements) {
+    this.guiState = {
+      autoPlay: false,
+      compressor: false,
+      compressorKey: true,
+      compressorBgm: true,
+      compressorMaster: true,
+      status: 'Ready',
+      openFolder: () => this.elements.songInput.click(),
+      record: () => {
+        void this.toggleRecording();
+      },
+    };
     // Pick up the `?compressor=split|legacy|off` URL flag once at
     // boot. We resolve it through `parseCompressorMode` (the same
     // helper exported from `audio-bus.ts`) so the recognised values
     // stay synced with the runtime API. Unrecognised / missing flag
-    // → fall through to defaults: architecture `'split'`, checkbox
-    // unchecked (compressor off).
+    // → fall through to defaults: architecture `'split'`, GUI
+    // checkbox unchecked (compressor off).
     //
     // `?compressor=split|legacy` is an explicit opt-in to that
     // architecture and implies compression should be ON, so the
-    // checkbox is checked too. `?compressor=off` is redundant with
-    // the new default (checkbox starts unchecked) but kept as an
-    // explicit form for documentation / scripted launches.
+    // checkbox is pre-checked too. `?compressor=off` is redundant
+    // with the new default but kept as an explicit form for
+    // documentation / scripted launches.
     const flag: CompressorMode | undefined = parseCompressorMode(
       new URL(window.location.href).searchParams.get('compressor'),
     );
     if (flag === 'split' || flag === 'legacy') {
       this.compressorMode = flag;
-      this.elements.compressorInput.checked = true;
+      this.guiState.compressor = true;
     } else if (flag === 'off') {
-      this.elements.compressorInput.checked = false;
+      this.guiState.compressor = false;
     }
   }
 
   public start(): void {
+    this.buildGui();
     void this.showSelect();
 
     this.elements.songInput.addEventListener('change', () => {
@@ -216,7 +281,7 @@ class PlayerWebDemoApp {
       }
       void (async () => {
         // Browser file-picker drops go through the same loading
-        // overlay as drag-drop so a folder picked via the toolbar
+        // overlay as drag-drop so a folder picked via the GUI
         // shows progress too. Hide the select scene up-front so
         // its rendering / BGM stays paused while we read + parse
         // — the user shouldn't see the song list flicker mid-load.
@@ -229,32 +294,6 @@ class PlayerWebDemoApp {
         }
         await this.showSelect();
       })();
-    });
-
-    this.elements.backButton.addEventListener('click', () => {
-      void this.showSelect();
-    });
-
-    this.elements.compressorInput.addEventListener('change', () => {
-      this.gameplayView?.setAudioCompressor(this.elements.compressorInput.checked);
-      this.refreshCompressorStageVisibility();
-    });
-    this.elements.compKeyInput.addEventListener('change', () => {
-      this.gameplayView?.setAudioCompressorStageEnabled('key', this.elements.compKeyInput.checked);
-    });
-    this.elements.compBgmInput.addEventListener('change', () => {
-      this.gameplayView?.setAudioCompressorStageEnabled('bgm', this.elements.compBgmInput.checked);
-    });
-    this.elements.compMasterInput.addEventListener('change', () => {
-      this.gameplayView?.setAudioCompressorStageEnabled('master', this.elements.compMasterInput.checked);
-    });
-    this.refreshCompressorStageVisibility();
-
-    // Record toggle: starts the gameplay recorder while a chart
-    // is playing, stops + downloads the WebM blob on a second
-    // click. Silently no-ops when no gameplay view exists.
-    this.elements.recordButton.addEventListener('click', () => {
-      void this.toggleRecording();
     });
 
     // Global `/` shortcut focuses the search input. Standard
@@ -326,20 +365,95 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Hide the per-stage `Key` / `BGM` / `Master` checkboxes when
-   * they don't apply to the current state:
+   * Hide the per-stage `Key` / `BGM` / `Master` folder when it
+   * doesn't apply to the current state:
    *
    * - Compressor checkbox unchecked → bus is in `'off'` mode, every
    *   stage is bypassed already.
    * - `?compressor=legacy` → the legacy architecture has just one
    *   compressor; per-stage toggles don't map onto it.
    *
-   * The CSS class drives `display: none` on the container so the
-   * toolbar reflows around the missing element.
+   * lil-gui's `show(false)` collapses the folder out of the panel
+   * entirely, matching the previous `display: none` behaviour.
    */
   private refreshCompressorStageVisibility(): void {
-    const visible = this.elements.compressorInput.checked && this.compressorMode === 'split';
-    this.elements.compStages.classList.toggle('hidden', !visible);
+    const visible = this.guiState.compressor && this.compressorMode === 'split';
+    this.compressorStageFolder?.show(visible);
+  }
+
+  /**
+   * Builds the floating lil-gui control panel and wires every
+   * controller to the gameplay / scene state. Centralising this
+   * in one method lets us bind handles to specific controllers
+   * (`recordController`, `compressorStageFolder`) up-front, so
+   * runtime code can address them by name (renaming the record
+   * button when capture starts, hiding the per-stage folder on
+   * compressor mode change) without re-querying the DOM.
+   */
+  private buildGui(): void {
+    const gui = new GUI({ title: 'be-music demo', width: 280 });
+    this.gui = gui;
+    // Status row pinned to the top of the panel — first thing
+    // the user sees, so a glance at the GUI is enough to tell
+    // whether a load is in flight, what's currently playing, or
+    // where a saved recording landed. Disabled so the field
+    // reads as a passive read-out instead of an editable input.
+    // Updates are pushed explicitly via `setStatus`; cheaper
+    // than lil-gui's `.listen()` polling and the only writer is
+    // this class anyway.
+    this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
+    this.statusController.domElement.classList.add('status-row');
+    gui.add(this.guiState, 'openFolder').name('Open folder / ZIP');
+    gui
+      .add(this.guiState, 'autoPlay')
+      .name('Auto play')
+      .onChange((value: boolean) => {
+        // `autoPlay` is consumed at gameplay-mount time; nothing
+        // to push onto a live view because the gameplay scene
+        // captures the flag in its constructor. The `value` arg
+        // satisfies lil-gui's typed signature without us needing
+        // to re-read `state.autoPlay` ourselves.
+        this.guiState.autoPlay = value;
+      });
+    gui
+      .add(this.guiState, 'compressor')
+      .name('Compressor')
+      .onChange((value: boolean) => {
+        this.gameplayView?.setAudioCompressor(value);
+        this.refreshCompressorStageVisibility();
+      });
+    const stages = gui.addFolder('Compressor stages');
+    this.compressorStageFolder = stages;
+    stages
+      .add(this.guiState, 'compressorKey')
+      .name('Key')
+      .onChange((value: boolean) => {
+        this.gameplayView?.setAudioCompressorStageEnabled('key', value);
+      });
+    stages
+      .add(this.guiState, 'compressorBgm')
+      .name('BGM')
+      .onChange((value: boolean) => {
+        this.gameplayView?.setAudioCompressorStageEnabled('bgm', value);
+      });
+    stages
+      .add(this.guiState, 'compressorMaster')
+      .name('Master')
+      .onChange((value: boolean) => {
+        this.gameplayView?.setAudioCompressorStageEnabled('master', value);
+      });
+    this.recordController = gui.add(this.guiState, 'record').name('● Record');
+    this.refreshCompressorStageVisibility();
+  }
+
+  /**
+   * Single chokepoint for status-text updates. Writes the new
+   * value into `guiState` and refreshes the lil-gui controller
+   * so the read-only row repaints with the new text.
+   */
+  private setStatus(text: string): void {
+    this.guiState.status = text;
+    this.statusController?.updateDisplay();
   }
 
   /**
@@ -348,15 +462,37 @@ class PlayerWebDemoApp {
    * blob and triggers a browser download as
    * `<song>.webm`. Errors (codec unavailable, no gameplay view)
    * surface to the status panel.
+   *
+   * Visual state lives entirely on the lil-gui record controller:
+   * `name()` swaps the label between `● Record` / `■ Stop`, and
+   * `disable()` greys it out while the WebM blob is being
+   * assembled on stop. The `.recording` CSS class on the
+   * controller's DOM element drives the red-glow accent so the
+   * lil-gui style takes precedence over our highlight.
    */
   private async toggleRecording(): Promise<void> {
     const gameplay = this.gameplayView;
+    const controller = this.recordController;
     if (!gameplay) {
-      this.elements.status.textContent = 'Recording: start a chart first';
+      // No chart is playing yet — interpret the click as "arm
+      // capture for the next song I pick" so the user can stage
+      // recording from the song-select screen without having to
+      // hit Record at the precise moment gameplay starts. A
+      // second click before picking a song disarms.
+      this.autoRecordArmed = !this.autoRecordArmed;
+      if (this.autoRecordArmed) {
+        controller?.domElement.classList.add('arming');
+        controller?.name('◉ Recording on next song');
+        this.setStatus('Recording armed — pick a song to start capturing');
+      } else {
+        controller?.domElement.classList.remove('arming');
+        controller?.name('● Record');
+        this.setStatus('Recording disarmed');
+      }
       return;
     }
     if (gameplay.isRecording()) {
-      this.elements.recordButton.disabled = true;
+      controller?.disable();
       try {
         const result = await gameplay.stopRecording();
         if (result) {
@@ -364,24 +500,24 @@ class PlayerWebDemoApp {
           downloadBlob(result.blob, filename);
           const seconds = (result.durationMs / 1000).toFixed(1);
           const sizeMb = (result.blob.size / (1024 * 1024)).toFixed(1);
-          this.elements.status.textContent = `Saved ${filename} (${seconds}s, ${sizeMb} MB)`;
+          this.setStatus(`Saved ${filename} (${seconds}s, ${sizeMb} MB)`);
         }
       } finally {
-        this.elements.recordButton.classList.remove('recording');
-        this.elements.recordButton.textContent = '● Record';
-        this.elements.recordButton.disabled = false;
+        controller?.domElement.classList.remove('recording');
+        controller?.name('● Record');
+        controller?.enable();
       }
       return;
     }
     try {
       gameplay.startRecording();
-      this.elements.recordButton.classList.add('recording');
-      this.elements.recordButton.textContent = '■ Stop';
-      this.elements.status.textContent = 'Recording…';
+      controller?.domElement.classList.add('recording');
+      controller?.name('■ Stop');
+      this.setStatus('Recording…');
     } catch (error) {
       // eslint-disable-next-line no-console
       console.warn('[record] start failed', error);
-      this.elements.status.textContent = `Recording unavailable: ${(error as Error).message}`;
+      this.setStatus(`Recording unavailable: ${(error as Error).message}`);
     }
   }
 
@@ -520,9 +656,9 @@ class PlayerWebDemoApp {
       // active skin in-canvas. "0 charts loaded" is suppressed so
       // a theme-only drop doesn't read like an error.
       if (this.collection.songs.length > 0) {
-        this.elements.status.textContent = describeSongCollection(this.collection);
+        this.setStatus(describeSongCollection(this.collection));
       } else if (this.selectSkin || this.resultSkin || Object.keys(this.playSkins).length > 0) {
-        this.elements.status.textContent = 'Theme loaded';
+        this.setStatus('Theme loaded');
       }
       await this.showSelect();
     } finally {
@@ -535,7 +671,7 @@ class PlayerWebDemoApp {
   }
 
   private async loadSongs(files: File[]): Promise<void> {
-    this.elements.status.textContent = 'Loading songs...';
+    this.setStatus('Loading songs...');
     this.collection = await this.library.loadFromFiles(files, {
       onProgress: (progress) => this.applyLoadProgress(progress),
     });
@@ -544,12 +680,12 @@ class PlayerWebDemoApp {
     // is set by `handleDrop` once both theme + songs land, so a
     // mid-flight transient is plenty.
     if (this.collection.songs.length > 0) {
-      this.elements.status.textContent = describeSongCollection(this.collection);
+      this.setStatus(describeSongCollection(this.collection));
     }
   }
 
   private async loadTheme(files: File[]): Promise<void> {
-    this.elements.status.textContent = 'Loading LR2 theme...';
+    this.setStatus('Loading LR2 theme...');
     const loadedTheme = await loadLr2ThemeSkinsFromFiles(files, {
       onProgress: (progress) => this.applyLoadProgress(progress),
     });
@@ -658,13 +794,13 @@ class PlayerWebDemoApp {
     const playSkin = pickLr2PlaySkin(this.playSkins, song);
     this.gameplayView = new PixiGameplayView({
       skin: playSkin,
-      autoPlay: overrides.autoPlay ?? this.elements.autoPlayInput.checked,
-      audioCompressor: this.elements.compressorInput.checked,
+      autoPlay: overrides.autoPlay ?? this.guiState.autoPlay,
+      audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {
-        key: this.elements.compKeyInput.checked,
-        bgm: this.elements.compBgmInput.checked,
-        master: this.elements.compMasterInput.checked,
+        key: this.guiState.compressorKey,
+        bgm: this.guiState.compressorBgm,
+        master: this.guiState.compressorMaster,
       },
       onExit: () => {
         // Stop + download any in-flight recording before we
@@ -686,8 +822,32 @@ class PlayerWebDemoApp {
         void this.playSong(song);
       },
     });
-    this.elements.status.textContent = `Playing: ${song.title}`;
+    this.setStatus(`Playing: ${song.title}`);
     await this.gameplayView.mount(this.sceneHost, song, resolveSongSource(this.collection, song));
+    // Consume the "user pressed Record on the select screen"
+    // flag now that gameplay is mounted — `startRecording`
+    // requires the gameplay AudioContext to exist, which only
+    // happens after `mount`. Failing here is non-fatal: the
+    // select-screen click already nudged the user that capture
+    // would start; if it doesn't (codec missing / no
+    // MediaRecorder), the surfaced error replaces the armed
+    // status without breaking gameplay.
+    if (this.autoRecordArmed) {
+      this.autoRecordArmed = false;
+      const controller = this.recordController;
+      controller?.domElement.classList.remove('arming');
+      try {
+        this.gameplayView.startRecording();
+        controller?.domElement.classList.add('recording');
+        controller?.name('■ Stop');
+        this.setStatus('Recording…');
+      } catch (error) {
+        controller?.name('● Record');
+        // eslint-disable-next-line no-console
+        console.warn('[record] auto-start failed', error);
+        this.setStatus(`Recording unavailable: ${(error as Error).message}`);
+      }
+    }
   }
 
   /**
@@ -715,24 +875,15 @@ class PlayerWebDemoApp {
     await this.resultView.mount(this.sceneHost, data);
     this.gameplayView?.dispose();
     this.gameplayView = undefined;
-    this.elements.status.textContent = `Result: ${data.song.title}`;
+    this.setStatus(`Result: ${data.song.title}`);
   }
 }
 
 new PlayerWebDemoApp({
   stage: document.querySelector<HTMLDivElement>('#stage')!,
   shell: document.querySelector<HTMLDivElement>('.shell')!,
-  status: document.querySelector<HTMLSpanElement>('#status')!,
   songInput: document.querySelector<HTMLInputElement>('#songs')!,
-  autoPlayInput: document.querySelector<HTMLInputElement>('#autoplay')!,
-  compressorInput: document.querySelector<HTMLInputElement>('#compressor')!,
-  compStages: document.querySelector<HTMLSpanElement>('#comp-stages')!,
-  compKeyInput: document.querySelector<HTMLInputElement>('#comp-key')!,
-  compBgmInput: document.querySelector<HTMLInputElement>('#comp-bgm')!,
-  compMasterInput: document.querySelector<HTMLInputElement>('#comp-master')!,
-  backButton: document.querySelector<HTMLButtonElement>('#back')!,
   searchInput: document.querySelector<HTMLInputElement>('#search')!,
-  recordButton: document.querySelector<HTMLButtonElement>('#record')!,
   loadingOverlay: document.querySelector<HTMLDivElement>('#loading-overlay')!,
   loadingLabel: document.querySelector<HTMLDivElement>('#loading-label')!,
   loadingBarFill: document.querySelector<HTMLDivElement>('#loading-bar-fill')!,

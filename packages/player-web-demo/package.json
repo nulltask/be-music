@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@be-music/player-web-core": "workspace:*",
+    "lil-gui": "^0.21.0",
     "vite": "^8.0.8"
-  },
-  "devDependencies": {}
+  }
 }
