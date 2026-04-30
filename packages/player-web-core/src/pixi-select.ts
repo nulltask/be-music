@@ -168,6 +168,21 @@ export interface PixiSongSelectNavigation {
   selectedIndex: number;
 }
 
+/**
+ * Bundle of LR2 system sound-effect bytes (typically loaded from
+ * `LR2files/Sound/lr2/*.wav`). Each field is the encoded audio
+ * payload (WAV / OGG / MP3 / etc.); {@link PixiSongSelectView}
+ * decodes lazily on first play through its own `AudioContext`.
+ */
+export interface PixiSongSelectSystemSounds {
+  /** Bar / cursor-move click. The default LR2 theme calls this `scratch.wav`. */
+  cursorMove?: Uint8Array;
+  /** Folder-enter cue (`f-open.wav`). */
+  folderOpen?: Uint8Array;
+  /** Folder-back cue (`f-close.wav`). */
+  folderClose?: Uint8Array;
+}
+
 export interface PixiSongSelectViewOptions {
   onSongSelected?: (song: BrowserSongEntry) => void;
   /**
@@ -195,6 +210,31 @@ export interface PixiSongSelectViewOptions {
    * via {@link PixiSongSelectView.setSelectBgm}.
    */
   selectBgm?: Uint8Array;
+  /**
+   * One-shot song-decided BGM bytes (typically
+   * `LR2files/Bgm/<theme>/decide.wav`). Fired by hosts via
+   * {@link PixiSongSelectView.playDecideSound} on the select →
+   * gameplay transition. Decoded lazily on first play through
+   * the same `AudioContext` as the looping select BGM. Runtime
+   * swap via {@link PixiSongSelectView.setDecideBgm}.
+   */
+  decideBgm?: Uint8Array;
+  /**
+   * LR2 system sound effects (typically `LR2files/Sound/lr2/*.wav`).
+   * The view fires each effect at the appropriate navigation
+   * event:
+   *
+   * - `cursorMove` (`scratch.wav`) — every cursor advance, both
+   *   keyboard and mouse / wheel triggered.
+   * - `folderOpen` (`f-open.wav`) — drilling into a folder.
+   * - `folderClose` (`f-close.wav`) — backing out of a folder via
+   *   Esc / Backspace / Left.
+   *
+   * Missing entries are silently skipped — themes that don't ship
+   * a particular effect just don't play it. Runtime swap via
+   * {@link PixiSongSelectView.setSystemSounds}.
+   */
+  systemSounds?: PixiSongSelectSystemSounds;
   /**
    * LR2 skin to render the select screen with. When provided, static
    * `#IMAGE` elements decorate the frame and `#SRC_BAR_BODY` /
@@ -397,9 +437,28 @@ export class PixiSongSelectView {
    * resolves.
    */
   private selectBgmDecodeInFlight = false;
+  /**
+   * Encoded one-shot sound effects keyed by name. Stems include
+   * `'decide'` (select → gameplay cue) and the LR2 system
+   * effects (`'cursor-move'` / `'folder-open'` / `'folder-close'`
+   * — see `LR2files/Sound/lr2/*.wav` in the default theme). All
+   * one-shots share the same `AudioContext` + master gain as the
+   * looping select BGM and decode lazily on first use.
+   */
+  private readonly oneShotBytes = new Map<string, Uint8Array>();
+  /** Decoded buffer cache, parallel to {@link oneShotBytes}. */
+  private readonly oneShotBuffers = new Map<string, AudioBuffer>();
+  /**
+   * Names whose decode pass is in flight. Prevents redundant
+   * `decodeAudioData` calls when the same sound is fired multiple
+   * times before the first decode resolves.
+   */
+  private readonly oneShotDecoding = new Set<string>();
 
   public constructor(private options: PixiSongSelectViewOptions = {}) {
     this.selectBgmBytes = options.selectBgm;
+    this.setOneShotBytes('decide', options.decideBgm);
+    this.setSystemSounds(options.systemSounds);
   }
 
   /**
@@ -424,6 +483,111 @@ export class PixiSongSelectView {
       // it via `ensureSelectBgmContext`.
       void this.startSelectBgm();
     }
+  }
+
+  /**
+   * Replaces the one-shot song-decided sound (`decide.wav`).
+   * Pass `undefined` to disable. Drops any cached decoded buffer
+   * — the next `playDecideSound` call will decode the new bytes.
+   */
+  public setDecideBgm(bytes: Uint8Array | undefined): void {
+    this.setOneShotBytes('decide', bytes);
+  }
+
+  /**
+   * Replaces the LR2 system sound-effect bundle. Each field is
+   * an independent bytes payload that drops + re-decodes on
+   * change (next play call decodes the new bytes). Missing
+   * entries clear the previous binding so a theme without
+   * a particular effect simply silences that cue.
+   */
+  public setSystemSounds(sounds: PixiSongSelectSystemSounds | undefined): void {
+    this.setOneShotBytes('cursor-move', sounds?.cursorMove);
+    this.setOneShotBytes('folder-open', sounds?.folderOpen);
+    this.setOneShotBytes('folder-close', sounds?.folderClose);
+  }
+
+  /**
+   * Plays the decide sound once. Used by hosts on the select →
+   * gameplay transition. See {@link playOneShotSound} for the
+   * shared decode / autoplay-policy semantics.
+   */
+  public async playDecideSound(): Promise<void> {
+    await this.playOneShotSound('decide');
+  }
+
+  /**
+   * Stores or clears the encoded bytes for a one-shot sound. We
+   * also drop the decoded buffer so the next `playOneShotSound`
+   * call decodes from scratch — without that a swap would silently
+   * keep playing the old sound until the cache happened to be
+   * invalidated some other way.
+   */
+  private setOneShotBytes(name: string, bytes: Uint8Array | undefined): void {
+    if (bytes === undefined) {
+      this.oneShotBytes.delete(name);
+    } else {
+      this.oneShotBytes.set(name, bytes);
+    }
+    this.oneShotBuffers.delete(name);
+  }
+
+  /**
+   * Plays the named one-shot sound (no loop). Decodes lazily on
+   * first call and caches the buffer for subsequent plays —
+   * cursor-move clicks fire dozens of times per minute on a
+   * fast scroll, so the decode-once / replay-many pattern is
+   * worth the cache.
+   *
+   * No-op when:
+   *
+   * - The sound's bytes are unset (the theme didn't ship that
+   *   effect) — `oneShotBytes.get(name)` returns undefined.
+   * - The `AudioContext` can't be created (e.g. Node test env).
+   * - A decode pass for the same name is already in flight; the
+   *   next caller after the decode resolves will succeed.
+   * - The `AudioContext` is still suspended because no user
+   *   gesture has unlocked it. In practice every trigger site
+   *   (cursor / folder navigation, song decide) IS such a
+   *   gesture, so the resume always lands here.
+   */
+  private async playOneShotSound(name: string): Promise<void> {
+    if (this.disposed) return;
+    const bytes = this.oneShotBytes.get(name);
+    if (!bytes) return;
+    const audioContext = this.ensureSelectBgmContext();
+    if (!audioContext) return;
+    let buffer = this.oneShotBuffers.get(name);
+    if (!buffer) {
+      if (this.oneShotDecoding.has(name)) return;
+      this.oneShotDecoding.add(name);
+      try {
+        buffer = await audioContext.decodeAudioData(bytes.slice().buffer);
+        if (this.disposed) return;
+        this.oneShotBuffers.set(name, buffer);
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn(`[select] one-shot "${name}" decode failed`, error);
+        return;
+      } finally {
+        this.oneShotDecoding.delete(name);
+      }
+    }
+    // Resume in case autoplay policy left the context suspended
+    // — the gesture that triggered this play should satisfy it.
+    void audioContext.resume().catch(() => undefined);
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.selectBgmGain ?? audioContext.destination);
+    source.start();
+    // Auto-disconnect on natural end so the node is GC-eligible.
+    source.onended = (): void => {
+      try {
+        source.disconnect();
+      } catch {
+        // Already disconnected (dispose path) — fine.
+      }
+    };
   }
 
   /**
@@ -553,6 +717,48 @@ export class PixiSongSelectView {
     // positions; the per-frame decay slides them to the new slots.
     const slotHeight = this.estimateSlotHeight();
     this.listScrollOffset += delta * slotHeight;
+    // LR2 system effect — `Sound/lr2/scratch.wav` fires on every
+    // bar move regardless of direction. Fire-and-forget; the
+    // one-shot decode caches after the first use so a fast
+    // wheel-scroll doesn't thrash the audio decoder.
+    void this.playOneShotSound('cursor-move');
+  }
+
+  /**
+   * Drills into `folder`: pushes onto the browse stack, resets
+   * the cursor to the top of the folder's contents, animates
+   * the bar slide as a single down-step, and fires the LR2
+   * folder-open cue (`Sound/lr2/f-open.wav`).
+   *
+   * Three call sites use this — keyboard Enter, skin-mode click,
+   * fallback-row click — so factoring it here keeps their
+   * semantics identical.
+   */
+  private enterFolder(folder: BrowserFolderNode): void {
+    this.browseStack = [...this.browseStack, folder];
+    this.selectedIndex = 0;
+    // Folder traversal: animate as a single "down" step
+    // regardless of how big the index jump was, so the slide
+    // stays bounded.
+    this.noteCursorChange(1);
+    this.render();
+    void this.playOneShotSound('folder-open');
+  }
+
+  /**
+   * Pops one level out of the browse stack. No-op at the root
+   * (mirroring the old inline branch that bailed when
+   * `browseStack.length === 0`). Fires the LR2 folder-close
+   * cue (`Sound/lr2/f-close.wav`).
+   */
+  private leaveFolder(): boolean {
+    if (this.browseStack.length === 0) return false;
+    this.browseStack = this.browseStack.slice(0, -1);
+    this.selectedIndex = 0;
+    this.noteCursorChange(-1);
+    this.render();
+    void this.playOneShotSound('folder-close');
+    return true;
   }
 
   /**
@@ -1259,10 +1465,7 @@ export class PixiSongSelectView {
           const entry = entries[target];
           if (!entry) return;
           if (entry.kind === 'folder') {
-            this.browseStack = [...this.browseStack, entry.folder];
-            this.selectedIndex = 0;
-            this.noteCursorChange(1);
-            this.render();
+            this.enterFolder(entry.folder);
           } else {
             this.options.onSongSelected?.(entry.song);
           }
@@ -1284,10 +1487,7 @@ export class PixiSongSelectView {
       this.render();
       const entry = fallbackEntries[row];
       if (entry?.kind === 'folder') {
-        this.browseStack = [...this.browseStack, entry.folder];
-        this.selectedIndex = 0;
-        this.noteCursorChange(1);
-        this.render();
+        this.enterFolder(entry.folder);
       } else if (entry?.kind === 'song') {
         this.options.onSongSelected?.(entry.song);
       }
@@ -1333,15 +1533,7 @@ export class PixiSongSelectView {
       const entry = entries[this.selectedIndex];
       if (!entry) return;
       if (entry.kind === 'folder') {
-        // Drill into the folder. Reset the cursor so the user lands
-        // on the first song of the folder rather than wherever the
-        // root cursor happened to be.
-        this.browseStack = [...this.browseStack, entry.folder];
-        this.selectedIndex = 0;
-        // Folder traversal: animate as a single "down" step regardless
-        // of how big the index jump was, so the slide stays bounded.
-        this.noteCursorChange(1);
-        this.render();
+        this.enterFolder(entry.folder);
       } else {
         this.options.onSongSelected?.(entry.song);
       }
@@ -1349,12 +1541,8 @@ export class PixiSongSelectView {
       // Pop one level up — Esc / Backspace / ← all back out of the
       // current folder. No-op at the root so the user doesn't get
       // stuck on an "empty list" view by accident.
-      if (this.browseStack.length === 0) return;
+      if (!this.leaveFolder()) return;
       event.preventDefault();
-      this.browseStack = this.browseStack.slice(0, -1);
-      this.selectedIndex = 0;
-      this.noteCursorChange(-1);
-      this.render();
     }
   };
 

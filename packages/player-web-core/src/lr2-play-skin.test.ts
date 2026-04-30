@@ -2,6 +2,7 @@ import type { BeMusicEvent } from '@be-music/json';
 import { describe, expect, test } from 'vitest';
 import {
   pickLr2PlaySkin,
+  pickLr2SystemSoundFile,
   pickLr2ThemeBgmFile,
   summarizeLr2PlaySkins,
   type Lr2PlaySkinMap,
@@ -112,5 +113,58 @@ describe('pickLr2ThemeBgmFile', () => {
   test('returns undefined when the bundle has no BGM file', () => {
     expect(pickLr2ThemeBgmFile([], 'select')).toBeUndefined();
     expect(pickLr2ThemeBgmFile([pathFile('LR2files/Theme/LR2/Select/select.lr2skin')], 'select')).toBeUndefined();
+  });
+});
+
+describe('pickLr2SystemSoundFile', () => {
+  test('picks the LR2 default scratch / folder system effects', () => {
+    // Standard LR2 layout: `LR2files/Sound/lr2/<stem>.wav`. The
+    // matcher should pull each effect out for any stem the
+    // caller asks for.
+    const files = [
+      pathFile('LR2files/Sound/lr2/scratch.wav'),
+      pathFile('LR2files/Sound/lr2/f-open.wav'),
+      pathFile('LR2files/Sound/lr2/f-close.wav'),
+      pathFile('LR2files/Sound/lr2/o-change.wav'),
+    ];
+    expect(pickLr2SystemSoundFile(files, 'scratch')?.name).toBe('scratch.wav');
+    expect(pickLr2SystemSoundFile(files, 'f-open')?.name).toBe('f-open.wav');
+    expect(pickLr2SystemSoundFile(files, 'f-close')?.name).toBe('f-close.wav');
+    expect(pickLr2SystemSoundFile(files, 'o-change')?.name).toBe('o-change.wav');
+  });
+
+  test('matches case-insensitively on path and basename', () => {
+    expect(pickLr2SystemSoundFile([pathFile('LR2FILES/SOUND/LR2/SCRATCH.WAV')], 'scratch')?.name).toBe(
+      'SCRATCH.WAV',
+    );
+  });
+
+  test('rejects scratch.wav outside the Sound/lr2 path', () => {
+    // BMS chart keysounds occasionally use names that look like
+    // system effects. The strict path filter prevents a song's
+    // `scratch.wav` from being misidentified as the cursor click.
+    expect(pickLr2SystemSoundFile([pathFile('Songs/Foo/scratch.wav')], 'scratch')).toBeUndefined();
+    // BGM-folder files mustn't qualify either — `decide.wav`
+    // belongs there but the picker's path filter is just
+    // `Sound/lr2/`, so a BGM-folder match must be rejected by
+    // basename rather than colliding with this picker's allow-
+    // list.
+    expect(pickLr2SystemSoundFile([pathFile('LR2files/Bgm/x/decide.wav')], 'decide')).toBeUndefined();
+  });
+
+  test('accepts alternate audio extensions', () => {
+    // Same as the BGM picker — themes occasionally ship .ogg /
+    // .mp3 mirrors of the WAV originals to save space.
+    expect(pickLr2SystemSoundFile([pathFile('LR2files/Sound/lr2/scratch.ogg')], 'scratch')?.name).toBe(
+      'scratch.ogg',
+    );
+    expect(pickLr2SystemSoundFile([pathFile('LR2files/Sound/lr2/scratch.opus')], 'scratch')?.name).toBe(
+      'scratch.opus',
+    );
+  });
+
+  test('returns undefined when the bundle has no matching effect', () => {
+    expect(pickLr2SystemSoundFile([], 'scratch')).toBeUndefined();
+    expect(pickLr2SystemSoundFile([pathFile('LR2files/Sound/lr2/clear.wav')], 'scratch')).toBeUndefined();
   });
 });

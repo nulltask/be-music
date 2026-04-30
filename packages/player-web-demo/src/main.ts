@@ -111,6 +111,22 @@ class PlayerWebDemoApp {
    * drops mid-session.
    */
   private selectBgmBytes: Uint8Array | undefined;
+  /**
+   * One-shot song-decided sound bytes
+   * (`LR2files/Bgm/<theme>/decide.wav`). Played by
+   * `PixiSongSelectView.playDecideSound` on the select →
+   * gameplay transition.
+   */
+  private decideBgmBytes: Uint8Array | undefined;
+  /**
+   * LR2 system sound-effect bundle
+   * (`LR2files/Sound/lr2/<name>.wav`). Each slot maps to a
+   * `PixiSongSelectView` system-sound name (cursorMove /
+   * folderOpen / folderClose). Forwarded via the constructor
+   * option on first mount and via `setSystemSounds` on
+   * subsequent theme drops.
+   */
+  private systemSoundBundle: { cursorMove?: Uint8Array; folderOpen?: Uint8Array; folderClose?: Uint8Array } = {};
   private selectView: PixiSongSelectView | undefined;
   private gameplayView: PixiGameplayView | undefined;
   private resultView: PixiResultView | undefined;
@@ -393,10 +409,19 @@ class PlayerWebDemoApp {
     this.selectSkin = loadedTheme.selectSkin;
     this.resultSkin = loadedTheme.resultSkin;
     this.selectBgmBytes = loadedTheme.selectBgm?.bytes;
+    this.decideBgmBytes = loadedTheme.decideBgm?.bytes;
+    this.systemSoundBundle = {
+      cursorMove: loadedTheme.systemSounds.cursorMove?.bytes,
+      folderOpen: loadedTheme.systemSounds.folderOpen?.bytes,
+      folderClose: loadedTheme.systemSounds.folderClose?.bytes,
+    };
     // If a select view is already mounted (theme dropped mid-
-    // session), swap in the new BGM live. The view handles decode
-    // + loop start internally.
+    // session), swap in the new BGM / decide / system-effect
+    // bytes live. The view handles decode + loop start (and the
+    // one-shot lazy decodes) internally.
     this.selectView?.setSelectBgm(this.selectBgmBytes);
+    this.selectView?.setDecideBgm(this.decideBgmBytes);
+    this.selectView?.setSystemSounds(this.systemSoundBundle);
     const parts: string[] = [];
     const playSummary = summarizeLr2PlaySkins(this.playSkins, ' / ');
     if (playSummary) {
@@ -426,8 +451,15 @@ class PlayerWebDemoApp {
     this.selectView = new PixiSongSelectView({
       skin: this.selectSkin,
       selectBgm: this.selectBgmBytes,
+      decideBgm: this.decideBgmBytes,
+      systemSounds: this.systemSoundBundle,
       initialNavigation: this.lastSelectNavigation,
       onSongSelected: (song) => {
+        // Fire the decide cue first — it plays through the
+        // select view's AudioContext which keeps running even
+        // after the view is hidden, so the cue isn't cut by the
+        // gameplay mount.
+        void this.selectView?.playDecideSound();
         void this.playSong(song);
       },
       onSongAutoPlay: (song) => {
@@ -435,6 +467,7 @@ class PlayerWebDemoApp {
         // this session regardless of the toolbar checkbox state.
         // We DON'T mutate the checkbox here — the user might want
         // to keep it off for the next manual play.
+        void this.selectView?.playDecideSound();
         void this.playSong(song, { autoPlay: true });
       },
       onSearchActivate: () => {

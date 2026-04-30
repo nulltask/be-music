@@ -37,6 +37,22 @@ export interface Lr2ThemeSkins {
    * from select to gameplay.
    */
   decideBgm?: Lr2ThemeBgm;
+  /**
+   * LR2 system sound effects from `LR2files/Sound/lr2/*.wav`.
+   * Each slot is independently optional — themes that don't
+   * ship a particular effect just leave that field undefined,
+   * and the consuming view silences that cue.
+   */
+  systemSounds: Lr2ThemeSystemSounds;
+}
+
+export interface Lr2ThemeSystemSounds {
+  /** Bar / cursor-move click (`scratch.wav` in the LR2 default theme). */
+  cursorMove?: Lr2ThemeBgm;
+  /** Folder-enter cue (`f-open.wav`). */
+  folderOpen?: Lr2ThemeBgm;
+  /** Folder-back cue (`f-close.wav`). */
+  folderClose?: Lr2ThemeBgm;
 }
 
 const PLAY_SKIN_FALLBACKS: Record<Lr2PlayVariant, readonly Lr2PlayVariant[]> = {
@@ -49,15 +65,19 @@ const PLAY_SKIN_FALLBACKS: Record<Lr2PlayVariant, readonly Lr2PlayVariant[]> = {
 
 export async function loadLr2ThemeSkinsFromFiles(files: Iterable<File>): Promise<Lr2ThemeSkins> {
   const sourceFiles = [...files];
-  const [variantSkins, selectSkin, resultSkin, selectBgm, decideBgm] = await Promise.all([
-    Promise.all(
-      LR2_PLAY_VARIANTS.map((variant) => loadLr2SkinFromFiles(sourceFiles, { kind: 'play', playVariant: variant })),
-    ),
-    loadLr2SkinFromFiles(sourceFiles, { kind: 'select' }),
-    loadLr2SkinFromFiles(sourceFiles, { kind: 'result' }),
-    loadLr2ThemeBgm(sourceFiles, 'select'),
-    loadLr2ThemeBgm(sourceFiles, 'decide'),
-  ]);
+  const [variantSkins, selectSkin, resultSkin, selectBgm, decideBgm, cursorMove, folderOpen, folderClose] =
+    await Promise.all([
+      Promise.all(
+        LR2_PLAY_VARIANTS.map((variant) => loadLr2SkinFromFiles(sourceFiles, { kind: 'play', playVariant: variant })),
+      ),
+      loadLr2SkinFromFiles(sourceFiles, { kind: 'select' }),
+      loadLr2SkinFromFiles(sourceFiles, { kind: 'result' }),
+      loadLr2ThemeBgm(sourceFiles, 'select'),
+      loadLr2ThemeBgm(sourceFiles, 'decide'),
+      loadLr2SystemSound(sourceFiles, 'scratch'),
+      loadLr2SystemSound(sourceFiles, 'f-open'),
+      loadLr2SystemSound(sourceFiles, 'f-close'),
+    ]);
 
   const playSkins: Lr2PlaySkinMap = {};
   LR2_PLAY_VARIANTS.forEach((variant, index) => {
@@ -66,7 +86,18 @@ export async function loadLr2ThemeSkinsFromFiles(files: Iterable<File>): Promise
       playSkins[variant] = skin;
     }
   });
-  return { playSkins, selectSkin, resultSkin, selectBgm, decideBgm };
+  return {
+    playSkins,
+    selectSkin,
+    resultSkin,
+    selectBgm,
+    decideBgm,
+    systemSounds: {
+      cursorMove,
+      folderOpen,
+      folderClose,
+    },
+  };
 }
 
 /**
@@ -98,6 +129,37 @@ export async function loadLr2ThemeBgm(
 const LR2_THEME_BGM_EXTENSIONS = ['.wav', '.ogg', '.mp3', '.opus', '.flac', '.oga'] as const;
 
 /**
+ * Generic theme-audio file picker. Returns the first input-order
+ * file whose path satisfies `pathTest` (case-insensitive) AND
+ * whose basename is exactly `<stem>.<audio-ext>` for one of the
+ * supported codecs. Returns `undefined` when no candidate matches.
+ *
+ * Used as the underlying matcher for both
+ * {@link pickLr2ThemeBgmFile} (filters on `bgm/` in the path) and
+ * {@link pickLr2SystemSoundFile} (filters on `sound/lr2/`).
+ */
+function pickThemeAudioFile(
+  files: readonly File[],
+  pathTest: (lower: string) => boolean,
+  stem: string,
+): File | undefined {
+  for (const file of files) {
+    const path = (file.webkitRelativePath || file.name).toLowerCase();
+    if (!pathTest(path)) continue;
+    const slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    const baseName = slash >= 0 ? path.slice(slash + 1) : path;
+    const dot = baseName.lastIndexOf('.');
+    if (dot < 0) continue;
+    const fileStem = baseName.slice(0, dot);
+    const ext = baseName.slice(dot);
+    if (fileStem !== stem) continue;
+    if (!LR2_THEME_BGM_EXTENSIONS.includes(ext as (typeof LR2_THEME_BGM_EXTENSIONS)[number])) continue;
+    return file;
+  }
+  return undefined;
+}
+
+/**
  * Pure file picker — separated from {@link loadLr2ThemeBgm} so a
  * unit test can verify the matching rules without invoking
  * `arrayBuffer()`. Returns the file from the dropped bundle that
@@ -113,20 +175,42 @@ const LR2_THEME_BGM_EXTENSIONS = ['.wav', '.ogg', '.mp3', '.opus', '.flac', '.og
  * Returns `undefined` when no candidate exists.
  */
 export function pickLr2ThemeBgmFile(files: readonly File[], role: 'select' | 'decide'): File | undefined {
-  for (const file of files) {
-    const path = (file.webkitRelativePath || file.name).toLowerCase();
-    if (!path.includes('bgm/') && !path.includes('bgm\\')) continue;
-    const slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-    const baseName = slash >= 0 ? path.slice(slash + 1) : path;
-    const dot = baseName.lastIndexOf('.');
-    if (dot < 0) continue;
-    const stem = baseName.slice(0, dot);
-    const ext = baseName.slice(dot);
-    if (stem !== role) continue;
-    if (!LR2_THEME_BGM_EXTENSIONS.includes(ext as (typeof LR2_THEME_BGM_EXTENSIONS)[number])) continue;
-    return file;
-  }
-  return undefined;
+  return pickThemeAudioFile(files, (path) => path.includes('bgm/') || path.includes('bgm\\'), role);
+}
+
+/**
+ * Returns the dropped file matching `LR2files/Sound/lr2/<stem>.<ext>`
+ * (case-insensitive on path / basename). Used for LR2 system
+ * sound effects: `scratch` (cursor move click), `f-open` /
+ * `f-close` (folder enter / back), `o-open` / `o-close` /
+ * `o-change` (option panel — UI not yet implemented), `mine`
+ * (gameplay mine note), `clear` / `fail` (result), etc.
+ *
+ * Strict path filter on `sound/lr2/` keeps a per-song WAV named
+ * `scratch.wav` from accidentally being picked as the system
+ * cursor sound; only files inside the `Sound/lr2/` subtree
+ * qualify.
+ */
+export function pickLr2SystemSoundFile(files: readonly File[], stem: string): File | undefined {
+  return pickThemeAudioFile(files, (path) => path.includes('sound/lr2/') || path.includes('sound\\lr2\\'), stem);
+}
+
+/**
+ * Loads the named LR2 system sound effect (e.g. `scratch`,
+ * `f-open`, `f-close`) from the dropped bundle. Returns
+ * `undefined` when the theme doesn't ship that effect.
+ */
+export async function loadLr2SystemSound(
+  files: Iterable<File>,
+  stem: string,
+): Promise<Lr2ThemeBgm | undefined> {
+  const match = pickLr2SystemSoundFile([...files], stem);
+  if (!match) return undefined;
+  const buffer = await match.arrayBuffer();
+  return {
+    path: normalizePath(match.webkitRelativePath || match.name),
+    bytes: new Uint8Array(buffer),
+  };
 }
 
 export function pickLr2PlaySkin(playSkins: Lr2PlaySkinMap, song: BrowserSongEntry): Lr2Skin | undefined {
