@@ -244,6 +244,14 @@ export interface PixiPlayOptions {
    * (160=7K..164=9K). Mirrors `#SRC_BUTTON,type=11` cycling.
    */
   keysFilter: PixiKeysFilter;
+  /**
+   * Sort order for the song-list. Mirrors `#SRC_BUTTON,type=12`
+   * cycling (off / level / title / clear). `'CLEAR'` is a no-op
+   * for now — without persisted play history every chart has the
+   * same "not played" status, so the sorted order matches the
+   * input order anyway.
+   */
+  sort: PixiSelectSort;
 }
 
 /** Allowed values for {@link PixiPlayOptions.difficultyFilter}. */
@@ -251,6 +259,9 @@ export type PixiDifficultyFilter = 'ALL' | 'BEGINNER' | 'NORMAL' | 'HYPER' | 'AN
 
 /** Allowed values for {@link PixiPlayOptions.keysFilter}. */
 export type PixiKeysFilter = 'ALL' | 'KEYS_5' | 'KEYS_7' | 'KEYS_9' | 'KEYS_10' | 'KEYS_14';
+
+/** Allowed values for {@link PixiPlayOptions.sort}. */
+export type PixiSelectSort = 'OFF' | 'LEVEL' | 'TITLE' | 'CLEAR';
 
 /** Allowed values for {@link PixiPlayOptions.bga}. */
 export type PixiBgaMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
@@ -329,6 +340,12 @@ const KEYS_FILTER_TO_OP: Record<Exclude<PixiKeysFilter, 'ALL'>, number> = {
   KEYS_14: 162,
 };
 
+/**
+ * Cycle order for {@link PixiPlayOptions.sort}. LR2 button cells
+ * 0 / 1 / 2 / 3 = off / level / title / clear.
+ */
+const SORT_CYCLE: readonly PixiSelectSort[] = ['OFF', 'LEVEL', 'TITLE', 'CLEAR'];
+
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hiSpeed: 1.5,
@@ -338,6 +355,7 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   scoreGraph: false,
   difficultyFilter: 'ALL',
   keysFilter: 'ALL',
+  sort: 'OFF',
 };
 
 /**
@@ -803,6 +821,9 @@ export class PixiSongSelectView {
     }
     if (!KEYS_FILTER_CYCLE.includes(next.keysFilter)) {
       next.keysFilter = DEFAULT_PLAY_OPTIONS.keysFilter;
+    }
+    if (!SORT_CYCLE.includes(next.sort)) {
+      next.sort = DEFAULT_PLAY_OPTIONS.sort;
     }
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
@@ -1557,10 +1578,13 @@ export class PixiSongSelectView {
       const targetOp = KEYS_FILTER_TO_OP[this.playOptions.keysFilter];
       filtered = filtered.filter((entry) => entry.kind !== 'song' || resolveKeyModeOp(entry.song) === targetOp);
     }
-    if (this.searchQuery.length === 0) {
-      return filtered;
+    if (this.searchQuery.length > 0) {
+      filtered = filtered.filter((entry) => matchesSearchQuery(entry, this.searchQuery));
     }
-    return filtered.filter((entry) => matchesSearchQuery(entry, this.searchQuery));
+    if (this.playOptions.sort !== 'OFF') {
+      filtered = sortBrowseEntries([...filtered], this.playOptions.sort);
+    }
+    return filtered;
   }
 
   /**
@@ -1978,6 +2002,14 @@ export class PixiSongSelectView {
     // visible entry immediately.
     if (type === 11) {
       this.cyclePlayOption('keysFilter', KEYS_FILTER_CYCLE);
+      this.snapCursorAfterFilterChange();
+      return;
+    }
+    // Sort cycle (button_type 12). Reorders the bar list; snap to
+    // the top so the cursor doesn't end up pointing at an entry
+    // that just slid past on the rail.
+    if (type === 12) {
+      this.cyclePlayOption('sort', SORT_CYCLE);
       this.snapCursorAfterFilterChange();
       return;
     }
@@ -3819,6 +3851,76 @@ function resolveDifficultyName(difficulty: number | undefined): string {
  * — `PixiSongSelectView.setSearchQuery` is the front door.
  */
 /**
+ * Sorts a list of browse entries in place by the chosen LR2
+ * sort mode. Folders always sort by label (LEVEL / CLEAR don't
+ * meaningfully apply to a folder bar). Songs sort by:
+ *   - LEVEL: ascending `#PLAYLEVEL` (missing levels last)
+ *   - TITLE: case-insensitive `#TITLE`
+ *   - CLEAR: no-op until per-song clear-history persistence
+ *     lands; falls back to title order so the result is
+ *     deterministic.
+ *
+ * Stable for entries that compare equal — preserves the input
+ * order, which matches the original drop-folder layout.
+ */
+function sortBrowseEntries(entries: BrowserBrowseEntry[], sort: PixiSelectSort): BrowserBrowseEntry[] {
+  const indexed = entries.map((entry, index) => ({ entry, index }));
+  indexed.sort((a, b) => {
+    const cmp = compareEntriesForSort(a.entry, b.entry, sort);
+    return cmp !== 0 ? cmp : a.index - b.index;
+  });
+  return indexed.map((item) => item.entry);
+}
+
+function compareEntriesForSort(a: BrowserBrowseEntry, b: BrowserBrowseEntry, sort: PixiSelectSort): number {
+  // Mixed folder + song lists shouldn't happen at any single nav
+  // depth today, but keep folders ahead of songs so the result is
+  // sensible if that invariant changes.
+  if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
+  if (a.kind === 'folder' && b.kind === 'folder') {
+    return compareStrings(a.folder.label, b.folder.label);
+  }
+  if (a.kind !== 'song' || b.kind !== 'song') return 0;
+  const songA = a.song;
+  const songB = b.song;
+  switch (sort) {
+    case 'LEVEL': {
+      const levelA = coercePlayLevel(songA.playLevel);
+      const levelB = coercePlayLevel(songB.playLevel);
+      if (levelA !== levelB) return levelA - levelB;
+      return compareStrings(songA.title, songB.title);
+    }
+    case 'TITLE':
+      return compareStrings(songA.title, songB.title);
+    case 'CLEAR':
+      // No play-history persistence yet — fall through to a
+      // deterministic title sort so the cycle-button still
+      // reorders the list visibly.
+      return compareStrings(songA.title, songB.title);
+    case 'OFF':
+      return 0;
+  }
+}
+
+function compareStrings(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { sensitivity: 'base' });
+}
+
+/**
+ * Normalises a `playLevel` value (declared as `number | string |
+ * undefined` on `BrowserSongEntry`) to a numeric sort key. Missing
+ * / non-numeric levels sort to the END of an ascending list.
+ */
+function coercePlayLevel(value: number | string | undefined): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+/**
  * Returns whether `song`'s `#DIFFICULTY` field matches the target
  * difficulty enum value. The {@link DIFFICULTY_FILTER_CYCLE} index
  * maps onto LR2's 1=BEGINNER..5=INSANE numbering directly:
@@ -3876,6 +3978,10 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
     // {@link KEYS_FILTER_CYCLE} order
     // (off / 5K / 7K / 10K / 14K / 9K).
     stateIndex = KEYS_FILTER_CYCLE.indexOf(playOptions.keysFilter);
+  } else if (type === 12) {
+    // Sort cycle button — cell index follows the
+    // {@link SORT_CYCLE} order (off / level / title / clear).
+    stateIndex = SORT_CYCLE.indexOf(playOptions.sort);
   } else if (type >= 91 && type <= 96) {
     // Difficulty filter direct-set buttons — cell 0 / 1 = inactive
     // / active depending on whether this button's specific
