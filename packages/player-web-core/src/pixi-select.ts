@@ -64,7 +64,9 @@ const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
   32, // autoplay off
   34, // ghost off
   38, // scoregraph off
-  40, // BGA off (select-screen UI doesn't run BGA)
+  // op 40 / 41 (BGA off / on) — set dynamically from `playOptions.bga`
+  // by `computeSelectOps` so the LR2 default panel-1 BGA toggle button
+  // reflects the live state on cell 0/1/2.
   42, // 1P normal gauge
   44, // 2P normal gauge
   47, // difficulty filter disabled
@@ -201,12 +203,33 @@ export interface PixiPlayOptions {
    * this on for that single launch regardless of what's stored here.
    */
   autoPlay: boolean;
+  /**
+   * BGA (background animation) display mode. Mirrors the LR2
+   * `#SRC_BUTTON,type=72` cycle (OFF / ON / AUTOPLAY ONLY). When
+   * `'AUTOPLAY_ONLY'` the BGA renders only when {@link autoPlay}
+   * (or the AUTOPLAY skin-button override) is also active —
+   * matches LR2 behaviour where AUTOPLAY ONLY hides BGA during
+   * regular human-played sessions.
+   */
+  bga: PixiBgaMode;
 }
+
+/** Allowed values for {@link PixiPlayOptions.bga}. */
+export type PixiBgaMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
+
+/**
+ * Cycle order for {@link PixiPlayOptions.bga}. Matches the LR2
+ * default-skin cell order on the `#SRC_BUTTON,type=72` sprite —
+ * `divx*divy` produces 3 cells (`OFF` / `ON` / `AUTOPLAY ONLY`)
+ * and clicks advance through them in this order.
+ */
+const BGA_CYCLE: readonly PixiBgaMode[] = ['OFF', 'ON', 'AUTOPLAY_ONLY'];
 
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hiSpeed: 1.5,
   autoPlay: false,
+  bga: 'ON',
 };
 
 /**
@@ -233,6 +256,19 @@ function clampHiSpeed(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_PLAY_OPTIONS.hiSpeed;
   const snapped = Math.round(value * 1000) / 1000;
   return Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, snapped));
+}
+
+/**
+ * Returns the next value of `current` in `values`, wrapping back
+ * to the start past the end. Used to advance enum-style play
+ * options on each `#SRC_BUTTON` click (type 40, 42, 50, 72, 73,
+ * etc.). Falls back to `values[0]` when `current` isn't a member
+ * of the cycle (defensive against host-supplied junk values).
+ */
+function cycleNext<T>(values: readonly T[], current: T): T {
+  const index = values.indexOf(current);
+  if (index < 0) return values[0]!;
+  return values[(index + 1) % values.length]!;
 }
 
 /**
@@ -651,6 +687,7 @@ export class PixiSongSelectView {
   public setPlayOptions(partial: Partial<PixiPlayOptions>): void {
     const next = { ...this.playOptions, ...partial };
     next.hiSpeed = clampHiSpeed(next.hiSpeed);
+    if (!BGA_CYCLE.includes(next.bga)) next.bga = DEFAULT_PLAY_OPTIONS.bga;
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
     // currently open — that's the only surface that visualises
@@ -1725,7 +1762,7 @@ export class PixiSongSelectView {
    * static endpoint).
    */
   private handleSkinHitTest(skin: Lr2Skin, virtualX: number, virtualY: number): boolean {
-    const ops = computeSelectOps(this.focusedSong(), this.panelStates);
+    const ops = computeSelectOps(this.focusedSong(), this.panelStates, this.playOptions);
     for (const button of skin.buttons) {
       if (button.click !== 1) continue;
       if (!this.isPanelOpen(button.panel)) continue;
@@ -1782,6 +1819,12 @@ export class PixiSongSelectView {
       this.adjustHiSpeed(direction);
       return;
     }
+    // BGA on/off/autoplay-only (button_type 72). Cycles through
+    // {@link BGA_CYCLE} on each click.
+    if (type === 72) {
+      this.cyclePlayOption('bga', BGA_CYCLE);
+      return;
+    }
     const focused = this.focusedSong();
     if (!focused) return;
     if (type === 15) {
@@ -1817,6 +1860,26 @@ export class PixiSongSelectView {
     // LR2 system effect — `Sound/lr2/o-change.wav`. Fired on any
     // option-value change inside an open panel (HS up/down, gauge
     // toggle, random select, etc.).
+    void this.playOneShotSound('option-change');
+    this.render();
+  }
+
+  /**
+   * Generic cycler for enum-style play options. Advances the value
+   * at `key` to the next entry in `cycle` (wrapping past the end),
+   * notifies host / fires the option-change cue, and re-renders.
+   * Used for `#SRC_BUTTON` types that walk through a fixed set of
+   * states on click (BGA on/off/autoplay-only, gauge type, random,
+   * etc.). Generic so adding a new enum option is a one-liner.
+   */
+  private cyclePlayOption<K extends keyof PixiPlayOptions>(
+    key: K,
+    cycle: readonly PixiPlayOptions[K][],
+  ): void {
+    const next = cycleNext(cycle, this.playOptions[key]);
+    if (next === this.playOptions[key]) return;
+    this.playOptions = { ...this.playOptions, [key]: next };
+    this.options.onPlayOptionsChange?.({ ...this.playOptions });
     void this.playOneShotSound('option-change');
     this.render();
   }
@@ -2089,7 +2152,9 @@ export class PixiSongSelectView {
       //      BACKBMP presence, …) onto static frame elements that
       //      LR2 skins gate with op 70..195.
       //   2. Avoid recomputing the same `Set` per element.
-      const ops = this.perf.time('computeOps', () => computeSelectOps(this.focusedSong(), this.panelStates));
+      const ops = this.perf.time('computeOps', () =>
+        computeSelectOps(this.focusedSong(), this.panelStates, this.playOptions),
+      );
       this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, ops));
       this.perf.time('renderSkinBars', () => this.renderSkinBars(skin, ops));
       // Empty-state hint — shown over the skin when nothing was
@@ -2570,7 +2635,7 @@ export class PixiSongSelectView {
     if (cellWidth <= 0 || cellHeight <= 0) {
       return;
     }
-    const stateIndex = resolveButtonStateIndex(button.type, divx * divy);
+    const stateIndex = resolveButtonStateIndex(button.type, divx * divy, this.playOptions);
     const cellX = stateIndex % divx;
     const cellY = Math.floor(stateIndex / divx);
     const cellTexture =
@@ -3049,6 +3114,7 @@ function pickBarBody(
 function computeSelectOps(
   song: BrowserSongEntry | undefined,
   panelStates: ReadonlySet<number> = EMPTY_PANEL_STATES,
+  playOptions: PixiPlayOptions = DEFAULT_PLAY_OPTIONS,
 ): ReadonlySet<number> {
   const ops = new Set<number>(SELECT_BASE_OPS);
   // LR2 ops 1..9 carry panel-open state. Skin elements gated on
@@ -3058,6 +3124,13 @@ function computeSelectOps(
   for (const which of panelStates) {
     if (which >= 1 && which <= 9) ops.add(which);
   }
+  // BGA on/off (ops 40 / 41). When `bga = AUTOPLAY_ONLY` we mirror
+  // LR2: BGA is "on" when autoplay is also on, "off" otherwise.
+  // The select view never actually plays BGA, so this drives the
+  // panel-1 toggle button cell; the runtime gameplay-side gating
+  // happens in `pixi-gameplay.ts::renderBga`.
+  const bgaActive = playOptions.bga === 'ON' || (playOptions.bga === 'AUTOPLAY_ONLY' && playOptions.autoPlay);
+  ops.add(bgaActive ? 41 : 40);
   if (!song) {
     // Nothing focused — set all `_ABSENT` slots and a sensible "no
     // play data" lamp so the skin's empty-list branch renders.
@@ -3566,16 +3639,17 @@ export function matchesSearchQuery(entry: BrowserBrowseEntry, lowerQuery: string
 /**
  * Returns the cell index a `#SRC_BUTTON` should display for the
  * current option state. Mapped per LR2 `# button_type 一覧`
- * (`docs/LR2SkinHelp.md` lines 5887+). Until the select view tracks
- * its own option / panel / filter state, every type returns its
- * "default" cell (0 for most enums, the OFF cell for toggles). The
- * `cellCount = divx * divy` cap prevents an out-of-range index from
- * sampling outside the source rect.
+ * (`docs/LR2SkinHelp.md` lines 5887+). Types not yet tracked by
+ * {@link PixiPlayOptions} fall back to cell 0 ("OFF" / "ALL" /
+ * "GROOVE" / etc.). The `cellCount = divx * divy` cap prevents an
+ * out-of-range index from sampling outside the source rect.
  */
-function resolveButtonStateIndex(type: number, cellCount: number): number {
-  // Hook point for future state lookup. For now, every button shows
-  // its baseline ("OFF" / "ALL" / "GROOVE" / etc.) artwork.
-  const stateIndex = 0;
+function resolveButtonStateIndex(type: number, cellCount: number, playOptions: PixiPlayOptions): number {
+  let stateIndex = 0;
+  if (type === 72) {
+    // BGA: cell 0 = OFF, cell 1 = ON, cell 2 = AUTOPLAY ONLY.
+    stateIndex = BGA_CYCLE.indexOf(playOptions.bga);
+  }
   return Math.max(0, Math.min(cellCount - 1, stateIndex));
 }
 

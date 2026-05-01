@@ -910,6 +910,7 @@ class PlayerWebDemoApp {
       skin: playSkin,
       autoPlay: overrides.autoPlay ?? playOptions?.autoPlay ?? this.guiState.autoPlay,
       initialHiSpeed: playOptions?.hiSpeed,
+      bga: playOptions?.bga,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {

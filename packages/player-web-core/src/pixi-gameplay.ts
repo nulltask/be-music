@@ -214,6 +214,14 @@ export interface PixiGameplayViewOptions {
    */
   initialHiSpeed?: number;
   /**
+   * BGA display mode picked from the LR2 panel-1 BGA toggle
+   * (`#SRC_BUTTON,type=72`). Defaults to `'ON'` so charts that
+   * ship a BGA render it by default. With `'OFF'` the BGA layer
+   * stays empty for the entire play; with `'AUTOPLAY_ONLY'` the
+   * BGA only shows when {@link autoPlay} is also true.
+   */
+  bga?: 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
+  /**
    * When true (default), the audio bus runs through dynamics
    * compressors that soften clipping when many BMS samples fire
    * simultaneously (jacks, dense BGM stacks). Set to `false` to
@@ -2755,6 +2763,13 @@ export class PixiGameplayView {
    */
   private renderBga(seconds: number): void {
     disposeChildren(this.bgaLayer);
+    // Honour the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`).
+    // - `'OFF'`            → never render
+    // - `'AUTOPLAY_ONLY'`  → render only when autoplay is on
+    // - `'ON'` (default)   → render whenever the chart has BGA
+    const bgaMode = this.options.bga ?? 'ON';
+    if (bgaMode === 'OFF') return;
+    if (bgaMode === 'AUTOPLAY_ONLY' && !this.options.autoPlay) return;
     const skin = this.options.skin;
     if (!skin || !this.hasBga || skin.bgas.length === 0) {
       return;
