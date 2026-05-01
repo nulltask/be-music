@@ -919,6 +919,8 @@ class PlayerWebDemoApp {
       autoScratch1P: playOptions?.autoScratch1P,
       autoScratch2P: playOptions?.autoScratch2P,
       dpFlip: playOptions?.dpFlip,
+      random1P: playOptions?.random1P,
+      random2P: playOptions?.random2P,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {

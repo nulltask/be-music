@@ -281,6 +281,16 @@ export interface PixiGameplayViewOptions {
    */
   dpFlip?: boolean;
   /**
+   * Note-arrangement mode for the 1P keyboard lanes
+   * (`#SRC_BUTTON,type=42`). Applied at chart-prepare time so
+   * the shuffle is consistent across the play session — pressing
+   * F5 (restart) reuses the same `random1P` value but draws a
+   * fresh permutation.
+   */
+  random1P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
+  random2P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  /**
    * When true (default), the audio bus runs through dynamics
    * compressors that soften clipping when many BMS samples fire
    * simultaneously (jacks, dense BGM stacks). Set to `false` to
@@ -1129,6 +1139,13 @@ export class PixiGameplayView {
         note.channel = flipDpChannel(note.channel);
       }
     }
+    // RANDOM / MIRROR / S-RANDOM / SCATTER — shuffle the 1P / 2P
+    // keyboard lanes independently. Scratch (channels 16 / 26)
+    // never moves. Per LR2 convention, the shuffle is drawn at
+    // chart-prepare time so a single play session has a stable
+    // arrangement (F5-restart re-rolls it).
+    applyRandomMode(this.notes, '1', this.options.random1P ?? 'OFF', Math.random);
+    applyRandomMode(this.notes, '2', this.options.random2P ?? 'OFF', Math.random);
     this.maxLongNoteBeatSpan = this.notes.reduce((max, note) => {
       if (note.endBeat === undefined) {
         return max;
@@ -4240,6 +4257,107 @@ function flipDpChannel(channel: string): string {
   if (side === '1') return '2' + lane;
   if (side === '2') return '1' + lane;
   return channel;
+}
+
+/**
+ * 1P / 2P keyboard lane channels in lane-1..lane-7 order.
+ * Scratch (channel 16 / 26) is excluded — `applyRandomMode`
+ * never touches it, matching LR2 where RANDOM/MIRROR shuffle
+ * the keyboard lanes only.
+ */
+const ONE_P_KEYBOARD_LANES: readonly string[] = ['11', '12', '13', '14', '15', '18', '19'];
+const TWO_P_KEYBOARD_LANES: readonly string[] = ['21', '22', '23', '24', '25', '28', '29'];
+
+/**
+ * Shuffles `notes` in place per the chosen arrangement mode. Only
+ * the keyboard lanes for `side` are touched — scratches and the
+ * other side pass through untouched. The `usedLanes` filter trims
+ * the permutation domain to the lanes actually present in the
+ * chart so 5K charts (lanes 1..5 only) MIRROR / RANDOM cleanly
+ * inside that subset.
+ *
+ * - `MIRROR`   — deterministic reversal of `usedLanes`
+ * - `RANDOM`   — single chart-wide permutation (Fisher-Yates with
+ *   the supplied RNG)
+ * - `S-RANDOM` — per-chord permutation; chord notes share the
+ *   beat key, and we re-permute within that group so notes on
+ *   the same beat never collide on one lane
+ * - `SCATTER`  — currently aliased to `RANDOM`; reserved for a
+ *   future per-measure permutation pass
+ */
+function applyRandomMode(
+  notes: RuntimeNote[],
+  side: '1' | '2',
+  mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER',
+  rng: () => number,
+): void {
+  if (mode === 'OFF') return;
+  const allLanes = side === '1' ? ONE_P_KEYBOARD_LANES : TWO_P_KEYBOARD_LANES;
+  const usedLanes = allLanes.filter((lane) => notes.some((note) => note.channel === lane));
+  if (usedLanes.length < 2) return;
+
+  if (mode === 'MIRROR') {
+    const map = new Map<string, string>();
+    for (let index = 0; index < usedLanes.length; index += 1) {
+      map.set(usedLanes[index]!, usedLanes[usedLanes.length - 1 - index]!);
+    }
+    for (const note of notes) {
+      const target = map.get(note.channel);
+      if (target) note.channel = target;
+    }
+    return;
+  }
+
+  if (mode === 'RANDOM' || mode === 'SCATTER') {
+    const perm = shuffleArray([...usedLanes], rng);
+    const map = new Map<string, string>();
+    for (let index = 0; index < usedLanes.length; index += 1) {
+      map.set(usedLanes[index]!, perm[index]!);
+    }
+    for (const note of notes) {
+      const target = map.get(note.channel);
+      if (target) note.channel = target;
+    }
+    return;
+  }
+
+  if (mode === 'S-RANDOM') {
+    // Group keyboard-lane notes by beat — every note in a chord
+    // shares the same `beat` key, so a fresh permutation per group
+    // gives each note a distinct lane within that chord.
+    const grouped = new Map<number, RuntimeNote[]>();
+    for (const note of notes) {
+      if (!usedLanes.includes(note.channel)) continue;
+      const group = grouped.get(note.beat);
+      if (group) {
+        group.push(note);
+      } else {
+        grouped.set(note.beat, [note]);
+      }
+    }
+    for (const chord of grouped.values()) {
+      const perm = shuffleArray([...usedLanes], rng);
+      chord.forEach((note, index) => {
+        const target = perm[index];
+        if (target) note.channel = target;
+      });
+    }
+  }
+}
+
+/**
+ * In-place Fisher-Yates shuffle. Returns the same array for
+ * call-chaining — callers usually just discard the return value
+ * since the array is mutated.
+ */
+function shuffleArray<T>(array: T[], rng: () => number): T[] {
+  for (let index = array.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(rng() * (index + 1));
+    const swap = array[target]!;
+    array[target] = array[index]!;
+    array[index] = swap;
+  }
+  return array;
 }
 
 /**

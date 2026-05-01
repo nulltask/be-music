@@ -302,6 +302,22 @@ export interface PixiPlayOptions {
    * pure gameplay-side transformation.
    */
   dpFlip: boolean;
+  /**
+   * Note-arrangement mode for the 1P keyboard lanes (channels
+   * 11..15 + 18 + 19). Mirrors `#SRC_BUTTON,type=42`. Scratch
+   * (channel 16) is never touched.
+   *
+   * - `OFF`      — original chart layout
+   * - `MIRROR`   — reverse the lane order (1↔7, 2↔6, 3↔5)
+   * - `RANDOM`   — chart-wide random permutation of the lanes
+   * - `S-RANDOM` — per-chord random assignment (chord shapes
+   *   are NOT preserved)
+   * - `SCATTER`  — currently aliased to `RANDOM`; reserved for a
+   *   future per-measure permutation pass
+   */
+  random1P: PixiRandomMode;
+  /** 2P side note arrangement (channels 21..25 + 28 + 29). */
+  random2P: PixiRandomMode;
 }
 
 /** Allowed values for {@link PixiPlayOptions.difficultyFilter}. */
@@ -318,6 +334,9 @@ export type PixiHsFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
 
 /** Allowed values for {@link PixiPlayOptions.hiddenSudden}. */
 export type PixiHiddenSudden = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
+
+/** Allowed values for {@link PixiPlayOptions.random1P} / `random2P`. */
+export type PixiRandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
 
 /** Per-step shutter delta applied by the panel-open `KeyD` / `KeyF` shortcuts. */
 const SHUTTER_STEP = 0.05;
@@ -418,6 +437,13 @@ const HIDDEN_SUDDEN_CYCLE: readonly PixiHiddenSudden[] = ['OFF', 'HIDDEN', 'SUDD
 /** Cycle for boolean OFF/ON LR2 buttons (e.g. autoscratch). */
 const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
 
+/**
+ * Cycle order for {@link PixiPlayOptions.random1P} / `random2P`.
+ * LR2 button cells 0..4 on `#SRC_BUTTON,type=42 / 43`:
+ * off / mirror / random / s-random / scatter.
+ */
+const RANDOM_CYCLE: readonly PixiRandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'];
+
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hiSpeed: 1.5,
@@ -434,6 +460,8 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   autoScratch1P: false,
   autoScratch2P: false,
   dpFlip: false,
+  random1P: 'OFF',
+  random2P: 'OFF',
 };
 
 /**
@@ -924,6 +952,8 @@ export class PixiSongSelectView {
     if (typeof next.autoScratch1P !== 'boolean') next.autoScratch1P = DEFAULT_PLAY_OPTIONS.autoScratch1P;
     if (typeof next.autoScratch2P !== 'boolean') next.autoScratch2P = DEFAULT_PLAY_OPTIONS.autoScratch2P;
     if (typeof next.dpFlip !== 'boolean') next.dpFlip = DEFAULT_PLAY_OPTIONS.dpFlip;
+    if (!RANDOM_CYCLE.includes(next.random1P)) next.random1P = DEFAULT_PLAY_OPTIONS.random1P;
+    if (!RANDOM_CYCLE.includes(next.random2P)) next.random2P = DEFAULT_PLAY_OPTIONS.random2P;
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
     // currently open — that's the only surface that visualises
@@ -2143,6 +2173,15 @@ export class PixiSongSelectView {
     // hand-off.
     if (type === 54) {
       this.cyclePlayOption('dpFlip', BOOLEAN_CYCLE);
+      return;
+    }
+    // Note arrangement RANDOM cycle (button_type 42 = 1P, 43 = 2P).
+    if (type === 42) {
+      this.cyclePlayOption('random1P', RANDOM_CYCLE);
+      return;
+    }
+    if (type === 43) {
+      this.cyclePlayOption('random2P', RANDOM_CYCLE);
       return;
     }
     const focused = this.focusedSong();
@@ -4167,6 +4206,12 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
   } else if (type === 54) {
     // DP FLIP: cell 0 = OFF, cell 1 = ON.
     stateIndex = playOptions.dpFlip ? 1 : 0;
+  } else if (type === 42) {
+    // RANDOM 1P: cells follow {@link RANDOM_CYCLE} order.
+    stateIndex = RANDOM_CYCLE.indexOf(playOptions.random1P);
+  } else if (type === 43) {
+    // RANDOM 2P.
+    stateIndex = RANDOM_CYCLE.indexOf(playOptions.random2P);
   } else if (type >= 91 && type <= 96) {
     // Difficulty filter direct-set buttons — cell 0 / 1 = inactive
     // / active depending on whether this button's specific
