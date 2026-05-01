@@ -955,7 +955,10 @@ export class PixiResultView {
         width: texture.width,
         height: texture.height,
       });
-      cropped = createCroppedTexture(texture, cell) ?? texture;
+      if (cell.w <= 0 || cell.h <= 0) return undefined;
+      const cellTexture = createCroppedTexture(texture, cell);
+      if (!cellTexture) return undefined;
+      cropped = cellTexture;
     }
     const sprite = new Sprite(cropped);
     sprite.label = `image[${path}]`;

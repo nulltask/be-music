@@ -289,6 +289,16 @@ export function pickAnimatedCell(
   loop: number = 0,
   textureSize?: { width: number; height: number },
 ): { x: number; y: number; w: number; h: number } {
+  // "No-graphic" idiom — `w=0,h=0,divx=0,divy=0` is how LR2 skin
+  // authors declare a placeholder element that should paint
+  // nothing (typically a clickable button whose only visible
+  // content is its #SRC_TEXT label, or an empty op-gated slot).
+  // Returning a zero-size rect makes the caller's
+  // `createCroppedTexture` short-circuit to `undefined`, which
+  // they treat as "skip render".
+  if (source.w === 0 && source.h === 0 && source.divx === 0 && source.divy === 0) {
+    return { x: source.x, y: source.y, w: 0, h: 0 };
+  }
   const divx = Math.max(1, source.divx);
   const divy = Math.max(1, source.divy);
   const totalFrames = divx * divy;

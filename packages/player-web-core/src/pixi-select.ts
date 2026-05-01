@@ -3063,7 +3063,9 @@ export class PixiSongSelectView {
       width: baseTexture.width,
       height: baseTexture.height,
     });
-    const cropped = createCroppedTexture(baseTexture, cell) ?? baseTexture;
+    if (cell.w <= 0 || cell.h <= 0) return undefined;
+    const cropped = createCroppedTexture(baseTexture, cell);
+    if (!cropped) return undefined;
     const sprite = new Sprite(cropped);
     sprite.label = label ?? `sliced[${source.imagePath}]`;
     sprite.position.set(rect.x, rect.y);
@@ -3092,7 +3094,9 @@ export class PixiSongSelectView {
       width: baseTexture.width,
       height: baseTexture.height,
     });
-    const cropped = createCroppedTexture(baseTexture, cell) ?? baseTexture;
+    if (cell.w <= 0 || cell.h <= 0) return undefined;
+    const cropped = createCroppedTexture(baseTexture, cell);
+    if (!cropped) return undefined;
     const sprite = new Sprite(cropped);
     sprite.label = 'mouse-cursor';
     sprite.position.set(this.mouseX + rect.x, this.mouseY + rect.y);
@@ -3118,6 +3122,22 @@ export class PixiSongSelectView {
     const dst = this.evaluateElementDst(button);
     const rect = normaliseRect(dst);
     if (rect.w <= 0 || rect.h <= 0) {
+      return;
+    }
+    // LR2 "no-graphic" button — `gr=0,x=0,y=0,w=0,h=0,divx=0,divy=0`
+    // is the skin author's idiom for a clickable rect with no
+    // visible body (the matching #SRC_TEXT label is what paints).
+    // Without this short-circuit, our `w==0` fallback would treat
+    // the source as "use the full texture" and render the entire
+    // skin atlas squashed into the small button rect — the
+    // collage of glyphs / chrome the user sees behind PLAY OPTION
+    // value labels.
+    if (
+      button.source.w === 0 &&
+      button.source.h === 0 &&
+      button.source.divx === 0 &&
+      button.source.divy === 0
+    ) {
       return;
     }
     const divx = Math.max(1, button.source.divx);
@@ -3330,7 +3350,12 @@ export class PixiSongSelectView {
         width: texture.width,
         height: texture.height,
       });
-      cropped = createCroppedTexture(texture, cell) ?? texture;
+      // Cell of zero size means the SRC was the LR2 "no-graphic"
+      // shorthand (`w=0,h=0,divx=0,divy=0`); skip rendering.
+      if (cell.w <= 0 || cell.h <= 0) return undefined;
+      const cellTexture = createCroppedTexture(texture, cell);
+      if (!cellTexture) return undefined;
+      cropped = cellTexture;
     }
     const sprite = new Sprite(cropped);
     sprite.label = `image[${path}]`;
