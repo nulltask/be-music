@@ -2,6 +2,7 @@ import { Texture, Assets } from 'pixi.js';
 import { parseLr2Font, type Lr2BitmapFont } from './lr2-font.ts';
 import type { Lr2LoadedFont } from './lr2-bitmap-text.ts';
 import { readDxaArchive } from './lr2-dxa.ts';
+import { decodeTga, isTgaImage } from './lr2-tga.ts';
 import { normalizePath } from './library.ts';
 
 /**
@@ -124,12 +125,19 @@ async function loadFontTextures(
 }
 
 async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise<Texture | undefined> {
+  const ext = (relPath.toLowerCase().split('.').pop() ?? 'png').replace(/[^a-z0-9]/g, '');
+  // TGA branch — browsers don't natively decode TrueVision Targa,
+  // so we run our own decoder and upload the raw RGBA pixels via
+  // `createImageBitmap`. The LR2 default theme ships every font
+  // texture as `.tga`, so this is the hot path for that bundle.
+  if (ext === 'tga' || isTgaImage(bytes)) {
+    return loadTgaTexture(bytes, relPath);
+  }
   // Pixi v8 `Assets.load` accepts a URL — we mint an in-memory
   // blob URL so the loader's WebGL upload pipeline is reused. We
   // intentionally don't revoke the blob URL: the texture's
   // `source` keeps a reference to it for the lifetime of the
   // skin, and revoking would break re-decode on context loss.
-  const ext = relPath.toLowerCase().split('.').pop() ?? 'png';
   const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'bmp' ? 'image/bmp' : 'image/png';
   // Copy into a fresh `ArrayBuffer` — `bytes.buffer` may be a
   // `SharedArrayBuffer` view (when the bytes came through a
@@ -146,6 +154,34 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
     console.warn(`[lr2-font] failed to decode ${relPath}`, error);
     return undefined;
   }
+}
+
+async function loadTgaTexture(bytes: Uint8Array, relPath: string): Promise<Texture | undefined> {
+  const decoded = decodeTga(bytes);
+  if (!decoded) {
+    // eslint-disable-next-line no-console
+    console.warn(`[lr2-font] failed to decode TGA ${relPath}`);
+    return undefined;
+  }
+  // Wrap the raw pixels in `ImageData`, then either rasterize via
+  // `createImageBitmap` (browser fast path) or paint to an
+  // OffscreenCanvas. Returns `undefined` if the runtime exposes
+  // neither (Node test environments).
+  if (typeof OffscreenCanvas === 'undefined') return undefined;
+  // Paint the decoded RGBA pixels onto an offscreen canvas via
+  // `putImageData`, then hand the canvas to Pixi as a texture
+  // source. Using `OffscreenCanvas` (rather than mounting a DOM
+  // `<canvas>`) keeps the load path off the main thread / DOM.
+  const canvas = new OffscreenCanvas(decoded.width, decoded.height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return undefined;
+  // Construct ImageData via the ctx helper (`createImageData`) so
+  // we get a runtime-correct constructor regardless of the lib
+  // version, then copy the decoded pixels into its `data` slot.
+  const imageData = ctx.createImageData(decoded.width, decoded.height);
+  imageData.data.set(decoded.data);
+  ctx.putImageData(imageData, 0, 0);
+  return Texture.from(canvas as unknown as HTMLCanvasElement);
 }
 
 function decodeText(bytes: Uint8Array): string | undefined {

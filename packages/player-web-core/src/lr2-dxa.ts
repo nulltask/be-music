@@ -1,262 +1,334 @@
 /**
- * Minimal DxLib DXA archive reader. Supports V6 / V8 unencrypted
- * archives — sufficient for fonts the user has rebuilt with
- * `DxaEncode.exe` *without* the `-K:KeyString` option, or for any
- * third-party DxLib archive with no password.
+ * DxLib DXA archive reader (V3 layout) — used by the LR2 default
+ * theme to ship `*.lr2font` + `*.tga` font assets.
  *
- * LR2's bundled font archives (`optionfont.dxa` / `titlefont.dxa`
- * / etc.) are XOR-encrypted with a hardcoded key sequence that
- * begins `55 AA 21 55 ...` (recovered from `LR2body.exe` at
- * offset `0x382a0f`) and a header magic of `DX` + version 2.
- * The full cycle length / per-block transformations haven't been
- * fully reverse-engineered — empirical decoding produces a "DX"
- * magic but downstream offset fields don't fit any known DxLib
- * V2 layout. Until the cipher is fully understood, encrypted
- * archives return `undefined` and the host falls back to
- * placeholder glyph rendering. Workaround: run the bundled
- * `DxaDecode.exe` (in `LR2files/スキン関連ドキュメント/`) to
- * extract `.lr2font` + `.png` siblings into a folder next to the
- * skin CSV, then drop the extracted folder.
+ * Reverse-engineered from `DxaDecode.exe` (LR2 bundled tool):
+ *
+ * - **Cipher** — XOR with a 12-byte rolling key. The key is
+ *   derived from the password by `KeyCreate` at RVA `0x401010`;
+ *   when the password is NULL (LR2's default) the source bytes
+ *   are all `0xAA`, then twelve byte-mangling transforms
+ *   produce {@link DXA_DEFAULT_KEY}.
+ * - **Header** (24 bytes, V3) — `DX` magic + version 3 + flags +
+ *   five DWORDs pointing at the file/name/dir tables.
+ * - **File-entry size** is 44 bytes: name address, attributes,
+ *   3 × FILETIME, data head, data size, compressed size.
+ * - **Compression** — DxLib's marker-byte LZSS variant. Decoder
+ *   ported from RVA `0x4015b0..0x4016fc`. See {@link decompress}.
+ *
+ * Browser-side path:
+ * 1. {@link readDxaArchive} XOR-decrypts the bytes.
+ * 2. Walks the directory + file tables to enumerate entries.
+ * 3. Decompresses each entry's payload (entries with
+ *    `pressDataSize === 0xFFFFFFFF` ship raw and skip step 3).
+ *
+ * Limitation: only V3 / default-key archives are supported. LR2
+ * encodes its theme bundles without a `-K` password so this
+ * covers the common case.
  */
-
-const DXA_MAGIC_BYTE_0 = 0x44; // 'D'
-const DXA_MAGIC_BYTE_1 = 0x58; // 'X'
 
 /** Single file extracted from a DXA archive. */
 export interface DxaFile {
   /** Forward-slash separated path inside the archive. */
   path: string;
-  /** Raw bytes (already decrypted + decompressed if applicable). */
+  /** Raw bytes (already decrypted + decompressed). */
   data: Uint8Array;
 }
 
 export interface DxaArchive {
   files: DxaFile[];
-  /** DXA major version (4..8). */
+  /** DXA major version (3). */
   version: number;
 }
 
 /**
- * Reads a `.dxa` archive into individual files. Returns
- * `undefined` when the header signature doesn't match (encrypted
- * or non-DXA bytes); the caller should treat that as
- * "unsupported" and continue.
+ * 12-byte XOR key for `Key = DxLib_KeyCreate(NULL)`. Source bytes
+ * are all `0xAA` (the V3 default), then each key byte is mangled
+ * per the routine at DxaDecode.exe RVA `0x4010C5..0x401158`.
  *
- * Implementation is deliberately conservative — only the
- * V6 / V8 subsets of DxLib's spec we've verified are handled,
- * with deliberate failure on uncompressed-only archives so we
- * don't return junk data for archives whose entries are
- * pre-compressed (DxLib's "Huffman" mode, rare in font shipping).
+ * Reference transforms:
+ * - key[0]  = ~0xAA = 0x55
+ * - key[1]  = swap_nibbles(0xAA) = 0xAA
+ * - key[2]  = 0xAA ^ 0x8A = 0x20
+ * - key[3]  = ~swap_nibbles(0xAA) = 0x55
+ * - key[4]  = ~0xAA = 0x55
+ * - key[5]  = 0xAA ^ 0xAC = 0x06
+ * - key[6]  = ~0xAA = 0x55
+ * - key[7]  = ~rot_r3(0xAA) = ~0x55 = 0xAA
+ * - key[8]  = rot_l3(0xAA) = 0x55
+ * - key[9]  = 0xAA ^ 0x7F = 0xD5
+ * - key[10] = swap_nibbles(0xAA) ^ 0xD6 = 0x7C
+ * - key[11] = 0xAA ^ 0xCC = 0x66
  */
-export function readDxaArchive(bytes: Uint8Array): DxaArchive | undefined {
-  if (bytes.length < 32) return undefined;
-  if (bytes[0] !== DXA_MAGIC_BYTE_0 || bytes[1] !== DXA_MAGIC_BYTE_1) {
+const DXA_DEFAULT_KEY: ReadonlyArray<number> = [
+  0x55, 0xaa, 0x20, 0x55, 0x55, 0x06, 0x55, 0xaa, 0x55, 0xd5, 0x7c, 0x66,
+];
+
+const DXA_KEY_LENGTH = 12;
+const DXA_HEADER_SIZE = 24;
+const DXA_FILE_ENTRY_SIZE = 44;
+const DXA_DIR_ENTRY_SIZE = 16;
+const DXA_ATTR_DIRECTORY = 0x10;
+const DXA_PRESS_UNCOMPRESSED = 0xffffffff;
+const DXA_MAGIC_BYTE_0 = 0x44; // 'D'
+const DXA_MAGIC_BYTE_1 = 0x58; // 'X'
+
+/**
+ * Reads a DXA archive (LR2 default-key encrypted, V3 layout) into
+ * individual files. Returns `undefined` when the header magic is
+ * wrong (unsupported password / version) or when one of the
+ * tables is malformed.
+ *
+ * Compressed entries are decompressed here so callers receive
+ * ready-to-use payloads.
+ */
+export function readDxaArchive(bytes: Uint8Array, key: ReadonlyArray<number> = DXA_DEFAULT_KEY): DxaArchive | undefined {
+  if (bytes.length < DXA_HEADER_SIZE) return undefined;
+  if (key.length !== DXA_KEY_LENGTH) return undefined;
+  // XOR decrypt the entire archive in one pass — the cipher is
+  // symmetric and self-inverting.
+  const decrypted = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i += 1) {
+    decrypted[i] = bytes[i]! ^ key[i % DXA_KEY_LENGTH]!;
+  }
+  if (decrypted[0] !== DXA_MAGIC_BYTE_0 || decrypted[1] !== DXA_MAGIC_BYTE_1) {
     return undefined;
   }
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const version = bytes[2];
-  if (version !== 6 && version !== 8) {
-    return undefined;
-  }
-  // Layout (V6 / V8):
-  //   0-1  : "DX"
-  //   2    : version
-  //   3    : flags
-  //   4-7  : HeadSize (DWORD LE)
-  //   8-15 : DataHead (ULONGLONG LE) — file payload offset
-  //   16-23: FileNameTableHead
-  //   24-31: FileTableHead
-  //   32-39: DirectoryTableHead
-  //   40-43: CodePage (DWORD LE) — typically 932 (SJIS)
-  const dataHead = readUInt64LE(view, 8);
-  const fileNameTableHead = readUInt64LE(view, 16);
-  const fileTableHead = readUInt64LE(view, 24);
-  const directoryTableHead = readUInt64LE(view, 32);
-  if (dataHead === undefined || fileNameTableHead === undefined) return undefined;
-  if (fileTableHead === undefined || directoryTableHead === undefined) return undefined;
+  const version = decrypted[2]!;
+  if (version !== 3) return undefined;
+  const view = new DataView(decrypted.buffer, decrypted.byteOffset, decrypted.byteLength);
+  const headSize = view.getUint32(4, true);
+  const dataHead = view.getUint32(8, true);
+  const fileNameTableHead = view.getUint32(12, true);
+  const fileTableRel = view.getUint32(16, true);
+  const directoryTableRel = view.getUint32(20, true);
   if (
-    dataHead > bytes.length ||
-    fileNameTableHead > bytes.length ||
-    fileTableHead > bytes.length ||
-    directoryTableHead > bytes.length
+    headSize === 0 ||
+    fileNameTableHead + headSize > decrypted.length ||
+    dataHead > decrypted.length
   ) {
     return undefined;
   }
-  const codePage = view.getUint32(40, true);
-  const decoder = createPathDecoder(codePage);
-  const files: DxaFile[] = [];
-  walkDirectory(
-    bytes,
+  const ctx: WalkContext = {
+    bytes: decrypted,
     view,
-    {
-      directoryTableHead: Number(directoryTableHead),
-      fileTableHead: Number(fileTableHead),
-      fileNameTableHead: Number(fileNameTableHead),
-      dataHead: Number(dataHead),
-      version,
-      decoder,
-    },
-    0, // root directory index
-    '',
-    files,
-  );
+    fileNameTableHead,
+    fileTableAbs: fileNameTableHead + fileTableRel,
+    directoryTableAbs: fileNameTableHead + directoryTableRel,
+    dataHead,
+  };
+  const files: DxaFile[] = [];
+  walkDirectory(ctx, 0, '', files);
   return { files, version };
 }
 
 interface WalkContext {
-  directoryTableHead: number;
-  fileTableHead: number;
+  bytes: Uint8Array;
+  view: DataView;
   fileNameTableHead: number;
+  fileTableAbs: number;
+  directoryTableAbs: number;
   dataHead: number;
-  version: number;
-  decoder: TextDecoder;
 }
 
-interface DirEntry {
-  /** Offset into the FileTable (in bytes). */
-  fileHead: number;
-  /** Offset of the parent directory's DIRECTORY_ENTRY (in bytes), or -1 for root. */
-  parentDirectory: number;
-  /** Offset of this directory's own FILE_ENTRY (in bytes). */
-  directoryEntry: number;
-  /** Number of file entries directly in this directory. */
-  fileCount: number;
-}
-
-function walkDirectory(
-  bytes: Uint8Array,
-  view: DataView,
-  ctx: WalkContext,
-  directoryOffset: number,
-  pathPrefix: string,
-  files: DxaFile[],
-): void {
-  const dirEntry = readDirectoryEntry(view, ctx.directoryTableHead + directoryOffset);
-  if (!dirEntry) return;
-  const fileEntrySize = ctx.version >= 8 ? 64 : 56;
-  for (let index = 0; index < dirEntry.fileCount; index += 1) {
-    const fileEntryOffset = ctx.fileTableHead + dirEntry.fileHead + index * fileEntrySize;
-    const entry = readFileEntry(view, fileEntryOffset, ctx.version);
+function walkDirectory(ctx: WalkContext, directoryEntryOffset: number, pathPrefix: string, files: DxaFile[]): void {
+  const dir = readDirectoryEntry(ctx.view, ctx.directoryTableAbs + directoryEntryOffset);
+  if (!dir) return;
+  for (let index = 0; index < dir.fileCount; index += 1) {
+    const entryOffset = ctx.fileTableAbs + dir.fileHead + index * DXA_FILE_ENTRY_SIZE;
+    const entry = readFileEntry(ctx.view, entryOffset);
     if (!entry) continue;
-    const name = readFileName(bytes, ctx.fileNameTableHead + entry.nameAddress, ctx.decoder);
+    // Skip the implicit "self" entry (the root directory's own
+    // file-table slot). It has `nameAddress=0` and the directory
+    // attribute set; recursing into it would loop forever.
+    if (entry.isDirectory && entry.nameAddress === 0 && pathPrefix === '') {
+      continue;
+    }
+    const name = readFileName(ctx.bytes, ctx.fileNameTableHead + entry.nameAddress);
+    if (name === '') continue;
     const fullPath = pathPrefix === '' ? name : `${pathPrefix}/${name}`;
     if (entry.isDirectory) {
-      walkDirectory(bytes, view, ctx, entry.dataHeadOrDirOffset, fullPath, files);
-    } else {
-      const dataStart = ctx.dataHead + entry.dataHeadOrDirOffset;
+      walkDirectory(ctx, entry.dataHead, fullPath, files);
+      continue;
+    }
+    const dataStart = ctx.dataHead + entry.dataHead;
+    if (entry.pressDataSize === DXA_PRESS_UNCOMPRESSED) {
+      // Raw payload — copy out as-is.
       const dataEnd = dataStart + entry.dataSize;
-      if (dataEnd > bytes.length) continue;
-      // Compressed entries (entry.compressedSize !== 0xFFFFFFFFFFFFFFFFn)
-      // would need a Huffman decoder we don't implement yet — skip
-      // them rather than emit garbage. Most font archives ship raw.
-      if (entry.isCompressed) continue;
-      files.push({ path: fullPath, data: bytes.subarray(dataStart, dataEnd) });
+      if (dataEnd > ctx.bytes.length) continue;
+      files.push({ path: fullPath, data: ctx.bytes.subarray(dataStart, dataEnd) });
+    } else {
+      // Compressed payload — `entry.dataSize` is the uncompressed
+      // length, `entry.pressDataSize` the on-disk length.
+      const compressed = ctx.bytes.subarray(dataStart, dataStart + entry.pressDataSize);
+      if (compressed.length !== entry.pressDataSize) continue;
+      const decompressed = decompress(compressed, entry.dataSize);
+      if (!decompressed) continue;
+      files.push({ path: fullPath, data: decompressed });
     }
   }
 }
 
+interface DirEntry {
+  fileHead: number;
+  fileCount: number;
+}
+
 function readDirectoryEntry(view: DataView, offset: number): DirEntry | undefined {
-  if (offset + 32 > view.byteLength) return undefined;
-  // DIRECTORY_ENTRY layout:
-  //   0-7  : DirectoryAddress (ULONGLONG LE) — own FILE_ENTRY offset
-  //   8-15 : ParentDirectoryAddress
-  //   16-23: FileHeadSize (file count … wait, let me re-check)
-  //
-  // Actually DxLib's DIRECTORY_ENTRY is:
-  //   ULONGLONG DirectoryAddress;     // file-entry offset of this dir
-  //   ULONGLONG ParentDirectoryAddress;
-  //   ULONGLONG FileHeadAddress;       // start offset in FileTable
-  //   ULONGLONG FileNum;               // count of files in this dir
-  const directoryEntry = readUInt64LE(view, offset);
-  const parentDirectory = readUInt64LE(view, offset + 8);
-  const fileHead = readUInt64LE(view, offset + 16);
-  const fileNum = readUInt64LE(view, offset + 24);
-  if (
-    directoryEntry === undefined ||
-    parentDirectory === undefined ||
-    fileHead === undefined ||
-    fileNum === undefined
-  ) {
-    return undefined;
-  }
-  return {
-    directoryEntry: Number(directoryEntry),
-    parentDirectory: Number(parentDirectory),
-    fileHead: Number(fileHead),
-    fileCount: Number(fileNum),
-  };
+  if (offset + DXA_DIR_ENTRY_SIZE > view.byteLength) return undefined;
+  // V3 DirEntry: [0..3] DirectoryAddress, [4..7] ParentDirectoryAddress,
+  //              [8..11] FileNum, [12..15] FileHead.
+  const fileNum = view.getUint32(offset + 8, true);
+  const fileHead = view.getUint32(offset + 12, true);
+  return { fileHead, fileCount: fileNum };
 }
 
 interface FileEntry {
   nameAddress: number;
+  attributes: number;
   dataSize: number;
-  dataHeadOrDirOffset: number;
+  dataHead: number;
+  pressDataSize: number;
   isDirectory: boolean;
-  isCompressed: boolean;
 }
 
-function readFileEntry(view: DataView, offset: number, version: number): FileEntry | undefined {
-  // FILE_ENTRY (V6 = 56 bytes, V8 = 64 bytes):
-  //   0-7  : NameAddress (offset into FileNameTable)
-  //   8-15 : Attributes (DWORD pair? — ignored)
-  //   16-...: timestamps (3 × ULONGLONG)
-  //   ...  : DataSize (ULONGLONG)
-  //   ...  : DataHead (ULONGLONG) — payload offset (or directory offset for sub-dir)
-  //   ...  : CompressedSize (ULONGLONG, V8) or PressDataSize (V6 — different shape)
-  if (offset + (version >= 8 ? 64 : 56) > view.byteLength) return undefined;
-  const nameAddress = readUInt64LE(view, offset);
-  const attributes = view.getUint32(offset + 8, true);
-  // Timestamps occupy `offset + 16 .. offset + 39` — skipped.
-  const dataSize = readUInt64LE(view, offset + 40);
-  const dataHead = readUInt64LE(view, offset + 48);
-  const compressedSize = version >= 8 ? readUInt64LE(view, offset + 56) : undefined;
-  if (nameAddress === undefined || dataSize === undefined || dataHead === undefined) return undefined;
-  // Attribute bit 16 (0x10) marks a directory in DxLib; we mirror
-  // that — sub-directories store a directory-table offset in the
-  // `DataHead` slot instead of a payload offset.
-  const isDirectory = (attributes & 0x10) !== 0;
-  // Compressed entries have a `compressedSize !== ULLONG_MAX` —
-  // 0xFFFFFFFFFFFFFFFFn means "uncompressed". We don't implement
-  // DxLib's Huffman decoder yet, so flag and skip.
-  const isCompressed = compressedSize !== undefined && compressedSize !== 0xffffffffffffffffn;
+function readFileEntry(view: DataView, offset: number): FileEntry | undefined {
+  if (offset + DXA_FILE_ENTRY_SIZE > view.byteLength) return undefined;
+  // V3 FileEntry layout (44 bytes):
+  //   [0..3]   NameAddress (offset into FileNameTable)
+  //   [4..7]   Attributes (DWORD; bit 4 = directory, 0x20 = archive)
+  //   [8..15]  CreationTime (FILETIME) — ignored
+  //   [16..23] LastAccessTime (FILETIME) — ignored
+  //   [24..31] LastWriteTime (FILETIME) — ignored
+  //   [32..35] DataHead (offset within data area, or directory index)
+  //   [36..39] DataSize (uncompressed bytes)
+  //   [40..43] PressDataSize (compressed bytes; 0xFFFFFFFF = uncompressed)
+  const nameAddress = view.getUint32(offset, true);
+  const attributes = view.getUint32(offset + 4, true);
+  const dataHead = view.getUint32(offset + 32, true);
+  const dataSize = view.getUint32(offset + 36, true);
+  const pressDataSize = view.getUint32(offset + 40, true);
   return {
-    nameAddress: Number(nameAddress),
-    dataSize: Number(dataSize),
-    dataHeadOrDirOffset: Number(dataHead),
-    isDirectory,
-    isCompressed,
+    nameAddress,
+    attributes,
+    dataSize,
+    dataHead,
+    pressDataSize,
+    isDirectory: (attributes & DXA_ATTR_DIRECTORY) !== 0,
   };
 }
 
-function readFileName(bytes: Uint8Array, offset: number, decoder: TextDecoder): string {
-  // FileName entry layout: 8-byte aligned packed-name length +
-  // upper-case Shift-JIS bytes (for case-insensitive lookup) +
-  // null-terminated original-case bytes.
-  // For our path-based extraction we want the original-case name,
-  // which sits AFTER the upper-case packed table.
-  if (offset + 4 > bytes.length) return '';
-  const packedLength = bytes[offset] | (bytes[offset + 1] << 8);
-  // The original-case name starts at `offset + 4 + packedLength*4`
-  // (DxLib uses a packed-name buffer aligned to 4 bytes, with the
-  // packed length as a 16-bit count of 4-byte units).
-  const nameOffset = offset + 4 + packedLength * 4;
-  let end = nameOffset;
-  while (end < bytes.length && bytes[end] !== 0) end += 1;
-  return decoder.decode(bytes.subarray(nameOffset, end));
-}
-
-function readUInt64LE(view: DataView, offset: number): bigint | undefined {
-  if (offset + 8 > view.byteLength) return undefined;
-  return view.getBigUint64(offset, true);
-}
-
-function createPathDecoder(codePage: number): TextDecoder {
-  // 932 = Shift-JIS, 65001 = UTF-8. Anything else falls back to
-  // SJIS which is the LR2-era default.
-  const label = codePage === 65001 ? 'utf-8' : 'shift-jis';
+const sjisDecoder = (() => {
   try {
-    return new TextDecoder(label, { fatal: false });
-  } catch {
     return new TextDecoder('shift-jis', { fatal: false });
+  } catch {
+    return new TextDecoder('utf-8', { fatal: false });
   }
+})();
+
+function readFileName(bytes: Uint8Array, offset: number): string {
+  // V3 FileName entry: WORD packNum + WORD reserved + packNum*4
+  // bytes upper-case packed name + null-terminated original-case
+  // name. The upper-case packed table is for case-insensitive
+  // lookup; we ignore it and read the original name only.
+  if (offset + 4 > bytes.length) return '';
+  const packNum = bytes[offset]! | (bytes[offset + 1]! << 8);
+  const nameStart = offset + 4 + packNum * 4;
+  let end = nameStart;
+  while (end < bytes.length && bytes[end] !== 0) end += 1;
+  if (end === nameStart) return '';
+  return sjisDecoder.decode(bytes.subarray(nameStart, end));
+}
+
+/**
+ * Decompresses a DxLib V3 payload. Reverse-engineered from
+ * DxaDecode.exe RVA `0x4015b0..0x4016fc`.
+ *
+ * Payload layout:
+ * - `[0..3]` — uncompressed size (DWORD LE)
+ * - `[4..7]` — `unused` slot (matches `pressDataSize` in
+ *   the file entry; the decoder ignores it)
+ * - `[8]` — keycode (the marker byte chosen by the encoder
+ *   to be rare in input)
+ * - `[9..]` — body
+ *
+ * Body codec — each input byte is either:
+ * - **Literal** (`byte != keycode`): output byte verbatim.
+ * - **Marker** (`byte == keycode`): the next byte is a code
+ *   byte. If `code == keycode` the marker is escaped (output
+ *   `keycode` literally). Otherwise it's a back-reference:
+ *   - If `code > keycode`, decrement `code` (so `code` skips
+ *     over the keycode value).
+ *   - `length = (code >> 3) + 4`
+ *   - If `code & 0x04`: read 1 more byte; `length |= (ext << 5)`.
+ *   - Offset format from `code & 0x03`:
+ *     - `0` — read 1 byte
+ *     - `1` — read 2 bytes (WORD LE)
+ *     - `2` — read 3 bytes (24-bit LE)
+ *     - `3` — reuse the previous offset
+ *   - Bump `offset += 1` (so min offset = 1).
+ *   - Copy `length` bytes from `out[len - offset]` (handling
+ *     overlap so a length > offset replicates the head bytes).
+ */
+function decompress(src: Uint8Array, expectedSize: number): Uint8Array | undefined {
+  if (src.length < 9) return undefined;
+  const keycode = src[8]!;
+  const out = new Uint8Array(expectedSize);
+  let outIdx = 0;
+  let p = 9;
+  let lastOffset = 0;
+  while (outIdx < expectedSize && p < src.length) {
+    const b = src[p]!;
+    p += 1;
+    if (b !== keycode) {
+      out[outIdx] = b;
+      outIdx += 1;
+      continue;
+    }
+    if (p >= src.length) break;
+    let code = src[p]!;
+    p += 1;
+    if (code === keycode) {
+      // Escaped literal of the keycode byte itself.
+      out[outIdx] = keycode;
+      outIdx += 1;
+      continue;
+    }
+    if (code > keycode) code -= 1;
+    let length = (code >>> 3) + 4;
+    if ((code & 0x04) !== 0) {
+      if (p >= src.length) break;
+      length |= src[p]! << 5;
+      p += 1;
+    }
+    let offset: number;
+    const offsetFormat = code & 0x03;
+    if (offsetFormat === 0) {
+      if (p >= src.length) break;
+      offset = src[p]!;
+      p += 1;
+    } else if (offsetFormat === 1) {
+      if (p + 1 >= src.length) break;
+      offset = src[p]! | (src[p + 1]! << 8);
+      p += 2;
+    } else if (offsetFormat === 2) {
+      if (p + 2 >= src.length) break;
+      offset = src[p]! | (src[p + 1]! << 8) | (src[p + 2]! << 16);
+      p += 3;
+    } else {
+      // Format 3 — reuse the previous offset (no new bytes
+      // consumed). Encoder's value-skipping optimisation for
+      // streaks of same-offset back-references.
+      offset = lastOffset;
+    }
+    offset += 1;
+    lastOffset = offset - 1;
+    const refStart = outIdx - offset;
+    for (let i = 0; i < length && outIdx < expectedSize; i += 1) {
+      out[outIdx] = refStart + i < 0 ? 0 : out[refStart + i] ?? 0;
+      outIdx += 1;
+    }
+  }
+  if (outIdx !== expectedSize) return undefined;
+  return out;
 }
