@@ -102,7 +102,13 @@ async function collectFilesFromEntry(
     });
     const relativePath = prefix ? `${prefix}${file.name}` : file.name;
     files.push(withRelativePath(file, relativePath));
-    onProgress?.({ phase: 'enumerating', current: files.length, total: -1, label: relativePath });
+    // Throttle the per-file progress emit: a 4000-file walk
+    // doesn't need 4000 React-style updates. Keep one in every
+    // 32 entries plus the very first, which is enough for a
+    // visibly-moving counter without thrashing the host UI.
+    if (onProgress && (files.length & 0x1f) === 1) {
+      onProgress({ phase: 'enumerating', current: files.length, total: -1, label: relativePath });
+    }
     return;
   }
   if (entry.isDirectory) {
@@ -115,11 +121,97 @@ async function collectFilesFromEntry(
       if (batch.length === 0) {
         return;
       }
-      for (const child of batch) {
-        await collectFilesFromEntry(child, nextPrefix, files, onProgress);
-      }
+      // Walk all children of this batch in parallel — the
+      // FileSystemEntry API is async so each `entry.file()` /
+      // sub-directory `readEntries` call would otherwise stall
+      // the next one. With a deep song-pack tree (one folder
+      // per chart × thousands of charts) the serial walk took
+      // tens of seconds for a real-world drop; parallel walk
+      // pushes the whole walk into the I/O concurrency limit
+      // the browser sets internally.
+      await Promise.all(batch.map((child) => collectFilesFromEntry(child, nextPrefix, files, onProgress)));
     }
   }
+}
+
+/**
+ * Default concurrency cap for parallel file reads. Tuned high
+ * enough that 4000 small files saturate disk I/O without the
+ * browser starting to thrash on micro-task scheduling. Tweakable
+ * per-call via {@link readFilesIntoBytesMap}'s options.
+ */
+const FILE_READ_CONCURRENCY = 32;
+
+/**
+ * Reads `files` into a `Map<path, bytes>` using a worker-pool
+ * pattern so up to `concurrency` reads are in-flight at once.
+ * Replaces the textbook `for ... await arrayBuffer()` serial
+ * loop, which on a 4000-file drop spent the bulk of its time
+ * idling on disk between reads.
+ *
+ * Every call passes `path = normalizePath(webkitRelativePath ||
+ * name)`, matching the rest of the loader so a downstream
+ * lookup (`source.files.get(path)`) doesn't need to negotiate
+ * separator-style differences. Progress is reported once per
+ * worker step but throttled to every ~32 reads in callers via
+ * {@link createThrottledProgress} so the UI updates don't
+ * dwarf the actual read work.
+ */
+export async function readFilesIntoBytesMap(
+  files: ReadonlyArray<File>,
+  options: {
+    concurrency?: number;
+    onRead?: (path: string, current: number, total: number) => void;
+  } = {},
+): Promise<Map<string, Uint8Array>> {
+  const concurrency = Math.min(options.concurrency ?? FILE_READ_CONCURRENCY, files.length || 1);
+  const result = new Map<string, Uint8Array>();
+  let nextIndex = 0;
+  let completed = 0;
+  const total = files.length;
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= total) return;
+      const file = files[index]!;
+      const path = normalizePath(file.webkitRelativePath || file.name);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      result.set(path, bytes);
+      completed += 1;
+      options.onRead?.(path, completed, total);
+    }
+  };
+  await Promise.all(Array.from({ length: concurrency }, worker));
+  return result;
+}
+
+/**
+ * Returns a progress-emit wrapper that fires at most once per
+ * `intervalMs` (default 32ms ≈ two display frames). Callers
+ * always emit through this when they're producing progress
+ * events from a hot loop — the host UI only needs ~30 updates a
+ * second to look smooth, but `loadFromFiles` was firing 4000+
+ * `onProgress` callbacks per drop, which dominated the load
+ * time on weaker machines.
+ *
+ * The trailing-edge call inside the wrapper isn't synchronously
+ * scheduled (no setTimeout) — callers should make a final
+ * unthrottled call themselves at the end of their loop so the
+ * 100 % tick always lands.
+ */
+function createThrottledProgress(
+  onProgress: LoadProgressCallback | undefined,
+  intervalMs = 32,
+): LoadProgressCallback | undefined {
+  if (!onProgress) return undefined;
+  let lastEmit = 0;
+  return (event) => {
+    const now = performance.now();
+    if (now - lastEmit < intervalMs) return;
+    lastEmit = now;
+    onProgress(event);
+  };
 }
 
 function withRelativePath(file: File, relativePath: string): File {
@@ -161,18 +253,44 @@ export async function loadSongCollectionFromFiles(
   // no-op spread; it just lets the typing accept any iterable.
   const fileList = [...files];
   onProgress?.({ phase: 'reading', current: 0, total: fileList.length });
-  for (let index = 0; index < fileList.length; index += 1) {
-    const file = fileList[index]!;
-    const relativePath = normalizePath(file.webkitRelativePath || file.name);
-    const bytes = new Uint8Array(await file.arrayBuffer());
+  // Split ZIPs out before the parallel-read pool so we can keep
+  // each archive's expansion tied to its own source label.
+  // Everything else lands in the shared `looseFiles` map.
+  const zipFiles: File[] = [];
+  const looseEntries: File[] = [];
+  for (const file of fileList) {
     if (extensionOf(file.name) === '.zip' && !file.webkitRelativePath) {
-      sources.push(createZipSource(file.name, bytes));
+      zipFiles.push(file);
     } else {
-      looseFiles.set(relativePath, bytes);
-      looseLabels.add(firstPathSegment(relativePath) || file.name);
+      looseEntries.push(file);
+      looseLabels.add(firstPathSegment(normalizePath(file.webkitRelativePath || file.name)) || file.name);
     }
-    onProgress?.({ phase: 'reading', current: index + 1, total: fileList.length, label: relativePath });
   }
+  // Pooled parallel read for the loose-file bucket — this is the
+  // dominant cost on a real-world drop (4000+ small files were
+  // previously read serially via `for ... await arrayBuffer()`).
+  // The throttled progress wrapper keeps the 4000-emit storm from
+  // dominating the read time on the host-UI side.
+  const throttledProgress = createThrottledProgress(onProgress);
+  if (looseEntries.length > 0) {
+    const looseMap = await readFilesIntoBytesMap(looseEntries, {
+      onRead: (path, current, total) => {
+        throttledProgress?.({ phase: 'reading', current, total, label: path });
+      },
+    });
+    for (const [path, bytes] of looseMap) {
+      looseFiles.set(path, bytes);
+    }
+  }
+  // ZIPs read after the loose pool — there's typically zero or
+  // one of them per drop, so serialising here costs nothing.
+  for (const file of zipFiles) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    sources.push(createZipSource(file.name, bytes));
+  }
+  // Final 100 % emit for the read phase — the throttled wrapper
+  // may have suppressed the last one.
+  onProgress?.({ phase: 'reading', current: fileList.length, total: fileList.length });
 
   if (looseFiles.size > 0) {
     sources.push({
@@ -185,23 +303,34 @@ export async function loadSongCollectionFromFiles(
 
   const songs: BrowserSongEntry[] = [];
   const errors: BrowserSongCollection['errors'] = [];
-  // Pre-flight pass to count chart files across all sources so the
-  // parsing-phase progress is determinate. Walks the same path
-  // lists the parser loop walks below; cheap (no decoding) and
-  // makes "Parsing X / N charts" hit zero at the very end.
-  const chartCount = sources.reduce(
-    (acc, source) => acc + [...source.files.keys()].filter((path) => isChartFilePath(path)).length,
-    0,
-  );
+  // Build the chart-path lists in one pass per source so we don't
+  // sort + filter the full path table twice (once for the count,
+  // once for the parse loop). Sort the chart paths only — the
+  // non-chart paths don't need ordering since they're just asset
+  // lookups.
+  const chartPathsBySource = sources.map((source) => {
+    const paths: string[] = [];
+    for (const path of source.files.keys()) {
+      if (isChartFilePath(path)) paths.push(path);
+    }
+    paths.sort((left, right) => left.localeCompare(right, 'ja'));
+    return paths;
+  });
+  const chartCount = chartPathsBySource.reduce((acc, list) => acc + list.length, 0);
   let parsedSoFar = 0;
   if (chartCount > 0) {
     onProgress?.({ phase: 'parsing', current: 0, total: chartCount });
   }
-  for (const source of sources) {
-    for (const path of [...source.files.keys()].sort((left, right) => left.localeCompare(right, 'ja'))) {
-      if (!isChartFilePath(path)) {
-        continue;
-      }
+  const throttledParseProgress = createThrottledProgress(onProgress);
+  // Yield to the event loop every few charts so the host can paint
+  // a frame and run the throttled progress emit. Chart parsing is
+  // CPU-bound and otherwise blocks the main thread for the entire
+  // parse phase on a multi-hundred-chart drop.
+  const PARSE_YIELD_INTERVAL = 32;
+  for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
+    const source = sources[sourceIndex]!;
+    const paths = chartPathsBySource[sourceIndex]!;
+    for (const path of paths) {
       try {
         const chart = parseChart(path, source.files.get(path)!);
         const notes = extractPlayableNotes(chart, { inferBmsLnTypeWhenMissing: true });
@@ -230,11 +359,37 @@ export async function loadSongCollectionFromFiles(
         });
       }
       parsedSoFar += 1;
-      onProgress?.({ phase: 'parsing', current: parsedSoFar, total: chartCount, label: path });
+      throttledParseProgress?.({ phase: 'parsing', current: parsedSoFar, total: chartCount, label: path });
+      // Cooperative yield — gives the browser a slot to paint
+      // and flush the throttled progress callback.
+      if (parsedSoFar % PARSE_YIELD_INTERVAL === 0) {
+        await yieldToEventLoop();
+      }
     }
+  }
+  if (chartCount > 0) {
+    onProgress?.({ phase: 'parsing', current: chartCount, total: chartCount });
   }
 
   return { sources, songs, errors };
+}
+
+/**
+ * Schedules a microtask that resolves on the next browser
+ * macrotask, giving the event loop a chance to paint a frame
+ * and dispatch any pending progress events. Cheaper than
+ * `setTimeout(0)` (no minimum-delay clamp) and works in
+ * Node-environment tests too (the Promise resolves on the
+ * next tick).
+ */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(resolve);
+    } else {
+      Promise.resolve().then(resolve);
+    }
+  });
 }
 
 export function describeSongCollection(collection: BrowserSongCollection): string {

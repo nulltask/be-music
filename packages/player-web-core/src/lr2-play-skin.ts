@@ -1,5 +1,5 @@
-import { normalizePath, resolveChartPlayVariant } from './library.ts';
-import { loadLr2SkinFromFiles, type Lr2PlayVariant, type Lr2Skin } from './lr2-skin.ts';
+import { normalizePath, readFilesIntoBytesMap, resolveChartPlayVariant } from './library.ts';
+import { loadLr2SkinFromSourceFiles, type Lr2PlayVariant, type Lr2Skin } from './lr2-skin.ts';
 import type { BrowserSongEntry, LoadProgressCallback } from './types.ts';
 
 export const LR2_PLAY_VARIANTS = ['7', '14', '10', '5', '9'] as const satisfies readonly Lr2PlayVariant[];
@@ -101,6 +101,18 @@ export async function loadLr2ThemeSkinsFromFiles(
 ): Promise<Lr2ThemeSkins> {
   const sourceFiles = [...files];
   const onProgress = options.onProgress;
+  // Read every theme file into a single shared byte map ONCE,
+  // up-front, with a worker-pool. The previous implementation
+  // re-read the entire file list inside each of the 11 sub-task
+  // calls (each `loadLr2SkinFromFiles` walked the full list and
+  // awaited every `arrayBuffer()` serially). On a 388-file LR2
+  // default-theme drop that meant ~4300 sequential file reads,
+  // dominating the load time. Reading once and dispatching
+  // against the resulting `Map<path, bytes>` removes that
+  // duplication entirely; the play / select / result / decide
+  // skins all share the same map by reference, so memory cost
+  // is also lower.
+  const sharedFiles = await readFilesIntoBytesMap(sourceFiles);
   // Total = play variants (one per LR2_PLAY_VARIANTS entry) +
   // select skin + result skin + decide skin + 2 theme BGMs +
   // 6 system sounds (cursor-move + folder open/close + option
@@ -117,8 +129,15 @@ export async function loadLr2ThemeSkinsFromFiles(
       onProgress?.({ phase: 'theme', current: completed, total: totalSubTasks, label });
       return value;
     });
+  // Each task wraps a synchronous parse / pick in `Promise.resolve`
+  // so the existing progress-tracking + parallel-await shape
+  // continues to work — no semantic change beyond the up-front
+  // batched read.
   const playSkinTasks = LR2_PLAY_VARIANTS.map((variant) =>
-    track(`play/${variant}K`, loadLr2SkinFromFiles(sourceFiles, { kind: 'play', playVariant: variant })),
+    track(
+      `play/${variant}K`,
+      Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'play', playVariant: variant })),
+    ),
   );
   const [
     variantSkins,
@@ -135,17 +154,17 @@ export async function loadLr2ThemeSkinsFromFiles(
     optionChange,
   ] = await Promise.all([
     Promise.all(playSkinTasks),
-    track('select', loadLr2SkinFromFiles(sourceFiles, { kind: 'select' })),
-    track('result', loadLr2SkinFromFiles(sourceFiles, { kind: 'result' })),
-    track('decide', loadLr2SkinFromFiles(sourceFiles, { kind: 'decide' })),
-    track('bgm/select', loadLr2ThemeBgm(sourceFiles, 'select')),
-    track('bgm/decide', loadLr2ThemeBgm(sourceFiles, 'decide')),
-    track('sound/scratch', loadLr2SystemSound(sourceFiles, 'scratch')),
-    track('sound/f-open', loadLr2SystemSound(sourceFiles, 'f-open')),
-    track('sound/f-close', loadLr2SystemSound(sourceFiles, 'f-close')),
-    track('sound/o-open', loadLr2SystemSound(sourceFiles, 'o-open')),
-    track('sound/o-close', loadLr2SystemSound(sourceFiles, 'o-close')),
-    track('sound/o-change', loadLr2SystemSound(sourceFiles, 'o-change')),
+    track('select', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'select' }))),
+    track('result', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'result' }))),
+    track('decide', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'decide' }))),
+    track('bgm/select', Promise.resolve(pickLr2ThemeBgmFromMap(sharedFiles, 'select'))),
+    track('bgm/decide', Promise.resolve(pickLr2ThemeBgmFromMap(sharedFiles, 'decide'))),
+    track('sound/scratch', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'scratch'))),
+    track('sound/f-open', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'f-open'))),
+    track('sound/f-close', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'f-close'))),
+    track('sound/o-open', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'o-open'))),
+    track('sound/o-close', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'o-close'))),
+    track('sound/o-change', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'o-change'))),
   ]);
 
   const playSkins: Lr2PlaySkinMap = {};
@@ -266,6 +285,49 @@ export function pickLr2ThemeBgmFile(files: readonly File[], role: 'select' | 'de
  */
 export function pickLr2SystemSoundFile(files: readonly File[], stem: string): File | undefined {
   return pickThemeAudioFile(files, (path) => path.includes('sound/lr2/') || path.includes('sound\\lr2\\'), stem);
+}
+
+/**
+ * Map-keyed counterpart to {@link pickThemeAudioFile} — same rules
+ * (case-insensitive path filter + exact-stem + supported codec)
+ * but consumes a pre-read `Map<path, bytes>` so the caller doesn't
+ * have to re-issue `arrayBuffer()` reads it already paid for.
+ * Used by `loadLr2ThemeSkinsFromFiles` after the up-front shared
+ * read.
+ */
+function pickThemeAudioBytes(
+  files: ReadonlyMap<string, Uint8Array>,
+  pathTest: (lower: string) => boolean,
+  stem: string,
+): Lr2ThemeBgm | undefined {
+  for (const [path, bytes] of files) {
+    const lower = path.toLowerCase();
+    if (!pathTest(lower)) continue;
+    const slash = Math.max(lower.lastIndexOf('/'), lower.lastIndexOf('\\'));
+    const baseName = slash >= 0 ? lower.slice(slash + 1) : lower;
+    const dot = baseName.lastIndexOf('.');
+    if (dot < 0) continue;
+    const fileStem = baseName.slice(0, dot);
+    const ext = baseName.slice(dot);
+    if (fileStem !== stem) continue;
+    if (!LR2_THEME_BGM_EXTENSIONS.includes(ext as (typeof LR2_THEME_BGM_EXTENSIONS)[number])) continue;
+    return { path, bytes };
+  }
+  return undefined;
+}
+
+function pickLr2ThemeBgmFromMap(
+  files: ReadonlyMap<string, Uint8Array>,
+  role: 'select' | 'decide',
+): Lr2ThemeBgm | undefined {
+  return pickThemeAudioBytes(files, (path) => path.includes('bgm/') || path.includes('bgm\\'), role);
+}
+
+function pickLr2SystemSoundFromMap(
+  files: ReadonlyMap<string, Uint8Array>,
+  stem: string,
+): Lr2ThemeBgm | undefined {
+  return pickThemeAudioBytes(files, (path) => path.includes('sound/lr2/') || path.includes('sound\\lr2\\'), stem);
 }
 
 /**

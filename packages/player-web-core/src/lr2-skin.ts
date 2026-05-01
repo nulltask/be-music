@@ -1,4 +1,5 @@
-import { basename, dirname, normalizePath } from '@be-music/utils/core';
+import { basename, dirname } from '@be-music/utils/core';
+import { readFilesIntoBytesMap } from './library.ts';
 import { normalizeLr2Path, resolveLr2IncludePath } from './lr2-skin-assets.ts';
 import { decodeText, parseRows } from './lr2-skin-csv.ts';
 import { isSkinPathOfKind, scoreSkinPath, type Lr2PlayVariant, type Lr2SkinKind } from './lr2-skin-paths.ts';
@@ -1112,11 +1113,13 @@ export async function loadLr2SkinFromFiles(
   files: Iterable<File>,
   options: LoadLr2SkinOptions = {},
 ): Promise<Lr2Skin | undefined> {
-  const sourceFiles = new Map<string, Uint8Array>();
-  for (const file of files) {
-    const path = normalizePath(file.webkitRelativePath || file.name);
-    sourceFiles.set(path, new Uint8Array(await file.arrayBuffer()));
-  }
+  // Pooled parallel read instead of the textbook `for ... await
+  // arrayBuffer()` serial loop — the latter idles on disk between
+  // every read on a large theme bundle. The dedicated theme
+  // loader already calls `loadLr2SkinFromSourceFiles` directly
+  // with a pre-read map; this path remains for callers (and
+  // tests) that hand a `File[]` over.
+  const sourceFiles = await readFilesIntoBytesMap([...files]);
   return loadLr2SkinFromSourceFiles(sourceFiles, options);
 }
 

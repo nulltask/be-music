@@ -33,24 +33,27 @@ function makeFile(path: string, contents = ''): File {
 const MINIMAL_BMS = ['#TITLE Test', '#BPM 120', '#PLAYER 1', '#00111:0F'].join('\n');
 
 describe('loadSongCollectionFromFiles progress events', () => {
-  test('reports a reading event per file with monotonically increasing current', async () => {
+  test('reports the reading phase with a monotonic current and a guaranteed terminal event', async () => {
     const events: LoadProgress[] = [];
     await loadSongCollectionFromFiles(
       [makeFile('Song/main.bms', MINIMAL_BMS), makeFile('Song/kick.wav'), makeFile('Song/snare.wav')],
       { onProgress: (event) => events.push(event) },
     );
     const reading = events.filter((event) => event.phase === 'reading');
-    // Three files plus the initial "0 / 3" prelude == 4 events.
-    expect(reading.length).toBe(4);
+    // Reads are pooled in parallel and per-file progress is
+    // throttled to ~30 fps so a 4000-file drop doesn't generate a
+    // 4000-call storm. The contract is therefore relaxed:
+    //   - At least an initial 0/N + a terminal N/N event must fire.
+    //   - `current` must never go backwards.
+    //   - The last event hits 100% (drives the host's
+    //     "load done" transition).
+    expect(reading.length).toBeGreaterThanOrEqual(2);
     expect(reading[0]).toMatchObject({ current: 0, total: 3 });
     expect(reading.at(-1)).toMatchObject({ current: 3, total: 3 });
-    // Currents should walk 0 → 1 → 2 → 3 in order.
-    expect(reading.map((event) => event.current)).toEqual([0, 1, 2, 3]);
-    // Each non-zero reading event labels which file just finished —
-    // the UI uses this to show the current path.
-    expect(reading[1]?.label).toBe('Song/main.bms');
-    expect(reading[2]?.label).toBe('Song/kick.wav');
-    expect(reading[3]?.label).toBe('Song/snare.wav');
+    const currents = reading.map((event) => event.current);
+    for (let i = 1; i < currents.length; i += 1) {
+      expect(currents[i]!).toBeGreaterThanOrEqual(currents[i - 1]!);
+    }
   });
 
   test('reports a parsing event per chart file (skipping non-charts)', async () => {
