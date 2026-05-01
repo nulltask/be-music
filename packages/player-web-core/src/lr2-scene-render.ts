@@ -1,6 +1,7 @@
-import { Text, TextStyle } from 'pixi.js';
+import { Container, Text, TextStyle } from 'pixi.js';
 import { normaliseRect } from './lr2-render.ts';
 import type { Lr2DestinationRect, Lr2TextElement } from './lr2-skin.ts';
+import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './lr2-bitmap-text.ts';
 
 export interface ScaledViewport {
   x: number;
@@ -10,6 +11,14 @@ export interface ScaledViewport {
 
 export interface Lr2TextSpriteOptions {
   maxFontSize?: number;
+  /**
+   * Loaded LR2 bitmap fonts keyed by font index (`#LR2FONT`
+   * declaration order). When the element's `font` field hits a
+   * loaded entry, `makeLr2TextSprite` returns a bitmap-text
+   * `Container` instead of the system-font `Text` fallback —
+   * matching what real LR2 paints with `#SRC_TEXT`.
+   */
+  bitmapFonts?: ReadonlyMap<number, Lr2LoadedFont>;
 }
 
 export function resolveScaledViewport(
@@ -48,12 +57,31 @@ export function isDestinationVisible(
   return true;
 }
 
+/**
+ * Renders an LR2 `#SRC_TEXT` element into a Pixi node — a bitmap-
+ * font `Container` when the element's `font` index points at a
+ * loaded `#LR2FONT`, or a system-font `Text` fallback otherwise.
+ *
+ * Returning a `Container` (instead of `Text` specifically) is the
+ * union of both paths; callers attach the result with
+ * `addChild` either way, which is the only API contract the
+ * scene renderers rely on.
+ */
 export function makeLr2TextSprite(
   value: string,
   element: Lr2TextElement,
   dst: Lr2DestinationRect = element.destination,
   options: Lr2TextSpriteOptions = {},
-): Text {
+): Container {
+  // Bitmap path — chosen when the host loaded the matching
+  // `#LR2FONT` payload. Empty strings are still painted as an
+  // empty Container so the caller's `addChild` doesn't need to
+  // null-check; the visible result is just nothing, same as the
+  // text fallback would produce for "".
+  const loaded = options.bitmapFonts?.get(element.font);
+  if (loaded) {
+    return makeLr2BitmapTextSprite(value, element, dst, loaded);
+  }
   const rect = normaliseRect(dst);
   const fontSize = clampFontSize(rect.h - 2, 8, options.maxFontSize ?? 18);
   const text = new Text({

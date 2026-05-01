@@ -23,6 +23,8 @@ import {
   resolveSolidSpecialGraphicTexture,
 } from './lr2-scene-textures.ts';
 import { isDestinationVisible, makeLr2TextSprite, resolveScaledViewport } from './lr2-scene-render.ts';
+import { loadSkinBitmapFonts } from './lr2-font-loader.ts';
+import type { Lr2LoadedFont } from './lr2-bitmap-text.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
 /**
@@ -161,6 +163,8 @@ export class PixiDecideView {
   private readonly fallbackLayer = new Container();
   private readonly skinTextures = new Lr2SkinTextureStore();
   private readonly chartGraphicTextures = new Lr2ChartGraphicTextureStore();
+  /** Lazy-loaded LR2 bitmap fonts — see `prepareBitmapFonts`. */
+  private bitmapFonts: Map<number, Lr2LoadedFont> = new Map();
   private target: PixiDecideTarget | undefined;
   private sceneStartedAt = 0;
   private animationFrame = 0;
@@ -197,6 +201,7 @@ export class PixiDecideView {
     host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
     if (this.options.skin) {
       void this.prepareSkinTextures(this.options.skin);
+      void this.prepareBitmapFonts(this.options.skin);
     }
     const now = performance.now();
     this.sceneStartedAt = now;
@@ -270,6 +275,14 @@ export class PixiDecideView {
     if (loaded) {
       this.render();
     }
+  }
+
+  private async prepareBitmapFonts(skin: Lr2Skin): Promise<void> {
+    if (skin.lr2FontPaths.length === 0) return;
+    const loaded = await loadSkinBitmapFonts(skin.lr2FontPaths, skin.files);
+    if (this.disposed || this.options.skin !== skin) return;
+    this.bitmapFonts = loaded;
+    this.render();
   }
 
   private startAnimationLoop(): void {
@@ -358,7 +371,7 @@ export class PixiDecideView {
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const value = resolveDecideText(text.st, this.target.song);
       if (value === undefined || value.length === 0) continue;
-      this.skinLayer.addChild(makeLr2TextSprite(value, text, dst, { maxFontSize: 22 }));
+      this.skinLayer.addChild(makeLr2TextSprite(value, text, dst, { maxFontSize: 22, bitmapFonts: this.bitmapFonts }));
     }
   }
 
@@ -433,7 +446,10 @@ export class PixiDecideView {
       cropped = texture;
     } else {
       const elapsed = this.elapsedSinceTimer(image.source.timer);
-      const cell = pickAnimatedCell(image.source, elapsed, dst.loop);
+      const cell = pickAnimatedCell(image.source, elapsed, dst.loop, {
+        width: texture.width,
+        height: texture.height,
+      });
       cropped = createCroppedTexture(texture, cell) ?? texture;
     }
     const sprite = new Sprite(cropped);

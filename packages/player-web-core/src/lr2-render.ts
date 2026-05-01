@@ -287,12 +287,21 @@ export function pickAnimatedCell(
   source: { x: number; y: number; w: number; h: number; divx: number; divy: number; cycle: number },
   elapsedMs: number,
   loop: number = 0,
+  textureSize?: { width: number; height: number },
 ): { x: number; y: number; w: number; h: number } {
   const divx = Math.max(1, source.divx);
   const divy = Math.max(1, source.divy);
   const totalFrames = divx * divy;
-  const cellW = source.w / divx;
-  const cellH = source.h / divy;
+  // LR2 SRC rects with `w=0` / `h=0` are spec shorthand for "use
+  // the texture's native dimensions". Substitute when the caller
+  // supplied `textureSize`, otherwise leave the zero through (the
+  // crop helper will return `undefined` and the caller falls back
+  // to the full texture — preferable to silently re-sampling
+  // arbitrary-size cells).
+  const sourceW = source.w > 0 ? source.w : textureSize?.width ?? 0;
+  const sourceH = source.h > 0 ? source.h : textureSize?.height ?? 0;
+  const cellW = sourceW / divx;
+  const cellH = sourceH / divy;
   if (totalFrames <= 1 || source.cycle <= 0) {
     return { x: source.x, y: source.y, w: cellW, h: cellH };
   }

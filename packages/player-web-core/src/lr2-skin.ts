@@ -740,6 +740,20 @@ export interface Lr2Skin {
   barLayout: Lr2BarLayout;
   customOptions: Lr2CustomOption[];
   customFiles: Lr2CustomFile[];
+  /**
+   * `#LR2FONT,n,path` declarations in CSV-stream order. Each
+   * entry is the resolved relative path (post-CUSTOMFILE
+   * substitution); array index = font index referenced by
+   * `#SRC_TEXT`'s `font` field. Loaded lazily by the host —
+   * see `Lr2LoadedFont` for the runtime payload.
+   */
+  lr2FontPaths: string[];
+  /**
+   * `#FONT,size,...` declarations in CSV-stream order. Sizes are
+   * the only field LR2 honours; we use them as the system-font
+   * fallback height when `#LR2FONT` isn't loaded for that index.
+   */
+  systemFontSizes: number[];
   transparentColor?: { r: number; g: number; b: number };
   files: ReadonlyMap<string, Uint8Array>;
 }
@@ -905,6 +919,10 @@ interface BarRankSourceEntry {
 
 interface ParseContext {
   imagePaths: string[];
+  /** Declared `#LR2FONT` paths (declaration index = font index). */
+  lr2FontPaths: string[];
+  /** Declared `#FONT,size` sizes for system-font fallback. */
+  systemFontSizes: number[];
   imageSources: SourceRect[];
   imageDstGroups: Lr2DestinationRect[][];
   noteSources: Map<string, SourceRect[]>;
@@ -1134,6 +1152,8 @@ export function loadLr2SkinFromSourceFiles(
 
   const context: ParseContext = {
     imagePaths: [],
+    lr2FontPaths: [],
+    systemFontSizes: [],
     imageSources: [],
     imageDstGroups: [],
     noteSources: new Map(),
@@ -1274,6 +1294,8 @@ export function loadLr2SkinFromSourceFiles(
     barLayout: createBarLayout(context),
     customOptions: context.customOptions,
     customFiles: context.customFiles,
+    lr2FontPaths: context.lr2FontPaths,
+    systemFontSizes: context.systemFontSizes,
     transparentColor: context.transparentColor,
     files: sourceFiles,
   };
@@ -1368,6 +1390,25 @@ function readLr2Path(
       const normalized = normalizeLr2Path(row[1] ?? '');
       const expanded = context.customFileLookup.get(normalized.toLowerCase()) ?? normalized;
       context.imagePaths.push(expanded);
+    } else if (command === '#LR2FONT') {
+      // Each `#LR2FONT,relativePath[,1=force-bitmap]` declaration
+      // gets the next sequential font index. The actual `.lr2font`
+      // file is loaded out-of-band by the host and supplied to
+      // the renderer via `Lr2BitmapFont` payloads — here we only
+      // capture the declared path so the host knows what to load.
+      const normalized = normalizeLr2Path(row[1] ?? '');
+      if (normalized.length > 0) {
+        const expanded = context.customFileLookup.get(normalized.toLowerCase()) ?? normalized;
+        context.lr2FontPaths.push(expanded);
+      } else {
+        context.lr2FontPaths.push('');
+      }
+    } else if (command === '#FONT') {
+      // System-font fallback (`#FONT,size,thick,style,name`). LR2
+      // ignores the name and uses the user's SET UP option, so we
+      // only capture the size for our system-font fallback path.
+      const size = Math.max(1, Math.trunc(toNumber(row[1], 12)));
+      context.systemFontSizes.push(size);
     } else if (command === '#TRANSCOLOR') {
       const r = clampColorByte(toNumber(row[1], 0));
       const g = clampColorByte(toNumber(row[2], 0));

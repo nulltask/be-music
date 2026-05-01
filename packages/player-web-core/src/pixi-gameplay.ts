@@ -109,6 +109,8 @@ import {
 } from './pixi-gameplay-hud.ts';
 import { renderFallbackLr2Frame } from './pixi-gameplay-fallback.ts';
 import { resolveScaledViewport } from './lr2-scene-render.ts';
+import { loadSkinBitmapFonts } from './lr2-font-loader.ts';
+import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './lr2-bitmap-text.ts';
 
 interface RuntimeNote extends TimedPlayableNote {
   hit: boolean;
@@ -470,6 +472,8 @@ export class PixiGameplayView {
    * short-circuits immediately.
    */
   private disposed = false;
+  /** Lazy-loaded LR2 bitmap fonts (font index → glyph payload). */
+  private bitmapFonts: Map<number, Lr2LoadedFont> = new Map();
   private audioContext: AudioContext | undefined;
   /**
    * Audio routing handle. Owns two stable mixers (`keyMixer` for
@@ -1493,6 +1497,14 @@ export class PixiGameplayView {
       return;
     }
     const skin = this.options.skin;
+    // Load LR2 bitmap fonts in parallel with the texture preload —
+    // they go through their own loader, so we don't need to await
+    // the result here. The renderer falls back to the system font
+    // for any font index that isn't ready yet.
+    void loadSkinBitmapFonts(skin.lr2FontPaths, skin.files).then((loaded) => {
+      if (this.disposed || this.options.skin !== skin) return;
+      this.bitmapFonts = loaded;
+    });
     // Compute the FC animation duration from the skin's keyframes.
     // Walk every element type that can be anchored to a timer and
     // pick the longest keyframe time across those whose `timer` is
@@ -3336,7 +3348,13 @@ export class PixiGameplayView {
     } else {
       // Pick the current SRC cell from the divx*divy animation grid; a `loop=-1`
       // destination clamps SRC frames at the last cell (one-shot effects).
-      const cellRect = pickAnimatedCell(image.source, this.elapsedSinceTimer(image.source.timer), dst.loop);
+      // Pass the texture extents so LR2's `w=0` / `h=0` "use native size"
+      // shorthand resolves correctly — without it, `w=0` produces a
+      // zero-width cell and we'd skip rendering the element entirely.
+      const cellRect = pickAnimatedCell(image.source, this.elapsedSinceTimer(image.source.timer), dst.loop, {
+        width: baseTexture.width,
+        height: baseTexture.height,
+      });
       if (cellRect.w <= 0 || cellRect.h <= 0) {
         return;
       }
@@ -3442,6 +3460,15 @@ export class PixiGameplayView {
     }
     const value = this.resolveTextValue(text.st);
     if (!value) {
+      return;
+    }
+    // Bitmap-font path — when the host loaded the matching
+    // `#LR2FONT`, paint glyphs from its sprite sheet so the text
+    // matches the skin's pixel-art aesthetic. Falls through to the
+    // system-font path below when the font index isn't loaded.
+    const loaded = this.bitmapFonts.get(text.font);
+    if (loaded) {
+      this.skinLayer.addChild(makeLr2BitmapTextSprite(value, text, interpolated, loaded));
       return;
     }
     // Match the LR2 destination height as the font size; this gives roughly

@@ -28,6 +28,8 @@ import {
   resolveSolidSpecialGraphicTexture,
 } from './lr2-scene-textures.ts';
 import { isDestinationVisible, makeLr2TextSprite, resolveScaledViewport } from './lr2-scene-render.ts';
+import { loadSkinBitmapFonts } from './lr2-font-loader.ts';
+import type { Lr2LoadedFont } from './lr2-bitmap-text.ts';
 import type { BrowserSongCollection } from './types.ts';
 import type { PixiGameplayResultData } from './pixi-gameplay.ts';
 
@@ -288,6 +290,8 @@ export class PixiResultView {
   private sceneStartedAt = 0;
   private animationFrame = 0;
   private disposed = false;
+  /** Lazy-loaded LR2 bitmap fonts — see `prepareBitmapFonts`. */
+  private bitmapFonts: Map<number, Lr2LoadedFont> = new Map();
   /**
    * Per-timer fire timestamps. Empty until each respective timer
    * fires; entries here drive both the keyframe interpolator
@@ -336,6 +340,7 @@ export class PixiResultView {
     // negative and the scene fell through to the fallback panel.
     if (this.options.skin) {
       void this.prepareSkinTextures(this.options.skin);
+      void this.prepareBitmapFonts(this.options.skin);
     }
     this.sceneStartedAt = performance.now();
     this.timerStartedAt.clear();
@@ -429,6 +434,14 @@ export class PixiResultView {
     }
   }
 
+  private async prepareBitmapFonts(skin: Lr2Skin): Promise<void> {
+    if (skin.lr2FontPaths.length === 0) return;
+    const loaded = await loadSkinBitmapFonts(skin.lr2FontPaths, skin.files);
+    if (this.disposed || this.options.skin !== skin) return;
+    this.bitmapFonts = loaded;
+    this.render();
+  }
+
   private startAnimationLoop(): void {
     const tick = (): void => {
       if (this.disposed) {
@@ -503,7 +516,7 @@ export class PixiResultView {
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const value = resolveResultText(text.st, this.result);
       if (value === undefined || value.length === 0) continue;
-      this.skinLayer.addChild(makeLr2TextSprite(value, text, dst));
+      this.skinLayer.addChild(makeLr2TextSprite(value, text, dst, { bitmapFonts: this.bitmapFonts }));
     }
     // BARGRAPH / SLIDER: result-screen skins use these for the
     // EX-score / rate progress bars next to the digit panels. The
@@ -938,7 +951,10 @@ export class PixiResultView {
       cropped = texture;
     } else {
       const elapsed = this.elapsedSinceTimer(image.source.timer);
-      const cell = pickAnimatedCell(image.source, elapsed, dst.loop);
+      const cell = pickAnimatedCell(image.source, elapsed, dst.loop, {
+        width: texture.width,
+        height: texture.height,
+      });
       cropped = createCroppedTexture(texture, cell) ?? texture;
     }
     const sprite = new Sprite(cropped);

@@ -38,6 +38,8 @@ import {
   resolveSolidSpecialGraphicTexture,
 } from './lr2-scene-textures.ts';
 import { clampFontSize, isDestinationVisible, makeLr2TextSprite, resolveScaledViewport } from './lr2-scene-render.ts';
+import { loadSkinBitmapFonts } from './lr2-font-loader.ts';
+import type { Lr2LoadedFont } from './lr2-bitmap-text.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
 const BG = new Color('#08090d');
@@ -746,6 +748,13 @@ export class PixiSongSelectView {
    */
   private readonly skinTextures = new Lr2SkinTextureStore();
   /**
+   * Loaded LR2 bitmap-font payloads keyed by `#LR2FONT`
+   * declaration index. Populated asynchronously by
+   * `prepareBitmapFonts`; until that finishes the renderer falls
+   * back to the system-font path inside `makeLr2TextSprite`.
+   */
+  private bitmapFonts: Map<number, Lr2LoadedFont> = new Map();
+  /**
    * Per-song chart-asset texture cache for LR2 runtime-bound graphics
    * (`#SRC_IMAGE,gr=100/101/102` → STAGEFILE / BACKBMP / BANNER).
    * Keyed by `${song.id}:${kind}` so navigating between songs reuses
@@ -1194,6 +1203,7 @@ export class PixiSongSelectView {
     // gauge frame, etc. that don't belong on the select view.
     if (this.options.skin && this.options.skin.barLayout.slots.length > 0) {
       void this.prepareSkinTextures(this.options.skin);
+      void this.prepareBitmapFonts(this.options.skin);
     }
     this.resetSceneTimers();
     this.render();
@@ -1538,8 +1548,10 @@ export class PixiSongSelectView {
     // (BACKBMP / BANNER / STAGEFILE) cache stays valid since it's
     // keyed by song id, not by skin.
     this.skinTextures.clear();
+    this.bitmapFonts = new Map();
     if (skin && skin.barLayout.slots.length > 0) {
       void this.prepareSkinTextures(skin);
+      void this.prepareBitmapFonts(skin);
     }
     this.render();
   }
@@ -2011,6 +2023,22 @@ export class PixiSongSelectView {
   }
 
   /**
+   * Loads `#LR2FONT` payloads for the supplied skin in parallel
+   * with `prepareSkinTextures`. Bails out cleanly if the skin
+   * declares no fonts or if the user navigates away mid-load
+   * (`this.options.skin !== skin`). Fonts that fail to decode
+   * (encrypted DXA, missing image, etc.) are simply skipped —
+   * the system-font fallback renders for those indices.
+   */
+  private async prepareBitmapFonts(skin: Lr2Skin): Promise<void> {
+    if (skin.lr2FontPaths.length === 0) return;
+    const loaded = await loadSkinBitmapFonts(skin.lr2FontPaths, skin.files);
+    if (this.disposed || this.options.skin !== skin) return;
+    this.bitmapFonts = loaded;
+    this.render();
+  }
+
+  /**
    * Tracks the pointer in design-space coordinates so `#SRC_ONMOUSE`
    * hit-tests and the `#SRC_MOUSECURSOR` follow can read from a
    * single source of truth. The math mirrors `handlePointerDown` —
@@ -2066,7 +2094,7 @@ export class PixiSongSelectView {
    * static endpoint).
    */
   private handleSkinHitTest(skin: Lr2Skin, virtualX: number, virtualY: number): boolean {
-    const ops = computeSelectOps(this.focusedSong(), this.panelStates, this.playOptions);
+    const ops = computeSelectOps(this.focusedSong(), this.panelStates, this.playOptions, skin.customOptions);
     for (const button of skin.buttons) {
       if (button.click !== 1) continue;
       if (!this.isPanelOpen(button.panel)) continue;
@@ -2605,7 +2633,7 @@ export class PixiSongSelectView {
       //      LR2 skins gate with op 70..195.
       //   2. Avoid recomputing the same `Set` per element.
       const ops = this.perf.time('computeOps', () =>
-        computeSelectOps(this.focusedSong(), this.panelStates, this.playOptions),
+        computeSelectOps(this.focusedSong(), this.panelStates, this.playOptions, skin.customOptions),
       );
       this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, ops));
       this.perf.time('renderSkinBars', () => this.renderSkinBars(skin, ops));
@@ -2811,11 +2839,13 @@ export class PixiSongSelectView {
       if (!isDestinationVisible(dst, ops, this.timerActive)) {
         continue;
       }
-      const value = resolveSelectText(text.st, focusedSong);
+      const value = resolveSelectText(text.st, focusedSong, this.playOptions);
       if (value === undefined || value.length === 0) {
         continue;
       }
-      this.pickChromeLayer(text.declarationOrder).addChild(makeLr2TextSprite(value, text, dst));
+      this.pickChromeLayer(text.declarationOrder).addChild(
+        makeLr2TextSprite(value, text, dst, { bitmapFonts: this.bitmapFonts }),
+      );
     }
 
     // BUTTON panels — sort / filter / panel-toggle / play / replay /
@@ -3029,7 +3059,10 @@ export class PixiSongSelectView {
       return undefined;
     }
     const elapsed = this.elapsedSinceTimer(source.timer);
-    const cell = pickAnimatedCell(source, elapsed, dst.loop);
+    const cell = pickAnimatedCell(source, elapsed, dst.loop, {
+      width: baseTexture.width,
+      height: baseTexture.height,
+    });
     const cropped = createCroppedTexture(baseTexture, cell) ?? baseTexture;
     const sprite = new Sprite(cropped);
     sprite.label = label ?? `sliced[${source.imagePath}]`;
@@ -3055,7 +3088,10 @@ export class PixiSongSelectView {
       return undefined;
     }
     const elapsed = this.elapsedSinceTimer(cursor.source.timer);
-    const cell = pickAnimatedCell(cursor.source, elapsed, dst.loop);
+    const cell = pickAnimatedCell(cursor.source, elapsed, dst.loop, {
+      width: baseTexture.width,
+      height: baseTexture.height,
+    });
     const cropped = createCroppedTexture(baseTexture, cell) ?? baseTexture;
     const sprite = new Sprite(cropped);
     sprite.label = 'mouse-cursor';
@@ -3280,12 +3316,20 @@ export class PixiSongSelectView {
     if (isLr2SpecialGraphic(path)) {
       cropped = texture;
     } else {
-      // Use `pickAnimatedCell` so `source.cycle > 0` images (spinning
-      // markers, animated frame decorations, …) cycle through their
-      // divx*divy cells. Static images return cell (0, 0) at native
-      // size, identical to the previous `cropTexture` behaviour.
+      // `pickAnimatedCell` accepts a `textureSize` fallback so
+      // LR2's `w=0` / `h=0` "use native dimensions" shorthand is
+      // resolved against the real texture extents. Without that
+      // fallback, a `divx=N` source with `w=0` would produce a
+      // zero-width cell, `createCroppedTexture` would return
+      // `undefined`, and we'd fall through to the full untrimmed
+      // texture (which is the "every UI element squashed into
+      // each option-value box" corruption on the LR2 default
+      // skin's panel 1).
       const elapsed = this.elapsedSinceTimer(image.source.timer);
-      const cell = pickAnimatedCell(image.source, elapsed, dst.loop);
+      const cell = pickAnimatedCell(image.source, elapsed, dst.loop, {
+        width: texture.width,
+        height: texture.height,
+      });
       cropped = createCroppedTexture(texture, cell) ?? texture;
     }
     const sprite = new Sprite(cropped);
@@ -3571,6 +3615,7 @@ function computeSelectOps(
   song: BrowserSongEntry | undefined,
   panelStates: ReadonlySet<number> = EMPTY_PANEL_STATES,
   playOptions: PixiPlayOptions = DEFAULT_PLAY_OPTIONS,
+  customOptions: ReadonlyArray<{ defaultOp: number }> = [],
 ): ReadonlySet<number> {
   const ops = new Set<number>(SELECT_BASE_OPS);
   // LR2 ops 1..9 carry panel-open state. Skin elements gated on
@@ -3579,6 +3624,19 @@ function computeSelectOps(
   // for the same condition.
   for (const which of panelStates) {
     if (which >= 1 && which <= 9) ops.add(which);
+  }
+  // CUSTOMOPTION defaults — the LR2 default skin defines a
+  // `#CUSTOMOPTION` per panel-1 option (RANDOM 1P/2P, GAUGE,
+  // ASSIST, EFFECT, PLAYSTYLE, BATTLE, FLIP, TARGET) with a
+  // 900-series op assigned to each value cell. The "current
+  // value" label image inside each panel button is gated on the
+  // matching custom op — without these defaults active the
+  // labels render as a stack of overlapping cells (or vanish
+  // entirely depending on which `op !X` clauses they have),
+  // which is the corruption the user sees if we omit them.
+  // Mirrors `pixi-gameplay.ts`'s `runtimeOps` seeding.
+  for (const option of customOptions) {
+    ops.add(option.defaultOp);
   }
   // BGA on/off (ops 40 / 41). When `bga = AUTOPLAY_ONLY` we mirror
   // LR2: BGA is "on" when autoplay is also on, "off" otherwise.
@@ -3799,7 +3857,11 @@ function detectChartFeatures(song: BrowserSongEntry): {
  * etc." rendering on a separate layer, but practically the value
  * resolves identically.
  */
-function resolveSelectText(st: number, song: BrowserSongEntry | undefined): string | undefined {
+function resolveSelectText(
+  st: number,
+  song: BrowserSongEntry | undefined,
+  playOptions: PixiPlayOptions = DEFAULT_PLAY_OPTIONS,
+): string | undefined {
   // Slots that don't depend on a focused song.
   switch (st) {
     case 1:
@@ -3817,36 +3879,65 @@ function resolveSelectText(st: number, song: BrowserSongEntry | undefined): stri
       return 'LR2 SELECT';
     case 51: // skin author
       return '';
-    // Option-panel labels (60..85). These come from the skin's
-    // option-state machine, which isn't wired yet — return a blank
-    // string so the field renders without exposing stale data.
+    // Option-panel labels (60..85). LR2 default skin renders the
+    // current option-state name as readable text inside each
+    // panel-1 box (mirrors what HI-SPEED's NUMBER readout does
+    // for HiSpeed). We return the matching `playOptions` enum
+    // string so `makeLr2TextSprite` paints it with the system
+    // font; without these, the underlying #SRC_TEXT slot stayed
+    // empty and the only thing visible was an unrelated
+    // background image.
     case 60: // playmode
+      return 'SINGLE';
     case 61: // sort
-    case 62: // difficulty
+      return playOptions.sort;
+    case 62: // difficulty filter
+      return playOptions.difficultyFilter;
     case 63: // random 1P
+      return playOptions.random1P;
     case 64: // random 2P
+      return playOptions.random2P;
     case 65: // gauge 1P
+      return playOptions.gauge1P;
     case 66: // gauge 2P
-    case 67: // assist 1P
+      return playOptions.gauge2P;
+    case 67: // assist 1P (autoscratch)
+      return playOptions.autoScratch1P ? 'AUTOSCRATCH' : 'OFF';
     case 68: // assist 2P
+      return playOptions.autoScratch2P ? 'AUTOSCRATCH' : 'OFF';
     case 69: // battle
+      return 'OFF';
     case 70: // flip
+      return playOptions.dpFlip ? 'ON' : 'OFF';
     case 71: // scoregraph
+      return playOptions.scoreGraph ? 'ON' : 'OFF';
     case 72: // ghost
+      return 'OFF';
     case 73: // shutter
+      return `${Math.round(playOptions.shutter * 100)}%`;
     case 74: // scroll type
+      return 'OFF';
     case 75: // bga size
+      return playOptions.bgaSize;
     case 76: // bga
+      return playOptions.bga === 'AUTOPLAY_ONLY' ? 'AUTO ONLY' : playOptions.bga;
     case 77: // color depth
+      return '32 BIT';
     case 78: // vsync
+      return 'ON';
     case 79: // screen mode
-    case 80: // judge auto
+      return 'WINDOW';
+    case 80: // judge auto-adjust
+      return 'OFF';
     case 81: // replay save mode
+      return 'OFF';
     case 82: // trial line 1
     case 83: // trial line 2
-    case 84: // effect 1P
-    case 85: // effect 2P
       return '';
+    case 84: // effect 1P
+      return playOptions.hiddenSudden;
+    case 85: // effect 2P
+      return playOptions.hiddenSudden;
   }
 
   if (!song) {
