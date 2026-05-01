@@ -205,6 +205,15 @@ export interface PixiGameplayViewOptions {
   /** When true, every note is auto-judged as PERFECT at its scheduled time. */
   autoPlay?: boolean;
   /**
+   * Initial visual scroll-speed multiplier. Mirrors the live
+   * runtime hotkey (`ArrowUp` / `ArrowDown` adjusts this value
+   * during play); the option lets the host seed it from the
+   * select-screen play-options panel so the user doesn't have to
+   * re-dial their preferred HS at every song. Clamped to
+   * [`HISPEED_MIN`, `HISPEED_MAX`] internally; defaults to 1.5.
+   */
+  initialHiSpeed?: number;
+  /**
    * When true (default), the audio bus runs through dynamics
    * compressors that soften clipping when many BMS samples fire
    * simultaneously (jacks, dense BGM stacks). Set to `false` to
@@ -587,7 +596,16 @@ export class PixiGameplayView {
    */
   private readonly perf = new PerfTracker('gameplay');
 
-  public constructor(private readonly options: PixiGameplayViewOptions = {}) {}
+  public constructor(private readonly options: PixiGameplayViewOptions = {}) {
+    if (options.initialHiSpeed !== undefined && Number.isFinite(options.initialHiSpeed)) {
+      // Snap to the same 1/1000 grid `adjustHiSpeed` uses so a
+      // host-supplied `1.5000000000000002` (the obvious float-drift
+      // failure mode of repeated +0.1 steps) lands on the canonical
+      // grid value the in-game adjust hotkey would produce.
+      const snapped = Math.round(options.initialHiSpeed * 1000) / 1000;
+      this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, snapped));
+    }
+  }
 
   /**
    * Convenience accessor for the host's `Application`. Throws if

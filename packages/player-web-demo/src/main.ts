@@ -184,7 +184,14 @@ class PlayerWebDemoApp {
    * option on first mount and via `setSystemSounds` on
    * subsequent theme drops.
    */
-  private systemSoundBundle: { cursorMove?: Uint8Array; folderOpen?: Uint8Array; folderClose?: Uint8Array } = {};
+  private systemSoundBundle: {
+    cursorMove?: Uint8Array;
+    folderOpen?: Uint8Array;
+    folderClose?: Uint8Array;
+    optionOpen?: Uint8Array;
+    optionClose?: Uint8Array;
+    optionChange?: Uint8Array;
+  } = {};
   private selectView: PixiSongSelectView | undefined;
   private gameplayView: PixiGameplayView | undefined;
   private resultView: PixiResultView | undefined;
@@ -222,6 +229,12 @@ class PlayerWebDemoApp {
   private gui: GUI | undefined;
   private compressorStageFolder: GUI | undefined;
   private recordController: Controller | undefined;
+  /**
+   * Cached lil-gui handle for the "Auto play" toggle so the
+   * demo can push value changes (driven by the in-scene PLAY
+   * OPTIONS panel) onto the GUI without rebuilding the controller.
+   */
+  private autoPlayController: Controller | undefined;
   /**
    * Disabled string controller used as the read-only status
    * row inside the lil-gui panel. We hold a reference so
@@ -414,7 +427,7 @@ class PlayerWebDemoApp {
     this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open folder / ZIP');
-    gui
+    this.autoPlayController = gui
       .add(this.guiState, 'autoPlay')
       .name('Auto play')
       .onChange((value: boolean) => {
@@ -424,6 +437,12 @@ class PlayerWebDemoApp {
         // satisfies lil-gui's typed signature without us needing
         // to re-read `state.autoPlay` ourselves.
         this.guiState.autoPlay = value;
+        // Mirror the toggle into the in-scene "PLAY OPTIONS" panel
+        // so the user can flip it from either surface and the
+        // values stay aligned. The select view re-renders the
+        // modal if it's currently open; otherwise the change is
+        // picked up the next time the user expands it.
+        this.selectView?.setPlayOptions({ autoPlay: value });
       });
     gui
       .add(this.guiState, 'compressor')
@@ -721,6 +740,9 @@ class PlayerWebDemoApp {
       cursorMove: loadedTheme.systemSounds.cursorMove?.bytes,
       folderOpen: loadedTheme.systemSounds.folderOpen?.bytes,
       folderClose: loadedTheme.systemSounds.folderClose?.bytes,
+      optionOpen: loadedTheme.systemSounds.optionOpen?.bytes,
+      optionClose: loadedTheme.systemSounds.optionClose?.bytes,
+      optionChange: loadedTheme.systemSounds.optionChange?.bytes,
     };
     // BGM / decide / system-sound bytes are stashed on the host
     // here, but NOT pushed onto the live select view yet — that
@@ -781,6 +803,20 @@ class PlayerWebDemoApp {
       decideBgm: this.decideBgmBytes,
       systemSounds: this.systemSoundBundle,
       initialNavigation: this.lastSelectNavigation,
+      // Seed the in-scene panel's autoPlay value from the lil-gui
+      // toggle so power-users who only touched the toolbar still
+      // see the right state when they open the panel for the
+      // first time.
+      initialPlayOptions: { autoPlay: this.guiState.autoPlay },
+      onPlayOptionsChange: (options) => {
+        // Mirror panel-side mutations back onto the lil-gui so the
+        // toolbar reflects the latest value the user chose. We
+        // bypass the controller's `onChange` to avoid bouncing the
+        // event back into `setPlayOptions` and triggering a
+        // pointless re-render.
+        this.guiState.autoPlay = options.autoPlay;
+        this.autoPlayController?.updateDisplay();
+      },
       onSongSelected: (song) => {
         // Fire the decide cue first — it plays through the
         // select view's AudioContext which keeps running even
@@ -863,9 +899,17 @@ class PlayerWebDemoApp {
     // folder rather than overwriting the previous one.
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
     const playSkin = pickLr2PlaySkin(this.playSkins, song);
+    // Pull the canonical play-option snapshot (HiSpeed + AutoPlay
+    // tweaked from the in-scene "PLAY OPTIONS" panel) so the
+    // gameplay scene starts with the user's chosen values. The
+    // explicit `overrides.autoPlay` from `onSongAutoPlay` still
+    // wins so the AUTOPLAY skin button forces auto-judging on for
+    // a single launch regardless of the panel state.
+    const playOptions = this.selectView?.getPlayOptions();
     this.gameplayView = new PixiGameplayView({
       skin: playSkin,
-      autoPlay: overrides.autoPlay ?? this.guiState.autoPlay,
+      autoPlay: overrides.autoPlay ?? playOptions?.autoPlay ?? this.guiState.autoPlay,
+      initialHiSpeed: playOptions?.hiSpeed,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {

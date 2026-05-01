@@ -57,6 +57,9 @@ const FALLBACK_DESIGN_HEIGHT = 720;
  * The op numbers follow LR2's official `dst_option` table — see
  * `docs/LR2SkinHelp.md` lines 4099+ for the canonical list.
  */
+/** Empty panel-state constant — saves a fresh allocation per `computeSelectOps` call when no panel is open. */
+const EMPTY_PANEL_STATES: ReadonlySet<number> = new Set<number>();
+
 const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
   32, // autoplay off
   34, // ghost off
@@ -173,6 +176,66 @@ export interface PixiSongSelectNavigation {
 }
 
 /**
+ * Per-session gameplay tweaks the user picks from the select-screen
+ * "PLAY OPTIONS" overlay (toggled with Space). The host reads the
+ * current snapshot via {@link PixiSongSelectView.getPlayOptions} on
+ * song-pick and feeds it into {@link PixiGameplayViewOptions}.
+ *
+ * Kept deliberately small for now — HiSpeed and AutoPlay are the two
+ * choices that change every play session. Note arrangement (RANDOM /
+ * MIRROR / S-RANDOM), gauge type, and judge rank would slot in here
+ * once the gameplay engine grows the corresponding transformations.
+ */
+export interface PixiPlayOptions {
+  /**
+   * Visual scroll-speed multiplier. The chart's note-to-second
+   * mapping is unchanged; only the on-screen pixels-per-beat
+   * scaling moves. Range matches gameplay's runtime adjust hotkeys
+   * (`ArrowUp` / `ArrowDown` during play).
+   */
+  hiSpeed: number;
+  /**
+   * When `true`, every note auto-judges as PERFECT at its scheduled
+   * time. Mirrors the LR2 AUTOPLAY skin button (`#SRC_BUTTON
+   * type=16`); the dedicated `onSongAutoPlay` callback also forces
+   * this on for that single launch regardless of what's stored here.
+   */
+  autoPlay: boolean;
+}
+
+/** Default play-option values, applied at view construction time. */
+export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
+  hiSpeed: 1.5,
+  autoPlay: false,
+};
+
+/**
+ * Allowed range for {@link PixiPlayOptions.hiSpeed}. Mirrors
+ * gameplay's `HISPEED_MIN` / `HISPEED_MAX` so values seeded from
+ * the select scene cover the same domain the in-play adjust
+ * hotkeys (`ArrowUp` / `ArrowDown`) can produce. Duplicated here
+ * rather than re-exported from `pixi-gameplay-constants.ts` so
+ * the select view stays free of gameplay imports.
+ */
+const HISPEED_MIN = 0.1;
+const HISPEED_MAX = 6.0;
+/** Per-click HS step. 0.1 matches gameplay's `HISPEED_STEP`. */
+const HISPEED_STEP = 0.1;
+
+/**
+ * Snaps a hiSpeed value to the 1/1000 grid and clamps to
+ * [{@link HISPEED_MIN}, {@link HISPEED_MAX}]. The 1/1000 snap absorbs
+ * float drift from repeated +0.1 / -0.1 increments — the same trick
+ * `pixi-gameplay::adjustHiSpeed` uses so the two paths converge on
+ * identical step values.
+ */
+function clampHiSpeed(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_PLAY_OPTIONS.hiSpeed;
+  const snapped = Math.round(value * 1000) / 1000;
+  return Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, snapped));
+}
+
+/**
  * Bundle of LR2 system sound-effect bytes (typically loaded from
  * `LR2files/Sound/lr2/*.wav`). Each field is the encoded audio
  * payload (WAV / OGG / MP3 / etc.); {@link PixiSongSelectView}
@@ -185,6 +248,12 @@ export interface PixiSongSelectSystemSounds {
   folderOpen?: Uint8Array;
   /** Folder-back cue (`f-close.wav`). */
   folderClose?: Uint8Array;
+  /** Option-panel open cue (`o-open.wav`). Fired when any LR2 panel (1..9) opens. */
+  optionOpen?: Uint8Array;
+  /** Option-panel close cue (`o-close.wav`). Fired when an open panel is dismissed. */
+  optionClose?: Uint8Array;
+  /** Option-value change cue (`o-change.wav`). Fired on HS up/down, gauge toggle, etc. */
+  optionChange?: Uint8Array;
 }
 
 export interface PixiSongSelectViewOptions {
@@ -253,6 +322,23 @@ export interface PixiSongSelectViewOptions {
    * demo to remember the focused song across play sessions.
    */
   initialNavigation?: PixiSongSelectNavigation;
+  /**
+   * Initial play-option values. Merged onto {@link DEFAULT_PLAY_OPTIONS}
+   * — fields the host omits keep their defaults. The view owns the
+   * live state from then on; hosts read it back via
+   * {@link PixiSongSelectView.getPlayOptions} when launching gameplay.
+   */
+  initialPlayOptions?: Partial<PixiPlayOptions>;
+  /**
+   * Fired whenever the in-scene "PLAY OPTIONS" panel mutates the
+   * live play-option state. Hosts use this to keep external
+   * surfaces (e.g. a debug toolbar checkbox, a URL flag, persisted
+   * settings) in sync with the value the panel just changed.
+   *
+   * Not fired for {@link PixiSongSelectView.setPlayOptions} writes
+   * — those originate from the host so the host already knows.
+   */
+  onPlayOptionsChange?: (options: PixiPlayOptions) => void;
 }
 
 export class PixiSongSelectView {
@@ -318,6 +404,27 @@ export class PixiSongSelectView {
    * extend later.
    */
   private browseStack: BrowserFolderNode[] = [];
+  /**
+   * Live play-option state, mutated by the in-scene panel buttons
+   * (LR2 `#SRC_BUTTON,type=40..58` etc.) and read by the host via
+   * {@link getPlayOptions} at gameplay-launch time. Initialised
+   * from `initialPlayOptions` (overlaid on {@link DEFAULT_PLAY_OPTIONS})
+   * at construction.
+   */
+  private playOptions: PixiPlayOptions = { ...DEFAULT_PLAY_OPTIONS };
+  /**
+   * Set of currently-open LR2 panels (1..9). Drives op 1..9 in
+   * `computeSelectOps` and gates panel-scoped `#SRC_*` elements
+   * via {@link isPanelOpen}. Convention: panel 1 is the play-
+   * options panel — opened with the START button (Enter / Space)
+   * per LR2's select-skin spec (LR2SkinHelp line 9101).
+   *
+   * Multiple panels can be open simultaneously per spec (the FX
+   * panel and the play-options panel coexist on real LR2 setups);
+   * `togglePanel` flips one slot at a time so the user explicitly
+   * controls which panels are stacked.
+   */
+  private readonly panelStates = new Set<number>();
   /**
    * Parallel stack of the parent's `selectedIndex` at the moment
    * each folder on `browseStack` was entered. Used by
@@ -485,12 +592,26 @@ export class PixiSongSelectView {
    */
   private bgmGainBeforeDuck: number | undefined;
   /**
+   * Master gain for one-shot system effects (`cursor-move` /
+   * `folder-open` / `folder-close` / `option-open` / `option-close`
+   * / `option-change` / `decide`). Routed straight to
+   * `audioContext.destination` in parallel with `selectBgmGain` and
+   * `chartPreviewGain` — that way the BGM-duck on preview-start
+   * (which zeros `selectBgmGain.gain`) doesn't also silence the
+   * effect cues. Held as a field so a future master-volume slider
+   * can attenuate effects independently of music.
+   */
+  private systemSoundGain: GainNode | undefined;
+  /**
    * Encoded one-shot sound effects keyed by name. Stems include
    * `'decide'` (select → gameplay cue) and the LR2 system
    * effects (`'cursor-move'` / `'folder-open'` / `'folder-close'`
-   * — see `LR2files/Sound/lr2/*.wav` in the default theme). All
-   * one-shots share the same `AudioContext` + master gain as the
-   * looping select BGM and decode lazily on first use.
+   * / `'option-open'` / `'option-close'` / `'option-change'` —
+   * see `LR2files/Sound/lr2/*.wav` in the default theme). All
+   * one-shots share the same `AudioContext` as the looping select
+   * BGM but route through the dedicated {@link systemSoundGain} so
+   * preview ducking doesn't silence them. Buffers decode lazily on
+   * first use.
    */
   private readonly oneShotBytes = new Map<string, Uint8Array>();
   /** Decoded buffer cache, parallel to {@link oneShotBytes}. */
@@ -506,6 +627,38 @@ export class PixiSongSelectView {
     this.selectBgmBytes = options.selectBgm;
     this.setOneShotBytes('decide', options.decideBgm);
     this.setSystemSounds(options.systemSounds);
+    if (options.initialPlayOptions) {
+      this.playOptions = { ...this.playOptions, ...options.initialPlayOptions };
+      this.playOptions.hiSpeed = clampHiSpeed(this.playOptions.hiSpeed);
+    }
+  }
+
+  /**
+   * Returns a shallow snapshot of the current play-option state. The
+   * host typically calls this from `onSongSelected` / `onSongAutoPlay`
+   * and forwards the values onto {@link PixiGameplayViewOptions}.
+   */
+  public getPlayOptions(): PixiPlayOptions {
+    return { ...this.playOptions };
+  }
+
+  /**
+   * Merges `partial` onto the live play-option state and re-renders if
+   * the panel is open. Allows hosts to seed values from external
+   * sources (e.g. a settings menu, URL flag, prior session snapshot)
+   * without bouncing through the in-scene panel.
+   */
+  public setPlayOptions(partial: Partial<PixiPlayOptions>): void {
+    const next = { ...this.playOptions, ...partial };
+    next.hiSpeed = clampHiSpeed(next.hiSpeed);
+    this.playOptions = next;
+    // Re-render only when panel 1 (the play-options panel) is
+    // currently open — that's the only surface that visualises
+    // these values today, so a closed-panel write doesn't need a
+    // frame.
+    if (this.panelStates.has(1)) {
+      this.render();
+    }
   }
 
   /**
@@ -552,6 +705,9 @@ export class PixiSongSelectView {
     this.setOneShotBytes('cursor-move', sounds?.cursorMove);
     this.setOneShotBytes('folder-open', sounds?.folderOpen);
     this.setOneShotBytes('folder-close', sounds?.folderClose);
+    this.setOneShotBytes('option-open', sounds?.optionOpen);
+    this.setOneShotBytes('option-close', sounds?.optionClose);
+    this.setOneShotBytes('option-change', sounds?.optionChange);
   }
 
   /**
@@ -625,7 +781,12 @@ export class PixiSongSelectView {
     void audioContext.resume().catch(() => undefined);
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.selectBgmGain ?? audioContext.destination);
+    // Route through the dedicated system-FX gain so the duck-on-
+    // preview-start (which zeros `selectBgmGain.gain`) doesn't
+    // also silence the cue. Falls through to destination if the
+    // FX gain hasn't been constructed yet (shouldn't happen in
+    // practice — `ensureSelectBgmContext` builds both atomically).
+    source.connect(this.systemSoundGain ?? audioContext.destination);
     source.start();
     // Auto-disconnect on natural end so the node is GC-eligible.
     source.onended = (): void => {
@@ -670,6 +831,9 @@ export class PixiSongSelectView {
     //   (the song bars) → skinForegroundLayer (chrome that the
     //   CSV declared AFTER bars, e.g. scroll slider) →
     //   title / hint (Drop hints, fallback chrome).
+    // LR2 panels (op 1..9) live inside skinLayer / skinForegroundLayer
+    // — they're regular `#SRC_*` elements gated by their `panel`
+    // field, so no separate overlay layer is needed.
     this.root.addChild(
       this.background,
       this.skinLayer,
@@ -850,6 +1014,68 @@ export class PixiSongSelectView {
   }
 
   /**
+   * Returns whether an element with the given `panel` gate should
+   * currently render. Per LR2 spec:
+   *
+   *   - `panel = 0` → always render (default).
+   *   - `panel = -1` → only when no option panel is open.
+   *   - `panel = 1..9` → only when that specific panel is open.
+   *
+   * Defined as an arrow-property so callers can pass `this.isPanelOpen`
+   * to free helpers that need a `(panel) => boolean` predicate
+   * without binding `this` themselves.
+   */
+  private readonly isPanelOpen = (panel: number): boolean => {
+    if (panel === 0) return true;
+    if (panel === -1) return this.panelStates.size === 0;
+    return this.panelStates.has(panel);
+  };
+
+  /**
+   * Toggles LR2 panel `which` (1..9). Opening sets the corresponding
+   * `panelStates` flag and starts the matching open timer (21..29);
+   * closing clears the flag and starts the close timer (31..39).
+   * Mirrors the LR2 spec — panel buttons (`#SRC_BUTTON,type=1..9`)
+   * and the START key both route through here so keyboard / mouse
+   * paths stay in sync.
+   *
+   * Re-renders synchronously so panel-gated elements appear /
+   * disappear on the very next frame instead of waiting for the
+   * idle rAF tick (which only fires while keyframe animations are
+   * active and would skip a few frames after a static-state
+   * toggle).
+   */
+  private togglePanel(which: number): void {
+    if (which < 1 || which > 9) return;
+    const now = performance.now();
+    const openTimer = 20 + which; // panel 1 → timer 21
+    const closeTimer = 30 + which; // panel 1 → timer 31
+    let opening: boolean;
+    if (this.panelStates.has(which)) {
+      // Closing: drop the open timer (so it goes inactive next
+      // frame) and seed the close timer for the close-anim
+      // keyframes that #DST elements anchored to timer 31..39
+      // depend on.
+      this.panelStates.delete(which);
+      this.timerStartedAt.delete(openTimer);
+      this.timerStartedAt.set(closeTimer, now);
+      opening = false;
+    } else {
+      // Opening: drop the (potentially leftover) close timer and
+      // seed the open timer.
+      this.panelStates.add(which);
+      this.timerStartedAt.delete(closeTimer);
+      this.timerStartedAt.set(openTimer, now);
+      opening = true;
+    }
+    // LR2 system effects — `Sound/lr2/o-open.wav` /
+    // `o-close.wav`. Fire-and-forget; the cached buffer makes
+    // rapid toggles cheap.
+    void this.playOneShotSound(opening ? 'option-open' : 'option-close');
+    this.render();
+  }
+
+  /**
    * Estimates the vertical pitch between adjacent bar slots — used
    * to scale `listScrollOffset` so a 1-step cursor move produces a
    * 1-slot worth of visual slide. Picks the most-occupied y-delta
@@ -941,6 +1167,7 @@ export class PixiSongSelectView {
     void this.selectBgmContext?.close().catch(() => undefined);
     this.selectBgmContext = undefined;
     this.selectBgmGain = undefined;
+    this.systemSoundGain = undefined;
     this.selectBgmBuffer = undefined;
     // Detach our scene-graph subtree from the host's stage. The
     // host owns the `Application` lifetime; it (or whoever else
@@ -1292,6 +1519,14 @@ export class PixiSongSelectView {
     gain.connect(audioContext.destination);
     this.selectBgmContext = audioContext;
     this.selectBgmGain = gain;
+    // System-effect bus — sibling of `selectBgmGain`, routed
+    // directly to destination so the preview-start BGM duck
+    // (which zeros `selectBgmGain.gain`) doesn't also silence
+    // cursor / folder / option cues.
+    const fxGain = audioContext.createGain();
+    fxGain.gain.value = 1;
+    fxGain.connect(audioContext.destination);
+    this.systemSoundGain = fxGain;
     return audioContext;
   }
 
@@ -1490,20 +1725,20 @@ export class PixiSongSelectView {
    * static endpoint).
    */
   private handleSkinHitTest(skin: Lr2Skin, virtualX: number, virtualY: number): boolean {
-    const ops = computeSelectOps(this.focusedSong());
+    const ops = computeSelectOps(this.focusedSong(), this.panelStates);
     for (const button of skin.buttons) {
       if (button.click !== 1) continue;
-      if (!isPanelOpen(button.panel)) continue;
+      if (!this.isPanelOpen(button.panel)) continue;
       const dst = this.evaluateElementDst(button);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       if (!containsPoint(dst, virtualX, virtualY)) continue;
-      this.dispatchButtonClick(button.type);
+      this.dispatchButtonClick(button);
       return true;
     }
     for (const text of skin.texts) {
       if (text.edit !== 1) continue;
       if (text.st !== 30) continue; // 30 = search word
-      if (!isPanelOpen(text.panel)) continue;
+      if (!this.isPanelOpen(text.panel)) continue;
       const dst = this.evaluateElementDst(text);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       if (!containsPoint(dst, virtualX, virtualY)) continue;
@@ -1526,7 +1761,27 @@ export class PixiSongSelectView {
    * Other types are no-ops for now. Filter / sort / panel buttons
    * (types 1..12) land here too once their state machines exist.
    */
-  private dispatchButtonClick(type: number): void {
+  private dispatchButtonClick(button: Lr2ButtonElement): void {
+    const type = button.type;
+    // Panel-toggle buttons (LR2 button_type 1..9). Don't require a
+    // focused song — the LR2 default skin's "OPTION" launcher is
+    // always clickable, even before any chart is selected.
+    if (type >= 1 && type <= 9) {
+      this.togglePanel(type);
+      return;
+    }
+    // HS-1P / HS-2P (button_type 57 / 58). Spec: "数値変化機能のみ".
+    // The `plusOnly` field tells us the click direction:
+    //   - `1`  → this button raises HS by one step
+    //   - `-1` → this button lowers HS by one step
+    //   - `0`  → ambiguous; treat left-click as +step (right-click
+    //            could be wired to -step in a future pass, but
+    //            we don't track button affinities yet)
+    if (type === 57 || type === 58) {
+      const direction = button.plusOnly === -1 ? -1 : 1;
+      this.adjustHiSpeed(direction);
+      return;
+    }
     const focused = this.focusedSong();
     if (!focused) return;
     if (type === 15) {
@@ -1544,6 +1799,26 @@ export class PixiSongSelectView {
     // Types 17 / 19 / 13 / 14 / etc. — readtext / replay / config
     // / skin-select. Not yet implemented; intentionally silent so
     // a click doesn't trigger the wrong action.
+  }
+
+  /**
+   * Mutates `playOptions.hiSpeed` by ±0.1 (clamped to
+   * [{@link HISPEED_MIN}, {@link HISPEED_MAX}]) and notifies any
+   * external observer through `onPlayOptionsChange`. Re-renders
+   * synchronously so the open panel reflects the new value (the
+   * HS slider knob, the NUMBER readout, and any keyframed UI
+   * gated on op 10/11) without waiting for the idle rAF tick.
+   */
+  private adjustHiSpeed(direction: 1 | -1): void {
+    const next = clampHiSpeed(this.playOptions.hiSpeed + direction * HISPEED_STEP);
+    if (next === this.playOptions.hiSpeed) return; // already at clamp
+    this.playOptions = { ...this.playOptions, hiSpeed: next };
+    this.options.onPlayOptionsChange?.({ ...this.playOptions });
+    // LR2 system effect — `Sound/lr2/o-change.wav`. Fired on any
+    // option-value change inside an open panel (HS up/down, gauge
+    // toggle, random select, etc.).
+    void this.playOneShotSound('option-change');
+    this.render();
   }
 
   private readonly handleWheel = (event: WheelEvent): void => {
@@ -1668,6 +1943,49 @@ export class PixiSongSelectView {
     if (isEditableTarget(event.target)) {
       return;
     }
+    // Space toggles LR2 panel 1 (the play-options panel by
+    // convention — LR2SkinHelp line 9101: "選曲スキンでのみ
+    // 『スタートボタンでパネル1の呼び出し』が行えます"). We bind it
+    // to Space rather than Enter because Enter is already the
+    // song-pick / folder-enter accelerator on this view.
+    if (event.code === 'Space') {
+      event.preventDefault();
+      this.togglePanel(1);
+      return;
+    }
+    // While any panel is open, Escape closes it instead of popping
+    // a folder. Mirrors LR2: right-click on a panel (or re-clicking
+    // its launcher button) closes it; here we accept Escape too so
+    // keyboard-only users have a back-out shortcut.
+    if (event.key === 'Escape' && this.panelStates.size > 0) {
+      event.preventDefault();
+      // Close panels in numeric order — picking the lowest-numbered
+      // open panel matches "Esc closes the topmost / most-recent"
+      // expectation on the common case where only panel 1 is open.
+      const sorted = [...this.panelStates].sort((a, b) => a - b);
+      const target = sorted[0];
+      if (target !== undefined) this.togglePanel(target);
+      return;
+    }
+    // HS adjustment via the 1P 5 / 7 lane keys (LR2 convention:
+    // pressing the 5-key inside the play-options panel decreases
+    // HiSpeed, the 7-key increases it). Bindings come from
+    // `pixi-gameplay-lanes::CHANNEL_KEY_BINDINGS` —
+    // channel `15` (lane 5) → `KeyC`, channel `19` (lane 7) → `KeyV`.
+    // Only fires while panel 1 is open so the keys remain free
+    // outside the play-options context.
+    if (this.panelStates.has(1)) {
+      if (event.code === 'KeyC') {
+        event.preventDefault();
+        this.adjustHiSpeed(-1);
+        return;
+      }
+      if (event.code === 'KeyV') {
+        event.preventDefault();
+        this.adjustHiSpeed(1);
+        return;
+      }
+    }
     const entries = this.currentEntries();
     if (event.key === 'ArrowDown') {
       event.preventDefault();
@@ -1771,7 +2089,7 @@ export class PixiSongSelectView {
       //      BACKBMP presence, …) onto static frame elements that
       //      LR2 skins gate with op 70..195.
       //   2. Avoid recomputing the same `Set` per element.
-      const ops = this.perf.time('computeOps', () => computeSelectOps(this.focusedSong()));
+      const ops = this.perf.time('computeOps', () => computeSelectOps(this.focusedSong(), this.panelStates));
       this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, ops));
       this.perf.time('renderSkinBars', () => this.renderSkinBars(skin, ops));
       // Empty-state hint — shown over the skin when nothing was
@@ -1790,7 +2108,7 @@ export class PixiSongSelectView {
     this.hint.text =
       `${this.collection.songs.length} charts loaded` +
       (this.collection.errors.length > 0 ? ` / ${this.collection.errors.length} errors` : '') +
-      '  |  Select: Arrow keys / Enter';
+      '  |  Select: Arrow keys / Enter   |   SPACE: panel 1';
 
     const visibleRows = Math.max(1, Math.floor((designHeight - 120) / 52));
     const start = Math.max(
@@ -1873,7 +2191,23 @@ export class PixiSongSelectView {
     if (timer >= 10 && timer <= 13) {
       return this.timerStartedAt.has(timer);
     }
-    // Panel timers (21..39), play timers (40+) etc. stay inactive.
+    // Panel-open timers 21..29 — active iff that panel is currently
+    // open. LR2 spec: "パネルが閉じたらオフになります" so the timer
+    // implicitly stops when `togglePanel` clears the state, even if
+    // the seed timestamp is left in `timerStartedAt`.
+    if (timer >= 21 && timer <= 29) {
+      const which = timer - 20;
+      return this.panelStates.has(which);
+    }
+    // Panel-close timers 31..39 — active once seeded by `togglePanel`.
+    // The close-anim keyframes clamp at their final frame, so leaving
+    // it "active" past the animation is harmless; reopening the same
+    // panel re-deletes this entry to prevent a stale seed from
+    // triggering the close anim again.
+    if (timer >= 31 && timer <= 39) {
+      return this.timerStartedAt.has(timer);
+    }
+    // Play timers (40+) etc. stay inactive on the select scene.
     return false;
   };
 
@@ -1935,7 +2269,7 @@ export class PixiSongSelectView {
       if (!isDestinationVisible(dst, ops, this.timerActive)) {
         continue;
       }
-      const value = resolveSelectNumber(number.source.num, focusedSong);
+      const value = resolveSelectNumber(number.source.num, focusedSong, this.playOptions);
       if (value === undefined) {
         continue;
       }
@@ -1953,7 +2287,7 @@ export class PixiSongSelectView {
     // implement; fall back to a system-font Pixi `Text`. The `panel`
     // field hides labels scoped to closed option panels.
     for (const text of skin.texts) {
-      if (!isPanelOpen(text.panel)) {
+      if (!this.isPanelOpen(text.panel)) {
         continue;
       }
       const dst = this.evaluateElementDst(text);
@@ -1972,7 +2306,7 @@ export class PixiSongSelectView {
     // current state (still 0 for most types since we don't yet have
     // per-type state bindings); click handling lands separately.
     for (const button of skin.buttons) {
-      if (!isPanelOpen(button.panel)) {
+      if (!this.isPanelOpen(button.panel)) {
         continue;
       }
       if (!isDestinationVisible(this.evaluateElementDst(button), ops, this.timerActive)) {
@@ -1985,7 +2319,7 @@ export class PixiSongSelectView {
     // when the pointer is inside the SRC's hit-test rect (relative
     // to the DST top-left).
     for (const onMouse of skin.onMouseElements) {
-      if (!isPanelOpen(onMouse.panel)) {
+      if (!this.isPanelOpen(onMouse.panel)) {
         continue;
       }
       const dst = this.evaluateElementDst(onMouse);
@@ -2075,6 +2409,17 @@ export class PixiSongSelectView {
       const slotHeight = this.estimateSlotHeight();
       const visualIndex = slotHeight > 0 ? this.selectedIndex - this.listScrollOffset / slotHeight : this.selectedIndex;
       return Math.max(0, Math.min(1, visualIndex / (entries.length - 1)));
+    }
+    if (type === 2 || type === 3) {
+      // HiSpeed 1P / 2P — both 1P and 2P sliders read the same
+      // global HS today (we don't model side-split HS yet). The
+      // value is `(hiSpeed - HISPEED_MIN) / (HISPEED_MAX -
+      // HISPEED_MIN)` so the knob spans the rail proportionally
+      // to the configured range.
+      const span = HISPEED_MAX - HISPEED_MIN;
+      if (span <= 0) return 0;
+      const ratio = (this.playOptions.hiSpeed - HISPEED_MIN) / span;
+      return Math.max(0, Math.min(1, ratio));
     }
     return undefined;
   }
@@ -2701,8 +3046,18 @@ function pickBarBody(
  * Without a focused song we still set the defaults so empty-list
  * frames render reasonably.
  */
-function computeSelectOps(song: BrowserSongEntry | undefined): ReadonlySet<number> {
+function computeSelectOps(
+  song: BrowserSongEntry | undefined,
+  panelStates: ReadonlySet<number> = EMPTY_PANEL_STATES,
+): ReadonlySet<number> {
   const ops = new Set<number>(SELECT_BASE_OPS);
+  // LR2 ops 1..9 carry panel-open state. Skin elements gated on
+  // op 1 / op !1 / etc. read directly from this — distinct from
+  // the `panel` field on `#SRC_*` which is a syntactic shortcut
+  // for the same condition.
+  for (const which of panelStates) {
+    if (which >= 1 && which <= 9) ops.add(which);
+  }
   if (!song) {
     // Nothing focused — set all `_ABSENT` slots and a sensible "no
     // play data" lamp so the skin's empty-list branch renders.
@@ -3007,7 +3362,11 @@ function resolveSelectText(st: number, song: BrowserSongEntry | undefined): stri
  * Returning `undefined` makes the renderer skip the slot, leaving it
  * blank — which matches LR2's behaviour when no value is bound.
  */
-function resolveSelectNumber(num: number, song: BrowserSongEntry | undefined): number | undefined {
+function resolveSelectNumber(
+  num: number,
+  song: BrowserSongEntry | undefined,
+  playOptions: PixiPlayOptions = DEFAULT_PLAY_OPTIONS,
+): number | undefined {
   // Slots that don't depend on a focused song.
   switch (num) {
     case 20:
@@ -3041,11 +3400,14 @@ function resolveSelectNumber(num: number, song: BrowserSongEntry | undefined): n
     case 40: // TRIAL LEVEL
     case 41: // TRIAL LEVEL-1
       return 0;
-    // Play-option slots (10..15). Placeholder defaults — once the
-    // option panel state lives in a store, switch to that.
+    // Play-option slots (10..15). HS values come from the live
+    // `playOptions.hiSpeed` so the LR2 default skin's HS readout
+    // tracks the in-scene panel buttons. Other slots are
+    // placeholders until the corresponding option lands in
+    // {@link PixiPlayOptions} (judge / target rate / SUD+).
     case 10: // HS-1P (×100, e.g. 230 = 2.30×)
-    case 11: // HS-2P
-      return 100;
+    case 11: // HS-2P (we drive both from the same global HS today)
+      return Math.round(playOptions.hiSpeed * 100);
     case 12: // JUDGE TIMING
     case 13: // DEFAULT TARGET RATE
     case 14: // SUD+ 1P
@@ -3175,21 +3537,6 @@ function resolveDifficultyName(difficulty: number | undefined): string {
   }
 }
 
-/**
- * Returns whether an element with the given `panel` gate should
- * currently render. Per LR2 spec:
- *
- *   - `panel = 0` → always render (default).
- *   - `panel = -1` → only when no option panel is open. We don't
- *     model panels yet, so this branch is always true.
- *   - `panel = 1..9` → only when that specific panel is open. Always
- *     hidden until the panel system is implemented.
- */
-function isPanelOpen(panel: number): boolean {
-  if (panel === 0) return true;
-  if (panel === -1) return true;
-  return false;
-}
 
 /**
  * Returns whether `entry` matches the lower-cased search query.

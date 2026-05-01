@@ -62,6 +62,12 @@ export interface Lr2ThemeSystemSounds {
   folderOpen?: Lr2ThemeBgm;
   /** Folder-back cue (`f-close.wav`). */
   folderClose?: Lr2ThemeBgm;
+  /** Option-panel open cue (`o-open.wav`). */
+  optionOpen?: Lr2ThemeBgm;
+  /** Option-panel close cue (`o-close.wav`). */
+  optionClose?: Lr2ThemeBgm;
+  /** Option-value change cue (`o-change.wav`). */
+  optionChange?: Lr2ThemeBgm;
 }
 
 const PLAY_SKIN_FALLBACKS: Record<Lr2PlayVariant, readonly Lr2PlayVariant[]> = {
@@ -97,11 +103,12 @@ export async function loadLr2ThemeSkinsFromFiles(
   const onProgress = options.onProgress;
   // Total = play variants (one per LR2_PLAY_VARIANTS entry) +
   // select skin + result skin + decide skin + 2 theme BGMs +
-  // 3 system sounds. Hard-coding it to the structural shape
+  // 6 system sounds (cursor-move + folder open/close + option
+  // open/close/change). Hard-coding it to the structural shape
   // below keeps the count honest if anyone adds another
   // sub-task later (compile breaks when the awaited tuple
   // disagrees with this constant).
-  const totalSubTasks = LR2_PLAY_VARIANTS.length + 8;
+  const totalSubTasks = LR2_PLAY_VARIANTS.length + 11;
   let completed = 0;
   onProgress?.({ phase: 'theme', current: 0, total: totalSubTasks });
   const track = <T>(label: string, task: Promise<T>): Promise<T> =>
@@ -123,6 +130,9 @@ export async function loadLr2ThemeSkinsFromFiles(
     cursorMove,
     folderOpen,
     folderClose,
+    optionOpen,
+    optionClose,
+    optionChange,
   ] = await Promise.all([
     Promise.all(playSkinTasks),
     track('select', loadLr2SkinFromFiles(sourceFiles, { kind: 'select' })),
@@ -133,6 +143,9 @@ export async function loadLr2ThemeSkinsFromFiles(
     track('sound/scratch', loadLr2SystemSound(sourceFiles, 'scratch')),
     track('sound/f-open', loadLr2SystemSound(sourceFiles, 'f-open')),
     track('sound/f-close', loadLr2SystemSound(sourceFiles, 'f-close')),
+    track('sound/o-open', loadLr2SystemSound(sourceFiles, 'o-open')),
+    track('sound/o-close', loadLr2SystemSound(sourceFiles, 'o-close')),
+    track('sound/o-change', loadLr2SystemSound(sourceFiles, 'o-change')),
   ]);
 
   const playSkins: Lr2PlaySkinMap = {};
@@ -153,6 +166,9 @@ export async function loadLr2ThemeSkinsFromFiles(
       cursorMove,
       folderOpen,
       folderClose,
+      optionOpen,
+      optionClose,
+      optionChange,
     },
   };
 }
