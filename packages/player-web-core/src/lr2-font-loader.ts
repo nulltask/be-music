@@ -46,13 +46,26 @@ async function tryLoadFont(
 ): Promise<Lr2LoadedFont | undefined> {
   const lower = declaredPath.toLowerCase();
   const direct = lookupCaseInsensitive(files, declaredPath);
+  // Direct hit on a `.dxa` declaration.
   if (lower.endsWith('.dxa')) {
     if (!direct) return undefined;
     return loadFontFromDxa(direct, declaredPath);
   }
-  if (lower.endsWith('.lr2font')) {
-    if (!direct) return undefined;
+  // Direct hit on a bare `.lr2font` text file (already-extracted theme).
+  if (lower.endsWith('.lr2font') && direct) {
     return loadFontFromBareFile(direct, declaredPath, files);
+  }
+  // LR2 default-theme convention: skin CSV references e.g.
+  // `Select/optionfont/font.lr2font` even though no such directory
+  // exists — the actual content sits inside `Select/optionfont.dxa`.
+  // LR2 strips the trailing `<basename>/<basename>.lr2font` suffix
+  // and tries the `.dxa` next to it. We mirror that here.
+  if (lower.endsWith('.lr2font')) {
+    const archivePath = collapseLr2FontDirectoryToDxa(declaredPath);
+    if (archivePath) {
+      const archiveBytes = lookupCaseInsensitive(files, archivePath);
+      if (archiveBytes) return loadFontFromDxa(archiveBytes, archivePath);
+    }
   }
   // Some themes name the path without an extension. Try both
   // common siblings before giving up.
@@ -61,6 +74,22 @@ async function tryLoadFont(
   const lr2font = lookupCaseInsensitive(files, `${declaredPath}.lr2font`);
   if (lr2font) return loadFontFromBareFile(lr2font, declaredPath, files);
   return undefined;
+}
+
+/**
+ * Returns the `.dxa` archive path corresponding to LR2's
+ * "directory-pretending-to-be-an-archive" convention. The skin
+ * CSV references e.g. `Select/optionfont/font.lr2font` and LR2,
+ * when the directory doesn't exist, falls back to
+ * `Select/optionfont.dxa` (the parent directory's name becomes
+ * the archive name; the leaf `.lr2font` filename is whatever the
+ * archive packs internally).
+ */
+function collapseLr2FontDirectoryToDxa(declaredPath: string): string | undefined {
+  const normalized = declaredPath.replace(/\\/g, '/');
+  const lastSlash = normalized.lastIndexOf('/');
+  if (lastSlash <= 0) return undefined;
+  return `${normalized.slice(0, lastSlash)}.dxa`;
 }
 
 async function loadFontFromBareFile(
