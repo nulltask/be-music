@@ -258,7 +258,8 @@ export interface PixiGameplayViewOptions {
    *
    * Defaults to `'OFF'`.
    */
-  hiddenSudden?: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
+  hiddenSudden1P?: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
+  hiddenSudden2P?: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
   /**
    * Shutter coverage (0..1) — how much of the playfield each
    * active mask occupies. `0.25` covers the bottom 25 % for
@@ -2980,7 +2981,6 @@ export class PixiGameplayView {
    */
   private renderShutter(): void {
     this.shutterLayer.clear();
-    const mode = this.options.hiddenSudden ?? 'OFF';
     // LANE COVER (`button_type 46`) is the master ON/OFF switch
     // for the playfield mask. With it OFF, no shutter renders
     // even if HIDDEN / SUDDEN / HID+SUD is selected — matches
@@ -2989,34 +2989,70 @@ export class PixiGameplayView {
     // in. The HIDDEN / SUDDEN cycle picks WHERE the mask sits
     // (top / bottom / both); this gate decides WHETHER it shows.
     if (this.options.laneCover === false) return;
-    if (mode === 'OFF') return;
     if (this.laneX.size === 0) return;
     const shutter = Math.max(0, Math.min(1, this.options.shutter ?? 0.25));
     if (shutter <= 0) return;
+    const mode1P = this.options.hiddenSudden1P ?? 'OFF';
+    const mode2P = this.options.hiddenSudden2P ?? 'OFF';
+    if (mode1P === 'OFF' && mode2P === 'OFF') return;
+    // Per-side mask: collect each side's lane bounding box from
+    // `laneX`. Channels 11..16, 18, 19 are 1P (keyboard + scratch +
+    // start/select); 21..26, 28, 29 are 2P. SP charts only have 1P
+    // lanes registered, so the 2P loop will yield an empty bbox
+    // and skip rendering — drawing the 1P mask covers the whole
+    // playfield in that case, exactly as before.
+    this.paintSideShutter(this.collectSideBounds('1P'), mode1P, shutter);
+    this.paintSideShutter(this.collectSideBounds('2P'), mode2P, shutter);
+  }
+
+  private collectSideBounds(side: '1P' | '2P'): {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  } | undefined {
     let left = Number.POSITIVE_INFINITY;
     let right = Number.NEGATIVE_INFINITY;
     let top = Number.POSITIVE_INFINITY;
     let bottom = Number.NEGATIVE_INFINITY;
-    for (const lane of this.laneX.values()) {
+    let any = false;
+    for (const [channel, lane] of this.laneX) {
+      const onSide = isChannelOnSide(channel, side);
+      if (!onSide) continue;
+      any = true;
       left = Math.min(left, lane.x);
       right = Math.max(right, lane.x + lane.w);
       top = Math.min(top, lane.top);
       bottom = Math.max(bottom, lane.bottom);
     }
-    const height = bottom - top;
-    if (!Number.isFinite(left) || !Number.isFinite(right) || height <= 0) return;
+    if (!any) return undefined;
+    if (!Number.isFinite(left) || !Number.isFinite(right) || bottom - top <= 0) return undefined;
+    return { left, right, top, bottom };
+  }
+
+  private paintSideShutter(
+    bounds: { left: number; right: number; top: number; bottom: number } | undefined,
+    mode: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD',
+    shutter: number,
+  ): void {
+    if (!bounds || mode === 'OFF') return;
+    const width = bounds.right - bounds.left;
+    const height = bounds.bottom - bounds.top;
     const maskHeight = height * shutter;
-    const width = right - left;
     if (mode === 'SUDDEN' || mode === 'HID+SUD') {
       // SUDDEN — opaque rect at the TOP of the playfield. Notes
       // emerge below it.
-      this.shutterLayer.rect(left, top, width, maskHeight).fill({ color: 0x000000, alpha: 0.92 });
+      this.shutterLayer
+        .rect(bounds.left, bounds.top, width, maskHeight)
+        .fill({ color: 0x000000, alpha: 0.92 });
     }
     if (mode === 'HIDDEN' || mode === 'HID+SUD') {
       // HIDDEN — opaque rect at the BOTTOM of the playfield, just
       // above the judge line (lanes' `bottom` is the judge line
       // bottom edge — the mask itself ends there).
-      this.shutterLayer.rect(left, bottom - maskHeight, width, maskHeight).fill({ color: 0x000000, alpha: 0.92 });
+      this.shutterLayer
+        .rect(bounds.left, bounds.bottom - maskHeight, width, maskHeight)
+        .fill({ color: 0x000000, alpha: 0.92 });
     }
   }
 
@@ -4313,6 +4349,27 @@ function flipDpChannel(channel: string): string {
   if (side === '1') return '2' + lane;
   if (side === '2') return '1' + lane;
   return channel;
+}
+
+/**
+ * Returns whether a BMS channel string belongs to the given
+ * play-side. Used by per-side gameplay overlays (LANE COVER /
+ * HIDDEN / SUDDEN masks) so each side can render an
+ * independent shutter without leaking onto the other side's
+ * lanes on a DP chart.
+ *
+ * Channel layout (LR2 convention):
+ * - 1P keyboard: `11..15` + `18` + `19`; scratch: `16`
+ * - 2P keyboard: `21..25` + `28` + `29`; scratch: `26`
+ *
+ * Anything else (BGM, BGA, BPM, etc.) returns `false` for
+ * BOTH sides — those don't appear in `laneX` anyway.
+ */
+function isChannelOnSide(channel: string, side: '1P' | '2P'): boolean {
+  if (channel.length !== 2) return false;
+  const head = channel[0];
+  if (side === '1P') return head === '1';
+  return head === '2';
 }
 
 /**

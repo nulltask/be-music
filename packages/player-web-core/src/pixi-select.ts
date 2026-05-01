@@ -288,13 +288,21 @@ export interface PixiPlayOptions {
    */
   hsFix: PixiHsFix;
   /**
-   * HIDDEN / SUDDEN effect picked from
-   * `#SRC_BUTTON,type=50/51`. Cycles
-   * OFF → HIDDEN → SUDDEN → HID+SUD on each click. The shared
-   * 1P / 2P value drives an opaque mask on the gameplay
-   * playfield.
+   * 1P-side HIDDEN / SUDDEN effect picked from
+   * `#SRC_BUTTON,type=50`. Cycles OFF → HIDDEN → SUDDEN → HID+SUD
+   * on each click. Drives the opaque mask over the 1P keyboard /
+   * scratch lanes. SP charts only render this side; DP charts
+   * pair it with {@link hiddenSudden2P}.
    */
-  hiddenSudden: PixiHiddenSudden;
+  hiddenSudden1P: PixiHiddenSudden;
+  /**
+   * 2P-side HIDDEN / SUDDEN effect picked from
+   * `#SRC_BUTTON,type=51`. Independent from the 1P value — LR2's
+   * panel UI exposes per-side cycle buttons because real players
+   * sometimes want, e.g., HIDDEN on their dominant side and OFF
+   * on the other.
+   */
+  hiddenSudden2P: PixiHiddenSudden;
   /**
    * Shutter / LANE COVER coverage (0..1) — the fraction of the
    * playfield the LANE COVER (and any active HIDDEN / SUDDEN
@@ -374,7 +382,7 @@ export type PixiSelectSort = 'OFF' | 'LEVEL' | 'TITLE' | 'CLEAR';
 /** Allowed values for {@link PixiPlayOptions.hsFix}. */
 export type PixiHsFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
 
-/** Allowed values for {@link PixiPlayOptions.hiddenSudden}. */
+/** Allowed values for {@link PixiPlayOptions.hiddenSudden1P} / `hiddenSudden2P`. */
 export type PixiHiddenSudden = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 
 /** Allowed values for {@link PixiPlayOptions.random1P} / `random2P`. */
@@ -473,8 +481,9 @@ const SORT_CYCLE: readonly PixiSelectSort[] = ['OFF', 'LEVEL', 'TITLE', 'CLEAR']
 const HS_FIX_CYCLE: readonly PixiHsFix[] = ['OFF', 'MAXBPM', 'MINBPM', 'AVERAGE', 'CONSTANT'];
 
 /**
- * Cycle order for {@link PixiPlayOptions.hiddenSudden}. LR2 button
- * cells 0..3 on `#SRC_BUTTON,type=50/51`:
+ * Cycle order for {@link PixiPlayOptions.hiddenSudden1P} /
+ * `hiddenSudden2P`. LR2 button cells 0..3 on
+ * `#SRC_BUTTON,type=50` (1P) and `type=51` (2P):
  * off / hidden / sudden / hid+sud.
  */
 const HIDDEN_SUDDEN_CYCLE: readonly PixiHiddenSudden[] = ['OFF', 'HIDDEN', 'SUDDEN', 'HID+SUD'];
@@ -507,7 +516,8 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   keysFilter: 'ALL',
   sort: 'OFF',
   hsFix: 'OFF',
-  hiddenSudden: 'OFF',
+  hiddenSudden1P: 'OFF',
+  hiddenSudden2P: 'OFF',
   shutter: SHUTTER_DEFAULT,
   laneCover: false,
   autoScratch1P: false,
@@ -1079,8 +1089,11 @@ export class PixiSongSelectView {
     if (!HS_FIX_CYCLE.includes(next.hsFix)) {
       next.hsFix = DEFAULT_PLAY_OPTIONS.hsFix;
     }
-    if (!HIDDEN_SUDDEN_CYCLE.includes(next.hiddenSudden)) {
-      next.hiddenSudden = DEFAULT_PLAY_OPTIONS.hiddenSudden;
+    if (!HIDDEN_SUDDEN_CYCLE.includes(next.hiddenSudden1P)) {
+      next.hiddenSudden1P = DEFAULT_PLAY_OPTIONS.hiddenSudden1P;
+    }
+    if (!HIDDEN_SUDDEN_CYCLE.includes(next.hiddenSudden2P)) {
+      next.hiddenSudden2P = DEFAULT_PLAY_OPTIONS.hiddenSudden2P;
     }
     next.shutter = clampShutter(next.shutter);
     if (typeof next.autoScratch1P !== 'boolean') next.autoScratch1P = DEFAULT_PLAY_OPTIONS.autoScratch1P;
@@ -2357,11 +2370,16 @@ export class PixiSongSelectView {
       this.cyclePlayOption('hsFix', HS_FIX_CYCLE);
       return;
     }
-    // HIDDEN/SUDDEN effect cycle (button_type 50 = 1P, 51 = 2P).
-    // We keep a single shared `hiddenSudden` value for both sides
-    // until per-side gameplay variation lands.
-    if (type === 50 || type === 51) {
-      this.cyclePlayOption('hiddenSudden', HIDDEN_SUDDEN_CYCLE);
+    // HIDDEN/SUDDEN effect cycle — split per side (button_type 50
+    // = 1P, 51 = 2P). Each side cycles independently so a player
+    // can run e.g. HIDDEN on 1P + OFF on 2P, matching the LR2 panel
+    // UI which exposes a separate cell for each side.
+    if (type === 50) {
+      this.cyclePlayOption('hiddenSudden1P', HIDDEN_SUDDEN_CYCLE);
+      return;
+    }
+    if (type === 51) {
+      this.cyclePlayOption('hiddenSudden2P', HIDDEN_SUDDEN_CYCLE);
       return;
     }
     // LANE COVER (シャッター) ON / OFF toggle (button_type 46).
@@ -4436,10 +4454,10 @@ function resolveSelectText(
     case 82: // trial line 1
     case 83: // trial line 2
       return '';
-    case 84: // effect 1P
-      return playOptions.hiddenSudden;
+    case 84: // effect 1P (HIDDEN / SUDDEN)
+      return playOptions.hiddenSudden1P;
     case 85: // effect 2P
-      return playOptions.hiddenSudden;
+      return playOptions.hiddenSudden2P;
   }
 
   if (!song) {
@@ -4895,10 +4913,13 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
     // {@link HS_FIX_CYCLE} order
     // (off / maxbpm / minbpm / average / constant).
     stateIndex = HS_FIX_CYCLE.indexOf(playOptions.hsFix);
-  } else if (type === 50 || type === 51) {
-    // HIDDEN/SUDDEN cycle — cell index follows the
+  } else if (type === 50) {
+    // HIDDEN/SUDDEN 1P — cell index follows the
     // {@link HIDDEN_SUDDEN_CYCLE} order (off/hidden/sudden/hid+sud).
-    stateIndex = HIDDEN_SUDDEN_CYCLE.indexOf(playOptions.hiddenSudden);
+    stateIndex = HIDDEN_SUDDEN_CYCLE.indexOf(playOptions.hiddenSudden1P);
+  } else if (type === 51) {
+    // HIDDEN/SUDDEN 2P — independent cycle from the 1P button.
+    stateIndex = HIDDEN_SUDDEN_CYCLE.indexOf(playOptions.hiddenSudden2P);
   } else if (type === 46) {
     // LANE COVER (シャッター): cell 0 = OFF, cell 1 = ON.
     stateIndex = playOptions.laneCover ? 1 : 0;
