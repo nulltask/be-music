@@ -90,6 +90,16 @@ async function collectFilesFromDataTransfer(
   return fallback;
 }
 
+/**
+ * Cap on how many `entry.file()` / sub-directory `readEntries`
+ * calls can be in flight at once during the FileSystemEntry
+ * walk. Chrome's FileSystem API silently rejects (or drops) some
+ * calls when the in-flight set grows large, manifesting as a
+ * mid-load abort on multi-thousand-file drops. 16 is enough to
+ * keep disk I/O saturated without bumping that limit.
+ */
+const ENTRY_WALK_CONCURRENCY = 16;
+
 async function collectFilesFromEntry(
   entry: FileSystemEntry,
   prefix: string,
@@ -97,9 +107,21 @@ async function collectFilesFromEntry(
   onProgress?: LoadProgressCallback,
 ): Promise<void> {
   if (entry.isFile) {
-    const file = await new Promise<File>((resolve, reject) => {
-      (entry as FileSystemFileEntry).file(resolve, reject);
-    });
+    let file: File;
+    try {
+      file = await new Promise<File>((resolve, reject) => {
+        (entry as FileSystemFileEntry).file(resolve, reject);
+      });
+    } catch (error) {
+      // A single file failing to materialise (permission denied,
+      // stale entry, network drive disconnect, …) shouldn't kill
+      // the entire drop. Log and skip — the resulting collection
+      // simply omits that file, matching what real LR2 does
+      // when an asset is missing.
+      // eslint-disable-next-line no-console
+      console.warn(`[drop] skipped (entry.file failed): ${prefix}${entry.name}`, error);
+      return;
+    }
     const relativePath = prefix ? `${prefix}${file.name}` : file.name;
     files.push(withRelativePath(file, relativePath));
     // Throttle the per-file progress emit: a 4000-file walk
@@ -115,23 +137,70 @@ async function collectFilesFromEntry(
     const reader = (entry as FileSystemDirectoryEntry).createReader();
     const nextPrefix = `${prefix}${entry.name}/`;
     while (true) {
-      const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
-        reader.readEntries(resolve, reject);
-      });
+      let batch: FileSystemEntry[];
+      try {
+        batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+          reader.readEntries(resolve, reject);
+        });
+      } catch (error) {
+        // A directory readEntries failure aborts iteration on
+        // THIS directory — the parent walk continues with what
+        // we already collected. Logged because this is unusual
+        // (file-system errors are uncommon in dropped folders).
+        // eslint-disable-next-line no-console
+        console.warn(`[drop] skipped (readEntries failed): ${nextPrefix}`, error);
+        return;
+      }
       if (batch.length === 0) {
         return;
       }
-      // Walk all children of this batch in parallel — the
-      // FileSystemEntry API is async so each `entry.file()` /
-      // sub-directory `readEntries` call would otherwise stall
-      // the next one. With a deep song-pack tree (one folder
-      // per chart × thousands of charts) the serial walk took
-      // tens of seconds for a real-world drop; parallel walk
-      // pushes the whole walk into the I/O concurrency limit
-      // the browser sets internally.
-      await Promise.all(batch.map((child) => collectFilesFromEntry(child, nextPrefix, files, onProgress)));
+      // Walk children with a bounded-concurrency pool. The
+      // unbounded `Promise.all(batch.map(...))` from before fanned
+      // out into the recursive walks too, piling up hundreds of
+      // pending FileSystemEntry handles for deep trees. Chrome's
+      // FileSystem API has an internal in-flight cap that, when
+      // exceeded, silently rejects later calls — observable on
+      // the user side as a partial / interrupted load. Bounding
+      // the walk here keeps disk I/O saturated without tripping
+      // that cap. Children are wrapped in `.catch` so one bad
+      // sub-tree doesn't reject the whole pool.
+      await runWithConcurrency(batch, ENTRY_WALK_CONCURRENCY, async (child) => {
+        try {
+          await collectFilesFromEntry(child, nextPrefix, files, onProgress);
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.warn(`[drop] skipped (child walk failed): ${nextPrefix}${child.name}`, error);
+        }
+      });
     }
   }
+}
+
+/**
+ * Runs `task` against each item in `items`, with at most `limit`
+ * tasks in flight at once. Settles when every task has resolved
+ * or rejected; rejections are NOT propagated — callers wrap each
+ * task in their own try/catch when they want per-item error
+ * containment. Used by both the FileSystemEntry walk and the
+ * file-read pool to enforce a safe concurrency ceiling.
+ */
+async function runWithConcurrency<T>(
+  items: ReadonlyArray<T>,
+  limit: number,
+  task: (item: T, index: number) => Promise<void>,
+): Promise<void> {
+  const total = items.length;
+  if (total === 0) return;
+  let nextIndex = 0;
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= total) return;
+      await task(items[index]!, index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, total) }, worker));
 }
 
 /**
@@ -164,25 +233,26 @@ export async function readFilesIntoBytesMap(
     onRead?: (path: string, current: number, total: number) => void;
   } = {},
 ): Promise<Map<string, Uint8Array>> {
-  const concurrency = Math.min(options.concurrency ?? FILE_READ_CONCURRENCY, files.length || 1);
+  const concurrency = options.concurrency ?? FILE_READ_CONCURRENCY;
   const result = new Map<string, Uint8Array>();
-  let nextIndex = 0;
   let completed = 0;
   const total = files.length;
-  const worker = async (): Promise<void> => {
-    while (true) {
-      const index = nextIndex;
-      nextIndex += 1;
-      if (index >= total) return;
-      const file = files[index]!;
-      const path = normalizePath(file.webkitRelativePath || file.name);
+  await runWithConcurrency(files, concurrency, async (file) => {
+    const path = normalizePath(file.webkitRelativePath || file.name);
+    try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       result.set(path, bytes);
-      completed += 1;
-      options.onRead?.(path, completed, total);
+    } catch (error) {
+      // A single file failing to read shouldn't kill the entire
+      // drop. The map simply omits that path; the caller's
+      // chart parser / asset resolver will treat it as missing,
+      // which matches what happens for genuinely-missing files.
+      // eslint-disable-next-line no-console
+      console.warn(`[drop] skipped (arrayBuffer failed): ${path}`, error);
     }
-  };
-  await Promise.all(Array.from({ length: concurrency }, worker));
+    completed += 1;
+    options.onRead?.(path, completed, total);
+  });
   return result;
 }
 
