@@ -291,6 +291,14 @@ export interface PixiGameplayViewOptions {
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
   random2P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
   /**
+   * 1P gauge variant (`#SRC_BUTTON,type=40`). Drives both the
+   * gauge formula (`createGrooveGaugeState`) and the gauge-on-
+   * red-branch op flags (43 / 45). 2P-side gauge isn't yet
+   * separately wired — `createGrooveGaugeState` consumes the 1P
+   * value and applies it to the single shared gauge.
+   */
+  gauge?: 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
+  /**
    * When true (default), the audio bus runs through dynamics
    * compressors that soften clipping when many BMS samples fire
    * simultaneously (jacks, dense BGM stacks). Set to `false` to
@@ -1199,7 +1207,7 @@ export class PixiGameplayView {
     // with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a
     // short TOTAL=160 100-note chart gets +1.6 per PG/GR.
     const playableNoteCount = this.notes.filter((note) => isPlayableInputChannel(note.channel)).length;
-    this.gaugeState = createGrooveGaugeState(playableNoteCount, resolved.metadata.total);
+    this.gaugeState = createGrooveGaugeState(playableNoteCount, resolved.metadata.total, this.options.gauge ?? 'GROOVE');
     // Now that the gauge has its starting value (LR2 default 20 %),
     // seed the polyline history so the result-screen graph starts at
     // the correct origin instead of the first judge's value.
@@ -1273,8 +1281,8 @@ export class PixiGameplayView {
       // from `options.scoreGraph`.
       // ops 40 / 41 (BGA off / on) — set dynamically below from
       // `options.bga` so the runtime gating matches the live setting.
-      42, // 1P normal gauge
-      44, // 2P normal gauge
+      // ops 42 / 43 (1P normal / 赤 gauge), 44 / 45 (2P) — set
+      // dynamically below from `options.gauge`.
       47, // difficulty filter disabled
       50, // offline
       // ops 54 / 55 (autoscratch 1P off / on), 56 / 57 (autoscratch
@@ -1292,6 +1300,11 @@ export class PixiGameplayView {
     // Autoscratch 1P / 2P (54 / 55, 56 / 57).
     this.runtimeOps.add(this.options.autoScratch1P ? 55 : 54);
     this.runtimeOps.add(this.options.autoScratch2P ? 57 : 56);
+    // Gauge type — HARD / DEATH map to the LR2 "red" gauge ops
+    // (43 / 45); GROOVE / EASY share the normal branch (42 / 44).
+    const isRedGaugeOp = this.options.gauge === 'HARD' || this.options.gauge === 'DEATH';
+    this.runtimeOps.add(isRedGaugeOp ? 43 : 42);
+    this.runtimeOps.add(isRedGaugeOp ? 45 : 44);
     // Score graph (38 / 39).
     this.runtimeOps.add(this.options.scoreGraph ? 39 : 38);
     // BGA on/off (40 / 41). With AUTOPLAY_ONLY we mirror LR2: the

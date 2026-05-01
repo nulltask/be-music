@@ -921,6 +921,7 @@ class PlayerWebDemoApp {
       dpFlip: playOptions?.dpFlip,
       random1P: playOptions?.random1P,
       random2P: playOptions?.random2P,
+      gauge: playOptions?.gauge1P,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {

@@ -69,8 +69,8 @@ const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
   // op 40 / 41 (BGA off / on) — set dynamically from `playOptions.bga`
   // by `computeSelectOps` so the LR2 default panel-1 BGA toggle button
   // reflects the live state on cell 0/1/2.
-  42, // 1P normal gauge
-  44, // 2P normal gauge
+  // ops 42 / 43 (1P normal / 赤 gauge), 44 / 45 (2P normal / 赤)
+  // — set dynamically from `playOptions.gauge1P / 2P`.
   // op 46 / 47 (difficulty filter active / disabled) — set
   // dynamically from `playOptions.difficultyFilter`.
   50, // offline (no IR connection yet)
@@ -318,6 +318,18 @@ export interface PixiPlayOptions {
   random1P: PixiRandomMode;
   /** 2P side note arrangement (channels 21..25 + 28 + 29). */
   random2P: PixiRandomMode;
+  /**
+   * 1P gauge variant (`#SRC_BUTTON,type=40`):
+   *
+   * - `GROOVE`   — LR2 default cumulative gauge (start 20 %,
+   *   clear 80 %)
+   * - `HARD`     — survival gauge (start 100 %, fail at 0 %)
+   * - `DEATH`    — instant-death (start 100 %, any miss = 0)
+   * - `EASY`     — gentler GROOVE (clear 60 %)
+   */
+  gauge1P: PixiGaugeType;
+  /** 2P gauge variant (`#SRC_BUTTON,type=41`). */
+  gauge2P: PixiGaugeType;
 }
 
 /** Allowed values for {@link PixiPlayOptions.difficultyFilter}. */
@@ -337,6 +349,9 @@ export type PixiHiddenSudden = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 
 /** Allowed values for {@link PixiPlayOptions.random1P} / `random2P`. */
 export type PixiRandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+
+/** Allowed values for {@link PixiPlayOptions.gauge1P} / `gauge2P`. */
+export type PixiGaugeType = 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
 
 /** Per-step shutter delta applied by the panel-open `KeyD` / `KeyF` shortcuts. */
 const SHUTTER_STEP = 0.05;
@@ -444,6 +459,13 @@ const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
  */
 const RANDOM_CYCLE: readonly PixiRandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'];
 
+/**
+ * Cycle order for {@link PixiPlayOptions.gauge1P} / `gauge2P`.
+ * LR2 button cells 0..3 on `#SRC_BUTTON,type=40 / 41`:
+ * groove / survival / death / easy.
+ */
+const GAUGE_CYCLE: readonly PixiGaugeType[] = ['GROOVE', 'HARD', 'DEATH', 'EASY'];
+
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hiSpeed: 1.5,
@@ -462,6 +484,8 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   dpFlip: false,
   random1P: 'OFF',
   random2P: 'OFF',
+  gauge1P: 'GROOVE',
+  gauge2P: 'GROOVE',
 };
 
 /**
@@ -954,6 +978,8 @@ export class PixiSongSelectView {
     if (typeof next.dpFlip !== 'boolean') next.dpFlip = DEFAULT_PLAY_OPTIONS.dpFlip;
     if (!RANDOM_CYCLE.includes(next.random1P)) next.random1P = DEFAULT_PLAY_OPTIONS.random1P;
     if (!RANDOM_CYCLE.includes(next.random2P)) next.random2P = DEFAULT_PLAY_OPTIONS.random2P;
+    if (!GAUGE_CYCLE.includes(next.gauge1P)) next.gauge1P = DEFAULT_PLAY_OPTIONS.gauge1P;
+    if (!GAUGE_CYCLE.includes(next.gauge2P)) next.gauge2P = DEFAULT_PLAY_OPTIONS.gauge2P;
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
     // currently open — that's the only surface that visualises
@@ -2182,6 +2208,15 @@ export class PixiSongSelectView {
     }
     if (type === 43) {
       this.cyclePlayOption('random2P', RANDOM_CYCLE);
+      return;
+    }
+    // Gauge type cycle (button_type 40 = 1P, 41 = 2P).
+    if (type === 40) {
+      this.cyclePlayOption('gauge1P', GAUGE_CYCLE);
+      return;
+    }
+    if (type === 41) {
+      this.cyclePlayOption('gauge2P', GAUGE_CYCLE);
       return;
     }
     const focused = this.focusedSong();
@@ -3564,6 +3599,12 @@ function computeSelectOps(
   // Autoscratch 1P / 2P (ops 54 / 55, 56 / 57).
   ops.add(playOptions.autoScratch1P ? 55 : 54);
   ops.add(playOptions.autoScratch2P ? 57 : 56);
+  // Gauge type 1P / 2P (ops 42 = normal / 43 = 赤, 44 / 45). LR2
+  // groups HARD / DEATH together as the "red gauge" branch since
+  // both share the survival-style colour treatment in the
+  // default skin. EASY shares the normal-gauge branch with GROOVE.
+  ops.add(isRedGauge(playOptions.gauge1P) ? 43 : 42);
+  ops.add(isRedGauge(playOptions.gauge2P) ? 45 : 44);
   // Difficulty filter active / disabled (ops 46 / 47).
   ops.add(playOptions.difficultyFilter !== 'ALL' ? 46 : 47);
   if (!song) {
@@ -4057,6 +4098,16 @@ function resolveDifficultyName(difficulty: number | undefined): string {
  * — `PixiSongSelectView.setSearchQuery` is the front door.
  */
 /**
+ * Returns whether a {@link PixiGaugeType} maps to LR2's "red"
+ * gauge variant (op 43 / 45). HARD and DEATH share that branch
+ * because the default skin treats them as the same survival-
+ * style colour treatment.
+ */
+function isRedGauge(type: PixiGaugeType): boolean {
+  return type === 'HARD' || type === 'DEATH';
+}
+
+/**
  * Sorts a list of browse entries in place by the chosen LR2
  * sort mode. Folders always sort by label (LEVEL / CLEAR don't
  * meaningfully apply to a folder bar). Songs sort by:
@@ -4212,6 +4263,12 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
   } else if (type === 43) {
     // RANDOM 2P.
     stateIndex = RANDOM_CYCLE.indexOf(playOptions.random2P);
+  } else if (type === 40) {
+    // Gauge 1P: cells follow {@link GAUGE_CYCLE} order.
+    stateIndex = GAUGE_CYCLE.indexOf(playOptions.gauge1P);
+  } else if (type === 41) {
+    // Gauge 2P.
+    stateIndex = GAUGE_CYCLE.indexOf(playOptions.gauge2P);
   } else if (type >= 91 && type <= 96) {
     // Difficulty filter direct-set buttons — cell 0 / 1 = inactive
     // / active depending on whether this button's specific
