@@ -3124,20 +3124,16 @@ export class PixiSongSelectView {
     if (rect.w <= 0 || rect.h <= 0) {
       return;
     }
-    // LR2 "no-graphic" button — `gr=0,x=0,y=0,w=0,h=0,divx=0,divy=0`
-    // is the skin author's idiom for a clickable rect with no
-    // visible body (the matching #SRC_TEXT label is what paints).
-    // Without this short-circuit, our `w==0` fallback would treat
-    // the source as "use the full texture" and render the entire
-    // skin atlas squashed into the small button rect — the
-    // collage of glyphs / chrome the user sees behind PLAY OPTION
-    // value labels.
-    if (
-      button.source.w === 0 &&
-      button.source.h === 0 &&
-      button.source.divx === 0 &&
-      button.source.divy === 0
-    ) {
+    // LR2 "no-graphic" button — when both `w` and `h` are 0 the
+    // skin author is declaring a clickable rect with no visible
+    // body (the matching #SRC_TEXT label is what paints). The
+    // button may still carry non-zero `divx` / `divy` to indicate
+    // state count (LANE COVER uses `divx=1, divy=2` for ON/OFF),
+    // so we key only on the zero source-rect bounds. Without this
+    // short-circuit, our `w==0` fallback would treat the source
+    // as "use the full texture" and render the entire skin atlas
+    // squashed into the small button rect.
+    if (button.source.w === 0 && button.source.h === 0) {
       return;
     }
     const divx = Math.max(1, button.source.divx);
