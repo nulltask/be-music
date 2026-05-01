@@ -912,6 +912,7 @@ class PlayerWebDemoApp {
       initialHiSpeed: playOptions?.hiSpeed,
       bga: playOptions?.bga,
       bgaSize: playOptions?.bgaSize,
+      scoreGraph: playOptions?.scoreGraph,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {

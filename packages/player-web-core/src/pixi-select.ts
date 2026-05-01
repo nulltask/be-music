@@ -63,7 +63,9 @@ const EMPTY_PANEL_STATES: ReadonlySet<number> = new Set<number>();
 const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
   32, // autoplay off
   34, // ghost off
-  38, // scoregraph off
+  // op 38 / 39 (scoregraph off / on) — set dynamically from
+  // `playOptions.scoreGraph` so the panel-1 toggle button cell
+  // tracks the live state.
   // op 40 / 41 (BGA off / on) — set dynamically from `playOptions.bga`
   // by `computeSelectOps` so the LR2 default panel-1 BGA toggle button
   // reflects the live state on cell 0/1/2.
@@ -218,6 +220,14 @@ export interface PixiPlayOptions {
    * gated on op 31. Mirrors `#SRC_BUTTON,type=73`.
    */
   bgaSize: PixiBgaSize;
+  /**
+   * Score-graph (per-judge prediction line) display flag. Mirrors
+   * `#SRC_BUTTON,type=70` and ops 38 (off) / 39 (on). The LR2
+   * default skin gates its score-graph chrome on op 39 — toggling
+   * this on reveals those elements without needing a dedicated
+   * renderer in the gameplay scene.
+   */
+  scoreGraph: boolean;
 }
 
 /** Allowed values for {@link PixiPlayOptions.bga}. */
@@ -240,12 +250,19 @@ const BGA_CYCLE: readonly PixiBgaMode[] = ['OFF', 'ON', 'AUTOPLAY_ONLY'];
  */
 const BGA_SIZE_CYCLE: readonly PixiBgaSize[] = ['NORMAL', 'EXTEND'];
 
+/**
+ * Cycle order for {@link PixiPlayOptions.scoreGraph}. LR2 button
+ * cell 0 = OFF, cell 1 = ON.
+ */
+const SCORE_GRAPH_CYCLE: readonly boolean[] = [false, true];
+
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hiSpeed: 1.5,
   autoPlay: false,
   bga: 'ON',
   bgaSize: 'NORMAL',
+  scoreGraph: false,
 };
 
 /**
@@ -705,6 +722,7 @@ export class PixiSongSelectView {
     next.hiSpeed = clampHiSpeed(next.hiSpeed);
     if (!BGA_CYCLE.includes(next.bga)) next.bga = DEFAULT_PLAY_OPTIONS.bga;
     if (!BGA_SIZE_CYCLE.includes(next.bgaSize)) next.bgaSize = DEFAULT_PLAY_OPTIONS.bgaSize;
+    if (typeof next.scoreGraph !== 'boolean') next.scoreGraph = DEFAULT_PLAY_OPTIONS.scoreGraph;
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
     // currently open — that's the only surface that visualises
@@ -1845,6 +1863,11 @@ export class PixiSongSelectView {
     // BGA size NORMAL/EXTEND (button_type 73).
     if (type === 73) {
       this.cyclePlayOption('bgaSize', BGA_SIZE_CYCLE);
+      return;
+    }
+    // SCOREGRAPH on/off (button_type 70).
+    if (type === 70) {
+      this.cyclePlayOption('scoreGraph', SCORE_GRAPH_CYCLE);
       return;
     }
     const focused = this.focusedSong();
@@ -3158,6 +3181,10 @@ function computeSelectOps(
   // gameplay-side `#DST_BGA` chooses between two definitions
   // gated on these ops.
   ops.add(playOptions.bgaSize === 'EXTEND' ? 31 : 30);
+  // Score graph on/off (ops 38 / 39). The LR2 default skin gates
+  // its score-prediction line chrome on op 39 — without it those
+  // elements stay hidden even when the option is "on".
+  ops.add(playOptions.scoreGraph ? 39 : 38);
   if (!song) {
     // Nothing focused — set all `_ABSENT` slots and a sensible "no
     // play data" lamp so the skin's empty-list branch renders.
@@ -3679,6 +3706,9 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
   } else if (type === 73) {
     // BGA size: cell 0 = NORMAL, cell 1 = EXTEND.
     stateIndex = BGA_SIZE_CYCLE.indexOf(playOptions.bgaSize);
+  } else if (type === 70) {
+    // Score graph: cell 0 = OFF, cell 1 = ON.
+    stateIndex = playOptions.scoreGraph ? 1 : 0;
   }
   return Math.max(0, Math.min(cellCount - 1, stateIndex));
 }

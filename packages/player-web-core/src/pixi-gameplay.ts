@@ -228,6 +228,13 @@ export interface PixiGameplayViewOptions {
    */
   bgaSize?: 'NORMAL' | 'EXTEND';
   /**
+   * Score-graph display flag picked from `#SRC_BUTTON,type=70`.
+   * Drives ops 38 (off) / 39 (on) on the gameplay runtime so the
+   * skin's score-prediction line chrome (gated on op 39) shows
+   * when enabled. Defaults to `false` to mirror the LR2 default.
+   */
+  scoreGraph?: boolean;
+  /**
    * When true (default), the audio bus runs through dynamics
    * compressors that soften clipping when many BMS samples fire
    * simultaneously (jacks, dense BGM stacks). Set to `false` to
@@ -1180,7 +1187,8 @@ export class PixiGameplayView {
     const defaults = [
       5, // selected bar is playable
       34, // ghost off
-      38, // scoregraph off
+      // ops 38 / 39 (scoregraph off / on) — set dynamically below
+      // from `options.scoreGraph`.
       // ops 40 / 41 (BGA off / on) — set dynamically below from
       // `options.bga` so the runtime gating matches the live setting.
       42, // 1P normal gauge
@@ -1198,6 +1206,8 @@ export class PixiGameplayView {
       196, // replay absent
     ];
     defaults.forEach((op) => this.runtimeOps.add(op));
+    // Score graph (38 / 39).
+    this.runtimeOps.add(this.options.scoreGraph ? 39 : 38);
     // BGA on/off (40 / 41). With AUTOPLAY_ONLY we mirror LR2: the
     // BGA is "on" only when autoplay is also engaged.
     const bgaMode = this.options.bga ?? 'ON';
