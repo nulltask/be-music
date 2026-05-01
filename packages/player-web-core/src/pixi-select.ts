@@ -71,7 +71,8 @@ const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
   // reflects the live state on cell 0/1/2.
   42, // 1P normal gauge
   44, // 2P normal gauge
-  47, // difficulty filter disabled
+  // op 46 / 47 (difficulty filter active / disabled) — set
+  // dynamically from `playOptions.difficultyFilter`.
   50, // offline (no IR connection yet)
   54, // autoscratch 1P off
   56, // autoscratch 2P off
@@ -228,7 +229,18 @@ export interface PixiPlayOptions {
    * renderer in the gameplay scene.
    */
   scoreGraph: boolean;
+  /**
+   * Difficulty filter for the song-list. `'ALL'` shows every chart;
+   * the named values restrict the bar list to charts whose
+   * `#DIFFICULTY` matches the corresponding LR2 enum (1=BEGINNER..
+   * 5=INSANE). Mirrors `#SRC_BUTTON,type=10` (cycling) and types
+   * 91..96 (direct set).
+   */
+  difficultyFilter: PixiDifficultyFilter;
 }
+
+/** Allowed values for {@link PixiPlayOptions.difficultyFilter}. */
+export type PixiDifficultyFilter = 'ALL' | 'BEGINNER' | 'NORMAL' | 'HYPER' | 'ANOTHER' | 'INSANE';
 
 /** Allowed values for {@link PixiPlayOptions.bga}. */
 export type PixiBgaMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
@@ -256,6 +268,37 @@ const BGA_SIZE_CYCLE: readonly PixiBgaSize[] = ['NORMAL', 'EXTEND'];
  */
 const SCORE_GRAPH_CYCLE: readonly boolean[] = [false, true];
 
+/**
+ * Cycle order for {@link PixiPlayOptions.difficultyFilter}. Matches
+ * the LR2 `#SRC_BUTTON,type=10` cell order
+ * (off / easy / normal / hard / expert / 発狂). The direct-set
+ * buttons (types 91..96) map onto specific entries here via
+ * {@link DIFFICULTY_FILTER_BY_DIRECT_BUTTON}.
+ */
+const DIFFICULTY_FILTER_CYCLE: readonly PixiDifficultyFilter[] = [
+  'ALL',
+  'BEGINNER',
+  'NORMAL',
+  'HYPER',
+  'ANOTHER',
+  'INSANE',
+];
+
+/**
+ * Mapping from `#SRC_BUTTON,type=91..96` to the
+ * {@link PixiDifficultyFilter} they directly select. Per LR2 spec
+ * (`docs/LR2SkinHelp.md` 6171+): 91 all, 92 beginner, 93 normal,
+ * 94 hyper, 95 another, 96 insane.
+ */
+const DIFFICULTY_FILTER_BY_DIRECT_BUTTON: Record<number, PixiDifficultyFilter> = {
+  91: 'ALL',
+  92: 'BEGINNER',
+  93: 'NORMAL',
+  94: 'HYPER',
+  95: 'ANOTHER',
+  96: 'INSANE',
+};
+
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hiSpeed: 1.5,
@@ -263,6 +306,7 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   bga: 'ON',
   bgaSize: 'NORMAL',
   scoreGraph: false,
+  difficultyFilter: 'ALL',
 };
 
 /**
@@ -723,6 +767,9 @@ export class PixiSongSelectView {
     if (!BGA_CYCLE.includes(next.bga)) next.bga = DEFAULT_PLAY_OPTIONS.bga;
     if (!BGA_SIZE_CYCLE.includes(next.bgaSize)) next.bgaSize = DEFAULT_PLAY_OPTIONS.bgaSize;
     if (typeof next.scoreGraph !== 'boolean') next.scoreGraph = DEFAULT_PLAY_OPTIONS.scoreGraph;
+    if (!DIFFICULTY_FILTER_CYCLE.includes(next.difficultyFilter)) {
+      next.difficultyFilter = DEFAULT_PLAY_OPTIONS.difficultyFilter;
+    }
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
     // currently open — that's the only surface that visualises
@@ -1467,10 +1514,15 @@ export class PixiSongSelectView {
     const baseEntries: BrowserBrowseEntry[] = top
       ? top.songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }))
       : groupSongsByFolder(this.collection.songs).map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
-    if (this.searchQuery.length === 0) {
-      return baseEntries;
+    let filtered = baseEntries;
+    if (this.playOptions.difficultyFilter !== 'ALL') {
+      const target = DIFFICULTY_FILTER_CYCLE.indexOf(this.playOptions.difficultyFilter);
+      filtered = filtered.filter((entry) => entry.kind !== 'song' || matchesDifficultyFilter(entry.song, target));
     }
-    return baseEntries.filter((entry) => matchesSearchQuery(entry, this.searchQuery));
+    if (this.searchQuery.length === 0) {
+      return filtered;
+    }
+    return filtered.filter((entry) => matchesSearchQuery(entry, this.searchQuery));
   }
 
   /**
@@ -1870,6 +1922,19 @@ export class PixiSongSelectView {
       this.cyclePlayOption('scoreGraph', SCORE_GRAPH_CYCLE);
       return;
     }
+    // Difficulty filter cycle (button_type 10).
+    if (type === 10) {
+      this.cyclePlayOption('difficultyFilter', DIFFICULTY_FILTER_CYCLE);
+      this.snapDifficultyFilterCursor();
+      return;
+    }
+    // Difficulty filter direct-set (button_type 91..96).
+    const directDifficulty = DIFFICULTY_FILTER_BY_DIRECT_BUTTON[type];
+    if (directDifficulty !== undefined) {
+      this.setPlayOption('difficultyFilter', directDifficulty);
+      this.snapDifficultyFilterCursor();
+      return;
+    }
     const focused = this.focusedSong();
     if (!focused) return;
     if (type === 15) {
@@ -1927,6 +1992,35 @@ export class PixiSongSelectView {
     this.options.onPlayOptionsChange?.({ ...this.playOptions });
     void this.playOneShotSound('option-change');
     this.render();
+  }
+
+  /**
+   * Direct-set helper for play options whose `#SRC_BUTTON` is a
+   * "set this exact value" affair (e.g. type 91..96 for the
+   * difficulty filter). Skips the change notification when the
+   * value already matches so spam-clicking the same button
+   * doesn't fire phantom `option-change` cues.
+   */
+  private setPlayOption<K extends keyof PixiPlayOptions>(key: K, value: PixiPlayOptions[K]): void {
+    if (this.playOptions[key] === value) return;
+    this.playOptions = { ...this.playOptions, [key]: value };
+    this.options.onPlayOptionsChange?.({ ...this.playOptions });
+    void this.playOneShotSound('option-change');
+    this.render();
+  }
+
+  /**
+   * Resets `selectedIndex` to 0 after the difficulty filter
+   * changed. Whatever song the user was hovering on a moment
+   * ago is unlikely to be at the same numeric index in the new
+   * filtered list (or even still present), so jumping to the
+   * top is more predictable than trying to clamp/preserve.
+   * Re-arms the chart preview so the new top song's preview
+   * starts after the LR2 focus-settle delay.
+   */
+  private snapDifficultyFilterCursor(): void {
+    this.selectedIndex = 0;
+    this.refreshChartPreview();
   }
 
   private readonly handleWheel = (event: WheelEvent): void => {
@@ -3185,6 +3279,8 @@ function computeSelectOps(
   // its score-prediction line chrome on op 39 — without it those
   // elements stay hidden even when the option is "on".
   ops.add(playOptions.scoreGraph ? 39 : 38);
+  // Difficulty filter active / disabled (ops 46 / 47).
+  ops.add(playOptions.difficultyFilter !== 'ALL' ? 46 : 47);
   if (!song) {
     // Nothing focused — set all `_ABSENT` slots and a sensible "no
     // play data" lamp so the skin's empty-list branch renders.
@@ -3675,6 +3771,21 @@ function resolveDifficultyName(difficulty: number | undefined): string {
  * Pure / exported for testing. Hosts shouldn't call this directly
  * — `PixiSongSelectView.setSearchQuery` is the front door.
  */
+/**
+ * Returns whether `song`'s `#DIFFICULTY` field matches the target
+ * difficulty enum value. The {@link DIFFICULTY_FILTER_CYCLE} index
+ * maps onto LR2's 1=BEGINNER..5=INSANE numbering directly:
+ * `target = 1` ↔ BEGINNER, ..., `target = 5` ↔ INSANE. Charts
+ * with no `#DIFFICULTY` (`undefined` / 0) never match a non-ALL
+ * filter — there's no defined bucket for them and showing them
+ * everywhere would defeat the filter's purpose.
+ */
+function matchesDifficultyFilter(song: BrowserSongEntry, target: number): boolean {
+  const value = song.chart.metadata.difficulty;
+  if (value === undefined || value === 0) return false;
+  return value === target;
+}
+
 export function matchesSearchQuery(entry: BrowserBrowseEntry, lowerQuery: string): boolean {
   if (lowerQuery.length === 0) return true;
   if (entry.kind === 'folder') {
@@ -3709,6 +3820,17 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
   } else if (type === 70) {
     // Score graph: cell 0 = OFF, cell 1 = ON.
     stateIndex = playOptions.scoreGraph ? 1 : 0;
+  } else if (type === 10) {
+    // Difficulty filter cycle button — cell index follows the
+    // {@link DIFFICULTY_FILTER_CYCLE} order.
+    stateIndex = DIFFICULTY_FILTER_CYCLE.indexOf(playOptions.difficultyFilter);
+  } else if (type >= 91 && type <= 96) {
+    // Difficulty filter direct-set buttons — cell 0 / 1 = inactive
+    // / active depending on whether this button's specific
+    // difficulty matches the live filter. Skins typically use
+    // these as separate "lit when selected" plates.
+    const target = DIFFICULTY_FILTER_BY_DIRECT_BUTTON[type];
+    stateIndex = target !== undefined && playOptions.difficultyFilter === target ? 1 : 0;
   }
   return Math.max(0, Math.min(cellCount - 1, stateIndex));
 }
