@@ -266,6 +266,15 @@ export interface PixiGameplayViewOptions {
    */
   shutter?: number;
   /**
+   * 1P side auto-scratch flag — when true, the scratch lane
+   * (channel 16) auto-judges as PERFECT at every note's scheduled
+   * time even when {@link autoPlay} is off. The player only has
+   * to play the keys.
+   */
+  autoScratch1P?: boolean;
+  /** 2P side auto-scratch (channel 26). */
+  autoScratch2P?: boolean;
+  /**
    * When true (default), the audio bus runs through dynamics
    * compressors that soften clipping when many BMS samples fire
    * simultaneously (jacks, dense BGM stacks). Set to `false` to
@@ -1237,8 +1246,9 @@ export class PixiGameplayView {
       44, // 2P normal gauge
       47, // difficulty filter disabled
       50, // offline
-      54,
-      56, // autoscratch off (1P/2P)
+      // ops 54 / 55 (autoscratch 1P off / on), 56 / 57 (autoscratch
+      // 2P off / on) — set dynamically below from
+      // `options.autoScratch1P / 2P`.
       61, // score saveable
       81, // load complete
       82, // replay off
@@ -1248,6 +1258,9 @@ export class PixiGameplayView {
       196, // replay absent
     ];
     defaults.forEach((op) => this.runtimeOps.add(op));
+    // Autoscratch 1P / 2P (54 / 55, 56 / 57).
+    this.runtimeOps.add(this.options.autoScratch1P ? 55 : 54);
+    this.runtimeOps.add(this.options.autoScratch2P ? 57 : 56);
     // Score graph (38 / 39).
     this.runtimeOps.add(this.options.scoreGraph ? 39 : 38);
     // BGA on/off (40 / 41). With AUTOPLAY_ONLY we mirror LR2: the
@@ -1858,6 +1871,13 @@ export class PixiGameplayView {
     if (!channel || this.paused) {
       return;
     }
+    // Auto-scratch suppresses the player's scratch input — otherwise
+    // the user's stray Shift press would trigger an EMPTY_POOR judge
+    // (scratch note already auto-hit + cleared by `autoScratchJudge`).
+    if (isScratch(channel)) {
+      const autoSide = channel === '16' ? this.options.autoScratch1P : this.options.autoScratch2P;
+      if (autoSide) return;
+    }
     event.preventDefault();
     if (!event.repeat) {
       this.pressedChannels.add(channel);
@@ -2242,6 +2262,16 @@ export class PixiGameplayView {
           // completion lines up with the score event.
           this.autoFinalizeLongNotes(seconds);
         } else {
+          // Auto-scratch runs BEFORE the regular miss sweep so
+          // un-pressed scratch notes within the auto-side never
+          // reach `autoMiss` (and therefore never POOR-out).
+          if (this.options.autoScratch1P || this.options.autoScratch2P) {
+            this.autoScratchJudge(seconds);
+            // Scratch LNs may have been seeded into `activeLongNotes`
+            // by the auto-judge above — finalise their tails the
+            // same way the full-autoplay path does.
+            this.autoFinalizeLongNotes(seconds);
+          }
           this.autoMiss(seconds);
           // Manual play safety net: auto-finalise LNs the user
           // forgot to release. Uses the head verdict (treats
@@ -2501,6 +2531,45 @@ export class PixiGameplayView {
    * safety net) and uses the **head** verdict; here we fire
    * exactly at endSeconds with a clean PERFECT.
    */
+  /**
+   * Auto-judges scratch notes on whichever side(s) have
+   * autoscratch enabled. Notes on the keyboard lanes pass through
+   * unchanged — only channel `16` (1P scratch) and `26`
+   * (2P scratch) are touched. Mirrors the {@link autoJudge}
+   * structure (PERFECT verdict, sample play, bomb trigger, LN
+   * head seeding) but skips advancing `autoJudgeCursor` so the
+   * full-autoplay path stays unaffected.
+   *
+   * Cost: one O(n) scan from `autoMissCursor` per frame, bounded
+   * by `bad-window seconds × note density`. Real charts have a
+   * handful of scratch notes within any miss window, so this is
+   * negligible.
+   */
+  private autoScratchJudge(seconds: number): void {
+    for (let index = this.autoMissCursor; index < this.notes.length; index += 1) {
+      const note = this.notes[index]!;
+      if (note.seconds > seconds) break;
+      if (note.hit) continue;
+      if (!isScratch(note.channel)) continue;
+      const enabled = note.channel === '16' ? this.options.autoScratch1P : this.options.autoScratch2P;
+      if (!enabled) continue;
+      this.markNoteHit(note);
+      this.playSample(note);
+      this.triggerBomb(note.channel);
+      if (isLongNote(note)) {
+        this.activeLongNotes.set(note.channel, {
+          note,
+          headJudge: 'PERFECT',
+          headSignedDeltaMs: 0,
+        });
+        this.startKeyOnTimer(note.channel);
+        continue;
+      }
+      this.commitFinalJudge('PERFECT', 0, seconds, note.channel);
+      this.flashKeyOnTimer(note.channel);
+    }
+  }
+
   private autoFinalizeLongNotes(seconds: number): void {
     if (this.activeLongNotes.size === 0) {
       return;

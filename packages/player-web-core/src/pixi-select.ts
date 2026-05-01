@@ -74,8 +74,9 @@ const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
   // op 46 / 47 (difficulty filter active / disabled) — set
   // dynamically from `playOptions.difficultyFilter`.
   50, // offline (no IR connection yet)
-  54, // autoscratch 1P off
-  56, // autoscratch 2P off
+  // ops 54 / 55 (autoscratch 1P off / on), 56 / 57 (autoscratch 2P
+  // off / on) — set dynamically from `playOptions.autoScratch1P /
+  // 2P` so the panel-1 toggle button cells track the live state.
   60, // save impossible (no persistence yet)
   62, // clear save impossible (no persistence yet)
   81, // load complete (we always render after texture preload)
@@ -284,6 +285,15 @@ export interface PixiPlayOptions {
    * the 1P 4-key / 6-key (`KeyD` / `KeyF`) when panel 1 is open.
    */
   shutter: number;
+  /**
+   * 1P side auto-scratch flag picked from `#SRC_BUTTON,type=44`.
+   * When true the scratch lane (channel 16) auto-judges as PERFECT
+   * at every note's scheduled time, so the player only has to
+   * play the keys.
+   */
+  autoScratch1P: boolean;
+  /** 2P side auto-scratch (`#SRC_BUTTON,type=45`, channel 26). */
+  autoScratch2P: boolean;
 }
 
 /** Allowed values for {@link PixiPlayOptions.difficultyFilter}. */
@@ -325,11 +335,6 @@ const BGA_CYCLE: readonly PixiBgaMode[] = ['OFF', 'ON', 'AUTOPLAY_ONLY'];
  */
 const BGA_SIZE_CYCLE: readonly PixiBgaSize[] = ['NORMAL', 'EXTEND'];
 
-/**
- * Cycle order for {@link PixiPlayOptions.scoreGraph}. LR2 button
- * cell 0 = OFF, cell 1 = ON.
- */
-const SCORE_GRAPH_CYCLE: readonly boolean[] = [false, true];
 
 /**
  * Cycle order for {@link PixiPlayOptions.difficultyFilter}. Matches
@@ -402,6 +407,9 @@ const HS_FIX_CYCLE: readonly PixiHsFix[] = ['OFF', 'MAXBPM', 'MINBPM', 'AVERAGE'
  */
 const HIDDEN_SUDDEN_CYCLE: readonly PixiHiddenSudden[] = ['OFF', 'HIDDEN', 'SUDDEN', 'HID+SUD'];
 
+/** Cycle for boolean OFF/ON LR2 buttons (e.g. autoscratch). */
+const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
+
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hiSpeed: 1.5,
@@ -415,6 +423,8 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hsFix: 'OFF',
   hiddenSudden: 'OFF',
   shutter: SHUTTER_DEFAULT,
+  autoScratch1P: false,
+  autoScratch2P: false,
 };
 
 /**
@@ -902,6 +912,8 @@ export class PixiSongSelectView {
       next.hiddenSudden = DEFAULT_PLAY_OPTIONS.hiddenSudden;
     }
     next.shutter = clampShutter(next.shutter);
+    if (typeof next.autoScratch1P !== 'boolean') next.autoScratch1P = DEFAULT_PLAY_OPTIONS.autoScratch1P;
+    if (typeof next.autoScratch2P !== 'boolean') next.autoScratch2P = DEFAULT_PLAY_OPTIONS.autoScratch2P;
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
     // currently open — that's the only surface that visualises
@@ -2058,7 +2070,7 @@ export class PixiSongSelectView {
     }
     // SCOREGRAPH on/off (button_type 70).
     if (type === 70) {
-      this.cyclePlayOption('scoreGraph', SCORE_GRAPH_CYCLE);
+      this.cyclePlayOption('scoreGraph', BOOLEAN_CYCLE);
       return;
     }
     // Difficulty filter cycle (button_type 10).
@@ -2103,6 +2115,17 @@ export class PixiSongSelectView {
     // until per-side gameplay variation lands.
     if (type === 50 || type === 51) {
       this.cyclePlayOption('hiddenSudden', HIDDEN_SUDDEN_CYCLE);
+      return;
+    }
+    // Autoscratch 1P / 2P toggle (button_type 44 / 45). Each side
+    // stays independent — DP charts can have one side auto-scratching
+    // while the other is fully manual.
+    if (type === 44) {
+      this.cyclePlayOption('autoScratch1P', BOOLEAN_CYCLE);
+      return;
+    }
+    if (type === 45) {
+      this.cyclePlayOption('autoScratch2P', BOOLEAN_CYCLE);
       return;
     }
     const focused = this.focusedSong();
@@ -3482,6 +3505,9 @@ function computeSelectOps(
   // its score-prediction line chrome on op 39 — without it those
   // elements stay hidden even when the option is "on".
   ops.add(playOptions.scoreGraph ? 39 : 38);
+  // Autoscratch 1P / 2P (ops 54 / 55, 56 / 57).
+  ops.add(playOptions.autoScratch1P ? 55 : 54);
+  ops.add(playOptions.autoScratch2P ? 57 : 56);
   // Difficulty filter active / disabled (ops 46 / 47).
   ops.add(playOptions.difficultyFilter !== 'ALL' ? 46 : 47);
   if (!song) {
@@ -4115,6 +4141,12 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
     // HIDDEN/SUDDEN cycle — cell index follows the
     // {@link HIDDEN_SUDDEN_CYCLE} order (off/hidden/sudden/hid+sud).
     stateIndex = HIDDEN_SUDDEN_CYCLE.indexOf(playOptions.hiddenSudden);
+  } else if (type === 44) {
+    // Autoscratch 1P: cell 0 = OFF, cell 1 = ON.
+    stateIndex = playOptions.autoScratch1P ? 1 : 0;
+  } else if (type === 45) {
+    // Autoscratch 2P: cell 0 = OFF, cell 1 = ON.
+    stateIndex = playOptions.autoScratch2P ? 1 : 0;
   } else if (type >= 91 && type <= 96) {
     // Difficulty filter direct-set buttons — cell 0 / 1 = inactive
     // / active depending on whether this button's specific

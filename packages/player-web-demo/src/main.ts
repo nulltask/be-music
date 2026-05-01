@@ -916,6 +916,8 @@ class PlayerWebDemoApp {
       hsFix: playOptions?.hsFix,
       hiddenSudden: playOptions?.hiddenSudden,
       shutter: playOptions?.shutter,
+      autoScratch1P: playOptions?.autoScratch1P,
+      autoScratch2P: playOptions?.autoScratch2P,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {
