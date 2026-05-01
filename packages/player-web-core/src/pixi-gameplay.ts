@@ -268,6 +268,14 @@ export interface PixiGameplayViewOptions {
    */
   shutter?: number;
   /**
+   * LANE COVER ON / OFF toggle (LR2 button_type 46). When true,
+   * the gameplay-side mask renders at `shutter`'s configured
+   * height. When false, the mask is suppressed regardless of
+   * `shutter` — preserves the user's last height across toggles
+   * so they don't have to redial it after re-enabling.
+   */
+  laneCover?: boolean;
+  /**
    * 1P side auto-scratch flag — when true, the scratch lane
    * (channel 16) auto-judges as PERFECT at every note's scheduled
    * time even when {@link autoPlay} is off. The player only has
@@ -2973,6 +2981,14 @@ export class PixiGameplayView {
   private renderShutter(): void {
     this.shutterLayer.clear();
     const mode = this.options.hiddenSudden ?? 'OFF';
+    // LANE COVER (`button_type 46`) is the master ON/OFF switch
+    // for the playfield mask. With it OFF, no shutter renders
+    // even if HIDDEN / SUDDEN / HID+SUD is selected — matches
+    // LR2's behaviour where the user toggles LANE COVER off to
+    // hide the cover without losing the height they had dialled
+    // in. The HIDDEN / SUDDEN cycle picks WHERE the mask sits
+    // (top / bottom / both); this gate decides WHETHER it shows.
+    if (this.options.laneCover === false) return;
     if (mode === 'OFF') return;
     if (this.laneX.size === 0) return;
     const shutter = Math.max(0, Math.min(1, this.options.shutter ?? 0.25));

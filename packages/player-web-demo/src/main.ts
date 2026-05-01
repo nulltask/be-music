@@ -916,6 +916,7 @@ class PlayerWebDemoApp {
       hsFix: playOptions?.hsFix,
       hiddenSudden: playOptions?.hiddenSudden,
       shutter: playOptions?.shutter,
+      laneCover: playOptions?.laneCover,
       autoScratch1P: playOptions?.autoScratch1P,
       autoScratch2P: playOptions?.autoScratch2P,
       dpFlip: playOptions?.dpFlip,

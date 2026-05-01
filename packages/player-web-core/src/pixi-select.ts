@@ -296,12 +296,25 @@ export interface PixiPlayOptions {
    */
   hiddenSudden: PixiHiddenSudden;
   /**
-   * Shutter coverage (0..1) — the fraction of the playfield each
-   * active HIDDEN / SUDDEN mask occupies. Drives slider
-   * `type=4 / 5` on the panel-1 shutter track. Adjustable via
-   * the 1P 4-key / 6-key (`KeyD` / `KeyF`) when panel 1 is open.
+   * Shutter / LANE COVER coverage (0..1) — the fraction of the
+   * playfield the LANE COVER (and any active HIDDEN / SUDDEN
+   * masks) occupies. Drives slider `type=4 / 5` on the panel-1
+   * shutter track. Adjustable via the 1P 4-key / 6-key
+   * (`KeyD` / `KeyF`) when panel 1 is open. Independent from
+   * {@link laneCover} — height is preserved across ON/OFF
+   * toggles so the user doesn't have to redial it after
+   * re-enabling the cover.
    */
   shutter: number;
+  /**
+   * LANE COVER ON / OFF toggle. In LR2's SYSTEM OPTION panel
+   * this is the binary state shown next to the "LANE COVER"
+   * label — distinct from {@link shutter} (which is the
+   * height). When OFF, the gameplay-side mask is hidden
+   * regardless of `shutter`. When ON, the mask renders at the
+   * `shutter`-derived height.
+   */
+  laneCover: boolean;
   /**
    * 1P side auto-scratch flag picked from `#SRC_BUTTON,type=44`.
    * When true the scratch lane (channel 16) auto-judges as PERFECT
@@ -496,6 +509,7 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hsFix: 'OFF',
   hiddenSudden: 'OFF',
   shutter: SHUTTER_DEFAULT,
+  laneCover: false,
   autoScratch1P: false,
   autoScratch2P: false,
   dpFlip: false,
@@ -2331,6 +2345,15 @@ export class PixiSongSelectView {
       this.cyclePlayOption('hiddenSudden', HIDDEN_SUDDEN_CYCLE);
       return;
     }
+    // LANE COVER (シャッター) ON / OFF toggle (button_type 46).
+    // Per LR2's `button.txt`: type 46 is "シャッター" with no
+    // declared cycle values — it's a binary toggle. The height
+    // (slider type 4 / 5) is preserved across toggles via
+    // `playOptions.shutter`.
+    if (type === 46) {
+      this.cyclePlayOption('laneCover', BOOLEAN_CYCLE);
+      return;
+    }
     // Autoscratch 1P / 2P toggle (button_type 44 / 45). Each side
     // stays independent — DP charts can have one side auto-scratching
     // while the other is fully manual.
@@ -2536,7 +2559,12 @@ export class PixiSongSelectView {
   private adjustShutter(direction: 1 | -1): void {
     const next = clampShutter(this.playOptions.shutter + direction * SHUTTER_STEP);
     if (next === this.playOptions.shutter) return;
-    this.playOptions = { ...this.playOptions, shutter: next };
+    // Adjusting the height implies the user wants the cover
+    // visible — enable LANE COVER on first adjustment if it
+    // happened to be OFF. Mirrors LR2's slider feel where the
+    // mask immediately appears as the knob moves away from 0.
+    const laneCover = next > 0 ? true : this.playOptions.laneCover;
+    this.playOptions = { ...this.playOptions, shutter: next, laneCover };
     this.options.onPlayOptionsChange?.({ ...this.playOptions });
     void this.playOneShotSound('option-change');
     this.render();
@@ -4314,8 +4342,14 @@ function resolveSelectText(
       return playOptions.scoreGraph ? 'ON' : 'OFF';
     case 72: // ghost
       return 'OFF';
-    case 73: // shutter
-      return `${Math.round(playOptions.shutter * 100)}%`;
+    case 73: // LANE COVER (シャッター)
+      // LR2's SYSTEM OPTION row labels this slot "LANE COVER" and
+      // shows the binary ON / OFF state — the height percentage
+      // belongs to the slider next to the value, not the value
+      // text itself. (We previously rendered a percentage here,
+      // which made the row look like a numeric option instead of
+      // a toggle.)
+      return playOptions.laneCover ? 'ON' : 'OFF';
     case 74: // scroll type
       return 'OFF';
     case 75: // bga size
@@ -4798,6 +4832,9 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
     // HIDDEN/SUDDEN cycle — cell index follows the
     // {@link HIDDEN_SUDDEN_CYCLE} order (off/hidden/sudden/hid+sud).
     stateIndex = HIDDEN_SUDDEN_CYCLE.indexOf(playOptions.hiddenSudden);
+  } else if (type === 46) {
+    // LANE COVER (シャッター): cell 0 = OFF, cell 1 = ON.
+    stateIndex = playOptions.laneCover ? 1 : 0;
   } else if (type === 44) {
     // Autoscratch 1P: cell 0 = OFF, cell 1 = ON.
     stateIndex = playOptions.autoScratch1P ? 1 : 0;
