@@ -913,6 +913,7 @@ class PlayerWebDemoApp {
       bga: playOptions?.bga,
       bgaSize: playOptions?.bgaSize,
       scoreGraph: playOptions?.scoreGraph,
+      hsFix: playOptions?.hsFix,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {

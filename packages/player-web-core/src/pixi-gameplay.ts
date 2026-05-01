@@ -235,6 +235,15 @@ export interface PixiGameplayViewOptions {
    */
   scoreGraph?: boolean;
   /**
+   * HS-FIX mode picked from `#SRC_BUTTON,type=55`. Applied as a
+   * one-time multiplier on `initialHiSpeed` at chart-prepare time
+   * so the user's chosen HS feels consistent across BPM changes.
+   * `'CONSTANT'` falls back to `'AVERAGE'` for now — true
+   * per-frame BPM-aware scrolling needs a render-pipeline
+   * change that hasn't landed yet.
+   */
+  hsFix?: 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
+  /**
    * When true (default), the audio bus runs through dynamics
    * compressors that soften clipping when many BMS samples fire
    * simultaneously (jacks, dense BGM stacks). Set to `false` to
@@ -1112,6 +1121,7 @@ export class PixiGameplayView {
       .sort((left, right) => left.seconds - right.seconds);
     this.autoTriggerNextIndex = 0;
     this.songDurationSeconds = Math.max(this.chartLastNoteEndSeconds, this.autoSampleTriggers.at(-1)?.seconds ?? 0);
+    this.applyHsFix(resolver, resolved.metadata.bpm ?? this.song?.bpm);
     // Initialize gauge with the actual playable-note count and the
     // chart's #TOTAL value so PG/GR gain matches LR2: a long chart
     // with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a
@@ -1861,6 +1871,80 @@ export class PixiGameplayView {
    */
   private adjustHiSpeed(delta: number): void {
     const next = Math.round((this.hiSpeed + delta) * 1000) / 1000;
+    this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, next));
+  }
+
+  /**
+   * Applies the LR2 HS-FIX multiplier to {@link hiSpeed} once
+   * `prepareSong` has installed the timing resolver. Pegs the
+   * user's chosen HS to a chosen BPM so the visual scroll feels
+   * uniform across BPM changes:
+   *
+   * - `OFF`     — leave HS as-is.
+   * - `MAXBPM`  — scale by `mainBPM / maxBPM` (slow sections feel
+   *   proportionally slower).
+   * - `MINBPM`  — scale by `mainBPM / minBPM` (fast sections feel
+   *   proportionally faster).
+   * - `AVERAGE` — scale by `mainBPM / avgBPM` where avgBPM is the
+   *   time-weighted mean.
+   * - `CONSTANT` — true per-frame "constant scroll" needs a render-
+   *   pipeline change that hasn't landed; falls through to the
+   *   `AVERAGE` multiplier so the option still produces a sensible
+   *   shift instead of doing nothing.
+   *
+   * Skipped when there are no tempo points (defensive — the
+   * resolver can be constructed empty during edge-case mounts) or
+   * the chart has no BPM info.
+   */
+  private applyHsFix(
+    resolver: ReturnType<typeof createTimingResolver>,
+    mainBpmCandidate: number | undefined,
+  ): void {
+    const mode = this.options.hsFix ?? 'OFF';
+    if (mode === 'OFF') return;
+    const mainBpm = typeof mainBpmCandidate === 'number' && mainBpmCandidate > 0 ? mainBpmCandidate : undefined;
+    if (mainBpm === undefined) return;
+    const tempoPoints = resolver.tempoPoints;
+    if (tempoPoints.length === 0) return;
+    const bpms = tempoPoints.map((point) => point.bpm).filter((bpm) => Number.isFinite(bpm) && bpm > 0);
+    if (bpms.length === 0) return;
+    const maxBpm = Math.max(...bpms);
+    const minBpm = Math.min(...bpms);
+    let multiplier = 1;
+    switch (mode) {
+      case 'MAXBPM':
+        multiplier = mainBpm / maxBpm;
+        break;
+      case 'MINBPM':
+        multiplier = mainBpm / minBpm;
+        break;
+      case 'AVERAGE':
+      case 'CONSTANT': {
+        // Time-weighted average — each tempo segment runs from
+        // `point.seconds` to the next point's `seconds` (or the
+        // chart's last note for the final segment). Using a flat
+        // arithmetic mean would over-weight a tiny BPM-change
+        // blip relative to a long segment at the surrounding BPM.
+        const finalSeconds = Math.max(this.songDurationSeconds, tempoPoints.at(-1)?.seconds ?? 0);
+        let weightedSum = 0;
+        let totalDuration = 0;
+        for (let index = 0; index < tempoPoints.length; index += 1) {
+          const point = tempoPoints[index]!;
+          const next = tempoPoints[index + 1];
+          const start = Math.max(0, point.seconds);
+          const end = Math.max(start, next ? next.seconds : finalSeconds);
+          const duration = end - start;
+          if (duration <= 0 || !Number.isFinite(point.bpm) || point.bpm <= 0) continue;
+          weightedSum += point.bpm * duration;
+          totalDuration += duration;
+        }
+        const average = totalDuration > 0 ? weightedSum / totalDuration : mainBpm;
+        multiplier = mainBpm / Math.max(1, average);
+        break;
+      }
+    }
+    if (!Number.isFinite(multiplier) || multiplier <= 0) return;
+    const next = Math.round(this.hiSpeed * multiplier * 1000) / 1000;
     this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, next));
   }
 

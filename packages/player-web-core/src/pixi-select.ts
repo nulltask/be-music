@@ -252,6 +252,23 @@ export interface PixiPlayOptions {
    * input order anyway.
    */
   sort: PixiSelectSort;
+  /**
+   * HS-FIX mode picked from `#SRC_BUTTON,type=55`. Without HS-FIX
+   * (`'OFF'`) the visual scroll rate scales with the chart's BPM,
+   * so high-BPM sections fly past while low-BPM sections crawl.
+   * The other modes apply a one-time HS multiplier so the user's
+   * chosen HS feels consistent across the chart:
+   *
+   * - `'MAXBPM'` — pegs the user's HS to the chart's MAX BPM
+   *   (slower segments scroll proportionally slower).
+   * - `'MINBPM'` — pegs to MIN BPM (faster segments scroll faster).
+   * - `'AVERAGE'` — pegs to the time-weighted average BPM.
+   * - `'CONSTANT'` — adjusts HS at every BPM change so visual
+   *   scroll is exactly constant. Falls back to `'AVERAGE'`
+   *   behaviour for now (per-frame BPM-aware scroll requires a
+   *   render-pipeline change that hasn't landed yet).
+   */
+  hsFix: PixiHsFix;
 }
 
 /** Allowed values for {@link PixiPlayOptions.difficultyFilter}. */
@@ -262,6 +279,9 @@ export type PixiKeysFilter = 'ALL' | 'KEYS_5' | 'KEYS_7' | 'KEYS_9' | 'KEYS_10' 
 
 /** Allowed values for {@link PixiPlayOptions.sort}. */
 export type PixiSelectSort = 'OFF' | 'LEVEL' | 'TITLE' | 'CLEAR';
+
+/** Allowed values for {@link PixiPlayOptions.hsFix}. */
+export type PixiHsFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
 
 /** Allowed values for {@link PixiPlayOptions.bga}. */
 export type PixiBgaMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
@@ -346,6 +366,13 @@ const KEYS_FILTER_TO_OP: Record<Exclude<PixiKeysFilter, 'ALL'>, number> = {
  */
 const SORT_CYCLE: readonly PixiSelectSort[] = ['OFF', 'LEVEL', 'TITLE', 'CLEAR'];
 
+/**
+ * Cycle order for {@link PixiPlayOptions.hsFix}. LR2 button cells
+ * 0..4 on `#SRC_BUTTON,type=55`: off / maxbpm / minbpm / average
+ * / constant.
+ */
+const HS_FIX_CYCLE: readonly PixiHsFix[] = ['OFF', 'MAXBPM', 'MINBPM', 'AVERAGE', 'CONSTANT'];
+
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hiSpeed: 1.5,
@@ -356,6 +383,7 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   difficultyFilter: 'ALL',
   keysFilter: 'ALL',
   sort: 'OFF',
+  hsFix: 'OFF',
 };
 
 /**
@@ -824,6 +852,9 @@ export class PixiSongSelectView {
     }
     if (!SORT_CYCLE.includes(next.sort)) {
       next.sort = DEFAULT_PLAY_OPTIONS.sort;
+    }
+    if (!HS_FIX_CYCLE.includes(next.hsFix)) {
+      next.hsFix = DEFAULT_PLAY_OPTIONS.hsFix;
     }
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
@@ -2011,6 +2042,14 @@ export class PixiSongSelectView {
     if (type === 12) {
       this.cyclePlayOption('sort', SORT_CYCLE);
       this.snapCursorAfterFilterChange();
+      return;
+    }
+    // HS-FIX cycle (button_type 55). Pure play-option setting —
+    // the value is applied at gameplay-mount time so the running
+    // select view doesn't need to react beyond updating the panel
+    // button cell.
+    if (type === 55) {
+      this.cyclePlayOption('hsFix', HS_FIX_CYCLE);
       return;
     }
     const focused = this.focusedSong();
@@ -3982,6 +4021,11 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
     // Sort cycle button — cell index follows the
     // {@link SORT_CYCLE} order (off / level / title / clear).
     stateIndex = SORT_CYCLE.indexOf(playOptions.sort);
+  } else if (type === 55) {
+    // HS-FIX cycle button — cell index follows the
+    // {@link HS_FIX_CYCLE} order
+    // (off / maxbpm / minbpm / average / constant).
+    stateIndex = HS_FIX_CYCLE.indexOf(playOptions.hsFix);
   } else if (type >= 91 && type <= 96) {
     // Difficulty filter direct-set buttons — cell 0 / 1 = inactive
     // / active depending on whether this button's specific
