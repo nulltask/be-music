@@ -3145,19 +3145,6 @@ export class PixiSongSelectView {
   }
 
   private renderSkinFrame(skin: Lr2Skin, ops: ReadonlySet<number>): void {
-    for (const image of skin.images) {
-      // Visibility uses the interpolated DST so an alpha=0 keyframe
-      // still keeps the element technically visible — only the per-DST
-      // op gating (and timer activity) controls hidden vs shown.
-      if (!isDestinationVisible(this.evaluateElementDst(image), ops, this.timerActive)) {
-        continue;
-      }
-      const sprite = this.makeStaticImageSprite(image);
-      if (sprite) {
-        this.pickChromeLayer(image.declarationOrder).addChild(sprite);
-      }
-    }
-
     // Resolve the song the cursor is sitting on by going through the
     // browse stack — `selectedIndex` indexes `currentEntries()`, which
     // is per-folder (or the folder list at root). Indexing
@@ -3166,6 +3153,43 @@ export class PixiSongSelectView {
     // inside any folder past the first, because the cursor index there
     // refers to a position WITHIN that folder, not a global offset.
     const focusedSong = this.focusedSong();
+
+    // Build a unified work list of (declarationOrder, layer, paint)
+    // tuples spanning every chrome-element kind, then run the paint
+    // thunks in declaration order. LR2's render contract is "later
+    // declaration paints on top": panel backgrounds declared after
+    // the song-info text need to cover the title even when the
+    // text loop runs separately. The previous kind-grouped loop
+    // (images first, then numbers, texts, buttons, …) inverted the
+    // z-order whenever a later-kind element was declared earlier
+    // than a same-layer earlier-kind element — see the LR2 default
+    // theme's PLAY OPTION panel, where the song title (#SRC_TEXT
+    // ~line 1587) bled through the panel background (#SRC_IMAGE
+    // ~line 6300+) because images iterated before texts.
+    interface ChromePaint {
+      order: number;
+      layer: Container;
+      paint: () => void;
+    }
+    const work: ChromePaint[] = [];
+
+    for (const image of skin.images) {
+      // Visibility uses the interpolated DST so an alpha=0 keyframe
+      // still keeps the element technically visible — only the per-DST
+      // op gating (and timer activity) controls hidden vs shown.
+      if (!isDestinationVisible(this.evaluateElementDst(image), ops, this.timerActive)) {
+        continue;
+      }
+      const layer = this.pickChromeLayer(image.declarationOrder);
+      work.push({
+        order: image.declarationOrder,
+        layer,
+        paint: () => {
+          const sprite = this.makeStaticImageSprite(image);
+          if (sprite) layer.addChild(sprite);
+        },
+      });
+    }
 
     // Song-info NUMBER panels: BPM, total notes, play level. We resolve
     // a small whitelist of LR2 number ids relevant to the select view —
@@ -3180,19 +3204,18 @@ export class PixiSongSelectView {
       if (value === undefined) {
         continue;
       }
-      renderNumberElement(
-        this.pickChromeLayer(number.declarationOrder),
-        number,
-        value,
-        this.skinTextures.asReadonlyMap(),
-        dst,
-      );
+      const layer = this.pickChromeLayer(number.declarationOrder);
+      work.push({
+        order: number.declarationOrder,
+        layer,
+        paint: () => {
+          renderNumberElement(layer, number, value, this.skinTextures.asReadonlyMap(), dst);
+        },
+      });
     }
 
-    // TEXT panels — title / artist / genre / level label / etc. LR2
-    // would normally render these via `#LR2FONT`, which we don't yet
-    // implement; fall back to a system-font Pixi `Text`. The `panel`
-    // field hides labels scoped to closed option panels.
+    // TEXT panels — title / artist / genre / level label / etc. The
+    // `panel` field hides labels scoped to closed option panels.
     for (const text of skin.texts) {
       if (!this.isPanelOpen(text.panel)) {
         continue;
@@ -3205,18 +3228,24 @@ export class PixiSongSelectView {
       if (value === undefined || value.length === 0) {
         continue;
       }
-      this.pickChromeLayer(text.declarationOrder).addChild(
-        makeLr2TextSprite(value, text, dst, {
-          bitmapFonts: this.bitmapFonts,
-          systemFontSizes: skin.systemFontSizes,
-        }),
-      );
+      const layer = this.pickChromeLayer(text.declarationOrder);
+      work.push({
+        order: text.declarationOrder,
+        layer,
+        paint: () => {
+          layer.addChild(
+            makeLr2TextSprite(value, text, dst, {
+              bitmapFonts: this.bitmapFonts,
+              systemFontSizes: skin.systemFontSizes,
+            }),
+          );
+        },
+      });
     }
 
     // BUTTON panels — sort / filter / panel-toggle / play / replay /
     // option buttons etc. We render the cell that matches the button's
-    // current state (still 0 for most types since we don't yet have
-    // per-type state bindings); click handling lands separately.
+    // current state; click handling lands separately.
     for (const button of skin.buttons) {
       if (!this.isPanelOpen(button.panel)) {
         continue;
@@ -3224,7 +3253,14 @@ export class PixiSongSelectView {
       if (!isDestinationVisible(this.evaluateElementDst(button), ops, this.timerActive)) {
         continue;
       }
-      this.renderButtonElement(button, this.pickChromeLayer(button.declarationOrder));
+      const layer = this.pickChromeLayer(button.declarationOrder);
+      work.push({
+        order: button.declarationOrder,
+        layer,
+        paint: () => {
+          this.renderButtonElement(button, layer);
+        },
+      });
     }
 
     // ONMOUSE — hover overlays. Drawn on top of buttons / images
@@ -3241,20 +3277,18 @@ export class PixiSongSelectView {
       if (!this.isPointerInHitRect(dst, onMouse)) {
         continue;
       }
-      const sprite = this.makeSlicedSprite(onMouse.source, dst, 'onmouse');
-      if (sprite) {
-        this.pickChromeLayer(onMouse.declarationOrder).addChild(sprite);
-      }
+      const layer = this.pickChromeLayer(onMouse.declarationOrder);
+      work.push({
+        order: onMouse.declarationOrder,
+        layer,
+        paint: () => {
+          const sprite = this.makeSlicedSprite(onMouse.source, dst, 'onmouse');
+          if (sprite) layer.addChild(sprite);
+        },
+      });
     }
 
-    // SLIDER — runtime-positioned indicator knobs. The select
-    // scene cares mainly about `type=1` (曲セレクトポジション,
-    // i.e. song-list scroll position): the LR2 default skin
-    // draws the long vertical orange/teal bar to the right of
-    // the bar list whose top edge tracks the cursor through
-    // the entries. `pickChromeLayer` routes each slider into
-    // the right side of the bar list per its CSV declaration
-    // order (see helper for the layering contract).
+    // SLIDER — runtime-positioned indicator knobs.
     for (const slider of skin.sliders) {
       const dst = this.evaluateElementDst(slider);
       if (!isDestinationVisible(dst, ops, this.timerActive)) {
@@ -3264,10 +3298,24 @@ export class PixiSongSelectView {
       if (value === undefined) {
         continue;
       }
-      const sprite = this.makeSliderSprite(slider, dst, value);
-      if (sprite) {
-        this.pickChromeLayer(slider.declarationOrder).addChild(sprite);
-      }
+      const layer = this.pickChromeLayer(slider.declarationOrder);
+      work.push({
+        order: slider.declarationOrder,
+        layer,
+        paint: () => {
+          const sprite = this.makeSliderSprite(slider, dst, value);
+          if (sprite) layer.addChild(sprite);
+        },
+      });
+    }
+
+    // Stable-sort by declarationOrder so the addChild order on each
+    // Pixi Container matches the CSV-declared paint order. Earlier
+    // declarations land lower in the children array (drawn first /
+    // behind), later declarations end up on top — matching LR2.
+    work.sort((a, b) => a.order - b.order);
+    for (const item of work) {
+      item.paint();
     }
 
     // MOUSECURSOR — replaces the system cursor with the skin's
