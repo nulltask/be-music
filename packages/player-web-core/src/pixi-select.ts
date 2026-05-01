@@ -1528,7 +1528,24 @@ export class PixiSongSelectView {
       this.timerStartedAt.set(closeTimer, now);
       opening = false;
     } else {
-      // Opening: drop the (potentially leftover) close timer and
+      // Opening: only one option panel may be open at a time
+      // (LR2 mutual-exclusion convention — clicking PLAY OPTION
+      // while SYSTEM OPTION is already open closes the latter
+      // first, then opens the former). Snapshot the open set
+      // before we start mutating it so we don't trip on
+      // iterator-vs-mutation order. Close every other open panel
+      // via the same close-timer + state-flip sequence so their
+      // close-anim keyframes still play.
+      const previouslyOpen = Array.from(this.panelStates);
+      for (const open of previouslyOpen) {
+        if (open === which) continue;
+        const otherOpenTimer = 20 + open;
+        const otherCloseTimer = 30 + open;
+        this.panelStates.delete(open);
+        this.timerStartedAt.delete(otherOpenTimer);
+        this.timerStartedAt.set(otherCloseTimer, now);
+      }
+      // Drop our own (potentially leftover) close timer and
       // seed the open timer.
       this.panelStates.add(which);
       this.timerStartedAt.delete(closeTimer);
@@ -1537,7 +1554,9 @@ export class PixiSongSelectView {
     }
     // LR2 system effects — `Sound/lr2/o-open.wav` /
     // `o-close.wav`. Fire-and-forget; the cached buffer makes
-    // rapid toggles cheap.
+    // rapid toggles cheap. Use the open cue for "swap to
+    // another panel" too (the previous panel's silent close is
+    // implicit; firing both cues at once would just clip).
     void this.playOneShotSound(opening ? 'option-open' : 'option-close');
     this.render();
   }
