@@ -237,10 +237,20 @@ export interface PixiPlayOptions {
    * 91..96 (direct set).
    */
   difficultyFilter: PixiDifficultyFilter;
+  /**
+   * Keymode filter for the song-list. `'ALL'` shows every chart;
+   * the named values restrict the bar list to charts whose lane
+   * usage matches the corresponding LR2 keymode op
+   * (160=7K..164=9K). Mirrors `#SRC_BUTTON,type=11` cycling.
+   */
+  keysFilter: PixiKeysFilter;
 }
 
 /** Allowed values for {@link PixiPlayOptions.difficultyFilter}. */
 export type PixiDifficultyFilter = 'ALL' | 'BEGINNER' | 'NORMAL' | 'HYPER' | 'ANOTHER' | 'INSANE';
+
+/** Allowed values for {@link PixiPlayOptions.keysFilter}. */
+export type PixiKeysFilter = 'ALL' | 'KEYS_5' | 'KEYS_7' | 'KEYS_9' | 'KEYS_10' | 'KEYS_14';
 
 /** Allowed values for {@link PixiPlayOptions.bga}. */
 export type PixiBgaMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
@@ -299,6 +309,26 @@ const DIFFICULTY_FILTER_BY_DIRECT_BUTTON: Record<number, PixiDifficultyFilter> =
   96: 'INSANE',
 };
 
+/**
+ * Cycle order for {@link PixiPlayOptions.keysFilter}. Matches the
+ * LR2 `#SRC_BUTTON,type=11` cell order
+ * (off / 5keys / 7keys / 10keys / 14keys / 9keys).
+ */
+const KEYS_FILTER_CYCLE: readonly PixiKeysFilter[] = ['ALL', 'KEYS_5', 'KEYS_7', 'KEYS_10', 'KEYS_14', 'KEYS_9'];
+
+/**
+ * Mapping from {@link PixiKeysFilter} → LR2 keymode op
+ * (`SELECT_DYNAMIC_OPS.KEYS_*`). Used to compare against the
+ * focused chart's resolved keymode when filtering the song-list.
+ */
+const KEYS_FILTER_TO_OP: Record<Exclude<PixiKeysFilter, 'ALL'>, number> = {
+  KEYS_5: 161,
+  KEYS_7: 160,
+  KEYS_9: 164,
+  KEYS_10: 163,
+  KEYS_14: 162,
+};
+
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hiSpeed: 1.5,
@@ -307,6 +337,7 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   bgaSize: 'NORMAL',
   scoreGraph: false,
   difficultyFilter: 'ALL',
+  keysFilter: 'ALL',
 };
 
 /**
@@ -769,6 +800,9 @@ export class PixiSongSelectView {
     if (typeof next.scoreGraph !== 'boolean') next.scoreGraph = DEFAULT_PLAY_OPTIONS.scoreGraph;
     if (!DIFFICULTY_FILTER_CYCLE.includes(next.difficultyFilter)) {
       next.difficultyFilter = DEFAULT_PLAY_OPTIONS.difficultyFilter;
+    }
+    if (!KEYS_FILTER_CYCLE.includes(next.keysFilter)) {
+      next.keysFilter = DEFAULT_PLAY_OPTIONS.keysFilter;
     }
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
@@ -1519,6 +1553,10 @@ export class PixiSongSelectView {
       const target = DIFFICULTY_FILTER_CYCLE.indexOf(this.playOptions.difficultyFilter);
       filtered = filtered.filter((entry) => entry.kind !== 'song' || matchesDifficultyFilter(entry.song, target));
     }
+    if (this.playOptions.keysFilter !== 'ALL') {
+      const targetOp = KEYS_FILTER_TO_OP[this.playOptions.keysFilter];
+      filtered = filtered.filter((entry) => entry.kind !== 'song' || resolveKeyModeOp(entry.song) === targetOp);
+    }
     if (this.searchQuery.length === 0) {
       return filtered;
     }
@@ -1925,14 +1963,22 @@ export class PixiSongSelectView {
     // Difficulty filter cycle (button_type 10).
     if (type === 10) {
       this.cyclePlayOption('difficultyFilter', DIFFICULTY_FILTER_CYCLE);
-      this.snapDifficultyFilterCursor();
+      this.snapCursorAfterFilterChange();
       return;
     }
     // Difficulty filter direct-set (button_type 91..96).
     const directDifficulty = DIFFICULTY_FILTER_BY_DIRECT_BUTTON[type];
     if (directDifficulty !== undefined) {
       this.setPlayOption('difficultyFilter', directDifficulty);
-      this.snapDifficultyFilterCursor();
+      this.snapCursorAfterFilterChange();
+      return;
+    }
+    // Keymode filter cycle (button_type 11). Cycling re-filters the
+    // bar list; snap the cursor to the top so the user lands on a
+    // visible entry immediately.
+    if (type === 11) {
+      this.cyclePlayOption('keysFilter', KEYS_FILTER_CYCLE);
+      this.snapCursorAfterFilterChange();
       return;
     }
     const focused = this.focusedSong();
@@ -2010,15 +2056,16 @@ export class PixiSongSelectView {
   }
 
   /**
-   * Resets `selectedIndex` to 0 after the difficulty filter
-   * changed. Whatever song the user was hovering on a moment
-   * ago is unlikely to be at the same numeric index in the new
-   * filtered list (or even still present), so jumping to the
-   * top is more predictable than trying to clamp/preserve.
-   * Re-arms the chart preview so the new top song's preview
-   * starts after the LR2 focus-settle delay.
+   * Resets `selectedIndex` to 0 after a song-list filter (the
+   * difficulty / keymode filter buttons) changed. Whatever song
+   * the user was hovering on a moment ago is unlikely to be at
+   * the same numeric index in the new filtered list (or even
+   * still present), so jumping to the top is more predictable
+   * than trying to clamp/preserve. Re-arms the chart preview so
+   * the new top song's preview starts after the LR2 focus-
+   * settle delay.
    */
-  private snapDifficultyFilterCursor(): void {
+  private snapCursorAfterFilterChange(): void {
     this.selectedIndex = 0;
     this.refreshChartPreview();
   }
@@ -3824,6 +3871,11 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
     // Difficulty filter cycle button — cell index follows the
     // {@link DIFFICULTY_FILTER_CYCLE} order.
     stateIndex = DIFFICULTY_FILTER_CYCLE.indexOf(playOptions.difficultyFilter);
+  } else if (type === 11) {
+    // Keymode filter cycle button — cell index follows the
+    // {@link KEYS_FILTER_CYCLE} order
+    // (off / 5K / 7K / 10K / 14K / 9K).
+    stateIndex = KEYS_FILTER_CYCLE.indexOf(playOptions.keysFilter);
   } else if (type >= 91 && type <= 96) {
     // Difficulty filter direct-set buttons — cell 0 / 1 = inactive
     // / active depending on whether this button's specific
