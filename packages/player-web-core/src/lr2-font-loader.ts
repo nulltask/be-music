@@ -3,7 +3,9 @@ import { parseLr2Font, type Lr2BitmapFont } from './lr2-font.ts';
 import type { Lr2LoadedFont } from './lr2-bitmap-text.ts';
 import { readDxaArchive } from './lr2-dxa.ts';
 import { decodeTga, isTgaImage } from './lr2-tga.ts';
+import { asLoadedBytes } from './file-lookup.ts';
 import { normalizePath } from './library.ts';
+import type { BrowserSongAssetEntry } from './types.ts';
 
 /**
  * Loads every `#LR2FONT,n,path` declared by a parsed skin into
@@ -27,7 +29,7 @@ import { normalizePath } from './library.ts';
  */
 export async function loadSkinBitmapFonts(
   fontPaths: ReadonlyArray<string>,
-  files: ReadonlyMap<string, Uint8Array>,
+  files: ReadonlyMap<string, BrowserSongAssetEntry>,
 ): Promise<Map<number, Lr2LoadedFont>> {
   const declared = fontPaths.filter((path) => path.length > 0).length;
   // eslint-disable-next-line no-console
@@ -49,7 +51,7 @@ export async function loadSkinBitmapFonts(
 
 async function tryLoadFont(
   declaredPath: string,
-  files: ReadonlyMap<string, Uint8Array>,
+  files: ReadonlyMap<string, BrowserSongAssetEntry>,
 ): Promise<Lr2LoadedFont | undefined> {
   const lower = declaredPath.toLowerCase();
   const direct = lookupCaseInsensitive(files, declaredPath);
@@ -121,7 +123,7 @@ function collapseLr2FontDirectoryToDxa(declaredPath: string): string | undefined
 async function loadFontFromBareFile(
   bytes: Uint8Array,
   fontPath: string,
-  files: ReadonlyMap<string, Uint8Array>,
+  files: ReadonlyMap<string, BrowserSongAssetEntry>,
 ): Promise<Lr2LoadedFont | undefined> {
   const text = decodeText(bytes);
   if (!text) return undefined;
@@ -302,12 +304,18 @@ function joinRelative(base: string, rel: string): string {
   return stack.join('/');
 }
 
-function lookupCaseInsensitive(files: ReadonlyMap<string, Uint8Array>, path: string): Uint8Array | undefined {
-  const direct = files.get(path);
+function lookupCaseInsensitive(
+  files: ReadonlyMap<string, BrowserSongAssetEntry>,
+  path: string,
+): Uint8Array | undefined {
+  const direct = asLoadedBytes(files.get(path));
   if (direct) return direct;
   const target = normalizePath(path).toLowerCase();
   for (const [key, value] of files) {
-    if (normalizePath(key).toLowerCase() === target) return value;
+    if (normalizePath(key).toLowerCase() === target) {
+      const bytes = asLoadedBytes(value);
+      if (bytes) return bytes;
+    }
   }
   // Suffix-match fallback. Common case: the user dropped the
   // `LR2beta3/` parent folder, so file keys look like
@@ -323,9 +331,11 @@ function lookupCaseInsensitive(files: ReadonlyMap<string, Uint8Array>, path: str
   for (const [key, value] of files) {
     const norm = normalizePath(key).toLowerCase();
     if (!norm.endsWith(suffix)) continue;
+    const bytes = asLoadedBytes(value);
+    if (!bytes) continue;
     if (bestKey === undefined || key.length < bestKey.length) {
       bestKey = key;
-      bestValue = value;
+      bestValue = bytes;
     }
   }
   return bestValue;

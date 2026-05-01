@@ -1,5 +1,7 @@
 import { basename, dirname } from '@be-music/utils/core';
+import { asLoadedBytes } from './file-lookup.ts';
 import { readFilesIntoBytesMap } from './library.ts';
+import type { BrowserSongAssetEntry } from './types.ts';
 import { normalizeLr2Path, resolveLr2IncludePath } from './lr2-skin-assets.ts';
 import { decodeText, parseRows } from './lr2-skin-csv.ts';
 import { isSkinPathOfKind, scoreSkinPath, type Lr2PlayVariant, type Lr2SkinKind } from './lr2-skin-paths.ts';
@@ -763,7 +765,7 @@ export interface Lr2Skin {
    */
   systemFontSizes: number[];
   transparentColor?: { r: number; g: number; b: number };
-  files: ReadonlyMap<string, Uint8Array>;
+  files: ReadonlyMap<string, BrowserSongAssetEntry>;
 }
 
 interface SourceRect {
@@ -1124,7 +1126,7 @@ export async function loadLr2SkinFromFiles(
 }
 
 export function loadLr2SkinFromSourceFiles(
-  sourceFiles: ReadonlyMap<string, Uint8Array>,
+  sourceFiles: ReadonlyMap<string, BrowserSongAssetEntry>,
   options: LoadLr2SkinOptions = {},
 ): Lr2Skin | undefined {
   const kind = options.kind ?? 'play';
@@ -1319,7 +1321,7 @@ function clampColorByte(value: number): number {
 }
 
 function readLr2Path(
-  sourceFiles: ReadonlyMap<string, Uint8Array>,
+  sourceFiles: ReadonlyMap<string, BrowserSongAssetEntry>,
   path: string,
   context: ParseContext,
   visited: Set<string>,
@@ -1328,7 +1330,10 @@ function readLr2Path(
     return;
   }
   visited.add(path);
-  const bytes = sourceFiles.get(path);
+  // `.lr2skin` / `.csv` files are CSV text, never audio, so the
+  // map entry is always a `Uint8Array` here. `asLoadedBytes`
+  // narrows the union type without any runtime cost.
+  const bytes = asLoadedBytes(sourceFiles.get(path));
   if (!bytes) {
     return;
   }
@@ -1930,7 +1935,7 @@ function registerCustomOption(context: ParseContext, row: string[]): void {
 
 function registerCustomFile(
   context: ParseContext,
-  sourceFiles: ReadonlyMap<string, Uint8Array>,
+  sourceFiles: ReadonlyMap<string, BrowserSongAssetEntry>,
   baseDirectory: string,
   row: string[],
 ): void {

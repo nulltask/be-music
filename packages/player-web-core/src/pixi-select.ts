@@ -4831,10 +4831,15 @@ function findReadtextForSong(
   const source = resolveSongSource(collection, song);
   if (!source) return undefined;
   const dir = dirname(song.chartPath).toLowerCase();
-  for (const [path, bytes] of source.files) {
+  for (const [path, entry] of source.files) {
     if (!path.toLowerCase().endsWith('.txt')) continue;
     if (dirname(path).toLowerCase() !== dir) continue;
-    return decodeReadtextBytes(bytes);
+    // `.txt` files are stored eagerly (only audio is deferred),
+    // so this is always a `Uint8Array` in practice — `instanceof`
+    // narrows the union without dragging an `await` into the
+    // synchronous readtext lookup.
+    if (!(entry instanceof Uint8Array)) continue;
+    return decodeReadtextBytes(entry);
   }
   return undefined;
 }

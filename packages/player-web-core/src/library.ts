@@ -5,6 +5,7 @@ import { extractPlayableNotes } from '@be-music/player/playable-notes';
 import { basename, dirname, normalizePath } from '@be-music/utils/core';
 import type {
   BrowserFolderNode,
+  BrowserSongAssetEntry,
   BrowserSongAssetSource,
   BrowserSongCollection,
   BrowserSongEntry,
@@ -12,7 +13,9 @@ import type {
   LoadProgressCallback,
 } from './types.ts';
 import { isChartFilePath } from './drop.ts';
-import { lookupBytesCaseInsensitive } from './file-lookup.ts';
+import { asLoadedBytes, loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
+
+export { loadAssetBytes, asLoadedBytes } from './file-lookup.ts';
 
 export { basename, dirname, normalizePath } from '@be-music/utils/core';
 
@@ -231,29 +234,70 @@ export async function readFilesIntoBytesMap(
   options: {
     concurrency?: number;
     onRead?: (path: string, current: number, total: number) => void;
+    /**
+     * When true (default), audio files (`.wav` / `.ogg` / `.mp3`
+     * / `.opus` / `.flac` / `.oga`) are stored as the original
+     * `File` reference instead of being slurped into a
+     * `Uint8Array`. The gameplay scene reads the bytes on demand
+     * via {@link loadAssetBytes}, so the dropped-folder load no
+     * longer has to materialise gigabytes of WAV samples just to
+     * keep them in memory while the user is browsing the song
+     * list. Pass `false` to force-eager reads for callers that
+     * don't have a runtime able to await later (tests, etc.).
+     */
+    deferAudio?: boolean;
   } = {},
-): Promise<Map<string, Uint8Array>> {
+): Promise<Map<string, BrowserSongAssetEntry>> {
   const concurrency = options.concurrency ?? FILE_READ_CONCURRENCY;
-  const result = new Map<string, Uint8Array>();
+  const deferAudio = options.deferAudio ?? true;
+  const result = new Map<string, BrowserSongAssetEntry>();
   let completed = 0;
   const total = files.length;
   await runWithConcurrency(files, concurrency, async (file) => {
     const path = normalizePath(file.webkitRelativePath || file.name);
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      result.set(path, bytes);
-    } catch (error) {
-      // A single file failing to read shouldn't kill the entire
-      // drop. The map simply omits that path; the caller's
-      // chart parser / asset resolver will treat it as missing,
-      // which matches what happens for genuinely-missing files.
-      // eslint-disable-next-line no-console
-      console.warn(`[drop] skipped (arrayBuffer failed): ${path}`, error);
+    if (deferAudio && isAudioPath(path)) {
+      // Audio files account for the bulk of a typical BMS pack's
+      // disk footprint (hundreds of WAV samples per chart, often
+      // megabytes each). Storing the `File` reference instead of
+      // its decoded bytes drops the at-rest memory by an order
+      // of magnitude — the bytes only land in the heap when the
+      // gameplay scene actually decodes a sample for the
+      // currently-playing chart.
+      result.set(path, file);
+    } else {
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        result.set(path, bytes);
+      } catch (error) {
+        // A single file failing to read shouldn't kill the entire
+        // drop. The map simply omits that path; the caller's
+        // chart parser / asset resolver will treat it as missing,
+        // which matches what happens for genuinely-missing files.
+        // eslint-disable-next-line no-console
+        console.warn(`[drop] skipped (arrayBuffer failed): ${path}`, error);
+      }
     }
     completed += 1;
     options.onRead?.(path, completed, total);
   });
   return result;
+}
+
+/**
+ * Audio extensions for which we defer the byte-load by default.
+ * Mirrors the codec fallback chain in {@link audioFallbackPaths}
+ * so a chart's `#WAV xx.wav` declaration finds the deferred
+ * `xx.opus` / `.ogg` / `.mp3` file as transparently as it found
+ * the eager bytes before.
+ */
+const AUDIO_EXTENSIONS = new Set(['.wav', '.ogg', '.mp3', '.opus', '.flac', '.oga']);
+
+function isAudioPath(path: string): boolean {
+  const dot = path.lastIndexOf('.');
+  if (dot < 0) return false;
+  const slash = path.lastIndexOf('/');
+  if (slash > dot) return false;
+  return AUDIO_EXTENSIONS.has(path.slice(dot).toLowerCase());
 }
 
 /**
@@ -315,7 +359,7 @@ export async function loadSongCollectionFromFiles(
 ): Promise<BrowserSongCollection> {
   const onProgress = options.onProgress;
   const sources: BrowserSongAssetSource[] = [];
-  const looseFiles = new Map<string, Uint8Array>();
+  const looseFiles = new Map<string, BrowserSongAssetEntry>();
   const looseLabels = new Set<string>();
 
   // Materialise the iterable so we can report "X / N" totals up
@@ -402,7 +446,14 @@ export async function loadSongCollectionFromFiles(
     const paths = chartPathsBySource[sourceIndex]!;
     for (const path of paths) {
       try {
-        const chart = parseChart(path, source.files.get(path)!);
+        // Charts (.bms / .bmson / etc.) are never audio, so the
+        // map entry must be a `Uint8Array`; the `asLoadedBytes`
+        // guard exists only to satisfy the union type.
+        const chartBytes = asLoadedBytes(source.files.get(path));
+        if (!chartBytes) {
+          throw new Error(`chart bytes missing for ${path}`);
+        }
+        const chart = parseChart(path, chartBytes);
         const notes = extractPlayableNotes(chart, { inferBmsLnTypeWhenMissing: true });
         songs.push({
           id: `${source.id}:${path}`,
@@ -540,8 +591,11 @@ export function resolveChartPlayVariant(song: BrowserSongEntry): '5' | '7' | '10
   return uses6or7 ? '7' : '5';
 }
 
-function inferSourceKind(files: ReadonlyMap<string, Uint8Array>): BrowserSongSourceKind {
-  return [...files.keys()].some((path) => path.includes('/')) ? 'directory' : 'files';
+function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): BrowserSongSourceKind {
+  for (const path of files.keys()) {
+    if (path.includes('/')) return 'directory';
+  }
+  return 'files';
 }
 
 export function resolveSongSource(
@@ -570,7 +624,7 @@ export function resolveChartAsset(
   source: BrowserSongAssetSource,
   chartPath: string,
   assetPath: string,
-): Uint8Array | undefined {
+): BrowserSongAssetEntry | undefined {
   const base = dirname(chartPath);
   const normalized = normalizePath(assetPath);
   const baseName = basename(normalized);
@@ -581,9 +635,9 @@ export function resolveChartAsset(
     baseName,
   ];
   for (const candidate of candidates) {
-    const bytes = lookupBytesCaseInsensitive(source.files, candidate);
-    if (bytes) {
-      return bytes;
+    const entry = lookupBytesCaseInsensitive(source.files, candidate);
+    if (entry) {
+      return entry;
     }
   }
   return undefined;
@@ -614,11 +668,11 @@ export function resolveChartAudioAsset(
   source: BrowserSongAssetSource,
   chartPath: string,
   assetPath: string,
-): Uint8Array | undefined {
+): BrowserSongAssetEntry | undefined {
   for (const candidate of audioFallbackPaths(assetPath)) {
-    const bytes = resolveChartAsset(source, chartPath, candidate);
-    if (bytes) {
-      return bytes;
+    const entry = resolveChartAsset(source, chartPath, candidate);
+    if (entry) {
+      return entry;
     }
   }
   return undefined;

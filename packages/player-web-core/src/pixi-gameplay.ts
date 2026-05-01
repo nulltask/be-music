@@ -26,7 +26,13 @@ import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-m
 import { extractTimedNotes, type TimedPlayableNote } from '@be-music/player/playable-notes';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
-import { normalizePath, resolveChartAsset, resolveChartAudioAsset } from './library.ts';
+import {
+  asLoadedBytes,
+  loadAssetBytes,
+  normalizePath,
+  resolveChartAsset,
+  resolveChartAudioAsset,
+} from './library.ts';
 import {
   type Lr2BarGraphElement,
   type Lr2DestinationRect,
@@ -1598,7 +1604,10 @@ export class PixiGameplayView {
     }
     await Promise.all(
       candidates.map(async ({ key, assetPath }) => {
-        const bytes = resolveChartAsset(source, song.chartPath, assetPath);
+        // STAGEFILE / BANNER are images so they're always stored
+        // as eager `Uint8Array` — `asLoadedBytes` is just a type
+        // narrow over the union.
+        const bytes = asLoadedBytes(resolveChartAsset(source, song.chartPath, assetPath));
         if (!bytes) return;
         try {
           const texture = await loadTextureFromBytes(assetPath, bytes);
@@ -1701,7 +1710,14 @@ export class PixiGameplayView {
         // Audio-aware asset lookup: charts almost universally declare
         // `.wav` paths but archives often ship `.ogg` / `.mp3`. Try
         // the codec fallback chain (opus → ogg → mp3 → wav → original).
-        const bytes = resolveChartAudioAsset(this.source, this.song.chartPath, path);
+        // Audio entries are stored as lazy `File` references in
+        // the source map (the drop pipeline defers their byte
+        // load to keep gigabytes of WAV samples out of memory),
+        // so `loadAssetBytes` is the unwrap step that actually
+        // calls `arrayBuffer()` on demand for THIS chart.
+        const entry = resolveChartAudioAsset(this.source, this.song.chartPath, path);
+        const bytes = await loadAssetBytes(entry);
+        if (this.disposed || !this.audioContext) return;
         if (!bytes) {
           return;
         }
@@ -1771,7 +1787,10 @@ export class PixiGameplayView {
     await Promise.all(
       [...refs.entries()].map(async ([key, path]) => {
         if (this.disposed) return;
-        const bytes = resolveChartAsset(source, song.chartPath, path);
+        // BMP / video assets are stored eagerly in the source map
+        // (only audio is deferred), so a `File`-branch should
+        // never appear here. `asLoadedBytes` narrows the union.
+        const bytes = asLoadedBytes(resolveChartAsset(source, song.chartPath, path));
         if (!bytes) {
           return;
         }

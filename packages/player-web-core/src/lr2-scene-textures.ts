@@ -1,7 +1,7 @@
 import { Texture } from 'pixi.js';
 import { type Lr2Skin, type Lr2SpecialGraphic, LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from './lr2-skin.ts';
 import { loadSkinAssetTexture, loadTextureFromBytes } from './lr2-textures.ts';
-import { resolveChartAsset, resolveSongSource } from './library.ts';
+import { asLoadedBytes, resolveChartAsset, resolveSongSource } from './library.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
 type TextureLoadValidity = () => boolean;
@@ -107,7 +107,7 @@ export class Lr2ChartGraphicTextureStore {
       if (!source) {
         return;
       }
-      const bytes = resolveChartAsset(source, song.chartPath, assetPath);
+      const bytes = asLoadedBytes(resolveChartAsset(source, song.chartPath, assetPath));
       if (!bytes) {
         return;
       }

@@ -1,9 +1,10 @@
 import { basename, dirname, normalizePath } from '@be-music/utils/core';
-import { findCaseInsensitivePath, lookupBytesCaseInsensitive } from './file-lookup.ts';
+import { asLoadedBytes, findCaseInsensitivePath, lookupBytesCaseInsensitive } from './file-lookup.ts';
 import type { Lr2Skin } from './lr2-skin.ts';
+import type { BrowserSongAssetEntry } from './types.ts';
 
 export function resolveLr2IncludePath(
-  sourceFiles: ReadonlyMap<string, Uint8Array>,
+  sourceFiles: ReadonlyMap<string, BrowserSongAssetEntry>,
   baseDirectory: string,
   rawPath: string,
 ): string | undefined {
@@ -54,13 +55,16 @@ export function resolveLr2IncludePath(
 export function resolveLr2AssetBytes(skin: Lr2Skin, rawPath: string): Uint8Array | undefined {
   const normalized = normalizeLr2Path(rawPath);
   const candidates = [normalized, basename(normalized)];
+  // Skin assets (TGA / PNG / BMP / DXA / .lr2font) are non-audio
+  // and stored eagerly in the skin's files map, so the
+  // `asLoadedBytes` narrowing here is just a type guard.
   // Case-insensitive exact-match: skin elements that reference
   // `LR2files\Theme\LR2\Result\parts.tga` should resolve when the
   // dropped tree spells the file `Parts.TGA`. Falls through to the
   // wildcard / parent-suffix walks below for genuinely partial-path
   // references (e.g. `*.bmp` `#CUSTOMFILE` patterns).
   for (const candidate of candidates) {
-    const bytes = lookupBytesCaseInsensitive(skin.files, candidate);
+    const bytes = asLoadedBytes(lookupBytesCaseInsensitive(skin.files, candidate));
     if (bytes) {
       return bytes;
     }
@@ -79,7 +83,7 @@ export function resolveLr2AssetBytes(skin: Lr2Skin, rawPath: string): Uint8Array
       return grandLower === grandParent && parentLower === parentName && fileNamePattern.test(baseNameLower);
     });
     if (matchWithGrand) {
-      return skin.files.get(matchWithGrand);
+      return asLoadedBytes(skin.files.get(matchWithGrand));
     }
   }
   if (parentName) {
@@ -88,11 +92,11 @@ export function resolveLr2AssetBytes(skin: Lr2Skin, rawPath: string): Uint8Array
       return basename(dirname(lower)) === parentName && fileNamePattern.test(basename(path));
     });
     if (matchWithParent) {
-      return skin.files.get(matchWithParent);
+      return asLoadedBytes(skin.files.get(matchWithParent));
     }
   }
   const match = [...skin.files.keys()].find((path) => fileNamePattern.test(basename(path)));
-  return match ? skin.files.get(match) : undefined;
+  return match ? asLoadedBytes(skin.files.get(match)) : undefined;
 }
 
 export function normalizeLr2Path(path: string): string {

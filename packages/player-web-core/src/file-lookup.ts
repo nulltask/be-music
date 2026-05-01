@@ -1,7 +1,18 @@
+import type { BrowserSongAssetEntry } from './types.ts';
+
 /**
- * Shared case-insensitive lookup helpers for `ReadonlyMap<string, Uint8Array>`
- * file maps used by the song collection (`BrowserSongAssetSource.files`)
- * and the LR2 skin asset map (`Lr2Skin.files`).
+ * Shared case-insensitive lookup helpers for the file maps used
+ * by the song collection (`BrowserSongAssetSource.files`) and
+ * the LR2 skin asset map (`Lr2Skin.files`).
+ *
+ * Map values can be either:
+ *
+ * - `Uint8Array` — bytes already in memory (small files / images
+ *   / charts / skins); returned directly to the synchronous caller.
+ * - `File` — a lazy `File` reference for large audio assets that
+ *   shouldn't be slurped into memory up-front. Callers that
+ *   need bytes await {@link loadAssetBytes}; callers that are
+ *   fine with either branch take the union.
  *
  * Why this exists: BMS / bmson chart files reference WAV / BMP / image
  * assets by an arbitrary string (e.g. `#WAV01 kick.wav`). On case-
@@ -19,7 +30,7 @@
  * (and we never re-scan the same source twice).
  */
 
-const indexCache: WeakMap<ReadonlyMap<string, Uint8Array>, ReadonlyMap<string, string>> = new WeakMap();
+const indexCache: WeakMap<ReadonlyMap<string, BrowserSongAssetEntry>, ReadonlyMap<string, string>> = new WeakMap();
 
 /**
  * Returns a `Map<lowerKey, originalKey>` for `files`, building it once
@@ -30,7 +41,7 @@ const indexCache: WeakMap<ReadonlyMap<string, Uint8Array>, ReadonlyMap<string, s
  * rare), and picking the first means iteration order in the original
  * map is the tiebreaker, which matches what a single-pass loader sees.
  */
-function getCaseInsensitiveIndex(files: ReadonlyMap<string, Uint8Array>): ReadonlyMap<string, string> {
+function getCaseInsensitiveIndex(files: ReadonlyMap<string, BrowserSongAssetEntry>): ReadonlyMap<string, string> {
   const cached = indexCache.get(files);
   if (cached) {
     return cached;
@@ -56,7 +67,7 @@ function getCaseInsensitiveIndex(files: ReadonlyMap<string, Uint8Array>): Readon
  * fast path with no Map allocation; only on a miss do we touch the
  * lazy index.
  */
-export function findCaseInsensitivePath(files: ReadonlyMap<string, Uint8Array>, candidate: string): string | undefined {
+export function findCaseInsensitivePath(files: ReadonlyMap<string, BrowserSongAssetEntry>, candidate: string): string | undefined {
   if (files.has(candidate)) {
     return candidate;
   }
@@ -69,9 +80,40 @@ export function findCaseInsensitivePath(files: ReadonlyMap<string, Uint8Array>, 
  * for call sites that don't need the original key.
  */
 export function lookupBytesCaseInsensitive(
-  files: ReadonlyMap<string, Uint8Array>,
+  files: ReadonlyMap<string, BrowserSongAssetEntry>,
   candidate: string,
-): Uint8Array | undefined {
+): BrowserSongAssetEntry | undefined {
   const key = findCaseInsensitivePath(files, candidate);
   return key === undefined ? undefined : files.get(key);
+}
+
+/**
+ * Forces a {@link BrowserSongAssetEntry} into a `Uint8Array`. If
+ * the entry is a `File` (a lazy audio reference) this performs an
+ * `arrayBuffer()` read on demand. The result is NOT cached on the
+ * source map — callers that need to cache (e.g. the gameplay
+ * sample decoder) should hold onto the returned buffer themselves.
+ *
+ * Returns `undefined` when the entry itself is undefined so the
+ * common pattern `loadAssetBytes(lookupBytesCaseInsensitive(...))`
+ * stays readable without an extra null-guard.
+ */
+export async function loadAssetBytes(
+  entry: BrowserSongAssetEntry | undefined,
+): Promise<Uint8Array | undefined> {
+  if (entry === undefined) return undefined;
+  if (entry instanceof Uint8Array) return entry;
+  return new Uint8Array(await entry.arrayBuffer());
+}
+
+/**
+ * Sync variant — returns the entry's bytes when they're already
+ * resolved, `undefined` when it's a lazy `File` reference (the
+ * caller has to use {@link loadAssetBytes} to read those). Used
+ * by image / texture loaders that can't reasonably go async at
+ * the call site.
+ */
+export function asLoadedBytes(entry: BrowserSongAssetEntry | undefined): Uint8Array | undefined {
+  if (entry === undefined) return undefined;
+  return entry instanceof Uint8Array ? entry : undefined;
 }

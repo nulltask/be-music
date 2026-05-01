@@ -5,7 +5,7 @@
 // which explicitly drops the root alias for that reason.
 import { collectSampleTriggers, createTimingResolver } from '@be-music/audio-renderer/triggers';
 import type { BeMusicJson } from '@be-music/json';
-import { resolveChartAudioAsset } from './library.ts';
+import { loadAssetBytes, resolveChartAudioAsset } from './library.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 
 /**
@@ -301,7 +301,8 @@ export class ChartPreviewEngine {
   }
 
   private async playPreviewFile(target: ChartPreviewTarget, previewPath: string, sequence: number): Promise<void> {
-    const bytes = resolveChartAudioAsset(target.source, target.song.chartPath, previewPath);
+    const entry = resolveChartAudioAsset(target.source, target.song.chartPath, previewPath);
+    const bytes = await loadAssetBytes(entry);
     if (!bytes) return;
     if (sequence !== this.activeSequence) return;
     let buffer: AudioBuffer;
@@ -370,7 +371,8 @@ export class ChartPreviewEngine {
         if (sequence !== this.activeSequence) return;
         const path = chart.resources.wav[key];
         if (typeof path !== 'string') return;
-        const bytes = resolveChartAudioAsset(target.source, target.song.chartPath, path);
+        const entry = resolveChartAudioAsset(target.source, target.song.chartPath, path);
+        const bytes = await loadAssetBytes(entry);
         if (!bytes) return;
         if (sequence !== this.activeSequence) return;
         try {

@@ -1,6 +1,6 @@
 import { normalizePath, readFilesIntoBytesMap, resolveChartPlayVariant } from './library.ts';
 import { loadLr2SkinFromSourceFiles, type Lr2PlayVariant, type Lr2Skin } from './lr2-skin.ts';
-import type { BrowserSongEntry, LoadProgressCallback } from './types.ts';
+import type { BrowserSongAssetEntry, BrowserSongEntry, LoadProgressCallback } from './types.ts';
 
 export const LR2_PLAY_VARIANTS = ['7', '14', '10', '5', '9'] as const satisfies readonly Lr2PlayVariant[];
 
@@ -157,14 +157,21 @@ export async function loadLr2ThemeSkinsFromFiles(
     track('select', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'select' }))),
     track('result', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'result' }))),
     track('decide', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'decide' }))),
-    track('bgm/select', Promise.resolve(pickLr2ThemeBgmFromMap(sharedFiles, 'select'))),
-    track('bgm/decide', Promise.resolve(pickLr2ThemeBgmFromMap(sharedFiles, 'decide'))),
-    track('sound/scratch', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'scratch'))),
-    track('sound/f-open', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'f-open'))),
-    track('sound/f-close', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'f-close'))),
-    track('sound/o-open', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'o-open'))),
-    track('sound/o-close', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'o-close'))),
-    track('sound/o-change', Promise.resolve(pickLr2SystemSoundFromMap(sharedFiles, 'o-change'))),
+    // Theme audio (BGM + system sounds) goes through
+    // `materialiseLr2ThemeAudio` so the lazy `File` branch from
+    // `readFilesIntoBytesMap`'s `deferAudio: true` default is
+    // unwrapped here. The rest of the pack stays lazy — only the
+    // theme's small handful of audio files (BGM + ~6 cues) is
+    // forced eager up front, since they need to be ready the
+    // moment the user lands on the select scene.
+    track('bgm/select', materialiseLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'select'))),
+    track('bgm/decide', materialiseLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'decide'))),
+    track('sound/scratch', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'scratch'))),
+    track('sound/f-open', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-open'))),
+    track('sound/f-close', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-close'))),
+    track('sound/o-open', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-open'))),
+    track('sound/o-close', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-close'))),
+    track('sound/o-change', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-change'))),
   ]);
 
   const playSkins: Lr2PlaySkinMap = {};
@@ -296,11 +303,11 @@ export function pickLr2SystemSoundFile(files: readonly File[], stem: string): Fi
  * read.
  */
 function pickThemeAudioBytes(
-  files: ReadonlyMap<string, Uint8Array>,
+  files: ReadonlyMap<string, BrowserSongAssetEntry>,
   pathTest: (lower: string) => boolean,
   stem: string,
-): Lr2ThemeBgm | undefined {
-  for (const [path, bytes] of files) {
+): Lr2ThemeAudioRef | undefined {
+  for (const [path, entry] of files) {
     const lower = path.toLowerCase();
     if (!pathTest(lower)) continue;
     const slash = Math.max(lower.lastIndexOf('/'), lower.lastIndexOf('\\'));
@@ -311,22 +318,33 @@ function pickThemeAudioBytes(
     const ext = baseName.slice(dot);
     if (fileStem !== stem) continue;
     if (!LR2_THEME_BGM_EXTENSIONS.includes(ext as (typeof LR2_THEME_BGM_EXTENSIONS)[number])) continue;
-    return { path, bytes };
+    return { path, entry };
   }
   return undefined;
 }
 
+interface Lr2ThemeAudioRef {
+  path: string;
+  entry: BrowserSongAssetEntry;
+}
+
+async function materialiseLr2ThemeAudio(ref: Lr2ThemeAudioRef | undefined): Promise<Lr2ThemeBgm | undefined> {
+  if (!ref) return undefined;
+  const bytes = ref.entry instanceof Uint8Array ? ref.entry : new Uint8Array(await ref.entry.arrayBuffer());
+  return { path: ref.path, bytes };
+}
+
 function pickLr2ThemeBgmFromMap(
-  files: ReadonlyMap<string, Uint8Array>,
+  files: ReadonlyMap<string, BrowserSongAssetEntry>,
   role: 'select' | 'decide',
-): Lr2ThemeBgm | undefined {
+): Lr2ThemeAudioRef | undefined {
   return pickThemeAudioBytes(files, (path) => path.includes('bgm/') || path.includes('bgm\\'), role);
 }
 
 function pickLr2SystemSoundFromMap(
-  files: ReadonlyMap<string, Uint8Array>,
+  files: ReadonlyMap<string, BrowserSongAssetEntry>,
   stem: string,
-): Lr2ThemeBgm | undefined {
+): Lr2ThemeAudioRef | undefined {
   return pickThemeAudioBytes(files, (path) => path.includes('sound/lr2/') || path.includes('sound\\lr2\\'), stem);
 }
 
