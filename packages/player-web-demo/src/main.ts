@@ -911,6 +911,7 @@ class PlayerWebDemoApp {
       autoPlay: overrides.autoPlay ?? playOptions?.autoPlay ?? this.guiState.autoPlay,
       initialHiSpeed: playOptions?.hiSpeed,
       bga: playOptions?.bga,
+      bgaSize: playOptions?.bgaSize,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {

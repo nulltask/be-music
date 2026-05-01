@@ -212,10 +212,19 @@ export interface PixiPlayOptions {
    * regular human-played sessions.
    */
   bga: PixiBgaMode;
+  /**
+   * BGA frame size — `'NORMAL'` uses the skin's default
+   * `#DST_BGA` rect (op 30), `'EXTEND'` uses the larger variant
+   * gated on op 31. Mirrors `#SRC_BUTTON,type=73`.
+   */
+  bgaSize: PixiBgaSize;
 }
 
 /** Allowed values for {@link PixiPlayOptions.bga}. */
 export type PixiBgaMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
+
+/** Allowed values for {@link PixiPlayOptions.bgaSize}. */
+export type PixiBgaSize = 'NORMAL' | 'EXTEND';
 
 /**
  * Cycle order for {@link PixiPlayOptions.bga}. Matches the LR2
@@ -225,11 +234,18 @@ export type PixiBgaMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
  */
 const BGA_CYCLE: readonly PixiBgaMode[] = ['OFF', 'ON', 'AUTOPLAY_ONLY'];
 
+/**
+ * Cycle order for {@link PixiPlayOptions.bgaSize}. LR2 button cell
+ * order on `#SRC_BUTTON,type=73`: cell 0 = NORMAL, cell 1 = EXTEND.
+ */
+const BGA_SIZE_CYCLE: readonly PixiBgaSize[] = ['NORMAL', 'EXTEND'];
+
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hiSpeed: 1.5,
   autoPlay: false,
   bga: 'ON',
+  bgaSize: 'NORMAL',
 };
 
 /**
@@ -688,6 +704,7 @@ export class PixiSongSelectView {
     const next = { ...this.playOptions, ...partial };
     next.hiSpeed = clampHiSpeed(next.hiSpeed);
     if (!BGA_CYCLE.includes(next.bga)) next.bga = DEFAULT_PLAY_OPTIONS.bga;
+    if (!BGA_SIZE_CYCLE.includes(next.bgaSize)) next.bgaSize = DEFAULT_PLAY_OPTIONS.bgaSize;
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
     // currently open — that's the only surface that visualises
@@ -1823,6 +1840,11 @@ export class PixiSongSelectView {
     // {@link BGA_CYCLE} on each click.
     if (type === 72) {
       this.cyclePlayOption('bga', BGA_CYCLE);
+      return;
+    }
+    // BGA size NORMAL/EXTEND (button_type 73).
+    if (type === 73) {
+      this.cyclePlayOption('bgaSize', BGA_SIZE_CYCLE);
       return;
     }
     const focused = this.focusedSong();
@@ -3131,6 +3153,11 @@ function computeSelectOps(
   // happens in `pixi-gameplay.ts::renderBga`.
   const bgaActive = playOptions.bga === 'ON' || (playOptions.bga === 'AUTOPLAY_ONLY' && playOptions.autoPlay);
   ops.add(bgaActive ? 41 : 40);
+  // BGA size (ops 30 / 31). LR2 default skin's panel-1 BGA size
+  // toggle (`type=73`) walks between NORMAL and EXTEND, and the
+  // gameplay-side `#DST_BGA` chooses between two definitions
+  // gated on these ops.
+  ops.add(playOptions.bgaSize === 'EXTEND' ? 31 : 30);
   if (!song) {
     // Nothing focused — set all `_ABSENT` slots and a sensible "no
     // play data" lamp so the skin's empty-list branch renders.
@@ -3649,6 +3676,9 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
   if (type === 72) {
     // BGA: cell 0 = OFF, cell 1 = ON, cell 2 = AUTOPLAY ONLY.
     stateIndex = BGA_CYCLE.indexOf(playOptions.bga);
+  } else if (type === 73) {
+    // BGA size: cell 0 = NORMAL, cell 1 = EXTEND.
+    stateIndex = BGA_SIZE_CYCLE.indexOf(playOptions.bgaSize);
   }
   return Math.max(0, Math.min(cellCount - 1, stateIndex));
 }

@@ -222,6 +222,12 @@ export interface PixiGameplayViewOptions {
    */
   bga?: 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
   /**
+   * BGA frame size picked from `#SRC_BUTTON,type=73`. NORMAL uses
+   * the skin's default `#DST_BGA` rect (op 30); EXTEND chooses
+   * the larger variant (op 31). Defaults to NORMAL.
+   */
+  bgaSize?: 'NORMAL' | 'EXTEND';
+  /**
    * When true (default), the audio bus runs through dynamics
    * compressors that soften clipping when many BMS samples fire
    * simultaneously (jacks, dense BGM stacks). Set to `false` to
@@ -1175,7 +1181,8 @@ export class PixiGameplayView {
       5, // selected bar is playable
       34, // ghost off
       38, // scoregraph off
-      40, // BGA off
+      // ops 40 / 41 (BGA off / on) — set dynamically below from
+      // `options.bga` so the runtime gating matches the live setting.
       42, // 1P normal gauge
       44, // 2P normal gauge
       47, // difficulty filter disabled
@@ -1191,6 +1198,11 @@ export class PixiGameplayView {
       196, // replay absent
     ];
     defaults.forEach((op) => this.runtimeOps.add(op));
+    // BGA on/off (40 / 41). With AUTOPLAY_ONLY we mirror LR2: the
+    // BGA is "on" only when autoplay is also engaged.
+    const bgaMode = this.options.bga ?? 'ON';
+    const bgaActive = bgaMode === 'ON' || (bgaMode === 'AUTOPLAY_ONLY' && this.options.autoPlay);
+    this.runtimeOps.add(bgaActive ? 41 : 40);
     // op 32 = autoplay off, op 33 = autoplay on (mutually exclusive).
     this.runtimeOps.add(this.options.autoPlay ? 33 : 32);
     // Keymode op (160=7keys / 161=5keys / 162=14keys / 163=10keys / 164=9keys)
@@ -1221,11 +1233,13 @@ export class PixiGameplayView {
     this.runtimeOps.add(meta?.stageFile ? 191 : 190);
     this.runtimeOps.add(meta?.banner ? 193 : 192);
     this.runtimeOps.add(meta?.backBmp ? 195 : 194);
-    // BGA size: op 30 = normal, op 31 = large. We expose the user's
-    // preference via `customOptions` defaults; here we pick "normal" as
-    // a sane fallback so the default `#DST_BGA` (op 30) is selected.
+    // BGA size: op 30 = normal, op 31 = extend. Defer to the
+    // CUSTOMOPTION default if the skin already declared one (rare —
+    // most skins leave this to the runtime); otherwise pick from
+    // `options.bgaSize` so the LR2 panel-1 BGA size toggle
+    // (`#SRC_BUTTON,type=73`) is honoured.
     if (!this.runtimeOps.has(30) && !this.runtimeOps.has(31)) {
-      this.runtimeOps.add(30);
+      this.runtimeOps.add(this.options.bgaSize === 'EXTEND' ? 31 : 30);
     }
   }
 
