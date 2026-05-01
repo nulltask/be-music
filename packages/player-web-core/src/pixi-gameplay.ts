@@ -275,6 +275,12 @@ export interface PixiGameplayViewOptions {
   /** 2P side auto-scratch (channel 26). */
   autoScratch2P?: boolean;
   /**
+   * DP FLIP — when true, swaps every note's 1P / 2P channel at
+   * chart-prepare time. Only DP charts have notes on both sides
+   * so SP charts are unaffected. Mirrors LR2's `#SRC_BUTTON,type=54`.
+   */
+  dpFlip?: boolean;
+  /**
    * When true (default), the audio bus runs through dynamics
    * compressors that soften clipping when many BMS samples fire
    * simultaneously (jacks, dense BGM stacks). Set to `false` to
@@ -1115,6 +1121,14 @@ export class PixiGameplayView {
     this.notes = extracted.playableNotes
       .map((note) => ({ ...note, hit: false }))
       .sort((left, right) => left.beat - right.beat || left.seconds - right.seconds);
+    // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk
+    // because we already iterate `notes` for sorting; SP charts
+    // skip every entry (no `2x` channels exist).
+    if (this.options.dpFlip) {
+      for (const note of this.notes) {
+        note.channel = flipDpChannel(note.channel);
+      }
+    }
     this.maxLongNoteBeatSpan = this.notes.reduce((max, note) => {
       if (note.endBeat === undefined) {
         return max;
@@ -4211,6 +4225,21 @@ export class PixiGameplayView {
  */
 function isLongNote(note: RuntimeNote): boolean {
   return typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
+}
+
+/**
+ * Swaps a BMS channel's side digit (1↔2) so a 1P-side channel
+ * becomes its 2P-side counterpart and vice versa. Used to apply
+ * DP FLIP at chart-prepare time. Non-side channels (BGM, BGA,
+ * any single-character channel) pass through unchanged.
+ */
+function flipDpChannel(channel: string): string {
+  if (channel.length !== 2) return channel;
+  const side = channel[0];
+  const lane = channel[1]!;
+  if (side === '1') return '2' + lane;
+  if (side === '2') return '1' + lane;
+  return channel;
 }
 
 /**

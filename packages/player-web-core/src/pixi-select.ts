@@ -294,6 +294,14 @@ export interface PixiPlayOptions {
   autoScratch1P: boolean;
   /** 2P side auto-scratch (`#SRC_BUTTON,type=45`, channel 26). */
   autoScratch2P: boolean;
+  /**
+   * DP FLIP toggle picked from `#SRC_BUTTON,type=54`. When true,
+   * 1P and 2P lane channels are swapped at chart-prepare time.
+   * Only DP charts have lanes on both sides, so SP charts are
+   * unaffected. LR2 has no dedicated op for DP FLIP — it's a
+   * pure gameplay-side transformation.
+   */
+  dpFlip: boolean;
 }
 
 /** Allowed values for {@link PixiPlayOptions.difficultyFilter}. */
@@ -425,6 +433,7 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   shutter: SHUTTER_DEFAULT,
   autoScratch1P: false,
   autoScratch2P: false,
+  dpFlip: false,
 };
 
 /**
@@ -914,6 +923,7 @@ export class PixiSongSelectView {
     next.shutter = clampShutter(next.shutter);
     if (typeof next.autoScratch1P !== 'boolean') next.autoScratch1P = DEFAULT_PLAY_OPTIONS.autoScratch1P;
     if (typeof next.autoScratch2P !== 'boolean') next.autoScratch2P = DEFAULT_PLAY_OPTIONS.autoScratch2P;
+    if (typeof next.dpFlip !== 'boolean') next.dpFlip = DEFAULT_PLAY_OPTIONS.dpFlip;
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
     // currently open — that's the only surface that visualises
@@ -2126,6 +2136,13 @@ export class PixiSongSelectView {
     }
     if (type === 45) {
       this.cyclePlayOption('autoScratch2P', BOOLEAN_CYCLE);
+      return;
+    }
+    // DP FLIP toggle (button_type 54). Pure gameplay setting — the
+    // select view just tracks the value for the gameplay launch
+    // hand-off.
+    if (type === 54) {
+      this.cyclePlayOption('dpFlip', BOOLEAN_CYCLE);
       return;
     }
     const focused = this.focusedSong();
@@ -4147,6 +4164,9 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
   } else if (type === 45) {
     // Autoscratch 2P: cell 0 = OFF, cell 1 = ON.
     stateIndex = playOptions.autoScratch2P ? 1 : 0;
+  } else if (type === 54) {
+    // DP FLIP: cell 0 = OFF, cell 1 = ON.
+    stateIndex = playOptions.dpFlip ? 1 : 0;
   } else if (type >= 91 && type <= 96) {
     // Difficulty filter direct-set buttons — cell 0 / 1 = inactive
     // / active depending on whether this button's specific

@@ -918,6 +918,7 @@ class PlayerWebDemoApp {
       shutter: playOptions?.shutter,
       autoScratch1P: playOptions?.autoScratch1P,
       autoScratch2P: playOptions?.autoScratch2P,
+      dpFlip: playOptions?.dpFlip,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {
