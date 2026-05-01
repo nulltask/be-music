@@ -269,6 +269,21 @@ export interface PixiPlayOptions {
    *   render-pipeline change that hasn't landed yet).
    */
   hsFix: PixiHsFix;
+  /**
+   * HIDDEN / SUDDEN effect picked from
+   * `#SRC_BUTTON,type=50/51`. Cycles
+   * OFF → HIDDEN → SUDDEN → HID+SUD on each click. The shared
+   * 1P / 2P value drives an opaque mask on the gameplay
+   * playfield.
+   */
+  hiddenSudden: PixiHiddenSudden;
+  /**
+   * Shutter coverage (0..1) — the fraction of the playfield each
+   * active HIDDEN / SUDDEN mask occupies. Drives slider
+   * `type=4 / 5` on the panel-1 shutter track. Adjustable via
+   * the 1P 4-key / 6-key (`KeyD` / `KeyF`) when panel 1 is open.
+   */
+  shutter: number;
 }
 
 /** Allowed values for {@link PixiPlayOptions.difficultyFilter}. */
@@ -282,6 +297,13 @@ export type PixiSelectSort = 'OFF' | 'LEVEL' | 'TITLE' | 'CLEAR';
 
 /** Allowed values for {@link PixiPlayOptions.hsFix}. */
 export type PixiHsFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
+
+/** Allowed values for {@link PixiPlayOptions.hiddenSudden}. */
+export type PixiHiddenSudden = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
+
+/** Per-step shutter delta applied by the panel-open `KeyD` / `KeyF` shortcuts. */
+const SHUTTER_STEP = 0.05;
+const SHUTTER_DEFAULT = 0.25;
 
 /** Allowed values for {@link PixiPlayOptions.bga}. */
 export type PixiBgaMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
@@ -373,6 +395,13 @@ const SORT_CYCLE: readonly PixiSelectSort[] = ['OFF', 'LEVEL', 'TITLE', 'CLEAR']
  */
 const HS_FIX_CYCLE: readonly PixiHsFix[] = ['OFF', 'MAXBPM', 'MINBPM', 'AVERAGE', 'CONSTANT'];
 
+/**
+ * Cycle order for {@link PixiPlayOptions.hiddenSudden}. LR2 button
+ * cells 0..3 on `#SRC_BUTTON,type=50/51`:
+ * off / hidden / sudden / hid+sud.
+ */
+const HIDDEN_SUDDEN_CYCLE: readonly PixiHiddenSudden[] = ['OFF', 'HIDDEN', 'SUDDEN', 'HID+SUD'];
+
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   hiSpeed: 1.5,
@@ -384,6 +413,8 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   keysFilter: 'ALL',
   sort: 'OFF',
   hsFix: 'OFF',
+  hiddenSudden: 'OFF',
+  shutter: SHUTTER_DEFAULT,
 };
 
 /**
@@ -410,6 +441,17 @@ function clampHiSpeed(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_PLAY_OPTIONS.hiSpeed;
   const snapped = Math.round(value * 1000) / 1000;
   return Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, snapped));
+}
+
+/**
+ * Clamps a shutter coverage value to [0, 1] and snaps to the
+ * 1/100 grid so repeated keyboard +0.05 nudges land on round
+ * values rather than drifting through float-rounding.
+ */
+function clampShutter(value: number): number {
+  if (!Number.isFinite(value)) return SHUTTER_DEFAULT;
+  const snapped = Math.round(value * 100) / 100;
+  return Math.max(0, Math.min(1, snapped));
 }
 
 /**
@@ -856,6 +898,10 @@ export class PixiSongSelectView {
     if (!HS_FIX_CYCLE.includes(next.hsFix)) {
       next.hsFix = DEFAULT_PLAY_OPTIONS.hsFix;
     }
+    if (!HIDDEN_SUDDEN_CYCLE.includes(next.hiddenSudden)) {
+      next.hiddenSudden = DEFAULT_PLAY_OPTIONS.hiddenSudden;
+    }
+    next.shutter = clampShutter(next.shutter);
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is
     // currently open — that's the only surface that visualises
@@ -2052,6 +2098,13 @@ export class PixiSongSelectView {
       this.cyclePlayOption('hsFix', HS_FIX_CYCLE);
       return;
     }
+    // HIDDEN/SUDDEN effect cycle (button_type 50 = 1P, 51 = 2P).
+    // We keep a single shared `hiddenSudden` value for both sides
+    // until per-side gameplay variation lands.
+    if (type === 50 || type === 51) {
+      this.cyclePlayOption('hiddenSudden', HIDDEN_SUDDEN_CYCLE);
+      return;
+    }
     const focused = this.focusedSong();
     if (!focused) return;
     if (type === 15) {
@@ -2079,6 +2132,21 @@ export class PixiSongSelectView {
    * HS slider knob, the NUMBER readout, and any keyframed UI
    * gated on op 10/11) without waiting for the idle rAF tick.
    */
+  /**
+   * Walks `playOptions.shutter` by ±{@link SHUTTER_STEP} (clamped
+   * to [0, 1]) and re-renders / notifies on change. Triggers the
+   * `o-change.wav` cue so the panel-open keyboard shortcuts feel
+   * like the rest of the option-bus.
+   */
+  private adjustShutter(direction: 1 | -1): void {
+    const next = clampShutter(this.playOptions.shutter + direction * SHUTTER_STEP);
+    if (next === this.playOptions.shutter) return;
+    this.playOptions = { ...this.playOptions, shutter: next };
+    this.options.onPlayOptionsChange?.({ ...this.playOptions });
+    void this.playOneShotSound('option-change');
+    this.render();
+  }
+
   private adjustHiSpeed(direction: 1 | -1): void {
     const next = clampHiSpeed(this.playOptions.hiSpeed + direction * HISPEED_STEP);
     if (next === this.playOptions.hiSpeed) return; // already at clamp
@@ -2292,6 +2360,9 @@ export class PixiSongSelectView {
     // HiSpeed, the 7-key increases it). Bindings come from
     // `pixi-gameplay-lanes::CHANNEL_KEY_BINDINGS` —
     // channel `15` (lane 5) → `KeyC`, channel `19` (lane 7) → `KeyV`.
+    // Shutter adjustment uses the 4 / 6 lane keys
+    // (`KeyD` / `KeyF`) — same family of "adjacent black-key
+    // shortcuts" that LR2 conventionally maps for option panels.
     // Only fires while panel 1 is open so the keys remain free
     // outside the play-options context.
     if (this.panelStates.has(1)) {
@@ -2303,6 +2374,16 @@ export class PixiSongSelectView {
       if (event.code === 'KeyV') {
         event.preventDefault();
         this.adjustHiSpeed(1);
+        return;
+      }
+      if (event.code === 'KeyD') {
+        event.preventDefault();
+        this.adjustShutter(-1);
+        return;
+      }
+      if (event.code === 'KeyF') {
+        event.preventDefault();
+        this.adjustShutter(1);
         return;
       }
     }
@@ -2742,6 +2823,10 @@ export class PixiSongSelectView {
       if (span <= 0) return 0;
       const ratio = (this.playOptions.hiSpeed - HISPEED_MIN) / span;
       return Math.max(0, Math.min(1, ratio));
+    }
+    if (type === 4 || type === 5) {
+      // Shutter 1P / 2P — both render the shared shutter coverage.
+      return Math.max(0, Math.min(1, this.playOptions.shutter));
     }
     return undefined;
   }
@@ -4026,6 +4111,10 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
     // {@link HS_FIX_CYCLE} order
     // (off / maxbpm / minbpm / average / constant).
     stateIndex = HS_FIX_CYCLE.indexOf(playOptions.hsFix);
+  } else if (type === 50 || type === 51) {
+    // HIDDEN/SUDDEN cycle — cell index follows the
+    // {@link HIDDEN_SUDDEN_CYCLE} order (off/hidden/sudden/hid+sud).
+    stateIndex = HIDDEN_SUDDEN_CYCLE.indexOf(playOptions.hiddenSudden);
   } else if (type >= 91 && type <= 96) {
     // Difficulty filter direct-set buttons — cell 0 / 1 = inactive
     // / active depending on whether this button's specific

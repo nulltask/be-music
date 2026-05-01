@@ -244,6 +244,28 @@ export interface PixiGameplayViewOptions {
    */
   hsFix?: 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
   /**
+   * HIDDEN / SUDDEN / HID+SUD effect picked from
+   * `#SRC_BUTTON,type=50/51`:
+   *
+   * - `OFF`     — no mask
+   * - `HIDDEN`  — bottom of the playfield is masked (notes
+   *   disappear before reaching the judge line)
+   * - `SUDDEN`  — top of the playfield is masked (notes appear
+   *   suddenly partway down)
+   * - `HID+SUD` — both
+   *
+   * Defaults to `'OFF'`.
+   */
+  hiddenSudden?: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
+  /**
+   * Shutter coverage (0..1) — how much of the playfield each
+   * active mask occupies. `0.25` covers the bottom 25 % for
+   * HIDDEN, the top 25 % for SUDDEN, and 25 % at each end for
+   * HID+SUD. Drives slider `type=4 / 5` on the panel-1 shutter
+   * track. Defaults to `0.25`.
+   */
+  shutter?: number;
+  /**
    * When true (default), the audio bus runs through dynamics
    * compressors that soften clipping when many BMS samples fire
    * simultaneously (jacks, dense BGM stacks). Set to `false` to
@@ -315,6 +337,14 @@ export class PixiGameplayView {
   private readonly skinLayer = new Container();
   private readonly laneLayer = new Graphics();
   private readonly noteLayer = new Container();
+  /**
+   * Shutter mask layer. Sits above `noteLayer` so the dark
+   * rectangles drawn here cover the scrolling notes underneath
+   * but stay below the judgement-line / HUD overlays. Cleared
+   * and redrawn every frame from `playOptions.hiddenSudden` +
+   * `playOptions.shutter`.
+   */
+  private readonly shutterLayer = new Graphics();
   private readonly bombLayer = new Container();
   /**
    * Sits above `noteLayer` / `bombLayer` and below `textLayer`. Holds the
@@ -674,11 +704,13 @@ export class PixiGameplayView {
       this.skinLayer,
       this.laneLayer,
       this.noteLayer,
+      this.shutterLayer,
       this.bombLayer,
       this.overlayLayer,
       this.textLayer,
       this.overlay,
     );
+    this.shutterLayer.label = 'gameplay/shutter';
     this.sceneRoot.addChild(this.viewportBackground, this.root);
     // Attach to the host's already-initialised stage. The host owns
     // the `Application` (canvas, ticker, WebGL context) — we just
@@ -2745,6 +2777,7 @@ export class PixiGameplayView {
     this.perf.time('renderBga', () => this.renderBga(seconds));
     this.perf.time('renderLanes', () => this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT));
     this.perf.time('renderNotes', () => this.renderNotes(seconds, DESIGN_HEIGHT));
+    this.perf.time('renderShutter', () => this.renderShutter());
     this.perf.time('renderBombs', () => this.renderBombs());
     // Retire timer 48 / 49 once the FC animation has played out.
     // Same pattern as bomb-timer cleanup: without this the skin's
@@ -2799,6 +2832,50 @@ export class PixiGameplayView {
       const laneIndex = resolveSideRelativeLaneIndex(channel);
       const base = channel.startsWith('2') ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE;
       this.timerStartedAt.delete(base + laneIndex);
+    }
+  }
+
+  /**
+   * Draws the LR2 HIDDEN / SUDDEN / HID+SUD masks over the
+   * playfield. Pulls the union of all lanes' top/bottom from
+   * `laneX` so the mask exactly covers the lane area regardless
+   * of how the skin laid the lanes out (single-side, DP, etc.).
+   *
+   * `playOptions.shutter` (0..1) controls the fraction of the
+   * playfield each active mask covers. With HID+SUD that fraction
+   * applies to BOTH ends, so 0.5 leaves a thin slit in the middle.
+   */
+  private renderShutter(): void {
+    this.shutterLayer.clear();
+    const mode = this.options.hiddenSudden ?? 'OFF';
+    if (mode === 'OFF') return;
+    if (this.laneX.size === 0) return;
+    const shutter = Math.max(0, Math.min(1, this.options.shutter ?? 0.25));
+    if (shutter <= 0) return;
+    let left = Number.POSITIVE_INFINITY;
+    let right = Number.NEGATIVE_INFINITY;
+    let top = Number.POSITIVE_INFINITY;
+    let bottom = Number.NEGATIVE_INFINITY;
+    for (const lane of this.laneX.values()) {
+      left = Math.min(left, lane.x);
+      right = Math.max(right, lane.x + lane.w);
+      top = Math.min(top, lane.top);
+      bottom = Math.max(bottom, lane.bottom);
+    }
+    const height = bottom - top;
+    if (!Number.isFinite(left) || !Number.isFinite(right) || height <= 0) return;
+    const maskHeight = height * shutter;
+    const width = right - left;
+    if (mode === 'SUDDEN' || mode === 'HID+SUD') {
+      // SUDDEN — opaque rect at the TOP of the playfield. Notes
+      // emerge below it.
+      this.shutterLayer.rect(left, top, width, maskHeight).fill({ color: 0x000000, alpha: 0.92 });
+    }
+    if (mode === 'HIDDEN' || mode === 'HID+SUD') {
+      // HIDDEN — opaque rect at the BOTTOM of the playfield, just
+      // above the judge line (lanes' `bottom` is the judge line
+      // bottom edge — the mask itself ends there).
+      this.shutterLayer.rect(left, bottom - maskHeight, width, maskHeight).fill({ color: 0x000000, alpha: 0.92 });
     }
   }
 

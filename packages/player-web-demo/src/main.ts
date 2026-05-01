@@ -914,6 +914,8 @@ class PlayerWebDemoApp {
       bgaSize: playOptions?.bgaSize,
       scoreGraph: playOptions?.scoreGraph,
       hsFix: playOptions?.hsFix,
+      hiddenSudden: playOptions?.hiddenSudden,
+      shutter: playOptions?.shutter,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {
