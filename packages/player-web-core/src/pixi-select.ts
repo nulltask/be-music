@@ -3865,9 +3865,10 @@ function resolveSelectText(
   // Slots that don't depend on a focused song.
   switch (st) {
     case 1:
-      // Target / rival / cursor name. We don't ship rival mode yet —
-      // surface a placeholder so the panel doesn't read empty.
-      return 'TARGET';
+      // Target / rival name. LR2 displays "NO TARGET" when no
+      // rival has been selected; we ship without rival/IR support
+      // so this is the permanent value.
+      return 'NO TARGET';
     case 2:
       // Player name. Placeholder until a profile system exists.
       return 'PLAYER';
@@ -3887,8 +3888,27 @@ function resolveSelectText(
     // font; without these, the underlying #SRC_TEXT slot stayed
     // empty and the only thing visible was an unrelated
     // background image.
-    case 60: // playmode
-      return 'SINGLE';
+    case 60: {
+      // Playstyle / keymode label — derived from the focused
+      // chart's lane usage. Matches the "5KEYS" / "7KEYS" /
+      // "10KEYS" / "14KEYS" / "9KEYS" wording the LR2 default
+      // skin paints for the panel-1 PLAYSTYLE box.
+      if (!song) return 'SINGLE';
+      switch (resolveKeyModeOp(song)) {
+        case 161:
+          return '5KEYS';
+        case 160:
+          return '7KEYS';
+        case 163:
+          return '10KEYS';
+        case 162:
+          return '14KEYS';
+        case 164:
+          return '9KEYS';
+        default:
+          return 'SINGLE';
+      }
+    }
     case 61: // sort
       return playOptions.sort;
     case 62: // difficulty filter
@@ -3920,13 +3940,13 @@ function resolveSelectText(
     case 75: // bga size
       return playOptions.bgaSize;
     case 76: // bga
-      return playOptions.bga === 'AUTOPLAY_ONLY' ? 'AUTO ONLY' : playOptions.bga;
+      return playOptions.bga === 'AUTOPLAY_ONLY' ? 'AUTOPLAY' : playOptions.bga;
     case 77: // color depth
       return '32 BIT';
     case 78: // vsync
       return 'ON';
     case 79: // screen mode
-      return 'WINDOW';
+      return 'FULL';
     case 80: // judge auto-adjust
       return 'OFF';
     case 81: // replay save mode
