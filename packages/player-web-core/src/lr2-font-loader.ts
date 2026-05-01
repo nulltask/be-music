@@ -29,6 +29,11 @@ export async function loadSkinBitmapFonts(
   fontPaths: ReadonlyArray<string>,
   files: ReadonlyMap<string, Uint8Array>,
 ): Promise<Map<number, Lr2LoadedFont>> {
+  const declared = fontPaths.filter((path) => path.length > 0).length;
+  // eslint-disable-next-line no-console
+  console.info(
+    `[lr2-font] start: ${declared}/${fontPaths.length} non-empty font slots, ${files.size} files in source`,
+  );
   const out = new Map<number, Lr2LoadedFont>();
   await Promise.all(
     fontPaths.map(async (path, index) => {
@@ -37,6 +42,8 @@ export async function loadSkinBitmapFonts(
       if (loaded) out.set(index, loaded);
     }),
   );
+  // eslint-disable-next-line no-console
+  console.info(`[lr2-font] done: loaded ${out.size}/${declared} bitmap fonts`);
   return out;
 }
 
@@ -48,7 +55,11 @@ async function tryLoadFont(
   const direct = lookupCaseInsensitive(files, declaredPath);
   // Direct hit on a `.dxa` declaration.
   if (lower.endsWith('.dxa')) {
-    if (!direct) return undefined;
+    if (!direct) {
+      // eslint-disable-next-line no-console
+      console.info(`[lr2-font] miss: declared .dxa not found in source: ${declaredPath}`);
+      return undefined;
+    }
     return loadFontFromDxa(direct, declaredPath);
   }
   // Direct hit on a bare `.lr2font` text file (already-extracted theme).
@@ -65,6 +76,10 @@ async function tryLoadFont(
     if (archivePath) {
       const archiveBytes = lookupCaseInsensitive(files, archivePath);
       if (archiveBytes) return loadFontFromDxa(archiveBytes, archivePath);
+      // eslint-disable-next-line no-console
+      console.info(
+        `[lr2-font] miss: collapsed-dir .dxa not found: ${declaredPath} → tried ${archivePath}`,
+      );
     }
   }
   // Some themes name the path without an extension. Try both
@@ -73,6 +88,17 @@ async function tryLoadFont(
   if (dxa) return loadFontFromDxa(dxa, declaredPath);
   const lr2font = lookupCaseInsensitive(files, `${declaredPath}.lr2font`);
   if (lr2font) return loadFontFromBareFile(lr2font, declaredPath, files);
+  // Nothing matched — emit a diagnostic listing the candidate
+  // paths we tried so the user can match against their actual
+  // file layout. The most common cause is a filename-encoding
+  // mismatch (Shift-JIS path in the CSV vs. UTF-8 keys in the
+  // source files map) or a directory-loader that skipped binary
+  // files entirely.
+  // eslint-disable-next-line no-console
+  console.info(
+    `[lr2-font] miss: no matching file for declared path "${declaredPath}" ` +
+      `(tried direct, collapsed .dxa, suffix .dxa, suffix .lr2font)`,
+  );
   return undefined;
 }
 
@@ -111,12 +137,15 @@ async function loadFontFromBareFile(
 async function loadFontFromDxa(bytes: Uint8Array, fontPath: string): Promise<Lr2LoadedFont | undefined> {
   const archive = readDxaArchive(bytes);
   if (!archive) {
-    // Encrypted or unsupported DXA — bail and let the host fall
-    // back to system-font / placeholder rendering. Logged once at
-    // INFO so themes shipping unsupported archives don't noisy the
-    // console for every render.
+    // Decode failed — most often because the archive is encrypted
+    // (the LR2 default theme bundles use a non-default key we
+    // can't recover) or because the format isn't a DXA V3 we
+    // recognise. The renderer falls back to system-font /
+    // placeholder text so the scene is still legible. Logged once
+    // per font path at INFO since this is expected on user-shipped
+    // themes; not a warning.
     // eslint-disable-next-line no-console
-    console.info(`[lr2-font] DXA decode skipped (likely encrypted): ${fontPath}`);
+    console.info(`[lr2-font] DXA decode failed: ${fontPath} (encrypted or unsupported)`);
     return undefined;
   }
   // Build an in-archive lookup map so the .lr2font's relative
@@ -126,14 +155,31 @@ async function loadFontFromDxa(bytes: Uint8Array, fontPath: string): Promise<Lr2
     archiveFiles.set(normalizePath(file.path).toLowerCase(), file.data);
   }
   const lr2FontFile = archive.files.find((file) => file.path.toLowerCase().endsWith('.lr2font'));
-  if (!lr2FontFile) return undefined;
+  if (!lr2FontFile) {
+    // eslint-disable-next-line no-console
+    console.info(`[lr2-font] DXA decoded OK but contained no .lr2font: ${fontPath}`);
+    return undefined;
+  }
   const text = decodeText(lr2FontFile.data);
-  if (!text) return undefined;
+  if (!text) {
+    // eslint-disable-next-line no-console
+    console.info(`[lr2-font] DXA .lr2font text decode failed: ${fontPath}`);
+    return undefined;
+  }
   const font = parseLr2Font(text);
   const textures = await loadFontTextures(font, (relPath) => {
     const normalized = normalizePath(relPath).toLowerCase();
     return archiveFiles.get(normalized);
   });
+  // Success path — log so the user can confirm which fonts came
+  // through the DXA pipeline at runtime. Also emits the texture
+  // count, which is the easiest cue when a font decodes but its
+  // sibling images don't (zero textures → glyphs fall back to
+  // placeholder rectangles even though the layout is correct).
+  // eslint-disable-next-line no-console
+  console.info(
+    `[lr2-font] DXA decoded OK: ${fontPath} (${archive.files.length} entries, ${textures.size} textures)`,
+  );
   return { font, textures };
 }
 
@@ -263,5 +309,24 @@ function lookupCaseInsensitive(files: ReadonlyMap<string, Uint8Array>, path: str
   for (const [key, value] of files) {
     if (normalizePath(key).toLowerCase() === target) return value;
   }
-  return undefined;
+  // Suffix-match fallback. Common case: the user dropped the
+  // `LR2beta3/` parent folder, so file keys look like
+  // `LR2beta3/LR2files/Theme/LR2/Select/barfnt.dxa` while the
+  // skin CSV declares `LR2files/Theme/LR2/Select/barfnt.dxa`.
+  // Treat any key that ends with `/<target>` as a match. Among
+  // multiple candidates we pick the shortest — the one whose
+  // extra prefix is the smallest, which is the most-specific
+  // mount under the user-dropped root.
+  const suffix = `/${target}`;
+  let bestKey: string | undefined;
+  let bestValue: Uint8Array | undefined;
+  for (const [key, value] of files) {
+    const norm = normalizePath(key).toLowerCase();
+    if (!norm.endsWith(suffix)) continue;
+    if (bestKey === undefined || key.length < bestKey.length) {
+      bestKey = key;
+      bestValue = value;
+    }
+  }
+  return bestValue;
 }

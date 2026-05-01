@@ -259,8 +259,21 @@ function readFileName(bytes: Uint8Array, offset: number): string {
  *   `keycode` literally). Otherwise it's a back-reference:
  *   - If `code > keycode`, decrement `code` (so `code` skips
  *     over the keycode value).
- *   - `length = (code >> 3) + 4`
- *   - If `code & 0x04`: read 1 more byte; `length |= (ext << 5)`.
+ *   - Length is encoded as a 5-bit low part (`code >> 3`) plus
+ *     an optional 8-bit high part (1 extra byte when
+ *     `code & 0x04`). Combine the parts FIRST, then add the
+ *     +4 base offset:
+ *     - `lengthBits = code >> 3`
+ *     - If `code & 0x04`: read 1 more byte; `lengthBits |= ext << 5`.
+ *     - `length = lengthBits + 4`
+ *     The "combine then +4" order is critical — applying `+4` to
+ *     the low 5 bits before OR'ing the extension would overflow
+ *     into bit 5 whenever `code >> 3 >= 28`, corrupting the
+ *     extension byte's lowest bit and silently truncating the
+ *     decoded output. (We hit this bug on the LR2 default theme's
+ *     `barfnt.dxa` font textures: the .lr2font itself decoded
+ *     fine but every `font_NN.tga` came out 1500-2000 bytes
+ *     short.)
  *   - Offset format from `code & 0x03`:
  *     - `0` — read 1 byte
  *     - `1` — read 2 bytes (WORD LE)
@@ -295,12 +308,16 @@ function decompress(src: Uint8Array, expectedSize: number): Uint8Array | undefin
       continue;
     }
     if (code > keycode) code -= 1;
-    let length = (code >>> 3) + 4;
+    // Combine low 5 bits + optional 8-bit extension BEFORE adding
+    // the +4 base offset. See the file-header doc comment for why
+    // the order matters.
+    let length = code >>> 3;
     if ((code & 0x04) !== 0) {
       if (p >= src.length) break;
       length |= src[p]! << 5;
       p += 1;
     }
+    length += 4;
     let offset: number;
     const offsetFormat = code & 0x03;
     if (offsetFormat === 0) {

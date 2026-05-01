@@ -371,7 +371,13 @@ export class PixiDecideView {
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const value = resolveDecideText(text.st, this.target.song);
       if (value === undefined || value.length === 0) continue;
-      this.skinLayer.addChild(makeLr2TextSprite(value, text, dst, { maxFontSize: 22, bitmapFonts: this.bitmapFonts }));
+      this.skinLayer.addChild(
+        makeLr2TextSprite(value, text, dst, {
+          maxFontSize: 22,
+          bitmapFonts: this.bitmapFonts,
+          systemFontSizes: skin.systemFontSizes,
+        }),
+      );
     }
   }
 

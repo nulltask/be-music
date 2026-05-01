@@ -72,18 +72,33 @@ export function makeLr2BitmapTextSprite(
   const scale = targetHeight / baseSize;
   const codes = stringToLr2CharCodes(value);
   // First pass — compute total advance so we can apply alignment.
+  // Per-glyph width MUST be measured the same way the render pass
+  // below scales the sprite (`targetHeight / glyph.h`), not via
+  // the font-level `scale = targetHeight / baseSize`. The two
+  // diverge whenever a glyph's source height differs from `#S`
+  // (LR2 spec calls this rare-but-allowed). Mismatch caused the
+  // PLAY OPTION values to render right-shifted: layout
+  // underestimated their width, the centring math added too
+  // much left padding, and the actual sprites then drew further
+  // right than the centred bounding box.
   let totalAdvance = 0;
   const layout: Array<{
     glyph: Lr2FontGlyph | undefined;
+    glyphScale: number;
     advance: number;
     width: number;
   }> = [];
   for (const code of codes) {
     const glyph = code !== undefined ? font.glyphs.get(code) : undefined;
-    const glyphWidth = glyph ? glyph.w : Math.max(1, baseSize / 2);
-    const placedWidth = glyphWidth * scale;
+    const glyphHeight = glyph ? Math.max(1, glyph.h) : Math.max(1, baseSize);
+    const glyphScale = targetHeight / glyphHeight;
+    const sourceWidth = glyph ? glyph.w : Math.max(1, baseSize / 2);
+    const placedWidth = sourceWidth * glyphScale;
+    // Spacing is a font-level metric in source pixels — it's tied
+    // to `#S` (the font's reference size), not per-glyph, so we
+    // keep using `scale` for it.
     const advance = placedWidth + font.spacing * scale;
-    layout.push({ glyph, advance, width: placedWidth });
+    layout.push({ glyph, glyphScale, advance, width: placedWidth });
     totalAdvance += advance;
   }
   // The last glyph contributes its own width but no trailing
@@ -92,11 +107,22 @@ export function makeLr2BitmapTextSprite(
   if (layout.length > 0) {
     totalAdvance -= font.spacing * scale;
   }
+  // LR2 alignment is ANCHOR-based, not box-based: `x` is the
+  // alignment-dependent anchor point (left edge / horizontal
+  // centre / right edge), NOT a box origin paired with `w` as the
+  // box width. We learnt this empirically from the LR2 default
+  // theme's SYSTEM OPTION panel — the buttons live at `x=192,w=95`
+  // (visual frame 192..287) while the value-text DST sits at
+  // `x=239,w=73` (text rect 239..312). With `align=1` the text was
+  // rendering centred within (239,312), which lands far to the
+  // right of the button frame's centre (239.5). Treating `x=239`
+  // as the centre anchor instead places the text right where the
+  // skin author drew the box — ignore `w` for positioning here.
   let cursorX = rect.x;
   if (element.alignment === 'right') {
-    cursorX = rect.x + (rect.w > 0 ? rect.w : 0) - totalAdvance;
+    cursorX = rect.x - totalAdvance;
   } else if (element.alignment === 'center') {
-    cursorX = rect.x + ((rect.w > 0 ? rect.w : 0) - totalAdvance) / 2;
+    cursorX = rect.x - totalAdvance / 2;
   }
   const tint = (dst.r << 16) | (dst.g << 8) | dst.b;
   for (const item of layout) {

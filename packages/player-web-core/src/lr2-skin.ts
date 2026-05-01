@@ -741,17 +741,24 @@ export interface Lr2Skin {
   customOptions: Lr2CustomOption[];
   customFiles: Lr2CustomFile[];
   /**
-   * `#LR2FONT,n,path` declarations in CSV-stream order. Each
-   * entry is the resolved relative path (post-CUSTOMFILE
-   * substitution); array index = font index referenced by
-   * `#SRC_TEXT`'s `font` field. Loaded lazily by the host —
-   * see `Lr2LoadedFont` for the runtime payload.
+   * `#LR2FONT,path` declarations in CSV-stream order. Each entry
+   * is the resolved relative path (post-CUSTOMFILE substitution).
+   *
+   * Indexed independently from `systemFontSizes`: the `font`
+   * field in `#SRC_TEXT` first looks up `lr2FontPaths[font]`
+   * (bitmap path) and only falls through to
+   * `systemFontSizes[font]` (system size) on miss. The two
+   * registries are PAIRED by per-kind index — slot 0 means "the
+   * 1st bitmap font OR the 1st system font", not "global
+   * declaration #0".
    */
   lr2FontPaths: string[];
   /**
-   * `#FONT,size,...` declarations in CSV-stream order. Sizes are
-   * the only field LR2 honours; we use them as the system-font
-   * fallback height when `#LR2FONT` isn't loaded for that index.
+   * `#FONT,size,...` declarations in CSV-stream order. See
+   * {@link Lr2Skin.lr2FontPaths} for the per-kind indexing
+   * model. Sizes are the only `#FONT` field LR2 honours — the
+   * family / weight / style triplet is ignored because LR2
+   * always reads the user's SET UP option for those.
    */
   systemFontSizes: number[];
   transparentColor?: { r: number; g: number; b: number };
@@ -1391,22 +1398,37 @@ function readLr2Path(
       const expanded = context.customFileLookup.get(normalized.toLowerCase()) ?? normalized;
       context.imagePaths.push(expanded);
     } else if (command === '#LR2FONT') {
-      // Each `#LR2FONT,relativePath[,1=force-bitmap]` declaration
-      // gets the next sequential font index. The actual `.lr2font`
-      // file is loaded out-of-band by the host and supplied to
-      // the renderer via `Lr2BitmapFont` payloads — here we only
-      // capture the declared path so the host knows what to load.
+      // `#LR2FONT,relativePath[,1=force-bitmap]` is the **bitmap
+      // font** registry. It's indexed independently from the
+      // `#FONT` system-font registry — both share the `font` field
+      // in `#SRC_TEXT` but each array is keyed by its own per-kind
+      // position. So a CSV like:
+      // ```
+      // #FONT,18,...        ← system slot 0
+      // #FONT,42,...        ← system slot 1
+      // #LR2FONT,barfnt     ← bitmap slot 0
+      // #LR2FONT,titlefont  ← bitmap slot 1
+      // ```
+      // pairs the system fallback at index N with the bitmap at
+      // index N. `#SRC_TEXT,..., font=N, ...` first looks up
+      // bitmap[N]; on miss it falls back to system[N] for the
+      // size + face hint. This per-kind indexing is what LR2 the
+      // application does and is required by the LR2 default
+      // theme — its `select.csv` uses `font=4` for the PLAY
+      // OPTION text expecting `#LR2FONT[4]` (= optionfont) to
+      // render the value, not the 5th global declaration.
       const normalized = normalizeLr2Path(row[1] ?? '');
-      if (normalized.length > 0) {
-        const expanded = context.customFileLookup.get(normalized.toLowerCase()) ?? normalized;
-        context.lr2FontPaths.push(expanded);
-      } else {
-        context.lr2FontPaths.push('');
-      }
+      const expanded =
+        normalized.length > 0
+          ? (context.customFileLookup.get(normalized.toLowerCase()) ?? normalized)
+          : '';
+      context.lr2FontPaths.push(expanded);
     } else if (command === '#FONT') {
-      // System-font fallback (`#FONT,size,thick,style,name`). LR2
-      // ignores the name and uses the user's SET UP option, so we
-      // only capture the size for our system-font fallback path.
+      // `#FONT,size,thick,style,name` — system-font fallback
+      // registry. See the `#LR2FONT` block above for the
+      // per-kind indexing rationale. LR2 ignores the name and
+      // uses the user's SET UP option, so we only capture the
+      // size for our render-time text-style decision.
       const size = Math.max(1, Math.trunc(toNumber(row[1], 12)));
       context.systemFontSizes.push(size);
     } else if (command === '#TRANSCOLOR') {

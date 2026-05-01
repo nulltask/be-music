@@ -516,7 +516,12 @@ export class PixiResultView {
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const value = resolveResultText(text.st, this.result);
       if (value === undefined || value.length === 0) continue;
-      this.skinLayer.addChild(makeLr2TextSprite(value, text, dst, { bitmapFonts: this.bitmapFonts }));
+      this.skinLayer.addChild(
+        makeLr2TextSprite(value, text, dst, {
+          bitmapFonts: this.bitmapFonts,
+          systemFontSizes: skin.systemFontSizes,
+        }),
+      );
     }
     // BARGRAPH / SLIDER: result-screen skins use these for the
     // EX-score / rate progress bars next to the digit panels. The

@@ -19,6 +19,17 @@ export interface Lr2TextSpriteOptions {
    * matching what real LR2 paints with `#SRC_TEXT`.
    */
   bitmapFonts?: ReadonlyMap<number, Lr2LoadedFont>;
+  /**
+   * `#FONT,size,...` declarations indexed by the same global
+   * font slot as `bitmapFonts`. Used by the system-font fallback
+   * branch to pick the size the skin actually asked for —
+   * without this, every system-font label collapses to the
+   * generic `rect.h - 2` heuristic and visibly disagrees with
+   * the LR2 reference (e.g. the LR2 default theme's PLAY OPTION
+   * row declares `#FONT,18,...` but the rect height is closer to
+   * 30, so the heuristic over-shoots).
+   */
+  systemFontSizes?: ReadonlyArray<number>;
 }
 
 export function resolveScaledViewport(
@@ -83,7 +94,15 @@ export function makeLr2TextSprite(
     return makeLr2BitmapTextSprite(value, element, dst, loaded);
   }
   const rect = normaliseRect(dst);
-  const fontSize = clampFontSize(rect.h - 2, 8, options.maxFontSize ?? 18);
+  // Prefer the size declared by the skin's `#FONT` for this slot.
+  // Falls back to the rect-height heuristic only when there's no
+  // declaration at all (e.g. older skins that omit `#FONT` and
+  // rely on rect-driven sizing). The clamp still applies as a
+  // safety net — a malformed `#FONT,9999` shouldn't blow out the
+  // text bounds.
+  const declaredSize = options.systemFontSizes?.[element.font];
+  const desiredSize = declaredSize !== undefined && declaredSize > 0 ? declaredSize : rect.h - 2;
+  const fontSize = clampFontSize(desiredSize, 8, options.maxFontSize ?? 64);
   const text = new Text({
     text: value,
     style: new TextStyle({
@@ -97,6 +116,11 @@ export function makeLr2TextSprite(
   });
   text.label = `text[st=${element.st}]`;
   text.alpha = dst.alpha;
+  // LR2 alignment is ANCHOR-based: `dst.x` is the
+  // alignment-dependent anchor point (left edge / centre / right
+  // edge), not a box origin paired with `dst.w` as a box width.
+  // See `lr2-bitmap-text.ts` for the empirical justification —
+  // same skin-author convention applies to the system-font path.
   if (element.alignment === 'center') {
     text.anchor.set(0.5, 0);
   } else if (element.alignment === 'right') {

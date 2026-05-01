@@ -30,6 +30,7 @@ import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { disposeChildren } from './pixi-utils.ts';
 import { groupSongsByFolder, resolveSongSource } from './library.ts';
+import { dirname } from '@be-music/utils/core';
 import { ChartPreviewEngine } from './chart-preview.ts';
 import {
   Lr2ChartGraphicTextureStore,
@@ -49,6 +50,20 @@ const TEXT = new Color('#f8fafc');
 const MUTED = new Color('#9aa6b2');
 const FALLBACK_DESIGN_WIDTH = 1280;
 const FALLBACK_DESIGN_HEIGHT = 720;
+
+/**
+ * Pixel scroll step for the readtext modal's arrow-key nudge —
+ * roughly two lines at the body's 14px / 18px line-height. Wheel
+ * input uses the browser's native `deltaY` (already in pixels) so
+ * it doesn't need this constant.
+ */
+const READTEXT_LINE_SCROLL = 36;
+/**
+ * PageUp / PageDown / Space scroll step — most of a viewport,
+ * leaving a couple of lines of overlap so the user can re-find
+ * their place after the jump.
+ */
+const READTEXT_PAGE_SCROLL = 360;
 
 /**
  * Globally-true ops that hold regardless of which song is focused —
@@ -676,6 +691,78 @@ export class PixiSongSelectView {
    */
   private readonly skinForegroundLayer = new Container();
   /**
+   * Top-most overlay used by the LR2 READTEXT button (#SRC_BUTTON
+   * type 17). Hidden until the user clicks the button on a song
+   * whose folder ships a `.txt` file. The skin's own readtext UI
+   * lives on its own panel timer (15 / 16) and we don't have the
+   * chrome for that yet — render a no-frills modal so the
+   * feature is at least usable.
+   */
+  private readonly readTextLayer = new Container();
+  private readonly readTextBackdrop = new Graphics();
+  private readonly readTextCard = new Graphics();
+  private readonly readTextTitle = new Text({
+    text: 'Readme',
+    style: new TextStyle({
+      fill: TEXT,
+      // Match the rest of the select-scene UI chrome — same
+      // weight / family used by `title` (the empty-state header)
+      // and the result-screen panel labels. No `letterSpacing`
+      // tracking — that was a leftover from the all-caps draft
+      // and looks sparse with mixed-case.
+      fontSize: 22,
+      fontWeight: '700',
+      fontFamily: 'system-ui, sans-serif',
+    }),
+  });
+  /**
+   * Scroll viewport for the readtext body. The body lives inside
+   * this container with a mask matching `readTextViewportMask`, so
+   * negative-Y offsets clip to the visible card area instead of
+   * overflowing onto the surrounding skin / decide layer.
+   */
+  private readonly readTextViewport = new Container();
+  private readonly readTextViewportMask = new Graphics();
+  private readonly readTextBody = new Text({
+    text: '',
+    style: new TextStyle({
+      fill: TEXT,
+      fontSize: 14,
+      // Author notes are typically pre-formatted ASCII art /
+      // tables / column-aligned changelogs; a monospace font
+      // preserves that layout. CJK glyphs fall back to the
+      // browser's monospace JP face automatically.
+      fontFamily: 'ui-monospace, monospace',
+      wordWrap: true,
+      wordWrapWidth: 600,
+      lineHeight: 18,
+    }),
+  });
+  /** Scrollbar gutter + thumb (only visible when content overflows). */
+  private readonly readTextScrollbar = new Graphics();
+  /**
+   * Footer hint inside the modal — the close shortcut would
+   * otherwise be invisible (no native `[x]` close button on the
+   * Pixi card). Mirrors the LR2 default skin's right-hand README
+   * panel which always shows the dismiss key in-frame.
+   */
+  private readonly readTextFooter = new Text({
+    text: '↑↓ / Wheel to scroll · Enter or click to close',
+    style: new TextStyle({
+      fill: MUTED,
+      fontSize: 12,
+      fontFamily: 'system-ui, sans-serif',
+    }),
+  });
+  /** True while the readtext modal is open. */
+  private readTextOpen = false;
+  /**
+   * Pixel offset of the readtext body inside its viewport. Always
+   * a non-negative integer; clamped to `[0, max(0, bodyH - viewH)]`
+   * by `renderReadTextOverlay` whenever the modal re-renders.
+   */
+  private readTextScroll = 0;
+  /**
    * Per-frame section timing tracker. Logs every second when enabled
    * via `?perf` URL flag or `globalThis.__BE_MUSIC_PERF__ = true`.
    */
@@ -1179,6 +1266,25 @@ export class PixiSongSelectView {
       this.skinForegroundLayer,
       this.title,
       this.hint,
+      this.readTextLayer,
+    );
+    this.readTextLayer.label = 'select/read-text';
+    this.readTextLayer.visible = false;
+    this.readTextViewport.addChild(this.readTextBody);
+    // Pixi v8 mask: the mask graphic must live in the scene graph
+    // (so its world transform is current) but stays invisible
+    // visually — it's only used for clipping. Adding it as a
+    // sibling of the viewport keeps both transforms in sync with
+    // any future readtext-layer translation.
+    this.readTextViewport.mask = this.readTextViewportMask;
+    this.readTextLayer.addChild(
+      this.readTextBackdrop,
+      this.readTextCard,
+      this.readTextTitle,
+      this.readTextViewport,
+      this.readTextViewportMask,
+      this.readTextScrollbar,
+      this.readTextFooter,
     );
     // Attach to the host's already-initialised stage. The canvas is
     // owned by the host and shared across scenes.
@@ -1277,6 +1383,14 @@ export class PixiSongSelectView {
    * direction.
    */
   private noteCursorChange(delta: number): void {
+    // Cursor moved → readtext modal's content no longer matches
+    // the focused song. Close it without an audible cue (the
+    // `cursor-move` click below already conveys the bar move) so
+    // the user doesn't get a double-blip on every wheel notch.
+    if (this.readTextOpen) {
+      this.readTextOpen = false;
+      this.readTextLayer.visible = false;
+    }
     const now = performance.now();
     this.timerStartedAt.set(10, now);
     this.timerStartedAt.set(11, now);
@@ -2094,7 +2208,13 @@ export class PixiSongSelectView {
    * static endpoint).
    */
   private handleSkinHitTest(skin: Lr2Skin, virtualX: number, virtualY: number): boolean {
-    const ops = computeSelectOps(this.focusedSong(), this.panelStates, this.playOptions, skin.customOptions);
+    const ops = computeSelectOps(
+      this.focusedSong(),
+      this.panelStates,
+      this.playOptions,
+      skin.customOptions,
+      this.collection,
+    );
     for (const button of skin.buttons) {
       if (button.click !== 1) continue;
       if (!this.isPanelOpen(button.panel)) continue;
@@ -2251,6 +2371,8 @@ export class PixiSongSelectView {
     if (!focused) return;
     if (type === 15) {
       this.options.onSongSelected?.(focused);
+    } else if (type === 17) {
+      this.toggleReadText(focused);
     } else if (type === 16) {
       // AUTOPLAY: prefer the dedicated callback when supplied,
       // otherwise fall through to the regular start path so the
@@ -2280,6 +2402,137 @@ export class PixiSongSelectView {
    * `o-change.wav` cue so the panel-open keyboard shortcuts feel
    * like the rest of the option-bus.
    */
+  /**
+   * Toggles the READTEXT modal for the focused song. Looks for a
+   * `.txt` file in the song's directory and shows its contents
+   * in a centred Pixi card. Closes on second click / Escape /
+   * cursor move to a different song.
+   */
+  private toggleReadText(song: BrowserSongEntry): void {
+    if (this.readTextOpen) {
+      this.closeReadText();
+      return;
+    }
+    const text = findReadtextForSong(this.collection, song);
+    if (!text) {
+      // No `.txt` companion — give brief audible feedback so the
+      // user knows the click registered, then bail out.
+      void this.playOneShotSound('option-change');
+      return;
+    }
+    this.readTextBody.text = text;
+    // Reset scroll on every open so the user always lands at the
+    // top of a freshly-loaded README, even if they had scrolled
+    // through a previous one in the same session.
+    this.readTextScroll = 0;
+    this.readTextOpen = true;
+    this.readTextLayer.visible = true;
+    void this.playOneShotSound('option-open');
+    this.render();
+  }
+
+  /**
+   * Adjusts the readtext body's scroll offset by `delta` pixels
+   * (positive = scroll down). Clamps to the body / viewport
+   * extents — overflow checks happen in
+   * {@link renderReadTextOverlay}, but we also clamp here so
+   * repeated wheel events at the bottom don't keep growing the
+   * stored offset (which would cause a "rubber band" effect when
+   * the viewport size later changes).
+   */
+  private scrollReadText(delta: number): void {
+    if (!this.readTextOpen) return;
+    const next = Math.max(0, this.readTextScroll + delta);
+    if (next === this.readTextScroll) return;
+    this.readTextScroll = next;
+    this.render();
+  }
+
+  /**
+   * Hides the READTEXT modal, fires the LR2 panel-close cue, and
+   * re-renders. Safe to call when already closed (no-op + no cue),
+   * which lets `noteCursorChange` blindly invoke it on every bar
+   * move without churning sound effects.
+   */
+  private closeReadText(): void {
+    if (!this.readTextOpen) return;
+    this.readTextOpen = false;
+    this.readTextLayer.visible = false;
+    void this.playOneShotSound('option-close');
+    this.render();
+  }
+
+  private renderReadTextOverlay(designWidth: number, designHeight: number): void {
+    if (!this.readTextOpen) {
+      this.readTextLayer.visible = false;
+      return;
+    }
+    this.readTextLayer.visible = true;
+    this.readTextBackdrop.clear().rect(0, 0, designWidth, designHeight).fill({ color: 0x000000, alpha: 0.85 });
+    const cardWidth = Math.min(800, designWidth - 80);
+    const cardHeight = Math.min(560, designHeight - 80);
+    const cardX = Math.round((designWidth - cardWidth) / 2);
+    const cardY = Math.round((designHeight - cardHeight) / 2);
+    this.readTextCard
+      .clear()
+      .roundRect(cardX, cardY, cardWidth, cardHeight, 12)
+      .fill({ color: 0x111318, alpha: 0.96 })
+      .stroke({ color: 0x2a2f3a, width: 2 });
+    this.readTextTitle.position.set(cardX + 24, cardY + 16);
+    // Reserve a 12px gutter on the right for the scrollbar so the
+    // body never reflows on overflow. Wrap width drives Pixi's
+    // word-wrap layout — drop the gutter from the card padding
+    // (24px each side).
+    const gutter = 12;
+    const padX = 24;
+    const headerH = 56;
+    // Reserve enough vertical room at the bottom for the footer
+    // hint so the body never overlaps the close-instructions row.
+    const footerH = 32;
+    const viewportX = cardX + padX;
+    const viewportY = cardY + headerH;
+    const viewportW = cardWidth - padX * 2 - gutter;
+    const viewportH = cardHeight - headerH - footerH;
+    this.readTextFooter.position.set(cardX + padX, cardY + cardHeight - footerH + 8);
+    this.readTextBody.style.wordWrapWidth = viewportW;
+    // Clamp the stored scroll against the freshly-measured body
+    // height so the body can never scroll past its last line. We
+    // do this AFTER setting the wrap width so `body.height` reflects
+    // the current layout.
+    const bodyH = this.readTextBody.height;
+    const maxScroll = Math.max(0, bodyH - viewportH);
+    if (this.readTextScroll > maxScroll) this.readTextScroll = maxScroll;
+    // Position the viewport at the body's top-left and offset the
+    // body itself by `-scroll` so it slides up as the user scrolls
+    // down. Using the viewport as the positioning anchor (rather
+    // than nudging the body absolute) keeps the mask-relative
+    // hit-testing simple if we ever wire pointer-driven scrolling.
+    this.readTextViewport.position.set(viewportX, viewportY);
+    this.readTextBody.position.set(0, -this.readTextScroll);
+    // Mask geometry must be redrawn each frame — the card's size
+    // depends on the screen, and Pixi's mask uses the graphic's
+    // current geometry verbatim.
+    this.readTextViewportMask.clear().rect(viewportX, viewportY, viewportW, viewportH).fill({ color: 0xffffff });
+    // Scrollbar — render only when the body overflows. The track
+    // is a faint gutter and the thumb is sized proportionally to
+    // the visible fraction of the body.
+    this.readTextScrollbar.clear();
+    if (maxScroll > 0) {
+      const trackX = cardX + cardWidth - padX;
+      const trackY = viewportY;
+      const trackW = 4;
+      const trackH = viewportH;
+      this.readTextScrollbar
+        .rect(trackX, trackY, trackW, trackH)
+        .fill({ color: 0xffffff, alpha: 0.06 });
+      const thumbH = Math.max(24, (viewportH / bodyH) * trackH);
+      const thumbY = trackY + (this.readTextScroll / maxScroll) * (trackH - thumbH);
+      this.readTextScrollbar
+        .rect(trackX, thumbY, trackW, thumbH)
+        .fill({ color: 0xffffff, alpha: 0.45 });
+    }
+  }
+
   private adjustShutter(direction: 1 | -1): void {
     const next = clampShutter(this.playOptions.shutter + direction * SHUTTER_STEP);
     if (next === this.playOptions.shutter) return;
@@ -2355,6 +2608,14 @@ export class PixiSongSelectView {
     if (!this.visible) return;
     if (event.deltaY === 0) return;
     event.preventDefault();
+    // While the readtext modal is open, the wheel scrolls the
+    // README body instead of moving the bar cursor. Otherwise the
+    // user couldn't pan a long author note without first closing
+    // the overlay.
+    if (this.readTextOpen) {
+      this.scrollReadText(event.deltaY);
+      return;
+    }
     const entries = this.currentEntries();
     if (entries.length === 0) return;
     const direction = event.deltaY > 0 ? 1 : -1;
@@ -2379,6 +2640,18 @@ export class PixiSongSelectView {
     // context suspended. Cheap to call repeatedly (early-returns
     // when a source is already playing).
     void this.startSelectBgm();
+    // README modal owns the pointer while open. LR2 uses Enter
+    // (the decide key) for panel close, mirrored on the keyboard
+    // path; on the mouse side we accept any click anywhere as a
+    // dismiss to cover users who'd reach for "click outside the
+    // card" before reading the footer hint. The README content
+    // itself isn't interactive so consuming the click loses no
+    // affordance.
+    if (this.readTextOpen) {
+      event.preventDefault();
+      this.closeReadText();
+      return;
+    }
     // No `canvas.focus()` — we listen for `keydown` on `window`, so
     // capturing focus here would needlessly pull it away from any
     // form input the user might already be typing into.
@@ -2481,6 +2754,59 @@ export class PixiSongSelectView {
     if (event.code === 'Space') {
       event.preventDefault();
       this.togglePanel(1);
+      return;
+    }
+    // While the README modal is open it owns the keyboard. LR2's
+    // canonical close key is Enter (the decide / confirm key);
+    // from the keyboard:
+    // - Enter / Backspace close it. Enter is the LR2-faithful
+    //   shortcut hinted in the modal footer; Backspace is a
+    //   secondary "go back" alias. Esc is intentionally NOT
+    //   bound — LR2 doesn't use it for panel close, and reusing
+    //   it here would diverge from the host's skin-faithful
+    //   interaction model.
+    // - ↑ / ↓ / PageUp / PageDown / Home / End / Space scroll the
+    //   body. Falling through to the cursor-move handlers would
+    //   defeat the modal — the bar cursor would race past songs
+    //   while the user is just trying to read the note.
+    if (this.readTextOpen) {
+      if (event.key === 'Backspace' || event.key === 'Enter') {
+        event.preventDefault();
+        this.closeReadText();
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        this.scrollReadText(READTEXT_LINE_SCROLL);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        this.scrollReadText(-READTEXT_LINE_SCROLL);
+        return;
+      }
+      if (event.key === 'PageDown' || event.key === ' ') {
+        event.preventDefault();
+        this.scrollReadText(READTEXT_PAGE_SCROLL);
+        return;
+      }
+      if (event.key === 'PageUp') {
+        event.preventDefault();
+        this.scrollReadText(-READTEXT_PAGE_SCROLL);
+        return;
+      }
+      if (event.key === 'Home') {
+        event.preventDefault();
+        this.scrollReadText(-Number.MAX_SAFE_INTEGER);
+        return;
+      }
+      if (event.key === 'End') {
+        event.preventDefault();
+        this.scrollReadText(Number.MAX_SAFE_INTEGER);
+        return;
+      }
+      // Any other key — swallow so it doesn't leak through to
+      // the panel / cursor handlers below.
       return;
     }
     // While any panel is open, Escape closes it instead of popping
@@ -2633,7 +2959,13 @@ export class PixiSongSelectView {
       //      LR2 skins gate with op 70..195.
       //   2. Avoid recomputing the same `Set` per element.
       const ops = this.perf.time('computeOps', () =>
-        computeSelectOps(this.focusedSong(), this.panelStates, this.playOptions, skin.customOptions),
+        computeSelectOps(
+          this.focusedSong(),
+          this.panelStates,
+          this.playOptions,
+          skin.customOptions,
+          this.collection,
+        ),
       );
       this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, ops));
       this.perf.time('renderSkinBars', () => this.renderSkinBars(skin, ops));
@@ -2642,6 +2974,7 @@ export class PixiSongSelectView {
       if (this.collection.songs.length === 0) {
         this.renderEmptyStateHint();
       }
+      this.renderReadTextOverlay(designWidth, designHeight);
       return;
     }
 
@@ -2671,6 +3004,7 @@ export class PixiSongSelectView {
       }
       this.drawFallbackSongRow(song, songIndex, visibleIndex, designWidth);
     }
+    this.renderReadTextOverlay(designWidth, designHeight);
   }
 
   /**
@@ -2844,7 +3178,10 @@ export class PixiSongSelectView {
         continue;
       }
       this.pickChromeLayer(text.declarationOrder).addChild(
-        makeLr2TextSprite(value, text, dst, { bitmapFonts: this.bitmapFonts }),
+        makeLr2TextSprite(value, text, dst, {
+          bitmapFonts: this.bitmapFonts,
+          systemFontSizes: skin.systemFontSizes,
+        }),
       );
     }
 
@@ -3637,6 +3974,7 @@ function computeSelectOps(
   panelStates: ReadonlySet<number> = EMPTY_PANEL_STATES,
   playOptions: PixiPlayOptions = DEFAULT_PLAY_OPTIONS,
   customOptions: ReadonlyArray<{ defaultOp: number }> = [],
+  collection?: BrowserSongCollection,
 ): ReadonlySet<number> {
   const ops = new Set<number>(SELECT_BASE_OPS);
   // LR2 ops 1..9 carry panel-open state. Skin elements gated on
@@ -3720,7 +4058,14 @@ function computeSelectOps(
   const features = detectChartFeatures(song);
   ops.add(features.bga ? SELECT_DYNAMIC_OPS.BGA_PRESENT : SELECT_DYNAMIC_OPS.BGA_ABSENT);
   ops.add(features.longNote ? SELECT_DYNAMIC_OPS.LN_PRESENT : SELECT_DYNAMIC_OPS.LN_ABSENT);
-  ops.add(features.text ? SELECT_DYNAMIC_OPS.TEXT_PRESENT : SELECT_DYNAMIC_OPS.TEXT_ABSENT);
+  // op 174 / 175 = 付属テキスト無 / 有 (LR2SkinHelp.md). Despite the
+  // name "TEXT", these gate on the **companion `.txt`** in the
+  // song folder (the README the READTEXT button surfaces) — NOT
+  // on `#TEXT01..` resources embedded inside the chart. Skinning
+  // that gates the READTEXT button (`#SRC_BUTTON,...,17,...`) on
+  // op 175 leaves it permanently DISABLED otherwise.
+  const hasReadtext = collection !== undefined && hasReadtextForSong(collection, song);
+  ops.add(hasReadtext ? SELECT_DYNAMIC_OPS.TEXT_PRESENT : SELECT_DYNAMIC_OPS.TEXT_ABSENT);
   ops.add(features.bpmChange ? SELECT_DYNAMIC_OPS.BPM_CHANGE_PRESENT : SELECT_DYNAMIC_OPS.BPM_CHANGE_ABSENT);
   ops.add(features.random ? SELECT_DYNAMIC_OPS.RANDOM_PRESENT : SELECT_DYNAMIC_OPS.RANDOM_ABSENT);
 
@@ -3843,7 +4188,6 @@ function resolveKeyModeOp(song: BrowserSongEntry): number {
 function detectChartFeatures(song: BrowserSongEntry): {
   bga: boolean;
   longNote: boolean;
-  text: boolean;
   bpmChange: boolean;
   random: boolean;
 } {
@@ -3855,8 +4199,6 @@ function detectChartFeatures(song: BrowserSongEntry): {
   const longNote =
     (chart.bms.lnObjs?.length ?? 0) > 0 ||
     chart.events.some((event) => event.channel.startsWith('5') || event.channel.startsWith('6'));
-  // Attached text: `#TEXT` resources.
-  const text = Object.keys(chart.resources.text).length > 0;
   // BPM change: channel 03 (inline hex) or 08 (lookup) carries BPM ops.
   const bpmChange = chart.events.some((event) => event.channel === '03' || event.channel === '08');
   // RANDOM control-flow lives in `chart.bms.controlFlow` and uses the
@@ -3865,7 +4207,25 @@ function detectChartFeatures(song: BrowserSongEntry): {
   const random = chart.bms.controlFlow.some(
     (entry) => entry.kind === 'directive' && (entry.command === 'RANDOM' || entry.command === 'SETRANDOM'),
   );
-  return { bga, longNote, text, bpmChange, random };
+  return { bga, longNote, bpmChange, random };
+}
+
+/**
+ * Cheap predicate variant of {@link findReadtextForSong} that only
+ * answers "is there a `.txt` companion?" without decoding the
+ * bytes. Used by `computeSelectOps` per cursor change to decide
+ * the LR2 op 174 / 175 (付属テキスト無 / 有) gate. Decoding only
+ * happens on demand when the user opens the modal.
+ */
+function hasReadtextForSong(collection: BrowserSongCollection, song: BrowserSongEntry): boolean {
+  const source = resolveSongSource(collection, song);
+  if (!source) return false;
+  const dir = dirname(song.chartPath).toLowerCase();
+  for (const path of source.files.keys()) {
+    if (!path.toLowerCase().endsWith('.txt')) continue;
+    if (dirname(path).toLowerCase() === dir) return true;
+  }
+  return false;
 }
 
 /**
@@ -4322,6 +4682,64 @@ function matchesDifficultyFilter(song: BrowserSongEntry, target: number): boolea
   const value = song.chart.metadata.difficulty;
   if (value === undefined || value === 0) return false;
   return value === target;
+}
+
+/**
+ * Looks up a `.txt` companion file in the same directory as the
+ * focused song's chart and returns its decoded contents. Used by
+ * the LR2 READTEXT button (`#SRC_BUTTON,...,17,...`) to surface
+ * per-song notes / changelogs that BMS authors traditionally ship
+ * alongside the chart files.
+ *
+ * Resolution rules — kept deliberately tolerant so we don't need
+ * the source to follow any specific naming convention:
+ *
+ * - Only files **directly inside** the chart's directory are
+ *   considered (no recursing into sub-folders, no walking up to
+ *   the source root).
+ * - The first matching file wins. The map iteration order is the
+ *   source's insertion order (which mirrors the directory listing
+ *   on the directory loader / the central directory order on the
+ *   ZIP loader), so this is stable per source.
+ * - Returns `undefined` when the song has no resolvable source or
+ *   no sibling `.txt` exists, letting the caller play the
+ *   "no readtext" feedback cue instead of opening an empty modal.
+ */
+function findReadtextForSong(
+  collection: BrowserSongCollection,
+  song: BrowserSongEntry,
+): string | undefined {
+  const source = resolveSongSource(collection, song);
+  if (!source) return undefined;
+  const dir = dirname(song.chartPath).toLowerCase();
+  for (const [path, bytes] of source.files) {
+    if (!path.toLowerCase().endsWith('.txt')) continue;
+    if (dirname(path).toLowerCase() !== dir) continue;
+    return decodeReadtextBytes(bytes);
+  }
+  return undefined;
+}
+
+/**
+ * Decodes raw `.txt` bytes to a string. BMS author notes are
+ * historically Shift-JIS (the LR2 era's default codepage on
+ * Japanese Windows installs), but modern releases sometimes ship
+ * as UTF-8 with or without a BOM. Try UTF-8 first when a BOM is
+ * present (unambiguous), then probe Shift-JIS, and finally fall
+ * back to lossy UTF-8 so we always return *some* string rather
+ * than failing the modal open.
+ */
+function decodeReadtextBytes(bytes: Uint8Array): string {
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(3));
+  }
+  try {
+    const sjis = new TextDecoder('shift-jis', { fatal: false }).decode(bytes);
+    if (sjis.length > 0 && !sjis.includes('�')) return sjis;
+  } catch {
+    // `shift-jis` not available in this runtime — fall through.
+  }
+  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
 }
 
 export function matchesSearchQuery(entry: BrowserBrowseEntry, lowerQuery: string): boolean {
