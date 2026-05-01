@@ -11,14 +11,18 @@ import {
   type Lr2ImageElement,
   type Lr2Skin,
   type Lr2SpecialGraphic,
-  type Lr2TextElement,
   LR2_SPECIAL_GRAPHIC,
   isLr2SpecialGraphic,
 } from './lr2-skin.ts';
-import { loadSkinAssetTexture, loadTextureFromBytes } from './lr2-textures.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { disposeChildren } from './pixi-utils.ts';
-import { resolveChartAsset, resolveSongSource } from './library.ts';
+import {
+  Lr2ChartGraphicTextureStore,
+  Lr2SkinTextureStore,
+  collectDecideSkinTexturePaths,
+  resolveSolidSpecialGraphicTexture,
+} from './lr2-scene-textures.ts';
+import { isDestinationVisible, makeLr2TextSprite, resolveScaledViewport } from './lr2-scene-render.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
 /**
@@ -53,8 +57,6 @@ import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
  */
 const FALLBACK_DESIGN_WIDTH = 1280;
 const FALLBACK_DESIGN_HEIGHT = 720;
-const LR2_DESIGN_WIDTH = 640;
-const LR2_DESIGN_HEIGHT = 480;
 const BG = new Color('#05070b');
 const TEXT_COLOR = new Color('#f8fafc');
 const MUTED = new Color('#9aa6b2');
@@ -157,9 +159,8 @@ export class PixiDecideView {
   private readonly stageFileLayer = new Container();
   private readonly skinLayer = new Container();
   private readonly fallbackLayer = new Container();
-  private readonly skinTextures = new Map<string, Texture>();
-  private readonly chartGraphicTextures = new Map<string, Texture>();
-  private readonly chartGraphicPending = new Set<string>();
+  private readonly skinTextures = new Lr2SkinTextureStore();
+  private readonly chartGraphicTextures = new Lr2ChartGraphicTextureStore();
   private target: PixiDecideTarget | undefined;
   private sceneStartedAt = 0;
   private animationFrame = 0;
@@ -245,14 +246,8 @@ export class PixiDecideView {
       this.sceneRoot.parent.removeChild(this.sceneRoot);
     }
     try {
-      for (const texture of this.skinTextures.values()) {
-        texture.destroy(true);
-      }
-      this.skinTextures.clear();
-      for (const texture of this.chartGraphicTextures.values()) {
-        texture.destroy(true);
-      }
-      this.chartGraphicTextures.clear();
+      this.skinTextures.dispose();
+      this.chartGraphicTextures.dispose();
     } catch (error) {
       // eslint-disable-next-line no-console
       console.warn('[decide] texture cleanup threw', error);
@@ -267,29 +262,14 @@ export class PixiDecideView {
   }
 
   private async prepareSkinTextures(skin: Lr2Skin): Promise<void> {
-    const referencedPaths = new Set<string>();
-    for (const image of skin.images) {
-      if (!isLr2SpecialGraphic(image.source.imagePath)) {
-        referencedPaths.add(image.source.imagePath);
-      }
-    }
-    for (const number of skin.numbers) {
-      referencedPaths.add(number.source.imagePath);
-    }
-    await Promise.all(
-      [...referencedPaths].map(async (path) => {
-        const texture = await loadSkinAssetTexture(skin, path);
-        if (this.disposed) {
-          texture?.destroy(true);
-          return;
-        }
-        if (texture) {
-          this.skinTextures.set(path, texture);
-        }
-      }),
+    const loaded = await this.skinTextures.preload(
+      skin,
+      collectDecideSkinTexturePaths(skin),
+      () => !this.disposed && this.options.skin === skin,
     );
-    if (this.disposed) return;
-    this.render();
+    if (loaded) {
+      this.render();
+    }
   }
 
   private startAnimationLoop(): void {
@@ -348,13 +328,13 @@ export class PixiDecideView {
     if (!target) return;
     const stageFilePath = target.song.chart.metadata.stageFile;
     if (!stageFilePath) return;
-    const cacheKey = `${target.song.id}:${LR2_SPECIAL_GRAPHIC.STAGEFILE}`;
-    let texture = this.chartGraphicTextures.get(cacheKey);
+    const texture = this.chartGraphicTextures.resolve(
+      target.collection,
+      target.song,
+      LR2_SPECIAL_GRAPHIC.STAGEFILE,
+      () => this.render(),
+    );
     if (!texture) {
-      if (!this.chartGraphicPending.has(cacheKey)) {
-        this.chartGraphicPending.add(cacheKey);
-        void this.loadChartGraphic(LR2_SPECIAL_GRAPHIC.STAGEFILE, cacheKey);
-      }
       return;
     }
     const sprite = new Sprite(texture);
@@ -378,7 +358,7 @@ export class PixiDecideView {
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const value = resolveDecideText(text.st, this.target.song);
       if (value === undefined || value.length === 0) continue;
-      this.skinLayer.addChild(makeTextSprite(value, text, dst));
+      this.skinLayer.addChild(makeLr2TextSprite(value, text, dst, { maxFontSize: 22 }));
     }
   }
 
@@ -472,50 +452,13 @@ export class PixiDecideView {
    * render pass picks the cached texture up.
    */
   private resolveSpecialGraphicTexture(path: Lr2SpecialGraphic): Texture | undefined {
-    if (path === LR2_SPECIAL_GRAPHIC.BLACK || path === LR2_SPECIAL_GRAPHIC.WHITE) {
-      return Texture.WHITE;
+    const solidTexture = resolveSolidSpecialGraphicTexture(path);
+    if (solidTexture) {
+      return solidTexture;
     }
     const target = this.target;
     if (!target) return undefined;
-    const cacheKey = `${target.song.id}:${path}`;
-    const cached = this.chartGraphicTextures.get(cacheKey);
-    if (cached) return cached;
-    if (!this.chartGraphicPending.has(cacheKey)) {
-      this.chartGraphicPending.add(cacheKey);
-      void this.loadChartGraphic(path, cacheKey);
-    }
-    return undefined;
-  }
-
-  private async loadChartGraphic(path: Lr2SpecialGraphic, cacheKey: string): Promise<void> {
-    try {
-      const target = this.target;
-      if (!target) return;
-      const meta = target.song.chart.metadata;
-      const assetPath =
-        path === LR2_SPECIAL_GRAPHIC.BACKBMP
-          ? meta.backBmp
-          : path === LR2_SPECIAL_GRAPHIC.BANNER
-            ? meta.banner
-            : path === LR2_SPECIAL_GRAPHIC.STAGEFILE
-              ? meta.stageFile
-              : undefined;
-      if (!assetPath) return;
-      const source = resolveSongSource(target.collection, target.song);
-      if (!source) return;
-      const bytes = resolveChartAsset(source, target.song.chartPath, assetPath);
-      if (!bytes) return;
-      const texture = await loadTextureFromBytes(assetPath, bytes);
-      if (!texture) return;
-      if (this.disposed) {
-        texture.destroy(true);
-        return;
-      }
-      this.chartGraphicTextures.set(cacheKey, texture);
-      this.render();
-    } finally {
-      this.chartGraphicPending.delete(cacheKey);
-    }
+    return this.chartGraphicTextures.resolve(target.collection, target.song, path, () => this.render());
   }
 
   private fireContinue(): void {
@@ -656,68 +599,4 @@ function resolveDecideText(st: number, song: BrowserSongEntry): string | undefin
     default:
       return undefined;
   }
-}
-
-function isDestinationVisible(
-  destination: Lr2DestinationRect,
-  ops: ReadonlySet<number>,
-  timerActive: (timer: number) => boolean,
-): boolean {
-  if (!timerActive(destination.timer)) return false;
-  for (const op of destination.ops) {
-    if (op === 0) continue;
-    if (op > 0) {
-      if (!ops.has(op)) return false;
-    } else if (ops.has(-op)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function makeTextSprite(value: string, element: Lr2TextElement, dst: Lr2DestinationRect): Text {
-  const rect = normaliseRect(dst);
-  const fontSize = clampFontSize(rect.h - 2, 8, 22);
-  const text = new Text({
-    text: value,
-    style: new TextStyle({
-      fill: dst.alpha > 0 ? (dst.r << 16) | (dst.g << 8) | dst.b : 0xffffff,
-      fontSize,
-      fontFamily: 'system-ui, sans-serif',
-      wordWrap: rect.w > 0,
-      wordWrapWidth: rect.w > 0 ? rect.w : undefined,
-      stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
-    }),
-  });
-  text.label = `text[st=${element.st}]`;
-  text.alpha = dst.alpha;
-  if (element.alignment === 'center') {
-    text.anchor.set(0.5, 0);
-  } else if (element.alignment === 'right') {
-    text.anchor.set(1, 0);
-  } else {
-    text.anchor.set(0, 0);
-  }
-  text.position.set(rect.x, rect.y);
-  return text;
-}
-
-function clampFontSize(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, Math.floor(value)));
-}
-
-function resolveScaledViewport(
-  screenWidth: number,
-  screenHeight: number,
-  designWidth: number = LR2_DESIGN_WIDTH,
-  designHeight: number = LR2_DESIGN_HEIGHT,
-): { x: number; y: number; scale: number } {
-  const scale = Math.min(screenWidth / designWidth, screenHeight / designHeight);
-  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
-  return {
-    x: (screenWidth - designWidth * safeScale) / 2,
-    y: (screenHeight - designHeight * safeScale) / 2,
-    scale: safeScale,
-  };
 }

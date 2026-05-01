@@ -24,6 +24,7 @@ import {
 } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { extractTimedNotes, type TimedPlayableNote } from '@be-music/player/playable-notes';
+import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 import { normalizePath, resolveChartAsset, resolveChartAudioAsset } from './library.ts';
 import {
@@ -46,12 +47,7 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from './lr2-render.ts';
-import {
-  type AudioBusHandle,
-  type CompressorMode,
-  type CompressorStage,
-  buildAudioBus,
-} from './audio-bus.ts';
+import { type AudioBusHandle, type CompressorMode, type CompressorStage, buildAudioBus } from './audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-recorder.ts';
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
@@ -111,7 +107,8 @@ import {
   resolveJudgeSkinKind,
   resolveNumberValue,
 } from './pixi-gameplay-hud.ts';
-import { renderFallbackLr2Frame, resolveScaledViewport } from './pixi-gameplay-fallback.ts';
+import { renderFallbackLr2Frame } from './pixi-gameplay-fallback.ts';
+import { resolveScaledViewport } from './lr2-scene-render.ts';
 
 interface RuntimeNote extends TimedPlayableNote {
   hit: boolean;
@@ -1864,7 +1861,7 @@ export class PixiGameplayView {
   private judge(channel: string, seconds: number): void {
     const windows = resolveJudgeWindowsMs(this.song!.chart);
     const badSeconds = windows.bad / 1000;
-    const firstCandidateIndex = lowerBoundBy(this.notes, seconds - badSeconds, (note) => note.seconds);
+    const firstCandidateIndex = findFirstIndexAtOrAfter(this.notes, seconds - badSeconds, (note) => note.seconds);
     let note: RuntimeNote | undefined;
     let closestDistance = Number.POSITIVE_INFINITY;
     for (let index = firstCandidateIndex; index < this.notes.length; index += 1) {
@@ -1992,10 +1989,7 @@ export class PixiGameplayView {
     // Combine: pick the worst severity (LR2 convention). On a tie
     // we prefer the verdict whose delta is larger so FAST/SLOW
     // classification reflects the genuinely-off side of the hold.
-    const finalJudge =
-      judgeSeverity(headJudge) >= judgeSeverity(tailJudge)
-        ? headJudge
-        : tailJudge;
+    const finalJudge = judgeSeverity(headJudge) >= judgeSeverity(tailJudge) ? headJudge : tailJudge;
     const finalSignedDeltaMs = finalJudge === headJudge ? headSignedDeltaMs : tailSignedDeltaMs;
     this.commitFinalJudge(finalJudge, finalSignedDeltaMs, seconds, channel);
     this.triggerBombOnNonMiss(channel, finalJudge);
@@ -2608,7 +2602,7 @@ export class PixiGameplayView {
   private render(seconds: number): void {
     const screenWidth = this.app.screen.width;
     const screenHeight = this.app.screen.height;
-    const viewport = resolveScaledViewport(screenWidth, screenHeight);
+    const viewport = resolveScaledViewport(screenWidth, screenHeight, DESIGN_WIDTH, DESIGN_HEIGHT);
     this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
@@ -3535,7 +3529,7 @@ export class PixiGameplayView {
     const maxVisibleBeat = currentBeat + (laneHeight + 48) / Math.max(1, pixelsPerBeat);
     const firstNoteIndex = this.scrollMapper
       ? 0
-      : lowerBoundBy(this.notes, currentBeat - this.maxLongNoteBeatSpan, (note) => note.beat);
+      : findFirstIndexAtOrAfter(this.notes, currentBeat - this.maxLongNoteBeatSpan, (note) => note.beat);
     for (let noteIndex = firstNoteIndex; noteIndex < this.notes.length; noteIndex += 1) {
       const note = this.notes[noteIndex]!;
       if (!this.scrollMapper && note.beat > maxVisibleBeat) {
@@ -3641,7 +3635,7 @@ export class PixiGameplayView {
     const skin = this.options.skin;
     const firstBeatIndex = this.scrollMapper
       ? 0
-      : lowerBoundNumber(beats, currentBeat - 1 / Math.max(1, pixelsPerBeat));
+      : findFirstIndexNumberAtOrAfter(beats, currentBeat - 1 / Math.max(1, pixelsPerBeat));
     const maxBeat = this.scrollMapper
       ? Number.POSITIVE_INFINITY
       : currentBeat + (bottom - top + 1) / Math.max(1, pixelsPerBeat);
@@ -3930,34 +3924,6 @@ export class PixiGameplayView {
  */
 function isLongNote(note: RuntimeNote): boolean {
   return typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
-}
-
-function lowerBoundBy<T>(items: ReadonlyArray<T>, value: number, pick: (item: T) => number): number {
-  let low = 0;
-  let high = items.length;
-  while (low < high) {
-    const mid = (low + high) >> 1;
-    if (pick(items[mid]!) < value) {
-      low = mid + 1;
-    } else {
-      high = mid;
-    }
-  }
-  return low;
-}
-
-function lowerBoundNumber(items: ReadonlyArray<number>, value: number): number {
-  let low = 0;
-  let high = items.length;
-  while (low < high) {
-    const mid = (low + high) >> 1;
-    if (items[mid]! < value) {
-      low = mid + 1;
-    } else {
-      high = mid;
-    }
-  }
-  return low;
 }
 
 /**

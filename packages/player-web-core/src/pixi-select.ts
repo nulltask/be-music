@@ -16,10 +16,8 @@ import type {
   Lr2Skin,
   Lr2SliderElement,
   Lr2SpecialGraphic,
-  Lr2TextElement,
 } from './lr2-skin.ts';
-import { LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from './lr2-skin.ts';
-import { loadSkinAssetTexture, loadTextureFromBytes } from './lr2-textures.ts';
+import { isLr2SpecialGraphic } from './lr2-skin.ts';
 import {
   applyDestinationToSprite,
   createCroppedTexture,
@@ -31,8 +29,15 @@ import {
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { disposeChildren } from './pixi-utils.ts';
-import { groupSongsByFolder, resolveChartAsset, resolveSongSource } from './library.ts';
+import { groupSongsByFolder, resolveSongSource } from './library.ts';
 import { ChartPreviewEngine } from './chart-preview.ts';
+import {
+  Lr2ChartGraphicTextureStore,
+  Lr2SkinTextureStore,
+  collectSelectSkinTexturePaths,
+  resolveSolidSpecialGraphicTexture,
+} from './lr2-scene-textures.ts';
+import { clampFontSize, isDestinationVisible, makeLr2TextSprite, resolveScaledViewport } from './lr2-scene-render.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
 const BG = new Color('#08090d');
@@ -42,10 +47,6 @@ const TEXT = new Color('#f8fafc');
 const MUTED = new Color('#9aa6b2');
 const FALLBACK_DESIGN_WIDTH = 1280;
 const FALLBACK_DESIGN_HEIGHT = 720;
-// LR2 default skin design space — used when a skin is loaded so the
-// stage scales to the skin's authoring resolution (640x480).
-const LR2_DESIGN_WIDTH = 640;
-const LR2_DESIGN_HEIGHT = 480;
 
 /**
  * Globally-true ops that hold regardless of which song is focused —
@@ -333,17 +334,14 @@ export class PixiSongSelectView {
    * straight from this map and silently skips bars whose texture is
    * still loading (next render tick will fill them in).
    */
-  private readonly skinTextures = new Map<string, Texture>();
-  private skinTextureLoadSerial = 0;
+  private readonly skinTextures = new Lr2SkinTextureStore();
   /**
    * Per-song chart-asset texture cache for LR2 runtime-bound graphics
    * (`#SRC_IMAGE,gr=100/101/102` → STAGEFILE / BACKBMP / BANNER).
    * Keyed by `${song.id}:${kind}` so navigating between songs reuses
    * already-decoded banners. Loaded lazily on first reference.
    */
-  private readonly chartGraphicTextures = new Map<string, Texture>();
-  /** In-flight banner-load promises so we don't decode the same asset twice. */
-  private readonly chartGraphicPending = new Set<string>();
+  private readonly chartGraphicTextures = new Lr2ChartGraphicTextureStore();
   /**
    * `performance.now()` at the moment the select scene was mounted.
    * Drives the elapsed-time clock for LR2 timer 0 (scene main) so the
@@ -919,7 +917,6 @@ export class PixiSongSelectView {
       return;
     }
     this.disposed = true;
-    this.skinTextureLoadSerial += 1;
     if (this.animationFrame !== 0) {
       cancelAnimationFrame(this.animationFrame);
       this.animationFrame = 0;
@@ -952,15 +949,8 @@ export class PixiSongSelectView {
       this.sceneRoot.parent.removeChild(this.sceneRoot);
     }
     try {
-      for (const texture of this.skinTextures.values()) {
-        texture.destroy(true);
-      }
-      this.skinTextures.clear();
-      for (const texture of this.chartGraphicTextures.values()) {
-        texture.destroy(true);
-      }
-      this.chartGraphicTextures.clear();
-      this.chartGraphicPending.clear();
+      this.skinTextures.dispose();
+      this.chartGraphicTextures.dispose();
     } catch (error) {
       // eslint-disable-next-line no-console
       console.warn('[select] texture cleanup threw', error);
@@ -987,14 +977,10 @@ export class PixiSongSelectView {
    */
   public setSkin(skin: Lr2Skin | undefined): void {
     this.options = { ...this.options, skin };
-    this.skinTextureLoadSerial += 1;
     // Drop the previous skin's textures — `prepareSkinTextures` will
     // populate fresh ones for the new skin, and the chart-graphic
     // (BACKBMP / BANNER / STAGEFILE) cache stays valid since it's
     // keyed by song id, not by skin.
-    for (const texture of this.skinTextures.values()) {
-      texture.destroy(true);
-    }
     this.skinTextures.clear();
     if (skin && skin.barLayout.slots.length > 0) {
       void this.prepareSkinTextures(skin);
@@ -1438,76 +1424,14 @@ export class PixiSongSelectView {
    * isn't ready yet (we re-render after each load resolves).
    */
   private async prepareSkinTextures(skin: Lr2Skin): Promise<void> {
-    const serial = ++this.skinTextureLoadSerial;
-    const referencedPaths = new Set<string>();
-    for (const image of skin.images) {
-      // Skip LR2-special graphic sentinels (BACKBMP / BANNER / STAGEFILE
-      // / etc.) — those bind to per-song chart assets and are loaded
-      // lazily by `resolveSpecialGraphicTexture()`.
-      if (!isLr2SpecialGraphic(image.source.imagePath)) {
-        referencedPaths.add(image.source.imagePath);
-      }
-    }
-    for (const body of skin.barLayout.bodies) {
-      referencedPaths.add(body.source.imagePath);
-    }
-    // NUMBER source images use the SAME path as `#IMAGE` references but
-    // sliced into digit cells — preload them so the renderer can resolve
-    // each digit cell from the cache.
-    for (const number of skin.numbers) {
-      referencedPaths.add(number.source.imagePath);
-    }
-    // BAR_LEVEL / LAMP / RANK sprites are usually their own texture
-    // sheets, so add them too.
-    for (const level of skin.barLayout.levels) {
-      referencedPaths.add(level.source.imagePath);
-    }
-    for (const lamp of skin.barLayout.lamps) {
-      referencedPaths.add(lamp.source.imagePath);
-    }
-    for (const rank of skin.barLayout.ranks) {
-      referencedPaths.add(rank.source.imagePath);
-    }
-    // BUTTON elements: each one slices the same kind of cell sheet as
-    // NUMBER, picking the cell index from the button's current state.
-    for (const button of skin.buttons) {
-      referencedPaths.add(button.source.imagePath);
-    }
-    // ONMOUSE / MOUSECURSOR sprites (hover overlays + custom cursor)
-    // and the BAR_FLASH overlay drawn on the focused bar.
-    for (const onMouse of skin.onMouseElements) {
-      referencedPaths.add(onMouse.source.imagePath);
-    }
-    for (const cursor of skin.mouseCursors) {
-      referencedPaths.add(cursor.source.imagePath);
-    }
-    if (skin.barLayout.flash) {
-      referencedPaths.add(skin.barLayout.flash.source.imagePath);
-    }
-    // SLIDER atlases — the LR2 default Select skin draws the
-    // song-list scroll-position knob (slider type=1) using the
-    // same shared atlas as the rest of the chrome, but a custom
-    // skin could route it through a dedicated sheet, so preload
-    // every referenced source path here too.
-    for (const slider of skin.sliders) {
-      referencedPaths.add(slider.source.imagePath);
-    }
-    await Promise.all(
-      [...referencedPaths].map(async (path) => {
-        const texture = await loadSkinAssetTexture(skin, path);
-        if (texture) {
-          if (this.disposed || this.options.skin !== skin || serial !== this.skinTextureLoadSerial) {
-            texture.destroy(true);
-            return;
-          }
-          this.skinTextures.set(path, texture);
-        }
-      }),
+    const loaded = await this.skinTextures.preload(
+      skin,
+      collectSelectSkinTexturePaths(skin),
+      () => !this.disposed && this.options.skin === skin,
     );
-    if (this.disposed || this.options.skin !== skin || serial !== this.skinTextureLoadSerial) {
-      return;
+    if (loaded) {
+      this.render();
     }
-    this.render();
   }
 
   /**
@@ -2015,7 +1939,13 @@ export class PixiSongSelectView {
       if (value === undefined) {
         continue;
       }
-      renderNumberElement(this.pickChromeLayer(number.declarationOrder), number, value, this.skinTextures, dst);
+      renderNumberElement(
+        this.pickChromeLayer(number.declarationOrder),
+        number,
+        value,
+        this.skinTextures.asReadonlyMap(),
+        dst,
+      );
     }
 
     // TEXT panels — title / artist / genre / level label / etc. LR2
@@ -2034,7 +1964,7 @@ export class PixiSongSelectView {
       if (value === undefined || value.length === 0) {
         continue;
       }
-      this.pickChromeLayer(text.declarationOrder).addChild(makeTextSprite(value, text, dst));
+      this.pickChromeLayer(text.declarationOrder).addChild(makeLr2TextSprite(value, text, dst));
     }
 
     // BUTTON panels — sort / filter / panel-toggle / play / replay /
@@ -2143,8 +2073,7 @@ export class PixiSongSelectView {
       const entries = this.currentEntries();
       if (entries.length <= 1) return 0;
       const slotHeight = this.estimateSlotHeight();
-      const visualIndex =
-        slotHeight > 0 ? this.selectedIndex - this.listScrollOffset / slotHeight : this.selectedIndex;
+      const visualIndex = slotHeight > 0 ? this.selectedIndex - this.listScrollOffset / slotHeight : this.selectedIndex;
       return Math.max(0, Math.min(1, visualIndex / (entries.length - 1)));
     }
     return undefined;
@@ -2459,7 +2388,7 @@ export class PixiSongSelectView {
     // edge of the bar — visibly offset from where the LR2 default
     // skin places it. Centering math still uses the full field width
     // so single-digit numbers sit at the field's middle.
-    renderNumberElement(this.listLayer, fakeNumberElement, playLevel, this.skinTextures, absoluteDst, {
+    renderNumberElement(this.listLayer, fakeNumberElement, playLevel, this.skinTextures.asReadonlyMap(), absoluteDst, {
       suppressLeadingZeros: true,
     });
   }
@@ -2510,65 +2439,15 @@ export class PixiSongSelectView {
    * cached texture.
    */
   private resolveSpecialGraphicTexture(path: Lr2SpecialGraphic): Texture | undefined {
-    if (path === LR2_SPECIAL_GRAPHIC.BLACK) {
-      return Texture.WHITE; // tinted via DST `r/g/b=0` in `applyDestinationToSprite`
+    const solidTexture = resolveSolidSpecialGraphicTexture(path);
+    if (solidTexture) {
+      return solidTexture;
     }
-    if (path === LR2_SPECIAL_GRAPHIC.WHITE) {
-      return Texture.WHITE;
-    }
-    const song = this.collection.songs[this.selectedIndex];
+    const song = this.focusedSong();
     if (!song) {
       return undefined;
     }
-    const cacheKey = `${song.id}:${path}`;
-    const cached = this.chartGraphicTextures.get(cacheKey);
-    if (cached) {
-      return cached;
-    }
-    if (!this.chartGraphicPending.has(cacheKey)) {
-      this.chartGraphicPending.add(cacheKey);
-      void this.loadChartGraphic(song, path, cacheKey);
-    }
-    return undefined;
-  }
-
-  private async loadChartGraphic(song: BrowserSongEntry, path: Lr2SpecialGraphic, cacheKey: string): Promise<void> {
-    try {
-      // Unified metadata slots now carry both BMS (`#BACKBMP` /
-      // `#BANNER` / `#STAGEFILE`) and bmson-derived fields, so the
-      // lookup no longer needs to branch on chart format.
-      const meta = song.chart.metadata;
-      const assetPath =
-        path === LR2_SPECIAL_GRAPHIC.BACKBMP
-          ? meta.backBmp
-          : path === LR2_SPECIAL_GRAPHIC.BANNER
-            ? meta.banner
-            : path === LR2_SPECIAL_GRAPHIC.STAGEFILE
-              ? meta.stageFile
-              : undefined;
-      if (!assetPath) {
-        return;
-      }
-      const source = resolveSongSource(this.collection, song);
-      if (!source) {
-        return;
-      }
-      const bytes = resolveChartAsset(source, song.chartPath, assetPath);
-      if (!bytes) {
-        return;
-      }
-      const texture = await loadTextureFromBytes(assetPath, bytes);
-      if (texture) {
-        if (this.disposed) {
-          texture.destroy(true);
-          return;
-        }
-        this.chartGraphicTextures.set(cacheKey, texture);
-        this.render();
-      }
-    } finally {
-      this.chartGraphicPending.delete(cacheKey);
-    }
+    return this.chartGraphicTextures.resolve(this.collection, song, path, () => this.render());
   }
 
   private makeBarBodySprite(
@@ -2691,21 +2570,6 @@ export class PixiSongSelectView {
   }
 }
 
-function resolveScaledViewport(
-  screenWidth: number,
-  screenHeight: number,
-  designWidth: number = LR2_DESIGN_WIDTH,
-  designHeight: number = LR2_DESIGN_HEIGHT,
-): { x: number; y: number; scale: number } {
-  const scale = Math.min(screenWidth / designWidth, screenHeight / designHeight);
-  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
-  return {
-    x: (screenWidth - designWidth * safeScale) / 2,
-    y: (screenHeight - designHeight * safeScale) / 2,
-    scale: safeScale,
-  };
-}
-
 function clampSlot(value: number, slotCount: number): number {
   if (slotCount <= 0) return 0;
   return Math.min(slotCount - 1, Math.max(0, Math.trunc(value)));
@@ -2816,37 +2680,6 @@ function pickBarBody(
   }
   const kind: Lr2BarBodyKind = entry?.kind === 'folder' ? 'folder' : 'song';
   return bodies.find((body) => body.kind === kind) ?? bodies.find((body) => body.kind === 'song') ?? bodies[0];
-}
-
-/**
- * Slot DST gating: applies the same "all `op > 0` must be true,
- * negative ops mean negation" rule the parser uses, but against the
- * dynamic op set computed for the currently-focused song.
- *
- * `timerActive` is a closure over `PixiSongSelectView.isTimerActive`
- * — pulled in as a callback so this function can stay outside the
- * class while still respecting per-instance timer state (the
- * song-change timer 11 only fires while *this* view's cursor moves).
- */
-function isDestinationVisible(
-  destination: Lr2DestinationRect,
-  ops: ReadonlySet<number>,
-  timerActive: (timer: number) => boolean,
-): boolean {
-  if (!timerActive(destination.timer)) {
-    return false;
-  }
-  for (const op of destination.ops) {
-    if (op === 0) continue;
-    if (op > 0) {
-      if (!ops.has(op)) {
-        return false;
-      }
-    } else if (ops.has(-op)) {
-      return false;
-    }
-  }
-  return true;
 }
 
 /**
@@ -3343,69 +3176,6 @@ function resolveDifficultyName(difficulty: number | undefined): string {
 }
 
 /**
- * Builds a Pixi `Text` sprite for a `#SRC_TEXT` element using the
- * built-in font. We don't yet implement `#LR2FONT` (image-font sheets),
- * so this is a best-effort fallback whose alignment / wrap matches the
- * skin's `align` field but uses a system sans-serif typeface.
- */
-function makeTextSprite(value: string, element: Lr2TextElement, dst: Lr2DestinationRect = element.destination): Text {
-  const rect = normaliseRect(dst);
-  // System sans-serif at the same point-size as a pixel font reads
-  // visibly larger; cap at min(rect.h - 2, 18) instead of `rect.h * 0.8`
-  // so titles like "Alternate Ignition" still fit inside narrow LR2
-  // text panels until `#LR2FONT` rendering replaces this fallback.
-  const fontSize = clampFontSize(rect.h - 2, 8, 18);
-  const text = new Text({
-    text: value,
-    style: new TextStyle({
-      fill: dst.alpha > 0 ? (dst.r << 16) | (dst.g << 8) | dst.b : 0xffffff,
-      fontSize,
-      fontFamily: 'system-ui, sans-serif',
-      wordWrap: rect.w > 0,
-      wordWrapWidth: rect.w > 0 ? rect.w : undefined,
-      // 袋文字 (outlined text) — LR2 reference skins use bitmap
-      // fonts pre-baked with a 1–2 px black outline so titles read
-      // cleanly against busy stagefile / banner backgrounds. We
-      // approximate that by stroking the system-font fallback.
-      // `alignment: 0.5` puts half the stroke inside the glyph and
-      // half outside, which matches the LR2 look without bloating
-      // glyph metrics.
-      stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
-    }),
-  });
-  text.label = `text[st=${element.st}]`;
-  text.alpha = dst.alpha;
-  // LR2 #SRC_TEXT alignment (`docs/LR2SkinHelp.md` lines 1350+):
-  //   0 = left   — DST x is the **left edge** of the rendered string
-  //   1 = center — DST x is the **center**   of the rendered string
-  //   2 = right  — DST x is the **right edge** of the rendered string
-  // The earlier code was treating (x, y, w, h) as a bounding box and
-  // adding `w` / `w/2` for center / right, which shifted right-aligned
-  // text by an extra `w` pixels — pushing the title / artist / genre
-  // panel into the bar-list area on the right side of the screen.
-  if (element.alignment === 'center') {
-    text.anchor.set(0.5, 0);
-  } else if (element.alignment === 'right') {
-    text.anchor.set(1, 0);
-  } else {
-    text.anchor.set(0, 0);
-  }
-  text.position.set(rect.x, rect.y);
-  return text;
-}
-
-/**
- * Clamps a font-size suggestion (typically derived from a DST rect's
- * `h` value) into a sensible range. Pixi `Text` looks visibly larger
- * than an LR2 image font at the same nominal pixel size, so callers
- * pass tighter `max` bounds than they would for a pixel font.
- */
-function clampFontSize(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, Math.floor(value)));
-}
-
-/**
  * Returns whether an element with the given `panel` gate should
  * currently render. Per LR2 spec:
  *
@@ -3437,13 +3207,7 @@ export function matchesSearchQuery(entry: BrowserBrowseEntry, lowerQuery: string
     return entry.folder.label.toLowerCase().includes(lowerQuery);
   }
   const song = entry.song;
-  const haystacks: Array<string | undefined> = [
-    song.title,
-    song.subtitle,
-    song.artist,
-    song.genre,
-    song.fileLabel,
-  ];
+  const haystacks: Array<string | undefined> = [song.title, song.subtitle, song.artist, song.genre, song.fileLabel];
   for (const value of haystacks) {
     if (typeof value === 'string' && value.toLowerCase().includes(lowerQuery)) {
       return true;

@@ -9,10 +9,8 @@ import type {
   Lr2Skin,
   Lr2SliderElement,
   Lr2SpecialGraphic,
-  Lr2TextElement,
 } from './lr2-skin.ts';
-import { LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from './lr2-skin.ts';
-import { loadSkinAssetTexture, loadTextureFromBytes } from './lr2-textures.ts';
+import { isLr2SpecialGraphic } from './lr2-skin.ts';
 import {
   applyDestinationToSprite,
   createCroppedTexture,
@@ -23,7 +21,13 @@ import {
 } from './lr2-render.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { disposeChildren } from './pixi-utils.ts';
-import { resolveChartAsset, resolveSongSource } from './library.ts';
+import {
+  Lr2ChartGraphicTextureStore,
+  Lr2SkinTextureStore,
+  collectResultSkinTexturePaths,
+  resolveSolidSpecialGraphicTexture,
+} from './lr2-scene-textures.ts';
+import { isDestinationVisible, makeLr2TextSprite, resolveScaledViewport } from './lr2-scene-render.ts';
 import type { BrowserSongCollection } from './types.ts';
 import type { PixiGameplayResultData } from './pixi-gameplay.ts';
 
@@ -63,8 +67,6 @@ import type { PixiGameplayResultData } from './pixi-gameplay.ts';
  */
 const FALLBACK_DESIGN_WIDTH = 1280;
 const FALLBACK_DESIGN_HEIGHT = 720;
-const LR2_DESIGN_WIDTH = 640;
-const LR2_DESIGN_HEIGHT = 480;
 const BG = new Color('#05070b');
 const TEXT = new Color('#f8fafc');
 const MUTED = new Color('#9aa6b2');
@@ -272,11 +274,9 @@ export class PixiResultView {
    * Keyed by image path (including LR2 special-graphic sentinels
    * that resolve to per-song chart assets).
    */
-  private readonly skinTextures = new Map<string, Texture>();
-  private skinTextureLoadSerial = 0;
+  private readonly skinTextures = new Lr2SkinTextureStore();
   /** Per-song chart graphic textures (BANNER / STAGEFILE / BACKBMP). */
-  private readonly chartGraphicTextures = new Map<string, Texture>();
-  private readonly chartGraphicPending = new Set<string>();
+  private readonly chartGraphicTextures = new Lr2ChartGraphicTextureStore();
   private readonly timeoutHandles = new Set<number>();
   /** Fallback summary panel (used when no skin or as overlay). */
   private readonly fallbackLayer = new Container();
@@ -373,7 +373,6 @@ export class PixiResultView {
       return;
     }
     this.disposed = true;
-    this.skinTextureLoadSerial += 1;
     for (const timeout of this.timeoutHandles) {
       window.clearTimeout(timeout);
     }
@@ -390,15 +389,8 @@ export class PixiResultView {
       this.sceneRoot.parent.removeChild(this.sceneRoot);
     }
     try {
-      for (const texture of this.skinTextures.values()) {
-        texture.destroy(true);
-      }
-      this.skinTextures.clear();
-      for (const texture of this.chartGraphicTextures.values()) {
-        texture.destroy(true);
-      }
-      this.chartGraphicTextures.clear();
-      this.chartGraphicPending.clear();
+      this.skinTextures.dispose();
+      this.chartGraphicTextures.dispose();
     } catch (error) {
       // eslint-disable-next-line no-console
       console.warn('[result] texture cleanup threw', error);
@@ -427,38 +419,14 @@ export class PixiResultView {
    * those bind to per-song chart assets and are loaded lazily.
    */
   private async prepareSkinTextures(skin: Lr2Skin): Promise<void> {
-    const serial = ++this.skinTextureLoadSerial;
-    const referencedPaths = new Set<string>();
-    for (const image of skin.images) {
-      if (!isLr2SpecialGraphic(image.source.imagePath)) {
-        referencedPaths.add(image.source.imagePath);
-      }
-    }
-    for (const number of skin.numbers) {
-      referencedPaths.add(number.source.imagePath);
-    }
-    for (const bargraph of skin.bargraphs) {
-      referencedPaths.add(bargraph.source.imagePath);
-    }
-    for (const slider of skin.sliders) {
-      referencedPaths.add(slider.source.imagePath);
-    }
-    await Promise.all(
-      [...referencedPaths].map(async (path) => {
-        const texture = await loadSkinAssetTexture(skin, path);
-        if (texture) {
-          if (this.disposed || this.options.skin !== skin || serial !== this.skinTextureLoadSerial) {
-            texture.destroy(true);
-            return;
-          }
-          this.skinTextures.set(path, texture);
-        }
-      }),
+    const loaded = await this.skinTextures.preload(
+      skin,
+      collectResultSkinTexturePaths(skin),
+      () => !this.disposed && this.options.skin === skin,
     );
-    if (this.disposed || this.options.skin !== skin || serial !== this.skinTextureLoadSerial) {
-      return;
+    if (loaded) {
+      this.render();
     }
-    this.render();
   }
 
   private startAnimationLoop(): void {
@@ -528,14 +496,14 @@ export class PixiResultView {
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const value = resolveResultNumber(number.source.num, this.result);
       if (value === undefined) continue;
-      renderNumberElement(this.skinLayer, number, value, this.skinTextures, dst);
+      renderNumberElement(this.skinLayer, number, value, this.skinTextures.asReadonlyMap(), dst);
     }
     for (const text of skin.texts) {
       const dst = this.evaluateElementDst(text);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const value = resolveResultText(text.st, this.result);
       if (value === undefined || value.length === 0) continue;
-      this.skinLayer.addChild(makeTextSprite(value, text, dst));
+      this.skinLayer.addChild(makeLr2TextSprite(value, text, dst));
     }
     // BARGRAPH / SLIDER: result-screen skins use these for the
     // EX-score / rate progress bars next to the digit panels. The
@@ -993,52 +961,14 @@ export class PixiResultView {
    * resolver doesn't need to consult a navigation cursor.
    */
   private resolveSpecialGraphicTexture(path: Lr2SpecialGraphic): Texture | undefined {
-    if (path === LR2_SPECIAL_GRAPHIC.BLACK || path === LR2_SPECIAL_GRAPHIC.WHITE) {
-      return Texture.WHITE;
+    const solidTexture = resolveSolidSpecialGraphicTexture(path);
+    if (solidTexture) {
+      return solidTexture;
     }
     const result = this.result;
-    if (!result) return undefined;
-    const cacheKey = `${result.song.id}:${path}`;
-    const cached = this.chartGraphicTextures.get(cacheKey);
-    if (cached) return cached;
-    if (!this.chartGraphicPending.has(cacheKey)) {
-      this.chartGraphicPending.add(cacheKey);
-      void this.loadChartGraphic(path, cacheKey);
-    }
-    return undefined;
-  }
-
-  private async loadChartGraphic(path: Lr2SpecialGraphic, cacheKey: string): Promise<void> {
-    try {
-      const result = this.result;
-      const collection = this.options.collection;
-      if (!result || !collection) return;
-      const meta = result.song.chart.metadata;
-      const assetPath =
-        path === LR2_SPECIAL_GRAPHIC.BACKBMP
-          ? meta.backBmp
-          : path === LR2_SPECIAL_GRAPHIC.BANNER
-            ? meta.banner
-            : path === LR2_SPECIAL_GRAPHIC.STAGEFILE
-              ? meta.stageFile
-              : undefined;
-      if (!assetPath) return;
-      const source = resolveSongSource(collection, result.song);
-      if (!source) return;
-      const bytes = resolveChartAsset(source, result.song.chartPath, assetPath);
-      if (!bytes) return;
-      const texture = await loadTextureFromBytes(assetPath, bytes);
-      if (texture) {
-        if (this.disposed) {
-          texture.destroy(true);
-          return;
-        }
-        this.chartGraphicTextures.set(cacheKey, texture);
-        this.render();
-      }
-    } finally {
-      this.chartGraphicPending.delete(cacheKey);
-    }
+    const collection = this.options.collection;
+    if (!result || !collection) return undefined;
+    return this.chartGraphicTextures.resolve(collection, result.song, path, () => this.render());
   }
 
   /**
@@ -1545,83 +1475,6 @@ function resolveRankLabel(exScore: number, total: number): string {
   if (rate >= 3 / 9) return 'D';
   if (rate >= 2 / 9) return 'E';
   return 'F';
-}
-
-/**
- * `pixi-select.ts` has the canonical version of this helper. Kept
- * private to this file (not imported) so the result module
- * remains self-contained — the visibility predicate is small, and
- * factoring it would cross-couple two scenes that otherwise share
- * no state.
- */
-function isDestinationVisible(
-  destination: Lr2DestinationRect,
-  ops: ReadonlySet<number>,
-  timerActive: (timer: number) => boolean,
-): boolean {
-  if (!timerActive(destination.timer)) {
-    return false;
-  }
-  for (const op of destination.ops) {
-    if (op === 0) continue;
-    if (op > 0) {
-      if (!ops.has(op)) {
-        return false;
-      }
-    } else if (ops.has(-op)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function makeTextSprite(value: string, element: Lr2TextElement, dst: Lr2DestinationRect): Text {
-  const rect = normaliseRect(dst);
-  const fontSize = clampFontSize(rect.h - 2, 8, 18);
-  const text = new Text({
-    text: value,
-    style: new TextStyle({
-      fill: dst.alpha > 0 ? (dst.r << 16) | (dst.g << 8) | dst.b : 0xffffff,
-      fontSize,
-      fontFamily: 'system-ui, sans-serif',
-      wordWrap: rect.w > 0,
-      wordWrapWidth: rect.w > 0 ? rect.w : undefined,
-      // 袋文字 stroke matches the select-screen text path so result
-      // titles stay legible against busy stagefile / skin frames.
-      stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
-    }),
-  });
-  text.label = `text[st=${element.st}]`;
-  text.alpha = dst.alpha;
-  if (element.alignment === 'center') {
-    text.anchor.set(0.5, 0);
-  } else if (element.alignment === 'right') {
-    text.anchor.set(1, 0);
-  } else {
-    text.anchor.set(0, 0);
-  }
-  text.position.set(rect.x, rect.y);
-  return text;
-}
-
-function clampFontSize(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, Math.floor(value)));
-}
-
-function resolveScaledViewport(
-  screenWidth: number,
-  screenHeight: number,
-  designWidth: number = LR2_DESIGN_WIDTH,
-  designHeight: number = LR2_DESIGN_HEIGHT,
-): { x: number; y: number; scale: number } {
-  const scale = Math.min(screenWidth / designWidth, screenHeight / designHeight);
-  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
-  return {
-    x: (screenWidth - designWidth * safeScale) / 2,
-    y: (screenHeight - designHeight * safeScale) / 2,
-    scale: safeScale,
-  };
 }
 
 // `Lr2ImageRect` is referenced in the imports for `makeBargraphSprite`'s

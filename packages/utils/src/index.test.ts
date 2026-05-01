@@ -6,6 +6,8 @@ import {
   basename,
   compareFractions,
   dirname,
+  findFirstIndexAtOrAfter,
+  findFirstIndexNumberAtOrAfter,
   findLastIndexAtOrBefore,
   findLastIndexBefore,
   gcd,
@@ -118,6 +120,16 @@ describe('utils', () => {
     expect(findLastIndexBefore(values, 1, (item) => item.beat)).toBe(-1);
     expect(findLastIndexBefore(values, 3, (item) => item.beat)).toBe(0);
     expect(findLastIndexBefore(values, 8, (item) => item.beat)).toBe(3);
+  });
+
+  test('findFirstIndexAtOrAfter/findFirstIndexNumberAtOrAfter: returns lower-bound indexes', () => {
+    const values = [{ beat: 1 }, { beat: 3 }, { beat: 3 }, { beat: 7 }];
+    expect(findFirstIndexAtOrAfter(values, 0, (item) => item.beat)).toBe(0);
+    expect(findFirstIndexAtOrAfter(values, 3, (item) => item.beat)).toBe(1);
+    expect(findFirstIndexAtOrAfter(values, 4, (item) => item.beat)).toBe(3);
+    expect(findFirstIndexAtOrAfter(values, 8, (item) => item.beat)).toBe(4);
+    expect(findFirstIndexNumberAtOrAfter([1, 3, 3, 7], 3)).toBe(1);
+    expect(findFirstIndexNumberAtOrAfter([1, 3, 3, 7], 8)).toBe(4);
   });
 
   test('normalizeAsciiBase36Code: normalizes ASCII 0-9/A-Z/a-z to uppercase base36 codes', () => {

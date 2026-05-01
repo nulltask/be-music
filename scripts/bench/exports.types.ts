@@ -89,6 +89,7 @@ export interface BenchFixtures {
   eventA: BeMusicEvent;
   eventB: BeMusicEvent;
   fractionItems: ReadonlyArray<{ value: number }>;
+  fractionValues: ReadonlyArray<number>;
   randomPatterns: ReadonlyArray<RandomPatternSelection>;
   sampleRenderResult: RenderResult;
   playableRenderResult: RenderResult;

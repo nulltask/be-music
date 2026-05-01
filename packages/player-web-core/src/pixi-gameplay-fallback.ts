@@ -49,16 +49,3 @@ export function renderFallbackLr2Frame(layer: Container): void {
 
   layer.addChild(frame);
 }
-
-export function resolveScaledViewport(
-  screenWidth: number,
-  screenHeight: number,
-): { x: number; y: number; scale: number } {
-  const scale = Math.min(screenWidth / DESIGN_WIDTH, screenHeight / DESIGN_HEIGHT);
-  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
-  return {
-    x: (screenWidth - DESIGN_WIDTH * safeScale) / 2,
-    y: (screenHeight - DESIGN_HEIGHT * safeScale) / 2,
-    scale: safeScale,
-  };
-}

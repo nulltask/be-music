@@ -104,7 +104,8 @@ export function compareFractions(
 }
 
 export function normalizeSortedUniqueNonNegativeIntegers(values: ReadonlyArray<number>): number[] {
-  const normalized = new Array<number>(values.length);
+  const normalized: number[] = [];
+  normalized.length = values.length;
   let normalizedLength = 0;
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index]!;
@@ -190,6 +191,39 @@ export function findLastIndexBefore<T>(
     }
   }
   return low - 1;
+}
+
+export function findFirstIndexAtOrAfter<T>(
+  items: ReadonlyArray<T>,
+  target: number,
+  resolveValue: (item: T) => number,
+): number {
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    const value = resolveValue(items[mid]!);
+    if (value < target) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
+export function findFirstIndexNumberAtOrAfter(items: ReadonlyArray<number>, target: number): number {
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (items[mid]! < target) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
 }
 
 export function normalizeAsciiBase36Code(code: number): number {

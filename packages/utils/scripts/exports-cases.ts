@@ -67,6 +67,16 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       utilsApi.findLastIndexBefore(fixtures.fractionItems, 377, (item) => item.value);
     },
   });
+  define('utils.findFirstIndexAtOrAfter', {
+    run: (fixtures) => {
+      utilsApi.findFirstIndexAtOrAfter(fixtures.fractionItems, 377, (item) => item.value);
+    },
+  });
+  define('utils.findFirstIndexNumberAtOrAfter', {
+    run: (fixtures) => {
+      utilsApi.findFirstIndexNumberAtOrAfter(fixtures.fractionValues, 377);
+    },
+  });
   define('utils.normalizeAsciiBase36Code', {
     run: () => {
       utilsApi.normalizeAsciiBase36Code(0x66);
