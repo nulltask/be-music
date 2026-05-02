@@ -176,6 +176,10 @@ class PlayerWebDemoApp {
    * drops mid-session.
    */
   private selectBgmBytes: Uint8Array | undefined;
+  /** Result-screen BGM bytes — picked per outcome inside `PixiResultView`. */
+  private clearBgmBytes: Uint8Array | undefined;
+  private failBgmBytes: Uint8Array | undefined;
+  private resultBgmBytes: Uint8Array | undefined;
   /**
    * One-shot song-decided sound bytes
    * (`LR2files/Bgm/<theme>/decide.wav`). Played by
@@ -743,6 +747,9 @@ class PlayerWebDemoApp {
     this.decideSkin = loadedTheme.decideSkin;
     this.selectBgmBytes = loadedTheme.selectBgm?.bytes;
     this.decideBgmBytes = loadedTheme.decideBgm?.bytes;
+    this.clearBgmBytes = loadedTheme.clearBgm?.bytes;
+    this.failBgmBytes = loadedTheme.failBgm?.bytes;
+    this.resultBgmBytes = loadedTheme.resultBgm?.bytes;
     this.systemSoundBundle = {
       cursorMove: loadedTheme.systemSounds.cursorMove?.bytes,
       folderOpen: loadedTheme.systemSounds.folderOpen?.bytes,
@@ -1137,6 +1144,9 @@ class PlayerWebDemoApp {
     this.resultView = new PixiResultView({
       skin: this.resultSkin,
       collection: this.collection,
+      clearBgm: this.clearBgmBytes,
+      failBgm: this.failBgmBytes,
+      resultBgm: this.resultBgmBytes,
       onContinue: () => {
         void this.showSelect();
       },

@@ -47,6 +47,27 @@ export interface Lr2ThemeSkins {
    */
   decideBgm?: Lr2ThemeBgm;
   /**
+   * Result-screen BGM played when the chart was cleared,
+   * conventionally `LR2files/Bgm/<theme>/clear.wav` (some
+   * themes name it `result_clear.wav`). Falls back to
+   * {@link resultBgm} when missing so themes that ship a single
+   * generic result loop still play something.
+   */
+  clearBgm?: Lr2ThemeBgm;
+  /**
+   * Result-screen BGM played when the chart was failed,
+   * conventionally `LR2files/Bgm/<theme>/fail.wav`. Same
+   * fallback chain as {@link clearBgm}.
+   */
+  failBgm?: Lr2ThemeBgm;
+  /**
+   * Generic result-screen BGM (`LR2files/Bgm/<theme>/result.wav`)
+   * used as the fallback when {@link clearBgm} / {@link failBgm}
+   * are absent. Themes that ship just one result loop populate
+   * this slot only.
+   */
+  resultBgm?: Lr2ThemeBgm;
+  /**
    * LR2 system sound effects from `LR2files/Sound/lr2/*.wav`.
    * Each slot is independently optional — themes that don't
    * ship a particular effect just leave that field undefined,
@@ -114,13 +135,14 @@ export async function loadLr2ThemeSkinsFromFiles(
   // is also lower.
   const sharedFiles = await readFilesIntoBytesMap(sourceFiles);
   // Total = play variants (one per LR2_PLAY_VARIANTS entry) +
-  // select skin + result skin + decide skin + 2 theme BGMs +
-  // 6 system sounds (cursor-move + folder open/close + option
+  // select skin + result skin + decide skin + 5 theme BGMs
+  // (select / decide / clear / fail / result) + 6 system
+  // sounds (cursor-move + folder open/close + option
   // open/close/change). Hard-coding it to the structural shape
   // below keeps the count honest if anyone adds another
   // sub-task later (compile breaks when the awaited tuple
   // disagrees with this constant).
-  const totalSubTasks = LR2_PLAY_VARIANTS.length + 11;
+  const totalSubTasks = LR2_PLAY_VARIANTS.length + 14;
   let completed = 0;
   onProgress?.({ phase: 'theme', current: 0, total: totalSubTasks });
   const track = <T>(label: string, task: Promise<T>): Promise<T> =>
@@ -146,6 +168,9 @@ export async function loadLr2ThemeSkinsFromFiles(
     decideSkin,
     selectBgm,
     decideBgm,
+    clearBgm,
+    failBgm,
+    resultBgm,
     cursorMove,
     folderOpen,
     folderClose,
@@ -166,6 +191,9 @@ export async function loadLr2ThemeSkinsFromFiles(
     // moment the user lands on the select scene.
     track('bgm/select', materialiseLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'select'))),
     track('bgm/decide', materialiseLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'decide'))),
+    track('bgm/clear', materialiseLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'clear'))),
+    track('bgm/fail', materialiseLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'fail'))),
+    track('bgm/result', materialiseLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'result'))),
     track('sound/scratch', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'scratch'))),
     track('sound/f-open', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-open'))),
     track('sound/f-close', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-close'))),
@@ -188,6 +216,9 @@ export async function loadLr2ThemeSkinsFromFiles(
     decideSkin,
     selectBgm,
     decideBgm,
+    clearBgm,
+    failBgm,
+    resultBgm,
     systemSounds: {
       cursorMove,
       folderOpen,
@@ -214,7 +245,7 @@ export async function loadLr2ThemeSkinsFromFiles(
  */
 export async function loadLr2ThemeBgm(
   files: Iterable<File>,
-  role: 'select' | 'decide',
+  role: 'select' | 'decide' | 'clear' | 'fail' | 'result',
 ): Promise<Lr2ThemeBgm | undefined> {
   const match = pickLr2ThemeBgmFile([...files], role);
   if (!match) return undefined;
@@ -273,7 +304,10 @@ function pickThemeAudioFile(
  *
  * Returns `undefined` when no candidate exists.
  */
-export function pickLr2ThemeBgmFile(files: readonly File[], role: 'select' | 'decide'): File | undefined {
+export function pickLr2ThemeBgmFile(
+  files: readonly File[],
+  role: 'select' | 'decide' | 'clear' | 'fail' | 'result',
+): File | undefined {
   return pickThemeAudioFile(files, (path) => path.includes('bgm/') || path.includes('bgm\\'), role);
 }
 
@@ -336,7 +370,7 @@ async function materialiseLr2ThemeAudio(ref: Lr2ThemeAudioRef | undefined): Prom
 
 function pickLr2ThemeBgmFromMap(
   files: ReadonlyMap<string, BrowserSongAssetEntry>,
-  role: 'select' | 'decide',
+  role: 'select' | 'decide' | 'clear' | 'fail' | 'result',
 ): Lr2ThemeAudioRef | undefined {
   return pickThemeAudioBytes(files, (path) => path.includes('bgm/') || path.includes('bgm\\'), role);
 }

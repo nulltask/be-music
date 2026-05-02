@@ -251,6 +251,24 @@ export interface PixiResultViewOptions {
    * (or immediately on Escape).
    */
   onContinue?: () => void;
+  /**
+   * Encoded result-screen BGM bytes used when the chart was
+   * cleared (`LR2files/Bgm/<theme>/clear.wav` in the LR2 default
+   * theme). Falls back to {@link resultBgm} when unset so
+   * single-loop themes still produce sound.
+   */
+  clearBgm?: Uint8Array;
+  /**
+   * Encoded result-screen BGM bytes used when the chart was
+   * failed (`fail.wav`). Same fallback chain as {@link clearBgm}.
+   */
+  failBgm?: Uint8Array;
+  /**
+   * Generic result-screen BGM (`result.wav`). Plays when the
+   * theme doesn't ship a clear / fail-specific track for the
+   * current outcome.
+   */
+  resultBgm?: Uint8Array;
 }
 
 /**
@@ -290,6 +308,14 @@ export class PixiResultView {
   private sceneStartedAt = 0;
   private animationFrame = 0;
   private disposed = false;
+  /**
+   * Web Audio plumbing for the result-screen BGM. Created lazily
+   * the first time `mount` runs and torn down by `dispose`. The
+   * scene is one-shot (host destroys + recreates between charts)
+   * so we don't bother caching the decoded buffer across mounts.
+   */
+  private bgmContext: AudioContext | undefined;
+  private bgmSource: AudioBufferSourceNode | undefined;
   /** Lazy-loaded LR2 bitmap fonts — see `prepareBitmapFonts`. */
   private bitmapFonts: Map<number, Lr2LoadedFont> = new Map();
   /**
@@ -371,6 +397,45 @@ export class PixiResultView {
     );
     this.render();
     this.startAnimationLoop();
+    void this.startResultBgm(result);
+  }
+
+  /**
+   * Decodes and plays the matching result-screen BGM. Picks
+   * `clearBgm` / `failBgm` based on `data.cleared` and falls
+   * back to the generic `resultBgm` when the theme doesn't
+   * differentiate. Silently no-ops when no slot is populated
+   * (skinless / non-LR2 themes) and when the browser refuses
+   * autoplay — neither path is fatal for the result scene.
+   *
+   * Looped because real LR2 themes ship a short result jingle
+   * the user can sit on for as long as they want before
+   * dismissing.
+   */
+  private async startResultBgm(data: PixiGameplayResultData): Promise<void> {
+    const bytes = data.cleared
+      ? this.options.clearBgm ?? this.options.resultBgm ?? this.options.failBgm
+      : this.options.failBgm ?? this.options.resultBgm ?? this.options.clearBgm;
+    if (!bytes || this.disposed) return;
+    try {
+      const audioContext = new AudioContext();
+      this.bgmContext = audioContext;
+      const buffer = await audioContext.decodeAudioData(bytes.slice().buffer);
+      if (this.disposed) {
+        await audioContext.close().catch(() => undefined);
+        this.bgmContext = undefined;
+        return;
+      }
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.connect(audioContext.destination);
+      source.start();
+      this.bgmSource = source;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[result] BGM playback failed', error);
+    }
   }
 
   public dispose(): void {
@@ -385,6 +450,19 @@ export class PixiResultView {
     if (this.animationFrame !== 0) {
       cancelAnimationFrame(this.animationFrame);
       this.animationFrame = 0;
+    }
+    if (this.bgmSource) {
+      try {
+        this.bgmSource.stop();
+        this.bgmSource.disconnect();
+      } catch {
+        // Already stopped / disconnected — ignore.
+      }
+      this.bgmSource = undefined;
+    }
+    if (this.bgmContext) {
+      void this.bgmContext.close().catch(() => undefined);
+      this.bgmContext = undefined;
     }
     window.removeEventListener('keydown', this.handleKeyDown);
     if (this.host) {
