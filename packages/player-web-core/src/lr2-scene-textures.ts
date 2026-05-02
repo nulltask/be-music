@@ -1,7 +1,7 @@
 import { Texture } from 'pixi.js';
 import { type Lr2Skin, type Lr2SpecialGraphic, LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from './lr2-skin.ts';
 import { loadSkinAssetTexture, loadTextureFromBytes } from './lr2-textures.ts';
-import { loadAssetBytes, resolveChartAsset, resolveSongSource } from './library.ts';
+import { loadAssetBytes, resolveChartImageAsset, resolveSongSource } from './library.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
 type TextureLoadValidity = () => boolean;
@@ -110,7 +110,7 @@ export class Lr2ChartGraphicTextureStore {
       // Song-bundle assets are lazy `File` references — read the
       // banner / stagefile / backbmp bytes on demand the moment
       // the user focuses this song.
-      const bytes = await loadAssetBytes(resolveChartAsset(source, song.chartPath, assetPath));
+      const bytes = await loadAssetBytes(resolveChartImageAsset(source, song.chartPath, assetPath));
       if (!bytes) {
         return;
       }

@@ -709,6 +709,54 @@ function audioFallbackPaths(path: string): string[] {
 }
 
 /**
+ * Image-asset variant of {@link resolveChartAsset} that walks the
+ * common BMS image-format extensions before giving up. BMS charts
+ * historically declare `#BMPxx test.bmp`, but archives ship the
+ * actual graphic as `.png` / `.jpg` / `.gif` more often than as a
+ * real Windows bitmap. Mirrors {@link resolveChartAudioAsset}'s
+ * codec-walking behaviour, with the order tuned for graphics:
+ *
+ *   1. `.png`  (lossless, broadly supported, the modern default)
+ *   2. `.jpg` / `.jpeg`  (lossy, smaller — common for photo BGA)
+ *   3. `.gif`  (legacy but still seen in older charts)
+ *   4. `.bmp`  (the literal `#BMPxx` extension)
+ *   5. the original path verbatim — keeps video BGA references
+ *      (`.mpg` / `.mp4` / `.webm` / …) and any exotic format
+ *      not in the list above resolving correctly.
+ *
+ * Case is handled by `resolveChartAsset` itself (case-insensitive
+ * lookup), so this list doesn't need explicit upper-case
+ * duplicates.
+ */
+export function resolveChartImageAsset(
+  source: BrowserSongAssetSource,
+  chartPath: string,
+  assetPath: string,
+): BrowserSongAssetEntry | undefined {
+  for (const candidate of imageFallbackPaths(assetPath)) {
+    const entry = resolveChartAsset(source, chartPath, candidate);
+    if (entry) {
+      return entry;
+    }
+  }
+  return undefined;
+}
+
+function imageFallbackPaths(path: string): string[] {
+  const lastSlash = path.lastIndexOf('/');
+  const dotIndex = path.lastIndexOf('.');
+  if (dotIndex < 0 || dotIndex < lastSlash) {
+    return [path];
+  }
+  const base = path.slice(0, dotIndex);
+  const candidates = [`${base}.png`, `${base}.jpg`, `${base}.jpeg`, `${base}.gif`, `${base}.bmp`];
+  if (!candidates.includes(path)) {
+    candidates.push(path);
+  }
+  return candidates;
+}
+
+/**
  * Groups a flat song list into top-level folders for the select-screen
  * bar list. The grouping key is the **first segment** of each song's
  * `directoryLabel` (relative to its source) — so a song at

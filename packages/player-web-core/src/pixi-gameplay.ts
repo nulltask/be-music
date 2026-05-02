@@ -29,7 +29,7 @@ import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 import {
   loadAssetBytes,
   normalizePath,
-  resolveChartAsset,
+  resolveChartImageAsset,
   resolveChartAudioAsset,
 } from './library.ts';
 import {
@@ -1962,7 +1962,11 @@ export class PixiGameplayView {
         // (only the theme bundle keeps eager bytes). Read on
         // demand so the at-rest heap stays at "parsed chart
         // metadata only" until the user actually starts a song.
-        const entry = resolveChartAsset(source, song.chartPath, assetPath);
+        // Image-aware resolver so STAGEFILE / BANNER / BACKBMP
+        // entries that ship the actual graphic with a different
+        // extension (e.g. declared `.bmp` but bundled as `.png`)
+        // still resolve.
+        const entry = resolveChartImageAsset(source, song.chartPath, assetPath);
         const bytes = await loadAssetBytes(entry);
         if (!bytes) return;
         try {
@@ -2147,7 +2151,11 @@ export class PixiGameplayView {
         // in the song bundle. Read on demand so memory stays low
         // while browsing — the bytes only land in the heap for
         // BGA assets actually referenced by the focused chart.
-        const entry = resolveChartAsset(source, song.chartPath, path);
+        // Use the image-aware resolver so charts that declare
+        // `#BMPxx foo.bmp` but ship `foo.png` (or `.jpg` / `.gif`)
+        // still find the asset; video extensions fall through to
+        // the original path verbatim.
+        const entry = resolveChartImageAsset(source, song.chartPath, path);
         const bytes = await loadAssetBytes(entry);
         if (this.disposed) return;
         if (!bytes) {
