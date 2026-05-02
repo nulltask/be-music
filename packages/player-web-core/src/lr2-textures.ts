@@ -118,48 +118,19 @@ async function transcodeVideoToBrowserCodec(
   bytes: Uint8Array,
   path: string,
 ): Promise<Uint8Array | undefined> {
-  // Self-polyfill: libav's UMD bundle expects `globalThis.self`
-  // to exist. Browsers always have `self`, but the same import
-  // is reused in test / Node contexts where it might be missing.
-  if (typeof (globalThis as { self?: unknown }).self === 'undefined') {
-    (globalThis as { self?: unknown }).self = globalThis;
-  }
-  // libav's Emscripten-generated backend probes `global` (the
-  // Node global object) and crashes with `ReferenceError:
-  // global is not defined` in the browser, where only `self` /
-  // `globalThis` exist. Aliasing `globalThis.global = globalThis`
-  // before the dynamic backend import is enough for the probe to
-  // succeed and the WASM bootstrap to continue. We don't go
-  // through `vite-plugin-node-polyfills`'s `globals.global` for
-  // this — flipping it on there would inject a `global` shim
-  // into every module's preamble, which trips a few of the
-  // packages' own `typeof global === 'undefined'` guards.
-  if (typeof (globalThis as { global?: unknown }).global === 'undefined') {
-    (globalThis as { global?: unknown }).global = globalThis;
-  }
   const startedAt = performance.now();
   // eslint-disable-next-line no-console
   console.info(`[bga-video] transcode start: ${path} (${bytes.byteLength} bytes)`);
-  let libAvModule: LibAvFactoryModule;
-  try {
-    libAvModule = (await import('@uwx/libav.js-fat')) as unknown as LibAvFactoryModule;
-  } catch (error) {
+  const ffmpeg = await loadFfmpeg().catch((error) => {
     // eslint-disable-next-line no-console
-    console.warn('[bga-video] failed to import @uwx/libav.js-fat — BGA video will be skipped', error);
+    console.warn('[bga-video] failed to load ffmpeg.wasm — BGA video will be skipped', error);
     return undefined;
-  }
-  let libav: LibAvInstance;
-  try {
-    libav = await libAvModule.default.LibAV({ noworker: true, variant: 'fat' });
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.warn('[bga-video] LibAV() factory failed (likely a wasm fetch / instantiation error)', error);
-    return undefined;
-  }
+  });
+  if (!ffmpeg) return undefined;
   const inputName = `bga-input${pickInputExtension(path)}`;
   const outputName = 'bga-output.mp4';
   try {
-    await libav.writeFile(inputName, bytes);
+    await ffmpeg.writeFile(inputName, bytes);
     // Single-pass libx264 transcode. Flags chosen for browser
     // compatibility:
     //   - `-c:v libx264 -pix_fmt yuv420p` — universally decoded
@@ -173,7 +144,7 @@ async function transcodeVideoToBrowserCodec(
     //     `<video>` element can start decoding before the whole
     //     MP4 finishes downloading (we read the whole buffer
     //     anyway, but the flag is free)
-    const exitCode = await libav.ffmpeg(
+    const exitCode = await ffmpeg.exec([
       '-y',
       '-i',
       inputName,
@@ -189,18 +160,21 @@ async function transcodeVideoToBrowserCodec(
       '-movflags',
       '+faststart',
       outputName,
-    );
+    ]);
     if (exitCode !== 0) {
       // eslint-disable-next-line no-console
       console.warn(`[bga-video] ffmpeg exited with code ${exitCode} for ${path}`);
       return undefined;
     }
-    const out = await libav.readFile(outputName);
+    const out = await ffmpeg.readFile(outputName);
     let outBytes: Uint8Array | undefined;
     if (out instanceof Uint8Array) {
       outBytes = out;
-    } else if (out && typeof out === 'object' && 'buffer' in out) {
-      outBytes = new Uint8Array((out as ArrayBufferView).buffer);
+    } else if (typeof out === 'string') {
+      // ffmpeg.readFile can return string when no encoding is
+      // overridden — coerce via TextEncoder so we always return
+      // raw bytes downstream.
+      outBytes = new TextEncoder().encode(out);
     }
     if (!outBytes || outBytes.byteLength === 0) {
       // eslint-disable-next-line no-console
@@ -217,37 +191,77 @@ async function transcodeVideoToBrowserCodec(
     return undefined;
   } finally {
     try {
-      await libav.unlink?.(inputName);
+      await ffmpeg.deleteFile(inputName);
     } catch {
-      // ignore — the libav VFS is torn down with the instance
+      // ignore — the in-memory FS lives only as long as the
+      // FFmpeg instance, which we leak between calls (see
+      // `loadFfmpeg` for why) so cleanup just keeps the VFS
+      // tidy across calls.
     }
     try {
-      await libav.unlink?.(outputName);
+      await ffmpeg.deleteFile(outputName);
     } catch {
       // ignore
-    }
-    try {
-      libav.terminate();
-    } catch {
-      // ignore — terminate doubles as a free-instance call and
-      // throws on already-terminated instances in some libav
-      // builds; safe to swallow.
     }
   }
 }
 
-interface LibAvInstance {
-  writeFile(path: string, data: Uint8Array): Promise<void>;
-  readFile(path: string): Promise<Uint8Array | ArrayBufferView>;
-  ffmpeg(...args: (string | string[])[]): Promise<number>;
-  unlink?(path: string): Promise<void>;
-  terminate(): void;
+/**
+ * Lazy-loaded singleton — the `FFmpeg` class boots a Worker that
+ * downloads + instantiates the ~30 MB `@ffmpeg/core` wasm. We
+ * keep the loaded instance around between calls so subsequent
+ * BGA videos transcode immediately instead of paying the cold-
+ * start hit on every chart change.
+ */
+let cachedFfmpeg: FfmpegInstance | undefined;
+let cachedFfmpegPromise: Promise<FfmpegInstance> | undefined;
+
+async function loadFfmpeg(): Promise<FfmpegInstance> {
+  if (cachedFfmpeg) return cachedFfmpeg;
+  if (cachedFfmpegPromise) return cachedFfmpegPromise;
+  cachedFfmpegPromise = (async () => {
+    // Lazy ESM imports keep the multi-megabyte wasm + worker
+    // bundle out of the initial page load — the user only pays
+    // the download cost when they actually pick a chart with an
+    // unsupported BGA video.
+    const [{ FFmpeg }, { toBlobURL }, coreUrl, wasmUrl] = await Promise.all([
+      import('@ffmpeg/ffmpeg'),
+      import('@ffmpeg/util'),
+      // `@ffmpeg/core` exports two entry points:
+      //   - `.` → `dist/esm/ffmpeg-core.js`  (the JS glue)
+      //   - `./wasm` → `dist/esm/ffmpeg-core.wasm`  (the WASM
+      //     binary)
+      // Both are referenced via Vite's `?url` suffix so we get
+      // a browser-fetchable URL at runtime without copying the
+      // files into the demo's `public/` folder.
+      import('@ffmpeg/core?url').then((mod) => mod.default as string),
+      import('@ffmpeg/core/wasm?url').then((mod) => mod.default as string),
+    ]);
+    const ffmpeg = new FFmpeg();
+    // `toBlobURL` re-fetches the core JS / WASM URLs into
+    // blob URLs so the spawned Worker can `importScripts` them
+    // even when the page sits behind a different origin (the
+    // Worker's same-origin policy otherwise blocks the cross-
+    // origin file URLs Vite hands out under HMR).
+    const coreBlobUrl = await toBlobURL(coreUrl, 'text/javascript');
+    const wasmBlobUrl = await toBlobURL(wasmUrl, 'application/wasm');
+    await ffmpeg.load({ coreURL: coreBlobUrl, wasmURL: wasmBlobUrl });
+    cachedFfmpeg = ffmpeg as FfmpegInstance;
+    return cachedFfmpeg;
+  })().catch((error) => {
+    // Reset the promise cache on failure so a transient
+    // network blip doesn't permanently disable the fallback.
+    cachedFfmpegPromise = undefined;
+    throw error;
+  });
+  return cachedFfmpegPromise;
 }
 
-interface LibAvFactoryModule {
-  default: {
-    LibAV(options?: { noworker?: boolean; variant?: string }): Promise<LibAvInstance>;
-  };
+interface FfmpegInstance {
+  writeFile(path: string, data: Uint8Array): Promise<boolean>;
+  readFile(path: string): Promise<Uint8Array | string>;
+  exec(args: string[]): Promise<number>;
+  deleteFile(path: string): Promise<boolean>;
 }
 
 function pickInputExtension(path: string): string {
