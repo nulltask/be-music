@@ -170,6 +170,9 @@ importers:
       '@be-music/utils':
         specifier: workspace:*
         version: link:../utils
+      '@uwx/libav.js-fat':
+        specifier: 6.0.0-nightly.29.f420ff.ffmpeg.6.1.1
+        version: 6.0.0-nightly.29.f420ff.ffmpeg.6.1.1
       fflate:
         specifier: ^0.8.2
         version: 0.8.2

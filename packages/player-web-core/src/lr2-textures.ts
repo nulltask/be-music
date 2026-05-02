@@ -24,11 +24,41 @@ export interface VideoTextureHandle {
  * backed by an HTML `<video>` element. The video starts paused and
  * muted — the caller is expected to seek + `.play()` it on cue.
  *
- * Returns `undefined` if `loadedmetadata` doesn't fire within ~5 s
- * (probably an unsupported codec) so the BGA preloader can move on
- * without blocking on a stuck video forever.
+ * Falls back to {@link transcodeVideoToBrowserCodec} (via libav /
+ * ffmpeg.wasm) when the browser refuses to decode the original
+ * bytes — typical for legacy BMS BGA shipping `.mpg` / MPEG-1
+ * containers that no modern browser plays natively. The
+ * transcode pass writes a temporary H.264 / yuv420p MP4 in
+ * memory and feeds that back through the same `<video>` path,
+ * so the rest of the BGA pipeline (Pixi `VideoSource`, frame
+ * polling) is identical regardless of whether a transcode
+ * happened.
+ *
+ * Returns `undefined` only when both the native decode AND the
+ * libav fallback fail — at that point we accept the asset is
+ * unplayable and the BGA preloader simply skips it.
  */
 export async function loadVideoTextureFromBytes(
+  path: string,
+  bytes: Uint8Array,
+): Promise<VideoTextureHandle | undefined> {
+  const direct = await tryLoadVideoTextureFromBytes(path, bytes);
+  if (direct) return direct;
+  // eslint-disable-next-line no-console
+  console.info(`[bga-video] native decode failed; falling back to ffmpeg.wasm transcode: ${path}`);
+  const transcoded = await transcodeVideoToBrowserCodec(bytes, path).catch((error) => {
+    // eslint-disable-next-line no-console
+    console.warn(`[bga-video] transcode failed: ${path}`, error);
+    return undefined;
+  });
+  if (!transcoded) return undefined;
+  // The transcoded payload is always MP4 / H.264; pass an
+  // explicit name so `guessVideoMimeType` picks `video/mp4` and
+  // the browser's H.264 decoder takes the fast path.
+  return tryLoadVideoTextureFromBytes(`${stripVideoExtension(path)}.transcoded.mp4`, transcoded);
+}
+
+async function tryLoadVideoTextureFromBytes(
   path: string,
   bytes: Uint8Array,
 ): Promise<VideoTextureHandle | undefined> {
@@ -67,6 +97,129 @@ export async function loadVideoTextureFromBytes(
   const texture = new Texture({ source });
   texture.label = path;
   return { texture, video, objectUrl };
+}
+
+/**
+ * Lazy-imports libav.js (ffmpeg.wasm) and remuxes / re-encodes
+ * `bytes` to MP4 / H.264 / yuv420p — the lowest-common-denominator
+ * codec every modern browser plays natively. The libav module is
+ * a multi-megabyte WASM bundle, so the import is intentionally
+ * deferred to here: a typical drop with only modern BGA video
+ * never pays the download cost.
+ *
+ * `noworker: true` keeps everything on the main thread so the
+ * dev-server doesn't need to ship the COOP / COEP headers a
+ * worker-based libav build would otherwise require. Transcoding
+ * is CPU-bound but happens during the BGA prepare phase (which
+ * already overlaps the Decide splash), so the user never sees a
+ * frozen frame waiting for it.
+ */
+async function transcodeVideoToBrowserCodec(
+  bytes: Uint8Array,
+  path: string,
+): Promise<Uint8Array | undefined> {
+  // Self-polyfill: libav's UMD bundle expects `globalThis.self`
+  // to exist. Browsers always have `self`, but the same import
+  // is reused in test / Node contexts where it might be missing.
+  if (typeof (globalThis as { self?: unknown }).self === 'undefined') {
+    (globalThis as { self?: unknown }).self = globalThis;
+  }
+  const libAvModule = (await import('@uwx/libav.js-fat')) as unknown as LibAvFactoryModule;
+  const libav = await libAvModule.default.LibAV({ noworker: true, variant: 'fat' });
+  const inputName = `bga-input${pickInputExtension(path)}`;
+  const outputName = 'bga-output.mp4';
+  try {
+    await libav.writeFile(inputName, bytes);
+    // Single-pass libx264 transcode. Flags chosen for browser
+    // compatibility:
+    //   - `-c:v libx264 -pix_fmt yuv420p` — universally decoded
+    //   - `-preset ultrafast` / `-crf 26` — speed over file size
+    //     (the output is throwaway, only kept while the chart is
+    //     mounted)
+    //   - `-an` — strip audio; BMS BGA never carries an audio
+    //     track that should drive playback (chart audio comes
+    //     from `#WAV` cues)
+    //   - `-movflags +faststart` — moov atom up front so the
+    //     `<video>` element can start decoding before the whole
+    //     MP4 finishes downloading (we read the whole buffer
+    //     anyway, but the flag is free)
+    const exitCode = await libav.ffmpeg(
+      '-y',
+      '-i',
+      inputName,
+      '-c:v',
+      'libx264',
+      '-preset',
+      'ultrafast',
+      '-crf',
+      '26',
+      '-pix_fmt',
+      'yuv420p',
+      '-an',
+      '-movflags',
+      '+faststart',
+      outputName,
+    );
+    if (exitCode !== 0) {
+      // eslint-disable-next-line no-console
+      console.warn(`[bga-video] ffmpeg exited with code ${exitCode} for ${path}`);
+      return undefined;
+    }
+    const out = await libav.readFile(outputName);
+    if (out instanceof Uint8Array) return out;
+    if (out && typeof out === 'object' && 'buffer' in out) {
+      return new Uint8Array((out as ArrayBufferView).buffer);
+    }
+    return undefined;
+  } finally {
+    try {
+      await libav.unlink?.(inputName);
+    } catch {
+      // ignore — the libav VFS is torn down with the instance
+    }
+    try {
+      await libav.unlink?.(outputName);
+    } catch {
+      // ignore
+    }
+    libav.terminate();
+  }
+}
+
+interface LibAvInstance {
+  writeFile(path: string, data: Uint8Array): Promise<void>;
+  readFile(path: string): Promise<Uint8Array | ArrayBufferView>;
+  ffmpeg(...args: (string | string[])[]): Promise<number>;
+  unlink?(path: string): Promise<void>;
+  terminate(): void;
+}
+
+interface LibAvFactoryModule {
+  default: {
+    LibAV(options?: { noworker?: boolean; variant?: string }): Promise<LibAvInstance>;
+  };
+}
+
+function pickInputExtension(path: string): string {
+  const lower = path.toLowerCase();
+  // Preserve the original extension so libav picks the right
+  // demuxer (`.mpg` → mpegps, `.avi` → avi, `.wmv` → asf, …).
+  const dotIndex = lower.lastIndexOf('.');
+  if (dotIndex < 0) return '.mpg';
+  const ext = lower.slice(dotIndex);
+  // Allow only a small allowlist of known video extensions to
+  // avoid passing arbitrary user-controlled strings into the
+  // VFS path.
+  if (['.mpg', '.mpeg', '.avi', '.wmv', '.mov', '.mp4', '.webm', '.mkv', '.ogv', '.ogg'].includes(ext)) {
+    return ext;
+  }
+  return '.mpg';
+}
+
+function stripVideoExtension(path: string): string {
+  const dotIndex = path.lastIndexOf('.');
+  if (dotIndex < 0) return path;
+  return path.slice(0, dotIndex);
 }
 
 function releaseVideoElement(video: HTMLVideoElement): void {

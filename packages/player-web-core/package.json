@@ -33,6 +33,7 @@
     "@be-music/parser": "workspace:*",
     "@be-music/player": "workspace:*",
     "@be-music/utils": "workspace:*",
+    "@uwx/libav.js-fat": "6.0.0-nightly.29.f420ff.ffmpeg.6.1.1",
     "fflate": "^0.8.2",
     "pixi.js": "^8.17.1",
     "ts-ebml": "^3.0.2"
