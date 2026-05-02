@@ -3482,6 +3482,20 @@ export class PixiGameplayView {
    * "start playing this video from t=0 the moment the cue fires".
    */
   private syncBgaVideo(track: 'base' | 'layer', cue: BgaCue | undefined, seconds: number): void {
+    // Hold off on every video state mutation until the chart-start
+    // gate has fired and `audioContextStartTime` is anchored to the
+    // audio clock. Without this guard `renderBga` (which runs every
+    // tick from the moment `start()` reveals the scene) picks up
+    // the t=0 BGA cue while we're still in the LR2 LOADING phase
+    // and `play()`s the video — the user sees the BGA running
+    // behind the LOADING / DONE chrome. By short-circuiting we
+    // also avoid populating `bgaActiveVideos[track]`, so when
+    // PLAY START fires the next sync call still sees `previous =
+    // undefined` and re-enters the "first cue" branch with the
+    // correct seek offset.
+    if (this.audioContextStartTime === 0) {
+      return;
+    }
     const previous = this.bgaActiveVideos[track];
     const key = cue?.bmpKey;
     const handle = key ? this.bgaVideos.get(key) : undefined;
