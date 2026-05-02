@@ -57,7 +57,7 @@ import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-record
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { disposeChildren } from './pixi-utils.ts';
-import type { BeMusicJson } from '@be-music/json';
+import { normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import { createBeatResolver } from '@be-music/chart';
 import {
@@ -3584,7 +3584,14 @@ export class PixiGameplayView {
     if (!this.audioContext || !this.song) {
       return;
     }
-    const path = (this.resolvedChart ?? this.song.chart).resources.wav[note.event.value.toUpperCase()];
+    // `event.value` is already normalised under the chart's
+    // authored base (36 = case-folded, 62 = case-preserved). Look
+    // it up via `normalizeObjectKey(value, base)` rather than a
+    // hard-coded `toUpperCase()` so a `#BASE 62` chart's lowercase
+    // sample IDs (`#WAV0a`) hit their correct slot instead of
+    // collapsing onto the uppercase variant.
+    const chart = this.resolvedChart ?? this.song.chart;
+    const path = chart.resources.wav[normalizeObjectKey(note.event.value, resolveBmsBase(chart))];
     if (!path) {
       return;
     }

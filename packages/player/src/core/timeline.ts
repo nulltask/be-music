@@ -1,6 +1,6 @@
 import { createTimingResolver, type TimingResolver } from '@be-music/audio-renderer/triggers';
 import { isScrollChannel, sortEvents, type BeatResolver } from '@be-music/chart';
-import { normalizeChannel, normalizeObjectKey, type BeMusicJson } from '@be-music/json';
+import { normalizeChannel, normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import { findLastIndexAtOrBefore } from '@be-music/utils/core';
 
 export interface MeasureTimelinePoint {
@@ -83,12 +83,13 @@ export function createScrollTimeline(json: BeMusicJson, beatResolver: BeatResolv
   if (Object.keys(scrollMap).length === 0) {
     return timeline;
   }
+  const idBase = resolveBmsBase(json);
 
   for (const event of sortEvents(json.events)) {
     if (!isScrollChannel(event.channel)) {
       continue;
     }
-    const key = normalizeObjectKey(event.value);
+    const key = normalizeObjectKey(event.value, idBase);
     if (!Object.hasOwn(scrollMap, key)) {
       continue;
     }
@@ -115,12 +116,13 @@ export function createSpeedTimeline(json: BeMusicJson, beatResolver: BeatResolve
   if (Object.keys(speedMap).length === 0) {
     return timeline;
   }
+  const idBase = resolveBmsBase(json);
 
   for (const event of sortEvents(json.events)) {
     if (normalizeChannel(event.channel) !== 'SP') {
       continue;
     }
-    const key = normalizeObjectKey(event.value);
+    const key = normalizeObjectKey(event.value, idBase);
     if (!Object.hasOwn(speedMap, key)) {
       continue;
     }

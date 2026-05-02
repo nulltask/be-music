@@ -9,7 +9,14 @@ import {
   sortEvents,
   type BeatResolver,
 } from '@be-music/chart';
-import { normalizeChannel, normalizeObjectKey, DEFAULT_BPM, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import {
+  normalizeChannel,
+  normalizeObjectKey,
+  resolveBmsBase,
+  DEFAULT_BPM,
+  type BeMusicEvent,
+  type BeMusicJson,
+} from '@be-music/json';
 import { findLastIndexAtOrBefore, findLastIndexBefore } from '@be-music/utils/core';
 
 export interface TempoPoint {
@@ -150,10 +157,11 @@ export function collectSampleTriggersWithContext(
   const bmsonPlaybackMap =
     json.sourceFormat === 'bmson' ? createBmsonSamplePlaybackMap(json, resolver, events, beatResolver) : undefined;
 
+  const idBase = resolveBmsBase(json);
   const triggers: TimedSampleTrigger[] = [];
   for (const item of selectedEvents) {
     const event = item.event;
-    const sampleKey = normalizeObjectKey(event.value);
+    const sampleKey = normalizeObjectKey(event.value, idBase);
     const playback = bmsonPlaybackMap?.get(event);
     const beat = beatResolver.eventToBeat(event);
     triggers.push({
@@ -181,8 +189,9 @@ export function createBmsonSamplePlaybackMap(
     string,
     Array<{ event: BeMusicEvent; beat: number; seconds: number; sampleKey: string }>
   >();
+  const idBase = resolveBmsBase(json);
   for (const event of sampleEvents) {
-    const sampleKey = normalizeObjectKey(event.value);
+    const sampleKey = normalizeObjectKey(event.value, idBase);
     let entries = perSampleKey.get(sampleKey);
     if (!entries) {
       entries = [];
@@ -240,6 +249,7 @@ export function createBmsonSamplePlaybackMap(
 function createTempoPoints(json: BeMusicJson, sortedEvents: BeMusicEvent[], beatResolver: BeatResolver): TempoPoint[] {
   const baseBpm = json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
   const points: TempoPoint[] = [{ beat: 0, bpm: baseBpm, seconds: 0 }];
+  const idBase = resolveBmsBase(json);
 
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
@@ -254,7 +264,7 @@ function createTempoPoints(json: BeMusicJson, sortedEvents: BeMusicEvent[], beat
       }
       continue;
     }
-    const bpm = json.resources.bpm[normalizeObjectKey(event.value)];
+    const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase)];
     if (typeof bpm === 'number' && bpm > 0) {
       integrateTempoPoint(points, beat, bpm);
     }
@@ -284,13 +294,14 @@ function createStopPoints(
     order += 1;
   }
 
+  const idBase = resolveBmsBase(json);
   for (const event of sortedEvents) {
     const normalizedChannel = normalizeChannel(event.channel);
     if (!isStopChannel(normalizedChannel)) {
       continue;
     }
     const beat = beatResolver.eventToBeat(event);
-    const duration = json.resources.stop[normalizeObjectKey(event.value)];
+    const duration = json.resources.stop[normalizeObjectKey(event.value, idBase)];
     if (typeof duration !== 'number' || duration <= 0) {
       continue;
     }

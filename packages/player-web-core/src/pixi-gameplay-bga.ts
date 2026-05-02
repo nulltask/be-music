@@ -1,6 +1,6 @@
 import type { TimingResolver } from '@be-music/audio-renderer/triggers';
 import type { BeMusicJson } from '@be-music/json';
-import { normalizeChannel, normalizeObjectKey } from '@be-music/json';
+import { normalizeChannel, normalizeObjectKey, resolveBmsBase } from '@be-music/json';
 import { SPEC_BGA_CANVAS_SIZE } from './pixi-gameplay-constants.ts';
 
 export interface BgaCue {
@@ -20,6 +20,7 @@ export function buildBgaTimeline(
   const base: BgaCue[] = [];
   const layer: BgaCue[] = [];
   const poor: BgaCue[] = [];
+  const idBase = resolveBmsBase(chart);
 
   for (const event of chart.events) {
     const channel = normalizeChannel(event.channel);
@@ -32,7 +33,7 @@ export function buildBgaTimeline(
       continue;
     }
     const seconds = resolver.eventToSeconds(event);
-    const rawKey = normalizeObjectKey(event.value);
+    const rawKey = normalizeObjectKey(event.value, idBase);
     const bmpKey = rawKey === '00' ? undefined : rawKey;
     const cue: BgaCue = { seconds, bmpKey };
     if (channel === BGA_BASE_CHANNEL) base.push(cue);

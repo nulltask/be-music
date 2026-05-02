@@ -9,7 +9,7 @@ import {
   workerize,
 } from '@be-music/utils';
 import { sortEvents } from '@be-music/chart';
-import { normalizeChannel, normalizeObjectKey, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { normalizeChannel, normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { decode as decodeBmpFast } from 'fast-bmp';
 import { decode as decodePngFast } from 'fast-png';
@@ -614,10 +614,11 @@ export async function createBgaAnsiRenderer(
   const resolver = createTimingResolver(json);
   const sortedEvents = sortEvents(json.events);
 
-  const baseTimeline = buildBgaTimeline(sortedEvents, resolver, BASE_BGA_CHANNEL);
-  const poorTimeline = buildBgaTimeline(sortedEvents, resolver, POOR_BGA_CHANNEL);
-  const layerTimeline = buildBgaTimeline(sortedEvents, resolver, LAYER_BGA_CHANNEL);
-  const layer2Timeline = buildBgaTimeline(sortedEvents, resolver, LAYER2_BGA_CHANNEL);
+  const idBase = resolveBmsBase(json);
+  const baseTimeline = buildBgaTimeline(sortedEvents, resolver, BASE_BGA_CHANNEL, idBase);
+  const poorTimeline = buildBgaTimeline(sortedEvents, resolver, POOR_BGA_CHANNEL, idBase);
+  const layerTimeline = buildBgaTimeline(sortedEvents, resolver, LAYER_BGA_CHANNEL, idBase);
+  const layer2Timeline = buildBgaTimeline(sortedEvents, resolver, LAYER2_BGA_CHANNEL, idBase);
 
   const baseKeys = new Set(baseTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const poorKeys = new Set(poorTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
@@ -1136,6 +1137,7 @@ function buildBgaTimeline(
   sortedEvents: BeMusicEvent[],
   resolver: ReturnType<typeof createTimingResolver>,
   channel: string,
+  base: 36 | 62 = 36,
 ): BgaCue[] {
   const normalized = normalizeChannel(channel);
   const timeline: BgaCue[] = [];
@@ -1143,7 +1145,7 @@ function buildBgaTimeline(
     if (normalizeChannel(event.channel) !== normalized) {
       continue;
     }
-    const key = normalizeObjectKey(event.value);
+    const key = normalizeObjectKey(event.value, base);
     timeline.push({
       seconds: resolver.eventToSeconds(event),
       key: key === '00' ? undefined : key,

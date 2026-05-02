@@ -2,7 +2,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { parseChartFile } from '../../parser/src/index.ts';
+import { parseChart, parseChartFile } from '../../parser/src/index.ts';
 
 const audioSinkState = vi.hoisted(() => ({
   writes: [] as Uint8Array[],
@@ -821,6 +821,62 @@ describe('player', () => {
     // drain harder).
     expect(summary.gauge?.current).toBeCloseTo(18, 9);
     expect(summary.gauge?.cleared).toBe(false);
+  });
+
+  test('player: `#BASE 62` lowercase sample IDs are looked up case-sensitively at runtime', async () => {
+    // Two separate samples with case-distinct IDs (`#WAV0a` !=
+    // `#WAV0A`). On a base-36 chart the parser would have collapsed
+    // these into one slot during ingest; under `#BASE 62` they stay
+    // distinct and the player must resolve them via case-preserved
+    // keys when emitting `sample-trigger` logs.
+    const json = parseChart(
+      [
+        '#BASE 62',
+        '#TITLE Base62 Sample',
+        '#BPM 120',
+        '#WAV0a lower.wav',
+        '#WAV0A upper.wav',
+        '#00111:0a0A',
+        '',
+      ].join('\n'),
+    );
+    expect(json.bms.base).toBe(62);
+    expect(json.resources.wav['0a']).toBe('lower.wav');
+    expect(json.resources.wav['0A']).toBe('upper.wav');
+
+    const output: string[] = [];
+    await autoPlay(json, {
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+    });
+
+    // First note (`0a`) must hit the lowercase entry — `lower.wav` —
+    // and the runtime log must report the same case-preserved
+    // `sample:0a` token. Folding either side to uppercase would
+    // emit `file:upper.wav` / `sample:0A` and break this assertion.
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:sample-trigger') &&
+          line.includes('source:auto-note') &&
+          line.includes('sample:0a') &&
+          line.includes('file:lower.wav'),
+      ),
+    ).toBe(true);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:sample-trigger') &&
+          line.includes('source:auto-note') &&
+          line.includes('sample:0A') &&
+          line.includes('file:upper.wav'),
+      ),
+    ).toBe(true);
   });
 
   test('player: manual landmine hit triggers #WAV00 in runtime logs', async () => {

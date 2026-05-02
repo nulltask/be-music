@@ -1,4 +1,4 @@
-import { normalizeChannel, normalizeObjectKey, type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
+import { normalizeChannel, normalizeObjectKey, resolveBmsBase, type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
 
 const BMS_DEFAULT_DISPLAY_RANK = 2;
 const BMS_DEFAULT_DISPLAY_PLAY_LEVEL = 3;
@@ -73,11 +73,12 @@ function hasDynamicJudgeRankChanges(chart: BeMusicJson): boolean {
   if (chart.sourceFormat !== 'bms') {
     return false;
   }
+  const idBase = resolveBmsBase(chart);
   for (const event of chart.events) {
     if (normalizeChannel(event.channel) !== 'A0') {
       continue;
     }
-    if (parseDynamicJudgeRankPercent(chart.bms.exRank[normalizeObjectKey(event.value)]) !== undefined) {
+    if (parseDynamicJudgeRankPercent(chart.bms.exRank[normalizeObjectKey(event.value, idBase)]) !== undefined) {
       return true;
     }
   }

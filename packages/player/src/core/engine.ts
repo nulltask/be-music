@@ -11,7 +11,13 @@ import {
 import { basename } from 'node:path';
 import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
 import { floatToInt16, throwIfAborted, type LogEntry, type LogLevel } from '@be-music/utils';
-import { type BeMusicEvent, type BeMusicJson, normalizeChannel, normalizeObjectKey } from '@be-music/json';
+import {
+  type BeMusicEvent,
+  type BeMusicJson,
+  normalizeChannel,
+  normalizeObjectKey,
+  resolveBmsBase,
+} from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
   type RenderResult,
@@ -662,8 +668,9 @@ function writeRuntimeEventLog(
 function resolveEventResourceInfo(
   resources: Readonly<Record<string, string>>,
   event: Pick<BeMusicEvent, 'value'>,
+  base: 36 | 62 = 36,
 ): { sampleKey: string; resourcePath?: string } {
-  const sampleKey = normalizeObjectKey(event.value);
+  const sampleKey = normalizeObjectKey(event.value, base);
   return {
     sampleKey,
     resourcePath: resources[sampleKey],
@@ -677,8 +684,9 @@ function writePlayableSampleTriggerEventLog(
   resources: Readonly<Record<string, string>>,
   source: 'auto-note' | 'auto-scratch' | 'manual-note' | 'lane-fallback' | 'mine-hit',
   channel?: string,
+  base: 36 | 62 = 36,
 ): void {
-  const { sampleKey, resourcePath } = resolveEventResourceInfo(resources, event);
+  const { sampleKey, resourcePath } = resolveEventResourceInfo(resources, event, base);
   writeRealtimeTriggeredEventLog(
     writeOutput,
     {
@@ -706,12 +714,24 @@ function resolveLandmineExplosionEvent(
   };
 }
 
-function resolveLandmineGaugeEffect(landmineEvent: Pick<BeMusicEvent, 'value'>): {
+function resolveLandmineGaugeEffect(
+  landmineEvent: Pick<BeMusicEvent, 'value'>,
+  base: 36 | 62 = 36,
+): {
   objectValue: string;
   damage: number;
   gaugeDelta: number;
 } {
-  const objectValue = normalizeObjectKey(landmineEvent.value);
+  // Mine damage encodes the value in base-36 regardless of the
+  // chart's `#BASE` setting (the damage formula `value/2` is a
+  // BMS-spec constant, not an indexed-resource lookup), so the
+  // ID is normalised under the chart's base only to keep the
+  // returned `objectValue` in sync with the rest of the
+  // resource-key reporting. Mine charts that opt into base-62
+  // and use lowercase mine values will surface them verbatim
+  // here; the BASE36-pattern guard below still controls whether
+  // the value is interpreted numerically.
+  const objectValue = normalizeObjectKey(landmineEvent.value, base);
   if (!BASE36_OBJECT_KEY_PATTERN.test(objectValue)) {
     return {
       objectValue,
@@ -741,8 +761,9 @@ function writeSampleStopEventLog(
   reason: 'long-note-release' | 'long-note-break',
   event?: BeMusicEvent,
   resources?: Readonly<Record<string, string>>,
+  base: 36 | 62 = 36,
 ): void {
-  const resourceInfo = event && resources ? resolveEventResourceInfo(resources, event) : undefined;
+  const resourceInfo = event && resources ? resolveEventResourceInfo(resources, event, base) : undefined;
   const normalizedResourcePath =
     typeof resourceInfo?.resourcePath === 'string' ? normalizeLoggedResourcePath(resourceInfo.resourcePath) : undefined;
   writeRuntimeEventLog(writeOutput, 'sample-stop', [
@@ -758,8 +779,16 @@ function writeSampleStopEventLog(
 function createNoTuiPlaybackStateLogger(params: {
   writeOutput: (text: string) => void;
   summary: PlayerSummary;
+  /**
+   * Object-ID radix used for resolving sample keys in
+   * `logLongNoteState`. Defaults to base 36; pass `62` for charts
+   * that opted into `#BASE 62` so lowercase IDs hit the right
+   * resource entry instead of being case-folded.
+   */
+  base?: 36 | 62;
 }): PlaybackStateLogger {
   const { writeOutput, summary } = params;
+  const base = params.base ?? 36;
 
   return {
     logGaugeChange: (seconds, logParams): void => {
@@ -787,7 +816,7 @@ function createNoTuiPlaybackStateLogger(params: {
       ]);
     },
     logLongNoteState: (seconds, logParams): void => {
-      const { sampleKey, resourcePath } = resolveEventResourceInfo(logParams.resources, logParams.event);
+      const { sampleKey, resourcePath } = resolveEventResourceInfo(logParams.resources, logParams.event, base);
       const normalizedResourcePath =
         typeof resourcePath === 'string' ? normalizeLoggedResourcePath(resourcePath) : undefined;
       writeRuntimeEventLog(writeOutput, 'long-note', [
@@ -909,6 +938,7 @@ function buildLoggedBgaCueTimeline(
   resources: Record<string, string>,
   channel: string,
   layer: LoggedBgaLayer,
+  base: 36 | 62 = 36,
 ): LoggedBgaCue[] {
   const normalizedChannel = normalizeChannel(channel);
   const timeline: LoggedBgaCue[] = [];
@@ -916,7 +946,7 @@ function buildLoggedBgaCueTimeline(
     if (normalizeChannel(event.channel) !== normalizedChannel) {
       continue;
     }
-    const key = normalizeObjectKey(event.value);
+    const key = normalizeObjectKey(event.value, base);
     const normalizedKey = key === '00' ? undefined : key;
     timeline.push({
       seconds: Math.max(0, resolver.eventToSeconds(event)),
@@ -1153,12 +1183,14 @@ function createNoTuiPlaybackEventTracer(params: {
     })
     .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
 
+  const idBase = resolveBmsBase(json);
   const baseBgaTimeline = buildLoggedBgaCueTimeline(
     sortedEvents,
     resolver,
     json.resources.bmp,
     BGA_BASE_CHANNEL,
     'base',
+    idBase,
   );
   const poorBgaTimeline = buildLoggedBgaCueTimeline(
     sortedEvents,
@@ -1166,6 +1198,7 @@ function createNoTuiPlaybackEventTracer(params: {
     json.resources.bmp,
     BGA_POOR_CHANNEL,
     'poor',
+    idBase,
   );
   const layerBgaTimeline = buildLoggedBgaCueTimeline(
     sortedEvents,
@@ -1173,6 +1206,7 @@ function createNoTuiPlaybackEventTracer(params: {
     json.resources.bmp,
     BGA_LAYER_CHANNEL,
     'layer',
+    idBase,
   );
   const layer2BgaTimeline = buildLoggedBgaCueTimeline(
     sortedEvents,
@@ -1180,6 +1214,7 @@ function createNoTuiPlaybackEventTracer(params: {
     json.resources.bmp,
     BGA_LAYER2_CHANNEL,
     'layer2',
+    idBase,
   );
   const baseBgaEvents = baseBgaTimeline
     .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBgaCueText(cue)))
@@ -1496,12 +1531,13 @@ function collectDynamicBmsJudgeRankChanges(
   if (json.sourceFormat !== 'bms') {
     return [];
   }
+  const idBase = resolveBmsBase(json);
   const changes: DynamicBmsJudgeRankChange[] = [];
   for (const event of sortEvents(json.events)) {
     if (normalizeChannel(event.channel) !== 'A0') {
       continue;
     }
-    const raw = json.bms.exRank[normalizeObjectKey(event.value)];
+    const raw = json.bms.exRank[normalizeObjectKey(event.value, idBase)];
     const parsed = Number.parseFloat(raw ?? '');
     if (!Number.isFinite(parsed) || parsed <= 0) {
       continue;
@@ -1661,7 +1697,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       });
   const playbackStateLogger = uiEnabled
     ? createNoopPlaybackStateLogger()
-    : createNoTuiPlaybackStateLogger({ writeOutput, summary });
+    : createNoTuiPlaybackStateLogger({ writeOutput, summary, base: resolveBmsBase(resolvedJson) });
   const applyLoggedGaugeJudge = (seconds: number, judge: GrooveGaugeJudgeKind, reason = 'judge'): void => {
     applyGaugeJudgeWithLogging({
       summary,
@@ -1965,6 +2001,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
               resolvedJson.resources.wav,
               'auto-note',
               note.channel,
+              resolveBmsBase(resolvedJson),
             );
           }
           audioSession?.triggerEvent?.(note.event);
@@ -2230,7 +2267,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       });
   const playbackStateLogger = uiEnabled
     ? createNoopPlaybackStateLogger()
-    : createNoTuiPlaybackStateLogger({ writeOutput, summary });
+    : createNoTuiPlaybackStateLogger({ writeOutput, summary, base: resolveBmsBase(resolvedJson) });
   const applyLoggedGaugeJudge = (seconds: number, judge: GrooveGaugeJudgeKind, reason = 'judge'): void => {
     applyGaugeJudgeWithLogging({
       summary,
@@ -2454,6 +2491,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           resolvedJson.resources.wav,
           'auto-scratch',
           note.channel,
+          resolveBmsBase(resolvedJson),
         );
       }
       audioSession?.triggerEvent?.(note.event);
@@ -2731,7 +2769,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!markLandmineJudged(landmineCandidate)) {
         return;
       }
-      const landmineGaugeEffect = resolveLandmineGaugeEffect(landmineCandidate.event);
+      const landmineGaugeEffect = resolveLandmineGaugeEffect(landmineCandidate.event, resolveBmsBase(resolvedJson));
       const landmineExplosionEvent = resolveLandmineExplosionEvent(landmineCandidate.event, resolvedJson.resources.wav);
       if (landmineExplosionEvent) {
         if (!uiEnabled) {
@@ -2742,6 +2780,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             resolvedJson.resources.wav,
             'mine-hit',
             landmineCandidate.channel,
+            resolveBmsBase(resolvedJson),
           );
         }
         audioSession?.triggerEvent?.(landmineExplosionEvent);
@@ -2786,6 +2825,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             resolvedJson.resources.wav,
             'lane-fallback',
             fallback.channel,
+            resolveBmsBase(resolvedJson),
           );
         }
         audioSession?.triggerEvent?.(fallback.event);
@@ -2835,6 +2875,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         resolvedJson.resources.wav,
         'manual-note',
         channel,
+        resolveBmsBase(resolvedJson),
       );
     }
     audioSession?.triggerEvent?.(candidate.event);
@@ -3063,6 +3104,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
                 'long-note-release',
                 hold.note.event,
                 resolvedJson.resources.wav,
+                resolveBmsBase(resolvedJson),
               );
             }
             audioSession?.stopChannel?.(channel);
@@ -3103,6 +3145,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
                 'long-note-break',
                 hold.note.event,
                 resolvedJson.resources.wav,
+                resolveBmsBase(resolvedJson),
               );
             }
             audioSession?.stopChannel?.(channel);
@@ -3171,6 +3214,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
                 'long-note-release',
                 hold.note.event,
                 resolvedJson.resources.wav,
+                resolveBmsBase(resolvedJson),
               );
             }
             audioSession?.stopChannel?.(channel);
@@ -3376,6 +3420,11 @@ async function createAudioSessionIfEnabled(
     inferBmsLnTypeWhenMissing,
     options.signal,
   );
+  // Cache the chart's object-ID radix so the per-event runtime
+  // lookup below uses the same case-sensitivity as the keys in
+  // `samplesByKey` (which were extracted from `json.resources.wav`
+  // and therefore mirror the chart's authored case).
+  const runtimeSampleIdBase = resolveBmsBase(json);
   throwIfAborted(options.signal);
   onLoadProgress?.({
     ratio: 0.82,
@@ -3511,7 +3560,7 @@ async function createAudioSessionIfEnabled(
       if (lnobjEndEvents.has(event)) {
         return;
       }
-      const normalized = normalizeObjectKey(event.value);
+      const normalized = normalizeObjectKey(event.value, runtimeSampleIdBase);
       const sample = samplesByKey.get(normalized);
       if (!sample) {
         return;
@@ -3619,6 +3668,7 @@ async function createDebugActiveAudioEstimator(
     triggers,
     options.baseDir,
     options.signal,
+    resolveBmsBase(json),
   );
   throwIfAborted(options.signal);
   const windows: DebugSampleWindow[] = triggers
@@ -3716,8 +3766,9 @@ async function createDebugActiveAudioEstimator(
 
 async function buildDebugSampleDurationSecondsMap(
   triggers: TimedSampleTrigger[],
-  baseDir?: string,
-  signal?: AbortSignal,
+  baseDir: string | undefined,
+  signal: AbortSignal | undefined,
+  base: 36 | 62,
 ): Promise<Map<string, number>> {
   throwIfAborted(signal);
   const uniqueTriggers = new Map<string, TimedSampleTrigger>();
@@ -3736,6 +3787,7 @@ async function buildDebugSampleDurationSecondsMap(
       gain: 1,
       fallbackToneSeconds: DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS,
       signal,
+      base,
     });
     durations.set(trigger.sampleKey, rendered.durationSeconds);
   }
@@ -4160,6 +4212,7 @@ async function buildRuntimeSampleMap(
     });
   }
 
+  const idBase = resolveBmsBase(json);
   for (let index = 0; index < keys.length; index += 1) {
     throwIfAborted(signal);
     const key = keys[index];
@@ -4170,6 +4223,7 @@ async function buildRuntimeSampleMap(
       gain: chartWavGain,
       fallbackToneSeconds: 0.06,
       signal,
+      base: idBase,
     });
 
     sampleMap.set(key, rendered);

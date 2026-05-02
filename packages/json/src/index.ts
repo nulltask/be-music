@@ -497,6 +497,25 @@ export function normalizeChannel(value: string): string {
   return normalizeObjectKey(value);
 }
 
+/**
+ * Returns the radix the chart's object IDs should be interpreted
+ * under. `36` is the default (case-folded `0-9A-Z`); `62` is the
+ * beatoraja `#BASE 62` extension (case-sensitive `0-9A-Za-z`).
+ *
+ * Use this everywhere an `event.value` / `#WAVxx`-style key is
+ * about to be looked up against `json.resources.wav`,
+ * `json.resources.bpm`, etc. — passing the result through
+ * `normalizeObjectKey(value, base)` so the lookup honours the
+ * chart's authored case-sensitivity.
+ *
+ * Accepts a partial (`Pick<...>`) chart so callers that only have
+ * a `bms` slice (e.g. preservation walks) can use the same helper
+ * without rebuilding the full JSON.
+ */
+export function resolveBmsBase(json: { bms?: { base?: 36 | 62 } } | undefined): 36 | 62 {
+  return json?.bms?.base === 62 ? 62 : 36;
+}
+
 export function intToBase36(value: number, pad = 2): string {
   if (!Number.isFinite(value) || value < 0) {
     return '0'.repeat(pad);

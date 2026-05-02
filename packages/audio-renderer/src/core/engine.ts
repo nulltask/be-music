@@ -59,6 +59,13 @@ export interface RenderSingleSampleOptions {
   fallbackToneSeconds?: number;
   signal?: AbortSignal;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
+  /**
+   * Object-ID radix the supplied `sampleKey` was authored under.
+   * Defaults to base 36 (case-folded). Pass `62` for charts that
+   * declared `#BASE 62` so a lowercase `0a` key isn't re-folded
+   * back to `0A` during validation.
+   */
+  base?: 36 | 62;
 }
 
 interface StereoSample {
@@ -420,7 +427,7 @@ export async function renderSingleSample(
   samplePath: string | undefined,
   options: RenderSingleSampleOptions = {},
 ): Promise<RenderResult> {
-  const normalizedKey = normalizeObjectKey(sampleKey);
+  const normalizedKey = normalizeObjectKey(sampleKey, options.base ?? 36);
   const sampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
   const gain = typeof options.gain === 'number' && Number.isFinite(options.gain) ? options.gain : 1;
   const baseDir = options.baseDir ?? process.cwd();
