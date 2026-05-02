@@ -383,6 +383,7 @@ async function createBenchFixtures(): Promise<BenchFixtures> {
   const [eventA, eventB] = sampleBmsJson.events;
 
   const fractionItems = Array.from({ length: 512 }, (_value, index) => ({ value: index * 2 }));
+  const fractionValues = fractionItems.map((item) => item.value);
 
   const sampleRenderResult = createRenderResult([0, 0.2, -0.2, 0.1], [0, -0.1, 0.1, -0.05], 44_100);
   const playableRenderResult = createRenderResult([0.7, 0.2, 0], [0.68, 0.2, 0], 44_100);
@@ -402,6 +403,7 @@ async function createBenchFixtures(): Promise<BenchFixtures> {
     eventA,
     eventB,
     fractionItems,
+    fractionValues,
     randomPatterns: [
       { index: 1, current: 2, total: 4 },
       { index: 2, current: 1, total: 3 },

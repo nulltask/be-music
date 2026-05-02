@@ -1034,15 +1034,7 @@ function resizeFrameSourceWithAspectMode(
         const entry = source.frames[index]!;
         resizedFrames.push({
           seconds: entry.seconds,
-          frame: resizeAnsiFrameWithAspectMode(
-            entry.frame,
-            width,
-            height,
-            aspectX,
-            aspectY,
-            mode,
-            resizeAlgorithm,
-          ),
+          frame: resizeAnsiFrameWithAspectMode(entry.frame, width, height, aspectX, aspectY, mode, resizeAlgorithm),
         });
       }
       return resizedFrames;
@@ -1463,12 +1455,11 @@ async function loadTerminalAnsiImageInternal(
   }
   const outputFrame = options.fitMode === 'cover' ? selected.frame : cropAnsiFrameToOpaqueBounds(selected.frame);
   const filledFrame = fillAnsiFrameBackground(outputFrame, 0, 0, 0);
-  const kittyImage =
-    options.includeKittyImage
-      ? options.fitMode === 'cover'
-        ? buildTerminalKittyImage(sourceFrame, displaySize.width, displaySize.height, 'cover', resizeAlgorithm)
-        : buildTerminalKittyImage(sourceFrame, filledFrame.width, filledFrame.height, 'contain', resizeAlgorithm)
-      : undefined;
+  const kittyImage = options.includeKittyImage
+    ? options.fitMode === 'cover'
+      ? buildTerminalKittyImage(sourceFrame, displaySize.width, displaySize.height, 'cover', resizeAlgorithm)
+      : buildTerminalKittyImage(sourceFrame, filledFrame.width, filledFrame.height, 'contain', resizeAlgorithm)
+    : undefined;
   return {
     sourceFrame,
     image: {
@@ -1690,10 +1681,7 @@ function resolveFrameSourceDurationSeconds(source: FrameSource | undefined): num
   return Math.max(streamDuration, lastFrameSeconds + estimatedTailSeconds);
 }
 
-function startStreamingFrameSourceMap(
-  sourceMap: ReadonlyMap<string, FrameSource>,
-  seen: Set<FrameSource>,
-): void {
+function startStreamingFrameSourceMap(sourceMap: ReadonlyMap<string, FrameSource>, seen: Set<FrameSource>): void {
   for (const source of sourceMap.values()) {
     startStreamingFrameSource(source, seen);
   }
@@ -2052,7 +2040,9 @@ function convertImageToSpecFrame(
   const offsetX = image.format === 'video' ? 0 : Math.floor((SPEC_BGA_CANVAS_SIZE - fittedSize.width) / 2);
   const offsetY = 0;
   const resizedRgba =
-    resizeAlgorithm === 'lanczos' ? resampleDecodedImageRgbaLanczos(image, fittedSize.width, fittedSize.height) : undefined;
+    resizeAlgorithm === 'lanczos'
+      ? resampleDecodedImageRgbaLanczos(image, fittedSize.width, fittedSize.height)
+      : undefined;
 
   for (let targetYWithinImage = 0; targetYWithinImage < fittedSize.height; targetYWithinImage += 1) {
     const targetY = targetYWithinImage + offsetY;

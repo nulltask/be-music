@@ -1,0 +1,380 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #08090d;
+  color: #f8fafc;
+  font-family: system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * Hidden file input behind the GUI's "Open folder / ZIP"
+ * button. lil-gui's function controllers fire the GUI's
+ * `onChange` on click, which we use to forward `.click()` to
+ * this input — but the input itself never needs to be visible.
+ */
+.hidden-file-input {
+  display: none;
+}
+
+/*
+ * lil-gui custom theming — match the rest of the demo's
+ * dark / yellow accent palette. lil-gui ships CSS variables we
+ * can override at the root level rather than fighting its
+ * built-in selectors.
+ *
+ * `backdrop-filter: blur` lets the gameplay canvas + drop hint
+ * subtly read through the panel, so the controls don't feel
+ * like a hard rectangle pasted on top of the scene. The
+ * background colours therefore drop to fairly low alpha values;
+ * widget / row backgrounds keep slightly more opacity for
+ * legibility against busy chart graphics. `-webkit-backdrop-filter`
+ * is paired in for Safari / iOS WebKit support.
+ */
+.lil-gui.root {
+  --background-color: rgb(17 22 32 / 0.45);
+  --text-color: #f8fafc;
+  --title-background-color: rgb(11 14 22 / 0.55);
+  --title-text-color: #f8fafc;
+  --widget-color: rgb(27 34 48 / 0.7);
+  --hover-color: #ffd166;
+  --focus-color: #ffd166;
+  --number-color: #ffd166;
+  --string-color: #ffd166;
+  --font-family: system-ui, sans-serif;
+  z-index: 10;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+}
+
+/*
+ * Folder children inherit the root's `--background-color` (transparent),
+ * so blur applied to .lil-gui.root covers the whole panel. We
+ * deliberately don't add a separate `backdrop-filter` to the
+ * folder, otherwise stacked filters would re-blur an already
+ * blurred image and over-soften the chart visuals.
+ */
+
+/*
+ * Record-button accent. lil-gui paints function controllers as
+ * a single-row button — when capture is live we colour it red
+ * via the `.recording` class on the controller's row element
+ * and pulse the box-shadow so it stays visible without dominating
+ * gameplay rendered behind it.
+ */
+.lil-gui .controller.recording {
+  background: #c33b3b;
+  animation: record-pulse 1.4s ease-in-out infinite;
+}
+
+.lil-gui .controller.recording .name,
+.lil-gui .controller.recording .widget {
+  color: #fff;
+}
+
+/*
+ * Armed state — the user clicked Record on the select screen
+ * before picking a song. The button is in standby until the
+ * next play kicks off, at which point the `recording` class
+ * takes over. We use a softer amber + slower pulse so it reads
+ * as "ready, but not yet capturing".
+ */
+.lil-gui .controller.arming {
+  background: #b8841d;
+  animation: record-arming 2s ease-in-out infinite;
+}
+
+.lil-gui .controller.arming .name,
+.lil-gui .controller.arming .widget {
+  color: #fff;
+}
+
+@keyframes record-arming {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(184 132 29 / 0.5);
+  }
+  50% {
+    box-shadow: 0 0 6px 2px rgb(184 132 29 / 0.5);
+  }
+}
+
+@keyframes record-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(195 59 59 / 0.6);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px rgb(195 59 59 / 0.6);
+  }
+}
+
+/*
+ * Floating search input. Rendered as a DOM overlay rather than as
+ * a Pixi-side text widget because Web Audio editing UI (IME, copy
+ * / paste, keyboard-shortcut handling) is dramatically easier with
+ * a real `<input>` element. The input is invisible until focused
+ * — we don't want a stark form widget hovering over the LR2 skin
+ * by default; clicking the skin's search-text region (or pressing
+ * `/`) gives it focus and shows the editor on top of the skin.
+ *
+ * Pinned bottom-left so it doesn't compete with the floating
+ * top-right toolbar. Width matches the LR2 default search rect's
+ * approximate scaled width without trying to mirror it exactly —
+ * keeping the overlay independent of skin geometry means it works
+ * with any skin or no skin at all.
+ */
+.search-input {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 10;
+  width: 320px;
+  padding: 6px 10px;
+  border: 1px solid #3a4354;
+  border-radius: 6px;
+  background: rgb(11 14 22 / 0.85);
+  color: #f8fafc;
+  font-size: 13px;
+  font-family: system-ui, sans-serif;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: #ffd166;
+  background: rgb(11 14 22 / 0.95);
+}
+
+.search-input:not(:focus):placeholder-shown {
+  /*
+   * Dim the placeholder when the user hasn't focused yet so the
+   * input feels like a passive "click here to search" affordance
+   * rather than a primary widget.
+   */
+  opacity: 0.6;
+}
+
+/*
+ * Render stage. Fills the shell's full viewport so PixiJS's
+ * `resizeTo: container` sees the entire window size and the
+ * `resolveScaledViewport` math can scale the LR2 design space
+ * (640×480 / 1280×720 etc.) up as far as the aspect-correct fit
+ * allows.
+ *
+ * Both `width` and `height` need to be explicit `100%`: the shell
+ * itself is `position: relative` (no grid / flex) since the
+ * toolbar is absolute-positioned, so a default `display: block`
+ * stage would have `height: auto` and collapse to its (zero)
+ * content height — which would in turn shrink the canvas inside
+ * down to nothing.
+ */
+.stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.drop {
+  position: absolute;
+  inset: 16px;
+  display: none;
+  place-items: center;
+  border: 2px dashed #ffd166;
+  border-radius: 10px;
+  background: rgb(8 9 13 / 0.72);
+  color: #ffd166;
+  font-size: 22px;
+  font-weight: 700;
+  pointer-events: none;
+  z-index: 2;
+  /*
+   * Long string — wrap inside the dashed frame on narrow
+   * viewports rather than sticking out beyond it.
+   */
+  text-align: center;
+  padding: 16px;
+}
+
+.dragging .drop,
+.shell.empty .drop {
+  display: grid;
+}
+
+/*
+ * Loading overlay shown while a dropped folder / ZIP is being
+ * read and parsed. Positioned over the whole shell with a soft
+ * dim so the loading card reads above whatever scene is currently
+ * mounted (the select view, gameplay, or the empty drop hint).
+ *
+ * Hidden by default — `.visible` toggles it on. We use `display`
+ * (not `visibility`) so the indeterminate-bar animation stops
+ * paying CPU while idle, but fade the opacity for a less-jarring
+ * pop when the heavy phase ends.
+ */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  place-items: center;
+  background: rgb(8 9 13 / 0.65);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.loading-overlay.visible {
+  display: grid;
+}
+
+.loading-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /*
+   * Fixed width — the counter line shows the current filename,
+   * so without this the card would jitter horizontally with
+   * every progress event as paths of different lengths flowed
+   * in. `min(...)` keeps the layout sane on narrow viewports
+   * (< 480 px) while pinning the card to 480 px otherwise so
+   * the visual width is stable across phases.
+   */
+  width: min(80vw, 480px);
+  padding: 18px 22px;
+  border: 1px solid #3a4354;
+  border-radius: 10px;
+  background: rgb(17 22 32 / 0.94);
+  color: #f8fafc;
+  font-family: system-ui, sans-serif;
+  /*
+   * Card has its own pointer-events so a future "Cancel" button
+   * inside it would be clickable; the parent overlay stays
+   * pointer-event-none so the user can still interact with the
+   * background canvas in case loading runs in the background.
+   */
+  pointer-events: auto;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.4);
+}
+
+.loading-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+  /*
+   * Pin the line height in pixels (not em / unitless) so a CJK
+   * glyph in the label — should one ever sneak in via a future
+   * status string — doesn't pull a taller fallback font's line
+   * box and bump the card up by a couple of pixels. The fixed
+   * `height` plus `nowrap` makes this row exactly one line tall
+   * regardless of which fallback the browser picks.
+   */
+  line-height: 20px;
+  height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.loading-bar {
+  /*
+   * Track. Height kept tight (6 px) so the card reads as a hint
+   * rather than a hero element; rounded ends keep the fill from
+   * looking like a sharp data-cell on small percentages.
+   */
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #1b2230;
+  overflow: hidden;
+}
+
+.loading-bar-fill {
+  /*
+   * Determinate state — the inline `width` set by JS drives the
+   * fill. Default to a yellow accent so the bar matches the rest
+   * of the demo's highlight colour (toolbar :checked label, drop
+   * border).
+   */
+  height: 100%;
+  width: 0;
+  background: #ffd166;
+  border-radius: 3px;
+  transition: width 80ms linear;
+}
+
+.loading-bar-fill.indeterminate {
+  /*
+   * Indeterminate state — the bar slides a 30 %-wide segment
+   * back-and-forth so the user sees motion even when the loader
+   * doesn't yet know the total. Kicks in for the `enumerating`
+   * phase (FileSystem-tree walk) and as a default before the
+   * first determinate event lands.
+   */
+  width: 30%;
+  animation: loading-indeterminate 1.4s ease-in-out infinite;
+  transition: none;
+}
+
+@keyframes loading-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(333%);
+  }
+}
+
+.loading-counter {
+  /*
+   * Compact monospace-ish line that holds "X / N · path/to/file".
+   * Smaller and dimmer than the phase label so it reads as a
+   * supporting detail.
+   *
+   * Pinned to a single line via `nowrap` + `text-overflow: ellipsis`:
+   * the counter text changes on every progress tick (filename
+   * varies wildly in length) and any wrapping would make the card
+   * grow / shrink vertically, which combined with the fixed-width
+   * card makes the overlay look unstable.
+   *
+   * Width AND height are locked: a Japanese filename pulls in a
+   * CJK fallback font (Hiragino, Yu Gothic, etc.) whose intrinsic
+   * line-box is taller than the monospace primary; without a
+   * pixel-fixed `line-height` + `height` the card would jiggle
+   * vertically by ~2 px every time an ASCII path was followed by
+   * a Japanese path. Pinning to 18 px gives the 12 px font enough
+   * breathing room for the worst-case fallback's descender while
+   * staying constant across any locale.
+   */
+  font-size: 12px;
+  color: #aab4c2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 18px;
+  height: 18px;
+}

@@ -129,9 +129,7 @@ describe('player cli', () => {
   test('cli: enables video BGA streaming by default and lets the user switch back to legacy decode', () => {
     expect(parseArgs(['chart.bms']).videoBgaStreaming).toBe(true);
     expect(parseArgs(['chart.bms', '--no-video-bga-streaming']).videoBgaStreaming).toBe(false);
-    expect(parseArgs(['chart.bms', '--no-video-bga-streaming', '--video-bga-streaming']).videoBgaStreaming).toBe(
-      true,
-    );
+    expect(parseArgs(['chart.bms', '--no-video-bga-streaming', '--video-bga-streaming']).videoBgaStreaming).toBe(true);
   });
 
   test('cli: defaults image resize algorithm to nearest and accepts lanczos', () => {
@@ -270,7 +268,9 @@ describe('player cli', () => {
     const files = ['/charts/a.bms', '/charts/b.bms', '/charts/c.bms'];
     expect(resolveMusicSelectInitialFocusKey(files, '/charts/a.bms', 'random')).toBe('random');
     expect(resolveMusicSelectInitialFocusKey(files, undefined, 'chart:/charts/b.bms')).toBe('chart:/charts/b.bms');
-    expect(resolveMusicSelectInitialFocusKey(files, '/charts/a.bms', 'chart:/charts/missing.bms')).toBe('chart:/charts/a.bms');
+    expect(resolveMusicSelectInitialFocusKey(files, '/charts/a.bms', 'chart:/charts/missing.bms')).toBe(
+      'chart:/charts/a.bms',
+    );
   });
 
   test('cli: cycles music-select mode by a key in three states', () => {

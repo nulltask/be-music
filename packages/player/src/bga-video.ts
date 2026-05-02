@@ -277,13 +277,7 @@ export async function decodeVideoFramesToSourceFramesInWorker(
         settle(() => resolve(message.result));
         return;
       }
-      settle(() =>
-        reject(
-          message.name === 'AbortError'
-            ? createAbortError()
-            : new Error(message.message),
-        ),
-      );
+      settle(() => reject(message.name === 'AbortError' ? createAbortError() : new Error(message.message)));
     };
 
     const onError = (error: Error): void => {

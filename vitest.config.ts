@@ -4,11 +4,33 @@ import { defineConfig } from 'vitest/config';
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 
-const workspacePackages = ['utils', 'json', 'chart', 'parser', 'stringifier', 'audio-renderer', 'player', 'editor'] as const;
+const workspacePackages = [
+  'utils',
+  'json',
+  'chart',
+  'parser',
+  'stringifier',
+  'audio-renderer',
+  'player',
+  'editor',
+  'player-web-core',
+] as const;
 
-const workspaceAliases = Object.fromEntries(
-  workspacePackages.map((name) => [`@be-music/${name}`, resolve(rootDir, `packages/${name}/src/index.ts`)]),
-);
+const workspaceAliases = [
+  // Subpath aliases must come first because Vite resolves aliases by string prefix
+  // and `@be-music/utils` would otherwise capture `@be-music/utils/core`.
+  {
+    find: '@be-music/audio-renderer/triggers',
+    replacement: resolve(rootDir, 'packages/audio-renderer/src/core/triggers.ts'),
+  },
+  { find: '@be-music/player/playable-notes', replacement: resolve(rootDir, 'packages/player/src/playable-notes.ts') },
+  { find: '@be-music/player/core', replacement: resolve(rootDir, 'packages/player/src/core') },
+  { find: '@be-music/utils/core', replacement: resolve(rootDir, 'packages/utils/src/core.ts') },
+  ...workspacePackages.map((name) => ({
+    find: `@be-music/${name}`,
+    replacement: resolve(rootDir, `packages/${name}/src/index.ts`),
+  })),
+];
 
 const workspaceProjects = workspacePackages.map((name) => ({
   extends: true as const,
@@ -48,6 +70,9 @@ export default defineConfig({
         'packages/player/src/index.ts',
         'packages/player/src/tui.ts',
         'packages/player/src/node/*protocol.ts',
+        'packages/player-web-core/src/index.ts',
+        'packages/player-web-core/src/library.ts',
+        'packages/player-web-core/src/pixi-*.ts',
       ],
       thresholds: {
         // Use package-level thresholds so lower-coverage packages don't hide behind unrelated ones.

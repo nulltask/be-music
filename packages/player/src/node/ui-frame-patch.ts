@@ -6,8 +6,7 @@ export interface PlayerUiFrameNoteStateUpdate {
   visibleUntilBeat?: number;
 }
 
-export interface PlayerUiFramePatch
-  extends Omit<PlayerUiFramePayload, 'notes' | 'landmineNotes' | 'invisibleNotes'> {
+export interface PlayerUiFramePatch extends Omit<PlayerUiFramePayload, 'notes' | 'landmineNotes' | 'invisibleNotes'> {
   notes?: PlayerUiFrameNote[];
   landmineNotes?: PlayerUiFrameNote[];
   invisibleNotes?: PlayerUiFrameNote[];
@@ -41,11 +40,7 @@ export function createUiFramePatchBuilder(): (frame: Readonly<PlayerUiFramePaylo
       const note = frame.notes[index]!;
       const previous = noteStateSnapshots[index];
       const nextVisibleUntilBeat = note.visibleUntilBeat;
-      if (
-        !previous ||
-        previous.judged !== note.judged ||
-        previous.visibleUntilBeat !== nextVisibleUntilBeat
-      ) {
+      if (!previous || previous.judged !== note.judged || previous.visibleUntilBeat !== nextVisibleUntilBeat) {
         noteStateSnapshots[index] = {
           judged: note.judged,
           visibleUntilBeat: nextVisibleUntilBeat,

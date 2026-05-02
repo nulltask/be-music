@@ -49,7 +49,11 @@ function applyPlayModeToArgs<T extends PlayModeArgs>(args: T, playMode: PlayMode
   };
 }
 
-export function applyMusicSelectConfigToArgs<T extends PlayerConfigArgs>(args: T, playMode: PlayMode, highSpeed: number): T {
+export function applyMusicSelectConfigToArgs<T extends PlayerConfigArgs>(
+  args: T,
+  playMode: PlayMode,
+  highSpeed: number,
+): T {
   return {
     ...applyPlayModeToArgs(args, playMode),
     highSpeed: normalizeHighSpeedValue(highSpeed),
@@ -197,7 +201,10 @@ function parsePersistedPlayerConfig(value: unknown): PersistedPlayerConfig {
     playMode: parsePersistedPlayMode(objectValue.playMode) ?? defaults.playMode,
     highSpeed: parsePersistedHighSpeed(objectValue.highSpeed) ?? defaults.highSpeed,
   };
-  if (typeof objectValue.lastSelectedChartFileByDirectory === 'object' && objectValue.lastSelectedChartFileByDirectory) {
+  if (
+    typeof objectValue.lastSelectedChartFileByDirectory === 'object' &&
+    objectValue.lastSelectedChartFileByDirectory
+  ) {
     const copied = copyStringByDirectory(objectValue.lastSelectedChartFileByDirectory);
     if (copied) {
       resolved.lastSelectedChartFileByDirectory = copied;

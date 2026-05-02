@@ -5,11 +5,9 @@ import type { BgaKittyImage } from '../bga.ts';
 import type { PlayerSummary } from '../index.ts';
 import { formatSeconds, resolveAltModifierLabel } from '../utils.ts';
 import type { PlayerStateSignals } from '../state-signals.ts';
+import { ScrollDistanceMapper, type ScrollTimelinePoint, type SpeedTimelinePoint } from '../core/scroll-distance.ts';
 import { DEFAULT_TUI_NOTE_HEIGHT, type TuiNoteHeight } from '../tui-note-height.ts';
-import {
-  buildKittyGraphicsDeleteImageSequence,
-  buildKittyGraphicsRenderSequence,
-} from './kitty-graphics.ts';
+import { buildKittyGraphicsDeleteImageSequence, buildKittyGraphicsRenderSequence } from './kitty-graphics.ts';
 import { findStackableRowIndex } from './lane-stacking.ts';
 import { normalizeHighSpeed, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
 import {
@@ -105,27 +103,9 @@ interface BpmTimelinePoint {
   seconds: number;
 }
 
-interface ScrollTimelinePoint {
-  beat: number;
-  speed: number;
-}
-
-interface SpeedTimelinePoint {
-  beat: number;
-  speed: number;
-}
-
 interface StopWindowPoint {
   startSeconds: number;
   endSeconds: number;
-}
-
-interface ScrollSegment {
-  startBeat: number;
-  scrollSpeed: number;
-  speedStart: number;
-  speedSlope: number;
-  startDistance: number;
 }
 
 const IIDX_MEASURE_BEATS = 4;
@@ -348,7 +328,9 @@ export class PlayerTui {
     this.targetHighSpeed = initialHighSpeed;
     this.highSpeedTransitionFrom = initialHighSpeed;
     this.laneChannels = options.lanes.map((lane) => lane.channel);
-    this.scrollDistanceMapper = new ScrollDistanceMapper(options.scrollTimeline, options.speedTimeline);
+    this.scrollDistanceMapper = new ScrollDistanceMapper(options.scrollTimeline, options.speedTimeline, {
+      lookaheadBeats: MAX_SCROLL_LOOKAHEAD_BEATS,
+    });
     this.supported = Boolean(
       (options.stdoutIsTTY ?? process.stdout.isTTY) && (options.stdinIsTTY ?? process.stdin.isTTY),
     );
@@ -653,7 +635,11 @@ export class PlayerTui {
           const bodyEndBeat = note.endBeat;
           const bodyStartDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyStartBeat);
           const bodyEndDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyEndBeat);
-          const normalizedBodyStart = normalizeNoteApproachDistance(bodyStartDistance, frame.currentBeat, bodyStartBeat);
+          const normalizedBodyStart = normalizeNoteApproachDistance(
+            bodyStartDistance,
+            frame.currentBeat,
+            bodyStartBeat,
+          );
           const normalizedBodyEnd = normalizeNoteApproachDistance(bodyEndDistance, frame.currentBeat, bodyEndBeat);
           const hasBodyStart = Number.isFinite(normalizedBodyStart);
           const hasBodyEnd = Number.isFinite(normalizedBodyEnd);
@@ -1065,11 +1051,7 @@ export class PlayerTui {
       if (!Number.isFinite(maxBeat)) {
         end = notes.length;
       } else {
-        while (
-          end < notes.length &&
-          notes[end].beat <= maxBeat &&
-          end - start < visibleNotesLimit
-        ) {
+        while (end < notes.length && notes[end].beat <= maxBeat && end - start < visibleNotesLimit) {
           end += 1;
         }
       }
@@ -1206,314 +1188,6 @@ export class PlayerTui {
     }
     return laneIndex <= splitAfterIndex ? '1P' : '2P';
   }
-}
-
-class ScrollDistanceMapper {
-  private readonly segments: ScrollSegment[];
-
-  constructor(
-    scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>,
-    speedTimeline?: ReadonlyArray<SpeedTimelinePoint>,
-  ) {
-    this.segments = buildScrollSegments(scrollTimeline, speedTimeline);
-  }
-
-  distanceBetween(fromBeat: number, toBeat: number): number {
-    if (!Number.isFinite(fromBeat) || !Number.isFinite(toBeat)) {
-      return Number.NaN;
-    }
-    return this.distanceAt(toBeat) - this.distanceAt(fromBeat);
-  }
-
-  hasBidirectionalScrollWithinLookahead(fromBeat: number): boolean {
-    const safeFromBeat = Number.isFinite(fromBeat) ? Math.max(0, fromBeat) : 0;
-    const capBeat = safeFromBeat + MAX_SCROLL_LOOKAHEAD_BEATS;
-    let index = findLastSegmentIndexByBeat(this.segments, safeFromBeat);
-    let sawPositive = false;
-    let sawNegative = false;
-
-    while (index < this.segments.length) {
-      const segment = this.segments[index]!;
-      const segmentStartBeat = Math.max(safeFromBeat, segment.startBeat);
-      const nextStartBeat = this.segments[index + 1]?.startBeat ?? Number.POSITIVE_INFINITY;
-      const segmentEndBeat = Math.min(capBeat, nextStartBeat);
-      if (segmentEndBeat - segmentStartBeat <= 1e-9) {
-        if (segmentEndBeat >= capBeat) {
-          break;
-        }
-        index += 1;
-        continue;
-      }
-
-      const signedDistance = integratedSignedSegmentDistance(segment, segmentStartBeat, segmentEndBeat);
-      if (signedDistance > 1e-9) {
-        sawPositive = true;
-      } else if (signedDistance < -1e-9) {
-        sawNegative = true;
-      }
-
-      if (sawPositive && sawNegative) {
-        return true;
-      }
-      if (segmentEndBeat >= capBeat) {
-        break;
-      }
-      index += 1;
-    }
-
-    return false;
-  }
-
-  maxBeatWithinDistance(fromBeat: number, distance: number): number {
-    const safeFromBeat = Number.isFinite(fromBeat) ? Math.max(0, fromBeat) : 0;
-    const safeDistance = Number.isFinite(distance) ? Math.max(0, distance) : 0;
-    if (safeDistance <= 0) {
-      return safeFromBeat;
-    }
-
-    const capBeat = safeFromBeat + MAX_SCROLL_LOOKAHEAD_BEATS;
-    let beat = safeFromBeat;
-    let remainingDistance = safeDistance;
-    let index = findLastSegmentIndexByBeat(this.segments, beat);
-
-    while (index < this.segments.length && beat < capBeat && remainingDistance > 1e-9) {
-      const segment = this.segments[index]!;
-      const nextStartBeat = this.segments[index + 1]?.startBeat ?? Number.POSITIVE_INFINITY;
-      const segmentEndBeat = Math.min(capBeat, nextStartBeat);
-      const span = Math.max(0, segmentEndBeat - beat);
-      if (span <= 0) {
-        index += 1;
-        continue;
-      }
-
-      const traversableDistance = integratedAbsoluteSegmentDistance(segment, beat, segmentEndBeat);
-      if (traversableDistance <= 1e-9) {
-        beat = segmentEndBeat;
-        index += 1;
-        continue;
-      }
-      if (traversableDistance >= remainingDistance) {
-        return Math.min(capBeat, beat + solveBeatDeltaWithinSegment(segment, beat, remainingDistance));
-      }
-
-      remainingDistance -= traversableDistance;
-      beat = segmentEndBeat;
-      index += 1;
-    }
-
-    return capBeat;
-  }
-
-  private distanceAt(beat: number): number {
-    const safeBeat = Number.isFinite(beat) ? Math.max(0, beat) : 0;
-    const segment = this.segments[findLastSegmentIndexByBeat(this.segments, safeBeat)]!;
-    return segment.startDistance + integratedSignedSegmentDistance(segment, segment.startBeat, safeBeat);
-  }
-}
-
-function buildScrollSegments(
-  scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>,
-  speedTimeline?: ReadonlyArray<SpeedTimelinePoint>,
-): ScrollSegment[] {
-  const scrollPoints = normalizeScrollPoints(scrollTimeline);
-  const speedPoints = normalizeSpeedPoints(speedTimeline);
-  const breakpoints = [...new Set([...scrollPoints.map((point) => point.beat), ...speedPoints.map((point) => point.beat)])]
-    .filter((beat) => Number.isFinite(beat) && beat >= 0)
-    .sort((left, right) => left - right);
-  if (breakpoints.length === 0 || breakpoints[0] !== 0) {
-    breakpoints.unshift(0);
-  }
-
-  const segments: ScrollSegment[] = [];
-  let distance = 0;
-  for (let index = 0; index < breakpoints.length; index += 1) {
-    const startBeat = breakpoints[index]!;
-    const endBeat = breakpoints[index + 1];
-    const scrollSpeed = resolveScrollSpeedAtBeat(scrollPoints, startBeat);
-    const speedStart = resolveInterpolatedSpeedAtBeat(speedPoints, startBeat);
-    const speedEnd =
-      typeof endBeat === 'number' ? resolveInterpolatedSpeedAtBeat(speedPoints, endBeat) : speedStart;
-    const speedSlope =
-      typeof endBeat === 'number' && endBeat > startBeat ? (speedEnd - speedStart) / (endBeat - startBeat) : 0;
-    segments.push({
-      startBeat,
-      scrollSpeed,
-      speedStart,
-      speedSlope,
-      startDistance: distance,
-    });
-    if (typeof endBeat === 'number') {
-      distance += integratedSignedSegmentDistance(
-        {
-          startBeat,
-          scrollSpeed,
-          speedStart,
-          speedSlope,
-          startDistance: distance,
-        },
-        startBeat,
-        endBeat,
-      );
-    }
-  }
-  return segments.length > 0
-    ? segments
-    : [{ startBeat: 0, scrollSpeed: 1, speedStart: 1, speedSlope: 0, startDistance: 0 }];
-}
-
-function normalizeScrollPoints(timeline?: ReadonlyArray<ScrollTimelinePoint>): ScrollTimelinePoint[] {
-  const points: ScrollTimelinePoint[] = [{ beat: 0, speed: 1 }];
-  for (const point of timeline ?? []) {
-    if (!Number.isFinite(point.beat) || !Number.isFinite(point.speed) || point.beat < 0) {
-      continue;
-    }
-    points.push({
-      beat: point.beat,
-      speed: point.speed,
-    });
-  }
-  points.sort((left, right) => left.beat - right.beat);
-
-  const merged: ScrollTimelinePoint[] = [];
-  for (const point of points) {
-    const previous = merged.at(-1);
-    if (!previous) {
-      merged.push({ ...point });
-      continue;
-    }
-    if (Math.abs(point.beat - previous.beat) < 1e-9) {
-      previous.speed = point.speed;
-      continue;
-    }
-    if (Math.abs(point.speed - previous.speed) < 1e-9) {
-      continue;
-    }
-    merged.push({ ...point });
-  }
-  return merged;
-}
-
-function normalizeSpeedPoints(timeline?: ReadonlyArray<SpeedTimelinePoint>): SpeedTimelinePoint[] {
-  const points: SpeedTimelinePoint[] = [{ beat: 0, speed: 1 }];
-  for (const point of timeline ?? []) {
-    if (!Number.isFinite(point.beat) || !Number.isFinite(point.speed) || point.beat < 0 || point.speed < 0) {
-      continue;
-    }
-    points.push({
-      beat: point.beat,
-      speed: point.speed,
-    });
-  }
-  points.sort((left, right) => left.beat - right.beat);
-
-  const merged: SpeedTimelinePoint[] = [];
-  for (const point of points) {
-    const previous = merged.at(-1);
-    if (!previous) {
-      merged.push({ ...point });
-      continue;
-    }
-    if (Math.abs(point.beat - previous.beat) < 1e-9) {
-      previous.speed = point.speed;
-      continue;
-    }
-    merged.push({ ...point });
-  }
-  return merged;
-}
-
-function resolveScrollSpeedAtBeat(points: ReadonlyArray<ScrollTimelinePoint>, beat: number): number {
-  const index = findLastTimelineIndexAtOrBefore(points, beat);
-  return points[Math.max(0, index)]?.speed ?? 1;
-}
-
-function resolveInterpolatedSpeedAtBeat(points: ReadonlyArray<SpeedTimelinePoint>, beat: number): number {
-  const index = findLastTimelineIndexAtOrBefore(points, beat);
-  const current = points[Math.max(0, index)] ?? { beat: 0, speed: 1 };
-  const next = points[index + 1];
-  if (!next || beat <= current.beat || Math.abs(next.beat - current.beat) < 1e-9) {
-    return current.speed;
-  }
-  const ratio = clamp((beat - current.beat) / (next.beat - current.beat), 0, 1);
-  return current.speed + (next.speed - current.speed) * ratio;
-}
-
-function integratedSignedSegmentDistance(segment: ScrollSegment, fromBeat: number, toBeat: number): number {
-  const delta = Math.max(0, toBeat - fromBeat);
-  if (delta <= 0) {
-    return 0;
-  }
-  const offset = Math.max(0, fromBeat - segment.startBeat);
-  const startSpeed = segment.speedStart + segment.speedSlope * offset;
-  return segment.scrollSpeed * (startSpeed * delta + 0.5 * segment.speedSlope * delta * delta);
-}
-
-function integratedAbsoluteSegmentDistance(segment: ScrollSegment, fromBeat: number, toBeat: number): number {
-  const delta = Math.max(0, toBeat - fromBeat);
-  if (delta <= 0) {
-    return 0;
-  }
-  const offset = Math.max(0, fromBeat - segment.startBeat);
-  const startSpeed = segment.speedStart + segment.speedSlope * offset;
-  return Math.abs(segment.scrollSpeed) * (startSpeed * delta + 0.5 * segment.speedSlope * delta * delta);
-}
-
-function solveBeatDeltaWithinSegment(segment: ScrollSegment, fromBeat: number, distance: number): number {
-  const safeDistance = Number.isFinite(distance) ? Math.max(0, distance) : 0;
-  if (safeDistance <= 0) {
-    return 0;
-  }
-
-  const offset = Math.max(0, fromBeat - segment.startBeat);
-  const baseSpeed = segment.speedStart + segment.speedSlope * offset;
-  const absScroll = Math.abs(segment.scrollSpeed);
-  if (absScroll <= 1e-9) {
-    return 0;
-  }
-  const linear = absScroll * baseSpeed;
-  const quadratic = 0.5 * absScroll * segment.speedSlope;
-  if (Math.abs(quadratic) <= 1e-9) {
-    return linear <= 1e-9 ? 0 : safeDistance / linear;
-  }
-  const discriminant = linear * linear + 4 * quadratic * safeDistance;
-  if (discriminant <= 0) {
-    return 0;
-  }
-  return Math.max(0, (-linear + Math.sqrt(discriminant)) / (2 * quadratic));
-}
-
-function findLastTimelineIndexAtOrBefore<T extends { beat: number }>(points: ReadonlyArray<T>, beat: number): number {
-  let low = 0;
-  let high = points.length - 1;
-  let index = 0;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const candidate = points[mid]!;
-    if (candidate.beat <= beat) {
-      index = mid;
-      low = mid + 1;
-      continue;
-    }
-    high = mid - 1;
-  }
-  return index;
-}
-
-function findLastSegmentIndexByBeat(segments: ScrollSegment[], beat: number): number {
-  let low = 0;
-  let high = segments.length - 1;
-  let index = 0;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const candidate = segments[mid]!;
-    if (candidate.startBeat <= beat) {
-      index = mid;
-      low = mid + 1;
-      continue;
-    }
-    high = mid - 1;
-  }
-  return index;
 }
 
 function renderProgress(currentSeconds: number, totalSeconds: number): string {
@@ -2344,7 +2018,12 @@ function renderLaneLinesWithProgressIndicators(
   if (laneLines.length <= 0) {
     return laneLines;
   }
-  const markerPosition = resolveProgressIndicatorMarkerPosition(startRowIndex, endRowIndex, currentSeconds, totalSeconds);
+  const markerPosition = resolveProgressIndicatorMarkerPosition(
+    startRowIndex,
+    endRowIndex,
+    currentSeconds,
+    totalSeconds,
+  );
   return laneLines.map((line, index) => {
     if (index < startRowIndex || index > endRowIndex) {
       const emptySide = renderProgressIndicatorPadding();
@@ -2796,8 +2475,12 @@ function renderGrooveGaugeBar(current: number, clearThreshold: number, max: numb
     const inClearZone = index >= clearIndex;
     const filledCell = index < filled;
     const color = inClearZone
-      ? (filledCell ? GROOVE_GAUGE_CLEAR_RGB : GROOVE_GAUGE_CLEAR_EMPTY_RGB)
-      : (filledCell ? GROOVE_GAUGE_SAFE_RGB : GROOVE_GAUGE_SAFE_EMPTY_RGB);
+      ? filledCell
+        ? GROOVE_GAUGE_CLEAR_RGB
+        : GROOVE_GAUGE_CLEAR_EMPTY_RGB
+      : filledCell
+        ? GROOVE_GAUGE_SAFE_RGB
+        : GROOVE_GAUGE_SAFE_EMPTY_RGB;
     output += colorizeText(filledCell ? '█' : '░', color);
   }
   return output;

@@ -112,7 +112,10 @@ describe('timeline', () => {
   test('createMeasureTimeline and createMeasureBoundariesBeats include trailing boundary and skip invalid points', () => {
     const json = createEmptyJson('bms');
     json.events = [{ measure: 2, channel: '11', position: [0, 1], value: '01' }];
-    json.measures = [{ index: 3, length: 0 }, { index: 4, length: 1 }];
+    json.measures = [
+      { index: 3, length: 0 },
+      { index: 4, length: 1 },
+    ];
 
     const resolver = {
       beatToSeconds: (beat: number) => (beat === 16 ? Number.NaN : beat / 2),

@@ -84,10 +84,7 @@ export function createMusicSelectState(
         return;
       }
     }
-    if (
-      resolvedView.selectableIndexes.length > 0 &&
-      !resolvedView.selectableIndexByEntryIndex.has(nextSelectedIndex)
-    ) {
+    if (resolvedView.selectableIndexes.length > 0 && !resolvedView.selectableIndexByEntryIndex.has(nextSelectedIndex)) {
       nextSelectedIndex = resolvedView.selectableIndexes[0]!;
     }
     selectedIndex(nextSelectedIndex);

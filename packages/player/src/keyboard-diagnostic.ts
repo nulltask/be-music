@@ -40,7 +40,11 @@ function main(): void {
   process.stdin.setRawMode(true);
   process.stdin.resume();
 
-  const stopStatefulKeyboardProtocol = beginStatefulKeyboardProtocolOptIn(process.stdout, process.platform, process.env);
+  const stopStatefulKeyboardProtocol = beginStatefulKeyboardProtocolOptIn(
+    process.stdout,
+    process.platform,
+    process.env,
+  );
 
   process.stdout.write('Keyboard diagnostics started. Press keys to inspect stdin events. Press Ctrl+C to exit.\n');
   emitRecord({

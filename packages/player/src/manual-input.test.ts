@@ -310,10 +310,7 @@ describe('manual input', () => {
     const rightShift = resolveInputTokenEvent('447;2u', createKey(undefined, '447;2u'));
     expect(rightShift.tokens).toContain('shift-right');
 
-    const rightShiftCombined = resolveInputTokenEvent(
-      '447;2u447;1:3u',
-      createKey(undefined, '447;2u447;1:3u'),
-    );
+    const rightShiftCombined = resolveInputTokenEvent('447;2u447;1:3u', createKey(undefined, '447;2u447;1:3u'));
     expect(rightShiftCombined.tokens).toContain('shift-right');
     expect(rightShiftCombined.releaseTokens).toContain('shift-right');
   });
@@ -336,7 +333,10 @@ describe('manual input', () => {
     expect(ctrlC.protocol).toBe('win32');
     expect(ctrlC.tokens).toContain('ctrl+c');
 
-    const repeatedZ = resolveInputTokenEvent('\u001b[90;44;122;1;16;2_', createKey(undefined, '\u001b[90;44;122;1;16;2_'));
+    const repeatedZ = resolveInputTokenEvent(
+      '\u001b[90;44;122;1;16;2_',
+      createKey(undefined, '\u001b[90;44;122;1;16;2_'),
+    );
     expect(repeatedZ.protocol).toBe('win32');
     expect(repeatedZ.repeatTokens).toContain('z');
     expect(repeatedZ.repeatTokens).toContain('shift+z');

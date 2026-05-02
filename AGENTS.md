@@ -20,6 +20,13 @@
 - Keep links within Japanese markdown files pointing to other Japanese markdown files when those counterparts exist.
 - Do not add non-changeset Markdown files under `.changeset/` other than `README.md`, because Changesets parses `.md` files in that directory as release entries.
 
+# Testing Rules
+
+- Add tests in the same change that introduces new exported functions, new parser directives, new pure-function helpers, or behavior changes to existing ones. Vitest lives at the workspace root (`pnpm test`) and individual packages keep `*.test.ts` next to the source under test.
+- Tests are mandatory for: parser additions (e.g. new `#SRC_*` directive), pure helpers / utilities, format / op-table mappings (e.g. clear lamp / rank op resolvers), loader path-resolution rules, and any "given input → expected output" function.
+- Tests are optional for: Pixi scene classes that bind a WebGL context, demo-side wiring (`packages/player-web-demo/src/main.ts`), and integration glue whose only effect is calling already-tested helpers. When refactoring a previously-untested scene, prefer extracting the logic-heavy parts into pure functions and testing those rather than mocking the renderer.
+- When you change a tested helper's behavior, update or add the case that covers the new behavior — never delete an assertion just because it would otherwise fail.
+
 # Benchmark Rules
 
 - When exported functions are added or removed, update benchmarks accordingly (add or delete benchmark cases).

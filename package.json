@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "build": "pnpm -r --sort --workspace-concurrency=Infinity run build",
-    "clean": "pnpm -r run clean",
+    "clean": "pnpm -r run clean && rimraf coverage \"packages/*/node_modules/.vite\"",
     "changeset": "changeset",
     "release:status": "changeset status --verbose",
     "release:version": "changeset version",
@@ -21,6 +21,7 @@
     "bench:aggregate": "tsx --tsconfig tsconfig.typecheck.json scripts/bench/aggregate-results.ts",
     "bench:compare": "tsx --tsconfig tsconfig.typecheck.json scripts/bench/compare-results.ts",
     "player": "pnpm --filter @be-music/player run dev",
+    "player:web": "pnpm --filter @be-music/player-web-demo run dev",
     "player:diag:keyboard": "pnpm --filter @be-music/player run diag:keyboard",
     "player:diag:gameplay-input": "pnpm --filter @be-music/player run diag:gameplay-input",
     "player:sea": "pnpm --filter @be-music/player run build:sea",

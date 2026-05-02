@@ -67,20 +67,51 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       utilsApi.findLastIndexBefore(fixtures.fractionItems, 377, (item) => item.value);
     },
   });
+  define('utils.findFirstIndexAtOrAfter', {
+    run: (fixtures) => {
+      utilsApi.findFirstIndexAtOrAfter(fixtures.fractionItems, 377, (item) => item.value);
+    },
+  });
+  define('utils.findFirstIndexNumberAtOrAfter', {
+    run: (fixtures) => {
+      utilsApi.findFirstIndexNumberAtOrAfter(fixtures.fractionValues, 377);
+    },
+  });
   define('utils.normalizeAsciiBase36Code', {
     run: () => {
       utilsApi.normalizeAsciiBase36Code(0x66);
     },
   });
+  define('utils.normalizePath', {
+    run: () => {
+      utilsApi.normalizePath(String.raw`Songs\\set/../chart/./main.bms`);
+    },
+  });
+  define('utils.dirname', {
+    run: () => {
+      utilsApi.dirname(String.raw`Songs\\chart/main.bms`);
+    },
+  });
+  define('utils.basename', {
+    run: () => {
+      utilsApi.basename(String.raw`Songs\\chart/main.bms`);
+    },
+  });
   define('utils.workerize', {
     run: () => {
-      const worker = utilsApi.workerize((value: number) => value + 1, () => []);
+      const worker = utilsApi.workerize(
+        (value: number) => value + 1,
+        () => [],
+      );
       worker.close();
     },
   });
   define('utils.invokeWorkerizedFunction', {
     run: async () => {
-      const worker = utilsApi.workerize((value: number) => value + 1, () => []);
+      const worker = utilsApi.workerize(
+        (value: number) => value + 1,
+        () => [],
+      );
       try {
         await utilsApi.invokeWorkerizedFunction(worker, [41]);
       } finally {

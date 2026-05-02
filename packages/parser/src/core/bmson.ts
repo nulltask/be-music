@@ -6,7 +6,7 @@ import type {
   BmsonSoundNoteEntry,
   BmsonStopEventEntry,
 } from '@be-music/json';
-import { normalizeSortedUniqueNonNegativeIntegers } from '@be-music/utils';
+import { normalizeSortedUniqueNonNegativeIntegers } from '@be-music/utils/core';
 
 export interface BmsonInfo {
   title?: string;
@@ -156,7 +156,12 @@ export function normalizeBmsonBpmEvents(input: unknown): BmsonBpmEventEntry[] {
       continue;
     }
     const raw = item as Record<string, unknown>;
-    if (typeof raw.y !== 'number' || !Number.isFinite(raw.y) || typeof raw.bpm !== 'number' || !Number.isFinite(raw.bpm)) {
+    if (
+      typeof raw.y !== 'number' ||
+      !Number.isFinite(raw.y) ||
+      typeof raw.bpm !== 'number' ||
+      !Number.isFinite(raw.bpm)
+    ) {
       continue;
     }
     if (raw.bpm <= 0) {
@@ -246,7 +251,10 @@ export function createMeasureLengthsFromBmsonLines(
   return measures;
 }
 
-export function createBmsonPositionResolver(resolution: number, lines: number[]): (y: number) => MeasurePositionWithFraction {
+export function createBmsonPositionResolver(
+  resolution: number,
+  lines: number[],
+): (y: number) => MeasurePositionWithFraction {
   const ticksPerMeasure = Math.max(1, Math.floor(resolution * 4));
   return (y: number) => {
     const normalizedY = Math.max(0, Math.round(y));

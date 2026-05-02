@@ -1,9 +1,4 @@
-import {
-  normalizeChannel,
-  normalizeObjectKey,
-  type BeMusicEvent,
-  type BeMusicJson,
-} from '@be-music/json';
+import { normalizeChannel, normalizeObjectKey, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
@@ -278,11 +273,19 @@ export function isPlayLaneSoundChannel(channel: string): boolean {
 }
 
 export function isBmsBgmVolumeChangeChannel(channel: string): boolean {
-  return matchesPackedOrNormalizedChannel(channel, isPackedBmsBgmVolumeChangeChannel, isBmsBgmVolumeChangeNormalizedChannel);
+  return matchesPackedOrNormalizedChannel(
+    channel,
+    isPackedBmsBgmVolumeChangeChannel,
+    isBmsBgmVolumeChangeNormalizedChannel,
+  );
 }
 
 export function isBmsKeyVolumeChangeChannel(channel: string): boolean {
-  return matchesPackedOrNormalizedChannel(channel, isPackedBmsKeyVolumeChangeChannel, isBmsKeyVolumeChangeNormalizedChannel);
+  return matchesPackedOrNormalizedChannel(
+    channel,
+    isPackedBmsKeyVolumeChangeChannel,
+    isBmsKeyVolumeChangeNormalizedChannel,
+  );
 }
 
 export function isBmsDynamicVolumeChangeChannel(channel: string): boolean {
@@ -315,7 +318,9 @@ export function mapBmsLongNoteChannelToPlayable(channel: string): string | undef
     }
     const low = packed & 0xff;
     const laneIndex = low - 0x31;
-    return ((packed >> 8) & 0xff) === 0x35 ? BMS_LONG_NOTE_PLAYABLE_1P[laneIndex] : BMS_LONG_NOTE_PLAYABLE_2P[laneIndex];
+    return ((packed >> 8) & 0xff) === 0x35
+      ? BMS_LONG_NOTE_PLAYABLE_1P[laneIndex]
+      : BMS_LONG_NOTE_PLAYABLE_2P[laneIndex];
   }
   return mapBmsLongNoteNormalizedChannelToPlayable(resolveNormalizedChannelForPredicate(channel));
 }
@@ -623,11 +628,7 @@ function inferBmsLongNoteType(events: ResolvedBmsLongNoteEvent[]): 1 | 2 {
     let previousValue: string | undefined;
     let continuationCount = 0;
     for (const item of channelEvents) {
-      if (
-        previous &&
-        previousValue === item.normalizedValue &&
-        isBmsLongNoteType2Continuation(previous, item.event)
-      ) {
+      if (previous && previousValue === item.normalizedValue && isBmsLongNoteType2Continuation(previous, item.event)) {
         // A single same-value continuation is ambiguous because legacy LNTYPE=1
         // charts also use same-value pairs for their start/end markers.
         continuationCount += 1;
@@ -829,7 +830,9 @@ function isSampleTriggerNormalizedChannel(normalized: string): boolean {
   if (/^0[0-9A-Z]$/.test(normalized)) {
     return normalized === '01';
   }
-  return normalized !== '97' && normalized !== '98' && normalized !== 'A0' && normalized !== 'SC' && normalized !== 'SP';
+  return (
+    normalized !== '97' && normalized !== '98' && normalized !== 'A0' && normalized !== 'SC' && normalized !== 'SP'
+  );
 }
 
 function isPlayableNormalizedChannel(normalized: string): boolean {
@@ -880,7 +883,12 @@ function isPackedSampleTriggerChannel(packed: number): boolean {
   if (((packed >> 8) & 0xff) === 0x30) {
     return (packed & 0xff) === 0x31;
   }
-  if (packed === PACKED_CHANNEL_97 || packed === PACKED_CHANNEL_98 || packed === PACKED_CHANNEL_SC || packed === PACKED_CHANNEL_SP) {
+  if (
+    packed === PACKED_CHANNEL_97 ||
+    packed === PACKED_CHANNEL_98 ||
+    packed === PACKED_CHANNEL_SC ||
+    packed === PACKED_CHANNEL_SP
+  ) {
     return false;
   }
   return packed !== 0x4130;

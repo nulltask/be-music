@@ -71,10 +71,7 @@ export function resolveControlFlow(input: BeMusicJson, options: ResolveControlFl
   return json;
 }
 
-export function updateControlFlowCaptureStack(
-  stack: ControlFlowCaptureFrameType[],
-  command: ControlFlowCommand,
-): void {
+export function updateControlFlowCaptureStack(stack: ControlFlowCaptureFrameType[], command: ControlFlowCommand): void {
   if (command === 'RANDOM' || command === 'SETRANDOM') {
     stack.push('random');
     return;

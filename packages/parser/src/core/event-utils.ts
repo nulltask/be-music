@@ -11,7 +11,7 @@ import {
   normalizeFractionNumerator,
   normalizeNonNegativeInt,
   normalizePositiveInt,
-} from '@be-music/utils';
+} from '@be-music/utils/core';
 
 type MeasureLengthEntry = BeMusicJson['measures'][number];
 

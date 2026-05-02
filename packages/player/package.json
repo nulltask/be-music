@@ -17,6 +17,36 @@
       "types": "./dist/index.d.ts",
       "source": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./playable-notes": {
+      "types": "./dist/playable-notes.d.ts",
+      "source": "./src/playable-notes.ts",
+      "default": "./dist/playable-notes.js"
+    },
+    "./core/groove-gauge": {
+      "types": "./dist/core/groove-gauge.d.ts",
+      "source": "./src/core/groove-gauge.ts",
+      "default": "./dist/core/groove-gauge.js"
+    },
+    "./core/judge-window": {
+      "types": "./dist/core/judge-window.d.ts",
+      "source": "./src/core/judge-window.ts",
+      "default": "./dist/core/judge-window.js"
+    },
+    "./core/scoring": {
+      "types": "./dist/core/scoring.d.ts",
+      "source": "./src/core/scoring.ts",
+      "default": "./dist/core/scoring.js"
+    },
+    "./core/scroll-distance": {
+      "types": "./dist/core/scroll-distance.d.ts",
+      "source": "./src/core/scroll-distance.ts",
+      "default": "./dist/core/scroll-distance.js"
+    },
+    "./core/timeline": {
+      "types": "./dist/core/timeline.d.ts",
+      "source": "./src/core/timeline.ts",
+      "default": "./dist/core/timeline.js"
     }
   },
   "scripts": {

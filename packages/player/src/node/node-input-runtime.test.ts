@@ -15,19 +15,19 @@ const manualInputState = vi.hoisted(() => ({
                 ? ['alt+z']
                 : key?.meta && key.name === 'comma'
                   ? ['alt+,']
-                : chunk === 'KITTY'
-                  ? ['z']
-                  : chunk === 'WIN32'
+                  : chunk === 'KITTY'
                     ? ['z']
-                    : chunk === '\u001b[16;42;0;1;16;1_'
-                      ? ['shift-left', 'shift']
-                      : key?.sequence === '\u001b' || key?.name === 'escape'
-                        ? ['escape']
-                        : key?.sequence === '\u0003' || key?.ctrl
-                          ? ['ctrl+c']
-                          : key?.name === 'r' && key?.shift
-                            ? ['shift+r']
-                            : [],
+                    : chunk === 'WIN32'
+                      ? ['z']
+                      : chunk === '\u001b[16;42;0;1;16;1_'
+                        ? ['shift-left', 'shift']
+                        : key?.sequence === '\u001b' || key?.name === 'escape'
+                          ? ['escape']
+                          : key?.sequence === '\u0003' || key?.ctrl
+                            ? ['ctrl+c']
+                            : key?.name === 'r' && key?.shift
+                              ? ['shift+r']
+                              : [],
         repeatTokens: chunk === 'KITTY' || chunk === 'WIN32' ? ['x'] : [],
         releaseTokens:
           chunk === 'KITTY' || chunk === 'WIN32'
@@ -399,10 +399,7 @@ describe('node input runtime', () => {
       shift: false,
     });
 
-    expect(inputSignals.drainCommands()).toEqual([
-      { kind: 'toggle-pause' },
-      { kind: 'interrupt', reason: 'escape' },
-    ]);
+    expect(inputSignals.drainCommands()).toEqual([{ kind: 'toggle-pause' }, { kind: 'interrupt', reason: 'escape' }]);
 
     runtime.stop();
     expect(manualInputState.stopStatefulKeyboardProtocol).not.toHaveBeenCalled();
