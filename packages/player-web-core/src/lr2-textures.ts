@@ -151,10 +151,12 @@ async function transcodeVideoToBrowserCodec(
     //   - `-preset ultrafast` skips most analysis passes.
     //   - `-tune fastdecode,zerolatency` further drops
     //     bidirectional prediction.
-    //   - `-threads 0` lets libx264 pick the worker count from
-    //     the core-mt thread pool — the big multi-core win.
     //   - `-crf 30` trades a notch of quality for speed; BGA
     //     art tolerates it cleanly under nearest-filter scaling.
+    //
+    // No `-threads` override: the wasm core is single-threaded
+    // (see `loadFfmpeg` for why we don't use core-mt), so
+    // libx264 picks 1 by itself.
     const exitCode = await ffmpeg.exec([
       '-y',
       '-i',
@@ -169,8 +171,6 @@ async function transcodeVideoToBrowserCodec(
       '30',
       '-pix_fmt',
       'yuv420p',
-      '-threads',
-      '0',
       '-an',
       '-movflags',
       '+faststart',
@@ -243,42 +243,56 @@ async function loadFfmpeg(): Promise<FfmpegInstance> {
       import('@ffmpeg/ffmpeg'),
       import('@ffmpeg/util'),
     ]);
-    // `@ffmpeg/core-mt` is the multi-threaded build: ffmpeg
-    // runs on a worker pool that uses SharedArrayBuffer to
-    // parallelise libx264 across CPU cores. Cuts BMS BGA
-    // transcode time from ~tens of seconds to a few seconds
-    // on a typical multi-core CPU. Requires the page to be
-    // cross-origin isolated (COOP / COEP — see the demo's
-    // `vite.config.ts`).
+    // We target the ESM entry from the host's `/ffmpeg-core/`
+    // static path. @ffmpeg/ffmpeg creates its outer worker as
+    // `type: "module"`, where `importScripts` is unavailable:
+    // the worker's load handler catches that and falls back to
+    // `await import(coreURL)`. Dynamic-importing the UMD bundle
+    // yields `{ default: undefined }` (its IIFE assigns to a
+    // module-local `var createFFmpegCore` rather than to
+    // `module.exports` in a way the dynamic import can see),
+    // which trips `ERROR_IMPORT_FAILURE`. The ESM bundle exports
+    // `createFFmpegCore` as `default` properly.
     //
-    // We deliberately target the UMD entry from the host's
-    // `/ffmpeg-core-mt/` static path: the pthread workers
-    // Emscripten spawns load the core as a classic script via
-    // `importScripts`, which trips on the ESM entry's top-
-    // level `import` statements with `Uncaught SyntaxError:
-    // Cannot use import statement outside a module`. The UMD
-    // package exports aren't routed through `package.json`'s
-    // `exports` field (Vite can't resolve
-    // `@ffmpeg/core-mt/dist/umd/...?url` cleanly), so the demo
-    // copies the UMD files into `public/ffmpeg-core-mt/` via
-    // `vite-plugin-static-copy` and we reference them by their
-    // served URLs here.
-    const baseUrl = '/ffmpeg-core-mt';
+    // We deliberately use `@ffmpeg/core` (single-threaded) over
+    // `@ffmpeg/core-mt`. The multi-threaded core 0.12.x has a
+    // long-standing wasm bug where libx264's indirect calls
+    // crash every pthread worker with `RuntimeError: function
+    // signature mismatch`, after which `ffmpeg.exec()` aborts
+    // with a non-Error throw that detonates inside the core's
+    // own catch with `Cannot read properties of undefined
+    // (reading 'startsWith')`. Single-threaded encoding takes
+    // ~tens of seconds for a typical BMS BGA but actually
+    // completes.
+    //
+    // The demo's Vite config installs a custom plugin
+    // (`be-music:ffmpeg-core`) that serves the ESM core
+    // (`ffmpeg-core.js` / `.wasm`) at this stable URL prefix in
+    // dev and emits them as build assets in production.
+    const baseUrl = '/ffmpeg-core';
     const coreUrl = `${baseUrl}/ffmpeg-core.js`;
     const wasmUrl = `${baseUrl}/ffmpeg-core.wasm`;
-    const workerUrl = `${baseUrl}/ffmpeg-core.worker.js`;
     const ffmpeg = new FFmpeg();
-    // `toBlobURL` re-fetches the core JS / WASM / worker URLs
-    // into blob URLs so the spawned Worker can `importScripts`
-    // them even when the page sits behind a different origin
-    // (the Worker's same-origin policy otherwise blocks the
+    // `toBlobURL` re-fetches the core JS / WASM URLs into blob
+    // URLs so the spawned module worker's `await import(coreURL)`
+    // succeeds even when the page sits behind a different origin
+    // (the worker's same-origin policy otherwise blocks the
     // cross-origin file URLs Vite hands out under HMR).
-    const [coreBlobUrl, wasmBlobUrl, workerBlobUrl] = await Promise.all([
+    const [coreBlobUrl, wasmBlobUrl] = await Promise.all([
       toBlobURL(coreUrl, 'text/javascript'),
       toBlobURL(wasmUrl, 'application/wasm'),
-      toBlobURL(workerUrl, 'text/javascript'),
     ]);
-    await ffmpeg.load({ coreURL: coreBlobUrl, wasmURL: wasmBlobUrl, workerURL: workerBlobUrl });
+    // Surface ffmpeg's own log so we can see *what* the wasm
+    // side reports — the core's `exec()` wrapper hides errors
+    // without a JS-style `.message` (it only re-throws when the
+    // message starts with `"Aborted"` and self-detonates with a
+    // TypeError on `"unwind"` strings / OOMs), so the stderr log
+    // is often our only signal when something goes wrong.
+    ffmpeg.on('log', ({ type, message }: { type: string; message: string }) => {
+      // eslint-disable-next-line no-console
+      console.debug(`[bga-video] ffmpeg ${type}: ${message}`);
+    });
+    await ffmpeg.load({ coreURL: coreBlobUrl, wasmURL: wasmBlobUrl });
     cachedFfmpeg = ffmpeg as FfmpegInstance;
     return cachedFfmpeg;
   })().catch((error) => {
