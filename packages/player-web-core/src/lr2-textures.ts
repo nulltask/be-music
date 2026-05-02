@@ -144,23 +144,17 @@ async function transcodeVideoToBrowserCodec(
     //     `<video>` element can start decoding before the whole
     //     MP4 finishes downloading (we read the whole buffer
     //     anyway, but the flag is free)
-    // Speed-over-quality flags. BMS BGA is decorative low-res
-    // pixel art that gets aggressively scaled / nearest-filtered
-    // by Pixi anyway, so we can sacrifice a lot of fidelity for
-    // a fast transcode:
+    // Speed-over-quality flags — keep the input resolution &
+    // framerate intact (the user asked for visual parity), but
+    // tune libx264 itself for the fastest possible encode:
     //
-    //   - `-vf scale=320:-2` clamps width to 320px (height
-    //     auto-divides-by-2 to stay even), cutting the per-pixel
-    //     cost dramatically vs the 512px+ source.
-    //   - `-r 24` drops the frame rate; LR2's BGA layer doesn't
-    //     need 30+ fps and h264 encode is per-frame work.
-    //   - `-tune fastdecode -tune zerolatency` skips bidirectional
-    //     prediction passes the encoder would otherwise spend
-    //     time on.
-    //   - `-threads 0` lets libx264 pick the worker pool size
-    //     from `core-mt`'s SharedArrayBuffer-backed thread pool.
-    //   - `-crf 30` is a notch lower quality than the previous
-    //     26 but visually fine for BGA art.
+    //   - `-preset ultrafast` skips most analysis passes.
+    //   - `-tune fastdecode,zerolatency` further drops
+    //     bidirectional prediction.
+    //   - `-threads 0` lets libx264 pick the worker count from
+    //     the core-mt thread pool — the big multi-core win.
+    //   - `-crf 30` trades a notch of quality for speed; BGA
+    //     art tolerates it cleanly under nearest-filter scaling.
     const exitCode = await ffmpeg.exec([
       '-y',
       '-i',
@@ -175,10 +169,6 @@ async function transcodeVideoToBrowserCodec(
       '30',
       '-pix_fmt',
       'yuv420p',
-      '-vf',
-      'scale=320:-2',
-      '-r',
-      '24',
       '-threads',
       '0',
       '-an',
@@ -249,20 +239,34 @@ async function loadFfmpeg(): Promise<FfmpegInstance> {
     // bundle out of the initial page load — the user only pays
     // the download cost when they actually pick a chart with an
     // unsupported BGA video.
-    const [{ FFmpeg }, { toBlobURL }, coreUrl, wasmUrl, workerUrl] = await Promise.all([
+    const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
       import('@ffmpeg/ffmpeg'),
       import('@ffmpeg/util'),
-      // `@ffmpeg/core-mt` is the multi-threaded build: ffmpeg
-      // runs on a worker pool that uses SharedArrayBuffer to
-      // parallelise libx264 across CPU cores. Cuts BMS BGA
-      // transcode time from ~tens of seconds to a few seconds
-      // on a typical 2-minute MPEG-1 source. Requires the page
-      // to be cross-origin isolated (COOP / COEP headers — see
-      // the demo's `vite.config.ts`).
-      import('@ffmpeg/core-mt?url').then((mod) => mod.default as string),
-      import('@ffmpeg/core-mt/wasm?url').then((mod) => mod.default as string),
-      import('@ffmpeg/core-mt/worker?url').then((mod) => mod.default as string),
     ]);
+    // `@ffmpeg/core-mt` is the multi-threaded build: ffmpeg
+    // runs on a worker pool that uses SharedArrayBuffer to
+    // parallelise libx264 across CPU cores. Cuts BMS BGA
+    // transcode time from ~tens of seconds to a few seconds
+    // on a typical multi-core CPU. Requires the page to be
+    // cross-origin isolated (COOP / COEP — see the demo's
+    // `vite.config.ts`).
+    //
+    // We deliberately target the UMD entry from the host's
+    // `/ffmpeg-core-mt/` static path: the pthread workers
+    // Emscripten spawns load the core as a classic script via
+    // `importScripts`, which trips on the ESM entry's top-
+    // level `import` statements with `Uncaught SyntaxError:
+    // Cannot use import statement outside a module`. The UMD
+    // package exports aren't routed through `package.json`'s
+    // `exports` field (Vite can't resolve
+    // `@ffmpeg/core-mt/dist/umd/...?url` cleanly), so the demo
+    // copies the UMD files into `public/ffmpeg-core-mt/` via
+    // `vite-plugin-static-copy` and we reference them by their
+    // served URLs here.
+    const baseUrl = '/ffmpeg-core-mt';
+    const coreUrl = `${baseUrl}/ffmpeg-core.js`;
+    const wasmUrl = `${baseUrl}/ffmpeg-core.wasm`;
+    const workerUrl = `${baseUrl}/ffmpeg-core.worker.js`;
     const ffmpeg = new FFmpeg();
     // `toBlobURL` re-fetches the core JS / WASM / worker URLs
     // into blob URLs so the spawned Worker can `importScripts`

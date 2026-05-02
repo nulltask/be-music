@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 const repositoryDir = resolve(import.meta.dirname, '../..');
 
@@ -82,6 +83,31 @@ export default defineConfig({
         return null;
       },
     },
+    // Stage the multi-threaded ffmpeg.wasm core (UMD bundle)
+    // under `/ffmpeg-core-mt/` so the runtime can load it via
+    // a stable, classic-script-friendly URL. Single-thread
+    // ESM imports through Vite's `?url` machinery break the
+    // pthread workers Emscripten spawns (they `importScripts`
+    // the core, which fails on top-level `import` statements);
+    // a public-folder copy of the UMD build sidesteps that
+    // entirely, and the same files are picked up unchanged by
+    // `vite build` for production deploys.
+    viteStaticCopy({
+      targets: [
+        {
+          src: resolve(repositoryDir, 'node_modules/@ffmpeg/core-mt/dist/umd/ffmpeg-core.js'),
+          dest: 'ffmpeg-core-mt',
+        },
+        {
+          src: resolve(repositoryDir, 'node_modules/@ffmpeg/core-mt/dist/umd/ffmpeg-core.wasm'),
+          dest: 'ffmpeg-core-mt',
+        },
+        {
+          src: resolve(repositoryDir, 'node_modules/@ffmpeg/core-mt/dist/umd/ffmpeg-core.worker.js'),
+          dest: 'ffmpeg-core-mt',
+        },
+      ],
+    }),
   ],
   resolve: {
     alias: workspaceAliases,
@@ -102,7 +128,6 @@ export default defineConfig({
       // cleanly.
       '@ffmpeg/ffmpeg',
       '@ffmpeg/util',
-      '@ffmpeg/core-mt',
     ],
     // Pre-bundle `ts-ebml` up-front so Vite's CJS-named-export
     // interop runs at boot rather than the second pass a
