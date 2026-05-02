@@ -218,7 +218,23 @@ export function evaluateKeyframes(keyframes: ReadonlyArray<Lr2DestinationRect>, 
     }
     t = last.loop + ((elapsedMs - last.loop) % period);
   }
-  if (t <= first.time) {
+  if (t < first.time) {
+    // PRE-FIRST-KEYFRAME — hide. Per `docs/LR2SkinHelp.md`, a
+    // `#DST_*` whose first keyframe sits at `t=N>0` schedules
+    // the element to APPEAR at t=N, not to display the first
+    // keyframe verbatim during 0..N. The previous version
+    // returned `first` here, which painted e.g. the LR2 default
+    // play skin's blue scan-line beam (image[109], first kf at
+    // t=1000) at full size for the entire LOAD phase — visible
+    // immediately on scene mount instead of sweeping in alongside
+    // the song-title reveal at t=1000ms. Mirrors the
+    // `loop=-1 → alpha=0 after final` rule above for the
+    // post-animation phase: same hide-when-out-of-band idiom,
+    // just the bookend before the first keyframe instead of
+    // after the last.
+    return { ...first, alpha: 0 };
+  }
+  if (t === first.time) {
     return first;
   }
   for (let index = 0; index < keyframes.length - 1; index += 1) {
