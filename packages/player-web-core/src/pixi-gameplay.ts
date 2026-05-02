@@ -3009,6 +3009,41 @@ export class PixiGameplayView {
    * collapse to immediate dispatch (no behavioural change for
    * skinless / non-LR2 demos).
    */
+  /**
+   * Drives the global "fade everything to black" tween while
+   * {@link beginExitSequence} is in flight. The skin's authored
+   * `#FADEOUT` overlay (if any) only covers whatever the skin
+   * artist drew — gameplay-side layers (notes, lane chrome, BGA,
+   * shutters, bombs, overlay text) sit *above* `skinLayer` in
+   * `root` and would otherwise stay fully visible until the
+   * scene is torn down. Fading `root` itself dims every layer
+   * uniformly; `viewportBackground` is a sibling of `root` (under
+   * `sceneRoot`), so the page reveals the same `BG` (near-black)
+   * the playfield sat against, giving a clean fade-to-black
+   * appearance regardless of which lanes are still painting.
+   *
+   * Called every frame from {@link render}; cheap when the exit
+   * sequence isn't running (`root.alpha` is set back to 1 only
+   * when it diverges from 1, so steady-state has no GPU cost).
+   */
+  private applyExitFadeAlpha(): void {
+    if (!this.exiting) {
+      if (this.root.alpha !== 1) this.root.alpha = 1;
+      return;
+    }
+    const fadeOutMs = Math.max(0, this.options.skin?.timing?.fadeOut ?? 0);
+    const fadeStart = this.timerStartedAt.get(2);
+    if (fadeStart === undefined || fadeOutMs <= 0) {
+      // Fade hasn't been seeded (or skin has no `#FADEOUT`); leave
+      // root at full alpha. CLOSE-only skins keep the scene
+      // visible until the host transitions us out.
+      if (this.root.alpha !== 1) this.root.alpha = 1;
+      return;
+    }
+    const elapsed = this.playClock() - fadeStart;
+    this.root.alpha = Math.max(0, Math.min(1, 1 - elapsed / fadeOutMs));
+  }
+
   private beginExitSequence(callback: () => void): void {
     if (this.exiting || this.disposed) {
       callback();
@@ -3478,6 +3513,7 @@ export class PixiGameplayView {
     this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
+    this.applyExitFadeAlpha();
     this.background.clear().rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
     this.perf.time('renderSkin', () => this.renderSkin(DESIGN_WIDTH, DESIGN_HEIGHT));
     this.perf.time('renderBga', () => this.renderBga(seconds));
