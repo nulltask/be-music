@@ -15,6 +15,7 @@
 
 この文書が対象にするのは、`autoPlay()` と `manualPlay()` が返す結果、およびそれらが内部で使う判定・表示・音声処理です。
 CLI 引数、設定ファイル永続化、Node ワーカー間通信などの呼び出し方法は対象外です。
+browser player は timing、note、BGA cue、score、result に同じ譜面意味論を再利用しますが、PixiJS scene、LR2 skin 描画、browser file loading、WebAudio lifecycle は [Browser player 実装メモ](./player-web.ja.md) に分けて記述します。
 
 現時点で実装しているゲージは Lunatic Rave 2 互換の `NORMAL` groove gauge のみです。
 `HARD` / `EX-HARD` / `HAZARD` / 段位ゲージは未実装です。

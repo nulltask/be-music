@@ -15,6 +15,7 @@ Regarding the acceptance rules of musical score formats and the meaning of IR, p
 
 This document covers the results returned by `autoPlay()` and `manualPlay()`, as well as the judgment, display, and audio processing they use internally.
 Invocation methods such as CLI arguments, configuration file persistence, and Node worker communication are not covered.
+The browser player reuses the same chart semantics for timing, notes, BGA cues, score, and results, but its PixiJS scenes, LR2 skin rendering, browser file loading, and WebAudio lifecycle are documented separately in [Browser player implementation notes](./player-web.md).
 
 The only gauge currently implemented is the `NORMAL` groove gauge which is compatible with Lunatic Rave 2.
 `HARD` / `EX-HARD` / `HAZARD` / Level gauge is not implemented.

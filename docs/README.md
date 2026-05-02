@@ -8,6 +8,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [BMSON implementation specification](./bmson-spec.md)
 - [Bemuse implementation specification](./bemuse-spec.md)
 - [Player implementation specification](./player-spec.md)
+- [Browser player implementation notes](./player-web.md)
 - [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./json-spec.md)
 - [Glossary](./glossary.md)
 

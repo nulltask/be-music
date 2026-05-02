@@ -13,6 +13,8 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/stringifier`: JSON から `.bms` / `.bmson` への文字列化
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
 - `@be-music/player`: CLI プレイヤー (オートプレイ / キーボード演奏 / TUI)
+- `@be-music/player-web-core`: 選曲、LR2 skin 描画、gameplay、result scene、録画を扱う browser PixiJS player core
+- `@be-music/player-web-demo`: folder / ZIP drop、LR2 theme、debug control、browser 再生を接続する private Vite demo
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
 
 ## 必要環境
@@ -63,6 +65,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [BMSON 実装仕様](docs/bmson-spec.ja.md)
 - [Bemuse 実装仕様](docs/bemuse-spec.ja.md)
 - [Player 実装仕様](docs/player-spec.ja.md)
+- [Browser player 実装メモ](docs/player-web.ja.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](docs/json-spec.ja.md)
 - [用語集](docs/glossary.ja.md)
 
@@ -113,6 +116,16 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - 再生前 audio render (`--render-audio`) と bus ごとの音量調整 (`--volume`, `--bgm-volume`, `--key-volume`)
 - compressor / limiter の有効化切り替えと threshold / release 系の出力ダイナミクス調整
 - 構造化ログ出力 (`~/.be-music/logs/player.ndjson`, `--log-file` で上書き)
+
+### browser player (`@be-music/player-web-core` / `@be-music/player-web-demo`)
+
+- dropped folder、ZIP、BMS/LR2 theme 混在 drop を扱う browser song library
+- 大きな audio / video file を lazy に扱い、case-insensitive に path lookup
+- LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
+- note、timing、scroll distance、BGA cue、score、result は CLI player と共通の再生意味論を使用
+- key / BGM / master を分けた compressor control 付き WebAudio preview / gameplay bus
+- BGA still / video 描画、browser-side video transcode fallback、WebM gameplay recording
+- 1 つの renderer context を所有する PixiJS scene host と scene transition 時の resource dispose
 
 ### editor (`@be-music/editor`)
 
@@ -192,7 +205,15 @@ pnpm run player chart.bms --tui-visible-notes-limit 4096
 pnpm run player chart.bms --no-ln-type-auto
 ```
 
-### 5. エディタ
+### 5. Browser player demo
+
+```bash
+pnpm run player:web
+```
+
+demo は Vite dev server を起動します。BMS/BMSON の楽曲 folder、LR2 theme folder、ZIP、または楽曲 folder と theme folder の組み合わせを browser に drop できます。
+
+### 6. エディタ
 
 ```bash
 pnpm run editor import chart.bms chart.json

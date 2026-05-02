@@ -13,6 +13,8 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/stringifier`: Stringization from JSON to `.bms` / `.bmson`
 - `@be-music/audio-renderer`: Render the music score and output `.wav` / `.aiff`
 - `@be-music/player`: CLI player (autoplay / keyboard performance / TUI)
+- `@be-music/player-web-core`: Browser PixiJS player core for song selection, LR2 skin rendering, gameplay, result scenes, and recording
+- `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2 themes, debug controls, and browser playback together
 - `@be-music/editor`: CLI editor (import/edit/export)
 
 ## Required environment
@@ -63,6 +65,7 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [BMSON implementation specification](./docs/bmson-spec.md)
 - [Bemuse implementation specification](./docs/bemuse-spec.md)
 - [Player implementation specification](./docs/player-spec.md)
+- [Browser player implementation notes](./docs/player-web.md)
 - [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./docs/json-spec.md)
 - [Glossary](./docs/glossary.md)
 
@@ -113,6 +116,16 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Optional pre-playback audio rendering (`--render-audio`) and per-bus volume tuning (`--volume`, `--bgm-volume`, `--key-volume`)
 - Output dynamics tuning with compressor/limiter switches and threshold/release controls
 - Structured log output (`~/.be-music/logs/player.ndjson`, overwritten with `--log-file`)
+
+### browser player (`@be-music/player-web-core` / `@be-music/player-web-demo`)
+
+- Browser song library for dropped folders, ZIPs, and mixed BMS/LR2 theme drops
+- Lazy browser asset loading for large audio/video files, with case-insensitive path lookup
+- LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
+- Shared playback semantics with the CLI player for notes, timing, scroll distance, BGA cues, score, and results
+- WebAudio preview and gameplay buses with split key/BGM/master compressor controls
+- BGA still/video rendering, browser-side video transcode fallback, and WebM gameplay recording
+- Single PixiJS scene host that owns one renderer context and disposes scene resources on transitions
 
 ### editor (`@be-music/editor`)
 
@@ -192,7 +205,15 @@ pnpm run player chart.bms --tui-visible-notes-limit 4096
 pnpm run player chart.bms --no-ln-type-auto
 ```
 
-### 5. Editor
+### 5. Browser player demo
+
+```bash
+pnpm run player:web
+```
+
+The demo starts a Vite dev server. Drop a BMS/BMSON song folder, an LR2 theme folder, a ZIP, or a song folder and theme folder together into the browser.
+
+### 6. Editor
 
 ```bash
 pnpm run editor import chart.bms chart.json
