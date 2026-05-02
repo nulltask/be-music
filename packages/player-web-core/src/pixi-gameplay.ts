@@ -901,7 +901,12 @@ export class PixiGameplayView {
     // landing at ~PLAYSTART ms after that). Treating PLAYSTART as
     // the full intro length (the previous version) made the chart
     // start while the title was still on screen.
-    const now = performance.now();
+    // `start()` only runs when `paused` is false and `pauseTotal`
+    // is still 0, so `playClock()` and `performance.now()` are
+    // equivalent here — but seeding through `playClock()` keeps the
+    // animation clocks all in the same coordinate system as the
+    // pause-aware reads further below.
+    const now = this.playClock();
     this.sceneStartTime = now;
     const timing = this.options.skin?.timing ?? {};
     const loadStartMs = Math.max(0, timing.loadStart ?? 0);
@@ -966,20 +971,24 @@ export class PixiGameplayView {
     void Promise.all([bgaReady, delay(loadEndOffsetMs)]).then(() => {
       if (this.disposed) return;
       if (this.sceneStartTime !== sceneEpoch) return;
-      this.timerStartedAt.set(40, performance.now());
+      this.timerStartedAt.set(40, this.playClock());
       this.runtimeOps.delete(80);
       this.runtimeOps.add(81);
     });
     // PLAY START gate — same pattern, but for the configured
-    // `#PLAYSTART` (or fallback intro). Fires timer 41 and
-    // anchors the wall-clock + audio-context start times so the
-    // chart engine and BGM samples share a single t=0.
+    // `#PLAYSTART` (or fallback intro). Fires timer 41 (animation
+    // clock) and anchors the wall-clock + audio-context start
+    // times (chart-engine clock) so the chart engine and BGM
+    // samples share a single t=0.
     void Promise.all([bgaReady, delay(introMs)]).then(() => {
       if (this.disposed) return;
       if (this.sceneStartTime !== sceneEpoch) return;
-      const chartStartAt = performance.now();
-      this.timerStartedAt.set(41, chartStartAt);
-      this.startTime = chartStartAt;
+      this.timerStartedAt.set(41, this.playClock());
+      // `startTime` is consumed by `isIntroPlaying` and
+      // `currentSeconds`, both of which work in raw wall-clock
+      // units (with `currentSeconds` subtracting `pauseTotal`
+      // explicitly), so it MUST stay on `performance.now()`.
+      this.startTime = performance.now();
       if (this.audioContext) {
         this.audioContextStartTime = this.audioContext.currentTime;
       }
@@ -1007,7 +1016,7 @@ export class PixiGameplayView {
     }
     window.setTimeout(() => {
       if (this.disposed) return;
-      this.timerStartedAt.set(timer, performance.now());
+      this.timerStartedAt.set(timer, this.playClock());
     }, safeOffset);
   }
 
@@ -1542,10 +1551,11 @@ export class PixiGameplayView {
     // the slot doesn't go invisible before the first judgement happens.
     if (timer === 46 || timer === 47) {
       const judgedAt = this.timerStartedAt.get(timer);
+      const now = this.playClock();
       if (judgedAt !== undefined) {
-        return Math.max(0, performance.now() - judgedAt);
+        return Math.max(0, now - judgedAt);
       }
-      return Math.max(0, performance.now() - this.sceneStartTime);
+      return Math.max(0, now - this.sceneStartTime);
     }
     // Explicit seed wins. `mount()` seeds the LR2 scene-stage
     // timers (0 / 1 / 40 / 41) based on the skin's
@@ -1561,7 +1571,7 @@ export class PixiGameplayView {
     // fallback either.
     const started = this.timerStartedAt.get(timer);
     if (started !== undefined) {
-      return Math.max(0, performance.now() - started);
+      return Math.max(0, this.playClock() - started);
     }
     return 0;
   }
@@ -2234,7 +2244,7 @@ export class PixiGameplayView {
     if (timerId === undefined) {
       return;
     }
-    this.timerStartedAt.set(timerId, performance.now());
+    this.timerStartedAt.set(timerId, this.playClock());
   }
 
   private stopKeyOnTimer(channel: string): void {
@@ -2250,10 +2260,61 @@ export class PixiGameplayView {
       this.paused = false;
       this.pauseTotal += performance.now() - this.pauseTime;
       void this.audioContext?.resume();
+      this.resumeActiveBgaVideos();
     } else {
       this.paused = true;
       this.pauseTime = performance.now();
       void this.audioContext?.suspend();
+      this.pauseAllBgaVideos();
+    }
+  }
+
+  /**
+   * Pause-aware monotonic clock used by every "time since X"
+   * animation in the play scene (LR2 timer keyframes, scratch-disc
+   * rotation, bomb / FC / POOR-BGA windows, NOWJUDGE / NOWCOMBO
+   * decay, …). Returns wall clock minus the accumulated pause
+   * duration, and freezes at `pauseTime - pauseTotal` while the
+   * scene is paused. Seed sites that drive these animations store
+   * `playClock()` values, and the read sites compute
+   * `playClock() - seed` — so animations resume exactly where they
+   * left off rather than jumping forward by the pause duration.
+   */
+  private playClock(): number {
+    if (this.paused) {
+      return this.pauseTime - this.pauseTotal;
+    }
+    return performance.now() - this.pauseTotal;
+  }
+
+  /**
+   * Pauses every BGA video element in the chart's video pool. The
+   * `<video>` element doesn't honour the audio-context suspend, so
+   * without this the video keeps playing during a pause overlay.
+   */
+  private pauseAllBgaVideos(): void {
+    for (const handle of this.bgaVideos.values()) {
+      if (!handle.video.paused) {
+        handle.video.pause();
+      }
+    }
+  }
+
+  /**
+   * Resumes only the videos tied to currently-active base / layer
+   * cues. Avoids touching videos that were paused for a different
+   * reason (e.g. an earlier cue switched away from them in
+   * `syncBgaVideo`).
+   */
+  private resumeActiveBgaVideos(): void {
+    for (const track of ['base', 'layer'] as const) {
+      const active = this.bgaActiveVideos[track];
+      if (!active) continue;
+      const handle = this.bgaVideos.get(active.key);
+      if (!handle || !handle.video.paused) continue;
+      void handle.video.play().catch(() => {
+        // Autoplay-policy / codec rejections — ignore silently.
+      });
     }
   }
 
@@ -2433,7 +2494,7 @@ export class PixiGameplayView {
   }
 
   private triggerBomb(channel: string): void {
-    const now = performance.now();
+    const now = this.playClock();
     this.bombStartedAt.set(channel, now);
     // LR2 bomb timer (50+sideLaneIndex / 60+sideLaneIndex). The LR2
     // default 7keys skin attaches its bomb sprite to `timer=50..57`
@@ -2809,7 +2870,7 @@ export class PixiGameplayView {
     if (timerId === undefined) {
       return;
     }
-    this.timerStartedAt.set(timerId, performance.now());
+    this.timerStartedAt.set(timerId, this.playClock());
     // Clear after ~120 ms — long enough for the LR2 laser sprite to fade in
     // and back out without lingering through subsequent notes.
     const flashDurationMs = 120;
@@ -2889,12 +2950,12 @@ export class PixiGameplayView {
     // passed. When `channel` isn't supplied (legacy callers) we
     // default to the 1P timer.
     const isPlayer2 = typeof channel === 'string' && channel.startsWith('2');
-    this.timerStartedAt.set(isPlayer2 ? 47 : 46, performance.now());
+    this.timerStartedAt.set(isPlayer2 ? 47 : 46, this.playClock());
     // POOR / BAD judgements briefly swap the base BGA for the chart's
     // POOR BGA. We trigger the same window for `BAD` because the LR2
     // spec doesn't distinguish the two for the BGA channel.
     if (judge === 'POOR' || judge === 'BAD') {
-      this.lastPoorAt = performance.now();
+      this.lastPoorAt = this.playClock();
     }
     // Mirror the running combo into our high-water mark. `tracker.combo`
     // resets on every BAD/POOR, so this captures the longest unbroken
@@ -2939,7 +3000,7 @@ export class PixiGameplayView {
     if (this.score.total <= 0) return;
     if (this.tracker.combo < this.score.total) return;
     this.fullComboFired = true;
-    const now = performance.now();
+    const now = this.playClock();
     this.timerStartedAt.set(48, now);
     this.timerStartedAt.set(49, now);
     // eslint-disable-next-line no-console
@@ -3093,7 +3154,7 @@ export class PixiGameplayView {
     if (startedAt === undefined) {
       return;
     }
-    if (performance.now() - startedAt < this.fullComboDurationMs) {
+    if (this.playClock() - startedAt < this.fullComboDurationMs) {
       return;
     }
     this.timerStartedAt.delete(48);
@@ -3112,7 +3173,7 @@ export class PixiGameplayView {
     if (this.bombStartedAt.size === 0) {
       return;
     }
-    const now = performance.now();
+    const now = this.playClock();
     const totalDurationMs = 150; // LR2 default bomb cycle.
     for (const [channel, startedAt] of Array.from(this.bombStartedAt.entries())) {
       if (now - startedAt < totalDurationMs) {
@@ -3236,7 +3297,7 @@ export class PixiGameplayView {
     const cellWidth = this.bombTexture.frame.width / divx;
     const cellHeight = this.bombTexture.frame.height / divy;
     const cycle = lr2Layout ? 150 / totalFrames : BOMB_CYCLE_MS;
-    const now = performance.now();
+    const now = this.playClock();
     for (const [channel, startedAt] of Array.from(this.bombStartedAt.entries())) {
       const elapsed = now - startedAt;
       const lane = this.laneX.get(channel);
@@ -3311,7 +3372,7 @@ export class PixiGameplayView {
     // POOR override: show the POOR BGA for a short window after a missed
     // / BAD judgement, then revert to the base+layer composite.
     const poorWindowMs = 2000;
-    const inPoorWindow = !bga.noPoor && this.lastPoorAt > 0 && performance.now() - this.lastPoorAt < poorWindowMs;
+    const inPoorWindow = !bga.noPoor && this.lastPoorAt > 0 && this.playClock() - this.lastPoorAt < poorWindowMs;
     const poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, seconds) : undefined;
     // Drive video BGA playback: when the active cue points at a
     // video, seek it to (currentSeconds - cueSeconds) and resume
@@ -3585,7 +3646,7 @@ export class PixiGameplayView {
       sprite.anchor.set(0.5, 0.5);
       sprite.position.set(x + w / 2, y + h / 2);
       const rps = 0.5;
-      const elapsedMs = Math.max(0, performance.now() - this.sceneStartTime);
+      const elapsedMs = Math.max(0, this.playClock() - this.sceneStartTime);
       sprite.rotation = (elapsedMs / 1000) * rps * Math.PI * 2;
     } else {
       sprite.position.set(x, y);
