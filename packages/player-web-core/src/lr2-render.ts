@@ -192,8 +192,24 @@ export function evaluateKeyframes(keyframes: ReadonlyArray<Lr2DestinationRect>, 
   const finalTime = last.time;
   let t = elapsedMs;
   if (elapsedMs > finalTime) {
-    // Past the final keyframe — decide between hold vs. real loop.
-    if (last.loop < 0 || last.loop >= finalTime) {
+    // Past the final keyframe — decide between hide vs. hold vs. real loop.
+    //
+    // Per `docs/LR2SkinHelp.md` line 629:
+    //   "loop=-1の場合のみ、動作が終了した後にパーツが非表示になります"
+    // = "with loop=-1 only, the part becomes invisible after the
+    // animation finishes". So we synthesise a hidden version of the
+    // last keyframe (alpha=0) — preserves position / size for
+    // anything that still queries them, but makes the element
+    // disappear visually. The LR2 default skin's "DONE" plate uses
+    // exactly this idiom: 2 alpha=1 keyframes spanning 500 ms with
+    // loop=-1, so it flashes briefly then vanishes.
+    if (last.loop < 0) {
+      return { ...last, alpha: 0 };
+    }
+    if (last.loop >= finalTime) {
+      // `loop >= finalTime` is degenerate (would-be loop point is
+      // at or past the final keyframe), treat as hold-at-last for
+      // forward compat with skins that use it as "stop here".
       return last;
     }
     const period = finalTime - last.loop;
@@ -277,11 +293,15 @@ function interpolateKeyframe(a: Lr2DestinationRect, b: Lr2DestinationRect, t: nu
  * only one cell) we just return cell (0,0). Frames advance row-major
  * (left-to-right, top-to-bottom), matching LR2's playback order.
  *
- * When `loop === -1` (LR2's "play once and stop" marker on the
- * destination), the elapsed time is clamped to the cycle length so
- * the animation stops on its final frame instead of wrapping back to
- * frame 0. This is what makes a bomb explosion play exactly once even
- * when its SRC has a non-zero cycle.
+ * The optional `loop` parameter is reserved for callers that need to
+ * pin the cell at its final frame (used by one-shot effects whose
+ * SRC happens to have `cycle > 0`); pass `-1` to opt in. The default
+ * behaviour cycles cells continuously per LR2 spec — SRC cycling and
+ * DST keyframe looping are independent in LR2, so passing
+ * `dst.loop` here would conflate the two and break elements like
+ * the LR2 default skin's "DONE" plate (which is gated on op 81 +
+ * timer 40, has `dst.loop=-1` for "no DST keyframe loop", but whose
+ * SRC frames are an animated blink that must keep cycling).
  */
 export function pickAnimatedCell(
   source: { x: number; y: number; w: number; h: number; divx: number; divy: number; cycle: number },

@@ -3670,7 +3670,20 @@ export class PixiGameplayView {
       // Pass the texture extents so LR2's `w=0` / `h=0` "use native size"
       // shorthand resolves correctly — without it, `w=0` produces a
       // zero-width cell and we'd skip rendering the element entirely.
-      const cellRect = pickAnimatedCell(image.source, this.elapsedSinceTimer(image.source.timer), dst.loop, {
+      // SRC cycling and DST keyframe looping are independent in LR2.
+      // Pass `dst.loop` to `pickAnimatedCell` ONLY for the one-shot
+      // overlay timers (FC 48/49, bombs 50–69) so their explosion
+      // plays through the SRC cells exactly once and then clamps at
+      // the last frame for the brief moment before the timer's own
+      // cleanup retires the element. Every other element — most
+      // critically the LR2 default skin's "DONE" plate (timer 40 +
+      // op 81 + dst.loop=-1) — relies on continuous SRC cycling for
+      // its blink animation, so we pass `undefined` and let
+      // `pickAnimatedCell` use its default looping behaviour.
+      const dstTimer = image.destination.timer;
+      const isOneShotOverlayTimer = dstTimer === 48 || dstTimer === 49 || (dstTimer >= 50 && dstTimer <= 69);
+      const srcLoop = isOneShotOverlayTimer ? dst.loop : undefined;
+      const cellRect = pickAnimatedCell(image.source, this.elapsedSinceTimer(image.source.timer), srcLoop, {
         width: baseTexture.width,
         height: baseTexture.height,
       });
