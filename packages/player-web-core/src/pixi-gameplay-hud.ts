@@ -337,6 +337,20 @@ export function computeLnHoldDurationsMs(skin: Lr2Skin): Map<number, number> {
 }
 
 /**
+ * LR2 gauge-rise / gauge-max timers (`42` 1P up, `43` 2P up, `44`
+ * 1P max, `45` 2P max). The "up" timers are flash-style one-shots
+ * fired every time the gauge increases; the gameplay code retires
+ * them after the returned span via `setTimeout`. Max timers stay
+ * active for as long as the gauge sits at 100 %; they never auto-
+ * retire so this duration map is only consulted for the rise
+ * variants in practice — but we expose all four for symmetry with
+ * the bomb / FC / key-on / LN-hold helpers.
+ */
+export function computeGaugeTimerDurationsMs(skin: Lr2Skin): Map<number, number> {
+  return collectMaxKeyframeTimePerTimer(skin, 42, 45);
+}
+
+/**
  * Internal helper for {@link computeKeyOnFadeDurationsMs} /
  * {@link computeBombDurationsMs}: scan every keyframe-bearing
  * element type and report the longest `time` per timer id within

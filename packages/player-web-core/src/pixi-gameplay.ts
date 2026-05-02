@@ -104,6 +104,7 @@ import {
 import {
   computeBombDurationsMs,
   computeFullComboDurationMs,
+  computeGaugeTimerDurationsMs,
   computeKeyOnFadeDurationsMs,
   computeLnHoldDurationsMs,
   computeRankOp,
@@ -159,6 +160,14 @@ const KEY_ON_FLASH_HOLD_MS = 60;
  * skin's bomb cycle.
  */
 const BOMB_CLEANUP_FALLBACK_MS = 150;
+
+/**
+ * Fallback gauge-increase timer (42 / 43) cleanup duration in ms,
+ * used when the loaded skin has no element authored on those
+ * timers. ~300 ms is a comfortable flash window for the gauge bar
+ * "rise" sparkle when the skin doesn't dictate one.
+ */
+const GAUGE_INCREASE_FALLBACK_MS = 300;
 
 /**
  * Snapshot of the play session, captured at chart-end (or whenever
@@ -659,6 +668,22 @@ export class PixiGameplayView {
    * LN-hold visuals).
    */
   private readonly lnHoldFadeDurationMs = new Map<number, number>();
+  /**
+   * Per-gauge-rise / gauge-max timer (`42..45`) keyframe spans
+   * derived from the skin in {@link prepareSkin}.
+   * {@link applyGaugeDelta} consults the rise entries (42 / 43)
+   * to time the gauge-increase flash; max entries (44 / 45) stay
+   * active for as long as the gauge sits at 100 %, so their span
+   * is informational only.
+   */
+  private readonly gaugeTimerDurationMs = new Map<number, number>();
+  /**
+   * Active `setTimeout` handle for the gauge-increase flash
+   * (timer 42 / 43). Cleared on each new rise so consecutive
+   * increases re-stamp the flash instead of letting a stale
+   * deferred-delete retire the freshly-stamped timer.
+   */
+  private gaugeIncreaseTimeout: number | undefined;
   /**
    * In-flight long-note holds keyed by channel. Populated when the
    * head of an LN is judged (the press lands inside the note's
@@ -1288,6 +1313,10 @@ export class PixiGameplayView {
       window.clearTimeout(this.loadCompleteTimerHandle);
       this.loadCompleteTimerHandle = undefined;
     }
+    if (this.gaugeIncreaseTimeout !== undefined) {
+      window.clearTimeout(this.gaugeIncreaseTimeout);
+      this.gaugeIncreaseTimeout = undefined;
+    }
     if (this.exitFadeOutHandle !== undefined) {
       window.clearTimeout(this.exitFadeOutHandle);
       this.exitFadeOutHandle = undefined;
@@ -1527,9 +1556,46 @@ export class PixiGameplayView {
   /**
    * Applies an LR2 NORMAL-gauge judge to the current state. Accepts
    * `EMPTY_POOR` for input-on-empty-lane mispresses (-2 to gauge).
+   *
+   * Also drives the LR2 1P-side gauge-rise (timer 42) and gauge-
+   * max (timer 44) timers off the before/after diff so authored
+   * skin elements (rise sparkle, max-glow overlay) animate at
+   * the right moment. 2P-side timers (43 / 45) wait for DP
+   * gauge support.
    */
   private applyGaugeDelta(judge: GrooveGaugeJudgeKind): void {
+    const previous = this.gaugeState.current;
     applyGrooveGaugeJudge(this.gaugeState, judge);
+    const next = this.gaugeState.current;
+    if (next > previous) {
+      // Gauge increase — stamp timer 42 (1P rise) and schedule a
+      // deferred clear at the skin's authored span (or the
+      // fallback). Re-stamping is the natural behaviour for back-
+      // to-back increases: cancel the in-flight cleanup so the
+      // flash restarts cleanly each time.
+      if (this.gaugeIncreaseTimeout !== undefined) {
+        window.clearTimeout(this.gaugeIncreaseTimeout);
+        this.gaugeIncreaseTimeout = undefined;
+      }
+      this.timerStartedAt.set(42, this.playClock());
+      const fadeMs = this.gaugeTimerDurationMs.get(42) ?? GAUGE_INCREASE_FALLBACK_MS;
+      this.gaugeIncreaseTimeout = window.setTimeout(() => {
+        this.gaugeIncreaseTimeout = undefined;
+        if (this.disposed) return;
+        this.timerStartedAt.delete(42);
+      }, fadeMs);
+    }
+    if (next >= 100 && previous < 100) {
+      // Gauge crossed into max territory — fire timer 44 so any
+      // skin-authored "ゲージ MAX" overlay starts cycling.
+      this.timerStartedAt.set(44, this.playClock());
+    } else if (next < 100 && previous >= 100) {
+      // Dropped back below max; the max overlay is no longer
+      // applicable. Per LR2 spec the timer should re-fire from
+      // t=0 the next time we hit 100 %, which the branch above
+      // already handles.
+      this.timerStartedAt.delete(44);
+    }
   }
 
   /** Reset runtime DST-op state to a sensible default for a play session. */
@@ -1739,16 +1805,19 @@ export class PixiGameplayView {
     // running elapsed time afterward to slide in / fade out per the
     // skin's keyframe chain.
     if (
+      (timer >= 42 && timer <= 45) ||
       timer === 48 ||
       timer === 49 ||
       (timer >= 50 && timer <= 69) ||
       (timer >= 70 && timer <= 89) ||
       (timer >= 100 && timer <= 119)
     ) {
-      // Long-note hold-effect (70-89) follows the same explicit-
-      // seed model as bombs / FC / key-on: `startLnHoldTimer`
-      // stamps it at LN press, `releaseLnHoldTimer` retires it
-      // after the fade window. Without an entry the slot stays
+      // All explicitly-seeded timer ranges share the same gating:
+      // active iff `timerStartedAt` has an entry. Gauge rise /
+      // max (42..45) are stamped by `applyGaugeDelta`, LN-hold
+      // (70..89) by `startLnHoldTimer`, bombs (50..69) /
+      // key-on (100..119) by their own helpers, FC (48 / 49) by
+      // `maybeFireFullCombo`. Without an entry the slot stays
       // hidden.
       return this.timerStartedAt.has(timer);
     }
@@ -1804,6 +1873,13 @@ export class PixiGameplayView {
     this.lnHoldFadeDurationMs.clear();
     for (const [timerId, span] of computeLnHoldDurationsMs(skin)) {
       this.lnHoldFadeDurationMs.set(timerId, span);
+    }
+    // Gauge rise / max timers (42..45). The "rise" entries drive
+    // `applyGaugeDelta`'s flash retirement; the "max" entries are
+    // kept just for symmetry with the other timer-derived maps.
+    this.gaugeTimerDurationMs.clear();
+    for (const [timerId, span] of computeGaugeTimerDurationsMs(skin)) {
+      this.gaugeTimerDurationMs.set(timerId, span);
     }
     const imagePaths = new Set<string>();
     skin.images.forEach((image) => imagePaths.add(image.source.imagePath));
