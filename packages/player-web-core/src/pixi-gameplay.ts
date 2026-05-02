@@ -122,6 +122,29 @@ interface RuntimeNote extends TimedPlayableNote {
 }
 
 /**
+ * Duration of the lane-laser release fade. Anchors the linear
+ * 1 → 0 alpha taper that {@link releaseKeyOnTimer} drives.
+ *
+ * The 120 ms value is a carry-over from the previous "play the
+ * LR2 keyframe over ~120 ms" implementation; it's a perceptually
+ * comfortable decay for auto-judge feedback rather than a number
+ * derived from the skin metadata. Worth revisiting if a future
+ * skin's key-on keyframes are visibly out of step with this.
+ */
+const KEY_ON_FADE_OUT_MS = 120;
+
+/**
+ * "Fully on" hold time before {@link flashKeyOnTimer} hands the
+ * lane laser to the release-fade path. Without this hold the
+ * sprite would only stay at peak alpha for the first frame (≈16
+ * ms at 60 fps) before the fade tween kicked in, which made
+ * auto-judged short-note flashes look like a single-frame
+ * blink. ~60 ms is enough to register visually as a deliberate
+ * "tap" without lingering through the next note.
+ */
+const KEY_ON_FLASH_HOLD_MS = 60;
+
+/**
  * Snapshot of the play session, captured at chart-end (or whenever
  * the host asks for it via {@link PixiGameplayView.getResultData}).
  * Routed through the host into the result scene so it can render
@@ -562,6 +585,15 @@ export class PixiGameplayView {
   private chartEndTimeout: number | undefined;
   private readonly keyFlashTimeouts = new Set<number>();
   private readonly pressedChannels = new Set<string>();
+  /**
+   * Per-key-on-timer (`100..117`) play-clock timestamp of an
+   * in-flight release fade. When set, `renderSkinImage` tapers the
+   * sprite's `alpha` from 1 → 0 over {@link KEY_ON_FADE_OUT_MS}
+   * starting at the recorded value, so an LN release decays
+   * instead of popping off. {@link releaseKeyOnTimer} populates
+   * this; {@link startKeyOnTimer} clears it on a fresh press.
+   */
+  private readonly keyOnFadeOutStart = new Map<number, number>();
   /**
    * In-flight long-note holds keyed by channel. Populated when the
    * head of an LN is judged (the press lands inside the note's
@@ -1623,8 +1655,8 @@ export class PixiGameplayView {
     }
     // Bomb (50-69) and key-on (100-119) timers are tracked explicitly via
     // `timerStartedAt`. They become active the moment we record a start time
-    // and stay active until `stopKeyOnTimer` removes the entry (key-on) or
-    // the bomb's animation cycle finishes (bomb).
+    // and stay active until `releaseKeyOnTimer`'s deferred clean-up retires
+    // the entry (key-on) or the bomb's animation cycle finishes (bomb).
     //
     // Full-combo timers (48 = 1P, 49 = 2P) are tracked the same way:
     // `maybeFireFullCombo` stamps them once when the player's combo
@@ -2167,7 +2199,11 @@ export class PixiGameplayView {
     const channel = resolveKeyChannel(event, this.laneChannels);
     if (channel) {
       this.pressedChannels.delete(channel);
-      this.stopKeyOnTimer(channel);
+      // Same render-time alpha taper as the auto-judged LN release
+      // path so manual key-ups also decay smoothly instead of
+      // popping off. `releaseKeyOnTimer` schedules the timer's
+      // delete after `KEY_ON_FADE_OUT_MS`.
+      this.releaseKeyOnTimer(channel);
       // Don't delete bombStartedAt here -- let renderBombs decide when the
       // animation has finished. Otherwise releasing the key cuts off the
       // bomb flash mid-animation.
@@ -2292,14 +2328,43 @@ export class PixiGameplayView {
       return;
     }
     this.timerStartedAt.set(timerId, this.playClock());
+    // A fresh press cancels any in-flight release fade on the
+    // same lane; the laser is fully on again from this instant.
+    this.keyOnFadeOutStart.delete(timerId);
   }
 
-  private stopKeyOnTimer(channel: string): void {
+  /**
+   * Smoothly extinguishes the lane laser when a key (or auto LN
+   * head) releases: the LR2 key-on timer (100..117) stays in its
+   * currently-active state for {@link KEY_ON_FADE_OUT_MS} ms while
+   * a render-time alpha taper drives the visible amplitude down to
+   * 0, then the timer entry itself is deleted. Anchored on
+   * `playClock` so the fade pauses cleanly with the rest of the
+   * scene.
+   *
+   * The taper is what makes manual key-ups, auto-judged short
+   * notes (via {@link flashKeyOnTimer}), and auto-LN releases all
+   * decay at the same speed without restarting the key-on
+   * keyframe (which would blink the LR2 default skin's lane laser
+   * back to its fade-in origin before the decay).
+   */
+  private releaseKeyOnTimer(channel: string): void {
     const timerId = this.resolveKeyOnTimerId(channel);
-    if (timerId === undefined) {
-      return;
-    }
-    this.timerStartedAt.delete(timerId);
+    if (timerId === undefined) return;
+    if (!this.timerStartedAt.has(timerId)) return;
+    this.keyOnFadeOutStart.set(timerId, this.playClock());
+    const timeout = window.setTimeout(() => {
+      this.keyFlashTimeouts.delete(timeout);
+      if (this.disposed) return;
+      // If the player (or autoplay) re-pressed the same lane during
+      // the fade window, leave the timer running and skip the
+      // delete — the new press has its own lifecycle.
+      if (!this.pressedChannels.has(channel) && !this.activeLongNotes.has(channel)) {
+        this.timerStartedAt.delete(timerId);
+      }
+      this.keyOnFadeOutStart.delete(timerId);
+    }, KEY_ON_FADE_OUT_MS);
+    this.keyFlashTimeouts.add(timeout);
   }
 
   private togglePause(): void {
@@ -2555,14 +2620,6 @@ export class PixiGameplayView {
     const isPlayer2 = channel.startsWith('2');
     const base = isPlayer2 ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE;
     this.timerStartedAt.set(base + laneIndex, now);
-  }
-
-  /** Forced-clear utility used by `flashKeyOnTimer` after the fade window. */
-  private clearKeyOnTimerIfNotHeld(channel: string): void {
-    if (this.pressedChannels.has(channel)) {
-      return;
-    }
-    this.stopKeyOnTimer(channel);
   }
 
   private tick = (): void => {
@@ -2904,7 +2961,11 @@ export class PixiGameplayView {
         this.activeLongNotes.delete(channel);
         this.commitFinalJudge('PERFECT', 0, endSeconds, channel);
         this.triggerBombOnNonMiss(channel, 'PERFECT');
-        this.stopKeyOnTimer(channel);
+        // Same alpha-taper release as manual key-ups and auto-
+        // judged short notes (via `flashKeyOnTimer`) so the LN
+        // tail decays at the same speed without re-stamping the
+        // key-on timer.
+        this.releaseKeyOnTimer(channel);
       }
     }
   }
@@ -2915,25 +2976,28 @@ export class PixiGameplayView {
    * fades like a real keystroke. Used by autoplay (no real keyboard event)
    * so the player still sees the lane / key visuals react.
    */
+  /**
+   * Auto-judged short notes simulate a "press + release" in one
+   * tick: the lane laser lights up immediately (timer set to
+   * `playClock()` so the LR2 key-on keyframe begins) and stays
+   * at peak alpha for {@link KEY_ON_FLASH_HOLD_MS} before
+   * handing off to the release-fade path. Without that brief
+   * hold the sprite would taper from full to invisible across
+   * the first 1–2 render frames and the press would read as a
+   * single-frame blink rather than a deliberate flash.
+   */
   private flashKeyOnTimer(channel: string): void {
-    const timerId = this.resolveKeyOnTimerId(channel);
-    if (timerId === undefined) {
-      return;
-    }
-    this.timerStartedAt.set(timerId, this.playClock());
-    // Clear after ~120 ms — long enough for the LR2 laser sprite to fade in
-    // and back out without lingering through subsequent notes.
-    const flashDurationMs = 120;
+    this.startKeyOnTimer(channel);
     const timeout = window.setTimeout(() => {
       this.keyFlashTimeouts.delete(timeout);
-      if (this.disposed) {
+      if (this.disposed) return;
+      // A real press / sustained LN took over during the hold —
+      // skip the auto-release, the manual lifecycle is in charge.
+      if (this.pressedChannels.has(channel) || this.activeLongNotes.has(channel)) {
         return;
       }
-      // Only drop the timer if no real keypress overrode it during the flash.
-      if (!this.pressedChannels.has(channel)) {
-        this.timerStartedAt.delete(timerId);
-      }
-    }, flashDurationMs);
+      this.releaseKeyOnTimer(channel);
+    }, KEY_ON_FLASH_HOLD_MS);
     this.keyFlashTimeouts.add(timeout);
   }
 
@@ -3731,6 +3795,20 @@ export class PixiGameplayView {
     sprite.width = w;
     sprite.height = h;
     applyDestinationToSprite(sprite, dst);
+    // Lane-laser release fade. When `releaseKeyOnTimer` has marked
+    // a key-on slot (timer 100..117) as fading, OVERRIDE the
+    // sprite's alpha with a linear 1 → 0 taper over
+    // `KEY_ON_FADE_OUT_MS`. We override (rather than multiply)
+    // because the LR2 default skin's key-on keyframe[0] is the
+    // fade-in origin (alpha = 0) — multiplying that by our taper
+    // would keep the laser invisible the whole time. Position /
+    // size / colour from the keyframe still apply via the rest of
+    // `applyDestinationToSprite`.
+    const fadeStart = this.keyOnFadeOutStart.get(image.destination.timer);
+    if (fadeStart !== undefined) {
+      const elapsed = this.playClock() - fadeStart;
+      sprite.alpha = Math.max(0, 1 - elapsed / KEY_ON_FADE_OUT_MS);
+    }
     // The AUTOPLAY label (any image gated on op 33) belongs in the same
     // visual layer as the judgement plate — i.e. above the falling notes.
     // All other skin images stay in the regular skin layer.
