@@ -230,12 +230,6 @@ class PlayerWebDemoApp {
   private compressorStageFolder: GUI | undefined;
   private recordController: Controller | undefined;
   /**
-   * Cached lil-gui handle for the "Auto play" toggle so the
-   * demo can push value changes (driven by the in-scene PLAY
-   * OPTIONS panel) onto the GUI without rebuilding the controller.
-   */
-  private autoPlayController: Controller | undefined;
-  /**
    * Disabled string controller used as the read-only status
    * row inside the lil-gui panel. We hold a reference so
    * {@link setStatus} can call `updateDisplay()` directly
@@ -427,23 +421,12 @@ class PlayerWebDemoApp {
     this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open folder / ZIP');
-    this.autoPlayController = gui
-      .add(this.guiState, 'autoPlay')
-      .name('Auto play')
-      .onChange((value: boolean) => {
-        // `autoPlay` is consumed at gameplay-mount time; nothing
-        // to push onto a live view because the gameplay scene
-        // captures the flag in its constructor. The `value` arg
-        // satisfies lil-gui's typed signature without us needing
-        // to re-read `state.autoPlay` ourselves.
-        this.guiState.autoPlay = value;
-        // Mirror the toggle into the in-scene "PLAY OPTIONS" panel
-        // so the user can flip it from either surface and the
-        // values stay aligned. The select view re-renders the
-        // modal if it's currently open; otherwise the change is
-        // picked up the next time the user expands it.
-        this.selectView?.setPlayOptions({ autoPlay: value });
-      });
+    // Auto play used to be a lil-gui checkbox here too, but the
+    // in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on the
+    // select skin) already exposes it — the duplicate toolbar
+    // controller just added another surface to keep in sync. The
+    // `guiState.autoPlay` field stays as the seed/fallback value
+    // until the select panel publishes its own choice.
     gui
       .add(this.guiState, 'compressor')
       .name('Compressor')
@@ -803,19 +786,14 @@ class PlayerWebDemoApp {
       decideBgm: this.decideBgmBytes,
       systemSounds: this.systemSoundBundle,
       initialNavigation: this.lastSelectNavigation,
-      // Seed the in-scene panel's autoPlay value from the lil-gui
-      // toggle so power-users who only touched the toolbar still
-      // see the right state when they open the panel for the
-      // first time.
+      // Seed the in-scene panel's autoPlay value from the cached
+      // demo state (carries the last value the user picked across
+      // re-mounts of the select view).
       initialPlayOptions: { autoPlay: this.guiState.autoPlay },
       onPlayOptionsChange: (options) => {
-        // Mirror panel-side mutations back onto the lil-gui so the
-        // toolbar reflects the latest value the user chose. We
-        // bypass the controller's `onChange` to avoid bouncing the
-        // event back into `setPlayOptions` and triggering a
-        // pointless re-render.
+        // Cache the last value so it survives a select-view
+        // re-mount even though the lil-gui toggle is gone.
         this.guiState.autoPlay = options.autoPlay;
-        this.autoPlayController?.updateDisplay();
       },
       onSongSelected: (song) => {
         // Fire the decide cue first — it plays through the
