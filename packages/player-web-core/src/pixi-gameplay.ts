@@ -730,7 +730,35 @@ export class PixiGameplayView {
     return this.host.app;
   }
 
+  /**
+   * Convenience wrapper that runs {@link prepare} and {@link start}
+   * back-to-back — the historical "mount everything and play"
+   * entry point. Hosts that want to overlap heavy load with a
+   * Decide splash should call `prepare()` early and call
+   * `start()` only when the splash is dismissed. See the
+   * `showDecide` flow in `player-web-demo`.
+   */
   public async mount(host: PixiSceneHost, song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
+    await this.prepare(host, song, source);
+    if (this.disposed) return;
+    this.start();
+  }
+
+  /**
+   * Attaches the scene-graph subtree to the host, wires DOM
+   * listeners, parses the chart, and decodes every audio sample
+   * the chart references — the slow part of going from "song
+   * picked" to "gameplay can begin". The scene is added to the
+   * stage with `sceneRoot.visible = false` so a Decide splash
+   * (or any other overlay) can keep painting during the load
+   * window without competing for stage z-order.
+   *
+   * Returns once chart audio is decoded (timer / chart-start
+   * scheduling is deferred to {@link start}). BGA preload runs
+   * concurrently and is allowed to land mid-play; the playfield
+   * is up by the time `start()` fires regardless.
+   */
+  public async prepare(host: PixiSceneHost, song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
     this.host = host;
     this.song = song;
     this.source = source;
@@ -816,6 +844,12 @@ export class PixiGameplayView {
       hidden: document.hidden,
       hasFocus: typeof document.hasFocus === 'function' ? document.hasFocus() : 'n/a',
     });
+    // Hide the scene-graph subtree until {@link start} fires so a
+    // Decide splash (or any other overlay) can keep painting on
+    // the shared stage during the load window without z-order
+    // contention. `start()` flips this back on the moment the
+    // host hands control over to gameplay.
+    this.sceneRoot.visible = false;
     this.prepareSong(song);
     await this.prepareSkin();
     if (this.disposed) return;
@@ -824,6 +858,22 @@ export class PixiGameplayView {
     // BGA preload runs concurrently after audio so the playfield can mount
     // immediately; missing or slow-loading bitmaps fade in mid-play.
     void this.prepareBga();
+  }
+
+  /**
+   * Reveals the prepared scene, seeds the LR2 scene-stage timers,
+   * and starts the rAF loop. Must be called after {@link prepare}
+   * resolves; calling it before will skip the chart-start
+   * scheduling because `audioContextStartTime` only lands in the
+   * right ballpark when the audio context is up.
+   *
+   * Idempotent — repeated calls after the scene has already
+   * started no-op.
+   */
+  public start(): void {
+    if (this.disposed) return;
+    if (this.sceneStartTime !== 0) return;
+    this.sceneRoot.visible = true;
     // Compute the LR2 intro timeline. Per `docs/LR2SkinHelp.md`:
     //
     //   t=0                                 scene start (timer 0)

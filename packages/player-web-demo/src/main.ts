@@ -866,6 +866,15 @@ class PlayerWebDemoApp {
     this.lastSelectNavigation = this.selectView?.getNavigation();
     this.selectView?.setVisible(false);
     this.decideView?.dispose();
+    this.gameplayView?.dispose();
+    this.gameplayView = undefined;
+    // Build the gameplay view eagerly and kick off its heavy
+    // load (chart parse, audio decode, BGA preload) IN PARALLEL
+    // with the Decide animation. The Decide splash typically
+    // runs ~3 s; chart asset decoding is mostly done by the time
+    // the splash auto-advances, so the hand-off to gameplay
+    // becomes instant instead of dropping a frozen frame.
+    const preloaded = this.preloadGameplay(song, overrides);
     let advanced = false;
     const advance = (then: () => void): void => {
       // Idempotent — the auto-advance timer, key input, and
@@ -877,10 +886,120 @@ class PlayerWebDemoApp {
     };
     this.decideView = new PixiDecideView({
       skin: this.decideSkin,
-      onContinue: () => advance(() => void this.playSong(song, overrides)),
-      onCancel: () => advance(() => void this.showSelect()),
+      onContinue: () =>
+        advance(() => {
+          void this.startGameplayAfterDecide(song, preloaded);
+        }),
+      onCancel: () =>
+        advance(() => {
+          // User backed out of the splash — abandon the prepared
+          // gameplay scene before falling back to the select view.
+          this.gameplayView?.dispose();
+          this.gameplayView = undefined;
+          void this.showSelect();
+        }),
     });
     await this.decideView.mount(this.sceneHost, { song, collection: this.collection });
+  }
+
+  /**
+   * Constructs a fresh `PixiGameplayView` with the current
+   * play-options snapshot and starts its `prepare()` against the
+   * shared host. The returned promise resolves once chart audio
+   * is decoded — the host awaits it inside the Decide
+   * `onContinue` handler before flipping the scene visible.
+   *
+   * Wired up here (rather than inline in `showDecide`) because
+   * the same option-marshalling + callback wiring is needed
+   * whether we're going through Decide or the no-decide
+   * fast-path. `playSong` shares this construction shape.
+   */
+  private preloadGameplay(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<void> {
+    this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
+    const playSkin = pickLr2PlaySkin(this.playSkins, song);
+    const playOptions = this.selectView?.getPlayOptions();
+    this.gameplayView = new PixiGameplayView({
+      skin: playSkin,
+      autoPlay: overrides.autoPlay ?? playOptions?.autoPlay ?? this.guiState.autoPlay,
+      initialHiSpeed: playOptions?.hiSpeed,
+      bga: playOptions?.bga,
+      bgaSize: playOptions?.bgaSize,
+      scoreGraph: playOptions?.scoreGraph,
+      hsFix: playOptions?.hsFix,
+      hiddenSudden1P: playOptions?.hiddenSudden1P,
+      hiddenSudden2P: playOptions?.hiddenSudden2P,
+      shutter: playOptions?.shutter,
+      laneCover: playOptions?.laneCover,
+      autoScratch1P: playOptions?.autoScratch1P,
+      autoScratch2P: playOptions?.autoScratch2P,
+      dpFlip: playOptions?.dpFlip,
+      random1P: playOptions?.random1P,
+      random2P: playOptions?.random2P,
+      gauge: playOptions?.gauge1P,
+      audioCompressor: this.guiState.compressor,
+      audioCompressorMode: this.compressorMode,
+      audioCompressorStages: {
+        key: this.guiState.compressorKey,
+        bgm: this.guiState.compressorBgm,
+        master: this.guiState.compressorMaster,
+      },
+      onExit: () => {
+        void this.finishGameplayThen(() => this.showSelect());
+      },
+      onChartFinished: (result) => {
+        void this.finishGameplayThen(() => this.showResult(result));
+      },
+      onRestart: () => {
+        void this.finishGameplayThen(() => this.playSong(song));
+      },
+    });
+    return this.gameplayView.prepare(this.sceneHost, song, resolveSongSource(this.collection, song));
+  }
+
+  /**
+   * Tears the Decide splash down and hands the stage over to the
+   * (already-prepared) gameplay scene. Awaits the preload
+   * promise: when the user dismisses Decide before chart audio
+   * has finished decoding, the splash's last frame stays on
+   * screen until prepare resolves — visually a brief hold rather
+   * than the previous frozen-frame freeze.
+   */
+  private async startGameplayAfterDecide(song: BrowserSongEntry, preloaded: Promise<void>): Promise<void> {
+    try {
+      await preloaded;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[gameplay] preload failed; falling back to no-decide path', error);
+      this.gameplayView?.dispose();
+      this.gameplayView = undefined;
+      this.decideView?.dispose();
+      this.decideView = undefined;
+      await this.playSong(song);
+      return;
+    }
+    if (!this.gameplayView) return;
+    this.elements.shell.classList.add('playing');
+    this.lastSelectNavigation = this.selectView?.getNavigation();
+    this.selectView?.setVisible(false);
+    this.decideView?.dispose();
+    this.decideView = undefined;
+    this.setStatus(`Playing: ${song.title}`);
+    this.gameplayView.start();
+    if (this.autoRecordArmed) {
+      this.autoRecordArmed = false;
+      const controller = this.recordController;
+      controller?.domElement.classList.remove('arming');
+      try {
+        this.gameplayView.startRecording();
+        controller?.domElement.classList.add('recording');
+        controller?.name('■ Stop');
+        this.setStatus('Recording…');
+      } catch (error) {
+        controller?.name('● Record');
+        // eslint-disable-next-line no-console
+        console.warn('[record] auto-start failed', error);
+      }
+    }
   }
 
   private async playSong(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
