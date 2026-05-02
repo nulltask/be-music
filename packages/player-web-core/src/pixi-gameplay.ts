@@ -4029,15 +4029,31 @@ export class PixiGameplayView {
     // the beat at the start of each measure.
     // Use the resolved chart so #IF-gated #xx02 (measure-length)
     // declarations match the chosen #RANDOM branch.
-    const measures = (this.resolvedChart ?? song.chart).measures;
-    if (measures.length === 0) {
+    const chart = this.resolvedChart ?? song.chart;
+    const measures = chart.measures;
+    // The chart's `measures` array only carries measures with an
+    // EXPLICIT length declaration (`#xx02`). A typical 4/4-only
+    // chart has no entries at all, so falling out at "length === 0"
+    // skipped every measure line for those songs. Derive the
+    // chart's last measure from event data instead — measure lines
+    // need to render at every measure boundary regardless of
+    // whether the author bothered to declare the time signature.
+    let maxMeasureIndex = -1;
+    for (const measure of measures) {
+      if (measure.index > maxMeasureIndex) maxMeasureIndex = measure.index;
+    }
+    for (const event of chart.events) {
+      if (event.measure > maxMeasureIndex) maxMeasureIndex = event.measure;
+    }
+    if (maxMeasureIndex < 0) {
       this.measureBeatCache = { songId: song.id, beats };
       return beats;
     }
-    const maxIndex = Math.max(...measures.map((m) => m.index));
     const lengthByIndex = new Map(measures.map((m) => [m.index, m.length]));
-    for (let i = 0; i <= maxIndex + 1; i += 1) {
+    for (let i = 0; i <= maxMeasureIndex + 1; i += 1) {
       beats.push(cumulative);
+      // Default length 1 = full 4/4 measure. Only declared
+      // measures override this.
       const length = lengthByIndex.get(i) ?? 1;
       cumulative += length * 4;
     }
