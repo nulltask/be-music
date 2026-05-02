@@ -2355,13 +2355,14 @@ export class PixiGameplayView {
     const delta = Math.abs(signedDeltaMs);
     const judge: JudgeKind =
       delta <= windows.pgreat ? 'PERFECT' : delta <= windows.great ? 'GREAT' : delta <= windows.good ? 'GOOD' : 'BAD';
-    // Always play the keysound + bomb-flash on press so the player
-    // gets immediate audio / visual feedback even though the score
-    // commit might be deferred for an LN.
+    // Always play the keysound on press so the player gets
+    // immediate audio feedback even though the score commit might
+    // be deferred for an LN.
     this.playSample(note);
-    if (judge !== 'BAD') {
-      // LR2 bomb timer (50-69) fires on GREAT-or-better. Treat any non-BAD as
-      // a "good enough" judgement and trigger the bomb animation on the lane.
+    if (judge === 'PERFECT' || judge === 'GREAT') {
+      // LR2 bomb (timer 50-69) fires on GREAT-or-better only —
+      // GOOD / BAD / POOR don't earn the lane explosion, so the
+      // animation reads as positive feedback for clean hits.
       this.triggerBomb(channel);
     }
     if (isLongNote(note)) {
@@ -2456,16 +2457,18 @@ export class PixiGameplayView {
   }
 
   /**
-   * Fires a lane bomb only when the verdict is "successful enough"
-   * (PERFECT / GREAT / GOOD). Single-note presses already gate
-   * inline at the call-site (`if (judge !== 'BAD')`); the LN
-   * finalize paths funnel through this helper instead so all four
-   * commit sites — single-note, manual LN release, manual auto-
-   * over-hold, auto LN tail — share the same gate without
-   * duplicating the predicate.
+   * Fires a lane bomb only when the verdict is "clean enough"
+   * (PERFECT / GREAT). GOOD / BAD / POOR are deliberately excluded
+   * so the lane explosion stays a positive-feedback cue for
+   * accurate hits. Single-note presses already gate inline at the
+   * call-site (`if (judge === 'PERFECT' || judge === 'GREAT')`);
+   * the LN finalize paths funnel through this helper instead so
+   * all four commit sites — single-note, manual LN release,
+   * manual auto-over-hold, auto LN tail — share the same gate
+   * without duplicating the predicate.
    */
   private triggerBombOnNonMiss(channel: string, judge: JudgeKind): void {
-    if (judge === 'BAD' || judge === 'POOR') return;
+    if (judge !== 'PERFECT' && judge !== 'GREAT') return;
     this.triggerBomb(channel);
   }
 
