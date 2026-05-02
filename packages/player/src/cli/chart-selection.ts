@@ -112,7 +112,7 @@ export interface ListChartFilesOptions {
 }
 
 const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
-const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/5';
+const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/6';
 const CHART_SELECTION_BUILD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
 let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
 
@@ -654,6 +654,10 @@ function resolveChartSelectionBannerPath(json: BeMusicJson): string | undefined 
   const bmsonBanner = sanitizeChartSelectionMetadataText(json.bmson.info.bannerImage);
   if (bmsonBanner) {
     return bmsonBanner;
+  }
+  const bmsBanner = sanitizeChartSelectionMetadataText(json.metadata.banner);
+  if (bmsBanner) {
+    return bmsBanner;
   }
   return sanitizeChartSelectionMetadataText(json.metadata.extras.BANNER);
 }

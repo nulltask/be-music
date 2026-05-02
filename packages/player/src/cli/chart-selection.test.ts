@@ -2,12 +2,18 @@ import { mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/p
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { buildChartSelectionEntries, listChartFiles } from './chart-selection.ts';
 
 const tempDirectories: string[] = [];
 const originalHome = process.env.HOME;
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
+
+beforeEach(async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'be-music-chart-selection-home-'));
+  tempDirectories.push(tempHome);
+  process.env.HOME = tempHome;
+});
 
 afterEach(async () => {
   if (typeof originalHome === 'string') {
