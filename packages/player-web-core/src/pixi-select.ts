@@ -6,6 +6,7 @@ import type {
   Lr2BarFlashElement,
   Lr2BarLevelKind,
   Lr2BarLevelSource,
+  Lr2BarTitleElement,
   Lr2ButtonElement,
   Lr2DestinationRect,
   Lr2ImageElement,
@@ -16,6 +17,7 @@ import type {
   Lr2Skin,
   Lr2SliderElement,
   Lr2SpecialGraphic,
+  Lr2TextElement,
 } from './lr2-skin.ts';
 import { isLr2SpecialGraphic } from './lr2-skin.ts';
 import {
@@ -3675,8 +3677,7 @@ export class PixiSongSelectView {
       if (entry) {
         // BAR_TITLE DST x/y are RELATIVE to the bar's top-left
         // (`bar.txt`: "DST座標はバーのxy座標からの相対位置を指定").
-        const titleRect = layout.title?.destination ?? { x: 12, y: 8, w: dst.w - 24, h: 20 };
-        this.drawBarTitleText(entry, dst, titleRect);
+        this.drawBarTitleText(entry, dst, layout.title, skin);
       }
       // BAR_LEVEL: per-bar level number for SONG entries only. Folder
       // entries don't carry a level so they leave the slot blank.
@@ -3869,53 +3870,93 @@ export class PixiSongSelectView {
   }
 
   /**
-   * Draws the song title (and a compact metadata strip) at the
-   * `BAR_TITLE` destination (xy relative to the bar's top-left). LR2
-   * font rendering isn't supported yet, so we fall back to Pixi's
-   * built-in `Text` for now.
+   * Draws the song title at the `BAR_TITLE` destination (xy relative
+   * to the bar's top-left).
+   *
+   * When the skin defines `#SRC_BAR_TITLE` and the matching
+   * `#LR2FONT` payload has decoded, we route through
+   * `makeLr2TextSprite` so the title renders with the skin's
+   * authored bitmap font (the LR2 default's 14 px pixel-art
+   * face for the bar list, glyph-tinted per `#DST_BAR_TITLE`'s
+   * RGBA). Otherwise we fall back to a system-font `Text` —
+   * either while fonts are still loading, or for skins that omit
+   * `#SRC_BAR_TITLE` entirely.
+   *
+   * No artist sub-line: LR2's bar list shows just the title (or
+   * folder name). Per-song artist / genre live in the dedicated
+   * info panel populated by the skin's `#SRC_TEXT` slots — not
+   * the bar list itself.
    */
   private drawBarTitleText(
     entry: BrowserBrowseEntry,
     bar: Lr2DestinationRect,
-    title: { x: number; y: number; w: number; h: number },
+    titleElement: Lr2BarTitleElement | undefined,
+    skin: Lr2Skin,
   ): void {
-    const x = bar.x + title.x;
-    const y = bar.y + title.y;
-    const w = Math.max(1, title.w);
-    const h = Math.max(1, title.h);
-    // LR2 default skins use pixel-art fonts (typically 12px tall) for
-    // BAR_TITLE; Pixi `Text` with the system sans-serif is taller
-    // pixel-for-pixel, so cap the font size at 14px and leave 2px
-    // breathing room below `h`. The previous `h * 0.7` formula made
-    // the title overflow horizontally on narrow bars.
-    const titleFontSize = clampFontSize(h - 2, 8, 14);
+    const titleRect = titleElement?.destination ?? { x: 12, y: 8, w: bar.w - 24, h: 20 };
+    const x = bar.x + titleRect.x;
+    const y = bar.y + titleRect.y;
+    const w = Math.max(1, titleRect.w);
+    const h = Math.max(1, titleRect.h);
     const primaryText = entry.kind === 'song' ? entry.song.title : entry.folder.label;
+    if (titleElement) {
+      // Build a synthetic `Lr2TextElement` carrying just the
+      // fields `makeLr2TextSprite` reads — font index, alignment
+      // (BAR_TITLE has no LR2-spec alignment field, so left-anchor
+      // is the conventional rendering), and the absolute
+      // `destination` on the bar's coordinate frame. Going through
+      // `makeLr2TextSprite` means the bitmap-font path
+      // automatically engages once `#LR2FONT` payloads finish
+      // decoding, mirroring how the chrome-text path works.
+      const synthetic: Lr2TextElement = {
+        font: titleElement.font,
+        // 0 = freeform string. The bar list never queries `st`
+        // for text resolution since we pass the value directly,
+        // and `makeLr2BitmapTextSprite` only uses it for a debug
+        // label — any non-clashing value is fine.
+        st: 0,
+        alignment: 'left',
+        edit: 0,
+        panel: 0,
+        destination: { ...titleElement.destination, x, y, w, h },
+        keyframes: [],
+        declarationOrder: 0,
+      };
+      const sprite = makeLr2TextSprite(primaryText, synthetic, synthetic.destination, {
+        bitmapFonts: this.bitmapFonts,
+        systemFontSizes: skin.systemFontSizes,
+      });
+      sprite.label = `bar-title[${entry.kind}=${primaryText}]`;
+      this.listLayer.addChild(sprite);
+      return;
+    }
+    // No `#SRC_BAR_TITLE` — fall back to a basic system-font
+    // `Text`. LR2 default skins use pixel-art fonts (typically
+    // 12 px tall) for BAR_TITLE; Pixi `Text` with the system
+    // sans-serif is taller pixel-for-pixel, so cap the font size
+    // at 14 px and leave 2 px breathing room below `h`.
+    const titleFontSize = clampFontSize(h - 2, 8, 14);
     const titleText = new Text({
       text: primaryText,
       style: new TextStyle({
         fill: TEXT,
         fontSize: titleFontSize,
-        // System sans-serif looks too "thick" at small sizes vs an
-        // image font. A regular weight reads cleaner — bold should
-        // come back once we wire up `#LR2FONT`.
+        // System sans-serif looks too "thick" at small sizes vs
+        // an image font. A regular weight reads cleaner.
         fontWeight: '500',
         fontFamily: 'system-ui, sans-serif',
         wordWrap: true,
         wordWrapWidth: w,
-        // 袋文字 (outlined text) — LR2 reference skins bake a 1–2 px
-        // black outline into their bar-title bitmaps so titles read
-        // cleanly against the colored BAR_BODY artwork. Match that
-        // by stroking the system-font fallback.
+        // 袋文字 (outlined text) — LR2 reference skins bake a
+        // 1–2 px black outline into their bar-title bitmaps so
+        // titles read cleanly against the colored BAR_BODY
+        // artwork. Match that by stroking the fallback.
         stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
       }),
     });
     titleText.label = `bar-title[${entry.kind}=${primaryText}]`;
     titleText.position.set(x, y);
     this.listLayer.addChild(titleText);
-    // No artist sub-line: LR2's bar list shows just the title (or
-    // folder name). Per-song artist / genre live in the dedicated
-    // info panel on the left side of the screen, populated by the
-    // skin's #SRC_TEXT slots — not the bar list itself.
   }
 
   private drawFallbackSongRow(song: BrowserSongEntry, songIndex: number, visibleIndex: number, width: number): void {
