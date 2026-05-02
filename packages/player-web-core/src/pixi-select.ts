@@ -4325,11 +4325,22 @@ function resolveKeyModeOp(song: BrowserSongEntry): number {
   if (modeHint.includes('9k')) return SELECT_DYNAMIC_OPS.KEYS_9;
   if (modeHint.includes('7k')) return SELECT_DYNAMIC_OPS.KEYS_7;
   if (modeHint.includes('5k')) return SELECT_DYNAMIC_OPS.KEYS_5;
+  // PMS / 9 KEY (Pop'n) detection — `.pms` extension is the
+  // strongest hint, followed by the legacy `#PLAYER=3` + channel
+  // `17` marker for 9K charts saved as `.bms` / `.bme`. Mirrors
+  // `resolveChartPlayVariant` in `library.ts` so the song bar's
+  // key-mode lamp matches the loaded `play_9.lr2skin`.
+  const chartExt = (() => {
+    const dot = song.chartPath.lastIndexOf('.');
+    return dot >= 0 ? song.chartPath.slice(dot).toLowerCase() : '';
+  })();
+  if (chartExt === '.pms') return SELECT_DYNAMIC_OPS.KEYS_9;
   // Walk the chart events once and remember which input channels
   // were touched. Cheap: a typical chart has a few thousand events
   // and we exit early-ish via a Set lookup.
   let usesPlayer2 = false;
   let uses6or7 = false;
+  let usesCh17 = false;
   for (const event of song.chart.events) {
     const ch = event.channel;
     if (!ch || ch.length !== 2) continue;
@@ -4337,8 +4348,10 @@ function resolveKeyModeOp(song: BrowserSongEntry): number {
     // Channels 18 / 19 / 28 / 29 are keys 6 / 7 + extension. Their
     // presence is what makes a chart 7K (or 14K) vs 5K (or 10K).
     if (ch === '18' || ch === '19' || ch === '28' || ch === '29') uses6or7 = true;
-    if (usesPlayer2 && uses6or7) break;
+    if (ch === '17') usesCh17 = true;
   }
+  // PMS-COMPAT: `#PLAYER=3` + channel 17 used as a lane note.
+  if (song.chart.bms.player === 3 && usesCh17) return SELECT_DYNAMIC_OPS.KEYS_9;
   if (usesPlayer2 || song.chart.bms.player === 3) {
     return uses6or7 ? SELECT_DYNAMIC_OPS.KEYS_14 : SELECT_DYNAMIC_OPS.KEYS_10;
   }

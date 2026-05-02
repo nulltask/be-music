@@ -31,6 +31,7 @@ import {
   normalizePath,
   resolveChartImageAsset,
   resolveChartAudioAsset,
+  resolveChartPlayVariant,
 } from './library.ts';
 import {
   type Lr2BarGraphElement,
@@ -515,6 +516,17 @@ export class PixiGameplayView {
   private autoJudgeCursor = 0;
   private autoMissCursor = 0;
   private laneChannels: string[] = [];
+  /**
+   * Cached `resolveChartPlayVariant` result for the loaded chart.
+   * Used to pick the right `play_<variant>.lr2skin`, the right
+   * keymode op (160..164), and to switch lane-channel detection
+   * to the PMS layout (`17` is a lane note, `22..25` are 1P-side
+   * lanes) instead of the default IIDX layout. Defaults to `'7'`
+   * before any chart is loaded so the existing 7K-flavoured
+   * fallbacks keep behaving as before for skinless / pre-prepare
+   * code paths.
+   */
+  private chartPlayVariant: '5' | '7' | '9' | '10' | '14' = '7';
   private laneX = new Map<string, { x: number; w: number; top: number; bottom: number }>();
   private textures = new Map<string, Texture>();
   /**
@@ -1463,7 +1475,13 @@ export class PixiGameplayView {
     // this the next chart's first release on a cleared channel would
     // try to finalize the prior chart's hold and double-commit.
     this.activeLongNotes.clear();
-    this.laneChannels = resolveLaneChannels(this.notes);
+    // PMS / 9 KEY (Pop'n) charts route channel `17` (and the
+    // PMS-STD `22..25` block) as lane notes — `resolveLaneChannels`
+    // would otherwise filter `17` out as FREE ZONE under the IIDX
+    // default ordering. Hand it the chart variant so the lane set
+    // matches what the LR2 default `play_9.lr2skin` expects.
+    this.chartPlayVariant = resolveChartPlayVariant(song);
+    this.laneChannels = resolveLaneChannels(this.notes, this.chartPlayVariant);
     this.score = createEmptyScore(this.notes.filter((note) => isPlayableInputChannel(note.channel)).length);
     this.tracker = createScoreTracker();
     // Reset the result-screen "MAX COMBO" tracker whenever a fresh
@@ -1687,11 +1705,20 @@ export class PixiGameplayView {
 
   /**
    * Detects the chart's effective LR2 keymode op from its lane usage and
-   * the player option. We treat any chart that puts notes on key 6 or 7
-   * as a 7-keys chart and the rest as 5-keys; double-play modes are not
-   * yet wired and fall back to the single-side defaults.
+   * the player option. Mirrors `resolveChartPlayVariant`'s mapping
+   * (which already drives skin selection) but emits the LR2
+   * `dst_option` numbers instead of the string variant id:
+   *
+   *   - PMS / 9 KEY → 164
+   *   - DP 14 KEY  → 162
+   *   - DP 10 KEY  → 163
+   *   - SP 7 KEY   → 160
+   *   - SP 5 KEY   → 161
    */
   private resolveKeymodeOp(): number {
+    if (this.chartPlayVariant === '9') {
+      return 164; // 9keys (Pop'n / PMS)
+    }
     const usesPlayer2 = this.laneChannels.some((channel) => channel.startsWith('2'));
     const uses6or7 = this.laneChannels.some(
       (channel) => channel === '18' || channel === '19' || channel === '28' || channel === '29',
@@ -2504,17 +2531,20 @@ export class PixiGameplayView {
   }
 
   private resolveKeyOnTimerId(channel: string): number | undefined {
-    const laneIndex = resolveSideRelativeLaneIndex(channel);
-    if (laneIndex < 0 || laneIndex > 7) {
+    const laneIndex = resolveSideRelativeLaneIndex(channel, this.chartPlayVariant);
+    // 9 KEY (Pop'n) uses lane slots 1..9 — the 7-cap below would
+    // otherwise drop slots 8 / 9. Other modes top out at slot 7.
+    const maxSlot = this.chartPlayVariant === '9' ? 9 : 7;
+    if (laneIndex < 0 || laneIndex > maxSlot) {
       return undefined;
     }
     // LR2 spec: timer 100 = 1P SC, 101..107 = 1P key1..7;
     //          timer 110 = 2P SC, 111..117 = 2P key1..7.
-    // Side-relative lane index keeps the offset 0..7 within each
-    // side, so adding it to the per-side base lands on the correct
-    // timer id even for 2P channels (which would otherwise yield
-    // timer 100+8 = 108 from a position-based laneIndex).
-    const isPlayer2 = channel.startsWith('2');
+    // PMS / 9 KEY is single-side so every lane (whether the chart
+    // sources it from `1X` or `2X`) routes through the 1P-side
+    // base; the resolver already collapses both layouts onto
+    // slots 1..9.
+    const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
     const base = isPlayer2 ? LR2_2P_KEYON_TIMER_BASE : LR2_1P_KEYON_TIMER_BASE;
     return base + laneIndex;
   }
@@ -2526,11 +2556,12 @@ export class PixiGameplayView {
    * maps onto a known lane index.
    */
   private resolveLnHoldTimerId(channel: string): number | undefined {
-    const laneIndex = resolveSideRelativeLaneIndex(channel);
+    const laneIndex = resolveSideRelativeLaneIndex(channel, this.chartPlayVariant);
     if (laneIndex < 0 || laneIndex > 9) {
       return undefined;
     }
-    const isPlayer2 = channel.startsWith('2');
+    // PMS / 9 KEY collapses onto the 1P-side `70..79` bank.
+    const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
     const base = isPlayer2 ? LR2_2P_LN_HOLD_TIMER_BASE : LR2_1P_LN_HOLD_TIMER_BASE;
     return base + laneIndex;
   }
@@ -2900,8 +2931,10 @@ export class PixiGameplayView {
     // (1P), so we mirror that here. The timer auto-clears once
     // `renderBombs` completes the animation. Side-relative lane index
     // is used so 2P SC fires timer 60 (not 60+8).
-    const laneIndex = resolveSideRelativeLaneIndex(channel);
-    const isPlayer2 = channel.startsWith('2');
+    const laneIndex = resolveSideRelativeLaneIndex(channel, this.chartPlayVariant);
+    // PMS / 9 KEY routes every lane through the 1P-side bank
+    // (50..58) regardless of which side the chart sourced it from.
+    const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
     const base = isPlayer2 ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE;
     this.timerStartedAt.set(base + laneIndex, now);
   }
@@ -3678,8 +3711,9 @@ export class PixiGameplayView {
     }
     const now = this.playClock();
     for (const [channel, startedAt] of Array.from(this.bombStartedAt.entries())) {
-      const laneIndex = resolveSideRelativeLaneIndex(channel);
-      const timerId = (channel.startsWith('2') ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE) + laneIndex;
+      const laneIndex = resolveSideRelativeLaneIndex(channel, this.chartPlayVariant);
+      const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
+      const timerId = (isPlayer2 ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE) + laneIndex;
       // Per-bomb-timer cleanup duration — derived from the loaded
       // skin's keyframes in `prepareSkin` so each lane's explosion
       // retires at its authored cycle length, with the LR2-default
@@ -4650,7 +4684,7 @@ export class PixiGameplayView {
       // (channel-derived) so a DP chart's 2P notes land on the
       // 2P-side rects the skin actually authored — not on whatever
       // happens to sit at iteration position 8..15 in `laneRects`.
-      const lr2Lane = skin?.laneRects[resolveLr2LaneIndex(channel)];
+      const lr2Lane = skin?.laneRects[resolveLr2LaneIndex(channel, this.chartPlayVariant)];
       const x = lr2Lane ? skinX + lr2Lane.x * scale : startX + index * laneWidth;
       const w = lr2Lane ? Math.max(4, lr2Lane.w * scale) : laneWidth - 2;
       const top = lr2Lane ? skinY : fallbackTop;
@@ -4732,7 +4766,7 @@ export class PixiGameplayView {
       // 2P side notes need to read `skin.notes[kind][10..17]`, not
       // the position-based `[8..15]` that `resolveLaneIndex` would
       // give.
-      const laneIndex = resolveLr2LaneIndex(note.channel);
+      const laneIndex = resolveLr2LaneIndex(note.channel, this.chartPlayVariant);
       // Long-note render: draw LN_BODY between start and end beats, capped
       // with LN_START / LN_END sprites. Falls through to single-note render
       // if the chart has no long-note end-beat for this entry.

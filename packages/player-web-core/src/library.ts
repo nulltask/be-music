@@ -581,6 +581,8 @@ function isScoreTargetChannel(channel: string): boolean {
  * Inspects a chart entry's playable note channels and reports which
  * `play_<variant>.lr2skin` should be loaded for it. Mapping:
  *
+ *   - PMS / 9 KEY (Pop'n)
+ *     - `.pms` extension OR `#PLAYER=3` paired with channel `17` → `'9'`
  *   - any `2X` channel → DP
  *     - any 6/7 key (18 / 19 / 28 / 29) → `'14'`
  *     - otherwise                       → `'10'`
@@ -588,10 +590,16 @@ function isScoreTargetChannel(channel: string): boolean {
  *     - any 6/7 key → `'7'`
  *     - otherwise   → `'5'`
  *
- * Pop'n (9K) detection isn't wired yet — those charts still resolve
- * to `'7'` which the LR2 default skin tolerates.
+ * Mirrors the CLI's `resolveLaneMode` decision (see
+ * `packages/player/src/manual-input.ts`) so the web player picks
+ * the same `play_9.lr2skin` variant the CLI would for a Pop'n
+ * chart. The `22..25` PMS-STD channel signature is NOT used here
+ * because real DP charts also drop notes there — the CLI treats
+ * that signature only as a layout disambiguator (standard vs.
+ * compat) AFTER the 9KEY mode has been decided by extension or
+ * `#PLAYER=3 + 17`.
  */
-export function resolveChartPlayVariant(song: BrowserSongEntry): '5' | '7' | '10' | '14' {
+export function resolveChartPlayVariant(song: BrowserSongEntry): '5' | '7' | '9' | '10' | '14' {
   const channels = new Set<string>();
   for (const event of song.chart.events) {
     const ch = normalizeChannel(event.channel);
@@ -599,12 +607,32 @@ export function resolveChartPlayVariant(song: BrowserSongEntry): '5' | '7' | '10
       channels.add(ch);
     }
   }
+  // PMS detection — same precedence the CLI player uses:
+  // 1. Explicit `.pms` extension is the strongest hint.
+  // 2. `#PLAYER=3` + channel `17` is the legacy 9K marker for
+  //    charts saved as `.bms` / `.bme`.
+  if (isPmsExtension(song.chartPath)) {
+    return '9';
+  }
+  const playerHint = song.chart.bms?.player;
+  if (playerHint === 3 && channels.has('17')) {
+    return '9';
+  }
   const usesPlayer2 = [...channels].some((ch) => ch.startsWith('2'));
   const uses6or7 = ['18', '19', '28', '29'].some((ch) => channels.has(ch));
   if (usesPlayer2) {
     return uses6or7 ? '14' : '10';
   }
   return uses6or7 ? '7' : '5';
+}
+
+function isPmsExtension(chartPath: string | undefined): boolean {
+  if (typeof chartPath !== 'string' || chartPath.length === 0) {
+    return false;
+  }
+  const dotIndex = chartPath.lastIndexOf('.');
+  if (dotIndex < 0) return false;
+  return chartPath.slice(dotIndex).toLowerCase() === '.pms';
 }
 
 function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): BrowserSongSourceKind {

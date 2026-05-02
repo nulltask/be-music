@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { loadSongCollectionFromFiles } from './library.ts';
-import type { LoadProgress } from './types.ts';
+import { loadSongCollectionFromFiles, resolveChartPlayVariant } from './library.ts';
+import type { BeMusicEvent, BeMusicJson } from '../../json/src/index.ts';
+import type { BrowserSongEntry, LoadProgress } from './types.ts';
 
 /**
  * The drag-drop loader fires `LoadProgress` events as it walks the
@@ -90,5 +91,94 @@ describe('loadSongCollectionFromFiles progress events', () => {
     // that haven't migrated keep working.
     const collection = await loadSongCollectionFromFiles([makeFile('Song/main.bms', MINIMAL_BMS)]);
     expect(collection.songs.length).toBe(1);
+  });
+});
+
+/**
+ * Minimal `BrowserSongEntry` factory for `resolveChartPlayVariant`
+ * tests. Only the fields the resolver consults (`chartPath` for the
+ * `.pms` extension hint, `chart.events[*].channel` for lane usage,
+ * `chart.bms.player` for the legacy `#PLAYER=3` 9K marker) are
+ * populated — everything else is left at minimal defaults.
+ */
+function makeSong(params: {
+  chartPath: string;
+  channels?: ReadonlyArray<string>;
+  player?: number;
+}): BrowserSongEntry {
+  const events: BeMusicEvent[] = (params.channels ?? []).map((channel, index) => ({
+    measure: 1,
+    channel,
+    position: [index, Math.max(1, params.channels?.length ?? 1)],
+    value: '01',
+  }));
+  const chart = {
+    events,
+    bms: { player: params.player } as BeMusicJson['bms'],
+    bmson: { info: { modeHint: undefined } } as BeMusicJson['bmson'],
+  } as BeMusicJson;
+  return {
+    chartPath: params.chartPath,
+    chart,
+  } as BrowserSongEntry;
+}
+
+describe('resolveChartPlayVariant', () => {
+  test('classifies SP 5K (channels 11..15 only)', () => {
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '12', '15'] }))).toBe('5');
+  });
+
+  test('classifies SP 7K (channel 18 / 19 present)', () => {
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '15', '18', '19'] }))).toBe(
+      '7',
+    );
+  });
+
+  test('classifies DP 14K (2P-side keyboard 6 / 7)', () => {
+    expect(
+      resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '18', '21', '28'] })),
+    ).toBe('14');
+  });
+
+  test('classifies DP 10K (2P-side keyboard, no 6 / 7)', () => {
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '21', '25'] }))).toBe('10');
+  });
+
+  test('PMS / 9 KEY: `.pms` extension wins regardless of channel layout', () => {
+    // A `.pms` chart can use either the BME-COMPAT channel layout
+    // (`16..19`) or the PMS-STD layout (`22..25`). The extension
+    // alone is enough to commit to `play_9.lr2skin`.
+    expect(
+      resolveChartPlayVariant(
+        makeSong({ chartPath: 'Song/main.pms', channels: ['11', '12', '13', '14', '15', '16', '17', '18', '19'] }),
+      ),
+    ).toBe('9');
+    expect(
+      resolveChartPlayVariant(
+        makeSong({ chartPath: 'Song/main.PMS', channels: ['11', '15', '22', '23', '24', '25'] }),
+      ),
+    ).toBe('9');
+  });
+
+  test('PMS / 9 KEY: `#PLAYER=3` paired with channel 17 is the legacy `.bms` marker', () => {
+    expect(
+      resolveChartPlayVariant(
+        makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15', '17', '18', '19'], player: 3 }),
+      ),
+    ).toBe('9');
+  });
+
+  test('PMS / 9 KEY: a `.bme` chart on the PMS-STD layout WITHOUT the legacy `#PLAYER=3 + 17` marker is treated as DP', () => {
+    // The PMS-STD channel signature (`22..25`) is shared with
+    // genuine DP charts, so it can't be used as a 9KEY signal on
+    // its own — we'd misclassify regular DP charts. The CLI
+    // player reaches the same conclusion (it only uses the
+    // `22..25` block as a layout disambiguator AFTER the 9KEY
+    // mode has been decided by extension or `#PLAYER=3 + 17`).
+    expect(
+      resolveChartPlayVariant(
+        makeSong({ chartPath: 'Song/main.bme', channels: ['11', '12', '13', '14', '15', '22', '23', '24', '25'] }),
+      ),
+    ).toBe('10');
   });
 });
