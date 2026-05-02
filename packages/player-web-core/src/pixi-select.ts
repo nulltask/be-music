@@ -29,7 +29,7 @@ import {
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { disposeChildren } from './pixi-utils.ts';
-import { groupSongsByFolder, resolveSongSource } from './library.ts';
+import { groupSongsByFolder, loadAssetBytes, resolveSongSource } from './library.ts';
 import { dirname } from '@be-music/utils/core';
 import { ChartPreviewEngine } from './chart-preview.ts';
 import {
@@ -2473,22 +2473,29 @@ export class PixiSongSelectView {
       this.closeReadText();
       return;
     }
-    const text = findReadtextForSong(this.collection, song);
-    if (!text) {
-      // No `.txt` companion — give brief audible feedback so the
-      // user knows the click registered, then bail out.
-      void this.playOneShotSound('option-change');
-      return;
-    }
-    this.readTextBody.text = text;
-    // Reset scroll on every open so the user always lands at the
-    // top of a freshly-loaded README, even if they had scrolled
-    // through a previous one in the same session.
-    this.readTextScroll = 0;
-    this.readTextOpen = true;
-    this.readTextLayer.visible = true;
-    void this.playOneShotSound('option-open');
-    this.render();
+    void (async () => {
+      // Readtext lookup is async because the song bundle defers
+      // every file's bytes (lazy `File` reference) until something
+      // actually needs them. Wrap in a self-invoked async IIFE
+      // because the click handler stays sync.
+      const text = await findReadtextForSong(this.collection, song);
+      if (this.disposed) return;
+      if (!text) {
+        // No `.txt` companion — give brief audible feedback so the
+        // user knows the click registered, then bail out.
+        void this.playOneShotSound('option-change');
+        return;
+      }
+      this.readTextBody.text = text;
+      // Reset scroll on every open so the user always lands at the
+      // top of a freshly-loaded README, even if they had scrolled
+      // through a previous one in the same session.
+      this.readTextScroll = 0;
+      this.readTextOpen = true;
+      this.readTextLayer.visible = true;
+      void this.playOneShotSound('option-open');
+      this.render();
+    })();
   }
 
   /**
@@ -4824,22 +4831,23 @@ function matchesDifficultyFilter(song: BrowserSongEntry, target: number): boolea
  *   no sibling `.txt` exists, letting the caller play the
  *   "no readtext" feedback cue instead of opening an empty modal.
  */
-function findReadtextForSong(
+async function findReadtextForSong(
   collection: BrowserSongCollection,
   song: BrowserSongEntry,
-): string | undefined {
+): Promise<string | undefined> {
   const source = resolveSongSource(collection, song);
   if (!source) return undefined;
   const dir = dirname(song.chartPath).toLowerCase();
   for (const [path, entry] of source.files) {
     if (!path.toLowerCase().endsWith('.txt')) continue;
     if (dirname(path).toLowerCase() !== dir) continue;
-    // `.txt` files are stored eagerly (only audio is deferred),
-    // so this is always a `Uint8Array` in practice — `instanceof`
-    // narrows the union without dragging an `await` into the
-    // synchronous readtext lookup.
-    if (!(entry instanceof Uint8Array)) continue;
-    return decodeReadtextBytes(entry);
+    // Song-bundle files are lazy `File` references — pull the
+    // bytes on demand. The .txt is small so the read is cheap;
+    // the bytes go out of scope once decoded into the modal
+    // text, so they don't pin any extra memory.
+    const bytes = await loadAssetBytes(entry);
+    if (!bytes) continue;
+    return decodeReadtextBytes(bytes);
   }
   return undefined;
 }

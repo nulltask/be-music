@@ -13,7 +13,7 @@ import type {
   LoadProgressCallback,
 } from './types.ts';
 import { isChartFilePath } from './drop.ts';
-import { asLoadedBytes, loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
+import { loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
 
 export { loadAssetBytes, asLoadedBytes } from './file-lookup.ts';
 
@@ -235,34 +235,37 @@ export async function readFilesIntoBytesMap(
     concurrency?: number;
     onRead?: (path: string, current: number, total: number) => void;
     /**
-     * When true (default), audio files (`.wav` / `.ogg` / `.mp3`
-     * / `.opus` / `.flac` / `.oga`) are stored as the original
-     * `File` reference instead of being slurped into a
+     * When `true` (default), audio files (`.wav` / `.ogg` /
+     * `.mp3` / `.opus` / `.flac` / `.oga`) are stored as the
+     * original `File` reference instead of being slurped into a
      * `Uint8Array`. The gameplay scene reads the bytes on demand
-     * via {@link loadAssetBytes}, so the dropped-folder load no
-     * longer has to materialise gigabytes of WAV samples just to
-     * keep them in memory while the user is browsing the song
-     * list. Pass `false` to force-eager reads for callers that
-     * don't have a runtime able to await later (tests, etc.).
+     * via {@link loadAssetBytes}. Ignored when {@link shouldDefer}
+     * is supplied — that callback is the source of truth.
      */
     deferAudio?: boolean;
+    /**
+     * Per-file decision callback. Returning `true` keeps the
+     * file as a lazy `File` reference; `false` reads the bytes
+     * eagerly. Overrides {@link deferAudio} when supplied. Used
+     * by the song-collection loader to defer EVERY song-bundle
+     * file (charts plus assets) so a multi-thousand-file pack
+     * doesn't sit gigabytes-resident in the heap while the user
+     * is just browsing the bar list — the chart parser then
+     * pulls each chart's bytes through `loadAssetBytes` on
+     * demand and lets them be GC'd as soon as parsing finishes.
+     */
+    shouldDefer?: (path: string) => boolean;
   } = {},
 ): Promise<Map<string, BrowserSongAssetEntry>> {
   const concurrency = options.concurrency ?? FILE_READ_CONCURRENCY;
   const deferAudio = options.deferAudio ?? true;
+  const decideDefer = options.shouldDefer ?? (deferAudio ? isAudioPath : neverDefer);
   const result = new Map<string, BrowserSongAssetEntry>();
   let completed = 0;
   const total = files.length;
   await runWithConcurrency(files, concurrency, async (file) => {
     const path = normalizePath(file.webkitRelativePath || file.name);
-    if (deferAudio && isAudioPath(path)) {
-      // Audio files account for the bulk of a typical BMS pack's
-      // disk footprint (hundreds of WAV samples per chart, often
-      // megabytes each). Storing the `File` reference instead of
-      // its decoded bytes drops the at-rest memory by an order
-      // of magnitude — the bytes only land in the heap when the
-      // gameplay scene actually decodes a sample for the
-      // currently-playing chart.
+    if (decideDefer(path)) {
       result.set(path, file);
     } else {
       try {
@@ -281,6 +284,10 @@ export async function readFilesIntoBytesMap(
     options.onRead?.(path, completed, total);
   });
   return result;
+}
+
+function neverDefer(): boolean {
+  return false;
 }
 
 /**
@@ -380,14 +387,19 @@ export async function loadSongCollectionFromFiles(
       looseLabels.add(firstPathSegment(normalizePath(file.webkitRelativePath || file.name)) || file.name);
     }
   }
-  // Pooled parallel read for the loose-file bucket — this is the
-  // dominant cost on a real-world drop (4000+ small files were
-  // previously read serially via `for ... await arrayBuffer()`).
-  // The throttled progress wrapper keeps the 4000-emit storm from
-  // dominating the read time on the host-UI side.
+  // Defer EVERY song-bundle file. Charts get read on demand by
+  // the parse loop below (each chart's bytes are released as
+  // soon as the parser produces its `BeMusicJson`), and asset
+  // files (BGA images, audio, video, banner, …) stay as lazy
+  // `File` references until gameplay-mount actually needs them.
+  // This keeps the at-rest heap to "parsed chart metadata only"
+  // for the song bundle — the dropped pack itself sits on disk
+  // until the user picks a song. The throttled progress wrapper
+  // keeps the 4000-emit storm from dominating the read time.
   const throttledProgress = createThrottledProgress(onProgress);
   if (looseEntries.length > 0) {
     const looseMap = await readFilesIntoBytesMap(looseEntries, {
+      shouldDefer: () => true,
       onRead: (path, current, total) => {
         throttledProgress?.({ phase: 'reading', current, total, label: path });
       },
@@ -446,10 +458,14 @@ export async function loadSongCollectionFromFiles(
     const paths = chartPathsBySource[sourceIndex]!;
     for (const path of paths) {
       try {
-        // Charts (.bms / .bmson / etc.) are never audio, so the
-        // map entry must be a `Uint8Array`; the `asLoadedBytes`
-        // guard exists only to satisfy the union type.
-        const chartBytes = asLoadedBytes(source.files.get(path));
+        // Charts are stored as lazy `File` references in the
+        // song-bundle map (everything is deferred). Read the
+        // bytes on demand — the `chartBytes` local goes out of
+        // scope at the end of this iteration, so the GC can
+        // reclaim them as soon as the parser is done with them.
+        // Net effect: parse-phase memory is one chart at a time
+        // rather than the whole bundle's worth.
+        const chartBytes = await loadAssetBytes(source.files.get(path));
         if (!chartBytes) {
           throw new Error(`chart bytes missing for ${path}`);
         }

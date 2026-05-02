@@ -27,7 +27,6 @@ import { extractTimedNotes, type TimedPlayableNote } from '@be-music/player/play
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 import {
-  asLoadedBytes,
   loadAssetBytes,
   normalizePath,
   resolveChartAsset,
@@ -1604,10 +1603,12 @@ export class PixiGameplayView {
     }
     await Promise.all(
       candidates.map(async ({ key, assetPath }) => {
-        // STAGEFILE / BANNER are images so they're always stored
-        // as eager `Uint8Array` — `asLoadedBytes` is just a type
-        // narrow over the union.
-        const bytes = asLoadedBytes(resolveChartAsset(source, song.chartPath, assetPath));
+        // Song-bundle assets are stored as lazy `File` references
+        // (only the theme bundle keeps eager bytes). Read on
+        // demand so the at-rest heap stays at "parsed chart
+        // metadata only" until the user actually starts a song.
+        const entry = resolveChartAsset(source, song.chartPath, assetPath);
+        const bytes = await loadAssetBytes(entry);
         if (!bytes) return;
         try {
           const texture = await loadTextureFromBytes(assetPath, bytes);
@@ -1787,10 +1788,13 @@ export class PixiGameplayView {
     await Promise.all(
       [...refs.entries()].map(async ([key, path]) => {
         if (this.disposed) return;
-        // BMP / video assets are stored eagerly in the source map
-        // (only audio is deferred), so a `File`-branch should
-        // never appear here. `asLoadedBytes` narrows the union.
-        const bytes = asLoadedBytes(resolveChartAsset(source, song.chartPath, path));
+        // BMP / video assets are stored as lazy `File` references
+        // in the song bundle. Read on demand so memory stays low
+        // while browsing — the bytes only land in the heap for
+        // BGA assets actually referenced by the focused chart.
+        const entry = resolveChartAsset(source, song.chartPath, path);
+        const bytes = await loadAssetBytes(entry);
+        if (this.disposed) return;
         if (!bytes) {
           return;
         }
