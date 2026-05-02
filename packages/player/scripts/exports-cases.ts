@@ -1,6 +1,4 @@
 import * as playerApi from '@be-music/player';
-import * as playerScrollDistanceApi from '@be-music/player/core/scroll-distance';
-import * as playerTimelineApi from '@be-music/player/core/timeline';
 import type { PlayerOptions } from '@be-music/player';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
@@ -57,16 +55,6 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         includeInvisible: true,
         inferBmsLnTypeWhenMissing: true,
       });
-    },
-  });
-  define('player.core.createBeatAtSecondsResolver', {
-    run: (fixtures) => {
-      playerTimelineApi.createBeatAtSecondsResolver(fixtures.sampleBmsJson)(0.5);
-    },
-  });
-  define('player.core.createScrollDistanceMapper', {
-    run: () => {
-      playerScrollDistanceApi.createScrollDistanceMapper([{ beat: 4, speed: -1 }]).distanceBetween(0, 8);
     },
   });
   define('player.formatRandomPatternSummary', {

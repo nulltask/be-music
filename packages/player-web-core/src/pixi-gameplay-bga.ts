@@ -82,8 +82,8 @@ export function fitTextureWithinSpecCanvas(
   sourceWidth: number,
   sourceHeight: number,
 ): { offsetX: number; offsetY: number; width: number; height: number } {
-  const safeW = Math.max(1, Math.floor(sourceWidth));
-  const safeH = Math.max(1, Math.floor(sourceHeight));
+  const safeW = Number.isFinite(sourceWidth) ? Math.max(1, Math.floor(sourceWidth)) : 1;
+  const safeH = Number.isFinite(sourceHeight) ? Math.max(1, Math.floor(sourceHeight)) : 1;
   const widthScale = SPEC_BGA_CANVAS_SIZE / safeW;
   const heightScale = SPEC_BGA_CANVAS_SIZE / safeH;
   const scale = Math.min(1, widthScale, heightScale);
