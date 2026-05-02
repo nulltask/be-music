@@ -35,6 +35,15 @@ export const LR2_1P_KEYON_TIMER_BASE = 100;
 export const LR2_2P_KEYON_TIMER_BASE = 110;
 export const LR2_1P_BOMB_TIMER_BASE = 50;
 export const LR2_2P_BOMB_TIMER_BASE = 60;
+/**
+ * LR2 long-note hold-effect timers — fire at LN press, stop at LN
+ * release. Per-lane: `70 = 1P SC, 71..77 = 1P key1..7, 78 / 79 =
+ * 1P key8 / 9; 80 / 81..87 / 88..89` for the 2P side. Used by
+ * skins to drive LN-specific overlays (sustain glow, sparkles)
+ * that are independent of the regular key-on lasers.
+ */
+export const LR2_1P_LN_HOLD_TIMER_BASE = 70;
+export const LR2_2P_LN_HOLD_TIMER_BASE = 80;
 
 export const PLAYFIELD = { x: 84, y: 72, w: 204, judgementY: 322 } as const;
 export const BGA = { x: 291, y: 49, w: 174, h: 274 } as const;

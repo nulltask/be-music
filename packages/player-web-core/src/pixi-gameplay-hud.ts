@@ -327,6 +327,16 @@ export function computeBombDurationsMs(skin: Lr2Skin): Map<number, number> {
 }
 
 /**
+ * LR2 LN-hold-effect timers (`70..89` — 1P 70..79 / 2P 80..89).
+ * These fire while a long note is being held and stop on release;
+ * `releaseLnHoldTimer` consults the returned span to fade out any
+ * sustain-glow / hold-sparkle elements gated on the timer.
+ */
+export function computeLnHoldDurationsMs(skin: Lr2Skin): Map<number, number> {
+  return collectMaxKeyframeTimePerTimer(skin, 70, 89);
+}
+
+/**
  * Internal helper for {@link computeKeyOnFadeDurationsMs} /
  * {@link computeBombDurationsMs}: scan every keyframe-bearing
  * element type and report the longest `time` per timer id within

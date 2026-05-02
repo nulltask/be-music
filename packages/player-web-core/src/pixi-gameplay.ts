@@ -74,8 +74,10 @@ import {
   FALLBACK_INTRO_DELAY_MS,
   LR2_1P_BOMB_TIMER_BASE,
   LR2_1P_KEYON_TIMER_BASE,
+  LR2_1P_LN_HOLD_TIMER_BASE,
   LR2_2P_BOMB_TIMER_BASE,
   LR2_2P_KEYON_TIMER_BASE,
+  LR2_2P_LN_HOLD_TIMER_BASE,
   MUTED,
   PANEL,
   PIXELS_PER_BEAT,
@@ -103,6 +105,7 @@ import {
   computeBombDurationsMs,
   computeFullComboDurationMs,
   computeKeyOnFadeDurationsMs,
+  computeLnHoldDurationsMs,
   computeRankOp,
   createEmptyScore,
   formatTime,
@@ -624,6 +627,24 @@ export class PixiGameplayView {
    * author (or for skinless mode).
    */
   private readonly bombDurationMs = new Map<number, number>();
+  /**
+   * Per-LN-hold-effect-timer (`70..89`) play-clock at which the
+   * release fade began. {@link renderSkinImage} consumes this to
+   * taper the sprite alpha down to 0 over
+   * {@link lnHoldFadeDurationMs} starting at the recorded value.
+   * {@link startLnHoldTimer} clears the entry on a fresh LN head;
+   * {@link releaseLnHoldTimer} populates it at the tail.
+   */
+  private readonly lnHoldFadeOutStart = new Map<number, number>();
+  /**
+   * Per-LN-hold-effect-timer fade duration derived from the
+   * skin's keyframes anchored to that timer (longest `time`
+   * across elements). Populated in {@link prepareSkin}; consumers
+   * fall back to {@link KEY_ON_FADE_OUT_MS} when the skin doesn't
+   * author the slot (skinless mode, or a chart that never used
+   * LN-hold visuals).
+   */
+  private readonly lnHoldFadeDurationMs = new Map<number, number>();
   /**
    * In-flight long-note holds keyed by channel. Populated when the
    * head of an LN is judged (the press lands inside the note's
@@ -1694,11 +1715,20 @@ export class PixiGameplayView {
     // timers (the `Play/fullcombo/...` skin graphic) read the
     // running elapsed time afterward to slide in / fade out per the
     // skin's keyframe chain.
-    if (timer === 48 || timer === 49 || (timer >= 50 && timer <= 69) || (timer >= 100 && timer <= 119)) {
+    if (
+      timer === 48 ||
+      timer === 49 ||
+      (timer >= 50 && timer <= 69) ||
+      (timer >= 70 && timer <= 89) ||
+      (timer >= 100 && timer <= 119)
+    ) {
+      // Long-note hold-effect (70-89) follows the same explicit-
+      // seed model as bombs / FC / key-on: `startLnHoldTimer`
+      // stamps it at LN press, `releaseLnHoldTimer` retires it
+      // after the fade window. Without an entry the slot stays
+      // hidden.
       return this.timerStartedAt.has(timer);
     }
-    // Long-note hold timers (70-89) are not yet driven; treat as inactive so
-    // skin elements gated on them stay hidden rather than always visible.
     return false;
   }
 
@@ -1744,6 +1774,13 @@ export class PixiGameplayView {
     this.bombDurationMs.clear();
     for (const [timerId, span] of computeBombDurationsMs(skin)) {
       this.bombDurationMs.set(timerId, span);
+    }
+    // LN-hold-effect timer (70-89) keyframe spans — `releaseLnHoldTimer`
+    // uses these to fade authored sustain-glow visuals out at the
+    // skin's pace when the hold ends.
+    this.lnHoldFadeDurationMs.clear();
+    for (const [timerId, span] of computeLnHoldDurationsMs(skin)) {
+      this.lnHoldFadeDurationMs.set(timerId, span);
     }
     const imagePaths = new Set<string>();
     skin.images.forEach((image) => imagePaths.add(image.source.imagePath));
@@ -2368,6 +2405,22 @@ export class PixiGameplayView {
     return base + laneIndex;
   }
 
+  /**
+   * LR2 LN-hold-effect timer id for the given chart channel
+   * (`70..79` for 1P SC + key1..9, `80..89` for 2P). Mirrors
+   * {@link resolveKeyOnTimerId}; returned only when the channel
+   * maps onto a known lane index.
+   */
+  private resolveLnHoldTimerId(channel: string): number | undefined {
+    const laneIndex = resolveSideRelativeLaneIndex(channel);
+    if (laneIndex < 0 || laneIndex > 9) {
+      return undefined;
+    }
+    const isPlayer2 = channel.startsWith('2');
+    const base = isPlayer2 ? LR2_2P_LN_HOLD_TIMER_BASE : LR2_1P_LN_HOLD_TIMER_BASE;
+    return base + laneIndex;
+  }
+
   private startKeyOnTimer(channel: string): void {
     const timerId = this.resolveKeyOnTimerId(channel);
     if (timerId === undefined) {
@@ -2377,6 +2430,51 @@ export class PixiGameplayView {
     // A fresh press cancels any in-flight release fade on the
     // same lane; the laser is fully on again from this instant.
     this.keyOnFadeOutStart.delete(timerId);
+  }
+
+  /**
+   * Stamps the LR2 LN-hold-effect timer (70..89) for the given
+   * channel — fires at the head of an LN, paired with
+   * {@link releaseLnHoldTimer} at LN end. Skin elements gated on
+   * these timers (sustain glow, hold sparkles, etc.) become
+   * visible while the timer is active and fade through their
+   * keyframe sequence on release. A no-op if the channel doesn't
+   * map onto a known LN-hold slot.
+   */
+  private startLnHoldTimer(channel: string): void {
+    const timerId = this.resolveLnHoldTimerId(channel);
+    if (timerId === undefined) return;
+    this.timerStartedAt.set(timerId, this.playClock());
+    this.lnHoldFadeOutStart.delete(timerId);
+  }
+
+  /**
+   * Mirrors {@link releaseKeyOnTimer} but for the LN-hold-effect
+   * timer (70..89). Stamps the play-clock at which the fade
+   * began, schedules the timer's deferred delete, and lets
+   * `renderSkinImage` taper any LN-hold-anchored sprite alpha to
+   * 0 over the same skin-derived span as the key-on lasers (we
+   * reuse the per-timer duration map populated in `prepareSkin`,
+   * with `KEY_ON_FADE_OUT_MS` as the fallback).
+   */
+  private releaseLnHoldTimer(channel: string): void {
+    const timerId = this.resolveLnHoldTimerId(channel);
+    if (timerId === undefined) return;
+    if (!this.timerStartedAt.has(timerId)) return;
+    this.lnHoldFadeOutStart.set(timerId, this.playClock());
+    const fadeMs = this.lnHoldFadeDurationMs.get(timerId) ?? KEY_ON_FADE_OUT_MS;
+    const timeout = window.setTimeout(() => {
+      this.keyFlashTimeouts.delete(timeout);
+      if (this.disposed) return;
+      // Don't retire the timer if a fresh LN head landed on the
+      // same lane during the fade window — that re-press has its
+      // own start/release lifecycle.
+      if (!this.activeLongNotes.has(channel)) {
+        this.timerStartedAt.delete(timerId);
+      }
+      this.lnHoldFadeOutStart.delete(timerId);
+    }, fadeMs);
+    this.keyFlashTimeouts.add(timeout);
   }
 
   /**
@@ -2530,6 +2628,11 @@ export class PixiGameplayView {
       // `hit = true` so subsequent presses on this channel target
       // the next note rather than re-judging the same head.
       this.activeLongNotes.set(channel, { note, headJudge: judge, headSignedDeltaMs: signedDeltaMs });
+      // Fire the LR2 LN-hold-effect timer (70-89) so authored
+      // sustain visuals (sparkle / glow) become visible during
+      // the hold. Released in `finalizeActiveLongNote` /
+      // `autoFinalizeLongNotes` / `finalizeOverheldLongNotes`.
+      this.startLnHoldTimer(channel);
       return;
     }
     this.commitFinalJudge(judge, signedDeltaMs, seconds, channel);
@@ -2576,6 +2679,10 @@ export class PixiGameplayView {
       return;
     }
     this.activeLongNotes.delete(channel);
+    // Sustain visuals on the LR2 LN-hold-effect timer fade out
+    // here so the skin's release keyframes get a chance to play
+    // before the slot retires.
+    this.releaseLnHoldTimer(channel);
     const { note, headJudge, headSignedDeltaMs } = active;
     const endSeconds = note.endSeconds!;
     const windows = resolveJudgeWindowsMs(this.song.chart);
@@ -2651,6 +2758,7 @@ export class PixiGameplayView {
         this.activeLongNotes.delete(channel);
         this.commitFinalJudge(active.headJudge, active.headSignedDeltaMs, seconds, channel);
         this.triggerBombOnNonMiss(channel, active.headJudge);
+        this.releaseLnHoldTimer(channel);
       }
     }
   }
@@ -2939,6 +3047,7 @@ export class PixiGameplayView {
           headSignedDeltaMs: 0,
         });
         this.startKeyOnTimer(note.channel);
+        this.startLnHoldTimer(note.channel);
         continue;
       }
       this.commitFinalJudge('PERFECT', 0, seconds, note.channel);
@@ -2991,6 +3100,7 @@ export class PixiGameplayView {
           headSignedDeltaMs: 0,
         });
         this.startKeyOnTimer(note.channel);
+        this.startLnHoldTimer(note.channel);
         continue;
       }
       this.commitFinalJudge('PERFECT', 0, seconds, note.channel);
@@ -3011,8 +3121,10 @@ export class PixiGameplayView {
         // Same alpha-taper release as manual key-ups and auto-
         // judged short notes (via `flashKeyOnTimer`) so the LN
         // tail decays at the same speed without re-stamping the
-        // key-on timer.
+        // key-on timer. Pair with the LN-hold-effect release so
+        // any sustain visuals fade alongside the lane laser.
         this.releaseKeyOnTimer(channel);
+        this.releaseLnHoldTimer(channel);
       }
     }
   }
@@ -3858,10 +3970,20 @@ export class PixiGameplayView {
     // would keep the laser invisible the whole time. Position /
     // size / colour from the keyframe still apply via the rest of
     // `applyDestinationToSprite`.
-    const fadeStart = this.keyOnFadeOutStart.get(image.destination.timer);
-    if (fadeStart !== undefined) {
-      const elapsed = this.playClock() - fadeStart;
+    const keyOnFadeStart = this.keyOnFadeOutStart.get(image.destination.timer);
+    if (keyOnFadeStart !== undefined) {
+      const elapsed = this.playClock() - keyOnFadeStart;
       const fadeMs = this.keyOnFadeDurationMs.get(image.destination.timer) ?? KEY_ON_FADE_OUT_MS;
+      sprite.alpha = Math.max(0, 1 - elapsed / fadeMs);
+    }
+    // Same alpha taper for LN-hold-effect timers (70..89). Authored
+    // hold sprites stay visible while the timer is active and
+    // decay through this taper after `releaseLnHoldTimer` records
+    // the fade origin.
+    const lnHoldFadeStart = this.lnHoldFadeOutStart.get(image.destination.timer);
+    if (lnHoldFadeStart !== undefined) {
+      const elapsed = this.playClock() - lnHoldFadeStart;
+      const fadeMs = this.lnHoldFadeDurationMs.get(image.destination.timer) ?? KEY_ON_FADE_OUT_MS;
       sprite.alpha = Math.max(0, 1 - elapsed / fadeMs);
     }
     // The AUTOPLAY label (any image gated on op 33) belongs in the same
