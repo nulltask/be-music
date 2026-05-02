@@ -87,7 +87,20 @@ export default defineConfig({
     alias: workspaceAliases,
   },
   optimizeDeps: {
-    exclude: workspaceAliases.map((entry) => entry.find),
+    exclude: [
+      ...workspaceAliases.map((entry) => entry.find),
+      // libav.js (the BGA-video transcode fallback) loads its
+      // backend WASM file dynamically from a URL it derives off
+      // its own `import.meta.url`. Vite's pre-bundler rewrites
+      // the package into `.vite/deps/@uwx_libav__js-fat.js`,
+      // which makes that derived URL miss with a 404 because
+      // none of the version-stamped backend `.mjs` / `.wasm`
+      // files end up at the rewritten location. Excluding the
+      // package from pre-bundling makes Vite serve it directly
+      // from `node_modules`, where its companion files live and
+      // the dynamic import resolves cleanly.
+      '@uwx/libav.js-fat',
+    ],
     // Pre-bundle `ts-ebml` up-front so Vite's CJS-named-export
     // interop runs at boot rather than the second pass a
     // dynamic import would trigger. Listed explicitly because
