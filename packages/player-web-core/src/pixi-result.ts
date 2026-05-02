@@ -403,16 +403,18 @@ export class PixiResultView {
   }
 
   /**
-   * Decodes and plays the matching result-screen BGM. Picks
+   * Decodes and plays the matching result-screen jingle. Picks
    * `clearBgm` / `failBgm` based on `data.cleared` and falls
    * back to the generic `resultBgm` when the theme doesn't
    * differentiate. Silently no-ops when no slot is populated
    * (skinless / non-LR2 themes) and when the browser refuses
    * autoplay — neither path is fatal for the result scene.
    *
-   * Looped because real LR2 themes ship a short result jingle
-   * the user can sit on for as long as they want before
-   * dismissing.
+   * Plays once (no loop) because LR2's `clear` / `fail` /
+   * `result` are one-shot jingles living under
+   * `LR2files/Sound/<theme>/`, not looping BGM. Looping would
+   * keep the fanfare playing indefinitely while the user reads
+   * their score, which isn't how LR2 behaves.
    */
   private async startResultBgm(data: PixiGameplayResultData): Promise<void> {
     const bytes = data.cleared
@@ -430,7 +432,7 @@ export class PixiResultView {
       }
       const source = audioContext.createBufferSource();
       source.buffer = buffer;
-      source.loop = true;
+      source.loop = false;
       source.connect(audioContext.destination);
       source.start();
       this.bgmSource = source;
