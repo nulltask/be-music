@@ -855,16 +855,19 @@ export class PixiGameplayView {
     if (this.disposed) return;
     await this.prepareAudio();
     if (this.disposed) return;
-    // BGA preload is awaited so `prepare()` doesn't resolve
-    // until every BMP / video texture is ready. Charts that
-    // ship an unsupported video codec (e.g. legacy `.mpg`)
-    // route through the ffmpeg.wasm transcode fallback in
-    // `loadVideoTextureFromBytes`, which can take several
-    // seconds — blocking here keeps the host's Decide splash
-    // visible as a "loading" cue until everything is in place,
-    // matching the user-requested "wait with a loading
-    // animation until video encoding finishes" behaviour.
-    await this.prepareBga();
+    // BGA preload runs IN THE BACKGROUND — `prepare()` resolves
+    // here even if `prepareBga()` is still decoding videos. The
+    // ffmpeg.wasm fallback for unsupported codecs (e.g. legacy
+    // `.mpg`) can take ~tens of seconds, and the user wants the
+    // PLAY scene to transition in immediately and play its LR2
+    // LOADING animation during that wait rather than freezing the
+    // Decide splash. {@link start} gates the actual chart start
+    // (LR2 timer 40 → 41 / op 80 → 81) on `bgaReadyPromise`, so
+    // notes still don't begin until the BGA is in place.
+    this.bgaReadyPromise = this.prepareBga().catch((error) => {
+      // eslint-disable-next-line no-console
+      console.warn('[gameplay] BGA preload failed; continuing without it', error);
+    });
   }
 
   /**
@@ -909,15 +912,24 @@ export class PixiGameplayView {
     // the built-in fallback frame still has room to land before
     // notes begin.
     const introMs = playStartOffsetMs > 0 ? playStartOffsetMs : FALLBACK_INTRO_DELAY_MS;
-    this.startTime = now + introMs;
+    // The chart waits on BOTH the configured PLAY START delay
+    // AND the BGA preload (which may still be transcoding video
+    // in the background — see `prepare()`). Until the gate
+    // opens below, `startTime = +Infinity` keeps `isIntroPlaying`
+    // true and the rAF loop in the LR2 LOADING phase.
+    this.startTime = Number.POSITIVE_INFINITY;
     // Seed the LR2 scene-stage timers so the skin's
     // `#STARTINPUT` / `#LOADSTART` / `#LOADEND` / `#PLAYSTART`
     // directives drive their attached `#DST_*` keyframes
     // (without seeds, anything anchored to those timers would
-    // pin to time 0 and never animate). Each entry is a ms
-    // offset from scene mount; offsets <= 0 fire the timer
-    // immediately, larger offsets defer the seed via
-    // `setTimeout`.
+    // pin to time 0 and never animate).
+    //
+    // Timer 0 (scene start) fires immediately; timer 1
+    // (`#STARTINPUT`) keeps its configured offset. Timer 40
+    // (`#LOADEND`) and timer 41 (`#PLAYSTART`) — the events
+    // that drive "READY" / chart-start cues — are seeded later
+    // via the `Promise.all` gates below so they wait for the
+    // BGA preload too.
     //
     // Timer 2 (FADEOUT) and timer 3 (CLOSE) are deliberately NOT
     // seeded here even when the skin authored `#FADEOUT` /
@@ -930,32 +942,48 @@ export class PixiGameplayView {
     // wires an explicit "begin exit" event later.
     this.timerStartedAt.set(0, now);
     this.seedSceneStageTimer(1, timing.startInput);
-    this.seedSceneStageTimer(40, loadEndOffsetMs);
-    this.seedSceneStageTimer(41, playStartOffsetMs);
     // LR2 op 80 / 81 ("load not complete" / "load complete") gate
     // the centered title / genre / artist display in the play
-    // skin. Without these ops the LR2 default 7-keys skin's
-    // title elements never become visible. Set op 80 immediately
-    // (we're in the load animation window even though our
-    // prepare() already finished decoding) and switch to op 81
-    // when LOADEND would fire — matching the visual phase the
-    // skin authors against.
+    // skin. Op 80 is on during the LOADING phase; the 80→81 flip
+    // fires alongside timer 40 once the gate opens.
     this.runtimeOps.add(80);
     this.runtimeOps.delete(81);
     if (this.loadCompleteTimerHandle !== undefined) {
       window.clearTimeout(this.loadCompleteTimerHandle);
-    }
-    this.loadCompleteTimerHandle = window.setTimeout(() => {
       this.loadCompleteTimerHandle = undefined;
+    }
+    // The `start()` invocation we belong to — captured so the
+    // gate handlers below can detect a dispose-and-re-mount and
+    // bail out instead of mutating a fresh scene's state.
+    const sceneEpoch = this.sceneStartTime;
+    const bgaReady = this.bgaReadyPromise ?? Promise.resolve();
+    const delay = (ms: number): Promise<void> =>
+      new Promise((resolve) => window.setTimeout(resolve, Math.max(0, ms)));
+    // LOAD END gate — both the configured `#LOADEND` delay AND
+    // the BGA preload need to finish. Fires LR2 timer 40 and
+    // flips op 80→81 (READY), which the skin's load-complete
+    // animations key off of.
+    void Promise.all([bgaReady, delay(loadEndOffsetMs)]).then(() => {
       if (this.disposed) return;
+      if (this.sceneStartTime !== sceneEpoch) return;
+      this.timerStartedAt.set(40, performance.now());
       this.runtimeOps.delete(80);
       this.runtimeOps.add(81);
-    }, Math.max(0, loadEndOffsetMs));
-    // Anchor the chart's seconds=0 to the same precise audio-context
-    // timestamp so background samples and visual notes share one clock.
-    if (this.audioContext) {
-      this.audioContextStartTime = this.audioContext.currentTime + introMs / 1000;
-    }
+    });
+    // PLAY START gate — same pattern, but for the configured
+    // `#PLAYSTART` (or fallback intro). Fires timer 41 and
+    // anchors the wall-clock + audio-context start times so the
+    // chart engine and BGM samples share a single t=0.
+    void Promise.all([bgaReady, delay(introMs)]).then(() => {
+      if (this.disposed) return;
+      if (this.sceneStartTime !== sceneEpoch) return;
+      const chartStartAt = performance.now();
+      this.timerStartedAt.set(41, chartStartAt);
+      this.startTime = chartStartAt;
+      if (this.audioContext) {
+        this.audioContextStartTime = this.audioContext.currentTime;
+      }
+    });
     this.app.canvas.focus();
     this.tick();
   }
@@ -1983,6 +2011,17 @@ export class PixiGameplayView {
   private loadCompleteTimerHandle: number | undefined;
 
   /**
+   * Resolves when {@link prepareBga} has loaded every BGA texture.
+   * Set in {@link prepare} (without `await`) so the PLAY scene can
+   * be revealed immediately and the LR2 LOADING phase keeps
+   * painting while a long-running ffmpeg.wasm video transcode
+   * finishes in the background. {@link start} gates the LOAD END
+   * timer / chart-start scheduling on this promise so the chart
+   * itself doesn't begin until the BGA is actually ready.
+   */
+  private bgaReadyPromise: Promise<void> | undefined;
+
+  /**
    * Window-level blur/focus fallback for the auto-pause behaviour. Some
    * platforms (notably macOS with Chrome) keep the document `visible`
    * across Cmd-Tab app switches, so `visibilitychange` alone misses those
@@ -2916,6 +2955,14 @@ export class PixiGameplayView {
    * yet small enough that pause/resume timing remains responsive.
    */
   private scheduleAutoSamples(seconds: number): void {
+    // Hold off until the chart-start gate has fired and
+    // `audioContextStartTime` is anchored to the audio clock —
+    // until then `playSampleByKey` would clamp every queued
+    // chart-second to "now" and start playing the BGM during
+    // the LR2 LOADING phase.
+    if (this.audioContextStartTime === 0) {
+      return;
+    }
     const lookAhead = 0.5;
     while (this.autoTriggerNextIndex < this.autoSampleTriggers.length) {
       const trigger = this.autoSampleTriggers[this.autoTriggerNextIndex]!;
