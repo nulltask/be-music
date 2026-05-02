@@ -305,21 +305,22 @@ When `POOR` occurs, do the following:
 - Fire POOR BGA.
 - Update judge/combo display to `POOR`.
 
-### Blank keystroke (no candidate)
+### Blank keystroke (no candidate) — LR2-compatible empty POOR
 
-If there is an input, but there are no undecided notes in the `BAD` window for that lane set, that input will not cause a decision.
+If there is an input but no undecided notes inside the `BAD` window for that lane set, fire an LR2-compatible "empty POOR" (空POOR).
 
-When a blank key is pressed, the settings remain as follows.
+Empty POOR mirrors LR2's phantom-press behaviour:
 
-- Do not update `summary`.
-- Don't cut the combo.
-- Do not change gauge groove.
-- Do not fire POOR BGA.
-- Don't update judge/combo display.
+- Do NOT update `summary` judge counters (`perfect` / `great` / `good` / `bad` / `poor`). LR2 only counts the "missed POOR" branch (NOWJUDGE index 1) into the POOR tally; the "empty POOR" branch (index 0) is excluded.
+- Do NOT change EX-SCORE / IIDX score.
+- Do NOT cut the combo.
+- Apply `EMPTY_POOR` to the groove gauge — the delta lives in [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) (`applyGrooveGaugeJudge('EMPTY_POOR')`): GROOVE / HARD `-2`, EASY `-1`, DEATH `-100` (instant 0%). Nearly harmless on NORMAL / EASY; meaningful drain on HARD / DEATH.
+- Trigger POOR BGA (`trigger-poor-bga`).
+- Flash the judge display as `POOR` for 0.6 s (`publishJudgeCombo('POOR', combo)`). The LR2 spec separates op 246 (1P empty POOR) / 266 (2P empty POOR) from op 245 / 265 (missed POOR), but both NOWJUDGE indices currently resolve to the same `'poor'` skin slot in this implementation, so the rendered sprite is identical.
 
-If a keysound fallback exists, the fallback sound can be played first.
-However, even in that case, no additional judgments or gauge changes occur.
-Similarly, the fallback pronunciation of FREE ZONE also returns as is.
+If a keysound fallback exists, play it first.
+After the fallback, if the channel sits in a FREE ZONE, suppress empty POOR and return — FREE ZONE is the author's explicit "press here for ambience" region, not a phantom press.
+The LN repeat-suppress window after a long-note release is treated the same way (the input is the intended tail re-tap, not phantom).
 
 ### Landmine
 
@@ -631,4 +632,3 @@ The main items are:
 - Gauge type switching option
 - Gauge history display
 - `#LNMODE` branch on `AUTO`
-- Compatibility mode that introduces `EMPTY_POOR` for empty keys

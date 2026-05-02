@@ -2765,30 +2765,56 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
     if (!candidate) {
       if (refreshedHold) {
+        // Active LN re-tap inside the hold-grace window — input is
+        // part of the sustain, not a phantom press.
         return;
       }
       const fallback = findLaneSoundCandidate(notes, candidateChannels, nowSec);
       if (fallback) {
         const suppressUntil = longNoteSuppressUntilSecondsByChannel.get(fallback.channel);
         const shouldSuppressFallback = suppressUntil !== undefined && nowSec < suppressUntil;
-        if (!shouldSuppressFallback) {
-          if (!uiEnabled) {
-            writePlayableSampleTriggerEventLog(
-              writeOutput,
-              fallback.event,
-              nowSec,
-              resolvedJson.resources.wav,
-              'lane-fallback',
-              fallback.channel,
-            );
-          }
-          audioSession?.triggerEvent?.(fallback.event);
-          if (activeFreeZoneChannels.has(fallback.channel)) {
-            return;
-          }
-        } else {
+        if (shouldSuppressFallback) {
+          // LN repeat-suppress window — same intent as the hold path
+          // above, just on the cooldown side. Treat as benign.
           return;
         }
+        if (!uiEnabled) {
+          writePlayableSampleTriggerEventLog(
+            writeOutput,
+            fallback.event,
+            nowSec,
+            resolvedJson.resources.wav,
+            'lane-fallback',
+            fallback.channel,
+          );
+        }
+        audioSession?.triggerEvent?.(fallback.event);
+        if (activeFreeZoneChannels.has(fallback.channel)) {
+          // Free zone keysound — authored for empty-press playback.
+          // No POOR cue; this is intended audio.
+          return;
+        }
+      }
+      // LR2-compatible 空POOR (empty POOR): phantom press with no
+      // candidate and no benign explanation. Apply the gauge delta
+      // (GROOVE / HARD -2, EASY -1, DEATH -100 — see
+      // `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR BGA,
+      // but DO NOT break combo or increment `summary.poor`. Real LR2
+      // behaviour: NORMAL / EASY make this nearly harmless;
+      // HARD / DEATH actually drain.
+      applyLoggedGaugeJudge(nowSec, 'EMPTY_POOR', 'empty-poor');
+      uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: nowSec });
+      if (!uiEnabled) {
+        writeRuntimeEventLog(writeOutput, 'judge', [
+          ['time', formatSeconds(nowSec)],
+          ['result', 'EMPTY_POOR'],
+          ['reason', 'empty-poor'],
+        ]);
+      } else {
+        // Brief visual cue. The web-core gameplay scene maps this
+        // back to the LR2 `'poor'` skin slot (NOWJUDGE index 0/1
+        // share the same kind in our model).
+        activeStateSignals?.publishJudgeCombo('POOR', combo);
       }
       return;
     }

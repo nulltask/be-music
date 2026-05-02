@@ -788,7 +788,7 @@ describe('player', () => {
     expect(perfect?.seconds).toBeGreaterThan(1.2);
   });
 
-  test('player: stray key without a candidate note does not change judgments or groove gauge', async () => {
+  test('player: stray key fires LR2 empty POOR — gauge -2 but combo / score / poor counter untouched', async () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 60;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
@@ -812,8 +812,14 @@ describe('player', () => {
     expect(summary.great).toBe(0);
     expect(summary.good).toBe(0);
     expect(summary.bad).toBe(0);
+    // 空POOR is NOT counted in `summary.poor` — that slot is reserved
+    // for 見逃しPOOR (notes that passed without input). Matches LR2.
     expect(summary.poor).toBe(0);
-    expect(summary.gauge?.current).toBeCloseTo(20, 9);
+    // GROOVE gauge starts at 20 and the EMPTY_POOR delta is -2 (see
+    // `applyGrooveGaugeJudge`), giving 18. Matches LR2: phantom
+    // presses lightly drain even on the forgiving gauges (HARD/DEATH
+    // drain harder).
+    expect(summary.gauge?.current).toBeCloseTo(18, 9);
     expect(summary.gauge?.cleared).toBe(false);
   });
 

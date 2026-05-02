@@ -2711,11 +2711,26 @@ export class PixiGameplayView {
       }
     }
     if (!note) {
-      // Empty press (no note in the BAD window for this lane) — apply
-      // LR2's "空プア" gauge penalty (-2) without breaking combo or
-      // counting against the score summary. Matches the per-press
-      // gauge behaviour seen in the LR2 reference.
+      // Empty press (no note in the BAD window for this lane) —
+      // LR2-compatible 空POOR (empty POOR). Per the LR2 reference:
+      //
+      // - Gauge: penalty per gauge type (see
+      //   `applyGrooveGaugeJudge('EMPTY_POOR')`): GROOVE / HARD -2,
+      //   EASY -1, DEATH -100. So NORMAL / EASY are nearly
+      //   harmless; HARD / DEATH actually drain.
+      // - Combo: NOT broken (`tracker.combo` unchanged).
+      // - Score: NOT updated — `summary.poor` / EX-SCORE / IIDX
+      //   score all untouched, so phantom presses don't hurt the
+      //   final tally.
+      // - POOR BGA: triggered just like a real POOR — `publishJudge`
+      //   stamps `lastPoorAt` for the BGA-swap window.
+      // - Judge plate: flashes "POOR" for ~600 ms (NOWJUDGE timer 46
+      //   restart, `lastJudge` set). LR2 distinguishes index 0 (空)
+      //   vs 1 (見逃し) at the skin level via op 246 / 245, but both
+      //   map to the same `'poor'` kind in our skin model so the
+      //   rendered sprite is identical — close enough for now.
       this.applyGaugeDelta('EMPTY_POOR');
+      this.publishJudge('POOR', seconds, channel);
       return;
     }
     this.markNoteHit(note);

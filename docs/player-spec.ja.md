@@ -305,21 +305,22 @@ bmson の基準値は `100%` です。
 - POOR BGA を発火する。
 - judge/combo 表示を `POOR` に更新する。
 
-### 空打鍵（candidate なし）
+### 空打鍵（candidate なし）— LR2 互換 空POOR
 
-入力はあったが、そのレーン集合に対して `BAD` 窓内の未判定ノートが存在しない場合、その入力は判定を発生させません。
+入力はあったが、そのレーン集合に対して `BAD` 窓内の未判定ノートが存在しない場合、 LR2 互換の "空POOR" を発火します。
 
-空打鍵時は次のままです。
+空POOR は LR2 における phantom press の扱いに合わせ、次の挙動とします。
 
-- `summary` を更新しない。
-- combo を切らない。
-- groove gauge を変化させない。
-- POOR BGA を発火しない。
-- judge/combo 表示を更新しない。
+- `summary` のジャッジカウンタ (`perfect`/`great`/`good`/`bad`/`poor`) は **更新しない**。 LR2 では「見逃しPOOR」(NOWJUDGE index 1) のみが POOR としてカウントされ、「空POOR」(index 0) はカウント外となるため。
+- EX-SCORE / IIDX score は **変化させない**。
+- combo は **切らない**。
+- groove gauge には `EMPTY_POOR` を適用する。デルタは [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) の `applyGrooveGaugeJudge('EMPTY_POOR')` 経由で算出され、 GROOVE / HARD で `-2`、 EASY で `-1`、 DEATH では `-100` (= 即時 0%)。 NORMAL / EASY ではほぼ無害だが、 HARD / DEATH では実害が出る。
+- **POOR BGA を発火する** (`trigger-poor-bga`)。
+- **judge 表示を `POOR` で 0.6 秒フラッシュ** する (`publishJudgeCombo('POOR', combo)`)。 LR2 spec 上は op 246 (1P 空POOR) / 266 (2P 空POOR) と op 245 / 265 (見逃しPOOR) が分岐するが、本実装では NOWJUDGE index 0 / 1 を同じ `'poor'` skin slot に解決しているため、視覚上は同一の POOR 表示になる。
 
 keysound fallback が存在する場合は、fallback 音を先に再生できます。
-ただしその場合でも追加の判定や gauge 変動は発生しません。
-FREE ZONE の fallback 発音も同様に、そのまま return します。
+fallback 再生後、 FREE ZONE 上のチャンネルなら空POOR は発火させずそのまま return します (FREE ZONE は author が空打鍵による発音を意図したエリアなので、 phantom press 扱いしない)。
+LN 解放直後の repeat-suppress 窓内も同様に空POOR を発火させません (直前 LN の意図された tail re-tap として扱う)。
 
 ### 地雷
 
@@ -631,4 +632,3 @@ TUI が無効な場合は、モード開始メッセージ、レーン割り当�
 - ゲージ種別切り替えオプション
 - ゲージ推移の履歴表示
 - `AUTO` での `#LNMODE` 分岐
-- 空打鍵に `EMPTY_POOR` を導入する互換モード
