@@ -124,6 +124,19 @@ async function transcodeVideoToBrowserCodec(
   if (typeof (globalThis as { self?: unknown }).self === 'undefined') {
     (globalThis as { self?: unknown }).self = globalThis;
   }
+  // libav's Emscripten-generated backend probes `global` (the
+  // Node global object) and crashes with `ReferenceError:
+  // global is not defined` in the browser, where only `self` /
+  // `globalThis` exist. Aliasing `globalThis.global = globalThis`
+  // before the dynamic backend import is enough for the probe to
+  // succeed and the WASM bootstrap to continue. We don't go
+  // through `vite-plugin-node-polyfills`'s `globals.global` for
+  // this — flipping it on there would inject a `global` shim
+  // into every module's preamble, which trips a few of the
+  // packages' own `typeof global === 'undefined'` guards.
+  if (typeof (globalThis as { global?: unknown }).global === 'undefined') {
+    (globalThis as { global?: unknown }).global = globalThis;
+  }
   const startedAt = performance.now();
   // eslint-disable-next-line no-console
   console.info(`[bga-video] transcode start: ${path} (${bytes.byteLength} bytes)`);
