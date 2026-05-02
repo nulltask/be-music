@@ -124,8 +124,25 @@ async function transcodeVideoToBrowserCodec(
   if (typeof (globalThis as { self?: unknown }).self === 'undefined') {
     (globalThis as { self?: unknown }).self = globalThis;
   }
-  const libAvModule = (await import('@uwx/libav.js-fat')) as unknown as LibAvFactoryModule;
-  const libav = await libAvModule.default.LibAV({ noworker: true, variant: 'fat' });
+  const startedAt = performance.now();
+  // eslint-disable-next-line no-console
+  console.info(`[bga-video] transcode start: ${path} (${bytes.byteLength} bytes)`);
+  let libAvModule: LibAvFactoryModule;
+  try {
+    libAvModule = (await import('@uwx/libav.js-fat')) as unknown as LibAvFactoryModule;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('[bga-video] failed to import @uwx/libav.js-fat — BGA video will be skipped', error);
+    return undefined;
+  }
+  let libav: LibAvInstance;
+  try {
+    libav = await libAvModule.default.LibAV({ noworker: true, variant: 'fat' });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('[bga-video] LibAV() factory failed (likely a wasm fetch / instantiation error)', error);
+    return undefined;
+  }
   const inputName = `bga-input${pickInputExtension(path)}`;
   const outputName = 'bga-output.mp4';
   try {
@@ -166,10 +183,24 @@ async function transcodeVideoToBrowserCodec(
       return undefined;
     }
     const out = await libav.readFile(outputName);
-    if (out instanceof Uint8Array) return out;
-    if (out && typeof out === 'object' && 'buffer' in out) {
-      return new Uint8Array((out as ArrayBufferView).buffer);
+    let outBytes: Uint8Array | undefined;
+    if (out instanceof Uint8Array) {
+      outBytes = out;
+    } else if (out && typeof out === 'object' && 'buffer' in out) {
+      outBytes = new Uint8Array((out as ArrayBufferView).buffer);
     }
+    if (!outBytes || outBytes.byteLength === 0) {
+      // eslint-disable-next-line no-console
+      console.warn(`[bga-video] ffmpeg produced empty output for ${path}`);
+      return undefined;
+    }
+    const elapsed = ((performance.now() - startedAt) / 1000).toFixed(2);
+    // eslint-disable-next-line no-console
+    console.info(`[bga-video] transcode ok: ${path} → ${outBytes.byteLength} bytes (${elapsed}s)`);
+    return outBytes;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn(`[bga-video] transcode threw for ${path}`, error);
     return undefined;
   } finally {
     try {
@@ -182,7 +213,13 @@ async function transcodeVideoToBrowserCodec(
     } catch {
       // ignore
     }
-    libav.terminate();
+    try {
+      libav.terminate();
+    } catch {
+      // ignore — terminate doubles as a free-instance call and
+      // throws on already-terminated instances in some libav
+      // builds; safe to swallow.
+    }
   }
 }
 
