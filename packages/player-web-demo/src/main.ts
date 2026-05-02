@@ -131,6 +131,38 @@ interface DemoGuiState {
   compressorBgm: boolean;
   compressorMaster: boolean;
   /**
+   * Pixel cap for the longest edge of BGA videos that need the
+   * ffmpeg.wasm transcode fallback. Single-threaded libx264 cost
+   * is linear in pixel count, so capping the long edge is the
+   * biggest single-threaded encode-time lever — at the cost of
+   * a (usually imperceptible) reduction in BGA texture sharpness.
+   *
+   * `0` is the special "Off" value: no resize happens and the
+   * source resolution passes through unchanged. Off by default
+   * so the BMS-author resolution is preserved unless the user
+   * explicitly opts in via the GUI dropdown. Any positive value
+   * activates the resize path with that pixel cap; the
+   * `Math.max` guard at the consumer side rejects accidental
+   * negatives.
+   */
+  bgaResizeMaxEdgePx: number;
+  /**
+   * When true, BGA transcoding uses the browser's WebCodecs
+   * `VideoEncoder` (hardware-accelerated where supported)
+   * instead of the libx264 wasm encoder. Decoding still goes
+   * through ffmpeg.wasm because WebCodecs' decoder doesn't
+   * speak the legacy MPEG-1 / VC-1 codecs BMS BGA usually
+   * ships in.
+   *
+   * Forced to `false` and disabled in the GUI when the browser
+   * doesn't expose `VideoEncoder` (Safari < 17, older
+   * Firefox builds). Ignored at runtime if the encoder
+   * rejects the configured parameters or the raw decoded
+   * frames would blow the memory budget — the transcode then
+   * silently falls back to the ffmpeg encode path.
+   */
+  bgaUseWebCodecs: boolean;
+  /**
    * Read-only status text (loading summaries, "Playing: …",
    * recording state, etc.). Bound to a disabled string
    * controller so users can copy it out of the GUI but can't
@@ -277,6 +309,21 @@ class PlayerWebDemoApp {
       compressorKey: true,
       compressorBgm: true,
       compressorMaster: true,
+      // BGA resize is OFF by default — original-resolution
+      // transcode is the safe choice for visual parity. Power
+      // users hitting long encode times on HD BGA can pick a
+      // pixel cap from the GUI dropdown without rebuilding.
+      // `0` means "preserve resolution"; any positive integer
+      // activates the resize path with that long-edge cap.
+      bgaResizeMaxEdgePx: 0,
+      // WebCodecs encode is OFF by default for safety —
+      // browser support is good but not universal, and the
+      // raw-frame buffering means very large BGA can OOM
+      // before the fallback kicks in. Power users can opt in
+      // via the GUI checkbox; the GUI greys it out when
+      // `VideoEncoder` is missing so the user can't toggle
+      // an unsupported state.
+      bgaUseWebCodecs: false,
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
@@ -481,6 +528,58 @@ class PlayerWebDemoApp {
       .name('Master')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('master', value);
+      });
+    // BGA video transcode controls. Both settings are seeded
+    // into the next `PixiGameplayView` constructor (see
+    // `preloadGameplay` / `playSong` for the wiring), so
+    // changing them mid-session takes effect on the next chart
+    // mount — no need to rebuild gameplay if the user is
+    // between songs. We don't push live into the running
+    // gameplay because BGA assets are loaded once at chart-
+    // prepare time and the codec / resize decisions are encoded
+    // into the cached video bytes.
+    //
+    // Both controls are dropdowns rather than free-form fields:
+    // the meaningful options cluster around standard video
+    // heights (SD / 720p / 1080p / 4K) and a discrete codec
+    // pick. `0` in the resize dropdown is the magic "Off"
+    // value — the consumer treats anything `≤ 0` as "preserve
+    // resolution". Earlier iterations split resize into a
+    // checkbox + size pair, but users would change the size
+    // without realising they also had to flip the checkbox —
+    // the resize was silently a no-op. Folding both into one
+    // control with an explicit `Off` row removes that footgun.
+    const transcode = gui.addFolder('BGA video transcode');
+    // WebCodecs `VideoEncoder` is a browser feature; gate the
+    // checkbox on its existence so the user can't toggle a
+    // state the runtime can't honour. On unsupported browsers
+    // (Safari < 17, older Firefox builds) the controller is
+    // disabled and the seed value stays at `false`.
+    const webCodecsSupported = typeof window !== 'undefined' && 'VideoEncoder' in window;
+    const webCodecsController = transcode
+      .add(this.guiState, 'bgaUseWebCodecs')
+      .name(webCodecsSupported ? 'Use WebCodecs encoder' : 'Use WebCodecs encoder (unsupported)')
+      .onChange((value: boolean) => {
+        this.guiState.bgaUseWebCodecs = value;
+      });
+    if (!webCodecsSupported) {
+      webCodecsController.disable();
+    }
+    transcode
+      .add(this.guiState, 'bgaResizeMaxEdgePx', {
+        'Off (preserve resolution)': 0,
+        '256 px (BMS spec)': 256,
+        '360 px (≈ SD)': 360,
+        '480 px (SD)': 480,
+        '512 px': 512,
+        '720 px (HD)': 720,
+        '1080 px (FHD)': 1080,
+        '1440 px (QHD)': 1440,
+        '2160 px (4K)': 2160,
+      })
+      .name('Resize')
+      .onChange((value: number) => {
+        this.guiState.bgaResizeMaxEdgePx = value;
       });
     this.recordController = gui.add(this.guiState, 'record').name('● Record');
     this.refreshCompressorStageVisibility();
@@ -953,6 +1052,8 @@ class PlayerWebDemoApp {
         bgm: this.guiState.compressorBgm,
         master: this.guiState.compressorMaster,
       },
+      bgaTranscodeMaxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
+      bgaTranscodeUseWebCodecs: this.guiState.bgaUseWebCodecs,
       onExit: () => {
         void this.finishGameplayThen(() => this.showSelect());
       },
@@ -1061,6 +1162,8 @@ class PlayerWebDemoApp {
         bgm: this.guiState.compressorBgm,
         master: this.guiState.compressorMaster,
       },
+      bgaTranscodeMaxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
+      bgaTranscodeUseWebCodecs: this.guiState.bgaUseWebCodecs,
       onExit: () => {
         // Sequence finalize → transition. The transition methods
         // (`showSelect` / `showResult` / `playSong`) all dispose

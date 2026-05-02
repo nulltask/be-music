@@ -38,6 +38,7 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "fflate": "^0.8.2",
+    "mp4-muxer": "^5.2.2",
     "pixi.js": "^8.17.1",
     "ts-ebml": "^3.0.2"
   }

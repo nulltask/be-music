@@ -412,6 +412,40 @@ export interface PixiGameplayViewOptions {
    * would be silently reset every gameplay re-mount.
    */
   audioCompressorStages?: { key?: boolean; bgm?: boolean; master?: boolean };
+  /**
+   * When set to a positive integer, BGA videos that need the
+   * ffmpeg.wasm fallback (legacy `.mpg` / `.wmv` / `.avi` /
+   * unsupported codecs) are downscaled during transcode so
+   * neither edge exceeds this many pixels. Aspect ratio is
+   * preserved.
+   *
+   * Single-threaded libx264 cost scales linearly with pixel
+   * count, so capping at 720 / 480 / etc. is the biggest
+   * single-threaded speed lever once `-preset ultrafast` is in
+   * effect. Visual parity holds well under nearest-filter
+   * scaling because the BGA layer is rendered into a 256-px
+   * spec canvas.
+   *
+   * `undefined` / `0` / negative values disable the cap and
+   * the source resolution passes through unchanged (the
+   * default behaviour).
+   */
+  bgaTranscodeMaxLongEdgePx?: number;
+  /**
+   * When true, the BGA transcode fallback uses the browser's
+   * WebCodecs `VideoEncoder` API instead of libx264 in
+   * ffmpeg.wasm. The decode step still goes through ffmpeg
+   * because WebCodecs' `VideoDecoder` doesn't speak the legacy
+   * codecs (MPEG-1, VC-1, etc.) BMS BGA usually ships in.
+   *
+   * Hardware-accelerated where the browser exposes a platform
+   * encoder — typically a 5–20× encode-side speedup. Silently
+   * falls back to the ffmpeg-only path when the browser
+   * doesn't support WebCodecs, the encoder rejects the
+   * configured parameters, or the raw decoded frames would
+   * exceed the in-memory budget.
+   */
+  bgaTranscodeUseWebCodecs?: boolean;
 }
 
 export class PixiGameplayView {
@@ -2199,7 +2233,10 @@ export class PixiGameplayView {
             // The same texture handle is used on both tracks (no
             // chroma-key on layer; black-keying a moving video looks
             // worse than just letting the artist's blacks show).
-            const handle = await loadVideoTextureFromBytes(path, bytes);
+            const handle = await loadVideoTextureFromBytes(path, bytes, {
+              maxLongEdgePx: this.options.bgaTranscodeMaxLongEdgePx,
+              useWebCodecs: this.options.bgaTranscodeUseWebCodecs,
+            });
             if (!handle) return;
             // Late-arriving video decode after the player ESC'd
             // back to the song select — drop the texture / video
