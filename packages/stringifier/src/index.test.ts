@@ -561,4 +561,27 @@ describe('stringifier', () => {
     expect(bms).toContain('#TITLE Demo Chart');
     expect(bmson).toContain('"sound_channels"');
   });
+
+  test('BMS stringify: round-trips `#BASE 62` and preserves lowercase IDs in headers + channel data', () => {
+    const input = ['#BASE 62', '#WAV0a lower.wav', '#WAV0A upper.wav', '#00111:0a0AZz', ''].join('\n');
+    const parsed = parseChart(input);
+    expect(parsed.bms.base).toBe(62);
+
+    // Re-parsing the stringified output must yield an equivalent
+    // chart. We assert at the JSON level (not raw line text) because
+    // the stringifier may reorder or rewrap lines — what matters
+    // is that the case-sensitive base-62 IDs survive intact.
+    const output = stringifyBms(parsed);
+    expect(output).toContain('#BASE 62');
+
+    const reparsed = parseChart(output);
+    expect(reparsed.bms.base).toBe(62);
+    expect(reparsed.resources.wav['0a']).toBe('lower.wav');
+    expect(reparsed.resources.wav['0A']).toBe('upper.wav');
+    expect(reparsed.events).toEqual([
+      { measure: 1, channel: '11', position: [0, 3], value: '0a' },
+      { measure: 1, channel: '11', position: [1, 3], value: '0A' },
+      { measure: 1, channel: '11', position: [2, 3], value: 'Zz' },
+    ]);
+  });
 });

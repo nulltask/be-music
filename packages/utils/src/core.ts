@@ -237,6 +237,30 @@ export function normalizeAsciiBase36Code(code: number): number {
   return -1;
 }
 
+/**
+ * Base-62 counterpart of {@link normalizeAsciiBase36Code}: validates
+ * an ASCII char code as a member of `[0-9A-Za-z]` and returns it
+ * unchanged. Returns `-1` for any other input.
+ *
+ * Unlike the base-36 variant, lowercase letters are NOT folded to
+ * uppercase — `#BASE 62` charts use lowercase as a separate ID
+ * space (so `#WAV0a` and `#WAV0A` reference different sounds).
+ * Used for both indexed-header keys (`#WAVxx`, `#BMPxx`, …) and
+ * object-stream tokens when the chart opted into base-62.
+ */
+export function normalizeAsciiBase62Code(code: number): number {
+  if (code >= 0x30 && code <= 0x39) {
+    return code;
+  }
+  if (code >= 0x41 && code <= 0x5a) {
+    return code;
+  }
+  if (code >= 0x61 && code <= 0x7a) {
+    return code;
+  }
+  return -1;
+}
+
 export function normalizePath(path: string): string {
   const segments = path.replaceAll('\\', '/').split('/');
   const normalizedSegments: string[] = [];

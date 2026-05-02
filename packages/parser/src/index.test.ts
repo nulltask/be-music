@@ -718,4 +718,83 @@ describe('parser', () => {
     expect(parsed.bmson.bga.layerEvents).toEqual([{ y: 240, id: 2 }]);
     expect(parsed.bmson.bga.poorEvents).toEqual([{ y: 480, id: 3 }]);
   });
+
+  test('BMS: defaults to base 36 — `#WAV0a` and `#WAV0A` collapse to the same key', () => {
+    const parsed = parseChart(['#WAV0a lower.wav', '#WAV0A upper.wav', '#00111:0a', ''].join('\n'));
+
+    // Default base is 36 — the field should not be set on the JSON.
+    expect(parsed.bms.base).toBeUndefined();
+    // Both registrations target the uppercased key; last-write wins.
+    expect(parsed.resources.wav['0A']).toBe('upper.wav');
+    expect(parsed.resources.wav['0a']).toBeUndefined();
+    // The channel-stream `0a` token is also folded.
+    expect(parsed.events).toContainEqual({
+      measure: 1,
+      channel: '11',
+      position: [0, 1],
+      value: '0A',
+    });
+  });
+
+  test('BMS: `#BASE 62` preserves case for indexed-header keys and channel-stream tokens', () => {
+    const parsed = parseChart(
+      ['#BASE 62', '#WAV0a lower.wav', '#WAV0A upper.wav', '#WAVZz mixed.wav', '#00111:0a0AZz', ''].join('\n'),
+    );
+
+    // Base-62 mode is recorded on the JSON.
+    expect(parsed.bms.base).toBe(62);
+    // Lowercase / uppercase / mixed-case IDs all live in distinct slots.
+    expect(parsed.resources.wav['0a']).toBe('lower.wav');
+    expect(parsed.resources.wav['0A']).toBe('upper.wav');
+    expect(parsed.resources.wav['Zz']).toBe('mixed.wav');
+    // Channel-stream tokens carry the same case-preserved IDs into events.
+    expect(parsed.events).toEqual([
+      { measure: 1, channel: '11', position: [0, 3], value: '0a' },
+      { measure: 1, channel: '11', position: [1, 3], value: '0A' },
+      { measure: 1, channel: '11', position: [2, 3], value: 'Zz' },
+    ]);
+    // The `#BASE` directive itself is consumed — never leaks into extras.
+    expect(parsed.metadata.extras.BASE).toBeUndefined();
+  });
+
+  test('BMS: `#BASE 36` is treated as the default and clears any prior base-62 hint', () => {
+    const parsed = parseChart(['#BASE 36', '#WAV0a lower.wav', ''].join('\n'));
+
+    // Explicit base-36 still elides the field (default).
+    expect(parsed.bms.base).toBeUndefined();
+    expect(parsed.resources.wav['0A']).toBe('lower.wav');
+  });
+
+  test('BMS: `#BASE 62` after the first object line is ignored', () => {
+    const parsed = parseChart(['#WAV0a lower.wav', '#00111:0a', '#BASE 62', ''].join('\n'));
+
+    // Pre-scan stops at the first object line; the late `#BASE 62`
+    // doesn't take effect, so case is folded as in default base-36.
+    expect(parsed.bms.base).toBeUndefined();
+    expect(parsed.resources.wav['0A']).toBe('lower.wav');
+  });
+
+  test('BMS: `#BASE 62` preserves case for indexed-headers inside #RANDOM / #IF blocks', () => {
+    const parsed = parseChart(
+      ['#BASE 62', '#RANDOM 1', '#IF 1', '#WAV0a lower.wav', '#WAV0A upper.wav', '#ENDIF', '#ENDRANDOM', ''].join('\n'),
+    );
+    expect(parsed.bms.base).toBe(62);
+
+    // The control-flow capture stack stores both `command`
+    // (uppercased canonical form) and `commandRaw` (case-preserved
+    // original) so the lowercase `0a` ID survives the replay.
+    const wavEntries = parsed.bms.controlFlow.filter(
+      (entry) => entry.kind === 'header' && entry.command.startsWith('WAV'),
+    );
+    expect(wavEntries).toHaveLength(2);
+    const lowerEntry = wavEntries.find((entry) => entry.kind === 'header' && entry.commandRaw === 'WAV0a');
+    expect(lowerEntry).toBeDefined();
+
+    // Resolving the control flow under a deterministic random
+    // value applies the IF block; the resolved chart should now
+    // carry both case variants in `wav` as separate slots.
+    const resolved = resolveBmsControlFlow(parsed, { random: () => 0 });
+    expect(resolved.resources.wav['0a']).toBe('lower.wav');
+    expect(resolved.resources.wav['0A']).toBe('upper.wav');
+  });
 });

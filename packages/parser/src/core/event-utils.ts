@@ -8,6 +8,7 @@ import {
 } from '@be-music/json';
 import {
   normalizeAsciiBase36Code,
+  normalizeAsciiBase62Code,
   normalizeFractionNumerator,
   normalizeNonNegativeInt,
   normalizePositiveInt,
@@ -22,17 +23,36 @@ export function normalizeBmsonNoteLength(value: unknown): number | undefined {
   return Math.floor(value);
 }
 
-export function collectNonZeroObjectTokens(input: string): {
+/**
+ * Tokenises a BMS channel-object stream (the body of e.g.
+ * `#xxxYY:ZZ...`) into 2-character object IDs.
+ *
+ * - The total `tokenCount` (= denominator) counts EVERY 2-char slot
+ *   including `00` placeholders — needed to compute fractional
+ *   beat positions.
+ * - The returned `tokens` array only includes NON-ZERO entries
+ *   (zeros are silent placeholders, not events).
+ *
+ * `base` controls the per-character validator:
+ * - `36` (default): ASCII `[0-9A-Za-z]` is accepted and lowercase is
+ *   FOLDED to uppercase, so `0a` and `0A` collapse to the same ID.
+ * - `62`: lowercase is preserved, so `0a` and `0A` are distinct.
+ *   Used when the chart declared `#BASE 62`.
+ */
+export function collectNonZeroObjectTokens(
+  input: string,
+  base: 36 | 62 = 36,
+): {
   tokenCount: number;
   tokens: Array<{ index: number; value: string }>;
 } {
-  // BMS object positions need the total token count (denominator), but only non-zero tokens become events.
+  const normalize = base === 62 ? normalizeAsciiBase62Code : normalizeAsciiBase36Code;
   const tokens: Array<{ index: number; value: string }> = [];
   let tokenCount = 0;
   let highCode = -1;
   for (let index = 0; index < input.length; index += 1) {
     const code = input.charCodeAt(index);
-    const normalizedCode = normalizeAsciiBase36Code(code);
+    const normalizedCode = normalize(code);
     if (normalizedCode < 0) {
       continue;
     }
@@ -52,10 +72,13 @@ export function collectNonZeroObjectTokens(input: string): {
   return { tokenCount, tokens };
 }
 
-export function sortAndNormalizeEvents(events: Array<BeMusicEvent | Record<string, unknown>>): BeMusicEvent[] {
+export function sortAndNormalizeEvents(
+  events: Array<BeMusicEvent | Record<string, unknown>>,
+  base: 36 | 62 = 36,
+): BeMusicEvent[] {
   const normalized: BeMusicEvent[] = [];
   for (const event of events) {
-    const parsed = normalizeRawEvent(event);
+    const parsed = normalizeRawEvent(event, base);
     if (parsed) {
       normalized.push(parsed);
     }
@@ -90,11 +113,14 @@ export function upsertMeasureLength(
   }
 }
 
-function normalizeRawEvent(event: BeMusicEvent | Record<string, unknown>): BeMusicEvent | undefined {
+function normalizeRawEvent(
+  event: BeMusicEvent | Record<string, unknown>,
+  base: 36 | 62 = 36,
+): BeMusicEvent | undefined {
   const raw = event as Record<string, unknown>;
   const measure = normalizeMeasure(raw.measure);
   const channel = normalizeEventChannel(raw.channel);
-  const value = normalizeEventValue(raw.value);
+  const value = normalizeEventValue(raw.value, base);
   const position = normalizePosition(raw.position);
   if (measure === undefined || channel === undefined || value === undefined || position === undefined) {
     return undefined;
@@ -123,11 +149,11 @@ function normalizeEventChannel(value: unknown): string | undefined {
   return normalizeChannel(value);
 }
 
-function normalizeEventValue(value: unknown): string | undefined {
+function normalizeEventValue(value: unknown, base: 36 | 62 = 36): string | undefined {
   if (typeof value !== 'string') {
     return undefined;
   }
-  return normalizeObjectKey(value);
+  return normalizeObjectKey(value, base);
 }
 
 function normalizePosition(position: unknown): BeMusicPosition | undefined {

@@ -170,6 +170,7 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Keep extension header `#MATERIALS` in `bms` extension area
 - [x] Keep extension header `#DIVIDEPROP` in `bms` extension area
 - [x] Keep extension header `#CHARSET` in `bms` extension area
+- [x] Keep extension header `#BASE 62` (beatoraja-compatible base-62 ID extension) in `bms.base`; with `#BASE 62`, indexed-header keys (`#WAVxx`, `#BMPxx`, …) and channel-stream tokens are treated as case-sensitive (lowercase `a-z` is a separate ID space)
 - [x] Adopt EOF side for single value header, indexed header, and duplicate definition of `#mmm02`
 - [x] `#STP` / `#LNOBJ` / Control constructs keep duplicate lines in declaration order
 - [x] `#PREVIEW` is used preferentially in song selection screen preview playback

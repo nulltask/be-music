@@ -1,4 +1,4 @@
-import { normalizeAsciiBase36Code } from '@be-music/utils/core';
+import { normalizeAsciiBase36Code, normalizeAsciiBase62Code } from '@be-music/utils/core';
 
 export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
 
@@ -143,6 +143,16 @@ export interface BmsControlFlowHeaderEntry {
   kind: 'header';
   command: string;
   value: string;
+  /**
+   * Case-preserved command. Only set when the original source line
+   * had a case that differs from the uppercased `command` — most
+   * commonly because the chart opted into the `#BASE 62` extension
+   * and the captured directive carries a lowercase ID (e.g.
+   * `#WAV0a` inside a `#RANDOM` block). Replay paths use this to
+   * reconstruct the lowercase key; if absent, callers fall back to
+   * `command` (= upper-cased) for case-insensitive base-36 charts.
+   */
+  commandRaw?: string;
 }
 
 export interface BmsControlFlowObjectEntry {
@@ -193,6 +203,16 @@ export interface BmsExtensions {
   materials?: string;
   divideProp?: string;
   charset?: string;
+  /**
+   * `#BASE` directive — the radix used for object IDs (`#WAVxx`,
+   * `#BMPxx`, `#BPMxx`, channel object tokens, …). Default is base 36
+   * (case-insensitive `0-9A-Z`). The value `62` opts into the
+   * beatoraja-style base-62 extension where lowercase `a-z` is a
+   * separate ID space (so `#WAV0a` and `#WAV0A` reference different
+   * sounds). Only `36` and `62` are recognised; the field is omitted
+   * for the default base-36 case.
+   */
+  base?: 62;
 }
 
 export interface BmsPreservation {
@@ -367,7 +387,22 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
   };
 }
 
-export function normalizeObjectKey(value: string): string {
+/**
+ * Normalises a 2-character BMS object ID for storage. With the
+ * default `base = 36`, lowercase `a-z` is folded to uppercase so
+ * `#WAV0a` and `#WAV0A` collapse to the same key. With `base = 62`
+ * (the beatoraja `#BASE 62` extension), case is preserved — they
+ * become distinct IDs.
+ *
+ * Always returns a 2-character string. Single-character / empty /
+ * malformed inputs are padded or truncated rather than raising
+ * because the parser already filters at the syntactic level; this
+ * is the post-syntactic normaliser.
+ */
+export function normalizeObjectKey(value: string, base: 36 | 62 = 36): string {
+  if (base === 62) {
+    return normalizeObjectKeyBase62(value);
+  }
   if (value.length === 2) {
     const code0 = normalizeAsciiBase36CodeFast(value.charCodeAt(0));
     const code1 = normalizeAsciiBase36CodeFast(value.charCodeAt(1));
@@ -407,6 +442,48 @@ export function normalizeObjectKey(value: string): string {
     return trimmed.toUpperCase();
   }
   return trimmed.toUpperCase().slice(0, 2);
+}
+
+function normalizeObjectKeyBase62(value: string): string {
+  // Fast path: already 2 ASCII chars in `[0-9A-Za-z]`. Returned
+  // verbatim — no case folding in base-62 mode.
+  if (value.length === 2) {
+    const code0 = normalizeAsciiBase62Code(value.charCodeAt(0));
+    const code1 = normalizeAsciiBase62Code(value.charCodeAt(1));
+    if (code0 >= 0 && code1 >= 0) {
+      return value;
+    }
+  }
+  if (value.length === 1) {
+    const code = normalizeAsciiBase62Code(value.charCodeAt(0));
+    if (code >= 0) {
+      return `0${value}`;
+    }
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return '00';
+  }
+  if (trimmed.length === 1) {
+    const code = normalizeAsciiBase62Code(trimmed.charCodeAt(0));
+    if (code >= 0) {
+      return `0${trimmed}`;
+    }
+    // Out of base-62 range — fall back to the base-36 normaliser
+    // so callers still get a sensible 2-char key.
+    return `0${trimmed.slice(0, 1).toUpperCase()}`;
+  }
+  if (trimmed.length === 2) {
+    const code0 = normalizeAsciiBase62Code(trimmed.charCodeAt(0));
+    const code1 = normalizeAsciiBase62Code(trimmed.charCodeAt(1));
+    if (code0 >= 0 && code1 >= 0) {
+      return trimmed;
+    }
+    // Mixed valid / invalid — uppercase as a deterministic
+    // fallback (matches the base-36 path's behaviour).
+    return trimmed.toUpperCase();
+  }
+  return trimmed.slice(0, 2);
 }
 
 export function normalizeChannel(value: string): string {

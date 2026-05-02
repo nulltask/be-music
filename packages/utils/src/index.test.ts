@@ -14,6 +14,7 @@ import {
   lcm,
   normalizePath,
   normalizeAsciiBase36Code,
+  normalizeAsciiBase62Code,
   normalizeFractionNumerator,
   normalizeNonNegativeInt,
   normalizeSortedUniqueNonNegativeIntegers,
@@ -140,6 +141,23 @@ describe('utils', () => {
     expect(normalizeAsciiBase36Code(0x61)).toBe(0x41);
     expect(normalizeAsciiBase36Code(0x7a)).toBe(0x5a);
     expect(normalizeAsciiBase36Code(0x2d)).toBe(-1);
+  });
+
+  test('normalizeAsciiBase62Code: preserves case for the beatoraja base-62 extension', () => {
+    // 0-9 unchanged.
+    expect(normalizeAsciiBase62Code(0x30)).toBe(0x30);
+    expect(normalizeAsciiBase62Code(0x39)).toBe(0x39);
+    // A-Z unchanged.
+    expect(normalizeAsciiBase62Code(0x41)).toBe(0x41);
+    expect(normalizeAsciiBase62Code(0x5a)).toBe(0x5a);
+    // a-z preserved (NOT folded to uppercase, unlike base-36).
+    expect(normalizeAsciiBase62Code(0x61)).toBe(0x61);
+    expect(normalizeAsciiBase62Code(0x7a)).toBe(0x7a);
+    // Out-of-range codes rejected the same way.
+    expect(normalizeAsciiBase62Code(0x2d)).toBe(-1);
+    expect(normalizeAsciiBase62Code(0x40)).toBe(-1);
+    expect(normalizeAsciiBase62Code(0x60)).toBe(-1);
+    expect(normalizeAsciiBase62Code(0x7b)).toBe(-1);
   });
 
   test('normalizePath/dirname/basename: normalizes browser and archive-style paths', () => {

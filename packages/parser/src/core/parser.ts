@@ -41,7 +41,15 @@ import {
 } from './control-flow.ts';
 
 const INDEXED_HEADER_COMMAND =
-  /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SPEED|SWBGA)([0-9A-Z]{2})$/;
+  /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SPEED|SWBGA)([0-9A-Za-z]{2})$/;
+/**
+ * Pre-scans for the BMS `#BASE` directive (the beatoraja base-62
+ * extension switch). Default base is 36; only `#BASE 62` or
+ * `#BASE 36` are recognised. We do a one-pass forward scan and
+ * stop at the first object data line, mirroring real implementations
+ * that require `#BASE` to come before any objects.
+ */
+const BASE_DIRECTIVE_REGEX = /^#BASE\s+(36|62)\b/i;
 const CONTROL_FLOW_COMMANDS: ReadonlySet<BmsControlFlowCommand> = new Set([
   'RANDOM',
   'SETRANDOM',
@@ -80,6 +88,15 @@ export function parseBms(input: string): BeMusicJson {
   const controlFlowCaptureStack: ControlFlowCaptureFrameType[] = [];
   const measureByIndex = new Map<number, MeasureLengthEntry>();
   let hasValidMainBpmHeader = false;
+  // Resolve the chart's object-ID radix BEFORE main parsing so that
+  // every `#WAVxx` / `#BMPxx` key + every channel-stream token gets
+  // normalised under the right rule. Default is base 36 (case-fold
+  // lowercase to uppercase). `#BASE 62` opts into the beatoraja
+  // extension where lowercase `a-z` is a separate ID space.
+  const base = detectBmsBase(input);
+  if (base === 62) {
+    json.bms.base = 62;
+  }
 
   forEachLine(input, (rawLine) => {
     const line = rawLine.trim();
@@ -96,13 +113,13 @@ export function parseBms(input: string): BeMusicJson {
       }
       const { measure, channel, data } = objectLine;
       if (controlFlowCaptureStack.length > 0) {
-        const controlFlowObject = createControlFlowObjectEntry(measure, channel, data);
+        const controlFlowObject = createControlFlowObjectEntry(measure, channel, data, base);
         if (controlFlowObject) {
           json.bms.controlFlow.push(controlFlowObject);
           json.preservation.bms.sourceLines.push(controlFlowObject);
         }
       } else {
-        const objectLine = createBmsObjectLineEntry(measure, channel, data);
+        const objectLine = createBmsObjectLineEntry(measure, channel, data, base);
         if (objectLine) {
           json.preservation.bms.objectLines.push(objectLine);
           json.preservation.bms.sourceLines.push({
@@ -110,7 +127,7 @@ export function parseBms(input: string): BeMusicJson {
             ...objectLine,
           });
         }
-        pushObjectDataLine(json, measure, channel, data, measureByIndex);
+        pushObjectDataLine(json, measure, channel, data, base, measureByIndex);
       }
       return;
     }
@@ -119,7 +136,7 @@ export function parseBms(input: string): BeMusicJson {
     if (!headerLine) {
       return;
     }
-    const { command, value } = headerLine;
+    const { command, commandRaw, value } = headerLine;
 
     if (isControlFlowCommand(command)) {
       const directiveEntry: BmsSourceLineEntry = {
@@ -133,11 +150,18 @@ export function parseBms(input: string): BeMusicJson {
       return;
     }
 
+    // Stash the case-preserved command on captured entries when it
+    // differs from the uppercased canonical form. Only base-62
+    // charts (`#BASE 62`) put lowercase letters in indexed-header
+    // keys (e.g. `#WAV0a`), so most charts skip this entirely and
+    // the JSON stays compact.
+    const commandCaseDiffers = command !== commandRaw;
     if (controlFlowCaptureStack.length > 0) {
       const headerEntry: BmsSourceLineEntry = {
         kind: 'header',
         command,
         value,
+        ...(commandCaseDiffers ? { commandRaw } : {}),
       };
       json.bms.controlFlow.push(headerEntry);
       json.preservation.bms.sourceLines.push(headerEntry);
@@ -148,6 +172,7 @@ export function parseBms(input: string): BeMusicJson {
       kind: 'header',
       command,
       value,
+      ...(commandCaseDiffers ? { commandRaw } : {}),
     });
     if (command === 'BPM') {
       const parsedMainBpm = Number.parseFloat(value);
@@ -155,7 +180,7 @@ export function parseBms(input: string): BeMusicJson {
         hasValidMainBpmHeader = true;
       }
     }
-    pushHeaderLine(json, command, value);
+    pushHeaderLine(json, command, commandRaw, value, base);
   });
 
   if (!hasValidMainBpmHeader) {
@@ -163,7 +188,7 @@ export function parseBms(input: string): BeMusicJson {
     json.metadata.bpm = 130;
   }
   json.measures.sort((left, right) => left.index - right.index);
-  json.events = sortAndNormalizeEvents(json.events);
+  json.events = sortAndNormalizeEvents(json.events, base);
   return json;
 }
 
@@ -339,7 +364,13 @@ function parseJsonDocument(raw: Partial<BeMusicJson>): BeMusicJson {
     .filter((measure) => measure.length > 0)
     .sort((left, right) => left.index - right.index);
   const rawEvents = Array.isArray(raw.events) ? raw.events : [];
-  json.events = sortAndNormalizeEvents(rawEvents as Array<BeMusicEvent | Record<string, unknown>>);
+  // When re-parsing a previously-emitted BMS-JSON, honour the
+  // chart's recorded base so case-sensitive base-62 IDs don't get
+  // folded back to uppercase. The full `bms` extension is normalised
+  // a few lines below; we only need the `base` hint here.
+  const rawBmsBase = (rawBms as { base?: unknown } | undefined)?.base;
+  const reparseBase: 36 | 62 = rawBmsBase === 62 ? 62 : 36;
+  json.events = sortAndNormalizeEvents(rawEvents as Array<BeMusicEvent | Record<string, unknown>>, reparseBase);
   if (json.events.length !== rawEvents.length) {
     throw new Error('Invalid bms-json event: position [numerator, denominator] is required.');
   }
@@ -417,7 +448,14 @@ export interface ResolveBmsControlFlowOptions {
 export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsControlFlowOptions = {}): BeMusicJson {
   return resolveControlFlow(input, {
     random: options.random,
-    applyHeader: pushHeaderLine,
+    applyHeader: (json, command, commandRaw, value) => {
+      // Replay path: prefer the case-preserved `commandRaw` when
+      // available so a `#WAV0a` captured inside a `#RANDOM` /
+      // `#IF` block on a `#BASE 62` chart still registers under
+      // the lowercase key. Falls back to the uppercased `command`
+      // for the common base-36 case-insensitive path.
+      pushHeaderLine(json, command, commandRaw ?? command, value, json.bms.base === 62 ? 62 : 36);
+    },
   });
 }
 
@@ -457,6 +495,7 @@ function pushObjectDataLine(
   measure: number,
   channel: string,
   data: string,
+  base: 36 | 62,
   measureByIndex?: Map<number, MeasureLengthEntry>,
 ): void {
   if (channel === '02') {
@@ -467,7 +506,7 @@ function pushObjectDataLine(
     return;
   }
 
-  const parsed = collectNonZeroObjectTokens(data);
+  const parsed = collectNonZeroObjectTokens(data, base);
   for (const token of parsed.tokens) {
     json.events.push({
       measure,
@@ -478,7 +517,12 @@ function pushObjectDataLine(
   }
 }
 
-function createBmsObjectLineEntry(measure: number, channel: string, data: string): BmsObjectLineEntry | undefined {
+function createBmsObjectLineEntry(
+  measure: number,
+  channel: string,
+  data: string,
+  base: 36 | 62 = 36,
+): BmsObjectLineEntry | undefined {
   if (channel === '02') {
     const measureLength = Number.parseFloat(data);
     if (!Number.isFinite(measureLength) || measureLength <= 0) {
@@ -492,7 +536,7 @@ function createBmsObjectLineEntry(measure: number, channel: string, data: string
     };
   }
 
-  const parsed = collectNonZeroObjectTokens(data);
+  const parsed = collectNonZeroObjectTokens(data, base);
   const events: BeMusicEvent[] = [];
   for (const token of parsed.tokens) {
     events.push({
@@ -565,7 +609,15 @@ function parseObjectDataLine(line: string): ParsedObjectDataLine | undefined {
 }
 
 interface ParsedHeaderDirectiveLine {
+  /** Uppercased command — used for keyword matching (case-insensitive). */
   command: string;
+  /**
+   * Case-preserved command. For base-62 indexed-header keys, the
+   * trailing 2 characters of `commandRaw` hold the lowercase-aware
+   * ID — uppercasing here would collapse `#WAV0a` and `#WAV0A`
+   * back into the same slot.
+   */
+  commandRaw: string;
   value: string;
 }
 
@@ -586,13 +638,14 @@ function parseHeaderDirectiveLine(line: string): ParsedHeaderDirectiveLine | und
     return undefined;
   }
 
-  const command = line.slice(1, cursor).toUpperCase();
+  const commandRaw = line.slice(1, cursor);
+  const command = commandRaw.toUpperCase();
   while (cursor < line.length && isAsciiWhitespace(line.charCodeAt(cursor))) {
     cursor += 1;
   }
 
   const value = cursor < line.length ? line.slice(cursor).trim() : '';
-  return { command, value };
+  return { command, commandRaw, value };
 }
 
 function isAsciiWhitespace(code: number): boolean {
@@ -635,11 +688,56 @@ function forEachLine(input: string, visitor: (line: string) => void): void {
   visitor(input.slice(lineStart, input.length));
 }
 
-function pushHeaderLine(json: BeMusicJson, command: string, value: string): void {
+/**
+ * Pre-scans the BMS source for the `#BASE` directive (the
+ * beatoraja base-62 extension switch). Returns 62 if `#BASE 62`
+ * appears before the first object data line, otherwise 36.
+ *
+ * We bail out at the first non-header (object) line because real
+ * implementations require `#BASE` to come before any object
+ * references — applying it retroactively would change which IDs
+ * get folded vs. preserved AFTER they were already normalised in
+ * earlier headers.
+ */
+function detectBmsBase(input: string): 36 | 62 {
+  let resolved: 36 | 62 = 36;
+  let stop = false;
+  forEachLine(input, (rawLine) => {
+    if (stop) return;
+    const line = rawLine.trim();
+    if (!line.startsWith('#')) return;
+    const second = line.charCodeAt(1);
+    if (second >= 0x30 && second <= 0x39) {
+      // Hit the first `#xxxYY:...` object line — `#BASE` after this
+      // point is too late to take effect.
+      stop = true;
+      return;
+    }
+    const match = line.match(BASE_DIRECTIVE_REGEX);
+    if (match) {
+      resolved = match[1] === '62' ? 62 : 36;
+      stop = true;
+    }
+  });
+  return resolved;
+}
+
+function pushHeaderLine(
+  json: BeMusicJson,
+  command: string,
+  commandRaw: string,
+  value: string,
+  base: 36 | 62,
+): void {
   const objectCommand = command.match(INDEXED_HEADER_COMMAND);
   if (objectCommand) {
     const directive = objectCommand[1] as IndexedHeaderDirective;
-    const key = normalizeObjectKey(objectCommand[2]);
+    // For base-62 charts, lift the key from the case-preserved
+    // `commandRaw`; the trailing 2 chars hold the lowercase-aware
+    // ID. `commandRaw[directive.length...]` falls back to the
+    // uppercased form for base-36 (where case folding is intended).
+    const keyRaw = base === 62 ? commandRaw.slice(directive.length) : objectCommand[2]!;
+    const key = normalizeObjectKey(keyRaw, base);
     applyIndexedHeaderLine(json, directive, key, value);
     return;
   }
@@ -788,6 +886,13 @@ function pushHeaderLine(json: BeMusicJson, command: string, value: string): void
       if (value.length > 0) {
         json.bms.charset = value;
       }
+      return;
+    case 'BASE':
+      // `#BASE 62` is the beatoraja base-62 ID extension. The base
+      // was already resolved during pre-scan (`detectBmsBase`) and
+      // stamped onto `json.bms.base` before this header reaches us;
+      // swallow the directive here so it doesn't leak into
+      // `metadata.extras`.
       return;
     default:
       if (value.length > 0) {
@@ -1356,10 +1461,17 @@ function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | und
     if (typeof raw.command !== 'string') {
       return undefined;
     }
+    const command = raw.command.toUpperCase();
+    // Honour `commandRaw` when present and actually case-different
+    // — that's the base-62 marker. Otherwise drop it to keep the
+    // round-tripped JSON minimal.
+    const rawCommandValue = typeof raw.commandRaw === 'string' ? raw.commandRaw : undefined;
+    const commandRaw = rawCommandValue && rawCommandValue !== command ? rawCommandValue : undefined;
     return {
       kind: 'header',
-      command: raw.command.toUpperCase(),
+      command,
       value: typeof raw.value === 'string' ? raw.value : '',
+      ...(commandRaw ? { commandRaw } : {}),
     };
   }
   if (kind === 'object') {
