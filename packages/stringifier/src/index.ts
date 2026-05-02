@@ -9,6 +9,7 @@ import { parseBms, parseBmson } from '@be-music/parser';
 import {
   normalizeChannel,
   normalizeObjectKey,
+  resolveBmsBase,
   type BmsObjectLineEntry,
   type BmsSourceLineEntry,
   type BmsonBpmEventEntry,
@@ -91,6 +92,10 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   >();
   const bpmEvents: Array<{ y: number; bpm: number }> = [];
   const stopEvents: Array<{ y: number; duration: number }> = [];
+  // Honour `#BASE 62` so a chart whose `event.value` is a
+  // case-sensitive lowercase ID resolves to the right sample /
+  // BPM / STOP slot when re-emitted as bmson.
+  const idBase = resolveBmsBase(json);
 
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
@@ -101,7 +106,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
 
     const y = Math.round(beatResolver.eventToBeat(event) * resolution);
     if (isSampleChannel) {
-      const key = normalizeObjectKey(event.value);
+      const key = normalizeObjectKey(event.value, idBase);
       const fileName = json.resources.wav[key] ?? key;
       const x = channel === '01' ? 0 : (xMap.get(channel) ?? 0);
       const length =
@@ -123,14 +128,14 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
       continue;
     }
     if (channel === '08') {
-      const bpm = json.resources.bpm[normalizeObjectKey(event.value)];
+      const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase)];
       if (typeof bpm === 'number' && bpm > 0) {
         bpmEvents.push({ y, bpm });
       }
       continue;
     }
     if (channel === '09') {
-      const duration = json.resources.stop[normalizeObjectKey(event.value)];
+      const duration = json.resources.stop[normalizeObjectKey(event.value, idBase)];
       if (typeof duration === 'number' && duration > 0) {
         stopEvents.push({ y, duration });
       }
@@ -537,20 +542,26 @@ function resolvePreservedObjectLinesForOutput(json: BeMusicJson): BmsObjectLineE
 function doPreservedObjectLinesMatchChart(json: BeMusicJson, objectLines: BmsObjectLineEntry[]): boolean {
   const flattenedEvents: BeMusicEvent[] = [];
   const preservedMeasureLengths = new Map<number, number>();
+  // Compare values under the chart's authored radix so a base-62
+  // chart's lowercase IDs aren't folded to uppercase before the
+  // event comparison below — that would falsely trigger a
+  // mismatch and force the stringifier to regenerate object
+  // lines even when the preserved entries are still consistent.
+  const idBase = resolveBmsBase(json);
 
   for (const objectLine of objectLines) {
     if (typeof objectLine.measureLength === 'number' && objectLine.measureLength > 0) {
       preservedMeasureLengths.set(Math.max(0, Math.floor(objectLine.measure)), objectLine.measureLength);
     }
     for (const event of objectLine.events) {
-      if (normalizeObjectKey(event.value) === '00') {
+      if (normalizeObjectKey(event.value, idBase) === '00') {
         continue;
       }
       flattenedEvents.push({
         measure: Math.max(0, Math.floor(objectLine.measure)),
         channel: normalizeChannel(objectLine.channel),
         position: event.position,
-        value: normalizeObjectKey(event.value),
+        value: normalizeObjectKey(event.value, idBase),
         ...(event.bmson ? { bmson: event.bmson } : {}),
       });
     }
@@ -1065,7 +1076,7 @@ function serializeBmsObjectLineEvents(
     const { numerator, denominator } = resolveEventFraction(event);
     const scaled = Math.round((numerator * resolution) / denominator);
     const index = Math.min(resolution - 1, Math.max(0, scaled));
-    cells[index] = normalizeObjectKey(event.value);
+    cells[index] = normalizeObjectKey(event.value, base);
   }
 
   return `#${toMeasure(measure)}${normalizedChannel}:${cells.join('')}`;

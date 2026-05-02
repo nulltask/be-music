@@ -10,6 +10,7 @@ import {
   intToBase36,
   normalizeChannel,
   normalizeObjectKey,
+  resolveBmsBase,
 } from '@be-music/json';
 import { normalizeAsciiBase36Code } from '@be-music/utils/core';
 import {
@@ -813,7 +814,10 @@ function pushHeaderLine(
       return;
     case 'LNOBJ':
       if (value.length > 0) {
-        const normalizedValue = normalizeObjectKey(value);
+        // `#LNOBJ` carries an object-ID payload — preserve case
+        // for `#BASE 62` charts so the LN-end marker matches its
+        // case-sensitive `#WAVxx` counterpart.
+        const normalizedValue = normalizeObjectKey(value, base);
         json.bms.lnObjs = [...(json.bms.lnObjs ?? []), normalizedValue];
       }
       return;
@@ -987,6 +991,13 @@ function applyIndexedNumberValue(values: Record<string, number>, key: string, va
 
 function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
   const migratedExtras: Record<string, string> = {};
+  // Honour `#BASE 62` so any indexed-header keys that landed in
+  // `metadata.extras` (typically from a re-parsed JSON whose
+  // upstream parser didn't recognise the directive) get preserved
+  // in their authored case rather than folded to uppercase. The
+  // common base-36 case-insensitive path keeps its existing
+  // behaviour because `idBase` is 36 by default.
+  const idBase = resolveBmsBase(json);
 
   for (const [command, value] of Object.entries(json.metadata.extras ?? {})) {
     const upper = command.toUpperCase();
@@ -1012,7 +1023,10 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
     }
     if (upper === 'LNOBJ') {
       if (value.length > 0) {
-        const normalizedValue = normalizeObjectKey(value);
+        // The migration's `value` is the directive payload (e.g.
+        // `AA` for `#LNOBJ AA`), so the chart-base case-rule
+        // applies just like for any other indexed key.
+        const normalizedValue = normalizeObjectKey(value, idBase);
         json.bms.lnObjs = [...(json.bms.lnObjs ?? []), normalizedValue];
       }
       continue;
@@ -1215,6 +1229,13 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   }
 
   const raw = input as Record<string, unknown>;
+  // Honour `#BASE 62` on re-parsed JSON so the indexed maps below
+  // (`exRank`, `argb`, `wav`/`bmp`/…) preserve lowercase keys
+  // instead of folding them through the default base-36 path.
+  if (raw.base === 62) {
+    normalized.base = 62;
+  }
+  const idBase: 36 | 62 = normalized.base === 62 ? 62 : 36;
   if (Array.isArray(raw.controlFlow)) {
     const entries: BmsControlFlowEntry[] = [];
     for (const item of raw.controlFlow) {
@@ -1242,7 +1263,7 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
 
   const lnObjs = normalizeBmsExtensionStringList(raw.lnObjs ?? raw.ln_objs);
   if (lnObjs.length > 0) {
-    normalized.lnObjs = lnObjs.map((value) => normalizeObjectKey(value));
+    normalized.lnObjs = lnObjs.map((value) => normalizeObjectKey(value, idBase));
   }
 
   const volWav = normalizeNumericBmsExtensionValue(raw.volWav ?? raw.volwav ?? raw.vol_wav);
@@ -1255,8 +1276,8 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
     normalized.defExRank = defExRank;
   }
 
-  normalized.exRank = normalizeIndexedBmsExtensionMap(raw.exRank);
-  normalized.argb = normalizeIndexedBmsExtensionMap(raw.argb);
+  normalized.exRank = normalizeIndexedBmsExtensionMap(raw.exRank, idBase);
+  normalized.argb = normalizeIndexedBmsExtensionMap(raw.argb, idBase);
 
   const player = normalizeNumericBmsExtensionValue(raw.player);
   if (typeof player === 'number' && player > 0) {
@@ -1284,13 +1305,16 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
     normalized.wavCmd = wavCmd;
   }
 
-  normalized.changeOption = normalizeIndexedBmsExtensionMap(raw.changeOption ?? raw.change_option ?? raw.changeoption);
-  normalized.exWav = normalizeIndexedBmsExtensionMap(raw.exWav ?? raw.ex_wav ?? raw.exwav);
-  normalized.exBmp = normalizeIndexedBmsExtensionMap(raw.exBmp ?? raw.ex_bmp ?? raw.exbmp);
-  normalized.bga = normalizeIndexedBmsExtensionMap(raw.bga);
-  normalized.scroll = normalizeIndexedBmsExtensionNumericMap(raw.scroll);
-  normalized.speed = normalizeIndexedBmsExtensionNumericMap(raw.speed);
-  normalized.swBga = normalizeIndexedBmsExtensionMap(raw.swBga ?? raw.sw_bga ?? raw.swbga);
+  normalized.changeOption = normalizeIndexedBmsExtensionMap(
+    raw.changeOption ?? raw.change_option ?? raw.changeoption,
+    idBase,
+  );
+  normalized.exWav = normalizeIndexedBmsExtensionMap(raw.exWav ?? raw.ex_wav ?? raw.exwav, idBase);
+  normalized.exBmp = normalizeIndexedBmsExtensionMap(raw.exBmp ?? raw.ex_bmp ?? raw.exbmp, idBase);
+  normalized.bga = normalizeIndexedBmsExtensionMap(raw.bga, idBase);
+  normalized.scroll = normalizeIndexedBmsExtensionNumericMap(raw.scroll, idBase);
+  normalized.speed = normalizeIndexedBmsExtensionNumericMap(raw.speed, idBase);
+  normalized.swBga = normalizeIndexedBmsExtensionMap(raw.swBga ?? raw.sw_bga ?? raw.swbga, idBase);
 
   const poorBga = raw.poorBga ?? raw.poor_bga;
   if (typeof poorBga === 'string' && poorBga.length > 0) {
@@ -1383,14 +1407,14 @@ function normalizeNumericBmsExtensionValue(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function normalizeIndexedBmsExtensionMap(input: unknown): Record<string, string> {
+function normalizeIndexedBmsExtensionMap(input: unknown, base: 36 | 62 = 36): Record<string, string> {
   if (!input || typeof input !== 'object') {
     return {};
   }
 
   const normalized: Record<string, string> = {};
   for (const [rawKey, rawValue] of Object.entries(input as Record<string, unknown>)) {
-    const key = normalizeObjectKey(rawKey);
+    const key = normalizeObjectKey(rawKey, base);
     if (typeof rawValue === 'string' && rawValue.length > 0) {
       normalized[key] = rawValue;
       continue;
@@ -1402,7 +1426,7 @@ function normalizeIndexedBmsExtensionMap(input: unknown): Record<string, string>
   return normalized;
 }
 
-function normalizeIndexedBmsExtensionNumericMap(input: unknown): Record<string, number> {
+function normalizeIndexedBmsExtensionNumericMap(input: unknown, base: 36 | 62 = 36): Record<string, number> {
   if (!input || typeof input !== 'object') {
     return {};
   }
@@ -1411,7 +1435,7 @@ function normalizeIndexedBmsExtensionNumericMap(input: unknown): Record<string, 
   for (const [rawKey, rawValue] of Object.entries(input as Record<string, unknown>)) {
     const parsed = normalizeNumericBmsExtensionValue(rawValue);
     if (typeof parsed === 'number') {
-      normalized[normalizeObjectKey(rawKey)] = parsed;
+      normalized[normalizeObjectKey(rawKey, base)] = parsed;
     }
   }
   return normalized;

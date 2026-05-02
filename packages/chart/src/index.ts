@@ -1,4 +1,10 @@
-import { normalizeChannel, normalizeObjectKey, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import {
+  normalizeChannel,
+  normalizeObjectKey,
+  resolveBmsBase,
+  type BeMusicEvent,
+  type BeMusicJson,
+} from '@be-music/json';
 
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
@@ -365,7 +371,7 @@ export function resolveBmsLongNotes(
     };
   }
 
-  const longNoteEvents = prepareResolvedBmsLongNoteEvents(json.events);
+  const longNoteEvents = prepareResolvedBmsLongNoteEvents(json.events, resolveBmsBase(json));
   if (longNoteEvents.length === 0) {
     return {
       notes: [],
@@ -397,7 +403,8 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
     };
   }
 
-  const lnObjValues = resolveLnobjValues(json);
+  const idBase = resolveBmsBase(json);
+  const lnObjValues = resolveLnobjValues(json, idBase);
   if (lnObjValues.size === 0) {
     return {
       startToEndBeat: new Map(),
@@ -424,7 +431,7 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
     }
 
     const beat = beatResolver.eventToBeat(event);
-    const normalizedValue = normalizeObjectKey(event.value);
+    const normalizedValue = normalizeObjectKey(event.value, idBase);
     if (lnObjValues.has(normalizedValue)) {
       const start = pendingStartByChannel.get(normalizedChannel);
       if (start && beat > start.beat) {
@@ -474,11 +481,11 @@ function resolveBmsLongNotesType1(
   return { notes, suppressedTriggerEvents };
 }
 
-function resolveLnobjValues(json: BeMusicJson): Set<string> {
+function resolveLnobjValues(json: BeMusicJson, base: 36 | 62 = 36): Set<string> {
   const values = new Set<string>();
   for (const candidate of json.bms.lnObjs ?? []) {
     if (typeof candidate === 'string' && candidate.length > 0) {
-      values.add(normalizeObjectKey(candidate));
+      values.add(normalizeObjectKey(candidate, base));
     }
   }
   return values;
@@ -495,7 +502,10 @@ function prepareNormalizedChartEvents(events: ReadonlyArray<BeMusicEvent>): Norm
   return prepared;
 }
 
-function prepareResolvedBmsLongNoteEvents(events: ReadonlyArray<BeMusicEvent>): ResolvedBmsLongNoteEvent[] {
+function prepareResolvedBmsLongNoteEvents(
+  events: ReadonlyArray<BeMusicEvent>,
+  base: 36 | 62 = 36,
+): ResolvedBmsLongNoteEvent[] {
   const prepared: ResolvedBmsLongNoteEvent[] = [];
   for (const event of sortEvents(events as BeMusicEvent[])) {
     const sourceChannel = normalizeChannel(event.channel);
@@ -507,7 +517,7 @@ function prepareResolvedBmsLongNoteEvents(events: ReadonlyArray<BeMusicEvent>): 
       event,
       sourceChannel,
       channel: mapped,
-      normalizedValue: normalizeObjectKey(event.value),
+      normalizedValue: normalizeObjectKey(event.value, base),
     });
   }
   return prepared;

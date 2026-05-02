@@ -252,6 +252,32 @@ describe('chart', () => {
     expect(resolved.startToEndBeat.get(startB)).toBeCloseTo(1, 6);
   });
 
+  test('resolveLnobjLongNotes treats `#BASE 62` LN-end IDs case-sensitively', () => {
+    const json = createEmptyJson('bms');
+    json.bms.base = 62;
+    // Lowercase `aa` is a distinct ID from uppercase `AA` once the
+    // chart opts into base-62. The resolver must match
+    // case-sensitively so events tagged `aa` only mark the LN end
+    // when the chart actually authored `#LNOBJ aa`.
+    json.bms.lnObjs = ['aa'];
+    const start: BeMusicEvent = { measure: 0, channel: '11', position: [0, 1], value: '01' };
+    const matchingLowerEnd: BeMusicEvent = { measure: 0, channel: '11', position: [1, 4], value: 'aa' };
+    json.events = [start, matchingLowerEnd];
+
+    const resolved = resolveLnobjLongNotes(json);
+    expect(resolved.endEvents.has(matchingLowerEnd)).toBe(true);
+    expect(resolved.startToEndBeat.get(start)).toBeCloseTo(1, 6);
+
+    // And confirm an uppercase `AA` token does NOT close the LN
+    // when only lowercase `aa` was registered as a marker.
+    const startB: BeMusicEvent = { measure: 0, channel: '12', position: [0, 1], value: '02' };
+    const wrongCaseEnd: BeMusicEvent = { measure: 0, channel: '12', position: [1, 4], value: 'AA' };
+    json.events = [start, matchingLowerEnd, startB, wrongCaseEnd];
+    const resolvedAgain = resolveLnobjLongNotes(json);
+    expect(resolvedAgain.endEvents.has(wrongCaseEnd)).toBe(false);
+    expect(resolvedAgain.startToEndBeat.get(startB)).toBeUndefined();
+  });
+
   test('resolveLnobjLongNotes prioritizes 51-69 objects over LNOBJ at the same tick', () => {
     const json = createEmptyJson('bms');
     json.bms.lnObjs = ['AA'];

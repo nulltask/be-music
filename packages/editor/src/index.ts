@@ -9,6 +9,7 @@ import {
   ensureMeasure,
   normalizeChannel,
   normalizeObjectKey,
+  resolveBmsBase,
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
@@ -106,7 +107,7 @@ export function addNote(
   },
 ): BeMusicJson {
   const normalized = normalizeJson(json);
-  const event = createNormalizedNoteEvent(params);
+  const event = createNormalizedNoteEvent(params, resolveBmsBase(normalized));
   ensureMeasure(normalized, event.measure);
   insertSortedEvent(normalized.events, event);
   return normalized;
@@ -123,7 +124,11 @@ export function deleteNote(
   },
 ): BeMusicJson {
   const normalized = normalizeJson(json);
-  const target = createNormalizedNoteTarget(params);
+  // Honour `#BASE 62` so a delete keyed on `value: '0a'` doesn't
+  // accidentally match a `'0A'` event (or vice versa) by way of
+  // an implicit case-fold during target / event comparison.
+  const idBase = resolveBmsBase(normalized);
+  const target = createNormalizedNoteTarget(params, idBase);
 
   normalized.events = normalized.events.filter((event) => {
     if (event.measure !== target.measure) {
@@ -135,7 +140,7 @@ export function deleteNote(
     if (!isSamePosition(event, target.position)) {
       return true;
     }
-    if (target.value !== undefined && normalizeObjectKey(event.value) !== target.value) {
+    if (target.value !== undefined && normalizeObjectKey(event.value, idBase) !== target.value) {
       return true;
     }
     return false;
@@ -326,13 +331,16 @@ function normalizePositionFraction(numerator: number, denominator: number): { nu
   };
 }
 
-function createNormalizedNoteTarget(params: {
-  measure: number;
-  channel: string;
-  positionNumerator: number;
-  positionDenominator: number;
-  value?: string;
-}): {
+function createNormalizedNoteTarget(
+  params: {
+    measure: number;
+    channel: string;
+    positionNumerator: number;
+    positionDenominator: number;
+    value?: string;
+  },
+  base: 36 | 62 = 36,
+): {
   measure: number;
   channel: string;
   position: { numerator: number; denominator: number };
@@ -342,18 +350,21 @@ function createNormalizedNoteTarget(params: {
     measure: Math.max(0, Math.floor(params.measure)),
     channel: normalizeChannel(params.channel),
     position: normalizePositionFraction(params.positionNumerator, params.positionDenominator),
-    value: params.value === undefined ? undefined : normalizeObjectKey(params.value),
+    value: params.value === undefined ? undefined : normalizeObjectKey(params.value, base),
   };
 }
 
-function createNormalizedNoteEvent(params: {
-  measure: number;
-  channel: string;
-  positionNumerator: number;
-  positionDenominator: number;
-  value: string;
-}): BeMusicEvent {
-  const target = createNormalizedNoteTarget(params);
+function createNormalizedNoteEvent(
+  params: {
+    measure: number;
+    channel: string;
+    positionNumerator: number;
+    positionDenominator: number;
+    value: string;
+  },
+  base: 36 | 62 = 36,
+): BeMusicEvent {
+  const target = createNormalizedNoteTarget(params, base);
   return {
     measure: target.measure,
     channel: target.channel,
