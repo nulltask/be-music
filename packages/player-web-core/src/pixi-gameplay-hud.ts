@@ -296,6 +296,43 @@ export function computeFullComboDurationMs(skin: Lr2Skin): number {
   return max > 0 ? max : 3000;
 }
 
+/**
+ * Walks the skin's elements and returns the longest keyframe `time`
+ * (in ms) attached to each LR2 key-on timer (100..117). The value
+ * is used as the lane-laser release fade duration so the decay
+ * matches the skin's authored animation length instead of a hard-
+ * coded fallback. Timers without any element default to the
+ * caller's fallback (typically `KEY_ON_FADE_OUT_MS`).
+ *
+ * Mirrors the {@link computeFullComboDurationMs} pattern: visits
+ * every keyframe-bearing element type, picks the maximum `time`
+ * per timer slot, and reuses `destination` when `keyframes` is
+ * empty so static (single-keyframe) elements still report a span.
+ */
+export function computeKeyOnFadeDurationsMs(skin: Lr2Skin): Map<number, number> {
+  const result = new Map<number, number>();
+  const visit = (entry: { destination?: Lr2DestinationRect; keyframes?: Lr2DestinationRect[] }): void => {
+    const dst = entry.destination;
+    if (!dst) return;
+    const t = dst.timer;
+    if (t < 100 || t > 117) return;
+    const frames = entry.keyframes && entry.keyframes.length > 0 ? entry.keyframes : [dst];
+    let span = result.get(t) ?? 0;
+    for (const frame of frames) {
+      if (Number.isFinite(frame.time) && frame.time > span) {
+        span = frame.time;
+      }
+    }
+    if (span > 0) result.set(t, span);
+  };
+  for (const image of skin.images) visit(image);
+  for (const number of skin.numbers) visit(number);
+  for (const text of skin.texts) visit(text);
+  for (const bargraph of skin.bargraphs) visit(bargraph);
+  for (const slider of skin.sliders) visit(slider);
+  return result;
+}
+
 export function createEmptyScore(total: number): ScoreSummary {
   return { total, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, exScore: 0, score: 0 };
 }

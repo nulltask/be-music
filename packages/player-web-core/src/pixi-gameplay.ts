@@ -101,6 +101,7 @@ import {
 } from './pixi-gameplay-lanes.ts';
 import {
   computeFullComboDurationMs,
+  computeKeyOnFadeDurationsMs,
   computeRankOp,
   createEmptyScore,
   formatTime,
@@ -122,14 +123,14 @@ interface RuntimeNote extends TimedPlayableNote {
 }
 
 /**
- * Duration of the lane-laser release fade. Anchors the linear
- * 1 → 0 alpha taper that {@link releaseKeyOnTimer} drives.
- *
- * The 120 ms value is a carry-over from the previous "play the
- * LR2 keyframe over ~120 ms" implementation; it's a perceptually
- * comfortable decay for auto-judge feedback rather than a number
- * derived from the skin metadata. Worth revisiting if a future
- * skin's key-on keyframes are visibly out of step with this.
+ * Fallback lane-laser release fade duration in ms. The actual
+ * value used at runtime is the longest `time` keyframe across the
+ * skin's elements gated on the lane's key-on timer (computed in
+ * {@link prepareSkin} via `computeKeyOnFadeDurationsMs`); this
+ * constant kicks in only when a key-on slot has no skin element
+ * (skinless mode, or a slot the skin doesn't author). 120 ms
+ * matches the LR2 default skin's typical key-on keyframe span and
+ * is a perceptually comfortable decay for auto-judge feedback.
  */
 const KEY_ON_FADE_OUT_MS = 120;
 
@@ -588,12 +589,21 @@ export class PixiGameplayView {
   /**
    * Per-key-on-timer (`100..117`) play-clock timestamp of an
    * in-flight release fade. When set, `renderSkinImage` tapers the
-   * sprite's `alpha` from 1 → 0 over {@link KEY_ON_FADE_OUT_MS}
-   * starting at the recorded value, so an LN release decays
-   * instead of popping off. {@link releaseKeyOnTimer} populates
-   * this; {@link startKeyOnTimer} clears it on a fresh press.
+   * sprite's `alpha` from 1 → 0 over the matching entry of
+   * {@link keyOnFadeDurationMs} starting at the recorded value, so
+   * an LN release decays instead of popping off.
+   * {@link releaseKeyOnTimer} populates this;
+   * {@link startKeyOnTimer} clears it on a fresh press.
    */
   private readonly keyOnFadeOutStart = new Map<number, number>();
+  /**
+   * Per-key-on-timer fade duration in ms, derived from the LR2
+   * skin's `#DST_*` keyframes anchored to that timer (longest
+   * `time` value across all elements). Populated in
+   * {@link prepareSkin}; consumers fall back to
+   * {@link KEY_ON_FADE_OUT_MS} when a timer has no skin element.
+   */
+  private readonly keyOnFadeDurationMs = new Map<number, number>();
   /**
    * In-flight long-note holds keyed by channel. Populated when the
    * head of an LN is judged (the press lands inside the note's
@@ -1699,6 +1709,14 @@ export class PixiGameplayView {
     // this value to retire timer 48 / 49 once the animation has
     // played out, matching the bomb-cleanup pattern.
     this.fullComboDurationMs = computeFullComboDurationMs(skin);
+    // Pre-compute lane-laser release fade durations from the
+    // skin's key-on (`100..117`) keyframes so `releaseKeyOnTimer`
+    // / `renderSkinImage` decay each lane at its authored speed
+    // instead of a hard-coded 120 ms.
+    this.keyOnFadeDurationMs.clear();
+    for (const [timerId, span] of computeKeyOnFadeDurationsMs(skin)) {
+      this.keyOnFadeDurationMs.set(timerId, span);
+    }
     const imagePaths = new Set<string>();
     skin.images.forEach((image) => imagePaths.add(image.source.imagePath));
     Object.values(skin.notes).forEach((group) => group?.forEach((note) => imagePaths.add(note.imagePath)));
@@ -2353,6 +2371,7 @@ export class PixiGameplayView {
     if (timerId === undefined) return;
     if (!this.timerStartedAt.has(timerId)) return;
     this.keyOnFadeOutStart.set(timerId, this.playClock());
+    const fadeMs = this.keyOnFadeDurationMs.get(timerId) ?? KEY_ON_FADE_OUT_MS;
     const timeout = window.setTimeout(() => {
       this.keyFlashTimeouts.delete(timeout);
       if (this.disposed) return;
@@ -2363,7 +2382,7 @@ export class PixiGameplayView {
         this.timerStartedAt.delete(timerId);
       }
       this.keyOnFadeOutStart.delete(timerId);
-    }, KEY_ON_FADE_OUT_MS);
+    }, fadeMs);
     this.keyFlashTimeouts.add(timeout);
   }
 
@@ -3807,7 +3826,8 @@ export class PixiGameplayView {
     const fadeStart = this.keyOnFadeOutStart.get(image.destination.timer);
     if (fadeStart !== undefined) {
       const elapsed = this.playClock() - fadeStart;
-      sprite.alpha = Math.max(0, 1 - elapsed / KEY_ON_FADE_OUT_MS);
+      const fadeMs = this.keyOnFadeDurationMs.get(image.destination.timer) ?? KEY_ON_FADE_OUT_MS;
+      sprite.alpha = Math.max(0, 1 - elapsed / fadeMs);
     }
     // The AUTOPLAY label (any image gated on op 33) belongs in the same
     // visual layer as the judgement plate — i.e. above the falling notes.
