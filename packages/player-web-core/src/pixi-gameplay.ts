@@ -925,6 +925,25 @@ export class PixiGameplayView {
     this.seedSceneStageTimer(1, timing.startInput);
     this.seedSceneStageTimer(40, loadEndOffsetMs);
     this.seedSceneStageTimer(41, playStartOffsetMs);
+    // LR2 op 80 / 81 ("load not complete" / "load complete") gate
+    // the centered title / genre / artist display in the play
+    // skin. Without these ops the LR2 default 7-keys skin's
+    // title elements never become visible. Set op 80 immediately
+    // (we're in the load animation window even though our
+    // prepare() already finished decoding) and switch to op 81
+    // when LOADEND would fire — matching the visual phase the
+    // skin authors against.
+    this.runtimeOps.add(80);
+    this.runtimeOps.delete(81);
+    if (this.loadCompleteTimerHandle !== undefined) {
+      window.clearTimeout(this.loadCompleteTimerHandle);
+    }
+    this.loadCompleteTimerHandle = window.setTimeout(() => {
+      this.loadCompleteTimerHandle = undefined;
+      if (this.disposed) return;
+      this.runtimeOps.delete(80);
+      this.runtimeOps.add(81);
+    }, Math.max(0, loadEndOffsetMs));
     // Anchor the chart's seconds=0 to the same precise audio-context
     // timestamp so background samples and visual notes share one clock.
     if (this.audioContext) {
@@ -1099,6 +1118,10 @@ export class PixiGameplayView {
     if (this.visibilityPollHandle !== undefined) {
       window.clearInterval(this.visibilityPollHandle);
       this.visibilityPollHandle = undefined;
+    }
+    if (this.loadCompleteTimerHandle !== undefined) {
+      window.clearTimeout(this.loadCompleteTimerHandle);
+      this.loadCompleteTimerHandle = undefined;
     }
     if (this.chartEndTimeout !== undefined) {
       window.clearTimeout(this.chartEndTimeout);
@@ -1945,6 +1968,12 @@ export class PixiGameplayView {
   private lastFocus = true;
   /** `setInterval` handle for the visibility/focus poll loop. */
   private visibilityPollHandle: number | undefined;
+  /**
+   * `setTimeout` handle for the LR2 op 80 → 81 transition (load
+   * incomplete → load complete). Cleared on dispose so the
+   * deferred state mutation doesn't fire onto a torn-down scene.
+   */
+  private loadCompleteTimerHandle: number | undefined;
 
   /**
    * Window-level blur/focus fallback for the auto-pause behaviour. Some
