@@ -252,21 +252,23 @@ export interface PixiResultViewOptions {
    */
   onContinue?: () => void;
   /**
-   * Encoded result-screen BGM bytes used when the chart was
-   * cleared (`LR2files/Bgm/<theme>/clear.wav` in the LR2 default
-   * theme). Falls back to {@link resultBgm} when unset so
-   * single-loop themes still produce sound.
+   * Encoded result-screen audio bytes used when the chart was
+   * cleared (`LR2files/Sound/<theme>/clear.wav` in the LR2 default
+   * theme — these jingles live in `Sound/`, not `Bgm/`). Falls
+   * back to {@link resultBgm} when unset so single-loop themes
+   * still produce sound.
    */
   clearBgm?: Uint8Array;
   /**
-   * Encoded result-screen BGM bytes used when the chart was
-   * failed (`fail.wav`). Same fallback chain as {@link clearBgm}.
+   * Encoded result-screen audio bytes used when the chart was
+   * failed (`LR2files/Sound/<theme>/fail.wav`). Same fallback
+   * chain as {@link clearBgm}.
    */
   failBgm?: Uint8Array;
   /**
-   * Generic result-screen BGM (`result.wav`). Plays when the
-   * theme doesn't ship a clear / fail-specific track for the
-   * current outcome.
+   * Generic result-screen audio (`LR2files/Sound/<theme>/result.wav`).
+   * Plays when the theme doesn't ship a clear / fail-specific
+   * track for the current outcome.
    */
   resultBgm?: Uint8Array;
 }
