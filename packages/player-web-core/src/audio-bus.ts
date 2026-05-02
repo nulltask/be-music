@@ -162,6 +162,27 @@ export const LEGACY_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
 export const MASTER_MAKEUP_GAIN_LINEAR = 1.12;
 
 /**
+ * Per-mixer summing-headroom gain (linear). Each `BufferSourceNode`
+ * connects to `keyMixer` / `bgmMixer` at unity, so N simultaneous
+ * samples sum to amplitude N at the mixer output. With BMS charts
+ * routinely overlapping 4–6 samples (chord notes + scratch + BGM
+ * layers), the un-attenuated sum digital-clips at the destination
+ * (16-bit DAC clamp). Setting the mixer gain below unity buys
+ * `1/MIXER_HEADROOM_GAIN_LINEAR` clean voices before the
+ * compressor stack has to do anything; remaining peaks are caught
+ * by the master limiter.
+ *
+ * `0.5` ≈ −6 dB → ~2 simultaneous unity-amplitude samples sum to
+ * full scale. Combined with the split-bus master limiter
+ * (threshold = −3 dB, ratio 10) the perceived headroom is generous
+ * enough that sustained clipping is essentially impossible on
+ * typical BMS charts. Single-source playback is ~5 dB quieter than
+ * with unity mixers — the user can compensate with system volume,
+ * which is preferable to having the player surreptitiously clip.
+ */
+export const MIXER_HEADROOM_GAIN_LINEAR = 0.5;
+
+/**
  * Per-compressor-stage identifier used by {@link AudioBusHandle.setStageEnabled}.
  *
  * - `'key'` — key bus compressor (between `keyMixer` and master).
@@ -263,6 +284,11 @@ export function buildAudioBus(
 ): AudioBusHandle {
   const keyMixer = audioContext.createGain();
   const bgmMixer = audioContext.createGain();
+  // Sub-unity mixer gain so multiple simultaneous samples don't
+  // sum past full scale before the compressor stack has a chance
+  // to react. See `MIXER_HEADROOM_GAIN_LINEAR` for why ~−6 dB.
+  keyMixer.gain.value = MIXER_HEADROOM_GAIN_LINEAR;
+  bgmMixer.gain.value = MIXER_HEADROOM_GAIN_LINEAR;
   // Per-bus compressors plus the master — created up front, wired
   // in/out by `applyMode`. Held even when the active mode doesn't
   // use them so the next `setMode` call can splice them back in

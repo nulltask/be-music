@@ -262,7 +262,14 @@ class PlayerWebDemoApp {
     this.guiState = {
       autoPlay: false,
       autoPauseOnBlur: false,
-      compressor: false,
+      // Compressor stack ON by default — without it, multiple
+      // simultaneous `#WAV` samples sum past full scale and digital-
+      // clip at the destination. The `MIXER_HEADROOM_GAIN_LINEAR`
+      // attenuation in `audio-bus.ts` buys a little headroom but the
+      // master limiter is what reliably prevents audible clipping
+      // on dense charts. Power users wanting an unprocessed signal
+      // path can still flip it via `?compressor=off` or the GUI.
+      compressor: true,
       compressorKey: true,
       compressorBgm: true,
       compressorMaster: true,
@@ -277,13 +284,12 @@ class PlayerWebDemoApp {
     // helper exported from `audio-bus.ts`) so the recognised values
     // stay synced with the runtime API. Unrecognised / missing flag
     // → fall through to defaults: architecture `'split'`, GUI
-    // checkbox unchecked (compressor off).
+    // checkbox checked (compressor on, see the `compressor: true`
+    // seed above for the rationale).
     //
     // `?compressor=split|legacy` is an explicit opt-in to that
-    // architecture and implies compression should be ON, so the
-    // checkbox is pre-checked too. `?compressor=off` is redundant
-    // with the new default but kept as an explicit form for
-    // documentation / scripted launches.
+    // architecture and keeps the checkbox checked. `?compressor=off`
+    // unchecks it for an unprocessed-signal A/B comparison.
     const flag: CompressorMode | undefined = parseCompressorMode(
       new URL(window.location.href).searchParams.get('compressor'),
     );
