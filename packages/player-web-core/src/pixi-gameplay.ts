@@ -855,9 +855,16 @@ export class PixiGameplayView {
     if (this.disposed) return;
     await this.prepareAudio();
     if (this.disposed) return;
-    // BGA preload runs concurrently after audio so the playfield can mount
-    // immediately; missing or slow-loading bitmaps fade in mid-play.
-    void this.prepareBga();
+    // BGA preload is awaited so `prepare()` doesn't resolve
+    // until every BMP / video texture is ready. Charts that
+    // ship an unsupported video codec (e.g. legacy `.mpg`)
+    // route through the ffmpeg.wasm transcode fallback in
+    // `loadVideoTextureFromBytes`, which can take several
+    // seconds — blocking here keeps the host's Decide splash
+    // visible as a "loading" cue until everything is in place,
+    // matching the user-requested "wait with a loading
+    // animation until video encoding finishes" behaviour.
+    await this.prepareBga();
   }
 
   /**

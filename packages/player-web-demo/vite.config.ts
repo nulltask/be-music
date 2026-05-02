@@ -102,6 +102,7 @@ export default defineConfig({
       // cleanly.
       '@ffmpeg/ffmpeg',
       '@ffmpeg/util',
+      '@ffmpeg/core-mt',
     ],
     // Pre-bundle `ts-ebml` up-front so Vite's CJS-named-export
     // interop runs at boot rather than the second pass a
@@ -136,6 +137,24 @@ export default defineConfig({
   server: {
     fs: {
       allow: [repositoryDir],
+    },
+    // Cross-origin isolation headers — gate `SharedArrayBuffer`
+    // and `Atomics.wait` on, both required by the multi-threaded
+    // ffmpeg.wasm build (`@ffmpeg/core-mt`) the BGA-video
+    // transcode falls back to. Without these the worker pool
+    // crashes with `ReferenceError: SharedArrayBuffer is not
+    // defined` on first transcode.
+    //
+    // The demo loads every chart asset / theme bundle from a
+    // user-side drag-drop (in-memory blobs, no external CDN), so
+    // `require-corp` doesn't break any runtime fetches. If a
+    // future feature pulls in a third-party CORS resource, that
+    // resource's response will need a
+    // `Cross-Origin-Resource-Policy: cross-origin` header to keep
+    // working under this policy.
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
 });

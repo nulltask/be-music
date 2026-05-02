@@ -144,6 +144,23 @@ async function transcodeVideoToBrowserCodec(
     //     `<video>` element can start decoding before the whole
     //     MP4 finishes downloading (we read the whole buffer
     //     anyway, but the flag is free)
+    // Speed-over-quality flags. BMS BGA is decorative low-res
+    // pixel art that gets aggressively scaled / nearest-filtered
+    // by Pixi anyway, so we can sacrifice a lot of fidelity for
+    // a fast transcode:
+    //
+    //   - `-vf scale=320:-2` clamps width to 320px (height
+    //     auto-divides-by-2 to stay even), cutting the per-pixel
+    //     cost dramatically vs the 512px+ source.
+    //   - `-r 24` drops the frame rate; LR2's BGA layer doesn't
+    //     need 30+ fps and h264 encode is per-frame work.
+    //   - `-tune fastdecode -tune zerolatency` skips bidirectional
+    //     prediction passes the encoder would otherwise spend
+    //     time on.
+    //   - `-threads 0` lets libx264 pick the worker pool size
+    //     from `core-mt`'s SharedArrayBuffer-backed thread pool.
+    //   - `-crf 30` is a notch lower quality than the previous
+    //     26 but visually fine for BGA art.
     const exitCode = await ffmpeg.exec([
       '-y',
       '-i',
@@ -152,10 +169,18 @@ async function transcodeVideoToBrowserCodec(
       'libx264',
       '-preset',
       'ultrafast',
+      '-tune',
+      'fastdecode,zerolatency',
       '-crf',
-      '26',
+      '30',
       '-pix_fmt',
       'yuv420p',
+      '-vf',
+      'scale=320:-2',
+      '-r',
+      '24',
+      '-threads',
+      '0',
       '-an',
       '-movflags',
       '+faststart',
@@ -224,28 +249,32 @@ async function loadFfmpeg(): Promise<FfmpegInstance> {
     // bundle out of the initial page load — the user only pays
     // the download cost when they actually pick a chart with an
     // unsupported BGA video.
-    const [{ FFmpeg }, { toBlobURL }, coreUrl, wasmUrl] = await Promise.all([
+    const [{ FFmpeg }, { toBlobURL }, coreUrl, wasmUrl, workerUrl] = await Promise.all([
       import('@ffmpeg/ffmpeg'),
       import('@ffmpeg/util'),
-      // `@ffmpeg/core` exports two entry points:
-      //   - `.` → `dist/esm/ffmpeg-core.js`  (the JS glue)
-      //   - `./wasm` → `dist/esm/ffmpeg-core.wasm`  (the WASM
-      //     binary)
-      // Both are referenced via Vite's `?url` suffix so we get
-      // a browser-fetchable URL at runtime without copying the
-      // files into the demo's `public/` folder.
-      import('@ffmpeg/core?url').then((mod) => mod.default as string),
-      import('@ffmpeg/core/wasm?url').then((mod) => mod.default as string),
+      // `@ffmpeg/core-mt` is the multi-threaded build: ffmpeg
+      // runs on a worker pool that uses SharedArrayBuffer to
+      // parallelise libx264 across CPU cores. Cuts BMS BGA
+      // transcode time from ~tens of seconds to a few seconds
+      // on a typical 2-minute MPEG-1 source. Requires the page
+      // to be cross-origin isolated (COOP / COEP headers — see
+      // the demo's `vite.config.ts`).
+      import('@ffmpeg/core-mt?url').then((mod) => mod.default as string),
+      import('@ffmpeg/core-mt/wasm?url').then((mod) => mod.default as string),
+      import('@ffmpeg/core-mt/worker?url').then((mod) => mod.default as string),
     ]);
     const ffmpeg = new FFmpeg();
-    // `toBlobURL` re-fetches the core JS / WASM URLs into
-    // blob URLs so the spawned Worker can `importScripts` them
-    // even when the page sits behind a different origin (the
-    // Worker's same-origin policy otherwise blocks the cross-
-    // origin file URLs Vite hands out under HMR).
-    const coreBlobUrl = await toBlobURL(coreUrl, 'text/javascript');
-    const wasmBlobUrl = await toBlobURL(wasmUrl, 'application/wasm');
-    await ffmpeg.load({ coreURL: coreBlobUrl, wasmURL: wasmBlobUrl });
+    // `toBlobURL` re-fetches the core JS / WASM / worker URLs
+    // into blob URLs so the spawned Worker can `importScripts`
+    // them even when the page sits behind a different origin
+    // (the Worker's same-origin policy otherwise blocks the
+    // cross-origin file URLs Vite hands out under HMR).
+    const [coreBlobUrl, wasmBlobUrl, workerBlobUrl] = await Promise.all([
+      toBlobURL(coreUrl, 'text/javascript'),
+      toBlobURL(wasmUrl, 'application/wasm'),
+      toBlobURL(workerUrl, 'text/javascript'),
+    ]);
+    await ffmpeg.load({ coreURL: coreBlobUrl, wasmURL: wasmBlobUrl, workerURL: workerBlobUrl });
     cachedFfmpeg = ffmpeg as FfmpegInstance;
     return cachedFfmpeg;
   })().catch((error) => {
