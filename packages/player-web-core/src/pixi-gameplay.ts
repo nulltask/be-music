@@ -100,6 +100,7 @@ import {
   resolveSideRelativeLaneIndex,
 } from './pixi-gameplay-lanes.ts';
 import {
+  computeBombDurationsMs,
   computeFullComboDurationMs,
   computeKeyOnFadeDurationsMs,
   computeRankOp,
@@ -144,6 +145,17 @@ const KEY_ON_FADE_OUT_MS = 120;
  * "tap" without lingering through the next note.
  */
 const KEY_ON_FLASH_HOLD_MS = 60;
+
+/**
+ * Fallback bomb-explosion cleanup duration in ms. The actual value
+ * used at runtime is the longest `time` keyframe across the skin's
+ * elements gated on a given bomb timer (50..69), computed in
+ * {@link prepareSkin} via `computeBombDurationsMs`. This constant
+ * is the fallback for skinless mode and for bomb slots the loaded
+ * skin doesn't author. 150 ms matches the LR2 default 7-keys
+ * skin's bomb cycle.
+ */
+const BOMB_CLEANUP_FALLBACK_MS = 150;
 
 /**
  * Snapshot of the play session, captured at chart-end (or whenever
@@ -604,6 +616,14 @@ export class PixiGameplayView {
    * {@link KEY_ON_FADE_OUT_MS} when a timer has no skin element.
    */
   private readonly keyOnFadeDurationMs = new Map<number, number>();
+  /**
+   * Per-bomb-timer (`50..69`) explosion cleanup duration in ms.
+   * Populated in {@link prepareSkin} from the skin's authored
+   * keyframes; {@link cleanupBombTimers} falls back to
+   * {@link BOMB_CLEANUP_FALLBACK_MS} for slots the skin doesn't
+   * author (or for skinless mode).
+   */
+  private readonly bombDurationMs = new Map<number, number>();
   /**
    * In-flight long-note holds keyed by channel. Populated when the
    * head of an LN is judged (the press lands inside the note's
@@ -1716,6 +1736,14 @@ export class PixiGameplayView {
     this.keyOnFadeDurationMs.clear();
     for (const [timerId, span] of computeKeyOnFadeDurationsMs(skin)) {
       this.keyOnFadeDurationMs.set(timerId, span);
+    }
+    // Same idea for the bomb-explosion timers (50..69).
+    // `cleanupBombTimers` retires the active bomb entries once the
+    // skin's authored keyframe span has elapsed, so charts that
+    // ship a longer (or shorter) explosion animation match.
+    this.bombDurationMs.clear();
+    for (const [timerId, span] of computeBombDurationsMs(skin)) {
+      this.bombDurationMs.set(timerId, span);
     }
     const imagePaths = new Set<string>();
     skin.images.forEach((image) => imagePaths.add(image.source.imagePath));
@@ -3295,27 +3323,34 @@ export class PixiGameplayView {
   }
 
   /**
-   * One-shot bomb timer cleanup. Runs every frame regardless of whether
-   * we own a bomb texture, so the LR2 timer 50–69 stops being "active"
-   * once the explosion's natural duration (150 ms) has elapsed. Without
-   * this, the skin's `#DST_IMAGE` (which is gated on those timers and
-   * has `loop=-1` "play once and clamp") would keep displaying the last
-   * frame of the explosion forever.
+   * One-shot bomb timer cleanup. Runs every frame so the LR2 bomb
+   * timers (50–69) stop being "active" once the skin's authored
+   * explosion keyframes have played out. The per-timer duration is
+   * pre-computed in {@link prepareSkin} via `computeBombDurationsMs`
+   * (longest `time` keyframe across elements gated on each timer),
+   * with `BOMB_CLEANUP_FALLBACK_MS` covering skinless / unauthored
+   * slots. Without this retirement, the skin's `#DST_IMAGE`
+   * (typically `loop=-1` "play once and clamp") would keep
+   * displaying the last frame of the explosion forever.
    */
   private cleanupBombTimers(): void {
     if (this.bombStartedAt.size === 0) {
       return;
     }
     const now = this.playClock();
-    const totalDurationMs = 150; // LR2 default bomb cycle.
     for (const [channel, startedAt] of Array.from(this.bombStartedAt.entries())) {
-      if (now - startedAt < totalDurationMs) {
+      const laneIndex = resolveSideRelativeLaneIndex(channel);
+      const timerId = (channel.startsWith('2') ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE) + laneIndex;
+      // Per-bomb-timer cleanup duration — derived from the loaded
+      // skin's keyframes in `prepareSkin` so each lane's explosion
+      // retires at its authored cycle length, with the LR2-default
+      // 150 ms fallback for skinless / unauthored slots.
+      const cleanupAtMs = this.bombDurationMs.get(timerId) ?? BOMB_CLEANUP_FALLBACK_MS;
+      if (now - startedAt < cleanupAtMs) {
         continue;
       }
       this.bombStartedAt.delete(channel);
-      const laneIndex = resolveSideRelativeLaneIndex(channel);
-      const base = channel.startsWith('2') ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE;
-      this.timerStartedAt.delete(base + laneIndex);
+      this.timerStartedAt.delete(timerId);
     }
   }
 

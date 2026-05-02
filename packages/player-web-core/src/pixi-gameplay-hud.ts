@@ -310,12 +310,41 @@ export function computeFullComboDurationMs(skin: Lr2Skin): number {
  * empty so static (single-keyframe) elements still report a span.
  */
 export function computeKeyOnFadeDurationsMs(skin: Lr2Skin): Map<number, number> {
+  return collectMaxKeyframeTimePerTimer(skin, 100, 117);
+}
+
+/**
+ * Walks the skin's elements and returns the longest keyframe `time`
+ * (in ms) attached to each LR2 bomb timer (50..69 — 1P 50..59 / 2P
+ * 60..69, per the LR2 default 7-keys layout). `cleanupBombTimers`
+ * uses the value to retire the corresponding `bombStartedAt` /
+ * `timerStartedAt` entries once the skin's authored explosion
+ * animation has finished, instead of pinning every chart to a
+ * hard-coded "LR2 default 150 ms" cycle.
+ */
+export function computeBombDurationsMs(skin: Lr2Skin): Map<number, number> {
+  return collectMaxKeyframeTimePerTimer(skin, 50, 69);
+}
+
+/**
+ * Internal helper for {@link computeKeyOnFadeDurationsMs} /
+ * {@link computeBombDurationsMs}: scan every keyframe-bearing
+ * element type and report the longest `time` per timer id within
+ * the given inclusive range. Single-keyframe elements report
+ * `destination.time` so static authored placements still produce
+ * a span (otherwise the caller would never see them).
+ */
+function collectMaxKeyframeTimePerTimer(
+  skin: Lr2Skin,
+  minTimer: number,
+  maxTimer: number,
+): Map<number, number> {
   const result = new Map<number, number>();
   const visit = (entry: { destination?: Lr2DestinationRect; keyframes?: Lr2DestinationRect[] }): void => {
     const dst = entry.destination;
     if (!dst) return;
     const t = dst.timer;
-    if (t < 100 || t > 117) return;
+    if (t < minTimer || t > maxTimer) return;
     const frames = entry.keyframes && entry.keyframes.length > 0 ? entry.keyframes : [dst];
     let span = result.get(t) ?? 0;
     for (const frame of frames) {
