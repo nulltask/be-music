@@ -1615,6 +1615,9 @@ export class PixiGameplayView {
       // dynamically below from `options.gauge`.
       47, // difficulty filter disabled
       50, // offline
+      52, // EXTRA MODE OFF — gates wallpaper / decoration elements in
+          // the LR2 default skin family. Op 53 is the EXTRA MODE ON
+          // variant; we never enable EXTRA MODE in the web build.
       // ops 54 / 55 (autoscratch 1P off / on), 56 / 57 (autoscratch
       // 2P off / on) — set dynamically below from
       // `options.autoScratch1P / 2P`.

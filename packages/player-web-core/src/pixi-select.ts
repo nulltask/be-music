@@ -91,6 +91,10 @@ const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
   // op 46 / 47 (difficulty filter active / disabled) — set
   // dynamically from `playOptions.difficultyFilter`.
   50, // offline (no IR connection yet)
+  52, // EXTRA MODE OFF — gates the LR2 default skin's normal wallpaper
+      // (`LR2files/WallPaper/Select/LR2 default.bmp`). Op 53 is the
+      // EXTRA MODE ON variant; we never enable EXTRA MODE in the web
+      // build, so 52 is always-on and 53 is never set.
   // ops 54 / 55 (autoscratch 1P off / on), 56 / 57 (autoscratch 2P
   // off / on) — set dynamically from `playOptions.autoScratch1P /
   // 2P` so the panel-1 toggle button cells track the live state.
