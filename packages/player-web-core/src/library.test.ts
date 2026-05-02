@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { loadSongCollectionFromFiles, resolveChartPlayVariant } from './library.ts';
+import { loadSongCollectionFromFiles, resolveChartImageAsset, resolveChartPlayVariant } from './library.ts';
 import type { BeMusicEvent, BeMusicJson } from '../../json/src/index.ts';
-import type { BrowserSongEntry, LoadProgress } from './types.ts';
+import type { BrowserSongAssetEntry, BrowserSongAssetSource, BrowserSongEntry, LoadProgress } from './types.ts';
 
 /**
  * The drag-drop loader fires `LoadProgress` events as it walks the
@@ -180,5 +180,86 @@ describe('resolveChartPlayVariant', () => {
         makeSong({ chartPath: 'Song/main.bme', channels: ['11', '12', '13', '14', '15', '22', '23', '24', '25'] }),
       ),
     ).toBe('10');
+  });
+});
+
+/**
+ * Builds a tiny in-memory song source for testing the chart-asset
+ * resolver. The `files` map keys are relative paths (matching how
+ * `loadSongCollectionFromFiles` populates the source); the chart
+ * path is fixed so each test only varies the asset-side bytes.
+ */
+function makeAssetSource(files: Record<string, Uint8Array>): BrowserSongAssetSource {
+  const map = new Map<string, BrowserSongAssetEntry>();
+  for (const [key, value] of Object.entries(files)) {
+    map.set(key, value);
+  }
+  // Only `files` is read by `resolveChartImageAsset`; the
+  // identity / label fields are required by the structural
+  // type but never consulted here. Keep them tagged with the
+  // kind that drag-drop loaders produce so any future code
+  // path that does branch on `kind` still gets a plausible
+  // value.
+  return {
+    id: 'test-source',
+    kind: 'directory',
+    label: 'test',
+    files: map,
+  };
+}
+
+describe('resolveChartImageAsset', () => {
+  test('walks image-codec fallbacks (.png → .jpg → ...) for a `#BMPxx` declared as `.bmp`', () => {
+    // Classic case the resolver was designed for: chart says
+    // `_logo.bmp` but the song folder ships `_logo.png`. We
+    // expect the PNG bytes back.
+    const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const source = makeAssetSource({ 'Song/_logo.png': PNG_BYTES });
+    const entry = resolveChartImageAsset(source, 'Song/main.bms', '_logo.bmp');
+    expect(entry).toBe(PNG_BYTES);
+  });
+
+  test('does NOT fall back to a same-basename `.png` when the chart referenced a video file', () => {
+    // Regression: BMS charts often ship a still cover frame as
+    // `_scualee.png` alongside the actual `_scualee.mpg`. Walking
+    // image candidates first would resolve `_scualee.mpg` to the
+    // PNG bytes, which then go through the video pipeline (the
+    // BGA loader keys off the declared path's extension, not the
+    // resolved bytes), causing ffmpeg.wasm to detect `png_pipe`
+    // and emit a frozen 1-frame MP4. We must short-circuit on
+    // video extensions and only return the verbatim path.
+    const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const MPG_BYTES = new Uint8Array([0x00, 0x00, 0x01, 0xb3]);
+    const source = makeAssetSource({
+      'Song/_scualee.png': PNG_BYTES,
+      'Song/_scualee.mpg': MPG_BYTES,
+    });
+    const entry = resolveChartImageAsset(source, 'Song/main.bms', '_scualee.mpg');
+    expect(entry).toBe(MPG_BYTES);
+  });
+
+  test('returns undefined for a `.mpg` reference when only a same-basename `.png` exists', () => {
+    // Corollary of the regression test above — the resolver must
+    // refuse to silently substitute the PNG. The caller can then
+    // fall back to whatever video-only logic it wants (skip the
+    // BGA, log a warning, etc.); pretending the asset was found
+    // would just kick the surprise downstream.
+    const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const source = makeAssetSource({ 'Song/_scualee.png': PNG_BYTES });
+    const entry = resolveChartImageAsset(source, 'Song/main.bms', '_scualee.mpg');
+    expect(entry).toBeUndefined();
+  });
+
+  test('handles every supported video extension consistently (no image fallback)', () => {
+    // Locks in the contract for all extensions matched by the
+    // BGA loader's `isVideoExtension` regex — adding one there
+    // without updating `imageFallbackPaths` would silently
+    // re-introduce the PNG fallback bug for the new extension.
+    const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const VIDEO_EXTENSIONS = ['mpg', 'mpeg', 'mp4', 'm4v', 'avi', 'mov', 'wmv', 'webm', 'mkv'];
+    for (const ext of VIDEO_EXTENSIONS) {
+      const source = makeAssetSource({ 'Song/clip.png': PNG_BYTES });
+      expect(resolveChartImageAsset(source, 'Song/main.bms', `clip.${ext}`)).toBeUndefined();
+    }
   });
 });

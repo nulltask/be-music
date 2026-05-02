@@ -776,12 +776,37 @@ function imageFallbackPaths(path: string): string[] {
   if (dotIndex < 0 || dotIndex < lastSlash) {
     return [path];
   }
+  // Don't walk image extensions when the chart explicitly
+  // declared a video BGA — `_scualee.mpg` paired with a same-
+  // basename `_scualee.png` (cover art / static fallback frame
+  // shipped alongside the actual video) would otherwise have
+  // the resolver pick the PNG. The BGA loader only checks the
+  // declared path's extension to decide between the image vs.
+  // video pipeline, so feeding PNG bytes through the video
+  // path makes ffmpeg.wasm pick `png_pipe` and emit a 1-frame
+  // MP4 — visually a frozen still during gameplay. Returning
+  // just the original path here keeps the video reference
+  // resolving to its own file.
+  if (isVideoExtensionPath(path)) {
+    return [path];
+  }
   const base = path.slice(0, dotIndex);
   const candidates = [`${base}.png`, `${base}.jpg`, `${base}.jpeg`, `${base}.gif`, `${base}.bmp`];
   if (!candidates.includes(path)) {
     candidates.push(path);
   }
   return candidates;
+}
+
+/**
+ * Local copy of `isVideoExtension` from `pixi-gameplay-bga`.
+ * Pulled inline rather than imported so `library.ts` (the
+ * data-layer entry point) doesn't take a dependency on the
+ * Pixi-side BGA helpers; the patterns are tiny and trivially
+ * kept in sync.
+ */
+function isVideoExtensionPath(path: string): boolean {
+  return /\.(mpg|mpeg|mp4|m4v|avi|mov|wmv|webm|mkv)$/iu.test(path);
 }
 
 /**
