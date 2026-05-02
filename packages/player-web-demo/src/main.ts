@@ -119,6 +119,13 @@ interface PlayerWebDemoElements {
  */
 interface DemoGuiState {
   autoPlay: boolean;
+  /**
+   * When true, gameplay auto-pauses on tab visibility change /
+   * window blur and auto-resumes on focus. False (the default)
+   * keeps the play scene running in the background — convenient
+   * for capturing recordings while another window holds focus.
+   */
+  autoPauseOnBlur: boolean;
   compressor: boolean;
   compressorKey: boolean;
   compressorBgm: boolean;
@@ -254,6 +261,7 @@ class PlayerWebDemoApp {
   public constructor(private readonly elements: PlayerWebDemoElements) {
     this.guiState = {
       autoPlay: false,
+      autoPauseOnBlur: false,
       compressor: false,
       compressorKey: true,
       compressorBgm: true,
@@ -427,6 +435,16 @@ class PlayerWebDemoApp {
     // controller just added another surface to keep in sync. The
     // `guiState.autoPlay` field stays as the seed/fallback value
     // until the select panel publishes its own choice.
+    gui
+      .add(this.guiState, 'autoPauseOnBlur')
+      .name('Auto pause on blur')
+      .onChange((value: boolean) => {
+        this.guiState.autoPauseOnBlur = value;
+        // Push live so a chart already in flight starts honouring
+        // the new policy on its next visibility / blur event,
+        // without forcing the user to restart the song.
+        this.gameplayView?.setAutoPauseOnBlur(value);
+      });
     gui
       .add(this.guiState, 'compressor')
       .name('Compressor')
@@ -899,6 +917,7 @@ class PlayerWebDemoApp {
     this.gameplayView = new PixiGameplayView({
       skin: playSkin,
       autoPlay: overrides.autoPlay ?? playOptions?.autoPlay ?? this.guiState.autoPlay,
+      autoPauseOnBlur: this.guiState.autoPauseOnBlur,
       initialHiSpeed: playOptions?.hiSpeed,
       bga: playOptions?.bga,
       bgaSize: playOptions?.bgaSize,
@@ -1006,6 +1025,7 @@ class PlayerWebDemoApp {
     this.gameplayView = new PixiGameplayView({
       skin: playSkin,
       autoPlay: overrides.autoPlay ?? playOptions?.autoPlay ?? this.guiState.autoPlay,
+      autoPauseOnBlur: this.guiState.autoPauseOnBlur,
       initialHiSpeed: playOptions?.hiSpeed,
       bga: playOptions?.bga,
       bgaSize: playOptions?.bgaSize,

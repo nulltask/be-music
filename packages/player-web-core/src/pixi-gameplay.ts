@@ -212,6 +212,15 @@ export interface PixiGameplayViewOptions {
   /** When true, every note is auto-judged as PERFECT at its scheduled time. */
   autoPlay?: boolean;
   /**
+   * When true, the gameplay automatically pauses on tab visibility
+   * change (`document.hidden`) and window blur, and auto-resumes on
+   * focus / `pageshow`. When false (the default), the play scene
+   * keeps running in the background — convenient for capturing
+   * recordings while another window holds focus, and matches the
+   * "no surprise pauses" behaviour most rhythm-game hosts ship.
+   */
+  autoPauseOnBlur?: boolean;
+  /**
    * Initial visual scroll-speed multiplier. Mirrors the live
    * runtime hotkey (`ArrowUp` / `ArrowDown` adjusts this value
    * during play); the option lets the host seed it from the
@@ -716,6 +725,7 @@ export class PixiGameplayView {
       const snapped = Math.round(options.initialHiSpeed * 1000) / 1000;
       this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, snapped));
     }
+    this.autoPauseOnBlur = options.autoPauseOnBlur ?? false;
   }
 
   /**
@@ -1057,6 +1067,19 @@ export class PixiGameplayView {
     }
     const next = enabled ? this.audioCompressorMode : 'off';
     this.audioBus.setMode(next);
+  }
+
+  /**
+   * Toggles the auto-pause-on-blur behaviour at runtime. Future
+   * `visibilitychange` / `blur` events will only auto-pause when
+   * `enabled` is true; the auto-RESUME path stays unconditional so
+   * a user who blurs (auto-pauses) then disables this option still
+   * gets back to play state on the next focus.
+   *
+   * Idempotent — calling with the same value no-ops.
+   */
+  public setAutoPauseOnBlur(enabled: boolean): void {
+    this.autoPauseOnBlur = enabled;
   }
 
   /**
@@ -1993,9 +2016,16 @@ export class PixiGameplayView {
       hidden: document.hidden,
       paused: this.paused,
       autoPaused: this.autoPaused,
+      autoPauseOnBlur: this.autoPauseOnBlur,
     });
+    // Auto-pause when the tab goes hidden (only if the host opted
+    // in). The auto-RESUME path stays unconditional — if we
+    // previously auto-paused, we must auto-resume regardless of
+    // the toggle's current value, otherwise turning the toggle
+    // off mid-blur would strand gameplay in a paused state with
+    // no obvious way out.
     if (document.hidden) {
-      if (!this.paused) {
+      if (!this.paused && this.autoPauseOnBlur) {
         this.togglePause();
         this.autoPaused = true;
       }
@@ -2007,6 +2037,15 @@ export class PixiGameplayView {
 
   /** True iff we paused because the tab/window backgrounded itself. */
   private autoPaused = false;
+  /**
+   * Whether `visibilitychange` / `blur` / `pagehide` should
+   * auto-pause gameplay. Seeded from `options.autoPauseOnBlur`
+   * (default `false`). The host can flip it at runtime via
+   * {@link setAutoPauseOnBlur} — useful for a lil-gui toggle that
+   * lets the user opt into the LR2-desktop-style "pause when I
+   * Cmd-Tab away" behaviour.
+   */
+  private autoPauseOnBlur = false;
   /** Last sampled `document.hidden`, used by the polling safety net. */
   private lastHidden = false;
   /** Last sampled `document.hasFocus()`, used by the polling safety net. */
@@ -2040,8 +2079,16 @@ export class PixiGameplayView {
    */
   private readonly handleWindowBlur = (): void => {
     // eslint-disable-next-line no-console
-    console.log('[gameplay] window blur', { paused: this.paused, autoPaused: this.autoPaused });
-    if (!this.paused) {
+    console.log('[gameplay] window blur', {
+      paused: this.paused,
+      autoPaused: this.autoPaused,
+      autoPauseOnBlur: this.autoPauseOnBlur,
+    });
+    // Same opt-in policy as `handleVisibilityChange` — only blur-
+    // pause when the host enabled it; auto-resume on focus stays
+    // unconditional so flipping the toggle mid-pause can't strand
+    // us in a paused state.
+    if (!this.paused && this.autoPauseOnBlur) {
       this.togglePause();
       this.autoPaused = true;
     }
