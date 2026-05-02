@@ -599,6 +599,20 @@ export class PixiGameplayView {
   private lastJudgeUntil = 0;
   private frame: number | undefined;
   private chartEndTimeout: number | undefined;
+  /**
+   * `setTimeout` handles for the LR2 scene-exit sequence (timers
+   * 2 = FADEOUT, 3 = CLOSE). Cleared on dispose so the deferred
+   * host callback can't fire onto a torn-down view.
+   */
+  private exitFadeOutHandle: number | undefined;
+  private exitCloseHandle: number | undefined;
+  /**
+   * True once {@link beginExitSequence} starts the FADEOUT → CLOSE
+   * → host-callback chain. Re-entry is suppressed so a frantic
+   * second ESC press while the fade is animating doesn't leak a
+   * second callback or restart the timeline.
+   */
+  private exiting = false;
   private readonly keyFlashTimeouts = new Set<number>();
   private readonly pressedChannels = new Set<string>();
   /**
@@ -1034,10 +1048,11 @@ export class PixiGameplayView {
     // `#CLOSE` durations: those directives describe scene-EXIT
     // phase animations (= "when the scene starts to close, fade
     // out for N ms then close"), not offsets from scene mount.
-    // Seeding timer 3 mid-play makes the LR2 default skin's
-    // "STAGE FAILED" plate (anchored to timer 3) draw on top of
-    // the gameplay field. We'll seed them properly when the host
-    // wires an explicit "begin exit" event later.
+    // `beginExitSequence` is what stamps them at the actual
+    // transition moment (ESC / chart end) so the LR2 default
+    // 7-keys "STAGE FAILED" plate (anchored to timer 3) only
+    // paints during the brief exit window instead of bleeding
+    // over the gameplay field for the entire chart.
     this.timerStartedAt.set(0, now);
     this.seedSceneStageTimer(1, timing.startInput);
     // LR2 op 80 / 81 ("load not complete" / "load complete") gate
@@ -1272,6 +1287,14 @@ export class PixiGameplayView {
     if (this.loadCompleteTimerHandle !== undefined) {
       window.clearTimeout(this.loadCompleteTimerHandle);
       this.loadCompleteTimerHandle = undefined;
+    }
+    if (this.exitFadeOutHandle !== undefined) {
+      window.clearTimeout(this.exitFadeOutHandle);
+      this.exitFadeOutHandle = undefined;
+    }
+    if (this.exitCloseHandle !== undefined) {
+      window.clearTimeout(this.exitCloseHandle);
+      this.exitCloseHandle = undefined;
     }
     if (this.chartEndTimeout !== undefined) {
       window.clearTimeout(this.chartEndTimeout);
@@ -2225,7 +2248,11 @@ export class PixiGameplayView {
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (event.key === 'Escape') {
       event.preventDefault();
-      this.options.onExit?.();
+      // Run the LR2 #FADEOUT → #CLOSE timeline before handing
+      // control back so the skin's exit chrome (fade overlay,
+      // STAGE FAILED plate) gets a chance to animate. Idempotent
+      // when fired repeatedly.
+      this.beginExitSequence(() => this.options.onExit?.());
       return;
     }
     if (event.code === 'F5') {
@@ -2956,12 +2983,67 @@ export class PixiGameplayView {
       if (this.disposed) {
         return;
       }
-      if (this.options.onChartFinished && result) {
-        this.options.onChartFinished(result);
+      this.beginExitSequence(() => {
+        if (this.options.onChartFinished && result) {
+          this.options.onChartFinished(result);
+          return;
+        }
+        this.options.onExit?.();
+      });
+    }, 50);
+  }
+
+  /**
+   * Drives the LR2 scene-exit timeline (`#FADEOUT` → `#CLOSE`)
+   * before handing control back to the host. Seeds timer 2 at
+   * call time so skin elements gated on "FADEOUT" (typically a
+   * full-screen alpha overlay) play their authored fade-out
+   * keyframes; when `#FADEOUT` ms have passed it seeds timer 3
+   * so "CLOSE"-gated chrome (the LR2 default 7-keys
+   * STAGE FAILED / CLEARED plate) plays before the actual
+   * transition fires.
+   *
+   * Idempotent — re-entry while a fade is in flight is a no-op,
+   * so a frantic second ESC press doesn't double-fire the host
+   * callback. Skins with no `#FADEOUT` / `#CLOSE` directives
+   * collapse to immediate dispatch (no behavioural change for
+   * skinless / non-LR2 demos).
+   */
+  private beginExitSequence(callback: () => void): void {
+    if (this.exiting || this.disposed) {
+      callback();
+      return;
+    }
+    this.exiting = true;
+    const timing = this.options.skin?.timing ?? {};
+    const fadeOutMs = Math.max(0, timing.fadeOut ?? 0);
+    const closeMs = Math.max(0, timing.close ?? 0);
+    if (fadeOutMs <= 0 && closeMs <= 0) {
+      callback();
+      return;
+    }
+    this.timerStartedAt.set(2, this.playClock());
+    const fireClose = (): void => {
+      this.timerStartedAt.set(3, this.playClock());
+      this.exitCloseHandle = window.setTimeout(() => {
+        this.exitCloseHandle = undefined;
+        if (this.disposed) return;
+        callback();
+      }, closeMs);
+    };
+    if (fadeOutMs <= 0) {
+      fireClose();
+      return;
+    }
+    this.exitFadeOutHandle = window.setTimeout(() => {
+      this.exitFadeOutHandle = undefined;
+      if (this.disposed) return;
+      if (closeMs <= 0) {
+        callback();
         return;
       }
-      this.options.onExit?.();
-    }, 50);
+      fireClose();
+    }, fadeOutMs);
   }
 
   /**
