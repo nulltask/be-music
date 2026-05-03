@@ -169,6 +169,18 @@ export class PixiDecideView {
   private readonly fallbackLayer = new Container();
   /** Clip mask for the design rect — see `pixi-gameplay` for the rationale. */
   private readonly designClipMask = new Graphics();
+  /**
+   * Last dimensions baked into the static rect graphics
+   * (`viewportBackground`, `background`, `designClipMask`).
+   * Skips the per-frame `.clear().rect().fill()` rebuild when
+   * nothing changed — Pixi v8 has no change-detection on
+   * `Graphics` and rebuilds the underlying GraphicsContext on
+   * every chain.
+   */
+  private cachedScreenWidth = -1;
+  private cachedScreenHeight = -1;
+  private cachedDesignWidth = -1;
+  private cachedDesignHeight = -1;
   private readonly skinTextures = new Lr2SkinTextureStore();
   private readonly chartGraphicTextures = new Lr2ChartGraphicTextureStore();
   /** Lazy-loaded LR2 bitmap fonts — see `prepareBitmapFonts`. */
@@ -322,11 +334,19 @@ export class PixiDecideView {
     const designWidth = useSkin ? skin!.width : FALLBACK_DESIGN_WIDTH;
     const designHeight = useSkin ? skin!.height : FALLBACK_DESIGN_HEIGHT;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
-    this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
+    if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
+      this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
+      this.cachedScreenWidth = screenWidth;
+      this.cachedScreenHeight = screenHeight;
+    }
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
-    this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
-    this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
+    if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
+      this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
+      this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
+      this.cachedDesignWidth = designWidth;
+      this.cachedDesignHeight = designHeight;
+    }
     disposeChildren(this.stageFileLayer);
     disposeChildren(this.skinLayer);
     disposeChildren(this.fallbackLayer);

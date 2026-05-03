@@ -308,6 +308,15 @@ export class PixiResultView {
   private readonly fallbackLayer = new Container();
   /** Clip mask for the design rect — see `pixi-gameplay` for the rationale. */
   private readonly designClipMask = new Graphics();
+  /**
+   * Last dimensions baked into the static rect graphics. Skips
+   * the per-frame `.clear().rect().fill()` rebuild when nothing
+   * changed.
+   */
+  private cachedScreenWidth = -1;
+  private cachedScreenHeight = -1;
+  private cachedDesignWidth = -1;
+  private cachedDesignHeight = -1;
   private result: PixiGameplayResultData | undefined;
   /**
    * `performance.now()` of mount — reference point for timer 0
@@ -561,11 +570,19 @@ export class PixiResultView {
     const designWidth = useSkin ? skin!.width : FALLBACK_DESIGN_WIDTH;
     const designHeight = useSkin ? skin!.height : FALLBACK_DESIGN_HEIGHT;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
-    this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
+    if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
+      this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
+      this.cachedScreenWidth = screenWidth;
+      this.cachedScreenHeight = screenHeight;
+    }
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
-    this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
-    this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
+    if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
+      this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
+      this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
+      this.cachedDesignWidth = designWidth;
+      this.cachedDesignHeight = designHeight;
+    }
     // `disposeChildren` (vs bare `removeChildren`) is essential
     // here: the per-frame skin / fallback rebuild allocates fresh
     // `Sprite`, `Text` and (for polylines) `Graphics` nodes every

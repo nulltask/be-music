@@ -480,6 +480,18 @@ export class PixiGameplayView {
    * ratio.
    */
   private readonly designClipMask = new Graphics();
+  /**
+   * Cached screen / design dimensions baked into the static
+   * graphics (`viewportBackground`, `background`,
+   * `designClipMask`). Compared against the per-frame values
+   * so we only call `.clear().rect().fill()` when the size
+   * actually changes — Pixi v8 rebuilds the GraphicsContext on
+   * every chain, and redrawing identical rects every rAF tick
+   * was a noticeable contributor to gameplay frame time on
+   * dense charts.
+   */
+  private cachedScreenWidth = -1;
+  private cachedScreenHeight = -1;
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
   /**
@@ -970,6 +982,13 @@ export class PixiGameplayView {
     this.textLayer.label = 'gameplay/text';
     this.overlay.label = 'gameplay/pause-overlay';
     this.designClipMask.label = 'gameplay/design-clip';
+    // DESIGN_WIDTH / DESIGN_HEIGHT are module constants for
+    // gameplay (LR2 default 640×480), so the mask and design
+    // background never change shape post-mount. Stamp them once
+    // here and skip the per-frame rebuild that was contributing
+    // to the rAF handler's runtime.
+    this.designClipMask.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(0xffffff);
+    this.background.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
     this.root.addChild(
       this.background,
       this.bgaLayer,
@@ -3712,15 +3731,19 @@ export class PixiGameplayView {
     const screenWidth = this.app.screen.width;
     const screenHeight = this.app.screen.height;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, DESIGN_WIDTH, DESIGN_HEIGHT);
-    this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
+    // Only rebuild the static rect graphics when their backing
+    // dimensions actually change. The previous unconditional
+    // `.clear().rect().fill()` chain ran on every rAF tick and
+    // rebuilt the GraphicsContext for each — Pixi v8 has no
+    // change-detection built in.
+    if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
+      this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
+      this.cachedScreenWidth = screenWidth;
+      this.cachedScreenHeight = screenHeight;
+    }
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
-    // Re-stamp the design clip mask each frame in case the design
-    // dimensions ever change (skin swap with a non-default
-    // `#RESOLUTION`, etc.). Cheap — single-rect Graphics.
-    this.designClipMask.clear().rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(0xffffff);
     this.applyExitFadeAlpha();
-    this.background.clear().rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
     this.perf.time('renderSkin', () => this.renderSkin(DESIGN_WIDTH, DESIGN_HEIGHT));
     this.perf.time('renderBga', () => this.renderBga(seconds));
     this.perf.time('renderLanes', () => this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT));

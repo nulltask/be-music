@@ -411,8 +411,6 @@ export type PixiRandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER
 /** Allowed values for {@link PixiPlayOptions.gauge1P} / `gauge2P`. */
 export type PixiGaugeType = 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
 
-/** Per-step shutter delta applied by the panel-open `KeyD` / `KeyF` shortcuts. */
-const SHUTTER_STEP = 0.05;
 const SHUTTER_DEFAULT = 0.25;
 
 /** Allowed values for {@link PixiPlayOptions.bga}. */
@@ -731,6 +729,21 @@ export class PixiSongSelectView {
    * a screen with a different aspect ratio.
    */
   private readonly designClipMask = new Graphics();
+  /**
+   * Last dimensions baked into the design / viewport / mask
+   * graphics. Compared against the per-frame values so we only
+   * rebuild the geometry when the canvas actually resizes
+   * (skin swap, browser resize). Pixi v8's `Graphics.clear()`
+   * + `.rect()` + `.fill()` chain rebuilds the underlying
+   * GraphicsContext on every call — fine for occasional resize
+   * events, but redrawing the same three rectangles every
+   * `requestAnimationFrame` tick was on the hot path of the
+   * select scene's 60 fps loop.
+   */
+  private cachedScreenWidth = -1;
+  private cachedScreenHeight = -1;
+  private cachedDesignWidth = -1;
+  private cachedDesignHeight = -1;
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
   /** Skin static images (gated on `SELECT_DEFAULT_OPS`). */
@@ -2491,12 +2504,6 @@ export class PixiSongSelectView {
    * gated on op 10/11) without waiting for the idle rAF tick.
    */
   /**
-   * Walks `playOptions.shutter` by ±{@link SHUTTER_STEP} (clamped
-   * to [0, 1]) and re-renders / notifies on change. Triggers the
-   * `o-change.wav` cue so the panel-open keyboard shortcuts feel
-   * like the rest of the option-bus.
-   */
-  /**
    * Toggles the READTEXT modal for the focused song. Looks for a
    * `.txt` file in the song's directory and shows its contents
    * in a centred Pixi card. Closes on second click / Escape /
@@ -2632,20 +2639,6 @@ export class PixiSongSelectView {
         .rect(trackX, thumbY, trackW, thumbH)
         .fill({ color: 0xffffff, alpha: 0.45 });
     }
-  }
-
-  private adjustShutter(direction: 1 | -1): void {
-    const next = clampShutter(this.playOptions.shutter + direction * SHUTTER_STEP);
-    if (next === this.playOptions.shutter) return;
-    // Adjusting the height implies the user wants the cover
-    // visible — enable LANE COVER on first adjustment if it
-    // happened to be OFF. Mirrors LR2's slider feel where the
-    // mask immediately appears as the knob moves away from 0.
-    const laneCover = next > 0 ? true : this.playOptions.laneCover;
-    this.playOptions = { ...this.playOptions, shutter: next, laneCover };
-    this.options.onPlayOptionsChange?.({ ...this.playOptions });
-    void this.playOneShotSound('option-change');
-    this.render();
   }
 
   private adjustHiSpeed(direction: 1 | -1): void {
@@ -2957,31 +2950,58 @@ export class PixiSongSelectView {
     // pressing the 5-key inside the play-options panel decreases
     // HiSpeed, the 7-key increases it). Bindings come from
     // `pixi-gameplay-lanes::CHANNEL_KEY_BINDINGS` —
-    // channel `15` (lane 5) → `KeyC`, channel `19` (lane 7) → `KeyV`.
-    // Shutter adjustment uses the 4 / 6 lane keys
-    // (`KeyD` / `KeyF`) — same family of "adjacent black-key
-    // shortcuts" that LR2 conventionally maps for option panels.
+    // PLAY OPTIONS panel (panel 1) keyboard shortcuts. While the
+    // panel is open, each 7K lane key cycles a corresponding play
+    // option — same "adjacent-key shortcuts" family LR2 hardcodes
+    // for option panels. The mapping mirrors the panel's visible
+    // button layout:
+    //
+    //   LANE 1 (KeyZ) → PLAY STYLE  (`dpFlip` toggle)
+    //   LANE 2 (KeyS) → RANDOM      (`random1P` cycle)
+    //   LANE 3 (KeyX) → BATTLE      (`random2P` cycle — DP-side
+    //                                independent random is the
+    //                                canonical "battle" effect)
+    //   LANE 4 (KeyD) → GAUGE       (`gauge1P` cycle)
+    //   LANE 5 (KeyC) → HI-SPD ↓    (`adjustHiSpeed(-1)`)
+    //   LANE 6 (KeyF) → ASSIST      (`autoScratch1P` toggle)
+    //   LANE 7 (KeyV) → HI-SPD ↑    (`adjustHiSpeed(+1)`)
+    //
     // Only fires while panel 1 is open so the keys remain free
     // outside the play-options context.
     if (this.panelStates.has(1)) {
+      if (event.code === 'KeyZ') {
+        event.preventDefault();
+        this.cyclePlayOption('dpFlip', BOOLEAN_CYCLE);
+        return;
+      }
+      if (event.code === 'KeyS') {
+        event.preventDefault();
+        this.cyclePlayOption('random1P', RANDOM_CYCLE);
+        return;
+      }
+      if (event.code === 'KeyX') {
+        event.preventDefault();
+        this.cyclePlayOption('random2P', RANDOM_CYCLE);
+        return;
+      }
+      if (event.code === 'KeyD') {
+        event.preventDefault();
+        this.cyclePlayOption('gauge1P', GAUGE_CYCLE);
+        return;
+      }
       if (event.code === 'KeyC') {
         event.preventDefault();
         this.adjustHiSpeed(-1);
         return;
       }
+      if (event.code === 'KeyF') {
+        event.preventDefault();
+        this.cyclePlayOption('autoScratch1P', BOOLEAN_CYCLE);
+        return;
+      }
       if (event.code === 'KeyV') {
         event.preventDefault();
         this.adjustHiSpeed(1);
-        return;
-      }
-      if (event.code === 'KeyD') {
-        event.preventDefault();
-        this.adjustShutter(-1);
-        return;
-      }
-      if (event.code === 'KeyF') {
-        event.preventDefault();
-        this.adjustShutter(1);
         return;
       }
     }
@@ -3042,13 +3062,25 @@ export class PixiSongSelectView {
     const designWidth = useSkin ? skin!.width : FALLBACK_DESIGN_WIDTH;
     const designHeight = useSkin ? skin!.height : FALLBACK_DESIGN_HEIGHT;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
-    this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
+    // Only rebuild the static rect graphics when the dimensions
+    // they depend on actually change. The previous unconditional
+    // `.clear().rect().fill()` chain ran on every rAF tick and
+    // was a measurable contributor to the select scene's frame
+    // budget under LR2 default skin (~hundreds of skin elements
+    // already redraw per frame).
+    if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
+      this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
+      this.cachedScreenWidth = screenWidth;
+      this.cachedScreenHeight = screenHeight;
+    }
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
-    // Re-stamp the design clip rectangle to the active design
-    // size (may differ frame-to-frame when a skin loads / unloads).
-    this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
-    this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
+    if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
+      this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
+      this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
+      this.cachedDesignWidth = designWidth;
+      this.cachedDesignHeight = designHeight;
+    }
 
     // `disposeChildren` (vs bare `removeChildren`) frees the
     // GraphicsContext / glyph-atlas state Pixi v8 keeps registered
