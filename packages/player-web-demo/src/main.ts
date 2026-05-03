@@ -56,8 +56,58 @@ app.innerHTML = `
         clear "drop a folder here" target up-front, plus during
         an active drag (\`.dragging\`) so the hint reappears even
         once charts are loaded. Falls behind the canvas otherwise.
+
+        Structured as three layers:
+        - \`.drop-frame\`: subtle outer ring spanning the whole
+          stage, lights up during a live drag.
+        - \`.drop-card\`: centred glassmorphism panel hosting the
+          actual content; hosts the entry / hover animations.
+        - icon + title + subtitle for the hierarchy.
       -->
-      <div class="drop">Drop BMS folder + LR2 theme together (or either one)</div>
+      <div class="drop">
+        <div class="drop-frame"></div>
+        <div class="drop-card">
+          <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <!--
+              Stylised download arrow. The two halves animate
+              independently so the head bounces while the
+              shaft holds steady — feels lighter than a single
+              translateY.
+            -->
+            <path
+              class="drop-icon-shaft"
+              d="M24 6 L24 30"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+            />
+            <path
+              class="drop-icon-head"
+              d="M14 22 L24 32 L34 22"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M10 38 L38 38"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+              opacity="0.55"
+            />
+          </svg>
+          <div class="drop-title">Drop to load</div>
+          <div class="drop-subtitle">
+            <span>BMS folder</span>
+            <span class="drop-subtitle-sep">·</span>
+            <span>LR2 Files</span>
+          </div>
+        </div>
+      </div>
     </div>
     <!--
       Loading overlay. Hidden by default; revealed via the
@@ -422,21 +472,62 @@ class PlayerWebDemoApp {
       }
     });
 
+    // Drag state via a depth counter rather than a plain
+    // add/remove pair on dragover/dragleave. The browser fires
+    // `dragleave` not just when the cursor exits the window but
+    // also every time it crosses into a child element — without
+    // counting, the `.dragging` class flickers off whenever the
+    // user drags across the canvas → toolbar boundary, so the
+    // overlay would strobe (or, with `dragleave` firing once at
+    // the end, disappear before the user can read the hint).
+    //
+    // Increment on every `dragenter`, decrement on every
+    // `dragleave`. We're truly outside the window once the
+    // counter hits zero, at which point the class comes off.
+    // `drop` and the rare `dragend` reset the counter so a
+    // pathological event sequence (browser quirk, devtools
+    // overlay, etc.) can't leave the class stuck on.
+    let dragDepth = 0;
+    const setDragging = (active: boolean): void => {
+      document.body.classList.toggle('dragging', active);
+    };
+    window.addEventListener('dragenter', (event) => {
+      event.preventDefault();
+      dragDepth += 1;
+      if (dragDepth === 1) {
+        setDragging(true);
+      }
+    });
+    // `dragover` still has to call `preventDefault` for the
+    // browser to treat the page as a valid drop target. We
+    // don't toggle state here — that's `dragenter` / `dragleave`'s
+    // job — but skipping the preventDefault would silently
+    // turn drops into "open file in browser" navigations.
     window.addEventListener('dragover', (event) => {
       event.preventDefault();
-      document.body.classList.add('dragging');
     });
-
     window.addEventListener('dragleave', () => {
-      document.body.classList.remove('dragging');
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) {
+        setDragging(false);
+      }
     });
-
     window.addEventListener('drop', (event) => {
       event.preventDefault();
-      document.body.classList.remove('dragging');
+      dragDepth = 0;
+      setDragging(false);
       if (event.dataTransfer) {
         void this.handleDrop(event.dataTransfer);
       }
+    });
+    // Belt-and-braces: the spec lets `dragend` fire on the
+    // source element when a drag is cancelled (Esc, drop on
+    // a non-target). For files dragged in from the OS it
+    // shouldn't normally fire on `window`, but if a custom
+    // source ever does we still want to clear state.
+    window.addEventListener('dragend', () => {
+      dragDepth = 0;
+      setDragging(false);
     });
   }
 

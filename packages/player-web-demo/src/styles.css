@@ -198,30 +198,426 @@ body {
   height: 100%;
 }
 
+/*
+ * Drop overlay — three layers stacked over the stage:
+ *
+ *   1. `.drop`            — full-stage container, hidden by default.
+ *                           Becomes a placement grid when active so
+ *                           `.drop-card` lands centred without an
+ *                           extra wrapper.
+ *   2. `.drop-frame`      — subtle outer ring. Hairline border at
+ *                           rest, full accent + breathing glow on
+ *                           active drag.
+ *   3. `.drop-card`       — frosted-glass content panel: icon,
+ *                           title, subtitle. Letter-spaced uppercase
+ *                           typography pulls the centre of mass
+ *                           upward; slow scale + glow animations on
+ *                           drag give the screen change without
+ *                           shouting at the user.
+ *
+ * Visible whenever the shell carries `.empty` (no songs loaded
+ * yet) so first-time visitors see the affordance, and during a
+ * live drag (`.dragging`) where the heavier glow / pulse tier
+ * kicks in.
+ */
 .drop {
   position: absolute;
-  inset: 16px;
+  inset: 0;
   display: none;
   place-items: center;
-  border: 2px dashed #ffd166;
-  border-radius: 10px;
-  background: rgb(8 9 13 / 0.72);
-  color: #ffd166;
-  font-size: 22px;
-  font-weight: 700;
   pointer-events: none;
   z-index: 2;
   /*
-   * Long string — wrap inside the dashed frame on narrow
-   * viewports rather than sticking out beyond it.
+   * Resting backdrop. Stays light enough for first-time
+   * visitors to read the hint without feeling smothered;
+   * the dragging tier deepens this dramatically.
    */
-  text-align: center;
-  padding: 16px;
+  background: radial-gradient(
+    circle at center,
+    rgb(8 9 13 / 0.55) 0%,
+    rgb(8 9 13 / 0.72) 60%,
+    rgb(8 9 13 / 0.85) 100%
+  );
+  /*
+   * `transition` covers backdrop + opacity so the swap
+   * between resting and dragging tiers reads as a smooth
+   * mood shift rather than a hard cut.
+   */
+  transition:
+    opacity 180ms ease-out,
+    background 220ms ease-out;
+  opacity: 0;
 }
 
 .dragging .drop,
 .shell.empty .drop {
   display: grid;
+  opacity: 1;
+}
+
+/*
+ * Active drag tier — heavy darken across the whole scene so
+ * the card pops against any underlying chart art. Combined
+ * with the card's own scale + colour shift below, the overall
+ * transition reads as "the page just woke up to your drag".
+ */
+.dragging .drop {
+  background: radial-gradient(
+    circle at center,
+    rgb(8 9 13 / 0.72) 0%,
+    rgb(4 5 9 / 0.92) 70%,
+    rgb(0 0 0 / 0.96) 100%
+  );
+}
+
+.drop-frame {
+  position: absolute;
+  inset: 24px;
+  border: 1px solid rgb(255 209 102 / 0.18);
+  border-radius: 14px;
+  /*
+   * Hair-thin ring at rest — present but quiet. The active
+   * drag tier below replaces it with a thick luminous accent
+   * that nearly fills the dashed-frame slot.
+   */
+  transition:
+    inset 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 220ms ease-out,
+    border-width 220ms ease-out,
+    box-shadow 220ms ease-out;
+  pointer-events: none;
+}
+
+.drop-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 38px 64px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgb(20 24 34 / 0.78), rgb(11 14 22 / 0.78));
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  box-shadow:
+    0 24px 60px rgb(0 0 0 / 0.45),
+    0 0 0 1px rgb(255 255 255 / 0.04) inset;
+  text-align: center;
+  /*
+   * Initial entry animation. The state-driven property changes
+   * (size / colour / glow under `.dragging`) ride on
+   * `transition` below — *not* on a re-declared `animation`
+   * list — so adding the dragging tier doesn't restart this
+   * one-shot from scale(0.96) and produce a visible snap.
+   */
+  animation: drop-card-in 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  /*
+   * Hint the compositor that `transform` is the moving part.
+   * Without `will-change`, the first time we change `transform`
+   * the browser has to re-layer the card on the GPU mid-
+   * animation, which is the classic source of a one-frame
+   * "thunk" the user sees as カクッ.
+   */
+  will-change: transform;
+  /*
+   * No `padding` transition — animating padding triggers a
+   * layout reflow on every frame, which under transform=scale
+   * combine to produce the jolt the user reported. Padding is
+   * fixed; the dragging tier conveys the "size up" purely
+   * through `transform: scale(...)`, which is composited
+   * cheaply on the GPU.
+   */
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 220ms ease-out,
+    border-color 220ms ease-out,
+    box-shadow 220ms ease-out;
+}
+
+.drop-icon {
+  width: 44px;
+  height: 44px;
+  color: #ffd166;
+  filter: drop-shadow(0 0 12px rgb(255 209 102 / 0.35));
+  /*
+   * Subtle floating motion at rest. Slowed way down so it
+   * reads as ambient rather than demanding attention.
+   */
+  animation: drop-icon-float 3.2s ease-in-out infinite;
+  transition:
+    width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 200ms ease-out,
+    filter 220ms ease-out;
+}
+
+.drop-icon-head {
+  /*
+   * Arrow head bobs independently from the shaft on the
+   * dragging tier — `transform-origin` sits at the visual
+   * centre of the head so the bounce feels natural rather
+   * than pivoting from a corner.
+   */
+  transform-origin: 24px 27px;
+}
+
+.drop-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #f8fafc;
+  /*
+   * Soft yellow under-glow to tie the title back to the
+   * accent without inverting its colour entirely. Reads as
+   * "highlighted" rather than "loud".
+   */
+  text-shadow: 0 0 24px rgb(255 209 102 / 0.25);
+  transition:
+    color 200ms ease-out,
+    text-shadow 220ms ease-out,
+    letter-spacing 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.drop-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #aab4c2;
+  /*
+   * `flex-wrap` so very narrow viewports can stack the
+   * pieces vertically rather than overflowing the card.
+   */
+  flex-wrap: wrap;
+  justify-content: center;
+  transition: color 200ms ease-out;
+}
+
+.drop-subtitle-sep {
+  /*
+   * Dimmed bullet between subtitle pieces — accent at lower
+   * alpha so the separator reads as decorative rather than
+   * as another label.
+   */
+  color: rgb(255 209 102 / 0.45);
+  font-weight: 700;
+}
+
+/*
+ * Active-drag tier — every visual property shifts so the
+ * delta from resting is immediately legible: card swells in
+ * size, frame thickens and pulls inward, accent colour
+ * floods the typography, the icon doubles in glow, and the
+ * surrounding scrim deepens nearly to black. The empty /
+ * resting tier (`.shell.empty` without `.dragging`) keeps
+ * the calmer baseline so the contrast between the two
+ * states is the message.
+ */
+.dragging .drop-frame {
+  /*
+   * Frame contracts inward AND thickens — the inset shrinks
+   * from 24px to 12px and the border grows from a hairline
+   * to a clearly visible 3px luminous accent, so the screen's
+   * "frame" deltas in two channels at once (geometry + colour).
+   */
+  inset: 12px;
+  border-width: 3px;
+  border-color: rgb(255 209 102 / 0.85);
+  box-shadow:
+    0 0 0 1px rgb(255 209 102 / 0.35),
+    0 0 32px rgb(255 209 102 / 0.45),
+    inset 0 0 48px rgb(255 209 102 / 0.18);
+  animation: drop-frame-pulse 1.8s ease-in-out infinite;
+}
+
+.dragging .drop-card {
+  /*
+   * Card scales to 1.14 to deliver the visible "size up" that
+   * the resting tier lacked when padding stopped animating.
+   * Background brightens toward the accent, the inner sheen
+   * picks up a yellow tint, and the outer halo balloons to
+   * a 120-px glow — together these read as "the card just
+   * lit up", not "the card pulsed slightly".
+   *
+   * Crucially, we do NOT re-declare the `animation` shorthand
+   * here. Doing so would re-trigger `drop-card-in` from its
+   * `from` keyframe (scale 0.96), which is what produced the
+   * visible jolt the user reported. Instead, the elevated
+   * state rides entirely on the `transform` / `background` /
+   * `border-color` / `box-shadow` transitions defined on
+   * `.drop-card` above, and the breathe loop below adds a
+   * gentle infinite oscillation on top of the static target.
+   */
+  transform: scale(1.14);
+  background: linear-gradient(180deg, rgb(40 36 22 / 0.86), rgb(22 19 8 / 0.86));
+  border-color: rgb(255 209 102 / 0.85);
+  box-shadow:
+    0 32px 80px rgb(0 0 0 / 0.6),
+    0 0 0 2px rgb(255 209 102 / 0.45) inset,
+    0 0 120px rgb(255 209 102 / 0.45);
+  /*
+   * Breathe is delayed by the same 260ms the `transform`
+   * transition takes so the loop only kicks in *after* the
+   * card has reached its dragging-tier scale. Without the
+   * delay, the animation would override the transition mid-
+   * flight and collapse the smooth scale-up into a single
+   * snap.
+   */
+  animation: drop-card-breathe 2.4s ease-in-out 260ms infinite;
+}
+
+.dragging .drop-title {
+  /*
+   * Title flips to the accent colour and widens its letter-
+   * spacing. The colour shift alone is dramatic; the spacing
+   * shift gives it a subtle "expanded" feel without being a
+   * hard transform.
+   */
+  color: #ffd166;
+  letter-spacing: 0.24em;
+  text-shadow: 0 0 28px rgb(255 209 102 / 0.6);
+}
+
+.dragging .drop-subtitle {
+  /*
+   * Subtitle warms from grey to a soft accent so the whole
+   * card reads in the same mood — paired with the title shift
+   * the typography hierarchy stays intact (subtitle still
+   * dimmer than the title) but everything is now in-scheme.
+   */
+  color: rgb(255 209 102 / 0.85);
+}
+
+.dragging .drop-subtitle-sep {
+  color: rgb(255 209 102 / 0.7);
+}
+
+.dragging .drop-icon {
+  /*
+   * Icon picks up a much heavier drop-shadow halo. We DO
+   * NOT change `width` / `height` here — animating those
+   * properties would trigger a layout reflow on the card's
+   * flex column, which (combined with the card's own
+   * scale-up transition) was a contributor to the "カクッ"
+   * jolt. The card's `transform: scale(1.14)` already grows
+   * the icon proportionally; that's enough perceived size
+   * change without any property-driven layout work.
+   *
+   * The animation list keeps the resting `drop-icon-float`
+   * and adds a `drop-icon-glow` loop in parallel. Re-stating
+   * `drop-icon-float` is intentional — it lets us swap to
+   * the faster cadence (1.6s vs 3.2s at rest) so the user
+   * notices the energy shift, and because the keyframe
+   * transforms (translateY 0 ↔ -3px) overlap cleanly with
+   * the resting-tier values, the float loop hands off
+   * without a visible step.
+   */
+  filter: drop-shadow(0 0 28px rgb(255 209 102 / 0.85));
+  animation:
+    drop-icon-float 1.6s ease-in-out infinite,
+    drop-icon-glow 1.8s ease-in-out infinite;
+}
+
+.dragging .drop-icon-head {
+  animation: drop-icon-head-bounce 1.2s ease-in-out infinite;
+}
+
+@keyframes drop-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes drop-card-breathe {
+  /*
+   * Breathe loop sits on top of the dragging tier's static
+   * `transform: scale(1.14)`. Both keyframes anchor at 1.14
+   * so the animation never undershoots the resting position
+   * (which would look like the card sagging back toward
+   * "off"); the 50% peak is +0.015 above baseline, enough to
+   * read as motion without diluting the dragging-tier scale.
+   */
+  0%,
+  100% {
+    transform: scale(1.14);
+  }
+  50% {
+    transform: scale(1.155);
+  }
+}
+
+@keyframes drop-frame-pulse {
+  0%,
+  100% {
+    border-color: rgb(255 209 102 / 0.4);
+    box-shadow:
+      0 0 0 1px rgb(255 209 102 / 0.08),
+      0 0 0 8px rgb(255 209 102 / 0) inset;
+  }
+  50% {
+    border-color: rgb(255 209 102 / 0.7);
+    box-shadow:
+      0 0 0 1px rgb(255 209 102 / 0.18),
+      0 0 0 24px rgb(255 209 102 / 0.06) inset;
+  }
+}
+
+@keyframes drop-icon-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes drop-icon-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 12px rgb(255 209 102 / 0.35));
+  }
+  50% {
+    filter: drop-shadow(0 0 22px rgb(255 209 102 / 0.7));
+  }
+}
+
+@keyframes drop-icon-head-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+/*
+ * Respect the user's reduced-motion preference — strip the
+ * breathing / pulse loops and let only the entry fade play.
+ * The visual change is still clear (border-color / glow
+ * deltas remain) but nothing keeps animating in the
+ * background.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .drop-card,
+  .dragging .drop-card,
+  .dragging .drop-frame,
+  .drop-icon,
+  .dragging .drop-icon,
+  .dragging .drop-icon-head {
+    animation: none !important;
+  }
 }
 
 /*
