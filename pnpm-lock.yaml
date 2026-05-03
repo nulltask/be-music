@@ -30,8 +30,8 @@ importers:
         specifier: ^6.0.1
         version: 6.1.3
       tinybench:
-        specifier: ^6.0.0
-        version: 6.0.0
+        specifier: ^6.0.1
+        version: 6.0.1
       tsdown:
         specifier: ^0.21.10
         version: 0.21.10(@typescript/native-preview@7.0.0-dev.20260425.1)(typescript@5.9.3)
@@ -2522,8 +2522,8 @@ packages:
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
 
-  tinybench@6.0.0:
-    resolution: {integrity: sha512-BWlWpVbbZXaYjRV0twGLNQO00Zj4HA/sjLOQP2IvzQqGwRGp+2kh7UU3ijyJ3ywFRogYDRbiHDMrUOfaMnN56g==}
+  tinybench@6.0.1:
+    resolution: {integrity: sha512-cMdWsxmysdg8mNWf1pujiWl3TW0cU6m8QuNw55QlnP3I6N96Grb0wnu5N0syHIu3LbiVZCNqlfWzWDq84HZphA==}
     engines: {node: '>=20.0.0'}
 
   tinyexec@1.0.2:
@@ -4998,7 +4998,7 @@ snapshots:
 
   tinybench@2.9.0: {}
 
-  tinybench@6.0.0: {}
+  tinybench@6.0.1: {}
 
   tinyexec@1.0.2: {}
 
