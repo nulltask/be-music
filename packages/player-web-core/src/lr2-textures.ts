@@ -328,35 +328,39 @@ function buildScaleFilterArg(maxLongEdge: number): string {
 /**
  * WebCodecs encode path. Pipeline:
  *
- *   1. ffmpeg.wasm decodes the source to a raw `yuv420p` byte
- *      stream and reports the input's geometry / frame rate via
- *      its stderr log. We have to keep ffmpeg as the decoder
- *      because WebCodecs' `VideoDecoder` doesn't speak the
- *      legacy MPEG-1 / VC-1 / WMV codecs typical BMS BGA ships
- *      in.
+ *   1. ffmpeg.wasm decodes the source to raw `yuv420p` planes.
+ *      We keep ffmpeg as the decoder because WebCodecs'
+ *      `VideoDecoder` doesn't speak the legacy MPEG-1 / VC-1
+ *      / WMV codecs typical BMS BGA ships in.
  *   2. JS wraps each decoded frame in a `VideoFrame` and feeds
- *      it to `VideoEncoder` (H.264 / avc1 baseline at 30 CRF
- *      equivalent). On most platforms this hits the GPU /
- *      ASIC video encoder, taking encode time from
- *      ~1× realtime down to 5–20× realtime.
+ *      it to `VideoEncoder` (H.264 / avc1 baseline). On most
+ *      platforms this hits the GPU / ASIC video encoder, taking
+ *      encode time from ~1× realtime down to 5–20× realtime.
  *   3. Encoded chunks land in `mp4-muxer`'s in-memory MP4
  *      writer; once the encoder flushes, we hand the muxer's
  *      `ArrayBufferTarget` bytes back to the caller — same
  *      shape as the ffmpeg-encode path returns, so the
  *      downstream `<video>` blob plumbing is unchanged.
  *
- * Memory: holds the entire decoded raw YUV in a wasm-FS file
- * before iterating frames. The cap below is sized to handle
- * ~3 minutes of 512×512 30 fps content (the common modern
- * BMS BGA shape) without falling back, while still rejecting
- * pathological inputs (long-form 1080p BGA would balloon to
- * many GB and OOM the wasm core's 4 GB cap). When this path
- * bails, the caller falls back to the ffmpeg-encode path
- * which streams encode instead of buffering. Combining this
- * option with the resize dropdown is the recommended way to
- * keep the decoded frame pool small for HD BGA.
+ * Memory: decode and encode are interleaved in chunks rather
+ * than buffering the whole video as raw YUV. We can't get true
+ * stream-style concurrency (the wasm worker's `exec()` call
+ * blocks the worker from servicing `readFile` until decode
+ * completes, and there are no pipes in @ffmpeg/ffmpeg), but
+ * looping `ffmpeg.exec(['-ss', t, '-t', N, '-i', input, ...])`
+ * + `readFile` + `deleteFile` per chunk keeps MEMFS usage
+ * bounded by `MAX_CHUNK_BYTES` regardless of total duration.
+ *
+ * Trade-off: each chunk requires ffmpeg to seek+demux from the
+ * input again. Chunk size is sized to amortise this seek over
+ * many frames — too small and demux overhead dominates, too
+ * large and per-chunk MEMFS pressure blows the wasm heap.
+ * 256 MiB lands ~21 s of 512×512@30 (a typical BMS BGA) and
+ * ~3 s of 1920×1080@30 (HD outlier) per chunk; both have
+ * negligible seek overhead relative to the encode work.
  */
-const MAX_RAW_YUV_BYTES = 2 * 1024 * 1024 * 1024; // 2 GiB
+const MAX_CHUNK_BYTES = 256 * 1024 * 1024; // 256 MiB
+const MIN_CHUNK_SECONDS = 5;
 async function transcodeViaWebCodecs(
   bytes: Uint8Array,
   path: string,
@@ -376,43 +380,41 @@ async function transcodeViaWebCodecs(
   });
   if (!ffmpeg) return undefined;
   const inputName = `bga-input${pickInputExtension(path)}`;
-  const rawName = 'bga-decode.yuv';
-  const probeName = 'bga-probe.txt';
+  const chunkName = 'bga-chunk.yuv';
   let probeListener: ((event: { type: string; message: string }) => void) | undefined;
   const probeLines: string[] = [];
+  let encoder: VideoEncoder | undefined;
   try {
     // Clone before writeFile — see the libx264 path for why.
     // We need the caller's `bytes` to survive intact in case
     // the WebCodecs path bails out and the ffmpeg-encode
     // fallback is run with the same buffer.
     await ffmpeg.writeFile(inputName, new Uint8Array(bytes));
-    // ffmpeg's stderr log carries the input geometry and frame
-    // rate we need to drive the WebCodecs encoder. Capture it
-    // by hooking the same `on('log', ...)` handler used for
-    // diagnostics — `loadFfmpeg`'s default listener stays
-    // attached for console output, so this just adds a parallel
-    // tap rather than displacing it.
+    // ffmpeg's stderr log carries the input geometry, frame
+    // rate, and total duration we need to drive the WebCodecs
+    // encoder + chunk loop. Hook a parallel listener that
+    // doesn't displace `loadFfmpeg`'s diagnostic listener.
     probeListener = ({ type, message }) => {
       if (type === 'stderr') {
         probeLines.push(message);
       }
     };
     ffmpeg.on('log', probeListener);
-    // Decode-only ffmpeg pass. `-c:v rawvideo -f rawvideo` writes
-    // unframed `yuv420p` planes — same byte layout WebCodecs
-    // wants in the `I420` `VideoFrame` format below. The
-    // optional `-vf scale=...` resizes to the configured long-
-    // edge cap (same filter as the libx264 path so user-visible
-    // behaviour matches).
-    const decodeArgs: string[] = ['-y', '-i', inputName];
-    if (maxLongEdge) {
-      decodeArgs.push('-vf', buildScaleFilterArg(maxLongEdge));
-    }
-    decodeArgs.push('-c:v', 'rawvideo', '-pix_fmt', 'yuv420p', '-f', 'rawvideo', '-an', '-sn', '-dn', rawName);
-    const decodeExit = await ffmpeg.exec(decodeArgs);
-    if (decodeExit !== 0) {
+
+    // ── Probe pass ──────────────────────────────────────────
+    // `-t 0.05` decodes ~1-2 frames purely so ffmpeg emits the
+    // `Input #0` / `Stream #0:0` / `Duration:` lines we parse
+    // below. `-f null -` discards the output entirely so this
+    // costs only ffmpeg's cold-start time (~50–100 ms once
+    // the wasm core is cached). Cheaper than running ffprobe
+    // separately, and the stderr format is identical.
+    const probeArgs: string[] = ['-y', '-i', inputName, '-t', '0.05'];
+    if (maxLongEdge) probeArgs.push('-vf', buildScaleFilterArg(maxLongEdge));
+    probeArgs.push('-f', 'null', '-');
+    const probeExit = await ffmpeg.exec(probeArgs);
+    if (probeExit !== 0) {
       // eslint-disable-next-line no-console
-      console.warn(`[bga-video] ffmpeg decode (WebCodecs path) exited with code ${decodeExit} for ${path}`);
+      console.warn(`[bga-video] ffmpeg probe (WebCodecs path) exited with code ${probeExit} for ${path}`);
       return undefined;
     }
     const probe = parseFfmpegProbe(probeLines);
@@ -421,47 +423,28 @@ async function transcodeViaWebCodecs(
       console.warn(`[bga-video] WebCodecs path could not parse ffmpeg probe; falling back: ${path}`);
       return undefined;
     }
-    const { width, height, frameRate } = probe;
-    const rawRead = await ffmpeg.readFile(rawName);
-    const rawBytes = rawRead instanceof Uint8Array ? rawRead : new TextEncoder().encode(rawRead);
-    if (rawBytes.byteLength === 0) {
+    const { width, height, frameRate, durationSec } = probe;
+    if (!durationSec || durationSec <= 0) {
       // eslint-disable-next-line no-console
-      console.warn(`[bga-video] WebCodecs path got empty raw YUV for ${path}`);
+      console.warn(`[bga-video] WebCodecs path could not determine duration; falling back: ${path}`);
       return undefined;
     }
-    if (rawBytes.byteLength > MAX_RAW_YUV_BYTES) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[bga-video] WebCodecs path raw YUV exceeds ${(MAX_RAW_YUV_BYTES / (1024 * 1024 * 1024)).toFixed(1)} GiB budget (${rawBytes.byteLength} bytes); falling back to ffmpeg encode. Tip: combine WebCodecs with the Resize dropdown to keep the decoded frame pool small for HD BGA.`,
-      );
-      return undefined;
-    }
-    // 12 bits per pixel (yuv420p): luma=w*h, chroma=2*(w/2)*(h/2)=w*h/2 → 1.5 bytes per pixel
+    // 12 bits per pixel (yuv420p): 1.5 bytes per pixel.
     const bytesPerFrame = (width * height * 3) >> 1;
-    if (bytesPerFrame <= 0 || rawBytes.byteLength % bytesPerFrame !== 0) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[bga-video] WebCodecs path: unexpected raw YUV size (${rawBytes.byteLength}) for ${width}×${height} yuv420p; falling back: ${path}`,
-      );
-      return undefined;
-    }
-    const frameCount = rawBytes.byteLength / bytesPerFrame;
-    if (frameCount === 0) return undefined;
+    if (bytesPerFrame <= 0) return undefined;
 
+    // ── Encoder + muxer setup ───────────────────────────────
     // H.264 baseline @ Level 5.0 covers up to 1920×1080@30. The
     // browser's `isConfigSupported` will reject anything beyond
-    // its decoder's reach; we surface that as a fall-through to
-    // the ffmpeg encode path rather than a hard failure.
+    // the platform encoder's reach; we treat that as a
+    // fall-through to the ffmpeg-encode path rather than a
+    // hard failure.
     //
-    // `hardwareAcceleration: 'prefer-hardware'` asks the browser
-    // for a platform encoder (VideoToolbox on macOS,
-    // MediaFoundation on Windows, MediaCodec on Android, …) but
-    // accepts the software fallback when none is available.
-    // `isConfigSupported` echoes back the negotiated config —
-    // we log which acceleration mode the browser actually
-    // resolved so users can tell from the console whether
-    // they're getting the GPU-encoder speedup or the (still
-    // generally faster than libx264) software encoder.
+    // `hardwareAcceleration: 'prefer-hardware'` asks for the
+    // platform encoder (VideoToolbox on macOS,
+    // MediaFoundation on Windows, MediaCodec on Android, …)
+    // but accepts the software fallback when none is
+    // available. We log the negotiated mode for visibility.
     const encoderConfig: VideoEncoderConfig = {
       codec: 'avc1.42E01E',
       width,
@@ -492,12 +475,11 @@ async function transcodeViaWebCodecs(
         frameRate,
       },
       // 'in-memory' fastStart keeps everything buffered until
-      // `finalize()` writes a moov-at-front MP4. Matches the
-      // `<video>` element's expectations and is the closest
-      // analogue to libx264's `+faststart`.
+      // `finalize()` writes a moov-at-front MP4 — same as
+      // libx264's `+faststart`.
       fastStart: 'in-memory',
     });
-    const encoder = new VideoEncoder({
+    encoder = new VideoEncoder({
       output: (chunk, metadata) => {
         muxer.addVideoChunk(chunk, metadata);
       },
@@ -506,46 +488,104 @@ async function transcodeViaWebCodecs(
         console.warn(`[bga-video] WebCodecs encoder error for ${path}`, error);
       },
     });
-    // Use the negotiated config so the encoder honours whatever
-    // `prefer-hardware` resolved to (e.g. an HW encoder might
-    // round dimensions or bitrate up to its supported step).
     encoder.configure(negotiated);
-    // Force a keyframe roughly every 2 seconds to keep seek /
-    // mid-chart restart responsive. Same cadence libx264's
-    // default `keyint=250` lands at for 30 fps content.
+
+    // ── Chunk loop ──────────────────────────────────────────
+    // Compute how many seconds fit in the per-chunk byte
+    // budget. We always round down to the nearest second so
+    // ffmpeg's `-t` argument cleanly matches a frame boundary,
+    // and clamp to `MIN_CHUNK_SECONDS` so seek + demux setup
+    // doesn't dominate the wall-clock cost on enormous inputs.
+    const bytesPerSecond = bytesPerFrame * frameRate;
+    const chunkSeconds = Math.max(MIN_CHUNK_SECONDS, Math.floor(MAX_CHUNK_BYTES / bytesPerSecond));
     const keyframeInterval = Math.max(1, Math.round(frameRate * 2));
     const microsPerFrame = Math.max(1, Math.round(1_000_000 / frameRate));
-    for (let i = 0; i < frameCount; i++) {
-      // Slice (not copy) the raw frame view — WebCodecs takes
-      // the buffer reference and the encoder consumes it
-      // before we move to the next frame.
-      const frameBytes = rawBytes.subarray(i * bytesPerFrame, (i + 1) * bytesPerFrame);
-      const frame = new VideoFrame(frameBytes, {
-        format: 'I420',
-        codedWidth: width,
-        codedHeight: height,
-        timestamp: i * microsPerFrame,
-        duration: microsPerFrame,
-      });
-      encoder.encode(frame, { keyFrame: i % keyframeInterval === 0 });
-      frame.close();
-      // Backpressure: if the encoder queue grows beyond a few
-      // dozen frames the GPU encoder is the bottleneck — yield
-      // so the encoder can drain. Without this, on a fast
-      // wasm-decode + slow encoder pairing we can pile up
-      // hundreds of frames in memory before any get muxed.
-      if (encoder.encodeQueueSize > 32) {
-        await waitForEncoderDrain(encoder, 4);
+
+    let frameIndex = 0;
+    let chunkCount = 0;
+    for (let chunkStartSec = 0; chunkStartSec < durationSec; chunkStartSec += chunkSeconds) {
+      const remainingSec = durationSec - chunkStartSec;
+      const thisChunkSec = Math.min(chunkSeconds, remainingSec);
+
+      // `-ss BEFORE -i` does input-level seek and is accurate
+      // by default in modern ffmpeg (decode-and-discard between
+      // the prior keyframe and the seek target). For the first
+      // chunk we omit `-ss` entirely — some demuxers re-parse
+      // headers when a `-ss 0` is present which adds latency
+      // for no benefit.
+      const chunkArgs: string[] = ['-y'];
+      if (chunkStartSec > 0) chunkArgs.push('-ss', chunkStartSec.toFixed(3));
+      chunkArgs.push('-t', thisChunkSec.toFixed(3), '-i', inputName);
+      if (maxLongEdge) chunkArgs.push('-vf', buildScaleFilterArg(maxLongEdge));
+      chunkArgs.push('-c:v', 'rawvideo', '-pix_fmt', 'yuv420p', '-f', 'rawvideo', '-an', '-sn', '-dn', chunkName);
+      const chunkExit = await ffmpeg.exec(chunkArgs);
+      if (chunkExit !== 0) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[bga-video] ffmpeg chunk decode (WebCodecs path) exited with code ${chunkExit} at ${chunkStartSec.toFixed(2)}s for ${path}`,
+        );
+        return undefined;
       }
+      const chunkRead = await ffmpeg.readFile(chunkName);
+      const chunkBytes = chunkRead instanceof Uint8Array ? chunkRead : new TextEncoder().encode(chunkRead);
+      // Always delete BEFORE iterating frames so MEMFS pressure
+      // peaks at one chunk's worth of YUV. The Uint8Array view
+      // we just took stays valid because @ffmpeg/ffmpeg copied
+      // bytes out of MEMFS into the JS heap during readFile.
+      try {
+        await ffmpeg.deleteFile(chunkName);
+      } catch {
+        // ignore
+      }
+      if (chunkBytes.byteLength === 0) {
+        // ffmpeg's `-t` with imprecise duration sometimes
+        // overshoots the input end and produces an empty
+        // chunk. Treat as EOF and stop.
+        break;
+      }
+      if (chunkBytes.byteLength % bytesPerFrame !== 0) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[bga-video] WebCodecs path: chunk byte length ${chunkBytes.byteLength} not divisible by ${bytesPerFrame} (frame size); falling back: ${path}`,
+        );
+        return undefined;
+      }
+      const framesInChunk = chunkBytes.byteLength / bytesPerFrame;
+      for (let i = 0; i < framesInChunk; i++) {
+        // Slice (not copy) the raw frame view — WebCodecs
+        // takes the buffer reference and the encoder consumes
+        // it before we move to the next frame.
+        const frameBytes = chunkBytes.subarray(i * bytesPerFrame, (i + 1) * bytesPerFrame);
+        const frame = new VideoFrame(frameBytes, {
+          format: 'I420',
+          codedWidth: width,
+          codedHeight: height,
+          timestamp: frameIndex * microsPerFrame,
+          duration: microsPerFrame,
+        });
+        encoder.encode(frame, { keyFrame: frameIndex % keyframeInterval === 0 });
+        frame.close();
+        // Backpressure: yield when the encoder queue grows
+        // past a few dozen frames so the GPU encoder can
+        // drain. Without this, on a fast wasm-decode + slow
+        // encoder pairing we'd pile up hundreds of frames in
+        // memory before any get muxed.
+        if (encoder.encodeQueueSize > 32) {
+          await waitForEncoderDrain(encoder, 4);
+        }
+        frameIndex++;
+      }
+      chunkCount++;
     }
     await encoder.flush();
     encoder.close();
+    encoder = undefined;
     muxer.finalize();
     const outBytes = new Uint8Array(target.buffer);
     const elapsed = ((performance.now() - startedAt) / 1000).toFixed(2);
     // eslint-disable-next-line no-console
     console.info(
-      `[bga-video] WebCodecs transcode ok: ${path} → ${outBytes.byteLength} bytes (${elapsed}s, ${frameCount} frames @ ${width}×${height})`,
+      `[bga-video] WebCodecs transcode ok: ${path} → ${outBytes.byteLength} bytes (${elapsed}s, ${frameIndex} frames @ ${width}×${height}, ${chunkCount} chunks of ≤${chunkSeconds}s)`,
     );
     return outBytes;
   } catch (error) {
@@ -560,18 +600,20 @@ async function transcodeViaWebCodecs(
         // ignore
       }
     }
+    if (encoder) {
+      try {
+        encoder.close();
+      } catch {
+        // ignore — encoder.close() throws if already closed
+      }
+    }
     try {
       await ffmpeg.deleteFile(inputName);
     } catch {
       // ignore
     }
     try {
-      await ffmpeg.deleteFile(rawName);
-    } catch {
-      // ignore
-    }
-    try {
-      await ffmpeg.deleteFile(probeName);
+      await ffmpeg.deleteFile(chunkName);
     } catch {
       // ignore
     }
@@ -579,24 +621,41 @@ async function transcodeViaWebCodecs(
 }
 
 /**
- * Pulls input geometry / frame rate out of ffmpeg's stderr.
- * The line we want looks like:
+ * Pulls input geometry / frame rate / duration out of ffmpeg's
+ * stderr. The lines we want look like:
  *
+ *   `Duration: 00:02:02.00, start: 0.398189, bitrate: 5076 kb/s`
  *   `Stream #0:0(jpn): Video: vc1 ..., yuv420p, 1080x1080 [...], 30 tbr, 1k tbn`
  *
- * `tbr` (frame rate) and `WxH` are the only fields we need —
- * the rest (codec, profile, SAR / DAR) is informative but
- * doesn't affect the WebCodecs encoder configuration.
+ * `tbr` (frame rate) and `WxH` come from the `Stream` line;
+ * `Duration:` carries the total length we use to size the
+ * chunk loop. The rest of each line (codec, profile, SAR /
+ * DAR) is informative but doesn't affect the WebCodecs
+ * encoder configuration.
  *
- * Returns `undefined` if neither geometry nor frame rate could
- * be parsed. The WebCodecs path bails out in that case rather
- * than guessing dimensions.
+ * Returns `undefined` if any of geometry / frame rate /
+ * duration could not be parsed. The WebCodecs path bails out
+ * in that case rather than guessing.
  */
-function parseFfmpegProbe(lines: ReadonlyArray<string>): { width: number; height: number; frameRate: number } | undefined {
+function parseFfmpegProbe(
+  lines: ReadonlyArray<string>,
+): { width: number; height: number; frameRate: number; durationSec: number } | undefined {
   let width: number | undefined;
   let height: number | undefined;
   let frameRate: number | undefined;
+  let durationSec: number | undefined;
   for (const line of lines) {
+    if (durationSec === undefined) {
+      const duration = line.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/u);
+      if (duration) {
+        const hours = Number.parseInt(duration[1]!, 10);
+        const minutes = Number.parseInt(duration[2]!, 10);
+        const seconds = Number.parseFloat(duration[3]!);
+        if (Number.isFinite(hours) && Number.isFinite(minutes) && Number.isFinite(seconds)) {
+          durationSec = hours * 3600 + minutes * 60 + seconds;
+        }
+      }
+    }
     if (!line.includes('Video:')) continue;
     const dim = line.match(/(\d{2,5})x(\d{2,5})/u);
     if (dim) {
@@ -611,8 +670,8 @@ function parseFfmpegProbe(lines: ReadonlyArray<string>): { width: number; height
       }
     }
   }
-  if (!width || !height || !frameRate) return undefined;
-  return { width, height, frameRate };
+  if (!width || !height || !frameRate || !durationSec) return undefined;
+  return { width, height, frameRate, durationSec };
 }
 
 /**
