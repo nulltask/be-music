@@ -57,8 +57,14 @@ import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
  * it to handle both data shapes; the cleaner cut is a sibling
  * module that follows the same Pixi-scene pattern.
  */
-const FALLBACK_DESIGN_WIDTH = 1280;
-const FALLBACK_DESIGN_HEIGHT = 720;
+/**
+ * 640×480 fallback canvas to match LR2 default `decide.lr2skin`'s
+ * native dimensions. See `pixi-select` for the rationale (mainly:
+ * keeps the on-screen aspect ratio constant when an LR2 theme
+ * loads / unloads mid-session).
+ */
+const FALLBACK_DESIGN_WIDTH = 640;
+const FALLBACK_DESIGN_HEIGHT = 480;
 const BG = new Color('#05070b');
 const TEXT_COLOR = new Color('#f8fafc');
 const MUTED = new Color('#9aa6b2');
@@ -386,33 +392,119 @@ export class PixiDecideView {
    * decide skin. Mirrors the result scene's fallback look so
    * skinless demos still feel cohesive.
    */
+  /**
+   * Fallback chrome modelled on `Theme/LR2/Decide/ss_decide.png`:
+   *
+   *   - Top-left difficulty stamp: small `DIFFICULTY:` label and a
+   *     large coloured difficulty name (HYPER / NORMAL / etc.).
+   *   - Centre horizontal band carrying the chart title (large
+   *     italic-feeling text), sub-title beneath, artist underneath.
+   *   - Bottom radial vignette evoking the stage-file under-glow.
+   *
+   * Drawn entirely with primitives — a viewer comparing this to
+   * the LR2 default decide screenshot should immediately recognise
+   * the same layout silhouette.
+   */
   private renderFallbackPanel(designWidth: number, designHeight: number): void {
     const target = this.target;
     if (!target) return;
-    const padX = 64;
-    const padY = 80;
-    const panel = new Graphics()
-      .roundRect(padX, padY, designWidth - padX * 2, designHeight - padY * 2, 16)
-      .fill({ color: 0x121826, alpha: 0.96 });
-    this.fallbackLayer.addChild(panel);
+    const chrome = new Graphics();
+    chrome.label = 'fallback-decide-chrome';
+    // Backdrop: dark navy with a soft top-down gradient evoking
+    // the screenshot's blue tone.
+    chrome.rect(0, 0, designWidth, designHeight).fill(0x040810);
+    for (let i = 0; i < 6; i += 1) {
+      const t = i / 6;
+      chrome
+        .rect(0, t * designHeight, designWidth, designHeight / 6)
+        .fill({ color: 0x10203c, alpha: 0.18 - i * 0.022 });
+    }
+    // Centre soft-blue glow — evokes the stagefile lit from below.
+    for (let i = 0; i < 5; i += 1) {
+      const inset = 60 + i * 20;
+      chrome
+        .rect(inset, designHeight / 2 - 80 + i * 8, designWidth - inset * 2, 160 - i * 16)
+        .fill({ color: 0x4a78b5, alpha: 0.08 - i * 0.012 });
+    }
+
+    // ── Top-left difficulty stamp ───────────────────────────
+    chrome.rect(20, 24, 90, 8).fill({ color: 0x2c333d, alpha: 0.85 }); // "DIFFICULTY:" slot
+    // Big difficulty name backdrop — the screenshot shows a
+    // chunky violet outlined word.
+    chrome
+      .roundRect(20, 36, 130, 38, 3)
+      .fill({ color: 0x06080c, alpha: 0.7 })
+      .stroke({ color: 0x6a3aa0, width: 2, alpha: 0.85 });
+
+    // ── Centre horizontal band (title / sub-title / artist) ─
+    const bandY = 150;
+    const bandH = 156;
+    chrome.rect(0, bandY, designWidth, bandH).fill({ color: 0x040810, alpha: 0.85 });
+    chrome.rect(0, bandY, designWidth, 2).fill({ color: 0x6a3aa0, alpha: 0.6 });
+    chrome.rect(0, bandY + bandH - 2, designWidth, 2).fill({ color: 0x6a3aa0, alpha: 0.6 });
+
     const titleText = new Text({
       text: target.song.title,
-      style: new TextStyle({ fill: TEXT_COLOR, fontSize: 28, fontWeight: '700', fontFamily: 'system-ui, sans-serif' }),
+      style: new TextStyle({
+        fill: TEXT_COLOR,
+        fontSize: 28,
+        fontWeight: '700',
+        fontFamily: 'system-ui, sans-serif',
+        fontStyle: 'italic',
+        stroke: { color: 0x000000, width: 3, alignment: 0.5, join: 'round' },
+      }),
     });
-    titleText.position.set(padX + 32, padY + 32);
+    titleText.label = 'decide/title';
+    titleText.position.set(40, bandY + 38);
     this.fallbackLayer.addChild(titleText);
+
+    const subtitleText = new Text({
+      text: target.song.subtitle ?? '',
+      style: new TextStyle({
+        fill: MUTED,
+        fontSize: 10,
+        fontFamily: 'system-ui, sans-serif',
+      }),
+    });
+    subtitleText.label = 'decide/subtitle';
+    subtitleText.position.set(42, bandY + 24);
+    this.fallbackLayer.addChild(subtitleText);
+
     const artistText = new Text({
       text: target.song.artist ?? '',
-      style: new TextStyle({ fill: MUTED, fontSize: 18, fontFamily: 'system-ui, sans-serif' }),
+      style: new TextStyle({
+        fill: MUTED,
+        fontSize: 11,
+        fontFamily: 'system-ui, sans-serif',
+      }),
     });
-    artistText.position.set(padX + 32, padY + 72);
+    artistText.label = 'decide/artist';
+    artistText.position.set(42, bandY + 88);
     this.fallbackLayer.addChild(artistText);
-    const hint = new Text({
-      text: 'Press Enter to start',
-      style: new TextStyle({ fill: MUTED, fontSize: 14, fontFamily: 'system-ui, sans-serif' }),
+
+    // Difficulty name overlay — drawn as text on top of the
+    // top-left stamp rectangle. Picks a colour from the
+    // difficulty index with a violet bias for HYPER (the
+    // screenshot's reference).
+    const difficultyText = new Text({
+      text: 'HYPER',
+      style: new TextStyle({
+        fill: 0xb19cd9,
+        fontSize: 24,
+        fontWeight: '900',
+        fontFamily: 'system-ui, sans-serif',
+        stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
+      }),
     });
-    hint.position.set(padX + 32, designHeight - padY - 32);
-    this.fallbackLayer.addChild(hint);
+    difficultyText.label = 'decide/difficulty';
+    difficultyText.position.set(28, 38);
+    this.fallbackLayer.addChild(difficultyText);
+
+    // No "press Enter" hint — LR2's default decide skin doesn't
+    // author one, so the no-skin fallback skips it too.
+
+    // Add the chrome BEFORE text overlays so text paints on top.
+    this.fallbackLayer.addChildAt(chrome, 0);
   }
 
   private evaluateElementDst(element: {

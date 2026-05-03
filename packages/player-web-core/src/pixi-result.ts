@@ -67,14 +67,18 @@ import type { PixiGameplayResultData } from './pixi-gameplay.ts';
  * After timer 152 fires the next input dismisses the scene via
  * the `onContinue` callback the host supplied.
  */
-const FALLBACK_DESIGN_WIDTH = 1280;
-const FALLBACK_DESIGN_HEIGHT = 720;
+/**
+ * 640×480 fallback canvas to match LR2 default `result.lr2skin`'s
+ * native dimensions. See `pixi-select` for the rationale (keeps
+ * the on-screen aspect ratio constant when an LR2 theme loads /
+ * unloads mid-session).
+ */
+const FALLBACK_DESIGN_WIDTH = 640;
+const FALLBACK_DESIGN_HEIGHT = 480;
 const BG = new Color('#05070b');
 const TEXT = new Color('#f8fafc');
 const MUTED = new Color('#9aa6b2');
 const ACCENT = new Color('#ffd166');
-const PASS = new Color('#56b6f7');
-const FAIL = new Color('#ff6b6b');
 
 /**
  * Approximate duration of the chart-draw animation when no skin-side
@@ -838,84 +842,316 @@ export class PixiResultView {
    * panel — so the demo isn't blank between gameplay and select
    * even without a theme bundle.
    */
+  /**
+   * Fallback chrome modelled on `Theme/LR2/Result/ss_result.png`:
+   *
+   *   - Top header band with two graph panels (HP zigzag on the
+   *     left, score graph on the right) flanking a central
+   *     "STAGE CLEARED / FAILED" heading.
+   *   - Mid-left tile column: SCORE / EX SCORE / COMBO totals.
+   *   - Mid-right tile column: EX SCORE / TARGET / BEST EX SCORE
+   *     / NEXTRANK.
+   *   - Centre judge-counter ladder: GREAT (highlighted) / GREAT /
+   *     GOOD / BAD / POOR rows with their counts.
+   *   - Right grade panel showing the LR2 letter grade (AA / AAA).
+   *   - Bottom TOTAL SCORE strip spanning the width.
+   *
+   * Drawn entirely with primitives so a viewer recognises the
+   * silhouette of the LR2 default result skin even with no atlas.
+   */
   private renderFallbackPanel(designWidth: number, designHeight: number): void {
     const result = this.result;
     if (!result) return;
-    const panel = new Graphics();
-    panel.label = 'result/fallback-panel';
-    const padX = 80;
-    const padY = 100;
-    panel
-      .roundRect(padX, padY, designWidth - padX * 2, designHeight - padY * 2, 16)
-      .fill({ color: 0x10141d, alpha: 0.95 });
-    this.fallbackLayer.addChild(panel);
+    const chrome = new Graphics();
+    chrome.label = 'result/fallback-chrome';
+    // Backdrop: dark with a faint top-light gradient.
+    chrome.rect(0, 0, designWidth, designHeight).fill(0x06080c);
+    for (let i = 0; i < 6; i += 1) {
+      const t = i / 6;
+      chrome
+        .rect(0, t * designHeight, designWidth, designHeight / 6)
+        .fill({ color: 0x10131a, alpha: 0.5 - t * 0.08 });
+    }
 
-    const titleStyle = new TextStyle({
-      fill: TEXT,
-      fontSize: 32,
-      fontWeight: '800',
-      fontFamily: 'system-ui, sans-serif',
-    });
-    const heading = new Text({ text: result.cleared ? 'CLEARED' : 'FAILED', style: titleStyle });
-    heading.label = 'result/heading';
-    heading.style.fill = result.cleared ? PASS : FAIL;
-    heading.position.set(padX + 32, padY + 24);
-    this.fallbackLayer.addChild(heading);
+    // ── Top header band ─────────────────────────────────────
+    chrome.rect(0, 0, designWidth, 88).fill(0x0a0e16);
+    chrome.rect(0, 86, designWidth, 2).fill(0x4a3a73);
+    // Left graph panel — gauge history (red zigzag)
+    chrome
+      .rect(8, 6, 192, 78)
+      .fill({ color: 0x06080c, alpha: 0.85 })
+      .stroke({ color: 0x4a3a73, width: 1 });
+    chrome.rect(10, 8, 188, 6).fill({ color: 0x281f3e, alpha: 0.7 });
+    // Zigzag polyline approximation
+    for (let i = 0; i < 16; i += 1) {
+      const x = 14 + i * 11;
+      const y = 50 + ((i % 3) - 1) * 14;
+      chrome.rect(x, y, 11, 2).fill(0xef4444);
+    }
+    // Right graph panel — score curves (multi-line)
+    chrome
+      .rect(designWidth - 200, 6, 192, 78)
+      .fill({ color: 0x06080c, alpha: 0.85 })
+      .stroke({ color: 0x4a3a73, width: 1 });
+    chrome.rect(designWidth - 198, 8, 188, 6).fill({ color: 0x281f3e, alpha: 0.7 });
+    // Three score curves at different colours, rising
+    for (let i = 0; i < 18; i += 1) {
+      const x = designWidth - 196 + i * 10;
+      chrome.rect(x, 78 - i * 1.5, 10, 2).fill(0x56b6f7);
+      chrome.rect(x, 70 - i * 1.4, 10, 2).fill(0xffd166);
+      chrome.rect(x, 60 - i * 1.6, 10, 2).fill(0x72d677);
+    }
 
-    const songText = new Text({
-      text: `${result.song.title}${result.song.artist ? ` — ${result.song.artist}` : ''}`,
+    // ── STAGE CLEARED / FAILED heading ──────────────────────
+    // Renders centred between the two top graphs as a chunky
+    // outlined word — LR2 ships a silver/cyan gradient bitmap
+    // here; we mimic the silhouette with an outlined Text.
+    const cleared = result.cleared;
+    const headingText = new Text({
+      text: cleared ? 'CLEARED' : 'FAILED',
       style: new TextStyle({
-        fill: ACCENT,
-        fontSize: 20,
-        fontWeight: '600',
+        fill: cleared ? 0x9bd6ff : 0xff6b6b,
+        fontSize: 42,
+        fontWeight: '900',
         fontFamily: 'system-ui, sans-serif',
-        wordWrap: true,
-        wordWrapWidth: designWidth - padX * 2 - 64,
+        stroke: { color: 0x000000, width: 4, alignment: 0.5, join: 'round' },
+        letterSpacing: 4,
       }),
     });
-    songText.label = 'result/song';
-    songText.position.set(padX + 32, padY + 70);
-    this.fallbackLayer.addChild(songText);
+    headingText.label = 'result/heading';
+    headingText.anchor.set(0.5, 0.5);
+    headingText.position.set(designWidth / 2, 50);
+    this.fallbackLayer.addChild(headingText);
+    // "STAGE" small label above the heading
+    const stageText = new Text({
+      text: 'STAGE',
+      style: new TextStyle({
+        fill: TEXT,
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 12,
+        fontFamily: 'system-ui, sans-serif',
+      }),
+    });
+    stageText.label = 'result/stage-label';
+    stageText.anchor.set(0.5, 0.5);
+    stageText.position.set(designWidth / 2, 22);
+    this.fallbackLayer.addChild(stageText);
 
-    const rate = result.score.total > 0 ? (result.score.exScore / (result.score.total * 2)) * 100 : 0;
-    const lines: Array<[string, string]> = [
-      ['SCORE', String(result.score.score)],
-      ['EX SCORE', `${result.score.exScore} / ${result.score.total * 2}`],
-      ['RATE', `${rate.toFixed(2)} %`],
-      ['RANK', resolveRankLabel(result.score.exScore, result.score.total)],
-      ['MAX COMBO', String(result.maxCombo)],
-      ['PERFECT', String(result.score.perfect)],
-      ['GREAT', String(result.score.great)],
-      ['GOOD', String(result.score.good)],
-      ['BAD', String(result.score.bad)],
-      ['POOR', String(result.score.poor)],
+    // ── Mid-left score tiles (SCORE / EX SCORE / COMBO) ─────
+    const leftLabels: Array<readonly [string, string]> = [
+      ['SCORE', String(result.score.score).padStart(6, '0')],
+      ['EX SCORE', String(result.score.exScore).padStart(4, '0')],
+      ['COMBO', String(result.maxCombo).padStart(4, '0')],
     ];
-    const rowHeight = 28;
-    const colX = padX + 32;
-    const valueX = padX + 240;
-    for (let index = 0; index < lines.length; index += 1) {
-      const [label, value] = lines[index]!;
+    for (let i = 0; i < leftLabels.length; i += 1) {
+      const ly = 100 + i * 30;
+      this.renderResultTile(chrome, 8, ly, 192, 28, leftLabels[i]![0], leftLabels[i]![1]);
+    }
+
+    // ── Mid-right score tiles ───────────────────────────────
+    // EX SCORE shown again on the right with TARGET / BEST EX
+    // SCORE / NEXTRANK comparisons in the LR2 default layout.
+    const rate = result.score.total > 0 ? (result.score.exScore / (result.score.total * 2)) * 100 : 0;
+    const rightLabels: Array<readonly [string, string, string]> = [
+      ['EX SCORE', String(result.score.exScore).padStart(4, '0'), `${rate.toFixed(0)}%`],
+      ['TARGET', String(Math.max(0, result.score.exScore - 0)).padStart(4, '0'), ''],
+      ['BEST EX SCORE', String(result.score.exScore).padStart(4, '0'), ''],
+      ['NEXTRANK', resolveRankLabel(result.score.exScore, result.score.total), ''],
+    ];
+    for (let i = 0; i < rightLabels.length; i += 1) {
+      const ry = 100 + i * 30;
+      this.renderResultTile(
+        chrome,
+        designWidth - 200,
+        ry,
+        192,
+        28,
+        rightLabels[i]![0],
+        rightLabels[i]![1],
+        rightLabels[i]![2],
+      );
+    }
+
+    // ── Centre judge counter ladder ─────────────────────────
+    // PERFECT / GREAT / GOOD / BAD / POOR with counts. The
+    // screenshot highlights the top GREAT row in red.
+    const judges: Array<readonly [string, string, number]> = [
+      ['GREAT', String(result.score.perfect).padStart(4, '0'), 0xef4444],
+      ['GREAT', String(result.score.great).padStart(4, '0'), 0xa0e0ff],
+      ['GOOD', String(result.score.good).padStart(4, '0'), 0xa0e0ff],
+      ['BAD', String(result.score.bad).padStart(4, '0'), 0xa0e0ff],
+      ['POOR', String(result.score.poor).padStart(4, '0'), 0xa0e0ff],
+    ];
+    const judgeY = 230;
+    for (let i = 0; i < judges.length; i += 1) {
+      const jy = judgeY + i * 24;
+      const [label, value, fill] = judges[i]!;
+      // Highlighted PG row gets a coloured backplate
+      if (i === 0) {
+        chrome.rect(204, jy, 222, 22).fill({ color: 0x4a1818, alpha: 0.85 }).stroke({ color: 0xef4444, width: 1 });
+      } else {
+        chrome.rect(204, jy, 222, 22).fill({ color: 0x06080c, alpha: 0.85 }).stroke({ color: 0x4a3a73, width: 1 });
+      }
+      chrome.rect(208, jy + 4, 60, 14).fill({ color: 0x281f3e, alpha: 0.6 });
+      chrome.rect(280, jy + 4, 130, 14).fill(0x06080c);
+
       const labelText = new Text({
         text: label,
-        style: new TextStyle({ fill: MUTED, fontSize: 16, fontFamily: 'system-ui, sans-serif' }),
+        style: new TextStyle({
+          fill: i === 0 ? 0xff6b6b : MUTED,
+          fontSize: 10,
+          fontWeight: '700',
+          fontFamily: 'system-ui, sans-serif',
+        }),
       });
-      labelText.position.set(colX, padY + 130 + index * rowHeight);
+      labelText.position.set(212, jy + 5);
       this.fallbackLayer.addChild(labelText);
+
       const valueText = new Text({
         text: value,
-        style: new TextStyle({ fill: TEXT, fontSize: 18, fontWeight: '600', fontFamily: 'system-ui, sans-serif' }),
+        style: new TextStyle({
+          fill,
+          fontSize: 11,
+          fontWeight: '700',
+          fontFamily: 'system-ui, sans-serif',
+        }),
       });
-      valueText.position.set(valueX, padY + 130 + index * rowHeight);
+      valueText.position.set(346, jy + 5);
       this.fallbackLayer.addChild(valueText);
     }
 
-    const hintText = new Text({
-      text: 'Press Enter / Space / Esc to continue',
-      style: new TextStyle({ fill: MUTED, fontSize: 14, fontFamily: 'system-ui, sans-serif' }),
+    // ── Bottom TOTAL SCORE strip ────────────────────────────
+    chrome
+      .rect(0, designHeight - 32, designWidth, 32)
+      .fill({ color: 0x10131a, alpha: 0.95 })
+      .stroke({ color: 0x4a3a73, width: 1 });
+    const totalLabel = new Text({
+      text: 'TOTAL SCORE',
+      style: new TextStyle({
+        fill: MUTED,
+        fontSize: 10,
+        fontWeight: '700',
+        fontFamily: 'system-ui, sans-serif',
+      }),
     });
-    hintText.label = 'result/hint';
-    hintText.position.set(padX + 32, designHeight - padY - 32);
-    this.fallbackLayer.addChild(hintText);
+    totalLabel.position.set(12, designHeight - 22);
+    this.fallbackLayer.addChild(totalLabel);
+    const totalValue = new Text({
+      text: String(result.score.score).padStart(6, '0'),
+      style: new TextStyle({
+        fill: TEXT,
+        fontSize: 16,
+        fontWeight: '900',
+        fontFamily: 'system-ui, sans-serif',
+      }),
+    });
+    totalValue.position.set(140, designHeight - 25);
+    this.fallbackLayer.addChild(totalValue);
+
+    // ── Song-title strip below the heading ─────────────────
+    const songText = new Text({
+      text: `${result.song.title}${result.song.artist ? ` / ${result.song.artist}` : ''}`,
+      style: new TextStyle({
+        fill: ACCENT,
+        fontSize: 9,
+        fontFamily: 'system-ui, sans-serif',
+        wordWrap: true,
+        wordWrapWidth: designWidth - 32,
+      }),
+    });
+    songText.label = 'result/song';
+    songText.anchor.set(0.5, 0);
+    songText.position.set(designWidth / 2, 88);
+    this.fallbackLayer.addChild(songText);
+
+    // ── Right-side AA / AAA grade letters ───────────────────
+    const rankLabel = resolveRankLabel(result.score.exScore, result.score.total);
+    chrome
+      .rect(designWidth - 110, 230, 100, 76)
+      .fill({ color: 0x06080c, alpha: 0.95 })
+      .stroke({ color: 0x4a3a73, width: 2 });
+    const gradeText = new Text({
+      text: rankLabel,
+      style: new TextStyle({
+        fill: 0xc8b64a,
+        fontSize: 36,
+        fontWeight: '900',
+        fontFamily: 'system-ui, sans-serif',
+        stroke: { color: 0x000000, width: 3, alignment: 0.5, join: 'round' },
+        letterSpacing: 4,
+      }),
+    });
+    gradeText.label = 'result/grade';
+    gradeText.anchor.set(0.5, 0.5);
+    gradeText.position.set(designWidth - 60, 268);
+    this.fallbackLayer.addChild(gradeText);
+
+    // No "Press Enter / Space / Esc to continue" hint — LR2's
+    // default result skin doesn't author one, so the no-skin
+    // fallback skips it too.
+
+    // Chrome under all text overlays.
+    this.fallbackLayer.addChildAt(chrome, 0);
+  }
+
+  /**
+   * Helper for the SCORE / EX SCORE / etc. tiles — paints a dark
+   * rectangle with a label dab on the left and a digit slot on
+   * the right, matching the LR2 default layout. Optional `aux`
+   * value paints a small secondary number (e.g. RATE percentage)
+   * to the right of the main value.
+   */
+  private renderResultTile(
+    chrome: Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    label: string,
+    value: string,
+    aux: string = '',
+  ): void {
+    chrome.rect(x, y, w, h).fill({ color: 0x06080c, alpha: 0.92 }).stroke({ color: 0x4a3a73, width: 1 });
+    chrome.rect(x + 4, y + 4, 70, h - 8).fill({ color: 0x281f3e, alpha: 0.6 });
+    chrome.rect(x + 78, y + 4, w - 88, h - 8).fill(0x000000);
+
+    const labelText = new Text({
+      text: label,
+      style: new TextStyle({
+        fill: MUTED,
+        fontSize: 9,
+        fontWeight: '700',
+        fontFamily: 'system-ui, sans-serif',
+      }),
+    });
+    labelText.position.set(x + 8, y + (h - 12) / 2);
+    this.fallbackLayer.addChild(labelText);
+
+    const valueText = new Text({
+      text: value,
+      style: new TextStyle({
+        fill: TEXT,
+        fontSize: 14,
+        fontWeight: '800',
+        fontFamily: 'system-ui, sans-serif',
+      }),
+    });
+    valueText.position.set(x + 86, y + (h - 16) / 2);
+    this.fallbackLayer.addChild(valueText);
+
+    if (aux) {
+      const auxText = new Text({
+        text: aux,
+        style: new TextStyle({
+          fill: MUTED,
+          fontSize: 8,
+          fontFamily: 'system-ui, sans-serif',
+        }),
+      });
+      auxText.position.set(x + w - 22, y + 4);
+      this.fallbackLayer.addChild(auxText);
+    }
   }
 
   /**

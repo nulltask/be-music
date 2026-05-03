@@ -4072,7 +4072,31 @@ export class PixiGameplayView {
     disposeChildren(this.overlayLayer);
     const skin = this.options.skin;
     if (!skin) {
-      renderFallbackLr2Frame(this.skinLayer);
+      // Pass live runtime values into the fallback chrome so its
+      // text overlays (score / combo / BPM / hi-speed / judge
+      // counter / rank) render real chart numbers — same as the
+      // LR2 default skin would via `#DST_NUMBER` digit cells.
+      const total = this.score.total > 0 ? this.score.total : 0;
+      const exScoreMax = total * 2;
+      renderFallbackLr2Frame(this.skinLayer, {
+        songTitle: this.song?.title,
+        songArtist: this.song?.artist,
+        bpm: this.song?.bpm,
+        hiSpeed: this.hiSpeed,
+        score: this.score.score,
+        exScore: this.score.exScore,
+        exScoreMax,
+        combo: this.tracker.combo,
+        maxCombo: this.maxCombo,
+        perfect: this.score.perfect,
+        great: this.score.great,
+        good: this.score.good,
+        bad: this.score.bad,
+        poor: this.score.poor,
+        lastJudge: this.lastJudge,
+        rank: resolveFallbackRank(this.score.exScore, total),
+        autoplay: this.options.autoPlay === true,
+      });
       return;
     }
     const scale = Math.min(width / skin.width, height / skin.height);
@@ -5052,7 +5076,9 @@ export class PixiGameplayView {
     }
     const graphic = new Graphics();
     graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
-    graphic.roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2).fill(isScratch(channel) ? RED : WHITE);
+    graphic
+      .roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2)
+      .fill(noteFallbackColor(channel, laneIndex));
     this.noteLayer.addChild(graphic);
   }
 
@@ -5105,7 +5131,7 @@ export class PixiGameplayView {
       graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
       graphic
         .rect(lane.x + 2, top - 10, Math.max(4, lane.w - 4), Math.max(1, bottom - top))
-        .fill({ color: isScratch(channel) ? RED : YELLOW, alpha: 0.6 });
+        .fill({ color: noteFallbackColor(channel, laneIndex), alpha: 0.6 });
       this.noteLayer.addChild(graphic);
     }
     // LN_END at the top (yEnd), LN_START at the bottom (yStart).
@@ -5168,7 +5194,12 @@ export class PixiGameplayView {
       });
       judge.label = `fallback-judge[${this.lastJudge}]`;
       judge.anchor.set(0.5);
-      judge.position.set(PLAYFIELD.x + PLAYFIELD.w / 2, 246);
+      // Y aligned with LR2's `#DST_NOWJUDGE_1P,...,73,230,102,30,...`
+      // — the default skin parks the judge graphic 91 px above
+      // the judgement line. Hard-coded to the LR2 number rather
+      // than `judgementY - 91` so the relationship is greppable
+      // when comparing to LR2 source.
+      judge.position.set(PLAYFIELD.x + PLAYFIELD.w / 2, 230);
       this.textLayer.addChild(judge);
     }
     this.overlay.visible = this.paused;
@@ -5354,4 +5385,43 @@ function judgeSeverity(judge: JudgeKind): number {
     case 'POOR':
       return 4;
   }
+}
+
+/**
+ * Note colour for the no-skin fallback path, mirroring the IIDX /
+ * LR2 default convention:
+ *
+ *   - Scratch (`16` / `26`) — red.
+ *   - Odd-numbered keys (1 / 3 / 5 / 7) — white.
+ *   - Even-numbered keys (2 / 4 / 6) — blue.
+ *
+ * `laneIndex` is the LR2 lane id (`resolveLr2LaneIndex`-style):
+ * 0 / 10 = scratch, 1..9 = 1P-side keys, 11..19 = 2P-side keys.
+ * Modding by 10 strips the side-offset so the same rule applies
+ * to both sides.
+ */
+function noteFallbackColor(channel: string, laneIndex: number): typeof WHITE {
+  if (isScratch(channel)) return RED;
+  const keyIndex = laneIndex % 10;
+  if (keyIndex % 2 === 0) return BLUE;
+  return WHITE;
+}
+
+/**
+ * Mirror of `pixi-result.resolveRankLabel` — kept private here so
+ * the gameplay path doesn't take a dependency on the result
+ * module just to format the rank into the no-skin HUD's RANK
+ * slot. The IIDX rank ladder is identical in both paths.
+ */
+function resolveFallbackRank(exScore: number, total: number): string {
+  if (total <= 0) return '—';
+  const rate = exScore / (total * 2);
+  if (rate >= 8 / 9) return 'AAA';
+  if (rate >= 7 / 9) return 'AA';
+  if (rate >= 6 / 9) return 'A';
+  if (rate >= 5 / 9) return 'B';
+  if (rate >= 4 / 9) return 'C';
+  if (rate >= 3 / 9) return 'D';
+  if (rate >= 2 / 9) return 'E';
+  return 'F';
 }
