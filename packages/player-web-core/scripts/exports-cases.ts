@@ -10,6 +10,7 @@ const BENCH_SELECT_BGM_FILE = makeBenchFile('LR2files/Bgm/LR2/select.wav', 'RIFF
 const BENCH_SYSTEM_SOUND_FILE = makeBenchFile('LR2files/Sound/lr2/scratch.wav', 'RIFF');
 const BENCH_SOURCE = makeBenchSource();
 const BENCH_SONG = makeBenchSong();
+const BENCH_PMS_SONG = makeBenchPmsSong();
 const BENCH_COLLECTION = {
   sources: [BENCH_SOURCE],
   songs: [BENCH_SONG],
@@ -183,6 +184,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web-core.pickLr2PlaySkin', {
     run: () => {
       playerWebCoreApi.pickLr2PlaySkin({ '7': makeLr2Skin() }, BENCH_SONG);
+      playerWebCoreApi.pickLr2PlaySkin({ '9': makeLr2Skin() }, BENCH_PMS_SONG);
     },
   });
   define('player-web-core.pickLr2SystemSoundFile', {
@@ -258,6 +260,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web-core.resolveChartPlayVariant', {
     run: () => {
       playerWebCoreApi.resolveChartPlayVariant(BENCH_SONG);
+      playerWebCoreApi.resolveChartPlayVariant(BENCH_PMS_SONG);
     },
   });
   define('player-web-core.resolveChartPreviewPath', {
@@ -349,6 +352,30 @@ function makeBenchSong(): playerWebCoreApi.BrowserSongEntry {
     fileLabel: 'main.bms',
     title: 'Bench Song',
     totalNotes: 2,
+    chart,
+  };
+}
+
+function makeBenchPmsSong(): playerWebCoreApi.BrowserSongEntry {
+  const chart: BeMusicJson = createEmptyJson('bms');
+  chart.metadata.title = 'Bench PMS Song';
+  chart.bms.player = 3;
+  chart.events = [
+    { measure: 0, position: [0, 1], channel: '11', value: '01' },
+    { measure: 0, position: [0, 1], channel: '17', value: '01' },
+    { measure: 0, position: [0, 1], channel: '19', value: '01' },
+  ];
+  chart.resources.wav = { '01': 'kick.wav' };
+  return {
+    id: 'files:bench:Songs/Bench/main.pms',
+    sourceId: 'files:bench',
+    sourceLabel: 'Bench',
+    sourceKind: 'directory',
+    chartPath: 'Songs/Bench/main.pms',
+    directoryLabel: 'Songs/Bench',
+    fileLabel: 'main.pms',
+    title: 'Bench PMS Song',
+    totalNotes: 3,
     chart,
   };
 }

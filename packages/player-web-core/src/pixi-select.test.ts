@@ -1,6 +1,6 @@
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it } from 'vitest';
-import { matchesSearchQuery, wrappedCursorDelta } from './pixi-select.ts';
+import { DEFAULT_PLAY_OPTIONS, matchesSearchQuery, wrappedCursorDelta } from './pixi-select.ts';
 import type { BrowserBrowseEntry, BrowserSongEntry } from './types.ts';
 
 /**
@@ -94,6 +94,17 @@ describe('matchesSearchQuery', () => {
     };
     expect(matchesSearchQuery(folderEntry, 'lunatic')).toBe(true);
     expect(matchesSearchQuery(folderEntry, 'unrelated')).toBe(false);
+  });
+});
+
+describe('DEFAULT_PLAY_OPTIONS', () => {
+  it('seeds LR2-style visual options for the first gameplay mount', () => {
+    expect(DEFAULT_PLAY_OPTIONS.hiSpeed).toBe(2.5);
+    expect(DEFAULT_PLAY_OPTIONS.bga).toBe('ON');
+    expect(DEFAULT_PLAY_OPTIONS.bgaSize).toBe('EXTEND');
+    expect(DEFAULT_PLAY_OPTIONS.scoreGraph).toBe(true);
+    expect(DEFAULT_PLAY_OPTIONS.gauge1P).toBe('GROOVE');
+    expect(DEFAULT_PLAY_OPTIONS.gauge2P).toBe('GROOVE');
   });
 });
 
