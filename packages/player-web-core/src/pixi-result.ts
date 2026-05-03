@@ -306,6 +306,8 @@ export class PixiResultView {
   private readonly timeoutHandles = new Set<number>();
   /** Fallback summary panel (used when no skin or as overlay). */
   private readonly fallbackLayer = new Container();
+  /** Clip mask for the design rect — see `pixi-gameplay` for the rationale. */
+  private readonly designClipMask = new Graphics();
   private result: PixiGameplayResultData | undefined;
   /**
    * `performance.now()` of mount — reference point for timer 0
@@ -357,8 +359,10 @@ export class PixiResultView {
     this.background.label = 'result/background';
     this.skinLayer.label = 'result/skin';
     this.fallbackLayer.label = 'result/fallback';
+    this.designClipMask.label = 'result/design-clip';
     this.sceneRoot.addChild(this.viewportBackground, this.root);
-    this.root.addChild(this.background, this.skinLayer, this.fallbackLayer);
+    this.root.addChild(this.background, this.skinLayer, this.fallbackLayer, this.designClipMask);
+    this.root.mask = this.designClipMask;
     host.app.stage.addChild(this.sceneRoot);
     window.addEventListener('keydown', this.handleKeyDown);
     host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
@@ -560,6 +564,7 @@ export class PixiResultView {
     this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
+    this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
     this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
     // `disposeChildren` (vs bare `removeChildren`) is essential
     // here: the per-frame skin / fallback rebuild allocates fresh

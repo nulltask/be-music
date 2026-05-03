@@ -466,6 +466,20 @@ export class PixiGameplayView {
    */
   private readonly sceneRoot = new Container();
   private readonly root = new Container();
+  /**
+   * Clip mask for the design rect — sits as a child of `root` so
+   * the same `position` / `scale` transform applies to it as the
+   * sprites it clips. Pixi uses the mask's world-space bounds to
+   * decide what's visible; with the mask drawn at
+   * `(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT)` in design space, the
+   * post-transform bounds match the on-screen design rectangle
+   * exactly, and any sprite that animates in from off-canvas
+   * (LR2 default's `#DST_IMAGE,...,758,0,...` slide-ins, etc.)
+   * gets clipped at the design edge instead of bleeding into the
+   * pillarbox / letterbox of a screen with a different aspect
+   * ratio.
+   */
+  private readonly designClipMask = new Graphics();
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
   /**
@@ -955,6 +969,7 @@ export class PixiGameplayView {
     this.overlayLayer.label = 'gameplay/overlay';
     this.textLayer.label = 'gameplay/text';
     this.overlay.label = 'gameplay/pause-overlay';
+    this.designClipMask.label = 'gameplay/design-clip';
     this.root.addChild(
       this.background,
       this.bgaLayer,
@@ -966,7 +981,15 @@ export class PixiGameplayView {
       this.overlayLayer,
       this.textLayer,
       this.overlay,
+      this.designClipMask,
     );
+    // Clip every child of `root` to the design rectangle. The
+    // mask graphic itself is a child of `root`, so the same
+    // viewport scale / translate applies to both the mask and
+    // the masked content — Pixi clips against the mask's world-
+    // space bounds, which matches the on-screen design
+    // rectangle.
+    this.root.mask = this.designClipMask;
     this.shutterLayer.label = 'gameplay/shutter';
     this.sceneRoot.addChild(this.viewportBackground, this.root);
     // Attach to the host's already-initialised stage. The host owns
@@ -3692,6 +3715,10 @@ export class PixiGameplayView {
     this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
+    // Re-stamp the design clip mask each frame in case the design
+    // dimensions ever change (skin swap with a non-default
+    // `#RESOLUTION`, etc.). Cheap — single-rect Graphics.
+    this.designClipMask.clear().rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(0xffffff);
     this.applyExitFadeAlpha();
     this.background.clear().rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
     this.perf.time('renderSkin', () => this.renderSkin(DESIGN_WIDTH, DESIGN_HEIGHT));
@@ -4369,10 +4396,7 @@ export class PixiGameplayView {
    */
   private renderTextElement(text: Lr2TextElement): void {
     const interpolated = this.evaluateElementDst(text);
-    // `w` is intentionally unread — LR2 uses it as a max-width /
-    // shrink-to-fit hint for the rendered glyphs, not for anchor
-    // positioning. We anchor at `(x, y)` per the alignment field below.
-    const { x, y, h } = normaliseRect(interpolated);
+    const { x, y, w, h } = normaliseRect(interpolated);
     // `w === 0` is an LR2-spec "no width constraint" hint (the field
     // shrinks to fit the rendered string), so we must NOT bail just
     // because of it — skipping would hide every auto-sized label,
@@ -4414,10 +4438,6 @@ export class PixiGameplayView {
     //   align=0 → DST x is the LEFT edge of the rendered string
     //   align=1 → DST x is the CENTER of the rendered string
     //   align=2 → DST x is the RIGHT edge of the rendered string
-    // `w` is a max-width / shrink-to-fit constraint, not part of the
-    // anchor calculation (the previous code added `w` to `x` for
-    // right-aligned text which pushed the title / artist / genre
-    // labels into the bar-list area on the right side of the screen).
     if (text.alignment === 'center') {
       node.anchor.set(0.5, 0.5);
     } else if (text.alignment === 'right') {
@@ -4426,6 +4446,15 @@ export class PixiGameplayView {
       node.anchor.set(0, 0.5);
     }
     node.position.set(x, y + h / 2);
+    // LR2 shrink-to-fit (LR2SkinHelp line 1343): the rendered
+    // string is auto-compressed horizontally when its width
+    // exceeds the DST's `w`. We squeeze via `scale.x`; the scale
+    // applies around the text's anchor, so the alignment edge
+    // stays pinned (right-aligned text squeezes toward its right
+    // edge, centred text stays centred, …).
+    if (w > 0 && node.width > w) {
+      node.scale.x = w / node.width;
+    }
     this.skinLayer.addChild(node);
   }
 

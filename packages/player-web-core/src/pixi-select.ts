@@ -720,6 +720,17 @@ export class PixiSongSelectView {
    */
   private readonly sceneRoot = new Container();
   private readonly root = new Container();
+  /**
+   * Clip mask for the design rectangle (`skin.width × skin.height`
+   * or the no-skin fallback canvas). Sits as a child of `root`
+   * so the same `position` / `scale` transform applies to it.
+   * Pixi clips against the mask's world-space bounds, so any
+   * skin element that animates from off-canvas (LR2 default's
+   * `#DST_BAR_BODY_OFF` slide-ins, etc.) gets cut at the design
+   * edge instead of bleeding into the pillarbox / letterbox of
+   * a screen with a different aspect ratio.
+   */
+  private readonly designClipMask = new Graphics();
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
   /** Skin static images (gated on `SELECT_DEFAULT_OPS`). */
@@ -1306,6 +1317,7 @@ export class PixiSongSelectView {
     // LR2 panels (op 1..9) live inside skinLayer / skinForegroundLayer
     // — they're regular `#SRC_*` elements gated by their `panel`
     // field, so no separate overlay layer is needed.
+    this.designClipMask.label = 'select/design-clip';
     this.root.addChild(
       this.background,
       this.skinLayer,
@@ -1314,7 +1326,9 @@ export class PixiSongSelectView {
       this.title,
       this.hint,
       this.readTextLayer,
+      this.designClipMask,
     );
+    this.root.mask = this.designClipMask;
     this.readTextLayer.label = 'select/read-text';
     this.readTextLayer.visible = false;
     this.readTextViewport.addChild(this.readTextBody);
@@ -3031,6 +3045,9 @@ export class PixiSongSelectView {
     this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
+    // Re-stamp the design clip rectangle to the active design
+    // size (may differ frame-to-frame when a skin loads / unloads).
+    this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
     this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
 
     // `disposeChildren` (vs bare `removeChildren`) frees the
@@ -3245,6 +3262,10 @@ export class PixiSongSelectView {
     // placeholder per ss_select.png.
     const difficultyLabel = 'HARD';
 
+    // Song-title display: LR2-spec auto-shrink horizontally when
+    // the rendered string overflows the banner's text rect
+    // (`docs/LR2SkinHelp.md` line 1343). No `wordWrap` — long
+    // titles squeeze, they don't break to a second line.
     const titleText = new Text({
       text: songTitle,
       style: new TextStyle({
@@ -3252,12 +3273,14 @@ export class PixiSongSelectView {
         fontSize: 16,
         fontWeight: '800',
         fontFamily: 'system-ui, sans-serif',
-        wordWrap: true,
-        wordWrapWidth: 282,
       }),
     });
     titleText.label = 'select-fallback/title';
     titleText.position.set(20, 66);
+    const titleMaxWidth = 282;
+    if (titleText.width > titleMaxWidth) {
+      titleText.scale.x = titleMaxWidth / titleText.width;
+    }
     this.listLayer.addChild(titleText);
 
     const artistText = new Text({
@@ -3266,12 +3289,14 @@ export class PixiSongSelectView {
         fill: MUTED,
         fontSize: 9,
         fontFamily: 'system-ui, sans-serif',
-        wordWrap: true,
-        wordWrapWidth: 200,
       }),
     });
     artistText.label = 'select-fallback/artist';
     artistText.position.set(20, 96);
+    const artistMaxWidth = 282;
+    if (artistText.width > artistMaxWidth) {
+      artistText.scale.x = artistMaxWidth / artistText.width;
+    }
     this.listLayer.addChild(artistText);
 
     // Mode pill: small label dab + value
@@ -4345,6 +4370,9 @@ export class PixiSongSelectView {
     // sans-serif is taller pixel-for-pixel, so cap the font size
     // at 14 px and leave 2 px breathing room below `h`.
     const titleFontSize = clampFontSize(h - 2, 8, 14);
+    // No `wordWrap` — LR2 spec auto-shrinks long titles
+    // horizontally rather than wrapping (`docs/LR2SkinHelp.md`
+    // line 1343). The squeeze below mirrors that.
     const titleText = new Text({
       text: primaryText,
       style: new TextStyle({
@@ -4354,8 +4382,6 @@ export class PixiSongSelectView {
         // an image font. A regular weight reads cleaner.
         fontWeight: '500',
         fontFamily: 'system-ui, sans-serif',
-        wordWrap: true,
-        wordWrapWidth: w,
         // 袋文字 (outlined text) — LR2 reference skins bake a
         // 1–2 px black outline into their bar-title bitmaps so
         // titles read cleanly against the colored BAR_BODY
@@ -4365,6 +4391,9 @@ export class PixiSongSelectView {
     });
     titleText.label = `bar-title[${entry.kind}=${primaryText}]`;
     titleText.position.set(x, y);
+    if (w > 0 && titleText.width > w) {
+      titleText.scale.x = w / titleText.width;
+    }
     this.listLayer.addChild(titleText);
   }
 

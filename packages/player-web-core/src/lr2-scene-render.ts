@@ -103,14 +103,17 @@ export function makeLr2TextSprite(
   const declaredSize = options.systemFontSizes?.[element.font];
   const desiredSize = declaredSize !== undefined && declaredSize > 0 ? declaredSize : rect.h - 2;
   const fontSize = clampFontSize(desiredSize, 8, options.maxFontSize ?? 64);
+  // No `wordWrap` — LR2's `#SRC_TEXT` spec calls for HORIZONTAL
+  // shrink-to-fit when the rendered string overruns `dst.w`
+  // (`docs/LR2SkinHelp.md` line 1343), not for line-wrapping.
+  // Letting the text overflow on a single line and then
+  // squeezing it via `scale.x` matches that semantic.
   const text = new Text({
     text: value,
     style: new TextStyle({
       fill: dst.alpha > 0 ? (dst.r << 16) | (dst.g << 8) | dst.b : 0xffffff,
       fontSize,
       fontFamily: 'system-ui, sans-serif',
-      wordWrap: rect.w > 0,
-      wordWrapWidth: rect.w > 0 ? rect.w : undefined,
       stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
     }),
   });
@@ -129,6 +132,18 @@ export function makeLr2TextSprite(
     text.anchor.set(0, 0);
   }
   text.position.set(rect.x, rect.y);
+  // LR2 shrink-to-fit: when the rendered string overflows the
+  // DST's `w`, compress it horizontally so it lands inside the
+  // authored rectangle. Pixi `Text.width` is the post-style
+  // bounds width, so we can read it immediately after
+  // construction. The `scale` applies around the text's anchor
+  // (0 / 0.5 / 1 above), which keeps the alignment edge fixed
+  // — left-aligned text squeezes toward `rect.x`, right-aligned
+  // squeezes toward `rect.x` (right edge), centre stays
+  // centred on `rect.x`.
+  if (rect.w > 0 && text.width > rect.w) {
+    text.scale.x = rect.w / text.width;
+  }
   return text;
 }
 

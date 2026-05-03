@@ -167,6 +167,8 @@ export class PixiDecideView {
   private readonly stageFileLayer = new Container();
   private readonly skinLayer = new Container();
   private readonly fallbackLayer = new Container();
+  /** Clip mask for the design rect — see `pixi-gameplay` for the rationale. */
+  private readonly designClipMask = new Graphics();
   private readonly skinTextures = new Lr2SkinTextureStore();
   private readonly chartGraphicTextures = new Lr2ChartGraphicTextureStore();
   /** Lazy-loaded LR2 bitmap fonts — see `prepareBitmapFonts`. */
@@ -200,8 +202,16 @@ export class PixiDecideView {
     this.stageFileLayer.label = 'decide/stagefile';
     this.skinLayer.label = 'decide/skin';
     this.fallbackLayer.label = 'decide/fallback';
+    this.designClipMask.label = 'decide/design-clip';
     this.sceneRoot.addChild(this.viewportBackground, this.root);
-    this.root.addChild(this.background, this.stageFileLayer, this.skinLayer, this.fallbackLayer);
+    this.root.addChild(
+      this.background,
+      this.stageFileLayer,
+      this.skinLayer,
+      this.fallbackLayer,
+      this.designClipMask,
+    );
+    this.root.mask = this.designClipMask;
     host.app.stage.addChild(this.sceneRoot);
     window.addEventListener('keydown', this.handleKeyDown);
     host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
@@ -315,6 +325,7 @@ export class PixiDecideView {
     this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
+    this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
     this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
     disposeChildren(this.stageFileLayer);
     disposeChildren(this.skinLayer);

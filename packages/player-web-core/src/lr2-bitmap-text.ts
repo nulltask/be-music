@@ -110,44 +110,64 @@ export function makeLr2BitmapTextSprite(
   // LR2 alignment is ANCHOR-based, not box-based: `x` is the
   // alignment-dependent anchor point (left edge / horizontal
   // centre / right edge), NOT a box origin paired with `w` as the
-  // box width. We learnt this empirically from the LR2 default
-  // theme's SYSTEM OPTION panel — the buttons live at `x=192,w=95`
-  // (visual frame 192..287) while the value-text DST sits at
-  // `x=239,w=73` (text rect 239..312). With `align=1` the text was
-  // rendering centred within (239,312), which lands far to the
-  // right of the button frame's centre (239.5). Treating `x=239`
-  // as the centre anchor instead places the text right where the
-  // skin author drew the box — ignore `w` for positioning here.
-  let cursorX = rect.x;
+  // box width.
+  //
+  // We position the inner glyph container relative to `(0, 0)`
+  // and translate the outer `root` to the anchor point. That way
+  // applying a horizontal `scale.x` for the LR2-spec
+  // shrink-to-fit behaviour squeezes around the anchor exactly
+  // (no drift on right- / centre-aligned text), and the per-
+  // glyph offsets remain in their native un-squeezed coordinate
+  // space — easier to reason about than baking the squeeze into
+  // each cursor advance.
+  let originX = 0;
   if (element.alignment === 'right') {
-    cursorX = rect.x - totalAdvance;
+    originX = -totalAdvance;
   } else if (element.alignment === 'center') {
-    cursorX = rect.x - totalAdvance / 2;
+    originX = -totalAdvance / 2;
   }
+  const inner = new Container();
+  inner.label = 'lr2-bitmap-text/inner';
   const tint = (dst.r << 16) | (dst.g << 8) | dst.b;
+  let cursorX = originX;
   for (const item of layout) {
     if (item.glyph) {
       const baseTexture = loaded.textures.get(item.glyph.gr);
       if (baseTexture) {
         const sprite = new Sprite(getGlyphTexture(baseTexture, item.glyph));
         // Scale the source glyph's own height to `targetHeight`
-        // — this is the key step the LR2 spec calls out: a glyph
-        // authored at e.g. 24 px renders at the configured DST
-        // height regardless of the underlying source size.
+        // — the LR2 spec key step: a glyph authored at e.g. 24 px
+        // renders at the configured DST height regardless of the
+        // underlying source size.
         const glyphScale = targetHeight / item.glyph.h;
         sprite.scale.set(glyphScale, glyphScale);
-        sprite.position.set(cursorX, rect.y);
+        sprite.position.set(cursorX, 0);
         sprite.tint = tint;
         sprite.alpha = dst.alpha;
-        root.addChild(sprite);
+        inner.addChild(sprite);
       } else {
-        root.addChild(buildPlaceholderRect(cursorX, rect.y, item.width, targetHeight));
+        inner.addChild(buildPlaceholderRect(cursorX, 0, item.width, targetHeight));
       }
     } else {
-      root.addChild(buildPlaceholderRect(cursorX, rect.y, item.width, targetHeight));
+      inner.addChild(buildPlaceholderRect(cursorX, 0, item.width, targetHeight));
     }
     cursorX += item.advance;
   }
+  // LR2 shrink-to-fit: when the rendered string is wider than
+  // `dst.w`, the spec auto-compresses it to fit
+  // (`docs/LR2SkinHelp.md` line 1343:
+  // "表示文字列の横幅がDSTのw値を超えるサイズになった場合は自動的に縮小されます").
+  // We squeeze the inner container's `scale.x` so glyph height
+  // stays at `targetHeight` and only the horizontal stride
+  // compresses — same shape as the LR2 reference renderer (and
+  // why the spec calls `filter` "essentially required": the
+  // squeeze stretches glyphs horizontally and looks jagged
+  // without bilinear filtering).
+  if (rect.w > 0 && totalAdvance > rect.w) {
+    inner.scale.x = rect.w / totalAdvance;
+  }
+  root.addChild(inner);
+  root.position.set(rect.x, rect.y);
   return root;
 }
 
