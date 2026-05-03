@@ -168,7 +168,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     outputs:
-      available: ${{ steps.detect-bench.outputs.available }}
+      available: ${{ steps.detect-bench.outputs.available == 'true' && steps.run-base-benchmark.outcome == 'success' }}
       snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
     env:
       BENCH_TIME_MS: 200
@@ -219,7 +219,9 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Run base benchmark
+        id: run-base-benchmark
         if: steps.detect-bench.outputs.available == 'true'
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -246,7 +248,7 @@ jobs:
           cp "$BASE_DIR"/tmp/bench/base-runs/*.json tmp/bench/base-runs/
 
       - name: Aggregate base benchmark snapshots
-        if: steps.detect-bench.outputs.available == 'true'
+        if: steps.detect-bench.outputs.available == 'true' && steps.run-base-benchmark.outcome == 'success'
         id: aggregate-base
         shell: bash
         run: |
@@ -426,7 +428,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     outputs:
-      available: ${{ steps.detect-bench.outputs.available }}
+      available: ${{ steps.detect-bench.outputs.available == 'true' && steps.run-base-benchmark.outcome == 'success' }}
       snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
     env:
       BENCH_TIME_MS: 200
@@ -482,7 +484,9 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Run base benchmark
+        id: run-base-benchmark
         if: steps.detect-bench.outputs.available == 'true'
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -509,7 +513,7 @@ jobs:
           cp "$BASE_DIR"/tmp/bench/base-runs/*.json tmp/bench/base-runs/
 
       - name: Aggregate base benchmark snapshots
-        if: steps.detect-bench.outputs.available == 'true'
+        if: steps.detect-bench.outputs.available == 'true' && steps.run-base-benchmark.outcome == 'success'
         id: aggregate-base
         shell: bash
         run: |
