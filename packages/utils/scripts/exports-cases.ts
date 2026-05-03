@@ -82,6 +82,11 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       utilsApi.normalizeAsciiBase36Code(0x66);
     },
   });
+  define('utils.normalizeAsciiBase62Code', {
+    run: () => {
+      utilsApi.normalizeAsciiBase62Code(0x7a);
+    },
+  });
   define('utils.normalizePath', {
     run: () => {
       utilsApi.normalizePath(String.raw`Songs\\set/../chart/./main.bms`);

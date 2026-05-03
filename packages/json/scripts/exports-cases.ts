@@ -22,6 +22,11 @@ export function registerJsonExportsCases(define: DefineBenchmarkCase): void {
       jsonApi.normalizeChannel('1a');
     },
   });
+  define('json.resolveBmsBase', {
+    run: (fixtures) => {
+      jsonApi.resolveBmsBase(fixtures.sampleBmsJson);
+    },
+  });
   define('json.intToBase36', {
     run: () => {
       jsonApi.intToBase36(12_345, 2);
