@@ -32,9 +32,66 @@ export interface LoadProgressOptions {
 
 export class BrowserSongLibrary {
   public collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
+  /**
+   * Monotonic counter that prefixes every appended drop's source ids
+   * so subsequent drops don't collide with the previous one's
+   * `files:0` / `bundle:0` ids. The counter is incremented every
+   * time a drop produces at least one new source.
+   */
+  private dropSeq = 0;
 
+  /**
+   * Replace the library's collection with the chart pack parsed
+   * from `files`. Used for the explicit "load these and ONLY
+   * these" entry point — the file-input picker, the initial drop
+   * before any songs have been added, etc.
+   */
   public async loadFromFiles(files: Iterable<File>, options: LoadProgressOptions = {}): Promise<BrowserSongCollection> {
     this.collection = await loadSongCollectionFromFiles(files, options);
+    this.dropSeq = 0;
+    return this.collection;
+  }
+
+  /**
+   * Append the chart pack parsed from `files` onto the existing
+   * collection. This is the "drop another folder onto an already-
+   * loaded library" entry point — the user's previous songs stay,
+   * and the new drop's sources / songs are merged in.
+   *
+   * Source ids and song ids are re-prefixed with a per-drop tag
+   * (`drop1-files:0`, `drop2-bundle:0`, …) so the new entries
+   * don't collide with previously-loaded ones (each `loadSong*`
+   * call internally numbers sources from `0`, so without a prefix
+   * a second drop would overwrite the first's lookup keys).
+   */
+  public async appendFromFiles(
+    files: Iterable<File>,
+    options: LoadProgressOptions = {},
+  ): Promise<BrowserSongCollection> {
+    const incoming = await loadSongCollectionFromFiles(files, options);
+    if (incoming.sources.length === 0 && incoming.songs.length === 0 && incoming.errors.length === 0) {
+      return this.collection;
+    }
+    this.dropSeq += 1;
+    const prefix = `drop${this.dropSeq}-`;
+    const remappedSources: BrowserSongAssetSource[] = incoming.sources.map((source) => ({
+      ...source,
+      id: prefix + source.id,
+    }));
+    const remappedSongs: BrowserSongEntry[] = incoming.songs.map((song) => ({
+      ...song,
+      sourceId: prefix + song.sourceId,
+      id: prefix + song.id,
+    }));
+    const remappedErrors = incoming.errors.map((error) => ({
+      ...error,
+      sourceId: prefix + error.sourceId,
+    }));
+    this.collection = {
+      sources: [...this.collection.sources, ...remappedSources],
+      songs: [...this.collection.songs, ...remappedSongs],
+      errors: [...this.collection.errors, ...remappedErrors],
+    };
     return this.collection;
   }
 
@@ -43,6 +100,7 @@ export class BrowserSongLibrary {
     options: LoadProgressOptions = {},
   ): Promise<BrowserSongCollection> {
     this.collection = await loadSongCollectionFromDrop(dataTransfer, options);
+    this.dropSeq = 0;
     return this.collection;
   }
 }

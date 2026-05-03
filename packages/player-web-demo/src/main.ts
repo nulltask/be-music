@@ -871,10 +871,23 @@ class PlayerWebDemoApp {
         return;
       }
       const { themeFiles, songFiles } = splitDroppedSongAndThemeFiles(files);
+      // `splitDroppedSongAndThemeFiles` routes any non-chart files
+      // outside a chart directory into `themeFiles`. That includes
+      // stray `readme.txt` / `info.json` / album-art images sitting
+      // at the root of a BMS pack that isn't a real LR2 theme. Only
+      // run the theme loader when the drop actually carries an
+      // `.lr2skin` file — otherwise an "extra files at the BMS root"
+      // drop wipes the previously-loaded LR2 theme by overwriting
+      // `selectSkin` / `playSkins` / etc. with `undefined`.
+      const carriesLr2Theme = themeFiles.some((file) =>
+        (file.webkitRelativePath || file.name).toLowerCase().endsWith('.lr2skin'),
+      );
       // eslint-disable-next-line no-console
-      console.log(`[drop] received ${files.length} file(s) · theme=${themeFiles.length} · songs=${songFiles.length}`);
+      console.log(
+        `[drop] received ${files.length} file(s) · theme=${themeFiles.length}${carriesLr2Theme ? '' : ' (no .lr2skin → preserving current theme)'} · songs=${songFiles.length}`,
+      );
       const tasks: Array<Promise<unknown>> = [];
-      if (themeFiles.length > 0) {
+      if (carriesLr2Theme) {
         tasks.push(this.loadTheme(themeFiles));
       }
       if (songFiles.length > 0) {
@@ -919,7 +932,13 @@ class PlayerWebDemoApp {
 
   private async loadSongs(files: File[]): Promise<void> {
     this.setStatus('Loading songs...');
-    this.collection = await this.library.loadFromFiles(files, {
+    // Append rather than replace so a second / third folder drop
+    // adds to the existing library instead of wiping the previous
+    // pack. The library re-prefixes source / song IDs so each
+    // drop's entries stay uniquely addressable. The very first
+    // drop is just `append onto an empty collection`, which
+    // produces the same result as `loadFromFiles` would have.
+    this.collection = await this.library.appendFromFiles(files, {
       onProgress: (progress) => this.applyLoadProgress(progress),
     });
     // Suppress the "0 charts loaded" reading — that text reads
