@@ -473,7 +473,15 @@ class PlayerWebDemoApp {
    * compressor mode change) without re-querying the DOM.
    */
   private buildGui(): void {
-    const gui = new GUI({ title: 'be-music demo', width: 280 });
+    // Start collapsed so the panel doesn't cover the
+    // select-screen / gameplay canvas the moment a user lands
+    // on the demo. `closeFolders: true` keeps the nested
+    // folders (Compressor stages / BGA video transcode) shut
+    // when the user re-opens the panel — they're advanced
+    // tunables most of the time. The user can still pop the
+    // panel open via the title bar at any point.
+    const gui = new GUI({ title: 'be-music demo', width: 280, closeFolders: true });
+    gui.close();
     this.gui = gui;
     // Status row pinned to the top of the panel — first thing
     // the user sees, so a glance at the GUI is enough to tell
