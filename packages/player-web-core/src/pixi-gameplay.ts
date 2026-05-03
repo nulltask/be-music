@@ -825,8 +825,14 @@ export class PixiGameplayView {
    * High-speed multiplier. 1.0 = base PIXELS_PER_BEAT. Adjustable at runtime
    * via Arrow Up / Arrow Down (steps of 0.25, clamped to [0.5, 6.0]). Mirrors
    * LR2's "hi-speed" knob: only affects the visual scroll rate, never timing.
+   *
+   * Seeded to 2.5 to match `DEFAULT_PLAY_OPTIONS.hiSpeed` in
+   * `pixi-select` — the select view always passes `initialHiSpeed`
+   * along when transitioning to gameplay, so this is just the
+   * fallback when gameplay is mounted directly without a
+   * preceding select scene (tests / direct-launch tooling).
    */
-  private hiSpeed = 1.5;
+  private hiSpeed = 2.5;
   /**
    * Map of timer-id → performance.now() timestamp at which the timer started.
    * Populated for the LR2 timers we currently drive: bomb (50–69), key-on

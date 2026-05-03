@@ -525,11 +525,20 @@ const GAUGE_CYCLE: readonly PixiGaugeType[] = ['GROOVE', 'HARD', 'DEATH', 'EASY'
 
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
-  hiSpeed: 1.5,
+  hiSpeed: 2.5,
   autoPlay: false,
   bga: 'ON',
-  bgaSize: 'NORMAL',
-  scoreGraph: false,
+  // BGA renders at LR2's `#DST_BGA,...,30` rect (NORMAL) at
+  // `'NORMAL'` — a 256×256 window squeezed in beside the lane
+  // chrome. `'EXTEND'` uses the larger `op 31` rect (392×392)
+  // which fills more of the playfield and is the default LR2
+  // experience players expect; flip the seed accordingly.
+  bgaSize: 'EXTEND',
+  // Score graph (the per-judge prediction line gated on op 39)
+  // on by default — same intent: ship with the richer LR2
+  // chrome visible up-front rather than hidden behind a panel
+  // toggle.
+  scoreGraph: true,
   difficultyFilter: 'ALL',
   keysFilter: 'ALL',
   sort: 'OFF',
