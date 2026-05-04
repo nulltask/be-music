@@ -606,14 +606,23 @@ export class PixiGameplayView {
    * authored with `op4 === 1` (1P scratch) or `op4 === 2` (2P
    * scratch).
    *
-   * Model: the disc always spins at a constant baseline
-   * angular velocity (1 rev/sec, twice the rate of the
-   * pre-physics fixed-spin implementation). A scratch press
-   * applies a *brake* — subtracts a chunk of velocity so the
-   * disc visibly slows down. Each tick the velocity then
-   * exponentially relaxes back toward the baseline, so the
-   * brake fades away and the disc resumes its idle cadence
-   * within ~0.4 s.
+   * Model:
+   * - **Baseline**: the disc always spins forward at a constant
+   *   angular velocity (1 rev/sec).
+   * - **Press**: snaps the velocity to `baseline ± delta`. The
+   *   delta is larger than the baseline, so a brake (`−delta`)
+   *   actually drives `v` negative — the disc visibly reverses
+   *   direction, like a real DJ scratching the platter back.
+   * - **Streak alternation**: a press within
+   *   {@link TURNTABLE_STREAK_GAP_MS} of the previous press
+   *   continues a "scratch run" — the sign flips on each
+   *   press, so consecutive rapid hits alternate forward /
+   *   reverse / forward / reverse just like manual scratching.
+   *   A press after a longer pause resets the streak so
+   *   isolated presses always brake first (not jump forward).
+   * - **Recovery**: between presses, velocity exponentially
+   *   relaxes back to baseline, so the brake / forward push
+   *   fades and the disc resumes its idle cadence on its own.
    *
    * State is integrated in {@link updateTurntable} on the
    * tick loop and read by `renderImageElement` per frame.
@@ -627,10 +636,45 @@ export class PixiGameplayView {
    * time across all TS targets.
    */
   private turntableVelocity: Record<'1' | '2', number>;
+  /**
+   * Direction the *next* press will push the disc. `-1` brakes
+   * (drives velocity below baseline → momentary reverse);
+   * `+1` accelerates (drives velocity above baseline →
+   * momentary forward spike). Flipped after every press to
+   * produce the alternating "scratch run" feel; reset to `-1`
+   * after a quiet gap so isolated presses always brake first.
+   */
+  private turntableNextSign: Record<'1' | '2', -1 | 1> = { '1': -1, '2': -1 };
+  /**
+   * Last-press timestamp per side (in `playClock()` ms), used
+   * to detect streak continuity. A press within
+   * {@link TURNTABLE_STREAK_GAP_MS} keeps the alternation
+   * going; a press after a longer pause resets `nextSign` to
+   * `-1` so the first press of a fresh streak brakes.
+   */
+  private turntableLastImpulseAt: Record<'1' | '2', number> = {
+    '1': Number.NEGATIVE_INFINITY,
+    '2': Number.NEGATIVE_INFINITY,
+  };
   private turntableLastUpdateAt = 0;
   private static readonly TURNTABLE_BASELINE_RAD_PER_SEC = 2 * Math.PI;
-  private static readonly TURNTABLE_PRESS_BRAKE_RAD_PER_SEC = 4;
-  private static readonly TURNTABLE_RECOVERY_PER_SEC = 2.5;
+  /**
+   * Snap delta on each press. Larger than
+   * {@link TURNTABLE_BASELINE_RAD_PER_SEC} so a brake
+   * (`baseline − delta`) is genuinely negative — the disc
+   * visibly reverses rather than just slowing down.
+   */
+  private static readonly TURNTABLE_PRESS_DELTA_RAD_PER_SEC = 3 * Math.PI;
+  private static readonly TURNTABLE_RECOVERY_PER_SEC = 3;
+  /**
+   * Time window (ms) within which two presses count as part
+   * of the same streak. ~250 ms is faster than a casual
+   * isolated press and slower than the fastest practical
+   * scratch tempo (about 10 Hz = 100 ms gaps), so it cleanly
+   * separates "rapid scratch run" from "two unrelated single
+   * presses".
+   */
+  private static readonly TURNTABLE_STREAK_GAP_MS = 250;
   private maxLongNoteBeatSpan = 0;
   private chartLastNoteEndSeconds = 0;
   private songDurationSeconds = 0;
@@ -1644,13 +1688,17 @@ export class PixiGameplayView {
     // Reset the turntable physics so the disc starts each chart at
     // angle 0, spinning at baseline. Without this, F5-restarting
     // mid-spin would leave the new play's first visible frame at a
-    // random angle (or with a residual brake state if the player
-    // had just scratched at song-end).
+    // random angle (or with a residual brake / forward state if
+    // the player had just scratched at song-end), and the alternation
+    // streak from the prior play would carry into the new song's
+    // first press.
     this.turntableAngle = { '1': 0, '2': 0 };
     this.turntableVelocity = {
       '1': PixiGameplayView.TURNTABLE_BASELINE_RAD_PER_SEC,
       '2': PixiGameplayView.TURNTABLE_BASELINE_RAD_PER_SEC,
     };
+    this.turntableNextSign = { '1': -1, '2': -1 };
+    this.turntableLastImpulseAt = { '1': Number.NEGATIVE_INFINITY, '2': Number.NEGATIVE_INFINITY };
     this.turntableLastUpdateAt = 0;
     // PMS / 9 KEY (Pop'n) charts route channel `17` (and the
     // PMS-STD `22..25` block) as lane notes — `resolveLaneChannels`
@@ -3205,15 +3253,18 @@ export class PixiGameplayView {
   }
 
   /**
-   * Applies a *brake* impulse to the per-side turntable. Called
+   * Snaps the turntable velocity on a scratch press. Called
    * on every scratch-channel press (manual `Shift` keydown,
-   * full autoplay, or auto-scratch mode). Subtracts a chunk of
-   * angular velocity so the disc visibly slows down; the
-   * subsequent recovery in {@link updateTurntable} eases it
-   * back up to the baseline rate. Floored at zero so the disc
-   * never reverses past a full stop — matches the user's
-   * "decelerate then return" intuition rather than the more
-   * literal DJ-scratch reversal.
+   * full autoplay, or auto-scratch mode).
+   *
+   * - First press of an isolated event: brake (`v = baseline
+   *   − delta`, drives velocity negative → momentary reverse).
+   * - Subsequent presses inside {@link TURNTABLE_STREAK_GAP_MS}:
+   *   alternate sign each press, so a rapid scratch run paints
+   *   a back-and-forth motion (forward / reverse / forward /
+   *   reverse). After a quiet gap, the sign resets so the next
+   *   isolated press brakes again rather than spinning forward
+   *   unprompted.
    *
    * Channels other than `16` / `26` are no-ops, so this can be
    * called unconditionally from generic note-hit paths.
@@ -3221,10 +3272,24 @@ export class PixiGameplayView {
   private applyTurntableImpulse(channel: string): void {
     if (channel !== '16' && channel !== '26') return;
     const side = channel === '16' ? '1' : '2';
-    this.turntableVelocity[side] = Math.max(
-      0,
-      this.turntableVelocity[side] - PixiGameplayView.TURNTABLE_PRESS_BRAKE_RAD_PER_SEC,
-    );
+    const now = this.playClock();
+    const gap = now - this.turntableLastImpulseAt[side];
+    // Reset the alternation streak when the gap is long. Bare
+    // `>` (not `>=`) treats any back-to-back press as part of
+    // the same streak; the threshold has no useful "boundary"
+    // case.
+    if (gap > PixiGameplayView.TURNTABLE_STREAK_GAP_MS) {
+      this.turntableNextSign[side] = -1;
+    }
+    const sign = this.turntableNextSign[side];
+    const baseline = PixiGameplayView.TURNTABLE_BASELINE_RAD_PER_SEC;
+    const delta = PixiGameplayView.TURNTABLE_PRESS_DELTA_RAD_PER_SEC;
+    this.turntableVelocity[side] = baseline + sign * delta;
+    // Flip for next press. Re-typed via the conditional so TS
+    // narrows back to the `-1 | 1` literal; a plain `-sign`
+    // widens to `number` and breaks the field's type.
+    this.turntableNextSign[side] = sign === -1 ? 1 : -1;
+    this.turntableLastImpulseAt[side] = now;
   }
 
   /**
