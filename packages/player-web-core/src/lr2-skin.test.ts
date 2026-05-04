@@ -892,6 +892,55 @@ describe('loadLr2SkinFromSourceFiles', () => {
   // chart side has the same problem with `#WAVxx kick.WAV`. Verify
   // the resolver picks up a case-mismatched key without the caller
   // having to enumerate variants.
+  describe('keyframe inheritance', () => {
+    it('inherits op4 (turntable spin marker) from the previous keyframe when blank', () => {
+      // Mirrors the LR2 default 7-keys skin's turntable-disc
+      // declaration (`Theme/LR2/Play/7keys/7_LL0.csv` line 299):
+      // first keyframe sets op4=1, second omits it. Without
+      // inheritance the final keyframe would silently drop op4
+      // back to 0 and the spin code would never run.
+      const files = new Map<string, Uint8Array>([
+        [
+          'skin/main.csv',
+          lines(
+            '#IMAGE,turntable.png',
+            '#SRC_IMAGE,0,0,0,0,32,32,1,1,0,0,0,0,0',
+            '#DST_IMAGE,0,500,30,335,32,32,2,0,255,255,255,1,1,0,0,800,0,0,0,0,1',
+            '#DST_IMAGE,0,800,30,335,32,32,2,255,255,255,255,1,1,0,0,,,,,,',
+          ),
+        ],
+      ]);
+      const skin = loadLr2SkinFromSourceFiles(files);
+      const image = skin?.images[0];
+      expect(image?.destination.op4).toBe(1);
+      // Sanity: the first keyframe still carries op4=1 too — the
+      // inheritance shouldn't reach back, just forward.
+      expect(image?.keyframes[0]?.op4).toBe(1);
+      expect(image?.keyframes[1]?.op4).toBe(1);
+    });
+
+    it('preserves an explicit op4=0 reset on a later keyframe', () => {
+      // Inverse of the above: if a row genuinely sets op4=0 (not
+      // blank), inheritance must NOT clobber it back to a previous
+      // op4=1. Defensive — no real-world skin does this, but a
+      // future one might.
+      const files = new Map<string, Uint8Array>([
+        [
+          'skin/main.csv',
+          lines(
+            '#IMAGE,turntable.png',
+            '#SRC_IMAGE,0,0,0,0,32,32,1,1,0,0,0,0,0',
+            '#DST_IMAGE,0,0,0,0,32,32,0,255,255,255,255,1,0,0,0,0,0,0,0,0,1',
+            '#DST_IMAGE,0,500,0,0,32,32,0,255,255,255,255,1,0,0,0,0,0,0,0,0,0',
+          ),
+        ],
+      ]);
+      const skin = loadLr2SkinFromSourceFiles(files);
+      const image = skin?.images[0];
+      expect(image?.destination.op4).toBe(0);
+    });
+  });
+
   describe('resolveLr2AssetBytes', () => {
     it('finds an asset whose key differs only by casing', () => {
       const files = new Map<string, Uint8Array>([

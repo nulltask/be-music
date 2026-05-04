@@ -598,6 +598,20 @@ export class PixiGameplayView {
    * mine — matches LR2 behaviour where the mine explodes first.
    */
   private mineNotes: RuntimeMineNote[] = [];
+  /**
+   * LR2 turntable physics — per-side angular state for sprites
+   * authored with `op4 === 1` (1P scratch) or `op4 === 2` (2P
+   * scratch). Each scratch press adds a velocity impulse, and
+   * the velocity decays exponentially so the disc spins down
+   * naturally between presses, mimicking a physical turntable's
+   * inertia. State is integrated in {@link updateTurntable} on
+   * the tick loop and read by `renderImageElement` per frame.
+   */
+  private turntableAngle: Record<'1' | '2', number> = { '1': 0, '2': 0 };
+  private turntableVelocity: Record<'1' | '2', number> = { '1': 0, '2': 0 };
+  private turntableLastUpdateAt = 0;
+  private static readonly TURNTABLE_PRESS_IMPULSE_RAD_PER_SEC = 5;
+  private static readonly TURNTABLE_DECAY_PER_SEC = 1.5;
   private maxLongNoteBeatSpan = 0;
   private chartLastNoteEndSeconds = 0;
   private songDurationSeconds = 0;
@@ -1608,6 +1622,13 @@ export class PixiGameplayView {
     // this the next chart's first release on a cleared channel would
     // try to finalize the prior chart's hold and double-commit.
     this.activeLongNotes.clear();
+    // Reset the turntable physics so the disc starts each chart at
+    // angle 0 with no residual velocity from a prior play. Without
+    // this, F5-restarting mid-spin would leave the new play's first
+    // visible frame at a random angle.
+    this.turntableAngle = { '1': 0, '2': 0 };
+    this.turntableVelocity = { '1': 0, '2': 0 };
+    this.turntableLastUpdateAt = 0;
     // PMS / 9 KEY (Pop'n) charts route channel `17` (and the
     // PMS-STD `22..25` block) as lane notes — `resolveLaneChannels`
     // would otherwise filter `17` out as FREE ZONE under the IIDX
@@ -2551,6 +2572,10 @@ export class PixiGameplayView {
       // timer 100..107 (lane lasers etc.) become visible while the key is
       // held down.
       this.startKeyOnTimer(channel);
+      // Spin the turntable on every scratch press, even an empty
+      // one — a DJ scratch with no note still rotates the disc.
+      // No-op for non-scratch channels.
+      this.applyTurntableImpulse(channel);
       if (!this.options.autoPlay) {
         // Bomb is triggered inside judge() when the press lands on a note --
         // empty presses (no note in window) do not produce a bomb flash.
@@ -3160,6 +3185,54 @@ export class PixiGameplayView {
     this.timerStartedAt.set(base + laneIndex, now);
   }
 
+  /**
+   * Pushes an angular-velocity impulse into the per-side
+   * turntable physics. Called on every scratch-channel press
+   * (manual `Shift` keydown, full autoplay, or auto-scratch
+   * mode). Channels other than `16` / `26` are no-ops so this
+   * can be called unconditionally from generic note-hit paths.
+   */
+  private applyTurntableImpulse(channel: string): void {
+    if (channel !== '16' && channel !== '26') return;
+    const side = channel === '16' ? '1' : '2';
+    this.turntableVelocity[side] += PixiGameplayView.TURNTABLE_PRESS_IMPULSE_RAD_PER_SEC;
+  }
+
+  /**
+   * Integrates the turntable physics one tick. Called from
+   * {@link tick} just before render so the rendered angle
+   * reflects this frame's elapsed time rather than the
+   * previous frame's.
+   *
+   * - `velocity *= exp(-decay·dt)` gives smooth exponential
+   *   spin-down with a 1/e settling time of `1/decay` seconds
+   *   (~0.67 s at the current 1.5/sec rate).
+   * - Pause skips integration so the disc holds its current
+   *   angle until the user resumes — matches what gameplay
+   *   pause does for every other animated element.
+   */
+  private updateTurntable(now: number): void {
+    if (this.turntableLastUpdateAt === 0) {
+      this.turntableLastUpdateAt = now;
+      return;
+    }
+    const dt = Math.max(0, (now - this.turntableLastUpdateAt) / 1000);
+    this.turntableLastUpdateAt = now;
+    if (this.paused || dt <= 0) return;
+    const decay = Math.exp(-PixiGameplayView.TURNTABLE_DECAY_PER_SEC * dt);
+    for (const side of ['1', '2'] as const) {
+      this.turntableAngle[side] += this.turntableVelocity[side] * dt;
+      this.turntableVelocity[side] *= decay;
+      // Floating-point cleanup so a barely-moving disc decisively
+      // stops rather than drifting forever (and avoids the sprite
+      // re-rendering with imperceptibly-different rotation values
+      // forever, which is mostly harmless but pollutes diffs).
+      if (Math.abs(this.turntableVelocity[side]) < 0.01) {
+        this.turntableVelocity[side] = 0;
+      }
+    }
+  }
+
   private tick = (): void => {
     // Belt-and-suspenders for the rAF-after-dispose race. Even with
     // `app.stop()` removing the renderer's tick listener, our own
@@ -3207,6 +3280,10 @@ export class PixiGameplayView {
       this.updateRankOps();
       this.updateGaugeOps();
     });
+    // Integrate turntable physics before render so the disc's
+    // angle reflects this frame's elapsed time. Cheap (constant
+    // work per side) so it doesn't need its own perf bucket.
+    this.updateTurntable(this.playClock());
     this.perf.time('render', () => this.render(seconds));
     const report = this.perf.endFrame(() => ({
       stage: this.app.stage.children.length,
@@ -3509,6 +3586,10 @@ export class PixiGameplayView {
       this.markNoteHit(note);
       this.playSample(note);
       this.triggerBomb(note.channel);
+      // Full-autoplay scratch hits drive the turntable too —
+      // otherwise the disc would sit motionless during a watch-
+      // mode replay even though the chart is being scratched.
+      this.applyTurntableImpulse(note.channel);
       if (isLongNote(note)) {
         // Defer the verdict — the tail timing is what the player
         // actually sees as the LN body finishing. Hold the lane
@@ -3566,6 +3647,11 @@ export class PixiGameplayView {
       this.markNoteHit(note);
       this.playSample(note);
       this.triggerBomb(note.channel);
+      // Auto-scratch is by definition the disc rotating itself.
+      // Pump an impulse here so the turntable visibly spins for
+      // each scratch note even when the player isn't pressing
+      // anything.
+      this.applyTurntableImpulse(note.channel);
       if (isLongNote(note)) {
         this.activeLongNotes.set(note.channel, {
           note,
@@ -4456,19 +4542,20 @@ export class PixiGameplayView {
     const sprite = new Sprite(texture);
     sprite.label = `image[${image.source.imagePath}]`;
     const { x, y, w, h } = normaliseRect(dst);
-    // op4=1 on the destination is the LR2 scratch-turntable spin marker.
-    // We rotate the sprite around its own centre at a fixed cadence so the
-    // disc visibly turns regardless of input. The rotation is anchored at
-    // `sceneStartTime` (scene mount), not `startTime` (notes start), so
-    // the disc spins continuously — including during the intro window.
-    // PixiJS uses a y-down coordinate system, so positive `rotation`
-    // values produce a clockwise spin visually.
-    if (dst.op4 === 1) {
+    // op4=1 / op4=2 are the LR2 scratch-turntable spin markers
+    // (1P / 2P side respectively). We drive the sprite from
+    // {@link turntableAngle}, which {@link updateTurntable}
+    // integrates from per-press impulses with exponential decay
+    // — pressing scratch kicks the disc, releasing lets it spin
+    // down. Anchor at the centre so the rotation pivots through
+    // the visible disc rather than spinning around the top-left
+    // corner; PixiJS's y-down coords make positive `rotation`
+    // turn the disc clockwise on screen.
+    if (dst.op4 === 1 || dst.op4 === 2) {
+      const side = dst.op4 === 1 ? '1' : '2';
       sprite.anchor.set(0.5, 0.5);
       sprite.position.set(x + w / 2, y + h / 2);
-      const rps = 0.5;
-      const elapsedMs = Math.max(0, this.playClock() - this.sceneStartTime);
-      sprite.rotation = (elapsedMs / 1000) * rps * Math.PI * 2;
+      sprite.rotation = this.turntableAngle[side];
     } else {
       sprite.position.set(x, y);
     }

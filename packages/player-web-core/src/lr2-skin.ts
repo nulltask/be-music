@@ -2173,6 +2173,15 @@ function appendDestinationKeyframe(group: Lr2DestinationRect[], row: string[]): 
     if (isBlank(row[18]) && isBlank(row[19]) && isBlank(row[20])) {
       dst.ops = previous.ops;
     }
+    // `op4` (scratch-turntable spin marker) inherits the same way.
+    // Without this the LR2 default 7-keys skin's turntable disc has
+    // op4=1 on its first keyframe but a blank op4 on the second
+    // (final) keyframe — `evaluateElementDst` reads the final, sees
+    // op4=0, and the spin code at `pixi-gameplay.ts:renderImageElement`
+    // never fires.
+    if (isBlank(row[21])) {
+      dst.op4 = previous.op4;
+    }
   }
   group.push(dst);
 }
