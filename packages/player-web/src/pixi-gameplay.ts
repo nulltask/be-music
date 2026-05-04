@@ -921,6 +921,23 @@ export class PixiGameplayView {
    */
   private gaugeState: GrooveGaugeState = createGrooveGaugeState(0, undefined);
   /**
+   * Peak-hold meter state for the groove gauge. The renderer
+   * paints an extra "lit" bead at the highest gauge value seen
+   * recently — the peak follows the gauge up instantly, holds
+   * for a window after the gauge starts dropping, and then
+   * decays back down to the current value. Mimics LR2's
+   * gauge bar (and audio level meters generally) where a thin
+   * "ghost" indicator marks the recent high above the live
+   * fill.
+   */
+  private gaugePeak = 0;
+  /** `playClock()` ms when the peak was last raised. */
+  private gaugePeakUpdatedAt = 0;
+  /** `playClock()` ms of the most recent peak update tick. */
+  private gaugePeakLastTickAt = 0;
+  private static readonly GAUGE_PEAK_HOLD_MS = 700;
+  private static readonly GAUGE_PEAK_DECAY_PCT_PER_SEC = 60;
+  /**
    * FAST / SLOW counts. Incremented on every GREAT or GOOD judgement
    * — PERFECT is "on time" so it doesn't count, BAD/POOR break combo
    * and aren't tracked here. Mirrors `applyFastSlowForJudge` in
@@ -1782,6 +1799,13 @@ export class PixiGameplayView {
       resolved.metadata.total,
       this.options.gauge ?? 'GROOVE',
     );
+    // Reset the peak-hold meter so the new chart starts with the
+    // peak indicator pinned to the gauge's seeded starting value
+    // (LR2 default 20 %) — the prior play's residual peak would
+    // otherwise hang above the gauge for ~1 s after restart.
+    this.gaugePeak = this.gaugeState.current;
+    this.gaugePeakUpdatedAt = 0;
+    this.gaugePeakLastTickAt = 0;
     // Now that the gauge has its starting value (LR2 default 20 %),
     // seed the polyline history so the result-screen graph starts at
     // the correct origin instead of the first judge's value.
@@ -3394,6 +3418,47 @@ export class PixiGameplayView {
     }
   }
 
+  /**
+   * Updates the gauge peak-hold indicator. Mirrors how an audio
+   * level meter's peak indicator behaves:
+   *
+   * - Peak follows the gauge value up instantly (peak ≥ current).
+   * - When the gauge starts dropping the peak holds briefly
+   *   ({@link GAUGE_PEAK_HOLD_MS}) so the recent maximum stays
+   *   visible — that's the whole point of "peak hold".
+   * - After the hold expires the peak slides back toward the
+   *   current value at {@link GAUGE_PEAK_DECAY_PCT_PER_SEC} %
+   *   per second, never dropping below the current.
+   *
+   * Pause skips the tick so the meter freezes alongside every
+   * other animated element. The early `lastTickAt` seed avoids
+   * a giant first-frame `dt` integrating against the entire
+   * scene-mount window.
+   */
+  private updateGaugePeak(now: number): void {
+    if (this.gaugePeakLastTickAt === 0) {
+      this.gaugePeakLastTickAt = now;
+      return;
+    }
+    if (this.paused) {
+      this.gaugePeakLastTickAt = now;
+      return;
+    }
+    const dt = Math.max(0, (now - this.gaugePeakLastTickAt) / 1000);
+    this.gaugePeakLastTickAt = now;
+    const current = this.gaugeState.current;
+    if (current >= this.gaugePeak) {
+      this.gaugePeak = current;
+      this.gaugePeakUpdatedAt = now;
+      return;
+    }
+    if (now - this.gaugePeakUpdatedAt <= PixiGameplayView.GAUGE_PEAK_HOLD_MS) {
+      return;
+    }
+    const decay = PixiGameplayView.GAUGE_PEAK_DECAY_PCT_PER_SEC * dt;
+    this.gaugePeak = Math.max(current, this.gaugePeak - decay);
+  }
+
   private tick = (): void => {
     // Belt-and-suspenders for the rAF-after-dispose race. Even with
     // `app.stop()` removing the renderer's tick listener, our own
@@ -3445,6 +3510,11 @@ export class PixiGameplayView {
     // angle reflects this frame's elapsed time. Cheap (constant
     // work per side) so it doesn't need its own perf bucket.
     this.updateTurntable(this.playClock());
+    // Tick the gauge peak-hold meter so the ghost indicator
+    // tracks the gauge bar regardless of whether a judge fired
+    // this frame (decay needs to run continuously between
+    // hits).
+    this.updateGaugePeak(this.playClock());
     this.perf.time('render', () => this.render(seconds));
     const report = this.perf.endFrame(() => ({
       stage: this.app.stage.children.length,
@@ -4635,6 +4705,7 @@ export class PixiGameplayView {
         this.gaugeState.current,
         this.textures,
         this.evaluateElementDst(gauge),
+        { peakPercent: this.gaugePeak },
       );
     }
     for (const bargraph of skin.bargraphs) {

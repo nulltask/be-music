@@ -196,6 +196,7 @@ export function renderGrooveGaugeElement(
   percent: number,
   textures: ReadonlyMap<string, Texture>,
   dst: Lr2DestinationRect,
+  options: { peakPercent?: number } = {},
 ): void {
   if (dst.w === 0 || dst.h === 0) {
     return;
@@ -219,10 +220,21 @@ export function renderGrooveGaugeElement(
   const totalUnits = 50;
   const clearThresholdUnit = Math.round((80 / 100) * totalUnits);
   const activeUnits = Math.round((percent / 100) * totalUnits);
+  // Peak-hold indicator: the bead AT the peak position is
+  // painted with the "active" cell variant even when the live
+  // fill has dropped below it. Renders only above the live
+  // bar — once the peak catches up to the current value the
+  // indicator disappears into the regular fill. Skin-agnostic
+  // (works against the existing 4-cell sprite sheet) so it
+  // applies to every theme that defines a `#SRC_GROOVEGAUGE`.
+  const peakPercent = Math.max(0, Math.min(100, options.peakPercent ?? percent));
+  const peakIndex = Math.round((peakPercent / 100) * totalUnits) - 1;
   for (let unitIndex = 0; unitIndex < totalUnits; unitIndex += 1) {
     const isActive = unitIndex < activeUnits;
+    const isPeakIndicator = !isActive && unitIndex === peakIndex && peakIndex >= activeUnits;
+    const useActiveCell = isActive || isPeakIndicator;
     const isClearZone = unitIndex >= clearThresholdUnit;
-    const cellIndex = (isActive ? 0 : 2) + (isClearZone ? 1 : 0);
+    const cellIndex = (useActiveCell ? 0 : 2) + (isClearZone ? 1 : 0);
     const cellX = cellIndex % divx;
     const cellY = Math.floor(cellIndex / divx);
     const cellTexture = createCroppedTexture(baseTexture, {
@@ -235,7 +247,7 @@ export function renderGrooveGaugeElement(
       continue;
     }
     const sprite = new Sprite(cellTexture);
-    sprite.label = `gauge-bead[idx=${unitIndex},cell=${cellX + cellY * divx}]`;
+    sprite.label = `gauge-bead[idx=${unitIndex},cell=${cellX + cellY * divx}${isPeakIndicator ? ',peak' : ''}]`;
     sprite.position.set(dst.x + gauge.addX * unitIndex, dst.y + gauge.addY * unitIndex);
     sprite.width = dst.w;
     sprite.height = dst.h;
