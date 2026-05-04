@@ -607,31 +607,65 @@ export class PixiResultView {
 
   private renderSkin(skin: Lr2Skin, ops: ReadonlySet<number>): void {
     if (!this.result) return;
+    // Build a unified work list keyed on `declarationOrder` so the
+    // resulting paint order matches LR2's CSV-stream contract
+    // ("later declarations paint on top"). The previous kind-grouped
+    // loop (images first, then numbers, then texts, …) inverted the
+    // z-order whenever a later-kind element was authored EARLIER
+    // than a same-layer earlier-kind element — most visibly the LR2
+    // default result skin's high-score panel (image declared after
+    // the score `#SRC_NUMBER`s) bled the score digits through the
+    // panel background once timer 152 fired and revealed the panel
+    // on Enter.
+    interface ChromePaint {
+      order: number;
+      paint: () => void;
+    }
+    const work: ChromePaint[] = [];
+
     for (const image of skin.images) {
       const dst = this.evaluateElementDst(image);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      const sprite = this.makeStaticImageSprite(image);
-      if (sprite) this.skinLayer.addChild(sprite);
+      work.push({
+        order: image.declarationOrder,
+        paint: () => {
+          const sprite = this.makeStaticImageSprite(image);
+          if (sprite) this.skinLayer.addChild(sprite);
+        },
+      });
     }
+
     for (const number of skin.numbers) {
       const dst = this.evaluateElementDst(number);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const value = resolveResultNumber(number.source.num, this.result);
       if (value === undefined) continue;
-      renderNumberElement(this.skinLayer, number, value, this.skinTextures.asReadonlyMap(), dst);
+      work.push({
+        order: number.declarationOrder,
+        paint: () => {
+          renderNumberElement(this.skinLayer, number, value, this.skinTextures.asReadonlyMap(), dst);
+        },
+      });
     }
+
     for (const text of skin.texts) {
       const dst = this.evaluateElementDst(text);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const value = resolveResultText(text.st, this.result);
       if (value === undefined || value.length === 0) continue;
-      this.skinLayer.addChild(
-        makeLr2TextSprite(value, text, dst, {
-          bitmapFonts: this.bitmapFonts,
-          systemFontSizes: skin.systemFontSizes,
-        }),
-      );
+      work.push({
+        order: text.declarationOrder,
+        paint: () => {
+          this.skinLayer.addChild(
+            makeLr2TextSprite(value, text, dst, {
+              bitmapFonts: this.bitmapFonts,
+              systemFontSizes: skin.systemFontSizes,
+            }),
+          );
+        },
+      });
     }
+
     // BARGRAPH / SLIDER: result-screen skins use these for the
     // EX-score / rate progress bars next to the digit panels. The
     // value resolver returns 0..1 (filled ratio); the renderer
@@ -641,32 +675,66 @@ export class PixiResultView {
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const value = resolveResultBargraphValue(bargraph.type, this.result);
       if (value === undefined) continue;
-      const sprite = this.makeBargraphSprite(bargraph, dst, value);
-      if (sprite) this.skinLayer.addChild(sprite);
+      work.push({
+        order: bargraph.declarationOrder,
+        paint: () => {
+          const sprite = this.makeBargraphSprite(bargraph, dst, value);
+          if (sprite) this.skinLayer.addChild(sprite);
+        },
+      });
     }
+
     for (const slider of skin.sliders) {
       const dst = this.evaluateElementDst(slider);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const value = resolveResultSliderValue(slider.type, this.result);
       if (value === undefined) continue;
-      const sprite = this.makeSliderSprite(slider, dst, value);
-      if (sprite) this.skinLayer.addChild(sprite);
+      work.push({
+        order: slider.declarationOrder,
+        paint: () => {
+          const sprite = this.makeSliderSprite(slider, dst, value);
+          if (sprite) this.skinLayer.addChild(sprite);
+        },
+      });
     }
-    // Polyline charts (`#SRC_GAUGECHART_*` / `#SRC_SCORECHART`) —
-    // result-screen progress graphs, animated left-to-right between
-    // SRC `start` / `end` ms once the controlling timer fires. Drawn
-    // last so they sit on top of the chart-area background.
+
+    // Polyline charts (`#SRC_GAUGECHART_*` / `#SRC_SCORECHART`)
+    // also live on `declarationOrder`: the LR2 default result skin
+    // declares the high-score panel image AFTER the graphs, so a
+    // proper sort puts the panel on top of the polylines too. The
+    // previous unsorted-tail pass left the polylines painting over
+    // the panel even though the CSV order said otherwise.
     for (const chart of skin.gaugeCharts) {
       const dst = this.evaluateElementDst(chart);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      const graphic = this.makeGaugeChartGraphic(chart, dst);
-      if (graphic) this.skinLayer.addChild(graphic);
+      work.push({
+        order: chart.declarationOrder,
+        paint: () => {
+          const graphic = this.makeGaugeChartGraphic(chart, dst);
+          if (graphic) this.skinLayer.addChild(graphic);
+        },
+      });
     }
+
     for (const chart of skin.scoreCharts) {
       const dst = this.evaluateElementDst(chart);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      const graphic = this.makeScoreChartGraphic(chart, dst);
-      if (graphic) this.skinLayer.addChild(graphic);
+      work.push({
+        order: chart.declarationOrder,
+        paint: () => {
+          const graphic = this.makeScoreChartGraphic(chart, dst);
+          if (graphic) this.skinLayer.addChild(graphic);
+        },
+      });
+    }
+
+    // Stable sort by declaration order; ties (rare — usually only
+    // when two element kinds share a SRC line, which the LR2 parser
+    // forbids) keep their push order so the pre-sort pass acts as
+    // the secondary key.
+    work.sort((a, b) => a.order - b.order);
+    for (const item of work) {
+      item.paint();
     }
   }
 

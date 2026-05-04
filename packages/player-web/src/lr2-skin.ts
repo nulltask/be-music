@@ -332,6 +332,8 @@ export interface Lr2GaugeChartElement {
   destination: Lr2DestinationRect;
   keyframes: Lr2DestinationRect[];
   side: '1P' | '2P';
+  /** See {@link Lr2ImageElement.declarationOrder}. */
+  declarationOrder: number;
 }
 
 /**
@@ -358,6 +360,8 @@ export interface Lr2ScoreChartElement {
   source: Lr2ScoreChartSourceRect;
   destination: Lr2DestinationRect;
   keyframes: Lr2DestinationRect[];
+  /** See {@link Lr2ImageElement.declarationOrder}. */
+  declarationOrder: number;
 }
 
 /**
@@ -2752,6 +2756,7 @@ function createGaugeChartElements(context: ParseContext): Lr2GaugeChartElement[]
       destination,
       keyframes: [...dstGroup],
       side: entry.side,
+      declarationOrder: entry.source.declarationOrder,
     });
   }
   return elements;
@@ -2779,6 +2784,7 @@ function createScoreChartElements(context: ParseContext): Lr2ScoreChartElement[]
       },
       destination,
       keyframes: [...dstGroup],
+      declarationOrder: entry.source.declarationOrder,
     });
   }
   return elements;
