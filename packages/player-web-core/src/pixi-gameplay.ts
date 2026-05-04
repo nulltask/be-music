@@ -3328,6 +3328,17 @@ export class PixiGameplayView {
       this.turntableLastUpdateAt = now;
       return;
     }
+    // Hold the disc still during the LR2 intro chrome (LOADING /
+    // DONE banner, fade-in, etc.). The chart isn't playing yet,
+    // so a spinning disc would read as "the song is already
+    // running" — exactly the wrong cue. Reset the timestamp so
+    // the first post-intro tick produces a small dt (rather than
+    // the cumulative wall-clock since the intro began, which
+    // would integrate to a huge angle jump on the first frame).
+    if (this.isIntroPlaying()) {
+      this.turntableLastUpdateAt = now;
+      return;
+    }
     const dt = Math.max(0, (now - this.turntableLastUpdateAt) / 1000);
     this.turntableLastUpdateAt = now;
     if (this.paused || dt <= 0) return;
