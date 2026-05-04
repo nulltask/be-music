@@ -5,7 +5,10 @@ import { readDxaArchive } from './lr2-dxa.ts';
 import { decodeTga, isTgaImage } from './lr2-tga.ts';
 import { asLoadedBytes } from './file-lookup.ts';
 import { normalizePath } from './library.ts';
+import { logger } from './logger.ts';
 import type { BrowserSongAssetEntry } from './types.ts';
+
+const log = logger('lr2-font');
 
 /**
  * Loads every `#LR2FONT,n,path` declared by a parsed skin into
@@ -32,8 +35,7 @@ export async function loadSkinBitmapFonts(
   files: ReadonlyMap<string, BrowserSongAssetEntry>,
 ): Promise<Map<number, Lr2LoadedFont>> {
   const declared = fontPaths.filter((path) => path.length > 0).length;
-  // eslint-disable-next-line no-console
-  console.info(`[lr2-font] start: ${declared}/${fontPaths.length} non-empty font slots, ${files.size} files in source`);
+  log.info(`start: ${declared}/${fontPaths.length} non-empty font slots, ${files.size} files in source`);
   const out = new Map<number, Lr2LoadedFont>();
   await Promise.all(
     fontPaths.map(async (path, index) => {
@@ -42,8 +44,7 @@ export async function loadSkinBitmapFonts(
       if (loaded) out.set(index, loaded);
     }),
   );
-  // eslint-disable-next-line no-console
-  console.info(`[lr2-font] done: loaded ${out.size}/${declared} bitmap fonts`);
+  log.info(`done: loaded ${out.size}/${declared} bitmap fonts`);
   return out;
 }
 
@@ -56,8 +57,7 @@ async function tryLoadFont(
   // Direct hit on a `.dxa` declaration.
   if (lower.endsWith('.dxa')) {
     if (!direct) {
-      // eslint-disable-next-line no-console
-      console.info(`[lr2-font] miss: declared .dxa not found in source: ${declaredPath}`);
+      log.info(`miss: declared .dxa not found in source: ${declaredPath}`);
       return undefined;
     }
     return loadFontFromDxa(direct, declaredPath);
@@ -76,8 +76,7 @@ async function tryLoadFont(
     if (archivePath) {
       const archiveBytes = lookupCaseInsensitive(files, archivePath);
       if (archiveBytes) return loadFontFromDxa(archiveBytes, archivePath);
-      // eslint-disable-next-line no-console
-      console.info(`[lr2-font] miss: collapsed-dir .dxa not found: ${declaredPath} → tried ${archivePath}`);
+      log.info(`miss: collapsed-dir .dxa not found: ${declaredPath} → tried ${archivePath}`);
     }
   }
   // Some themes name the path without an extension. Try both
@@ -92,9 +91,8 @@ async function tryLoadFont(
   // mismatch (Shift-JIS path in the CSV vs. UTF-8 keys in the
   // source files map) or a directory-loader that skipped binary
   // files entirely.
-  // eslint-disable-next-line no-console
-  console.info(
-    `[lr2-font] miss: no matching file for declared path "${declaredPath}" ` +
+  log.info(
+    `miss: no matching file for declared path "${declaredPath}" ` +
       `(tried direct, collapsed .dxa, suffix .dxa, suffix .lr2font)`,
   );
   return undefined;
@@ -142,8 +140,7 @@ async function loadFontFromDxa(bytes: Uint8Array, fontPath: string): Promise<Lr2
     // placeholder text so the scene is still legible. Logged once
     // per font path at INFO since this is expected on user-shipped
     // themes; not a warning.
-    // eslint-disable-next-line no-console
-    console.info(`[lr2-font] DXA decode failed: ${fontPath} (encrypted or unsupported)`);
+    log.info(`DXA decode failed: ${fontPath} (encrypted or unsupported)`);
     return undefined;
   }
   // Build an in-archive lookup map so the .lr2font's relative
@@ -154,14 +151,12 @@ async function loadFontFromDxa(bytes: Uint8Array, fontPath: string): Promise<Lr2
   }
   const lr2FontFile = archive.files.find((file) => file.path.toLowerCase().endsWith('.lr2font'));
   if (!lr2FontFile) {
-    // eslint-disable-next-line no-console
-    console.info(`[lr2-font] DXA decoded OK but contained no .lr2font: ${fontPath}`);
+    log.info(`DXA decoded OK but contained no .lr2font: ${fontPath}`);
     return undefined;
   }
   const text = decodeText(lr2FontFile.data);
   if (!text) {
-    // eslint-disable-next-line no-console
-    console.info(`[lr2-font] DXA .lr2font text decode failed: ${fontPath}`);
+    log.info(`DXA .lr2font text decode failed: ${fontPath}`);
     return undefined;
   }
   const font = parseLr2Font(text);
@@ -174,8 +169,7 @@ async function loadFontFromDxa(bytes: Uint8Array, fontPath: string): Promise<Lr2
   // count, which is the easiest cue when a font decodes but its
   // sibling images don't (zero textures → glyphs fall back to
   // placeholder rectangles even though the layout is correct).
-  // eslint-disable-next-line no-console
-  console.info(`[lr2-font] DXA decoded OK: ${fontPath} (${archive.files.length} entries, ${textures.size} textures)`);
+  log.info(`DXA decoded OK: ${fontPath} (${archive.files.length} entries, ${textures.size} textures)`);
   return { font, textures };
 }
 
@@ -221,8 +215,7 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
     const texture = await Assets.load<Texture>(url);
     return texture;
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.warn(`[lr2-font] failed to decode ${relPath}`, error);
+    log.warn(`failed to decode ${relPath}`, error);
     return undefined;
   }
 }
@@ -230,8 +223,7 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
 async function loadTgaTexture(bytes: Uint8Array, relPath: string): Promise<Texture | undefined> {
   const decoded = decodeTga(bytes);
   if (!decoded) {
-    // eslint-disable-next-line no-console
-    console.warn(`[lr2-font] failed to decode TGA ${relPath}`);
+    log.warn(`failed to decode TGA ${relPath}`);
     return undefined;
   }
   // Wrap the raw pixels in `ImageData`, then either rasterize via

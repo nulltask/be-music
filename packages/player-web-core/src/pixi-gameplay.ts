@@ -125,6 +125,9 @@ import { renderFallbackLr2Frame } from './pixi-gameplay-fallback.ts';
 import { resolveScaledViewport } from './lr2-scene-render.ts';
 import { loadSkinBitmapFonts } from './lr2-font-loader.ts';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './lr2-bitmap-text.ts';
+import { logger } from './logger.ts';
+
+const log = logger('gameplay');
 
 interface RuntimeNote extends TimedPlayableNote {
   hit: boolean;
@@ -1112,8 +1115,7 @@ export class PixiGameplayView {
       const focusNow = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
       if (hiddenNow !== this.lastHidden) {
         this.lastHidden = hiddenNow;
-        // eslint-disable-next-line no-console
-        console.log('[gameplay] poll detected hidden change', { hidden: hiddenNow });
+        log.info('poll detected hidden change', { hidden: hiddenNow });
         if (hiddenNow) {
           this.handleWindowBlur();
         } else {
@@ -1121,8 +1123,7 @@ export class PixiGameplayView {
         }
       } else if (focusNow !== this.lastFocus) {
         this.lastFocus = focusNow;
-        // eslint-disable-next-line no-console
-        console.log('[gameplay] poll detected focus change', { focus: focusNow });
+        log.info('poll detected focus change', { focus: focusNow });
         if (!focusNow) {
           this.handleWindowBlur();
         } else {
@@ -1130,8 +1131,7 @@ export class PixiGameplayView {
         }
       }
     }, 250);
-    // eslint-disable-next-line no-console
-    console.log('[gameplay] listeners attached', {
+    log.info('listeners attached', {
       visibilityState: document.visibilityState,
       hidden: document.hidden,
       hasFocus: typeof document.hasFocus === 'function' ? document.hasFocus() : 'n/a',
@@ -1157,8 +1157,7 @@ export class PixiGameplayView {
     // (LR2 timer 40 → 41 / op 80 → 81) on `bgaReadyPromise`, so
     // notes still don't begin until the BGA is in place.
     this.bgaReadyPromise = this.prepareBga().catch((error) => {
-      // eslint-disable-next-line no-console
-      console.warn('[gameplay] BGA preload failed; continuing without it', error);
+      log.warn('BGA preload failed; continuing without it', error);
     });
   }
 
@@ -1492,8 +1491,7 @@ export class PixiGameplayView {
       window.clearTimeout(timeout);
     }
     this.keyFlashTimeouts.clear();
-    // eslint-disable-next-line no-console
-    console.log('[gameplay] listeners detached');
+    log.info('listeners detached');
     // Pause every BGA video BEFORE we touch textures. The Pixi
     // `VideoSource` wrapping each video registers a
     // `requestVideoFrameCallback` that re-uploads frames into the
@@ -1564,8 +1562,7 @@ export class PixiGameplayView {
       this.bombTexture?.destroy(true);
       this.bombTexture = undefined;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[gameplay] texture cleanup threw', error);
+      log.warn('texture cleanup threw', error);
     }
     // Destroy our scene-graph subtree. With the shared host pattern
     // we never call `app.destroy` here — that would nuke the canvas
@@ -1573,8 +1570,7 @@ export class PixiGameplayView {
     try {
       this.sceneRoot.destroy({ children: true });
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[gameplay] sceneRoot.destroy threw', error);
+      log.warn('sceneRoot.destroy threw', error);
     }
     this.host = undefined;
   }
@@ -2237,8 +2233,7 @@ export class PixiGameplayView {
     // Combined they form the floor of "press → hear" latency we
     // can't optimise away from JS.
     const ctx = this.audioContext;
-    // eslint-disable-next-line no-console
-    console.log('[gameplay] AudioContext ready', {
+    log.info('AudioContext ready', {
       sampleRate: ctx.sampleRate,
       state: ctx.state,
       baseLatencyMs: typeof ctx.baseLatency === 'number' ? +(ctx.baseLatency * 1000).toFixed(2) : 'n/a',
@@ -2450,8 +2445,7 @@ export class PixiGameplayView {
    * changes.
    */
   private readonly handleVisibilityChange = (): void => {
-    // eslint-disable-next-line no-console
-    console.log('[gameplay] visibilitychange', {
+    log.info('visibilitychange', {
       visibilityState: document.visibilityState,
       hidden: document.hidden,
       paused: this.paused,
@@ -2518,8 +2512,7 @@ export class PixiGameplayView {
    * gated on the same `autoPaused` flag so the two listeners cooperate.
    */
   private readonly handleWindowBlur = (): void => {
-    // eslint-disable-next-line no-console
-    console.log('[gameplay] window blur', {
+    log.info('window blur', {
       paused: this.paused,
       autoPaused: this.autoPaused,
       autoPauseOnBlur: this.autoPauseOnBlur,
@@ -2535,8 +2528,7 @@ export class PixiGameplayView {
   };
 
   private readonly handleWindowFocus = (): void => {
-    // eslint-disable-next-line no-console
-    console.log('[gameplay] window focus', { paused: this.paused, autoPaused: this.autoPaused });
+    log.info('window focus', { paused: this.paused, autoPaused: this.autoPaused });
     if (this.autoPaused && this.paused) {
       this.togglePause();
       this.autoPaused = false;
@@ -3332,8 +3324,10 @@ export class PixiGameplayView {
       notesTotal: this.notes.length,
     }));
     if (report) {
-      // eslint-disable-next-line no-console
-      console.log(report);
+      // High-volume (~every sampled frame) — keep on the
+      // verbose-only `debug` level so it doesn't drown out
+      // the host's Info console with per-frame counts.
+      log.debug('perf', report);
     }
     this.frame = requestAnimationFrame(this.tick);
   };
@@ -3871,8 +3865,7 @@ export class PixiGameplayView {
     const now = this.playClock();
     this.timerStartedAt.set(48, now);
     this.timerStartedAt.set(49, now);
-    // eslint-disable-next-line no-console
-    console.log('[gameplay] FULL COMBO');
+    log.info('FULL COMBO');
   }
 
   /**

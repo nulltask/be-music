@@ -43,8 +43,10 @@ import {
 import { clampFontSize, isDestinationVisible, makeLr2TextSprite, resolveScaledViewport } from './lr2-scene-render.ts';
 import { loadSkinBitmapFonts } from './lr2-font-loader.ts';
 import type { Lr2LoadedFont } from './lr2-bitmap-text.ts';
+import { logger } from './logger.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
+const log = logger('select');
 const BG = new Color('#08090d');
 const PANEL = new Color('#151923');
 const ACTIVE = new Color('#ffd166');
@@ -1273,8 +1275,7 @@ export class PixiSongSelectView {
         if (this.disposed) return;
         this.oneShotBuffers.set(name, buffer);
       } catch (error) {
-        // eslint-disable-next-line no-console
-        console.warn(`[select] one-shot "${name}" decode failed`, error);
+        log.warn(`one-shot "${name}" decode failed`, error);
         return;
       } finally {
         this.oneShotDecoding.delete(name);
@@ -1685,8 +1686,10 @@ export class PixiSongSelectView {
         songs: this.collection.songs.length,
       }));
       if (report) {
-        // eslint-disable-next-line no-console
-        console.log(report);
+        // High-volume (~every sampled frame) — keep on the
+        // verbose-only `debug` level so it doesn't drown out
+        // the host's Info console.
+        log.debug('perf', report);
       }
     };
     this.animationFrame = requestAnimationFrame(tick);
@@ -1733,14 +1736,12 @@ export class PixiSongSelectView {
       this.skinTextures.dispose();
       this.chartGraphicTextures.dispose();
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[select] texture cleanup threw', error);
+      log.warn('texture cleanup threw', error);
     }
     try {
       this.sceneRoot.destroy({ children: true });
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[select] sceneRoot.destroy threw', error);
+      log.warn('sceneRoot.destroy threw', error);
     }
     this.host = undefined;
     this.mountedContainer = undefined;
@@ -2020,8 +2021,7 @@ export class PixiSongSelectView {
         if (this.disposed) return;
         this.selectBgmBuffer = buffer;
       } catch (error) {
-        // eslint-disable-next-line no-console
-        console.warn('[select] BGM decode failed', error);
+        log.warn('BGM decode failed', error);
         return;
       } finally {
         this.selectBgmDecodeInFlight = false;

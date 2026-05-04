@@ -1,5 +1,8 @@
 import { Texture, VideoSource } from 'pixi.js';
 import { resolveLr2AssetBytes, type Lr2Skin } from './lr2-skin.ts';
+import { logger } from './logger.ts';
+
+const log = logger('bga-video');
 
 /**
  * Result of `loadVideoTextureFromBytes`. The texture is a Pixi
@@ -84,20 +87,17 @@ export async function loadVideoTextureFromBytes(
 ): Promise<VideoTextureHandle | undefined> {
   const direct = await tryLoadVideoTextureFromBytes(path, bytes);
   if (direct) return direct;
-  // eslint-disable-next-line no-console
-  console.info(`[bga-video] native decode failed; falling back to ffmpeg.wasm transcode: ${path}`);
+  log.info(`native decode failed; falling back to ffmpeg.wasm transcode: ${path}`);
   let transcoded: Uint8Array | undefined;
   if (options?.useWebCodecs && isWebCodecsEncodeSupported()) {
     transcoded = await transcodeViaWebCodecs(bytes, path, options).catch((error) => {
-      // eslint-disable-next-line no-console
-      console.warn(`[bga-video] WebCodecs transcode failed; falling back to ffmpeg encode: ${path}`, error);
+      log.warn(`WebCodecs transcode failed; falling back to ffmpeg encode: ${path}`, error);
       return undefined;
     });
   }
   if (!transcoded) {
     transcoded = await transcodeVideoToBrowserCodec(bytes, path, options).catch((error) => {
-      // eslint-disable-next-line no-console
-      console.warn(`[bga-video] transcode failed: ${path}`, error);
+      log.warn(`transcode failed: ${path}`, error);
       return undefined;
     });
   }
@@ -184,13 +184,9 @@ async function transcodeVideoToBrowserCodec(
 ): Promise<Uint8Array | undefined> {
   const startedAt = performance.now();
   const maxLongEdge = resolveMaxLongEdge(options);
-  // eslint-disable-next-line no-console
-  console.info(
-    `[bga-video] transcode start: ${path} (${bytes.byteLength} bytes${maxLongEdge ? `, resize ≤ ${maxLongEdge}px` : ''})`,
-  );
+  log.info(`transcode start: ${path} (${bytes.byteLength} bytes${maxLongEdge ? `, resize ≤ ${maxLongEdge}px` : ''})`);
   const ffmpeg = await loadFfmpeg().catch((error) => {
-    // eslint-disable-next-line no-console
-    console.warn('[bga-video] failed to load ffmpeg.wasm — BGA video will be skipped', error);
+    log.warn('failed to load ffmpeg.wasm — BGA video will be skipped', error);
     return undefined;
   });
   if (!ffmpeg) return undefined;
@@ -251,8 +247,7 @@ async function transcodeVideoToBrowserCodec(
     );
     const exitCode = await ffmpeg.exec(ffmpegArgs);
     if (exitCode !== 0) {
-      // eslint-disable-next-line no-console
-      console.warn(`[bga-video] ffmpeg exited with code ${exitCode} for ${path}`);
+      log.warn(`ffmpeg exited with code ${exitCode} for ${path}`);
       return undefined;
     }
     const out = await ffmpeg.readFile(outputName);
@@ -266,17 +261,14 @@ async function transcodeVideoToBrowserCodec(
       outBytes = new TextEncoder().encode(out);
     }
     if (!outBytes || outBytes.byteLength === 0) {
-      // eslint-disable-next-line no-console
-      console.warn(`[bga-video] ffmpeg produced empty output for ${path}`);
+      log.warn(`ffmpeg produced empty output for ${path}`);
       return undefined;
     }
     const elapsed = ((performance.now() - startedAt) / 1000).toFixed(2);
-    // eslint-disable-next-line no-console
-    console.info(`[bga-video] transcode ok: ${path} → ${outBytes.byteLength} bytes (${elapsed}s)`);
+    log.info(`transcode ok: ${path} → ${outBytes.byteLength} bytes (${elapsed}s)`);
     return outBytes;
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.warn(`[bga-video] transcode threw for ${path}`, error);
+    log.warn(`transcode threw for ${path}`, error);
     return undefined;
   } finally {
     try {
@@ -366,13 +358,11 @@ async function transcodeViaWebCodecs(
   if (!isWebCodecsEncodeSupported()) return undefined;
   const startedAt = performance.now();
   const maxLongEdge = resolveMaxLongEdge(options);
-  // eslint-disable-next-line no-console
-  console.info(
-    `[bga-video] WebCodecs transcode start: ${path} (${bytes.byteLength} bytes${maxLongEdge ? `, resize ≤ ${maxLongEdge}px` : ''})`,
+  log.info(
+    `WebCodecs transcode start: ${path} (${bytes.byteLength} bytes${maxLongEdge ? `, resize ≤ ${maxLongEdge}px` : ''})`,
   );
   const ffmpeg = await loadFfmpeg().catch((error) => {
-    // eslint-disable-next-line no-console
-    console.warn('[bga-video] failed to load ffmpeg.wasm — WebCodecs transcode aborted', error);
+    log.warn('failed to load ffmpeg.wasm — WebCodecs transcode aborted', error);
     return undefined;
   });
   if (!ffmpeg) return undefined;
@@ -410,20 +400,17 @@ async function transcodeViaWebCodecs(
     probeArgs.push('-f', 'null', '-');
     const probeExit = await ffmpeg.exec(probeArgs);
     if (probeExit !== 0) {
-      // eslint-disable-next-line no-console
-      console.warn(`[bga-video] ffmpeg probe (WebCodecs path) exited with code ${probeExit} for ${path}`);
+      log.warn(`ffmpeg probe (WebCodecs path) exited with code ${probeExit} for ${path}`);
       return undefined;
     }
     const probe = parseFfmpegProbe(probeLines);
     if (!probe) {
-      // eslint-disable-next-line no-console
-      console.warn(`[bga-video] WebCodecs path could not parse ffmpeg probe; falling back: ${path}`);
+      log.warn(`WebCodecs path could not parse ffmpeg probe; falling back: ${path}`);
       return undefined;
     }
     const { width, height, frameRate, durationSec } = probe;
     if (!durationSec || durationSec <= 0) {
-      // eslint-disable-next-line no-console
-      console.warn(`[bga-video] WebCodecs path could not determine duration; falling back: ${path}`);
+      log.warn(`WebCodecs path could not determine duration; falling back: ${path}`);
       return undefined;
     }
     // 12 bits per pixel (yuv420p): 1.5 bytes per pixel.
@@ -453,14 +440,12 @@ async function transcodeViaWebCodecs(
     };
     const support = await VideoEncoder.isConfigSupported(encoderConfig);
     if (!support.supported) {
-      // eslint-disable-next-line no-console
-      console.warn(`[bga-video] WebCodecs encoder rejected config for ${path}; falling back`, support);
+      log.warn(`WebCodecs encoder rejected config for ${path}; falling back`, support);
       return undefined;
     }
     const negotiated = support.config ?? encoderConfig;
     const accelerationLabel = negotiated.hardwareAcceleration ?? 'no-preference';
-    // eslint-disable-next-line no-console
-    console.info(`[bga-video] WebCodecs encoder negotiated: ${negotiated.codec} (${accelerationLabel})`);
+    log.info(`WebCodecs encoder negotiated: ${negotiated.codec} (${accelerationLabel})`);
     const { Muxer, ArrayBufferTarget } = await import('mp4-muxer');
     const target = new ArrayBufferTarget();
     const muxer = new Muxer({
@@ -481,8 +466,7 @@ async function transcodeViaWebCodecs(
         muxer.addVideoChunk(chunk, metadata);
       },
       error: (error) => {
-        // eslint-disable-next-line no-console
-        console.warn(`[bga-video] WebCodecs encoder error for ${path}`, error);
+        log.warn(`WebCodecs encoder error for ${path}`, error);
       },
     });
     encoder.configure(negotiated);
@@ -517,9 +501,8 @@ async function transcodeViaWebCodecs(
       chunkArgs.push('-c:v', 'rawvideo', '-pix_fmt', 'yuv420p', '-f', 'rawvideo', '-an', '-sn', '-dn', chunkName);
       const chunkExit = await ffmpeg.exec(chunkArgs);
       if (chunkExit !== 0) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[bga-video] ffmpeg chunk decode (WebCodecs path) exited with code ${chunkExit} at ${chunkStartSec.toFixed(2)}s for ${path}`,
+        log.warn(
+          `ffmpeg chunk decode (WebCodecs path) exited with code ${chunkExit} at ${chunkStartSec.toFixed(2)}s for ${path}`,
         );
         return undefined;
       }
@@ -541,9 +524,8 @@ async function transcodeViaWebCodecs(
         break;
       }
       if (chunkBytes.byteLength % bytesPerFrame !== 0) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[bga-video] WebCodecs path: chunk byte length ${chunkBytes.byteLength} not divisible by ${bytesPerFrame} (frame size); falling back: ${path}`,
+        log.warn(
+          `WebCodecs path: chunk byte length ${chunkBytes.byteLength} not divisible by ${bytesPerFrame} (frame size); falling back: ${path}`,
         );
         return undefined;
       }
@@ -580,14 +562,12 @@ async function transcodeViaWebCodecs(
     muxer.finalize();
     const outBytes = new Uint8Array(target.buffer);
     const elapsed = ((performance.now() - startedAt) / 1000).toFixed(2);
-    // eslint-disable-next-line no-console
-    console.info(
-      `[bga-video] WebCodecs transcode ok: ${path} → ${outBytes.byteLength} bytes (${elapsed}s, ${frameIndex} frames @ ${width}×${height}, ${chunkCount} chunks of ≤${chunkSeconds}s)`,
+    log.info(
+      `WebCodecs transcode ok: ${path} → ${outBytes.byteLength} bytes (${elapsed}s, ${frameIndex} frames @ ${width}×${height}, ${chunkCount} chunks of ≤${chunkSeconds}s)`,
     );
     return outBytes;
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.warn(`[bga-video] WebCodecs transcode threw for ${path}`, error);
+    log.warn(`WebCodecs transcode threw for ${path}`, error);
     return undefined;
   } finally {
     if (probeListener) {
@@ -765,8 +745,7 @@ async function loadFfmpeg(): Promise<FfmpegInstance> {
     // TypeError on `"unwind"` strings / OOMs), so the stderr log
     // is often our only signal when something goes wrong.
     ffmpeg.on('log', ({ type, message }: { type: string; message: string }) => {
-      // eslint-disable-next-line no-console
-      console.debug(`[bga-video] ffmpeg ${type}: ${message}`);
+      log.debug(`ffmpeg ${type}: ${message}`);
     });
     await ffmpeg.load({ coreURL: coreBlobUrl, wasmURL: wasmBlobUrl });
     cachedFfmpeg = ffmpeg as FfmpegInstance;

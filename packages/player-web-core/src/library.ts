@@ -14,10 +14,13 @@ import type {
 } from './types.ts';
 import { isChartFilePath } from './drop.ts';
 import { loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
+import { logger } from './logger.ts';
 
 export { loadAssetBytes, asLoadedBytes } from './file-lookup.ts';
 
 export { basename, dirname, normalizePath } from '@be-music/utils/core';
+
+const log = logger('drop');
 
 /**
  * Optional progress hook for the dropped-folder loaders. When
@@ -179,8 +182,7 @@ async function collectFilesFromEntry(
       // the entire drop. Log and skip — the resulting collection
       // simply omits that file, matching what real LR2 does
       // when an asset is missing.
-      // eslint-disable-next-line no-console
-      console.warn(`[drop] skipped (entry.file failed): ${prefix}${entry.name}`, error);
+      log.warn(`skipped (entry.file failed): ${prefix}${entry.name}`, error);
       return;
     }
     const relativePath = prefix ? `${prefix}${file.name}` : file.name;
@@ -208,8 +210,7 @@ async function collectFilesFromEntry(
         // THIS directory — the parent walk continues with what
         // we already collected. Logged because this is unusual
         // (file-system errors are uncommon in dropped folders).
-        // eslint-disable-next-line no-console
-        console.warn(`[drop] skipped (readEntries failed): ${nextPrefix}`, error);
+        log.warn(`skipped (readEntries failed): ${nextPrefix}`, error);
         return;
       }
       if (batch.length === 0) {
@@ -229,8 +230,7 @@ async function collectFilesFromEntry(
         try {
           await collectFilesFromEntry(child, nextPrefix, files, onProgress);
         } catch (error) {
-          // eslint-disable-next-line no-console
-          console.warn(`[drop] skipped (child walk failed): ${nextPrefix}${child.name}`, error);
+          log.warn(`skipped (child walk failed): ${nextPrefix}${child.name}`, error);
         }
       });
     }
@@ -334,8 +334,7 @@ export async function readFilesIntoBytesMap(
         // drop. The map simply omits that path; the caller's
         // chart parser / asset resolver will treat it as missing,
         // which matches what happens for genuinely-missing files.
-        // eslint-disable-next-line no-console
-        console.warn(`[drop] skipped (arrayBuffer failed): ${path}`, error);
+        log.warn(`skipped (arrayBuffer failed): ${path}`, error);
       }
     }
     completed += 1;

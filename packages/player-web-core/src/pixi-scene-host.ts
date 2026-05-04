@@ -1,4 +1,7 @@
 import { Application, type ApplicationOptions, Container, RendererType } from 'pixi.js';
+import { logger } from './logger.ts';
+
+const log = logger('scene-host');
 
 /**
  * A single PixiJS scene that lives inside a {@link PixiSceneHost}.
@@ -118,8 +121,7 @@ export class PixiSceneHost {
     // Surface the actual renderer type — the `preference` field is
     // a *hint*, and the real backend may differ if WebGPU init
     // failed silently or if the override flag was used.
-    // eslint-disable-next-line no-console
-    console.log('[scene-host] renderer ready', {
+    log.info('renderer ready', {
       requested: preference,
       actual: rendererTypeLabel(this.app.renderer.type),
     });
@@ -147,8 +149,7 @@ export class PixiSceneHost {
         try {
           await previous.exit();
         } catch (error) {
-          // eslint-disable-next-line no-console
-          console.warn('[scene-host] previous scene.exit threw', error);
+          log.warn('previous scene.exit threw', error);
         }
         if (previous.root.parent === this.app.stage) {
           this.app.stage.removeChild(previous.root);
@@ -158,8 +159,7 @@ export class PixiSceneHost {
         try {
           await scene.enter(this);
         } catch (error) {
-          // eslint-disable-next-line no-console
-          console.warn('[scene-host] next scene.enter threw', error);
+          log.warn('next scene.enter threw', error);
         }
         if (!this.disposed) {
           this.app.stage.addChild(scene.root);
@@ -183,8 +183,7 @@ export class PixiSceneHost {
       try {
         this.current.dispose();
       } catch (error) {
-        // eslint-disable-next-line no-console
-        console.warn('[scene-host] scene.dispose threw', error);
+        log.warn('scene.dispose threw', error);
       }
       this.current = undefined;
     }
@@ -196,8 +195,7 @@ export class PixiSceneHost {
       // we used to hit.)
       this.app.destroy({ removeView: true, releaseGlobalResources: true }, { children: true });
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[scene-host] app.destroy threw', error);
+      log.warn('app.destroy threw', error);
     }
   }
 }

@@ -31,8 +31,11 @@ import {
 import { isDestinationVisible, makeLr2TextSprite, resolveScaledViewport } from './lr2-scene-render.ts';
 import { loadSkinBitmapFonts } from './lr2-font-loader.ts';
 import type { Lr2LoadedFont } from './lr2-bitmap-text.ts';
+import { logger } from './logger.ts';
 import type { BrowserSongCollection } from './types.ts';
 import type { PixiGameplayResultData } from './pixi-gameplay.ts';
+
+const log = logger('result');
 
 /**
  * Result scene. Shows the per-chart score breakdown (judge counts,
@@ -455,8 +458,7 @@ export class PixiResultView {
       source.start();
       this.bgmSource = source;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[result] BGM playback failed', error);
+      log.warn('BGM playback failed', error);
     }
   }
 
@@ -497,14 +499,12 @@ export class PixiResultView {
       this.skinTextures.dispose();
       this.chartGraphicTextures.dispose();
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[result] texture cleanup threw', error);
+      log.warn('texture cleanup threw', error);
     }
     try {
       this.sceneRoot.destroy({ children: true });
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[result] sceneRoot.destroy threw', error);
+      log.warn('sceneRoot.destroy threw', error);
     }
     this.host = undefined;
   }

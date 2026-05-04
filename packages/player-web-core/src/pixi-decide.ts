@@ -25,7 +25,10 @@ import {
 import { isDestinationVisible, makeLr2TextSprite, resolveScaledViewport } from './lr2-scene-render.ts';
 import { loadSkinBitmapFonts } from './lr2-font-loader.ts';
 import type { Lr2LoadedFont } from './lr2-bitmap-text.ts';
+import { logger } from './logger.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
+
+const log = logger('decide');
 
 /**
  * Decide scene — the brief "song confirmation" splash that LR2
@@ -276,14 +279,12 @@ export class PixiDecideView {
       this.skinTextures.dispose();
       this.chartGraphicTextures.dispose();
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[decide] texture cleanup threw', error);
+      log.warn('texture cleanup threw', error);
     }
     try {
       this.sceneRoot.destroy({ children: true });
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[decide] sceneRoot.destroy threw', error);
+      log.warn('sceneRoot.destroy threw', error);
     }
     this.host = undefined;
   }

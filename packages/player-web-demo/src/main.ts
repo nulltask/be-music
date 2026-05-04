@@ -9,6 +9,7 @@ import {
   describeSongCollection,
   downloadBlob,
   loadLr2ThemeSkinsFromFiles,
+  logger,
   makeWebmSeekable,
   parseCompressorMode,
   pickLr2PlaySkin,
@@ -28,6 +29,10 @@ import {
   type PixiGameplayResultData,
   type PixiSongSelectNavigation,
 } from '@be-music/player-web-core';
+
+const dropLog = logger('drop');
+const recordLog = logger('record');
+const gameplayLog = logger('gameplay');
 // lil-gui auto-injects its stylesheet at construction time (see
 // `injectStyles` option, default `true`), so we don't import its
 // CSS explicitly — its package.json doesn't expose the file via
@@ -1121,8 +1126,7 @@ class PlayerWebDemoApp {
       controller?.name('■ Stop');
       this.setStatus('Recording…');
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[record] start failed', error);
+      recordLog.warn('start failed', error);
       this.setStatus(`Recording unavailable: ${(error as Error).message}`);
     }
   }
@@ -1241,9 +1245,8 @@ class PlayerWebDemoApp {
       const carriesLr2Theme = themeFiles.some((file) =>
         (file.webkitRelativePath || file.name).toLowerCase().endsWith('.lr2skin'),
       );
-      // eslint-disable-next-line no-console
-      console.log(
-        `[drop] received ${files.length} file(s) · theme=${themeFiles.length}${carriesLr2Theme ? '' : ' (no .lr2skin → preserving current theme)'} · songs=${songFiles.length}`,
+      dropLog.info(
+        `received ${files.length} file(s) · theme=${themeFiles.length}${carriesLr2Theme ? '' : ' (no .lr2skin → preserving current theme)'} · songs=${songFiles.length}`,
       );
       const tasks: Array<Promise<unknown>> = [];
       if (carriesLr2Theme) {
@@ -1253,21 +1256,18 @@ class PlayerWebDemoApp {
         tasks.push(this.loadSongs(songFiles));
       }
       if (tasks.length === 0) {
-        // eslint-disable-next-line no-console
-        console.warn('[drop] nothing to load — neither theme nor chart files matched');
+        dropLog.warn('nothing to load — neither theme nor chart files matched');
         return;
       }
       await Promise.all(tasks);
       const playSkinSummary = summarizeLr2PlaySkins(this.playSkins);
-      // eslint-disable-next-line no-console
-      console.log(
-        `[drop] loaded · songs=${this.collection.songs.length} · errors=${
+      dropLog.info(
+        `loaded · songs=${this.collection.songs.length} · errors=${
           this.collection.errors.length
         } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin?.name ?? 'none'}`,
       );
       if (this.collection.errors.length > 0) {
-        // eslint-disable-next-line no-console
-        console.warn('[drop] parse errors:', this.collection.errors);
+        dropLog.warn('parse errors:', this.collection.errors);
       }
       // Status panel stays terse on purpose — only show "loaded"
       // when there's something to celebrate, and skip the
@@ -1556,8 +1556,7 @@ class PlayerWebDemoApp {
     try {
       await preloaded;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[gameplay] preload failed; falling back to no-decide path', error);
+      gameplayLog.warn('preload failed; falling back to no-decide path', error);
       this.gameplayView?.dispose();
       this.gameplayView = undefined;
       this.decideView?.dispose();
@@ -1584,8 +1583,7 @@ class PlayerWebDemoApp {
         this.setStatus('Recording…');
       } catch (error) {
         controller?.name('● Record');
-        // eslint-disable-next-line no-console
-        console.warn('[record] auto-start failed', error);
+        recordLog.warn('auto-start failed', error);
       }
     }
   }
@@ -1681,8 +1679,7 @@ class PlayerWebDemoApp {
         this.setStatus('Recording…');
       } catch (error) {
         controller?.name('● Record');
-        // eslint-disable-next-line no-console
-        console.warn('[record] auto-start failed', error);
+        recordLog.warn('auto-start failed', error);
         this.setStatus(`Recording unavailable: ${(error as Error).message}`);
       }
     }
