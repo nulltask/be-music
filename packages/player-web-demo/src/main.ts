@@ -331,6 +331,12 @@ app.innerHTML = `
                   <strong>Scores are not saved.</strong> There is no persistence or leaderboard
                   yet — refreshing the page or revisiting later loses every result.
                 </li>
+                <li>
+                  <strong>Only the Lunatic Rave 2 default skin has been verified.</strong> Other LR2
+                  skins parse and load, but their layout is unverified — expect element overlap,
+                  off-by-a-few-pixels positioning, or missing animation frames on third-party
+                  themes.
+                </li>
                 <li>Use at your own risk. No warranty is provided.</li>
               </ul>
             </section>
@@ -422,6 +428,10 @@ app.innerHTML = `
                 <li>
                   <strong>スコアは保存されません。</strong>
                   永続化やランキング機能は未実装で、ページをリロード / 再訪するとリザルトはすべて失われます。
+                </li>
+                <li>
+                  <strong>Lunatic Rave 2 のデフォルトスキンのみ動作確認しています。</strong>
+                  他の LR2 スキンも読み込み自体は可能ですが、レイアウトは未検証です。要素の重なり / 数ピクセル単位のズレ / 一部アニメーションの欠落などが残っている可能性があります。
                 </li>
                 <li>利用は自己責任でお願いします。本ソフトウェアは無保証で提供されます。</li>
               </ul>
