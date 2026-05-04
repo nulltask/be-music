@@ -3257,14 +3257,22 @@ export class PixiGameplayView {
    * on every scratch-channel press (manual `Shift` keydown,
    * full autoplay, or auto-scratch mode).
    *
-   * - First press of an isolated event: brake (`v = baseline
-   *   − delta`, drives velocity negative → momentary reverse).
+   * - First press of an isolated event: brake (`v = −delta`,
+   *   pure reverse rotation).
    * - Subsequent presses inside {@link TURNTABLE_STREAK_GAP_MS}:
    *   alternate sign each press, so a rapid scratch run paints
    *   a back-and-forth motion (forward / reverse / forward /
-   *   reverse). After a quiet gap, the sign resets so the next
-   *   isolated press brakes again rather than spinning forward
-   *   unprompted.
+   *   reverse) at equal magnitudes. After a quiet gap, the
+   *   sign resets so the next isolated press brakes again
+   *   rather than spinning forward unprompted.
+   *
+   * Snap is centred on zero (not baseline) deliberately. The
+   * baseline is the *idle* spin; while the user is actively
+   * scratching, the disc should behave as if the hand is on it
+   * — pure forward / pure reverse motion. The integrator in
+   * {@link updateTurntable} suppresses the baseline-recovery
+   * pull during the streak window so the snapped velocity
+   * actually persists between presses.
    *
    * Channels other than `16` / `26` are no-ops, so this can be
    * called unconditionally from generic note-hit paths.
@@ -3282,9 +3290,8 @@ export class PixiGameplayView {
       this.turntableNextSign[side] = -1;
     }
     const sign = this.turntableNextSign[side];
-    const baseline = PixiGameplayView.TURNTABLE_BASELINE_RAD_PER_SEC;
     const delta = PixiGameplayView.TURNTABLE_PRESS_DELTA_RAD_PER_SEC;
-    this.turntableVelocity[side] = baseline + sign * delta;
+    this.turntableVelocity[side] = sign * delta;
     // Flip for next press. Re-typed via the conditional so TS
     // narrows back to the `-1 | 1` literal; a plain `-sign`
     // widens to `number` and breaks the field's type.
@@ -3298,13 +3305,19 @@ export class PixiGameplayView {
    * reflects this frame's elapsed time rather than the
    * previous frame's.
    *
-   * Velocity exponentially relaxes toward the baseline:
-   *   `v += (baseline − v) · (1 − exp(−recovery·dt))`
-   * Steady-state is the baseline (so the disc spins
-   * indefinitely with no input); each brake from
-   * {@link applyTurntableImpulse} drops `v` below baseline and
-   * this term recovers it within ~0.4 s at the current 2.5/sec
-   * recovery rate.
+   * Two regimes, gated on the streak window:
+   *
+   * - **In streak** (within {@link TURNTABLE_STREAK_GAP_MS} of
+   *   the last press): the snapped velocity is preserved as
+   *   the user "holds" the disc. Each press flips the sign,
+   *   so the angle traces a back-and-forth motion at constant
+   *   ±delta speed — the visual analogue of a hand on the
+   *   platter rocking it forward / back.
+   * - **Out of streak**: velocity exponentially relaxes
+   *   toward the baseline `v += (baseline − v) · (1 −
+   *   exp(−recovery·dt))`. Steady-state is the baseline
+   *   forward spin, so the disc resumes its idle cadence on
+   *   its own once the player stops pressing.
    *
    * Pause skips integration so the disc holds its current
    * angle until the user resumes — matches what gameplay pause
@@ -3322,6 +3335,13 @@ export class PixiGameplayView {
     const recovery = 1 - Math.exp(-PixiGameplayView.TURNTABLE_RECOVERY_PER_SEC * dt);
     for (const side of ['1', '2'] as const) {
       this.turntableAngle[side] += this.turntableVelocity[side] * dt;
+      // Suppress baseline pull while the user is still inside
+      // the streak window. The disc holds the snapped velocity
+      // so consecutive presses carry the angle through visible
+      // forward / reverse arcs without the spring snapping it
+      // back toward baseline between presses.
+      const inStreak = now - this.turntableLastImpulseAt[side] < PixiGameplayView.TURNTABLE_STREAK_GAP_MS;
+      if (inStreak) continue;
       this.turntableVelocity[side] += (baseline - this.turntableVelocity[side]) * recovery;
     }
   }
