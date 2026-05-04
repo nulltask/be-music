@@ -56,6 +56,7 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 | `#BPM`, `#BPMxx`, `#STOPxx`, `#STP` | Used for time resolution. |
 | `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL` | Used for judgment range, display rank, groove gauge calculation. |
 | `#WAVxx`, `#BMPxx` | Used for audio/BGA resource resolution. |
+| `#BASE` | Selects the BMS object ID base. `#BASE 62` keeps lowercase IDs case-sensitive when resolving samples, BGA, BPM/STOP references, long-note ends, and landmine values. |
 | `#PREVIEW` | Used preferentially for preview playback on the song selection screen. |
 | `#PATH_WAV` | Used only to search for files on the song selection screen preview. It is not used to solve samples during normal play. |
 | `#LNTYPE`, `#LNMODE`, `#LNOBJ` | Used to interpret BMS long notes. |

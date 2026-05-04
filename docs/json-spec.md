@@ -48,6 +48,7 @@ Also, as it is still in the early stages of development, backward compatibility 
     },
     "player": 1,
     "pathWav": "sounds/",
+    "base": 62,
     "baseBpm": 155,
     "stp": ["001.240"],
     "option": "HIGH-SPEED",
@@ -187,6 +188,7 @@ Also, as it is still in the early stages of development, backward compatibility 
 - `argb`: map of `#ARGBxx`
 - `player`: value of `#PLAYER`
 - `pathWav`: value of `#PATH_WAV`
+- `base`: value of `#BASE`; currently `36` or `62`. Omitted value means `36`.
 - `baseBpm`: value of `#BASEBPM`
 - `stp`: `#STP` value array
 - `option`: value of `#OPTION`
@@ -208,6 +210,21 @@ Also, as it is still in the early stages of development, backward compatibility 
 - `controlFlow.kind = "object"` is kept in the same `events` format as normal events (with `measureLength` if necessary)
 - Parser keeps control syntax in this array and branches are executed at playback/render time
 - `scroll` values ​​allow finite numbers, `0` and negative values ​​are also retained
+
+### BMS object ID base
+
+BMS defaults to base-36 object IDs (`0-9A-Z`), and lowercase ASCII letters are normalized to uppercase.
+When `bms.base` is `62`, object IDs use the beatoraja-style base-62 set (`0-9A-Za-z`) and preserve case.
+
+This affects all two-character indexed IDs stored in the IR:
+
+- Resource maps such as `resources.wav`, `resources.bmp`, `resources.bpm`, `resources.stop`, and `resources.text`
+- BMS extension maps such as `bms.exRank`, `bms.argb`, `bms.exWav`, `bms.exBmp`, `bms.bga`, `bms.scroll`, `bms.speed`, and `bms.swBga`
+- BMS object event `value` fields, including events retained in `preservation.bms.sourceLines` and `bms.controlFlow`
+- `bms.lnObjs`
+
+Code that consumes IDs should call `resolveBmsBase(json)` and pass the result to ID normalization helpers instead of uppercasing manually.
+This keeps `0a` and `0A` distinct for base-62 charts while preserving base-36 behavior for ordinary charts.
 
 `bmson` is an extension area that holds additional bmson-specific information.
 

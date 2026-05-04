@@ -102,7 +102,7 @@
 - [x] チャンネル `D1-D9` (地雷) を解釈
 - [x] チャンネル `E1-E9` (地雷) を解釈
 - [x] MANUAL モードで地雷タイミング入力を `BAD` 判定に反映
-- [x] MANUAL モードの地雷ダメージにオブジェクト値 (`base36 / 2`) を適用しつつ、判定表示は `BAD` のままにする
+- [x] MANUAL モードの地雷ダメージに譜面の ID base で解釈したオブジェクト値 (`object value / 2`) を適用しつつ、判定表示は `BAD` のままにする
 - [x] `#WAV00` が定義されている場合、MANUAL モードの地雷ヒットで爆発音として使用
 - [x] 地雷を `TOTAL` / `EX-SCORE` の対象ノート数から除外
 
@@ -179,6 +179,36 @@
 - [x] `#xxx98` を playable/key 側の動的音量変更として解釈
 - [x] `#EXRANKxx` と `#xxxA0` を player の動的判定幅変更として解釈
 - [x] `#BPMxx` による LR2 100001倍 BPM 系ギミックを時刻解決でサポート
+
+### `#BASE`
+
+`#BASE` は、BMS object ID の基数を選ぶ beatoraja 互換拡張です。
+既定値は `36` で、`0-9A-Z` を使い、ASCII 小文字は大文字へ畳み込みます。
+`#BASE 62` は indexed header と object stream token を case-sensitive な `0-9A-Za-z` として扱い、`0a` と `0A` を別 ID にします。
+
+parser は通常 parse の前に BMS source を pre-scan し、`#BASE 36` / `#BASE 62` を探します。
+scan は最初の object line (`#mmmcc:data`) で止めます。そのため object data より後ろにある `#BASE 62` は、`#BASE` を object より前に置くことを要求する player との互換を優先して無視します。
+未対応値は無視し、現在値または既定の base に fallback します。
+
+runtime と round-trip の扱い:
+
+- `parser` は有効な base を `bms.base` に保持します。`#BASE 36` は既定値と同じなので、出力時に明示する必要はありません。
+- `stringifier` は `bms.base` が `62` の場合に `#BASE 62` を出力します。
+- `#WAVxx`, `#BMPxx`, `#BPMxx`, `#STOPxx`, `#TEXTxx`, `#LNOBJ`, BGA 系 indexed map、object stream value は有効な base で正規化します。
+- 制御構文 (`#RANDOM` / `#IF` / `#SWITCH` block) の内側も通常行と同じ base を使うため、branch 内の小文字 ID も parse と branch resolution を通して保持します。
+- `player`, `audio-renderer`, `chart`, `player-web-core` は sample、BGA、BPM/STOP、LN、地雷、timing 参照を `resolveBmsBase()` 経由で解決し、base-62 の小文字 ID を runtime でも区別します。
+
+例:
+
+```bms
+#BASE 62
+#WAV0a lower.wav
+#WAV0A upper.wav
+#00111:0a0A
+```
+
+この場合、`lower.wav` と `upper.wav` は別々の sample reference として鳴ります。
+`#BASE 62` が無い場合、両方の key は同じ base-36 ID に畳み込まれ、後勝ちの定義になります。
 
 ### `#VOLWAV`
 
