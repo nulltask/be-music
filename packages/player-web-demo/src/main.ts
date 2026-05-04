@@ -303,7 +303,8 @@ app.innerHTML = `
               <p class="help-about-summary">
                 A browser-based BMS player. Drop in a folder containing BMS / BMSON charts and
                 play them straight from the page. Reads <strong>Lunatic Rave 2</strong> skin
-                files (<code>.lr2skin</code>), so existing LR2 themes can be used as-is.
+                files (<code>.lr2skin</code>) — drop your <code>LR2files</code> folder onto the
+                page (alongside or before the chart drop) and the theme is applied automatically.
               </p>
               <ul class="help-about-meta">
                 <li>
@@ -401,7 +402,7 @@ app.innerHTML = `
             <section class="help-about">
               <p class="help-about-summary">
                 ブラウザ上で動作する BMS プレイヤーです。BMS / BMSON が入ったフォルダをドロップするだけでそのまま再生できます。
-                <strong>Lunatic Rave 2</strong> のスキンファイル (<code>.lr2skin</code>) を解釈するので、既存の LR2 用スキンをそのまま利用できます。
+                <strong>Lunatic Rave 2</strong> のスキンファイル (<code>.lr2skin</code>) を解釈するので、<code>LR2files</code> フォルダをページにドロップすれば既存の LR2 用スキンをそのまま適用できます。
               </p>
               <ul class="help-about-meta">
                 <li>
