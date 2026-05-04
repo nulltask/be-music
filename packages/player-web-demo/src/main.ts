@@ -296,9 +296,9 @@ app.innerHTML = `
           <div class="help-lang is-active" data-lang="en">
             <section class="help-about">
               <p class="help-about-summary">
-                A browser-based BMS player. Drop in any folder of charts and play them straight
-                from the page. Reads <strong>Lunatic Rave 2</strong> skin files
-                (<code>.lr2skin</code>), so existing LR2 themes can be used as-is.
+                A browser-based BMS player. Drop in a folder containing BMS / BMSON charts and
+                play them straight from the page. Reads <strong>Lunatic Rave 2</strong> skin
+                files (<code>.lr2skin</code>), so existing LR2 themes can be used as-is.
               </p>
               <ul class="help-about-meta">
                 <li>
@@ -385,7 +385,7 @@ app.innerHTML = `
           <div class="help-lang" data-lang="ja" hidden>
             <section class="help-about">
               <p class="help-about-summary">
-                ブラウザ上で動作する BMS プレイヤーです。チャートが入ったフォルダをドロップするだけでそのまま再生できます。
+                ブラウザ上で動作する BMS プレイヤーです。BMS / BMSON が入ったフォルダをドロップするだけでそのまま再生できます。
                 <strong>Lunatic Rave 2</strong> のスキンファイル (<code>.lr2skin</code>) を解釈するので、既存の LR2 用スキンをそのまま利用できます。
               </p>
               <ul class="help-about-meta">

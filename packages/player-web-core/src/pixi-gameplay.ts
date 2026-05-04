@@ -601,17 +601,33 @@ export class PixiGameplayView {
   /**
    * LR2 turntable physics — per-side angular state for sprites
    * authored with `op4 === 1` (1P scratch) or `op4 === 2` (2P
-   * scratch). Each scratch press adds a velocity impulse, and
-   * the velocity decays exponentially so the disc spins down
-   * naturally between presses, mimicking a physical turntable's
-   * inertia. State is integrated in {@link updateTurntable} on
-   * the tick loop and read by `renderImageElement` per frame.
+   * scratch).
+   *
+   * Model: the disc always spins at a constant baseline
+   * angular velocity (1 rev/sec, twice the rate of the
+   * pre-physics fixed-spin implementation). A scratch press
+   * applies a *brake* — subtracts a chunk of velocity so the
+   * disc visibly slows down. Each tick the velocity then
+   * exponentially relaxes back toward the baseline, so the
+   * brake fades away and the disc resumes its idle cadence
+   * within ~0.4 s.
+   *
+   * State is integrated in {@link updateTurntable} on the
+   * tick loop and read by `renderImageElement` per frame.
    */
   private turntableAngle: Record<'1' | '2', number> = { '1': 0, '2': 0 };
-  private turntableVelocity: Record<'1' | '2', number> = { '1': 0, '2': 0 };
+  /**
+   * Initialised in the constructor body to the baseline so
+   * the disc spins from t=0 even before any input arrives.
+   * Not initialised inline because `private static readonly`
+   * fields can't be safely referenced at instance-field-init
+   * time across all TS targets.
+   */
+  private turntableVelocity: Record<'1' | '2', number>;
   private turntableLastUpdateAt = 0;
-  private static readonly TURNTABLE_PRESS_IMPULSE_RAD_PER_SEC = 5;
-  private static readonly TURNTABLE_DECAY_PER_SEC = 1.5;
+  private static readonly TURNTABLE_BASELINE_RAD_PER_SEC = 2 * Math.PI;
+  private static readonly TURNTABLE_PRESS_BRAKE_RAD_PER_SEC = 4;
+  private static readonly TURNTABLE_RECOVERY_PER_SEC = 2.5;
   private maxLongNoteBeatSpan = 0;
   private chartLastNoteEndSeconds = 0;
   private songDurationSeconds = 0;
@@ -969,6 +985,13 @@ export class PixiGameplayView {
       this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, snapped));
     }
     this.autoPauseOnBlur = options.autoPauseOnBlur ?? false;
+    // Seed the per-side turntable velocity at the baseline rate
+    // so the disc visibly spins from the moment the scene mounts
+    // — even before any input arrives or any chart loads.
+    this.turntableVelocity = {
+      '1': PixiGameplayView.TURNTABLE_BASELINE_RAD_PER_SEC,
+      '2': PixiGameplayView.TURNTABLE_BASELINE_RAD_PER_SEC,
+    };
   }
 
   /**
@@ -1623,11 +1646,15 @@ export class PixiGameplayView {
     // try to finalize the prior chart's hold and double-commit.
     this.activeLongNotes.clear();
     // Reset the turntable physics so the disc starts each chart at
-    // angle 0 with no residual velocity from a prior play. Without
-    // this, F5-restarting mid-spin would leave the new play's first
-    // visible frame at a random angle.
+    // angle 0, spinning at baseline. Without this, F5-restarting
+    // mid-spin would leave the new play's first visible frame at a
+    // random angle (or with a residual brake state if the player
+    // had just scratched at song-end).
     this.turntableAngle = { '1': 0, '2': 0 };
-    this.turntableVelocity = { '1': 0, '2': 0 };
+    this.turntableVelocity = {
+      '1': PixiGameplayView.TURNTABLE_BASELINE_RAD_PER_SEC,
+      '2': PixiGameplayView.TURNTABLE_BASELINE_RAD_PER_SEC,
+    };
     this.turntableLastUpdateAt = 0;
     // PMS / 9 KEY (Pop'n) charts route channel `17` (and the
     // PMS-STD `22..25` block) as lane notes — `resolveLaneChannels`
@@ -3186,16 +3213,26 @@ export class PixiGameplayView {
   }
 
   /**
-   * Pushes an angular-velocity impulse into the per-side
-   * turntable physics. Called on every scratch-channel press
-   * (manual `Shift` keydown, full autoplay, or auto-scratch
-   * mode). Channels other than `16` / `26` are no-ops so this
-   * can be called unconditionally from generic note-hit paths.
+   * Applies a *brake* impulse to the per-side turntable. Called
+   * on every scratch-channel press (manual `Shift` keydown,
+   * full autoplay, or auto-scratch mode). Subtracts a chunk of
+   * angular velocity so the disc visibly slows down; the
+   * subsequent recovery in {@link updateTurntable} eases it
+   * back up to the baseline rate. Floored at zero so the disc
+   * never reverses past a full stop — matches the user's
+   * "decelerate then return" intuition rather than the more
+   * literal DJ-scratch reversal.
+   *
+   * Channels other than `16` / `26` are no-ops, so this can be
+   * called unconditionally from generic note-hit paths.
    */
   private applyTurntableImpulse(channel: string): void {
     if (channel !== '16' && channel !== '26') return;
     const side = channel === '16' ? '1' : '2';
-    this.turntableVelocity[side] += PixiGameplayView.TURNTABLE_PRESS_IMPULSE_RAD_PER_SEC;
+    this.turntableVelocity[side] = Math.max(
+      0,
+      this.turntableVelocity[side] - PixiGameplayView.TURNTABLE_PRESS_BRAKE_RAD_PER_SEC,
+    );
   }
 
   /**
@@ -3204,12 +3241,17 @@ export class PixiGameplayView {
    * reflects this frame's elapsed time rather than the
    * previous frame's.
    *
-   * - `velocity *= exp(-decay·dt)` gives smooth exponential
-   *   spin-down with a 1/e settling time of `1/decay` seconds
-   *   (~0.67 s at the current 1.5/sec rate).
-   * - Pause skips integration so the disc holds its current
-   *   angle until the user resumes — matches what gameplay
-   *   pause does for every other animated element.
+   * Velocity exponentially relaxes toward the baseline:
+   *   `v += (baseline − v) · (1 − exp(−recovery·dt))`
+   * Steady-state is the baseline (so the disc spins
+   * indefinitely with no input); each brake from
+   * {@link applyTurntableImpulse} drops `v` below baseline and
+   * this term recovers it within ~0.4 s at the current 2.5/sec
+   * recovery rate.
+   *
+   * Pause skips integration so the disc holds its current
+   * angle until the user resumes — matches what gameplay pause
+   * does for every other animated element.
    */
   private updateTurntable(now: number): void {
     if (this.turntableLastUpdateAt === 0) {
@@ -3219,17 +3261,11 @@ export class PixiGameplayView {
     const dt = Math.max(0, (now - this.turntableLastUpdateAt) / 1000);
     this.turntableLastUpdateAt = now;
     if (this.paused || dt <= 0) return;
-    const decay = Math.exp(-PixiGameplayView.TURNTABLE_DECAY_PER_SEC * dt);
+    const baseline = PixiGameplayView.TURNTABLE_BASELINE_RAD_PER_SEC;
+    const recovery = 1 - Math.exp(-PixiGameplayView.TURNTABLE_RECOVERY_PER_SEC * dt);
     for (const side of ['1', '2'] as const) {
       this.turntableAngle[side] += this.turntableVelocity[side] * dt;
-      this.turntableVelocity[side] *= decay;
-      // Floating-point cleanup so a barely-moving disc decisively
-      // stops rather than drifting forever (and avoids the sprite
-      // re-rendering with imperceptibly-different rotation values
-      // forever, which is mostly harmless but pollutes diffs).
-      if (Math.abs(this.turntableVelocity[side]) < 0.01) {
-        this.turntableVelocity[side] = 0;
-      }
+      this.turntableVelocity[side] += (baseline - this.turntableVelocity[side]) * recovery;
     }
   }
 
