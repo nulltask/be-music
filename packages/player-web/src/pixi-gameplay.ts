@@ -784,6 +784,16 @@ export class PixiGameplayView {
   private scoreHistory: Array<{ progress: number; exScore: number }> = [];
   private lastJudge = '';
   private lastJudgeUntil = 0;
+  /**
+   * Side that produced the most recent judgement. Drives the LR2
+   * `#SRC_NOWJUDGE_*` / `#SRC_NOWCOMBO_*` side selection so a 2P
+   * scratch on a DP chart paints the judge plate at the 2P-side
+   * coordinates rather than overlapping the 1P plate.
+   *
+   * Defaults to `'1P'` so SP charts (where every channel starts
+   * with `'1'`) need no further bookkeeping.
+   */
+  private lastJudgeSide: '1P' | '2P' = '1P';
   private frame: number | undefined;
   private chartEndTimeout: number | undefined;
   /**
@@ -2144,6 +2154,9 @@ export class PixiGameplayView {
     skin.images.forEach((image) => imagePaths.add(image.source.imagePath));
     Object.values(skin.notes).forEach((group) => group?.forEach((note) => imagePaths.add(note.imagePath)));
     Object.values(skin.judges).forEach((group) => group?.forEach((judge) => imagePaths.add(judge.source.imagePath)));
+    Object.values(skin.judges2P).forEach((group) =>
+      group?.forEach((judge) => imagePaths.add(judge.source.imagePath)),
+    );
     skin.numbers.forEach((number) => imagePaths.add(number.source.imagePath));
     skin.grooveGauges.forEach((gauge) => imagePaths.add(gauge.source.imagePath));
     skin.nowCombos.forEach((combo) => imagePaths.add(combo.source.imagePath));
@@ -3908,6 +3921,7 @@ export class PixiGameplayView {
     // passed. When `channel` isn't supplied (legacy callers) we
     // default to the 1P timer.
     const isPlayer2 = typeof channel === 'string' && channel.startsWith('2');
+    this.lastJudgeSide = isPlayer2 ? '2P' : '1P';
     this.timerStartedAt.set(isPlayer2 ? 47 : 46, this.playClock());
     // POOR / BAD judgements briefly swap the base BGA for the chart's
     // POOR BGA. We trigger the same window for `BAD` because the LR2
@@ -5045,7 +5059,16 @@ export class PixiGameplayView {
       return;
     }
     const judgeKind = resolveJudgeSkinKind(this.lastJudge);
-    const judgeElements = judgeKind ? skin.judges[judgeKind] : undefined;
+    // 2P judge plate falls back to 1P when the skin omitted
+    // `#SRC_NOWJUDGE_2P` (most SP-only LR2 default skins). The
+    // result is wrong for true DP rendering — the 2P plate
+    // ends up at the 1P-side coordinates — but no worse than
+    // the prior side-agnostic behaviour and lets DP mode at
+    // least visibly differentiate when the skin DOES author
+    // 2P slots.
+    const sideJudgeMap = this.lastJudgeSide === '2P' ? skin.judges2P : skin.judges;
+    const judgeElements =
+      (judgeKind ? sideJudgeMap[judgeKind] : undefined) ?? (judgeKind ? skin.judges[judgeKind] : undefined);
     const judgeAnchor = judgeElements?.[0]?.destination;
     if (!judgeElements?.length || !judgeAnchor) {
       return;
@@ -5053,8 +5076,19 @@ export class PixiGameplayView {
     const comboKind = lastJudgeToNowComboKind(this.lastJudge);
     const combo = this.tracker.combo;
     const visibleCombo = comboKind && combo > 0 ? combo : 0;
+    // Combo lookup mirrors the judge-side fallback: try 2P
+    // first, then fall back to 1P if the skin omitted the
+    // 2P-side combo definition.
     const comboElement = comboKind
-      ? skin.nowCombos.find((entry) => entry.kind === comboKind && this.isDestinationVisible(entry.destination))
+      ? (skin.nowCombos.find(
+          (entry) =>
+            entry.kind === comboKind &&
+            entry.side === this.lastJudgeSide &&
+            this.isDestinationVisible(entry.destination),
+        ) ??
+          skin.nowCombos.find(
+            (entry) => entry.kind === comboKind && this.isDestinationVisible(entry.destination),
+          ))
       : undefined;
     // Compute centring offset so that judge plate + combo sits centred on
     // the lane area. Without this the assembly was anchored at LR2's static
@@ -5675,8 +5709,12 @@ export class PixiGameplayView {
       return false;
     }
     const kind = resolveJudgeSkinKind(this.lastJudge);
-    const elements = kind ? skin.judges[kind] : undefined;
-    return Boolean(elements?.length);
+    if (!kind) return false;
+    // Either side authoring the verdict counts — the renderer
+    // falls back to 1P when the 2P slot is empty, so the
+    // fallback-status text path needs to follow the same
+    // either-side rule.
+    return Boolean(skin.judges[kind]?.length || skin.judges2P[kind]?.length);
   }
 }
 

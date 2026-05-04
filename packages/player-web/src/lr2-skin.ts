@@ -143,6 +143,14 @@ export interface Lr2NowComboElement {
   keyframes: Lr2DestinationRect[];
   /** Which judgement triggers this combo style ('good' | 'great' | 'perfect'). */
   kind: Lr2NowComboKind;
+  /**
+   * Player side this combo definition belongs to. `#SRC_NOWCOMBO_1P`
+   * → `'1P'`, `#SRC_NOWCOMBO_2P` → `'2P'`. DP charts need the 2P
+   * entry to render at the correct screen-x; SP charts only have
+   * 1P, so the renderer falls back to 1P on the 2P side when no
+   * 2P element was authored.
+   */
+  side: '1P' | '2P';
 }
 
 /**
@@ -708,7 +716,18 @@ export interface Lr2Skin {
       Lr2ImageRect[]
     >
   >;
+  /**
+   * Per-side `#SRC_NOWJUDGE_*` rect collections. `1P` always
+   * populated when the skin authored any judge graphic; `2P` is
+   * populated only for skins that supply DP-specific positions
+   * (LR2 default `play_14.lr2skin`, etc.). Renderers falling back
+   * to 1P on the 2P side (because the skin omitted 2P) is
+   * acceptable — it parks the plate at the 1P-side coordinates,
+   * which is wrong for DP but no worse than the SP-only
+   * implementation it replaces.
+   */
   judges: Partial<Record<'perfect' | 'great' | 'good' | 'bad' | 'poor', Lr2ImageElement[]>>;
+  judges2P: Partial<Record<'perfect' | 'great' | 'good' | 'bad' | 'poor', Lr2ImageElement[]>>;
   numbers: Lr2NumberElement[];
   grooveGauges: Lr2GrooveGaugeElement[];
   nowCombos: Lr2NowComboElement[];
@@ -814,6 +833,7 @@ interface NowComboSourceEntry {
   index: number;
   alignment: Lr2NumberAlignment;
   padding: number;
+  side: '1P' | '2P';
 }
 
 interface JudgeLineSourceEntry {
@@ -947,10 +967,23 @@ interface ParseContext {
    * judge plate's fade-in / fade-out animation off timer 46.
    */
   nowJudge1PDstGroups: Lr2DestinationRect[][];
+  /**
+   * 2P-side counterparts for DP charts. LR2's `play_14.lr2skin` and
+   * any DP-aware skin authors a separate set of `#SRC_NOWJUDGE_2P`
+   * / `#DST_NOWJUDGE_2P` rows so the 2P judge plate renders at the
+   * 2P-side coordinates rather than overlapping the 1P plate.
+   */
+  nowJudge2PSources: SourceRect[];
+  nowJudge2PDstGroups: Lr2DestinationRect[][];
   numberSources: NumberSourceEntry[];
   numberDstGroups: Lr2DestinationRect[][];
   grooveGaugeSources: GrooveGaugeSourceEntry[];
   grooveGaugeDstGroups: Lr2DestinationRect[][];
+  /**
+   * `#SRC_NOWCOMBO_*` entries from both sides. The `side` field on
+   * each entry distinguishes 1P from 2P so the renderer can pick
+   * the right block at runtime.
+   */
   nowComboSources: NowComboSourceEntry[];
   nowComboDstGroups: Lr2DestinationRect[][];
   judgeLineSources: JudgeLineSourceEntry[];
@@ -1175,6 +1208,8 @@ export function loadLr2SkinFromSourceFiles(
     noteSources: new Map(),
     nowJudge1PSources: [],
     nowJudge1PDstGroups: [],
+    nowJudge2PSources: [],
+    nowJudge2PDstGroups: [],
     numberSources: [],
     numberDstGroups: [],
     grooveGaugeSources: [],
@@ -1290,6 +1325,7 @@ export function loadLr2SkinFromSourceFiles(
       ]),
     ) as Lr2Skin['notes'],
     judges: createJudgeElements(context),
+    judges2P: createJudge2PElements(context),
     numbers: createNumberElements(context),
     grooveGauges: createGrooveGaugeElements(context),
     nowCombos: createNowComboElements(context),
@@ -1534,6 +1570,16 @@ function readLr2Path(
       const group = context.nowJudge1PDstGroups[id] ?? [];
       appendDestinationKeyframe(group, row);
       context.nowJudge1PDstGroups[id] = group;
+    } else if (command === '#SRC_NOWJUDGE_2P') {
+      const id = toNumber(row[1], 0);
+      if (context.nowJudge2PSources[id] === undefined) {
+        context.nowJudge2PSources[id] = parseSource(row, context);
+      }
+    } else if (command === '#DST_NOWJUDGE_2P') {
+      const id = toNumber(row[1], 0);
+      const group = context.nowJudge2PDstGroups[id] ?? [];
+      appendDestinationKeyframe(group, row);
+      context.nowJudge2PDstGroups[id] = group;
     } else if (command === '#SRC_NUMBER') {
       context.numberSources.push({
         source: parseSource(row, context),
@@ -1560,16 +1606,22 @@ function readLr2Path(
       if (group) {
         appendDestinationKeyframe(group, row);
       }
-    } else if (command === '#SRC_NOWCOMBO_1P') {
-      // #SRC_NOWCOMBO_1P,index,gr,x,y,w,h,divx,divy,cycle,timer,(null),align,keta
+    } else if (command === '#SRC_NOWCOMBO_1P' || command === '#SRC_NOWCOMBO_2P') {
+      // #SRC_NOWCOMBO_*,index,gr,x,y,w,h,divx,divy,cycle,timer,(null),align,keta
       context.nowComboSources.push({
         source: parseSource(row, context),
         index: Math.max(0, Math.trunc(toNumber(row[1], 0))),
         alignment: parseNowComboAlignment(row[12]),
         padding: Math.max(0, Math.trunc(toNumber(row[13], 0))),
+        side: command === '#SRC_NOWCOMBO_1P' ? '1P' : '2P',
       });
       context.nowComboDstGroups.push([]);
-    } else if (command === '#DST_NOWCOMBO_1P') {
+    } else if (command === '#DST_NOWCOMBO_1P' || command === '#DST_NOWCOMBO_2P') {
+      // The DST attaches to the most recent SRC entry — we don't
+      // re-check the side here because the SRC ordering already
+      // pinned it: a `#DST_NOWCOMBO_1P` after a `#SRC_NOWCOMBO_2P`
+      // would be a malformed skin and is handled by the same
+      // permissive "extend the last group" semantics LR2 itself uses.
       const group = context.nowComboDstGroups.at(-1);
       if (group) {
         appendDestinationKeyframe(group, row);
@@ -2264,6 +2316,7 @@ function createNowComboElements(context: ParseContext): Lr2NowComboElement[] {
       destination,
       keyframes: [...dstGroup],
       kind,
+      side: entry.side,
     });
   }
   return elements;
@@ -2914,10 +2967,28 @@ function createMouseCursorElements(context: ParseContext): Lr2MouseCursorElement
 }
 
 function createJudgeElements(context: ParseContext): Lr2Skin['judges'] {
+  return buildJudgeMap(context.nowJudge1PSources, context.nowJudge1PDstGroups, context);
+}
+
+function createJudge2PElements(context: ParseContext): Lr2Skin['judges2P'] {
+  return buildJudgeMap(context.nowJudge2PSources, context.nowJudge2PDstGroups, context);
+}
+
+/**
+ * Shared body for the per-side judge factories. Walks the kind
+ * map and emits an `Lr2ImageElement[]` per verdict (or `[]` for
+ * verdicts the skin omitted on this side). Kept as a helper so
+ * the 1P / 2P paths can't drift apart silently.
+ */
+function buildJudgeMap(
+  sources: SourceRect[],
+  dstGroups: Lr2DestinationRect[][],
+  context: ParseContext,
+): Lr2Skin['judges'] {
   const judges: Lr2Skin['judges'] = {};
   for (const [id, kind] of NOW_JUDGE_1P_KIND_BY_INDEX) {
-    const source = context.nowJudge1PSources[id];
-    const dstGroup = context.nowJudge1PDstGroups[id];
+    const source = sources[id];
+    const dstGroup = dstGroups[id];
     const imagePath = source ? context.imagePaths[source.gr] : undefined;
     if (!source || !dstGroup || dstGroup.length === 0 || !imagePath) {
       continue;
