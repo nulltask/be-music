@@ -4705,7 +4705,14 @@ export class PixiGameplayView {
         this.gaugeState.current,
         this.textures,
         this.evaluateElementDst(gauge),
-        { peakPercent: this.gaugePeak },
+        {
+          peakPercent: this.gaugePeak,
+          // Drives the LR2 4-cell × N-frame animation cycle
+          // (lit-tip highlight scan). Anchored to the SRC's
+          // timer per spec — `0` is "scene start" which is
+          // what most skins use for the gauge.
+          elapsedMs: this.elapsedSinceTimer(gauge.source.timer),
+        },
       );
     }
     for (const bargraph of skin.bargraphs) {

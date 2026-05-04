@@ -196,7 +196,7 @@ export function renderGrooveGaugeElement(
   percent: number,
   textures: ReadonlyMap<string, Texture>,
   dst: Lr2DestinationRect,
-  options: { peakPercent?: number } = {},
+  options: { peakPercent?: number; elapsedMs?: number } = {},
 ): void {
   if (dst.w === 0 || dst.h === 0) {
     return;
@@ -205,12 +205,31 @@ export function renderGrooveGaugeElement(
   if (!baseTexture) {
     return;
   }
+  // LR2 spec (`docs/LR2SkinHelp.md` 8975 / 9012):
+  //
+  //   ゲージ点灯時の赤・緑、ゲージ消灯時の赤・緑の順に並べて
+  //   src分割を行ってください。4の倍数でcycle>0ならちゃんと
+  //   アニメーションします
+  //
+  // So `divx × divy` cells decompose into `frames = N / 4`
+  // animation frames; each frame is a contiguous group of 4
+  // cells in declaration order (active-red / active-green /
+  // inactive-red / inactive-green). The frame index advances
+  // by one every `cycle` ms relative to the SRC's `timer`.
+  // For LR2 default 7K (`divx=4, divy=1, cycle=0`) this is a
+  // single static 4-cell frame; for skins with multi-frame
+  // gauges (Quinine, etc.) the renderer cycles over time so
+  // the lit-tip "highlight" animation reaches every bead.
   const divx = Math.max(1, gauge.source.divx);
   const divy = Math.max(1, gauge.source.divy);
   const totalCells = divx * divy;
   if (totalCells < 4) {
     return;
   }
+  const frames = Math.max(1, Math.floor(totalCells / 4));
+  const cycleMs = Math.max(0, gauge.source.cycle);
+  const elapsed = Math.max(0, options.elapsedMs ?? 0);
+  const frameIndex = cycleMs > 0 && frames > 1 ? Math.floor(elapsed / cycleMs) % frames : 0;
   const cellWidth = gauge.source.w / divx;
   const cellHeight = gauge.source.h / divy;
   if (cellWidth <= 0 || cellHeight <= 0) {
@@ -222,11 +241,8 @@ export function renderGrooveGaugeElement(
   const activeUnits = Math.round((percent / 100) * totalUnits);
   // Peak-hold indicator: the bead AT the peak position is
   // painted with the "active" cell variant even when the live
-  // fill has dropped below it. Renders only above the live
-  // bar — once the peak catches up to the current value the
-  // indicator disappears into the regular fill. Skin-agnostic
-  // (works against the existing 4-cell sprite sheet) so it
-  // applies to every theme that defines a `#SRC_GROOVEGAUGE`.
+  // fill has dropped below it. Skin-agnostic — uses the same
+  // 4-cell sprite group, just at the peak's bead position.
   const peakPercent = Math.max(0, Math.min(100, options.peakPercent ?? percent));
   const peakIndex = Math.round((peakPercent / 100) * totalUnits) - 1;
   for (let unitIndex = 0; unitIndex < totalUnits; unitIndex += 1) {
@@ -234,7 +250,13 @@ export function renderGrooveGaugeElement(
     const isPeakIndicator = !isActive && unitIndex === peakIndex && peakIndex >= activeUnits;
     const useActiveCell = isActive || isPeakIndicator;
     const isClearZone = unitIndex >= clearThresholdUnit;
-    const cellIndex = (useActiveCell ? 0 : 2) + (isClearZone ? 1 : 0);
+    // LR2 spec ordering inside each 4-cell frame:
+    //   offset 0: 表赤 (active red, clear-zone)
+    //   offset 1: 表緑 (active green, normal)
+    //   offset 2: 裏赤 (inactive red, clear-zone)
+    //   offset 3: 裏緑 (inactive green, normal)
+    const offsetWithinFrame = (useActiveCell ? 0 : 2) + (isClearZone ? 0 : 1);
+    const cellIndex = frameIndex * 4 + offsetWithinFrame;
     const cellX = cellIndex % divx;
     const cellY = Math.floor(cellIndex / divx);
     const cellTexture = createCroppedTexture(baseTexture, {
@@ -247,7 +269,7 @@ export function renderGrooveGaugeElement(
       continue;
     }
     const sprite = new Sprite(cellTexture);
-    sprite.label = `gauge-bead[idx=${unitIndex},cell=${cellX + cellY * divx}${isPeakIndicator ? ',peak' : ''}]`;
+    sprite.label = `gauge-bead[idx=${unitIndex},frame=${frameIndex},cell=${cellIndex}${isPeakIndicator ? ',peak' : ''}]`;
     sprite.position.set(dst.x + gauge.addX * unitIndex, dst.y + gauge.addY * unitIndex);
     sprite.width = dst.w;
     sprite.height = dst.h;
