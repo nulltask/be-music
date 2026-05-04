@@ -15,11 +15,11 @@
   },
   "dependencies": {
     "@be-music/player-web-core": "workspace:*",
-    "lil-gui": "^0.21.0",
-    "ts-ebml": "^3.0.2",
-    "vite": "^8.0.10"
+    "lil-gui": "^0.21.0"
   },
   "devDependencies": {
+    "ts-ebml": "^3.0.2",
+    "vite": "^8.0.10",
     "vite-plugin-node-polyfills": "^0.26.0"
   }
 }

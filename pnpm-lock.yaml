@@ -227,13 +227,13 @@ importers:
       lil-gui:
         specifier: ^0.21.0
         version: 0.21.0
+    devDependencies:
       ts-ebml:
         specifier: ^3.0.2
         version: 3.0.2
       vite:
         specifier: ^8.0.10
         version: 8.0.10(@types/node@25.6.0)(esbuild@0.27.3)(tsx@4.21.0)
-    devDependencies:
       vite-plugin-node-polyfills:
         specifier: ^0.26.0
         version: 0.26.0(rollup@4.59.0)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.27.3)(tsx@4.21.0))

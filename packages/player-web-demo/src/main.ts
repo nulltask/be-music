@@ -33,6 +33,11 @@ import {
 // CSS explicitly — its package.json doesn't expose the file via
 // `exports` anyway.
 import GUI, { type Controller } from 'lil-gui';
+// Virtual module produced by the `be-music:acknowledgements`
+// Vite plugin (see `vite.config.ts`). The list is computed at
+// build time from the runtime dep tree, so a `pnpm install` is
+// the only step needed to keep the modal in sync.
+import acknowledgements from 'virtual:acknowledgements';
 import './styles.css';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -182,6 +187,301 @@ app.innerHTML = `
         <div class="loading-label" id="loading-label">Loading…</div>
         <div class="loading-bar"><div class="loading-bar-fill" id="loading-bar-fill"></div></div>
         <div class="loading-counter" id="loading-counter"></div>
+      </div>
+    </div>
+    <!--
+      Bottom-right floating Help button. Pinned so it stays
+      reachable from every scene (select / gameplay / result)
+      without having to compete with lil-gui (top-right) or the
+      search bar (bottom-left). Opens the unified Help dialog
+      that hosts both the usage guide and the third-party
+      attribution required by the libraries we ship.
+    -->
+    <button class="help-button" id="help-button" type="button" aria-haspopup="dialog" aria-controls="help-modal">
+      <svg class="help-button-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8" />
+        <path
+          d="M9.4 9.5 a2.6 2.6 0 1 1 3.6 2.4 c-0.7 0.3 -1 0.9 -1 1.6 V14.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <circle cx="12" cy="17.2" r="1.1" fill="currentColor" />
+      </svg>
+      <span class="help-button-label">Help</span>
+    </button>
+    <!--
+      Help modal. Two tabs:
+      - Usage: drag-drop instructions, keyboard shortcuts,
+        gameplay keys, options.
+      - Open source: build-time-resolved acknowledgement list
+        (one card per npm dependency that ships in the runtime
+        bundle, with verbatim LICENSE text).
+      Hidden by default; toggled via the \`.visible\` class on
+      the overlay.
+    -->
+    <div class="help-modal" id="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-modal-title" aria-hidden="true">
+      <div class="help-modal-backdrop" id="help-modal-backdrop"></div>
+      <div class="help-modal-card">
+        <header class="help-modal-header">
+          <div>
+            <div class="help-modal-eyebrow">Help &amp; About</div>
+            <h2 class="help-modal-title" id="help-modal-title">be-music player</h2>
+          </div>
+          <button class="help-modal-close" id="help-modal-close" type="button" aria-label="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M7 7 L17 17 M17 7 L7 17"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </header>
+        <div class="help-modal-tabs" role="tablist">
+          <button
+            class="help-modal-tab is-active"
+            id="help-tab-usage"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="help-pane-usage"
+            data-pane="usage"
+          >
+            Usage
+          </button>
+          <button
+            class="help-modal-tab"
+            id="help-tab-oss"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="help-pane-oss"
+            data-pane="oss"
+          >
+            Open source
+          </button>
+        </div>
+        <section
+          class="help-modal-pane is-active"
+          id="help-pane-usage"
+          role="tabpanel"
+          aria-labelledby="help-tab-usage"
+          tabindex="0"
+        >
+          <!--
+            Language switcher. The two \`.help-lang\` blocks below
+            carry parallel translations; only one is shown at a
+            time. Default selection comes from \`navigator.language\`
+            at boot — \`ja-*\` users land on Japanese, everyone else
+            on English.
+          -->
+          <div class="help-lang-switch" role="group" aria-label="Language">
+            <button
+              class="help-lang-toggle is-active"
+              type="button"
+              data-lang="en"
+              aria-pressed="true"
+            >
+              English
+            </button>
+            <button class="help-lang-toggle" type="button" data-lang="ja" aria-pressed="false">
+              日本語
+            </button>
+          </div>
+          <div class="help-lang is-active" data-lang="en">
+            <section class="help-about">
+              <p class="help-about-summary">
+                A browser-based BMS player. Drop in any folder of charts and play them straight
+                from the page. Reads <strong>Lunatic Rave 2</strong> skin files
+                (<code>.lr2skin</code>), so existing LR2 themes can be used as-is.
+              </p>
+              <ul class="help-about-meta">
+                <li>
+                  <span class="help-about-key">Author</span>
+                  <a href="https://nulltask.dev" target="_blank" rel="noopener noreferrer">nulltask · nulltask.dev</a>
+                </li>
+                <li>
+                  <span class="help-about-key">Source</span>
+                  <a href="https://github.com/nulltask/be-music" target="_blank" rel="noopener noreferrer">
+                    github.com/nulltask/be-music
+                  </a>
+                </li>
+                <li>
+                  <span class="help-about-key">Also available</span>
+                  <span>A TUI build (terminal frontend) ships in the same monorepo as <code>@be-music/player-tui</code>.</span>
+                </li>
+              </ul>
+              <ul class="help-about-notes">
+                <li>Some features are still missing or incomplete — expect rough edges.</li>
+                <li>Use at your own risk. No warranty is provided.</li>
+                <li>
+                  Dropped files stay entirely in your browser. Charts, audio, and BGA assets are
+                  <strong>never uploaded to any server</strong>.
+                </li>
+              </ul>
+            </section>
+            <h3 class="help-section-title">Loading songs</h3>
+            <ul class="help-list">
+              <li>Drop a BMS folder anywhere on the page to register its charts.</li>
+              <li>Drop an <code>LR2files</code> folder (or its contents) to apply an LR2 skin theme.</li>
+              <li>
+                Or click <strong>Open folder / ZIP</strong> in the lil-gui panel (top-right) to use the native
+                file picker.
+              </li>
+              <li>Subsequent drops add to the library and keep the current theme.</li>
+            </ul>
+
+            <h3 class="help-section-title">Song select</h3>
+            <ul class="help-list">
+              <li><kbd>/</kbd> focuses the search input. Filter by title, artist, or genre.</li>
+              <li><kbd>Esc</kbd> clears the search filter.</li>
+              <li>Click a song row, or click the LR2 skin's <em>PLAY</em> button, to start.</li>
+            </ul>
+
+            <h3 class="help-section-title">Gameplay (default keys)</h3>
+            <div class="help-keymap">
+              <div class="help-keymap-row">
+                <span class="help-keymap-side">1P</span>
+                <span class="help-keymap-keys">
+                  <kbd>Shift</kbd>
+                  <span class="help-keymap-sep">·</span>
+                  <kbd>Z</kbd> <kbd>S</kbd> <kbd>X</kbd> <kbd>D</kbd> <kbd>C</kbd> <kbd>F</kbd> <kbd>V</kbd>
+                </span>
+              </div>
+              <div class="help-keymap-row">
+                <span class="help-keymap-side">2P</span>
+                <span class="help-keymap-keys">
+                  <kbd>Shift</kbd> <span class="help-keymap-sep">·</span>
+                  <kbd>B</kbd> <kbd>H</kbd> <kbd>N</kbd> <kbd>J</kbd> <kbd>M</kbd> <kbd>K</kbd>
+                </span>
+              </div>
+              <div class="help-keymap-note">Left Shift = 1P scratch · Right Shift = 2P scratch · K = 2P 6th key.</div>
+            </div>
+            <ul class="help-list">
+              <li><kbd>↑</kbd> / <kbd>↓</kbd> adjusts hi-speed.</li>
+              <li><kbd>Space</kbd> pauses / resumes.</li>
+              <li><kbd>F5</kbd> restarts the current chart.</li>
+              <li><kbd>Esc</kbd> exits to the result screen (or back to song select).</li>
+            </ul>
+
+            <h3 class="help-section-title">Options &amp; recording</h3>
+            <ul class="help-list">
+              <li>The lil-gui panel (top-right) holds auto-play, compressor, BGA transcode, and recording controls.</li>
+              <li>
+                Click <strong>Record</strong> to capture the next play as a downloadable WebM (requires
+                MediaRecorder support — see Open source / browser checks).
+              </li>
+              <li>
+                Open the LR2 skin's <strong>PLAY OPTION</strong> panel during song select to set per-side
+                modifiers (Random / Mirror / Auto-scratch / hi-speed).
+              </li>
+            </ul>
+          </div>
+          <div class="help-lang" data-lang="ja" hidden>
+            <section class="help-about">
+              <p class="help-about-summary">
+                ブラウザ上で動作する BMS プレイヤーです。チャートが入ったフォルダをドロップするだけでそのまま再生できます。
+                <strong>Lunatic Rave 2</strong> のスキンファイル (<code>.lr2skin</code>) を解釈するので、既存の LR2 用スキンをそのまま利用できます。
+              </p>
+              <ul class="help-about-meta">
+                <li>
+                  <span class="help-about-key">作者</span>
+                  <a href="https://nulltask.dev" target="_blank" rel="noopener noreferrer">nulltask · nulltask.dev</a>
+                </li>
+                <li>
+                  <span class="help-about-key">ソースコード</span>
+                  <a href="https://github.com/nulltask/be-music" target="_blank" rel="noopener noreferrer">
+                    github.com/nulltask/be-music
+                  </a>
+                </li>
+                <li>
+                  <span class="help-about-key">関連</span>
+                  <span>同じモノレポに TUI 版 (<code>@be-music/player-tui</code>) も同梱されています。</span>
+                </li>
+              </ul>
+              <ul class="help-about-notes">
+                <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
+                <li>利用は自己責任でお願いします。本ソフトウェアは無保証で提供されます。</li>
+                <li>
+                  ドロップしたファイルはブラウザ内でのみ処理され、譜面・音声・BGA データを
+                  <strong>サーバへ送信することは一切ありません</strong>。
+                </li>
+              </ul>
+            </section>
+            <h3 class="help-section-title">楽曲の読み込み</h3>
+            <ul class="help-list">
+              <li>BMS フォルダをページ上にドロップすると、その中のチャートが登録されます。</li>
+              <li><code>LR2files</code> フォルダ (またはその中身) をドロップすると LR2 スキンが適用されます。</li>
+              <li>
+                右上 lil-gui パネルの <strong>Open folder / ZIP</strong> ボタンからネイティブのファイル選択ダイアログも使えます。
+              </li>
+              <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
+            </ul>
+
+            <h3 class="help-section-title">選曲画面</h3>
+            <ul class="help-list">
+              <li><kbd>/</kbd> で検索入力にフォーカス。タイトル / アーティスト / ジャンルで絞り込めます。</li>
+              <li><kbd>Esc</kbd> で検索条件をクリア。</li>
+              <li>曲の行をクリック、または LR2 スキンの <em>PLAY</em> ボタンで再生開始。</li>
+            </ul>
+
+            <h3 class="help-section-title">ゲームプレイ (デフォルトキー)</h3>
+            <div class="help-keymap">
+              <div class="help-keymap-row">
+                <span class="help-keymap-side">1P</span>
+                <span class="help-keymap-keys">
+                  <kbd>Shift</kbd>
+                  <span class="help-keymap-sep">·</span>
+                  <kbd>Z</kbd> <kbd>S</kbd> <kbd>X</kbd> <kbd>D</kbd> <kbd>C</kbd> <kbd>F</kbd> <kbd>V</kbd>
+                </span>
+              </div>
+              <div class="help-keymap-row">
+                <span class="help-keymap-side">2P</span>
+                <span class="help-keymap-keys">
+                  <kbd>Shift</kbd> <span class="help-keymap-sep">·</span>
+                  <kbd>B</kbd> <kbd>H</kbd> <kbd>N</kbd> <kbd>J</kbd> <kbd>M</kbd> <kbd>K</kbd>
+                </span>
+              </div>
+              <div class="help-keymap-note">左 Shift = 1P スクラッチ · 右 Shift = 2P スクラッチ · K = 2P 6 鍵。</div>
+            </div>
+            <ul class="help-list">
+              <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。</li>
+              <li><kbd>Space</kbd> でポーズ / 再開。</li>
+              <li><kbd>F5</kbd> で現在のチャートをリスタート。</li>
+              <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
+            </ul>
+
+            <h3 class="help-section-title">オプションと録画</h3>
+            <ul class="help-list">
+              <li>右上 lil-gui パネルにオートプレイ / コンプレッサー / BGA トランスコード / 録画コントロールがあります。</li>
+              <li>
+                <strong>Record</strong> ボタンを押すと、次の再生を WebM として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
+              </li>
+              <li>
+                選曲画面で LR2 スキンの <strong>PLAY OPTION</strong> パネルを開くと、Random / Mirror / Auto-scratch / hi-speed などのプレイヤー側モディファイアを設定できます。
+              </li>
+            </ul>
+          </div>
+        </section>
+        <section
+          class="help-modal-pane"
+          id="help-pane-oss"
+          role="tabpanel"
+          aria-labelledby="help-tab-oss"
+          tabindex="0"
+          hidden
+        >
+          <p class="help-pane-intro">
+            This player is built on the open source libraries listed below. Each entry shows the
+            verbatim copyright / license text shipped with the package.
+          </p>
+          <ol class="help-oss-list" id="help-oss-list"></ol>
+        </section>
       </div>
     </div>
   </div>
@@ -1446,6 +1746,12 @@ class PlayerWebDemoApp {
 // rather than a blank canvas.
 renderBrowserCompatPanel(checkBrowserCompat());
 
+// Wire up the bottom-right Help button + unified Help / OSS
+// modal. The acknowledgement list is rendered lazily on first
+// open of the OSS tab, so the initial paint isn't blocked on
+// rendering ~30 dependency cards.
+wireHelpModal();
+
 new PlayerWebDemoApp({
   stage: document.querySelector<HTMLDivElement>('#stage')!,
   shell: document.querySelector<HTMLDivElement>('.shell')!,
@@ -1544,6 +1850,237 @@ function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIEleme
   li.appendChild(sr);
 
   return li;
+}
+
+/**
+ * Wires the bottom-right Help button to the unified Help /
+ * Open-source modal. Two tabs share the dialog:
+ *
+ *  - Usage: a static guide rendered straight from the HTML
+ *    template (no JS rendering needed).
+ *  - Open source: the build-time-resolved acknowledgement
+ *    list, rendered lazily the first time the tab is shown.
+ *
+ * Behaviour:
+ *  - Click the button → show modal (always reopens on the
+ *    Usage tab), focus the close button.
+ *  - Click the backdrop, the close button, or press Escape →
+ *    hide the modal, return focus to the button.
+ *  - Click a tab → swap visible pane, render the OSS list on
+ *    first activation.
+ *
+ * Pointer + keyboard parity is intentional — the dialog is
+ * reachable purely via Tab / Enter / Escape on a keyboard so
+ * the legal-attribution surface meets a basic-a11y bar.
+ */
+function wireHelpModal(): void {
+  const button = document.querySelector<HTMLButtonElement>('#help-button');
+  const modal = document.querySelector<HTMLDivElement>('#help-modal');
+  const backdrop = document.querySelector<HTMLDivElement>('#help-modal-backdrop');
+  const closeButton = document.querySelector<HTMLButtonElement>('#help-modal-close');
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.help-modal-tab'));
+  const panes = Array.from(document.querySelectorAll<HTMLElement>('.help-modal-pane'));
+  const ossList = document.querySelector<HTMLOListElement>('#help-oss-list');
+  if (!button || !modal || !backdrop || !closeButton || tabs.length === 0 || panes.length === 0 || !ossList) {
+    return;
+  }
+
+  let ossPopulated = false;
+  const activatePane = (paneId: string): void => {
+    for (const tab of tabs) {
+      const matches = tab.dataset.pane === paneId;
+      tab.classList.toggle('is-active', matches);
+      tab.setAttribute('aria-selected', matches ? 'true' : 'false');
+    }
+    for (const pane of panes) {
+      const matches = pane.id === `help-pane-${paneId}`;
+      pane.classList.toggle('is-active', matches);
+      // `hidden` keeps the inactive pane out of the
+      // accessibility tree AND prevents its scrollable list
+      // from stealing keyboard focus when Tab cycles.
+      pane.toggleAttribute('hidden', !matches);
+    }
+    if (paneId === 'oss' && !ossPopulated) {
+      renderAcknowledgementsList(ossList);
+      ossPopulated = true;
+    }
+  };
+
+  const open = (): void => {
+    // Always reset to the Usage tab on open so a returning
+    // visitor sees the primary call-to-action first.
+    activatePane('usage');
+    modal.classList.add('visible');
+    modal.setAttribute('aria-hidden', 'false');
+    closeButton.focus();
+  };
+  const close = (): void => {
+    modal.classList.remove('visible');
+    modal.setAttribute('aria-hidden', 'true');
+    button.focus();
+  };
+
+  button.addEventListener('click', open);
+  closeButton.addEventListener('click', close);
+  backdrop.addEventListener('click', close);
+  for (const tab of tabs) {
+    tab.addEventListener('click', () => {
+      const pane = tab.dataset.pane;
+      if (pane) activatePane(pane);
+    });
+  }
+  // Esc closes — only when the modal is currently open. We
+  // attach to `document` rather than the modal itself so the
+  // shortcut works regardless of which descendant has focus.
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!modal.classList.contains('visible')) return;
+    event.preventDefault();
+    close();
+  });
+
+  wireUsageLanguageSwitch();
+}
+
+/**
+ * Wires the EN / 日本語 toggle inside the Usage pane. Defaults
+ * to whichever language matches `navigator.language` at boot —
+ * `ja-*` browsers land on Japanese, everyone else on English.
+ * The switch only toggles visibility on the static HTML
+ * blocks; nothing is fetched or recomputed.
+ */
+function wireUsageLanguageSwitch(): void {
+  const toggles = Array.from(document.querySelectorAll<HTMLButtonElement>('.help-lang-toggle'));
+  const blocks = Array.from(document.querySelectorAll<HTMLElement>('.help-lang'));
+  if (toggles.length === 0 || blocks.length === 0) return;
+
+  const activate = (lang: string): void => {
+    for (const toggle of toggles) {
+      const matches = toggle.dataset.lang === lang;
+      toggle.classList.toggle('is-active', matches);
+      toggle.setAttribute('aria-pressed', matches ? 'true' : 'false');
+    }
+    for (const block of blocks) {
+      const matches = block.dataset.lang === lang;
+      block.classList.toggle('is-active', matches);
+      block.toggleAttribute('hidden', !matches);
+    }
+  };
+
+  // Default selection. Anything starting with `ja` (e.g.
+  // `ja-JP`, `ja`) maps to Japanese; everything else falls
+  // through to English. We don't persist the user's choice
+  // — the switch is one click, and the page wasn't expected
+  // to remember it across sessions.
+  const initial = typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('ja') ? 'ja' : 'en';
+  activate(initial);
+
+  for (const toggle of toggles) {
+    toggle.addEventListener('click', () => {
+      const lang = toggle.dataset.lang;
+      if (lang) activate(lang);
+    });
+  }
+}
+
+/**
+ * Builds one row per acknowledgement. Each row is a `<details>`
+ * so the license text is hidden until the user expands it —
+ * keeps the at-rest list scannable while still putting the full
+ * text one click away.
+ */
+function renderAcknowledgementsList(list: HTMLOListElement): void {
+  list.replaceChildren();
+  if (acknowledgements.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'ack-empty';
+    empty.textContent = 'No third-party dependencies were detected at build time.';
+    list.appendChild(empty);
+    return;
+  }
+  for (const entry of acknowledgements) {
+    list.appendChild(buildAcknowledgementCard(entry));
+  }
+}
+
+function buildAcknowledgementCard(entry: (typeof acknowledgements)[number]): HTMLLIElement {
+  const card = document.createElement('li');
+  card.className = 'ack-card';
+
+  // Flat layout — no `<details>` / `<summary>`. Earlier we
+  // tried collapsing each card behind a disclosure widget,
+  // but Chromium 121+ rewired `<details>` internals to use
+  // shadow slots that fight with our CSS, leaving cards
+  // collapsed to ~12 px even with `details.open = true`.
+  // The license-text is the whole point of the modal anyway,
+  // so always-visible is the better default.
+  const heading = document.createElement('div');
+  heading.className = 'ack-card-heading';
+  const name = document.createElement('span');
+  name.className = 'ack-card-name';
+  name.textContent = entry.name;
+  heading.appendChild(name);
+  const version = document.createElement('span');
+  version.className = 'ack-card-version';
+  version.textContent = `v${entry.version}`;
+  heading.appendChild(version);
+  if (entry.license) {
+    const license = document.createElement('span');
+    license.className = 'ack-card-license';
+    license.textContent = entry.license;
+    heading.appendChild(license);
+  }
+  card.appendChild(heading);
+
+  const meta = document.createElement('div');
+  meta.className = 'ack-card-meta';
+  // Prefer homepage; fall back to the repository URL. Strip
+  // common npm prefixes (`git+`, `.git`) so the displayed link
+  // is human-friendly while the `href` keeps the raw URL.
+  const link = entry.homepage ?? cleanRepositoryUrl(entry.repository);
+  if (link) {
+    const a = document.createElement('a');
+    a.href = link;
+    a.textContent = link.replace(/^https?:\/\//u, '');
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.className = 'ack-card-link';
+    meta.appendChild(a);
+  }
+  if (entry.author) {
+    const author = document.createElement('span');
+    author.className = 'ack-card-author';
+    author.textContent = entry.author;
+    meta.appendChild(author);
+  }
+  if (meta.childNodes.length > 0) {
+    card.appendChild(meta);
+  }
+
+  if (entry.licenseText) {
+    const pre = document.createElement('pre');
+    pre.className = 'ack-card-license-text';
+    pre.textContent = entry.licenseText;
+    card.appendChild(pre);
+  } else {
+    const note = document.createElement('div');
+    note.className = 'ack-card-license-missing';
+    note.textContent = 'No LICENSE file shipped with this package.';
+    card.appendChild(note);
+  }
+
+  return card;
+}
+
+function cleanRepositoryUrl(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  // Strip `git+` / `.git` and `git://` → `https://`. Doesn't
+  // try to be exhaustive — these three transforms cover ~all
+  // npm packages we ship.
+  return raw
+    .replace(/^git\+/u, '')
+    .replace(/^git:\/\//u, 'https://')
+    .replace(/\.git$/u, '');
 }
 
 /**

@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
@@ -109,6 +109,276 @@ function ffmpegCorePlugin(sourceDir: string): Plugin {
   };
 }
 
+/**
+ * Walks the production dependency tree starting from `roots`
+ * (each a path to a `package.json`) and returns one
+ * `Acknowledgement` per discovered package — name, installed
+ * version, license id, author, repository, and the verbatim
+ * `LICENSE` text where available. Skips:
+ *
+ * - Workspace packages (`@be-music/*`) — these are first-party
+ *   code, listed separately in the demo's about section.
+ * - `devDependencies` / `peerDependencies` — anything that
+ *   doesn't ship to the runtime bundle.
+ * - Already-seen packages (dedup by name; version conflicts
+ *   are rare in pnpm with hoisting and the user only needs
+ *   to know the library was used).
+ *
+ * Resolution goes through `createRequire(parent)` so we always
+ * pick the version pnpm actually installed for that consumer,
+ * not whatever happens to be hoisted at the workspace root.
+ */
+async function collectAcknowledgements(roots: string[]): Promise<
+  Array<{
+    name: string;
+    version: string;
+    license?: string;
+    author?: string;
+    homepage?: string;
+    repository?: string;
+    licenseText?: string;
+  }>
+> {
+  const seen = new Map<string, Awaited<ReturnType<typeof readPackageMeta>>>();
+  const queue: Array<{ pkgJsonPath: string; basePath: string }> = roots.map((p) => ({
+    pkgJsonPath: p,
+    basePath: dirname(p),
+  }));
+
+  while (queue.length > 0) {
+    const item = queue.shift()!;
+    let pkg: { dependencies?: Record<string, string> };
+    try {
+      pkg = JSON.parse(await readFile(item.pkgJsonPath, 'utf8'));
+    } catch {
+      continue;
+    }
+
+    const deps = Object.keys(pkg.dependencies ?? {});
+    for (const depName of deps) {
+      // Workspace deps are first-party and don't belong in the
+      // third-party acknowledgement list. They're MIT under our
+      // own LICENSE which is already linked from the demo.
+      if (depName.startsWith('@be-music/')) continue;
+      if (seen.has(depName)) continue;
+
+      const resolved = await resolveDependencyPackageJson(depName, item.basePath);
+      if (!resolved) continue;
+      const meta = await readPackageMeta(resolved.pkgJsonPath, resolved.pkgDir);
+      if (!meta) continue;
+      seen.set(depName, meta);
+      // pnpm symlinks each package's `node_modules/<name>` to a
+      // location inside `.pnpm/...`. Walking from the symlinked
+      // path finds nothing because the package's own siblings
+      // live next to its `realpath` target. Resolving the symlink
+      // here lets the next iteration find transitive deps in
+      // the pnpm virtual store.
+      const realPkgDir = await realpath(resolved.pkgDir).catch(() => resolved.pkgDir);
+      queue.push({ pkgJsonPath: resolved.pkgJsonPath, basePath: realPkgDir });
+    }
+  }
+
+  return Array.from(seen.values())
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Locates the on-disk `package.json` for `depName` as resolved
+ * from `basePath`. Robust against two common pnpm-era issues:
+ *
+ *   1. Packages whose `exports` field doesn't list
+ *      `./package.json` — `require.resolve('pkg/package.json')`
+ *      throws `ERR_PACKAGE_PATH_NOT_EXPORTED` for these (notably
+ *      Pixi v8, modern @ffmpeg builds), so we walk
+ *      `node_modules` chains by hand instead.
+ *   2. Symlinked virtual stores (`node_modules/.pnpm/...`) —
+ *      `require.resolve(pkg)` returns the entry point inside
+ *      the virtual store, so we walk `dirname` chains until
+ *      we hit a `package.json` whose `name` matches.
+ *
+ * Returns `undefined` when no resolution path succeeds.
+ */
+async function resolveDependencyPackageJson(
+  depName: string,
+  basePath: string,
+): Promise<{ pkgJsonPath: string; pkgDir: string } | undefined> {
+  // Strategy 1: walk parent `node_modules` directories. This
+  // mirrors Node's resolution algorithm and works for both
+  // hoisted and non-hoisted layouts. Avoids the `exports`
+  // gating that blocks `require.resolve(pkg/package.json)`.
+  let dir = basePath;
+  while (true) {
+    const candidate = resolve(dir, 'node_modules', depName, 'package.json');
+    try {
+      await readFile(candidate, 'utf8');
+      return { pkgJsonPath: candidate, pkgDir: dirname(candidate) };
+    } catch {
+      // Not in this `node_modules`; walk up.
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  // Strategy 2: resolve the package's main entry and walk up
+  // until we find a `package.json` whose `name` matches. This
+  // catches pnpm's virtual store layout where the actual
+  // package lives under `node_modules/.pnpm/.../node_modules/`.
+  try {
+    const req = createRequire(`${basePath}/`);
+    const entry = req.resolve(depName);
+    let cursor = dirname(entry);
+    while (true) {
+      const candidate = resolve(cursor, 'package.json');
+      try {
+        const text = await readFile(candidate, 'utf8');
+        const json = JSON.parse(text) as { name?: string };
+        if (json.name === depName) {
+          return { pkgJsonPath: candidate, pkgDir: cursor };
+        }
+      } catch {
+        // Not here; walk up.
+      }
+      const parent = dirname(cursor);
+      if (parent === cursor) break;
+      cursor = parent;
+    }
+  } catch {
+    // require.resolve threw — package isn't installed.
+  }
+  return undefined;
+}
+
+async function readPackageMeta(
+  pkgJsonPath: string,
+  pkgDir: string,
+): Promise<
+  | {
+      name: string;
+      version: string;
+      license?: string;
+      author?: string;
+      homepage?: string;
+      repository?: string;
+      licenseText?: string;
+    }
+  | undefined
+> {
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(await readFile(pkgJsonPath, 'utf8'));
+  } catch {
+    return undefined;
+  }
+  const name = typeof raw.name === 'string' ? raw.name : undefined;
+  const version = typeof raw.version === 'string' ? raw.version : undefined;
+  if (!name || !version) return undefined;
+
+  // `license` can be a string ("MIT") or `{ type, url }`. Both
+  // forms are valid per package.json spec; we surface only the
+  // identifier — full text comes from the LICENSE file below.
+  const licenseField = raw.license;
+  const license =
+    typeof licenseField === 'string'
+      ? licenseField
+      : licenseField && typeof (licenseField as { type?: unknown }).type === 'string'
+        ? (licenseField as { type: string }).type
+        : undefined;
+
+  // `author` can be a string ("Name <email>") or
+  // `{ name, email, url }`. Format consistently as "Name (url)".
+  const authorField = raw.author;
+  const author =
+    typeof authorField === 'string'
+      ? authorField
+      : authorField && typeof (authorField as { name?: unknown }).name === 'string'
+        ? formatAuthorObject(authorField as { name: string; email?: string; url?: string })
+        : undefined;
+
+  const homepage = typeof raw.homepage === 'string' ? raw.homepage : undefined;
+  const repositoryField = raw.repository;
+  const repository =
+    typeof repositoryField === 'string'
+      ? repositoryField
+      : repositoryField && typeof (repositoryField as { url?: unknown }).url === 'string'
+        ? (repositoryField as { url: string }).url
+        : undefined;
+
+  const licenseText = await tryReadLicenseFile(pkgDir);
+
+  return { name, version, license, author, homepage, repository, licenseText };
+}
+
+function formatAuthorObject(author: { name: string; email?: string; url?: string }): string {
+  const parts: string[] = [author.name];
+  if (author.url) parts.push(`(${author.url})`);
+  return parts.join(' ');
+}
+
+async function tryReadLicenseFile(pkgDir: string): Promise<string | undefined> {
+  // Cover the common spellings — packages don't all agree.
+  // First match wins; we don't merge multiple files.
+  const candidates = [
+    'LICENSE',
+    'LICENSE.md',
+    'LICENSE.txt',
+    'License',
+    'license',
+    'license.md',
+    'COPYING',
+    'COPYING.txt',
+  ];
+  for (const candidate of candidates) {
+    try {
+      const text = await readFile(resolve(pkgDir, candidate), 'utf8');
+      // Truncate ridiculously long licenses (some packages bundle
+      // the full GPL + the code's own license + a third-party
+      // attribution dump). 32 kB is enough to render meaningful
+      // text without bloating the bundle past usefulness.
+      const MAX_LICENSE_BYTES = 32_000;
+      if (text.length > MAX_LICENSE_BYTES) {
+        return `${text.slice(0, MAX_LICENSE_BYTES)}\n\n…[truncated]`;
+      }
+      return text;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Vite plugin that exposes the resolved acknowledgement list as
+ * a virtual module (`virtual:acknowledgements`). The demo
+ * imports it once and renders it inside the about modal —
+ * staying out of the runtime bundle until the user actually
+ * opens the dialog requires nothing more than dynamic-importing
+ * the consumer module if bundle size matters later.
+ */
+function acknowledgementsPlugin(roots: string[]): Plugin {
+  const VIRTUAL_ID = 'virtual:acknowledgements';
+  const RESOLVED_ID = `\0${VIRTUAL_ID}`;
+  let cachedPayload: string | undefined;
+  return {
+    name: 'be-music:acknowledgements',
+    async buildStart() {
+      const data = await collectAcknowledgements(roots);
+      cachedPayload = `export default ${JSON.stringify(data)};`;
+    },
+    resolveId(id) {
+      if (id === VIRTUAL_ID) return RESOLVED_ID;
+      return null;
+    },
+    load(id) {
+      if (id !== RESOLVED_ID) return null;
+      // `cachedPayload` is populated by `buildStart`. The hook
+      // ordering guarantees `load` runs after `buildStart`
+      // resolves, so the fallback here is purely defensive.
+      return cachedPayload ?? 'export default [];';
+    },
+  };
+}
+
 // Vite alias は string で starts-with マッチするので、長いサブパスを先に並べる必要がある。
 // `@be-music/audio-renderer` (root, Node 依存) と `@be-music/utils` (root, Node 依存) は意図的に
 // alias しない: ブラウザ向けには pure な subpath (`/triggers`, `/core`) のみ使わせる。
@@ -174,6 +444,16 @@ export default defineConfig({
       },
     },
     ffmpegCorePlugin(ffmpegCoreEsmDir),
+    // Build-time acknowledgement collector. Walks the runtime
+    // dep tree from the demo + `player-web-core` package.json
+    // entry points so every npm dependency that ships in the
+    // bundle (direct or transitive) ends up listed in the
+    // about modal — no manual maintenance, just `pnpm install`
+    // and rebuild.
+    acknowledgementsPlugin([
+      resolve(repositoryDir, 'packages/player-web-demo/package.json'),
+      resolve(repositoryDir, 'packages/player-web-core/package.json'),
+    ]),
   ],
   resolve: {
     alias: workspaceAliases,
