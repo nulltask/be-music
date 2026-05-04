@@ -749,14 +749,15 @@ class PlayerWebDemoApp {
       // `0` means "preserve resolution"; any positive integer
       // activates the resize path with that long-edge cap.
       bgaResizeMaxEdgePx: 0,
-      // WebCodecs encode is OFF by default for safety —
-      // browser support is good but not universal, and the
-      // raw-frame buffering means very large BGA can OOM
-      // before the fallback kicks in. Power users can opt in
-      // via the GUI checkbox; the GUI greys it out when
-      // `VideoEncoder` is missing so the user can't toggle
-      // an unsupported state.
-      bgaUseWebCodecs: false,
+      // WebCodecs encode defaults ON when the browser exposes
+      // `VideoEncoder` — typically a 5-20× encode-side speedup
+      // over the single-threaded wasm libx264 fallback, and
+      // the runtime silently falls back to ffmpeg if the
+      // encoder rejects the configured codec parameters or any
+      // step throws. Browsers without `VideoEncoder`
+      // (Safari < 17, older Firefox) keep the toggle disabled
+      // in the GUI and the seed stays `false`.
+      bgaUseWebCodecs: typeof globalThis !== 'undefined' && 'VideoEncoder' in globalThis,
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
