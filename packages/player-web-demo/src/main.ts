@@ -322,12 +322,16 @@ app.innerHTML = `
                 </li>
               </ul>
               <ul class="help-about-notes">
-                <li>Some features are still missing or incomplete — expect rough edges.</li>
-                <li>Use at your own risk. No warranty is provided.</li>
                 <li>
                   Dropped files stay entirely in your browser. Charts, audio, and BGA assets are
                   <strong>never uploaded to any server</strong>.
                 </li>
+                <li>Some features are still missing or incomplete — expect rough edges.</li>
+                <li>
+                  <strong>Scores are not saved.</strong> There is no persistence or leaderboard
+                  yet — refreshing the page or revisiting later loses every result.
+                </li>
+                <li>Use at your own risk. No warranty is provided.</li>
               </ul>
             </section>
             <h3 class="help-section-title">Loading songs</h3>
@@ -410,12 +414,16 @@ app.innerHTML = `
                 </li>
               </ul>
               <ul class="help-about-notes">
-                <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
-                <li>利用は自己責任でお願いします。本ソフトウェアは無保証で提供されます。</li>
                 <li>
                   ドロップしたファイルはブラウザ内でのみ処理され、譜面・音声・BGA データを
                   <strong>サーバへ送信することは一切ありません</strong>。
                 </li>
+                <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
+                <li>
+                  <strong>スコアは保存されません。</strong>
+                  永続化やランキング機能は未実装で、ページをリロード / 再訪するとリザルトはすべて失われます。
+                </li>
+                <li>利用は自己責任でお願いします。本ソフトウェアは無保証で提供されます。</li>
               </ul>
             </section>
             <h3 class="help-section-title">楽曲の読み込み</h3>
