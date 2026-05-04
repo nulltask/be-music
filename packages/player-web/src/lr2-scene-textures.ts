@@ -1,5 +1,5 @@
 import { Texture } from 'pixi.js';
-import { type Lr2Skin, type Lr2SpecialGraphic, LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from './lr2-skin.ts';
+import { type Lr2Skin, type Lr2SpecialGraphic, LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from '@be-music/lr2-skin';
 import { loadSkinAssetTexture, loadTextureFromBytes } from './lr2-textures.ts';
 import { loadAssetBytes, resolveChartImageAsset, resolveSongSource } from './library.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';

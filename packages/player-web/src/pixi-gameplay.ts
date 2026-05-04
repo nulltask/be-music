@@ -38,6 +38,8 @@ import {
 import {
   type Lr2BarGraphElement,
   type Lr2DestinationRect,
+  type Lr2ImageElement,
+  type Lr2ImageRect,
   type Lr2JudgeLineElement,
   type Lr2Skin,
   type Lr2SliderElement,
@@ -45,7 +47,7 @@ import {
   type Lr2TextElement,
   LR2_SPECIAL_GRAPHIC,
   isLr2SpecialGraphic,
-} from './lr2-skin.ts';
+} from '@be-music/lr2-skin';
 import { loadSkinAssetTexture, loadTextureFromBytes, loadVideoTextureFromBytes } from './lr2-textures.ts';
 import {
   applyDestinationToSprite,
@@ -799,10 +801,7 @@ export class PixiGameplayView {
    * `lastJudge` / `lastJudgeUntil` aliases above keep their
    * existing behaviour for the fallback `renderText` path.
    */
-  private judgeSideState: Record<
-    '1P' | '2P',
-    { judge: JudgeKind | ''; until: number; combo: number }
-  > = {
+  private judgeSideState: Record<'1P' | '2P', { judge: JudgeKind | ''; until: number; combo: number }> = {
     '1P': { judge: '', until: 0, combo: 0 },
     '2P': { judge: '', until: 0, combo: 0 },
   };
@@ -2202,9 +2201,7 @@ export class PixiGameplayView {
     skin.images.forEach((image) => imagePaths.add(image.source.imagePath));
     Object.values(skin.notes).forEach((group) => group?.forEach((note) => imagePaths.add(note.imagePath)));
     Object.values(skin.judges).forEach((group) => group?.forEach((judge) => imagePaths.add(judge.source.imagePath)));
-    Object.values(skin.judges2P).forEach((group) =>
-      group?.forEach((judge) => imagePaths.add(judge.source.imagePath)),
-    );
+    Object.values(skin.judges2P).forEach((group) => group?.forEach((judge) => imagePaths.add(judge.source.imagePath)));
     skin.numbers.forEach((number) => imagePaths.add(number.source.imagePath));
     skin.grooveGauges.forEach((gauge) => imagePaths.add(gauge.source.imagePath));
     skin.nowCombos.forEach((combo) => imagePaths.add(combo.source.imagePath));
@@ -4491,11 +4488,7 @@ export class PixiGameplayView {
       const dst = this.evaluateElementDst(bga);
       const { x, y, w, h } = normaliseRect(dst);
       if (w <= 0 || h <= 0) continue;
-      const drawLayer = (
-        key: string | undefined,
-        textures: ReadonlyMap<string, Texture>,
-        layerName: string,
-      ): void => {
+      const drawLayer = (key: string | undefined, textures: ReadonlyMap<string, Texture>, layerName: string): void => {
         if (!key) return;
         const texture = textures.get(key);
         if (!texture) return;
@@ -4742,7 +4735,7 @@ export class PixiGameplayView {
    * the static frame images and the timer-driven overlays (bombs, lasers,
    * key-on flashes) — see `renderSkin`.
    */
-  private renderSkinImage(image: import('./lr2-skin.ts').Lr2ImageElement): void {
+  private renderSkinImage(image: Lr2ImageElement): void {
     if (!this.isDestinationVisible(image.destination)) {
       return;
     }
@@ -5215,12 +5208,8 @@ export class PixiGameplayView {
     }
     const comboElement = comboKind
       ? (skin.nowCombos.find(
-          (entry) =>
-            entry.kind === comboKind && entry.side === side && this.isDestinationVisible(entry.destination),
-        ) ??
-          skin.nowCombos.find(
-            (entry) => entry.kind === comboKind && this.isDestinationVisible(entry.destination),
-          ))
+          (entry) => entry.kind === comboKind && entry.side === side && this.isDestinationVisible(entry.destination),
+        ) ?? skin.nowCombos.find((entry) => entry.kind === comboKind && this.isDestinationVisible(entry.destination)))
       : undefined;
     const visibleCombo = comboKind && state.combo > 0 ? state.combo : 0;
     // Compute centring offset so that judge plate + combo sits centred on
@@ -5305,7 +5294,10 @@ export class PixiGameplayView {
       return PLAYFIELD.x + PLAYFIELD.w / 2;
     }
     const leftmost = sideLanes.reduce((acc, lane) => Math.min(acc, lane.x), sideLanes[0]!.x);
-    const rightmost = sideLanes.reduce((acc, lane) => Math.max(acc, lane.x + lane.w), sideLanes[0]!.x + sideLanes[0]!.w);
+    const rightmost = sideLanes.reduce(
+      (acc, lane) => Math.max(acc, lane.x + lane.w),
+      sideLanes[0]!.x + sideLanes[0]!.w,
+    );
     return (leftmost + rightmost) / 2;
   }
 
@@ -5652,7 +5644,7 @@ export class PixiGameplayView {
     skin: Lr2Skin | undefined,
     kind: 'note' | 'lnstart' | 'lnend' | 'lnbody' | 'mine',
     laneIndex: number,
-  ): import('./lr2-skin.ts').Lr2ImageRect | undefined {
+  ): Lr2ImageRect | undefined {
     if (!skin) {
       return undefined;
     }
@@ -5660,7 +5652,7 @@ export class PixiGameplayView {
       const autoKind = ('auto' + kind) as keyof Lr2Skin['notes'];
       const auto = skin.notes[autoKind];
       const direct = auto?.[laneIndex];
-      const fallback = auto?.find((entry): entry is import('./lr2-skin.ts').Lr2ImageRect => Boolean(entry));
+      const fallback = auto?.find((entry): entry is Lr2ImageRect => Boolean(entry));
       const autoSrc = direct ?? fallback;
       if (autoSrc) {
         return autoSrc;

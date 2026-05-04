@@ -99,6 +99,15 @@ importers:
         specifier: workspace:*
         version: link:../utils
 
+  packages/lr2-skin:
+    dependencies:
+      '@be-music/json':
+        specifier: workspace:*
+        version: link:../json
+      '@be-music/utils':
+        specifier: workspace:*
+        version: link:../utils
+
   packages/parser:
     dependencies:
       '@be-music/chart':
@@ -185,6 +194,9 @@ importers:
       '@be-music/json':
         specifier: workspace:*
         version: link:../json
+      '@be-music/lr2-skin':
+        specifier: workspace:*
+        version: link:../lr2-skin
       '@be-music/parser':
         specifier: workspace:*
         version: link:../parser
@@ -221,6 +233,9 @@ importers:
 
   packages/player-web-demo:
     dependencies:
+      '@be-music/lr2-skin':
+        specifier: workspace:*
+        version: link:../lr2-skin
       '@be-music/player-web':
         specifier: workspace:*
         version: link:../player-web

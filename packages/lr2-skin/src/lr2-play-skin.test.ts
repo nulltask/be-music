@@ -1,5 +1,6 @@
 import type { BeMusicEvent } from '@be-music/json';
 import { describe, expect, test } from 'vitest';
+import type { Lr2SkinInputFile } from './file-lookup.ts';
 import {
   loadLr2ThemeSkinsFromFiles,
   pickLr2PlaySkin,
@@ -7,33 +8,40 @@ import {
   pickLr2ThemeBgmFile,
   summarizeLr2PlaySkins,
   type Lr2PlaySkinMap,
+  type Lr2PlaySkinSong,
+  type Lr2ThemeLoadProgress,
 } from './lr2-play-skin.ts';
 import type { Lr2Skin } from './lr2-skin.ts';
-import type { BrowserSongEntry, LoadProgress } from './types.ts';
 
 function skin(name: string): Lr2Skin {
   return { name } as Lr2Skin;
 }
 
 /**
- * Builds a fake `File` carrying just the path metadata
+ * Builds a fake file carrying just the path metadata
  * `pickLr2ThemeBgmFile` consults. The matcher only inspects
  * `webkitRelativePath` / `name`, so casting an object literal
  * is enough — this avoids the `new File([...], ...)` boilerplate
  * that needs an actual Blob payload we don't use here.
  */
-function pathFile(path: string): File {
-  return { webkitRelativePath: path, name: path.split('/').pop() ?? path } as unknown as File;
+function pathFile(path: string): Lr2SkinInputFile {
+  return {
+    webkitRelativePath: path,
+    name: path.split('/').pop() ?? path,
+    arrayBuffer: async () => new ArrayBuffer(0),
+  };
 }
 
-function songWithChannels(channels: string[]): BrowserSongEntry {
+function songWithChannels(channels: string[]): Lr2PlaySkinSong {
   return {
+    chartPath: 'Song/main.bms',
     chart: {
+      bms: {},
       events: channels.map(
         (channel, index): BeMusicEvent => ({ measure: index, channel, position: [0, 1], value: '01' }),
       ),
     },
-  } as BrowserSongEntry;
+  };
 }
 
 describe('LR2 play-skin helpers', () => {
@@ -167,7 +175,7 @@ describe('loadLr2ThemeSkinsFromFiles progress events', () => {
     // `undefined`, but the progress emitter must still tick to
     // completion so the host UI's "Theme: X / N" readout reaches
     // the bottom-right corner of the bar.
-    const events: LoadProgress[] = [];
+    const events: Lr2ThemeLoadProgress[] = [];
     await loadLr2ThemeSkinsFromFiles([], { onProgress: (event) => events.push(event) });
     const themeEvents = events.filter((event) => event.phase === 'theme');
     // Initial 0 / N prelude + one per sub-task.

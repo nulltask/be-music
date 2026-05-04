@@ -1,7 +1,7 @@
 {
-  "name": "@be-music/player-web",
+  "name": "@be-music/lr2-skin",
   "version": "0.1.0",
-  "description": "Vanilla browser PixiJS core for be-music song selection and gameplay",
+  "description": "Renderer-independent Lunatic Rave 2 skin parser and theme loader for be-music",
   "license": "MIT",
   "files": [
     "dist"
@@ -17,6 +17,7 @@
     }
   },
   "scripts": {
+    "build:bundle": "tsdown",
     "build": "tsdown",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
@@ -27,20 +28,7 @@
     "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts"
   },
   "dependencies": {
-    "@be-music/audio-renderer": "workspace:*",
-    "@be-music/chart": "workspace:*",
     "@be-music/json": "workspace:*",
-    "@be-music/lr2-skin": "workspace:*",
-    "@be-music/parser": "workspace:*",
-    "@be-music/player": "workspace:*",
-    "@be-music/utils": "workspace:*",
-    "@ffmpeg/core": "^0.12.10",
-    "@ffmpeg/core-mt": "^0.12.10",
-    "@ffmpeg/ffmpeg": "^0.12.15",
-    "@ffmpeg/util": "^0.12.2",
-    "fflate": "^0.8.2",
-    "mp4-muxer": "^5.2.2",
-    "pixi.js": "^8.17.1",
-    "ts-ebml": "^3.0.2"
+    "@be-music/utils": "workspace:*"
   }
 }

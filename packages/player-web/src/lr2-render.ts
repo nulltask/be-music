@@ -1,5 +1,5 @@
 import { type BLEND_MODES, type Container, Rectangle, Sprite, Texture } from 'pixi.js';
-import type { Lr2DestinationRect, Lr2NumberElement } from './lr2-skin.ts';
+import type { Lr2DestinationRect, Lr2NumberElement } from '@be-music/lr2-skin';
 
 /**
  * Shared LR2 sprite-rendering helpers used by both the gameplay view

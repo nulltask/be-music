@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { clampFontSize, isDestinationVisible, resolveScaledViewport } from './lr2-scene-render.ts';
-import type { Lr2DestinationRect } from './lr2-skin.ts';
+import type { Lr2DestinationRect } from '@be-music/lr2-skin';
 
 function destination(overrides: Partial<Lr2DestinationRect> = {}): Lr2DestinationRect {
   return {

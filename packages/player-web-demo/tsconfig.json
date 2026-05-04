@@ -3,5 +3,5 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "../player-web/src/**/*.ts"]
+  "include": ["src/**/*.ts", "../lr2-skin/src/**/*.ts", "../player-web/src/**/*.ts"]
 }

@@ -13,7 +13,7 @@ import {
   type Lr2NowComboElement,
   type Lr2NowComboKind,
   type Lr2Skin,
-} from './lr2-skin.ts';
+} from '@be-music/lr2-skin';
 import { applyDestinationToSprite, createCroppedTexture } from './lr2-render.ts';
 
 export function isLr2OverlayImage(image: Lr2ImageElement): boolean {
