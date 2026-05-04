@@ -2,7 +2,7 @@
 
 # Browser player implementation notes
 
-This document summarizes the browser player added by `@be-music/player-web-core` and `@be-music/player-web-demo`.
+This document summarizes the browser player added by `@be-music/player-web` and `@be-music/player-web-demo`.
 Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as timing, notes, judgment, score, gauge, and BGA event meaning.
 
 ## Audit note
@@ -13,7 +13,7 @@ Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as ti
 
 ## Scope
 
-- `@be-music/player-web-core` provides browser-friendly song loading, preview playback, LR2 skin parsing, PixiJS scenes, WebAudio bus construction, and gameplay recording.
+- `@be-music/player-web` provides browser-friendly song loading, preview playback, LR2 skin parsing, PixiJS scenes, WebAudio bus construction, and gameplay recording.
 - `@be-music/player-web-demo` is a private Vite application that wires the core package to drag-and-drop loading, theme loading, debug controls, and recording controls.
 - The browser player supports both BMS/BME/BML/PMS and bmson charts through the same parser and player helpers used by the CLI.
 
@@ -84,7 +84,7 @@ Scenes implement `enter()`, `exit()`, and `dispose()`.
 - Benchmarks include browser-core helpers that are pure enough to run outside a WebGL context:
 
 ```bash
-pnpm bench -- --packages player-web-core
+pnpm bench -- --packages player-web
 ```
 
 ## Audio, BGA, and recording
@@ -101,4 +101,4 @@ pnpm bench -- --packages player-web-core
 
 The browser player is a runtime consumer of the repository's shared parser, chart, audio-renderer, player, and utils packages.
 When browser behavior diverges from the CLI player, prefer moving pure path, timing, scroll, lookup, or event-mapping helpers into shared packages and covering them with package-local tests.
-PixiJS scene wiring can remain in `player-web-core` when the behavior depends on browser rendering or WebAudio resources.
+PixiJS scene wiring can remain in `player-web` when the behavior depends on browser rendering or WebAudio resources.

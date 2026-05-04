@@ -13,7 +13,7 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/stringifier`: Stringization from JSON to `.bms` / `.bmson`
 - `@be-music/audio-renderer`: Render the music score and output `.wav` / `.aiff`
 - `@be-music/player`: CLI player (autoplay / keyboard performance / TUI)
-- `@be-music/player-web-core`: Browser PixiJS player core for song selection, LR2 skin rendering, gameplay, result scenes, and recording
+- `@be-music/player-web`: Browser PixiJS player core for song selection, LR2 skin rendering, gameplay, result scenes, and recording
 - `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2 themes, debug controls, and browser playback together
 - `@be-music/editor`: CLI editor (import/edit/export)
 
@@ -117,7 +117,7 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Output dynamics tuning with compressor/limiter switches and threshold/release controls
 - Structured log output (`~/.be-music/logs/player.ndjson`, overwritten with `--log-file`)
 
-### browser player (`@be-music/player-web-core` / `@be-music/player-web-demo`)
+### browser player (`@be-music/player-web` / `@be-music/player-web-demo`)
 
 - Browser song library for dropped folders, ZIPs, and mixed BMS/LR2 theme drops
 - Lazy browser asset loading for large audio/video files, with case-insensitive path lookup

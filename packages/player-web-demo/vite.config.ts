@@ -6,7 +6,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 const repositoryDir = resolve(import.meta.dirname, '../..');
 
-// `@ffmpeg/core` is a transitive dep of `@be-music/player-web-core`, so
+// `@ffmpeg/core` is a transitive dep of `@be-music/player-web`, so
 // pnpm doesn't hoist it to the workspace root. Resolve via the consumer
 // package's `require` so we always find the real on-disk path regardless
 // of pnpm's virtual-store layout. The package's `exports` block doesn't
@@ -29,7 +29,7 @@ const repositoryDir = resolve(import.meta.dirname, '../..');
 // workers (libx264 + SIMD + pthread). Single-threaded encoding is
 // slower but actually completes; the typical BMS BGA is a few minutes,
 // which transcodes in ~tens of seconds even single-threaded.
-const playerWebCoreRequire = createRequire(resolve(repositoryDir, 'packages/player-web-core/package.json'));
+const playerWebCoreRequire = createRequire(resolve(repositoryDir, 'packages/player-web/package.json'));
 const ffmpegCorePackageRoot = dirname(dirname(dirname(playerWebCoreRequire.resolve('@ffmpeg/core'))));
 const ffmpegCoreEsmDir = resolve(ffmpegCorePackageRoot, 'dist/esm');
 
@@ -396,7 +396,7 @@ const workspaceAliases = [
   { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },
   { find: '@be-music/json', replacement: resolve(repositoryDir, 'packages/json/src/index.ts') },
   { find: '@be-music/parser', replacement: resolve(repositoryDir, 'packages/parser/src/index.ts') },
-  { find: '@be-music/player-web-core', replacement: resolve(repositoryDir, 'packages/player-web-core/src/index.ts') },
+  { find: '@be-music/player-web', replacement: resolve(repositoryDir, 'packages/player-web/src/index.ts') },
 ];
 
 export default defineConfig({
@@ -445,14 +445,14 @@ export default defineConfig({
     },
     ffmpegCorePlugin(ffmpegCoreEsmDir),
     // Build-time acknowledgement collector. Walks the runtime
-    // dep tree from the demo + `player-web-core` package.json
+    // dep tree from the demo + `player-web` package.json
     // entry points so every npm dependency that ships in the
     // bundle (direct or transitive) ends up listed in the
     // about modal — no manual maintenance, just `pnpm install`
     // and rebuild.
     acknowledgementsPlugin([
       resolve(repositoryDir, 'packages/player-web-demo/package.json'),
-      resolve(repositoryDir, 'packages/player-web-core/package.json'),
+      resolve(repositoryDir, 'packages/player-web/package.json'),
     ]),
   ],
   resolve: {

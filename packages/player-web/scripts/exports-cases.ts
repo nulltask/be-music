@@ -1,4 +1,4 @@
-import * as playerWebCoreApi from '@be-music/player-web-core';
+import * as playerWebCoreApi from '@be-music/player-web';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
@@ -28,17 +28,17 @@ const BENCH_SCORE = {
 };
 
 export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): void {
-  define('player-web-core.asLoadedBytes', {
+  define('player-web.asLoadedBytes', {
     run: () => {
       playerWebCoreApi.asLoadedBytes(BENCH_BYTES);
     },
   });
-  define('player-web-core.basename', {
+  define('player-web.basename', {
     run: () => {
       playerWebCoreApi.basename('Songs/Bench/main.bms');
     },
   });
-  define('player-web-core.buildAudioBus', {
+  define('player-web.buildAudioBus', {
     run: () => {
       const bus = playerWebCoreApi.buildAudioBus(createFakeAudioContext(), 'split');
       bus.setStageEnabled('master', false);
@@ -46,12 +46,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       bus.dispose();
     },
   });
-  define('player-web-core.BrowserSongLibrary', {
+  define('player-web.BrowserSongLibrary', {
     run: () => {
       new playerWebCoreApi.BrowserSongLibrary();
     },
   });
-  define('player-web-core.ChartPreviewEngine', {
+  define('player-web.ChartPreviewEngine', {
     run: () => {
       const node = createFakeAudioNode();
       const engine = new playerWebCoreApi.ChartPreviewEngine(createFakeAudioContext(), node, { focusDelayMs: 1 });
@@ -59,38 +59,38 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       engine.dispose();
     },
   });
-  define('player-web-core.collectChartPreviewTriggers', {
+  define('player-web.collectChartPreviewTriggers', {
     run: (fixtures) => {
       playerWebCoreApi.collectChartPreviewTriggers(fixtures.sampleBmsJson, 3);
     },
   });
-  define('player-web-core.computeResultOps', {
+  define('player-web.computeResultOps', {
     run: () => {
       playerWebCoreApi.computeResultOps(makeResultData(), makeLr2Skin());
     },
   });
-  define('player-web-core.describeSongCollection', {
+  define('player-web.describeSongCollection', {
     run: () => {
       playerWebCoreApi.describeSongCollection(BENCH_COLLECTION);
     },
   });
-  define('player-web-core.dirname', {
+  define('player-web.dirname', {
     run: () => {
       playerWebCoreApi.dirname('Songs/Bench/main.bms');
     },
   });
-  define('player-web-core.downloadBlob', {
+  define('player-web.downloadBlob', {
     run: () => {
       playerWebCoreApi.downloadBlob(new Blob([BENCH_BYTES]), 'bench.webm');
     },
     interactive: true,
   });
-  define('player-web-core.findFirstAudibleOffsetSeconds', {
+  define('player-web.findFirstAudibleOffsetSeconds', {
     run: () => {
       playerWebCoreApi.findFirstAudibleOffsetSeconds(makeAudioBufferLike());
     },
   });
-  define('player-web-core.GameplayRecorder', {
+  define('player-web.GameplayRecorder', {
     run: () => {
       const recorder = new playerWebCoreApi.GameplayRecorder({
         canvas: { captureStream: () => ({ getVideoTracks: () => [] }) } as unknown as HTMLCanvasElement,
@@ -103,192 +103,192 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       recorder.dispose();
     },
   });
-  define('player-web-core.groupSongsByFolder', {
+  define('player-web.groupSongsByFolder', {
     run: () => {
       playerWebCoreApi.groupSongsByFolder([BENCH_SONG]);
     },
   });
-  define('player-web-core.isChartFilePath', {
+  define('player-web.isChartFilePath', {
     run: () => {
       playerWebCoreApi.isChartFilePath('Songs/Bench/main.bms');
     },
   });
-  define('player-web-core.isLr2SpecialGraphic', {
+  define('player-web.isLr2SpecialGraphic', {
     run: () => {
       playerWebCoreApi.isLr2SpecialGraphic('playbg');
     },
   });
-  define('player-web-core.loadAssetBytes', {
+  define('player-web.loadAssetBytes', {
     run: async () => {
       await playerWebCoreApi.loadAssetBytes(BENCH_BYTES);
     },
   });
-  define('player-web-core.loadLr2SkinFromFiles', {
+  define('player-web.loadLr2SkinFromFiles', {
     run: async () => {
       await playerWebCoreApi.loadLr2SkinFromFiles([BENCH_LR2_SKIN_FILE]);
     },
   });
-  define('player-web-core.loadLr2SkinFromSourceFiles', {
+  define('player-web.loadLr2SkinFromSourceFiles', {
     run: () => {
       playerWebCoreApi.loadLr2SkinFromSourceFiles(new Map([['LR2files/Theme/LR2/Play/play_7.lr2skin', BENCH_BYTES]]));
     },
   });
-  define('player-web-core.loadLr2SystemSound', {
+  define('player-web.loadLr2SystemSound', {
     run: async () => {
       await playerWebCoreApi.loadLr2SystemSound([BENCH_SYSTEM_SOUND_FILE], 'scratch');
     },
   });
-  define('player-web-core.loadLr2ThemeBgm', {
+  define('player-web.loadLr2ThemeBgm', {
     run: async () => {
       await playerWebCoreApi.loadLr2ThemeBgm([BENCH_SELECT_BGM_FILE], 'select');
     },
   });
-  define('player-web-core.loadLr2ThemeSkinsFromFiles', {
+  define('player-web.loadLr2ThemeSkinsFromFiles', {
     run: async () => {
       await playerWebCoreApi.loadLr2ThemeSkinsFromFiles([BENCH_LR2_SKIN_FILE]);
     },
   });
-  define('player-web-core.loadSongCollectionFromDrop', {
+  define('player-web.loadSongCollectionFromDrop', {
     run: async () => {
       await playerWebCoreApi.loadSongCollectionFromDrop({
         files: [BENCH_BMS_FILE, BENCH_WAV_FILE],
       } as unknown as DataTransfer);
     },
   });
-  define('player-web-core.loadSongCollectionFromFiles', {
+  define('player-web.loadSongCollectionFromFiles', {
     run: async () => {
       await playerWebCoreApi.loadSongCollectionFromFiles([BENCH_BMS_FILE, BENCH_WAV_FILE]);
     },
   });
-  define('player-web-core.makeWebmSeekable', {
+  define('player-web.makeWebmSeekable', {
     run: async () => {
       await playerWebCoreApi.makeWebmSeekable(new Blob([BENCH_BYTES]));
     },
     interactive: true,
   });
-  define('player-web-core.matchesSearchQuery', {
+  define('player-web.matchesSearchQuery', {
     run: () => {
       playerWebCoreApi.matchesSearchQuery({ kind: 'song', song: BENCH_SONG }, 'bench');
     },
   });
-  define('player-web-core.normalizePath', {
+  define('player-web.normalizePath', {
     run: () => {
       playerWebCoreApi.normalizePath(String.raw`Songs\\Bench/../Bench/main.bms`);
     },
   });
-  define('player-web-core.parseCompressorMode', {
+  define('player-web.parseCompressorMode', {
     run: () => {
       playerWebCoreApi.parseCompressorMode('split');
     },
   });
-  define('player-web-core.pickLr2PlaySkin', {
+  define('player-web.pickLr2PlaySkin', {
     run: () => {
       playerWebCoreApi.pickLr2PlaySkin({ '7': makeLr2Skin() }, BENCH_SONG);
       playerWebCoreApi.pickLr2PlaySkin({ '9': makeLr2Skin() }, BENCH_PMS_SONG);
     },
   });
-  define('player-web-core.pickLr2SystemSoundFile', {
+  define('player-web.pickLr2SystemSoundFile', {
     run: () => {
       playerWebCoreApi.pickLr2SystemSoundFile([BENCH_SYSTEM_SOUND_FILE], 'scratch');
     },
   });
-  define('player-web-core.pickLr2ThemeBgmFile', {
+  define('player-web.pickLr2ThemeBgmFile', {
     run: () => {
       playerWebCoreApi.pickLr2ThemeBgmFile([BENCH_SELECT_BGM_FILE], 'select');
     },
   });
-  define('player-web-core.pickRecorderMimeType', {
+  define('player-web.pickRecorderMimeType', {
     run: () => {
       playerWebCoreApi.pickRecorderMimeType((type) => type === 'video/webm');
     },
   });
-  define('player-web-core.PixiDecideView', {
+  define('player-web.PixiDecideView', {
     run: () => {
       new playerWebCoreApi.PixiDecideView();
     },
     interactive: true,
   });
-  define('player-web-core.PixiGameplayView', {
+  define('player-web.PixiGameplayView', {
     run: () => {
       new playerWebCoreApi.PixiGameplayView();
     },
     interactive: true,
   });
-  define('player-web-core.PixiResultView', {
+  define('player-web.PixiResultView', {
     run: () => {
       new playerWebCoreApi.PixiResultView();
     },
     interactive: true,
   });
-  define('player-web-core.PixiSceneHost', {
+  define('player-web.PixiSceneHost', {
     run: () => {
       new playerWebCoreApi.PixiSceneHost();
     },
     interactive: true,
   });
-  define('player-web-core.PixiSongSelectView', {
+  define('player-web.PixiSongSelectView', {
     run: () => {
       new playerWebCoreApi.PixiSongSelectView();
     },
     interactive: true,
   });
-  define('player-web-core.readDroppedFiles', {
+  define('player-web.readDroppedFiles', {
     run: async () => {
       await playerWebCoreApi.readDroppedFiles({ files: [BENCH_BMS_FILE] } as unknown as DataTransfer);
     },
   });
-  define('player-web-core.readFilesIntoBytesMap', {
+  define('player-web.readFilesIntoBytesMap', {
     run: async () => {
       await playerWebCoreApi.readFilesIntoBytesMap([BENCH_BMS_FILE], { deferAudio: false });
     },
   });
-  define('player-web-core.resolveChartAsset', {
+  define('player-web.resolveChartAsset', {
     run: () => {
       playerWebCoreApi.resolveChartAsset(BENCH_SOURCE, BENCH_SONG.chartPath, 'kick.wav');
     },
   });
-  define('player-web-core.resolveChartAudioAsset', {
+  define('player-web.resolveChartAudioAsset', {
     run: () => {
       playerWebCoreApi.resolveChartAudioAsset(BENCH_SOURCE, BENCH_SONG.chartPath, 'kick.wav');
     },
   });
-  define('player-web-core.resolveChartImageAsset', {
+  define('player-web.resolveChartImageAsset', {
     run: () => {
       playerWebCoreApi.resolveChartImageAsset(BENCH_SOURCE, BENCH_SONG.chartPath, 'banner.bmp');
     },
   });
-  define('player-web-core.resolveChartPlayVariant', {
+  define('player-web.resolveChartPlayVariant', {
     run: () => {
       playerWebCoreApi.resolveChartPlayVariant(BENCH_SONG);
       playerWebCoreApi.resolveChartPlayVariant(BENCH_PMS_SONG);
     },
   });
-  define('player-web-core.resolveChartPreviewPath', {
+  define('player-web.resolveChartPreviewPath', {
     run: (fixtures) => {
       playerWebCoreApi.resolveChartPreviewPath(fixtures.sampleBmsJson);
     },
   });
-  define('player-web-core.resolveDropFilePath', {
+  define('player-web.resolveDropFilePath', {
     run: () => {
       playerWebCoreApi.resolveDropFilePath(BENCH_BMS_FILE);
     },
   });
-  define('player-web-core.resolveLr2AssetBytes', {
+  define('player-web.resolveLr2AssetBytes', {
     run: () => {
       playerWebCoreApi.resolveLr2AssetBytes(makeLr2Skin(), 'parts.tga');
     },
   });
-  define('player-web-core.resolveRendererPreference', {
+  define('player-web.resolveRendererPreference', {
     run: () => {
       playerWebCoreApi.resolveRendererPreference('?renderer=webgl');
     },
   });
-  define('player-web-core.resolveSongSource', {
+  define('player-web.resolveSongSource', {
     run: () => {
       playerWebCoreApi.resolveSongSource(BENCH_COLLECTION, BENCH_SONG);
     },
   });
-  define('player-web-core.splitDroppedSongAndThemeFiles', {
+  define('player-web.splitDroppedSongAndThemeFiles', {
     run: () => {
       playerWebCoreApi.splitDroppedSongAndThemeFiles([
         { name: 'main.bms', webkitRelativePath: 'Songs/Example/main.bms' },
@@ -297,12 +297,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       ]);
     },
   });
-  define('player-web-core.summarizeLr2PlaySkins', {
+  define('player-web.summarizeLr2PlaySkins', {
     run: () => {
       playerWebCoreApi.summarizeLr2PlaySkins({ '7': { name: 'play_7' } as playerWebCoreApi.Lr2Skin });
     },
   });
-  define('player-web-core.wrappedCursorDelta', {
+  define('player-web.wrappedCursorDelta', {
     run: () => {
       playerWebCoreApi.wrappedCursorDelta(-9, 10);
     },

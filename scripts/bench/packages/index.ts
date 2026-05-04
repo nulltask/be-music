@@ -11,7 +11,7 @@ import { jsonBenchmarkPackage } from './json.ts';
 import { parserBenchmarkPackage } from './parser.ts';
 import { playerBenchmarkPackage } from './player.ts';
 import { playerTuiBenchmarkPackage } from './player-tui.ts';
-import { playerWebCoreBenchmarkPackage } from './player-web-core.ts';
+import { playerWebCoreBenchmarkPackage } from './player-web.ts';
 import { stringifierBenchmarkPackage } from './stringifier.ts';
 import { utilsBenchmarkPackage } from './utils.ts';
 
@@ -25,7 +25,7 @@ export const PACKAGE_DEFINITIONS: Record<PackageName, BenchmarkPackageDefinition
   'audio-renderer': audioRendererBenchmarkPackage,
   player: playerBenchmarkPackage,
   'player-tui': playerTuiBenchmarkPackage,
-  'player-web-core': playerWebCoreBenchmarkPackage,
+  'player-web': playerWebCoreBenchmarkPackage,
 };
 
 export function registerAllExportsBenchmarkCases(define: DefineBenchmarkCase): void {

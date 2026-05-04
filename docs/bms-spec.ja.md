@@ -196,7 +196,7 @@ runtime と round-trip の扱い:
 - `stringifier` は `bms.base` が `62` の場合に `#BASE 62` を出力します。
 - `#WAVxx`, `#BMPxx`, `#BPMxx`, `#STOPxx`, `#TEXTxx`, `#LNOBJ`, BGA 系 indexed map、object stream value は有効な base で正規化します。
 - 制御構文 (`#RANDOM` / `#IF` / `#SWITCH` block) の内側も通常行と同じ base を使うため、branch 内の小文字 ID も parse と branch resolution を通して保持します。
-- `player`, `audio-renderer`, `chart`, `player-web-core` は sample、BGA、BPM/STOP、LN、地雷、timing 参照を `resolveBmsBase()` 経由で解決し、base-62 の小文字 ID を runtime でも区別します。
+- `player`, `audio-renderer`, `chart`, `player-web` は sample、BGA、BPM/STOP、LN、地雷、timing 参照を `resolveBmsBase()` 経由で解決し、base-62 の小文字 ID を runtime でも区別します。
 
 例:
 

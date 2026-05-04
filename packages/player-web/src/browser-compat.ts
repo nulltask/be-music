@@ -5,7 +5,7 @@
  * the player can't start instead of getting an opaque WebGL /
  * AudioContext error mid-load.
  *
- * The detection lives in `player-web-core` (not the demo) so any
+ * The detection lives in `player-web` (not the demo) so any
  * host shell — the demo, a future hosted build, an embedded
  * iframe — gets the same readiness verdict from a single source
  * of truth as the actual runtime feature usage.

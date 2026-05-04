@@ -3,5 +3,5 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "../player-web-core/src/**/*.ts"]
+  "include": ["src/**/*.ts", "../player-web/src/**/*.ts"]
 }

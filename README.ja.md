@@ -13,7 +13,7 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/stringifier`: JSON から `.bms` / `.bmson` への文字列化
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
 - `@be-music/player`: CLI プレイヤー (オートプレイ / キーボード演奏 / TUI)
-- `@be-music/player-web-core`: 選曲、LR2 skin 描画、gameplay、result scene、録画を扱う browser PixiJS player core
+- `@be-music/player-web`: 選曲、LR2 skin 描画、gameplay、result scene、録画を扱う browser PixiJS player core
 - `@be-music/player-web-demo`: folder / ZIP drop、LR2 theme、debug control、browser 再生を接続する private Vite demo
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
 
@@ -117,7 +117,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - compressor / limiter の有効化切り替えと threshold / release 系の出力ダイナミクス調整
 - 構造化ログ出力 (`~/.be-music/logs/player.ndjson`, `--log-file` で上書き)
 
-### browser player (`@be-music/player-web-core` / `@be-music/player-web-demo`)
+### browser player (`@be-music/player-web` / `@be-music/player-web-demo`)
 
 - dropped folder、ZIP、BMS/LR2 theme 混在 drop を扱う browser song library
 - 大きな audio / video file を lazy に扱い、case-insensitive に path lookup

@@ -12,7 +12,7 @@ export const PACKAGE_NAMES = [
   'audio-renderer',
   'player',
   'player-tui',
-  'player-web-core',
+  'player-web',
 ] as const;
 
 export type PackageName = (typeof PACKAGE_NAMES)[number];

@@ -14,7 +14,7 @@ const workspacePackages = [
   'player',
   'player-tui',
   'editor',
-  'player-web-core',
+  'player-web',
 ] as const;
 
 const workspaceAliases = [
@@ -81,9 +81,9 @@ export default defineConfig({
         'packages/player-tui/src/cli.ts',
         'packages/player-tui/src/tui.ts',
         'packages/player-tui/src/node/*protocol.ts',
-        'packages/player-web-core/src/index.ts',
-        'packages/player-web-core/src/library.ts',
-        'packages/player-web-core/src/pixi-*.ts',
+        'packages/player-web/src/index.ts',
+        'packages/player-web/src/library.ts',
+        'packages/player-web/src/pixi-*.ts',
       ],
       thresholds: {
         // Use package-level thresholds so lower-coverage packages don't hide behind unrelated ones.

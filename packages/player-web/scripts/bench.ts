@@ -23,8 +23,8 @@ async function main(): Promise<void> {
   }
 
   await runExportsBenchmarkCli(process.argv.slice(2), {
-    defaultPackages: ['player-web-core'],
-    defaultOutputPath: resolve(repositoryDir, 'tmp/bench/exports-player-web-core.json'),
+    defaultPackages: ['player-web'],
+    defaultOutputPath: resolve(repositoryDir, 'tmp/bench/exports-player-web.json'),
   });
 }
 

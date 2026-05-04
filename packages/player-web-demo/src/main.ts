@@ -28,7 +28,7 @@ import {
   type Lr2Skin,
   type PixiGameplayResultData,
   type PixiSongSelectNavigation,
-} from '@be-music/player-web-core';
+} from '@be-music/player-web';
 
 const dropLog = logger('drop');
 const recordLog = logger('record');
@@ -1164,7 +1164,7 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Maps a `LoadProgress` event from the player-web-core loaders
+   * Maps a `LoadProgress` event from the player-web loaders
    * onto the overlay DOM. Phases:
    *
    * - `enumerating` — total is `-1` (we're still walking the drop
@@ -2083,7 +2083,7 @@ function cleanRepositoryUrl(raw: string | undefined): string | undefined {
 /**
  * Human-readable labels shown alongside the loading-overlay
  * progress bar. Keyed by the `LoadProgressPhase` discriminator the
- * `player-web-core` loaders emit. The web UI is English-only, so
+ * `player-web` loaders emit. The web UI is English-only, so
  * these strings stay in English even though the surrounding
  * project conversation is in Japanese.
  */

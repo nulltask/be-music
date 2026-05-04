@@ -2,7 +2,7 @@
 
 # Browser player 実装メモ
 
-この文書は、`@be-music/player-web-core` と `@be-music/player-web-demo` で追加された browser player の実装メモです。
+この文書は、`@be-music/player-web` と `@be-music/player-web-demo` で追加された browser player の実装メモです。
 timing、note、判定、score、gauge、BGA event の意味など、CLI と共有する runtime 意味論は [`player-spec.ja.md`](./player-spec.ja.md) を参照してください。
 
 ## 監査メモ
@@ -13,7 +13,7 @@ timing、note、判定、score、gauge、BGA event の意味など、CLI と共�
 
 ## 対象範囲
 
-- `@be-music/player-web-core` は browser 向けの song loading、preview playback、LR2 skin parsing、PixiJS scene、WebAudio bus、gameplay recording を提供します。
+- `@be-music/player-web` は browser 向けの song loading、preview playback、LR2 skin parsing、PixiJS scene、WebAudio bus、gameplay recording を提供します。
 - `@be-music/player-web-demo` は core package を drag-and-drop loading、theme loading、debug control、recording control へ接続する private Vite application です。
 - browser player は CLI と同じ parser / player helper を通して BMS/BME/BML/PMS と bmson の譜面を扱います。
 
@@ -84,7 +84,7 @@ scene は `enter()`, `exit()`, `dispose()` を実装します。
 - WebGL context に依存しない pure な browser-core helper は benchmark 対象です。
 
 ```bash
-pnpm bench -- --packages player-web-core
+pnpm bench -- --packages player-web
 ```
 
 ## Audio, BGA, recording
@@ -101,4 +101,4 @@ pnpm bench -- --packages player-web-core
 
 browser player は、この repository の parser、chart、audio-renderer、player、utils package を共有する runtime consumer です。
 browser behavior が CLI player と分岐する場合は、pure な path、timing、scroll、lookup、event mapping helper を shared package へ移し、package-local test で覆う方針を優先します。
-PixiJS scene wiring は browser rendering や WebAudio resource に依存する場合、`player-web-core` に残してかまいません。
+PixiJS scene wiring は browser rendering や WebAudio resource に依存する場合、`player-web` に残してかまいません。

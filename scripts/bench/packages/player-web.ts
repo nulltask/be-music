@@ -1,5 +1,5 @@
-import * as playerWebCoreApi from '@be-music/player-web-core';
-import { registerPlayerWebCoreExportsCases } from '../../../packages/player-web-core/scripts/exports-cases.ts';
+import * as playerWebCoreApi from '@be-music/player-web';
+import { registerPlayerWebCoreExportsCases } from '../../../packages/player-web/scripts/exports-cases.ts';
 import type { BenchmarkPackageDefinition } from '../exports.types.ts';
 
 export const playerWebCoreBenchmarkPackage: BenchmarkPackageDefinition = {

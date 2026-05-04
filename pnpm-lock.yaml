@@ -174,7 +174,7 @@ importers:
         specifier: ^0.4.4
         version: 0.4.4
 
-  packages/player-web-core:
+  packages/player-web:
     dependencies:
       '@be-music/audio-renderer':
         specifier: workspace:*
@@ -221,9 +221,9 @@ importers:
 
   packages/player-web-demo:
     dependencies:
-      '@be-music/player-web-core':
+      '@be-music/player-web':
         specifier: workspace:*
-        version: link:../player-web-core
+        version: link:../player-web
       lil-gui:
         specifier: ^0.21.0
         version: 0.21.0

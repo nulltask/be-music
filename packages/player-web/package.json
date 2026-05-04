@@ -1,5 +1,5 @@
 {
-  "name": "@be-music/player-web-core",
+  "name": "@be-music/player-web",
   "version": "0.1.0",
   "description": "Vanilla browser PixiJS core for be-music song selection and gameplay",
   "license": "MIT",

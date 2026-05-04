@@ -196,7 +196,7 @@ Runtime and round-trip behavior:
 - `stringifier` emits `#BASE 62` when `bms.base` is `62`.
 - `#WAVxx`, `#BMPxx`, `#BPMxx`, `#STOPxx`, `#TEXTxx`, `#LNOBJ`, BGA-related indexed maps, and object-stream values are normalized with the active base.
 - Control-flow contents (`#RANDOM` / `#IF` / `#SWITCH` blocks) use the same base as normal lines, so lowercase IDs inside branches survive parsing and branch resolution.
-- `player`, `audio-renderer`, `chart`, and `player-web-core` resolve sample, BGA, BPM/STOP, LN, mine, and timing references through `resolveBmsBase()` so base-62 lowercase IDs remain distinct at runtime.
+- `player`, `audio-renderer`, `chart`, and `player-web` resolve sample, BGA, BPM/STOP, LN, mine, and timing references through `resolveBmsBase()` so base-62 lowercase IDs remain distinct at runtime.
 
 Example:
 

@@ -14,7 +14,7 @@
     "format:check": "oxfmt . --check"
   },
   "dependencies": {
-    "@be-music/player-web-core": "workspace:*",
+    "@be-music/player-web": "workspace:*",
     "lil-gui": "^0.21.0"
   },
   "devDependencies": {
