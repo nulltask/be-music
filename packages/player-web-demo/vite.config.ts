@@ -29,12 +29,8 @@ const repositoryDir = resolve(import.meta.dirname, '../..');
 // workers (libx264 + SIMD + pthread). Single-threaded encoding is
 // slower but actually completes; the typical BMS BGA is a few minutes,
 // which transcodes in ~tens of seconds even single-threaded.
-const playerWebCoreRequire = createRequire(
-  resolve(repositoryDir, 'packages/player-web-core/package.json'),
-);
-const ffmpegCorePackageRoot = dirname(
-  dirname(dirname(playerWebCoreRequire.resolve('@ffmpeg/core'))),
-);
+const playerWebCoreRequire = createRequire(resolve(repositoryDir, 'packages/player-web-core/package.json'));
+const ffmpegCorePackageRoot = dirname(dirname(dirname(playerWebCoreRequire.resolve('@ffmpeg/core'))));
 const ffmpegCoreEsmDir = resolve(ffmpegCorePackageRoot, 'dist/esm');
 
 // `ebml` v3 ships a `"browser": "lib/ebml.iife.js"` field that
@@ -46,10 +42,7 @@ const ffmpegCoreEsmDir = resolve(ffmpegCorePackageRoot, 'dist/esm');
 // of undefined (reading 'readVint')` the moment we try to patch a
 // recorded WebM. Force-resolve to the ESM bundle, which exports
 // `tools` / `schema` / `Decoder` / `Encoder` properly.
-const ebmlEsmPath = resolve(
-  repositoryDir,
-  'node_modules/.pnpm/ebml@3.0.0/node_modules/ebml/lib/ebml.esm.js',
-);
+const ebmlEsmPath = resolve(repositoryDir, 'node_modules/.pnpm/ebml@3.0.0/node_modules/ebml/lib/ebml.esm.js');
 
 /**
  * Stages the single-threaded ffmpeg.wasm core (ESM bundle) under

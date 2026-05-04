@@ -723,13 +723,7 @@ function detectBmsBase(input: string): 36 | 62 {
   return resolved;
 }
 
-function pushHeaderLine(
-  json: BeMusicJson,
-  command: string,
-  commandRaw: string,
-  value: string,
-  base: 36 | 62,
-): void {
+function pushHeaderLine(json: BeMusicJson, command: string, commandRaw: string, value: string, base: 36 | 62): void {
   const objectCommand = command.match(INDEXED_HEADER_COMMAND);
   if (objectCommand) {
     const directive = objectCommand[1] as IndexedHeaderDirective;
