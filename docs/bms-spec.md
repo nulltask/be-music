@@ -102,7 +102,7 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
 - [x] Reflect mine timing input in `BAD` judgment in MANUAL mode
-- [x] Apply mine object value as MANUAL mode groove gauge damage (`base36 / 2`) while keeping the judgment display as `BAD`
+- [x] Apply mine object value as MANUAL mode groove gauge damage (`object value / 2` under the chart's ID base) while keeping the judgment display as `BAD`
 - [x] When `#WAV00` is defined, use it as the landmine explosion sound on manual mine hit
 - [x] Exclude landmines from the number of target notes for `TOTAL` / `EX-SCORE`
 
@@ -179,6 +179,36 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Interpret `#xxx98` as dynamic volume change on playable/key side
 - [x] Interpret `#EXRANKxx` and `#xxxA0` as dynamic decision width changes of player
 - [x] Supports LR2 100001x BPM gimmick by `#BPMxx` with time resolution
+
+### `#BASE`
+
+`#BASE` is a beatoraja-compatible extension that selects the radix for BMS object IDs.
+The default is `36`, which uses `0-9A-Z` and folds lowercase ASCII letters to uppercase.
+`#BASE 62` switches indexed headers and object-stream tokens to case-sensitive `0-9A-Za-z`, so `0a` and `0A` are different IDs.
+
+The parser pre-scans the BMS source for `#BASE 36` / `#BASE 62` before normal parsing starts.
+The scan stops at the first object line (`#mmmcc:data`), so a late `#BASE 62` after object data is ignored for compatibility with players that require `#BASE` to be declared before objects.
+Unsupported values are ignored and fall back to the current/default base.
+
+Runtime and round-trip behavior:
+
+- `parser` stores the active base in `bms.base`; `#BASE 36` is equivalent to the default and does not need to be emitted.
+- `stringifier` emits `#BASE 62` when `bms.base` is `62`.
+- `#WAVxx`, `#BMPxx`, `#BPMxx`, `#STOPxx`, `#TEXTxx`, `#LNOBJ`, BGA-related indexed maps, and object-stream values are normalized with the active base.
+- Control-flow contents (`#RANDOM` / `#IF` / `#SWITCH` blocks) use the same base as normal lines, so lowercase IDs inside branches survive parsing and branch resolution.
+- `player`, `audio-renderer`, `chart`, and `player-web-core` resolve sample, BGA, BPM/STOP, LN, mine, and timing references through `resolveBmsBase()` so base-62 lowercase IDs remain distinct at runtime.
+
+Example:
+
+```bms
+#BASE 62
+#WAV0a lower.wav
+#WAV0A upper.wav
+#00111:0a0A
+```
+
+This plays `lower.wav` and `upper.wav` as two different sample references.
+Without `#BASE 62`, both keys fold into the same base-36 ID and the later definition wins.
 
 ### `#VOLWAV`
 

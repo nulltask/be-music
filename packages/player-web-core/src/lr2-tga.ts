@@ -108,13 +108,7 @@ export function decodeTga(bytes: Uint8Array): { width: number; height: number; d
       return undefined;
     }
   } else {
-    decodeUncompressed(
-      bytes.subarray(pixelDataStart),
-      bytesPerPixel,
-      pixels,
-      totalPixels,
-      isGrayscale,
-    );
+    decodeUncompressed(bytes.subarray(pixelDataStart), bytesPerPixel, pixels, totalPixels, isGrayscale);
   }
 
   // TGA origin: bit 5 of imageDescriptor (`0x20`) flags top-left
@@ -203,7 +197,7 @@ function writePixel(
     dest[destIdx] = value;
     dest[destIdx + 1] = value;
     dest[destIdx + 2] = value;
-    dest[destIdx + 3] = bytesPerPixel === 2 ? src[srcIdx + 1] ?? 255 : 255;
+    dest[destIdx + 3] = bytesPerPixel === 2 ? (src[srcIdx + 1] ?? 255) : 255;
     return;
   }
   if (bytesPerPixel === 2) {
@@ -212,9 +206,9 @@ function writePixel(
     const lo = src[srcIdx] ?? 0;
     const hi = src[srcIdx + 1] ?? 0;
     const bgr = lo | (hi << 8);
-    const r = ((bgr >>> 10) & 0x1f) * 255 / 31;
-    const g = ((bgr >>> 5) & 0x1f) * 255 / 31;
-    const b = (bgr & 0x1f) * 255 / 31;
+    const r = (((bgr >>> 10) & 0x1f) * 255) / 31;
+    const g = (((bgr >>> 5) & 0x1f) * 255) / 31;
+    const b = ((bgr & 0x1f) * 255) / 31;
     const a = (bgr & 0x8000) !== 0 ? 255 : 0;
     dest[destIdx] = r;
     dest[destIdx + 1] = g;
@@ -226,13 +220,13 @@ function writePixel(
   dest[destIdx] = src[srcIdx + 2] ?? 0; // R = TGA byte 2
   dest[destIdx + 1] = src[srcIdx + 1] ?? 0; // G = TGA byte 1
   dest[destIdx + 2] = src[srcIdx] ?? 0; // B = TGA byte 0
-  dest[destIdx + 3] = bytesPerPixel === 4 ? src[srcIdx + 3] ?? 255 : 255;
+  dest[destIdx + 3] = bytesPerPixel === 4 ? (src[srcIdx + 3] ?? 255) : 255;
 }
 
 function flipRows(pixels: Uint8ClampedArray, width: number, height: number): void {
   const rowBytes = width * 4;
   const tmp = new Uint8ClampedArray(rowBytes);
-  for (let y = 0; y < (height >>> 1); y += 1) {
+  for (let y = 0; y < height >>> 1; y += 1) {
     const top = y * rowBytes;
     const bot = (height - 1 - y) * rowBytes;
     tmp.set(pixels.subarray(top, top + rowBytes));

@@ -118,7 +118,10 @@ describe('findFirstAudibleOffsetSeconds', () => {
   // Mini stand-in for the parts of `AudioBuffer` the helper
   // actually consults. Web Audio's real buffer isn't available
   // in the node test env, so we feed in a duck-typed stub.
-  function makeBuffer(channels: Float32Array[], sampleRate: number): Parameters<typeof findFirstAudibleOffsetSeconds>[0] {
+  function makeBuffer(
+    channels: Float32Array[],
+    sampleRate: number,
+  ): Parameters<typeof findFirstAudibleOffsetSeconds>[0] {
     return {
       numberOfChannels: channels.length,
       sampleRate,

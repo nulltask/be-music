@@ -7,6 +7,8 @@ import {
 import {
   createScoreTracker,
   applyJudgeToSummary,
+  computeScoreRate,
+  resolveIidxRankLabel,
   type JudgeKind,
   type ScoreSummary,
 } from '@be-music/player/core/scoring';
@@ -23,7 +25,7 @@ import {
   createSpeedTimeline,
 } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import { extractTimedNotes, type TimedPlayableNote } from '@be-music/player/playable-notes';
+import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 import {
@@ -125,6 +127,24 @@ import { loadSkinBitmapFonts } from './lr2-font-loader.ts';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './lr2-bitmap-text.ts';
 
 interface RuntimeNote extends TimedPlayableNote {
+  hit: boolean;
+}
+
+/**
+ * Mine / landmine note (BMS channels D1-D9 / E1-E9 for the 1P /
+ * 2P sides). Mirrors `RuntimeNote`'s `hit` flag so the same
+ * "judged once, never re-judged" bookkeeping applies, but uses
+ * the simpler `TimedLandmineNote` source shape (no LN body / end
+ * beat / sound channel — landmines are point-in-time hazards).
+ *
+ * On a key press inside the BAD window we trigger a BAD verdict,
+ * play the mine explosion sample (`#WAV 00`), drain the gauge by
+ * the chart-encoded damage value, and reset combo to zero. The
+ * underlying `playableNotes` array stays untouched so a regular
+ * note in the same window past / future the mine can still be
+ * judged on the next press.
+ */
+interface RuntimeMineNote extends TimedLandmineNote {
   hit: boolean;
 }
 
@@ -569,6 +589,15 @@ export class PixiGameplayView {
    */
   private scrollMapper: ScrollDistanceMapperLike | undefined;
   private notes: RuntimeNote[] = [];
+  /**
+   * Landmine notes (channels D1-D9 / E1-E9). Sorted by `seconds`
+   * for the same binary-search-by-time access pattern the
+   * playable-note judge loop uses. Hit-test runs in `judge()`
+   * BEFORE the playable-note check so a press that lands inside
+   * the BAD window of both a mine and a regular note prefers the
+   * mine — matches LR2 behaviour where the mine explodes first.
+   */
+  private mineNotes: RuntimeMineNote[] = [];
   private maxLongNoteBeatSpan = 0;
   private chartLastNoteEndSeconds = 0;
   private songDurationSeconds = 0;
@@ -1189,8 +1218,7 @@ export class PixiGameplayView {
     // bail out instead of mutating a fresh scene's state.
     const sceneEpoch = this.sceneStartTime;
     const bgaReady = this.bgaReadyPromise ?? Promise.resolve();
-    const delay = (ms: number): Promise<void> =>
-      new Promise((resolve) => window.setTimeout(resolve, Math.max(0, ms)));
+    const delay = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, Math.max(0, ms)));
     // LOAD END gate — both the configured `#LOADEND` delay AND
     // the BGA preload need to finish. Fires LR2 timer 40 and
     // flips op 80→81 (READY), which the skin's load-complete
@@ -1526,21 +1554,44 @@ export class PixiGameplayView {
     this.notes = extracted.playableNotes
       .map((note) => ({ ...note, hit: false }))
       .sort((left, right) => left.beat - right.beat || left.seconds - right.seconds);
+    this.mineNotes = extracted.landmineNotes
+      .map((note) => ({ ...note, hit: false }))
+      .sort((left, right) => left.beat - right.beat || left.seconds - right.seconds);
     // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk
     // because we already iterate `notes` for sorting; SP charts
-    // skip every entry (no `2x` channels exist).
+    // skip every entry (no `2x` channels exist). Mine notes are
+    // flipped together so they stay anchored to the same visual
+    // lane after the flip.
     if (this.options.dpFlip) {
       for (const note of this.notes) {
         note.channel = flipDpChannel(note.channel);
+      }
+      for (const mine of this.mineNotes) {
+        mine.channel = flipDpChannel(mine.channel);
       }
     }
     // RANDOM / MIRROR / S-RANDOM / SCATTER — shuffle the 1P / 2P
     // keyboard lanes independently. Scratch (channels 16 / 26)
     // never moves. Per LR2 convention, the shuffle is drawn at
     // chart-prepare time so a single play session has a stable
-    // arrangement (F5-restart re-rolls it).
-    applyRandomMode(this.notes, '1', this.options.random1P ?? 'OFF', Math.random);
-    applyRandomMode(this.notes, '2', this.options.random2P ?? 'OFF', Math.random);
+    // arrangement (F5-restart re-rolls it). Mine channels are
+    // included in the same shuffle pass so a mine on lane 4 lands
+    // wherever the shuffle moved lane 4 — keeping the mine's
+    // visual relationship to the surrounding chord intact.
+    applyRandomMode(
+      this.notes as Array<{ channel: string }>,
+      '1',
+      this.options.random1P ?? 'OFF',
+      Math.random,
+      this.mineNotes as Array<{ channel: string }>,
+    );
+    applyRandomMode(
+      this.notes as Array<{ channel: string }>,
+      '2',
+      this.options.random2P ?? 'OFF',
+      Math.random,
+      this.mineNotes as Array<{ channel: string }>,
+    );
     this.maxLongNoteBeatSpan = this.notes.reduce((max, note) => {
       if (note.endBeat === undefined) {
         return max;
@@ -1600,7 +1651,11 @@ export class PixiGameplayView {
     // with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a
     // short TOTAL=160 100-note chart gets +1.6 per PG/GR.
     const playableNoteCount = this.notes.filter((note) => isPlayableInputChannel(note.channel)).length;
-    this.gaugeState = createGrooveGaugeState(playableNoteCount, resolved.metadata.total, this.options.gauge ?? 'GROOVE');
+    this.gaugeState = createGrooveGaugeState(
+      playableNoteCount,
+      resolved.metadata.total,
+      this.options.gauge ?? 'GROOVE',
+    );
     // Now that the gauge has its starting value (LR2 default 20 %),
     // seed the polyline history so the result-screen graph starts at
     // the correct origin instead of the first judge's value.
@@ -1716,8 +1771,8 @@ export class PixiGameplayView {
       47, // difficulty filter disabled
       50, // offline
       52, // EXTRA MODE OFF — gates wallpaper / decoration elements in
-          // the LR2 default skin family. Op 53 is the EXTRA MODE ON
-          // variant; we never enable EXTRA MODE in the web build.
+      // the LR2 default skin family. Op 53 is the EXTRA MODE ON
+      // variant; we never enable EXTRA MODE in the web build.
       // ops 54 / 55 (autoscratch 1P off / on), 56 / 57 (autoscratch
       // 2P off / on) — set dynamically below from
       // `options.autoScratch1P / 2P`.
@@ -2563,10 +2618,7 @@ export class PixiGameplayView {
    * resolver can be constructed empty during edge-case mounts) or
    * the chart has no BPM info.
    */
-  private applyHsFix(
-    resolver: ReturnType<typeof createTimingResolver>,
-    mainBpmCandidate: number | undefined,
-  ): void {
+  private applyHsFix(resolver: ReturnType<typeof createTimingResolver>, mainBpmCandidate: number | undefined): void {
     const mode = this.options.hsFix ?? 'OFF';
     if (mode === 'OFF') return;
     const mainBpm = typeof mainBpmCandidate === 'number' && mainBpmCandidate > 0 ? mainBpmCandidate : undefined;
@@ -2805,9 +2857,93 @@ export class PixiGameplayView {
     }
   }
 
+  /**
+   * Sample key the BMS spec reserves for landmine "explosion"
+   * audio. Charts that author a `#WAV 00` register the explosion
+   * sound there and we play it on every mine hit; charts without
+   * a `#WAV 00` get silent mine hits (still scored / damaged).
+   */
+  private static readonly LANDMINE_EXPLOSION_SAMPLE_KEY = '00';
+
+  /**
+   * Hit-tests `mineNotes` for an un-judged landmine on `channel`
+   * within ±`badSeconds` of `seconds`. Returns `true` when a mine
+   * was consumed (caller must skip the regular note path), false
+   * otherwise.
+   *
+   * Mirrors the CLI engine's `mine-hit` branch
+   * (`packages/player/src/core/engine.ts:resolveLandmineGaugeEffect`):
+   *
+   *   - mark the mine as `hit` so it doesn't re-fire,
+   *   - apply a BAD verdict to the score summary (BAD count up,
+   *     combo reset, no EX-score / IIDX-score change since BAD
+   *     scores zero on both ladders anyway),
+   *   - drain the gauge — the chart-encoded damage value gets
+   *     parsed from the BMS object value (`<value>/2` in base-36)
+   *     and floored at `DEFAULT_LANDMINE_GAUGE_DAMAGE` (= 4) when
+   *     the value is missing / unparseable. We map that down onto
+   *     `applyGaugeDelta('BAD')` so the gauge type's normal BAD
+   *     penalty still applies (HARD / DEATH stay punishing) and
+   *     leave per-mine custom damage as a future refinement,
+   *   - play `#WAV 00` if the chart shipped one,
+   *   - publish a BAD judge event so the skin's NOWJUDGE plate
+   *     flashes "BAD" and the bomb / lane-flash chrome reacts.
+   */
+  private tryHitMine(channel: string, seconds: number, badSeconds: number): boolean {
+    if (this.mineNotes.length === 0) return false;
+    const firstIndex = findFirstIndexAtOrAfter(this.mineNotes, seconds - badSeconds, (mine) => mine.seconds);
+    let target: RuntimeMineNote | undefined;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (let index = firstIndex; index < this.mineNotes.length; index += 1) {
+      const candidate = this.mineNotes[index]!;
+      const signedDistance = candidate.seconds - seconds;
+      if (signedDistance > badSeconds) break;
+      if (candidate.hit || candidate.channel !== channel) continue;
+      const distance = Math.abs(signedDistance);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        target = candidate;
+      }
+    }
+    if (!target) return false;
+    target.hit = true;
+    // BAD verdict — combo reset + bad++. Same path the
+    // playable-note BAD branch uses, so the score panel ladder
+    // (PERFECT/GREAT/GOOD/BAD/POOR) reads consistently whether
+    // the BAD came from mistiming a real note or stepping on a
+    // mine.
+    applyJudgeToSummary(this.score, 'BAD', this.tracker);
+    this.applyGaugeDelta('BAD');
+    if (this.tracker.combo > this.maxCombo) {
+      this.maxCombo = this.tracker.combo;
+    }
+    this.publishJudge('BAD', seconds, channel);
+    // Mine explosion sample — `#WAV 00` if the chart authored
+    // one. Silent mines (no #WAV 00) just don't play anything.
+    this.playSampleByKey(PixiGameplayView.LANDMINE_EXPLOSION_SAMPLE_KEY, target.seconds);
+    // Bomb / key-on visuals fire so the lane flashes the same
+    // way it would on a real BAD hit. The skin's mine-specific
+    // explosion sprite (when authored) is gated by the regular
+    // bomb timer — LR2 doesn't carry a separate "mine explosion"
+    // timer, so reusing 50-69 matches the reference behaviour.
+    this.triggerBomb(channel);
+    return true;
+  }
+
   private judge(channel: string, seconds: number): void {
     const windows = resolveJudgeWindowsMs(this.song!.chart);
     const badSeconds = windows.bad / 1000;
+    // Landmine pre-check — a press inside the BAD window of an
+    // un-judged mine on this lane explodes the mine FIRST,
+    // skipping the regular note search. Mirrors LR2's behaviour
+    // (`engine.ts:resolveLandmineGaugeEffect` in `packages/player`):
+    // BAD verdict, combo reset to 0, gauge drained by the
+    // chart-encoded damage value (default 4), and the mine's
+    // explosion sample (`#WAV 00`) plays. The playable-note loop
+    // below is skipped — the mine consumes the press.
+    if (this.tryHitMine(channel, seconds, badSeconds)) {
+      return;
+    }
     const firstCandidateIndex = findFirstIndexAtOrAfter(this.notes, seconds - badSeconds, (note) => note.seconds);
     let note: RuntimeNote | undefined;
     let closestDistance = Number.POSITIVE_INFINITY;
@@ -3856,12 +3992,14 @@ export class PixiGameplayView {
     this.paintSideShutter(this.collectSideBounds('2P'), mode2P, shutter);
   }
 
-  private collectSideBounds(side: '1P' | '2P'): {
-    left: number;
-    right: number;
-    top: number;
-    bottom: number;
-  } | undefined {
+  private collectSideBounds(side: '1P' | '2P'):
+    | {
+        left: number;
+        right: number;
+        top: number;
+        bottom: number;
+      }
+    | undefined {
     let left = Number.POSITIVE_INFINITY;
     let right = Number.NEGATIVE_INFINITY;
     let top = Number.POSITIVE_INFINITY;
@@ -3893,9 +4031,7 @@ export class PixiGameplayView {
     if (mode === 'SUDDEN' || mode === 'HID+SUD') {
       // SUDDEN — opaque rect at the TOP of the playfield. Notes
       // emerge below it.
-      this.shutterLayer
-        .rect(bounds.left, bounds.top, width, maskHeight)
-        .fill({ color: 0x000000, alpha: 0.92 });
+      this.shutterLayer.rect(bounds.left, bounds.top, width, maskHeight).fill({ color: 0x000000, alpha: 0.92 });
     }
     if (mode === 'HIDDEN' || mode === 'HID+SUD') {
       // HIDDEN — opaque rect at the BOTTOM of the playfield, just
@@ -4150,7 +4286,7 @@ export class PixiGameplayView {
         bad: this.score.bad,
         poor: this.score.poor,
         lastJudge: this.lastJudge,
-        rank: resolveFallbackRank(this.score.exScore, total),
+        rank: total <= 0 ? '—' : resolveIidxRankLabel(this.score.exScore, total),
         autoplay: this.options.autoPlay === true,
       });
       return;
@@ -4601,10 +4737,7 @@ export class PixiGameplayView {
       case 13: {
         // 1P EX-score (current / predicted / highscore current/final).
         // We don't yet track predicted/highscore; reuse the live EX rate.
-        if (this.score.total <= 0) {
-          return 0;
-        }
-        return Math.max(0, Math.min(1, this.score.exScore / (this.score.total * 2)));
+        return computeScoreRate(this.score);
       }
       default:
         return 0;
@@ -4910,6 +5043,66 @@ export class PixiGameplayView {
       }
       this.renderSingleNote(skin, laneIndex, note.channel, lane, y);
     }
+    // Landmine notes — same scroll math, separate sprite. Drawn
+    // after regular notes so a mine sitting at the same beat as a
+    // playable note paints on top (LR2 default skin's mine
+    // sprites carry their own outline so the visual hierarchy
+    // reads correctly).
+    const firstMineIndex = this.scrollMapper
+      ? 0
+      : findFirstIndexAtOrAfter(this.mineNotes, currentBeat, (note) => note.beat);
+    for (let mineIndex = firstMineIndex; mineIndex < this.mineNotes.length; mineIndex += 1) {
+      const mine = this.mineNotes[mineIndex]!;
+      if (!this.scrollMapper && mine.beat > maxVisibleBeat) {
+        break;
+      }
+      if (mine.hit) continue;
+      const lane = this.laneX.get(mine.channel);
+      if (!lane) continue;
+      const y = lane.bottom - beatDistance(mine.beat) * pixelsPerBeat;
+      if (y < lane.top - 48 || y > lane.bottom) continue;
+      const laneIndex = resolveLr2LaneIndex(mine.channel, this.chartPlayVariant);
+      this.renderMineNote(skin, laneIndex, mine.channel, lane, y);
+    }
+  }
+
+  /**
+   * Renders one landmine sprite. Tries the LR2 skin's
+   * `#SRC_NOTE` `mine` slot first (the skin's authored mine
+   * graphic, animated per its `divX/divY/cycle`); falls back to
+   * a red rectangle with a yellow caution stripe so the no-skin
+   * path still flags the hazard distinctly from playable notes.
+   */
+  private renderMineNote(
+    skin: Lr2Skin | undefined,
+    laneIndex: number,
+    channel: string,
+    lane: { x: number; w: number; top: number; bottom: number },
+    y: number,
+  ): void {
+    const skinMine = this.resolveNoteSource(skin, 'mine', laneIndex);
+    const baseTexture = skinMine ? this.textures.get(skinMine.imagePath) : undefined;
+    if (skinMine && baseTexture) {
+      const cell = pickAnimatedCell(skinMine, this.elapsedSinceTimer(skinMine.timer));
+      const texture = createCroppedTexture(baseTexture, cell);
+      if (texture) {
+        const sprite = new Sprite(texture);
+        sprite.label = `mine[lane=${laneIndex},ch=${channel}]`;
+        sprite.x = lane.x + (lane.w - cell.w) / 2;
+        sprite.y = y - cell.h;
+        sprite.width = cell.w;
+        sprite.height = cell.h;
+        this.noteLayer.addChild(sprite);
+        return;
+      }
+    }
+    const graphic = new Graphics();
+    graphic.label = `mine-fallback[lane=${laneIndex},ch=${channel}]`;
+    graphic
+      .roundRect(lane.x + 2, y - 12, Math.max(4, lane.w - 4), 12, 3)
+      .fill(0x8a1a1a)
+      .stroke({ color: 0xffd166, width: 2 });
+    this.noteLayer.addChild(graphic);
   }
 
   /**
@@ -5134,9 +5327,7 @@ export class PixiGameplayView {
     }
     const graphic = new Graphics();
     graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
-    graphic
-      .roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2)
-      .fill(noteFallbackColor(channel, laneIndex));
+    graphic.roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2).fill(noteFallbackColor(channel, laneIndex));
     this.noteLayer.addChild(graphic);
   }
 
@@ -5351,25 +5542,43 @@ const TWO_P_KEYBOARD_LANES: readonly string[] = ['21', '22', '23', '24', '25', '
  *   future per-measure permutation pass
  */
 function applyRandomMode(
-  notes: RuntimeNote[],
+  notes: Array<{ channel: string }>,
   side: '1' | '2',
   mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER',
   rng: () => number,
+  // Extra channel-bearing arrays (e.g. mine notes) that should
+  // follow the same lane shuffle as the playable notes. The
+  // `usedLanes` set is computed from `notes` only — secondary
+  // entries on a lane that has no playable notes get remapped
+  // through the same chart-wide map / chord permutation, so
+  // mines stay anchored to the visual lane they were authored
+  // on relative to the surrounding chord.
+  ...secondary: Array<Array<{ channel: string }>>
 ): void {
   if (mode === 'OFF') return;
   const allLanes = side === '1' ? ONE_P_KEYBOARD_LANES : TWO_P_KEYBOARD_LANES;
   const usedLanes = allLanes.filter((lane) => notes.some((note) => note.channel === lane));
   if (usedLanes.length < 2) return;
 
+  const remapAll = (map: Map<string, string>): void => {
+    for (const note of notes) {
+      const target = map.get(note.channel);
+      if (target) note.channel = target;
+    }
+    for (const arr of secondary) {
+      for (const entry of arr) {
+        const target = map.get(entry.channel);
+        if (target) entry.channel = target;
+      }
+    }
+  };
+
   if (mode === 'MIRROR') {
     const map = new Map<string, string>();
     for (let index = 0; index < usedLanes.length; index += 1) {
       map.set(usedLanes[index]!, usedLanes[usedLanes.length - 1 - index]!);
     }
-    for (const note of notes) {
-      const target = map.get(note.channel);
-      if (target) note.channel = target;
-    }
+    remapAll(map);
     return;
   }
 
@@ -5379,33 +5588,47 @@ function applyRandomMode(
     for (let index = 0; index < usedLanes.length; index += 1) {
       map.set(usedLanes[index]!, perm[index]!);
     }
-    for (const note of notes) {
-      const target = map.get(note.channel);
-      if (target) note.channel = target;
-    }
+    remapAll(map);
     return;
   }
 
   if (mode === 'S-RANDOM') {
     // Group keyboard-lane notes by beat — every note in a chord
     // shares the same `beat` key, so a fresh permutation per group
-    // gives each note a distinct lane within that chord.
-    const grouped = new Map<number, RuntimeNote[]>();
-    for (const note of notes) {
-      if (!usedLanes.includes(note.channel)) continue;
-      const group = grouped.get(note.beat);
-      if (group) {
-        group.push(note);
-      } else {
-        grouped.set(note.beat, [note]);
+    // gives each note a distinct lane within that chord. The
+    // secondary arrays (mines) get the chord-local map too so an
+    // adjacent mine in the same beat ends up beside the
+    // re-arranged chord, not floating to a stale lane.
+    const grouped = new Map<number, Array<{ channel: string }>>();
+    const beatOf = (note: { channel: string }): number | undefined => {
+      const beat = (note as { beat?: number }).beat;
+      return typeof beat === 'number' ? beat : undefined;
+    };
+    const groupBy = (arr: Array<{ channel: string }>): void => {
+      for (const note of arr) {
+        if (!usedLanes.includes(note.channel)) continue;
+        const beat = beatOf(note);
+        if (beat === undefined) continue;
+        const group = grouped.get(beat);
+        if (group) {
+          group.push(note);
+        } else {
+          grouped.set(beat, [note]);
+        }
       }
-    }
+    };
+    groupBy(notes);
+    for (const arr of secondary) groupBy(arr);
     for (const chord of grouped.values()) {
       const perm = shuffleArray([...usedLanes], rng);
-      chord.forEach((note, index) => {
-        const target = perm[index];
+      const map = new Map<string, string>();
+      for (let index = 0; index < usedLanes.length; index += 1) {
+        map.set(usedLanes[index]!, perm[index]!);
+      }
+      for (const note of chord) {
+        const target = map.get(note.channel);
         if (target) note.channel = target;
-      });
+      }
     }
   }
 }
@@ -5463,23 +5686,4 @@ function noteFallbackColor(channel: string, laneIndex: number): typeof WHITE {
   const keyIndex = laneIndex % 10;
   if (keyIndex % 2 === 0) return BLUE;
   return WHITE;
-}
-
-/**
- * Mirror of `pixi-result.resolveRankLabel` — kept private here so
- * the gameplay path doesn't take a dependency on the result
- * module just to format the rank into the no-skin HUD's RANK
- * slot. The IIDX rank ladder is identical in both paths.
- */
-function resolveFallbackRank(exScore: number, total: number): string {
-  if (total <= 0) return '—';
-  const rate = exScore / (total * 2);
-  if (rate >= 8 / 9) return 'AAA';
-  if (rate >= 7 / 9) return 'AA';
-  if (rate >= 6 / 9) return 'A';
-  if (rate >= 5 / 9) return 'B';
-  if (rate >= 4 / 9) return 'C';
-  if (rate >= 3 / 9) return 'D';
-  if (rate >= 2 / 9) return 'E';
-  return 'F';
 }

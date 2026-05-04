@@ -56,6 +56,7 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 | `#BPM`, `#BPMxx`, `#STOPxx`, `#STP` | 時間解決に使います。 |
 | `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL` | 判定幅、表示ランク、groove gauge 計算に使います。 |
 | `#WAVxx`, `#BMPxx` | 音声・BGA リソース解決に使います。 |
+| `#BASE` | BMS object ID の base を選びます。`#BASE 62` では sample、BGA、BPM/STOP 参照、long-note 終端、地雷値の解決時に小文字 ID を case-sensitive に扱います。 |
 | `#PREVIEW` | 選曲画面のプレビュー再生で優先的に使います。 |
 | `#PATH_WAV` | 選曲画面プレビューのファイル探索にだけ使います。通常プレイ中の sample 解決には使いません。 |
 | `#LNTYPE`, `#LNMODE`, `#LNOBJ` | BMS long note の解釈に使います。 |

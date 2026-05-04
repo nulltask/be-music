@@ -9,6 +9,10 @@
     "paths": {
       "@be-music/audio-renderer/triggers": ["./packages/audio-renderer/src/core/triggers.ts"],
       "@be-music/player/playable-notes": ["./packages/player/src/playable-notes.ts"],
+      "@be-music/player/audio-sink": ["./packages/player/src/audio-sink.ts"],
+      "@be-music/player/image-resize-algorithm": ["./packages/player/src/image-resize-algorithm.ts"],
+      "@be-music/player/state-signals": ["./packages/player/src/state-signals.ts"],
+      "@be-music/player/utils": ["./packages/player/src/utils.ts"],
       "@be-music/player/core/*": ["./packages/player/src/core/*.ts"],
       "@be-music/utils/core": ["./packages/utils/src/core.ts"],
       "@be-music/*": ["./packages/*/src/index.ts"]

@@ -216,13 +216,7 @@ export class PixiDecideView {
     this.fallbackLayer.label = 'decide/fallback';
     this.designClipMask.label = 'decide/design-clip';
     this.sceneRoot.addChild(this.viewportBackground, this.root);
-    this.root.addChild(
-      this.background,
-      this.stageFileLayer,
-      this.skinLayer,
-      this.fallbackLayer,
-      this.designClipMask,
-    );
+    this.root.addChild(this.background, this.stageFileLayer, this.skinLayer, this.fallbackLayer, this.designClipMask);
     this.root.mask = this.designClipMask;
     host.app.stage.addChild(this.sceneRoot);
     window.addEventListener('keydown', this.handleKeyDown);

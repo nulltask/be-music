@@ -1427,9 +1427,7 @@ function readLr2Path(
       // render the value, not the 5th global declaration.
       const normalized = normalizeLr2Path(row[1] ?? '');
       const expanded =
-        normalized.length > 0
-          ? (context.customFileLookup.get(normalized.toLowerCase()) ?? normalized)
-          : '';
+        normalized.length > 0 ? (context.customFileLookup.get(normalized.toLowerCase()) ?? normalized) : '';
       context.lr2FontPaths.push(expanded);
     } else if (command === '#FONT') {
       // `#FONT,size,thick,style,name` — system-font fallback

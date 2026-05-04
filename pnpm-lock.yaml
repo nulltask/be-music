@@ -131,6 +131,33 @@ importers:
       '@be-music/utils':
         specifier: workspace:*
         version: link:../utils
+      alien-signals:
+        specifier: ^3.1.2
+        version: 3.1.2
+      node-web-audio-api:
+        specifier: ^1.0.9
+        version: 1.0.9
+
+  packages/player-tui:
+    dependencies:
+      '@be-music/audio-renderer':
+        specifier: workspace:*
+        version: link:../audio-renderer
+      '@be-music/chart':
+        specifier: workspace:*
+        version: link:../chart
+      '@be-music/json':
+        specifier: workspace:*
+        version: link:../json
+      '@be-music/parser':
+        specifier: workspace:*
+        version: link:../parser
+      '@be-music/player':
+        specifier: workspace:*
+        version: link:../player
+      '@be-music/utils':
+        specifier: workspace:*
+        version: link:../utils
       '@uwx/libav.js-fat':
         specifier: 6.0.0-nightly.29.f420ff.ffmpeg.6.1.1
         version: 6.0.0-nightly.29.f420ff.ffmpeg.6.1.1
@@ -146,9 +173,6 @@ importers:
       jpeg-js:
         specifier: ^0.4.4
         version: 0.4.4
-      node-web-audio-api:
-        specifier: ^1.0.9
-        version: 1.0.9
 
   packages/player-web-core:
     dependencies:

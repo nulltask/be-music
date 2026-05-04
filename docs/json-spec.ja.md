@@ -48,6 +48,7 @@
     },
     "player": 1,
     "pathWav": "sounds/",
+    "base": 62,
     "baseBpm": 155,
     "stp": ["001.240"],
     "option": "HIGH-SPEED",
@@ -187,6 +188,7 @@
 - `argb`: `#ARGBxx` のマップ
 - `player`: `#PLAYER` の値
 - `pathWav`: `#PATH_WAV` の値
+- `base`: `#BASE` の値。現在は `36` または `62`。省略時は `36`
 - `baseBpm`: `#BASEBPM` の値
 - `stp`: `#STP` の値配列
 - `option`: `#OPTION` の値
@@ -208,6 +210,21 @@
 - `controlFlow.kind = "object"` は通常イベントと同じ `events` 形式（必要に応じて `measureLength`）で保持
 - パーサは制御構文をこの配列へ保持し、分岐の実行は再生/レンダリング時に行います
 - `scroll` の値は有限数を許可し、`0` および負値も保持対象です
+
+### BMS object ID base
+
+BMS の既定 object ID は base-36 (`0-9A-Z`) で、ASCII 小文字は大文字へ正規化します。
+`bms.base` が `62` の場合は、beatoraja 互換の base-62 (`0-9A-Za-z`) として扱い、大文字小文字を保持します。
+
+これは IR に保存される次の 2 文字 indexed ID 全体に影響します。
+
+- `resources.wav`, `resources.bmp`, `resources.bpm`, `resources.stop`, `resources.text` などの resource map
+- `bms.exRank`, `bms.argb`, `bms.exWav`, `bms.exBmp`, `bms.bga`, `bms.scroll`, `bms.speed`, `bms.swBga` などの BMS extension map
+- `preservation.bms.sourceLines` や `bms.controlFlow` に保持される event を含む BMS object event の `value`
+- `bms.lnObjs`
+
+ID を消費する code は手動で upper-case せず、`resolveBmsBase(json)` の結果を ID normalization helper に渡してください。
+これにより、base-62 譜面では `0a` と `0A` を区別し、通常譜面では従来の base-36 挙動を保てます。
 
 `bmson` は bmson 固有の追加情報を保持する拡張領域です。
 

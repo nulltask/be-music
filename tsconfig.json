@@ -8,6 +8,7 @@
     { "path": "packages/stringifier" },
     { "path": "packages/audio-renderer" },
     { "path": "packages/player" },
+    { "path": "packages/player-tui" },
     { "path": "packages/editor" }
   ]
 }

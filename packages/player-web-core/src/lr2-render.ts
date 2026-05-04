@@ -344,8 +344,8 @@ export function pickAnimatedCell(
   // crop helper will return `undefined` and the caller falls back
   // to the full texture — preferable to silently re-sampling
   // arbitrary-size cells).
-  const sourceW = source.w > 0 ? source.w : textureSize?.width ?? 0;
-  const sourceH = source.h > 0 ? source.h : textureSize?.height ?? 0;
+  const sourceW = source.w > 0 ? source.w : (textureSize?.width ?? 0);
+  const sourceH = source.h > 0 ? source.h : (textureSize?.height ?? 0);
   const cellW = sourceW / divx;
   const cellH = sourceH / divy;
   if (totalFrames <= 1 || source.cycle <= 0) {

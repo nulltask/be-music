@@ -33,9 +33,7 @@ export async function loadSkinBitmapFonts(
 ): Promise<Map<number, Lr2LoadedFont>> {
   const declared = fontPaths.filter((path) => path.length > 0).length;
   // eslint-disable-next-line no-console
-  console.info(
-    `[lr2-font] start: ${declared}/${fontPaths.length} non-empty font slots, ${files.size} files in source`,
-  );
+  console.info(`[lr2-font] start: ${declared}/${fontPaths.length} non-empty font slots, ${files.size} files in source`);
   const out = new Map<number, Lr2LoadedFont>();
   await Promise.all(
     fontPaths.map(async (path, index) => {
@@ -79,9 +77,7 @@ async function tryLoadFont(
       const archiveBytes = lookupCaseInsensitive(files, archivePath);
       if (archiveBytes) return loadFontFromDxa(archiveBytes, archivePath);
       // eslint-disable-next-line no-console
-      console.info(
-        `[lr2-font] miss: collapsed-dir .dxa not found: ${declaredPath} → tried ${archivePath}`,
-      );
+      console.info(`[lr2-font] miss: collapsed-dir .dxa not found: ${declaredPath} → tried ${archivePath}`);
     }
   }
   // Some themes name the path without an extension. Try both
@@ -179,9 +175,7 @@ async function loadFontFromDxa(bytes: Uint8Array, fontPath: string): Promise<Lr2
   // sibling images don't (zero textures → glyphs fall back to
   // placeholder rectangles even though the layout is correct).
   // eslint-disable-next-line no-console
-  console.info(
-    `[lr2-font] DXA decoded OK: ${fontPath} (${archive.files.length} entries, ${textures.size} textures)`,
-  );
+  console.info(`[lr2-font] DXA decoded OK: ${fontPath} (${archive.files.length} entries, ${textures.size} textures)`);
   return { font, textures };
 }
 

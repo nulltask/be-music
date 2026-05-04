@@ -1,4 +1,5 @@
 import { Application, Color, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+import { computeScoreRate, resolveIidxRankIndexFromScore, resolveIidxRankLabel } from '@be-music/player/core/scoring';
 import type {
   Lr2BarGraphElement,
   Lr2DestinationRect,
@@ -435,8 +436,8 @@ export class PixiResultView {
    */
   private async startResultBgm(data: PixiGameplayResultData): Promise<void> {
     const bytes = data.cleared
-      ? this.options.clearBgm ?? this.options.resultBgm ?? this.options.failBgm
-      : this.options.failBgm ?? this.options.resultBgm ?? this.options.clearBgm;
+      ? (this.options.clearBgm ?? this.options.resultBgm ?? this.options.failBgm)
+      : (this.options.failBgm ?? this.options.resultBgm ?? this.options.clearBgm);
     if (!bytes || this.disposed) return;
     try {
       const audioContext = new AudioContext();
@@ -890,19 +891,14 @@ export class PixiResultView {
     chrome.rect(0, 0, designWidth, designHeight).fill(0x06080c);
     for (let i = 0; i < 6; i += 1) {
       const t = i / 6;
-      chrome
-        .rect(0, t * designHeight, designWidth, designHeight / 6)
-        .fill({ color: 0x10131a, alpha: 0.5 - t * 0.08 });
+      chrome.rect(0, t * designHeight, designWidth, designHeight / 6).fill({ color: 0x10131a, alpha: 0.5 - t * 0.08 });
     }
 
     // ── Top header band ─────────────────────────────────────
     chrome.rect(0, 0, designWidth, 88).fill(0x0a0e16);
     chrome.rect(0, 86, designWidth, 2).fill(0x4a3a73);
     // Left graph panel — gauge history (red zigzag)
-    chrome
-      .rect(8, 6, 192, 78)
-      .fill({ color: 0x06080c, alpha: 0.85 })
-      .stroke({ color: 0x4a3a73, width: 1 });
+    chrome.rect(8, 6, 192, 78).fill({ color: 0x06080c, alpha: 0.85 }).stroke({ color: 0x4a3a73, width: 1 });
     chrome.rect(10, 8, 188, 6).fill({ color: 0x281f3e, alpha: 0.7 });
     // Zigzag polyline approximation
     for (let i = 0; i < 16; i += 1) {
@@ -974,7 +970,7 @@ export class PixiResultView {
     // ── Mid-right score tiles ───────────────────────────────
     // EX SCORE shown again on the right with TARGET / BEST EX
     // SCORE / NEXTRANK comparisons in the LR2 default layout.
-    const rate = result.score.total > 0 ? (result.score.exScore / (result.score.total * 2)) * 100 : 0;
+    const rate = computeScoreRate(result.score) * 100;
     const rightLabels: Array<readonly [string, string, string]> = [
       ['EX SCORE', String(result.score.exScore).padStart(4, '0'), `${rate.toFixed(0)}%`],
       ['TARGET', String(Math.max(0, result.score.exScore - 0)).padStart(4, '0'), ''],
@@ -1585,16 +1581,7 @@ function resolveResultLampOp(data: PixiGameplayResultData): number {
  * here so something visible always renders.
  */
 function resolveResultRankIndex(data: PixiGameplayResultData): number {
-  if (data.score.total <= 0) return 0;
-  const rate = data.score.exScore / (data.score.total * 2);
-  if (rate >= 8 / 9) return 0;
-  if (rate >= 7 / 9) return 1;
-  if (rate >= 6 / 9) return 2;
-  if (rate >= 5 / 9) return 3;
-  if (rate >= 4 / 9) return 4;
-  if (rate >= 3 / 9) return 5;
-  if (rate >= 2 / 9) return 6;
-  return 7;
+  return resolveIidxRankIndexFromScore(data.score) ?? 0;
 }
 
 /**
@@ -1829,16 +1816,7 @@ function resolveResultSliderValue(type: number, data: PixiGameplayResultData): n
 }
 
 function resolveRankLabel(exScore: number, total: number): string {
-  if (total <= 0) return 'AAA';
-  const rate = exScore / (total * 2);
-  if (rate >= 8 / 9) return 'AAA';
-  if (rate >= 7 / 9) return 'AA';
-  if (rate >= 6 / 9) return 'A';
-  if (rate >= 5 / 9) return 'B';
-  if (rate >= 4 / 9) return 'C';
-  if (rate >= 3 / 9) return 'D';
-  if (rate >= 2 / 9) return 'E';
-  return 'F';
+  return total <= 0 ? 'AAA' : resolveIidxRankLabel(exScore, total);
 }
 
 // `Lr2ImageRect` is referenced in the imports for `makeBargraphSprite`'s

@@ -30,6 +30,49 @@ export function createScoreTracker(): ScoreTracker {
   };
 }
 
+export function createEmptyScore(total: number): ScoreSummary {
+  return { total, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, exScore: 0, score: 0 };
+}
+
+export function computeScoreRate(score: Pick<ScoreSummary, 'total' | 'exScore'>): number {
+  if (score.total <= 0) {
+    return 0;
+  }
+  const max = score.total * IIDX_EX_SCORE_PER_PGREAT;
+  return Math.max(0, Math.min(1, score.exScore / max));
+}
+
+export function resolveIidxRankIndexFromScore(score: Pick<ScoreSummary, 'total' | 'exScore'>): number | undefined {
+  if (score.total <= 0) {
+    return undefined;
+  }
+  return resolveIidxRankIndexFromRate(computeScoreRate(score));
+}
+
+export function resolveIidxRankIndexFromRate(rate: number): number {
+  if (rate >= 8 / 9) return 0;
+  if (rate >= 7 / 9) return 1;
+  if (rate >= 6 / 9) return 2;
+  if (rate >= 5 / 9) return 3;
+  if (rate >= 4 / 9) return 4;
+  if (rate >= 3 / 9) return 5;
+  if (rate >= 2 / 9) return 6;
+  return 7;
+}
+
+export function resolveIidxRankLabel(exScore: number, total: number): string {
+  const rankIndex = resolveIidxRankIndexFromScore({ exScore, total });
+  if (rankIndex === undefined) {
+    return '-';
+  }
+  return IIDX_RANK_LABELS[rankIndex]!;
+}
+
+export function resolveIidxSelectRankOp(score: Pick<ScoreSummary, 'total' | 'exScore'>): number | undefined {
+  const rankIndex = resolveIidxRankIndexFromScore(score);
+  return rankIndex === undefined ? undefined : 200 + rankIndex;
+}
+
 export function applyJudgeToSummary(summary: ScoreSummary, judge: JudgeKind, tracker: ScoreTracker): void {
   if (judge === 'PERFECT') {
     summary.perfect += 1;
@@ -69,6 +112,8 @@ function resolveExScoreDelta(judge: JudgeKind): number {
   }
   return 0;
 }
+
+const IIDX_RANK_LABELS = ['AAA', 'AA', 'A', 'B', 'C', 'D', 'E', 'F'] as const;
 
 function resolveIidxScoreDelta(judge: JudgeKind, totalNotes: number, combo: number): number {
   if (!Number.isFinite(totalNotes) || totalNotes <= 0) {

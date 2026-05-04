@@ -1,4 +1,10 @@
-import { normalizeChannel, normalizeObjectKey, resolveBmsBase, type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
+import {
+  normalizeChannel,
+  normalizeObjectKey,
+  resolveBmsBase,
+  type BeMusicJson,
+  type BeMusicPlayLevel,
+} from '@be-music/json';
 
 const BMS_DEFAULT_DISPLAY_RANK = 2;
 const BMS_DEFAULT_DISPLAY_PLAY_LEVEL = 3;
