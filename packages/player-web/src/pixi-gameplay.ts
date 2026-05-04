@@ -784,6 +784,28 @@ export class PixiGameplayView {
   private scoreHistory: Array<{ progress: number; exScore: number }> = [];
   private lastJudge = '';
   private lastJudgeUntil = 0;
+  /**
+   * Per-side judge / combo snapshots. Each side captures the
+   * verdict text, the chart-time at which the plate should
+   * disappear, and the running combo *at the moment that side's
+   * note was judged*. The DP renderer reads these directly so
+   * the 1P assembly displays the combo at the latest 1P hit and
+   * the 2P assembly displays the combo at the latest 2P hit —
+   * they only stay synchronised on charts where every press
+   * triggers identical-timing hits on both sides (a coincidence,
+   * not the rule).
+   *
+   * SP charts only ever populate the `'1P'` slot, so the global
+   * `lastJudge` / `lastJudgeUntil` aliases above keep their
+   * existing behaviour for the fallback `renderText` path.
+   */
+  private judgeSideState: Record<
+    '1P' | '2P',
+    { judge: JudgeKind | ''; until: number; combo: number }
+  > = {
+    '1P': { judge: '', until: 0, combo: 0 },
+    '2P': { judge: '', until: 0, combo: 0 },
+  };
   private frame: number | undefined;
   private chartEndTimeout: number | undefined;
   /**
@@ -1713,6 +1735,18 @@ export class PixiGameplayView {
     // chart is prepared — restart (R), song-pick from select, etc.
     // Otherwise the previous play's max would leak into the new one.
     this.maxCombo = 0;
+    // Wipe per-side judge / combo snapshots so a fresh chart
+    // doesn't briefly paint the previous play's verdict on its
+    // first frame (the `until` chart-time is in the previous
+    // chart's coordinate system; comparing it to the new chart's
+    // `currentSeconds()` would render stale state until the new
+    // play crosses that mark).
+    this.lastJudge = '';
+    this.lastJudgeUntil = 0;
+    this.judgeSideState = {
+      '1P': { judge: '', until: 0, combo: 0 },
+      '2P': { judge: '', until: 0, combo: 0 },
+    };
     // Result-screen polyline histories. Seeding waits until after
     // `gaugeState` is reinitialised below — at this point we'd still
     // be reading the **previous** play's gauge value.
@@ -3901,8 +3935,9 @@ export class PixiGameplayView {
   }
 
   private publishJudge(judge: JudgeKind, seconds: number, channel?: string): void {
+    const until = seconds + 0.6;
     this.lastJudge = judge;
-    this.lastJudgeUntil = seconds + 0.6;
+    this.lastJudgeUntil = until;
     // LR2 spec: timer 46 (1P judge) / 47 (2P judge) restarts on every
     // judgement on its respective side so the attached
     // `#DST_NOWJUDGE` / `#DST_NOWCOMBO` chains animate from time=0
@@ -3911,7 +3946,17 @@ export class PixiGameplayView {
     // passed. When `channel` isn't supplied (legacy callers) we
     // default to the 1P timer.
     const isPlayer2 = typeof channel === 'string' && channel.startsWith('2');
+    const side: '1P' | '2P' = isPlayer2 ? '2P' : '1P';
     this.timerStartedAt.set(isPlayer2 ? 47 : 46, this.playClock());
+    // Snapshot the verdict + combo for this side so DP rendering
+    // shows each lane group's *own* combo number — frozen at the
+    // moment that side last hit a note — rather than mirroring
+    // the global running combo on both sides.
+    this.judgeSideState[side] = {
+      judge,
+      until,
+      combo: this.tracker.combo,
+    };
     // POOR / BAD judgements briefly swap the base BGA for the chart's
     // POOR BGA. We trigger the same window for `BAD` because the LR2
     // spec doesn't distinguish the two for the BGA channel.
@@ -5043,24 +5088,15 @@ export class PixiGameplayView {
    * "GREAT 158" text punches through the note stream.
    */
   private renderJudgeAndComboOnOverlay(skin: Lr2Skin): void {
-    const seconds = this.currentSeconds();
-    if (!this.lastJudge || seconds > this.lastJudgeUntil) {
-      return;
-    }
-    const judgeKind = resolveJudgeSkinKind(this.lastJudge);
-    if (!judgeKind) return;
-    const comboKind = lastJudgeToNowComboKind(this.lastJudge);
-    // DP charts paint judge + combo on BOTH sides simultaneously
-    // — each side shows the same (latest) verdict and the same
-    // global combo count. SP charts only render the 1P side.
-    // Detection sticks to "did any 2P-side channel show up in
-    // the resolved lane set" rather than the play-variant enum
-    // so battle / DP-imitating SP charts also light both sides
-    // when authored that way.
-    this.renderJudgeAndComboForSide(skin, '1P', judgeKind, comboKind);
+    // DP charts paint judge + combo on BOTH sides simultaneously,
+    // but each side reads its own *snapshot* state so the combo
+    // number on each side reflects that side's most recent hit
+    // (and stays still while only the other side fires). SP
+    // charts only ever populate the 1P slot.
+    this.renderJudgeAndComboForSide(skin, '1P');
     const usesPlayer2 = this.laneChannels.some((channel) => channel.startsWith('2'));
     if (usesPlayer2) {
-      this.renderJudgeAndComboForSide(skin, '2P', judgeKind, comboKind);
+      this.renderJudgeAndComboForSide(skin, '2P');
     }
   }
 
@@ -5070,14 +5106,20 @@ export class PixiGameplayView {
    * `skin.nowCombos.side === '2P'`), falling back to the 1P
    * slots when the skin omitted the 2P pair — matches LR2's
    * "DP-aware skins author both sides; SP-only skins reuse the
-   * 1P rect for any 2P hit" convention.
+   * 1P rect for any 2P hit" convention. The verdict text +
+   * combo number come from the per-side snapshot in
+   * {@link judgeSideState} so the 1P / 2P assemblies tick
+   * independently.
    */
-  private renderJudgeAndComboForSide(
-    skin: Lr2Skin,
-    side: '1P' | '2P',
-    judgeKind: NonNullable<ReturnType<typeof resolveJudgeSkinKind>>,
-    comboKind: ReturnType<typeof lastJudgeToNowComboKind>,
-  ): void {
+  private renderJudgeAndComboForSide(skin: Lr2Skin, side: '1P' | '2P'): void {
+    const state = this.judgeSideState[side];
+    const seconds = this.currentSeconds();
+    if (!state.judge || seconds > state.until) {
+      return;
+    }
+    const judgeKind = resolveJudgeSkinKind(state.judge);
+    if (!judgeKind) return;
+    const comboKind = lastJudgeToNowComboKind(state.judge);
     const sideJudgeMap = side === '2P' ? skin.judges2P : skin.judges;
     const judgeElements = sideJudgeMap[judgeKind] ?? skin.judges[judgeKind];
     const judgeAnchor = judgeElements?.[0]?.destination;
@@ -5093,8 +5135,7 @@ export class PixiGameplayView {
             (entry) => entry.kind === comboKind && this.isDestinationVisible(entry.destination),
           ))
       : undefined;
-    const combo = this.tracker.combo;
-    const visibleCombo = comboKind && combo > 0 ? combo : 0;
+    const visibleCombo = comboKind && state.combo > 0 ? state.combo : 0;
     // Compute centring offset so that judge plate + combo sits centred on
     // this side's lane area. Without this the assembly was anchored at
     // LR2's static x=73 / x=185 coordinates, biased ~10px to the left of
