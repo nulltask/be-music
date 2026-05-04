@@ -13,7 +13,7 @@ import {
   type Lr2SpecialGraphic,
   LR2_SPECIAL_GRAPHIC,
   isLr2SpecialGraphic,
-} from './lr2-skin.ts';
+} from '@be-music/lr2-skin';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { disposeChildren } from './pixi-utils.ts';
 import {

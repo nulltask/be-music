@@ -1,7 +1,7 @@
 import { Rectangle, Texture } from 'pixi.js';
 import { describe, expect, test } from 'vitest';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './lr2-bitmap-text.ts';
-import type { Lr2DestinationRect, Lr2TextElement } from './lr2-skin.ts';
+import type { Lr2DestinationRect, Lr2TextElement } from '@be-music/lr2-skin';
 
 function destination(overrides: Partial<Lr2DestinationRect> = {}): Lr2DestinationRect {
   return {

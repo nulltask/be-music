@@ -9,6 +9,7 @@
     { "path": "packages/audio-renderer" },
     { "path": "packages/player" },
     { "path": "packages/player-tui" },
+    { "path": "packages/lr2-skin" },
     { "path": "packages/editor" }
   ]
 }

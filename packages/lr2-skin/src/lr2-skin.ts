@@ -1,7 +1,6 @@
 import { basename, dirname } from '@be-music/utils/core';
-import { asLoadedBytes } from './file-lookup.ts';
-import { readFilesIntoBytesMap } from './library.ts';
-import type { BrowserSongAssetEntry } from './types.ts';
+import { asLoadedBytes, readFilesIntoBytesMap } from './file-lookup.ts';
+import type { Lr2SkinFileEntry, Lr2SkinInputFile } from './file-lookup.ts';
 import { normalizeLr2Path, resolveLr2IncludePath } from './lr2-skin-assets.ts';
 import { decodeText, parseRows } from './lr2-skin-csv.ts';
 import { isSkinPathOfKind, scoreSkinPath, type Lr2PlayVariant, type Lr2SkinKind } from './lr2-skin-paths.ts';
@@ -788,7 +787,7 @@ export interface Lr2Skin {
    */
   systemFontSizes: number[];
   transparentColor?: { r: number; g: number; b: number };
-  files: ReadonlyMap<string, BrowserSongAssetEntry>;
+  files: ReadonlyMap<string, Lr2SkinFileEntry>;
 }
 
 interface SourceRect {
@@ -1149,7 +1148,7 @@ export interface LoadLr2SkinOptions {
 }
 
 export async function loadLr2SkinFromFiles(
-  files: Iterable<File>,
+  files: Iterable<Lr2SkinInputFile>,
   options: LoadLr2SkinOptions = {},
 ): Promise<Lr2Skin | undefined> {
   // Pooled parallel read instead of the textbook `for ... await
@@ -1157,13 +1156,13 @@ export async function loadLr2SkinFromFiles(
   // every read on a large theme bundle. The dedicated theme
   // loader already calls `loadLr2SkinFromSourceFiles` directly
   // with a pre-read map; this path remains for callers (and
-  // tests) that hand a `File[]` over.
+  // tests) that hand a file-like array over.
   const sourceFiles = await readFilesIntoBytesMap([...files]);
   return loadLr2SkinFromSourceFiles(sourceFiles, options);
 }
 
 export function loadLr2SkinFromSourceFiles(
-  sourceFiles: ReadonlyMap<string, BrowserSongAssetEntry>,
+  sourceFiles: ReadonlyMap<string, Lr2SkinFileEntry>,
   options: LoadLr2SkinOptions = {},
 ): Lr2Skin | undefined {
   const kind = options.kind ?? 'play';
@@ -1361,7 +1360,7 @@ function clampColorByte(value: number): number {
 }
 
 function readLr2Path(
-  sourceFiles: ReadonlyMap<string, BrowserSongAssetEntry>,
+  sourceFiles: ReadonlyMap<string, Lr2SkinFileEntry>,
   path: string,
   context: ParseContext,
   visited: Set<string>,
@@ -1989,7 +1988,7 @@ function registerCustomOption(context: ParseContext, row: string[]): void {
 
 function registerCustomFile(
   context: ParseContext,
-  sourceFiles: ReadonlyMap<string, BrowserSongAssetEntry>,
+  sourceFiles: ReadonlyMap<string, Lr2SkinFileEntry>,
   baseDirectory: string,
   row: string[],
 ): void {

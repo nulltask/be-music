@@ -1,10 +1,30 @@
-import { normalizePath, readFilesIntoBytesMap, resolveChartPlayVariant } from './library.ts';
+import { normalizeChannel } from '@be-music/json';
+import { normalizePath } from '@be-music/utils/core';
+import { readFilesIntoBytesMap, type Lr2SkinFileEntry } from './file-lookup.ts';
+import type { Lr2SkinInputFile } from './file-lookup.ts';
 import { loadLr2SkinFromSourceFiles, type Lr2PlayVariant, type Lr2Skin } from './lr2-skin.ts';
-import type { BrowserSongAssetEntry, BrowserSongEntry, LoadProgressCallback } from './types.ts';
 
 export const LR2_PLAY_VARIANTS = ['7', '14', '10', '5', '9'] as const satisfies readonly Lr2PlayVariant[];
 
 export type Lr2PlaySkinMap = Partial<Record<Lr2PlayVariant, Lr2Skin>>;
+
+export interface Lr2ThemeLoadProgress {
+  phase: 'theme';
+  /** 1-based "items completed so far"; 0 when theme loading starts. */
+  current: number;
+  total: number;
+  label?: string;
+}
+
+export type Lr2ThemeLoadProgressCallback = (progress: Lr2ThemeLoadProgress) => void;
+
+export interface Lr2PlaySkinSong {
+  chartPath?: string;
+  chart: {
+    events: ReadonlyArray<{ channel: string }>;
+    bms?: { player?: number };
+  };
+}
 
 /**
  * Background-music file extracted from a dropped LR2 theme. Used
@@ -115,11 +135,11 @@ export interface LoadLr2ThemeOptions {
    * Sub-tasks fire in parallel; the callback receives the running
    * "completed so far" tally.
    */
-  onProgress?: LoadProgressCallback;
+  onProgress?: Lr2ThemeLoadProgressCallback;
 }
 
 export async function loadLr2ThemeSkinsFromFiles(
-  files: Iterable<File>,
+  files: Iterable<Lr2SkinInputFile>,
   options: LoadLr2ThemeOptions = {},
 ): Promise<Lr2ThemeSkins> {
   const sourceFiles = [...files];
@@ -185,7 +205,7 @@ export async function loadLr2ThemeSkinsFromFiles(
     track('result', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'result' }))),
     track('decide', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'decide' }))),
     // Theme audio (BGM + system sounds) goes through
-    // `materialiseLr2ThemeAudio` so the lazy `File` branch from
+    // `materialiseLr2ThemeAudio` so the lazy file branch from
     // `readFilesIntoBytesMap`'s `deferAudio: true` default is
     // unwrapped here. The rest of the pack stays lazy — only the
     // theme's small handful of audio files (BGM + ~6 cues) is
@@ -252,7 +272,7 @@ export async function loadLr2ThemeSkinsFromFiles(
  * `decide` slots in parallel.
  */
 export async function loadLr2ThemeBgm(
-  files: Iterable<File>,
+  files: Iterable<Lr2SkinInputFile>,
   role: 'select' | 'decide',
 ): Promise<Lr2ThemeBgm | undefined> {
   const match = pickLr2ThemeBgmFile([...files], role);
@@ -277,10 +297,10 @@ const LR2_THEME_BGM_EXTENSIONS = ['.wav', '.ogg', '.mp3', '.opus', '.flac', '.og
  * {@link pickLr2SystemSoundFile} (filters on `sound/lr2/`).
  */
 function pickThemeAudioFile(
-  files: readonly File[],
+  files: readonly Lr2SkinInputFile[],
   pathTest: (lower: string) => boolean,
   stem: string,
-): File | undefined {
+): Lr2SkinInputFile | undefined {
   for (const file of files) {
     const path = (file.webkitRelativePath || file.name).toLowerCase();
     if (!pathTest(path)) continue;
@@ -312,7 +332,10 @@ function pickThemeAudioFile(
  *
  * Returns `undefined` when no candidate exists.
  */
-export function pickLr2ThemeBgmFile(files: readonly File[], role: 'select' | 'decide'): File | undefined {
+export function pickLr2ThemeBgmFile(
+  files: readonly Lr2SkinInputFile[],
+  role: 'select' | 'decide',
+): Lr2SkinInputFile | undefined {
   return pickThemeAudioFile(files, (path) => path.includes('bgm/') || path.includes('bgm\\'), role);
 }
 
@@ -329,7 +352,7 @@ export function pickLr2ThemeBgmFile(files: readonly File[], role: 'select' | 'de
  * cursor sound; only files inside the `Sound/lr2/` subtree
  * qualify.
  */
-export function pickLr2SystemSoundFile(files: readonly File[], stem: string): File | undefined {
+export function pickLr2SystemSoundFile(files: readonly Lr2SkinInputFile[], stem: string): Lr2SkinInputFile | undefined {
   return pickThemeAudioFile(files, (path) => path.includes('sound/lr2/') || path.includes('sound\\lr2\\'), stem);
 }
 
@@ -342,7 +365,7 @@ export function pickLr2SystemSoundFile(files: readonly File[], stem: string): Fi
  * read.
  */
 function pickThemeAudioBytes(
-  files: ReadonlyMap<string, BrowserSongAssetEntry>,
+  files: ReadonlyMap<string, Lr2SkinFileEntry>,
   pathTest: (lower: string) => boolean,
   stem: string,
 ): Lr2ThemeAudioRef | undefined {
@@ -364,7 +387,7 @@ function pickThemeAudioBytes(
 
 interface Lr2ThemeAudioRef {
   path: string;
-  entry: BrowserSongAssetEntry;
+  entry: Lr2SkinFileEntry;
 }
 
 async function materialiseLr2ThemeAudio(ref: Lr2ThemeAudioRef | undefined): Promise<Lr2ThemeBgm | undefined> {
@@ -374,14 +397,14 @@ async function materialiseLr2ThemeAudio(ref: Lr2ThemeAudioRef | undefined): Prom
 }
 
 function pickLr2ThemeBgmFromMap(
-  files: ReadonlyMap<string, BrowserSongAssetEntry>,
+  files: ReadonlyMap<string, Lr2SkinFileEntry>,
   role: 'select' | 'decide',
 ): Lr2ThemeAudioRef | undefined {
   return pickThemeAudioBytes(files, (path) => path.includes('bgm/') || path.includes('bgm\\'), role);
 }
 
 function pickLr2SystemSoundFromMap(
-  files: ReadonlyMap<string, BrowserSongAssetEntry>,
+  files: ReadonlyMap<string, Lr2SkinFileEntry>,
   stem: string,
 ): Lr2ThemeAudioRef | undefined {
   return pickThemeAudioBytes(files, (path) => path.includes('sound/lr2/') || path.includes('sound\\lr2\\'), stem);
@@ -392,7 +415,10 @@ function pickLr2SystemSoundFromMap(
  * `f-open`, `f-close`) from the dropped bundle. Returns
  * `undefined` when the theme doesn't ship that effect.
  */
-export async function loadLr2SystemSound(files: Iterable<File>, stem: string): Promise<Lr2ThemeBgm | undefined> {
+export async function loadLr2SystemSound(
+  files: Iterable<Lr2SkinInputFile>,
+  stem: string,
+): Promise<Lr2ThemeBgm | undefined> {
   const match = pickLr2SystemSoundFile([...files], stem);
   if (!match) return undefined;
   const buffer = await match.arrayBuffer();
@@ -402,7 +428,7 @@ export async function loadLr2SystemSound(files: Iterable<File>, stem: string): P
   };
 }
 
-export function pickLr2PlaySkin(playSkins: Lr2PlaySkinMap, song: BrowserSongEntry): Lr2Skin | undefined {
+export function pickLr2PlaySkin(playSkins: Lr2PlaySkinMap, song: Lr2PlaySkinSong): Lr2Skin | undefined {
   const target = resolveChartPlayVariant(song);
   for (const variant of PLAY_SKIN_FALLBACKS[target]) {
     const candidate = playSkins[variant];
@@ -411,6 +437,41 @@ export function pickLr2PlaySkin(playSkins: Lr2PlaySkinMap, song: BrowserSongEntr
     }
   }
   return undefined;
+}
+
+function resolveChartPlayVariant(song: Lr2PlaySkinSong): Lr2PlayVariant {
+  const channels = new Set<string>();
+  for (const event of song.chart.events) {
+    const channel = normalizeChannel(event.channel);
+    if (isScoreTargetChannel(channel)) {
+      channels.add(channel);
+    }
+  }
+  if (isPmsExtension(song.chartPath)) {
+    return '9';
+  }
+  if (song.chart.bms?.player === 3 && channels.has('17')) {
+    return '9';
+  }
+  const usesPlayer2 = [...channels].some((channel) => channel.startsWith('2'));
+  const uses6or7 = ['18', '19', '28', '29'].some((channel) => channels.has(channel));
+  if (usesPlayer2) {
+    return uses6or7 ? '14' : '10';
+  }
+  return uses6or7 ? '7' : '5';
+}
+
+function isPmsExtension(chartPath: string | undefined): boolean {
+  if (typeof chartPath !== 'string' || chartPath.length === 0) {
+    return false;
+  }
+  const dotIndex = chartPath.lastIndexOf('.');
+  if (dotIndex < 0) return false;
+  return chartPath.slice(dotIndex).toLowerCase() === '.pms';
+}
+
+function isScoreTargetChannel(channel: string): boolean {
+  return channel.startsWith('1') || channel.startsWith('2');
 }
 
 export function summarizeLr2PlaySkins(playSkins: Lr2PlaySkinMap, separator = ','): string {

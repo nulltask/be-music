@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import type { Lr2SkinFileEntry } from './file-lookup.ts';
 import { normalizeLr2Path, resolveLr2AssetBytes, resolveLr2IncludePath, wildcardToRegExp } from './lr2-skin-assets.ts';
 import type { Lr2Skin } from './lr2-skin.ts';
-import type { BrowserSongAssetEntry } from './types.ts';
 
 const BYTES_A = new Uint8Array([1, 2, 3]);
 const BYTES_B = new Uint8Array([4, 5, 6]);
 
-function skinWithFiles(files: ReadonlyMap<string, BrowserSongAssetEntry>): Lr2Skin {
+function skinWithFiles(files: ReadonlyMap<string, Lr2SkinFileEntry>): Lr2Skin {
   return { files } as Lr2Skin;
 }
 
 describe('resolveLr2IncludePath', () => {
   it('resolves includes relative to the current skin directory case-insensitively', () => {
-    const files = new Map<string, BrowserSongAssetEntry>([['LR2files/Theme/LR2/Select/Parts.CSV', BYTES_A]]);
+    const files = new Map<string, Lr2SkinFileEntry>([['LR2files/Theme/LR2/Select/Parts.CSV', BYTES_A]]);
 
     expect(resolveLr2IncludePath(files, 'LR2files/Theme/LR2/Select', 'parts.csv')).toBe(
       'LR2files/Theme/LR2/Select/Parts.CSV',
@@ -20,7 +20,7 @@ describe('resolveLr2IncludePath', () => {
   });
 
   it('falls back through grandparent / parent suffixes before basename-only matching', () => {
-    const files = new Map<string, BrowserSongAssetEntry>([
+    const files = new Map<string, Lr2SkinFileEntry>([
       ['Other/Theme/Result/result_normal.csv', BYTES_A],
       ['Fallback/result_normal.csv', BYTES_B],
     ]);
@@ -44,7 +44,7 @@ describe('resolveLr2AssetBytes', () => {
     expect(resolveLr2AssetBytes(skin, 'custom/blue-*.png')).toBe(BYTES_B);
   });
 
-  it('does not return lazy File entries from the synchronous resolver', () => {
+  it('does not return lazy file entries from the synchronous resolver', () => {
     const file = new File([BYTES_A], 'parts.tga');
     const skin = skinWithFiles(new Map([['parts.tga', file]]));
 

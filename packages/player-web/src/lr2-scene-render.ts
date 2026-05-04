@@ -1,6 +1,6 @@
 import { Container, Text, TextStyle } from 'pixi.js';
 import { normaliseRect } from './lr2-render.ts';
-import type { Lr2DestinationRect, Lr2TextElement } from './lr2-skin.ts';
+import type { Lr2DestinationRect, Lr2TextElement } from '@be-music/lr2-skin';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './lr2-bitmap-text.ts';
 
 export interface ScaledViewport {

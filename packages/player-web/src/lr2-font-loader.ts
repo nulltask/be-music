@@ -1,12 +1,15 @@
 import { Texture, Assets } from 'pixi.js';
-import { parseLr2Font, type Lr2BitmapFont } from './lr2-font.ts';
+import {
+  decodeTga,
+  isTgaImage,
+  parseLr2Font,
+  readDxaArchive,
+  type Lr2BitmapFont,
+  type Lr2SkinFileEntry,
+} from '@be-music/lr2-skin';
 import type { Lr2LoadedFont } from './lr2-bitmap-text.ts';
-import { readDxaArchive } from './lr2-dxa.ts';
-import { decodeTga, isTgaImage } from './lr2-tga.ts';
-import { asLoadedBytes } from './file-lookup.ts';
 import { normalizePath } from './library.ts';
 import { logger } from './logger.ts';
-import type { BrowserSongAssetEntry } from './types.ts';
 
 const log = logger('lr2-font');
 
@@ -32,7 +35,7 @@ const log = logger('lr2-font');
  */
 export async function loadSkinBitmapFonts(
   fontPaths: ReadonlyArray<string>,
-  files: ReadonlyMap<string, BrowserSongAssetEntry>,
+  files: ReadonlyMap<string, Lr2SkinFileEntry>,
 ): Promise<Map<number, Lr2LoadedFont>> {
   const declared = fontPaths.filter((path) => path.length > 0).length;
   log.info(`start: ${declared}/${fontPaths.length} non-empty font slots, ${files.size} files in source`);
@@ -50,7 +53,7 @@ export async function loadSkinBitmapFonts(
 
 async function tryLoadFont(
   declaredPath: string,
-  files: ReadonlyMap<string, BrowserSongAssetEntry>,
+  files: ReadonlyMap<string, Lr2SkinFileEntry>,
 ): Promise<Lr2LoadedFont | undefined> {
   const lower = declaredPath.toLowerCase();
   const direct = lookupCaseInsensitive(files, declaredPath);
@@ -117,7 +120,7 @@ function collapseLr2FontDirectoryToDxa(declaredPath: string): string | undefined
 async function loadFontFromBareFile(
   bytes: Uint8Array,
   fontPath: string,
-  files: ReadonlyMap<string, BrowserSongAssetEntry>,
+  files: ReadonlyMap<string, Lr2SkinFileEntry>,
 ): Promise<Lr2LoadedFont | undefined> {
   const text = decodeText(bytes);
   if (!text) return undefined;
@@ -290,10 +293,7 @@ function joinRelative(base: string, rel: string): string {
   return stack.join('/');
 }
 
-function lookupCaseInsensitive(
-  files: ReadonlyMap<string, BrowserSongAssetEntry>,
-  path: string,
-): Uint8Array | undefined {
+function lookupCaseInsensitive(files: ReadonlyMap<string, Lr2SkinFileEntry>, path: string): Uint8Array | undefined {
   const direct = asLoadedBytes(files.get(path));
   if (direct) return direct;
   const target = normalizePath(path).toLowerCase();
@@ -325,4 +325,8 @@ function lookupCaseInsensitive(
     }
   }
   return bestValue;
+}
+
+function asLoadedBytes(entry: Lr2SkinFileEntry | undefined): Uint8Array | undefined {
+  return entry instanceof Uint8Array ? entry : undefined;
 }

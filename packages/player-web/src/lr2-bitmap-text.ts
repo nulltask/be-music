@@ -1,6 +1,6 @@
 import { Container, Graphics, Sprite, Texture, Rectangle } from 'pixi.js';
-import type { Lr2DestinationRect, Lr2TextElement } from './lr2-skin.ts';
-import { stringToLr2CharCodes, type Lr2BitmapFont, type Lr2FontGlyph } from './lr2-font.ts';
+import type { Lr2DestinationRect, Lr2TextElement } from '@be-music/lr2-skin';
+import { stringToLr2CharCodes, type Lr2BitmapFont, type Lr2FontGlyph } from '@be-music/lr2-skin';
 import { normaliseRect } from './lr2-render.ts';
 
 /**

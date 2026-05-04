@@ -8,27 +8,29 @@ import {
   checkBrowserCompat,
   describeSongCollection,
   downloadBlob,
-  loadLr2ThemeSkinsFromFiles,
   logger,
   makeWebmSeekable,
   parseCompressorMode,
-  pickLr2PlaySkin,
   readDroppedFiles,
   resolveSongSource,
   splitDroppedSongAndThemeFiles,
   summarizeBrowserCompat,
-  summarizeLr2PlaySkins,
   type BrowserCompatReport,
   type BrowserSongCollection,
   type BrowserSongEntry,
   type CompressorMode,
   type LoadProgress,
-  type Lr2PlayVariant,
-  type Lr2PlaySkinMap,
-  type Lr2Skin,
   type PixiGameplayResultData,
   type PixiSongSelectNavigation,
 } from '@be-music/player-web';
+import {
+  loadLr2ThemeSkinsFromFiles,
+  pickLr2PlaySkin,
+  summarizeLr2PlaySkins,
+  type Lr2PlaySkinMap,
+  type Lr2PlayVariant,
+  type Lr2Skin,
+} from '@be-music/lr2-skin';
 
 const dropLog = logger('drop');
 const recordLog = logger('record');

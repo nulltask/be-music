@@ -10,8 +10,8 @@ import type {
   Lr2Skin,
   Lr2SliderElement,
   Lr2SpecialGraphic,
-} from './lr2-skin.ts';
-import { isLr2SpecialGraphic } from './lr2-skin.ts';
+} from '@be-music/lr2-skin';
+import { isLr2SpecialGraphic } from '@be-music/lr2-skin';
 import {
   applyDestinationToSprite,
   createCroppedTexture,

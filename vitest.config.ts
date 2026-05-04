@@ -13,6 +13,7 @@ const workspacePackages = [
   'audio-renderer',
   'player',
   'player-tui',
+  'lr2-skin',
   'editor',
   'player-web',
 ] as const;

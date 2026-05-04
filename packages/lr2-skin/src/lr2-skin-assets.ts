@@ -1,10 +1,10 @@
 import { basename, dirname, normalizePath } from '@be-music/utils/core';
 import { asLoadedBytes, findCaseInsensitivePath, lookupBytesCaseInsensitive } from './file-lookup.ts';
+import type { Lr2SkinFileEntry } from './file-lookup.ts';
 import type { Lr2Skin } from './lr2-skin.ts';
-import type { BrowserSongAssetEntry } from './types.ts';
 
 export function resolveLr2IncludePath(
-  sourceFiles: ReadonlyMap<string, BrowserSongAssetEntry>,
+  sourceFiles: ReadonlyMap<string, Lr2SkinFileEntry>,
   baseDirectory: string,
   rawPath: string,
 ): string | undefined {

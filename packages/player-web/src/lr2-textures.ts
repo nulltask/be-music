@@ -1,5 +1,5 @@
 import { Texture, VideoSource } from 'pixi.js';
-import { resolveLr2AssetBytes, type Lr2Skin } from './lr2-skin.ts';
+import { resolveLr2AssetBytes, type Lr2Skin } from '@be-music/lr2-skin';
 import { logger } from './logger.ts';
 
 const log = logger('bga-video');
