@@ -5,6 +5,7 @@ import {
   PixiResultView,
   PixiSceneHost,
   PixiSongSelectView,
+  checkBrowserCompat,
   describeSongCollection,
   downloadBlob,
   loadLr2ThemeSkinsFromFiles,
@@ -14,7 +15,9 @@ import {
   readDroppedFiles,
   resolveSongSource,
   splitDroppedSongAndThemeFiles,
+  summarizeBrowserCompat,
   summarizeLr2PlaySkins,
+  type BrowserCompatReport,
   type BrowserSongCollection,
   type BrowserSongEntry,
   type CompressorMode,
@@ -109,6 +112,62 @@ app.innerHTML = `
         </div>
       </div>
     </div>
+    <!--
+      Browser-compatibility panel. Lives at the shell level — NOT
+      inside the drop card — so it reads as a separate diagnostic
+      widget rather than as decoration on the call-to-action.
+      Header (icon + eyebrow + status) communicates at-a-glance
+      readiness; the body lists every probed feature split into
+      \`Required\` / \`Optional\` sections so the user can see
+      exactly which feature is responsible for an unsupported
+      verdict. Populated once at boot from \`checkBrowserCompat()\`.
+    -->
+    <aside class="compat-panel" id="compat-panel" aria-label="Browser compatibility check">
+      <header class="compat-panel-header">
+        <div class="compat-panel-badge" id="compat-panel-badge" aria-hidden="true">
+          <!--
+            Status mark. The default check arc paints when the
+            browser is fully supported; the JS swaps in a cross
+            path for the unsupported state by toggling a class on
+            the panel root.
+          -->
+          <svg viewBox="0 0 24 24" class="compat-panel-badge-icon" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
+            <path
+              class="compat-panel-badge-mark compat-panel-badge-mark--check"
+              d="M7 12 L11 16 L17 9"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              class="compat-panel-badge-mark compat-panel-badge-mark--cross"
+              d="M8 8 L16 16 M16 8 L8 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.4"
+              stroke-linecap="round"
+            />
+          </svg>
+        </div>
+        <div class="compat-panel-heading">
+          <div class="compat-panel-eyebrow">System check</div>
+          <div class="compat-panel-status" id="compat-panel-status">Browser ready</div>
+        </div>
+      </header>
+      <div class="compat-panel-sections">
+        <section class="compat-panel-section">
+          <h3 class="compat-panel-section-title">Required</h3>
+          <ul class="compat-panel-list" id="compat-panel-required"></ul>
+        </section>
+        <section class="compat-panel-section">
+          <h3 class="compat-panel-section-title">Optional</h3>
+          <ul class="compat-panel-list" id="compat-panel-optional"></ul>
+        </section>
+      </div>
+    </aside>
     <!--
       Loading overlay. Hidden by default; revealed via the
       "visible" class while a folder / ZIP drop is mid-load. The
@@ -1379,6 +1438,14 @@ class PlayerWebDemoApp {
   }
 }
 
+// Browser compatibility probe runs first so the drop card paints
+// the readiness verdict immediately on first render. We do this
+// BEFORE constructing the demo app so that even a hard-fail
+// (Pixi `Application.init()` throwing on a no-WebGL2 browser)
+// still leaves the user looking at the unsupported-browser message
+// rather than a blank canvas.
+renderBrowserCompatPanel(checkBrowserCompat());
+
 new PlayerWebDemoApp({
   stage: document.querySelector<HTMLDivElement>('#stage')!,
   shell: document.querySelector<HTMLDivElement>('.shell')!,
@@ -1389,6 +1456,95 @@ new PlayerWebDemoApp({
   loadingBarFill: document.querySelector<HTMLDivElement>('#loading-bar-fill')!,
   loadingCounter: document.querySelector<HTMLDivElement>('#loading-counter')!,
 }).start();
+
+/**
+ * Renders the browser-compatibility diagnostic panel that lives
+ * alongside (not inside) the drop card. Feature support doesn't
+ * change at runtime so this is a one-shot side-effect — call once
+ * at boot and the DOM stays in sync for the session.
+ *
+ * The panel is the *only* place the compat verdict surfaces; the
+ * drop card stays focused on its call-to-action. When required
+ * features are missing the panel flips into a red "Browser not
+ * supported" mode and lists each missing item with its
+ * dependency note, so the user can identify exactly what's
+ * blocking them.
+ */
+function renderBrowserCompatPanel(report: BrowserCompatReport): void {
+  const panel = document.querySelector<HTMLElement>('#compat-panel');
+  const requiredList = document.querySelector<HTMLUListElement>('#compat-panel-required');
+  const optionalList = document.querySelector<HTMLUListElement>('#compat-panel-optional');
+  const statusLabel = document.querySelector<HTMLDivElement>('#compat-panel-status');
+  if (!panel || !requiredList || !optionalList || !statusLabel) return;
+
+  // `--ok` / `--fail` toggles the badge palette and the
+  // check-vs-cross mark visibility (the two icon `<path>`s share
+  // the SVG, only one is shown at a time per CSS).
+  panel.classList.toggle('compat-panel--ok', report.ok);
+  panel.classList.toggle('compat-panel--fail', !report.ok);
+
+  if (report.ok) {
+    // Distinguish "everything works" from "core works but you're
+    // missing some optional niceties" — the latter is still a
+    // green verdict but the count tells power users at a glance
+    // whether Web­Codecs / WebGPU / etc. are reachable.
+    const missingOptional = report.items.filter((item) => !item.required && !item.supported).length;
+    statusLabel.textContent =
+      missingOptional > 0 ? `Browser ready · ${missingOptional} optional missing` : 'Browser ready';
+  } else {
+    statusLabel.textContent = summarizeBrowserCompat(report) ?? 'Browser not supported';
+  }
+
+  requiredList.replaceChildren();
+  optionalList.replaceChildren();
+  for (const item of report.items) {
+    const target = item.required ? requiredList : optionalList;
+    target.appendChild(buildCompatRow(item));
+  }
+}
+
+/**
+ * Builds one feature row inside the compat panel. Status colour
+ * is encoded both as a CSS modifier class (drives the icon /
+ * background) and as a screen-reader-friendly text fallback so
+ * the verdict is accessible without colour vision.
+ */
+function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIElement {
+  const li = document.createElement('li');
+  // `ok` = supported, `warn` = optional & missing (the player
+  // still works), `fail` = required & missing (player won't
+  // function). Required-supported and optional-supported both
+  // map to `ok` — visual hierarchy comes from the section split
+  // (Required vs Optional) above, not from a distinction here.
+  const status = item.supported ? 'ok' : item.required ? 'fail' : 'warn';
+  li.className = `compat-row compat-row--${status}`;
+  li.title = item.note;
+
+  const icon = document.createElement('span');
+  icon.className = 'compat-row-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  // Plain text glyphs over inline SVG — keeps the markup compact
+  // and lets us colour the glyph via `color: currentColor`. The
+  // accessibility verdict is carried by the screen-reader text
+  // span below, not by the symbol.
+  icon.textContent = item.supported ? '✓' : item.required ? '✕' : '–';
+  li.appendChild(icon);
+
+  const label = document.createElement('span');
+  label.className = 'compat-row-label';
+  label.textContent = item.label;
+  li.appendChild(label);
+
+  const sr = document.createElement('span');
+  sr.className = 'compat-row-sr';
+  // Read-aloud text for assistive tech — `✓` / `✕` / `–` carry
+  // visual semantics but no name on their own. `aria-hidden` on
+  // the icon hands the verdict to this hidden label instead.
+  sr.textContent = item.supported ? 'supported' : item.required ? 'missing (required)' : 'missing (optional)';
+  li.appendChild(sr);
+
+  return li;
+}
 
 /**
  * Human-readable labels shown alongside the loading-overlay
