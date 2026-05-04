@@ -1000,6 +1000,16 @@ export class PixiSongSelectView {
    */
   private searchQuery = '';
   /**
+   * Memoised result of {@link currentEntries}. Recomputed only
+   * when one of the captured inputs changes; otherwise the
+   * cached array is returned as-is so per-frame call sites
+   * (slider value, bar renderer) hit a Map-like O(1) path
+   * instead of re-walking the chart events of every song under
+   * the keymode filter. Initialised lazily on the first call.
+   */
+  private cachedEntries: BrowserBrowseEntry[] = [];
+  private cachedEntriesInputs: CurrentEntriesInputs | undefined;
+  /**
    * Encoded select-screen BGM bytes (typically WAV / OGG). Set
    * via the `selectBgm` constructor option or
    * {@link setSelectBgm}; decoded lazily on the first user
@@ -1948,10 +1958,30 @@ export class PixiSongSelectView {
    * inside a folder and only see matching songs in that folder.
    */
   private currentEntries(): BrowserBrowseEntry[] {
+    // Cache the filtered + sorted list so the per-frame call
+    // sites (slider value resolver, bar renderer, …) don't
+    // re-allocate every entry and re-walk the keymode filter on
+    // every frame. Inputs that affect the result are captured
+    // shallowly; reference comparison is enough for the array /
+    // folder fields because the mutators always replace those
+    // refs (no in-place edits).
     const top = this.browseStack[this.browseStack.length - 1];
+    const songs = this.collection.songs;
+    const inputs: CurrentEntriesInputs = {
+      top,
+      stackLength: this.browseStack.length,
+      songs,
+      difficulty: this.playOptions.difficultyFilter,
+      keys: this.playOptions.keysFilter,
+      sort: this.playOptions.sort,
+      search: this.searchQuery,
+    };
+    if (this.cachedEntriesInputs && currentEntriesInputsEqual(this.cachedEntriesInputs, inputs)) {
+      return this.cachedEntries;
+    }
     const baseEntries: BrowserBrowseEntry[] = top
       ? top.songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }))
-      : groupSongsByFolder(this.collection.songs).map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
+      : groupSongsByFolder(songs).map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
     let filtered = baseEntries;
     if (this.playOptions.difficultyFilter !== 'ALL') {
       const target = DIFFICULTY_FILTER_CYCLE.indexOf(this.playOptions.difficultyFilter);
@@ -1967,6 +1997,8 @@ export class PixiSongSelectView {
     if (this.playOptions.sort !== 'OFF') {
       filtered = sortBrowseEntries([...filtered], this.playOptions.sort);
     }
+    this.cachedEntries = filtered;
+    this.cachedEntriesInputs = inputs;
     return filtered;
   }
 
@@ -4809,7 +4841,61 @@ function resolveDifficultyOp(song: BrowserSongEntry): number {
  * The previous implementation skipped step 2 entirely and 5K BMS
  * charts surfaced as 7K in the keymode panel.
  */
+/**
+ * Inputs captured by {@link PixiSongSelectView.currentEntries}'
+ * memoisation pass. Reference-equal `top` / `songs` is enough
+ * because the view never mutates either in place — every
+ * library reload / browse-stack change replaces the array, so
+ * a stale cache is impossible without one of these fields
+ * changing.
+ */
+interface CurrentEntriesInputs {
+  top: BrowserFolderNode | undefined;
+  stackLength: number;
+  songs: ReadonlyArray<BrowserSongEntry>;
+  difficulty: PixiDifficultyFilter;
+  keys: PixiKeysFilter;
+  sort: PixiSelectSort;
+  search: string;
+}
+
+function currentEntriesInputsEqual(a: CurrentEntriesInputs, b: CurrentEntriesInputs): boolean {
+  return (
+    a.top === b.top &&
+    a.stackLength === b.stackLength &&
+    a.songs === b.songs &&
+    a.difficulty === b.difficulty &&
+    a.keys === b.keys &&
+    a.sort === b.sort &&
+    a.search === b.search
+  );
+}
+
+/**
+ * Per-song memoisation cache for {@link resolveKeyModeOp}. The
+ * inner `computeKeyModeOp` walks every event in the chart, which
+ * is fine once but ruinous when the keymode filter is active —
+ * `currentEntries()` runs the filter on every render frame, and
+ * `render()` is rAF-driven, so an N-song library with E events
+ * each would do `N × E` work per frame. The cache turns the
+ * second-and-later lookups into a `Map.get` (O(1)).
+ *
+ * Keyed on the `BrowserSongEntry` reference so the entry can be
+ * garbage-collected freely; switching skin or reloading the
+ * library replaces the entries entirely and the old cache slots
+ * vacate naturally.
+ */
+const KEY_MODE_OP_CACHE = new WeakMap<BrowserSongEntry, number>();
+
 function resolveKeyModeOp(song: BrowserSongEntry): number {
+  const cached = KEY_MODE_OP_CACHE.get(song);
+  if (cached !== undefined) return cached;
+  const computed = computeKeyModeOp(song);
+  KEY_MODE_OP_CACHE.set(song, computed);
+  return computed;
+}
+
+function computeKeyModeOp(song: BrowserSongEntry): number {
   const modeHint = song.chart.bmson.info?.modeHint?.toLowerCase() ?? '';
   // Order matters — check the longer "14K" / "10K" / "9K" tokens before
   // "5K" / "7K" so e.g. "5k" doesn't accidentally match inside "75k".
@@ -4829,8 +4915,9 @@ function resolveKeyModeOp(song: BrowserSongEntry): number {
   })();
   if (chartExt === '.pms') return SELECT_DYNAMIC_OPS.KEYS_9;
   // Walk the chart events once and remember which input channels
-  // were touched. Cheap: a typical chart has a few thousand events
-  // and we exit early-ish via a Set lookup.
+  // were touched. Once all three flags are set there's no more
+  // information to gather — break out so we don't keep scanning
+  // a 10k-event chart needlessly.
   let usesPlayer2 = false;
   let uses6or7 = false;
   let usesCh17 = false;
@@ -4842,6 +4929,7 @@ function resolveKeyModeOp(song: BrowserSongEntry): number {
     // presence is what makes a chart 7K (or 14K) vs 5K (or 10K).
     if (ch === '18' || ch === '19' || ch === '28' || ch === '29') uses6or7 = true;
     if (ch === '17') usesCh17 = true;
+    if (usesPlayer2 && uses6or7 && usesCh17) break;
   }
   // PMS-COMPAT: `#PLAYER=3` + channel 17 used as a lane note.
   if (song.chart.bms.player === 3 && usesCh17) return SELECT_DYNAMIC_OPS.KEYS_9;
