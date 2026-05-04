@@ -830,15 +830,9 @@ describe('player', () => {
     // distinct and the player must resolve them via case-preserved
     // keys when emitting `sample-trigger` logs.
     const json = parseChart(
-      [
-        '#BASE 62',
-        '#TITLE Base62 Sample',
-        '#BPM 120',
-        '#WAV0a lower.wav',
-        '#WAV0A upper.wav',
-        '#00111:0a0A',
-        '',
-      ].join('\n'),
+      ['#BASE 62', '#TITLE Base62 Sample', '#BPM 120', '#WAV0a lower.wav', '#WAV0A upper.wav', '#00111:0a0A', ''].join(
+        '\n',
+      ),
     );
     expect(json.bms.base).toBe(62);
     expect(json.resources.wav['0a']).toBe('lower.wav');

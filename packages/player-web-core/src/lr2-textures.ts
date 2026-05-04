@@ -124,10 +124,7 @@ export function isWebCodecsEncodeSupported(): boolean {
   return typeof globalThis !== 'undefined' && 'VideoEncoder' in globalThis;
 }
 
-async function tryLoadVideoTextureFromBytes(
-  path: string,
-  bytes: Uint8Array,
-): Promise<VideoTextureHandle | undefined> {
+async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Promise<VideoTextureHandle | undefined> {
   const blob = new Blob([new Uint8Array(bytes)], { type: guessVideoMimeType(path) });
   const objectUrl = URL.createObjectURL(blob);
   const video = document.createElement('video');
@@ -721,10 +718,7 @@ async function loadFfmpeg(): Promise<FfmpegInstance> {
     // bundle out of the initial page load — the user only pays
     // the download cost when they actually pick a chart with an
     // unsupported BGA video.
-    const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
-      import('@ffmpeg/ffmpeg'),
-      import('@ffmpeg/util'),
-    ]);
+    const [{ FFmpeg }, { toBlobURL }] = await Promise.all([import('@ffmpeg/ffmpeg'), import('@ffmpeg/util')]);
     // We target the ESM entry from the host's `/ffmpeg-core/`
     // static path. @ffmpeg/ffmpeg creates its outer worker as
     // `type: "module"`, where `importScripts` is unavailable:

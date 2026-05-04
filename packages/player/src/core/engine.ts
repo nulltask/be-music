@@ -21,20 +21,18 @@ import {
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
   type RenderResult,
-  type RenderSampleLoadProgress,
   type TimedSampleTrigger,
   type TimingResolver,
   collectSampleTriggers,
   createTimingResolver,
   renderSingleSample,
-  renderJson,
 } from '@be-music/audio-renderer';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
 import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
-import { type LaneBinding } from '../manual-input.ts';
+import { type LaneBinding } from './lane-layout.ts';
 import { type LongNoteMode, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
-import { type TuiNoteHeight } from '../tui-note-height.ts';
+import { type TuiNoteHeight } from './ui-options.ts';
 import { formatSeconds, resolveAltModifierLabel, resolveChartVolWavGain } from '../utils.ts';
 import { createNodeAudioSink, type AudioSink, type AudioSinkClockState } from '../audio-sink.ts';
 import {
@@ -1045,7 +1043,7 @@ function createScheduledPlaybackEvent(
 function mergeScheduledPlaybackEventGroups(
   groups: ReadonlyArray<ReadonlyArray<NoTuiScheduledPlaybackEvent>>,
 ): NoTuiScheduledPlaybackEvent[] {
-  const cursors = new Array<number>(groups.length).fill(0);
+  const cursors = Array.from({ length: groups.length }, () => 0);
   const merged: NoTuiScheduledPlaybackEvent[] = [];
 
   while (true) {
@@ -1337,16 +1335,6 @@ const PLAYBACK_PREPARATION_UI_RATIO_WEIGHT = 0.12;
 const PLAYBACK_PREPARATION_AUDIO_RATIO_WEIGHT = 0.68;
 const PREPARED_UI_RUNTIME_SETTLE_TIMEOUT_MS = 300;
 
-function formatSampleLoadDetail(progress: RenderSampleLoadProgress): string {
-  if (typeof progress.resolvedPath === 'string' && progress.resolvedPath.length > 0) {
-    return basename(progress.resolvedPath);
-  }
-  if (typeof progress.samplePath === 'string' && progress.samplePath.length > 0) {
-    return progress.samplePath;
-  }
-  return `#WAV${progress.sampleKey}`;
-}
-
 async function disposePreparedUiRuntime(
   initializedUiRuntime: Awaited<ReturnType<typeof initializePlayerUiRuntime>>,
 ): Promise<void> {
@@ -1632,13 +1620,11 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     realtimeAudioEndSeconds,
   );
   const {
-    notes,
     landmineNotes,
     invisibleNotes,
     renderNotes,
     laneBindings,
     laneDisplayMode,
-    activeFreeZoneChannels,
     scorableNotes,
     inputTokenToChannels,
   } = playbackChart;
@@ -4123,71 +4109,8 @@ function resolvePositiveNumberOption(value: number | undefined, fallback: number
   return value;
 }
 
-function stripPlayableEvents(json: BeMusicJson): BeMusicJson {
-  const cloned = structuredClone(json);
-  cloned.events = cloned.events.filter((event) => !isPlayLaneSoundChannel(event.channel));
-  return cloned;
-}
-
-function stripNonPlayableEvents(json: BeMusicJson): BeMusicJson {
-  const cloned = structuredClone(json);
-  cloned.events = cloned.events.filter(
-    (event) => isPlayLaneSoundChannel(event.channel) || isBmsKeyVolumeChangeChannel(event.channel),
-  );
-  return cloned;
-}
-
 export function shouldUseAutoMixBgmHeadroomControl(options: PlayerOptions): boolean {
   return options.limiter === false;
-}
-
-async function renderAutoMixWithVolumeControls(
-  json: BeMusicJson,
-  bgmVolume: number,
-  playVolume: number,
-  options: {
-    baseDir: string;
-    tailSeconds: number;
-    inferBmsLnTypeWhenMissing?: boolean;
-    useBgmHeadroomControl?: boolean;
-    onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
-  },
-): Promise<RenderResult> {
-  if (bgmVolume === 1 && playVolume === 1) {
-    return renderJson(json, options);
-  }
-
-  if (options.useBgmHeadroomControl !== true) {
-    return renderJson(json, {
-      ...options,
-      normalize: false,
-      resolveTriggerGain: (trigger) => (isPlayLaneSoundChannel(trigger.channel) ? playVolume : bgmVolume),
-    });
-  }
-
-  const playableOnly = stripNonPlayableEvents(json);
-  if (bgmVolume === 0) {
-    return applyGainToRenderResult(await renderJson(playableOnly, options), playVolume);
-  }
-
-  const bgmOnly = stripPlayableEvents(json);
-  if (playVolume === 0) {
-    return applyGainToRenderResult(await renderJson(bgmOnly, options), bgmVolume);
-  }
-
-  const splitRenderOptions = {
-    ...options,
-    normalize: false,
-  } as const;
-  const [bgmRendered, playableRendered] = await Promise.all([
-    renderJson(bgmOnly, splitRenderOptions),
-    renderJson(playableOnly, splitRenderOptions),
-  ]);
-  const scaledPlayable = applyGainToRenderResult(playableRendered, playVolume);
-  const scaledBgm = applyGainToRenderResult(bgmRendered, bgmVolume);
-  const bgmHeadroomGain = resolveBgmHeadroomGain(scaledPlayable, scaledBgm);
-
-  return mixRenderResults(applyGainToRenderResult(scaledBgm, bgmHeadroomGain), scaledPlayable);
 }
 
 async function buildRuntimeSampleMap(
@@ -4343,52 +4266,6 @@ function normalizeBusVolume(value: number | undefined, fallback: number): number
   return Math.max(0, value) * fallback;
 }
 
-function applyGainToRenderResult(result: RenderResult, gain: number): RenderResult {
-  if (gain === 1) {
-    return result;
-  }
-
-  const left = new Float32Array(result.left.length);
-  const right = new Float32Array(result.right.length);
-  for (let index = 0; index < result.left.length; index += 1) {
-    left[index] = result.left[index] * gain;
-    right[index] = result.right[index] * gain;
-  }
-
-  return {
-    sampleRate: result.sampleRate,
-    left,
-    right,
-    durationSeconds: result.durationSeconds,
-    peak: measureRenderPeak(left, right),
-  };
-}
-
-function mixRenderResults(leftResult: RenderResult, rightResult: RenderResult): RenderResult {
-  if (leftResult.sampleRate !== rightResult.sampleRate) {
-    return leftResult;
-  }
-
-  const frameLength = Math.max(leftResult.left.length, rightResult.left.length);
-  const mixedLeft = new Float32Array(frameLength);
-  const mixedRight = new Float32Array(frameLength);
-
-  for (let frame = 0; frame < frameLength; frame += 1) {
-    const left = (leftResult.left[frame] ?? 0) + (rightResult.left[frame] ?? 0);
-    const right = (leftResult.right[frame] ?? 0) + (rightResult.right[frame] ?? 0);
-    mixedLeft[frame] = left;
-    mixedRight[frame] = right;
-  }
-
-  return {
-    sampleRate: leftResult.sampleRate,
-    left: mixedLeft,
-    right: mixedRight,
-    durationSeconds: frameLength / leftResult.sampleRate,
-    peak: measureRenderPeak(mixedLeft, mixedRight),
-  };
-}
-
 export function resolveBgmHeadroomGain(playableResult: RenderResult, bgmResult: RenderResult): number {
   const playableLeft = playableResult.left;
   const playableRight = playableResult.right;
@@ -4423,21 +4300,6 @@ function resolveBgmHeadroomGainForChannel(playableAbs: number, bgmAbs: number): 
     return 1;
   }
   return Math.min(1, availableHeadroom / bgmAbs);
-}
-
-function measureRenderPeak(left: Float32Array, right: Float32Array): number {
-  let peak = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    const leftAbs = Math.abs(left[index]);
-    if (leftAbs > peak) {
-      peak = leftAbs;
-    }
-    const rightAbs = Math.abs(right[index]);
-    if (rightAbs > peak) {
-      peak = rightAbs;
-    }
-  }
-  return peak;
 }
 
 function createPerformancePlaybackClockSource(): PlaybackClockSource {
@@ -4526,30 +4388,6 @@ async function waitPrecise(delayMs: number): Promise<void> {
     }
     await delayImmediate();
   }
-}
-
-function addHeadPadding(result: RenderResult, paddingMs: number): RenderResult {
-  const safePaddingMs = Number.isFinite(paddingMs) ? Math.max(0, paddingMs) : 0;
-  if (safePaddingMs === 0) {
-    return result;
-  }
-
-  const paddingFrames = Math.round((safePaddingMs / 1000) * result.sampleRate);
-  if (paddingFrames <= 0) {
-    return result;
-  }
-
-  const left = new Float32Array(result.left.length + paddingFrames);
-  const right = new Float32Array(result.right.length + paddingFrames);
-  left.set(result.left, paddingFrames);
-  right.set(result.right, paddingFrames);
-
-  return {
-    ...result,
-    left,
-    right,
-    durationSeconds: left.length / result.sampleRate,
-  };
 }
 
 function toPlaybackSampleRate(baseSampleRate: number, speed: number): number {

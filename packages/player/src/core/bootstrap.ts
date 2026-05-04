@@ -21,10 +21,10 @@ import {
   createLaneBindings,
   resolveLaneDisplayMode,
   type LaneBinding,
-} from '../manual-input.ts';
+} from './lane-layout.ts';
 import { DEFAULT_IMAGE_RESIZE_ALGORITHM } from '../image-resize-algorithm.ts';
 import { type PlayerStateSignals } from '../state-signals.ts';
-import { DEFAULT_TUI_NOTE_HEIGHT } from '../tui-note-height.ts';
+import { DEFAULT_TUI_NOTE_HEIGHT } from './ui-options.ts';
 
 export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];

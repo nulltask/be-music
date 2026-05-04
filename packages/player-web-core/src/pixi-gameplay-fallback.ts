@@ -250,9 +250,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
   for (let i = 0; i < judgeRows.length; i += 1) {
     const [label, value, color] = judgeRows[i]!;
     const ly = 424 + i * 7;
-    layer.addChild(
-      makeText(label, 196, ly, { fontSize: 5, fontWeight: '900', fill: color, letterSpacing: 0.5 }),
-    );
+    layer.addChild(makeText(label, 196, ly, { fontSize: 5, fontWeight: '900', fill: color, letterSpacing: 0.5 }));
     layer.addChild(
       makeText(formatScore(value, 4), 216, ly, {
         fontSize: 5,
@@ -292,12 +290,8 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
   );
 
   // #DST_NUMBER 508,453,8,5 / 260,453,8,5 — small bottom numbers.
-  layer.addChild(
-    makeText(formatScore(undefined, 3), 260, 453, { fontSize: 5, fontWeight: '700', fill: TEXT_DIM }),
-  );
-  layer.addChild(
-    makeText(formatScore(undefined, 3), 508, 453, { fontSize: 5, fontWeight: '700', fill: TEXT_DIM }),
-  );
+  layer.addChild(makeText(formatScore(undefined, 3), 260, 453, { fontSize: 5, fontWeight: '700', fill: TEXT_DIM }));
+  layer.addChild(makeText(formatScore(undefined, 3), 508, 453, { fontSize: 5, fontWeight: '700', fill: TEXT_DIM }));
 
   // #DST_NOWJUDGE_1P 73,230,102,30 — judge text + #DST_NOWCOMBO_1P
   // 112,0,22,30 (RELATIVE to NOWJUDGE) — combo digit count.

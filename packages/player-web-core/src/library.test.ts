@@ -101,11 +101,7 @@ describe('loadSongCollectionFromFiles progress events', () => {
  * `chart.bms.player` for the legacy `#PLAYER=3` 9K marker) are
  * populated — everything else is left at minimal defaults.
  */
-function makeSong(params: {
-  chartPath: string;
-  channels?: ReadonlyArray<string>;
-  player?: number;
-}): BrowserSongEntry {
+function makeSong(params: { chartPath: string; channels?: ReadonlyArray<string>; player?: number }): BrowserSongEntry {
   const events: BeMusicEvent[] = (params.channels ?? []).map((channel, index) => ({
     measure: 1,
     channel,
@@ -135,9 +131,9 @@ describe('resolveChartPlayVariant', () => {
   });
 
   test('classifies DP 14K (2P-side keyboard 6 / 7)', () => {
-    expect(
-      resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '18', '21', '28'] })),
-    ).toBe('14');
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '18', '21', '28'] }))).toBe(
+      '14',
+    );
   });
 
   test('classifies DP 10K (2P-side keyboard, no 6 / 7)', () => {
@@ -154,9 +150,7 @@ describe('resolveChartPlayVariant', () => {
       ),
     ).toBe('9');
     expect(
-      resolveChartPlayVariant(
-        makeSong({ chartPath: 'Song/main.PMS', channels: ['11', '15', '22', '23', '24', '25'] }),
-      ),
+      resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.PMS', channels: ['11', '15', '22', '23', '24', '25'] })),
     ).toBe('9');
   });
 

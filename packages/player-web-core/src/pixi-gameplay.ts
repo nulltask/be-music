@@ -7,6 +7,8 @@ import {
 import {
   createScoreTracker,
   applyJudgeToSummary,
+  computeScoreRate,
+  resolveIidxRankLabel,
   type JudgeKind,
   type ScoreSummary,
 } from '@be-music/player/core/scoring';
@@ -23,11 +25,7 @@ import {
   createSpeedTimeline,
 } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import {
-  extractTimedNotes,
-  type TimedLandmineNote,
-  type TimedPlayableNote,
-} from '@be-music/player/playable-notes';
+import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 import {
@@ -1220,8 +1218,7 @@ export class PixiGameplayView {
     // bail out instead of mutating a fresh scene's state.
     const sceneEpoch = this.sceneStartTime;
     const bgaReady = this.bgaReadyPromise ?? Promise.resolve();
-    const delay = (ms: number): Promise<void> =>
-      new Promise((resolve) => window.setTimeout(resolve, Math.max(0, ms)));
+    const delay = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, Math.max(0, ms)));
     // LOAD END gate — both the configured `#LOADEND` delay AND
     // the BGA preload need to finish. Fires LR2 timer 40 and
     // flips op 80→81 (READY), which the skin's load-complete
@@ -1654,7 +1651,11 @@ export class PixiGameplayView {
     // with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a
     // short TOTAL=160 100-note chart gets +1.6 per PG/GR.
     const playableNoteCount = this.notes.filter((note) => isPlayableInputChannel(note.channel)).length;
-    this.gaugeState = createGrooveGaugeState(playableNoteCount, resolved.metadata.total, this.options.gauge ?? 'GROOVE');
+    this.gaugeState = createGrooveGaugeState(
+      playableNoteCount,
+      resolved.metadata.total,
+      this.options.gauge ?? 'GROOVE',
+    );
     // Now that the gauge has its starting value (LR2 default 20 %),
     // seed the polyline history so the result-screen graph starts at
     // the correct origin instead of the first judge's value.
@@ -1770,8 +1771,8 @@ export class PixiGameplayView {
       47, // difficulty filter disabled
       50, // offline
       52, // EXTRA MODE OFF — gates wallpaper / decoration elements in
-          // the LR2 default skin family. Op 53 is the EXTRA MODE ON
-          // variant; we never enable EXTRA MODE in the web build.
+      // the LR2 default skin family. Op 53 is the EXTRA MODE ON
+      // variant; we never enable EXTRA MODE in the web build.
       // ops 54 / 55 (autoscratch 1P off / on), 56 / 57 (autoscratch
       // 2P off / on) — set dynamically below from
       // `options.autoScratch1P / 2P`.
@@ -2617,10 +2618,7 @@ export class PixiGameplayView {
    * resolver can be constructed empty during edge-case mounts) or
    * the chart has no BPM info.
    */
-  private applyHsFix(
-    resolver: ReturnType<typeof createTimingResolver>,
-    mainBpmCandidate: number | undefined,
-  ): void {
+  private applyHsFix(resolver: ReturnType<typeof createTimingResolver>, mainBpmCandidate: number | undefined): void {
     const mode = this.options.hsFix ?? 'OFF';
     if (mode === 'OFF') return;
     const mainBpm = typeof mainBpmCandidate === 'number' && mainBpmCandidate > 0 ? mainBpmCandidate : undefined;
@@ -3994,12 +3992,14 @@ export class PixiGameplayView {
     this.paintSideShutter(this.collectSideBounds('2P'), mode2P, shutter);
   }
 
-  private collectSideBounds(side: '1P' | '2P'): {
-    left: number;
-    right: number;
-    top: number;
-    bottom: number;
-  } | undefined {
+  private collectSideBounds(side: '1P' | '2P'):
+    | {
+        left: number;
+        right: number;
+        top: number;
+        bottom: number;
+      }
+    | undefined {
     let left = Number.POSITIVE_INFINITY;
     let right = Number.NEGATIVE_INFINITY;
     let top = Number.POSITIVE_INFINITY;
@@ -4031,9 +4031,7 @@ export class PixiGameplayView {
     if (mode === 'SUDDEN' || mode === 'HID+SUD') {
       // SUDDEN — opaque rect at the TOP of the playfield. Notes
       // emerge below it.
-      this.shutterLayer
-        .rect(bounds.left, bounds.top, width, maskHeight)
-        .fill({ color: 0x000000, alpha: 0.92 });
+      this.shutterLayer.rect(bounds.left, bounds.top, width, maskHeight).fill({ color: 0x000000, alpha: 0.92 });
     }
     if (mode === 'HIDDEN' || mode === 'HID+SUD') {
       // HIDDEN — opaque rect at the BOTTOM of the playfield, just
@@ -4288,7 +4286,7 @@ export class PixiGameplayView {
         bad: this.score.bad,
         poor: this.score.poor,
         lastJudge: this.lastJudge,
-        rank: resolveFallbackRank(this.score.exScore, total),
+        rank: total <= 0 ? '—' : resolveIidxRankLabel(this.score.exScore, total),
         autoplay: this.options.autoPlay === true,
       });
       return;
@@ -4739,10 +4737,7 @@ export class PixiGameplayView {
       case 13: {
         // 1P EX-score (current / predicted / highscore current/final).
         // We don't yet track predicted/highscore; reuse the live EX rate.
-        if (this.score.total <= 0) {
-          return 0;
-        }
-        return Math.max(0, Math.min(1, this.score.exScore / (this.score.total * 2)));
+        return computeScoreRate(this.score);
       }
       default:
         return 0;
@@ -5332,9 +5327,7 @@ export class PixiGameplayView {
     }
     const graphic = new Graphics();
     graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
-    graphic
-      .roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2)
-      .fill(noteFallbackColor(channel, laneIndex));
+    graphic.roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2).fill(noteFallbackColor(channel, laneIndex));
     this.noteLayer.addChild(graphic);
   }
 
@@ -5693,23 +5686,4 @@ function noteFallbackColor(channel: string, laneIndex: number): typeof WHITE {
   const keyIndex = laneIndex % 10;
   if (keyIndex % 2 === 0) return BLUE;
   return WHITE;
-}
-
-/**
- * Mirror of `pixi-result.resolveRankLabel` — kept private here so
- * the gameplay path doesn't take a dependency on the result
- * module just to format the rank into the no-skin HUD's RANK
- * slot. The IIDX rank ladder is identical in both paths.
- */
-function resolveFallbackRank(exScore: number, total: number): string {
-  if (total <= 0) return '—';
-  const rate = exScore / (total * 2);
-  if (rate >= 8 / 9) return 'AAA';
-  if (rate >= 7 / 9) return 'AA';
-  if (rate >= 6 / 9) return 'A';
-  if (rate >= 5 / 9) return 'B';
-  if (rate >= 4 / 9) return 'C';
-  if (rate >= 3 / 9) return 'D';
-  if (rate >= 2 / 9) return 'E';
-  return 'F';
 }

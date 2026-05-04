@@ -1,5 +1,10 @@
 import { Container, Sprite, Texture } from 'pixi.js';
-import type { ScoreSummary } from '@be-music/player/core/scoring';
+import {
+  computeScoreRate,
+  createEmptyScore,
+  resolveIidxSelectRankOp,
+  type ScoreSummary,
+} from '@be-music/player/core/scoring';
 import type { BrowserSongEntry } from './types.ts';
 import {
   type Lr2DestinationRect,
@@ -30,7 +35,7 @@ export function resolveNumberValue(
   totalSeconds: number,
   maxCombo: number,
 ): number | undefined {
-  const rate = computeRate(score);
+  const rate = computeScoreRate(score);
   const ratePct = Math.round(rate * 100);
   const rateDecimals = Math.round(rate * 10000) % 100;
   const remaining = Math.max(0, totalSeconds - seconds);
@@ -104,26 +109,7 @@ export function resolveNumberValue(
 }
 
 export function computeRankOp(score: ScoreSummary): number | undefined {
-  if (score.total <= 0) {
-    return undefined;
-  }
-  const rate = score.exScore / (score.total * 2);
-  if (rate >= 8 / 9) return 200;
-  if (rate >= 7 / 9) return 201;
-  if (rate >= 6 / 9) return 202;
-  if (rate >= 5 / 9) return 203;
-  if (rate >= 4 / 9) return 204;
-  if (rate >= 3 / 9) return 205;
-  if (rate >= 2 / 9) return 206;
-  return 207;
-}
-
-export function computeRate(score: ScoreSummary): number {
-  if (score.total <= 0) {
-    return 0;
-  }
-  const max = score.total * 2;
-  return Math.max(0, Math.min(1, score.exScore / max));
+  return resolveIidxSelectRankOp(score);
 }
 
 export function lastJudgeToNowComboKind(lastJudge: string): Lr2NowComboKind | undefined {
@@ -358,11 +344,7 @@ export function computeGaugeTimerDurationsMs(skin: Lr2Skin): Map<number, number>
  * `destination.time` so static authored placements still produce
  * a span (otherwise the caller would never see them).
  */
-function collectMaxKeyframeTimePerTimer(
-  skin: Lr2Skin,
-  minTimer: number,
-  maxTimer: number,
-): Map<number, number> {
+function collectMaxKeyframeTimePerTimer(skin: Lr2Skin, minTimer: number, maxTimer: number): Map<number, number> {
   const result = new Map<number, number>();
   const visit = (entry: { destination?: Lr2DestinationRect; keyframes?: Lr2DestinationRect[] }): void => {
     const dst = entry.destination;
@@ -386,9 +368,7 @@ function collectMaxKeyframeTimePerTimer(
   return result;
 }
 
-export function createEmptyScore(total: number): ScoreSummary {
-  return { total, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, exScore: 0, score: 0 };
-}
+export { createEmptyScore };
 
 export function formatTime(seconds: number): string {
   const minute = Math.floor(seconds / 60);

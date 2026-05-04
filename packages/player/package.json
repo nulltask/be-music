@@ -1,11 +1,8 @@
 {
   "name": "@be-music/player",
   "version": "0.1.0",
-  "description": "CLI BMS player with TUI, autoplay, and keyboard input",
+  "description": "Core playback engine and shared gameplay helpers for be-music",
   "license": "MIT",
-  "bin": {
-    "bms-player": "dist/cli.js"
-  },
   "files": [
     "dist"
   ],
@@ -23,15 +20,60 @@
       "source": "./src/playable-notes.ts",
       "default": "./dist/playable-notes.js"
     },
+    "./audio-sink": {
+      "types": "./dist/audio-sink.d.ts",
+      "source": "./src/audio-sink.ts",
+      "default": "./dist/audio-sink.js"
+    },
+    "./image-resize-algorithm": {
+      "types": "./dist/image-resize-algorithm.d.ts",
+      "source": "./src/image-resize-algorithm.ts",
+      "default": "./dist/image-resize-algorithm.js"
+    },
+    "./state-signals": {
+      "types": "./dist/state-signals.d.ts",
+      "source": "./src/state-signals.ts",
+      "default": "./dist/state-signals.js"
+    },
+    "./utils": {
+      "types": "./dist/utils.d.ts",
+      "source": "./src/utils.ts",
+      "default": "./dist/utils.js"
+    },
     "./core/groove-gauge": {
       "types": "./dist/core/groove-gauge.d.ts",
       "source": "./src/core/groove-gauge.ts",
       "default": "./dist/core/groove-gauge.js"
     },
+    "./core/bga-timeline": {
+      "types": "./dist/core/bga-timeline.d.ts",
+      "source": "./src/core/bga-timeline.ts",
+      "default": "./dist/core/bga-timeline.js"
+    },
+    "./core/engine": {
+      "types": "./dist/core/engine.d.ts",
+      "source": "./src/core/engine.ts",
+      "default": "./dist/core/engine.js"
+    },
+    "./core/high-speed-control": {
+      "types": "./dist/core/high-speed-control.d.ts",
+      "source": "./src/core/high-speed-control.ts",
+      "default": "./dist/core/high-speed-control.js"
+    },
+    "./core/input-signal-bus": {
+      "types": "./dist/core/input-signal-bus.d.ts",
+      "source": "./src/core/input-signal-bus.ts",
+      "default": "./dist/core/input-signal-bus.js"
+    },
     "./core/judge-window": {
       "types": "./dist/core/judge-window.d.ts",
       "source": "./src/core/judge-window.ts",
       "default": "./dist/core/judge-window.js"
+    },
+    "./core/lane-layout": {
+      "types": "./dist/core/lane-layout.d.ts",
+      "source": "./src/core/lane-layout.ts",
+      "default": "./dist/core/lane-layout.js"
     },
     "./core/scoring": {
       "types": "./dist/core/scoring.d.ts",
@@ -47,16 +89,22 @@
       "types": "./dist/core/timeline.d.ts",
       "source": "./src/core/timeline.ts",
       "default": "./dist/core/timeline.js"
+    },
+    "./core/ui-options": {
+      "types": "./dist/core/ui-options.d.ts",
+      "source": "./src/core/ui-options.ts",
+      "default": "./dist/core/ui-options.js"
+    },
+    "./core/ui-signal-bus": {
+      "types": "./dist/core/ui-signal-bus.d.ts",
+      "source": "./src/core/ui-signal-bus.ts",
+      "default": "./dist/core/ui-signal-bus.js"
     }
   },
   "scripts": {
     "build:bundle": "tsdown",
     "build": "tsdown",
-    "build:sea": "tsx ../../scripts/build-sea.ts --package player",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "dev": "tsx --tsconfig ../../tsconfig.typecheck.json src/cli.ts",
-    "diag:keyboard": "tsx --tsconfig ../../tsconfig.typecheck.json src/keyboard-diagnostic.ts",
-    "diag:gameplay-input": "tsx --tsconfig ../../tsconfig.typecheck.json src/gameplay-input-diagnostic.ts",
     "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
@@ -70,11 +118,7 @@
     "@be-music/json": "workspace:*",
     "@be-music/parser": "workspace:*",
     "@be-music/utils": "workspace:*",
-    "@uwx/libav.js-fat": "6.0.0-nightly.29.f420ff.ffmpeg.6.1.1",
     "alien-signals": "^3.1.2",
-    "fast-bmp": "^4.0.1",
-    "fast-png": "^8.0.0",
-    "jpeg-js": "^0.4.4",
     "node-web-audio-api": "^1.0.9"
   }
 }

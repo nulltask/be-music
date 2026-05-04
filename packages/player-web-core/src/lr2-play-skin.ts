@@ -312,10 +312,7 @@ function pickThemeAudioFile(
  *
  * Returns `undefined` when no candidate exists.
  */
-export function pickLr2ThemeBgmFile(
-  files: readonly File[],
-  role: 'select' | 'decide',
-): File | undefined {
+export function pickLr2ThemeBgmFile(files: readonly File[], role: 'select' | 'decide'): File | undefined {
   return pickThemeAudioFile(files, (path) => path.includes('bgm/') || path.includes('bgm\\'), role);
 }
 

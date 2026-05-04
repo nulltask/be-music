@@ -8,12 +8,11 @@ import { build } from 'vite';
 
 const execFileAsync = promisify(execFile);
 
-const SEA_WORKER_BANNER =
-  [
-    "globalThis.Worker ??= (() => { try { return require('node:worker_threads').Worker; } catch { return undefined; } })();",
-    "globalThis.FileList ??= class FileList {};",
-    "globalThis.ImageData ??= class ImageData {};",
-  ].join('\n');
+const SEA_WORKER_BANNER = [
+  "globalThis.Worker ??= (() => { try { return require('node:worker_threads').Worker; } catch { return undefined; } })();",
+  'globalThis.FileList ??= class FileList {};',
+  'globalThis.ImageData ??= class ImageData {};',
+].join('\n');
 
 interface CliArgs {
   packageName: SeaTargetName;
@@ -38,7 +37,7 @@ const repositoryDir = resolve(scriptDir, '..');
 
 const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
   player: {
-    packageDir: resolve(repositoryDir, 'packages/player'),
+    packageDir: resolve(repositoryDir, 'packages/player-tui'),
     outputBaseName: 'be-music-player',
     optionalExternalModules: ['node-web-audio-api', '@uwx/libav.js-fat'],
     bundleBanner: SEA_WORKER_BANNER,
@@ -47,6 +46,16 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
       '@be-music/chart': resolve(repositoryDir, 'packages/chart/src/index.ts'),
       '@be-music/json': resolve(repositoryDir, 'packages/json/src/index.ts'),
       '@be-music/parser': resolve(repositoryDir, 'packages/parser/src/index.ts'),
+      '@be-music/player/playable-notes': resolve(repositoryDir, 'packages/player/src/playable-notes.ts'),
+      '@be-music/player/audio-sink': resolve(repositoryDir, 'packages/player/src/audio-sink.ts'),
+      '@be-music/player/image-resize-algorithm': resolve(
+        repositoryDir,
+        'packages/player/src/image-resize-algorithm.ts',
+      ),
+      '@be-music/player/state-signals': resolve(repositoryDir, 'packages/player/src/state-signals.ts'),
+      '@be-music/player/utils': resolve(repositoryDir, 'packages/player/src/utils.ts'),
+      '@be-music/player/core': resolve(repositoryDir, 'packages/player/src/core'),
+      '@be-music/player': resolve(repositoryDir, 'packages/player/src/index.ts'),
       '@be-music/utils': resolve(repositoryDir, 'packages/utils/src/index.ts'),
     },
   },
@@ -297,8 +306,10 @@ async function runSeaBuild(nodeBinaryPath: string, cwd: string, configFilePath: 
   try {
     await execFileAsync(nodeBinaryPath, ['--build-sea', configFilePath], { cwd });
   } catch (error) {
-    const stdout = typeof (error as { stdout?: unknown })?.stdout === 'string' ? (error as { stdout: string }).stdout : '';
-    const stderr = typeof (error as { stderr?: unknown })?.stderr === 'string' ? (error as { stderr: string }).stderr : '';
+    const stdout =
+      typeof (error as { stdout?: unknown })?.stdout === 'string' ? (error as { stdout: string }).stdout : '';
+    const stderr =
+      typeof (error as { stderr?: unknown })?.stderr === 'string' ? (error as { stderr: string }).stderr : '';
     const output = `${stdout}\n${stderr}`;
 
     if (output.includes('--build-sea') && output.toLowerCase().includes('unknown')) {

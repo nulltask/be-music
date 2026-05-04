@@ -108,9 +108,9 @@ const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
   // dynamically from `playOptions.difficultyFilter`.
   50, // offline (no IR connection yet)
   52, // EXTRA MODE OFF — gates the LR2 default skin's normal wallpaper
-      // (`LR2files/WallPaper/Select/LR2 default.bmp`). Op 53 is the
-      // EXTRA MODE ON variant; we never enable EXTRA MODE in the web
-      // build, so 52 is always-on and 53 is never set.
+  // (`LR2files/WallPaper/Select/LR2 default.bmp`). Op 53 is the
+  // EXTRA MODE ON variant; we never enable EXTRA MODE in the web
+  // build, so 52 is always-on and 53 is never set.
   // ops 54 / 55 (autoscratch 1P off / on), 56 / 57 (autoscratch 2P
   // off / on) — set dynamically from `playOptions.autoScratch1P /
   // 2P` so the panel-1 toggle button cells track the live state.
@@ -432,7 +432,6 @@ const BGA_CYCLE: readonly PixiBgaMode[] = ['OFF', 'ON', 'AUTOPLAY_ONLY'];
  * order on `#SRC_BUTTON,type=73`: cell 0 = NORMAL, cell 1 = EXTEND.
  */
 const BGA_SIZE_CYCLE: readonly PixiBgaSize[] = ['NORMAL', 'EXTEND'];
-
 
 /**
  * Cycle order for {@link PixiPlayOptions.difficultyFilter}. Matches
@@ -2639,14 +2638,10 @@ export class PixiSongSelectView {
       const trackY = viewportY;
       const trackW = 4;
       const trackH = viewportH;
-      this.readTextScrollbar
-        .rect(trackX, trackY, trackW, trackH)
-        .fill({ color: 0xffffff, alpha: 0.06 });
+      this.readTextScrollbar.rect(trackX, trackY, trackW, trackH).fill({ color: 0xffffff, alpha: 0.06 });
       const thumbH = Math.max(24, (viewportH / bodyH) * trackH);
       const thumbY = trackY + (this.readTextScroll / maxScroll) * (trackH - thumbH);
-      this.readTextScrollbar
-        .rect(trackX, thumbY, trackW, thumbH)
-        .fill({ color: 0xffffff, alpha: 0.45 });
+      this.readTextScrollbar.rect(trackX, thumbY, trackW, thumbH).fill({ color: 0xffffff, alpha: 0.45 });
     }
   }
 
@@ -2670,10 +2665,7 @@ export class PixiSongSelectView {
    * states on click (BGA on/off/autoplay-only, gauge type, random,
    * etc.). Generic so adding a new enum option is a one-liner.
    */
-  private cyclePlayOption<K extends keyof PixiPlayOptions>(
-    key: K,
-    cycle: readonly PixiPlayOptions[K][],
-  ): void {
+  private cyclePlayOption<K extends keyof PixiPlayOptions>(key: K, cycle: readonly PixiPlayOptions[K][]): void {
     const next = cycleNext(cycle, this.playOptions[key]);
     if (next === this.playOptions[key]) return;
     this.playOptions = { ...this.playOptions, [key]: next };
@@ -3133,13 +3125,7 @@ export class PixiSongSelectView {
       //      LR2 skins gate with op 70..195.
       //   2. Avoid recomputing the same `Set` per element.
       const ops = this.perf.time('computeOps', () =>
-        computeSelectOps(
-          this.focusedSong(),
-          this.panelStates,
-          this.playOptions,
-          skin.customOptions,
-          this.collection,
-        ),
+        computeSelectOps(this.focusedSong(), this.panelStates, this.playOptions, skin.customOptions, this.collection),
       );
       this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, ops));
       this.perf.time('renderSkinBars', () => this.renderSkinBars(skin, ops));
@@ -3267,10 +3253,7 @@ export class PixiSongSelectView {
     this.listLayer.addChild(categoryText);
 
     // ── Centre-left song banner ─────────────────────────────
-    chrome
-      .rect(8, 34, 304, 246)
-      .fill({ color: 0x10131d, alpha: 0.85 })
-      .stroke({ color: 0x4a3a73, width: 1 });
+    chrome.rect(8, 34, 304, 246).fill({ color: 0x10131d, alpha: 0.85 }).stroke({ color: 0x4a3a73, width: 1 });
     // Backplates for title / sub-title / mode-pills / difficulty
     // bar / filename strip — the actual text is painted as
     // `Text` nodes below so the user reads real chart info, not
@@ -3289,7 +3272,7 @@ export class PixiSongSelectView {
     // "song info goes here".
     const song = this.focusedSong();
     const songTitle = song?.title ?? '— No Song Selected —';
-    const songArtist = song?.artist ?? (song?.subtitle ?? '');
+    const songArtist = song?.artist ?? song?.subtitle ?? '';
     const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '—';
     const songBpm = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '—';
     const fileLabel = song?.fileLabel ?? '';
@@ -3391,10 +3374,7 @@ export class PixiSongSelectView {
 
     // Difficulty mini-bar fill (proportional to playLevel /
     // typical max 12). Caps at the rectangle width.
-    const fillRatio =
-      song?.playLevel !== undefined
-        ? Math.max(0.05, Math.min(1, Number(song.playLevel) / 12))
-        : 0.35;
+    const fillRatio = song?.playLevel !== undefined ? Math.max(0.05, Math.min(1, Number(song.playLevel) / 12)) : 0.35;
     chrome.rect(16, 220, Math.round(288 * fillRatio), 8).fill(0x56b6f7);
 
     // Filename row — small monospace-ish text along the bottom
@@ -3423,10 +3403,7 @@ export class PixiSongSelectView {
     const btnW = 70;
     for (let i = 0; i < buttons.length; i += 1) {
       const bx = 8 + i * (btnW + 4);
-      chrome
-        .roundRect(bx, btnY, btnW, 26, 3)
-        .fill(0x281f3e)
-        .stroke({ color: 0x8a5dc0, width: 1 });
+      chrome.roundRect(bx, btnY, btnW, 26, 3).fill(0x281f3e).stroke({ color: 0x8a5dc0, width: 1 });
       // Small play-arrow glyph
       chrome.poly([bx + 8, btnY + 8, bx + 14, btnY + 13, bx + 8, btnY + 18]).fill(0xffd166);
       const btnText = new Text({
@@ -3444,10 +3421,7 @@ export class PixiSongSelectView {
     }
 
     // ── Search input ────────────────────────────────────────
-    chrome
-      .roundRect(8, 336, 300, 24, 3)
-      .fill({ color: 0x06080c, alpha: 0.85 })
-      .stroke({ color: 0x4a3a73, width: 1 });
+    chrome.roundRect(8, 336, 300, 24, 3).fill({ color: 0x06080c, alpha: 0.85 }).stroke({ color: 0x4a3a73, width: 1 });
     const searchLabelText = new Text({
       text: 'SEARCH',
       style: new TextStyle({
@@ -3514,7 +3488,10 @@ export class PixiSongSelectView {
       this.listLayer.addChild(valueText);
     }
     // Big AA / AAA grade letters on the right
-    chrome.rect(designWidth - 110, 392, 90, 60).fill(0x06080c).stroke({ color: 0x4a3a73, width: 1 });
+    chrome
+      .rect(designWidth - 110, 392, 90, 60)
+      .fill(0x06080c)
+      .stroke({ color: 0x4a3a73, width: 1 });
     const gradeText = new Text({
       text: 'AA',
       style: new TextStyle({
@@ -4469,9 +4446,7 @@ export class PixiSongSelectView {
 
     // Left mode badge (LR2 puts a small mode/lamp lozenge at the
     // far-left of every bar in `select.csv`).
-    row
-      .roundRect(listX + 4, y + 4, 18, rowHeight - 10, 2)
-      .fill(active ? 0xffffff : 0x4a6390);
+    row.roundRect(listX + 4, y + 4, 18, rowHeight - 10, 2).fill(active ? 0xffffff : 0x4a6390);
 
     // Right-side level number badge — lifted from `#DST_BAR_LEVEL`
     // positions where the difficulty number lives.
@@ -4494,10 +4469,7 @@ export class PixiSongSelectView {
     this.listLayer.addChild(title);
 
     const meta = new Text({
-      text: [
-        song.playLevel !== undefined ? `Lv ${song.playLevel}` : undefined,
-        song.bpm ? `${song.bpm}BPM` : undefined,
-      ]
+      text: [song.playLevel !== undefined ? `Lv ${song.playLevel}` : undefined, song.bpm ? `${song.bpm}BPM` : undefined]
         .filter(Boolean)
         .join('  ·  '),
       style: new TextStyle({
@@ -5282,7 +5254,6 @@ function resolveDifficultyName(difficulty: number | undefined): string {
       return '';
   }
 }
-
 
 /**
  * Returns whether `entry` matches the lower-cased search query.

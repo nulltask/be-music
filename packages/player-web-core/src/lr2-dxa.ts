@@ -60,9 +60,7 @@ export interface DxaArchive {
  * - key[10] = swap_nibbles(0xAA) ^ 0xD6 = 0x7C
  * - key[11] = 0xAA ^ 0xCC = 0x66
  */
-const DXA_DEFAULT_KEY: ReadonlyArray<number> = [
-  0x55, 0xaa, 0x20, 0x55, 0x55, 0x06, 0x55, 0xaa, 0x55, 0xd5, 0x7c, 0x66,
-];
+const DXA_DEFAULT_KEY: ReadonlyArray<number> = [0x55, 0xaa, 0x20, 0x55, 0x55, 0x06, 0x55, 0xaa, 0x55, 0xd5, 0x7c, 0x66];
 
 const DXA_KEY_LENGTH = 12;
 const DXA_HEADER_SIZE = 24;
@@ -82,7 +80,10 @@ const DXA_MAGIC_BYTE_1 = 0x58; // 'X'
  * Compressed entries are decompressed here so callers receive
  * ready-to-use payloads.
  */
-export function readDxaArchive(bytes: Uint8Array, key: ReadonlyArray<number> = DXA_DEFAULT_KEY): DxaArchive | undefined {
+export function readDxaArchive(
+  bytes: Uint8Array,
+  key: ReadonlyArray<number> = DXA_DEFAULT_KEY,
+): DxaArchive | undefined {
   if (bytes.length < DXA_HEADER_SIZE) return undefined;
   if (key.length !== DXA_KEY_LENGTH) return undefined;
   // XOR decrypt the entire archive in one pass — the cipher is
@@ -102,11 +103,7 @@ export function readDxaArchive(bytes: Uint8Array, key: ReadonlyArray<number> = D
   const fileNameTableHead = view.getUint32(12, true);
   const fileTableRel = view.getUint32(16, true);
   const directoryTableRel = view.getUint32(20, true);
-  if (
-    headSize === 0 ||
-    fileNameTableHead + headSize > decrypted.length ||
-    dataHead > decrypted.length
-  ) {
+  if (headSize === 0 || fileNameTableHead + headSize > decrypted.length || dataHead > decrypted.length) {
     return undefined;
   }
   const ctx: WalkContext = {
@@ -342,7 +339,7 @@ function decompress(src: Uint8Array, expectedSize: number): Uint8Array | undefin
     lastOffset = offset - 1;
     const refStart = outIdx - offset;
     for (let i = 0; i < length && outIdx < expectedSize; i += 1) {
-      out[outIdx] = refStart + i < 0 ? 0 : out[refStart + i] ?? 0;
+      out[outIdx] = refStart + i < 0 ? 0 : (out[refStart + i] ?? 0);
       outIdx += 1;
     }
   }

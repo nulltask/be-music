@@ -462,9 +462,7 @@ export function collectChartPreviewTriggers(
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
   const resolver = createTimingResolver(chart);
   const all = collectSampleTriggers(chart, resolver, { inferBmsLnTypeWhenMissing: true });
-  return all
-    .filter((trigger) => trigger.seconds < cutoffSeconds)
-    .sort((left, right) => left.seconds - right.seconds);
+  return all.filter((trigger) => trigger.seconds < cutoffSeconds).sort((left, right) => left.seconds - right.seconds);
 }
 
 function sameTarget(a: ChartPreviewTarget | undefined, b: ChartPreviewTarget | undefined): boolean {

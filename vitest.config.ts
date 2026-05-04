@@ -12,6 +12,7 @@ const workspacePackages = [
   'stringifier',
   'audio-renderer',
   'player',
+  'player-tui',
   'editor',
   'player-web-core',
 ] as const;
@@ -24,6 +25,13 @@ const workspaceAliases = [
     replacement: resolve(rootDir, 'packages/audio-renderer/src/core/triggers.ts'),
   },
   { find: '@be-music/player/playable-notes', replacement: resolve(rootDir, 'packages/player/src/playable-notes.ts') },
+  { find: '@be-music/player/audio-sink', replacement: resolve(rootDir, 'packages/player/src/audio-sink.ts') },
+  {
+    find: '@be-music/player/image-resize-algorithm',
+    replacement: resolve(rootDir, 'packages/player/src/image-resize-algorithm.ts'),
+  },
+  { find: '@be-music/player/state-signals', replacement: resolve(rootDir, 'packages/player/src/state-signals.ts') },
+  { find: '@be-music/player/utils', replacement: resolve(rootDir, 'packages/player/src/utils.ts') },
   { find: '@be-music/player/core', replacement: resolve(rootDir, 'packages/player/src/core') },
   { find: '@be-music/utils/core', replacement: resolve(rootDir, 'packages/utils/src/core.ts') },
   ...workspacePackages.map((name) => ({
@@ -70,6 +78,9 @@ export default defineConfig({
         'packages/player/src/index.ts',
         'packages/player/src/tui.ts',
         'packages/player/src/node/*protocol.ts',
+        'packages/player-tui/src/cli.ts',
+        'packages/player-tui/src/tui.ts',
+        'packages/player-tui/src/node/*protocol.ts',
         'packages/player-web-core/src/index.ts',
         'packages/player-web-core/src/library.ts',
         'packages/player-web-core/src/pixi-*.ts',
@@ -107,6 +118,12 @@ export default defineConfig({
           lines: 87,
         },
         'packages/player/src/**/*.ts': {
+          statements: 59,
+          branches: 51,
+          functions: 64,
+          lines: 59,
+        },
+        'packages/player-tui/src/**/*.ts': {
           statements: 59,
           branches: 51,
           functions: 64,

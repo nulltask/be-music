@@ -11,6 +11,7 @@ export const PACKAGE_NAMES = [
   'editor',
   'audio-renderer',
   'player',
+  'player-tui',
   'player-web-core',
 ] as const;
 

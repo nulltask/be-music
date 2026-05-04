@@ -67,7 +67,10 @@ function getCaseInsensitiveIndex(files: ReadonlyMap<string, BrowserSongAssetEntr
  * fast path with no Map allocation; only on a miss do we touch the
  * lazy index.
  */
-export function findCaseInsensitivePath(files: ReadonlyMap<string, BrowserSongAssetEntry>, candidate: string): string | undefined {
+export function findCaseInsensitivePath(
+  files: ReadonlyMap<string, BrowserSongAssetEntry>,
+  candidate: string,
+): string | undefined {
   if (files.has(candidate)) {
     return candidate;
   }
@@ -98,9 +101,7 @@ export function lookupBytesCaseInsensitive(
  * common pattern `loadAssetBytes(lookupBytesCaseInsensitive(...))`
  * stays readable without an extra null-guard.
  */
-export async function loadAssetBytes(
-  entry: BrowserSongAssetEntry | undefined,
-): Promise<Uint8Array | undefined> {
+export async function loadAssetBytes(entry: BrowserSongAssetEntry | undefined): Promise<Uint8Array | undefined> {
   if (entry === undefined) return undefined;
   if (entry instanceof Uint8Array) return entry;
   return new Uint8Array(await entry.arrayBuffer());
