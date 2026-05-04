@@ -4382,69 +4382,78 @@ export class PixiGameplayView {
     if (!skin || !this.hasBga || skin.bgas.length === 0) {
       return;
     }
-    // Pick the first DST_BGA whose op gating is currently true (e.g. the
-    // LR2 default skin defines two — op 30 = "normal size", op 31 =
-    // "large" — and we set op 30 by default so the normal one wins).
-    const bga = skin.bgas.find((entry) => this.isDestinationVisible(entry.destination));
-    if (!bga) {
+    // Render ALL `#DST_BGA` rectangles whose op gating is true.
+    // For SP charts the LR2 default skin authors two — op 30
+    // ("BGA NORMAL") and op 31 ("BGA EXTEND") — and only one
+    // is visible at a time, so the loop produces a single
+    // sprite. For DP (`14keys/14_LR0.csv` line 78+) the skin
+    // authors *three* rects: one big op-31 EXTEND square plus
+    // a pair of op-30 NORMAL panels stacked vertically on the
+    // right side. The previous `find(...)` short-circuited at
+    // the first match and clipped the second NORMAL panel, so
+    // DP charts under "BGA NORMAL" mode showed only the top
+    // panel and left the bottom one blank.
+    const visibleBgas = skin.bgas.filter((entry) => this.isDestinationVisible(entry.destination));
+    if (visibleBgas.length === 0) {
       return;
     }
-    const dst = this.evaluateElementDst(bga);
-    const { x, y, w, h } = normaliseRect(dst);
-    if (w <= 0 || h <= 0) {
-      return;
-    }
-    const baseCue = bga.noBase ? undefined : pickActiveBgaCue(this.bgaTimeline.base, seconds);
-    const layerCue = bga.noLayer ? undefined : pickActiveBgaCue(this.bgaTimeline.layer, seconds);
+    // Drive video BGA playback once per frame (not per-rect)
+    // — base / layer cues are global to the chart, every rect
+    // shows the same source video. Picking the first visible
+    // entry's `noBase` / `noLayer` flags as the controlling
+    // ones is fine in practice: the LR2 default skin uses
+    // identical flags on every rect, and a future skin that
+    // mixes them per-rect would still get a consistent global
+    // playback state from this single sync point.
+    const controllingBga = visibleBgas[0]!;
+    const baseCue = controllingBga.noBase ? undefined : pickActiveBgaCue(this.bgaTimeline.base, seconds);
+    const layerCue = controllingBga.noLayer ? undefined : pickActiveBgaCue(this.bgaTimeline.layer, seconds);
     const baseKey = baseCue?.bmpKey;
     const layerKey = layerCue?.bmpKey;
-    // POOR override: show the POOR BGA for a short window after a missed
-    // / BAD judgement, then revert to the base+layer composite.
     const poorWindowMs = 2000;
-    const inPoorWindow = !bga.noPoor && this.lastPoorAt > 0 && this.playClock() - this.lastPoorAt < poorWindowMs;
+    const inPoorWindow =
+      !controllingBga.noPoor && this.lastPoorAt > 0 && this.playClock() - this.lastPoorAt < poorWindowMs;
     const poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, seconds) : undefined;
-    // Drive video BGA playback: when the active cue points at a
-    // video, seek it to (currentSeconds - cueSeconds) and resume
-    // playback. When the cue switches away from a previous video,
-    // pause it. Tracked per-track because base / layer can run
-    // independent videos.
     this.syncBgaVideo('base', baseCue, seconds);
     this.syncBgaVideo('layer', layerCue, seconds);
 
-    const drawLayer = (key: string | undefined, textures: ReadonlyMap<string, Texture>, layerName: string): void => {
-      if (!key) {
-        return;
+    for (const bga of visibleBgas) {
+      const dst = this.evaluateElementDst(bga);
+      const { x, y, w, h } = normaliseRect(dst);
+      if (w <= 0 || h <= 0) continue;
+      const drawLayer = (
+        key: string | undefined,
+        textures: ReadonlyMap<string, Texture>,
+        layerName: string,
+      ): void => {
+        if (!key) return;
+        const texture = textures.get(key);
+        if (!texture) return;
+        // Stretch the BGA texture to fill this rect exactly. The
+        // previous version routed through a BMS 256×256 spec
+        // canvas which left non-256 sources covering only part
+        // of the DST and produced visible "letterbox" gaps. LR2
+        // stretches straight to the skin rect, matching here.
+        const sprite = new Sprite(texture);
+        sprite.label = `bga/${layerName}[key=${key}]`;
+        sprite.position.set(x, y);
+        sprite.width = w;
+        sprite.height = h;
+        applyDestinationToSprite(sprite, dst);
+        this.bgaLayer.addChild(sprite);
+      };
+      if (poorKey) {
+        // POOR uses base-mode decoding (no chroma key) since it
+        // replaces the entire base+layer composite during its
+        // window.
+        drawLayer(poorKey, this.bgaTextures, 'poor');
+      } else {
+        drawLayer(baseKey, this.bgaTextures, 'base');
+        // Layer track is composited on top with black→transparent
+        // so the base track shows through where the foreground BMP
+        // is empty.
+        drawLayer(layerKey, this.bgaLayerTextures, 'layer');
       }
-      const texture = textures.get(key);
-      if (!texture) {
-        return;
-      }
-      // Stretch the BGA texture to fill the skin's `#DST_BGA`
-      // rectangle exactly. The previous version routed through a
-      // BMS 256×256 spec canvas (centred + top-aligned, no
-      // upscaling) which left non-256 sources covering only part
-      // of the DST and produced visible "letterbox" gaps inside
-      // the skin's BGA window. The LR2 reference video stretches
-      // the source straight to the skin rect, so that's what we
-      // emit here too.
-      const sprite = new Sprite(texture);
-      sprite.label = `bga/${layerName}[key=${key}]`;
-      sprite.position.set(x, y);
-      sprite.width = w;
-      sprite.height = h;
-      applyDestinationToSprite(sprite, dst);
-      this.bgaLayer.addChild(sprite);
-    };
-
-    if (poorKey) {
-      // POOR uses base-mode decoding (no chroma key) since it replaces
-      // the entire base+layer composite during its window.
-      drawLayer(poorKey, this.bgaTextures, 'poor');
-    } else {
-      drawLayer(baseKey, this.bgaTextures, 'base');
-      // Layer track is composited on top with black→transparent so the
-      // base track shows through where the foreground BMP is empty.
-      drawLayer(layerKey, this.bgaLayerTextures, 'layer');
     }
   }
 
