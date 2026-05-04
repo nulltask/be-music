@@ -4011,8 +4011,13 @@ export class PixiGameplayView {
     // per hit. Without this the keyframe playhead drifts hours into
     // the song and the post-hit fade-out keyframes have long since
     // passed. When `channel` isn't supplied (legacy callers) we
-    // default to the 1P timer.
-    const isPlayer2 = typeof channel === 'string' && channel.startsWith('2');
+    // default to the 1P timer. PMS / 9 KEY is single-side so every
+    // judgement collapses onto the 1P timer regardless of the
+    // sourcing channel — the LR2 9-key skin authors only the 1P
+    // judge plate (channels 22..25 belong to the central / right
+    // half of the Pop'n nine-lane bank, not the second player).
+    const isPlayer2 =
+      this.chartPlayVariant !== '9' && typeof channel === 'string' && channel.startsWith('2');
     const side: '1P' | '2P' = isPlayer2 ? '2P' : '1P';
     this.timerStartedAt.set(isPlayer2 ? 47 : 46, this.playClock());
     // Snapshot the verdict + combo for this side so DP rendering
@@ -5174,7 +5179,11 @@ export class PixiGameplayView {
     // (and stays still while only the other side fires). SP
     // charts only ever populate the 1P slot.
     this.renderJudgeAndComboForSide(skin, '1P');
-    const usesPlayer2 = this.laneChannels.some((channel) => channel.startsWith('2'));
+    // 9 KEY (PMS) charts can store their lane data on the 2x channel block but
+    // they're still *single-side* — only DP (variant 10/14) actually wants a
+    // second judge/combo plate painted on the 2P lane.
+    const usesPlayer2 =
+      this.chartPlayVariant !== '9' && this.laneChannels.some((channel) => channel.startsWith('2'));
     if (usesPlayer2) {
       this.renderJudgeAndComboForSide(skin, '2P');
     }
