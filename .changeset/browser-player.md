@@ -29,7 +29,10 @@ Headline capabilities of the core:
   combo / score numbers, scroll slider.
 - **PMS / 9 KEY (Pop'n) skin support** alongside default
   IIDX 7 / 14-key layouts; per-variant skin pickers and
-  channel→lane mappings.
+  channel→lane mappings. Single-side judge / combo plate
+  rendering — PMS-STD charts that source lanes from the
+  `2X` channel block still collapse onto the LR2 9-key
+  skin's 1P-side `#SRC_NOWJUDGE` / `#SRC_NOWCOMBO` slots.
 - **BGA pipeline** — native `<video>` decode for modern codecs
   with an ffmpeg.wasm transcode fallback (single-threaded
   H.264, optional WebCodecs hardware-accelerated encode,
