@@ -784,16 +784,6 @@ export class PixiGameplayView {
   private scoreHistory: Array<{ progress: number; exScore: number }> = [];
   private lastJudge = '';
   private lastJudgeUntil = 0;
-  /**
-   * Side that produced the most recent judgement. Drives the LR2
-   * `#SRC_NOWJUDGE_*` / `#SRC_NOWCOMBO_*` side selection so a 2P
-   * scratch on a DP chart paints the judge plate at the 2P-side
-   * coordinates rather than overlapping the 1P plate.
-   *
-   * Defaults to `'1P'` so SP charts (where every channel starts
-   * with `'1'`) need no further bookkeeping.
-   */
-  private lastJudgeSide: '1P' | '2P' = '1P';
   private frame: number | undefined;
   private chartEndTimeout: number | undefined;
   /**
@@ -3921,7 +3911,6 @@ export class PixiGameplayView {
     // passed. When `channel` isn't supplied (legacy callers) we
     // default to the 1P timer.
     const isPlayer2 = typeof channel === 'string' && channel.startsWith('2');
-    this.lastJudgeSide = isPlayer2 ? '2P' : '1P';
     this.timerStartedAt.set(isPlayer2 ? 47 : 46, this.playClock());
     // POOR / BAD judgements briefly swap the base BGA for the chart's
     // POOR BGA. We trigger the same window for `BAD` because the LR2
@@ -5059,42 +5048,58 @@ export class PixiGameplayView {
       return;
     }
     const judgeKind = resolveJudgeSkinKind(this.lastJudge);
-    // 2P judge plate falls back to 1P when the skin omitted
-    // `#SRC_NOWJUDGE_2P` (most SP-only LR2 default skins). The
-    // result is wrong for true DP rendering — the 2P plate
-    // ends up at the 1P-side coordinates — but no worse than
-    // the prior side-agnostic behaviour and lets DP mode at
-    // least visibly differentiate when the skin DOES author
-    // 2P slots.
-    const sideJudgeMap = this.lastJudgeSide === '2P' ? skin.judges2P : skin.judges;
-    const judgeElements =
-      (judgeKind ? sideJudgeMap[judgeKind] : undefined) ?? (judgeKind ? skin.judges[judgeKind] : undefined);
+    if (!judgeKind) return;
+    const comboKind = lastJudgeToNowComboKind(this.lastJudge);
+    // DP charts paint judge + combo on BOTH sides simultaneously
+    // — each side shows the same (latest) verdict and the same
+    // global combo count. SP charts only render the 1P side.
+    // Detection sticks to "did any 2P-side channel show up in
+    // the resolved lane set" rather than the play-variant enum
+    // so battle / DP-imitating SP charts also light both sides
+    // when authored that way.
+    this.renderJudgeAndComboForSide(skin, '1P', judgeKind, comboKind);
+    const usesPlayer2 = this.laneChannels.some((channel) => channel.startsWith('2'));
+    if (usesPlayer2) {
+      this.renderJudgeAndComboForSide(skin, '2P', judgeKind, comboKind);
+    }
+  }
+
+  /**
+   * Renders one side's judge plate + NOWCOMBO assembly. Picks
+   * the side-specific elements (`skin.judges2P` / matching
+   * `skin.nowCombos.side === '2P'`), falling back to the 1P
+   * slots when the skin omitted the 2P pair — matches LR2's
+   * "DP-aware skins author both sides; SP-only skins reuse the
+   * 1P rect for any 2P hit" convention.
+   */
+  private renderJudgeAndComboForSide(
+    skin: Lr2Skin,
+    side: '1P' | '2P',
+    judgeKind: NonNullable<ReturnType<typeof resolveJudgeSkinKind>>,
+    comboKind: ReturnType<typeof lastJudgeToNowComboKind>,
+  ): void {
+    const sideJudgeMap = side === '2P' ? skin.judges2P : skin.judges;
+    const judgeElements = sideJudgeMap[judgeKind] ?? skin.judges[judgeKind];
     const judgeAnchor = judgeElements?.[0]?.destination;
     if (!judgeElements?.length || !judgeAnchor) {
       return;
     }
-    const comboKind = lastJudgeToNowComboKind(this.lastJudge);
-    const combo = this.tracker.combo;
-    const visibleCombo = comboKind && combo > 0 ? combo : 0;
-    // Combo lookup mirrors the judge-side fallback: try 2P
-    // first, then fall back to 1P if the skin omitted the
-    // 2P-side combo definition.
     const comboElement = comboKind
       ? (skin.nowCombos.find(
           (entry) =>
-            entry.kind === comboKind &&
-            entry.side === this.lastJudgeSide &&
-            this.isDestinationVisible(entry.destination),
+            entry.kind === comboKind && entry.side === side && this.isDestinationVisible(entry.destination),
         ) ??
           skin.nowCombos.find(
             (entry) => entry.kind === comboKind && this.isDestinationVisible(entry.destination),
           ))
       : undefined;
+    const combo = this.tracker.combo;
+    const visibleCombo = comboKind && combo > 0 ? combo : 0;
     // Compute centring offset so that judge plate + combo sits centred on
-    // the lane area. Without this the assembly was anchored at LR2's static
-    // x=73 / x=185 coordinates, biased ~10px to the left of the lane centre
-    // and drifting further as the combo grew.
-    const laneCenter = this.resolveLaneCenter(skin);
+    // this side's lane area. Without this the assembly was anchored at
+    // LR2's static x=73 / x=185 coordinates, biased ~10px to the left of
+    // the lane centre and drifting further as the combo grew.
+    const laneCenter = this.resolveLaneCenter(skin, side);
     const judgeRight = judgeAnchor.x + judgeAnchor.w;
     let assemblyRight = judgeRight;
     if (comboElement && visibleCombo > 0) {
@@ -5104,10 +5109,12 @@ export class PixiGameplayView {
     }
     const offsetX = laneCenter - (judgeAnchor.x + assemblyRight) / 2;
 
-    // 1) Judge plate. The full keyframe chain animates against timer 46
-    // (which we restart on every judgement in `publishJudge`), so the LR2
-    // default fade-in / fade-out timing comes through naturally.
-    const judgeElapsed = this.elapsedSinceTimer(46);
+    // 1) Judge plate. The full keyframe chain animates against
+    // timer 46 (1P) / 47 (2P), both restarted on the matching
+    // side's hit in `publishJudge`. We pick the side-specific
+    // timer so the fade-in / fade-out keyframes land in sync
+    // with the verdict that triggered them.
+    const judgeElapsed = this.elapsedSinceTimer(side === '2P' ? 47 : 46);
     for (const element of judgeElements) {
       if (!this.isDestinationVisible(element.destination)) {
         continue;
@@ -5126,7 +5133,7 @@ export class PixiGameplayView {
         continue;
       }
       const sprite = new Sprite(texture);
-      sprite.label = `nowjudge[kind=${judgeKind ?? 'unknown'}]`;
+      sprite.label = `nowjudge[side=${side},kind=${judgeKind}]`;
       sprite.position.set(dst.x + offsetX, dst.y);
       sprite.width = dst.w;
       sprite.height = dst.h;
@@ -5150,17 +5157,27 @@ export class PixiGameplayView {
   }
 
   /**
-   * Returns the horizontal centre of the play-field (in design pixels)
-   * derived from the LR2 skin's `#DST_NOTE` rectangles. Falls back to the
-   * fallback playfield constant when no skin is loaded.
+   * Returns the horizontal centre of one side's play-field area
+   * (in design pixels) derived from the LR2 skin's `#DST_NOTE`
+   * rectangles. `side` filters the lane set: `1P` keeps indices
+   * 0..9, `2P` keeps indices 10..19 (per `resolveLr2LaneIndex`'s
+   * mapping). Falls back to the fallback playfield constant
+   * when no skin is loaded or the requested side has no lanes.
    */
-  private resolveLaneCenter(skin: Lr2Skin): number {
-    const lanes = skin.laneRects.filter((rect): rect is Lr2DestinationRect => Boolean(rect));
-    if (lanes.length === 0) {
+  private resolveLaneCenter(skin: Lr2Skin, side: '1P' | '2P' = '1P'): number {
+    const sideLanes: Lr2DestinationRect[] = [];
+    skin.laneRects.forEach((rect, index) => {
+      if (!rect) return;
+      const isPlayer2Index = index >= 10;
+      if (side === '2P' && !isPlayer2Index) return;
+      if (side === '1P' && isPlayer2Index) return;
+      sideLanes.push(rect);
+    });
+    if (sideLanes.length === 0) {
       return PLAYFIELD.x + PLAYFIELD.w / 2;
     }
-    const leftmost = lanes.reduce((acc, lane) => Math.min(acc, lane.x), lanes[0]!.x);
-    const rightmost = lanes.reduce((acc, lane) => Math.max(acc, lane.x + lane.w), lanes[0]!.x + lanes[0]!.w);
+    const leftmost = sideLanes.reduce((acc, lane) => Math.min(acc, lane.x), sideLanes[0]!.x);
+    const rightmost = sideLanes.reduce((acc, lane) => Math.max(acc, lane.x + lane.w), sideLanes[0]!.x + sideLanes[0]!.w);
     return (leftmost + rightmost) / 2;
   }
 
