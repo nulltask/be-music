@@ -54,6 +54,15 @@ export class ChildPool {
   private graphicsCursor = 0;
   private readonly texts: Text[] = [];
   private textCursor = 0;
+  /**
+   * Per-bucket count of consecutive frames where the bucket's high-water mark exceeded its actual usage by more than
+   * {@link CHILD_POOL_TRIM_SLACK}. When the count crosses {@link CHILD_POOL_TRIM_AFTER_FRAMES} we shrink the bucket
+   * back down to `cursor + CHILD_POOL_TRIM_SLACK` and reset the counter. Tracked separately per bucket so a still-hot
+   * sprite cursor doesn't keep an unused text tail pinned (and vice-versa).
+   */
+  private idleFramesSprites = 0;
+  private idleFramesGraphics = 0;
+  private idleFramesTexts = 0;
 
   public constructor(private readonly layer: Container) {}
 
@@ -135,7 +144,18 @@ export class ChildPool {
     return text;
   }
 
-  /** Hides every pooled child the current pass didn't acquire. Call once at the bottom of every render pass. */
+  /**
+   * Hides every pooled child the current pass didn't acquire, and idle-decay-shrinks each bucket whose high-water
+   * mark hasn't been touched recently. Call once at the bottom of every render pass.
+   *
+   * Without the shrink, a single peak frame (e.g. a transition where dozens of skin sprites are visible at once) would
+   * pin the bucket's allocation for the rest of the scene's lifetime; downstream sections of the chart that draw far
+   * fewer children would still pay the memory cost. The decay is intentionally gentle — the bucket has to underflow by
+   * more than {@link CHILD_POOL_TRIM_SLACK} for {@link CHILD_POOL_TRIM_AFTER_FRAMES} consecutive frames before any
+   * children are destroyed — so a noisy frame-to-frame range (e.g. between bombs and no-bombs) never triggers the
+   * shrink. When it does fire, the bucket is trimmed back to `cursor + slack`; subsequent peaks just allocate fresh
+   * children, paying a one-frame allocation cost in exchange for the steady-state memory saving.
+   */
   public end(): void {
     for (let i = this.spriteCursor; i < this.sprites.length; i++) {
       this.sprites[i]!.visible = false;
@@ -146,6 +166,17 @@ export class ChildPool {
     for (let i = this.textCursor; i < this.texts.length; i++) {
       this.texts[i]!.visible = false;
     }
+    this.idleFramesSprites = trimIdleBucket(this.sprites, this.spriteCursor, this.idleFramesSprites);
+    this.idleFramesGraphics = trimIdleBucket(this.graphics, this.graphicsCursor, this.idleFramesGraphics);
+    this.idleFramesTexts = trimIdleBucket(this.texts, this.textCursor, this.idleFramesTexts);
+  }
+
+  /**
+   * Returns the bucket's currently-allocated child count for debugging / telemetry. The cursor is omitted on purpose;
+   * call sites only need the underlying capacity.
+   */
+  public size(): { sprites: number; graphics: number; texts: number } {
+    return { sprites: this.sprites.length, graphics: this.graphics.length, texts: this.texts.length };
   }
 
   /** Destroys every pooled child (and `clear()`s every Graphics' context). Call from the owner's `dispose()`. */
@@ -177,7 +208,55 @@ export class ChildPool {
     this.spriteCursor = 0;
     this.graphicsCursor = 0;
     this.textCursor = 0;
+    this.idleFramesSprites = 0;
+    this.idleFramesGraphics = 0;
+    this.idleFramesTexts = 0;
   }
+}
+
+/**
+ * Number of consecutive underutilized frames before the {@link ChildPool} shrinks the affected bucket. ~5 s at 60 fps —
+ * long enough that frame-to-frame noise never fires the shrink, short enough that a section of the chart that stops
+ * spawning bombs / particles releases its peak allocation while it's still paused.
+ */
+const CHILD_POOL_TRIM_AFTER_FRAMES = 300;
+/**
+ * Slack kept above the cursor when the {@link ChildPool} shrinks a bucket. Avoids re-allocating a child the very next
+ * frame after a one-frame valley between two peaks; also amortises the shrink/grow cycle if the chart keeps the cursor
+ * within a small band around its trim target.
+ */
+const CHILD_POOL_TRIM_SLACK = 8;
+
+/**
+ * Per-bucket helper for {@link ChildPool.end}: increments the idle-frame counter when the bucket is over-allocated by
+ * more than {@link CHILD_POOL_TRIM_SLACK}, fires the destroy + tail-pop when the counter crosses
+ * {@link CHILD_POOL_TRIM_AFTER_FRAMES}, and resets the counter as soon as utilization comes back up. Returns the new
+ * counter value so the caller can persist it on the pool.
+ */
+function trimIdleBucket<T extends Sprite | Graphics | Text>(bucket: T[], cursor: number, idleFrames: number): number {
+  if (bucket.length <= cursor + CHILD_POOL_TRIM_SLACK) {
+    return 0;
+  }
+  const next = idleFrames + 1;
+  if (next < CHILD_POOL_TRIM_AFTER_FRAMES) {
+    return next;
+  }
+  const target = cursor + CHILD_POOL_TRIM_SLACK;
+  while (bucket.length > target) {
+    const child = bucket.pop()!;
+    try {
+      // `Graphics` needs `context: true` to free its owned `GraphicsContext` (matches the destroy options used by
+      // {@link ChildPool.destroy}). For Sprite / Text the default options are correct.
+      if (child instanceof Graphics) {
+        child.destroy({ context: true });
+      } else {
+        child.destroy();
+      }
+    } catch {
+      // Already destroyed / detached — both terminal states; nothing to do.
+    }
+  }
+  return 0;
 }
 
 export function destroyUniqueTextures(textures: Iterable<Texture | undefined>, destroySource = true): number {
