@@ -271,3 +271,63 @@ export function destroyUniqueTextures(textures: Iterable<Texture | undefined>, d
   }
   return destroyed.size;
 }
+
+/**
+ * Drop-in {@link destroyUniqueTextures} replacement that spreads the destroy + blob-revoke calls across multiple
+ * frames via the supplied scheduler (typically `Application.ticker.add` / `requestAnimationFrame`). Returns the unique
+ * texture count immediately, identical to the synchronous variant; the actual destroy work runs in batches of
+ * `perFrame` per scheduler tick.
+ *
+ * Why this exists: the synchronous `destroyUniqueTextures` destroys every texture in one pass, which on a scene
+ * transition (gameplay → result) means several hundred `texture.destroy(true)` calls landing in the same frame.
+ * Pixi's GL backend issues a `gl.deleteTexture` per call; the driver-side flush adds up to a visible 30–80 ms freeze
+ * on the transition, observed as the result splash being late by one or two frames. Spreading the work over ~10
+ * frames keeps each frame's destroy pass under the per-frame budget while still releasing the GPU memory within
+ * 100–200 ms of dispose() returning. Mirrors the staggered teardown pattern in PixiJS's own `pixijs-performance`
+ * guidance.
+ *
+ * The scheduler signature is the lowest-common-denominator subset of `app.ticker.add` and `requestAnimationFrame`:
+ * pass a callback, get a stop function. Callers that don't have a host ticker handy can wrap `requestAnimationFrame`
+ * directly. The callback is fired once per frame and receives no arguments.
+ *
+ * Errors thrown by `destroyTextureAndRevokeBlobUrl` are swallowed so that one corrupted texture doesn't strand the
+ * remaining queue; the underlying call already runs the URL revoke before the texture destroy, so a half-finished
+ * destroy still releases the blob.
+ */
+export function staggerDestroyTextures(
+  textures: Iterable<Texture | undefined>,
+  scheduler: (callback: () => void) => () => void,
+  options: { perFrame?: number; destroySource?: boolean } = {},
+): number {
+  const perFrame = Math.max(1, options.perFrame ?? 8);
+  const destroySource = options.destroySource ?? true;
+  // Flatten + dedupe up-front so the iterable can't generate fresh references between frames (a `Map.values()` view
+  // of a Map that's still being mutated would otherwise give us shifting work). Filtering `undefined` here also
+  // simplifies the per-frame loop.
+  const queue: Texture[] = [];
+  const seen = new Set<Texture>();
+  for (const texture of textures) {
+    if (texture === undefined || seen.has(texture)) continue;
+    seen.add(texture);
+    queue.push(texture);
+  }
+  if (queue.length === 0) return 0;
+  let cursor = 0;
+  let stop: () => void = () => undefined;
+  const tick = (): void => {
+    const end = Math.min(cursor + perFrame, queue.length);
+    for (let i = cursor; i < end; i += 1) {
+      try {
+        destroyTextureAndRevokeBlobUrl(queue[i]!, destroySource);
+      } catch {
+        // Already destroyed / detached — keep walking the queue so a single corrupted entry doesn't strand the rest.
+      }
+    }
+    cursor = end;
+    if (cursor >= queue.length) {
+      stop();
+    }
+  };
+  stop = scheduler(tick);
+  return queue.length;
+}

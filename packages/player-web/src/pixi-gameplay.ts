@@ -63,7 +63,7 @@ import { type AudioBusHandle, type CompressorMode, type CompressorStage, buildAu
 import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-recorder.ts';
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
-import { ChildPool, destroyUniqueTextures, disposeChildren } from './pixi-utils.ts';
+import { ChildPool, disposeChildren, staggerDestroyTextures } from './pixi-utils.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
@@ -1492,13 +1492,43 @@ export class PixiGameplayView {
     // Free per-view textures. Order matters: textures BEFORE we destroy the sceneRoot / sprites, because
     // `Texture.destroy()` emits a `styleChange` event that traverses up to the live `GlTextureSystem` (still alive on
     // the shared host). With our sprites still parented to sceneRoot, the events route correctly.
+    //
+    // The destroys are spread across multiple frames via the shared host's ticker: a sync sweep over the gameplay
+    // view's full texture set (skin chrome + every #BGA frame slot + per-key bombs, often several hundred entries)
+    // hits the GL backend with one `gl.deleteTexture` per call back-to-back, and the driver-side flush stalls the
+    // transition into the result scene by 30–80 ms on lower-end devices. Staggering at 8 textures per frame keeps
+    // each frame's destroy pass under the per-frame budget while still releasing GPU memory within ~100–200 ms of
+    // dispose() returning. The result scene's first paint is unaffected — it draws its own freshly-loaded textures
+    // and never references the gameplay set.
     try {
-      destroyUniqueTextures([
+      const ticker = this.host?.app.ticker;
+      const queue: (Texture | undefined)[] = [
         ...this.textures.values(),
         ...this.bgaTextures.values(),
         ...this.bgaLayerTextures.values(),
         this.bombTexture,
-      ]);
+      ];
+      if (ticker) {
+        staggerDestroyTextures(queue, (callback) => {
+          ticker.add(callback);
+          return () => ticker.remove(callback);
+        });
+      } else {
+        // No live ticker (defensive — host is normally still alive at this point). Fall back to a microtask scheduler
+        // so the destroy chain still spreads across event-loop turns rather than blocking the dispose call.
+        staggerDestroyTextures(queue, (callback) => {
+          let cancelled = false;
+          const loop = (): void => {
+            if (cancelled) return;
+            callback();
+            queueMicrotask(loop);
+          };
+          queueMicrotask(loop);
+          return () => {
+            cancelled = true;
+          };
+        });
+      }
       this.textures.clear();
       this.bgaTextures.clear();
       this.bgaLayerTextures.clear();
