@@ -4543,6 +4543,13 @@ export class PixiGameplayView {
     this.renderJudgeAndComboOnOverlay(skin);
     this.skinLayerPool.end();
     this.overlayLayerPool.end();
+    // Re-pin the bitmap-text sub-layer at the top of `skinLayer`'s child stack. The pool's `acquireSprite` /
+    // `acquireGraphics` calls land freshly-allocated children at the END of `skinLayer.children` whenever the
+    // pool grows (first render, after a pool growth, etc.), which would otherwise leave the bitmap-text Container
+    // — created up-front in the scene constructor — sitting at index 0 / behind every chrome sprite. Re-`addChild`-
+    // ing it once per render moves it to the tail in O(1) inside Pixi's child array, so its glyphs (LR2 intro
+    // title etc.) paint on top of the pool-allocated chrome instead of being covered by the lane-frame image.
+    this.skinLayer.addChild(this.skinBitmapTextLayer);
   }
 
   /**
