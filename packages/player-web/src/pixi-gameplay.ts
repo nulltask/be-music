@@ -1050,8 +1050,15 @@ export class PixiGameplayView {
     // keydown listener — none of the per-layer children need to participate in Pixi's interaction system. Marking
     // each render-only Container as `eventMode = 'none'` lets the interaction manager skip the entire subtree
     // during hit-testing every pointermove / pointerdown, which is otherwise an O(N) walk over hundreds of skin
-    // children per event. Containers that legitimately need interaction (none today on gameplay) would have to
-    // opt back in by re-setting `eventMode`.
+    // children per event.
+    //
+    // CAUTION: `this.background` and `this.designClipMask` are intentionally NOT marked `'none'`. The mask is
+    // referenced via `this.root.mask = this.designClipMask` and Pixi v8's mask resolution path interacts with the
+    // event-mode setting in subtle ways — clearing it on the mask Graphics has been observed to leave the root
+    // unclipped (residual previous-frame content visible, e.g. the LR2 intro title strip stays painted across
+    // subsequent frames) and has the side effect of dropping the rendered frame rate. The mask + the static
+    // `background` Graphics don't carry interactive children either way, so leaving their `eventMode` at the
+    // default is the safest choice.
     for (const layer of [
       this.bgaLayer,
       this.skinLayer,
@@ -1061,8 +1068,6 @@ export class PixiGameplayView {
       this.bombLayer,
       this.overlayLayer,
       this.textLayer,
-      this.background,
-      this.designClipMask,
     ]) {
       layer.eventMode = 'none';
     }
