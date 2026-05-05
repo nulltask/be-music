@@ -595,27 +595,26 @@ interface DemoGuiState {
   bgaUseWebCodecs: boolean;
   /**
    * Debug overlay — when true, every invisible / keysound note
-   * the chart authors on channels `3x` / `4x` paints as a thin
-   * green bar in its assigned playable lane during gameplay.
-   * Useful for verifying which lane each `#WAV` sample is wired
-   * to without affecting scoring or judgement. Defaults to false
+   * the chart authors on channels `3x` / `4x` paints as the
+   * 9-keys POP green note (or a flat green bar fallback) in
+   * its assigned playable lane during gameplay. Useful for
+   * verifying which lane each `#WAV` sample is wired to
+   * without affecting scoring or judgement. Defaults to false
    * so the regular play surface stays uncluttered.
    *
-   * The option is seeded into the next `PixiGameplayView`
-   * constructor; toggling it mid-song doesn't affect the running
-   * play (the invisible-note array is built once at chart-prepare
-   * time), but the next chart picks up the new value.
+   * Live-toggleable — the gameplay view always extracts the
+   * invisible-note array and preloads the green sprite at
+   * chart-prepare time, so flipping the flag mid-song flips
+   * the per-frame render branch on the very next paint.
    */
   showInvisibleNotes: boolean;
   /**
    * Single-note visibility after a judgement lands.
    *
-   * - `'KEEP_SCROLLING'` (default) — judged notes keep
-   *   scrolling past the judgement line (this implementation's
-   *   historical behaviour, equivalent to beatoraja's
-   *   `LANEEFFECT ON`).
-   * - `'HIDE'` — judged notes disappear at the judgement
-   *   instant, matching the LR2 / beatoraja default.
+   * - `'HIDE'` (default) — judged notes disappear at the
+   *   judgement instant, matching the LR2 / beatoraja default.
+   * - `'KEEP_SCROLLING'` — judged notes keep scrolling past
+   *   the judgement line (≈ beatoraja's `LANEEFFECT ON`).
    *
    * Long-note bodies are unaffected — they always persist
    * until the tail crosses the line.
@@ -789,12 +788,12 @@ class PlayerWebDemoApp {
       // diagnosing missing keysound triggers) flip it on; the
       // regular gameplay surface stays clean otherwise.
       showInvisibleNotes: false,
-      // Default to the implementation's historical "keep scrolling
-      // past the judge line" behaviour (= beatoraja LANEEFFECT
-      // ON). LR2 / beatoraja's stock behaviour is `'HIDE'`; the
-      // dropdown lets the user opt into that without forcing it
-      // as a silent change.
-      judgedNoteDisplay: 'KEEP_SCROLLING',
+      // Default to LR2 / beatoraja's stock behaviour (judged notes
+      // disappear at the judge line) — matches what most users
+      // coming from those players expect. The dropdown lets users
+      // opt into the `'KEEP_SCROLLING'` mode (≈ beatoraja
+      // LANEEFFECT ON) for timing-learning play.
+      judgedNoteDisplay: 'HIDE',
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
@@ -985,14 +984,13 @@ class PlayerWebDemoApp {
    * compressor mode change) without re-querying the DOM.
    */
   private buildGui(): void {
-    // Start collapsed so the panel doesn't cover the
-    // select-screen / gameplay canvas the moment a user lands
-    // on the demo. `closeFolders: true` keeps the nested
-    // folders (Compressor stages / BGA video transcode) shut
-    // when the user re-opens the panel — they're advanced
-    // tunables most of the time. The user can still pop the
-    // panel open via the title bar at any point.
-    const gui = new GUI({ title: 'be-music demo', width: 280, closeFolders: true });
+    // Start the panel itself collapsed so it doesn't cover the
+    // select-screen / gameplay canvas the moment a user lands on
+    // the demo. The nested folders (Compressor stages / BGA
+    // video transcode) stay open by default — once the user
+    // opens the top-level panel, every controller is one click
+    // away rather than hidden behind another folder header.
+    const gui = new GUI({ title: 'be-music demo', width: 280 });
     gui.close();
     this.gui = gui;
     // Status row pinned to the top of the panel — first thing
@@ -1107,11 +1105,16 @@ class PlayerWebDemoApp {
     // constructor; toggling mid-song waits until the next chart
     // load to take effect (the invisible-note array is built once
     // at chart-prepare time).
+    // Live-toggleable — the gameplay view always extracts the
+    // invisible-note array and preloads the green sprite, so
+    // flipping this flag flips the per-frame render branch on
+    // the very next paint.
     gui
       .add(this.guiState, 'showInvisibleNotes')
       .name('Show invisible notes')
       .onChange((value: boolean) => {
         this.guiState.showInvisibleNotes = value;
+        this.gameplayView?.setShowInvisibleNotes(value);
       });
     // Picks between LR2-faithful "judged note disappears at the
     // judge line" and our historical "keep scrolling past it"
@@ -1617,6 +1620,13 @@ class PlayerWebDemoApp {
       bgaTranscodeMaxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
       bgaTranscodeUseWebCodecs: this.guiState.bgaUseWebCodecs,
       showInvisibleNotes: this.guiState.showInvisibleNotes,
+      // Pass the loaded 9-keys play variant as the invisible-note
+      // sprite source — Pop'n's green wide note at index 3 is the
+      // sprite the gameplay view paints over each invisible note
+      // when {@link DemoGuiState.showInvisibleNotes} is on. Falls
+      // back to a flat green rectangle when the dropped theme
+      // didn't ship `play_9.lr2skin`.
+      invisibleNoteSkin: this.playSkins['9'],
       judgedNoteDisplay: this.guiState.judgedNoteDisplay,
       onExit: () => {
         void this.finishGameplayThen(() => this.showSelect());
@@ -1727,6 +1737,13 @@ class PlayerWebDemoApp {
       bgaTranscodeMaxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
       bgaTranscodeUseWebCodecs: this.guiState.bgaUseWebCodecs,
       showInvisibleNotes: this.guiState.showInvisibleNotes,
+      // Pass the loaded 9-keys play variant as the invisible-note
+      // sprite source — Pop'n's green wide note at index 3 is the
+      // sprite the gameplay view paints over each invisible note
+      // when {@link DemoGuiState.showInvisibleNotes} is on. Falls
+      // back to a flat green rectangle when the dropped theme
+      // didn't ship `play_9.lr2skin`.
+      invisibleNoteSkin: this.playSkins['9'],
       judgedNoteDisplay: this.guiState.judgedNoteDisplay,
       onExit: () => {
         // Sequence finalize → transition. The transition methods

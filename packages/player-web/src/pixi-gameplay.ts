@@ -483,17 +483,35 @@ export interface PixiGameplayViewOptions {
    */
   showInvisibleNotes?: boolean;
   /**
+   * Optional source skin for the green note sprite drawn on
+   * top of each invisible note when {@link showInvisibleNotes}
+   * is on. The renderer pulls `notes.note[3]` from this skin —
+   * index 3 is the green wide note in the LR2 default
+   * `play_9.lr2skin` POP layout (Pop'n's third lane), so the
+   * convention is: pass the loaded 9-keys play variant here
+   * and the invisible-note overlay uses the same green sprite
+   * a PMS chart would.
+   *
+   * Falls back to a flat green rectangle when the skin is
+   * absent, lacks `notes.note[3]`, or its texture failed to
+   * load. Texture is preloaded alongside the active skin's
+   * own assets in {@link prepareSkin} so by the time
+   * `renderNotes` runs the cropped cell is ready.
+   */
+  invisibleNoteSkin?: Lr2Skin;
+  /**
    * Single-note visibility after judgement.
    *
-   * - `'KEEP_SCROLLING'` (default) — judged notes stay on
-   *   screen and keep scrolling until their position crosses
-   *   the judgement line. Equivalent to beatoraja's
+   * - `'HIDE'` (default) — judged notes vanish at the
+   *   judgement instant. Matches the LR2 / beatoraja default
+   *   behaviour and keeps the playfield visually clean during
+   *   dense passages.
+   * - `'KEEP_SCROLLING'` — judged notes stay on screen and
+   *   keep scrolling until their position crosses the
+   *   judgement line. Equivalent to beatoraja's
    *   `LANEEFFECT ON` mode; useful as a timing-learning aid
    *   because the player can see *where* a press landed
    *   relative to the line.
-   * - `'HIDE'` — judged notes vanish at the judgement instant.
-   *   Matches the LR2 / beatoraja default behaviour and keeps
-   *   the playfield visually clean during dense passages.
    *
    * Only single notes are gated. Long-note bodies are always
    * positionally clipped (the body persists until the tail
@@ -1502,6 +1520,18 @@ export class PixiGameplayView {
   }
 
   /**
+   * Live setter for {@link PixiGameplayViewOptions.showInvisibleNotes}.
+   * The invisible-note array is always extracted at chart-
+   * prepare time and the green sprite's texture is always
+   * preloaded, so flipping this flag mid-song just toggles the
+   * per-frame render branch — the overlay appears (or vanishes)
+   * on the very next paint.
+   */
+  public setShowInvisibleNotes(enabled: boolean): void {
+    this.options.showInvisibleNotes = enabled;
+  }
+
+  /**
    * Switches the compressor architecture between `'split'` (default
    * 3-stage) and `'legacy'` (original single-compressor) at
    * runtime. Mostly useful for the demo's `?compressor=` URL flag
@@ -1712,7 +1742,13 @@ export class PixiGameplayView {
     this.resolvedChart = resolved;
     const extracted = extractTimedNotes(resolved, {
       includeLandmine: true,
-      includeInvisible: Boolean(this.options.showInvisibleNotes),
+      // Always extract the invisible / keysound array even when the
+      // overlay is off — so the lil-gui toggle can flip the
+      // visualisation on mid-song without a chart restart. The cost
+      // is purely memory (one sorted array of 3x / 4x events); the
+      // per-frame render loop is gated on `showInvisibleNotes` and
+      // bails immediately when the flag is off.
+      includeInvisible: true,
       inferBmsLnTypeWhenMissing: true,
     });
     this.notes = extracted.playableNotes
@@ -2294,6 +2330,25 @@ export class PixiGameplayView {
         return;
       }
       this.bombTexture = texture;
+    }
+    // Invisible-note overlay sprite. Pulls index 3 from the
+    // dedicated `invisibleNoteSkin` (Pop'n's green wide note in
+    // the LR2 default `play_9.lr2skin` POP layout) and asks
+    // *that* skin's bundled file map for the bytes — for LR2
+    // default themes this resolves to the same `frame.tga` the
+    // active skin already uses, so the texture cache key is
+    // shared. Themes that ship a per-variant atlas instead get
+    // an extra entry under a distinct key.
+    const invisibleNoteSrc = this.options.invisibleNoteSkin?.notes.note?.[3];
+    if (invisibleNoteSrc?.imagePath && !this.textures.has(invisibleNoteSrc.imagePath)) {
+      const texture = await this.loadSkinAssetTexture(this.options.invisibleNoteSkin!, invisibleNoteSrc.imagePath);
+      if (this.disposed) {
+        texture?.destroy(true);
+        return;
+      }
+      if (texture) {
+        this.textures.set(invisibleNoteSrc.imagePath, texture);
+      }
     }
     if (this.disposed) {
       return;
@@ -5437,6 +5492,17 @@ export class PixiGameplayView {
     // entirely (and the array stays empty) when the option is
     // off.
     if (this.options.showInvisibleNotes && this.invisibleNotes.length > 0) {
+      // Resolve the green-note sprite once per frame. `notes.note[3]`
+      // is the Pop'n green wide note in the LR2 default
+      // `play_9.lr2skin` POP layout — the convention the user-
+      // facing host (`PixiGameplayView` consumer) opts into by
+      // passing the loaded 9-keys play variant as
+      // {@link PixiGameplayViewOptions.invisibleNoteSkin}. When
+      // unavailable (no 9-keys variant in the loaded theme, or
+      // its texture failed to load) we fall through to a flat
+      // green rectangle so the overlay still reads.
+      const greenNoteSrc = this.options.invisibleNoteSkin?.notes.note?.[3];
+      const greenBaseTexture = greenNoteSrc ? this.textures.get(greenNoteSrc.imagePath) : undefined;
       const firstInvisibleIndex = this.scrollMapper
         ? 0
         : findFirstIndexAtOrAfter(this.invisibleNotes, currentBeat, (note) => note.beat);
@@ -5449,8 +5515,22 @@ export class PixiGameplayView {
         if (!lane) continue;
         const y = lane.bottom - beatDistance(invisible.beat) * pixelsPerBeat;
         if (y < lane.top - 48 || y > lane.bottom) continue;
+        if (greenNoteSrc && greenBaseTexture) {
+          const cell = pickAnimatedCell(greenNoteSrc, this.elapsedSinceTimer(greenNoteSrc.timer));
+          const texture = createCroppedTexture(greenBaseTexture, cell);
+          if (texture) {
+            const sprite = new Sprite(texture);
+            sprite.label = `invisible-note[ch=${invisible.channel}]`;
+            sprite.x = lane.x + (lane.w - cell.w) / 2;
+            sprite.y = y - cell.h;
+            sprite.width = cell.w;
+            sprite.height = cell.h;
+            this.noteLayer.addChild(sprite);
+            continue;
+          }
+        }
         const graphic = new Graphics();
-        graphic.label = `invisible-note[ch=${invisible.channel}]`;
+        graphic.label = `invisible-note-fallback[ch=${invisible.channel}]`;
         graphic.rect(lane.x + 2, y - 4, Math.max(4, lane.w - 4), 4).fill({ color: 0x33dd66, alpha: 0.7 });
         this.noteLayer.addChild(graphic);
       }
@@ -5492,14 +5572,17 @@ export class PixiGameplayView {
         continue;
       }
       // Single notes hide the moment their bottom edge passes the
-      // judgement-line bottom (= `lane.bottom`). Until then the note is
-      // free to scroll through the line normally — judged or not, by
-      // default. With `judgedNoteDisplay === 'HIDE'` the note disappears
-      // the instant it was judged (LR2 / beatoraja default behaviour).
+      // judgement-line bottom (= `lane.bottom`). Until then the note's
+      // visibility depends on `judgedNoteDisplay`:
+      // - `'HIDE'` (default) — judged notes disappear the instant
+      //   they were judged (LR2 / beatoraja default behaviour).
+      // - `'KEEP_SCROLLING'` — judged notes keep scrolling until
+      //   their position passes the line (≈ beatoraja's
+      //   LANEEFFECT ON).
       if (y < lane.top - 48 || y > lane.bottom) {
         continue;
       }
-      if (note.hit && this.options.judgedNoteDisplay === 'HIDE') {
+      if (note.hit && this.options.judgedNoteDisplay !== 'KEEP_SCROLLING') {
         continue;
       }
       this.renderSingleNote(skin, laneIndex, note.channel, lane, y);
