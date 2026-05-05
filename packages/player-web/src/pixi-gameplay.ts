@@ -472,6 +472,35 @@ export interface PixiGameplayViewOptions {
    * exceed the in-memory budget.
    */
   bgaTranscodeUseWebCodecs?: boolean;
+  /**
+   * Debug overlay — when true, the renderer paints a thin green
+   * bar at every invisible / keysound note's chart position
+   * (BMS channels `3x` / `4x`, the chart author's hidden
+   * keysound layout). The bars never affect gameplay or
+   * judgement; they're a chart-inspection aid for verifying
+   * which lane each `#WAV` sample is wired to. Defaults to
+   * `false` so the regular play surface stays uncluttered.
+   */
+  showInvisibleNotes?: boolean;
+  /**
+   * Single-note visibility after judgement.
+   *
+   * - `'KEEP_SCROLLING'` (default) — judged notes stay on
+   *   screen and keep scrolling until their position crosses
+   *   the judgement line. Equivalent to beatoraja's
+   *   `LANEEFFECT ON` mode; useful as a timing-learning aid
+   *   because the player can see *where* a press landed
+   *   relative to the line.
+   * - `'HIDE'` — judged notes vanish at the judgement instant.
+   *   Matches the LR2 / beatoraja default behaviour and keeps
+   *   the playfield visually clean during dense passages.
+   *
+   * Only single notes are gated. Long-note bodies are always
+   * positionally clipped (the body persists until the tail
+   * passes the line regardless of head-hit state) so this
+   * option doesn't disturb LN visuals.
+   */
+  judgedNoteDisplay?: 'KEEP_SCROLLING' | 'HIDE';
 }
 
 export class PixiGameplayView {
@@ -604,6 +633,21 @@ export class PixiGameplayView {
    * mine — matches LR2 behaviour where the mine explodes first.
    */
   private mineNotes: RuntimeMineNote[] = [];
+  /**
+   * Invisible / keysound notes (BMS channels `3x` / `4x`). Held
+   * separately from {@link notes} because they don't participate
+   * in scoring or judgement — they exist purely so a press on
+   * the matching lane fires the per-note `#WAV` sample. The
+   * extractor already remaps `3x → 1x` / `4x → 2x` so each
+   * entry's `channel` lines up with the playable lane it shares.
+   *
+   * Populated only when {@link PixiGameplayViewOptions.showInvisibleNotes}
+   * is on — this is a debug visualisation, not gameplay state.
+   * The renderer paints a thin green bar per entry so the chart
+   * author's hidden keysound layout is legible alongside the
+   * regular note stream.
+   */
+  private invisibleNotes: TimedPlayableNote[] = [];
   /**
    * LR2 turntable physics — per-side angular state for sprites
    * authored with `op4 === 1` (1P scratch) or `op4 === 2` (2P
@@ -1447,6 +1491,17 @@ export class PixiGameplayView {
   }
 
   /**
+   * Live setter for {@link PixiGameplayViewOptions.judgedNoteDisplay}.
+   * Mutates `this.options` so the per-frame `renderNotes` check
+   * picks the new mode on the next paint — letting the user
+   * A/B "keep scrolling" vs "hide on judge" without restarting
+   * the song.
+   */
+  public setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void {
+    this.options.judgedNoteDisplay = mode;
+  }
+
+  /**
    * Switches the compressor architecture between `'split'` (default
    * 3-stage) and `'legacy'` (original single-compressor) at
    * runtime. Mostly useful for the demo's `?compressor=` URL flag
@@ -1655,12 +1710,19 @@ export class PixiGameplayView {
     // this for a seeded PRNG later.
     const resolved = resolveBmsControlFlow(song.chart, { random: Math.random });
     this.resolvedChart = resolved;
-    const extracted = extractTimedNotes(resolved, { includeLandmine: true, inferBmsLnTypeWhenMissing: true });
+    const extracted = extractTimedNotes(resolved, {
+      includeLandmine: true,
+      includeInvisible: Boolean(this.options.showInvisibleNotes),
+      inferBmsLnTypeWhenMissing: true,
+    });
     this.notes = extracted.playableNotes
       .map((note) => ({ ...note, hit: false }))
       .sort((left, right) => left.beat - right.beat || left.seconds - right.seconds);
     this.mineNotes = extracted.landmineNotes
       .map((note) => ({ ...note, hit: false }))
+      .sort((left, right) => left.beat - right.beat || left.seconds - right.seconds);
+    this.invisibleNotes = extracted.invisibleNotes
+      .slice()
       .sort((left, right) => left.beat - right.beat || left.seconds - right.seconds);
     // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk
     // because we already iterate `notes` for sorting; SP charts
@@ -1673,6 +1735,9 @@ export class PixiGameplayView {
       }
       for (const mine of this.mineNotes) {
         mine.channel = flipDpChannel(mine.channel);
+      }
+      for (const invisible of this.invisibleNotes) {
+        invisible.channel = flipDpChannel(invisible.channel);
       }
     }
     // RANDOM / MIRROR / S-RANDOM / SCATTER — shuffle the 1P / 2P
@@ -1689,6 +1754,7 @@ export class PixiGameplayView {
       this.options.random1P ?? 'OFF',
       Math.random,
       this.mineNotes as Array<{ channel: string }>,
+      this.invisibleNotes as Array<{ channel: string }>,
     );
     applyRandomMode(
       this.notes as Array<{ channel: string }>,
@@ -1696,6 +1762,7 @@ export class PixiGameplayView {
       this.options.random2P ?? 'OFF',
       Math.random,
       this.mineNotes as Array<{ channel: string }>,
+      this.invisibleNotes as Array<{ channel: string }>,
     );
     this.maxLongNoteBeatSpan = this.notes.reduce((max, note) => {
       if (note.endBeat === undefined) {
@@ -5365,6 +5432,29 @@ export class PixiGameplayView {
       laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
     }
     const maxVisibleBeat = currentBeat + (laneHeight + 48) / Math.max(1, pixelsPerBeat);
+    // Debug visualisation — paint invisible / keysound notes
+    // FIRST so playable notes + mines paint over them. Skipped
+    // entirely (and the array stays empty) when the option is
+    // off.
+    if (this.options.showInvisibleNotes && this.invisibleNotes.length > 0) {
+      const firstInvisibleIndex = this.scrollMapper
+        ? 0
+        : findFirstIndexAtOrAfter(this.invisibleNotes, currentBeat, (note) => note.beat);
+      for (let invIndex = firstInvisibleIndex; invIndex < this.invisibleNotes.length; invIndex += 1) {
+        const invisible = this.invisibleNotes[invIndex]!;
+        if (!this.scrollMapper && invisible.beat > maxVisibleBeat) {
+          break;
+        }
+        const lane = this.laneX.get(invisible.channel);
+        if (!lane) continue;
+        const y = lane.bottom - beatDistance(invisible.beat) * pixelsPerBeat;
+        if (y < lane.top - 48 || y > lane.bottom) continue;
+        const graphic = new Graphics();
+        graphic.label = `invisible-note[ch=${invisible.channel}]`;
+        graphic.rect(lane.x + 2, y - 4, Math.max(4, lane.w - 4), 4).fill({ color: 0x33dd66, alpha: 0.7 });
+        this.noteLayer.addChild(graphic);
+      }
+    }
     const firstNoteIndex = this.scrollMapper
       ? 0
       : findFirstIndexAtOrAfter(this.notes, currentBeat - this.maxLongNoteBeatSpan, (note) => note.beat);
@@ -5403,8 +5493,13 @@ export class PixiGameplayView {
       }
       // Single notes hide the moment their bottom edge passes the
       // judgement-line bottom (= `lane.bottom`). Until then the note is
-      // free to scroll through the line normally — judged or not.
+      // free to scroll through the line normally — judged or not, by
+      // default. With `judgedNoteDisplay === 'HIDE'` the note disappears
+      // the instant it was judged (LR2 / beatoraja default behaviour).
       if (y < lane.top - 48 || y > lane.bottom) {
+        continue;
+      }
+      if (note.hit && this.options.judgedNoteDisplay === 'HIDE') {
         continue;
       }
       this.renderSingleNote(skin, laneIndex, note.channel, lane, y);

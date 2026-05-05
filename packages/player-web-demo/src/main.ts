@@ -594,6 +594,34 @@ interface DemoGuiState {
    */
   bgaUseWebCodecs: boolean;
   /**
+   * Debug overlay — when true, every invisible / keysound note
+   * the chart authors on channels `3x` / `4x` paints as a thin
+   * green bar in its assigned playable lane during gameplay.
+   * Useful for verifying which lane each `#WAV` sample is wired
+   * to without affecting scoring or judgement. Defaults to false
+   * so the regular play surface stays uncluttered.
+   *
+   * The option is seeded into the next `PixiGameplayView`
+   * constructor; toggling it mid-song doesn't affect the running
+   * play (the invisible-note array is built once at chart-prepare
+   * time), but the next chart picks up the new value.
+   */
+  showInvisibleNotes: boolean;
+  /**
+   * Single-note visibility after a judgement lands.
+   *
+   * - `'KEEP_SCROLLING'` (default) — judged notes keep
+   *   scrolling past the judgement line (this implementation's
+   *   historical behaviour, equivalent to beatoraja's
+   *   `LANEEFFECT ON`).
+   * - `'HIDE'` — judged notes disappear at the judgement
+   *   instant, matching the LR2 / beatoraja default.
+   *
+   * Long-note bodies are unaffected — they always persist
+   * until the tail crosses the line.
+   */
+  judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
+  /**
    * Read-only status text (loading summaries, "Playing: …",
    * recording state, etc.). Bound to a disabled string
    * controller so users can copy it out of the GUI but can't
@@ -756,6 +784,17 @@ class PlayerWebDemoApp {
       // (Safari < 17, older Firefox) keep the toggle disabled
       // in the GUI and the seed stays `false`.
       bgaUseWebCodecs: typeof globalThis !== 'undefined' && 'VideoEncoder' in globalThis,
+      // Debug overlay for invisible / keysound notes — off by
+      // default. Power users investigating chart authoring (or
+      // diagnosing missing keysound triggers) flip it on; the
+      // regular gameplay surface stays clean otherwise.
+      showInvisibleNotes: false,
+      // Default to the implementation's historical "keep scrolling
+      // past the judge line" behaviour (= beatoraja LANEEFFECT
+      // ON). LR2 / beatoraja's stock behaviour is `'HIDE'`; the
+      // dropdown lets the user opt into that without forcing it
+      // as a silent change.
+      judgedNoteDisplay: 'KEEP_SCROLLING',
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
@@ -1061,6 +1100,34 @@ class PlayerWebDemoApp {
       .name('Resize')
       .onChange((value: number) => {
         this.guiState.bgaResizeMaxEdgePx = value;
+      });
+    // Chart-authoring debug overlay — paints invisible / keysound
+    // notes (BMS channels `3x` / `4x`) as thin green bars in
+    // their playable lane. Seeded into the next `PixiGameplayView`
+    // constructor; toggling mid-song waits until the next chart
+    // load to take effect (the invisible-note array is built once
+    // at chart-prepare time).
+    gui
+      .add(this.guiState, 'showInvisibleNotes')
+      .name('Show invisible notes')
+      .onChange((value: boolean) => {
+        this.guiState.showInvisibleNotes = value;
+      });
+    // Picks between LR2-faithful "judged note disappears at the
+    // judge line" and our historical "keep scrolling past it"
+    // behaviour. Pushed live into the running gameplay view so a
+    // mid-song toggle takes effect on the very next paint — the
+    // visibility check is a single per-frame branch with no
+    // backing state to rebuild.
+    gui
+      .add(this.guiState, 'judgedNoteDisplay', {
+        'Keep scrolling (LANEEFFECT ON)': 'KEEP_SCROLLING',
+        'Hide on judge (LR2 default)': 'HIDE',
+      })
+      .name('Judged notes')
+      .onChange((value: 'KEEP_SCROLLING' | 'HIDE') => {
+        this.guiState.judgedNoteDisplay = value;
+        this.gameplayView?.setJudgedNoteDisplay(value);
       });
     this.recordController = gui.add(this.guiState, 'record').name('● Record');
     this.refreshCompressorStageVisibility();
@@ -1549,6 +1616,8 @@ class PlayerWebDemoApp {
       },
       bgaTranscodeMaxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
       bgaTranscodeUseWebCodecs: this.guiState.bgaUseWebCodecs,
+      showInvisibleNotes: this.guiState.showInvisibleNotes,
+      judgedNoteDisplay: this.guiState.judgedNoteDisplay,
       onExit: () => {
         void this.finishGameplayThen(() => this.showSelect());
       },
@@ -1657,6 +1726,8 @@ class PlayerWebDemoApp {
       },
       bgaTranscodeMaxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
       bgaTranscodeUseWebCodecs: this.guiState.bgaUseWebCodecs,
+      showInvisibleNotes: this.guiState.showInvisibleNotes,
+      judgedNoteDisplay: this.guiState.judgedNoteDisplay,
       onExit: () => {
         // Sequence finalize → transition. The transition methods
         // (`showSelect` / `showResult` / `playSong`) all dispose
