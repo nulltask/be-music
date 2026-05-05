@@ -266,6 +266,33 @@ export interface AudioBusHandle {
   setMasterGain(value: number): void;
   /** Returns the currently-applied chart master gain (default `1.0`). */
   getMasterGain(): number;
+  /**
+   * Fades the **audible** signal path (post-tap, just before
+   * `audioContext.destination`) towards `targetGain` over
+   * `durationMs`. Used by the gameplay scene's exit transition
+   * so the audio dies in lock-step with the screen's `#FADEOUT`
+   * alpha animation.
+   *
+   * Crucially, this stage sits AFTER the recording tap — so a
+   * recording in progress keeps capturing the unattenuated mix
+   * while the speaker output dips to silence. That matches the
+   * user expectation that "saved WAV ≈ what the chart sounds
+   * like in full", not "what the user heard during a partial
+   * play / abort".
+   *
+   * Idempotent re-calls re-anchor the ramp at the current
+   * value, so a frantic second ESC press just continues the
+   * existing fade rather than producing a stair-step.
+   */
+  fadeOutAudibleTo(targetGain: number, durationMs: number): void;
+  /**
+   * Restores the post-tap fade gain to unity immediately. The
+   * gameplay scene calls this when it cancels an in-flight
+   * fade (e.g. a pause that the user then unpauses by mashing
+   * keys instead of letting the exit timeline complete) so
+   * subsequent audio plays at full level again.
+   */
+  resetFadeGain(): void;
   dispose(): void;
 }
 
@@ -339,8 +366,16 @@ export function buildAudioBus(
   // `'off'` is preserved.
   const tap = audioContext.createGain();
   tap.gain.value = 1.0;
+  // Post-tap fade gain. Splits the "audible" path (which goes to
+  // the destination) from the "recording" path (taps off `tap`),
+  // so an exit-sequence fade-out can dip the speakers to silence
+  // without also pulling the recording mix down. Initialised to
+  // unity so steady-state playback is acoustically transparent.
+  const exitFadeGain = audioContext.createGain();
+  exitFadeGain.gain.value = 1.0;
   masterGain.connect(tap);
-  tap.connect(audioContext.destination);
+  tap.connect(exitFadeGain);
+  exitFadeGain.connect(audioContext.destination);
   // `makeup → masterGain → tap` is wired once and never
   // re-disconnected; modes that use makeup (legacy / split) just
   // connect their last compressor to makeup and let the rest of
@@ -467,6 +502,38 @@ export function buildAudioBus(
     getMasterGain(): number {
       return masterGain.gain.value;
     },
+    fadeOutAudibleTo(targetGain: number, durationMs: number): void {
+      // Re-anchor the ramp at the current value so chained
+      // fade-out calls don't snap back to the previous setpoint.
+      // `cancelScheduledValues` discards any in-flight ramp, then
+      // `setValueAtTime(currentValue, now)` pins the curve to the
+      // present audible level before linearly tweening to the
+      // target — chosen `linearRampToValueAtTime` over
+      // `exponentialRampToValueAtTime` because the screen overlay
+      // animates linearly, and we want the visible / audible
+      // fades to feel synchronised rather than the audio dying
+      // off ahead of the screen.
+      const now = audioContext.currentTime;
+      const param = exitFadeGain.gain;
+      const safeTarget = Number.isFinite(targetGain) ? Math.max(0, targetGain) : 0;
+      const safeDurationSeconds = Number.isFinite(durationMs) ? Math.max(0, durationMs) / 1000 : 0;
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(param.value, now);
+      if (safeDurationSeconds <= 0) {
+        // Zero / negative duration → snap immediately. Avoids
+        // `linearRampToValueAtTime` being called with `endTime ===
+        // now` which the spec leaves implementation-defined.
+        param.setValueAtTime(safeTarget, now);
+        return;
+      }
+      param.linearRampToValueAtTime(safeTarget, now + safeDurationSeconds);
+    },
+    resetFadeGain(): void {
+      const now = audioContext.currentTime;
+      const param = exitFadeGain.gain;
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(1, now);
+    },
     dispose(): void {
       try {
         keyMixer.disconnect();
@@ -478,6 +545,7 @@ export function buildAudioBus(
         makeup.disconnect();
         masterGain.disconnect();
         tap.disconnect();
+        exitFadeGain.disconnect();
       } catch {
         // `disconnect()` throws when called on an already-disposed
         // node. Swallowing is safe — `dispose()` is idempotent and

@@ -4149,6 +4149,17 @@ export class PixiGameplayView {
       return;
     }
     this.timerStartedAt.set(2, this.playClock());
+    // Drive the audio bus's post-tap fade in lock-step with
+    // `applyExitFadeAlpha`'s screen-alpha animation. The fade
+    // node sits AFTER the recording tap, so a recording in
+    // flight keeps capturing the unattenuated mix; only the
+    // speakers go quiet. Skipped when the skin has no
+    // `#FADEOUT` (the screen also stays at full alpha in that
+    // path), so a skinless / non-LR2 demo gets the historical
+    // immediate-cut behaviour.
+    if (fadeOutMs > 0) {
+      this.audioBus?.fadeOutAudibleTo(0, fadeOutMs);
+    }
     const fireClose = (): void => {
       this.timerStartedAt.set(3, this.playClock());
       this.exitCloseHandle = window.setTimeout(() => {

@@ -27,6 +27,9 @@ import {
 
 interface FakeAudioParam {
   value: number;
+  cancelScheduledValues?(time: number): void;
+  setValueAtTime?(value: number, time: number): void;
+  linearRampToValueAtTime?(value: number, time: number): void;
 }
 
 interface FakeNode {
@@ -69,13 +72,41 @@ function createFakeAudioContext(): { context: AudioContext; destination: FakeNod
       node.knee = { value: 0 };
     }
     if (type === 'gain') {
-      node.gain = { value: 1 };
+      // Gain `AudioParam`s expose the minimal subset audio-bus
+      // touches for the post-tap fade. The fake records the
+      // *final* setpoint (`setValueAtTime` / ramp end) onto
+      // `value` so tests can assert "where did this param land?"
+      // without modelling the full schedule timeline.
+      const param: FakeAudioParam = {
+        value: 1,
+        cancelScheduledValues() {
+          // No-op — we don't model an in-flight schedule queue;
+          // every subsequent `setValueAtTime` / ramp just
+          // overwrites `value` directly.
+        },
+        setValueAtTime(value: number) {
+          param.value = value;
+        },
+        linearRampToValueAtTime(value: number) {
+          // For "where does the param ultimately land?" assertions
+          // the ramp's destination IS the relevant value. Tests
+          // that need to check intermediate samples would need a
+          // richer fake; none of audio-bus's contracts depend on
+          // mid-ramp interpolation.
+          param.value = value;
+        },
+      };
+      node.gain = param;
     }
     return node;
   };
   const destination = makeNode('destination');
   const context = {
     destination,
+    // The fade API reads `audioContext.currentTime` to anchor the
+    // ramp; surfacing a stable `0` is enough since the fake's
+    // ramp model collapses to "set to target value".
+    currentTime: 0,
     createGain: () => makeNode('gain'),
     createDynamicsCompressor: () => makeNode('compressor'),
     // Other AudioContext fields that `audio-bus.ts` doesn't read are
@@ -520,5 +551,95 @@ describe('buildAudioBus master gain (#VOLWAV)', () => {
       expect(reachesDestination(keyMixer, destination)).toBe(true);
       expect(reachesDestination(bgmMixer, destination)).toBe(true);
     }
+  });
+});
+
+// -- Exit fade (post-tap) -------------------------------------------------
+
+describe('buildAudioBus exit-fade gain', () => {
+  // The exit-fade gain sits AFTER the recording tap and BEFORE
+  // `audioContext.destination`. Two consequences must hold:
+  //   1. fading it down silences the speakers but leaves the
+  //      recording tap unaffected (so a saved WAV still captures
+  //      the unattenuated mix);
+  //   2. the bus's `outputNode` (the tap) is NOT the same node as
+  //      the post-tap fade — there's exactly one gain hop between
+  //      `outputNode` and the destination on the audible path.
+
+  it('inserts a unity-gain fade stage between outputNode and the destination', () => {
+    const { context, destination } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    const tap = bus.outputNode as unknown as FakeNode;
+    // Tap → exitFadeGain → destination (two-hop).
+    const tapDownstream = [...tap.outgoing];
+    expect(tapDownstream).toHaveLength(1);
+    const fadeStage = tapDownstream[0]!;
+    expect(fadeStage.type).toBe('gain');
+    expect(fadeStage).not.toBe(tap); // distinct from the tap itself
+    expect(fadeStage.outgoing.has(destination)).toBe(true);
+    // Steady-state value is unity so the fade stage is acoustically
+    // transparent until the gameplay scene actually drives it.
+    expect(fadeStage.gain?.value).toBe(1);
+  });
+
+  it('drives the post-tap stage to the requested target on fadeOutAudibleTo', () => {
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    const tap = bus.outputNode as unknown as FakeNode;
+    const fadeStage = [...tap.outgoing][0]!;
+    bus.fadeOutAudibleTo(0, 1000);
+    expect(fadeStage.gain?.value).toBe(0);
+  });
+
+  it('snaps immediately when the duration is zero / negative / non-finite', () => {
+    // Avoids `linearRampToValueAtTime` being asked for a same-time
+    // ramp endpoint, which the spec leaves implementation-defined.
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    const tap = bus.outputNode as unknown as FakeNode;
+    const fadeStage = [...tap.outgoing][0]!;
+    bus.fadeOutAudibleTo(0.5, 0);
+    expect(fadeStage.gain?.value).toBe(0.5);
+    bus.fadeOutAudibleTo(0.25, -1);
+    expect(fadeStage.gain?.value).toBe(0.25);
+    bus.fadeOutAudibleTo(0.1, Number.NaN);
+    expect(fadeStage.gain?.value).toBe(0.1);
+  });
+
+  it('clamps a negative or non-finite target to silence', () => {
+    // A pathological caller mustn't push the gain into the
+    // negative domain (which would phase-invert the output) or
+    // poison the AudioParam with NaN.
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    const tap = bus.outputNode as unknown as FakeNode;
+    const fadeStage = [...tap.outgoing][0]!;
+    bus.fadeOutAudibleTo(-0.5, 100);
+    expect(fadeStage.gain?.value).toBe(0);
+    bus.fadeOutAudibleTo(Number.NaN, 100);
+    expect(fadeStage.gain?.value).toBe(0);
+  });
+
+  it('resetFadeGain restores the post-tap stage to unity', () => {
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    const tap = bus.outputNode as unknown as FakeNode;
+    const fadeStage = [...tap.outgoing][0]!;
+    bus.fadeOutAudibleTo(0, 100);
+    bus.resetFadeGain();
+    expect(fadeStage.gain?.value).toBe(1);
+  });
+
+  it('keeps the recording tap (outputNode) at unity during a fade', () => {
+    // External consumers connect to `outputNode` — that node must
+    // NOT see the fade so a recording captures the full mix even
+    // mid-exit-sequence. Verifying via the gain value on the tap
+    // itself is enough; its outgoing edges (to the fade stage) are
+    // separate node-to-node connections.
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    const tap = bus.outputNode as unknown as FakeNode;
+    bus.fadeOutAudibleTo(0, 100);
+    expect(tap.gain?.value).toBe(1);
   });
 });
