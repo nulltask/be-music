@@ -2247,38 +2247,18 @@ export class PixiSongSelectView {
       this.options.onSearchActivate?.();
       return true;
     }
-    if (this.isInsideLr2DefaultSearchBox(skin, virtualX, virtualY)) {
+    if (
+      isInsideLr2DefaultSearchBox({
+        width: skin.width,
+        height: skin.height,
+        x: virtualX,
+        y: virtualY,
+      })
+    ) {
       this.options.onSearchActivate?.();
       return true;
     }
     return false;
-  }
-
-  /**
-   * Heuristic hit-test for the LR2 default theme's search box.
-   *
-   * The vanilla LR2 select skin draws the SEARCH chrome as a
-   * background `#SRC_IMAGE` plus an `#SRC_TEXT st=30` whose DST
-   * rectangle hugs the value text rather than the whole box.
-   * Once the text is empty (the typical first-load state) the
-   * DST collapses to roughly zero pixels of horizontal room, so
-   * the regular `text.st === 30` walk above misses every click
-   * that lands on the box's chrome and the host's input never
-   * receives focus.
-   *
-   * To stay friendly to skins that don't lay the search box out
-   * the LR2-default way we gate on the canonical 1280×720
-   * design size — anything else falls through to the spec-
-   * driven walk above and we accept that themes shipping a
-   * search box at a non-standard position will need their own
-   * `#SRC_TEXT st=30` to be hit-testable. The hardcoded
-   * rectangle below covers the visible SEARCH chrome on every
-   * LR2 default-derived theme I've seen (`LR2 ver sta`,
-   * `LR2 ver Yamajet`, `LR2 ver syatten`).
-   */
-  private isInsideLr2DefaultSearchBox(skin: Lr2Skin, virtualX: number, virtualY: number): boolean {
-    if (skin.width !== 1280 || skin.height !== 720) return false;
-    return virtualX >= 0 && virtualX <= 920 && virtualY >= 540 && virtualY <= 582;
   }
 
   /**
@@ -3396,9 +3376,7 @@ export class PixiSongSelectView {
     // visually invisible (Pixi's hit-test treats unfilled
     // Graphics as having zero hit area).
     const searchHit = new Graphics();
-    searchHit
-      .rect(8, 336, 300, 24)
-      .fill({ color: 0xffffff, alpha: 0.001 });
+    searchHit.rect(8, 336, 300, 24).fill({ color: 0xffffff, alpha: 0.001 });
     searchHit.eventMode = 'static';
     searchHit.cursor = 'text';
     searchHit.on('pointerdown', () => this.options.onSearchActivate?.());
@@ -4507,6 +4485,30 @@ export function wrappedCursorDelta(rawDelta: number, count: number): number {
     return rawDelta;
   }
   return ((((rawDelta + half) % count) + count) % count) - half;
+}
+
+export interface Lr2DefaultSearchBoxHitTestInput {
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * Heuristic hit-test for the LR2 default theme's search box.
+ *
+ * The vanilla LR2 select skin draws the SEARCH chrome as a
+ * background `#SRC_IMAGE` plus an `#SRC_TEXT st=30` whose DST
+ * rectangle hugs the value text rather than the whole box. Once
+ * the text is empty, the DST collapses to roughly zero horizontal
+ * room, so the spec-driven text walk misses clicks on the chrome.
+ *
+ * To avoid hijacking custom layouts, the fallback is gated to the
+ * canonical 1280×720 LR2-default design size.
+ */
+export function isInsideLr2DefaultSearchBox(input: Lr2DefaultSearchBoxHitTestInput): boolean {
+  if (input.width !== 1280 || input.height !== 720) return false;
+  return input.x >= 0 && input.x <= 920 && input.y >= 540 && input.y <= 582;
 }
 
 /**

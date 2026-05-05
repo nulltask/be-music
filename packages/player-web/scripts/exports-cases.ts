@@ -116,6 +116,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.isChartFilePath('Songs/Bench/main.bms');
     },
   });
+  define('player-web.isInsideLr2DefaultSearchBox', {
+    run: () => {
+      playerWebCoreApi.isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 460, y: 561 });
+      playerWebCoreApi.isInsideLr2DefaultSearchBox({ width: 640, height: 480, x: 460, y: 561 });
+    },
+  });
   define('player-web.loadAssetBytes', {
     run: async () => {
       await playerWebCoreApi.loadAssetBytes(BENCH_BYTES);

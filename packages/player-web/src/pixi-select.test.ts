@@ -1,6 +1,11 @@
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PLAY_OPTIONS, matchesSearchQuery, wrappedCursorDelta } from './pixi-select.ts';
+import {
+  DEFAULT_PLAY_OPTIONS,
+  isInsideLr2DefaultSearchBox,
+  matchesSearchQuery,
+  wrappedCursorDelta,
+} from './pixi-select.ts';
 import { computeSelectOps, resolveKeyModeOp, SELECT_DYNAMIC_OPS } from './select-ops.ts';
 import type { BrowserBrowseEntry, BrowserSongEntry } from './types.ts';
 
@@ -181,5 +186,28 @@ describe('wrappedCursorDelta', () => {
     // shorter path is +1.
     expect(wrappedCursorDelta(-2, 3)).toBe(1);
     expect(wrappedCursorDelta(2, 3)).toBe(-1);
+  });
+});
+
+describe('isInsideLr2DefaultSearchBox', () => {
+  it('accepts the LR2 default search-box chrome on the canonical 1280x720 design canvas', () => {
+    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 460, y: 561 })).toBe(true);
+  });
+
+  it('keeps the fallback rectangle boundaries inclusive to match the select-view click path', () => {
+    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 0, y: 540 })).toBe(true);
+    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 920, y: 582 })).toBe(true);
+  });
+
+  it('rejects clicks just outside the LR2 default search-box rectangle', () => {
+    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: -0.01, y: 561 })).toBe(false);
+    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 920.01, y: 561 })).toBe(false);
+    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 460, y: 539.99 })).toBe(false);
+    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 460, y: 582.01 })).toBe(false);
+  });
+
+  it('does not apply the hardcoded fallback to custom design sizes', () => {
+    expect(isInsideLr2DefaultSearchBox({ width: 640, height: 480, x: 460, y: 561 })).toBe(false);
+    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 800, x: 460, y: 561 })).toBe(false);
   });
 });
