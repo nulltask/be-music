@@ -1,4 +1,4 @@
-import { Graphics, Sprite, Text, type Container, type Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
 import { destroyTextureAndRevokeBlobUrl } from './lr2-textures.ts';
 
 /**
@@ -48,6 +48,19 @@ export function disposeChildren(container: Container): void {
  * here too, which destroys every pooled child.
  */
 export class ChildPool {
+  /**
+   * Sub-container that hosts every pooled {@link Graphics}. Lives at z-index 0 inside the owner-supplied `layer` so
+   * its children render BEHIND every {@link Sprite} pooled by this same pool — the LR2 render order has measure
+   * lines and long-note bodies (Graphics) underneath note heads and skin sprites (Sprite). Keeping every Graphics
+   * grouped under one sub-container is the whole point of the split: Pixi's batcher walks children in order and
+   * issues a fresh draw call every time the type changes (Sprite → Graphics or vice-versa, see Pixi's
+   * `pixijs-performance` skill §Batching), so a layer that interleaves the two types fragments into many small
+   * draws. Putting all Graphics first, then all Sprites, then all Text reduces a dense frame's
+   * note-layer draw count from O(num type-switches) to ~3.
+   */
+  private readonly graphicsHost: Container;
+  private readonly spriteHost: Container;
+  private readonly textHost: Container;
   private readonly sprites: Sprite[] = [];
   private spriteCursor = 0;
   private readonly graphics: Graphics[] = [];
@@ -64,7 +77,15 @@ export class ChildPool {
   private idleFramesGraphics = 0;
   private idleFramesTexts = 0;
 
-  public constructor(private readonly layer: Container) {}
+  public constructor(private readonly layer: Container) {
+    this.graphicsHost = new Container();
+    this.spriteHost = new Container();
+    this.textHost = new Container();
+    // Z-order matches LR2 visual layering: Graphics (measure lines, LN body, fallback rects) → Sprite (notes,
+    // skin chrome) → Text (in-skin labels, fallback HUD). The hosts inherit the parent layer's `eventMode` so
+    // setting `layer.eventMode = 'none'` (as `pixi-gameplay.ts` does for render-only layers) propagates here too.
+    this.layer.addChild(this.graphicsHost, this.spriteHost, this.textHost);
+  }
 
   /** Resets every cursor. Call once at the top of every render pass. */
   public begin(): void {
@@ -83,7 +104,7 @@ export class ChildPool {
     let sprite = this.sprites[this.spriteCursor];
     if (!sprite) {
       sprite = new Sprite();
-      this.layer.addChild(sprite);
+      this.spriteHost.addChild(sprite);
       this.sprites.push(sprite);
     }
     // Keep `tint` / `alpha` reset so a previous pass's coloured / faded sprite doesn't leak into a fresh draw.
@@ -107,7 +128,7 @@ export class ChildPool {
     let graphics = this.graphics[this.graphicsCursor];
     if (!graphics) {
       graphics = new Graphics();
-      this.layer.addChild(graphics);
+      this.graphicsHost.addChild(graphics);
       this.graphics.push(graphics);
     }
     graphics.clear();
@@ -131,7 +152,7 @@ export class ChildPool {
     let text = this.texts[this.textCursor];
     if (!text) {
       text = new Text();
-      this.layer.addChild(text);
+      this.textHost.addChild(text);
       this.texts.push(text);
     }
     text.visible = true;
@@ -198,6 +219,16 @@ export class ChildPool {
     for (const text of this.texts) {
       try {
         text.destroy();
+      } catch {
+        // ditto
+      }
+    }
+    // Tear down the sub-host Containers as well. The pooled children are already destroyed above so the host
+    // destroy is just freeing the empty Container shells; we nevertheless pass `children: true` defensively in
+    // case a caller injected something into the host directly (we don't, but a future caller might).
+    for (const host of [this.graphicsHost, this.spriteHost, this.textHost]) {
+      try {
+        host.destroy({ children: true });
       } catch {
         // ditto
       }

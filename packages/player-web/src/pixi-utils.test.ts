@@ -1,6 +1,6 @@
 import { Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import { describe, expect, test, vi } from 'vitest';
-import { destroyUniqueTextures, disposeChildren, staggerDestroyTextures } from './pixi-utils.ts';
+import { ChildPool, destroyUniqueTextures, disposeChildren, staggerDestroyTextures } from './pixi-utils.ts';
 
 /**
  * The hot render loops in `pixi-gameplay.ts` / `pixi-result.ts` / `pixi-select.ts` originally cleared their dynamic
@@ -160,5 +160,84 @@ describe('staggerDestroyTextures', () => {
     expect(staggerDestroyTextures([], scheduler)).toBe(0);
     expect(staggerDestroyTextures([undefined], scheduler)).toBe(0);
     expect(scheduler).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * `ChildPool` ships acquired children into per-type sub-Containers (graphics → sprite → text z-order) so Pixi's
+ * batcher sees one contiguous block per type and doesn't fragment a dense frame's draw calls into N small batches.
+ * The tests below pin that contract:
+ *
+ * 1. Sprites land under the sprite host, Graphics under the graphics host, Text under the text host — never on the
+ *    outer layer directly.
+ * 2. The host z-order at the outer layer is graphics < sprite < text so the visual stack is correct.
+ * 3. Reuse hits the same instance across `begin()` cycles — the cursor reset must not re-allocate.
+ * 4. Children acquired across many `begin()` cycles stay grouped per host (so the layer doesn't accumulate
+ *    interleaved sprite/graphic blocks).
+ */
+describe('ChildPool', () => {
+  test('routes acquired children into the correct per-type sub-host with graphics → sprite → text z-order', () => {
+    const layer = new Container();
+    const pool = new ChildPool(layer);
+    expect(layer.children.length).toBe(3);
+    const [graphicsHost, spriteHost, textHost] = layer.children;
+    pool.begin();
+    const sprite = pool.acquireSprite();
+    const graphics = pool.acquireGraphics();
+    const text = pool.acquireText();
+    pool.end();
+    // Sprite landed in spriteHost, not the outer layer.
+    expect(sprite.parent).toBe(spriteHost);
+    expect(graphics.parent).toBe(graphicsHost);
+    expect(text.parent).toBe(textHost);
+    // The outer layer's children are still the three hosts only — no leaked direct children.
+    expect(layer.children.length).toBe(3);
+  });
+
+  test('reuses the same instance for repeated acquires across begin() cycles', () => {
+    const layer = new Container();
+    const pool = new ChildPool(layer);
+    pool.begin();
+    const a = pool.acquireSprite();
+    pool.end();
+    pool.begin();
+    const b = pool.acquireSprite();
+    pool.end();
+    expect(b).toBe(a);
+  });
+
+  test('keeps every Sprite under the sprite host even when sprite/graphics acquires alternate', () => {
+    const layer = new Container();
+    const pool = new ChildPool(layer);
+    const [graphicsHost, spriteHost] = layer.children;
+    pool.begin();
+    pool.acquireSprite();
+    pool.acquireGraphics();
+    pool.acquireSprite();
+    pool.acquireGraphics();
+    pool.acquireSprite();
+    pool.end();
+    // 3 sprites + 2 graphics — no children leak to the outer layer despite the alternating order.
+    expect(spriteHost!.children.length).toBe(3);
+    expect(graphicsHost!.children.length).toBe(2);
+    for (const child of spriteHost!.children) expect(child).toBeInstanceOf(Sprite);
+    for (const child of graphicsHost!.children) expect(child).toBeInstanceOf(Graphics);
+  });
+
+  test('destroy() tears down pooled children and the host containers', () => {
+    const layer = new Container();
+    const pool = new ChildPool(layer);
+    pool.begin();
+    const sprite = pool.acquireSprite();
+    const graphics = pool.acquireGraphics();
+    const text = pool.acquireText();
+    pool.end();
+    pool.destroy();
+    expect(sprite.destroyed).toBe(true);
+    expect(graphics.destroyed).toBe(true);
+    expect(text.destroyed).toBe(true);
+    // Hosts are also destroyed — pool.destroy() leaves the outer layer empty so the owning view's `dispose()`
+    // doesn't have orphaned ChildPool sub-containers hanging around.
+    expect(layer.children.length).toBe(0);
   });
 });
