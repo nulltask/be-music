@@ -635,6 +635,50 @@ describe('parser', () => {
     expect(json.resources.stop[stopKeys[0]!]).toBeCloseTo(48, 6);
   });
 
+  test('bmson: negative info.level is treated as invalid and dropped per the 1.0.0 spec', () => {
+    // Spec: "level must be ≥ 0. Negative values may be regarded
+    // as invalid by a player." We choose the "invalid → drop"
+    // branch so the UI shows no level rather than a misleading
+    // negative number, and so re-stringifying doesn't preserve
+    // the bad value.
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', level: -3 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.info.level).toBeUndefined();
+    expect(json.metadata.playLevel).toBeUndefined();
+  });
+
+  test('bmson: non-integer info.level is floored per the unsigned-long spec type', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', level: 7.8 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.info.level).toBe(7);
+    expect(json.metadata.playLevel).toBe(7);
+  });
+
+  test('bmson: zero info.level is preserved (a valid unsigned-long)', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', level: 0 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.info.level).toBe(0);
+    expect(json.metadata.playLevel).toBe(0);
+  });
+
   test('bmson: subartists entries get role/name halves trimmed at parse time', () => {
     // bmson 1.0.0 spec SHOULD — "Implementers should trim the
     // spaces before and after `key` and `value` in subartists."

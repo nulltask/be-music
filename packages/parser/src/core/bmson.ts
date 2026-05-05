@@ -514,7 +514,14 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
     normalized.subartists = subartists;
   }
 
-  copyIfFiniteNumber(normalized, 'level', info.level);
+  // bmson 1.0.0 spec — `level` is an `unsigned long` and "must
+  // be ≥ 0. Negative values may be regarded as invalid by a
+  // player." We treat the negative case as "invalid → drop the
+  // field" rather than silently coerce, so the missing-level
+  // fallback (`undefined` → no displayed level) is what the
+  // chart's level shows in the UI. Non-integer inputs are
+  // floored to honour the spec's `unsigned long` type.
+  copyIfNonNegativeInteger(normalized, 'level', info.level);
   copyIfFiniteNumber(normalized, 'initBpm', info.init_bpm);
   copyIfFiniteNumber(normalized, 'judgeRank', info.judge_rank);
   // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take
@@ -768,6 +775,25 @@ function copyIfFiniteNumberAbs<T extends object>(target: T, key: keyof T & strin
   }
 }
 
+/**
+ * Copies a finite numeric value as a non-negative integer,
+ * dropping the field entirely when the input is negative or
+ * non-finite. Matches the bmson 1.0.0 spec's `unsigned long`
+ * fields (notably `info.level`) which require `≥ 0` and the
+ * spec's MAY clause that lets implementations regard negatives
+ * as invalid. Non-integer inputs are floored.
+ */
+function copyIfNonNegativeInteger<T extends object>(target: T, key: keyof T & string, value: unknown): void {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return;
+  }
+  const floored = Math.floor(value);
+  if (floored < 0) {
+    return;
+  }
+  (target as Record<string, unknown>)[key] = floored;
+}
+
 function normalizePositiveInteger(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined;
@@ -802,12 +828,12 @@ function normalizeBmsonInfoFromIr(input: unknown): BeMusicJson['bmson']['info'] 
     info.subartists = subartists;
   }
 
-  copyIfFiniteNumber(info, 'level', raw.level);
+  // Match `normalizeBmsonInfoForIr`'s spec-compliant unsigned-
+  // integer + abs handling for the re-parse path so JSON round-
+  // trips don't reintroduce a negative / float level / total.
+  copyIfNonNegativeInteger(info, 'level', raw.level);
   copyIfFiniteNumber(info, 'initBpm', raw.initBpm ?? raw.init_bpm);
   copyIfFiniteNumber(info, 'judgeRank', raw.judgeRank ?? raw.judge_rank);
-  // Match `normalizeBmsonInfoForIr`'s spec-compliant absolute
-  // value handling so re-parsing a previously-stringified IR
-  // doesn't reintroduce a negative `total`.
   copyIfFiniteNumberAbs(info, 'total', raw.total);
 
   const resolution = normalizePositiveInteger(raw.resolution);
