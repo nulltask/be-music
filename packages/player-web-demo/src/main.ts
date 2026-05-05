@@ -990,7 +990,7 @@ class PlayerWebDemoApp {
     // video transcode) stay open by default — once the user
     // opens the top-level panel, every controller is one click
     // away rather than hidden behind another folder header.
-    const gui = new GUI({ title: 'be-music demo', width: 280 });
+    const gui = new GUI({ title: 'Debug Menu', width: 280 });
     gui.close();
     this.gui = gui;
     // Status row pinned to the top of the panel — first thing
