@@ -1,0 +1,117 @@
+import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import {
+  autoPlay as engineAutoPlay,
+  manualPlay as engineManualPlay,
+  type AudioSession,
+  type CreateAudioSessionContext,
+  type PlayerOptions,
+  type PlayerSummary,
+} from '@be-music/player/core/engine';
+import { logger } from './logger.ts';
+import { type AudioBusHandle } from './audio-bus.ts';
+import { createWebAudioSession, type WebAudioSessionSlicePlayback } from './web-audio-session.ts';
+import { createWebInputRuntimeFactory } from './web-input-runtime.ts';
+import { createWebUiRuntimeFactory, type WebUiRuntimeCallbacks } from './web-ui-runtime.ts';
+
+const log = logger('engine-driver');
+
+/**
+ * Shape the engine driver expects from the host's preloaded sample cache. Decoupled from `BeMusicJson` so the host
+ * can decode `#WAVxx` slots once during the prepare phase and reuse the same `AudioBuffer` set across pause /
+ * resume / restart cycles without re-decoding.
+ */
+export interface EngineDriverAudioContext {
+  audioContext: AudioContext;
+  audioBus: AudioBusHandle;
+  decodedSamples: ReadonlyMap<string, AudioBuffer>;
+  wavCmdVolumeMultipliers: ReadonlyMap<string, number>;
+  bmsonSlicePlayback?: ReadonlyMap<BeMusicEvent, WebAudioSessionSlicePlayback>;
+}
+
+/**
+ * Tunables surfaced to the host. Mirrors the `PlayerOptions` fields the web view actually sets — full passthrough
+ * lets advanced callers reach the rest of the engine surface (limiter / compressor / lead-in / etc.) without
+ * widening this driver's API every time the engine adds an option.
+ */
+export interface EngineDriverOptions {
+  /** Reference chart already resolved via `parseChart` / `parseChartFile`. */
+  chart: BeMusicJson;
+  /** Audio backend resources prepared by the host. The driver constructs a {@link createWebAudioSession} on top. */
+  audio: EngineDriverAudioContext;
+  /** Engine play mode. Mirrors the existing `PixiGameplayView` `autoPlay` flag. */
+  mode: 'manual' | 'auto';
+  /** Pixi-side rendering callbacks. The driver subscribes them to the engine's `uiSignals`. */
+  ui: WebUiRuntimeCallbacks;
+  /**
+   * DOM key event source (defaults to `window`). Scoped targets work too — pass a focusable canvas to keep stray
+   * keystrokes outside the player from reaching the engine.
+   */
+  inputTarget?: EventTarget;
+  /** Optional hook for the input runtime — see {@link createWebInputRuntime}. */
+  shouldSkipKey?: (event: KeyboardEvent) => boolean;
+  /** Forwarded to the engine. The driver supplies sensible defaults but a host can override any field. */
+  engineOptions?: Omit<PlayerOptions, 'createAudioSession' | 'createInputRuntime' | 'createUiRuntime' | 'auto'>;
+}
+
+/**
+ * Result returned to the host when the engine's playback loop finishes. Mirrors what `manualPlay` / `autoPlay`
+ * return so the host can route it straight into the result scene.
+ */
+export type EngineDriverResult = PlayerSummary;
+
+/**
+ * Glue layer that wires the three runtime adapters ({@link createWebAudioSession},
+ * {@link createWebInputRuntimeFactory}, {@link createWebUiRuntimeFactory}) together and invokes the shared engine's
+ * `manualPlay` / `autoPlay`. Hosts call this once per chart play; the returned promise resolves with the final
+ * `PlayerSummary` when the chart ends (or rejects with `PlayerInterruptedError` when the player aborts).
+ *
+ * The driver is intentionally stateless — every per-chart cache (decoded samples, WAVCMD multipliers, BGA video
+ * handles) lives on the host side. That matches how the existing `PixiGameplayView.prepare*` chain already builds
+ * those caches, so adopting the driver in Phase 4b is a drop-in replacement for the gameplay view's self-judge
+ * loop rather than a state-ownership refactor.
+ *
+ * Beatoraja-compatible behavior the engine drives for both runtimes (TUI + Web):
+ * - Look-ahead lane keysound fallback (`findLaneSoundCandidate`) on out-of-window presses.
+ * - Free-Zone (`17` / `27`) channels — empty press plays the keysound, no 空POOR.
+ * - LN suppress windows + 380 ms initial / 120 ms repeat hold-grace.
+ * - LN early-release audio cut via `AudioSession.stopChannel`.
+ * - Mine vs note delta-based priority (closest delta wins).
+ * - Multi-channel input mapping for scratch / Free-Zone aliases.
+ */
+export async function runEngineDriver(options: EngineDriverOptions): Promise<EngineDriverResult> {
+  const { chart, audio, mode, ui, inputTarget, shouldSkipKey, engineOptions } = options;
+  const createAudioSession = async (context: CreateAudioSessionContext): Promise<AudioSession> => {
+    log.debug('audio session factory invoked', { mode: context.mode });
+    return createWebAudioSession({
+      audioContext: audio.audioContext,
+      audioBus: audio.audioBus,
+      chart: context.json,
+      decodedSamples: audio.decodedSamples,
+      wavCmdVolumeMultipliers: audio.wavCmdVolumeMultipliers,
+      bmsonSlicePlayback: audio.bmsonSlicePlayback,
+    });
+  };
+  const createInputRuntime = createWebInputRuntimeFactory({ target: inputTarget, shouldSkipKey });
+  const createUiRuntime = createWebUiRuntimeFactory(ui);
+  const compositeOptions: PlayerOptions = {
+    ...engineOptions,
+    auto: mode === 'auto',
+    tui: false,
+    createAudioSession,
+    createInputRuntime,
+    createUiRuntime,
+  };
+  log.info('engine driver starting', { mode, hasInputTarget: inputTarget !== undefined });
+  const summary =
+    mode === 'auto' ? await engineAutoPlay(chart, compositeOptions) : await engineManualPlay(chart, compositeOptions);
+  log.info('engine driver finished', {
+    score: summary.score,
+    exScore: summary.exScore,
+    perfect: summary.perfect,
+    great: summary.great,
+    good: summary.good,
+    bad: summary.bad,
+    poor: summary.poor,
+  });
+  return summary;
+}
