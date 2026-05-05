@@ -2226,8 +2226,20 @@ export class PixiSongSelectView {
       return true;
     }
     for (const text of skin.texts) {
-      if (text.edit !== 1) continue;
       if (text.st !== 30) continue; // 30 = search word
+      // We deliberately DON'T require `text.edit === 1` here.
+      // The LR2 default theme paints the search box with a
+      // `#SRC_TEXT st=30` chrome but routes the actual edit
+      // affordance through the skin's surrounding background
+      // sprite (no `edit` flag on the text itself), so the
+      // strict `edit === 1` filter previously made the search-
+      // word area look interactive without actually firing
+      // `onSearchActivate`. Loosening to "any st=30 text"
+      // catches the LR2 default plus every theme that authors
+      // a search box more conventionally; the host's
+      // `onSearchActivate` is idempotent (it just focuses the
+      // overlay input), so a stray click on a non-editable
+      // search readout is harmless.
       if (!this.isPanelOpen(text.panel)) continue;
       const dst = this.evaluateElementDst(text);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
@@ -3344,6 +3356,22 @@ export class PixiSongSelectView {
     });
     searchValueText.position.set(58, 343);
     this.listLayer.addChild(searchValueText);
+    // Click target — sits above the chrome rectangle and catches
+    // pointer-down events anywhere in the search box. The actual
+    // text input lives off-canvas as a DOM `<input>`, so the host
+    // forwards the activation to that element through
+    // `onSearchActivate`. Filling with `alpha: 0.001` instead of
+    // a no-fill keeps the Graphics hit-testable while staying
+    // visually invisible (Pixi's hit-test treats unfilled
+    // Graphics as having zero hit area).
+    const searchHit = new Graphics();
+    searchHit
+      .rect(8, 336, 300, 24)
+      .fill({ color: 0xffffff, alpha: 0.001 });
+    searchHit.eventMode = 'static';
+    searchHit.cursor = 'text';
+    searchHit.on('pointerdown', () => this.options.onSearchActivate?.());
+    this.listLayer.addChild(searchHit);
 
     // ── Bottom-right score panel ────────────────────────────
     chrome
