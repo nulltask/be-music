@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { BMS_JSON_FORMAT } from '../../json/src/index.ts';
-import { parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from './index.ts';
+import { decodeBmsText, parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
@@ -1256,5 +1256,51 @@ describe('parser', () => {
     const resolved = resolveBmsControlFlow(parsed, { random: () => 0 });
     expect(resolved.resources.wav['0a']).toBe('lower.wav');
     expect(resolved.resources.wav['0A']).toBe('upper.wav');
+  });
+
+  test('decodeBmsText: honours #CHARSET UTF-8 even when shift_jis would also parse', () => {
+    // The chart is authored in UTF-8 with the directive at the
+    // top. Without `#CHARSET`, the auto-detect path would still
+    // reach UTF-8 here (no byte hits the 0x80+ shift_jis lead
+    // range), so we deliberately include a UTF-8 byte sequence
+    // (`éclair` → `é` = 0xC3 0xA9) that decodes garbled under
+    // shift_jis. Honoring the directive yields the correct
+    // accented form.
+    const utf8Bytes = new TextEncoder().encode('#CHARSET UTF-8\n#TITLE éclair\n#ARTIST foo\n');
+    const decoded = decodeBmsText(utf8Bytes);
+    expect(decoded.encoding).toBe('utf8');
+    expect(decoded.text).toContain('#TITLE éclair');
+  });
+
+  test('decodeBmsText: falls back to shift_jis default when no #CHARSET is declared', () => {
+    // No directive, only shift_jis bytes (`「テスト」` =
+    // typical Japanese kana / brackets, well-formed in
+    // shift_jis but garbled under UTF-8). The decoder should
+    // pick shift_jis automatically.
+    const sjisBytes = new Uint8Array([
+      0x23, 0x54, 0x49, 0x54, 0x4c, 0x45, 0x20, 0x83, 0x65, 0x83, 0x58, 0x83, 0x67, 0x0a,
+    ]); // "#TITLE テスト\n" in Shift_JIS
+    const decoded = decodeBmsText(sjisBytes);
+    expect(decoded.encoding).toBe('shift_jis');
+    expect(decoded.text).toContain('テスト');
+  });
+
+  test('decodeBmsText: #CHARSET shift_jis with non-ASCII title surfaces the kana', () => {
+    // Same shift_jis content as above but with the directive
+    // explicitly set. The directive should drive the decode
+    // path even though autodetect would also pick shift_jis,
+    // ensuring deterministic decoding when the chart author
+    // declares an encoding.
+    const directive = '#CHARSET Shift_JIS\n';
+    const directiveBytes = new TextEncoder().encode(directive);
+    const titleBytes = new Uint8Array([
+      0x23, 0x54, 0x49, 0x54, 0x4c, 0x45, 0x20, 0x83, 0x65, 0x83, 0x58, 0x83, 0x67, 0x0a,
+    ]); // "#TITLE テスト\n" in Shift_JIS
+    const merged = new Uint8Array(directiveBytes.length + titleBytes.length);
+    merged.set(directiveBytes, 0);
+    merged.set(titleBytes, directiveBytes.length);
+    const decoded = decodeBmsText(merged);
+    expect(decoded.encoding).toBe('shift_jis');
+    expect(decoded.text).toContain('テスト');
   });
 });

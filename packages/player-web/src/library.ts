@@ -1,6 +1,6 @@
 import { unzipSync } from 'fflate';
 import { isPlayableChannel, resolveChartPlayVariant as resolveChartPlayVariantForChart } from '@be-music/chart';
-import { parseBms, parseBmson } from '@be-music/parser';
+import { extractDeclaredBmsCharset, parseBms, parseBmson } from '@be-music/parser';
 import { extractPlayableNotes } from '@be-music/player/playable-notes';
 import { basename, dirname, normalizePath, runWithConcurrency } from '@be-music/utils/core';
 import type {
@@ -595,10 +595,52 @@ function decodeUtf8(bytes: Uint8Array): string {
 }
 
 function decodeBms(bytes: Uint8Array): string {
+  // BOM detection \u2014 UTF-8 BOM unambiguously identifies the
+  // chart as UTF-8 encoded.
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return decodeUtf8(bytes);
+  }
+  // BMS spec \u2014 honour `#CHARSET <name>` at the top of the file
+  // before falling back to the shift_jis default. The
+  // first-pass latin1 decode preserves every byte 1:1 so we
+  // can scan for the directive without decoding misinterpretation.
+  // Mirrors the parser's `decodeBmsText` flow so a chart's
+  // declared encoding is honoured by every runtime (CLI / TUI /
+  // web).
+  const declaredCharset = extractDeclaredBmsCharset(new TextDecoder('iso-8859-1').decode(bytes));
+  if (declaredCharset) {
+    const decoded = decodeBmsWithCharset(bytes, declaredCharset);
+    if (decoded !== undefined) return decoded;
+  }
   try {
     return new TextDecoder('shift_jis').decode(bytes).replace(/^\ufeff/u, '');
   } catch {
     return decodeUtf8(bytes);
+  }
+}
+
+function decodeBmsWithCharset(bytes: Uint8Array, charset: string): string | undefined {
+  // `TextDecoder` accepts the same canonical encoding names
+  // `canonicaliseBmsCharset` produces, so the declared charset
+  // can route directly through it. Any unrecognised label
+  // throws synchronously; the caller treats that as
+  // "fall back to autodetection".
+  try {
+    switch (charset) {
+      case 'utf-8':
+        return new TextDecoder('utf-8').decode(bytes).replace(/^\ufeff/u, '');
+      case 'shift_jis':
+      case 'euc-jp':
+      case 'iso-8859-1':
+        return new TextDecoder(charset).decode(bytes);
+      case 'utf-16le':
+      case 'utf-16be':
+        return new TextDecoder(charset).decode(bytes).replace(/^\ufeff/u, '');
+      default:
+        return undefined;
+    }
+  } catch {
+    return undefined;
   }
 }
 

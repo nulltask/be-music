@@ -1,4 +1,5 @@
 import iconv from 'iconv-lite';
+import { extractDeclaredBmsCharset } from './bms-charset.ts';
 
 const OBJECT_DATA_LINE = /^#(\d{3})([0-9A-Z]{2})\s*:\s*(.+)\s*$/i;
 const HEADER_LINE = /^#([A-Z][A-Z0-9_]*)(?:\s+(.+))?$/i;
@@ -30,6 +31,19 @@ export function decodeBmsText(buffer: Buffer): DecodedBmsText {
       encoding: 'utf16be',
       text: decodeUtf16BeText(buffer),
     };
+  }
+  // Honour an explicit `#CHARSET` directive at the top of the
+  // chart before falling into automatic detection. The BMS
+  // spec authors `#CHARSET` near the start of the file before
+  // any non-ASCII text, so a latin1 first-pass (which maps
+  // every byte 1:1 to a code point) reliably surfaces the
+  // directive without depending on the autodetect heuristics.
+  const declaredCharset = extractDeclaredBmsCharset(decodeLatin1Text(buffer));
+  if (declaredCharset) {
+    const decoded = decodeWithDeclaredCharset(buffer, declaredCharset);
+    if (decoded) {
+      return decoded;
+    }
   }
   if (isAsciiText(buffer)) {
     return {
@@ -66,6 +80,37 @@ export function decodeBmsText(buffer: Buffer): DecodedBmsText {
       text: decodeUtf8Text(buffer),
     }
   );
+}
+
+function decodeLatin1Text(buffer: Buffer): string {
+  return buffer.toString('latin1');
+}
+
+/**
+ * Maps the canonical charset name produced by
+ * {@link canonicaliseBmsCharset} onto the variant
+ * `decodeBmsText` returns, then runs the decode through
+ * `iconv-lite`. `undefined` for unsupported encodings so the
+ * caller skips the explicit-charset path and falls back to
+ * automatic detection.
+ */
+function decodeWithDeclaredCharset(buffer: Buffer, charset: string): DecodedBmsText | undefined {
+  switch (charset) {
+    case 'utf-8':
+      return { encoding: 'utf8', text: decodeUtf8Text(buffer) };
+    case 'utf-16le':
+      return { encoding: 'utf16le', text: decodeUtf16LeText(buffer) };
+    case 'utf-16be':
+      return { encoding: 'utf16be', text: decodeUtf16BeText(buffer) };
+    case 'shift_jis':
+      return { encoding: 'shift_jis', text: iconv.decode(buffer, 'shift_jis') };
+    case 'euc-jp':
+      return { encoding: 'euc-jp', text: iconv.decode(buffer, 'euc-jp') };
+    case 'iso-8859-1':
+      return { encoding: 'latin1', text: iconv.decode(buffer, 'latin1') };
+    default:
+      return undefined;
+  }
 }
 
 function scoreDecodedBmsText(text: string, bias: number): number {
