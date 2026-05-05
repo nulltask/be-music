@@ -1528,6 +1528,32 @@ export class PixiGameplayView {
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
     }
+    // Drop large per-song reference holders explicitly. The view instance itself becomes unreachable shortly after
+    // `dispose()` returns, but the maps below pin objects whose retained memory dwarfs everything else (decoded PCM
+    // for every #WAV slot, dozens of cached `TextStyle`s with paragraph-layout state) — clearing them here lets the
+    // GC reclaim that memory immediately, instead of waiting for the next major collection that happens to evict the
+    // view. `bgaActiveVideos` was already reset above; the rest of the small Maps / Sets follow the view to GC.
+    this.decodedSamples.clear();
+    this.skinTextStyleCache.clear();
+    this.activeSampleNodes.clear();
+    this.scheduled.clear();
+    this.runtimeOps.clear();
+    this.pressedChannels.clear();
+    this.activeLongNotes.clear();
+    this.timerStartedAt.clear();
+    this.bombStartedAt.clear();
+    this.keyOnFadeOutStart.clear();
+    this.keyOnFadeDurationMs.clear();
+    this.lnHoldFadeOutStart.clear();
+    this.lnHoldFadeDurationMs.clear();
+    this.bombDurationMs.clear();
+    this.gaugeTimerDurationMs.clear();
+    this.wavCmdVolumeMultipliers.clear();
+    this.switchingBgas.clear();
+    this.gaugeHistory.length = 0;
+    this.scoreHistory.length = 0;
+    this.volumeChangeEvents.length = 0;
+    this.invisibleNotes.length = 0;
     this.host = undefined;
   }
 
