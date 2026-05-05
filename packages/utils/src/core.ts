@@ -298,6 +298,55 @@ export function normalizeAsciiBase62Code(code: number): number {
   return -1;
 }
 
+/**
+ * bmson 1.0.0 spec MUST — "The implementation must protect from
+ * malicious paths. Absolute path: `C:\password.txt` or
+ * `/etc/passwd`. Reference to parent directory:
+ * `../../../var/www/html/config.php`. Null characters (`\0`)."
+ *
+ * Pure-string predicate so CLI / TUI filesystem callers and
+ * the browser's case-insensitive file map can share one
+ * canonical guard. Returns `true` for paths the implementation
+ * should refuse to resolve. Does NOT consult any filesystem.
+ *
+ * - **Null byte** — many native APIs interpret `\0` as a C
+ *   string terminator, so `safe.wav\0/etc/passwd` could
+ *   resolve to the second half on a non-defensive backend.
+ * - **POSIX absolute** — leading `/` (or `\`) escapes the
+ *   chart bundle on Unix-style backends.
+ * - **Windows absolute** — `C:\...` / `D:/...` drive-letter
+ *   prefixes.
+ * - **UNC / network share** — `\\server\share`,
+ *   `//server/share`.
+ * - **Parent traversal** — any path *segment* that is exactly
+ *   `..` would walk out of the chart bundle. Per-segment
+ *   matching (rather than substring) so a legitimate filename
+ *   like `Lab..rinth.wav` still resolves.
+ */
+export function isMaliciousAssetPath(path: string): boolean {
+  if (typeof path !== 'string' || path.length === 0) {
+    return false;
+  }
+  if (path.includes('\0')) {
+    return true;
+  }
+  if (path.startsWith('/') || path.startsWith('\\')) {
+    return true;
+  }
+  if (/^[A-Za-z]:[\\/]/.test(path)) {
+    return true;
+  }
+  if (path.startsWith('//') || path.startsWith('\\\\')) {
+    return true;
+  }
+  for (const segment of path.split(/[/\\]/)) {
+    if (segment === '..') {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function normalizePath(path: string): string {
   const segments = path.replaceAll('\\', '/').split('/');
   const normalizedSegments: string[] = [];

@@ -11,6 +11,7 @@ import {
   findLastIndexAtOrBefore,
   findLastIndexBefore,
   gcd,
+  isMaliciousAssetPath,
   lcm,
   normalizePath,
   normalizeAsciiBase36Code,
@@ -196,5 +197,27 @@ describe('utils', () => {
     expect(dirname(String.raw`root\\song/main.bms`)).toBe('root/song');
     expect(dirname('main.bms')).toBe('');
     expect(basename(String.raw`root\\song/main.bms`)).toBe('main.bms');
+  });
+
+  test('isMaliciousAssetPath: rejects spec-named threat shapes', () => {
+    // bmson 1.0.0 spec MUST entries.
+    expect(isMaliciousAssetPath('/etc/passwd')).toBe(true);
+    expect(isMaliciousAssetPath('\\etc\\passwd')).toBe(true);
+    expect(isMaliciousAssetPath('C:\\password.txt')).toBe(true);
+    expect(isMaliciousAssetPath('D:/secrets.bin')).toBe(true);
+    expect(isMaliciousAssetPath('//server/share/file.wav')).toBe(true);
+    expect(isMaliciousAssetPath('\\\\server\\share\\file.wav')).toBe(true);
+    expect(isMaliciousAssetPath('../../../var/www/html/config.php')).toBe(true);
+    expect(isMaliciousAssetPath('safe/../escape.wav')).toBe(true);
+    expect(isMaliciousAssetPath('safe.wav\0/etc/passwd')).toBe(true);
+  });
+
+  test('isMaliciousAssetPath: accepts ordinary chart-relative paths', () => {
+    expect(isMaliciousAssetPath('kick.wav')).toBe(false);
+    expect(isMaliciousAssetPath('subdir/kick.wav')).toBe(false);
+    expect(isMaliciousAssetPath('subdir\\kick.wav')).toBe(false);
+    expect(isMaliciousAssetPath('Lab..rinth.wav')).toBe(false);
+    expect(isMaliciousAssetPath('./local.wav')).toBe(false);
+    expect(isMaliciousAssetPath('')).toBe(false);
   });
 });

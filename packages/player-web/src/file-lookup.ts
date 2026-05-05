@@ -1,4 +1,7 @@
+import { isMaliciousAssetPath } from '@be-music/utils/core';
 import type { BrowserSongAssetEntry } from './types.ts';
+
+export { isMaliciousAssetPath } from '@be-music/utils/core';
 
 /**
  * Shared case-insensitive lookup helpers for the file maps used
@@ -81,63 +84,6 @@ export function findCaseInsensitivePath(
   return index.get(candidate.toLowerCase());
 }
 
-/**
- * bmson 1.0.0 spec — "The implementation must protect from
- * malicious paths. Absolute path: `C:\password.txt` or
- * `/etc/passwd`. Reference to parent directory:
- * `../../../var/www/html/config.php`. Null characters (`\0`)."
- *
- * The browser sandbox already blocks the absolute / parent-
- * directory shapes from reaching real disk (the file map is
- * built from `webkitRelativePath` strings constrained to the
- * dropped folder), but the spec phrases the protection as a
- * MUST, and rejecting these paths explicitly here also covers
- * the CLI / Node consumers who feed the same map through a
- * filesystem layer.
- *
- * - **Null byte** — many filesystem APIs interpret `\0` as a C
- *   string terminator, allowing a crafted path like
- *   `safe.wav\0/etc/passwd` to resolve to the second half on
- *   non-defensive backends.
- * - **POSIX absolute** — leading `/` (or `\`) escapes the
- *   chart bundle on Unix-style backends.
- * - **Windows absolute** — `C:\...` / `D:/...` drive-letter
- *   prefixes; UNC `\\server\share` / `//server/share`
- *   network paths.
- * - **Parent traversal** — any path segment that is exactly
- *   `..` would walk out of the chart bundle. Per-segment
- *   matching (rather than substring) so a legitimate filename
- *   like `Lab..rinth.wav` still resolves.
- */
-export function isMaliciousAssetPath(path: string): boolean {
-  if (typeof path !== 'string' || path.length === 0) {
-    return false;
-  }
-  if (path.includes('\0')) {
-    return true;
-  }
-  if (path.startsWith('/') || path.startsWith('\\')) {
-    return true;
-  }
-  if (/^[A-Za-z]:[\\/]/.test(path)) {
-    return true;
-  }
-  // UNC / network share shapes (covered above by the leading
-  // slash check, but kept explicit for the typed-out
-  // double-slash form `//server/share`).
-  if (path.startsWith('//') || path.startsWith('\\\\')) {
-    return true;
-  }
-  // Per-segment `..` walk — split on both forward and back
-  // slashes so a Windows-authored chart with backslashes is
-  // still vetted.
-  for (const segment of path.split(/[/\\]/)) {
-    if (segment === '..') {
-      return true;
-    }
-  }
-  return false;
-}
 
 /**
  * Convenience wrapper that returns the bytes (or `undefined`) directly,
