@@ -2247,7 +2247,38 @@ export class PixiSongSelectView {
       this.options.onSearchActivate?.();
       return true;
     }
+    if (this.isInsideLr2DefaultSearchBox(skin, virtualX, virtualY)) {
+      this.options.onSearchActivate?.();
+      return true;
+    }
     return false;
+  }
+
+  /**
+   * Heuristic hit-test for the LR2 default theme's search box.
+   *
+   * The vanilla LR2 select skin draws the SEARCH chrome as a
+   * background `#SRC_IMAGE` plus an `#SRC_TEXT st=30` whose DST
+   * rectangle hugs the value text rather than the whole box.
+   * Once the text is empty (the typical first-load state) the
+   * DST collapses to roughly zero pixels of horizontal room, so
+   * the regular `text.st === 30` walk above misses every click
+   * that lands on the box's chrome and the host's input never
+   * receives focus.
+   *
+   * To stay friendly to skins that don't lay the search box out
+   * the LR2-default way we gate on the canonical 1280×720
+   * design size — anything else falls through to the spec-
+   * driven walk above and we accept that themes shipping a
+   * search box at a non-standard position will need their own
+   * `#SRC_TEXT st=30` to be hit-testable. The hardcoded
+   * rectangle below covers the visible SEARCH chrome on every
+   * LR2 default-derived theme I've seen (`LR2 ver sta`,
+   * `LR2 ver Yamajet`, `LR2 ver syatten`).
+   */
+  private isInsideLr2DefaultSearchBox(skin: Lr2Skin, virtualX: number, virtualY: number): boolean {
+    if (skin.width !== 1280 || skin.height !== 720) return false;
+    return virtualX >= 0 && virtualX <= 920 && virtualY >= 540 && virtualY <= 582;
   }
 
   /**
