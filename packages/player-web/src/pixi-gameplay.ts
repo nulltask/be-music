@@ -1,6 +1,7 @@
 import { Application, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
 import {
   collectSampleTriggers,
+  createBmsonSamplePlaybackMap,
   createTimingResolver,
   type TimedSampleTrigger,
 } from '@be-music/audio-renderer/triggers';
@@ -63,7 +64,7 @@ import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-record
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { destroyUniqueTextures, disposeChildren } from './pixi-utils.ts';
-import { normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
+import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import { createBeatResolver } from '@be-music/chart';
 import {
@@ -818,6 +819,22 @@ export class PixiGameplayView {
    */
   private recorder: GameplayRecorder | undefined;
   private decodedSamples = new Map<string, AudioBuffer>();
+  /**
+   * bmson per-event slice playback map. For bmson charts the
+   * audio-renderer's `createBmsonSamplePlaybackMap` precomputes
+   * which portion of each `sound_channels[]` WAV a given note
+   * is supposed to play — `offsetSeconds` is the seek-into-file
+   * position, `durationSeconds` (when set) caps how long the
+   * slice should run. Built once per chart in `prepareSong`;
+   * `playSample` looks each note's event up here and calls
+   * `node.start(when, offset, duration)` accordingly so the
+   * sliced-WAV authoring intent is preserved.
+   *
+   * Stays `undefined` for non-bmson charts (they have no
+   * slicing semantics — each note plays its entire WAV from
+   * t=0).
+   */
+  private bmsonSlicePlayback: Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }> | undefined;
   /**
    * Most recent {@link AudioBufferSourceNode} per sample key,
    * tracked so bmson `note.c = true` (continuation flag) can
@@ -1899,6 +1916,27 @@ export class PixiGameplayView {
       .filter((trigger) => !isPlayableInputChannel(trigger.channel))
       .sort((left, right) => left.seconds - right.seconds);
     this.autoTriggerNextIndex = 0;
+    // bmson 1.0.0 slicing — for bmson charts, each
+    // `sound_channels[]` entry is a single audio file that gets
+    // sliced at every distinct pulse where any of its notes fire,
+    // and each note plays its assigned slice (`audio_offset` ..
+    // `audio_offset + slice_duration`) instead of the whole WAV
+    // from t=0. The audio-renderer already computes the per-event
+    // slice playback table; we wire it up here so the playable-
+    // note path (`playSample`) can look up the offset / duration
+    // by event identity at trigger time. BMS / json charts skip
+    // the build (the map stays undefined) since they have no
+    // slicing semantics — every note plays its WAV from the
+    // start.
+    this.bmsonSlicePlayback =
+      resolved.sourceFormat === 'bmson'
+        ? createBmsonSamplePlaybackMap(
+            resolved,
+            resolver,
+            [...this.notes, ...this.mineNotes, ...this.invisibleNotes].map((note) => note.event),
+            beatResolver,
+          )
+        : undefined;
     this.songDurationSeconds = Math.max(this.chartLastNoteEndSeconds, this.autoSampleTriggers.at(-1)?.seconds ?? 0);
     this.applyHsFix(resolver, resolved.metadata.bpm ?? this.song?.bpm);
     // Initialize gauge with the actual playable-note count and the
@@ -4268,6 +4306,8 @@ export class PixiGameplayView {
       this.autoTriggerNextIndex += 1;
       this.playSampleByKey(trigger.sampleKey, trigger.seconds, {
         continuationFlag: trigger.event.bmson?.c === true,
+        offsetSeconds: trigger.sampleOffsetSeconds,
+        durationSeconds: trigger.sampleDurationSeconds,
       });
     }
   }
@@ -4287,7 +4327,7 @@ export class PixiGameplayView {
   private playSampleByKey(
     sampleKey: string,
     scheduledChartSeconds?: number,
-    options: { continuationFlag?: boolean } = {},
+    options: { continuationFlag?: boolean; offsetSeconds?: number; durationSeconds?: number } = {},
   ): void {
     if (!this.audioContext || !this.song) {
       return;
@@ -4326,14 +4366,24 @@ export class PixiGameplayView {
     // hasn't run yet (defensive — in practice the bus is always
     // built before any `play*` call).
     node.connect(this.audioBus?.bgmMixer ?? this.audioContext.destination);
+    // bmson slicing — `offsetSeconds` seeks into the sound-channel
+    // WAV and `durationSeconds` caps how long this slice plays.
+    // Both are clamped against the buffer duration so a chart
+    // that mis-authors them (or that sourced its slice positions
+    // from a longer take) still produces audible output instead
+    // of an instant abort. BMS / json paths leave both fields
+    // undefined and play the whole WAV from t=0 — the historical
+    // behaviour.
+    const offsetSeconds = clampSampleOffset(options.offsetSeconds, buffer.duration);
+    const durationSeconds = clampSampleDuration(options.durationSeconds, buffer.duration, offsetSeconds);
     if (scheduledChartSeconds !== undefined) {
       // Map chart seconds → audio-context time. Clamp to "now" so a slightly
       // late trigger (look-ahead just elapsed) still fires immediately rather
       // than throwing for a past timestamp.
       const startAt = Math.max(this.audioContext.currentTime, this.audioContextStartTime + scheduledChartSeconds);
-      node.start(startAt);
+      startSampleNode(node, startAt, offsetSeconds, durationSeconds);
     } else {
-      node.start();
+      startSampleNode(node, undefined, offsetSeconds, durationSeconds);
     }
     this.activeSampleNodes.set(sampleKey, node);
   }
@@ -4397,7 +4447,19 @@ export class PixiGameplayView {
     // hasn't run yet (defensive — in practice the bus is always
     // built before any `play*` call).
     node.connect(this.audioBus?.keyMixer ?? this.audioContext.destination);
-    node.start();
+    // bmson slicing — for bmson charts, the playback map carries
+    // the per-event `(offsetSeconds, durationSeconds)` tuple
+    // produced by `createBmsonSamplePlaybackMap`. Honouring it
+    // here means a chart that splits one long WAV across many
+    // notes plays each note's intended slice instead of replaying
+    // the whole file from t=0 on every hit. BMS / json charts
+    // never populate `bmsonSlicePlayback` (slicing is a bmson-
+    // only concept), so the lookup misses and the historical
+    // play-from-zero behaviour kicks in.
+    const slice = this.bmsonSlicePlayback?.get(note.event);
+    const offsetSeconds = clampSampleOffset(slice?.offsetSeconds, buffer.duration);
+    const durationSeconds = clampSampleDuration(slice?.durationSeconds, buffer.duration, offsetSeconds);
+    startSampleNode(node, undefined, offsetSeconds, durationSeconds);
     this.activeSampleNodes.set(sampleKey, node);
   }
 
@@ -6343,4 +6405,83 @@ function noteFallbackColor(channel: string, laneIndex: number): typeof WHITE {
   const keyIndex = laneIndex % 10;
   if (keyIndex % 2 === 0) return BLUE;
   return WHITE;
+}
+
+/**
+ * Clamps a bmson slice offset against the loaded buffer's
+ * duration so a misauthored offset (or one that came from a
+ * trimmed take) doesn't produce a `start()` call past EOF —
+ * Web Audio would silently emit nothing in that case. Any
+ * non-finite / negative input collapses to 0 so the historical
+ * "play from t=0" behaviour stays the default fallback.
+ */
+function clampSampleOffset(offsetSeconds: number | undefined, bufferDuration: number): number {
+  if (typeof offsetSeconds !== 'number' || !Number.isFinite(offsetSeconds) || offsetSeconds <= 0) {
+    return 0;
+  }
+  if (offsetSeconds >= bufferDuration) {
+    return Math.max(0, bufferDuration - 1e-3);
+  }
+  return offsetSeconds;
+}
+
+/**
+ * Caps a bmson slice duration against the loaded buffer's
+ * tail so the slice playback doesn't overshoot the file.
+ * Returns `undefined` when no duration was authored — the
+ * caller then lets the buffer source play to its natural end
+ * (matching BMS-style "trigger plays the whole sample"
+ * semantics).
+ */
+function clampSampleDuration(
+  durationSeconds: number | undefined,
+  bufferDuration: number,
+  offsetSeconds: number,
+): number | undefined {
+  if (typeof durationSeconds !== 'number' || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    return undefined;
+  }
+  const remaining = Math.max(0, bufferDuration - offsetSeconds);
+  if (remaining <= 0) {
+    return undefined;
+  }
+  return Math.min(durationSeconds, remaining);
+}
+
+/**
+ * Wraps `AudioBufferSourceNode.start` so the offset / duration
+ * arguments only get supplied when meaningful — Web Audio
+ * differentiates `start(when)` (whole buffer) from
+ * `start(when, offset)` (seek) from `start(when, offset, duration)`
+ * (seek + cap), and we want to match the historical behaviour
+ * for the two- and three-arg cases when slicing isn't in play.
+ *
+ * `when` of `undefined` calls `start()` (immediate); a finite
+ * value calls `start(when)` (scheduled).
+ */
+function startSampleNode(
+  node: AudioBufferSourceNode,
+  when: number | undefined,
+  offsetSeconds: number,
+  durationSeconds: number | undefined,
+): void {
+  const hasOffset = offsetSeconds > 0;
+  const hasDuration = typeof durationSeconds === 'number';
+  if (when !== undefined) {
+    if (hasDuration) {
+      node.start(when, offsetSeconds, durationSeconds);
+    } else if (hasOffset) {
+      node.start(when, offsetSeconds);
+    } else {
+      node.start(when);
+    }
+    return;
+  }
+  if (hasDuration) {
+    node.start(0, offsetSeconds, durationSeconds);
+  } else if (hasOffset) {
+    node.start(0, offsetSeconds);
+  } else {
+    node.start();
+  }
 }
