@@ -223,6 +223,43 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
   return uses6or7 ? '7' : '5';
 }
 
+/**
+ * Resolves the chart's reference BPM for hi-speed / scroll-speed
+ * normalisation, honouring the BMS spec for `#BASEBPM`.
+ *
+ * Spec — `#BASEBPM N` (hitkey BMS Memo): declares the chart's
+ * reference BPM for HS-fix style scroll calibration. When set,
+ * scroll-speed-aware consumers should treat that value as the
+ * "main BPM" instead of the chart's initial `#BPM`. When absent
+ * we fall back to the parser-extracted `metadata.bpm`, which is
+ * the chart's first declared `#BPM`.
+ *
+ * `fallbackBpm` is the optional last-resort value the host can
+ * supply (e.g. a song-list-cached BPM hint) for charts that omit
+ * both `#BASEBPM` and `#BPM` — a rare but legal corner of the
+ * spec.
+ *
+ * Returns `undefined` when no positive BPM is available, so
+ * callers can early-out without applying a meaningless ratio.
+ */
+export function resolveChartReferenceBpm(
+  json: BeMusicJson,
+  fallbackBpm?: number,
+): number | undefined {
+  const baseBpm = json.bms.baseBpm;
+  if (typeof baseBpm === 'number' && Number.isFinite(baseBpm) && baseBpm > 0) {
+    return baseBpm;
+  }
+  const metadataBpm = json.metadata.bpm;
+  if (typeof metadataBpm === 'number' && Number.isFinite(metadataBpm) && metadataBpm > 0) {
+    return metadataBpm;
+  }
+  if (typeof fallbackBpm === 'number' && Number.isFinite(fallbackBpm) && fallbackBpm > 0) {
+    return fallbackBpm;
+  }
+  return undefined;
+}
+
 export function isTempoChannel(channel: string): boolean {
   if (channel.length === 2) {
     const high = channel.charCodeAt(0);

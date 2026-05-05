@@ -20,6 +20,7 @@ import {
   parseBmsDynamicVolumeGain,
   parseBpmFrom03Token,
   resolveChartPlayVariant,
+  resolveChartReferenceBpm,
   resolveBmsLongNotes,
   resolveLnobjLongNotes,
   sortEvents,
@@ -120,6 +121,51 @@ describe('chart', () => {
     const sorted = sortEvents(events);
     expect(sorted[0].value).toBe('01');
     expect(sorted[1].value).toBe('02');
+  });
+
+  test('resolveChartReferenceBpm prefers #BASEBPM over the chart #BPM', () => {
+    // BMS spec — `#BASEBPM` (hitkey BMS Memo) is the chart-author
+    // -declared HS-fix reference BPM. When set, scroll-speed
+    // calibration MUST honour it instead of the chart's initial
+    // `#BPM`, because that's the explicit author intent for the
+    // scroll feel; `#BPM` is just where the chart starts ticking.
+    const json = createEmptyJson();
+    json.metadata.bpm = 200;
+    json.bms.baseBpm = 130;
+    expect(resolveChartReferenceBpm(json)).toBe(130);
+  });
+
+  test('resolveChartReferenceBpm falls back to metadata.bpm when #BASEBPM is absent', () => {
+    const json = createEmptyJson();
+    json.metadata.bpm = 145;
+    expect(resolveChartReferenceBpm(json)).toBe(145);
+  });
+
+  test('resolveChartReferenceBpm honours the host fallback when nothing is declared', () => {
+    // Charts that omit both `#BASEBPM` and `#BPM` are rare but
+    // legal — typically partial / WIP fixtures. The host can
+    // pass a song-list-cached BPM hint.
+    const json = createEmptyJson();
+    json.metadata.bpm = 0;
+    expect(resolveChartReferenceBpm(json, 120)).toBe(120);
+  });
+
+  test('resolveChartReferenceBpm rejects non-positive #BASEBPM values', () => {
+    // Defensive: `#BASEBPM 0` / negative parses can leak through
+    // a malformed chart. We treat them as "unset" rather than
+    // returning a divide-by-zero seed.
+    const json = createEmptyJson();
+    json.metadata.bpm = 140;
+    json.bms.baseBpm = 0;
+    expect(resolveChartReferenceBpm(json)).toBe(140);
+    json.bms.baseBpm = -10;
+    expect(resolveChartReferenceBpm(json)).toBe(140);
+  });
+
+  test('resolveChartReferenceBpm returns undefined when nothing positive is available', () => {
+    const json = createEmptyJson();
+    json.metadata.bpm = 0;
+    expect(resolveChartReferenceBpm(json)).toBeUndefined();
   });
 
   test('classifies channel types', () => {

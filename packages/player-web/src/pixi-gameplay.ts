@@ -72,6 +72,7 @@ import {
   isBmsDynamicVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
   parseBmsDynamicVolumeGain,
+  resolveChartReferenceBpm,
   sortEvents,
 } from '@be-music/chart';
 import {
@@ -2002,7 +2003,15 @@ export class PixiGameplayView {
           )
         : undefined;
     this.songDurationSeconds = Math.max(this.chartLastNoteEndSeconds, this.autoSampleTriggers.at(-1)?.seconds ?? 0);
-    this.applyHsFix(resolver, resolved.metadata.bpm ?? this.song?.bpm);
+    // BMS spec — `#BASEBPM N` declares the chart's reference
+    // BPM for HS-FIX calibration. The shared
+    // `resolveChartReferenceBpm` helper prefers `#BASEBPM` over
+    // the chart's initial `#BPM` so a chart whose `#BPM` is its
+    // peak / average rather than its scroll-feel reference still
+    // calibrates at the speed the author intended; falls back to
+    // the parsed `metadata.bpm` and finally the song-list BPM
+    // hint when neither is present.
+    this.applyHsFix(resolver, resolveChartReferenceBpm(resolved, this.song?.bpm));
     // Initialize gauge with the actual playable-note count and the
     // chart's #TOTAL value so PG/GR gain matches LR2: a long chart
     // with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a
