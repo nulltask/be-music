@@ -635,6 +635,36 @@ describe('parser', () => {
     expect(json.resources.stop[stopKeys[0]!]).toBeCloseTo(48, 6);
   });
 
+  test('bmson: subartists entries get role/name halves trimmed at parse time', () => {
+    // bmson 1.0.0 spec SHOULD — "Implementers should trim the
+    // spaces before and after `key` and `value` in subartists."
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: {
+          init_bpm: 120,
+          resolution: 240,
+          mode_hint: 'beat-7k',
+          subartists: ['  illust  :  foo  ', 'OBJ:bar', '  trimmed  ', ':  bare  ', 'role:'],
+        },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.info.subartists).toEqual([
+      // "  illust  :  foo  " → "illust:foo" (role and name both trimmed)
+      'illust:foo',
+      // Already-tidy entries pass through unchanged.
+      'OBJ:bar',
+      // Colon-less entries get their outer whitespace trimmed.
+      'trimmed',
+      // Leading-colon (no role) collapses to the bare name.
+      'bare',
+      // Trailing-colon (empty name) is preserved as `role:`.
+      'role:',
+    ]);
+  });
+
   test('bmson: missing info.init_bpm throws — spec calls this a fatal error', () => {
     expect(() =>
       parseBmson(

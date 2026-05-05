@@ -638,7 +638,7 @@ function normalizeBmsonSubartists(input: unknown): string[] | undefined {
   const names: string[] = [];
   for (const item of input) {
     if (typeof item === 'string') {
-      names.push(item);
+      names.push(canonicaliseSubartistEntry(item));
       continue;
     }
     if (!item || typeof item !== 'object') {
@@ -646,10 +646,34 @@ function normalizeBmsonSubartists(input: unknown): string[] | undefined {
     }
     const raw = item as Record<string, unknown>;
     if (typeof raw.name === 'string') {
-      names.push(raw.name);
+      names.push(canonicaliseSubartistEntry(raw.name));
     }
   }
   return names;
+}
+
+/**
+ * bmson 1.0.0 spec SHOULD — "Implementers should trim the spaces
+ * before and after `key` and `value` in subartists."
+ *
+ * Trims each half of the `role:name` form (or just the name when
+ * the entry doesn't carry a role) and rejoins so the stored
+ * array contains canonicalised strings. Role case is preserved
+ * — the consumer-facing helper {@link parseBmsonSubartist} is
+ * the one that lower-cases for grouping; we don't want to lose
+ * the author's intended capitalisation in the IR.
+ */
+function canonicaliseSubartistEntry(entry: string): string {
+  const colon = entry.indexOf(':');
+  if (colon < 0) {
+    return entry.trim();
+  }
+  const role = entry.slice(0, colon).trim();
+  const name = entry.slice(colon + 1).trim();
+  if (role.length === 0) {
+    return name;
+  }
+  return `${role}:${name}`;
 }
 
 function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
