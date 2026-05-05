@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Sprite, Text, TextStyle, Texture } from 'pixi.js';
 import {
   collectSampleTriggers,
   createBmsonSamplePlaybackMap,
@@ -73,6 +73,7 @@ import {
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
+  parseBmsBga,
   parseBmsDynamicVolumeGain,
   resolveBmsBmpArgb,
   resolveChartReferenceBpm,
@@ -2908,6 +2909,55 @@ export class PixiGameplayView {
         }
       }),
     );
+    this.registerSubRegionBgaTextures(chart);
+  }
+
+  /**
+   * Builds Pixi sub-textures for every `#BGAxx YY x1 y1 x2 y2 dx dy`
+   * directive after the source `#BMPYY` images have finished
+   * loading. Each sub-region BGA aliases slot `xx` to a frame-
+   * cropped view of slot `YY`, so a chart that authors
+   * `#BGA01 02 0 0 256 256 0 0` makes BGA cues for `01` render the
+   * corresponding portion of `#BMP02` rather than failing the
+   * texture lookup.
+   *
+   * Both the base and layer texture maps are populated so a
+   * sub-region aliased into either track resolves correctly.
+   * Texture sources are reused across slots — Pixi releases the
+   * underlying GPU resource only when the last referencing
+   * sub-texture is destroyed, which `dispose()` handles via
+   * `destroyUniqueTextures`.
+   */
+  private registerSubRegionBgaTextures(chart: BeMusicJson): void {
+    const base = resolveBmsBase(chart);
+    for (const [bgaSlot, raw] of Object.entries(chart.bms.bga)) {
+      const parsed = parseBmsBga(raw, base);
+      if (!parsed) continue;
+      const frameWidth = parsed.ex - parsed.sx;
+      const frameHeight = parsed.ey - parsed.sy;
+      if (frameWidth <= 0 || frameHeight <= 0) continue;
+      const sourceBase = this.bgaTextures.get(parsed.sourceBmp);
+      const sourceLayer = this.bgaLayerTextures.get(parsed.sourceBmp);
+      const seed = sourceBase ?? sourceLayer;
+      if (!seed) {
+        // Source `#BMPYY` failed to load (or was never declared);
+        // the BGA cue for this slot will silently no-op rather
+        // than fall back to a misleading full-frame render.
+        continue;
+      }
+      // Reuse the loaded image source — Pixi treats a `Texture`
+      // sharing a `source` plus a different `frame` rectangle as
+      // a cheap view, no extra GPU upload. Keeping `frame` in
+      // pixel coordinates that match the source image size
+      // guarantees the crop the chart author intended.
+      const frame = new Rectangle(parsed.sx, parsed.sy, frameWidth, frameHeight);
+      if (sourceBase && !this.bgaTextures.has(bgaSlot)) {
+        this.bgaTextures.set(bgaSlot, new Texture({ source: sourceBase.source, frame }));
+      }
+      if (sourceLayer && !this.bgaLayerTextures.has(bgaSlot)) {
+        this.bgaLayerTextures.set(bgaSlot, new Texture({ source: sourceLayer.source, frame }));
+      }
+    }
   }
 
   /**

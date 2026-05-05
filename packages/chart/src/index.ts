@@ -481,6 +481,76 @@ export function resolveBmsBmpArgb(
 }
 
 /**
+ * Parsed `#BGAxx YY x1 y1 x2 y2 dx dy` directive.
+ *
+ * `#BGAxx` declares a sub-region BGA: it pulls a rectangle out of
+ * an existing `#BMPYY` slot and exposes it as the slot ID `xx` so
+ * BGA cues referencing `xx` render only that crop. The destination
+ * offset `(dx, dy)` is the position INSIDE the BMS 256x256 spec
+ * canvas where the cropped rectangle should be drawn — chart
+ * authors use it to compose multiple sub-regions of one source
+ * BMP into different on-screen positions, e.g. assembling a
+ * sprite-sheet animation by aliasing slots `01..09` to different
+ * tiles of `#BMP10`.
+ */
+export interface BmsSubRegionBga {
+  /** Source BMP slot id, normalised via `normalizeObjectKey`. */
+  sourceBmp: string;
+  /** Top-left X of the source rectangle (pixel coordinates). */
+  sx: number;
+  /** Top-left Y of the source rectangle. */
+  sy: number;
+  /** Bottom-right X of the source rectangle (exclusive). */
+  ex: number;
+  /** Bottom-right Y of the source rectangle (exclusive). */
+  ey: number;
+  /** Destination X inside the 256x256 BGA spec canvas. */
+  dx: number;
+  /** Destination Y inside the 256x256 BGA spec canvas. */
+  dy: number;
+}
+
+/**
+ * Parses one `#BGAxx YY x1 y1 x2 y2 dx dy` directive. Whitespace-
+ * separated tokens, all integer except `YY` which is the source
+ * BMP slot id (base-36 / base-62 depending on `#BASE`).
+ *
+ * Returns `undefined` for malformed lines (fewer than seven
+ * tokens, non-integer numerics, empty source slot, or a degenerate
+ * rectangle where `ex <= sx` / `ey <= sy`).
+ */
+export function parseBmsBga(raw: string, idBase: 36 | 62 = 36): BmsSubRegionBga | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const tokens = raw.trim().split(/\s+/u);
+  if (tokens.length < 7) return undefined;
+  const [sourceRaw, sxRaw, syRaw, exRaw, eyRaw, dxRaw, dyRaw] = tokens;
+  if (
+    sourceRaw === undefined ||
+    sxRaw === undefined ||
+    syRaw === undefined ||
+    exRaw === undefined ||
+    eyRaw === undefined ||
+    dxRaw === undefined ||
+    dyRaw === undefined
+  ) {
+    return undefined;
+  }
+  const sourceBmp = normalizeObjectKey(sourceRaw, idBase);
+  if (sourceBmp.length === 0) return undefined;
+  const sx = Number.parseInt(sxRaw, 10);
+  const sy = Number.parseInt(syRaw, 10);
+  const ex = Number.parseInt(exRaw, 10);
+  const ey = Number.parseInt(eyRaw, 10);
+  const dx = Number.parseInt(dxRaw, 10);
+  const dy = Number.parseInt(dyRaw, 10);
+  if (![sx, sy, ex, ey, dx, dy].every((value) => Number.isFinite(value))) return undefined;
+  // Degenerate / inverted rectangles are unusable — they'd produce
+  // a zero-area frame and a runtime divide-by-zero in the consumer.
+  if (ex <= sx || ey <= sy) return undefined;
+  return { sourceBmp, sx, sy, ex, ey, dx, dy };
+}
+
+/**
  * Parsed BMS `#ARGBxx` value — alpha + RGB channel in 0..255.
  *
  * Each component is clamped to the byte range so callers can blindly

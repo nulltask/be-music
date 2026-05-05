@@ -21,6 +21,7 @@ import {
   collectBmsWavCmdVolumeMultipliers,
   exWavVolumeCentibelsToLinearGain,
   parseBmsArgb,
+  parseBmsBga,
   parseBmsDynamicVolumeGain,
   parseBmsExBmp,
   parseBmsExWav,
@@ -250,6 +251,47 @@ describe('chart', () => {
     expect(map.get('01')).toBeCloseTo(0.501, 3);
     expect(map.has('02')).toBe(false);
     expect(map.get('03')).toBeCloseTo(1, 6);
+  });
+
+  test('parseBmsBga decodes "YY x1 y1 x2 y2 dx dy" sub-region directives', () => {
+    // Hitkey BMS Memo: `#BGAxx YY x1 y1 x2 y2 dx dy` aliases slot
+    // `xx` to a rectangle pulled out of `#BMPYY`. Consumers use
+    // this to compose sprite-sheet style animations.
+    expect(parseBmsBga('02 0 0 256 256 0 0')).toEqual({
+      sourceBmp: '02',
+      sx: 0,
+      sy: 0,
+      ex: 256,
+      ey: 256,
+      dx: 0,
+      dy: 0,
+    });
+    expect(parseBmsBga('0a 64 32 192 160 16 8')).toMatchObject({
+      sourceBmp: '0A',
+      sx: 64,
+      sy: 32,
+      ex: 192,
+      ey: 160,
+      dx: 16,
+      dy: 8,
+    });
+  });
+
+  test('parseBmsBga preserves base-62 source slot case', () => {
+    expect(parseBmsBga('0a 0 0 64 64 0 0', 62)?.sourceBmp).toBe('0a');
+  });
+
+  test('parseBmsBga rejects malformed / degenerate inputs', () => {
+    // Too few tokens — missing dx / dy.
+    expect(parseBmsBga('02 0 0 256 256 0')).toBeUndefined();
+    // Inverted rectangle — `ex <= sx` would produce a zero-area
+    // frame and divide-by-zero downstream.
+    expect(parseBmsBga('02 100 0 50 256 0 0')).toBeUndefined();
+    expect(parseBmsBga('02 0 100 256 50 0 0')).toBeUndefined();
+    // Non-integer coordinate.
+    expect(parseBmsBga('02 0 zero 256 256 0 0')).toBeUndefined();
+    // Empty source slot.
+    expect(parseBmsBga(' 0 0 256 256 0 0')).toBeUndefined();
   });
 
   test('parseBmsExBmp decodes "a,r,g,b,filename" with the ARGB tint applied', () => {
