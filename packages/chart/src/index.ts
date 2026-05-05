@@ -261,6 +261,122 @@ export function resolveChartReferenceBpm(
 }
 
 /**
+ * Parsed `#EXWAVxx [flags] params filename` directive.
+ *
+ * `#EXWAVxx` declares an "extended" WAV slot whose playback should
+ * be modified by the listed parameters. The `flags` token names
+ * which channels are present (in order), and `params` is a
+ * comma-separated list whose values match those flags positionally.
+ *
+ * Supported flags (hitkey BMS Memo):
+ * - `p` — stereo pan (`-10000..10000` LR2-style, where 0 is centre).
+ * - `v` — playback volume in centibels (CB), where each step is
+ *   `1/100` of a dB. Negative values attenuate, `0` is unity.
+ * - `f` — playback frequency in Hz. The sample is resampled (or
+ *   replayed at a different rate) so its native sample rate maps
+ *   onto this output rate.
+ *
+ * Real-world charts use this most often for `v` (per-slot volume
+ * trim) and occasionally `p` for stereo placement of one-shots.
+ */
+export interface BmsExWav {
+  /** Raw filename token, joined back together if it contained spaces. */
+  filename: string;
+  /** Pan, when the `p` flag was present. */
+  pan?: number;
+  /** Volume in centibels (1/100 dB), when the `v` flag was present. */
+  volumeCentibels?: number;
+  /** Playback frequency in Hz, when the `f` flag was present. */
+  frequencyHz?: number;
+}
+
+/**
+ * Parses one `#EXWAVxx` directive value (the post-`#EXWAVxx ` text).
+ *
+ * Token layout — three whitespace-separated groups:
+ * 1. Flag string in declaration order, e.g. `pvf` / `vp` / `v`.
+ * 2. Comma-separated integer params matching the flag positions
+ *    (`pvf 100,-200,48000` → pan=100, vol=-200, freq=48000).
+ * 3. Filename. Any trailing whitespace-separated tokens are joined
+ *    back together so chart authors can use names with spaces.
+ *
+ * Returns `undefined` for malformed input — better to skip a
+ * broken `#EXWAV` than to apply nonsense to the audible signal.
+ */
+export function parseBmsExWav(raw: string): BmsExWav | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  const tokens = trimmed.split(/\s+/u);
+  if (tokens.length < 3) return undefined;
+  const flags = tokens[0]!.toLowerCase();
+  const params = tokens[1]!.split(',');
+  // Filename can legitimately contain spaces; rejoin every
+  // remaining token. (LR2 uses Windows-style paths, never URL-
+  // encoded, so a literal space in the name is the only edge.)
+  const filename = tokens.slice(2).join(' ');
+  if (filename.length === 0) return undefined;
+  const out: BmsExWav = { filename };
+  for (let index = 0; index < flags.length; index += 1) {
+    const flag = flags[index];
+    const valueRaw = params[index];
+    if (valueRaw === undefined) break;
+    const value = Number.parseInt(valueRaw.trim(), 10);
+    if (!Number.isFinite(value)) continue;
+    if (flag === 'p') out.pan = value;
+    else if (flag === 'v') out.volumeCentibels = value;
+    else if (flag === 'f') out.frequencyHz = value;
+  }
+  return out;
+}
+
+/**
+ * Maps a centibel volume value (`#EXWAVxx v` parameter, `1/100 dB`)
+ * to a 0..N linear gain multiplier. `0 cB` round-trips to `1.0`
+ * (unity); negative values attenuate; positive values boost. We
+ * clamp the output below `8.0` (≈ +18 dB) so a malformed chart
+ * can't blow the bus, and at `0` so very-negative inputs collapse
+ * to silence rather than producing a denormal.
+ *
+ * Centibels rather than decibels because LR2 / beatoraja both
+ * persist `#EXWAV v` as cB — `v -200` = −2 dB, `v -600` = −6 dB.
+ * Treating the value as straight dB would silently halve every
+ * attenuation in the wild.
+ */
+export function exWavVolumeCentibelsToLinearGain(centibels: number): number {
+  if (!Number.isFinite(centibels)) return 1;
+  const dB = centibels / 100;
+  const gain = 10 ** (dB / 20);
+  if (!Number.isFinite(gain) || gain < 0) return 0;
+  return Math.min(8, gain);
+}
+
+/**
+ * Builds a `slot → linear-gain-multiplier` map for every
+ * `#EXWAVxx` entry that supplies a `v` (volume) flag. Slots
+ * without a parsed `v` (or whose `#EXWAVxx` doesn't even have
+ * three tokens) are absent from the result so the consumer
+ * falls through to unity gain.
+ *
+ * `entries` is the parser-produced `chart.bms.exWav` map (raw
+ * post-`#EXWAVxx ` strings keyed by slot id). The returned keys
+ * are passed through verbatim — they're already normalised to
+ * the chart's id base when the parser ingested them.
+ */
+export function collectBmsExWavVolumeMultipliers(
+  entries: Readonly<Record<string, string>>,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const [slot, raw] of Object.entries(entries)) {
+    const parsed = parseBmsExWav(raw);
+    if (parsed === undefined) continue;
+    if (parsed.volumeCentibels === undefined) continue;
+    out.set(slot, exWavVolumeCentibelsToLinearGain(parsed.volumeCentibels));
+  }
+  return out;
+}
+
+/**
  * Parsed BMS `#ARGBxx` value — alpha + RGB channel in 0..255.
  *
  * Each component is clamped to the byte range so callers can blindly

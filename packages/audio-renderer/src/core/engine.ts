@@ -1,4 +1,5 @@
 import {
+  collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
@@ -285,6 +286,17 @@ async function scheduleSampleRenders(params: {
   // require resampling / loop-aware mixing that this offline
   // renderer doesn't yet implement.
   const wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(json.bms.wavCmds, resolveBmsBase(json));
+  // BMS spec — `#EXWAVxx [flags] params filename` extended WAV
+  // declarations include an optional `v` (centibel) volume that
+  // composes multiplicatively with `#WAVCMD 01 xx vv`. Fold the
+  // extracted multipliers into the same Map so the per-trigger
+  // gain math stays a single lookup. Pan / freq fall to a future
+  // patch since they require resampling / stereo splitting in
+  // this offline renderer.
+  for (const [slot, multiplier] of collectBmsExWavVolumeMultipliers(json.bms.exWav)) {
+    const previous = wavCmdVolumeMultipliers.get(slot) ?? 1;
+    wavCmdVolumeMultipliers.set(slot, previous * multiplier);
+  }
   for (const trigger of triggers) {
     throwIfAborted(signal);
     const sample = await getOrCreateSample({

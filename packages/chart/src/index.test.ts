@@ -17,9 +17,12 @@ import {
   isTempoChannel,
   mapBmsLongNoteChannelToPlayable,
   measureToBeat,
+  collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
+  exWavVolumeCentibelsToLinearGain,
   parseBmsArgb,
   parseBmsDynamicVolumeGain,
+  parseBmsExWav,
   parseBmsWavCmd,
   wavCmdVolumeByteToLinearGain,
   parseBpmFrom03Token,
@@ -170,6 +173,81 @@ describe('chart', () => {
     const json = createEmptyJson();
     json.metadata.bpm = 0;
     expect(resolveChartReferenceBpm(json)).toBeUndefined();
+  });
+
+  test('parseBmsExWav parses the standard pvf flag layout', () => {
+    // Hitkey BMS Memo: `#EXWAVxx [flags] params filename`.
+    // `pvf 1024,-200,48000 sample.wav` → pan=1024, vol=-200 cB
+    // (≈ −2 dB), freq=48 kHz, filename `sample.wav`.
+    expect(parseBmsExWav('pvf 1024,-200,48000 sample.wav')).toEqual({
+      pan: 1024,
+      volumeCentibels: -200,
+      frequencyHz: 48000,
+      filename: 'sample.wav',
+    });
+  });
+
+  test('parseBmsExWav matches each flag character to its positional param', () => {
+    // Flags can appear in any order; the values follow positionally.
+    expect(parseBmsExWav('vp -100,500 hat.wav')).toMatchObject({
+      volumeCentibels: -100,
+      pan: 500,
+      filename: 'hat.wav',
+    });
+    const onlyVol = parseBmsExWav('v 0 only-vol.wav');
+    expect(onlyVol?.volumeCentibels).toBe(0);
+    // Absent flags must remain undefined so the consumer can
+    // distinguish "explicitly authored 0" from "not authored at
+    // all" — pan: 0 = centre, vol: 0 cB = unity.
+    expect(onlyVol?.pan).toBeUndefined();
+    expect(onlyVol?.frequencyHz).toBeUndefined();
+  });
+
+  test('parseBmsExWav joins multi-token filenames back together', () => {
+    // Charts can ship Windows-path-style names with spaces.
+    expect(parseBmsExWav('v 0 my sample.wav')?.filename).toBe('my sample.wav');
+  });
+
+  test('parseBmsExWav returns undefined for malformed input', () => {
+    expect(parseBmsExWav('')).toBeUndefined();
+    // Missing the params or the filename token.
+    expect(parseBmsExWav('pvf')).toBeUndefined();
+    expect(parseBmsExWav('pvf 100,200,300')).toBeUndefined();
+  });
+
+  test('exWavVolumeCentibelsToLinearGain treats 0 cB as unity', () => {
+    expect(exWavVolumeCentibelsToLinearGain(0)).toBe(1);
+  });
+
+  test('exWavVolumeCentibelsToLinearGain attenuates negative cB and boosts positive cB', () => {
+    // -600 cB = -6 dB → ≈ 0.501 linear gain.
+    expect(exWavVolumeCentibelsToLinearGain(-600)).toBeCloseTo(0.501, 3);
+    // -2000 cB = -20 dB → ≈ 0.1.
+    expect(exWavVolumeCentibelsToLinearGain(-2000)).toBeCloseTo(0.1, 3);
+    // +600 cB = +6 dB → ≈ 1.995 linear gain.
+    expect(exWavVolumeCentibelsToLinearGain(600)).toBeCloseTo(1.995, 3);
+  });
+
+  test('exWavVolumeCentibelsToLinearGain clamps absurd inputs', () => {
+    // Pathological boost should clamp at +18 dB linear (≈ 8x).
+    expect(exWavVolumeCentibelsToLinearGain(10_000)).toBe(8);
+    // Non-finite input falls back to unity (no surprise change).
+    expect(exWavVolumeCentibelsToLinearGain(Number.NaN)).toBe(1);
+  });
+
+  test('collectBmsExWavVolumeMultipliers ignores entries without a v flag', () => {
+    const map = collectBmsExWavVolumeMultipliers({
+      // Only `v`, no pan / freq — should produce a multiplier.
+      '01': 'v -600 attenuated.wav',
+      // Pan-only — must NOT contribute (no volume to apply).
+      '02': 'p 1024 panned.wav',
+      // pvf with `v 0` — unity is still recorded so the consumer
+      // sees the slot was deliberately authored.
+      '03': 'pvf 1024,0,48000 unity.wav',
+    });
+    expect(map.get('01')).toBeCloseTo(0.501, 3);
+    expect(map.has('02')).toBe(false);
+    expect(map.get('03')).toBeCloseTo(1, 6);
   });
 
   test('parseBmsArgb decodes the AARRGGBB hex format the parser stores', () => {

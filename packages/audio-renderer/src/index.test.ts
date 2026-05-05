@@ -172,6 +172,60 @@ test('audio-renderer: scales individual sample triggers with #WAVCMD 01 xx vv', 
   expect(attenuatedRendered.peak).toBeCloseTo(baselineRendered.peak * (64 / 127), 6);
 });
 
+test('audio-renderer: scales individual sample triggers with #EXWAVxx v', async () => {
+  // BMS spec — `#EXWAVxx [flags] params filename` exposes a
+  // centibel-units `v` (volume) trim that composes with the
+  // bus / `#WAVCMD` chain. -600 cB = -6 dB ≈ 0.501 linear gain.
+  const baseline = createSingleTriggerBmsChart('not-found.wav');
+  const attenuated = createSingleTriggerBmsChart('not-found.wav');
+  attenuated.bms.exWav['01'] = 'v -600 not-found.wav';
+  const [baselineRendered, attenuatedRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+    renderJson(attenuated, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+  ]);
+  expect(attenuatedRendered.peak).toBeCloseTo(baselineRendered.peak * 0.501, 2);
+});
+
+test('audio-renderer: composes #EXWAVxx and #WAVCMD attenuation multiplicatively', async () => {
+  // Stack a `#EXWAV01 v -600` (≈ 0.5x) on top of a `#WAVCMD 01 01 64`
+  // (≈ 0.504x) — the rendered peak should be the product, not just
+  // one of them.
+  const baseline = createSingleTriggerBmsChart('not-found.wav');
+  const stacked = createSingleTriggerBmsChart('not-found.wav');
+  stacked.bms.exWav['01'] = 'v -600 not-found.wav';
+  stacked.bms.wavCmds = ['01 01 64'];
+  const [baselineRendered, stackedRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+    renderJson(stacked, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+  ]);
+  // 0.501 × (64/127) ≈ 0.252.
+  expect(stackedRendered.peak).toBeCloseTo(baselineRendered.peak * 0.501 * (64 / 127), 2);
+});
+
 test('audio-renderer: ignores non-volume #WAVCMD bytes (pitch / loop)', async () => {
   // Pitch / loop bytes are intentionally not applied yet (the
   // offline renderer doesn't resample / loop dynamically). They

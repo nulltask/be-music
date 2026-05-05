@@ -67,6 +67,7 @@ import { destroyUniqueTextures, disposeChildren } from './pixi-utils.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
+  collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
   createBeatResolver,
   isBmsBgmVolumeChangeChannel,
@@ -1839,6 +1840,23 @@ export class PixiGameplayView {
       resolved.bms.wavCmds,
       resolveBmsBase(resolved),
     );
+    // BMS spec — `#EXWAVxx [flags] params filename` declares an
+    // extended WAV slot with optional pan / volume / frequency.
+    // Apply the volume side here so the existing per-trigger
+    // `connectSampleNodeWithWavCmdGain` splices the `#EXWAV`
+    // attenuation in alongside any `#WAVCMD 01 xx vv` value.
+    // Pan / freq are deliberately skipped — they need a
+    // StereoPannerNode / playbackRate split that the current
+    // graph doesn't yet wire up.
+    const exWavMultipliers = collectBmsExWavVolumeMultipliers(resolved.bms.exWav);
+    for (const [slot, multiplier] of exWavMultipliers) {
+      // Compose multiplicatively with `#WAVCMD` so authors who
+      // use both directives on the same slot get the combined
+      // attenuation rather than one silently overriding the
+      // other.
+      const previous = this.wavCmdVolumeMultipliers.get(slot) ?? 1;
+      this.wavCmdVolumeMultipliers.set(slot, previous * multiplier);
+    }
     const extracted = extractTimedNotes(resolved, {
       includeLandmine: true,
       // Always extract the invisible / keysound array even when the
