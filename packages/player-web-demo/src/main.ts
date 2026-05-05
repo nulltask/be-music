@@ -344,8 +344,9 @@ app.innerHTML = `
               <li>Drop a BMS folder anywhere on the page to register its charts.</li>
               <li>Drop an <code>LR2files</code> folder (or its contents) to apply an LR2 skin theme.</li>
               <li>
-                Or click <strong>Open folder / ZIP</strong> in the lil-gui panel (top-right) to use the native
-                file picker.
+                Or click <strong>Open Folder</strong> in the lil-gui panel (top-right) to use the native
+                file picker — same handling as a drag-drop, so a folder containing both an LR2 theme and
+                BMS charts loads both in one shot. Press the button again to add another folder.
               </li>
               <li>Subsequent drops add to the library and keep the current theme.</li>
             </ul>
@@ -440,7 +441,9 @@ app.innerHTML = `
               <li>BMS フォルダをページ上にドロップすると、その中のチャートが登録されます。</li>
               <li><code>LR2files</code> フォルダ (またはその中身) をドロップすると LR2 スキンが適用されます。</li>
               <li>
-                右上 lil-gui パネルの <strong>Open folder / ZIP</strong> ボタンからネイティブのファイル選択ダイアログも使えます。
+                右上 lil-gui パネルの <strong>Open Folder</strong> ボタンからネイティブのファイル選択ダイアログも使えます。
+                ドラッグ&ドロップと同じ処理経路を通るので、テーマとチャートが同居したフォルダもまとめて読み込めます。
+                ボタンを押し直せば別フォルダを追加で読み込めます。
               </li>
               <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
             </ul>
@@ -628,7 +631,7 @@ interface DemoGuiState {
    * which also pushes the new value into the controller.
    */
   status: string;
-  /** Triggered by clicking the GUI's "Open folder / ZIP" button. */
+  /** Triggered by clicking the GUI's "Open Folder" button. */
   openFolder: () => void;
   /** Triggered by clicking the GUI's record toggle. */
   record: () => void;
@@ -828,9 +831,17 @@ class PlayerWebDemoApp {
 
     this.elements.songInput.addEventListener('change', () => {
       const files = this.elements.songInput.files;
-      if (!files) {
+      if (!files || files.length === 0) {
         return;
       }
+      const fileList = [...files];
+      // Reset the input value immediately so picking the SAME
+      // folder a second time still fires `change`. Browsers
+      // suppress repeat `change` events when the new selection
+      // matches the previous value — without this, a user
+      // re-picking after a misclick or an interrupted load
+      // would see the input silently ignore them.
+      this.elements.songInput.value = '';
       void (async () => {
         // Browser file-picker drops go through the same loading
         // overlay as drag-drop so a folder picked via the GUI
@@ -840,11 +851,17 @@ class PlayerWebDemoApp {
         this.showLoadingOverlay();
         this.selectView?.setVisible(false);
         try {
-          await this.loadSongs([...files]);
+          // Route through the same post-enumeration pipeline as
+          // drag-drop so the picker's selection produces a
+          // theme + songs split (handy when a user hand-picks
+          // a folder whose root carries both an LR2 theme and a
+          // BMS pack), instead of the previous `loadSongs`-only
+          // path that quietly skipped any LR2 assets in the
+          // selection.
+          await this.processIncomingFiles(fileList);
         } finally {
           this.hideLoadingOverlay();
         }
-        await this.showSelect();
       })();
     });
 
@@ -1003,7 +1020,7 @@ class PlayerWebDemoApp {
     // this class anyway.
     this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
     this.statusController.domElement.classList.add('status-row');
-    gui.add(this.guiState, 'openFolder').name('Open folder / ZIP');
+    gui.add(this.guiState, 'openFolder').name('Open Folder');
     // Auto play used to be a lil-gui checkbox here too, but the
     // in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on the
     // select skin) already exposes it — the duplicate toolbar
@@ -1318,56 +1335,7 @@ class PlayerWebDemoApp {
       const files = await readDroppedFiles(dataTransfer, {
         onProgress: (progress) => this.applyLoadProgress(progress),
       });
-      if (files.length === 0) {
-        return;
-      }
-      const { themeFiles, songFiles } = splitDroppedSongAndThemeFiles(files);
-      // `splitDroppedSongAndThemeFiles` routes any non-chart files
-      // outside a chart directory into `themeFiles`. That includes
-      // stray `readme.txt` / `info.json` / album-art images sitting
-      // at the root of a BMS pack that isn't a real LR2 theme. Only
-      // run the theme loader when the drop actually carries an
-      // `.lr2skin` file — otherwise an "extra files at the BMS root"
-      // drop wipes the previously-loaded LR2 theme by overwriting
-      // `selectSkin` / `playSkins` / etc. with `undefined`.
-      const carriesLr2Theme = themeFiles.some((file) =>
-        (file.webkitRelativePath || file.name).toLowerCase().endsWith('.lr2skin'),
-      );
-      dropLog.info(
-        `received ${files.length} file(s) · theme=${themeFiles.length}${carriesLr2Theme ? '' : ' (no .lr2skin → preserving current theme)'} · songs=${songFiles.length}`,
-      );
-      const tasks: Array<Promise<unknown>> = [];
-      if (carriesLr2Theme) {
-        tasks.push(this.loadTheme(themeFiles));
-      }
-      if (songFiles.length > 0) {
-        tasks.push(this.loadSongs(songFiles));
-      }
-      if (tasks.length === 0) {
-        dropLog.warn('nothing to load — neither theme nor chart files matched');
-        return;
-      }
-      await Promise.all(tasks);
-      const playSkinSummary = summarizeLr2PlaySkins(this.playSkins);
-      dropLog.info(
-        `loaded · songs=${this.collection.songs.length} · errors=${
-          this.collection.errors.length
-        } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin?.name ?? 'none'}`,
-      );
-      if (this.collection.errors.length > 0) {
-        dropLog.warn('parse errors:', this.collection.errors);
-      }
-      // Status panel stays terse on purpose — only show "loaded"
-      // when there's something to celebrate, and skip the
-      // per-key-mode skin enumeration since the user can see the
-      // active skin in-canvas. "0 charts loaded" is suppressed so
-      // a theme-only drop doesn't read like an error.
-      if (this.collection.songs.length > 0) {
-        this.setStatus(describeSongCollection(this.collection));
-      } else if (this.selectSkin || this.resultSkin || Object.keys(this.playSkins).length > 0) {
-        this.setStatus('Theme loaded');
-      }
-      await this.showSelect();
+      await this.processIncomingFiles(files);
     } finally {
       // Always tear the overlay down — even when one of the
       // sub-loaders threw or `splitDroppedSongAndThemeFiles`
@@ -1375,6 +1343,78 @@ class PlayerWebDemoApp {
       // leave the UI permanently masked.
       this.hideLoadingOverlay();
     }
+  }
+
+  /**
+   * Shared post-enumeration pipeline for both drag-drop and the
+   * Debug Menu's "Open Folder" picker. Routes the incoming file
+   * list through {@link splitDroppedSongAndThemeFiles}, dispatches
+   * theme + song loaders in parallel, then mounts the freshly
+   * populated select view.
+   *
+   * The caller is responsible for showing / hiding the loading
+   * overlay and pausing the select view — both entry points
+   * handle that around their own enumeration phase.
+   *
+   * `loadSongs` appends to the existing library so a second /
+   * third invocation of this routine accumulates entries rather
+   * than wiping the previous pack — the host can call this
+   * multiple times in succession (e.g. Open Folder pressed twice
+   * with two different folders) and every drop's charts stay
+   * uniquely addressable through the library's per-source
+   * prefixing.
+   */
+  private async processIncomingFiles(files: File[]): Promise<void> {
+    if (files.length === 0) {
+      return;
+    }
+    const { themeFiles, songFiles } = splitDroppedSongAndThemeFiles(files);
+    // `splitDroppedSongAndThemeFiles` routes any non-chart files
+    // outside a chart directory into `themeFiles`. That includes
+    // stray `readme.txt` / `info.json` / album-art images sitting
+    // at the root of a BMS pack that isn't a real LR2 theme. Only
+    // run the theme loader when the drop actually carries an
+    // `.lr2skin` file — otherwise an "extra files at the BMS root"
+    // drop wipes the previously-loaded LR2 theme by overwriting
+    // `selectSkin` / `playSkins` / etc. with `undefined`.
+    const carriesLr2Theme = themeFiles.some((file) =>
+      (file.webkitRelativePath || file.name).toLowerCase().endsWith('.lr2skin'),
+    );
+    dropLog.info(
+      `received ${files.length} file(s) · theme=${themeFiles.length}${carriesLr2Theme ? '' : ' (no .lr2skin → preserving current theme)'} · songs=${songFiles.length}`,
+    );
+    const tasks: Array<Promise<unknown>> = [];
+    if (carriesLr2Theme) {
+      tasks.push(this.loadTheme(themeFiles));
+    }
+    if (songFiles.length > 0) {
+      tasks.push(this.loadSongs(songFiles));
+    }
+    if (tasks.length === 0) {
+      dropLog.warn('nothing to load — neither theme nor chart files matched');
+      return;
+    }
+    await Promise.all(tasks);
+    const playSkinSummary = summarizeLr2PlaySkins(this.playSkins);
+    dropLog.info(
+      `loaded · songs=${this.collection.songs.length} · errors=${
+        this.collection.errors.length
+      } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin?.name ?? 'none'}`,
+    );
+    if (this.collection.errors.length > 0) {
+      dropLog.warn('parse errors:', this.collection.errors);
+    }
+    // Status panel stays terse on purpose — only show "loaded"
+    // when there's something to celebrate, and skip the
+    // per-key-mode skin enumeration since the user can see the
+    // active skin in-canvas. "0 charts loaded" is suppressed so
+    // a theme-only drop doesn't read like an error.
+    if (this.collection.songs.length > 0) {
+      this.setStatus(describeSongCollection(this.collection));
+    } else if (this.selectSkin || this.resultSkin || Object.keys(this.playSkins).length > 0) {
+      this.setStatus('Theme loaded');
+    }
+    await this.showSelect();
   }
 
   private async loadSongs(files: File[]): Promise<void> {
