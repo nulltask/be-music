@@ -66,7 +66,14 @@ import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { destroyUniqueTextures, disposeChildren } from './pixi-utils.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
-import { createBeatResolver } from '@be-music/chart';
+import {
+  createBeatResolver,
+  isBmsBgmVolumeChangeChannel,
+  isBmsDynamicVolumeChangeChannel,
+  isBmsKeyVolumeChangeChannel,
+  parseBmsDynamicVolumeGain,
+  sortEvents,
+} from '@be-music/chart';
 import {
   BG,
   BLUE,
@@ -852,6 +859,17 @@ export class PixiGameplayView {
   private scheduled = new Set<RuntimeNote>();
   private autoSampleTriggers: TimedSampleTrigger[] = [];
   private autoTriggerNextIndex = 0;
+  /**
+   * BMS dynamic-volume timeline (channels `97` BGM-volume /
+   * `98` key-volume). Each entry records the chart-time at
+   * which the corresponding bus's gain should switch to the
+   * authored 0..1 value. The cursor advances as the playhead
+   * crosses each event in `scheduleAutoSamples`. Empty for
+   * non-BMS charts (the source-format gate matches the CLI's
+   * `collectRealtimeAudioVolumeEvents`).
+   */
+  private volumeChangeEvents: Array<{ seconds: number; bus: 'key' | 'bgm'; gain: number }> = [];
+  private volumeChangeCursor = 0;
   private score: ScoreSummary = createEmptyScore(0);
   private tracker = createScoreTracker();
   /**
@@ -1916,6 +1934,32 @@ export class PixiGameplayView {
       .filter((trigger) => !isPlayableInputChannel(trigger.channel))
       .sort((left, right) => left.seconds - right.seconds);
     this.autoTriggerNextIndex = 0;
+    // BMS dynamic volume — channels `97` (BGM bus) and `98`
+    // (key bus). hitkey BMS Memo encodes the value as a
+    // hex-style 2-digit pair where `01..FF` maps to 1/255..1.0
+    // gain. Mirror the CLI's `collectRealtimeAudioVolumeEvents`
+    // gate (BMS source format only) so bmson charts (which use
+    // their own per-channel routing) don't get treated as BMS
+    // volume events.
+    this.volumeChangeEvents =
+      resolved.sourceFormat === 'bms'
+        ? sortEvents(resolved.events)
+            .filter((event) => isBmsDynamicVolumeChangeChannel(event.channel))
+            .flatMap<{ seconds: number; bus: 'key' | 'bgm'; gain: number }>((event) => {
+              const gain = parseBmsDynamicVolumeGain(event.value);
+              if (gain === undefined) return [];
+              const bus = isBmsKeyVolumeChangeChannel(event.channel)
+                ? 'key'
+                : isBmsBgmVolumeChangeChannel(event.channel)
+                  ? 'bgm'
+                  : undefined;
+              if (!bus) return [];
+              const seconds = Math.max(0, resolver.eventToSeconds(event));
+              return [{ seconds, bus, gain }];
+            })
+            .sort((left, right) => left.seconds - right.seconds)
+        : [];
+    this.volumeChangeCursor = 0;
     // bmson 1.0.0 slicing — for bmson charts, each
     // `sound_channels[]` entry is a single audio file that gets
     // sliced at every distinct pulse where any of its notes fire,
@@ -4309,6 +4353,50 @@ export class PixiGameplayView {
         offsetSeconds: trigger.sampleOffsetSeconds,
         durationSeconds: trigger.sampleDurationSeconds,
       });
+    }
+    this.scheduleVolumeChanges(seconds, lookAhead);
+  }
+
+  /**
+   * Drains pending BMS dynamic-volume events (channels `97` /
+   * `98`) up to `chartSeconds + lookAhead` and writes their
+   * authored 0..1 gain to the appropriate audio bus mixer at
+   * the corresponding audio-context time. Mirrors the CLI's
+   * realtime-volume scheduling so a chart that quiets the BGM
+   * during a vocal break (or boosts the key bus for a
+   * climactic drop) sounds the same on the web side.
+   *
+   * The scheduled `setValueAtTime` calls overwrite each other —
+   * BMS volume events are absolute, not multiplicative — so a
+   * later `setValueAtTime(0.5, t2)` cleanly replaces an earlier
+   * `setValueAtTime(0.2, t1)` regardless of fire order.
+   */
+  private scheduleVolumeChanges(chartSeconds: number, lookAheadSeconds: number): void {
+    if (!this.audioContext || this.volumeChangeEvents.length === 0) {
+      return;
+    }
+    const horizon = chartSeconds + lookAheadSeconds;
+    while (this.volumeChangeCursor < this.volumeChangeEvents.length) {
+      const event = this.volumeChangeEvents[this.volumeChangeCursor]!;
+      if (event.seconds > horizon) {
+        break;
+      }
+      this.volumeChangeCursor += 1;
+      const mixer = event.bus === 'key' ? this.audioBus?.keyMixer : this.audioBus?.bgmMixer;
+      if (!mixer) continue;
+      const startAt = Math.max(this.audioContext.currentTime, this.audioContextStartTime + event.seconds);
+      // Web Audio raises an exception if `setValueAtTime` is
+      // handed a non-finite value — `parseBmsDynamicVolumeGain`
+      // already filtered those, so we just clamp into [0, 1]
+      // for safety.
+      const gain = Math.max(0, Math.min(1, event.gain));
+      try {
+        mixer.gain.setValueAtTime(gain, startAt);
+      } catch {
+        // Sealed AudioParam (extremely rare — only happens if
+        // the bus has been disposed mid-flight). Drop the event
+        // silently; the next play prepare resets the cursor.
+      }
     }
   }
 
