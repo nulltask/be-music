@@ -4634,20 +4634,69 @@ export class PixiGameplayView {
     // because the LR2 default skin's key-on keyframe[0] is the fade-in origin (alpha = 0) — multiplying that by our
     // taper would keep the laser invisible the whole time. Position / size / color from the keyframe still apply via
     // the rest of `applyDestinationToSprite`.
-    const keyOnFadeStart = this.keyOnFadeOutStart.get(image.destination.timer);
+    //
+    // Defensive cleanup: when the elapsed time has crossed the full fade window we retire the timer state right here
+    // instead of waiting on the `releaseKeyOnTimer` setTimeout. Browsers throttle / drop setTimeout callbacks under
+    // battery-save / background-tab pressure, and we'd previously seen the laser stay painted at full brightness in
+    // autoplay (where the only `releaseKeyOnTimer` caller is `flashKeyOnTimer`'s setTimeout chain) when the timer
+    // never fired. Tearing the state down render-side guarantees the laser actually disappears once its fade window
+    // has elapsed regardless of whether the deferred cleanup arrives.
+    const fadeTimer = image.destination.timer;
+    const keyOnFadeStart = this.keyOnFadeOutStart.get(fadeTimer);
     if (keyOnFadeStart !== undefined) {
       const elapsed = this.playClock() - keyOnFadeStart;
-      const fadeMs = this.keyOnFadeDurationMs.get(image.destination.timer) ?? KEY_ON_FADE_OUT_MS;
-      sprite.alpha = Math.max(0, 1 - elapsed / fadeMs);
+      const fadeMs = this.keyOnFadeDurationMs.get(fadeTimer) ?? KEY_ON_FADE_OUT_MS;
+      if (elapsed >= fadeMs) {
+        sprite.alpha = 0;
+        // Belt-and-braces — keep the maps consistent so `isTimerActive` stops reporting the slot as active and the
+        // next press starts from a clean fade-in keyframe. We mirror `releaseKeyOnTimer`'s deferred cleanup: only
+        // wipe `timerStartedAt` when neither a real keypress nor a still-active LN is keeping the slot alive.
+        this.keyOnFadeOutStart.delete(fadeTimer);
+        const channel = this.resolveChannelForKeyOnTimer(fadeTimer);
+        if (channel !== undefined && !this.pressedChannels.has(channel) && !this.activeLongNotes.has(channel)) {
+          this.timerStartedAt.delete(fadeTimer);
+        }
+      } else {
+        sprite.alpha = Math.max(0, 1 - elapsed / fadeMs);
+      }
     }
     // Same alpha taper for LN-hold-effect timers (70..89). Authored hold sprites stay visible while the timer is active
     // and decay through this taper after `releaseLnHoldTimer` records the fade origin.
-    const lnHoldFadeStart = this.lnHoldFadeOutStart.get(image.destination.timer);
+    const lnHoldFadeStart = this.lnHoldFadeOutStart.get(fadeTimer);
     if (lnHoldFadeStart !== undefined) {
       const elapsed = this.playClock() - lnHoldFadeStart;
-      const fadeMs = this.lnHoldFadeDurationMs.get(image.destination.timer) ?? KEY_ON_FADE_OUT_MS;
-      sprite.alpha = Math.max(0, 1 - elapsed / fadeMs);
+      const fadeMs = this.lnHoldFadeDurationMs.get(fadeTimer) ?? KEY_ON_FADE_OUT_MS;
+      if (elapsed >= fadeMs) {
+        sprite.alpha = 0;
+        this.lnHoldFadeOutStart.delete(fadeTimer);
+      } else {
+        sprite.alpha = Math.max(0, 1 - elapsed / fadeMs);
+      }
     }
+  }
+
+  /**
+   * Reverse of {@link resolveKeyOnTimerId} — given a timer slot in the 100..119 range, returns the BMS channel id
+   * that the gameplay engine would press / release for it. Used by the defensive fade-cleanup path so the render-
+   * side teardown can leave `timerStartedAt` populated when the user is still physically holding the matching key.
+   */
+  private resolveChannelForKeyOnTimer(timerId: number): string | undefined {
+    if (timerId < LR2_1P_KEYON_TIMER_BASE || timerId >= LR2_2P_KEYON_TIMER_BASE + 10) {
+      return undefined;
+    }
+    const isPlayer2 = timerId >= LR2_2P_KEYON_TIMER_BASE;
+    const base = isPlayer2 ? LR2_2P_KEYON_TIMER_BASE : LR2_1P_KEYON_TIMER_BASE;
+    const laneIndex = timerId - base;
+    if (laneIndex < 0 || laneIndex > 9) return undefined;
+    if (this.chartPlayVariant === '9') {
+      return `1${laneIndex}`;
+    }
+    const sidePrefix = isPlayer2 ? '2' : '1';
+    // Lane index 0 is the scratch (LR2 maps it to channel `?6`); 1..7 map to `?1..?7`. We mirror the small table
+    // from `resolveKeyOnTimerId` exactly to avoid drift.
+    if (laneIndex === 0) return `${sidePrefix}6`;
+    if (laneIndex >= 1 && laneIndex <= 7) return `${sidePrefix}${laneIndex}`;
+    return undefined;
   }
 
   /**
