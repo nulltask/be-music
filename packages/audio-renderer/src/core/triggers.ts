@@ -230,8 +230,21 @@ export function createBmsonSamplePlaybackMap(
       }
 
       const offsetSeconds = Math.max(0, firstEntry.seconds - anchorSeconds);
-      const next = end < entries.length ? entries[end]! : undefined;
-      const durationSeconds = next ? Math.max(0, next.seconds - firstEntry.seconds) : undefined;
+      // bmson 1.0.0 spec: a `c=true` note must NOT restart playback —
+      // the previous `c=false` anchor's audio keeps streaming through
+      // it. So the slice's duration boundary is the next note that
+      // forces a restart (`c !== true`), not just the next note.
+      // Walking past every consecutive `c=true` chord here means the
+      // BufferSource scheduled for THIS slice plays long enough to
+      // cover them all, and the runtime's "skip retrigger when this
+      // sample is already active" path actually has an active sample
+      // to compare against.
+      let boundaryIndex = end;
+      while (boundaryIndex < entries.length && entries[boundaryIndex]!.event.bmson?.c === true) {
+        boundaryIndex += 1;
+      }
+      const boundary = boundaryIndex < entries.length ? entries[boundaryIndex]! : undefined;
+      const durationSeconds = boundary ? Math.max(0, boundary.seconds - firstEntry.seconds) : undefined;
       const sliceId = `${firstEntry.sampleKey}:${sliceIndex}`;
       sliceIndex += 1;
       const playback = { offsetSeconds, durationSeconds, sliceId };

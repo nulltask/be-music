@@ -481,6 +481,49 @@ describe('audio-renderer', () => {
     expect(triggers.map((trigger) => Number(trigger.sampleOffsetSeconds.toFixed(3)))).toEqual([0, 0.5, 0, 0.5]);
   });
 
+  test('audio-renderer: extends slice duration past consecutive c=true notes to the next restart', () => {
+    // bmson 1.0.0 — `c=true` MUST NOT restart audio playback. So
+    // the BufferSource scheduled at the `c=false` anchor must be
+    // long enough to reach the next `c=false` anchor (or end of
+    // the channel), letting the runtime's "skip retrigger when
+    // already playing" path keep the audio continuous.
+    const json = createEmptyJson('bmson');
+    json.metadata.bpm = 120;
+    json.resources.wav['01'] = 'sample.wav';
+    json.events = [
+      // anchor at 0s — should hold open until 1.0s.
+      { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
+      // c=true at 0.5s — should hold open until 1.0s.
+      { measure: 0, channel: '12', position: [1, 4], value: '01', bmson: { c: true } },
+      // anchor at 1.0s — open-ended (no further restart).
+      { measure: 0, channel: '13', position: [2, 4], value: '01', bmson: { c: false } },
+      // c=true at 1.5s — open-ended too.
+      { measure: 0, channel: '14', position: [3, 4], value: '01', bmson: { c: true } },
+    ];
+
+    const triggers = collectSampleTriggers(json);
+    expect(triggers.map((trigger) => trigger.sampleDurationSeconds)).toEqual([1, 0.5, undefined, undefined]);
+  });
+
+  test('audio-renderer: bmson chord at the same beat shares a single slice with shared duration', () => {
+    // Two simultaneous notes at beat 0 form one chord; both must
+    // render against the same slice (offset / duration / sliceId)
+    // so the runtime triggers the BufferSource only once.
+    const json = createEmptyJson('bmson');
+    json.metadata.bpm = 120;
+    json.resources.wav['01'] = 'sample.wav';
+    json.events = [
+      { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
+      { measure: 0, channel: '12', position: [0, 1], value: '01', bmson: { c: true } },
+      { measure: 0, channel: '13', position: [1, 2], value: '01', bmson: { c: false } },
+    ];
+    const triggers = collectSampleTriggers(json);
+    expect(triggers).toHaveLength(3);
+    expect(triggers[0]?.sampleSliceId).toBe(triggers[1]?.sampleSliceId);
+    expect(triggers[0]?.sampleDurationSeconds).toBeCloseTo(1, 6);
+    expect(triggers[1]?.sampleDurationSeconds).toBeCloseTo(1, 6);
+  });
+
   test('audio-renderer: ignores landmine channels for sample triggering', () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;
