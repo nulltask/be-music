@@ -204,7 +204,7 @@ export interface AudioBusHandle {
   /** Returns the currently-applied chart master gain (default `1.0`). */
   getMasterGain(): number;
   /**
-   * Fades the **audible** signal path (post-tap, just before `audioContext.destination`) towards `targetGain` over
+   * Fades the **audible** signal path (post-tap, just before `audioContext.destination`) toward `targetGain` over
    * `durationMs`. Used by the gameplay scene's exit transition so the audio dies in lock-step with the screen's
    * `#FADEOUT` alpha animation.
    *

@@ -1038,7 +1038,7 @@ export interface LoadLr2SkinOptions {
   /** Which kind of skin to load. Defaults to `'play'`. */
   kind?: Lr2SkinKind;
   /**
-   * For `kind: 'play'` only — biases the candidate scoring towards `play_<variant>.lr2skin`. Falls back to the default
+   * For `kind: 'play'` only — biases the candidate scoring toward `play_<variant>.lr2skin`. Falls back to the default
    * scoring (7K-preferred) if no file matches the requested variant.
    */
   playVariant?: Lr2PlayVariant;
