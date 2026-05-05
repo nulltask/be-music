@@ -469,7 +469,7 @@ describe('parser', () => {
     expect(channels).toEqual(['15', '22', '23', '24', '25']);
   });
 
-  test('bmson: missing mode_hint falls back to positional `x` ordering', () => {
+  test('bmson: missing mode_hint defaults to beat-7k per the 1.0.0 spec', () => {
     const json = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -487,14 +487,96 @@ describe('parser', () => {
       }),
     );
 
-    // Without `mode_hint`, the lane map preserves the previous
-    // positional behaviour: distinct x-values get assigned to
-    // 11, 12, 13, ... in ascending order.
+    // bmson 1.0.0 spec — "Default value is 'beat-7k'". x=1/5/7
+    // route to the canonical 7-key channels 11 / 15 / 19 instead
+    // of the positional 11 / 12 / 13 fallback.
+    const sortedChannels = json.events
+      .slice()
+      .sort((left, right) => left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1])
+      .map((event) => event.channel);
+    expect(sortedChannels).toEqual(['19', '11', '15']);
+  });
+
+  test('bmson: unknown mode_hint falls back to positional `x` ordering', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'kabuki-3k' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 7, y: 0 },
+              { x: 1, y: 240 },
+              { x: 5, y: 480 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // Unknown mode_hints (`kabuki-3k` etc.) fall through onto
+    // the positional fallback so consumers can still load the
+    // chart even if no canonical layout matches.
     const sortedChannels = json.events
       .slice()
       .sort((left, right) => left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1])
       .map((event) => event.channel);
     expect(sortedChannels).toEqual(['13', '11', '12']);
+  });
+
+  test('bmson: generic-Nkeys mode_hint generates a left-to-right positional map', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'generic-3keys' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 2, y: 240 },
+              { x: 3, y: 480 },
+              { x: 4, y: 720 }, // outside the declared 3-key range
+            ],
+          },
+        ],
+      }),
+    );
+
+    // x=1..3 within the declared key count map to 11/12/13;
+    // x=4 falls outside the map so the parser routes it to
+    // the channel-11 default (consumers see one playable note
+    // at lane 1 plus three at the explicit slots).
+    const sortedChannels = json.events
+      .slice()
+      .sort((left, right) => left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1])
+      .map((event) => event.channel);
+    expect(sortedChannels).toEqual(['11', '12', '13', '11']);
+  });
+
+  test('bmson: missing info.total defaults to 100 per the 1.0.0 spec', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.metadata.total).toBe(100);
+  });
+
+  test('bmson: explicit info.total wins over the spec default', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', total: 250 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.metadata.total).toBe(250);
   });
 
   test('bmson: key_channels mines route through the same mode_hint lane map onto Dx / Ex channels', () => {

@@ -7,6 +7,7 @@ import {
   intToBase36,
   normalizeChannel,
   normalizeObjectKey,
+  parseBmsonSubartist,
 } from './index.ts';
 
 describe('json', () => {
@@ -115,5 +116,26 @@ describe('json', () => {
     const created = ensureMeasure(json, 6);
     expect(created).toEqual({ index: 6, length: 1 });
     expect(json.measures.at(-1)).toBe(created);
+  });
+
+  test('parseBmsonSubartist splits "role:name" entries case-insensitively', () => {
+    expect(parseBmsonSubartist('illust:foo')).toEqual({ role: 'illust', name: 'foo' });
+    expect(parseBmsonSubartist('OBJ:bar')).toEqual({ role: 'obj', name: 'bar' });
+    // Whitespace around either half is trimmed.
+    expect(parseBmsonSubartist('  music  :  baz  ')).toEqual({ role: 'music', name: 'baz' });
+  });
+
+  test('parseBmsonSubartist treats colon-less entries as bare names', () => {
+    expect(parseBmsonSubartist('Anonymous')).toEqual({ name: 'Anonymous' });
+    expect(parseBmsonSubartist('  trimmed  ')).toEqual({ name: 'trimmed' });
+  });
+
+  test('parseBmsonSubartist handles edge inputs gracefully', () => {
+    expect(parseBmsonSubartist('')).toEqual({ name: '' });
+    // A leading colon (no role) collapses to a bare name so consumers
+    // don't see a phantom empty-string role.
+    expect(parseBmsonSubartist(':just a name')).toEqual({ name: 'just a name' });
+    // A trailing colon yields role with empty name.
+    expect(parseBmsonSubartist('artist:')).toEqual({ role: 'artist', name: '' });
   });
 });

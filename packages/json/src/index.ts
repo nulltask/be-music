@@ -68,6 +68,13 @@ export interface BmsonInfoExtensions {
   subtitle?: string;
   artist?: string;
   genre?: string;
+  /**
+   * Contributor list per the bmson 1.0.0 spec — entries are
+   * authored as `"key:value"` strings (e.g. `"illust:foo"`,
+   * `"obj:bar"`). Stored verbatim; consumers that want the
+   * structured `{ role, name }` form can run each entry through
+   * {@link parseBmsonSubartist}.
+   */
   subartists?: string[];
   chartName?: string;
   level?: number;
@@ -427,6 +434,47 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
  * because the parser already filters at the syntactic level; this
  * is the post-syntactic normaliser.
  */
+/**
+ * Structured form of a `bmson info.subartists[]` entry. The
+ * spec authors entries as `"role:name"` strings; consumers that
+ * want to group / filter contributors by role (illustrator,
+ * objet author, lyricist, …) split each entry through
+ * {@link parseBmsonSubartist} and read the structured pair
+ * instead of the raw string.
+ */
+export interface BmsonSubartistEntry {
+  /** The lower-cased role tag, or `undefined` if the entry is just a name. */
+  role?: string;
+  /** Contributor name with surrounding whitespace trimmed. */
+  name: string;
+}
+
+/**
+ * Splits a `subartists[]` entry on the first `:` per the bmson
+ * 1.0.0 convention. Whitespace around either half is trimmed,
+ * and the role half is lower-cased so a downstream lookup
+ * (e.g. `byRole.get('illust')`) is case-insensitive against
+ * common variants (`Illust:` / `ILLUST:` / `illust:`).
+ *
+ * Entries without a `:` (legacy free-form names) come back with
+ * `role` undefined and the whole string as `name`.
+ */
+export function parseBmsonSubartist(entry: string): BmsonSubartistEntry {
+  if (typeof entry !== 'string') {
+    return { name: '' };
+  }
+  const colon = entry.indexOf(':');
+  if (colon < 0) {
+    return { name: entry.trim() };
+  }
+  const role = entry.slice(0, colon).trim().toLowerCase();
+  const name = entry.slice(colon + 1).trim();
+  if (role.length === 0) {
+    return { name };
+  }
+  return { role, name };
+}
+
 export function normalizeObjectKey(value: string, base: 36 | 62 = 36): string {
   if (base === 62) {
     return normalizeObjectKeyBase62(value);

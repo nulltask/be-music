@@ -238,6 +238,13 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   }
   if (Number.isFinite(json.bmson.info.total)) {
     json.metadata.total = json.bmson.info.total;
+  } else {
+    // bmson 1.0.0 spec — `info.total` default is 100. We pin
+    // that here (rather than letting the BMS-flavoured
+    // `LR2_GROOVE_GAUGE_DEFAULT_TOTAL = 160` fallback take
+    // over) so a bmson chart that omits `total` runs with the
+    // gauge curve its author / the spec assumed.
+    json.metadata.total = 100;
   }
   // Mirror bmson's `info.backImage` / `bannerImage` / `eyecatchImage`
   // onto the unified `metadata` slots so consumers (the select view's

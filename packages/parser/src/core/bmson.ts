@@ -191,22 +191,56 @@ const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
 };
 
 /**
+ * bmson 1.0.0 spec — when a chart omits / blanks `mode_hint`,
+ * the default is `beat-7k` ("Default value is 'beat-7k'").
+ * Applied centrally in {@link buildBmsonLaneMap} so the default
+ * lane routing follows the spec instead of falling through onto
+ * the unknown-hint positional fallback (which used to map
+ * x=6/7 onto `16` / `17` because those digits came next in
+ * numeric order).
+ */
+const BMSON_DEFAULT_MODE_HINT = 'beat-7k';
+
+/**
+ * `generic-Nkeys` template pattern — bmson allows arbitrary key
+ * counts via this naming convention ("a layout for a generic
+ * symmetrical keyboard layout, ordered left to right"). The
+ * numeric prefix is the key count; we route it as a positional
+ * left-to-right `x=1..N → 11, 12, …` map.
+ */
+const BMSON_GENERIC_KEYS_PATTERN = /^generic-(\d+)keys?$/;
+
+/**
  * Resolves the `x` → BMS channel mapping for a chart's playable
- * lanes. When the chart's `mode_hint` is one of the canonical
- * IIDX / Pop'n hints, returns that hint's authoritative mapping
- * (so `beat-7k`'s x=6/7 hit the key 6 / 7 channels `18` / `19`
- * rather than colliding with the scratch / FREE ZONE digits).
- * Falls back to a positional `x` → `11`, `12`, … assignment for
- * unknown / absent hints — preserves the historical behaviour for
- * the long tail of bmson dialects.
+ * lanes. Order of resolution:
+ *
+ * 1. `mode_hint` blank / undefined → spec default `beat-7k`
+ *    (per bmson 1.0.0).
+ * 2. Canonical IIDX / Pop'n hint → authoritative table.
+ * 3. `generic-Nkeys` template → left-to-right positional map
+ *    sized to N keys.
+ * 4. Anything else → positional fallback over the chart's
+ *    actual `x` values (preserves the historical behaviour for
+ *    bmson dialects unknown to us).
  */
 export function buildBmsonLaneMap(
   soundChannels: BmsonSoundChannel[],
   modeHint?: string,
 ): Map<number, string> {
-  const hintedMap = typeof modeHint === 'string' ? MODE_HINT_LANE_MAPS[modeHint] : undefined;
+  const trimmedHint = typeof modeHint === 'string' ? modeHint.trim() : '';
+  const effectiveHint = trimmedHint.length > 0 ? trimmedHint : BMSON_DEFAULT_MODE_HINT;
+  const hintedMap = MODE_HINT_LANE_MAPS[effectiveHint];
   if (hintedMap) {
     return new Map(hintedMap);
+  }
+  const genericMatch = effectiveHint.match(BMSON_GENERIC_KEYS_PATTERN);
+  if (genericMatch) {
+    const keyCount = Math.max(0, Math.min(99, Number.parseInt(genericMatch[1]!, 10)));
+    const map = new Map<number, string>();
+    for (let index = 0; index < keyCount; index += 1) {
+      map.set(index + 1, laneIndexToChannel(index));
+    }
+    return map;
   }
   const xValues = new Set<number>();
   for (const soundChannel of soundChannels) {

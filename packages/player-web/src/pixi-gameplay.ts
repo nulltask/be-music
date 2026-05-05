@@ -818,6 +818,20 @@ export class PixiGameplayView {
    */
   private recorder: GameplayRecorder | undefined;
   private decodedSamples = new Map<string, AudioBuffer>();
+  /**
+   * Most recent {@link AudioBufferSourceNode} per sample key,
+   * tracked so bmson `note.c = true` (continuation flag) can
+   * skip retriggering a sample that's still emitting from a
+   * previous note. The map entry is cleared by the node's
+   * `onended` callback once playback finishes naturally — the
+   * "still playing" check then reduces to `has(sampleKey)`.
+   *
+   * Populated by every successful `playSample` / `playSampleByKey`
+   * call regardless of source format; only consulted by bmson
+   * `c=true` callers, so BMS playback (which has no
+   * continuation flag) is unaffected.
+   */
+  private activeSampleNodes = new Map<string, AudioBufferSourceNode>();
   private scheduled = new Set<RuntimeNote>();
   private autoSampleTriggers: TimedSampleTrigger[] = [];
   private autoTriggerNextIndex = 0;
@@ -1812,6 +1826,12 @@ export class PixiGameplayView {
     this.autoJudgeCursor = 0;
     this.autoMissCursor = 0;
     this.chartEnded = false;
+    // Drop the previous chart's active-sample tracking. Stale
+    // entries would otherwise let a `c=true` note on the new
+    // chart suppress its own first trigger because a same-key
+    // node from the old play looks "still playing" until it
+    // ends naturally.
+    this.activeSampleNodes.clear();
     // Drop any held LN state from a previous song / restart. Without
     // this the next chart's first release on a cleared channel would
     // try to finalize the prior chart's hold and double-commit.
@@ -4235,7 +4255,9 @@ export class PixiGameplayView {
         break;
       }
       this.autoTriggerNextIndex += 1;
-      this.playSampleByKey(trigger.sampleKey, trigger.seconds);
+      this.playSampleByKey(trigger.sampleKey, trigger.seconds, {
+        continuationFlag: trigger.event.bmson?.c === true,
+      });
     }
   }
 
@@ -4251,12 +4273,23 @@ export class PixiGameplayView {
    * through `bgmMixer`. The split-bus compressor handles BGM and key
    * sounds independently — see `audio-bus.ts` for why.
    */
-  private playSampleByKey(sampleKey: string, scheduledChartSeconds?: number): void {
+  private playSampleByKey(
+    sampleKey: string,
+    scheduledChartSeconds?: number,
+    options: { continuationFlag?: boolean } = {},
+  ): void {
     if (!this.audioContext || !this.song) {
       return;
     }
     const path = (this.resolvedChart ?? this.song.chart).resources.wav[sampleKey];
     if (!path) {
+      return;
+    }
+    if (options.continuationFlag === true && this.activeSampleNodes.has(sampleKey)) {
+      // bmson `note.c = true` — a previous trigger of the same
+      // sample is still emitting, so skip the retrigger and let
+      // the sustained playback ride through. Mirrors the
+      // playable-note path in `playSample`.
       return;
     }
     const buffer = this.decodedSamples.get(normalizePath(path).toLowerCase());
@@ -4270,6 +4303,12 @@ export class PixiGameplayView {
         node.disconnect();
       } catch {
         // Already disconnected or context closed.
+      }
+      // Drop the active-node tracking entry once the sample
+      // finishes naturally so the next bmson `c=true` lookup
+      // sees an empty slot and triggers a fresh start.
+      if (this.activeSampleNodes.get(sampleKey) === node) {
+        this.activeSampleNodes.delete(sampleKey);
       }
     };
     // BGM bus. Falls back to direct destination if `prepareAudio`
@@ -4285,12 +4324,23 @@ export class PixiGameplayView {
     } else {
       node.start();
     }
+    this.activeSampleNodes.set(sampleKey, node);
   }
 
   /**
    * Plays the keysound attached to a judged input note. Routes
    * through `keyMixer` so the key-bus compressor (split mode) sees
    * the input transient stream independently of the BGM.
+   *
+   * Honours the bmson 1.0.0 `note.c` (continuation flag): when
+   * `c === true`, a still-playing instance of the same sample
+   * suppresses the new trigger so the audio plays through
+   * uninterrupted. Per the spec ("c=true → don't restart audio"),
+   * this lets chart authors hold one sample across a chord /
+   * burst of repeated notes without each hit re-attacking the
+   * envelope. Notes without `c` (BMS-derived events, plain
+   * bmson notes) keep the historical "every press triggers a
+   * fresh playback" behaviour.
    */
   private playSample(note: RuntimeNote): void {
     if (!this.audioContext || !this.song) {
@@ -4303,8 +4353,14 @@ export class PixiGameplayView {
     // sample IDs (`#WAV0a`) hit their correct slot instead of
     // collapsing onto the uppercase variant.
     const chart = this.resolvedChart ?? this.song.chart;
-    const path = chart.resources.wav[normalizeObjectKey(note.event.value, resolveBmsBase(chart))];
+    const sampleKey = normalizeObjectKey(note.event.value, resolveBmsBase(chart));
+    const path = chart.resources.wav[sampleKey];
     if (!path) {
+      return;
+    }
+    if (note.event.bmson?.c === true && this.activeSampleNodes.has(sampleKey)) {
+      // bmson continuation flag — previous instance of this
+      // sample is still playing, so do not retrigger.
       return;
     }
     const buffer = this.decodedSamples.get(normalizePath(path).toLowerCase());
@@ -4319,12 +4375,19 @@ export class PixiGameplayView {
       } catch {
         // Already disconnected or context closed.
       }
+      // Drop the active-node tracking entry once the sample
+      // finishes naturally so the next bmson `c=true` lookup
+      // sees an empty slot and triggers a fresh start.
+      if (this.activeSampleNodes.get(sampleKey) === node) {
+        this.activeSampleNodes.delete(sampleKey);
+      }
     };
     // Key bus. Falls back to direct destination if `prepareAudio`
     // hasn't run yet (defensive — in practice the bus is always
     // built before any `play*` call).
     node.connect(this.audioBus?.keyMixer ?? this.audioContext.destination);
     node.start();
+    this.activeSampleNodes.set(sampleKey, node);
   }
 
   private render(seconds: number): void {
