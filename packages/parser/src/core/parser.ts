@@ -210,6 +210,17 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
 
   const resolution = resolveBmsonResolution(document);
   json.bmson.info = normalizeBmsonInfoForIr(info, resolution);
+  // Per spec, the difference between "lines missing" and
+  // "lines: []" matters: missing → assume 4/4 and generate a
+  // barline every 4 quarter notes (the renderer's default
+  // derive-from-events path); explicit empty → no barlines at
+  // all (the "100 % minimoo-G effect"). Detect the explicit-
+  // empty case here so the IR carries the suppress flag, since
+  // both shapes collapse to `[]` after `normalizeBmsonLines`.
+  const linesAuthoredEmpty = Array.isArray(document.lines) && document.lines.length === 0;
+  if (linesAuthoredEmpty) {
+    json.bmson.barlinesSuppressed = true;
+  }
   const lines = normalizeBmsonLines(document.lines);
   const positionResolver = createBmsonPositionResolver(resolution, lines);
   if (lines.length > 0) {

@@ -564,6 +564,9 @@ export function normalizeBmsonExtensions(input: unknown): BeMusicJson['bmson'] {
 
   normalized.info = normalizeBmsonInfoFromIr(raw.info);
   normalized.bga = normalizeBmsonBgaFromIr(raw.bga);
+  if (raw.barlinesSuppressed === true) {
+    normalized.barlinesSuppressed = true;
+  }
 
   return normalized;
 }

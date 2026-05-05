@@ -601,6 +601,44 @@ describe('parser', () => {
     expect(json.resources.stop[stopKeys[0]!]).toBeCloseTo(48, 6);
   });
 
+  test('bmson: missing lines does NOT set the barline-suppress flag (default 4/4 barlines apply)', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.barlinesSuppressed).toBeUndefined();
+  });
+
+  test('bmson: lines: [] sets the barline-suppress flag per the 100 % minimoo-G effect', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        lines: [],
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.barlinesSuppressed).toBe(true);
+  });
+
+  test('bmson: non-empty lines does NOT set the barline-suppress flag', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        lines: [{ y: 0 }, { y: 960 }],
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.barlinesSuppressed).toBeUndefined();
+  });
+
   test('bmson: stop_events.duration scales with non-default resolution', () => {
     // Same beat-length stop authored at resolution=480 takes
     // duration=480 pulses (still 1 beat). Conversion remains

@@ -5844,6 +5844,15 @@ export class PixiGameplayView {
     // Use the resolved chart so #IF-gated #xx02 (measure-length)
     // declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? song.chart;
+    // bmson 1.0.0 spec — `lines: []` (explicit empty array) is
+    // the author opting out of barlines entirely (the "100 %
+    // minimoo-G effect"). Honour the suppress flag the parser
+    // sets and short-circuit before we'd otherwise derive
+    // 4/4-default barlines from the event stream.
+    if (chart.bmson.barlinesSuppressed === true) {
+      this.measureBeatCache = { songId: song.id, beats };
+      return beats;
+    }
     const measures = chart.measures;
     // The chart's `measures` array only carries measures with an
     // EXPLICIT length declaration (`#xx02`). A typical 4/4-only

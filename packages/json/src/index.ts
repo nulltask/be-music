@@ -151,6 +151,18 @@ export interface BmsonExtensions {
   version?: string;
   info: BmsonInfoExtensions;
   bga: BmsonBgaExtensions;
+  /**
+   * `true` when the bmson source authored an explicit `lines: []`
+   * (intentionally barline-less, the bmson 1.0.0 spec's
+   * "100 % minimoo-G effect"). Distinct from "lines missing"
+   * (`undefined` / not present), which the spec treats as "assume
+   * 4/4 and generate a barline every 4 quarter notes".
+   *
+   * Only ever `true` for bmson charts; BMS / json sources leave
+   * the field undefined and the renderer falls back to its
+   * derive-from-events default.
+   */
+  barlinesSuppressed?: boolean;
 }
 
 export type BmsControlFlowCommand =
