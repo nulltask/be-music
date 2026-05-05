@@ -243,6 +243,21 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
 
   if (Number.isFinite(json.bmson.info.initBpm) && (json.bmson.info.initBpm ?? 0) > 0) {
     json.metadata.bpm = json.bmson.info.initBpm!;
+  } else {
+    // bmson 1.0.0 spec — "It is a fatal error if `info.init_bpm`
+    // is unspecified." A chart that omits / zeroes / negates
+    // `init_bpm` has no anchor for tempo-driven timing, so
+    // every downstream calculation (note seconds, BGA cues,
+    // gauge timing) silently falls back to whatever
+    // `metadata.bpm` was seeded with — typically the
+    // `DEFAULT_BPM = 130` placeholder, which produces visibly
+    // wrong playback for any chart that wasn't authored at 130.
+    // Surface the violation as a parse error so the loader
+    // surfaces a clear "broken chart" diagnostic rather than
+    // playing the chart back at the wrong tempo.
+    throw new Error(
+      'bmson: info.init_bpm is required (spec: "It is a fatal error if info.init_bpm is unspecified")',
+    );
   }
   if (Number.isFinite(json.bmson.info.judgeRank)) {
     json.metadata.rank = json.bmson.info.judgeRank;

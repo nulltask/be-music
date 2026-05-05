@@ -635,6 +635,40 @@ describe('parser', () => {
     expect(json.resources.stop[stopKeys[0]!]).toBeCloseTo(48, 6);
   });
 
+  test('bmson: missing info.init_bpm throws — spec calls this a fatal error', () => {
+    expect(() =>
+      parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { resolution: 240, mode_hint: 'beat-7k' }, // init_bpm omitted
+          sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+        }),
+      ),
+    ).toThrow(/init_bpm/i);
+  });
+
+  test('bmson: zero / negative info.init_bpm also throws (no usable tempo anchor)', () => {
+    expect(() =>
+      parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { init_bpm: 0, resolution: 240, mode_hint: 'beat-7k' },
+          sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+        }),
+      ),
+    ).toThrow(/init_bpm/i);
+
+    expect(() =>
+      parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { init_bpm: -120, resolution: 240, mode_hint: 'beat-7k' },
+          sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+        }),
+      ),
+    ).toThrow(/init_bpm/i);
+  });
+
   test('bmson: missing lines does NOT set the barline-suppress flag (default 4/4 barlines apply)', () => {
     const json = parseBmson(
       JSON.stringify({
