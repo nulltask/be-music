@@ -481,6 +481,120 @@ export function resolveBmsBmpArgb(
 }
 
 /**
+ * Parsed `#SWBGAxx fr:tot:lp:ARGB N1 N2 …` directive.
+ *
+ * `#SWBGAxx` declares a switching ("animated") BGA: while the cue
+ * is active, the player cycles through the listed `#BMPxx` slots
+ * one frame at a time. The header tokens — `fr` / `tot` / `lp` /
+ * optional `ARGB` — drive how the cycle progresses, the rest of
+ * the line is the per-frame slot list.
+ *
+ * Field semantics (hitkey BMS Memo):
+ * - `fr` (frame rate): frame interval in `1/100`-second units, so
+ *   `fr = 10` means one frame every 100 ms. Stored here in ms.
+ * - `tot` (total frames): number of frames in the animation. The
+ *   slot list MAY be shorter / longer; a shorter list cycles
+ *   itself, a longer one is truncated to `tot`.
+ * - `lp` (loop): `0` = play once and hold the last frame,
+ *   non-zero = loop.
+ * - `ARGB` (optional): AARRGGBB tint applied to every frame, same
+ *   format as `#ARGBxx`.
+ */
+export interface BmsSwitchingBga {
+  /** Frame interval in milliseconds (`fr × 10`). */
+  frameIntervalMs: number;
+  /** Total frames the animation should advance through. */
+  totalFrames: number;
+  /** Whether playback should loop after reaching `totalFrames`. */
+  loop: boolean;
+  /**
+   * ARGB tuple as a parser-faithful raw string (AARRGGBB hex), or
+   * `undefined` when the header omitted the `:ARGB` field.
+   */
+  argbRaw?: string;
+  /**
+   * Per-frame `#BMPxx` slot ids, normalised via
+   * `normalizeObjectKey`. Empty / unparseable tokens are skipped.
+   * `frames.length` may differ from `totalFrames` — consumers
+   * should index modulo `frames.length` while clamping to
+   * `totalFrames`.
+   */
+  frames: string[];
+}
+
+/**
+ * Parses one `#SWBGAxx` directive value (the post-`#SWBGAxx ` text).
+ * Returns `undefined` for malformed inputs (missing header, non-
+ * positive frame rate / total, empty slot list, etc.) so the
+ * consumer can fall through to "no animation" rather than show a
+ * stuck or scrambled frame.
+ */
+export function parseBmsSwBga(raw: string, idBase: 36 | 62 = 36): BmsSwitchingBga | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const tokens = raw.trim().split(/\s+/u);
+  if (tokens.length < 2) return undefined;
+  const headerRaw = tokens[0]!;
+  const headerParts = headerRaw.split(':');
+  if (headerParts.length < 3) return undefined;
+  const fr = Number.parseInt(headerParts[0]!, 10);
+  const totalFrames = Number.parseInt(headerParts[1]!, 10);
+  const lp = Number.parseInt(headerParts[2]!, 10);
+  if (![fr, totalFrames, lp].every((value) => Number.isFinite(value))) return undefined;
+  if (fr <= 0 || totalFrames <= 0) return undefined;
+  const argbField = headerParts[3]?.trim();
+  const argbRaw = argbField && argbField.length > 0 ? argbField : undefined;
+  const frames: string[] = [];
+  for (const token of tokens.slice(1)) {
+    const slot = normalizeObjectKey(token, idBase);
+    if (slot.length > 0) frames.push(slot);
+  }
+  if (frames.length === 0) return undefined;
+  return {
+    frameIntervalMs: fr * 10,
+    totalFrames,
+    loop: lp !== 0,
+    argbRaw,
+    frames,
+  };
+}
+
+/**
+ * Picks the `#BMPxx` slot id that should render at `elapsedMs`
+ * milliseconds into a switching BGA's playback. Honours the
+ * directive's `frameIntervalMs`, `totalFrames`, and `loop`
+ * fields — when `loop = false` and the cycle has ended, the
+ * last authored frame stays on screen ("hold last").
+ *
+ * Returns `undefined` only when the parsed entry has an empty
+ * `frames` list (which {@link parseBmsSwBga} already filters out
+ * for us); included for safety so callers can use a single null
+ * check.
+ */
+export function pickSwitchingBgaFrame(
+  swBga: BmsSwitchingBga,
+  elapsedMs: number,
+): string | undefined {
+  if (swBga.frames.length === 0) return undefined;
+  if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
+    return swBga.frames[0];
+  }
+  const rawIndex = Math.floor(elapsedMs / swBga.frameIntervalMs);
+  let index: number;
+  if (swBga.loop) {
+    // Modulo against `frames.length` so a slot list shorter than
+    // `totalFrames` keeps cycling within the authored frames.
+    index = ((rawIndex % swBga.totalFrames) + swBga.totalFrames) % swBga.totalFrames;
+    index = index % swBga.frames.length;
+  } else {
+    // Clamp to the last frame so post-end the BGA holds rather
+    // than disappearing.
+    const clamped = Math.min(rawIndex, swBga.totalFrames - 1);
+    index = Math.min(clamped, swBga.frames.length - 1);
+  }
+  return swBga.frames[index];
+}
+
+/**
  * Parsed `#BGAxx YY x1 y1 x2 y2 dx dy` directive.
  *
  * `#BGAxx` declares a sub-region BGA: it pulls a rectangle out of

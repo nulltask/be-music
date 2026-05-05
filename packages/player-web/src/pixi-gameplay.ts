@@ -75,9 +75,12 @@ import {
   isBmsKeyVolumeChangeChannel,
   parseBmsBga,
   parseBmsDynamicVolumeGain,
+  parseBmsSwBga,
+  pickSwitchingBgaFrame,
   resolveBmsBmpArgb,
   resolveChartReferenceBpm,
   sortEvents,
+  type BmsSwitchingBga,
 } from '@be-music/chart';
 import {
   BG,
@@ -848,6 +851,15 @@ export class PixiGameplayView {
    * already covers the common case.
    */
   private wavCmdVolumeMultipliers = new Map<string, number>();
+  /**
+   * Parsed `#SWBGAxx` directives keyed by slot id. Built once per
+   * chart by {@link prepareSong}, looked up on every BGA frame
+   * draw — `pickSwitchingBgaFrame(entry, elapsedMs)` resolves the
+   * currently-visible source `#BMPxx` key to swap into the layer
+   * draw. Slots without a `#SWBGAxx` declaration stay absent so
+   * the fast path (single texture lookup) takes over.
+   */
+  private switchingBgas = new Map<string, BmsSwitchingBga>();
   /**
    * bmson per-event slice playback map. For bmson charts the
    * audio-renderer's `createBmsonSamplePlaybackMap` precomputes
@@ -1857,6 +1869,18 @@ export class PixiGameplayView {
       // other.
       const previous = this.wavCmdVolumeMultipliers.get(slot) ?? 1;
       this.wavCmdVolumeMultipliers.set(slot, previous * multiplier);
+    }
+    // BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...` declares an
+    // animated BGA slot. Pre-parse every entry now so per-frame
+    // BGA composition stays a single `Map.get` plus
+    // `pickSwitchingBgaFrame` (no per-frame regex / split).
+    this.switchingBgas.clear();
+    const base = resolveBmsBase(resolved);
+    for (const [slot, raw] of Object.entries(resolved.bms.swBga)) {
+      const parsed = parseBmsSwBga(raw, base);
+      if (parsed) {
+        this.switchingBgas.set(slot, parsed);
+      }
     }
     const extracted = extractTimedNotes(resolved, {
       includeLandmine: true,
@@ -5063,9 +5087,30 @@ export class PixiGameplayView {
       const dst = this.evaluateElementDst(bga);
       const { x, y, w, h } = normaliseRect(dst);
       if (w <= 0 || h <= 0) continue;
-      const drawLayer = (key: string | undefined, textures: ReadonlyMap<string, Texture>, layerName: string): void => {
+      const drawLayer = (
+        key: string | undefined,
+        textures: ReadonlyMap<string, Texture>,
+        layerName: string,
+        cueSeconds: number | undefined,
+      ): void => {
         if (!key) return;
-        const texture = textures.get(key);
+        // BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...` declares
+        // an animated BGA. When the cue's slot matches a parsed
+        // entry, advance through its frame list at the authored
+        // interval and swap in the source `#BMPxx` texture for the
+        // currently-visible frame. The fast path (no `#SWBGAxx`
+        // entry) leaves `key` untouched so the existing static
+        // texture lookup wins.
+        let resolvedKey = key;
+        if (cueSeconds !== undefined) {
+          const swBga = this.switchingBgas.get(key);
+          if (swBga) {
+            const elapsedMs = Math.max(0, (seconds - cueSeconds) * 1000);
+            const frameKey = pickSwitchingBgaFrame(swBga, elapsedMs);
+            if (frameKey) resolvedKey = frameKey;
+          }
+        }
+        const texture = textures.get(resolvedKey);
         if (!texture) return;
         // Stretch the BGA texture to fill this rect exactly. The
         // previous version routed through a BMS 256×256 spec
@@ -5073,7 +5118,7 @@ export class PixiGameplayView {
         // of the DST and produced visible "letterbox" gaps. LR2
         // stretches straight to the skin rect, matching here.
         const sprite = new Sprite(texture);
-        sprite.label = `bga/${layerName}[key=${key}]`;
+        sprite.label = `bga/${layerName}[key=${resolvedKey}]`;
         sprite.position.set(x, y);
         sprite.width = w;
         sprite.height = h;
@@ -5096,7 +5141,13 @@ export class PixiGameplayView {
         // direct lookup matches.
         const resolvedChart = this.resolvedChart;
         if (resolvedChart) {
-          const argb = resolveBmsBmpArgb(resolvedChart, key);
+          // Tint resolution honours the original cue key first
+          // (so `#ARGBxx 01` applies even when `#SWBGA01` is
+          // ALSO active and the per-frame source slot lacks its
+          // own tint). Falling back to the resolved frame key
+          // catches the inverse case: chart tints the source
+          // `#BMPYY` slot but not the `#SWBGA01` alias.
+          const argb = resolveBmsBmpArgb(resolvedChart, key) ?? resolveBmsBmpArgb(resolvedChart, resolvedKey);
           if (argb) {
             sprite.tint = (argb.r << 16) | (argb.g << 8) | argb.b;
             // Compose with the call-site alpha that
@@ -5112,14 +5163,20 @@ export class PixiGameplayView {
       if (poorKey) {
         // POOR uses base-mode decoding (no chroma key) since it
         // replaces the entire base+layer composite during its
-        // window.
-        drawLayer(poorKey, this.bgaTextures, 'poor');
+        // window. POOR has no per-cue origin time we can hand
+        // to `drawLayer` for `#SWBGAxx` frame timing; chart
+        // authors don't typically pair POOR with switching BGA,
+        // and a static frame is the safer fallback.
+        drawLayer(poorKey, this.bgaTextures, 'poor', undefined);
       } else {
-        drawLayer(baseKey, this.bgaTextures, 'base');
+        // `cue.seconds` anchors switching-BGA frame timing —
+        // `pickSwitchingBgaFrame` advances frames relative to
+        // when the cue fired, not relative to the chart origin.
+        drawLayer(baseKey, this.bgaTextures, 'base', baseCue?.seconds);
         // Layer track is composited on top with black→transparent
         // so the base track shows through where the foreground BMP
         // is empty.
-        drawLayer(layerKey, this.bgaLayerTextures, 'layer');
+        drawLayer(layerKey, this.bgaLayerTextures, 'layer', layerCue?.seconds);
       }
     }
   }

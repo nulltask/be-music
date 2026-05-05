@@ -25,7 +25,9 @@ import {
   parseBmsDynamicVolumeGain,
   parseBmsExBmp,
   parseBmsExWav,
+  parseBmsSwBga,
   parseBmsWavCmd,
+  pickSwitchingBgaFrame,
   resolveBmsBmpArgb,
   wavCmdVolumeByteToLinearGain,
   parseBpmFrom03Token,
@@ -251,6 +253,71 @@ describe('chart', () => {
     expect(map.get('01')).toBeCloseTo(0.501, 3);
     expect(map.has('02')).toBe(false);
     expect(map.get('03')).toBeCloseTo(1, 6);
+  });
+
+  test('parseBmsSwBga decodes "fr:tot:lp:ARGB N1 N2 …" animation directives', () => {
+    // Hitkey BMS Memo: `fr` is in 1/100 sec, so `fr=10` → 100ms
+    // per frame. The optional ARGB field round-trips as a raw
+    // string for downstream `parseBmsArgb` use.
+    const parsed = parseBmsSwBga('10:5:1:FF000000 02 03 04 05 06');
+    expect(parsed).toEqual({
+      frameIntervalMs: 100,
+      totalFrames: 5,
+      loop: true,
+      argbRaw: 'FF000000',
+      frames: ['02', '03', '04', '05', '06'],
+    });
+  });
+
+  test('parseBmsSwBga treats lp=0 as no-loop and ARGB as optional', () => {
+    const parsed = parseBmsSwBga('5:3:0 0a 0b 0c');
+    expect(parsed?.loop).toBe(false);
+    expect(parsed?.argbRaw).toBeUndefined();
+    expect(parsed?.frames).toEqual(['0A', '0B', '0C']);
+  });
+
+  test('parseBmsSwBga rejects malformed / non-positive headers', () => {
+    expect(parseBmsSwBga('')).toBeUndefined();
+    // No frame list.
+    expect(parseBmsSwBga('10:5:1')).toBeUndefined();
+    // Header missing fields.
+    expect(parseBmsSwBga('10 02 03')).toBeUndefined();
+    // Non-positive `fr` would divide by zero downstream.
+    expect(parseBmsSwBga('0:5:1 02 03')).toBeUndefined();
+    // Non-positive `tot`.
+    expect(parseBmsSwBga('10:0:1 02 03')).toBeUndefined();
+  });
+
+  test('pickSwitchingBgaFrame walks the frame list at the authored interval', () => {
+    const swBga = parseBmsSwBga('10:5:1 02 03 04 05 06')!;
+    expect(pickSwitchingBgaFrame(swBga, 0)).toBe('02');
+    expect(pickSwitchingBgaFrame(swBga, 99)).toBe('02'); // 99 ms < 100 ms threshold
+    expect(pickSwitchingBgaFrame(swBga, 100)).toBe('03');
+    expect(pickSwitchingBgaFrame(swBga, 350)).toBe('05');
+    // After totalFrames the loop wraps back to frame 0.
+    expect(pickSwitchingBgaFrame(swBga, 500)).toBe('02');
+  });
+
+  test('pickSwitchingBgaFrame holds the last frame when lp=0', () => {
+    // With looping disabled, an `elapsedMs` past the authored
+    // duration must hold the final frame instead of wrapping
+    // to frame 0 (which would cause a visual glitch at end).
+    const swBga = parseBmsSwBga('10:3:0 02 03 04')!;
+    expect(pickSwitchingBgaFrame(swBga, 0)).toBe('02');
+    expect(pickSwitchingBgaFrame(swBga, 250)).toBe('04');
+    expect(pickSwitchingBgaFrame(swBga, 5000)).toBe('04');
+  });
+
+  test('pickSwitchingBgaFrame cycles a slot list shorter than totalFrames', () => {
+    // Author shipped only two frames but advertised tot=4. The
+    // hitkey-style behaviour is to cycle within the authored
+    // slot list while honouring the total-frame loop boundary.
+    const swBga = parseBmsSwBga('10:4:1 02 03')!;
+    expect(pickSwitchingBgaFrame(swBga, 0)).toBe('02');
+    expect(pickSwitchingBgaFrame(swBga, 100)).toBe('03');
+    expect(pickSwitchingBgaFrame(swBga, 200)).toBe('02');
+    expect(pickSwitchingBgaFrame(swBga, 300)).toBe('03');
+    expect(pickSwitchingBgaFrame(swBga, 400)).toBe('02');
   });
 
   test('parseBmsBga decodes "YY x1 y1 x2 y2 dx dy" sub-region directives', () => {
