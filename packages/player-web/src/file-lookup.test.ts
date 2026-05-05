@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findCaseInsensitivePath, lookupBytesCaseInsensitive } from './file-lookup.ts';
+import { findCaseInsensitivePath, isMaliciousAssetPath, lookupBytesCaseInsensitive } from './file-lookup.ts';
 
 const BYTES_A = new Uint8Array([1, 2, 3]);
 const BYTES_B = new Uint8Array([4, 5, 6]);
@@ -55,5 +55,59 @@ describe('lookupBytesCaseInsensitive', () => {
     expect(lookupBytesCaseInsensitive(files, 'a.png')).toBe(BYTES_A);
     expect(lookupBytesCaseInsensitive(files, 'b.png')).toBe(BYTES_B);
     expect(lookupBytesCaseInsensitive(files, 'A.PNG')).toBe(BYTES_A);
+  });
+});
+
+describe('isMaliciousAssetPath', () => {
+  it('rejects POSIX absolute paths', () => {
+    expect(isMaliciousAssetPath('/etc/passwd')).toBe(true);
+    expect(isMaliciousAssetPath('/var/www/html/config.php')).toBe(true);
+  });
+
+  it('rejects backslash absolute paths', () => {
+    expect(isMaliciousAssetPath('\\etc\\passwd')).toBe(true);
+  });
+
+  it('rejects Windows drive-letter absolute paths', () => {
+    expect(isMaliciousAssetPath('C:\\password.txt')).toBe(true);
+    expect(isMaliciousAssetPath('D:/secrets.bin')).toBe(true);
+    expect(isMaliciousAssetPath('z:\\foo.wav')).toBe(true);
+  });
+
+  it('rejects UNC / network share paths', () => {
+    expect(isMaliciousAssetPath('//server/share/file.wav')).toBe(true);
+    expect(isMaliciousAssetPath('\\\\server\\share\\file.wav')).toBe(true);
+  });
+
+  it('rejects parent-directory references', () => {
+    expect(isMaliciousAssetPath('../../../var/www/html/config.php')).toBe(true);
+    expect(isMaliciousAssetPath('safe/../escape.wav')).toBe(true);
+    // Backslash separator variant
+    expect(isMaliciousAssetPath('safe\\..\\escape.wav')).toBe(true);
+  });
+
+  it('rejects null-byte injections', () => {
+    expect(isMaliciousAssetPath('safe.wav\0/etc/passwd')).toBe(true);
+    expect(isMaliciousAssetPath('\0bad')).toBe(true);
+  });
+
+  it('accepts ordinary chart-relative paths', () => {
+    expect(isMaliciousAssetPath('kick.wav')).toBe(false);
+    expect(isMaliciousAssetPath('subdir/kick.wav')).toBe(false);
+    expect(isMaliciousAssetPath('subdir\\kick.wav')).toBe(false);
+    // `..` as part of a filename (not a dedicated segment) is fine.
+    expect(isMaliciousAssetPath('Lab..rinth.wav')).toBe(false);
+    // A leading `.` is fine — `./local.wav` is a valid relative path.
+    expect(isMaliciousAssetPath('./local.wav')).toBe(false);
+  });
+});
+
+describe('findCaseInsensitivePath malicious-path guard', () => {
+  it('returns undefined for malicious candidates even when the map has matching bytes', () => {
+    // Crafted a defensive map entry to prove the guard rejects
+    // even when a pathological matcher would succeed.
+    const files = new Map([['/etc/passwd', BYTES_A]]);
+    expect(findCaseInsensitivePath(files, '/etc/passwd')).toBeUndefined();
+    expect(lookupBytesCaseInsensitive(files, '/etc/passwd')).toBeUndefined();
   });
 });

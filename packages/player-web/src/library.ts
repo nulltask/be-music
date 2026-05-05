@@ -13,7 +13,7 @@ import type {
   LoadProgressCallback,
 } from './types.ts';
 import { isChartFilePath } from './drop.ts';
-import { loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
+import { isMaliciousAssetPath, loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
 import { logger } from './logger.ts';
 
 export { loadAssetBytes, asLoadedBytes } from './file-lookup.ts';
@@ -670,6 +670,15 @@ export function resolveChartAsset(
   chartPath: string,
   assetPath: string,
 ): BrowserSongAssetEntry | undefined {
+  // bmson 1.0.0 spec MUST: reject malicious paths at the
+  // chart-asset entry point. `lookupBytesCaseInsensitive`
+  // also vets each candidate as defence-in-depth, but
+  // short-circuiting here means we don't even synthesise the
+  // joined `${base}/${assetPath}` candidate for a path the
+  // chart never had any business referencing.
+  if (isMaliciousAssetPath(assetPath)) {
+    return undefined;
+  }
   const base = dirname(chartPath);
   const normalized = normalizePath(assetPath);
   const baseName = basename(normalized);
