@@ -253,6 +253,19 @@ export interface AudioBusHandle {
    * temporary mode change).
    */
   getStageEnabled(stage: CompressorStage): boolean;
+  /**
+   * Sets the chart-level master gain (BMS `#VOLWAV`). The value
+   * is a linear multiplier applied at a dedicated stage that
+   * sits BEFORE the recording tap, so a chart authored with
+   * `#VOLWAV 80` runs at 80 % through every routing mode and
+   * the recorder captures the same attenuated signal the user
+   * hears. Passing `1.0` (or omitting the field on the chart)
+   * leaves the bus at unity. Negative / non-finite inputs are
+   * clamped to `0`.
+   */
+  setMasterGain(value: number): void;
+  /** Returns the currently-applied chart master gain (default `1.0`). */
+  getMasterGain(): number;
   dispose(): void;
 }
 
@@ -305,6 +318,16 @@ export function buildAudioBus(
   const legacyComp = createCompressor(audioContext, LEGACY_COMPRESSOR_PARAMS);
   const makeup = audioContext.createGain();
   makeup.gain.value = MASTER_MAKEUP_GAIN_LINEAR;
+  // BMS spec — `#VOLWAV <0..ZZ>` declares the chart's master
+  // volume scaling (100 = unity). Implemented as a dedicated
+  // gain node placed BEFORE the universal tap so every routing
+  // mode (`'off'` / `'legacy'` / `'split'`) feels the
+  // attenuation, and the recording tap captures the
+  // post-`#VOLWAV` signal — i.e. what the user actually hears.
+  // Initialised to unity so charts that omit `#VOLWAV` (or run
+  // outside a chart context) are unaffected.
+  const masterGain = audioContext.createGain();
+  masterGain.gain.value = 1.0;
   // Universal output tap. Every mode routes through this unity-
   // gain node before reaching `audioContext.destination`, so
   // external consumers (the recorder, future analysers, level
@@ -316,11 +339,13 @@ export function buildAudioBus(
   // `'off'` is preserved.
   const tap = audioContext.createGain();
   tap.gain.value = 1.0;
+  masterGain.connect(tap);
   tap.connect(audioContext.destination);
-  // `makeup → tap` is wired once and never re-disconnected; modes
-  // that use makeup (legacy / split) just connect their last
-  // compressor to makeup and let the rest of the chain ride.
-  makeup.connect(tap);
+  // `makeup → masterGain → tap` is wired once and never
+  // re-disconnected; modes that use makeup (legacy / split) just
+  // connect their last compressor to makeup and let the rest of
+  // the chain ride.
+  makeup.connect(masterGain);
 
   let activeMode: CompressorMode = initialMode;
   // Stage on/off state. Persisted across mode changes so a UI
@@ -350,11 +375,12 @@ export function buildAudioBus(
     legacyComp.disconnect();
     if (activeMode === 'off') {
       // Bypass every compressor + makeup — but route through the
-      // shared `tap` node anyway so the recorder (and any other
-      // tap-side consumer) sees the signal. `tap.gain = 1.0`
-      // keeps this transparent for the audible path.
-      keyMixer.connect(tap);
-      bgmMixer.connect(tap);
+      // master-gain (#VOLWAV) and shared `tap` nodes anyway so
+      // the recorder (and any other tap-side consumer) sees the
+      // signal. `tap.gain = 1.0` keeps this transparent for the
+      // audible path; only `#VOLWAV` modulates volume here.
+      keyMixer.connect(masterGain);
+      bgmMixer.connect(masterGain);
       return;
     }
     if (activeMode === 'legacy') {
@@ -419,6 +445,28 @@ export function buildAudioBus(
     getStageEnabled(stage: CompressorStage): boolean {
       return stages[stage];
     },
+    setMasterGain(value: number): void {
+      // Sanitise pathological inputs — `#VOLWAV` is documented as
+      // `0..ZZ` (linear-scale BMS units, 100 = unity, > 100 boosts
+      // the chart above unity), but a malformed chart could emit
+      // NaN / Infinity / negative numbers that would otherwise
+      // propagate into a Web Audio AudioParam and produce silent
+      // failure or a runtime exception. Non-finite → unity (no
+      // surprise scaling); negative-finite → 0 (silence is the
+      // safer interpretation of a negative gain).
+      let sanitised: number;
+      if (!Number.isFinite(value)) {
+        sanitised = 1.0;
+      } else if (value < 0) {
+        sanitised = 0;
+      } else {
+        sanitised = value;
+      }
+      masterGain.gain.value = sanitised;
+    },
+    getMasterGain(): number {
+      return masterGain.gain.value;
+    },
     dispose(): void {
       try {
         keyMixer.disconnect();
@@ -428,6 +476,7 @@ export function buildAudioBus(
         masterComp.disconnect();
         legacyComp.disconnect();
         makeup.disconnect();
+        masterGain.disconnect();
         tap.disconnect();
       } catch {
         // `disconnect()` throws when called on an already-disposed

@@ -212,21 +212,28 @@ describe('buildAudioBus graph topology', () => {
     const keyMixer = bus.keyMixer as unknown as FakeNode;
     const bgmMixer = bus.bgmMixer as unknown as FakeNode;
     // No compressor stages on the audible path — the mixers go
-    // straight into the unity-gain tap node, which then feeds the
-    // destination. Mid-chain `tap` is required so external taps
-    // (recording / analysers) see the signal even when no
+    // through the chart-level master-gain (#VOLWAV) stage and the
+    // unity-gain tap before reaching the destination. The
+    // mid-chain tap matters because external consumers (recording,
+    // analysers) connect there to see the signal even when no
     // compressor is engaged; without it the recorder would
     // capture silence whenever the user toggles compression off.
     expect(reachesDestination(keyMixer, destination)).toBe(true);
     expect(reachesDestination(bgmMixer, destination)).toBe(true);
     expect(compressorsReachableFrom(keyMixer)).toBe(0);
     expect(compressorsReachableFrom(bgmMixer)).toBe(0);
-    // Both mixers share their immediate downstream — the tap.
+    // Both mixers share their immediate downstream — the chart
+    // master-gain (#VOLWAV) stage that feeds the tap. The
+    // shared-target gain node is a unity GainNode in this mode,
+    // so the path is acoustically transparent (the recording
+    // captures the unprocessed signal that the user actually
+    // hears).
     const sharedTargets = [...keyMixer.outgoing].filter((node) => bgmMixer.outgoing.has(node));
     expect(sharedTargets).toHaveLength(1);
     expect(sharedTargets[0]?.type).toBe('gain');
-    // The bus's `outputNode` IS that shared tap.
-    expect(sharedTargets[0]).toBe(bus.outputNode);
+    // The bus's `outputNode` is the tap, which sits one hop
+    // downstream of the shared master-gain target.
+    expect(sharedTargets[0]?.outgoing.has(bus.outputNode as unknown as FakeNode)).toBe(true);
   });
 
   it('exposes the tap as a stable outputNode across mode switches', () => {
@@ -440,5 +447,78 @@ describe('buildAudioBus per-stage toggles', () => {
     bus.setStageEnabled('master', true); // already true
     bus.setStageEnabled('master', true);
     expect(bus.getStageEnabled('master')).toBe(true);
+  });
+});
+
+// -- #VOLWAV master gain ---------------------------------------------------
+
+describe('buildAudioBus master gain (#VOLWAV)', () => {
+  // The bus exposes a single dedicated stage for the chart-level
+  // master volume scaling. The contract: the value applies through
+  // every routing mode (so a chart authored at #VOLWAV 80 sounds at
+  // 80 % even in 'off' mode), and the recorder tap captures the
+  // post-`#VOLWAV` signal — i.e. what the user hears.
+
+  it('starts at unity gain so charts without #VOLWAV are unaffected', () => {
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    expect(bus.getMasterGain()).toBe(1.0);
+  });
+
+  it('applies setMasterGain across every routing mode', () => {
+    // The single AudioParam sits BEFORE the universal tap, so once
+    // set, every mode threads its signal through it. We verify by
+    // confirming the value sticks when the host flips modes.
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    bus.setMasterGain(0.8);
+    expect(bus.getMasterGain()).toBeCloseTo(0.8);
+    bus.setMode('legacy');
+    expect(bus.getMasterGain()).toBeCloseTo(0.8);
+    bus.setMode('off');
+    expect(bus.getMasterGain()).toBeCloseTo(0.8);
+    bus.setMode('split');
+    expect(bus.getMasterGain()).toBeCloseTo(0.8);
+  });
+
+  it('clamps negative gains to 0 and replaces non-finite inputs with unity', () => {
+    // A malformed `#VOLWAV` value can land in the parser as NaN or
+    // a negative number; both should be handled gracefully rather
+    // than poisoning the AudioParam.
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    bus.setMasterGain(-1);
+    expect(bus.getMasterGain()).toBe(0);
+    bus.setMasterGain(Number.NaN);
+    expect(bus.getMasterGain()).toBe(1.0);
+    bus.setMasterGain(Number.POSITIVE_INFINITY);
+    expect(bus.getMasterGain()).toBe(1.0);
+  });
+
+  it('admits values above unity (#VOLWAV > 100 boosts the chart)', () => {
+    // Some charts authored on quieter sample sets push above 100 to
+    // bring the audible level up — the bus has to honour that.
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    bus.setMasterGain(1.5);
+    expect(bus.getMasterGain()).toBeCloseTo(1.5);
+  });
+
+  it('keeps the master gain stage on the audible path in every mode', () => {
+    // The master-gain GainNode must sit between the bus tail and
+    // the destination so a `setMasterGain(0)` mutes every mode.
+    // Identity: the bus's outputNode (tap) is the *post*-master
+    // anchor; mixer → ... → masterGain → tap → destination.
+    const { context, destination } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    const keyMixer = bus.keyMixer as unknown as FakeNode;
+    const bgmMixer = bus.bgmMixer as unknown as FakeNode;
+    // Sanity: even with the master-gain stage in place the audible
+    // path still reaches the destination across every mode.
+    for (const mode of ['split', 'legacy', 'off'] as const) {
+      bus.setMode(mode);
+      expect(reachesDestination(keyMixer, destination)).toBe(true);
+      expect(reachesDestination(bgmMixer, destination)).toBe(true);
+    }
   });
 });

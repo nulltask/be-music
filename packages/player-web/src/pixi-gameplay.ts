@@ -2644,6 +2644,18 @@ export class PixiGameplayView {
     // Use the control-flow-resolved chart so #IF-gated #WAVxx
     // declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? this.song.chart;
+    // BMS spec — `#VOLWAV <0..ZZ>` declares the chart's master
+    // volume scaling (100 = unity, 80 = 80 % loud, > 100 boosts).
+    // Applying it here means every sample triggered for THIS chart
+    // (key bus, BGM bus, every compressor mode) flows through the
+    // single dedicated stage in the bus and the recorder captures
+    // the post-`#VOLWAV` signal, matching the CLI renderer's
+    // `resolveChartVolWavGain` behaviour. Charts that omit
+    // `#VOLWAV` parse to `undefined` and are left at unity.
+    const volWavRaw = chart.bms.volWav;
+    if (typeof volWavRaw === 'number' && Number.isFinite(volWavRaw) && volWavRaw >= 0) {
+      this.audioBus.setMasterGain(volWavRaw / 100);
+    }
     // BMS spec: `#WAVxx` slot index is base-36 (`00..ZZ`), so a chart
     // can declare up to 1296 unique samples. An earlier revision
     // capped this preload at the first 256 entries, which silently
