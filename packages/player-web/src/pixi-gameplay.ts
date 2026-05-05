@@ -71,6 +71,7 @@ import {
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
+  parseBmsArgb,
   parseBmsDynamicVolumeGain,
   resolveChartReferenceBpm,
   sortEvents,
@@ -4938,6 +4939,30 @@ export class PixiGameplayView {
         sprite.width = w;
         sprite.height = h;
         applyDestinationToSprite(sprite, dst);
+        // BMS spec — `#ARGBxx AARRGGBB` declares the BMP slot's
+        // alpha + RGB tint for layer composition. Apply the
+        // parsed values via Pixi's per-sprite `tint` (RGB
+        // multiply) and `alpha` (overall opacity); the default
+        // `#FFFFFFFF` round-trips to `tint = 0xFFFFFF` /
+        // `alpha = 1` which is the no-op identity, so charts
+        // that omit `#ARGB` see no change.
+        // BGA-cue keys come from `buildBgaTimelines`, which
+        // routes through `normalizeObjectKey` — exactly the
+        // same key normalisation the parser applies to the
+        // `chart.bms.argb` map, so the direct lookup matches.
+        const argbRaw = this.resolvedChart?.bms.argb[key];
+        if (typeof argbRaw === 'string') {
+          const argb = parseBmsArgb(argbRaw);
+          if (argb) {
+            sprite.tint = (argb.r << 16) | (argb.g << 8) | argb.b;
+            // Compose with the call-site alpha that
+            // `applyDestinationToSprite` may have already
+            // written (e.g. skin-driven LR2 fades) so the
+            // chart-level `#ARGBxx` α stacks multiplicatively
+            // rather than overriding it.
+            sprite.alpha *= argb.a / 255;
+          }
+        }
         this.bgaLayer.addChild(sprite);
       };
       if (poorKey) {

@@ -260,6 +260,71 @@ export function resolveChartReferenceBpm(
   return undefined;
 }
 
+/**
+ * Parsed BMS `#ARGBxx` value — alpha + RGB channel in 0..255.
+ *
+ * Each component is clamped to the byte range so callers can blindly
+ * feed them into bit-shift / `/255` conversions without re-validating.
+ */
+export interface BmsArgb {
+  /** Alpha (0 = fully transparent, 255 = fully opaque). */
+  a: number;
+  r: number;
+  g: number;
+  b: number;
+}
+
+const BMS_ARGB_HEX_RE = /^[0-9A-Fa-f]{8}$/;
+
+/**
+ * Parses a BMS `#ARGBxx` raw string into A / R / G / B byte
+ * components. Recognises both formats commonly found in the wild:
+ *
+ * - **Hex AARRGGBB** — `'FF000000'` or `'#FF000000'` (8 hex digits,
+ *   optional leading `#`). High byte = alpha.
+ * - **Comma-separated decimal** — `'255,0,0,0'` (A,R,G,B with
+ *   optional whitespace around each integer).
+ *
+ * Returns `undefined` for unrecognised / malformed input so the
+ * caller can fall back to "no tint".
+ *
+ * Spec note (hitkey BMS Memo): `#ARGBxx` adjusts the color / alpha
+ * of `#BMPxx` for BGA layer composition. Authors typically use it
+ * to chroma-key a backdrop colour to transparent, or to dim a
+ * layer image — in both cases the consumer applies the parsed
+ * values as a tint × alpha at draw time.
+ */
+export function parseBmsArgb(raw: string): BmsArgb | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  // Comma-separated decimal: "A,R,G,B" with optional whitespace.
+  if (trimmed.includes(',')) {
+    const parts = trimmed.split(',');
+    if (parts.length !== 4) return undefined;
+    const ints: number[] = [];
+    for (const part of parts) {
+      const trimmedPart = part.trim();
+      if (trimmedPart.length === 0) return undefined;
+      const value = Number.parseInt(trimmedPart, 10);
+      if (!Number.isFinite(value)) return undefined;
+      // Clamp to 0..255 so `#ARGB01 300,-5,...` (clearly malformed
+      // but writeable) doesn't poison downstream alpha math.
+      ints.push(Math.max(0, Math.min(255, Math.trunc(value))));
+    }
+    return { a: ints[0]!, r: ints[1]!, g: ints[2]!, b: ints[3]! };
+  }
+  // Hex AARRGGBB, optional leading '#'.
+  const hex = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+  if (!BMS_ARGB_HEX_RE.test(hex)) return undefined;
+  return {
+    a: Number.parseInt(hex.slice(0, 2), 16),
+    r: Number.parseInt(hex.slice(2, 4), 16),
+    g: Number.parseInt(hex.slice(4, 6), 16),
+    b: Number.parseInt(hex.slice(6, 8), 16),
+  };
+}
+
 export function isTempoChannel(channel: string): boolean {
   if (channel.length === 2) {
     const high = channel.charCodeAt(0);

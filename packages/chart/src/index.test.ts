@@ -17,6 +17,7 @@ import {
   isTempoChannel,
   mapBmsLongNoteChannelToPlayable,
   measureToBeat,
+  parseBmsArgb,
   parseBmsDynamicVolumeGain,
   parseBpmFrom03Token,
   resolveChartPlayVariant,
@@ -166,6 +167,46 @@ describe('chart', () => {
     const json = createEmptyJson();
     json.metadata.bpm = 0;
     expect(resolveChartReferenceBpm(json)).toBeUndefined();
+  });
+
+  test('parseBmsArgb decodes the AARRGGBB hex format the parser stores', () => {
+    // Parser-level normalisation lands `#ARGB01 FF000000` here as
+    // the bare hex string, since that's the dominant in-the-wild
+    // format. AA = alpha (FF = fully opaque), then RR/GG/BB.
+    expect(parseBmsArgb('FF000000')).toEqual({ a: 255, r: 0, g: 0, b: 0 });
+    expect(parseBmsArgb('80a0b0c0')).toEqual({ a: 0x80, r: 0xa0, g: 0xb0, b: 0xc0 });
+  });
+
+  test('parseBmsArgb tolerates a leading "#" on hex inputs', () => {
+    // Some chart authors write `#ARGB01 #FF000000` with a CSS-style
+    // prefix; treat the `#` as decorative.
+    expect(parseBmsArgb('#FF112233')).toEqual({ a: 255, r: 0x11, g: 0x22, b: 0x33 });
+  });
+
+  test('parseBmsArgb decodes comma-separated decimal A,R,G,B', () => {
+    // The spec also lists the decimal form. Whitespace inside the
+    // commas should be tolerated since chart authors hand-edit
+    // these.
+    expect(parseBmsArgb('255,0,0,0')).toEqual({ a: 255, r: 0, g: 0, b: 0 });
+    expect(parseBmsArgb(' 128 , 32 , 64 , 96 ')).toEqual({ a: 128, r: 32, g: 64, b: 96 });
+  });
+
+  test('parseBmsArgb clamps decimal channel values to the byte range', () => {
+    // Defensive — out-of-range inputs from a malformed chart shouldn't
+    // produce alpha = 1.18 or a wrap-around RGB tint.
+    expect(parseBmsArgb('300,-5,9999,128')).toEqual({ a: 255, r: 0, g: 255, b: 128 });
+  });
+
+  test('parseBmsArgb returns undefined for unrecognised / empty input', () => {
+    expect(parseBmsArgb('')).toBeUndefined();
+    expect(parseBmsArgb('   ')).toBeUndefined();
+    expect(parseBmsArgb('not-an-argb')).toBeUndefined();
+    // Hex of the wrong length isn't AARRGGBB.
+    expect(parseBmsArgb('FFF')).toBeUndefined();
+    expect(parseBmsArgb('FFFFFFFFFF')).toBeUndefined();
+    // Wrong number of comma-separated channels.
+    expect(parseBmsArgb('255,0,0')).toBeUndefined();
+    expect(parseBmsArgb('1,2,3,4,5')).toBeUndefined();
   });
 
   test('classifies channel types', () => {
