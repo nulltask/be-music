@@ -579,6 +579,46 @@ describe('parser', () => {
     expect(json.metadata.total).toBe(250);
   });
 
+  test('bmson: stop_events.duration is converted from pulses-at-resolution to BMS 1/192-measure units', () => {
+    // Spec: `duration` is in pulses at the chart's `resolution`.
+    // BMS-side timing reads `resources.stop[key]` through the
+    // `(value / 192) × (240/bpm)` formula expecting 1/192-measure
+    // units (= 48 per beat). Parser conversion: `pulses × 48 /
+    // resolution`. Default resolution=240 → 1 beat (240 pulses) =
+    // 48 BMS units; without the conversion we'd see the raw 240
+    // and the formula would produce a 5× over-long stop.
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+        stop_events: [{ y: 240, duration: 240 }],
+      }),
+    );
+
+    const stopKeys = Object.keys(json.resources.stop);
+    expect(stopKeys).toHaveLength(1);
+    expect(json.resources.stop[stopKeys[0]!]).toBeCloseTo(48, 6);
+  });
+
+  test('bmson: stop_events.duration scales with non-default resolution', () => {
+    // Same beat-length stop authored at resolution=480 takes
+    // duration=480 pulses (still 1 beat). Conversion remains
+    // 48 BMS units regardless.
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 480, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+        stop_events: [{ y: 480, duration: 480 }],
+      }),
+    );
+
+    const stopKeys = Object.keys(json.resources.stop);
+    expect(stopKeys).toHaveLength(1);
+    expect(json.resources.stop[stopKeys[0]!]).toBeCloseTo(48, 6);
+  });
+
   test('bmson: key_channels mines route through the same mode_hint lane map onto Dx / Ex channels', () => {
     const json = parseBmson(
       JSON.stringify({

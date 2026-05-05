@@ -394,7 +394,24 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   json.preservation.bmson.stopEvents = stopEvents;
   stopEvents.forEach((stopEvent, index) => {
     const key = intToBase36(index + 1, 2);
-    json.resources.stop[key] = stopEvent.duration;
+    // Spec: `stop_events.duration` is measured in **pulses** at
+    // the chart's `resolution`. The downstream timing resolver
+    // reads `resources.stop[key]` through the BMS-style
+    // `(value / 192) × (240/bpm)` formula, which expects the
+    // value in "1/192-of-a-measure" units (1 measure = 4 beats
+    // = 192 BMS-spec STOP units, so 1 beat = 48 BMS units). To
+    // keep the BMS / bmson paths sharing one formula, convert
+    // bmson pulses into the equivalent 1/192-measure units at
+    // parse time:
+    //
+    //   bms_units = pulses × 48 / resolution
+    //
+    // Default `resolution = 240` → 1 beat (`duration = 240`)
+    // becomes `48` BMS units, which the formula evaluates to
+    // `(48 / 192) × (240/bpm) = 60/bpm` seconds — exactly one
+    // beat. Without this conversion bmson stops were ~5×
+    // longer than authored at the default resolution.
+    json.resources.stop[key] = (stopEvent.duration * 48) / resolution;
     const { measure, position } = positionResolver(stopEvent.y);
     json.events.push({
       measure,
