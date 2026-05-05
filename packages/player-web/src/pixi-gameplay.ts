@@ -2655,6 +2655,12 @@ export class PixiGameplayView {
     // buffers, dominated by the underlying PCM rather than any
     // per-entry overhead.
     const wavPaths = Object.values(chart.resources.wav).filter((path): path is string => typeof path === 'string');
+    // BMS spec — `#PATH_WAV <prefix>` declares a sub-directory
+    // the chart's WAVs live under. The audio asset resolver
+    // walks the prefixed form first when set so a chart
+    // authored as `wav/` + bare `kick.wav` references resolves
+    // the file as `wav/kick.wav`.
+    const pathWavPrefix = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav : undefined;
     await Promise.all(
       wavPaths.map(async (path) => {
         if (this.disposed || !this.source || !this.song || !this.audioContext) return;
@@ -2666,7 +2672,9 @@ export class PixiGameplayView {
         // load to keep gigabytes of WAV samples out of memory),
         // so `loadAssetBytes` is the unwrap step that actually
         // calls `arrayBuffer()` on demand for THIS chart.
-        const entry = resolveChartAudioAsset(this.source, this.song.chartPath, path);
+        const entry = resolveChartAudioAsset(this.source, this.song.chartPath, path, {
+          pathPrefix: pathWavPrefix,
+        });
         const bytes = await loadAssetBytes(entry);
         if (this.disposed || !this.audioContext) return;
         if (!bytes) {

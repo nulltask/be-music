@@ -50,4 +50,36 @@ describe('createSamplePathCandidates', () => {
     const candidates = createSamplePathCandidates('kick.WAV');
     expect(new Set(candidates).size).toBe(candidates.length);
   });
+
+  test('#PATH_WAV prefix joins the chart-declared path before the bare name', () => {
+    // BMS spec — `#PATH_WAV wav/` + `#WAV01 kick.wav` should
+    // resolve to `wav/kick.wav` first, falling back to
+    // `kick.wav` when the prefix-joined path isn't on disk.
+    const candidates = createSamplePathCandidates('kick.wav', { pathPrefix: 'wav/' });
+    expect(candidates).toContain('wav/kick.wav');
+    expect(candidates).toContain('kick.wav');
+    // The prefixed form should appear before the bare path.
+    expect(candidates.indexOf('wav/kick.wav')).toBeLessThan(candidates.indexOf('kick.wav'));
+  });
+
+  test('#PATH_WAV prefix without a trailing slash is normalised', () => {
+    const candidates = createSamplePathCandidates('kick.wav', { pathPrefix: 'wav' });
+    expect(candidates).toContain('wav/kick.wav');
+  });
+
+  test('#PATH_WAV prefix is skipped when the chart already includes it in the sample path', () => {
+    // No double-prefixing: `wav/kick.wav` with `#PATH_WAV wav/`
+    // should not produce `wav/wav/kick.wav` candidates.
+    const candidates = createSamplePathCandidates('wav/kick.wav', { pathPrefix: 'wav/' });
+    expect(candidates).toContain('wav/kick.wav');
+    expect(candidates).not.toContain('wav/wav/kick.wav');
+  });
+
+  test('blank #PATH_WAV prefix is treated as no prefix', () => {
+    const withBlank = createSamplePathCandidates('kick.wav', { pathPrefix: '' });
+    const withSpaces = createSamplePathCandidates('kick.wav', { pathPrefix: '   ' });
+    const withoutPrefix = createSamplePathCandidates('kick.wav');
+    expect(withBlank).toEqual(withoutPrefix);
+    expect(withSpaces).toEqual(withoutPrefix);
+  });
 });

@@ -268,6 +268,13 @@ async function scheduleSampleRenders(params: {
   const playVolumeState: DynamicVolumeState = { index: 0, gain: 1 };
   let maxFrame = Math.max(1, Math.round(tailSeconds * sampleRate));
 
+  // BMS spec — `#PATH_WAV` declares a directory prefix the
+  // chart's WAVs live under. The sample-path resolver tries
+  // `pathPrefix + samplePath` before the bare path so charts
+  // that organise their WAVs under a sub-folder (e.g.
+  // `wav/kick.wav` reachable via `#PATH_WAV wav/`) resolve
+  // correctly.
+  const pathWavPrefix = typeof json.bms.pathWav === 'string' ? json.bms.pathWav : undefined;
   for (const trigger of triggers) {
     throwIfAborted(signal);
     const sample = await getOrCreateSample({
@@ -280,6 +287,7 @@ async function scheduleSampleRenders(params: {
       resolvedPathCache,
       signal,
       onSampleLoadProgress,
+      pathPrefix: pathWavPrefix,
     });
     const frameWindow = resolveScheduledSampleFrameWindow(trigger, sampleRate, sample);
     if (!frameWindow) {
@@ -480,6 +488,7 @@ async function getOrCreateSample(params: {
   resolvedPathCache: Map<string, string | undefined>;
   signal?: AbortSignal;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
+  pathPrefix?: string;
 }): Promise<StereoSample> {
   const {
     sampleKey,
@@ -491,6 +500,7 @@ async function getOrCreateSample(params: {
     resolvedPathCache,
     signal,
     onSampleLoadProgress,
+    pathPrefix,
   } = params;
   throwIfAborted(signal);
 
@@ -520,10 +530,12 @@ async function getOrCreateSample(params: {
     sampleKey,
     samplePath,
   });
-  const cacheKey = `${baseDir}:${samplePath}`;
+  // Cache key includes the `#PATH_WAV` prefix so two charts
+  // sharing a `baseDir` but different prefixes don't collide.
+  const cacheKey = `${baseDir}:${pathPrefix ?? ''}:${samplePath}`;
   const resolvedPath = resolvedPathCache.has(cacheKey)
     ? resolvedPathCache.get(cacheKey)
-    : await resolveSamplePath(baseDir, samplePath, signal);
+    : await resolveSamplePath(baseDir, samplePath, signal, { pathPrefix });
   resolvedPathCache.set(cacheKey, resolvedPath);
 
   if (!resolvedPath) {

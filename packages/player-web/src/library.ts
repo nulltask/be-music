@@ -760,18 +760,58 @@ export function resolveChartAsset(
  * duplicates — `kick.OPUS` and `kick.opus` both resolve through
  * the lower-cased extension variant.
  */
+export interface ResolveChartAudioAssetOptions {
+  /**
+   * BMS spec — `#PATH_WAV <prefix>` declares a directory the
+   * chart's WAVs live under. The resolver tries each codec
+   * fallback prefixed with this string before falling through
+   * to the bare path, so a chart authored as `wav/` + bare
+   * `kick.wav` references resolves the file as `wav/kick.wav`.
+   */
+  pathPrefix?: string;
+}
+
 export function resolveChartAudioAsset(
   source: BrowserSongAssetSource,
   chartPath: string,
   assetPath: string,
+  options: ResolveChartAudioAssetOptions = {},
 ): BrowserSongAssetEntry | undefined {
   for (const candidate of audioFallbackPaths(assetPath)) {
+    // Try the `#PATH_WAV` prefixed form first when supplied;
+    // fall through to the bare name if the prefix-joined path
+    // doesn't resolve. Charts that don't author `#PATH_WAV`
+    // pass `pathPrefix: undefined` and behave exactly as
+    // before.
+    const prefixed = joinPathWavPrefix(options.pathPrefix, candidate);
+    if (prefixed !== undefined) {
+      const entry = resolveChartAsset(source, chartPath, prefixed);
+      if (entry) return entry;
+    }
     const entry = resolveChartAsset(source, chartPath, candidate);
     if (entry) {
       return entry;
     }
   }
   return undefined;
+}
+
+function joinPathWavPrefix(prefix: string | undefined, samplePath: string): string | undefined {
+  if (typeof prefix !== 'string') return undefined;
+  const trimmedPrefix = prefix.trim();
+  if (trimmedPrefix.length === 0) return undefined;
+  // Skip when the chart already includes the prefix in the
+  // sample path — common when `#WAV01` already references
+  // `wav/kick.wav` AND `#PATH_WAV wav/` is also set. The
+  // bare-path candidate (returned without the second prefix
+  // application) already resolves correctly.
+  const normalizedPrefix = trimmedPrefix.replaceAll('\\', '/');
+  const normalizedSample = samplePath.replaceAll('\\', '/');
+  const prefixWithSep = normalizedPrefix.endsWith('/') ? normalizedPrefix : `${normalizedPrefix}/`;
+  if (normalizedSample.startsWith(prefixWithSep)) {
+    return undefined;
+  }
+  return `${prefixWithSep}${samplePath}`;
 }
 
 function audioFallbackPaths(path: string): string[] {

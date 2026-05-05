@@ -302,6 +302,38 @@ describe('resolveChartAudioAsset', () => {
     expect(resolveChartAudioAsset(source, 'Song/main.bms', 'snare.wav')).toBe(OPUS_BYTES);
   });
 
+  test('honours the BMS #PATH_WAV prefix when supplied by the caller', () => {
+    // Spec — `#PATH_WAV wav/` + `#WAV01 kick.wav` should
+    // resolve to `wav/kick.wav` on disk. The prefixed form is
+    // tried first; the bare name is the fallback.
+    const PREFIXED_BYTES = new Uint8Array([1, 2, 3]);
+    const source = makeAssetSource({ 'Song/wav/kick.wav': PREFIXED_BYTES });
+    expect(
+      resolveChartAudioAsset(source, 'Song/main.bms', 'kick.wav', { pathPrefix: 'wav/' }),
+    ).toBe(PREFIXED_BYTES);
+  });
+
+  test('falls back to the bare path when the #PATH_WAV-prefixed form is absent', () => {
+    const BARE_BYTES = new Uint8Array([7, 8, 9]);
+    const source = makeAssetSource({ 'Song/kick.wav': BARE_BYTES });
+    // Prefix-joined `wav/kick.wav` doesn't exist; resolver
+    // should fall through to `kick.wav`.
+    expect(
+      resolveChartAudioAsset(source, 'Song/main.bms', 'kick.wav', { pathPrefix: 'wav/' }),
+    ).toBe(BARE_BYTES);
+  });
+
+  test('does NOT double-prefix when the sample path already includes the #PATH_WAV directory', () => {
+    // `wav/kick.wav` with `#PATH_WAV wav/` should NOT produce
+    // a `wav/wav/kick.wav` candidate; the resolver picks up
+    // the bare-path candidate (which already includes `wav/`).
+    const PREFIXED_BYTES = new Uint8Array([5, 6, 7]);
+    const source = makeAssetSource({ 'Song/wav/kick.wav': PREFIXED_BYTES });
+    expect(
+      resolveChartAudioAsset(source, 'Song/main.bms', 'wav/kick.wav', { pathPrefix: 'wav/' }),
+    ).toBe(PREFIXED_BYTES);
+  });
+
   test('falls back to .m4a when only AAC ships', () => {
     // The bmson spec example explicitly mentions `.m4a` as a
     // valid codec; this exercises the new entry in the candidate
