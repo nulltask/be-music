@@ -726,11 +726,22 @@ export function resolveChartAudioAsset(
 function audioFallbackPaths(path: string): string[] {
   const lastSlash = path.lastIndexOf('/');
   const dotIndex = path.lastIndexOf('.');
-  if (dotIndex < 0 || dotIndex < lastSlash) {
-    return [path];
-  }
-  const base = path.slice(0, dotIndex);
-  const candidates = [`${base}.opus`, `${base}.ogg`, `${base}.mp3`, `${base}.wav`];
+  // bmson 1.0.0 spec — "A file extension may be omitted. If file
+  // extension is omitted, then the implementation should search
+  // for compatible sound file with that name." The previous
+  // shape returned just `[path]` for extensionless inputs, which
+  // skipped the codec walk entirely and broke any bmson chart
+  // that authors `sound_channels[].name` without a dot. We now
+  // walk the same fallback list for both cases — the only
+  // difference is whether `path` is the bare base or the
+  // already-suffixed variant we strip back to one.
+  const hasExtension = dotIndex >= 0 && dotIndex >= lastSlash;
+  const base = hasExtension ? path.slice(0, dotIndex) : path;
+  // Order is "most-likely-shipped first" so the case-insensitive
+  // file lookup short-circuits fast on the common archive
+  // formats. `.m4a` (AAC) is included to match the spec example
+  // ("Try piano.wav, piano.ogg, piano.m4a, …").
+  const candidates = [`${base}.opus`, `${base}.ogg`, `${base}.mp3`, `${base}.wav`, `${base}.m4a`];
   if (!candidates.includes(path)) {
     candidates.push(path);
   }

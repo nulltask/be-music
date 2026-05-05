@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vitest';
-import { loadSongCollectionFromFiles, resolveChartImageAsset, resolveChartPlayVariant } from './library.ts';
+import {
+  loadSongCollectionFromFiles,
+  resolveChartAudioAsset,
+  resolveChartImageAsset,
+  resolveChartPlayVariant,
+} from './library.ts';
 import type { BeMusicEvent, BeMusicJson } from '../../json/src/index.ts';
 import type { BrowserSongAssetEntry, BrowserSongAssetSource, BrowserSongEntry, LoadProgress } from './types.ts';
 
@@ -255,5 +260,55 @@ describe('resolveChartImageAsset', () => {
       const source = makeAssetSource({ 'Song/clip.png': PNG_BYTES });
       expect(resolveChartImageAsset(source, 'Song/main.bms', `clip.${ext}`)).toBeUndefined();
     }
+  });
+});
+
+describe('resolveChartAudioAsset', () => {
+  test('falls back through codec extensions when the chart-declared `.wav` is absent', () => {
+    // Classic case the resolver was designed for: chart says
+    // `kick.wav` but the song folder ships `kick.ogg`. The codec
+    // walk should pick up the OGG bytes.
+    const OGG_BYTES = new Uint8Array([0x4f, 0x67, 0x67, 0x53]);
+    const source = makeAssetSource({ 'Song/kick.ogg': OGG_BYTES });
+    const entry = resolveChartAudioAsset(source, 'Song/main.bms', 'kick.wav');
+    expect(entry).toBe(OGG_BYTES);
+  });
+
+  test('appends extensions when the chart-declared name has no extension at all', () => {
+    // bmson 1.0.0 spec: "A file extension may be omitted. […]
+    // Try piano.wav, piano.ogg, piano.m4a, …". Without this
+    // fallback path, `name: "piano"` would never resolve to
+    // `piano.wav` on disk.
+    const WAV_BYTES = new Uint8Array([0x52, 0x49, 0x46, 0x46]);
+    const source = makeAssetSource({ 'Song/piano.wav': WAV_BYTES });
+    const entry = resolveChartAudioAsset(source, 'Song/main.bms', 'piano');
+    expect(entry).toBe(WAV_BYTES);
+  });
+
+  test('respects the codec-priority order (opus → ogg → mp3 → wav → m4a) when multiple are present', () => {
+    const OPUS_BYTES = new Uint8Array([1]);
+    const OGG_BYTES = new Uint8Array([2]);
+    const MP3_BYTES = new Uint8Array([3]);
+    const WAV_BYTES = new Uint8Array([4]);
+    const source = makeAssetSource({
+      'Song/snare.opus': OPUS_BYTES,
+      'Song/snare.ogg': OGG_BYTES,
+      'Song/snare.mp3': MP3_BYTES,
+      'Song/snare.wav': WAV_BYTES,
+    });
+    // Even though the chart authored `.wav`, the codec walk
+    // prefers `.opus` first since it ships the smallest payload
+    // for browsers that support it.
+    expect(resolveChartAudioAsset(source, 'Song/main.bms', 'snare.wav')).toBe(OPUS_BYTES);
+  });
+
+  test('falls back to .m4a when only AAC ships', () => {
+    // The bmson spec example explicitly mentions `.m4a` as a
+    // valid codec; this exercises the new entry in the candidate
+    // list.
+    const M4A_BYTES = new Uint8Array([0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70]);
+    const source = makeAssetSource({ 'Song/voice.m4a': M4A_BYTES });
+    expect(resolveChartAudioAsset(source, 'Song/main.bms', 'voice.wav')).toBe(M4A_BYTES);
+    expect(resolveChartAudioAsset(source, 'Song/main.bms', 'voice')).toBe(M4A_BYTES);
   });
 });
