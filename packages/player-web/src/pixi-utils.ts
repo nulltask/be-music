@@ -1,4 +1,5 @@
 import type { Container, Texture } from 'pixi.js';
+import { destroyTextureAndRevokeBlobUrl } from './lr2-textures.ts';
 
 /**
  * Removes every child of `container` AND destroys each removed child so its renderer-side state is released.
@@ -33,7 +34,10 @@ export function destroyUniqueTextures(textures: Iterable<Texture | undefined>, d
   for (const texture of textures) {
     if (texture === undefined || destroyed.has(texture)) continue;
     destroyed.add(texture);
-    texture.destroy(destroySource);
+    // `destroyTextureAndRevokeBlobUrl` is `texture.destroy(destroySource)` plus a revoke of any blob URL the texture
+    // was decoded from. The LR2 skin asset loader stamps the URL onto the texture via `attachBlobUrlToTexture`, so
+    // disposing through this helper releases both the GPU resource AND the in-memory blob the URL was holding open.
+    destroyTextureAndRevokeBlobUrl(texture, destroySource);
   }
   return destroyed.size;
 }

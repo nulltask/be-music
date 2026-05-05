@@ -1,6 +1,6 @@
 import { Texture } from 'pixi.js';
 import { type Lr2Skin, type Lr2SpecialGraphic, LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from '@be-music/lr2-skin';
-import { loadSkinAssetTexture, loadTextureFromBytes } from './lr2-textures.ts';
+import { destroyTextureAndRevokeBlobUrl, loadSkinAssetTexture, loadTextureFromBytes } from './lr2-textures.ts';
 import { loadAssetBytes, resolveChartImageAsset, resolveSongSource } from './library.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
@@ -45,7 +45,7 @@ export class Lr2SkinTextureStore {
           return;
         }
         if (this.disposed || serial !== this.loadSerial || !isStillCurrent()) {
-          texture.destroy(true);
+          destroyTextureAndRevokeBlobUrl(texture, true);
           return;
         }
         this.textures.set(path, texture);
@@ -121,7 +121,7 @@ export class Lr2ChartGraphicTextureStore {
         return;
       }
       if (this.disposed) {
-        texture.destroy(true);
+        destroyTextureAndRevokeBlobUrl(texture, true);
         return;
       }
       this.textures.set(cacheKey, texture);
@@ -229,7 +229,7 @@ function chartGraphicCacheKey(song: BrowserSongEntry, path: Lr2SpecialGraphic): 
 
 function destroyTextureMap(textures: Map<string, Texture>): void {
   for (const texture of textures.values()) {
-    texture.destroy(true);
+    destroyTextureAndRevokeBlobUrl(texture, true);
   }
   textures.clear();
 }

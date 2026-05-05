@@ -5,6 +5,44 @@ import { logger } from './logger.ts';
 const log = logger('bga-video');
 
 /**
+ * Symbol used to attach a blob `objectUrl` to a `Texture` so that downstream destroy paths
+ * (`destroyUniqueTextures`, `Lr2SkinTextureStore.clear()`) can revoke the URL alongside the GPU resource.
+ *
+ * Pixi v8 doesn't surface a destroy hook on `TextureSource`, and we can't simply `URL.revokeObjectURL` on the load path
+ * — the texture's `<img>` source keeps a reference to the URL for the lifetime of the GPU upload (and for re-decode on
+ * a WebGL context-loss event). Storing the URL on the texture itself lets the destroy site free both at once, without
+ * forcing every texture map to carry a parallel `Map<Texture, string>`.
+ */
+const TEXTURE_BLOB_URL = Symbol.for('be-music-player-web/texture-blob-url');
+
+interface TextureWithBlobUrl extends Texture {
+  [TEXTURE_BLOB_URL]?: string;
+}
+
+/**
+ * Records the blob `objectUrl` the texture was decoded from. The URL is revoked the next time the texture passes
+ * through {@link destroyTextureAndRevokeBlobUrl}.
+ */
+export function attachBlobUrlToTexture(texture: Texture, objectUrl: string): void {
+  (texture as TextureWithBlobUrl)[TEXTURE_BLOB_URL] = objectUrl;
+}
+
+/**
+ * Destroys `texture` and, if it was created from a blob via {@link attachBlobUrlToTexture}, revokes the associated
+ * object URL. `destroySource` mirrors `Texture.destroy(destroySource)` — pass `true` (the default) to also tear down
+ * the underlying `TextureSource`. Errors thrown by Pixi's destroy path are propagated; the URL is still revoked first
+ * so a failed destroy doesn't strand the blob in the URL store.
+ */
+export function destroyTextureAndRevokeBlobUrl(texture: Texture, destroySource = true): void {
+  const url = (texture as TextureWithBlobUrl)[TEXTURE_BLOB_URL];
+  if (typeof url === 'string') {
+    URL.revokeObjectURL(url);
+    delete (texture as TextureWithBlobUrl)[TEXTURE_BLOB_URL];
+  }
+  texture.destroy(destroySource);
+}
+
+/**
  * Result of `loadVideoTextureFromBytes`. The texture is a Pixi `Texture` whose source is a `VideoSource` wrapping the
  * same `<video>` element returned alongside it. Callers seek / play the video element directly to drive frame updates;
  * the Pixi source polls `requestVideoFrameCallback` (or a rAF fallback) to push fresh frames into the GL texture.

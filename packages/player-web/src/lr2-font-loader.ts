@@ -9,6 +9,7 @@ import {
 } from '@be-music/lr2-skin';
 import type { Lr2LoadedFont } from './lr2-bitmap-text.ts';
 import { normalizePath } from './library.ts';
+import { attachBlobUrlToTexture } from './lr2-textures.ts';
 import { logger } from './logger.ts';
 
 const log = logger('lr2-font');
@@ -180,8 +181,11 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
     return loadTgaTexture(bytes, relPath);
   }
   // Pixi v8 `Assets.load` accepts a URL — we mint an in-memory blob URL so the loader's WebGL upload pipeline is
-  // reused. We intentionally don't revoke the blob URL: the texture's `source` keeps a reference to it for the lifetime
-  // of the skin, and revoking would break re-decode on context loss.
+  // reused. The URL is *not* revoked synchronously after the upload because the texture's `<img>` source keeps a
+  // reference to it for the lifetime of the GPU upload (and for re-decode on a WebGL context-loss event); revoking
+  // here would break those redirects. Instead we stamp the URL onto the texture via `attachBlobUrlToTexture` so
+  // `destroyTextureAndRevokeBlobUrl` (used by `destroyUniqueTextures` and the LR2 texture stores) can revoke the URL
+  // when the texture is finally torn down.
   const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'bmp' ? 'image/bmp' : 'image/png';
   // Copy into a fresh `ArrayBuffer` — `bytes.buffer` may be a `SharedArrayBuffer` view (when the bytes came through a
   // worker), and `Blob` only accepts plain `ArrayBuffer` parts.
@@ -191,9 +195,11 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
   const url = URL.createObjectURL(blob);
   try {
     const texture = await Assets.load<Texture>(url);
+    attachBlobUrlToTexture(texture, url);
     return texture;
   } catch (error) {
     log.warn(`failed to decode ${relPath}`, error);
+    URL.revokeObjectURL(url);
     return undefined;
   }
 }

@@ -116,6 +116,13 @@ export class GameplayRecorder {
   private readonly explicitMimeType: string | undefined;
   private mediaRecorder: MediaRecorder | undefined;
   private audioDestination: MediaStreamAudioDestinationNode | undefined;
+  /**
+   * The `MediaStream` returned by `canvas.captureStream(fps)`. Held so {@link stop} / {@link dispose} can release the
+   * stream's video tracks via `track.stop()`. `MediaRecorder.stop()` only ends the recording, not the underlying
+   * capture; the canvas' frame producer stays attached and burns CPU on every paint until each video track is
+   * explicitly stopped.
+   */
+  private videoStream: MediaStream | undefined;
   private chunks: Blob[] = [];
   private startedAtMs = 0;
   private disposed = false;
@@ -163,6 +170,7 @@ export class GameplayRecorder {
     this.audioDestination = audioDestination;
     // Combine canvas video + bus audio into a single stream so the recorder treats them as one timeline.
     const videoStream = this.canvas.captureStream(this.fps);
+    this.videoStream = videoStream;
     const combined = new MediaStream([...videoStream.getVideoTracks(), ...audioDestination.stream.getAudioTracks()]);
     const recorder = new MediaRecorder(combined, {
       mimeType,
@@ -207,6 +215,7 @@ export class GameplayRecorder {
     const blob = new Blob(this.chunks, { type: mimeType });
     this.chunks = [];
     this.detachAudioTap();
+    this.releaseVideoStream();
     this.mediaRecorder = undefined;
     return {
       blob,
@@ -233,6 +242,26 @@ export class GameplayRecorder {
     this.mediaRecorder = undefined;
     this.chunks = [];
     this.detachAudioTap();
+    this.releaseVideoStream();
+  }
+
+  /**
+   * Stops every track on the captured `videoStream` and drops the reference. The browser keeps the capture pipeline
+   * alive (and burns CPU on every canvas paint) until `track.stop()` lands on each track, even after
+   * `MediaRecorder.stop()` returns. Idempotent — safe to call when the stream wasn't started or has already been
+   * released.
+   */
+  private releaseVideoStream(): void {
+    const stream = this.videoStream;
+    if (!stream) return;
+    for (const track of stream.getTracks()) {
+      try {
+        track.stop();
+      } catch {
+        // Defensive — `track.stop()` throws on tracks that have already ended in some browser builds.
+      }
+    }
+    this.videoStream = undefined;
   }
 
   private detachAudioTap(): void {
