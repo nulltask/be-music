@@ -2687,7 +2687,18 @@ export class PixiGameplayView {
             }
           }
           if (usedAsLayer) {
-            const texture = await loadTextureFromBytes(path, bytes, { keyOutBlack: true });
+            // BMS' layer track (`#xxx07`) chroma-keys pure black
+            // pixels by convention so the foreground composites
+            // over the base BGA. The bmson 1.0.0 spec breaks
+            // explicitly with that: "Unlike BMS Layer Channel
+            // #xxx07, black pixels will not be made transparent."
+            // Bmson layer authors deliver pre-multiplied / alpha-
+            // channel artwork and expect blacks to render as
+            // black. Gate the chroma-key on chart source so
+            // BMS-derived layers keep the historical blend while
+            // bmson layers come through untouched.
+            const keyOutBlack = chart.sourceFormat !== 'bmson';
+            const texture = await loadTextureFromBytes(path, bytes, { keyOutBlack });
             if (this.disposed) {
               texture?.destroy(true);
               return;
