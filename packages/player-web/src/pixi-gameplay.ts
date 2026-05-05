@@ -26,6 +26,7 @@ import {
 } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
+import { findClosestCandidateInWindow } from '@be-music/player/judging';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 import {
@@ -61,7 +62,7 @@ import { type AudioBusHandle, type CompressorMode, type CompressorStage, buildAu
 import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-recorder.ts';
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
-import { disposeChildren } from './pixi-utils.ts';
+import { destroyUniqueTextures, disposeChildren } from './pixi-utils.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import { createBeatResolver } from '@be-music/chart';
@@ -1622,26 +1623,15 @@ export class PixiGameplayView {
     // sprites still parented to sceneRoot, the events route
     // correctly.
     try {
-      const destroyedTextures = new Set<Texture>();
-      for (const texture of this.textures.values()) {
-        if (destroyedTextures.has(texture)) continue;
-        destroyedTextures.add(texture);
-        texture.destroy(true);
-      }
+      destroyUniqueTextures([
+        ...this.textures.values(),
+        ...this.bgaTextures.values(),
+        ...this.bgaLayerTextures.values(),
+        this.bombTexture,
+      ]);
       this.textures.clear();
-      for (const texture of this.bgaTextures.values()) {
-        if (destroyedTextures.has(texture)) continue;
-        destroyedTextures.add(texture);
-        texture.destroy(true);
-      }
       this.bgaTextures.clear();
-      for (const texture of this.bgaLayerTextures.values()) {
-        if (destroyedTextures.has(texture)) continue;
-        destroyedTextures.add(texture);
-        texture.destroy(true);
-      }
       this.bgaLayerTextures.clear();
-      this.bombTexture?.destroy(true);
       this.bombTexture = undefined;
     } catch (error) {
       log.warn('texture cleanup threw', error);
@@ -3042,19 +3032,14 @@ export class PixiGameplayView {
   private tryHitMine(channel: string, seconds: number, badSeconds: number): boolean {
     if (this.mineNotes.length === 0) return false;
     const firstIndex = findFirstIndexAtOrAfter(this.mineNotes, seconds - badSeconds, (mine) => mine.seconds);
-    let target: RuntimeMineNote | undefined;
-    let closestDistance = Number.POSITIVE_INFINITY;
-    for (let index = firstIndex; index < this.mineNotes.length; index += 1) {
-      const candidate = this.mineNotes[index]!;
-      const signedDistance = candidate.seconds - seconds;
-      if (signedDistance > badSeconds) break;
-      if (candidate.hit || candidate.channel !== channel) continue;
-      const distance = Math.abs(signedDistance);
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        target = candidate;
-      }
-    }
+    const target = findClosestCandidateInWindow(this.mineNotes, {
+      channel,
+      nowSec: seconds,
+      judgeWindowSec: badSeconds,
+      startIndex: firstIndex,
+      sortedBySeconds: true,
+      isConsumed: (mine) => mine.hit,
+    });
     if (!target) return false;
     target.hit = true;
     // BAD verdict — combo reset + bad++. Same path the
@@ -3095,23 +3080,14 @@ export class PixiGameplayView {
       return;
     }
     const firstCandidateIndex = findFirstIndexAtOrAfter(this.notes, seconds - badSeconds, (note) => note.seconds);
-    let note: RuntimeNote | undefined;
-    let closestDistance = Number.POSITIVE_INFINITY;
-    for (let index = firstCandidateIndex; index < this.notes.length; index += 1) {
-      const candidate = this.notes[index]!;
-      const signedDistance = candidate.seconds - seconds;
-      if (signedDistance > badSeconds) {
-        break;
-      }
-      if (candidate.hit || candidate.channel !== channel) {
-        continue;
-      }
-      const distance = Math.abs(signedDistance);
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        note = candidate;
-      }
-    }
+    const note = findClosestCandidateInWindow(this.notes, {
+      channel,
+      nowSec: seconds,
+      judgeWindowSec: badSeconds,
+      startIndex: firstCandidateIndex,
+      sortedBySeconds: true,
+      isConsumed: (candidate) => candidate.hit,
+    });
     if (!note) {
       // Empty press (no note in the BAD window for this lane) —
       // LR2-compatible 空POOR (empty POOR). Per the LR2 reference:
@@ -4016,8 +3992,7 @@ export class PixiGameplayView {
     // sourcing channel — the LR2 9-key skin authors only the 1P
     // judge plate (channels 22..25 belong to the central / right
     // half of the Pop'n nine-lane bank, not the second player).
-    const isPlayer2 =
-      this.chartPlayVariant !== '9' && typeof channel === 'string' && channel.startsWith('2');
+    const isPlayer2 = this.chartPlayVariant !== '9' && typeof channel === 'string' && channel.startsWith('2');
     const side: '1P' | '2P' = isPlayer2 ? '2P' : '1P';
     this.timerStartedAt.set(isPlayer2 ? 47 : 46, this.playClock());
     // Snapshot the verdict + combo for this side so DP rendering
@@ -5182,8 +5157,7 @@ export class PixiGameplayView {
     // 9 KEY (PMS) charts can store their lane data on the 2x channel block but
     // they're still *single-side* — only DP (variant 10/14) actually wants a
     // second judge/combo plate painted on the 2P lane.
-    const usesPlayer2 =
-      this.chartPlayVariant !== '9' && this.laneChannels.some((channel) => channel.startsWith('2'));
+    const usesPlayer2 = this.chartPlayVariant !== '9' && this.laneChannels.some((channel) => channel.startsWith('2'));
     if (usesPlayer2) {
       this.renderJudgeAndComboForSide(skin, '2P');
     }

@@ -19,6 +19,7 @@ import {
   measureToBeat,
   parseBmsDynamicVolumeGain,
   parseBpmFrom03Token,
+  resolveChartPlayVariant,
   resolveBmsLongNotes,
   resolveLnobjLongNotes,
   sortEvents,
@@ -194,6 +195,24 @@ describe('chart', () => {
     expect(isSampleTriggerChannel(' a0 ')).toBe(false);
     expect(isBmsDynamicVolumeChangeChannel(' 98 ')).toBe(true);
     expect(mapBmsLongNoteChannelToPlayable(' 61 ')).toBe('21');
+  });
+
+  test('resolveChartPlayVariant classifies IIDX and PMS chart families', () => {
+    const chart = (chartPath: string, channels: string[], player?: number) => ({
+      chartPath,
+      events: channels.map((channel) => ({ channel })),
+      bms: { player },
+    });
+
+    expect(resolveChartPlayVariant(chart('main.bms', ['11', '12', '15']))).toBe('5');
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '15', '18', '19']))).toBe('7');
+    expect(resolveChartPlayVariant(chart('main.bms', ['11', '21', '25']))).toBe('10');
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '18', '21', '28']))).toBe('14');
+    expect(resolveChartPlayVariant(chart('main.pms', ['11', '15', '22', '23', '24', '25']))).toBe('9');
+    expect(resolveChartPlayVariant(chart('main.bms', ['11', '15', '17', '18', '19'], 3))).toBe('9');
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '12', '13', '14', '15', '22', '23', '24', '25']))).toBe(
+      '10',
+    );
   });
 
   test('resolve long note helpers return empty results for non-BMS charts and missing LNOBJ markers', () => {

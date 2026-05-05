@@ -11,9 +11,18 @@ export interface BeatResolver {
   eventToBeat: (event: BeMusicEvent) => number;
 }
 
+export type ChartPlayVariant = '5' | '7' | '9' | '10' | '14';
+
+export interface ChartPlayVariantInput {
+  chartPath?: string;
+  events: ReadonlyArray<{ channel: string }>;
+  bms?: {
+    player?: number;
+  };
+}
+
 const BMS_LONG_NOTE_PLAYABLE_1P = ['11', '12', '13', '14', '15', '16', '17', '18', '19'] as const;
 const BMS_LONG_NOTE_PLAYABLE_2P = ['21', '22', '23', '24', '25', '26', '27', '28', '29'] as const;
-const PACKED_CHANNEL_01 = 0x3031;
 const PACKED_CHANNEL_03 = 0x3033;
 const PACKED_CHANNEL_08 = 0x3038;
 const PACKED_CHANNEL_09 = 0x3039;
@@ -186,6 +195,32 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
     return left.value < right.value ? -1 : 1;
   }
   return 0;
+}
+
+/**
+ * Resolves the LR2/play-skin lane family for a chart from its
+ * extension, `#PLAYER`, and playable lane usage.
+ */
+export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlayVariant {
+  const channels = new Set<string>();
+  for (const event of chart.events) {
+    const channel = normalizeChannel(event.channel);
+    if (isPlayableChannel(channel)) {
+      channels.add(channel);
+    }
+  }
+  if (isPmsExtension(chart.chartPath)) {
+    return '9';
+  }
+  if (chart.bms?.player === 3 && channels.has('17')) {
+    return '9';
+  }
+  const usesPlayer2 = [...channels].some((channel) => channel.startsWith('2'));
+  const uses6or7 = ['18', '19', '28', '29'].some((channel) => channels.has(channel));
+  if (usesPlayer2) {
+    return uses6or7 ? '14' : '10';
+  }
+  return uses6or7 ? '7' : '5';
 }
 
 export function isTempoChannel(channel: string): boolean {
@@ -806,6 +841,15 @@ function normalizeAsciiBase36CodeFast(code: number): number {
     return uppercase;
   }
   return -1;
+}
+
+function isPmsExtension(chartPath: string | undefined): boolean {
+  if (typeof chartPath !== 'string' || chartPath.length === 0) {
+    return false;
+  }
+  const dotIndex = chartPath.lastIndexOf('.');
+  if (dotIndex < 0) return false;
+  return chartPath.slice(dotIndex).toLowerCase() === '.pms';
 }
 
 function isTempoNormalizedChannel(normalized: string): boolean {

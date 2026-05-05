@@ -391,6 +391,10 @@ const workspaceAliases = [
     find: '@be-music/player/playable-notes',
     replacement: resolve(repositoryDir, 'packages/player/src/playable-notes.ts'),
   },
+  {
+    find: '@be-music/player/judging',
+    replacement: resolve(repositoryDir, 'packages/player/src/judging.ts'),
+  },
   { find: '@be-music/player/core', replacement: resolve(repositoryDir, 'packages/player/src/core') },
   { find: '@be-music/utils/core', replacement: resolve(repositoryDir, 'packages/utils/src/core.ts') },
   { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },

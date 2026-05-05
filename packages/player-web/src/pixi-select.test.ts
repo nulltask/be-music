@@ -1,6 +1,7 @@
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PLAY_OPTIONS, matchesSearchQuery, wrappedCursorDelta } from './pixi-select.ts';
+import { computeSelectOps, resolveKeyModeOp, SELECT_DYNAMIC_OPS } from './select-ops.ts';
 import type { BrowserBrowseEntry, BrowserSongEntry } from './types.ts';
 
 /**
@@ -105,6 +106,30 @@ describe('DEFAULT_PLAY_OPTIONS', () => {
     expect(DEFAULT_PLAY_OPTIONS.scoreGraph).toBe(true);
     expect(DEFAULT_PLAY_OPTIONS.gauge1P).toBe('GROOVE');
     expect(DEFAULT_PLAY_OPTIONS.gauge2P).toBe('GROOVE');
+  });
+});
+
+describe('select ops', () => {
+  it('seeds empty-list defaults without a focused song', () => {
+    const ops = computeSelectOps(undefined, new Set(), DEFAULT_PLAY_OPTIONS);
+    expect(ops.has(SELECT_DYNAMIC_OPS.BGA_ABSENT)).toBe(true);
+    expect(ops.has(SELECT_DYNAMIC_OPS.LN_ABSENT)).toBe(true);
+    expect(ops.has(SELECT_DYNAMIC_OPS.TEXT_ABSENT)).toBe(true);
+    expect(ops.has(SELECT_DYNAMIC_OPS.KEYS_7)).toBe(true);
+    expect(ops.has(41)).toBe(true);
+    expect(ops.has(31)).toBe(true);
+  });
+
+  it('uses shared chart play-variant classification for key-mode ops', () => {
+    const entry = makeSongEntry({
+      chartPath: 'test/song.pms',
+      chart: {
+        ...createEmptyJson(),
+        events: [{ measure: 0, channel: '22', position: [0, 1], value: '01' }],
+      },
+    });
+    if (entry.kind !== 'song') throw new Error('expected song entry');
+    expect(resolveKeyModeOp(entry.song)).toBe(SELECT_DYNAMIC_OPS.KEYS_9);
   });
 });
 

@@ -1,4 +1,4 @@
-import { normalizePath } from '@be-music/utils/core';
+import { normalizePath, runWithConcurrency } from '@be-music/utils/core';
 
 export interface Lr2SkinInputFile {
   readonly name: string;
@@ -89,25 +89,6 @@ function getCaseInsensitiveIndex(files: ReadonlyMap<string, Lr2SkinFileEntry>): 
   }
   indexCache.set(files, index);
   return index;
-}
-
-async function runWithConcurrency<T>(
-  items: ReadonlyArray<T>,
-  limit: number,
-  task: (item: T, index: number) => Promise<void>,
-): Promise<void> {
-  const total = items.length;
-  if (total === 0) return;
-  let nextIndex = 0;
-  const worker = async (): Promise<void> => {
-    while (true) {
-      const index = nextIndex;
-      nextIndex += 1;
-      if (index >= total) return;
-      await task(items[index]!, index);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, total) }, worker));
 }
 
 function neverDefer(): boolean {

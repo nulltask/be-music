@@ -1,4 +1,4 @@
-import type { Container } from 'pixi.js';
+import type { Container, Texture } from 'pixi.js';
 
 /**
  * Removes every child of `container` AND destroys each removed
@@ -39,4 +39,14 @@ export function disposeChildren(container: Container): void {
   for (const child of container.removeChildren()) {
     child.destroy({ children: true, context: true });
   }
+}
+
+export function destroyUniqueTextures(textures: Iterable<Texture | undefined>, destroySource = true): number {
+  const destroyed = new Set<Texture>();
+  for (const texture of textures) {
+    if (texture === undefined || destroyed.has(texture)) continue;
+    destroyed.add(texture);
+    texture.destroy(destroySource);
+  }
+  return destroyed.size;
 }

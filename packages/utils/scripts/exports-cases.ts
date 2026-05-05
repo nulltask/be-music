@@ -77,6 +77,11 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       utilsApi.findFirstIndexNumberAtOrAfter(fixtures.fractionValues, 377);
     },
   });
+  define('utils.runWithConcurrency', {
+    run: async () => {
+      await utilsApi.runWithConcurrency([1, 2, 3, 4], 2, async () => undefined);
+    },
+  });
   define('utils.normalizeAsciiBase36Code', {
     run: () => {
       utilsApi.normalizeAsciiBase36Code(0x66);

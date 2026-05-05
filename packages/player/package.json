@@ -30,6 +30,11 @@
       "source": "./src/image-resize-algorithm.ts",
       "default": "./dist/image-resize-algorithm.js"
     },
+    "./judging": {
+      "types": "./dist/judging.d.ts",
+      "source": "./src/judging.ts",
+      "default": "./dist/judging.js"
+    },
     "./state-signals": {
       "types": "./dist/state-signals.d.ts",
       "source": "./src/state-signals.ts",

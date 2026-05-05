@@ -20,6 +20,7 @@ import {
   normalizeSortedUniqueNonNegativeIntegers,
   normalizePositiveInt,
   resolveCliPath,
+  runWithConcurrency,
 } from './index.ts';
 describe('utils', () => {
   test('resolveCliPath: resolves to an absolute path from the specified cwd', () => {
@@ -131,6 +132,35 @@ describe('utils', () => {
     expect(findFirstIndexAtOrAfter(values, 8, (item) => item.beat)).toBe(4);
     expect(findFirstIndexNumberAtOrAfter([1, 3, 3, 7], 3)).toBe(1);
     expect(findFirstIndexNumberAtOrAfter([1, 3, 3, 7], 8)).toBe(4);
+  });
+
+  test('runWithConcurrency: bounds in-flight tasks and preserves item indexes', async () => {
+    let active = 0;
+    let maxActive = 0;
+    const visited: Array<[number, number]> = [];
+    await runWithConcurrency([10, 20, 30, 40, 50], 2, async (item, index) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      visited.push([item, index]);
+      await Promise.resolve();
+      active -= 1;
+    });
+    expect(maxActive).toBeLessThanOrEqual(2);
+    expect(visited.sort((a, b) => a[1] - b[1])).toEqual([
+      [10, 0],
+      [20, 1],
+      [30, 2],
+      [40, 3],
+      [50, 4],
+    ]);
+  });
+
+  test('runWithConcurrency: throws AbortError for aborted signals', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(runWithConcurrency([1], 1, async () => undefined, { signal: controller.signal })).rejects.toThrow(
+      /aborted/i,
+    );
   });
 
   test('normalizeAsciiBase36Code: normalizes ASCII 0-9/A-Z/a-z to uppercase base36 codes', () => {

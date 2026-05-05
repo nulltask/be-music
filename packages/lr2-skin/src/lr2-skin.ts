@@ -4,8 +4,11 @@ import type { Lr2SkinFileEntry, Lr2SkinInputFile } from './file-lookup.ts';
 import { normalizeLr2Path, resolveLr2IncludePath } from './lr2-skin-assets.ts';
 import { decodeText, parseRows } from './lr2-skin-csv.ts';
 import { isSkinPathOfKind, scoreSkinPath, type Lr2PlayVariant, type Lr2SkinKind } from './lr2-skin-paths.ts';
+import { LR2_SPECIAL_GRAPHIC, type Lr2SpecialGraphic } from './lr2-special-graphic.ts';
 
 export { resolveLr2AssetBytes } from './lr2-skin-assets.ts';
+export { LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from './lr2-special-graphic.ts';
+export type { Lr2SpecialGraphic } from './lr2-special-graphic.ts';
 export type { Lr2PlayVariant, Lr2SkinKind } from './lr2-skin-paths.ts';
 
 export interface Lr2ImageRect {
@@ -2004,39 +2007,6 @@ function registerCustomFile(
     context.customFiles.push({ name, path: resolvedPath });
     context.customFileLookup.set(normalizeLr2Path(pattern).toLowerCase(), resolvedPath);
   }
-}
-
-/**
- * Sentinel paths used in `Lr2ImageRect.imagePath` for LR2's runtime-bound
- * textures (`#SRC_IMAGE,gr=...`):
- *
- *   100 → STAGEFILE / 101 → BACKBMP / 102 → BANNER /
- *   105 → skin-select thumbnail / 110 → solid black / 111 → solid white.
- *
- * Renderers detect these paths and substitute the appropriate live
- * texture (e.g. the focused song's banner) instead of looking the path
- * up in the bundled `#IMAGE` map.
- */
-export const LR2_SPECIAL_GRAPHIC = {
-  STAGEFILE: '__lr2_special:stagefile',
-  BACKBMP: '__lr2_special:backbmp',
-  BANNER: '__lr2_special:banner',
-  SKIN_THUMBNAIL: '__lr2_special:skin_thumbnail',
-  BLACK: '__lr2_special:black',
-  WHITE: '__lr2_special:white',
-} as const;
-
-export type Lr2SpecialGraphic = (typeof LR2_SPECIAL_GRAPHIC)[keyof typeof LR2_SPECIAL_GRAPHIC];
-
-export function isLr2SpecialGraphic(path: string): path is Lr2SpecialGraphic {
-  return (
-    path === LR2_SPECIAL_GRAPHIC.STAGEFILE ||
-    path === LR2_SPECIAL_GRAPHIC.BACKBMP ||
-    path === LR2_SPECIAL_GRAPHIC.BANNER ||
-    path === LR2_SPECIAL_GRAPHIC.SKIN_THUMBNAIL ||
-    path === LR2_SPECIAL_GRAPHIC.BLACK ||
-    path === LR2_SPECIAL_GRAPHIC.WHITE
-  );
 }
 
 function specialGraphicPath(gr: number): Lr2SpecialGraphic | undefined {

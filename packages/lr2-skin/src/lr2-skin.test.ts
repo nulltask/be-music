@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { loadLr2SkinFromSourceFiles, resolveLr2AssetBytes } from './lr2-skin.ts';
+import {
+  isLr2SpecialGraphic,
+  loadLr2SkinFromSourceFiles,
+  LR2_SPECIAL_GRAPHIC,
+  resolveLr2AssetBytes,
+} from './lr2-skin.ts';
 
 const lines = (...rows: string[]): Uint8Array => new TextEncoder().encode(rows.join('\n'));
 
@@ -12,6 +17,13 @@ const imageCsv = (name: string, grIndex = 0): Uint8Array =>
 
 const imagePathsOf = (skin: ReturnType<typeof loadLr2SkinFromSourceFiles>): string[] =>
   skin?.images.map((image) => image.source.imagePath) ?? [];
+
+describe('LR2 special graphics', () => {
+  it('exposes renderer-independent sentinel paths', () => {
+    expect(isLr2SpecialGraphic(LR2_SPECIAL_GRAPHIC.STAGEFILE)).toBe(true);
+    expect(isLr2SpecialGraphic('stagefile.png')).toBe(false);
+  });
+});
 
 describe('loadLr2SkinFromSourceFiles', () => {
   it('reads a single CSV without conditionals', () => {

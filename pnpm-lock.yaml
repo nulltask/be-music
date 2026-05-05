@@ -101,6 +101,9 @@ importers:
 
   packages/lr2-skin:
     dependencies:
+      '@be-music/chart':
+        specifier: workspace:*
+        version: link:../chart
       '@be-music/json':
         specifier: workspace:*
         version: link:../json

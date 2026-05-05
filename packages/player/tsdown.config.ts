@@ -10,6 +10,7 @@ export default createPackageTsdownConfig({
     index: 'src/index.ts',
     'audio-sink': 'src/audio-sink.ts',
     'image-resize-algorithm': 'src/image-resize-algorithm.ts',
+    judging: 'src/judging.ts',
     'playable-notes': 'src/playable-notes.ts',
     'core/bga-timeline': 'src/core/bga-timeline.ts',
     'core/engine': 'src/core/engine.ts',

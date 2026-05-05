@@ -1,4 +1,5 @@
 import * as playerApi from '@be-music/player';
+import * as judgingApi from '@be-music/player/judging';
 import type { PlayerOptions } from '@be-music/player';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
@@ -75,6 +76,17 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player.resolveBmsControlFlowForPlayback', {
     run: (fixtures) => {
       playerApi.resolveBmsControlFlowForPlayback(fixtures.controlFlowJson, () => 0.42);
+    },
+  });
+  define('player.judging.findClosestCandidateInWindow', {
+    run: () => {
+      judgingApi.findClosestCandidateInWindow(
+        [
+          { channel: '11', seconds: 0.95, hit: false },
+          { channel: '11', seconds: 1.02, hit: false },
+        ],
+        { channel: '11', nowSec: 1, judgeWindowSec: 0.05, isConsumed: (note) => note.hit },
+      );
     },
   });
   define('player.autoPlay', {

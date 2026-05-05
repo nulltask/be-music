@@ -37,6 +37,15 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartApi.compareEvents(fixtures.eventA, fixtures.eventB);
     },
   });
+  define('chart.resolveChartPlayVariant', {
+    run: (fixtures) => {
+      chartApi.resolveChartPlayVariant({
+        chartPath: 'sample.bme',
+        events: fixtures.sampleBmsJson.events,
+        bms: fixtures.sampleBmsJson.bms,
+      });
+    },
+  });
   define('chart.isTempoChannel', {
     run: () => {
       chartApi.isTempoChannel('08');

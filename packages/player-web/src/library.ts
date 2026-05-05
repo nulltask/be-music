@@ -1,8 +1,8 @@
 import { unzipSync } from 'fflate';
-import { normalizeChannel } from '@be-music/json';
+import { isPlayableChannel, resolveChartPlayVariant as resolveChartPlayVariantForChart } from '@be-music/chart';
 import { parseBms, parseBmson } from '@be-music/parser';
 import { extractPlayableNotes } from '@be-music/player/playable-notes';
-import { basename, dirname, normalizePath } from '@be-music/utils/core';
+import { basename, dirname, normalizePath, runWithConcurrency } from '@be-music/utils/core';
 import type {
   BrowserFolderNode,
   BrowserSongAssetEntry,
@@ -235,33 +235,6 @@ async function collectFilesFromEntry(
       });
     }
   }
-}
-
-/**
- * Runs `task` against each item in `items`, with at most `limit`
- * tasks in flight at once. Settles when every task has resolved
- * or rejected; rejections are NOT propagated — callers wrap each
- * task in their own try/catch when they want per-item error
- * containment. Used by both the FileSystemEntry walk and the
- * file-read pool to enforce a safe concurrency ceiling.
- */
-async function runWithConcurrency<T>(
-  items: ReadonlyArray<T>,
-  limit: number,
-  task: (item: T, index: number) => Promise<void>,
-): Promise<void> {
-  const total = items.length;
-  if (total === 0) return;
-  let nextIndex = 0;
-  const worker = async (): Promise<void> => {
-    while (true) {
-      const index = nextIndex;
-      nextIndex += 1;
-      if (index >= total) return;
-      await task(items[index]!, index);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, total) }, worker));
 }
 
 /**
@@ -630,8 +603,7 @@ function decodeBms(bytes: Uint8Array): string {
 }
 
 function isScoreTargetChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  return normalized.startsWith('1') || normalized.startsWith('2');
+  return isPlayableChannel(channel);
 }
 
 /**
@@ -657,39 +629,11 @@ function isScoreTargetChannel(channel: string): boolean {
  * `#PLAYER=3 + 17`.
  */
 export function resolveChartPlayVariant(song: BrowserSongEntry): '5' | '7' | '9' | '10' | '14' {
-  const channels = new Set<string>();
-  for (const event of song.chart.events) {
-    const ch = normalizeChannel(event.channel);
-    if (isScoreTargetChannel(ch)) {
-      channels.add(ch);
-    }
-  }
-  // PMS detection — same precedence the CLI player uses:
-  // 1. Explicit `.pms` extension is the strongest hint.
-  // 2. `#PLAYER=3` + channel `17` is the legacy 9K marker for
-  //    charts saved as `.bms` / `.bme`.
-  if (isPmsExtension(song.chartPath)) {
-    return '9';
-  }
-  const playerHint = song.chart.bms?.player;
-  if (playerHint === 3 && channels.has('17')) {
-    return '9';
-  }
-  const usesPlayer2 = [...channels].some((ch) => ch.startsWith('2'));
-  const uses6or7 = ['18', '19', '28', '29'].some((ch) => channels.has(ch));
-  if (usesPlayer2) {
-    return uses6or7 ? '14' : '10';
-  }
-  return uses6or7 ? '7' : '5';
-}
-
-function isPmsExtension(chartPath: string | undefined): boolean {
-  if (typeof chartPath !== 'string' || chartPath.length === 0) {
-    return false;
-  }
-  const dotIndex = chartPath.lastIndexOf('.');
-  if (dotIndex < 0) return false;
-  return chartPath.slice(dotIndex).toLowerCase() === '.pms';
+  return resolveChartPlayVariantForChart({
+    chartPath: song.chartPath,
+    events: song.chart.events,
+    bms: song.chart.bms,
+  });
 }
 
 function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): BrowserSongSourceKind {

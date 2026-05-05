@@ -1,6 +1,6 @@
 import { Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import { describe, expect, test } from 'vitest';
-import { disposeChildren } from './pixi-utils.ts';
+import { describe, expect, test, vi } from 'vitest';
+import { destroyUniqueTextures, disposeChildren } from './pixi-utils.ts';
 
 /**
  * The hot render loops in `pixi-gameplay.ts` / `pixi-result.ts` /
@@ -100,5 +100,16 @@ describe('disposeChildren', () => {
     const container = new Container();
     expect(() => disposeChildren(container)).not.toThrow();
     expect(container.children.length).toBe(0);
+  });
+});
+
+describe('destroyUniqueTextures', () => {
+  test('destroys each texture at most once and skips undefined slots', () => {
+    const textureA = { destroy: vi.fn() } as unknown as Texture;
+    const textureB = { destroy: vi.fn() } as unknown as Texture;
+    expect(destroyUniqueTextures([textureA, undefined, textureA, textureB])).toBe(2);
+    expect(textureA.destroy).toHaveBeenCalledTimes(1);
+    expect(textureB.destroy).toHaveBeenCalledTimes(1);
+    expect(textureA.destroy).toHaveBeenCalledWith(true);
   });
 });

@@ -5,6 +5,7 @@ import {
   invokeWorkerizedFunction,
   isAbortError,
   resolveFirstExistingPath,
+  runWithConcurrency,
   throwIfAborted,
   workerize,
 } from '@be-music/utils';
@@ -767,7 +768,7 @@ async function loadFramesByKeys(params: {
   } = params;
   const map = new Map<string, FrameSource>();
   const orderedKeys = [...keys];
-  await mapWithConcurrency(
+  await runWithConcurrency(
     orderedKeys,
     Math.min(orderedKeys.length || 1, BGA_SOURCE_LOAD_CONCURRENCY),
     async (key) => {
@@ -805,7 +806,7 @@ async function loadFramesByKeys(params: {
       }
       onLoadProgress?.(resourcePath);
     },
-    signal,
+    { signal },
   );
 
   return map;
@@ -830,32 +831,6 @@ function normalizeDisplaySize(width?: number, height?: number): { width: number;
     width: Math.max(8, Math.floor(width ?? DEFAULT_BGA_ASCII_WIDTH)),
     height: Math.max(6, Math.floor(height ?? DEFAULT_BGA_ASCII_HEIGHT)),
   };
-}
-
-async function mapWithConcurrency<TInput>(
-  items: readonly TInput[],
-  concurrency: number,
-  worker: (item: TInput, index: number) => Promise<void>,
-  signal?: AbortSignal,
-): Promise<void> {
-  if (items.length === 0) {
-    return;
-  }
-  let nextIndex = 0;
-  const workerCount = Math.max(1, Math.min(concurrency, items.length));
-  await Promise.all(
-    Array.from({ length: workerCount }, async () => {
-      while (true) {
-        throwIfAborted(signal);
-        const currentIndex = nextIndex;
-        if (currentIndex >= items.length) {
-          return;
-        }
-        nextIndex += 1;
-        await worker(items[currentIndex]!, currentIndex);
-      }
-    }),
-  );
 }
 
 function resizeFrameSourceMap(

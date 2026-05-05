@@ -1,3 +1,5 @@
+import { throwIfAborted } from './abort.ts';
+
 export function clamp(value: number, min: number, max: number): number {
   return value <= min ? min : value >= max ? max : value;
 }
@@ -153,6 +155,41 @@ export function normalizeSortedUniqueNonNegativeIntegers(values: ReadonlyArray<n
   }
   normalized.length = writeIndex;
   return normalized;
+}
+
+export interface RunWithConcurrencyOptions {
+  signal?: AbortSignal;
+}
+
+/**
+ * Runs `task` against each item with a bounded number of workers.
+ *
+ * This is intentionally small and dependency-free because browser
+ * drop loaders, theme readers, and terminal BGA preloaders all need
+ * the same "saturate I/O without fanning out unbounded Promises"
+ * primitive.
+ */
+export async function runWithConcurrency<T>(
+  items: ReadonlyArray<T>,
+  limit: number,
+  task: (item: T, index: number) => Promise<void>,
+  options: RunWithConcurrencyOptions = {},
+): Promise<void> {
+  const total = items.length;
+  if (total === 0) return;
+  let nextIndex = 0;
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 1;
+  const workerCount = Math.min(safeLimit, total);
+  const worker = async (): Promise<void> => {
+    while (true) {
+      throwIfAborted(options.signal);
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= total) return;
+      await task(items[index]!, index);
+    }
+  };
+  await Promise.all(Array.from({ length: workerCount }, worker));
 }
 
 export function findLastIndexAtOrBefore<T>(

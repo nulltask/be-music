@@ -1,4 +1,4 @@
-import { normalizeChannel } from '@be-music/json';
+import { resolveChartPlayVariant } from '@be-music/chart';
 import { normalizePath } from '@be-music/utils/core';
 import { readFilesIntoBytesMap, type Lr2SkinFileEntry } from './file-lookup.ts';
 import type { Lr2SkinInputFile } from './file-lookup.ts';
@@ -429,7 +429,11 @@ export async function loadLr2SystemSound(
 }
 
 export function pickLr2PlaySkin(playSkins: Lr2PlaySkinMap, song: Lr2PlaySkinSong): Lr2Skin | undefined {
-  const target = resolveChartPlayVariant(song);
+  const target = resolveChartPlayVariant({
+    chartPath: song.chartPath,
+    events: song.chart.events,
+    bms: song.chart.bms,
+  });
   for (const variant of PLAY_SKIN_FALLBACKS[target]) {
     const candidate = playSkins[variant];
     if (candidate) {
@@ -437,41 +441,6 @@ export function pickLr2PlaySkin(playSkins: Lr2PlaySkinMap, song: Lr2PlaySkinSong
     }
   }
   return undefined;
-}
-
-function resolveChartPlayVariant(song: Lr2PlaySkinSong): Lr2PlayVariant {
-  const channels = new Set<string>();
-  for (const event of song.chart.events) {
-    const channel = normalizeChannel(event.channel);
-    if (isScoreTargetChannel(channel)) {
-      channels.add(channel);
-    }
-  }
-  if (isPmsExtension(song.chartPath)) {
-    return '9';
-  }
-  if (song.chart.bms?.player === 3 && channels.has('17')) {
-    return '9';
-  }
-  const usesPlayer2 = [...channels].some((channel) => channel.startsWith('2'));
-  const uses6or7 = ['18', '19', '28', '29'].some((channel) => channels.has(channel));
-  if (usesPlayer2) {
-    return uses6or7 ? '14' : '10';
-  }
-  return uses6or7 ? '7' : '5';
-}
-
-function isPmsExtension(chartPath: string | undefined): boolean {
-  if (typeof chartPath !== 'string' || chartPath.length === 0) {
-    return false;
-  }
-  const dotIndex = chartPath.lastIndexOf('.');
-  if (dotIndex < 0) return false;
-  return chartPath.slice(dotIndex).toLowerCase() === '.pms';
-}
-
-function isScoreTargetChannel(channel: string): boolean {
-  return channel.startsWith('1') || channel.startsWith('2');
 }
 
 export function summarizeLr2PlaySkins(playSkins: Lr2PlaySkinMap, separator = ','): string {
