@@ -505,6 +505,47 @@ describe('audio-renderer', () => {
     expect(triggers.map((trigger) => trigger.sampleDurationSeconds)).toEqual([1, 0.5, undefined, undefined]);
   });
 
+  test('audio-renderer: bmson c=true notes never schedule a second render on top of the c=false anchor', async () => {
+    // The runtime relies on an `activeSampleNodes` gate to skip
+    // the BufferSource retrigger; the offline mixer has none, so
+    // a `c=true` trigger must be filtered before scheduling. Two
+    // notes at distinct beats sharing one anchor — a `c=false`
+    // followed by a `c=true` — must mix at the same peak as the
+    // `c=false` alone (i.e. NOT 2x), confirming the second trigger
+    // produced no extra render.
+    const anchorOnly = createEmptyJson('bmson');
+    anchorOnly.metadata.bpm = 120;
+    anchorOnly.resources.wav['01'] = 'not-found.wav';
+    anchorOnly.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } }];
+
+    const withContinuation = createEmptyJson('bmson');
+    withContinuation.metadata.bpm = 120;
+    withContinuation.resources.wav['01'] = 'not-found.wav';
+    withContinuation.events = [
+      { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
+      // `c=true` at a later beat must NOT spawn its own render.
+      { measure: 0, channel: '12', position: [1, 2], value: '01', bmson: { c: true } },
+    ];
+
+    const [anchorRendered, continuationRendered] = await Promise.all([
+      renderJson(anchorOnly, {
+        sampleRate: 44_100,
+        gain: 1,
+        normalize: false,
+        tailSeconds: 0,
+        fallbackToneSeconds: 0.05,
+      }),
+      renderJson(withContinuation, {
+        sampleRate: 44_100,
+        gain: 1,
+        normalize: false,
+        tailSeconds: 0,
+        fallbackToneSeconds: 0.05,
+      }),
+    ]);
+    expect(continuationRendered.peak).toBeCloseTo(anchorRendered.peak, 6);
+  });
+
   test('audio-renderer: bmson chord at the same beat shares a single slice with shared duration', () => {
     // Two simultaneous notes at beat 0 form one chord; both must
     // render against the same slice (offset / duration / sliceId)
