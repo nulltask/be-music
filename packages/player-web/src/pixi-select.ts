@@ -79,6 +79,16 @@ const READTEXT_LINE_SCROLL = 36;
 const READTEXT_PAGE_SCROLL = 360;
 
 /**
+ * Minimum interval between two wheel-driven cursor moves in the bar list. Modern trackpads / high-resolution mice fire
+ * `wheel` events at ~60+ Hz with tiny per-event `deltaY`s, so an unthrottled handler advances the cursor a dozen+ slots
+ * per flick — far past the entry the user was aiming for, with the `cursor-move` SFX chattering on every notch and the
+ * smooth-scroll offset re-seeded before the previous slide finishes. 15 ms ≈ twice the rate of macOS's fastest key-
+ * repeat setting (~30 ms / repeat at the slider's max), so a sustained scroll feels noticeably snappier than holding
+ * an arrow key while still resolving a deliberate trackpad flick to a bounded number of steps instead of a dozen+.
+ */
+const WHEEL_THROTTLE_INTERVAL_MS = 15;
+
+/**
  * Serializable cursor / browse state. Used to round-trip the select view across `dispose()` / new-instance cycles (e.g.
  * play → return → select), so the user lands back on the same song they launched.
  *
@@ -703,6 +713,12 @@ export class PixiSongSelectView {
    */
   private lastScrollUpdate = 0;
   /**
+   * `performance.now()` of the most recent wheel-driven cursor move. Used by {@link handleWheel} to throttle high-rate
+   * trackpad / hi-res-mouse input to one cursor step per {@link WHEEL_THROTTLE_INTERVAL_MS} so a fast flick doesn't
+   * fly past the user's target. `-Infinity` lets the very first wheel tick after mount fire immediately.
+   */
+  private lastWheelMoveAt = Number.NEGATIVE_INFINITY;
+  /**
    * Last known pointer position in **design-space** coordinates, used by `#SRC_ONMOUSE` hit-tests and
    * `#SRC_MOUSECURSOR` follow. `-1` means "no pointer over canvas yet"; both renderers skip drawing in that case.
    */
@@ -1096,6 +1112,9 @@ export class PixiSongSelectView {
     // NaN or instantly zero out a fresh offset (depending on Math.exp's behavior).
     this.listScrollOffset = 0;
     this.lastScrollUpdate = 0;
+    // Reset the wheel throttle so the first wheel tick after a re-mount fires immediately rather than being eaten by
+    // a stale `lastWheelMoveAt` from before the play round-trip.
+    this.lastWheelMoveAt = Number.NEGATIVE_INFINITY;
   }
 
   /**
@@ -2221,6 +2240,13 @@ export class PixiSongSelectView {
     }
     const entries = this.currentEntries();
     if (entries.length === 0) return;
+    // Throttle high-rate wheel input. Modern trackpads emit a continuous stream of small `deltaY`s during a single
+    // flick — without this gate one flick advances the cursor 10+ slots, the smooth-scroll keeps re-seeding before
+    // the previous slide finishes, and `cursor-move` chatters on every notch. The floor is intentionally gentle:
+    // sustained scrolling still progresses ~11 entries / second, but discrete flicks resolve to roughly one step.
+    const now = performance.now();
+    if (now - this.lastWheelMoveAt < WHEEL_THROTTLE_INTERVAL_MS) return;
+    this.lastWheelMoveAt = now;
     const direction = event.deltaY > 0 ? 1 : -1;
     this.selectedIndex = (this.selectedIndex + direction + entries.length) % entries.length;
     // Use the wheel direction directly rather than the wrapped (new - old) delta. With a tiny list (e.g. 2 entries),
