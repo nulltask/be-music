@@ -92,7 +92,11 @@ export class PixiSceneHost {
       // pixel-art-style render.
       antialias: false,
       autoDensity: true,
-      resolution: globalThis.devicePixelRatio || 1,
+      // Cap the render-buffer multiplier at 2× the CSS resolution. LR2 / BMS art is pixel-art rendered through
+      // `roundPixels: true` + nearest sampling — a 3× DPR Retina display brings no perceptual benefit but multiplies
+      // the GPU's fillrate cost by ~9× compared to the 1× CSS pixel grid. The cap drops a 3× DPR display to 56 % of
+      // the previous fragment count; 1× / 2× displays (the common case) are unaffected.
+      resolution: Math.min(2, globalThis.devicePixelRatio || 1),
       roundPixels: true,
       ...options?.appOptions,
     });

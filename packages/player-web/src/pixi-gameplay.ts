@@ -1046,6 +1046,26 @@ export class PixiGameplayView {
     // contributing to the rAF handler's runtime.
     this.designClipMask.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(0xffffff);
     this.background.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
+    // The gameplay scene owns its own pointerdown listener on the canvas itself (`this.focus`) and a window-level
+    // keydown listener — none of the per-layer children need to participate in Pixi's interaction system. Marking
+    // each render-only Container as `eventMode = 'none'` lets the interaction manager skip the entire subtree
+    // during hit-testing every pointermove / pointerdown, which is otherwise an O(N) walk over hundreds of skin
+    // children per event. Containers that legitimately need interaction (none today on gameplay) would have to
+    // opt back in by re-setting `eventMode`.
+    for (const layer of [
+      this.bgaLayer,
+      this.skinLayer,
+      this.laneLayer,
+      this.noteLayer,
+      this.shutterLayer,
+      this.bombLayer,
+      this.overlayLayer,
+      this.textLayer,
+      this.background,
+      this.designClipMask,
+    ]) {
+      layer.eventMode = 'none';
+    }
     this.root.addChild(
       this.background,
       this.bgaLayer,
