@@ -5,6 +5,30 @@
 この文書は、`@be-music/player-web` と `@be-music/player-web-demo` で追加された browser player の実装メモです。
 timing、note、判定、score、gauge、BGA event の意味など、CLI と共有する runtime 意味論は [`player-spec.ja.md`](./player-spec.ja.md) を参照してください。
 
+## 共通 engine への移行 (Phase 1-4a)
+
+browser player は判定 (judge) / fallback / LN / Sample 演奏を `@be-music/player/core/engine` の `manualPlay` /
+`autoPlay` 経由で駆動するよう移行中です。 beatoraja 互換挙動 (look-ahead lane keysound fallback、 Free-Zone (`17` /
+`27`)、 LN suppress 窓 + 380ms / 120ms hold-grace、 LN 早離し audio cut、 mine vs note delta-priority、 multi-channel
+input mapping) は engine 側にすべて実装済みで、 TUI / Web どちらの runtime からも同じ判定路を通る形にしています。
+
+移行のため新しく追加された module:
+
+| module | 役割 |
+| --- | --- |
+| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | engine の `AudioSession` 契約を Web Audio API でラップ。 `triggerEvent` / `stopChannel` / pause / resume を実装し、 `keyMixer` / `bgmMixer` / 動的 volume change (`#xxx97` / `#xxx98`) / bmson `c=true` 連続音抑制 / `#WAVCMD` 別 gain 適用も担当。 |
+| [`web-input-runtime.ts`](../packages/player-web/src/web-input-runtime.ts) | DOM `keydown` / `keyup` を engine の `inputSignals` に流す。 OS auto-repeat フィルタ、 `Escape` / `F5` / `Space` を `interrupt` / `toggle-pause` 経路へ転送、その他は `lane-input(tokens)` として engine に渡す。 |
+| [`web-ui-runtime.ts`](../packages/player-web/src/web-ui-runtime.ts) | engine の `uiSignals` から `frame` snapshot と `command` queue (flash-lane / press-lane / trigger-poor-bga 等) を host (Pixi) callback に流す。 |
+| [`engine-driver.ts`](../packages/player-web/src/engine-driver.ts) | 上 3 つの adapter を組み立てて `manualPlay` / `autoPlay` を呼び出すヘルパー。 host は `runEngineDriver({ chart, audio, mode, ui })` 1 回で 1 譜面の playback を回せる。 |
+
+`@be-music/player/core/engine` は `node:path` / `node:timers/promises` 依存を排除済みで、 browser bundle にそのまま
+含められます。 `createNodeAudioSink` (Node 専用 audio backend) も lazy import なので、 host が
+`PlayerOptions.createAudioSession` factory (= `createWebAudioSession`) を渡す経路では一切到達しません。
+
+Phase 4b では `PixiGameplayView.prepare` chain を `runEngineDriver` 経由に切り替え、 view 内に残っている
+`judge` / `autoJudge` / `playSample` / `tryHitMine` / `finalize*LongNote` / `scheduleAutoSamples` 系
+(~1500 行) を engine 駆動の event subscription に置き換える予定です。 Phase 4c で旧コードを除去します。
+
 ## 監査メモ
 
 - 監査起点コミット: `97b05e825c60e2242b621f63a1ebbfccd415362b`
