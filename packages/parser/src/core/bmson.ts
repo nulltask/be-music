@@ -523,7 +523,15 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
   // floored to honour the spec's `unsigned long` type.
   copyIfNonNegativeInteger(normalized, 'level', info.level);
   copyIfFiniteNumber(normalized, 'initBpm', info.init_bpm);
-  copyIfFiniteNumber(normalized, 'judgeRank', info.judge_rank);
+  // bmson 1.0.0 spec — `judge_rank` describes "the width of
+  // judgment window" with the spec text only making sense for
+  // positive values ("smaller than 100" / "larger than 100"
+  // are framed relative to the player's default; 0 / negative
+  // would mean a zero-or-inverted window). Drop the field for
+  // non-positive inputs so the consumer falls back to the
+  // spec default of 100 rather than producing a nonsensical
+  // judge window.
+  copyIfPositiveFiniteNumber(normalized, 'judgeRank', info.judge_rank);
   // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take
   // the absolute value." Normalising at parse time keeps the
   // gauge formula (`+TOTAL/N`) on the positive branch and means
@@ -794,6 +802,24 @@ function copyIfNonNegativeInteger<T extends object>(target: T, key: keyof T & st
   (target as Record<string, unknown>)[key] = floored;
 }
 
+/**
+ * Copies a finite numeric value only when it is strictly
+ * positive (`> 0`). Matches bmson 1.0.0 spec fields whose
+ * semantics only make sense for positive values — notably
+ * `info.judge_rank`, where the spec text ("smaller than 100" /
+ * "larger than 100") frames the value as a width relative to
+ * the player's default. A `0` or negative input would imply
+ * a zero-width or inverted judgement window, both nonsensical;
+ * dropping the field lets the consumer fall back to the spec
+ * default of 100.
+ */
+function copyIfPositiveFiniteNumber<T extends object>(target: T, key: keyof T & string, value: unknown): void {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return;
+  }
+  (target as Record<string, unknown>)[key] = value;
+}
+
 function normalizePositiveInteger(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined;
@@ -829,11 +855,12 @@ function normalizeBmsonInfoFromIr(input: unknown): BeMusicJson['bmson']['info'] 
   }
 
   // Match `normalizeBmsonInfoForIr`'s spec-compliant unsigned-
-  // integer + abs handling for the re-parse path so JSON round-
-  // trips don't reintroduce a negative / float level / total.
+  // integer + positive + abs handling for the re-parse path so
+  // JSON round-trips don't reintroduce a negative / float
+  // level / judge_rank / total.
   copyIfNonNegativeInteger(info, 'level', raw.level);
   copyIfFiniteNumber(info, 'initBpm', raw.initBpm ?? raw.init_bpm);
-  copyIfFiniteNumber(info, 'judgeRank', raw.judgeRank ?? raw.judge_rank);
+  copyIfPositiveFiniteNumber(info, 'judgeRank', raw.judgeRank ?? raw.judge_rank);
   copyIfFiniteNumberAbs(info, 'total', raw.total);
 
   const resolution = normalizePositiveInteger(raw.resolution);

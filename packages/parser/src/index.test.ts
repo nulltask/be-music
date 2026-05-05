@@ -635,6 +635,46 @@ describe('parser', () => {
     expect(json.resources.stop[stopKeys[0]!]).toBeCloseTo(48, 6);
   });
 
+  test('bmson: non-positive info.judge_rank is dropped so the consumer falls back to the spec default', () => {
+    // bmson 1.0.0 spec — `judge_rank`'s text frames the value
+    // as a width relative to the player's default ("smaller
+    // than 100" / "larger than 100"). 0 / negative inputs would
+    // imply a zero-width or inverted window — meaningless. The
+    // parser drops the field so `resolveBmsonJudgeRankPercent`
+    // falls back to the spec default of 100.
+    const negative = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', judge_rank: -50 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+    expect(negative.bmson.info.judgeRank).toBeUndefined();
+    expect(negative.metadata.rank).toBeUndefined();
+
+    const zero = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', judge_rank: 0 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+    expect(zero.bmson.info.judgeRank).toBeUndefined();
+    expect(zero.metadata.rank).toBeUndefined();
+  });
+
+  test('bmson: positive info.judge_rank flows through unchanged', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', judge_rank: 75 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+    expect(json.bmson.info.judgeRank).toBe(75);
+    expect(json.metadata.rank).toBe(75);
+  });
+
   test('bmson: negative info.level is treated as invalid and dropped per the 1.0.0 spec', () => {
     // Spec: "level must be ≥ 0. Negative values may be regarded
     // as invalid by a player." We choose the "invalid → drop"
