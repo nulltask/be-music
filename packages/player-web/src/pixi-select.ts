@@ -22,6 +22,7 @@ import type {
 import { isLr2SpecialGraphic } from '@be-music/lr2-skin';
 import {
   applyDestinationToSprite,
+  containerSpriteSink,
   createCroppedTexture,
   evaluateKeyframes,
   normalizeRect,
@@ -3112,7 +3113,7 @@ export class PixiSongSelectView {
         order: number.declarationOrder,
         layer,
         paint: () => {
-          renderNumberElement(layer, number, value, this.skinTextures.asReadonlyMap(), dst);
+          renderNumberElement(containerSpriteSink(layer), number, value, this.skinTextures.asReadonlyMap(), dst);
         },
       });
     }
@@ -3571,9 +3572,14 @@ export class PixiSongSelectView {
     // pushing the visible "7" half a field-width to the right and leaving a stray "0" at the left edge of the bar —
     // visibly offset from where the LR2 default skin places it. Centering math still uses the full field width so
     // single-digit numbers sit at the field's middle.
-    renderNumberElement(this.listLayer, fakeNumberElement, playLevel, this.skinTextures.asReadonlyMap(), absoluteDst, {
-      suppressLeadingZeros: true,
-    });
+    renderNumberElement(
+      containerSpriteSink(this.listLayer),
+      fakeNumberElement,
+      playLevel,
+      this.skinTextures.asReadonlyMap(),
+      absoluteDst,
+      { suppressLeadingZeros: true },
+    );
   }
 
   private makeStaticImageSprite(image: Lr2ImageElement): Sprite | undefined {

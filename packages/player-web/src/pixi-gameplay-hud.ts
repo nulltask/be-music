@@ -1,4 +1,4 @@
-import { Container, Sprite, Texture } from 'pixi.js';
+import { Texture } from 'pixi.js';
 import {
   computeScoreRate,
   createEmptyScore,
@@ -14,7 +14,7 @@ import {
   type Lr2NowComboKind,
   type Lr2Skin,
 } from '@be-music/lr2-skin';
-import { applyDestinationToSprite, createCroppedTexture } from './lr2-render.ts';
+import { applyDestinationToSprite, createCroppedTexture, type SpriteSink } from './lr2-render.ts';
 
 export function isLr2OverlayImage(image: Lr2ImageElement): boolean {
   const t = image.destination.timer;
@@ -126,7 +126,7 @@ export function lastJudgeToNowComboKind(lastJudge: string): Lr2NowComboKind | un
 }
 
 export function renderNowComboElement(
-  layer: Container,
+  sink: SpriteSink,
   element: Lr2NowComboElement,
   combo: number,
   judgeAnchor: Lr2DestinationRect,
@@ -180,18 +180,18 @@ export function renderNowComboElement(
     if (!cellTexture) {
       continue;
     }
-    const sprite = new Sprite(cellTexture);
+    const sprite = sink.acquireSprite();
+    sprite.texture = cellTexture;
     sprite.label = `nowcombo[digit=${digit}]`;
     sprite.position.set(startX + dstWidth * index, absY);
     sprite.width = dstWidth;
     sprite.height = dst.h;
     applyDestinationToSprite(sprite, dst);
-    layer.addChild(sprite);
   }
 }
 
 export function renderGrooveGaugeElement(
-  layer: Container,
+  sink: SpriteSink,
   gauge: Lr2GrooveGaugeElement,
   percent: number,
   textures: ReadonlyMap<string, Texture>,
@@ -260,13 +260,13 @@ export function renderGrooveGaugeElement(
     if (!cellTexture) {
       continue;
     }
-    const sprite = new Sprite(cellTexture);
+    const sprite = sink.acquireSprite();
+    sprite.texture = cellTexture;
     sprite.label = `gauge-bead[idx=${unitIndex},frame=${frameIndex},cell=${cellIndex}${isPeakIndicator ? ',peak' : ''}]`;
     sprite.position.set(dst.x + gauge.addX * unitIndex, dst.y + gauge.addY * unitIndex);
     sprite.width = dst.w;
     sprite.height = dst.h;
     applyDestinationToSprite(sprite, dst);
-    layer.addChild(sprite);
   }
 }
 

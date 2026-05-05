@@ -504,8 +504,8 @@ export class PixiGameplayView {
    * children when the view tears down.
    */
   private readonly noteLayerPool = new ChildPool(this.noteLayer);
-  private readonly skinLayerPool = new ChildPool(this.skinLayer);
-  private readonly overlayLayerPool = new ChildPool(this.overlayLayer);
+  private skinLayerPool = new ChildPool(this.skinLayer);
+  private overlayLayerPool = new ChildPool(this.overlayLayer);
   private readonly textLayerPool = new ChildPool(this.textLayer);
   private readonly bombLayerPool = new ChildPool(this.bombLayer);
   private readonly bgaLayerPool = new ChildPool(this.bgaLayer);
@@ -4361,10 +4361,17 @@ export class PixiGameplayView {
   }
 
   private renderSkin(width: number, height: number): void {
-    disposeChildren(this.skinLayer);
-    disposeChildren(this.overlayLayer);
     const skin = this.options.skin;
     if (!skin) {
+      // Fallback (no-LR2-skin) path uses the simpler `disposeChildren` + Graphics/Text rebuild — its alloc churn
+      // is bounded and the fallback file owns one Graphics + ~20 Texts. Reset the pools to a clean slate so a
+      // subsequent skin load doesn't try to recycle children we just destroyed via `disposeChildren`.
+      this.skinLayerPool.destroy();
+      this.overlayLayerPool.destroy();
+      this.skinLayerPool = new ChildPool(this.skinLayer);
+      this.overlayLayerPool = new ChildPool(this.overlayLayer);
+      disposeChildren(this.skinLayer);
+      disposeChildren(this.overlayLayer);
       // Pass live runtime values into the fallback chrome so its text overlays (score / combo / BPM / hi-speed / judge
       // counter / rank) render real chart numbers — same as the LR2 default skin would via `#DST_NUMBER` digit cells.
       const total = this.score.total > 0 ? this.score.total : 0;
@@ -4390,6 +4397,8 @@ export class PixiGameplayView {
       });
       return;
     }
+    this.skinLayerPool.begin();
+    this.overlayLayerPool.begin();
     const scale = Math.min(width / skin.width, height / skin.height);
     this.skinLayer.scale.set(scale);
     this.skinLayer.position.set((width - skin.width * scale) / 2, (height - skin.height * scale) / 2);
@@ -4441,7 +4450,7 @@ export class PixiGameplayView {
       if (value === undefined) {
         continue;
       }
-      renderNumberElement(this.skinLayer, number, value, this.textures, this.evaluateElementDst(number), {
+      renderNumberElement(this.skinLayerPool, number, value, this.textures, this.evaluateElementDst(number), {
         // Groove-gauge percentage is naturally variable-length; LR2 default skins specify keta=3 which would print
         // "020" / "100". Suppress leading zeros so the displayed value reads like a normal integer.
         suppressLeadingZeros: number.source.num === 107,
@@ -4456,7 +4465,7 @@ export class PixiGameplayView {
         continue;
       }
       renderGrooveGaugeElement(
-        this.skinLayer,
+        this.skinLayerPool,
         gauge,
         this.gaugeState.current,
         this.textures,
@@ -4488,6 +4497,8 @@ export class PixiGameplayView {
       this.renderTextElement(text);
     }
     this.renderJudgeAndComboOnOverlay(skin);
+    this.skinLayerPool.end();
+    this.overlayLayerPool.end();
   }
 
   /**
@@ -4544,7 +4555,11 @@ export class PixiGameplayView {
     if (!texture) {
       return;
     }
-    const sprite = new Sprite(texture);
+    // The AUTOPLAY label (any image gated on op 33) belongs in the same visual layer as the judgement plate — i.e.
+    // above the falling notes. All other skin images stay in the regular skin layer.
+    const targetPool = image.destination.ops.includes(33) ? this.overlayLayerPool : this.skinLayerPool;
+    const sprite = targetPool.acquireSprite();
+    sprite.texture = texture;
     sprite.label = `image[${image.source.imagePath}]`;
     const { x, y, w, h } = normalizeRect(dst);
     // op4=1 / op4=2 are the LR2 scratch-turntable spin markers (1P / 2P side respectively). We drive the sprite from
@@ -4582,10 +4597,6 @@ export class PixiGameplayView {
       const fadeMs = this.lnHoldFadeDurationMs.get(image.destination.timer) ?? KEY_ON_FADE_OUT_MS;
       sprite.alpha = Math.max(0, 1 - elapsed / fadeMs);
     }
-    // The AUTOPLAY label (any image gated on op 33) belongs in the same visual layer as the judgement plate — i.e.
-    // above the falling notes. All other skin images stay in the regular skin layer.
-    const targetLayer = image.destination.ops.includes(33) ? this.overlayLayer : this.skinLayer;
-    targetLayer.addChild(sprite);
   }
 
   /**
@@ -4609,13 +4620,13 @@ export class PixiGameplayView {
     if (!texture) {
       return;
     }
-    const sprite = new Sprite(texture);
+    const sprite = this.skinLayerPool.acquireSprite();
+    sprite.texture = texture;
     sprite.label = `judgeline[idx=${judgeLine.index}]`;
     sprite.position.set(dst.x, dst.y);
     sprite.width = dst.w;
     sprite.height = dst.h;
     applyDestinationToSprite(sprite, dst);
-    this.skinLayer.addChild(sprite);
   }
 
   /**
@@ -4662,17 +4673,28 @@ export class PixiGameplayView {
     // the original skin used a bitmap font that pre-baked size and glyph spacing.
     const fontSize = Math.max(8, Math.min(64, h * 0.8));
     const tint = (interpolated.r << 16) | (interpolated.g << 8) | interpolated.b;
-    const node = new Text({
-      text: value,
-      style: new TextStyle({
+    const node = this.skinLayerPool.acquireText();
+    // Re-use a TextStyle keyed by `(st, fontSize, tint)` so identical descriptors share one paragraph layout cache,
+    // keeping the per-frame allocation off the hot path. Distinct tuples build their own cached style on first
+    // appearance and stay pinned across frames.
+    const styleKey = `${text.st}:${fontSize}:${tint}`;
+    let style = this.skinTextStyleCache.get(styleKey);
+    if (!style) {
+      style = new TextStyle({
         fill: tint,
         fontSize,
         fontWeight: '600',
         fontFamily: 'system-ui, sans-serif',
-      }),
-    });
+      });
+      this.skinTextStyleCache.set(styleKey, style);
+    }
+    if (node.style !== style) {
+      node.style = style;
+    }
+    node.text = value;
     node.label = `text[st=${text.st}]`;
     node.alpha = interpolated.alpha;
+    node.scale.set(1, 1); // pool acquireText keeps `tint/alpha`, but scale needs an explicit reset before measuring.
     // LR2 #SRC_TEXT spec (`docs/LR2SkinHelp.md` lines 1350+): align=0 → DST x is the LEFT edge of the rendered string
     // align=1 → DST x is the CENTER of the rendered string align=2 → DST x is the RIGHT edge of the rendered string
     if (text.alignment === 'center') {
@@ -4689,8 +4711,14 @@ export class PixiGameplayView {
     if (w > 0 && node.width > w) {
       node.scale.x = w / node.width;
     }
-    this.skinLayer.addChild(node);
   }
+
+  /**
+   * `TextStyle` cache keyed by `(st, fontSize, tint)` — every distinct skin-text descriptor builds a single style
+   * and pins it; subsequent frames reuse the same `TextStyle` reference, so re-assigning `node.style` is a no-op
+   * (Pixi's paragraph layout cache only invalidates on identity change, not value-equality).
+   */
+  private readonly skinTextStyleCache = new Map<string, TextStyle>();
 
   /**
    * Resolves the string content for an `#SRC_TEXT,st=…` slot. This is a minimal subset focused on values that are
@@ -4763,7 +4791,8 @@ export class PixiGameplayView {
     if (!cropTexture) {
       return;
     }
-    const sprite = new Sprite(cropTexture);
+    const sprite = this.skinLayerPool.acquireSprite();
+    sprite.texture = cropTexture;
     sprite.label = `bargraph[type=${bargraph.type}]`;
     if (bargraph.muki === 'vertical') {
       const filledHeight = Math.round(h * progress);
@@ -4776,7 +4805,6 @@ export class PixiGameplayView {
       sprite.height = h;
     }
     applyDestinationToSprite(sprite, interpolated);
-    this.skinLayer.addChild(sprite);
   }
 
   /**
@@ -4854,13 +4882,13 @@ export class PixiGameplayView {
         drawX = x - offset;
         break;
     }
-    const sprite = new Sprite(cropTexture);
+    const sprite = this.skinLayerPool.acquireSprite();
+    sprite.texture = cropTexture;
     sprite.label = `slider[type=${slider.type}]`;
     sprite.position.set(drawX, drawY);
     sprite.width = w;
     sprite.height = h;
     applyDestinationToSprite(sprite, interpolated);
-    this.skinLayer.addChild(sprite);
   }
 
   /** Returns the 0..1 value for a slider type. */
@@ -4964,19 +4992,19 @@ export class PixiGameplayView {
       if (!texture) {
         continue;
       }
-      const sprite = new Sprite(texture);
+      const sprite = this.overlayLayerPool.acquireSprite();
+      sprite.texture = texture;
       sprite.label = `nowjudge[side=${side},kind=${judgeKind}]`;
       sprite.position.set(dst.x + offsetX, dst.y);
       sprite.width = dst.w;
       sprite.height = dst.h;
       applyDestinationToSprite(sprite, dst);
-      this.overlayLayer.addChild(sprite);
     }
 
     // 2) Combo digits (animated for PERFECT — divx*divy with cycle).
     if (comboElement && visibleCombo > 0) {
       renderNowComboElement(
-        this.overlayLayer,
+        this.overlayLayerPool,
         comboElement,
         visibleCombo,
         judgeAnchor,

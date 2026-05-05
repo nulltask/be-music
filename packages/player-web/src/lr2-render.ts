@@ -11,6 +11,31 @@ import type { Lr2DestinationRect, Lr2NumberElement } from '@be-music/lr2-skin';
  */
 
 /**
+ * Minimal interface for "where do I put this Sprite?". Pool-based callers (pixi-gameplay's `ChildPool`) satisfy this
+ * structurally with their `acquireSprite()` method; non-pooled scene renders wrap a layer `Container` via
+ * {@link containerSpriteSink} so the same helpers work for both.
+ */
+export interface SpriteSink {
+  acquireSprite(): Sprite;
+}
+
+/**
+ * Wraps a Pixi `Container` as a `SpriteSink` that allocates a fresh `Sprite` and parents it to the layer on every
+ * acquire. Used by the non-pooled scene renders (select / result / decide); pooled callers should pass a `ChildPool`
+ * directly instead so its recycle semantics kick in. Holding the wrapper inside a per-render local keeps every
+ * acquire cost down to the closure call plus the `new Sprite()` / `addChild()` Pixi handles.
+ */
+export function containerSpriteSink(layer: Container): SpriteSink {
+  return {
+    acquireSprite() {
+      const sprite = new Sprite();
+      layer.addChild(sprite);
+      return sprite;
+    },
+  };
+}
+
+/**
  * Applies an LR2 `#DST_*` row's per-frame transforms (alpha, tint, blend mode, rotation, rotation pivot) onto a Pixi
  * `Sprite`.
  *
@@ -342,7 +367,7 @@ export interface RenderNumberOptions {
  *   `-`. Negative values are rendered using the second-half digit cells plus the trailing `-` sign cell.
  */
 export function renderNumberElement(
-  layer: Container,
+  sink: SpriteSink,
   element: Lr2NumberElement,
   value: number,
   textures: ReadonlyMap<string, Texture>,
@@ -425,12 +450,12 @@ export function renderNumberElement(
     if (!cellTexture) {
       continue;
     }
-    const sprite = new Sprite(cellTexture);
+    const sprite = sink.acquireSprite();
+    sprite.texture = cellTexture;
     sprite.label = `number[num=${element.source.num},cell=${cellIndex}]`;
     sprite.position.set(startX + dstWidth * index, dst.y);
     sprite.width = dstWidth;
     sprite.height = dst.h || cellHeight;
     applyDestinationToSprite(sprite, dst);
-    layer.addChild(sprite);
   }
 }

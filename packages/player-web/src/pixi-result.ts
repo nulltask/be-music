@@ -14,6 +14,7 @@ import type {
 import { isLr2SpecialGraphic } from '@be-music/lr2-skin';
 import {
   applyDestinationToSprite,
+  containerSpriteSink,
   createCroppedTexture,
   evaluateKeyframes,
   normalizeRect,
@@ -565,7 +566,13 @@ export class PixiResultView {
       work.push({
         order: number.declarationOrder,
         paint: () => {
-          renderNumberElement(this.skinLayer, number, value, this.skinTextures.asReadonlyMap(), dst);
+          renderNumberElement(
+            containerSpriteSink(this.skinLayer),
+            number,
+            value,
+            this.skinTextures.asReadonlyMap(),
+            dst,
+          );
         },
       });
     }
