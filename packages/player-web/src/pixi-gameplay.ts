@@ -63,7 +63,7 @@ import { type AudioBusHandle, type CompressorMode, type CompressorStage, buildAu
 import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-recorder.ts';
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
-import { destroyUniqueTextures, disposeChildren } from './pixi-utils.ts';
+import { ChildPool, destroyUniqueTextures, disposeChildren } from './pixi-utils.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
@@ -493,6 +493,22 @@ export class PixiGameplayView {
    */
   private readonly overlayLayer = new Container();
   private readonly textLayer = new Container();
+  /**
+   * Per-frame `Sprite` / `Graphics` / `Text` recyclers — one per layer that previously paid for
+   * `disposeChildren(layer)` + fresh allocations on every render tick. The pool reuses parented children across
+   * frames (toggling `visible` and overwriting properties), eliminating the allocation churn that historically
+   * dominated GC pauses during dense charts.
+   *
+   * Each render pass calls `pool.begin()`, `pool.acquireSprite|Graphics|Text()` for every child it draws, then
+   * `pool.end()` to hide whatever the pass didn't use. `dispose()` calls `pool.destroy()` to free the underlying
+   * children when the view tears down.
+   */
+  private readonly noteLayerPool = new ChildPool(this.noteLayer);
+  private readonly skinLayerPool = new ChildPool(this.skinLayer);
+  private readonly overlayLayerPool = new ChildPool(this.overlayLayer);
+  private readonly textLayerPool = new ChildPool(this.textLayer);
+  private readonly bombLayerPool = new ChildPool(this.bombLayer);
+  private readonly bgaLayerPool = new ChildPool(this.bgaLayer);
   private readonly overlay = new Text({
     text: '',
     style: new TextStyle({
@@ -1449,6 +1465,21 @@ export class PixiGameplayView {
       this.bombTexture = undefined;
     } catch (error) {
       log.warn('texture cleanup threw', error);
+    }
+    // Drop every per-frame child pool so the pooled Sprite / Graphics / Text instances are destroyed before the
+    // scene-graph subtree below tears them down indirectly. Order matters — the pools' children are parented to the
+    // layer Containers we're about to destroy, so going through the pools first means each child is freed via its
+    // own `destroy()` (which clears `GraphicsContext` resources) rather than chained through `destroy({children:true})`
+    // which can skip some Pixi v8 cleanup paths.
+    try {
+      this.noteLayerPool.destroy();
+      this.skinLayerPool.destroy();
+      this.overlayLayerPool.destroy();
+      this.textLayerPool.destroy();
+      this.bombLayerPool.destroy();
+      this.bgaLayerPool.destroy();
+    } catch (error) {
+      log.warn('child pool teardown threw', error);
     }
     // Destroy our scene-graph subtree. With the shared host pattern we never call `app.destroy` here — that would nuke
     // the canvas and the select scene would lose its rendering target.
@@ -4080,15 +4111,15 @@ export class PixiGameplayView {
   }
 
   private renderBombs(): void {
-    // Pixi v8 holds renderer-side state (Graphics contexts, glyph atlas tiles) for every detached child until each one
-    // is explicitly destroyed. `disposeChildren` does both — see `pixi-utils.ts` for why a bare `removeChildren()` was
-    // the root cause of the post-chart browser hang.
-    disposeChildren(this.bombLayer);
+    // Pooled per-frame children — see `ChildPool` in `pixi-utils.ts`. The previous `disposeChildren` rebuild ran a
+    // destroy + Sprite-allocation cycle for every active explosion; the pool reuses parented sprites across frames.
+    this.bombLayerPool.begin();
     this.cleanupBombTimers();
     // When an LR2 skin is loaded the bomb sprite is already part of the skin's `#DST_IMAGE` set (one entry per lane,
     // gated on bomb timer 50–57 / 60–67). Drawing our own copy on top would double-render the explosion, so this
     // fallback only fires for the default (skinless) demo experience.
     if (this.options.skin !== undefined || !this.bombTexture || this.bombStartedAt.size === 0) {
+      this.bombLayerPool.end();
       return;
     }
     const naturalRatio = this.bombTexture.frame.width / Math.max(1, this.bombTexture.frame.height);
@@ -4119,7 +4150,8 @@ export class PixiGameplayView {
       if (!cropped) {
         continue;
       }
-      const sprite = new Sprite(cropped);
+      const sprite = this.bombLayerPool.acquireSprite();
+      sprite.texture = cropped;
       sprite.label = `bomb[ch=${channel},frame=${frameIndex}]`;
       const displayWidth = Math.max(cellWidth * 0.6, lane.w * (lr2Layout ? 4.5 : 3));
       const displayHeight = displayWidth * (cellHeight / cellWidth);
@@ -4127,8 +4159,8 @@ export class PixiGameplayView {
       sprite.width = displayWidth;
       sprite.height = displayHeight;
       sprite.blendMode = 'add';
-      this.bombLayer.addChild(sprite);
     }
+    this.bombLayerPool.end();
   }
 
   /**
@@ -4140,14 +4172,21 @@ export class PixiGameplayView {
    * switches show up the next frame without explicit dirty tracking.
    */
   private renderBga(seconds: number): void {
-    disposeChildren(this.bgaLayer);
+    this.bgaLayerPool.begin();
     // Honor the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). - `'OFF'` → never render - `'AUTOPLAY_ONLY'` → render
     // only when autoplay is on - `'ON'` (default) → render whenever the chart has BGA
     const bgaMode = this.options.bga ?? 'ON';
-    if (bgaMode === 'OFF') return;
-    if (bgaMode === 'AUTOPLAY_ONLY' && !this.options.autoPlay) return;
+    if (bgaMode === 'OFF') {
+      this.bgaLayerPool.end();
+      return;
+    }
+    if (bgaMode === 'AUTOPLAY_ONLY' && !this.options.autoPlay) {
+      this.bgaLayerPool.end();
+      return;
+    }
     const skin = this.options.skin;
     if (!skin || !this.hasBga || skin.bgas.length === 0) {
+      this.bgaLayerPool.end();
       return;
     }
     // Render ALL `#DST_BGA` rectangles whose op gating is true. For SP charts the LR2 default skin authors two — op 30
@@ -4158,6 +4197,7 @@ export class PixiGameplayView {
     // and left the bottom one blank.
     const visibleBgas = skin.bgas.filter((entry) => this.isDestinationVisible(entry.destination));
     if (visibleBgas.length === 0) {
+      this.bgaLayerPool.end();
       return;
     }
     // Drive video BGA playback once per frame (not per-rect) — base / layer cues are global to the chart, every rect
@@ -4216,7 +4256,8 @@ export class PixiGameplayView {
         // Stretch the BGA texture to fill this rect exactly. The previous version routed through a BMS 256×256 spec
         // canvas which left non-256 sources covering only part of the DST and produced visible "letterbox" gaps. LR2
         // stretches straight to the skin rect, matching here.
-        const sprite = new Sprite(texture);
+        const sprite = this.bgaLayerPool.acquireSprite();
+        sprite.texture = texture;
         sprite.label = `bga/${layerName}[key=${resolvedKey}]`;
         sprite.position.set(x, y);
         sprite.width = w;
@@ -4243,7 +4284,6 @@ export class PixiGameplayView {
             sprite.alpha *= argb.a / 255;
           }
         }
-        this.bgaLayer.addChild(sprite);
       };
       if (poorKey) {
         // POOR uses base-mode decoding (no chroma key) since it replaces the entire base+layer composite during its
@@ -4259,6 +4299,7 @@ export class PixiGameplayView {
         drawLayer(layerKey, this.bgaLayerTextures, 'layer', layerCue?.seconds);
       }
     }
+    this.bgaLayerPool.end();
   }
 
   /**
@@ -5022,10 +5063,12 @@ export class PixiGameplayView {
   }
 
   private renderNotes(seconds: number, _height: number): void {
-    disposeChildren(this.noteLayer);
+    this.noteLayerPool.begin();
     if (this.isIntroPlaying()) {
       // Intro period — the LR2 skin is sliding its frame chrome in. Notes and measure lines stay off-screen until the
-      // playhead is live.
+      // playhead is live. The `noteLayerPool.end()` below hides every pooled child that the (skipped) draw passes
+      // would have re-acquired.
+      this.noteLayerPool.end();
       return;
     }
     const currentBeat = this.currentBeat(seconds);
@@ -5072,20 +5115,19 @@ export class PixiGameplayView {
           const cell = pickAnimatedCell(greenNoteSrc, this.elapsedSinceTimer(greenNoteSrc.timer));
           const texture = createCroppedTexture(greenBaseTexture, cell);
           if (texture) {
-            const sprite = new Sprite(texture);
+            const sprite = this.noteLayerPool.acquireSprite();
+            sprite.texture = texture;
             sprite.label = `invisible-note[ch=${invisible.channel}]`;
             sprite.x = lane.x + (lane.w - cell.w) / 2;
             sprite.y = y - cell.h;
             sprite.width = cell.w;
             sprite.height = cell.h;
-            this.noteLayer.addChild(sprite);
             continue;
           }
         }
-        const graphic = new Graphics();
+        const graphic = this.noteLayerPool.acquireGraphics();
         graphic.label = `invisible-note-fallback[ch=${invisible.channel}]`;
         graphic.rect(lane.x + 2, y - 4, Math.max(4, lane.w - 4), 4).fill({ color: 0x33dd66, alpha: 0.7 });
-        this.noteLayer.addChild(graphic);
       }
     }
     const firstNoteIndex = this.scrollMapper
@@ -5150,6 +5192,7 @@ export class PixiGameplayView {
       const laneIndex = resolveLr2LaneIndex(mine.channel, this.chartPlayVariant);
       this.renderMineNote(skin, laneIndex, mine.channel, lane, y);
     }
+    this.noteLayerPool.end();
   }
 
   /**
@@ -5170,23 +5213,22 @@ export class PixiGameplayView {
       const cell = pickAnimatedCell(skinMine, this.elapsedSinceTimer(skinMine.timer));
       const texture = createCroppedTexture(baseTexture, cell);
       if (texture) {
-        const sprite = new Sprite(texture);
+        const sprite = this.noteLayerPool.acquireSprite();
+        sprite.texture = texture;
         sprite.label = `mine[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         sprite.y = y - cell.h;
         sprite.width = cell.w;
         sprite.height = cell.h;
-        this.noteLayer.addChild(sprite);
         return;
       }
     }
-    const graphic = new Graphics();
+    const graphic = this.noteLayerPool.acquireGraphics();
     graphic.label = `mine-fallback[lane=${laneIndex},ch=${channel}]`;
     graphic
       .roundRect(lane.x + 2, y - 12, Math.max(4, lane.w - 4), 12, 3)
       .fill(0x8a1a1a)
       .stroke({ color: 0xffd166, width: 2 });
-    this.noteLayer.addChild(graphic);
   }
 
   /**
@@ -5294,21 +5336,22 @@ export class PixiGameplayView {
           if (y < top - 1 || y > bottom + 1) {
             continue;
           }
-          const sprite = new Sprite(cropped);
+          const sprite = this.noteLayerPool.acquireSprite();
+          sprite.texture = cropped;
           sprite.label = `measure-line[idx=${skinLine.index},beat=${beat}]`;
           sprite.position.set(lineDst.x, Math.round(y));
           sprite.width = lineDst.w;
           sprite.height = Math.max(1, Math.abs(lineDst.h));
           applyDestinationToSprite(sprite, lineDst);
-          this.noteLayer.addChild(sprite);
         }
       }
       return;
     }
-    // Fallback: simple white strip when no skin or no #SRC_LINE.
+    // Fallback: simple white strip when no skin or no #SRC_LINE. One pooled `Graphics` carries every line — the
+    // accumulated rect-fill commands form one batched draw, no per-line allocation.
     const x0 = left.x;
     const x1 = right.x + right.w;
-    const graphic = new Graphics();
+    const graphic = this.noteLayerPool.acquireGraphics();
     const beatDistance = this.scrollMapper
       ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
       : (toBeat: number): number => toBeat - currentBeat;
@@ -5323,7 +5366,6 @@ export class PixiGameplayView {
       }
       graphic.rect(x0, Math.round(y), x1 - x0, 1).fill({ color: 0xffffff, alpha: 0.65 });
     }
-    this.noteLayer.addChild(graphic);
   }
 
   /**
@@ -5389,20 +5431,19 @@ export class PixiGameplayView {
       const cell = pickAnimatedCell(skinNote, this.elapsedSinceTimer(skinNote.timer));
       const texture = createCroppedTexture(baseTexture, cell);
       if (texture) {
-        const sprite = new Sprite(texture);
+        const sprite = this.noteLayerPool.acquireSprite();
+        sprite.texture = texture;
         sprite.label = `note[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         sprite.y = y - cell.h;
         sprite.width = cell.w;
         sprite.height = cell.h;
-        this.noteLayer.addChild(sprite);
         return;
       }
     }
-    const graphic = new Graphics();
+    const graphic = this.noteLayerPool.acquireGraphics();
     graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
     graphic.roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2).fill(noteFallbackColor(channel, laneIndex));
-    this.noteLayer.addChild(graphic);
   }
 
   /**
@@ -5433,7 +5474,8 @@ export class PixiGameplayView {
       const cell = pickAnimatedCell(bodySrc, this.elapsedSinceTimer(bodySrc.timer));
       const cropped = createCroppedTexture(bodyBase, cell);
       if (cropped) {
-        const sprite = new Sprite(cropped);
+        const sprite = this.noteLayerPool.acquireSprite();
+        sprite.texture = cropped;
         sprite.label = `ln-body[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         // Shift the body up by one cell-height so the body's bottom edge aligns with the LN_START's bottom edge (=
@@ -5442,28 +5484,26 @@ export class PixiGameplayView {
         sprite.y = top - cell.h;
         sprite.width = cell.w;
         sprite.height = Math.max(1, bottom - top);
-        this.noteLayer.addChild(sprite);
       }
     } else {
-      const graphic = new Graphics();
+      const graphic = this.noteLayerPool.acquireGraphics();
       graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
       graphic
         .rect(lane.x + 2, top - 10, Math.max(4, lane.w - 4), Math.max(1, bottom - top))
         .fill({ color: noteFallbackColor(channel, laneIndex), alpha: 0.6 });
-      this.noteLayer.addChild(graphic);
     }
     // LN_END at the top (yEnd), LN_START at the bottom (yStart).
     if (endSrc) {
       const cell = pickAnimatedCell(endSrc, this.elapsedSinceTimer(endSrc.timer));
       const endTexture = createCroppedTexture(this.textures.get(endSrc.imagePath), cell);
       if (endTexture) {
-        const sprite = new Sprite(endTexture);
+        const sprite = this.noteLayerPool.acquireSprite();
+        sprite.texture = endTexture;
         sprite.label = `ln-end[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         sprite.y = yEnd - cell.h;
         sprite.width = cell.w;
         sprite.height = cell.h;
-        this.noteLayer.addChild(sprite);
       }
     }
     // Hide the LN head once it has visually passed the judgement-line bottom. The body+end keep showing until the tail
@@ -5472,55 +5512,73 @@ export class PixiGameplayView {
       const cell = pickAnimatedCell(startSrc, this.elapsedSinceTimer(startSrc.timer));
       const startTexture = createCroppedTexture(this.textures.get(startSrc.imagePath), cell);
       if (startTexture) {
-        const sprite = new Sprite(startTexture);
+        const sprite = this.noteLayerPool.acquireSprite();
+        sprite.texture = startTexture;
         sprite.label = `ln-start[lane=${laneIndex},ch=${channel}]`;
         sprite.x = lane.x + (lane.w - cell.w) / 2;
         sprite.y = yStart - cell.h;
         sprite.width = cell.w;
         sprite.height = cell.h;
-        this.noteLayer.addChild(sprite);
       }
     }
   }
 
   private renderText(width: number, height: number, seconds: number): void {
-    disposeChildren(this.textLayer);
+    this.textLayerPool.begin();
     // Bottom-left status (title / time / HS / judge counts) is only useful when there's no LR2 skin painting the same
     // information via NUMBER / TEXT elements. With a skin loaded we'd duplicate every figure on top of the skin's
     // panels, so suppress it.
     if (!this.options.skin) {
-      const status = new Text({
-        text: `${this.song?.title ?? ''}  ${formatTime(seconds)}  HS×${this.hiSpeed.toFixed(2)}  PG:${this.score.perfect} GR:${this.score.great} GD:${this.score.good} BD:${this.score.bad} PR:${this.score.poor}  F:${this.fastCount} S:${this.slowCount}`,
-        style: new TextStyle({ fill: MUTED, fontSize: 10, fontFamily: 'system-ui, sans-serif' }),
-      });
+      const status = this.textLayerPool.acquireText();
+      // Pool keeps the previous render's `style` instance — re-assigning the same `style` would force a full
+      // paragraph rebuild on every frame, so we pin a single shared `TextStyle` for this slot lazily and only flip
+      // the .style assignment when the pooled Text was just freshly allocated (style === undefined / default).
+      if (this.fallbackStatusStyle === undefined) {
+        this.fallbackStatusStyle = new TextStyle({ fill: MUTED, fontSize: 10, fontFamily: 'system-ui, sans-serif' });
+      }
+      if (status.style !== this.fallbackStatusStyle) {
+        status.style = this.fallbackStatusStyle;
+      }
+      status.text = `${this.song?.title ?? ''}  ${formatTime(seconds)}  HS×${this.hiSpeed.toFixed(2)}  PG:${this.score.perfect} GR:${this.score.great} GD:${this.score.good} BD:${this.score.bad} PR:${this.score.poor}  F:${this.fastCount} S:${this.slowCount}`;
       status.label = 'fallback-status';
       status.position.set(18, height - 22);
-      this.textLayer.addChild(status);
     }
     if (this.lastJudge && seconds <= this.lastJudgeUntil && !this.hasSkinnedJudge()) {
-      const judge = new Text({
-        text: this.lastJudge,
-        style: new TextStyle({
+      const judge = this.textLayerPool.acquireText();
+      if (this.fallbackJudgeStyle === undefined) {
+        this.fallbackJudgeStyle = new TextStyle({
           fill: BLUE,
           stroke: { color: 0xffffff, width: 2 },
           fontSize: 32,
           fontWeight: '800',
           fontFamily: 'system-ui, sans-serif',
-        }),
-      });
+        });
+      }
+      if (judge.style !== this.fallbackJudgeStyle) {
+        judge.style = this.fallbackJudgeStyle;
+      }
+      judge.text = this.lastJudge;
       judge.label = `fallback-judge[${this.lastJudge}]`;
       judge.anchor.set(0.5);
       // Y aligned with LR2's `#DST_NOWJUDGE_1P,...,73,230,102,30,...` — the default skin parks the judge graphic 91 px
       // above the judgement line. Hard-coded to the LR2 number rather than `judgementY - 91` so the relationship is
       // greppable when comparing to LR2 source.
       judge.position.set(PLAYFIELD.x + PLAYFIELD.w / 2, 230);
-      this.textLayer.addChild(judge);
     }
+    this.textLayerPool.end();
     this.overlay.visible = this.paused;
     this.overlay.text = 'Paused';
     this.overlay.anchor.set(0.5);
     this.overlay.position.set(width / 2, height / 2);
   }
+
+  /**
+   * Lazily-built `TextStyle` instances for the fallback (no-skin) status / judge text. Held so we re-use the same
+   * `TextStyle` reference across frames — re-assigning a Text's `.style` to a freshly-constructed `TextStyle` (even
+   * with identical fields) invalidates Pixi's paragraph layout cache and forces a full re-shape every frame.
+   */
+  private fallbackStatusStyle: TextStyle | undefined;
+  private fallbackJudgeStyle: TextStyle | undefined;
 
   private hasSkinnedJudge(): boolean {
     const skin = this.options.skin;
