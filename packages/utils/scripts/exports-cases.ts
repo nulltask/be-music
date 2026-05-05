@@ -156,6 +156,12 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       utilsApi.isAbortError(new Error('x'));
     },
   });
+  define('utils.isMaliciousAssetPath', {
+    run: () => {
+      utilsApi.isMaliciousAssetPath('../../../etc/passwd');
+      utilsApi.isMaliciousAssetPath('sounds/kick.wav');
+    },
+  });
   define('utils.throwIfAborted', {
     run: () => {
       utilsApi.throwIfAborted(undefined);

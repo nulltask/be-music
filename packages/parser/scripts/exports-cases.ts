@@ -2,9 +2,20 @@ import * as parserApi from '@be-music/parser';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 export function registerParserExportsCases(define: DefineBenchmarkCase): void {
+  define('parser.canonicaliseBmsCharset', {
+    run: () => {
+      parserApi.canonicaliseBmsCharset('Shift-JIS');
+      parserApi.canonicaliseBmsCharset('utf8');
+    },
+  });
   define('parser.decodeBmsText', {
     run: (fixtures) => {
       parserApi.decodeBmsText(fixtures.bmsBuffer);
+    },
+  });
+  define('parser.extractDeclaredBmsCharset', {
+    run: () => {
+      parserApi.extractDeclaredBmsCharset('#CHARSET Shift_JIS\n#TITLE Bench\n');
     },
   });
   define('parser.parseBms', {
