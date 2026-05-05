@@ -175,8 +175,8 @@ jobs:
         steps.run-base-benchmark.outcome == 'success' }}
       snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
     env:
-      BENCH_TIME_MS: 200
-      BENCH_WARMUP_TIME_MS: 100
+      BENCH_TIME_MS: 20
+      BENCH_WARMUP_TIME_MS: 10
       BENCH_REPEATS: 3
     permissions:
       contents: read
@@ -378,8 +378,8 @@ jobs:
     outputs:
       snapshot_b64: ${{ steps.aggregate-head.outputs.snapshot_b64 }}
     env:
-      BENCH_TIME_MS: 200
-      BENCH_WARMUP_TIME_MS: 100
+      BENCH_TIME_MS: 20
+      BENCH_WARMUP_TIME_MS: 10
       BENCH_REPEATS: 3
     permissions:
       contents: read
@@ -438,8 +438,8 @@ jobs:
         steps.run-base-benchmark.outcome == 'success' }}
       snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
     env:
-      BENCH_TIME_MS: 200
-      BENCH_WARMUP_TIME_MS: 100
+      BENCH_TIME_MS: 20
+      BENCH_WARMUP_TIME_MS: 10
       BENCH_REPEATS: 3
     permissions:
       contents: read
