@@ -8,8 +8,20 @@ import {
   parseBmsDynamicVolumeGain,
   sortEvents,
 } from '@be-music/chart';
-import { basename } from 'node:path';
-import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
+// Hand-rolled polyfills replace what was previously imported from `node:path` / `node:timers/promises`. Keeping the
+// engine free of `node:`-prefixed imports lets the same module run unchanged in the browser (Phase 4 of the
+// web-engine integration plan) without depending on bundler-side aliases. The behaviors below are deliberately
+// minimal — `basename` only needs the trailing-segment semantics for log output, and `delay` / `delayImmediate`
+// only need the cooperative-yield semantics `waitPrecise` consumes.
+const basename = (path: string): string => {
+  // Match `node:path.basename`'s "drop the trailing separator(s) and return the final segment" semantics for both
+  // POSIX and Windows-style separators. An all-separator input ("/" / "\\") returns an empty string.
+  const trimmed = path.replace(/[\\/]+$/, '');
+  const lastSep = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return lastSep === -1 ? trimmed : trimmed.slice(lastSep + 1);
+};
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const delayImmediate = (): Promise<void> => new Promise((resolve) => queueMicrotask(resolve));
 import { floatToInt16, throwIfAborted, type LogEntry, type LogLevel } from '@be-music/utils';
 import {
   type BeMusicEvent,
