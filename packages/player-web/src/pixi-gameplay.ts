@@ -2161,6 +2161,24 @@ export class PixiGameplayView {
       }
       return Math.max(0, now - this.sceneStartTime);
     }
+    // Timer 140 — リズムタイマー (rhythm timer). Per the LR2 skin
+    // help: 「一拍を1000としたときのタイマーです」 — one beat
+    // remaps to 1000 logical ms regardless of BPM. The LR2 default
+    // 7-keys skin's lane-bottom aura keyframes (`#SRC_IMAGE,...,
+    // y=2007` at `#DST_IMAGE,...,33,286,194,29,...,0,140,...`) ride
+    // this timer so the glow pulses bright on every beat boundary
+    // and fades over the rest of the beat. We map the chart's
+    // current beat fractional part to that 0..1000 window so the
+    // pulse stays beat-locked under soflan, hi-speed change, and
+    // STOP — anything that bends the seconds→beats relationship is
+    // already absorbed by `currentBeat`.
+    if (timer === 140) {
+      if (!this.song) return 0;
+      const beat = this.currentBeat(this.currentSeconds());
+      if (!Number.isFinite(beat) || beat < 0) return 0;
+      const fraction = beat - Math.floor(beat);
+      return fraction * 1000;
+    }
     // Explicit seed wins. `mount()` seeds the LR2 scene-stage
     // timers (0 / 1 / 40 / 41) based on the skin's
     // `#STARTINPUT` / `#LOADSTART` / `#LOADEND` / `#PLAYSTART`
@@ -2201,6 +2219,18 @@ export class PixiGameplayView {
     // higher-level renderer to draw only while a judgement is fresh.
     if (timer === 46 || timer === 47) {
       return true;
+    }
+    // Timer 140 — リズムタイマー. Beat-locked, but suppressed
+    // during the LR2 LOADING → DONE intro window so the lane-
+    // bottom aura keyframes stay invisible until notes actually
+    // start scrolling. Without this gate the glow would already
+    // be pulsing in the empty playfield while the title plate /
+    // ring chrome is still sliding in. `isIntroPlaying()` is the
+    // same gate that hides falling notes / measure lines, so
+    // pinning the aura to it lines up with the "the chart has
+    // started" moment users perceive.
+    if (timer === 140) {
+      return this.song !== undefined && !this.isIntroPlaying();
     }
     // Bomb (50-69) and key-on (100-119) timers are tracked explicitly via
     // `timerStartedAt`. They become active the moment we record a start time
@@ -5471,10 +5501,15 @@ export class PixiGameplayView {
     const skin = this.options.skin;
     const pixelsPerBeat = PIXELS_PER_BEAT * this.hiSpeed;
     this.renderMeasureLines(currentBeat, pixelsPerBeat);
-    // Note: the BPM-linked judgement-line glow is drawn by the LR2 skin
-    // itself (the "判定グロー" `#DST_IMAGE` at SRC y=2007 in the default
-    // 7-keys skin). The custom `renderBeatAura` we used to call here was
-    // duplicate visual noise and has been removed.
+    // Note: the lane-bottom beat-pulse glow is drawn by the LR2
+    // skin itself — the "リズムタイマー" `#DST_IMAGE` at SRC
+    // y=2007 in the default 7-keys skin, anchored to timer 140.
+    // `elapsedSinceTimer(140)` remaps the chart's current
+    // fractional beat to the 0..1000 ms keyframe window the LR2
+    // skin's keyframe chain authored, so the glow flashes on
+    // every beat regardless of BPM. The custom `renderBeatAura`
+    // we used to call here was duplicate visual noise and has
+    // been removed.
     // Distance integrator. With `#SCROLL` / `#SPEED` events present
     // we let the mapper compute the integrated distance; otherwise
     // we fall back to a flat `(beat - currentBeat)` to skip the
