@@ -159,6 +159,17 @@ export interface PlayerOptions {
   laneModeExtension?: string;
   createUiRuntime?: (context: CreatePlayerUiRuntimeContext) => Promise<PlayerUiRuntime | undefined>;
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
+  /**
+   * Optional override for the audio playback backend. When provided, the engine routes every sample trigger / channel
+   * stop / pause-resume / finish-dispose through the returned {@link AudioSession} instead of the bundled Node
+   * `createNodeAudioSink` path. Used by the web (Pixi) runtime to wire a Web Audio API backend through the same
+   * judging code the TUI runs, so both runtimes hit the engine's beatoraja-compliant judge / fallback / LN logic
+   * without each one re-implementing it.
+   *
+   * Returning `undefined` (or omitting the option entirely) preserves the original behavior — the engine falls
+   * through to the Node sink, which is what every existing TUI / test path already relies on.
+   */
+  createAudioSession?: (context: CreateAudioSessionContext) => Promise<AudioSession | undefined>;
   onResolvedChart?: (json: BeMusicJson) => void;
   onLog?: (entry: LogEntry) => void;
   writeOutput?: (text: string) => void;
@@ -215,10 +226,26 @@ export class PlayerInterruptedError extends Error {
   }
 }
 
-interface AudioSession {
+/**
+ * The audio playback contract the engine uses regardless of which runtime backs it. The default Node implementation
+ * created in {@link createAudioSessionIfEnabled} wraps `node-web-audio-api`; alternative runtimes (browser Web Audio,
+ * test mocks) implement this same shape and plug in via {@link PlayerOptions.createAudioSession}.
+ *
+ * **Lifetime**: caller invokes `start()` once chart playback begins, `pause()` / `resume()` during input-driven
+ * pauses, and exactly one of `finish()` (graceful drain) or `dispose()` (abort, no drain) at the end of playback.
+ *
+ * **Optional methods** are absent on backends that don't model the corresponding concept — e.g. test mocks may
+ * skip clock state, and pure-render backends may not handle `triggerEvent` / `stopChannel`.
+ */
+export interface AudioSession {
   start: () => void;
   finish: () => Promise<void>;
   dispose: () => Promise<void>;
+  /**
+   * Milliseconds to wait between {@link start} and the chart's note-zero moment. Backends that need a known lead-in
+   * (e.g. to fully fill an audio output buffer before the chart's first note) report it here so the engine schedules
+   * note timings against this offset.
+   */
   chartStartDelayMs: number;
   backendLabel: string;
   pause: () => void;
@@ -228,6 +255,18 @@ interface AudioSession {
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
   stopChannel?: (channel: string) => void;
+}
+
+/**
+ * Context handed to a {@link PlayerOptions.createAudioSession} factory. Mirrors the inputs the engine's built-in
+ * Node session would consume so a custom backend can apply the same chart-derived gain / volume semantics. Forward-
+ * compatible: backends should ignore unrecognized fields.
+ */
+export interface CreateAudioSessionContext {
+  json: BeMusicJson;
+  options: PlayerOptions;
+  mode: 'auto' | 'manual';
+  onLoadProgress?: (progress: AudioSessionLoadProgress) => void;
 }
 
 export interface RandomPatternSelection {
@@ -1301,7 +1340,13 @@ function createNoTuiPlaybackEventTracer(params: {
   };
 }
 
-interface AudioSessionLoadProgress {
+/**
+ * Progress signal emitted while an {@link AudioSession} is loading. Values are normalized:
+ * - `ratio` is in `[0, 1]` (0 = just started, 1 = ready)
+ * - `message` is a short human-readable status (`"Loading key sounds..."`, `"Audio ready."`)
+ * - `detail` is optional context (the WAV currently decoding, the failed asset, etc.)
+ */
+export interface AudioSessionLoadProgress {
   ratio: number;
   message: string;
   detail?: string;
@@ -3361,6 +3406,20 @@ async function createAudioSessionIfEnabled(
       message: 'Audio disabled; skipping audio setup.',
     });
     return undefined;
+  }
+  // Custom backend hook (web / browser / test). When supplied, the factory owns sample loading, mixing, and clock
+  // state — we only forward the standard load-progress reporter so the host UI's loading bar still ticks during the
+  // backend's own asset-decode phase. A factory that returns `undefined` is treated the same as omitting the hook
+  // (fall through to the Node sink); this lets a runtime conditionally opt out at runtime (e.g. browser without
+  // AudioContext support).
+  if (options.createAudioSession) {
+    const customSession = await options.createAudioSession({ json, options, mode, onLoadProgress });
+    throwIfAborted(options.signal);
+    if (customSession) {
+      writeOutput(`Audio backend: ${customSession.backendLabel}\n`);
+      onLoadProgress?.({ ratio: 1, message: 'Audio ready.' });
+      return customSession;
+    }
   }
 
   const headPaddingMs = options.audioHeadPaddingMs ?? 0;

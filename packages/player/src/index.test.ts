@@ -74,7 +74,9 @@ vi.mock('./audio-sink.ts', () => ({
 import {
   applyFastSlowForJudge,
   applyHighSpeedControlAction,
+  type AudioSession,
   autoPlay,
+  type CreateAudioSessionContext,
   type CreatePlayerUiRuntimeContext,
   type PlayerLoadProgress,
   extractInvisiblePlayableNotes,
@@ -942,6 +944,92 @@ describe('player', () => {
 
     expect(summary.bad).toBe(1);
     expect(summary.gauge?.current).toBeCloseTo(2, 9);
+  });
+
+  test('player: routes audio through createAudioSession factory when supplied', async () => {
+    // Phase 1 of the web-engine integration plan exposes a `createAudioSession` factory option so the browser
+    // runtime can plug in a Web Audio backend without forking the engine. The factory's returned `AudioSession`
+    // must short-circuit the bundled Node sink path entirely — verified here by asserting the Node sink mock
+    // never received a `write()` call while the custom factory's `start` / `triggerEvent` / `finish` did.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
+    json.resources.wav = { '01': 'mock.wav' };
+
+    audioSinkState.writes.length = 0;
+    const triggeredEvents: string[] = [];
+    let started = false;
+    let finished = false;
+    const customSession: AudioSession = {
+      backendLabel: 'mock-web-audio',
+      chartStartDelayMs: 0,
+      start: () => {
+        started = true;
+      },
+      pause: () => undefined,
+      resume: () => undefined,
+      finish: async () => {
+        finished = true;
+      },
+      dispose: async () => undefined,
+      triggerEvent: (event) => {
+        triggeredEvents.push(event.value);
+      },
+      stopChannel: () => undefined,
+    };
+    const seenContexts: CreateAudioSessionContext[] = [];
+
+    await autoPlay(json, {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      writeOutput: () => undefined,
+      createAudioSession: async (context) => {
+        seenContexts.push(context);
+        return customSession;
+      },
+    });
+
+    expect(seenContexts).toHaveLength(1);
+    expect(seenContexts[0]?.mode).toBe('auto');
+    // The factory receives the post-#RANDOM-resolution clone, not the caller's input. The clone preserves the
+    // chart's identifying fields (bpm / events / resources) so a backend can re-derive everything it needs.
+    expect(seenContexts[0]?.json.metadata.bpm).toBe(120);
+    expect(seenContexts[0]?.json.events).toHaveLength(1);
+    expect(started).toBe(true);
+    expect(finished).toBe(true);
+    expect(triggeredEvents).toContain('01');
+    // The Node sink mock from the file's top-level `vi.mock` registers a `write` push for every audio chunk; the
+    // factory short-circuit means it should remain untouched.
+    expect(audioSinkState.writes.length).toBe(0);
+  });
+
+  test('player: falls back to the bundled Node sink when createAudioSession returns undefined', async () => {
+    // Returning `undefined` from the factory must be treated as "no opinion" so a runtime can probe optional
+    // backends without forfeiting the default sink. The Node sink mock should still receive writes in this path.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
+
+    audioSinkState.writes.length = 0;
+    let factoryCalls = 0;
+    await autoPlay(json, {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      writeOutput: () => undefined,
+      createAudioSession: async () => {
+        factoryCalls += 1;
+        return undefined;
+      },
+    });
+
+    expect(factoryCalls).toBe(1);
+    expect(audioSinkState.writes.length).toBeGreaterThan(0);
   });
 
   test('player: manual landmine hit sounds #WAV00 when audio is enabled', async () => {
