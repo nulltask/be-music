@@ -48,7 +48,7 @@ const INDEXED_HEADER_COMMAND =
   /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SPEED|SWBGA)([0-9A-Za-z]{2})$/;
 /**
  * Pre-scans for the BMS `#BASE` directive (the beatoraja base-62 extension switch). Default base is 36; only `#BASE 62`
- * or `#BASE 36` are recognised. We do a one-pass forward scan and stop at the first object data line, mirroring real
+ * or `#BASE 36` are recognized. We do a one-pass forward scan and stop at the first object data line, mirroring real
  * implementations that require `#BASE` to come before any objects.
  */
 const BASE_DIRECTIVE_REGEX = /^#BASE\s+(36|62)\b/i;
@@ -91,7 +91,7 @@ export function parseBms(input: string): BeMusicJson {
   const measureByIndex = new Map<number, MeasureLengthEntry>();
   let hasValidMainBpmHeader = false;
   // Resolve the chart's object-ID radix BEFORE main parsing so that every `#WAVxx` / `#BMPxx` key + every
-  // channel-stream token gets normalised under the right rule. Default is base 36 (case-fold lowercase to uppercase).
+  // channel-stream token gets normalized under the right rule. Default is base 36 (case-fold lowercase to uppercase).
   // `#BASE 62` opts into the beatoraja extension where lowercase `a-z` is a separate ID space.
   const base = detectBmsBase(input);
   if (base === 62) {
@@ -250,7 +250,7 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   if (Number.isFinite(json.bmson.info.total)) {
     json.metadata.total = json.bmson.info.total;
   } else {
-    // bmson 1.0.0 spec — `info.total` default is 100. We pin that here (rather than letting the BMS-flavoured
+    // bmson 1.0.0 spec — `info.total` default is 100. We pin that here (rather than letting the BMS-flavored
     // `LR2_GROOVE_GAUGE_DEFAULT_TOTAL = 160` fallback take over) so a bmson chart that omits `total` runs with the
     // gauge curve its author / the spec assumed.
     json.metadata.total = 100;
@@ -269,7 +269,7 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
 
   const soundChannels = normalizeBmsonSoundChannels(document.sound_channels);
   json.preservation.bmson.soundChannels = soundChannels;
-  // Lane mapping honours `mode_hint` so canonical IIDX / Pop'n bmson dialects route the right keys onto the right BMS
+  // Lane mapping honors `mode_hint` so canonical IIDX / Pop'n bmson dialects route the right keys onto the right BMS
   // channels — the legacy positional fallback would mis-route `beat-7k` x=6/7 onto scratch (`16`) / FREE ZONE (`17`)
   // because those channel digits come next in numeric order.
   const laneMap = buildBmsonLaneMap(soundChannels, json.bmson.info.modeHint);
@@ -444,8 +444,8 @@ function parseJsonDocument(raw: Partial<BeMusicJson>): BeMusicJson {
     .filter((measure) => measure.length > 0)
     .sort((left, right) => left.index - right.index);
   const rawEvents = Array.isArray(raw.events) ? raw.events : [];
-  // When re-parsing a previously-emitted BMS-JSON, honour the chart's recorded base so case-sensitive base-62 IDs don't
-  // get folded back to uppercase. The full `bms` extension is normalised a few lines below; we only need the `base`
+  // When re-parsing a previously-emitted BMS-JSON, honor the chart's recorded base so case-sensitive base-62 IDs don't
+  // get folded back to uppercase. The full `bms` extension is normalized a few lines below; we only need the `base`
   // hint here.
   const rawBmsBase = (rawBms as { base?: unknown } | undefined)?.base;
   const reparseBase: 36 | 62 = rawBmsBase === 62 ? 62 : 36;
@@ -537,7 +537,7 @@ export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsCon
 }
 
 export { decodeBmsText };
-export { canonicaliseBmsCharset, extractDeclaredBmsCharset } from './bms-charset.ts';
+export { canonicalizeBmsCharset, extractDeclaredBmsCharset } from './bms-charset.ts';
 
 export interface DecodedBmsText {
   encoding: 'utf8' | 'shift_jis' | 'euc-jp' | 'utf-16le' | 'utf-16be' | 'iso-8859-1';
@@ -551,9 +551,9 @@ function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
       text: decodeUtf8Text(buffer),
     };
   }
-  // BMS spec — honour `#CHARSET <name>` at the top of the file before falling back to the shift_jis default. The
+  // BMS spec — honor `#CHARSET <name>` at the top of the file before falling back to the shift_jis default. The
   // directive is authored before any non-ASCII text, so a latin1 first-pass (every byte → its 0..255 code point) always
-  // surfaces it. The web `TextDecoder` accepts the same canonical encoding names `canonicaliseBmsCharset` produces
+  // surfaces it. The web `TextDecoder` accepts the same canonical encoding names `canonicalizeBmsCharset` produces
   // (utf-8 / shift_jis / euc-jp / utf-16le / utf-16be / iso-8859-1), so we can route directly through it without an
   // intermediate library.
   const declaredCharset = extractDeclaredBmsCharset(decodeLatin1Text(buffer));
@@ -582,9 +582,9 @@ function decodeLatin1Text(buffer: Uint8Array): string {
 }
 
 function decodeWithDeclaredCharset(buffer: Uint8Array, charset: string): DecodedBmsText | undefined {
-  // BMS `#CHARSET` declares the encoding for the file. We map the canonicalised name onto a `TextDecoder` label and
-  // strip a leading BOM where applicable. `TextDecoder` throws synchronously for unrecognised labels, which we treat as
-  // "fall back to autodetection" — same as a value that didn't canonicalise.
+  // BMS `#CHARSET` declares the encoding for the file. We map the canonicalized name onto a `TextDecoder` label and
+  // strip a leading BOM where applicable. `TextDecoder` throws synchronously for unrecognized labels, which we treat as
+  // "fall back to autodetection" — same as a value that didn't canonicalize.
   try {
     switch (charset) {
       case 'utf-8':
@@ -813,7 +813,7 @@ function forEachLine(input: string, visitor: (line: string) => void): void {
  *
  * We bail out at the first non-header (object) line because real implementations require `#BASE` to come before any
  * object references — applying it retroactively would change which IDs get folded vs. preserved AFTER they were already
- * normalised in earlier headers.
+ * normalized in earlier headers.
  */
 function detectBmsBase(input: string): 36 | 62 {
   let resolved: 36 | 62 = 36;
@@ -1102,9 +1102,9 @@ function applyIndexedNumberValue(values: Record<string, number>, key: string, va
 
 function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
   const migratedExtras: Record<string, string> = {};
-  // Honour `#BASE 62` so any indexed-header keys that landed in `metadata.extras` (typically from a re-parsed JSON
-  // whose upstream parser didn't recognise the directive) get preserved in their authored case rather than folded to
-  // uppercase. The common base-36 case-insensitive path keeps its existing behaviour because `idBase` is 36 by default.
+  // Honor `#BASE 62` so any indexed-header keys that landed in `metadata.extras` (typically from a re-parsed JSON
+  // whose upstream parser didn't recognize the directive) get preserved in their authored case rather than folded to
+  // uppercase. The common base-36 case-insensitive path keeps its existing behavior because `idBase` is 36 by default.
   const idBase = resolveBmsBase(json);
 
   for (const [command, value] of Object.entries(json.metadata.extras ?? {})) {
@@ -1344,7 +1344,7 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   }
 
   const raw = input as Record<string, unknown>;
-  // Honour `#BASE 62` on re-parsed JSON so the indexed maps below (`exRank`, `argb`, `wav`/`bmp`/…) preserve lowercase
+  // Honor `#BASE 62` on re-parsed JSON so the indexed maps below (`exRank`, `argb`, `wav`/`bmp`/…) preserve lowercase
   // keys instead of folding them through the default base-36 path.
   if (raw.base === 62) {
     normalized.base = 62;
@@ -1606,7 +1606,7 @@ function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | und
       return undefined;
     }
     const command = raw.command.toUpperCase();
-    // Honour `commandRaw` when present and actually case-different — that's the base-62 marker. Otherwise drop it to
+    // Honor `commandRaw` when present and actually case-different — that's the base-62 marker. Otherwise drop it to
     // keep the round-tripped JSON minimal.
     const rawCommandValue = typeof raw.commandRaw === 'string' ? raw.commandRaw : undefined;
     const commandRaw = rawCommandValue && rawCommandValue !== command ? rawCommandValue : undefined;

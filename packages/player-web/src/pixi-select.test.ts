@@ -33,7 +33,7 @@ function makeSongEntry(overrides: Partial<BrowserSongEntry>): BrowserBrowseEntry
 describe('matchesSearchQuery', () => {
   it('returns true for any entry on an empty query', () => {
     // Empty-query short-circuit is what lets `currentEntries` pass the unfiltered list through without touching it.
-    // Asserting on it here locks in that behaviour so later changes don't accidentally reintroduce a filter pass on
+    // Asserting on it here locks in that behavior so later changes don't accidentally reintroduce a filter pass on
     // every render.
     expect(matchesSearchQuery(makeSongEntry({ title: 'Whatever' }), '')).toBe(true);
   });

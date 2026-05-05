@@ -173,25 +173,25 @@ export async function loadLr2ThemeSkinsFromFiles(
     track('select', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'select' }))),
     track('result', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'result' }))),
     track('decide', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'decide' }))),
-    // Theme audio (BGM + system sounds) goes through `materialiseLr2ThemeAudio` so the lazy file branch from
+    // Theme audio (BGM + system sounds) goes through `materializeLr2ThemeAudio` so the lazy file branch from
     // `readFilesIntoBytesMap`'s `deferAudio: true` default is unwrapped here. The rest of the pack stays lazy — only
     // the theme's small handful of audio files (BGM + ~6 cues) is forced eager up front, since they need to be ready
     // the moment the user lands on the select scene.
-    track('bgm/select', materialiseLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'select'))),
-    track('bgm/decide', materialiseLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'decide'))),
+    track('bgm/select', materializeLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'select'))),
+    track('bgm/decide', materializeLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'decide'))),
     // `clear` / `fail` / `result` jingles live alongside the LR2 system sound effects (scratch / mine / o-change …)
     // under `LR2files/Sound/<theme>/`, NOT in `LR2files/Bgm/`. The Bgm/ directory is reserved for the looping select /
     // decide tracks — picking from there would silently miss the result audio since LR2 default ships these stems only
     // under Sound/lr2/.
-    track('sound/clear', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'clear'))),
-    track('sound/fail', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'fail'))),
-    track('sound/result', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'result'))),
-    track('sound/scratch', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'scratch'))),
-    track('sound/f-open', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-open'))),
-    track('sound/f-close', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-close'))),
-    track('sound/o-open', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-open'))),
-    track('sound/o-close', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-close'))),
-    track('sound/o-change', materialiseLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-change'))),
+    track('sound/clear', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'clear'))),
+    track('sound/fail', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'fail'))),
+    track('sound/result', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'result'))),
+    track('sound/scratch', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'scratch'))),
+    track('sound/f-open', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-open'))),
+    track('sound/f-close', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-close'))),
+    track('sound/o-open', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-open'))),
+    track('sound/o-close', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-close'))),
+    track('sound/o-change', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-change'))),
   ]);
 
   const playSkins: Lr2PlaySkinMap = {};
@@ -338,7 +338,7 @@ interface Lr2ThemeAudioRef {
   entry: Lr2SkinFileEntry;
 }
 
-async function materialiseLr2ThemeAudio(ref: Lr2ThemeAudioRef | undefined): Promise<Lr2ThemeBgm | undefined> {
+async function materializeLr2ThemeAudio(ref: Lr2ThemeAudioRef | undefined): Promise<Lr2ThemeBgm | undefined> {
   if (!ref) return undefined;
   const bytes = ref.entry instanceof Uint8Array ? ref.entry : new Uint8Array(await ref.entry.arrayBuffer());
   return { path: ref.path, bytes };

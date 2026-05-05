@@ -45,8 +45,8 @@ describe('resolveChartPreviewPath', () => {
   });
 
   test('prefers BMS `#PREVIEW` over bmson `previewMusic` if both fields are populated', () => {
-    // Charts can theoretically be re-serialised from one format to another and end up with both populated; pin the
-    // priority so the behaviour stays predictable.
+    // Charts can theoretically be re-serialized from one format to another and end up with both populated; pin the
+    // priority so the behavior stays predictable.
     const chart = createEmptyJson('bms');
     chart.bms.preview = 'bms.wav';
     chart.bmson.info = { ...chart.bmson.info, previewMusic: 'bmson.wav' };

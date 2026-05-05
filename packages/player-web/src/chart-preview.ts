@@ -411,7 +411,7 @@ function sameTarget(a: ChartPreviewTarget | undefined, b: ChartPreviewTarget | u
 /**
  * Minimal contract for the parts of `AudioBuffer` the leading- silence scan reads. Defined separately so unit tests can
  * feed in a duck-typed object without summoning a real Web Audio AudioBuffer (which doesn't exist in node test envs),
- * and so the helper isn't gratuitously coupled to the DOM type's `Float32Array<ArrayBuffer>` parameterisation.
+ * and so the helper isn't gratuitously coupled to the DOM type's `Float32Array<ArrayBuffer>` parameterization.
  */
 export interface AudibleOffsetBuffer {
   numberOfChannels: number;

@@ -245,7 +245,7 @@ export function renderGrooveGaugeElement(
     // LR2 spec ordering inside each 4-cell frame: offset 0: 表赤 — lit, red (warning zone, below 80 %) offset 1: 表緑 —
     // lit, green (clear zone, ≥ 80 %) offset 2: 裏赤 — unlit, red (warning zone) offset 3: 裏緑 — unlit, green (clear zone)
     // i.e. red marks the *below*-clear-threshold beads, green marks the clear zone — matches the IIDX-style "your gauge
-    // is below 80, you're in danger" colour cue. Earlier the frame ordering was correct but the zone mapping was
+    // is below 80, you're in danger" color cue. Earlier the frame ordering was correct but the zone mapping was
     // inverted; this patch restores `clearZone ? 1 : 0`.
     const offsetWithinFrame = (useActiveCell ? 0 : 2) + (isClearZone ? 1 : 0);
     const cellIndex = frameIndex * 4 + offsetWithinFrame;

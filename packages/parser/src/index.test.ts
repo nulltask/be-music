@@ -577,7 +577,7 @@ describe('parser', () => {
     expect(json.metadata.total).toBe(100);
   });
 
-  test('bmson: negative info.total is normalised to its absolute value per the 1.0.0 spec', () => {
+  test('bmson: negative info.total is normalized to its absolute value per the 1.0.0 spec', () => {
     const json = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -601,7 +601,7 @@ describe('parser', () => {
       }),
     );
 
-    // Spec: "If 0, the lifebar doesn't increase." The abs normalisation must not collapse 0 into the missing-default
+    // Spec: "If 0, the lifebar doesn't increase." The abs normalization must not collapse 0 into the missing-default
     // (100) — the gauge formula sees baseGain = 0/N = 0 and emits no PG/GR rise.
     expect(json.bmson.info.total).toBe(0);
     expect(json.metadata.total).toBe(0);
@@ -1252,7 +1252,7 @@ describe('parser', () => {
     expect(resolved.resources.wav['0A']).toBe('upper.wav');
   });
 
-  test('decodeBmsText: honours #CHARSET UTF-8 even when shift_jis would also parse', () => {
+  test('decodeBmsText: honors #CHARSET UTF-8 even when shift_jis would also parse', () => {
     // The chart is authored in UTF-8 with the directive at the top. Without `#CHARSET`, the auto-detect path would
     // still reach UTF-8 here (no byte hits the 0x80+ shift_jis lead range), so we deliberately include a UTF-8 byte
     // sequence (`éclair` → `é` = 0xC3 0xA9) that decodes garbled under shift_jis. Honoring the directive yields the

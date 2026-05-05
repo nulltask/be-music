@@ -275,7 +275,7 @@ function decompress(src: Uint8Array, expectedSize: number): Uint8Array | undefin
       offset = src[p]! | (src[p + 1]! << 8) | (src[p + 2]! << 16);
       p += 3;
     } else {
-      // Format 3 — reuse the previous offset (no new bytes consumed). Encoder's value-skipping optimisation for streaks
+      // Format 3 — reuse the previous offset (no new bytes consumed). Encoder's value-skipping optimization for streaks
       // of same-offset back-references.
       offset = lastOffset;
     }

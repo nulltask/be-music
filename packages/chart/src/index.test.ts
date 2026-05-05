@@ -137,7 +137,7 @@ describe('chart', () => {
 
   test('resolveChartReferenceBpm prefers #BASEBPM over the chart #BPM', () => {
     // BMS spec — `#BASEBPM` (hitkey BMS Memo) is the chart-author -declared HS-fix reference BPM. When set,
-    // scroll-speed calibration MUST honour it instead of the chart's initial `#BPM`, because that's the explicit author
+    // scroll-speed calibration MUST honor it instead of the chart's initial `#BPM`, because that's the explicit author
     // intent for the scroll feel; `#BPM` is just where the chart starts ticking.
     const json = createEmptyJson();
     json.metadata.bpm = 200;
@@ -151,7 +151,7 @@ describe('chart', () => {
     expect(resolveChartReferenceBpm(json)).toBe(145);
   });
 
-  test('resolveChartReferenceBpm honours the host fallback when nothing is declared', () => {
+  test('resolveChartReferenceBpm honors the host fallback when nothing is declared', () => {
     // Charts that omit both `#BASEBPM` and `#BPM` are rare but legal — typically partial / WIP fixtures. The host can
     // pass a song-list-cached BPM hint.
     const json = createEmptyJson();
@@ -197,7 +197,7 @@ describe('chart', () => {
     const onlyVol = parseBmsExWav('v 0 only-vol.wav');
     expect(onlyVol?.volumeCentibels).toBe(0);
     // Absent flags must remain undefined so the consumer can distinguish "explicitly authored 0" from "not authored at
-    // all" — pan: 0 = centre, vol: 0 cB = unity.
+    // all" — pan: 0 = center, vol: 0 cB = unity.
     expect(onlyVol?.pan).toBeUndefined();
     expect(onlyVol?.frequencyHz).toBeUndefined();
   });
@@ -300,8 +300,8 @@ describe('chart', () => {
   });
 
   test('pickSwitchingBgaFrame cycles a slot list shorter than totalFrames', () => {
-    // Author shipped only two frames but advertised tot=4. The hitkey-style behaviour is to cycle within the authored
-    // slot list while honouring the total-frame loop boundary.
+    // Author shipped only two frames but advertised tot=4. The hitkey-style behavior is to cycle within the authored
+    // slot list while honoring the total-frame loop boundary.
     const swBga = parseBmsSwBga('10:4:1 02 03')!;
     expect(pickSwitchingBgaFrame(swBga, 0)).toBe('02');
     expect(pickSwitchingBgaFrame(swBga, 100)).toBe('03');
@@ -394,7 +394,7 @@ describe('chart', () => {
   });
 
   test('parseBmsArgb decodes the AARRGGBB hex format the parser stores', () => {
-    // Parser-level normalisation lands `#ARGB01 FF000000` here as the bare hex string, since that's the dominant
+    // Parser-level normalization lands `#ARGB01 FF000000` here as the bare hex string, since that's the dominant
     // in-the-wild format. AA = alpha (FF = fully opaque), then RR/GG/BB.
     expect(parseBmsArgb('FF000000')).toEqual({ a: 255, r: 0, g: 0, b: 0 });
     expect(parseBmsArgb('80a0b0c0')).toEqual({ a: 0x80, r: 0xa0, g: 0xb0, b: 0xc0 });
@@ -417,7 +417,7 @@ describe('chart', () => {
     expect(parseBmsArgb('300,-5,9999,128')).toEqual({ a: 255, r: 0, g: 255, b: 128 });
   });
 
-  test('parseBmsWavCmd parses volume / pitch / loop lines and normalises the slot id', () => {
+  test('parseBmsWavCmd parses volume / pitch / loop lines and normalizes the slot id', () => {
     // The trailing token is parsed as a base-10 integer (the spec gives the value in decimal even though the slot id is
     // base-36), so `64` here means literal 64 / 127 ≈ 50% volume.
     expect(parseBmsWavCmd('01 0a 64')).toEqual({ param: 'volume', slot: '0A', value: 64 });
@@ -466,13 +466,13 @@ describe('chart', () => {
     expect(map.has('03')).toBe(false);
   });
 
-  test('collectBmsWavCmdVolumeMultipliers honours later-overrides-earlier', () => {
+  test('collectBmsWavCmdVolumeMultipliers honors later-overrides-earlier', () => {
     // Authors occasionally re-issue a #WAVCMD volume line. LR2 and beatoraja apply the LAST value, so we mirror that.
     const map = collectBmsWavCmdVolumeMultipliers(['01 01 32', '01 01 96']);
     expect(map.get('01')).toBeCloseTo(96 / 127);
   });
 
-  test('parseBmsArgb returns undefined for unrecognised / empty input', () => {
+  test('parseBmsArgb returns undefined for unrecognized / empty input', () => {
     expect(parseBmsArgb('')).toBeUndefined();
     expect(parseBmsArgb('   ')).toBeUndefined();
     expect(parseBmsArgb('not-an-argb')).toBeUndefined();

@@ -12,7 +12,7 @@ import { isMaliciousAssetPath } from './core.ts';
  * - The resolved absolute path is additionally pinned to `baseDir` — even if a candidate slipped through the per-string
  *   check, the post-resolve containment guard refuses to return paths outside the chart bundle.
  *
- * Both layers are defence-in-depth — the per-string predicate catches the obvious shapes before we even spawn a
+ * Both layers are defense-in-depth — the per-string predicate catches the obvious shapes before we even spawn a
  * syscall; the containment check catches anything subtle (symlinks, platform-specific path quirks, future additions to
  * the candidate generator).
  */
@@ -22,7 +22,7 @@ export async function resolveFirstExistingPath(
   signal?: AbortSignal,
 ): Promise<string | undefined> {
   const baseAbsolute = resolve(baseDir);
-  // Trailing-separator normalised form lets the containment check work regardless of whether `baseDir` was passed with
+  // Trailing-separator normalized form lets the containment check work regardless of whether `baseDir` was passed with
   // or without a slash — `/foo` vs `/foo/` both produce `/foo/` for the prefix comparison.
   const baseAbsoluteWithSep = baseAbsolute.endsWith(sep) ? baseAbsolute : baseAbsolute + sep;
   for (const candidate of candidates) {

@@ -166,7 +166,7 @@ async function collectFilesFromEntry(
         (entry as FileSystemFileEntry).file(resolve, reject);
       });
     } catch (error) {
-      // A single file failing to materialise (permission denied, stale entry, network drive disconnect, …) shouldn't
+      // A single file failing to materialize (permission denied, stale entry, network drive disconnect, …) shouldn't
       // kill the entire drop. Log and skip — the resulting collection simply omits that file, matching what real LR2
       // does when an asset is missing.
       log.warn(`skipped (entry.file failed): ${prefix}${entry.name}`, error);
@@ -357,7 +357,7 @@ export async function loadSongCollectionFromFiles(
   const looseFiles = new Map<string, BrowserSongAssetEntry>();
   const looseLabels = new Set<string>();
 
-  // Materialise the iterable so we can report "X / N" totals up front. The callers always pass an array today, so this
+  // Materialize the iterable so we can report "X / N" totals up front. The callers always pass an array today, so this
   // is a no-op spread; it just lets the typing accept any iterable.
   const fileList = [...files];
   onProgress?.({ phase: 'reading', current: 0, total: fileList.length });
@@ -390,7 +390,7 @@ export async function loadSongCollectionFromFiles(
       looseFiles.set(path, bytes);
     }
   }
-  // ZIPs read after the loose pool — there's typically zero or one of them per drop, so serialising here costs nothing.
+  // ZIPs read after the loose pool — there's typically zero or one of them per drop, so serializing here costs nothing.
   for (const file of zipFiles) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     sources.push(createZipSource(file.name, bytes));
@@ -538,9 +538,9 @@ function decodeBms(bytes: Uint8Array): string {
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
     return decodeUtf8(bytes);
   }
-  // BMS spec \u2014 honour `#CHARSET <name>` at the top of the file before falling back to the shift_jis default. The
+  // BMS spec \u2014 honor `#CHARSET <name>` at the top of the file before falling back to the shift_jis default. The
   // first-pass latin1 decode preserves every byte 1:1 so we can scan for the directive without decoding
-  // misinterpretation. Mirrors the parser's `decodeBmsText` flow so a chart's declared encoding is honoured by every
+  // misinterpretation. Mirrors the parser's `decodeBmsText` flow so a chart's declared encoding is honored by every
   // runtime (CLI / TUI / web).
   const declaredCharset = extractDeclaredBmsCharset(new TextDecoder('iso-8859-1').decode(bytes));
   if (declaredCharset) {
@@ -555,8 +555,8 @@ function decodeBms(bytes: Uint8Array): string {
 }
 
 function decodeBmsWithCharset(bytes: Uint8Array, charset: string): string | undefined {
-  // `TextDecoder` accepts the same canonical encoding names `canonicaliseBmsCharset` produces, so the declared charset
-  // can route directly through it. Any unrecognised label throws synchronously; the caller treats that as "fall back to
+  // `TextDecoder` accepts the same canonical encoding names `canonicalizeBmsCharset` produces, so the declared charset
+  // can route directly through it. Any unrecognized label throws synchronously; the caller treats that as "fall back to
   // autodetection".
   try {
     switch (charset) {
@@ -631,7 +631,7 @@ export function resolveChartAsset(
   assetPath: string,
 ): BrowserSongAssetEntry | undefined {
   // bmson 1.0.0 spec MUST: reject malicious paths at the chart-asset entry point. `lookupBytesCaseInsensitive` also
-  // vets each candidate as defence-in-depth, but short-circuiting here means we don't even synthesise the joined
+  // vets each candidate as defense-in-depth, but short-circuiting here means we don't even synthesize the joined
   // `${base}/${assetPath}` candidate for a path the chart never had any business referencing.
   if (isMaliciousAssetPath(assetPath)) {
     return undefined;
@@ -660,7 +660,7 @@ export function resolveChartAsset(
  *
  * BMS charts almost always declare `#WAVxx test.wav`, but real-world archives ship the audio as `.opus` / `.ogg` /
  * `.mp3` to save space. Mirrors the `packages/player` audio loader's "try the alternative codecs before giving up"
- * behaviour, with the order tweaked for the browser case:
+ * behavior, with the order tweaked for the browser case:
  *
  * - 1. `.opus` (highest compression-to-quality ratio) 2. `.ogg` (broadly supported, small) 3. `.mp3` (universal,
  *   slightly larger) 4. `.wav` (always-correct fallback) 5. the original path verbatim (covers `.flac` / `.oga` / etc.)
@@ -737,7 +737,7 @@ function audioFallbackPaths(path: string): string[] {
 /**
  * Image-asset variant of {@link resolveChartAsset} that walks the common BMS image-format extensions before giving up.
  * BMS charts historically declare `#BMPxx test.bmp`, but archives ship the actual graphic as `.png` / `.jpg` / `.gif`
- * more often than as a real Windows bitmap. Mirrors {@link resolveChartAudioAsset}'s codec-walking behaviour, with the
+ * more often than as a real Windows bitmap. Mirrors {@link resolveChartAudioAsset}'s codec-walking behavior, with the
  * order tuned for graphics:
  *
  * - 1. `.png` (lossless, broadly supported, the modern default) 2. `.jpg` / `.jpeg` (lossy, smaller — common for photo

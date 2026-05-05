@@ -2,7 +2,7 @@ import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { BGA, BG, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD, YELLOW } from './pixi-gameplay-constants.ts';
 
 /*
- * Palette: dark grey chrome panels + a few accent tones lifted from `Theme/LR2/Play/ss_7.png`. The LR2 default skin
+ * Palette: dark gray chrome panels + a few accent tones lifted from `Theme/LR2/Play/ss_7.png`. The LR2 default skin
  * paints everything with a single `frame.tga` bitmap; we evoke that with flat-fill rectangles at each `#DST_IMAGE`
  * rectangle the skin authors. Nothing here is invented — every position below has a corresponding `#DST_*` literal in
  * `Theme/LR2/Play/7keys/7_LL0.csv`.
@@ -101,7 +101,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
   // ── #DST_IMAGE,...,238,371,85,36 — decorative band beneath BGA.
   frame.rect(238, 371, 85, 36).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
 
-  // ── #DST_IMAGE,...,320,392,200,31 — centre-bottom bar.
+  // ── #DST_IMAGE,...,320,392,200,31 — center-bottom bar.
   frame.rect(320, 392, 200, 31).fill(PANEL_BG).stroke({ color: PANEL_BORDER, width: 1 });
 
   // ── #DST_IMAGE,...,465,392,144,88 — right square panel (rank / grade letter target).
@@ -117,7 +117,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
   frame.rect(325, 406, 57, 42).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
   frame.rect(409, 406, 57, 42).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
 
-  // ── #DST_IMAGE,...,320,422,151,58 — centre-bottom info card (judge counter container).
+  // ── #DST_IMAGE,...,320,422,151,58 — center-bottom info card (judge counter container).
   frame.rect(320, 422, 151, 58).fill(PANEL_BG).stroke({ color: PANEL_BORDER, width: 1 });
 
   // ── #DST_IMAGE,...,70,322,174,59 — bottom-left BPM / HS popup.
@@ -191,7 +191,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
     }),
   );
 
-  // #DST_NUMBER 266,383,13,11 — combo (centre-bottom, ribbon).
+  // #DST_NUMBER 266,383,13,11 — combo (center-bottom, ribbon).
   layer.addChild(
     makeText(formatScore(runtime.combo, 4), 218, 376, {
       fontSize: 12,
@@ -200,7 +200,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
     }),
   );
 
-  // #DST_NUMBER 374,435,14,10 — centre-bottom progress / extra.
+  // #DST_NUMBER 374,435,14,10 — center-bottom progress / extra.
   layer.addChild(
     makeText(formatScore(runtime.maxCombo, 4), 326, 397, {
       fontSize: 10,

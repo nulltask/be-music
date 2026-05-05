@@ -248,7 +248,7 @@ export interface BmsExtensions {
    * `#BASE` directive — the radix used for object IDs (`#WAVxx`, `#BMPxx`, `#BPMxx`, channel object tokens, …). Default
    * is base 36 (case-insensitive `0-9A-Z`). The value `62` opts into the beatoraja-style base-62 extension where
    * lowercase `a-z` is a separate ID space (so `#WAV0a` and `#WAV0A` reference different sounds). Only `36` and `62`
-   * are recognised; the field is omitted for the default base-36 case.
+   * are recognized; the field is omitted for the default base-36 case.
    */
   base?: 62;
 }
@@ -428,12 +428,12 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
 }
 
 /**
- * Normalises a 2-character BMS object ID for storage. With the default `base = 36`, lowercase `a-z` is folded to
+ * Normalizes a 2-character BMS object ID for storage. With the default `base = 36`, lowercase `a-z` is folded to
  * uppercase so `#WAV0a` and `#WAV0A` collapse to the same key. With `base = 62` (the beatoraja `#BASE 62` extension),
  * case is preserved — they become distinct IDs.
  *
  * Always returns a 2-character string. Single-character / empty / malformed inputs are padded or truncated rather than
- * raising because the parser already filters at the syntactic level; this is the post-syntactic normaliser.
+ * raising because the parser already filters at the syntactic level; this is the post-syntactic normalizer.
  */
 /**
  * Structured form of a `bmson info.subartists[]` entry. The spec authors entries as `"role:name"` strings; consumers
@@ -539,7 +539,7 @@ function normalizeObjectKeyBase62(value: string): string {
     if (code >= 0) {
       return `0${trimmed}`;
     }
-    // Out of base-62 range — fall back to the base-36 normaliser so callers still get a sensible 2-char key.
+    // Out of base-62 range — fall back to the base-36 normalizer so callers still get a sensible 2-char key.
     return `0${trimmed.slice(0, 1).toUpperCase()}`;
   }
   if (trimmed.length === 2) {
@@ -548,7 +548,7 @@ function normalizeObjectKeyBase62(value: string): string {
     if (code0 >= 0 && code1 >= 0) {
       return trimmed;
     }
-    // Mixed valid / invalid — uppercase as a deterministic fallback (matches the base-36 path's behaviour).
+    // Mixed valid / invalid — uppercase as a deterministic fallback (matches the base-36 path's behavior).
     return trimmed.toUpperCase();
   }
   return trimmed.slice(0, 2);
@@ -570,7 +570,7 @@ export function normalizeChannel(value: string): string {
  * `62` is the beatoraja `#BASE 62` extension (case-sensitive `0-9A-Za-z`).
  *
  * Use this everywhere an `event.value` / `#WAVxx`-style key is about to be looked up against `json.resources.wav`,
- * `json.resources.bpm`, etc. — passing the result through `normalizeObjectKey(value, base)` so the lookup honours the
+ * `json.resources.bpm`, etc. — passing the result through `normalizeObjectKey(value, base)` so the lookup honors the
  * chart's authored case-sensitivity.
  *
  * Accepts a partial (`Pick<...>`) chart so callers that only have a `bms` slice (e.g. preservation walks) can use the

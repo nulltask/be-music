@@ -91,7 +91,7 @@ export const BGM_BUS_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
  * compressor.
  *
  * Rationale per parameter: - `threshold = -3`: leaves 3 dB of explicit headroom below 0 dBFS, so even worst-case
- * summing won't clip the destination. - `ratio = 10`: ≈ limiter behaviour. The bus inputs are already processed, so we
+ * summing won't clip the destination. - `ratio = 10`: ≈ limiter behavior. The bus inputs are already processed, so we
  * can be aggressive here without "smashing". - `attack = 0.001`, `release = 0.10`: fast capture, moderate release for
  * transparent peak control. - `knee = 2`: hard knee so the limiter activates decisively at the threshold (no slow
  * onset).
@@ -169,7 +169,7 @@ export interface AudioBusHandle {
   readonly bgmMixer: GainNode;
   /**
    * Final node before `audioContext.destination` — i.e. the stage the playback actually reaches the speakers from.
-   * Exposed so external taps (recording, analysers, level meters) can `connect` to their own destinations without
+   * Exposed so external taps (recording, analyzers, level meters) can `connect` to their own destinations without
    * disrupting the main path.
    *
    * Internally a unity-gain `GainNode` that every mode (`'off'` / `'legacy'` / `'split'`) routes through. Unity gain
@@ -267,11 +267,11 @@ export function buildAudioBus(
   // BMS spec — `#VOLWAV <0..ZZ>` declares the chart's master volume scaling (100 = unity). Implemented as a dedicated
   // gain node placed BEFORE the universal tap so every routing mode (`'off'` / `'legacy'` / `'split'`) feels the
   // attenuation, and the recording tap captures the post-`#VOLWAV` signal — i.e. what the user actually hears.
-  // Initialised to unity so charts that omit `#VOLWAV` (or run outside a chart context) are unaffected.
+  // Initialized to unity so charts that omit `#VOLWAV` (or run outside a chart context) are unaffected.
   const masterGain = audioContext.createGain();
   masterGain.gain.value = 1.0;
   // Universal output tap. Every mode routes through this unity- gain node before reaching `audioContext.destination`,
-  // so external consumers (the recorder, future analysers, level meters) can `connect` to a single stable point and
+  // so external consumers (the recorder, future analyzers, level meters) can `connect` to a single stable point and
   // capture whatever the user is hearing — including `'off'` mode where the makeup gain is bypassed for the audible
   // path. Unity gain means the tap is acoustically transparent: it sums its inputs with no level / phase change, so the
   // "raw signal" intent of `'off'` is preserved.
@@ -279,7 +279,7 @@ export function buildAudioBus(
   tap.gain.value = 1.0;
   // Post-tap fade gain. Splits the "audible" path (which goes to the destination) from the "recording" path (taps off
   // `tap`), so an exit-sequence fade-out can dip the speakers to silence without also pulling the recording mix down.
-  // Initialised to unity so steady-state playback is acoustically transparent.
+  // Initialized to unity so steady-state playback is acoustically transparent.
   const exitFadeGain = audioContext.createGain();
   exitFadeGain.gain.value = 1.0;
   masterGain.connect(tap);
@@ -378,19 +378,19 @@ export function buildAudioBus(
       return stages[stage];
     },
     setMasterGain(value: number): void {
-      // Sanitise pathological inputs — `#VOLWAV` is documented as `0..ZZ` (linear-scale BMS units, 100 = unity, > 100
+      // Sanitize pathological inputs — `#VOLWAV` is documented as `0..ZZ` (linear-scale BMS units, 100 = unity, > 100
       // boosts the chart above unity), but a malformed chart could emit NaN / Infinity / negative numbers that would
       // otherwise propagate into a Web Audio AudioParam and produce silent failure or a runtime exception. Non-finite →
       // unity (no surprise scaling); negative-finite → 0 (silence is the safer interpretation of a negative gain).
-      let sanitised: number;
+      let sanitized: number;
       if (!Number.isFinite(value)) {
-        sanitised = 1.0;
+        sanitized = 1.0;
       } else if (value < 0) {
-        sanitised = 0;
+        sanitized = 0;
       } else {
-        sanitised = value;
+        sanitized = value;
       }
-      masterGain.gain.value = sanitised;
+      masterGain.gain.value = sanitized;
     },
     getMasterGain(): number {
       return masterGain.gain.value;
@@ -400,7 +400,7 @@ export function buildAudioBus(
       // `cancelScheduledValues` discards any in-flight ramp, then `setValueAtTime(currentValue, now)` pins the curve to
       // the present audible level before linearly tweening to the target — chosen `linearRampToValueAtTime` over
       // `exponentialRampToValueAtTime` because the screen overlay animates linearly, and we want the visible / audible
-      // fades to feel synchronised rather than the audio dying off ahead of the screen.
+      // fades to feel synchronized rather than the audio dying off ahead of the screen.
       const now = audioContext.currentTime;
       const param = exitFadeGain.gain;
       const safeTarget = Number.isFinite(targetGain) ? Math.max(0, targetGain) : 0;
@@ -453,7 +453,7 @@ function createCompressor(audioContext: AudioContext, params: CompressorParams):
 
 /**
  * Parses a `?compressor=...` URL search-param value into a valid {@link CompressorMode}, or `undefined` when the value
- * is missing / unrecognised so callers can fall through to their default. The demo passes the URL's
+ * is missing / unrecognized so callers can fall through to their default. The demo passes the URL's
  * `searchParams.get('compressor')` here at mount time.
  */
 export function parseCompressorMode(raw: string | null | undefined): CompressorMode | undefined {

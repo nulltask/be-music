@@ -64,7 +64,7 @@ export class PixiSceneHost {
   /** Set when {@link dispose} runs so subsequent calls short-circuit. */
   private disposed = false;
   /**
-   * Serialises in-flight `setScene` calls. Without it a fast-double-toggle (e.g. ESC-then-immediate-song-pick) could
+   * Serializes in-flight `setScene` calls. Without it a fast-double-toggle (e.g. ESC-then-immediate-song-pick) could
    * interleave a new scene's `enter()` with a previous scene's `exit()`, leaving both attached to the stage.
    */
   private transitionLock: Promise<void> = Promise.resolve();
@@ -175,7 +175,7 @@ export class PixiSceneHost {
 
 /**
  * Reads `?renderer=...` from `window.location.search` and maps it onto a PixiJS `preference` value. Defaults to
- * `'webgpu'`; only the explicit `webgl` form opts out (any other value, missing window object, or unrecognised input
+ * `'webgpu'`; only the explicit `webgl` form opts out (any other value, missing window object, or unrecognized input
  * falls through to the default). PixiJS auto-falls-back to WebGL2 if WebGPU isn't available, so the default is safe
  * across the entire browser matrix.
  *

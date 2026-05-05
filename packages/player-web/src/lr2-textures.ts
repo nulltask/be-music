@@ -31,7 +31,7 @@ export interface VideoTranscodeOptions {
    * nearest-filter scaling.
    *
    * `undefined` / `0` / negative values disable the cap and the source resolution is preserved verbatim (the original
-   * behaviour).
+   * behavior).
    */
   maxLongEdgePx?: number;
   /**
@@ -275,7 +275,7 @@ function buildScaleFilterArg(maxLongEdge: number): string {
  * input, ...])` + `readFile` + `deleteFile` per chunk keeps MEMFS usage bounded by `MAX_CHUNK_BYTES` regardless of
  * total duration.
  *
- * Trade-off: each chunk requires ffmpeg to seek+demux from the input again. Chunk size is sized to amortise this seek
+ * Trade-off: each chunk requires ffmpeg to seek+demux from the input again. Chunk size is sized to amortize this seek
  * over many frames — too small and demux overhead dominates, too large and per-chunk MEMFS pressure blows the wasm
  * heap. 256 MiB lands ~21 s of 512×512@30 (a typical BMS BGA) and ~3 s of 1920×1080@30 (HD outlier) per chunk; both
  * have negligible seek overhead relative to the encode work.
@@ -749,7 +749,7 @@ export async function loadTextureFromBytes(
 }
 
 /**
- * Resolves an LR2 skin asset (image, font sheet, etc.) to a Pixi texture using the skin's bundled file map. Honours the
+ * Resolves an LR2 skin asset (image, font sheet, etc.) to a Pixi texture using the skin's bundled file map. Honors the
  * skin's `#TRANSCOLOR` chroma key.
  */
 export async function loadSkinAssetTexture(skin: Lr2Skin, path: string): Promise<Texture | undefined> {
@@ -797,7 +797,7 @@ async function loadTextureFromBlob(
       finalBitmap.close();
       throw error;
     }
-    // Force nearest-neighbour sampling on every loaded texture. LR2 skin / BGA assets are pixel-art; bilinear filtering
+    // Force nearest-neighbor sampling on every loaded texture. LR2 skin / BGA assets are pixel-art; bilinear filtering
     // blurs them when the design space is scaled up to the canvas. Mirrors the user-requested "disable all
     // interpolation / AA" policy.
     texture.source.scaleMode = 'nearest';

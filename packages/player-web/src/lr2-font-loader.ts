@@ -122,7 +122,7 @@ async function loadFontFromDxa(bytes: Uint8Array, fontPath: string): Promise<Lr2
   const archive = readDxaArchive(bytes);
   if (!archive) {
     // Decode failed — most often because the archive is encrypted (the LR2 default theme bundles use a non-default key
-    // we can't recover) or because the format isn't a DXA V3 we recognise. The renderer falls back to system-font /
+    // we can't recover) or because the format isn't a DXA V3 we recognize. The renderer falls back to system-font /
     // placeholder text so the scene is still legible. Logged once per font path at INFO since this is expected on
     // user-shipped themes; not a warning.
     log.info(`DXA decode failed: ${fontPath} (encrypted or unsupported)`);

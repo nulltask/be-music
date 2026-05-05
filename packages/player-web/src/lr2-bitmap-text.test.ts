@@ -72,7 +72,7 @@ describe('makeLr2BitmapTextSprite', () => {
     expect(root.position.x).toBe(120);
     // The first glyph starts left of the anchor. `B` has a shorter source height than the font base size, so its
     // measured width uses per-glyph scaling; this pins the alignment math that keeps LR2 option labels
-    // centred/right-aligned correctly.
+    // centered/right-aligned correctly.
     expect(inner.children[0]!.position.x).toBe(-44);
   });
 

@@ -16,7 +16,7 @@ import {
   applyDestinationToSprite,
   createCroppedTexture,
   evaluateKeyframes,
-  normaliseRect,
+  normalizeRect,
   pickAnimatedCell,
   renderNumberElement,
 } from './lr2-render.ts';
@@ -690,7 +690,7 @@ export class PixiResultView {
       fieldWidth,
       fieldHeight,
       lineWidth: Math.max(1, Math.abs(dst.w || 2)),
-      // DST tint colours the line.
+      // DST tint colors the line.
       color: ((dst.r << 16) | (dst.g << 8) | dst.b) >>> 0,
       alpha: dst.alpha,
       label: `gaugechart[${chart.side}/idx=${chart.source.index}]`,
@@ -832,15 +832,15 @@ export class PixiResultView {
    * gameplay and select even without a theme bundle.
    */
   /**
-   * Fallback chrome modelled on `Theme/LR2/Result/ss_result.png`:
+   * Fallback chrome modeled on `Theme/LR2/Result/ss_result.png`:
    *
    * - - Top header band with two graph panels (HP zigzag on the left, score graph on the right) flanking a central
    *   "STAGE CLEARED / FAILED" heading. - Mid-left tile column: SCORE / EX SCORE / COMBO totals. - Mid-right tile
-   *   column: EX SCORE / TARGET / BEST EX SCORE / NEXTRANK. - Centre judge-counter ladder: GREAT (highlighted) / GREAT
+   *   column: EX SCORE / TARGET / BEST EX SCORE / NEXTRANK. - Center judge-counter ladder: GREAT (highlighted) / GREAT
    *   / GOOD / BAD / POOR rows with their counts. - Right grade panel showing the LR2 letter grade (AA / AAA). - Bottom
    *   TOTAL SCORE strip spanning the width.
    *
-   * Drawn entirely with primitives so a viewer recognises the silhouette of the LR2 default result skin even with no
+   * Drawn entirely with primitives so a viewer recognizes the silhouette of the LR2 default result skin even with no
    * atlas.
    */
   private renderFallbackPanel(designWidth: number, designHeight: number): void {
@@ -873,7 +873,7 @@ export class PixiResultView {
       .fill({ color: 0x06080c, alpha: 0.85 })
       .stroke({ color: 0x4a3a73, width: 1 });
     chrome.rect(designWidth - 198, 8, 188, 6).fill({ color: 0x281f3e, alpha: 0.7 });
-    // Three score curves at different colours, rising
+    // Three score curves at different colors, rising
     for (let i = 0; i < 18; i += 1) {
       const x = designWidth - 196 + i * 10;
       chrome.rect(x, 78 - i * 1.5, 10, 2).fill(0x56b6f7);
@@ -881,7 +881,7 @@ export class PixiResultView {
       chrome.rect(x, 60 - i * 1.6, 10, 2).fill(0x72d677);
     }
 
-    // ── STAGE CLEARED / FAILED heading ────────────────────── Renders centred between the two top graphs as a chunky
+    // ── STAGE CLEARED / FAILED heading ────────────────────── Renders centered between the two top graphs as a chunky
     // outlined word — LR2 ships a silver/cyan gradient bitmap here; we mimic the silhouette with an outlined Text.
     const cleared = result.cleared;
     const headingText = new Text({
@@ -949,7 +949,7 @@ export class PixiResultView {
       );
     }
 
-    // ── Centre judge counter ladder ───────────────────────── PERFECT / GREAT / GOOD / BAD / POOR with counts. The
+    // ── Center judge counter ladder ───────────────────────── PERFECT / GREAT / GOOD / BAD / POOR with counts. The
     // screenshot highlights the top GREAT row in red.
     const judges: Array<readonly [string, string, number]> = [
       ['GREAT', String(result.score.perfect).padStart(4, '0'), 0xef4444],
@@ -962,7 +962,7 @@ export class PixiResultView {
     for (let i = 0; i < judges.length; i += 1) {
       const jy = judgeY + i * 24;
       const [label, value, fill] = judges[i]!;
-      // Highlighted PG row gets a coloured backplate
+      // Highlighted PG row gets a colored backplate
       if (i === 0) {
         chrome.rect(204, jy, 222, 22).fill({ color: 0x4a1818, alpha: 0.85 }).stroke({ color: 0xef4444, width: 1 });
       } else {
@@ -1208,7 +1208,7 @@ export class PixiResultView {
     }
     if (!this.timerStartedAt.has(151)) {
       // Skip the chart draw — fire timer 151 so the score panel appears immediately. Mirrors LR2's gacha-press
-      // behaviour.
+      // behavior.
       this.timerStartedAt.set(151, performance.now());
       return;
     }
@@ -1227,7 +1227,7 @@ export class PixiResultView {
     }
     if (!texture) return undefined;
     const dst = this.evaluateElementDst(image);
-    const rect = normaliseRect(dst);
+    const rect = normalizeRect(dst);
     if (rect.w <= 0 || rect.h <= 0) return undefined;
     let cropped: Texture;
     if (isLr2SpecialGraphic(path)) {
@@ -1279,7 +1279,7 @@ export class PixiResultView {
   private makeBargraphSprite(element: Lr2BarGraphElement, dst: Lr2DestinationRect, value: number): Sprite | undefined {
     const texture = this.skinTextures.get(element.source.imagePath);
     if (!texture) return undefined;
-    const rect = normaliseRect(dst);
+    const rect = normalizeRect(dst);
     if (rect.w <= 0 || rect.h <= 0) return undefined;
     const ratio = Math.max(0, Math.min(1, value));
     const horizontal = element.muki === 'horizontal';
@@ -1310,7 +1310,7 @@ export class PixiResultView {
   private makeSliderSprite(element: Lr2SliderElement, dst: Lr2DestinationRect, value: number): Sprite | undefined {
     const texture = this.skinTextures.get(element.source.imagePath);
     if (!texture) return undefined;
-    const rect = normaliseRect(dst);
+    const rect = normalizeRect(dst);
     if (rect.w <= 0 || rect.h <= 0) return undefined;
     const ratio = Math.max(0, Math.min(1, value));
     const cropped = createCroppedTexture(texture, {

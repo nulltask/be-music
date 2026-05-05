@@ -32,7 +32,7 @@ export function decodeBmsText(buffer: Buffer): DecodedBmsText {
       text: decodeUtf16BeText(buffer),
     };
   }
-  // Honour an explicit `#CHARSET` directive at the top of the chart before falling into automatic detection. The BMS
+  // Honor an explicit `#CHARSET` directive at the top of the chart before falling into automatic detection. The BMS
   // spec authors `#CHARSET` near the start of the file before any non-ASCII text, so a latin1 first-pass (which maps
   // every byte 1:1 to a code point) reliably surfaces the directive without depending on the autodetect heuristics.
   const declaredCharset = extractDeclaredBmsCharset(decodeLatin1Text(buffer));
@@ -84,7 +84,7 @@ function decodeLatin1Text(buffer: Buffer): string {
 }
 
 /**
- * Maps the canonical charset name produced by {@link canonicaliseBmsCharset} onto the variant `decodeBmsText` returns,
+ * Maps the canonical charset name produced by {@link canonicalizeBmsCharset} onto the variant `decodeBmsText` returns,
  * then runs the decode through `iconv-lite`. `undefined` for unsupported encodings so the caller skips the
  * explicit-charset path and falls back to automatic detection.
  */

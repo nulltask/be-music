@@ -173,8 +173,8 @@ describe('loadLr2ThemeSkinsFromFiles progress events', () => {
     // Each event reports the same total, and the final one matches the running tally — i.e. the bar reaches 100 %.
     expect(last.current).toBe(last.total);
     // Every event after the prelude carries a sub-task label (`play/7K`, `select`, `bgm/decide`, …) — handy for the UI.
-    const labelled = themeEvents.slice(1);
-    expect(labelled.every((event) => typeof event.label === 'string' && event.label.length > 0)).toBe(true);
+    const labeled = themeEvents.slice(1);
+    expect(labeled.every((event) => typeof event.label === 'string' && event.label.length > 0)).toBe(true);
   });
 
   test('survives without an onProgress callback', async () => {

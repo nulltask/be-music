@@ -49,7 +49,7 @@ export interface GameplayRecorderOptions {
   fps?: number;
   /**
    * Bits-per-second target for the video track. Defaults to ~5 Mbps which gives reasonable quality for a 1280×720 LR2
-   * design space without bloating the file. Honoured only when the picked codec / browser respects the hint.
+   * design space without bloating the file. Honored only when the picked codec / browser respects the hint.
    */
   videoBitsPerSecond?: number;
   /**
@@ -248,7 +248,7 @@ export class GameplayRecorder {
 }
 
 // Static import of `ts-ebml` so Vite handles its CJS interop during the initial pre-bundle pass. The previous dynamic
-// import deferred the resolution to a second optimisation pass where the named-export re-export `tools.readVint` would
+// import deferred the resolution to a second optimization pass where the named-export re-export `tools.readVint` would
 // land as `undefined` and crash the recording-stop flow.
 import { Decoder, Reader, tools } from 'ts-ebml';
 
@@ -267,7 +267,7 @@ import { Decoder, Reader, tools } from 'ts-ebml';
  * we need, and a `tools.makeMetadataSeekable` that builds the patched header buffer.
  *
  * Returns a fresh `Blob` of the same MIME type with seekable metadata. Falls back to the original blob (and logs a
- * warning) when the input isn't a recognisable WebM container or the patch fails — better to hand the user the
+ * warning) when the input isn't a recognizable WebM container or the patch fails — better to hand the user the
  * play-only file than to lose the recording outright.
  */
 export async function makeWebmSeekable(blob: Blob): Promise<Blob> {

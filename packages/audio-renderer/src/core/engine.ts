@@ -275,7 +275,7 @@ async function scheduleSampleRenders(params: {
   let maxFrame = Math.max(1, Math.round(tailSeconds * sampleRate));
 
   // BMS spec — `#PATH_WAV` declares a directory prefix the chart's WAVs live under. The sample-path resolver tries
-  // `pathPrefix + samplePath` before the bare path so charts that organise their WAVs under a sub-folder (e.g.
+  // `pathPrefix + samplePath` before the bare path so charts that organize their WAVs under a sub-folder (e.g.
   // `wav/kick.wav` reachable via `#PATH_WAV wav/`) resolve correctly.
   const pathWavPrefix = typeof json.bms.pathWav === 'string' ? json.bms.pathWav : undefined;
   // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides as a 0..127 byte. Pre-collect into a Map<slotKey,

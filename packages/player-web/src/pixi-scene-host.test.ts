@@ -19,7 +19,7 @@ describe('resolveRendererPreference', () => {
     expect(resolveRendererPreference('?renderer=webgl')).toBe('webgl');
   });
 
-  it('falls back to "webgpu" for unrecognised renderer values', () => {
+  it('falls back to "webgpu" for unrecognized renderer values', () => {
     // Strict allow-list — typoed flags shouldn't silently disable WebGPU on a user's machine. They get the default and
     // can fix their URL.
     expect(resolveRendererPreference('?renderer=canvas')).toBe('webgpu');

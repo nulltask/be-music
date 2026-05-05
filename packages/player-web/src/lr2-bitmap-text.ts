@@ -1,7 +1,7 @@
 import { Container, Graphics, Sprite, Texture, Rectangle } from 'pixi.js';
 import type { Lr2DestinationRect, Lr2TextElement } from '@be-music/lr2-skin';
 import { stringToLr2CharCodes, type Lr2BitmapFont, type Lr2FontGlyph } from '@be-music/lr2-skin';
-import { normaliseRect } from './lr2-render.ts';
+import { normalizeRect } from './lr2-render.ts';
 
 /**
  * Loaded LR2 font payload — the parsed `.lr2font` metadata plus one Pixi `Texture` per `#T <gr>` image declaration. The
@@ -57,7 +57,7 @@ export function makeLr2BitmapTextSprite(
   const root = new Container();
   root.label = `lr2-bitmap-text[st=${element.st},font=${element.font}]`;
   if (value.length === 0) return root;
-  const rect = normaliseRect(dst);
+  const rect = normalizeRect(dst);
   const font = loaded.font;
   const baseSize = Math.max(1, font.baseSize);
   const targetHeight = rect.h > 0 ? rect.h : baseSize;
@@ -67,8 +67,8 @@ export function makeLr2BitmapTextSprite(
   // render pass below scales the sprite (`targetHeight / glyph.h`), not via the font-level `scale = targetHeight /
   // baseSize`. The two diverge whenever a glyph's source height differs from `#S` (LR2 spec calls this
   // rare-but-allowed). Mismatch caused the PLAY OPTION values to render right-shifted: layout underestimated their
-  // width, the centring math added too much left padding, and the actual sprites then drew further right than the
-  // centred bounding box.
+  // width, the centering math added too much left padding, and the actual sprites then drew further right than the
+  // centered bounding box.
   let totalAdvance = 0;
   const layout: Array<{
     glyph: Lr2FontGlyph | undefined;
@@ -89,16 +89,16 @@ export function makeLr2BitmapTextSprite(
     totalAdvance += advance;
   }
   // The last glyph contributes its own width but no trailing spacing — strip the spacing from the final advance so
-  // right / centre alignment doesn't push everything off by one.
+  // right / center alignment doesn't push everything off by one.
   if (layout.length > 0) {
     totalAdvance -= font.spacing * scale;
   }
   // LR2 alignment is ANCHOR-based, not box-based: `x` is the alignment-dependent anchor point (left edge / horizontal
-  // centre / right edge), NOT a box origin paired with `w` as the box width.
+  // center / right edge), NOT a box origin paired with `w` as the box width.
   //
   // We position the inner glyph container relative to `(0, 0)` and translate the outer `root` to the anchor point. That
-  // way applying a horizontal `scale.x` for the LR2-spec shrink-to-fit behaviour squeezes around the anchor exactly (no
-  // drift on right- / centre-aligned text), and the per- glyph offsets remain in their native un-squeezed coordinate
+  // way applying a horizontal `scale.x` for the LR2-spec shrink-to-fit behavior squeezes around the anchor exactly (no
+  // drift on right- / center-aligned text), and the per- glyph offsets remain in their native un-squeezed coordinate
   // space — easier to reason about than baking the squeeze into each cursor advance.
   let originX = 0;
   if (element.alignment === 'right') {

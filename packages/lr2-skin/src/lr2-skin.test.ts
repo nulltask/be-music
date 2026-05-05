@@ -731,7 +731,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
 
     it('still falls back to any .lr2skin for kind: play (legacy single-skin bundle)', () => {
       // Some user bundles ship just one CSV and expect the play loader to pick it up regardless of folder layout. Keep
-      // that behaviour for `play` only — it's the fallback path that pre-dates select / result kind support.
+      // that behavior for `play` only — it's the fallback path that pre-dates select / result kind support.
       const files = new Map<string, Uint8Array>([['skin/main.lr2skin', imageCsv('main')]]);
       expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['main.png']);
     });
@@ -803,7 +803,7 @@ describe('loadLr2SkinFromSourceFiles', () => {
         start: 500,
         end: 2000,
       });
-      // DST `(x, y) = (20, 206)` is the LR2 bottom-left anchor; the tint `(0, 255, 0)` is what colours the polyline.
+      // DST `(x, y) = (20, 206)` is the LR2 bottom-left anchor; the tint `(0, 255, 0)` is what colors the polyline.
       // The renderer depends on both surfacing through `keyframes[0]`.
       expect(green?.destination).toMatchObject({ x: 20, y: 206, r: 0, g: 255, b: 0 });
       const red = skin?.gaugeCharts[1];

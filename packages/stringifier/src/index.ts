@@ -92,7 +92,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   >();
   const bpmEvents: Array<{ y: number; bpm: number }> = [];
   const stopEvents: Array<{ y: number; duration: number }> = [];
-  // Honour `#BASE 62` so a chart whose `event.value` is a case-sensitive lowercase ID resolves to the right sample /
+  // Honor `#BASE 62` so a chart whose `event.value` is a case-sensitive lowercase ID resolves to the right sample /
   // BPM / STOP slot when re-emitted as bmson.
   const idBase = resolveBmsBase(json);
 

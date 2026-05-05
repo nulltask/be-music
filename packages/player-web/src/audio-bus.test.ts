@@ -18,7 +18,7 @@ import {
 // tagged nodes with `connect(target)` and `disconnect()`. `disconnect()` (no args) removes every outgoing edge — same
 // semantics as the real spec. - Each compressor exposes `threshold` / `ratio` / `attack` / `release` / `knee`
 // `AudioParam`-like objects whose `value` we can read back to verify the params we wrote into them. - `destination` is
-// a sentinel node (no behaviour) — the bus connects to it as the audible terminator, and tests check via the recorded
+// a sentinel node (no behavior) — the bus connects to it as the audible terminator, and tests check via the recorded
 // edges.
 
 interface FakeAudioParam {
@@ -70,7 +70,7 @@ function createFakeAudioContext(): { context: AudioContext; destination: FakeNod
     if (type === 'gain') {
       // Gain `AudioParam`s expose the minimal subset audio-bus touches for the post-tap fade. The fake records the
       // *final* setpoint (`setValueAtTime` / ramp end) onto `value` so tests can assert "where did this param land?"
-      // without modelling the full schedule timeline.
+      // without modeling the full schedule timeline.
       const param: FakeAudioParam = {
         value: 1,
         cancelScheduledValues() {
@@ -180,7 +180,7 @@ describe('parseCompressorMode', () => {
     expect(parseCompressorMode(' Off ')).toBe('off');
   });
 
-  it('returns undefined for missing / unrecognised flag values', () => {
+  it('returns undefined for missing / unrecognized flag values', () => {
     expect(parseCompressorMode(null)).toBeUndefined();
     expect(parseCompressorMode(undefined)).toBeUndefined();
     expect(parseCompressorMode('')).toBeUndefined();
@@ -228,7 +228,7 @@ describe('buildAudioBus graph topology', () => {
     const bgmMixer = bus.bgmMixer as unknown as FakeNode;
     // No compressor stages on the audible path — the mixers go through the chart-level master-gain (#VOLWAV) stage and
     // the unity-gain tap before reaching the destination. The mid-chain tap matters because external consumers
-    // (recording, analysers) connect there to see the signal even when no compressor is engaged; without it the
+    // (recording, analyzers) connect there to see the signal even when no compressor is engaged; without it the
     // recorder would capture silence whenever the user toggles compression off.
     expect(reachesDestination(keyMixer, destination)).toBe(true);
     expect(reachesDestination(bgmMixer, destination)).toBe(true);
@@ -245,7 +245,7 @@ describe('buildAudioBus graph topology', () => {
   });
 
   it('exposes the tap as a stable outputNode across mode switches', () => {
-    // Recording / analysers connect to `outputNode` once and expect that tap point to keep delivering signal across
+    // Recording / analyzers connect to `outputNode` once and expect that tap point to keep delivering signal across
     // mode flips. Identity stability locks that in.
     const { context } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');
@@ -328,7 +328,7 @@ describe('buildAudioBus graph topology', () => {
     expect(paramSets[3]).toMatchObject(LEGACY_COMPRESSOR_PARAMS);
   });
 
-  it('honours the initial mode argument', () => {
+  it('honors the initial mode argument', () => {
     const { context } = createFakeAudioContext();
     const modes: CompressorMode[] = ['split', 'legacy', 'off'];
     for (const mode of modes) {
@@ -487,7 +487,7 @@ describe('buildAudioBus master gain (#VOLWAV)', () => {
   });
 
   it('admits values above unity (#VOLWAV > 100 boosts the chart)', () => {
-    // Some charts authored on quieter sample sets push above 100 to bring the audible level up — the bus has to honour
+    // Some charts authored on quieter sample sets push above 100 to bring the audible level up — the bus has to honor
     // that.
     const { context } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');

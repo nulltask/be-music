@@ -44,9 +44,9 @@ export interface Lr2DestinationRect {
    * 0 = constant (linear) / 1 = accelerate (ease-in) / 2 = decelerate (ease-out) / 3 = discontinuous (snap).
    */
   acc: number;
-  /** 0..1 normalised from LR2's 0..255 alpha. */
+  /** 0..1 normalized from LR2's 0..255 alpha. */
   alpha: number;
-  /** 0..255 colour tint. 255 means no tint (LR2 only allows reducing channels). */
+  /** 0..255 color tint. 255 means no tint (LR2 only allows reducing channels). */
   r: number;
   g: number;
   b: number;
@@ -80,7 +80,7 @@ export interface Lr2ImageElement {
   destination: Lr2DestinationRect;
   /**
    * Full set of `#DST_*` keyframes in time-order. Use these together with `Lr2DestinationRect.loop` and `time` to
-   * animate the rectangle / colour / alpha across a play session.
+   * animate the rectangle / color / alpha across a play session.
    */
   keyframes: Lr2DestinationRect[];
   /**
@@ -147,7 +147,7 @@ export interface Lr2NowComboElement {
 
 /**
  * `#SRC_JUDGELINE` + `#DST_JUDGELINE` element. LR2 draws a horizontal bar at the judgement line per side (index 0=1P,
- * 1=2P). The skin texture frame itself decides the colour/thickness; we just need to honour the destination rectangle
+ * 1=2P). The skin texture frame itself decides the color/thickness; we just need to honor the destination rectangle
  * so it lands at the correct y-coordinate above the keys.
  */
 export interface Lr2JudgeLineElement {
@@ -276,8 +276,8 @@ export interface Lr2SliderElement {
  *
  * Spec (`docs/LR2SkinHelp.md` lines 10238+): - `index` 0 = green (NORMAL gauge), 1 = red (HARD-style gauge). - `gr` /
  * `x` / `y` / `w` / `h` / `divx` / `divy` / `cycle` / `timer` follow the `#SRC_IMAGE` template — they pick the `#IMAGE`
- * cell whose **tint** colours the line. Most LR2 default skins set `gr = 0`, `w = h = 2` (a 2×2 sample of the skin
- * atlas) so the line carries the atlas pixel's colour. - `fieldWidth` / `fieldHeight` are the polyline drawing area in
+ * cell whose **tint** colors the line. Most LR2 default skins set `gr = 0`, `w = h = 2` (a 2×2 sample of the skin
+ * atlas) so the line carries the atlas pixel's color. - `fieldWidth` / `fieldHeight` are the polyline drawing area in
  * design pixels; the curve maps `progress 0..1 → 0..fieldW` and `value 0..100 → fieldH..0` (LR2 anchors the DST at the
  * bottom-left, so y grows upward in graph space). - `start` / `end` (ms relative to the controlling timer) gate the
  * **animated reveal**: until `start` ms elapsed nothing is drawn, between `start` and `end` the polyline reveals
@@ -467,7 +467,7 @@ export interface Lr2BarBodySource {
 
 /**
  * One song-select bar slot (`#DST_BAR_BODY_OFF` / `_ON` index 0..29). `off` is the inactive layout, `on` is the focused
- * layout. LR2 uses up to 30 slots — typically 10 above the focus, 1 at the centre, 10 below.
+ * layout. LR2 uses up to 30 slots — typically 10 above the focus, 1 at the center, 10 below.
  */
 export interface Lr2BarBodySlot {
   index: number;
@@ -599,7 +599,7 @@ export interface Lr2SkinTiming {
 }
 
 /**
- * Scratch-side / DP-flip behaviour declared by the skin (`#SCRATCH`, `#FLIPSIDE`, `#FLIPRESULT`, `#DISABLEFLIP`). All
+ * Scratch-side / DP-flip behavior declared by the skin (`#SCRATCH`, `#FLIPSIDE`, `#FLIPRESULT`, `#DISABLEFLIP`). All
  * optional — the renderer reads these to decide which side renders the scratch and whether to apply the LR2 "DP flip"
  * mirror.
  *
@@ -681,7 +681,7 @@ export interface Lr2Skin {
   mouseCursors: Lr2MouseCursorElement[];
   /** Scene-timing directives (`#STARTINPUT` / `#FADEOUT` / `#CLOSE` / …). */
   timing: Lr2SkinTiming;
-  /** Scratch-side / DP-flip behaviour declared by the skin. */
+  /** Scratch-side / DP-flip behavior declared by the skin. */
   scratchFlip: Lr2ScratchFlip;
   /** Song-select bar layout. Only populated when the skin defines `#SRC_BAR_BODY` etc. */
   barLayout: Lr2BarLayout;
@@ -698,7 +698,7 @@ export interface Lr2Skin {
   lr2FontPaths: string[];
   /**
    * `#FONT,size,...` declarations in CSV-stream order. See {@link Lr2Skin.lr2FontPaths} for the per-kind indexing
-   * model. Sizes are the only `#FONT` field LR2 honours — the family / weight / style triplet is ignored because LR2
+   * model. Sizes are the only `#FONT` field LR2 honors — the family / weight / style triplet is ignored because LR2
    * always reads the user's SET UP option for those.
    */
   systemFontSizes: number[];
@@ -1080,7 +1080,7 @@ export function loadLr2SkinFromSourceFiles(
         (left, right) =>
           scoreSkinPath(left, kind, variant) - scoreSkinPath(right, kind, variant) || left.localeCompare(right, 'ja'),
       )[0] ??
-    // Last-resort `.csv` lookup mirrors the play-only "single-CSV bundle" behaviour. Skipped for non-play kinds for the
+    // Last-resort `.csv` lookup mirrors the play-only "single-CSV bundle" behavior. Skipped for non-play kinds for the
     // same reason as above.
     (kind === 'play' ? [...sourceFiles.keys()].find((path) => path.toLowerCase().endsWith('.csv')) : undefined);
   if (!entryPath) {
@@ -1417,7 +1417,7 @@ function readLr2Path(
       // Flip should persist into the result scene.
       context.scratchFlip.flipResult = true;
     } else if (command === '#DISABLEFLIP') {
-      // Skin opts out of flip. Mutually exclusive with `#FLIPSIDE`, but we honour whichever directive appears latest.
+      // Skin opts out of flip. Mutually exclusive with `#FLIPSIDE`, but we honor whichever directive appears latest.
       context.scratchFlip.disableFlip = true;
     } else if (command === '#RELOADBANNER') {
       // Banner reloads on cursor move (BACKBMP / BANNER refresh). We always reload anyway, so this just records the
@@ -2227,7 +2227,7 @@ function parseNumberAlignment(value: string | undefined): Lr2NumberAlignment {
 
 // LR2 NOWCOMBO_1P alignment. The spec says 0=left/1=center/2=right but matching the LR2 reference video visually
 // requires NUMBER's encoding (0=right, 1=left, 2=center) — for the LR2 default 7-keys skin (`align=1`) the combo digits
-// sit IMMEDIATELY to the right of the judgement plate (left-aligned at the relative x), not centred on it.
+// sit IMMEDIATELY to the right of the judgement plate (left-aligned at the relative x), not centered on it.
 function parseNowComboAlignment(value: string | undefined): Lr2NumberAlignment {
   switch (toNumber(value, 0)) {
     case 1:
@@ -2258,7 +2258,7 @@ function parseBarGraphMuki(value: string | undefined): Lr2BarGraphMuki {
 
 /**
  * LR2 SRC_SLIDER `muki`: empirically derived from the LR2 default 7-keys skin's song-progress slider
- * (`#SRC_SLIDER,…,muki=2,range=278,type=6`) and the verified behaviour that the indicator travels top → bottom over 278
+ * (`#SRC_SLIDER,…,muki=2,range=278,type=6`) and the verified behavior that the indicator travels top → bottom over 278
  * px starting at y=15. So muki=2 ⇒ "down" — vertical, growing downward.
  *
  * 0=right (horizontal default), 1=left, 2=down, 3=up.
@@ -2571,12 +2571,12 @@ function parseBarRivalKind(value: string | undefined): Lr2BarRivalKind | undefin
 }
 
 /**
- * Finalises `#SRC_GAUGECHART_*` / `#DST_*` pairs into the runtime-friendly element shape. Mirrors
+ * Finalizes `#SRC_GAUGECHART_*` / `#DST_*` pairs into the runtime-friendly element shape. Mirrors
  * `createSliderElements`' structure so the failure modes (unmatched DST, missing image) surface the same way: silently
  * drop the entry, no throw.
  *
  * `imagePath` resolution differs slightly from sliders: gauge-chart SRCs in real LR2 default skins use `gr = 0` (the
- * main atlas), but the **tint** drives the line colour rather than the sampled pixel — even so we still pin a path for
+ * main atlas), but the **tint** drives the line color rather than the sampled pixel — even so we still pin a path for
  * `loadSkinAssetTexture` fallback consumers, falling back to the first declared `#IMAGE` when `gr` indexes outside the
  * table.
  */

@@ -18,12 +18,12 @@ import type { Lr2DestinationRect, Lr2NumberElement } from '@be-music/lr2-skin';
  *
  * ```
  *   7 8 9   = top-left / top / top-right
- *   4 5 6   = mid-left / centre / mid-right
+ *   4 5 6   = mid-left / center / mid-right
  *   1 2 3   = bot-left / bot / bot-right
- *   0       = centre (alias of 5)
+ *   0       = center (alias of 5)
  * ```
  *
- * Pixi's anchor is normalised (0..1), so we map each numpad position onto the corresponding `(anchorX, anchorY)`. The
+ * Pixi's anchor is normalized (0..1), so we map each numpad position onto the corresponding `(anchorX, anchorY)`. The
  * sprite's screen position is shifted by the same fraction so the painted rectangle stays put — only the rotation pivot
  * moves.
  */
@@ -134,7 +134,7 @@ export function createCroppedTexture(
  * (e.g. h=-321 at y=321 means a 321-tall rect whose bottom edge sits at y=321). PixiJS expects positive extents
  * anchored at the top-left, so we convert here.
  */
-export function normaliseRect(rect: { x: number; y: number; w: number; h: number }): {
+export function normalizeRect(rect: { x: number; y: number; w: number; h: number }): {
   x: number;
   y: number;
   w: number;
@@ -161,7 +161,7 @@ export function normaliseRect(rect: { x: number; y: number; w: number; h: number
  *   forever (used for one-shot effects like bomb sprites). - `loop >= finalTime`: behaves like a clamp (would wrap back
  *   to a point that isn't earlier than the last keyframe). - Otherwise: wrap to `loop + ((elapsed - loop) % (finalTime
  *   - loop))`. LR2's `loop` is the **time the animation jumps back to**, not a cycle length.
- * - **Between two keyframes A (time=tA) and B (time=tB)**: position, size, colour, alpha and angle are linearly
+ * - **Between two keyframes A (time=tA) and B (time=tB)**: position, size, color, alpha and angle are linearly
  *   interpolated by `(t - tA) / (tB - tA)`. Discrete attributes (blend, filter, center, timer, ops, op4) come from the
  *   **target** keyframe so visibility / blending changes cleanly at boundaries.
  */
@@ -177,7 +177,7 @@ export function evaluateKeyframes(keyframes: ReadonlyArray<Lr2DestinationRect>, 
     // Past the final keyframe — decide between hide vs. hold vs. real loop.
     //
     // Per `docs/LR2SkinHelp.md` line 629: "loop=-1の場合のみ、動作が終了した後にパーツが非表示になります" = "with loop=-1 only, the part becomes
-    // invisible after the animation finishes". So we synthesise a hidden version of the last keyframe (alpha=0) —
+    // invisible after the animation finishes". So we synthesize a hidden version of the last keyframe (alpha=0) —
     // preserves position / size for anything that still queries them, but makes the element disappear visually. The LR2
     // default skin's "DONE" plate uses exactly this idiom: 2 alpha=1 keyframes spanning 500 ms with loop=-1, so it
     // flashes briefly then vanishes.
@@ -223,7 +223,7 @@ export function evaluateKeyframes(keyframes: ReadonlyArray<Lr2DestinationRect>, 
 }
 
 /**
- * Applies the `acc` easing curve to a normalised progress value `u` (0..1). Per `docs/LR2SkinHelp.md` line 509+:
+ * Applies the `acc` easing curve to a normalized progress value `u` (0..1). Per `docs/LR2SkinHelp.md` line 509+:
  *
  * - **0** — linear (constant velocity).
  * - **1** — accelerate (ease-in, `u²`).
@@ -276,7 +276,7 @@ function interpolateKeyframe(a: Lr2DestinationRect, b: Lr2DestinationRect, t: nu
  * (0,0). Frames advance row-major (left-to-right, top-to-bottom), matching LR2's playback order.
  *
  * The optional `loop` parameter is reserved for callers that need to pin the cell at its final frame (used by one-shot
- * effects whose SRC happens to have `cycle > 0`); pass `-1` to opt in. The default behaviour cycles cells continuously
+ * effects whose SRC happens to have `cycle > 0`); pass `-1` to opt in. The default behavior cycles cells continuously
  * per LR2 spec — SRC cycling and DST keyframe looping are independent in LR2, so passing `dst.loop` here would conflate
  * the two and break elements like the LR2 default skin's "DONE" plate (which is gated on op 81 + timer 40, has
  * `dst.loop=-1` for "no DST keyframe loop", but whose SRC frames are an animated blink that must keep cycling).

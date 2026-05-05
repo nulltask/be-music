@@ -7,7 +7,7 @@ export type BrowserSongSourceKind = 'directory' | 'zip' | 'files';
  *
  * - **`Uint8Array`** — bytes already in memory. Used for small files that are accessed synchronously by parsers / image
  *   decoders (`.bms`, `.bmson`, `.bmp`, `.png`, `.tga`, `.csv`, `.dxa`, `.lr2skin`, …).
- * - **`File`** — lazy reference. The bytes haven't been materialised yet and will be read on demand via
+ * - **`File`** — lazy reference. The bytes haven't been materialized yet and will be read on demand via
  *   `loadAssetBytes`. Used for audio (`.wav`, `.ogg`, `.mp3`, `.opus`, `.flac`, `.oga`) where a single drop can carry
  *   gigabytes of WAV samples that are only needed for the currently-playing chart.
  *

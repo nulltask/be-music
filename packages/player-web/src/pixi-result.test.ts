@@ -219,7 +219,7 @@ describe('computeResultOps', () => {
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_5_10)).toBe(true);
     });
 
-    it('honours bmson modeHint over channel detection', () => {
+    it('honors bmson modeHint over channel detection', () => {
       const ops = computeResultOps(makeResult({ modeHint: 'beat-9k' }), makeSkin());
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_9)).toBe(true);
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_9)).toBe(true);

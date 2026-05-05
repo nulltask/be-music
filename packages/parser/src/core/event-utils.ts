@@ -24,7 +24,7 @@ export function normalizeBmsonNoteLength(value: unknown): number | undefined {
 }
 
 /**
- * Tokenises a BMS channel-object stream (the body of e.g. `#xxxYY:ZZ...`) into 2-character object IDs.
+ * Tokenizes a BMS channel-object stream (the body of e.g. `#xxxYY:ZZ...`) into 2-character object IDs.
  *
  * - The total `tokenCount` (= denominator) counts EVERY 2-char slot including `00` placeholders — needed to compute
  *   fractional beat positions.

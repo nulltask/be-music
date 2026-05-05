@@ -3,7 +3,7 @@ import {
   applyDestinationToSprite,
   createCroppedTexture,
   evaluateKeyframes,
-  normaliseRect,
+  normalizeRect,
   pickAnimatedCell,
 } from './lr2-render.ts';
 import {
@@ -114,7 +114,7 @@ export interface PixiDecideViewOptions {
   onContinue?: () => void;
   /**
    * Fired once when the user presses Escape to bail on the splash. Hosts wire this to "go back to song select". Escape
-   * always works (even before `#STARTINPUT` elapses) — matches LR2's bail-out behaviour. Falls back to `onContinue`
+   * always works (even before `#STARTINPUT` elapses) — matches LR2's bail-out behavior. Falls back to `onContinue`
    * when not provided so a host that doesn't differentiate still gets a callback.
    */
   onCancel?: () => void;
@@ -378,14 +378,14 @@ export class PixiDecideView {
    * skinless demos still feel cohesive.
    */
   /**
-   * Fallback chrome modelled on `Theme/LR2/Decide/ss_decide.png`:
+   * Fallback chrome modeled on `Theme/LR2/Decide/ss_decide.png`:
    *
-   * - - Top-left difficulty stamp: small `DIFFICULTY:` label and a large coloured difficulty name (HYPER / NORMAL /
-   *   etc.). - Centre horizontal band carrying the chart title (large italic-feeling text), sub-title beneath, artist
+   * - - Top-left difficulty stamp: small `DIFFICULTY:` label and a large colored difficulty name (HYPER / NORMAL /
+   *   etc.). - Center horizontal band carrying the chart title (large italic-feeling text), sub-title beneath, artist
    *   underneath. - Bottom radial vignette evoking the stage-file under-glow.
    *
    * Drawn entirely with primitives — a viewer comparing this to the LR2 default decide screenshot should immediately
-   * recognise the same layout silhouette.
+   * recognize the same layout silhouette.
    */
   private renderFallbackPanel(designWidth: number, designHeight: number): void {
     const target = this.target;
@@ -400,7 +400,7 @@ export class PixiDecideView {
         .rect(0, t * designHeight, designWidth, designHeight / 6)
         .fill({ color: 0x10203c, alpha: 0.18 - i * 0.022 });
     }
-    // Centre soft-blue glow — evokes the stagefile lit from below.
+    // Center soft-blue glow — evokes the stagefile lit from below.
     for (let i = 0; i < 5; i += 1) {
       const inset = 60 + i * 20;
       chrome
@@ -416,7 +416,7 @@ export class PixiDecideView {
       .fill({ color: 0x06080c, alpha: 0.7 })
       .stroke({ color: 0x6a3aa0, width: 2, alpha: 0.85 });
 
-    // ── Centre horizontal band (title / sub-title / artist) ─
+    // ── Center horizontal band (title / sub-title / artist) ─
     const bandY = 150;
     const bandH = 156;
     chrome.rect(0, bandY, designWidth, bandH).fill({ color: 0x040810, alpha: 0.85 });
@@ -462,7 +462,7 @@ export class PixiDecideView {
     artistText.position.set(42, bandY + 88);
     this.fallbackLayer.addChild(artistText);
 
-    // Difficulty name overlay — drawn as text on top of the top-left stamp rectangle. Picks a colour from the
+    // Difficulty name overlay — drawn as text on top of the top-left stamp rectangle. Picks a color from the
     // difficulty index with a violet bias for HYPER (the screenshot's reference).
     const difficultyText = new Text({
       text: 'HYPER',
@@ -514,7 +514,7 @@ export class PixiDecideView {
     }
     if (!texture) return undefined;
     const dst = this.evaluateElementDst(image);
-    const rect = normaliseRect(dst);
+    const rect = normalizeRect(dst);
     if (rect.w <= 0 || rect.h <= 0) return undefined;
     let cropped: Texture;
     if (isLr2SpecialGraphic(path)) {

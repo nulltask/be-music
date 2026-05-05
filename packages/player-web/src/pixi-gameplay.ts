@@ -55,7 +55,7 @@ import {
   applyDestinationToSprite,
   createCroppedTexture,
   evaluateKeyframes,
-  normaliseRect,
+  normalizeRect,
   pickAnimatedCell,
   renderNumberElement,
 } from './lr2-render.ts';
@@ -224,7 +224,7 @@ export interface GaugeHistorySample {
 
 /**
  * One sample of the EX-score polyline. Same shape as {@link GaugeHistorySample} but the value is an absolute EX-score
- * count (0..`total*2`). The result scene normalises by the chart's theoretical max when drawing.
+ * count (0..`total*2`). The result scene normalizes by the chart's theoretical max when drawing.
  */
 export interface ScoreHistorySample {
   progress: number;
@@ -262,7 +262,7 @@ export interface PixiGameplayViewOptions {
    * buffer). The snapshot is the same payload {@link PixiGameplayView.getResultData} returns — passed eagerly so the
    * host doesn't have to reach back into the soon-to-be-disposed gameplay view to read it. When this hook is supplied,
    * `onExit` is **not** called for natural completion; `onExit` is reserved for the user-initiated escape (ESC). Hosts
-   * that don't want a result screen can leave this unset and rely on `onExit` for both paths (legacy behaviour).
+   * that don't want a result screen can leave this unset and rely on `onExit` for both paths (legacy behavior).
    */
   onChartFinished?: (result: PixiGameplayResultData) => void;
   /** When true, every note is auto-judged as PERFECT at its scheduled time. */
@@ -271,7 +271,7 @@ export interface PixiGameplayViewOptions {
    * When true, the gameplay automatically pauses on tab visibility change (`document.hidden`) and window blur, and
    * auto-resumes on focus / `pageshow`. When false (the default), the play scene keeps running in the background —
    * convenient for capturing recordings while another window holds focus, and matches the "no surprise pauses"
-   * behaviour most rhythm-game hosts ship.
+   * behavior most rhythm-game hosts ship.
    */
   autoPauseOnBlur?: boolean;
   /**
@@ -369,7 +369,7 @@ export interface PixiGameplayViewOptions {
    *   aggressively for transient peaks, BGM bus tuned for musical glue, master for clip protection. Prevents BGM
    *   ducking under dense input bursts (a known failure mode of the legacy single-bus compressor).
    * - `'legacy'` — original single-compressor topology, kept for A/B comparison via the demo's `?compressor=legacy` URL
-   *   flag so behaviour can be diff-tested directly.
+   *   flag so behavior can be diff-tested directly.
    *
    * `'off'` is reachable via `audioCompressor: false` rather than being a valid value here — `audioCompressor` is the
    * user- facing toggle, this option only chooses **which** compressed topology to use when compression is on.
@@ -392,7 +392,7 @@ export interface PixiGameplayViewOptions {
    * scaling because the BGA layer is rendered into a 256-px spec canvas.
    *
    * `undefined` / `0` / negative values disable the cap and the source resolution passes through unchanged (the default
-   * behaviour).
+   * behavior).
    */
   bgaTranscodeMaxLongEdgePx?: number;
   /**
@@ -426,7 +426,7 @@ export interface PixiGameplayViewOptions {
   /**
    * Single-note visibility after judgement.
    *
-   * - `'HIDE'` (default) — judged notes vanish at the judgement instant. Matches the LR2 / beatoraja default behaviour
+   * - `'HIDE'` (default) — judged notes vanish at the judgement instant. Matches the LR2 / beatoraja default behavior
    *   and keeps the playfield visually clean during dense passages.
    * - `'KEEP_SCROLLING'` — judged notes stay on screen and keep scrolling until their position crosses the judgement
    *   line. Equivalent to beatoraja's `LANEEFFECT ON` mode; useful as a timing-learning aid because the player can see
@@ -510,7 +510,7 @@ export class PixiGameplayView {
    * (kept for metadata stability), but every gameplay-time consumer — note extraction, timing resolver, sample
    * triggers, BGA timeline, measure walk — reads `resolvedChart` so the rolled random branches actually take effect.
    * Without this step BMS charts using `#RANDOM` / `#SETRANDOM` / `#SWITCH` either omit every conditional section or
-   * include them all (depending on parser default), neither of which matches LR2 behaviour.
+   * include them all (depending on parser default), neither of which matches LR2 behavior.
    */
   private resolvedChart: BeMusicJson | undefined;
   /**
@@ -532,7 +532,7 @@ export class PixiGameplayView {
   /**
    * Landmine notes (channels D1-D9 / E1-E9). Sorted by `seconds` for the same binary-search-by-time access pattern the
    * playable-note judge loop uses. Hit-test runs in `judge()` BEFORE the playable-note check so a press that lands
-   * inside the BAD window of both a mine and a regular note prefers the mine — matches LR2 behaviour where the mine
+   * inside the BAD window of both a mine and a regular note prefers the mine — matches LR2 behavior where the mine
    * explodes first.
    */
   private mineNotes: RuntimeMineNote[] = [];
@@ -542,7 +542,7 @@ export class PixiGameplayView {
    * sample. The extractor already remaps `3x → 1x` / `4x → 2x` so each entry's `channel` lines up with the playable
    * lane it shares.
    *
-   * Populated only when {@link PixiGameplayViewOptions.showInvisibleNotes} is on — this is a debug visualisation, not
+   * Populated only when {@link PixiGameplayViewOptions.showInvisibleNotes} is on — this is a debug visualization, not
    * gameplay state. The renderer paints a thin green bar per entry so the chart author's hidden keysound layout is
    * legible alongside the regular note stream.
    */
@@ -564,8 +564,8 @@ export class PixiGameplayView {
    */
   private turntableAngle: Record<'1' | '2', number> = { '1': 0, '2': 0 };
   /**
-   * Initialised in the constructor body to the baseline so the disc spins from t=0 even before any input arrives. Not
-   * initialised inline because `private static readonly` fields can't be safely referenced at instance-field-init time
+   * Initialized in the constructor body to the baseline so the disc spins from t=0 even before any input arrives. Not
+   * initialized inline because `private static readonly` fields can't be safely referenced at instance-field-init time
    * across all TS targets.
    */
   private turntableVelocity: Record<'1' | '2', number>;
@@ -609,7 +609,7 @@ export class PixiGameplayView {
    * Cached `resolveChartPlayVariant` result for the loaded chart. Used to pick the right `play_<variant>.lr2skin`, the
    * right keymode op (160..164), and to switch lane-channel detection to the PMS layout (`17` is a lane note, `22..25`
    * are 1P-side lanes) instead of the default IIDX layout. Defaults to `'7'` before any chart is loaded so the existing
-   * 7K-flavoured fallbacks keep behaving as before for skinless / pre-prepare code paths.
+   * 7K-flavored fallbacks keep behaving as before for skinless / pre-prepare code paths.
    */
   private chartPlayVariant: '5' | '7' | '9' | '10' | '14' = '7';
   private laneX = new Map<string, { x: number; w: number; top: number; bottom: number }>();
@@ -735,11 +735,11 @@ export class PixiGameplayView {
    * Per-side judge / combo snapshots. Each side captures the verdict text, the chart-time at which the plate should
    * disappear, and the running combo *at the moment that side's note was judged*. The DP renderer reads these directly
    * so the 1P assembly displays the combo at the latest 1P hit and the 2P assembly displays the combo at the latest 2P
-   * hit — they only stay synchronised on charts where every press triggers identical-timing hits on both sides (a
+   * hit — they only stay synchronized on charts where every press triggers identical-timing hits on both sides (a
    * coincidence, not the rule).
    *
    * SP charts only ever populate the `'1P'` slot, so the global `lastJudge` / `lastJudgeUntil` aliases above keep their
-   * existing behaviour for the fallback `renderText` path.
+   * existing behavior for the fallback `renderText` path.
    */
   private judgeSideState: Record<'1P' | '2P', { judge: JudgeKind | ''; until: number; combo: number }> = {
     '1P': { judge: '', until: 0, combo: 0 },
@@ -855,7 +855,7 @@ export class PixiGameplayView {
    * Set to `true` once the player has hit every chart note without a single BAD / POOR break. Latches on first
    * achievement so the LR2 FC timers (48 / 49) only fire once per play — replaying the chart resets this in
    * `prepareSong`. Note: AUTO mode reaches FC the moment the last note's auto-PERFECT lands, so the FC presentation
-   * also plays during autoplay sessions (the player specifically asked for that behaviour).
+   * also plays during autoplay sessions (the player specifically asked for that behavior).
    */
   private fullComboFired = false;
   /**
@@ -1049,7 +1049,7 @@ export class PixiGameplayView {
     this.root.mask = this.designClipMask;
     this.shutterLayer.label = 'gameplay/shutter';
     this.sceneRoot.addChild(this.viewportBackground, this.root);
-    // Attach to the host's already-initialised stage. The host owns the `Application` (canvas, ticker, WebGL context) —
+    // Attach to the host's already-initialized stage. The host owns the `Application` (canvas, ticker, WebGL context) —
     // we just contribute our scene-graph subtree.
     host.app.stage.addChild(this.sceneRoot);
     window.addEventListener('keydown', this.handleKeyDown);
@@ -1209,7 +1209,7 @@ export class PixiGameplayView {
    * (`#STARTINPUT` / `#LOADSTART` / `#LOADEND` / `#FADEOUT` / `#CLOSE`) — see `mount()` for the full mapping.
    *
    * `undefined` offset → fall back to "fire immediately" so a skin that omits the directive still has the timer
-   * available to elements that gated on it (matches the pre-skin-timing default behaviour).
+   * available to elements that gated on it (matches the pre-skin-timing default behavior).
    */
   private seedSceneStageTimer(timer: number, offsetMs: number | undefined): void {
     const safeOffset = offsetMs === undefined ? 0 : Math.max(0, offsetMs);
@@ -1256,7 +1256,7 @@ export class PixiGameplayView {
   }
 
   /**
-   * Toggles the auto-pause-on-blur behaviour at runtime. Future `visibilitychange` / `blur` events will only auto-pause
+   * Toggles the auto-pause-on-blur behavior at runtime. Future `visibilitychange` / `blur` events will only auto-pause
    * when `enabled` is true; the auto-RESUME path stays unconditional so a user who blurs (auto-pauses) then disables
    * this option still gets back to play state on the next focus.
    *
@@ -1494,7 +1494,7 @@ export class PixiGameplayView {
     const extracted = extractTimedNotes(resolved, {
       includeLandmine: true,
       // Always extract the invisible / keysound array even when the overlay is off — so the lil-gui toggle can flip the
-      // visualisation on mid-song without a chart restart. The cost is purely memory (one sorted array of 3x / 4x
+      // visualization on mid-song without a chart restart. The cost is purely memory (one sorted array of 3x / 4x
       // events); the per-frame render loop is gated on `showInvisibleNotes` and bails immediately when the flag is off.
       includeInvisible: true,
       inferBmsLnTypeWhenMissing: true,
@@ -1593,7 +1593,7 @@ export class PixiGameplayView {
       '1P': { judge: '', until: 0, combo: 0 },
       '2P': { judge: '', until: 0, combo: 0 },
     };
-    // Result-screen polyline histories. Seeding waits until after `gaugeState` is reinitialised below — at this point
+    // Result-screen polyline histories. Seeding waits until after `gaugeState` is reinitialized below — at this point
     // we'd still be reading the **previous** play's gauge value.
     this.gaugeHistory = [];
     this.scoreHistory = [];
@@ -1744,7 +1744,7 @@ export class PixiGameplayView {
     const next = this.gaugeState.current;
     if (next > previous) {
       // Gauge increase — stamp timer 42 (1P rise) and schedule a deferred clear at the skin's authored span (or the
-      // fallback). Re-stamping is the natural behaviour for back- to-back increases: cancel the in-flight cleanup so
+      // fallback). Re-stamping is the natural behavior for back- to-back increases: cancel the in-flight cleanup so
       // the flash restarts cleanly each time.
       if (this.gaugeIncreaseTimeout !== undefined) {
         window.clearTimeout(this.gaugeIncreaseTimeout);
@@ -1834,7 +1834,7 @@ export class PixiGameplayView {
     this.runtimeOps.add(meta?.backBmp ? 195 : 194);
     // BGA size: op 30 = normal, op 31 = extend. Defer to the CUSTOMOPTION default if the skin already declared one
     // (rare — most skins leave this to the runtime); otherwise pick from `options.bgaSize` so the LR2 panel-1 BGA size
-    // toggle (`#SRC_BUTTON,type=73`) is honoured.
+    // toggle (`#SRC_BUTTON,type=73`) is honored.
     if (!this.runtimeOps.has(30) && !this.runtimeOps.has(31)) {
       this.runtimeOps.add(this.options.bgaSize === 'EXTEND' ? 31 : 30);
     }
@@ -1937,7 +1937,7 @@ export class PixiGameplayView {
 
   private isTimerActive(timer: number): boolean {
     // Explicit seed = active. Scene-stage timers (0 / 1 / 40 / 41) are seeded by `mount()` based on the skin's LR2
-    // timing directives, so checking `timerStartedAt` here honours their actual fire moment — e.g. timer 40 (READY)
+    // timing directives, so checking `timerStartedAt` here honors their actual fire moment — e.g. timer 40 (READY)
     // stays inactive until `#LOADSTART + #LOADEND` ms have elapsed, and the LR2 default skin's title plate + loading
     // ring (anchored to timer 40) only paint from that moment onward, just as the LR2 reference video shows them
     // appearing mid-intro rather than at scene mount.
@@ -2144,7 +2144,7 @@ export class PixiGameplayView {
 
   private loadSkinAssetTexture(skin: Lr2Skin, path: string): Promise<Texture | undefined> {
     // Delegates to the shared loader in `lr2-textures.ts`. For `.tga` assets it routes through the bundled TGA decoder;
-    // everything else goes via `createImageBitmap`. Honours the skin's `#TRANSCOLOR`.
+    // everything else goes via `createImageBitmap`. Honors the skin's `#TRANSCOLOR`.
     return loadSkinAssetTexture(skin, path);
   }
 
@@ -2155,7 +2155,7 @@ export class PixiGameplayView {
     // `latencyHint: 'interactive'` asks the browser for the lowest round-trip latency it can offer — at the cost of CPU
     // efficiency vs `'playback'`. For a rhythm game the trade-off is right: keypress → sample audible delay is the
     // player's primary perception of "responsiveness", and we'd rather burn a few extra cycles than land samples on a
-    // 20–30 ms late. Browsers that don't honour the hint silently ignore it.
+    // 20–30 ms late. Browsers that don't honor the hint silently ignore it.
     this.audioContext = new AudioContext({ latencyHint: 'interactive' });
     // AudioContext starts in `suspended` state on most browsers until a user gesture, and the *first* `node.start()`
     // call on a still-suspended context can sit in the queue for ~30ms while the browser ramps the audio graph up.
@@ -2166,7 +2166,7 @@ export class PixiGameplayView {
     // Surface the device-reported latency so the player has visibility into how much "free" delay the audio stack is
     // adding before our schedule even begins. `baseLatency` is "how late the audio graph commits a buffer" (driver /
     // hardware buffer headroom); `outputLatency` (when populated) tracks the OS audio queue. Combined they form the
-    // floor of "press → hear" latency we can't optimise away from JS.
+    // floor of "press → hear" latency we can't optimize away from JS.
     const ctx = this.audioContext;
     log.info('AudioContext ready', {
       sampleRate: ctx.sampleRate,
@@ -2194,7 +2194,7 @@ export class PixiGameplayView {
     // BMS spec — `#VOLWAV <0..ZZ>` declares the chart's master volume scaling (100 = unity, 80 = 80 % loud, > 100
     // boosts). Applying it here means every sample triggered for THIS chart (key bus, BGM bus, every compressor mode)
     // flows through the single dedicated stage in the bus and the recorder captures the post-`#VOLWAV` signal, matching
-    // the CLI renderer's `resolveChartVolWavGain` behaviour. Charts that omit `#VOLWAV` parse to `undefined` and are
+    // the CLI renderer's `resolveChartVolWavGain` behavior. Charts that omit `#VOLWAV` parse to `undefined` and are
     // left at unity.
     const volWavRaw = chart.bms.volWav;
     if (typeof volWavRaw === 'number' && Number.isFinite(volWavRaw) && volWavRaw >= 0) {
@@ -2410,7 +2410,7 @@ export class PixiGameplayView {
 
   /**
    * Auto-pause when the document tab / window goes to the background and auto-resume when it comes back to the
-   * foreground (matching the LR2 desktop client behaviour). The user can still toggle manually with Space without
+   * foreground (matching the LR2 desktop client behavior). The user can still toggle manually with Space without
    * conflicting with this listener — `togglePause` is a symmetric flip, and we only fire it when the visibility state
    * actually changes.
    */
@@ -2441,7 +2441,7 @@ export class PixiGameplayView {
   /**
    * Whether `visibilitychange` / `blur` / `pagehide` should auto-pause gameplay. Seeded from `options.autoPauseOnBlur`
    * (default `false`). The host can flip it at runtime via {@link setAutoPauseOnBlur} — useful for a lil-gui toggle
-   * that lets the user opt into the LR2-desktop-style "pause when I Cmd-Tab away" behaviour.
+   * that lets the user opt into the LR2-desktop-style "pause when I Cmd-Tab away" behavior.
    */
   private autoPauseOnBlur = false;
   /** Last sampled `document.hidden`, used by the polling safety net. */
@@ -2465,7 +2465,7 @@ export class PixiGameplayView {
   private bgaReadyPromise: Promise<void> | undefined;
 
   /**
-   * Window-level blur/focus fallback for the auto-pause behaviour. Some platforms (notably macOS with Chrome) keep the
+   * Window-level blur/focus fallback for the auto-pause behavior. Some platforms (notably macOS with Chrome) keep the
    * document `visible` across Cmd-Tab app switches, so `visibilitychange` alone misses those cases. We treat `blur` /
    * `focus` the same way as `visibilitychange`, gated on the same `autoPaused` flag so the two listeners cooperate.
    */
@@ -2780,7 +2780,7 @@ export class PixiGameplayView {
   }
 
   /**
-   * Pauses every BGA video element in the chart's video pool. The `<video>` element doesn't honour the audio-context
+   * Pauses every BGA video element in the chart's video pool. The `<video>` element doesn't honor the audio-context
    * suspend, so without this the video keeps playing during a pause overlay.
    */
   private pauseAllBgaVideos(): void {
@@ -2854,7 +2854,7 @@ export class PixiGameplayView {
     this.playSampleByKey(PixiGameplayView.LANDMINE_EXPLOSION_SAMPLE_KEY, target.seconds);
     // Bomb / key-on visuals fire so the lane flashes the same way it would on a real BAD hit. The skin's mine-specific
     // explosion sprite (when authored) is gated by the regular bomb timer — LR2 doesn't carry a separate "mine
-    // explosion" timer, so reusing 50-69 matches the reference behaviour.
+    // explosion" timer, so reusing 50-69 matches the reference behavior.
     this.triggerBomb(channel);
     return true;
   }
@@ -2863,7 +2863,7 @@ export class PixiGameplayView {
     const windows = resolveJudgeWindowsMs(this.song!.chart);
     const badSeconds = windows.bad / 1000;
     // Landmine pre-check — a press inside the BAD window of an un-judged mine on this lane explodes the mine FIRST,
-    // skipping the regular note search. Mirrors LR2's behaviour (`engine.ts:resolveLandmineGaugeEffect` in
+    // skipping the regular note search. Mirrors LR2's behavior (`engine.ts:resolveLandmineGaugeEffect` in
     // `packages/player`): BAD verdict, combo reset to 0, gauge drained by the chart-encoded damage value (default 4),
     // and the mine's explosion sample (`#WAV 00`) plays. The playable-note loop below is skipped — the mine consumes
     // the press.
@@ -2941,7 +2941,7 @@ export class PixiGameplayView {
 
   /**
    * Finalizes the LN currently held on `channel` (if any) using the release timing relative to the note's `endSeconds`.
-   * Behaviour branches on `note.longNoteMode`:
+   * Behavior branches on `note.longNoteMode`:
    *
    * - **Mode 1** (BMS `#LNOBJ` default) — tail auto-completes on release within the bad-window of `endSeconds`.
    *   Releasing significantly early downgrades the verdict to BAD. Late release after `endSeconds` is fine; the head
@@ -2966,7 +2966,7 @@ export class PixiGameplayView {
     const windows = resolveJudgeWindowsMs(this.song.chart);
     const mode: 1 | 2 | 3 = note.longNoteMode ?? 1;
     if (mode === 1) {
-      // Mode 1: tail auto-completes — only penalise *significant* early release. Within the bad window of `endSeconds`
+      // Mode 1: tail auto-completes — only penalize *significant* early release. Within the bad window of `endSeconds`
       // (or any time after) the head verdict carries.
       const earlyByMs = (endSeconds - seconds) * 1000;
       if (earlyByMs > windows.bad) {
@@ -3055,7 +3055,7 @@ export class PixiGameplayView {
    *   paints a back-and-forth motion (forward / reverse / forward / reverse) at equal magnitudes. After a quiet gap,
    *   the sign resets so the next isolated press brakes again rather than spinning forward unprompted.
    *
-   * Snap is centred on zero (not baseline) deliberately. The baseline is the *idle* spin; while the user is actively
+   * Snap is centered on zero (not baseline) deliberately. The baseline is the *idle* spin; while the user is actively
    * scratching, the disc should behave as if the hand is on it — pure forward / pure reverse motion. The integrator in
    * {@link updateTurntable} suppresses the baseline-recovery pull during the streak window so the snapped velocity
    * actually persists between presses.
@@ -3089,7 +3089,7 @@ export class PixiGameplayView {
    *
    * - **In streak** (within {@link TURNTABLE_STREAK_GAP_MS} of the last press): the snapped velocity is preserved as
    *   the user "holds" the disc. Each press flips the sign, so the angle traces a back-and-forth motion at constant
-   *   ±delta speed — the visual analogue of a hand on the platter rocking it forward / back.
+   *   ±delta speed — the visual analog of a hand on the platter rocking it forward / back.
    * - **Out of streak**: velocity exponentially relaxes toward the baseline `v += (baseline − v) · (1 −
    *   exp(−recovery·dt))`. Steady-state is the baseline forward spin, so the disc resumes its idle cadence on its own
    *   once the player stops pressing.
@@ -3183,12 +3183,12 @@ export class PixiGameplayView {
           // reach `autoMiss` (and therefore never POOR-out).
           if (this.options.autoScratch1P || this.options.autoScratch2P) {
             this.autoScratchJudge(seconds);
-            // Scratch LNs may have been seeded into `activeLongNotes` by the auto-judge above — finalise their tails
+            // Scratch LNs may have been seeded into `activeLongNotes` by the auto-judge above — finalize their tails
             // the same way the full-autoplay path does.
             this.autoFinalizeLongNotes(seconds);
           }
           this.autoMiss(seconds);
-          // Manual play safety net: auto-finalise LNs the user forgot to release. Uses the head verdict (treats
+          // Manual play safety net: auto-finalize LNs the user forgot to release. Uses the head verdict (treats
           // continued hold past end as a clean tail).
           this.finalizeOverheldLongNotes(seconds);
         }
@@ -3295,7 +3295,7 @@ export class PixiGameplayView {
     // NORMAL gauge is the default play-session gauge type; keep op 42 set so the matching frame plate (`#IF op42`)
     // remains visible.
     this.runtimeOps.add(42);
-    // op 43 = 1P HARD/EX (not modelled yet — leave clear).
+    // op 43 = 1P HARD/EX (not modeled yet — leave clear).
     this.runtimeOps.delete(43);
   }
 
@@ -3347,7 +3347,7 @@ export class PixiGameplayView {
    * STAGE FAILED / CLEARED plate) plays before the actual transition fires.
    *
    * Idempotent — re-entry while a fade is in flight is a no-op, so a frantic second ESC press doesn't double-fire the
-   * host callback. Skins with no `#FADEOUT` / `#CLOSE` directives collapse to immediate dispatch (no behavioural change
+   * host callback. Skins with no `#FADEOUT` / `#CLOSE` directives collapse to immediate dispatch (no behavioral change
    * for skinless / non-LR2 demos).
    */
   /**
@@ -3395,7 +3395,7 @@ export class PixiGameplayView {
     // Drive the audio bus's post-tap fade in lock-step with `applyExitFadeAlpha`'s screen-alpha animation. The fade
     // node sits AFTER the recording tap, so a recording in flight keeps capturing the unattenuated mix; only the
     // speakers go quiet. Skipped when the skin has no `#FADEOUT` (the screen also stays at full alpha in that path), so
-    // a skinless / non-LR2 demo gets the historical immediate-cut behaviour.
+    // a skinless / non-LR2 demo gets the historical immediate-cut behavior.
     if (fadeOutMs > 0) {
       this.audioBus?.fadeOutAudibleTo(0, fadeOutMs);
     }
@@ -3825,7 +3825,7 @@ export class PixiGameplayView {
     // bmson slicing — `offsetSeconds` seeks into the sound-channel WAV and `durationSeconds` caps how long this slice
     // plays. Both are clamped against the buffer duration so a chart that mis-authors them (or that sourced its slice
     // positions from a longer take) still produces audible output instead of an instant abort. BMS / json paths leave
-    // both fields undefined and play the whole WAV from t=0 — the historical behaviour.
+    // both fields undefined and play the whole WAV from t=0 — the historical behavior.
     const offsetSeconds = clampSampleOffset(options.offsetSeconds, buffer.duration);
     const durationSeconds = clampSampleDuration(options.durationSeconds, buffer.duration, offsetSeconds);
     if (scheduledChartSeconds !== undefined) {
@@ -3869,17 +3869,17 @@ export class PixiGameplayView {
    * Plays the keysound attached to a judged input note. Routes through `keyMixer` so the key-bus compressor (split
    * mode) sees the input transient stream independently of the BGM.
    *
-   * Honours the bmson 1.0.0 `note.c` (continuation flag): when `c === true`, a still-playing instance of the same
+   * Honors the bmson 1.0.0 `note.c` (continuation flag): when `c === true`, a still-playing instance of the same
    * sample suppresses the new trigger so the audio plays through uninterrupted. Per the spec ("c=true → don't restart
    * audio"), this lets chart authors hold one sample across a chord / burst of repeated notes without each hit
    * re-attacking the envelope. Notes without `c` (BMS-derived events, plain bmson notes) keep the historical "every
-   * press triggers a fresh playback" behaviour.
+   * press triggers a fresh playback" behavior.
    */
   private playSample(note: RuntimeNote): void {
     if (!this.audioContext || !this.song) {
       return;
     }
-    // `event.value` is already normalised under the chart's authored base (36 = case-folded, 62 = case-preserved). Look
+    // `event.value` is already normalized under the chart's authored base (36 = case-folded, 62 = case-preserved). Look
     // it up via `normalizeObjectKey(value, base)` rather than a hard-coded `toUpperCase()` so a `#BASE 62` chart's
     // lowercase sample IDs (`#WAV0a`) hit their correct slot instead of collapsing onto the uppercase variant.
     const chart = this.resolvedChart ?? this.song.chart;
@@ -3912,14 +3912,14 @@ export class PixiGameplayView {
     };
     // Key bus. Falls back to direct destination if `prepareAudio` hasn't run yet (defensive — in practice the bus is
     // always built before any `play*` call). The `#WAVCMD 01 xx vv` gain splice mirrors `playSampleByKey` so input
-    // keysounds honour the same chart-author per-slot volume the BGM path does.
+    // keysounds honor the same chart-author per-slot volume the BGM path does.
     const sampleGainTarget = this.audioBus?.keyMixer ?? this.audioContext.destination;
     this.connectSampleNodeWithWavCmdGain(node, sampleKey, sampleGainTarget);
     // bmson slicing — for bmson charts, the playback map carries the per-event `(offsetSeconds, durationSeconds)` tuple
-    // produced by `createBmsonSamplePlaybackMap`. Honouring it here means a chart that splits one long WAV across many
+    // produced by `createBmsonSamplePlaybackMap`. Honoring it here means a chart that splits one long WAV across many
     // notes plays each note's intended slice instead of replaying the whole file from t=0 on every hit. BMS / json
     // charts never populate `bmsonSlicePlayback` (slicing is a bmson- only concept), so the lookup misses and the
-    // historical play-from-zero behaviour kicks in.
+    // historical play-from-zero behavior kicks in.
     const slice = this.bmsonSlicePlayback?.get(note.event);
     const offsetSeconds = clampSampleOffset(slice?.offsetSeconds, buffer.duration);
     const durationSeconds = clampSampleDuration(slice?.durationSeconds, buffer.duration, offsetSeconds);
@@ -4012,8 +4012,8 @@ export class PixiGameplayView {
   private renderShutter(): void {
     this.shutterLayer.clear();
     // LANE COVER (`button_type 46`) is the master ON/OFF switch for the playfield mask. With it OFF, no shutter renders
-    // even if HIDDEN / SUDDEN / HID+SUD is selected — matches LR2's behaviour where the user toggles LANE COVER off to
-    // hide the cover without losing the height they had dialled in. The HIDDEN / SUDDEN cycle picks WHERE the mask sits
+    // even if HIDDEN / SUDDEN / HID+SUD is selected — matches LR2's behavior where the user toggles LANE COVER off to
+    // hide the cover without losing the height they had dialed in. The HIDDEN / SUDDEN cycle picks WHERE the mask sits
     // (top / bottom / both); this gate decides WHETHER it shows.
     if (this.options.laneCover === false) return;
     if (this.laneX.size === 0) return;
@@ -4141,7 +4141,7 @@ export class PixiGameplayView {
    */
   private renderBga(seconds: number): void {
     disposeChildren(this.bgaLayer);
-    // Honour the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). - `'OFF'` → never render - `'AUTOPLAY_ONLY'` → render
+    // Honor the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). - `'OFF'` → never render - `'AUTOPLAY_ONLY'` → render
     // only when autoplay is on - `'ON'` (default) → render whenever the chart has BGA
     const bgaMode = this.options.bga ?? 'ON';
     if (bgaMode === 'OFF') return;
@@ -4189,7 +4189,7 @@ export class PixiGameplayView {
 
     for (const bga of visibleBgas) {
       const dst = this.evaluateElementDst(bga);
-      const { x, y, w, h } = normaliseRect(dst);
+      const { x, y, w, h } = normalizeRect(dst);
       if (w <= 0 || h <= 0) continue;
       const drawLayer = (
         key: string | undefined,
@@ -4228,11 +4228,11 @@ export class PixiGameplayView {
         // 1` which is the no-op identity, so charts that omit both directives see no change. `resolveBmsBmpArgb`
         // prefers `#ARGBxx` over the `#EXBMPxx`-embedded tuple when both target the same slot, matching the LR2 /
         // beatoraja precedence. BGA-cue keys come from `buildBgaTimelines`, which routes through `normalizeObjectKey` —
-        // exactly the same key normalisation the parser applies to the `chart.bms.argb` / `chart.bms.exBmp` maps, so
+        // exactly the same key normalization the parser applies to the `chart.bms.argb` / `chart.bms.exBmp` maps, so
         // the direct lookup matches.
         const resolvedChart = this.resolvedChart;
         if (resolvedChart) {
-          // Tint resolution honours the original cue key first (so `#ARGBxx 01` applies even when `#SWBGA01` is ALSO
+          // Tint resolution honors the original cue key first (so `#ARGBxx 01` applies even when `#SWBGA01` is ALSO
           // active and the per-frame source slot lacks its own tint). Falling back to the resolved frame key catches
           // the inverse case: chart tints the source `#BMPYY` slot but not the `#SWBGA01` alias.
           const argb = resolveBmsBmpArgb(resolvedChart, key) ?? resolveBmsBmpArgb(resolvedChart, resolvedKey);
@@ -4487,7 +4487,7 @@ export class PixiGameplayView {
       // then clamps at the last frame for the brief moment before the timer's own cleanup retires the element. Every
       // other element — most critically the LR2 default skin's "DONE" plate (timer 40 + op 81 + dst.loop=-1) — relies
       // on continuous SRC cycling for its blink animation, so we pass `undefined` and let `pickAnimatedCell` use its
-      // default looping behaviour.
+      // default looping behavior.
       const dstTimer = image.destination.timer;
       const isOneShotOverlayTimer = dstTimer === 48 || dstTimer === 49 || (dstTimer >= 50 && dstTimer <= 69);
       const srcLoop = isOneShotOverlayTimer ? dst.loop : undefined;
@@ -4505,10 +4505,10 @@ export class PixiGameplayView {
     }
     const sprite = new Sprite(texture);
     sprite.label = `image[${image.source.imagePath}]`;
-    const { x, y, w, h } = normaliseRect(dst);
+    const { x, y, w, h } = normalizeRect(dst);
     // op4=1 / op4=2 are the LR2 scratch-turntable spin markers (1P / 2P side respectively). We drive the sprite from
     // {@link turntableAngle}, which {@link updateTurntable} integrates from per-press impulses with exponential decay —
-    // pressing scratch kicks the disc, releasing lets it spin down. Anchor at the centre so the rotation pivots through
+    // pressing scratch kicks the disc, releasing lets it spin down. Anchor at the center so the rotation pivots through
     // the visible disc rather than spinning around the top-left corner; PixiJS's y-down coords make positive `rotation`
     // turn the disc clockwise on screen.
     if (dst.op4 === 1 || dst.op4 === 2) {
@@ -4525,7 +4525,7 @@ export class PixiGameplayView {
     // Lane-laser release fade. When `releaseKeyOnTimer` has marked a key-on slot (timer 100..117) as fading, OVERRIDE
     // the sprite's alpha with a linear 1 → 0 taper over `KEY_ON_FADE_OUT_MS`. We override (rather than multiply)
     // because the LR2 default skin's key-on keyframe[0] is the fade-in origin (alpha = 0) — multiplying that by our
-    // taper would keep the laser invisible the whole time. Position / size / colour from the keyframe still apply via
+    // taper would keep the laser invisible the whole time. Position / size / color from the keyframe still apply via
     // the rest of `applyDestinationToSprite`.
     const keyOnFadeStart = this.keyOnFadeOutStart.get(image.destination.timer);
     if (keyOnFadeStart !== undefined) {
@@ -4549,7 +4549,7 @@ export class PixiGameplayView {
 
   /**
    * Renders the LR2 `#DST_JUDGELINE` sprite (the horizontal bar at the judgement line, typically a thin red strip in
-   * the LR2 default 7-keys skin). The skin's source frame already encodes the colour; we only need to honour the
+   * the LR2 default 7-keys skin). The skin's source frame already encodes the color; we only need to honor the
    * destination rectangle.
    */
   private renderJudgeLineElement(judgeLine: Lr2JudgeLineElement): void {
@@ -4598,7 +4598,7 @@ export class PixiGameplayView {
    */
   private renderTextElement(text: Lr2TextElement): void {
     const interpolated = this.evaluateElementDst(text);
-    const { x, y, w, h } = normaliseRect(interpolated);
+    const { x, y, w, h } = normalizeRect(interpolated);
     // `w === 0` is an LR2-spec "no width constraint" hint (the field shrinks to fit the rendered string), so we must
     // NOT bail just because of it — skipping would hide every auto-sized label, including the centered song-title
     // display in the LR2 default play skin. Only `h === 0` is fatal (no glyph height to size on).
@@ -4644,7 +4644,7 @@ export class PixiGameplayView {
     node.position.set(x, y + h / 2);
     // LR2 shrink-to-fit (LR2SkinHelp line 1343): the rendered string is auto-compressed horizontally when its width
     // exceeds the DST's `w`. We squeeze via `scale.x`; the scale applies around the text's anchor, so the alignment
-    // edge stays pinned (right-aligned text squeezes toward its right edge, centred text stays centred, …).
+    // edge stays pinned (right-aligned text squeezes toward its right edge, centered text stays centered, …).
     if (w > 0 && node.width > w) {
       node.scale.x = w / node.width;
     }
@@ -4704,7 +4704,7 @@ export class PixiGameplayView {
    */
   private renderBarGraphElement(bargraph: Lr2BarGraphElement): void {
     const interpolated = this.evaluateElementDst(bargraph);
-    const { x, y, w, h } = normaliseRect(interpolated);
+    const { x, y, w, h } = normalizeRect(interpolated);
     if (w === 0 || h === 0) {
       return;
     }
@@ -4783,7 +4783,7 @@ export class PixiGameplayView {
    */
   private renderSliderElement(slider: Lr2SliderElement): void {
     const interpolated = this.evaluateElementDst(slider);
-    const { x, y, w, h } = normaliseRect(interpolated);
+    const { x, y, w, h } = normalizeRect(interpolated);
     if (w === 0 || h === 0) {
       return;
     }
@@ -4841,8 +4841,8 @@ export class PixiGameplayView {
   }
 
   /**
-   * Renders the judgement plate + NOWCOMBO digits as a single horizontally centred assembly. The two are drawn together
-   * so the relative gap stays stable while the whole group slides left/right to centre on the lane area as the combo
+   * Renders the judgement plate + NOWCOMBO digits as a single horizontally centered assembly. The two are drawn together
+   * so the relative gap stays stable while the whole group slides left/right to center on the lane area as the combo
    * gets longer.
    *
    * Called from `renderSkin` and emits to `overlayLayer` so the assembly sits *above* falling notes — matching the LR2
@@ -4889,8 +4889,8 @@ export class PixiGameplayView {
         ) ?? skin.nowCombos.find((entry) => entry.kind === comboKind && this.isDestinationVisible(entry.destination)))
       : undefined;
     const visibleCombo = comboKind && state.combo > 0 ? state.combo : 0;
-    // Compute centring offset so that judge plate + combo sits centred on this side's lane area. Without this the
-    // assembly was anchored at LR2's static x=73 / x=185 coordinates, biased ~10px to the left of the lane centre and
+    // Compute centering offset so that judge plate + combo sits centered on this side's lane area. Without this the
+    // assembly was anchored at LR2's static x=73 / x=185 coordinates, biased ~10px to the left of the lane center and
     // drifting further as the combo grew.
     const laneCenter = this.resolveLaneCenter(skin, side);
     const judgeRight = judgeAnchor.x + judgeAnchor.w;
@@ -4948,7 +4948,7 @@ export class PixiGameplayView {
   }
 
   /**
-   * Returns the horizontal centre of one side's play-field area (in design pixels) derived from the LR2 skin's
+   * Returns the horizontal center of one side's play-field area (in design pixels) derived from the LR2 skin's
    * `#DST_NOTE` rectangles. `side` filters the lane set: `1P` keeps indices 0..9, `2P` keeps indices 10..19 (per
    * `resolveLr2LaneIndex`'s mapping). Falls back to the fallback playfield constant when no skin is loaded or the
    * requested side has no lanes.
@@ -5002,7 +5002,7 @@ export class PixiGameplayView {
 
       if (skin) {
         // With an LR2 skin loaded, the playfield background, judgement line and key lasers are all rendered by the skin
-        // itself (driven by `#DST_IMAGE` + key-on / judgement timers). Drawing our own coloured rectangles on top of
+        // itself (driven by `#DST_IMAGE` + key-on / judgement timers). Drawing our own colored rectangles on top of
         // that just paints over the skin -- which is exactly the "scratch lane is too red" / "judgement line is white"
         // problem we want to avoid. Skip the fallback overlays here.
         return;
@@ -5046,7 +5046,7 @@ export class PixiGameplayView {
       laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
     }
     const maxVisibleBeat = currentBeat + (laneHeight + 48) / Math.max(1, pixelsPerBeat);
-    // Debug visualisation — paint invisible / keysound notes FIRST so playable notes + mines paint over them. Skipped
+    // Debug visualization — paint invisible / keysound notes FIRST so playable notes + mines paint over them. Skipped
     // entirely (and the array stays empty) when the option is off.
     if (this.options.showInvisibleNotes && this.invisibleNotes.length > 0) {
       // Resolve the green-note sprite once per frame. `notes.note[3]` is the Pop'n green wide note in the LR2 default
@@ -5121,7 +5121,7 @@ export class PixiGameplayView {
       }
       // Single notes hide the moment their bottom edge passes the judgement-line bottom (= `lane.bottom`). Until then
       // the note's visibility depends on `judgedNoteDisplay`: - `'HIDE'` (default) — judged notes disappear the instant
-      // they were judged (LR2 / beatoraja default behaviour). - `'KEEP_SCROLLING'` — judged notes keep scrolling until
+      // they were judged (LR2 / beatoraja default behavior). - `'KEEP_SCROLLING'` — judged notes keep scrolling until
       // their position passes the line (≈ beatoraja's LANEEFFECT ON).
       if (y < lane.top - 48 || y > lane.bottom) {
         continue;
@@ -5211,7 +5211,7 @@ export class PixiGameplayView {
     // (measure-length) declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? song.chart;
     // bmson 1.0.0 spec — `lines: []` (explicit empty array) is the author opting out of barlines entirely (the "100 %
-    // minimoo-G effect"). Honour the suppress flag the parser sets and short-circuit before we'd otherwise derive
+    // minimoo-G effect"). Honor the suppress flag the parser sets and short-circuit before we'd otherwise derive
     // 4/4-default barlines from the event stream.
     if (chart.bmson.barlinesSuppressed === true) {
       this.measureBeatCache = { songId: song.id, beats };
@@ -5358,7 +5358,7 @@ export class PixiGameplayView {
   /**
    * Returns true when the given lane index is currently auto-handled by the per-lane play options — autoscratch on (op
    * 55) → scratch lane auto, or autolane on (op 53) → all lanes auto. Global autoplay (op 33) is deliberately not
-   * counted here so notes still render in their normal colour during autoplay demonstrations, matching the LR2
+   * counted here so notes still render in their normal color during autoplay demonstrations, matching the LR2
    * reference.
    */
   private isAutoLane(laneIndex: number): boolean {
@@ -5380,12 +5380,12 @@ export class PixiGameplayView {
   ): void {
     // `y` is where the chart timing intersects the judgement line for this note. We anchor the sprite by its **bottom
     // edge** so the just-timing moment lines up with the bottom edge of the visual note (LR2 / BMS convention) instead
-    // of the centre.
+    // of the center.
     const skinNote = this.resolveNoteSource(skin, 'note', laneIndex);
     const baseTexture = skinNote ? this.textures.get(skinNote.imagePath) : undefined;
     if (skinNote && baseTexture) {
       // Some LR2 skins animate notes (shimmer / pulse). Pick the current SRC cell from divx*divy/cycle. For
-      // non-animated notes (cycle=0) this returns cell (0,0) which matches the static behaviour.
+      // non-animated notes (cycle=0) this returns cell (0,0) which matches the static behavior.
       const cell = pickAnimatedCell(skinNote, this.elapsedSinceTimer(skinNote.timer));
       const texture = createCroppedTexture(baseTexture, cell);
       if (texture) {
@@ -5713,7 +5713,7 @@ function judgeSeverity(judge: JudgeKind): number {
 }
 
 /**
- * Note colour for the no-skin fallback path, mirroring the IIDX / LR2 default convention:
+ * Note color for the no-skin fallback path, mirroring the IIDX / LR2 default convention:
  *
  * - - Scratch (`16` / `26`) — red. - Odd-numbered keys (1 / 3 / 5 / 7) — white. - Even-numbered keys (2 / 4 / 6) —
  *   blue.
@@ -5731,7 +5731,7 @@ function noteFallbackColor(channel: string, laneIndex: number): typeof WHITE {
 /**
  * Clamps a bmson slice offset against the loaded buffer's duration so a misauthored offset (or one that came from a
  * trimmed take) doesn't produce a `start()` call past EOF — Web Audio would silently emit nothing in that case. Any
- * non-finite / negative input collapses to 0 so the historical "play from t=0" behaviour stays the default fallback.
+ * non-finite / negative input collapses to 0 so the historical "play from t=0" behavior stays the default fallback.
  */
 function clampSampleOffset(offsetSeconds: number | undefined, bufferDuration: number): number {
   if (typeof offsetSeconds !== 'number' || !Number.isFinite(offsetSeconds) || offsetSeconds <= 0) {
@@ -5766,7 +5766,7 @@ function clampSampleDuration(
 /**
  * Wraps `AudioBufferSourceNode.start` so the offset / duration arguments only get supplied when meaningful — Web Audio
  * differentiates `start(when)` (whole buffer) from `start(when, offset)` (seek) from `start(when, offset, duration)`
- * (seek + cap), and we want to match the historical behaviour for the two- and three-arg cases when slicing isn't in
+ * (seek + cap), and we want to match the historical behavior for the two- and three-arg cases when slicing isn't in
  * play.
  *
  * `when` of `undefined` calls `start()` (immediate); a finite value calls `start(when)` (scheduled).

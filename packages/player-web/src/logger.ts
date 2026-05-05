@@ -1,9 +1,9 @@
 /**
- * Scoped console logger with a coloured prefix label.
+ * Scoped console logger with a colored prefix label.
  *
  * Replaces the project's prior convention of writing `console.log('[scope] msg')` with a `logger('scope').info(msg)`
- * call so devtools renders the scope as a coloured pill rather than as plain bracketed text. Each scope gets a
- * deterministic colour (djb2 hash → fixed palette) so the same subsystem looks the same across reloads, and the bracket
+ * call so devtools renders the scope as a colored pill rather than as plain bracketed text. Each scope gets a
+ * deterministic color (djb2 hash → fixed palette) so the same subsystem looks the same across reloads, and the bracket
  * characters around the scope are dropped.
  *
  * Levels follow the standard `console` triage: - `info`: state changes / one-shot lifecycle events. Visible under
@@ -61,7 +61,7 @@ export function logger(scope: string): Logger {
 function createLogger(scope: string): Logger {
   const color = pickColor(scope);
   // CSS-styled prefix using the `%c` directive. The scope label gets a tinted-background pill; the trailing `%c` resets
-  // so the rest of the message renders with the host's default styling (otherwise the colour would bleed into every
+  // so the rest of the message renders with the host's default styling (otherwise the color would bleed into every
   // subsequent argument).
   const prefix = `%c${scope}%c`;
   const labelStyle = [
@@ -94,7 +94,7 @@ function createLogger(scope: string): Logger {
 }
 
 /**
- * djb2 string hash, modded into the palette index. Stable across runs so a given scope name maps to the same colour
+ * djb2 string hash, modded into the palette index. Stable across runs so a given scope name maps to the same color
  * every reload — keeps the user's "I know `gameplay` is amber" intuition usable across debugging sessions.
  */
 function pickColor(scope: string): string {

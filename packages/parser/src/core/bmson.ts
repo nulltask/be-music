@@ -204,7 +204,7 @@ const BMSON_GENERIC_KEYS_PATTERN = /^generic-(\d+)keys?$/;
  * 1. `mode_hint` blank / undefined → spec default `beat-7k` (per bmson 1.0.0).
  * 2. Canonical IIDX / Pop'n hint → authoritative table.
  * 3. `generic-Nkeys` template → left-to-right positional map sized to N keys.
- * 4. Anything else → positional fallback over the chart's actual `x` values (preserves the historical behaviour for
+ * 4. Anything else → positional fallback over the chart's actual `x` values (preserves the historical behavior for
  *    bmson dialects unknown to us).
  */
 export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[], modeHint?: string): Map<number, string> {
@@ -496,7 +496,7 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
   // bmson 1.0.0 spec — `level` is an `unsigned long` and "must be ≥ 0. Negative values may be regarded as invalid by a
   // player." We treat the negative case as "invalid → drop the field" rather than silently coerce, so the missing-level
   // fallback (`undefined` → no displayed level) is what the chart's level shows in the UI. Non-integer inputs are
-  // floored to honour the spec's `unsigned long` type.
+  // floored to honor the spec's `unsigned long` type.
   copyIfNonNegativeInteger(normalized, 'level', info.level);
   copyIfFiniteNumber(normalized, 'initBpm', info.init_bpm);
   // bmson 1.0.0 spec — `judge_rank` describes "the width of judgment window" with the spec text only making sense for
@@ -504,7 +504,7 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
   // would mean a zero-or-inverted window). Drop the field for non-positive inputs so the consumer falls back to the
   // spec default of 100 rather than producing a nonsensical judge window.
   copyIfPositiveFiniteNumber(normalized, 'judgeRank', info.judge_rank);
-  // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take the absolute value." Normalising at parse time keeps the
+  // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take the absolute value." Normalizing at parse time keeps the
   // gauge formula (`+TOTAL/N`) on the positive branch and means every downstream consumer (gauge, stringifier,
   // round-trip re-parse) sees the canonical value. `total: 0` stays semantically meaningful (lifebar doesn't increase,
   // per the same spec section).
@@ -622,7 +622,7 @@ function normalizeBmsonSubartists(input: unknown): string[] | undefined {
   const names: string[] = [];
   for (const item of input) {
     if (typeof item === 'string') {
-      names.push(canonicaliseSubartistEntry(item));
+      names.push(canonicalizeSubartistEntry(item));
       continue;
     }
     if (!item || typeof item !== 'object') {
@@ -630,7 +630,7 @@ function normalizeBmsonSubartists(input: unknown): string[] | undefined {
     }
     const raw = item as Record<string, unknown>;
     if (typeof raw.name === 'string') {
-      names.push(canonicaliseSubartistEntry(raw.name));
+      names.push(canonicalizeSubartistEntry(raw.name));
     }
   }
   return names;
@@ -640,11 +640,11 @@ function normalizeBmsonSubartists(input: unknown): string[] | undefined {
  * bmson 1.0.0 spec SHOULD — "Implementers should trim the spaces before and after `key` and `value` in subartists."
  *
  * Trims each half of the `role:name` form (or just the name when the entry doesn't carry a role) and rejoins so the
- * stored array contains canonicalised strings. Role case is preserved — the consumer-facing helper {@link
+ * stored array contains canonicalized strings. Role case is preserved — the consumer-facing helper {@link
  * parseBmsonSubartist} is the one that lower-cases for grouping; we don't want to lose the author's intended
- * capitalisation in the IR.
+ * capitalization in the IR.
  */
-function canonicaliseSubartistEntry(entry: string): string {
+function canonicalizeSubartistEntry(entry: string): string {
   const colon = entry.indexOf(':');
   if (colon < 0) {
     return entry.trim();
@@ -738,7 +738,7 @@ function copyIfFiniteNumber<T extends object>(target: T, key: keyof T & string, 
 
 /**
  * Same as {@link copyIfFiniteNumber} but applies `Math.abs` so spec fields that say "if negative, take the absolute
- * value" (notably `info.total`) get normalised at parse time. Keeps `0` intact so its spec-defined "lifebar doesn't
+ * value" (notably `info.total`) get normalized at parse time. Keeps `0` intact so its spec-defined "lifebar doesn't
  * increase" meaning is preserved.
  */
 function copyIfFiniteNumberAbs<T extends object>(target: T, key: keyof T & string, value: unknown): void {

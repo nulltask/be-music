@@ -24,7 +24,7 @@ import {
   applyDestinationToSprite,
   createCroppedTexture,
   evaluateKeyframes,
-  normaliseRect,
+  normalizeRect,
   pickAnimatedCell,
   renderNumberElement,
 } from './lr2-render.ts';
@@ -78,7 +78,7 @@ const READTEXT_LINE_SCROLL = 36;
 const READTEXT_PAGE_SCROLL = 360;
 
 /**
- * Serialisable cursor / browse state. Used to round-trip the select view across `dispose()` / new-instance cycles (e.g.
+ * Serializable cursor / browse state. Used to round-trip the select view across `dispose()` / new-instance cycles (e.g.
  * play → return → select), so the user lands back on the same song they launched.
  *
  * Folder identity travels by **label** rather than node reference because each `setCollection()` call rebuilds the
@@ -116,7 +116,7 @@ export interface PixiPlayOptions {
   /**
    * BGA (background animation) display mode. Mirrors the LR2 `#SRC_BUTTON,type=72` cycle (OFF / ON / AUTOPLAY ONLY).
    * When `'AUTOPLAY_ONLY'` the BGA renders only when {@link autoPlay} (or the AUTOPLAY skin-button override) is also
-   * active — matches LR2 behaviour where AUTOPLAY ONLY hides BGA during regular human-played sessions.
+   * active — matches LR2 behavior where AUTOPLAY ONLY hides BGA during regular human-played sessions.
    */
   bga: PixiBgaMode;
   /**
@@ -156,7 +156,7 @@ export interface PixiPlayOptions {
    * - `'MINBPM'` — pegs to MIN BPM (faster segments scroll faster).
    * - `'AVERAGE'` — pegs to the time-weighted average BPM.
    * - `'CONSTANT'` — adjusts HS at every BPM change so visual scroll is exactly constant. Falls back to `'AVERAGE'`
-   *   behaviour for now (per-frame BPM-aware scroll requires a render-pipeline change that hasn't landed yet).
+   *   behavior for now (per-frame BPM-aware scroll requires a render-pipeline change that hasn't landed yet).
    */
   hsFix: PixiHsFix;
   /**
@@ -625,7 +625,7 @@ export class PixiSongSelectView {
   private browseStack: BrowserFolderNode[] = [];
   /**
    * Live play-option state, mutated by the in-scene panel buttons (LR2 `#SRC_BUTTON,type=40..58` etc.) and read by the
-   * host via {@link getPlayOptions} at gameplay-launch time. Initialised from `initialPlayOptions` (overlaid on {@link
+   * host via {@link getPlayOptions} at gameplay-launch time. Initialized from `initialPlayOptions` (overlaid on {@link
    * DEFAULT_PLAY_OPTIONS}) at construction.
    */
   private playOptions: PixiPlayOptions = { ...DEFAULT_PLAY_OPTIONS };
@@ -720,9 +720,9 @@ export class PixiSongSelectView {
    */
   private searchQuery = '';
   /**
-   * Memoised result of {@link currentEntries}. Recomputed only when one of the captured inputs changes; otherwise the
+   * Memoized result of {@link currentEntries}. Recomputed only when one of the captured inputs changes; otherwise the
    * cached array is returned as-is so per-frame call sites (slider value, bar renderer) hit a Map-like O(1) path
-   * instead of re-walking the chart events of every song under the keymode filter. Initialised lazily on the first
+   * instead of re-walking the chart events of every song under the keymode filter. Initialized lazily on the first
    * call.
    */
   private cachedEntries: BrowserBrowseEntry[] = [];
@@ -857,7 +857,7 @@ export class PixiSongSelectView {
     if (!GAUGE_CYCLE.includes(next.gauge1P)) next.gauge1P = DEFAULT_PLAY_OPTIONS.gauge1P;
     if (!GAUGE_CYCLE.includes(next.gauge2P)) next.gauge2P = DEFAULT_PLAY_OPTIONS.gauge2P;
     this.playOptions = next;
-    // Re-render only when panel 1 (the play-options panel) is currently open — that's the only surface that visualises
+    // Re-render only when panel 1 (the play-options panel) is currently open — that's the only surface that visualizes
     // these values today, so a closed-panel write doesn't need a frame.
     if (this.panelStates.has(1)) {
       this.render();
@@ -1039,7 +1039,7 @@ export class PixiSongSelectView {
       this.readTextScrollbar,
       this.readTextFooter,
     );
-    // Attach to the host's already-initialised stage. The canvas is owned by the host and shared across scenes.
+    // Attach to the host's already-initialized stage. The canvas is owned by the host and shared across scenes.
     host.app.stage.addChild(this.sceneRoot);
     // Bind keyboard handlers at the window level so the user can navigate without first clicking the canvas. The canvas
     // itself is a child of the document body and naturally won't have focus until interacted with — which would
@@ -1092,7 +1092,7 @@ export class PixiSongSelectView {
     this.timerStartedAt.set(11, this.sceneStartedAt);
     // Drop any leftover smooth-scroll state from a previous session — the cursor isn't moving on re-entry, and a stale
     // `dt` from before the play round-trip would otherwise feed the decay formula a multi-minute interval and either
-    // NaN or instantly zero out a fresh offset (depending on Math.exp's behaviour).
+    // NaN or instantly zero out a fresh offset (depending on Math.exp's behavior).
     this.listScrollOffset = 0;
     this.lastScrollUpdate = 0;
   }
@@ -1246,7 +1246,7 @@ export class PixiSongSelectView {
   /**
    * Estimates the vertical pitch between adjacent bar slots — used to scale `listScrollOffset` so a 1-step cursor move
    * produces a 1-slot worth of visual slide. Picks the most-occupied y-delta between adjacent off-slot rectangles since
-   * LR2 default skins tend to have one "centre" slot at a different y than the uniformly-spaced off-centre slots; the
+   * LR2 default skins tend to have one "center" slot at a different y than the uniformly-spaced off-center slots; the
    * median of pairwise deltas excludes that outlier.
    */
   private estimateSlotHeight(): number {
@@ -1439,7 +1439,7 @@ export class PixiSongSelectView {
     this.parentCursorStack = [];
     this.selectedIndex = 0;
     // Brand-new collection: try the constructor-time `initialNavigation` (typical: dropped a folder mid-session and
-    // there's a saved snapshot in the URL or local storage). Falls back to the auto-enter-single-folder behaviour when
+    // there's a saved snapshot in the URL or local storage). Falls back to the auto-enter-single-folder behavior when
     // no saved state exists or the saved labels no longer match.
     const restored = this.options.initialNavigation ? this.restoreNavigation(this.options.initialNavigation) : false;
     if (!restored) {
@@ -1506,7 +1506,7 @@ export class PixiSongSelectView {
    * Returns the entries to render in the bar list at the current navigation depth. At the root we surface one bar per
    * top-level folder; inside a folder we surface the folder's songs.
    *
-   * Honours `searchQuery` (lower-cased substring match) when set — the filter applies at every depth so a user can type
+   * Honors `searchQuery` (lower-cased substring match) when set — the filter applies at every depth so a user can type
    * while inside a folder and only see matching songs in that folder.
    */
   private currentEntries(): BrowserBrowseEntry[] {
@@ -1700,7 +1700,7 @@ export class PixiSongSelectView {
 
   /**
    * Hands the engine the song currently under the cursor (or `undefined` when the cursor sits on a folder bar). The
-   * engine swallows redundant focuses internally — calling this on every cursor move is cheap, and centralising the
+   * engine swallows redundant focuses internally — calling this on every cursor move is cheap, and centralizing the
    * call here means new focus-changing call sites (`setNavigation`, `setCollection`) only have to invoke this single
    * helper.
    *
@@ -1837,11 +1837,11 @@ export class PixiSongSelectView {
    * Currently handles:
    *
    * - `#SRC_BUTTON` (`click = 1`) — AUTOPLAY (`type = 16`) is wired to `onSongAutoPlay` for the focused song. Other
-   *   button types are recognised but currently no-op (panel / filter / sort buttons land here for future wiring).
+   *   button types are recognized but currently no-op (panel / filter / sort buttons land here for future wiring).
    * - `#SRC_TEXT` (`edit = 1`, `st = 30`) — fires `onSearchActivate` so the host can focus a DOM `<input>` overlay.
    *
    * Buttons / texts are only considered when their DST passes the standard visibility / panel gate; we re-use
-   * `evaluateElementDst` to honour keyframe interpolation (so a click during a slide-in animation hits the rectangle
+   * `evaluateElementDst` to honor keyframe interpolation (so a click during a slide-in animation hits the rectangle
    * the user actually sees, not a static endpoint).
    */
   private handleSkinHitTest(skin: Lr2Skin, virtualX: number, virtualY: number): boolean {
@@ -1892,7 +1892,7 @@ export class PixiSongSelectView {
 
   /**
    * Routes a clicked `#SRC_BUTTON` to the matching action. The button-type table comes from `docs/LR2SkinHelp.md` lines
-   * 5901+; we currently honour:
+   * 5901+; we currently honor:
    *
    * - **15** — start play (treat as Enter on the focused song)
    * - **16** — start autoplay (`onSongAutoPlay`)
@@ -2045,7 +2045,7 @@ export class PixiSongSelectView {
    */
   /**
    * Toggles the READTEXT modal for the focused song. Looks for a `.txt` file in the song's directory and shows its
-   * contents in a centred Pixi card. Closes on second click / Escape / cursor move to a different song.
+   * contents in a centered Pixi card. Closes on second click / Escape / cursor move to a different song.
    */
   private toggleReadText(song: BrowserSongEntry): void {
     if (this.readTextOpen) {
@@ -2263,8 +2263,8 @@ export class PixiSongSelectView {
         return;
       }
       // Skin layout: hit-test each available slot's BAR_BODY rect and jump the selection so the clicked slot becomes
-      // the centre. Any slot click both moves the cursor (if needed) AND triggers the selection action — earlier the
-      // click on a non-centre slot only moved the cursor and required a second click on the centre slot to actually
+      // the center. Any slot click both moves the cursor (if needed) AND triggers the selection action — earlier the
+      // click on a non-center slot only moved the cursor and required a second click on the center slot to actually
       // pick the song. The 1-click flow is what mouse users expect; keyboard navigation still uses the 2-step "land on
       // cursor → press Enter" model.
       const center = clampSlot(skin.barLayout.center, skin.barLayout.slots.length);
@@ -2304,7 +2304,7 @@ export class PixiSongSelectView {
     // actually live in.
     //
     // Geometry must mirror the `render()` layout above: rows begin at `listTop` with `rowHeight` pitch, and the visible
-    // window centres on `selectedIndex` with the same `start` calculation. Anything outside the list rectangle is a
+    // window centers on `selectedIndex` with the same `start` calculation. Anything outside the list rectangle is a
     // no-op.
     const listX = 320;
     const listTop = 36;
@@ -2579,7 +2579,7 @@ export class PixiSongSelectView {
       return;
     }
 
-    // Fallback chrome modelled on `Theme/LR2/Select/ss_select.png`: top tab bar, centre-left song banner, right-column
+    // Fallback chrome modeled on `Theme/LR2/Select/ss_select.png`: top tab bar, center-left song banner, right-column
     // bar list, bottom-left button row + search, bottom-right score panel. The chrome now paints the focused-song title
     // / artist / BPM / level itself, so the legacy `this.title` / `this.hint` Text overlays (which used to render
     // generic "Song Select" / "Drop a BMS folder or ZIP" placeholders) are hidden — they'd otherwise overlap the
@@ -2589,7 +2589,7 @@ export class PixiSongSelectView {
     this.hint.visible = false;
 
     // Right-column song bar list — LR2's `#DST_BAR_BODY_OFF` slots park at x=397, w=259. We render rows of 24 px each
-    // centred on the selected index so the active bar stays in the middle of the column (mirroring LR2's centred-bar
+    // centered on the selected index so the active bar stays in the middle of the column (mirroring LR2's centered-bar
     // feel).
     const listX = 320;
     const listWidth = designWidth - listX - 16;
@@ -2617,9 +2617,9 @@ export class PixiSongSelectView {
 
   /**
    * Background chrome for the no-skin select scene — mirrors the footprint of LR2's default `select.lr2skin` so a
-   * viewer can recognise the layout even without the skin's bitmap atlas.
+   * viewer can recognize the layout even without the skin's bitmap atlas.
    *
-   * Layout (640×480 design canvas): - Top tab bar (TITLE / LEVEL / ALL) — y=0..30 - Centre-left song banner (title /
+   * Layout (640×480 design canvas): - Top tab bar (TITLE / LEVEL / ALL) — y=0..30 - Center-left song banner (title /
    * artist / mode / BPM / level pills) — x=8..312, y=34..280 - Right-column bar list — x=316..632, y=32..372 -
    * Bottom-left button row (HELP / REPLAY / AUTOPLAY / READTEXT) — x=8..308, y=288..330 - Bottom-left search box —
    * x=8..308, y=336..360 - Bottom-right score panel (SCORE / EX / RANK / FULL COMBO / AAA grade) — x=316..632,
@@ -2680,7 +2680,7 @@ export class PixiSongSelectView {
     categoryText.position.set(designWidth - 68, 15);
     this.listLayer.addChild(categoryText);
 
-    // ── Centre-left song banner ─────────────────────────────
+    // ── Center-left song banner ─────────────────────────────
     chrome.rect(8, 34, 304, 246).fill({ color: 0x10131d, alpha: 0.85 }).stroke({ color: 0x4a3a73, width: 1 });
     // Backplates for title / sub-title / mode-pills / difficulty bar / filename strip — the actual text is painted as
     // `Text` nodes below so the user reads real chart info, not empty placeholder rectangles.
@@ -2703,7 +2703,7 @@ export class PixiSongSelectView {
     // Mode label derives from the chart's PlayVariant when we have one; before a song is focused we fall back to a
     // placeholder so the pill keeps its visual weight.
     const modeLabel = song ? formatPlayVariantLabel(song) : '— KEYS';
-    // Difficulty colour matches the LR2 default skin's HARD ribbon (red). When we have richer difficulty info from the
+    // Difficulty color matches the LR2 default skin's HARD ribbon (red). When we have richer difficulty info from the
     // chart we'll route it; for now HARD is the visible-state placeholder per ss_select.png.
     const difficultyLabel = 'HARD';
 
@@ -3097,7 +3097,7 @@ export class PixiSongSelectView {
 
     // Song-info NUMBER panels: BPM, total notes, play level. We resolve a small whitelist of LR2 number ids relevant to
     // the select view — the gameplay-only ids (score, gauge, judges, …) leave their slots blank when shown here, which
-    // matches LR2's behaviour off-stage.
+    // matches LR2's behavior off-stage.
     for (const number of skin.numbers) {
       const dst = this.evaluateElementDst(number);
       if (!isDestinationVisible(dst, ops, this.timerActive)) {
@@ -3240,7 +3240,7 @@ export class PixiSongSelectView {
    * meaningful here (e.g. play-time hi-speed / shutter sliders that LR2 still allows in select skins as decoration).
    *
    * The only slider we currently drive is `type=1` ("曲セレクト ポジション") — the orange / teal scroll-position bar that lives
-   * to the right of the bar list. Its value is the **visual** cursor index normalised against the visible entry count,
+   * to the right of the bar list. Its value is the **visual** cursor index normalized against the visible entry count,
    * where "visual" means we lag the discrete selectedIndex by the active smooth-scroll offset so the knob slides in
    * lockstep with the bars (LR2 itself doesn't define slider easing in the skin format — `#SRC_SLIDER` / `#DST_SLIDER`
    * just specify rail geometry — so the smoothing has to come from the runtime).
@@ -3286,7 +3286,7 @@ export class PixiSongSelectView {
   private makeSliderSprite(element: Lr2SliderElement, dst: Lr2DestinationRect, value: number): Sprite | undefined {
     const texture = this.skinTextures.get(element.source.imagePath);
     if (!texture) return undefined;
-    const rect = normaliseRect(dst);
+    const rect = normalizeRect(dst);
     if (rect.w <= 0 || rect.h <= 0) return undefined;
     const ratio = Math.max(0, Math.min(1, value));
     const cropped = createCroppedTexture(texture, {
@@ -3346,7 +3346,7 @@ export class PixiSongSelectView {
     if (!baseTexture) {
       return undefined;
     }
-    const rect = normaliseRect(dst);
+    const rect = normalizeRect(dst);
     if (rect.w <= 0 || rect.h <= 0) {
       return undefined;
     }
@@ -3376,7 +3376,7 @@ export class PixiSongSelectView {
     if (!baseTexture) {
       return undefined;
     }
-    const rect = normaliseRect(dst);
+    const rect = normalizeRect(dst);
     if (rect.w <= 0 || rect.h <= 0) {
       return undefined;
     }
@@ -3409,7 +3409,7 @@ export class PixiSongSelectView {
       return;
     }
     const dst = this.evaluateElementDst(button);
-    const rect = normaliseRect(dst);
+    const rect = normalizeRect(dst);
     if (rect.w <= 0 || rect.h <= 0) {
       return;
     }
@@ -3459,7 +3459,7 @@ export class PixiSongSelectView {
     }
     const slotCount = layout.slots.length;
     const center = clampSlot(layout.center, slotCount);
-    // Choose the OFF/ON state per slot — only the centre slot uses ON.
+    // Choose the OFF/ON state per slot — only the center slot uses ON.
     const entries = this.currentEntries();
     for (const slot of layout.slots) {
       const offset = slot.index - center;
@@ -3513,7 +3513,7 @@ export class PixiSongSelectView {
   /**
    * Renders the `#SRC_BAR_FLASH` overlay on the focused bar. The DST coordinates in the flash element are **relative**
    * to the focused bar's `BAR_BODY_ON` rect, mirroring how BAR_TITLE / BAR_LEVEL place themselves. We compose the
-   * absolute DST and then delegate to `makeSlicedSprite` so any animation cycle / cell cycling is honoured.
+   * absolute DST and then delegate to `makeSlicedSprite` so any animation cycle / cell cycling is honored.
    */
   private drawBarFlash(flash: Lr2BarFlashElement, bar: Lr2DestinationRect): void {
     const flashDst = this.evaluateElementDst(flash);
@@ -3586,7 +3586,7 @@ export class PixiSongSelectView {
       return undefined;
     }
     const dst = this.evaluateElementDst(image);
-    const rect = normaliseRect(dst);
+    const rect = normalizeRect(dst);
     if (rect.w <= 0 || rect.h <= 0) {
       return undefined;
     }
@@ -3644,7 +3644,7 @@ export class PixiSongSelectView {
     destination: Lr2DestinationRect,
     label?: string,
   ): Sprite | undefined {
-    const rect = normaliseRect(destination);
+    const rect = normalizeRect(destination);
     if (rect.w <= 0 || rect.h <= 0) {
       return undefined;
     }
@@ -3750,7 +3750,7 @@ export class PixiSongSelectView {
     const row = new Graphics();
     const active = songIndex === this.selectedIndex;
     row.label = `fallback-row[idx=${songIndex}${active ? ',active' : ''}]`;
-    // LR2's selected `#DST_BAR_BODY_OFF` slot is 259×26 with a brighter accent colour; non-selected slots are 31 px
+    // LR2's selected `#DST_BAR_BODY_OFF` slot is 259×26 with a brighter accent color; non-selected slots are 31 px
     // tall. We fake the same hierarchy with a wider/taller active row.
     if (active) {
       row
@@ -3907,7 +3907,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 function containsPoint(rect: Lr2DestinationRect, x: number, y: number): boolean {
-  const r = normaliseRect(rect);
+  const r = normalizeRect(rect);
   return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 }
 
@@ -3915,7 +3915,7 @@ function containsPoint(rect: Lr2DestinationRect, x: number, y: number): boolean 
  * Picks the bar-body sprite definition for a slot. Maps the entry kind (`'song'` / `'folder'`) onto the matching
  * `#SRC_BAR_BODY` art, falling back to a `'song'` body when the skin doesn't define a folder variant, and finally the
  * first available body. Slots with no entry (i.e. out-of-range when the cursor is near the start / end of the list)
- * still get a body sprite so the empty slats keep rendering — that matches LR2's behaviour where the rail draws even
+ * still get a body sprite so the empty slats keep rendering — that matches LR2's behavior where the rail draws even
  * past the end of the song list.
  */
 function pickBarBody(
@@ -3930,7 +3930,7 @@ function pickBarBody(
 }
 
 /**
- * Inputs captured by {@link PixiSongSelectView.currentEntries}' memoisation pass. Reference-equal `top` / `songs` is
+ * Inputs captured by {@link PixiSongSelectView.currentEntries}' memoization pass. Reference-equal `top` / `songs` is
  * enough because the view never mutates either in place — every library reload / browse-stack change replaces the
  * array, so a stale cache is impossible without one of these fields changing.
  */
@@ -4117,7 +4117,7 @@ function resolveSelectText(
  * - **92..94** — IR (online-only) — always `undefined`.
  * - **160** — initial BPM (matches the gameplay `bpm` field).
  *
- * Returning `undefined` makes the renderer skip the slot, leaving it blank — which matches LR2's behaviour when no
+ * Returning `undefined` makes the renderer skip the slot, leaving it blank — which matches LR2's behavior when no
  * value is bound.
  */
 function resolveSelectNumber(
@@ -4345,7 +4345,7 @@ function compareStrings(a: string, b: string): number {
 }
 
 /**
- * Normalises a `playLevel` value (declared as `number | string | undefined` on `BrowserSongEntry`) to a numeric sort
+ * Normalizes a `playLevel` value (declared as `number | string | undefined` on `BrowserSongEntry`) to a numeric sort
  * key. Missing / non-numeric levels sort to the END of an ascending list.
  */
 function coercePlayLevel(value: number | string | undefined): number {

@@ -223,7 +223,7 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
 }
 
 /**
- * Resolves the chart's reference BPM for hi-speed / scroll-speed normalisation, honouring the BMS spec for `#BASEBPM`.
+ * Resolves the chart's reference BPM for hi-speed / scroll-speed normalization, honoring the BMS spec for `#BASEBPM`.
  *
  * Spec — `#BASEBPM N` (hitkey BMS Memo): declares the chart's reference BPM for HS-fix style scroll calibration. When
  * set, scroll-speed-aware consumers should treat that value as the "main BPM" instead of the chart's initial `#BPM`.
@@ -256,7 +256,7 @@ export function resolveChartReferenceBpm(json: BeMusicJson, fallbackBpm?: number
  * token names which channels are present (in order), and `params` is a comma-separated list whose values match those
  * flags positionally.
  *
- * Supported flags (hitkey BMS Memo): - `p` — stereo pan (`-10000..10000` LR2-style, where 0 is centre). - `v` —
+ * Supported flags (hitkey BMS Memo): - `p` — stereo pan (`-10000..10000` LR2-style, where 0 is center). - `v` —
  * playback volume in centibels (CB), where each step is `1/100` of a dB. Negative values attenuate, `0` is unity. - `f`
  * — playback frequency in Hz. The sample is resampled (or replayed at a different rate) so its native sample rate maps
  * onto this output rate.
@@ -335,7 +335,7 @@ export function exWavVolumeCentibelsToLinearGain(centibels: number): number {
  * falls through to unity gain.
  *
  * `entries` is the parser-produced `chart.bms.exWav` map (raw post-`#EXWAVxx ` strings keyed by slot id). The returned
- * keys are passed through verbatim — they're already normalised to the chart's id base when the parser ingested them.
+ * keys are passed through verbatim — they're already normalized to the chart's id base when the parser ingested them.
  */
 export function collectBmsExWavVolumeMultipliers(entries: Readonly<Record<string, string>>): Map<string, number> {
   const out = new Map<string, number>();
@@ -352,8 +352,8 @@ export function collectBmsExWavVolumeMultipliers(entries: Readonly<Record<string
  * Parsed `#EXBMPxx a,r,g,b,filename` directive.
  *
  * Where `#BMPxx filename` declares an opaque image slot, `#EXBMPxx` declares the same slot's filename PLUS an ARGB
- * tuple that the player should apply on top — typically used by chart authors to chroma-key a backdrop colour to
- * transparent (`a = 0` for the keyed colour) or to dim a layer image (`a < 255`). The format is a single
+ * tuple that the player should apply on top — typically used by chart authors to chroma-key a backdrop color to
+ * transparent (`a = 0` for the keyed color) or to dim a layer image (`a < 255`). The format is a single
  * `a,r,g,b,filename` string (commas separating the four byte channels and the filename).
  *
  * `argbRaw` keeps the AARRGGBB-equivalent string so consumers can pass it straight to {@link parseBmsArgb} — the same
@@ -458,7 +458,7 @@ export interface BmsSwitchingBga {
    */
   argbRaw?: string;
   /**
-   * Per-frame `#BMPxx` slot ids, normalised via `normalizeObjectKey`. Empty / unparseable tokens are skipped.
+   * Per-frame `#BMPxx` slot ids, normalized via `normalizeObjectKey`. Empty / unparseable tokens are skipped.
    * `frames.length` may differ from `totalFrames` — consumers should index modulo `frames.length` while clamping to
    * `totalFrames`.
    */
@@ -500,7 +500,7 @@ export function parseBmsSwBga(raw: string, idBase: 36 | 62 = 36): BmsSwitchingBg
 }
 
 /**
- * Picks the `#BMPxx` slot id that should render at `elapsedMs` milliseconds into a switching BGA's playback. Honours
+ * Picks the `#BMPxx` slot id that should render at `elapsedMs` milliseconds into a switching BGA's playback. Honors
  * the directive's `frameIntervalMs`, `totalFrames`, and `loop` fields — when `loop = false` and the cycle has ended,
  * the last authored frame stays on screen ("hold last").
  *
@@ -537,7 +537,7 @@ export function pickSwitchingBgaFrame(swBga: BmsSwitchingBga, elapsedMs: number)
  * aliasing slots `01..09` to different tiles of `#BMP10`.
  */
 export interface BmsSubRegionBga {
-  /** Source BMP slot id, normalised via `normalizeObjectKey`. */
+  /** Source BMP slot id, normalized via `normalizeObjectKey`. */
   sourceBmp: string;
   /** Top-left X of the source rectangle (pixel coordinates). */
   sx: number;
@@ -608,16 +608,16 @@ export interface BmsArgb {
 const BMS_ARGB_HEX_RE = /^[0-9A-Fa-f]{8}$/;
 
 /**
- * Parses a BMS `#ARGBxx` raw string into A / R / G / B byte components. Recognises both formats commonly found in the
+ * Parses a BMS `#ARGBxx` raw string into A / R / G / B byte components. Recognizes both formats commonly found in the
  * wild:
  *
  * - **Hex AARRGGBB** — `'FF000000'` or `'#FF000000'` (8 hex digits, optional leading `#`). High byte = alpha.
  * - **Comma-separated decimal** — `'255,0,0,0'` (A,R,G,B with optional whitespace around each integer).
  *
- * Returns `undefined` for unrecognised / malformed input so the caller can fall back to "no tint".
+ * Returns `undefined` for unrecognized / malformed input so the caller can fall back to "no tint".
  *
  * Spec note (hitkey BMS Memo): `#ARGBxx` adjusts the color / alpha of `#BMPxx` for BGA layer composition. Authors
- * typically use it to chroma-key a backdrop colour to transparent, or to dim a layer image — in both cases the consumer
+ * typically use it to chroma-key a backdrop color to transparent, or to dim a layer image — in both cases the consumer
  * applies the parsed values as a tint × alpha at draw time.
  */
 export function parseBmsArgb(raw: string): BmsArgb | undefined {
@@ -663,7 +663,7 @@ export type BmsWavCmdParam = 'pitch' | 'volume' | 'loop';
 
 export interface BmsWavCmdEntry {
   param: BmsWavCmdParam;
-  /** Slot id (`#WAVxx`), normalised via `normalizeObjectKey`. */
+  /** Slot id (`#WAVxx`), normalized via `normalizeObjectKey`. */
   slot: string;
   /**
    * Raw integer value as written in the chart. The interpretation depends on `param` — see {@link BmsWavCmdParam}.
@@ -689,9 +689,9 @@ export function wavCmdVolumeByteToLinearGain(byteValue: number): number {
 /**
  * Parses one `#WAVCMD pp xx vv` line. Whitespace-separated tokens: - `pp` (parameter byte): `00`/`01`/`02`
  * (pitch/volume/loop). - `xx` (slot id): two-character base-36 (or base-62) id matching a `#WAVxx` declaration.
- * Returned as the normalised key. - `vv`: integer value.
+ * Returned as the normalized key. - `vv`: integer value.
  *
- * Returns `undefined` for malformed lines so callers can skip them rather than crashing on an unrecognised parameter
+ * Returns `undefined` for malformed lines so callers can skip them rather than crashing on an unrecognized parameter
  * byte.
  *
  * @param idBase  Pass `62` for charts declared with `#BASE 62` so
@@ -730,7 +730,7 @@ export function parseBmsWavCmd(line: string, idBase: 36 | 62 = 36): BmsWavCmdEnt
 /**
  * Builds a `slot → linear-gain-multiplier` map by collecting every `#WAVCMD 01 xx vv` (volume) line. Slots with no
  * `#WAVCMD 01` line stay absent (the consumer falls back to unity gain). When a chart writes multiple volume lines for
- * the same slot the LAST one wins, matching LR2 / beatoraja's "later directives override earlier" behaviour.
+ * the same slot the LAST one wins, matching LR2 / beatoraja's "later directives override earlier" behavior.
  *
  * Pitch / loop lines are intentionally skipped — they require sample-graph wiring (playback rate, loop points) that
  * lives in the audio engine, not in this pure pre-process.

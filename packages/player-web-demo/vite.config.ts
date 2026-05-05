@@ -384,8 +384,8 @@ export default defineConfig({
     // to the outer `module.exports`, so ts-ebml's downstream `require("ebml")` ends up with `tools === undefined` and
     // crashes the recording-stop flow with `Cannot read properties of undefined (reading 'readVint')`. A plain string
     // `resolve.alias` would also match `ebml-block` / `ebml-iterator` (Vite alias is prefix-based); a regex alias makes
-    // Vite's CJS optimiser throw inside `escapeRegex`. A bespoke `resolveId` hook is both narrow enough to skip the
-    // prefix collisions and simple enough to dodge the optimiser's regex bug.
+    // Vite's CJS optimizer throw inside `escapeRegex`. A bespoke `resolveId` hook is both narrow enough to skip the
+    // prefix collisions and simple enough to dodge the optimizer's regex bug.
     {
       name: 'be-music:resolve-ebml-esm',
       enforce: 'pre',
@@ -420,10 +420,10 @@ export default defineConfig({
     // Pre-bundle `ts-ebml` up-front so Vite's CJS-named-export interop runs at boot rather than the second pass a
     // dynamic import would trigger. Listed explicitly because we no longer dynamic-import it from
     // `gameplay-recorder.ts`; without this pin, the static import is still detected, but the explicit listing makes the
-    // optimisation deterministic across cache-cleared dev sessions.
+    // optimization deterministic across cache-cleared dev sessions.
     include: ['ts-ebml'],
     // The pre-bundle phase resolves bare imports through Rolldown, which runs SEPARATELY from Vite's plugin pipeline —
-    // so the `resolve-ebml-esm` plugin below isn't consulted while ts-ebml is being optimised, and Rolldown would once
+    // so the `resolve-ebml-esm` plugin below isn't consulted while ts-ebml is being optimized, and Rolldown would once
     // again pick `ebml`'s `"browser"` field (`lib/ebml.iife.js`) and inline a private-closure module that exports
     // nothing usable. Steering the pre-bundler at the ESM bundle here is what actually makes the runtime
     // `tools.readVint` non-undefined.

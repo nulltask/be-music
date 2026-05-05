@@ -27,7 +27,7 @@ function destination(overrides: Partial<Lr2DestinationRect> = {}): Lr2Destinatio
 }
 
 describe('resolveScaledViewport', () => {
-  test('centres the design rectangle inside a wider screen', () => {
+  test('centers the design rectangle inside a wider screen', () => {
     expect(resolveScaledViewport(1280, 720, 640, 480)).toEqual({
       x: 160,
       y: 0,
@@ -50,7 +50,7 @@ describe('isDestinationVisible', () => {
     expect(isDestinationVisible(destination({ timer: 12 }), new Set(), (timer) => timer === 12)).toBe(true);
   });
 
-  test('honours positive and negated op gates', () => {
+  test('honors positive and negated op gates', () => {
     const gated = destination({ ops: [41, -55, 0] });
     expect(isDestinationVisible(gated, new Set([41]), () => true)).toBe(true);
     expect(isDestinationVisible(gated, new Set(), () => true)).toBe(false);

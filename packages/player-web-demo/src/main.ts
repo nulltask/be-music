@@ -69,7 +69,7 @@ app.innerHTML = `
         Structured as three layers:
         - \`.drop-frame\`: subtle outer ring spanning the whole
           stage, lights up during a live drag.
-        - \`.drop-card\`: centred glassmorphism panel hosting the
+        - \`.drop-card\`: centered glassmorphism panel hosting the
           actual content; hosts the entry / hover animations.
         - icon + title + subtitle for the hierarchy.
       -->
@@ -78,7 +78,7 @@ app.innerHTML = `
         <div class="drop-card">
           <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
             <!--
-              Stylised download arrow. The two halves animate
+              Stylized download arrow. The two halves animate
               independently so the head bounces while the
               shaft holds steady — feels lighter than a single
               translateY.
@@ -180,7 +180,7 @@ app.innerHTML = `
       bar below moves between "indeterminate" (CSS animation) and
       "determinate" (inline width %) states depending on whether
       the active phase reports a known total. The card sits in the
-      centre of the shell so it's visible regardless of which
+      center of the shell so it's visible regardless of which
       scene is currently mounted (select / gameplay / result).
     -->
     <div class="loading-overlay" id="loading-overlay" aria-hidden="true">
@@ -525,7 +525,7 @@ interface PlayerWebDemoElements {
    */
   searchInput: HTMLInputElement;
   /**
-   * Centred overlay shown while a dropped folder / ZIP is being read + parsed. Toggled via the `.visible` class so CSS
+   * Centered overlay shown while a dropped folder / ZIP is being read + parsed. Toggled via the `.visible` class so CSS
    * controls the fade-in / fade-out, and the `aria-hidden` attribute mirrors the visibility for screen readers.
    */
   loadingOverlay: HTMLDivElement;
@@ -722,7 +722,7 @@ class PlayerWebDemoApp {
       // Debug overlay for invisible / keysound notes — off by default. Power users investigating chart authoring (or
       // diagnosing missing keysound triggers) flip it on; the regular gameplay surface stays clean otherwise.
       showInvisibleNotes: false,
-      // Default to LR2 / beatoraja's stock behaviour (judged notes disappear at the judge line) — matches what most
+      // Default to LR2 / beatoraja's stock behavior (judged notes disappear at the judge line) — matches what most
       // users coming from those players expect. The dropdown lets users opt into the `'KEEP_SCROLLING'` mode (≈
       // beatoraja LANEEFFECT ON) for timing-learning play.
       judgedNoteDisplay: 'HIDE',
@@ -733,8 +733,8 @@ class PlayerWebDemoApp {
       },
     };
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
-    // (the same helper exported from `audio-bus.ts`) so the recognised values stay synced with the runtime API.
-    // Unrecognised / missing flag → fall through to defaults: architecture `'split'`, GUI checkbox checked (compressor
+    // (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the runtime API.
+    // Unrecognized / missing flag → fall through to defaults: architecture `'split'`, GUI checkbox checked (compressor
     // on, see the `compressor: true` seed above for the rationale).
     //
     // `?compressor=split|legacy` is an explicit opt-in to that architecture and keeps the checkbox checked.
@@ -857,7 +857,7 @@ class PlayerWebDemoApp {
         void this.handleDrop(event.dataTransfer);
       }
     });
-    // Belt-and-braces: the spec lets `dragend` fire on the source element when a drag is cancelled (Esc, drop on a
+    // Belt-and-braces: the spec lets `dragend` fire on the source element when a drag is canceled (Esc, drop on a
     // non-target). For files dragged in from the OS it shouldn't normally fire on `window`, but if a custom source ever
     // does we still want to clear state.
     window.addEventListener('dragend', () => {
@@ -879,7 +879,7 @@ class PlayerWebDemoApp {
    * - `?compressor=legacy` → the legacy architecture has just one compressor; per-stage toggles don't map onto it.
    *
    * lil-gui's `show(false)` collapses the folder out of the panel entirely, matching the previous `display: none`
-   * behaviour.
+   * behavior.
    */
   private refreshCompressorStageVisibility(): void {
     const visible = this.guiState.compressor && this.compressorMode === 'split';
@@ -887,7 +887,7 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Builds the floating lil-gui control panel and wires every controller to the gameplay / scene state. Centralising
+   * Builds the floating lil-gui control panel and wires every controller to the gameplay / scene state. Centralizing
    * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageFolder`)
    * up-front, so runtime code can address them by name (renaming the record button when capture starts, hiding the
    * per-stage folder on compressor mode change) without re-querying the DOM.
@@ -915,7 +915,7 @@ class PlayerWebDemoApp {
       .name('Auto pause on blur')
       .onChange((value: boolean) => {
         this.guiState.autoPauseOnBlur = value;
-        // Push live so a chart already in flight starts honouring the new policy on its next visibility / blur event,
+        // Push live so a chart already in flight starts honoring the new policy on its next visibility / blur event,
         // without forcing the user to restart the song.
         this.gameplayView?.setAutoPauseOnBlur(value);
       });
@@ -955,11 +955,11 @@ class PlayerWebDemoApp {
     // Both controls are dropdowns rather than free-form fields: the meaningful options cluster around standard video
     // heights (SD / 720p / 1080p / 4K) and a discrete codec pick. `0` in the resize dropdown is the magic "Off" value —
     // the consumer treats anything `≤ 0` as "preserve resolution". Earlier iterations split resize into a checkbox +
-    // size pair, but users would change the size without realising they also had to flip the checkbox — the resize was
+    // size pair, but users would change the size without realizing they also had to flip the checkbox — the resize was
     // silently a no-op. Folding both into one control with an explicit `Off` row removes that footgun.
     const transcode = gui.addFolder('BGA video transcode');
     // WebCodecs `VideoEncoder` is a browser feature; gate the checkbox on its existence so the user can't toggle a
-    // state the runtime can't honour. On unsupported browsers (Safari < 17, older Firefox builds) the controller is
+    // state the runtime can't honor. On unsupported browsers (Safari < 17, older Firefox builds) the controller is
     // disabled and the seed value stays at `false`.
     const webCodecsSupported = typeof window !== 'undefined' && 'VideoEncoder' in window;
     const webCodecsController = transcode
@@ -1000,7 +1000,7 @@ class PlayerWebDemoApp {
         this.gameplayView?.setShowInvisibleNotes(value);
       });
     // Picks between LR2-faithful "judged note disappears at the judge line" and our historical "keep scrolling past it"
-    // behaviour. Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint —
+    // behavior. Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint —
     // the visibility check is a single per-frame branch with no backing state to rebuild.
     gui
       .add(this.guiState, 'judgedNoteDisplay', {
@@ -1031,7 +1031,7 @@ class PlayerWebDemoApp {
    * status panel.
    *
    * Visual state lives entirely on the lil-gui record controller: `name()` swaps the label between `● Record` / `■
-   * Stop`, and `disable()` greys it out while the WebM blob is being assembled on stop. The `.recording` CSS class on
+   * Stop`, and `disable()` grays it out while the WebM blob is being assembled on stop. The `.recording` CSS class on
    * the controller's DOM element drives the red-glow accent so the lil-gui style takes precedence over our highlight.
    */
   private async toggleRecording(): Promise<void> {
@@ -1055,7 +1055,7 @@ class PlayerWebDemoApp {
     }
     if (gameplay.isRecording()) {
       controller?.disable();
-      this.setStatus('Finalising recording…');
+      this.setStatus('Finalizing recording…');
       try {
         const result = await gameplay.stopRecording();
         if (result) {
@@ -1089,14 +1089,14 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Filename base for the next saved recording. Derived from the currently-playing song's title (sanitised for
+   * Filename base for the next saved recording. Derived from the currently-playing song's title (sanitized for
    * filesystem safety) or `gameplay-<timestamp>` when no song info is available. Updated on every `playSong` so
    * back-to-back recordings don't overwrite each other in the user's downloads folder.
    */
   private recordingFilenameBase = 'gameplay';
 
   /**
-   * Reveals the centred loading overlay and reset its readout to a neutral "Loading…" state. The actual phase / counter
+   * Reveals the centered loading overlay and reset its readout to a neutral "Loading…" state. The actual phase / counter
    * text fills in via `applyLoadProgress` as events fire from the loaders.
    */
   private showLoadingOverlay(): void {
@@ -1292,7 +1292,7 @@ class PlayerWebDemoApp {
 
   private async showSelect(): Promise<void> {
     this.elements.shell.classList.remove('playing');
-    // The `.empty` class drives the centred "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
+    // The `.empty` class drives the centered "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
     // and back on after a wipe / failed drop so the hint comes back instead of leaving the user staring at a blank
     // canvas.
     this.elements.shell.classList.toggle('empty', this.collection.songs.length === 0);
@@ -1596,7 +1596,7 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * If a recording is active, calls {@link toggleRecording} to finalise + download. Used at chart end / exit / restart
+   * If a recording is active, calls {@link toggleRecording} to finalize + download. Used at chart end / exit / restart
    * so the user doesn't lose footage when transitioning out of gameplay.
    */
   private async finalizeRecordingIfActive(): Promise<void> {
@@ -1698,8 +1698,8 @@ function renderBrowserCompatPanel(report: BrowserCompatReport): void {
 }
 
 /**
- * Builds one feature row inside the compat panel. Status colour is encoded both as a CSS modifier class (drives the
- * icon / background) and as a screen-reader-friendly text fallback so the verdict is accessible without colour vision.
+ * Builds one feature row inside the compat panel. Status color is encoded both as a CSS modifier class (drives the
+ * icon / background) and as a screen-reader-friendly text fallback so the verdict is accessible without color vision.
  */
 function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIElement {
   const li = document.createElement('li');
@@ -1713,7 +1713,7 @@ function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIEleme
   const icon = document.createElement('span');
   icon.className = 'compat-row-icon';
   icon.setAttribute('aria-hidden', 'true');
-  // Plain text glyphs over inline SVG — keeps the markup compact and lets us colour the glyph via `color:
+  // Plain text glyphs over inline SVG — keeps the markup compact and lets us color the glyph via `color:
   // currentColor`. The accessibility verdict is carried by the screen-reader text span below, not by the symbol.
   icon.textContent = item.supported ? '✓' : item.required ? '✕' : '–';
   li.appendChild(icon);

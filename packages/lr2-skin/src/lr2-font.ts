@@ -53,7 +53,7 @@ export interface Lr2BitmapFont {
 }
 
 /**
- * Parses a `.lr2font` source text into the structured form. Lines are tokenised on whitespace; unknown directives are
+ * Parses a `.lr2font` source text into the structured form. Lines are tokenized on whitespace; unknown directives are
  * silently skipped so future `#X` keywords don't break the parse. Unparseable numeric fields fall back to `0`.
  */
 export function parseLr2Font(source: string): Lr2BitmapFont {

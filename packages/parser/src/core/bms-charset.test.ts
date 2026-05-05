@@ -1,49 +1,49 @@
 import { describe, expect, test } from 'vitest';
-import { canonicaliseBmsCharset, extractDeclaredBmsCharset } from './bms-charset.ts';
+import { canonicalizeBmsCharset, extractDeclaredBmsCharset } from './bms-charset.ts';
 
-describe('canonicaliseBmsCharset', () => {
+describe('canonicalizeBmsCharset', () => {
   test('maps every common UTF-8 spelling onto utf-8', () => {
-    expect(canonicaliseBmsCharset('UTF-8')).toBe('utf-8');
-    expect(canonicaliseBmsCharset('utf8')).toBe('utf-8');
-    expect(canonicaliseBmsCharset(' utf8 ')).toBe('utf-8');
-    expect(canonicaliseBmsCharset('utf_8')).toBe('utf-8');
+    expect(canonicalizeBmsCharset('UTF-8')).toBe('utf-8');
+    expect(canonicalizeBmsCharset('utf8')).toBe('utf-8');
+    expect(canonicalizeBmsCharset(' utf8 ')).toBe('utf-8');
+    expect(canonicalizeBmsCharset('utf_8')).toBe('utf-8');
   });
 
   test('maps every common Shift_JIS spelling onto shift_jis', () => {
-    expect(canonicaliseBmsCharset('Shift_JIS')).toBe('shift_jis');
-    expect(canonicaliseBmsCharset('Shift-JIS')).toBe('shift_jis');
-    expect(canonicaliseBmsCharset('shiftjis')).toBe('shift_jis');
-    expect(canonicaliseBmsCharset('sjis')).toBe('shift_jis');
-    expect(canonicaliseBmsCharset('cp932')).toBe('shift_jis');
-    expect(canonicaliseBmsCharset('CP932')).toBe('shift_jis');
-    expect(canonicaliseBmsCharset('MS932')).toBe('shift_jis');
-    expect(canonicaliseBmsCharset('windows-31j')).toBe('shift_jis');
+    expect(canonicalizeBmsCharset('Shift_JIS')).toBe('shift_jis');
+    expect(canonicalizeBmsCharset('Shift-JIS')).toBe('shift_jis');
+    expect(canonicalizeBmsCharset('shiftjis')).toBe('shift_jis');
+    expect(canonicalizeBmsCharset('sjis')).toBe('shift_jis');
+    expect(canonicalizeBmsCharset('cp932')).toBe('shift_jis');
+    expect(canonicalizeBmsCharset('CP932')).toBe('shift_jis');
+    expect(canonicalizeBmsCharset('MS932')).toBe('shift_jis');
+    expect(canonicalizeBmsCharset('windows-31j')).toBe('shift_jis');
   });
 
   test('maps EUC-JP variants', () => {
-    expect(canonicaliseBmsCharset('EUC-JP')).toBe('euc-jp');
-    expect(canonicaliseBmsCharset('eucjp')).toBe('euc-jp');
+    expect(canonicalizeBmsCharset('EUC-JP')).toBe('euc-jp');
+    expect(canonicalizeBmsCharset('eucjp')).toBe('euc-jp');
   });
 
   test('maps Latin1 / Windows-1252 variants', () => {
-    expect(canonicaliseBmsCharset('iso-8859-1')).toBe('iso-8859-1');
-    expect(canonicaliseBmsCharset('latin1')).toBe('iso-8859-1');
-    expect(canonicaliseBmsCharset('Latin-1')).toBe('iso-8859-1');
-    expect(canonicaliseBmsCharset('cp1252')).toBe('iso-8859-1');
-    expect(canonicaliseBmsCharset('windows-1252')).toBe('iso-8859-1');
+    expect(canonicalizeBmsCharset('iso-8859-1')).toBe('iso-8859-1');
+    expect(canonicalizeBmsCharset('latin1')).toBe('iso-8859-1');
+    expect(canonicalizeBmsCharset('Latin-1')).toBe('iso-8859-1');
+    expect(canonicalizeBmsCharset('cp1252')).toBe('iso-8859-1');
+    expect(canonicalizeBmsCharset('windows-1252')).toBe('iso-8859-1');
   });
 
   test('maps UTF-16 variants', () => {
-    expect(canonicaliseBmsCharset('UTF-16LE')).toBe('utf-16le');
-    expect(canonicaliseBmsCharset('UTF-16BE')).toBe('utf-16be');
-    expect(canonicaliseBmsCharset('utf-16')).toBe('utf-16le');
+    expect(canonicalizeBmsCharset('UTF-16LE')).toBe('utf-16le');
+    expect(canonicalizeBmsCharset('UTF-16BE')).toBe('utf-16be');
+    expect(canonicalizeBmsCharset('utf-16')).toBe('utf-16le');
   });
 
   test('returns undefined for unknown / empty / non-string inputs', () => {
-    expect(canonicaliseBmsCharset('Klingon')).toBeUndefined();
-    expect(canonicaliseBmsCharset('')).toBeUndefined();
-    expect(canonicaliseBmsCharset('   ')).toBeUndefined();
-    expect(canonicaliseBmsCharset(undefined)).toBeUndefined();
+    expect(canonicalizeBmsCharset('Klingon')).toBeUndefined();
+    expect(canonicalizeBmsCharset('')).toBeUndefined();
+    expect(canonicalizeBmsCharset('   ')).toBeUndefined();
+    expect(canonicalizeBmsCharset(undefined)).toBeUndefined();
   });
 });
 
@@ -75,7 +75,7 @@ describe('extractDeclaredBmsCharset', () => {
     expect(extractDeclaredBmsCharset('#TITLE test\n#ARTIST foo\n')).toBeUndefined();
   });
 
-  test('returns undefined when the directive value does not canonicalise', () => {
+  test('returns undefined when the directive value does not canonicalize', () => {
     expect(extractDeclaredBmsCharset('#CHARSET Klingon\n')).toBeUndefined();
   });
 });

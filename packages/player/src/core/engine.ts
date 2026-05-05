@@ -721,7 +721,7 @@ function resolveLandmineGaugeEffect(
   gaugeDelta: number;
 } {
   // Mine damage encodes the value in base-36 regardless of the chart's `#BASE` setting (the damage formula `value/2` is
-  // a BMS-spec constant, not an indexed-resource lookup), so the ID is normalised under the chart's base only to keep
+  // a BMS-spec constant, not an indexed-resource lookup), so the ID is normalized under the chart's base only to keep
   // the returned `objectValue` in sync with the rest of the resource-key reporting. Mine charts that opt into base-62
   // and use lowercase mine values will surface them verbatim here; the BASE36-pattern guard below still controls
   // whether the value is interpreted numerically.
@@ -2814,7 +2814,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       // LR2-compatible 空POOR (empty POOR): phantom press with no candidate and no benign explanation. Apply the gauge
       // delta (GROOVE / HARD -2, EASY -1, DEATH -100 — see `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR
-      // BGA, but DO NOT break combo or increment `summary.poor`. Real LR2 behaviour: NORMAL / EASY make this nearly
+      // BGA, but DO NOT break combo or increment `summary.poor`. Real LR2 behavior: NORMAL / EASY make this nearly
       // harmless; HARD / DEATH actually drain.
       applyLoggedGaugeJudge(nowSec, 'EMPTY_POOR', 'empty-poor');
       uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: nowSec });

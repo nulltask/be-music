@@ -17,7 +17,7 @@ export const PIXELS_PER_BEAT = 72;
  * lr2Lane.x * scale` resolve to scale=1.0 with no horizontal offset — the skin paints at its authored coordinates 1:1.
  *
  * Bumping this to 1280×720 (matching `pixi-select` / `pixi-result` / `pixi-decide`'s fallback) would force every
- * 640×480 skin to render at scale=1.5 inside an off-centre letterbox, mis-positioning notes and chart chrome — a
+ * 640×480 skin to render at scale=1.5 inside an off-center letterbox, mis-positioning notes and chart chrome — a
  * regression that was caught immediately when an LR2 default skin was dropped during gameplay.
  */
 export const DESIGN_WIDTH = 640;

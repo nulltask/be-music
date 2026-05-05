@@ -268,7 +268,7 @@ describe('resolveChartAudioAsset', () => {
     expect(resolveChartAudioAsset(source, 'Song/main.bms', 'snare.wav')).toBe(OPUS_BYTES);
   });
 
-  test('honours the BMS #PATH_WAV prefix when supplied by the caller', () => {
+  test('honors the BMS #PATH_WAV prefix when supplied by the caller', () => {
     // Spec — `#PATH_WAV wav/` + `#WAV01 kick.wav` should resolve to `wav/kick.wav` on disk. The prefixed form is tried
     // first; the bare name is the fallback.
     const PREFIXED_BYTES = new Uint8Array([1, 2, 3]);

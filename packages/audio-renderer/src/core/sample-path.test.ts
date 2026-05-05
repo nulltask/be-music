@@ -35,7 +35,7 @@ describe('createSamplePathCandidates', () => {
     expect(candidates).toContain('voice.mp3');
   });
 
-  test('Windows-style backslash paths are normalised into forward-slash candidates too', () => {
+  test('Windows-style backslash paths are normalized into forward-slash candidates too', () => {
     // Same path with backslashes converted to slashes is appended so the resolver finds files on either form of
     // case-/separator-sensitive filesystem.
     const candidates = createSamplePathCandidates('subdir\\kick.wav');
@@ -58,7 +58,7 @@ describe('createSamplePathCandidates', () => {
     expect(candidates.indexOf('wav/kick.wav')).toBeLessThan(candidates.indexOf('kick.wav'));
   });
 
-  test('#PATH_WAV prefix without a trailing slash is normalised', () => {
+  test('#PATH_WAV prefix without a trailing slash is normalized', () => {
     const candidates = createSamplePathCandidates('kick.wav', { pathPrefix: 'wav' });
     expect(candidates).toContain('wav/kick.wav');
   });
