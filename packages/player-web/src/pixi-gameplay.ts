@@ -1153,6 +1153,26 @@ export class PixiGameplayView {
     {};
   /** `performance.now()` of the most recent POOR judgement, drives the POOR-BGA window. */
   private lastPoorAt = 0;
+  /**
+   * BMS spec — when the chart omits `#POORBGA` and provides
+   * `#BMP00`, the BMP00 image acts as the implicit POOR
+   * placeholder until an explicit `#xxx06` POOR cue takes
+   * over. Set during {@link prepareSong} so the renderer can
+   * paint BMP00 on a miss before any authored POOR event
+   * fires; left `undefined` when the chart already authors a
+   * proper POOR track or doesn't ship a BMP00 fallback. Mirrors
+   * the TUI BGA renderer's `poorFallbackKey` plumbing.
+   */
+  private poorBgaFallbackKey: string | undefined;
+  /**
+   * Chart-time after which the BMP00 POOR fallback yields to
+   * the explicit POOR timeline. Equal to the first authored
+   * POOR cue's `seconds` (or `Infinity` when no POOR cues
+   * exist). The renderer compares the chart playhead against
+   * this so a chart that authors POOR mid-song falls back to
+   * BMP00 only during the pre-roll.
+   */
+  private poorBgaFallbackUntilSeconds = Number.POSITIVE_INFINITY;
   /** Whether the chart actually carries any BGA events (drives op 170/171). */
   private hasBga = false;
   /** Smoothed score for the count-up animation. Lerps toward `score.score`. */
@@ -2010,6 +2030,17 @@ export class PixiGameplayView {
     this.fullComboFired = false;
     this.displayedScore = 0;
     this.bgaTimeline = buildBgaTimeline(resolved, resolver);
+    // BMS spec — when `#POORBGA` is unset but `#BMP00` exists,
+    // BMP00 becomes the implicit POOR placeholder until an
+    // explicit `#xxx06` cue fires. Mirrors the TUI BGA
+    // renderer's `poorFallbackKey` so the web side stops
+    // showing a black POOR plate on misses for charts that
+    // rely on this convention.
+    const poorBmp00 = resolved.resources.bmp['00'];
+    const shouldUsePoorBmp00Fallback =
+      typeof resolved.bms.poorBga !== 'string' && typeof poorBmp00 === 'string' && poorBmp00.length > 0;
+    this.poorBgaFallbackKey = shouldUsePoorBmp00Fallback ? '00' : undefined;
+    this.poorBgaFallbackUntilSeconds = this.bgaTimeline.poor[0]?.seconds ?? Number.POSITIVE_INFINITY;
     this.hasBga =
       this.bgaTimeline.base.length > 0 || this.bgaTimeline.layer.length > 0 || this.bgaTimeline.poor.length > 0;
     this.initializeRuntimeOps();
@@ -2684,6 +2715,12 @@ export class PixiGameplayView {
     }
     for (const cue of this.bgaTimeline.layer) {
       if (cue.bmpKey) layerTrackKeys.add(cue.bmpKey);
+    }
+    // Preload the BMP00 POOR fallback alongside the regular
+    // POOR cues so the very first miss shows the placeholder
+    // instantly instead of waiting for an on-demand decode.
+    if (this.poorBgaFallbackKey) {
+      baseTrackKeys.add(this.poorBgaFallbackKey);
     }
     // Build a map of `bmpKey → file path` covering both BMS-style ids and
     // bmson `bga.header[].name`s. The bmson header carries the actual
@@ -4836,7 +4873,20 @@ export class PixiGameplayView {
     const poorWindowMs = 2000;
     const inPoorWindow =
       !controllingBga.noPoor && this.lastPoorAt > 0 && this.playClock() - this.lastPoorAt < poorWindowMs;
-    const poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, seconds) : undefined;
+    let poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, seconds) : undefined;
+    // BMP00 fallback: when no explicit POOR cue is active but the
+    // chart left `#POORBGA` blank with a `#BMP00` defined, paint
+    // BMP00 during the miss window. Capped at the first authored
+    // POOR cue's chart-time so a chart that does eventually
+    // author POOR isn't permanently stuck on the placeholder.
+    if (
+      inPoorWindow &&
+      poorKey === undefined &&
+      this.poorBgaFallbackKey !== undefined &&
+      seconds < this.poorBgaFallbackUntilSeconds
+    ) {
+      poorKey = this.poorBgaFallbackKey;
+    }
     this.syncBgaVideo('base', baseCue, seconds);
     this.syncBgaVideo('layer', layerCue, seconds);
 
