@@ -494,6 +494,16 @@ export class PixiGameplayView {
   private readonly overlayLayer = new Container();
   private readonly textLayer = new Container();
   /**
+   * Sub-layer of `skinLayer` that hosts every `makeLr2BitmapTextSprite` Container created on the bitmap-font path of
+   * `renderTextElement`. The bitmap-text helper returns a freshly-allocated `Container` each call, which the pool
+   * abstraction can't recycle (it tracks `Sprite` / `Graphics` / `Text` instances only). Without this dedicated
+   * sub-layer the per-frame Containers used to silently accumulate inside `skinLayer` after the pool refactor —
+   * visible as the LR2 intro title text staying painted across every subsequent frame. We `disposeChildren` this
+   * sub-layer at the top of every `renderSkin` pass so its content is rebuilt from scratch each tick, the same as
+   * the pre-pool path did for the whole skin layer.
+   */
+  private readonly skinBitmapTextLayer = new Container();
+  /**
    * Per-frame `Sprite` / `Graphics` / `Text` recyclers — one per layer that previously paid for
    * `disposeChildren(layer)` + fresh allocations on every render tick. The pool reuses parented children across
    * frames (toggling `visible` and overwriting properties), eliminating the allocation churn that historically
@@ -1062,6 +1072,7 @@ export class PixiGameplayView {
     for (const layer of [
       this.bgaLayer,
       this.skinLayer,
+      this.skinBitmapTextLayer,
       this.laneLayer,
       this.noteLayer,
       this.shutterLayer,
@@ -1071,6 +1082,10 @@ export class PixiGameplayView {
     ]) {
       layer.eventMode = 'none';
     }
+    // Park the bitmap-text sub-layer inside `skinLayer` so it inherits the skin's scale / position transform. Stacked
+    // last among `skinLayer`'s children so its painted glyphs sit on top of the rest of the skin chrome, matching the
+    // z-order the pre-pool path produced (where bitmap text was the last `addChild` in the skin pass).
+    this.skinLayer.addChild(this.skinBitmapTextLayer);
     this.root.addChild(
       this.background,
       this.bgaLayer,
@@ -4424,6 +4439,10 @@ export class PixiGameplayView {
     }
     this.skinLayerPool.begin();
     this.overlayLayerPool.begin();
+    // The bitmap-font path of `renderTextElement` adds a freshly-allocated Container per text element each frame
+    // (see `makeLr2BitmapTextSprite`). The pool abstraction can't recycle those, so we host them in a dedicated
+    // sub-layer and tear it down per render — same approach the pre-pool path used for the whole skin layer.
+    disposeChildren(this.skinBitmapTextLayer);
     const scale = Math.min(width / skin.width, height / skin.height);
     this.skinLayer.scale.set(scale);
     this.skinLayer.position.set((width - skin.width * scale) / 2, (height - skin.height * scale) / 2);
@@ -4691,7 +4710,9 @@ export class PixiGameplayView {
     // loaded.
     const loaded = this.bitmapFonts.get(text.font);
     if (loaded) {
-      this.skinLayer.addChild(makeLr2BitmapTextSprite(value, text, interpolated, loaded));
+      // Bitmap-text path uses a per-frame disposeChildren'd sub-layer (see `skinBitmapTextLayer`) instead of the
+      // pool because `makeLr2BitmapTextSprite` builds a fresh `Container` of glyph sprites each call.
+      this.skinBitmapTextLayer.addChild(makeLr2BitmapTextSprite(value, text, interpolated, loaded));
       return;
     }
     // Match the LR2 destination height as the font size; this gives roughly the right size for system fonts even though
