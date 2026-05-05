@@ -98,6 +98,15 @@ export class PixiSceneHost {
       // the previous fragment count; 1× / 2× displays (the common case) are unaffected.
       resolution: Math.min(2, globalThis.devicePixelRatio || 1),
       roundPixels: true,
+      // Tighten Pixi's TextureGCSystem windows. Defaults are 30 s check / 60 s idle-eviction; that's too lax for BMS
+      // playback where the BGA prepass loads dozens of frames that may be referenced exactly once and then never
+      // again (animated layered BGAs cycle through a frame band; a #BGA-defined freeze frame fires once and is dead
+      // for the rest of the chart). Halving both windows lets the GPU reclaim those one-shot textures within ~30 s
+      // of their last reference, smoothing peak texture-memory across long sessions. The CPU cost is the GC
+      // walk itself, which is a single pass over the texture cache every 15 s — negligible next to a per-frame
+      // render pass.
+      gcMaxUnusedTime: 30_000,
+      gcFrequency: 15_000,
       ...options?.appOptions,
     });
     // Surface the actual renderer type — the `preference` field is a *hint*, and the real backend may differ if WebGPU
