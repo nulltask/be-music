@@ -567,6 +567,40 @@ describe('parser', () => {
     expect(json.metadata.total).toBe(100);
   });
 
+  test('bmson: negative info.total is normalised to its absolute value per the 1.0.0 spec', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', total: -260 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    // Spec: "If negative, take the absolute value." Both the
+    // bmson IR field and the unified `metadata.total` slot
+    // surface the positive value so the gauge formula
+    // (`+TOTAL/N`) stays on the positive branch.
+    expect(json.bmson.info.total).toBe(260);
+    expect(json.metadata.total).toBe(260);
+  });
+
+  test('bmson: info.total = 0 is preserved (lifebar does not increase)', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', total: 0 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    // Spec: "If 0, the lifebar doesn't increase." The abs
+    // normalisation must not collapse 0 into the missing-default
+    // (100) — the gauge formula sees baseGain = 0/N = 0 and
+    // emits no PG/GR rise.
+    expect(json.bmson.info.total).toBe(0);
+    expect(json.metadata.total).toBe(0);
+  });
+
   test('bmson: explicit info.total wins over the spec default', () => {
     const json = parseBmson(
       JSON.stringify({

@@ -517,7 +517,14 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
   copyIfFiniteNumber(normalized, 'level', info.level);
   copyIfFiniteNumber(normalized, 'initBpm', info.init_bpm);
   copyIfFiniteNumber(normalized, 'judgeRank', info.judge_rank);
-  copyIfFiniteNumber(normalized, 'total', info.total);
+  // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take
+  // the absolute value." Normalising at parse time keeps the
+  // gauge formula (`+TOTAL/N`) on the positive branch and means
+  // every downstream consumer (gauge, stringifier, round-trip
+  // re-parse) sees the canonical value. `total: 0` stays
+  // semantically meaningful (lifebar doesn't increase, per the
+  // same spec section).
+  copyIfFiniteNumberAbs(normalized, 'total', info.total);
 
   if (resolution > 0) {
     normalized.resolution = resolution;
@@ -724,6 +731,19 @@ function copyIfFiniteNumber<T extends object>(target: T, key: keyof T & string, 
   }
 }
 
+/**
+ * Same as {@link copyIfFiniteNumber} but applies `Math.abs` so
+ * spec fields that say "if negative, take the absolute value"
+ * (notably `info.total`) get normalised at parse time. Keeps
+ * `0` intact so its spec-defined "lifebar doesn't increase"
+ * meaning is preserved.
+ */
+function copyIfFiniteNumberAbs<T extends object>(target: T, key: keyof T & string, value: unknown): void {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    (target as Record<string, unknown>)[key] = Math.abs(value);
+  }
+}
+
 function normalizePositiveInteger(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined;
@@ -761,7 +781,10 @@ function normalizeBmsonInfoFromIr(input: unknown): BeMusicJson['bmson']['info'] 
   copyIfFiniteNumber(info, 'level', raw.level);
   copyIfFiniteNumber(info, 'initBpm', raw.initBpm ?? raw.init_bpm);
   copyIfFiniteNumber(info, 'judgeRank', raw.judgeRank ?? raw.judge_rank);
-  copyIfFiniteNumber(info, 'total', raw.total);
+  // Match `normalizeBmsonInfoForIr`'s spec-compliant absolute
+  // value handling so re-parsing a previously-stringified IR
+  // doesn't reintroduce a negative `total`.
+  copyIfFiniteNumberAbs(info, 'total', raw.total);
 
   const resolution = normalizePositiveInteger(raw.resolution);
   if (resolution !== undefined && resolution > 0) {
