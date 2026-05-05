@@ -220,7 +220,7 @@ export class ChartPreviewEngine {
       try {
         source.stop();
       } catch {
-                // `stop()` throws when the source hasn't started yet (a future-scheduled trigger we never reached) or has
+        // `stop()` throws when the source hasn't started yet (a future-scheduled trigger we never reached) or has
         // already ended. Both are fine — we just want it gone.
       }
       try {
@@ -263,12 +263,12 @@ export class ChartPreviewEngine {
     try {
       buffer = await this.audioContext.decodeAudioData(bytes.slice().buffer);
     } catch {
-            // Codec mismatch or corrupt file. Silently skip — the user will see the focused bar but hear nothing, which is
+      // Codec mismatch or corrupt file. Silently skip — the user will see the focused bar but hear nothing, which is
       // strictly better than throwing into the rAF tick.
       return;
     }
     if (sequence !== this.activeSequence) return;
-        // LR2 / packages/player both trim leading silence from the preview rendering so the user hears the first audible
+    // LR2 / packages/player both trim leading silence from the preview rendering so the user hears the first audible
     // sample the moment the focus delay elapses, not several hundred milliseconds of "did anything happen?" silence
     // baked into the source file. Web Audio's `start(when, offset)` is exactly the right tool: skip past the silent
     // prefix on first play, and pin the loop boundary to the same offset so every subsequent loop iteration also starts
@@ -289,7 +289,7 @@ export class ChartPreviewEngine {
       } catch {
         // See `stopAllSources` — silenced for the same reason.
       }
-            // When the last live source ends, signal stop so the host can unduck the BGM. With `loop = true` (default) this
+      // When the last live source ends, signal stop so the host can unduck the BGM. With `loop = true` (default) this
       // path only fires on a manual `stop()`; without looping we want the natural end-of-buffer to release the duck.
       if (this.activeSources.size === 0) {
         this.emitPlaybackStop();
@@ -304,7 +304,7 @@ export class ChartPreviewEngine {
     const chart = target.song.chart;
     const triggers = collectChartPreviewTriggers(chart, this.fallbackDurationSeconds);
     if (triggers.length === 0) return;
-        // Unique #WAVxx slots referenced inside the preview window — the only WAVs we need to bother decoding for this
+    // Unique #WAVxx slots referenced inside the preview window — the only WAVs we need to bother decoding for this
     // preview.
     const sampleKeys = new Set<string>();
     for (const trigger of triggers) {
@@ -332,7 +332,7 @@ export class ChartPreviewEngine {
       }),
     );
     if (sequence !== this.activeSequence) return;
-        // Charts often have a few seconds of silent intro (no events until measure 1+). Pinning the first DECODABLE trigger
+    // Charts often have a few seconds of silent intro (no events until measure 1+). Pinning the first DECODABLE trigger
     // to `t=0` removes that lead-in so the user hears the first hit as soon as the focus delay elapses, matching how
     // `packages/player`'s CLI preview trims its rendered waveform. We pick the earliest trigger whose WAV actually
     // decoded — a missing-buffer trigger contributes no audio, so leaving its `seconds` as the anchor would just
@@ -360,7 +360,7 @@ export class ChartPreviewEngine {
         } catch {
           // See `stopAllSources`.
         }
-                // The fallback schedules every trigger inside the preview window in one shot — when the LAST one ends we want
+        // The fallback schedules every trigger inside the preview window in one shot — when the LAST one ends we want
         // the BGM to unduck rather than stay silent until the user moves cursor.
         if (this.activeSources.size === 0) {
           this.emitPlaybackStop();
@@ -374,7 +374,7 @@ export class ChartPreviewEngine {
           source.start(when, offset);
         }
       } catch {
-                // `start` rejects on negative offsets / out-of-range values that can sneak in for malformed bmson slice
+        // `start` rejects on negative offsets / out-of-range values that can sneak in for malformed bmson slice
         // metadata. Keep going — one bad trigger shouldn't mute the rest of the preview.
         this.activeSources.delete(source);
       }
@@ -440,7 +440,7 @@ export function findFirstAudibleOffsetSeconds(
   if (channelCount === 0) return 0;
   const length = buffer.length;
   if (length === 0) return 0;
-    // Cache `getChannelData` calls — repeated calls allocate a fresh `Float32Array` view in some implementations and
+  // Cache `getChannelData` calls — repeated calls allocate a fresh `Float32Array` view in some implementations and
   // would dominate the inner loop's runtime.
   const channels: Float32Array[] = [];
   for (let channel = 0; channel < channelCount; channel += 1) {

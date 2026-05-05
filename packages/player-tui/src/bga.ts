@@ -651,7 +651,7 @@ export async function createBgaAnsiRenderer(
   };
 
   const sharedSourceCache: FrameSourceLoadCache = new Map();
-    // bmson 1.0.0 spec — layer images "will not have black pixels made transparent", unlike BMS `#xxx07`. Pick the
+  // bmson 1.0.0 spec — layer images "will not have black pixels made transparent", unlike BMS `#xxx07`. Pick the
   // spec-aware overlay mode for bmson charts so the layer compositor skips the black chroma-key while still honouring
   // the PNG alpha channel. BMS / json sources stay on the historical `'layer'` mode.
   const layerMode: FrameMode = json.sourceFormat === 'bmson' ? 'bmson-layer' : 'layer';
@@ -2458,7 +2458,7 @@ function isOpaquePixel(r: number, g: number, b: number, a: number, format: Image
   if (mode === 'base') {
     return true;
   }
-    // bmson-layer skips the BMS-style black chroma-key entirely (per the spec's explicit break from `#xxx07`'s
+  // bmson-layer skips the BMS-style black chroma-key entirely (per the spec's explicit break from `#xxx07`'s
   // convention), but still honours the PNG alpha channel — the spec only forbids the black-key shortcut, not the
   // legitimate alpha information bmson authors deliver.
   if (mode === 'bmson-layer') {

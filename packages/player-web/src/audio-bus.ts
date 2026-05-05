@@ -248,36 +248,36 @@ export function buildAudioBus(
 ): AudioBusHandle {
   const keyMixer = audioContext.createGain();
   const bgmMixer = audioContext.createGain();
-    // Sub-unity mixer gain so multiple simultaneous samples don't sum past full scale before the compressor stack has a
+  // Sub-unity mixer gain so multiple simultaneous samples don't sum past full scale before the compressor stack has a
   // chance to react. See `MIXER_HEADROOM_GAIN_LINEAR` for why ~−6 dB.
   keyMixer.gain.value = MIXER_HEADROOM_GAIN_LINEAR;
   bgmMixer.gain.value = MIXER_HEADROOM_GAIN_LINEAR;
-    // Per-bus compressors plus the master — created up front, wired in/out by `applyMode`. Held even when the active mode
+  // Per-bus compressors plus the master — created up front, wired in/out by `applyMode`. Held even when the active mode
   // doesn't use them so the next `setMode` call can splice them back in without re-creating Web Audio nodes (cheap, but
   // recreating would also reset their internal envelope state which wastes any "warm" gain reduction the mode switch
   // could otherwise preserve).
   const keyComp = createCompressor(audioContext, KEY_BUS_COMPRESSOR_PARAMS);
   const bgmComp = createCompressor(audioContext, BGM_BUS_COMPRESSOR_PARAMS);
   const masterComp = createCompressor(audioContext, MASTER_BUS_COMPRESSOR_PARAMS);
-    // Legacy mode reuses a single compressor with the original pre-split params. Distinct node from the master so
+  // Legacy mode reuses a single compressor with the original pre-split params. Distinct node from the master so
   // swapping modes doesn't have to mutate AudioParam values mid-chart.
   const legacyComp = createCompressor(audioContext, LEGACY_COMPRESSOR_PARAMS);
   const makeup = audioContext.createGain();
   makeup.gain.value = MASTER_MAKEUP_GAIN_LINEAR;
-    // BMS spec — `#VOLWAV <0..ZZ>` declares the chart's master volume scaling (100 = unity). Implemented as a dedicated
+  // BMS spec — `#VOLWAV <0..ZZ>` declares the chart's master volume scaling (100 = unity). Implemented as a dedicated
   // gain node placed BEFORE the universal tap so every routing mode (`'off'` / `'legacy'` / `'split'`) feels the
   // attenuation, and the recording tap captures the post-`#VOLWAV` signal — i.e. what the user actually hears.
   // Initialised to unity so charts that omit `#VOLWAV` (or run outside a chart context) are unaffected.
   const masterGain = audioContext.createGain();
   masterGain.gain.value = 1.0;
-    // Universal output tap. Every mode routes through this unity- gain node before reaching `audioContext.destination`,
+  // Universal output tap. Every mode routes through this unity- gain node before reaching `audioContext.destination`,
   // so external consumers (the recorder, future analysers, level meters) can `connect` to a single stable point and
   // capture whatever the user is hearing — including `'off'` mode where the makeup gain is bypassed for the audible
   // path. Unity gain means the tap is acoustically transparent: it sums its inputs with no level / phase change, so the
   // "raw signal" intent of `'off'` is preserved.
   const tap = audioContext.createGain();
   tap.gain.value = 1.0;
-    // Post-tap fade gain. Splits the "audible" path (which goes to the destination) from the "recording" path (taps off
+  // Post-tap fade gain. Splits the "audible" path (which goes to the destination) from the "recording" path (taps off
   // `tap`), so an exit-sequence fade-out can dip the speakers to silence without also pulling the recording mix down.
   // Initialised to unity so steady-state playback is acoustically transparent.
   const exitFadeGain = audioContext.createGain();
@@ -285,12 +285,12 @@ export function buildAudioBus(
   masterGain.connect(tap);
   tap.connect(exitFadeGain);
   exitFadeGain.connect(audioContext.destination);
-    // `makeup → masterGain → tap` is wired once and never re-disconnected; modes that use makeup (legacy / split) just
+  // `makeup → masterGain → tap` is wired once and never re-disconnected; modes that use makeup (legacy / split) just
   // connect their last compressor to makeup and let the rest of the chain ride.
   makeup.connect(masterGain);
 
   let activeMode: CompressorMode = initialMode;
-    // Stage on/off state. Persisted across mode changes so a UI checkbox can flip the architecture mid-play without
+  // Stage on/off state. Persisted across mode changes so a UI checkbox can flip the architecture mid-play without
   // forgetting which stages the user had disabled. `initialStages` lets the host seed this from a pre-mount UI
   // selection.
   const stages: CompressorStages = {
@@ -313,7 +313,7 @@ export function buildAudioBus(
     masterComp.disconnect();
     legacyComp.disconnect();
     if (activeMode === 'off') {
-            // Bypass every compressor + makeup — but route through the master-gain (#VOLWAV) and shared `tap` nodes anyway so
+      // Bypass every compressor + makeup — but route through the master-gain (#VOLWAV) and shared `tap` nodes anyway so
       // the recorder (and any other tap-side consumer) sees the signal. `tap.gain = 1.0` keeps this transparent for the
       // audible path; only `#VOLWAV` modulates volume here.
       keyMixer.connect(masterGain);
@@ -321,7 +321,7 @@ export function buildAudioBus(
       return;
     }
     if (activeMode === 'legacy') {
-            // keyMixer + bgmMixer → legacyComp → makeup → destination. Stage toggles are intentionally ignored here — legacy
+      // keyMixer + bgmMixer → legacyComp → makeup → destination. Stage toggles are intentionally ignored here — legacy
       // is a single-comp architecture, "disable key only" doesn't map onto its topology. The flags persist so toggling
       // back to split mode picks them up.
       keyMixer.connect(legacyComp);
@@ -329,7 +329,7 @@ export function buildAudioBus(
       legacyComp.connect(makeup);
       return;
     }
-        // 'split' — 3-stage architecture with per-stage bypass.
+    // 'split' — 3-stage architecture with per-stage bypass.
     //
     // `stages.key` — engage `keyComp` (else keyMixer skips ahead) `stages.bgm` — engage `bgmComp` (else bgmMixer skips
     // ahead) `stages.master` — engage `masterComp` (else key/BGM tails meet at `makeup`)
@@ -368,7 +368,7 @@ export function buildAudioBus(
     setStageEnabled(stage: CompressorStage, enabled: boolean): void {
       if (stages[stage] === enabled) return;
       stages[stage] = enabled;
-            // Only re-route when the active mode is one that uses stage flags. Persisting the flag for legacy/off is the
+      // Only re-route when the active mode is one that uses stage flags. Persisting the flag for legacy/off is the
       // right thing — see the doc comment on `setStageEnabled`.
       if (activeMode === 'split') {
         applyRouting();
@@ -378,7 +378,7 @@ export function buildAudioBus(
       return stages[stage];
     },
     setMasterGain(value: number): void {
-            // Sanitise pathological inputs — `#VOLWAV` is documented as `0..ZZ` (linear-scale BMS units, 100 = unity, > 100
+      // Sanitise pathological inputs — `#VOLWAV` is documented as `0..ZZ` (linear-scale BMS units, 100 = unity, > 100
       // boosts the chart above unity), but a malformed chart could emit NaN / Infinity / negative numbers that would
       // otherwise propagate into a Web Audio AudioParam and produce silent failure or a runtime exception. Non-finite →
       // unity (no surprise scaling); negative-finite → 0 (silence is the safer interpretation of a negative gain).
@@ -396,7 +396,7 @@ export function buildAudioBus(
       return masterGain.gain.value;
     },
     fadeOutAudibleTo(targetGain: number, durationMs: number): void {
-            // Re-anchor the ramp at the current value so chained fade-out calls don't snap back to the previous setpoint.
+      // Re-anchor the ramp at the current value so chained fade-out calls don't snap back to the previous setpoint.
       // `cancelScheduledValues` discards any in-flight ramp, then `setValueAtTime(currentValue, now)` pins the curve to
       // the present audible level before linearly tweening to the target — chosen `linearRampToValueAtTime` over
       // `exponentialRampToValueAtTime` because the screen overlay animates linearly, and we want the visible / audible
@@ -408,7 +408,7 @@ export function buildAudioBus(
       param.cancelScheduledValues(now);
       param.setValueAtTime(param.value, now);
       if (safeDurationSeconds <= 0) {
-                // Zero / negative duration → snap immediately. Avoids `linearRampToValueAtTime` being called with `endTime ===
+        // Zero / negative duration → snap immediately. Avoids `linearRampToValueAtTime` being called with `endTime ===
         // now` which the spec leaves implementation-defined.
         param.setValueAtTime(safeTarget, now);
         return;
@@ -434,7 +434,7 @@ export function buildAudioBus(
         tap.disconnect();
         exitFadeGain.disconnect();
       } catch {
-                // `disconnect()` throws when called on an already-disposed node. Swallowing is safe — `dispose()` is idempotent
+        // `disconnect()` throws when called on an already-disposed node. Swallowing is safe — `dispose()` is idempotent
         // and the only thing the caller cares about is "no future outputs from this bus".
       }
     },

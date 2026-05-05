@@ -113,7 +113,7 @@ function walkDirectory(ctx: WalkContext, directoryEntryOffset: number, pathPrefi
     const entryOffset = ctx.fileTableAbs + dir.fileHead + index * DXA_FILE_ENTRY_SIZE;
     const entry = readFileEntry(ctx.view, entryOffset);
     if (!entry) continue;
-        // Skip the implicit "self" entry (the root directory's own file-table slot). It has `nameAddress=0` and the
+    // Skip the implicit "self" entry (the root directory's own file-table slot). It has `nameAddress=0` and the
     // directory attribute set; recursing into it would loop forever.
     if (entry.isDirectory && entry.nameAddress === 0 && pathPrefix === '') {
       continue;
@@ -166,7 +166,7 @@ interface FileEntry {
 
 function readFileEntry(view: DataView, offset: number): FileEntry | undefined {
   if (offset + DXA_FILE_ENTRY_SIZE > view.byteLength) return undefined;
-    // V3 FileEntry layout (44 bytes): [0..3] NameAddress (offset into FileNameTable) [4..7] Attributes (DWORD; bit 4 =
+  // V3 FileEntry layout (44 bytes): [0..3] NameAddress (offset into FileNameTable) [4..7] Attributes (DWORD; bit 4 =
   // directory, 0x20 = archive) [8..15] CreationTime (FILETIME) — ignored [16..23] LastAccessTime (FILETIME) — ignored
   // [24..31] LastWriteTime (FILETIME) — ignored [32..35] DataHead (offset within data area, or directory index)
   // [36..39] DataSize (uncompressed bytes) [40..43] PressDataSize (compressed bytes; 0xFFFFFFFF = uncompressed)
@@ -194,7 +194,7 @@ const sjisDecoder = (() => {
 })();
 
 function readFileName(bytes: Uint8Array, offset: number): string {
-    // V3 FileName entry: WORD packNum + WORD reserved + packNum*4 bytes upper-case packed name + null-terminated
+  // V3 FileName entry: WORD packNum + WORD reserved + packNum*4 bytes upper-case packed name + null-terminated
   // original-case name. The upper-case packed table is for case-insensitive lookup; we ignore it and read the original
   // name only.
   if (offset + 4 > bytes.length) return '';
@@ -251,7 +251,7 @@ function decompress(src: Uint8Array, expectedSize: number): Uint8Array | undefin
       continue;
     }
     if (code > keycode) code -= 1;
-        // Combine low 5 bits + optional 8-bit extension BEFORE adding the +4 base offset. See the file-header doc comment
+    // Combine low 5 bits + optional 8-bit extension BEFORE adding the +4 base offset. See the file-header doc comment
     // for why the order matters.
     let length = code >>> 3;
     if ((code & 0x04) !== 0) {
@@ -275,7 +275,7 @@ function decompress(src: Uint8Array, expectedSize: number): Uint8Array | undefin
       offset = src[p]! | (src[p + 1]! << 8) | (src[p + 2]! << 16);
       p += 3;
     } else {
-            // Format 3 — reuse the previous offset (no new bytes consumed). Encoder's value-skipping optimisation for streaks
+      // Format 3 — reuse the previous offset (no new bytes consumed). Encoder's value-skipping optimisation for streaks
       // of same-offset back-references.
       offset = lastOffset;
     }

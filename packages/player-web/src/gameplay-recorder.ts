@@ -156,7 +156,7 @@ export class GameplayRecorder {
     if (typeof this.canvas.captureStream !== 'function') {
       throw new Error('GameplayRecorder.start: HTMLCanvasElement.captureStream is unavailable');
     }
-        // Audio tap. The `MediaStreamAudioDestinationNode` is a dedicated sink — connecting `audioOutput` to it is
+    // Audio tap. The `MediaStreamAudioDestinationNode` is a dedicated sink — connecting `audioOutput` to it is
     // additive, so live playback through `audioContext.destination` keeps working unchanged.
     const audioDestination = this.audioContext.createMediaStreamDestination();
     this.audioOutput.connect(audioDestination);
@@ -175,7 +175,7 @@ export class GameplayRecorder {
         this.chunks.push(event.data);
       }
     };
-        // 1-second chunk timeslice keeps memory bounded — without it the entire recording lives in a single Blob until
+    // 1-second chunk timeslice keeps memory bounded — without it the entire recording lives in a single Blob until
     // stop(), which is fine for short sessions but punishes 5-minute LN grindfests.
     recorder.start(1000);
     this.mediaRecorder = recorder;
@@ -240,7 +240,7 @@ export class GameplayRecorder {
     try {
       this.audioOutput.disconnect(this.audioDestination);
     } catch {
-            // `disconnect(target)` throws when the edge isn't present. Defensive — `start` always connects before populating
+      // `disconnect(target)` throws when the edge isn't present. Defensive — `start` always connects before populating
       // `audioDestination`, but the recorder can be torn down mid-construction if `start` itself threw after wiring.
     }
     this.audioDestination = undefined;
@@ -307,7 +307,7 @@ export function downloadBlob(blob: Blob, filename: string): void {
   anchor.style.display = 'none';
   document.body.appendChild(anchor);
   anchor.click();
-    // Defer revoke to the next macrotask — Chrome / Firefox finalize the download synchronously after `click()` but
+  // Defer revoke to the next macrotask — Chrome / Firefox finalize the download synchronously after `click()` but
   // Safari spreads the work across event-loop turns; revoking too eagerly there can cancel the in-flight download.
   setTimeout(() => {
     URL.revokeObjectURL(url);

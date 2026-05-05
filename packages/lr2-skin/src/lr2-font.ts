@@ -95,7 +95,7 @@ export function parseLr2Font(source: string): Lr2BitmapFont {
 }
 
 function stripLineComment(line: string): string {
-    // LR2 conventionally uses `//` (C++) line comments inside skin files. `.lr2font` follows the same convention for
+  // LR2 conventionally uses `//` (C++) line comments inside skin files. `.lr2font` follows the same convention for
   // compatibility with FontUtil-generated output.
   const slash = line.indexOf('//');
   return slash >= 0 ? line.slice(0, slash) : line;
@@ -123,7 +123,7 @@ export function unicodeToLr2CharCode(char: string): number | undefined {
   }
   const sjis = unicodeToSjis(codePoint);
   if (sjis === undefined) return undefined;
-    // SJIS double-byte: split into high/low and decimal-encode as `(high << 8) | low` (i.e. `high * 256 + low` per LR2
+  // SJIS double-byte: split into high/low and decimal-encode as `(high << 8) | low` (i.e. `high * 256 + low` per LR2
   // spec "Shift-JIS文字コードを10進数に変換").
   const decimal = sjis;
   if (decimal >= 33088 && decimal < 33088 + (SJIS_RANGE_1_END - 256 + 1) * 1) {
@@ -173,11 +173,11 @@ function buildUnicodeToSjisTable(): Map<number, number> {
         if (decoded.length === 0) continue;
         const code = decoded.codePointAt(0);
         if (code === undefined || code === 0xfffd) continue;
-                // Multi-character outputs (rare — combining marks etc.) are skipped; we can't represent them as a single LR2
+        // Multi-character outputs (rare — combining marks etc.) are skipped; we can't represent them as a single LR2
         // char code anyway.
         if (decoded.length > 1) continue;
         const sjis = (high << 8) | low;
-                // Multiple SJIS sequences can decode to the same Unicode (very rare). Keep the FIRST mapping so range-1
+        // Multiple SJIS sequences can decode to the same Unicode (very rare). Keep the FIRST mapping so range-1
         // characters take precedence over range-2 duplicates, matching the LR2 char-code allocation order.
         if (!map.has(code)) {
           map.set(code, sjis);

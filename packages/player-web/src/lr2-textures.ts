@@ -82,7 +82,7 @@ export async function loadVideoTextureFromBytes(
     });
   }
   if (!transcoded) return undefined;
-    // The transcoded payload is always MP4 / H.264 (whether it came out of libx264 or the WebCodecs encoder); pass an
+  // The transcoded payload is always MP4 / H.264 (whether it came out of libx264 or the WebCodecs encoder); pass an
   // explicit name so `guessVideoMimeType` picks `video/mp4` and the browser's H.264 decoder takes the fast path.
   return tryLoadVideoTextureFromBytes(`${stripVideoExtension(path)}.transcoded.mp4`, transcoded);
 }
@@ -104,13 +104,13 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
   const objectUrl = URL.createObjectURL(blob);
   const video = document.createElement('video');
   video.src = objectUrl;
-    // BMS BGA video has no soundtrack of its own — audio comes from `#WAV` samples on the chart timeline. Muting also
+  // BMS BGA video has no soundtrack of its own — audio comes from `#WAV` samples on the chart timeline. Muting also
   // lets some browsers skip the autoplay-policy gating since silent media is exempt.
   video.muted = true;
   video.playsInline = true;
   video.preload = 'auto';
   video.crossOrigin = 'anonymous';
-    // `loop` is left at false — BGA cues drive when the video starts; looping would replay forever after the cue ends,
+  // `loop` is left at false — BGA cues drive when the video starts; looping would replay forever after the cue ends,
   // which doesn't match BMS semantics.
   video.loop = false;
 
@@ -123,7 +123,7 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
   }
 
   const source = new VideoSource({ resource: video, autoPlay: false, autoLoad: true });
-    // BGA video should look as the artist authored it; nearest-pixel sampling matches our per-skin default for low-res
+  // BGA video should look as the artist authored it; nearest-pixel sampling matches our per-skin default for low-res
   // BGA frames and avoids the smeary look the GPU's bilinear gives on 256x256 BMS-spec frames scaled up to 800px+
   // playfields.
   source.scaleMode = 'nearest';
@@ -159,11 +159,11 @@ async function transcodeVideoToBrowserCodec(
   const inputName = `bga-input${pickInputExtension(path)}`;
   const outputName = 'bga-output.mp4';
   try {
-        // Clone before handing to ffmpeg.wasm: the worker channel posts the buffer with `transfer` ownership (detaching the
+    // Clone before handing to ffmpeg.wasm: the worker channel posts the buffer with `transfer` ownership (detaching the
     // source ArrayBuffer), which would brick any caller that wants to retry the same bytes through a different
     // transcode path (e.g. the WebCodecs → ffmpeg fallback chain in `loadVideoTextureFromBytes`).
     await ffmpeg.writeFile(inputName, new Uint8Array(bytes));
-        // libx264 fast path. Encoder-side flags chosen for the fastest possible single-threaded encode while keeping the
+    // libx264 fast path. Encoder-side flags chosen for the fastest possible single-threaded encode while keeping the
     // output universally browser-decodable:
     //
     // - - `-c:v libx264 -pix_fmt yuv420p` — universally decoded - `-preset ultrafast` skips most analysis passes. -
@@ -208,7 +208,7 @@ async function transcodeVideoToBrowserCodec(
     if (out instanceof Uint8Array) {
       outBytes = out;
     } else if (typeof out === 'string') {
-            // ffmpeg.readFile can return string when no encoding is overridden — coerce via TextEncoder so we always return
+      // ffmpeg.readFile can return string when no encoding is overridden — coerce via TextEncoder so we always return
       // raw bytes downstream.
       outBytes = new TextEncoder().encode(out);
     }
@@ -226,7 +226,7 @@ async function transcodeVideoToBrowserCodec(
     try {
       await ffmpeg.deleteFile(inputName);
     } catch {
-            // ignore — the in-memory FS lives only as long as the FFmpeg instance, which we leak between calls (see
+      // ignore — the in-memory FS lives only as long as the FFmpeg instance, which we leak between calls (see
       // `loadFfmpeg` for why) so cleanup just keeps the VFS tidy across calls.
     }
     try {
@@ -304,10 +304,10 @@ async function transcodeViaWebCodecs(
   const probeLines: string[] = [];
   let encoder: VideoEncoder | undefined;
   try {
-        // Clone before writeFile — see the libx264 path for why. We need the caller's `bytes` to survive intact in case the
+    // Clone before writeFile — see the libx264 path for why. We need the caller's `bytes` to survive intact in case the
     // WebCodecs path bails out and the ffmpeg-encode fallback is run with the same buffer.
     await ffmpeg.writeFile(inputName, new Uint8Array(bytes));
-        // ffmpeg's stderr log carries the input geometry, frame rate, and total duration we need to drive the WebCodecs
+    // ffmpeg's stderr log carries the input geometry, frame rate, and total duration we need to drive the WebCodecs
     // encoder + chunk loop. Hook a parallel listener that doesn't displace `loadFfmpeg`'s diagnostic listener.
     probeListener = ({ type, message }) => {
       if (type === 'stderr') {
@@ -316,7 +316,7 @@ async function transcodeViaWebCodecs(
     };
     ffmpeg.on('log', probeListener);
 
-        // ── Probe pass ────────────────────────────────────────── `-t 0.05` decodes ~1-2 frames purely so ffmpeg emits the
+    // ── Probe pass ────────────────────────────────────────── `-t 0.05` decodes ~1-2 frames purely so ffmpeg emits the
     // `Input #0` / `Stream #0:0` / `Duration:` lines we parse below. `-f null -` discards the output entirely so this
     // costs only ffmpeg's cold-start time (~50–100 ms once the wasm core is cached). Cheaper than running ffprobe
     // separately, and the stderr format is identical.
@@ -342,7 +342,7 @@ async function transcodeViaWebCodecs(
     const bytesPerFrame = (width * height * 3) >> 1;
     if (bytesPerFrame <= 0) return undefined;
 
-        // ── Encoder + muxer setup ─────────────────────────────── H.264 baseline @ Level 5.0 covers up to 1920×1080@30.
+    // ── Encoder + muxer setup ─────────────────────────────── H.264 baseline @ Level 5.0 covers up to 1920×1080@30.
     // The browser's `isConfigSupported` will reject anything beyond the platform encoder's reach; we treat that as a
     // fall-through to the ffmpeg-encode path rather than a hard failure.
     //
@@ -376,7 +376,7 @@ async function transcodeViaWebCodecs(
         height,
         frameRate,
       },
-            // 'in-memory' fastStart keeps everything buffered until `finalize()` writes a moov-at-front MP4 — same as
+      // 'in-memory' fastStart keeps everything buffered until `finalize()` writes a moov-at-front MP4 — same as
       // libx264's `+faststart`.
       fastStart: 'in-memory',
     });
@@ -390,7 +390,7 @@ async function transcodeViaWebCodecs(
     });
     encoder.configure(negotiated);
 
-        // ── Chunk loop ────────────────────────────────────────── Compute how many seconds fit in the per-chunk byte
+    // ── Chunk loop ────────────────────────────────────────── Compute how many seconds fit in the per-chunk byte
     // budget. We always round down to the nearest second so ffmpeg's `-t` argument cleanly matches a frame boundary,
     // and clamp to `MIN_CHUNK_SECONDS` so seek + demux setup doesn't dominate the wall-clock cost on enormous inputs.
     const bytesPerSecond = bytesPerFrame * frameRate;
@@ -404,7 +404,7 @@ async function transcodeViaWebCodecs(
       const remainingSec = durationSec - chunkStartSec;
       const thisChunkSec = Math.min(chunkSeconds, remainingSec);
 
-            // `-ss BEFORE -i` does input-level seek and is accurate by default in modern ffmpeg (decode-and-discard between
+      // `-ss BEFORE -i` does input-level seek and is accurate by default in modern ffmpeg (decode-and-discard between
       // the prior keyframe and the seek target). For the first chunk we omit `-ss` entirely — some demuxers re-parse
       // headers when a `-ss 0` is present which adds latency for no benefit.
       const chunkArgs: string[] = ['-y'];
@@ -421,7 +421,7 @@ async function transcodeViaWebCodecs(
       }
       const chunkRead = await ffmpeg.readFile(chunkName);
       const chunkBytes = chunkRead instanceof Uint8Array ? chunkRead : new TextEncoder().encode(chunkRead);
-            // Always delete BEFORE iterating frames so MEMFS pressure peaks at one chunk's worth of YUV. The Uint8Array view
+      // Always delete BEFORE iterating frames so MEMFS pressure peaks at one chunk's worth of YUV. The Uint8Array view
       // we just took stays valid because @ffmpeg/ffmpeg copied bytes out of MEMFS into the JS heap during readFile.
       try {
         await ffmpeg.deleteFile(chunkName);
@@ -429,7 +429,7 @@ async function transcodeViaWebCodecs(
         // ignore
       }
       if (chunkBytes.byteLength === 0) {
-                // ffmpeg's `-t` with imprecise duration sometimes overshoots the input end and produces an empty chunk. Treat
+        // ffmpeg's `-t` with imprecise duration sometimes overshoots the input end and produces an empty chunk. Treat
         // as EOF and stop.
         break;
       }
@@ -441,7 +441,7 @@ async function transcodeViaWebCodecs(
       }
       const framesInChunk = chunkBytes.byteLength / bytesPerFrame;
       for (let i = 0; i < framesInChunk; i++) {
-                // Slice (not copy) the raw frame view — WebCodecs takes the buffer reference and the encoder consumes it before
+        // Slice (not copy) the raw frame view — WebCodecs takes the buffer reference and the encoder consumes it before
         // we move to the next frame.
         const frameBytes = chunkBytes.subarray(i * bytesPerFrame, (i + 1) * bytesPerFrame);
         const frame = new VideoFrame(frameBytes, {
@@ -453,7 +453,7 @@ async function transcodeViaWebCodecs(
         });
         encoder.encode(frame, { keyFrame: frameIndex % keyframeInterval === 0 });
         frame.close();
-                // Backpressure: yield when the encoder queue grows past a few dozen frames so the GPU encoder can drain.
+        // Backpressure: yield when the encoder queue grows past a few dozen frames so the GPU encoder can drain.
         // Without this, on a fast wasm-decode + slow encoder pairing we'd pile up hundreds of frames in memory before
         // any get muxed.
         if (encoder.encodeQueueSize > 32) {
@@ -561,7 +561,7 @@ function parseFfmpegProbe(
  */
 function estimateBitrate(width: number, height: number, frameRate: number): number {
   const pixelsPerSecond = width * height * frameRate;
-    // 0.08 bits per pixel-second lands around 4 Mb/s for 1080p30 and 1 Mb/s for 480p30 — comparable to libx264 ultrafast
+  // 0.08 bits per pixel-second lands around 4 Mb/s for 1080p30 and 1 Mb/s for 480p30 — comparable to libx264 ultrafast
   // crf 30 outputs in the same range.
   return Math.max(500_000, Math.round(pixelsPerSecond * 0.08));
 }
@@ -590,10 +590,10 @@ async function loadFfmpeg(): Promise<FfmpegInstance> {
   if (cachedFfmpeg) return cachedFfmpeg;
   if (cachedFfmpegPromise) return cachedFfmpegPromise;
   cachedFfmpegPromise = (async () => {
-        // Lazy ESM imports keep the multi-megabyte wasm + worker bundle out of the initial page load — the user only pays
+    // Lazy ESM imports keep the multi-megabyte wasm + worker bundle out of the initial page load — the user only pays
     // the download cost when they actually pick a chart with an unsupported BGA video.
     const [{ FFmpeg }, { toBlobURL }] = await Promise.all([import('@ffmpeg/ffmpeg'), import('@ffmpeg/util')]);
-        // We target the ESM entry from the host's `/ffmpeg-core/` static path. @ffmpeg/ffmpeg creates its outer worker as
+    // We target the ESM entry from the host's `/ffmpeg-core/` static path. @ffmpeg/ffmpeg creates its outer worker as
     // `type: "module"`, where `importScripts` is unavailable: the worker's load handler catches that and falls back to
     // `await import(coreURL)`. Dynamic-importing the UMD bundle yields `{ default: undefined }` (its IIFE assigns to a
     // module-local `var createFFmpegCore` rather than to `module.exports` in a way the dynamic import can see), which
@@ -611,14 +611,14 @@ async function loadFfmpeg(): Promise<FfmpegInstance> {
     const coreUrl = `${baseUrl}/ffmpeg-core.js`;
     const wasmUrl = `${baseUrl}/ffmpeg-core.wasm`;
     const ffmpeg = new FFmpeg();
-        // `toBlobURL` re-fetches the core JS / WASM URLs into blob URLs so the spawned module worker's `await
+    // `toBlobURL` re-fetches the core JS / WASM URLs into blob URLs so the spawned module worker's `await
     // import(coreURL)` succeeds even when the page sits behind a different origin (the worker's same-origin policy
     // otherwise blocks the cross-origin file URLs Vite hands out under HMR).
     const [coreBlobUrl, wasmBlobUrl] = await Promise.all([
       toBlobURL(coreUrl, 'text/javascript'),
       toBlobURL(wasmUrl, 'application/wasm'),
     ]);
-        // Surface ffmpeg's own log so we can see *what* the wasm side reports — the core's `exec()` wrapper hides errors
+    // Surface ffmpeg's own log so we can see *what* the wasm side reports — the core's `exec()` wrapper hides errors
     // without a JS-style `.message` (it only re-throws when the message starts with `"Aborted"` and self-detonates with
     // a TypeError on `"unwind"` strings / OOMs), so the stderr log is often our only signal when something goes wrong.
     ffmpeg.on('log', ({ type, message }: { type: string; message: string }) => {
@@ -655,7 +655,7 @@ function pickInputExtension(path: string): string {
   const dotIndex = lower.lastIndexOf('.');
   if (dotIndex < 0) return '.mpg';
   const ext = lower.slice(dotIndex);
-    // Allow only a small allowlist of known video extensions to avoid passing arbitrary user-controlled strings into the
+  // Allow only a small allowlist of known video extensions to avoid passing arbitrary user-controlled strings into the
   // VFS path.
   if (['.mpg', '.mpeg', '.avi', '.wmv', '.mov', '.mp4', '.webm', '.mkv', '.ogv', '.ogg'].includes(ext)) {
     return ext;
@@ -709,7 +709,7 @@ function guessVideoMimeType(path: string): string {
   if (lower.endsWith('.webm')) return 'video/webm';
   if (lower.endsWith('.ogv') || lower.endsWith('.ogg')) return 'video/ogg';
   if (lower.endsWith('.mov')) return 'video/quicktime';
-    // Older BMS archives sometimes ship `.mpg` / `.mpeg` / `.avi` / `.wmv` — modern browsers won't decode those so the
+  // Older BMS archives sometimes ship `.mpg` / `.mpeg` / `.avi` / `.wmv` — modern browsers won't decode those so the
   // video element will fire `error` and `loadVideoTextureFromBytes` returns `undefined`. We still tag a sensible MIME
   // type so the rare browser-supported codec works.
   if (lower.endsWith('.mpg') || lower.endsWith('.mpeg')) return 'video/mpeg';
@@ -766,7 +766,7 @@ function normalizeLoadTextureOptions(
   if (!input) {
     return {};
   }
-    // The legacy positional `transparentColor` shape has flat `r/g/b` numbers; the new options shape has a nested
+  // The legacy positional `transparentColor` shape has flat `r/g/b` numbers; the new options shape has a nested
   // `transparentColor` / `keyOutBlack`. Discriminate on `r` so call sites that still pass the bare color triple keep
   // working without a typed cast.
   if (typeof (input as { r?: unknown }).r === 'number') {
@@ -797,7 +797,7 @@ async function loadTextureFromBlob(
       finalBitmap.close();
       throw error;
     }
-        // Force nearest-neighbour sampling on every loaded texture. LR2 skin / BGA assets are pixel-art; bilinear filtering
+    // Force nearest-neighbour sampling on every loaded texture. LR2 skin / BGA assets are pixel-art; bilinear filtering
     // blurs them when the design space is scaled up to the canvas. Mirrors the user-requested "disable all
     // interpolation / AA" policy.
     texture.source.scaleMode = 'nearest';

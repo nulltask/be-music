@@ -75,7 +75,7 @@ export function makeLr2TextSprite(
   dst: Lr2DestinationRect = element.destination,
   options: Lr2TextSpriteOptions = {},
 ): Container {
-    // Bitmap path — chosen when the host loaded the matching `#LR2FONT` payload. Empty strings are still painted as an
+  // Bitmap path — chosen when the host loaded the matching `#LR2FONT` payload. Empty strings are still painted as an
   // empty Container so the caller's `addChild` doesn't need to null-check; the visible result is just nothing, same as
   // the text fallback would produce for "".
   const loaded = options.bitmapFonts?.get(element.font);
@@ -83,13 +83,13 @@ export function makeLr2TextSprite(
     return makeLr2BitmapTextSprite(value, element, dst, loaded);
   }
   const rect = normaliseRect(dst);
-    // Prefer the size declared by the skin's `#FONT` for this slot. Falls back to the rect-height heuristic only when
+  // Prefer the size declared by the skin's `#FONT` for this slot. Falls back to the rect-height heuristic only when
   // there's no declaration at all (e.g. older skins that omit `#FONT` and rely on rect-driven sizing). The clamp still
   // applies as a safety net — a malformed `#FONT,9999` shouldn't blow out the text bounds.
   const declaredSize = options.systemFontSizes?.[element.font];
   const desiredSize = declaredSize !== undefined && declaredSize > 0 ? declaredSize : rect.h - 2;
   const fontSize = clampFontSize(desiredSize, 8, options.maxFontSize ?? 64);
-    // No `wordWrap` — LR2's `#SRC_TEXT` spec calls for HORIZONTAL shrink-to-fit when the rendered string overruns `dst.w`
+  // No `wordWrap` — LR2's `#SRC_TEXT` spec calls for HORIZONTAL shrink-to-fit when the rendered string overruns `dst.w`
   // (`docs/LR2SkinHelp.md` line 1343), not for line-wrapping. Letting the text overflow on a single line and then
   // squeezing it via `scale.x` matches that semantic.
   const text = new Text({
@@ -103,7 +103,7 @@ export function makeLr2TextSprite(
   });
   text.label = `text[st=${element.st}]`;
   text.alpha = dst.alpha;
-    // LR2 alignment is ANCHOR-based: `dst.x` is the alignment-dependent anchor point (left edge / centre / right edge),
+  // LR2 alignment is ANCHOR-based: `dst.x` is the alignment-dependent anchor point (left edge / centre / right edge),
   // not a box origin paired with `dst.w` as a box width. See `lr2-bitmap-text.ts` for the empirical justification —
   // same skin-author convention applies to the system-font path.
   if (element.alignment === 'center') {
@@ -114,7 +114,7 @@ export function makeLr2TextSprite(
     text.anchor.set(0, 0);
   }
   text.position.set(rect.x, rect.y);
-    // LR2 shrink-to-fit: when the rendered string overflows the DST's `w`, compress it horizontally so it lands inside
+  // LR2 shrink-to-fit: when the rendered string overflows the DST's `w`, compress it horizontally so it lands inside
   // the authored rectangle. Pixi `Text.width` is the post-style bounds width, so we can read it immediately after
   // construction. The `scale` applies around the text's anchor (0 / 0.5 / 1 above), which keeps the alignment edge
   // fixed — left-aligned text squeezes toward `rect.x`, right-aligned squeezes toward `rect.x` (right edge), centre

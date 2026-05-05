@@ -74,7 +74,7 @@ export class PixiSceneHost {
       return;
     }
     this.mounted = true;
-        // Renderer preference. Defaults to WebGPU per the project's perf goals (lower per-frame CPU on dense charts, room
+    // Renderer preference. Defaults to WebGPU per the project's perf goals (lower per-frame CPU on dense charts, room
     // for future compute-shader BGA effects). PixiJS auto-falls-back to WebGL2 when the browser doesn't expose WebGPU,
     // so this is safe to leave on for old browsers — `app.renderer.type` logged below confirms which path actually came
     // up.
@@ -87,7 +87,7 @@ export class PixiSceneHost {
       preference,
       backgroundAlpha: 0,
       resizeTo: container,
-            // LR2 skins and BGA frames are pixel-art; bilinear filtering and MSAA blur them visibly. Combined with
+      // LR2 skins and BGA frames are pixel-art; bilinear filtering and MSAA blur them visibly. Combined with
       // `roundPixels: true` and per-texture nearest sampling on each loaded asset, this gives a fully-crisp
       // pixel-art-style render.
       antialias: false,
@@ -96,7 +96,7 @@ export class PixiSceneHost {
       roundPixels: true,
       ...options?.appOptions,
     });
-        // Surface the actual renderer type — the `preference` field is a *hint*, and the real backend may differ if WebGPU
+    // Surface the actual renderer type — the `preference` field is a *hint*, and the real backend may differ if WebGPU
     // init failed silently or if the override flag was used.
     log.info('renderer ready', {
       requested: preference,
@@ -163,7 +163,7 @@ export class PixiSceneHost {
       this.current = undefined;
     }
     try {
-            // With only ONE Application owned by the process, releasing the module-shared `batchPool` here is safe — no other
+      // With only ONE Application owned by the process, releasing the module-shared `batchPool` here is safe — no other
       // live Application can be tripped up by the cleared pool. (See the class doc-block above for the
       // multi-Application landmine we used to hit.)
       this.app.destroy({ removeView: true, releaseGlobalResources: true }, { children: true });

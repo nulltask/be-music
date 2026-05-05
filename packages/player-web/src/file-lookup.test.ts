@@ -22,7 +22,7 @@ describe('findCaseInsensitivePath', () => {
   });
 
   it('keeps the first key encountered when multiple keys collide on lowercase', () => {
-        // Insertion order: `kick.wav` first → it wins. The map iterator preserves insertion order, so the first-pass scan
+    // Insertion order: `kick.wav` first → it wins. The map iterator preserves insertion order, so the first-pass scan
     // in `getCaseInsensitiveIndex` gets locked in.
     const files = new Map([
       ['kick.wav', BYTES_A],
@@ -44,7 +44,7 @@ describe('lookupBytesCaseInsensitive', () => {
   });
 
   it('reuses the lazy index across calls (smoke test)', () => {
-        // Not a strict invariant test — just confirms a second lookup on the same map works the same way (which would
+    // Not a strict invariant test — just confirms a second lookup on the same map works the same way (which would
     // surface obvious cache-key bugs even though we can't probe the WeakMap directly).
     const files = new Map([
       ['A.png', BYTES_A],

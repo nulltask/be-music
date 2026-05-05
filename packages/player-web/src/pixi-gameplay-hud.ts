@@ -205,7 +205,7 @@ export function renderGrooveGaugeElement(
   if (!baseTexture) {
     return;
   }
-    // LR2 spec (`docs/LR2SkinHelp.md` 8975 / 9012):
+  // LR2 spec (`docs/LR2SkinHelp.md` 8975 / 9012):
   //
   // ゲージ点灯時の赤・緑、ゲージ消灯時の赤・緑の順に並べて src分割を行ってください。4の倍数でcycle>0ならちゃんと アニメーションします
   //
@@ -233,7 +233,7 @@ export function renderGrooveGaugeElement(
   const totalUnits = 50;
   const clearThresholdUnit = Math.round((80 / 100) * totalUnits);
   const activeUnits = Math.round((percent / 100) * totalUnits);
-    // Peak-hold indicator: the bead AT the peak position is painted with the "active" cell variant even when the live
+  // Peak-hold indicator: the bead AT the peak position is painted with the "active" cell variant even when the live
   // fill has dropped below it. Skin-agnostic — uses the same 4-cell sprite group, just at the peak's bead position.
   const peakPercent = Math.max(0, Math.min(100, options.peakPercent ?? percent));
   const peakIndex = Math.round((peakPercent / 100) * totalUnits) - 1;
@@ -242,7 +242,7 @@ export function renderGrooveGaugeElement(
     const isPeakIndicator = !isActive && unitIndex === peakIndex && peakIndex >= activeUnits;
     const useActiveCell = isActive || isPeakIndicator;
     const isClearZone = unitIndex >= clearThresholdUnit;
-        // LR2 spec ordering inside each 4-cell frame: offset 0: 表赤 — lit, red (warning zone, below 80 %) offset 1: 表緑 —
+    // LR2 spec ordering inside each 4-cell frame: offset 0: 表赤 — lit, red (warning zone, below 80 %) offset 1: 表緑 —
     // lit, green (clear zone, ≥ 80 %) offset 2: 裏赤 — unlit, red (warning zone) offset 3: 裏緑 — unlit, green (clear zone)
     // i.e. red marks the *below*-clear-threshold beads, green marks the clear zone — matches the IIDX-style "your gauge
     // is below 80, you're in danger" colour cue. Earlier the frame ordering was correct but the zone mapping was

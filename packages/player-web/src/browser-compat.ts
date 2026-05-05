@@ -124,7 +124,7 @@ function detectWebGL2(): boolean {
   if (typeof document === 'undefined') return false;
   try {
     const canvas = document.createElement('canvas');
-        // `failIfMajorPerformanceCaveat: false` matches Pixi's default — we want to know whether ANY WebGL2 context is
+    // `failIfMajorPerformanceCaveat: false` matches Pixi's default — we want to know whether ANY WebGL2 context is
     // reachable, even on integrated GPUs the browser flags as "slow".
     return canvas.getContext('webgl2') !== null;
   } catch {
@@ -134,7 +134,7 @@ function detectWebGL2(): boolean {
 
 function detectAudioContext(): boolean {
   if (typeof globalThis === 'undefined') return false;
-    // Safari on iOS still ships only the prefixed `webkitAudioContext` for some versions; treat both as "Web Audio is
+  // Safari on iOS still ships only the prefixed `webkitAudioContext` for some versions; treat both as "Web Audio is
   // reachable".
   return 'AudioContext' in globalThis || 'webkitAudioContext' in (globalThis as unknown as Record<string, unknown>);
 }
@@ -163,7 +163,7 @@ function detectWebCodecs(): boolean {
 function detectMediaRecorder(): boolean {
   if (typeof globalThis === 'undefined') return false;
   if (!('MediaRecorder' in globalThis)) return false;
-    // `captureStream` is the bridge between the canvas and the recorder. Without it, MediaRecorder existing alone doesn't
+  // `captureStream` is the bridge between the canvas and the recorder. Without it, MediaRecorder existing alone doesn't
   // help us — we'd never feed it a video track.
   if (typeof HTMLCanvasElement === 'undefined') return false;
   return typeof HTMLCanvasElement.prototype.captureStream === 'function';

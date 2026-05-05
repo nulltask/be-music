@@ -124,7 +124,7 @@ export function deleteNote(
   },
 ): BeMusicJson {
   const normalized = normalizeJson(json);
-    // Honour `#BASE 62` so a delete keyed on `value: '0a'` doesn't accidentally match a `'0A'` event (or vice versa) by
+  // Honour `#BASE 62` so a delete keyed on `value: '0a'` doesn't accidentally match a `'0A'` event (or vice versa) by
   // way of an implicit case-fold during target / event comparison.
   const idBase = resolveBmsBase(normalized);
   const target = createNormalizedNoteTarget(params, idBase);

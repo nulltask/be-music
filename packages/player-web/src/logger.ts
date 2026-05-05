@@ -60,7 +60,7 @@ export function logger(scope: string): Logger {
 
 function createLogger(scope: string): Logger {
   const color = pickColor(scope);
-    // CSS-styled prefix using the `%c` directive. The scope label gets a tinted-background pill; the trailing `%c` resets
+  // CSS-styled prefix using the `%c` directive. The scope label gets a tinted-background pill; the trailing `%c` resets
   // so the rest of the message renders with the host's default styling (otherwise the colour would bleed into every
   // subsequent argument).
   const prefix = `%c${scope}%c`;
@@ -100,7 +100,7 @@ function createLogger(scope: string): Logger {
 function pickColor(scope: string): string {
   let hash = 5381;
   for (let index = 0; index < scope.length; index += 1) {
-        // `Math.imul` keeps the multiplication 32-bit so the hash doesn't drift into IEEE 754 territory on long scope
+    // `Math.imul` keeps the multiplication 32-bit so the hash doesn't drift into IEEE 754 territory on long scope
     // names.
     hash = (Math.imul(hash, 33) ^ scope.charCodeAt(index)) | 0;
   }

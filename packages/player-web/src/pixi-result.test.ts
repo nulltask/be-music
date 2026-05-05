@@ -45,7 +45,7 @@ function makeResult(overrides: ResultOverrides = {}): PixiGameplayResultData {
     chart.metadata.difficulty = overrides.difficulty;
   }
   if (overrides.channels) {
-        // BeMusicPosition is a `[numerator, denominator]` tuple; `[0, 1]` pins the event at measure-start which is fine for
+    // BeMusicPosition is a `[numerator, denominator]` tuple; `[0, 1]` pins the event at measure-start which is fine for
     // tests that only care about which channels exist.
     chart.events = overrides.channels.map((channel) => ({ measure: 0, position: [0, 1], channel, value: '01' }));
   }
@@ -83,7 +83,7 @@ function makeResult(overrides: ResultOverrides = {}): PixiGameplayResultData {
 }
 
 describe('computeResultOps', () => {
-    // -- Cleared / failed gating (op 90 / 91) ------------------------- The default LR2 result skin gates the chrome
+  // -- Cleared / failed gating (op 90 / 91) ------------------------- The default LR2 result skin gates the chrome
   // atlas (parts.tga vs parts_fail.tga) and the big "CLEARED" / "FAILED" graphic on these. Exactly one must be set per
   // result.
   describe('cleared / failed', () => {
@@ -100,7 +100,7 @@ describe('computeResultOps', () => {
     });
   });
 
-    // -- Clear lamp (op 101..105) ------------------------------------- The lamp determines which "STAGE CLEARED" /
+  // -- Clear lamp (op 101..105) ------------------------------------- The lamp determines which "STAGE CLEARED" /
   // "FAILED" / "FULL COMBO" graphic shows. The branching priority is: 1. failed (gauge < 80) 2. full combo (cleared AND
   // zero BAD/POOR) 3. normal (otherwise)
   describe('clear lamp', () => {
@@ -129,7 +129,7 @@ describe('computeResultOps', () => {
     });
   });
 
-    // -- Result rank (op 300..308 NOW + 340..347 NEXT + 320..328 PREV) The result skin gates rank graphics on the **300 /
+  // -- Result rank (op 300..308 NOW + 340..347 NEXT + 320..328 PREV) The result skin gates rank graphics on the **300 /
   // 340** ranges (current / after-update), NOT the 200..207 select-screen range. An earlier revision of the renderer
   // set 200..207 and every rank panel stayed hidden. These tests lock in the correct mapping.
   describe('result rank', () => {
@@ -154,14 +154,14 @@ describe('computeResultOps', () => {
     });
 
     it('falls back to AAA when total <= 0 (empty chart)', () => {
-            // With total=0 the rate divisor is undefined; the implementation returns AAA so the rank panel still renders with
+      // With total=0 the rate divisor is undefined; the implementation returns AAA so the rank panel still renders with
       // something.
       const ops = computeResultOps(makeResult({ total: 0, exScore: 0 }), makeSkin());
       expect(ops.has(RESULT_DYNAMIC_OPS.RANK_NOW_AAA)).toBe(true);
     });
   });
 
-    // -- Updated flags (op 330..335) --------------------------------- Without persisted score history every play is
+  // -- Updated flags (op 330..335) --------------------------------- Without persisted score history every play is
   // treated as an update — keeps the LR2 default skin's congratulatory artwork visible. When persistence lands these
   // tests will need updating.
   describe('updated flags', () => {
@@ -172,7 +172,7 @@ describe('computeResultOps', () => {
     });
   });
 
-    // -- Result flip (op 350 / 351) ----------------------------------- 350 = `#FLIPRESULT` not declared (default), 351 =
+  // -- Result flip (op 350 / 351) ----------------------------------- 350 = `#FLIPRESULT` not declared (default), 351 =
   // declared. Skins gate side-specific panels on these; setting BOTH would double-render. Mutual exclusivity is the
   // contract.
   describe('result flip', () => {
@@ -189,7 +189,7 @@ describe('computeResultOps', () => {
     });
   });
 
-    // -- Key mode (dual range: SELECT 160..164 + KEYCONFIG 400..402) Different skin authors gate either way. Both ranges
+  // -- Key mode (dual range: SELECT 160..164 + KEYCONFIG 400..402) Different skin authors gate either way. Both ranges
   // have to be set so a skin that uses op 160 (7K) AND a skin that uses op 400 (7+14K) both render their per-keymode
   // panels.
   describe('key mode', () => {
@@ -226,7 +226,7 @@ describe('computeResultOps', () => {
     });
   });
 
-    // -- Difficulty (op 150..155) ------------------------------------ The default skin's `#IF,400,152` (7+14K NORMAL)
+  // -- Difficulty (op 150..155) ------------------------------------ The default skin's `#IF,400,152` (7+14K NORMAL)
   // per-difficulty panel relies on this. Verify each chart difficulty maps to the matching slot, and that "no
   // difficulty declared" doesn't leave every panel blank (it falls back to NORMAL).
   describe('difficulty echo', () => {

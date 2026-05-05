@@ -9,7 +9,7 @@ export function findStackableRowIndex(
     return undefined;
   }
 
-    // Keep overlap ordering deterministic for SCROLL=0 stacks: prefer rows farther from the judge line (upper rows)
+  // Keep overlap ordering deterministic for SCROLL=0 stacks: prefer rows farther from the judge line (upper rows)
   // first.
   for (let targetRow = safePreferredRow - 1; targetRow >= 0; targetRow -= 1) {
     if (canPlaceAt(targetRow)) {

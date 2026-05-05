@@ -45,7 +45,7 @@ describe('resolveChartPreviewPath', () => {
   });
 
   test('prefers BMS `#PREVIEW` over bmson `previewMusic` if both fields are populated', () => {
-        // Charts can theoretically be re-serialised from one format to another and end up with both populated; pin the
+    // Charts can theoretically be re-serialised from one format to another and end up with both populated; pin the
     // priority so the behaviour stays predictable.
     const chart = createEmptyJson('bms');
     chart.bms.preview = 'bms.wav';
@@ -59,7 +59,7 @@ describe('resolveChartPreviewPath', () => {
   });
 
   test('treats an empty string as "unset"', () => {
-        // The parser preserves the literal value; an empty `#PREVIEW` line shouldn't masquerade as a preview path. The
+    // The parser preserves the literal value; an empty `#PREVIEW` line shouldn't masquerade as a preview path. The
     // engine uses this helper directly so the empty-string check has to live here, not in the engine.
     const chart = makeBmsChart('');
     expect(resolveChartPreviewPath(chart)).toBeUndefined();
@@ -68,7 +68,7 @@ describe('resolveChartPreviewPath', () => {
 
 describe('collectChartPreviewTriggers', () => {
   test('returns an empty array for a non-positive cutoff', () => {
-        // Exposed as a guard so a misconfigured engine (`fallbackDurationSeconds: 0`) silently does no work rather than
+    // Exposed as a guard so a misconfigured engine (`fallbackDurationSeconds: 0`) silently does no work rather than
     // scheduling every trigger up to t=0.
     const chart = createEmptyJson('bms');
     expect(collectChartPreviewTriggers(chart, 0)).toEqual([]);
@@ -81,7 +81,7 @@ describe('collectChartPreviewTriggers', () => {
   });
 
   test('filters triggers strictly inside the cutoff window and sorts them by seconds', () => {
-        // Build a tiny chart with a few BGM events. We don't need the parser to wire the resolver — `collectSampleTriggers`
+    // Build a tiny chart with a few BGM events. We don't need the parser to wire the resolver — `collectSampleTriggers`
     // walks the events array and the timing resolver maps measure positions to seconds. With BPM 120 and the default
     // measure length 1 (= 4 beats = 2 s), each measure adds 2 s.
     const chart = createEmptyJson('bms');
@@ -106,7 +106,7 @@ describe('collectChartPreviewTriggers', () => {
 });
 
 describe('findFirstAudibleOffsetSeconds', () => {
-    // Mini stand-in for the parts of `AudioBuffer` the helper actually consults. Web Audio's real buffer isn't available
+  // Mini stand-in for the parts of `AudioBuffer` the helper actually consults. Web Audio's real buffer isn't available
   // in the node test env, so we feed in a duck-typed stub.
   function makeBuffer(
     channels: Float32Array[],
@@ -135,7 +135,7 @@ describe('findFirstAudibleOffsetSeconds', () => {
   });
 
   test('treats either channel crossing threshold as audible (stereo)', () => {
-        // Left silent throughout, right audible at frame 50 → trim to 50 / sampleRate. Real charts often have one-sided
+    // Left silent throughout, right audible at frame 50 → trim to 50 / sampleRate. Real charts often have one-sided
     // "intro tone" hits we still want to hear.
     const left = new Float32Array(200);
     const right = new Float32Array(200);
@@ -145,7 +145,7 @@ describe('findFirstAudibleOffsetSeconds', () => {
   });
 
   test('returns 0 when the entire buffer is below threshold', () => {
-        // Nothing to skip — the helper falls back to `0` so the engine still plays whatever (silent) buffer the source gave
+    // Nothing to skip — the helper falls back to `0` so the engine still plays whatever (silent) buffer the source gave
     // it. Avoids an infinite "no audio at all" loop where we keep advancing the offset past the end.
     const data = new Float32Array(100);
     const buffer = makeBuffer([data], 1000);
@@ -170,13 +170,13 @@ describe('findFirstAudibleOffsetSeconds', () => {
 
 describe('exported constants', () => {
   test('LR2 focus delay defaults to 1000 ms', () => {
-        // The constant ships with this default to match LR2's song-select preview wait. Lock the value so a future
+    // The constant ships with this default to match LR2's song-select preview wait. Lock the value so a future
     // accidental tweak surfaces in code review rather than silently changing UX feel for every demo deploy.
     expect(LR2_PREVIEW_FOCUS_DELAY_MS).toBe(1000);
   });
 
   test('fallback preview cap defaults to 30 s', () => {
-        // Same rationale as above — used for the in-place chart playback when a chart didn't ship `#PREVIEW`. 30 s gives
+    // Same rationale as above — used for the in-place chart playback when a chart didn't ship `#PREVIEW`. 30 s gives
     // intro + first verse without scheduling thousands of triggers up-front.
     expect(DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS).toBe(30);
   });

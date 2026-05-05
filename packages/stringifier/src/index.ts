@@ -92,7 +92,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   >();
   const bpmEvents: Array<{ y: number; bpm: number }> = [];
   const stopEvents: Array<{ y: number; duration: number }> = [];
-    // Honour `#BASE 62` so a chart whose `event.value` is a case-sensitive lowercase ID resolves to the right sample /
+  // Honour `#BASE 62` so a chart whose `event.value` is a case-sensitive lowercase ID resolves to the right sample /
   // BPM / STOP slot when re-emitted as bmson.
   const idBase = resolveBmsBase(json);
 
@@ -178,7 +178,7 @@ function renderPreservedBmsSourceLines(sourceLines: BmsSourceLineEntry[]): strin
       continue;
     }
     if (entry.kind === 'header') {
-            // Use the case-preserved `commandRaw` when present so e.g. `#WAV0a` survives the round-trip on a `#BASE 62`
+      // Use the case-preserved `commandRaw` when present so e.g. `#WAV0a` survives the round-trip on a `#BASE 62`
       // chart.
       const commandText = entry.commandRaw ?? entry.command;
       lines.push(entry.value.length > 0 ? `#${commandText} ${entry.value}` : `#${commandText}`);
@@ -347,7 +347,7 @@ function pushMetadataLines(lines: string[], json: BeMusicJson): void {
 
 function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
   const base = resolveJsonBase(json);
-    // `#BASE 62` opts the whole chart into the beatoraja base-62 ID extension, which affects every subsequent
+  // `#BASE 62` opts the whole chart into the beatoraja base-62 ID extension, which affects every subsequent
   // indexed-header / channel-stream token's case-sensitivity. Emit it FIRST so it takes effect before any `#WAVxx` /
   // `#BMPxx` etc. lines below.
   if (base === 62) {
@@ -540,7 +540,7 @@ function resolvePreservedObjectLinesForOutput(json: BeMusicJson): BmsObjectLineE
 function doPreservedObjectLinesMatchChart(json: BeMusicJson, objectLines: BmsObjectLineEntry[]): boolean {
   const flattenedEvents: BeMusicEvent[] = [];
   const preservedMeasureLengths = new Map<number, number>();
-    // Compare values under the chart's authored radix so a base-62 chart's lowercase IDs aren't folded to uppercase
+  // Compare values under the chart's authored radix so a base-62 chart's lowercase IDs aren't folded to uppercase
   // before the event comparison below — that would falsely trigger a mismatch and force the stringifier to regenerate
   // object lines even when the preserved entries are still consistent.
   const idBase = resolveBmsBase(json);
@@ -1004,7 +1004,7 @@ function pushControlFlowLines(lines: string[], json: BeMusicJson): void {
       continue;
     }
     if (entry.kind === 'header') {
-            // Use the case-preserved `commandRaw` when present so e.g. `#WAV0a` survives the round-trip on a `#BASE 62`
+      // Use the case-preserved `commandRaw` when present so e.g. `#WAV0a` survives the round-trip on a `#BASE 62`
       // chart.
       const commandText = entry.commandRaw ?? entry.command;
       lines.push(entry.value.length > 0 ? `#${commandText} ${entry.value}` : `#${commandText}`);

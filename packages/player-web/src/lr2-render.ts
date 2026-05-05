@@ -35,7 +35,7 @@ export function applyDestinationToSprite(sprite: Sprite, destination: Lr2Destina
     sprite.rotation = (destination.angle * Math.PI) / 180;
     const pivot = resolveCenterAnchor(destination.center);
     if (pivot.x !== 0 || pivot.y !== 0) {
-            // Move the anchor and offset the position so the sprite visually stays in place — only the rotation pivot
+      // Move the anchor and offset the position so the sprite visually stays in place — only the rotation pivot
       // changes.
       sprite.anchor.set(pivot.x, pivot.y);
       sprite.position.set(sprite.position.x + sprite.width * pivot.x, sprite.position.y + sprite.height * pivot.y);
@@ -118,7 +118,7 @@ export function createCroppedTexture(
     bySource = new Map();
     cropCache.set(texture, bySource);
   }
-    // Animation cells can have fractional widths when the source w/h doesn't divide evenly by divx/divy, so encode the
+  // Animation cells can have fractional widths when the source w/h doesn't divide evenly by divx/divy, so encode the
   // full numeric value rather than rounding.
   const key = `${rect.x}|${rect.y}|${rect.w}|${rect.h}`;
   let cached = bySource.get(key);
@@ -174,7 +174,7 @@ export function evaluateKeyframes(keyframes: ReadonlyArray<Lr2DestinationRect>, 
   const finalTime = last.time;
   let t = elapsedMs;
   if (elapsedMs > finalTime) {
-        // Past the final keyframe — decide between hide vs. hold vs. real loop.
+    // Past the final keyframe — decide between hide vs. hold vs. real loop.
     //
     // Per `docs/LR2SkinHelp.md` line 629: "loop=-1の場合のみ、動作が終了した後にパーツが非表示になります" = "with loop=-1 only, the part becomes
     // invisible after the animation finishes". So we synthesise a hidden version of the last keyframe (alpha=0) —
@@ -185,7 +185,7 @@ export function evaluateKeyframes(keyframes: ReadonlyArray<Lr2DestinationRect>, 
       return { ...last, alpha: 0 };
     }
     if (last.loop >= finalTime) {
-            // `loop >= finalTime` is degenerate (would-be loop point is at or past the final keyframe), treat as hold-at-last
+      // `loop >= finalTime` is degenerate (would-be loop point is at or past the final keyframe), treat as hold-at-last
       // for forward compat with skins that use it as "stop here".
       return last;
     }
@@ -196,7 +196,7 @@ export function evaluateKeyframes(keyframes: ReadonlyArray<Lr2DestinationRect>, 
     t = last.loop + ((elapsedMs - last.loop) % period);
   }
   if (t < first.time) {
-        // PRE-FIRST-KEYFRAME — hide. Per `docs/LR2SkinHelp.md`, a `#DST_*` whose first keyframe sits at `t=N>0` schedules
+    // PRE-FIRST-KEYFRAME — hide. Per `docs/LR2SkinHelp.md`, a `#DST_*` whose first keyframe sits at `t=N>0` schedules
     // the element to APPEAR at t=N, not to display the first keyframe verbatim during 0..N. The previous version
     // returned `first` here, which painted e.g. the LR2 default play skin's blue scan-line beam (image[109], first kf
     // at t=1000) at full size for the entire LOAD phase — visible immediately on scene mount instead of sweeping in
@@ -287,7 +287,7 @@ export function pickAnimatedCell(
   loop: number = 0,
   textureSize?: { width: number; height: number },
 ): { x: number; y: number; w: number; h: number } {
-    // "No-graphic" idiom — `w=0,h=0,divx=0,divy=0` is how LR2 skin authors declare a placeholder element that should
+  // "No-graphic" idiom — `w=0,h=0,divx=0,divy=0` is how LR2 skin authors declare a placeholder element that should
   // paint nothing (typically a clickable button whose only visible content is its #SRC_TEXT label, or an empty op-gated
   // slot). Returning a zero-size rect makes the caller's `createCroppedTexture` short-circuit to `undefined`, which
   // they treat as "skip render".
@@ -297,7 +297,7 @@ export function pickAnimatedCell(
   const divx = Math.max(1, source.divx);
   const divy = Math.max(1, source.divy);
   const totalFrames = divx * divy;
-    // LR2 SRC rects with `w=0` / `h=0` are spec shorthand for "use the texture's native dimensions". Substitute when the
+  // LR2 SRC rects with `w=0` / `h=0` are spec shorthand for "use the texture's native dimensions". Substitute when the
   // caller supplied `textureSize`, otherwise leave the zero through (the crop helper will return `undefined` and the
   // caller falls back to the full texture — preferable to silently re-sampling arbitrary-size cells).
   const sourceW = source.w > 0 ? source.w : (textureSize?.width ?? 0);
@@ -366,14 +366,14 @@ export function renderNumberElement(
   const totalCells = divx * divy;
   // ×11 / ×22 / ×24 sheets include a blank cell. Anything ÷11=0 has it.
   const hasBlankCell = totalCells % 11 === 0 || totalCells % 24 === 0;
-    // ×24 sheets carry per-sign digit cells and a `-` glyph at index 23. We treat any sheet whose total is a multiple of
+  // ×24 sheets carry per-sign digit cells and a `-` glyph at index 23. We treat any sheet whose total is a multiple of
   // 24 as signed; this matches LR2's convention where the only common signed layout is exactly 24 cells (1×24, 2×12,
   // 4×6, 6×4, 8×3, 12×2, 24×1).
   const isSignedSheet = totalCells % 24 === 0;
   const negative = isSignedSheet && value < 0;
   const absValue = Math.abs(Math.trunc(value));
   const digitText = absValue.toString();
-    // The sign cell is appended to the field on negative values, eating one slot from the configured `padding (keta)` so
+  // The sign cell is appended to the field on negative values, eating one slot from the configured `padding (keta)` so
   // the visual width stays the same as the positive variant.
   const fieldKeta = element.source.padding > 0 ? element.source.padding : digitText.length + (negative ? 1 : 0);
   const digitsKeta = negative ? Math.max(1, fieldKeta - 1) : fieldKeta;

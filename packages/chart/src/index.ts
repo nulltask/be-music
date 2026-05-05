@@ -294,7 +294,7 @@ export function parseBmsExWav(raw: string): BmsExWav | undefined {
   if (tokens.length < 3) return undefined;
   const flags = tokens[0]!.toLowerCase();
   const params = tokens[1]!.split(',');
-    // Filename can legitimately contain spaces; rejoin every remaining token. (LR2 uses Windows-style paths, never URL-
+  // Filename can legitimately contain spaces; rejoin every remaining token. (LR2 uses Windows-style paths, never URL-
   // encoded, so a literal space in the name is the only edge.)
   const filename = tokens.slice(2).join(' ');
   if (filename.length === 0) return undefined;
@@ -387,14 +387,14 @@ export function parseBmsExBmp(raw: string): BmsExBmp | undefined {
   if (typeof raw !== 'string') return undefined;
   const trimmed = raw.trim();
   if (trimmed.length === 0) return undefined;
-    // Five-way split on commas. `split(',', limit)` would silently drop trailing commas in the filename if a chart author
+  // Five-way split on commas. `split(',', limit)` would silently drop trailing commas in the filename if a chart author
   // left any, so split unbounded and rejoin the tail.
   const parts = trimmed.split(',');
   if (parts.length < 5) return undefined;
   const [aRaw, rRaw, gRaw, bRaw, ...rest] = parts;
   const filename = rest.join(',').trim();
   if (filename.length === 0) return undefined;
-    // The argb tuple may legally be empty (chart authors sometimes ship `#EXBMP01 ,,,,foo.bmp` to mean "filename only"),
+  // The argb tuple may legally be empty (chart authors sometimes ship `#EXBMP01 ,,,,foo.bmp` to mean "filename only"),
   // in which case we still surface the filename and leave `argb` undefined so the consumer can fall back to `#ARGBxx`
   // or the image's own alpha channel.
   const argbCandidate = `${aRaw},${rRaw},${gRaw},${bRaw}`;
@@ -515,7 +515,7 @@ export function pickSwitchingBgaFrame(swBga: BmsSwitchingBga, elapsedMs: number)
   const rawIndex = Math.floor(elapsedMs / swBga.frameIntervalMs);
   let index: number;
   if (swBga.loop) {
-        // Modulo against `frames.length` so a slot list shorter than `totalFrames` keeps cycling within the authored
+    // Modulo against `frames.length` so a slot list shorter than `totalFrames` keeps cycling within the authored
     // frames.
     index = ((rawIndex % swBga.totalFrames) + swBga.totalFrames) % swBga.totalFrames;
     index = index % swBga.frames.length;
@@ -585,7 +585,7 @@ export function parseBmsBga(raw: string, idBase: 36 | 62 = 36): BmsSubRegionBga 
   const dx = Number.parseInt(dxRaw, 10);
   const dy = Number.parseInt(dyRaw, 10);
   if (![sx, sy, ex, ey, dx, dy].every((value) => Number.isFinite(value))) return undefined;
-    // Degenerate / inverted rectangles are unusable — they'd produce a zero-area frame and a runtime divide-by-zero in
+  // Degenerate / inverted rectangles are unusable — they'd produce a zero-area frame and a runtime divide-by-zero in
   // the consumer.
   if (ex <= sx || ey <= sy) return undefined;
   return { sourceBmp, sx, sy, ex, ey, dx, dy };
@@ -1200,7 +1200,7 @@ function inferBmsLongNoteType(events: ResolvedBmsLongNoteEvent[]): 1 | 2 {
     let continuationCount = 0;
     for (const item of channelEvents) {
       if (previous && previousValue === item.normalizedValue && isBmsLongNoteType2Continuation(previous, item.event)) {
-                // A single same-value continuation is ambiguous because legacy LNTYPE=1 charts also use same-value pairs for
+        // A single same-value continuation is ambiguous because legacy LNTYPE=1 charts also use same-value pairs for
         // their start/end markers.
         continuationCount += 1;
         if (continuationCount >= 2) {

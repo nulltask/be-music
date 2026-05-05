@@ -124,14 +124,14 @@ export async function loadLr2ThemeSkinsFromFiles(
 ): Promise<Lr2ThemeSkins> {
   const sourceFiles = [...files];
   const onProgress = options.onProgress;
-    // Read every theme file into a single shared byte map ONCE, up-front, with a worker-pool. The previous implementation
+  // Read every theme file into a single shared byte map ONCE, up-front, with a worker-pool. The previous implementation
   // re-read the entire file list inside each of the 11 sub-task calls (each `loadLr2SkinFromFiles` walked the full list
   // and awaited every `arrayBuffer()` serially). On a 388-file LR2 default-theme drop that meant ~4300 sequential file
   // reads, dominating the load time. Reading once and dispatching against the resulting `Map<path, bytes>` removes that
   // duplication entirely; the play / select / result / decide skins all share the same map by reference, so memory cost
   // is also lower.
   const sharedFiles = await readFilesIntoBytesMap(sourceFiles);
-    // Total = play variants (one per LR2_PLAY_VARIANTS entry) + select skin + result skin + decide skin + 5 theme BGMs
+  // Total = play variants (one per LR2_PLAY_VARIANTS entry) + select skin + result skin + decide skin + 5 theme BGMs
   // (select / decide / clear / fail / result) + 6 system sounds (cursor-move + folder open/close + option
   // open/close/change). Hard-coding it to the structural shape below keeps the count honest if anyone adds another
   // sub-task later (compile breaks when the awaited tuple disagrees with this constant).
@@ -144,7 +144,7 @@ export async function loadLr2ThemeSkinsFromFiles(
       onProgress?.({ phase: 'theme', current: completed, total: totalSubTasks, label });
       return value;
     });
-    // Each task wraps a synchronous parse / pick in `Promise.resolve` so the existing progress-tracking + parallel-await
+  // Each task wraps a synchronous parse / pick in `Promise.resolve` so the existing progress-tracking + parallel-await
   // shape continues to work — no semantic change beyond the up-front batched read.
   const playSkinTasks = LR2_PLAY_VARIANTS.map((variant) =>
     track(
@@ -173,13 +173,13 @@ export async function loadLr2ThemeSkinsFromFiles(
     track('select', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'select' }))),
     track('result', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'result' }))),
     track('decide', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'decide' }))),
-        // Theme audio (BGM + system sounds) goes through `materialiseLr2ThemeAudio` so the lazy file branch from
+    // Theme audio (BGM + system sounds) goes through `materialiseLr2ThemeAudio` so the lazy file branch from
     // `readFilesIntoBytesMap`'s `deferAudio: true` default is unwrapped here. The rest of the pack stays lazy — only
     // the theme's small handful of audio files (BGM + ~6 cues) is forced eager up front, since they need to be ready
     // the moment the user lands on the select scene.
     track('bgm/select', materialiseLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'select'))),
     track('bgm/decide', materialiseLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'decide'))),
-        // `clear` / `fail` / `result` jingles live alongside the LR2 system sound effects (scratch / mine / o-change …)
+    // `clear` / `fail` / `result` jingles live alongside the LR2 system sound effects (scratch / mine / o-change …)
     // under `LR2files/Sound/<theme>/`, NOT in `LR2files/Bgm/`. The Bgm/ directory is reserved for the looping select /
     // decide tracks — picking from there would silently miss the result audio since LR2 default ships these stems only
     // under Sound/lr2/.

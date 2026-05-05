@@ -95,7 +95,7 @@ const DECIDE_DYNAMIC_OPS = {
 } as const;
 
 const DECIDE_BASE_OPS: ReadonlySet<number> = new Set<number>([
-    // Per-frame "always true" flags shared with select / result. 81 = "load complete" (data is ready by the time we mount
+  // Per-frame "always true" flags shared with select / result. 81 = "load complete" (data is ready by the time we mount
   // the decide scene), 50 = "offline" (no IR connection yet).
   50, 81,
 ]);
@@ -199,7 +199,7 @@ export class PixiDecideView {
     const now = performance.now();
     this.sceneStartedAt = now;
     this.timerStartedAt.set(0, now);
-        // Schedule timer 1 (#STARTINPUT) and the auto-advance so the user sees the splash for a consistent window before
+    // Schedule timer 1 (#STARTINPUT) and the auto-advance so the user sees the splash for a consistent window before
     // gameplay. Pressing Enter / Space before the start-input window elapses does nothing, matching LR2's input-gating.
     const startInputMs = Math.max(0, this.options.skin?.timing.startInput ?? DEFAULT_STARTINPUT_MS);
     this.inputUnlockHandle = setTimeout(() => {
@@ -311,7 +311,7 @@ export class PixiDecideView {
     disposeChildren(this.stageFileLayer);
     disposeChildren(this.skinLayer);
     disposeChildren(this.fallbackLayer);
-        // STAGEFILE backdrop. The chart-authored stagefile is the standout visual on the LR2 decide screen — render it as a
+    // STAGEFILE backdrop. The chart-authored stagefile is the standout visual on the LR2 decide screen — render it as a
     // fullscreen sprite behind whatever decide-skin chrome overlays it, so themes (with or without a `*STAGEFILE` skin
     // reference) consistently get the artwork treatment. No-op when the chart didn't author `#STAGEFILE` / bmson
     // `info.back_image`; the solid background underneath shows through unchanged in that case.
@@ -462,7 +462,7 @@ export class PixiDecideView {
     artistText.position.set(42, bandY + 88);
     this.fallbackLayer.addChild(artistText);
 
-        // Difficulty name overlay — drawn as text on top of the top-left stamp rectangle. Picks a colour from the
+    // Difficulty name overlay — drawn as text on top of the top-left stamp rectangle. Picks a colour from the
     // difficulty index with a violet bias for HYPER (the screenshot's reference).
     const difficultyText = new Text({
       text: 'HYPER',
@@ -562,7 +562,7 @@ export class PixiDecideView {
   private fireCancel(): void {
     if (this.continuedFired) return;
     this.continuedFired = true;
-        // Fall back to `onContinue` when the host didn't wire a dedicated cancel handler — better than swallowing the input
+    // Fall back to `onContinue` when the host didn't wire a dedicated cancel handler — better than swallowing the input
     // and stranding the user on the splash.
     (this.options.onCancel ?? this.options.onContinue)?.();
   }
@@ -570,7 +570,7 @@ export class PixiDecideView {
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed) return;
     if (event.key === 'Escape') {
-            // Escape always dismisses (LR2 spec — even before `#STARTINPUT` elapses) and routes through `onCancel` so the
+      // Escape always dismisses (LR2 spec — even before `#STARTINPUT` elapses) and routes through `onCancel` so the
       // host can route the user back to song-select instead of accidentally starting gameplay.
       event.preventDefault();
       this.fireCancel();
@@ -592,7 +592,7 @@ export class PixiDecideView {
 function computeDecideOps(target: PixiDecideTarget, skin: Lr2Skin): ReadonlySet<number> {
   const ops = new Set<number>(DECIDE_BASE_OPS);
   const meta = target.song.chart.metadata;
-    // Difficulty plates — the LR2 default decide skin gates per- difficulty stickers off these. Difficulty 0 (undefined)
+  // Difficulty plates — the LR2 default decide skin gates per- difficulty stickers off these. Difficulty 0 (undefined)
   // maps to op 150 ("???") so the skin draws a generic plate when the chart didn't author a `#DIFFICULTY` field.
   switch (meta.difficulty) {
     case 1:
@@ -614,17 +614,17 @@ function computeDecideOps(target: PixiDecideTarget, skin: Lr2Skin): ReadonlySet<
       ops.add(DECIDE_DYNAMIC_OPS.DIFFICULTY_UNDEFINED);
       break;
   }
-    // Key mode — same flag IDs the select scene uses (160..164). Walk the chart's events to detect 14 / 10 / 9 / 7 / 5
+  // Key mode — same flag IDs the select scene uses (160..164). Walk the chart's events to detect 14 / 10 / 9 / 7 / 5
   // keys since `metadata.modeHint` is bmson-only.
   ops.add(detectKeyModeOp(target.song));
-    // Suppress the `Lr2Skin` argument linter — keeps the parser signature future-proof if we later need to peek at the
+  // Suppress the `Lr2Skin` argument linter — keeps the parser signature future-proof if we later need to peek at the
   // skin's authored op declarations to filter the active set.
   void skin;
   return ops;
 }
 
 function detectKeyModeOp(song: BrowserSongEntry): number {
-    // Inspect playable channels in the chart to pick the right key-mode flag. Mirrors the heuristic the select scene uses
+  // Inspect playable channels in the chart to pick the right key-mode flag. Mirrors the heuristic the select scene uses
   // for its bar-list `BAR_LEVEL` plate.
   let usesPlayer2 = false;
   let uses6or7 = false;

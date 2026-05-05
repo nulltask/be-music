@@ -17,7 +17,7 @@ describe('resolveSideKeySlot', () => {
   });
 
   test('PMS / 9 KEY (COMPAT) — 11..19 each map to lane slots 1..9', () => {
-        // Channels 16, 17, 18, 19 are LANE NOTES under 9KEY-COMPAT (not scratch / FREE ZONE), so they get distinct slots 6,
+    // Channels 16, 17, 18, 19 are LANE NOTES under 9KEY-COMPAT (not scratch / FREE ZONE), so they get distinct slots 6,
     // 7, 8, 9 — matching `play_9.lr2skin`'s `#SRC_NOTE,1..9`.
     expect(resolveSideKeySlot('11', '9')).toBe(1);
     expect(resolveSideKeySlot('15', '9')).toBe(5);

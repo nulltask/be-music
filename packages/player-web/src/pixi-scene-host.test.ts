@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveRendererPreference } from './pixi-scene-host.ts';
 
 describe('resolveRendererPreference', () => {
-    // Defaults to WebGPU per the project policy. PixiJS auto-falls- back to WebGL2 inside `Application.init` if the
+  // Defaults to WebGPU per the project policy. PixiJS auto-falls- back to WebGL2 inside `Application.init` if the
   // browser doesn't expose WebGPU, so the default is safe even on older platforms.
   it('returns "webgpu" by default when no flag is present', () => {
     expect(resolveRendererPreference('')).toBe('webgpu');
@@ -20,7 +20,7 @@ describe('resolveRendererPreference', () => {
   });
 
   it('falls back to "webgpu" for unrecognised renderer values', () => {
-        // Strict allow-list — typoed flags shouldn't silently disable WebGPU on a user's machine. They get the default and
+    // Strict allow-list — typoed flags shouldn't silently disable WebGPU on a user's machine. They get the default and
     // can fix their URL.
     expect(resolveRendererPreference('?renderer=canvas')).toBe('webgpu');
     expect(resolveRendererPreference('?renderer=WebGL')).toBe('webgpu');

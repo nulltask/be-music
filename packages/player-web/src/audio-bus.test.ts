@@ -68,20 +68,20 @@ function createFakeAudioContext(): { context: AudioContext; destination: FakeNod
       node.knee = { value: 0 };
     }
     if (type === 'gain') {
-            // Gain `AudioParam`s expose the minimal subset audio-bus touches for the post-tap fade. The fake records the
+      // Gain `AudioParam`s expose the minimal subset audio-bus touches for the post-tap fade. The fake records the
       // *final* setpoint (`setValueAtTime` / ramp end) onto `value` so tests can assert "where did this param land?"
       // without modelling the full schedule timeline.
       const param: FakeAudioParam = {
         value: 1,
         cancelScheduledValues() {
-                    // No-op — we don't model an in-flight schedule queue; every subsequent `setValueAtTime` / ramp just
+          // No-op — we don't model an in-flight schedule queue; every subsequent `setValueAtTime` / ramp just
           // overwrites `value` directly.
         },
         setValueAtTime(value: number) {
           param.value = value;
         },
         linearRampToValueAtTime(value: number) {
-                    // For "where does the param ultimately land?" assertions the ramp's destination IS the relevant value. Tests
+          // For "where does the param ultimately land?" assertions the ramp's destination IS the relevant value. Tests
           // that need to check intermediate samples would need a richer fake; none of audio-bus's contracts depend on
           // mid-ramp interpolation.
           param.value = value;
@@ -94,12 +94,12 @@ function createFakeAudioContext(): { context: AudioContext; destination: FakeNod
   const destination = makeNode('destination');
   const context = {
     destination,
-        // The fade API reads `audioContext.currentTime` to anchor the ramp; surfacing a stable `0` is enough since the
+    // The fade API reads `audioContext.currentTime` to anchor the ramp; surfacing a stable `0` is enough since the
     // fake's ramp model collapses to "set to target value".
     currentTime: 0,
     createGain: () => makeNode('gain'),
     createDynamicsCompressor: () => makeNode('compressor'),
-        // Other AudioContext fields that `audio-bus.ts` doesn't read are intentionally absent — accessing them would
+    // Other AudioContext fields that `audio-bus.ts` doesn't read are intentionally absent — accessing them would
     // surface as a test failure pointing at the exact missing API.
   } as unknown as AudioContext;
   return { context, destination };
@@ -128,7 +128,7 @@ function compressorsReachableFrom(start: FakeNode): number {
 // -- Param sanity ----------------------------------------------------------
 
 describe('compressor parameter constants', () => {
-    // Spec-required clamps and a couple of sanity bounds — protects accidentally typing `0.3` instead of `0.003` for an
+  // Spec-required clamps and a couple of sanity bounds — protects accidentally typing `0.3` instead of `0.003` for an
   // attack value.
   const inSpecRange = (params: {
     threshold: number;
@@ -156,7 +156,7 @@ describe('compressor parameter constants', () => {
   });
 
   it('orders thresholds master <= key <= BGM (later stage = lower threshold)', () => {
-        // The split design intentionally engages each bus before the master so peaks are shaped per-source, then the master
+    // The split design intentionally engages each bus before the master so peaks are shaped per-source, then the master
     // only catches summed-bus peaks. If someone "fixed" master to be less aggressive than its inputs, the design intent
     // breaks.
     expect(MASTER_BUS_COMPRESSOR_PARAMS.threshold).toBeGreaterThan(KEY_BUS_COMPRESSOR_PARAMS.threshold);
@@ -164,7 +164,7 @@ describe('compressor parameter constants', () => {
   });
 
   it('keeps the master makeup gain near unity', () => {
-        // Anything wildly above 1 would be a loudness boost rather than a make-up — at these compression ratios the "lost"
+    // Anything wildly above 1 would be a loudness boost rather than a make-up — at these compression ratios the "lost"
     // level is small, so >1.5 (≈ +3.5 dB) would suggest a typo.
     expect(MASTER_MAKEUP_GAIN_LINEAR).toBeGreaterThan(1);
     expect(MASTER_MAKEUP_GAIN_LINEAR).toBeLessThan(1.5);
@@ -191,7 +191,7 @@ describe('parseCompressorMode', () => {
 // -- Graph topology --------------------------------------------------------
 
 describe('buildAudioBus graph topology', () => {
-    // Node identity: every key/BGM source connects to the same mixers regardless of mode, so a mode flip is a
+  // Node identity: every key/BGM source connects to the same mixers regardless of mode, so a mode flip is a
   // downstream-only re-wire. Verifying topology this way (rather than on the real Web Audio graph) lets the tests run
   // under Node — and lets us assert the structure without depending on the browser implementation.
 
@@ -202,7 +202,7 @@ describe('buildAudioBus graph topology', () => {
     const bgmMixer = bus.bgmMixer as unknown as FakeNode;
     expect(reachesDestination(keyMixer, destination)).toBe(true);
     expect(reachesDestination(bgmMixer, destination)).toBe(true);
-        // Walk the chain: keyMixer's first edge must be a compressor (the key bus comp), not the destination directly. Same
+    // Walk the chain: keyMixer's first edge must be a compressor (the key bus comp), not the destination directly. Same
     // for BGM.
     expect([...keyMixer.outgoing].every((node) => node.type === 'compressor')).toBe(true);
     expect([...bgmMixer.outgoing].every((node) => node.type === 'compressor')).toBe(true);
@@ -226,7 +226,7 @@ describe('buildAudioBus graph topology', () => {
     const bus = buildAudioBus(context, 'off');
     const keyMixer = bus.keyMixer as unknown as FakeNode;
     const bgmMixer = bus.bgmMixer as unknown as FakeNode;
-        // No compressor stages on the audible path — the mixers go through the chart-level master-gain (#VOLWAV) stage and
+    // No compressor stages on the audible path — the mixers go through the chart-level master-gain (#VOLWAV) stage and
     // the unity-gain tap before reaching the destination. The mid-chain tap matters because external consumers
     // (recording, analysers) connect there to see the signal even when no compressor is engaged; without it the
     // recorder would capture silence whenever the user toggles compression off.
@@ -234,7 +234,7 @@ describe('buildAudioBus graph topology', () => {
     expect(reachesDestination(bgmMixer, destination)).toBe(true);
     expect(compressorsReachableFrom(keyMixer)).toBe(0);
     expect(compressorsReachableFrom(bgmMixer)).toBe(0);
-        // Both mixers share their immediate downstream — the chart master-gain (#VOLWAV) stage that feeds the tap. The
+    // Both mixers share their immediate downstream — the chart master-gain (#VOLWAV) stage that feeds the tap. The
     // shared-target gain node is a unity GainNode in this mode, so the path is acoustically transparent (the recording
     // captures the unprocessed signal that the user actually hears).
     const sharedTargets = [...keyMixer.outgoing].filter((node) => bgmMixer.outgoing.has(node));
@@ -245,7 +245,7 @@ describe('buildAudioBus graph topology', () => {
   });
 
   it('exposes the tap as a stable outputNode across mode switches', () => {
-        // Recording / analysers connect to `outputNode` once and expect that tap point to keep delivering signal across
+    // Recording / analysers connect to `outputNode` once and expect that tap point to keep delivering signal across
     // mode flips. Identity stability locks that in.
     const { context } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');
@@ -257,7 +257,7 @@ describe('buildAudioBus graph topology', () => {
   });
 
   it('preserves mixer identity across mode switches (no re-allocation)', () => {
-        // The whole point of the bus design is that source-side connections never have to be touched on a mode flip. If
+    // The whole point of the bus design is that source-side connections never have to be touched on a mode flip. If
     // setMode swapped out the mixer node references, every BufferSourceNode in flight would lose its sink.
     const { context } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');
@@ -291,12 +291,12 @@ describe('buildAudioBus graph topology', () => {
   });
 
   it('writes per-bus params onto the underlying compressors', () => {
-        // Verifies that `KEY_BUS_COMPRESSOR_PARAMS` etc. actually reach the nodes — a future refactor that forgets to
+    // Verifies that `KEY_BUS_COMPRESSOR_PARAMS` etc. actually reach the nodes — a future refactor that forgets to
     // assign one AudioParam would silently leave it at the default (e.g. ratio=1 = pass-through) without this test
     // catching it.
     const { context } = createFakeAudioContext();
     buildAudioBus(context, 'split');
-        // Walk the spy state: every compressor created by the test recorded its assigned params on the FakeAudioParam
+    // Walk the spy state: every compressor created by the test recorded its assigned params on the FakeAudioParam
     // objects. We don't have direct refs to the inner compressors, but we can verify the params are on at least one
     // FakeNode of type 'compressor' by walking the createDynamicsCompressor call record indirectly. Easier: re-create
     // with a wrapping AudioContext that captures every compressor it hands out.
@@ -341,7 +341,7 @@ describe('buildAudioBus graph topology', () => {
 // -- Per-stage on/off toggles ---------------------------------------------
 
 describe('buildAudioBus per-stage toggles', () => {
-    // Each stage flip should rebuild the routing so the corresponding compressor node is bypassed. We track this by
+  // Each stage flip should rebuild the routing so the corresponding compressor node is bypassed. We track this by
   // counting the total number of compressor nodes the source-side mixers can reach: in the all-on baseline we expect
   // both keyComp + masterComp (or bgmComp + masterComp) on each path, and disabling one stage drops one compressor from
   // the path's reachable set.
@@ -369,7 +369,7 @@ describe('buildAudioBus per-stage toggles', () => {
     const { bus, destination } = setupSplit();
     const keyMixer = bus.keyMixer as unknown as FakeNode;
     expect(reachesDestination(keyMixer, destination)).toBe(true);
-        // keyComp + masterComp = 2 compressors on the key path. The legacy comp + bgmComp aren't reachable from the key
+    // keyComp + masterComp = 2 compressors on the key path. The legacy comp + bgmComp aren't reachable from the key
     // mixer (different branches), so we shouldn't see them.
     expect(compressorsReachableFrom(keyMixer)).toBe(2);
   });
@@ -414,7 +414,7 @@ describe('buildAudioBus per-stage toggles', () => {
     bus.setStageEnabled('master', false);
     const keyMixer = bus.keyMixer as unknown as FakeNode;
     const bgmMixer = bus.bgmMixer as unknown as FakeNode;
-        // No compressors on either path, but the makeup gain is still there — distinct from `'off'` mode which bypasses
+    // No compressors on either path, but the makeup gain is still there — distinct from `'off'` mode which bypasses
     // makeup too.
     expect(compressorsReachableFrom(keyMixer)).toBe(0);
     expect(compressorsReachableFrom(bgmMixer)).toBe(0);
@@ -423,7 +423,7 @@ describe('buildAudioBus per-stage toggles', () => {
   });
 
   it('remembers stage state across mode switches', () => {
-        // The split → legacy switch should be a no-op for stage state (legacy doesn't use it), and switching back to split
+    // The split → legacy switch should be a no-op for stage state (legacy doesn't use it), and switching back to split
     // should bring the disabled stages back without the user having to re-toggle.
     const { bus, destination } = setupSplit();
     bus.setStageEnabled('key', false);
@@ -436,7 +436,7 @@ describe('buildAudioBus per-stage toggles', () => {
   });
 
   it('treats setStageEnabled as a no-op for unchanged values', () => {
-        // Asserting no exception + idempotent state is the practical contract; flipping the same stage twice shouldn't
+    // Asserting no exception + idempotent state is the practical contract; flipping the same stage twice shouldn't
     // accidentally re-route on the second call.
     const { bus } = setupSplit();
     bus.setStageEnabled('master', true); // already true
@@ -448,7 +448,7 @@ describe('buildAudioBus per-stage toggles', () => {
 // -- #VOLWAV master gain ---------------------------------------------------
 
 describe('buildAudioBus master gain (#VOLWAV)', () => {
-    // The bus exposes a single dedicated stage for the chart-level master volume scaling. The contract: the value applies
+  // The bus exposes a single dedicated stage for the chart-level master volume scaling. The contract: the value applies
   // through every routing mode (so a chart authored at #VOLWAV 80 sounds at 80 % even in 'off' mode), and the recorder
   // tap captures the post-`#VOLWAV` signal — i.e. what the user hears.
 
@@ -459,7 +459,7 @@ describe('buildAudioBus master gain (#VOLWAV)', () => {
   });
 
   it('applies setMasterGain across every routing mode', () => {
-        // The single AudioParam sits BEFORE the universal tap, so once set, every mode threads its signal through it. We
+    // The single AudioParam sits BEFORE the universal tap, so once set, every mode threads its signal through it. We
     // verify by confirming the value sticks when the host flips modes.
     const { context } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');
@@ -474,7 +474,7 @@ describe('buildAudioBus master gain (#VOLWAV)', () => {
   });
 
   it('clamps negative gains to 0 and replaces non-finite inputs with unity', () => {
-        // A malformed `#VOLWAV` value can land in the parser as NaN or a negative number; both should be handled gracefully
+    // A malformed `#VOLWAV` value can land in the parser as NaN or a negative number; both should be handled gracefully
     // rather than poisoning the AudioParam.
     const { context } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');
@@ -487,7 +487,7 @@ describe('buildAudioBus master gain (#VOLWAV)', () => {
   });
 
   it('admits values above unity (#VOLWAV > 100 boosts the chart)', () => {
-        // Some charts authored on quieter sample sets push above 100 to bring the audible level up — the bus has to honour
+    // Some charts authored on quieter sample sets push above 100 to bring the audible level up — the bus has to honour
     // that.
     const { context } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');
@@ -496,14 +496,14 @@ describe('buildAudioBus master gain (#VOLWAV)', () => {
   });
 
   it('keeps the master gain stage on the audible path in every mode', () => {
-        // The master-gain GainNode must sit between the bus tail and the destination so a `setMasterGain(0)` mutes every
+    // The master-gain GainNode must sit between the bus tail and the destination so a `setMasterGain(0)` mutes every
     // mode. Identity: the bus's outputNode (tap) is the *post*-master anchor; mixer → ... → masterGain → tap →
     // destination.
     const { context, destination } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');
     const keyMixer = bus.keyMixer as unknown as FakeNode;
     const bgmMixer = bus.bgmMixer as unknown as FakeNode;
-        // Sanity: even with the master-gain stage in place the audible path still reaches the destination across every
+    // Sanity: even with the master-gain stage in place the audible path still reaches the destination across every
     // mode.
     for (const mode of ['split', 'legacy', 'off'] as const) {
       bus.setMode(mode);
@@ -516,7 +516,7 @@ describe('buildAudioBus master gain (#VOLWAV)', () => {
 // -- Exit fade (post-tap) -------------------------------------------------
 
 describe('buildAudioBus exit-fade gain', () => {
-    // The exit-fade gain sits AFTER the recording tap and BEFORE `audioContext.destination`. Two consequences must hold:
+  // The exit-fade gain sits AFTER the recording tap and BEFORE `audioContext.destination`. Two consequences must hold:
   // 1. fading it down silences the speakers but leaves the recording tap unaffected (so a saved WAV still captures the
   // unattenuated mix); 2. the bus's `outputNode` (the tap) is NOT the same node as the post-tap fade — there's exactly
   // one gain hop between `outputNode` and the destination on the audible path.
@@ -532,7 +532,7 @@ describe('buildAudioBus exit-fade gain', () => {
     expect(fadeStage.type).toBe('gain');
     expect(fadeStage).not.toBe(tap); // distinct from the tap itself
     expect(fadeStage.outgoing.has(destination)).toBe(true);
-        // Steady-state value is unity so the fade stage is acoustically transparent until the gameplay scene actually
+    // Steady-state value is unity so the fade stage is acoustically transparent until the gameplay scene actually
     // drives it.
     expect(fadeStage.gain?.value).toBe(1);
   });
@@ -547,7 +547,7 @@ describe('buildAudioBus exit-fade gain', () => {
   });
 
   it('snaps immediately when the duration is zero / negative / non-finite', () => {
-        // Avoids `linearRampToValueAtTime` being asked for a same-time ramp endpoint, which the spec leaves
+    // Avoids `linearRampToValueAtTime` being asked for a same-time ramp endpoint, which the spec leaves
     // implementation-defined.
     const { context } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');
@@ -562,7 +562,7 @@ describe('buildAudioBus exit-fade gain', () => {
   });
 
   it('clamps a negative or non-finite target to silence', () => {
-        // A pathological caller mustn't push the gain into the negative domain (which would phase-invert the output) or
+    // A pathological caller mustn't push the gain into the negative domain (which would phase-invert the output) or
     // poison the AudioParam with NaN.
     const { context } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');
@@ -585,7 +585,7 @@ describe('buildAudioBus exit-fade gain', () => {
   });
 
   it('keeps the recording tap (outputNode) at unity during a fade', () => {
-        // External consumers connect to `outputNode` — that node must NOT see the fade so a recording captures the full mix
+    // External consumers connect to `outputNode` — that node must NOT see the fade so a recording captures the full mix
     // even mid-exit-sequence. Verifying via the gain value on the tap itself is enough; its outgoing edges (to the fade
     // stage) are separate node-to-node connections.
     const { context } = createFakeAudioContext();

@@ -230,7 +230,7 @@ export function createBmsonSamplePlaybackMap(
       }
 
       const offsetSeconds = Math.max(0, firstEntry.seconds - anchorSeconds);
-            // bmson 1.0.0 spec: a `c=true` note must NOT restart playback — the previous `c=false` anchor's audio keeps
+      // bmson 1.0.0 spec: a `c=true` note must NOT restart playback — the previous `c=false` anchor's audio keeps
       // streaming through it. So the slice's duration boundary is the next note that forces a restart (`c !== true`),
       // not just the next note. Walking past every consecutive `c=true` chord here means the BufferSource scheduled for
       // THIS slice plays long enough to cover them all, and the runtime's "skip retrigger when this sample is already

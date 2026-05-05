@@ -59,7 +59,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
   frame.label = 'fallback-frame/chrome';
   frame.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
 
-    // ── Lane area: x=33..227, full-height down to the judge bar. LR2 paints this as part of frame.tga; we use a uniform
+  // ── Lane area: x=33..227, full-height down to the judge bar. LR2 paints this as part of frame.tga; we use a uniform
   // black fill so notes scroll over a consistent dark background. Authored references: #DST_NOTE,0..7 →
   // x=33/76/100/119/143/162/186/205, y=315 #DST_LINE → x=33, y=320, w=194, h=1 #DST_JUDGELINE → x=33, y=315, w=194, h=6
   frame.rect(PLAYFIELD.x, PLAYFIELD.y, PLAYFIELD.w, PLAYFIELD.judgementY - PLAYFIELD.y).fill(0x000000);
@@ -86,7 +86,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
     frame.rect(488, ly, 128, 7).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
   }
 
-    // ── #DST_BARGRAPH,...,500/540/580,303,36,-259 — three vertical bargraphs (current / target / next-rank). Visible
+  // ── #DST_BARGRAPH,...,500/540/580,303,36,-259 — three vertical bargraphs (current / target / next-rank). Visible
   // footprint is x..x+36, y=44..303.
   for (const bx of [500, 540, 580]) {
     frame.rect(bx, 44, 36, 259).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
@@ -137,13 +137,13 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
   // ── #DST_SLIDER,...,19,15,18,24 — playmode slider knob area.
   frame.rect(19, 15, 18, 24).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
 
-    // ── #DST_NOWJUDGE_1P,...,73,230,102,30 — judge text panel backdrop. The actual judge string + combo number are
+  // ── #DST_NOWJUDGE_1P,...,73,230,102,30 — judge text panel backdrop. The actual judge string + combo number are
   // painted as Text overlays below.
   frame.rect(73, 230, 102, 30).fill({ color: 0x000000, alpha: 0.55 });
 
   layer.addChildAt(frame, 0);
 
-    // ════════════════════════════════════════════════════════ TEXT / NUMBER OVERLAYS Painted as Pixi `Text` at the LR2
+  // ════════════════════════════════════════════════════════ TEXT / NUMBER OVERLAYS Painted as Pixi `Text` at the LR2
   // skin's authored `#DST_NUMBER` / `#DST_TEXT` / `#DST_NOWJUDGE_1P` / `#DST_NOWCOMBO_1P` coordinates so the values
   // land in the same place a bitmap-font LR2 skin would. ════════════════════════════════════════════════════════
 
@@ -174,7 +174,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
     }),
   );
 
-    // #DST_NUMBER 52,413,16,12 — bottom-left big number 1. #DST_NUMBER 52,421,16,12 — bottom-left big number 2. (Score
+  // #DST_NUMBER 52,413,16,12 — bottom-left big number 1. #DST_NUMBER 52,421,16,12 — bottom-left big number 2. (Score
   // panel main readout in LR2 default — score / max score side-by-side at this position.)
   layer.addChild(
     makeText(formatScore(runtime.score, 6), 52, 376, {
@@ -209,7 +209,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
     }),
   );
 
-    // #DST_NUMBER 216,424/431/438/445/452,6,5 — 5-row judge counter (PG / G / Gd / B / P). Coordinates are inside the
+  // #DST_NUMBER 216,424/431/438/445/452,6,5 — 5-row judge counter (PG / G / Gd / B / P). Coordinates are inside the
   // (182, 401) autoplay/clear lamp panel.
   const judgeRows: Array<readonly [string, number | undefined, number]> = [
     ['PG', runtime.perfect, ACCENT_AMBER],
@@ -232,7 +232,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
     );
   }
 
-    // #DST_NUMBER 105,210,8,7 / 229,210,8,7 — FAST / SLOW counters shown on the lane sides (between the lane and the
+  // #DST_NUMBER 105,210,8,7 / 229,210,8,7 — FAST / SLOW counters shown on the lane sides (between the lane and the
   // BGA).
   layer.addChild(
     makeText(formatScore(undefined, 3), 105, 210, {
@@ -264,7 +264,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
   layer.addChild(makeText(formatScore(undefined, 3), 260, 453, { fontSize: 5, fontWeight: '700', fill: TEXT_DIM }));
   layer.addChild(makeText(formatScore(undefined, 3), 508, 453, { fontSize: 5, fontWeight: '700', fill: TEXT_DIM }));
 
-    // #DST_NOWJUDGE_1P 73,230,102,30 — judge text + #DST_NOWCOMBO_1P 112,0,22,30 (RELATIVE to NOWJUDGE) — combo digit
+  // #DST_NOWJUDGE_1P 73,230,102,30 — judge text + #DST_NOWCOMBO_1P 112,0,22,30 (RELATIVE to NOWJUDGE) — combo digit
   // count.
   if (runtime.lastJudge) {
     const judgeText = makeText(runtime.lastJudge, 73 + 51, 230 + 6, {
@@ -287,7 +287,7 @@ export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGamepl
     }),
   );
 
-    // ── Rank letter on the (465, 392, 144, 88) right square panel. LR2 paints the rank lamp as a `#DST_IMAGE` cell from
+  // ── Rank letter on the (465, 392, 144, 88) right square panel. LR2 paints the rank lamp as a `#DST_IMAGE` cell from
   // rank.tga; we substitute the rank string as Text.
   if (runtime.rank) {
     const rankText = makeText(runtime.rank, 465 + 72, 392 + 36, {

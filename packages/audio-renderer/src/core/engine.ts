@@ -274,16 +274,16 @@ async function scheduleSampleRenders(params: {
   const playVolumeState: DynamicVolumeState = { index: 0, gain: 1 };
   let maxFrame = Math.max(1, Math.round(tailSeconds * sampleRate));
 
-    // BMS spec — `#PATH_WAV` declares a directory prefix the chart's WAVs live under. The sample-path resolver tries
+  // BMS spec — `#PATH_WAV` declares a directory prefix the chart's WAVs live under. The sample-path resolver tries
   // `pathPrefix + samplePath` before the bare path so charts that organise their WAVs under a sub-folder (e.g.
   // `wav/kick.wav` reachable via `#PATH_WAV wav/`) resolve correctly.
   const pathWavPrefix = typeof json.bms.pathWav === 'string' ? json.bms.pathWav : undefined;
-    // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides as a 0..127 byte. Pre-collect into a Map<slotKey,
+  // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides as a 0..127 byte. Pre-collect into a Map<slotKey,
   // 0..1 multiplier> so the per-trigger lookup is O(1); slots without a `#WAVCMD 01` line stay absent and skip the
   // multiplication. Pitch / loop bytes (`pp = 00` / `02`) are intentionally not collected here — applying them would
   // require resampling / loop-aware mixing that this offline renderer doesn't yet implement.
   const wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(json.bms.wavCmds, resolveBmsBase(json));
-    // BMS spec — `#EXWAVxx [flags] params filename` extended WAV declarations include an optional `v` (centibel) volume
+  // BMS spec — `#EXWAVxx [flags] params filename` extended WAV declarations include an optional `v` (centibel) volume
   // that composes multiplicatively with `#WAVCMD 01 xx vv`. Fold the extracted multipliers into the same Map so the
   // per-trigger gain math stays a single lookup. Pan / freq fall to a future patch since they require resampling /
   // stereo splitting in this offline renderer.
@@ -379,7 +379,7 @@ function resolveScheduledTriggerGain(
     volumeBus === 'play'
       ? advanceDynamicVolumeGain(dynamicVolumeChanges.play, trigger.seconds, playVolumeState)
       : advanceDynamicVolumeGain(dynamicVolumeChanges.bgm, trigger.seconds, bgmVolumeState);
-    // `#WAVCMD 01 xx vv` per-slot volume — multiplied in alongside the dynamic-volume bus state so a chart can stack a
+  // `#WAVCMD 01 xx vv` per-slot volume — multiplied in alongside the dynamic-volume bus state so a chart can stack a
   // 50% `#WAVCMD` slot under a `97`/`98` runtime cut.
   const wavCmdGain = wavCmdVolumeMultipliers.get(trigger.sampleKey) ?? 1;
   return (Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1) * dynamicGain * wavCmdGain;
@@ -394,7 +394,7 @@ function shouldScheduleTrigger(
   if (json.sourceFormat !== 'bmson') {
     return true;
   }
-    // bmson 1.0.0 spec: a `c=true` note MUST NOT restart playback — it's a continuation marker that rides on the previous
+  // bmson 1.0.0 spec: a `c=true` note MUST NOT restart playback — it's a continuation marker that rides on the previous
   // `c=false` anchor's BufferSource. Scheduling a separate render for it would overlap with the still-running anchor
   // sample (especially now that the slice's `durationSeconds` is walked out to the next genuine restart) and
   // effectively double the mix gain at every `c=true` hit. The runtime side achieves the same outcome via its

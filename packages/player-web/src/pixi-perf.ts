@@ -126,7 +126,7 @@ export class PerfTracker {
 }
 
 function isPerfEnabled(): boolean {
-    // Allow runtime opt-in from the console without rebuilding — `globalThis.__BE_MUSIC_PERF__ = true;
+  // Allow runtime opt-in from the console without rebuilding — `globalThis.__BE_MUSIC_PERF__ = true;
   // location.reload()`.
   if ((globalThis as { __BE_MUSIC_PERF__?: boolean }).__BE_MUSIC_PERF__) {
     return true;

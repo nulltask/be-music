@@ -75,7 +75,7 @@ export function resolveControlFlow(input: BeMusicJson, options: ResolveControlFl
   }
 
   json.measures.sort((left, right) => left.index - right.index);
-    // Honour `#BASE 62` so post-control-flow event normalisation preserves lowercase IDs instead of folding them. The
+  // Honour `#BASE 62` so post-control-flow event normalisation preserves lowercase IDs instead of folding them. The
   // base was recorded on the chart by the initial `parseBms` pass.
   const replayBase: 36 | 62 = json.bms.base === 62 ? 62 : 36;
   json.events = sortAndNormalizeEvents(json.events, replayBase);

@@ -51,7 +51,7 @@ export function createGrooveGaugeState(
 export function applyGrooveGaugeJudge(state: GrooveGaugeState, judge: GrooveGaugeJudgeKind): number {
   const delta = resolveGrooveGaugeDelta(state, judge);
   state.current = clampGrooveGauge(state.current + delta, state.min, state.max);
-    // DEATH gauge — any non-positive verdict zeroes the gauge so subsequent renders / fail-detection see an instant
+  // DEATH gauge — any non-positive verdict zeroes the gauge so subsequent renders / fail-detection see an instant
   // flat-line.
   if (state.type === 'DEATH' && (judge === 'POOR' || judge === 'BAD' || judge === 'EMPTY_POOR')) {
     state.current = state.min;
@@ -68,14 +68,14 @@ function resolveGrooveGaugeTotal(totalValue: number | undefined): number {
 }
 
 function resolveGrooveGaugeInitial(type: GrooveGaugeType): number {
-    // HARD / DEATH gauges start FULL — every chart is a survival run from 100 % down. GROOVE / EASY follow the LR2
+  // HARD / DEATH gauges start FULL — every chart is a survival run from 100 % down. GROOVE / EASY follow the LR2
   // default of 20 % so the gauge ramps up over the play.
   if (type === 'HARD' || type === 'DEATH') return LR2_GROOVE_GAUGE_MAX;
   return LR2_GROOVE_GAUGE_INITIAL;
 }
 
 function resolveGrooveGaugeMin(type: GrooveGaugeType): number {
-    // GROOVE / EASY have a soft floor (2 %) so a mid-chart miss streak doesn't lock the player out of recovery. HARD /
+  // GROOVE / EASY have a soft floor (2 %) so a mid-chart miss streak doesn't lock the player out of recovery. HARD /
   // DEATH bottom out at 0 % so they can fail.
   if (type === 'HARD' || type === 'DEATH') return 0;
   return LR2_GROOVE_GAUGE_MIN;
@@ -83,7 +83,7 @@ function resolveGrooveGaugeMin(type: GrooveGaugeType): number {
 
 function resolveGrooveGaugeClearThreshold(type: GrooveGaugeType): number {
   if (type === 'EASY') return 60;
-    // HARD / DEATH "clear" if you survive past 0 — any positive gauge at end-of-chart counts. We reuse 0 + epsilon as the
+  // HARD / DEATH "clear" if you survive past 0 — any positive gauge at end-of-chart counts. We reuse 0 + epsilon as the
   // threshold so `isGrooveGaugeCleared` uses the same comparison.
   if (type === 'HARD' || type === 'DEATH') return 0;
   return LR2_GROOVE_GAUGE_CLEAR_THRESHOLD;
@@ -114,7 +114,7 @@ function resolveGrooveGaugeDeltaNormal(state: GrooveGaugeState, judge: GrooveGau
 }
 
 function resolveHardGaugeDelta(_state: GrooveGaugeState, judge: GrooveGaugeJudgeKind): number {
-    // HARD penalties are flat percentages — independent of TOTAL — because the gauge starts at 100 % and the penalty
+  // HARD penalties are flat percentages — independent of TOTAL — because the gauge starts at 100 % and the penalty
   // model is "how many BADs / POORs can you survive". Approximates LR2's canonical values; re-tune if score-history
   // calibration says otherwise.
   if (judge === 'BAD') return -6;
@@ -126,7 +126,7 @@ function resolveHardGaugeDelta(_state: GrooveGaugeState, judge: GrooveGaugeJudge
 }
 
 function resolveDeathGaugeDelta(_state: GrooveGaugeState, judge: GrooveGaugeJudgeKind): number {
-    // DEATH — any miss / poor zeroes the gauge (handled by the post-clamp nudge in `applyGrooveGaugeJudge`). Hits give a
+  // DEATH — any miss / poor zeroes the gauge (handled by the post-clamp nudge in `applyGrooveGaugeJudge`). Hits give a
   // tiny token gain so the polyline reads as "alive" while the chart still has playable notes.
   if (judge === 'BAD' || judge === 'POOR' || judge === 'EMPTY_POOR') return -100;
   if (judge === 'GOOD') return 0;

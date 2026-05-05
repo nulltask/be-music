@@ -105,7 +105,7 @@ const RESULT_BASE_OPS: ReadonlySet<number> = new Set<number>([
   62, // clear save impossible
   81, // load complete
   82, // replay off
-    // op 350 = "result flip disabled" (no #FLIPRESULT in the skin) — most LR2 default skins gate the score panel against
+  // op 350 = "result flip disabled" (no #FLIPRESULT in the skin) — most LR2 default skins gate the score panel against
   // op 350, so set it. Skins that DO declare #FLIPRESULT will need op 351 instead, which we toggle below from the
   // gameplay's skin.
   350,
@@ -120,15 +120,15 @@ const RESULT_BASE_OPS: ReadonlySet<number> = new Set<number>([
  * 200..207 (as an earlier revision of this file did) leaves every rank panel hidden.
  */
 export const RESULT_DYNAMIC_OPS = {
-    // Cleared / failed at the play-result level. These gate the background atlas (`parts.tga` vs `parts_fail.tga`) plus
+  // Cleared / failed at the play-result level. These gate the background atlas (`parts.tga` vs `parts_fail.tga`) plus
   // the big "CLEARED" / "FAILED" graphic. Runtime-only — pre-set in `defaultParseOps` so both atlases parse.
   RESULT_CLEARED: 90,
   RESULT_FAILED: 91,
-    // Bar / cursor type duplicated here in case the skin re-uses a bar-list panel (rare, but the LR2 default
+  // Bar / cursor type duplicated here in case the skin re-uses a bar-list panel (rare, but the LR2 default
   // course-result skin does for the per-stage chart graph).
   BAR_IS_SONG: 2,
   BAR_IS_PLAYABLE: 5,
-    // Difficulty echoed onto the result screen — gates per-difficulty panels in the default skin
+  // Difficulty echoed onto the result screen — gates per-difficulty panels in the default skin
   // (`#DST_IMAGE,...,400,152,...` = "show only on 7/14K NORMAL chart").
   DIFFICULTY_UNDEFINED: 150,
   DIFFICULTY_EASY: 151,
@@ -136,14 +136,14 @@ export const RESULT_DYNAMIC_OPS = {
   DIFFICULTY_HYPER: 153,
   DIFFICULTY_ANOTHER: 154,
   DIFFICULTY_INSANE: 155,
-    // Key mode of the played chart for the SELECT-screen op range. The result skin generally uses the KEYCONFIG range
+  // Key mode of the played chart for the SELECT-screen op range. The result skin generally uses the KEYCONFIG range
   // (400..402) instead, but a few skins reuse the select range too — so we set both so each gating style works.
   KEYS_7: 160,
   KEYS_5: 161,
   KEYS_14: 162,
   KEYS_10: 163,
   KEYS_9: 164,
-    // Clear lamp for THIS play. 100 = not played (won't fire on the result screen — we always ran the chart), 101 =
+  // Clear lamp for THIS play. 100 = not played (won't fire on the result screen — we always ran the chart), 101 =
   // failed, 102 = easy clear, 103 = normal clear, 104 = hard clear, 105 = full combo. Picked from `data.cleared` +
   // judge counts.
   LAMP_FAILED: 101,
@@ -151,7 +151,7 @@ export const RESULT_DYNAMIC_OPS = {
   LAMP_NORMAL: 103,
   LAMP_HARD: 104,
   LAMP_FULL_COMBO: 105,
-    // 1P **result-screen** rank (300..307). Distinct from the select- screen rank op range (200..207) and from the 2P
+  // 1P **result-screen** rank (300..307). Distinct from the select- screen rank op range (200..207) and from the 2P
   // range (310..317). The default skin's "RANK" panel gates on these.
   RANK_NOW_AAA: 300,
   RANK_NOW_AA: 301,
@@ -162,7 +162,7 @@ export const RESULT_DYNAMIC_OPS = {
   RANK_NOW_E: 306,
   RANK_NOW_F: 307,
   RANK_NOW_0: 308,
-    // Pre-update rank — 320..327 + 328 ("rank 0"). Without score history every play is "first time" so the previous rank
+  // Pre-update rank — 320..327 + 328 ("rank 0"). Without score history every play is "first time" so the previous rank
   // is 0 / F. We set 327 (F) to match what real LR2 reports for an un-played chart.
   RANK_PREV_AAA: 320,
   RANK_PREV_AA: 321,
@@ -182,18 +182,18 @@ export const RESULT_DYNAMIC_OPS = {
   RANK_NEXT_D: 345,
   RANK_NEXT_E: 346,
   RANK_NEXT_F: 347,
-    // "Score / max-combo / score-rank updated" flags. Without score persistence we always claim "updated" so the LR2
+  // "Score / max-combo / score-rank updated" flags. Without score persistence we always claim "updated" so the LR2
   // default skin's congratulatory artwork shows; once history persists, this becomes a comparison against the stored
   // best.
   SCORE_UPDATED: 330,
   MAXCOMBO_UPDATED: 331,
   MIN_BP_UPDATED: 332,
   RANK_UPDATED: 335,
-    // Result-flip status. 350 = flip disabled (default), 351 = flip enabled (skin declared `#FLIPRESULT`). We set exactly
+  // Result-flip status. 350 = flip disabled (default), 351 = flip enabled (skin declared `#FLIPRESULT`). We set exactly
   // one based on the gameplay skin's `scratchFlip.flipResult`.
   RESULT_FLIP_DISABLED: 350,
   RESULT_FLIP_ENABLED: 351,
-    // KEYCONFIG-derived key mode used by the result skin's per-keymode panels. 400 = 7/14keys, 401 = 9keys, 402 =
+  // KEYCONFIG-derived key mode used by the result skin's per-keymode panels. 400 = 7/14keys, 401 = 9keys, 402 =
   // 5/10keys.
   KEYCONFIG_7_14: 400,
   KEYCONFIG_9: 401,
@@ -322,7 +322,7 @@ export class PixiResultView {
     host.app.stage.addChild(this.sceneRoot);
     window.addEventListener('keydown', this.handleKeyDown);
     host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
-        // Trust the loader's path filter: any `Lr2Skin` we receive here was selected from `Result/*.lr2skin` candidates
+    // Trust the loader's path filter: any `Lr2Skin` we receive here was selected from `Result/*.lr2skin` candidates
     // (see `loadLr2SkinFromSourceFiles` for the kind-aware path matcher). Earlier this scene gated on a "has
     // result-anchored timer" heuristic, but the LR2 default `Result/result_normal.csv` anchors almost everything to
     // timer 0 (the chart-draw timeline is a thin overlay on top), so the heuristic produced a false negative and the
@@ -334,7 +334,7 @@ export class PixiResultView {
     this.sceneStartedAt = performance.now();
     this.timerStartedAt.clear();
     this.timerStartedAt.set(0, this.sceneStartedAt);
-        // Schedule timer 1 (#STARTINPUT) and timer 150 (chart-draw) from wall clock so the skin's intro animation plays out
+    // Schedule timer 1 (#STARTINPUT) and timer 150 (chart-draw) from wall clock so the skin's intro animation plays out
     // even without user interaction. Timer 151 fires automatically once the chart-draw window elapses; 152 needs an
     // input.
     const startInput = this.options.skin?.timing.startInput ?? DEFAULT_STARTINPUT_MS;
@@ -342,7 +342,7 @@ export class PixiResultView {
       () => {
         if (this.disposed) return;
         this.timerStartedAt.set(1, performance.now());
-                // The LR2 reference timeline starts the chart draw the moment input becomes available — keep the same anchor so
+        // The LR2 reference timeline starts the chart draw the moment input becomes available — keep the same anchor so
         // the numbers panel slide-in lines up with the chrome animation.
         this.timerStartedAt.set(150, performance.now());
       },
@@ -515,7 +515,7 @@ export class PixiResultView {
       this.cachedDesignWidth = designWidth;
       this.cachedDesignHeight = designHeight;
     }
-        // `disposeChildren` (vs bare `removeChildren`) is essential here: the per-frame skin / fallback rebuild allocates
+    // `disposeChildren` (vs bare `removeChildren`) is essential here: the per-frame skin / fallback rebuild allocates
     // fresh `Sprite`, `Text` and (for polylines) `Graphics` nodes every tick. Bare detach leaves their renderer-side
     // state alive, which the original report described as "browser freezes after the song ends" — accumulated
     // GraphicsContext + glyph atlas slots stalled the next reconcile pass. See `pixi-utils.ts` for the full rationale.
@@ -524,7 +524,7 @@ export class PixiResultView {
     if (useSkin && skin) {
       const ops = computeResultOps(this.result, skin);
       this.renderSkin(skin, ops);
-            // No empty-state hint here — the skin's own artwork covers the whole canvas. If a skin author wired a result skin
+      // No empty-state hint here — the skin's own artwork covers the whole canvas. If a skin author wired a result skin
       // but no #IMAGE / #TEXT to display, that's their decision.
       return;
     }
@@ -533,7 +533,7 @@ export class PixiResultView {
 
   private renderSkin(skin: Lr2Skin, ops: ReadonlySet<number>): void {
     if (!this.result) return;
-        // Build a unified work list keyed on `declarationOrder` so the resulting paint order matches LR2's CSV-stream
+    // Build a unified work list keyed on `declarationOrder` so the resulting paint order matches LR2's CSV-stream
     // contract ("later declarations paint on top"). The previous kind-grouped loop (images first, then numbers, then
     // texts, …) inverted the z-order whenever a later-kind element was authored EARLIER than a same-layer earlier-kind
     // element — most visibly the LR2 default result skin's high-score panel (image declared after the score
@@ -588,7 +588,7 @@ export class PixiResultView {
       });
     }
 
-        // BARGRAPH / SLIDER: result-screen skins use these for the EX-score / rate progress bars next to the digit panels.
+    // BARGRAPH / SLIDER: result-screen skins use these for the EX-score / rate progress bars next to the digit panels.
     // The value resolver returns 0..1 (filled ratio); the renderer crops the source rect along the `muki` axis.
     for (const bargraph of skin.bargraphs) {
       const dst = this.evaluateElementDst(bargraph);
@@ -618,7 +618,7 @@ export class PixiResultView {
       });
     }
 
-        // Polyline charts (`#SRC_GAUGECHART_*` / `#SRC_SCORECHART`) also live on `declarationOrder`: the LR2 default result
+    // Polyline charts (`#SRC_GAUGECHART_*` / `#SRC_SCORECHART`) also live on `declarationOrder`: the LR2 default result
     // skin declares the high-score panel image AFTER the graphs, so a proper sort puts the panel on top of the
     // polylines too. The previous unsorted-tail pass left the polylines painting over the panel even though the CSV
     // order said otherwise.
@@ -646,7 +646,7 @@ export class PixiResultView {
       });
     }
 
-        // Stable sort by declaration order; ties (rare — usually only when two element kinds share a SRC line, which the
+    // Stable sort by declaration order; ties (rare — usually only when two element kinds share a SRC line, which the
     // LR2 parser forbids) keep their push order so the pre-sort pass acts as the secondary key.
     work.sort((a, b) => a.order - b.order);
     for (const item of work) {
@@ -786,7 +786,7 @@ export class PixiResultView {
     const graphic = new Graphics();
     graphic.label = label;
     graphic.alpha = alpha;
-        // Walk the points until we cross the reveal cutoff. We need the first point as the move-to anchor; subsequent
+    // Walk the points until we cross the reveal cutoff. We need the first point as the move-to anchor; subsequent
     // points are line-to. If the cutoff falls between two points we interpolate.
     const first = points[0]!;
     const start = toScreen(first);
@@ -818,7 +818,7 @@ export class PixiResultView {
       break;
     }
     if (!drewAny && points.length === 1) {
-            // Single-sample series (chart that ended before any judges fired): emit a tiny dot so the line still has visible
+      // Single-sample series (chart that ended before any judges fired): emit a tiny dot so the line still has visible
       // geometry. `lineTo` to the same point is a no-op in Pixi v8, so we offset by half a pixel.
       graphic.lineTo(start.sx + 0.5, start.sy);
     }
@@ -881,7 +881,7 @@ export class PixiResultView {
       chrome.rect(x, 60 - i * 1.6, 10, 2).fill(0x72d677);
     }
 
-        // ── STAGE CLEARED / FAILED heading ────────────────────── Renders centred between the two top graphs as a chunky
+    // ── STAGE CLEARED / FAILED heading ────────────────────── Renders centred between the two top graphs as a chunky
     // outlined word — LR2 ships a silver/cyan gradient bitmap here; we mimic the silhouette with an outlined Text.
     const cleared = result.cleared;
     const headingText = new Text({
@@ -926,7 +926,7 @@ export class PixiResultView {
       this.renderResultTile(chrome, 8, ly, 192, 28, leftLabels[i]![0], leftLabels[i]![1]);
     }
 
-        // ── Mid-right score tiles ─────────────────────────────── EX SCORE shown again on the right with TARGET / BEST EX
+    // ── Mid-right score tiles ─────────────────────────────── EX SCORE shown again on the right with TARGET / BEST EX
     // SCORE / NEXTRANK comparisons in the LR2 default layout.
     const rate = computeScoreRate(result.score) * 100;
     const rightLabels: Array<readonly [string, string, string]> = [
@@ -949,7 +949,7 @@ export class PixiResultView {
       );
     }
 
-        // ── Centre judge counter ladder ───────────────────────── PERFECT / GREAT / GOOD / BAD / POOR with counts. The
+    // ── Centre judge counter ladder ───────────────────────── PERFECT / GREAT / GOOD / BAD / POOR with counts. The
     // screenshot highlights the top GREAT row in red.
     const judges: Array<readonly [string, string, number]> = [
       ['GREAT', String(result.score.perfect).padStart(4, '0'), 0xef4444],
@@ -1062,7 +1062,7 @@ export class PixiResultView {
     gradeText.position.set(designWidth - 60, 268);
     this.fallbackLayer.addChild(gradeText);
 
-        // No "Press Enter / Space / Esc to continue" hint — LR2's default result skin doesn't author one, so the no-skin
+    // No "Press Enter / Space / Esc to continue" hint — LR2's default result skin doesn't author one, so the no-skin
     // fallback skips it too.
 
     // Chrome under all text overlays.
@@ -1202,12 +1202,12 @@ export class PixiResultView {
    */
   private advance(): void {
     if (!this.timerStartedAt.has(1)) {
-            // `#STARTINPUT` hasn't elapsed — ignore the press. LR2 suppresses input here so the player can't accidentally
+      // `#STARTINPUT` hasn't elapsed — ignore the press. LR2 suppresses input here so the player can't accidentally
       // skip past the slide-in animation before the score panel appears.
       return;
     }
     if (!this.timerStartedAt.has(151)) {
-            // Skip the chart draw — fire timer 151 so the score panel appears immediately. Mirrors LR2's gacha-press
+      // Skip the chart draw — fire timer 151 so the score panel appears immediately. Mirrors LR2's gacha-press
       // behaviour.
       this.timerStartedAt.set(151, performance.now());
       return;
@@ -1378,13 +1378,13 @@ export function computeResultOps(data: PixiGameplayResultData, skin: Lr2Skin): R
   }
   ops.add(resolveDifficultyOp(data));
   ops.add(resolveResultLampOp(data));
-    // Current 1P rank goes into the 300 / 340 ranges (the result- screen-specific slots — 200..207 is the SELECT-side
+  // Current 1P rank goes into the 300 / 340 ranges (the result- screen-specific slots — 200..207 is the SELECT-side
   // rank op and the LR2 default skin doesn't gate on it). Both "now" and "next" carry the same value because we don't
   // yet persist a best-score baseline to compare against.
   const rankIndex = resolveResultRankIndex(data);
   ops.add(RESULT_DYNAMIC_OPS.RANK_NOW_AAA + rankIndex);
   ops.add(RESULT_DYNAMIC_OPS.RANK_NEXT_AAA + rankIndex);
-    // Pre-update rank is rank-0 (no prior history) — the default skin uses 328 ("0" tier) for that, with 320..327
+  // Pre-update rank is rank-0 (no prior history) — the default skin uses 328 ("0" tier) for that, with 320..327
   // reserved for each historical rank.
   ops.add(RESULT_DYNAMIC_OPS.RANK_PREV_0);
 
@@ -1394,7 +1394,7 @@ export function computeResultOps(data: PixiGameplayResultData, skin: Lr2Skin): R
   ops.add(RESULT_DYNAMIC_OPS.MIN_BP_UPDATED);
   ops.add(RESULT_DYNAMIC_OPS.RANK_UPDATED);
 
-    // Result-flip status toggled from the gameplay skin (#FLIPRESULT). Default-disabled is already in `RESULT_BASE_OPS`;
+  // Result-flip status toggled from the gameplay skin (#FLIPRESULT). Default-disabled is already in `RESULT_BASE_OPS`;
   // if the skin declares flipResult we swap to the enabled slot.
   if (skin.scratchFlip.flipResult) {
     ops.delete(RESULT_DYNAMIC_OPS.RESULT_FLIP_DISABLED);
@@ -1433,7 +1433,7 @@ function resolveKeyModeOps(data: PixiGameplayResultData): number[] {
       selectOp = uses6or7 ? RESULT_DYNAMIC_OPS.KEYS_7 : RESULT_DYNAMIC_OPS.KEYS_5;
     }
   }
-    // Map the select-range op onto the KEYCONFIG range. 7K + 14K share op 400 because the LR2 default skin doesn't draw a
+  // Map the select-range op onto the KEYCONFIG range. 7K + 14K share op 400 because the LR2 default skin doesn't draw a
   // separate 14K layout. Likewise 5K + 10K share 402.
   let keyConfigOp: number;
   if (selectOp === RESULT_DYNAMIC_OPS.KEYS_9) {
@@ -1459,7 +1459,7 @@ function resolveDifficultyOp(data: PixiGameplayResultData): number {
     case 5:
       return RESULT_DYNAMIC_OPS.DIFFICULTY_INSANE;
     default:
-            // Real LR2 maps "no difficulty declared" to the NORMAL slot for the result-screen panel split (the default skin
+      // Real LR2 maps "no difficulty declared" to the NORMAL slot for the result-screen panel split (the default skin
       // only ships per-difficulty graphics for 152..155 and would otherwise leave the panel blank). Mirror that.
       return RESULT_DYNAMIC_OPS.DIFFICULTY_NORMAL;
   }
@@ -1480,7 +1480,7 @@ function resolveResultLampOp(data: PixiGameplayResultData): number {
   if (data.score.total > 0 && data.score.bad === 0 && data.score.poor === 0) {
     return RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO;
   }
-    // Single gauge type today — every clear maps to NORMAL. Once gauge-type selection lands, branch on that here for HARD
+  // Single gauge type today — every clear maps to NORMAL. Once gauge-type selection lands, branch on that here for HARD
   // / EASY.
   return RESULT_DYNAMIC_OPS.LAMP_NORMAL;
 }
@@ -1567,7 +1567,7 @@ function resolveResultNumber(num: number, data: PixiGameplayResultData): number 
     case 103:
       return Math.round(rate * 10000);
     case 104:
-            // Result screen: there's no "live" combo, but the LR2 default skin reuses num=104 for the per-result "MAX COMBO"
+      // Result screen: there's no "live" combo, but the LR2 default skin reuses num=104 for the per-result "MAX COMBO"
       // digit panel as a fallback. Surface the achieved max combo so the panel doesn't read 0.
       return data.maxCombo;
     case 105:
@@ -1596,7 +1596,7 @@ function resolveResultNumber(num: number, data: PixiGameplayResultData): number 
       return Math.floor(data.playSeconds % 60);
     case 165:
       return 100;
-        // Result-specific high-score deltas. "before" = 0 (no history), "now" = the live values, "diff" = "now" - "before"
+    // Result-specific high-score deltas. "before" = 0 (no history), "now" = the live values, "diff" = "now" - "before"
     // = "now".
     case 170: // EX score (before)
       return 0;
@@ -1611,7 +1611,7 @@ function resolveResultNumber(num: number, data: PixiGameplayResultData): number 
     case 175: // max combo (diff)
       return data.maxCombo;
     case 176: // min B+P (before)
-            // Without history, treat the "before" number as the chart's theoretical worst (every note BAD) so the diff column
+      // Without history, treat the "before" number as the chart's theoretical worst (every note BAD) so the diff column
       // shows a positive improvement.
       return totalNotes;
     case 177: // min B+P (now)
@@ -1687,7 +1687,7 @@ function resolveResultText(st: number, data: PixiGameplayResultData): string | u
  * Returns `undefined` for type codes outside the result-relevant range; the renderer skips those.
  */
 function resolveResultBargraphValue(type: number, data: PixiGameplayResultData): number | undefined {
-    // Per `bargraph.txt`: 1 = score, 2 = exscore, 3 = exscore best, 4 = exscore target, 6 = gauge, 7 = max-combo, 9 =
+  // Per `bargraph.txt`: 1 = score, 2 = exscore, 3 = exscore best, 4 = exscore target, 6 = gauge, 7 = max-combo, 9 =
   // rate. Many result skins use type 1 / 2 / 9 for the EX-score progress bar.
   const exMax = data.score.total * 2;
   switch (type) {
@@ -1707,7 +1707,7 @@ function resolveResultBargraphValue(type: number, data: PixiGameplayResultData):
 }
 
 function resolveResultSliderValue(type: number, data: PixiGameplayResultData): number | undefined {
-    // Slider types overlap with bargraph types in the LR2 spec; the result screen typically only wires "song progress"
+  // Slider types overlap with bargraph types in the LR2 spec; the result screen typically only wires "song progress"
   // (type 1) and "rate" (type 6). Reuse the bargraph resolver so any new slot landing in either gets one shared
   // implementation.
   return resolveResultBargraphValue(type, data);

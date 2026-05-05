@@ -168,7 +168,7 @@ const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
     [4, '14'],
     [5, '15'],
   ]),
-    // PMS-STD (`#PLAYER 3` Pop'n) routes the right-hand half of the 9-lane bank through the 2P-side `22..25` channels —
+  // PMS-STD (`#PLAYER 3` Pop'n) routes the right-hand half of the 9-lane bank through the 2P-side `22..25` channels —
   // same convention `play_9.lr2skin` and `lane-layout.ts` use.
   'popn-9k': new Map([
     [1, '11'],
@@ -493,18 +493,18 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
     normalized.subartists = subartists;
   }
 
-    // bmson 1.0.0 spec — `level` is an `unsigned long` and "must be ≥ 0. Negative values may be regarded as invalid by a
+  // bmson 1.0.0 spec — `level` is an `unsigned long` and "must be ≥ 0. Negative values may be regarded as invalid by a
   // player." We treat the negative case as "invalid → drop the field" rather than silently coerce, so the missing-level
   // fallback (`undefined` → no displayed level) is what the chart's level shows in the UI. Non-integer inputs are
   // floored to honour the spec's `unsigned long` type.
   copyIfNonNegativeInteger(normalized, 'level', info.level);
   copyIfFiniteNumber(normalized, 'initBpm', info.init_bpm);
-    // bmson 1.0.0 spec — `judge_rank` describes "the width of judgment window" with the spec text only making sense for
+  // bmson 1.0.0 spec — `judge_rank` describes "the width of judgment window" with the spec text only making sense for
   // positive values ("smaller than 100" / "larger than 100" are framed relative to the player's default; 0 / negative
   // would mean a zero-or-inverted window). Drop the field for non-positive inputs so the consumer falls back to the
   // spec default of 100 rather than producing a nonsensical judge window.
   copyIfPositiveFiniteNumber(normalized, 'judgeRank', info.judge_rank);
-    // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take the absolute value." Normalising at parse time keeps the
+  // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take the absolute value." Normalising at parse time keeps the
   // gauge formula (`+TOTAL/N`) on the positive branch and means every downstream consumer (gauge, stringifier,
   // round-trip re-parse) sees the canonical value. `total: 0` stays semantically meaningful (lifebar doesn't increase,
   // per the same spec section).
@@ -811,7 +811,7 @@ function normalizeBmsonInfoFromIr(input: unknown): BeMusicJson['bmson']['info'] 
     info.subartists = subartists;
   }
 
-    // Match `normalizeBmsonInfoForIr`'s spec-compliant unsigned- integer + positive + abs handling for the re-parse path
+  // Match `normalizeBmsonInfoForIr`'s spec-compliant unsigned- integer + positive + abs handling for the re-parse path
   // so JSON round-trips don't reintroduce a negative / float level / judge_rank / total.
   copyIfNonNegativeInteger(info, 'level', raw.level);
   copyIfFiniteNumber(info, 'initBpm', raw.initBpm ?? raw.init_bpm);

@@ -43,7 +43,7 @@ export function createSamplePathCandidates(samplePath: string, options: ResolveS
 
   const basePaths: string[] = [];
   const slashNormalizedSample = samplePath.replaceAll('\\', '/');
-    // `#PATH_WAV` prefix-joined variants come first so a chart with `wav/` layout resolves through its declared directory
+  // `#PATH_WAV` prefix-joined variants come first so a chart with `wav/` layout resolves through its declared directory
   // before the bare-name fallback. Skip the prefix entirely when blank / null-safe — empty `#PATH_WAV` is treated as
   // "no prefix" by hitkey BMS Memo.
   const prefixed = joinPathWavPrefix(options.pathPrefix, samplePath);
@@ -70,7 +70,7 @@ function joinPathWavPrefix(prefix: string | undefined, samplePath: string): stri
   if (typeof prefix !== 'string') return undefined;
   const trimmedPrefix = prefix.trim();
   if (trimmedPrefix.length === 0) return undefined;
-    // Skip when the chart already includes the prefix in the sample path — common when a chart pulls samples from a
+  // Skip when the chart already includes the prefix in the sample path — common when a chart pulls samples from a
   // sub-folder explicitly via `#WAV01 wav/kick.wav` AND sets `#PATH_WAV wav/`. Returning `undefined` here keeps the
   // regular candidate list (without the second prefix application) and the bare path still resolves correctly.
   const normalizedPrefix = trimmedPrefix.replaceAll('\\', '/');
@@ -145,7 +145,7 @@ function appendSampleCandidatesByRule(samplePath: string, push: (candidatePath: 
   }
 
   if (extension === '.m4a') {
-        // bmson 1.0.0 spec example explicitly lists `.m4a` (AAC) as a fallback codec, so treat it as a first-class entry:
+    // bmson 1.0.0 spec example explicitly lists `.m4a` (AAC) as a fallback codec, so treat it as a first-class entry:
     // try m4a, then walk the rest of the codec list for the case where the chart authors `.m4a` but the disk only has a
     // re-encoded variant.
     push(`${withoutExtension}.m4a`);
@@ -161,7 +161,7 @@ function appendSampleCandidatesByRule(samplePath: string, push: (candidatePath: 
     return;
   }
 
-    // Extension omitted or unknown: wav -> mp3 -> ogg -> opus -> m4a. The bmson 1.0.0 spec calls out `.m4a` (AAC)
+  // Extension omitted or unknown: wav -> mp3 -> ogg -> opus -> m4a. The bmson 1.0.0 spec calls out `.m4a` (AAC)
   // explicitly in its extensionless-name example ("Try piano.wav, piano.ogg, piano.m4a, …"), so we include it here and
   // in the with- extension branches above.
   push(`${withoutExtension}.wav`);

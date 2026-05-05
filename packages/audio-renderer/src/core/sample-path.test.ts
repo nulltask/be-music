@@ -8,7 +8,7 @@ describe('createSamplePathCandidates', () => {
   });
 
   test('extensionless input walks every codec the bmson 1.0.0 spec lists', () => {
-        // bmson 1.0.0 spec: "Try piano.wav, piano.ogg, piano.m4a, …". We additionally include `.mp3` / `.opus` / `.oga` for
+    // bmson 1.0.0 spec: "Try piano.wav, piano.ogg, piano.m4a, …". We additionally include `.mp3` / `.opus` / `.oga` for
     // archive coverage. `.m4a` must appear since it's named explicitly in the spec example.
     const candidates = createSamplePathCandidates('piano');
     const lower = candidates.map((entry) => entry.toLowerCase());
@@ -36,7 +36,7 @@ describe('createSamplePathCandidates', () => {
   });
 
   test('Windows-style backslash paths are normalised into forward-slash candidates too', () => {
-        // Same path with backslashes converted to slashes is appended so the resolver finds files on either form of
+    // Same path with backslashes converted to slashes is appended so the resolver finds files on either form of
     // case-/separator-sensitive filesystem.
     const candidates = createSamplePathCandidates('subdir\\kick.wav');
     expect(candidates).toContain('subdir\\kick.wav');
@@ -49,7 +49,7 @@ describe('createSamplePathCandidates', () => {
   });
 
   test('#PATH_WAV prefix joins the chart-declared path before the bare name', () => {
-        // BMS spec — `#PATH_WAV wav/` + `#WAV01 kick.wav` should resolve to `wav/kick.wav` first, falling back to
+    // BMS spec — `#PATH_WAV wav/` + `#WAV01 kick.wav` should resolve to `wav/kick.wav` first, falling back to
     // `kick.wav` when the prefix-joined path isn't on disk.
     const candidates = createSamplePathCandidates('kick.wav', { pathPrefix: 'wav/' });
     expect(candidates).toContain('wav/kick.wav');

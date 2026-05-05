@@ -24,7 +24,7 @@ function readHeader(bytes: Uint8Array): TgaHeader | undefined {
     idLength: bytes[0]!,
     colorMapType: bytes[1]!,
     imageType: bytes[2]!,
-        // bytes 3-7 = ColorMap spec (skipped — we don't support indexed) bytes 8-9 = X origin (LR2 uses 0) bytes 10-11 = Y
+    // bytes 3-7 = ColorMap spec (skipped — we don't support indexed) bytes 8-9 = X origin (LR2 uses 0) bytes 10-11 = Y
     // origin
     width: bytes[12]! | (bytes[13]! << 8),
     height: bytes[14]! | (bytes[15]! << 8),
@@ -81,7 +81,7 @@ export function decodeTga(bytes: Uint8Array): { width: number; height: number; d
   if (![1, 2, 3, 4].includes(bytesPerPixel)) return undefined;
   const totalPixels = header.width * header.height;
 
-    // Image type values: 2 = uncompressed TrueColor RGB / RGBA 3 = uncompressed grayscale 10 = RLE TrueColor RGB / RGBA
+  // Image type values: 2 = uncompressed TrueColor RGB / RGBA 3 = uncompressed grayscale 10 = RLE TrueColor RGB / RGBA
   // 11 = RLE grayscale
   const isRle = header.imageType === 10 || header.imageType === 11;
   const isGrayscale = header.imageType === 3 || header.imageType === 11;
@@ -98,7 +98,7 @@ export function decodeTga(bytes: Uint8Array): { width: number; height: number; d
     decodeUncompressed(bytes.subarray(pixelDataStart), bytesPerPixel, pixels, totalPixels, isGrayscale);
   }
 
-    // TGA origin: bit 5 of imageDescriptor (`0x20`) flags top-left origin. When clear, the image is stored bottom-up and
+  // TGA origin: bit 5 of imageDescriptor (`0x20`) flags top-left origin. When clear, the image is stored bottom-up and
   // we flip rows so the resulting canvas-friendly buffer is top-down.
   const topDown = (header.imageDescriptor & 0x20) !== 0;
   if (!topDown) {

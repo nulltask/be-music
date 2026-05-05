@@ -127,7 +127,7 @@ async function collectFilesFromDataTransfer(
     }
     if (entries.length > 0) {
       const collected: File[] = [];
-            // Total is unknown while we're still walking the FileSystem tree (the FileSystemEntry API doesn't expose a
+      // Total is unknown while we're still walking the FileSystem tree (the FileSystemEntry API doesn't expose a
       // directory's file count up-front), so we report `total: -1` and let the host UI show an indeterminate
       // "Collecting…" indicator.
       onProgress?.({ phase: 'enumerating', current: 0, total: -1 });
@@ -166,7 +166,7 @@ async function collectFilesFromEntry(
         (entry as FileSystemFileEntry).file(resolve, reject);
       });
     } catch (error) {
-            // A single file failing to materialise (permission denied, stale entry, network drive disconnect, …) shouldn't
+      // A single file failing to materialise (permission denied, stale entry, network drive disconnect, …) shouldn't
       // kill the entire drop. Log and skip — the resulting collection simply omits that file, matching what real LR2
       // does when an asset is missing.
       log.warn(`skipped (entry.file failed): ${prefix}${entry.name}`, error);
@@ -174,7 +174,7 @@ async function collectFilesFromEntry(
     }
     const relativePath = prefix ? `${prefix}${file.name}` : file.name;
     files.push(withRelativePath(file, relativePath));
-        // Throttle the per-file progress emit: a 4000-file walk doesn't need 4000 React-style updates. Keep one in every 32
+    // Throttle the per-file progress emit: a 4000-file walk doesn't need 4000 React-style updates. Keep one in every 32
     // entries plus the very first, which is enough for a visibly-moving counter without thrashing the host UI.
     if (onProgress && (files.length & 0x1f) === 1) {
       onProgress({ phase: 'enumerating', current: files.length, total: -1, label: relativePath });
@@ -191,7 +191,7 @@ async function collectFilesFromEntry(
           reader.readEntries(resolve, reject);
         });
       } catch (error) {
-                // A directory readEntries failure aborts iteration on THIS directory — the parent walk continues with what we
+        // A directory readEntries failure aborts iteration on THIS directory — the parent walk continues with what we
         // already collected. Logged because this is unusual (file-system errors are uncommon in dropped folders).
         log.warn(`skipped (readEntries failed): ${nextPrefix}`, error);
         return;
@@ -199,7 +199,7 @@ async function collectFilesFromEntry(
       if (batch.length === 0) {
         return;
       }
-            // Walk children with a bounded-concurrency pool. The unbounded `Promise.all(batch.map(...))` from before fanned
+      // Walk children with a bounded-concurrency pool. The unbounded `Promise.all(batch.map(...))` from before fanned
       // out into the recursive walks too, piling up hundreds of pending FileSystemEntry handles for deep trees.
       // Chrome's FileSystem API has an internal in-flight cap that, when exceeded, silently rejects later calls —
       // observable on the user side as a partial / interrupted load. Bounding the walk here keeps disk I/O saturated
@@ -269,7 +269,7 @@ export async function readFilesIntoBytesMap(
         const bytes = new Uint8Array(await file.arrayBuffer());
         result.set(path, bytes);
       } catch (error) {
-                // A single file failing to read shouldn't kill the entire drop. The map simply omits that path; the caller's
+        // A single file failing to read shouldn't kill the entire drop. The map simply omits that path; the caller's
         // chart parser / asset resolver will treat it as missing, which matches what happens for genuinely-missing
         // files.
         log.warn(`skipped (arrayBuffer failed): ${path}`, error);
@@ -357,11 +357,11 @@ export async function loadSongCollectionFromFiles(
   const looseFiles = new Map<string, BrowserSongAssetEntry>();
   const looseLabels = new Set<string>();
 
-    // Materialise the iterable so we can report "X / N" totals up front. The callers always pass an array today, so this
+  // Materialise the iterable so we can report "X / N" totals up front. The callers always pass an array today, so this
   // is a no-op spread; it just lets the typing accept any iterable.
   const fileList = [...files];
   onProgress?.({ phase: 'reading', current: 0, total: fileList.length });
-    // Split ZIPs out before the parallel-read pool so we can keep each archive's expansion tied to its own source label.
+  // Split ZIPs out before the parallel-read pool so we can keep each archive's expansion tied to its own source label.
   // Everything else lands in the shared `looseFiles` map.
   const zipFiles: File[] = [];
   const looseEntries: File[] = [];
@@ -373,7 +373,7 @@ export async function loadSongCollectionFromFiles(
       looseLabels.add(firstPathSegment(normalizePath(file.webkitRelativePath || file.name)) || file.name);
     }
   }
-    // Defer EVERY song-bundle file. Charts get read on demand by the parse loop below (each chart's bytes are released as
+  // Defer EVERY song-bundle file. Charts get read on demand by the parse loop below (each chart's bytes are released as
   // soon as the parser produces its `BeMusicJson`), and asset files (BGA images, audio, video, banner, …) stay as lazy
   // `File` references until gameplay-mount actually needs them. This keeps the at-rest heap to "parsed chart metadata
   // only" for the song bundle — the dropped pack itself sits on disk until the user picks a song. The throttled
@@ -409,7 +409,7 @@ export async function loadSongCollectionFromFiles(
 
   const songs: BrowserSongEntry[] = [];
   const errors: BrowserSongCollection['errors'] = [];
-    // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
+  // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
   // count, once for the parse loop). Sort the chart paths only — the non-chart paths don't need ordering since they're
   // just asset lookups.
   const chartPathsBySource = sources.map((source) => {
@@ -426,7 +426,7 @@ export async function loadSongCollectionFromFiles(
     onProgress?.({ phase: 'parsing', current: 0, total: chartCount });
   }
   const throttledParseProgress = createThrottledProgress(onProgress);
-    // Yield to the event loop every few charts so the host can paint a frame and run the throttled progress emit. Chart
+  // Yield to the event loop every few charts so the host can paint a frame and run the throttled progress emit. Chart
   // parsing is CPU-bound and otherwise blocks the main thread for the entire parse phase on a multi-hundred-chart drop.
   const PARSE_YIELD_INTERVAL = 32;
   for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
@@ -434,7 +434,7 @@ export async function loadSongCollectionFromFiles(
     const paths = chartPathsBySource[sourceIndex]!;
     for (const path of paths) {
       try {
-                // Charts are stored as lazy `File` references in the song-bundle map (everything is deferred). Read the bytes
+        // Charts are stored as lazy `File` references in the song-bundle map (everything is deferred). Read the bytes
         // on demand — the `chartBytes` local goes out of scope at the end of this iteration, so the GC can reclaim them
         // as soon as the parser is done with them. Net effect: parse-phase memory is one chart at a time rather than
         // the whole bundle's worth.
@@ -538,7 +538,7 @@ function decodeBms(bytes: Uint8Array): string {
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
     return decodeUtf8(bytes);
   }
-    // BMS spec \u2014 honour `#CHARSET <name>` at the top of the file before falling back to the shift_jis default. The
+  // BMS spec \u2014 honour `#CHARSET <name>` at the top of the file before falling back to the shift_jis default. The
   // first-pass latin1 decode preserves every byte 1:1 so we can scan for the directive without decoding
   // misinterpretation. Mirrors the parser's `decodeBmsText` flow so a chart's declared encoding is honoured by every
   // runtime (CLI / TUI / web).
@@ -555,7 +555,7 @@ function decodeBms(bytes: Uint8Array): string {
 }
 
 function decodeBmsWithCharset(bytes: Uint8Array, charset: string): string | undefined {
-    // `TextDecoder` accepts the same canonical encoding names `canonicaliseBmsCharset` produces, so the declared charset
+  // `TextDecoder` accepts the same canonical encoding names `canonicaliseBmsCharset` produces, so the declared charset
   // can route directly through it. Any unrecognised label throws synchronously; the caller treats that as "fall back to
   // autodetection".
   try {
@@ -630,7 +630,7 @@ export function resolveChartAsset(
   chartPath: string,
   assetPath: string,
 ): BrowserSongAssetEntry | undefined {
-    // bmson 1.0.0 spec MUST: reject malicious paths at the chart-asset entry point. `lookupBytesCaseInsensitive` also
+  // bmson 1.0.0 spec MUST: reject malicious paths at the chart-asset entry point. `lookupBytesCaseInsensitive` also
   // vets each candidate as defence-in-depth, but short-circuiting here means we don't even synthesise the joined
   // `${base}/${assetPath}` candidate for a path the chart never had any business referencing.
   if (isMaliciousAssetPath(assetPath)) {
@@ -684,7 +684,7 @@ export function resolveChartAudioAsset(
   options: ResolveChartAudioAssetOptions = {},
 ): BrowserSongAssetEntry | undefined {
   for (const candidate of audioFallbackPaths(assetPath)) {
-        // Try the `#PATH_WAV` prefixed form first when supplied; fall through to the bare name if the prefix-joined path
+    // Try the `#PATH_WAV` prefixed form first when supplied; fall through to the bare name if the prefix-joined path
     // doesn't resolve. Charts that don't author `#PATH_WAV` pass `pathPrefix: undefined` and behave exactly as before.
     const prefixed = joinPathWavPrefix(options.pathPrefix, candidate);
     if (prefixed !== undefined) {
@@ -703,7 +703,7 @@ function joinPathWavPrefix(prefix: string | undefined, samplePath: string): stri
   if (typeof prefix !== 'string') return undefined;
   const trimmedPrefix = prefix.trim();
   if (trimmedPrefix.length === 0) return undefined;
-    // Skip when the chart already includes the prefix in the sample path — common when `#WAV01` already references
+  // Skip when the chart already includes the prefix in the sample path — common when `#WAV01` already references
   // `wav/kick.wav` AND `#PATH_WAV wav/` is also set. The bare-path candidate (returned without the second prefix
   // application) already resolves correctly.
   const normalizedPrefix = trimmedPrefix.replaceAll('\\', '/');
@@ -718,14 +718,14 @@ function joinPathWavPrefix(prefix: string | undefined, samplePath: string): stri
 function audioFallbackPaths(path: string): string[] {
   const lastSlash = path.lastIndexOf('/');
   const dotIndex = path.lastIndexOf('.');
-    // bmson 1.0.0 spec — "A file extension may be omitted. If file extension is omitted, then the implementation should
+  // bmson 1.0.0 spec — "A file extension may be omitted. If file extension is omitted, then the implementation should
   // search for compatible sound file with that name." The previous shape returned just `[path]` for extensionless
   // inputs, which skipped the codec walk entirely and broke any bmson chart that authors `sound_channels[].name`
   // without a dot. We now walk the same fallback list for both cases — the only difference is whether `path` is the
   // bare base or the already-suffixed variant we strip back to one.
   const hasExtension = dotIndex >= 0 && dotIndex >= lastSlash;
   const base = hasExtension ? path.slice(0, dotIndex) : path;
-    // Order is "most-likely-shipped first" so the case-insensitive file lookup short-circuits fast on the common archive
+  // Order is "most-likely-shipped first" so the case-insensitive file lookup short-circuits fast on the common archive
   // formats. `.m4a` (AAC) is included to match the spec example ("Try piano.wav, piano.ogg, piano.m4a, …").
   const candidates = [`${base}.opus`, `${base}.ogg`, `${base}.mp3`, `${base}.wav`, `${base}.m4a`];
   if (!candidates.includes(path)) {
@@ -768,7 +768,7 @@ function imageFallbackPaths(path: string): string[] {
   if (dotIndex < 0 || dotIndex < lastSlash) {
     return [path];
   }
-    // Don't walk image extensions when the chart explicitly declared a video BGA — `_scualee.mpg` paired with a same-
+  // Don't walk image extensions when the chart explicitly declared a video BGA — `_scualee.mpg` paired with a same-
   // basename `_scualee.png` (cover art / static fallback frame shipped alongside the actual video) would otherwise have
   // the resolver pick the PNG. The BGA loader only checks the declared path's extension to decide between the image vs.
   // video pipeline, so feeding PNG bytes through the video path makes ffmpeg.wasm pick `png_pipe` and emit a 1-frame

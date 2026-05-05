@@ -22,7 +22,7 @@ export async function resolveFirstExistingPath(
   signal?: AbortSignal,
 ): Promise<string | undefined> {
   const baseAbsolute = resolve(baseDir);
-    // Trailing-separator normalised form lets the containment check work regardless of whether `baseDir` was passed with
+  // Trailing-separator normalised form lets the containment check work regardless of whether `baseDir` was passed with
   // or without a slash — `/foo` vs `/foo/` both produce `/foo/` for the prefix comparison.
   const baseAbsoluteWithSep = baseAbsolute.endsWith(sep) ? baseAbsolute : baseAbsolute + sep;
   for (const candidate of candidates) {
@@ -31,7 +31,7 @@ export async function resolveFirstExistingPath(
       continue;
     }
     const absolute = resolve(baseDir, candidate);
-        // Containment guard — the resolved path must either be `baseDir` itself or sit underneath it. Anything outside
+    // Containment guard — the resolved path must either be `baseDir` itself or sit underneath it. Anything outside
     // (e.g. via symlinks the caller already followed, or via exotic candidate shapes that escaped the string check) is
     // treated as not-found.
     if (absolute !== baseAbsolute && !absolute.startsWith(baseAbsoluteWithSep)) {

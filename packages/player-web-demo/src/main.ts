@@ -702,7 +702,7 @@ class PlayerWebDemoApp {
     this.guiState = {
       autoPlay: false,
       autoPauseOnBlur: false,
-            // Compressor stack ON by default — without it, multiple simultaneous `#WAV` samples sum past full scale and
+      // Compressor stack ON by default — without it, multiple simultaneous `#WAV` samples sum past full scale and
       // digital- clip at the destination. The `MIXER_HEADROOM_GAIN_LINEAR` attenuation in `audio-bus.ts` buys a little
       // headroom but the master limiter is what reliably prevents audible clipping on dense charts. Power users wanting
       // an unprocessed signal path can still flip it via `?compressor=off` or the GUI.
@@ -710,19 +710,19 @@ class PlayerWebDemoApp {
       compressorKey: true,
       compressorBgm: true,
       compressorMaster: true,
-            // BGA resize is OFF by default — original-resolution transcode is the safe choice for visual parity. Power users
+      // BGA resize is OFF by default — original-resolution transcode is the safe choice for visual parity. Power users
       // hitting long encode times on HD BGA can pick a pixel cap from the GUI dropdown without rebuilding. `0` means
       // "preserve resolution"; any positive integer activates the resize path with that long-edge cap.
       bgaResizeMaxEdgePx: 0,
-            // WebCodecs encode defaults ON when the browser exposes `VideoEncoder` — typically a 5-20× encode-side speedup
+      // WebCodecs encode defaults ON when the browser exposes `VideoEncoder` — typically a 5-20× encode-side speedup
       // over the single-threaded wasm libx264 fallback, and the runtime silently falls back to ffmpeg if the encoder
       // rejects the configured codec parameters or any step throws. Browsers without `VideoEncoder` (Safari < 17, older
       // Firefox) keep the toggle disabled in the GUI and the seed stays `false`.
       bgaUseWebCodecs: typeof globalThis !== 'undefined' && 'VideoEncoder' in globalThis,
-            // Debug overlay for invisible / keysound notes — off by default. Power users investigating chart authoring (or
+      // Debug overlay for invisible / keysound notes — off by default. Power users investigating chart authoring (or
       // diagnosing missing keysound triggers) flip it on; the regular gameplay surface stays clean otherwise.
       showInvisibleNotes: false,
-            // Default to LR2 / beatoraja's stock behaviour (judged notes disappear at the judge line) — matches what most
+      // Default to LR2 / beatoraja's stock behaviour (judged notes disappear at the judge line) — matches what most
       // users coming from those players expect. The dropdown lets users opt into the `'KEEP_SCROLLING'` mode (≈
       // beatoraja LANEEFFECT ON) for timing-learning play.
       judgedNoteDisplay: 'HIDE',
@@ -732,7 +732,7 @@ class PlayerWebDemoApp {
         void this.toggleRecording();
       },
     };
-        // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
+    // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
     // (the same helper exported from `audio-bus.ts`) so the recognised values stay synced with the runtime API.
     // Unrecognised / missing flag → fall through to defaults: architecture `'split'`, GUI checkbox checked (compressor
     // on, see the `compressor: true` seed above for the rationale).
@@ -760,18 +760,18 @@ class PlayerWebDemoApp {
         return;
       }
       const fileList = [...files];
-            // Reset the input value immediately so picking the SAME folder a second time still fires `change`. Browsers
+      // Reset the input value immediately so picking the SAME folder a second time still fires `change`. Browsers
       // suppress repeat `change` events when the new selection matches the previous value — without this, a user
       // re-picking after a misclick or an interrupted load would see the input silently ignore them.
       this.elements.songInput.value = '';
       void (async () => {
-                // Browser file-picker drops go through the same loading overlay as drag-drop so a folder picked via the GUI
+        // Browser file-picker drops go through the same loading overlay as drag-drop so a folder picked via the GUI
         // shows progress too. Hide the select scene up-front so its rendering / BGM stays paused while we read + parse
         // — the user shouldn't see the song list flicker mid-load.
         this.showLoadingOverlay();
         this.selectView?.setVisible(false);
         try {
-                    // Route through the same post-enumeration pipeline as drag-drop so the picker's selection produces a theme +
+          // Route through the same post-enumeration pipeline as drag-drop so the picker's selection produces a theme +
           // songs split (handy when a user hand-picks a folder whose root carries both an LR2 theme and a BMS pack),
           // instead of the previous `loadSongs`-only path that quietly skipped any LR2 assets in the selection.
           await this.processIncomingFiles(fileList);
@@ -781,7 +781,7 @@ class PlayerWebDemoApp {
       })();
     });
 
-        // Global `/` shortcut focuses the search input. Standard editor convention — same as GitHub / Slack / Discord. We
+    // Global `/` shortcut focuses the search input. Standard editor convention — same as GitHub / Slack / Discord. We
     // suppress the actual `/` character so it doesn't end up in the input field.
     window.addEventListener('keydown', (event) => {
       if (event.key !== '/') return;
@@ -794,7 +794,7 @@ class PlayerWebDemoApp {
       this.elements.searchInput.focus();
       this.elements.searchInput.select();
     });
-        // Search input: forward every keystroke to the select view so the bar list filters live. Escape clears the filter
+    // Search input: forward every keystroke to the select view so the bar list filters live. Escape clears the filter
     // and returns focus to the canvas (so arrow-key navigation works again immediately).
     this.elements.searchInput.addEventListener('input', () => {
       this.selectView?.setSearchQuery(this.elements.searchInput.value);
@@ -806,18 +806,18 @@ class PlayerWebDemoApp {
         this.selectView?.setSearchQuery('');
         this.elements.searchInput.blur();
       } else if (event.key === 'Enter') {
-                // Pressing Enter while typing should let the user pick the currently-focused (filtered) result without leaving
+        // Pressing Enter while typing should let the user pick the currently-focused (filtered) result without leaving
         // the input first. `keydown` on the window won't fire on the select view (the input has focus), so route the
         // action explicitly.
         event.preventDefault();
-                // No public "trigger Enter" API on the view; setSearchQuery already moved the cursor to 0 after each keystroke,
+        // No public "trigger Enter" API on the view; setSearchQuery already moved the cursor to 0 after each keystroke,
         // so closing the input + giving focus back to the canvas is enough for the user's next Enter press to pick that
         // song.
         this.elements.searchInput.blur();
       }
     });
 
-        // Drag state via a depth counter rather than a plain add/remove pair on dragover/dragleave. The browser fires
+    // Drag state via a depth counter rather than a plain add/remove pair on dragover/dragleave. The browser fires
     // `dragleave` not just when the cursor exits the window but also every time it crosses into a child element —
     // without counting, the `.dragging` class flickers off whenever the user drags across the canvas → toolbar
     // boundary, so the overlay would strobe (or, with `dragleave` firing once at the end, disappear before the user can
@@ -837,7 +837,7 @@ class PlayerWebDemoApp {
         setDragging(true);
       }
     });
-        // `dragover` still has to call `preventDefault` for the browser to treat the page as a valid drop target. We don't
+    // `dragover` still has to call `preventDefault` for the browser to treat the page as a valid drop target. We don't
     // toggle state here — that's `dragenter` / `dragleave`'s job — but skipping the preventDefault would silently turn
     // drops into "open file in browser" navigations.
     window.addEventListener('dragover', (event) => {
@@ -857,7 +857,7 @@ class PlayerWebDemoApp {
         void this.handleDrop(event.dataTransfer);
       }
     });
-        // Belt-and-braces: the spec lets `dragend` fire on the source element when a drag is cancelled (Esc, drop on a
+    // Belt-and-braces: the spec lets `dragend` fire on the source element when a drag is cancelled (Esc, drop on a
     // non-target). For files dragged in from the OS it shouldn't normally fire on `window`, but if a custom source ever
     // does we still want to clear state.
     window.addEventListener('dragend', () => {
@@ -893,20 +893,20 @@ class PlayerWebDemoApp {
    * per-stage folder on compressor mode change) without re-querying the DOM.
    */
   private buildGui(): void {
-        // Start the panel itself collapsed so it doesn't cover the select-screen / gameplay canvas the moment a user lands
+    // Start the panel itself collapsed so it doesn't cover the select-screen / gameplay canvas the moment a user lands
     // on the demo. The nested folders (Compressor stages / BGA video transcode) stay open by default — once the user
     // opens the top-level panel, every controller is one click away rather than hidden behind another folder header.
     const gui = new GUI({ title: 'Debug Menu', width: 280 });
     gui.close();
     this.gui = gui;
-        // Status row pinned to the top of the panel — first thing the user sees, so a glance at the GUI is enough to tell
+    // Status row pinned to the top of the panel — first thing the user sees, so a glance at the GUI is enough to tell
     // whether a load is in flight, what's currently playing, or where a saved recording landed. Disabled so the field
     // reads as a passive read-out instead of an editable input. Updates are pushed explicitly via `setStatus`; cheaper
     // than lil-gui's `.listen()` polling and the only writer is this class anyway.
     this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open Folder');
-        // Auto play used to be a lil-gui checkbox here too, but the in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on
+    // Auto play used to be a lil-gui checkbox here too, but the in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on
     // the select skin) already exposes it — the duplicate toolbar controller just added another surface to keep in
     // sync. The `guiState.autoPlay` field stays as the seed/fallback value until the select panel publishes its own
     // choice.
@@ -915,7 +915,7 @@ class PlayerWebDemoApp {
       .name('Auto pause on blur')
       .onChange((value: boolean) => {
         this.guiState.autoPauseOnBlur = value;
-                // Push live so a chart already in flight starts honouring the new policy on its next visibility / blur event,
+        // Push live so a chart already in flight starts honouring the new policy on its next visibility / blur event,
         // without forcing the user to restart the song.
         this.gameplayView?.setAutoPauseOnBlur(value);
       });
@@ -946,7 +946,7 @@ class PlayerWebDemoApp {
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('master', value);
       });
-        // BGA video transcode controls. Both settings are seeded into the next `PixiGameplayView` constructor (see
+    // BGA video transcode controls. Both settings are seeded into the next `PixiGameplayView` constructor (see
     // `preloadGameplay` / `playSong` for the wiring), so changing them mid-session takes effect on the next chart mount
     // — no need to rebuild gameplay if the user is between songs. We don't push live into the running gameplay because
     // BGA assets are loaded once at chart- prepare time and the codec / resize decisions are encoded into the cached
@@ -958,7 +958,7 @@ class PlayerWebDemoApp {
     // size pair, but users would change the size without realising they also had to flip the checkbox — the resize was
     // silently a no-op. Folding both into one control with an explicit `Off` row removes that footgun.
     const transcode = gui.addFolder('BGA video transcode');
-        // WebCodecs `VideoEncoder` is a browser feature; gate the checkbox on its existence so the user can't toggle a
+    // WebCodecs `VideoEncoder` is a browser feature; gate the checkbox on its existence so the user can't toggle a
     // state the runtime can't honour. On unsupported browsers (Safari < 17, older Firefox builds) the controller is
     // disabled and the seed value stays at `false`.
     const webCodecsSupported = typeof window !== 'undefined' && 'VideoEncoder' in window;
@@ -987,7 +987,7 @@ class PlayerWebDemoApp {
       .onChange((value: number) => {
         this.guiState.bgaResizeMaxEdgePx = value;
       });
-        // Chart-authoring debug overlay — paints invisible / keysound notes (BMS channels `3x` / `4x`) as thin green bars
+    // Chart-authoring debug overlay — paints invisible / keysound notes (BMS channels `3x` / `4x`) as thin green bars
     // in their playable lane. Seeded into the next `PixiGameplayView` constructor; toggling mid-song waits until the
     // next chart load to take effect (the invisible-note array is built once at chart-prepare time). Live-toggleable —
     // the gameplay view always extracts the invisible-note array and preloads the green sprite, so flipping this flag
@@ -999,7 +999,7 @@ class PlayerWebDemoApp {
         this.guiState.showInvisibleNotes = value;
         this.gameplayView?.setShowInvisibleNotes(value);
       });
-        // Picks between LR2-faithful "judged note disappears at the judge line" and our historical "keep scrolling past it"
+    // Picks between LR2-faithful "judged note disappears at the judge line" and our historical "keep scrolling past it"
     // behaviour. Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint —
     // the visibility check is a single per-frame branch with no backing state to rebuild.
     gui
@@ -1038,7 +1038,7 @@ class PlayerWebDemoApp {
     const gameplay = this.gameplayView;
     const controller = this.recordController;
     if (!gameplay) {
-            // No chart is playing yet — interpret the click as "arm capture for the next song I pick" so the user can stage
+      // No chart is playing yet — interpret the click as "arm capture for the next song I pick" so the user can stage
       // recording from the song-select screen without having to hit Record at the precise moment gameplay starts. A
       // second click before picking a song disarms.
       this.autoRecordArmed = !this.autoRecordArmed;
@@ -1059,7 +1059,7 @@ class PlayerWebDemoApp {
       try {
         const result = await gameplay.stopRecording();
         if (result) {
-                    // `MediaRecorder`'s native WebM stream is play-only — post-process the blob to inject `Duration` + `Cues` so
+          // `MediaRecorder`'s native WebM stream is play-only — post-process the blob to inject `Duration` + `Cues` so
           // external players can seek inside it. Cheap on the typical chart-length take (a few hundred ms for a 1-3
           // minute recording on M-series hardware) and gracefully falls back to the raw blob if the patch fails, so a
           // corrupt take is never silently lost.
@@ -1104,7 +1104,7 @@ class PlayerWebDemoApp {
     this.elements.loadingOverlay.setAttribute('aria-hidden', 'false');
     this.elements.loadingLabel.textContent = 'Loading…';
     this.elements.loadingCounter.textContent = '';
-        // Reset to indeterminate (no inline width) until the first `applyLoadProgress` lands. The CSS animates the bar so
+    // Reset to indeterminate (no inline width) until the first `applyLoadProgress` lands. The CSS animates the bar so
     // the user sees motion even before the first phase event fires.
     this.elements.loadingBarFill.classList.add('indeterminate');
     this.elements.loadingBarFill.style.width = '';
@@ -1151,11 +1151,11 @@ class PlayerWebDemoApp {
   }
 
   private async handleDrop(dataTransfer: DataTransfer): Promise<void> {
-        // Show the overlay before we even start enumerating files — walking a deep `webkitGetAsEntry` tree on a chart pack
+    // Show the overlay before we even start enumerating files — walking a deep `webkitGetAsEntry` tree on a chart pack
     // with tens of thousands of WAVs visibly stalls the UI for several seconds, and we want the user to see "we're
     // working on it" immediately rather than after the slow phase finishes.
     this.showLoadingOverlay();
-        // Take the select scene offline for the duration of the load. `setVisible(false)` pauses BGM + the rAF tick + the
+    // Take the select scene offline for the duration of the load. `setVisible(false)` pauses BGM + the rAF tick + the
     // song list rendering, so:
     //
     // - the loaded LR2 theme's `select.wav` doesn't start the moment the (small) theme bundle finishes parsing while
@@ -1171,7 +1171,7 @@ class PlayerWebDemoApp {
       });
       await this.processIncomingFiles(files);
     } finally {
-            // Always tear the overlay down — even when one of the sub-loaders threw or `splitDroppedSongAndThemeFiles`
+      // Always tear the overlay down — even when one of the sub-loaders threw or `splitDroppedSongAndThemeFiles`
       // produced an empty bucket. Otherwise a failed drop would leave the UI permanently masked.
       this.hideLoadingOverlay();
     }
@@ -1195,7 +1195,7 @@ class PlayerWebDemoApp {
       return;
     }
     const { themeFiles, songFiles } = splitDroppedSongAndThemeFiles(files);
-        // `splitDroppedSongAndThemeFiles` routes any non-chart files outside a chart directory into `themeFiles`. That
+    // `splitDroppedSongAndThemeFiles` routes any non-chart files outside a chart directory into `themeFiles`. That
     // includes stray `readme.txt` / `info.json` / album-art images sitting at the root of a BMS pack that isn't a real
     // LR2 theme. Only run the theme loader when the drop actually carries an `.lr2skin` file — otherwise an "extra
     // files at the BMS root" drop wipes the previously-loaded LR2 theme by overwriting `selectSkin` / `playSkins` /
@@ -1227,7 +1227,7 @@ class PlayerWebDemoApp {
     if (this.collection.errors.length > 0) {
       dropLog.warn('parse errors:', this.collection.errors);
     }
-        // Status panel stays terse on purpose — only show "loaded" when there's something to celebrate, and skip the
+    // Status panel stays terse on purpose — only show "loaded" when there's something to celebrate, and skip the
     // per-key-mode skin enumeration since the user can see the active skin in-canvas. "0 charts loaded" is suppressed
     // so a theme-only drop doesn't read like an error.
     if (this.collection.songs.length > 0) {
@@ -1240,14 +1240,14 @@ class PlayerWebDemoApp {
 
   private async loadSongs(files: File[]): Promise<void> {
     this.setStatus('Loading songs...');
-        // Append rather than replace so a second / third folder drop adds to the existing library instead of wiping the
+    // Append rather than replace so a second / third folder drop adds to the existing library instead of wiping the
     // previous pack. The library re-prefixes source / song IDs so each drop's entries stay uniquely addressable. The
     // very first drop is just `append onto an empty collection`, which produces the same result as `loadFromFiles`
     // would have.
     this.collection = await this.library.appendFromFiles(files, {
       onProgress: (progress) => this.applyLoadProgress(progress),
     });
-        // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
+    // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
     // text is set by `handleDrop` once both theme + songs land, so a mid-flight transient is plenty.
     if (this.collection.songs.length > 0) {
       this.setStatus(describeSongCollection(this.collection));
@@ -1279,7 +1279,7 @@ class PlayerWebDemoApp {
       optionClose: loadedTheme.systemSounds.optionClose?.bytes,
       optionChange: loadedTheme.systemSounds.optionChange?.bytes,
     };
-        // BGM / decide / system-sound bytes are stashed on the host here, but NOT pushed onto the live select view yet —
+    // BGM / decide / system-sound bytes are stashed on the host here, but NOT pushed onto the live select view yet —
     // that happens in `showSelect()` once every load task has resolved. Otherwise the small theme bundle would land
     // first and start BGM playing before the larger song collection has even finished parsing, which felt jarring with
     // a loading overlay still on screen.
@@ -1292,7 +1292,7 @@ class PlayerWebDemoApp {
 
   private async showSelect(): Promise<void> {
     this.elements.shell.classList.remove('playing');
-        // The `.empty` class drives the centred "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
+    // The `.empty` class drives the centred "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
     // and back on after a wipe / failed drop so the hint comes back instead of leaving the user staring at a blank
     // canvas.
     this.elements.shell.classList.toggle('empty', this.collection.songs.length === 0);
@@ -1301,12 +1301,12 @@ class PlayerWebDemoApp {
     this.gameplayView = undefined;
     this.resultView?.dispose();
     this.resultView = undefined;
-        // Decide splash is cleared too — Escape from the splash should land back on the select scene rather than leave the
+    // Decide splash is cleared too — Escape from the splash should land back on the select scene rather than leave the
     // splash drawing over it.
     this.decideView?.dispose();
     this.decideView = undefined;
     if (this.selectView) {
-            // Push the latest theme assets onto the view BEFORE flipping it visible. Order matters — `setSelectBgm` no-ops
+      // Push the latest theme assets onto the view BEFORE flipping it visible. Order matters — `setSelectBgm` no-ops
       // when the bytes haven't changed, so back-from-play is silent; on a fresh theme drop it stops the old loop, swaps
       // the bytes, and (because we're still hidden) defers the actual `start()` until `setVisible(true)` lands a moment
       // later. Doing it the other way round would briefly start the prior theme's BGM during the visibility flip.
@@ -1327,7 +1327,7 @@ class PlayerWebDemoApp {
       decideBgm: this.decideBgmBytes,
       systemSounds: this.systemSoundBundle,
       initialNavigation: this.lastSelectNavigation,
-            // Seed the in-scene panel's autoPlay value from the cached demo state (carries the last value the user picked
+      // Seed the in-scene panel's autoPlay value from the cached demo state (carries the last value the user picked
       // across re-mounts of the select view).
       initialPlayOptions: { autoPlay: this.guiState.autoPlay },
       onPlayOptionsChange: (options) => {
@@ -1335,13 +1335,13 @@ class PlayerWebDemoApp {
         this.guiState.autoPlay = options.autoPlay;
       },
       onSongSelected: (song) => {
-                // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
+        // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
         // the view is hidden, so the cue isn't cut by the gameplay mount.
         void this.selectView?.playDecideSound();
         void this.showDecide(song);
       },
       onSongAutoPlay: (song) => {
-                // The skin's AUTOPLAY button forces the auto flag on for this session regardless of the toolbar checkbox state.
+        // The skin's AUTOPLAY button forces the auto flag on for this session regardless of the toolbar checkbox state.
         // We DON'T mutate the checkbox here — the user might want to keep it off for the next manual play.
         void this.selectView?.playDecideSound();
         void this.showDecide(song, { autoPlay: true });
@@ -1365,7 +1365,7 @@ class PlayerWebDemoApp {
    */
   private async showDecide(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
     if (!this.decideSkin) {
-            // No decide skin in the bundle (or skinless demo) — skip the splash entirely. The select view's `playDecideSound`
+      // No decide skin in the bundle (or skinless demo) — skip the splash entirely. The select view's `playDecideSound`
       // already fired so the audio cue still plays.
       await this.playSong(song, overrides);
       return;
@@ -1376,13 +1376,13 @@ class PlayerWebDemoApp {
     this.decideView?.dispose();
     this.gameplayView?.dispose();
     this.gameplayView = undefined;
-        // Build the gameplay view eagerly and kick off its heavy load (chart parse, audio decode, BGA preload) IN PARALLEL
+    // Build the gameplay view eagerly and kick off its heavy load (chart parse, audio decode, BGA preload) IN PARALLEL
     // with the Decide animation. The Decide splash typically runs ~3 s; chart asset decoding is mostly done by the time
     // the splash auto-advances, so the hand-off to gameplay becomes instant instead of dropping a frozen frame.
     const preloaded = this.preloadGameplay(song, overrides);
     let advanced = false;
     const advance = (then: () => void): void => {
-            // Idempotent — the auto-advance timer, key input, and pointer click can all race; whichever lands first wins and
+      // Idempotent — the auto-advance timer, key input, and pointer click can all race; whichever lands first wins and
       // re-entries no-op.
       if (advanced) return;
       advanced = true;
@@ -1446,7 +1446,7 @@ class PlayerWebDemoApp {
       bgaTranscodeMaxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
       bgaTranscodeUseWebCodecs: this.guiState.bgaUseWebCodecs,
       showInvisibleNotes: this.guiState.showInvisibleNotes,
-            // Pass the loaded 9-keys play variant as the invisible-note sprite source — Pop'n's green wide note at index 3 is
+      // Pass the loaded 9-keys play variant as the invisible-note sprite source — Pop'n's green wide note at index 3 is
       // the sprite the gameplay view paints over each invisible note when {@link DemoGuiState.showInvisibleNotes} is
       // on. Falls back to a flat green rectangle when the dropped theme didn't ship `play_9.lr2skin`.
       invisibleNoteSkin: this.playSkins['9'],
@@ -1510,16 +1510,16 @@ class PlayerWebDemoApp {
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
     this.selectView?.setVisible(false);
-        // Tear down the decide splash before mounting gameplay — both share the host stage, so leaving the decide layer
+    // Tear down the decide splash before mounting gameplay — both share the host stage, so leaving the decide layer
     // alive would draw the splash on top of the gameplay scene.
     this.decideView?.dispose();
     this.decideView = undefined;
     this.gameplayView?.dispose();
-        // Refresh the recording filename base for the upcoming play — each session writes to a unique file in the user's
+    // Refresh the recording filename base for the upcoming play — each session writes to a unique file in the user's
     // downloads folder rather than overwriting the previous one.
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
     const playSkin = pickLr2PlaySkin(this.playSkins, song);
-        // Pull the canonical play-option snapshot (HiSpeed + AutoPlay tweaked from the in-scene "PLAY OPTIONS" panel) so
+    // Pull the canonical play-option snapshot (HiSpeed + AutoPlay tweaked from the in-scene "PLAY OPTIONS" panel) so
     // the gameplay scene starts with the user's chosen values. The explicit `overrides.autoPlay` from `onSongAutoPlay`
     // still wins so the AUTOPLAY skin button forces auto-judging on for a single launch regardless of the panel state.
     const playOptions = this.selectView?.getPlayOptions();
@@ -1552,13 +1552,13 @@ class PlayerWebDemoApp {
       bgaTranscodeMaxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
       bgaTranscodeUseWebCodecs: this.guiState.bgaUseWebCodecs,
       showInvisibleNotes: this.guiState.showInvisibleNotes,
-            // Pass the loaded 9-keys play variant as the invisible-note sprite source — Pop'n's green wide note at index 3 is
+      // Pass the loaded 9-keys play variant as the invisible-note sprite source — Pop'n's green wide note at index 3 is
       // the sprite the gameplay view paints over each invisible note when {@link DemoGuiState.showInvisibleNotes} is
       // on. Falls back to a flat green rectangle when the dropped theme didn't ship `play_9.lr2skin`.
       invisibleNoteSkin: this.playSkins['9'],
       judgedNoteDisplay: this.guiState.judgedNoteDisplay,
       onExit: () => {
-                // Sequence finalize → transition. The transition methods (`showSelect` / `showResult` / `playSong`) all dispose
+        // Sequence finalize → transition. The transition methods (`showSelect` / `showResult` / `playSong`) all dispose
         // the gameplay view, which closes its AudioContext and tears down the bus the recorder taps. If we kicked the
         // transition off in parallel with `finalizeRecordingIfActive`, `MediaRecorder.stop()` would race the dispose
         // and lose its `'stop'` event under the closed context — the user would never see the auto-download. ESC /
@@ -1574,7 +1574,7 @@ class PlayerWebDemoApp {
     });
     this.setStatus(`Playing: ${song.title}`);
     await this.gameplayView.mount(this.sceneHost, song, resolveSongSource(this.collection, song));
-        // Consume the "user pressed Record on the select screen" flag now that gameplay is mounted — `startRecording`
+    // Consume the "user pressed Record on the select screen" flag now that gameplay is mounted — `startRecording`
     // requires the gameplay AudioContext to exist, which only happens after `mount`. Failing here is non-fatal: the
     // select-screen click already nudged the user that capture would start; if it doesn't (codec missing / no
     // MediaRecorder), the surfaced error replaces the armed status without breaking gameplay.
@@ -1674,13 +1674,13 @@ function renderBrowserCompatPanel(report: BrowserCompatReport): void {
   const statusLabel = document.querySelector<HTMLDivElement>('#compat-panel-status');
   if (!panel || !requiredList || !optionalList || !statusLabel) return;
 
-    // `--ok` / `--fail` toggles the badge palette and the check-vs-cross mark visibility (the two icon `<path>`s share
+  // `--ok` / `--fail` toggles the badge palette and the check-vs-cross mark visibility (the two icon `<path>`s share
   // the SVG, only one is shown at a time per CSS).
   panel.classList.toggle('compat-panel--ok', report.ok);
   panel.classList.toggle('compat-panel--fail', !report.ok);
 
   if (report.ok) {
-        // Distinguish "everything works" from "core works but you're missing some optional niceties" — the latter is still
+    // Distinguish "everything works" from "core works but you're missing some optional niceties" — the latter is still
     // a green verdict but the count tells power users at a glance whether Web­Codecs / WebGPU / etc. are reachable.
     const missingOptional = report.items.filter((item) => !item.required && !item.supported).length;
     statusLabel.textContent =
@@ -1703,7 +1703,7 @@ function renderBrowserCompatPanel(report: BrowserCompatReport): void {
  */
 function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIElement {
   const li = document.createElement('li');
-    // `ok` = supported, `warn` = optional & missing (the player still works), `fail` = required & missing (player won't
+  // `ok` = supported, `warn` = optional & missing (the player still works), `fail` = required & missing (player won't
   // function). Required-supported and optional-supported both map to `ok` — visual hierarchy comes from the section
   // split (Required vs Optional) above, not from a distinction here.
   const status = item.supported ? 'ok' : item.required ? 'fail' : 'warn';
@@ -1713,7 +1713,7 @@ function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIEleme
   const icon = document.createElement('span');
   icon.className = 'compat-row-icon';
   icon.setAttribute('aria-hidden', 'true');
-    // Plain text glyphs over inline SVG — keeps the markup compact and lets us colour the glyph via `color:
+  // Plain text glyphs over inline SVG — keeps the markup compact and lets us colour the glyph via `color:
   // currentColor`. The accessibility verdict is carried by the screen-reader text span below, not by the symbol.
   icon.textContent = item.supported ? '✓' : item.required ? '✕' : '–';
   li.appendChild(icon);
@@ -1725,7 +1725,7 @@ function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIEleme
 
   const sr = document.createElement('span');
   sr.className = 'compat-row-sr';
-    // Read-aloud text for assistive tech — `✓` / `✕` / `–` carry visual semantics but no name on their own. `aria-hidden`
+  // Read-aloud text for assistive tech — `✓` / `✕` / `–` carry visual semantics but no name on their own. `aria-hidden`
   // on the icon hands the verdict to this hidden label instead.
   sr.textContent = item.supported ? 'supported' : item.required ? 'missing (required)' : 'missing (optional)';
   li.appendChild(sr);

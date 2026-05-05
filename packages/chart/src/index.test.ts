@@ -136,7 +136,7 @@ describe('chart', () => {
   });
 
   test('resolveChartReferenceBpm prefers #BASEBPM over the chart #BPM', () => {
-        // BMS spec — `#BASEBPM` (hitkey BMS Memo) is the chart-author -declared HS-fix reference BPM. When set,
+    // BMS spec — `#BASEBPM` (hitkey BMS Memo) is the chart-author -declared HS-fix reference BPM. When set,
     // scroll-speed calibration MUST honour it instead of the chart's initial `#BPM`, because that's the explicit author
     // intent for the scroll feel; `#BPM` is just where the chart starts ticking.
     const json = createEmptyJson();
@@ -152,7 +152,7 @@ describe('chart', () => {
   });
 
   test('resolveChartReferenceBpm honours the host fallback when nothing is declared', () => {
-        // Charts that omit both `#BASEBPM` and `#BPM` are rare but legal — typically partial / WIP fixtures. The host can
+    // Charts that omit both `#BASEBPM` and `#BPM` are rare but legal — typically partial / WIP fixtures. The host can
     // pass a song-list-cached BPM hint.
     const json = createEmptyJson();
     json.metadata.bpm = 0;
@@ -160,7 +160,7 @@ describe('chart', () => {
   });
 
   test('resolveChartReferenceBpm rejects non-positive #BASEBPM values', () => {
-        // Defensive: `#BASEBPM 0` / negative parses can leak through a malformed chart. We treat them as "unset" rather
+    // Defensive: `#BASEBPM 0` / negative parses can leak through a malformed chart. We treat them as "unset" rather
     // than returning a divide-by-zero seed.
     const json = createEmptyJson();
     json.metadata.bpm = 140;
@@ -177,7 +177,7 @@ describe('chart', () => {
   });
 
   test('parseBmsExWav parses the standard pvf flag layout', () => {
-        // Hitkey BMS Memo: `#EXWAVxx [flags] params filename`. `pvf 1024,-200,48000 sample.wav` → pan=1024, vol=-200 cB (≈
+    // Hitkey BMS Memo: `#EXWAVxx [flags] params filename`. `pvf 1024,-200,48000 sample.wav` → pan=1024, vol=-200 cB (≈
     // −2 dB), freq=48 kHz, filename `sample.wav`.
     expect(parseBmsExWav('pvf 1024,-200,48000 sample.wav')).toEqual({
       pan: 1024,
@@ -196,7 +196,7 @@ describe('chart', () => {
     });
     const onlyVol = parseBmsExWav('v 0 only-vol.wav');
     expect(onlyVol?.volumeCentibels).toBe(0);
-        // Absent flags must remain undefined so the consumer can distinguish "explicitly authored 0" from "not authored at
+    // Absent flags must remain undefined so the consumer can distinguish "explicitly authored 0" from "not authored at
     // all" — pan: 0 = centre, vol: 0 cB = unity.
     expect(onlyVol?.pan).toBeUndefined();
     expect(onlyVol?.frequencyHz).toBeUndefined();
@@ -249,7 +249,7 @@ describe('chart', () => {
   });
 
   test('parseBmsSwBga decodes "fr:tot:lp:ARGB N1 N2 …" animation directives', () => {
-        // Hitkey BMS Memo: `fr` is in 1/100 sec, so `fr=10` → 100ms per frame. The optional ARGB field round-trips as a raw
+    // Hitkey BMS Memo: `fr` is in 1/100 sec, so `fr=10` → 100ms per frame. The optional ARGB field round-trips as a raw
     // string for downstream `parseBmsArgb` use.
     const parsed = parseBmsSwBga('10:5:1:FF000000 02 03 04 05 06');
     expect(parsed).toEqual({
@@ -291,7 +291,7 @@ describe('chart', () => {
   });
 
   test('pickSwitchingBgaFrame holds the last frame when lp=0', () => {
-        // With looping disabled, an `elapsedMs` past the authored duration must hold the final frame instead of wrapping to
+    // With looping disabled, an `elapsedMs` past the authored duration must hold the final frame instead of wrapping to
     // frame 0 (which would cause a visual glitch at end).
     const swBga = parseBmsSwBga('10:3:0 02 03 04')!;
     expect(pickSwitchingBgaFrame(swBga, 0)).toBe('02');
@@ -300,7 +300,7 @@ describe('chart', () => {
   });
 
   test('pickSwitchingBgaFrame cycles a slot list shorter than totalFrames', () => {
-        // Author shipped only two frames but advertised tot=4. The hitkey-style behaviour is to cycle within the authored
+    // Author shipped only two frames but advertised tot=4. The hitkey-style behaviour is to cycle within the authored
     // slot list while honouring the total-frame loop boundary.
     const swBga = parseBmsSwBga('10:4:1 02 03')!;
     expect(pickSwitchingBgaFrame(swBga, 0)).toBe('02');
@@ -311,7 +311,7 @@ describe('chart', () => {
   });
 
   test('parseBmsBga decodes "YY x1 y1 x2 y2 dx dy" sub-region directives', () => {
-        // Hitkey BMS Memo: `#BGAxx YY x1 y1 x2 y2 dx dy` aliases slot `xx` to a rectangle pulled out of `#BMPYY`. Consumers
+    // Hitkey BMS Memo: `#BGAxx YY x1 y1 x2 y2 dx dy` aliases slot `xx` to a rectangle pulled out of `#BMPYY`. Consumers
     // use this to compose sprite-sheet style animations.
     expect(parseBmsBga('02 0 0 256 256 0 0')).toEqual({
       sourceBmp: '02',
@@ -350,7 +350,7 @@ describe('chart', () => {
   });
 
   test('parseBmsExBmp decodes "a,r,g,b,filename" with the ARGB tint applied', () => {
-        // Hitkey BMS Memo: `#EXBMPxx a,r,g,b,filename`. The ARGB tuple should round-trip via the same `parseBmsArgb` parser
+    // Hitkey BMS Memo: `#EXBMPxx a,r,g,b,filename`. The ARGB tuple should round-trip via the same `parseBmsArgb` parser
     // that `#ARGBxx` uses (so consumers don't carry two code paths for "what is this slot's tint?").
     const parsed = parseBmsExBmp('255,0,0,0,backdrop.bmp');
     expect(parsed?.filename).toBe('backdrop.bmp');
@@ -358,7 +358,7 @@ describe('chart', () => {
   });
 
   test('parseBmsExBmp surfaces filename even when the ARGB fields are blank', () => {
-        // Some chart authors ship `#EXBMP01 ,,,,foo.bmp` as a way to declare the slot without yet picking a tint — the
+    // Some chart authors ship `#EXBMP01 ,,,,foo.bmp` as a way to declare the slot without yet picking a tint — the
     // consumer should still know which file to load and just skip the tint.
     const parsed = parseBmsExBmp(',,,,foo.bmp');
     expect(parsed?.filename).toBe('foo.bmp');
@@ -374,7 +374,7 @@ describe('chart', () => {
   });
 
   test('resolveBmsBmpArgb prefers an explicit #ARGBxx value over the embedded #EXBMPxx tuple', () => {
-        // Both directives can target the same slot. `#ARGBxx` is the newer, more flexible form so chart authors expect it
+    // Both directives can target the same slot. `#ARGBxx` is the newer, more flexible form so chart authors expect it
     // to win when both are present.
     const json = createEmptyJson();
     json.bms.argb['01'] = 'FF112233';
@@ -394,7 +394,7 @@ describe('chart', () => {
   });
 
   test('parseBmsArgb decodes the AARRGGBB hex format the parser stores', () => {
-        // Parser-level normalisation lands `#ARGB01 FF000000` here as the bare hex string, since that's the dominant
+    // Parser-level normalisation lands `#ARGB01 FF000000` here as the bare hex string, since that's the dominant
     // in-the-wild format. AA = alpha (FF = fully opaque), then RR/GG/BB.
     expect(parseBmsArgb('FF000000')).toEqual({ a: 255, r: 0, g: 0, b: 0 });
     expect(parseBmsArgb('80a0b0c0')).toEqual({ a: 0x80, r: 0xa0, g: 0xb0, b: 0xc0 });
@@ -406,7 +406,7 @@ describe('chart', () => {
   });
 
   test('parseBmsArgb decodes comma-separated decimal A,R,G,B', () => {
-        // The spec also lists the decimal form. Whitespace inside the commas should be tolerated since chart authors
+    // The spec also lists the decimal form. Whitespace inside the commas should be tolerated since chart authors
     // hand-edit these.
     expect(parseBmsArgb('255,0,0,0')).toEqual({ a: 255, r: 0, g: 0, b: 0 });
     expect(parseBmsArgb(' 128 , 32 , 64 , 96 ')).toEqual({ a: 128, r: 32, g: 64, b: 96 });
@@ -418,17 +418,17 @@ describe('chart', () => {
   });
 
   test('parseBmsWavCmd parses volume / pitch / loop lines and normalises the slot id', () => {
-        // The trailing token is parsed as a base-10 integer (the spec gives the value in decimal even though the slot id is
+    // The trailing token is parsed as a base-10 integer (the spec gives the value in decimal even though the slot id is
     // base-36), so `64` here means literal 64 / 127 ≈ 50% volume.
     expect(parseBmsWavCmd('01 0a 64')).toEqual({ param: 'volume', slot: '0A', value: 64 });
     expect(parseBmsWavCmd('00 0A 2')).toEqual({ param: 'pitch', slot: '0A', value: 2 });
-        // Loop point: 0 = no loop, otherwise the sample-frame index the player should jump to once the source reaches its
+    // Loop point: 0 = no loop, otherwise the sample-frame index the player should jump to once the source reaches its
     // tail.
     expect(parseBmsWavCmd('02 ZZ 1024')).toEqual({ param: 'loop', slot: 'ZZ', value: 1024 });
   });
 
   test('parseBmsWavCmd preserves slot case under base-62 charts', () => {
-        // `#BASE 62` opens up lowercase ids as a separate slot space, so a `#WAVCMD 01 0a 64` line must not be folded to
+    // `#BASE 62` opens up lowercase ids as a separate slot space, so a `#WAVCMD 01 0a 64` line must not be folded to
     // `0A`.
     expect(parseBmsWavCmd('01 0a 64', 62)).toMatchObject({ slot: '0a' });
     expect(parseBmsWavCmd('01 0A 64', 62)).toMatchObject({ slot: '0A' });
@@ -636,7 +636,7 @@ describe('chart', () => {
   test('resolveLnobjLongNotes treats `#BASE 62` LN-end IDs case-sensitively', () => {
     const json = createEmptyJson('bms');
     json.bms.base = 62;
-        // Lowercase `aa` is a distinct ID from uppercase `AA` once the chart opts into base-62. The resolver must match
+    // Lowercase `aa` is a distinct ID from uppercase `AA` once the chart opts into base-62. The resolver must match
     // case-sensitively so events tagged `aa` only mark the LN end when the chart actually authored `#LNOBJ aa`.
     json.bms.lnObjs = ['aa'];
     const start: BeMusicEvent = { measure: 0, channel: '11', position: [0, 1], value: '01' };

@@ -35,7 +35,7 @@ describe('disposeChildren', () => {
     const graphics = new Graphics();
     graphics.rect(0, 0, 10, 10).fill(0xff0000);
     container.addChild(graphics);
-        // `_context` is the live owned-or-shared GraphicsContext; a successful `destroy({ context: true })` sets it to
+    // `_context` is the live owned-or-shared GraphicsContext; a successful `destroy({ context: true })` sets it to
     // null. Pre-condition: the freshly authored Graphics has a context.
     expect((graphics as unknown as { _context: unknown })._context).not.toBeNull();
     disposeChildren(container);
@@ -52,7 +52,7 @@ describe('disposeChildren', () => {
   });
 
   test('does not destroy textures shared by sprites that are still live', () => {
-        // Use the always-available WHITE texture so the test doesn't depend on a real atlas decode. We register a second
+    // Use the always-available WHITE texture so the test doesn't depend on a real atlas decode. We register a second
     // sprite pointing at the same texture but NOT inside the container, simulating "atlas tile shared across the
     // scene". After disposing the container the live sprite must still be able to read the texture.
     const sharedTexture = Texture.WHITE;
@@ -63,13 +63,13 @@ describe('disposeChildren', () => {
     disposeChildren(container);
     expect(removed.destroyed).toBe(true);
     expect(stillAlive.destroyed).toBe(false);
-        // The shared texture must still be usable. `Texture.destroy()` sets `destroyed = true`; if `disposeChildren` had
+    // The shared texture must still be usable. `Texture.destroy()` sets `destroyed = true`; if `disposeChildren` had
     // blasted through with `texture: true`, this read would fail.
     expect((sharedTexture as unknown as { destroyed?: boolean }).destroyed).not.toBe(true);
   });
 
   test('leaves the host container itself alive (only its children are gone)', () => {
-        // Important contract: hosts re-add fresh children every frame. Disposing them as well would force every render-loop
+    // Important contract: hosts re-add fresh children every frame. Disposing them as well would force every render-loop
     // caller to re-create the layer on the next tick.
     const container = new Container();
     container.addChild(new Container(), new Container());
