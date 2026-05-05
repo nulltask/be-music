@@ -9,7 +9,12 @@ const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264', 'mjpeg']);
 const PACKET_READ_CHUNK_BYTES = 65_536;
 const MAX_PACKET_READ_ITERATIONS = 16_384;
 const FALLBACK_FPS = 30;
-type FrameMode = 'base' | 'layer';
+// Mirror the `FrameMode` shape declared in `./bga.ts` — kept in
+// sync so a bmson-source layer can be threaded through the
+// video decode worker without losing the spec-aware
+// `'bmson-layer'` distinction (which suppresses the BMS-style
+// black chroma-key per the bmson 1.0.0 spec).
+type FrameMode = 'base' | 'layer' | 'bmson-layer';
 
 interface LibAvPlaneLayout {
   offset: number;
