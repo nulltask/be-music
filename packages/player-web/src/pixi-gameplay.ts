@@ -1,4 +1,9 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+// Side-effect import: registers Pixi's `PrepareSystem` on the renderer so {@link PixiGameplayView.preparePixiUpload}
+// can drive eager GPU uploads. Pixi v8 deliberately ships the prepare module out of the default bundle (it's a
+// large optional system that not every app needs); the import has to land before any `Application.init` runs that
+// expects `renderer.prepare` to exist.
+import 'pixi.js/prepare';
 import {
   collectSampleTriggers,
   createBmsonSamplePlaybackMap,
@@ -1157,6 +1162,15 @@ export class PixiGameplayView {
     this.prepareSong(song);
     await this.prepareSkin();
     if (this.disposed) return;
+    // Eager-upload every freshly loaded skin texture to the GPU before the first paint. Without this, Pixi's lazy
+    // upload-on-first-render path issues all the GL `texSubImage2D` calls in the chart's opening frames, which on
+    // lower-end devices stalls the very first rendered frames by 30–80 ms (visible as the LR2 intro slide-in being
+    // late by a beat or two). PrepareSystem walks the queue at its own cadence so this await stays bounded — the
+    // Decide splash above is already showing during this window. BGA textures get the same treatment per-batch
+    // inside `prepareBga` once each background load resolves.
+    await this.preparePixiUpload(this.textures.values());
+    if (this.bombTexture) await this.preparePixiUpload([this.bombTexture]);
+    if (this.disposed) return;
     await this.prepareAudio();
     if (this.disposed) return;
     // BGA preload runs IN THE BACKGROUND — `prepare()` resolves here even if `prepareBga()` is still decoding videos.
@@ -2275,6 +2289,40 @@ export class PixiGameplayView {
     return loadSkinAssetTexture(skin, path);
   }
 
+  /**
+   * Hands `textures` to Pixi's `PrepareSystem` so the renderer's GPU upload happens NOW, before the first frame that
+   * would otherwise touch them. Without this, Pixi defers the upload to the moment a sprite first samples each
+   * texture — which means the chart's opening frames pay the cumulative `texSubImage2D` cost of the entire skin
+   * sheet (and, mid-chart, the first BGA cue stalls on its image upload). Eager-uploading at prepare time spreads
+   * the work across the Decide splash window where the gameplay scene isn't visible yet.
+   *
+   * The PrepareSystem is conditionally optional — the static `import 'pixi.js/prepare'` at the top of this module
+   * registers it when bundled, but we still defensively detect its presence so a future tree-shaking config that
+   * eliminates the side-effect import doesn't break the prepare flow at runtime. When absent we silently skip the
+   * upload; first-frame stutter returns to the pre-PrepareSystem baseline but nothing else breaks.
+   *
+   * Errors thrown by the upload (e.g. a corrupt texture, a transient WebGL context loss) are logged and the loop
+   * stops — there's no point queuing more uploads on a renderer that just rejected one. The chart still loads; the
+   * not-yet-uploaded textures will fall through to lazy upload on first paint, which is the original behavior.
+   */
+  private async preparePixiUpload(textures: Iterable<Texture | undefined>): Promise<void> {
+    const renderer = this.host?.app.renderer;
+    if (!renderer) return;
+    type PrepareLike = { upload: (resource: Texture) => Promise<unknown> };
+    const prepare = (renderer as { prepare?: PrepareLike }).prepare;
+    if (!prepare || typeof prepare.upload !== 'function') return;
+    for (const texture of textures) {
+      if (this.disposed) return;
+      if (!texture) continue;
+      try {
+        await prepare.upload(texture);
+      } catch (error) {
+        log.warn('prepare.upload failed; falling back to lazy upload for the rest', error);
+        return;
+      }
+    }
+  }
+
   private async prepareAudio(): Promise<void> {
     if (!this.source || !this.song) {
       return;
@@ -2494,6 +2542,14 @@ export class PixiGameplayView {
       }),
     );
     this.registerSubRegionBgaTextures(chart);
+    if (this.disposed) return;
+    // Eager-upload every freshly loaded BGA texture (and any sub-region aliases registered above) so the first BGA
+    // cue mid-chart doesn't stall on its own first sample. Mirrors the skin path in `prepare()`. This is fire-and-
+    // forget from the prepareBga callsite — `bgaReadyPromise` already gates chart start, and adding the upload to
+    // its tail just lengthens that promise by the upload work, which is what we want.
+    await this.preparePixiUpload(this.bgaTextures.values());
+    if (this.disposed) return;
+    await this.preparePixiUpload(this.bgaLayerTextures.values());
   }
 
   /**
