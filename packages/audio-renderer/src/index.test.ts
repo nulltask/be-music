@@ -143,6 +143,63 @@ test.each(codecCases)(
   },
 );
 
+test('audio-renderer: scales individual sample triggers with #WAVCMD 01 xx vv', async () => {
+  // BMS spec — `#WAVCMD 01 xx vv` declares a per-slot volume
+  // override (0..127 byte). A trigger for that slot should
+  // attenuate by `vv / 127`; everything else stays at full.
+  const baseline = createSingleTriggerBmsChart('not-found.wav');
+  const attenuated = createSingleTriggerBmsChart('not-found.wav');
+  // 64 / 127 ≈ 50% — chosen so the multiplier is unambiguous
+  // even after the renderer's per-frame summing.
+  attenuated.bms.wavCmds = ['01 01 64'];
+  const [baselineRendered, attenuatedRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+    renderJson(attenuated, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+  ]);
+  expect(attenuatedRendered.left.length).toBe(baselineRendered.left.length);
+  expect(attenuatedRendered.peak).toBeCloseTo(baselineRendered.peak * (64 / 127), 6);
+});
+
+test('audio-renderer: ignores non-volume #WAVCMD bytes (pitch / loop)', async () => {
+  // Pitch / loop bytes are intentionally not applied yet (the
+  // offline renderer doesn't resample / loop dynamically). They
+  // must NOT fall through to the volume code path either — a
+  // `#WAVCMD 00 01 12` line should leave the sample at full
+  // volume, not at 12/127.
+  const baseline = createSingleTriggerBmsChart('not-found.wav');
+  const withPitch = createSingleTriggerBmsChart('not-found.wav');
+  withPitch.bms.wavCmds = ['00 01 12'];
+  const [baselineRendered, pitchRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+    renderJson(withPitch, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+  ]);
+  expect(pitchRendered.peak).toBeCloseTo(baselineRendered.peak, 6);
+});
+
 test('audio-renderer: scales rendered chart audio with #VOLWAV', async () => {
   const normal = createSingleTriggerBmsChart('not-found.wav', 100);
   const boosted = createSingleTriggerBmsChart('not-found.wav', 200);

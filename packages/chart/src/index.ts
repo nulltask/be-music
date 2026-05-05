@@ -325,6 +325,119 @@ export function parseBmsArgb(raw: string): BmsArgb | undefined {
   };
 }
 
+/**
+ * Parameter byte for a `#WAVCMD pp xx vv` entry.
+ *
+ * - `'pitch'` (`pp = 00`) — semitone shift, signed (`-127..127`).
+ * - `'volume'` (`pp = 01`) — playback volume, `0..127` where 0
+ *   is mute and 127 is unity. We map this to a 0..1 linear gain
+ *   multiplier so consumers can multiply directly into a gain
+ *   stage.
+ * - `'loop'` (`pp = 02`) — sample-frame loop point. `0` disables
+ *   looping; otherwise the sample loops back to that frame
+ *   index after reaching its end.
+ */
+export type BmsWavCmdParam = 'pitch' | 'volume' | 'loop';
+
+export interface BmsWavCmdEntry {
+  param: BmsWavCmdParam;
+  /** Slot id (`#WAVxx`), normalised via `normalizeObjectKey`. */
+  slot: string;
+  /**
+   * Raw integer value as written in the chart. The interpretation
+   * depends on `param` — see {@link BmsWavCmdParam}. Volume here
+   * is the literal 0..127 byte; convert to a gain multiplier via
+   * {@link wavCmdVolumeByteToLinearGain}.
+   */
+  value: number;
+}
+
+/**
+ * Maps a `#WAVCMD 01 xx vv` volume byte (0..127) to a 0..1 linear
+ * gain multiplier. `127 = 1.0` (unity), `0 = 0.0` (mute), linear
+ * in between. Out-of-range bytes are clamped.
+ *
+ * Hitkey BMS Memo describes the 0..127 byte as the volume, with
+ * 127 the practical "loud as authored" reference. We treat it as
+ * a straight ratio rather than a dB curve because most players
+ * (LR2 / beatoraja) implement it linearly and chart authors
+ * compose against that.
+ */
+export function wavCmdVolumeByteToLinearGain(byteValue: number): number {
+  if (!Number.isFinite(byteValue)) return 1;
+  const clamped = Math.max(0, Math.min(127, byteValue));
+  return clamped / 127;
+}
+
+/**
+ * Parses one `#WAVCMD pp xx vv` line. Whitespace-separated tokens:
+ * - `pp` (parameter byte): `00`/`01`/`02` (pitch/volume/loop).
+ * - `xx` (slot id): two-character base-36 (or base-62) id matching
+ *   a `#WAVxx` declaration. Returned as the normalised key.
+ * - `vv`: integer value.
+ *
+ * Returns `undefined` for malformed lines so callers can skip them
+ * rather than crashing on an unrecognised parameter byte.
+ *
+ * @param idBase  Pass `62` for charts declared with `#BASE 62` so
+ *                lowercase slot ids are preserved as-is.
+ */
+export function parseBmsWavCmd(line: string, idBase: 36 | 62 = 36): BmsWavCmdEntry | undefined {
+  if (typeof line !== 'string') return undefined;
+  const tokens = line.trim().split(/\s+/u);
+  if (tokens.length < 3) return undefined;
+  const [paramRaw, slotRaw, valueRaw] = tokens;
+  if (paramRaw === undefined || slotRaw === undefined || valueRaw === undefined) {
+    return undefined;
+  }
+  const paramByte = Number.parseInt(paramRaw, 10);
+  const value = Number.parseInt(valueRaw, 10);
+  if (!Number.isFinite(paramByte) || !Number.isFinite(value)) return undefined;
+  let param: BmsWavCmdParam;
+  switch (paramByte) {
+    case 0:
+      param = 'pitch';
+      break;
+    case 1:
+      param = 'volume';
+      break;
+    case 2:
+      param = 'loop';
+      break;
+    default:
+      return undefined;
+  }
+  const slot = normalizeObjectKey(slotRaw, idBase);
+  if (slot.length === 0) return undefined;
+  return { param, slot, value };
+}
+
+/**
+ * Builds a `slot → linear-gain-multiplier` map by collecting every
+ * `#WAVCMD 01 xx vv` (volume) line. Slots with no `#WAVCMD 01`
+ * line stay absent (the consumer falls back to unity gain). When
+ * a chart writes multiple volume lines for the same slot the
+ * LAST one wins, matching LR2 / beatoraja's "later directives
+ * override earlier" behaviour.
+ *
+ * Pitch / loop lines are intentionally skipped — they require
+ * sample-graph wiring (playback rate, loop points) that lives in
+ * the audio engine, not in this pure pre-process.
+ */
+export function collectBmsWavCmdVolumeMultipliers(
+  lines: ReadonlyArray<string>,
+  idBase: 36 | 62 = 36,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const line of lines) {
+    const entry = parseBmsWavCmd(line, idBase);
+    if (entry?.param === 'volume') {
+      out.set(entry.slot, wavCmdVolumeByteToLinearGain(entry.value));
+    }
+  }
+  return out;
+}
+
 export function isTempoChannel(channel: string): boolean {
   if (channel.length === 2) {
     const high = channel.charCodeAt(0);

@@ -238,6 +238,16 @@ export interface BmsExtensions {
   option?: string;
   changeOption: Record<string, string>;
   wavCmd?: string;
+  /**
+   * Every `#WAVCMD pp xx vv` line as the raw post-directive text
+   * (one entry per source line, in declaration order). The legacy
+   * `wavCmd` field above retains the FIRST value only for
+   * backward compatibility — `wavCmds` is the spec-faithful
+   * representation, since real-world charts emit one line per
+   * `(parameter, slot)` pair. Consumers should iterate `wavCmds`
+   * and parse via `@be-music/chart`'s `parseBmsWavCmd` helper.
+   */
+  wavCmds: string[];
   exWav: Record<string, string>;
   exBmp: Record<string, string>;
   bga: Record<string, string>;
@@ -325,6 +335,7 @@ export function createEmptyJson(sourceFormat: BeMusicSourceFormat = 'bms'): BeMu
       exRank: {},
       argb: {},
       stp: [],
+      wavCmds: [],
       changeOption: {},
       exWav: {},
       exBmp: {},
@@ -398,6 +409,7 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
       exRank: { ...json.bms.exRank },
       argb: { ...json.bms.argb },
       stp: [...json.bms.stp],
+      wavCmds: [...json.bms.wavCmds],
       changeOption: { ...json.bms.changeOption },
       exWav: { ...json.bms.exWav },
       exBmp: { ...json.bms.exBmp },

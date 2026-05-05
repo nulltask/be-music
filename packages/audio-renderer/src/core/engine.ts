@@ -1,4 +1,5 @@
 import {
+  collectBmsWavCmdVolumeMultipliers,
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
@@ -7,7 +8,7 @@ import {
 } from '@be-music/chart';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { normalizeChannel, normalizeObjectKey, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { normalizeChannel, normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { isAbortError, throwIfAborted } from '@be-music/utils';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { detectAudioFormat, encodeAiff16, encodeWav16 } from './file-codec.ts';
@@ -275,6 +276,15 @@ async function scheduleSampleRenders(params: {
   // `wav/kick.wav` reachable via `#PATH_WAV wav/`) resolve
   // correctly.
   const pathWavPrefix = typeof json.bms.pathWav === 'string' ? json.bms.pathWav : undefined;
+  // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume
+  // overrides as a 0..127 byte. Pre-collect into a Map<slotKey,
+  // 0..1 multiplier> so the per-trigger lookup is O(1); slots
+  // without a `#WAVCMD 01` line stay absent and skip the
+  // multiplication. Pitch / loop bytes (`pp = 00` / `02`) are
+  // intentionally not collected here — applying them would
+  // require resampling / loop-aware mixing that this offline
+  // renderer doesn't yet implement.
+  const wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(json.bms.wavCmds, resolveBmsBase(json));
   for (const trigger of triggers) {
     throwIfAborted(signal);
     const sample = await getOrCreateSample({
@@ -299,6 +309,7 @@ async function scheduleSampleRenders(params: {
       dynamicVolumeChanges,
       bgmVolumeState,
       playVolumeState,
+      wavCmdVolumeMultipliers,
     );
     const start = Math.max(0, Math.round((trigger.seconds - startSeconds) * sampleRate));
 
@@ -354,6 +365,7 @@ function resolveScheduledTriggerGain(
   dynamicVolumeChanges: DynamicVolumeChangesByBus,
   bgmVolumeState: DynamicVolumeState,
   playVolumeState: DynamicVolumeState,
+  wavCmdVolumeMultipliers: ReadonlyMap<string, number>,
 ): number {
   const rawTriggerGain = resolveTriggerGain?.(trigger) ?? 1;
   const volumeBus: DynamicVolumeBus = isPlayLaneSoundChannel(trigger.channel) ? 'play' : 'bgm';
@@ -361,7 +373,11 @@ function resolveScheduledTriggerGain(
     volumeBus === 'play'
       ? advanceDynamicVolumeGain(dynamicVolumeChanges.play, trigger.seconds, playVolumeState)
       : advanceDynamicVolumeGain(dynamicVolumeChanges.bgm, trigger.seconds, bgmVolumeState);
-  return (Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1) * dynamicGain;
+  // `#WAVCMD 01 xx vv` per-slot volume — multiplied in alongside
+  // the dynamic-volume bus state so a chart can stack a 50%
+  // `#WAVCMD` slot under a `97`/`98` runtime cut.
+  const wavCmdGain = wavCmdVolumeMultipliers.get(trigger.sampleKey) ?? 1;
+  return (Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1) * dynamicGain * wavCmdGain;
 }
 
 function shouldScheduleTrigger(

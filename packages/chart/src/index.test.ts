@@ -17,8 +17,11 @@ import {
   isTempoChannel,
   mapBmsLongNoteChannelToPlayable,
   measureToBeat,
+  collectBmsWavCmdVolumeMultipliers,
   parseBmsArgb,
   parseBmsDynamicVolumeGain,
+  parseBmsWavCmd,
+  wavCmdVolumeByteToLinearGain,
   parseBpmFrom03Token,
   resolveChartPlayVariant,
   resolveChartReferenceBpm,
@@ -195,6 +198,68 @@ describe('chart', () => {
     // Defensive — out-of-range inputs from a malformed chart shouldn't
     // produce alpha = 1.18 or a wrap-around RGB tint.
     expect(parseBmsArgb('300,-5,9999,128')).toEqual({ a: 255, r: 0, g: 255, b: 128 });
+  });
+
+  test('parseBmsWavCmd parses volume / pitch / loop lines and normalises the slot id', () => {
+    // The trailing token is parsed as a base-10 integer (the spec
+    // gives the value in decimal even though the slot id is base-36),
+    // so `64` here means literal 64 / 127 ≈ 50% volume.
+    expect(parseBmsWavCmd('01 0a 64')).toEqual({ param: 'volume', slot: '0A', value: 64 });
+    expect(parseBmsWavCmd('00 0A 2')).toEqual({ param: 'pitch', slot: '0A', value: 2 });
+    // Loop point: 0 = no loop, otherwise the sample-frame index
+    // the player should jump to once the source reaches its tail.
+    expect(parseBmsWavCmd('02 ZZ 1024')).toEqual({ param: 'loop', slot: 'ZZ', value: 1024 });
+  });
+
+  test('parseBmsWavCmd preserves slot case under base-62 charts', () => {
+    // `#BASE 62` opens up lowercase ids as a separate slot space,
+    // so a `#WAVCMD 01 0a 64` line must not be folded to `0A`.
+    expect(parseBmsWavCmd('01 0a 64', 62)).toMatchObject({ slot: '0a' });
+    expect(parseBmsWavCmd('01 0A 64', 62)).toMatchObject({ slot: '0A' });
+  });
+
+  test('parseBmsWavCmd rejects unknown parameter bytes and malformed lines', () => {
+    // Anything outside `00`/`01`/`02` is reserved by the spec —
+    // we'd rather skip than guess a meaning.
+    expect(parseBmsWavCmd('99 01 100')).toBeUndefined();
+    expect(parseBmsWavCmd('not even close')).toBeUndefined();
+    expect(parseBmsWavCmd('01 01')).toBeUndefined();
+    expect(parseBmsWavCmd('')).toBeUndefined();
+  });
+
+  test('wavCmdVolumeByteToLinearGain maps 0..127 to 0..1 with edge clamping', () => {
+    expect(wavCmdVolumeByteToLinearGain(0)).toBe(0);
+    expect(wavCmdVolumeByteToLinearGain(127)).toBe(1);
+    expect(wavCmdVolumeByteToLinearGain(63.5)).toBeCloseTo(0.5);
+    // Out-of-range bytes clamp to the byte range so a malformed
+    // `300` doesn't poison the gain stage.
+    expect(wavCmdVolumeByteToLinearGain(-10)).toBe(0);
+    expect(wavCmdVolumeByteToLinearGain(255)).toBe(1);
+    // Non-finite inputs default to unity (no-op).
+    expect(wavCmdVolumeByteToLinearGain(Number.NaN)).toBe(1);
+  });
+
+  test('collectBmsWavCmdVolumeMultipliers builds slot → gain map from volume lines only', () => {
+    const map = collectBmsWavCmdVolumeMultipliers([
+      '01 01 64', // WAV01 → volume 64/127
+      '00 01 2', // pitch line for the same slot — must NOT
+      // override the volume entry (different param).
+      '01 02 0', // WAV02 → muted
+      '02 03 1024', // loop line — skipped (not volume).
+    ]);
+    expect(map.get('01')).toBeCloseTo(64 / 127);
+    expect(map.get('02')).toBe(0);
+    expect(map.has('03')).toBe(false);
+  });
+
+  test('collectBmsWavCmdVolumeMultipliers honours later-overrides-earlier', () => {
+    // Authors occasionally re-issue a #WAVCMD volume line. LR2
+    // and beatoraja apply the LAST value, so we mirror that.
+    const map = collectBmsWavCmdVolumeMultipliers([
+      '01 01 32',
+      '01 01 96',
+    ]);
+    expect(map.get('01')).toBeCloseTo(96 / 127);
   });
 
   test('parseBmsArgb returns undefined for unrecognised / empty input', () => {

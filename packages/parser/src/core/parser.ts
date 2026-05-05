@@ -1018,7 +1018,17 @@ function pushHeaderLine(json: BeMusicJson, command: string, commandRaw: string, 
       return;
     case 'WAVCMD':
       if (value.length > 0) {
-        json.bms.wavCmd = value;
+        // BMS spec — `#WAVCMD pp xx vv` declares per-slot WAV
+        // playback overrides (pitch / volume / loop). Real
+        // charts emit ONE line per `(parameter, slot)` pair, so
+        // we collect every line into `wavCmds`. The legacy
+        // single-string `wavCmd` field is preserved for the
+        // first occurrence so older consumers that only read
+        // the head value keep compiling.
+        json.bms.wavCmds.push(value);
+        if (typeof json.bms.wavCmd !== 'string') {
+          json.bms.wavCmd = value;
+        }
       }
       return;
     case 'POORBGA':
@@ -1238,8 +1248,16 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
       continue;
     }
     if (upper === 'WAVCMD') {
-      if (typeof json.bms.wavCmd !== 'string' && value.length > 0) {
-        json.bms.wavCmd = value;
+      if (value.length > 0) {
+        // Mirror the strict-path collection so non-strict
+        // ingestion (chart roundtrips through `metadata.extras`)
+        // also retains every line of `#WAVCMD pp xx vv`.
+        if (!json.bms.wavCmds.includes(value)) {
+          json.bms.wavCmds.push(value);
+        }
+        if (typeof json.bms.wavCmd !== 'string') {
+          json.bms.wavCmd = value;
+        }
       }
       continue;
     }
@@ -1376,6 +1394,7 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
     exRank: {},
     argb: {},
     stp: [],
+    wavCmds: [],
     changeOption: {},
     exWav: {},
     exBmp: {},
@@ -1463,6 +1482,13 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   const wavCmd = raw.wavCmd ?? raw.wavcmd ?? raw.wav_cmd;
   if (typeof wavCmd === 'string' && wavCmd.length > 0) {
     normalized.wavCmd = wavCmd;
+  }
+  // Spec-faithful per-line list. Falls back to the legacy single
+  // string when only `wavCmd` was preserved (older roundtripped
+  // JSON), so older fixtures keep round-tripping.
+  normalized.wavCmds = normalizeBmsExtensionStringList(raw.wavCmds ?? raw.wav_cmds);
+  if (normalized.wavCmds.length === 0 && typeof normalized.wavCmd === 'string') {
+    normalized.wavCmds.push(normalized.wavCmd);
   }
 
   normalized.changeOption = normalizeIndexedBmsExtensionMap(

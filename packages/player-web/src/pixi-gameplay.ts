@@ -67,6 +67,7 @@ import { destroyUniqueTextures, disposeChildren } from './pixi-utils.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
+  collectBmsWavCmdVolumeMultipliers,
   createBeatResolver,
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
@@ -828,6 +829,23 @@ export class PixiGameplayView {
    */
   private recorder: GameplayRecorder | undefined;
   private decodedSamples = new Map<string, AudioBuffer>();
+  /**
+   * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv`
+   * lines, expressed as 0..1 linear gain. Built once per chart by
+   * {@link prepareSong} via the shared
+   * `collectBmsWavCmdVolumeMultipliers` helper, looked up on
+   * every `playSample` / `playSampleByKey` so a slot with no
+   * `#WAVCMD` directive returns `undefined` and the fast path
+   * (no extra GainNode) takes over.
+   *
+   * Pitch / loop bytes (`pp = 00` / `02`) are intentionally NOT
+   * collected here: they require sample-graph rewiring
+   * (playbackRate, loopStart / loopEnd) which the current
+   * pipeline doesn't surface yet — see the spec audit. Volume
+   * is the dominant in-the-wild use of `#WAVCMD`, so this
+   * already covers the common case.
+   */
+  private wavCmdVolumeMultipliers = new Map<string, number>();
   /**
    * bmson per-event slice playback map. For bmson charts the
    * audio-renderer's `createBmsonSamplePlaybackMap` precomputes
@@ -1811,6 +1829,16 @@ export class PixiGameplayView {
     // this for a seeded PRNG later.
     const resolved = resolveBmsControlFlow(song.chart, { random: Math.random });
     this.resolvedChart = resolved;
+    // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume
+    // overrides (0..127 byte). Collect once now so every
+    // subsequent `playSample{,ByKey}` is a single Map lookup;
+    // slots without an entry fall through to the unity-gain
+    // fast path. Pitch / loop bytes are skipped — the helper
+    // only emits volume multipliers.
+    this.wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(
+      resolved.bms.wavCmds,
+      resolveBmsBase(resolved),
+    );
     const extracted = extractTimedNotes(resolved, {
       includeLandmine: true,
       // Always extract the invisible / keysound array even when the
@@ -4519,8 +4547,13 @@ export class PixiGameplayView {
     };
     // BGM bus. Falls back to direct destination if `prepareAudio`
     // hasn't run yet (defensive — in practice the bus is always
-    // built before any `play*` call).
-    node.connect(this.audioBus?.bgmMixer ?? this.audioContext.destination);
+    // built before any `play*` call). When `#WAVCMD 01 xx vv`
+    // assigned a non-unity multiplier for this slot, splice a
+    // unity-cost GainNode in between so the per-WAV attenuation
+    // applies before the bus mixer sees the signal. Slots
+    // without a `#WAVCMD` entry skip the extra node entirely.
+    const sampleGainTarget = this.audioBus?.bgmMixer ?? this.audioContext.destination;
+    this.connectSampleNodeWithWavCmdGain(node, sampleKey, sampleGainTarget);
     // bmson slicing — `offsetSeconds` seeks into the sound-channel
     // WAV and `durationSeconds` caps how long this slice plays.
     // Both are clamped against the buffer duration so a chart
@@ -4541,6 +4574,40 @@ export class PixiGameplayView {
       startSampleNode(node, undefined, offsetSeconds, durationSeconds);
     }
     this.activeSampleNodes.set(sampleKey, node);
+  }
+
+  /**
+   * Connects a freshly-created `BufferSourceNode` to its target bus
+   * mixer, splicing in a per-slot GainNode when `#WAVCMD 01 xx vv`
+   * declared a non-unity multiplier. Slots with no `#WAVCMD` entry
+   * connect directly (no allocation, no extra hop).
+   *
+   * `node.onended` already cleans up its own outgoing edges, but the
+   * intermediate gain node (if we created one) survives by being
+   * referenced through the source node's edge until the next GC
+   * cycle — that's fine for short keysounds and acceptable for BGM
+   * since chart authors don't author thousands of `#WAVCMD` lines.
+   */
+  private connectSampleNodeWithWavCmdGain(
+    node: AudioBufferSourceNode,
+    sampleKey: string,
+    target: AudioNode,
+  ): void {
+    if (!this.audioContext) {
+      // Defensive — `playSample{,ByKey}` already gated on
+      // `audioContext`, but the type-narrowing doesn't carry.
+      node.connect(target);
+      return;
+    }
+    const multiplier = this.wavCmdVolumeMultipliers.get(sampleKey);
+    if (multiplier === undefined || multiplier === 1) {
+      node.connect(target);
+      return;
+    }
+    const gain = this.audioContext.createGain();
+    gain.gain.value = multiplier;
+    node.connect(gain);
+    gain.connect(target);
   }
 
   /**
@@ -4600,8 +4667,12 @@ export class PixiGameplayView {
     };
     // Key bus. Falls back to direct destination if `prepareAudio`
     // hasn't run yet (defensive — in practice the bus is always
-    // built before any `play*` call).
-    node.connect(this.audioBus?.keyMixer ?? this.audioContext.destination);
+    // built before any `play*` call). The `#WAVCMD 01 xx vv`
+    // gain splice mirrors `playSampleByKey` so input keysounds
+    // honour the same chart-author per-slot volume the BGM
+    // path does.
+    const sampleGainTarget = this.audioBus?.keyMixer ?? this.audioContext.destination;
+    this.connectSampleNodeWithWavCmdGain(node, sampleKey, sampleGainTarget);
     // bmson slicing — for bmson charts, the playback map carries
     // the per-event `(offsetSeconds, durationSeconds)` tuple
     // produced by `createBmsonSamplePlaybackMap`. Honouring it
