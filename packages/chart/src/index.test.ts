@@ -22,8 +22,10 @@ import {
   exWavVolumeCentibelsToLinearGain,
   parseBmsArgb,
   parseBmsDynamicVolumeGain,
+  parseBmsExBmp,
   parseBmsExWav,
   parseBmsWavCmd,
+  resolveBmsBmpArgb,
   wavCmdVolumeByteToLinearGain,
   parseBpmFrom03Token,
   resolveChartPlayVariant,
@@ -248,6 +250,54 @@ describe('chart', () => {
     expect(map.get('01')).toBeCloseTo(0.501, 3);
     expect(map.has('02')).toBe(false);
     expect(map.get('03')).toBeCloseTo(1, 6);
+  });
+
+  test('parseBmsExBmp decodes "a,r,g,b,filename" with the ARGB tint applied', () => {
+    // Hitkey BMS Memo: `#EXBMPxx a,r,g,b,filename`. The ARGB
+    // tuple should round-trip via the same `parseBmsArgb` parser
+    // that `#ARGBxx` uses (so consumers don't carry two code
+    // paths for "what is this slot's tint?").
+    const parsed = parseBmsExBmp('255,0,0,0,backdrop.bmp');
+    expect(parsed?.filename).toBe('backdrop.bmp');
+    expect(parsed?.argb).toEqual({ a: 255, r: 0, g: 0, b: 0 });
+  });
+
+  test('parseBmsExBmp surfaces filename even when the ARGB fields are blank', () => {
+    // Some chart authors ship `#EXBMP01 ,,,,foo.bmp` as a way to
+    // declare the slot without yet picking a tint — the consumer
+    // should still know which file to load and just skip the tint.
+    const parsed = parseBmsExBmp(',,,,foo.bmp');
+    expect(parsed?.filename).toBe('foo.bmp');
+    expect(parsed?.argb).toBeUndefined();
+  });
+
+  test('parseBmsExBmp returns undefined for inputs missing the filename or with too few commas', () => {
+    expect(parseBmsExBmp('')).toBeUndefined();
+    // Only four commas — no filename token at all.
+    expect(parseBmsExBmp('255,0,0,0')).toBeUndefined();
+    // Filename present but blank after trimming.
+    expect(parseBmsExBmp('255,0,0,0,   ')).toBeUndefined();
+  });
+
+  test('resolveBmsBmpArgb prefers an explicit #ARGBxx value over the embedded #EXBMPxx tuple', () => {
+    // Both directives can target the same slot. `#ARGBxx` is the
+    // newer, more flexible form so chart authors expect it to win
+    // when both are present.
+    const json = createEmptyJson();
+    json.bms.argb['01'] = 'FF112233';
+    json.bms.exBmp['01'] = '255,0,0,0,backdrop.bmp';
+    expect(resolveBmsBmpArgb(json, '01')).toEqual({ a: 255, r: 0x11, g: 0x22, b: 0x33 });
+  });
+
+  test('resolveBmsBmpArgb falls back to the #EXBMPxx tuple when #ARGBxx is absent', () => {
+    const json = createEmptyJson();
+    json.bms.exBmp['02'] = '128,255,0,0,red-tint.bmp';
+    expect(resolveBmsBmpArgb(json, '02')).toEqual({ a: 128, r: 255, g: 0, b: 0 });
+  });
+
+  test('resolveBmsBmpArgb returns undefined when neither directive applies to the slot', () => {
+    const json = createEmptyJson();
+    expect(resolveBmsBmpArgb(json, '03')).toBeUndefined();
   });
 
   test('parseBmsArgb decodes the AARRGGBB hex format the parser stores', () => {

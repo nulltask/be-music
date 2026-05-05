@@ -73,8 +73,8 @@ import {
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
-  parseBmsArgb,
   parseBmsDynamicVolumeGain,
+  resolveBmsBmpArgb,
   resolveChartReferenceBpm,
   sortEvents,
 } from '@be-music/chart';
@@ -5028,27 +5028,32 @@ export class PixiGameplayView {
         sprite.width = w;
         sprite.height = h;
         applyDestinationToSprite(sprite, dst);
-        // BMS spec — `#ARGBxx AARRGGBB` declares the BMP slot's
-        // alpha + RGB tint for layer composition. Apply the
-        // parsed values via Pixi's per-sprite `tint` (RGB
-        // multiply) and `alpha` (overall opacity); the default
-        // `#FFFFFFFF` round-trips to `tint = 0xFFFFFF` /
-        // `alpha = 1` which is the no-op identity, so charts
-        // that omit `#ARGB` see no change.
+        // BMS spec — `#ARGBxx AARRGGBB` (and the ARGB tuple
+        // embedded in `#EXBMPxx a,r,g,b,filename`) declare the
+        // BMP slot's alpha + RGB tint for layer composition.
+        // Apply the parsed values via Pixi's per-sprite `tint`
+        // (RGB multiply) and `alpha` (overall opacity); the
+        // default `#FFFFFFFF` round-trips to `tint = 0xFFFFFF`
+        // / `alpha = 1` which is the no-op identity, so charts
+        // that omit both directives see no change.
+        // `resolveBmsBmpArgb` prefers `#ARGBxx` over the
+        // `#EXBMPxx`-embedded tuple when both target the same
+        // slot, matching the LR2 / beatoraja precedence.
         // BGA-cue keys come from `buildBgaTimelines`, which
         // routes through `normalizeObjectKey` — exactly the
         // same key normalisation the parser applies to the
-        // `chart.bms.argb` map, so the direct lookup matches.
-        const argbRaw = this.resolvedChart?.bms.argb[key];
-        if (typeof argbRaw === 'string') {
-          const argb = parseBmsArgb(argbRaw);
+        // `chart.bms.argb` / `chart.bms.exBmp` maps, so the
+        // direct lookup matches.
+        const resolvedChart = this.resolvedChart;
+        if (resolvedChart) {
+          const argb = resolveBmsBmpArgb(resolvedChart, key);
           if (argb) {
             sprite.tint = (argb.r << 16) | (argb.g << 8) | argb.b;
             // Compose with the call-site alpha that
             // `applyDestinationToSprite` may have already
             // written (e.g. skin-driven LR2 fades) so the
-            // chart-level `#ARGBxx` α stacks multiplicatively
-            // rather than overriding it.
+            // chart-level α stacks multiplicatively rather
+            // than overriding it.
             sprite.alpha *= argb.a / 255;
           }
         }

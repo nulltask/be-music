@@ -377,6 +377,110 @@ export function collectBmsExWavVolumeMultipliers(
 }
 
 /**
+ * Parsed `#EXBMPxx a,r,g,b,filename` directive.
+ *
+ * Where `#BMPxx filename` declares an opaque image slot,
+ * `#EXBMPxx` declares the same slot's filename PLUS an ARGB
+ * tuple that the player should apply on top — typically used by
+ * chart authors to chroma-key a backdrop colour to transparent
+ * (`a = 0` for the keyed colour) or to dim a layer image
+ * (`a < 255`). The format is a single `a,r,g,b,filename` string
+ * (commas separating the four byte channels and the filename).
+ *
+ * `argbRaw` keeps the AARRGGBB-equivalent string so consumers
+ * can pass it straight to {@link parseBmsArgb} — the same parser
+ * `#ARGBxx` already uses, no second code path. `argb` is the
+ * pre-parsed shortcut for the common case.
+ */
+export interface BmsExBmp {
+  /** Filename of the image to load into this `#BMPxx` slot. */
+  filename: string;
+  /**
+   * Decoded ARGB values, or `undefined` when the directive omitted
+   * the ARGB tuple (e.g. `#EXBMP01 ,,,,filename.bmp`).
+   */
+  argb: BmsArgb | undefined;
+  /**
+   * Comma-separated AARRGGBB-equivalent text — kept so consumers
+   * can roundtrip through the same `parseBmsArgb` pipeline that
+   * `#ARGBxx` uses, without re-emitting it from the `argb` shortcut.
+   */
+  argbRaw: string;
+}
+
+/**
+ * Parses one `#EXBMPxx` directive value (the post-`#EXBMPxx ` text).
+ *
+ * Token layout: `a,r,g,b,filename`. Filenames containing literal
+ * commas are unsupported by the spec — that's a property of the
+ * format, not a limitation here. Whitespace inside each field is
+ * trimmed.
+ *
+ * Returns `undefined` for malformed input (less than five comma
+ * groups or an empty filename). When the ARGB fields are present
+ * but unparseable (e.g. `xxx,yyy,zzz,www,foo.bmp`), the entry's
+ * `argb` is `undefined` while `filename` is still surfaced — so
+ * the consumer at least knows which file the slot points at.
+ */
+export function parseBmsExBmp(raw: string): BmsExBmp | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  // Five-way split on commas. `split(',', limit)` would silently
+  // drop trailing commas in the filename if a chart author left
+  // any, so split unbounded and rejoin the tail.
+  const parts = trimmed.split(',');
+  if (parts.length < 5) return undefined;
+  const [aRaw, rRaw, gRaw, bRaw, ...rest] = parts;
+  const filename = rest.join(',').trim();
+  if (filename.length === 0) return undefined;
+  // The argb tuple may legally be empty (chart authors sometimes
+  // ship `#EXBMP01 ,,,,foo.bmp` to mean "filename only"), in
+  // which case we still surface the filename and leave `argb`
+  // undefined so the consumer can fall back to `#ARGBxx` or the
+  // image's own alpha channel.
+  const argbCandidate = `${aRaw},${rRaw},${gRaw},${bRaw}`;
+  const argbValuesAllBlank = [aRaw, rRaw, gRaw, bRaw].every((part) => part.trim().length === 0);
+  const argb = argbValuesAllBlank ? undefined : parseBmsArgb(argbCandidate);
+  return {
+    filename,
+    argb,
+    argbRaw: argbCandidate,
+  };
+}
+
+/**
+ * Resolves the ARGB tint to apply when compositing `chart.bms.bmp[slot]`,
+ * folding the two BMS directives that can drive it (in priority
+ * order):
+ *
+ * 1. `#ARGBxx` — explicit per-slot ARGB. Wins when present.
+ * 2. `#EXBMPxx` — the ARGB embedded in the filename declaration.
+ *    Used as a fallback so chart authors who only wrote the
+ *    extended form still get their transparent / dim composite.
+ *
+ * Returns `undefined` when neither directive is present (or
+ * neither parses), letting the consumer skip the tint stage
+ * entirely on the unaffected path.
+ */
+export function resolveBmsBmpArgb(
+  chart: BeMusicJson,
+  slot: string,
+): BmsArgb | undefined {
+  const argbRaw = chart.bms.argb[slot];
+  if (typeof argbRaw === 'string') {
+    const parsed = parseBmsArgb(argbRaw);
+    if (parsed) return parsed;
+  }
+  const exBmpRaw = chart.bms.exBmp[slot];
+  if (typeof exBmpRaw === 'string') {
+    const parsed = parseBmsExBmp(exBmpRaw);
+    if (parsed?.argb) return parsed.argb;
+  }
+  return undefined;
+}
+
+/**
  * Parsed BMS `#ARGBxx` value — alpha + RGB channel in 0..255.
  *
  * Each component is clamped to the byte range so callers can blindly
