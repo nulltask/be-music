@@ -2777,8 +2777,13 @@ export class PixiGameplayView {
   private releaseLnHoldTimer(channel: string): void {
     const timerId = this.resolveLnHoldTimerId(channel);
     if (timerId === undefined) return;
-    if (!this.timerStartedAt.has(timerId)) return;
+    // Stamp the fade origin unconditionally for the same reason as `releaseKeyOnTimer`: the render-side defensive
+    // cleanup in `renderSkinImage` keys off `lnHoldFadeOutStart` to taper sustain-glow / hold-sparkle sprites to
+    // alpha=0, so a missing `timerStartedAt` (whose deferred-cleanup setTimeout could already have wiped the slot
+    // under battery-saver throttling) must not skip the stamp. The `timerStartedAt.has` gate now controls only the
+    // deferred cleanup below.
     this.lnHoldFadeOutStart.set(timerId, this.playClock());
+    if (!this.timerStartedAt.has(timerId)) return;
     const fadeMs = this.lnHoldFadeDurationMs.get(timerId) ?? KEY_ON_FADE_OUT_MS;
     const timeout = window.setTimeout(() => {
       this.keyFlashTimeouts.delete(timeout);
@@ -2806,8 +2811,15 @@ export class PixiGameplayView {
   private releaseKeyOnTimer(channel: string): void {
     const timerId = this.resolveKeyOnTimerId(channel);
     if (timerId === undefined) return;
-    if (!this.timerStartedAt.has(timerId)) return;
+    // Stamp the fade origin unconditionally — the render-side cleanup uses it as the authoritative clock for the
+    // 1 → 0 alpha taper, and the previous early-return on a missing `timerStartedAt` left the LN-end path stuck at
+    // full brightness whenever the deferred startKeyOnTimer / releaseKeyOnTimer interleaving had already retired
+    // the slot (most visibly: `autoFinalizeLongNotes` calls release after `activeLongNotes.delete`, and a racy
+    // setTimeout cleanup from a previous press could have wiped `timerStartedAt` between the LN's startKeyOnTimer
+    // and this release). The `timerStartedAt.has` gate now controls only the deferred cleanup below — the fade
+    // start is committed regardless so `renderSkinImage` can taper any still-visible laser through to alpha=0.
     this.keyOnFadeOutStart.set(timerId, this.playClock());
+    if (!this.timerStartedAt.has(timerId)) return;
     const fadeMs = this.keyOnFadeDurationMs.get(timerId) ?? KEY_ON_FADE_OUT_MS;
     const timeout = window.setTimeout(() => {
       this.keyFlashTimeouts.delete(timeout);
