@@ -1,6 +1,5 @@
 /**
- * Which screen's `.lr2skin` to pick when a theme bundle ships multiple
- * (play, select, result, decide, etc.).
+ * Which screen's `.lr2skin` to pick when a theme bundle ships multiple (play, select, result, decide, etc.).
  */
 export type Lr2SkinKind = 'play' | 'select' | 'result' | 'decide';
 

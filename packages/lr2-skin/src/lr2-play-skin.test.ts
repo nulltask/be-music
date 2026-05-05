@@ -18,11 +18,9 @@ function skin(name: string): Lr2Skin {
 }
 
 /**
- * Builds a fake file carrying just the path metadata
- * `pickLr2ThemeBgmFile` consults. The matcher only inspects
- * `webkitRelativePath` / `name`, so casting an object literal
- * is enough — this avoids the `new File([...], ...)` boilerplate
- * that needs an actual Blob payload we don't use here.
+ * Builds a fake file carrying just the path metadata `pickLr2ThemeBgmFile` consults. The matcher only inspects
+ * `webkitRelativePath` / `name`, so casting an object literal is enough — this avoids the `new File([...], ...)`
+ * boilerplate that needs an actual Blob payload we don't use here.
  */
 function pathFile(path: string): Lr2SkinInputFile {
   return {
@@ -72,11 +70,9 @@ describe('pickLr2ThemeBgmFile', () => {
   });
 
   test('returns the first matching variant when several themes are bundled', () => {
-    // The LR2 default ships three theme variants (`LR2 ver sta`,
-    // `LR2 ver Yamajet`, `LR2 ver syatten`). Picking the first in
-    // input order keeps the choice deterministic without forcing
-    // an alphabetical sort that would surprise users who expect
-    // their drag order to win.
+        // The LR2 default ships three theme variants (`LR2 ver sta`, `LR2 ver Yamajet`, `LR2 ver syatten`). Picking the
+    // first in input order keeps the choice deterministic without forcing an alphabetical sort that would surprise
+    // users who expect their drag order to win.
     const files = [
       pathFile('LR2files/Bgm/LR2 ver sta/select.wav'),
       pathFile('LR2files/Bgm/LR2 ver Yamajet/select.wav'),
@@ -97,8 +93,8 @@ describe('pickLr2ThemeBgmFile', () => {
   });
 
   test('rejects non-Bgm paths', () => {
-    // A file named `select.wav` outside an `Bgm/` directory could
-    // be a chart's keysound — must NOT be picked as theme BGM.
+        // A file named `select.wav` outside an `Bgm/` directory could be a chart's keysound — must NOT be picked as theme
+    // BGM.
     expect(pickLr2ThemeBgmFile([pathFile('Songs/MyChart/select.wav')], 'select')).toBeUndefined();
     expect(pickLr2ThemeBgmFile([pathFile('LR2files/Theme/LR2/Select/select.wav')], 'select')).toBeUndefined();
   });
@@ -109,9 +105,8 @@ describe('pickLr2ThemeBgmFile', () => {
   });
 
   test('rejects basenames that just contain the role substring', () => {
-    // Strict basename match: `select.wav` matches, `selecting.wav`
-    // doesn't. Without this guard a song folder happening to ship
-    // a `selecting_loop.wav` keysound would hijack the BGM slot.
+        // Strict basename match: `select.wav` matches, `selecting.wav` doesn't. Without this guard a song folder happening
+    // to ship a `selecting_loop.wav` keysound would hijack the BGM slot.
     expect(pickLr2ThemeBgmFile([pathFile('LR2files/Bgm/x/selecting.wav')], 'select')).toBeUndefined();
     expect(pickLr2ThemeBgmFile([pathFile('LR2files/Bgm/x/decided.wav')], 'decide')).toBeUndefined();
   });
@@ -124,8 +119,7 @@ describe('pickLr2ThemeBgmFile', () => {
 
 describe('pickLr2SystemSoundFile', () => {
   test('picks the LR2 default scratch / folder system effects', () => {
-    // Standard LR2 layout: `LR2files/Sound/lr2/<stem>.wav`. The
-    // matcher should pull each effect out for any stem the
+        // Standard LR2 layout: `LR2files/Sound/lr2/<stem>.wav`. The matcher should pull each effect out for any stem the
     // caller asks for.
     const files = [
       pathFile('LR2files/Sound/lr2/scratch.wav'),
@@ -144,21 +138,17 @@ describe('pickLr2SystemSoundFile', () => {
   });
 
   test('rejects scratch.wav outside the Sound/lr2 path', () => {
-    // BMS chart keysounds occasionally use names that look like
-    // system effects. The strict path filter prevents a song's
-    // `scratch.wav` from being misidentified as the cursor click.
+        // BMS chart keysounds occasionally use names that look like system effects. The strict path filter prevents a
+    // song's `scratch.wav` from being misidentified as the cursor click.
     expect(pickLr2SystemSoundFile([pathFile('Songs/Foo/scratch.wav')], 'scratch')).toBeUndefined();
-    // BGM-folder files mustn't qualify either — `decide.wav`
-    // belongs there but the picker's path filter is just
-    // `Sound/lr2/`, so a BGM-folder match must be rejected by
-    // basename rather than colliding with this picker's allow-
+        // BGM-folder files mustn't qualify either — `decide.wav` belongs there but the picker's path filter is just
+    // `Sound/lr2/`, so a BGM-folder match must be rejected by basename rather than colliding with this picker's allow-
     // list.
     expect(pickLr2SystemSoundFile([pathFile('LR2files/Bgm/x/decide.wav')], 'decide')).toBeUndefined();
   });
 
   test('accepts alternate audio extensions', () => {
-    // Same as the BGM picker — themes occasionally ship .ogg /
-    // .mp3 mirrors of the WAV originals to save space.
+    // Same as the BGM picker — themes occasionally ship .ogg / .mp3 mirrors of the WAV originals to save space.
     expect(pickLr2SystemSoundFile([pathFile('LR2files/Sound/lr2/scratch.ogg')], 'scratch')?.name).toBe('scratch.ogg');
     expect(pickLr2SystemSoundFile([pathFile('LR2files/Sound/lr2/scratch.opus')], 'scratch')?.name).toBe('scratch.opus');
   });
@@ -171,10 +161,8 @@ describe('pickLr2SystemSoundFile', () => {
 
 describe('loadLr2ThemeSkinsFromFiles progress events', () => {
   test('fires a theme-phase event for every internal sub-task', async () => {
-    // No real theme files supplied — every sub-task resolves with
-    // `undefined`, but the progress emitter must still tick to
-    // completion so the host UI's "Theme: X / N" readout reaches
-    // the bottom-right corner of the bar.
+        // No real theme files supplied — every sub-task resolves with `undefined`, but the progress emitter must still tick
+    // to completion so the host UI's "Theme: X / N" readout reaches the bottom-right corner of the bar.
     const events: Lr2ThemeLoadProgress[] = [];
     await loadLr2ThemeSkinsFromFiles([], { onProgress: (event) => events.push(event) });
     const themeEvents = events.filter((event) => event.phase === 'theme');
@@ -182,11 +170,9 @@ describe('loadLr2ThemeSkinsFromFiles progress events', () => {
     expect(themeEvents.length).toBeGreaterThan(1);
     expect(themeEvents[0]).toMatchObject({ current: 0 });
     const last = themeEvents.at(-1)!;
-    // Each event reports the same total, and the final one matches
-    // the running tally — i.e. the bar reaches 100 %.
+    // Each event reports the same total, and the final one matches the running tally — i.e. the bar reaches 100 %.
     expect(last.current).toBe(last.total);
-    // Every event after the prelude carries a sub-task label
-    // (`play/7K`, `select`, `bgm/decide`, …) — handy for the UI.
+    // Every event after the prelude carries a sub-task label (`play/7K`, `select`, `bgm/decide`, …) — handy for the UI.
     const labelled = themeEvents.slice(1);
     expect(labelled.every((event) => typeof event.label === 'string' && event.label.length > 0)).toBe(true);
   });

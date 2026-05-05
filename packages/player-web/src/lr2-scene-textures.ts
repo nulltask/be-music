@@ -107,9 +107,8 @@ export class Lr2ChartGraphicTextureStore {
       if (!source) {
         return;
       }
-      // Song-bundle assets are lazy `File` references — read the
-      // banner / stagefile / backbmp bytes on demand the moment
-      // the user focuses this song.
+            // Song-bundle assets are lazy `File` references — read the banner / stagefile / backbmp bytes on demand the
+      // moment the user focuses this song.
       const bytes = await loadAssetBytes(resolveChartImageAsset(source, song.chartPath, assetPath));
       if (!bytes) {
         return;

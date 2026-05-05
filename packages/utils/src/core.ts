@@ -164,10 +164,8 @@ export interface RunWithConcurrencyOptions {
 /**
  * Runs `task` against each item with a bounded number of workers.
  *
- * This is intentionally small and dependency-free because browser
- * drop loaders, theme readers, and terminal BGA preloaders all need
- * the same "saturate I/O without fanning out unbounded Promises"
- * primitive.
+ * This is intentionally small and dependency-free because browser drop loaders, theme readers, and terminal BGA
+ * preloaders all need the same "saturate I/O without fanning out unbounded Promises" primitive.
  */
 export async function runWithConcurrency<T>(
   items: ReadonlyArray<T>,
@@ -275,15 +273,12 @@ export function normalizeAsciiBase36Code(code: number): number {
 }
 
 /**
- * Base-62 counterpart of {@link normalizeAsciiBase36Code}: validates
- * an ASCII char code as a member of `[0-9A-Za-z]` and returns it
- * unchanged. Returns `-1` for any other input.
+ * Base-62 counterpart of {@link normalizeAsciiBase36Code}: validates an ASCII char code as a member of `[0-9A-Za-z]`
+ * and returns it unchanged. Returns `-1` for any other input.
  *
- * Unlike the base-36 variant, lowercase letters are NOT folded to
- * uppercase — `#BASE 62` charts use lowercase as a separate ID
- * space (so `#WAV0a` and `#WAV0A` reference different sounds).
- * Used for both indexed-header keys (`#WAVxx`, `#BMPxx`, …) and
- * object-stream tokens when the chart opted into base-62.
+ * Unlike the base-36 variant, lowercase letters are NOT folded to uppercase — `#BASE 62` charts use lowercase as a
+ * separate ID space (so `#WAV0a` and `#WAV0A` reference different sounds). Used for both indexed-header keys (`#WAVxx`,
+ * `#BMPxx`, …) and object-stream tokens when the chart opted into base-62.
  */
 export function normalizeAsciiBase62Code(code: number): number {
   if (code >= 0x30 && code <= 0x39) {
@@ -299,29 +294,20 @@ export function normalizeAsciiBase62Code(code: number): number {
 }
 
 /**
- * bmson 1.0.0 spec MUST — "The implementation must protect from
- * malicious paths. Absolute path: `C:\password.txt` or
- * `/etc/passwd`. Reference to parent directory:
- * `../../../var/www/html/config.php`. Null characters (`\0`)."
+ * bmson 1.0.0 spec MUST — "The implementation must protect from malicious paths. Absolute path: `C:\password.txt` or
+ * `/etc/passwd`. Reference to parent directory: `../../../var/www/html/config.php`. Null characters (`\0`)."
  *
- * Pure-string predicate so CLI / TUI filesystem callers and
- * the browser's case-insensitive file map can share one
- * canonical guard. Returns `true` for paths the implementation
- * should refuse to resolve. Does NOT consult any filesystem.
+ * Pure-string predicate so CLI / TUI filesystem callers and the browser's case-insensitive file map can share one
+ * canonical guard. Returns `true` for paths the implementation should refuse to resolve. Does NOT consult any
+ * filesystem.
  *
- * - **Null byte** — many native APIs interpret `\0` as a C
- *   string terminator, so `safe.wav\0/etc/passwd` could
- *   resolve to the second half on a non-defensive backend.
- * - **POSIX absolute** — leading `/` (or `\`) escapes the
- *   chart bundle on Unix-style backends.
- * - **Windows absolute** — `C:\...` / `D:/...` drive-letter
- *   prefixes.
- * - **UNC / network share** — `\\server\share`,
- *   `//server/share`.
- * - **Parent traversal** — any path *segment* that is exactly
- *   `..` would walk out of the chart bundle. Per-segment
- *   matching (rather than substring) so a legitimate filename
- *   like `Lab..rinth.wav` still resolves.
+ * - **Null byte** — many native APIs interpret `\0` as a C string terminator, so `safe.wav\0/etc/passwd` could resolve
+ *   to the second half on a non-defensive backend.
+ * - **POSIX absolute** — leading `/` (or `\`) escapes the chart bundle on Unix-style backends.
+ * - **Windows absolute** — `C:\...` / `D:/...` drive-letter prefixes.
+ * - **UNC / network share** — `\\server\share`, `//server/share`.
+ * - **Parent traversal** — any path *segment* that is exactly `..` would walk out of the chart bundle. Per-segment
+ *   matching (rather than substring) so a legitimate filename like `Lab..rinth.wav` still resolves.
  */
 export function isMaliciousAssetPath(path: string): boolean {
   if (typeof path !== 'string' || path.length === 0) {

@@ -9,7 +9,13 @@ import {
 } from '@be-music/chart';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { normalizeChannel, normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import {
+  normalizeChannel,
+  normalizeObjectKey,
+  resolveBmsBase,
+  type BeMusicEvent,
+  type BeMusicJson,
+} from '@be-music/json';
 import { isAbortError, throwIfAborted } from '@be-music/utils';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { detectAudioFormat, encodeAiff16, encodeWav16 } from './file-codec.ts';
@@ -62,10 +68,8 @@ export interface RenderSingleSampleOptions {
   signal?: AbortSignal;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
   /**
-   * Object-ID radix the supplied `sampleKey` was authored under.
-   * Defaults to base 36 (case-folded). Pass `62` for charts that
-   * declared `#BASE 62` so a lowercase `0a` key isn't re-folded
-   * back to `0A` during validation.
+   * Object-ID radix the supplied `sampleKey` was authored under. Defaults to base 36 (case-folded). Pass `62` for
+   * charts that declared `#BASE 62` so a lowercase `0a` key isn't re-folded back to `0A` during validation.
    */
   base?: 36 | 62;
 }
@@ -270,29 +274,19 @@ async function scheduleSampleRenders(params: {
   const playVolumeState: DynamicVolumeState = { index: 0, gain: 1 };
   let maxFrame = Math.max(1, Math.round(tailSeconds * sampleRate));
 
-  // BMS spec — `#PATH_WAV` declares a directory prefix the
-  // chart's WAVs live under. The sample-path resolver tries
-  // `pathPrefix + samplePath` before the bare path so charts
-  // that organise their WAVs under a sub-folder (e.g.
-  // `wav/kick.wav` reachable via `#PATH_WAV wav/`) resolve
-  // correctly.
+    // BMS spec — `#PATH_WAV` declares a directory prefix the chart's WAVs live under. The sample-path resolver tries
+  // `pathPrefix + samplePath` before the bare path so charts that organise their WAVs under a sub-folder (e.g.
+  // `wav/kick.wav` reachable via `#PATH_WAV wav/`) resolve correctly.
   const pathWavPrefix = typeof json.bms.pathWav === 'string' ? json.bms.pathWav : undefined;
-  // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume
-  // overrides as a 0..127 byte. Pre-collect into a Map<slotKey,
-  // 0..1 multiplier> so the per-trigger lookup is O(1); slots
-  // without a `#WAVCMD 01` line stay absent and skip the
-  // multiplication. Pitch / loop bytes (`pp = 00` / `02`) are
-  // intentionally not collected here — applying them would
-  // require resampling / loop-aware mixing that this offline
-  // renderer doesn't yet implement.
+    // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides as a 0..127 byte. Pre-collect into a Map<slotKey,
+  // 0..1 multiplier> so the per-trigger lookup is O(1); slots without a `#WAVCMD 01` line stay absent and skip the
+  // multiplication. Pitch / loop bytes (`pp = 00` / `02`) are intentionally not collected here — applying them would
+  // require resampling / loop-aware mixing that this offline renderer doesn't yet implement.
   const wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(json.bms.wavCmds, resolveBmsBase(json));
-  // BMS spec — `#EXWAVxx [flags] params filename` extended WAV
-  // declarations include an optional `v` (centibel) volume that
-  // composes multiplicatively with `#WAVCMD 01 xx vv`. Fold the
-  // extracted multipliers into the same Map so the per-trigger
-  // gain math stays a single lookup. Pan / freq fall to a future
-  // patch since they require resampling / stereo splitting in
-  // this offline renderer.
+    // BMS spec — `#EXWAVxx [flags] params filename` extended WAV declarations include an optional `v` (centibel) volume
+  // that composes multiplicatively with `#WAVCMD 01 xx vv`. Fold the extracted multipliers into the same Map so the
+  // per-trigger gain math stays a single lookup. Pan / freq fall to a future patch since they require resampling /
+  // stereo splitting in this offline renderer.
   for (const [slot, multiplier] of collectBmsExWavVolumeMultipliers(json.bms.exWav)) {
     const previous = wavCmdVolumeMultipliers.get(slot) ?? 1;
     wavCmdVolumeMultipliers.set(slot, previous * multiplier);
@@ -385,9 +379,8 @@ function resolveScheduledTriggerGain(
     volumeBus === 'play'
       ? advanceDynamicVolumeGain(dynamicVolumeChanges.play, trigger.seconds, playVolumeState)
       : advanceDynamicVolumeGain(dynamicVolumeChanges.bgm, trigger.seconds, bgmVolumeState);
-  // `#WAVCMD 01 xx vv` per-slot volume — multiplied in alongside
-  // the dynamic-volume bus state so a chart can stack a 50%
-  // `#WAVCMD` slot under a `97`/`98` runtime cut.
+    // `#WAVCMD 01 xx vv` per-slot volume — multiplied in alongside the dynamic-volume bus state so a chart can stack a
+  // 50% `#WAVCMD` slot under a `97`/`98` runtime cut.
   const wavCmdGain = wavCmdVolumeMultipliers.get(trigger.sampleKey) ?? 1;
   return (Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1) * dynamicGain * wavCmdGain;
 }
@@ -401,16 +394,12 @@ function shouldScheduleTrigger(
   if (json.sourceFormat !== 'bmson') {
     return true;
   }
-  // bmson 1.0.0 spec: a `c=true` note MUST NOT restart playback —
-  // it's a continuation marker that rides on the previous
-  // `c=false` anchor's BufferSource. Scheduling a separate render
-  // for it would overlap with the still-running anchor sample
-  // (especially now that the slice's `durationSeconds` is walked
-  // out to the next genuine restart) and effectively double the
-  // mix gain at every `c=true` hit. The runtime side achieves the
-  // same outcome via its `activeSampleNodes` "skip when already
-  // playing" gate; the offline mixer has no such state, so the
-  // skip has to happen up front here.
+    // bmson 1.0.0 spec: a `c=true` note MUST NOT restart playback — it's a continuation marker that rides on the previous
+  // `c=false` anchor's BufferSource. Scheduling a separate render for it would overlap with the still-running anchor
+  // sample (especially now that the slice's `durationSeconds` is walked out to the next genuine restart) and
+  // effectively double the mix gain at every `c=true` hit. The runtime side achieves the same outcome via its
+  // `activeSampleNodes` "skip when already playing" gate; the offline mixer has no such state, so the skip has to
+  // happen up front here.
   if (trigger.event.bmson?.c === true) {
     return false;
   }
@@ -574,8 +563,7 @@ async function getOrCreateSample(params: {
     sampleKey,
     samplePath,
   });
-  // Cache key includes the `#PATH_WAV` prefix so two charts
-  // sharing a `baseDir` but different prefixes don't collide.
+  // Cache key includes the `#PATH_WAV` prefix so two charts sharing a `baseDir` but different prefixes don't collide.
   const cacheKey = `${baseDir}:${pathPrefix ?? ''}:${samplePath}`;
   const resolvedPath = resolvedPathCache.has(cacheKey)
     ? resolvedPathCache.get(cacheKey)

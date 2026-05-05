@@ -1,5 +1,4 @@
-// Virtual module produced by the `be-music:acknowledgements`
-// Vite plugin (see `vite.config.ts`).
+// Virtual module produced by the `be-music:acknowledgements` Vite plugin (see `vite.config.ts`).
 import acknowledgements from 'virtual:acknowledgements';
 
 export function wireHelpModal(): void {

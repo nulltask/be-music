@@ -1,42 +1,34 @@
 /**
- * Feature-detection probe for the browser APIs the web player
- * relies on. Run once at boot; the result drives the readiness
- * badge in the drop card so a user on an old browser sees *why*
- * the player can't start instead of getting an opaque WebGL /
- * AudioContext error mid-load.
+ * Feature-detection probe for the browser APIs the web player relies on. Run once at boot; the result drives the
+ * readiness badge in the drop card so a user on an old browser sees *why* the player can't start instead of getting an
+ * opaque WebGL / AudioContext error mid-load.
  *
- * The detection lives in `player-web` (not the demo) so any
- * host shell — the demo, a future hosted build, an embedded
- * iframe — gets the same readiness verdict from a single source
- * of truth as the actual runtime feature usage.
+ * The detection lives in `player-web` (not the demo) so any host shell — the demo, a future hosted build, an embedded
+ * iframe — gets the same readiness verdict from a single source of truth as the actual runtime feature usage.
  */
 
 /**
- * One row of the compatibility report. `id` is stable across
- * versions so a host could persist user-dismissed warnings; the
- * `label` is the human-readable name shown in the badge.
+ * One row of the compatibility report. `id` is stable across versions so a host could persist user-dismissed warnings;
+ * the `label` is the human-readable name shown in the badge.
  */
 export interface BrowserCompatItem {
   id: string;
   label: string;
   supported: boolean;
   /**
-   * `true` when the player can't function at all without this
-   * feature (rendering / audio / chart loading). Missing required
-   * features flip {@link BrowserCompatReport.ok} to `false`.
+   * `true` when the player can't function at all without this feature (rendering / audio / chart loading). Missing
+   * required features flip {@link BrowserCompatReport.ok} to `false`.
    */
   required: boolean;
   /**
-   * One-line note explaining what depends on this feature, shown
-   * as a tooltip / aria-description on the badge.
+   * One-line note explaining what depends on this feature, shown as a tooltip / aria-description on the badge.
    */
   note: string;
 }
 
 export interface BrowserCompatReport {
   /**
-   * `true` iff every `required: true` item is supported. The
-   * drop card uses this to swap "Drop to load" for the
+   * `true` iff every `required: true` item is supported. The drop card uses this to swap "Drop to load" for the
    * unsupported message.
    */
   ok: boolean;
@@ -44,9 +36,8 @@ export interface BrowserCompatReport {
 }
 
 /**
- * Synchronously probes every feature. Each detector swallows its
- * own exceptions so a single failed probe (e.g. `getContext` on a
- * locked-down canvas) can't crash the rest of the page.
+ * Synchronously probes every feature. Each detector swallows its own exceptions so a single failed probe (e.g.
+ * `getContext` on a locked-down canvas) can't crash the rest of the page.
  */
 export function checkBrowserCompat(): BrowserCompatReport {
   const items: BrowserCompatItem[] = [
@@ -119,9 +110,8 @@ export function checkBrowserCompat(): BrowserCompatReport {
 }
 
 /**
- * Compact summary of the missing features, suitable for a single
- * status line. Returns `undefined` when every required feature is
- * supported (callers can branch on that to skip rendering).
+ * Compact summary of the missing features, suitable for a single status line. Returns `undefined` when every required
+ * feature is supported (callers can branch on that to skip rendering).
  */
 export function summarizeBrowserCompat(report: BrowserCompatReport): string | undefined {
   if (report.ok) return undefined;
@@ -134,9 +124,8 @@ function detectWebGL2(): boolean {
   if (typeof document === 'undefined') return false;
   try {
     const canvas = document.createElement('canvas');
-    // `failIfMajorPerformanceCaveat: false` matches Pixi's default
-    // — we want to know whether ANY WebGL2 context is reachable,
-    // even on integrated GPUs the browser flags as "slow".
+        // `failIfMajorPerformanceCaveat: false` matches Pixi's default — we want to know whether ANY WebGL2 context is
+    // reachable, even on integrated GPUs the browser flags as "slow".
     return canvas.getContext('webgl2') !== null;
   } catch {
     return false;
@@ -145,8 +134,8 @@ function detectWebGL2(): boolean {
 
 function detectAudioContext(): boolean {
   if (typeof globalThis === 'undefined') return false;
-  // Safari on iOS still ships only the prefixed `webkitAudioContext`
-  // for some versions; treat both as "Web Audio is reachable".
+    // Safari on iOS still ships only the prefixed `webkitAudioContext` for some versions; treat both as "Web Audio is
+  // reachable".
   return 'AudioContext' in globalThis || 'webkitAudioContext' in (globalThis as unknown as Record<string, unknown>);
 }
 
@@ -174,8 +163,7 @@ function detectWebCodecs(): boolean {
 function detectMediaRecorder(): boolean {
   if (typeof globalThis === 'undefined') return false;
   if (!('MediaRecorder' in globalThis)) return false;
-  // `captureStream` is the bridge between the canvas and the
-  // recorder. Without it, MediaRecorder existing alone doesn't
+    // `captureStream` is the bridge between the canvas and the recorder. Without it, MediaRecorder existing alone doesn't
   // help us — we'd never feed it a video track.
   if (typeof HTMLCanvasElement === 'undefined') return false;
   return typeof HTMLCanvasElement.prototype.captureStream === 'function';

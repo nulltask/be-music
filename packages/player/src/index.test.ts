@@ -812,23 +812,19 @@ describe('player', () => {
     expect(summary.great).toBe(0);
     expect(summary.good).toBe(0);
     expect(summary.bad).toBe(0);
-    // 空POOR is NOT counted in `summary.poor` — that slot is reserved
-    // for 見逃しPOOR (notes that passed without input). Matches LR2.
+        // 空POOR is NOT counted in `summary.poor` — that slot is reserved for 見逃しPOOR (notes that passed without input).
+    // Matches LR2.
     expect(summary.poor).toBe(0);
-    // GROOVE gauge starts at 20 and the EMPTY_POOR delta is -2 (see
-    // `applyGrooveGaugeJudge`), giving 18. Matches LR2: phantom
-    // presses lightly drain even on the forgiving gauges (HARD/DEATH
-    // drain harder).
+        // GROOVE gauge starts at 20 and the EMPTY_POOR delta is -2 (see `applyGrooveGaugeJudge`), giving 18. Matches LR2:
+    // phantom presses lightly drain even on the forgiving gauges (HARD/DEATH drain harder).
     expect(summary.gauge?.current).toBeCloseTo(18, 9);
     expect(summary.gauge?.cleared).toBe(false);
   });
 
   test('player: `#BASE 62` lowercase sample IDs are looked up case-sensitively at runtime', async () => {
-    // Two separate samples with case-distinct IDs (`#WAV0a` !=
-    // `#WAV0A`). On a base-36 chart the parser would have collapsed
-    // these into one slot during ingest; under `#BASE 62` they stay
-    // distinct and the player must resolve them via case-preserved
-    // keys when emitting `sample-trigger` logs.
+        // Two separate samples with case-distinct IDs (`#WAV0a` != `#WAV0A`). On a base-36 chart the parser would have
+    // collapsed these into one slot during ingest; under `#BASE 62` they stay distinct and the player must resolve them
+    // via case-preserved keys when emitting `sample-trigger` logs.
     const json = parseChart(
       ['#BASE 62', '#TITLE Base62 Sample', '#BPM 120', '#WAV0a lower.wav', '#WAV0A upper.wav', '#00111:0a0A', ''].join(
         '\n',
@@ -849,10 +845,9 @@ describe('player', () => {
       },
     });
 
-    // First note (`0a`) must hit the lowercase entry — `lower.wav` —
-    // and the runtime log must report the same case-preserved
-    // `sample:0a` token. Folding either side to uppercase would
-    // emit `file:upper.wav` / `sample:0A` and break this assertion.
+        // First note (`0a`) must hit the lowercase entry — `lower.wav` — and the runtime log must report the same
+    // case-preserved `sample:0a` token. Folding either side to uppercase would emit `file:upper.wav` / `sample:0A` and
+    // break this assertion.
     expect(
       output.some(
         (line) =>

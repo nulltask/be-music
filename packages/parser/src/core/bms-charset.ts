@@ -1,26 +1,18 @@
 /**
  * Shared `#CHARSET` directive helpers.
  *
- * BMS spec — `#CHARSET <name>` declares the chart's text
- * encoding. The directive is authored at the top of the file
- * before any non-ASCII text so consumers can decode the rest
- * of the chart with the declared encoding. The two helpers
- * here are pure string logic (no Buffer / Node dependency)
- * so the CLI / TUI buffer decoder and the web player's
- * `TextDecoder`-based loader can both honour the directive
- * via a single canonical implementation.
+ * BMS spec — `#CHARSET <name>` declares the chart's text encoding. The directive is authored at the top of the file
+ * before any non-ASCII text so consumers can decode the rest of the chart with the declared encoding. The two helpers
+ * here are pure string logic (no Buffer / Node dependency) so the CLI / TUI buffer decoder and the web player's
+ * `TextDecoder`-based loader can both honour the directive via a single canonical implementation.
  */
 
 /**
- * Canonical charset name accepted by both `iconv-lite` and the
- * browser's `TextDecoder`. Returns `undefined` for empty /
- * unknown encodings so the caller can fall back to its
- * automatic detection path.
+ * Canonical charset name accepted by both `iconv-lite` and the browser's `TextDecoder`. Returns `undefined` for empty /
+ * unknown encodings so the caller can fall back to its automatic detection path.
  *
- * Real-world BMS / BME files use a small set of variants for
- * each encoding (`UTF-8` / `utf8`, `Shift_JIS` / `Shift-JIS` /
- * `sjis` / `MS932` / `cp932`, …). The normalisation strips
- * separators and lower-cases so every common spelling
+ * Real-world BMS / BME files use a small set of variants for each encoding (`UTF-8` / `utf8`, `Shift_JIS` / `Shift-JIS`
+ * / `sjis` / `MS932` / `cp932`, …). The normalisation strips separators and lower-cases so every common spelling
  * collapses onto one canonical name.
  */
 export function canonicaliseBmsCharset(raw: string | undefined): string | undefined {
@@ -57,16 +49,12 @@ export function canonicaliseBmsCharset(raw: string | undefined): string | undefi
 }
 
 /**
- * Scans the head of a (latin1- or ASCII-decoded) BMS source
- * for a `#CHARSET <name>` directive and returns the canonical
+ * Scans the head of a (latin1- or ASCII-decoded) BMS source for a `#CHARSET <name>` directive and returns the canonical
  * encoding name, or `undefined` when no directive is found.
  *
- * Per hitkey BMS Memo's `#CHARSET` section, the directive is
- * authored at the top of the file before any non-ASCII text
- * so a latin1 first-pass decode (which preserves bytes 1:1)
- * always lets us read it. Looking at only the first ~4 KB
- * keeps the scan cheap and avoids regex-walking a multi-MB
- * chart needlessly.
+ * Per hitkey BMS Memo's `#CHARSET` section, the directive is authored at the top of the file before any non-ASCII text
+ * so a latin1 first-pass decode (which preserves bytes 1:1) always lets us read it. Looking at only the first ~4 KB
+ * keeps the scan cheap and avoids regex-walking a multi-MB chart needlessly.
  */
 export function extractDeclaredBmsCharset(text: string): string | undefined {
   const head = text.length > 4096 ? text.slice(0, 4096) : text;

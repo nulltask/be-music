@@ -8,8 +8,8 @@ import type { PixiGaugeType, PixiPlayOptions } from './pixi-select.ts';
 export const EMPTY_SELECT_PANEL_STATES: ReadonlySet<number> = new Set<number>();
 
 /**
- * Globally-true ops that hold regardless of which song is focused:
- * filter / mode toggles, gauge defaults, "no rival" fallbacks, etc.
+ * Globally-true ops that hold regardless of which song is focused: filter / mode toggles, gauge defaults, "no rival"
+ * fallbacks, etc.
  */
 export const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
   32, // autoplay off
@@ -23,8 +23,7 @@ export const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
 ]);
 
 /**
- * Op slots that LR2 select skins flip per-song. The numeric values
- * match `dst_option` in `docs/LR2SkinHelp.md`.
+ * Op slots that LR2 select skins flip per-song. The numeric values match `dst_option` in `docs/LR2SkinHelp.md`.
  */
 export const SELECT_DYNAMIC_OPS = {
   BAR_IS_FOLDER: 1,

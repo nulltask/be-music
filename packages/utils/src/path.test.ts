@@ -31,13 +31,10 @@ describe('path utilities', () => {
   });
 
   test('resolveFirstExistingPath rejects absolute candidates per the bmson spec malicious-path guard', async () => {
-    // bmson 1.0.0 spec MUST: "Absolute path: C:\\password.txt or
-    // /etc/passwd" must be refused. Even when the absolute path
-    // sits under baseDir, the malicious-path predicate rejects
-    // it pre-resolve so chart-authored absolute references can't
-    // sneak through. Callers that need to load a known absolute
-    // file should pass it directly to `fs.access` without going
-    // through this helper.
+        // bmson 1.0.0 spec MUST: "Absolute path: C:\\password.txt or /etc/passwd" must be refused. Even when the absolute
+    // path sits under baseDir, the malicious-path predicate rejects it pre-resolve so chart-authored absolute
+    // references can't sneak through. Callers that need to load a known absolute file should pass it directly to
+    // `fs.access` without going through this helper.
     const baseDir = await createTempFixtureDir('absolute');
     const existingPath = join(baseDir, 'absolute.bms');
     await writeFile(existingPath, '#TITLE test\n', 'utf8');
@@ -45,18 +42,15 @@ describe('path utilities', () => {
 
     await expect(resolveFirstExistingPath(baseDir, [existingPath])).resolves.toBeUndefined();
 
-    // Relative candidate for the same file resolves correctly
-    // through the per-baseDir join.
+    // Relative candidate for the same file resolves correctly through the per-baseDir join.
     await expect(resolveFirstExistingPath(baseDir, ['absolute.bms'])).resolves.toBe(existingPath);
 
     await expect(resolveFirstExistingPath(baseDir, ['missing.bms'])).resolves.toBeUndefined();
   });
 
   test('resolveFirstExistingPath rejects parent-directory traversal candidates', async () => {
-    // bmson 1.0.0 spec MUST: "Reference to parent directory:
-    // ../../../var/www/html/config.php" must be refused. Even
-    // a single-step `../sibling` walk escapes the chart bundle
-    // and must not resolve.
+        // bmson 1.0.0 spec MUST: "Reference to parent directory: ../../../var/www/html/config.php" must be refused. Even a
+    // single-step `../sibling` walk escapes the chart bundle and must not resolve.
     const baseDir = await createTempFixtureDir('parent-traversal');
     const sibling = join(baseDir, '..', 'sibling-secret.txt');
     await writeFile(sibling, 'secret', 'utf8');
@@ -68,11 +62,9 @@ describe('path utilities', () => {
   });
 
   test('resolveFirstExistingPath rejects null-byte injection candidates', async () => {
-    // bmson 1.0.0 spec MUST: "Null characters (`\\0`)" must be
-    // refused. Some native APIs interpret `\0` as a C string
-    // terminator, so a crafted candidate like
-    // `safe.wav\0/etc/passwd` could resolve to the second half
-    // on a non-defensive backend.
+        // bmson 1.0.0 spec MUST: "Null characters (`\\0`)" must be refused. Some native APIs interpret `\0` as a C string
+    // terminator, so a crafted candidate like `safe.wav\0/etc/passwd` could resolve to the second half on a
+    // non-defensive backend.
     const baseDir = await createTempFixtureDir('null-byte');
     await expect(resolveFirstExistingPath(baseDir, ['safe.wav\0/etc/passwd'])).resolves.toBeUndefined();
   });

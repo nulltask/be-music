@@ -22,17 +22,16 @@ export interface Lr2ImageRect {
   /** Animation cycle length (ms). 0 = static. */
   cycle: number;
   /**
-   * Source-side timer reference. The cycle counter is anchored at the moment
-   * this timer started so animations are deterministic per skin convention.
-   * 0 = scene start.
+   * Source-side timer reference. The cycle counter is anchored at the moment this timer started so animations are
+   * deterministic per skin convention. 0 = scene start.
    */
   timer: number;
 }
 
 export interface Lr2DestinationRect {
   /**
-   * Keyframe time in milliseconds since the source `timer` started counting.
-   * The renderer interpolates between consecutive keyframes by `time`.
+   * Keyframe time in milliseconds since the source `timer` started counting. The renderer interpolates between
+   * consecutive keyframes by `time`.
    */
   time: number;
   x: number;
@@ -42,8 +41,7 @@ export interface Lr2DestinationRect {
   /**
    * Easing applied to the segment **into** this keyframe (LR2 spec):
    *
-   *   0 = constant (linear) / 1 = accelerate (ease-in) /
-   *   2 = decelerate (ease-out) / 3 = discontinuous (snap).
+   * 0 = constant (linear) / 1 = accelerate (ease-in) / 2 = decelerate (ease-out) / 3 = discontinuous (snap).
    */
   acc: number;
   /** 0..1 normalised from LR2's 0..255 alpha. */
@@ -67,10 +65,8 @@ export interface Lr2DestinationRect {
   /** Display conditions (op1/op2/op3). Negative values mean negation; 0 entries are dropped. */
   ops: number[];
   /**
-   * Optional fourth column past the standard op slots. The LR2 default
-   * 7-keys skin uses `op4=1` on the scratch turntable's `#DST_IMAGE` to
-   * mean "spin this sprite at the scratch rate". Most other elements leave
-   * it 0.
+   * Optional fourth column past the standard op slots. The LR2 default 7-keys skin uses `op4=1` on the scratch
+   * turntable's `#DST_IMAGE` to mean "spin this sprite at the scratch rate". Most other elements leave it 0.
    */
   op4: number;
 }
@@ -78,22 +74,18 @@ export interface Lr2DestinationRect {
 export interface Lr2ImageElement {
   source: Lr2ImageRect;
   /**
-   * Final keyframe of the destination animation. Convenient for static
-   * elements; for animation, prefer `keyframes` which exposes the full
-   * sequence including intermediate `time` markers.
+   * Final keyframe of the destination animation. Convenient for static elements; for animation, prefer `keyframes`
+   * which exposes the full sequence including intermediate `time` markers.
    */
   destination: Lr2DestinationRect;
   /**
-   * Full set of `#DST_*` keyframes in time-order. Use these together with
-   * `Lr2DestinationRect.loop` and `time` to animate the rectangle / colour
-   * / alpha across a play session.
+   * Full set of `#DST_*` keyframes in time-order. Use these together with `Lr2DestinationRect.loop` and `time` to
+   * animate the rectangle / colour / alpha across a play session.
    */
   keyframes: Lr2DestinationRect[];
   /**
-   * Monotonic CSV-stream index — see {@link Lr2SliderElement.declarationOrder}.
-   * Renderers stratify chrome around the bar list using this field
-   * (e.g. `#IMAGE` declared after `#SRC_BAR_BODY` should overlay
-   * the bars).
+   * Monotonic CSV-stream index — see {@link Lr2SliderElement.declarationOrder}. Renderers stratify chrome around the
+   * bar list using this field (e.g. `#IMAGE` declared after `#SRC_BAR_BODY` should overlay the bars).
    */
   declarationOrder: number;
 }
@@ -146,20 +138,17 @@ export interface Lr2NowComboElement {
   /** Which judgement triggers this combo style ('good' | 'great' | 'perfect'). */
   kind: Lr2NowComboKind;
   /**
-   * Player side this combo definition belongs to. `#SRC_NOWCOMBO_1P`
-   * → `'1P'`, `#SRC_NOWCOMBO_2P` → `'2P'`. DP charts need the 2P
-   * entry to render at the correct screen-x; SP charts only have
-   * 1P, so the renderer falls back to 1P on the 2P side when no
-   * 2P element was authored.
+   * Player side this combo definition belongs to. `#SRC_NOWCOMBO_1P` → `'1P'`, `#SRC_NOWCOMBO_2P` → `'2P'`. DP charts
+   * need the 2P entry to render at the correct screen-x; SP charts only have 1P, so the renderer falls back to 1P on
+   * the 2P side when no 2P element was authored.
    */
   side: '1P' | '2P';
 }
 
 /**
- * `#SRC_JUDGELINE` + `#DST_JUDGELINE` element. LR2 draws a horizontal bar at
- * the judgement line per side (index 0=1P, 1=2P). The skin texture frame
- * itself decides the colour/thickness; we just need to honour the destination
- * rectangle so it lands at the correct y-coordinate above the keys.
+ * `#SRC_JUDGELINE` + `#DST_JUDGELINE` element. LR2 draws a horizontal bar at the judgement line per side (index 0=1P,
+ * 1=2P). The skin texture frame itself decides the colour/thickness; we just need to honour the destination rectangle
+ * so it lands at the correct y-coordinate above the keys.
  */
 export interface Lr2JudgeLineElement {
   source: Lr2ImageRect;
@@ -170,10 +159,9 @@ export interface Lr2JudgeLineElement {
 }
 
 /**
- * `#SRC_LINE` + `#DST_LINE` element — LR2's measure-line graphic that
- * scrolls with the chart. The skin specifies the per-side x/y/w/h at the
- * judgement line; the renderer replicates this texture at every measure
- * boundary, offset upward by the same scroll amount as falling notes.
+ * `#SRC_LINE` + `#DST_LINE` element — LR2's measure-line graphic that scrolls with the chart. The skin specifies the
+ * per-side x/y/w/h at the judgement line; the renderer replicates this texture at every measure boundary, offset upward
+ * by the same scroll amount as falling notes.
  */
 export interface Lr2MeasureLineElement {
   source: Lr2ImageRect;
@@ -184,12 +172,10 @@ export interface Lr2MeasureLineElement {
 }
 
 /**
- * `#SRC_BGA` + `#DST_BGA` — defines the rectangle where the chart's BGA
- * (background animation) is composited. The SRC is mostly a placeholder
- * in the LR2 spec; columns 11/12/13 carry the **nobase / nolayer / nopoor**
- * flags (set to 1 to suppress that layer for this DST entry). Multiple
- * `#DST_BGA` entries can coexist when gated on different ops (e.g. one
- * for "normal" BGA size, another for "large" BGA size).
+ * `#SRC_BGA` + `#DST_BGA` — defines the rectangle where the chart's BGA (background animation) is composited. The SRC
+ * is mostly a placeholder in the LR2 spec; columns 11/12/13 carry the **nobase / nolayer / nopoor** flags (set to 1 to
+ * suppress that layer for this DST entry). Multiple `#DST_BGA` entries can coexist when gated on different ops (e.g.
+ * one for "normal" BGA size, another for "large" BGA size).
  */
 export interface Lr2BgaElement {
   destination: Lr2DestinationRect;
@@ -203,15 +189,13 @@ export interface Lr2BgaElement {
 }
 
 /**
- * `#SRC_TEXT` text alignment. LR2 spec column 4 of #SRC_TEXT:
- * 0 = left, 1 = center, 2 = right.
+ * `#SRC_TEXT` text alignment. LR2 spec column 4 of #SRC_TEXT: 0 = left, 1 = center, 2 = right.
  */
 export type Lr2TextAlignment = 'left' | 'center' | 'right';
 
 /**
- * `#SRC_TEXT` + `#DST_TEXT` element. LR2 renders strings (song title,
- * artist, difficulty label, …) via a separately-defined font (either an
- * image-font `#LR2FONT` or a system `#FONT`). The `st` (source type) is a
+ * `#SRC_TEXT` + `#DST_TEXT` element. LR2 renders strings (song title, artist, difficulty label, …) via a
+ * separately-defined font (either an image-font `#LR2FONT` or a system `#FONT`). The `st` (source type) is a
  * one-of-many enum — see `text.txt` of the LR2 reference docs.
  */
 export interface Lr2TextElement {
@@ -221,15 +205,13 @@ export interface Lr2TextElement {
   st: number;
   alignment: Lr2TextAlignment;
   /**
-   * `edit=1` makes the text field clickable for in-place editing. We
-   * don't yet ship a text-edit UI, so this is purely informational
-   * for skins that gate UI on it.
+   * `edit=1` makes the text field clickable for in-place editing. We don't yet ship a text-edit UI, so this is purely
+   * informational for skins that gate UI on it.
    */
   edit: number;
   /**
-   * Panel gate (-1 = only when no panel open, 0 = always, 1..9 =
-   * matching panel only). LR2 default skins use this to scope option
-   * labels to their respective option panel.
+   * Panel gate (-1 = only when no panel open, 0 = always, 1..9 = matching panel only). LR2 default skins use this to
+   * scope option labels to their respective option panel.
    */
   panel: number;
   destination: Lr2DestinationRect;
@@ -239,16 +221,14 @@ export interface Lr2TextElement {
 }
 
 /**
- * `#SRC_BARGRAPH` bar fill direction. LR2 spec column 11 (`muki`):
- * 0 = horizontal (default), 1 = vertical.
+ * `#SRC_BARGRAPH` bar fill direction. LR2 spec column 11 (`muki`): 0 = horizontal (default), 1 = vertical.
  */
 export type Lr2BarGraphMuki = 'horizontal' | 'vertical';
 
 /**
- * `#SRC_BARGRAPH` + `#DST_BARGRAPH`. A bargraph is a sprite that is
- * progressively revealed from one edge based on a runtime value (gauge,
- * loading progress, score graph, …). The `type` enum in `bargraph.txt`
- * controls which value drives the fill.
+ * `#SRC_BARGRAPH` + `#DST_BARGRAPH`. A bargraph is a sprite that is progressively revealed from one edge based on a
+ * runtime value (gauge, loading progress, score graph, …). The `type` enum in `bargraph.txt` controls which value
+ * drives the fill.
  */
 export interface Lr2BarGraphElement {
   source: Lr2ImageRect;
@@ -262,15 +242,14 @@ export interface Lr2BarGraphElement {
 }
 
 /**
- * `#SRC_SLIDER` orientation. Column 11 (`muki`): 0=down, 1=up, 2=right,
- * 3=left — i.e. the direction the slider travels as its value grows.
+ * `#SRC_SLIDER` orientation. Column 11 (`muki`): 0=down, 1=up, 2=right, 3=left — i.e. the direction the slider travels
+ * as its value grows.
  */
 export type Lr2SliderMuki = 'down' | 'up' | 'right' | 'left';
 
 /**
- * `#SRC_SLIDER` + `#DST_SLIDER`. A slider is a draggable knob whose
- * position represents a runtime value. During play sliders are mostly
- * read-only (e.g. the song-progress slider, the hi-speed knob).
+ * `#SRC_SLIDER` + `#DST_SLIDER`. A slider is a draggable knob whose position represents a runtime value. During play
+ * sliders are mostly read-only (e.g. the song-progress slider, the hi-speed knob).
  */
 export interface Lr2SliderElement {
   source: Lr2ImageRect;
@@ -282,40 +261,27 @@ export interface Lr2SliderElement {
   /** Travel range in design pixels. */
   range: number;
   /**
-   * Monotonic counter capturing where this slider's `#SRC_SLIDER`
-   * appeared in the skin's CSV stream relative to the other
-   * tagged elements (`Lr2BarLayout.declarationOrder` for bars).
-   * The renderer uses this to decide whether the slider is
-   * drawn behind or in front of the song-list bars — a slider
-   * declared AFTER `#SRC_BAR_BODY` should overlay the list
-   * (e.g. the LR2 default scroll-position slider on the right
-   * edge of the bar area), while one declared before sits in
-   * the chrome behind everything.
+   * Monotonic counter capturing where this slider's `#SRC_SLIDER` appeared in the skin's CSV stream relative to the
+   * other tagged elements (`Lr2BarLayout.declarationOrder` for bars). The renderer uses this to decide whether the
+   * slider is drawn behind or in front of the song-list bars — a slider declared AFTER `#SRC_BAR_BODY` should overlay
+   * the list (e.g. the LR2 default scroll-position slider on the right edge of the bar area), while one declared before
+   * sits in the chrome behind everything.
    */
   declarationOrder: number;
 }
 
 /**
- * `#SRC_GAUGECHART_1P` / `#SRC_GAUGECHART_2P` source-rect plus the
- * extra columns LR2 uses to size the chart area and time the
- * animated reveal. Used by the result scene to draw a polyline
- * tracking gauge percentage over chart progress.
+ * `#SRC_GAUGECHART_1P` / `#SRC_GAUGECHART_2P` source-rect plus the extra columns LR2 uses to size the chart area and
+ * time the animated reveal. Used by the result scene to draw a polyline tracking gauge percentage over chart progress.
  *
- * Spec (`docs/LR2SkinHelp.md` lines 10238+):
- * - `index` 0 = green (NORMAL gauge), 1 = red (HARD-style gauge).
- * - `gr` / `x` / `y` / `w` / `h` / `divx` / `divy` / `cycle` /
- *   `timer` follow the `#SRC_IMAGE` template — they pick the
- *   `#IMAGE` cell whose **tint** colours the line. Most LR2
- *   default skins set `gr = 0`, `w = h = 2` (a 2×2 sample of the
- *   skin atlas) so the line carries the atlas pixel's colour.
- * - `fieldWidth` / `fieldHeight` are the polyline drawing area
- *   in design pixels; the curve maps `progress 0..1 → 0..fieldW`
- *   and `value 0..100 → fieldH..0` (LR2 anchors the DST at the
- *   bottom-left, so y grows upward in graph space).
- * - `start` / `end` (ms relative to the controlling timer)
- *   gate the **animated reveal**: until `start` ms elapsed
- *   nothing is drawn, between `start` and `end` the polyline
- *   reveals left-to-right, after `end` it stays fully visible.
+ * Spec (`docs/LR2SkinHelp.md` lines 10238+): - `index` 0 = green (NORMAL gauge), 1 = red (HARD-style gauge). - `gr` /
+ * `x` / `y` / `w` / `h` / `divx` / `divy` / `cycle` / `timer` follow the `#SRC_IMAGE` template — they pick the `#IMAGE`
+ * cell whose **tint** colours the line. Most LR2 default skins set `gr = 0`, `w = h = 2` (a 2×2 sample of the skin
+ * atlas) so the line carries the atlas pixel's colour. - `fieldWidth` / `fieldHeight` are the polyline drawing area in
+ * design pixels; the curve maps `progress 0..1 → 0..fieldW` and `value 0..100 → fieldH..0` (LR2 anchors the DST at the
+ * bottom-left, so y grows upward in graph space). - `start` / `end` (ms relative to the controlling timer) gate the
+ * **animated reveal**: until `start` ms elapsed nothing is drawn, between `start` and `end` the polyline reveals
+ * left-to-right, after `end` it stays fully visible.
  */
 export interface Lr2GaugeChartSourceRect extends Lr2ImageRect {
   /** 0 = 1P green / NORMAL gauge, 1 = 1P red / HARD-style gauge. */
@@ -327,15 +293,12 @@ export interface Lr2GaugeChartSourceRect extends Lr2ImageRect {
 }
 
 /**
- * `#SRC_GAUGECHART_1P` / `#SRC_GAUGECHART_2P` plus its DST
- * keyframe set. The DST `(x, y)` anchors the **bottom-left** of
- * the chart (LR2 spec, `docs/LR2SkinHelp.md` line 10244), and
- * `(w, h)` is the line thickness — NOT the chart size, which
- * comes from the SRC's `fieldWidth` / `fieldHeight`.
+ * `#SRC_GAUGECHART_1P` / `#SRC_GAUGECHART_2P` plus its DST keyframe set. The DST `(x, y)` anchors the **bottom-left**
+ * of the chart (LR2 spec, `docs/LR2SkinHelp.md` line 10244), and `(w, h)` is the line thickness — NOT the chart size,
+ * which comes from the SRC's `fieldWidth` / `fieldHeight`.
  *
- * `side` distinguishes the 1P / 2P data source. The result scene
- * always has 1P data, but DP / battle plays would also populate
- * 2P. Either side may have multiple `index` slots (green / red).
+ * `side` distinguishes the 1P / 2P data source. The result scene always has 1P data, but DP / battle plays would also
+ * populate 2P. Either side may have multiple `index` slots (green / red).
  */
 export interface Lr2GaugeChartElement {
   source: Lr2GaugeChartSourceRect;
@@ -347,15 +310,11 @@ export interface Lr2GaugeChartElement {
 }
 
 /**
- * `#SRC_SCORECHART` source-rect — same extra columns as
- * gauge-chart but the `index` enum is different per spec
- * (`docs/LR2SkinHelp.md` lines 10392+):
- * - 0 = 今回のスコア (this play)
- * - 1 = 自己ベストスコア (personal best)
- * - 2 = ライバルスコア (rival / target)
+ * `#SRC_SCORECHART` source-rect — same extra columns as gauge-chart but the `index` enum is different per spec
+ * (`docs/LR2SkinHelp.md` lines 10392+): - 0 = 今回のスコア (this play) - 1 = 自己ベストスコア (personal best) - 2 = ライバルスコア (rival /
+ * target)
  *
- * The `value` axis runs 0..1 (EX-score / theoretical max) so
- * the polyline maps the same way GAUGECHART does.
+ * The `value` axis runs 0..1 (EX-score / theoretical max) so the polyline maps the same way GAUGECHART does.
  */
 export interface Lr2ScoreChartSourceRect extends Lr2ImageRect {
   /** 0 = this play, 1 = personal best, 2 = rival / target. */
@@ -375,15 +334,12 @@ export interface Lr2ScoreChartElement {
 }
 
 /**
- * `#SRC_BUTTON` + `#DST_BUTTON`. A button element shows a per-state
- * cell from a sprite sheet: `divx*divy` cells correspond to the
- * possible states of the button's `type` (sort, difficulty filter,
- * play-mode, panel toggle, etc.) — see `# button_type 一覧` in
- * `docs/LR2SkinHelp.md` (lines 5887+) for the full enum.
+ * `#SRC_BUTTON` + `#DST_BUTTON`. A button element shows a per-state cell from a sprite sheet: `divx*divy` cells
+ * correspond to the possible states of the button's `type` (sort, difficulty filter, play-mode, panel toggle, etc.) —
+ * see `# button_type 一覧` in `docs/LR2SkinHelp.md` (lines 5887+) for the full enum.
  *
- * State management & click handling aren't wired yet; the renderer
- * just paints the cell at the current button state index (cell 0 by
- * default) so the static frame shows the right artwork.
+ * State management & click handling aren't wired yet; the renderer just paints the cell at the current button state
+ * index (cell 0 by default) so the static frame shows the right artwork.
  */
 export interface Lr2ButtonElement {
   source: Lr2ImageRect;
@@ -402,11 +358,9 @@ export interface Lr2ButtonElement {
 }
 
 /**
- * `#SRC_ONMOUSE` + `#DST_ONMOUSE`. The element is only painted when
- * the mouse cursor is inside its hit-test rectangle — used for hover
- * highlights on buttons and links. Hit-test coordinates `(x2, y2,
- * w2, h2)` are **relative to the DST `(x, y)`** per LR2 spec; the
- * `panel` field gates the element to a specific option panel.
+ * `#SRC_ONMOUSE` + `#DST_ONMOUSE`. The element is only painted when the mouse cursor is inside its hit-test rectangle —
+ * used for hover highlights on buttons and links. Hit-test coordinates `(x2, y2, w2, h2)` are **relative to the DST
+ * `(x, y)`** per LR2 spec; the `panel` field gates the element to a specific option panel.
  */
 export interface Lr2OnMouseElement {
   source: Lr2ImageRect;
@@ -424,10 +378,8 @@ export interface Lr2OnMouseElement {
 }
 
 /**
- * `#SRC_BAR_FLASH` + `#DST_BAR_FLASH`. Animated overlay drawn on top
- * of the focused (`BAR_BODY_ON`) bar — typically a glow or pulse.
- * DST coordinates are relative to the focused bar's top-left, like
- * `#SRC_BAR_TITLE` / `#SRC_BAR_LEVEL`.
+ * `#SRC_BAR_FLASH` + `#DST_BAR_FLASH`. Animated overlay drawn on top of the focused (`BAR_BODY_ON`) bar — typically a
+ * glow or pulse. DST coordinates are relative to the focused bar's top-left, like `#SRC_BAR_TITLE` / `#SRC_BAR_LEVEL`.
  */
 export interface Lr2BarFlashElement {
   source: Lr2ImageRect;
@@ -436,10 +388,9 @@ export interface Lr2BarFlashElement {
 }
 
 /**
- * `#SRC_BAR_RIVAL` (rival mode WIN/LOSE/DRAW per-bar overlay). One
- * SRC per outcome (`win` / `lose` / `draw`) plus a single shared DST
- * keyframe set. Renderer skipped until rival mode lands; parsed so
- * the data is available when it does.
+ * `#SRC_BAR_RIVAL` (rival mode WIN/LOSE/DRAW per-bar overlay). One SRC per outcome (`win` / `lose` / `draw`) plus a
+ * single shared DST keyframe set. Renderer skipped until rival mode lands; parsed so the data is available when it
+ * does.
  */
 export type Lr2BarRivalKind = 'win' | 'lose' | 'draw';
 export interface Lr2BarRivalSource {
@@ -448,9 +399,8 @@ export interface Lr2BarRivalSource {
 }
 
 /**
- * `#SRC_BAR_MY_LAMP` / `#SRC_BAR_RIVAL_LAMP` rival-folder lamp
- * variants. Use the same `Lr2BarLampKind` enum as the regular
- * `#SRC_BAR_LAMP`. Parsed but not yet rendered (rival mode is TBD).
+ * `#SRC_BAR_MY_LAMP` / `#SRC_BAR_RIVAL_LAMP` rival-folder lamp variants. Use the same `Lr2BarLampKind` enum as the
+ * regular `#SRC_BAR_LAMP`. Parsed but not yet rendered (rival mode is TBD).
  */
 export interface Lr2BarRivalLampSet {
   myLamps: Lr2BarLampSource[];
@@ -462,10 +412,9 @@ export interface Lr2BarRivalLampSet {
 }
 
 /**
- * `#SRC_README` + `#DST_README`. Scrollable text viewer used by the
- * `READTEXT` button on the select screen. The renderer is gated on
- * a "readme open" state we don't yet model, so the parser stores
- * the entry but the select view doesn't draw it.
+ * `#SRC_README` + `#DST_README`. Scrollable text viewer used by the `READTEXT` button on the select screen. The
+ * renderer is gated on a "readme open" state we don't yet model, so the parser stores the entry but the select view
+ * doesn't draw it.
  */
 export interface Lr2ReadmeElement {
   /** Font index (`#LR2FONT` order). */
@@ -477,9 +426,8 @@ export interface Lr2ReadmeElement {
 }
 
 /**
- * `#SRC_MOUSECURSOR` + `#DST_MOUSECURSOR`. Replaces the system
- * cursor with a skin sprite that follows the pointer. DST `(x, y)`
- * is the offset from the actual mouse position (typically `(0, 0)`).
+ * `#SRC_MOUSECURSOR` + `#DST_MOUSECURSOR`. Replaces the system cursor with a skin sprite that follows the pointer. DST
+ * `(x, y)` is the offset from the actual mouse position (typically `(0, 0)`).
  */
 export interface Lr2MouseCursorElement {
   source: Lr2ImageRect;
@@ -490,13 +438,11 @@ export interface Lr2MouseCursorElement {
 }
 
 /**
- * `#SRC_BAR_BODY` index → which kind of song-select bar this sprite
- * decorates. The renderer picks the appropriate sprite per song / folder
- * row when populating the on-screen bar list.
+ * `#SRC_BAR_BODY` index → which kind of song-select bar this sprite decorates. The renderer picks the appropriate
+ * sprite per song / folder row when populating the on-screen bar list.
  *
- * 0 song / 1 folder / 2 custom folder / 3 new song folder /
- * 4 rival folder / 5 song (rival mode) / 6 course folder /
- * 7 course create / 8 course / 9 random course
+ * 0 song / 1 folder / 2 custom folder / 3 new song folder / 4 rival folder / 5 song (rival mode) / 6 course folder / 7
+ * course create / 8 course / 9 random course
  */
 export type Lr2BarBodyKind =
   | 'song'
@@ -511,9 +457,8 @@ export type Lr2BarBodyKind =
   | 'randomCourse';
 
 /**
- * Sprite definition for one kind of song-select bar (`#SRC_BAR_BODY`).
- * The select-screen renderer cross-references the bar slot's kind with
- * this map to pick the right artwork.
+ * Sprite definition for one kind of song-select bar (`#SRC_BAR_BODY`). The select-screen renderer cross-references the
+ * bar slot's kind with this map to pick the right artwork.
  */
 export interface Lr2BarBodySource {
   kind: Lr2BarBodyKind;
@@ -521,9 +466,8 @@ export interface Lr2BarBodySource {
 }
 
 /**
- * One song-select bar slot (`#DST_BAR_BODY_OFF` / `_ON` index 0..29).
- * `off` is the inactive layout, `on` is the focused layout. LR2 uses up
- * to 30 slots — typically 10 above the focus, 1 at the centre, 10 below.
+ * One song-select bar slot (`#DST_BAR_BODY_OFF` / `_ON` index 0..29). `off` is the inactive layout, `on` is the focused
+ * layout. LR2 uses up to 30 slots — typically 10 above the focus, 1 at the centre, 10 below.
  */
 export interface Lr2BarBodySlot {
   index: number;
@@ -534,10 +478,9 @@ export interface Lr2BarBodySlot {
 }
 
 /**
- * `#SRC_BAR_TITLE` / `#DST_BAR_TITLE`: the per-bar song title overlay.
- * DST coordinates are **relative** to the bar slot's `BAR_BODY` rect
- * (LR2 spec: "DST coordinates are relative to the bar's xy"). Only one
- * SRC + DST pair is allowed per skin.
+ * `#SRC_BAR_TITLE` / `#DST_BAR_TITLE`: the per-bar song title overlay. DST coordinates are **relative** to the bar
+ * slot's `BAR_BODY` rect (LR2 spec: "DST coordinates are relative to the bar's xy"). Only one SRC + DST pair is allowed
+ * per skin.
  */
 export interface Lr2BarTitleElement {
   /** Font index (references the skin's `#LR2FONT` order). */
@@ -547,12 +490,10 @@ export interface Lr2BarTitleElement {
 }
 
 /**
- * `#SRC_BAR_LEVEL` index → difficulty kind. Renders the song's level
- * number using a NUMBER-style cell sheet. DST coordinates are
- * **relative** to the bar's xy.
+ * `#SRC_BAR_LEVEL` index → difficulty kind. Renders the song's level number using a NUMBER-style cell sheet. DST
+ * coordinates are **relative** to the bar's xy.
  *
- * 0 = undefined / 1 = BEGINNER / 2 = NORMAL / 3 = HYPER / 4 = ANOTHER /
- * 5 = INSANE / 6 = IR RANKING.
+ * 0 = undefined / 1 = BEGINNER / 2 = NORMAL / 3 = HYPER / 4 = ANOTHER / 5 = INSANE / 6 = IR RANKING.
  */
 export type Lr2BarLevelKind = 'undefined' | 'beginner' | 'normal' | 'hyper' | 'another' | 'insane' | 'irRanking';
 
@@ -562,11 +503,8 @@ export interface Lr2BarLevelSource {
 }
 
 /**
- * `#SRC_BAR_LAMP` index → clear-lamp kind.
- *   0 = NO PLAY / 1 = FAILED / 2 = EASY / 3 = CLEAR / 4 = HARD /
- *   5 = full combo.
- * `#SRC_BAR_MY_LAMP` / `#SRC_BAR_RIVAL_LAMP` (rival-folder variants)
- * aren't parsed yet — only the plain track is.
+ * `#SRC_BAR_LAMP` index → clear-lamp kind. 0 = NO PLAY / 1 = FAILED / 2 = EASY / 3 = CLEAR / 4 = HARD / 5 = full combo.
+ * `#SRC_BAR_MY_LAMP` / `#SRC_BAR_RIVAL_LAMP` (rival-folder variants) aren't parsed yet — only the plain track is.
  */
 export type Lr2BarLampKind = 'noplay' | 'failed' | 'easy' | 'clear' | 'hard' | 'fullcombo';
 
@@ -576,9 +514,8 @@ export interface Lr2BarLampSource {
 }
 
 /**
- * `#SRC_BAR_RANK` index → clear-rank kind.
- *   0 = no play / 1 = F / 2 = E / 3 = D / 4 = C / 5 = B / 6 = A /
- *   7 = AA / 8 = AAA.
+ * `#SRC_BAR_RANK` index → clear-rank kind. 0 = no play / 1 = F / 2 = E / 3 = D / 4 = C / 5 = B / 6 = A / 7 = AA / 8 =
+ * AAA.
  */
 export type Lr2BarRankKind = 'noplay' | 'F' | 'E' | 'D' | 'C' | 'B' | 'A' | 'AA' | 'AAA';
 
@@ -588,9 +525,8 @@ export interface Lr2BarRankSource {
 }
 
 /**
- * Aggregate of the song-select-bar definitions in an LR2 skin. When a
- * skin has no bar definitions (e.g. play-only skins) `slots` is empty
- * and the renderer falls back to its built-in list layout.
+ * Aggregate of the song-select-bar definitions in an LR2 skin. When a skin has no bar definitions (e.g. play-only
+ * skins) `slots` is empty and the renderer falls back to its built-in list layout.
  */
 export interface Lr2BarLayout {
   bodies: Lr2BarBodySource[];
@@ -598,16 +534,15 @@ export interface Lr2BarLayout {
   /** `#BAR_CENTER`: the slot index that should hold the focused song. */
   center: number;
   /**
-   * `#BAR_AVAILABLE`: number of slots that are clickable / focus-able.
-   * Slots outside this range only render as scrolling decoration.
+   * `#BAR_AVAILABLE`: number of slots that are clickable / focus-able. Slots outside this range only render as
+   * scrolling decoration.
    */
   available: number;
   title?: Lr2BarTitleElement;
   /**
-   * `#SRC_BAR_LEVEL` artworks keyed by difficulty. The renderer picks
-   * one entry based on the focused-song's `#DIFFICULTY` and uses the
-   * single shared `levelDestination` (DST_BAR_LEVEL keyframes are not
-   * indexed per kind in LR2).
+   * `#SRC_BAR_LEVEL` artworks keyed by difficulty. The renderer picks one entry based on the focused-song's
+   * `#DIFFICULTY` and uses the single shared `levelDestination` (DST_BAR_LEVEL keyframes are not indexed per kind in
+   * LR2).
    */
   levels: Lr2BarLevelSource[];
   levelDestination?: Lr2DestinationRect;
@@ -621,14 +556,13 @@ export interface Lr2BarLayout {
   rankDestination?: Lr2DestinationRect;
   rankKeyframes: Lr2DestinationRect[];
   /**
-   * `#SRC_BAR_FLASH` overlay on the focused bar. LR2 spec: only one
-   * SRC + DST pair allowed. Rendered relative to the focused bar's
-   * `BAR_BODY_ON` rect.
+   * `#SRC_BAR_FLASH` overlay on the focused bar. LR2 spec: only one SRC + DST pair allowed. Rendered relative to the
+   * focused bar's `BAR_BODY_ON` rect.
    */
   flash?: Lr2BarFlashElement;
   /**
-   * `#SRC_BAR_RIVAL` artworks (WIN/LOSE/DRAW) drawn on rival-folder
-   * bars. Parsed; renderer skipped until rival mode lands.
+   * `#SRC_BAR_RIVAL` artworks (WIN/LOSE/DRAW) drawn on rival-folder bars. Parsed; renderer skipped until rival mode
+   * lands.
    */
   rivalIndicators: Lr2BarRivalSource[];
   rivalDestination?: Lr2DestinationRect;
@@ -636,23 +570,18 @@ export interface Lr2BarLayout {
   /** Rival-mode lamp variants (`#SRC_BAR_MY_LAMP` / `_RIVAL_LAMP`). */
   rivalLamps: Lr2BarRivalLampSet;
   /**
-   * Monotonic counter capturing where the FIRST `#SRC_BAR_BODY`
-   * appeared in the skin's CSV stream. Compared against
-   * `Lr2SliderElement.declarationOrder` so the renderer can
-   * stratify chrome elements into "before bars" (skinLayer,
-   * drawn behind the list) vs "after bars" (foreground layer,
-   * drawn on top of the list). `undefined` when the skin has
+   * Monotonic counter capturing where the FIRST `#SRC_BAR_BODY` appeared in the skin's CSV stream. Compared against
+   * `Lr2SliderElement.declarationOrder` so the renderer can stratify chrome elements into "before bars" (skinLayer,
+   * drawn behind the list) vs "after bars" (foreground layer, drawn on top of the list). `undefined` when the skin has
    * no bar list.
    */
   declarationOrder: number | undefined;
 }
 
 /**
- * Scene-timing directives (`#STARTINPUT` / `#FADEOUT` / `#CLOSE` /
- * `#LOADSTART` / `#LOADEND` / `#PLAYSTART` / `#SKIP`). Each value is a
- * millisecond offset from the scene's main timer (timer 0). The
- * select-screen renderer uses `startInput` to gate timer-1 anchored
- * elements; `fadeOut` / `close` would drive scene-exit transitions.
+ * Scene-timing directives (`#STARTINPUT` / `#FADEOUT` / `#CLOSE` / `#LOADSTART` / `#LOADEND` / `#PLAYSTART` / `#SKIP`).
+ * Each value is a millisecond offset from the scene's main timer (timer 0). The select-screen renderer uses
+ * `startInput` to gate timer-1 anchored elements; `fadeOut` / `close` would drive scene-exit transitions.
  */
 export interface Lr2SkinTiming {
   /** ms after scene mount before timer 1 (input start) fires. */
@@ -670,17 +599,13 @@ export interface Lr2SkinTiming {
 }
 
 /**
- * Scratch-side / DP-flip behaviour declared by the skin (`#SCRATCH`,
- * `#FLIPSIDE`, `#FLIPRESULT`, `#DISABLEFLIP`). All optional — the
- * renderer reads these to decide which side renders the scratch and
- * whether to apply the LR2 "DP flip" mirror.
+ * Scratch-side / DP-flip behaviour declared by the skin (`#SCRATCH`, `#FLIPSIDE`, `#FLIPRESULT`, `#DISABLEFLIP`). All
+ * optional — the renderer reads these to decide which side renders the scratch and whether to apply the LR2 "DP flip"
+ * mirror.
  *
- * Spec values (`docs/LR2SkinHelp.md`):
- * - `#SCRATCH,1P,2P` — `1P` / `2P` flag for which side has scratch.
- *   `0 = no scratch`, `1 = has scratch` per side.
- * - `#FLIPSIDE` — declares the skin is the flippable kind.
- * - `#FLIPRESULT` — flip persists into the result screen.
- * - `#DISABLEFLIP` — skin opts out of flip entirely.
+ * Spec values (`docs/LR2SkinHelp.md`): - `#SCRATCH,1P,2P` — `1P` / `2P` flag for which side has scratch. `0 = no
+ * scratch`, `1 = has scratch` per side. - `#FLIPSIDE` — declares the skin is the flippable kind. - `#FLIPRESULT` — flip
+ * persists into the result screen. - `#DISABLEFLIP` — skin opts out of flip entirely.
  */
 export interface Lr2ScratchFlip {
   /** `1` if the 1P side has a scratch lane, `0` otherwise. */
@@ -719,14 +644,10 @@ export interface Lr2Skin {
     >
   >;
   /**
-   * Per-side `#SRC_NOWJUDGE_*` rect collections. `1P` always
-   * populated when the skin authored any judge graphic; `2P` is
-   * populated only for skins that supply DP-specific positions
-   * (LR2 default `play_14.lr2skin`, etc.). Renderers falling back
-   * to 1P on the 2P side (because the skin omitted 2P) is
-   * acceptable — it parks the plate at the 1P-side coordinates,
-   * which is wrong for DP but no worse than the SP-only
-   * implementation it replaces.
+   * Per-side `#SRC_NOWJUDGE_*` rect collections. `1P` always populated when the skin authored any judge graphic; `2P`
+   * is populated only for skins that supply DP-specific positions (LR2 default `play_14.lr2skin`, etc.). Renderers
+   * falling back to 1P on the 2P side (because the skin omitted 2P) is acceptable — it parks the plate at the 1P-side
+   * coordinates, which is wrong for DP but no worse than the SP-only implementation it replaces.
    */
   judges: Partial<Record<'perfect' | 'great' | 'good' | 'bad' | 'poor', Lr2ImageElement[]>>;
   judges2P: Partial<Record<'perfect' | 'great' | 'good' | 'bad' | 'poor', Lr2ImageElement[]>>;
@@ -740,14 +661,13 @@ export interface Lr2Skin {
   bargraphs: Lr2BarGraphElement[];
   sliders: Lr2SliderElement[];
   /**
-   * `#SRC_GAUGECHART_1P` / `#SRC_GAUGECHART_2P` entries. Result-screen
-   * gauge polylines; populated by `result_sc_l.csv` / `result_sc_r.csv`
-   * variants (the no-chart `result_normal.csv` leaves this empty).
+   * `#SRC_GAUGECHART_1P` / `#SRC_GAUGECHART_2P` entries. Result-screen gauge polylines; populated by `result_sc_l.csv`
+   * / `result_sc_r.csv` variants (the no-chart `result_normal.csv` leaves this empty).
    */
   gaugeCharts: Lr2GaugeChartElement[];
   /**
-   * `#SRC_SCORECHART` entries (1P only — the spec uses `index` to
-   * distinguish current / best / target instead of a 2P sibling).
+   * `#SRC_SCORECHART` entries (1P only — the spec uses `index` to distinguish current / best / target instead of a 2P
+   * sibling).
    */
   scoreCharts: Lr2ScoreChartElement[];
   buttons: Lr2ButtonElement[];
@@ -755,9 +675,8 @@ export interface Lr2Skin {
   /** `#SRC_README` viewer entries. Parsed; renderer integration is TBD. */
   readmes: Lr2ReadmeElement[];
   /**
-   * `#SRC_MOUSECURSOR`. Generally one entry per skin; we keep an
-   * array for parity with the other element collections and so a
-   * skin that overrides via `#IF` branches works.
+   * `#SRC_MOUSECURSOR`. Generally one entry per skin; we keep an array for parity with the other element collections
+   * and so a skin that overrides via `#IF` branches works.
    */
   mouseCursors: Lr2MouseCursorElement[];
   /** Scene-timing directives (`#STARTINPUT` / `#FADEOUT` / `#CLOSE` / …). */
@@ -769,23 +688,17 @@ export interface Lr2Skin {
   customOptions: Lr2CustomOption[];
   customFiles: Lr2CustomFile[];
   /**
-   * `#LR2FONT,path` declarations in CSV-stream order. Each entry
-   * is the resolved relative path (post-CUSTOMFILE substitution).
+   * `#LR2FONT,path` declarations in CSV-stream order. Each entry is the resolved relative path (post-CUSTOMFILE
+   * substitution).
    *
-   * Indexed independently from `systemFontSizes`: the `font`
-   * field in `#SRC_TEXT` first looks up `lr2FontPaths[font]`
-   * (bitmap path) and only falls through to
-   * `systemFontSizes[font]` (system size) on miss. The two
-   * registries are PAIRED by per-kind index — slot 0 means "the
-   * 1st bitmap font OR the 1st system font", not "global
-   * declaration #0".
+   * Indexed independently from `systemFontSizes`: the `font` field in `#SRC_TEXT` first looks up `lr2FontPaths[font]`
+   * (bitmap path) and only falls through to `systemFontSizes[font]` (system size) on miss. The two registries are
+   * PAIRED by per-kind index — slot 0 means "the 1st bitmap font OR the 1st system font", not "global declaration #0".
    */
   lr2FontPaths: string[];
   /**
-   * `#FONT,size,...` declarations in CSV-stream order. See
-   * {@link Lr2Skin.lr2FontPaths} for the per-kind indexing
-   * model. Sizes are the only `#FONT` field LR2 honours — the
-   * family / weight / style triplet is ignored because LR2
+   * `#FONT,size,...` declarations in CSV-stream order. See {@link Lr2Skin.lr2FontPaths} for the per-kind indexing
+   * model. Sizes are the only `#FONT` field LR2 honours — the family / weight / style triplet is ignored because LR2
    * always reads the user's SET UP option for those.
    */
   systemFontSizes: number[];
@@ -804,14 +717,11 @@ interface SourceRect {
   cycle: number;
   timer: number;
   /**
-   * CSV-stream declaration index assigned by `parseSource` from
-   * `ParseContext.nextDeclarationOrder`. Captures the relative
-   * order this `#SRC_*` line appeared at so the renderer can
-   * stratify chrome elements (`#SRC_IMAGE` / `#SRC_NUMBER` /
-   * `#SRC_SLIDER` / `#SRC_TEXT` / `#SRC_BUTTON` / `#SRC_ONMOUSE`)
-   * around the bar list (`#SRC_BAR_BODY`). Internal — only
-   * propagated to public element types via the typed
-   * `declarationOrder` field on each `Lr2*Element`.
+   * CSV-stream declaration index assigned by `parseSource` from `ParseContext.nextDeclarationOrder`. Captures the
+   * relative order this `#SRC_*` line appeared at so the renderer can stratify chrome elements (`#SRC_IMAGE` /
+   * `#SRC_NUMBER` / `#SRC_SLIDER` / `#SRC_TEXT` / `#SRC_BUTTON` / `#SRC_ONMOUSE`) around the bar list
+   * (`#SRC_BAR_BODY`). Internal — only propagated to public element types via the typed `declarationOrder` field on
+   * each `Lr2*Element`.
    */
   declarationOrder: number;
 }
@@ -861,9 +771,8 @@ interface TextSourceEntry {
   edit: number;
   panel: number;
   /**
-   * `#SRC_TEXT` doesn't carry an embedded `SourceRect`, so we
-   * stamp the CSV-stream order here directly. Same semantics as
-   * the other entries' `source.declarationOrder`.
+   * `#SRC_TEXT` doesn't carry an embedded `SourceRect`, so we stamp the CSV-stream order here directly. Same semantics
+   * as the other entries' `source.declarationOrder`.
    */
   declarationOrder: number;
 }
@@ -964,16 +873,14 @@ interface ParseContext {
   noteSources: Map<string, SourceRect[]>;
   nowJudge1PSources: SourceRect[];
   /**
-   * Full keyframe chain per judgement id — [first DST, … last DST]. The
-   * renderer needs the whole sequence (not just the first row) to play the
-   * judge plate's fade-in / fade-out animation off timer 46.
+   * Full keyframe chain per judgement id — [first DST, … last DST]. The renderer needs the whole sequence (not just the
+   * first row) to play the judge plate's fade-in / fade-out animation off timer 46.
    */
   nowJudge1PDstGroups: Lr2DestinationRect[][];
   /**
-   * 2P-side counterparts for DP charts. LR2's `play_14.lr2skin` and
-   * any DP-aware skin authors a separate set of `#SRC_NOWJUDGE_2P`
-   * / `#DST_NOWJUDGE_2P` rows so the 2P judge plate renders at the
-   * 2P-side coordinates rather than overlapping the 1P plate.
+   * 2P-side counterparts for DP charts. LR2's `play_14.lr2skin` and any DP-aware skin authors a separate set of
+   * `#SRC_NOWJUDGE_2P` / `#DST_NOWJUDGE_2P` rows so the 2P judge plate renders at the 2P-side coordinates rather than
+   * overlapping the 1P plate.
    */
   nowJudge2PSources: SourceRect[];
   nowJudge2PDstGroups: Lr2DestinationRect[][];
@@ -982,9 +889,8 @@ interface ParseContext {
   grooveGaugeSources: GrooveGaugeSourceEntry[];
   grooveGaugeDstGroups: Lr2DestinationRect[][];
   /**
-   * `#SRC_NOWCOMBO_*` entries from both sides. The `side` field on
-   * each entry distinguishes 1P from 2P so the renderer can pick
-   * the right block at runtime.
+   * `#SRC_NOWCOMBO_*` entries from both sides. The `side` field on each entry distinguishes 1P from 2P so the renderer
+   * can pick the right block at runtime.
    */
   nowComboSources: NowComboSourceEntry[];
   nowComboDstGroups: Lr2DestinationRect[][];
@@ -1001,10 +907,9 @@ interface ParseContext {
   sliderSources: SliderSourceEntry[];
   sliderDstGroups: Lr2DestinationRect[][];
   /**
-   * `#SRC_GAUGECHART_1P` and `#SRC_GAUGECHART_2P` staging arrays.
-   * Pairing with `#DST_*` mirrors the `imageSources` / `imageDstGroups`
-   * pattern: each new SRC starts a new keyframe group; the next DST
-   * extends the group at the same array index.
+   * `#SRC_GAUGECHART_1P` and `#SRC_GAUGECHART_2P` staging arrays. Pairing with `#DST_*` mirrors the `imageSources` /
+   * `imageDstGroups` pattern: each new SRC starts a new keyframe group; the next DST extends the group at the same
+   * array index.
    */
   gaugeChartSources: GaugeChartSourceEntry[];
   gaugeChartDstGroups: Lr2DestinationRect[][];
@@ -1032,13 +937,13 @@ interface ParseContext {
   barRivalLampSources: BarLampSourceEntry[];
   barRivalLampDst: Lr2DestinationRect[];
   /**
-   * Song-select bar `#SRC_BAR_BODY` definitions (one per kind id 0..9).
-   * Sparse — only kinds the skin actually defines have an entry.
+   * Song-select bar `#SRC_BAR_BODY` definitions (one per kind id 0..9). Sparse — only kinds the skin actually defines
+   * have an entry.
    */
   barBodySources: BarBodySourceEntry[];
   /**
-   * `#DST_BAR_BODY_OFF` keyframes per slot index 0..29. Sparse like the
-   * play-skin DST groups — slot 0 is the topmost off-state position.
+   * `#DST_BAR_BODY_OFF` keyframes per slot index 0..29. Sparse like the play-skin DST groups — slot 0 is the topmost
+   * off-state position.
    */
   barBodyOffDstGroups: Lr2DestinationRect[][];
   /** `#DST_BAR_BODY_ON` keyframes per slot index 0..29 (focus-state). */
@@ -1048,9 +953,8 @@ interface ParseContext {
   /** `#BAR_AVAILABLE` value (clamped to slot range at finalization). */
   barAvailable: number;
   /**
-   * `#SRC_BAR_TITLE` source. LR2 spec only allows one. We keep the
-   * latest one wins to mirror how the LR2 default skin chains an
-   * `#IF`-gated alt definition for the focus state.
+   * `#SRC_BAR_TITLE` source. LR2 spec only allows one. We keep the latest one wins to mirror how the LR2 default skin
+   * chains an `#IF`-gated alt definition for the focus state.
    */
   barTitleSource?: BarTitleSourceEntry;
   /** `#DST_BAR_TITLE` keyframes (relative to the bar's xy). */
@@ -1079,21 +983,15 @@ interface ParseContext {
   width: number;
   height: number;
   /**
-   * Monotonic counter that increments every time we record a
-   * `#SRC_*` declaration the renderer wants z-order context for
-   * (currently `#SRC_SLIDER` and the first `#SRC_BAR_BODY`).
-   * The counter is process-local to a single skin parse — so a
-   * later reference's `declarationOrder > earlier reference's`
-   * iff it appeared later in the CSV stream (including across
-   * `#INCLUDE`s, which feed back into the same `readLr2Path`
-   * call chain).
+   * Monotonic counter that increments every time we record a `#SRC_*` declaration the renderer wants z-order context
+   * for (currently `#SRC_SLIDER` and the first `#SRC_BAR_BODY`). The counter is process-local to a single skin parse —
+   * so a later reference's `declarationOrder > earlier reference's` iff it appeared later in the CSV stream (including
+   * across `#INCLUDE`s, which feed back into the same `readLr2Path` call chain).
    */
   nextDeclarationOrder: number;
   /**
-   * `nextDeclarationOrder` value assigned to the first
-   * `#SRC_BAR_BODY` we saw, or `undefined` when the skin has
-   * no bar layout. Used to decide which side of the bar list
-   * each chrome element sits on.
+   * `nextDeclarationOrder` value assigned to the first `#SRC_BAR_BODY` we saw, or `undefined` when the skin has no bar
+   * layout. Used to decide which side of the bar list each chrome element sits on.
    */
   barLayoutDeclarationOrder?: number;
 }
@@ -1110,8 +1008,8 @@ const NOTE_COMMANDS: Record<string, keyof Lr2Skin['notes']> = {
   '#SRC_LN_END': 'lnend',
   '#SRC_LN_BODY': 'lnbody',
   '#SRC_MINE': 'mine',
-  // Auto-play "dummy note" sprites — used while autoplay (op 33) is on with
-  // CUSTOMOPTION "AUTOPLAY LANE = DUMMY NOTES" (op 915) selected.
+    // Auto-play "dummy note" sprites — used while autoplay (op 33) is on with CUSTOMOPTION "AUTOPLAY LANE = DUMMY NOTES"
+  // (op 915) selected.
   '#SRC_AUTO_NOTE': 'autonote',
   '#SRC_AUTO_LN_START': 'autolnstart',
   '#SRC_AUTO_LN_END': 'autolnend',
@@ -1119,10 +1017,8 @@ const NOTE_COMMANDS: Record<string, keyof Lr2Skin['notes']> = {
   '#SRC_AUTO_MINE': 'automine',
 };
 
-// LR2 NOWJUDGE_1P index mapping (per the LR2skin spec):
-//   0 = early POOR (空POOR), 1 = POOR (見逃し), 2 = BAD,
-//   3 = GOOD, 4 = GREAT, 5 = PERFECT (= JUST GREAT).
-// Both POOR variants render with the same kind.
+// LR2 NOWJUDGE_1P index mapping (per the LR2skin spec): 0 = early POOR (空POOR), 1 = POOR (見逃し), 2 = BAD, 3 = GOOD, 4 =
+// GREAT, 5 = PERFECT (= JUST GREAT). Both POOR variants render with the same kind.
 const NOW_JUDGE_1P_KIND_BY_INDEX: ReadonlyMap<number, keyof Lr2Skin['judges']> = new Map([
   [0, 'poor'],
   [1, 'poor'],
@@ -1131,8 +1027,7 @@ const NOW_JUDGE_1P_KIND_BY_INDEX: ReadonlyMap<number, keyof Lr2Skin['judges']> =
   [4, 'great'],
   [5, 'perfect'],
 ]);
-// LR2 NOWCOMBO_1P index mapping. BAD or worse breaks the combo, so only
-// GOOD/GREAT/PERFECT have meaningful entries.
+// LR2 NOWCOMBO_1P index mapping. BAD or worse breaks the combo, so only GOOD/GREAT/PERFECT have meaningful entries.
 const NOW_COMBO_1P_KIND_BY_INDEX: ReadonlyMap<number, 'good' | 'great' | 'perfect'> = new Map([
   [3, 'good'],
   [4, 'great'],
@@ -1143,9 +1038,8 @@ export interface LoadLr2SkinOptions {
   /** Which kind of skin to load. Defaults to `'play'`. */
   kind?: Lr2SkinKind;
   /**
-   * For `kind: 'play'` only — biases the candidate scoring towards
-   * `play_<variant>.lr2skin`. Falls back to the default scoring
-   * (7K-preferred) if no file matches the requested variant.
+   * For `kind: 'play'` only — biases the candidate scoring towards `play_<variant>.lr2skin`. Falls back to the default
+   * scoring (7K-preferred) if no file matches the requested variant.
    */
   playVariant?: Lr2PlayVariant;
 }
@@ -1154,12 +1048,9 @@ export async function loadLr2SkinFromFiles(
   files: Iterable<Lr2SkinInputFile>,
   options: LoadLr2SkinOptions = {},
 ): Promise<Lr2Skin | undefined> {
-  // Pooled parallel read instead of the textbook `for ... await
-  // arrayBuffer()` serial loop — the latter idles on disk between
-  // every read on a large theme bundle. The dedicated theme
-  // loader already calls `loadLr2SkinFromSourceFiles` directly
-  // with a pre-read map; this path remains for callers (and
-  // tests) that hand a file-like array over.
+    // Pooled parallel read instead of the textbook `for ... await arrayBuffer()` serial loop — the latter idles on disk
+  // between every read on a large theme bundle. The dedicated theme loader already calls `loadLr2SkinFromSourceFiles`
+  // directly with a pre-read map; this path remains for callers (and tests) that hand a file-like array over.
   const sourceFiles = await readFilesIntoBytesMap([...files]);
   return loadLr2SkinFromSourceFiles(sourceFiles, options);
 }
@@ -1169,22 +1060,17 @@ export function loadLr2SkinFromSourceFiles(
   options: LoadLr2SkinOptions = {},
 ): Lr2Skin | undefined {
   const kind = options.kind ?? 'play';
-  // Filter `.lr2skin` candidates to the requested kind first so a theme
-  // bundle that contains both `Play/play_7.lr2skin` and
-  // `Select/select.lr2skin` doesn't accidentally feed the play skin into
-  // the select view (or vice versa). Falls back to ANY `.lr2skin` if the
-  // kind-specific filter matches nothing — useful for one-off skins that
-  // ship a single CSV.
+    // Filter `.lr2skin` candidates to the requested kind first so a theme bundle that contains both `Play/play_7.lr2skin`
+  // and `Select/select.lr2skin` doesn't accidentally feed the play skin into the select view (or vice versa). Falls
+  // back to ANY `.lr2skin` if the kind-specific filter matches nothing — useful for one-off skins that ship a single
+  // CSV.
   const lr2SkinPaths = [...sourceFiles.keys()].filter((path) => path.toLowerCase().endsWith('.lr2skin'));
   const filtered = lr2SkinPaths.filter((path) => isSkinPathOfKind(path, kind));
-  // Falling back to ANY `.lr2skin` is only safe for `play`: a single-skin
-  // bundle is most often a play skin (the gameplay scene has been the
-  // only consumer for most of this loader's lifetime). For `select` and
-  // `result` we'd otherwise pick up `play_7.lr2skin` and parse it as a
-  // select / result skin — every DST element gates on play-specific ops
-  // and timers, so the resulting "skin" renders as a blank canvas. Cleaner
-  // to return `undefined` and let the caller fall through to its built-in
-  // panel than silently feed the wrong CSV through the parser.
+    // Falling back to ANY `.lr2skin` is only safe for `play`: a single-skin bundle is most often a play skin (the
+  // gameplay scene has been the only consumer for most of this loader's lifetime). For `select` and `result` we'd
+  // otherwise pick up `play_7.lr2skin` and parse it as a select / result skin — every DST element gates on
+  // play-specific ops and timers, so the resulting "skin" renders as a blank canvas. Cleaner to return `undefined` and
+  // let the caller fall through to its built-in panel than silently feed the wrong CSV through the parser.
   const candidates = filtered.length > 0 ? filtered : kind === 'play' ? lr2SkinPaths : [];
   const variant = kind === 'play' ? options.playVariant : undefined;
   const entryPath =
@@ -1194,8 +1080,8 @@ export function loadLr2SkinFromSourceFiles(
         (left, right) =>
           scoreSkinPath(left, kind, variant) - scoreSkinPath(right, kind, variant) || left.localeCompare(right, 'ja'),
       )[0] ??
-    // Last-resort `.csv` lookup mirrors the play-only "single-CSV bundle"
-    // behaviour. Skipped for non-play kinds for the same reason as above.
+        // Last-resort `.csv` lookup mirrors the play-only "single-CSV bundle" behaviour. Skipped for non-play kinds for the
+    // same reason as above.
     (kind === 'play' ? [...sourceFiles.keys()].find((path) => path.toLowerCase().endsWith('.csv')) : undefined);
   if (!entryPath) {
     return undefined;
@@ -1289,23 +1175,18 @@ export function loadLr2SkinFromSourceFiles(
       if (!dstGroup || dstGroup.length === 0) {
         return [];
       }
-      // LR2 reserves a few special gr indices for textures that are
-      // resolved at runtime instead of from `#IMAGE` declarations:
-      //   100 = STAGEFILE, 101 = BACKBMP, 102 = BANNER,
-      //   105 = skin-select thumbnail, 110 = solid black, 111 = solid white.
-      // We mark them with a sentinel path so the renderer can swap in
-      // the appropriate texture (per-song banner, generated 1-dot, etc.)
-      // without needing to pre-register them in the `#IMAGE` table.
+            // LR2 reserves a few special gr indices for textures that are resolved at runtime instead of from `#IMAGE`
+      // declarations: 100 = STAGEFILE, 101 = BACKBMP, 102 = BANNER, 105 = skin-select thumbnail, 110 = solid black, 111
+      // = solid white. We mark them with a sentinel path so the renderer can swap in the appropriate texture (per-song
+      // banner, generated 1-dot, etc.) without needing to pre-register them in the `#IMAGE` table.
       const specialPath = specialGraphicPath(source.gr);
       const imagePath = specialPath ?? context.imagePaths[source.gr];
       if (!imagePath) {
         return [];
       }
-      // LR2: a sequence of consecutive `#DST_IMAGE` lines after one
-      // `#SRC_IMAGE` defines an animation. We expose every keyframe so the
-      // renderer can interpolate; the `destination` field is the final
-      // (latest-`time`) keyframe, used for visibility checks and as the
-      // fallback for static elements.
+            // LR2: a sequence of consecutive `#DST_IMAGE` lines after one `#SRC_IMAGE` defines an animation. We expose every
+      // keyframe so the renderer can interpolate; the `destination` field is the final (latest-`time`) keyframe, used
+      // for visibility checks and as the fallback for static elements.
       const destination = dstGroup[dstGroup.length - 1]!;
       return [
         {
@@ -1372,9 +1253,8 @@ function readLr2Path(
     return;
   }
   visited.add(path);
-  // `.lr2skin` / `.csv` files are CSV text, never audio, so the
-  // map entry is always a `Uint8Array` here. `asLoadedBytes`
-  // narrows the union type without any runtime cost.
+    // `.lr2skin` / `.csv` files are CSV text, never audio, so the map entry is always a `Uint8Array` here.
+  // `asLoadedBytes` narrows the union type without any runtime cost.
   const bytes = asLoadedBytes(sourceFiles.get(path));
   if (!bytes) {
     return;
@@ -1448,7 +1328,7 @@ function readLr2Path(
       const expanded = context.customFileLookup.get(normalized.toLowerCase()) ?? normalized;
       context.imagePaths.push(expanded);
     } else if (command === '#LR2FONT') {
-      // `#LR2FONT,relativePath[,1=force-bitmap]` is the **bitmap
+            // `#LR2FONT,relativePath[,1=force-bitmap]` is the **bitmap
       // font** registry. It's indexed independently from the
       // `#FONT` system-font registry — both share the `font` field
       // in `#SRC_TEXT` but each array is keyed by its own per-kind
@@ -1472,11 +1352,9 @@ function readLr2Path(
         normalized.length > 0 ? (context.customFileLookup.get(normalized.toLowerCase()) ?? normalized) : '';
       context.lr2FontPaths.push(expanded);
     } else if (command === '#FONT') {
-      // `#FONT,size,thick,style,name` — system-font fallback
-      // registry. See the `#LR2FONT` block above for the
-      // per-kind indexing rationale. LR2 ignores the name and
-      // uses the user's SET UP option, so we only capture the
-      // size for our render-time text-style decision.
+            // `#FONT,size,thick,style,name` — system-font fallback registry. See the `#LR2FONT` block above for the per-kind
+      // indexing rationale. LR2 ignores the name and uses the user's SET UP option, so we only capture the size for our
+      // render-time text-style decision.
       const size = Math.max(1, Math.trunc(toNumber(row[1], 12)));
       context.systemFontSizes.push(size);
     } else if (command === '#TRANSCOLOR') {
@@ -1493,8 +1371,7 @@ function readLr2Path(
       command === '#PLAYSTART' ||
       command === '#SKIP'
     ) {
-      // Scene-timing directives — single ms argument. The renderer
-      // anchors timer 1/2/3/40/41 off these offsets.
+      // Scene-timing directives — single ms argument. The renderer anchors timer 1/2/3/40/41 off these offsets.
       const ms = Math.max(0, Math.trunc(toNumber(row[1], 0)));
       switch (command) {
         case '#STARTINPUT':
@@ -1520,11 +1397,9 @@ function readLr2Path(
           break;
       }
     } else if (command === '#SETOPTION') {
-      // `#SETOPTION,opCode` — overrides a CUSTOMOPTION's default by
-      // marking that op true at parse time. LR2 uses this to lock a
-      // skin into a specific branch even when the user hasn't
-      // selected the matching option (e.g. force the wide-lane layout
-      // when the skin author wants it as the default).
+            // `#SETOPTION,opCode` — overrides a CUSTOMOPTION's default by marking that op true at parse time. LR2 uses this
+      // to lock a skin into a specific branch even when the user hasn't selected the matching option (e.g. force the
+      // wide-lane layout when the skin author wants it as the default).
       const op = Math.trunc(toNumber(row[1], 0));
       if (op > 0) {
         context.trueOps.add(op);
@@ -1542,12 +1417,11 @@ function readLr2Path(
       // Flip should persist into the result scene.
       context.scratchFlip.flipResult = true;
     } else if (command === '#DISABLEFLIP') {
-      // Skin opts out of flip. Mutually exclusive with `#FLIPSIDE`,
-      // but we honour whichever directive appears latest.
+      // Skin opts out of flip. Mutually exclusive with `#FLIPSIDE`, but we honour whichever directive appears latest.
       context.scratchFlip.disableFlip = true;
     } else if (command === '#RELOADBANNER') {
-      // Banner reloads on cursor move (BACKBMP / BANNER refresh).
-      // We always reload anyway, so this just records the intent.
+            // Banner reloads on cursor move (BACKBMP / BANNER refresh). We always reload anyway, so this just records the
+      // intent.
       context.scratchFlip.reloadBanner = true;
     } else if (command === '#INCLUDE') {
       const includePath = resolveLr2IncludePath(sourceFiles, dirname(path), row[1] ?? '');
@@ -1619,11 +1493,9 @@ function readLr2Path(
       });
       context.nowComboDstGroups.push([]);
     } else if (command === '#DST_NOWCOMBO_1P' || command === '#DST_NOWCOMBO_2P') {
-      // The DST attaches to the most recent SRC entry — we don't
-      // re-check the side here because the SRC ordering already
-      // pinned it: a `#DST_NOWCOMBO_1P` after a `#SRC_NOWCOMBO_2P`
-      // would be a malformed skin and is handled by the same
-      // permissive "extend the last group" semantics LR2 itself uses.
+            // The DST attaches to the most recent SRC entry — we don't re-check the side here because the SRC ordering
+      // already pinned it: a `#DST_NOWCOMBO_1P` after a `#SRC_NOWCOMBO_2P` would be a malformed skin and is handled by
+      // the same permissive "extend the last group" semantics LR2 itself uses.
       const group = context.nowComboDstGroups.at(-1);
       if (group) {
         appendDestinationKeyframe(group, row);
@@ -1653,9 +1525,8 @@ function readLr2Path(
         appendDestinationKeyframe(group, row);
       }
     } else if (command === '#SRC_BGA') {
-      // #SRC_BGA,(NULL),(NULL),…(unused),nobase,nolayer,nopoor
-      // Columns 11/12/13 are the per-DST suppression flags; everything
-      // before them is a placeholder kept for SRC-row format symmetry.
+            // #SRC_BGA,(NULL),(NULL),…(unused),nobase,nolayer,nopoor Columns 11/12/13 are the per-DST suppression flags;
+      // everything before them is a placeholder kept for SRC-row format symmetry.
       context.bgaSources.push({
         noBase: toNumber(row[11], 0) === 1,
         noLayer: toNumber(row[12], 0) === 1,
@@ -1674,11 +1545,9 @@ function readLr2Path(
         st: Math.max(0, Math.trunc(toNumber(row[3], 0))),
         alignment: parseTextAlignment(row[4]),
         edit: Math.max(0, Math.trunc(toNumber(row[5], 0))),
-        // `panel` may legitimately be negative (-1 = "only when no
-        // panel open") so we keep the sign.
+        // `panel` may legitimately be negative (-1 = "only when no panel open") so we keep the sign.
         panel: Math.trunc(toNumber(row[6], 0)),
-        // TEXT bypasses `parseSource` (no SourceRect) so stamp
-        // the CSV-stream order on the entry directly.
+        // TEXT bypasses `parseSource` (no SourceRect) so stamp the CSV-stream order on the entry directly.
         declarationOrder: context.nextDeclarationOrder++,
       });
       context.textDstGroups.push([]);
@@ -1701,10 +1570,8 @@ function readLr2Path(
         appendDestinationKeyframe(group, row);
       }
     } else if (command === '#SRC_SLIDER') {
-      // #SRC_SLIDER,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,muki,range,type,disable
-      // `parseSource` already stamps `source.declarationOrder`
-      // for the z-order stratification — no need for a second
-      // counter on the entry itself.
+            // #SRC_SLIDER,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,muki,range,type,disable `parseSource` already stamps
+      // `source.declarationOrder` for the z-order stratification — no need for a second counter on the entry itself.
       context.sliderSources.push({
         source: parseSource(row, context),
         muki: parseSliderMuki(row[11]),
@@ -1718,12 +1585,10 @@ function readLr2Path(
         appendDestinationKeyframe(group, row);
       }
     } else if (command === '#SRC_GAUGECHART_1P' || command === '#SRC_GAUGECHART_2P') {
-      // #SRC_GAUGECHART_*,index,gr,x,y,w,h,divx,divy,cycle,timer,field_w,field_h,start,end
-      // The LR2 spec puts `index` at row[1] (where #SRC_IMAGE has the
-      // `(NULL)` placeholder), and the per-chart-area / animation
-      // fields at row[11..14]. `parseSource` already reads gr/x/y/w/h/
-      // /divx/divy/cycle/timer from row[2..10] which aligns; we only
-      // need to pull the chart-specific extras separately.
+            // #SRC_GAUGECHART_*,index,gr,x,y,w,h,divx,divy,cycle,timer,field_w,field_h,start,end The LR2 spec puts `index` at
+      // row[1] (where #SRC_IMAGE has the `(NULL)` placeholder), and the per-chart-area / animation fields at
+      // row[11..14]. `parseSource` already reads gr/x/y/w/h/ /divx/divy/cycle/timer from row[2..10] which aligns; we
+      // only need to pull the chart-specific extras separately.
       context.gaugeChartSources.push({
         source: parseSource(row, context),
         index: Math.max(0, Math.trunc(toNumber(row[1], 0))),
@@ -1735,9 +1600,8 @@ function readLr2Path(
       });
       context.gaugeChartDstGroups.push([]);
     } else if (command === '#DST_GAUGECHART_1P' || command === '#DST_GAUGECHART_2P') {
-      // The DST keyframe attaches to the most-recently-pushed SRC of
-      // the matching side. The LR2 default skins interleave 1P / 2P
-      // SRC + DST so "last SRC of this side" picks the right group.
+            // The DST keyframe attaches to the most-recently-pushed SRC of the matching side. The LR2 default skins
+      // interleave 1P / 2P SRC + DST so "last SRC of this side" picks the right group.
       const targetSide = command === '#DST_GAUGECHART_2P' ? '2P' : '1P';
       let lastSideIndex = -1;
       for (let index = context.gaugeChartSources.length - 1; index >= 0; index -= 1) {
@@ -1753,8 +1617,8 @@ function readLr2Path(
         }
       }
     } else if (command === '#SRC_SCORECHART') {
-      // Same layout as `#SRC_GAUGECHART_*` minus the side dimension
-      // (the spec uses `index` for current/best/target instead).
+            // Same layout as `#SRC_GAUGECHART_*` minus the side dimension (the spec uses `index` for current/best/target
+      // instead).
       context.scoreChartSources.push({
         source: parseSource(row, context),
         index: Math.max(0, Math.trunc(toNumber(row[1], 0))),
@@ -1770,9 +1634,8 @@ function readLr2Path(
         appendDestinationKeyframe(group, row);
       }
     } else if (command === '#SRC_BUTTON') {
-      // #SRC_BUTTON,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,type,click,panel,plusonly
-      // `plusonly` is optional in the LR2 spec — `toNumber(..., 0)` keeps
-      // it at 0 (= both directions allowed) when the column is missing.
+            // #SRC_BUTTON,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,type,click,panel,plusonly `plusonly` is optional in the LR2
+      // spec — `toNumber(..., 0)` keeps it at 0 (= both directions allowed) when the column is missing.
       context.buttonSources.push({
         source: parseSource(row, context),
         type: Math.max(0, Math.trunc(toNumber(row[11], 0))),
@@ -1824,16 +1687,14 @@ function readLr2Path(
         appendDestinationKeyframe(group, row);
       }
     } else if (command === '#SRC_BAR_FLASH') {
-      // Spec only allows one — last wins. Used as the focused-bar
-      // pulse / glow overlay; DST coordinates are relative to the
-      // focused bar's `BAR_BODY_ON` rect.
+            // Spec only allows one — last wins. Used as the focused-bar pulse / glow overlay; DST coordinates are relative to
+      // the focused bar's `BAR_BODY_ON` rect.
       context.barFlashSource = parseSource(row, context);
     } else if (command === '#DST_BAR_FLASH') {
       appendDestinationKeyframe(context.barFlashDst, row);
     } else if (command === '#SRC_BAR_RIVAL') {
-      // #SRC_BAR_RIVAL,index,gr,x,y,w,h,divx,divy,cycle,timer
-      // index 0=WIN / 1=LOSE / 2=DRAW (3=NOT PLAYED is recommended
-      // omitted by the spec; we accept it but don't model it).
+            // #SRC_BAR_RIVAL,index,gr,x,y,w,h,divx,divy,cycle,timer index 0=WIN / 1=LOSE / 2=DRAW (3=NOT PLAYED is
+      // recommended omitted by the spec; we accept it but don't model it).
       const kind = parseBarRivalKind(row[1]);
       if (kind) {
         const entry: BarRivalSourceEntry = { kind, source: parseSource(row, context) };
@@ -1878,17 +1739,13 @@ function readLr2Path(
       // #SRC_BAR_BODY,kind,gr,x,y,w,h,divx,divy,cycle,timer
       const kind = parseBarBodyKind(row[1]);
       if (kind) {
-        // Stamp the FIRST `#SRC_BAR_BODY` we see — that's the
-        // anchor `Lr2BarLayout.declarationOrder` ends up at, and
-        // every chrome element compared against it. Later
-        // bar-body declarations (e.g. inside an #IF branch
-        // overriding the kind) don't shift the anchor — the
-        // bar list as a whole is "declared" at its first slot.
+                // Stamp the FIRST `#SRC_BAR_BODY` we see — that's the anchor `Lr2BarLayout.declarationOrder` ends up at, and
+        // every chrome element compared against it. Later bar-body declarations (e.g. inside an #IF branch overriding
+        // the kind) don't shift the anchor — the bar list as a whole is "declared" at its first slot.
         if (context.barLayoutDeclarationOrder === undefined) {
           context.barLayoutDeclarationOrder = context.nextDeclarationOrder++;
         }
-        // Last definition for a given kind wins, mirroring LR2's
-        // "later #IF branch overrides earlier" convention.
+        // Last definition for a given kind wins, mirroring LR2's "later #IF branch overrides earlier" convention.
         const existingIndex = context.barBodySources.findIndex((entry) => entry.kind === kind);
         const entry: BarBodySourceEntry = { kind, source: parseSource(row, context) };
         if (existingIndex >= 0) {
@@ -1912,9 +1769,8 @@ function readLr2Path(
     } else if (command === '#BAR_AVAILABLE') {
       context.barAvailable = Math.max(0, Math.trunc(toNumber(row[1], 0)));
     } else if (command === '#SRC_BAR_TITLE') {
-      // #SRC_BAR_TITLE,(NULL),font,(NULL)... — only the font index is
-      // meaningful; everything else is a placeholder kept for SRC-row
-      // format symmetry with #SRC_TEXT.
+            // #SRC_BAR_TITLE,(NULL),font,(NULL)... — only the font index is meaningful; everything else is a placeholder kept
+      // for SRC-row format symmetry with #SRC_TEXT.
       context.barTitleSource = { font: Math.max(0, Math.trunc(toNumber(row[2], 0))) };
     } else if (command === '#DST_BAR_TITLE') {
       appendDestinationKeyframe(context.barTitleDst, row);
@@ -2029,30 +1885,23 @@ function specialGraphicPath(gr: number): Lr2SpecialGraphic | undefined {
 }
 
 /**
- * Static ops that are conventionally true at parse time so that `#IF` /
- * `#ELSEIF` chains in the LR2 default skins resolve to a sensible default
- * branch. The runtime renderer overrides specific values (key mode, autoplay,
- * etc.) at play time, but they need to be true HERE so the parser doesn't
- * silently drop entire `#INCLUDE` chains gated on them.
+ * Static ops that are conventionally true at parse time so that `#IF` / `#ELSEIF` chains in the LR2 default skins
+ * resolve to a sensible default branch. The runtime renderer overrides specific values (key mode, autoplay, etc.) at
+ * play time, but they need to be true HERE so the parser doesn't silently drop entire `#INCLUDE` chains gated on them.
  *
- * Notably 160 (7keys mode) and 32 (autoplay off) are included — without them,
- * an `#IF,160` / `#IF,32` block in any included CSV would skip the branch
- * even though the runtime would later mark those ops true.
+ * Notably 160 (7keys mode) and 32 (autoplay off) are included — without them, an `#IF,160` / `#IF,32` block in any
+ * included CSV would skip the branch even though the runtime would later mark those ops true.
  */
 function defaultParseOps(): Set<number> {
   return new Set<number>([
     5, // selected bar is playable
     32, // autoplay off (default branch)
-    // Result-screen clear / fail flags. These are runtime-resolved (the
-    // parser doesn't know whether the player cleared), but the LR2
-    // default `Result/result_normal.csv` gates `#IF,90` / `#IF,91` blocks
-    // around the **`#IMAGE` declarations themselves** (parts.tga vs
-    // parts_fail.tga). Without both ops marked true at parse time, one
-    // of the two atlases never reaches `skin.images` — and the runtime
-    // op gate downstream is moot because there's no DST/SRC pointing at
-    // the missing texture. Setting both makes the parser load both
-    // atlases; runtime DST gating on op 90 vs 91 then picks which one
-    // is drawn on a per-frame basis.
+        // Result-screen clear / fail flags. These are runtime-resolved (the parser doesn't know whether the player
+    // cleared), but the LR2 default `Result/result_normal.csv` gates `#IF,90` / `#IF,91` blocks around the **`#IMAGE`
+    // declarations themselves** (parts.tga vs parts_fail.tga). Without both ops marked true at parse time, one of the
+    // two atlases never reaches `skin.images` — and the runtime op gate downstream is moot because there's no DST/SRC
+    // pointing at the missing texture. Setting both makes the parser load both atlases; runtime DST gating on op 90 vs
+    // 91 then picks which one is drawn on a per-frame basis.
     90, // result: cleared
     91, // result: failed
     34, // ghost off
@@ -2074,15 +1923,12 @@ function defaultParseOps(): Set<number> {
     176, // BPM change absent
     178, // RANDOM absent
     182, // judge normal
-    // 190..195 — skins typically gate the STAGEFILE / BANNER /
-    // BACKBMP display block on the "present" op, so we mark those
-    // true at parse time even though the chart-level state is
-    // unknown until runtime. Without 191/193/195 the load-screen
-    // branch never gets included by `#IF`, so the runtime renderer
-    // wouldn't have the SRC/DST entries to draw at all.
+        // 190..195 — skins typically gate the STAGEFILE / BANNER / BACKBMP display block on the "present" op, so we mark
+    // those true at parse time even though the chart-level state is unknown until runtime. Without 191/193/195 the
+    // load-screen branch never gets included by `#IF`, so the runtime renderer wouldn't have the SRC/DST entries to
+    // draw at all.
     191, // STAGEFILE present (per LR2 spec — the comment in the
-    //   previous revision said "absent", which was wrong: 190 is
-    //   absent, 191 is present)
+    // previous revision said "absent", which was wrong: 190 is absent, 191 is present)
     193, // BANNER present
     195, // BACKBMP present
     196, // replay absent
@@ -2118,27 +1964,22 @@ function parseSource(row: string[], context: ParseContext): SourceRect {
     divy: Math.max(1, Math.trunc(toNumber(row[8], 1)) || 1),
     cycle: Math.max(0, Math.trunc(toNumber(row[9], 0))),
     timer: Math.max(0, Math.trunc(toNumber(row[10], 0))),
-    // Stamp every parsed source with the next free CSV-stream
-    // index so the renderer can compare it against the bar
-    // layout's own index to decide which side of the bar list
-    // this element sits on.
+        // Stamp every parsed source with the next free CSV-stream index so the renderer can compare it against the bar
+    // layout's own index to decide which side of the bar list this element sits on.
     declarationOrder: context.nextDeclarationOrder++,
   };
 }
 
 function parseDestination(row: string[]): Lr2DestinationRect {
-  // #DST_*,(NULL),time,x,y,w,h,acc,a,r,g,b,blend,filter,angle,center,loop,timer,op1,op2,op3
-  // row index:    0         1   2 3 4 5 6   7 8 9  10 11    12     13    14     15  16    17  18  19  20
-  // (row[0] is the command itself when split by parseRow.)
+    // #DST_*,(NULL),time,x,y,w,h,acc,a,r,g,b,blend,filter,angle,center,loop,timer,op1,op2,op3 row index: 0 1 2 3 4 5 6 7
+  // 8 9 10 11 12 13 14 15 16 17 18 19 20 (row[0] is the command itself when split by parseRow.)
   const ops = [toNumber(row[18], 0), toNumber(row[19], 0), toNumber(row[20], 0)].filter(
     (op) => Number.isFinite(op) && op !== 0,
   );
-  // LR2 keyframes commonly leave the trailing fields blank past the first row
-  // (e.g. `#DST_IMAGE,0,1500,...,,,,,`). An empty field for `timer` should be
-  // treated as "inherit from the previous keyframe", not as `timer=0` -- this
-  // is what kept things like the "STAGE FAILED" plate (timer=3 on the first
-  // keyframe) drawing during gameplay. Use -1 here as a sentinel and let the
-  // DST-list builder resolve the inheritance.
+    // LR2 keyframes commonly leave the trailing fields blank past the first row (e.g. `#DST_IMAGE,0,1500,...,,,,,`). An
+  // empty field for `timer` should be treated as "inherit from the previous keyframe", not as `timer=0` -- this is what
+  // kept things like the "STAGE FAILED" plate (timer=3 on the first keyframe) drawing during gameplay. Use -1 here as a
+  // sentinel and let the DST-list builder resolve the inheritance.
   const timerRaw = row[17];
   const timerProvided = typeof timerRaw === 'string' && timerRaw.trim() !== '';
   const timer = timerProvided ? Math.max(0, Math.trunc(toNumber(timerRaw, 0))) : -1;
@@ -2165,19 +2006,14 @@ function parseDestination(row: string[]): Lr2DestinationRect {
 }
 
 /**
- * Push a freshly-parsed `#DST_*` row into a keyframe group, inheriting the
- * `timer`, `loop`, and `ops` values from the previous keyframe when they were
- * omitted on the trailing row.
+ * Push a freshly-parsed `#DST_*` row into a keyframe group, inheriting the `timer`, `loop`, and `ops` values from the
+ * previous keyframe when they were omitted on the trailing row.
  *
- * Per the LR2 spec, a chain like
- *   `#DST_IMAGE,0,400,...,1000,0,161,0,0`
- *   `#DST_IMAGE,0,1000,...,,,,,`
- * is read as "second keyframe inherits everything that was blank from the
- * first." Without inheritance, the second keyframe would silently default to
- * `timer=0, loop=0, ops=[]`, which made gated overlays (5keys lane cover
- * with op=161, autoscratch lane cover with op=55, …) leak in unrelated
- * modes. The destination check uses the *final* keyframe, so its `ops` MUST
- * carry the gate forward.
+ * Per the LR2 spec, a chain like `#DST_IMAGE,0,400,...,1000,0,161,0,0` `#DST_IMAGE,0,1000,...,,,,,` is read as "second
+ * keyframe inherits everything that was blank from the first." Without inheritance, the second keyframe would silently
+ * default to `timer=0, loop=0, ops=[]`, which made gated overlays (5keys lane cover with op=161, autoscratch lane cover
+ * with op=55, …) leak in unrelated modes. The destination check uses the *final* keyframe, so its `ops` MUST carry the
+ * gate forward.
  */
 function appendDestinationKeyframe(group: Lr2DestinationRect[], row: string[]): void {
   const dst = parseDestination(row);
@@ -2186,9 +2022,8 @@ function appendDestinationKeyframe(group: Lr2DestinationRect[], row: string[]): 
     dst.timer = previous?.timer ?? 0;
   }
   if (previous) {
-    // `loop`, `acc`, and the trailing op fields are blank-inherited
-    // the same way: a row that only specifies `time,x,y,w,h,...` keeps
-    // the original easing / loop gate / op gate.
+        // `loop`, `acc`, and the trailing op fields are blank-inherited the same way: a row that only specifies
+    // `time,x,y,w,h,...` keeps the original easing / loop gate / op gate.
     if (isBlank(row[16])) {
       dst.loop = previous.loop;
     }
@@ -2198,12 +2033,9 @@ function appendDestinationKeyframe(group: Lr2DestinationRect[], row: string[]): 
     if (isBlank(row[18]) && isBlank(row[19]) && isBlank(row[20])) {
       dst.ops = previous.ops;
     }
-    // `op4` (scratch-turntable spin marker) inherits the same way.
-    // Without this the LR2 default 7-keys skin's turntable disc has
-    // op4=1 on its first keyframe but a blank op4 on the second
-    // (final) keyframe — `evaluateElementDst` reads the final, sees
-    // op4=0, and the spin code at `pixi-gameplay.ts:renderImageElement`
-    // never fires.
+        // `op4` (scratch-turntable spin marker) inherits the same way. Without this the LR2 default 7-keys skin's turntable
+    // disc has op4=1 on its first keyframe but a blank op4 on the second (final) keyframe — `evaluateElementDst` reads
+    // the final, sees op4=0, and the spin code at `pixi-gameplay.ts:renderImageElement` never fires.
     if (isBlank(row[21])) {
       dst.op4 = previous.op4;
     }
@@ -2393,11 +2225,9 @@ function parseNumberAlignment(value: string | undefined): Lr2NumberAlignment {
   }
 }
 
-// LR2 NOWCOMBO_1P alignment. The spec says 0=left/1=center/2=right but
-// matching the LR2 reference video visually requires NUMBER's encoding
-// (0=right, 1=left, 2=center) — for the LR2 default 7-keys skin (`align=1`)
-// the combo digits sit IMMEDIATELY to the right of the judgement plate
-// (left-aligned at the relative x), not centred on it.
+// LR2 NOWCOMBO_1P alignment. The spec says 0=left/1=center/2=right but matching the LR2 reference video visually
+// requires NUMBER's encoding (0=right, 1=left, 2=center) — for the LR2 default 7-keys skin (`align=1`) the combo digits
+// sit IMMEDIATELY to the right of the judgement plate (left-aligned at the relative x), not centred on it.
 function parseNowComboAlignment(value: string | undefined): Lr2NumberAlignment {
   switch (toNumber(value, 0)) {
     case 1:
@@ -2427,11 +2257,9 @@ function parseBarGraphMuki(value: string | undefined): Lr2BarGraphMuki {
 }
 
 /**
- * LR2 SRC_SLIDER `muki`: empirically derived from the LR2 default 7-keys
- * skin's song-progress slider (`#SRC_SLIDER,…,muki=2,range=278,type=6`)
- * and the verified behaviour that the indicator travels top → bottom over
- * 278 px starting at y=15. So muki=2 ⇒ "down" — vertical, growing
- * downward.
+ * LR2 SRC_SLIDER `muki`: empirically derived from the LR2 default 7-keys skin's song-progress slider
+ * (`#SRC_SLIDER,…,muki=2,range=278,type=6`) and the verified behaviour that the indicator travels top → bottom over 278
+ * px starting at y=15. So muki=2 ⇒ "down" — vertical, growing downward.
  *
  * 0=right (horizontal default), 1=left, 2=down, 3=up.
  */
@@ -2559,8 +2387,8 @@ function createBarLayout(context: ParseContext): Lr2BarLayout {
     };
   }
 
-  // BAR_LEVEL: keep the alignment / padding from each per-difficulty
-  // entry so the renderer can use `renderNumberElement` directly.
+    // BAR_LEVEL: keep the alignment / padding from each per-difficulty entry so the renderer can use
+  // `renderNumberElement` directly.
   const levels: Lr2BarLevelSource[] = context.barLevelSources.flatMap((entry) => {
     const imagePath = context.imagePaths[entry.source.gr];
     if (!imagePath) {
@@ -2596,8 +2424,8 @@ function createBarLayout(context: ParseContext): Lr2BarLayout {
   const lampDestination = context.barLampDst.at(-1);
   const rankDestination = context.barRankDst.at(-1);
 
-  // BAR_FLASH — focused-bar overlay. Spec only allows one, so we
-  // pick the latest source / DST chain and resolve its image path.
+    // BAR_FLASH — focused-bar overlay. Spec only allows one, so we pick the latest source / DST chain and resolve its
+  // image path.
   let flash: Lr2BarFlashElement | undefined;
   if (context.barFlashSource && context.barFlashDst.length > 0) {
     const imagePath = context.imagePaths[context.barFlashSource.gr];
@@ -2743,17 +2571,14 @@ function parseBarRivalKind(value: string | undefined): Lr2BarRivalKind | undefin
 }
 
 /**
- * Finalises `#SRC_GAUGECHART_*` / `#DST_*` pairs into the
- * runtime-friendly element shape. Mirrors `createSliderElements`'
- * structure so the failure modes (unmatched DST, missing image)
- * surface the same way: silently drop the entry, no throw.
+ * Finalises `#SRC_GAUGECHART_*` / `#DST_*` pairs into the runtime-friendly element shape. Mirrors
+ * `createSliderElements`' structure so the failure modes (unmatched DST, missing image) surface the same way: silently
+ * drop the entry, no throw.
  *
- * `imagePath` resolution differs slightly from sliders: gauge-chart
- * SRCs in real LR2 default skins use `gr = 0` (the main atlas),
- * but the **tint** drives the line colour rather than the sampled
- * pixel — even so we still pin a path for `loadSkinAssetTexture`
- * fallback consumers, falling back to the first declared `#IMAGE`
- * when `gr` indexes outside the table.
+ * `imagePath` resolution differs slightly from sliders: gauge-chart SRCs in real LR2 default skins use `gr = 0` (the
+ * main atlas), but the **tint** drives the line colour rather than the sampled pixel — even so we still pin a path for
+ * `loadSkinAssetTexture` fallback consumers, falling back to the first declared `#IMAGE` when `gr` indexes outside the
+ * table.
  */
 function createGaugeChartElements(context: ParseContext): Lr2GaugeChartElement[] {
   const elements: Lr2GaugeChartElement[] = [];
@@ -2944,10 +2769,8 @@ function createJudge2PElements(context: ParseContext): Lr2Skin['judges2P'] {
 }
 
 /**
- * Shared body for the per-side judge factories. Walks the kind
- * map and emits an `Lr2ImageElement[]` per verdict (or `[]` for
- * verdicts the skin omitted on this side). Kept as a helper so
- * the 1P / 2P paths can't drift apart silently.
+ * Shared body for the per-side judge factories. Walks the kind map and emits an `Lr2ImageElement[]` per verdict (or
+ * `[]` for verdicts the skin omitted on this side). Kept as a helper so the 1P / 2P paths can't drift apart silently.
  */
 function buildJudgeMap(
   sources: SourceRect[],
@@ -2963,10 +2786,9 @@ function buildJudgeMap(
       continue;
     }
     const destination = dstGroup[dstGroup.length - 1]!;
-    // 0 (early POOR) and 1 (regular POOR) both map to 'poor'; the second one
-    // wins by virtue of being processed later.
-    // Keep the FULL source rect (w/h spanning all divx*divy cells) so the
-    // renderer can cycle frames at runtime per `cycle`.
+        // 0 (early POOR) and 1 (regular POOR) both map to 'poor'; the second one wins by virtue of being processed later.
+    // Keep the FULL source rect (w/h spanning all divx*divy cells) so the renderer can cycle frames at runtime per
+    // `cycle`.
     judges[kind] = [
       {
         source: {

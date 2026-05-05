@@ -4,10 +4,8 @@ import { stringToLr2CharCodes, type Lr2BitmapFont, type Lr2FontGlyph } from '@be
 import { normaliseRect } from './lr2-render.ts';
 
 /**
- * Loaded LR2 font payload — the parsed `.lr2font` metadata plus
- * one Pixi `Texture` per `#T <gr>` image declaration. The
- * renderer samples sub-rects from these textures by glyph and
- * stamps them at the destination position.
+ * Loaded LR2 font payload — the parsed `.lr2font` metadata plus one Pixi `Texture` per `#T <gr>` image declaration. The
+ * renderer samples sub-rects from these textures by glyph and stamps them at the destination position.
  */
 export interface Lr2LoadedFont {
   font: Lr2BitmapFont;
@@ -16,10 +14,9 @@ export interface Lr2LoadedFont {
 }
 
 /**
- * Stub-cache reused across renders. Pixi v8 holds renderer-side
- * state per `Texture` (atlas page, GraphicsContext), so re-using
- * the same cropped textures across frames keeps GPU memory bounded
- * even as the bar list rebuilds glyph sprites every frame.
+ * Stub-cache reused across renders. Pixi v8 holds renderer-side state per `Texture` (atlas page, GraphicsContext), so
+ * re-using the same cropped textures across frames keeps GPU memory bounded even as the bar list rebuilds glyph sprites
+ * every frame.
  */
 const glyphTextureCache = new WeakMap<Texture, Map<string, Texture>>();
 
@@ -41,20 +38,15 @@ function getGlyphTexture(baseTexture: Texture, glyph: Lr2FontGlyph): Texture {
 }
 
 /**
- * Renders `value` into a Pixi `Container` using the supplied LR2
- * bitmap font. Mirrors `makeLr2TextSprite`'s contract: the returned
- * node is positioned per `dst.x` / `dst.y` and respects the
- * element's alignment (left / center / right).
+ * Renders `value` into a Pixi `Container` using the supplied LR2 bitmap font. Mirrors `makeLr2TextSprite`'s contract:
+ * the returned node is positioned per `dst.x` / `dst.y` and respects the element's alignment (left / center / right).
  *
- * Glyph height is scaled to `dst.h` (which is the LR2 spec's "final
- * size") — the source-side `font.baseSize` is the reference
- * dimension, so the scale factor is `dst.h / font.baseSize`. A
- * mismatch between the glyph's own `h` and the font's `#S` value
- * is also handled (the LR2 spec calls this rare but possible).
+ * Glyph height is scaled to `dst.h` (which is the LR2 spec's "final size") — the source-side `font.baseSize` is the
+ * reference dimension, so the scale factor is `dst.h / font.baseSize`. A mismatch between the glyph's own `h` and the
+ * font's `#S` value is also handled (the LR2 spec calls this rare but possible).
  *
- * Characters with no glyph entry get a placeholder rectangle
- * (translucent outline) so unmapped text is visibly present rather
- * than silently dropped.
+ * Characters with no glyph entry get a placeholder rectangle (translucent outline) so unmapped text is visibly present
+ * rather than silently dropped.
  */
 export function makeLr2BitmapTextSprite(
   value: string,
@@ -71,16 +63,12 @@ export function makeLr2BitmapTextSprite(
   const targetHeight = rect.h > 0 ? rect.h : baseSize;
   const scale = targetHeight / baseSize;
   const codes = stringToLr2CharCodes(value);
-  // First pass — compute total advance so we can apply alignment.
-  // Per-glyph width MUST be measured the same way the render pass
-  // below scales the sprite (`targetHeight / glyph.h`), not via
-  // the font-level `scale = targetHeight / baseSize`. The two
-  // diverge whenever a glyph's source height differs from `#S`
-  // (LR2 spec calls this rare-but-allowed). Mismatch caused the
-  // PLAY OPTION values to render right-shifted: layout
-  // underestimated their width, the centring math added too
-  // much left padding, and the actual sprites then drew further
-  // right than the centred bounding box.
+    // First pass — compute total advance so we can apply alignment. Per-glyph width MUST be measured the same way the
+  // render pass below scales the sprite (`targetHeight / glyph.h`), not via the font-level `scale = targetHeight /
+  // baseSize`. The two diverge whenever a glyph's source height differs from `#S` (LR2 spec calls this
+  // rare-but-allowed). Mismatch caused the PLAY OPTION values to render right-shifted: layout underestimated their
+  // width, the centring math added too much left padding, and the actual sprites then drew further right than the
+  // centred bounding box.
   let totalAdvance = 0;
   const layout: Array<{
     glyph: Lr2FontGlyph | undefined;
@@ -94,32 +82,24 @@ export function makeLr2BitmapTextSprite(
     const glyphScale = targetHeight / glyphHeight;
     const sourceWidth = glyph ? glyph.w : Math.max(1, baseSize / 2);
     const placedWidth = sourceWidth * glyphScale;
-    // Spacing is a font-level metric in source pixels — it's tied
-    // to `#S` (the font's reference size), not per-glyph, so we
-    // keep using `scale` for it.
+        // Spacing is a font-level metric in source pixels — it's tied to `#S` (the font's reference size), not per-glyph,
+    // so we keep using `scale` for it.
     const advance = placedWidth + font.spacing * scale;
     layout.push({ glyph, glyphScale, advance, width: placedWidth });
     totalAdvance += advance;
   }
-  // The last glyph contributes its own width but no trailing
-  // spacing — strip the spacing from the final advance so right /
-  // centre alignment doesn't push everything off by one.
+    // The last glyph contributes its own width but no trailing spacing — strip the spacing from the final advance so
+  // right / centre alignment doesn't push everything off by one.
   if (layout.length > 0) {
     totalAdvance -= font.spacing * scale;
   }
-  // LR2 alignment is ANCHOR-based, not box-based: `x` is the
-  // alignment-dependent anchor point (left edge / horizontal
-  // centre / right edge), NOT a box origin paired with `w` as the
-  // box width.
+    // LR2 alignment is ANCHOR-based, not box-based: `x` is the alignment-dependent anchor point (left edge / horizontal
+  // centre / right edge), NOT a box origin paired with `w` as the box width.
   //
-  // We position the inner glyph container relative to `(0, 0)`
-  // and translate the outer `root` to the anchor point. That way
-  // applying a horizontal `scale.x` for the LR2-spec
-  // shrink-to-fit behaviour squeezes around the anchor exactly
-  // (no drift on right- / centre-aligned text), and the per-
-  // glyph offsets remain in their native un-squeezed coordinate
-  // space — easier to reason about than baking the squeeze into
-  // each cursor advance.
+  // We position the inner glyph container relative to `(0, 0)` and translate the outer `root` to the anchor point. That
+  // way applying a horizontal `scale.x` for the LR2-spec shrink-to-fit behaviour squeezes around the anchor exactly (no
+  // drift on right- / centre-aligned text), and the per- glyph offsets remain in their native un-squeezed coordinate
+  // space — easier to reason about than baking the squeeze into each cursor advance.
   let originX = 0;
   if (element.alignment === 'right') {
     originX = -totalAdvance;
@@ -135,10 +115,8 @@ export function makeLr2BitmapTextSprite(
       const baseTexture = loaded.textures.get(item.glyph.gr);
       if (baseTexture) {
         const sprite = new Sprite(getGlyphTexture(baseTexture, item.glyph));
-        // Scale the source glyph's own height to `targetHeight`
-        // — the LR2 spec key step: a glyph authored at e.g. 24 px
-        // renders at the configured DST height regardless of the
-        // underlying source size.
+                // Scale the source glyph's own height to `targetHeight` — the LR2 spec key step: a glyph authored at e.g. 24 px
+        // renders at the configured DST height regardless of the underlying source size.
         const glyphScale = targetHeight / item.glyph.h;
         sprite.scale.set(glyphScale, glyphScale);
         sprite.position.set(cursorX, 0);
@@ -153,16 +131,11 @@ export function makeLr2BitmapTextSprite(
     }
     cursorX += item.advance;
   }
-  // LR2 shrink-to-fit: when the rendered string is wider than
-  // `dst.w`, the spec auto-compresses it to fit
-  // (`docs/LR2SkinHelp.md` line 1343:
-  // "表示文字列の横幅がDSTのw値を超えるサイズになった場合は自動的に縮小されます").
-  // We squeeze the inner container's `scale.x` so glyph height
-  // stays at `targetHeight` and only the horizontal stride
-  // compresses — same shape as the LR2 reference renderer (and
-  // why the spec calls `filter` "essentially required": the
-  // squeeze stretches glyphs horizontally and looks jagged
-  // without bilinear filtering).
+    // LR2 shrink-to-fit: when the rendered string is wider than `dst.w`, the spec auto-compresses it to fit
+  // (`docs/LR2SkinHelp.md` line 1343: "表示文字列の横幅がDSTのw値を超えるサイズになった場合は自動的に縮小されます"). We squeeze the inner container's
+  // `scale.x` so glyph height stays at `targetHeight` and only the horizontal stride compresses — same shape as the LR2
+  // reference renderer (and why the spec calls `filter` "essentially required": the squeeze stretches glyphs
+  // horizontally and looks jagged without bilinear filtering).
   if (rect.w > 0 && totalAdvance > rect.w) {
     inner.scale.x = rect.w / totalAdvance;
   }
@@ -172,12 +145,10 @@ export function makeLr2BitmapTextSprite(
 }
 
 /**
- * Translucent stroked rectangle used as a "missing glyph" marker.
- * Mirrors how DxLib's debug build draws fallback boxes for
- * unmapped characters — the user sees that text *was* there even
- * if the font couldn't render it. Rendered as `Graphics` rather
- * than a procedurally-built texture so we avoid taking up a slot
- * in the texture cache for ephemeral fallback cells.
+ * Translucent stroked rectangle used as a "missing glyph" marker. Mirrors how DxLib's debug build draws fallback boxes
+ * for unmapped characters — the user sees that text *was* there even if the font couldn't render it. Rendered as
+ * `Graphics` rather than a procedurally-built texture so we avoid taking up a slot in the texture cache for ephemeral
+ * fallback cells.
  */
 function buildPlaceholderRect(x: number, y: number, w: number, h: number): Graphics {
   const inset = 1;

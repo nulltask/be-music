@@ -1,30 +1,22 @@
 /**
- * DxLib DXA archive reader (V3 layout) — used by the LR2 default
- * theme to ship `*.lr2font` + `*.tga` font assets.
+ * DxLib DXA archive reader (V3 layout) — used by the LR2 default theme to ship `*.lr2font` + `*.tga` font assets.
  *
  * Reverse-engineered from `DxaDecode.exe` (LR2 bundled tool):
  *
- * - **Cipher** — XOR with a 12-byte rolling key. The key is
- *   derived from the password by `KeyCreate` at RVA `0x401010`;
- *   when the password is NULL (LR2's default) the source bytes
- *   are all `0xAA`, then twelve byte-mangling transforms
+ * - **Cipher** — XOR with a 12-byte rolling key. The key is derived from the password by `KeyCreate` at RVA `0x401010`;
+ *   when the password is NULL (LR2's default) the source bytes are all `0xAA`, then twelve byte-mangling transforms
  *   produce {@link DXA_DEFAULT_KEY}.
- * - **Header** (24 bytes, V3) — `DX` magic + version 3 + flags +
- *   five DWORDs pointing at the file/name/dir tables.
- * - **File-entry size** is 44 bytes: name address, attributes,
- *   3 × FILETIME, data head, data size, compressed size.
- * - **Compression** — DxLib's marker-byte LZSS variant. Decoder
- *   ported from RVA `0x4015b0..0x4016fc`. See {@link decompress}.
+ * - **Header** (24 bytes, V3) — `DX` magic + version 3 + flags + five DWORDs pointing at the file/name/dir tables.
+ * - **File-entry size** is 44 bytes: name address, attributes, 3 × FILETIME, data head, data size, compressed size.
+ * - **Compression** — DxLib's marker-byte LZSS variant. Decoder ported from RVA `0x4015b0..0x4016fc`. See {@link
+ *   decompress}.
  *
- * Browser-side path:
- * 1. {@link readDxaArchive} XOR-decrypts the bytes.
- * 2. Walks the directory + file tables to enumerate entries.
- * 3. Decompresses each entry's payload (entries with
- *    `pressDataSize === 0xFFFFFFFF` ship raw and skip step 3).
+ * Browser-side path: 1. {@link readDxaArchive} XOR-decrypts the bytes. 2. Walks the directory + file tables to
+ * enumerate entries. 3. Decompresses each entry's payload (entries with `pressDataSize === 0xFFFFFFFF` ship raw and
+ * skip step 3).
  *
- * Limitation: only V3 / default-key archives are supported. LR2
- * encodes its theme bundles without a `-K` password so this
- * covers the common case.
+ * Limitation: only V3 / default-key archives are supported. LR2 encodes its theme bundles without a `-K` password so
+ * this covers the common case.
  */
 
 /** Single file extracted from a DXA archive. */
@@ -42,23 +34,13 @@ export interface DxaArchive {
 }
 
 /**
- * 12-byte XOR key for `Key = DxLib_KeyCreate(NULL)`. Source bytes
- * are all `0xAA` (the V3 default), then each key byte is mangled
- * per the routine at DxaDecode.exe RVA `0x4010C5..0x401158`.
+ * 12-byte XOR key for `Key = DxLib_KeyCreate(NULL)`. Source bytes are all `0xAA` (the V3 default), then each key byte
+ * is mangled per the routine at DxaDecode.exe RVA `0x4010C5..0x401158`.
  *
- * Reference transforms:
- * - key[0]  = ~0xAA = 0x55
- * - key[1]  = swap_nibbles(0xAA) = 0xAA
- * - key[2]  = 0xAA ^ 0x8A = 0x20
- * - key[3]  = ~swap_nibbles(0xAA) = 0x55
- * - key[4]  = ~0xAA = 0x55
- * - key[5]  = 0xAA ^ 0xAC = 0x06
- * - key[6]  = ~0xAA = 0x55
- * - key[7]  = ~rot_r3(0xAA) = ~0x55 = 0xAA
- * - key[8]  = rot_l3(0xAA) = 0x55
- * - key[9]  = 0xAA ^ 0x7F = 0xD5
- * - key[10] = swap_nibbles(0xAA) ^ 0xD6 = 0x7C
- * - key[11] = 0xAA ^ 0xCC = 0x66
+ * Reference transforms: - key[0] = ~0xAA = 0x55 - key[1] = swap_nibbles(0xAA) = 0xAA - key[2] = 0xAA ^ 0x8A = 0x20 -
+ * key[3] = ~swap_nibbles(0xAA) = 0x55 - key[4] = ~0xAA = 0x55 - key[5] = 0xAA ^ 0xAC = 0x06 - key[6] = ~0xAA = 0x55 -
+ * key[7] = ~rot_r3(0xAA) = ~0x55 = 0xAA - key[8] = rot_l3(0xAA) = 0x55 - key[9] = 0xAA ^ 0x7F = 0xD5 - key[10] =
+ * swap_nibbles(0xAA) ^ 0xD6 = 0x7C - key[11] = 0xAA ^ 0xCC = 0x66
  */
 const DXA_DEFAULT_KEY: ReadonlyArray<number> = [0x55, 0xaa, 0x20, 0x55, 0x55, 0x06, 0x55, 0xaa, 0x55, 0xd5, 0x7c, 0x66];
 
@@ -72,13 +54,10 @@ const DXA_MAGIC_BYTE_0 = 0x44; // 'D'
 const DXA_MAGIC_BYTE_1 = 0x58; // 'X'
 
 /**
- * Reads a DXA archive (LR2 default-key encrypted, V3 layout) into
- * individual files. Returns `undefined` when the header magic is
- * wrong (unsupported password / version) or when one of the
- * tables is malformed.
+ * Reads a DXA archive (LR2 default-key encrypted, V3 layout) into individual files. Returns `undefined` when the header
+ * magic is wrong (unsupported password / version) or when one of the tables is malformed.
  *
- * Compressed entries are decompressed here so callers receive
- * ready-to-use payloads.
+ * Compressed entries are decompressed here so callers receive ready-to-use payloads.
  */
 export function readDxaArchive(
   bytes: Uint8Array,
@@ -86,8 +65,7 @@ export function readDxaArchive(
 ): DxaArchive | undefined {
   if (bytes.length < DXA_HEADER_SIZE) return undefined;
   if (key.length !== DXA_KEY_LENGTH) return undefined;
-  // XOR decrypt the entire archive in one pass — the cipher is
-  // symmetric and self-inverting.
+  // XOR decrypt the entire archive in one pass — the cipher is symmetric and self-inverting.
   const decrypted = new Uint8Array(bytes.length);
   for (let i = 0; i < bytes.length; i += 1) {
     decrypted[i] = bytes[i]! ^ key[i % DXA_KEY_LENGTH]!;
@@ -135,9 +113,8 @@ function walkDirectory(ctx: WalkContext, directoryEntryOffset: number, pathPrefi
     const entryOffset = ctx.fileTableAbs + dir.fileHead + index * DXA_FILE_ENTRY_SIZE;
     const entry = readFileEntry(ctx.view, entryOffset);
     if (!entry) continue;
-    // Skip the implicit "self" entry (the root directory's own
-    // file-table slot). It has `nameAddress=0` and the directory
-    // attribute set; recursing into it would loop forever.
+        // Skip the implicit "self" entry (the root directory's own file-table slot). It has `nameAddress=0` and the
+    // directory attribute set; recursing into it would loop forever.
     if (entry.isDirectory && entry.nameAddress === 0 && pathPrefix === '') {
       continue;
     }
@@ -155,8 +132,7 @@ function walkDirectory(ctx: WalkContext, directoryEntryOffset: number, pathPrefi
       if (dataEnd > ctx.bytes.length) continue;
       files.push({ path: fullPath, data: ctx.bytes.subarray(dataStart, dataEnd) });
     } else {
-      // Compressed payload — `entry.dataSize` is the uncompressed
-      // length, `entry.pressDataSize` the on-disk length.
+      // Compressed payload — `entry.dataSize` is the uncompressed length, `entry.pressDataSize` the on-disk length.
       const compressed = ctx.bytes.subarray(dataStart, dataStart + entry.pressDataSize);
       if (compressed.length !== entry.pressDataSize) continue;
       const decompressed = decompress(compressed, entry.dataSize);
@@ -173,8 +149,7 @@ interface DirEntry {
 
 function readDirectoryEntry(view: DataView, offset: number): DirEntry | undefined {
   if (offset + DXA_DIR_ENTRY_SIZE > view.byteLength) return undefined;
-  // V3 DirEntry: [0..3] DirectoryAddress, [4..7] ParentDirectoryAddress,
-  //              [8..11] FileNum, [12..15] FileHead.
+  // V3 DirEntry: [0..3] DirectoryAddress, [4..7] ParentDirectoryAddress, [8..11] FileNum, [12..15] FileHead.
   const fileNum = view.getUint32(offset + 8, true);
   const fileHead = view.getUint32(offset + 12, true);
   return { fileHead, fileCount: fileNum };
@@ -191,15 +166,10 @@ interface FileEntry {
 
 function readFileEntry(view: DataView, offset: number): FileEntry | undefined {
   if (offset + DXA_FILE_ENTRY_SIZE > view.byteLength) return undefined;
-  // V3 FileEntry layout (44 bytes):
-  //   [0..3]   NameAddress (offset into FileNameTable)
-  //   [4..7]   Attributes (DWORD; bit 4 = directory, 0x20 = archive)
-  //   [8..15]  CreationTime (FILETIME) — ignored
-  //   [16..23] LastAccessTime (FILETIME) — ignored
-  //   [24..31] LastWriteTime (FILETIME) — ignored
-  //   [32..35] DataHead (offset within data area, or directory index)
-  //   [36..39] DataSize (uncompressed bytes)
-  //   [40..43] PressDataSize (compressed bytes; 0xFFFFFFFF = uncompressed)
+    // V3 FileEntry layout (44 bytes): [0..3] NameAddress (offset into FileNameTable) [4..7] Attributes (DWORD; bit 4 =
+  // directory, 0x20 = archive) [8..15] CreationTime (FILETIME) — ignored [16..23] LastAccessTime (FILETIME) — ignored
+  // [24..31] LastWriteTime (FILETIME) — ignored [32..35] DataHead (offset within data area, or directory index)
+  // [36..39] DataSize (uncompressed bytes) [40..43] PressDataSize (compressed bytes; 0xFFFFFFFF = uncompressed)
   const nameAddress = view.getUint32(offset, true);
   const attributes = view.getUint32(offset + 4, true);
   const dataHead = view.getUint32(offset + 32, true);
@@ -224,10 +194,9 @@ const sjisDecoder = (() => {
 })();
 
 function readFileName(bytes: Uint8Array, offset: number): string {
-  // V3 FileName entry: WORD packNum + WORD reserved + packNum*4
-  // bytes upper-case packed name + null-terminated original-case
-  // name. The upper-case packed table is for case-insensitive
-  // lookup; we ignore it and read the original name only.
+    // V3 FileName entry: WORD packNum + WORD reserved + packNum*4 bytes upper-case packed name + null-terminated
+  // original-case name. The upper-case packed table is for case-insensitive lookup; we ignore it and read the original
+  // name only.
   if (offset + 4 > bytes.length) return '';
   const packNum = bytes[offset]! | (bytes[offset + 1]! << 8);
   const nameStart = offset + 4 + packNum * 4;
@@ -238,47 +207,24 @@ function readFileName(bytes: Uint8Array, offset: number): string {
 }
 
 /**
- * Decompresses a DxLib V3 payload. Reverse-engineered from
- * DxaDecode.exe RVA `0x4015b0..0x4016fc`.
+ * Decompresses a DxLib V3 payload. Reverse-engineered from DxaDecode.exe RVA `0x4015b0..0x4016fc`.
  *
- * Payload layout:
- * - `[0..3]` — uncompressed size (DWORD LE)
- * - `[4..7]` — `unused` slot (matches `pressDataSize` in
- *   the file entry; the decoder ignores it)
- * - `[8]` — keycode (the marker byte chosen by the encoder
- *   to be rare in input)
- * - `[9..]` — body
+ * Payload layout: - `[0..3]` — uncompressed size (DWORD LE) - `[4..7]` — `unused` slot (matches `pressDataSize` in the
+ * file entry; the decoder ignores it) - `[8]` — keycode (the marker byte chosen by the encoder to be rare in input) -
+ * `[9..]` — body
  *
- * Body codec — each input byte is either:
- * - **Literal** (`byte != keycode`): output byte verbatim.
- * - **Marker** (`byte == keycode`): the next byte is a code
- *   byte. If `code == keycode` the marker is escaped (output
- *   `keycode` literally). Otherwise it's a back-reference:
- *   - If `code > keycode`, decrement `code` (so `code` skips
- *     over the keycode value).
- *   - Length is encoded as a 5-bit low part (`code >> 3`) plus
- *     an optional 8-bit high part (1 extra byte when
- *     `code & 0x04`). Combine the parts FIRST, then add the
- *     +4 base offset:
- *     - `lengthBits = code >> 3`
- *     - If `code & 0x04`: read 1 more byte; `lengthBits |= ext << 5`.
- *     - `length = lengthBits + 4`
- *     The "combine then +4" order is critical — applying `+4` to
- *     the low 5 bits before OR'ing the extension would overflow
- *     into bit 5 whenever `code >> 3 >= 28`, corrupting the
- *     extension byte's lowest bit and silently truncating the
- *     decoded output. (We hit this bug on the LR2 default theme's
- *     `barfnt.dxa` font textures: the .lr2font itself decoded
- *     fine but every `font_NN.tga` came out 1500-2000 bytes
- *     short.)
- *   - Offset format from `code & 0x03`:
- *     - `0` — read 1 byte
- *     - `1` — read 2 bytes (WORD LE)
- *     - `2` — read 3 bytes (24-bit LE)
- *     - `3` — reuse the previous offset
- *   - Bump `offset += 1` (so min offset = 1).
- *   - Copy `length` bytes from `out[len - offset]` (handling
- *     overlap so a length > offset replicates the head bytes).
+ * Body codec — each input byte is either: - **Literal** (`byte != keycode`): output byte verbatim. - **Marker** (`byte
+ * == keycode`): the next byte is a code byte. If `code == keycode` the marker is escaped (output `keycode` literally).
+ * Otherwise it's a back-reference: - If `code > keycode`, decrement `code` (so `code` skips over the keycode value). -
+ * Length is encoded as a 5-bit low part (`code >> 3`) plus an optional 8-bit high part (1 extra byte when `code &
+ * 0x04`). Combine the parts FIRST, then add the +4 base offset: - `lengthBits = code >> 3` - If `code & 0x04`: read 1
+ * more byte; `lengthBits |= ext << 5`. - `length = lengthBits + 4` The "combine then +4" order is critical — applying
+ * `+4` to the low 5 bits before OR'ing the extension would overflow into bit 5 whenever `code >> 3 >= 28`, corrupting
+ * the extension byte's lowest bit and silently truncating the decoded output. (We hit this bug on the LR2 default
+ * theme's `barfnt.dxa` font textures: the .lr2font itself decoded fine but every `font_NN.tga` came out 1500-2000 bytes
+ * short.) - Offset format from `code & 0x03`: - `0` — read 1 byte - `1` — read 2 bytes (WORD LE) - `2` — read 3 bytes
+ * (24-bit LE) - `3` — reuse the previous offset - Bump `offset += 1` (so min offset = 1). - Copy `length` bytes from
+ * `out[len - offset]` (handling overlap so a length > offset replicates the head bytes).
  */
 function decompress(src: Uint8Array, expectedSize: number): Uint8Array | undefined {
   if (src.length < 9) return undefined;
@@ -305,9 +251,8 @@ function decompress(src: Uint8Array, expectedSize: number): Uint8Array | undefin
       continue;
     }
     if (code > keycode) code -= 1;
-    // Combine low 5 bits + optional 8-bit extension BEFORE adding
-    // the +4 base offset. See the file-header doc comment for why
-    // the order matters.
+        // Combine low 5 bits + optional 8-bit extension BEFORE adding the +4 base offset. See the file-header doc comment
+    // for why the order matters.
     let length = code >>> 3;
     if ((code & 0x04) !== 0) {
       if (p >= src.length) break;
@@ -330,9 +275,8 @@ function decompress(src: Uint8Array, expectedSize: number): Uint8Array | undefin
       offset = src[p]! | (src[p + 1]! << 8) | (src[p + 2]! << 16);
       p += 3;
     } else {
-      // Format 3 — reuse the previous offset (no new bytes
-      // consumed). Encoder's value-skipping optimisation for
-      // streaks of same-offset back-references.
+            // Format 3 — reuse the previous offset (no new bytes consumed). Encoder's value-skipping optimisation for streaks
+      // of same-offset back-references.
       offset = lastOffset;
     }
     offset += 1;

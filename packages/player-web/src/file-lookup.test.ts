@@ -22,9 +22,8 @@ describe('findCaseInsensitivePath', () => {
   });
 
   it('keeps the first key encountered when multiple keys collide on lowercase', () => {
-    // Insertion order: `kick.wav` first → it wins. The map iterator
-    // preserves insertion order, so the first-pass scan in
-    // `getCaseInsensitiveIndex` gets locked in.
+        // Insertion order: `kick.wav` first → it wins. The map iterator preserves insertion order, so the first-pass scan
+    // in `getCaseInsensitiveIndex` gets locked in.
     const files = new Map([
       ['kick.wav', BYTES_A],
       ['KICK.WAV', BYTES_B],
@@ -45,9 +44,8 @@ describe('lookupBytesCaseInsensitive', () => {
   });
 
   it('reuses the lazy index across calls (smoke test)', () => {
-    // Not a strict invariant test — just confirms a second lookup on
-    // the same map works the same way (which would surface obvious
-    // cache-key bugs even though we can't probe the WeakMap directly).
+        // Not a strict invariant test — just confirms a second lookup on the same map works the same way (which would
+    // surface obvious cache-key bugs even though we can't probe the WeakMap directly).
     const files = new Map([
       ['A.png', BYTES_A],
       ['B.png', BYTES_B],
@@ -104,8 +102,7 @@ describe('isMaliciousAssetPath', () => {
 
 describe('findCaseInsensitivePath malicious-path guard', () => {
   it('returns undefined for malicious candidates even when the map has matching bytes', () => {
-    // Crafted a defensive map entry to prove the guard rejects
-    // even when a pathological matcher would succeed.
+    // Crafted a defensive map entry to prove the guard rejects even when a pathological matcher would succeed.
     const files = new Map([['/etc/passwd', BYTES_A]]);
     expect(findCaseInsensitivePath(files, '/etc/passwd')).toBeUndefined();
     expect(lookupBytesCaseInsensitive(files, '/etc/passwd')).toBeUndefined();

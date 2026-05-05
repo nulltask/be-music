@@ -417,8 +417,7 @@ describe('parser', () => {
         sound_channels: [
           {
             name: 'sample.wav',
-            // Each note one beat apart so measures are stable for
-            // assertion. Resolution 240, four beats / measure → one
+                        // Each note one beat apart so measures are stable for assertion. Resolution 240, four beats / measure → one
             // x value per beat fits inside measure 0 / 1.
             notes: [
               { x: 1, y: 0 },
@@ -437,7 +436,10 @@ describe('parser', () => {
 
     const sortedChannels = json.events
       .slice()
-      .sort((left, right) => left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1])
+      .sort(
+        (left, right) =>
+          left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+      )
       .map((event) => event.channel);
     expect(sortedChannels).toEqual(['11', '12', '13', '14', '15', '18', '19', '16']);
   });
@@ -464,7 +466,10 @@ describe('parser', () => {
 
     const channels = json.events
       .slice()
-      .sort((left, right) => left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1])
+      .sort(
+        (left, right) =>
+          left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+      )
       .map((event) => event.channel);
     expect(channels).toEqual(['15', '22', '23', '24', '25']);
   });
@@ -487,12 +492,14 @@ describe('parser', () => {
       }),
     );
 
-    // bmson 1.0.0 spec — "Default value is 'beat-7k'". x=1/5/7
-    // route to the canonical 7-key channels 11 / 15 / 19 instead
-    // of the positional 11 / 12 / 13 fallback.
+        // bmson 1.0.0 spec — "Default value is 'beat-7k'". x=1/5/7 route to the canonical 7-key channels 11 / 15 / 19
+    // instead of the positional 11 / 12 / 13 fallback.
     const sortedChannels = json.events
       .slice()
-      .sort((left, right) => left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1])
+      .sort(
+        (left, right) =>
+          left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+      )
       .map((event) => event.channel);
     expect(sortedChannels).toEqual(['19', '11', '15']);
   });
@@ -515,12 +522,14 @@ describe('parser', () => {
       }),
     );
 
-    // Unknown mode_hints (`kabuki-3k` etc.) fall through onto
-    // the positional fallback so consumers can still load the
+        // Unknown mode_hints (`kabuki-3k` etc.) fall through onto the positional fallback so consumers can still load the
     // chart even if no canonical layout matches.
     const sortedChannels = json.events
       .slice()
-      .sort((left, right) => left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1])
+      .sort(
+        (left, right) =>
+          left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+      )
       .map((event) => event.channel);
     expect(sortedChannels).toEqual(['13', '11', '12']);
   });
@@ -544,13 +553,14 @@ describe('parser', () => {
       }),
     );
 
-    // x=1..3 within the declared key count map to 11/12/13;
-    // x=4 falls outside the map so the parser routes it to
-    // the channel-11 default (consumers see one playable note
-    // at lane 1 plus three at the explicit slots).
+        // x=1..3 within the declared key count map to 11/12/13; x=4 falls outside the map so the parser routes it to the
+    // channel-11 default (consumers see one playable note at lane 1 plus three at the explicit slots).
     const sortedChannels = json.events
       .slice()
-      .sort((left, right) => left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1])
+      .sort(
+        (left, right) =>
+          left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+      )
       .map((event) => event.channel);
     expect(sortedChannels).toEqual(['11', '12', '13', '11']);
   });
@@ -576,10 +586,8 @@ describe('parser', () => {
       }),
     );
 
-    // Spec: "If negative, take the absolute value." Both the
-    // bmson IR field and the unified `metadata.total` slot
-    // surface the positive value so the gauge formula
-    // (`+TOTAL/N`) stays on the positive branch.
+        // Spec: "If negative, take the absolute value." Both the bmson IR field and the unified `metadata.total` slot
+    // surface the positive value so the gauge formula (`+TOTAL/N`) stays on the positive branch.
     expect(json.bmson.info.total).toBe(260);
     expect(json.metadata.total).toBe(260);
   });
@@ -593,10 +601,8 @@ describe('parser', () => {
       }),
     );
 
-    // Spec: "If 0, the lifebar doesn't increase." The abs
-    // normalisation must not collapse 0 into the missing-default
-    // (100) — the gauge formula sees baseGain = 0/N = 0 and
-    // emits no PG/GR rise.
+        // Spec: "If 0, the lifebar doesn't increase." The abs normalisation must not collapse 0 into the missing-default
+    // (100) — the gauge formula sees baseGain = 0/N = 0 and emits no PG/GR rise.
     expect(json.bmson.info.total).toBe(0);
     expect(json.metadata.total).toBe(0);
   });
@@ -614,13 +620,10 @@ describe('parser', () => {
   });
 
   test('bmson: stop_events.duration is converted from pulses-at-resolution to BMS 1/192-measure units', () => {
-    // Spec: `duration` is in pulses at the chart's `resolution`.
-    // BMS-side timing reads `resources.stop[key]` through the
-    // `(value / 192) × (240/bpm)` formula expecting 1/192-measure
-    // units (= 48 per beat). Parser conversion: `pulses × 48 /
-    // resolution`. Default resolution=240 → 1 beat (240 pulses) =
-    // 48 BMS units; without the conversion we'd see the raw 240
-    // and the formula would produce a 5× over-long stop.
+        // Spec: `duration` is in pulses at the chart's `resolution`. BMS-side timing reads `resources.stop[key]` through
+    // the `(value / 192) × (240/bpm)` formula expecting 1/192-measure units (= 48 per beat). Parser conversion: `pulses
+    // × 48 / resolution`. Default resolution=240 → 1 beat (240 pulses) = 48 BMS units; without the conversion we'd see
+    // the raw 240 and the formula would produce a 5× over-long stop.
     const json = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -636,12 +639,9 @@ describe('parser', () => {
   });
 
   test('bmson: non-positive info.judge_rank is dropped so the consumer falls back to the spec default', () => {
-    // bmson 1.0.0 spec — `judge_rank`'s text frames the value
-    // as a width relative to the player's default ("smaller
-    // than 100" / "larger than 100"). 0 / negative inputs would
-    // imply a zero-width or inverted window — meaningless. The
-    // parser drops the field so `resolveBmsonJudgeRankPercent`
-    // falls back to the spec default of 100.
+        // bmson 1.0.0 spec — `judge_rank`'s text frames the value as a width relative to the player's default ("smaller
+    // than 100" / "larger than 100"). 0 / negative inputs would imply a zero-width or inverted window — meaningless.
+    // The parser drops the field so `resolveBmsonJudgeRankPercent` falls back to the spec default of 100.
     const negative = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -676,10 +676,8 @@ describe('parser', () => {
   });
 
   test('bmson: negative info.level is treated as invalid and dropped per the 1.0.0 spec', () => {
-    // Spec: "level must be ≥ 0. Negative values may be regarded
-    // as invalid by a player." We choose the "invalid → drop"
-    // branch so the UI shows no level rather than a misleading
-    // negative number, and so re-stringifying doesn't preserve
+        // Spec: "level must be ≥ 0. Negative values may be regarded as invalid by a player." We choose the "invalid → drop"
+    // branch so the UI shows no level rather than a misleading negative number, and so re-stringifying doesn't preserve
     // the bad value.
     const json = parseBmson(
       JSON.stringify({
@@ -720,8 +718,7 @@ describe('parser', () => {
   });
 
   test('bmson: subartists entries get role/name halves trimmed at parse time', () => {
-    // bmson 1.0.0 spec SHOULD — "Implementers should trim the
-    // spaces before and after `key` and `value` in subartists."
+    // bmson 1.0.0 spec SHOULD — "Implementers should trim the spaces before and after `key` and `value` in subartists."
     const json = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -822,9 +819,8 @@ describe('parser', () => {
   });
 
   test('bmson: stop_events.duration scales with non-default resolution', () => {
-    // Same beat-length stop authored at resolution=480 takes
-    // duration=480 pulses (still 1 beat). Conversion remains
-    // 48 BMS units regardless.
+        // Same beat-length stop authored at resolution=480 takes duration=480 pulses (still 1 beat). Conversion remains 48
+    // BMS units regardless.
     const json = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -1228,8 +1224,8 @@ describe('parser', () => {
   test('BMS: `#BASE 62` after the first object line is ignored', () => {
     const parsed = parseChart(['#WAV0a lower.wav', '#00111:0a', '#BASE 62', ''].join('\n'));
 
-    // Pre-scan stops at the first object line; the late `#BASE 62`
-    // doesn't take effect, so case is folded as in default base-36.
+        // Pre-scan stops at the first object line; the late `#BASE 62` doesn't take effect, so case is folded as in default
+    // base-36.
     expect(parsed.bms.base).toBeUndefined();
     expect(parsed.resources.wav['0A']).toBe('lower.wav');
   });
@@ -1240,8 +1236,7 @@ describe('parser', () => {
     );
     expect(parsed.bms.base).toBe(62);
 
-    // The control-flow capture stack stores both `command`
-    // (uppercased canonical form) and `commandRaw` (case-preserved
+        // The control-flow capture stack stores both `command` (uppercased canonical form) and `commandRaw` (case-preserved
     // original) so the lowercase `0a` ID survives the replay.
     const wavEntries = parsed.bms.controlFlow.filter(
       (entry) => entry.kind === 'header' && entry.command.startsWith('WAV'),
@@ -1250,8 +1245,7 @@ describe('parser', () => {
     const lowerEntry = wavEntries.find((entry) => entry.kind === 'header' && entry.commandRaw === 'WAV0a');
     expect(lowerEntry).toBeDefined();
 
-    // Resolving the control flow under a deterministic random
-    // value applies the IF block; the resolved chart should now
+        // Resolving the control flow under a deterministic random value applies the IF block; the resolved chart should now
     // carry both case variants in `wav` as separate slots.
     const resolved = resolveBmsControlFlow(parsed, { random: () => 0 });
     expect(resolved.resources.wav['0a']).toBe('lower.wav');
@@ -1259,13 +1253,10 @@ describe('parser', () => {
   });
 
   test('decodeBmsText: honours #CHARSET UTF-8 even when shift_jis would also parse', () => {
-    // The chart is authored in UTF-8 with the directive at the
-    // top. Without `#CHARSET`, the auto-detect path would still
-    // reach UTF-8 here (no byte hits the 0x80+ shift_jis lead
-    // range), so we deliberately include a UTF-8 byte sequence
-    // (`éclair` → `é` = 0xC3 0xA9) that decodes garbled under
-    // shift_jis. Honoring the directive yields the correct
-    // accented form.
+        // The chart is authored in UTF-8 with the directive at the top. Without `#CHARSET`, the auto-detect path would
+    // still reach UTF-8 here (no byte hits the 0x80+ shift_jis lead range), so we deliberately include a UTF-8 byte
+    // sequence (`éclair` → `é` = 0xC3 0xA9) that decodes garbled under shift_jis. Honoring the directive yields the
+    // correct accented form.
     const utf8Bytes = new TextEncoder().encode('#CHARSET UTF-8\n#TITLE éclair\n#ARTIST foo\n');
     const decoded = decodeBmsText(utf8Bytes);
     expect(decoded.encoding).toBe('utf8');
@@ -1273,10 +1264,8 @@ describe('parser', () => {
   });
 
   test('decodeBmsText: falls back to shift_jis default when no #CHARSET is declared', () => {
-    // No directive, only shift_jis bytes (`「テスト」` =
-    // typical Japanese kana / brackets, well-formed in
-    // shift_jis but garbled under UTF-8). The decoder should
-    // pick shift_jis automatically.
+        // No directive, only shift_jis bytes (`「テスト」` = typical Japanese kana / brackets, well-formed in shift_jis but
+    // garbled under UTF-8). The decoder should pick shift_jis automatically.
     const sjisBytes = new Uint8Array([
       0x23, 0x54, 0x49, 0x54, 0x4c, 0x45, 0x20, 0x83, 0x65, 0x83, 0x58, 0x83, 0x67, 0x0a,
     ]); // "#TITLE テスト\n" in Shift_JIS
@@ -1286,11 +1275,9 @@ describe('parser', () => {
   });
 
   test('decodeBmsText: #CHARSET shift_jis with non-ASCII title surfaces the kana', () => {
-    // Same shift_jis content as above but with the directive
-    // explicitly set. The directive should drive the decode
-    // path even though autodetect would also pick shift_jis,
-    // ensuring deterministic decoding when the chart author
-    // declares an encoding.
+        // Same shift_jis content as above but with the directive explicitly set. The directive should drive the decode path
+    // even though autodetect would also pick shift_jis, ensuring deterministic decoding when the chart author declares
+    // an encoding.
     const directive = '#CHARSET Shift_JIS\n';
     const directiveBytes = new TextEncoder().encode(directive);
     const titleBytes = new Uint8Array([

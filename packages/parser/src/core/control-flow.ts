@@ -42,12 +42,10 @@ export interface ResolveControlFlowOptions {
   /**
    * Re-applies a captured `#xxx ...` header entry against `json`.
    *
-   * `command` is the uppercased canonical form used for keyword
-   * dispatch. `commandRaw` is the case-preserved original — set
-   * only when the captured entry differed in case (typically a
-   * lowercase indexed-header key from a `#BASE 62` chart). Callers
-   * should fall back to `command` when `commandRaw` is undefined,
-   * which is the common base-36 case-insensitive path.
+   * `command` is the uppercased canonical form used for keyword dispatch. `commandRaw` is the case-preserved original —
+   * set only when the captured entry differed in case (typically a lowercase indexed-header key from a `#BASE 62`
+   * chart). Callers should fall back to `command` when `commandRaw` is undefined, which is the common base-36
+   * case-insensitive path.
    */
   applyHeader: (json: BeMusicJson, command: string, commandRaw: string | undefined, value: string) => void;
 }
@@ -77,9 +75,8 @@ export function resolveControlFlow(input: BeMusicJson, options: ResolveControlFl
   }
 
   json.measures.sort((left, right) => left.index - right.index);
-  // Honour `#BASE 62` so post-control-flow event normalisation
-  // preserves lowercase IDs instead of folding them. The base was
-  // recorded on the chart by the initial `parseBms` pass.
+    // Honour `#BASE 62` so post-control-flow event normalisation preserves lowercase IDs instead of folding them. The
+  // base was recorded on the chart by the initial `parseBms` pass.
   const replayBase: 36 | 62 = json.bms.base === 62 ? 62 : 36;
   json.events = sortAndNormalizeEvents(json.events, replayBase);
   return json;

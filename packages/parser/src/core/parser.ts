@@ -47,11 +47,9 @@ import { extractDeclaredBmsCharset } from './bms-charset.ts';
 const INDEXED_HEADER_COMMAND =
   /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SPEED|SWBGA)([0-9A-Za-z]{2})$/;
 /**
- * Pre-scans for the BMS `#BASE` directive (the beatoraja base-62
- * extension switch). Default base is 36; only `#BASE 62` or
- * `#BASE 36` are recognised. We do a one-pass forward scan and
- * stop at the first object data line, mirroring real implementations
- * that require `#BASE` to come before any objects.
+ * Pre-scans for the BMS `#BASE` directive (the beatoraja base-62 extension switch). Default base is 36; only `#BASE 62`
+ * or `#BASE 36` are recognised. We do a one-pass forward scan and stop at the first object data line, mirroring real
+ * implementations that require `#BASE` to come before any objects.
  */
 const BASE_DIRECTIVE_REGEX = /^#BASE\s+(36|62)\b/i;
 const CONTROL_FLOW_COMMANDS: ReadonlySet<BmsControlFlowCommand> = new Set([
@@ -92,11 +90,9 @@ export function parseBms(input: string): BeMusicJson {
   const controlFlowCaptureStack: ControlFlowCaptureFrameType[] = [];
   const measureByIndex = new Map<number, MeasureLengthEntry>();
   let hasValidMainBpmHeader = false;
-  // Resolve the chart's object-ID radix BEFORE main parsing so that
-  // every `#WAVxx` / `#BMPxx` key + every channel-stream token gets
-  // normalised under the right rule. Default is base 36 (case-fold
-  // lowercase to uppercase). `#BASE 62` opts into the beatoraja
-  // extension where lowercase `a-z` is a separate ID space.
+    // Resolve the chart's object-ID radix BEFORE main parsing so that every `#WAVxx` / `#BMPxx` key + every
+  // channel-stream token gets normalised under the right rule. Default is base 36 (case-fold lowercase to uppercase).
+  // `#BASE 62` opts into the beatoraja extension where lowercase `a-z` is a separate ID space.
   const base = detectBmsBase(input);
   if (base === 62) {
     json.bms.base = 62;
@@ -154,11 +150,9 @@ export function parseBms(input: string): BeMusicJson {
       return;
     }
 
-    // Stash the case-preserved command on captured entries when it
-    // differs from the uppercased canonical form. Only base-62
-    // charts (`#BASE 62`) put lowercase letters in indexed-header
-    // keys (e.g. `#WAV0a`), so most charts skip this entirely and
-    // the JSON stays compact.
+        // Stash the case-preserved command on captured entries when it differs from the uppercased canonical form. Only
+    // base-62 charts (`#BASE 62`) put lowercase letters in indexed-header keys (e.g. `#WAV0a`), so most charts skip
+    // this entirely and the JSON stays compact.
     const commandCaseDiffers = command !== commandRaw;
     if (controlFlowCaptureStack.length > 0) {
       const headerEntry: BmsSourceLineEntry = {
@@ -211,12 +205,9 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
 
   const resolution = resolveBmsonResolution(document);
   json.bmson.info = normalizeBmsonInfoForIr(info, resolution);
-  // Per spec, the difference between "lines missing" and
-  // "lines: []" matters: missing → assume 4/4 and generate a
-  // barline every 4 quarter notes (the renderer's default
-  // derive-from-events path); explicit empty → no barlines at
-  // all (the "100 % minimoo-G effect"). Detect the explicit-
-  // empty case here so the IR carries the suppress flag, since
+    // Per spec, the difference between "lines missing" and "lines: []" matters: missing → assume 4/4 and generate a
+  // barline every 4 quarter notes (the renderer's default derive-from-events path); explicit empty → no barlines at all
+  // (the "100 % minimoo-G effect"). Detect the explicit- empty case here so the IR carries the suppress flag, since
   // both shapes collapse to `[]` after `normalizeBmsonLines`.
   const linesAuthoredEmpty = Array.isArray(document.lines) && document.lines.length === 0;
   if (linesAuthoredEmpty) {
@@ -245,20 +236,13 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   if (Number.isFinite(json.bmson.info.initBpm) && (json.bmson.info.initBpm ?? 0) > 0) {
     json.metadata.bpm = json.bmson.info.initBpm!;
   } else {
-    // bmson 1.0.0 spec — "It is a fatal error if `info.init_bpm`
-    // is unspecified." A chart that omits / zeroes / negates
-    // `init_bpm` has no anchor for tempo-driven timing, so
-    // every downstream calculation (note seconds, BGA cues,
-    // gauge timing) silently falls back to whatever
-    // `metadata.bpm` was seeded with — typically the
-    // `DEFAULT_BPM = 130` placeholder, which produces visibly
-    // wrong playback for any chart that wasn't authored at 130.
-    // Surface the violation as a parse error so the loader
-    // surfaces a clear "broken chart" diagnostic rather than
-    // playing the chart back at the wrong tempo.
-    throw new Error(
-      'bmson: info.init_bpm is required (spec: "It is a fatal error if info.init_bpm is unspecified")',
-    );
+        // bmson 1.0.0 spec — "It is a fatal error if `info.init_bpm` is unspecified." A chart that omits / zeroes / negates
+    // `init_bpm` has no anchor for tempo-driven timing, so every downstream calculation (note seconds, BGA cues, gauge
+    // timing) silently falls back to whatever `metadata.bpm` was seeded with — typically the `DEFAULT_BPM = 130`
+    // placeholder, which produces visibly wrong playback for any chart that wasn't authored at 130. Surface the
+    // violation as a parse error so the loader surfaces a clear "broken chart" diagnostic rather than playing the chart
+    // back at the wrong tempo.
+    throw new Error('bmson: info.init_bpm is required (spec: "It is a fatal error if info.init_bpm is unspecified")');
   }
   if (Number.isFinite(json.bmson.info.judgeRank)) {
     json.metadata.rank = json.bmson.info.judgeRank;
@@ -266,17 +250,13 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   if (Number.isFinite(json.bmson.info.total)) {
     json.metadata.total = json.bmson.info.total;
   } else {
-    // bmson 1.0.0 spec — `info.total` default is 100. We pin
-    // that here (rather than letting the BMS-flavoured
-    // `LR2_GROOVE_GAUGE_DEFAULT_TOTAL = 160` fallback take
-    // over) so a bmson chart that omits `total` runs with the
+        // bmson 1.0.0 spec — `info.total` default is 100. We pin that here (rather than letting the BMS-flavoured
+    // `LR2_GROOVE_GAUGE_DEFAULT_TOTAL = 160` fallback take over) so a bmson chart that omits `total` runs with the
     // gauge curve its author / the spec assumed.
     json.metadata.total = 100;
   }
-  // Mirror bmson's `info.backImage` / `bannerImage` / `eyecatchImage`
-  // onto the unified `metadata` slots so consumers (the select view's
-  // BACKBMP loader, rendered banner, etc.) don't need to branch on
-  // chart format.
+    // Mirror bmson's `info.backImage` / `bannerImage` / `eyecatchImage` onto the unified `metadata` slots so consumers
+  // (the select view's BACKBMP loader, rendered banner, etc.) don't need to branch on chart format.
   if (json.bmson.info.backImage) {
     json.metadata.backBmp = json.bmson.info.backImage;
   }
@@ -289,10 +269,8 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
 
   const soundChannels = normalizeBmsonSoundChannels(document.sound_channels);
   json.preservation.bmson.soundChannels = soundChannels;
-  // Lane mapping honours `mode_hint` so canonical IIDX / Pop'n
-  // bmson dialects route the right keys onto the right BMS
-  // channels — the legacy positional fallback would mis-route
-  // `beat-7k` x=6/7 onto scratch (`16`) / FREE ZONE (`17`)
+    // Lane mapping honours `mode_hint` so canonical IIDX / Pop'n bmson dialects route the right keys onto the right BMS
+  // channels — the legacy positional fallback would mis-route `beat-7k` x=6/7 onto scratch (`16`) / FREE ZONE (`17`)
   // because those channel digits come next in numeric order.
   const laneMap = buildBmsonLaneMap(soundChannels, json.bmson.info.modeHint);
   for (let index = 0; index < soundChannels.length; index += 1) {
@@ -348,18 +326,12 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
     }
   }
 
-  // beatoraja `key_channels` extension — mine notes. Each channel
-  // is a WAV bound to one or more `(x, y, damage)` entries; the
-  // sample plays on contact and `damage` (0..100 gauge percent)
-  // bleeds the gauge. We register the WAV after the
-  // sound-channels block so the WAV ID space stays contiguous,
-  // route notes through the same `mode_hint`-aware lane map, and
-  // emit them on BMS landmine channels (`Dx` / `Ex`) so the
-  // downstream `extractTimedNotes` landmine extractor sees them.
-  // The bmson per-mine `damage` is preserved on
-  // `event.bmson.damage` so consumers can opt into custom
-  // damage; players that don't read it fall through to the
-  // BMS-side default.
+    // beatoraja `key_channels` extension — mine notes. Each channel is a WAV bound to one or more `(x, y, damage)`
+  // entries; the sample plays on contact and `damage` (0..100 gauge percent) bleeds the gauge. We register the WAV
+  // after the sound-channels block so the WAV ID space stays contiguous, route notes through the same `mode_hint`-aware
+  // lane map, and emit them on BMS landmine channels (`Dx` / `Ex`) so the downstream `extractTimedNotes` landmine
+  // extractor sees them. The bmson per-mine `damage` is preserved on `event.bmson.damage` so consumers can opt into
+  // custom damage; players that don't read it fall through to the BMS-side default.
   const keyChannels = normalizeBmsonKeyChannels(document.key_channels);
   for (let index = 0; index < keyChannels.length; index += 1) {
     const keyChannel = keyChannels[index]!;
@@ -371,8 +343,7 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
       }
       const lane = Number.isFinite(note.x) ? Math.floor(note.x!) : 0;
       if (lane <= 0) {
-        // Lane 0 / missing `x` would map onto a BGM channel which
-        // makes no sense for a mine — skip rather than silently
+                // Lane 0 / missing `x` would map onto a BGM channel which makes no sense for a mine — skip rather than silently
         // emit a malformed event.
         continue;
       }
@@ -392,7 +363,8 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
         value: wavKey,
       };
       const noteContinue = typeof note.c === 'boolean' ? note.c : undefined;
-      const noteLength = typeof note.l === 'number' && Number.isFinite(note.l) && note.l >= 0 ? Math.floor(note.l) : undefined;
+      const noteLength =
+        typeof note.l === 'number' && Number.isFinite(note.l) && note.l >= 0 ? Math.floor(note.l) : undefined;
       if (noteLength !== undefined || noteContinue !== undefined || note.damage !== undefined) {
         event.bmson = {};
         if (noteLength !== undefined) event.bmson.l = noteLength;
@@ -421,23 +393,17 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   json.preservation.bmson.stopEvents = stopEvents;
   stopEvents.forEach((stopEvent, index) => {
     const key = intToBase36(index + 1, 2);
-    // Spec: `stop_events.duration` is measured in **pulses** at
-    // the chart's `resolution`. The downstream timing resolver
-    // reads `resources.stop[key]` through the BMS-style
-    // `(value / 192) × (240/bpm)` formula, which expects the
-    // value in "1/192-of-a-measure" units (1 measure = 4 beats
-    // = 192 BMS-spec STOP units, so 1 beat = 48 BMS units). To
-    // keep the BMS / bmson paths sharing one formula, convert
-    // bmson pulses into the equivalent 1/192-measure units at
+        // Spec: `stop_events.duration` is measured in **pulses** at the chart's `resolution`. The downstream timing
+    // resolver reads `resources.stop[key]` through the BMS-style `(value / 192) × (240/bpm)` formula, which expects the
+    // value in "1/192-of-a-measure" units (1 measure = 4 beats = 192 BMS-spec STOP units, so 1 beat = 48 BMS units). To
+    // keep the BMS / bmson paths sharing one formula, convert bmson pulses into the equivalent 1/192-measure units at
     // parse time:
     //
-    //   bms_units = pulses × 48 / resolution
+    // bms_units = pulses × 48 / resolution
     //
-    // Default `resolution = 240` → 1 beat (`duration = 240`)
-    // becomes `48` BMS units, which the formula evaluates to
-    // `(48 / 192) × (240/bpm) = 60/bpm` seconds — exactly one
-    // beat. Without this conversion bmson stops were ~5×
-    // longer than authored at the default resolution.
+    // Default `resolution = 240` → 1 beat (`duration = 240`) becomes `48` BMS units, which the formula evaluates to
+    // `(48 / 192) × (240/bpm) = 60/bpm` seconds — exactly one beat. Without this conversion bmson stops were ~5× longer
+    // than authored at the default resolution.
     json.resources.stop[key] = (stopEvent.duration * 48) / resolution;
     const { measure, position } = positionResolver(stopEvent.y);
     json.events.push({
@@ -478,10 +444,9 @@ function parseJsonDocument(raw: Partial<BeMusicJson>): BeMusicJson {
     .filter((measure) => measure.length > 0)
     .sort((left, right) => left.index - right.index);
   const rawEvents = Array.isArray(raw.events) ? raw.events : [];
-  // When re-parsing a previously-emitted BMS-JSON, honour the
-  // chart's recorded base so case-sensitive base-62 IDs don't get
-  // folded back to uppercase. The full `bms` extension is normalised
-  // a few lines below; we only need the `base` hint here.
+    // When re-parsing a previously-emitted BMS-JSON, honour the chart's recorded base so case-sensitive base-62 IDs don't
+  // get folded back to uppercase. The full `bms` extension is normalised a few lines below; we only need the `base`
+  // hint here.
   const rawBmsBase = (rawBms as { base?: unknown } | undefined)?.base;
   const reparseBase: 36 | 62 = rawBmsBase === 62 ? 62 : 36;
   json.events = sortAndNormalizeEvents(rawEvents as Array<BeMusicEvent | Record<string, unknown>>, reparseBase);
@@ -563,11 +528,9 @@ export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsCon
   return resolveControlFlow(input, {
     random: options.random,
     applyHeader: (json, command, commandRaw, value) => {
-      // Replay path: prefer the case-preserved `commandRaw` when
-      // available so a `#WAV0a` captured inside a `#RANDOM` /
-      // `#IF` block on a `#BASE 62` chart still registers under
-      // the lowercase key. Falls back to the uppercased `command`
-      // for the common base-36 case-insensitive path.
+            // Replay path: prefer the case-preserved `commandRaw` when available so a `#WAV0a` captured inside a `#RANDOM` /
+      // `#IF` block on a `#BASE 62` chart still registers under the lowercase key. Falls back to the uppercased
+      // `command` for the common base-36 case-insensitive path.
       pushHeaderLine(json, command, commandRaw ?? command, value, json.bms.base === 62 ? 62 : 36);
     },
   });
@@ -588,14 +551,10 @@ function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
       text: decodeUtf8Text(buffer),
     };
   }
-  // BMS spec — honour `#CHARSET <name>` at the top of the file
-  // before falling back to the shift_jis default. The directive
-  // is authored before any non-ASCII text, so a latin1
-  // first-pass (every byte → its 0..255 code point) always
-  // surfaces it. The web `TextDecoder` accepts the same
-  // canonical encoding names `canonicaliseBmsCharset` produces
-  // (utf-8 / shift_jis / euc-jp / utf-16le / utf-16be /
-  // iso-8859-1), so we can route directly through it without an
+    // BMS spec — honour `#CHARSET <name>` at the top of the file before falling back to the shift_jis default. The
+  // directive is authored before any non-ASCII text, so a latin1 first-pass (every byte → its 0..255 code point) always
+  // surfaces it. The web `TextDecoder` accepts the same canonical encoding names `canonicaliseBmsCharset` produces
+  // (utf-8 / shift_jis / euc-jp / utf-16le / utf-16be / iso-8859-1), so we can route directly through it without an
   // intermediate library.
   const declaredCharset = extractDeclaredBmsCharset(decodeLatin1Text(buffer));
   if (declaredCharset) {
@@ -616,21 +575,16 @@ function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
 }
 
 function decodeLatin1Text(buffer: Uint8Array): string {
-  // `iso-8859-1` is required by the WHATWG Encoding spec, so
-  // every browser and Node ships it. Maps every byte 1:1 to a
-  // Unicode code point in [0, 255], which lets the
-  // `#CHARSET` scan look at the file's bytes without
-  // misinterpretation regardless of the actual encoding.
+    // `iso-8859-1` is required by the WHATWG Encoding spec, so every browser and Node ships it. Maps every byte 1:1 to a
+  // Unicode code point in [0, 255], which lets the `#CHARSET` scan look at the file's bytes without misinterpretation
+  // regardless of the actual encoding.
   return new TextDecoder('iso-8859-1').decode(buffer);
 }
 
 function decodeWithDeclaredCharset(buffer: Uint8Array, charset: string): DecodedBmsText | undefined {
-  // BMS `#CHARSET` declares the encoding for the file. We map
-  // the canonicalised name onto a `TextDecoder` label and
-  // strip a leading BOM where applicable. `TextDecoder`
-  // throws synchronously for unrecognised labels, which we
-  // treat as "fall back to autodetection" — same as a value
-  // that didn't canonicalise.
+    // BMS `#CHARSET` declares the encoding for the file. We map the canonicalised name onto a `TextDecoder` label and
+  // strip a leading BOM where applicable. `TextDecoder` throws synchronously for unrecognised labels, which we treat as
+  // "fall back to autodetection" — same as a value that didn't canonicalise.
   try {
     switch (charset) {
       case 'utf-8':
@@ -779,10 +733,8 @@ interface ParsedHeaderDirectiveLine {
   /** Uppercased command — used for keyword matching (case-insensitive). */
   command: string;
   /**
-   * Case-preserved command. For base-62 indexed-header keys, the
-   * trailing 2 characters of `commandRaw` hold the lowercase-aware
-   * ID — uppercasing here would collapse `#WAV0a` and `#WAV0A`
-   * back into the same slot.
+   * Case-preserved command. For base-62 indexed-header keys, the trailing 2 characters of `commandRaw` hold the
+   * lowercase-aware ID — uppercasing here would collapse `#WAV0a` and `#WAV0A` back into the same slot.
    */
   commandRaw: string;
   value: string;
@@ -856,15 +808,12 @@ function forEachLine(input: string, visitor: (line: string) => void): void {
 }
 
 /**
- * Pre-scans the BMS source for the `#BASE` directive (the
- * beatoraja base-62 extension switch). Returns 62 if `#BASE 62`
+ * Pre-scans the BMS source for the `#BASE` directive (the beatoraja base-62 extension switch). Returns 62 if `#BASE 62`
  * appears before the first object data line, otherwise 36.
  *
- * We bail out at the first non-header (object) line because real
- * implementations require `#BASE` to come before any object
- * references — applying it retroactively would change which IDs
- * get folded vs. preserved AFTER they were already normalised in
- * earlier headers.
+ * We bail out at the first non-header (object) line because real implementations require `#BASE` to come before any
+ * object references — applying it retroactively would change which IDs get folded vs. preserved AFTER they were already
+ * normalised in earlier headers.
  */
 function detectBmsBase(input: string): 36 | 62 {
   let resolved: 36 | 62 = 36;
@@ -875,8 +824,7 @@ function detectBmsBase(input: string): 36 | 62 {
     if (!line.startsWith('#')) return;
     const second = line.charCodeAt(1);
     if (second >= 0x30 && second <= 0x39) {
-      // Hit the first `#xxxYY:...` object line — `#BASE` after this
-      // point is too late to take effect.
+      // Hit the first `#xxxYY:...` object line — `#BASE` after this point is too late to take effect.
       stop = true;
       return;
     }
@@ -893,10 +841,9 @@ function pushHeaderLine(json: BeMusicJson, command: string, commandRaw: string, 
   const objectCommand = command.match(INDEXED_HEADER_COMMAND);
   if (objectCommand) {
     const directive = objectCommand[1] as IndexedHeaderDirective;
-    // For base-62 charts, lift the key from the case-preserved
-    // `commandRaw`; the trailing 2 chars hold the lowercase-aware
-    // ID. `commandRaw[directive.length...]` falls back to the
-    // uppercased form for base-36 (where case folding is intended).
+        // For base-62 charts, lift the key from the case-preserved `commandRaw`; the trailing 2 chars hold the
+    // lowercase-aware ID. `commandRaw[directive.length...]` falls back to the uppercased form for base-36 (where case
+    // folding is intended).
     const keyRaw = base === 62 ? commandRaw.slice(directive.length) : objectCommand[2]!;
     const key = normalizeObjectKey(keyRaw, base);
     applyIndexedHeaderLine(json, directive, key, value);
@@ -974,8 +921,7 @@ function pushHeaderLine(json: BeMusicJson, command: string, commandRaw: string, 
       return;
     case 'LNOBJ':
       if (value.length > 0) {
-        // `#LNOBJ` carries an object-ID payload — preserve case
-        // for `#BASE 62` charts so the LN-end marker matches its
+                // `#LNOBJ` carries an object-ID payload — preserve case for `#BASE 62` charts so the LN-end marker matches its
         // case-sensitive `#WAVxx` counterpart.
         const normalizedValue = normalizeObjectKey(value, base);
         json.bms.lnObjs = [...(json.bms.lnObjs ?? []), normalizedValue];
@@ -1018,13 +964,10 @@ function pushHeaderLine(json: BeMusicJson, command: string, commandRaw: string, 
       return;
     case 'WAVCMD':
       if (value.length > 0) {
-        // BMS spec — `#WAVCMD pp xx vv` declares per-slot WAV
-        // playback overrides (pitch / volume / loop). Real
-        // charts emit ONE line per `(parameter, slot)` pair, so
-        // we collect every line into `wavCmds`. The legacy
-        // single-string `wavCmd` field is preserved for the
-        // first occurrence so older consumers that only read
-        // the head value keep compiling.
+                // BMS spec — `#WAVCMD pp xx vv` declares per-slot WAV playback overrides (pitch / volume / loop). Real charts
+        // emit ONE line per `(parameter, slot)` pair, so we collect every line into `wavCmds`. The legacy single-string
+        // `wavCmd` field is preserved for the first occurrence so older consumers that only read the head value keep
+        // compiling.
         json.bms.wavCmds.push(value);
         if (typeof json.bms.wavCmd !== 'string') {
           json.bms.wavCmd = value;
@@ -1062,11 +1005,9 @@ function pushHeaderLine(json: BeMusicJson, command: string, commandRaw: string, 
       }
       return;
     case 'BASE':
-      // `#BASE 62` is the beatoraja base-62 ID extension. The base
-      // was already resolved during pre-scan (`detectBmsBase`) and
-      // stamped onto `json.bms.base` before this header reaches us;
-      // swallow the directive here so it doesn't leak into
-      // `metadata.extras`.
+            // `#BASE 62` is the beatoraja base-62 ID extension. The base was already resolved during pre-scan
+      // (`detectBmsBase`) and stamped onto `json.bms.base` before this header reaches us; swallow the directive here so
+      // it doesn't leak into `metadata.extras`.
       return;
     default:
       if (value.length > 0) {
@@ -1161,12 +1102,9 @@ function applyIndexedNumberValue(values: Record<string, number>, key: string, va
 
 function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
   const migratedExtras: Record<string, string> = {};
-  // Honour `#BASE 62` so any indexed-header keys that landed in
-  // `metadata.extras` (typically from a re-parsed JSON whose
-  // upstream parser didn't recognise the directive) get preserved
-  // in their authored case rather than folded to uppercase. The
-  // common base-36 case-insensitive path keeps its existing
-  // behaviour because `idBase` is 36 by default.
+    // Honour `#BASE 62` so any indexed-header keys that landed in `metadata.extras` (typically from a re-parsed JSON
+  // whose upstream parser didn't recognise the directive) get preserved in their authored case rather than folded to
+  // uppercase. The common base-36 case-insensitive path keeps its existing behaviour because `idBase` is 36 by default.
   const idBase = resolveBmsBase(json);
 
   for (const [command, value] of Object.entries(json.metadata.extras ?? {})) {
@@ -1193,8 +1131,7 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
     }
     if (upper === 'LNOBJ') {
       if (value.length > 0) {
-        // The migration's `value` is the directive payload (e.g.
-        // `AA` for `#LNOBJ AA`), so the chart-base case-rule
+                // The migration's `value` is the directive payload (e.g. `AA` for `#LNOBJ AA`), so the chart-base case-rule
         // applies just like for any other indexed key.
         const normalizedValue = normalizeObjectKey(value, idBase);
         json.bms.lnObjs = [...(json.bms.lnObjs ?? []), normalizedValue];
@@ -1249,9 +1186,8 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
     }
     if (upper === 'WAVCMD') {
       if (value.length > 0) {
-        // Mirror the strict-path collection so non-strict
-        // ingestion (chart roundtrips through `metadata.extras`)
-        // also retains every line of `#WAVCMD pp xx vv`.
+                // Mirror the strict-path collection so non-strict ingestion (chart roundtrips through `metadata.extras`) also
+        // retains every line of `#WAVCMD pp xx vv`.
         if (!json.bms.wavCmds.includes(value)) {
           json.bms.wavCmds.push(value);
         }
@@ -1408,9 +1344,8 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   }
 
   const raw = input as Record<string, unknown>;
-  // Honour `#BASE 62` on re-parsed JSON so the indexed maps below
-  // (`exRank`, `argb`, `wav`/`bmp`/…) preserve lowercase keys
-  // instead of folding them through the default base-36 path.
+    // Honour `#BASE 62` on re-parsed JSON so the indexed maps below (`exRank`, `argb`, `wav`/`bmp`/…) preserve lowercase
+  // keys instead of folding them through the default base-36 path.
   if (raw.base === 62) {
     normalized.base = 62;
   }
@@ -1483,9 +1418,8 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   if (typeof wavCmd === 'string' && wavCmd.length > 0) {
     normalized.wavCmd = wavCmd;
   }
-  // Spec-faithful per-line list. Falls back to the legacy single
-  // string when only `wavCmd` was preserved (older roundtripped
-  // JSON), so older fixtures keep round-tripping.
+    // Spec-faithful per-line list. Falls back to the legacy single string when only `wavCmd` was preserved (older
+  // roundtripped JSON), so older fixtures keep round-tripping.
   normalized.wavCmds = normalizeBmsExtensionStringList(raw.wavCmds ?? raw.wav_cmds);
   if (normalized.wavCmds.length === 0 && typeof normalized.wavCmd === 'string') {
     normalized.wavCmds.push(normalized.wavCmd);
@@ -1672,9 +1606,8 @@ function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | und
       return undefined;
     }
     const command = raw.command.toUpperCase();
-    // Honour `commandRaw` when present and actually case-different
-    // — that's the base-62 marker. Otherwise drop it to keep the
-    // round-tripped JSON minimal.
+        // Honour `commandRaw` when present and actually case-different — that's the base-62 marker. Otherwise drop it to
+    // keep the round-tripped JSON minimal.
     const rawCommandValue = typeof raw.commandRaw === 'string' ? raw.commandRaw : undefined;
     const commandRaw = rawCommandValue && rawCommandValue !== command ? rawCommandValue : undefined;
     return {

@@ -4,8 +4,7 @@ import { checkBrowserCompat, summarizeBrowserCompat } from './browser-compat.ts'
 describe('checkBrowserCompat', () => {
   test('returns a stable item set with both required and optional entries', () => {
     const report = checkBrowserCompat();
-    // Stable IDs the host UI can rely on for filtering / styling
-    // — a regression here would silently break any persisted
+        // Stable IDs the host UI can rely on for filtering / styling — a regression here would silently break any persisted
     // dismissals or theme overrides keyed off the IDs.
     const ids = report.items.map((item) => item.id).sort();
     expect(ids).toEqual([
@@ -34,8 +33,7 @@ describe('checkBrowserCompat', () => {
   });
 
   test('does not crash in a non-browser env (Node test runner)', () => {
-    // The detectors swallow their own exceptions, so even with
-    // no `document` / no `HTMLCanvasElement` they must still
+        // The detectors swallow their own exceptions, so even with no `document` / no `HTMLCanvasElement` they must still
     // return a structured report. This test pins the contract.
     const report = checkBrowserCompat();
     expect(typeof report.ok).toBe('boolean');
@@ -44,12 +42,9 @@ describe('checkBrowserCompat', () => {
 
   test('ok flips to false when a required feature is missing', () => {
     const report = checkBrowserCompat();
-    // In the Vitest Node env there's no `document`, so WebGL2
-    // detection must return `false` (the canvas-creation path
-    // can't run). That alone is enough to flip `ok`. We don't
-    // assert false unconditionally — a future browser-running
-    // env (jsdom) might satisfy more detectors — but the
-    // expected-vs-detected relationship has to hold.
+        // In the Vitest Node env there's no `document`, so WebGL2 detection must return `false` (the canvas-creation path
+    // can't run). That alone is enough to flip `ok`. We don't assert false unconditionally — a future browser-running
+    // env (jsdom) might satisfy more detectors — but the expected-vs-detected relationship has to hold.
     const expectedOk = report.items.every((item) => !item.required || item.supported);
     expect(report.ok).toBe(expectedOk);
   });
@@ -71,15 +66,13 @@ describe('summarizeBrowserCompat', () => {
         { id: 'd', label: 'Workers', supported: false, required: true, note: '' },
       ],
     });
-    // Optional misses (`WebGPU`) are excluded — the summary is
-    // deliberately the "what's *blocking* you" line, not the
+        // Optional misses (`WebGPU`) are excluded — the summary is deliberately the "what's *blocking* you" line, not the
     // full feature inventory.
     expect(summary).toBe('Missing required: WebGL2, Workers');
   });
 
   test('returns undefined when ok is false but no required item is actually missing', () => {
-    // Defensive — `ok: false` with no missing required items
-    // shouldn't happen in normal usage, but the helper must not
+        // Defensive — `ok: false` with no missing required items shouldn't happen in normal usage, but the helper must not
     // emit the misleading "Missing required: " (with empty list).
     const summary = summarizeBrowserCompat({
       ok: false,

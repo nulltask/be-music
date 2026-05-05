@@ -567,10 +567,9 @@ describe('stringifier', () => {
     const parsed = parseChart(input);
     expect(parsed.bms.base).toBe(62);
 
-    // Re-parsing the stringified output must yield an equivalent
-    // chart. We assert at the JSON level (not raw line text) because
-    // the stringifier may reorder or rewrap lines — what matters
-    // is that the case-sensitive base-62 IDs survive intact.
+        // Re-parsing the stringified output must yield an equivalent chart. We assert at the JSON level (not raw line text)
+    // because the stringifier may reorder or rewrap lines — what matters is that the case-sensitive base-62 IDs survive
+    // intact.
     const output = stringifyBms(parsed);
     expect(output).toContain('#BASE 62');
 

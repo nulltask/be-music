@@ -45,12 +45,9 @@ export interface BmsonEventExtensions {
   l?: number;
   c?: boolean;
   /**
-   * Per-mine gauge damage in 0..100, sourced from a bmson
-   * `key_channels[].notes[].damage` entry. Only set on mine
-   * events emitted from `key_channels`; absent on regular
-   * `sound_channels`-derived note events. Consumers that don't
-   * read this field fall through to the BMS-side default
-   * (`<value>/2` in base-36, floor 4).
+   * Per-mine gauge damage in 0..100, sourced from a bmson `key_channels[].notes[].damage` entry. Only set on mine
+   * events emitted from `key_channels`; absent on regular `sound_channels`-derived note events. Consumers that don't
+   * read this field fall through to the BMS-side default (`<value>/2` in base-36, floor 4).
    */
   damage?: number;
 }
@@ -69,10 +66,8 @@ export interface BmsonInfoExtensions {
   artist?: string;
   genre?: string;
   /**
-   * Contributor list per the bmson 1.0.0 spec — entries are
-   * authored as `"key:value"` strings (e.g. `"illust:foo"`,
-   * `"obj:bar"`). Stored verbatim; consumers that want the
-   * structured `{ role, name }` form can run each entry through
+   * Contributor list per the bmson 1.0.0 spec — entries are authored as `"key:value"` strings (e.g. `"illust:foo"`,
+   * `"obj:bar"`). Stored verbatim; consumers that want the structured `{ role, name }` form can run each entry through
    * {@link parseBmsonSubartist}.
    */
   subartists?: string[];
@@ -129,10 +124,8 @@ export interface BmsonSoundChannelEntry {
 }
 
 /**
- * beatoraja extension — `key_channels[].notes[]` shape. Same
- * timing / lane / continuation fields as a regular sound-channel
- * note, plus a `damage` value (0..100 gauge percent) that carries
- * the per-mine damage authoring intent.
+ * beatoraja extension — `key_channels[].notes[]` shape. Same timing / lane / continuation fields as a regular
+ * sound-channel note, plus a `damage` value (0..100 gauge percent) that carries the per-mine damage authoring intent.
  */
 export interface BmsonKeyNoteEntry {
   x?: number;
@@ -152,14 +145,11 @@ export interface BmsonExtensions {
   info: BmsonInfoExtensions;
   bga: BmsonBgaExtensions;
   /**
-   * `true` when the bmson source authored an explicit `lines: []`
-   * (intentionally barline-less, the bmson 1.0.0 spec's
-   * "100 % minimoo-G effect"). Distinct from "lines missing"
-   * (`undefined` / not present), which the spec treats as "assume
-   * 4/4 and generate a barline every 4 quarter notes".
+   * `true` when the bmson source authored an explicit `lines: []` (intentionally barline-less, the bmson 1.0.0 spec's
+   * "100 % minimoo-G effect"). Distinct from "lines missing" (`undefined` / not present), which the spec treats as
+   * "assume 4/4 and generate a barline every 4 quarter notes".
    *
-   * Only ever `true` for bmson charts; BMS / json sources leave
-   * the field undefined and the renderer falls back to its
+   * Only ever `true` for bmson charts; BMS / json sources leave the field undefined and the renderer falls back to its
    * derive-from-events default.
    */
   barlinesSuppressed?: boolean;
@@ -191,13 +181,10 @@ export interface BmsControlFlowHeaderEntry {
   command: string;
   value: string;
   /**
-   * Case-preserved command. Only set when the original source line
-   * had a case that differs from the uppercased `command` — most
-   * commonly because the chart opted into the `#BASE 62` extension
-   * and the captured directive carries a lowercase ID (e.g.
-   * `#WAV0a` inside a `#RANDOM` block). Replay paths use this to
-   * reconstruct the lowercase key; if absent, callers fall back to
-   * `command` (= upper-cased) for case-insensitive base-36 charts.
+   * Case-preserved command. Only set when the original source line had a case that differs from the uppercased
+   * `command` — most commonly because the chart opted into the `#BASE 62` extension and the captured directive carries
+   * a lowercase ID (e.g. `#WAV0a` inside a `#RANDOM` block). Replay paths use this to reconstruct the lowercase key; if
+   * absent, callers fall back to `command` (= upper-cased) for case-insensitive base-36 charts.
    */
   commandRaw?: string;
 }
@@ -239,13 +226,10 @@ export interface BmsExtensions {
   changeOption: Record<string, string>;
   wavCmd?: string;
   /**
-   * Every `#WAVCMD pp xx vv` line as the raw post-directive text
-   * (one entry per source line, in declaration order). The legacy
-   * `wavCmd` field above retains the FIRST value only for
-   * backward compatibility — `wavCmds` is the spec-faithful
-   * representation, since real-world charts emit one line per
-   * `(parameter, slot)` pair. Consumers should iterate `wavCmds`
-   * and parse via `@be-music/chart`'s `parseBmsWavCmd` helper.
+   * Every `#WAVCMD pp xx vv` line as the raw post-directive text (one entry per source line, in declaration order). The
+   * legacy `wavCmd` field above retains the FIRST value only for backward compatibility — `wavCmds` is the
+   * spec-faithful representation, since real-world charts emit one line per `(parameter, slot)` pair. Consumers should
+   * iterate `wavCmds` and parse via `@be-music/chart`'s `parseBmsWavCmd` helper.
    */
   wavCmds: string[];
   exWav: Record<string, string>;
@@ -261,13 +245,10 @@ export interface BmsExtensions {
   divideProp?: string;
   charset?: string;
   /**
-   * `#BASE` directive — the radix used for object IDs (`#WAVxx`,
-   * `#BMPxx`, `#BPMxx`, channel object tokens, …). Default is base 36
-   * (case-insensitive `0-9A-Z`). The value `62` opts into the
-   * beatoraja-style base-62 extension where lowercase `a-z` is a
-   * separate ID space (so `#WAV0a` and `#WAV0A` reference different
-   * sounds). Only `36` and `62` are recognised; the field is omitted
-   * for the default base-36 case.
+   * `#BASE` directive — the radix used for object IDs (`#WAVxx`, `#BMPxx`, `#BPMxx`, channel object tokens, …). Default
+   * is base 36 (case-insensitive `0-9A-Z`). The value `62` opts into the beatoraja-style base-62 extension where
+   * lowercase `a-z` is a separate ID space (so `#WAV0a` and `#WAV0A` reference different sounds). Only `36` and `62`
+   * are recognised; the field is omitted for the default base-36 case.
    */
   base?: 62;
 }
@@ -447,24 +428,17 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
 }
 
 /**
- * Normalises a 2-character BMS object ID for storage. With the
- * default `base = 36`, lowercase `a-z` is folded to uppercase so
- * `#WAV0a` and `#WAV0A` collapse to the same key. With `base = 62`
- * (the beatoraja `#BASE 62` extension), case is preserved — they
- * become distinct IDs.
+ * Normalises a 2-character BMS object ID for storage. With the default `base = 36`, lowercase `a-z` is folded to
+ * uppercase so `#WAV0a` and `#WAV0A` collapse to the same key. With `base = 62` (the beatoraja `#BASE 62` extension),
+ * case is preserved — they become distinct IDs.
  *
- * Always returns a 2-character string. Single-character / empty /
- * malformed inputs are padded or truncated rather than raising
- * because the parser already filters at the syntactic level; this
- * is the post-syntactic normaliser.
+ * Always returns a 2-character string. Single-character / empty / malformed inputs are padded or truncated rather than
+ * raising because the parser already filters at the syntactic level; this is the post-syntactic normaliser.
  */
 /**
- * Structured form of a `bmson info.subartists[]` entry. The
- * spec authors entries as `"role:name"` strings; consumers that
- * want to group / filter contributors by role (illustrator,
- * objet author, lyricist, …) split each entry through
- * {@link parseBmsonSubartist} and read the structured pair
- * instead of the raw string.
+ * Structured form of a `bmson info.subartists[]` entry. The spec authors entries as `"role:name"` strings; consumers
+ * that want to group / filter contributors by role (illustrator, objet author, lyricist, …) split each entry through
+ * {@link parseBmsonSubartist} and read the structured pair instead of the raw string.
  */
 export interface BmsonSubartistEntry {
   /** The lower-cased role tag, or `undefined` if the entry is just a name. */
@@ -474,14 +448,11 @@ export interface BmsonSubartistEntry {
 }
 
 /**
- * Splits a `subartists[]` entry on the first `:` per the bmson
- * 1.0.0 convention. Whitespace around either half is trimmed,
- * and the role half is lower-cased so a downstream lookup
- * (e.g. `byRole.get('illust')`) is case-insensitive against
- * common variants (`Illust:` / `ILLUST:` / `illust:`).
+ * Splits a `subartists[]` entry on the first `:` per the bmson 1.0.0 convention. Whitespace around either half is
+ * trimmed, and the role half is lower-cased so a downstream lookup (e.g. `byRole.get('illust')`) is case-insensitive
+ * against common variants (`Illust:` / `ILLUST:` / `illust:`).
  *
- * Entries without a `:` (legacy free-form names) come back with
- * `role` undefined and the whole string as `name`.
+ * Entries without a `:` (legacy free-form names) come back with `role` undefined and the whole string as `name`.
  */
 export function parseBmsonSubartist(entry: string): BmsonSubartistEntry {
   if (typeof entry !== 'string') {
@@ -545,8 +516,7 @@ export function normalizeObjectKey(value: string, base: 36 | 62 = 36): string {
 }
 
 function normalizeObjectKeyBase62(value: string): string {
-  // Fast path: already 2 ASCII chars in `[0-9A-Za-z]`. Returned
-  // verbatim — no case folding in base-62 mode.
+  // Fast path: already 2 ASCII chars in `[0-9A-Za-z]`. Returned verbatim — no case folding in base-62 mode.
   if (value.length === 2) {
     const code0 = normalizeAsciiBase62Code(value.charCodeAt(0));
     const code1 = normalizeAsciiBase62Code(value.charCodeAt(1));
@@ -569,8 +539,7 @@ function normalizeObjectKeyBase62(value: string): string {
     if (code >= 0) {
       return `0${trimmed}`;
     }
-    // Out of base-62 range — fall back to the base-36 normaliser
-    // so callers still get a sensible 2-char key.
+    // Out of base-62 range — fall back to the base-36 normaliser so callers still get a sensible 2-char key.
     return `0${trimmed.slice(0, 1).toUpperCase()}`;
   }
   if (trimmed.length === 2) {
@@ -579,8 +548,7 @@ function normalizeObjectKeyBase62(value: string): string {
     if (code0 >= 0 && code1 >= 0) {
       return trimmed;
     }
-    // Mixed valid / invalid — uppercase as a deterministic
-    // fallback (matches the base-36 path's behaviour).
+    // Mixed valid / invalid — uppercase as a deterministic fallback (matches the base-36 path's behaviour).
     return trimmed.toUpperCase();
   }
   return trimmed.slice(0, 2);
@@ -598,19 +566,15 @@ export function normalizeChannel(value: string): string {
 }
 
 /**
- * Returns the radix the chart's object IDs should be interpreted
- * under. `36` is the default (case-folded `0-9A-Z`); `62` is the
- * beatoraja `#BASE 62` extension (case-sensitive `0-9A-Za-z`).
+ * Returns the radix the chart's object IDs should be interpreted under. `36` is the default (case-folded `0-9A-Z`);
+ * `62` is the beatoraja `#BASE 62` extension (case-sensitive `0-9A-Za-z`).
  *
- * Use this everywhere an `event.value` / `#WAVxx`-style key is
- * about to be looked up against `json.resources.wav`,
- * `json.resources.bpm`, etc. — passing the result through
- * `normalizeObjectKey(value, base)` so the lookup honours the
+ * Use this everywhere an `event.value` / `#WAVxx`-style key is about to be looked up against `json.resources.wav`,
+ * `json.resources.bpm`, etc. — passing the result through `normalizeObjectKey(value, base)` so the lookup honours the
  * chart's authored case-sensitivity.
  *
- * Accepts a partial (`Pick<...>`) chart so callers that only have
- * a `bms` slice (e.g. preservation walks) can use the same helper
- * without rebuilding the full JSON.
+ * Accepts a partial (`Pick<...>`) chart so callers that only have a `bms` slice (e.g. preservation walks) can use the
+ * same helper without rebuilding the full JSON.
  */
 export function resolveBmsBase(json: { bms?: { base?: 36 | 62 } } | undefined): 36 | 62 {
   return json?.bms?.base === 62 ? 62 : 36;

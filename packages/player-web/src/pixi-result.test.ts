@@ -5,10 +5,8 @@ import type { Lr2Skin } from '@be-music/lr2-skin';
 import type { PixiGameplayResultData } from './pixi-gameplay.ts';
 
 /**
- * Minimal LR2 skin shape that `computeResultOps` reads from. Only
- * `scratchFlip.flipResult` is consulted, but the function still
- * accepts the full `Lr2Skin` type — so we narrow via a cast and
- * keep the test fixture small.
+ * Minimal LR2 skin shape that `computeResultOps` reads from. Only `scratchFlip.flipResult` is consulted, but the
+ * function still accepts the full `Lr2Skin` type — so we narrow via a cast and keep the test fixture small.
  */
 function makeSkin(flipResult = false): Lr2Skin {
   return { scratchFlip: { flipResult, flipSide: false, disableFlip: false, reloadBanner: false } } as Lr2Skin;
@@ -30,11 +28,9 @@ interface ResultOverrides extends SongOverrides {
 }
 
 /**
- * Builds a `PixiGameplayResultData` with sensible defaults. The
- * fields `computeResultOps` actually reads are: `cleared`, score
- * counts, `song.chart.bmson.info.modeHint`, `song.chart.events`,
- * `song.chart.bms.player`, `song.chart.metadata.difficulty`. Other
- * fields are filler so the type checks.
+ * Builds a `PixiGameplayResultData` with sensible defaults. The fields `computeResultOps` actually reads are:
+ * `cleared`, score counts, `song.chart.bmson.info.modeHint`, `song.chart.events`, `song.chart.bms.player`,
+ * `song.chart.metadata.difficulty`. Other fields are filler so the type checks.
  */
 function makeResult(overrides: ResultOverrides = {}): PixiGameplayResultData {
   const chart: BeMusicJson = createEmptyJson();
@@ -49,9 +45,8 @@ function makeResult(overrides: ResultOverrides = {}): PixiGameplayResultData {
     chart.metadata.difficulty = overrides.difficulty;
   }
   if (overrides.channels) {
-    // BeMusicPosition is a `[numerator, denominator]` tuple; `[0, 1]`
-    // pins the event at measure-start which is fine for tests that
-    // only care about which channels exist.
+        // BeMusicPosition is a `[numerator, denominator]` tuple; `[0, 1]` pins the event at measure-start which is fine for
+    // tests that only care about which channels exist.
     chart.events = overrides.channels.map((channel) => ({ measure: 0, position: [0, 1], channel, value: '01' }));
   }
   const total = overrides.total ?? 100;
@@ -88,10 +83,9 @@ function makeResult(overrides: ResultOverrides = {}): PixiGameplayResultData {
 }
 
 describe('computeResultOps', () => {
-  // -- Cleared / failed gating (op 90 / 91) -------------------------
-  // The default LR2 result skin gates the chrome atlas (parts.tga vs
-  // parts_fail.tga) and the big "CLEARED" / "FAILED" graphic on
-  // these. Exactly one must be set per result.
+    // -- Cleared / failed gating (op 90 / 91) ------------------------- The default LR2 result skin gates the chrome
+  // atlas (parts.tga vs parts_fail.tga) and the big "CLEARED" / "FAILED" graphic on these. Exactly one must be set per
+  // result.
   describe('cleared / failed', () => {
     it('sets op 90 (cleared) when data.cleared is true', () => {
       const ops = computeResultOps(makeResult({ cleared: true }), makeSkin());
@@ -106,12 +100,9 @@ describe('computeResultOps', () => {
     });
   });
 
-  // -- Clear lamp (op 101..105) -------------------------------------
-  // The lamp determines which "STAGE CLEARED" / "FAILED" / "FULL
-  // COMBO" graphic shows. The branching priority is:
-  //   1. failed (gauge < 80)
-  //   2. full combo (cleared AND zero BAD/POOR)
-  //   3. normal (otherwise)
+    // -- Clear lamp (op 101..105) ------------------------------------- The lamp determines which "STAGE CLEARED" /
+  // "FAILED" / "FULL COMBO" graphic shows. The branching priority is: 1. failed (gauge < 80) 2. full combo (cleared AND
+  // zero BAD/POOR) 3. normal (otherwise)
   describe('clear lamp', () => {
     it('selects FAILED lamp when not cleared', () => {
       const ops = computeResultOps(makeResult({ cleared: false }), makeSkin());
@@ -138,11 +129,9 @@ describe('computeResultOps', () => {
     });
   });
 
-  // -- Result rank (op 300..308 NOW + 340..347 NEXT + 320..328 PREV)
-  // The result skin gates rank graphics on the **300 / 340** ranges
-  // (current / after-update), NOT the 200..207 select-screen range.
-  // An earlier revision of the renderer set 200..207 and every rank
-  // panel stayed hidden. These tests lock in the correct mapping.
+    // -- Result rank (op 300..308 NOW + 340..347 NEXT + 320..328 PREV) The result skin gates rank graphics on the **300 /
+  // 340** ranges (current / after-update), NOT the 200..207 select-screen range. An earlier revision of the renderer
+  // set 200..207 and every rank panel stayed hidden. These tests lock in the correct mapping.
   describe('result rank', () => {
     it('maps EX rate >= 8/9 to AAA on both NOW (300) and NEXT (340)', () => {
       // total=100 → ex max 200; exScore 178 = 89% > 8/9 ≈ 88.9%.
@@ -159,24 +148,22 @@ describe('computeResultOps', () => {
     });
 
     it('always sets PREV rank slot to 0 (no history yet)', () => {
-      // Until score persistence lands, every play is "first time" so
-      // the previous rank reads as rank-0 / "0 tier".
+      // Until score persistence lands, every play is "first time" so the previous rank reads as rank-0 / "0 tier".
       const ops = computeResultOps(makeResult({ total: 100, exScore: 200 }), makeSkin());
       expect(ops.has(RESULT_DYNAMIC_OPS.RANK_PREV_0)).toBe(true);
     });
 
     it('falls back to AAA when total <= 0 (empty chart)', () => {
-      // With total=0 the rate divisor is undefined; the implementation
-      // returns AAA so the rank panel still renders with something.
+            // With total=0 the rate divisor is undefined; the implementation returns AAA so the rank panel still renders with
+      // something.
       const ops = computeResultOps(makeResult({ total: 0, exScore: 0 }), makeSkin());
       expect(ops.has(RESULT_DYNAMIC_OPS.RANK_NOW_AAA)).toBe(true);
     });
   });
 
-  // -- Updated flags (op 330..335) ---------------------------------
-  // Without persisted score history every play is treated as an
-  // update — keeps the LR2 default skin's congratulatory artwork
-  // visible. When persistence lands these tests will need updating.
+    // -- Updated flags (op 330..335) --------------------------------- Without persisted score history every play is
+  // treated as an update — keeps the LR2 default skin's congratulatory artwork visible. When persistence lands these
+  // tests will need updating.
   describe('updated flags', () => {
     it('sets SCORE_UPDATED and RANK_UPDATED on every result', () => {
       const ops = computeResultOps(makeResult(), makeSkin());
@@ -185,10 +172,9 @@ describe('computeResultOps', () => {
     });
   });
 
-  // -- Result flip (op 350 / 351) -----------------------------------
-  // 350 = `#FLIPRESULT` not declared (default), 351 = declared.
-  // Skins gate side-specific panels on these; setting BOTH would
-  // double-render. Mutual exclusivity is the contract.
+    // -- Result flip (op 350 / 351) ----------------------------------- 350 = `#FLIPRESULT` not declared (default), 351 =
+  // declared. Skins gate side-specific panels on these; setting BOTH would double-render. Mutual exclusivity is the
+  // contract.
   describe('result flip', () => {
     it('sets RESULT_FLIP_DISABLED when the skin does not declare #FLIPRESULT', () => {
       const ops = computeResultOps(makeResult(), makeSkin(false));
@@ -203,10 +189,9 @@ describe('computeResultOps', () => {
     });
   });
 
-  // -- Key mode (dual range: SELECT 160..164 + KEYCONFIG 400..402)
-  // Different skin authors gate either way. Both ranges have to be
-  // set so a skin that uses op 160 (7K) AND a skin that uses op 400
-  // (7+14K) both render their per-keymode panels.
+    // -- Key mode (dual range: SELECT 160..164 + KEYCONFIG 400..402) Different skin authors gate either way. Both ranges
+  // have to be set so a skin that uses op 160 (7K) AND a skin that uses op 400 (7+14K) both render their per-keymode
+  // panels.
   describe('key mode', () => {
     it('sets 160 (7K) and 400 (7+14K) for an SP-7K chart', () => {
       // 7K means the chart uses key 6/7 (channels 18 / 19).
@@ -241,11 +226,9 @@ describe('computeResultOps', () => {
     });
   });
 
-  // -- Difficulty (op 150..155) ------------------------------------
-  // The default skin's `#IF,400,152` (7+14K NORMAL) per-difficulty
-  // panel relies on this. Verify each chart difficulty maps to the
-  // matching slot, and that "no difficulty declared" doesn't leave
-  // every panel blank (it falls back to NORMAL).
+    // -- Difficulty (op 150..155) ------------------------------------ The default skin's `#IF,400,152` (7+14K NORMAL)
+  // per-difficulty panel relies on this. Verify each chart difficulty maps to the matching slot, and that "no
+  // difficulty declared" doesn't leave every panel blank (it falls back to NORMAL).
   describe('difficulty echo', () => {
     it('sets DIFFICULTY_HYPER (153) for difficulty=3', () => {
       const ops = computeResultOps(makeResult({ difficulty: 3 }), makeSkin());

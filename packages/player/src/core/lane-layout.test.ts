@@ -17,9 +17,8 @@ describe('resolveSideKeySlot', () => {
   });
 
   test('PMS / 9 KEY (COMPAT) — 11..19 each map to lane slots 1..9', () => {
-    // Channels 16, 17, 18, 19 are LANE NOTES under 9KEY-COMPAT
-    // (not scratch / FREE ZONE), so they get distinct slots
-    // 6, 7, 8, 9 — matching `play_9.lr2skin`'s `#SRC_NOTE,1..9`.
+        // Channels 16, 17, 18, 19 are LANE NOTES under 9KEY-COMPAT (not scratch / FREE ZONE), so they get distinct slots 6,
+    // 7, 8, 9 — matching `play_9.lr2skin`'s `#SRC_NOTE,1..9`.
     expect(resolveSideKeySlot('11', '9')).toBe(1);
     expect(resolveSideKeySlot('15', '9')).toBe(5);
     expect(resolveSideKeySlot('16', '9')).toBe(6);
@@ -33,8 +32,7 @@ describe('resolveSideKeySlot', () => {
     expect(resolveSideKeySlot('23', '9')).toBe(7);
     expect(resolveSideKeySlot('24', '9')).toBe(8);
     expect(resolveSideKeySlot('25', '9')).toBe(9);
-    // Channels outside the PMS-STD 22..25 band on the 2P side
-    // are rejected — there's no `#SRC_NOTE` slot for them.
+    // Channels outside the PMS-STD 22..25 band on the 2P side are rejected — there's no `#SRC_NOTE` slot for them.
     expect(resolveSideKeySlot('21', '9')).toBe(-1);
     expect(resolveSideKeySlot('28', '9')).toBe(-1);
   });
@@ -85,8 +83,7 @@ describe('resolveLaneChannels', () => {
       { channel: '18' },
       { channel: '19' },
     ];
-    // Order: 11..19 — the 9 lanes of the PMS-COMPAT layout in
-    // left-to-right rendering order.
+    // Order: 11..19 — the 9 lanes of the PMS-COMPAT layout in left-to-right rendering order.
     expect(resolveLaneChannels(notes, '9')).toEqual(['11', '12', '13', '14', '15', '16', '17', '18', '19']);
   });
 

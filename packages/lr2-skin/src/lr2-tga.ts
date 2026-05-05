@@ -1,14 +1,11 @@
 /**
  * Minimal TrueVision TGA decoder for LR2 font sprite sheets.
  *
- * LR2 fonts use TGA images at 24-bit RGB or 32-bit BGRA, type 2
- * (uncompressed) or type 10 (RLE). Other variants — color-mapped,
- * grayscale, 16-bit BGR(A)5551 — aren't seen in shipped LR2
- * themes so they're not supported here.
+ * LR2 fonts use TGA images at 24-bit RGB or 32-bit BGRA, type 2 (uncompressed) or type 10 (RLE). Other variants —
+ * color-mapped, grayscale, 16-bit BGR(A)5551 — aren't seen in shipped LR2 themes so they're not supported here.
  *
- * Output is `ImageData` so the caller can hand it directly to
- * `createImageBitmap` for Pixi texture upload, or paint it onto
- * an offscreen canvas.
+ * Output is `ImageData` so the caller can hand it directly to `createImageBitmap` for Pixi texture upload, or paint it
+ * onto an offscreen canvas.
  */
 
 interface TgaHeader {
@@ -27,9 +24,8 @@ function readHeader(bytes: Uint8Array): TgaHeader | undefined {
     idLength: bytes[0]!,
     colorMapType: bytes[1]!,
     imageType: bytes[2]!,
-    // bytes 3-7 = ColorMap spec (skipped — we don't support indexed)
-    // bytes 8-9 = X origin (LR2 uses 0)
-    // bytes 10-11 = Y origin
+        // bytes 3-7 = ColorMap spec (skipped — we don't support indexed) bytes 8-9 = X origin (LR2 uses 0) bytes 10-11 = Y
+    // origin
     width: bytes[12]! | (bytes[13]! << 8),
     height: bytes[14]! | (bytes[15]! << 8),
     pixelDepth: bytes[16]!,
@@ -38,8 +34,7 @@ function readHeader(bytes: Uint8Array): TgaHeader | undefined {
 }
 
 /**
- * Returns whether the supplied bytes look like a TGA we can
- * decode. Detects the (somewhat ambiguous) TGA-V2 footer
+ * Returns whether the supplied bytes look like a TGA we can decode. Detects the (somewhat ambiguous) TGA-V2 footer
  * "TRUEVISION-XFILE.\0" or otherwise sanity-checks the header.
  */
 export function isTgaImage(bytes: Uint8Array): boolean {
@@ -66,24 +61,19 @@ export function isTgaImage(bytes: Uint8Array): boolean {
 }
 
 /**
- * Decodes TGA bytes into an `ImageData`-shaped object (raw RGBA
- * pixel buffer + width / height). Returns `undefined` on
+ * Decodes TGA bytes into an `ImageData`-shaped object (raw RGBA pixel buffer + width / height). Returns `undefined` on
  * unsupported / malformed input.
  *
- * Note: the returned `data` is a plain `Uint8ClampedArray`, not a
- * DOM `ImageData` instance — the caller wraps it via
- * `new ImageData(data, width, height)` or passes it to
- * `ctx.putImageData` after constructing a fresh one. This keeps
- * the decoder usable in Node tests where `ImageData` isn't a
- * global.
+ * Note: the returned `data` is a plain `Uint8ClampedArray`, not a DOM `ImageData` instance — the caller wraps it via
+ * `new ImageData(data, width, height)` or passes it to `ctx.putImageData` after constructing a fresh one. This keeps
+ * the decoder usable in Node tests where `ImageData` isn't a global.
  */
 export function decodeTga(bytes: Uint8Array): { width: number; height: number; data: Uint8ClampedArray } | undefined {
   const header = readHeader(bytes);
   if (!header) return undefined;
   if (header.colorMapType !== 0) return undefined; // No paletted support
   if (header.width <= 0 || header.height <= 0) return undefined;
-  // Image data starts after the 18-byte header + ID field + color
-  // map (skipped — we rejected colorMapType != 0).
+  // Image data starts after the 18-byte header + ID field + color map (skipped — we rejected colorMapType != 0).
   const pixelDataStart = 18 + header.idLength;
   if (pixelDataStart > bytes.length) return undefined;
 
@@ -91,11 +81,8 @@ export function decodeTga(bytes: Uint8Array): { width: number; height: number; d
   if (![1, 2, 3, 4].includes(bytesPerPixel)) return undefined;
   const totalPixels = header.width * header.height;
 
-  // Image type values:
-  //   2  = uncompressed TrueColor RGB / RGBA
-  //   3  = uncompressed grayscale
-  //   10 = RLE TrueColor RGB / RGBA
-  //   11 = RLE grayscale
+    // Image type values: 2 = uncompressed TrueColor RGB / RGBA 3 = uncompressed grayscale 10 = RLE TrueColor RGB / RGBA
+  // 11 = RLE grayscale
   const isRle = header.imageType === 10 || header.imageType === 11;
   const isGrayscale = header.imageType === 3 || header.imageType === 11;
   if (!isRle && header.imageType !== 2 && header.imageType !== 3) {
@@ -111,9 +98,8 @@ export function decodeTga(bytes: Uint8Array): { width: number; height: number; d
     decodeUncompressed(bytes.subarray(pixelDataStart), bytesPerPixel, pixels, totalPixels, isGrayscale);
   }
 
-  // TGA origin: bit 5 of imageDescriptor (`0x20`) flags top-left
-  // origin. When clear, the image is stored bottom-up and we flip
-  // rows so the resulting canvas-friendly buffer is top-down.
+    // TGA origin: bit 5 of imageDescriptor (`0x20`) flags top-left origin. When clear, the image is stored bottom-up and
+  // we flip rows so the resulting canvas-friendly buffer is top-down.
   const topDown = (header.imageDescriptor & 0x20) !== 0;
   if (!topDown) {
     flipRows(pixels, header.width, header.height);
@@ -136,10 +122,8 @@ function decodeUncompressed(
 /**
  * Decodes TGA RLE packets. Each packet starts with a header byte:
  *
- * - `bit 7 = 1` (`0x80..0xFF`) — Run-length packet: repeat the
- *   following pixel `(header & 0x7F) + 1` times.
- * - `bit 7 = 0` (`0x00..0x7F`) — Raw packet: `(header & 0x7F) + 1`
- *   pixels stored verbatim.
+ * - `bit 7 = 1` (`0x80..0xFF`) — Run-length packet: repeat the following pixel `(header & 0x7F) + 1` times.
+ * - `bit 7 = 0` (`0x00..0x7F`) — Raw packet: `(header & 0x7F) + 1` pixels stored verbatim.
  *
  * Returns `false` on truncation.
  */
@@ -201,8 +185,7 @@ function writePixel(
     return;
   }
   if (bytesPerPixel === 2) {
-    // 16-bit BGR(A)5551 — high bit = alpha. Most LR2 fonts don't
-    // use this, but we still support it for completeness.
+    // 16-bit BGR(A)5551 — high bit = alpha. Most LR2 fonts don't use this, but we still support it for completeness.
     const lo = src[srcIdx] ?? 0;
     const hi = src[srcIdx + 1] ?? 0;
     const bgr = lo | (hi << 8);

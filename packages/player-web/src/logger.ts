@@ -1,24 +1,16 @@
 /**
  * Scoped console logger with a coloured prefix label.
  *
- * Replaces the project's prior convention of writing
- * `console.log('[scope] msg')` with a `logger('scope').info(msg)`
- * call so devtools renders the scope as a coloured pill rather
- * than as plain bracketed text. Each scope gets a deterministic
- * colour (djb2 hash → fixed palette) so the same subsystem looks
- * the same across reloads, and the bracket characters around the
- * scope are dropped.
+ * Replaces the project's prior convention of writing `console.log('[scope] msg')` with a `logger('scope').info(msg)`
+ * call so devtools renders the scope as a coloured pill rather than as plain bracketed text. Each scope gets a
+ * deterministic colour (djb2 hash → fixed palette) so the same subsystem looks the same across reloads, and the bracket
+ * characters around the scope are dropped.
  *
- * Levels follow the standard `console` triage:
- * - `info`: state changes / one-shot lifecycle events. Visible
- *   under "Info" in devtools by default.
- * - `debug`: per-frame / high-volume diagnostic events. Filtered
- *   out by Chrome devtools' "Verbose" toggle by default, so they
- *   stay out of the way unless the user opts in.
- * - `warn` / `error`: as usual; passed through to the matching
- *   `console.*` so the host's existing devtools surface for
- *   warnings (yellow background, optional stack trace) keeps
- *   working.
+ * Levels follow the standard `console` triage: - `info`: state changes / one-shot lifecycle events. Visible under
+ * "Info" in devtools by default. - `debug`: per-frame / high-volume diagnostic events. Filtered out by Chrome devtools'
+ * "Verbose" toggle by default, so they stay out of the way unless the user opts in. - `warn` / `error`: as usual;
+ * passed through to the matching `console.*` so the host's existing devtools surface for warnings (yellow background,
+ * optional stack trace) keeps working.
  *
  * Usage:
  * ```ts
@@ -37,10 +29,9 @@ export interface Logger {
 }
 
 /**
- * Palette picked to be readable on both light and dark devtools
- * themes. Avoid pure red — it's reserved for `console.error` /
- * `console.warn` framing — and hyper-saturated cyans, which
- * vibrate against the white background in Chrome's light theme.
+ * Palette picked to be readable on both light and dark devtools themes. Avoid pure red — it's reserved for
+ * `console.error` / `console.warn` framing — and hyper-saturated cyans, which vibrate against the white background in
+ * Chrome's light theme.
  */
 const COLOR_PALETTE: ReadonlyArray<string> = [
   '#ffd166', // amber (matches the demo's accent)
@@ -54,10 +45,8 @@ const COLOR_PALETTE: ReadonlyArray<string> = [
 ];
 
 /**
- * Cache logger instances per scope so callers can re-acquire by
- * scope name (`logger('gameplay')`) without rebuilding the
- * inline-style strings on every call. Cheap, but matters for
- * the per-frame debug paths.
+ * Cache logger instances per scope so callers can re-acquire by scope name (`logger('gameplay')`) without rebuilding
+ * the inline-style strings on every call. Cheap, but matters for the per-frame debug paths.
  */
 const cache = new Map<string, Logger>();
 
@@ -71,10 +60,8 @@ export function logger(scope: string): Logger {
 
 function createLogger(scope: string): Logger {
   const color = pickColor(scope);
-  // CSS-styled prefix using the `%c` directive. The scope label
-  // gets a tinted-background pill; the trailing `%c` resets so
-  // the rest of the message renders with the host's default
-  // styling (otherwise the colour would bleed into every
+    // CSS-styled prefix using the `%c` directive. The scope label gets a tinted-background pill; the trailing `%c` resets
+  // so the rest of the message renders with the host's default styling (otherwise the colour would bleed into every
   // subsequent argument).
   const prefix = `%c${scope}%c`;
   const labelStyle = [
@@ -107,16 +94,14 @@ function createLogger(scope: string): Logger {
 }
 
 /**
- * djb2 string hash, modded into the palette index. Stable across
- * runs so a given scope name maps to the same colour every
- * reload — keeps the user's "I know `gameplay` is amber"
- * intuition usable across debugging sessions.
+ * djb2 string hash, modded into the palette index. Stable across runs so a given scope name maps to the same colour
+ * every reload — keeps the user's "I know `gameplay` is amber" intuition usable across debugging sessions.
  */
 function pickColor(scope: string): string {
   let hash = 5381;
   for (let index = 0; index < scope.length; index += 1) {
-    // `Math.imul` keeps the multiplication 32-bit so the hash
-    // doesn't drift into IEEE 754 territory on long scope names.
+        // `Math.imul` keeps the multiplication 32-bit so the hash doesn't drift into IEEE 754 territory on long scope
+    // names.
     hash = (Math.imul(hash, 33) ^ scope.charCodeAt(index)) | 0;
   }
   return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length]!;

@@ -1,17 +1,13 @@
 /**
  * Lightweight per-section frame timing tracker.
  *
- * Wrap each render-loop section in `tracker.time(label, fn)`; once a
- * second the tracker prints a console summary with avg / p95 / max
- * per section, sorted by total time spent. Each section also emits a
- * `performance.mark` / `performance.measure` so the same data shows
- * up under the "Timings" track in Chrome DevTools' Performance tab.
+ * Wrap each render-loop section in `tracker.time(label, fn)`; once a second the tracker prints a console summary with
+ * avg / p95 / max per section, sorted by total time spent. Each section also emits a `performance.mark` /
+ * `performance.measure` so the same data shows up under the "Timings" track in Chrome DevTools' Performance tab.
  *
- * Enable by adding `?perf` to the dev URL (or by setting
- * `globalThis.__BE_MUSIC_PERF__ = true` from the console). When
- * disabled, `time()` is a thin wrapper that does no measurement and
- * returns the function result directly — safe to leave wired up in
- * production.
+ * Enable by adding `?perf` to the dev URL (or by setting `globalThis.__BE_MUSIC_PERF__ = true` from the console). When
+ * disabled, `time()` is a thin wrapper that does no measurement and returns the function result directly — safe to
+ * leave wired up in production.
  */
 export class PerfTracker {
   private readonly enabled: boolean;
@@ -20,10 +16,9 @@ export class PerfTracker {
   private frameCount = 0;
   private lastReport = performance.now();
   /**
-   * Timestamp of the previous tick start (rAF callback entry). Used to
-   * derive `frameInterval` — the actual wall-clock time between ticks,
-   * which captures everything the JS-only `time()` wrappers can't see
-   * (PixiJS auto-render, GPU dispatch, browser composite, GC pauses).
+   * Timestamp of the previous tick start (rAF callback entry). Used to derive `frameInterval` — the actual wall-clock
+   * time between ticks, which captures everything the JS-only `time()` wrappers can't see (PixiJS auto-render, GPU
+   * dispatch, browser composite, GC pauses).
    */
   private prevTickStart = 0;
 
@@ -37,11 +32,9 @@ export class PerfTracker {
   }
 
   /**
-   * Call once at the very start of the rAF callback. Records the gap
-   * between this tick and the previous one as a `frameInterval`
-   * sample, so the periodic report shows e.g. `frameInterval avg=24ms`
-   * even when our `time()`-wrapped JS work sums to under 1 ms — that
-   * difference is where we should look for the real bottleneck.
+   * Call once at the very start of the rAF callback. Records the gap between this tick and the previous one as a
+   * `frameInterval` sample, so the periodic report shows e.g. `frameInterval avg=24ms` even when our `time()`-wrapped
+   * JS work sums to under 1 ms — that difference is where we should look for the real bottleneck.
    */
   public beginTick(): void {
     if (!this.enabled) return;
@@ -59,8 +52,7 @@ export class PerfTracker {
   }
 
   /**
-   * Times a render section. When perf is disabled this is just `fn()`
-   * — no measurement, no `performance.mark` overhead.
+   * Times a render section. When perf is disabled this is just `fn()` — no measurement, no `performance.mark` overhead.
    */
   public time<T>(section: string, fn: () => T): T {
     if (!this.enabled) {
@@ -84,11 +76,9 @@ export class PerfTracker {
   }
 
   /**
-   * Call once per frame at the end. Returns a report string when
-   * 1 second has elapsed since the previous report (otherwise
-   * undefined). The optional `extra` callback contributes one-off
-   * counters (e.g. scene-graph child counts) appended below the
-   * timing table.
+   * Call once per frame at the end. Returns a report string when 1 second has elapsed since the previous report
+   * (otherwise undefined). The optional `extra` callback contributes one-off counters (e.g. scene-graph child counts)
+   * appended below the timing table.
    */
   public endFrame(extra?: () => Record<string, number | string>): string | undefined {
     if (!this.enabled) {
@@ -136,8 +126,8 @@ export class PerfTracker {
 }
 
 function isPerfEnabled(): boolean {
-  // Allow runtime opt-in from the console without rebuilding —
-  // `globalThis.__BE_MUSIC_PERF__ = true; location.reload()`.
+    // Allow runtime opt-in from the console without rebuilding — `globalThis.__BE_MUSIC_PERF__ = true;
+  // location.reload()`.
   if ((globalThis as { __BE_MUSIC_PERF__?: boolean }).__BE_MUSIC_PERF__) {
     return true;
   }

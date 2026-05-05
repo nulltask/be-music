@@ -132,8 +132,7 @@ describe('json', () => {
 
   test('parseBmsonSubartist handles edge inputs gracefully', () => {
     expect(parseBmsonSubartist('')).toEqual({ name: '' });
-    // A leading colon (no role) collapses to a bare name so consumers
-    // don't see a phantom empty-string role.
+    // A leading colon (no role) collapses to a bare name so consumers don't see a phantom empty-string role.
     expect(parseBmsonSubartist(':just a name')).toEqual({ name: 'just a name' });
     // A trailing colon yields role with empty name.
     expect(parseBmsonSubartist('artist:')).toEqual({ role: 'artist', name: '' });

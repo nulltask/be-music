@@ -61,8 +61,7 @@ describe('extractDeclaredBmsCharset', () => {
   test('only scans the first 4 KB for cheapness', () => {
     const padding = '#PADDING ' + 'x'.repeat(4096);
     const chart = padding + '\n#CHARSET UTF-8\n';
-    // The directive is past the 4 KB cap, so the scan should
-    // miss it.
+    // The directive is past the 4 KB cap, so the scan should miss it.
     expect(extractDeclaredBmsCharset(chart)).toBeUndefined();
   });
 

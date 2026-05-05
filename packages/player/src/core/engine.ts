@@ -720,15 +720,11 @@ function resolveLandmineGaugeEffect(
   damage: number;
   gaugeDelta: number;
 } {
-  // Mine damage encodes the value in base-36 regardless of the
-  // chart's `#BASE` setting (the damage formula `value/2` is a
-  // BMS-spec constant, not an indexed-resource lookup), so the
-  // ID is normalised under the chart's base only to keep the
-  // returned `objectValue` in sync with the rest of the
-  // resource-key reporting. Mine charts that opt into base-62
-  // and use lowercase mine values will surface them verbatim
-  // here; the BASE36-pattern guard below still controls whether
-  // the value is interpreted numerically.
+    // Mine damage encodes the value in base-36 regardless of the chart's `#BASE` setting (the damage formula `value/2` is
+  // a BMS-spec constant, not an indexed-resource lookup), so the ID is normalised under the chart's base only to keep
+  // the returned `objectValue` in sync with the rest of the resource-key reporting. Mine charts that opt into base-62
+  // and use lowercase mine values will surface them verbatim here; the BASE36-pattern guard below still controls
+  // whether the value is interpreted numerically.
   const objectValue = normalizeObjectKey(landmineEvent.value, base);
   if (!BASE36_OBJECT_KEY_PATTERN.test(objectValue)) {
     return {
@@ -778,10 +774,8 @@ function createNoTuiPlaybackStateLogger(params: {
   writeOutput: (text: string) => void;
   summary: PlayerSummary;
   /**
-   * Object-ID radix used for resolving sample keys in
-   * `logLongNoteState`. Defaults to base 36; pass `62` for charts
-   * that opted into `#BASE 62` so lowercase IDs hit the right
-   * resource entry instead of being case-folded.
+   * Object-ID radix used for resolving sample keys in `logLongNoteState`. Defaults to base 36; pass `62` for charts
+   * that opted into `#BASE 62` so lowercase IDs hit the right resource entry instead of being case-folded.
    */
   base?: 36 | 62;
 }): PlaybackStateLogger {
@@ -2790,8 +2784,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
     if (!candidate) {
       if (refreshedHold) {
-        // Active LN re-tap inside the hold-grace window — input is
-        // part of the sustain, not a phantom press.
+        // Active LN re-tap inside the hold-grace window — input is part of the sustain, not a phantom press.
         return;
       }
       const fallback = findLaneSoundCandidate(notes, candidateChannels, nowSec);
@@ -2799,8 +2792,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         const suppressUntil = longNoteSuppressUntilSecondsByChannel.get(fallback.channel);
         const shouldSuppressFallback = suppressUntil !== undefined && nowSec < suppressUntil;
         if (shouldSuppressFallback) {
-          // LN repeat-suppress window — same intent as the hold path
-          // above, just on the cooldown side. Treat as benign.
+          // LN repeat-suppress window — same intent as the hold path above, just on the cooldown side. Treat as benign.
           return;
         }
         if (!uiEnabled) {
@@ -2816,18 +2808,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
         audioSession?.triggerEvent?.(fallback.event);
         if (activeFreeZoneChannels.has(fallback.channel)) {
-          // Free zone keysound — authored for empty-press playback.
-          // No POOR cue; this is intended audio.
+          // Free zone keysound — authored for empty-press playback. No POOR cue; this is intended audio.
           return;
         }
       }
-      // LR2-compatible 空POOR (empty POOR): phantom press with no
-      // candidate and no benign explanation. Apply the gauge delta
-      // (GROOVE / HARD -2, EASY -1, DEATH -100 — see
-      // `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR BGA,
-      // but DO NOT break combo or increment `summary.poor`. Real LR2
-      // behaviour: NORMAL / EASY make this nearly harmless;
-      // HARD / DEATH actually drain.
+            // LR2-compatible 空POOR (empty POOR): phantom press with no candidate and no benign explanation. Apply the gauge
+      // delta (GROOVE / HARD -2, EASY -1, DEATH -100 — see `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR
+      // BGA, but DO NOT break combo or increment `summary.poor`. Real LR2 behaviour: NORMAL / EASY make this nearly
+      // harmless; HARD / DEATH actually drain.
       applyLoggedGaugeJudge(nowSec, 'EMPTY_POOR', 'empty-poor');
       uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: nowSec });
       if (!uiEnabled) {
@@ -2837,9 +2825,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           ['reason', 'empty-poor'],
         ]);
       } else {
-        // Brief visual cue. The web-core gameplay scene maps this
-        // back to the LR2 `'poor'` skin slot (NOWJUDGE index 0/1
-        // share the same kind in our model).
+                // Brief visual cue. The web-core gameplay scene maps this back to the LR2 `'poor'` skin slot (NOWJUDGE index
+        // 0/1 share the same kind in our model).
         activeStateSignals?.publishJudgeCombo('POOR', combo);
       }
       return;
@@ -3406,10 +3393,8 @@ async function createAudioSessionIfEnabled(
     inferBmsLnTypeWhenMissing,
     options.signal,
   );
-  // Cache the chart's object-ID radix so the per-event runtime
-  // lookup below uses the same case-sensitivity as the keys in
-  // `samplesByKey` (which were extracted from `json.resources.wav`
-  // and therefore mirror the chart's authored case).
+    // Cache the chart's object-ID radix so the per-event runtime lookup below uses the same case-sensitivity as the keys
+  // in `samplesByKey` (which were extracted from `json.resources.wav` and therefore mirror the chart's authored case).
   const runtimeSampleIdBase = resolveBmsBase(json);
   throwIfAborted(options.signal);
   onLoadProgress?.({

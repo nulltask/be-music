@@ -205,21 +205,15 @@ export function renderGrooveGaugeElement(
   if (!baseTexture) {
     return;
   }
-  // LR2 spec (`docs/LR2SkinHelp.md` 8975 / 9012):
+    // LR2 spec (`docs/LR2SkinHelp.md` 8975 / 9012):
   //
-  //   ゲージ点灯時の赤・緑、ゲージ消灯時の赤・緑の順に並べて
-  //   src分割を行ってください。4の倍数でcycle>0ならちゃんと
-  //   アニメーションします
+  // ゲージ点灯時の赤・緑、ゲージ消灯時の赤・緑の順に並べて src分割を行ってください。4の倍数でcycle>0ならちゃんと アニメーションします
   //
-  // So `divx × divy` cells decompose into `frames = N / 4`
-  // animation frames; each frame is a contiguous group of 4
-  // cells in declaration order (active-red / active-green /
-  // inactive-red / inactive-green). The frame index advances
-  // by one every `cycle` ms relative to the SRC's `timer`.
-  // For LR2 default 7K (`divx=4, divy=1, cycle=0`) this is a
-  // single static 4-cell frame; for skins with multi-frame
-  // gauges (Quinine, etc.) the renderer cycles over time so
-  // the lit-tip "highlight" animation reaches every bead.
+  // So `divx × divy` cells decompose into `frames = N / 4` animation frames; each frame is a contiguous group of 4
+  // cells in declaration order (active-red / active-green / inactive-red / inactive-green). The frame index advances by
+  // one every `cycle` ms relative to the SRC's `timer`. For LR2 default 7K (`divx=4, divy=1, cycle=0`) this is a single
+  // static 4-cell frame; for skins with multi-frame gauges (Quinine, etc.) the renderer cycles over time so the lit-tip
+  // "highlight" animation reaches every bead.
   const divx = Math.max(1, gauge.source.divx);
   const divy = Math.max(1, gauge.source.divy);
   const totalCells = divx * divy;
@@ -239,10 +233,8 @@ export function renderGrooveGaugeElement(
   const totalUnits = 50;
   const clearThresholdUnit = Math.round((80 / 100) * totalUnits);
   const activeUnits = Math.round((percent / 100) * totalUnits);
-  // Peak-hold indicator: the bead AT the peak position is
-  // painted with the "active" cell variant even when the live
-  // fill has dropped below it. Skin-agnostic — uses the same
-  // 4-cell sprite group, just at the peak's bead position.
+    // Peak-hold indicator: the bead AT the peak position is painted with the "active" cell variant even when the live
+  // fill has dropped below it. Skin-agnostic — uses the same 4-cell sprite group, just at the peak's bead position.
   const peakPercent = Math.max(0, Math.min(100, options.peakPercent ?? percent));
   const peakIndex = Math.round((peakPercent / 100) * totalUnits) - 1;
   for (let unitIndex = 0; unitIndex < totalUnits; unitIndex += 1) {
@@ -250,15 +242,10 @@ export function renderGrooveGaugeElement(
     const isPeakIndicator = !isActive && unitIndex === peakIndex && peakIndex >= activeUnits;
     const useActiveCell = isActive || isPeakIndicator;
     const isClearZone = unitIndex >= clearThresholdUnit;
-    // LR2 spec ordering inside each 4-cell frame:
-    //   offset 0: 表赤 — lit, red (warning zone, below 80 %)
-    //   offset 1: 表緑 — lit, green (clear zone, ≥ 80 %)
-    //   offset 2: 裏赤 — unlit, red (warning zone)
-    //   offset 3: 裏緑 — unlit, green (clear zone)
-    // i.e. red marks the *below*-clear-threshold beads, green
-    // marks the clear zone — matches the IIDX-style "your
-    // gauge is below 80, you're in danger" colour cue. Earlier
-    // the frame ordering was correct but the zone mapping was
+        // LR2 spec ordering inside each 4-cell frame: offset 0: 表赤 — lit, red (warning zone, below 80 %) offset 1: 表緑 —
+    // lit, green (clear zone, ≥ 80 %) offset 2: 裏赤 — unlit, red (warning zone) offset 3: 裏緑 — unlit, green (clear zone)
+    // i.e. red marks the *below*-clear-threshold beads, green marks the clear zone — matches the IIDX-style "your gauge
+    // is below 80, you're in danger" colour cue. Earlier the frame ordering was correct but the zone mapping was
     // inverted; this patch restores `clearZone ? 1 : 0`.
     const offsetWithinFrame = (useActiveCell ? 0 : 2) + (isClearZone ? 1 : 0);
     const cellIndex = frameIndex * 4 + offsetWithinFrame;
@@ -322,66 +309,54 @@ export function computeFullComboDurationMs(skin: Lr2Skin): number {
 }
 
 /**
- * Walks the skin's elements and returns the longest keyframe `time`
- * (in ms) attached to each LR2 key-on timer (100..117). The value
- * is used as the lane-laser release fade duration so the decay
- * matches the skin's authored animation length instead of a hard-
- * coded fallback. Timers without any element default to the
- * caller's fallback (typically `KEY_ON_FADE_OUT_MS`).
+ * Walks the skin's elements and returns the longest keyframe `time` (in ms) attached to each LR2 key-on timer
+ * (100..117). The value is used as the lane-laser release fade duration so the decay matches the skin's authored
+ * animation length instead of a hard- coded fallback. Timers without any element default to the caller's fallback
+ * (typically `KEY_ON_FADE_OUT_MS`).
  *
- * Mirrors the {@link computeFullComboDurationMs} pattern: visits
- * every keyframe-bearing element type, picks the maximum `time`
- * per timer slot, and reuses `destination` when `keyframes` is
- * empty so static (single-keyframe) elements still report a span.
+ * Mirrors the {@link computeFullComboDurationMs} pattern: visits every keyframe-bearing element type, picks the maximum
+ * `time` per timer slot, and reuses `destination` when `keyframes` is empty so static (single-keyframe) elements still
+ * report a span.
  */
 export function computeKeyOnFadeDurationsMs(skin: Lr2Skin): Map<number, number> {
   return collectMaxKeyframeTimePerTimer(skin, 100, 117);
 }
 
 /**
- * Walks the skin's elements and returns the longest keyframe `time`
- * (in ms) attached to each LR2 bomb timer (50..69 — 1P 50..59 / 2P
- * 60..69, per the LR2 default 7-keys layout). `cleanupBombTimers`
- * uses the value to retire the corresponding `bombStartedAt` /
- * `timerStartedAt` entries once the skin's authored explosion
- * animation has finished, instead of pinning every chart to a
- * hard-coded "LR2 default 150 ms" cycle.
+ * Walks the skin's elements and returns the longest keyframe `time` (in ms) attached to each LR2 bomb timer (50..69 —
+ * 1P 50..59 / 2P 60..69, per the LR2 default 7-keys layout). `cleanupBombTimers` uses the value to retire the
+ * corresponding `bombStartedAt` / `timerStartedAt` entries once the skin's authored explosion animation has finished,
+ * instead of pinning every chart to a hard-coded "LR2 default 150 ms" cycle.
  */
 export function computeBombDurationsMs(skin: Lr2Skin): Map<number, number> {
   return collectMaxKeyframeTimePerTimer(skin, 50, 69);
 }
 
 /**
- * LR2 LN-hold-effect timers (`70..89` — 1P 70..79 / 2P 80..89).
- * These fire while a long note is being held and stop on release;
- * `releaseLnHoldTimer` consults the returned span to fade out any
- * sustain-glow / hold-sparkle elements gated on the timer.
+ * LR2 LN-hold-effect timers (`70..89` — 1P 70..79 / 2P 80..89). These fire while a long note is being held and stop on
+ * release; `releaseLnHoldTimer` consults the returned span to fade out any sustain-glow / hold-sparkle elements gated
+ * on the timer.
  */
 export function computeLnHoldDurationsMs(skin: Lr2Skin): Map<number, number> {
   return collectMaxKeyframeTimePerTimer(skin, 70, 89);
 }
 
 /**
- * LR2 gauge-rise / gauge-max timers (`42` 1P up, `43` 2P up, `44`
- * 1P max, `45` 2P max). The "up" timers are flash-style one-shots
- * fired every time the gauge increases; the gameplay code retires
- * them after the returned span via `setTimeout`. Max timers stay
- * active for as long as the gauge sits at 100 %; they never auto-
- * retire so this duration map is only consulted for the rise
- * variants in practice — but we expose all four for symmetry with
- * the bomb / FC / key-on / LN-hold helpers.
+ * LR2 gauge-rise / gauge-max timers (`42` 1P up, `43` 2P up, `44` 1P max, `45` 2P max). The "up" timers are flash-style
+ * one-shots fired every time the gauge increases; the gameplay code retires them after the returned span via
+ * `setTimeout`. Max timers stay active for as long as the gauge sits at 100 %; they never auto- retire so this duration
+ * map is only consulted for the rise variants in practice — but we expose all four for symmetry with the bomb / FC /
+ * key-on / LN-hold helpers.
  */
 export function computeGaugeTimerDurationsMs(skin: Lr2Skin): Map<number, number> {
   return collectMaxKeyframeTimePerTimer(skin, 42, 45);
 }
 
 /**
- * Internal helper for {@link computeKeyOnFadeDurationsMs} /
- * {@link computeBombDurationsMs}: scan every keyframe-bearing
- * element type and report the longest `time` per timer id within
- * the given inclusive range. Single-keyframe elements report
- * `destination.time` so static authored placements still produce
- * a span (otherwise the caller would never see them).
+ * Internal helper for {@link computeKeyOnFadeDurationsMs} / {@link computeBombDurationsMs}: scan every keyframe-bearing
+ * element type and report the longest `time` per timer id within the given inclusive range. Single-keyframe elements
+ * report `destination.time` so static authored placements still produce a span (otherwise the caller would never see
+ * them).
  */
 function collectMaxKeyframeTimePerTimer(skin: Lr2Skin, minTimer: number, maxTimer: number): Map<number, number> {
   const result = new Map<number, number>();

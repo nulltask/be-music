@@ -3,25 +3,17 @@ import type { BeMusicJson } from '@be-music/json';
 export type BrowserSongSourceKind = 'directory' | 'zip' | 'files';
 
 /**
- * Asset payload kept inside a {@link BrowserSongAssetSource}. Each
- * file from the dropped bundle is either:
+ * Asset payload kept inside a {@link BrowserSongAssetSource}. Each file from the dropped bundle is either:
  *
- * - **`Uint8Array`** — bytes already in memory. Used for small
- *   files that are accessed synchronously by parsers / image
- *   decoders (`.bms`, `.bmson`, `.bmp`, `.png`, `.tga`, `.csv`,
- *   `.dxa`, `.lr2skin`, …).
- * - **`File`** — lazy reference. The bytes haven't been
- *   materialised yet and will be read on demand via
- *   `loadAssetBytes`. Used for audio (`.wav`, `.ogg`, `.mp3`,
- *   `.opus`, `.flac`, `.oga`) where a single drop can carry
- *   gigabytes of WAV samples that are only needed for the
- *   currently-playing chart.
+ * - **`Uint8Array`** — bytes already in memory. Used for small files that are accessed synchronously by parsers / image
+ *   decoders (`.bms`, `.bmson`, `.bmp`, `.png`, `.tga`, `.csv`, `.dxa`, `.lr2skin`, …).
+ * - **`File`** — lazy reference. The bytes haven't been materialised yet and will be read on demand via
+ *   `loadAssetBytes`. Used for audio (`.wav`, `.ogg`, `.mp3`, `.opus`, `.flac`, `.oga`) where a single drop can carry
+ *   gigabytes of WAV samples that are only needed for the currently-playing chart.
  *
- * Consumers that always hand a non-audio path call the existing
- * sync helpers and receive the `Uint8Array` branch by
- * construction. Audio consumers go through
- * `loadAssetBytes` / `resolveChartAudioAsset` to handle the
- * lazy branch transparently.
+ * Consumers that always hand a non-audio path call the existing sync helpers and receive the `Uint8Array` branch by
+ * construction. Audio consumers go through `loadAssetBytes` / `resolveChartAudioAsset` to handle the lazy branch
+ * transparently.
  */
 export type BrowserSongAssetEntry = Uint8Array | File;
 
@@ -57,10 +49,9 @@ export interface BrowserSongCollection {
 }
 
 /**
- * One folder of songs surfaced by `groupSongsByFolder`. The label is
- * the human-readable folder name (top-level directory inside the
- * source, falling back to the source label) and `songs` are all the
- * BMS charts whose `directoryLabel` resolves to it.
+ * One folder of songs surfaced by `groupSongsByFolder`. The label is the human-readable folder name (top-level
+ * directory inside the source, falling back to the source label) and `songs` are all the BMS charts whose
+ * `directoryLabel` resolves to it.
  */
 export interface BrowserFolderNode {
   label: string;
@@ -68,29 +59,24 @@ export interface BrowserFolderNode {
 }
 
 /**
- * One entry in the bar list when navigating the song collection. A
- * select view either shows folder bars (when at the root) or song
- * bars (when inside a folder).
+ * One entry in the bar list when navigating the song collection. A select view either shows folder bars (when at the
+ * root) or song bars (when inside a folder).
  */
 export type BrowserBrowseEntry =
   | { kind: 'folder'; folder: BrowserFolderNode }
   | { kind: 'song'; song: BrowserSongEntry };
 
 /**
- * Phases reported by the dropped-folder loaders so a host UI can
- * show a meaningful "Loading…" state instead of a frozen
+ * Phases reported by the dropped-folder loaders so a host UI can show a meaningful "Loading…" state instead of a frozen
  * unresponsive screen.
  *
- * - `enumerating` — walking the dropped FileSystem entries to
- *   collect every nested file. Total is unknown while walking, so
- *   `total` is `-1` and `current` ticks upward.
- * - `reading` — slurping each collected `File` into a `Uint8Array`.
- *   This is the dominant cost for large zip / folder drops.
- * - `parsing` — running `parseBms` / `parseBmson` on each chart
- *   file inside the source, building `BrowserSongEntry`s.
- * - `theme` — loading the LR2 theme bundle (skins + BGM + system
- *   sounds). Theme work happens in parallel internally; events
- *   fire as each sub-task lands so the bar still moves.
+ * - `enumerating` — walking the dropped FileSystem entries to collect every nested file. Total is unknown while
+ *   walking, so `total` is `-1` and `current` ticks upward.
+ * - `reading` — slurping each collected `File` into a `Uint8Array`. This is the dominant cost for large zip / folder
+ *   drops.
+ * - `parsing` — running `parseBms` / `parseBmson` on each chart file inside the source, building `BrowserSongEntry`s.
+ * - `theme` — loading the LR2 theme bundle (skins + BGM + system sounds). Theme work happens in parallel internally;
+ *   events fire as each sub-task lands so the bar still moves.
  */
 export type LoadProgressPhase = 'enumerating' | 'reading' | 'parsing' | 'theme';
 

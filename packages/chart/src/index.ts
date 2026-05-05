@@ -198,8 +198,7 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
 }
 
 /**
- * Resolves the LR2/play-skin lane family for a chart from its
- * extension, `#PLAYER`, and playable lane usage.
+ * Resolves the LR2/play-skin lane family for a chart from its extension, `#PLAYER`, and playable lane usage.
  */
 export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlayVariant {
   const channels = new Set<string>();
@@ -224,28 +223,18 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
 }
 
 /**
- * Resolves the chart's reference BPM for hi-speed / scroll-speed
- * normalisation, honouring the BMS spec for `#BASEBPM`.
+ * Resolves the chart's reference BPM for hi-speed / scroll-speed normalisation, honouring the BMS spec for `#BASEBPM`.
  *
- * Spec — `#BASEBPM N` (hitkey BMS Memo): declares the chart's
- * reference BPM for HS-fix style scroll calibration. When set,
- * scroll-speed-aware consumers should treat that value as the
- * "main BPM" instead of the chart's initial `#BPM`. When absent
- * we fall back to the parser-extracted `metadata.bpm`, which is
- * the chart's first declared `#BPM`.
+ * Spec — `#BASEBPM N` (hitkey BMS Memo): declares the chart's reference BPM for HS-fix style scroll calibration. When
+ * set, scroll-speed-aware consumers should treat that value as the "main BPM" instead of the chart's initial `#BPM`.
+ * When absent we fall back to the parser-extracted `metadata.bpm`, which is the chart's first declared `#BPM`.
  *
- * `fallbackBpm` is the optional last-resort value the host can
- * supply (e.g. a song-list-cached BPM hint) for charts that omit
- * both `#BASEBPM` and `#BPM` — a rare but legal corner of the
- * spec.
+ * `fallbackBpm` is the optional last-resort value the host can supply (e.g. a song-list-cached BPM hint) for charts
+ * that omit both `#BASEBPM` and `#BPM` — a rare but legal corner of the spec.
  *
- * Returns `undefined` when no positive BPM is available, so
- * callers can early-out without applying a meaningless ratio.
+ * Returns `undefined` when no positive BPM is available, so callers can early-out without applying a meaningless ratio.
  */
-export function resolveChartReferenceBpm(
-  json: BeMusicJson,
-  fallbackBpm?: number,
-): number | undefined {
+export function resolveChartReferenceBpm(json: BeMusicJson, fallbackBpm?: number): number | undefined {
   const baseBpm = json.bms.baseBpm;
   if (typeof baseBpm === 'number' && Number.isFinite(baseBpm) && baseBpm > 0) {
     return baseBpm;
@@ -263,21 +252,17 @@ export function resolveChartReferenceBpm(
 /**
  * Parsed `#EXWAVxx [flags] params filename` directive.
  *
- * `#EXWAVxx` declares an "extended" WAV slot whose playback should
- * be modified by the listed parameters. The `flags` token names
- * which channels are present (in order), and `params` is a
- * comma-separated list whose values match those flags positionally.
+ * `#EXWAVxx` declares an "extended" WAV slot whose playback should be modified by the listed parameters. The `flags`
+ * token names which channels are present (in order), and `params` is a comma-separated list whose values match those
+ * flags positionally.
  *
- * Supported flags (hitkey BMS Memo):
- * - `p` — stereo pan (`-10000..10000` LR2-style, where 0 is centre).
- * - `v` — playback volume in centibels (CB), where each step is
- *   `1/100` of a dB. Negative values attenuate, `0` is unity.
- * - `f` — playback frequency in Hz. The sample is resampled (or
- *   replayed at a different rate) so its native sample rate maps
- *   onto this output rate.
+ * Supported flags (hitkey BMS Memo): - `p` — stereo pan (`-10000..10000` LR2-style, where 0 is centre). - `v` —
+ * playback volume in centibels (CB), where each step is `1/100` of a dB. Negative values attenuate, `0` is unity. - `f`
+ * — playback frequency in Hz. The sample is resampled (or replayed at a different rate) so its native sample rate maps
+ * onto this output rate.
  *
- * Real-world charts use this most often for `v` (per-slot volume
- * trim) and occasionally `p` for stereo placement of one-shots.
+ * Real-world charts use this most often for `v` (per-slot volume trim) and occasionally `p` for stereo placement of
+ * one-shots.
  */
 export interface BmsExWav {
   /** Raw filename token, joined back together if it contained spaces. */
@@ -293,15 +278,13 @@ export interface BmsExWav {
 /**
  * Parses one `#EXWAVxx` directive value (the post-`#EXWAVxx ` text).
  *
- * Token layout — three whitespace-separated groups:
- * 1. Flag string in declaration order, e.g. `pvf` / `vp` / `v`.
- * 2. Comma-separated integer params matching the flag positions
- *    (`pvf 100,-200,48000` → pan=100, vol=-200, freq=48000).
- * 3. Filename. Any trailing whitespace-separated tokens are joined
- *    back together so chart authors can use names with spaces.
+ * Token layout — three whitespace-separated groups: 1. Flag string in declaration order, e.g. `pvf` / `vp` / `v`. 2.
+ * Comma-separated integer params matching the flag positions (`pvf 100,-200,48000` → pan=100, vol=-200, freq=48000). 3.
+ * Filename. Any trailing whitespace-separated tokens are joined back together so chart authors can use names with
+ * spaces.
  *
- * Returns `undefined` for malformed input — better to skip a
- * broken `#EXWAV` than to apply nonsense to the audible signal.
+ * Returns `undefined` for malformed input — better to skip a broken `#EXWAV` than to apply nonsense to the audible
+ * signal.
  */
 export function parseBmsExWav(raw: string): BmsExWav | undefined {
   if (typeof raw !== 'string') return undefined;
@@ -311,8 +294,7 @@ export function parseBmsExWav(raw: string): BmsExWav | undefined {
   if (tokens.length < 3) return undefined;
   const flags = tokens[0]!.toLowerCase();
   const params = tokens[1]!.split(',');
-  // Filename can legitimately contain spaces; rejoin every
-  // remaining token. (LR2 uses Windows-style paths, never URL-
+    // Filename can legitimately contain spaces; rejoin every remaining token. (LR2 uses Windows-style paths, never URL-
   // encoded, so a literal space in the name is the only edge.)
   const filename = tokens.slice(2).join(' ');
   if (filename.length === 0) return undefined;
@@ -331,17 +313,13 @@ export function parseBmsExWav(raw: string): BmsExWav | undefined {
 }
 
 /**
- * Maps a centibel volume value (`#EXWAVxx v` parameter, `1/100 dB`)
- * to a 0..N linear gain multiplier. `0 cB` round-trips to `1.0`
- * (unity); negative values attenuate; positive values boost. We
- * clamp the output below `8.0` (≈ +18 dB) so a malformed chart
- * can't blow the bus, and at `0` so very-negative inputs collapse
- * to silence rather than producing a denormal.
+ * Maps a centibel volume value (`#EXWAVxx v` parameter, `1/100 dB`) to a 0..N linear gain multiplier. `0 cB`
+ * round-trips to `1.0` (unity); negative values attenuate; positive values boost. We clamp the output below `8.0` (≈
+ * +18 dB) so a malformed chart can't blow the bus, and at `0` so very-negative inputs collapse to silence rather than
+ * producing a denormal.
  *
- * Centibels rather than decibels because LR2 / beatoraja both
- * persist `#EXWAV v` as cB — `v -200` = −2 dB, `v -600` = −6 dB.
- * Treating the value as straight dB would silently halve every
- * attenuation in the wild.
+ * Centibels rather than decibels because LR2 / beatoraja both persist `#EXWAV v` as cB — `v -200` = −2 dB, `v -600` =
+ * −6 dB. Treating the value as straight dB would silently halve every attenuation in the wild.
  */
 export function exWavVolumeCentibelsToLinearGain(centibels: number): number {
   if (!Number.isFinite(centibels)) return 1;
@@ -352,20 +330,14 @@ export function exWavVolumeCentibelsToLinearGain(centibels: number): number {
 }
 
 /**
- * Builds a `slot → linear-gain-multiplier` map for every
- * `#EXWAVxx` entry that supplies a `v` (volume) flag. Slots
- * without a parsed `v` (or whose `#EXWAVxx` doesn't even have
- * three tokens) are absent from the result so the consumer
+ * Builds a `slot → linear-gain-multiplier` map for every `#EXWAVxx` entry that supplies a `v` (volume) flag. Slots
+ * without a parsed `v` (or whose `#EXWAVxx` doesn't even have three tokens) are absent from the result so the consumer
  * falls through to unity gain.
  *
- * `entries` is the parser-produced `chart.bms.exWav` map (raw
- * post-`#EXWAVxx ` strings keyed by slot id). The returned keys
- * are passed through verbatim — they're already normalised to
- * the chart's id base when the parser ingested them.
+ * `entries` is the parser-produced `chart.bms.exWav` map (raw post-`#EXWAVxx ` strings keyed by slot id). The returned
+ * keys are passed through verbatim — they're already normalised to the chart's id base when the parser ingested them.
  */
-export function collectBmsExWavVolumeMultipliers(
-  entries: Readonly<Record<string, string>>,
-): Map<string, number> {
+export function collectBmsExWavVolumeMultipliers(entries: Readonly<Record<string, string>>): Map<string, number> {
   const out = new Map<string, number>();
   for (const [slot, raw] of Object.entries(entries)) {
     const parsed = parseBmsExWav(raw);
@@ -379,31 +351,24 @@ export function collectBmsExWavVolumeMultipliers(
 /**
  * Parsed `#EXBMPxx a,r,g,b,filename` directive.
  *
- * Where `#BMPxx filename` declares an opaque image slot,
- * `#EXBMPxx` declares the same slot's filename PLUS an ARGB
- * tuple that the player should apply on top — typically used by
- * chart authors to chroma-key a backdrop colour to transparent
- * (`a = 0` for the keyed colour) or to dim a layer image
- * (`a < 255`). The format is a single `a,r,g,b,filename` string
- * (commas separating the four byte channels and the filename).
+ * Where `#BMPxx filename` declares an opaque image slot, `#EXBMPxx` declares the same slot's filename PLUS an ARGB
+ * tuple that the player should apply on top — typically used by chart authors to chroma-key a backdrop colour to
+ * transparent (`a = 0` for the keyed colour) or to dim a layer image (`a < 255`). The format is a single
+ * `a,r,g,b,filename` string (commas separating the four byte channels and the filename).
  *
- * `argbRaw` keeps the AARRGGBB-equivalent string so consumers
- * can pass it straight to {@link parseBmsArgb} — the same parser
- * `#ARGBxx` already uses, no second code path. `argb` is the
- * pre-parsed shortcut for the common case.
+ * `argbRaw` keeps the AARRGGBB-equivalent string so consumers can pass it straight to {@link parseBmsArgb} — the same
+ * parser `#ARGBxx` already uses, no second code path. `argb` is the pre-parsed shortcut for the common case.
  */
 export interface BmsExBmp {
   /** Filename of the image to load into this `#BMPxx` slot. */
   filename: string;
   /**
-   * Decoded ARGB values, or `undefined` when the directive omitted
-   * the ARGB tuple (e.g. `#EXBMP01 ,,,,filename.bmp`).
+   * Decoded ARGB values, or `undefined` when the directive omitted the ARGB tuple (e.g. `#EXBMP01 ,,,,filename.bmp`).
    */
   argb: BmsArgb | undefined;
   /**
-   * Comma-separated AARRGGBB-equivalent text — kept so consumers
-   * can roundtrip through the same `parseBmsArgb` pipeline that
-   * `#ARGBxx` uses, without re-emitting it from the `argb` shortcut.
+   * Comma-separated AARRGGBB-equivalent text — kept so consumers can roundtrip through the same `parseBmsArgb` pipeline
+   * that `#ARGBxx` uses, without re-emitting it from the `argb` shortcut.
    */
   argbRaw: string;
 }
@@ -411,34 +376,27 @@ export interface BmsExBmp {
 /**
  * Parses one `#EXBMPxx` directive value (the post-`#EXBMPxx ` text).
  *
- * Token layout: `a,r,g,b,filename`. Filenames containing literal
- * commas are unsupported by the spec — that's a property of the
- * format, not a limitation here. Whitespace inside each field is
- * trimmed.
+ * Token layout: `a,r,g,b,filename`. Filenames containing literal commas are unsupported by the spec — that's a property
+ * of the format, not a limitation here. Whitespace inside each field is trimmed.
  *
- * Returns `undefined` for malformed input (less than five comma
- * groups or an empty filename). When the ARGB fields are present
- * but unparseable (e.g. `xxx,yyy,zzz,www,foo.bmp`), the entry's
- * `argb` is `undefined` while `filename` is still surfaced — so
- * the consumer at least knows which file the slot points at.
+ * Returns `undefined` for malformed input (less than five comma groups or an empty filename). When the ARGB fields are
+ * present but unparseable (e.g. `xxx,yyy,zzz,www,foo.bmp`), the entry's `argb` is `undefined` while `filename` is still
+ * surfaced — so the consumer at least knows which file the slot points at.
  */
 export function parseBmsExBmp(raw: string): BmsExBmp | undefined {
   if (typeof raw !== 'string') return undefined;
   const trimmed = raw.trim();
   if (trimmed.length === 0) return undefined;
-  // Five-way split on commas. `split(',', limit)` would silently
-  // drop trailing commas in the filename if a chart author left
-  // any, so split unbounded and rejoin the tail.
+    // Five-way split on commas. `split(',', limit)` would silently drop trailing commas in the filename if a chart author
+  // left any, so split unbounded and rejoin the tail.
   const parts = trimmed.split(',');
   if (parts.length < 5) return undefined;
   const [aRaw, rRaw, gRaw, bRaw, ...rest] = parts;
   const filename = rest.join(',').trim();
   if (filename.length === 0) return undefined;
-  // The argb tuple may legally be empty (chart authors sometimes
-  // ship `#EXBMP01 ,,,,foo.bmp` to mean "filename only"), in
-  // which case we still surface the filename and leave `argb`
-  // undefined so the consumer can fall back to `#ARGBxx` or the
-  // image's own alpha channel.
+    // The argb tuple may legally be empty (chart authors sometimes ship `#EXBMP01 ,,,,foo.bmp` to mean "filename only"),
+  // in which case we still surface the filename and leave `argb` undefined so the consumer can fall back to `#ARGBxx`
+  // or the image's own alpha channel.
   const argbCandidate = `${aRaw},${rRaw},${gRaw},${bRaw}`;
   const argbValuesAllBlank = [aRaw, rRaw, gRaw, bRaw].every((part) => part.trim().length === 0);
   const argb = argbValuesAllBlank ? undefined : parseBmsArgb(argbCandidate);
@@ -450,23 +408,17 @@ export function parseBmsExBmp(raw: string): BmsExBmp | undefined {
 }
 
 /**
- * Resolves the ARGB tint to apply when compositing `chart.bms.bmp[slot]`,
- * folding the two BMS directives that can drive it (in priority
- * order):
+ * Resolves the ARGB tint to apply when compositing `chart.bms.bmp[slot]`, folding the two BMS directives that can drive
+ * it (in priority order):
  *
  * 1. `#ARGBxx` — explicit per-slot ARGB. Wins when present.
- * 2. `#EXBMPxx` — the ARGB embedded in the filename declaration.
- *    Used as a fallback so chart authors who only wrote the
+ * 2. `#EXBMPxx` — the ARGB embedded in the filename declaration. Used as a fallback so chart authors who only wrote the
  *    extended form still get their transparent / dim composite.
  *
- * Returns `undefined` when neither directive is present (or
- * neither parses), letting the consumer skip the tint stage
+ * Returns `undefined` when neither directive is present (or neither parses), letting the consumer skip the tint stage
  * entirely on the unaffected path.
  */
-export function resolveBmsBmpArgb(
-  chart: BeMusicJson,
-  slot: string,
-): BmsArgb | undefined {
+export function resolveBmsBmpArgb(chart: BeMusicJson, slot: string): BmsArgb | undefined {
   const argbRaw = chart.bms.argb[slot];
   if (typeof argbRaw === 'string') {
     const parsed = parseBmsArgb(argbRaw);
@@ -483,22 +435,15 @@ export function resolveBmsBmpArgb(
 /**
  * Parsed `#SWBGAxx fr:tot:lp:ARGB N1 N2 …` directive.
  *
- * `#SWBGAxx` declares a switching ("animated") BGA: while the cue
- * is active, the player cycles through the listed `#BMPxx` slots
- * one frame at a time. The header tokens — `fr` / `tot` / `lp` /
- * optional `ARGB` — drive how the cycle progresses, the rest of
- * the line is the per-frame slot list.
+ * `#SWBGAxx` declares a switching ("animated") BGA: while the cue is active, the player cycles through the listed
+ * `#BMPxx` slots one frame at a time. The header tokens — `fr` / `tot` / `lp` / optional `ARGB` — drive how the cycle
+ * progresses, the rest of the line is the per-frame slot list.
  *
- * Field semantics (hitkey BMS Memo):
- * - `fr` (frame rate): frame interval in `1/100`-second units, so
- *   `fr = 10` means one frame every 100 ms. Stored here in ms.
- * - `tot` (total frames): number of frames in the animation. The
- *   slot list MAY be shorter / longer; a shorter list cycles
- *   itself, a longer one is truncated to `tot`.
- * - `lp` (loop): `0` = play once and hold the last frame,
- *   non-zero = loop.
- * - `ARGB` (optional): AARRGGBB tint applied to every frame, same
- *   format as `#ARGBxx`.
+ * Field semantics (hitkey BMS Memo): - `fr` (frame rate): frame interval in `1/100`-second units, so `fr = 10` means
+ * one frame every 100 ms. Stored here in ms. - `tot` (total frames): number of frames in the animation. The slot list
+ * MAY be shorter / longer; a shorter list cycles itself, a longer one is truncated to `tot`. - `lp` (loop): `0` = play
+ * once and hold the last frame, non-zero = loop. - `ARGB` (optional): AARRGGBB tint applied to every frame, same format
+ * as `#ARGBxx`.
  */
 export interface BmsSwitchingBga {
   /** Frame interval in milliseconds (`fr × 10`). */
@@ -508,26 +453,22 @@ export interface BmsSwitchingBga {
   /** Whether playback should loop after reaching `totalFrames`. */
   loop: boolean;
   /**
-   * ARGB tuple as a parser-faithful raw string (AARRGGBB hex), or
-   * `undefined` when the header omitted the `:ARGB` field.
+   * ARGB tuple as a parser-faithful raw string (AARRGGBB hex), or `undefined` when the header omitted the `:ARGB`
+   * field.
    */
   argbRaw?: string;
   /**
-   * Per-frame `#BMPxx` slot ids, normalised via
-   * `normalizeObjectKey`. Empty / unparseable tokens are skipped.
-   * `frames.length` may differ from `totalFrames` — consumers
-   * should index modulo `frames.length` while clamping to
+   * Per-frame `#BMPxx` slot ids, normalised via `normalizeObjectKey`. Empty / unparseable tokens are skipped.
+   * `frames.length` may differ from `totalFrames` — consumers should index modulo `frames.length` while clamping to
    * `totalFrames`.
    */
   frames: string[];
 }
 
 /**
- * Parses one `#SWBGAxx` directive value (the post-`#SWBGAxx ` text).
- * Returns `undefined` for malformed inputs (missing header, non-
- * positive frame rate / total, empty slot list, etc.) so the
- * consumer can fall through to "no animation" rather than show a
- * stuck or scrambled frame.
+ * Parses one `#SWBGAxx` directive value (the post-`#SWBGAxx ` text). Returns `undefined` for malformed inputs (missing
+ * header, non- positive frame rate / total, empty slot list, etc.) so the consumer can fall through to "no animation"
+ * rather than show a stuck or scrambled frame.
  */
 export function parseBmsSwBga(raw: string, idBase: 36 | 62 = 36): BmsSwitchingBga | undefined {
   if (typeof raw !== 'string') return undefined;
@@ -559,21 +500,14 @@ export function parseBmsSwBga(raw: string, idBase: 36 | 62 = 36): BmsSwitchingBg
 }
 
 /**
- * Picks the `#BMPxx` slot id that should render at `elapsedMs`
- * milliseconds into a switching BGA's playback. Honours the
- * directive's `frameIntervalMs`, `totalFrames`, and `loop`
- * fields — when `loop = false` and the cycle has ended, the
- * last authored frame stays on screen ("hold last").
+ * Picks the `#BMPxx` slot id that should render at `elapsedMs` milliseconds into a switching BGA's playback. Honours
+ * the directive's `frameIntervalMs`, `totalFrames`, and `loop` fields — when `loop = false` and the cycle has ended,
+ * the last authored frame stays on screen ("hold last").
  *
- * Returns `undefined` only when the parsed entry has an empty
- * `frames` list (which {@link parseBmsSwBga} already filters out
- * for us); included for safety so callers can use a single null
- * check.
+ * Returns `undefined` only when the parsed entry has an empty `frames` list (which {@link parseBmsSwBga} already
+ * filters out for us); included for safety so callers can use a single null check.
  */
-export function pickSwitchingBgaFrame(
-  swBga: BmsSwitchingBga,
-  elapsedMs: number,
-): string | undefined {
+export function pickSwitchingBgaFrame(swBga: BmsSwitchingBga, elapsedMs: number): string | undefined {
   if (swBga.frames.length === 0) return undefined;
   if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
     return swBga.frames[0];
@@ -581,13 +515,12 @@ export function pickSwitchingBgaFrame(
   const rawIndex = Math.floor(elapsedMs / swBga.frameIntervalMs);
   let index: number;
   if (swBga.loop) {
-    // Modulo against `frames.length` so a slot list shorter than
-    // `totalFrames` keeps cycling within the authored frames.
+        // Modulo against `frames.length` so a slot list shorter than `totalFrames` keeps cycling within the authored
+    // frames.
     index = ((rawIndex % swBga.totalFrames) + swBga.totalFrames) % swBga.totalFrames;
     index = index % swBga.frames.length;
   } else {
-    // Clamp to the last frame so post-end the BGA holds rather
-    // than disappearing.
+    // Clamp to the last frame so post-end the BGA holds rather than disappearing.
     const clamped = Math.min(rawIndex, swBga.totalFrames - 1);
     index = Math.min(clamped, swBga.frames.length - 1);
   }
@@ -597,15 +530,11 @@ export function pickSwitchingBgaFrame(
 /**
  * Parsed `#BGAxx YY x1 y1 x2 y2 dx dy` directive.
  *
- * `#BGAxx` declares a sub-region BGA: it pulls a rectangle out of
- * an existing `#BMPYY` slot and exposes it as the slot ID `xx` so
- * BGA cues referencing `xx` render only that crop. The destination
- * offset `(dx, dy)` is the position INSIDE the BMS 256x256 spec
- * canvas where the cropped rectangle should be drawn — chart
- * authors use it to compose multiple sub-regions of one source
- * BMP into different on-screen positions, e.g. assembling a
- * sprite-sheet animation by aliasing slots `01..09` to different
- * tiles of `#BMP10`.
+ * `#BGAxx` declares a sub-region BGA: it pulls a rectangle out of an existing `#BMPYY` slot and exposes it as the slot
+ * ID `xx` so BGA cues referencing `xx` render only that crop. The destination offset `(dx, dy)` is the position INSIDE
+ * the BMS 256x256 spec canvas where the cropped rectangle should be drawn — chart authors use it to compose multiple
+ * sub-regions of one source BMP into different on-screen positions, e.g. assembling a sprite-sheet animation by
+ * aliasing slots `01..09` to different tiles of `#BMP10`.
  */
 export interface BmsSubRegionBga {
   /** Source BMP slot id, normalised via `normalizeObjectKey`. */
@@ -625,13 +554,11 @@ export interface BmsSubRegionBga {
 }
 
 /**
- * Parses one `#BGAxx YY x1 y1 x2 y2 dx dy` directive. Whitespace-
- * separated tokens, all integer except `YY` which is the source
- * BMP slot id (base-36 / base-62 depending on `#BASE`).
+ * Parses one `#BGAxx YY x1 y1 x2 y2 dx dy` directive. Whitespace- separated tokens, all integer except `YY` which is
+ * the source BMP slot id (base-36 / base-62 depending on `#BASE`).
  *
- * Returns `undefined` for malformed lines (fewer than seven
- * tokens, non-integer numerics, empty source slot, or a degenerate
- * rectangle where `ex <= sx` / `ey <= sy`).
+ * Returns `undefined` for malformed lines (fewer than seven tokens, non-integer numerics, empty source slot, or a
+ * degenerate rectangle where `ex <= sx` / `ey <= sy`).
  */
 export function parseBmsBga(raw: string, idBase: 36 | 62 = 36): BmsSubRegionBga | undefined {
   if (typeof raw !== 'string') return undefined;
@@ -658,8 +585,8 @@ export function parseBmsBga(raw: string, idBase: 36 | 62 = 36): BmsSubRegionBga 
   const dx = Number.parseInt(dxRaw, 10);
   const dy = Number.parseInt(dyRaw, 10);
   if (![sx, sy, ex, ey, dx, dy].every((value) => Number.isFinite(value))) return undefined;
-  // Degenerate / inverted rectangles are unusable — they'd produce
-  // a zero-area frame and a runtime divide-by-zero in the consumer.
+    // Degenerate / inverted rectangles are unusable — they'd produce a zero-area frame and a runtime divide-by-zero in
+  // the consumer.
   if (ex <= sx || ey <= sy) return undefined;
   return { sourceBmp, sx, sy, ex, ey, dx, dy };
 }
@@ -667,8 +594,8 @@ export function parseBmsBga(raw: string, idBase: 36 | 62 = 36): BmsSubRegionBga 
 /**
  * Parsed BMS `#ARGBxx` value — alpha + RGB channel in 0..255.
  *
- * Each component is clamped to the byte range so callers can blindly
- * feed them into bit-shift / `/255` conversions without re-validating.
+ * Each component is clamped to the byte range so callers can blindly feed them into bit-shift / `/255` conversions
+ * without re-validating.
  */
 export interface BmsArgb {
   /** Alpha (0 = fully transparent, 255 = fully opaque). */
@@ -681,22 +608,17 @@ export interface BmsArgb {
 const BMS_ARGB_HEX_RE = /^[0-9A-Fa-f]{8}$/;
 
 /**
- * Parses a BMS `#ARGBxx` raw string into A / R / G / B byte
- * components. Recognises both formats commonly found in the wild:
+ * Parses a BMS `#ARGBxx` raw string into A / R / G / B byte components. Recognises both formats commonly found in the
+ * wild:
  *
- * - **Hex AARRGGBB** — `'FF000000'` or `'#FF000000'` (8 hex digits,
- *   optional leading `#`). High byte = alpha.
- * - **Comma-separated decimal** — `'255,0,0,0'` (A,R,G,B with
- *   optional whitespace around each integer).
+ * - **Hex AARRGGBB** — `'FF000000'` or `'#FF000000'` (8 hex digits, optional leading `#`). High byte = alpha.
+ * - **Comma-separated decimal** — `'255,0,0,0'` (A,R,G,B with optional whitespace around each integer).
  *
- * Returns `undefined` for unrecognised / malformed input so the
- * caller can fall back to "no tint".
+ * Returns `undefined` for unrecognised / malformed input so the caller can fall back to "no tint".
  *
- * Spec note (hitkey BMS Memo): `#ARGBxx` adjusts the color / alpha
- * of `#BMPxx` for BGA layer composition. Authors typically use it
- * to chroma-key a backdrop colour to transparent, or to dim a
- * layer image — in both cases the consumer applies the parsed
- * values as a tint × alpha at draw time.
+ * Spec note (hitkey BMS Memo): `#ARGBxx` adjusts the color / alpha of `#BMPxx` for BGA layer composition. Authors
+ * typically use it to chroma-key a backdrop colour to transparent, or to dim a layer image — in both cases the consumer
+ * applies the parsed values as a tint × alpha at draw time.
  */
 export function parseBmsArgb(raw: string): BmsArgb | undefined {
   if (typeof raw !== 'string') return undefined;
@@ -712,8 +634,7 @@ export function parseBmsArgb(raw: string): BmsArgb | undefined {
       if (trimmedPart.length === 0) return undefined;
       const value = Number.parseInt(trimmedPart, 10);
       if (!Number.isFinite(value)) return undefined;
-      // Clamp to 0..255 so `#ARGB01 300,-5,...` (clearly malformed
-      // but writeable) doesn't poison downstream alpha math.
+      // Clamp to 0..255 so `#ARGB01 300,-5,...` (clearly malformed but writeable) doesn't poison downstream alpha math.
       ints.push(Math.max(0, Math.min(255, Math.trunc(value))));
     }
     return { a: ints[0]!, r: ints[1]!, g: ints[2]!, b: ints[3]! };
@@ -733,12 +654,9 @@ export function parseBmsArgb(raw: string): BmsArgb | undefined {
  * Parameter byte for a `#WAVCMD pp xx vv` entry.
  *
  * - `'pitch'` (`pp = 00`) — semitone shift, signed (`-127..127`).
- * - `'volume'` (`pp = 01`) — playback volume, `0..127` where 0
- *   is mute and 127 is unity. We map this to a 0..1 linear gain
- *   multiplier so consumers can multiply directly into a gain
- *   stage.
- * - `'loop'` (`pp = 02`) — sample-frame loop point. `0` disables
- *   looping; otherwise the sample loops back to that frame
+ * - `'volume'` (`pp = 01`) — playback volume, `0..127` where 0 is mute and 127 is unity. We map this to a 0..1 linear
+ *   gain multiplier so consumers can multiply directly into a gain stage.
+ * - `'loop'` (`pp = 02`) — sample-frame loop point. `0` disables looping; otherwise the sample loops back to that frame
  *   index after reaching its end.
  */
 export type BmsWavCmdParam = 'pitch' | 'volume' | 'loop';
@@ -748,24 +666,19 @@ export interface BmsWavCmdEntry {
   /** Slot id (`#WAVxx`), normalised via `normalizeObjectKey`. */
   slot: string;
   /**
-   * Raw integer value as written in the chart. The interpretation
-   * depends on `param` — see {@link BmsWavCmdParam}. Volume here
-   * is the literal 0..127 byte; convert to a gain multiplier via
-   * {@link wavCmdVolumeByteToLinearGain}.
+   * Raw integer value as written in the chart. The interpretation depends on `param` — see {@link BmsWavCmdParam}.
+   * Volume here is the literal 0..127 byte; convert to a gain multiplier via {@link wavCmdVolumeByteToLinearGain}.
    */
   value: number;
 }
 
 /**
- * Maps a `#WAVCMD 01 xx vv` volume byte (0..127) to a 0..1 linear
- * gain multiplier. `127 = 1.0` (unity), `0 = 0.0` (mute), linear
- * in between. Out-of-range bytes are clamped.
+ * Maps a `#WAVCMD 01 xx vv` volume byte (0..127) to a 0..1 linear gain multiplier. `127 = 1.0` (unity), `0 = 0.0`
+ * (mute), linear in between. Out-of-range bytes are clamped.
  *
- * Hitkey BMS Memo describes the 0..127 byte as the volume, with
- * 127 the practical "loud as authored" reference. We treat it as
- * a straight ratio rather than a dB curve because most players
- * (LR2 / beatoraja) implement it linearly and chart authors
- * compose against that.
+ * Hitkey BMS Memo describes the 0..127 byte as the volume, with 127 the practical "loud as authored" reference. We
+ * treat it as a straight ratio rather than a dB curve because most players (LR2 / beatoraja) implement it linearly and
+ * chart authors compose against that.
  */
 export function wavCmdVolumeByteToLinearGain(byteValue: number): number {
   if (!Number.isFinite(byteValue)) return 1;
@@ -774,14 +687,12 @@ export function wavCmdVolumeByteToLinearGain(byteValue: number): number {
 }
 
 /**
- * Parses one `#WAVCMD pp xx vv` line. Whitespace-separated tokens:
- * - `pp` (parameter byte): `00`/`01`/`02` (pitch/volume/loop).
- * - `xx` (slot id): two-character base-36 (or base-62) id matching
- *   a `#WAVxx` declaration. Returned as the normalised key.
- * - `vv`: integer value.
+ * Parses one `#WAVCMD pp xx vv` line. Whitespace-separated tokens: - `pp` (parameter byte): `00`/`01`/`02`
+ * (pitch/volume/loop). - `xx` (slot id): two-character base-36 (or base-62) id matching a `#WAVxx` declaration.
+ * Returned as the normalised key. - `vv`: integer value.
  *
- * Returns `undefined` for malformed lines so callers can skip them
- * rather than crashing on an unrecognised parameter byte.
+ * Returns `undefined` for malformed lines so callers can skip them rather than crashing on an unrecognised parameter
+ * byte.
  *
  * @param idBase  Pass `62` for charts declared with `#BASE 62` so
  *                lowercase slot ids are preserved as-is.
@@ -817,16 +728,12 @@ export function parseBmsWavCmd(line: string, idBase: 36 | 62 = 36): BmsWavCmdEnt
 }
 
 /**
- * Builds a `slot → linear-gain-multiplier` map by collecting every
- * `#WAVCMD 01 xx vv` (volume) line. Slots with no `#WAVCMD 01`
- * line stay absent (the consumer falls back to unity gain). When
- * a chart writes multiple volume lines for the same slot the
- * LAST one wins, matching LR2 / beatoraja's "later directives
- * override earlier" behaviour.
+ * Builds a `slot → linear-gain-multiplier` map by collecting every `#WAVCMD 01 xx vv` (volume) line. Slots with no
+ * `#WAVCMD 01` line stay absent (the consumer falls back to unity gain). When a chart writes multiple volume lines for
+ * the same slot the LAST one wins, matching LR2 / beatoraja's "later directives override earlier" behaviour.
  *
- * Pitch / loop lines are intentionally skipped — they require
- * sample-graph wiring (playback rate, loop points) that lives in
- * the audio engine, not in this pure pre-process.
+ * Pitch / loop lines are intentionally skipped — they require sample-graph wiring (playback rate, loop points) that
+ * lives in the audio engine, not in this pure pre-process.
  */
 export function collectBmsWavCmdVolumeMultipliers(
   lines: ReadonlyArray<string>,
@@ -1293,8 +1200,8 @@ function inferBmsLongNoteType(events: ResolvedBmsLongNoteEvent[]): 1 | 2 {
     let continuationCount = 0;
     for (const item of channelEvents) {
       if (previous && previousValue === item.normalizedValue && isBmsLongNoteType2Continuation(previous, item.event)) {
-        // A single same-value continuation is ambiguous because legacy LNTYPE=1
-        // charts also use same-value pairs for their start/end markers.
+                // A single same-value continuation is ambiguous because legacy LNTYPE=1 charts also use same-value pairs for
+        // their start/end markers.
         continuationCount += 1;
         if (continuationCount >= 2) {
           return 2;

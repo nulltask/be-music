@@ -1,6 +1,5 @@
 /**
- * Sentinel paths used in `Lr2ImageRect.imagePath` for LR2's runtime-bound
- * textures (`#SRC_IMAGE,gr=...`).
+ * Sentinel paths used in `Lr2ImageRect.imagePath` for LR2's runtime-bound textures (`#SRC_IMAGE,gr=...`).
  */
 export const LR2_SPECIAL_GRAPHIC = {
   STAGEFILE: '__lr2_special:stagefile',

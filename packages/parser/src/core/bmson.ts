@@ -56,10 +56,9 @@ export interface BmsonSoundChannel {
 }
 
 /**
- * beatoraja's bmson extension for mine notes. Each note carries a
- * gauge `damage` value (0..100) alongside the same lane / timing
- * fields a regular `sound_channels` note has. The channel `name`
- * is the WAV played on contact (the "explosion sample").
+ * beatoraja's bmson extension for mine notes. Each note carries a gauge `damage` value (0..100) alongside the same lane
+ * / timing fields a regular `sound_channels` note has. The channel `name` is the WAV played on contact (the "explosion
+ * sample").
  */
 export interface BmsonKeyNote {
   x?: number;
@@ -83,10 +82,8 @@ export interface BmsonDocument {
   stop_events?: BmsonStopEvent[];
   sound_channels?: BmsonSoundChannel[];
   /**
-   * beatoraja extension — mine note channels. Each channel maps
-   * onto a BMS landmine channel (`Dx` for 1P, `Ex` for 2P) using
-   * the same `mode_hint` lane convention `sound_channels` uses
-   * for playable lanes.
+   * beatoraja extension — mine note channels. Each channel maps onto a BMS landmine channel (`Dx` for 1P, `Ex` for 2P)
+   * using the same `mode_hint` lane convention `sound_channels` uses for playable lanes.
    */
   key_channels?: BmsonKeyChannel[];
   bga?: {
@@ -105,16 +102,13 @@ interface MeasurePositionWithFraction {
 /**
  * bmson `mode_hint` → BMS lane channel maps.
  *
- * Each entry maps a bmson `x` lane index (1-based, left-to-right)
- * onto the BMS playable channel that `extractTimedNotes` and
- * `resolveChartPlayVariant` expect. Without these, the legacy
- * positional fallback would mis-route `beat-7k`'s key 6 / 7 onto
- * scratch (`16`) / FREE ZONE (`17`) — the channel digits that
- * happen to come next in numeric order — instead of `18` / `19`.
+ * Each entry maps a bmson `x` lane index (1-based, left-to-right) onto the BMS playable channel that
+ * `extractTimedNotes` and `resolveChartPlayVariant` expect. Without these, the legacy positional fallback would
+ * mis-route `beat-7k`'s key 6 / 7 onto scratch (`16`) / FREE ZONE (`17`) — the channel digits that happen to come next
+ * in numeric order — instead of `18` / `19`.
  *
- * Keys mirror the bmson 1.0.0 spec's mode hints; values follow the
- * canonical IIDX / Pop'n channel layout that LR2 / beatoraja ship
- * default skins for.
+ * Keys mirror the bmson 1.0.0 spec's mode hints; values follow the canonical IIDX / Pop'n channel layout that LR2 /
+ * beatoraja ship default skins for.
  */
 const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
   'beat-5k': new Map([
@@ -174,9 +168,8 @@ const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
     [4, '14'],
     [5, '15'],
   ]),
-  // PMS-STD (`#PLAYER 3` Pop'n) routes the right-hand half of the
-  // 9-lane bank through the 2P-side `22..25` channels — same
-  // convention `play_9.lr2skin` and `lane-layout.ts` use.
+    // PMS-STD (`#PLAYER 3` Pop'n) routes the right-hand half of the 9-lane bank through the 2P-side `22..25` channels —
+  // same convention `play_9.lr2skin` and `lane-layout.ts` use.
   'popn-9k': new Map([
     [1, '11'],
     [2, '12'],
@@ -191,42 +184,30 @@ const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
 };
 
 /**
- * bmson 1.0.0 spec — when a chart omits / blanks `mode_hint`,
- * the default is `beat-7k` ("Default value is 'beat-7k'").
- * Applied centrally in {@link buildBmsonLaneMap} so the default
- * lane routing follows the spec instead of falling through onto
- * the unknown-hint positional fallback (which used to map
- * x=6/7 onto `16` / `17` because those digits came next in
- * numeric order).
+ * bmson 1.0.0 spec — when a chart omits / blanks `mode_hint`, the default is `beat-7k` ("Default value is 'beat-7k'").
+ * Applied centrally in {@link buildBmsonLaneMap} so the default lane routing follows the spec instead of falling
+ * through onto the unknown-hint positional fallback (which used to map x=6/7 onto `16` / `17` because those digits came
+ * next in numeric order).
  */
 const BMSON_DEFAULT_MODE_HINT = 'beat-7k';
 
 /**
- * `generic-Nkeys` template pattern — bmson allows arbitrary key
- * counts via this naming convention ("a layout for a generic
- * symmetrical keyboard layout, ordered left to right"). The
- * numeric prefix is the key count; we route it as a positional
- * left-to-right `x=1..N → 11, 12, …` map.
+ * `generic-Nkeys` template pattern — bmson allows arbitrary key counts via this naming convention ("a layout for a
+ * generic symmetrical keyboard layout, ordered left to right"). The numeric prefix is the key count; we route it as a
+ * positional left-to-right `x=1..N → 11, 12, …` map.
  */
 const BMSON_GENERIC_KEYS_PATTERN = /^generic-(\d+)keys?$/;
 
 /**
- * Resolves the `x` → BMS channel mapping for a chart's playable
- * lanes. Order of resolution:
+ * Resolves the `x` → BMS channel mapping for a chart's playable lanes. Order of resolution:
  *
- * 1. `mode_hint` blank / undefined → spec default `beat-7k`
- *    (per bmson 1.0.0).
+ * 1. `mode_hint` blank / undefined → spec default `beat-7k` (per bmson 1.0.0).
  * 2. Canonical IIDX / Pop'n hint → authoritative table.
- * 3. `generic-Nkeys` template → left-to-right positional map
- *    sized to N keys.
- * 4. Anything else → positional fallback over the chart's
- *    actual `x` values (preserves the historical behaviour for
+ * 3. `generic-Nkeys` template → left-to-right positional map sized to N keys.
+ * 4. Anything else → positional fallback over the chart's actual `x` values (preserves the historical behaviour for
  *    bmson dialects unknown to us).
  */
-export function buildBmsonLaneMap(
-  soundChannels: BmsonSoundChannel[],
-  modeHint?: string,
-): Map<number, string> {
+export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[], modeHint?: string): Map<number, string> {
   const trimmedHint = typeof modeHint === 'string' ? modeHint.trim() : '';
   const effectiveHint = trimmedHint.length > 0 ? trimmedHint : BMSON_DEFAULT_MODE_HINT;
   const hintedMap = MODE_HINT_LANE_MAPS[effectiveHint];
@@ -263,11 +244,9 @@ export function buildBmsonLaneMap(
 }
 
 /**
- * Converts a BMS playable lane channel into its matching BMS
- * landmine channel — `Dx` for 1P (`1X` keys) and `Ex` for 2P
- * (`2X` keys). Used to route bmson `key_channels` notes through
- * the same lane resolver as playable notes while keeping them
- * tagged as mines downstream.
+ * Converts a BMS playable lane channel into its matching BMS landmine channel — `Dx` for 1P (`1X` keys) and `Ex` for 2P
+ * (`2X` keys). Used to route bmson `key_channels` notes through the same lane resolver as playable notes while keeping
+ * them tagged as mines downstream.
  */
 export function bmsPlayableChannelToLandmineChannel(channel: string): string | undefined {
   if (channel.length !== 2) return undefined;
@@ -514,31 +493,21 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
     normalized.subartists = subartists;
   }
 
-  // bmson 1.0.0 spec — `level` is an `unsigned long` and "must
-  // be ≥ 0. Negative values may be regarded as invalid by a
-  // player." We treat the negative case as "invalid → drop the
-  // field" rather than silently coerce, so the missing-level
-  // fallback (`undefined` → no displayed level) is what the
-  // chart's level shows in the UI. Non-integer inputs are
+    // bmson 1.0.0 spec — `level` is an `unsigned long` and "must be ≥ 0. Negative values may be regarded as invalid by a
+  // player." We treat the negative case as "invalid → drop the field" rather than silently coerce, so the missing-level
+  // fallback (`undefined` → no displayed level) is what the chart's level shows in the UI. Non-integer inputs are
   // floored to honour the spec's `unsigned long` type.
   copyIfNonNegativeInteger(normalized, 'level', info.level);
   copyIfFiniteNumber(normalized, 'initBpm', info.init_bpm);
-  // bmson 1.0.0 spec — `judge_rank` describes "the width of
-  // judgment window" with the spec text only making sense for
-  // positive values ("smaller than 100" / "larger than 100"
-  // are framed relative to the player's default; 0 / negative
-  // would mean a zero-or-inverted window). Drop the field for
-  // non-positive inputs so the consumer falls back to the
-  // spec default of 100 rather than producing a nonsensical
-  // judge window.
+    // bmson 1.0.0 spec — `judge_rank` describes "the width of judgment window" with the spec text only making sense for
+  // positive values ("smaller than 100" / "larger than 100" are framed relative to the player's default; 0 / negative
+  // would mean a zero-or-inverted window). Drop the field for non-positive inputs so the consumer falls back to the
+  // spec default of 100 rather than producing a nonsensical judge window.
   copyIfPositiveFiniteNumber(normalized, 'judgeRank', info.judge_rank);
-  // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take
-  // the absolute value." Normalising at parse time keeps the
-  // gauge formula (`+TOTAL/N`) on the positive branch and means
-  // every downstream consumer (gauge, stringifier, round-trip
-  // re-parse) sees the canonical value. `total: 0` stays
-  // semantically meaningful (lifebar doesn't increase, per the
-  // same spec section).
+    // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take the absolute value." Normalising at parse time keeps the
+  // gauge formula (`+TOTAL/N`) on the positive branch and means every downstream consumer (gauge, stringifier,
+  // round-trip re-parse) sees the canonical value. `total: 0` stays semantically meaningful (lifebar doesn't increase,
+  // per the same spec section).
   copyIfFiniteNumberAbs(normalized, 'total', info.total);
 
   if (resolution > 0) {
@@ -668,15 +637,12 @@ function normalizeBmsonSubartists(input: unknown): string[] | undefined {
 }
 
 /**
- * bmson 1.0.0 spec SHOULD — "Implementers should trim the spaces
- * before and after `key` and `value` in subartists."
+ * bmson 1.0.0 spec SHOULD — "Implementers should trim the spaces before and after `key` and `value` in subartists."
  *
- * Trims each half of the `role:name` form (or just the name when
- * the entry doesn't carry a role) and rejoins so the stored
- * array contains canonicalised strings. Role case is preserved
- * — the consumer-facing helper {@link parseBmsonSubartist} is
- * the one that lower-cases for grouping; we don't want to lose
- * the author's intended capitalisation in the IR.
+ * Trims each half of the `role:name` form (or just the name when the entry doesn't carry a role) and rejoins so the
+ * stored array contains canonicalised strings. Role case is preserved — the consumer-facing helper {@link
+ * parseBmsonSubartist} is the one that lower-cases for grouping; we don't want to lose the author's intended
+ * capitalisation in the IR.
  */
 function canonicaliseSubartistEntry(entry: string): string {
   const colon = entry.indexOf(':');
@@ -771,11 +737,9 @@ function copyIfFiniteNumber<T extends object>(target: T, key: keyof T & string, 
 }
 
 /**
- * Same as {@link copyIfFiniteNumber} but applies `Math.abs` so
- * spec fields that say "if negative, take the absolute value"
- * (notably `info.total`) get normalised at parse time. Keeps
- * `0` intact so its spec-defined "lifebar doesn't increase"
- * meaning is preserved.
+ * Same as {@link copyIfFiniteNumber} but applies `Math.abs` so spec fields that say "if negative, take the absolute
+ * value" (notably `info.total`) get normalised at parse time. Keeps `0` intact so its spec-defined "lifebar doesn't
+ * increase" meaning is preserved.
  */
 function copyIfFiniteNumberAbs<T extends object>(target: T, key: keyof T & string, value: unknown): void {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -784,12 +748,9 @@ function copyIfFiniteNumberAbs<T extends object>(target: T, key: keyof T & strin
 }
 
 /**
- * Copies a finite numeric value as a non-negative integer,
- * dropping the field entirely when the input is negative or
- * non-finite. Matches the bmson 1.0.0 spec's `unsigned long`
- * fields (notably `info.level`) which require `≥ 0` and the
- * spec's MAY clause that lets implementations regard negatives
- * as invalid. Non-integer inputs are floored.
+ * Copies a finite numeric value as a non-negative integer, dropping the field entirely when the input is negative or
+ * non-finite. Matches the bmson 1.0.0 spec's `unsigned long` fields (notably `info.level`) which require `≥ 0` and the
+ * spec's MAY clause that lets implementations regard negatives as invalid. Non-integer inputs are floored.
  */
 function copyIfNonNegativeInteger<T extends object>(target: T, key: keyof T & string, value: unknown): void {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -803,15 +764,11 @@ function copyIfNonNegativeInteger<T extends object>(target: T, key: keyof T & st
 }
 
 /**
- * Copies a finite numeric value only when it is strictly
- * positive (`> 0`). Matches bmson 1.0.0 spec fields whose
- * semantics only make sense for positive values — notably
- * `info.judge_rank`, where the spec text ("smaller than 100" /
- * "larger than 100") frames the value as a width relative to
- * the player's default. A `0` or negative input would imply
- * a zero-width or inverted judgement window, both nonsensical;
- * dropping the field lets the consumer fall back to the spec
- * default of 100.
+ * Copies a finite numeric value only when it is strictly positive (`> 0`). Matches bmson 1.0.0 spec fields whose
+ * semantics only make sense for positive values — notably `info.judge_rank`, where the spec text ("smaller than 100" /
+ * "larger than 100") frames the value as a width relative to the player's default. A `0` or negative input would imply
+ * a zero-width or inverted judgement window, both nonsensical; dropping the field lets the consumer fall back to the
+ * spec default of 100.
  */
 function copyIfPositiveFiniteNumber<T extends object>(target: T, key: keyof T & string, value: unknown): void {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
@@ -854,10 +811,8 @@ function normalizeBmsonInfoFromIr(input: unknown): BeMusicJson['bmson']['info'] 
     info.subartists = subartists;
   }
 
-  // Match `normalizeBmsonInfoForIr`'s spec-compliant unsigned-
-  // integer + positive + abs handling for the re-parse path so
-  // JSON round-trips don't reintroduce a negative / float
-  // level / judge_rank / total.
+    // Match `normalizeBmsonInfoForIr`'s spec-compliant unsigned- integer + positive + abs handling for the re-parse path
+  // so JSON round-trips don't reintroduce a negative / float level / judge_rank / total.
   copyIfNonNegativeInteger(info, 'level', raw.level);
   copyIfFiniteNumber(info, 'initBpm', raw.initBpm ?? raw.init_bpm);
   copyIfPositiveFiniteNumber(info, 'judgeRank', raw.judgeRank ?? raw.judge_rank);
