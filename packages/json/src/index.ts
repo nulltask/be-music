@@ -44,6 +44,15 @@ export type BeMusicPosition = readonly [numerator: number, denominator: number];
 export interface BmsonEventExtensions {
   l?: number;
   c?: boolean;
+  /**
+   * Per-mine gauge damage in 0..100, sourced from a bmson
+   * `key_channels[].notes[].damage` entry. Only set on mine
+   * events emitted from `key_channels`; absent on regular
+   * `sound_channels`-derived note events. Consumers that don't
+   * read this field fall through to the BMS-side default
+   * (`<value>/2` in base-36, floor 4).
+   */
+  damage?: number;
 }
 
 export interface BeMusicEvent {
@@ -110,6 +119,25 @@ export interface BmsonSoundNoteEntry {
 export interface BmsonSoundChannelEntry {
   name: string;
   notes: BmsonSoundNoteEntry[];
+}
+
+/**
+ * beatoraja extension — `key_channels[].notes[]` shape. Same
+ * timing / lane / continuation fields as a regular sound-channel
+ * note, plus a `damage` value (0..100 gauge percent) that carries
+ * the per-mine damage authoring intent.
+ */
+export interface BmsonKeyNoteEntry {
+  x?: number;
+  y: number;
+  l?: number;
+  c?: boolean;
+  damage?: number;
+}
+
+export interface BmsonKeyChannelEntry {
+  name: string;
+  notes: BmsonKeyNoteEntry[];
 }
 
 export interface BmsonExtensions {

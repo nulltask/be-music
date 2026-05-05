@@ -20,6 +20,7 @@ import {
   upsertMeasureLength,
 } from './event-utils.ts';
 import {
+  bmsPlayableChannelToLandmineChannel,
   buildBmsonLaneMap,
   createBmsonPositionResolver,
   createMeasureLengthsFromBmsonLines,
@@ -28,6 +29,7 @@ import {
   normalizeBmsonBgaForIr,
   normalizeBmsonExtensions,
   normalizeBmsonInfoForIr,
+  normalizeBmsonKeyChannels,
   normalizeBmsonLines,
   normalizeBmsonSoundChannels,
   normalizeBmsonStopEvents,
@@ -253,7 +255,12 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
 
   const soundChannels = normalizeBmsonSoundChannels(document.sound_channels);
   json.preservation.bmson.soundChannels = soundChannels;
-  const laneMap = buildBmsonLaneMap(soundChannels);
+  // Lane mapping honours `mode_hint` so canonical IIDX / Pop'n
+  // bmson dialects route the right keys onto the right BMS
+  // channels — the legacy positional fallback would mis-route
+  // `beat-7k` x=6/7 onto scratch (`16`) / FREE ZONE (`17`)
+  // because those channel digits come next in numeric order.
+  const laneMap = buildBmsonLaneMap(soundChannels, json.bmson.info.modeHint);
   for (let index = 0; index < soundChannels.length; index += 1) {
     const soundChannel = soundChannels[index]!;
     const key = intToBase36(index + 1, 2);
@@ -304,6 +311,61 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
         continue;
       }
       json.events.push(candidate.event);
+    }
+  }
+
+  // beatoraja `key_channels` extension — mine notes. Each channel
+  // is a WAV bound to one or more `(x, y, damage)` entries; the
+  // sample plays on contact and `damage` (0..100 gauge percent)
+  // bleeds the gauge. We register the WAV after the
+  // sound-channels block so the WAV ID space stays contiguous,
+  // route notes through the same `mode_hint`-aware lane map, and
+  // emit them on BMS landmine channels (`Dx` / `Ex`) so the
+  // downstream `extractTimedNotes` landmine extractor sees them.
+  // The bmson per-mine `damage` is preserved on
+  // `event.bmson.damage` so consumers can opt into custom
+  // damage; players that don't read it fall through to the
+  // BMS-side default.
+  const keyChannels = normalizeBmsonKeyChannels(document.key_channels);
+  for (let index = 0; index < keyChannels.length; index += 1) {
+    const keyChannel = keyChannels[index]!;
+    const wavKey = intToBase36(soundChannels.length + index + 1, 2);
+    json.resources.wav[wavKey] = keyChannel.name;
+    for (const note of keyChannel.notes) {
+      if (!Number.isFinite(note.y)) {
+        continue;
+      }
+      const lane = Number.isFinite(note.x) ? Math.floor(note.x!) : 0;
+      if (lane <= 0) {
+        // Lane 0 / missing `x` would map onto a BGM channel which
+        // makes no sense for a mine — skip rather than silently
+        // emit a malformed event.
+        continue;
+      }
+      const playableChannel = laneMap.get(lane);
+      if (!playableChannel) {
+        continue;
+      }
+      const landmineChannel = bmsPlayableChannelToLandmineChannel(playableChannel);
+      if (!landmineChannel) {
+        continue;
+      }
+      const { measure, position } = positionResolver(note.y);
+      const event: BeMusicEvent = {
+        measure,
+        position,
+        channel: landmineChannel,
+        value: wavKey,
+      };
+      const noteContinue = typeof note.c === 'boolean' ? note.c : undefined;
+      const noteLength = typeof note.l === 'number' && Number.isFinite(note.l) && note.l >= 0 ? Math.floor(note.l) : undefined;
+      if (noteLength !== undefined || noteContinue !== undefined || note.damage !== undefined) {
+        event.bmson = {};
+        if (noteLength !== undefined) event.bmson.l = noteLength;
+        if (noteContinue !== undefined) event.bmson.c = noteContinue;
+        if (note.damage !== undefined) event.bmson.damage = note.damage;
+      }
+      json.events.push(event);
     }
   }
 

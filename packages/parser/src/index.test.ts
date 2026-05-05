@@ -409,6 +409,124 @@ describe('parser', () => {
     expect(playableNotes.some((event) => event.position[0] === 480)).toBe(true);
   });
 
+  test('bmson: mode_hint=beat-7k routes x=6/7 onto channels 18/19 and x=8 onto scratch (16)', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            // Each note one beat apart so measures are stable for
+            // assertion. Resolution 240, four beats / measure → one
+            // x value per beat fits inside measure 0 / 1.
+            notes: [
+              { x: 1, y: 0 },
+              { x: 2, y: 240 },
+              { x: 3, y: 480 },
+              { x: 4, y: 720 },
+              { x: 5, y: 960 },
+              { x: 6, y: 1200 },
+              { x: 7, y: 1440 },
+              { x: 8, y: 1680 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const sortedChannels = json.events
+      .slice()
+      .sort((left, right) => left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1])
+      .map((event) => event.channel);
+    expect(sortedChannels).toEqual(['11', '12', '13', '14', '15', '18', '19', '16']);
+  });
+
+  test('bmson: mode_hint=popn-9k routes x=6..9 onto the PMS-STD 22..25 channels', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'popn-9k' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 5, y: 0 },
+              { x: 6, y: 240 },
+              { x: 7, y: 480 },
+              { x: 8, y: 720 },
+              { x: 9, y: 960 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const channels = json.events
+      .slice()
+      .sort((left, right) => left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1])
+      .map((event) => event.channel);
+    expect(channels).toEqual(['15', '22', '23', '24', '25']);
+  });
+
+  test('bmson: missing mode_hint falls back to positional `x` ordering', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240 },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 7, y: 0 },
+              { x: 1, y: 240 },
+              { x: 5, y: 480 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // Without `mode_hint`, the lane map preserves the previous
+    // positional behaviour: distinct x-values get assigned to
+    // 11, 12, 13, ... in ascending order.
+    const sortedChannels = json.events
+      .slice()
+      .sort((left, right) => left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1])
+      .map((event) => event.channel);
+    expect(sortedChannels).toEqual(['13', '11', '12']);
+  });
+
+  test('bmson: key_channels mines route through the same mode_hint lane map onto Dx / Ex channels', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 'note.wav', notes: [{ x: 1, y: 0 }] }],
+        key_channels: [
+          {
+            name: 'mine.wav',
+            notes: [
+              { x: 6, y: 240, damage: 0 },
+              { x: 8, y: 480, damage: 50 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const mineEvents = json.events.filter((event) => event.channel.startsWith('D') || event.channel.startsWith('E'));
+    expect(mineEvents).toHaveLength(2);
+    // x=6 → 18 (1P key 6) → mine D8
+    expect(mineEvents[0].channel).toBe('D8');
+    expect(mineEvents[0].bmson?.damage).toBe(0);
+    // x=8 → 16 (1P scratch) → mine D6
+    expect(mineEvents[1].channel).toBe('D6');
+    expect(mineEvents[1].bmson?.damage).toBe(50);
+    // The mine WAV is registered after the sound_channels block.
+    expect(json.resources.wav['02']).toBe('mine.wav');
+  });
+
   test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and rejects invalid positions', () => {
     const parsed = parseChart(
       JSON.stringify({

@@ -2,6 +2,8 @@ import type {
   BeMusicJson,
   BeMusicPosition,
   BmsonBpmEventEntry,
+  BmsonKeyChannelEntry,
+  BmsonKeyNoteEntry,
   BmsonSoundChannelEntry,
   BmsonSoundNoteEntry,
   BmsonStopEventEntry,
@@ -53,6 +55,25 @@ export interface BmsonSoundChannel {
   notes?: BmsonSoundNote[];
 }
 
+/**
+ * beatoraja's bmson extension for mine notes. Each note carries a
+ * gauge `damage` value (0..100) alongside the same lane / timing
+ * fields a regular `sound_channels` note has. The channel `name`
+ * is the WAV played on contact (the "explosion sample").
+ */
+export interface BmsonKeyNote {
+  x?: number;
+  y: number;
+  l?: number;
+  c?: boolean;
+  damage?: number;
+}
+
+export interface BmsonKeyChannel {
+  name: string;
+  notes?: BmsonKeyNote[];
+}
+
 export interface BmsonDocument {
   version?: string;
   info?: BmsonInfo;
@@ -61,6 +82,13 @@ export interface BmsonDocument {
   bpm_events?: BmsonBpmEvent[];
   stop_events?: BmsonStopEvent[];
   sound_channels?: BmsonSoundChannel[];
+  /**
+   * beatoraja extension — mine note channels. Each channel maps
+   * onto a BMS landmine channel (`Dx` for 1P, `Ex` for 2P) using
+   * the same `mode_hint` lane convention `sound_channels` uses
+   * for playable lanes.
+   */
+  key_channels?: BmsonKeyChannel[];
   bga?: {
     bga_header?: Array<{ id: number; name: string }>;
     bga_events?: Array<{ y: number; id: number }>;
@@ -74,7 +102,112 @@ interface MeasurePositionWithFraction {
   position: BeMusicPosition;
 }
 
-export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[]): Map<number, string> {
+/**
+ * bmson `mode_hint` → BMS lane channel maps.
+ *
+ * Each entry maps a bmson `x` lane index (1-based, left-to-right)
+ * onto the BMS playable channel that `extractTimedNotes` and
+ * `resolveChartPlayVariant` expect. Without these, the legacy
+ * positional fallback would mis-route `beat-7k`'s key 6 / 7 onto
+ * scratch (`16`) / FREE ZONE (`17`) — the channel digits that
+ * happen to come next in numeric order — instead of `18` / `19`.
+ *
+ * Keys mirror the bmson 1.0.0 spec's mode hints; values follow the
+ * canonical IIDX / Pop'n channel layout that LR2 / beatoraja ship
+ * default skins for.
+ */
+const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
+  'beat-5k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+    [6, '16'],
+  ]),
+  'beat-7k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+    [6, '18'],
+    [7, '19'],
+    [8, '16'],
+  ]),
+  'beat-10k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+    [6, '16'],
+    [7, '21'],
+    [8, '22'],
+    [9, '23'],
+    [10, '24'],
+    [11, '25'],
+    [12, '26'],
+  ]),
+  'beat-14k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+    [6, '18'],
+    [7, '19'],
+    [8, '16'],
+    [9, '21'],
+    [10, '22'],
+    [11, '23'],
+    [12, '24'],
+    [13, '25'],
+    [14, '28'],
+    [15, '29'],
+    [16, '26'],
+  ]),
+  'popn-5k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+  ]),
+  // PMS-STD (`#PLAYER 3` Pop'n) routes the right-hand half of the
+  // 9-lane bank through the 2P-side `22..25` channels — same
+  // convention `play_9.lr2skin` and `lane-layout.ts` use.
+  'popn-9k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+    [6, '22'],
+    [7, '23'],
+    [8, '24'],
+    [9, '25'],
+  ]),
+};
+
+/**
+ * Resolves the `x` → BMS channel mapping for a chart's playable
+ * lanes. When the chart's `mode_hint` is one of the canonical
+ * IIDX / Pop'n hints, returns that hint's authoritative mapping
+ * (so `beat-7k`'s x=6/7 hit the key 6 / 7 channels `18` / `19`
+ * rather than colliding with the scratch / FREE ZONE digits).
+ * Falls back to a positional `x` → `11`, `12`, … assignment for
+ * unknown / absent hints — preserves the historical behaviour for
+ * the long tail of bmson dialects.
+ */
+export function buildBmsonLaneMap(
+  soundChannels: BmsonSoundChannel[],
+  modeHint?: string,
+): Map<number, string> {
+  const hintedMap = typeof modeHint === 'string' ? MODE_HINT_LANE_MAPS[modeHint] : undefined;
+  if (hintedMap) {
+    return new Map(hintedMap);
+  }
   const xValues = new Set<number>();
   for (const soundChannel of soundChannels) {
     for (const note of soundChannel.notes ?? []) {
@@ -93,6 +226,22 @@ export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[]): Map<numbe
     map.set(sorted[index], laneIndexToChannel(index));
   }
   return map;
+}
+
+/**
+ * Converts a BMS playable lane channel into its matching BMS
+ * landmine channel — `Dx` for 1P (`1X` keys) and `Ex` for 2P
+ * (`2X` keys). Used to route bmson `key_channels` notes through
+ * the same lane resolver as playable notes while keeping them
+ * tagged as mines downstream.
+ */
+export function bmsPlayableChannelToLandmineChannel(channel: string): string | undefined {
+  if (channel.length !== 2) return undefined;
+  const side = channel[0];
+  const lane = channel[1];
+  if (side === '1') return `D${lane}`;
+  if (side === '2') return `E${lane}`;
+  return undefined;
 }
 
 export function resolveBmsonResolution(document: BmsonDocument): number {
@@ -222,6 +371,28 @@ export function normalizeBmsonSoundChannels(input: unknown): BmsonSoundChannelEn
     channels.push({
       name: raw.name,
       notes: normalizeBmsonSoundNotes(raw.notes),
+    });
+  }
+  return channels;
+}
+
+export function normalizeBmsonKeyChannels(input: unknown): BmsonKeyChannelEntry[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const channels: BmsonKeyChannelEntry[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.name !== 'string') {
+      continue;
+    }
+    channels.push({
+      name: raw.name,
+      notes: normalizeBmsonKeyNotes(raw.notes),
     });
   }
   return channels;
@@ -463,6 +634,41 @@ function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
     }
     if (typeof raw.c === 'boolean') {
       note.c = raw.c;
+    }
+    notes.push(note);
+  }
+  return notes;
+}
+
+function normalizeBmsonKeyNotes(input: unknown): BmsonKeyNoteEntry[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const notes: BmsonKeyNoteEntry[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.y !== 'number' || !Number.isFinite(raw.y)) {
+      continue;
+    }
+
+    const note: BmsonKeyNoteEntry = {
+      y: Math.max(0, Math.round(raw.y)),
+    };
+    if (typeof raw.x === 'number' && Number.isFinite(raw.x)) {
+      note.x = Math.floor(raw.x);
+    }
+    if (typeof raw.l === 'number' && Number.isFinite(raw.l) && raw.l >= 0) {
+      note.l = Math.floor(raw.l);
+    }
+    if (typeof raw.c === 'boolean') {
+      note.c = raw.c;
+    }
+    if (typeof raw.damage === 'number' && Number.isFinite(raw.damage) && raw.damage >= 0) {
+      note.damage = raw.damage;
     }
     notes.push(note);
   }
