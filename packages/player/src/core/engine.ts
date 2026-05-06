@@ -11,8 +11,10 @@ import {
 // Hand-rolled polyfills replace what was previously imported from `node:path` / `node:timers/promises`. Keeping the
 // engine free of `node:`-prefixed imports lets the same module run unchanged in the browser (Phase 4 of the
 // web-engine integration plan) without depending on bundler-side aliases. The behaviors below are deliberately
-// minimal — `basename` only needs the trailing-segment semantics for log output, and `delay` / `delayImmediate`
-// only need the cooperative-yield semantics `waitPrecise` consumes.
+// minimal — `basename` only needs the trailing-segment semantics for log output, `delay` only needs to resolve
+// after `ms` ms (matches `node:timers/promises.setTimeout`), and `delayImmediate` matches
+// `node:timers/promises.setImmediate` whenever a global `setImmediate` is available (= Node) so the TUI's
+// frame-loop spin doesn't starve stdin / stdout I/O.
 const basename = (path: string): string => {
   // Match `node:path.basename`'s "drop the trailing separator(s) and return the final segment" semantics for both
   // POSIX and Windows-style separators. An all-separator input ("/" / "\\") returns an empty string.
@@ -21,7 +23,25 @@ const basename = (path: string): string => {
   return lastSep === -1 ? trimmed : trimmed.slice(lastSep + 1);
 };
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-const delayImmediate = (): Promise<void> => new Promise((resolve) => queueMicrotask(resolve));
+/**
+ * Cooperative yield used by {@link waitPrecise}'s sub-8 ms tail spin. Prefers Node's `setImmediate` when
+ * available so the spin re-enters via the event loop's `check` phase — that gives the I/O / timers phases a
+ * chance to run between iterations, which matters in the TUI runtime where `process.stdin` keypress delivery
+ * and `process.stdout` flushes happen on those phases. Falls back to `queueMicrotask` only in environments
+ * without `setImmediate` (i.e. browsers), where the microtask-only path is fine because the runtime there is
+ * driven by `requestAnimationFrame` / Web Audio's clock instead of stdin polling. A bare `queueMicrotask`
+ * implementation would starve I/O during the tail spin under Node because `await queueMicrotask(...)` keeps
+ * appending continuations to the microtask queue, preventing the loop from descending into `poll` / `check`.
+ */
+const delayImmediate = (): Promise<void> => {
+  const setImmediateFn = (globalThis as { setImmediate?: (callback: () => void) => unknown }).setImmediate;
+  if (typeof setImmediateFn === 'function') {
+    return new Promise((resolve) => {
+      setImmediateFn(() => resolve());
+    });
+  }
+  return new Promise((resolve) => queueMicrotask(resolve));
+};
 import { floatToInt16, throwIfAborted, type LogEntry, type LogLevel } from '@be-music/utils';
 import {
   type BeMusicEvent,
