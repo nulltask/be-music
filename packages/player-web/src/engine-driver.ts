@@ -84,6 +84,23 @@ export type EngineDriverResult = PlayerSummary;
  * - LN early-release audio cut via `AudioSession.stopChannel`.
  * - Mine vs note delta-based priority (closest delta wins).
  * - Multi-channel input mapping for scratch / Free-Zone aliases.
+ *
+ * Test-coverage trail for the dynamic-judge / sample-routing features the migration depends on:
+ * - **EXRANK dynamic judge windows** — engine end-to-end at
+ *   `packages/player/src/index.test.ts:'player: updates manual judge windows from dynamic EXRANK events'`.
+ *   Frame summary propagation through `WebUiRuntime` is covered by
+ *   `packages/player-web/src/web-ui-runtime.test.ts:'drainWebUiSignals routes the current frame snapshot ...'`.
+ * - **#WAVCMD per-slot gain** — covered by
+ *   `packages/player-web/src/web-audio-session.test.ts:'applies #WAVCMD per-slot gain via an intermediate GainNode'`,
+ *   which verifies the BufferSource → GainNode → mixer routing instead of BufferSource → mixer.
+ * - **bmson c=true continuation** — covered by
+ *   `packages/player-web/src/web-audio-session.test.ts:'honours bmson c=true continuation by suppressing
+ *   retriggers of an in-flight slot'`. The engine's `findLaneSoundCandidate` fallback path doesn't bypass this
+ *   guard because every trigger flows through `WebAudioSession.triggerEvent` (which checks `activeBySlot`).
+ * - **#STP measure stops** — handled at the timing-resolver / timeline level inside `@be-music/chart`; the
+ *   engine consumes chart-time seconds that already account for stops, so it doesn't have a separate code
+ *   path. Covered by `packages/player/src/core/timeline.test.ts:'SCROLL/BPM/STOP: keeps zero and negative
+ *   scroll with LR2-style stop compensation'`.
  */
 export async function runEngineDriver(options: EngineDriverOptions): Promise<EngineDriverResult> {
   const { chart, audio, mode, ui, inputTarget, shouldSkipKey, onInputSignalsReady, engineOptions } = options;
