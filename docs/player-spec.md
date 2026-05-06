@@ -2,10 +2,10 @@
 
 # Player implementation specifications
 
-This document defines the runtime specification for `@be-music/player`.
+This document defines the runtime specification for the shared `@be-music/player` core engine.
 Regarding the acceptance rules of musical score formats and the meaning of IR, priority is given to [`bms-spec.md`](./bms-spec.md), [`bmson-spec.md`](./bmson-spec.md), and [`json-spec.md`](./json-spec.md), and this document only deals with how the player plays, judges, and displays them.
 
-## the purpose
+## Purpose
 
 - Consolidate the behavior of `@be-music/player` by mode in one place.
 - Clarify criteria for judgment, scores, gauges, audio, and display.
@@ -14,11 +14,11 @@ Regarding the acceptance rules of musical score formats and the meaning of IR, p
 ## Scope
 
 This document covers the results returned by `autoPlay()` and `manualPlay()`, as well as the judgment, display, and audio processing they use internally.
-Invocation methods such as CLI arguments, configuration file persistence, and Node worker communication are not covered.
-The browser player reuses the same chart semantics for timing, notes, BGA cues, score, and results, but its PixiJS scenes, LR2 skin rendering, browser file loading, and WebAudio lifecycle are documented separately in [Browser player implementation notes](./player-web.md).
+Invocation methods such as `@be-music/player-tui` CLI arguments, configuration file persistence, and Node worker communication are not covered.
+The terminal player and browser player reuse the same chart semantics for timing, notes, BGA cues, score, and results. Terminal UI behavior lives in `@be-music/player-tui`, while PixiJS scenes, LR2 skin rendering, browser file loading, and WebAudio lifecycle are documented separately in [Browser player implementation notes](./player-web.md).
 
-The only gauge currently implemented is the `NORMAL` groove gauge which is compatible with Lunatic Rave 2.
-`HARD` / `EX-HARD` / `HAZARD` / Level gauge is not implemented.
+The core engine defaults to the LR2-compatible `GROOVE` gauge, which corresponds to LR2's `NORMAL` gauge.
+The exported gauge helper also supports `HARD`, `DEATH`, and `EASY` for browser PLAY OPTION controls. The bundled terminal player currently has no gauge-type switch.
 
 ## BMS compatible range
 
@@ -64,7 +64,7 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 | `#VOLWAV` | Used as a volume multiplier for the entire score. |
 | `#POORBGA` | Used to override the default value of POOR images. |
 | `#SCROLLxx`, `#SPEEDxx` | Used to calculate note drawing distance. |
-`#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | Resolved as control syntax before playback starts. |
+| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | Resolved as control syntax before playback starts. |
 
 ### Unsupported channels
 
@@ -79,9 +79,11 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 | command | Current player implementation |
 | --- | --- |
 | `#TEXTxx`, `#TEXT00` | The parser is retained, but it is not used for player display or runtime performance. |
-| `#OPTION`, `#CHANGEOPTIONxx`, `#WAVCMD` | Parser is retained, but forced change of play option and `WAVCMD` execution are not supported. |
-| `#BACKBMP`, `#MAKER` | Display and behavior exclusive to player runtime are not implemented. |
-| `#EXWAVxx`, `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx` | Contains parser but does not refer to player runtime. |
+| `#OPTION`, `#CHANGEOPTIONxx` | Parser is retained, but forced play-option changes are not supported by the core runtime. |
+| `#WAVCMD`, `#EXWAVxx` | Parser is retained. The bundled Node realtime audio session does not apply them, while audio-renderer and browser WebAudio apply the implemented volume subset (`#WAVCMD 01` and `#EXWAVxx v`). Pitch, loop, pan, and frequency parameters are still unsupported. |
+| `#BACKBMP` | The core/terminal runtime has no dedicated behavior for this command. Browser LR2 special graphics can use it. |
+| `#MAKER` | Metadata-only/unsupported. |
+| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx` | The parser retains them. The terminal/core runtime does not apply them, while the browser player renders the implemented BGA sub-region, switching, tint, and alpha subset. |
 | `#BASEBPM` | The parser is retained, but the player is not used for time resolution. |
 | `#VIDEOFILE` | The parser is retained, but it is not used for BGA video resolution in the player. Real-world video playback only handles video files referenced with `#BMPxx`. |
 | `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET` | Retains the parser but does not refer to the player runtime. |
@@ -380,23 +382,27 @@ Calculate the bonus unit price for each number of notes so that it is always `20
 
 ### Basic policy
 
-- `NORMAL` groove gauge matches Lunatic Rave 2 default value.
-- Gauge display range uses internal value `2-100%` instead of `0-100%`.
-- Clear judgment is when the gauge is ``80% or more'' at the end of the performance.
+- The default `GROOVE` gauge matches the Lunatic Rave 2 `NORMAL` gauge.
+- `GROOVE` / `EASY` use a soft floor, while `HARD` / `DEATH` can fall to `0%`.
+- Clear judgment is resolved from each gauge type's threshold at the end of the performance.
 
 ### Initial and default values
 
-- Initial gauge is `20%`
-- The lower limit during playing is `2%`
+- Default `GROOVE` initial gauge is `20%`
+- Default `GROOVE` lower limit during play is `2%`
 - Upper limit is `100%`
-- Clear line is `80%`
+- Default `GROOVE` clear line is `80%`
 - If `#TOTAL` is not specified, the default value is `160`
 - When `#TOTAL` is specified, use that value as is
+
+`HARD` and `DEATH` start at `100%` and bottom out at `0%`; `EASY` starts at `20%`, has a `2%` floor, and clears at `60%`.
 
 ### Increase/Decrease
 
 `noteCount` is the number of notes played for TOTAL / EX-SCORE / SCORE.
 FREE ZONE, mines, and invisible objects are not included in `noteCount`.
+
+The following deltas describe the default `GROOVE` gauge. `HARD`, `DEATH`, and `EASY` use the variant-specific deltas in [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts).
 
 `baseGain = effectiveTotal / noteCount`
 
@@ -407,7 +413,7 @@ FREE ZONE, mines, and invisible objects are not included in `noteCount`.
 - `POOR`: `-6`
 - Manual landmine hit: `-(mineValue(base36) / 2)`
 
-The value after gauge update is clamped to `2-100%`.
+The value after gauge update is clamped to the current gauge type's min/max range.
 
 ## Long Note
 
@@ -454,8 +460,7 @@ No judgment window or manual input candidate search is used.
 ### `MANUAL`
 
 `MANUAL` selects the most appropriate candidate note within the `BAD` window from the set of lanes corresponding to the input token.
-If there are no candidates, nothing happens.
-If a keysound fallback exists, only that sound will be played.
+If there are no candidates, the runtime first plays a keysound fallback when one exists, then applies LR2-compatible empty POOR unless the channel is FREE ZONE or the input falls inside the long-note repeat-suppress window.
 
 In manual input, objects that pass the `BAD` window without any note input are automatically set to `POOR`.
 Invisible notes are not included in this miss judgment.
@@ -631,7 +636,7 @@ The main items are:
 
 ## Known unsupported
 
-- Gauge type other than `NORMAL` of LR2
-- Gauge type switching option
+- Gauge type switching in the terminal player and core `autoPlay()` / `manualPlay()` result path
+- Independent 2P gauge variant in browser gameplay
 - Gauge timeline display
 - `#LNMODE` branch on `AUTO`

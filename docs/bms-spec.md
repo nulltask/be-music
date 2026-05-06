@@ -59,7 +59,8 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] Interpret meta header `#GENRE`
 - [x] Interpret meta header `#COMMENT`
 - [x] Keep `#SUBARTIST` as `metadata.extras.SUBARTIST` and use it for player's music selection screen metadata
-- [x] Keep `#BANNER` as `metadata.extras.BANNER` and use it for the player's song selection screen banner
+- [x] Keep `#BACKBMP` as `metadata.backBmp` for browser LR2 special graphics
+- [x] Keep `#BANNER` as `metadata.banner` and use it for the player's song selection screen banner
 - [x] Interpret meta header `#STAGEFILE`
 - [x] Display `#STAGEFILE` as a loading screen exclusive image after song selection
 - [x] Interpret meta header `#PLAYLEVEL`
@@ -171,6 +172,10 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Interpret `#xxx98` as dynamic volume change on playable/key side
 - [x] Interpret `#EXRANKxx` and `#xxxA0` as dynamic decision width changes of player
 - [x] Supports LR2 100001x BPM gimmick by `#BPMxx` with time resolution
+- [x] Keep every `#WAVCMD` line in `bms.wavCmds`; audio-renderer and browser WebAudio apply the `01` volume parameter
+- [x] Parse `#EXWAVxx` and apply its `v` volume parameter in audio-renderer and browser WebAudio
+- [x] Use `#BASEBPM` as the chart reference BPM for browser HS-FIX calibration through `@be-music/chart`
+- [x] Browser player reflects `#BGAxx` sub-region BGA, `#SWBGAxx` switching BGA, and `#ARGBxx` / `#EXBMPxx` tint and alpha
 
 ### `#BASE`
 
@@ -245,7 +250,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [x] `#LNOBJ` Handling when multiple declarations are made (declaration order maintained in `bms.lnObjs`)
 - [x] `#LNOBJ` Compatibility policy for Keyup pronunciation extension at the end (HDX Keyup is not adopted, end trigger is suppressed)
 - [x] Priority definition in a score where `#xxx51-69` and `#LNOBJ` conflict (`#xxx51-69` takes precedence in the same lane and position)
-- [ ] Dedicated interpretation of header `#BACKBMP` / `#MAKER`
+- [ ] Dedicated interpretation of header `#MAKER`
 - [ ] Interpretation of multiple line definition (Multiplex) of `#SUBTITLE` / `#SUBARTIST` / `#COMMENT`
 - [ ] Rules for treating the old-style compatible header `#SONGxx` as equivalent to `#TEXTxx`
 - [ ] Compatible header `#EXBPMxx` reading policy (difference with `#BPMxx`)
@@ -254,7 +259,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [ ] Handling of old video headers `#VIDEOFPS` / `#VIDEODLY` / `#VIDEOCOLORS` / `#SEEK`
 - [ ] Handling of material separation header `#MATERIALSBMP` / `#MATERIALSWAV`
 - [x] Real-time reflection of `#STP`
-- [ ] Execution specifications of `#WAVCMD` (currently only retained)
+- [ ] `#WAVCMD` pitch and loop execution. Current runtime support only applies the `01` volume parameter in audio-renderer and browser WebAudio.
 - [ ] `#OPTION` Simultaneous application rule for multiple lines (currently holds a single value)
 - [ ] Runtime reflection of object channel `#xxxA6` (`#CHANGEOPTIONxx`)
 - [ ] `#TEXTxx` / `#TEXT00` display behavior during play (currently only retained)
@@ -266,10 +271,11 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [ ] Conflict priority between `#xxx08` and `#xxx09` on the same timeline
 - [ ] Compatibility behavior when inputting invalid values ​​(negative numbers/zero/character strings/exponential notation, etc.) for `#BPMxx`
 - [x] Timing interpretation of `#STP` format `xxx[.yyy] zzzz` and abbreviation `xxx zzzz`
-- [ ] `#BGAxx` Interpretation of detailed definition (cutting/placement parameters) and drawing reflection
+- [x] Browser player: `#BGAxx` interpretation of sub-region cutting and placement parameters
 - [ ] Runtime reflection of `#@BGAxx` (branch/conditional BGA definition)
-- [ ] Reflection of `#SWBGAxx` at runtime (BGA switching according to conditions)
-- [ ] Runtime reflection of `#ARGBxx` (transparency/composition parameters)
+- [x] Browser player: `#SWBGAxx` runtime reflection for switching BGA animations
+- [x] Browser player: `#ARGBxx` / `#EXBMPxx` runtime reflection for transparency and tint parameters
+- [ ] CLI/TUI reflection of `#BGAxx`, `#SWBGAxx`, `#ARGBxx`, and `#EXBMPxx`
 - [ ] Decision width interpretation of boundary values ​​including `#DEFEXRANK 0`
 - [ ] Apply `#PATH_WAV` to real file resolution during playback/rendering.
 - [x] Support for drawing channel `0A` (BGA LAYER2)
@@ -295,13 +301,13 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [ ] Acceptance policy for commands with leading indentation (leading blank + `#COMMAND`)
 - [ ] Acceptance policy for alternative notation of control syntax `#ELSE IF` / `#END IF` / `#END`
 - [ ] EOF completion rules when `#IF` / `#SWITCH` block is unterminated (`#ENDIF` / `#ENDSW` is missing)
-- [ ] Acceptance of Bemuse extension header `#SPEEDxx` and reflection at runtime
-- [ ] Bemuse expansion channel `#xxxSP` (spacing factor) acceptance and drawing reflection
+- [x] Acceptance of Bemuse extension header `#SPEEDxx` and reflection in note drawing distance
+- [x] Bemuse expansion channel `#xxxSP` (spacing factor) acceptance and drawing reflection
 - [ ] Acceptance rules for Bemuse extension line `#EXT #xxxyy:...` (differences from normal objects)
 - [ ] 256x256 Oversize BGA drawing policy (cropping, reduction, placement)
 - [x] Maximum number of layers and priority for BGA composition (normally 3 layers: `04` < `07` < `0A`, while POOR is displayed, POOR has the highest priority)
 - [ ] Whether to apply `#ARGBxx` / `#BGAxx` parameters to video BGA
-- [ ] `#BASEBPM` real time reflection (speed display, HI-SPEED calculation, internal time calculation) policy
+- [ ] `#BASEBPM` core time-resolution reflection policy. Browser HS-FIX uses it as a visual reference BPM, but internal chart timing still follows BPM events.
 - [ ] player: `#PLAYER` When not specified, the default value `1` is reflected on the song selection screen, TUI, and result display.
 - [ ] player: Match the display of `#PLAYER=2` / `#PLAYER=4` with the actual implementation (meta only explicit or dedicated mode implementation)
 - [ ] editor: `setMetadata` / `set-meta` write `#PLAYER` to `bms.player` instead of `metadata.extras`

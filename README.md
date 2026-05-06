@@ -12,7 +12,9 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON parser
 - `@be-music/stringifier`: Stringization from JSON to `.bms` / `.bmson`
 - `@be-music/audio-renderer`: Render the music score and output `.wav` / `.aiff`
-- `@be-music/player`: CLI player (autoplay / keyboard performance / TUI)
+- `@be-music/player`: Shared playback engine, timing, judgment, scoring, gauge, BGA timeline, and UI/audio adapter contracts
+- `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds
+- `@be-music/lr2-skin`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/player-web`: Browser PixiJS player core for song selection, LR2 skin rendering, gameplay, result scenes, and recording
 - `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2 themes, debug controls, and browser playback together
 - `@be-music/editor`: CLI editor (import/edit/export)
@@ -53,7 +55,7 @@ pnpm run release:version
 - Normal feature PR adds `.changeset/*.md` for the changed package
 - When you want to release, run `pnpm run release:version` on `devel` and commit the generated `packages/*/package.json` and `packages/*/CHANGELOG.md` updates together.
 - In that state, if you merge the release PR of `devel -> main`, a separate GitHub Release will be created only for the package whose version has increased.
-- `@be-music/player` and `@be-music/audio-renderer` have SEA zips attached to individual releases
+- The player SEA executable is built from `@be-music/player-tui` and attached to the `@be-music/player` release; `@be-music/audio-renderer` also ships a SEA zip
 - The private repository root `package.json` stays at `0.0.0`; releasable versions are tracked in `packages/*/package.json`.
 
 The tag is created in the format `@be-music/package-name@x.y.z`.
@@ -66,6 +68,7 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [Bemuse implementation specification](./docs/bemuse-spec.md)
 - [Player implementation specification](./docs/player-spec.md)
 - [Browser player implementation notes](./docs/player-web.md)
+- [LR2 skin implementation notes](./docs/lr2-skin.md)
 - [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./docs/json-spec.md)
 - [Glossary](./docs/glossary.md)
 
@@ -81,12 +84,15 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Contains BMS extension headers (`#PREVIEW`, `#LNTYPE`, `#LNMODE`, `#LNOBJ`, `#VOLWAV`, `#SCROLLxx`, `#VIDEOFILE`, etc.)
 - Interpret BMSON's `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga`
 - BMS text character code guessing (`Shift_JIS`, `UTF-8`, `EUC-JP`, `latin1`, etc.)
+- BMSON `info.init_bpm` is required by the parser; missing or invalid values fail early instead of falling back to `130`
+- BMSON `key_channels` mine notes are mapped through the `mode_hint` lane resolver and preserve per-mine `damage`
 
 ### stringifier (`@be-music/stringifier`)
 
 - Output BMS/BMSON from intermediate representation (JSON)
 - Stable reproduction of bar resolution using `position: [numerator, denominator]`
 - Output BMSON extension information (`info` extension, `bga`, `notes.l/c`)
+- Preserve BMS source structure when the stored `preservation` layer still matches the normalized events
 
 ### audio-renderer (`@be-music/audio-renderer`)
 
@@ -95,8 +101,17 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Sample loading: `WAV` / `MP3` / `OGG` (Vorbis/Opus) / `OPUS`
 - Reflects bar length / BPM / STOP
 - 100001 times the BPM gimmick value of LR2 series is processed by time resolution
+- Applies `#VOLWAV`, `#xxx97` / `#xxx98`, BMSON `notes.c`, `#WAVCMD 01 xx vv`, and `#EXWAVxx v` volume scaling
 
-### player (`@be-music/player`)
+### player core (`@be-music/player`)
+
+- Shared `autoPlay()` / `manualPlay()` engine for terminal and browser runtimes
+- UI and input signal buses for lane flashes, POOR BGA commands, frame snapshots, pause, restart, and high-speed changes
+- Shared note extraction for playable notes, legacy long notes, `#LNOBJ`, FREE ZONE, mines, and invisible notes
+- Shared judgment windows, dynamic `#EXRANKxx` changes, score, groove gauge, scroll-distance, BGA timelines, and result summaries
+- Browser-safe subpath exports for reusable helpers such as `core/engine`, `core/bga-timeline`, `core/scroll-distance`, `core/groove-gauge`, and `playable-notes`
+
+### terminal player (`@be-music/player-tui`)
 
 - 3 modes: MANUAL / AUTO SCRATCH / AUTO
 - TUI play screen and song selection screen
@@ -116,6 +131,14 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Optional pre-playback audio rendering (`--render-audio`) and per-bus volume tuning (`--volume`, `--bgm-volume`, `--key-volume`)
 - Output dynamics tuning with compressor/limiter switches and threshold/release controls
 - Structured log output (`~/.be-music/logs/player.ndjson`, overwritten with `--log-file`)
+- Node worker split for gameplay, TUI rendering, and video BGA decoding
+
+### LR2 skin (`@be-music/lr2-skin`)
+
+- Parses LR2 select / decide / play / result skin CSV files independently from PixiJS
+- Resolves `#INCLUDE`, `#CUSTOMOPTION`, `#CUSTOMFILE`, `#LR2FONT`, system font declarations, skin timers, op conditions, and play-skin variants
+- Parses image, number, text, slider, bargraph, button, BGA, judge-line, measure-line, gauge, score-chart, and result graph elements
+- Loads theme assets with case-insensitive and wildcard lookup, TGA decoding, and DXA archive extraction
 
 ### browser player (`@be-music/player-web` / `@be-music/player-web-demo`)
 
@@ -123,10 +146,11 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Lazy browser asset loading for large audio/video files, with case-insensitive path lookup
 - LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
 - Shared LR2 Pixi helpers for destination interpolation, sprite transforms, numbers, text, sliders, and bargraphs
-- Shared playback semantics with the CLI player for notes, timing, scroll distance, BGA cues, score, and results
+- Shared playback semantics with the terminal player for notes, timing, scroll distance, BGA cues, score, and results
 - WebAudio preview and gameplay buses with split key/BGM/master compressor controls
 - BGA still/video rendering, browser-side video transcode fallback, and WebM gameplay recording
 - Single PixiJS scene host that owns one renderer context and disposes scene resources on transitions
+- In-scene LR2 PLAY OPTION controls for hi-speed, BGA mode/size, filters, sort, HS-FIX, lane cover, auto-scratch, DP flip, random/mirror modes, and gauge variants
 
 ### editor (`@be-music/editor`)
 
@@ -312,7 +336,7 @@ If the automatic judgment is ambiguous, it will be supplemented with an extensio
 
 - Judgment type: `PERFECT`, `GREAT`, `GOOD`, `BAD`, `POOR`
 - `FAST` / `SLOW` is added only when pressing `GREAT` / `GOOD` quickly or slowly.
-- A blank keystroke without a corresponding unjudged note will not be judged or fluctuate in the groove gauge.
+- A blank keystroke without a corresponding unjudged note fires LR2-style empty POOR: it does not change judge counters, score, EX-SCORE, or combo, but it applies the empty-POOR gauge delta and triggers POOR BGA.
 - EX-SCORE:
   - `PERFECT = +2`
   - `GREAT = +1`
@@ -349,7 +373,7 @@ pnpm run player:sea
 pnpm run audio-renderer:sea
 
 # Build outputs
-./packages/player/dist-sea/be-music-player chart.bms
+./packages/player-tui/dist-sea/be-music-player chart.bms
 ./packages/audio-renderer/dist-sea/be-music-audio-render chart.bms output.wav
 
 # When specifying the Node executable explicitly
