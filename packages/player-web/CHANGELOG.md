@@ -1,70 +1,63 @@
-# @be-music/player
+# @be-music/player-web
 
 ## 0.2.0
 
 ### Minor Changes
 
-- 632f274: End-to-end support for the beatoraja `#BASE 62` ID extension
-  (case-sensitive 62-character object IDs `0-9A-Za-z`, four
-  times the address space of the original `0-9A-Z` 36-base).
+- 632f274: Initial browser player implementation. Adds two packages:
 
-  - **`@be-music/parser`**: detects the `#BASE 62` header and
-    decodes channel-row IDs case-sensitively under it.
-  - **`@be-music/chart`** / **`@be-music/stringifier`**: thread
-    the `base` through every `parseInt` / `toString` site so
-    serialised charts round-trip without dropping casing.
-  - **`@be-music/editor`**: surfaces the `base` flag on edits.
-  - **`@be-music/player`** / **`@be-music/audio-renderer`**:
-    honour the chart's `base` when resolving WAV / BMP slot
-    IDs at playback time, so `#WAVaA` and `#WAVAA` map to
-    distinct samples on a `#BASE 62` chart.
-  - **`@be-music/utils`** / **`@be-music/json`**: shared
-    helpers (`normalizeAsciiBase62Code`, `parseObjectKey`
-    base parameter) the layers above call into.
+  - **`@be-music/player-web`** — vanilla PixiJS scene host
+    for the LR2 chart-player flow (select / decide / play /
+    result), with scene-graph rendering driven by the parsed
+    LR2 skin (`#IMAGE` / `#SRC_*` / `#DST_*` keyframes, bitmap
+    fonts via `#LR2FONT`, op-gated visibility, scene-stage
+    timers). Loads charts and themes from drag-drop or file
+    picker via a chunked enumerate / read / parse pipeline that
+    publishes progress events to host UIs.
+  - **`@be-music/player-web-demo`** — Vite-based demo shell
+    that wires the core into a single-page app, with a lil-gui
+    settings panel, a glassmorphism drop overlay, browser-
+    compatibility check panel, and a Help dialog that hosts
+    the usage guide plus the Open-Source attribution list
+    (resolved at build time by a custom Vite plugin that walks
+    the runtime dep tree).
 
-  Charts that don't declare `#BASE 62` keep the historical
-  36-base behaviour; the flag is opt-in.
+  Headline capabilities of the core:
 
-- 632f274: Engine-side gameplay improvements:
-
-  - **Landmine notes** — apply the chart-encoded damage value
-    (default 4) on a manual mine hit; play `#WAV00` as the
-    explosion sample so users get audible feedback consistent
-    with LR2's mine semantics.
-  - **空 POOR (empty POOR)** — fire the LR2-compatible "phantom
-    press" verdict when the player presses a lane key with no
-    note in window. Drains the gauge per gauge type without
-    breaking combo or scoring, and triggers the POOR BGA
-    swap window — matching real LR2 behaviour.
-  - **Lanczos image resize option** — opt-in resampling for
-    `#STAGEFILE` / `#BANNER` / `#BACKBMP` so high-res chart
-    graphics down-scale cleanly to skin slot sizes instead of
-    using the default nearest-neighbour path.
-  - **Gradual TUI note height option** — render notes that
-    span multiple terminal rows as a vertically-tweened
-    gradient rather than a hard-edged block, so close note
-    pairs read as distinct rather than fused.
-
-- 632f274: Split the CLI / TUI frontend out of `@be-music/player` into a
-  new `@be-music/player-tui` package.
-
-  `@be-music/player` is now a pure playback-engine library:
-  gameplay loop, scoring, lane layout, BGA timeline, signals,
-  and the audio sink. Its package surface adds new subpath
-  exports under `core/` (`bga-timeline`, `lane-layout`,
-  `ui-options`) plus top-level `audio-sink`,
-  `image-resize-algorithm`, `state-signals`, and `utils`. The
-  `bms-player` bin and the Node-only dependencies (`libav.js`,
-  `fast-bmp`, `fast-png`, `jpeg-js`) move to player-tui.
-
-  `@be-music/player-tui` carries the `bms-player` bin, the
-  terminal UI (kitty-graphics renderer, lane-stacking layout,
-  high-speed control), Node worker runtimes, manual input,
-  BGA video decoding, and the `keyboard-diagnostic` /
-  `gameplay-input-diagnostic` entry points. Hosts that want
-  just the engine (web players, custom UIs) depend on
-  `@be-music/player`; the historical TUI experience lives in
-  `@be-music/player-tui`.
+  - **LR2 skin rendering**: frame chrome, BGA, lane lasers,
+    scratch turntable with physics-driven streak alternation,
+    bomb / FC / hold timers, animated bitmap fonts, gauge /
+    combo / score numbers, scroll slider.
+  - **PMS / 9 KEY (Pop'n) skin support** alongside default
+    IIDX 7 / 14-key layouts; per-variant skin pickers and
+    channel→lane mappings. Single-side judge / combo plate
+    rendering — PMS-STD charts that source lanes from the
+    `2X` channel block still collapse onto the LR2 9-key
+    skin's 1P-side `#SRC_NOWJUDGE` / `#SRC_NOWCOMBO` slots.
+  - **BGA pipeline** — native `<video>` decode for modern codecs
+    with an ffmpeg.wasm transcode fallback (single-threaded
+    H.264, optional WebCodecs hardware-accelerated encode,
+    optional long-edge pixel cap). Hold playback until the
+    chart-start gate so the video doesn't sneak ahead during
+    the LOADING / DONE intro.
+  - **Web Audio bus** — split key / BGM / master compressor
+    topology with per-stage toggles plus a global bypass; per-
+    sample latency tuning; `MediaRecorder` + canvas
+    `captureStream` for downloadable WebM gameplay capture.
+  - **LR2 button wiring** — RANDOM / MIRROR, AUTO-SCRATCH, gauge
+    type, HIDDEN / SUDDEN + shutter, HS-FIX, DP FLIP, BGA on /
+    off / autoplay-only, BGA size NORMAL / EXTEND, score graph
+    toggle, difficulty / keymode filters, song-list sort.
+  - **Performance** — single shared `Application` (avoids the
+    Pixi v8 batchPool race), per-section frame-timing tracker,
+    cached cropped textures, sprite / text node pooling,
+    static-rect graphics caching, parallel drop pipeline,
+    deferred song-bundle bytes.
+  - **Polish** — keyframe-inheriting LR2 parser fixes (op4 /
+    loop / acc / ops), clip-mask to design rect, auto-shrink
+    text, theme + library persistence across additional drops,
+    scene-stage exit FADEOUT / CLOSE, intro LOADING → DONE
+    flow, freeze on pause / blur, scoped colored logger.
 
 - 135f822: Migrate the browser player to the shared `@be-music/player` engine and
   sweep rhythm-game latency end-to-end. The browser player now drives
@@ -162,34 +155,16 @@ mode, ui })` glue over the three adapters.
 
 ### Patch Changes
 
-- 632f274: - Carry the BMS `#BANNER` into the chart-selection prompt so
-  the TUI's per-chart banner cell renders the correct image
-  for the highlighted entry instead of falling back to the
-  song-level `#STAGEFILE`.
-  - Resume cleanly after a `Space` pause that overlaps a `#STOP`
-    segment. Previously the playhead would freeze for the rest
-    of the stop's duration on resume because the stop-clock
-    baseline wasn't being rolled forward across the pause.
+- Updated dependencies [632f274]
+- Updated dependencies [632f274]
+- Updated dependencies [632f274]
 - Updated dependencies [632f274]
 - Updated dependencies [135f822]
 - Updated dependencies [135f822]
   - @be-music/parser@0.2.0
   - @be-music/chart@0.2.0
+  - @be-music/player@0.2.0
   - @be-music/audio-renderer@0.2.0
   - @be-music/json@0.2.0
   - @be-music/utils@0.2.0
-
-## 0.1.0
-
-### Minor Changes
-
-- Initial release.
-
-### Patch Changes
-
-- Updated dependencies
-  - @be-music/audio-renderer@0.1.0
-  - @be-music/chart@0.1.0
-  - @be-music/json@0.1.0
-  - @be-music/parser@0.1.0
-  - @be-music/utils@0.1.0
+  - @be-music/lr2-skin@0.1.1
