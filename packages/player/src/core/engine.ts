@@ -1984,6 +1984,15 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         endSeconds: pending.endSeconds,
       });
       applyAutoPerfectJudge(pending.note, pending.endSeconds);
+      // Pair the `hold-lane-until-beat` command emitted at the LN head (see `applyDueAutoPlayableJudgements` for the
+      // autoplay path / `applyAutoScratchJudgements` for the auto-scratch path) with an explicit release at the
+      // tail so the LR2 LN-hold timer (70..89) and the lane laser (100..117) actually fade out. Without this the
+      // sustain glow / scratch streak stay lit after the LN has visually cleared, and the surrounding LN-body
+      // sprite vanishes while the lane laser still reads as "held" — both regressions reported during Phase 4c
+      // shared-engine playthroughs.
+      if (uiEnabled) {
+        uiSignals.pushCommand({ kind: 'release-lane', channel: pending.note.channel });
+      }
     }
   };
 
@@ -2644,6 +2653,13 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         ]);
       }
       activeStateSignals?.publishJudgeCombo('PERFECT', combo, pending.note.channel);
+      // Mirror the `release-lane` emitted from `drainPendingAutoLongNotes` so the LN-hold timer / lane laser the
+      // turntable's auto-scratch lit at the head (`hold-lane-until-beat` from `applyAutoScratchJudgements`) actually
+      // fades out at the tail. Without this the scratch streak keeps glowing past the LN's visual end. Gated on
+      // `uiEnabled` to match the matching `hold-lane-until-beat` push in `applyAutoScratchJudgements`.
+      if (uiEnabled) {
+        uiSignals.pushCommand({ kind: 'release-lane', channel: pending.note.channel });
+      }
     }
   };
 

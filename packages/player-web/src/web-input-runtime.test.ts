@@ -71,14 +71,28 @@ describe('createWebInputRuntime', () => {
     runtime.stop();
   });
 
-  test('lane key press pushes a lane-input command with the resolved token', () => {
+  test('lane key press pushes a lane-input command followed by a kitty-state press for LN sustain tracking', () => {
+    // The runtime emits BOTH commands on a single keydown:
+    // - `lane-input` resolves the timing judge for the press itself.
+    // - `kitty-state` with `pressTokens` adds the channel to the engine's `activeKittyPressedChannels` set so
+    //   `longHoldUntilMsByChannel` keeps refreshing on every tick — without this, manual LNs BAD-fail ~380 ms
+    //   into the sustain because the engine can't tell the user is still holding the key.
     const inputSignals = createPlayerInputSignalBus();
     const { target, dispatch } = makeMockTarget();
     const runtime = createWebInputRuntime({ inputSignals, inputTokenToChannels: new Map(), target });
     runtime.start();
     dispatch('keydown', makeKeyEvent('KeyZ'));
     const commands = inputSignals.drainCommands();
-    expect(commands).toEqual([{ kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) }]);
+    expect(commands).toEqual([
+      { kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) },
+      {
+        kind: 'kitty-state',
+        pressTokens: ['z'],
+        repeatTokens: [],
+        releaseTokens: [],
+        pressedAt: expect.any(Number),
+      },
+    ]);
   });
 
   test('lane key press forwards `KeyboardEvent.timeStamp` as a wall-clock-ms `pressedAt`', () => {
@@ -94,6 +108,13 @@ describe('createWebInputRuntime', () => {
     dispatch('keydown', makeKeyEvent('KeyZ', { timeStamp: 12_345.6 }));
     expect(inputSignals.drainCommands()).toEqual([
       { kind: 'lane-input', tokens: ['z'], pressedAt: performance.timeOrigin + 12_345.6 },
+      {
+        kind: 'kitty-state',
+        pressTokens: ['z'],
+        repeatTokens: [],
+        releaseTokens: [],
+        pressedAt: performance.timeOrigin + 12_345.6,
+      },
     ]);
   });
 
@@ -151,8 +172,17 @@ describe('createWebInputRuntime', () => {
     dispatch('keydown', makeKeyEvent('KeyZ'));
     dispatch('keydown', makeKeyEvent('KeyZ', { repeat: true }));
     dispatch('keydown', makeKeyEvent('KeyZ', { repeat: true }));
+    // Only the first (un-repeated) keydown produces commands; both `lane-input` and `kitty-state` press are
+    // emitted as a pair so the engine has the timing judge AND the held-state tracking for LN sustain.
     expect(inputSignals.drainCommands()).toEqual([
       { kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) },
+      {
+        kind: 'kitty-state',
+        pressTokens: ['z'],
+        repeatTokens: [],
+        releaseTokens: [],
+        pressedAt: expect.any(Number),
+      },
     ]);
   });
 
