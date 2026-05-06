@@ -138,7 +138,21 @@ export function createCroppedBeatorajaTexture(
   texture: Texture | undefined,
   rect: { x: number; y: number; w: number; h: number },
 ): Texture | undefined {
-  if (!texture || rect.w <= 0 || rect.h <= 0) return undefined;
+  if (
+    !texture ||
+    !Number.isFinite(rect.x) ||
+    !Number.isFinite(rect.y) ||
+    !Number.isFinite(rect.w) ||
+    !Number.isFinite(rect.h) ||
+    rect.w <= 0 ||
+    rect.h <= 0
+  ) {
+    // PixiJS v8 + WebGPU crashes inside `BindGroupSystem._createBindGroup` (`Cannot read properties of null
+    // (reading 'textureSource1')`) when a sub-texture is created with a zero-extent or NaN frame — the source
+    // never finishes its GPU upload and the bind group lookup deref's a null. Guard against every degenerate rect
+    // here so the renderer can simply skip the sprite when the source cell is empty.
+    return undefined;
+  }
   let bySource = cropCache.get(texture);
   if (!bySource) {
     bySource = new Map();

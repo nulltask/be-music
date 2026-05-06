@@ -36,7 +36,6 @@ export interface BeatorajaPlaySkinPreviewOptions {
 export class BeatorajaPlaySkinPreviewScene implements PixiScene {
   readonly root = new Container();
   private readonly view: BeatorajaPlaySkinView;
-  private readonly textures: BeatorajaTextureCache;
   private readonly baseOps: ReadonlySet<number>;
   private readonly onExit?: () => void;
   private host?: PixiSceneHost;
@@ -45,7 +44,6 @@ export class BeatorajaPlaySkinPreviewScene implements PixiScene {
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinPreviewOptions) {
-    this.textures = options.textures;
     this.onExit = options.onExit;
     this.baseOps = buildBaseOpSet(options.skinConfig?.option);
     this.view = new BeatorajaPlaySkinView({ skin: options.skin, textures: options.textures });

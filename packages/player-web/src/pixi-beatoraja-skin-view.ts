@@ -15,7 +15,7 @@
 // Once the gameplay engine signals are available, the same Container is reused — additional per-element children
 // (notes, judge sprites, etc.) can be appended without rebuilding the destination list.
 
-import { Container, Sprite } from 'pixi.js';
+import { Container, Sprite, Texture } from 'pixi.js';
 import {
   imageFrameAt,
   imageFrameRect,
@@ -82,11 +82,39 @@ export class BeatorajaPlaySkinView {
       const image = imageById.get(group.id);
       if (image === undefined) continue;
       const baseTexture = options.textures.get(image.src);
-      // Build the sprite even when the texture is missing — the runtime might still want to compute layout. Sprite
-      // stays invisible (no texture / hidden) and the renderer just skips it on update.
-      const sprite = new Sprite({ visible: false });
+      // Pre-bind the sprite's texture to the cell-0 cropped frame at construction time. Building the sub-texture
+      // here (rather than lazily inside `update()`) ensures the sprite's texture is registered with PixiJS before
+      // the first render pass executes.
+      //
+      // CRITICAL: we mount sprites with `visible = true` (the Pixi default) and `alpha = 0` instead of starting
+      // them at `visible = false`. PixiJS v8's WebGPU and WebGL2 batchers BOTH skip texture-binding setup for
+      // `visible: false` sprites on the first render pass. The next frame, when our `update()` flips them to
+      // `visible: true`, every still-unbound source rushes the bind-group cache in parallel and one of them hits
+      // a half-initialized slot — surfacing as `Cannot read properties of null (reading 'textureSource1')` on
+      // WebGPU and `(reading 'addressModeU')` on WebGL2.
+      //
+      // The LR2 renderer dodges this accidentally: `pixi-select.ts` mounts sprites with `new Sprite(cropped)`
+      // (default `visible = true`) and the destinations whose `op` codes don't match are simply painted with an
+      // already-bound texture but at off-screen positions. The first frame's render pass therefore primes every
+      // bind group, and subsequent visibility flips reuse the cached binding.
+      //
+      // Mirroring that here: keep `visible = true`, force `alpha = 0` so nothing reaches the screen until
+      // `update()` overwrites it with the destination keyframe's actual alpha.
+      const baseIsBindable =
+        baseTexture !== undefined && baseTexture !== Texture.EMPTY;
+      let initialTexture: Texture | undefined;
+      let currentFrame = -1;
+      if (baseIsBindable) {
+        const cell = imageFrameRect(image, 0);
+        const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
+        if (cropped !== undefined) {
+          initialTexture = cropped;
+          currentFrame = 0;
+        }
+      }
+      const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
       this.container.addChild(sprite);
-      this.entries.push({ group, image, baseTexture, sprite, currentFrame: -1 });
+      this.entries.push({ group, image, baseTexture, sprite, currentFrame });
     }
   }
 
@@ -98,6 +126,17 @@ export class BeatorajaPlaySkinView {
     for (const entry of this.entries) {
       const props = destinationToSpriteProps(entry.group, context);
       const sprite = entry.sprite;
+
+      // Without a base texture (or with `Texture.EMPTY`, whose source has no GPU resource) we have nothing to
+      // paint. Keep the sprite hidden so the renderer never tries to bind a sourceless texture for a draw call —
+      // WebGPU crashes with `Cannot read properties of null (reading 'textureSource1')` when batching tries to
+      // bind a sprite whose texture has no GPU source attached.
+      const baseTexture = entry.baseTexture;
+      if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
+        sprite.visible = false;
+        continue;
+      }
+
       sprite.visible = props.visible;
       if (!props.visible) continue;
 
@@ -113,6 +152,11 @@ export class BeatorajaPlaySkinView {
         const cropped = createCroppedBeatorajaTexture(entry.baseTexture, cell);
         if (cropped !== undefined) {
           sprite.texture = cropped;
+        } else {
+          // Cropped rect was empty (e.g. cell width / height resolves to 0). Hide rather than render the EMPTY
+          // texture, which would also trigger the WebGPU `textureSource1` crash above.
+          sprite.visible = false;
+          continue;
         }
         entry.currentFrame = frameIndex;
       }
@@ -129,8 +173,8 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
-   * Tear down sprites and the container. Textures themselves are owned by the {@link BeatorajaTextureCache} and are
-   * NOT destroyed here — the host calls `textures.dispose()` once it's done with the bundle.
+   * Tear down sprites and the container. Textures themselves are owned by the {@link BeatorajaTextureCache} and
+   * are NOT destroyed here — the cache is intentionally long-lived (no `dispose()` method by design).
    */
   dispose(): void {
     if (this.disposed) return;

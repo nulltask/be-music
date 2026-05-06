@@ -1,22 +1,23 @@
-import { Texture } from 'pixi.js';
+import { Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 
 function fakeTextureCache(idsWithTextures: ReadonlyArray<number>): BeatorajaTextureCache {
-  // We don't need a real GPU upload — Texture.EMPTY clones share the same source field, which is all the view's
-  // sub-texture cropper needs to construct an unattached `Rectangle` view. Pixi v8 lets us read `texture.source`
-  // even when the source is the synthetic empty source, so the WeakMap-keyed crop cache still works.
+  // The view explicitly skips any sprite whose texture is `Texture.EMPTY` (the renderer crashes on WebGPU when a
+  // sub-texture is built off an empty source — see the `BindGroupSystem._createBindGroup` null-deref). For the
+  // tests we synthesize a tiny non-empty `TextureSource` so the view treats the entry as a real texture; we
+  // never actually paint these to a GPU, so the bytes are irrelevant.
+  const fakeSource = new TextureSource({ resource: new Uint8Array(4), width: 1, height: 1 });
   const map = new Map<number, Texture>();
   for (const id of idsWithTextures) {
-    map.set(id, Texture.EMPTY);
+    map.set(id, new Texture({ source: fakeSource }));
   }
   return {
     get: (id) => map.get(id),
     values: () => map.values(),
     pathOf: () => undefined,
-    dispose: () => {},
   };
 }
 

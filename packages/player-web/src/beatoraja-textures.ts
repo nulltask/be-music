@@ -4,18 +4,20 @@
 // path is enough. The cache hands renderers a `Map<sourceId, Texture>` keyed by the same numeric ids `image[].src`
 // references, so a sprite update is just `sprite.texture = textures.get(image.src)`.
 //
-// Blob URLs are tracked alongside the texture so `dispose()` can revoke them in lockstep with the GPU teardown.
+// IMPORTANT — texture lifetime: the cache deliberately does NOT expose a `dispose()` method. Calling
+// `texture.destroy(true)` on a beatoraja-skin texture and then rebuilding a new texture from a fresh bitmap can
+// hand back a half-disposed `TextureSource` (style=null) from PixiJS v8's internal source cache. WebGPU and WebGL2
+// then crash on the next render frame inside `_createBindGroup` / `applyStyleParams`. The host caches the
+// `BeatorajaTextureCache` per entry path in the demo (`main.ts`) so the same instance is reused across previews,
+// which means we never need to call destroy. The trade-off is that every distinct play-skin variant the user
+// previews keeps its bytes resident until page reload — a few tens of MB total in the worst case, which is well
+// inside the budget for a debug preview.
 
 import { Texture } from 'pixi.js';
 import type { BeatorajaSourceAsset, BeatorajaSourceBundle } from '@be-music/beatoraja-skin';
 import { logger } from './logger.ts';
 
 const log = logger('beatoraja-tex');
-
-const TEXTURE_BLOB_URL = Symbol.for('be-music-player-web/beatoraja-texture-blob-url');
-interface TextureWithBlobUrl extends Texture {
-  [TEXTURE_BLOB_URL]?: string;
-}
 
 export interface BeatorajaTextureCache {
   /** Numeric `source[].id` → loaded Pixi Texture. Missing ids returned `undefined`. */
@@ -24,8 +26,6 @@ export interface BeatorajaTextureCache {
   values(): IterableIterator<Texture>;
   /** Per-id source path (canonical case-corrected key from the file map). */
   pathOf(sourceId: number): string | undefined;
-  /** Tear down every texture and revoke its blob URL. Idempotent. */
-  dispose(): void;
 }
 
 /**
@@ -57,33 +57,22 @@ export async function loadBeatorajaTexturesFromBundle(
     get: (sourceId) => textures.get(sourceId),
     values: () => textures.values(),
     pathOf: (sourceId) => paths.get(sourceId),
-    dispose: () => {
-      for (const tex of textures.values()) {
-        const url = (tex as TextureWithBlobUrl)[TEXTURE_BLOB_URL];
-        if (typeof url === 'string') {
-          URL.revokeObjectURL(url);
-          delete (tex as TextureWithBlobUrl)[TEXTURE_BLOB_URL];
-        }
-        tex.destroy(true);
-      }
-      textures.clear();
-      paths.clear();
-    },
   };
 }
 
 async function decodeAsset(asset: BeatorajaSourceAsset): Promise<Texture> {
   // `bytes` is a `Uint8Array`; the `as Uint8Array<ArrayBuffer>` cast keeps us on the zero-copy path Blob accepts
-  // without rewrapping the buffer (which would otherwise force a redundant copy). Mirrors the LR2 loader's choice.
+  // without rewrapping the buffer. Mirrors the LR2 loader's choice. We deliberately do NOT call
+  // `URL.revokeObjectURL` for the success path — the blob URL stays alive for the lifetime of the cache, which
+  // matches the "no dispose" lifetime contract documented at the top of this file.
   const blob = new Blob([asset.bytes as Uint8Array<ArrayBuffer>]);
-  const objectUrl = URL.createObjectURL(blob);
-  try {
-    const bitmap = await createImageBitmap(blob);
-    const texture = Texture.from(bitmap);
-    (texture as TextureWithBlobUrl)[TEXTURE_BLOB_URL] = objectUrl;
-    return texture;
-  } catch (e) {
-    URL.revokeObjectURL(objectUrl);
-    throw e;
-  }
+  const bitmap = await createImageBitmap(blob);
+  const texture = Texture.from(bitmap);
+  // Force nearest-neighbor sampling on every loaded texture. Beatoraja skin assets are pixel-art (key beams,
+  // judge effects, etc.) and bilinear filtering blurs them on scaling. The setter also forces the renderer to
+  // initialize the texture's `style` immediately, which avoids a `addressModeU` null-deref in WebGL2 / WebGPU.
+  texture.source.scaleMode = 'nearest';
+  texture.label = asset.path;
+  texture.source.label = asset.path;
+  return texture;
 }

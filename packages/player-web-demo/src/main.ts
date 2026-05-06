@@ -42,7 +42,7 @@ import {
   type BeatorajaTextureCache,
   type BeatorajaThemeBundle,
 } from '@be-music/player-web';
-import { bundleBeatorajaSources } from '@be-music/beatoraja-skin';
+import { buildDefaultSkinConfigOptions, bundleBeatorajaSources } from '@be-music/beatoraja-skin';
 
 const dropLog = logger('drop');
 const recordLog = logger('record');
@@ -1355,13 +1355,14 @@ class PlayerWebDemoApp {
       const bundle = await loadBeatorajaThemeFromFiles(files, {
         onProgress: (progress) => this.applyLoadProgress(progress),
       });
-      // Dispose of the previous texture cache (and any active preview scene) before swapping themes — otherwise
-      // the textures keep their GPU allocations alive even though they reference asset paths from a theme bundle
-      // that no longer exists.
+      // Drop the previous preview scene's container, but keep the texture caches alive (we don't destroy
+      // beatoraja textures in this session — see `beatorajaTextureCachesByEntry`'s field comment). The map
+      // entries pointing at the old theme's bytes are released by clearing the map; the underlying Pixi
+      // textures stay allocated until page reload, but they're unreachable from the renderer once the new
+      // theme replaces `beatorajaTheme`.
       this.beatorajaPreviewScene?.dispose();
       this.beatorajaPreviewScene = undefined;
-      this.beatorajaTextureCache?.dispose();
-      this.beatorajaTextureCache = undefined;
+      this.beatorajaTextureCachesByEntry.clear();
       this.beatorajaTheme = bundle;
       const summary = summarizeBeatorajaPlaySkins(bundle.theme.playSkins) || 'none';
       const sceneSummary = [
@@ -1389,11 +1390,18 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Cached texture cache for the currently-loaded beatoraja theme. Built lazily when the user first opens the
-   * preview, then reused on subsequent variant switches. Disposed when the theme is replaced (a fresh drop wipes
-   * `beatorajaTheme` and clears this cache too).
+   * Per-entry-path memoized texture caches for the currently-loaded beatoraja theme. We deliberately keep every
+   * cache that the user has ever previewed in this session — calling `dispose()` on a beatoraja texture and then
+   * re-decoding the same bytes for a follow-up preview lets PixiJS v8's internal source cache hand back a
+   * half-disposed `TextureSource` whose `style` is null, crashing inside `BindGroupSystem._createBindGroup`
+   * (WebGPU) or `applyStyleParams` (WebGL2) on the next render frame. The same crash is technically lurking in
+   * the LR2 path too, but LR2's typical user flow doesn't re-mount the same skin in a session so it stays
+   * latent. Beatoraja's preview UX (variant dropdown + open/close button) deliberately exercises that loop, so
+   * we sidestep the bug by never destroying these textures in the first place. The cost is up to a few tens of
+   * MB of RAM per fully-explored theme, which is well inside the budget for a debug preview and is reset on
+   * page reload.
    */
-  private beatorajaTextureCache: BeatorajaTextureCache | undefined;
+  private readonly beatorajaTextureCachesByEntry = new Map<string, BeatorajaTextureCache>();
   private beatorajaPreviewScene: BeatorajaPlaySkinPreviewScene | undefined;
 
   /**
@@ -1411,24 +1419,56 @@ class PlayerWebDemoApp {
       return;
     }
     const desired = this.guiState.beatorajaPreviewVariant as BeatorajaPlayVariant;
-    const loaded = loadBeatorajaPlaySkinFromBundle(bundle, desired, { offset: 0 });
+    // Two-pass evaluation. The header pass surfaces the skin's `property[]` schema; we then materialize each
+    // property's first item into a default `option` map and run the second pass with it. Without this, Lua skins
+    // whose `main()` branches on `skin_config.option["Play Side"]` (and friends) hit none of their elseif arms and
+    // emit an empty `source[]` — which is what we saw in the dev-server logs for play7.
+    const headerLoad = loadBeatorajaPlaySkinFromBundle(bundle, desired);
+    if (!headerLoad || !headerLoad.result.ok) {
+      const reason = headerLoad?.result.ok === false ? headerLoad.result.error.message : 'no skin available';
+      dropLog.warn(`beatoraja preview header: ${reason}`);
+      this.setStatus(`Beatoraja preview: ${reason}`);
+      return;
+    }
+    const defaultOption = buildDefaultSkinConfigOptions(headerLoad.result.header);
+    const loaded = loadBeatorajaPlaySkinFromBundle(bundle, desired, { offset: 0, option: defaultOption });
     if (!loaded || !loaded.result.ok || !loaded.result.skin) {
       const reason = loaded?.result.ok === false ? loaded.result.error.message : 'no skin available';
       dropLog.warn(`beatoraja preview: ${reason}`);
       this.setStatus(`Beatoraja preview: ${reason}`);
       return;
     }
+    dropLog.info(
+      `beatoraja preview default options: ${
+        Object.keys(defaultOption).length === 0
+          ? '(none)'
+          : Object.entries(defaultOption)
+              .map(([k, v]) => `${k}=${v}`)
+              .join(' / ')
+      }`,
+    );
 
-    // Build (or reuse) the texture cache. Source assets live on the entry's bundle and don't change between
-    // variants, but each variant has its own `source[]` slice — rebuilding here is cheap (textures are uploaded
-    // once per source path), and avoids leaking textures from a stale variant pick.
-    this.beatorajaTextureCache?.dispose();
-    const sourceBundle = bundleBeatorajaSources({
-      files: bundle.files,
-      entryPath: loaded.entry.entryPath,
-      sources: (loaded.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-    });
-    this.beatorajaTextureCache = await loadBeatorajaTexturesFromBundle(sourceBundle);
+    // Reuse the texture cache for this entry path if we've already built one, otherwise decode the variant's
+    // `source[]` once and cache the result for the rest of the session. We never destroy these caches — see the
+    // comment on `beatorajaTextureCachesByEntry` for the WebGPU / WebGL2 reason.
+    let textures = this.beatorajaTextureCachesByEntry.get(loaded.entry.entryPath);
+    if (textures === undefined) {
+      const sourceBundle = bundleBeatorajaSources({
+        files: bundle.files,
+        entryPath: loaded.entry.entryPath,
+        sources: (loaded.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+      });
+      dropLog.info(
+        `beatoraja preview source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length}`,
+      );
+      for (const u of sourceBundle.unresolved) {
+        dropLog.warn(`beatoraja preview unresolved source[${u.id}] '${u.path}': ${u.reason}`);
+      }
+      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
+      this.beatorajaTextureCachesByEntry.set(loaded.entry.entryPath, textures);
+    } else {
+      dropLog.info(`beatoraja preview source bundle: reused cached textures for ${loaded.entry.entryPath}`);
+    }
 
     await this.ensureHostMounted();
 
@@ -1436,10 +1476,12 @@ class PlayerWebDemoApp {
     this.gameplayView?.dispose();
     this.gameplayView = undefined;
 
+    // Drop the previous preview scene's container without touching its textures (those are owned by the cached
+    // texture map and survive the scene teardown).
     this.beatorajaPreviewScene?.dispose();
     this.beatorajaPreviewScene = new BeatorajaPlaySkinPreviewScene({
       skin: loaded.result.skin,
-      textures: this.beatorajaTextureCache,
+      textures,
       onExit: () => {
         void this.closeBeatorajaPreview();
       },
@@ -1451,10 +1493,11 @@ class PlayerWebDemoApp {
 
   private async closeBeatorajaPreview(): Promise<void> {
     await this.sceneHost.setScene(undefined);
+    // Only the preview scene's container is detached; the texture cache stays alive in
+    // `beatorajaTextureCachesByEntry` so the next preview can reuse it. See the field-level comment for the
+    // dispose-avoidance rationale.
     this.beatorajaPreviewScene?.dispose();
     this.beatorajaPreviewScene = undefined;
-    this.beatorajaTextureCache?.dispose();
-    this.beatorajaTextureCache = undefined;
     await this.showSelect();
   }
 
