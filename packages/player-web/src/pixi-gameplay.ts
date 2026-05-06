@@ -5524,6 +5524,14 @@ export class PixiGameplayView {
       this.sharedEngineClockAnchored = true;
     }
     const summary = frame.summary;
+    // `summary.total` is the engine's authoritative scorable-note count (`scorableNotes.length`, which excludes
+    // Free-Zone channels). The view's own initial `score.total` is computed independently in `prepareSong` from
+    // `notes.filter(isPlayableInputChannel).length`, which DOES include Free-Zone — so on charts that use
+    // channel `17` / `27` as Free-Zone the two diverge by the Free-Zone count. That mismatch makes
+    // `maybeFireFullCombo`'s `tracker.combo === score.total` predicate unreachable (combo can only ever climb to
+    // the engine's smaller scorable count) and the FC presentation never fires. Sync `score.total` to the
+    // engine's value here so the view always agrees with the authority on the scorable population.
+    this.score.total = summary.total;
     this.score.perfect = summary.perfect;
     this.score.great = summary.great;
     this.score.good = summary.good;
