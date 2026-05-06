@@ -5,18 +5,19 @@
 この文書は、`@be-music/player-web` と `@be-music/player-web-demo` で追加された browser player の実装メモです。
 timing、note、判定、score、gauge、BGA event の意味など、CLI と共有する runtime 意味論は [`player-spec.ja.md`](./player-spec.ja.md) を参照してください。
 
-## 共通 engine への移行 (Phase 1-4a)
+## 共通 engine への移行 (Phase 1-4b 完了)
 
 browser player は判定 (judge) / fallback / LN / Sample 演奏を `@be-music/player/core/engine` の `manualPlay` /
-`autoPlay` 経由で駆動するよう移行中です。 beatoraja 互換挙動 (look-ahead lane keysound fallback、 Free-Zone (`17` /
-`27`)、 LN suppress 窓 + 380ms / 120ms hold-grace、 LN 早離し audio cut、 mine vs note delta-priority、 multi-channel
-input mapping) は engine 側にすべて実装済みで、 TUI / Web どちらの runtime からも同じ判定路を通る形にしています。
+`autoPlay` 経由で駆動する方針に移行しています。 beatoraja 互換挙動 (look-ahead lane keysound fallback、 Free-Zone
+(`17` / `27`)、 LN suppress 窓 + 380ms / 120ms hold-grace、 LN 早離し audio cut、 mine vs note delta-priority、
+multi-channel input mapping) は engine 側にすべて実装済みで、 TUI / Web どちらの runtime からも同じ判定路を通る形に
+しています。
 
-移行のため新しく追加された module:
+移行のため追加された module:
 
 | module | 役割 |
 | --- | --- |
-| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | engine の `AudioSession` 契約を Web Audio API でラップ。 `triggerEvent` / `stopChannel` / pause / resume を実装し、 `keyMixer` / `bgmMixer` / 動的 volume change (`#xxx97` / `#xxx98`) / bmson `c=true` 連続音抑制 / `#WAVCMD` 別 gain 適用も担当。 |
+| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | engine の `AudioSession` 契約を Web Audio API でラップ。 `triggerEvent` (即時) / `scheduleEvent` (BGM look-ahead) / `stopChannel` / pause / resume を実装し、 `keyMixer` / `bgmMixer` / 動的 volume change (`#xxx97` / `#xxx98`) / bmson `c=true` 連続音抑制 / `#WAVCMD` 別 gain 適用も担当。 |
 | [`web-input-runtime.ts`](../packages/player-web/src/web-input-runtime.ts) | DOM `keydown` / `keyup` を engine の `inputSignals` に流す。 OS auto-repeat フィルタ、 `Escape` / `F5` / `Space` を `interrupt` / `toggle-pause` 経路へ転送、その他は `lane-input(tokens)` として engine に渡す。 |
 | [`web-ui-runtime.ts`](../packages/player-web/src/web-ui-runtime.ts) | engine の `uiSignals` から `frame` snapshot と `command` queue (flash-lane / press-lane / trigger-poor-bga 等) を host (Pixi) callback に流す。 |
 | [`engine-driver.ts`](../packages/player-web/src/engine-driver.ts) | 上 3 つの adapter を組み立てて `manualPlay` / `autoPlay` を呼び出すヘルパー。 host は `runEngineDriver({ chart, audio, mode, ui })` 1 回で 1 譜面の playback を回せる。 |
@@ -25,9 +26,21 @@ input mapping) は engine 側にすべて実装済みで、 TUI / Web どちら�
 含められます。 `createNodeAudioSink` (Node 専用 audio backend) も lazy import なので、 host が
 `PlayerOptions.createAudioSession` factory (= `createWebAudioSession`) を渡す経路では一切到達しません。
 
-Phase 4b では `PixiGameplayView.prepare` chain を `runEngineDriver` 経由に切り替え、 view 内に残っている
-`judge` / `autoJudge` / `playSample` / `tryHitMine` / `finalize*LongNote` / `scheduleAutoSamples` 系
-(~1500 行) を engine 駆動の event subscription に置き換える予定です。 Phase 4c で旧コードを除去します。
+### 進捗状況
+
+- **Phase 1 (済)** — `PlayerOptions.createAudioSession` factory hook
+- **Phase 2 (済)** — `WebAudioSession` 実装
+- **Phase 3 (済)** — `WebInputRuntime` + `WebUiRuntime` adapter
+- **Phase 4 prereq (済)** — engine の Node import 排除
+- **Phase 4a (済)** — `runEngineDriver` glue 層
+- **Phase 4b-i (済)** — `PixiGameplayView` の `playSample` / 地雷音を `WebAudioSession.triggerEvent` 経由に
+- **Phase 4b-ii (済)** — BGM look-ahead を `WebAudioSession.scheduleEvent` 経由に統一、 view 内の `playSampleByKey` /
+  `connectSampleNodeWithWavCmdGain` / `activeSampleNodes` / `clampSample*` / `startSampleNode` 削除 (-181 行)
+- **Phase 5 (済)** — このドキュメント
+- **Phase 4c (未着手)** — `PixiGameplayView` の DOM key handler / `judge()` / `autoJudge()` / `autoMiss()` /
+  `tryHitMine()` / `finalize*LongNote()` (~1000-1500 行) を撤去し、 `runEngineDriver` 経由に切替。 view は engine の
+  `uiSignals` を購読する pure renderer になる。 audio 二重発火を防ぐため self-judge と engine 駆動の同時稼働は不可で、
+  単一 commit の big-bang 形式で実施する想定です。
 
 ## 監査メモ
 

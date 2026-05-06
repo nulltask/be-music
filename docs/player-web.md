@@ -5,7 +5,7 @@
 This document summarizes the browser player added by `@be-music/player-web` and `@be-music/player-web-demo`.
 Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as timing, notes, judgment, score, gauge, and BGA event meaning.
 
-## Migration to the shared engine (Phase 1-4a)
+## Migration to the shared engine (Phase 1-4b complete)
 
 The browser player is migrating its judge / fallback / LN / sample-playback paths to drive
 `@be-music/player/core/engine`'s `manualPlay` / `autoPlay` directly so the beatoraja-compatible behavior the engine
@@ -17,7 +17,7 @@ New modules introduced for the migration:
 
 | module | role |
 | --- | --- |
-| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | Web Audio API implementation of the engine's `AudioSession` contract: `triggerEvent` / `stopChannel` / pause / resume, plus `keyMixer` / `bgmMixer` routing, dynamic volume changes (`#xxx97` / `#xxx98`), bmson `c=true` continuation suppression, and `#WAVCMD` per-slot gain. |
+| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | Web Audio API implementation of the engine's `AudioSession` contract: `triggerEvent` (immediate) / `scheduleEvent` (BGM look-ahead) / `stopChannel` / pause / resume, plus `keyMixer` / `bgmMixer` routing, dynamic volume changes (`#xxx97` / `#xxx98`), bmson `c=true` continuation suppression, and `#WAVCMD` per-slot gain. |
 | [`web-input-runtime.ts`](../packages/player-web/src/web-input-runtime.ts) | Bridges DOM `keydown` / `keyup` events to the engine's `inputSignals` bus. Filters OS auto-repeat, routes `Escape` / `F5` / `Space` to interrupt / pause commands, sends everything else as `lane-input(tokens)`. |
 | [`web-ui-runtime.ts`](../packages/player-web/src/web-ui-runtime.ts) | Subscribes the host (Pixi) to the engine's `uiSignals` — frame snapshots + the `flash-lane` / `press-lane` / `trigger-poor-bga` command queue. |
 | [`engine-driver.ts`](../packages/player-web/src/engine-driver.ts) | Glue layer that wires the three adapters together and invokes `manualPlay` / `autoPlay`; hosts call `runEngineDriver({ chart, audio, mode, ui })` once per chart play. |
@@ -26,9 +26,23 @@ New modules introduced for the migration:
 bundled into the browser as-is. The Node-only `createNodeAudioSink` backend is loaded lazily and is never reached
 when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `createWebAudioSession`).
 
-Phase 4b will swap `PixiGameplayView.prepare` to call `runEngineDriver` and remove the in-tree judge code
-(`judge` / `autoJudge` / `playSample` / `tryHitMine` / `finalize*LongNote` / `scheduleAutoSamples` and friends, ~1500
-lines). Phase 4c removes the duplicated logic from the gameplay view entirely.
+### Migration phases
+
+- **Phase 1 (done)** — `PlayerOptions.createAudioSession` factory hook
+- **Phase 2 (done)** — `WebAudioSession` implementation
+- **Phase 3 (done)** — `WebInputRuntime` + `WebUiRuntime` adapters
+- **Phase 4 prereq (done)** — drop the engine's `node:` imports
+- **Phase 4a (done)** — `runEngineDriver` glue layer
+- **Phase 4b-i (done)** — `PixiGameplayView`'s `playSample` and landmine paths now delegate to
+  `WebAudioSession.triggerEvent`
+- **Phase 4b-ii (done)** — BGM look-ahead now flows through `WebAudioSession.scheduleEvent`; the in-tree
+  `playSampleByKey` / `connectSampleNodeWithWavCmdGain` / `activeSampleNodes` / `clampSample*` / `startSampleNode`
+  helpers are removed (-181 lines)
+- **Phase 5 (done)** — this document
+- **Phase 4c (pending)** — strip the gameplay view's DOM key handlers, `judge()`, `autoJudge()`, `autoMiss()`,
+  `tryHitMine()`, `finalize*LongNote()` and friends (~1000-1500 lines), and run the chart through `runEngineDriver`
+  instead. The view becomes a pure renderer that subscribes to `uiSignals`. Self-judge and engine-driving cannot
+  run side-by-side without double-triggering audio, so this lands as a single big-bang commit.
 
 ## Audit note
 
