@@ -91,8 +91,8 @@ describe('drainWebUiSignals', () => {
     });
     uiSignals.pushCommand({ kind: 'flash-lane', channel: '11' });
     uiSignals.pushCommand({ kind: 'press-lane', channel: '12' });
-    const drained = drainWebUiSignals(uiSignals, { onFrame, onCommand });
-    expect(drained).toBe(true);
+    const result = drainWebUiSignals(uiSignals, { onFrame, onCommand });
+    expect(result.drained).toBe(true);
     expect(onFrame).toHaveBeenCalledTimes(1);
     const frame = onFrame.mock.calls[0]![0] as PlayerUiFramePayload;
     expect(frame.currentSeconds).toBe(1);
@@ -100,8 +100,8 @@ describe('drainWebUiSignals', () => {
     expect(onCommand).toHaveBeenCalledTimes(2);
     const commandKinds = onCommand.mock.calls.map((call) => (call[0] as PlayerUiCommand).kind);
     expect(commandKinds).toEqual(['flash-lane', 'press-lane']);
-    // Drained queue is now empty so a subsequent drain is a no-op (still returns true because the frame snapshot
-    // is always reported, but no further commands fire).
+    // Drained queue is now empty so a subsequent drain is a no-op (still returns drained:true because the frame
+    // snapshot is always reported, but no further commands fire).
     onCommand.mockClear();
     drainWebUiSignals(uiSignals, { onFrame, onCommand });
     expect(onCommand).not.toHaveBeenCalled();

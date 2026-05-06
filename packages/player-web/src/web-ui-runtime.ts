@@ -1,4 +1,5 @@
 import type { CreatePlayerUiRuntimeContext, PlayerUiRuntime } from '@be-music/player/core/engine';
+import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
 import { logger } from './logger.ts';
 
@@ -53,14 +54,27 @@ export interface WebUiRuntimeCallbacks {
   onPoorTriggered?: (seconds: number) => void;
   /** Fired when `clearPoor()` is called. Mirror of {@link onPoorTriggered}. */
   onPoorCleared?: () => void;
+  /**
+   * Fired whenever the engine publishes a fresh judge / combo state through {@link PlayerStateSignals}. The state
+   * carries the judge kind (`'PERFECT'` / `'GREAT'` / ... — see `PlayerJudgeComboSignalState`), the running combo,
+   * and the lane channel that produced the verdict. Hosts use this to drive the LR2 NOWJUDGE plate timer and the
+   * combo readout on the play skin.
+   */
+  onJudgeCombo?: (state: Readonly<PlayerJudgeComboSignalState>) => void;
 }
 
 /**
- * Construction-time inputs for {@link createWebUiRuntime}. The host supplies the engine's signal bus alongside its
- * callbacks; the runtime sets up the subscription lifecycle.
+ * Construction-time inputs for {@link createWebUiRuntime}. The host supplies the engine's signal buses alongside
+ * its callbacks; the runtime sets up the subscription lifecycle.
  */
 export interface WebUiRuntimeOptions extends WebUiRuntimeCallbacks {
   uiSignals: PlayerUiSignalBus;
+  /**
+   * Optional `PlayerStateSignals` bus. The engine emits judge / combo / pause / hi-speed updates through this
+   * channel separately from `uiSignals`; the runtime drains it inside {@link drainWebUiSignals} so a single
+   * per-frame poll catches both surfaces.
+   */
+  stateSignals?: PlayerStateSignals;
   /** Total seconds of playback the engine reports — surfaced through `playbackEndSeconds`. */
   playbackEndSeconds?: number;
 }
@@ -163,15 +177,25 @@ export function createWebUiRuntime(options: WebUiRuntimeOptions): PlayerUiRuntim
 }
 
 /**
- * Helper to drain frame / command updates from the engine's `uiSignals`. The web host's rAF loop calls this once
- * per frame so the engine's UI events arrive at the host without an alien-signals reactive subscription (which
- * would otherwise complicate dispose ordering).
+ * Helper to drain frame / command updates from the engine's `uiSignals` (and, when supplied, the matching
+ * `stateSignals` judge/combo channel). The web host's rAF loop calls this once per frame so the engine's UI
+ * events arrive at the host without an alien-signals reactive subscription (which would otherwise complicate
+ * dispose ordering).
+ *
+ * The drainer keeps a per-call latched tick so a stateSignals' judge-combo update only fires `onJudgeCombo` once
+ * even if the host polls multiple times per engine tick. Pass `lastJudgeComboTick` from your previous call (or
+ * `0` on the first poll) and persist the returned tick value back for the next frame.
  *
  * Returns `true` when at least one event drained — useful for the host to skip Pixi work when the engine produced
  * nothing new this frame.
  */
-export function drainWebUiSignals(uiSignals: PlayerUiSignalBus, callbacks: WebUiRuntimeCallbacks): boolean {
+export function drainWebUiSignals(
+  uiSignals: PlayerUiSignalBus,
+  callbacks: WebUiRuntimeCallbacks,
+  options: { stateSignals?: PlayerStateSignals; lastJudgeComboTick?: number } = {},
+): { drained: boolean; lastJudgeComboTick: number } {
   let drained = false;
+  let nextJudgeComboTick = options.lastJudgeComboTick ?? 0;
   try {
     callbacks.onFrame?.(uiSignals.getFrame());
     drained = true;
@@ -187,7 +211,19 @@ export function drainWebUiSignals(uiSignals: PlayerUiSignalBus, callbacks: WebUi
       log.warn('onCommand drain threw', { command, error });
     }
   }
-  return drained;
+  if (options.stateSignals) {
+    const tick = options.stateSignals.judgeComboTick();
+    if (tick !== nextJudgeComboTick) {
+      nextJudgeComboTick = tick;
+      try {
+        callbacks.onJudgeCombo?.(options.stateSignals.getJudgeCombo());
+        drained = true;
+      } catch (error) {
+        log.warn('onJudgeCombo drain threw', error);
+      }
+    }
+  }
+  return { drained, lastJudgeComboTick: nextJudgeComboTick };
 }
 
 /**
@@ -202,5 +238,6 @@ export function createWebUiRuntimeFactory(
     createWebUiRuntime({
       ...callbacks,
       uiSignals: context.uiSignals,
+      stateSignals: context.stateSignals,
     });
 }
