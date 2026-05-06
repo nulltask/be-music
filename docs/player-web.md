@@ -39,10 +39,25 @@ when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `creat
   `playSampleByKey` / `connectSampleNodeWithWavCmdGain` / `activeSampleNodes` / `clampSample*` / `startSampleNode`
   helpers are removed (-181 lines)
 - **Phase 5 (done)** — this document
-- **Phase 4c (pending)** — strip the gameplay view's DOM key handlers, `judge()`, `autoJudge()`, `autoMiss()`,
-  `tryHitMine()`, `finalize*LongNote()` and friends (~1000-1500 lines), and run the chart through `runEngineDriver`
-  instead. The view becomes a pure renderer that subscribes to `uiSignals`. Self-judge and engine-driving cannot
-  run side-by-side without double-triggering audio, so this lands as a single big-bang commit.
+- **Phase 4c (opt-in landed)** — `PixiGameplayViewOptions.useSharedEngine` opts the chart into engine-driven
+  playback via `runEngineDriver`. When the flag is on:
+  - The view skips its `keydown` / `keyup` listeners; `WebInputRuntime` consumes input.
+  - `tick()` skips its `autoJudge` / `autoScratchJudge` / `autoMiss` / `autoFinalizeLongNotes` /
+    `finalizeOverheldLongNotes` / `scheduleAutoSamples` / `checkChartEnd` calls.
+  - The LR2 PLAYSTART gate launches `runEngineDriver` so the engine's chart-time t=0 lines up with the view's
+    `audioContextStartTime`.
+  - `applyEngineFrame` mirrors `PlayerSummary` (score / exScore / fast / slow / gauge) into the view fields.
+  - `applyEngineCommand` translates `flash-lane` / `press-lane` / `release-lane` / `hold-lane-until-beat` /
+    `trigger-poor-bga` / `clear-poor-bga` into the view-side visual-effect helpers.
+  - `applyEngineJudgeCombo` drives the NOWJUDGE plate timer and combo readout.
+  - The engine's `judged` flags propagate onto the view's `notes[].hit` / `mineNotes[].hit` so judged notes
+    correctly retire from the playfield.
+  - `dispose` aborts the engine via `AbortController` before the audio bus tears down.
+  - `PlayerInterruptedError` routes `escape` → `onExit` and `restart` → `onRestart`.
+
+  The flag defaults to `false`; the legacy self-judge ladder still lives in the source code so the existing demo
+  and test suite are untouched. A follow-up commit will flip the default to `true` and remove the duplicated
+  logic once the integration has been verified end-to-end.
 
 ## Audit note
 

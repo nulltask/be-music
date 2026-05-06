@@ -37,10 +37,23 @@ multi-channel input mapping) は engine 側にすべて実装済みで、 TUI / 
 - **Phase 4b-ii (済)** — BGM look-ahead を `WebAudioSession.scheduleEvent` 経由に統一、 view 内の `playSampleByKey` /
   `connectSampleNodeWithWavCmdGain` / `activeSampleNodes` / `clampSample*` / `startSampleNode` 削除 (-181 行)
 - **Phase 5 (済)** — このドキュメント
-- **Phase 4c (未着手)** — `PixiGameplayView` の DOM key handler / `judge()` / `autoJudge()` / `autoMiss()` /
-  `tryHitMine()` / `finalize*LongNote()` (~1000-1500 行) を撤去し、 `runEngineDriver` 経由に切替。 view は engine の
-  `uiSignals` を購読する pure renderer になる。 audio 二重発火を防ぐため self-judge と engine 駆動の同時稼働は不可で、
-  単一 commit の big-bang 形式で実施する想定です。
+- **Phase 4c (opt-in 済)** — `PixiGameplayViewOptions.useSharedEngine` フラグで `runEngineDriver` 経由の engine
+  駆動を opt-in 可能に。 ON の場合:
+  - DOM `keydown` / `keyup` listener は attach されず、 `WebInputRuntime` が入力を消費
+  - view の `tick()` 内 `autoJudge` / `autoScratchJudge` / `autoMiss` / `autoFinalizeLongNotes` /
+    `finalizeOverheldLongNotes` / `scheduleAutoSamples` / `checkChartEnd` 呼び出しは skip
+  - LR2 PLAYSTART gate 発火と同時に `runEngineDriver` を起動 (engine の chart-time t=0 が view の
+    `audioContextStartTime` と一致)
+  - `applyEngineFrame` が `PlayerSummary` (score / exScore / fast / slow / gauge) を view fields に反映
+  - `applyEngineCommand` が `flash-lane` / `press-lane` / `release-lane` / `hold-lane-until-beat` /
+    `trigger-poor-bga` / `clear-poor-bga` を視覚効果ヘルパー (`flashKeyOnTimer` 等) にディスパッチ
+  - `applyEngineJudgeCombo` が NOWJUDGE plate timer + combo readout を駆動
+  - frame.notes の `judged` flag を view の `notes[].hit` に同期 (判定済みノートを画面から消す)
+  - `dispose` 時は `AbortController` で engine を中断
+  - `PlayerInterruptedError` を捕捉して `escape` → `onExit` / `restart` → `onRestart` にルーティング
+
+  既定値は `false`。 旧 self-judge ladder は引き続き source code 上に残しており、 単独の検証コミットで default を
+  `true` に切り替え + dead code 撤去を行う想定。
 
 ## 監査メモ
 
