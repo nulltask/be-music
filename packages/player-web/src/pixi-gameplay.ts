@@ -5922,6 +5922,28 @@ export class PixiGameplayView {
       this.gaugeState.initial = summary.gauge.initial;
       this.gaugeState.effectiveTotal = summary.gauge.effectiveTotal;
     }
+    // Sync the engine's per-note `judged` flag onto the view's runtime notes so `renderNotes` knows to stop
+    // drawing them. Engine and view both extract the chart through `extractTimedNotes` and sort by (beat,
+    // seconds), so the arrays line up index-for-index. Without this sync, the view would keep painting every
+    // note past its judgment timing because `note.hit` would never flip.
+    const frameNotes = frame.notes;
+    const limit = Math.min(this.notes.length, frameNotes.length);
+    for (let i = 0; i < limit; i += 1) {
+      if (frameNotes[i]!.judged && !this.notes[i]!.hit) {
+        this.notes[i]!.hit = true;
+      }
+    }
+    // Same pattern for landmine hits — frame carries them on `landmineNotes`. The view paints these as a
+    // separate red plate so they need their own sync to disappear once the engine resolves a hit.
+    const frameMines = frame.landmineNotes;
+    if (frameMines && this.mineNotes.length > 0) {
+      const mineLimit = Math.min(this.mineNotes.length, frameMines.length);
+      for (let i = 0; i < mineLimit; i += 1) {
+        if (frameMines[i]!.judged && !this.mineNotes[i]!.hit) {
+          this.mineNotes[i]!.hit = true;
+        }
+      }
+    }
   }
 
   /**
