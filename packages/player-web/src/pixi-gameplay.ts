@@ -12,13 +12,11 @@ import {
 } from '@be-music/audio-renderer/triggers';
 import {
   createScoreTracker,
-  applyJudgeToSummary,
   computeScoreRate,
   resolveIidxRankLabel,
   type JudgeKind,
   type ScoreSummary,
 } from '@be-music/player/core/scoring';
-import { resolveJudgeWindowsMs } from '@be-music/player/core/judge-window';
 import { PlayerInterruptedError } from '@be-music/player/core/engine';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
@@ -36,7 +34,6 @@ import {
 } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
-import { findClosestCandidateInWindow } from '@be-music/player/judging';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 import {
@@ -859,21 +856,6 @@ export class PixiGameplayView {
    * increases re-stamp the flash instead of letting a stale deferred-delete retire the freshly-stamped timer.
    */
   private gaugeIncreaseTimeout: number | undefined;
-  /**
-   * In-flight long-note holds keyed by channel. Populated when the head of an LN is judged (the press lands inside the
-   * note's judge window) and cleared either on release or when the chart times out the hold (see
-   * `finalizeOverheldLongNotes`). Until the tail is finalized the head's `applyJudgeToSummary` / `applyGaugeDelta`
-   * calls are deferred — earlier the gameplay committed the head verdict on press, which made every LN effectively a
-   * single-tap note and ignored the release timing entirely.
-   */
-  private readonly activeLongNotes = new Map<
-    string,
-    {
-      readonly note: RuntimeNote;
-      readonly headJudge: JudgeKind;
-      readonly headSignedDeltaMs: number;
-    }
-  >();
   private readonly bombStartedAt = new Map<string, number>();
   private bombTexture: Texture | undefined;
   private readonly runtimeOps = new Set<number>();
@@ -1638,7 +1620,6 @@ export class PixiGameplayView {
     this.scheduled.clear();
     this.runtimeOps.clear();
     this.pressedChannels.clear();
-    this.activeLongNotes.clear();
     this.timerStartedAt.clear();
     this.bombStartedAt.clear();
     this.keyOnFadeOutStart.clear();
@@ -1752,9 +1733,6 @@ export class PixiGameplayView {
     // chart suppress its own first trigger because a same-key node from the old play looks "still playing" until it
     // ends naturally.
 
-    // Drop any held LN state from a previous song / restart. Without this the next chart's first release on a cleared
-    // channel would try to finalize the prior chart's hold and double-commit.
-    this.activeLongNotes.clear();
     // Reset the turntable physics so the disc starts each chart at angle 0, spinning at baseline. Without this,
     // F5-restarting mid-spin would leave the new play's first visible frame at a random angle (or with a residual brake
     // / forward state if the player had just scratched at song-end), and the alternation streak from the prior play
@@ -2934,11 +2912,7 @@ export class PixiGameplayView {
     const timeout = window.setTimeout(() => {
       this.keyFlashTimeouts.delete(timeout);
       if (this.disposed) return;
-      // Don't retire the timer if a fresh LN head landed on the same lane during the fade window — that re-press has
-      // its own start/release lifecycle.
-      if (!this.activeLongNotes.has(channel)) {
-        this.timerStartedAt.delete(timerId);
-      }
+      this.timerStartedAt.delete(timerId);
       this.lnHoldFadeOutStart.delete(timerId);
     }, fadeMs);
     this.keyFlashTimeouts.add(timeout);
@@ -2960,19 +2934,19 @@ export class PixiGameplayView {
     // Stamp the fade origin unconditionally — the render-side cleanup uses it as the authoritative clock for the
     // 1 → 0 alpha taper, and the previous early-return on a missing `timerStartedAt` left the LN-end path stuck at
     // full brightness whenever the deferred startKeyOnTimer / releaseKeyOnTimer interleaving had already retired
-    // the slot (most visibly: `autoFinalizeLongNotes` calls release after `activeLongNotes.delete`, and a racy
-    // setTimeout cleanup from a previous press could have wiped `timerStartedAt` between the LN's startKeyOnTimer
-    // and this release). The `timerStartedAt.has` gate now controls only the deferred cleanup below — the fade
-    // start is committed regardless so `renderSkinImage` can taper any still-visible laser through to alpha=0.
+    // the slot (a racy setTimeout cleanup from a previous press could have wiped `timerStartedAt` between the LN's
+    // startKeyOnTimer and this release). The `timerStartedAt.has` gate now controls only the deferred cleanup
+    // below — the fade start is committed regardless so `renderSkinImage` can taper any still-visible laser
+    // through to alpha=0.
     this.keyOnFadeOutStart.set(timerId, this.playClock());
     if (!this.timerStartedAt.has(timerId)) return;
     const fadeMs = this.keyOnFadeDurationMs.get(timerId) ?? KEY_ON_FADE_OUT_MS;
     const timeout = window.setTimeout(() => {
       this.keyFlashTimeouts.delete(timeout);
       if (this.disposed) return;
-      // If the player (or autoplay) re-pressed the same lane during the fade window, leave the timer running and skip
-      // the delete — the new press has its own lifecycle.
-      if (!this.pressedChannels.has(channel) && !this.activeLongNotes.has(channel)) {
+      // If the player (or autoplay) re-pressed the same lane during the fade window, leave the timer running and
+      // skip the delete — the new press has its own lifecycle.
+      if (!this.pressedChannels.has(channel)) {
         this.timerStartedAt.delete(timerId);
       }
       this.keyOnFadeOutStart.delete(timerId);
@@ -3040,239 +3014,6 @@ export class PixiGameplayView {
       void handle.video.play().catch(() => {
         // Autoplay-policy / codec rejections — ignore silently.
       });
-    }
-  }
-
-  /**
-   * Sample key the BMS spec reserves for landmine "explosion" audio. Charts that author a `#WAV 00` register the
-   * explosion sound there and we play it on every mine hit; charts without a `#WAV 00` get silent mine hits (still
-   * scored / damaged).
-   */
-  private static readonly LANDMINE_EXPLOSION_SAMPLE_KEY = '00';
-
-  /**
-   * Hit-tests `mineNotes` for an un-judged landmine on `channel` within ±`badSeconds` of `seconds`. Returns `true` when
-   * a mine was consumed (caller must skip the regular note path), false otherwise.
-   *
-   * Mirrors the CLI engine's `mine-hit` branch (`packages/player/src/core/engine.ts:resolveLandmineGaugeEffect`):
-   *
-   * - - mark the mine as `hit` so it doesn't re-fire, - apply a BAD verdict to the score summary (BAD count up, combo
-   *   reset, no EX-score / IIDX-score change since BAD scores zero on both ladders anyway), - drain the gauge — the
-   *   chart-encoded damage value gets parsed from the BMS object value (`<value>/2` in base-36) and floored at
-   *   `DEFAULT_LANDMINE_GAUGE_DAMAGE` (= 4) when the value is missing / unparseable. We map that down onto
-   *   `applyGaugeDelta('BAD')` so the gauge type's normal BAD penalty still applies (HARD / DEATH stay punishing) and
-   *   leave per-mine custom damage as a future refinement, - play `#WAV 00` if the chart shipped one, - publish a BAD
-   *   judge event so the skin's NOWJUDGE plate flashes "BAD" and the bomb / lane-flash chrome reacts.
-   */
-  private tryHitMine(channel: string, seconds: number, badSeconds: number): boolean {
-    if (this.mineNotes.length === 0) return false;
-    const firstIndex = findFirstIndexAtOrAfter(this.mineNotes, seconds - badSeconds, (mine) => mine.seconds);
-    const target = findClosestCandidateInWindow(this.mineNotes, {
-      channel,
-      nowSec: seconds,
-      judgeWindowSec: badSeconds,
-      startIndex: firstIndex,
-      sortedBySeconds: true,
-      isConsumed: (mine) => mine.hit,
-    });
-    if (!target) return false;
-    target.hit = true;
-    // BAD verdict — combo reset + bad++. Same path the playable-note BAD branch uses, so the score panel ladder
-    // (PERFECT/GREAT/GOOD/BAD/POOR) reads consistently whether the BAD came from mistiming a real note or stepping on a
-    // mine.
-    applyJudgeToSummary(this.score, 'BAD', this.tracker);
-    this.applyGaugeDelta('BAD');
-    if (this.tracker.combo > this.maxCombo) {
-      this.maxCombo = this.tracker.combo;
-    }
-    this.publishJudge('BAD', seconds, channel);
-    // Mine explosion sample — `#WAV 00` if the chart authored one. Silent mines (no #WAV 00) just don't play anything.
-    // Route through `WebAudioSession.triggerEvent` with a synthesized BGM-style event so the explosion lands on
-    // `bgmMixer` (matching the historical `playSampleByKey` routing); the session's `#WAVCMD` gain splice and
-    // `c=true` continuation handling apply automatically.
-    this.webAudioSession?.triggerEvent?.({
-      measure: target.event.measure,
-      channel: '01',
-      position: target.event.position,
-      value: PixiGameplayView.LANDMINE_EXPLOSION_SAMPLE_KEY,
-    });
-    // Bomb / key-on visuals fire so the lane flashes the same way it would on a real BAD hit. The skin's mine-specific
-    // explosion sprite (when authored) is gated by the regular bomb timer — LR2 doesn't carry a separate "mine
-    // explosion" timer, so reusing 50-69 matches the reference behavior.
-    this.triggerBomb(channel);
-    return true;
-  }
-
-  private judge(channel: string, seconds: number): void {
-    const windows = resolveJudgeWindowsMs(this.song!.chart);
-    const badSeconds = windows.bad / 1000;
-    // Landmine pre-check — a press inside the BAD window of an un-judged mine on this lane explodes the mine FIRST,
-    // skipping the regular note search. Mirrors LR2's behavior (`engine.ts:resolveLandmineGaugeEffect` in
-    // `packages/player`): BAD verdict, combo reset to 0, gauge drained by the chart-encoded damage value (default 4),
-    // and the mine's explosion sample (`#WAV 00`) plays. The playable-note loop below is skipped — the mine consumes
-    // the press.
-    if (this.tryHitMine(channel, seconds, badSeconds)) {
-      return;
-    }
-    const firstCandidateIndex = findFirstIndexAtOrAfter(this.notes, seconds - badSeconds, (note) => note.seconds);
-    const note = findClosestCandidateInWindow(this.notes, {
-      channel,
-      nowSec: seconds,
-      judgeWindowSec: badSeconds,
-      startIndex: firstCandidateIndex,
-      sortedBySeconds: true,
-      isConsumed: (candidate) => candidate.hit,
-    });
-    if (!note) {
-      // Empty press (no note in the BAD window for this lane) — LR2-compatible 空POOR (empty POOR). Per the LR2
-      // reference:
-      //
-      // - Gauge: penalty per gauge type (see `applyGrooveGaugeJudge('EMPTY_POOR')`): GROOVE / HARD -2, EASY -1, DEATH
-      //   -100. So NORMAL / EASY are nearly harmless; HARD / DEATH actually drain.
-      // - Combo: NOT broken (`tracker.combo` unchanged).
-      // - Score: NOT updated — `summary.poor` / EX-SCORE / IIDX score all untouched, so phantom presses don't hurt the
-      //   final tally.
-      // - POOR BGA: triggered just like a real POOR — `publishJudge` stamps `lastPoorAt` for the BGA-swap window.
-      // - Judge plate: flashes "POOR" for ~600 ms (NOWJUDGE timer 46 restart, `lastJudge` set). LR2 distinguishes index
-      //   0 (空) vs 1 (見逃し) at the skin level via op 246 / 245, but both map to the same `'poor'` kind in our skin model
-      //   so the rendered sprite is identical — close enough for now.
-      this.applyGaugeDelta('EMPTY_POOR');
-      this.publishJudge('POOR', seconds, channel);
-      return;
-    }
-    this.markNoteHit(note);
-    // Signed delta (ms): positive = player late, negative = player early. Used for FAST/SLOW classification on GREAT /
-    // GOOD judgements (PERFECT is "on time" by definition).
-    const signedDeltaMs = (seconds - note.seconds) * 1000;
-    const delta = Math.abs(signedDeltaMs);
-    const judge: JudgeKind =
-      delta <= windows.pgreat ? 'PERFECT' : delta <= windows.great ? 'GREAT' : delta <= windows.good ? 'GOOD' : 'BAD';
-    // Always play the keysound on press so the player gets immediate audio feedback even though the score commit might
-    // be deferred for an LN.
-    this.playSample(note);
-    if (judge === 'PERFECT' || judge === 'GREAT') {
-      // LR2 bomb (timer 50-69) fires on GREAT-or-better only — GOOD / BAD / POOR don't earn the lane explosion, so the
-      // animation reads as positive feedback for clean hits.
-      this.triggerBomb(channel);
-    }
-    if (isLongNote(note)) {
-      // LN: defer scoreboard / gauge / publish until the tail is finalized in `finalizeActiveLongNote`. The note is
-      // marked `hit = true` so subsequent presses on this channel target the next note rather than re-judging the same
-      // head.
-      this.activeLongNotes.set(channel, { note, headJudge: judge, headSignedDeltaMs: signedDeltaMs });
-      // Fire the LR2 LN-hold-effect timer (70-89) so authored sustain visuals (sparkle / glow) become visible during
-      // the hold. Released in `finalizeActiveLongNote` / `autoFinalizeLongNotes` / `finalizeOverheldLongNotes`.
-      this.startLnHoldTimer(channel);
-      return;
-    }
-    this.commitFinalJudge(judge, signedDeltaMs, seconds, channel);
-  }
-
-  /**
-   * Commits a finalized note judgement to every downstream sink: scoreboard counter, FAST/SLOW classifier, gauge delta,
-   * and the per-judge UI signal (`publishJudge`). Used by both the regular single-note path and the LN
-   * finalize-on-release path so the commit semantics stay consistent regardless of how the verdict was reached.
-   */
-  private commitFinalJudge(judge: JudgeKind, signedDeltaMs: number, seconds: number, channel: string): void {
-    applyJudgeToSummary(this.score, judge, this.tracker);
-    if (judge === 'GREAT' || judge === 'GOOD') {
-      if (signedDeltaMs < 0) this.fastCount += 1;
-      else if (signedDeltaMs > 0) this.slowCount += 1;
-    }
-    this.applyGaugeDelta(judge);
-    this.publishJudge(judge, seconds, channel);
-  }
-
-  /**
-   * Finalizes the LN currently held on `channel` (if any) using the release timing relative to the note's `endSeconds`.
-   * Behavior branches on `note.longNoteMode`:
-   *
-   * - **Mode 1** (BMS `#LNOBJ` default) — tail auto-completes on release within the bad-window of `endSeconds`.
-   *   Releasing significantly early downgrades the verdict to BAD. Late release after `endSeconds` is fine; the head
-   *   verdict stands.
-   * - **Mode 2 / 3** — tail timing matters. Release delta vs `endSeconds` produces a tail judgement on the same window
-   *   table the head uses; the final commit is the worst severity between head and tail (LR2 standard).
-   *
-   * If the matching LN was already finalized (e.g. by chart-end timeout via {@link finalizeOverheldLongNotes}) this is
-   * a no-op.
-   */
-  private finalizeActiveLongNote(channel: string, seconds: number): void {
-    const active = this.activeLongNotes.get(channel);
-    if (!active || !this.song) {
-      return;
-    }
-    this.activeLongNotes.delete(channel);
-    // Sustain visuals on the LR2 LN-hold-effect timer fade out here so the skin's release keyframes get a chance to
-    // play before the slot retires.
-    this.releaseLnHoldTimer(channel);
-    const { note, headJudge, headSignedDeltaMs } = active;
-    const endSeconds = note.endSeconds!;
-    const windows = resolveJudgeWindowsMs(this.song.chart);
-    const mode: 1 | 2 | 3 = note.longNoteMode ?? 1;
-    if (mode === 1) {
-      // Mode 1: tail auto-completes — only penalize *significant* early release. Within the bad window of `endSeconds`
-      // (or any time after) the head verdict carries.
-      const earlyByMs = (endSeconds - seconds) * 1000;
-      if (earlyByMs > windows.bad) {
-        this.commitFinalJudge('BAD', headSignedDeltaMs, seconds, channel);
-      } else {
-        this.commitFinalJudge(headJudge, headSignedDeltaMs, seconds, channel);
-        this.triggerBombOnNonMiss(channel, headJudge);
-      }
-      return;
-    }
-    // Mode 2 / 3: tail judgement based on release-vs-end delta.
-    const tailSignedDeltaMs = (seconds - endSeconds) * 1000;
-    const tailDelta = Math.abs(tailSignedDeltaMs);
-    const tailJudge: JudgeKind =
-      tailDelta <= windows.pgreat
-        ? 'PERFECT'
-        : tailDelta <= windows.great
-          ? 'GREAT'
-          : tailDelta <= windows.good
-            ? 'GOOD'
-            : tailDelta <= windows.bad
-              ? 'BAD'
-              : 'POOR';
-    // Combine: pick the worst severity (LR2 convention). On a tie we prefer the verdict whose delta is larger so
-    // FAST/SLOW classification reflects the genuinely-off side of the hold.
-    const finalJudge = judgeSeverity(headJudge) >= judgeSeverity(tailJudge) ? headJudge : tailJudge;
-    const finalSignedDeltaMs = finalJudge === headJudge ? headSignedDeltaMs : tailSignedDeltaMs;
-    this.commitFinalJudge(finalJudge, finalSignedDeltaMs, seconds, channel);
-    this.triggerBombOnNonMiss(channel, finalJudge);
-  }
-
-  /**
-   * Fires a lane bomb only when the verdict is "clean enough" (PERFECT / GREAT). GOOD / BAD / POOR are deliberately
-   * excluded so the lane explosion stays a positive-feedback cue for accurate hits. Single-note presses already gate
-   * inline at the call-site (`if (judge === 'PERFECT' || judge === 'GREAT')`); the LN finalize paths funnel through
-   * this helper instead so all four commit sites — single-note, manual LN release, manual auto-over-hold, auto LN tail
-   * — share the same gate without duplicating the predicate.
-   */
-  private triggerBombOnNonMiss(channel: string, judge: JudgeKind): void {
-    if (judge !== 'PERFECT' && judge !== 'GREAT') return;
-    this.triggerBomb(channel);
-  }
-
-  /**
-   * Auto-finalizes any active LN whose `endSeconds + bad-window` has passed without a release event. Maps to "user kept
-   * holding past the end" which LR2 treats as a clean tail (head verdict carries) so the chart can complete cleanly.
-   * Without this the `checkChartEnd` "every note hit" guard would be satisfied (the head set `hit = true`) but the LN's
-   * score would never reach the scoreboard.
-   */
-  private finalizeOverheldLongNotes(seconds: number): void {
-    if (this.activeLongNotes.size === 0 || !this.song) {
-      return;
-    }
-    const windows = resolveJudgeWindowsMs(this.song.chart);
-    const graceSec = windows.bad / 1000;
-    for (const [channel, active] of this.activeLongNotes) {
-      if (active.note.endSeconds! + graceSec < seconds) {
-        this.activeLongNotes.delete(channel);
-        this.commitFinalJudge(active.headJudge, active.headSignedDeltaMs, seconds, channel);
-        this.triggerBombOnNonMiss(channel, active.headJudge);
-        this.releaseLnHoldTimer(channel);
-      }
     }
   }
 
@@ -3707,9 +3448,9 @@ export class PixiGameplayView {
     const timeout = window.setTimeout(() => {
       this.keyFlashTimeouts.delete(timeout);
       if (this.disposed) return;
-      // A real press / sustained LN took over during the hold — skip the auto-release, the manual lifecycle is in
-      // charge.
-      if (this.pressedChannels.has(channel) || this.activeLongNotes.has(channel)) {
+      // A real press took over during the hold — skip the auto-release, the press lifecycle is in charge. (LN
+      // sustains drive their own `hold-lane-until-beat` timer keep-alive via `applyEngineCommand`.)
+      if (this.pressedChannels.has(channel)) {
         return;
       }
       this.releaseKeyOnTimer(channel);
@@ -3735,16 +3476,6 @@ export class PixiGameplayView {
       return Math.max(0, (this.pauseTime - this.startTime - this.pauseTotal) / 1000);
     }
     return Math.max(0, (performance.now() - this.startTime - this.pauseTotal) / 1000);
-  }
-
-  private markNoteHit(note: RuntimeNote): void {
-    if (note.hit) {
-      return;
-    }
-    note.hit = true;
-    if (this.remainingNotes > 0) {
-      this.remainingNotes -= 1;
-    }
   }
 
   private publishJudge(judge: JudgeKind, seconds: number, channel?: string): void {
@@ -3811,16 +3542,6 @@ export class PixiGameplayView {
     this.timerStartedAt.set(48, now);
     this.timerStartedAt.set(49, now);
     log.info('FULL COMBO');
-  }
-
-  /**
-   * Plays the keysound attached to a judged input note. Delegates to the {@link WebAudioSession} built in
-   * `prepareAudio`, which handles routing (player-input lanes → `keyMixer`), `#WAVCMD` gain, bmson `c=true`
-   * continuation, and bmson slicing. The session also tracks the most recent BufferSource per channel so the
-   * upcoming engine-driven LN early-release path (Phase 4b-ii) can call `stopChannel` to silence sustained samples.
-   */
-  private playSample(note: RuntimeNote): void {
-    this.webAudioSession?.triggerEvent?.(note.event);
   }
 
   private render(seconds: number): void {
@@ -4475,10 +4196,10 @@ export class PixiGameplayView {
         sprite.alpha = 0;
         // Belt-and-braces — keep the maps consistent so `isTimerActive` stops reporting the slot as active and the
         // next press starts from a clean fade-in keyframe. We mirror `releaseKeyOnTimer`'s deferred cleanup: only
-        // wipe `timerStartedAt` when neither a real keypress nor a still-active LN is keeping the slot alive.
+        // wipe `timerStartedAt` when no real keypress is keeping the slot alive.
         this.keyOnFadeOutStart.delete(fadeTimer);
         const channel = this.resolveChannelForKeyOnTimer(fadeTimer);
-        if (channel !== undefined && !this.pressedChannels.has(channel) && !this.activeLongNotes.has(channel)) {
+        if (channel !== undefined && !this.pressedChannels.has(channel)) {
           this.timerStartedAt.delete(fadeTimer);
         }
       } else {
@@ -5901,15 +5622,6 @@ export class PixiGameplayView {
 }
 
 /**
- * Returns whether `note` carries a finite long-note tail. Mirrors the engine package's `resolveLongNoteEndSeconds`: a
- * missing / non-finite / non-positive `endSeconds` collapses to "single tap", and the judge / finalize logic falls back
- * to single-note semantics for it.
- */
-function isLongNote(note: RuntimeNote): boolean {
-  return typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
-}
-
-/**
  * Returns whether `texture` is backed by a Pixi `VideoSource` (i.e. a `<video>` element). Used by the
  * `PrepareSystem` upload path to skip eager GPU uploads on video-backed textures: the underlying `<video>` may
  * not have decoded any frames at prepare time, and WebGPU's `copyExternalImageToTexture` rejects an unbacked
@@ -6067,25 +5779,6 @@ function shuffleArray<T>(array: T[], rng: () => number): T[] {
     array[index] = swap;
   }
   return array;
-}
-
-/**
- * 0..4 severity ordering used by `finalizeActiveLongNote` to pick the worst verdict between an LN's head and tail
- * (matches the engine's `resolveJudgeSeverity`). Higher = worse.
- */
-function judgeSeverity(judge: JudgeKind): number {
-  switch (judge) {
-    case 'PERFECT':
-      return 0;
-    case 'GREAT':
-      return 1;
-    case 'GOOD':
-      return 2;
-    case 'BAD':
-      return 3;
-    case 'POOR':
-      return 4;
-  }
 }
 
 /**
