@@ -5308,6 +5308,17 @@ export class PixiGameplayView {
         // auto-spun would just sit there as misses, and the legacy `autoScratchJudge` path is gated off in
         // shared-engine mode. A future engine extension could split the flag per side.
         autoScratch: this.options.autoScratch1P === true || this.options.autoScratch2P === true,
+        // CRITICAL: view and engine each call `extractTimedNotes` independently and the per-frame note sync in
+        // `applyEngineFrame` keys off shared array indices (`frameNotes[i] ↔ this.notes[i]`). The two extractions
+        // MUST therefore see the exact same `inferBmsLnTypeWhenMissing` flag — otherwise charts without an
+        // explicit `#LNTYPE` resolve LNs in only one of the two callers (view treats HEAD+TAIL as a single
+        // note with `endBeat`, engine treats them as two separate notes), the resulting arrays drift in length
+        // by one entry per LN, and every subsequent index points at the wrong note. Symptoms include notes
+        // disappearing partway down the lane (the "judged" flag from a different note crosses over via index),
+        // the full-combo presentation firing mid-chart (combo runs ahead of the view's `score.total`), and AUTO
+        // PLAY scoring below the EX-MAX 200_000 ceiling (some judges land on already-judged notes and get
+        // suppressed by `markScorableJudged`). The view extracts with `true`, so the engine must too.
+        inferBmsLnTypeWhenMissing: true,
         signal: (this.sharedEngineAbortController = new AbortController()).signal,
       },
     })
