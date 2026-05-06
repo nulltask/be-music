@@ -100,6 +100,15 @@ describe('sampleBeatorajaDestination', () => {
     expect(sampleBeatorajaDestination(group, 1500)).toBeUndefined();
   });
 
+  it('treats single-keyframe destinations as static (always visible regardless of loop)', () => {
+    const staticGroup = normalizeBeatorajaDestinations([
+      { id: 'static-bg', loop: -1, dst: [{ time: 0, x: 10, y: 20, w: 100, h: 100, a: 255 }] },
+    ])[0];
+    expect(sampleBeatorajaDestination(staticGroup, 0)?.x).toBe(10);
+    expect(sampleBeatorajaDestination(staticGroup, 1000)?.x).toBe(10);
+    expect(sampleBeatorajaDestination(staticGroup, 9999)?.x).toBe(10);
+  });
+
   it('wraps when loop is set', () => {
     const looping = normalizeBeatorajaDestinations([
       {

@@ -174,6 +174,10 @@ export function sampleBeatorajaDestination(
 ): BeatorajaDestinationKeyframe | undefined {
   const dst = group.dst;
   if (dst.length === 0) return undefined;
+  // Single-keyframe destinations are static — always show, regardless of `loop`. Time advancing past `dst[0].time`
+  // doesn't end the element because there's no animation to play out.
+  if (dst.length === 1) return dst[0];
+
   const last = dst[dst.length - 1];
   let t = elapsedMs;
 
@@ -184,7 +188,7 @@ export function sampleBeatorajaDestination(
     t = group.loop + ((elapsedMs - group.loop) % period);
   }
 
-  if (dst.length === 1 || t <= dst[0].time) {
+  if (t <= dst[0].time) {
     return dst[0];
   }
 

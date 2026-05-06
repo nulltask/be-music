@@ -119,6 +119,37 @@ export function summarizeBeatorajaPlaySkins(playSkins: BeatorajaPlaySkinMap, sep
   return present.join(separator);
 }
 
+/**
+ * Play variants the renderer is willing to mount. The browser player only supports BMS / BMSON charts (5 / 7 / 9 /
+ * 10 / 14 keys), so the 24-key variants beatoraja's reference theme ships are deliberately excluded — there's no
+ * 24-key chart format the engine could feed in.
+ *
+ * If the dropped theme only ships a 24-key skin, the host should fall back to the LR2 theme for gameplay. This
+ * matches how `pickLr2PlaySkin` chains through fallbacks for missing variants.
+ */
+export const BEATORAJA_PLAYABLE_VARIANTS = ['7', '5', '9', '10', '14'] as const satisfies ReadonlyArray<
+  BeatorajaPlayVariant
+>;
+export type BeatorajaPlayableVariant = (typeof BEATORAJA_PLAYABLE_VARIANTS)[number];
+
+/**
+ * Map a chart's key count + double-play flag to the corresponding beatoraja play variant. Mirrors the logic
+ * `pickLr2PlaySkin` uses on the LR2 side. Returns `undefined` for chart shapes the renderer doesn't support.
+ */
+export function pickBeatorajaPlayableVariant(
+  chart: { keys: number; isDouble: boolean; isPms: boolean },
+): BeatorajaPlayableVariant | undefined {
+  if (chart.isPms) return '9';
+  if (chart.isDouble) {
+    if (chart.keys === 14) return '14';
+    if (chart.keys === 10) return '10';
+    return undefined;
+  }
+  if (chart.keys === 7) return '7';
+  if (chart.keys === 5) return '5';
+  return undefined;
+}
+
 export type {
   BeatorajaPlaySkinMap,
   BeatorajaPlayVariant,
