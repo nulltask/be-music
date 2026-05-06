@@ -1218,7 +1218,7 @@ export class PixiResultView {
   private makeStaticImageSprite(image: Lr2ImageElement) {
     return makeLr2StaticImageSprite(image, this.evaluateElementDst(image), {
       textures: this.skinTextures.asReadonlyMap(),
-      elapsedSinceTimer: this.elapsedSinceTimer,
+      elapsedSinceTimer: (timer) => this.elapsedSinceTimer(timer),
       resolveSpecialGraphicTexture: (path) => this.resolveSpecialGraphicTexture(path),
     });
   }
