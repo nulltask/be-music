@@ -2805,6 +2805,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   ): void => {
     activeLongNotesByChannel.delete(channel);
     longHoldUntilMsByChannel.delete(channel);
+    // Mirror the autoplay LN-tail `release-lane` so the renderer fades out the LR2 LN-hold timer (70..89) and
+    // the lane laser (100..117) at the LN's resolution moment. The `hold-lane-until-beat` we emitted on the
+    // manual LN HEAD relies on this matching release to take the lane out of the renderer's `pressedChannels`
+    // set; without it the sustain glow / lane laser would stay lit indefinitely once the engine finalizes the
+    // LN (early grace expiry, end-beat reached, or kitty-state release).
+    if (uiEnabled) {
+      uiSignals.pushCommand({ kind: 'release-lane', channel });
+    }
     applyResolvedManualJudge(channel, judge, atSeconds);
   };
 
@@ -3026,6 +3034,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         endSeconds,
       });
       candidate.visibleUntilBeat = candidate.endBeat;
+      // Mirror the autoplay LN-head path's `hold-lane-until-beat` so the renderer can light its LR2 LN-hold
+      // timer (70..89, drives the skin's sustain glow / hold-sparkle elements) on a manual LN start. The
+      // accompanying `release-lane` is fired when the LN finalizes (early release through `kitty-state`, mode-1
+      // grace expiry, or end-beat reached) — see `finalizeActiveLongNote` and the early-release branches in
+      // the playback loop. Without this, the renderer never sees a "the LN is firing now" cue from the engine
+      // on manual play, and the skin's sustain-glow gated on timer 70..89 stays invisible for the whole hold.
+      if (uiEnabled && longNoteMode !== undefined) {
+        uiSignals.pushCommand({ kind: 'hold-lane-until-beat', channel, beat: candidate.endBeat ?? candidate.beat });
+      }
       if (longNoteMode === 2 || longNoteMode === 3) {
         activeLongNotesByChannel.set(channel, {
           endSeconds,

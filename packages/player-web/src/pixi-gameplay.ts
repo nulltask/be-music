@@ -5490,6 +5490,16 @@ export class PixiGameplayView {
         this.releaseLnHoldTimer(command.channel);
         break;
       case 'hold-lane-until-beat':
+        // Mark the lane as held for the LN's duration. Without this, a `flash-lane` command that arrives in
+        // the same tick (typical for the LN HEAD: autoplay emits BOTH `flash-lane` and `hold-lane-until-beat`
+        // on every LN start) schedules a `flashKeyOnTimer` setTimeout that calls `releaseKeyOnTimer` after
+        // `KEY_ON_FLASH_HOLD_MS` because `pressedChannels.has(channel)` is `false`, and the lane laser fades
+        // out ~150 ms into the LN even though the LN body is still scrolling. Adding the channel to
+        // `pressedChannels` here makes the auto-release skip path fire the same way it does for a real key
+        // press, and the laser stays lit for the full LN sustain. The matching `release-lane` (emitted by
+        // `drainPendingAutoLongNotes` / `drainPendingAutoScratchLongNotes` at the LN tail) deletes the
+        // channel and lets the lane laser fade out at the tail timing.
+        this.pressedChannels.add(command.channel);
         this.startKeyOnTimer(command.channel);
         this.startLnHoldTimer(command.channel);
         // The engine's hold-until-beat command implicitly says "the LN is firing now"; bomb-flash on the head
