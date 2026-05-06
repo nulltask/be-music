@@ -5348,6 +5348,17 @@ export class PixiGameplayView {
         // auto-spun would just sit there as misses, and the legacy `autoScratchJudge` path is gated off in
         // shared-engine mode. A future engine extension could split the flag per side.
         autoScratch: this.options.autoScratch1P === true || this.options.autoScratch2P === true,
+        // Forward the chart's filename extension to the engine's `resolveLaneMode` so PMS / `*.pms` charts route
+        // to `POPN_9KEY_PMS_BINDINGS` (`11..15 + 22..25` mapped to `z s x d c f v g b`) instead of falling all
+        // the way through to the `'5-key-dp'` IIDX-DP binding. Without this hint, the engine sees `#PLAYER 3`
+        // plus 2P-side channels (`22..25`) but no `#PLAYER 3 + ch17` co-occurrence and no extension cue, so it
+        // bottoms out at the IIDX 10-key DP layout; the 1P-side keys still align (`z s x d c`) but lanes 6-9
+        // pick up `j k l ;` (or whatever the 2P-side IIDX binding produces) instead of the expected
+        // `f v g b`. The view extracts the extension from the chart path the host loaded via the
+        // `BrowserSongEntry`. PMS detection relies on the `.pms` suffix here, but `.bme` / `.bms` callers
+        // benefit too (the engine's `resolveLaneModeByExtension` distinguishes them for the 7- vs 5-key
+        // fallback).
+        laneModeExtension: extractChartExtension(this.song?.chartPath),
         // CRITICAL: view and engine each call `extractTimedNotes` independently and the per-frame note sync in
         // `applyEngineFrame` keys off shared array indices (`frameNotes[i] ↔ this.notes[i]`). The two extractions
         // MUST therefore see the exact same `inferBmsLnTypeWhenMissing` flag — otherwise charts without an
@@ -5709,6 +5720,32 @@ export class PixiGameplayView {
       });
     }, 50);
   }
+}
+
+/**
+ * Returns the lowercased filename extension (including the leading dot, e.g. `.pms` / `.bme` / `.bms`) of
+ * `chartPath`, or `undefined` if the path doesn't include a recognizable suffix. The engine's
+ * `resolveLaneMode` consumes this via `laneModeExtension` so PMS / BME / BMS charts route to the right binding
+ * family even when the chart's content alone is ambiguous (e.g. PMS charts that don't use channel `17`, or
+ * BME charts on `#PLAYER 1` that omit the 6 / 7 keys). Returning `undefined` falls back to the engine's
+ * content-based heuristics, matching the pre-fix behavior on chart paths the host doesn't surface.
+ */
+function extractChartExtension(chartPath: string | undefined): string | undefined {
+  if (typeof chartPath !== 'string' || chartPath.length === 0) {
+    return undefined;
+  }
+  const lastDot = chartPath.lastIndexOf('.');
+  if (lastDot < 0) {
+    return undefined;
+  }
+  // Anchor on the last path segment so `.` characters that appear in directory names (e.g. `Bok.fps/01.bms`)
+  // don't get mistaken for the chart's own extension.
+  const lastSlash = Math.max(chartPath.lastIndexOf('/'), chartPath.lastIndexOf('\\'));
+  if (lastDot < lastSlash) {
+    return undefined;
+  }
+  const ext = chartPath.slice(lastDot).toLowerCase();
+  return ext.length > 1 ? ext : undefined;
 }
 
 /**
