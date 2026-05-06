@@ -20,6 +20,11 @@
       "source": "./src/core.ts",
       "default": "./dist/core.js"
     },
+    "./path": {
+      "types": "./dist/path.d.ts",
+      "source": "./src/path.ts",
+      "default": "./dist/path.js"
+    },
     "./workerize": {
       "types": "./dist/workerize.d.ts",
       "source": "./src/workerize.ts",

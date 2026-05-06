@@ -6,6 +6,7 @@ import {
   basename,
   compareFractions,
   dirname,
+  extname,
   findFirstIndexAtOrAfter,
   findFirstIndexNumberAtOrAfter,
   findLastIndexAtOrBefore,
@@ -215,6 +216,14 @@ describe('utils', () => {
     expect(dirname(String.raw`root\\song/main.bms`)).toBe('root/song');
     expect(dirname('main.bms')).toBe('');
     expect(basename(String.raw`root\\song/main.bms`)).toBe('main.bms');
+  });
+
+  test('extname: returns Node-style trailing extensions without depending on node:path', () => {
+    expect(extname(String.raw`Songs\\chart/main.bms`)).toBe('.bms');
+    expect(extname('archive.tar.gz')).toBe('.gz');
+    expect(extname('README')).toBe('');
+    expect(extname('.env')).toBe('');
+    expect(extname('dir.with.dots/file')).toBe('');
   });
 
   test('isMaliciousAssetPath: rejects spec-named threat shapes', () => {

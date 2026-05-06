@@ -1,5 +1,5 @@
 import { OggVorbisDecoder } from '@wasm-audio-decoders/ogg-vorbis';
-import { clampSignedUnit, extname, isAbortError, throwIfAborted } from '@be-music/utils';
+import { clampSignedUnit, extname, isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { MPEGDecoder } from 'mpg123-decoder';
 import { OggOpusDecoder } from 'ogg-opus-decoder';
 
@@ -14,7 +14,7 @@ interface DecoderOutput {
   channelData?: readonly Float32Array[];
 }
 
-interface ManagedDecoder<TDecoded extends DecoderOutput> {
+interface ManagedDecoder {
   ready: Promise<unknown>;
   free(): void;
 }
@@ -48,7 +48,7 @@ export function createFallbackTone(
 }
 
 export async function decodeAudioSample(
-  buffer: Buffer,
+  buffer: Uint8Array,
   pathHint?: string,
   signal?: AbortSignal,
 ): Promise<DecodedAudio> {
@@ -87,7 +87,7 @@ export async function decodeAudioSample(
 }
 
 function decodeAudioSampleByExtension(
-  buffer: Buffer,
+  buffer: Uint8Array,
   extension: string,
   signal?: AbortSignal,
 ): Promise<DecodedAudio> | DecodedAudio | undefined {
@@ -131,7 +131,7 @@ export function resampleLinear(
   return output;
 }
 
-async function decodeOggLike(buffer: Buffer, signal?: AbortSignal): Promise<DecodedAudio> {
+async function decodeOggLike(buffer: Uint8Array, signal?: AbortSignal): Promise<DecodedAudio> {
   throwIfAborted(signal);
   if (isOggOpusBuffer(buffer)) {
     return decodeOggOpus(buffer, signal);
@@ -147,7 +147,7 @@ async function decodeOggLike(buffer: Buffer, signal?: AbortSignal): Promise<Deco
   }
 }
 
-function decodeWav(buffer: Buffer, signal?: AbortSignal): DecodedAudio {
+function decodeWav(buffer: Uint8Array, signal?: AbortSignal): DecodedAudio {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   if (readAscii(view, 0, 4) !== 'RIFF' || readAscii(view, 8, 4) !== 'WAVE') {
     throw new Error('Unsupported file format. Only RIFF/WAVE is supported for samples.');
@@ -215,7 +215,7 @@ function decodeWav(buffer: Buffer, signal?: AbortSignal): DecodedAudio {
   };
 }
 
-async function decodeOggVorbis(buffer: Buffer, signal?: AbortSignal): Promise<DecodedAudio> {
+async function decodeOggVorbis(buffer: Uint8Array, signal?: AbortSignal): Promise<DecodedAudio> {
   return decodeWithManagedDecoder(
     () => new OggVorbisDecoder(),
     (decoder, input) => decoder.decodeFile(input),
@@ -225,7 +225,7 @@ async function decodeOggVorbis(buffer: Buffer, signal?: AbortSignal): Promise<De
   );
 }
 
-async function decodeMp3(buffer: Buffer, signal?: AbortSignal): Promise<DecodedAudio> {
+async function decodeMp3(buffer: Uint8Array, signal?: AbortSignal): Promise<DecodedAudio> {
   return withSuppressedMpg123Warnings(async () => {
     return decodeWithManagedDecoder(
       () => new MPEGDecoder(),
@@ -237,7 +237,7 @@ async function decodeMp3(buffer: Buffer, signal?: AbortSignal): Promise<DecodedA
   });
 }
 
-async function decodeOggOpus(buffer: Buffer, signal?: AbortSignal): Promise<DecodedAudio> {
+async function decodeOggOpus(buffer: Uint8Array, signal?: AbortSignal): Promise<DecodedAudio> {
   return decodeWithManagedDecoder(
     () => new OggOpusDecoder(),
     (decoder, input) => decoder.decodeFile(input),
@@ -247,10 +247,10 @@ async function decodeOggOpus(buffer: Buffer, signal?: AbortSignal): Promise<Deco
   );
 }
 
-async function decodeWithManagedDecoder<TDecoded extends DecoderOutput, TDecoder extends ManagedDecoder<TDecoded>>(
+async function decodeWithManagedDecoder<TDecoded extends DecoderOutput, TDecoder extends ManagedDecoder>(
   createDecoder: () => TDecoder,
   decode: (decoder: TDecoder, input: Uint8Array) => Promise<TDecoded> | TDecoded,
-  buffer: Buffer,
+  buffer: Uint8Array,
   signal: AbortSignal | undefined,
   formatLabel: string,
 ): Promise<DecodedAudio> {
@@ -268,7 +268,7 @@ async function decodeWithManagedDecoder<TDecoded extends DecoderOutput, TDecoder
   }
 }
 
-function createDecoderInput(buffer: Buffer): Uint8Array {
+function createDecoderInput(buffer: Uint8Array): Uint8Array {
   return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 }
 
@@ -315,7 +315,7 @@ function decodeSample(view: DataView, offset: number, audioFormat: number, bitsP
   }
 }
 
-function isWavBuffer(buffer: Buffer): boolean {
+function isWavBuffer(buffer: Uint8Array): boolean {
   if (buffer.byteLength < 12) {
     return false;
   }
@@ -323,7 +323,7 @@ function isWavBuffer(buffer: Buffer): boolean {
   return readAscii(view, 0, 4) === 'RIFF' && readAscii(view, 8, 4) === 'WAVE';
 }
 
-function isOggBuffer(buffer: Buffer): boolean {
+function isOggBuffer(buffer: Uint8Array): boolean {
   if (buffer.byteLength < 4) {
     return false;
   }
@@ -331,14 +331,14 @@ function isOggBuffer(buffer: Buffer): boolean {
   return readAscii(view, 0, 4) === 'OggS';
 }
 
-function isOggOpusBuffer(buffer: Buffer): boolean {
+function isOggOpusBuffer(buffer: Uint8Array): boolean {
   if (buffer.byteLength < 32) {
     return false;
   }
-  return buffer.includes(Buffer.from('OpusHead', 'ascii'));
+  return includesAscii(buffer, 'OpusHead');
 }
 
-function isMp3Buffer(buffer: Buffer): boolean {
+function isMp3Buffer(buffer: Uint8Array): boolean {
   if (buffer.byteLength >= 3) {
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     if (readAscii(view, 0, 3) === 'ID3') {
@@ -361,6 +361,31 @@ function readAscii(view: DataView, offset: number, length: number): string {
   return result;
 }
 
+function includesAscii(buffer: Uint8Array, needle: string): boolean {
+  const needleLength = needle.length;
+  if (needleLength === 0) {
+    return true;
+  }
+  const maxStart = buffer.byteLength - needleLength;
+  for (let start = 0; start <= maxStart; start += 1) {
+    let matches = true;
+    for (let index = 0; index < needleLength; index += 1) {
+      if (buffer[start + index] !== (needle.charCodeAt(index) & 0xff)) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function decodeUtf8(bytes: Uint8Array): string {
+  return new TextDecoder().decode(bytes);
+}
+
 async function withSuppressedMpg123Warnings<T>(fn: () => Promise<T>): Promise<T> {
   const originalConsoleError = console.error;
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
@@ -376,7 +401,7 @@ async function withSuppressedMpg123Warnings<T>(fn: () => Promise<T>): Promise<T>
     encoding?: BufferEncoding | ((error?: Error | null) => void),
     callback?: (error?: Error | null) => void,
   ): boolean => {
-    const message = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    const message = typeof chunk === 'string' ? chunk : decodeUtf8(chunk);
     if (MPG123_SUPPRESSED_LOG_PATTERNS.some((pattern) => pattern.test(message))) {
       if (typeof encoding === 'function') {
         encoding();

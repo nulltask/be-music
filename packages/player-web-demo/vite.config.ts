@@ -365,6 +365,7 @@ const workspaceAliases = [
   { find: '@be-music/player/core', replacement: resolve(repositoryDir, 'packages/player/src/core') },
   { find: '@be-music/player', replacement: resolve(repositoryDir, 'packages/player/src/index.ts') },
   { find: '@be-music/utils/core', replacement: resolve(repositoryDir, 'packages/utils/src/core.ts') },
+  { find: '@be-music/utils/path', replacement: resolve(repositoryDir, 'packages/utils/src/path.ts') },
   { find: '@be-music/utils', replacement: resolve(repositoryDir, 'packages/utils/src/index.ts') },
   { find: '@be-music/audio-renderer', replacement: resolve(repositoryDir, 'packages/audio-renderer/src/index.ts') },
   { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },

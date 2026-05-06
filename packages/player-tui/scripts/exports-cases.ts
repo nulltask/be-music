@@ -67,6 +67,12 @@ export function registerPlayerTuiExportsCases(define: DefineBenchmarkCase): void
       playerTuiApi.formatMeasureSignature(0.75);
     },
   });
+  define('player-tui.formatJudgeComboDisplay', {
+    run: () => {
+      playerTuiApi.formatJudgeComboDisplay('GREAT', 123, 1000, false);
+      playerTuiApi.formatJudgeComboDisplay('POOR', 123, 1000, false);
+    },
+  });
   define('player-tui.inspectInputTokenEvent', {
     run: () => {
       playerTuiApi.inspectInputTokenEvent('z', BENCH_KEY);

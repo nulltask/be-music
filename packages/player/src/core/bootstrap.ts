@@ -1,4 +1,4 @@
-import { throwIfAborted } from '@be-music/utils';
+import { throwIfAborted } from '@be-music/utils/core';
 import { normalizeChannel, type BeMusicJson } from '@be-music/json';
 import {
   createGrooveGaugeState,

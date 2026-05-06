@@ -107,26 +107,10 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       utilsApi.basename(String.raw`Songs\\chart/main.bms`);
     },
   });
-  define('utils.workerize', {
+  define('utils.extname', {
     run: () => {
-      const worker = utilsApi.workerize(
-        (value: number) => value + 1,
-        () => [],
-      );
-      worker.close();
-    },
-  });
-  define('utils.invokeWorkerizedFunction', {
-    run: async () => {
-      const worker = utilsApi.workerize(
-        (value: number) => value + 1,
-        () => [],
-      );
-      try {
-        await utilsApi.invokeWorkerizedFunction(worker, [41]);
-      } finally {
-        worker.close();
-      }
+      utilsApi.extname(String.raw`Songs\\chart/main.bms`);
+      utilsApi.extname('README');
     },
   });
   define('utils.createAbortError', {

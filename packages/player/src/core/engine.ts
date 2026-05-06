@@ -24,7 +24,7 @@ const basename = (path: string): string => {
 };
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 /**
- * Cooperative yield used by {@link waitPrecise}'s sub-8 ms tail spin. Prefers Node's `setImmediate` when
+ * Cooperative yield used by {@link waitPreciseOrInput}'s sub-8 ms tail spin. Prefers Node's `setImmediate` when
  * available so the spin re-enters via the event loop's `check` phase — that gives the I/O / timers phases a
  * chance to run between iterations, which matters in the TUI runtime where `process.stdin` keypress delivery
  * and `process.stdout` flushes happen on those phases. Falls back to `queueMicrotask` only in environments
@@ -42,7 +42,8 @@ const delayImmediate = (): Promise<void> => {
   }
   return new Promise((resolve) => queueMicrotask(resolve));
 };
-import { floatToInt16, throwIfAborted, type LogEntry, type LogLevel } from '@be-music/utils';
+import { floatToInt16, throwIfAborted } from '@be-music/utils/core';
+import type { LogEntry, LogLevel } from '@be-music/utils';
 import {
   type BeMusicEvent,
   type BeMusicJson,
@@ -4525,23 +4526,8 @@ function resolveJudgeNowMsFromPressedAt(drainNowMs: number, pressedAt: number | 
  */
 const PRESSED_AT_MAX_DELTA_MS = 50;
 
-async function waitPrecise(delayMs: number): Promise<void> {
-  const target = performance.now() + Math.max(0, delayMs);
-  while (true) {
-    const remaining = target - performance.now();
-    if (remaining <= 0) {
-      return;
-    }
-    if (remaining > 8) {
-      await delay(remaining - 4);
-      continue;
-    }
-    await delayImmediate();
-  }
-}
-
 /**
- * Same precise-sleep semantics as {@link waitPrecise}, but cuts the wait short on the next input arrival
+ * Precise sleep that cuts the wait short on the next input arrival
  * (`inputSignals.pushCommand`). Returns `'timeout'` when the full delay elapsed and `'input'` when an input
  * woke us up early. The caller decides what to do on `'input'` — typically re-drain the input queue and
  * continue waiting for the rest of the original tick.

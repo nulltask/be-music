@@ -1,4 +1,4 @@
-import { extname, writeStereoPcm16Be, writeStereoPcm16Le } from '@be-music/utils';
+import { extname, floatToInt16 } from '@be-music/utils/core';
 
 export type AudioFileFormat = 'wav' | 'aiff';
 
@@ -16,76 +16,106 @@ export function detectAudioFormat(path: string): AudioFileFormat {
   return 'wav';
 }
 
-export function encodeWav16(result: StereoRenderResult): Buffer {
+export function encodeWav16(result: StereoRenderResult): Uint8Array {
   const frameCount = Math.min(result.left.length, result.right.length);
   const dataSize = frameCount * 4;
-  const buffer = Buffer.allocUnsafe(44 + dataSize);
+  const buffer = new Uint8Array(44 + dataSize);
+  const view = createDataView(buffer);
 
-  buffer.write('RIFF', 0, 4, 'ascii');
-  buffer.writeUInt32LE(36 + dataSize, 4);
-  buffer.write('WAVE', 8, 4, 'ascii');
-  buffer.write('fmt ', 12, 4, 'ascii');
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20);
-  buffer.writeUInt16LE(2, 22);
-  buffer.writeUInt32LE(result.sampleRate, 24);
-  buffer.writeUInt32LE(result.sampleRate * 4, 28);
-  buffer.writeUInt16LE(4, 32);
-  buffer.writeUInt16LE(16, 34);
-  buffer.write('data', 36, 4, 'ascii');
-  buffer.writeUInt32LE(dataSize, 40);
+  writeAscii(buffer, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeAscii(buffer, 8, 'WAVE');
+  writeAscii(buffer, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 2, true);
+  view.setUint32(24, result.sampleRate, true);
+  view.setUint32(28, result.sampleRate * 4, true);
+  view.setUint16(32, 4, true);
+  view.setUint16(34, 16, true);
+  writeAscii(buffer, 36, 'data');
+  view.setUint32(40, dataSize, true);
 
-  writeStereoPcm16Le(buffer, 44, result.left, result.right, 0, frameCount);
+  writeStereoPcm16(view, 44, result.left, result.right, frameCount, true);
 
   return buffer;
 }
 
-export function encodeAiff16(result: StereoRenderResult): Buffer {
+export function encodeAiff16(result: StereoRenderResult): Uint8Array {
   const frameCount = Math.min(result.left.length, result.right.length);
   const dataSize = frameCount * 4;
   const ssndSize = 8 + dataSize;
   const formSize = 4 + (8 + 18) + (8 + ssndSize);
 
-  const buffer = Buffer.allocUnsafe(8 + formSize);
+  const buffer = new Uint8Array(8 + formSize);
+  const view = createDataView(buffer);
   let pointer = 0;
 
-  buffer.write('FORM', pointer, 4, 'ascii');
+  writeAscii(buffer, pointer, 'FORM');
   pointer += 4;
-  buffer.writeUInt32BE(formSize, pointer);
+  view.setUint32(pointer, formSize, false);
   pointer += 4;
-  buffer.write('AIFF', pointer, 4, 'ascii');
+  writeAscii(buffer, pointer, 'AIFF');
   pointer += 4;
 
-  buffer.write('COMM', pointer, 4, 'ascii');
+  writeAscii(buffer, pointer, 'COMM');
   pointer += 4;
-  buffer.writeUInt32BE(18, pointer);
+  view.setUint32(pointer, 18, false);
   pointer += 4;
-  buffer.writeUInt16BE(2, pointer);
+  view.setUint16(pointer, 2, false);
   pointer += 2;
-  buffer.writeUInt32BE(frameCount, pointer);
+  view.setUint32(pointer, frameCount, false);
   pointer += 4;
-  buffer.writeUInt16BE(16, pointer);
+  view.setUint16(pointer, 16, false);
   pointer += 2;
-  writeExtended80(buffer, pointer, result.sampleRate);
+  writeExtended80(view, pointer, result.sampleRate);
   pointer += 10;
 
-  buffer.write('SSND', pointer, 4, 'ascii');
+  writeAscii(buffer, pointer, 'SSND');
   pointer += 4;
-  buffer.writeUInt32BE(ssndSize, pointer);
+  view.setUint32(pointer, ssndSize, false);
   pointer += 4;
-  buffer.writeUInt32BE(0, pointer);
+  view.setUint32(pointer, 0, false);
   pointer += 4;
-  buffer.writeUInt32BE(0, pointer);
+  view.setUint32(pointer, 0, false);
   pointer += 4;
 
-  writeStereoPcm16Be(buffer, pointer, result.left, result.right, 0, frameCount);
+  writeStereoPcm16(view, pointer, result.left, result.right, frameCount, false);
 
   return buffer;
 }
 
-function writeExtended80(buffer: Buffer, offset: number, value: number): void {
+function createDataView(buffer: Uint8Array): DataView {
+  return new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+}
+
+function writeAscii(buffer: Uint8Array, offset: number, value: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    buffer[offset + index] = value.charCodeAt(index) & 0xff;
+  }
+}
+
+function writeStereoPcm16(
+  view: DataView,
+  byteOffset: number,
+  left: ArrayLike<number>,
+  right: ArrayLike<number>,
+  frameCount: number,
+  littleEndian: boolean,
+): void {
+  let pointer = byteOffset;
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    view.setInt16(pointer, floatToInt16(left[frame]!), littleEndian);
+    view.setInt16(pointer + 2, floatToInt16(right[frame]!), littleEndian);
+    pointer += 4;
+  }
+}
+
+function writeExtended80(view: DataView, offset: number, value: number): void {
   if (value <= 0) {
-    buffer.fill(0, offset, offset + 10);
+    for (let index = 0; index < 10; index += 1) {
+      view.setUint8(offset + index, 0);
+    }
     return;
   }
 
@@ -109,7 +139,7 @@ function writeExtended80(buffer: Buffer, offset: number, value: number): void {
   const hi = Math.floor(mantissa / 2 ** 32);
   const lo = Math.floor(mantissa - hi * 2 ** 32);
 
-  buffer.writeUInt16BE(exponent & 0x7fff, offset);
-  buffer.writeUInt32BE(hi >>> 0, offset + 2);
-  buffer.writeUInt32BE(lo >>> 0, offset + 6);
+  view.setUint16(offset, exponent & 0x7fff, false);
+  view.setUint32(offset + 2, hi >>> 0, false);
+  view.setUint32(offset + 6, lo >>> 0, false);
 }

@@ -8,12 +8,10 @@ export default createPackageTsdownConfig({
   packageDir,
   entries: {
     index: 'src/index.ts',
-    // Carve out the browser-safe `core` and Node-only `workerize` entry points so the package root doesn't
-    // statically drag `node:sea` (workerize.ts) into a browser bundle. Vite externalises `node:`-prefixed
-    // imports for browser targets, but only crashes when the externalised symbol is actually accessed —
-    // splitting workerize off the root means a browser caller importing from `@be-music/utils` never reaches
-    // `node:sea` in the first place.
+    // Carve out narrow subpath entry points so browser bundles can import only the helpers they need without routing
+    // through the package root and pulling unrelated Node-facing modules into the graph.
     core: 'src/core.ts',
+    path: 'src/path.ts',
     workerize: 'src/workerize.ts',
   },
 });

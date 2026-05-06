@@ -1,4 +1,4 @@
-import { isAbortError, throwIfAborted } from '@be-music/utils';
+import { isAbortError, throwIfAborted } from '@be-music/utils/core';
 
 // Browser-compatible cooperative-sleep helper. Mirrors what `node:timers/promises.setTimeout` returned (a Promise
 // that resolves after `ms` ms) but uses the global `setTimeout` available in both runtimes. Hand-rolled so this
