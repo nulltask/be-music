@@ -24,7 +24,22 @@ export function resolveCliPath(path: string, cwd: string = resolveDefaultCwd()):
     return cwd;
   }
 
-  // Most CLI paths are simple relative paths without parent traversal.
+  // Absolute paths return as-is. POSIX absolute paths begin with '/'; Windows drive paths (`C:\foo`,
+  // `C:/foo`) start with a letter followed by `:`. Without this fast-path branch the absolute-path case
+  // fell through to the `node:path` slow path below, which silently returned `cwd` whenever the lazy
+  // `require` lookup failed (= every pure-ESM Node runtime, e.g. `tsx` / `node --import tsx/esm`) — turning
+  // every CLI invocation with an absolute argument into "scan cwd as a directory."
+  const firstCode = path.charCodeAt(0);
+  if (firstCode === 0x2f) {
+    return path;
+  }
+  if (path.length >= 3 && isWindowsDrivePath(path)) {
+    return path;
+  }
+
+  // Most CLI paths are simple relative paths without parent traversal. After the absolute-path branches
+  // above rule out POSIX / Windows absolute inputs, any string that doesn't contain `..` or a backslash
+  // is a plain relative path that just needs `cwd` prepended.
   if (!path.includes('..') && !path.includes('\\')) {
     if (path.startsWith('./')) {
       const relativePath = path.slice(2);
@@ -33,10 +48,7 @@ export function resolveCliPath(path: string, cwd: string = resolveDefaultCwd()):
       }
       return cwd.endsWith('/') ? `${cwd}${relativePath}` : `${cwd}/${relativePath}`;
     }
-    const firstCode = path.charCodeAt(0);
-    if (firstCode !== 0x2f && firstCode !== 0x2e) {
-      return cwd.endsWith('/') ? `${cwd}${path}` : `${cwd}/${path}`;
-    }
+    return cwd.endsWith('/') ? `${cwd}${path}` : `${cwd}/${path}`;
   }
   // `node:path` slow path — only needed for parent-traversal / Windows-separator inputs. Loaded synchronously
   // through Node's built-in `require` so the import doesn't sit at module scope (which Vite would externalise
@@ -48,6 +60,27 @@ export function resolveCliPath(path: string, cwd: string = resolveDefaultCwd()):
   }
   const { resolve } = nodeRequire('node:path') as typeof import('node:path');
   return resolve(cwd, path);
+}
+
+/**
+ * Returns true for Windows drive-relative paths like `C:\foo`, `C:/foo`, or just `C:` (current dir on
+ * drive C). The CLI receives these from PowerShell / cmd users on Windows.
+ */
+function isWindowsDrivePath(path: string): boolean {
+  const driveLetter = path.charCodeAt(0);
+  if (
+    !(
+      (
+        (driveLetter >= 0x41 && driveLetter <= 0x5a) || // A..Z
+        (driveLetter >= 0x61 && driveLetter <= 0x7a)
+      ) // a..z
+    )
+  ) {
+    return false;
+  }
+  if (path.charCodeAt(1) !== 0x3a) return false;
+  const sep = path.charCodeAt(2);
+  return sep === 0x2f || sep === 0x5c;
 }
 
 function resolveDefaultCwd(): string {

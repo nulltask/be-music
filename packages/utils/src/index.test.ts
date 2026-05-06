@@ -30,6 +30,24 @@ describe('utils', () => {
     expect(resolveCliPath('./', '/tmp')).toBe(resolve('/tmp', './'));
   });
 
+  test('resolveCliPath: returns POSIX absolute paths verbatim regardless of cwd', () => {
+    // The previous implementation routed absolute inputs through the lazy `node:path` `require` slow
+    // path, which silently fell back to `cwd` on pure-ESM Node runtimes (`tsx`, `node --import tsx/esm`)
+    // because `eval('require')` throws in strict ESM. Result: every CLI invocation with an absolute
+    // argument turned into "scan cwd as a directory." Verify the fast-path branch never reaches that
+    // code path now by exercising it from a cwd that doesn't share a prefix with the input.
+    expect(resolveCliPath('/Users/foo/song/chart.bms', '/tmp')).toBe('/Users/foo/song/chart.bms');
+    expect(resolveCliPath('/abs', '/tmp')).toBe('/abs');
+  });
+
+  test('resolveCliPath: returns Windows drive-absolute paths verbatim', () => {
+    // Same regression class as the POSIX case — `C:\foo` / `C:/foo` would silently collapse to `cwd`
+    // when the slow path's `require` lookup failed.
+    expect(resolveCliPath('C:\\Users\\foo\\chart.bms', '/tmp')).toBe('C:\\Users\\foo\\chart.bms');
+    expect(resolveCliPath('C:/Users/foo/chart.bms', '/tmp')).toBe('C:/Users/foo/chart.bms');
+    expect(resolveCliPath('d:\\song.bms', '/tmp')).toBe('d:\\song.bms');
+  });
+
   test('clamp/clampSignedUnit: clamps values to configured ranges', () => {
     expect(clamp(4, 0, 3)).toBe(3);
     expect(clamp(-2, 0, 3)).toBe(0);
