@@ -66,10 +66,14 @@ describe('createWebUiRuntime', () => {
     expect(() => runtime.triggerPoor(0)).not.toThrow();
   });
 
-  test('tuiEnabled is false so the engine keeps emitting per-frame log output for diagnostics', () => {
+  test('tuiEnabled is true so the engine emits flash-lane / press-lane / state-signal judge updates', () => {
+    // The engine reads `tuiEnabled` as the universal "is some UI subscribed" gate. Reporting `false` would
+    // silence every uiSignals push (`flash-lane`, `press-lane`, `release-lane`, `hold-lane-until-beat`,
+    // `trigger-poor-bga`, `clear-poor-bga`) AND every `stateSignals.publishJudgeCombo` call, which are the only
+    // sources the Pixi gameplay view has for press visuals and the NOWJUDGE plate timer.
     const uiSignals = createPlayerUiSignalBus(makeInitialFrame());
     const runtime = createWebUiRuntime({ uiSignals });
-    expect(runtime.tuiEnabled).toBe(false);
+    expect(runtime.tuiEnabled).toBe(true);
   });
 
   test('playbackEndSeconds is forwarded so the engine can wait for trailing BGA / audio tails', () => {

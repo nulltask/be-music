@@ -137,7 +137,13 @@ export function createWebUiRuntime(options: WebUiRuntimeOptions): PlayerUiRuntim
   };
 
   return {
-    tuiEnabled: false,
+    // The engine reads `tuiEnabled` as the universal "is some UI subscribed" gate, not as "is the TUI
+    // specifically running" — `flash-lane` / `press-lane` / `release-lane` / `hold-lane-until-beat` /
+    // `trigger-poor-bga` / `clear-poor-bga` UI commands AND every `stateSignals.publishJudgeCombo` call are
+    // gated behind it (see `bootstrap.ts:activeStateSignals = uiEnabled ? stateSignals : undefined`). Reporting
+    // `false` would silence every visual / score event the gameplay view relies on. The Web has a UI just like
+    // the TUI does (Pixi instead of ANSI), so it's `true`.
+    tuiEnabled: true,
     playbackEndSeconds: options.playbackEndSeconds,
     start: (): void => {
       // alien-signals' WritableSignal can be subscribed by reading inside an effect, but for our minimal "drain on
