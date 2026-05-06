@@ -85,10 +85,26 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
     // engine reads it the same way regardless of runtime. The engine then subtracts the wall-clock delta
     // between this and its drain time so the judge resolves against the true press moment instead of "next
     // 60 Hz tick" — eliminates up to ~16 ms of late-bias on every press.
+    const pressedAt = performance.timeOrigin + keyEvent.timeStamp;
     options.inputSignals.pushCommand({
       kind: 'lane-input',
       tokens,
-      pressedAt: performance.timeOrigin + keyEvent.timeStamp,
+      pressedAt,
+    });
+    // ALSO emit a kitty-state press so the engine adds the lane channel to `activeKittyPressedChannels`. The
+    // engine's tick loop only refreshes `longHoldUntilMsByChannel` for channels in that set — without it, every
+    // manual LN BAD/POOR-fails ~380 ms (`LONG_NOTE_INITIAL_HOLD_GRACE_MS`) into the sustain even while the user
+    // keeps the key held, because the engine can't tell the press is still active. The kitty-state press also
+    // promotes the lane laser from a brief `flash-lane` flicker to a sustained `press-lane` so the lane glow lasts
+    // the full hold (`applyEngineCommand` switches between the two on the view side). Browsers don't expose the
+    // Kitty protocol so we synthesize the event here from the regular keydown — release symmetry lives in
+    // `handleKeyUp` below. `pressTokens` mirrors the raw token list (the engine resolves channels itself).
+    options.inputSignals.pushCommand({
+      kind: 'kitty-state',
+      pressTokens: tokens,
+      repeatTokens: [],
+      releaseTokens: [],
+      pressedAt,
     });
   };
 
