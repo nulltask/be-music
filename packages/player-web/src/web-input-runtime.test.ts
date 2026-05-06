@@ -5,16 +5,17 @@ import { createWebInputRuntime, keyboardEventToTokens } from './web-input-runtim
 /**
  * Minimal stand-in for the {@link KeyboardEvent} surface the runtime touches. `repeat` defaults to `false` because
  * most tests want to exercise the un-repeated path; the auto-repeat suppression is its own dedicated test.
- * `timeStamp` is omitted by default — existing assertions don't need to consider press timestamps, and
- * `expect.toEqual` ignores `undefined` properties so a command with `pressedAt: undefined` still matches an
- * expected shape that doesn't list it. The press-timestamp tests pass `timeStamp` explicitly.
+ * `timeStamp` defaults to `0` because real `KeyboardEvent`s always carry a `DOMHighResTimeStamp` (the runtime
+ * promotes it to wall-clock-ms with `performance.timeOrigin + timeStamp`); leaving it `undefined` would make the
+ * promotion arithmetic produce `NaN` and break the existing shape assertions. Press-timestamp tests pass
+ * `timeStamp` explicitly.
  */
 function makeKeyEvent(code: string, options: { repeat?: boolean; timeStamp?: number } = {}): KeyboardEvent {
   let prevented = false;
   const event = {
     code,
     repeat: options.repeat ?? false,
-    timeStamp: options.timeStamp,
+    timeStamp: options.timeStamp ?? 0,
     preventDefault: () => {
       prevented = true;
     },
@@ -77,23 +78,26 @@ describe('createWebInputRuntime', () => {
     runtime.start();
     dispatch('keydown', makeKeyEvent('KeyZ'));
     const commands = inputSignals.drainCommands();
-    expect(commands).toEqual([{ kind: 'lane-input', tokens: ['z'] }]);
+    expect(commands).toEqual([{ kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) }]);
   });
 
-  test('lane key press forwards `KeyboardEvent.timeStamp` as `pressedAt` so the engine can judge against the physical press time', () => {
-    // The engine's drain loop subtracts (`performance.now()` - `pressedAt`) from its playback clock to recover
-    // the press's true game-time. Forwarding `KeyboardEvent.timeStamp` (which is on the same time origin as
-    // `performance.now()`) is the runtime's half of that contract — without this, a press that lands a few ms
-    // before the next 60 Hz tick gets up to ~16 ms of artificial late-bias on judgment.
+  test('lane key press forwards `KeyboardEvent.timeStamp` as a wall-clock-ms `pressedAt`', () => {
+    // The runtime promotes `KeyboardEvent.timeStamp` (a `DOMHighResTimeStamp` relative to
+    // `performance.timeOrigin`) into the wall-clock-ms domain by adding `performance.timeOrigin`. The engine
+    // reads `pressedAt` in that domain so the value is process-shared — TUI's worker-thread engine reads the
+    // same wall clock the main-thread input adapter wrote to. Without this promotion the value would be on
+    // the page's `performance.timeOrigin` clock, which doesn't survive a Worker boundary.
     const inputSignals = createPlayerInputSignalBus();
     const { target, dispatch } = makeMockTarget();
     const runtime = createWebInputRuntime({ inputSignals, inputTokenToChannels: new Map(), target });
     runtime.start();
     dispatch('keydown', makeKeyEvent('KeyZ', { timeStamp: 12_345.6 }));
-    expect(inputSignals.drainCommands()).toEqual([{ kind: 'lane-input', tokens: ['z'], pressedAt: 12_345.6 }]);
+    expect(inputSignals.drainCommands()).toEqual([
+      { kind: 'lane-input', tokens: ['z'], pressedAt: performance.timeOrigin + 12_345.6 },
+    ]);
   });
 
-  test('lane key release forwards `KeyboardEvent.timeStamp` as `pressedAt` on the synthesized kitty-state release', () => {
+  test('lane key release forwards `KeyboardEvent.timeStamp` as a wall-clock-ms `pressedAt` on kitty-state release', () => {
     const inputSignals = createPlayerInputSignalBus();
     const { target, dispatch } = makeMockTarget();
     const runtime = createWebInputRuntime({ inputSignals, inputTokenToChannels: new Map(), target });
@@ -105,7 +109,7 @@ describe('createWebInputRuntime', () => {
         pressTokens: [],
         repeatTokens: [],
         releaseTokens: ['z'],
-        pressedAt: 9_999,
+        pressedAt: performance.timeOrigin + 9_999,
       },
     ]);
   });
@@ -147,7 +151,9 @@ describe('createWebInputRuntime', () => {
     dispatch('keydown', makeKeyEvent('KeyZ'));
     dispatch('keydown', makeKeyEvent('KeyZ', { repeat: true }));
     dispatch('keydown', makeKeyEvent('KeyZ', { repeat: true }));
-    expect(inputSignals.drainCommands()).toEqual([{ kind: 'lane-input', tokens: ['z'] }]);
+    expect(inputSignals.drainCommands()).toEqual([
+      { kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) },
+    ]);
   });
 
   test('keyup pushes a kitty-state release-only command for LN release handling', () => {
@@ -157,7 +163,13 @@ describe('createWebInputRuntime', () => {
     runtime.start();
     dispatch('keyup', makeKeyEvent('KeyZ'));
     expect(inputSignals.drainCommands()).toEqual([
-      { kind: 'kitty-state', pressTokens: [], repeatTokens: [], releaseTokens: ['z'] },
+      {
+        kind: 'kitty-state',
+        pressTokens: [],
+        repeatTokens: [],
+        releaseTokens: ['z'],
+        pressedAt: expect.any(Number),
+      },
     ]);
   });
 

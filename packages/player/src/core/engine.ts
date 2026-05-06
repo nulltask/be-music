@@ -4493,22 +4493,26 @@ function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
  * ~16 ms late even though the player hit the note on time. With it, the judge timestamp matches the physical
  * press to within event-handler latency (= ~1–3 ms on typical hardware).
  *
- * The delta is computed in the same wall-clock domain (`performance.now()` ms) that both the runtime adapters
- * and the engine consume, so this is safe for both the web (`KeyboardEvent.timeStamp` is on the same time
- * origin as `performance.now()`) and the TUI (the node input runtime snapshots `performance.now()` directly at
- * handler entry).
+ * `pressedAt` is in the **wall-clock-ms domain** (`Date.now()`-equivalent, but with sub-ms precision via
+ * `performance.timeOrigin + performance.now()`), NOT the per-thread `performance.now()` domain. This matters
+ * because the TUI's input runtime runs on the main thread and the engine runs in a `worker_threads` Worker —
+ * each thread has its own `performance.timeOrigin`, so a raw `performance.now()` snapshot from the main thread
+ * compared against the worker's `performance.now()` would always read as "in the future" (negative delta) and
+ * the fallback would silently swallow every press. Wall-clock-ms is process-shared, so the comparison is
+ * stable across worker boundaries, and `KeyboardEvent.timeStamp` on the web (also `performance.timeOrigin`-
+ * relative) feeds the same domain after a `+ performance.timeOrigin` adjustment in the runtime adapter.
  *
  * Defensive bounds:
  * - Negative delta (`pressedAt` in the future) → fall back to drain time. Happens with synthetic / test inputs
  *   that supply a fixed timestamp ahead of the clock; the legacy semantics are still correct in that case.
  * - Delta > {@link PRESSED_AT_MAX_DELTA_MS} → fall back to drain time. Long stalls (pause-then-resume, GC) can
- *   make the wall-clock delta diverge from the playback delta because `playbackClock` pauses while
- *   `performance.now()` keeps ticking. Capping the adjustment prevents stale presses from being judged in the
- *   past after a pause.
+ *   make the wall-clock delta diverge from the playback delta because `playbackClock` pauses while the wall
+ *   clock keeps ticking. Capping the adjustment prevents stale presses from being judged in the past after a
+ *   pause.
  */
 function resolveJudgeNowMsFromPressedAt(drainNowMs: number, pressedAt: number | undefined): number {
   if (pressedAt === undefined) return drainNowMs;
-  const deltaMs = performance.now() - pressedAt;
+  const deltaMs = performance.timeOrigin + performance.now() - pressedAt;
   if (deltaMs < 0 || deltaMs > PRESSED_AT_MAX_DELTA_MS) return drainNowMs;
   return Math.max(0, drainNowMs - deltaMs);
 }
