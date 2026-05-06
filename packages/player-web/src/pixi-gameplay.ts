@@ -730,15 +730,6 @@ export class PixiGameplayView {
   private bmsonSlicePlayback:
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
-  /**
-   * Most recent {@link AudioBufferSourceNode} per sample key, tracked so bmson `note.c = true` (continuation flag) can
-   * skip retriggering a sample that's still emitting from a previous note. The map entry is cleared by the node's
-   * `onended` callback once playback finishes naturally — the "still playing" check then reduces to `has(sampleKey)`.
-   *
-   * Populated by every successful `playSample` / `playSampleByKey` call regardless of source format; only consulted by
-   * bmson `c=true` callers, so BMS playback (which has no continuation flag) is unaffected.
-   */
-  private activeSampleNodes = new Map<string, AudioBufferSourceNode>();
   private scheduled = new Set<RuntimeNote>();
   private autoSampleTriggers: TimedSampleTrigger[] = [];
   private autoTriggerNextIndex = 0;
@@ -1595,7 +1586,7 @@ export class PixiGameplayView {
     // view. `bgaActiveVideos` was already reset above; the rest of the small Maps / Sets follow the view to GC.
     this.decodedSamples.clear();
     this.skinTextStyleCache.clear();
-    this.activeSampleNodes.clear();
+
     this.scheduled.clear();
     this.runtimeOps.clear();
     this.pressedChannels.clear();
@@ -1715,7 +1706,7 @@ export class PixiGameplayView {
     // Drop the previous chart's active-sample tracking. Stale entries would otherwise let a `c=true` note on the new
     // chart suppress its own first trigger because a same-key node from the old play looks "still playing" until it
     // ends naturally.
-    this.activeSampleNodes.clear();
+
     // Drop any held LN state from a previous song / restart. Without this the next chart's first release on a cleared
     // channel would try to finalize the prior chart's hold and double-commit.
     this.activeLongNotes.clear();
@@ -1805,7 +1796,16 @@ export class PixiGameplayView {
         ? createBmsonSamplePlaybackMap(
             resolved,
             resolver,
-            [...this.notes, ...this.mineNotes, ...this.invisibleNotes].map((note) => note.event),
+            // Include both playable notes and the auto-trigger BGM events so the {@link WebAudioSession} can resolve
+            // slice metadata for both code paths through a single Map lookup. Without the trigger events here, the
+            // session's `scheduleEvent` would fall back to "play whole WAV" for every BGM cue, regressing bmson
+            // sliced-WAV authoring intent (each note's `audio_offset` / `slice_duration` window).
+            [
+              ...this.notes.map((note) => note.event),
+              ...this.mineNotes.map((note) => note.event),
+              ...this.invisibleNotes.map((note) => note.event),
+              ...this.autoSampleTriggers.map((trigger) => trigger.event),
+            ],
             beatResolver,
           )
         : undefined;
@@ -3946,12 +3946,17 @@ export class PixiGameplayView {
    * a precise audio-context start time (`audioContextStartTime + trigger.seconds`) so the Web Audio engine can fire it
    * sample-accurately, independent of when this method is next polled. The ~0.5s look-ahead is large enough to absorb
    * GC/stutters in the JS frame loop yet small enough that pause/resume timing remains responsive.
+   *
+   * Routes every cue through {@link WebAudioSession.scheduleEvent} so the session's `activeBySlot` map (which the
+   * player keysound path also writes to) is the single source of truth for bmson `c=true` continuation. Without
+   * this unification, a chart that maps the same `#WAVxx` slot to both a player lane and a BGM cue could double-
+   * trigger the keysound on chord-style entries.
    */
   private scheduleAutoSamples(seconds: number): void {
     // Hold off until the chart-start gate has fired and `audioContextStartTime` is anchored to the audio clock — until
-    // then `playSampleByKey` would clamp every queued chart-second to "now" and start playing the BGM during the LR2
+    // then a queued chart-second would clamp to "now" inside the session and start playing the BGM during the LR2
     // LOADING phase.
-    if (this.audioContextStartTime === 0) {
+    if (this.audioContextStartTime === 0 || !this.webAudioSession) {
       return;
     }
     const lookAhead = 0.5;
@@ -3961,11 +3966,8 @@ export class PixiGameplayView {
         break;
       }
       this.autoTriggerNextIndex += 1;
-      this.playSampleByKey(trigger.sampleKey, trigger.seconds, {
-        continuationFlag: trigger.event.bmson?.c === true,
-        offsetSeconds: trigger.sampleOffsetSeconds,
-        durationSeconds: trigger.sampleDurationSeconds,
-      });
+      const startAt = this.audioContextStartTime + trigger.seconds;
+      this.webAudioSession.scheduleEvent(trigger.event, startAt);
     }
     this.scheduleVolumeChanges(seconds, lookAhead);
   }
@@ -4003,99 +4005,6 @@ export class PixiGameplayView {
         // silently; the next play prepare resets the cursor.
       }
     }
-  }
-
-  /**
-   * Plays a WAV sample by its `#WAV` key. When `scheduledChartSeconds` is given, the buffer is *scheduled* to start at
-   * the corresponding audio-context timestamp (precise Web Audio timing). Without it, the buffer starts immediately --
-   * used for input-driven hit sounds, where the player's key press defines the start time.
-   *
-   * **Bus routing**: this is the auto-trigger path (`scheduleAutoSamples` is the only caller), so the sample is the BMS
-   * BGM bed and routes through `bgmMixer`. The split-bus compressor handles BGM and key sounds independently — see
-   * `audio-bus.ts` for why.
-   */
-  private playSampleByKey(
-    sampleKey: string,
-    scheduledChartSeconds?: number,
-    options: { continuationFlag?: boolean; offsetSeconds?: number; durationSeconds?: number } = {},
-  ): void {
-    if (!this.audioContext || !this.song) {
-      return;
-    }
-    const path = (this.resolvedChart ?? this.song.chart).resources.wav[sampleKey];
-    if (!path) {
-      return;
-    }
-    if (options.continuationFlag === true && this.activeSampleNodes.has(sampleKey)) {
-      // bmson `note.c = true` — a previous trigger of the same sample is still emitting, so skip the retrigger and let
-      // the sustained playback ride through. Mirrors the playable-note path in `playSample`.
-      return;
-    }
-    const buffer = this.decodedSamples.get(normalizePath(path).toLowerCase());
-    if (!buffer) {
-      return;
-    }
-    const node = this.audioContext.createBufferSource();
-    node.buffer = buffer;
-    node.onended = () => {
-      try {
-        node.disconnect();
-      } catch {
-        // Already disconnected or context closed.
-      }
-      // Drop the active-node tracking entry once the sample finishes naturally so the next bmson `c=true` lookup sees
-      // an empty slot and triggers a fresh start.
-      if (this.activeSampleNodes.get(sampleKey) === node) {
-        this.activeSampleNodes.delete(sampleKey);
-      }
-    };
-    // BGM bus. Falls back to direct destination if `prepareAudio` hasn't run yet (defensive — in practice the bus is
-    // always built before any `play*` call). When `#WAVCMD 01 xx vv` assigned a non-unity multiplier for this slot,
-    // splice a unity-cost GainNode in between so the per-WAV attenuation applies before the bus mixer sees the signal.
-    // Slots without a `#WAVCMD` entry skip the extra node entirely.
-    const sampleGainTarget = this.audioBus?.bgmMixer ?? this.audioContext.destination;
-    this.connectSampleNodeWithWavCmdGain(node, sampleKey, sampleGainTarget);
-    // bmson slicing — `offsetSeconds` seeks into the sound-channel WAV and `durationSeconds` caps how long this slice
-    // plays. Both are clamped against the buffer duration so a chart that mis-authors them (or that sourced its slice
-    // positions from a longer take) still produces audible output instead of an instant abort. BMS / json paths leave
-    // both fields undefined and play the whole WAV from t=0 — the historical behavior.
-    const offsetSeconds = clampSampleOffset(options.offsetSeconds, buffer.duration);
-    const durationSeconds = clampSampleDuration(options.durationSeconds, buffer.duration, offsetSeconds);
-    if (scheduledChartSeconds !== undefined) {
-      // Map chart seconds → audio-context time. Clamp to "now" so a slightly late trigger (look-ahead just elapsed)
-      // still fires immediately rather than throwing for a past timestamp.
-      const startAt = Math.max(this.audioContext.currentTime, this.audioContextStartTime + scheduledChartSeconds);
-      startSampleNode(node, startAt, offsetSeconds, durationSeconds);
-    } else {
-      startSampleNode(node, undefined, offsetSeconds, durationSeconds);
-    }
-    this.activeSampleNodes.set(sampleKey, node);
-  }
-
-  /**
-   * Connects a freshly-created `BufferSourceNode` to its target bus mixer, splicing in a per-slot GainNode when
-   * `#WAVCMD 01 xx vv` declared a non-unity multiplier. Slots with no `#WAVCMD` entry connect directly (no allocation,
-   * no extra hop).
-   *
-   * `node.onended` already cleans up its own outgoing edges, but the intermediate gain node (if we created one)
-   * survives by being referenced through the source node's edge until the next GC cycle — that's fine for short
-   * keysounds and acceptable for BGM since chart authors don't author thousands of `#WAVCMD` lines.
-   */
-  private connectSampleNodeWithWavCmdGain(node: AudioBufferSourceNode, sampleKey: string, target: AudioNode): void {
-    if (!this.audioContext) {
-      // Defensive — `playSample{,ByKey}` already gated on `audioContext`, but the type-narrowing doesn't carry.
-      node.connect(target);
-      return;
-    }
-    const multiplier = this.wavCmdVolumeMultipliers.get(sampleKey);
-    if (multiplier === undefined || multiplier === 1) {
-      node.connect(target);
-      return;
-    }
-    const gain = this.audioContext.createGain();
-    gain.gain.value = multiplier;
-    node.connect(gain);
-    gain.connect(target);
   }
 
   /**
@@ -6026,72 +5935,7 @@ function noteFallbackColor(channel: string, laneIndex: number): typeof WHITE {
   return WHITE;
 }
 
-/**
- * Clamps a bmson slice offset against the loaded buffer's duration so a misauthored offset (or one that came from a
- * trimmed take) doesn't produce a `start()` call past EOF — Web Audio would silently emit nothing in that case. Any
- * non-finite / negative input collapses to 0 so the historical "play from t=0" behavior stays the default fallback.
- */
-function clampSampleOffset(offsetSeconds: number | undefined, bufferDuration: number): number {
-  if (typeof offsetSeconds !== 'number' || !Number.isFinite(offsetSeconds) || offsetSeconds <= 0) {
-    return 0;
-  }
-  if (offsetSeconds >= bufferDuration) {
-    return Math.max(0, bufferDuration - 1e-3);
-  }
-  return offsetSeconds;
-}
-
-/**
- * Caps a bmson slice duration against the loaded buffer's tail so the slice playback doesn't overshoot the file.
- * Returns `undefined` when no duration was authored — the caller then lets the buffer source play to its natural end
- * (matching BMS-style "trigger plays the whole sample" semantics).
- */
-function clampSampleDuration(
-  durationSeconds: number | undefined,
-  bufferDuration: number,
-  offsetSeconds: number,
-): number | undefined {
-  if (typeof durationSeconds !== 'number' || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-    return undefined;
-  }
-  const remaining = Math.max(0, bufferDuration - offsetSeconds);
-  if (remaining <= 0) {
-    return undefined;
-  }
-  return Math.min(durationSeconds, remaining);
-}
-
-/**
- * Wraps `AudioBufferSourceNode.start` so the offset / duration arguments only get supplied when meaningful — Web Audio
- * differentiates `start(when)` (whole buffer) from `start(when, offset)` (seek) from `start(when, offset, duration)`
- * (seek + cap), and we want to match the historical behavior for the two- and three-arg cases when slicing isn't in
- * play.
- *
- * `when` of `undefined` calls `start()` (immediate); a finite value calls `start(when)` (scheduled).
- */
-function startSampleNode(
-  node: AudioBufferSourceNode,
-  when: number | undefined,
-  offsetSeconds: number,
-  durationSeconds: number | undefined,
-): void {
-  const hasOffset = offsetSeconds > 0;
-  const hasDuration = typeof durationSeconds === 'number';
-  if (when !== undefined) {
-    if (hasDuration) {
-      node.start(when, offsetSeconds, durationSeconds);
-    } else if (hasOffset) {
-      node.start(when, offsetSeconds);
-    } else {
-      node.start(when);
-    }
-    return;
-  }
-  if (hasDuration) {
-    node.start(0, offsetSeconds, durationSeconds);
-  } else if (hasOffset) {
-    node.start(0, offsetSeconds);
-  } else {
-    node.start();
-  }
-}
+// `clampSampleOffset` / `clampSampleDuration` / `startSampleNode` lived here while the gameplay view managed its
+// own audio playback. With Phase 4b-i / 4b-ii routing every cue through {@link WebAudioSession}, the canonical
+// implementations now live in `web-audio-session.ts` (re-exported there for tests) — this module no longer needs
+// them.
