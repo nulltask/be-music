@@ -19,6 +19,9 @@ import {
   type ScoreSummary,
 } from '@be-music/player/core/scoring';
 import { resolveJudgeWindowsMs } from '@be-music/player/core/judge-window';
+import { PlayerInterruptedError } from '@be-music/player/core/engine';
+import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
+import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
 import {
   applyGrooveGaugeJudge,
   createGrooveGaugeState,
@@ -69,7 +72,9 @@ import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-record
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { ChildPool, disposeChildren, staggerDestroyTextures } from './pixi-utils.ts';
+import { runEngineDriver } from './engine-driver.ts';
 import { createWebAudioSession, type WebAudioSession } from './web-audio-session.ts';
+import { drainWebUiSignals, type WebUiRuntimeCallbacks } from './web-ui-runtime.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
@@ -273,6 +278,19 @@ export interface PixiGameplayViewOptions {
   onChartFinished?: (result: PixiGameplayResultData) => void;
   /** When true, every note is auto-judged as PERFECT at its scheduled time. */
   autoPlay?: boolean;
+  /**
+   * Phase 4c opt-in: route every judge / sample / fallback decision through `@be-music/player`'s `manualPlay` /
+   * `autoPlay` engine instead of the gameplay view's in-tree judge ladder. With the flag enabled the view's DOM
+   * keyboard listeners and `judge()` / `autoJudge()` / `autoMiss()` / `tryHitMine()` / `finalize*LongNote()`
+   * methods short-circuit, leaving the shared engine as the sole source of truth for scoring / gauge / combo.
+   * Visual state (lane laser, bombs, NOWJUDGE plate, score panel) is fed from the engine's `uiSignals` and
+   * `stateSignals` buses through the {@link WebUiRuntime} callback surface.
+   *
+   * Defaults to `false` while the migration is under verification — the old self-judge path stays in the
+   * generated code so the existing test suite + demo continue to pass while the engine path is exercised in
+   * isolation. Future commits will flip the default and then remove the dead self-judge ladder.
+   */
+  useSharedEngine?: boolean;
   /**
    * When true, the gameplay automatically pauses on tab visibility change (`document.hidden`) and window blur, and
    * auto-resumes on focus / `pageshow`. When false (the default), the play scene keeps running in the background —
@@ -699,6 +717,26 @@ export class PixiGameplayView {
    * release in Phase 4b-ii). Stays `undefined` until `prepareAudio` finishes — every call site guards.
    */
   private webAudioSession: WebAudioSession | undefined;
+  /**
+   * Promise returned by {@link runEngineDriver} once the shared-engine play loop is in flight. `undefined` while
+   * the driver hasn't started yet (engine launches at the same chart-start moment the LR2 PLAYSTART gate fires)
+   * and after `dispose` triggers a clean abort. Used here only as a "have we already launched" guard so a
+   * re-entered `start()` (defensive) doesn't kick off a second engine in parallel.
+   */
+  private sharedEnginePromise: Promise<unknown> | undefined;
+  /**
+   * Forwarded into the engine via `PlayerOptions.signal`. Aborted from {@link dispose} so the engine's
+   * `throwIfAborted` checks unwind cleanly instead of leaving the playback loop running on a torn-down audio bus.
+   */
+  private sharedEngineAbortController: AbortController | undefined;
+  /**
+   * Latch for the engine's `stateSignals.judgeComboTick`. {@link drainWebUiSignals} compares the current tick
+   * value against this latch on every poll and only fires the host's `onJudgeCombo` callback when a fresh
+   * judge / combo update has landed since the last drain.
+   */
+  private sharedEngineLastJudgeComboTick = 0;
+  /** Bus references handed back from the engine via `onSignalsReady`. Drained per-frame from {@link tick}. */
+  private sharedEngineSignals: { uiSignals: PlayerUiSignalBus; stateSignals?: PlayerStateSignals } | undefined;
   private decodedSamples = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
@@ -1114,8 +1152,13 @@ export class PixiGameplayView {
     // Attach to the host's already-initialized stage. The host owns the `Application` (canvas, ticker, WebGL context) —
     // we just contribute our scene-graph subtree.
     host.app.stage.addChild(this.sceneRoot);
-    window.addEventListener('keydown', this.handleKeyDown);
-    window.addEventListener('keyup', this.handleKeyUp);
+    // The view's own keyboard listeners are skipped when {@link PixiGameplayViewOptions.useSharedEngine} routes
+    // input through the shared engine's `WebInputRuntime` (which attaches its own listeners). Without this gate,
+    // both runtimes would consume keystrokes and judge each one twice.
+    if (!this.options.useSharedEngine) {
+      window.addEventListener('keydown', this.handleKeyDown);
+      window.addEventListener('keyup', this.handleKeyUp);
+    }
     this.app.canvas.addEventListener('pointerdown', this.focus);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
     // `visibilitychange` covers tab switching but not always app switching (Cmd-Tab / Alt-Tab) — fall back to window
@@ -1269,6 +1312,12 @@ export class PixiGameplayView {
       this.startTime = performance.now();
       if (this.audioContext) {
         this.audioContextStartTime = this.audioContext.currentTime;
+      }
+      // Phase 4c opt-in: hand chart playback over to `@be-music/player`'s engine. Fires only after the LR2
+      // PLAYSTART gate (= same instant the legacy self-judge would have started consuming notes), so the engine's
+      // chart-time t=0 lines up with the view's `audioContextStartTime` anchor — no double-leadin.
+      if (this.options.useSharedEngine) {
+        this.launchSharedEngine();
       }
     });
     this.app.canvas.focus();
@@ -1497,6 +1546,20 @@ export class PixiGameplayView {
     // dispose it BEFORE we tear the bus down — that gives the session a chance to call `node.stop()` on every
     // still-playing source so they don't survive into the next chart's bus and bleed audio through. Fire-and-
     // forget the returned promise; the session's dispose path is best-effort.
+    // Abort the shared engine driver BEFORE the audio session tear-down so engine ticks don't fire fresh
+    // sample triggers onto a session that's about to lose its bus references. The engine catches the abort via
+    // `throwIfAborted` and unwinds; our launchSharedEngine catch swallows the resulting `AbortError` because
+    // the host already initiated dispose.
+    if (this.sharedEngineAbortController) {
+      try {
+        this.sharedEngineAbortController.abort();
+      } catch {
+        // Already aborted or unsupported environment — swallow.
+      }
+      this.sharedEngineAbortController = undefined;
+    }
+    this.sharedEngineSignals = undefined;
+    this.sharedEnginePromise = undefined;
     void this.webAudioSession?.dispose();
     this.webAudioSession = undefined;
     // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
@@ -3405,29 +3468,42 @@ export class PixiGameplayView {
     this.perf.beginTick();
     const seconds = this.currentSeconds();
     if (!this.paused) {
-      this.perf.time('autoJudge', () => {
-        if (this.options.autoPlay) {
-          this.autoJudge(seconds);
-          // Drain LN holds whose tail timing has been reached. Fires the deferred PERFECT verdict + combo increment +
-          // lane laser release exactly at `endSeconds` so the visual completion lines up with the score event.
-          this.autoFinalizeLongNotes(seconds);
-        } else {
-          // Auto-scratch runs BEFORE the regular miss sweep so un-pressed scratch notes within the auto-side never
-          // reach `autoMiss` (and therefore never POOR-out).
-          if (this.options.autoScratch1P || this.options.autoScratch2P) {
-            this.autoScratchJudge(seconds);
-            // Scratch LNs may have been seeded into `activeLongNotes` by the auto-judge above — finalize their tails
-            // the same way the full-autoplay path does.
+      // The shared engine path owns judge / sample / chart-end bookkeeping when
+      // {@link PixiGameplayViewOptions.useSharedEngine} is on; running these in parallel would double-trigger
+      // every audio cue and produce a self-judged score that disagrees with the engine's authoritative one. The
+      // engine's own tick loop polls at TUI_FRAME_INTERVAL_MS independent of this rAF, so skipping them here
+      // doesn't drop any chart-time work.
+      if (!this.options.useSharedEngine) {
+        this.perf.time('autoJudge', () => {
+          if (this.options.autoPlay) {
+            this.autoJudge(seconds);
+            // Drain LN holds whose tail timing has been reached. Fires the deferred PERFECT verdict + combo
+            // increment + lane laser release exactly at `endSeconds` so the visual completion lines up with the
+            // score event.
             this.autoFinalizeLongNotes(seconds);
+          } else {
+            // Auto-scratch runs BEFORE the regular miss sweep so un-pressed scratch notes within the auto-side
+            // never reach `autoMiss` (and therefore never POOR-out).
+            if (this.options.autoScratch1P || this.options.autoScratch2P) {
+              this.autoScratchJudge(seconds);
+              // Scratch LNs may have been seeded into `activeLongNotes` by the auto-judge above — finalize their
+              // tails the same way the full-autoplay path does.
+              this.autoFinalizeLongNotes(seconds);
+            }
+            this.autoMiss(seconds);
+            // Manual play safety net: auto-finalize LNs the user forgot to release. Uses the head verdict (treats
+            // continued hold past end as a clean tail).
+            this.finalizeOverheldLongNotes(seconds);
           }
-          this.autoMiss(seconds);
-          // Manual play safety net: auto-finalize LNs the user forgot to release. Uses the head verdict (treats
-          // continued hold past end as a clean tail).
-          this.finalizeOverheldLongNotes(seconds);
-        }
-      });
-      this.perf.time('autoSamples', () => this.scheduleAutoSamples(seconds));
-      this.perf.time('checkChartEnd', () => this.checkChartEnd(seconds));
+        });
+        this.perf.time('autoSamples', () => this.scheduleAutoSamples(seconds));
+        this.perf.time('checkChartEnd', () => this.checkChartEnd(seconds));
+      } else {
+        // Shared-engine mode: drain the engine's UI signal buses each frame so frame-snapshot driven state (score
+        // panel, gauge, NOWJUDGE plate) and command-driven visual effects (lane flashes, POOR BGA) stay in sync.
+        // The state-applying callbacks were registered at engine launch; here we simply pull from the buses.
+        this.drainSharedEngineSignals();
+      }
     }
     this.perf.time('updateFps', () => this.updateFps());
     this.perf.time('updateScores', () => {
@@ -5739,6 +5815,171 @@ export class PixiGameplayView {
     // Either side authoring the verdict counts — the renderer falls back to 1P when the 2P slot is empty, so the
     // fallback-status text path needs to follow the same either-side rule.
     return Boolean(skin.judges[kind]?.length || skin.judges2P[kind]?.length);
+  }
+
+  /**
+   * Kicks off the shared-engine playback loop in the background. Called from the LR2 PLAYSTART gate inside
+   * {@link start} when {@link PixiGameplayViewOptions.useSharedEngine} is on. The returned promise is captured on
+   * `this.sharedEnginePromise` so a defensive re-entry doesn't spawn a second engine; we don't `await` it because
+   * the chart can run for several minutes and `start()` must return synchronously to the host's setVisible chain.
+   *
+   * Catches {@link PlayerInterruptedError} so the engine's `interrupt(escape)` / `interrupt(restart)` commands
+   * route to the host's `onExit` / `onRestart` callbacks the same way the legacy DOM keyhandler did.
+   */
+  private launchSharedEngine(): void {
+    if (this.disposed || this.sharedEnginePromise) return;
+    if (!this.song || !this.audioContext || !this.audioBus) return;
+    const chart = this.resolvedChart ?? this.song.chart;
+    const callbacks: WebUiRuntimeCallbacks = {
+      onFrame: (frame) => this.applyEngineFrame(frame),
+      onCommand: (command) => this.applyEngineCommand(command),
+      onJudgeCombo: (state) => this.applyEngineJudgeCombo(state),
+      onSignalsReady: (signals) => {
+        this.sharedEngineSignals = signals;
+      },
+    };
+    this.sharedEnginePromise = runEngineDriver({
+      chart,
+      audio: {
+        audioContext: this.audioContext,
+        audioBus: this.audioBus,
+        decodedSamples: this.decodedSamples,
+        wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
+        bmsonSlicePlayback: this.bmsonSlicePlayback,
+      },
+      mode: this.options.autoPlay ? 'auto' : 'manual',
+      ui: callbacks,
+      // Restrict the input runtime's keyboard listeners to the gameplay canvas so other DOM widgets (e.g.
+      // the lil-gui debug panel) can keep receiving keystrokes — matches the legacy DOM key handler's
+      // implicit "canvas has focus" behavior.
+      inputTarget: this.host?.app.canvas as unknown as EventTarget,
+      engineOptions: {
+        // The view's own intro timing already gated the chart to PLAYSTART; tell the engine to start its chart
+        // immediately so its t=0 lines up with our `audioContextStartTime` anchor instead of imposing the
+        // engine's default 1.5 s lead-in on top.
+        leadInMs: 0,
+        signal: (this.sharedEngineAbortController = new AbortController()).signal,
+      },
+    })
+      .then(() => {
+        log.info('shared engine driver finished');
+      })
+      .catch((error: unknown) => {
+        if (error instanceof PlayerInterruptedError) {
+          if (error.reason === 'escape') {
+            this.beginExitSequence(() => this.options.onExit?.());
+          } else if (error.reason === 'restart') {
+            this.options.onRestart?.();
+          }
+          return;
+        }
+        log.warn('shared engine driver threw', error);
+      });
+  }
+
+  /**
+   * Pulls the latest frame snapshot + queued commands + judge-combo state from the engine's signal buses. Called
+   * from {@link tick} when shared-engine mode is on; the per-call callbacks were registered at engine launch.
+   */
+  private drainSharedEngineSignals(): void {
+    if (!this.sharedEngineSignals) return;
+    const result = drainWebUiSignals(
+      this.sharedEngineSignals.uiSignals,
+      {
+        onFrame: (frame) => this.applyEngineFrame(frame),
+        onCommand: (command) => this.applyEngineCommand(command),
+        onJudgeCombo: (state) => this.applyEngineJudgeCombo(state),
+      },
+      {
+        stateSignals: this.sharedEngineSignals.stateSignals,
+        lastJudgeComboTick: this.sharedEngineLastJudgeComboTick,
+      },
+    );
+    this.sharedEngineLastJudgeComboTick = result.lastJudgeComboTick;
+  }
+
+  /**
+   * Mirrors the engine's per-frame snapshot into the view's score / gauge / fast-slow fields so the LR2 NUMBER
+   * elements + score-graph keep rendering from the existing source paths — they don't need to know the engine
+   * replaced the in-tree judge ladder. The summary's optional `gauge` payload populates `this.gaugeState` so the
+   * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative.
+   */
+  private applyEngineFrame(frame: Readonly<PlayerUiFramePayload>): void {
+    const summary = frame.summary;
+    this.score.perfect = summary.perfect;
+    this.score.great = summary.great;
+    this.score.good = summary.good;
+    this.score.bad = summary.bad;
+    this.score.poor = summary.poor;
+    this.score.exScore = summary.exScore;
+    this.score.score = summary.score;
+    this.fastCount = summary.fast;
+    this.slowCount = summary.slow;
+    if (summary.gauge) {
+      this.gaugeState.current = summary.gauge.current;
+      this.gaugeState.max = summary.gauge.max;
+      this.gaugeState.clearThreshold = summary.gauge.clearThreshold;
+      this.gaugeState.initial = summary.gauge.initial;
+      this.gaugeState.effectiveTotal = summary.gauge.effectiveTotal;
+    }
+  }
+
+  /**
+   * Maps an engine UI command to the matching view-side visual effect. The visual-effect helpers
+   * (`flashKeyOnTimer`, `startKeyOnTimer`, `releaseKeyOnTimer`, `startLnHoldTimer`, `releaseLnHoldTimer`,
+   * `triggerBomb`, `applyTurntableImpulse`) are kept in shared-engine mode because they own the per-lane LR2
+   * timer book-keeping the skin chrome animates against — only the judge / sample-trigger code paths above were
+   * removed.
+   */
+  private applyEngineCommand(command: PlayerUiCommand): void {
+    switch (command.kind) {
+      case 'flash-lane':
+        this.flashKeyOnTimer(command.channel);
+        this.applyTurntableImpulse(command.channel);
+        break;
+      case 'press-lane':
+        this.pressedChannels.add(command.channel);
+        this.startKeyOnTimer(command.channel);
+        this.applyTurntableImpulse(command.channel);
+        break;
+      case 'release-lane':
+        this.pressedChannels.delete(command.channel);
+        this.releaseKeyOnTimer(command.channel);
+        this.releaseLnHoldTimer(command.channel);
+        break;
+      case 'hold-lane-until-beat':
+        this.startKeyOnTimer(command.channel);
+        this.startLnHoldTimer(command.channel);
+        // The engine's hold-until-beat command implicitly says "the LN is firing now"; bomb-flash on the head
+        // mirrors the legacy autoJudge behavior so the lane still blinks a positive-feedback explosion at LN
+        // start in autoplay.
+        this.triggerBomb(command.channel);
+        break;
+      case 'trigger-poor-bga':
+        this.lastPoorAt = command.seconds;
+        break;
+      case 'clear-poor-bga':
+        this.lastPoorAt = -Number.POSITIVE_INFINITY;
+        break;
+    }
+  }
+
+  /**
+   * Drives the LR2 NOWJUDGE plate timer + combo readout from the engine's stateSignals judge-combo bus. The
+   * signal carries the verdict kind (`'PERFECT'` / etc.), running combo, and the lane channel so the per-side
+   * (`judgeSideState`) plate latch can pin to the correct side's chrome.
+   */
+  private applyEngineJudgeCombo(state: Readonly<PlayerJudgeComboSignalState>): void {
+    if (state.judge === 'READY') return;
+    this.tracker.combo = state.combo;
+    if (state.combo > this.maxCombo) this.maxCombo = state.combo;
+    const judgeKind = state.judge as JudgeKind;
+    this.lastJudge = judgeKind;
+    this.lastJudgeUntil = this.currentSeconds() + 0.6;
+    if (state.channel) {
+      const side: '1P' | '2P' = state.channel.startsWith('2') ? '2P' : '1P';
+      this.judgeSideState[side] = { judge: judgeKind, until: this.lastJudgeUntil, combo: state.combo };
+    }
   }
 }
 
