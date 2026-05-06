@@ -37,17 +37,17 @@ export type {
 } from './beatoraja-skin-lua.ts';
 export { describeBeatorajaLuaError, evaluateBeatorajaLuaSkin } from './beatoraja-skin-lua.ts';
 export type { BeatorajaSkinFormat, LoadBeatorajaSkinOptions, LoadBeatorajaSkinResult } from './beatoraja-skin.ts';
-export { detectBeatorajaSkinFormat, loadBeatorajaSkin } from './beatoraja-skin.ts';
-export { parseBeatorajaSkinJson, parseBeatorajaSkinJsonHeader, stripTrailingCommas } from './beatoraja-skin-json.ts';
+export {
+  collectBeatorajaLuaModules,
+  detectBeatorajaSkinFormat,
+  extractBeatorajaSkinHeader,
+  loadBeatorajaSkin,
+} from './beatoraja-skin.ts';
+export { parseBeatorajaSkinJson, parseBeatorajaSkinJsonHeader, relaxBeatorajaJson } from './beatoraja-skin-json.ts';
 export type { NormalizedElement, RawElement } from './beatoraja-skin-element.ts';
 export { buildBaseOpSet, flattenBeatorajaElements, isElementVisible } from './beatoraja-skin-element.ts';
 export type { BeatorajaImageElement, BeatorajaImageId } from './beatoraja-skin-image.ts';
-export {
-  imageFrameAt,
-  imageFrameRect,
-  imageRefFrame,
-  normalizeBeatorajaImages,
-} from './beatoraja-skin-image.ts';
+export { imageFrameAt, imageFrameRect, imageRefFrame, normalizeBeatorajaImages } from './beatoraja-skin-image.ts';
 export type { BeatorajaDestinationGroup, BeatorajaDestinationKeyframe } from './beatoraja-skin-destination.ts';
 export { normalizeBeatorajaDestinations, sampleBeatorajaDestination } from './beatoraja-skin-destination.ts';
 export type { BeatorajaFontElement, BeatorajaTextAlign, BeatorajaTextElement } from './beatoraja-skin-text.ts';

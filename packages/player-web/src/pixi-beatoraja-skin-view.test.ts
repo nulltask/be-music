@@ -215,6 +215,31 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
+  it('shifts the text x by destination width for center / right alignment', () => {
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 1,
+      h: 1,
+      text: [
+        { id: 'left', font: 0, size: 24, align: 'left' },
+        { id: 'center', font: 0, size: 24, align: 'center' },
+        { id: 'right', font: 0, size: 24, align: 'right' },
+      ],
+      destination: [
+        { id: 'left', dst: [{ time: 0, x: 100, y: 50, w: 200, h: 24, a: 255 }] },
+        { id: 'center', dst: [{ time: 0, x: 100, y: 50, w: 200, h: 24, a: 255 }] },
+        { id: 'right', dst: [{ time: 0, x: 100, y: 50, w: 200, h: 24, a: 255 }] },
+      ],
+    };
+    const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+    const [leftNode, centerNode, rightNode] = view.container.children as Array<{ x: number }>;
+    expect(leftNode.x).toBe(100);
+    expect(centerNode.x).toBe(200); // 100 + 200/2
+    expect(rightNode.x).toBe(300); // 100 + 200
+    view.dispose();
+  });
+
   it('hides text nodes when the destination is past its last keyframe with loop=-1', () => {
     const skin: BeatorajaSkin = {
       type: 0,

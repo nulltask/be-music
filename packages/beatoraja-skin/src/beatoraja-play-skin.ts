@@ -5,7 +5,12 @@
 // {@link BeatorajaTheme} object whose fields point at the per-scene loaders.
 
 import { dirname, normalizePath } from '@be-music/utils/core';
-import { detectBeatorajaSkinFormat, loadBeatorajaSkin } from './beatoraja-skin.ts';
+import {
+  collectBeatorajaLuaModules,
+  detectBeatorajaSkinFormat,
+  extractBeatorajaSkinHeader,
+  loadBeatorajaSkin,
+} from './beatoraja-skin.ts';
 import type { LoadBeatorajaSkinResult } from './beatoraja-skin.ts';
 import { BEATORAJA_PLAY_VARIANTS, playVariantForSkinType, sceneForSkinType } from './beatoraja-skin-types.ts';
 import type { BeatorajaPlayVariant, BeatorajaSkinConfig, BeatorajaSkinHeader } from './beatoraja-skin-types.ts';
@@ -133,30 +138,7 @@ function readHeader(
   if (format === 'json') {
     return parseBeatorajaSkinJsonHeader(bytes);
   }
-  // Lua header pass.
-  const baseDir = dirname(normalizePath(entryPath));
-  const modules: { name: string; source: Uint8Array }[] = [];
-  const baseDirLower = baseDir.toLowerCase();
-  const parentDirLower = dirname(baseDir).toLowerCase();
-  for (const [path, entry] of files) {
-    if (!path.toLowerCase().endsWith('.lua')) continue;
-    const lower = path.toLowerCase();
-    const slash = lower.lastIndexOf('/');
-    const fileDir = slash >= 0 ? lower.slice(0, slash) : '';
-    if (fileDir !== baseDirLower && fileDir !== parentDirLower) continue;
-    const name = path.slice(slash + 1, -'.lua'.length);
-    const source = asLoadedBytes(entry);
-    if (source === undefined) continue;
-    // Same-dir wins over parent-dir on conflict.
-    const existing = modules.find((m) => m.name === name);
-    if (existing) {
-      if (fileDir === baseDirLower) {
-        existing.source = source;
-      }
-      continue;
-    }
-    modules.push({ name, source });
-  }
+  const modules = collectBeatorajaLuaModules(files, dirname(normalizePath(entryPath)));
   const result = evaluateBeatorajaLuaSkin({ entry: bytes, entryName: entryPath, modules });
   if (!result.ok) {
     throw new Error(result.error.message);
@@ -164,23 +146,7 @@ function readHeader(
   if (result.value === null || typeof result.value !== 'object' || Array.isArray(result.value)) {
     throw new Error('Lua skin returned a non-object header');
   }
-  const obj = result.value as Record<string, unknown>;
-  return {
-    type: typeof obj.type === 'number' ? obj.type : 0,
-    name: typeof obj.name === 'string' ? obj.name : undefined,
-    author: typeof obj.author === 'string' ? obj.author : undefined,
-    w: typeof obj.w === 'number' ? obj.w : 0,
-    h: typeof obj.h === 'number' ? obj.h : 0,
-    playstart: typeof obj.playstart === 'number' ? obj.playstart : undefined,
-    scene: typeof obj.scene === 'number' ? obj.scene : undefined,
-    input: typeof obj.input === 'number' ? obj.input : undefined,
-    close: typeof obj.close === 'number' ? obj.close : undefined,
-    fadeout: typeof obj.fadeout === 'number' ? obj.fadeout : undefined,
-    finishmargin: typeof obj.finishmargin === 'number' ? obj.finishmargin : undefined,
-    property: Array.isArray(obj.property) ? (obj.property as BeatorajaSkinHeader['property']) : undefined,
-    filepath: Array.isArray(obj.filepath) ? (obj.filepath as BeatorajaSkinHeader['filepath']) : undefined,
-    offset: typeof obj.offset === 'number' ? obj.offset : undefined,
-  };
+  return extractBeatorajaSkinHeader(result.value as Readonly<Record<string, unknown>>);
 }
 
 function buildTheme(entries: ReadonlyArray<BeatorajaSkinEntry>): BeatorajaTheme {

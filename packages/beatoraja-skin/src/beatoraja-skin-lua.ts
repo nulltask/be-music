@@ -342,9 +342,8 @@ function readLuaValueAt(L: lua_State, idx: number): LuaValue {
     case LUA_TBOOLEAN:
       return lua_toboolean(L, idx);
     case LUA_TNUMBER:
-      // We treat integers and floats the same way at the JS boundary — both fit in JS Number for the magnitudes
-      // skin authors use.
-      return lua_isinteger(L, idx) ? lua_tonumber(L, idx) : lua_tonumber(L, idx);
+      // Both integer and float Lua numbers fit in JS Number for the magnitudes skin authors use.
+      return lua_tonumber(L, idx);
     case LUA_TSTRING:
       return lua_tojsstring(L, idx);
     case LUA_TTABLE:

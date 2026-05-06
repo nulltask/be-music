@@ -14,11 +14,7 @@
 //     sprite.blendMode = props.blendMode;
 
 import { Rectangle, Texture } from 'pixi.js';
-import {
-  isElementVisible,
-  sampleBeatorajaDestination,
-  type BeatorajaDestinationGroup,
-} from '@be-music/beatoraja-skin';
+import { isElementVisible, sampleBeatorajaDestination, type BeatorajaDestinationGroup } from '@be-music/beatoraja-skin';
 
 export interface BeatorajaSpriteProps {
   visible: boolean;

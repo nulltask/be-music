@@ -2,11 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import {
-  parseBeatorajaSkinJson,
-  parseBeatorajaSkinJsonHeader,
-  relaxBeatorajaJson,
-} from './beatoraja-skin-json.ts';
+import { parseBeatorajaSkinJson, parseBeatorajaSkinJsonHeader, relaxBeatorajaJson } from './beatoraja-skin-json.ts';
 
 const fixtureDir = resolve(dirname(fileURLToPath(import.meta.url)), '__fixtures__');
 const readFixture = (name: string): string => readFileSync(resolve(fixtureDir, name), 'utf-8');

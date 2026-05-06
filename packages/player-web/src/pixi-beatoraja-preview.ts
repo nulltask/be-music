@@ -10,10 +10,7 @@
 // `BeatorajaPlaySkinView`'s op-set / timer-start callbacks.
 
 import { Container, Ticker } from 'pixi.js';
-import type {
-  BeatorajaSkin,
-  BeatorajaSkinConfig,
-} from '@be-music/beatoraja-skin';
+import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
 import { buildBaseOpSet } from '@be-music/beatoraja-skin';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
@@ -89,8 +86,7 @@ export class BeatorajaPlaySkinPreviewScene implements PixiScene {
     this.disposed = true;
     this.exit();
     this.view.dispose();
-    // Texture cache is owned by the host (it survives multiple previews); the host's `loadBeatorajaTheme` flow
-    // disposes it when the bundle is replaced. We don't tear it down here.
+    // The texture cache outlives every preview scene by design — see `beatoraja-textures.ts`.
     if (!this.root.destroyed) {
       this.root.destroy({ children: false });
     }

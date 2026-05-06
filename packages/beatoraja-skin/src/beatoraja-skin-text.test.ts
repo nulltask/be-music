@@ -1,21 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import {
-  normalizeBeatorajaFonts,
-  normalizeBeatorajaTexts,
-} from './beatoraja-skin-text.ts';
+import { normalizeBeatorajaFonts, normalizeBeatorajaTexts } from './beatoraja-skin-text.ts';
 
 describe('normalizeBeatorajaTexts', () => {
   it('fills in default font / size / ref / align when omitted', () => {
     const out = normalizeBeatorajaTexts([{ id: 'genre' }]);
-    expect(out).toEqual([
-      { id: 'genre', fontId: 0, size: 24, ref: 0, align: 'left', ifCodes: [] },
-    ]);
+    expect(out).toEqual([{ id: 'genre', fontId: 0, size: 24, ref: 0, align: 'left', ifCodes: [] }]);
   });
 
   it('preserves authored numeric and string fields verbatim', () => {
-    const out = normalizeBeatorajaTexts([
-      { id: 'title', font: 1, size: 30, ref: 12, align: 'center' },
-    ]);
+    const out = normalizeBeatorajaTexts([{ id: 'title', font: 1, size: 30, ref: 12, align: 'center' }]);
     expect(out[0]).toMatchObject({ id: 'title', fontId: 1, size: 30, ref: 12, align: 'center' });
   });
 
@@ -30,9 +23,7 @@ describe('normalizeBeatorajaTexts', () => {
   });
 
   it('flattens conditional `if`/`values` blocks and attaches ifCodes', () => {
-    const out = normalizeBeatorajaTexts([
-      { if: [920], values: [{ id: 'genre', font: 0, size: 24, ref: 13 }] },
-    ]);
+    const out = normalizeBeatorajaTexts([{ if: [920], values: [{ id: 'genre', font: 0, size: 24, ref: 13 }] }]);
     expect(out[0]).toMatchObject({ id: 'genre', ifCodes: [920] });
   });
 

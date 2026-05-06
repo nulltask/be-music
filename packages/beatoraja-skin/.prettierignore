@@ -1,0 +1,4 @@
+# Real-world beatoraja skin files used as fixtures. Their JSON is libgdx-flavored (trailing commas, missing
+# commas, occasional `{{` typo) so RFC-style formatters reject them. Kept byte-for-byte from the upstream
+# theme so the parser tests exercise the actual quirks.
+src/__fixtures__/

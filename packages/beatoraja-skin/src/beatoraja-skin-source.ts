@@ -9,10 +9,7 @@ import { dirname, normalizePath } from '@be-music/utils/core';
 import { asLoadedBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
 import type { BeatorajaSkinFileEntry } from './file-lookup.ts';
 import { resolveSourcePath } from './beatoraja-skin-resolver.ts';
-import type {
-  BeatorajaSkinFilepath,
-  BeatorajaSkinSource,
-} from './beatoraja-skin-types.ts';
+import type { BeatorajaSkinFilepath, BeatorajaSkinSource } from './beatoraja-skin-types.ts';
 
 export interface BeatorajaSourceAsset {
   /** Source slot index — matches `image[].src`. */
@@ -59,9 +56,7 @@ export interface BundleBeatorajaSourcesOptions {
  * pre-load image bytes via `readFilesIntoBytesMap({ deferAudio: true })` so that `.png`/`.jpg`/`.tga` arrive as
  * `Uint8Array`s by the time this runs.
  */
-export function bundleBeatorajaSources(
-  options: BundleBeatorajaSourcesOptions,
-): BeatorajaSourceBundle {
+export function bundleBeatorajaSources(options: BundleBeatorajaSourcesOptions): BeatorajaSourceBundle {
   const assets: BeatorajaSourceAsset[] = [];
   const byId = new Map<number, BeatorajaSourceAsset>();
   const unresolved: BeatorajaUnresolvedSource[] = [];

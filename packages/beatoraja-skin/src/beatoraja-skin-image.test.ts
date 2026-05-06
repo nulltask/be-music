@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  imageFrameAt,
-  imageFrameRect,
-  imageRefFrame,
-  normalizeBeatorajaImages,
-} from './beatoraja-skin-image.ts';
+import { imageFrameAt, imageFrameRect, imageRefFrame, normalizeBeatorajaImages } from './beatoraja-skin-image.ts';
 
 describe('normalizeBeatorajaImages', () => {
   it('fills in default field values for sparsely-authored entries', () => {
@@ -84,9 +79,7 @@ describe('imageFrameRect', () => {
   });
 
   it('handles 2D cell grids', () => {
-    const image = normalizeBeatorajaImages([
-      { id: 0, src: 0, x: 0, y: 0, w: 1810, h: 192, divx: 10 },
-    ])[0];
+    const image = normalizeBeatorajaImages([{ id: 0, src: 0, x: 0, y: 0, w: 1810, h: 192, divx: 10 }])[0];
     expect(imageFrameRect(image, 0)).toEqual({ x: 0, y: 0, w: 181, h: 192 });
     expect(imageFrameRect(image, 9)).toEqual({ x: 1629, y: 0, w: 181, h: 192 });
   });
@@ -119,9 +112,7 @@ describe('imageRefFrame', () => {
   });
 
   it('falls back to total cell count when len is omitted', () => {
-    const image = normalizeBeatorajaImages([
-      { id: 0, src: 0, x: 0, y: 0, w: 200, h: 220, divy: 11 },
-    ])[0];
+    const image = normalizeBeatorajaImages([{ id: 0, src: 0, x: 0, y: 0, w: 200, h: 220, divy: 11 }])[0];
     expect(imageRefFrame(image, 100)).toBe(10);
   });
 });

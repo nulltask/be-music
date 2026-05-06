@@ -1,19 +1,7 @@
-// Minimal PixiJS view for a beatoraja skin.
-//
-// This is the static-paint layer: every `image[]` + `destination[]` pair becomes a `Sprite` on a single `Container`,
-// and `update(context)` repositions / re-tints / re-blends each sprite from the destination keyframes. Animated
-// images (`divx` / `divy` cells, `cycle`-based animation, `ref`/`len` op-driven frame selection) are honored too —
-// the cached cropped texture is swapped each tick when the frame index changes.
-//
-// What this view DOESN'T do (left for follow-up patches):
-//
-// - Note rendering (the `note` field's playable-note layout).
-// - Engine-driven runtime ops (combo / score / lamp updates, judge flashes, key-on flashes, key beams).
-// - BGA video / image tracks.
-// - Text / value / slider / bargraph elements (only `image[]` + `destination[]` are wired).
-//
-// Once the gameplay engine signals are available, the same Container is reused — additional per-element children
-// (notes, judge sprites, etc.) can be appended without rebuilding the destination list.
+// Static-paint view for a beatoraja skin: each `image[]` / `value[]` / `text[]` declaration referenced by a
+// `destination[]` becomes a Pixi `Sprite` or `Text` on a single `Container`, and `update(context)` resamples
+// every destination keyframe per frame. Engine-driven dynamics (notes, judge flashes, key-on, BGA, lamps) are
+// owned by the gameplay scene that drives this view from outside.
 
 import { Container, Sprite, Text, Texture } from 'pixi.js';
 import {
@@ -93,23 +81,18 @@ export class BeatorajaPlaySkinView {
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
       imageById.set(image.id, image);
     }
-    // `value[]` declarations share the `id / src / x / y / w / h / divx / divy` shape with `image[]` — the only
-    // extras (`digit / padding / align / ref`) are number-formatting hints that the renderer can ignore at this
-    // stage. Treating each value declaration as an image-like source lets the destination targeting it pick up the
-    // matching texture and paint a placeholder digit (cell 0 of the source sheet — typically '0'). When the engine
-    // wiring lands later, the `digit` / `align` / `ref` fields will drive the actual numeric layout.
-    //
-    // `image[]` wins on id collisions because authors sometimes alias the two — keeping image as the canonical
-    // declaration matches beatoraja's own resolver.
+    // `value[]` shares the `id / src / x / y / w / h / divx / divy` shape with `image[]`; the formatting hints
+    // (`digit / padding / align`) are ignored until engine integration plugs in the dynamic numeric layout. The
+    // placeholder paints cell 0 of the source sheet ('0' on a number strip). `image[]` wins on id collision —
+    // matches beatoraja's own resolver.
     for (const value of normalizeBeatorajaImages(options.skin.value)) {
       if (!imageById.has(value.id)) {
         imageById.set(value.id, value);
       }
     }
-    // `text[]` declarations carry no source rect; they pair a font/size/ref with a string the runtime resolves at
-    // render time. We don't yet load the skin's TTFs (engine integration will fold those in along with the dynamic
-    // string lookups), so the placeholders below render with the browser's default sans-serif font and an empty
-    // string — enough to put each text destination on screen at the correct position with the matching size.
+    // `text[]` declarations carry no source rect — font / size / ref pairs the runtime resolves into strings.
+    // Skin TTFs aren't loaded yet (engine integration handles that); the placeholders below use the browser's
+    // default sans-serif so positions and sizes are visible.
     const textById = new Map<BeatorajaImageId, BeatorajaTextElement>();
     for (const text of normalizeBeatorajaTexts(options.skin.text)) {
       textById.set(text.id, text);
@@ -131,26 +114,14 @@ export class BeatorajaPlaySkinView {
         continue;
       }
       const baseTexture = options.textures.get(image.src);
-      // Pre-bind the sprite's texture to the cell-0 cropped frame at construction time. Building the sub-texture
-      // here (rather than lazily inside `update()`) ensures the sprite's texture is registered with PixiJS before
-      // the first render pass executes.
+      // Mount with `visible = true` (Pixi default) + `alpha = 0` instead of `visible = false`. PixiJS v8 batchers
+      // skip texture-binding setup for invisible sprites on the first render pass, and the second-pass flip-on
+      // crashes the bind-group cache (`textureSource1` null on WebGPU, `addressModeU` null on WebGL2). Painting
+      // alpha-0 from frame 0 warms up every bind group; `update()` writes the real alpha next tick.
       //
-      // CRITICAL: we mount sprites with `visible = true` (the Pixi default) and `alpha = 0` instead of starting
-      // them at `visible = false`. PixiJS v8's WebGPU and WebGL2 batchers BOTH skip texture-binding setup for
-      // `visible: false` sprites on the first render pass. The next frame, when our `update()` flips them to
-      // `visible: true`, every still-unbound source rushes the bind-group cache in parallel and one of them hits
-      // a half-initialized slot — surfacing as `Cannot read properties of null (reading 'textureSource1')` on
-      // WebGPU and `(reading 'addressModeU')` on WebGL2.
-      //
-      // The LR2 renderer dodges this accidentally: `pixi-select.ts` mounts sprites with `new Sprite(cropped)`
-      // (default `visible = true`) and the destinations whose `op` codes don't match are simply painted with an
-      // already-bound texture but at off-screen positions. The first frame's render pass therefore primes every
-      // bind group, and subsequent visibility flips reuse the cached binding.
-      //
-      // Mirroring that here: keep `visible = true`, force `alpha = 0` so nothing reaches the screen until
-      // `update()` overwrites it with the destination keyframe's actual alpha.
-      const baseIsBindable =
-        baseTexture !== undefined && baseTexture !== Texture.EMPTY;
+      // The cell-0 cropped sub-texture is also pre-built here so the first render pass has a fully-resolved
+      // texture for every sprite — same bind-group reasoning.
+      const baseIsBindable = baseTexture !== undefined && baseTexture !== Texture.EMPTY;
       let initialTexture: Texture | undefined;
       let currentFrame = -1;
       if (baseIsBindable) {
@@ -167,11 +138,6 @@ export class BeatorajaPlaySkinView {
     }
   }
 
-  /**
-   * Build a placeholder Pixi `Text` for a text-targeting destination. Uses the browser's default sans-serif at
-   * the declared font size; the actual TTF bundled in the skin is honored once the host has registered fonts via
-   * `FontFace`. Position and alpha are driven by the destination keyframe in `update()`, same as image sprites.
-   */
   private buildTextEntry(group: BeatorajaDestinationGroup, element: BeatorajaTextElement): TextEntry {
     const text = new Text({
       text: '',
@@ -211,10 +177,8 @@ export class BeatorajaPlaySkinView {
   ): void {
     const sprite = entry.sprite;
 
-    // Without a base texture (or with `Texture.EMPTY`, whose source has no GPU resource) we have nothing to
-    // paint. Keep the sprite hidden so the renderer never tries to bind a sourceless texture for a draw call —
-    // WebGPU crashes with `Cannot read properties of null (reading 'textureSource1')` when batching tries to
-    // bind a sprite whose texture has no GPU source attached.
+    // No base texture (or `Texture.EMPTY`, source-less) → must not enter the renderer's batch; WebGPU's
+    // `_createBindGroup` deref's a null source.
     const baseTexture = entry.baseTexture;
     if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
       sprite.visible = false;
@@ -224,8 +188,8 @@ export class BeatorajaPlaySkinView {
     sprite.visible = props.visible;
     if (!props.visible) return;
 
-    // Pick the source-cell index. `ref` (op-driven frame) takes precedence — that's how lamp / judge-icon
-    // textures swap between cells. Otherwise the `cycle`-based animation drives the frame.
+    // `ref` (op-driven frame) takes precedence over `cycle` animation — that's how lamp / judge-icon textures
+    // swap between cells.
     const frameIndex =
       entry.image.ref !== 0
         ? imageRefFrame(entry.image, this.resolveRefValue(entry.image.ref))
@@ -234,14 +198,12 @@ export class BeatorajaPlaySkinView {
     if (frameIndex !== entry.currentFrame) {
       const cell = imageFrameRect(entry.image, frameIndex);
       const cropped = createCroppedBeatorajaTexture(entry.baseTexture, cell);
-      if (cropped !== undefined) {
-        sprite.texture = cropped;
-      } else {
-        // Cropped rect was empty (e.g. cell width / height resolves to 0). Hide rather than render the EMPTY
-        // texture, which would also trigger the WebGPU `textureSource1` crash above.
+      if (cropped === undefined) {
+        // Cell width/height collapsed to 0 — hiding avoids the same null-source bind-group crash above.
         sprite.visible = false;
         return;
       }
+      sprite.texture = cropped;
       entry.currentFrame = frameIndex;
     }
 
@@ -255,27 +217,26 @@ export class BeatorajaPlaySkinView {
     sprite.blendMode = props.blendMode;
   }
 
-  private updateTextEntry(
-    entry: TextEntry,
-    props: ReturnType<typeof destinationToSpriteProps>,
-  ): void {
+  private updateTextEntry(entry: TextEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
     const text = entry.text;
     text.visible = props.visible;
     if (!props.visible) return;
 
-    // Refresh the displayed string via the host-provided resolver. The empty fallback keeps the layout silent
-    // when the engine isn't wired in yet. Skipping the assignment when the string hasn't changed lets PixiJS
-    // reuse the cached glyph atlas — assigning the same string still triggers a relayout otherwise.
-    const next = entry.element.ref !== 0 ? this.resolveTextContent(entry.element.ref) ?? '' : '';
+    // Skip the assignment when the string hasn't changed — assigning the same string still triggers a Pixi
+    // glyph relayout.
+    const next = entry.element.ref !== 0 ? (this.resolveTextContent(entry.element.ref) ?? '') : '';
     if (text.text !== next) {
       text.text = next;
     }
 
-    // Position from the destination keyframe. Width/height intentionally NOT applied — Pixi `Text` auto-sizes
-    // to its rendered glyphs, and forcing a width via the keyframe rect would scale the type. The destination's
-    // `w / h` are bounding-box hints that beatoraja uses for clipping; we'll honor them once the engine plugs
-    // real strings in and clipping starts to matter.
-    text.x = props.x;
+    // The destination's `x` is the bounding box's left edge. With `align: center` / `right` the Pixi anchor is
+    // 0.5 / 1.0 (set in `buildTextEntry`), so we must add half / full width of the destination box to land on
+    // the box's center / right edge respectively. Width / height themselves are intentionally NOT applied —
+    // Pixi `Text` auto-sizes to its glyphs and forcing a width via the keyframe rect would scale the type.
+    let x = props.x;
+    if (entry.element.align === 'center') x += props.width / 2;
+    else if (entry.element.align === 'right') x += props.width;
+    text.x = x;
     text.y = props.y;
     text.alpha = props.alpha;
     text.tint = props.tint;
@@ -283,10 +244,7 @@ export class BeatorajaPlaySkinView {
     text.blendMode = props.blendMode;
   }
 
-  /**
-   * Tear down sprites and the container. Textures themselves are owned by the {@link BeatorajaTextureCache} and
-   * are NOT destroyed here — the cache is intentionally long-lived (no `dispose()` method by design).
-   */
+  /** Tear down sprites and the container. Textures live on the cache (no `dispose()` by design). */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

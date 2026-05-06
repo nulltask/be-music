@@ -84,7 +84,7 @@ export function loadBeatorajaSkin(options: LoadBeatorajaSkinOptions): LoadBeator
 
   // Lua path.
   const baseDir = dirname(normalizePath(entryKey));
-  const modules = collectLuaModules(options.files, baseDir);
+  const modules = collectBeatorajaLuaModules(options.files, baseDir);
   const evalResult = evaluateBeatorajaLuaSkin({
     entry: entryBytes,
     entryName: entryKey,
@@ -112,7 +112,7 @@ export function loadBeatorajaSkin(options: LoadBeatorajaSkinOptions): LoadBeator
  * Pull every `.lua` file in `baseDir` (and one directory up — beatoraja themes occasionally use `../play_parts.lua`)
  * into the Lua module table. The module name is the filename without the `.lua` suffix.
  */
-function collectLuaModules(
+export function collectBeatorajaLuaModules(
   files: ReadonlyMap<string, BeatorajaSkinFileEntry>,
   baseDir: string,
 ): BeatorajaLuaModuleSource[] {
@@ -138,37 +138,30 @@ function collectLuaModules(
   return Array.from(seen.values());
 }
 
-function headerFromSkin(skin: BeatorajaSkin): BeatorajaSkinHeader {
-  const {
-    type,
-    name,
-    author,
-    w,
-    h,
-    playstart,
-    scene,
-    input,
-    close,
-    fadeout,
-    finishmargin,
-    property,
-    filepath,
-    offset,
-  } = skin;
+/**
+ * Extract a `BeatorajaSkinHeader` from a record-shaped object — the only header fields are the well-known
+ * top-level keys. Used both by the JSON loader and the Lua header pass; they hand in the same shape so the
+ * picker logic can be shared.
+ */
+export function extractBeatorajaSkinHeader(obj: Readonly<Record<string, unknown>>): BeatorajaSkinHeader {
   return {
-    type: typeof type === 'number' ? type : 0,
-    name: typeof name === 'string' ? name : undefined,
-    author: typeof author === 'string' ? author : undefined,
-    w: typeof w === 'number' ? w : 0,
-    h: typeof h === 'number' ? h : 0,
-    playstart: typeof playstart === 'number' ? playstart : undefined,
-    scene: typeof scene === 'number' ? scene : undefined,
-    input: typeof input === 'number' ? input : undefined,
-    close: typeof close === 'number' ? close : undefined,
-    fadeout: typeof fadeout === 'number' ? fadeout : undefined,
-    finishmargin: typeof finishmargin === 'number' ? finishmargin : undefined,
-    property: Array.isArray(property) ? (property as BeatorajaSkinHeader['property']) : undefined,
-    filepath: Array.isArray(filepath) ? (filepath as BeatorajaSkinHeader['filepath']) : undefined,
-    offset: typeof offset === 'number' ? offset : undefined,
+    type: typeof obj.type === 'number' ? obj.type : 0,
+    name: typeof obj.name === 'string' ? obj.name : undefined,
+    author: typeof obj.author === 'string' ? obj.author : undefined,
+    w: typeof obj.w === 'number' ? obj.w : 0,
+    h: typeof obj.h === 'number' ? obj.h : 0,
+    playstart: typeof obj.playstart === 'number' ? obj.playstart : undefined,
+    scene: typeof obj.scene === 'number' ? obj.scene : undefined,
+    input: typeof obj.input === 'number' ? obj.input : undefined,
+    close: typeof obj.close === 'number' ? obj.close : undefined,
+    fadeout: typeof obj.fadeout === 'number' ? obj.fadeout : undefined,
+    finishmargin: typeof obj.finishmargin === 'number' ? obj.finishmargin : undefined,
+    property: Array.isArray(obj.property) ? (obj.property as BeatorajaSkinHeader['property']) : undefined,
+    filepath: Array.isArray(obj.filepath) ? (obj.filepath as BeatorajaSkinHeader['filepath']) : undefined,
+    offset: typeof obj.offset === 'number' ? obj.offset : undefined,
   };
+}
+
+function headerFromSkin(skin: BeatorajaSkin): BeatorajaSkinHeader {
+  return extractBeatorajaSkinHeader(skin as unknown as Readonly<Record<string, unknown>>);
 }

@@ -104,14 +104,5 @@ declare module 'fengari' {
 // `fengari-web` re-exports the same `lua` / `lauxlib` / `lualib` / `to_luastring` shapes as `fengari` itself, so we
 // declare it as the same module surface.
 declare module 'fengari-web' {
-  export {
-    lua_State,
-    LuaCFunction,
-    lua,
-    lauxlib,
-    lualib,
-    to_luastring,
-    to_jsstring,
-    luastring_of,
-  } from 'fengari';
+  export { lua_State, LuaCFunction, lua, lauxlib, lualib, to_luastring, to_jsstring, luastring_of } from 'fengari';
 }

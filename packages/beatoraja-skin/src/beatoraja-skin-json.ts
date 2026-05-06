@@ -114,9 +114,3 @@ function startsNewElementChar(ch: string): boolean {
   if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) return true;
   return false;
 }
-
-/**
- * @deprecated Use {@link relaxBeatorajaJson}. Kept as a re-export so older code paths keep building, but the new
- * helper handles BOTH trailing-comma drop AND missing-comma insertion.
- */
-export const stripTrailingCommas = relaxBeatorajaJson;

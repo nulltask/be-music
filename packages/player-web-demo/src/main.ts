@@ -939,9 +939,7 @@ class PlayerWebDemoApp {
     // Beatoraja-skin preview controls. The dropdown picks which key-count variant to mount; the button opens the
     // preview scene over whatever's currently active. Only available after a beatoraja theme has been dropped.
     const beatorajaFolder = gui.addFolder('Beatoraja preview').close();
-    beatorajaFolder
-      .add(this.guiState, 'beatorajaPreviewVariant', ['7', '5', '14', '10', '9'] as const)
-      .name('Variant');
+    beatorajaFolder.add(this.guiState, 'beatorajaPreviewVariant', ['7', '5', '14', '10', '9'] as const).name('Variant');
     beatorajaFolder.add(this.guiState, 'beatorajaPreview').name('Open preview');
     // Auto play used to be a lil-gui checkbox here too, but the in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on
     // the select skin) already exposes it — the duplicate toolbar controller just added another surface to keep in
@@ -1390,16 +1388,9 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Per-entry-path memoized texture caches for the currently-loaded beatoraja theme. We deliberately keep every
-   * cache that the user has ever previewed in this session — calling `dispose()` on a beatoraja texture and then
-   * re-decoding the same bytes for a follow-up preview lets PixiJS v8's internal source cache hand back a
-   * half-disposed `TextureSource` whose `style` is null, crashing inside `BindGroupSystem._createBindGroup`
-   * (WebGPU) or `applyStyleParams` (WebGL2) on the next render frame. The same crash is technically lurking in
-   * the LR2 path too, but LR2's typical user flow doesn't re-mount the same skin in a session so it stays
-   * latent. Beatoraja's preview UX (variant dropdown + open/close button) deliberately exercises that loop, so
-   * we sidestep the bug by never destroying these textures in the first place. The cost is up to a few tens of
-   * MB of RAM per fully-explored theme, which is well inside the budget for a debug preview and is reset on
-   * page reload.
+   * Per-entry-path memoized texture caches. Never destroyed in this session — see `beatoraja-textures.ts` for
+   * why disposing beatoraja textures and re-decoding the same bytes crashes PixiJS v8's bind-group cache.
+   * The same hazard is technically present in the LR2 path but LR2's flow doesn't re-mount the same skin.
    */
   private readonly beatorajaTextureCachesByEntry = new Map<string, BeatorajaTextureCache>();
   private beatorajaPreviewScene: BeatorajaPlaySkinPreviewScene | undefined;

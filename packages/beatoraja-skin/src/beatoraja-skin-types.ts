@@ -185,9 +185,7 @@ export interface BeatorajaSkinConfig {
  *
  * Returns an empty record when the header has no `property[]`.
  */
-export function buildDefaultSkinConfigOptions(
-  header: Pick<BeatorajaSkinHeader, 'property'>,
-): Record<string, number> {
+export function buildDefaultSkinConfigOptions(header: Pick<BeatorajaSkinHeader, 'property'>): Record<string, number> {
   const out: Record<string, number> = {};
   if (!Array.isArray(header.property)) return out;
   for (const property of header.property) {

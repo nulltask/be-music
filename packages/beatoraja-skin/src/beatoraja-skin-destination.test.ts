@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  normalizeBeatorajaDestinations,
-  sampleBeatorajaDestination,
-} from './beatoraja-skin-destination.ts';
+import { normalizeBeatorajaDestinations, sampleBeatorajaDestination } from './beatoraja-skin-destination.ts';
 
 describe('normalizeBeatorajaDestinations', () => {
   it('fills in default group fields and carries forward keyframe state', () => {
