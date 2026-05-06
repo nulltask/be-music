@@ -130,7 +130,6 @@ import {
 import {
   isPlayableInputChannel,
   isScratch,
-  resolveKeyChannel,
   resolveLaneChannels,
   resolveLr2LaneIndex,
   resolveSideRelativeLaneIndex,
@@ -2781,81 +2780,6 @@ export class PixiGameplayView {
     this.app.canvas.focus();
   };
 
-  private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      // Run the LR2 #FADEOUT → #CLOSE timeline before handing control back so the skin's exit chrome (fade overlay,
-      // STAGE FAILED plate) gets a chance to animate. Idempotent when fired repeatedly.
-      this.beginExitSequence(() => this.options.onExit?.());
-      return;
-    }
-    if (event.code === 'F5') {
-      // Restart: convention follows beatoraja / LR2's F5-restart key. `preventDefault` blocks the browser-reload
-      // default; if the host hasn't supplied an `onRestart` handler we fall through to a no-op (still preventing the
-      // reload).
-      event.preventDefault();
-      this.options.onRestart?.();
-      return;
-    }
-    if (event.code === 'Space') {
-      event.preventDefault();
-      this.togglePause();
-      return;
-    }
-    if (event.code === 'ArrowUp') {
-      event.preventDefault();
-      this.adjustHiSpeed(HISPEED_STEP);
-      return;
-    }
-    if (event.code === 'ArrowDown') {
-      event.preventDefault();
-      this.adjustHiSpeed(-HISPEED_STEP);
-      return;
-    }
-    const channel = resolveKeyChannel(event, this.laneChannels);
-    if (!channel || this.paused) {
-      return;
-    }
-    // Auto-scratch suppresses the player's scratch input — otherwise the user's stray Shift press would trigger an
-    // EMPTY_POOR judge (scratch note already auto-hit + cleared by `autoScratchJudge`).
-    if (isScratch(channel)) {
-      const autoSide = channel === '16' ? this.options.autoScratch1P : this.options.autoScratch2P;
-      if (autoSide) return;
-    }
-    event.preventDefault();
-    if (!event.repeat) {
-      this.pressedChannels.add(channel);
-      // Start the LR2 key-on timer for this lane so skin elements gated on timer 100..107 (lane lasers etc.) become
-      // visible while the key is held down.
-      this.startKeyOnTimer(channel);
-      // Spin the turntable on every scratch press, even an empty one — a DJ scratch with no note still rotates the
-      // disc. No-op for non-scratch channels.
-      this.applyTurntableImpulse(channel);
-      if (!this.options.autoPlay) {
-        // Bomb is triggered inside judge() when the press lands on a note -- empty presses (no note in window) do not
-        // produce a bomb flash.
-        this.judge(channel, this.currentSeconds());
-      }
-    }
-  };
-
-  private readonly handleKeyUp = (event: KeyboardEvent): void => {
-    const channel = resolveKeyChannel(event, this.laneChannels);
-    if (channel) {
-      this.pressedChannels.delete(channel);
-      // Same render-time alpha taper as the auto-judged LN release path so manual key-ups also decay smoothly instead
-      // of popping off. `releaseKeyOnTimer` schedules the timer's delete after `KEY_ON_FADE_OUT_MS`.
-      this.releaseKeyOnTimer(channel);
-      // Don't delete bombStartedAt here -- let renderBombs decide when the animation has finished. Otherwise releasing
-      // the key cuts off the bomb flash mid-animation. Manual play: a release on a channel currently holding an LN is
-      // the trigger to finalize the tail judgement. Auto-play never reaches this branch (the auto-judge path handles
-      // its own LN end timing).
-      if (!this.options.autoPlay) {
-        this.finalizeActiveLongNote(channel, this.currentSeconds());
-      }
-    }
-  };
-
   /**
    * Captures ESC / F5 in shared-engine mode so the LR2 `#FADEOUT` exit animation runs to completion BEFORE the
    * engine's `PlayerInterruptedError` flow disposes the audio session. Without this intercept, pushing
@@ -2891,11 +2815,10 @@ export class PixiGameplayView {
       this.togglePause();
       return;
     }
-    // HiSpeed adjustment runs entirely on the view side regardless of who's judging the chart — the engine has
-    // its own \`high-speed\` input command but the value it tracks is decoupled from the visual scroll speed
-    // (`PIXELS_PER_BEAT * this.hiSpeed`) the renderer applies. Mirror the legacy `handleKeyDown` path here so
-    // ArrowUp / ArrowDown still work in shared-engine mode (the WebInputRuntime's lane-input dispatch ignores
-    // arrow tokens and the engine has no way to push them back to the renderer).
+    // HiSpeed adjustment runs entirely on the view side — the engine has its own `high-speed` input command but
+    // the value it tracks is decoupled from the visual scroll speed (`PIXELS_PER_BEAT * this.hiSpeed`) the
+    // renderer applies. The WebInputRuntime's lane-input dispatch ignores arrow tokens, so the engine has no
+    // way to push HiSpeed changes back to the renderer; we handle them directly here.
     if (event.code === 'ArrowUp') {
       event.preventDefault();
       this.adjustHiSpeed(HISPEED_STEP);
