@@ -72,6 +72,19 @@ export class BeatorajaPlaySkinView {
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
       imageById.set(image.id, image);
     }
+    // `value[]` declarations share the `id / src / x / y / w / h / divx / divy` shape with `image[]` — the only
+    // extras (`digit / padding / align / ref`) are number-formatting hints that the renderer can ignore at this
+    // stage. Treating each value declaration as an image-like source lets the destination targeting it pick up the
+    // matching texture and paint a placeholder digit (cell 0 of the source sheet — typically '0'). When the engine
+    // wiring lands later, the `digit` / `align` / `ref` fields will drive the actual numeric layout.
+    //
+    // `image[]` wins on id collisions because authors sometimes alias the two — keeping image as the canonical
+    // declaration matches beatoraja's own resolver.
+    for (const value of normalizeBeatorajaImages(options.skin.value)) {
+      if (!imageById.has(value.id)) {
+        imageById.set(value.id, value);
+      }
+    }
     const groups = normalizeBeatorajaDestinations(options.skin.destination);
 
     // Render order: lower `offset` (back layer) draws first, then by author declaration order. Matches beatoraja's

@@ -145,6 +145,37 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
+  it('treats `value[]` declarations as image-like sources for destination lookup', () => {
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 1280,
+      h: 720,
+      image: [{ id: 1, src: 0, x: 0, y: 0, w: 100, h: 100 }],
+      value: [{ id: 400, src: 0, x: 0, y: 0, w: 240, h: 24, divx: 10, digit: 4, ref: 91 }],
+      destination: [
+        { id: 1, dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100 }] },
+        { id: 400, dst: [{ time: 0, x: 520, y: 2, w: 18, h: 18 }] },
+      ],
+    };
+    const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+    expect(view.container.children).toHaveLength(2);
+    view.dispose();
+  });
+
+  it('image declarations win over value declarations on id collision', () => {
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 1,
+      h: 1,
+      image: [{ id: 5, src: 0, x: 0, y: 0, w: 100, h: 100 }],
+      value: [{ id: 5, src: 0, x: 50, y: 50, w: 200, h: 200 }],
+      destination: [{ id: 5, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] }],
+    };
+    const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+    expect(view.container.children).toHaveLength(1);
+    view.dispose();
+  });
+
   it('dispose() detaches sprites from the container without throwing', () => {
     const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
     expect(() => view.dispose()).not.toThrow();
