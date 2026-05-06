@@ -5405,17 +5405,37 @@ export class PixiGameplayView {
           break;
         }
       }
+      const summarizeNote = (
+        note:
+          | { channel: string; beat: number; seconds: number; endBeat?: number; endSeconds?: number }
+          | undefined,
+      ): unknown => {
+        if (!note) return null;
+        return {
+          channel: note.channel,
+          beat: note.beat,
+          seconds: note.seconds,
+          endBeat: note.endBeat,
+          endSeconds: note.endSeconds,
+        };
+      };
       // eslint-disable-next-line no-console
-      console.warn('[be-music debug] note-array sync', {
-        viewLength: viewNotes.length,
-        engineLength: frameNotes.length,
-        lengthMatch: viewNotes.length === frameNotes.length,
-        firstDivergence,
-        viewFirst: viewNotes[0],
-        engineFirst: frameNotes[0],
-        viewLast: viewNotes[viewNotes.length - 1],
-        engineLast: frameNotes[frameNotes.length - 1],
-      });
+      console.warn(
+        `[be-music debug] note-array sync ${JSON.stringify(
+          {
+            viewLength: viewNotes.length,
+            engineLength: frameNotes.length,
+            lengthMatch: viewNotes.length === frameNotes.length,
+            firstDivergence,
+            viewFirst: summarizeNote(viewNotes[0]),
+            engineFirst: summarizeNote(frameNotes[0]),
+            viewLast: summarizeNote(viewNotes[viewNotes.length - 1]),
+            engineLast: summarizeNote(frameNotes[frameNotes.length - 1]),
+          },
+          null,
+          2,
+        )}`,
+      );
     }
     // Re-anchor the view's chart-time clock to the engine's the very first time the engine publishes a frame.
     // The engine's `playbackClock` (and therefore the chart-time it stamps on every judge / sample / ui-signal
