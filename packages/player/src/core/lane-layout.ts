@@ -419,7 +419,7 @@ function resolveModeBindings(
 
 function createScratchReverseTokensByChannel(
   bindings: readonly FixedLaneDefinition[],
-  platform: NodeJS.Platform = process.platform,
+  platform: NodeJS.Platform = resolveDefaultPlatform(),
 ): Map<string, readonly string[]> {
   const scratchChannels = bindings.filter((binding) => binding.isScratch).map((binding) => binding.channel);
   const tokenMap = new Map<string, readonly string[]>();
@@ -432,6 +432,17 @@ function createScratchReverseTokensByChannel(
   }
 
   return tokenMap;
+}
+
+/**
+ * Browser-safe `process.platform` lookup. Falls back to `'linux'` when running outside Node — the value is only
+ * consulted by the scratch-reverse token mapping (option / ctrl modifier choice), and `'linux'` produces the
+ * non-darwin tokens the engine's web-based callers expect. Bare `process.platform` would throw a
+ * `ReferenceError` on first chart load in a browser bundle that doesn't ship a `process` polyfill.
+ */
+function resolveDefaultPlatform(): NodeJS.Platform {
+  const proc = (globalThis as { process?: { platform?: NodeJS.Platform } }).process;
+  return proc?.platform ?? ('linux' as NodeJS.Platform);
 }
 
 function resolvePms9KeyBindings(
