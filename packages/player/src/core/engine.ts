@@ -104,7 +104,12 @@ import {
   createSpeedTimeline,
   createStopBeatWindows,
 } from './timeline.ts';
-import { createInitialPlayerSummary, initializePlayerUiRuntime, preparePlaybackChartData } from './bootstrap.ts';
+import {
+  createInitialPlayerSummary,
+  initializePlayerUiRuntime,
+  preparePlaybackChartData,
+  type PreparedPlaybackChartData,
+} from './bootstrap.ts';
 
 export interface PlayerUiRuntime {
   readonly tuiEnabled: boolean;
@@ -191,6 +196,32 @@ export interface PlayerOptions {
   onLoadComplete?: () => void;
   onHighSpeedChange?: (highSpeed: number) => void;
   laneModeExtension?: string;
+  /**
+   * Pre-built playback chart data the host wants the engine to use verbatim instead of running its own
+   * `preparePlaybackChartData` pass. When provided, the engine treats the supplied {@link PreparedPlaybackChartData}
+   * as the single source of truth for the playable / landmine / invisible / scorable note arrays, the lane
+   * bindings, the input-token map, the active free-zone channel set, and the playback's `totalSeconds`.
+   *
+   * Why this exists: the web renderer used to call `extractTimedNotes` independently of the engine to build its
+   * own `notes` / `mineNotes` / `invisibleNotes` arrays, and `applyEngineFrame` then synced the engine's
+   * per-note `judged` flag onto the renderer's parallel arrays by **shared array index**. Any divergence
+   * between the two extract calls (a different `inferBmsLnTypeWhenMissing` flag, a different
+   * `laneModeExtension`, a stale `bms.controlFlow` array re-resolved on the engine side, a `random1P: 'OFF'`
+   * truthy-check evaluating to `false` because `'OFF'` is a non-empty string, …) shifted the index alignment
+   * and the renderer ended up applying judge flags to the wrong notes — symptoms ranged from notes vanishing
+   * partway down the lane in HIDE-on-judge mode, to mid-chart full-combo cues, to AUTO PLAY exScore landing
+   * below the EX-MAX 200_000 ceiling. Each of those was patched by aligning one more argument between the
+   * two extract sites, but the underlying design was inherently fragile.
+   *
+   * Letting the host hand the engine a ready-made `preparedChart` removes the entire class of bugs at the
+   * structural level: the renderer and the engine literally hold the same `TimedPlayableNote[]` / `TimedLandmineNote[]`
+   * instances, so any judge mutation the engine performs on a note is visible to the renderer with no sync
+   * step, and there is no second extract that could disagree with the first.
+   *
+   * Hosts that omit this option (TUI, every existing test) keep the original behavior — the engine
+   * runs its own `preparePlaybackChartData` internally, just like before.
+   */
+  preparedChart?: PreparedPlaybackChartData;
   createUiRuntime?: (context: CreatePlayerUiRuntimeContext) => Promise<PlayerUiRuntime | undefined>;
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
   /**
@@ -437,6 +468,7 @@ const BGA_LAYER2_CHANNEL = '0A';
 
 export { applyHighSpeedControlAction, resolveHighSpeedControlActionFromLaneChannels, type HighSpeedControlAction };
 export { resolveJudgeWindowsMs };
+export { preparePlaybackChartData, type PreparedPlaybackChartData };
 
 export function applyFastSlowForJudge(
   summary: Pick<PlayerSummary, 'fast' | 'slow'>,
@@ -1683,15 +1715,21 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     options.audio === false
       ? 0
       : Math.max(realtimeAudioTriggers.at(-1)?.seconds ?? 0, realtimeAudioVolumeEvents.at(-1)?.seconds ?? 0);
-  const playbackChart = preparePlaybackChartData(
-    resolvedJson,
-    {
-      showInvisibleNotes: options.showInvisibleNotes,
-      laneModeExtension: options.laneModeExtension,
-    },
-    inferBmsLnTypeWhenMissing,
-    realtimeAudioEndSeconds,
-  );
+  // Prefer the host-provided `preparedChart` over running our own extract pass. See `PlayerOptions.preparedChart`
+  // for the why — sharing the playable / landmine / invisible note arrays with the renderer eliminates a whole
+  // class of "view and engine each ran `extractTimedNotes` with subtly different arguments and the parallel
+  // arrays drifted" bugs that plagued the web runtime through the Phase-4c shared-engine migration.
+  const playbackChart =
+    options.preparedChart ??
+    preparePlaybackChartData(
+      resolvedJson,
+      {
+        showInvisibleNotes: options.showInvisibleNotes,
+        laneModeExtension: options.laneModeExtension,
+      },
+      inferBmsLnTypeWhenMissing,
+      realtimeAudioEndSeconds,
+    );
   const {
     landmineNotes,
     invisibleNotes,
@@ -2271,15 +2309,18 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     options.audio === false
       ? 0
       : Math.max(nonPlayableRealtimeAudioTriggers.at(-1)?.seconds ?? 0, realtimeAudioVolumeEvents.at(-1)?.seconds ?? 0);
-  const playbackChart = preparePlaybackChartData(
-    resolvedJson,
-    {
-      showInvisibleNotes: options.showInvisibleNotes,
-      laneModeExtension: options.laneModeExtension,
-    },
-    inferBmsLnTypeWhenMissing,
-    nonPlayableRealtimeAudioEndSeconds,
-  );
+  // Same shared-instance fast path as `autoPlay`. See `PlayerOptions.preparedChart`.
+  const playbackChart =
+    options.preparedChart ??
+    preparePlaybackChartData(
+      resolvedJson,
+      {
+        showInvisibleNotes: options.showInvisibleNotes,
+        laneModeExtension: options.laneModeExtension,
+      },
+      inferBmsLnTypeWhenMissing,
+      nonPlayableRealtimeAudioEndSeconds,
+    );
   const {
     notes,
     landmineNotes,
@@ -2764,6 +2805,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   ): void => {
     activeLongNotesByChannel.delete(channel);
     longHoldUntilMsByChannel.delete(channel);
+    // Mirror the autoplay LN-tail `release-lane` so the renderer fades out the LR2 LN-hold timer (70..89) and
+    // the lane laser (100..117) at the LN's resolution moment. The `hold-lane-until-beat` we emitted on the
+    // manual LN HEAD relies on this matching release to take the lane out of the renderer's `pressedChannels`
+    // set; without it the sustain glow / lane laser would stay lit indefinitely once the engine finalizes the
+    // LN (early grace expiry, end-beat reached, or kitty-state release).
+    if (uiEnabled) {
+      uiSignals.pushCommand({ kind: 'release-lane', channel });
+    }
     applyResolvedManualJudge(channel, judge, atSeconds);
   };
 
@@ -2985,6 +3034,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         endSeconds,
       });
       candidate.visibleUntilBeat = candidate.endBeat;
+      // Mirror the autoplay LN-head path's `hold-lane-until-beat` so the renderer can light its LR2 LN-hold
+      // timer (70..89, drives the skin's sustain glow / hold-sparkle elements) on a manual LN start. The
+      // accompanying `release-lane` is fired when the LN finalizes (early release through `kitty-state`, mode-1
+      // grace expiry, or end-beat reached) — see `finalizeActiveLongNote` and the early-release branches in
+      // the playback loop. Without this, the renderer never sees a "the LN is firing now" cue from the engine
+      // on manual play, and the skin's sustain-glow gated on timer 70..89 stays invisible for the whole hold.
+      if (uiEnabled && longNoteMode !== undefined) {
+        uiSignals.pushCommand({ kind: 'hold-lane-until-beat', channel, beat: candidate.endBeat ?? candidate.beat });
+      }
       if (longNoteMode === 2 || longNoteMode === 3) {
         activeLongNotesByChannel.set(channel, {
           endSeconds,

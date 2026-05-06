@@ -110,4 +110,33 @@ describe('drainWebUiSignals', () => {
     drainWebUiSignals(uiSignals, { onFrame, onCommand });
     expect(onCommand).not.toHaveBeenCalled();
   });
+
+  test('forwards every queued judge-combo to the host (one onJudgeCombo per publish)', async () => {
+    // Regression cover for the AUTO PLAY simultaneous-press bomb bug: the renderer used to read
+    // `getJudgeCombo()` once per drain, so chord publishes inside the same engine tick collapsed onto the
+    // latch's last entry and only the right-most lane's bomb fired. The fix is the queue API
+    // (`drainPendingJudgeCombos`) — `drainWebUiSignals` must invoke `onJudgeCombo` ONCE PER QUEUED PUBLISH
+    // in publish order so the host can fan out one bomb sprite per chord note.
+    const { createPlayerStateSignals } = await import('../../player/src/state-signals.ts');
+    const uiSignals = createPlayerUiSignalBus(makeInitialFrame());
+    const stateSignals = createPlayerStateSignals(1);
+    const onJudgeCombo = vi.fn();
+
+    stateSignals.publishJudgeCombo('PERFECT', 1, '11', 100);
+    stateSignals.publishJudgeCombo('PERFECT', 2, '12', 100);
+    stateSignals.publishJudgeCombo('PERFECT', 3, '13', 100);
+
+    drainWebUiSignals(uiSignals, { onJudgeCombo }, { stateSignals });
+    expect(onJudgeCombo).toHaveBeenCalledTimes(3);
+    expect(onJudgeCombo.mock.calls.map((call) => (call[0] as { channel?: string }).channel)).toEqual([
+      '11',
+      '12',
+      '13',
+    ]);
+
+    // Second drain with no new publishes: queue is empty, callback not invoked again.
+    onJudgeCombo.mockClear();
+    drainWebUiSignals(uiSignals, { onJudgeCombo }, { stateSignals });
+    expect(onJudgeCombo).not.toHaveBeenCalled();
+  });
 });
