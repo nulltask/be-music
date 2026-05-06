@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Rectangle, Sprite, Text, TextStyle, Texture, VideoSource } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Text, TextStyle, Texture, VideoSource } from 'pixi.js';
 // Side-effect import: registers Pixi's `PrepareSystem` on the renderer so {@link PixiGameplayView.preparePixiUpload}
 // can drive eager GPU uploads. Pixi v8 deliberately ships the prepare module out of the default bundle (it's a
 // large optional system that not every app needs); the import has to land before any `Application.init` runs that
@@ -55,6 +55,7 @@ import { loadSkinAssetTexture, loadTextureFromBytes, loadVideoTextureFromBytes }
 import {
   applyDestinationToSprite,
   createCroppedTexture,
+  evaluateElementDestination,
   evaluateKeyframes,
   normalizeRect,
   pickAnimatedCell,
@@ -68,7 +69,7 @@ import { ChildPool, disposeChildren, staggerDestroyTextures } from './pixi-utils
 import { runEngineDriver } from './engine-driver.ts';
 import { createWebAudioSession, type WebAudioSession } from './web-audio-session.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from './web-ui-runtime.ts';
-import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
   collectBmsExWavVolumeMultipliers,
@@ -4201,10 +4202,7 @@ export class PixiGameplayView {
     destination: Lr2DestinationRect;
     keyframes: Lr2DestinationRect[];
   }): Lr2DestinationRect {
-    if (element.keyframes.length > 1) {
-      return evaluateKeyframes(element.keyframes, this.elapsedSinceTimer(element.destination.timer));
-    }
-    return element.destination;
+    return evaluateElementDestination(element, this.elapsedSinceTimer);
   }
 
   /**

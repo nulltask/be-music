@@ -1,5 +1,13 @@
 import { type BLEND_MODES, type Container, Rectangle, Sprite, Texture } from 'pixi.js';
-import type { Lr2DestinationRect, Lr2NumberElement } from '@be-music/lr2-skin';
+import type {
+  Lr2BarGraphElement,
+  Lr2DestinationRect,
+  Lr2ImageElement,
+  Lr2NumberElement,
+  Lr2SliderElement,
+  Lr2SpecialGraphic,
+} from '@be-music/lr2-skin';
+import { isLr2SpecialGraphic } from '@be-music/lr2-skin';
 
 /**
  * Shared LR2 sprite-rendering helpers used by both the gameplay view (`pixi-gameplay.ts`) and the song-select view
@@ -175,6 +183,140 @@ export function normalizeRect(rect: { x: number; y: number; w: number; h: number
     h = -h;
   }
   return { x, y, w, h };
+}
+
+export interface Lr2DestinationElement {
+  destination: Lr2DestinationRect;
+  keyframes: Lr2DestinationRect[];
+}
+
+export function evaluateElementDestination(
+  element: Lr2DestinationElement,
+  elapsedSinceTimer: (timer: number) => number,
+): Lr2DestinationRect {
+  if (element.keyframes.length > 1) {
+    return evaluateKeyframes(element.keyframes, elapsedSinceTimer(element.destination.timer));
+  }
+  return element.destination;
+}
+
+export interface Lr2StaticImageSpriteOptions {
+  textures: ReadonlyMap<string, Texture>;
+  elapsedSinceTimer: (timer: number) => number;
+  resolveSpecialGraphicTexture?: (path: Lr2SpecialGraphic) => Texture | undefined;
+}
+
+export function makeLr2StaticImageSprite(
+  image: Lr2ImageElement,
+  dst: Lr2DestinationRect,
+  options: Lr2StaticImageSpriteOptions,
+): Sprite | undefined {
+  const path = image.source.imagePath;
+  let texture = options.textures.get(path);
+  if (!texture && isLr2SpecialGraphic(path)) {
+    texture = options.resolveSpecialGraphicTexture?.(path);
+  }
+  if (!texture) {
+    return undefined;
+  }
+  const rect = normalizeRect(dst);
+  if (rect.w <= 0 || rect.h <= 0) {
+    return undefined;
+  }
+  let cropped: Texture;
+  if (isLr2SpecialGraphic(path)) {
+    cropped = texture;
+  } else {
+    const cell = pickAnimatedCell(image.source, options.elapsedSinceTimer(image.source.timer), dst.loop, {
+      width: texture.width,
+      height: texture.height,
+    });
+    if (cell.w <= 0 || cell.h <= 0) return undefined;
+    const cellTexture = createCroppedTexture(texture, cell);
+    if (!cellTexture) return undefined;
+    cropped = cellTexture;
+  }
+  const sprite = new Sprite(cropped);
+  sprite.label = `image[${path}]`;
+  sprite.position.set(rect.x, rect.y);
+  sprite.width = rect.w;
+  sprite.height = rect.h;
+  applyDestinationToSprite(sprite, dst);
+  return sprite;
+}
+
+export function makeLr2BargraphSprite(
+  element: Lr2BarGraphElement,
+  dst: Lr2DestinationRect,
+  value: number,
+  textures: ReadonlyMap<string, Texture>,
+): Sprite | undefined {
+  const texture = textures.get(element.source.imagePath);
+  if (!texture) return undefined;
+  const rect = normalizeRect(dst);
+  if (rect.w <= 0 || rect.h <= 0) return undefined;
+  const ratio = Math.max(0, Math.min(1, value));
+  const horizontal = element.muki === 'horizontal';
+  const cropW = horizontal ? element.source.w * ratio : element.source.w;
+  const cropH = horizontal ? element.source.h : element.source.h * ratio;
+  const cropY = horizontal ? element.source.y : element.source.y + (element.source.h - cropH);
+  const cropped = createCroppedTexture(texture, {
+    x: element.source.x,
+    y: cropY,
+    w: cropW,
+    h: cropH,
+  });
+  if (!cropped) return undefined;
+  const sprite = new Sprite(cropped);
+  sprite.label = `bargraph[type=${element.type}]`;
+  sprite.position.set(rect.x, horizontal ? rect.y : rect.y + rect.h * (1 - ratio));
+  sprite.width = horizontal ? rect.w * ratio : rect.w;
+  sprite.height = horizontal ? rect.h : rect.h * ratio;
+  applyDestinationToSprite(sprite, dst);
+  return sprite;
+}
+
+export function makeLr2SliderSprite(
+  element: Lr2SliderElement,
+  dst: Lr2DestinationRect,
+  value: number,
+  textures: ReadonlyMap<string, Texture>,
+): Sprite | undefined {
+  const texture = textures.get(element.source.imagePath);
+  if (!texture) return undefined;
+  const rect = normalizeRect(dst);
+  if (rect.w <= 0 || rect.h <= 0) return undefined;
+  const ratio = Math.max(0, Math.min(1, value));
+  const cropped = createCroppedTexture(texture, {
+    x: element.source.x,
+    y: element.source.y,
+    w: element.source.w / Math.max(1, element.source.divx),
+    h: element.source.h / Math.max(1, element.source.divy),
+  });
+  if (!cropped) return undefined;
+  const sprite = new Sprite(cropped);
+  sprite.label = `slider[type=${element.type}]`;
+  let x = rect.x;
+  let y = rect.y;
+  switch (element.muki) {
+    case 'down':
+      y = rect.y + element.range * ratio;
+      break;
+    case 'up':
+      y = rect.y - element.range * ratio;
+      break;
+    case 'right':
+      x = rect.x + element.range * ratio;
+      break;
+    case 'left':
+      x = rect.x - element.range * ratio;
+      break;
+  }
+  sprite.position.set(x, y);
+  sprite.width = rect.w;
+  sprite.height = rect.h;
+  applyDestinationToSprite(sprite, dst);
+  return sprite;
 }
 
 /**
