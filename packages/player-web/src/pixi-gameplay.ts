@@ -5219,11 +5219,28 @@ export class PixiGameplayView {
    */
   private buildSharedEngineChart(): BeMusicJson {
     const chart = this.resolvedChart ?? this.song!.chart;
+    // CRITICAL: drop `bms.controlFlow` before handing the chart to the engine. The view already ran
+    // `resolveBmsControlFlow` once (in `prepareSong`) and pushed every active `#xxx` header / object entry into
+    // `json.events`, but the resolver does NOT clear `controlFlow` afterwards — the array stays populated on the
+    // resolved chart. The engine's `resolveBmsControlFlowForPlayback` then walks that same array a second time
+    // and `applyActiveControlFlowEntry` duplicates every `kind: 'object'` entry into `json.events`, so notes that
+    // were authored inside an `#IF` / `#SETRANDOM` / unconditional capture block (and even some `#LNTYPE 1` LN
+    // markers — the parser routes those through `controlFlow` regardless of `#RANDOM`) end up as **two** entries
+    // by the time `extractTimedNotes` sees them. Result: `frame.notes.length > this.notes.length`, the
+    // index-based note sync in `applyEngineFrame` flips `note.hit` on the wrong notes, hide-on-judge wipes
+    // approaching notes off the lane, the engine's combo races ahead of `score.total` so the full-combo cue
+    // fires mid-chart, and AUTO PLAY's exScore lands below the EX-MAX 200_000 ceiling because some auto judges
+    // collide with already-judged duplicates and drop. Zero-out `controlFlow` here so the engine takes the fast
+    // path (`controlFlow.length === 0` short-circuits `resolveControlFlow` to a clone-and-return) instead of
+    // re-replaying everything.
+    const decoupled = chart.bms.controlFlow.length > 0
+      ? { ...chart, bms: { ...chart.bms, controlFlow: [] } }
+      : chart;
     if (!this.options.random1P && !this.options.random2P && !this.options.dpFlip) {
       // Hot path: no shuffle / flip declared, so the runtime channels are guaranteed to match the chart-event
       // channels and we can hand the original chart through unchanged. Saves a per-event Map probe on every
       // chart launch.
-      return chart;
+      return decoupled;
     }
     const remap = new Map<BeMusicEvent, string>();
     const collect = (entries: ReadonlyArray<{ event: BeMusicEvent; channel: string }>): void => {
@@ -5238,11 +5255,11 @@ export class PixiGameplayView {
     collect(this.invisibleNotes);
     if (remap.size === 0) {
       // The shuffle was a no-op for this chart's lane usage (e.g. MIRROR on a 1-lane chart). Skip the clone.
-      return chart;
+      return decoupled;
     }
     return {
-      ...chart,
-      events: chart.events.map((event) => {
+      ...decoupled,
+      events: decoupled.events.map((event) => {
         const remapped = remap.get(event);
         return remapped === undefined ? event : { ...event, channel: remapped };
       }),
