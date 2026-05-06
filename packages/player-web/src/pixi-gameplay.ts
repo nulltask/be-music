@@ -69,6 +69,7 @@ import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-record
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { ChildPool, disposeChildren, staggerDestroyTextures } from './pixi-utils.ts';
+import { createWebAudioSession, type WebAudioSession } from './web-audio-session.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
@@ -689,6 +690,15 @@ export class PixiGameplayView {
    * `dispose` can finalize cleanly even if the chart ends mid- recording.
    */
   private recorder: GameplayRecorder | undefined;
+  /**
+   * Web Audio session built in {@link prepareAudio} once `decodedSamples` and `wavCmdVolumeMultipliers` are
+   * populated. Owns every sample-playback path the view used to manage in-tree (player keysound triggers, BGM
+   * scheduled triggers, landmine explosion, bmson `c=true` continuation, `#WAVCMD` per-slot gain, dynamic
+   * `#xxx97` / `#xxx98` volume changes). The view simply forwards `event` payloads to it; the session decides
+   * routing (`keyMixer` / `bgmMixer`), gain splicing, and lifecycle (`stopChannel` for engine-driven LN early
+   * release in Phase 4b-ii). Stays `undefined` until `prepareAudio` finishes — every call site guards.
+   */
+  private webAudioSession: WebAudioSession | undefined;
   private decodedSamples = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
@@ -1492,6 +1502,12 @@ export class PixiGameplayView {
     // node, so the bus can be disposed cleanly afterwards.
     this.recorder?.dispose();
     this.recorder = undefined;
+    // WebAudioSession owns the in-flight BufferSource tracking that the bus's connected sources hang off of, so
+    // dispose it BEFORE we tear the bus down — that gives the session a chance to call `node.stop()` on every
+    // still-playing source so they don't survive into the next chart's bus and bleed audio through. Fire-and-
+    // forget the returned promise; the session's dispose path is best-effort.
+    void this.webAudioSession?.dispose();
+    this.webAudioSession = undefined;
     // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
     // The bus doesn't own the AudioContext itself; closing that is the next step.
     this.audioBus?.dispose();
@@ -2414,6 +2430,20 @@ export class PixiGameplayView {
         }
       }),
     );
+    // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
+    // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
+    // playback path from this point on — `playSample` / `playSampleByKey` / `scheduleAutoSamples` all delegate to
+    // it. See the field doc for why this beats keeping the audio plumbing inline on the view.
+    if (!this.disposed && this.audioContext && this.audioBus) {
+      this.webAudioSession = createWebAudioSession({
+        audioContext: this.audioContext,
+        audioBus: this.audioBus,
+        chart: this.resolvedChart ?? this.song!.chart,
+        decodedSamples: this.decodedSamples,
+        wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
+        bmsonSlicePlayback: this.bmsonSlicePlayback,
+      });
+    }
   }
 
   /**
@@ -3046,7 +3076,15 @@ export class PixiGameplayView {
     }
     this.publishJudge('BAD', seconds, channel);
     // Mine explosion sample — `#WAV 00` if the chart authored one. Silent mines (no #WAV 00) just don't play anything.
-    this.playSampleByKey(PixiGameplayView.LANDMINE_EXPLOSION_SAMPLE_KEY, target.seconds);
+    // Route through `WebAudioSession.triggerEvent` with a synthesized BGM-style event so the explosion lands on
+    // `bgmMixer` (matching the historical `playSampleByKey` routing); the session's `#WAVCMD` gain splice and
+    // `c=true` continuation handling apply automatically.
+    this.webAudioSession?.triggerEvent?.({
+      measure: target.event.measure,
+      channel: '01',
+      position: target.event.position,
+      value: PixiGameplayView.LANDMINE_EXPLOSION_SAMPLE_KEY,
+    });
     // Bomb / key-on visuals fire so the lane flashes the same way it would on a real BAD hit. The skin's mine-specific
     // explosion sprite (when authored) is gated by the regular bomb timer — LR2 doesn't carry a separate "mine
     // explosion" timer, so reusing 50-69 matches the reference behavior.
@@ -4061,65 +4099,13 @@ export class PixiGameplayView {
   }
 
   /**
-   * Plays the keysound attached to a judged input note. Routes through `keyMixer` so the key-bus compressor (split
-   * mode) sees the input transient stream independently of the BGM.
-   *
-   * Honors the bmson 1.0.0 `note.c` (continuation flag): when `c === true`, a still-playing instance of the same
-   * sample suppresses the new trigger so the audio plays through uninterrupted. Per the spec ("c=true → don't restart
-   * audio"), this lets chart authors hold one sample across a chord / burst of repeated notes without each hit
-   * re-attacking the envelope. Notes without `c` (BMS-derived events, plain bmson notes) keep the historical "every
-   * press triggers a fresh playback" behavior.
+   * Plays the keysound attached to a judged input note. Delegates to the {@link WebAudioSession} built in
+   * `prepareAudio`, which handles routing (player-input lanes → `keyMixer`), `#WAVCMD` gain, bmson `c=true`
+   * continuation, and bmson slicing. The session also tracks the most recent BufferSource per channel so the
+   * upcoming engine-driven LN early-release path (Phase 4b-ii) can call `stopChannel` to silence sustained samples.
    */
   private playSample(note: RuntimeNote): void {
-    if (!this.audioContext || !this.song) {
-      return;
-    }
-    // `event.value` is already normalized under the chart's authored base (36 = case-folded, 62 = case-preserved). Look
-    // it up via `normalizeObjectKey(value, base)` rather than a hard-coded `toUpperCase()` so a `#BASE 62` chart's
-    // lowercase sample IDs (`#WAV0a`) hit their correct slot instead of collapsing onto the uppercase variant.
-    const chart = this.resolvedChart ?? this.song.chart;
-    const sampleKey = normalizeObjectKey(note.event.value, resolveBmsBase(chart));
-    const path = chart.resources.wav[sampleKey];
-    if (!path) {
-      return;
-    }
-    if (note.event.bmson?.c === true && this.activeSampleNodes.has(sampleKey)) {
-      // bmson continuation flag — previous instance of this sample is still playing, so do not retrigger.
-      return;
-    }
-    const buffer = this.decodedSamples.get(normalizePath(path).toLowerCase());
-    if (!buffer) {
-      return;
-    }
-    const node = this.audioContext.createBufferSource();
-    node.buffer = buffer;
-    node.onended = () => {
-      try {
-        node.disconnect();
-      } catch {
-        // Already disconnected or context closed.
-      }
-      // Drop the active-node tracking entry once the sample finishes naturally so the next bmson `c=true` lookup sees
-      // an empty slot and triggers a fresh start.
-      if (this.activeSampleNodes.get(sampleKey) === node) {
-        this.activeSampleNodes.delete(sampleKey);
-      }
-    };
-    // Key bus. Falls back to direct destination if `prepareAudio` hasn't run yet (defensive — in practice the bus is
-    // always built before any `play*` call). The `#WAVCMD 01 xx vv` gain splice mirrors `playSampleByKey` so input
-    // keysounds honor the same chart-author per-slot volume the BGM path does.
-    const sampleGainTarget = this.audioBus?.keyMixer ?? this.audioContext.destination;
-    this.connectSampleNodeWithWavCmdGain(node, sampleKey, sampleGainTarget);
-    // bmson slicing — for bmson charts, the playback map carries the per-event `(offsetSeconds, durationSeconds)` tuple
-    // produced by `createBmsonSamplePlaybackMap`. Honoring it here means a chart that splits one long WAV across many
-    // notes plays each note's intended slice instead of replaying the whole file from t=0 on every hit. BMS / json
-    // charts never populate `bmsonSlicePlayback` (slicing is a bmson- only concept), so the lookup misses and the
-    // historical play-from-zero behavior kicks in.
-    const slice = this.bmsonSlicePlayback?.get(note.event);
-    const offsetSeconds = clampSampleOffset(slice?.offsetSeconds, buffer.duration);
-    const durationSeconds = clampSampleDuration(slice?.durationSeconds, buffer.duration, offsetSeconds);
-    startSampleNode(node, undefined, offsetSeconds, durationSeconds);
-    this.activeSampleNodes.set(sampleKey, node);
+    this.webAudioSession?.triggerEvent?.(note.event);
   }
 
   private render(seconds: number): void {

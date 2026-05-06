@@ -55,6 +55,26 @@ export interface WebAudioSessionContext {
 }
 
 /**
+ * Extension of the engine's {@link AudioSession} contract that exposes the web-only "schedule a sample at a precise
+ * audio-context time" affordance. Web Audio's `BufferSource.start(when)` lets us pre-schedule BGM cues sample-
+ * accurately up to ~0.5s ahead, which is dramatically tighter than the per-frame `triggerEvent` cadence the engine
+ * uses on the TUI side. Hosts that drive their own per-frame BGM look-ahead (the existing `pixi-gameplay`
+ * `scheduleAutoSamples` path) call {@link scheduleEvent} instead of `triggerEvent` so the buffer is queued at the
+ * right audio-context timestamp rather than firing immediately.
+ */
+export interface WebAudioSession extends AudioSession {
+  /**
+   * Schedules `event`'s associated `#WAVxx` slot to start at `audioContextStartSeconds` (the absolute time on the
+   * `AudioContext.currentTime` clock — usually computed by the host as `chartStartContextTime + chartSeconds`).
+   *
+   * Routing rules and `#WAVCMD` gain handling are identical to {@link AudioSession.triggerEvent}; only the start
+   * timing differs. When `audioContextStartSeconds` is in the past the buffer fires immediately (Web Audio's
+   * `start(when)` semantics), so a host that polls on a slightly-late tick won't drop the cue.
+   */
+  scheduleEvent: (event: BeMusicEvent, audioContextStartSeconds: number) => void;
+}
+
+/**
  * Web Audio API implementation of the engine's {@link AudioSession} contract. Sole purpose is to plug a browser
  * runtime into the same judge / fallback / LN logic the TUI uses, so the web (Pixi) view doesn't need to keep its
  * own copy of the BMS sample triggering rules.
@@ -78,7 +98,7 @@ export interface WebAudioSessionContext {
  * mid-hold release), it expects the session to silence the keysound on that lane. The session keeps a per-channel map
  * of the most recent `BufferSourceNode` triggered for that channel and calls `node.stop()` when asked.
  */
-export function createWebAudioSession(context: WebAudioSessionContext): AudioSession {
+export function createWebAudioSession(context: WebAudioSessionContext): WebAudioSession {
   const { audioContext, audioBus, chart, decodedSamples, wavCmdVolumeMultipliers, bmsonSlicePlayback } = context;
   const sampleIdBase = resolveBmsBase(chart);
   /** Active BufferSource per `#WAVxx` slot. Used to honor bmson `c = true` (skip retrigger of a still-playing sample)
@@ -123,7 +143,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): AudioSes
     return { node, buffer };
   };
 
-  const playSampleEvent = (event: BeMusicEvent): void => {
+  const playSampleEvent = (event: BeMusicEvent, audioContextStartSeconds?: number): void => {
     if (disposed) return;
     const resolved = resolveSamplePath(event);
     if (!resolved) return;
@@ -153,7 +173,11 @@ export function createWebAudioSession(context: WebAudioSessionContext): AudioSes
     const slice = bmsonSlicePlayback?.get(event);
     const offsetSeconds = clampSampleOffset(slice?.offsetSeconds, buffer.duration);
     const durationSeconds = clampSampleDuration(slice?.durationSeconds, buffer.duration, offsetSeconds);
-    startSampleNode(node, undefined, offsetSeconds, durationSeconds);
+    // Scheduled BGM cues clamp to "now" so a slightly-late polling tick still fires immediately rather than
+    // throwing for a past timestamp; player-input keysounds and immediate triggers go through the no-`when` path.
+    const startAt =
+      audioContextStartSeconds !== undefined ? Math.max(audioContext.currentTime, audioContextStartSeconds) : undefined;
+    startSampleNode(node, startAt, offsetSeconds, durationSeconds);
 
     activeBySlot.set(sampleKey, node);
     if (isPlayerLane) activeByChannel.set(channel, node);
@@ -231,6 +255,16 @@ export function createWebAudioSession(context: WebAudioSessionContext): AudioSes
         return;
       }
       playSampleEvent(event);
+    },
+    scheduleEvent: (event: BeMusicEvent, audioContextStartSeconds: number): void => {
+      // Scheduled cues are exclusively BGM-style triggers (player input is by definition immediate), so we don't
+      // expect dynamic volume events to arrive here — but route them through the same handler if they ever do so a
+      // misuse doesn't silently drop the event.
+      if (isBmsBgmVolumeChangeChannel(event.channel) || isBmsKeyVolumeChangeChannel(event.channel)) {
+        applyDynamicVolumeEvent(event);
+        return;
+      }
+      playSampleEvent(event, audioContextStartSeconds);
     },
     stopChannel: (channel: string): void => {
       const node = activeByChannel.get(channel);
