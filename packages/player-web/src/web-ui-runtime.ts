@@ -234,15 +234,27 @@ export function drainWebUiSignals(
     }
   }
   if (options.stateSignals) {
-    const tick = options.stateSignals.judgeComboTick();
-    if (tick !== nextJudgeComboTick) {
-      nextJudgeComboTick = tick;
-      try {
-        callbacks.onJudgeCombo?.(options.stateSignals.getJudgeCombo());
-        drained = true;
-      } catch (error) {
-        log.warn('onJudgeCombo drain threw', error);
+    // Drain the per-publish queue rather than reading the latched single state. A simultaneous-press AUTO
+    // PLAY chord resolves several `publishJudgeCombo` calls inside the same engine tick, and the previous
+    // `getJudgeCombo()` peek only saw the LAST publish (the others got overwritten on the latch) — so only
+    // the right-most lane's bomb / FC update fired. The queue preserves every publish in publish order, so
+    // the host can fan out one bomb sprite per chord note. We still update `lastJudgeComboTick` for callers
+    // that want a "did anything change?" hint, but the queue is the source of truth for the actual fan-out.
+    const drainedCombos = options.stateSignals.drainPendingJudgeCombos();
+    if (drainedCombos.length > 0) {
+      nextJudgeComboTick = options.stateSignals.judgeComboTick();
+      for (const combo of drainedCombos) {
+        try {
+          callbacks.onJudgeCombo?.(combo);
+          drained = true;
+        } catch (error) {
+          log.warn('onJudgeCombo drain threw', error);
+        }
       }
+    } else {
+      // No publishes since last drain — keep the tick latch in sync (it should already match, this is just
+      // defensive against external code mutating the tick signal directly).
+      nextJudgeComboTick = options.stateSignals.judgeComboTick();
     }
   }
   return { drained, lastJudgeComboTick: nextJudgeComboTick };

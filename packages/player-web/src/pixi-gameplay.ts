@@ -17,7 +17,11 @@ import {
   type JudgeKind,
   type ScoreSummary,
 } from '@be-music/player/core/scoring';
-import { PlayerInterruptedError } from '@be-music/player/core/engine';
+import {
+  PlayerInterruptedError,
+  preparePlaybackChartData,
+  type PreparedPlaybackChartData,
+} from '@be-music/player/core/engine';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
@@ -28,7 +32,7 @@ import {
   createSpeedTimeline,
 } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
+import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 import {
@@ -147,22 +151,25 @@ import { logger } from './logger.ts';
 
 const log = logger('gameplay');
 
-interface RuntimeNote extends TimedPlayableNote {
-  hit: boolean;
-}
+/**
+ * View-side runtime note alias. Used to keep `this.notes` typed even though the view no longer extends
+ * `TimedPlayableNote` with extra renderer state — judge status is now tracked through the same `judged` flag
+ * the engine mutates on the **shared** instance handed in via `engineOptions.preparedChart`. See
+ * `PlayerOptions.preparedChart` for the design rationale; the alias stays in case future renderer-only state
+ * needs to attach back here.
+ */
+type RuntimeNote = TimedPlayableNote;
 
 /**
- * Mine / landmine note (BMS channels D1-D9 / E1-E9 for the 1P / 2P sides). Mirrors `RuntimeNote`'s `hit` flag so the
- * same "judged once, never re-judged" bookkeeping applies, but uses the simpler `TimedLandmineNote` source shape (no LN
- * body / end beat / sound channel — landmines are point-in-time hazards).
+ * Mine / landmine note (BMS channels D1-D9 / E1-E9 for the 1P / 2P sides). Same shared-instance treatment as
+ * `RuntimeNote`: the engine mutates `judged` on the same `TimedLandmineNote` instance the renderer's
+ * `this.mineNotes` array already references, so there is no separate `hit` flag for the view to keep in sync.
  *
  * On a key press inside the BAD window we trigger a BAD verdict, play the mine explosion sample (`#WAV 00`), drain the
  * gauge by the chart-encoded damage value, and reset combo to zero. The underlying `playableNotes` array stays
  * untouched so a regular note in the same window past / future the mine can still be judged on the next press.
  */
-interface RuntimeMineNote extends TimedLandmineNote {
-  hit: boolean;
-}
+type RuntimeMineNote = TimedLandmineNote;
 
 /**
  * Fallback lane-laser release fade duration in ms. The actual value used at runtime is the longest `time` keyframe
@@ -553,6 +560,14 @@ export class PixiGameplayView {
    * points. Falls back to plain beat-difference math when no scroll/speed events are present.
    */
   private scrollMapper: ScrollDistanceMapperLike | undefined;
+  /**
+   * Engine's `preparePlaybackChartData` result, computed once during {@link prepareSong} and forwarded to the
+   * shared engine via `engineOptions.preparedChart`. Holds the canonical `notes` / `landmineNotes` /
+   * `invisibleNotes` arrays the renderer points at (`this.notes` / `this.mineNotes` / `this.invisibleNotes`
+   * are the same instances), so any mutation the engine performs on a note's `judged` flag is automatically
+   * visible to the renderer with no separate sync step. `undefined` until the song has been prepared.
+   */
+  private preparedChart: PreparedPlaybackChartData | undefined;
   private notes: RuntimeNote[] = [];
   /**
    * Landmine notes (channels D1-D9 / E1-E9). Sorted by `seconds` for the same binary-search-by-time access pattern the
@@ -725,13 +740,6 @@ export class PixiGameplayView {
    * PLAYSTART anchor and notes pass the judgment line ahead of the engine's actual judge event.
    */
   private sharedEngineClockAnchored = false;
-  /**
-   * Debug latch — flipped after the first `applyEngineFrame` call so the per-frame array-sanity log only fires once
-   * per chart. Used to confirm that the view's `this.notes` and the engine's `frame.notes` line up index-for-index;
-   * any divergence here produces the hide-on-judge dropout, mid-chart full-combo, and AUTO PLAY < 200_000 score
-   * regressions.
-   */
-  private sharedEngineNoteSyncDebugLogged = false;
   private decodedSamples = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
@@ -1667,23 +1675,36 @@ export class PixiGameplayView {
         this.switchingBgas.set(slot, parsed);
       }
     }
-    const extracted = extractTimedNotes(resolved, {
-      includeLandmine: true,
-      // Always extract the invisible / keysound array even when the overlay is off — so the lil-gui toggle can flip the
-      // visualization on mid-song without a chart restart. The cost is purely memory (one sorted array of 3x / 4x
-      // events); the per-frame render loop is gated on `showInvisibleNotes` and bails immediately when the flag is off.
-      includeInvisible: true,
-      inferBmsLnTypeWhenMissing: true,
-    });
-    this.notes = extracted.playableNotes
-      .map((note) => ({ ...note, hit: false }))
-      .sort((left, right) => left.beat - right.beat || left.seconds - right.seconds);
-    this.mineNotes = extracted.landmineNotes
-      .map((note) => ({ ...note, hit: false }))
-      .sort((left, right) => left.beat - right.beat || left.seconds - right.seconds);
-    this.invisibleNotes = extracted.invisibleNotes
-      .slice()
-      .sort((left, right) => left.beat - right.beat || left.seconds - right.seconds);
+    // Build the chart's playable / landmine / invisible note arrays via the engine's own `preparePlaybackChartData`
+    // so the renderer holds the exact same `TimedPlayableNote[]` / `TimedLandmineNote[]` instances the engine
+    // will judge against. We keep a reference to the entire prepared bundle and forward it through
+    // `engineOptions.preparedChart` later, telling the engine to skip its own internal extract pass.
+    //
+    // This is the structural fix for the whole class of view ↔ engine drift bugs the Phase-4c shared-engine
+    // migration kept tripping over: an `inferBmsLnTypeWhenMissing` flag missing on one side, a
+    // `bms.controlFlow` array re-resolved on the engine side, a `random1P: 'OFF'` truthy-check evaluating to
+    // `false` because `'OFF'` is a non-empty string, a missing `laneModeExtension` mapping PMS to IIDX 10-key
+    // DP, … each one shifted the index alignment of the renderer's parallel `this.notes` arrays vs the
+    // engine's, and `applyEngineFrame` ended up mirroring `judged` flags onto the wrong note. Sharing the
+    // instance means the parallel arrays are no longer parallel — they're the same array, the engine mutates
+    // `judged` directly, and the renderer just reads it. There is no second extract that could disagree.
+    const prepared = preparePlaybackChartData(
+      resolved,
+      {
+        // Always extract the invisible / keysound array even when the overlay is off — so the lil-gui toggle
+        // can flip the visualization on mid-song without a chart restart. The cost is purely memory (one
+        // sorted array of 3x / 4x events); the per-frame render loop is gated on `showInvisibleNotes` and
+        // bails immediately when the flag is off.
+        showInvisibleNotes: true,
+        laneModeExtension: extractChartExtension(this.song?.chartPath),
+      },
+      true /* inferBmsLnTypeWhenMissing */,
+      0 /* auxiliaryPlaybackEndSeconds — engine recomputes its own audio horizon from realtime triggers */,
+    );
+    this.preparedChart = prepared;
+    this.notes = prepared.notes;
+    this.mineNotes = prepared.landmineNotes;
+    this.invisibleNotes = prepared.invisibleNotes;
     // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk because we already iterate `notes` for sorting; SP
     // charts skip every entry (no `2x` channels exist). Mine notes are flipped together so they stay anchored to the
     // same visual lane after the flip.
@@ -1749,7 +1770,14 @@ export class PixiGameplayView {
     // chart variant so the lane set matches what the LR2 default `play_9.lr2skin` expects.
     this.chartPlayVariant = resolveChartPlayVariant(song);
     this.laneChannels = resolveLaneChannels(this.notes, this.chartPlayVariant);
-    this.score = createEmptyScore(this.notes.filter((note) => isPlayableInputChannel(note.channel)).length);
+    // Initialize from `prepared.scorableNotes.length` so the view's initial `score.total` matches the engine's
+    // authoritative `summary.total` (= same `scorableNotes` filter, with Free-Zone channels excluded). Without
+    // this, charts that use a Free-Zone channel had a renderer-side total larger than the engine's by the
+    // Free-Zone count, and `maybeFireFullCombo`'s `tracker.combo === score.total` predicate became
+    // unreachable — combo could only ever climb to the engine's smaller scorable count, and the FC cue never
+    // fired. `applyEngineFrame` still mirrors `summary.total` defensively each frame, but that's now a no-op
+    // on the common path.
+    this.score = createEmptyScore(prepared.scorableNotes.length);
     this.tracker = createScoreTracker();
     // Reset the result-screen "MAX COMBO" tracker whenever a fresh chart is prepared — restart (R), song-pick from
     // select, etc. Otherwise the previous play's max would leak into the new one.
@@ -4767,7 +4795,12 @@ export class PixiGameplayView {
       if (y < lane.top - 48 || y > lane.bottom) {
         continue;
       }
-      if (note.hit && this.options.judgedNoteDisplay !== 'KEEP_SCROLLING') {
+      // Read the engine's `judged` flag directly off the shared `TimedPlayableNote` instance — the engine
+      // mutates it the moment it resolves the note's verdict, and because the renderer and the engine
+      // hold the same array (handed in via `engineOptions.preparedChart`), there is no parallel `hit` flag
+      // to keep in sync. HIDE-on-judge mode uses this to clip the note immediately at the judgment moment;
+      // KEEP_SCROLLING leaves it on screen until its position passes the line.
+      if (note.judged && this.options.judgedNoteDisplay !== 'KEEP_SCROLLING') {
         continue;
       }
       this.renderSingleNote(skin, laneIndex, note.channel, lane, y);
@@ -4783,7 +4816,7 @@ export class PixiGameplayView {
       if (!this.scrollMapper && mine.beat > maxVisibleBeat) {
         break;
       }
-      if (mine.hit) continue;
+      if (mine.judged) continue;
       const lane = this.laneX.get(mine.channel);
       if (!lane) continue;
       const y = lane.bottom - beatDistance(mine.beat) * pixelsPerBeat;
@@ -5201,85 +5234,30 @@ export class PixiGameplayView {
    * route to the host's `onExit` / `onRestart` callbacks the same way the legacy DOM keyhandler did.
    */
   /**
-   * Builds the `BeMusicJson` snapshot the engine sees in shared-engine mode, with playable-channel events
-   * re-mapped to match whichever shuffle the view's `applyRandomMode` produced for this play session
-   * (RANDOM / MIRROR / S-RANDOM / SCATTER + DP FLIP).
+   * Builds the `BeMusicJson` snapshot the engine sees in shared-engine mode. Since the renderer now hands the
+   * engine its own `PreparedPlaybackChartData` instance (which already encodes shuffle / DP-flip via the
+   * post-`applyRandomMode` channel mutations on each `TimedPlayableNote`), the engine never re-runs
+   * `extractTimedNotes`, and the chart events handed in here are only consumed by engine-internal helpers
+   * (control-flow resolve fast path, timing resolver, BGM / BGA / dynamic-volume realtime audio scheduling).
+   * Those helpers all operate on non-playable channels — none of them care about the shuffled lane channels —
+   * so the renderer no longer needs to remap playable-channel events to match the view's shuffle.
    *
-   * The view's per-side shuffle mutates `runtimeNote.channel` on each entry of `this.notes` /
-   * `this.mineNotes` / `this.invisibleNotes`, but the underlying chart `event.channel` is untouched. The
-   * engine extracts its own runtime notes by walking `chart.events` and using `event.channel`, so without a
-   * remap it would judge against the original channel layout while the renderer paints the shuffled one. The
-   * player would press the key for a lane that visually contains note A and the engine would judge note B.
-   *
-   * The remap is built by walking the view's three runtime arrays and storing
-   * `event → post-shuffle channel`. Events present in `chart.events` but not on any runtime array (BGM,
-   * BGA, dynamic volume, …) keep their original channel; the engine never extracts them as playable lanes.
-   * The returned chart shares `events` references with the original chart wherever no remap applies, so the
-   * shallow-clone overhead is one new array plus one new object per actually-shuffled event.
+   * The one transformation we still need is to clear `bms.controlFlow` before handing the chart to the engine.
+   * `PixiGameplayView.prepareSong` already ran `resolveBmsControlFlow` once and pushed every active
+   * `#xxx` header / object entry into `json.events`, but the resolver does NOT clear `controlFlow` afterwards —
+   * the array stays populated on the resolved chart. Without zeroing it out here, the engine's own
+   * `resolveBmsControlFlowForPlayback` would walk the same array a second time and
+   * `applyActiveControlFlowEntry` would duplicate every `kind: 'object'` entry into `json.events`. The engine
+   * doesn't extract notes from those duplicated events any more, but the realtime-audio collectors (BGM / BGA
+   * cues) would still pick them up and trigger duplicate sample plays. The empty `controlFlow` short-circuits
+   * `resolveControlFlow` to a clone-and-return on the engine side, which is exactly what we want.
    */
   private buildSharedEngineChart(): BeMusicJson {
     const chart = this.resolvedChart ?? this.song!.chart;
-    // CRITICAL: drop `bms.controlFlow` before handing the chart to the engine. The view already ran
-    // `resolveBmsControlFlow` once (in `prepareSong`) and pushed every active `#xxx` header / object entry into
-    // `json.events`, but the resolver does NOT clear `controlFlow` afterwards — the array stays populated on the
-    // resolved chart. The engine's `resolveBmsControlFlowForPlayback` then walks that same array a second time
-    // and `applyActiveControlFlowEntry` duplicates every `kind: 'object'` entry into `json.events`, so notes that
-    // were authored inside an `#IF` / `#SETRANDOM` / unconditional capture block (and even some `#LNTYPE 1` LN
-    // markers — the parser routes those through `controlFlow` regardless of `#RANDOM`) end up as **two** entries
-    // by the time `extractTimedNotes` sees them. Result: `frame.notes.length > this.notes.length`, the
-    // index-based note sync in `applyEngineFrame` flips `note.hit` on the wrong notes, hide-on-judge wipes
-    // approaching notes off the lane, the engine's combo races ahead of `score.total` so the full-combo cue
-    // fires mid-chart, and AUTO PLAY's exScore lands below the EX-MAX 200_000 ceiling because some auto judges
-    // collide with already-judged duplicates and drop. Zero-out `controlFlow` here so the engine takes the fast
-    // path (`controlFlow.length === 0` short-circuits `resolveControlFlow` to a clone-and-return) instead of
-    // re-replaying everything.
-    const decoupled = chart.bms.controlFlow.length > 0
-      ? { ...chart, bms: { ...chart.bms, controlFlow: [] } }
-      : chart;
-    // CRITICAL: `random1P` / `random2P` default to the **string `'OFF'`** (not `undefined`), so a naïve
-    // `!this.options.random1P` truthiness check evaluates to `false` for the default and the early-return below
-    // is skipped — even on charts the player loaded with shuffle disabled. Falling through into the remap path
-    // is what triggered the channel-class drift we hunted down here: `collect(this.notes)` walks the view's
-    // post-extract notes and registers a remap whenever `note.channel !== event.channel`. For `#LNTYPE 1` LNs
-    // that mismatch is structural — `extractTimedNotes` normalizes the LN source channel (`51..59` / `61..69`)
-    // onto the matching playable lane (`11..19` / `21..29`) on `note.channel` while `event.channel` keeps the
-    // original `5x` / `6x`, so every LN HEAD ends up in `remap` and the eventual `events.map` rewrites the LN
-    // HEAD's channel from `5x` to `1x`. The resulting `engineChart.events` had 1P LN HEADs converted to
-    // playable shorts, so `extractTimedNotes` on the engine side produced 120 extra `1x` shorts and lost the
-    // ability to pair them as LNs (only TAILs remained on `5x`). The view-vs-engine bucket diff matched
-    // exactly: `viewBuckets["5"]=240, engineBuckets["5"]=120` (HEADs gone) and `engineBuckets["1"]` gained
-    // 120+6 entries (the 6 are `3x`/invisible, same kind of normalization mismatch). Treat `'OFF'` and
-    // `undefined` as "no shuffle" explicitly so the early return actually fires for the common case.
-    const random1POn = !!this.options.random1P && this.options.random1P !== 'OFF';
-    const random2POn = !!this.options.random2P && this.options.random2P !== 'OFF';
-    if (!random1POn && !random2POn && !this.options.dpFlip) {
-      // Hot path: no shuffle / flip declared, so the runtime channels are guaranteed to match the chart-event
-      // channels and we can hand the original chart through unchanged. Saves a per-event Map probe on every
-      // chart launch.
-      return decoupled;
+    if (chart.bms.controlFlow.length === 0) {
+      return chart;
     }
-    const remap = new Map<BeMusicEvent, string>();
-    const collect = (entries: ReadonlyArray<{ event: BeMusicEvent; channel: string }>): void => {
-      for (const entry of entries) {
-        if (entry.channel !== entry.event.channel) {
-          remap.set(entry.event, entry.channel);
-        }
-      }
-    };
-    collect(this.notes);
-    collect(this.mineNotes);
-    collect(this.invisibleNotes);
-    if (remap.size === 0) {
-      // The shuffle was a no-op for this chart's lane usage (e.g. MIRROR on a 1-lane chart). Skip the clone.
-      return decoupled;
-    }
-    return {
-      ...decoupled,
-      events: decoupled.events.map((event) => {
-        const remapped = remap.get(event);
-        return remapped === undefined ? event : { ...event, channel: remapped };
-      }),
-    };
+    return { ...chart, bms: { ...chart.bms, controlFlow: [] } };
   }
 
   private launchSharedEngine(): void {
@@ -5348,28 +5326,16 @@ export class PixiGameplayView {
         // auto-spun would just sit there as misses, and the legacy `autoScratchJudge` path is gated off in
         // shared-engine mode. A future engine extension could split the flag per side.
         autoScratch: this.options.autoScratch1P === true || this.options.autoScratch2P === true,
-        // Forward the chart's filename extension to the engine's `resolveLaneMode` so PMS / `*.pms` charts route
-        // to `POPN_9KEY_PMS_BINDINGS` (`11..15 + 22..25` mapped to `z s x d c f v g b`) instead of falling all
-        // the way through to the `'5-key-dp'` IIDX-DP binding. Without this hint, the engine sees `#PLAYER 3`
-        // plus 2P-side channels (`22..25`) but no `#PLAYER 3 + ch17` co-occurrence and no extension cue, so it
-        // bottoms out at the IIDX 10-key DP layout; the 1P-side keys still align (`z s x d c`) but lanes 6-9
-        // pick up `j k l ;` (or whatever the 2P-side IIDX binding produces) instead of the expected
-        // `f v g b`. The view extracts the extension from the chart path the host loaded via the
-        // `BrowserSongEntry`. PMS detection relies on the `.pms` suffix here, but `.bme` / `.bms` callers
-        // benefit too (the engine's `resolveLaneModeByExtension` distinguishes them for the 7- vs 5-key
-        // fallback).
-        laneModeExtension: extractChartExtension(this.song?.chartPath),
-        // CRITICAL: view and engine each call `extractTimedNotes` independently and the per-frame note sync in
-        // `applyEngineFrame` keys off shared array indices (`frameNotes[i] ↔ this.notes[i]`). The two extractions
-        // MUST therefore see the exact same `inferBmsLnTypeWhenMissing` flag — otherwise charts without an
-        // explicit `#LNTYPE` resolve LNs in only one of the two callers (view treats HEAD+TAIL as a single
-        // note with `endBeat`, engine treats them as two separate notes), the resulting arrays drift in length
-        // by one entry per LN, and every subsequent index points at the wrong note. Symptoms include notes
-        // disappearing partway down the lane (the "judged" flag from a different note crosses over via index),
-        // the full-combo presentation firing mid-chart (combo runs ahead of the view's `score.total`), and AUTO
-        // PLAY scoring below the EX-MAX 200_000 ceiling (some judges land on already-judged notes and get
-        // suppressed by `markScorableJudged`). The view extracts with `true`, so the engine must too.
-        inferBmsLnTypeWhenMissing: true,
+        // Hand the engine the same `PreparedPlaybackChartData` instance the renderer is already pointing at
+        // (`this.notes` / `this.mineNotes` / `this.invisibleNotes` are references into this bundle). The
+        // engine's `autoPlay` / `manualPlay` use it verbatim instead of running their own
+        // `preparePlaybackChartData` pass, so the renderer's parallel arrays and the engine's playable note
+        // arrays are guaranteed to be the same instances — no `inferBmsLnTypeWhenMissing` flag to keep in
+        // sync, no `laneModeExtension` to forward separately (the bundle already encodes the lane bindings
+        // computed under the right extension), no `bms.controlFlow` re-resolve to deduplicate, no
+        // `random1P: 'OFF'` truthy-check to fix. Every "view extracted differently than engine" bug is
+        // structurally impossible because there is only one extract.
+        preparedChart: this.preparedChart,
         signal: (this.sharedEngineAbortController = new AbortController()).signal,
       },
     })
@@ -5425,100 +5391,6 @@ export class PixiGameplayView {
    * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative.
    */
   private applyEngineFrame(frame: Readonly<PlayerUiFramePayload>): void {
-    // DEBUG: One-shot sanity check of the view↔engine note-array index alignment that `applyEngineFrame` relies on.
-    // Logs the first divergence (if any) to the browser console; remove once the sync regression is confirmed fixed.
-    if (!this.sharedEngineNoteSyncDebugLogged) {
-      this.sharedEngineNoteSyncDebugLogged = true;
-      // DEBUG: Snapshot of the chart inputs each side fed into `extractTimedNotes`. If `controlFlow.length` is non-
-      // zero on the engine-bound chart, the engine's `resolveBmsControlFlowForPlayback` is re-applying every
-      // captured object entry on top of `events`, which doubles up notes. If `events.length` already differs
-      // between the view and engine charts, the pre-extract pipelines (control-flow resolve / lane shuffle /
-      // post-shuffle remap) themselves drifted — the bug is upstream of `extractTimedNotes`.
-      const viewChart = this.resolvedChart ?? this.song?.chart;
-      const engineChart = this.buildSharedEngineChart();
-      // Bucket events by their first character so we can spot channel-class drift between the two chart inputs.
-      // For BMS the buckets line up with the LR2 channel groups: '0x' control / BPM, '1x' 1P playable, '2x' 2P
-      // playable, '3x' 1P invisible, '4x' 2P invisible, '5x' 1P LNTYPE-1, '6x' 2P LNTYPE-1, 'Dx' 1P landmine,
-      // 'Ex' 2P landmine. A diff in bucket counts pinpoints which channel class lost or gained entries.
-      const bucketEvents = (events: ReadonlyArray<{ channel: string }>): Record<string, number> => {
-        const buckets: Record<string, number> = {};
-        for (const event of events) {
-          const key = event.channel.charAt(0) || '?';
-          buckets[key] = (buckets[key] ?? 0) + 1;
-        }
-        return buckets;
-      };
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[be-music debug] chart inputs ${JSON.stringify(
-          {
-            viewEventsLength: viewChart?.events.length ?? -1,
-            viewControlFlowLength: viewChart?.bms.controlFlow.length ?? -1,
-            engineEventsLength: engineChart.events.length,
-            engineControlFlowLength: engineChart.bms.controlFlow.length,
-            sameEventsRef: viewChart?.events === engineChart.events,
-            sameChartRef: viewChart === engineChart,
-            lnType: viewChart?.bms.lnType,
-            lnObjs: viewChart?.bms.lnObjs,
-            viewBuckets: viewChart ? bucketEvents(viewChart.events) : null,
-            engineBuckets: bucketEvents(engineChart.events),
-          },
-          null,
-          2,
-        )}`,
-      );
-      const frameNotes = frame.notes;
-      const viewNotes = this.notes;
-      const limit = Math.min(viewNotes.length, frameNotes.length);
-      let firstDivergence: {
-        index: number;
-        view: { channel: string; beat: number; endBeat: number | undefined };
-        engine: { channel: string; beat: number; endBeat: number | undefined };
-      } | null = null;
-      for (let i = 0; i < limit; i += 1) {
-        const v = viewNotes[i]!;
-        const e = frameNotes[i]!;
-        if (v.channel !== e.channel || Math.abs(v.beat - e.beat) > 1e-9 || (v.endBeat ?? -1) !== (e.endBeat ?? -1)) {
-          firstDivergence = {
-            index: i,
-            view: { channel: v.channel, beat: v.beat, endBeat: v.endBeat },
-            engine: { channel: e.channel, beat: e.beat, endBeat: e.endBeat },
-          };
-          break;
-        }
-      }
-      const summarizeNote = (
-        note:
-          | { channel: string; beat: number; seconds: number; endBeat?: number; endSeconds?: number }
-          | undefined,
-      ): unknown => {
-        if (!note) return null;
-        return {
-          channel: note.channel,
-          beat: note.beat,
-          seconds: note.seconds,
-          endBeat: note.endBeat,
-          endSeconds: note.endSeconds,
-        };
-      };
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[be-music debug] note-array sync ${JSON.stringify(
-          {
-            viewLength: viewNotes.length,
-            engineLength: frameNotes.length,
-            lengthMatch: viewNotes.length === frameNotes.length,
-            firstDivergence,
-            viewFirst: summarizeNote(viewNotes[0]),
-            engineFirst: summarizeNote(frameNotes[0]),
-            viewLast: summarizeNote(viewNotes[viewNotes.length - 1]),
-            engineLast: summarizeNote(frameNotes[frameNotes.length - 1]),
-          },
-          null,
-          2,
-        )}`,
-      );
-    }
     // Re-anchor the view's chart-time clock to the engine's the very first time the engine publishes a frame.
     // The engine's `playbackClock` (and therefore the chart-time it stamps on every judge / sample / ui-signal
     // event) anchors at the moment the engine creates the clock — which lands a few ms to a few hundred ms
@@ -5584,28 +5456,14 @@ export class PixiGameplayView {
         this.timerStartedAt.delete(44);
       }
     }
-    // Sync the engine's per-note `judged` flag onto the view's runtime notes so `renderNotes` knows to stop
-    // drawing them. Engine and view both extract the chart through `extractTimedNotes` and sort by (beat,
-    // seconds), so the arrays line up index-for-index. Without this sync, the view would keep painting every
-    // note past its judgment timing because `note.hit` would never flip.
-    const frameNotes = frame.notes;
-    const limit = Math.min(this.notes.length, frameNotes.length);
-    for (let i = 0; i < limit; i += 1) {
-      if (frameNotes[i]!.judged && !this.notes[i]!.hit) {
-        this.notes[i]!.hit = true;
-      }
-    }
-    // Same pattern for landmine hits — frame carries them on `landmineNotes`. The view paints these as a
-    // separate red plate so they need their own sync to disappear once the engine resolves a hit.
-    const frameMines = frame.landmineNotes;
-    if (frameMines && this.mineNotes.length > 0) {
-      const mineLimit = Math.min(this.mineNotes.length, frameMines.length);
-      for (let i = 0; i < mineLimit; i += 1) {
-        if (frameMines[i]!.judged && !this.mineNotes[i]!.hit) {
-          this.mineNotes[i]!.hit = true;
-        }
-      }
-    }
+    // Note: the per-note `judged` flag is no longer synced here. The renderer's `this.notes` /
+    // `this.mineNotes` are references into the same `PreparedPlaybackChartData` instance the engine is
+    // judging against (handed in via `engineOptions.preparedChart`), so when the engine sets
+    // `note.judged = true` the renderer sees it on the next paint with no copy step. The fragile
+    // index-based sync this used to perform was the source of the Phase-4c HIDE-on-judge dropout, the
+    // mid-chart full-combo cue, and the AUTO PLAY < 200_000 score regressions — every one of them was
+    // really "engine extract produced a different array than view extract." With the shared instance
+    // there is no second extract.
   }
 
   /**
