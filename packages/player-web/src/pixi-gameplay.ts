@@ -6026,6 +6026,13 @@ export class PixiGameplayView {
         // immediately so its t=0 lines up with our `audioContextStartTime` anchor instead of imposing the
         // engine's default 1.5 s lead-in on top.
         leadInMs: 0,
+        // Forward AUTO SCRATCH: engine has a single boolean rather than per-side, so either-side AUTO SCRATCH
+        // turns scratch auto on for both 16 / 26 channels. That's a per-side fidelity loss for rare DP charts
+        // where only one player's scratch should auto-spin (the demo's lil-gui surfaces them as two separate
+        // toggles), but the alternative — leaving auto off — was worse: scratch notes the user expected to be
+        // auto-spun would just sit there as misses, and the legacy `autoScratchJudge` path is gated off in
+        // shared-engine mode. A future engine extension could split the flag per side.
+        autoScratch: this.options.autoScratch1P === true || this.options.autoScratch2P === true,
         signal: (this.sharedEngineAbortController = new AbortController()).signal,
       },
     })
