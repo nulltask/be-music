@@ -1,0 +1,122 @@
+// Static preview scene for a beatoraja play skin.
+//
+// Mounts a {@link BeatorajaPlaySkinView} inside the shared `PixiSceneHost`, scales it to fit the screen, and ticks
+// it once per frame from `performance.now()` so the cycle-based animations (key beams, bombs, hidden cover) play.
+// No engine signals — every runtime op-code (judge / combo / score / lamp) is missing, so combo readouts and
+// lamp icons stay on their initial frames.
+//
+// This is the "does my parser + renderer pipeline reach the screen" milestone. The full gameplay integration
+// (notes, judge flashes, BGA, key-on flashes, lamps) lands in follow-up patches that wire the engine signals into
+// `BeatorajaPlaySkinView`'s op-set / timer-start callbacks.
+
+import { Container, Ticker } from 'pixi.js';
+import type {
+  BeatorajaSkin,
+  BeatorajaSkinConfig,
+} from '@be-music/beatoraja-skin';
+import { buildBaseOpSet } from '@be-music/beatoraja-skin';
+import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
+import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
+import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
+
+export interface BeatorajaPlaySkinPreviewOptions {
+  skin: BeatorajaSkin;
+  textures: BeatorajaTextureCache;
+  /**
+   * Skin-config picks the user confirmed on the option dialog (or empty for the default theme path). The preview
+   * scene treats every option op-code as ALWAYS active so the matching `if`/`op` branches render — that's the
+   * "preview the chosen layout" UX. Once the engine integration arrives, runtime ops (judge / lamp / etc.) are
+   * union-merged into this set.
+   */
+  skinConfig?: BeatorajaSkinConfig;
+  /** Called when the user presses Escape. Wired to `host.setScene(undefined)` upstream. */
+  onExit?: () => void;
+}
+
+export class BeatorajaPlaySkinPreviewScene implements PixiScene {
+  readonly root = new Container();
+  private readonly view: BeatorajaPlaySkinView;
+  private readonly textures: BeatorajaTextureCache;
+  private readonly baseOps: ReadonlySet<number>;
+  private readonly onExit?: () => void;
+  private host?: PixiSceneHost;
+  private tickerHandle?: (ticker: Ticker) => void;
+  private startMs = 0;
+  private disposed = false;
+
+  constructor(options: BeatorajaPlaySkinPreviewOptions) {
+    this.textures = options.textures;
+    this.onExit = options.onExit;
+    this.baseOps = buildBaseOpSet(options.skinConfig?.option);
+    this.view = new BeatorajaPlaySkinView({ skin: options.skin, textures: options.textures });
+    this.root.addChild(this.view.container);
+  }
+
+  enter(host: PixiSceneHost): void {
+    this.host = host;
+    this.fitToStage();
+    this.startMs = performance.now();
+
+    this.tickerHandle = () => this.tick();
+    host.app.ticker.add(this.tickerHandle);
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', this.handleKeyDown);
+    }
+  }
+
+  exit(): void {
+    if (this.tickerHandle && this.host) {
+      this.host.app.ticker.remove(this.tickerHandle);
+    }
+    this.tickerHandle = undefined;
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.handleKeyDown);
+    }
+    this.host = undefined;
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.exit();
+    this.view.dispose();
+    // Texture cache is owned by the host (it survives multiple previews); the host's `loadBeatorajaTheme` flow
+    // disposes it when the bundle is replaced. We don't tear it down here.
+    if (!this.root.destroyed) {
+      this.root.destroy({ children: false });
+    }
+  }
+
+  private tick(): void {
+    if (this.disposed) return;
+    const elapsed = performance.now() - this.startMs;
+    this.view.update({
+      activeOps: this.baseOps,
+      // Every timer is treated as fired at scene start. Once the engine wiring arrives, this becomes
+      // `engine.timerStartTimes[id]` so per-key bomb / judge / etc. animations only run when their event fires.
+      getTimerStart: () => 0,
+      nowMs: elapsed,
+    });
+  }
+
+  private fitToStage(): void {
+    const host = this.host;
+    if (!host) return;
+    const screen = host.app.screen;
+    const scaleX = screen.width / this.view.width;
+    const scaleY = screen.height / this.view.height;
+    const scale = Math.min(scaleX, scaleY);
+    const container = this.view.container;
+    container.scale.set(scale, scale);
+    container.x = (screen.width - this.view.width * scale) / 2;
+    container.y = (screen.height - this.view.height * scale) / 2;
+  }
+
+  private handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.onExit?.();
+    }
+  };
+}

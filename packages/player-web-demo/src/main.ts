@@ -32,11 +32,17 @@ import {
   type Lr2Skin,
 } from '@be-music/lr2-skin';
 import {
+  BeatorajaPlaySkinPreviewScene,
   isBeatorajaSkinIndicator,
+  loadBeatorajaPlaySkinFromBundle,
+  loadBeatorajaTexturesFromBundle,
   loadBeatorajaThemeFromFiles,
   summarizeBeatorajaPlaySkins,
+  type BeatorajaPlayVariant,
+  type BeatorajaTextureCache,
   type BeatorajaThemeBundle,
 } from '@be-music/player-web';
+import { bundleBeatorajaSources } from '@be-music/beatoraja-skin';
 
 const dropLog = logger('drop');
 const recordLog = logger('record');
@@ -608,6 +614,14 @@ interface DemoGuiState {
   openFolder: () => void;
   /** Triggered by clicking the GUI's record toggle. */
   record: () => void;
+  /**
+   * Beatoraja preview action. Opens the `BeatorajaPlaySkinPreviewScene` over whatever scene is currently mounted,
+   * showing the static skin painted on screen. Picks the skin variant matching the dropdown below; falls back to
+   * the first available variant if the chosen one is missing in the loaded theme.
+   */
+  beatorajaPreview: () => void;
+  /** Variant selection for the beatoraja preview. Limited to chart-shape variants the renderer wires today. */
+  beatorajaPreviewVariant: '7' | '5' | '14' | '10' | '9';
 }
 
 class PlayerWebDemoApp {
@@ -743,6 +757,10 @@ class PlayerWebDemoApp {
       record: () => {
         void this.toggleRecording();
       },
+      beatorajaPreview: () => {
+        void this.openBeatorajaPreview();
+      },
+      beatorajaPreviewVariant: '7',
     };
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
     // (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the runtime API.
@@ -918,6 +936,13 @@ class PlayerWebDemoApp {
     this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open Folder');
+    // Beatoraja-skin preview controls. The dropdown picks which key-count variant to mount; the button opens the
+    // preview scene over whatever's currently active. Only available after a beatoraja theme has been dropped.
+    const beatorajaFolder = gui.addFolder('Beatoraja preview').close();
+    beatorajaFolder
+      .add(this.guiState, 'beatorajaPreviewVariant', ['7', '5', '14', '10', '9'] as const)
+      .name('Variant');
+    beatorajaFolder.add(this.guiState, 'beatorajaPreview').name('Open preview');
     // Auto play used to be a lil-gui checkbox here too, but the in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on
     // the select skin) already exposes it — the duplicate toolbar controller just added another surface to keep in
     // sync. The `guiState.autoPlay` field stays as the seed/fallback value until the select panel publishes its own
@@ -1330,6 +1355,13 @@ class PlayerWebDemoApp {
       const bundle = await loadBeatorajaThemeFromFiles(files, {
         onProgress: (progress) => this.applyLoadProgress(progress),
       });
+      // Dispose of the previous texture cache (and any active preview scene) before swapping themes — otherwise
+      // the textures keep their GPU allocations alive even though they reference asset paths from a theme bundle
+      // that no longer exists.
+      this.beatorajaPreviewScene?.dispose();
+      this.beatorajaPreviewScene = undefined;
+      this.beatorajaTextureCache?.dispose();
+      this.beatorajaTextureCache = undefined;
       this.beatorajaTheme = bundle;
       const summary = summarizeBeatorajaPlaySkins(bundle.theme.playSkins) || 'none';
       const sceneSummary = [
@@ -1354,6 +1386,76 @@ class PlayerWebDemoApp {
       const message = error instanceof Error ? error.message : String(error);
       dropLog.warn(`beatoraja theme load failed: ${message}`);
     }
+  }
+
+  /**
+   * Cached texture cache for the currently-loaded beatoraja theme. Built lazily when the user first opens the
+   * preview, then reused on subsequent variant switches. Disposed when the theme is replaced (a fresh drop wipes
+   * `beatorajaTheme` and clears this cache too).
+   */
+  private beatorajaTextureCache: BeatorajaTextureCache | undefined;
+  private beatorajaPreviewScene: BeatorajaPlaySkinPreviewScene | undefined;
+
+  /**
+   * Build the static-paint preview for the currently-loaded beatoraja theme and mount it on the shared
+   * scene host. This is intentionally minimal — the engine isn't running, so judge / combo / score / lamp ops are
+   * all on their initial frames. Goal: show that the parser → renderer → on-screen pipeline reaches the screen for
+   * `play 5 / 7 / 9 / 10 / 14`. Future patches will swap this for a full gameplay scene that drives the same view
+   * from engine signals.
+   */
+  private async openBeatorajaPreview(): Promise<void> {
+    const bundle = this.beatorajaTheme;
+    if (!bundle) {
+      dropLog.warn('beatoraja preview: no theme loaded — drop a beatoraja theme folder first');
+      this.setStatus('Beatoraja preview: drop a beatoraja theme folder first');
+      return;
+    }
+    const desired = this.guiState.beatorajaPreviewVariant as BeatorajaPlayVariant;
+    const loaded = loadBeatorajaPlaySkinFromBundle(bundle, desired, { offset: 0 });
+    if (!loaded || !loaded.result.ok || !loaded.result.skin) {
+      const reason = loaded?.result.ok === false ? loaded.result.error.message : 'no skin available';
+      dropLog.warn(`beatoraja preview: ${reason}`);
+      this.setStatus(`Beatoraja preview: ${reason}`);
+      return;
+    }
+
+    // Build (or reuse) the texture cache. Source assets live on the entry's bundle and don't change between
+    // variants, but each variant has its own `source[]` slice — rebuilding here is cheap (textures are uploaded
+    // once per source path), and avoids leaking textures from a stale variant pick.
+    this.beatorajaTextureCache?.dispose();
+    const sourceBundle = bundleBeatorajaSources({
+      files: bundle.files,
+      entryPath: loaded.entry.entryPath,
+      sources: (loaded.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+    });
+    this.beatorajaTextureCache = await loadBeatorajaTexturesFromBundle(sourceBundle);
+
+    await this.ensureHostMounted();
+
+    // Tear down the LR2 gameplay view if one is up — the preview scene takes over the host's stage.
+    this.gameplayView?.dispose();
+    this.gameplayView = undefined;
+
+    this.beatorajaPreviewScene?.dispose();
+    this.beatorajaPreviewScene = new BeatorajaPlaySkinPreviewScene({
+      skin: loaded.result.skin,
+      textures: this.beatorajaTextureCache,
+      onExit: () => {
+        void this.closeBeatorajaPreview();
+      },
+    });
+
+    await this.sceneHost.setScene(this.beatorajaPreviewScene);
+    this.setStatus(`Beatoraja preview: ${desired}-keys (${loaded.entry.entryPath}) — press ESC to exit`);
+  }
+
+  private async closeBeatorajaPreview(): Promise<void> {
+    await this.sceneHost.setScene(undefined);
+    this.beatorajaPreviewScene?.dispose();
+    this.beatorajaPreviewScene = undefined;
+    this.beatorajaTextureCache?.dispose();
+    this.beatorajaTextureCache = undefined;
+    await this.showSelect();
   }
 
   private async showSelect(): Promise<void> {
