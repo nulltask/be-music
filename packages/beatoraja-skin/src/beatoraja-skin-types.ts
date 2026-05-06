@@ -176,3 +176,28 @@ export interface BeatorajaSkinConfig {
   /** Map of `filepath[].name` → chosen relative path. */
   file?: Readonly<Record<string, string>>;
 }
+
+/**
+ * Build a default `option` map from a skin header's `property[]`. Each property's first item is treated as the
+ * "no choice yet" pick — the same behavior beatoraja takes when the player hasn't opened the option dialog. This
+ * matters for skins whose Lua `main()` branches on `skin_config.option["Play Side"]` (or similar): without a
+ * populated option map every branch fails and the skin returns an incomplete `source[]` / `destination[]`.
+ *
+ * Returns an empty record when the header has no `property[]`.
+ */
+export function buildDefaultSkinConfigOptions(
+  header: Pick<BeatorajaSkinHeader, 'property'>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!Array.isArray(header.property)) return out;
+  for (const property of header.property) {
+    if (!property || typeof property.name !== 'string') continue;
+    const items = property.item;
+    if (!Array.isArray(items) || items.length === 0) continue;
+    const first = items[0];
+    if (first && typeof first.op === 'number' && Number.isFinite(first.op)) {
+      out[property.name] = first.op;
+    }
+  }
+  return out;
+}

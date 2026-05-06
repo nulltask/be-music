@@ -76,6 +76,16 @@ describe('discoverBeatorajaTheme', () => {
     expect(warnings.map((w) => w.entryPath)).toContain('skin/default/play.json');
   });
 
+  it('prefers `skin/default/...` paths over other themes for the same variant', () => {
+    const files: Map<string, BeatorajaSkinFileEntry> = new Map([
+      ['beatoraja/skin/GdbG_Skin/play/play7.json', enc(jsonSkin(0, { name: 'gdbg7' }))],
+      ['beatoraja/skin/default/play7.json', enc(jsonSkin(0, { name: 'default7' }))],
+    ]);
+    const { theme } = discoverBeatorajaTheme(files);
+    expect(theme.playSkins['7']?.entryPath).toBe('beatoraja/skin/default/play7.json');
+    expect(theme.playSkins['7']?.header.name).toBe('default7');
+  });
+
   it('prefers JSON over Lua when both target the same play variant', () => {
     const luaEntry = enc(
       ['local t = require("p")', 'if skin_config then return t.main() else return t.header end'].join('\n'),

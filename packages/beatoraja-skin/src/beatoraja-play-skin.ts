@@ -85,6 +85,33 @@ export function discoverBeatorajaTheme(
 }
 
 /**
+ * Decide whether `candidate` should replace `incumbent` for a given scene slot. We can't unconditionally take the
+ * first hit because the bundled beatoraja folder ships TWO themes (`skin/default/`, `skin/GdbG_Skin/`, …) and
+ * each one provides its own copy of every variant. Without a tiebreaker the default theme — the only one our
+ * renderer can fully drive without engine-side `main_state` integration — gets shadowed by whichever theme is
+ * encountered last during folder iteration.
+ *
+ * Tiebreakers (top wins):
+ *   1. JSON entry beats Lua entry (parsed deterministically, no host-module stubs needed).
+ *   2. Path containing `/default/` beats other themes (the only fully-renderable theme today).
+ *   3. Lexicographically earlier path wins.
+ */
+function preferEntry(candidate: BeatorajaSkinEntry, incumbent: BeatorajaSkinEntry): boolean {
+  const candIsJson = candidate.entryPath.toLowerCase().endsWith('.json');
+  const incIsJson = incumbent.entryPath.toLowerCase().endsWith('.json');
+  if (candIsJson !== incIsJson) return candIsJson;
+  const candIsDefault = isDefaultThemePath(candidate.entryPath);
+  const incIsDefault = isDefaultThemePath(incumbent.entryPath);
+  if (candIsDefault !== incIsDefault) return candIsDefault;
+  return candidate.entryPath < incumbent.entryPath;
+}
+
+function isDefaultThemePath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return lower.includes('/skin/default/') || lower.startsWith('skin/default/');
+}
+
+/**
  * Restrict skin discovery to paths under a `skin/` segment. Beatoraja's user-data tree (`practice/<sha>.json`,
  * `player/<id>/config_player.json`, `score/...`, etc.) lives inside the same dropped folder but isn't a skin —
  * accepting them produces noisy parse-error warnings for files that were never meant to be skins. `.luaskin` is
@@ -168,18 +195,19 @@ function buildTheme(entries: ReadonlyArray<BeatorajaSkinEntry>): BeatorajaTheme 
     const scene = sceneForSkinType(entry.header.type);
     const variant = playVariantForSkinType(entry.header.type);
     if (scene === 'play' && variant !== undefined) {
-      // Prefer JSON over Lua when both are present for the same variant — JSON is faster and parsing-deterministic.
       const existing = playSkins[variant];
-      if (existing === undefined || (entry.entryPath.endsWith('.json') && existing.entryPath.endsWith('.luaskin'))) {
+      if (existing === undefined || preferEntry(entry, existing)) {
         playSkins[variant] = entry;
       }
       continue;
     }
-    if (scene === 'select' && selectSkin === undefined) selectSkin = entry;
-    else if (scene === 'decide' && decideSkin === undefined) decideSkin = entry;
-    else if (scene === 'result' && resultSkin === undefined) resultSkin = entry;
-    else if (scene === 'course-result' && courseResultSkin === undefined) courseResultSkin = entry;
-    else if (scene === 'grade-result' && gradeResultSkin === undefined) gradeResultSkin = entry;
+    if (scene === 'select' && (selectSkin === undefined || preferEntry(entry, selectSkin))) selectSkin = entry;
+    else if (scene === 'decide' && (decideSkin === undefined || preferEntry(entry, decideSkin))) decideSkin = entry;
+    else if (scene === 'result' && (resultSkin === undefined || preferEntry(entry, resultSkin))) resultSkin = entry;
+    else if (scene === 'course-result' && (courseResultSkin === undefined || preferEntry(entry, courseResultSkin)))
+      courseResultSkin = entry;
+    else if (scene === 'grade-result' && (gradeResultSkin === undefined || preferEntry(entry, gradeResultSkin)))
+      gradeResultSkin = entry;
   }
 
   return {

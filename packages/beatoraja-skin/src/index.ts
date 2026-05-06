@@ -23,6 +23,7 @@ export type {
 export {
   BEATORAJA_SKIN_TYPE,
   BEATORAJA_PLAY_VARIANTS,
+  buildDefaultSkinConfigOptions,
   playVariantForSkinType,
   sceneForSkinType,
 } from './beatoraja-skin-types.ts';
