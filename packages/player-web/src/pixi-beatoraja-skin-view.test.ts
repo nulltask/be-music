@@ -176,6 +176,68 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
+  it('builds a Pixi Text node for each `text[]`-targeting destination', () => {
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 1280,
+      h: 720,
+      image: [{ id: 1, src: 0, x: 0, y: 0, w: 1, h: 1 }],
+      text: [
+        { id: 'genre', font: 0, size: 24, ref: 13 },
+        { id: 'title', font: 0, size: 30, ref: 12 },
+      ],
+      destination: [
+        { id: 1, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] },
+        { id: 'genre', dst: [{ time: 0, x: 100, y: 50, w: 200, h: 24 }] },
+        { id: 'title', dst: [{ time: 0, x: 100, y: 100, w: 400, h: 30 }] },
+      ],
+    };
+    const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+    expect(view.container.children).toHaveLength(3);
+    view.dispose();
+  });
+
+  it('updates text nodes from the destination keyframe', () => {
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 1,
+      h: 1,
+      text: [{ id: 'genre', font: 0, size: 24 }],
+      destination: [{ id: 'genre', dst: [{ time: 0, x: 100, y: 50, w: 200, h: 24, a: 255 }] }],
+    };
+    const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+    const node = view.container.children[0] as { x: number; y: number; alpha: number; visible: boolean };
+    expect(node.visible).toBe(true);
+    expect(node.x).toBe(100);
+    expect(node.y).toBe(50);
+    expect(node.alpha).toBe(1);
+    view.dispose();
+  });
+
+  it('hides text nodes when the destination is past its last keyframe with loop=-1', () => {
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 1,
+      h: 1,
+      text: [{ id: 'title', font: 0, size: 24 }],
+      destination: [
+        {
+          id: 'title',
+          loop: -1,
+          dst: [
+            { time: 0, x: 0, y: 0, w: 1, h: 1, a: 255 },
+            { time: 1000, a: 0 },
+          ],
+        },
+      ],
+    };
+    const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 1500 });
+    expect((view.container.children[0] as { visible: boolean }).visible).toBe(false);
+    view.dispose();
+  });
+
   it('dispose() detaches sprites from the container without throwing', () => {
     const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
     expect(() => view.dispose()).not.toThrow();

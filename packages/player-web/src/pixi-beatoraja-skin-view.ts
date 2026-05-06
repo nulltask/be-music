@@ -15,17 +15,19 @@
 // Once the gameplay engine signals are available, the same Container is reused — additional per-element children
 // (notes, judge sprites, etc.) can be appended without rebuilding the destination list.
 
-import { Container, Sprite, Texture } from 'pixi.js';
+import { Container, Sprite, Text, Texture } from 'pixi.js';
 import {
   imageFrameAt,
   imageFrameRect,
   imageRefFrame,
   normalizeBeatorajaDestinations,
   normalizeBeatorajaImages,
+  normalizeBeatorajaTexts,
   type BeatorajaDestinationGroup,
   type BeatorajaImageElement,
   type BeatorajaImageId,
   type BeatorajaSkin,
+  type BeatorajaTextElement,
 } from '@be-music/beatoraja-skin';
 import {
   createCroppedBeatorajaTexture,
@@ -43,9 +45,17 @@ export interface BeatorajaPlaySkinViewOptions {
    * `update()` call site to compute "is this destination's `ref` op currently active?" lookups.
    */
   resolveRefValue?: (refOp: number) => number;
+  /**
+   * Optional callback that resolves a `text[].ref` op-code into the string to display. Returning `undefined`
+   * leaves the text empty (the placeholder behavior used while the engine integration is still in progress).
+   * This is also where the host should substitute placeholder strings (`'<title>'`, `'<artist>'`, …) during
+   * preview if it wants to make text destinations visible without an engine running.
+   */
+  resolveTextContent?: (refOp: number) => string | undefined;
 }
 
 interface SpriteEntry {
+  kind: 'image';
   group: BeatorajaDestinationGroup;
   image: BeatorajaImageElement;
   /** Base texture (whole source). Sprite's texture is a cropped view of this. */
@@ -55,18 +65,29 @@ interface SpriteEntry {
   currentFrame: number;
 }
 
+interface TextEntry {
+  kind: 'text';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaTextElement;
+  text: Text;
+}
+
+type ViewEntry = SpriteEntry | TextEntry;
+
 export class BeatorajaPlaySkinView {
   readonly container = new Container();
   readonly width: number;
   readonly height: number;
-  private readonly entries: SpriteEntry[] = [];
+  private readonly entries: ViewEntry[] = [];
   private readonly resolveRefValue: (refOp: number) => number;
+  private readonly resolveTextContent: (refOp: number) => string | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
     this.width = options.skin.w;
     this.height = options.skin.h;
     this.resolveRefValue = options.resolveRefValue ?? (() => 0);
+    this.resolveTextContent = options.resolveTextContent ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -85,6 +106,15 @@ export class BeatorajaPlaySkinView {
         imageById.set(value.id, value);
       }
     }
+    // `text[]` declarations carry no source rect; they pair a font/size/ref with a string the runtime resolves at
+    // render time. We don't yet load the skin's TTFs (engine integration will fold those in along with the dynamic
+    // string lookups), so the placeholders below render with the browser's default sans-serif font and an empty
+    // string — enough to put each text destination on screen at the correct position with the matching size.
+    const textById = new Map<BeatorajaImageId, BeatorajaTextElement>();
+    for (const text of normalizeBeatorajaTexts(options.skin.text)) {
+      textById.set(text.id, text);
+    }
+
     const groups = normalizeBeatorajaDestinations(options.skin.destination);
 
     // Render order: lower `offset` (back layer) draws first, then by author declaration order. Matches beatoraja's
@@ -93,7 +123,13 @@ export class BeatorajaPlaySkinView {
 
     for (const group of groups) {
       const image = imageById.get(group.id);
-      if (image === undefined) continue;
+      if (image === undefined) {
+        const textElement = textById.get(group.id);
+        if (textElement !== undefined) {
+          this.entries.push(this.buildTextEntry(group, textElement));
+        }
+        continue;
+      }
       const baseTexture = options.textures.get(image.src);
       // Pre-bind the sprite's texture to the cell-0 cropped frame at construction time. Building the sub-texture
       // here (rather than lazily inside `update()`) ensures the sprite's texture is registered with PixiJS before
@@ -127,62 +163,124 @@ export class BeatorajaPlaySkinView {
       }
       const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
       this.container.addChild(sprite);
-      this.entries.push({ group, image, baseTexture, sprite, currentFrame });
+      this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame });
     }
   }
 
   /**
-   * Re-sample every destination at `context.nowMs` and update the matching `Sprite`. Call once per frame.
+   * Build a placeholder Pixi `Text` for a text-targeting destination. Uses the browser's default sans-serif at
+   * the declared font size; the actual TTF bundled in the skin is honored once the host has registered fonts via
+   * `FontFace`. Position and alpha are driven by the destination keyframe in `update()`, same as image sprites.
+   */
+  private buildTextEntry(group: BeatorajaDestinationGroup, element: BeatorajaTextElement): TextEntry {
+    const text = new Text({
+      text: '',
+      style: {
+        fontFamily: 'sans-serif',
+        fontSize: element.size,
+        fill: 0xffffff,
+        align: element.align,
+      },
+      alpha: 0,
+    });
+    if (element.align === 'center') text.anchor.set(0.5, 0);
+    else if (element.align === 'right') text.anchor.set(1, 0);
+    this.container.addChild(text);
+    return { kind: 'text', group, element, text };
+  }
+
+  /**
+   * Re-sample every destination at `context.nowMs` and update the matching `Sprite` / `Text`. Call once per frame.
    */
   update(context: BeatorajaRenderContext): void {
     if (this.disposed) return;
     for (const entry of this.entries) {
       const props = destinationToSpriteProps(entry.group, context);
-      const sprite = entry.sprite;
-
-      // Without a base texture (or with `Texture.EMPTY`, whose source has no GPU resource) we have nothing to
-      // paint. Keep the sprite hidden so the renderer never tries to bind a sourceless texture for a draw call —
-      // WebGPU crashes with `Cannot read properties of null (reading 'textureSource1')` when batching tries to
-      // bind a sprite whose texture has no GPU source attached.
-      const baseTexture = entry.baseTexture;
-      if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
-        sprite.visible = false;
-        continue;
+      if (entry.kind === 'image') {
+        this.updateImageEntry(entry, context, props);
+      } else {
+        this.updateTextEntry(entry, props);
       }
-
-      sprite.visible = props.visible;
-      if (!props.visible) continue;
-
-      // Pick the source-cell index. `ref` (op-driven frame) takes precedence — that's how lamp / judge-icon
-      // textures swap between cells. Otherwise the `cycle`-based animation drives the frame.
-      const frameIndex =
-        entry.image.ref !== 0
-          ? imageRefFrame(entry.image, this.resolveRefValue(entry.image.ref))
-          : imageFrameAt(entry.image, computeAnimationElapsed(entry, context));
-
-      if (frameIndex !== entry.currentFrame) {
-        const cell = imageFrameRect(entry.image, frameIndex);
-        const cropped = createCroppedBeatorajaTexture(entry.baseTexture, cell);
-        if (cropped !== undefined) {
-          sprite.texture = cropped;
-        } else {
-          // Cropped rect was empty (e.g. cell width / height resolves to 0). Hide rather than render the EMPTY
-          // texture, which would also trigger the WebGPU `textureSource1` crash above.
-          sprite.visible = false;
-          continue;
-        }
-        entry.currentFrame = frameIndex;
-      }
-
-      sprite.x = props.x;
-      sprite.y = props.y;
-      sprite.width = props.width;
-      sprite.height = props.height;
-      sprite.alpha = props.alpha;
-      sprite.tint = props.tint;
-      sprite.angle = props.angle;
-      sprite.blendMode = props.blendMode;
     }
+  }
+
+  private updateImageEntry(
+    entry: SpriteEntry,
+    context: BeatorajaRenderContext,
+    props: ReturnType<typeof destinationToSpriteProps>,
+  ): void {
+    const sprite = entry.sprite;
+
+    // Without a base texture (or with `Texture.EMPTY`, whose source has no GPU resource) we have nothing to
+    // paint. Keep the sprite hidden so the renderer never tries to bind a sourceless texture for a draw call —
+    // WebGPU crashes with `Cannot read properties of null (reading 'textureSource1')` when batching tries to
+    // bind a sprite whose texture has no GPU source attached.
+    const baseTexture = entry.baseTexture;
+    if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
+      sprite.visible = false;
+      return;
+    }
+
+    sprite.visible = props.visible;
+    if (!props.visible) return;
+
+    // Pick the source-cell index. `ref` (op-driven frame) takes precedence — that's how lamp / judge-icon
+    // textures swap between cells. Otherwise the `cycle`-based animation drives the frame.
+    const frameIndex =
+      entry.image.ref !== 0
+        ? imageRefFrame(entry.image, this.resolveRefValue(entry.image.ref))
+        : imageFrameAt(entry.image, computeAnimationElapsed(entry, context));
+
+    if (frameIndex !== entry.currentFrame) {
+      const cell = imageFrameRect(entry.image, frameIndex);
+      const cropped = createCroppedBeatorajaTexture(entry.baseTexture, cell);
+      if (cropped !== undefined) {
+        sprite.texture = cropped;
+      } else {
+        // Cropped rect was empty (e.g. cell width / height resolves to 0). Hide rather than render the EMPTY
+        // texture, which would also trigger the WebGPU `textureSource1` crash above.
+        sprite.visible = false;
+        return;
+      }
+      entry.currentFrame = frameIndex;
+    }
+
+    sprite.x = props.x;
+    sprite.y = props.y;
+    sprite.width = props.width;
+    sprite.height = props.height;
+    sprite.alpha = props.alpha;
+    sprite.tint = props.tint;
+    sprite.angle = props.angle;
+    sprite.blendMode = props.blendMode;
+  }
+
+  private updateTextEntry(
+    entry: TextEntry,
+    props: ReturnType<typeof destinationToSpriteProps>,
+  ): void {
+    const text = entry.text;
+    text.visible = props.visible;
+    if (!props.visible) return;
+
+    // Refresh the displayed string via the host-provided resolver. The empty fallback keeps the layout silent
+    // when the engine isn't wired in yet. Skipping the assignment when the string hasn't changed lets PixiJS
+    // reuse the cached glyph atlas — assigning the same string still triggers a relayout otherwise.
+    const next = entry.element.ref !== 0 ? this.resolveTextContent(entry.element.ref) ?? '' : '';
+    if (text.text !== next) {
+      text.text = next;
+    }
+
+    // Position from the destination keyframe. Width/height intentionally NOT applied — Pixi `Text` auto-sizes
+    // to its rendered glyphs, and forcing a width via the keyframe rect would scale the type. The destination's
+    // `w / h` are bounding-box hints that beatoraja uses for clipping; we'll honor them once the engine plugs
+    // real strings in and clipping starts to matter.
+    text.x = props.x;
+    text.y = props.y;
+    text.alpha = props.alpha;
+    text.tint = props.tint;
+    text.angle = props.angle;
+    text.blendMode = props.blendMode;
   }
 
   /**
@@ -193,7 +291,13 @@ export class BeatorajaPlaySkinView {
     if (this.disposed) return;
     this.disposed = true;
     for (const entry of this.entries) {
-      entry.sprite.destroy({ children: false, texture: false, textureSource: false });
+      if (entry.kind === 'image') {
+        entry.sprite.destroy({ children: false, texture: false, textureSource: false });
+      } else {
+        // Pixi `Text` owns an internal canvas-rendered texture that the cache doesn't track, so we destroy it
+        // along with the text container.
+        entry.text.destroy({ children: false, texture: true, textureSource: true });
+      }
     }
     this.entries.length = 0;
     this.container.destroy({ children: false });

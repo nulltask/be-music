@@ -31,6 +31,12 @@ export interface BeatorajaPlaySkinPreviewOptions {
   skinConfig?: BeatorajaSkinConfig;
   /** Called when the user presses Escape. Wired to `host.setScene(undefined)` upstream. */
   onExit?: () => void;
+  /**
+   * Optional resolver for `text[].ref` — the host can plug in placeholder strings (`'<title>'`, `'<artist>'`,
+   * etc.) so text destinations are visible in the preview even though the engine isn't running yet. Returning
+   * `undefined` (or omitting the option entirely) keeps each text node empty.
+   */
+  resolveTextContent?: (refOp: number) => string | undefined;
 }
 
 export class BeatorajaPlaySkinPreviewScene implements PixiScene {
@@ -46,7 +52,11 @@ export class BeatorajaPlaySkinPreviewScene implements PixiScene {
   constructor(options: BeatorajaPlaySkinPreviewOptions) {
     this.onExit = options.onExit;
     this.baseOps = buildBaseOpSet(options.skinConfig?.option);
-    this.view = new BeatorajaPlaySkinView({ skin: options.skin, textures: options.textures });
+    this.view = new BeatorajaPlaySkinView({
+      skin: options.skin,
+      textures: options.textures,
+      resolveTextContent: options.resolveTextContent,
+    });
     this.root.addChild(this.view.container);
   }
 

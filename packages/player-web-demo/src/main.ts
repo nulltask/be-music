@@ -1485,6 +1485,10 @@ class PlayerWebDemoApp {
       onExit: () => {
         void this.closeBeatorajaPreview();
       },
+      // Placeholder text resolver — without an engine running we don't have the real song / score / state
+      // strings, so we substitute a per-ref-op label so the preview still shows where each text destination
+      // would render. Engine integration replaces this with a snapshot of the runtime text state.
+      resolveTextContent: (refOp) => `<text:${refOp}>`,
     });
 
     await this.sceneHost.setScene(this.beatorajaPreviewScene);

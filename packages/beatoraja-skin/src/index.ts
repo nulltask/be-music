@@ -50,6 +50,8 @@ export {
 } from './beatoraja-skin-image.ts';
 export type { BeatorajaDestinationGroup, BeatorajaDestinationKeyframe } from './beatoraja-skin-destination.ts';
 export { normalizeBeatorajaDestinations, sampleBeatorajaDestination } from './beatoraja-skin-destination.ts';
+export type { BeatorajaFontElement, BeatorajaTextAlign, BeatorajaTextElement } from './beatoraja-skin-text.ts';
+export { normalizeBeatorajaFonts, normalizeBeatorajaTexts } from './beatoraja-skin-text.ts';
 export { expandBeatorajaWildcard, resolveBeatorajaPath, resolveSourcePath } from './beatoraja-skin-resolver.ts';
 export type {
   BeatorajaSourceAsset,
