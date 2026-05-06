@@ -5236,7 +5236,23 @@ export class PixiGameplayView {
     const decoupled = chart.bms.controlFlow.length > 0
       ? { ...chart, bms: { ...chart.bms, controlFlow: [] } }
       : chart;
-    if (!this.options.random1P && !this.options.random2P && !this.options.dpFlip) {
+    // CRITICAL: `random1P` / `random2P` default to the **string `'OFF'`** (not `undefined`), so a naïve
+    // `!this.options.random1P` truthiness check evaluates to `false` for the default and the early-return below
+    // is skipped — even on charts the player loaded with shuffle disabled. Falling through into the remap path
+    // is what triggered the channel-class drift we hunted down here: `collect(this.notes)` walks the view's
+    // post-extract notes and registers a remap whenever `note.channel !== event.channel`. For `#LNTYPE 1` LNs
+    // that mismatch is structural — `extractTimedNotes` normalizes the LN source channel (`51..59` / `61..69`)
+    // onto the matching playable lane (`11..19` / `21..29`) on `note.channel` while `event.channel` keeps the
+    // original `5x` / `6x`, so every LN HEAD ends up in `remap` and the eventual `events.map` rewrites the LN
+    // HEAD's channel from `5x` to `1x`. The resulting `engineChart.events` had 1P LN HEADs converted to
+    // playable shorts, so `extractTimedNotes` on the engine side produced 120 extra `1x` shorts and lost the
+    // ability to pair them as LNs (only TAILs remained on `5x`). The view-vs-engine bucket diff matched
+    // exactly: `viewBuckets["5"]=240, engineBuckets["5"]=120` (HEADs gone) and `engineBuckets["1"]` gained
+    // 120+6 entries (the 6 are `3x`/invisible, same kind of normalization mismatch). Treat `'OFF'` and
+    // `undefined` as "no shuffle" explicitly so the early return actually fires for the common case.
+    const random1POn = !!this.options.random1P && this.options.random1P !== 'OFF';
+    const random2POn = !!this.options.random2P && this.options.random2P !== 'OFF';
+    if (!random1POn && !random2POn && !this.options.dpFlip) {
       // Hot path: no shuffle / flip declared, so the runtime channels are guaranteed to match the chart-event
       // channels and we can hand the original chart through unchanged. Saves a per-event Map probe on every
       // chart launch.
