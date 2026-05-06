@@ -1,15 +1,14 @@
-import { clamp } from '@be-music/utils';
+import { DEFAULT_HIGH_SPEED, MAX_HIGH_SPEED, MIN_HIGH_SPEED } from '@be-music/player/core/high-speed-control';
+import { clamp } from '@be-music/utils/core';
 
 const IIDX_MEASURE_BEATS = 4;
 const IIDX_MEASURE_ROWS_AT_HS1 = 16;
 const MIN_SCROLL_WINDOW_BEATS = 0.25;
-const MIN_HIGH_SPEED = 0.5;
-const MAX_HIGH_SPEED = 10;
 const MIN_GRID_ROWS = 4;
 
 export function normalizeHighSpeed(value: number): number {
   if (!Number.isFinite(value) || value <= 0) {
-    return 1;
+    return DEFAULT_HIGH_SPEED;
   }
   return Math.min(MAX_HIGH_SPEED, Math.max(MIN_HIGH_SPEED, value));
 }
