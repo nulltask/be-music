@@ -734,10 +734,14 @@ class PlayerWebDemoApp {
       // users coming from those players expect. The dropdown lets users opt into the `'KEEP_SCROLLING'` mode (≈
       // beatoraja LANEEFFECT ON) for timing-learning play.
       judgedNoteDisplay: 'HIDE',
-      // Phase 4c opt-in flag. Defaults to OFF while the engine-driven path is under verification — the legacy
-      // self-judge ladder still runs end-to-end so the existing demo feel is preserved. Power users / contributors
-      // flip the GUI checkbox to drive the chart through `@be-music/player`'s `manualPlay` / `autoPlay` instead.
-      useSharedEngine: false,
+      // Phase 4c default. The engine-driven path now matches the legacy self-judge ladder feature-for-feature
+      // (judge timing, gauge / score, RANDOM / MIRROR / DP FLIP, AUTO SCRATCH, EMPTY POOR result graph, LR2
+      // visual timers, NOWJUDGE plate, bomb / lane flash, ESC / F5 fade, ArrowUp/Down HiSpeed, pause sync)
+      // and adds beatoraja-compatible behaviors the legacy view doesn't have (look-ahead lane keysound
+      // fallback, Free-Zone 17/27, LN suppress windows + 380 ms / 120 ms hold-grace, mine-vs-note delta
+      // priority). The GUI checkbox stays so contributors can A/B against the legacy ladder during the
+      // remaining cleanup work.
+      useSharedEngine: true,
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
