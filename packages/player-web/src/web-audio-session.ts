@@ -52,6 +52,15 @@ export interface WebAudioSessionContext {
   chartStartDelayMs?: number;
   /** Human-readable label surfaced on the engine's "Audio backend: ..." log line. Defaults to `'web-audio'`. */
   backendLabel?: string;
+  /**
+   * Closure that returns the chart's t=0 on the audio-context clock — i.e. the value the host's renderer treats
+   * as `audioContextStartTime`. Used by {@link AudioSession.getClockState} to keep the engine's playback clock in
+   * lock-step with the renderer's `currentSeconds()` calculation, so judges fire exactly when the note hits the
+   * judgment line. Returning `0` (the default when omitted) makes the session report the absolute audio-context
+   * time, which matches the legacy "engine owns its own playback clock" flow but causes a per-chart drift between
+   * renderer and judge if the host's renderer references a different anchor.
+   */
+  getChartStartContextTime?: () => number;
 }
 
 /**
@@ -100,6 +109,7 @@ export interface WebAudioSession extends AudioSession {
  */
 export function createWebAudioSession(context: WebAudioSessionContext): WebAudioSession {
   const { audioContext, audioBus, chart, decodedSamples, wavCmdVolumeMultipliers, bmsonSlicePlayback } = context;
+  const resolveChartStartContextTime = context.getChartStartContextTime ?? (() => 0);
   const sampleIdBase = resolveBmsBase(chart);
   /** Active BufferSource per `#WAVxx` slot. Used to honor bmson `c = true` (skip retrigger of a still-playing sample)
    *  and to wipe the slot once the source ends naturally. */
@@ -224,6 +234,22 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       if (!paused) return;
       paused = false;
       void audioContext.resume?.().catch(() => undefined);
+    },
+    /**
+     * Reports the chart's elapsed audio-context time so the engine's playback clock locks to the same reference
+     * the renderer's `currentSeconds()` is using. Without this, the engine's default
+     * `createPerformancePlaybackClockSource` would tick on `performance.now()` minus its own internal start
+     * stamp — which drifts from the audio-context clock by however long the engine took to set up between the
+     * host setting its `audioContextStartTime` and the engine entering its tick loop. The drift is small (tens
+     * of ms) but enough to push judges off the visual judgment line by a couple of frames.
+     */
+    getClockState: () => {
+      const chartStart = resolveChartStartContextTime();
+      const outputSeconds = Math.max(0, audioContext.currentTime - chartStart);
+      // We don't actually buffer ahead on the web (Web Audio's BufferSource handles its own scheduling), so the
+      // scheduled head matches the output head. Reporting the same value lets the engine's
+      // `createAudioPlaybackClockSource` short-circuit its `Math.max` between the two.
+      return { outputSeconds, scheduledSeconds: outputSeconds };
     },
     finish: async (): Promise<void> => {
       // Engine finished playback gracefully — let any tail samples ring out naturally. Drop our tracking so a

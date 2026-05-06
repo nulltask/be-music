@@ -746,6 +746,14 @@ export class PixiGameplayView {
    * the view resumed.
    */
   private sharedEngineInputSignals: PlayerInputSignalBus | undefined;
+  /**
+   * Latch flipped on the first non-zero `frame.currentSeconds` from the engine. The view's
+   * `audioContextStartTime` is re-anchored at that moment so the renderer's chart-time matches what the engine
+   * judges against — without this snap, the engine's `playbackClock` (which anchors at the moment it's
+   * constructed inside `manualPlay`'s prepare phase) sits a few ms to a few hundred ms behind the view's
+   * PLAYSTART anchor and notes pass the judgment line ahead of the engine's actual judge event.
+   */
+  private sharedEngineClockAnchored = false;
   private decodedSamples = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
@@ -1576,6 +1584,7 @@ export class PixiGameplayView {
     }
     this.sharedEngineSignals = undefined;
     this.sharedEngineInputSignals = undefined;
+    this.sharedEngineClockAnchored = false;
     this.sharedEnginePromise = undefined;
     void this.webAudioSession?.dispose();
     this.webAudioSession = undefined;
@@ -6017,6 +6026,21 @@ export class PixiGameplayView {
    * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative.
    */
   private applyEngineFrame(frame: Readonly<PlayerUiFramePayload>): void {
+    // Re-anchor the view's chart-time clock to the engine's the very first time the engine publishes a frame.
+    // The engine's `playbackClock` (and therefore the chart-time it stamps on every judge / sample / ui-signal
+    // event) anchors at the moment the engine creates the clock — which lands a few ms to a few hundred ms
+    // AFTER the view set `audioContextStartTime` in its PLAYSTART gate, since `manualPlay` runs through its
+    // entire prepare phase between those two points. Without re-anchoring, every note appears to pass the
+    // judgment line slightly EARLIER (in view time) than the engine actually judges it, so the visual hit
+    // doesn't line up with the score event.
+    //
+    // Using the first non-zero `frame.currentSeconds` snaps the view's `audioContextStartTime` so that
+    // `currentSeconds() === frame.currentSeconds` from now on. Subsequent frames don't re-anchor — both
+    // clocks tick on the AudioContext now, so the offset stays locked.
+    if (!this.sharedEngineClockAnchored && frame.currentSeconds > 0 && this.audioContext) {
+      this.audioContextStartTime = this.audioContext.currentTime - frame.currentSeconds;
+      this.sharedEngineClockAnchored = true;
+    }
     const summary = frame.summary;
     this.score.perfect = summary.perfect;
     this.score.great = summary.great;
