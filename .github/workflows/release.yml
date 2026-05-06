@@ -398,6 +398,7 @@ jobs:
       - name: Create or update GitHub Releases
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           RELEASE_TARGET: ${{ needs.prepare.outputs.release_target }}
         run: |
