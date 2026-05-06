@@ -1,0 +1,1844 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #08090d;
+  color: #f8fafc;
+  font-family: system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * Hidden file input behind the GUI's "Open folder / ZIP"
+ * button. lil-gui's function controllers fire the GUI's
+ * `onChange` on click, which we use to forward `.click()` to
+ * this input — but the input itself never needs to be visible.
+ */
+.hidden-file-input {
+  display: none;
+}
+
+/*
+ * lil-gui custom theming — match the rest of the demo's
+ * dark / yellow accent palette. lil-gui ships CSS variables we
+ * can override at the root level rather than fighting its
+ * built-in selectors.
+ *
+ * `backdrop-filter: blur` lets the gameplay canvas + drop hint
+ * subtly read through the panel, so the controls don't feel
+ * like a hard rectangle pasted on top of the scene. The
+ * background colours therefore drop to fairly low alpha values;
+ * widget / row backgrounds keep slightly more opacity for
+ * legibility against busy chart graphics. `-webkit-backdrop-filter`
+ * is paired in for Safari / iOS WebKit support.
+ */
+.lil-gui.root {
+  --background-color: rgb(17 22 32 / 0.45);
+  --text-color: #f8fafc;
+  --title-background-color: rgb(11 14 22 / 0.55);
+  --title-text-color: #f8fafc;
+  --widget-color: rgb(27 34 48 / 0.7);
+  --hover-color: #ffd166;
+  --focus-color: #ffd166;
+  --number-color: #ffd166;
+  --string-color: #ffd166;
+  --font-family: system-ui, sans-serif;
+  z-index: 10;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+}
+
+/*
+ * Folder children inherit the root's `--background-color` (transparent),
+ * so blur applied to .lil-gui.root covers the whole panel. We
+ * deliberately don't add a separate `backdrop-filter` to the
+ * folder, otherwise stacked filters would re-blur an already
+ * blurred image and over-soften the chart visuals.
+ */
+
+/*
+ * Record-button accent. lil-gui paints function controllers as
+ * a single-row button — when capture is live we colour it red
+ * via the `.recording` class on the controller's row element
+ * and pulse the box-shadow so it stays visible without dominating
+ * gameplay rendered behind it.
+ */
+.lil-gui .controller.recording {
+  background: #c33b3b;
+  animation: record-pulse 1.4s ease-in-out infinite;
+}
+
+.lil-gui .controller.recording .name,
+.lil-gui .controller.recording .widget {
+  color: #fff;
+}
+
+/*
+ * Armed state — the user clicked Record on the select screen
+ * before picking a song. The button is in standby until the
+ * next play kicks off, at which point the `recording` class
+ * takes over. We use a softer amber + slower pulse so it reads
+ * as "ready, but not yet capturing".
+ */
+.lil-gui .controller.arming {
+  background: #b8841d;
+  animation: record-arming 2s ease-in-out infinite;
+}
+
+.lil-gui .controller.arming .name,
+.lil-gui .controller.arming .widget {
+  color: #fff;
+}
+
+@keyframes record-arming {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(184 132 29 / 0.5);
+  }
+  50% {
+    box-shadow: 0 0 6px 2px rgb(184 132 29 / 0.5);
+  }
+}
+
+@keyframes record-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(195 59 59 / 0.6);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px rgb(195 59 59 / 0.6);
+  }
+}
+
+/*
+ * Floating search input. Rendered as a DOM overlay rather than as
+ * a Pixi-side text widget because Web Audio editing UI (IME, copy
+ * / paste, keyboard-shortcut handling) is dramatically easier with
+ * a real `<input>` element. The input is invisible until focused
+ * — we don't want a stark form widget hovering over the LR2 skin
+ * by default; clicking the skin's search-text region (or pressing
+ * `/`) gives it focus and shows the editor on top of the skin.
+ *
+ * Pinned bottom-left so it doesn't compete with the floating
+ * top-right toolbar. Width matches the LR2 default search rect's
+ * approximate scaled width without trying to mirror it exactly —
+ * keeping the overlay independent of skin geometry means it works
+ * with any skin or no skin at all.
+ */
+.search-input {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 10;
+  width: 320px;
+  padding: 6px 10px;
+  border: 1px solid #3a4354;
+  border-radius: 6px;
+  background: rgb(11 14 22 / 0.85);
+  color: #f8fafc;
+  font-size: 13px;
+  font-family: system-ui, sans-serif;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: #ffd166;
+  background: rgb(11 14 22 / 0.95);
+}
+
+.search-input:not(:focus):placeholder-shown {
+  /*
+   * Dim the placeholder when the user hasn't focused yet so the
+   * input feels like a passive "click here to search" affordance
+   * rather than a primary widget.
+   */
+  opacity: 0.6;
+}
+
+/*
+ * Render stage. Fills the shell's full viewport so PixiJS's
+ * `resizeTo: container` sees the entire window size and the
+ * `resolveScaledViewport` math can scale the LR2 design space
+ * (640×480 / 1280×720 etc.) up as far as the aspect-correct fit
+ * allows.
+ *
+ * Both `width` and `height` need to be explicit `100%`: the shell
+ * itself is `position: relative` (no grid / flex) since the
+ * toolbar is absolute-positioned, so a default `display: block`
+ * stage would have `height: auto` and collapse to its (zero)
+ * content height — which would in turn shrink the canvas inside
+ * down to nothing.
+ */
+.stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * Drop overlay — three layers stacked over the stage:
+ *
+ *   1. `.drop`            — full-stage container, hidden by default.
+ *                           Becomes a placement grid when active so
+ *                           `.drop-card` lands centred without an
+ *                           extra wrapper.
+ *   2. `.drop-frame`      — subtle outer ring. Hairline border at
+ *                           rest, full accent + breathing glow on
+ *                           active drag.
+ *   3. `.drop-card`       — frosted-glass content panel: icon,
+ *                           title, subtitle. Letter-spaced uppercase
+ *                           typography pulls the centre of mass
+ *                           upward; slow scale + glow animations on
+ *                           drag give the screen change without
+ *                           shouting at the user.
+ *
+ * Visible whenever the shell carries `.empty` (no songs loaded
+ * yet) so first-time visitors see the affordance, and during a
+ * live drag (`.dragging`) where the heavier glow / pulse tier
+ * kicks in.
+ */
+.drop {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  pointer-events: none;
+  z-index: 2;
+  /*
+   * Resting backdrop. Stays light enough for first-time
+   * visitors to read the hint without feeling smothered;
+   * the dragging tier deepens this dramatically.
+   */
+  background: radial-gradient(circle at center, rgb(8 9 13 / 0.55) 0%, rgb(8 9 13 / 0.72) 60%, rgb(8 9 13 / 0.85) 100%);
+  /*
+   * `transition` covers backdrop + opacity so the swap
+   * between resting and dragging tiers reads as a smooth
+   * mood shift rather than a hard cut.
+   */
+  transition:
+    opacity 180ms ease-out,
+    background 220ms ease-out;
+  opacity: 0;
+}
+
+.dragging .drop,
+.shell.empty .drop {
+  display: grid;
+  opacity: 1;
+}
+
+/*
+ * Active drag tier — heavy darken across the whole scene so
+ * the card pops against any underlying chart art. Combined
+ * with the card's own scale + colour shift below, the overall
+ * transition reads as "the page just woke up to your drag".
+ */
+.dragging .drop {
+  background: radial-gradient(circle at center, rgb(8 9 13 / 0.72) 0%, rgb(4 5 9 / 0.92) 70%, rgb(0 0 0 / 0.96) 100%);
+}
+
+.drop-frame {
+  position: absolute;
+  inset: 24px;
+  border: 1px solid rgb(255 209 102 / 0.18);
+  border-radius: 14px;
+  /*
+   * Hair-thin ring at rest — present but quiet. The active
+   * drag tier below replaces it with a thick luminous accent
+   * that nearly fills the dashed-frame slot.
+   */
+  transition:
+    inset 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 220ms ease-out,
+    border-width 220ms ease-out,
+    box-shadow 220ms ease-out;
+  pointer-events: none;
+}
+
+.drop-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 38px 64px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgb(20 24 34 / 0.78), rgb(11 14 22 / 0.78));
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  box-shadow:
+    0 24px 60px rgb(0 0 0 / 0.45),
+    0 0 0 1px rgb(255 255 255 / 0.04) inset;
+  text-align: center;
+  /*
+   * Initial entry animation. The state-driven property changes
+   * (size / colour / glow under `.dragging`) ride on
+   * `transition` below — *not* on a re-declared `animation`
+   * list — so adding the dragging tier doesn't restart this
+   * one-shot from scale(0.96) and produce a visible snap.
+   */
+  animation: drop-card-in 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  /*
+   * Hint the compositor that `transform` is the moving part.
+   * Without `will-change`, the first time we change `transform`
+   * the browser has to re-layer the card on the GPU mid-
+   * animation, which is the classic source of a one-frame
+   * "thunk" the user sees as カクッ.
+   */
+  will-change: transform;
+  /*
+   * No `padding` transition — animating padding triggers a
+   * layout reflow on every frame, which under transform=scale
+   * combine to produce the jolt the user reported. Padding is
+   * fixed; the dragging tier conveys the "size up" purely
+   * through `transform: scale(...)`, which is composited
+   * cheaply on the GPU.
+   */
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 220ms ease-out,
+    border-color 220ms ease-out,
+    box-shadow 220ms ease-out;
+}
+
+.drop-icon {
+  width: 44px;
+  height: 44px;
+  color: #ffd166;
+  filter: drop-shadow(0 0 12px rgb(255 209 102 / 0.35));
+  /*
+   * Subtle floating motion at rest. Slowed way down so it
+   * reads as ambient rather than demanding attention.
+   */
+  animation: drop-icon-float 3.2s ease-in-out infinite;
+  transition:
+    width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 200ms ease-out,
+    filter 220ms ease-out;
+}
+
+.drop-icon-head {
+  /*
+   * Arrow head bobs independently from the shaft on the
+   * dragging tier — `transform-origin` sits at the visual
+   * centre of the head so the bounce feels natural rather
+   * than pivoting from a corner.
+   */
+  transform-origin: 24px 27px;
+}
+
+.drop-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #f8fafc;
+  /*
+   * Soft yellow under-glow to tie the title back to the
+   * accent without inverting its colour entirely. Reads as
+   * "highlighted" rather than "loud".
+   */
+  text-shadow: 0 0 24px rgb(255 209 102 / 0.25);
+  transition:
+    color 200ms ease-out,
+    text-shadow 220ms ease-out,
+    letter-spacing 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.drop-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #aab4c2;
+  /*
+   * `flex-wrap` so very narrow viewports can stack the
+   * pieces vertically rather than overflowing the card.
+   */
+  flex-wrap: wrap;
+  justify-content: center;
+  transition: color 200ms ease-out;
+}
+
+.drop-subtitle-sep {
+  /*
+   * Dimmed bullet between subtitle pieces — accent at lower
+   * alpha so the separator reads as decorative rather than
+   * as another label.
+   */
+  color: rgb(255 209 102 / 0.45);
+  font-weight: 700;
+}
+
+/*
+ * Browser-compatibility diagnostic panel. Standalone widget that
+ * lives at the shell level — DELIBERATELY not inside the drop
+ * card so it reads as "system check" rather than as decoration
+ * on the call-to-action.
+ *
+ * Pinned top-left because:
+ *   - top-right is taken by lil-gui (settings)
+ *   - bottom-left is taken by the search input (when songs load)
+ *   - centre is the drop card
+ * That leaves top-left as the natural home for a status-bar-
+ * style diagnostic widget. It only shows up alongside the empty-
+ * state UI (i.e. before songs are loaded); once gameplay /
+ * select / result mounts, it gets out of the way.
+ */
+.compat-panel {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 280px;
+  padding: 14px 16px 16px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 14px;
+  background: rgb(11 14 22 / 0.7);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  box-shadow:
+    0 18px 36px rgb(0 0 0 / 0.4),
+    0 0 0 1px rgb(255 255 255 / 0.03) inset;
+  /*
+   * Visible only on the empty / dragging shell — once the user
+   * loads songs (select / gameplay / result scenes) the panel
+   * has done its job and gets out of the way. Mirrors the
+   * `.drop` overlay's own visibility logic.
+   */
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition:
+    opacity 220ms ease-out,
+    transform 220ms ease-out,
+    border-color 220ms ease-out,
+    box-shadow 220ms ease-out,
+    background 220ms ease-out;
+}
+
+.shell.empty .compat-panel,
+.dragging .compat-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.compat-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/*
+ * Status badge — the visual anchor for the "system check"
+ * framing. The circular icon + check / cross mark mimics OS-
+ * level health-check widgets (macOS Activity Monitor's pill,
+ * Settings → About → Status etc.) so the user reads it as
+ * "diagnostic readout" without having to parse the label.
+ */
+.compat-panel-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgb(74 222 128 / 0.16);
+  color: #4ade80;
+  flex-shrink: 0;
+  transition:
+    color 200ms ease-out,
+    background 200ms ease-out;
+}
+
+.compat-panel-badge-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.compat-panel-badge-mark {
+  /*
+   * Both check and cross live in the SVG; the panel's `--ok` /
+   * `--fail` modifiers reveal exactly one. Fade rather than
+   * snap so a future state-change (e.g. async re-probe) reads
+   * as a transition rather than a flicker.
+   */
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+
+.compat-panel--ok .compat-panel-badge-mark--check,
+.compat-panel--fail .compat-panel-badge-mark--cross {
+  opacity: 1;
+}
+
+.compat-panel--fail .compat-panel-badge {
+  background: rgb(251 113 133 / 0.18);
+  color: #fb7185;
+}
+
+.compat-panel-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.compat-panel-eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgb(151 163 179 / 0.85);
+}
+
+.compat-panel-status {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #f8fafc;
+  /*
+   * Long missing-feature lists wrap rather than overflow the
+   * panel's fixed width. White-space normal (default) lets
+   * `Missing required: WebGL2, Web Audio` break naturally.
+   */
+  word-break: break-word;
+  transition: color 200ms ease-out;
+}
+
+.compat-panel--ok .compat-panel-status {
+  color: #b9f1c8;
+}
+
+.compat-panel--fail .compat-panel-status {
+  color: #ffd6dc;
+}
+
+.compat-panel--fail {
+  /*
+   * Border + shadow shift to the warning palette so the panel
+   * doesn't quietly look "off" — when the player isn't going
+   * to run, the user should see a clearly red diagnostic card.
+   */
+  border-color: rgb(251 113 133 / 0.55);
+  background: rgb(40 18 22 / 0.78);
+  box-shadow:
+    0 18px 36px rgb(0 0 0 / 0.45),
+    0 0 0 1px rgb(251 113 133 / 0.18) inset,
+    0 0 32px rgb(251 113 133 / 0.18);
+}
+
+.compat-panel-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /*
+   * Subtle top divider visually splits the header from the
+   * detail list. Inset 1 px so the line aligns with the
+   * panel's interior padding rather than running edge-to-edge.
+   */
+  padding-top: 10px;
+  border-top: 1px solid rgb(255 255 255 / 0.06);
+}
+
+.compat-panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compat-panel-section-title {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgb(151 163 179 / 0.65);
+}
+
+.compat-panel-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.compat-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: #d2d9e4;
+}
+
+.compat-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  flex-shrink: 0;
+  /*
+   * Glyph (`✓` / `✕` / `–`) inherits the row's `currentColor`
+   * via the modifier classes below; the disc itself uses an
+   * `rgb(... / 0.18)` background so the mark stays legible
+   * at small sizes against the panel's dark backdrop.
+   */
+}
+
+.compat-row--ok {
+  color: #4ade80;
+}
+.compat-row--ok .compat-row-icon {
+  background: rgb(74 222 128 / 0.18);
+}
+
+.compat-row--warn {
+  color: #facc15;
+}
+.compat-row--warn .compat-row-icon {
+  background: rgb(250 204 21 / 0.18);
+}
+
+.compat-row--fail {
+  color: #fb7185;
+}
+.compat-row--fail .compat-row-icon {
+  background: rgb(251 113 133 / 0.22);
+}
+
+.compat-row-label {
+  white-space: nowrap;
+  /*
+   * Label inherits a tinted-white default and only swaps to
+   * the row's accent on missing required (where the colour
+   * IS the message). Supported / optional-missing rows keep
+   * the label neutral so the icon carries the verdict —
+   * less visual noise across the grid.
+   */
+  color: #d2d9e4;
+}
+
+.compat-row--fail .compat-row-label {
+  color: #ffd6dc;
+}
+
+/*
+ * Screen-reader-only label that carries the verdict ("supported"
+ * / "missing (required)" / "missing (optional)") so assistive tech
+ * doesn't have to interpret the `✓` / `✕` / `–` glyph.
+ */
+.compat-row-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compat-panel,
+  .compat-panel-status,
+  .compat-panel-badge,
+  .compat-panel-badge-mark {
+    transition: none;
+  }
+}
+
+/*
+ * Active-drag tier — every visual property shifts so the
+ * delta from resting is immediately legible: card swells in
+ * size, frame thickens and pulls inward, accent colour
+ * floods the typography, the icon doubles in glow, and the
+ * surrounding scrim deepens nearly to black. The empty /
+ * resting tier (`.shell.empty` without `.dragging`) keeps
+ * the calmer baseline so the contrast between the two
+ * states is the message.
+ */
+.dragging .drop-frame {
+  /*
+   * Frame contracts inward AND thickens — the inset shrinks
+   * from 24px to 12px and the border grows from a hairline
+   * to a clearly visible 3px luminous accent, so the screen's
+   * "frame" deltas in two channels at once (geometry + colour).
+   */
+  inset: 12px;
+  border-width: 3px;
+  border-color: rgb(255 209 102 / 0.85);
+  box-shadow:
+    0 0 0 1px rgb(255 209 102 / 0.35),
+    0 0 32px rgb(255 209 102 / 0.45),
+    inset 0 0 48px rgb(255 209 102 / 0.18);
+  animation: drop-frame-pulse 1.8s ease-in-out infinite;
+}
+
+.dragging .drop-card {
+  /*
+   * Card scales to 1.14 to deliver the visible "size up" that
+   * the resting tier lacked when padding stopped animating.
+   * Background brightens toward the accent, the inner sheen
+   * picks up a yellow tint, and the outer halo balloons to
+   * a 120-px glow — together these read as "the card just
+   * lit up", not "the card pulsed slightly".
+   *
+   * Crucially, we do NOT re-declare the `animation` shorthand
+   * here. Doing so would re-trigger `drop-card-in` from its
+   * `from` keyframe (scale 0.96), which is what produced the
+   * visible jolt the user reported. Instead, the elevated
+   * state rides entirely on the `transform` / `background` /
+   * `border-color` / `box-shadow` transitions defined on
+   * `.drop-card` above, and the breathe loop below adds a
+   * gentle infinite oscillation on top of the static target.
+   */
+  transform: scale(1.14);
+  background: linear-gradient(180deg, rgb(40 36 22 / 0.86), rgb(22 19 8 / 0.86));
+  border-color: rgb(255 209 102 / 0.85);
+  box-shadow:
+    0 32px 80px rgb(0 0 0 / 0.6),
+    0 0 0 2px rgb(255 209 102 / 0.45) inset,
+    0 0 120px rgb(255 209 102 / 0.45);
+  /*
+   * Breathe is delayed by the same 260ms the `transform`
+   * transition takes so the loop only kicks in *after* the
+   * card has reached its dragging-tier scale. Without the
+   * delay, the animation would override the transition mid-
+   * flight and collapse the smooth scale-up into a single
+   * snap.
+   */
+  animation: drop-card-breathe 2.4s ease-in-out 260ms infinite;
+}
+
+.dragging .drop-title {
+  /*
+   * Title flips to the accent colour and widens its letter-
+   * spacing. The colour shift alone is dramatic; the spacing
+   * shift gives it a subtle "expanded" feel without being a
+   * hard transform.
+   */
+  color: #ffd166;
+  letter-spacing: 0.24em;
+  text-shadow: 0 0 28px rgb(255 209 102 / 0.6);
+}
+
+.dragging .drop-subtitle {
+  /*
+   * Subtitle warms from grey to a soft accent so the whole
+   * card reads in the same mood — paired with the title shift
+   * the typography hierarchy stays intact (subtitle still
+   * dimmer than the title) but everything is now in-scheme.
+   */
+  color: rgb(255 209 102 / 0.85);
+}
+
+.dragging .drop-subtitle-sep {
+  color: rgb(255 209 102 / 0.7);
+}
+
+.dragging .drop-icon {
+  /*
+   * Icon picks up a much heavier drop-shadow halo. We DO
+   * NOT change `width` / `height` here — animating those
+   * properties would trigger a layout reflow on the card's
+   * flex column, which (combined with the card's own
+   * scale-up transition) was a contributor to the "カクッ"
+   * jolt. The card's `transform: scale(1.14)` already grows
+   * the icon proportionally; that's enough perceived size
+   * change without any property-driven layout work.
+   *
+   * The animation list keeps the resting `drop-icon-float`
+   * and adds a `drop-icon-glow` loop in parallel. Re-stating
+   * `drop-icon-float` is intentional — it lets us swap to
+   * the faster cadence (1.6s vs 3.2s at rest) so the user
+   * notices the energy shift, and because the keyframe
+   * transforms (translateY 0 ↔ -3px) overlap cleanly with
+   * the resting-tier values, the float loop hands off
+   * without a visible step.
+   */
+  filter: drop-shadow(0 0 28px rgb(255 209 102 / 0.85));
+  animation:
+    drop-icon-float 1.6s ease-in-out infinite,
+    drop-icon-glow 1.8s ease-in-out infinite;
+}
+
+.dragging .drop-icon-head {
+  animation: drop-icon-head-bounce 1.2s ease-in-out infinite;
+}
+
+@keyframes drop-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes drop-card-breathe {
+  /*
+   * Breathe loop sits on top of the dragging tier's static
+   * `transform: scale(1.14)`. Both keyframes anchor at 1.14
+   * so the animation never undershoots the resting position
+   * (which would look like the card sagging back toward
+   * "off"); the 50% peak is +0.015 above baseline, enough to
+   * read as motion without diluting the dragging-tier scale.
+   */
+  0%,
+  100% {
+    transform: scale(1.14);
+  }
+  50% {
+    transform: scale(1.155);
+  }
+}
+
+@keyframes drop-frame-pulse {
+  0%,
+  100% {
+    border-color: rgb(255 209 102 / 0.4);
+    box-shadow:
+      0 0 0 1px rgb(255 209 102 / 0.08),
+      0 0 0 8px rgb(255 209 102 / 0) inset;
+  }
+  50% {
+    border-color: rgb(255 209 102 / 0.7);
+    box-shadow:
+      0 0 0 1px rgb(255 209 102 / 0.18),
+      0 0 0 24px rgb(255 209 102 / 0.06) inset;
+  }
+}
+
+@keyframes drop-icon-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes drop-icon-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 12px rgb(255 209 102 / 0.35));
+  }
+  50% {
+    filter: drop-shadow(0 0 22px rgb(255 209 102 / 0.7));
+  }
+}
+
+@keyframes drop-icon-head-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+/*
+ * Respect the user's reduced-motion preference — strip the
+ * breathing / pulse loops and let only the entry fade play.
+ * The visual change is still clear (border-color / glow
+ * deltas remain) but nothing keeps animating in the
+ * background.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .drop-card,
+  .dragging .drop-card,
+  .dragging .drop-frame,
+  .drop-icon,
+  .dragging .drop-icon,
+  .dragging .drop-icon-head {
+    animation: none !important;
+  }
+}
+
+/*
+ * Loading overlay shown while a dropped folder / ZIP is being
+ * read and parsed. Positioned over the whole shell with a soft
+ * dim so the loading card reads above whatever scene is currently
+ * mounted (the select view, gameplay, or the empty drop hint).
+ *
+ * Hidden by default — `.visible` toggles it on. We use `display`
+ * (not `visibility`) so the indeterminate-bar animation stops
+ * paying CPU while idle, but fade the opacity for a less-jarring
+ * pop when the heavy phase ends.
+ */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  place-items: center;
+  background: rgb(8 9 13 / 0.65);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.loading-overlay.visible {
+  display: grid;
+}
+
+.loading-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /*
+   * Fixed width — the counter line shows the current filename,
+   * so without this the card would jitter horizontally with
+   * every progress event as paths of different lengths flowed
+   * in. `min(...)` keeps the layout sane on narrow viewports
+   * (< 480 px) while pinning the card to 480 px otherwise so
+   * the visual width is stable across phases.
+   */
+  width: min(80vw, 480px);
+  padding: 18px 22px;
+  border: 1px solid #3a4354;
+  border-radius: 10px;
+  background: rgb(17 22 32 / 0.94);
+  color: #f8fafc;
+  font-family: system-ui, sans-serif;
+  /*
+   * Card has its own pointer-events so a future "Cancel" button
+   * inside it would be clickable; the parent overlay stays
+   * pointer-event-none so the user can still interact with the
+   * background canvas in case loading runs in the background.
+   */
+  pointer-events: auto;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.4);
+}
+
+.loading-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+  /*
+   * Pin the line height in pixels (not em / unitless) so a CJK
+   * glyph in the label — should one ever sneak in via a future
+   * status string — doesn't pull a taller fallback font's line
+   * box and bump the card up by a couple of pixels. The fixed
+   * `height` plus `nowrap` makes this row exactly one line tall
+   * regardless of which fallback the browser picks.
+   */
+  line-height: 20px;
+  height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.loading-bar {
+  /*
+   * Track. Height kept tight (6 px) so the card reads as a hint
+   * rather than a hero element; rounded ends keep the fill from
+   * looking like a sharp data-cell on small percentages.
+   */
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #1b2230;
+  overflow: hidden;
+}
+
+.loading-bar-fill {
+  /*
+   * Determinate state — the inline `width` set by JS drives the
+   * fill. Default to a yellow accent so the bar matches the rest
+   * of the demo's highlight colour (toolbar :checked label, drop
+   * border).
+   */
+  height: 100%;
+  width: 0;
+  background: #ffd166;
+  border-radius: 3px;
+  transition: width 80ms linear;
+}
+
+.loading-bar-fill.indeterminate {
+  /*
+   * Indeterminate state — the bar slides a 30 %-wide segment
+   * back-and-forth so the user sees motion even when the loader
+   * doesn't yet know the total. Kicks in for the `enumerating`
+   * phase (FileSystem-tree walk) and as a default before the
+   * first determinate event lands.
+   */
+  width: 30%;
+  animation: loading-indeterminate 1.4s ease-in-out infinite;
+  transition: none;
+}
+
+@keyframes loading-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(333%);
+  }
+}
+
+.loading-counter {
+  /*
+   * Compact monospace-ish line that holds "X / N · path/to/file".
+   * Smaller and dimmer than the phase label so it reads as a
+   * supporting detail.
+   *
+   * Pinned to a single line via `nowrap` + `text-overflow: ellipsis`:
+   * the counter text changes on every progress tick (filename
+   * varies wildly in length) and any wrapping would make the card
+   * grow / shrink vertically, which combined with the fixed-width
+   * card makes the overlay look unstable.
+   *
+   * Width AND height are locked: a Japanese filename pulls in a
+   * CJK fallback font (Hiragino, Yu Gothic, etc.) whose intrinsic
+   * line-box is taller than the monospace primary; without a
+   * pixel-fixed `line-height` + `height` the card would jiggle
+   * vertically by ~2 px every time an ASCII path was followed by
+   * a Japanese path. Pinning to 18 px gives the 12 px font enough
+   * breathing room for the worst-case fallback's descender while
+   * staying constant across any locale.
+   */
+  font-size: 12px;
+  color: #aab4c2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 18px;
+  height: 18px;
+}
+
+/*
+ * Bottom-right Acknowledgements button. Pinned outside any
+ * scene-specific UI so the open-source attribution stays
+ * reachable from select / gameplay / result views without the
+ * scenes having to carry it themselves. Sits above the canvas
+ * (z-index 8) but BELOW the modal it spawns (z-index 30) so
+ * the modal cleanly overlaps the button when open.
+ */
+.help-button {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 10px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 999px;
+  background: rgb(11 14 22 / 0.7);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  color: #d2d9e4;
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.35);
+  transition:
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    background 180ms ease-out,
+    transform 180ms ease-out;
+}
+
+.help-button:hover,
+.help-button:focus-visible {
+  color: #ffd166;
+  border-color: rgb(255 209 102 / 0.4);
+  background: rgb(20 24 34 / 0.85);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.help-button:focus-visible {
+  /*
+   * Keyboard-focus ring — uses the accent so it harmonises
+   * with the rest of the demo's hover affordances.
+   */
+  box-shadow:
+    0 8px 22px rgb(0 0 0 / 0.35),
+    0 0 0 2px rgb(255 209 102 / 0.45);
+}
+
+.help-button-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.help-button-label {
+  /*
+   * Letter-spacing shrinks slightly on the dragging tier so
+   * the button doesn't compete with the call-to-action; the
+   * default rest tier keeps the spaced-uppercase look.
+   */
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  /*
+   * On very narrow viewports the spacing-heavy label can
+   * overlap the search input. Hide the text and keep the
+   * icon — the `aria-label`-equivalent comes from the
+   * modal's title once opened.
+   */
+  .help-button-label {
+    display: none;
+  }
+  .help-button {
+    padding: 8px;
+  }
+}
+
+/*
+ * Acknowledgements modal. Lives at the page level so it
+ * overlaps every scene; the backdrop blocks pointer events to
+ * the canvas underneath while open. Hidden by default — the
+ * `.visible` class fades both backdrop and card in.
+ */
+.help-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.help-modal.visible {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+.help-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(4 6 10 / 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.help-modal-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(720px, 100%);
+  max-height: min(80vh, 720px);
+  padding: 22px 26px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 18px;
+  background: rgb(11 14 22 / 0.96);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: 0 28px 80px rgb(0 0 0 / 0.55);
+  /*
+   * Slide-in entry that reads as "the dialog rose into focus"
+   * rather than "popped instantly". Matches the drop card's
+   * entry animation cadence so the demo's overlay vocabulary
+   * stays consistent.
+   */
+  transform: translateY(8px) scale(0.98);
+  opacity: 0;
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease-out;
+}
+
+.help-modal.visible .help-modal-card {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.help-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.help-modal-eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgb(151 163 179 / 0.85);
+}
+
+.help-modal-title {
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #f8fafc;
+}
+
+.help-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 50%;
+  background: rgb(20 24 34 / 0.6);
+  color: #d2d9e4;
+  cursor: pointer;
+  transition:
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    background 180ms ease-out;
+}
+
+.help-modal-close:hover,
+.help-modal-close:focus-visible {
+  color: #ffd166;
+  border-color: rgb(255 209 102 / 0.4);
+  background: rgb(34 28 12 / 0.7);
+  outline: none;
+}
+
+.help-modal-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.help-pane-intro {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #aab4c2;
+}
+
+/*
+ * Tab strip — segmented-control look. The two tabs ("Usage"
+ * / "Open source") swap which pane is active inside the
+ * modal card. Active tab gets the accent underline; inactive
+ * stays neutral so the active pane reads as the focused
+ * surface.
+ */
+.help-modal-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+  padding-bottom: 8px;
+}
+
+.help-modal-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 6px 14px;
+  border-radius: 8px;
+  color: rgb(151 163 179 / 0.85);
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 180ms ease-out,
+    background 180ms ease-out;
+}
+
+.help-modal-tab:hover,
+.help-modal-tab:focus-visible {
+  color: #ffd166;
+  background: rgb(255 209 102 / 0.08);
+  outline: none;
+}
+
+.help-modal-tab.is-active {
+  color: #ffd166;
+  background: rgb(255 209 102 / 0.16);
+}
+
+/*
+ * Tab panes. Inactive panes use `[hidden]` to drop out of
+ * layout and the a11y tree entirely; the active pane fills
+ * the remaining height and scrolls when content overflows.
+ */
+.help-modal-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px 4px 0;
+  /*
+   * Same accent scrollbar as the OSS list — dim by default
+   * and lights up on hover. Keeps the modal's chrome
+   * coherent across both panes.
+   */
+  scrollbar-color: rgb(255 209 102 / 0.4) transparent;
+  scrollbar-width: thin;
+}
+
+.help-modal-pane::-webkit-scrollbar {
+  width: 6px;
+}
+
+.help-modal-pane::-webkit-scrollbar-thumb {
+  background: rgb(255 209 102 / 0.35);
+  border-radius: 999px;
+}
+
+.help-modal-pane::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 209 102 / 0.6);
+}
+
+.help-section-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgb(151 163 179 / 0.85);
+}
+
+.help-section-title:not(:first-child) {
+  margin-top: 18px;
+}
+
+.help-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #d2d9e4;
+}
+
+.help-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.06);
+  color: #f8fafc;
+}
+
+.help-list strong {
+  color: #ffd166;
+  font-weight: 600;
+}
+
+.help-list em {
+  font-style: normal;
+  color: #ffd166;
+}
+
+/*
+ * Keyboard-key pill. Mimics the on-the-key look readers
+ * expect from documentation surfaces (Notion, GitHub docs,
+ * MDN). Drop shadow gives the 3-D affordance without an
+ * inset border that would clash with the modal's flat tone.
+ */
+.help-list kbd,
+.help-keymap kbd {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: rgb(20 24 34 / 0.9);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.05) inset,
+    0 1px 0 rgb(0 0 0 / 0.4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f8fafc;
+  line-height: 1;
+}
+
+.help-keymap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 10px;
+  background: rgb(20 24 34 / 0.55);
+}
+
+.help-keymap-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.help-keymap-side {
+  /*
+   * "1P" / "2P" badge prefixing each row. Same accent palette
+   * as `.ack-card-license` so the player-side / library
+   * categorisation reads consistently across the modal.
+   */
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgb(255 209 102 / 0.18);
+  color: #ffd166;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.help-keymap-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.help-keymap-sep {
+  color: rgb(151 163 179 / 0.55);
+  margin: 0 2px;
+}
+
+.help-keymap-note {
+  font-size: 11px;
+  color: rgb(151 163 179 / 0.75);
+  padding-top: 2px;
+  border-top: 1px solid rgb(255 255 255 / 0.04);
+  margin-top: 4px;
+}
+
+/*
+ * Language switcher inside the Usage pane. Right-aligned so
+ * the primary content (section titles + lists) keeps its
+ * left visual rhythm. The toggle group looks like the tab
+ * strip but uses a stronger pressed-state to read as a
+ * binary segment selector.
+ */
+.help-lang-switch {
+  display: inline-flex;
+  align-self: flex-end;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 999px;
+  background: rgb(20 24 34 / 0.55);
+  margin-bottom: 12px;
+}
+
+.help-lang-toggle {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 5px 14px;
+  border-radius: 999px;
+  color: rgb(151 163 179 / 0.85);
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition:
+    color 160ms ease-out,
+    background 160ms ease-out;
+}
+
+.help-lang-toggle:hover,
+.help-lang-toggle:focus-visible {
+  color: #ffd166;
+  outline: none;
+}
+
+.help-lang-toggle.is-active {
+  color: #08090d;
+  background: #ffd166;
+}
+
+/*
+ * The toggle row sits *outside* the flex flow that arranges
+ * `.help-section-title` / `.help-list` — `.help-modal-pane`
+ * is a plain block, so use a small flex wrapper just on the
+ * switch + content. Keeps the alignment without disturbing
+ * the rest.
+ */
+.help-modal-pane#help-pane-usage {
+  display: flex;
+  flex-direction: column;
+}
+
+.help-lang {
+  display: contents;
+}
+
+.help-lang[hidden] {
+  display: none;
+}
+
+/*
+ * About card. Sits at the top of the Usage pane (per
+ * language) summarising what the program is, who wrote it,
+ * and where the source / author live. Styled as a softly
+ * highlighted info card — distinct from the surrounding
+ * `<ul class="help-list">` rows so the user reads it as
+ * "context" rather than "another step in the guide".
+ */
+.help-about {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgb(255 209 102 / 0.2);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgb(34 28 12 / 0.55), rgb(20 17 8 / 0.55));
+  margin-bottom: 18px;
+}
+
+.help-about-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #e9eef6;
+}
+
+.help-about-summary code,
+.help-about-meta code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.06);
+  color: #f8fafc;
+}
+
+.help-about-summary strong {
+  color: #ffd166;
+  font-weight: 600;
+}
+
+.help-about-meta {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #d2d9e4;
+}
+
+.help-about-key {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgb(151 163 179 / 0.85);
+  align-self: center;
+}
+
+.help-about-meta a {
+  color: #ffd166;
+  text-decoration: none;
+  /*
+   * `word-break: break-all` so long URLs (e.g.
+   * `github.com/nulltask/be-music`) wrap inside the right
+   * column on narrow viewports rather than blowing the grid
+   * wider than the modal.
+   */
+  word-break: break-word;
+}
+
+.help-about-meta a:hover,
+.help-about-meta a:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.help-about-meta li {
+  display: contents;
+}
+
+/*
+ * Disclaimers / privacy notes. Sit at the bottom of the About
+ * card with a thin top divider so they read as a separate
+ * "small print" section without losing the context of being
+ * inside the About card. Each item gets a small accent dot —
+ * dim enough to feel like a checklist marker, not loud
+ * warning iconography.
+ */
+.help-about-notes {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0 0;
+  border-top: 1px dashed rgb(255 209 102 / 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: rgb(210 217 228 / 0.95);
+}
+
+.help-about-notes li {
+  position: relative;
+  padding-left: 18px;
+}
+
+.help-about-notes li::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0.55em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgb(255 209 102 / 0.6);
+  /*
+   * Soft glow keeps the dot legible against the warm About-
+   * card background without needing a heavy color or stroke.
+   */
+  box-shadow: 0 0 6px rgb(255 209 102 / 0.4);
+}
+
+.help-about-notes strong {
+  color: #ffd166;
+  font-weight: 600;
+}
+
+/*
+ * Scrollable dependency list. `min-height: 0` lets the flex
+ * parent collapse the list when the dialog hits its
+ * `max-height` cap — without it the inner `<ol>` would push
+ * the modal taller than the viewport.
+ *
+ * Block layout (NOT flex column). When the list itself was a
+ * flex column, each `.ack-card` became a flex item with
+ * `flex-shrink: 1` (the default), and combined with the
+ * card's `overflow: hidden` the algorithm cheerfully shrunk
+ * each card to ~12 px when the available height was tight.
+ * Plain block layout sizes children purely by their content
+ * — the cards always paint at their natural height.
+ */
+.help-oss-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /*
+   * Scroll handling moved to the parent `.help-modal-pane`
+   * — the pane already scrolls when the dialog overflows,
+   * so a nested scroller here would create double-scroll
+   * confusion and an inner scrollbar that competes with the
+   * tab strip above. Custom scrollbar styling kept for any
+   * future case where a host wraps the list directly.
+   */
+  /*
+   * Custom scrollbar styling. Chromium reads
+   * `::-webkit-scrollbar`; Firefox reads
+   * `scrollbar-color`. Both surfaces stay in the demo's
+   * dark / accent palette rather than defaulting to the
+   * system grey.
+   */
+  scrollbar-color: rgb(255 209 102 / 0.4) transparent;
+  scrollbar-width: thin;
+}
+
+.help-oss-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.help-oss-list::-webkit-scrollbar-thumb {
+  background: rgb(255 209 102 / 0.35);
+  border-radius: 999px;
+}
+
+.help-oss-list::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 209 102 / 0.6);
+}
+
+.ack-card {
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 10px;
+  background: rgb(20 24 34 / 0.55);
+  /*
+   * Flat layout — no `<details>`/`<summary>` wrapper. Header
+   * info, meta, and license text all stack as direct children
+   * of the `<li>`. The 4 px gap above each child after the
+   * first replaces what would have been the summary's
+   * `padding-top`.
+   *
+   * `overflow: hidden` clips the inner license-text panel's
+   * background to the card's rounded corners. Safe here only
+   * because the parent list uses block layout (not flex
+   * column) — under flex column it would have let the algorithm
+   * collapse the card height.
+   */
+  overflow: hidden;
+  padding: 12px 16px 0;
+  margin-bottom: 8px;
+}
+
+.ack-card:last-child {
+  margin-bottom: 0;
+}
+
+.ack-card > * + * {
+  margin-top: 4px;
+}
+
+.ack-card-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ack-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ack-card-version {
+  font-size: 11px;
+  color: rgb(151 163 179 / 0.85);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ack-card-license {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgb(255 209 102 / 0.18);
+  color: #ffd166;
+}
+
+.ack-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: rgb(151 163 179 / 0.85);
+}
+
+.ack-card-link {
+  color: #ffd166;
+  text-decoration: none;
+}
+
+.ack-card-link:hover,
+.ack-card-link:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.ack-card-author {
+  /* Same dim grey as the version — secondary metadata. */
+}
+
+.ack-card-license-text {
+  /*
+   * Flat layout (no `<details>` wrapper): the license text
+   * is a sibling of the heading / meta blocks rather than a
+   * disclosed-on-click panel. Negative horizontal margin
+   * cancels the card's `padding: 12px 16px` so the dark
+   * inner panel runs edge-to-edge of the card while keeping
+   * the heading / meta padded normally.
+   */
+  margin: 8px -16px 0;
+  padding: 12px 16px 14px;
+  border-top: 1px solid rgb(255 255 255 / 0.06);
+  background: rgb(8 11 18 / 0.7);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #d2d9e4;
+  /*
+   * License text often has long lines (e.g. "Permission is
+   * hereby granted, ...") plus its own wrapping conventions.
+   * Wrap inside the card and preserve original line breaks.
+   */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ack-card-license-missing {
+  margin: 8px -16px 0;
+  padding: 10px 16px;
+  border-top: 1px solid rgb(255 255 255 / 0.06);
+  background: rgb(8 11 18 / 0.55);
+  font-size: 11px;
+  color: rgb(151 163 179 / 0.7);
+  font-style: italic;
+}
+
+.ack-empty {
+  padding: 24px;
+  text-align: center;
+  color: rgb(151 163 179 / 0.7);
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-modal,
+  .help-modal-card,
+  .help-button,
+  .help-modal-close {
+    transition: none;
+  }
+}

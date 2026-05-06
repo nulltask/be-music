@@ -1,0 +1,35 @@
+{
+  "name": "@be-music/lr2-skin",
+  "version": "0.1.1",
+  "description": "Renderer-independent Lunatic Rave 2 skin parser and theme loader for be-music",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build:bundle": "tsdown",
+    "build": "tsdown",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt . --write",
+    "format:check": "oxfmt . --check",
+    "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts"
+  },
+  "dependencies": {
+    "@be-music/chart": "workspace:*",
+    "@be-music/json": "workspace:*",
+    "@be-music/utils": "workspace:*"
+  }
+}

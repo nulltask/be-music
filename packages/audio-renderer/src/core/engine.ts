@@ -1,65 +1,40 @@
 import {
-  collectLnobjEndEvents,
-  createBeatResolver,
+  collectBmsExWavVolumeMultipliers,
+  collectBmsWavCmdVolumeMultipliers,
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
-  isLandmineChannel,
   isPlayLaneSoundChannel,
-  isSampleTriggerChannel,
-  isStopChannel,
   parseBmsDynamicVolumeGain,
-  parseBpmFrom03Token,
-  resolveBmsLongNotes,
-  sortEvents,
-  type BeatResolver,
 } from '@be-music/chart';
-import { readFile, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import {
-  normalizeChannel,
-  normalizeObjectKey,
-  DEFAULT_BPM,
-  type BeMusicEvent,
-  type BeMusicJson,
-} from '@be-music/json';
-import { findLastIndexAtOrBefore, findLastIndexBefore, isAbortError, throwIfAborted } from '@be-music/utils';
+// `node:fs/promises` and `node:path` are loaded lazily inside the Node-only entry points (`renderChartFile`,
+// `writeAudioFile`, `getOrCreateSample`) so that bundling this module into a browser build doesn't statically
+// pull the Node built-ins into the browser bundle. Vite externalises `node:`-prefixed imports for browser
+// targets but emits a runtime error if any code path actually reaches them — keeping the imports dynamic
+// confines that error to the Node-specific paths the browser never executes (renderJson / renderSingleSample
+// stay browser-safe because they don't touch disk).
+type NodeFsPromises = typeof import('node:fs/promises');
+type NodePath = typeof import('node:path');
+let nodeFsPromisesPromise: Promise<NodeFsPromises> | undefined;
+let nodePathPromise: Promise<NodePath> | undefined;
+const loadNodeFsPromises = (): Promise<NodeFsPromises> => (nodeFsPromisesPromise ??= import('node:fs/promises'));
+const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
+import { normalizeChannel, normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
+import { isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { detectAudioFormat, encodeAiff16, encodeWav16 } from './file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './decode.ts';
 import { resolveSamplePath } from './sample-path.ts';
-export interface TempoPoint {
-  beat: number;
-  bpm: number;
-  seconds: number;
-}
+import {
+  collectSampleTriggersWithContext,
+  createTimingBuildContext,
+  createTimingResolverWithContext,
+  type TimedSampleTrigger,
+  type TimingBuildContext,
+  type TimingResolver,
+} from './triggers.ts';
 
-export interface StopPoint {
-  beat: number;
-  seconds: number;
-  cumulativeSeconds: number;
-}
-
-export interface TimingResolver {
-  tempoPoints: TempoPoint[];
-  stopPoints: StopPoint[];
-  beatToSeconds: (beat: number) => number;
-  eventToSeconds: (event: BeMusicEvent) => number;
-  bpmAtBeat: (beat: number) => number;
-}
-
-export interface TimedSampleTrigger {
-  event: BeMusicEvent;
-  beat: number;
-  seconds: number;
-  channel: string;
-  sampleKey: string;
-  samplePath?: string;
-  sampleOffsetSeconds: number;
-  sampleDurationSeconds?: number;
-  sampleSliceId?: string;
-}
-
+export * from './triggers.ts';
 export interface RenderOptions {
   sampleRate?: number;
   normalize?: boolean;
@@ -71,10 +46,6 @@ export interface RenderOptions {
   signal?: AbortSignal;
   resolveTriggerGain?: (trigger: TimedSampleTrigger) => number;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
-  inferBmsLnTypeWhenMissing?: boolean;
-}
-
-export interface CollectSampleTriggersOptions {
   inferBmsLnTypeWhenMissing?: boolean;
 }
 
@@ -100,16 +71,16 @@ export interface RenderSingleSampleOptions {
   fallbackToneSeconds?: number;
   signal?: AbortSignal;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
+  /**
+   * Object-ID radix the supplied `sampleKey` was authored under. Defaults to base 36 (case-folded). Pass `62` for
+   * charts that declared `#BASE 62` so a lowercase `0a` key isn't re-folded back to `0A` during validation.
+   */
+  base?: 36 | 62;
 }
 
 interface StereoSample {
   left: Float32Array;
   right: Float32Array;
-}
-
-interface TimingBuildContext {
-  sortedEvents: BeMusicEvent[];
-  beatResolver: BeatResolver;
 }
 
 type DynamicVolumeBus = 'bgm' | 'play';
@@ -120,6 +91,16 @@ interface DynamicVolumeChange {
   gain: number;
 }
 
+interface DynamicVolumeState {
+  index: number;
+  gain: number;
+}
+
+interface DynamicVolumeChangesByBus {
+  bgm: DynamicVolumeChange[];
+  play: DynamicVolumeChange[];
+}
+
 interface ScheduledSampleRender {
   start: number;
   sample: StereoSample;
@@ -128,10 +109,14 @@ interface ScheduledSampleRender {
   sampleMaxFrames?: number;
 }
 
+interface ScheduledSampleFrameWindow {
+  sampleOffsetFrames: number;
+  sampleMaxFrames: number;
+}
+
 const DEFAULT_SAMPLE_RATE = 44_100;
 const DEFAULT_TAIL_SECONDS = 2;
 const DEFAULT_GAIN = 0.9;
-const EMPTY_EVENT_SET = new Set<BeMusicEvent>();
 const FALLBACK_SAMPLE_CACHE = new Map<string, StereoSample>();
 
 function resolveChartVolWavGain(json: BeMusicJson): number {
@@ -176,123 +161,13 @@ function collectDynamicVolumeChanges(
 function advanceDynamicVolumeGain(
   changes: readonly DynamicVolumeChange[],
   seconds: number,
-  state: { index: number; gain: number },
+  state: DynamicVolumeState,
 ): number {
   while (state.index < changes.length && changes[state.index]!.seconds <= seconds) {
     state.gain = changes[state.index]!.gain;
     state.index += 1;
   }
   return state.gain;
-}
-
-export function createTimingResolver(json: BeMusicJson): TimingResolver {
-  return createTimingResolverWithContext(json, createTimingBuildContext(json));
-}
-
-function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuildContext): TimingResolver {
-  const { sortedEvents, beatResolver } = context;
-  const tempoPoints = createTempoPoints(json, sortedEvents, beatResolver);
-  const stopPoints = createStopPoints(json, tempoPoints, sortedEvents, beatResolver);
-
-  const beatToSecondsWithoutStops = (beat: number): number => {
-    if (beat <= 0 || tempoPoints.length === 0) {
-      return 0;
-    }
-
-    const index = findLastIndexAtOrBefore(tempoPoints, beat, (point) => point.beat);
-    const point = tempoPoints[Math.max(0, index)];
-    const deltaBeat = beat - point.beat;
-    return point.seconds + (deltaBeat * 60) / point.bpm;
-  };
-
-  const bpmAtBeat = (beat: number): number => {
-    if (tempoPoints.length === 0) {
-      return json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
-    }
-    const index = findLastIndexAtOrBefore(tempoPoints, beat, (point) => point.beat);
-    return tempoPoints[Math.max(0, index)].bpm;
-  };
-
-  const beatToSeconds = (beat: number): number => {
-    const base = beatToSecondsWithoutStops(beat);
-    if (stopPoints.length === 0) {
-      return base;
-    }
-    const index = findLastIndexBefore(stopPoints, beat, (point) => point.beat);
-    if (index < 0) {
-      return base;
-    }
-    return base + stopPoints[index].cumulativeSeconds;
-  };
-
-  return {
-    tempoPoints,
-    stopPoints,
-    bpmAtBeat,
-    beatToSeconds,
-    eventToSeconds: (event) => beatToSeconds(beatResolver.eventToBeat(event)),
-  };
-}
-
-export function collectSampleTriggers(
-  json: BeMusicJson,
-  resolver: TimingResolver = createTimingResolver(json),
-  options: CollectSampleTriggersOptions = {},
-): TimedSampleTrigger[] {
-  return collectSampleTriggersWithContext(json, resolver, createTimingBuildContext(json), options);
-}
-
-function collectSampleTriggersWithContext(
-  json: BeMusicJson,
-  resolver: TimingResolver,
-  context: TimingBuildContext,
-  options: CollectSampleTriggersOptions = {},
-): TimedSampleTrigger[] {
-  const { sortedEvents, beatResolver } = context;
-  const isBmsChart = json.sourceFormat === 'bms';
-  const lnobjEndEvents = isBmsChart ? collectLnobjEndEvents(json) : EMPTY_EVENT_SET;
-  const suppressedBmsLongNoteEvents = isBmsChart
-    ? resolveBmsLongNotes(json, {
-        inferLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
-      }).suppressedTriggerEvents
-    : EMPTY_EVENT_SET;
-  const selectedEvents: Array<{ event: BeMusicEvent; normalizedChannel: string }> = [];
-  for (const event of sortedEvents) {
-    const normalizedChannel = normalizeChannel(event.channel);
-    if (!isSampleTriggerChannel(normalizedChannel) || isLandmineChannel(normalizedChannel)) {
-      continue;
-    }
-    if (lnobjEndEvents.has(event)) {
-      continue;
-    }
-    if (suppressedBmsLongNoteEvents.has(event)) {
-      continue;
-    }
-    selectedEvents.push({ event, normalizedChannel });
-  }
-  const events = selectedEvents.map((item) => item.event);
-  const bmsonPlaybackMap =
-    json.sourceFormat === 'bmson' ? createBmsonSamplePlaybackMap(json, resolver, events, beatResolver) : undefined;
-
-  const triggers: TimedSampleTrigger[] = [];
-  for (const item of selectedEvents) {
-    const event = item.event;
-    const sampleKey = normalizeObjectKey(event.value);
-    const playback = bmsonPlaybackMap?.get(event);
-    const beat = beatResolver.eventToBeat(event);
-    triggers.push({
-      event,
-      beat,
-      seconds: resolver.beatToSeconds(beat),
-      channel: item.normalizedChannel,
-      sampleKey,
-      samplePath: json.resources.wav[sampleKey],
-      sampleOffsetSeconds: playback?.offsetSeconds ?? 0,
-      sampleDurationSeconds: playback?.durationSeconds,
-      sampleSliceId: playback?.sliceId,
-    } satisfies TimedSampleTrigger);
-  }
-  return triggers;
 }
 
 export async function renderJson(json: BeMusicJson, options: RenderOptions = {}): Promise<RenderResult> {
@@ -310,126 +185,34 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
 
   const timingContext = createTimingBuildContext(json);
   const resolver = createTimingResolverWithContext(json, timingContext);
-  const dynamicVolumeChanges = collectDynamicVolumeChanges(json, resolver, timingContext);
-  const bgmVolumeChanges = dynamicVolumeChanges.filter((change) => change.bus === 'bgm');
-  const playVolumeChanges = dynamicVolumeChanges.filter((change) => change.bus === 'play');
-  const bgmVolumeState = { index: 0, gain: 1 };
-  const playVolumeState = { index: 0, gain: 1 };
+  const dynamicVolumeChanges = splitDynamicVolumeChangesByBus(
+    collectDynamicVolumeChanges(json, resolver, timingContext),
+  );
   const triggers = collectSampleTriggersWithContext(json, resolver, timingContext, {
     inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
   });
 
   const loadedSamples = new Map<string, StereoSample>();
   const resolvedPathCache = new Map<string, string | undefined>();
-
-  const scheduled: ScheduledSampleRender[] = [];
-  const bmsonScheduledSlices = new Set<string>();
-  const latestBmsScheduleBySampleKey = new Map<string, number>();
-  let maxFrame = Math.max(1, Math.round(tailSeconds * sampleRate));
-
-  for (const trigger of triggers) {
-    throwIfAborted(signal);
-    const sample = await getOrCreateSample({
-      sampleKey: trigger.sampleKey,
-      samplePath: trigger.samplePath,
-      sampleRate,
-      baseDir,
-      fallbackToneSeconds,
-      loadedSamples,
-      resolvedPathCache,
-      signal,
-      onSampleLoadProgress,
-    });
-
-    const sampleOffsetFrames = Math.max(0, Math.round(trigger.sampleOffsetSeconds * sampleRate));
-    const availableFrames = sample.left.length - sampleOffsetFrames;
-    if (availableFrames <= 0) {
-      continue;
-    }
-    const requestedDurationFrames =
-      typeof trigger.sampleDurationSeconds === 'number' && Number.isFinite(trigger.sampleDurationSeconds)
-        ? Math.max(1, Math.round(trigger.sampleDurationSeconds * sampleRate))
-        : undefined;
-    const sampleMaxFrames =
-      requestedDurationFrames === undefined ? availableFrames : Math.min(availableFrames, requestedDurationFrames);
-    if (sampleMaxFrames <= 0) {
-      continue;
-    }
-    const rawTriggerGain = resolveTriggerGain?.(trigger) ?? 1;
-    const volumeBus = isPlayLaneSoundChannel(trigger.channel) ? 'play' : 'bgm';
-    const dynamicGain =
-      volumeBus === 'play'
-        ? advanceDynamicVolumeGain(playVolumeChanges, trigger.seconds, playVolumeState)
-        : advanceDynamicVolumeGain(bgmVolumeChanges, trigger.seconds, bgmVolumeState);
-    const triggerGain = (Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1) * dynamicGain;
-
-    const start = Math.max(0, Math.round((trigger.seconds - startSeconds) * sampleRate));
-    if (json.sourceFormat === 'bmson' && trigger.sampleSliceId) {
-      const dedupeKey = `${trigger.sampleSliceId}@${start}`;
-      if (bmsonScheduledSlices.has(dedupeKey)) {
-        continue;
-      }
-      bmsonScheduledSlices.add(dedupeKey);
-    }
-    if (json.sourceFormat === 'bms') {
-      const previousIndex = latestBmsScheduleBySampleKey.get(trigger.sampleKey);
-      if (previousIndex !== undefined) {
-        const previous = scheduled[previousIndex];
-        const maxFramesUntilRetrigger = Math.max(0, start - previous.start);
-        const currentPreviousMaxFrames =
-          previous.sampleMaxFrames ?? previous.sample.left.length - previous.sampleOffsetFrames;
-        previous.sampleMaxFrames = Math.min(currentPreviousMaxFrames, maxFramesUntilRetrigger);
-      }
-    }
-
-    const scheduleIndex =
-      scheduled.push({
-        start,
-        sample,
-        triggerGain,
-        sampleOffsetFrames,
-        sampleMaxFrames,
-      }) - 1;
-    if (json.sourceFormat === 'bms') {
-      latestBmsScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
-    }
-    if (triggerGain > 0) {
-      maxFrame = Math.max(maxFrame, start + sampleMaxFrames + Math.round(tailSeconds * sampleRate));
-    }
-  }
+  const { scheduled, maxFrame } = await scheduleSampleRenders({
+    json,
+    triggers,
+    sampleRate,
+    tailSeconds,
+    startSeconds,
+    baseDir,
+    fallbackToneSeconds,
+    loadedSamples,
+    resolvedPathCache,
+    signal,
+    onSampleLoadProgress,
+    resolveTriggerGain,
+    dynamicVolumeChanges,
+  });
 
   const left = new Float32Array(maxFrame);
   const right = new Float32Array(maxFrame);
-
-  if (!signal) {
-    for (let scheduleIndex = 0; scheduleIndex < scheduled.length; scheduleIndex += 1) {
-      const item = scheduled[scheduleIndex]!;
-      if (item.triggerGain <= 0) {
-        continue;
-      }
-      mixSample(left, right, item.sample, item.start, gain * item.triggerGain, item.sampleOffsetFrames, item.sampleMaxFrames);
-    }
-  } else {
-    for (let scheduleIndex = 0; scheduleIndex < scheduled.length; scheduleIndex += 1) {
-      if ((scheduleIndex & 0x1f) === 0) {
-        throwIfAborted(signal);
-      }
-      const item = scheduled[scheduleIndex]!;
-      if (item.triggerGain <= 0) {
-        continue;
-      }
-      mixSample(
-        left,
-        right,
-        item.sample,
-        item.start,
-        gain * item.triggerGain,
-        item.sampleOffsetFrames,
-        item.sampleMaxFrames,
-        signal,
-      );
-    }
-  }
+  mixScheduledSamples(left, right, scheduled, gain, signal);
 
   const peak = measurePeak(left, right);
   if (normalize && peak > 1) {
@@ -447,12 +230,249 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   };
 }
 
+function splitDynamicVolumeChangesByBus(changes: DynamicVolumeChange[]): DynamicVolumeChangesByBus {
+  const partitioned: DynamicVolumeChangesByBus = {
+    bgm: [],
+    play: [],
+  };
+  for (const change of changes) {
+    partitioned[change.bus].push(change);
+  }
+  return partitioned;
+}
+
+async function scheduleSampleRenders(params: {
+  json: BeMusicJson;
+  triggers: TimedSampleTrigger[];
+  sampleRate: number;
+  tailSeconds: number;
+  startSeconds: number;
+  baseDir: string;
+  fallbackToneSeconds: number;
+  loadedSamples: Map<string, StereoSample>;
+  resolvedPathCache: Map<string, string | undefined>;
+  signal?: AbortSignal;
+  onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
+  resolveTriggerGain?: (trigger: TimedSampleTrigger) => number;
+  dynamicVolumeChanges: DynamicVolumeChangesByBus;
+}): Promise<{ scheduled: ScheduledSampleRender[]; maxFrame: number }> {
+  const {
+    json,
+    triggers,
+    sampleRate,
+    tailSeconds,
+    startSeconds,
+    baseDir,
+    fallbackToneSeconds,
+    loadedSamples,
+    resolvedPathCache,
+    signal,
+    onSampleLoadProgress,
+    resolveTriggerGain,
+    dynamicVolumeChanges,
+  } = params;
+  const scheduled: ScheduledSampleRender[] = [];
+  const bmsonScheduledSlices = new Set<string>();
+  const latestBmsScheduleBySampleKey = new Map<string, number>();
+  const bgmVolumeState: DynamicVolumeState = { index: 0, gain: 1 };
+  const playVolumeState: DynamicVolumeState = { index: 0, gain: 1 };
+  let maxFrame = Math.max(1, Math.round(tailSeconds * sampleRate));
+
+  // BMS spec — `#PATH_WAV` declares a directory prefix the chart's WAVs live under. The sample-path resolver tries
+  // `pathPrefix + samplePath` before the bare path so charts that organize their WAVs under a sub-folder (e.g.
+  // `wav/kick.wav` reachable via `#PATH_WAV wav/`) resolve correctly.
+  const pathWavPrefix = typeof json.bms.pathWav === 'string' ? json.bms.pathWav : undefined;
+  // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides as a 0..127 byte. Pre-collect into a Map<slotKey,
+  // 0..1 multiplier> so the per-trigger lookup is O(1); slots without a `#WAVCMD 01` line stay absent and skip the
+  // multiplication. Pitch / loop bytes (`pp = 00` / `02`) are intentionally not collected here — applying them would
+  // require resampling / loop-aware mixing that this offline renderer doesn't yet implement.
+  const wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(json.bms.wavCmds, resolveBmsBase(json));
+  // BMS spec — `#EXWAVxx [flags] params filename` extended WAV declarations include an optional `v` (centibel) volume
+  // that composes multiplicatively with `#WAVCMD 01 xx vv`. Fold the extracted multipliers into the same Map so the
+  // per-trigger gain math stays a single lookup. Pan / freq fall to a future patch since they require resampling /
+  // stereo splitting in this offline renderer.
+  for (const [slot, multiplier] of collectBmsExWavVolumeMultipliers(json.bms.exWav)) {
+    const previous = wavCmdVolumeMultipliers.get(slot) ?? 1;
+    wavCmdVolumeMultipliers.set(slot, previous * multiplier);
+  }
+  for (const trigger of triggers) {
+    throwIfAborted(signal);
+    const sample = await getOrCreateSample({
+      sampleKey: trigger.sampleKey,
+      samplePath: trigger.samplePath,
+      sampleRate,
+      baseDir,
+      fallbackToneSeconds,
+      loadedSamples,
+      resolvedPathCache,
+      signal,
+      onSampleLoadProgress,
+      pathPrefix: pathWavPrefix,
+    });
+    const frameWindow = resolveScheduledSampleFrameWindow(trigger, sampleRate, sample);
+    if (!frameWindow) {
+      continue;
+    }
+    const triggerGain = resolveScheduledTriggerGain(
+      trigger,
+      resolveTriggerGain,
+      dynamicVolumeChanges,
+      bgmVolumeState,
+      playVolumeState,
+      wavCmdVolumeMultipliers,
+    );
+    const start = Math.max(0, Math.round((trigger.seconds - startSeconds) * sampleRate));
+
+    if (!shouldScheduleTrigger(json, trigger, start, bmsonScheduledSlices)) {
+      continue;
+    }
+    trimPreviousBmsRetrigger(json, trigger, start, scheduled, latestBmsScheduleBySampleKey);
+
+    const scheduleIndex =
+      scheduled.push({
+        start,
+        sample,
+        triggerGain,
+        sampleOffsetFrames: frameWindow.sampleOffsetFrames,
+        sampleMaxFrames: frameWindow.sampleMaxFrames,
+      }) - 1;
+    if (json.sourceFormat === 'bms') {
+      latestBmsScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
+    }
+    if (triggerGain > 0) {
+      maxFrame = Math.max(maxFrame, start + frameWindow.sampleMaxFrames + Math.round(tailSeconds * sampleRate));
+    }
+  }
+
+  return { scheduled, maxFrame };
+}
+
+function resolveScheduledSampleFrameWindow(
+  trigger: TimedSampleTrigger,
+  sampleRate: number,
+  sample: StereoSample,
+): ScheduledSampleFrameWindow | undefined {
+  const sampleOffsetFrames = Math.max(0, Math.round(trigger.sampleOffsetSeconds * sampleRate));
+  const availableFrames = sample.left.length - sampleOffsetFrames;
+  if (availableFrames <= 0) {
+    return undefined;
+  }
+  const requestedDurationFrames =
+    typeof trigger.sampleDurationSeconds === 'number' && Number.isFinite(trigger.sampleDurationSeconds)
+      ? Math.max(1, Math.round(trigger.sampleDurationSeconds * sampleRate))
+      : undefined;
+  const sampleMaxFrames =
+    requestedDurationFrames === undefined ? availableFrames : Math.min(availableFrames, requestedDurationFrames);
+  if (sampleMaxFrames <= 0) {
+    return undefined;
+  }
+  return { sampleOffsetFrames, sampleMaxFrames };
+}
+
+function resolveScheduledTriggerGain(
+  trigger: TimedSampleTrigger,
+  resolveTriggerGain: ((trigger: TimedSampleTrigger) => number) | undefined,
+  dynamicVolumeChanges: DynamicVolumeChangesByBus,
+  bgmVolumeState: DynamicVolumeState,
+  playVolumeState: DynamicVolumeState,
+  wavCmdVolumeMultipliers: ReadonlyMap<string, number>,
+): number {
+  const rawTriggerGain = resolveTriggerGain?.(trigger) ?? 1;
+  const volumeBus: DynamicVolumeBus = isPlayLaneSoundChannel(trigger.channel) ? 'play' : 'bgm';
+  const dynamicGain =
+    volumeBus === 'play'
+      ? advanceDynamicVolumeGain(dynamicVolumeChanges.play, trigger.seconds, playVolumeState)
+      : advanceDynamicVolumeGain(dynamicVolumeChanges.bgm, trigger.seconds, bgmVolumeState);
+  // `#WAVCMD 01 xx vv` per-slot volume — multiplied in alongside the dynamic-volume bus state so a chart can stack a
+  // 50% `#WAVCMD` slot under a `97`/`98` runtime cut.
+  const wavCmdGain = wavCmdVolumeMultipliers.get(trigger.sampleKey) ?? 1;
+  return (Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1) * dynamicGain * wavCmdGain;
+}
+
+function shouldScheduleTrigger(
+  json: BeMusicJson,
+  trigger: TimedSampleTrigger,
+  start: number,
+  bmsonScheduledSlices: Set<string>,
+): boolean {
+  if (json.sourceFormat !== 'bmson') {
+    return true;
+  }
+  // bmson 1.0.0 spec: a `c=true` note MUST NOT restart playback — it's a continuation marker that rides on the previous
+  // `c=false` anchor's BufferSource. Scheduling a separate render for it would overlap with the still-running anchor
+  // sample (especially now that the slice's `durationSeconds` is walked out to the next genuine restart) and
+  // effectively double the mix gain at every `c=true` hit. The runtime side achieves the same outcome via its
+  // `activeSampleNodes` "skip when already playing" gate; the offline mixer has no such state, so the skip has to
+  // happen up front here.
+  if (trigger.event.bmson?.c === true) {
+    return false;
+  }
+  if (!trigger.sampleSliceId) {
+    return true;
+  }
+  const dedupeKey = `${trigger.sampleSliceId}@${start}`;
+  if (bmsonScheduledSlices.has(dedupeKey)) {
+    return false;
+  }
+  bmsonScheduledSlices.add(dedupeKey);
+  return true;
+}
+
+function trimPreviousBmsRetrigger(
+  json: BeMusicJson,
+  trigger: TimedSampleTrigger,
+  start: number,
+  scheduled: ScheduledSampleRender[],
+  latestBmsScheduleBySampleKey: Map<string, number>,
+): void {
+  if (json.sourceFormat !== 'bms') {
+    return;
+  }
+  const previousIndex = latestBmsScheduleBySampleKey.get(trigger.sampleKey);
+  if (previousIndex === undefined) {
+    return;
+  }
+  const previous = scheduled[previousIndex];
+  const maxFramesUntilRetrigger = Math.max(0, start - previous.start);
+  const currentPreviousMaxFrames =
+    previous.sampleMaxFrames ?? previous.sample.left.length - previous.sampleOffsetFrames;
+  previous.sampleMaxFrames = Math.min(currentPreviousMaxFrames, maxFramesUntilRetrigger);
+}
+
+function mixScheduledSamples(
+  destinationLeft: Float32Array,
+  destinationRight: Float32Array,
+  scheduled: readonly ScheduledSampleRender[],
+  gain: number,
+  signal?: AbortSignal,
+): void {
+  for (let scheduleIndex = 0; scheduleIndex < scheduled.length; scheduleIndex += 1) {
+    if (signal && (scheduleIndex & 0x1f) === 0) {
+      throwIfAborted(signal);
+    }
+    const item = scheduled[scheduleIndex]!;
+    if (item.triggerGain <= 0) {
+      continue;
+    }
+    mixSample(
+      destinationLeft,
+      destinationRight,
+      item.sample,
+      item.start,
+      gain * item.triggerGain,
+      item.sampleOffsetFrames,
+      item.sampleMaxFrames,
+      signal,
+    );
+  }
+}
+
 export async function renderSingleSample(
   sampleKey: string,
   samplePath: string | undefined,
   options: RenderSingleSampleOptions = {},
 ): Promise<RenderResult> {
-  const normalizedKey = normalizeObjectKey(sampleKey);
+  const normalizedKey = normalizeObjectKey(sampleKey, options.base ?? 36);
   const sampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
   const gain = typeof options.gain === 'number' && Number.isFinite(options.gain) ? options.gain : 1;
   const baseDir = options.baseDir ?? process.cwd();
@@ -473,18 +493,12 @@ export async function renderSingleSample(
   return toRenderResult(sample, sampleRate, gain);
 }
 
-function createTimingBuildContext(json: BeMusicJson): TimingBuildContext {
-  return {
-    sortedEvents: sortEvents(json.events),
-    beatResolver: createBeatResolver(json),
-  };
-}
-
 export async function renderChartFile(
   inputPath: string,
   outputPath: string,
   options: RenderOptions = {},
 ): Promise<RenderResult> {
+  const { resolve, dirname } = await loadNodePath();
   const chartPath = resolve(inputPath);
   const json = resolveBmsControlFlow(await parseChartFile(chartPath, { signal: options.signal }));
   const audioRendered = await renderJson(json, {
@@ -496,149 +510,11 @@ export async function renderChartFile(
 }
 
 export async function writeAudioFile(outputPath: string, result: RenderResult): Promise<void> {
+  const [{ resolve }, { writeFile }] = await Promise.all([loadNodePath(), loadNodeFsPromises()]);
   const destination = resolve(outputPath);
   const format = detectAudioFormat(destination);
   const encoded = format === 'aiff' ? encodeAiff16(result) : encodeWav16(result);
   await writeFile(destination, encoded);
-}
-
-function createTempoPoints(json: BeMusicJson, sortedEvents: BeMusicEvent[], beatResolver: BeatResolver): TempoPoint[] {
-  const baseBpm = json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
-  const points: TempoPoint[] = [{ beat: 0, bpm: baseBpm, seconds: 0 }];
-
-  for (const event of sortedEvents) {
-    const channel = normalizeChannel(event.channel);
-    if (channel !== '03' && channel !== '08') {
-      continue;
-    }
-    const beat = beatResolver.eventToBeat(event);
-    if (channel === '03') {
-      const bpm = parseBpmFrom03Token(event.value);
-      if (bpm > 0) {
-        integrateTempoPoint(points, beat, bpm);
-      }
-      continue;
-    }
-    const bpm = json.resources.bpm[normalizeObjectKey(event.value)];
-    if (typeof bpm === 'number' && bpm > 0) {
-      integrateTempoPoint(points, beat, bpm);
-    }
-  }
-
-  return points;
-}
-
-function createStopPoints(
-  json: BeMusicJson,
-  tempoPoints: TempoPoint[],
-  sortedEvents: BeMusicEvent[],
-  beatResolver: BeatResolver,
-): StopPoint[] {
-  const rawPoints: Array<{ beat: number; seconds: number; order: number }> = [];
-  let order = 0;
- 
-  for (const stp of json.bms.stp) {
-    const parsed = parseBemaniaDxStpStopPoint(stp, beatResolver);
-    if (!parsed) {
-      continue;
-    }
-    rawPoints.push({
-      ...parsed,
-      order,
-    });
-    order += 1;
-  }
-
-  for (const event of sortedEvents) {
-    const normalizedChannel = normalizeChannel(event.channel);
-    if (!isStopChannel(normalizedChannel)) {
-      continue;
-    }
-    const beat = beatResolver.eventToBeat(event);
-    const duration = json.resources.stop[normalizeObjectKey(event.value)];
-    if (typeof duration !== 'number' || duration <= 0) {
-      continue;
-    }
-    const bpm = bpmAtBeatFromTempoPoints(tempoPoints, beat);
-    // BMS STOP uses 1/192 of a measure as the unit.
-    const seconds = (duration / 192) * (240 / bpm);
-    rawPoints.push({
-      beat,
-      seconds,
-      order,
-    });
-    order += 1;
-  }
-
-  rawPoints.sort((left, right) => {
-    if (left.beat !== right.beat) {
-      return left.beat - right.beat;
-    }
-    return left.order - right.order;
-  });
-
-  const points: StopPoint[] = [];
-  let cumulativeSeconds = 0;
-
-  for (const point of rawPoints) {
-    cumulativeSeconds += point.seconds;
-    points.push({
-      beat: point.beat,
-      seconds: point.seconds,
-      cumulativeSeconds,
-    });
-  }
-
-  return points;
-}
-
-function parseBemaniaDxStpStopPoint(
-  rawValue: string,
-  beatResolver: BeatResolver,
-): { beat: number; seconds: number } | undefined {
-  const match =
-    /^\s*(\d{3})(?:\.(\d{3}))?(?:[ \t\u3000]{1,6})([+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:[^0-9].*)?$/u.exec(rawValue);
-  if (!match) {
-    return undefined;
-  }
-
-  const measure = Number.parseInt(match[1]!, 10);
-  const position = Number.parseInt(match[2] ?? '000', 10);
-  const durationMs = Number.parseFloat(match[3]!);
-  if (!Number.isFinite(measure) || !Number.isFinite(position) || !Number.isFinite(durationMs) || durationMs <= 0) {
-    return undefined;
-  }
-
-  return {
-    beat: beatResolver.measureToBeat(measure, position / 1000),
-    seconds: durationMs / 1000,
-  };
-}
-
-function bpmAtBeatFromTempoPoints(tempoPoints: TempoPoint[], beat: number): number {
-  if (tempoPoints.length === 0) {
-    return DEFAULT_BPM;
-  }
-  const index = findLastIndexAtOrBefore(tempoPoints, beat, (point) => point.beat);
-  return tempoPoints[Math.max(0, index)].bpm;
-}
-
-function integrateTempoPoint(points: TempoPoint[], beat: number, bpm: number): void {
-  const last = points[points.length - 1]!;
-  if (beat < last.beat) {
-    return;
-  }
-  if (Math.abs(beat - last.beat) < 1e-9) {
-    last.bpm = bpm;
-    return;
-  }
-
-  const seconds = last.seconds + ((beat - last.beat) * 60) / last.bpm;
-  points.push({
-    beat,
-    bpm,
-    seconds,
-  });
 }
 
 async function getOrCreateSample(params: {
@@ -651,6 +527,7 @@ async function getOrCreateSample(params: {
   resolvedPathCache: Map<string, string | undefined>;
   signal?: AbortSignal;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
+  pathPrefix?: string;
 }): Promise<StereoSample> {
   const {
     sampleKey,
@@ -662,6 +539,7 @@ async function getOrCreateSample(params: {
     resolvedPathCache,
     signal,
     onSampleLoadProgress,
+    pathPrefix,
   } = params;
   throwIfAborted(signal);
 
@@ -691,10 +569,11 @@ async function getOrCreateSample(params: {
     sampleKey,
     samplePath,
   });
-  const cacheKey = `${baseDir}:${samplePath}`;
+  // Cache key includes the `#PATH_WAV` prefix so two charts sharing a `baseDir` but different prefixes don't collide.
+  const cacheKey = `${baseDir}:${pathPrefix ?? ''}:${samplePath}`;
   const resolvedPath = resolvedPathCache.has(cacheKey)
     ? resolvedPathCache.get(cacheKey)
-    : await resolveSamplePath(baseDir, samplePath, signal);
+    : await resolveSamplePath(baseDir, samplePath, signal, { pathPrefix });
   resolvedPathCache.set(cacheKey, resolvedPath);
 
   if (!resolvedPath) {
@@ -715,6 +594,7 @@ async function getOrCreateSample(params: {
       samplePath,
       resolvedPath,
     });
+    const { readFile } = await loadNodeFsPromises();
     const buffer = await readFile(resolvedPath, { signal });
     throwIfAborted(signal);
     const decoded = await decodeAudioSample(buffer, resolvedPath, signal);
@@ -831,73 +711,6 @@ function mixSample(
     destinationLeft[target] += sourceLeft[source] * gain;
     destinationRight[target] += sourceRight[source] * gain;
   }
-}
-
-function createBmsonSamplePlaybackMap(
-  json: BeMusicJson,
-  resolver: TimingResolver,
-  sampleEvents: BeMusicEvent[],
-  beatResolver: BeatResolver,
-): Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }> {
-  const perSampleKey = new Map<
-    string,
-    Array<{ event: BeMusicEvent; beat: number; seconds: number; sampleKey: string }>
-  >();
-  for (const event of sampleEvents) {
-    const sampleKey = normalizeObjectKey(event.value);
-    let entries = perSampleKey.get(sampleKey);
-    if (!entries) {
-      entries = [];
-      perSampleKey.set(sampleKey, entries);
-    }
-    const beat = beatResolver.eventToBeat(event);
-    entries.push({
-      event,
-      beat,
-      seconds: resolver.beatToSeconds(beat),
-      sampleKey,
-    });
-  }
-
-  const playbackMap = new Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>();
-  for (const entries of perSampleKey.values()) {
-    // sampleEvents are already beat-sorted, so each sample bucket keeps beat order.
-    let anchorSeconds = 0;
-    let hasAnchor = false;
-    let sliceIndex = 0;
-
-    for (let index = 0; index < entries.length; ) {
-      const firstEntry = entries[index]!;
-      const currentBeat = firstEntry.beat;
-      let end = index + 1;
-      let shouldRestart = firstEntry.event.bmson?.c !== true;
-      while (end < entries.length && Math.abs(entries[end]!.beat - currentBeat) < 1e-9) {
-        if (entries[end]!.event.bmson?.c !== true) {
-          shouldRestart = true;
-        }
-        end += 1;
-      }
-
-      if (!hasAnchor || shouldRestart) {
-        anchorSeconds = firstEntry.seconds;
-        hasAnchor = true;
-      }
-
-      const offsetSeconds = Math.max(0, firstEntry.seconds - anchorSeconds);
-      const next = end < entries.length ? entries[end]! : undefined;
-      const durationSeconds = next ? Math.max(0, next.seconds - firstEntry.seconds) : undefined;
-      const sliceId = `${firstEntry.sampleKey}:${sliceIndex}`;
-      sliceIndex += 1;
-      const playback = { offsetSeconds, durationSeconds, sliceId };
-
-      for (let cursor = index; cursor < end; cursor += 1) {
-        playbackMap.set(entries[cursor]!.event, playback);
-      }
-      index = end;
-    }
-  }
-
-  return playbackMap;
 }
 
 function measurePeak(left: Float32Array, right: Float32Array): number {

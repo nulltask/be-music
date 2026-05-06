@@ -1,29 +1,31 @@
-# BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様
+[Japanese version](./json-spec.ja.md)
 
-この文書は、`@be-music/json` が提供する BMS/BMSON 中間表現の正規仕様です。
-`@be-music/json` は Be-Music の内部処理専用フォーマットであり、配布や再利用を目的とした外部交換フォーマットではありません。
-また、まだ開発初期段階のため、この中間表現の後方互換性は保証しません。
+# BMS/BMSON intermediate representation (`@be-music/json`) implementation specification
 
-## 目的
+This document is the canonical specification for the BMS/BMSON intermediate representation provided by `@be-music/json`.
+`@be-music/json` is a format for Be-Music's internal processing only, and is not an external exchange format for distribution or reuse.
+Also, as it is still in the early stages of development, backward compatibility of this intermediate representation cannot be guaranteed.
 
-- BMS / BMSON の差分を吸収して、内部処理を単一形式で扱う
-- 再文字列化時にイベント時刻を安定再現する
+## Purpose
 
-## パッケージ境界
+- Absorb BMS / BMSON differences and handle internal processing in a single format
+- Preserve event timing stably during round trips
 
-- `@be-music/json` は純粋な IR パッケージです
-- `@be-music/json` が提供するのは、型、正規化済みのデータ構造、clone / 初期化 / 基本的な整形 helper に限られます
-- beat 変換、イベント順序、ロングノート解決、sample trigger 判定などの譜面意味論は `@be-music/chart` が担当します
-- round-trip のための source-level 情報は IR の一部として保持しますが、正規化済みの譜面意味論とは `preservation` 層で分離します
+## Package boundaries
 
-## 設計原則
+- `@be-music/json` is a pure IR package
+- `@be-music/json` only provides types, normalized data structures, and clone/initialization/basic formatting helpers
+- `@be-music/chart` is in charge of score semantics such as beat conversion, event order, long note resolution, sample trigger judgment, etc.
+- Source-level information for round-trips is kept as part of the IR, but separated from the normalized score semantics in the `preservation` layer.
 
-- IR は `parse` した入力を `stringify` したときに、元の譜面が持っていた構造をできる限り変えずに再現することを原則とします
-- ここでいう構造には、重複定義の順序、制御構文、オブジェクト行の分割単位、bmson の小節線情報など、再文字列化結果に影響する要素を含みます
-- 空行、コメント、空白、改行コード、文字コードなど、IR が明示的に保持しない表層情報はこの原則の対象外です
-- IR を編集した結果、保持していた構造情報と正規化済みの `events` / `measures` / 拡張情報が一致しなくなった場合、stringifier は整合性を優先して再生成を行います
+## Design principles
 
-## ルート構造
+- When stringifying parsed input, the IR aims to preserve the original chart structure as faithfully as possible.
+- The structure here includes elements that affect the re-stringing result, such as the order of overlapping definitions, control syntax, object line division units, and BMSON bar line information.
+- Surface information that is not explicitly maintained by the IR, such as blank lines, comments, white space, line breaks, character codes, etc., is not subject to this principle.
+- As a result of editing the IR, if the retained structural information and the normalized `events` / `measures` / extension information no longer match, the stringifier will prioritize consistency and regenerate it.
+
+## Root structure
 
 ```json
 {
@@ -46,6 +48,7 @@
     },
     "player": 1,
     "pathWav": "sounds/",
+    "base": 62,
     "baseBpm": 155,
     "stp": ["001.240"],
     "option": "HIGH-SPEED",
@@ -175,57 +178,73 @@
 }
 ```
 
-`bms` は BMS 固有の追加情報を保持する拡張領域です。
+`bms` is an extension area that holds additional BMS-specific information.
 
-- `lnType`: `#LNTYPE` の値
-- `lnMode`: `#LNMODE` の値
-- `lnObjs`: 複数 `#LNOBJ` 宣言を宣言順で保持した配列 (2桁 base36)
-- `defExRank`: `#DEFEXRANK` の値
-- `exRank`: `#EXRANKxx` のマップ
-- `argb`: `#ARGBxx` のマップ
-- `player`: `#PLAYER` の値
-- `pathWav`: `#PATH_WAV` の値
-- `baseBpm`: `#BASEBPM` の値
-- `stp`: `#STP` の値配列
-- `option`: `#OPTION` の値
-- `changeOption`: `#CHANGEOPTIONxx` のマップ
-- `wavCmd`: `#WAVCMD` の値
-- `exWav`: `#EXWAVxx` のマップ
-- `exBmp`: `#EXBMPxx` のマップ
-- `bga`: `#BGAxx` のマップ
-- `scroll`: `#SCROLLxx` のマップ
-- `speed`: `#SPEEDxx` のマップ
-- `poorBga`: `#POORBGA` の値
-- `swBga`: `#SWBGAxx` のマップ
-- `videoFile`: `#VIDEOFILE` の値
-- `midiFile`: `#MIDIFILE` の値
-- `materials`: `#MATERIALS` の値
-- `divideProp`: `#DIVIDEPROP` の値
-- `charset`: `#CHARSET` の値
-- `controlFlow`: 制御構文 (`#RANDOM`/`#IF`/`#SWITCH` 系) と、その内側のヘッダ/オブジェクト行
-- `controlFlow.kind = "object"` は通常イベントと同じ `events` 形式（必要に応じて `measureLength`）で保持
-- パーサは制御構文をこの配列へ保持し、分岐の実行は再生/レンダリング時に行います
-- `scroll` の値は有限数を許可し、`0` および負値も保持対象です
+- `lnType`: value of `#LNTYPE`
+- `lnMode`: value of `#LNMODE`
+- `lnObjs`: Array holding multiple `#LNOBJ` declarations in declaration order (2 digit base36)
+- `defExRank`: value of `#DEFEXRANK`
+- `exRank`: Map of `#EXRANKxx`
+- `argb`: map of `#ARGBxx`
+- `player`: value of `#PLAYER`
+- `pathWav`: value of `#PATH_WAV`
+- `base`: value of `#BASE`; currently `36` or `62`. Omitted value means `36`.
+- `baseBpm`: value of `#BASEBPM`
+- `stp`: `#STP` value array
+- `option`: value of `#OPTION`
+- `changeOption`: Map of `#CHANGEOPTIONxx`
+- `wavCmd`: value of `#WAVCMD`
+- `exWav`: Map of `#EXWAVxx`
+- `exBmp`: Map of `#EXBMPxx`
+- `bga`: Map of `#BGAxx`
+- `scroll`: Map of `#SCROLLxx`
+- `speed`: Map of `#SPEEDxx`
+- `poorBga`: value of `#POORBGA`
+- `swBga`: Map of `#SWBGAxx`
+- `videoFile`: value of `#VIDEOFILE`
+- `midiFile`: value of `#MIDIFILE`
+- `materials`: value of `#MATERIALS`
+- `divideProp`: value of `#DIVIDEPROP`
+- `charset`: value of `#CHARSET`
+- `controlFlow`: Control syntax (`#RANDOM`/`#IF`/`#SWITCH` series) and the header/object lines inside it
+- `controlFlow.kind = "object"` is kept in the same `events` format as normal events (with `measureLength` if necessary)
+- Parser keeps control syntax in this array and branches are executed at playback/render time
+- `scroll` values ​​allow finite numbers, `0` and negative values ​​are also retained
 
-`bmson` は bmson 固有の追加情報を保持する拡張領域です。
+### BMS object ID base
 
-- `version`: bmson のバージョン文字列
-- `info`: `resolution` に加え、`subartists`, `chartName`, `modeHint`, `judgeRank`, `total`, 画像/プレビュー系を保持
-- `bga`: `header`, `events`, `layerEvents`, `poorEvents` を保持
+BMS defaults to base-36 object IDs (`0-9A-Z`), and lowercase ASCII letters are normalized to uppercase.
+When `bms.base` is `62`, object IDs use the beatoraja-style base-62 set (`0-9A-Za-z`) and preserve case.
 
-`preservation` は round-trip のための source-level 情報を保持する補助層です。
+This affects all two-character indexed IDs stored in the IR:
 
-- `preservation.bms.sourceLines`: 空行/コメントを除く BMS の全行を宣言順で保持するスナップショット
-- `preservation.bms.sourceLines` は BMS の header / object / 制御構文の相対位置を保ったまま `stringifyBms(parseChart(...))` を再現するための第一選択です
-- `preservation.bms.objectLines`: 制御構文の外側にあるオブジェクト行の宣言順スナップショット
-- `preservation.bms.objectLines` は制御構文外の object 行だけを扱いたい処理向けの部分スナップショットです
-- `preservation.bms.objectLines` が `events` / `measures` と一致しない場合、stringifier はこの配列を無視して再生成します
-- `preservation.bmson.lines`: 小節線 `y` 値の配列 (昇順・重複なし・`0` 始まり)
-- `preservation.bmson.bpmEvents`: `bpm_events` の配列順スナップショット
-- `preservation.bmson.stopEvents`: `stop_events` の配列順スナップショット
-- `preservation.bmson.soundChannels`: `sound_channels` の配列順スナップショット。未使用チャンネルも保持します
+- Resource maps such as `resources.wav`, `resources.bmp`, `resources.bpm`, `resources.stop`, and `resources.text`
+- BMS extension maps such as `bms.exRank`, `bms.argb`, `bms.exWav`, `bms.exBmp`, `bms.bga`, `bms.scroll`, `bms.speed`, and `bms.swBga`
+- BMS object event `value` fields, including events retained in `preservation.bms.sourceLines` and `bms.controlFlow`
+- `bms.lnObjs`
 
-## Event 構造 (正規)
+Code that consumes IDs should call `resolveBmsBase(json)` and pass the result to ID normalization helpers instead of uppercasing manually.
+This keeps `0a` and `0A` distinct for base-62 charts while preserving base-36 behavior for ordinary charts.
+
+`bmson` is an extension area that holds additional bmson-specific information.
+
+- `version`: bmson version string
+- `info`: In addition to `resolution`, retains `subartists`, `chartName`, `modeHint`, `judgeRank`, `total`, and image/preview system.
+- `bga`: Keep `header`, `events`, `layerEvents`, `poorEvents`
+
+`preservation` is an auxiliary layer that maintains source-level information for round-trips.
+
+- `preservation.bms.sourceLines`: Snapshot that preserves all lines of BMS in declaration order, excluding blank lines/comments.
+- `preservation.bms.sourceLines` is the first choice to reproduce `stringifyBms(parseChart(...))` while preserving the relative position of BMS header / object / control syntax
+- `preservation.bms.objectLines`: declaration order snapshot of object lines outside of control constructs
+- `preservation.bms.objectLines` is a partial snapshot for processing where you only want to handle object lines outside the control syntax
+- If `preservation.bms.objectLines` does not match `events` / `measures`, stringifier ignores and regenerates this array
+- `preservation.bmson.lines`: Array of bar line `y` values ​​(ascending order, no duplicates, starting from `0`)
+- `preservation.bmson.bpmEvents`: ordered snapshot of `bpm_events`
+- `preservation.bmson.stopEvents`: ordered snapshot of `stop_events`
+- `preservation.bmson.soundChannels`: Ordered snapshot of `sound_channels`. Also retains unused channels
+
+## Event structure (regular)
 
 ```ts
 type BeMusicPosition = readonly [numerator: number, denominator: number];
@@ -242,30 +261,30 @@ interface BeMusicEvent {
 }
 ```
 
-## `position` の意味
+## Meaning of `position`
 
-- `position[0]`: 分子 (`numerator`)
-- `position[1]`: 分母 (`denominator`)
+- `position[0]`: numerator (`numerator`)
+- `position[1]`: denominator (`denominator`)
 
-制約:
+Constraints:
 
 - `denominator >= 1`
 - `0 <= numerator < denominator`
-- いずれも整数
+- Both are integers
 
-## 比較・ソート規則
+## Comparison/sorting rules
 
-イベント比較順:
+Event comparison order:
 
 1. `measure`
-2. `position` (分数の厳密比較)
+2. `position` (exact comparison of fractions)
 3. `channel`
 4. `value`
 
-分数比較は浮動小数を使わず、クロス積で判定します。
+Fraction comparisons do not use floating point numbers and are determined by cross products.
 
-## 変換規則
+## Conversion rules
 
-- `stringifier` は `position` 分母情報を使って小節内解像度を決定します
-- `parseJson` は `position` タプルを必須とし、欠損イベントはエラー扱いにします
-- beat 変換やイベント順序などの譜面意味論 helper は `@be-music/chart` が提供します
+- `stringifier` uses `position` denominator information to determine intra-bar resolution
+- `parseJson` requires `position` tuple and treats missing events as errors
+- Score semantics helpers such as beat conversion and event order are provided by `@be-music/chart`

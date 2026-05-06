@@ -1,7 +1,8 @@
 {
   "name": "@be-music/parser",
-  "version": "0.1.0",
-  "description": "BMS/BMSON parser",
+  "version": "0.2.0",
+  "description": "Parser for BMS, BMSON, and be-music JSON charts",
+  "license": "MIT",
   "bin": {
     "bms-parse": "dist/cli.js"
   },

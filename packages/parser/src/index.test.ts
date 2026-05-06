@@ -3,789 +3,1291 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { BMS_JSON_FORMAT } from '../../json/src/index.ts';
-import { parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from './index.ts';
+import { decodeBmsText, parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
 describe('parser', () => {
+  test('BMS: parses measure length, BPM, STOP, and BGA channels', async () => {
+    const json = await parseChartFile(unifiedBmsChartPath);
 
-
-test('BMS: parses measure length, BPM, STOP, and BGA channels', async () => {
-  const json = await parseChartFile(unifiedBmsChartPath);
-
-  expect(json.sourceFormat).toBe('bms');
-  expect(json.metadata.title).toBe('Four-Measure Command Combo Test');
-  expect(json.resources.bpm['01']).toBe(96);
-  expect(json.resources.stop['01']).toBe(48);
-  expect(json.measures).toContainEqual({ index: 4, length: 0.75 });
-  expect(json.events.some((event) => event.channel === '04' && event.value === '01')).toBe(true);
-  expect(json.events.some((event) => event.channel === '07' && event.value === '02')).toBe(true);
-  expect(json.events.some((event) => event.channel === '0A' && event.value === '01')).toBe(true);
-  expect(json.events.some((event) => event.channel === 'SC' && event.value === '01')).toBe(true);
-  expect(json.events.some((event) => event.channel === '11' && event.value === '01')).toBe(true);
-});
-
-test('BMS: auto-detects and reads Shift_JIS files', async () => {
-  const chartPath = resolve(rootDir, 'examples/test/sjis-encoding-test.bms');
-  const json = await parseChartFile(chartPath);
-
-  expect(json.metadata.title).toBe('テスト曲');
-  expect(json.metadata.artist).toBe('佐藤');
-});
-
-test('BMS: uses 130 BPM when #BPM is omitted', () => {
-  const parsed = parseChart(
-    [
-      '#TITLE No BPM',
-      '#00111:01',
-      '',
-    ].join('\n'),
-  );
-  expect(parsed.sourceFormat).toBe('bms');
-  expect(parsed.metadata.bpm).toBe(130);
-});
-
-test('BMS: keeps declared #BPM even when it is 120', () => {
-  const parsed = parseChart(
-    [
-      '#TITLE Explicit BPM',
-      '#BPM 120',
-      '#00111:01',
-      '',
-    ].join('\n'),
-  );
-  expect(parsed.sourceFormat).toBe('bms');
-  expect(parsed.metadata.bpm).toBe(120);
-});
-
-test('BMS: accepts CR-only line endings', () => {
-  const parsed = parseChart('#TITLE CR Only\r#BPM 150\r#00111:01\r');
-
-  expect(parsed.sourceFormat).toBe('bms');
-  expect(parsed.metadata.title).toBe('CR Only');
-  expect(parsed.metadata.bpm).toBe(150);
-  expect(parsed.events).toContainEqual({
-    measure: 1,
-    channel: '11',
-    position: [0, 1],
-    value: '01',
+    expect(json.sourceFormat).toBe('bms');
+    expect(json.metadata.title).toBe('Four-Measure Command Combo Test');
+    expect(json.resources.bpm['01']).toBe(96);
+    expect(json.resources.stop['01']).toBe(48);
+    expect(json.measures).toContainEqual({ index: 4, length: 0.75 });
+    expect(json.events.some((event) => event.channel === '04' && event.value === '01')).toBe(true);
+    expect(json.events.some((event) => event.channel === '07' && event.value === '02')).toBe(true);
+    expect(json.events.some((event) => event.channel === '0A' && event.value === '01')).toBe(true);
+    expect(json.events.some((event) => event.channel === 'SC' && event.value === '01')).toBe(true);
+    expect(json.events.some((event) => event.channel === '11' && event.value === '01')).toBe(true);
   });
-});
 
-test('BMS: parses #RANK 4 as metadata rank 4', () => {
-  const parsed = parseChart(
-    [
-      '#TITLE Rank 4',
-      '#RANK 4',
-      '#00111:01',
-      '',
-    ].join('\n'),
-  );
+  test('BMS: auto-detects and reads Shift_JIS files', async () => {
+    const chartPath = resolve(rootDir, 'examples/test/sjis-encoding-test.bms');
+    const json = await parseChartFile(chartPath);
 
-  expect(parsed.sourceFormat).toBe('bms');
-  expect(parsed.metadata.rank).toBe(4);
-});
+    expect(json.metadata.title).toBe('テスト曲');
+    expect(json.metadata.artist).toBe('佐藤');
+  });
 
-test('BMS: parses #STAGEFILE into metadata.stageFile', () => {
-  const parsed = parseChart(
-    [
-      '#TITLE StageFile',
-      '#STAGEFILE loading.png',
-      '#00111:01',
-      '',
-    ].join('\n'),
-  );
+  test('BMS: uses 130 BPM when #BPM is omitted', () => {
+    const parsed = parseChart(['#TITLE No BPM', '#00111:01', ''].join('\n'));
+    expect(parsed.sourceFormat).toBe('bms');
+    expect(parsed.metadata.bpm).toBe(130);
+  });
 
-  expect(parsed.sourceFormat).toBe('bms');
-  expect(parsed.metadata.stageFile).toBe('loading.png');
-});
+  test('BMS: keeps declared #BPM even when it is 120', () => {
+    const parsed = parseChart(['#TITLE Explicit BPM', '#BPM 120', '#00111:01', ''].join('\n'));
+    expect(parsed.sourceFormat).toBe('bms');
+    expect(parsed.metadata.bpm).toBe(120);
+  });
 
-test('BMS: parses #PLAYLEVEL 0 as metadata playLevel 0', () => {
-  const parsed = parseChart(
-    [
-      '#TITLE PlayLevelZero',
-      '#PLAYLEVEL 0',
-      '#00111:01',
-      '',
-    ].join('\n'),
-  );
+  test('BMS: accepts CR-only line endings', () => {
+    const parsed = parseChart('#TITLE CR Only\r#BPM 150\r#00111:01\r');
 
-  expect(parsed.sourceFormat).toBe('bms');
-  expect(parsed.metadata.playLevel).toBe(0);
-});
+    expect(parsed.sourceFormat).toBe('bms');
+    expect(parsed.metadata.title).toBe('CR Only');
+    expect(parsed.metadata.bpm).toBe(150);
+    expect(parsed.events).toContainEqual({
+      measure: 1,
+      channel: '11',
+      position: [0, 1],
+      value: '01',
+    });
+  });
 
-test('BMS: parses string #PLAYLEVEL values without discarding them', () => {
-  const parsed = parseChart(
-    [
-      '#TITLE PlayLevelString',
-      '#PLAYLEVEL 安心',
-      '#00111:01',
-      '',
-    ].join('\n'),
-  );
+  test('BMS: parses #RANK 4 as metadata rank 4', () => {
+    const parsed = parseChart(['#TITLE Rank 4', '#RANK 4', '#00111:01', ''].join('\n'));
 
-  expect(parsed.sourceFormat).toBe('bms');
-  expect(parsed.metadata.playLevel).toBe('安心');
-});
+    expect(parsed.sourceFormat).toBe('bms');
+    expect(parsed.metadata.rank).toBe(4);
+  });
 
-test('BMS: keeps the last #DEFEXRANK with decimals', () => {
-  const parsed = parseChart(
-    [
-      '#TITLE DefExRank',
-      '#DEFEXRANK 120',
-      '#DEFEXRANK 199.97',
-      '#00111:01',
-      '',
-    ].join('\n'),
-  );
+  test('BMS: parses #STAGEFILE into metadata.stageFile', () => {
+    const parsed = parseChart(['#TITLE StageFile', '#STAGEFILE loading.png', '#00111:01', ''].join('\n'));
 
-  expect(parsed.sourceFormat).toBe('bms');
-  expect(parsed.bms.defExRank).toBe(199.97);
-});
+    expect(parsed.sourceFormat).toBe('bms');
+    expect(parsed.metadata.stageFile).toBe('loading.png');
+  });
 
-test('BMS: keeps 130 fallback unless a control-flow branch applies #BPM', () => {
-  const parsed = parseChart(
-    [
-      '#RANDOM 2',
-      '#IF 1',
-      '#BPM 150',
-      '#ENDIF',
-      '#ENDRANDOM',
-      '#00111:01',
-      '',
-    ].join('\n'),
-  );
-  expect(parsed.metadata.bpm).toBe(130);
+  test('BMS: parses #PLAYLEVEL 0 as metadata playLevel 0', () => {
+    const parsed = parseChart(['#TITLE PlayLevelZero', '#PLAYLEVEL 0', '#00111:01', ''].join('\n'));
 
-  const resolvedWhenBranchIsActive = resolveBmsControlFlow(parsed, { random: () => 0 });
-  expect(resolvedWhenBranchIsActive.metadata.bpm).toBe(150);
+    expect(parsed.sourceFormat).toBe('bms');
+    expect(parsed.metadata.playLevel).toBe(0);
+  });
 
-  const resolvedWhenBranchIsInactive = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
-  expect(resolvedWhenBranchIsInactive.metadata.bpm).toBe(130);
-});
+  test('BMS: parses string #PLAYLEVEL values without discarding them', () => {
+    const parsed = parseChart(['#TITLE PlayLevelString', '#PLAYLEVEL 安心', '#00111:01', ''].join('\n'));
 
-test('BMS: parses extension headers into dedicated fields', async () => {
-  const json = await parseChartFile(unifiedBmsChartPath);
+    expect(parsed.sourceFormat).toBe('bms');
+    expect(parsed.metadata.playLevel).toBe('安心');
+  });
 
-  expect(json.bms.preview).toBe('sample.wav');
-  expect(json.bms.player).toBe(3);
-  expect(json.bms.pathWav).toBe('./');
-  expect(json.bms.baseBpm).toBe(128);
-  expect(json.bms.stp).toEqual(['008.192']);
-  expect(json.bms.option).toBe('RANDOM');
-  expect(json.bms.changeOption['01']).toBe('MIRROR');
-  expect(json.bms.changeOption['02']).toBe('RANDOM');
-  expect(json.bms.wavCmd).toBe('legacy');
-  expect(json.bms.lnType).toBe(1);
-  expect(json.bms.lnMode).toBe(1);
-  expect(json.bms.lnObjs).toEqual(['AA', 'AB']);
-  expect(json.bms.volWav).toBe(90);
-  expect(json.bms.defExRank).toBe(120);
-  expect(json.bms.exRank['01']).toBe('120,90,60,30');
-  expect(json.bms.argb['01']).toBe('FF000000');
-  expect(json.bms.exWav['01']).toBe('ex_sample.wav');
-  expect(json.bms.exBmp['01']).toBe('ex_image.bmp');
-  expect(json.bms.bga['01']).toBe('01');
-  expect(json.bms.scroll['01']).toBe(0.5);
-  expect(json.bms.scroll['02']).toBe(1);
-  expect(json.bms.scroll['03']).toBe(1.5);
-  expect(json.bms.poorBga).toBe('03');
-  expect(json.bms.swBga['01']).toBe('02');
-  expect(json.bms.videoFile).toBe('demo.mp4');
-  expect(json.bms.midiFile).toBe('demo.mid');
-  expect(json.bms.materials).toBe('demo.materials');
-  expect(json.bms.divideProp).toBe('lane=2');
-  expect(json.bms.charset).toBe('UTF-8');
-  expect(json.events.some((event) => event.channel === 'SC' && event.value === '01')).toBe(true);
+  test('BMS: keeps the last #DEFEXRANK with decimals', () => {
+    const parsed = parseChart(['#TITLE DefExRank', '#DEFEXRANK 120', '#DEFEXRANK 199.97', '#00111:01', ''].join('\n'));
 
-  expect(json.metadata.extras.PREVIEW).toBeUndefined();
-  expect(json.metadata.extras.PLAYER).toBeUndefined();
-  expect(json.metadata.extras.PATH_WAV).toBeUndefined();
-  expect(json.metadata.extras.BASEBPM).toBeUndefined();
-  expect(json.metadata.extras.STP).toBeUndefined();
-  expect(json.metadata.extras.OPTION).toBeUndefined();
-  expect(json.metadata.extras.CHANGEOPTION01).toBeUndefined();
-  expect(json.metadata.extras.CHANGEOPTION02).toBeUndefined();
-  expect(json.metadata.extras.WAVCMD).toBeUndefined();
-  expect(json.metadata.extras.LNTYPE).toBeUndefined();
-  expect(json.metadata.extras.LNMODE).toBeUndefined();
-  expect(json.metadata.extras.LNOBJ).toBeUndefined();
-  expect(json.metadata.extras.VOLWAV).toBeUndefined();
-  expect(json.metadata.extras.DEFEXRANK).toBeUndefined();
-  expect(json.metadata.extras.EXRANK01).toBeUndefined();
-  expect(json.metadata.extras.ARGB01).toBeUndefined();
-  expect(json.metadata.extras.EXWAV01).toBeUndefined();
-  expect(json.metadata.extras.EXBMP01).toBeUndefined();
-  expect(json.metadata.extras.BGA01).toBeUndefined();
-  expect(json.metadata.extras.SCROLL01).toBeUndefined();
-  expect(json.metadata.extras.SCROLL02).toBeUndefined();
-  expect(json.metadata.extras.SCROLL03).toBeUndefined();
-  expect(json.metadata.extras.POORBGA).toBeUndefined();
-  expect(json.metadata.extras.SWBGA01).toBeUndefined();
-  expect(json.metadata.extras.VIDEOFILE).toBeUndefined();
-  expect(json.metadata.extras.MIDIFILE).toBeUndefined();
-  expect(json.metadata.extras.MATERIALS).toBeUndefined();
-  expect(json.metadata.extras.DIVIDEPROP).toBeUndefined();
-  expect(json.metadata.extras.CHARSET).toBeUndefined();
-});
+    expect(parsed.sourceFormat).toBe('bms');
+    expect(parsed.bms.defExRank).toBe(199.97);
+  });
 
-test('BMS: parses SPEED indexed headers and SP keyframes into bms extensions/events', () => {
-  const parsed = parseChart(
-    [
-      '#SPEED01 1',
-      '#SPEED02 0.5',
-      '#001SP:0102',
-      '',
-    ].join('\n'),
-  );
+  test('BMS: keeps 130 fallback unless a control-flow branch applies #BPM', () => {
+    const parsed = parseChart(['#RANDOM 2', '#IF 1', '#BPM 150', '#ENDIF', '#ENDRANDOM', '#00111:01', ''].join('\n'));
+    expect(parsed.metadata.bpm).toBe(130);
 
-  expect(parsed.bms.speed['01']).toBe(1);
-  expect(parsed.bms.speed['02']).toBe(0.5);
-  expect(parsed.events).toEqual([
-    { measure: 1, channel: 'SP', position: [0, 2], value: '01' },
-    { measure: 1, channel: 'SP', position: [1, 2], value: '02' },
-  ]);
-});
+    const resolvedWhenBranchIsActive = resolveBmsControlFlow(parsed, { random: () => 0 });
+    expect(resolvedWhenBranchIsActive.metadata.bpm).toBe(150);
 
-test('BMS: keeps all LNOBJ declarations in declaration order', () => {
-  const parsed = parseChart(
-    [
-      '#LNOBJ AA',
-      '#LNOBJ BB',
-      '#00111:01',
-      '',
-    ].join('\n'),
-  );
+    const resolvedWhenBranchIsInactive = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
+    expect(resolvedWhenBranchIsInactive.metadata.bpm).toBe(130);
+  });
 
-  expect(parsed.bms.lnObjs).toEqual(['AA', 'BB']);
-  expect(parsed.metadata.extras.LNOBJ).toBeUndefined();
-});
+  test('BMS: parses extension headers into dedicated fields', async () => {
+    const json = await parseChartFile(unifiedBmsChartPath);
 
-test('BMS: prefers EOF-side definitions for duplicate headers, indexed headers, and measure lengths', () => {
-  const parsed = parseChart(
-    [
-      '#TITLE First Title',
-      '#TITLE Final Title',
-      '#BPM 120',
-      '#BPM 150',
-      '#WAV01 first.wav',
-      '#WAV01 second.wav',
-      '#SCROLL01 0.5',
-      '#SCROLL01 -1',
-      '#00102:1.5',
-      '#00102:0.75',
-      '#00111:01',
-      '',
-    ].join('\n'),
-  );
+    expect(json.bms.preview).toBe('sample.wav');
+    expect(json.bms.player).toBe(3);
+    expect(json.bms.pathWav).toBe('./');
+    expect(json.bms.baseBpm).toBe(128);
+    expect(json.bms.stp).toEqual(['008.192']);
+    expect(json.bms.option).toBe('RANDOM');
+    expect(json.bms.changeOption['01']).toBe('MIRROR');
+    expect(json.bms.changeOption['02']).toBe('RANDOM');
+    expect(json.bms.wavCmd).toBe('legacy');
+    expect(json.bms.lnType).toBe(1);
+    expect(json.bms.lnMode).toBe(1);
+    expect(json.bms.lnObjs).toEqual(['AA', 'AB']);
+    expect(json.bms.volWav).toBe(90);
+    expect(json.bms.defExRank).toBe(120);
+    expect(json.bms.exRank['01']).toBe('120,90,60,30');
+    expect(json.bms.argb['01']).toBe('FF000000');
+    expect(json.bms.exWav['01']).toBe('ex_sample.wav');
+    expect(json.bms.exBmp['01']).toBe('ex_image.bmp');
+    expect(json.bms.bga['01']).toBe('01');
+    expect(json.bms.scroll['01']).toBe(0.5);
+    expect(json.bms.scroll['02']).toBe(1);
+    expect(json.bms.scroll['03']).toBe(1.5);
+    expect(json.bms.poorBga).toBe('03');
+    expect(json.bms.swBga['01']).toBe('02');
+    expect(json.bms.videoFile).toBe('demo.mp4');
+    expect(json.bms.midiFile).toBe('demo.mid');
+    expect(json.bms.materials).toBe('demo.materials');
+    expect(json.bms.divideProp).toBe('lane=2');
+    expect(json.bms.charset).toBe('UTF-8');
+    expect(json.events.some((event) => event.channel === 'SC' && event.value === '01')).toBe(true);
 
-  expect(parsed.metadata.title).toBe('Final Title');
-  expect(parsed.metadata.bpm).toBe(150);
-  expect(parsed.resources.wav['01']).toBe('second.wav');
-  expect(parsed.bms.scroll['01']).toBe(-1);
-  expect(parsed.measures).toContainEqual({ index: 1, length: 0.75 });
-});
+    expect(json.metadata.extras.PREVIEW).toBeUndefined();
+    expect(json.metadata.extras.PLAYER).toBeUndefined();
+    expect(json.metadata.extras.PATH_WAV).toBeUndefined();
+    expect(json.metadata.extras.BASEBPM).toBeUndefined();
+    expect(json.metadata.extras.STP).toBeUndefined();
+    expect(json.metadata.extras.OPTION).toBeUndefined();
+    expect(json.metadata.extras.CHANGEOPTION01).toBeUndefined();
+    expect(json.metadata.extras.CHANGEOPTION02).toBeUndefined();
+    expect(json.metadata.extras.WAVCMD).toBeUndefined();
+    expect(json.metadata.extras.LNTYPE).toBeUndefined();
+    expect(json.metadata.extras.LNMODE).toBeUndefined();
+    expect(json.metadata.extras.LNOBJ).toBeUndefined();
+    expect(json.metadata.extras.VOLWAV).toBeUndefined();
+    expect(json.metadata.extras.DEFEXRANK).toBeUndefined();
+    expect(json.metadata.extras.EXRANK01).toBeUndefined();
+    expect(json.metadata.extras.ARGB01).toBeUndefined();
+    expect(json.metadata.extras.EXWAV01).toBeUndefined();
+    expect(json.metadata.extras.EXBMP01).toBeUndefined();
+    expect(json.metadata.extras.BGA01).toBeUndefined();
+    expect(json.metadata.extras.SCROLL01).toBeUndefined();
+    expect(json.metadata.extras.SCROLL02).toBeUndefined();
+    expect(json.metadata.extras.SCROLL03).toBeUndefined();
+    expect(json.metadata.extras.POORBGA).toBeUndefined();
+    expect(json.metadata.extras.SWBGA01).toBeUndefined();
+    expect(json.metadata.extras.VIDEOFILE).toBeUndefined();
+    expect(json.metadata.extras.MIDIFILE).toBeUndefined();
+    expect(json.metadata.extras.MATERIALS).toBeUndefined();
+    expect(json.metadata.extras.DIVIDEPROP).toBeUndefined();
+    expect(json.metadata.extras.CHARSET).toBeUndefined();
+  });
 
-test('BMS: preserves repeated STP, LNOBJ, and control-flow entries instead of collapsing them', () => {
-  const parsed = parseChart(
-    [
-      '#STP 001.192',
-      '#STP 002.096',
-      '#LNOBJ AA',
-      '#LNOBJ BB',
-      '#RANDOM 2',
-      '#IF 1',
-      '#TITLE Branch Title',
-      '#ENDIF',
-      '#ENDRANDOM',
-      '#00111:01',
-      '',
-    ].join('\n'),
-  );
+  test('BMS: parses SPEED indexed headers and SP keyframes into bms extensions/events', () => {
+    const parsed = parseChart(['#SPEED01 1', '#SPEED02 0.5', '#001SP:0102', ''].join('\n'));
 
-  expect(parsed.bms.stp).toEqual(['001.192', '002.096']);
-  expect(parsed.bms.lnObjs).toEqual(['AA', 'BB']);
-  expect(parsed.metadata.title).toBeUndefined();
-  expect(parsed.bms.controlFlow).toEqual([
-    { kind: 'directive', command: 'RANDOM', value: '2' },
-    { kind: 'directive', command: 'IF', value: '1' },
-    { kind: 'header', command: 'TITLE', value: 'Branch Title' },
-    { kind: 'directive', command: 'ENDIF', value: undefined },
-    { kind: 'directive', command: 'ENDRANDOM', value: undefined },
-  ]);
-});
+    expect(parsed.bms.speed['01']).toBe(1);
+    expect(parsed.bms.speed['02']).toBe(0.5);
+    expect(parsed.events).toEqual([
+      { measure: 1, channel: 'SP', position: [0, 2], value: '01' },
+      { measure: 1, channel: 'SP', position: [1, 2], value: '02' },
+    ]);
+  });
 
-test('BMS: preserves non-control-flow object line boundaries for roundtrip', () => {
-  const parsed = parseChart(
-    [
-      '#TITLE First',
-      '#00113:11111111',
-      '#00113:0022332255224400',
-      '#00113:0066',
-      '#00101:11',
-      '#00101:22',
-      '#001A6:11',
-      '#001A6:22',
-      '#00102:1.5',
-      '#00102:0.75',
-      '',
-    ].join('\n'),
-  );
+  test('BMS: keeps all LNOBJ declarations in declaration order', () => {
+    const parsed = parseChart(['#LNOBJ AA', '#LNOBJ BB', '#00111:01', ''].join('\n'));
 
-  expect(parsed.preservation.bms.sourceLines.map((line) => line.kind)).toEqual([
-    'header',
-    'object',
-    'object',
-    'object',
-    'object',
-    'object',
-    'object',
-    'object',
-    'object',
-    'object',
-  ]);
-  expect(parsed.preservation.bms.objectLines.map((line) => `${line.measure}:${line.channel}:${line.events.length}:${line.measureLength ?? '-'}`)).toEqual([
-    '1:13:4:-',
-    '1:13:6:-',
-    '1:13:1:-',
-    '1:01:1:-',
-    '1:01:1:-',
-    '1:A6:1:-',
-    '1:A6:1:-',
-    '1:02:0:1.5',
-    '1:02:0:0.75',
-  ]);
-});
+    expect(parsed.bms.lnObjs).toEqual(['AA', 'BB']);
+    expect(parsed.metadata.extras.LNOBJ).toBeUndefined();
+  });
 
-test('BMS: parses RANDOM/IF/SWITCH control flow directives', async () => {
-  const parsed = await parseChartFile(unifiedBmsChartPath);
+  test('BMS: prefers EOF-side definitions for duplicate headers, indexed headers, and measure lengths', () => {
+    const parsed = parseChart(
+      [
+        '#TITLE First Title',
+        '#TITLE Final Title',
+        '#BPM 120',
+        '#BPM 150',
+        '#WAV01 first.wav',
+        '#WAV01 second.wav',
+        '#SCROLL01 0.5',
+        '#SCROLL01 -1',
+        '#00102:1.5',
+        '#00102:0.75',
+        '#00111:01',
+        '',
+      ].join('\n'),
+    );
 
-  expect(parsed.resources.wav['02']).toBe('branch.wav');
-  expect(parsed.bms.controlFlow.length).toBeGreaterThan(0);
-  expect(parsed.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(false);
-  expect(parsed.events.some((event) => event.measure === 21 && event.channel === '16')).toBe(false);
-  expect(parsed.events.some((event) => event.measure === 23 && event.channel === '22')).toBe(false);
+    expect(parsed.metadata.title).toBe('Final Title');
+    expect(parsed.metadata.bpm).toBe(150);
+    expect(parsed.resources.wav['01']).toBe('second.wav');
+    expect(parsed.bms.scroll['01']).toBe(-1);
+    expect(parsed.measures).toContainEqual({ index: 1, length: 0.75 });
+  });
 
-  const resolvedWhenRandomIs1 = resolveBmsControlFlow(parsed, { random: () => 0 });
-  expect(resolvedWhenRandomIs1.resources.wav['02']).toBe('right.wav');
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(true);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '11')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '12')).toBe(true);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '13')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 21 && event.channel === '16')).toBe(true);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '14')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '15')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '18')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '21')).toBe(false);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '22')).toBe(true);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(true);
-  expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(false);
+  test('BMS: preserves repeated STP, LNOBJ, and control-flow entries instead of collapsing them', () => {
+    const parsed = parseChart(
+      [
+        '#STP 001.192',
+        '#STP 002.096',
+        '#LNOBJ AA',
+        '#LNOBJ BB',
+        '#RANDOM 2',
+        '#IF 1',
+        '#TITLE Branch Title',
+        '#ENDIF',
+        '#ENDRANDOM',
+        '#00111:01',
+        '',
+      ].join('\n'),
+    );
 
-  const resolvedWhenRandomIs2 = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
-  expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(false);
-  expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(true);
+    expect(parsed.bms.stp).toEqual(['001.192', '002.096']);
+    expect(parsed.bms.lnObjs).toEqual(['AA', 'BB']);
+    expect(parsed.metadata.title).toBeUndefined();
+    expect(parsed.bms.controlFlow).toEqual([
+      { kind: 'directive', command: 'RANDOM', value: '2' },
+      { kind: 'directive', command: 'IF', value: '1' },
+      { kind: 'header', command: 'TITLE', value: 'Branch Title' },
+      { kind: 'directive', command: 'ENDIF', value: undefined },
+      { kind: 'directive', command: 'ENDRANDOM', value: undefined },
+    ]);
+  });
 
-  expect(parsed.metadata.extras.RANDOM).toBeUndefined();
-  expect(parsed.metadata.extras.SWITCH).toBeUndefined();
-  expect(parsed.metadata.extras.SETRANDOM).toBeUndefined();
-  expect(parsed.metadata.extras.SETSWITCH).toBeUndefined();
-});
+  test('BMS: preserves non-control-flow object line boundaries for roundtrip', () => {
+    const parsed = parseChart(
+      [
+        '#TITLE First',
+        '#00113:11111111',
+        '#00113:0022332255224400',
+        '#00113:0066',
+        '#00101:11',
+        '#00101:22',
+        '#001A6:11',
+        '#001A6:22',
+        '#00102:1.5',
+        '#00102:0.75',
+        '',
+      ].join('\n'),
+    );
 
-test('bmson: maps version/lines/info.resolution into IR', async () => {
-  const chartPath = resolve(rootDir, 'examples/test/bmson-lines-resolution-test.bmson');
-  const input = await readFile(chartPath, 'utf8');
-  const json = parseBmson(input);
+    expect(parsed.preservation.bms.sourceLines.map((line) => line.kind)).toEqual([
+      'header',
+      'object',
+      'object',
+      'object',
+      'object',
+      'object',
+      'object',
+      'object',
+      'object',
+      'object',
+    ]);
+    expect(
+      parsed.preservation.bms.objectLines.map(
+        (line) => `${line.measure}:${line.channel}:${line.events.length}:${line.measureLength ?? '-'}`,
+      ),
+    ).toEqual([
+      '1:13:4:-',
+      '1:13:6:-',
+      '1:13:1:-',
+      '1:01:1:-',
+      '1:01:1:-',
+      '1:A6:1:-',
+      '1:A6:1:-',
+      '1:02:0:1.5',
+      '1:02:0:0.75',
+    ]);
+  });
 
-  expect(json.sourceFormat).toBe('bmson');
-  expect(json.bmson.version).toBe('1.0.0');
-  expect(json.bmson.info.resolution).toBe(240);
-  expect(json.preservation.bmson.lines).toEqual([0, 960, 1680, 2640]);
-  expect(json.preservation.bmson.soundChannels.map((channel) => channel.name)).toEqual(['sample.wav']);
-  expect(json.preservation.bmson.bpmEvents.map((event) => event.bpm)).toEqual([180]);
-  expect(json.preservation.bmson.stopEvents.map((event) => event.duration)).toEqual([96]);
-  expect(json.measures).toEqual([{ index: 1, length: 0.75 }]);
+  test('BMS: parses RANDOM/IF/SWITCH control flow directives', async () => {
+    const parsed = await parseChartFile(unifiedBmsChartPath);
 
-  expect(
-    json.events.some(
-      (event) =>
-        event.channel === '11' && event.measure === 1 && event.position[0] === 240 && event.position[1] === 720,
-    ),
-  ).toBe(true);
-  expect(
-    json.events.some(
-      (event) => event.channel === '08' && event.measure === 1 && event.position[0] === 0 && event.position[1] === 720,
-    ),
-  ).toBe(true);
-});
+    expect(parsed.resources.wav['02']).toBe('branch.wav');
+    expect(parsed.bms.controlFlow.length).toBeGreaterThan(0);
+    expect(parsed.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(false);
+    expect(parsed.events.some((event) => event.measure === 21 && event.channel === '16')).toBe(false);
+    expect(parsed.events.some((event) => event.measure === 23 && event.channel === '22')).toBe(false);
 
-test('bmson: preserves bga/info extensions and notes.l/c in IR', async () => {
-  const chartPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
-  const input = await readFile(chartPath, 'utf8');
-  const json = parseBmson(input);
+    const resolvedWhenRandomIs1 = resolveBmsControlFlow(parsed, { random: () => 0 });
+    expect(resolvedWhenRandomIs1.resources.wav['02']).toBe('right.wav');
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(true);
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '11')).toBe(false);
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '12')).toBe(true);
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '13')).toBe(false);
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 21 && event.channel === '16')).toBe(true);
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '14')).toBe(false);
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '15')).toBe(false);
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '18')).toBe(false);
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '21')).toBe(false);
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '22')).toBe(true);
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(true);
+    expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(false);
 
-  expect(json.bmson.info.subartists).toEqual(['Alice', 'Bob']);
-  expect(json.bmson.info.chartName).toBe('HYPER');
-  expect(json.bmson.info.modeHint).toBe('beat-7k');
-  expect(json.bmson.info.judgeRank).toBe(125);
-  expect(json.bmson.info.total).toBe(340);
-  expect(json.bmson.info.backImage).toBe('back.png');
-  expect(json.bmson.info.eyecatchImage).toBe('eye.png');
-  expect(json.bmson.info.bannerImage).toBe('banner.png');
-  expect(json.bmson.info.previewMusic).toBe('preview.ogg');
-  expect(json.metadata.rank).toBe(125);
-  expect(json.metadata.total).toBe(340);
+    const resolvedWhenRandomIs2 = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
+    expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(false);
+    expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(true);
 
-  expect(json.bmson.bga.header).toEqual([
-    { id: 1, name: 'base.png' },
-    { id: 2, name: 'layer.png' },
-    { id: 3, name: 'poor.png' },
-  ]);
-  expect(json.bmson.bga.events).toEqual([{ y: 0, id: 1 }]);
-  expect(json.bmson.bga.layerEvents).toEqual([{ y: 480, id: 2 }]);
-  expect(json.bmson.bga.poorEvents).toEqual([{ y: 960, id: 3 }]);
+    expect(parsed.metadata.extras.RANDOM).toBeUndefined();
+    expect(parsed.metadata.extras.SWITCH).toBeUndefined();
+    expect(parsed.metadata.extras.SETRANDOM).toBeUndefined();
+    expect(parsed.metadata.extras.SETSWITCH).toBeUndefined();
+  });
 
-  const longNote = json.events.find((event) => event.value === '01' && event.position[0] === 0);
-  expect(longNote?.bmson?.l).toBe(120);
-  expect(longNote?.bmson?.c).toBe(true);
-  const normalNote = json.events.find((event) => event.value === '01' && event.position[0] > 0);
-  expect(normalNote?.bmson?.l).toBe(0);
-  expect(normalNote?.bmson?.c).toBe(false);
-});
+  test('bmson: maps version/lines/info.resolution into IR', async () => {
+    const chartPath = resolve(rootDir, 'examples/test/bmson-lines-resolution-test.bmson');
+    const input = await readFile(chartPath, 'utf8');
+    const json = parseBmson(input);
 
-test('bmson: treats x=0/null notes as BGM(01) and prioritizes playable notes on same tick', () => {
-  const json = parseBmson(
-    JSON.stringify({
-      version: '1.0.0',
-      info: {
-        init_bpm: 120,
-        resolution: 240,
-      },
-      sound_channels: [
-        {
-          name: 'sample.wav',
-          notes: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { y: 240 }, { x: 1, y: 480 }],
+    expect(json.sourceFormat).toBe('bmson');
+    expect(json.bmson.version).toBe('1.0.0');
+    expect(json.bmson.info.resolution).toBe(240);
+    expect(json.preservation.bmson.lines).toEqual([0, 960, 1680, 2640]);
+    expect(json.preservation.bmson.soundChannels.map((channel) => channel.name)).toEqual(['sample.wav']);
+    expect(json.preservation.bmson.bpmEvents.map((event) => event.bpm)).toEqual([180]);
+    expect(json.preservation.bmson.stopEvents.map((event) => event.duration)).toEqual([96]);
+    expect(json.measures).toEqual([{ index: 1, length: 0.75 }]);
+
+    expect(
+      json.events.some(
+        (event) =>
+          event.channel === '11' && event.measure === 1 && event.position[0] === 240 && event.position[1] === 720,
+      ),
+    ).toBe(true);
+    expect(
+      json.events.some(
+        (event) =>
+          event.channel === '08' && event.measure === 1 && event.position[0] === 0 && event.position[1] === 720,
+      ),
+    ).toBe(true);
+  });
+
+  test('bmson: preserves bga/info extensions and notes.l/c in IR', async () => {
+    const chartPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
+    const input = await readFile(chartPath, 'utf8');
+    const json = parseBmson(input);
+
+    expect(json.bmson.info.subartists).toEqual(['Alice', 'Bob']);
+    expect(json.bmson.info.chartName).toBe('HYPER');
+    expect(json.bmson.info.modeHint).toBe('beat-7k');
+    expect(json.bmson.info.judgeRank).toBe(125);
+    expect(json.bmson.info.total).toBe(340);
+    expect(json.bmson.info.backImage).toBe('back.png');
+    expect(json.bmson.info.eyecatchImage).toBe('eye.png');
+    expect(json.bmson.info.bannerImage).toBe('banner.png');
+    expect(json.bmson.info.previewMusic).toBe('preview.ogg');
+    expect(json.metadata.rank).toBe(125);
+    expect(json.metadata.total).toBe(340);
+
+    expect(json.bmson.bga.header).toEqual([
+      { id: 1, name: 'base.png' },
+      { id: 2, name: 'layer.png' },
+      { id: 3, name: 'poor.png' },
+    ]);
+    expect(json.bmson.bga.events).toEqual([{ y: 0, id: 1 }]);
+    expect(json.bmson.bga.layerEvents).toEqual([{ y: 480, id: 2 }]);
+    expect(json.bmson.bga.poorEvents).toEqual([{ y: 960, id: 3 }]);
+
+    const longNote = json.events.find((event) => event.value === '01' && event.position[0] === 0);
+    expect(longNote?.bmson?.l).toBe(120);
+    expect(longNote?.bmson?.c).toBe(true);
+    const normalNote = json.events.find((event) => event.value === '01' && event.position[0] > 0);
+    expect(normalNote?.bmson?.l).toBe(0);
+    expect(normalNote?.bmson?.c).toBe(false);
+  });
+
+  test('bmson: treats x=0/null notes as BGM(01) and prioritizes playable notes on same tick', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: {
+          init_bpm: 120,
+          resolution: 240,
         },
-      ],
-    }),
-  );
-
-  const bgmNotes = json.events.filter((event) => event.channel === '01');
-  const playableNotes = json.events.filter((event) => event.channel === '11');
-
-  expect(bgmNotes).toHaveLength(1);
-  expect(playableNotes).toHaveLength(2);
-  expect(bgmNotes[0].position).toEqual([240, 960]);
-  expect(playableNotes.some((event) => event.position[0] === 0)).toBe(true);
-  expect(playableNotes.some((event) => event.position[0] === 480)).toBe(true);
-});
-
-test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and rejects invalid positions', () => {
-  const parsed = parseChart(
-    JSON.stringify({
-      format: BMS_JSON_FORMAT,
-      sourceFormat: 'json',
-      metadata: { bpm: 120, extras: {} },
-      resources: { wav: {}, bmp: {}, bpm: {}, stop: {}, text: {} },
-      measures: [],
-      events: [],
-      bms: {
-        preview: 'preview.ogg',
-        lnType: '2',
-        lnMode: '1',
-        lnObj: 'yy',
-        lnObjs: ['zz'],
-        volWav: '90',
-        defExRank: '100.5',
-        player: '2',
-        pathWav: 'sounds/',
-        baseBpm: '145.5',
-        stp: ['001.240', 120, '002.120'],
-        option: 'HS',
-        changeOption: {
-          1: 'MIRROR',
-        },
-        wavCmd: 'legacy',
-        exRank: {
-          1: 120,
-          ab: '70,55,40,25',
-        },
-        argb: {
-          a: 'FF000000',
-        },
-        exWav: {
-          1: 'extended.wav',
-        },
-        exBmp: {
-          2: 'extended.bmp',
-        },
-        bga: {
-          3: '01',
-        },
-        scroll: {
-          1: '0.5',
-        },
-        speed: {
-          1: '1.5',
-        },
-        poorBga: '02',
-        swBga: {
-          4: '03',
-        },
-        videoFile: 'movie.mp4',
-        midiFile: 'song.mid',
-        materials: 'materials.def',
-        divideProp: 'lane=2',
-        charset: 'Shift_JIS',
-        sourceLines: [
-          { kind: 'header', command: 'title', value: 'Roundtrip' },
-          {
-            kind: 'object',
-            measure: 1,
-            channel: '1a',
-            events: [{ measure: 1, channel: '1a', position: [0, 2], value: '01' }],
-          },
-        ],
-        controlFlow: [
-          { kind: 'directive', command: 'random', value: 2 },
-          {
-            kind: 'object',
-            measure: 1,
-            channel: '1a',
-            events: [{ measure: 1, channel: '1a', position: [0, 2], value: '01' }],
-          },
-        ],
-      },
-      bmson: {
-        version: '1.0.1',
-        lines: [960, { y: 0 }, -100, { y: 1680 }],
-        info: { resolution: 480 },
-        bpm_events: [{ y: 240.4, bpm: 150 }],
-        stop_events: [{ y: 960.2, duration: 48 }],
         sound_channels: [
           {
             name: 'sample.wav',
-            notes: [{ x: 1.9, y: 0.2, l: 240.8, c: true }],
+            notes: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { y: 240 }, { x: 1, y: 480 }],
           },
         ],
-      },
-    }),
-    'json',
-  );
+      }),
+    );
 
-  expect(parsed.bmson.version).toBe('1.0.1');
-  expect(parsed.bmson.info.resolution).toBe(480);
-  expect(parsed.preservation.bmson.lines).toEqual([0, 960, 1680]);
-  expect(parsed.bms.preview).toBe('preview.ogg');
-  expect(parsed.bms.lnType).toBe(2);
-  expect(parsed.bms.lnMode).toBe(1);
-  expect(parsed.bms.lnObjs).toEqual(['ZZ']);
-  expect(parsed.bms.lnObjs).not.toContain('YY');
-  expect(parsed.bms.volWav).toBe(90);
-  expect(parsed.bms.defExRank).toBe(100.5);
-  expect(parsed.bms.player).toBe(2);
-  expect(parsed.bms.pathWav).toBe('sounds/');
-  expect(parsed.bms.baseBpm).toBe(145.5);
-  expect(parsed.bms.stp).toEqual(['001.240', '002.120']);
-  expect(parsed.bms.option).toBe('HS');
-  expect(parsed.bms.changeOption['01']).toBe('MIRROR');
-  expect(parsed.bms.wavCmd).toBe('legacy');
-  expect(parsed.bms.exRank['01']).toBe('120');
-  expect(parsed.bms.exRank.AB).toBe('70,55,40,25');
-  expect(parsed.bms.argb['0A']).toBe('FF000000');
-  expect(parsed.bms.exWav['01']).toBe('extended.wav');
-  expect(parsed.bms.exBmp['02']).toBe('extended.bmp');
-  expect(parsed.bms.bga['03']).toBe('01');
-  expect(parsed.bms.scroll['01']).toBe(0.5);
-  expect(parsed.bms.speed['01']).toBe(1.5);
-  expect(parsed.bms.poorBga).toBe('02');
-  expect(parsed.bms.swBga['04']).toBe('03');
-  expect(parsed.bms.videoFile).toBe('movie.mp4');
-  expect(parsed.bms.midiFile).toBe('song.mid');
-  expect(parsed.bms.materials).toBe('materials.def');
-  expect(parsed.bms.divideProp).toBe('lane=2');
-  expect(parsed.bms.charset).toBe('Shift_JIS');
-  expect(parsed.preservation.bms.sourceLines).toEqual([
-    { kind: 'header', command: 'TITLE', value: 'Roundtrip' },
-    {
-      kind: 'object',
-      measure: 1,
-      channel: '1A',
-      events: [{ measure: 1, channel: '1A', position: [0, 2], value: '01' }],
-      measureLength: undefined,
-    },
-  ]);
-  expect(parsed.bms.controlFlow).toEqual([
-    { kind: 'directive', command: 'RANDOM', value: '2' },
-    {
-      kind: 'object',
-      measure: 1,
-      channel: '1A',
-      events: [{ measure: 1, channel: '1A', position: [0, 2], value: '01' }],
-      measureLength: undefined,
-    },
-  ]);
-  expect(parsed.preservation.bmson.bpmEvents).toEqual([{ y: 240, bpm: 150 }]);
-  expect(parsed.preservation.bmson.stopEvents).toEqual([{ y: 960, duration: 48 }]);
-  expect(parsed.preservation.bmson.soundChannels).toEqual([
-    {
-      name: 'sample.wav',
-      notes: [{ x: 1, y: 0, l: 240, c: true }],
-    },
-  ]);
+    const bgmNotes = json.events.filter((event) => event.channel === '01');
+    const playableNotes = json.events.filter((event) => event.channel === '11');
 
-  expect(() =>
-    parseChart(
+    expect(bgmNotes).toHaveLength(1);
+    expect(playableNotes).toHaveLength(2);
+    expect(bgmNotes[0].position).toEqual([240, 960]);
+    expect(playableNotes.some((event) => event.position[0] === 0)).toBe(true);
+    expect(playableNotes.some((event) => event.position[0] === 480)).toBe(true);
+  });
+
+  test('bmson: mode_hint=beat-7k routes x=6/7 onto channels 18/19 and x=8 onto scratch (16)', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            // Each note one beat apart so measures are stable for assertion. Resolution 240, four beats / measure → one
+            // x value per beat fits inside measure 0 / 1.
+            notes: [
+              { x: 1, y: 0 },
+              { x: 2, y: 240 },
+              { x: 3, y: 480 },
+              { x: 4, y: 720 },
+              { x: 5, y: 960 },
+              { x: 6, y: 1200 },
+              { x: 7, y: 1440 },
+              { x: 8, y: 1680 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const sortedChannels = json.events
+      .slice()
+      .sort(
+        (left, right) =>
+          left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+      )
+      .map((event) => event.channel);
+    expect(sortedChannels).toEqual(['11', '12', '13', '14', '15', '18', '19', '16']);
+  });
+
+  test('bmson: mode_hint=popn-9k routes x=6..9 onto the PMS-STD 22..25 channels', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'popn-9k' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 5, y: 0 },
+              { x: 6, y: 240 },
+              { x: 7, y: 480 },
+              { x: 8, y: 720 },
+              { x: 9, y: 960 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const channels = json.events
+      .slice()
+      .sort(
+        (left, right) =>
+          left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+      )
+      .map((event) => event.channel);
+    expect(channels).toEqual(['15', '22', '23', '24', '25']);
+  });
+
+  test('bmson: missing mode_hint defaults to beat-7k per the 1.0.0 spec', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240 },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 7, y: 0 },
+              { x: 1, y: 240 },
+              { x: 5, y: 480 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // bmson 1.0.0 spec — "Default value is 'beat-7k'". x=1/5/7 route to the canonical 7-key channels 11 / 15 / 19
+    // instead of the positional 11 / 12 / 13 fallback.
+    const sortedChannels = json.events
+      .slice()
+      .sort(
+        (left, right) =>
+          left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+      )
+      .map((event) => event.channel);
+    expect(sortedChannels).toEqual(['19', '11', '15']);
+  });
+
+  test('bmson: unknown mode_hint falls back to positional `x` ordering', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'kabuki-3k' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 7, y: 0 },
+              { x: 1, y: 240 },
+              { x: 5, y: 480 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // Unknown mode_hints (`kabuki-3k` etc.) fall through onto the positional fallback so consumers can still load the
+    // chart even if no canonical layout matches.
+    const sortedChannels = json.events
+      .slice()
+      .sort(
+        (left, right) =>
+          left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+      )
+      .map((event) => event.channel);
+    expect(sortedChannels).toEqual(['13', '11', '12']);
+  });
+
+  test('bmson: generic-Nkeys mode_hint generates a left-to-right positional map', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'generic-3keys' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 2, y: 240 },
+              { x: 3, y: 480 },
+              { x: 4, y: 720 }, // outside the declared 3-key range
+            ],
+          },
+        ],
+      }),
+    );
+
+    // x=1..3 within the declared key count map to 11/12/13; x=4 falls outside the map so the parser routes it to the
+    // channel-11 default (consumers see one playable note at lane 1 plus three at the explicit slots).
+    const sortedChannels = json.events
+      .slice()
+      .sort(
+        (left, right) =>
+          left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+      )
+      .map((event) => event.channel);
+    expect(sortedChannels).toEqual(['11', '12', '13', '11']);
+  });
+
+  test('bmson: missing info.total defaults to 100 per the 1.0.0 spec', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.metadata.total).toBe(100);
+  });
+
+  test('bmson: negative info.total is normalized to its absolute value per the 1.0.0 spec', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', total: -260 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    // Spec: "If negative, take the absolute value." Both the bmson IR field and the unified `metadata.total` slot
+    // surface the positive value so the gauge formula (`+TOTAL/N`) stays on the positive branch.
+    expect(json.bmson.info.total).toBe(260);
+    expect(json.metadata.total).toBe(260);
+  });
+
+  test('bmson: info.total = 0 is preserved (lifebar does not increase)', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', total: 0 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    // Spec: "If 0, the lifebar doesn't increase." The abs normalization must not collapse 0 into the missing-default
+    // (100) — the gauge formula sees baseGain = 0/N = 0 and emits no PG/GR rise.
+    expect(json.bmson.info.total).toBe(0);
+    expect(json.metadata.total).toBe(0);
+  });
+
+  test('bmson: explicit info.total wins over the spec default', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', total: 250 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.metadata.total).toBe(250);
+  });
+
+  test('bmson: stop_events.duration is converted from pulses-at-resolution to BMS 1/192-measure units', () => {
+    // Spec: `duration` is in pulses at the chart's `resolution`. BMS-side timing reads `resources.stop[key]` through
+    // the `(value / 192) × (240/bpm)` formula expecting 1/192-measure units (= 48 per beat). Parser conversion: `pulses
+    // × 48 / resolution`. Default resolution=240 → 1 beat (240 pulses) = 48 BMS units; without the conversion we'd see
+    // the raw 240 and the formula would produce a 5× over-long stop.
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+        stop_events: [{ y: 240, duration: 240 }],
+      }),
+    );
+
+    const stopKeys = Object.keys(json.resources.stop);
+    expect(stopKeys).toHaveLength(1);
+    expect(json.resources.stop[stopKeys[0]!]).toBeCloseTo(48, 6);
+  });
+
+  test('bmson: non-positive info.judge_rank is dropped so the consumer falls back to the spec default', () => {
+    // bmson 1.0.0 spec — `judge_rank`'s text frames the value as a width relative to the player's default ("smaller
+    // than 100" / "larger than 100"). 0 / negative inputs would imply a zero-width or inverted window — meaningless.
+    // The parser drops the field so `resolveBmsonJudgeRankPercent` falls back to the spec default of 100.
+    const negative = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', judge_rank: -50 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+    expect(negative.bmson.info.judgeRank).toBeUndefined();
+    expect(negative.metadata.rank).toBeUndefined();
+
+    const zero = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', judge_rank: 0 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+    expect(zero.bmson.info.judgeRank).toBeUndefined();
+    expect(zero.metadata.rank).toBeUndefined();
+  });
+
+  test('bmson: positive info.judge_rank flows through unchanged', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', judge_rank: 75 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+    expect(json.bmson.info.judgeRank).toBe(75);
+    expect(json.metadata.rank).toBe(75);
+  });
+
+  test('bmson: negative info.level is treated as invalid and dropped per the 1.0.0 spec', () => {
+    // Spec: "level must be ≥ 0. Negative values may be regarded as invalid by a player." We choose the "invalid → drop"
+    // branch so the UI shows no level rather than a misleading negative number, and so re-stringifying doesn't preserve
+    // the bad value.
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', level: -3 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.info.level).toBeUndefined();
+    expect(json.metadata.playLevel).toBeUndefined();
+  });
+
+  test('bmson: non-integer info.level is floored per the unsigned-long spec type', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', level: 7.8 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.info.level).toBe(7);
+    expect(json.metadata.playLevel).toBe(7);
+  });
+
+  test('bmson: zero info.level is preserved (a valid unsigned-long)', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', level: 0 },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.info.level).toBe(0);
+    expect(json.metadata.playLevel).toBe(0);
+  });
+
+  test('bmson: subartists entries get role/name halves trimmed at parse time', () => {
+    // bmson 1.0.0 spec SHOULD — "Implementers should trim the spaces before and after `key` and `value` in subartists."
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: {
+          init_bpm: 120,
+          resolution: 240,
+          mode_hint: 'beat-7k',
+          subartists: ['  illust  :  foo  ', 'OBJ:bar', '  trimmed  ', ':  bare  ', 'role:'],
+        },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.info.subartists).toEqual([
+      // "  illust  :  foo  " → "illust:foo" (role and name both trimmed)
+      'illust:foo',
+      // Already-tidy entries pass through unchanged.
+      'OBJ:bar',
+      // Colon-less entries get their outer whitespace trimmed.
+      'trimmed',
+      // Leading-colon (no role) collapses to the bare name.
+      'bare',
+      // Trailing-colon (empty name) is preserved as `role:`.
+      'role:',
+    ]);
+  });
+
+  test('bmson: missing info.init_bpm throws — spec calls this a fatal error', () => {
+    expect(() =>
+      parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { resolution: 240, mode_hint: 'beat-7k' }, // init_bpm omitted
+          sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+        }),
+      ),
+    ).toThrow(/init_bpm/i);
+  });
+
+  test('bmson: zero / negative info.init_bpm also throws (no usable tempo anchor)', () => {
+    expect(() =>
+      parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { init_bpm: 0, resolution: 240, mode_hint: 'beat-7k' },
+          sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+        }),
+      ),
+    ).toThrow(/init_bpm/i);
+
+    expect(() =>
+      parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { init_bpm: -120, resolution: 240, mode_hint: 'beat-7k' },
+          sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+        }),
+      ),
+    ).toThrow(/init_bpm/i);
+  });
+
+  test('bmson: missing lines does NOT set the barline-suppress flag (default 4/4 barlines apply)', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.barlinesSuppressed).toBeUndefined();
+  });
+
+  test('bmson: lines: [] sets the barline-suppress flag per the 100 % minimoo-G effect', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        lines: [],
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.barlinesSuppressed).toBe(true);
+  });
+
+  test('bmson: non-empty lines does NOT set the barline-suppress flag', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        lines: [{ y: 0 }, { y: 960 }],
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+
+    expect(json.bmson.barlinesSuppressed).toBeUndefined();
+  });
+
+  test('bmson: stop_events.duration scales with non-default resolution', () => {
+    // Same beat-length stop authored at resolution=480 takes duration=480 pulses (still 1 beat). Conversion remains 48
+    // BMS units regardless.
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 480, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 's.wav', notes: [{ x: 1, y: 0 }] }],
+        stop_events: [{ y: 480, duration: 480 }],
+      }),
+    );
+
+    const stopKeys = Object.keys(json.resources.stop);
+    expect(stopKeys).toHaveLength(1);
+    expect(json.resources.stop[stopKeys[0]!]).toBeCloseTo(48, 6);
+  });
+
+  test('bmson: key_channels mines route through the same mode_hint lane map onto Dx / Ex channels', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 'note.wav', notes: [{ x: 1, y: 0 }] }],
+        key_channels: [
+          {
+            name: 'mine.wav',
+            notes: [
+              { x: 6, y: 240, damage: 0 },
+              { x: 8, y: 480, damage: 50 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const mineEvents = json.events.filter((event) => event.channel.startsWith('D') || event.channel.startsWith('E'));
+    expect(mineEvents).toHaveLength(2);
+    // x=6 → 18 (1P key 6) → mine D8
+    expect(mineEvents[0].channel).toBe('D8');
+    expect(mineEvents[0].bmson?.damage).toBe(0);
+    // x=8 → 16 (1P scratch) → mine D6
+    expect(mineEvents[1].channel).toBe('D6');
+    expect(mineEvents[1].bmson?.damage).toBe(50);
+    // The mine WAV is registered after the sound_channels block.
+    expect(json.resources.wav['02']).toBe('mine.wav');
+  });
+
+  test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and rejects invalid positions', () => {
+    const parsed = parseChart(
       JSON.stringify({
         format: BMS_JSON_FORMAT,
         sourceFormat: 'json',
         metadata: { bpm: 120, extras: {} },
         resources: { wav: {}, bmp: {}, bpm: {}, stop: {}, text: {} },
         measures: [],
-        events: [{ measure: 0, channel: '11', value: '01' }],
+        events: [],
+        bms: {
+          preview: 'preview.ogg',
+          lnType: '2',
+          lnMode: '1',
+          lnObj: 'yy',
+          lnObjs: ['zz'],
+          volWav: '90',
+          defExRank: '100.5',
+          player: '2',
+          pathWav: 'sounds/',
+          baseBpm: '145.5',
+          stp: ['001.240', 120, '002.120'],
+          option: 'HS',
+          changeOption: {
+            1: 'MIRROR',
+          },
+          wavCmd: 'legacy',
+          exRank: {
+            1: 120,
+            ab: '70,55,40,25',
+          },
+          argb: {
+            a: 'FF000000',
+          },
+          exWav: {
+            1: 'extended.wav',
+          },
+          exBmp: {
+            2: 'extended.bmp',
+          },
+          bga: {
+            3: '01',
+          },
+          scroll: {
+            1: '0.5',
+          },
+          speed: {
+            1: '1.5',
+          },
+          poorBga: '02',
+          swBga: {
+            4: '03',
+          },
+          videoFile: 'movie.mp4',
+          midiFile: 'song.mid',
+          materials: 'materials.def',
+          divideProp: 'lane=2',
+          charset: 'Shift_JIS',
+          sourceLines: [
+            { kind: 'header', command: 'title', value: 'Roundtrip' },
+            {
+              kind: 'object',
+              measure: 1,
+              channel: '1a',
+              events: [{ measure: 1, channel: '1a', position: [0, 2], value: '01' }],
+            },
+          ],
+          controlFlow: [
+            { kind: 'directive', command: 'random', value: 2 },
+            {
+              kind: 'object',
+              measure: 1,
+              channel: '1a',
+              events: [{ measure: 1, channel: '1a', position: [0, 2], value: '01' }],
+            },
+          ],
+        },
+        bmson: {
+          version: '1.0.1',
+          lines: [960, { y: 0 }, -100, { y: 1680 }],
+          info: { resolution: 480 },
+          bpm_events: [{ y: 240.4, bpm: 150 }],
+          stop_events: [{ y: 960.2, duration: 48 }],
+          sound_channels: [
+            {
+              name: 'sample.wav',
+              notes: [{ x: 1.9, y: 0.2, l: 240.8, c: true }],
+            },
+          ],
+        },
       }),
       'json',
-    ),
-  ).toThrow(/position \[numerator, denominator\] is required/);
-});
+    );
 
-test('JSON: migrates legacy metadata.extras extension headers to bms extensions', () => {
-  const parsed = parseChart(
-    JSON.stringify({
-      format: BMS_JSON_FORMAT,
-      sourceFormat: 'json',
-      metadata: {
-        bpm: 120,
-        extras: {
-          PREVIEW: 'preview.ogg',
-          LNTYPE: '1',
-          LNMODE: '2',
-          LNOBJ: 'zz',
-          VOLWAV: '70',
-          DEFEXRANK: '120',
-          PLAYER: '1',
-          PATH_WAV: 'sounds/',
-          BASEBPM: '150',
-          STP: '001.240',
-          OPTION: 'HS',
-          CHANGEOPTION01: 'MIRROR',
-          WAVCMD: 'legacy',
-          EXRANK01: '100,80,60,40',
-          ARGB0A: 'FF000000',
-          EXWAV01: 'extended.wav',
-          EXBMP0A: 'extended.bmp',
-          BGA01: '01',
-          SCROLL01: '1.25',
-          SPEED01: '1.5',
-          POORBGA: '02',
-          SWBGA01: '03',
-          VIDEOFILE: 'movie.mp4',
-          MIDIFILE: 'song.mid',
-          MATERIALS: 'materials.def',
-          DIVIDEPROP: 'lane=2',
-          CHARSET: 'Shift_JIS',
-          CUSTOM: 'ok',
+    expect(parsed.bmson.version).toBe('1.0.1');
+    expect(parsed.bmson.info.resolution).toBe(480);
+    expect(parsed.preservation.bmson.lines).toEqual([0, 960, 1680]);
+    expect(parsed.bms.preview).toBe('preview.ogg');
+    expect(parsed.bms.lnType).toBe(2);
+    expect(parsed.bms.lnMode).toBe(1);
+    expect(parsed.bms.lnObjs).toEqual(['ZZ']);
+    expect(parsed.bms.lnObjs).not.toContain('YY');
+    expect(parsed.bms.volWav).toBe(90);
+    expect(parsed.bms.defExRank).toBe(100.5);
+    expect(parsed.bms.player).toBe(2);
+    expect(parsed.bms.pathWav).toBe('sounds/');
+    expect(parsed.bms.baseBpm).toBe(145.5);
+    expect(parsed.bms.stp).toEqual(['001.240', '002.120']);
+    expect(parsed.bms.option).toBe('HS');
+    expect(parsed.bms.changeOption['01']).toBe('MIRROR');
+    expect(parsed.bms.wavCmd).toBe('legacy');
+    expect(parsed.bms.exRank['01']).toBe('120');
+    expect(parsed.bms.exRank.AB).toBe('70,55,40,25');
+    expect(parsed.bms.argb['0A']).toBe('FF000000');
+    expect(parsed.bms.exWav['01']).toBe('extended.wav');
+    expect(parsed.bms.exBmp['02']).toBe('extended.bmp');
+    expect(parsed.bms.bga['03']).toBe('01');
+    expect(parsed.bms.scroll['01']).toBe(0.5);
+    expect(parsed.bms.speed['01']).toBe(1.5);
+    expect(parsed.bms.poorBga).toBe('02');
+    expect(parsed.bms.swBga['04']).toBe('03');
+    expect(parsed.bms.videoFile).toBe('movie.mp4');
+    expect(parsed.bms.midiFile).toBe('song.mid');
+    expect(parsed.bms.materials).toBe('materials.def');
+    expect(parsed.bms.divideProp).toBe('lane=2');
+    expect(parsed.bms.charset).toBe('Shift_JIS');
+    expect(parsed.preservation.bms.sourceLines).toEqual([
+      { kind: 'header', command: 'TITLE', value: 'Roundtrip' },
+      {
+        kind: 'object',
+        measure: 1,
+        channel: '1A',
+        events: [{ measure: 1, channel: '1A', position: [0, 2], value: '01' }],
+        measureLength: undefined,
+      },
+    ]);
+    expect(parsed.bms.controlFlow).toEqual([
+      { kind: 'directive', command: 'RANDOM', value: '2' },
+      {
+        kind: 'object',
+        measure: 1,
+        channel: '1A',
+        events: [{ measure: 1, channel: '1A', position: [0, 2], value: '01' }],
+        measureLength: undefined,
+      },
+    ]);
+    expect(parsed.preservation.bmson.bpmEvents).toEqual([{ y: 240, bpm: 150 }]);
+    expect(parsed.preservation.bmson.stopEvents).toEqual([{ y: 960, duration: 48 }]);
+    expect(parsed.preservation.bmson.soundChannels).toEqual([
+      {
+        name: 'sample.wav',
+        notes: [{ x: 1, y: 0, l: 240, c: true }],
+      },
+    ]);
+
+    expect(() =>
+      parseChart(
+        JSON.stringify({
+          format: BMS_JSON_FORMAT,
+          sourceFormat: 'json',
+          metadata: { bpm: 120, extras: {} },
+          resources: { wav: {}, bmp: {}, bpm: {}, stop: {}, text: {} },
+          measures: [],
+          events: [{ measure: 0, channel: '11', value: '01' }],
+        }),
+        'json',
+      ),
+    ).toThrow(/position \[numerator, denominator\] is required/);
+  });
+
+  test('JSON: migrates legacy metadata.extras extension headers to bms extensions', () => {
+    const parsed = parseChart(
+      JSON.stringify({
+        format: BMS_JSON_FORMAT,
+        sourceFormat: 'json',
+        metadata: {
+          bpm: 120,
+          extras: {
+            PREVIEW: 'preview.ogg',
+            LNTYPE: '1',
+            LNMODE: '2',
+            LNOBJ: 'zz',
+            VOLWAV: '70',
+            DEFEXRANK: '120',
+            PLAYER: '1',
+            PATH_WAV: 'sounds/',
+            BASEBPM: '150',
+            STP: '001.240',
+            OPTION: 'HS',
+            CHANGEOPTION01: 'MIRROR',
+            WAVCMD: 'legacy',
+            EXRANK01: '100,80,60,40',
+            ARGB0A: 'FF000000',
+            EXWAV01: 'extended.wav',
+            EXBMP0A: 'extended.bmp',
+            BGA01: '01',
+            SCROLL01: '1.25',
+            SPEED01: '1.5',
+            POORBGA: '02',
+            SWBGA01: '03',
+            VIDEOFILE: 'movie.mp4',
+            MIDIFILE: 'song.mid',
+            MATERIALS: 'materials.def',
+            DIVIDEPROP: 'lane=2',
+            CHARSET: 'Shift_JIS',
+            CUSTOM: 'ok',
+          },
         },
-      },
-      resources: { wav: {}, bmp: {}, bpm: {}, stop: {}, text: {} },
-      measures: [],
-      events: [],
-      bms: {
-        controlFlow: [],
-      },
-      bmson: {
-        lines: [],
-        info: {},
-      },
-    }),
-    'json',
-  );
-
-  expect(parsed.bms.preview).toBe('preview.ogg');
-  expect(parsed.bms.lnType).toBe(1);
-  expect(parsed.bms.lnMode).toBe(2);
-  expect(parsed.bms.lnObjs).toEqual(['ZZ']);
-  expect(parsed.bms.volWav).toBe(70);
-  expect(parsed.bms.defExRank).toBe(120);
-  expect(parsed.bms.player).toBe(1);
-  expect(parsed.bms.pathWav).toBe('sounds/');
-  expect(parsed.bms.baseBpm).toBe(150);
-  expect(parsed.bms.stp).toEqual(['001.240']);
-  expect(parsed.bms.option).toBe('HS');
-  expect(parsed.bms.changeOption['01']).toBe('MIRROR');
-  expect(parsed.bms.wavCmd).toBe('legacy');
-  expect(parsed.bms.exRank['01']).toBe('100,80,60,40');
-  expect(parsed.bms.argb['0A']).toBe('FF000000');
-  expect(parsed.bms.exWav['01']).toBe('extended.wav');
-  expect(parsed.bms.exBmp['0A']).toBe('extended.bmp');
-  expect(parsed.bms.bga['01']).toBe('01');
-  expect(parsed.bms.scroll['01']).toBe(1.25);
-  expect(parsed.bms.speed['01']).toBe(1.5);
-  expect(parsed.bms.poorBga).toBe('02');
-  expect(parsed.bms.swBga['01']).toBe('03');
-  expect(parsed.bms.videoFile).toBe('movie.mp4');
-  expect(parsed.bms.midiFile).toBe('song.mid');
-  expect(parsed.bms.materials).toBe('materials.def');
-  expect(parsed.bms.divideProp).toBe('lane=2');
-  expect(parsed.bms.charset).toBe('Shift_JIS');
-  expect(parsed.metadata.extras.CUSTOM).toBe('ok');
-  expect(parsed.metadata.extras.MIDIFILE).toBeUndefined();
-  expect(parsed.metadata.extras.LNTYPE).toBeUndefined();
-});
-
-test('JSON: normalizes and imports bmson extensions (info/bga/notes.l/c)', () => {
-  const parsed = parseChart(
-    JSON.stringify({
-      format: BMS_JSON_FORMAT,
-      sourceFormat: 'json',
-      metadata: { bpm: 120, extras: {} },
-      resources: { wav: {}, bmp: {}, bpm: {}, stop: {}, text: {} },
-      measures: [],
-      events: [{ measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { l: 240.8, c: true } }],
-      bms: {
-        controlFlow: [],
-        exRank: {},
-        argb: {},
-      },
-      bmson: {
-        version: '1.0.0',
-        lines: [0, 960],
-        info: {
-          resolution: 240.5,
-          chart_name: 'NORMAL',
-          mode_hint: 'beat-5k',
-          judge_rank: 110,
-          total: 320,
-          back_image: 'back.png',
-          eyecatch_image: 'eye.png',
-          banner_image: 'banner.png',
-          preview_music: 'preview.ogg',
-          subartists: ['Sub'],
+        resources: { wav: {}, bmp: {}, bpm: {}, stop: {}, text: {} },
+        measures: [],
+        events: [],
+        bms: {
+          controlFlow: [],
         },
-        bga: {
-          bga_header: [{ id: 1.8, name: 'base.png' }],
-          bga_events: [{ y: 0.4, id: 1.1 }],
-          layer_events: [{ y: 240.9, id: 2.2 }],
-          poor_events: [{ y: 480.2, id: 3.3 }],
+        bmson: {
+          lines: [],
+          info: {},
         },
-      },
-    }),
-    'json',
-  );
+      }),
+      'json',
+    );
 
-  expect(parsed.events[0].bmson).toEqual({ l: 240, c: true });
-  expect(parsed.bmson.info.resolution).toBe(240);
-  expect(parsed.bmson.info.chartName).toBe('NORMAL');
-  expect(parsed.bmson.info.modeHint).toBe('beat-5k');
-  expect(parsed.bmson.info.judgeRank).toBe(110);
-  expect(parsed.bmson.info.total).toBe(320);
-  expect(parsed.bmson.info.backImage).toBe('back.png');
-  expect(parsed.bmson.info.eyecatchImage).toBe('eye.png');
-  expect(parsed.bmson.info.bannerImage).toBe('banner.png');
-  expect(parsed.bmson.info.previewMusic).toBe('preview.ogg');
-  expect(parsed.bmson.info.subartists).toEqual(['Sub']);
-  expect(parsed.bmson.bga.header).toEqual([{ id: 1, name: 'base.png' }]);
-  expect(parsed.bmson.bga.events).toEqual([{ y: 0, id: 1 }]);
-  expect(parsed.bmson.bga.layerEvents).toEqual([{ y: 240, id: 2 }]);
-  expect(parsed.bmson.bga.poorEvents).toEqual([{ y: 480, id: 3 }]);
-});
+    expect(parsed.bms.preview).toBe('preview.ogg');
+    expect(parsed.bms.lnType).toBe(1);
+    expect(parsed.bms.lnMode).toBe(2);
+    expect(parsed.bms.lnObjs).toEqual(['ZZ']);
+    expect(parsed.bms.volWav).toBe(70);
+    expect(parsed.bms.defExRank).toBe(120);
+    expect(parsed.bms.player).toBe(1);
+    expect(parsed.bms.pathWav).toBe('sounds/');
+    expect(parsed.bms.baseBpm).toBe(150);
+    expect(parsed.bms.stp).toEqual(['001.240']);
+    expect(parsed.bms.option).toBe('HS');
+    expect(parsed.bms.changeOption['01']).toBe('MIRROR');
+    expect(parsed.bms.wavCmd).toBe('legacy');
+    expect(parsed.bms.exRank['01']).toBe('100,80,60,40');
+    expect(parsed.bms.argb['0A']).toBe('FF000000');
+    expect(parsed.bms.exWav['01']).toBe('extended.wav');
+    expect(parsed.bms.exBmp['0A']).toBe('extended.bmp');
+    expect(parsed.bms.bga['01']).toBe('01');
+    expect(parsed.bms.scroll['01']).toBe(1.25);
+    expect(parsed.bms.speed['01']).toBe(1.5);
+    expect(parsed.bms.poorBga).toBe('02');
+    expect(parsed.bms.swBga['01']).toBe('03');
+    expect(parsed.bms.videoFile).toBe('movie.mp4');
+    expect(parsed.bms.midiFile).toBe('song.mid');
+    expect(parsed.bms.materials).toBe('materials.def');
+    expect(parsed.bms.divideProp).toBe('lane=2');
+    expect(parsed.bms.charset).toBe('Shift_JIS');
+    expect(parsed.metadata.extras.CUSTOM).toBe('ok');
+    expect(parsed.metadata.extras.MIDIFILE).toBeUndefined();
+    expect(parsed.metadata.extras.LNTYPE).toBeUndefined();
+  });
+
+  test('JSON: normalizes and imports bmson extensions (info/bga/notes.l/c)', () => {
+    const parsed = parseChart(
+      JSON.stringify({
+        format: BMS_JSON_FORMAT,
+        sourceFormat: 'json',
+        metadata: { bpm: 120, extras: {} },
+        resources: { wav: {}, bmp: {}, bpm: {}, stop: {}, text: {} },
+        measures: [],
+        events: [{ measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { l: 240.8, c: true } }],
+        bms: {
+          controlFlow: [],
+          exRank: {},
+          argb: {},
+        },
+        bmson: {
+          version: '1.0.0',
+          lines: [0, 960],
+          info: {
+            resolution: 240.5,
+            chart_name: 'NORMAL',
+            mode_hint: 'beat-5k',
+            judge_rank: 110,
+            total: 320,
+            back_image: 'back.png',
+            eyecatch_image: 'eye.png',
+            banner_image: 'banner.png',
+            preview_music: 'preview.ogg',
+            subartists: ['Sub'],
+          },
+          bga: {
+            bga_header: [{ id: 1.8, name: 'base.png' }],
+            bga_events: [{ y: 0.4, id: 1.1 }],
+            layer_events: [{ y: 240.9, id: 2.2 }],
+            poor_events: [{ y: 480.2, id: 3.3 }],
+          },
+        },
+      }),
+      'json',
+    );
+
+    expect(parsed.events[0].bmson).toEqual({ l: 240, c: true });
+    expect(parsed.bmson.info.resolution).toBe(240);
+    expect(parsed.bmson.info.chartName).toBe('NORMAL');
+    expect(parsed.bmson.info.modeHint).toBe('beat-5k');
+    expect(parsed.bmson.info.judgeRank).toBe(110);
+    expect(parsed.bmson.info.total).toBe(320);
+    expect(parsed.bmson.info.backImage).toBe('back.png');
+    expect(parsed.bmson.info.eyecatchImage).toBe('eye.png');
+    expect(parsed.bmson.info.bannerImage).toBe('banner.png');
+    expect(parsed.bmson.info.previewMusic).toBe('preview.ogg');
+    expect(parsed.bmson.info.subartists).toEqual(['Sub']);
+    expect(parsed.bmson.bga.header).toEqual([{ id: 1, name: 'base.png' }]);
+    expect(parsed.bmson.bga.events).toEqual([{ y: 0, id: 1 }]);
+    expect(parsed.bmson.bga.layerEvents).toEqual([{ y: 240, id: 2 }]);
+    expect(parsed.bmson.bga.poorEvents).toEqual([{ y: 480, id: 3 }]);
+  });
+
+  test('BMS: defaults to base 36 — `#WAV0a` and `#WAV0A` collapse to the same key', () => {
+    const parsed = parseChart(['#WAV0a lower.wav', '#WAV0A upper.wav', '#00111:0a', ''].join('\n'));
+
+    // Default base is 36 — the field should not be set on the JSON.
+    expect(parsed.bms.base).toBeUndefined();
+    // Both registrations target the uppercased key; last-write wins.
+    expect(parsed.resources.wav['0A']).toBe('upper.wav');
+    expect(parsed.resources.wav['0a']).toBeUndefined();
+    // The channel-stream `0a` token is also folded.
+    expect(parsed.events).toContainEqual({
+      measure: 1,
+      channel: '11',
+      position: [0, 1],
+      value: '0A',
+    });
+  });
+
+  test('BMS: `#BASE 62` preserves case for indexed-header keys and channel-stream tokens', () => {
+    const parsed = parseChart(
+      ['#BASE 62', '#WAV0a lower.wav', '#WAV0A upper.wav', '#WAVZz mixed.wav', '#00111:0a0AZz', ''].join('\n'),
+    );
+
+    // Base-62 mode is recorded on the JSON.
+    expect(parsed.bms.base).toBe(62);
+    // Lowercase / uppercase / mixed-case IDs all live in distinct slots.
+    expect(parsed.resources.wav['0a']).toBe('lower.wav');
+    expect(parsed.resources.wav['0A']).toBe('upper.wav');
+    expect(parsed.resources.wav['Zz']).toBe('mixed.wav');
+    // Channel-stream tokens carry the same case-preserved IDs into events.
+    expect(parsed.events).toEqual([
+      { measure: 1, channel: '11', position: [0, 3], value: '0a' },
+      { measure: 1, channel: '11', position: [1, 3], value: '0A' },
+      { measure: 1, channel: '11', position: [2, 3], value: 'Zz' },
+    ]);
+    // The `#BASE` directive itself is consumed — never leaks into extras.
+    expect(parsed.metadata.extras.BASE).toBeUndefined();
+  });
+
+  test('BMS: `#BASE 36` is treated as the default and clears any prior base-62 hint', () => {
+    const parsed = parseChart(['#BASE 36', '#WAV0a lower.wav', ''].join('\n'));
+
+    // Explicit base-36 still elides the field (default).
+    expect(parsed.bms.base).toBeUndefined();
+    expect(parsed.resources.wav['0A']).toBe('lower.wav');
+  });
+
+  test('BMS: `#BASE 62` after the first object line is ignored', () => {
+    const parsed = parseChart(['#WAV0a lower.wav', '#00111:0a', '#BASE 62', ''].join('\n'));
+
+    // Pre-scan stops at the first object line; the late `#BASE 62` doesn't take effect, so case is folded as in default
+    // base-36.
+    expect(parsed.bms.base).toBeUndefined();
+    expect(parsed.resources.wav['0A']).toBe('lower.wav');
+  });
+
+  test('BMS: `#BASE 62` preserves case for indexed-headers inside #RANDOM / #IF blocks', () => {
+    const parsed = parseChart(
+      ['#BASE 62', '#RANDOM 1', '#IF 1', '#WAV0a lower.wav', '#WAV0A upper.wav', '#ENDIF', '#ENDRANDOM', ''].join('\n'),
+    );
+    expect(parsed.bms.base).toBe(62);
+
+    // The control-flow capture stack stores both `command` (uppercased canonical form) and `commandRaw` (case-preserved
+    // original) so the lowercase `0a` ID survives the replay.
+    const wavEntries = parsed.bms.controlFlow.filter(
+      (entry) => entry.kind === 'header' && entry.command.startsWith('WAV'),
+    );
+    expect(wavEntries).toHaveLength(2);
+    const lowerEntry = wavEntries.find((entry) => entry.kind === 'header' && entry.commandRaw === 'WAV0a');
+    expect(lowerEntry).toBeDefined();
+
+    // Resolving the control flow under a deterministic random value applies the IF block; the resolved chart should now
+    // carry both case variants in `wav` as separate slots.
+    const resolved = resolveBmsControlFlow(parsed, { random: () => 0 });
+    expect(resolved.resources.wav['0a']).toBe('lower.wav');
+    expect(resolved.resources.wav['0A']).toBe('upper.wav');
+  });
+
+  test('decodeBmsText: honors #CHARSET UTF-8 even when shift_jis would also parse', () => {
+    // The chart is authored in UTF-8 with the directive at the top. Without `#CHARSET`, the auto-detect path would
+    // still reach UTF-8 here (no byte hits the 0x80+ shift_jis lead range), so we deliberately include a UTF-8 byte
+    // sequence (`éclair` → `é` = 0xC3 0xA9) that decodes garbled under shift_jis. Honoring the directive yields the
+    // correct accented form.
+    const utf8Bytes = new TextEncoder().encode('#CHARSET UTF-8\n#TITLE éclair\n#ARTIST foo\n');
+    const decoded = decodeBmsText(utf8Bytes);
+    expect(decoded.encoding).toBe('utf8');
+    expect(decoded.text).toContain('#TITLE éclair');
+  });
+
+  test('decodeBmsText: falls back to shift_jis default when no #CHARSET is declared', () => {
+    // No directive, only shift_jis bytes (`「テスト」` = typical Japanese kana / brackets, well-formed in shift_jis but
+    // garbled under UTF-8). The decoder should pick shift_jis automatically.
+    const sjisBytes = new Uint8Array([
+      0x23, 0x54, 0x49, 0x54, 0x4c, 0x45, 0x20, 0x83, 0x65, 0x83, 0x58, 0x83, 0x67, 0x0a,
+    ]); // "#TITLE テスト\n" in Shift_JIS
+    const decoded = decodeBmsText(sjisBytes);
+    expect(decoded.encoding).toBe('shift_jis');
+    expect(decoded.text).toContain('テスト');
+  });
+
+  test('decodeBmsText: #CHARSET shift_jis with non-ASCII title surfaces the kana', () => {
+    // Same shift_jis content as above but with the directive explicitly set. The directive should drive the decode path
+    // even though autodetect would also pick shift_jis, ensuring deterministic decoding when the chart author declares
+    // an encoding.
+    const directive = '#CHARSET Shift_JIS\n';
+    const directiveBytes = new TextEncoder().encode(directive);
+    const titleBytes = new Uint8Array([
+      0x23, 0x54, 0x49, 0x54, 0x4c, 0x45, 0x20, 0x83, 0x65, 0x83, 0x58, 0x83, 0x67, 0x0a,
+    ]); // "#TITLE テスト\n" in Shift_JIS
+    const merged = new Uint8Array(directiveBytes.length + titleBytes.length);
+    merged.set(directiveBytes, 0);
+    merged.set(titleBytes, directiveBytes.length);
+    const decoded = decodeBmsText(merged);
+    expect(decoded.encoding).toBe('shift_jis');
+    expect(decoded.text).toContain('テスト');
+  });
 });

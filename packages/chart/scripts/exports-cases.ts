@@ -1,6 +1,8 @@
 import * as chartApi from '@be-music/chart';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
+const BENCH_SWITCHING_BGA = chartApi.parseBmsSwBga('10:5:1:FF000000 02 03 04 05 06');
+
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart.parseBpmFrom03Token', {
     run: () => {
@@ -35,6 +37,85 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart.compareEvents', {
     run: (fixtures) => {
       chartApi.compareEvents(fixtures.eventA, fixtures.eventB);
+    },
+  });
+  define('chart.resolveChartPlayVariant', {
+    run: (fixtures) => {
+      chartApi.resolveChartPlayVariant({
+        chartPath: 'sample.bme',
+        events: fixtures.sampleBmsJson.events,
+        bms: fixtures.sampleBmsJson.bms,
+      });
+    },
+  });
+  define('chart.resolveChartReferenceBpm', {
+    run: (fixtures) => {
+      chartApi.resolveChartReferenceBpm(fixtures.sampleBmsJson, 120);
+    },
+  });
+  define('chart.parseBmsExWav', {
+    run: () => {
+      chartApi.parseBmsExWav('pvf 1024,-200,48000 sample.wav');
+    },
+  });
+  define('chart.exWavVolumeCentibelsToLinearGain', {
+    run: () => {
+      chartApi.exWavVolumeCentibelsToLinearGain(-600);
+    },
+  });
+  define('chart.collectBmsExWavVolumeMultipliers', {
+    run: () => {
+      chartApi.collectBmsExWavVolumeMultipliers({
+        '01': 'v -200 kick.wav',
+        '02': 'pv 0,-600 snare.wav',
+      });
+    },
+  });
+  define('chart.parseBmsExBmp', {
+    run: () => {
+      chartApi.parseBmsExBmp('255,0,0,0,backdrop.bmp');
+    },
+  });
+  define('chart.resolveBmsBmpArgb', {
+    run: (fixtures) => {
+      chartApi.resolveBmsBmpArgb(fixtures.sampleBmsJson, '01');
+    },
+  });
+  define('chart.parseBmsSwBga', {
+    run: () => {
+      chartApi.parseBmsSwBga('10:5:1:FF000000 02 03 04 05 06');
+    },
+  });
+  define('chart.pickSwitchingBgaFrame', {
+    run: () => {
+      if (BENCH_SWITCHING_BGA) {
+        chartApi.pickSwitchingBgaFrame(BENCH_SWITCHING_BGA, 350);
+      }
+    },
+  });
+  define('chart.parseBmsBga', {
+    run: () => {
+      chartApi.parseBmsBga('02 0 0 256 256 0 0');
+    },
+  });
+  define('chart.parseBmsArgb', {
+    run: () => {
+      chartApi.parseBmsArgb('FF112233');
+    },
+  });
+  define('chart.wavCmdVolumeByteToLinearGain', {
+    run: () => {
+      chartApi.wavCmdVolumeByteToLinearGain(64);
+    },
+  });
+  define('chart.parseBmsWavCmd', {
+    run: () => {
+      chartApi.parseBmsWavCmd('01 0A 64');
+    },
+  });
+  define('chart.collectBmsWavCmdVolumeMultipliers', {
+    run: () => {
+      chartApi.collectBmsWavCmdVolumeMultipliers(['01 0A 64', '00 0A 2', '01 0B 127']);
     },
   });
   define('chart.isTempoChannel', {

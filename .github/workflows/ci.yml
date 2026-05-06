@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     outputs:
       code_changed: ${{ steps.filter.outputs.code }}
       sea_player_changed: ${{ steps.filter.outputs.sea_player }}
@@ -69,8 +69,9 @@ jobs:
   verify:
     name: Verify (${{ matrix.task }})
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -106,14 +107,15 @@ jobs:
   benchmark-pr-head:
     name: Benchmark Head (PR)
     needs: changes
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' &&
+      needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     outputs:
       snapshot_b64: ${{ steps.aggregate-head.outputs.snapshot_b64 }}
     env:
-      BENCH_TIME_MS: 200
-      BENCH_WARMUP_TIME_MS: 100
+      BENCH_TIME_MS: 20
+      BENCH_WARMUP_TIME_MS: 10
       BENCH_REPEATS: 3
     permissions:
       contents: read
@@ -164,15 +166,17 @@ jobs:
   benchmark-pr-base:
     name: Benchmark Base (PR)
     needs: changes
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' &&
+      needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     outputs:
-      available: ${{ steps.detect-bench.outputs.available }}
+      available: ${{ steps.detect-bench.outputs.available == 'true' &&
+        steps.run-base-benchmark.outcome == 'success' }}
       snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
     env:
-      BENCH_TIME_MS: 200
-      BENCH_WARMUP_TIME_MS: 100
+      BENCH_TIME_MS: 20
+      BENCH_WARMUP_TIME_MS: 10
       BENCH_REPEATS: 3
     permissions:
       contents: read
@@ -219,7 +223,9 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Run base benchmark
+        id: run-base-benchmark
         if: steps.detect-bench.outputs.available == 'true'
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -246,7 +252,8 @@ jobs:
           cp "$BASE_DIR"/tmp/bench/base-runs/*.json tmp/bench/base-runs/
 
       - name: Aggregate base benchmark snapshots
-        if: steps.detect-bench.outputs.available == 'true'
+        if: steps.detect-bench.outputs.available == 'true' &&
+          steps.run-base-benchmark.outcome == 'success'
         id: aggregate-base
         shell: bash
         run: |
@@ -265,8 +272,9 @@ jobs:
       - changes
       - benchmark-pr-head
       - benchmark-pr-base
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' &&
+      needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     env:
       BENCH_REGRESSION_THRESHOLD: 8
@@ -321,7 +329,7 @@ jobs:
           fi
 
       - name: Post benchmark comment
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('node:fs');
@@ -365,13 +373,13 @@ jobs:
     name: Benchmark Head (Push)
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     outputs:
       snapshot_b64: ${{ steps.aggregate-head.outputs.snapshot_b64 }}
     env:
-      BENCH_TIME_MS: 200
-      BENCH_WARMUP_TIME_MS: 100
+      BENCH_TIME_MS: 20
+      BENCH_WARMUP_TIME_MS: 10
       BENCH_REPEATS: 3
     permissions:
       contents: read
@@ -423,14 +431,15 @@ jobs:
     name: Benchmark Base (Push)
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     outputs:
-      available: ${{ steps.detect-bench.outputs.available }}
+      available: ${{ steps.detect-bench.outputs.available == 'true' &&
+        steps.run-base-benchmark.outcome == 'success' }}
       snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
     env:
-      BENCH_TIME_MS: 200
-      BENCH_WARMUP_TIME_MS: 100
+      BENCH_TIME_MS: 20
+      BENCH_WARMUP_TIME_MS: 10
       BENCH_REPEATS: 3
     permissions:
       contents: read
@@ -482,7 +491,9 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Run base benchmark
+        id: run-base-benchmark
         if: steps.detect-bench.outputs.available == 'true'
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -509,7 +520,8 @@ jobs:
           cp "$BASE_DIR"/tmp/bench/base-runs/*.json tmp/bench/base-runs/
 
       - name: Aggregate base benchmark snapshots
-        if: steps.detect-bench.outputs.available == 'true'
+        if: steps.detect-bench.outputs.available == 'true' &&
+          steps.run-base-benchmark.outcome == 'success'
         id: aggregate-base
         shell: bash
         run: |
@@ -529,7 +541,7 @@ jobs:
       - benchmark-push-head
       - benchmark-push-base
     if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     env:
       BENCH_REGRESSION_THRESHOLD: 8
@@ -583,7 +595,7 @@ jobs:
           fi
 
       - name: Post benchmark comment
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('node:fs');

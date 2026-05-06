@@ -39,7 +39,15 @@ type MeasureLengthEntry = BeMusicJson['measures'][number];
 
 export interface ResolveControlFlowOptions {
   random?: () => number;
-  applyHeader: (json: BeMusicJson, command: string, value: string) => void;
+  /**
+   * Re-applies a captured `#xxx ...` header entry against `json`.
+   *
+   * `command` is the uppercased canonical form used for keyword dispatch. `commandRaw` is the case-preserved original —
+   * set only when the captured entry differed in case (typically a lowercase indexed-header key from a `#BASE 62`
+   * chart). Callers should fall back to `command` when `commandRaw` is undefined, which is the common base-36
+   * case-insensitive path.
+   */
+  applyHeader: (json: BeMusicJson, command: string, commandRaw: string | undefined, value: string) => void;
 }
 
 export function resolveControlFlow(input: BeMusicJson, options: ResolveControlFlowOptions): BeMusicJson {
@@ -67,14 +75,14 @@ export function resolveControlFlow(input: BeMusicJson, options: ResolveControlFl
   }
 
   json.measures.sort((left, right) => left.index - right.index);
-  json.events = sortAndNormalizeEvents(json.events);
+  // Honor `#BASE 62` so post-control-flow event normalization preserves lowercase IDs instead of folding them. The
+  // base was recorded on the chart by the initial `parseBms` pass.
+  const replayBase: 36 | 62 = json.bms.base === 62 ? 62 : 36;
+  json.events = sortAndNormalizeEvents(json.events, replayBase);
   return json;
 }
 
-export function updateControlFlowCaptureStack(
-  stack: ControlFlowCaptureFrameType[],
-  command: ControlFlowCommand,
-): void {
+export function updateControlFlowCaptureStack(stack: ControlFlowCaptureFrameType[], command: ControlFlowCommand): void {
   if (command === 'RANDOM' || command === 'SETRANDOM') {
     stack.push('random');
     return;
@@ -104,6 +112,7 @@ export function createControlFlowObjectEntry(
   measure: number,
   channel: string,
   data: string,
+  base: 36 | 62 = 36,
 ): Extract<BmsControlFlowEntry, { kind: 'object' }> | undefined {
   if (channel === '02') {
     const measureLength = Number.parseFloat(data);
@@ -119,7 +128,7 @@ export function createControlFlowObjectEntry(
     };
   }
 
-  const parsed = collectNonZeroObjectTokens(data);
+  const parsed = collectNonZeroObjectTokens(data, base);
   const events: BeMusicEvent[] = [];
   for (const token of parsed.tokens) {
     events.push({
@@ -178,23 +187,24 @@ function removeCurrentCaptureFrame(stack: ControlFlowCaptureFrameType[], type: C
 function applyActiveControlFlowEntry(
   json: BeMusicJson,
   entry: BmsControlFlowEntry,
-  applyHeader: (json: BeMusicJson, command: string, value: string) => void,
+  applyHeader: (json: BeMusicJson, command: string, commandRaw: string | undefined, value: string) => void,
   measureByIndex?: Map<number, MeasureLengthEntry>,
 ): void {
   if (entry.kind === 'header') {
-    applyHeader(json, entry.command, entry.value);
+    applyHeader(json, entry.command, entry.commandRaw, entry.value);
     return;
   }
   if (entry.kind === 'object') {
     if (typeof entry.measureLength === 'number' && entry.measureLength > 0) {
       upsertMeasureLength(json, entry.measure, entry.measureLength, measureByIndex);
     }
+    const replayBase: 36 | 62 = json.bms.base === 62 ? 62 : 36;
     for (const event of entry.events) {
       json.events.push({
         measure: entry.measure,
         channel: normalizeChannel(entry.channel),
         position: event.position,
-        value: normalizeObjectKey(event.value),
+        value: normalizeObjectKey(event.value, replayBase),
         ...(event.bmson ? { bmson: event.bmson } : {}),
       });
     }

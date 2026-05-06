@@ -1,5 +1,10 @@
-import { setTimeout as delay } from 'node:timers/promises';
-import { isAbortError, throwIfAborted } from '@be-music/utils';
+import { isAbortError, throwIfAborted } from '@be-music/utils/core';
+
+// Browser-compatible cooperative-sleep helper. Mirrors what `node:timers/promises.setTimeout` returned (a Promise
+// that resolves after `ms` ms) but uses the global `setTimeout` available in both runtimes. Hand-rolled so this
+// module stays importable from a browser bundle even though the rest of the file is the Node sink (which only
+// runs when the runtime actually invokes `createNodeAudioSink`; see `engine.ts:createAudioSessionIfEnabled`).
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type AudioRuntime = 'node' | 'browser';
 export type AudioEngine = 'webaudio';
@@ -33,7 +38,18 @@ export interface WebAudioBufferLike {
 export interface WebAudioBufferSourceLike {
   buffer: WebAudioBufferLike | null;
   connect: (destination: unknown) => unknown;
+  /**
+   * Optional in the structural type because not every test fake bothers to model it, but every real Web Audio
+   * implementation (browser + `node-web-audio-api`) provides it. Used by the sink to detach the source from the
+   * destination once playback ends so the node becomes GC-eligible — without it, idle source nodes accumulate per
+   * chunk written.
+   */
+  disconnect?: () => void;
   start: (when?: number) => void;
+  /**
+   * Spec-defined `ended` callback. Same optionality reasoning as {@link disconnect}.
+   */
+  onended?: (() => void) | null;
 }
 
 export interface WebAudioContextLike {
@@ -131,6 +147,11 @@ function createWebAudioSink(
       return;
     }
     closed = true;
+    // Drop the error-listener registry first so anything still holding the
+    // sink alive (e.g. an upstream player loop) can't accidentally call into
+    // a torn-down context. Listeners that already fired stay invoked; the
+    // clear only affects re-entrant emits after the sink is closed.
+    errorListeners.clear();
     try {
       await context.close?.();
     } catch {
@@ -172,6 +193,18 @@ function createWebAudioSink(
         const source = context.createBufferSource();
         source.buffer = buffer;
         source.connect(context.destination);
+        // Per Web Audio spec, an `AudioBufferSourceNode` keeps its outgoing edge to `destination` alive after playback
+        // ends until either explicit `disconnect()` or GC. The Node `node-web-audio-api` shim doesn't reliably collect
+        // those edges between `write` calls — at 100+ chunks per second the renderer accumulates idle source nodes
+        // backing every chunk we ever scheduled. Wiring `onended` to `disconnect()` lets each chunk's node detach the
+        // moment its frames finish and then become eligible for GC.
+        source.onended = () => {
+          try {
+            source.disconnect?.();
+          } catch {
+            // Already disconnected or context closed — both terminal states for this node.
+          }
+        };
         const now = Math.max(0, context.currentTime);
         const startAt = Math.max(now, scheduledUntilSeconds);
         source.start(startAt);

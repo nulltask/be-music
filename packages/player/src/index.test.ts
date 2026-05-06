@@ -2,7 +2,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { parseChartFile } from '../../parser/src/index.ts';
+import { parseChart, parseChartFile } from '../../parser/src/index.ts';
 
 const audioSinkState = vi.hoisted(() => ({
   writes: [] as Uint8Array[],
@@ -74,7 +74,9 @@ vi.mock('./audio-sink.ts', () => ({
 import {
   applyFastSlowForJudge,
   applyHighSpeedControlAction,
+  type AudioSession,
   autoPlay,
+  type CreateAudioSessionContext,
   type CreatePlayerUiRuntimeContext,
   type PlayerLoadProgress,
   extractInvisiblePlayableNotes,
@@ -197,6 +199,17 @@ function createPoorBgaLoggingChart() {
   json.resources.wav['01'] = 'not-found.wav';
   json.resources.bmp['00'] = 'fallback.png';
   json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
+  return json;
+}
+
+function createLandmineOnlyChart(options: { includeExplosionSound?: boolean; value?: string } = {}) {
+  const { includeExplosionSound = true, value = '10' } = options;
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 120;
+  if (includeExplosionSound) {
+    json.resources.wav['00'] = 'explode.wav';
+  }
+  json.events = [{ measure: 0, channel: 'D1', position: [0, 1] as const, value }];
   return json;
 }
 
@@ -429,20 +442,20 @@ describe('player', () => {
     expect(
       output.some(
         (line) =>
-          line.includes('kind:measure-length-change') &&
-          line.includes('measure:1') &&
-          line.includes('length:0.5'),
+          line.includes('kind:measure-length-change') && line.includes('measure:1') && line.includes('length:0.5'),
       ),
     ).toBe(true);
     expect(
       output.some(
         (line) =>
-          line.includes('kind:measure-length-change') &&
-          line.includes('measure:2') &&
-          line.includes('length:1'),
+          line.includes('kind:measure-length-change') && line.includes('measure:2') && line.includes('length:1'),
       ),
     ).toBe(true);
-    expect(output.some((line) => line.includes('kind:bpm-change') && line.includes('time:0:00.00') && line.includes('value:120'))).toBe(true);
+    expect(
+      output.some(
+        (line) => line.includes('kind:bpm-change') && line.includes('time:0:00.00') && line.includes('value:120'),
+      ),
+    ).toBe(true);
     expect(output.some((line) => line.includes('kind:bpm-change') && line.includes('value:180'))).toBe(true);
     expect(
       output.some(
@@ -454,10 +467,7 @@ describe('player', () => {
     expect(output.some((line) => line.includes('kind:stop') && line.includes('state:end'))).toBe(true);
     expect(
       output.some(
-        (line) =>
-          line.includes('kind:judge-rank-change') &&
-          line.includes('time:0:00.00') &&
-          line.includes('rank:48'),
+        (line) => line.includes('kind:judge-rank-change') && line.includes('time:0:00.00') && line.includes('rank:48'),
       ),
     ).toBe(true);
     expect(
@@ -780,7 +790,7 @@ describe('player', () => {
     expect(perfect?.seconds).toBeGreaterThan(1.2);
   });
 
-  test('player: stray key without a candidate note does not change judgments or groove gauge', async () => {
+  test('player: stray key fires LR2 empty POOR — gauge -2 but combo / score / poor counter untouched', async () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 60;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
@@ -804,9 +814,244 @@ describe('player', () => {
     expect(summary.great).toBe(0);
     expect(summary.good).toBe(0);
     expect(summary.bad).toBe(0);
+    // 空POOR is NOT counted in `summary.poor` — that slot is reserved for 見逃しPOOR (notes that passed without input).
+    // Matches LR2.
     expect(summary.poor).toBe(0);
-    expect(summary.gauge?.current).toBeCloseTo(20, 9);
+    // GROOVE gauge starts at 20 and the EMPTY_POOR delta is -2 (see `applyGrooveGaugeJudge`), giving 18. Matches LR2:
+    // phantom presses lightly drain even on the forgiving gauges (HARD/DEATH drain harder).
+    expect(summary.gauge?.current).toBeCloseTo(18, 9);
     expect(summary.gauge?.cleared).toBe(false);
+  });
+
+  test('player: `#BASE 62` lowercase sample IDs are looked up case-sensitively at runtime', async () => {
+    // Two separate samples with case-distinct IDs (`#WAV0a` != `#WAV0A`). On a base-36 chart the parser would have
+    // collapsed these into one slot during ingest; under `#BASE 62` they stay distinct and the player must resolve them
+    // via case-preserved keys when emitting `sample-trigger` logs.
+    const json = parseChart(
+      ['#BASE 62', '#TITLE Base62 Sample', '#BPM 120', '#WAV0a lower.wav', '#WAV0A upper.wav', '#00111:0a0A', ''].join(
+        '\n',
+      ),
+    );
+    expect(json.bms.base).toBe(62);
+    expect(json.resources.wav['0a']).toBe('lower.wav');
+    expect(json.resources.wav['0A']).toBe('upper.wav');
+
+    const output: string[] = [];
+    await autoPlay(json, {
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+    });
+
+    // First note (`0a`) must hit the lowercase entry — `lower.wav` — and the runtime log must report the same
+    // case-preserved `sample:0a` token. Folding either side to uppercase would emit `file:upper.wav` / `sample:0A` and
+    // break this assertion.
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:sample-trigger') &&
+          line.includes('source:auto-note') &&
+          line.includes('sample:0a') &&
+          line.includes('file:lower.wav'),
+      ),
+    ).toBe(true);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:sample-trigger') &&
+          line.includes('source:auto-note') &&
+          line.includes('sample:0A') &&
+          line.includes('file:upper.wav'),
+      ),
+    ).toBe(true);
+  });
+
+  test('player: manual landmine hit triggers #WAV00 in runtime logs', async () => {
+    const json = createLandmineOnlyChart();
+    const output: string[] = [];
+
+    const summary = await manualPlay(json, {
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(summary.total).toBe(0);
+    expect(summary.bad).toBe(1);
+    expect(
+      output.some(
+        (line) =>
+          line.includes('kind:sample-trigger') &&
+          line.includes('source:mine-hit') &&
+          line.includes('channel:11') &&
+          line.includes('sample:00') &&
+          line.includes('file:explode.wav'),
+      ),
+    ).toBe(true);
+    expect(output.some((line) => line.includes('kind:mine-hit') && line.includes('channel:11'))).toBe(true);
+  });
+
+  test('player: manual landmine hit applies value-based damage while keeping BAD judgment', async () => {
+    const summary = await manualPlay(createLandmineOnlyChart({ value: '08' }), {
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(summary.total).toBe(0);
+    expect(summary.bad).toBe(1);
+    expect(summary.poor).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(16, 9);
+  });
+
+  test('player: manual landmine hit clamps large mine damage at the groove gauge minimum', async () => {
+    const summary = await manualPlay(createLandmineOnlyChart({ value: 'ZZ' }), {
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(summary.bad).toBe(1);
+    expect(summary.gauge?.current).toBeCloseTo(2, 9);
+  });
+
+  test('player: routes audio through createAudioSession factory when supplied', async () => {
+    // Phase 1 of the web-engine integration plan exposes a `createAudioSession` factory option so the browser
+    // runtime can plug in a Web Audio backend without forking the engine. The factory's returned `AudioSession`
+    // must short-circuit the bundled Node sink path entirely — verified here by asserting the Node sink mock
+    // never received a `write()` call while the custom factory's `start` / `triggerEvent` / `finish` did.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
+    json.resources.wav = { '01': 'mock.wav' };
+
+    audioSinkState.writes.length = 0;
+    const triggeredEvents: string[] = [];
+    let started = false;
+    let finished = false;
+    const customSession: AudioSession = {
+      backendLabel: 'mock-web-audio',
+      chartStartDelayMs: 0,
+      start: () => {
+        started = true;
+      },
+      pause: () => undefined,
+      resume: () => undefined,
+      finish: async () => {
+        finished = true;
+      },
+      dispose: async () => undefined,
+      triggerEvent: (event) => {
+        triggeredEvents.push(event.value);
+      },
+      stopChannel: () => undefined,
+    };
+    const seenContexts: CreateAudioSessionContext[] = [];
+
+    await autoPlay(json, {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      writeOutput: () => undefined,
+      createAudioSession: async (context) => {
+        seenContexts.push(context);
+        return customSession;
+      },
+    });
+
+    expect(seenContexts).toHaveLength(1);
+    expect(seenContexts[0]?.mode).toBe('auto');
+    // The factory receives the post-#RANDOM-resolution clone, not the caller's input. The clone preserves the
+    // chart's identifying fields (bpm / events / resources) so a backend can re-derive everything it needs.
+    expect(seenContexts[0]?.json.metadata.bpm).toBe(120);
+    expect(seenContexts[0]?.json.events).toHaveLength(1);
+    expect(started).toBe(true);
+    expect(finished).toBe(true);
+    expect(triggeredEvents).toContain('01');
+    // The Node sink mock from the file's top-level `vi.mock` registers a `write` push for every audio chunk; the
+    // factory short-circuit means it should remain untouched.
+    expect(audioSinkState.writes.length).toBe(0);
+  });
+
+  test('player: falls back to the bundled Node sink when createAudioSession returns undefined', async () => {
+    // Returning `undefined` from the factory must be treated as "no opinion" so a runtime can probe optional
+    // backends without forfeiting the default sink. The Node sink mock should still receive writes in this path.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
+
+    audioSinkState.writes.length = 0;
+    let factoryCalls = 0;
+    await autoPlay(json, {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      writeOutput: () => undefined,
+      createAudioSession: async () => {
+        factoryCalls += 1;
+        return undefined;
+      },
+    });
+
+    expect(factoryCalls).toBe(1);
+    expect(audioSinkState.writes.length).toBeGreaterThan(0);
+  });
+
+  test('player: manual landmine hit sounds #WAV00 when audio is enabled', async () => {
+    await manualPlay(createLandmineOnlyChart(), {
+      speed: 240,
+      leadInMs: 0,
+      audio: true,
+      audioHeadPaddingMs: 0,
+      audioLeadMs: 0,
+      audioLeadMaxMs: 0,
+      limiter: false,
+      tui: false,
+      writeOutput: () => undefined,
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(hasAnyNonSilentAudioWrite()).toBe(true);
   });
 
   test('player: derives long-note end beat from bmson notes.l', () => {
@@ -1198,7 +1443,11 @@ describe('player', () => {
       ),
     ).toBe(true);
     expect(output.some((line) => line.includes('kind:gauge-change') && line.includes('reason:hold-drain'))).toBe(true);
-    expect(output.some((line) => line.includes('kind:combo-change') && line.includes('value:0') && line.includes('judge:POOR'))).toBe(true);
+    expect(
+      output.some(
+        (line) => line.includes('kind:combo-change') && line.includes('value:0') && line.includes('judge:POOR'),
+      ),
+    ).toBe(true);
     expect(
       output.some(
         (line) =>

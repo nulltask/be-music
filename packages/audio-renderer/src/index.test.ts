@@ -32,7 +32,11 @@ function createSingleTriggerBmsChart(samplePath: string, volWav?: number) {
   return json;
 }
 
-function createSingleBmsNoteChart(noteChannel: string, notePosition: readonly [number, number], samplePath = 'not-found.wav') {
+function createSingleBmsNoteChart(
+  noteChannel: string,
+  notePosition: readonly [number, number],
+  samplePath = 'not-found.wav',
+) {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
   json.resources.wav['01'] = samplePath;
@@ -138,6 +142,111 @@ test.each(codecCases)(
     expect(maxDeltaBetweenResults(single, mixed, 0, mixed.left.length)).toBeLessThan(1e-7);
   },
 );
+
+test('audio-renderer: scales individual sample triggers with #WAVCMD 01 xx vv', async () => {
+  // BMS spec — `#WAVCMD 01 xx vv` declares a per-slot volume override (0..127 byte). A trigger for that slot should
+  // attenuate by `vv / 127`; everything else stays at full.
+  const baseline = createSingleTriggerBmsChart('not-found.wav');
+  const attenuated = createSingleTriggerBmsChart('not-found.wav');
+  // 64 / 127 ≈ 50% — chosen so the multiplier is unambiguous even after the renderer's per-frame summing.
+  attenuated.bms.wavCmds = ['01 01 64'];
+  const [baselineRendered, attenuatedRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+    renderJson(attenuated, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+  ]);
+  expect(attenuatedRendered.left.length).toBe(baselineRendered.left.length);
+  expect(attenuatedRendered.peak).toBeCloseTo(baselineRendered.peak * (64 / 127), 6);
+});
+
+test('audio-renderer: scales individual sample triggers with #EXWAVxx v', async () => {
+  // BMS spec — `#EXWAVxx [flags] params filename` exposes a centibel-units `v` (volume) trim that composes with the bus
+  // / `#WAVCMD` chain. -600 cB = -6 dB ≈ 0.501 linear gain.
+  const baseline = createSingleTriggerBmsChart('not-found.wav');
+  const attenuated = createSingleTriggerBmsChart('not-found.wav');
+  attenuated.bms.exWav['01'] = 'v -600 not-found.wav';
+  const [baselineRendered, attenuatedRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+    renderJson(attenuated, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+  ]);
+  expect(attenuatedRendered.peak).toBeCloseTo(baselineRendered.peak * 0.501, 2);
+});
+
+test('audio-renderer: composes #EXWAVxx and #WAVCMD attenuation multiplicatively', async () => {
+  // Stack a `#EXWAV01 v -600` (≈ 0.5x) on top of a `#WAVCMD 01 01 64` (≈ 0.504x) — the rendered peak should be the
+  // product, not just one of them.
+  const baseline = createSingleTriggerBmsChart('not-found.wav');
+  const stacked = createSingleTriggerBmsChart('not-found.wav');
+  stacked.bms.exWav['01'] = 'v -600 not-found.wav';
+  stacked.bms.wavCmds = ['01 01 64'];
+  const [baselineRendered, stackedRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+    renderJson(stacked, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+  ]);
+  // 0.501 × (64/127) ≈ 0.252.
+  expect(stackedRendered.peak).toBeCloseTo(baselineRendered.peak * 0.501 * (64 / 127), 2);
+});
+
+test('audio-renderer: ignores non-volume #WAVCMD bytes (pitch / loop)', async () => {
+  // Pitch / loop bytes are intentionally not applied yet (the offline renderer doesn't resample / loop dynamically).
+  // They must NOT fall through to the volume code path either — a `#WAVCMD 00 01 12` line should leave the sample at
+  // full volume, not at 12/127.
+  const baseline = createSingleTriggerBmsChart('not-found.wav');
+  const withPitch = createSingleTriggerBmsChart('not-found.wav');
+  withPitch.bms.wavCmds = ['00 01 12'];
+  const [baselineRendered, pitchRendered] = await Promise.all([
+    renderJson(baseline, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+    renderJson(withPitch, {
+      sampleRate: 44_100,
+      gain: 1,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0.05,
+    }),
+  ]);
+  expect(pitchRendered.peak).toBeCloseTo(baselineRendered.peak, 6);
+});
 
 test('audio-renderer: scales rendered chart audio with #VOLWAV', async () => {
   const normal = createSingleTriggerBmsChart('not-found.wav', 100);
@@ -364,6 +473,84 @@ describe('audio-renderer', () => {
 
     const triggers = collectSampleTriggers(json);
     expect(triggers.map((trigger) => Number(trigger.sampleOffsetSeconds.toFixed(3)))).toEqual([0, 0.5, 0, 0.5]);
+  });
+
+  test('audio-renderer: extends slice duration past consecutive c=true notes to the next restart', () => {
+    // bmson 1.0.0 — `c=true` MUST NOT restart audio playback. So the BufferSource scheduled at the `c=false` anchor
+    // must be long enough to reach the next `c=false` anchor (or end of the channel), letting the runtime's "skip
+    // retrigger when already playing" path keep the audio continuous.
+    const json = createEmptyJson('bmson');
+    json.metadata.bpm = 120;
+    json.resources.wav['01'] = 'sample.wav';
+    json.events = [
+      // anchor at 0s — should hold open until 1.0s.
+      { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
+      // c=true at 0.5s — should hold open until 1.0s.
+      { measure: 0, channel: '12', position: [1, 4], value: '01', bmson: { c: true } },
+      // anchor at 1.0s — open-ended (no further restart).
+      { measure: 0, channel: '13', position: [2, 4], value: '01', bmson: { c: false } },
+      // c=true at 1.5s — open-ended too.
+      { measure: 0, channel: '14', position: [3, 4], value: '01', bmson: { c: true } },
+    ];
+
+    const triggers = collectSampleTriggers(json);
+    expect(triggers.map((trigger) => trigger.sampleDurationSeconds)).toEqual([1, 0.5, undefined, undefined]);
+  });
+
+  test('audio-renderer: bmson c=true notes never schedule a second render on top of the c=false anchor', async () => {
+    // The runtime relies on an `activeSampleNodes` gate to skip the BufferSource retrigger; the offline mixer has none,
+    // so a `c=true` trigger must be filtered before scheduling. Two notes at distinct beats sharing one anchor — a
+    // `c=false` followed by a `c=true` — must mix at the same peak as the `c=false` alone (i.e. NOT 2x), confirming the
+    // second trigger produced no extra render.
+    const anchorOnly = createEmptyJson('bmson');
+    anchorOnly.metadata.bpm = 120;
+    anchorOnly.resources.wav['01'] = 'not-found.wav';
+    anchorOnly.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } }];
+
+    const withContinuation = createEmptyJson('bmson');
+    withContinuation.metadata.bpm = 120;
+    withContinuation.resources.wav['01'] = 'not-found.wav';
+    withContinuation.events = [
+      { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
+      // `c=true` at a later beat must NOT spawn its own render.
+      { measure: 0, channel: '12', position: [1, 2], value: '01', bmson: { c: true } },
+    ];
+
+    const [anchorRendered, continuationRendered] = await Promise.all([
+      renderJson(anchorOnly, {
+        sampleRate: 44_100,
+        gain: 1,
+        normalize: false,
+        tailSeconds: 0,
+        fallbackToneSeconds: 0.05,
+      }),
+      renderJson(withContinuation, {
+        sampleRate: 44_100,
+        gain: 1,
+        normalize: false,
+        tailSeconds: 0,
+        fallbackToneSeconds: 0.05,
+      }),
+    ]);
+    expect(continuationRendered.peak).toBeCloseTo(anchorRendered.peak, 6);
+  });
+
+  test('audio-renderer: bmson chord at the same beat shares a single slice with shared duration', () => {
+    // Two simultaneous notes at beat 0 form one chord; both must render against the same slice (offset / duration /
+    // sliceId) so the runtime triggers the BufferSource only once.
+    const json = createEmptyJson('bmson');
+    json.metadata.bpm = 120;
+    json.resources.wav['01'] = 'sample.wav';
+    json.events = [
+      { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { c: false } },
+      { measure: 0, channel: '12', position: [0, 1], value: '01', bmson: { c: true } },
+      { measure: 0, channel: '13', position: [1, 2], value: '01', bmson: { c: false } },
+    ];
+    const triggers = collectSampleTriggers(json);
+    expect(triggers).toHaveLength(3);
+    expect(triggers[0]?.sampleSliceId).toBe(triggers[1]?.sampleSliceId);
+    expect(triggers[0]?.sampleDurationSeconds).toBeCloseTo(1, 6);
+    expect(triggers[1]?.sampleDurationSeconds).toBeCloseTo(1, 6);
   });
 
   test('audio-renderer: ignores landmine channels for sample triggering', () => {

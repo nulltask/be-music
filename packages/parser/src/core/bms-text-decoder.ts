@@ -1,9 +1,10 @@
 import iconv from 'iconv-lite';
+import { extractDeclaredBmsCharset } from './bms-charset.ts';
 
 const OBJECT_DATA_LINE = /^#(\d{3})([0-9A-Z]{2})\s*:\s*(.+)\s*$/i;
 const HEADER_LINE = /^#([A-Z][A-Z0-9_]*)(?:\s+(.+))?$/i;
 const BMS_KNOWN_COMMAND_LINE =
-  /^#(?:TITLE|SUBTITLE|ARTIST|GENRE|COMMENT|BPM|PLAYLEVEL|RANK|TOTAL|DIFFICULTY|STAGEFILE|PREVIEW|LNTYPE|LNMODE|LNOBJ|VOLWAV|DEFEXRANK|PLAYER|PATH_WAV|BASEBPM|STP|OPTION|WAVCMD|POORBGA|VIDEOFILE|MIDIFILE|MATERIALS|DIVIDEPROP|CHARSET|WAV[0-9A-Z]{2}|BMP[0-9A-Z]{2}|BPM[0-9A-Z]{2}|STOP[0-9A-Z]{2}|TEXT[0-9A-Z]{2}|EXRANK[0-9A-Z]{2}|ARGB[0-9A-Z]{2}|CHANGEOPTION[0-9A-Z]{2}|EXWAV[0-9A-Z]{2}|EXBMP[0-9A-Z]{2}|BGA[0-9A-Z]{2}|SCROLL[0-9A-Z]{2}|SPEED[0-9A-Z]{2}|SWBGA[0-9A-Z]{2}|RANDOM\s+\d+|SETRANDOM\s+\d+|ENDRANDOM|IF\s+\d+|ELSEIF\s+\d+|ELSE|ENDIF|SWITCH\s+\d+|SETSWITCH\s+\d+|CASE\s+\d+|DEF|SKIP|ENDSW|[0-9]{3}[0-9A-Z]{2}\s*:)/i;
+  /^#(?:TITLE|SUBTITLE|ARTIST|GENRE|COMMENT|BPM|PLAYLEVEL|RANK|TOTAL|DIFFICULTY|STAGEFILE|BACKBMP|BANNER|PREVIEW|LNTYPE|LNMODE|LNOBJ|VOLWAV|DEFEXRANK|PLAYER|PATH_WAV|BASEBPM|STP|OPTION|WAVCMD|POORBGA|VIDEOFILE|MIDIFILE|MATERIALS|DIVIDEPROP|CHARSET|WAV[0-9A-Z]{2}|BMP[0-9A-Z]{2}|BPM[0-9A-Z]{2}|STOP[0-9A-Z]{2}|TEXT[0-9A-Z]{2}|EXRANK[0-9A-Z]{2}|ARGB[0-9A-Z]{2}|CHANGEOPTION[0-9A-Z]{2}|EXWAV[0-9A-Z]{2}|EXBMP[0-9A-Z]{2}|BGA[0-9A-Z]{2}|SCROLL[0-9A-Z]{2}|SPEED[0-9A-Z]{2}|SWBGA[0-9A-Z]{2}|RANDOM\s+\d+|SETRANDOM\s+\d+|ENDRANDOM|IF\s+\d+|ELSEIF\s+\d+|ELSE|ENDIF|SWITCH\s+\d+|SETSWITCH\s+\d+|CASE\s+\d+|DEF|SKIP|ENDSW|[0-9]{3}[0-9A-Z]{2}\s*:)/i;
 
 type DetectedBmsEncoding = 'utf8' | 'shift_jis' | 'euc-jp' | 'latin1' | 'utf16le' | 'utf16be';
 
@@ -30,6 +31,16 @@ export function decodeBmsText(buffer: Buffer): DecodedBmsText {
       encoding: 'utf16be',
       text: decodeUtf16BeText(buffer),
     };
+  }
+  // Honor an explicit `#CHARSET` directive at the top of the chart before falling into automatic detection. The BMS
+  // spec authors `#CHARSET` near the start of the file before any non-ASCII text, so a latin1 first-pass (which maps
+  // every byte 1:1 to a code point) reliably surfaces the directive without depending on the autodetect heuristics.
+  const declaredCharset = extractDeclaredBmsCharset(decodeLatin1Text(buffer));
+  if (declaredCharset) {
+    const decoded = decodeWithDeclaredCharset(buffer, declaredCharset);
+    if (decoded) {
+      return decoded;
+    }
   }
   if (isAsciiText(buffer)) {
     return {
@@ -66,6 +77,34 @@ export function decodeBmsText(buffer: Buffer): DecodedBmsText {
       text: decodeUtf8Text(buffer),
     }
   );
+}
+
+function decodeLatin1Text(buffer: Buffer): string {
+  return buffer.toString('latin1');
+}
+
+/**
+ * Maps the canonical charset name produced by {@link canonicalizeBmsCharset} onto the variant `decodeBmsText` returns,
+ * then runs the decode through `iconv-lite`. `undefined` for unsupported encodings so the caller skips the
+ * explicit-charset path and falls back to automatic detection.
+ */
+function decodeWithDeclaredCharset(buffer: Buffer, charset: string): DecodedBmsText | undefined {
+  switch (charset) {
+    case 'utf-8':
+      return { encoding: 'utf8', text: decodeUtf8Text(buffer) };
+    case 'utf-16le':
+      return { encoding: 'utf16le', text: decodeUtf16LeText(buffer) };
+    case 'utf-16be':
+      return { encoding: 'utf16be', text: decodeUtf16BeText(buffer) };
+    case 'shift_jis':
+      return { encoding: 'shift_jis', text: iconv.decode(buffer, 'shift_jis') };
+    case 'euc-jp':
+      return { encoding: 'euc-jp', text: iconv.decode(buffer, 'euc-jp') };
+    case 'iso-8859-1':
+      return { encoding: 'latin1', text: iconv.decode(buffer, 'latin1') };
+    default:
+      return undefined;
+  }
 }
 
 function scoreDecodedBmsText(text: string, bias: number): number {

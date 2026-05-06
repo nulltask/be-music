@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolveCliPath } from '@be-music/utils';
+import { resolveCliPath } from '@be-music/utils/cli-path';
 import { parseChart } from '@be-music/parser';
 import { stringifyBmson, stringifyBms } from './index.ts';
 

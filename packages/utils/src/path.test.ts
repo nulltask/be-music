@@ -30,16 +30,43 @@ describe('path utilities', () => {
     ).resolves.toBe(existingPath);
   });
 
-  test('resolveFirstExistingPath accepts absolute candidates and returns undefined when nothing matches', async () => {
+  test('resolveFirstExistingPath rejects absolute candidates per the bmson spec malicious-path guard', async () => {
+    // bmson 1.0.0 spec MUST: "Absolute path: C:\\password.txt or /etc/passwd" must be refused. Even when the absolute
+    // path sits under baseDir, the malicious-path predicate rejects it pre-resolve so chart-authored absolute
+    // references can't sneak through. Callers that need to load a known absolute file should pass it directly to
+    // `fs.access` without going through this helper.
     const baseDir = await createTempFixtureDir('absolute');
     const existingPath = join(baseDir, 'absolute.bms');
     await writeFile(existingPath, '#TITLE test\n', 'utf8');
+    expect(isAbsolute(existingPath)).toBe(true);
 
-    const resolvedAbsolute = await resolveFirstExistingPath(baseDir, [existingPath]);
-    expect(resolvedAbsolute).toBe(existingPath);
-    expect(isAbsolute(resolvedAbsolute!)).toBe(true);
+    await expect(resolveFirstExistingPath(baseDir, [existingPath])).resolves.toBeUndefined();
+
+    // Relative candidate for the same file resolves correctly through the per-baseDir join.
+    await expect(resolveFirstExistingPath(baseDir, ['absolute.bms'])).resolves.toBe(existingPath);
 
     await expect(resolveFirstExistingPath(baseDir, ['missing.bms'])).resolves.toBeUndefined();
+  });
+
+  test('resolveFirstExistingPath rejects parent-directory traversal candidates', async () => {
+    // bmson 1.0.0 spec MUST: "Reference to parent directory: ../../../var/www/html/config.php" must be refused. Even a
+    // single-step `../sibling` walk escapes the chart bundle and must not resolve.
+    const baseDir = await createTempFixtureDir('parent-traversal');
+    const sibling = join(baseDir, '..', 'sibling-secret.txt');
+    await writeFile(sibling, 'secret', 'utf8');
+    try {
+      await expect(resolveFirstExistingPath(baseDir, ['../sibling-secret.txt'])).resolves.toBeUndefined();
+    } finally {
+      await rm(sibling, { force: true });
+    }
+  });
+
+  test('resolveFirstExistingPath rejects null-byte injection candidates', async () => {
+    // bmson 1.0.0 spec MUST: "Null characters (`\\0`)" must be refused. Some native APIs interpret `\0` as a C string
+    // terminator, so a crafted candidate like `safe.wav\0/etc/passwd` could resolve to the second half on a
+    // non-defensive backend.
+    const baseDir = await createTempFixtureDir('null-byte');
+    await expect(resolveFirstExistingPath(baseDir, ['safe.wav\0/etc/passwd'])).resolves.toBeUndefined();
   });
 
   test('resolveFirstExistingPath rejects when the signal is already aborted or aborts during lookup', async () => {
@@ -53,7 +80,9 @@ describe('path utilities', () => {
 
     const delayedController = new AbortController();
     delayedController.abort();
-    await expect(resolveFirstExistingPath(baseDir, ['other-missing.bms'], delayedController.signal)).rejects.toMatchObject({
+    await expect(
+      resolveFirstExistingPath(baseDir, ['other-missing.bms'], delayedController.signal),
+    ).rejects.toMatchObject({
       name: 'AbortError',
     });
   });

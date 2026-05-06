@@ -67,25 +67,50 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       utilsApi.findLastIndexBefore(fixtures.fractionItems, 377, (item) => item.value);
     },
   });
+  define('utils.findFirstIndexAtOrAfter', {
+    run: (fixtures) => {
+      utilsApi.findFirstIndexAtOrAfter(fixtures.fractionItems, 377, (item) => item.value);
+    },
+  });
+  define('utils.findFirstIndexNumberAtOrAfter', {
+    run: (fixtures) => {
+      utilsApi.findFirstIndexNumberAtOrAfter(fixtures.fractionValues, 377);
+    },
+  });
+  define('utils.runWithConcurrency', {
+    run: async () => {
+      await utilsApi.runWithConcurrency([1, 2, 3, 4], 2, async () => undefined);
+    },
+  });
   define('utils.normalizeAsciiBase36Code', {
     run: () => {
       utilsApi.normalizeAsciiBase36Code(0x66);
     },
   });
-  define('utils.workerize', {
+  define('utils.normalizeAsciiBase62Code', {
     run: () => {
-      const worker = utilsApi.workerize((value: number) => value + 1, () => []);
-      worker.close();
+      utilsApi.normalizeAsciiBase62Code(0x7a);
     },
   });
-  define('utils.invokeWorkerizedFunction', {
-    run: async () => {
-      const worker = utilsApi.workerize((value: number) => value + 1, () => []);
-      try {
-        await utilsApi.invokeWorkerizedFunction(worker, [41]);
-      } finally {
-        worker.close();
-      }
+  define('utils.normalizePath', {
+    run: () => {
+      utilsApi.normalizePath(String.raw`Songs\\set/../chart/./main.bms`);
+    },
+  });
+  define('utils.dirname', {
+    run: () => {
+      utilsApi.dirname(String.raw`Songs\\chart/main.bms`);
+    },
+  });
+  define('utils.basename', {
+    run: () => {
+      utilsApi.basename(String.raw`Songs\\chart/main.bms`);
+    },
+  });
+  define('utils.extname', {
+    run: () => {
+      utilsApi.extname(String.raw`Songs\\chart/main.bms`);
+      utilsApi.extname('README');
     },
   });
   define('utils.createAbortError', {
@@ -113,6 +138,12 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
   define('utils.isAbortError', {
     run: () => {
       utilsApi.isAbortError(new Error('x'));
+    },
+  });
+  define('utils.isMaliciousAssetPath', {
+    run: () => {
+      utilsApi.isMaliciousAssetPath('../../../etc/passwd');
+      utilsApi.isMaliciousAssetPath('sounds/kick.wav');
     },
   });
   define('utils.throwIfAborted', {

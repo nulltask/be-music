@@ -2,11 +2,13 @@ import type {
   BeMusicJson,
   BeMusicPosition,
   BmsonBpmEventEntry,
+  BmsonKeyChannelEntry,
+  BmsonKeyNoteEntry,
   BmsonSoundChannelEntry,
   BmsonSoundNoteEntry,
   BmsonStopEventEntry,
 } from '@be-music/json';
-import { normalizeSortedUniqueNonNegativeIntegers } from '@be-music/utils';
+import { normalizeSortedUniqueNonNegativeIntegers } from '@be-music/utils/core';
 
 export interface BmsonInfo {
   title?: string;
@@ -53,6 +55,24 @@ export interface BmsonSoundChannel {
   notes?: BmsonSoundNote[];
 }
 
+/**
+ * beatoraja's bmson extension for mine notes. Each note carries a gauge `damage` value (0..100) alongside the same lane
+ * / timing fields a regular `sound_channels` note has. The channel `name` is the WAV played on contact (the "explosion
+ * sample").
+ */
+export interface BmsonKeyNote {
+  x?: number;
+  y: number;
+  l?: number;
+  c?: boolean;
+  damage?: number;
+}
+
+export interface BmsonKeyChannel {
+  name: string;
+  notes?: BmsonKeyNote[];
+}
+
 export interface BmsonDocument {
   version?: string;
   info?: BmsonInfo;
@@ -61,6 +81,11 @@ export interface BmsonDocument {
   bpm_events?: BmsonBpmEvent[];
   stop_events?: BmsonStopEvent[];
   sound_channels?: BmsonSoundChannel[];
+  /**
+   * beatoraja extension — mine note channels. Each channel maps onto a BMS landmine channel (`Dx` for 1P, `Ex` for 2P)
+   * using the same `mode_hint` lane convention `sound_channels` uses for playable lanes.
+   */
+  key_channels?: BmsonKeyChannel[];
   bga?: {
     bga_header?: Array<{ id: number; name: string }>;
     bga_events?: Array<{ y: number; id: number }>;
@@ -74,7 +99,130 @@ interface MeasurePositionWithFraction {
   position: BeMusicPosition;
 }
 
-export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[]): Map<number, string> {
+/**
+ * bmson `mode_hint` → BMS lane channel maps.
+ *
+ * Each entry maps a bmson `x` lane index (1-based, left-to-right) onto the BMS playable channel that
+ * `extractTimedNotes` and `resolveChartPlayVariant` expect. Without these, the legacy positional fallback would
+ * mis-route `beat-7k`'s key 6 / 7 onto scratch (`16`) / FREE ZONE (`17`) — the channel digits that happen to come next
+ * in numeric order — instead of `18` / `19`.
+ *
+ * Keys mirror the bmson 1.0.0 spec's mode hints; values follow the canonical IIDX / Pop'n channel layout that LR2 /
+ * beatoraja ship default skins for.
+ */
+const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
+  'beat-5k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+    [6, '16'],
+  ]),
+  'beat-7k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+    [6, '18'],
+    [7, '19'],
+    [8, '16'],
+  ]),
+  'beat-10k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+    [6, '16'],
+    [7, '21'],
+    [8, '22'],
+    [9, '23'],
+    [10, '24'],
+    [11, '25'],
+    [12, '26'],
+  ]),
+  'beat-14k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+    [6, '18'],
+    [7, '19'],
+    [8, '16'],
+    [9, '21'],
+    [10, '22'],
+    [11, '23'],
+    [12, '24'],
+    [13, '25'],
+    [14, '28'],
+    [15, '29'],
+    [16, '26'],
+  ]),
+  'popn-5k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+  ]),
+  // PMS-STD (`#PLAYER 3` Pop'n) routes the right-hand half of the 9-lane bank through the 2P-side `22..25` channels —
+  // same convention `play_9.lr2skin` and `lane-layout.ts` use.
+  'popn-9k': new Map([
+    [1, '11'],
+    [2, '12'],
+    [3, '13'],
+    [4, '14'],
+    [5, '15'],
+    [6, '22'],
+    [7, '23'],
+    [8, '24'],
+    [9, '25'],
+  ]),
+};
+
+/**
+ * bmson 1.0.0 spec — when a chart omits / blanks `mode_hint`, the default is `beat-7k` ("Default value is 'beat-7k'").
+ * Applied centrally in {@link buildBmsonLaneMap} so the default lane routing follows the spec instead of falling
+ * through onto the unknown-hint positional fallback (which used to map x=6/7 onto `16` / `17` because those digits came
+ * next in numeric order).
+ */
+const BMSON_DEFAULT_MODE_HINT = 'beat-7k';
+
+/**
+ * `generic-Nkeys` template pattern — bmson allows arbitrary key counts via this naming convention ("a layout for a
+ * generic symmetrical keyboard layout, ordered left to right"). The numeric prefix is the key count; we route it as a
+ * positional left-to-right `x=1..N → 11, 12, …` map.
+ */
+const BMSON_GENERIC_KEYS_PATTERN = /^generic-(\d+)keys?$/;
+
+/**
+ * Resolves the `x` → BMS channel mapping for a chart's playable lanes. Order of resolution:
+ *
+ * 1. `mode_hint` blank / undefined → spec default `beat-7k` (per bmson 1.0.0).
+ * 2. Canonical IIDX / Pop'n hint → authoritative table.
+ * 3. `generic-Nkeys` template → left-to-right positional map sized to N keys.
+ * 4. Anything else → positional fallback over the chart's actual `x` values (preserves the historical behavior for
+ *    bmson dialects unknown to us).
+ */
+export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[], modeHint?: string): Map<number, string> {
+  const trimmedHint = typeof modeHint === 'string' ? modeHint.trim() : '';
+  const effectiveHint = trimmedHint.length > 0 ? trimmedHint : BMSON_DEFAULT_MODE_HINT;
+  const hintedMap = MODE_HINT_LANE_MAPS[effectiveHint];
+  if (hintedMap) {
+    return new Map(hintedMap);
+  }
+  const genericMatch = effectiveHint.match(BMSON_GENERIC_KEYS_PATTERN);
+  if (genericMatch) {
+    const keyCount = Math.max(0, Math.min(99, Number.parseInt(genericMatch[1]!, 10)));
+    const map = new Map<number, string>();
+    for (let index = 0; index < keyCount; index += 1) {
+      map.set(index + 1, laneIndexToChannel(index));
+    }
+    return map;
+  }
   const xValues = new Set<number>();
   for (const soundChannel of soundChannels) {
     for (const note of soundChannel.notes ?? []) {
@@ -93,6 +241,20 @@ export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[]): Map<numbe
     map.set(sorted[index], laneIndexToChannel(index));
   }
   return map;
+}
+
+/**
+ * Converts a BMS playable lane channel into its matching BMS landmine channel — `Dx` for 1P (`1X` keys) and `Ex` for 2P
+ * (`2X` keys). Used to route bmson `key_channels` notes through the same lane resolver as playable notes while keeping
+ * them tagged as mines downstream.
+ */
+export function bmsPlayableChannelToLandmineChannel(channel: string): string | undefined {
+  if (channel.length !== 2) return undefined;
+  const side = channel[0];
+  const lane = channel[1];
+  if (side === '1') return `D${lane}`;
+  if (side === '2') return `E${lane}`;
+  return undefined;
 }
 
 export function resolveBmsonResolution(document: BmsonDocument): number {
@@ -156,7 +318,12 @@ export function normalizeBmsonBpmEvents(input: unknown): BmsonBpmEventEntry[] {
       continue;
     }
     const raw = item as Record<string, unknown>;
-    if (typeof raw.y !== 'number' || !Number.isFinite(raw.y) || typeof raw.bpm !== 'number' || !Number.isFinite(raw.bpm)) {
+    if (
+      typeof raw.y !== 'number' ||
+      !Number.isFinite(raw.y) ||
+      typeof raw.bpm !== 'number' ||
+      !Number.isFinite(raw.bpm)
+    ) {
       continue;
     }
     if (raw.bpm <= 0) {
@@ -222,6 +389,28 @@ export function normalizeBmsonSoundChannels(input: unknown): BmsonSoundChannelEn
   return channels;
 }
 
+export function normalizeBmsonKeyChannels(input: unknown): BmsonKeyChannelEntry[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const channels: BmsonKeyChannelEntry[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.name !== 'string') {
+      continue;
+    }
+    channels.push({
+      name: raw.name,
+      notes: normalizeBmsonKeyNotes(raw.notes),
+    });
+  }
+  return channels;
+}
+
 export function createMeasureLengthsFromBmsonLines(
   lines: number[],
   resolution: number,
@@ -246,7 +435,10 @@ export function createMeasureLengthsFromBmsonLines(
   return measures;
 }
 
-export function createBmsonPositionResolver(resolution: number, lines: number[]): (y: number) => MeasurePositionWithFraction {
+export function createBmsonPositionResolver(
+  resolution: number,
+  lines: number[],
+): (y: number) => MeasurePositionWithFraction {
   const ticksPerMeasure = Math.max(1, Math.floor(resolution * 4));
   return (y: number) => {
     const normalizedY = Math.max(0, Math.round(y));
@@ -301,10 +493,22 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
     normalized.subartists = subartists;
   }
 
-  copyIfFiniteNumber(normalized, 'level', info.level);
+  // bmson 1.0.0 spec — `level` is an `unsigned long` and "must be ≥ 0. Negative values may be regarded as invalid by a
+  // player." We treat the negative case as "invalid → drop the field" rather than silently coerce, so the missing-level
+  // fallback (`undefined` → no displayed level) is what the chart's level shows in the UI. Non-integer inputs are
+  // floored to honor the spec's `unsigned long` type.
+  copyIfNonNegativeInteger(normalized, 'level', info.level);
   copyIfFiniteNumber(normalized, 'initBpm', info.init_bpm);
-  copyIfFiniteNumber(normalized, 'judgeRank', info.judge_rank);
-  copyIfFiniteNumber(normalized, 'total', info.total);
+  // bmson 1.0.0 spec — `judge_rank` describes "the width of judgment window" with the spec text only making sense for
+  // positive values ("smaller than 100" / "larger than 100" are framed relative to the player's default; 0 / negative
+  // would mean a zero-or-inverted window). Drop the field for non-positive inputs so the consumer falls back to the
+  // spec default of 100 rather than producing a nonsensical judge window.
+  copyIfPositiveFiniteNumber(normalized, 'judgeRank', info.judge_rank);
+  // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take the absolute value." Normalizing at parse time keeps the
+  // gauge formula (`+TOTAL/N`) on the positive branch and means every downstream consumer (gauge, stringifier,
+  // round-trip re-parse) sees the canonical value. `total: 0` stays semantically meaningful (lifebar doesn't increase,
+  // per the same spec section).
+  copyIfFiniteNumberAbs(normalized, 'total', info.total);
 
   if (resolution > 0) {
     normalized.resolution = resolution;
@@ -351,6 +555,9 @@ export function normalizeBmsonExtensions(input: unknown): BeMusicJson['bmson'] {
 
   normalized.info = normalizeBmsonInfoFromIr(raw.info);
   normalized.bga = normalizeBmsonBgaFromIr(raw.bga);
+  if (raw.barlinesSuppressed === true) {
+    normalized.barlinesSuppressed = true;
+  }
 
   return normalized;
 }
@@ -415,7 +622,7 @@ function normalizeBmsonSubartists(input: unknown): string[] | undefined {
   const names: string[] = [];
   for (const item of input) {
     if (typeof item === 'string') {
-      names.push(item);
+      names.push(canonicalizeSubartistEntry(item));
       continue;
     }
     if (!item || typeof item !== 'object') {
@@ -423,10 +630,31 @@ function normalizeBmsonSubartists(input: unknown): string[] | undefined {
     }
     const raw = item as Record<string, unknown>;
     if (typeof raw.name === 'string') {
-      names.push(raw.name);
+      names.push(canonicalizeSubartistEntry(raw.name));
     }
   }
   return names;
+}
+
+/**
+ * bmson 1.0.0 spec SHOULD — "Implementers should trim the spaces before and after `key` and `value` in subartists."
+ *
+ * Trims each half of the `role:name` form (or just the name when the entry doesn't carry a role) and rejoins so the
+ * stored array contains canonicalized strings. Role case is preserved — the consumer-facing helper {@link
+ * parseBmsonSubartist} is the one that lower-cases for grouping; we don't want to lose the author's intended
+ * capitalization in the IR.
+ */
+function canonicalizeSubartistEntry(entry: string): string {
+  const colon = entry.indexOf(':');
+  if (colon < 0) {
+    return entry.trim();
+  }
+  const role = entry.slice(0, colon).trim();
+  const name = entry.slice(colon + 1).trim();
+  if (role.length === 0) {
+    return name;
+  }
+  return `${role}:${name}`;
 }
 
 function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
@@ -461,6 +689,41 @@ function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
   return notes;
 }
 
+function normalizeBmsonKeyNotes(input: unknown): BmsonKeyNoteEntry[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const notes: BmsonKeyNoteEntry[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.y !== 'number' || !Number.isFinite(raw.y)) {
+      continue;
+    }
+
+    const note: BmsonKeyNoteEntry = {
+      y: Math.max(0, Math.round(raw.y)),
+    };
+    if (typeof raw.x === 'number' && Number.isFinite(raw.x)) {
+      note.x = Math.floor(raw.x);
+    }
+    if (typeof raw.l === 'number' && Number.isFinite(raw.l) && raw.l >= 0) {
+      note.l = Math.floor(raw.l);
+    }
+    if (typeof raw.c === 'boolean') {
+      note.c = raw.c;
+    }
+    if (typeof raw.damage === 'number' && Number.isFinite(raw.damage) && raw.damage >= 0) {
+      note.damage = raw.damage;
+    }
+    notes.push(note);
+  }
+  return notes;
+}
+
 function copyIfString<T extends object>(target: T, key: keyof T & string, value: unknown): void {
   if (typeof value === 'string') {
     (target as Record<string, unknown>)[key] = value;
@@ -471,6 +734,47 @@ function copyIfFiniteNumber<T extends object>(target: T, key: keyof T & string, 
   if (typeof value === 'number' && Number.isFinite(value)) {
     (target as Record<string, unknown>)[key] = value;
   }
+}
+
+/**
+ * Same as {@link copyIfFiniteNumber} but applies `Math.abs` so spec fields that say "if negative, take the absolute
+ * value" (notably `info.total`) get normalized at parse time. Keeps `0` intact so its spec-defined "lifebar doesn't
+ * increase" meaning is preserved.
+ */
+function copyIfFiniteNumberAbs<T extends object>(target: T, key: keyof T & string, value: unknown): void {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    (target as Record<string, unknown>)[key] = Math.abs(value);
+  }
+}
+
+/**
+ * Copies a finite numeric value as a non-negative integer, dropping the field entirely when the input is negative or
+ * non-finite. Matches the bmson 1.0.0 spec's `unsigned long` fields (notably `info.level`) which require `≥ 0` and the
+ * spec's MAY clause that lets implementations regard negatives as invalid. Non-integer inputs are floored.
+ */
+function copyIfNonNegativeInteger<T extends object>(target: T, key: keyof T & string, value: unknown): void {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return;
+  }
+  const floored = Math.floor(value);
+  if (floored < 0) {
+    return;
+  }
+  (target as Record<string, unknown>)[key] = floored;
+}
+
+/**
+ * Copies a finite numeric value only when it is strictly positive (`> 0`). Matches bmson 1.0.0 spec fields whose
+ * semantics only make sense for positive values — notably `info.judge_rank`, where the spec text ("smaller than 100" /
+ * "larger than 100") frames the value as a width relative to the player's default. A `0` or negative input would imply
+ * a zero-width or inverted judgement window, both nonsensical; dropping the field lets the consumer fall back to the
+ * spec default of 100.
+ */
+function copyIfPositiveFiniteNumber<T extends object>(target: T, key: keyof T & string, value: unknown): void {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return;
+  }
+  (target as Record<string, unknown>)[key] = value;
 }
 
 function normalizePositiveInteger(value: unknown): number | undefined {
@@ -507,10 +811,12 @@ function normalizeBmsonInfoFromIr(input: unknown): BeMusicJson['bmson']['info'] 
     info.subartists = subartists;
   }
 
-  copyIfFiniteNumber(info, 'level', raw.level);
+  // Match `normalizeBmsonInfoForIr`'s spec-compliant unsigned- integer + positive + abs handling for the re-parse path
+  // so JSON round-trips don't reintroduce a negative / float level / judge_rank / total.
+  copyIfNonNegativeInteger(info, 'level', raw.level);
   copyIfFiniteNumber(info, 'initBpm', raw.initBpm ?? raw.init_bpm);
-  copyIfFiniteNumber(info, 'judgeRank', raw.judgeRank ?? raw.judge_rank);
-  copyIfFiniteNumber(info, 'total', raw.total);
+  copyIfPositiveFiniteNumber(info, 'judgeRank', raw.judgeRank ?? raw.judge_rank);
+  copyIfFiniteNumberAbs(info, 'total', raw.total);
 
   const resolution = normalizePositiveInteger(raw.resolution);
   if (resolution !== undefined && resolution > 0) {

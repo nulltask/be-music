@@ -7,8 +7,23 @@
     "declaration": false,
     "declarationMap": false,
     "paths": {
+      "@be-music/audio-renderer/triggers": ["./packages/audio-renderer/src/core/triggers.ts"],
+      "@be-music/player/playable-notes": ["./packages/player/src/playable-notes.ts"],
+      "@be-music/player/audio-sink": ["./packages/player/src/audio-sink.ts"],
+      "@be-music/player/image-resize-algorithm": ["./packages/player/src/image-resize-algorithm.ts"],
+      "@be-music/player/judging": ["./packages/player/src/judging.ts"],
+      "@be-music/player/state-signals": ["./packages/player/src/state-signals.ts"],
+      "@be-music/player/utils": ["./packages/player/src/utils.ts"],
+      "@be-music/player/core/*": ["./packages/player/src/core/*.ts"],
+      "@be-music/utils/core": ["./packages/utils/src/core.ts"],
+      "@be-music/utils/cli-path": ["./packages/utils/src/cli-path.ts"],
+      "@be-music/utils/log": ["./packages/utils/src/log.ts"],
+      "@be-music/utils/path": ["./packages/utils/src/path.ts"],
+      "@be-music/utils/pcm": ["./packages/utils/src/pcm.ts"],
+      "@be-music/utils/workerize": ["./packages/utils/src/workerize.ts"],
       "@be-music/*": ["./packages/*/src/index.ts"]
     }
   },
-  "include": ["packages/*/src/**/*.ts", "vite.package.config.ts", "vitest.config.ts"]
+  "include": ["packages/*/src/**/*.ts", "scripts/**/*.ts", "vite.package.config.ts", "vitest.config.ts"],
+  "exclude": ["scripts/**/*.test.ts"]
 }

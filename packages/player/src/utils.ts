@@ -1,4 +1,10 @@
-import { normalizeChannel, normalizeObjectKey, type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
+import {
+  normalizeChannel,
+  normalizeObjectKey,
+  resolveBmsBase,
+  type BeMusicJson,
+  type BeMusicPlayLevel,
+} from '@be-music/json';
 
 const BMS_DEFAULT_DISPLAY_RANK = 2;
 const BMS_DEFAULT_DISPLAY_PLAY_LEVEL = 3;
@@ -61,7 +67,8 @@ export function resolveDisplayedPlayLevelValue(chart: BeMusicJson): BeMusicPlayL
 
 export function resolveDisplayedDifficultyValue(chart: BeMusicJson): number | undefined {
   const difficulty = chart.metadata.difficulty;
-  const normalized = typeof difficulty === 'number' && Number.isFinite(difficulty) ? Math.trunc(difficulty) : Number.NaN;
+  const normalized =
+    typeof difficulty === 'number' && Number.isFinite(difficulty) ? Math.trunc(difficulty) : Number.NaN;
   if (Number.isFinite(normalized) && normalized >= 1 && normalized <= 5) {
     return normalized;
   }
@@ -72,11 +79,12 @@ function hasDynamicJudgeRankChanges(chart: BeMusicJson): boolean {
   if (chart.sourceFormat !== 'bms') {
     return false;
   }
+  const idBase = resolveBmsBase(chart);
   for (const event of chart.events) {
     if (normalizeChannel(event.channel) !== 'A0') {
       continue;
     }
-    if (parseDynamicJudgeRankPercent(chart.bms.exRank[normalizeObjectKey(event.value)]) !== undefined) {
+    if (parseDynamicJudgeRankPercent(chart.bms.exRank[normalizeObjectKey(event.value, idBase)]) !== undefined) {
       return true;
     }
   }
@@ -134,6 +142,17 @@ export function formatSeconds(seconds: number): string {
   return `${hours}:${minutesPart.toString().padStart(2, '0')}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
 }
 
-export function resolveAltModifierLabel(platform: NodeJS.Platform = process.platform): 'Alt' | 'Option' {
+export function resolveAltModifierLabel(platform: NodeJS.Platform = resolveDefaultPlatform()): 'Alt' | 'Option' {
   return platform === 'darwin' ? 'Option' : 'Alt';
+}
+
+/**
+ * Browser-safe `process.platform` lookup. Falls back to `'linux'` when running outside Node so a static
+ * `process.platform` reference doesn't `ReferenceError` the moment a web bundle calls a default-param consumer.
+ * The value's only consumer is the human-readable Alt/Option modifier label, and `'Alt'` is the right fallback
+ * for any non-Mac surface.
+ */
+function resolveDefaultPlatform(): NodeJS.Platform {
+  const proc = (globalThis as { process?: { platform?: NodeJS.Platform } }).process;
+  return proc?.platform ?? ('linux' as NodeJS.Platform);
 }

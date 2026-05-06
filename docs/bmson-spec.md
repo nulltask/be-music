@@ -1,166 +1,167 @@
-# BMSON 実装仕様
+[Japanese version](./bmson-spec.ja.md)
 
-この文書は、`packages/parser` / `packages/stringifier` が BMSON をどう扱うかを定義します。
+# BMSON implementation specification
 
-## 一次参照
+This document defines how `packages/parser` / `packages/stringifier` handles BMSON.
 
-- 公式サイト: https://bmson.nekokan.dyndns.info/
-- 公式 documents: https://bmson.nekokan.dyndns.info/documents/
+## Primary reference
+
+- Official website: https://bmson.nekokan.dyndns.info/
+- Official documents: https://bmson.nekokan.dyndns.info/documents/
 - bmson format and specs v1.0 (Read the Docs): http://bmson-spec.readthedocs.org/en/master/doc/index.html
-- Google Docs 仕様: https://docs.google.com/document/d/1ZDjfjWud8UG3RPjyhN-dd1rVjPaactcMT3PIODTap9s/mobilebasic?pli=1
+- Google Docs spec: https://docs.google.com/document/d/1ZDjfjWud8UG3RPjyhN-dd1rVjPaactcMT3PIODTap9s/mobilebasic?pli=1
 
-## 対応状況の要約
+## Compliance status summary
 
-- 対応レベル: 部分対応
-- 方針: bmson 全仕様ではなく、BMS 相互変換と再生に必要な最小集合を優先
+- Compatibility level: Partial compliance
+- Policy: Prioritize the minimum set required for BMS interconversion and playback, rather than the full BMSON specification.
 
-## 対応チェックリスト
+## Compatibility checklist
 
 ### parser (bmson -> `@be-music/json`)
 
-- [x] ルート: `version`
-- [x] ルート: `info`
-- [x] ルート: `lines`
-- [x] ルート互換: `resolution` (`info.resolution` 未指定時のフォールバック)
-- [x] ルート: `sound_channels`
-- [x] ルート: `bpm_events`
-- [x] ルート: `stop_events`
-- [x] ルート: `bga`
-- [x] `info` 拡張項目: `subartists`
-- [x] `info` 拡張項目: `chart_name`
-- [x] `info` 拡張項目: `mode_hint`
-- [x] `info` 拡張項目: `judge_rank`
-- [x] `info` 拡張項目: `total`
-- [x] `info` 拡張項目: `back_image`
-- [x] `info` 拡張項目: `eyecatch_image`
-- [x] `info` 拡張項目: `banner_image`
-- [x] `info` 拡張項目: `preview_music`
-- [x] `sound_channels[].notes[]` の `x`
-- [x] `sound_channels[].notes[]` の `y`
-- [x] `sound_channels[].notes[]` の `l`
-- [x] `sound_channels[].notes[]` の `c`
-- [x] `lines` を使った `measure` / `position` 解決
-- [x] `x <= 0` (または未指定) ノートを BGM (`01`) として解釈
-- [ ] `version` の妥当性検証（`null` のエラー化、未指定時の legacy 扱い方針）
-- [ ] `version` の互換判定を SemVer で行う方針の明文化
-- [ ] `info.init_bpm` 未指定を fatal error として扱う
-- [ ] `info.title` / `artist` / `genre` など必須情報の欠損時エラー方針
-- [ ] `lines` 未指定時に 4/4（`resolution * 4` 間隔）を前提とした補完規則の固定
-- [ ] `sound_channels[].name` の拡張子フォールバック探索（`.wav`/`.ogg`/`.m4a`）
-- [ ] `sound_channels[].name` のパス正規化（`\` と `/`）およびディレクトリトラバーサル防止
-- [ ] `sound_channels[].notes[]` 同一 pulse で `c=true/false` が混在する場合の優先規則
-- [ ] `bpm_events` 同一 `y` 多重定義時の「末尾優先」正規化
-- [ ] `stop_events` 同一 `y` 多重定義時の「加算」正規化
-- [ ] `bga.bga_header` の同一 `id` 多重定義時に後勝ちで解釈
-- [ ] `info.title_image` の受理と IR への保持
-- [ ] `subartists` の `key:value` 形式（`music:`/`chart:` 等）の保持規則
-- [ ] 未知ルートキーの透過保持
+- [x] Root: `version`
+- [x] Root: `info`
+- [x] Root: `lines`
+- [x] Route compatibility: `resolution` (fallback when `info.resolution` is not specified)
+- [x] Root: `sound_channels`
+- [x] Root: `bpm_events`
+- [x] Root: `stop_events`
+- [x] Root: `bga`
+- [x] `info` extended item: `subartists`
+- [x] `info` extended item: `chart_name`
+- [x] `info` extended item: `mode_hint`
+- [x] `info` extended item: `judge_rank`
+- [x] `info` extended item: `total`
+- [x] `info` extended item: `back_image`
+- [x] `info` extended item: `eyecatch_image`
+- [x] `info` extended item: `banner_image`
+- [x] `info` extended item: `preview_music`
+- [x] `x` in `sound_channels[].notes[]`
+- [x] `y` in `sound_channels[].notes[]`
+- [x] `l` in `sound_channels[].notes[]`
+- [x] `c` in `sound_channels[].notes[]`
+- [x] `measure` / `position` resolution using `lines`
+- [x] `x <= 0` (or unspecified) Interpret notes as background music (`01`)- [ ] Validation of `version` (turning `null` into an error, treating legacy as unspecified)
+- [ ] Clarification of policy for determining compatibility of `version` with SemVer
+- [ ] `info.init_bpm` Treat unspecified as a fatal error
+- [ ] Error policy when required information such as `info.title` / `artist` / `genre` is missing
+- [ ] Fixed completion rule assuming 4/4 (`resolution * 4` interval) when `lines` is not specified.
+- [ ] `sound_channels[].name` extension fallback search (`.wav`/`.ogg`/`.m4a`)
+- [ ] `sound_channels[].name` path normalization (`\` and `/`) and directory traversal prevention
+- [ ] `sound_channels[].notes[]` Priority rules when `c=true/false` are mixed in the same pulse
+- [ ] `bpm_events` Same `y` Normalization of “last priority” when overloading
+- [ ] `stop_events` Same `y` "Addition" normalization when overloaded
+- [ ] When the same `id` of `bga.bga_header` is defined multiple times, it is interpreted as the winner.
+- [ ] Acceptance of `info.title_image` and retention in IR
+- [ ] Retention rules for `key:value` format (`music:`/`chart:` etc.) of `subartists`
+- [ ] Transparent preservation of unknown root keys
 
 ### stringifier (`@be-music/json` -> bmson)
 
-- [x] `version` 出力 (`bmson.version`, 未指定時 `1.0.0`)
-- [x] `info.resolution` 出力 (未指定時 `240`)
-- [x] `info` 拡張項目 `subartists` の出力
-- [x] `info` 拡張項目 `chart_name` の出力
-- [x] `info` 拡張項目 `mode_hint` の出力
-- [x] `info` 拡張項目 `judge_rank` の出力
-- [x] `info` 拡張項目 `total` の出力
-- [x] `info` 拡張項目 `back_image` の出力
-- [x] `info` 拡張項目 `eyecatch_image` の出力
-- [x] `info` 拡張項目 `banner_image` の出力
-- [x] `info` 拡張項目 `preview_music` の出力
-- [x] `lines` 出力 (`preservation.bmson.lines` 優先)
-- [x] `lines` 自動生成 (IR 小節長ベース)
-- [x] `sound_channels` 出力
-- [x] `bpm_events` 出力 (`03` / `08` 由来)
-- [x] `stop_events` 出力 (`09` 由来)
-- [x] `notes.l` 出力 (未指定時 `l=0`)
-- [x] `notes.c` 出力 (未指定時 `c=false`)
-- [x] `bga.bga_header` 出力
-- [x] `bga.bga_events` 出力
-- [x] `bga.layer_events` 出力
-- [x] `bga.poor_events` 出力
-- [ ] `bpm_events` 同一 `y` のイベントを「末尾優先」へ正規化して出力
-- [ ] `stop_events` 同一 `y` のイベントを加算正規化して出力
-- [ ] `info.title_image` の出力
-- [ ] `sound_channels[].name` のパス区切り正規化と危険パス除去
-- [ ] 未知ルートキーの透過再出力
-- [~] `notes.x` の元値を厳密保持 (IR で lanes を再割当するため完全同一は保証しない)
+- [x] `version` output (`bmson.version`, `1.0.0` if not specified)
+- [x] `info.resolution` output (`240` if not specified)
+- [x] `info` Extended item `subartists` output
+- [x] `info` Extended item `chart_name` output
+- [x] `info` Extended item `mode_hint` output
+- [x] `info` Extended item `judge_rank` output
+- [x] `info` Extended item `total` output
+- [x] `info` Extended item `back_image` output
+- [x] `info` Extended item `eyecatch_image` output
+- [x] `info` Extended item `banner_image` output
+- [x] `info` Extended item `preview_music` output
+- [x] `lines` output (prioritizes `preservation.bmson.lines`)
+- [x] `lines` automatic generation (IR bar length based)
+- [x] `sound_channels` output
+- [x] `bpm_events` output (from `03` / `08`)
+- [x] `stop_events` output (from `09`)
+- [x] `notes.l` output (`l=0` if not specified)
+- [x] `notes.c` output (`c=false` if not specified)
+- [x] `bga.bga_header` output
+- [x] `bga.bga_events` output
+- [x] `bga.layer_events` output
+- [x] `bga.poor_events` output
+- [ ] `bpm_events` Normalize and output events with the same `y` to "last priority"
+- [ ] `stop_events` Add and normalize events of the same `y` and output
+- [ ] Output of `info.title_image`
+- [ ] Path-separated normalization and dangerous path removal for `sound_channels[].name`
+- [ ] Transparent reoutput of unknown root key
+- [~] Strictly maintain the original value of `notes.x` (exact identity is not guaranteed as lanes are reallocated in IR)
 
-### player / audio-renderer (bmson 再生挙動)
+### player / audio-renderer (bmson playback behavior)
 
-- [x] bmson 入力再生 (`parseChartFile` 経由)
-- [x] `info.banner_image` を player の選曲画面 banner に使用
-- [x] `info.preview_music` を player の選曲画面 preview に使用
-- [x] `lines` を使った時刻解決
-- [x] `resolution` を使った時刻解決
-- [x] `bpm_events` を使った時刻解決
-- [x] `stop_events` を使った時刻解決
-- [x] `notes.c` によるサンプル継続オフセット解釈
-- [x] `notes.l` を使ったロングノート終端解釈
-- [ ] `bga.bga_events` の再生反映
-- [ ] `bga.layer_events` の再生反映
-- [ ] `bga.poor_events` の再生反映
-- [ ] 動画 BGA 再生
-- [ ] 同一 pulse の処理順（Note/BGA → BPM → STOP）を仕様通りに固定
-- [ ] 同一 `y` の `bpm_events` を末尾優先で適用
-- [ ] 同一 `y` の `stop_events` を加算して適用
-- [ ] sound channel スライス規則（`c` と restart）に基づく再生
-- [ ] 同一 slice に playable/BGM が混在する場合の BGM 破棄規則
-- [ ] 異なる sound channel の同一 `(x,y)` ノートを Layered Note として合成再生
+- [x] bmson input playback (via `parseChartFile`)
+- [x] Use `info.banner_image` for player's song selection screen banner
+- [x] Use `info.preview_music` to preview the player's music selection screen
+- [x] Time resolution using `lines`
+- [x] Time resolution using `resolution`
+- [x] Time resolution using `bpm_events`
+- [x] Time resolution using `stop_events`
+- [x] Sample continuation offset interpretation with `notes.c`
+- [x] Long note end interpretation using `notes.l`
+- [ ] `bga.bga_events` playback reflection
+- [ ] `bga.layer_events` playback reflection
+- [ ] `bga.poor_events` playback reflection
+- [ ] Video BGA playback
+- [ ] Fixed the processing order of the same pulse (Note/BGA → BPM → STOP) as specified.
+- [ ] Apply `bpm_events` of the same `y` with priority to the end
+- [ ] Add and apply `stop_events` of the same `y`
+- [ ] Playback based on sound channel slicing rules (`c` and restart)
+- [ ] BGM discard rules when playable/BGM are mixed in the same slice
+- [ ] Composite playback of the same `(x,y)` notes from different sound channels as Layered Notes
 
-## 実装が読み込むフィールド (parser)
+## Fields read by implementation (parser)
 
-- ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `bpm_events`, `stop_events`, `bga`
+- Root: `version`, `lines`, `resolution`(compatible), `info`, `sound_channels`, `bpm_events`, `stop_events`, `bga`
 - `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`
 - `sound_channels[].notes[]`: `x`, `y`, `l`, `c`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
 
-## bmson -> BMS/BMSON 中間表現 (`@be-music/json`) 変換
+## bmson -> BMS/BMSON intermediate representation (`@be-music/json`) conversion
 
-- `version` を `bmson.version` に保持
-- `lines[].y` を `preservation.bmson.lines` に保持
-- `info.resolution` を `bmson.info.resolution` に保持
-- 互換としてルート `resolution` も読み取り、`info.resolution` がなければ採用
-- `sound_channels[i].name` を `resources.wav[key]` に登録
-- `key = base36(i + 1)` を2桁化
-- `notes[].y` を分数位置へ変換してイベント化
-- `notes[].l/c` は `events[].bmson.l/c` として保持
-- `lines` が存在する場合、`lines` 区間を小節として `measure` と `position` を算出
-- `notes[].x` のユニーク値を昇順採番し、BMS互換チャンネルへ写像
-- `x` 未指定時は `11`
-- `bpm_events` は `resources.bpm` + チャンネル `08` へ変換
-- `stop_events` は `resources.stop` + チャンネル `09` へ変換
-- `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
-- `stop_events` の元配列は `preservation.bmson.stopEvents` に保持
-- `sound_channels` の元配列は `preservation.bmson.soundChannels` に保持
-- `bga` は `bmson.bga` へ保持
+- Keep `version` in `bmson.version`
+- Keep `lines[].y` in `preservation.bmson.lines`
+- Keep `info.resolution` in `bmson.info.resolution`
+- Also read the root `resolution` for compatibility, and adopt it if `info.resolution` is not present.
+- Register `sound_channels[i].name` in `resources.wav[key]`
+- Convert `key = base36(i + 1)` to 2 digits
+- Convert `notes[].y` to fractional position and turn it into an event
+- `notes[].l/c` is kept as `events[].bmson.l/c`
+- If `lines` exists, calculate `measure` and `position` using the `lines` interval as a measure.
+- Number the unique values ​​of `notes[].x` in ascending order and map them to BMS compatible channels.
+- `11` if `x` is not specified
+- `bpm_events` is converted to `resources.bpm` + channel `08`
+- `stop_events` is converted to `resources.stop` + channel `09`
+- Original array of `bpm_events` is kept in `preservation.bmson.bpmEvents`
+- Original array of `stop_events` is kept in `preservation.bmson.stopEvents`
+- Original array of `sound_channels` is kept in `preservation.bmson.soundChannels`
+- `bga` is kept in `bmson.bga`
 
-## BMS/BMSON 中間表現 -> BMSON 変換 (stringifier)
+## BMS/BMSON intermediate representation -> BMSON conversion (stringifier)
 
-- `@be-music/chart` の `eventToBeat` 相当の beat 解決から `y = round(beat * resolution)` を生成
-- `bmson.version` を `version` に出力 (未指定時は `1.0.0`)
-- `bmson.info.resolution` を `info.resolution` に出力 (未指定時は `240`)
-- `bmson.info` の拡張項目 (`subartists`, `chart_name`, `judge_rank`, `total`, 画像/プレビュー系など) を出力
-- `preservation.bmson.lines` があれば `lines[].y` として出力
-- `preservation.bmson.lines` がない場合は IR の小節長から `lines` を自動生成
-- `sound_channels` は `wav` キー単位で出力
-- `03` / `08` チャンネルから `bpm_events` を生成
-- `09` チャンネルから `stop_events` を生成
-- `events[].bmson.l/c` を `sound_channels.notes[].l/c` へ反映 (未指定時は `l=0`, `c=false`)
-- `preservation.bmson.bpmEvents` / `stopEvents` / `soundChannels` が現在の IR と整合する場合は、それらの配列構造を優先して再出力
-- `bmson.bga` が存在すれば `bga` を出力
+- Generate `y = round(beat * resolution)` from beat resolution equivalent to `eventToBeat` of `@be-music/chart`
+- Output `bmson.version` to `version` (`1.0.0` if not specified)
+- Output `bmson.info.resolution` to `info.resolution` (`240` if not specified)
+- Output extended items of `bmson.info` (`subartists`, `chart_name`, `judge_rank`, `total`, image/preview etc.)
+- If `preservation.bmson.lines` exists, output as `lines[].y`
+- If `preservation.bmson.lines` is not present, `lines` will be automatically generated from the bar length of IR.
+- `sound_channels` outputs in `wav` keys
+- Generate `bpm_events` from `03` / `08` channels
+- Generate `stop_events` from `09` channel
+- Reflect `events[].bmson.l/c` to `sound_channels.notes[].l/c` (if not specified, `l=0`, `c=false`)
+- If `preservation.bmson.bpmEvents` / `stopEvents` / `soundChannels` are consistent with the current IR, re-output them in favor of their array structure.
+- Output `bga` if `bmson.bga` exists
 
-## 一次参照に対する未対応/非互換
+## Unsupported/incompatible for primary references
 
-- 未対応: bmson で未使用の未知ルートキーの透過保持
+- Not supported: transparent retention of unused unknown root keys in bmson
 
-## y -> position 変換規則
+## y -> position conversion rule
 
-- `lines` がある場合:
-  - `measure = y` が属する `lines` 区間のインデックス
+- If you have `lines`:
+  - index of the `lines` interval to which `measure = y` belongs
   - `position = [y - lineStart, lineEnd - lineStart]`
-- `lines` がない場合:
-  - `beat = y / resolution`
+- If `lines` is missing:
+  - `beat = y/resolution`
   - `measure = floor(beat / 4)`
   - `position = [round(y) % (resolution * 4), resolution * 4]`

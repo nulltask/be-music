@@ -1,7 +1,8 @@
 {
   "name": "@be-music/audio-renderer",
-  "version": "0.1.0",
-  "description": "BMS audio-renderer",
+  "version": "0.2.0",
+  "description": "Renderer for BMS, BMSON, and be-music JSON charts to WAV or AIFF",
+  "license": "MIT",
   "bin": {
     "bms-audio-render": "dist/cli.js"
   },
@@ -16,6 +17,11 @@
       "types": "./dist/index.d.ts",
       "source": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./triggers": {
+      "types": "./dist/core/triggers.d.ts",
+      "source": "./src/core/triggers.ts",
+      "default": "./dist/core/triggers.js"
     }
   },
   "scripts": {

@@ -1,98 +1,98 @@
-# 用語集
+[Japanese version](./glossary.ja.md)
 
-この文書は、`be-music` の仕様書と実装で使う用語をまとめたものです。
-ここでの定義は一般的な BMS/BMSON 用語を踏まえつつ、**このリポジトリでどう扱うか**を優先します。
+# Glossary
 
-## 用語運用ルール
+This document summarizes the terms used in the `be-music` specification and implementation.
+The definitions here are based on general BMS/BMSON terminology, but prioritize **how to handle it in this repository**.
 
-- **chart** は、譜面ファイルや再生・選択・保存の単位を指す既定語とします。
-- **music / 曲 / 楽曲** は、画面名や user-facing な説明で使う語とし、内部処理の単位を指すときは原則 `chart` と区別します。
-- **song** は、このリポジトリの既定語ではなく、外部仕様名やファイル名（例: `song.mid`, `bemuse-song.json`, `songs[]`）をそのまま参照するときにだけ使います。
-- **Music Select** は画面名です。この画面で実際に選択・復元する単位は chart です。
+## Terms usage rules
 
-## 一般用語
+- **chart** is the default word that refers to the musical score file and unit of playback, selection, and storage.
+- **music/song/song** is a word used in screen names and user-facing descriptions, and is generally distinguished from `chart` when referring to a unit of internal processing.
+- **song** is not the default word for this repository, and should only be used when referring to an external specification name or file name (e.g. `song.mid`, `bemuse-song.json`, `songs[]`).
+- **Music Select** is the screen name. The unit actually selected and restored on this screen is chart.
 
-### 譜面とリソース
+## General terms
 
-- **BMS**: Be-Music Source 系のテキスト譜面形式です。`#TITLE` や `#WAVxx`、`#mmmcc:...` のようなヘッダ/オブジェクト行で構成します。
-- **bmson**: JSON ベースの譜面形式です。`info`、`sound_channels`、`bga`、`lines` などの構造を持ちます。
-- **チャート (chart)**: 1 つの譜面ファイル、またはその再生単位です。選曲画面では 1 entry が 1 chart に対応します。
-- **曲 / 楽曲 (music)**: `TITLE` / `ARTIST` などで人間が認識する作品単位です。1 つの music に複数の chart が属することがあります。
-- **メタデータ (metadata)**: 曲名、アーティスト、ジャンル、コメント、`#STAGEFILE`、`#BANNER` など、譜面本体以外の付加情報です。
-- **リソース (resource)**: 音声、画像、動画など、譜面から参照される外部ファイルです。
-- **song**: このリポジトリの内部用語というより、外部仕様やファイル名に現れる語です。特に `song.mid` や `bemuse-song.json` のような upstream 名称をそのまま指すときに使います。
-- **keysound**: ノートや BGM の発音に使う音声リソースです。BMS では主に `#WAVxx`、bmson では `sound_channels` が対応します。
-- **preview**: 選曲画面で再生する短い試聴音です。`#PREVIEW` や bmson の `info.preview_music` を優先して使います。
-- **BGA**: gameplay 中に表示する背景画像/動画です。base、layer、poor などの cue を持ちます。
-- **POOR BGA**: `POOR` 判定時に表示する専用 BGA です。譜面側で定義されている場合だけ使います。
-- **STAGEFILE**: 選曲後の loading screen に表示する画像です。gameplay 中の BGA とは別用途です。
-- **BANNER**: 選曲画面の曲紹介ブロックに表示する横長画像です。BMS では `#BANNER`、bmson では `info.banner_image` を使います。
+### Music sheets and resources
 
-### 再生と判定
+- **BMS**: Be-Music Source text score format. It consists of header/object lines like `#TITLE`, `#WAVxx`, and `#mmmcc:...`.
+- **bmson**: JSON-based music score format. It has structures such as `info`, `sound_channels`, `bga`, and `lines`.
+- **Chart**: One score file or its playback unit. On the song selection screen, 1 entry corresponds to 1 chart.
+- **Song/Music**: A unit of work recognized by humans, such as `TITLE` / `ARTIST`. Multiple charts may belong to one music.
+- **Metadata**: Additional information other than the music itself, such as song title, artist, genre, comments, `#STAGEFILE`, `#BANNER`, etc.
+- **Resource**: External files such as audio, images, videos, etc. that are referenced from the score.
+- **song**: This is a word that appears in external specifications and file names rather than an internal term for this repository. It is especially used to refer to upstream names like `song.mid` or `bemuse-song.json`.
+- **keysound**: Audio resource used to pronounce notes and BGM. BMS mainly supports `#WAVxx`, and bmson supports `sound_channels`.
+- **preview**: A short preview sound played on the song selection screen. Preferably use `#PREVIEW` or bmson's `info.preview_music`.
+- **BGA**: Background image/video displayed during gameplay. It has cues such as base, layer, and poor.
+- **POOR BGA**: This is a dedicated BGA that is displayed during `POOR` judgment. Used only when defined on the music score side.
+- **STAGEFILE**: This is the image displayed on the loading screen after selecting a song. It has a different purpose from BGA during gameplay.
+- **BANNER**: A horizontal image displayed in the song introduction block on the song selection screen. BMS uses `#BANNER`, bmson uses `info.banner_image`.
 
-- **チャネル (channel)**: BMS/BMSON 上の譜面データを識別する単位です。BMS の `11`、`16`、`54` のような値や、bmson の `notes.x` が元になる source-level の識別子を指します。
-- **レーン (lane)**: player が実際に入力・描画・判定を行う単位です。source-level の channel を、演奏モードに応じて lane へ割り当てます。
-- **scratch**: スクラッチ用レーンです。SP では `16`、DP では `16` と `26` が対応します。
-- **FREE ZONE**: `17` / `27` を使う特殊ノートです。9KEY 以外では scratch レーンに重ねて描画し、通常の score/gauge 対象からは外します。
-- **小節 (measure)**: 譜面上の区切りです。BMS の `#mmmcc` の `mmm` や、IR の `measure` が対応します。
-- **beat**: 小節長を正規化した譜面上の時間単位です。player や `@be-music/chart` は beat を基準に時刻や表示位置を計算します。
-- **BPM**: 1 分あたりの拍数です。譜面の時間進行を決めます。
-- **STOP**: 一定時間だけ譜面時間を停止するイベントです。見た目と判定時刻の両方に影響します。
-- **SCROLL**: ノートの見た目の流れ方を変える係数です。判定時刻ではなく表示位置側へ影響します。
-- **SPEED**: ノートの視覚距離を補間付きで変える係数です。`SCROLL` と組み合わせて使います。
-- **ロングノート (long note / LN)**: 始点と終点を持つノートです。保持、離し、終点到達の扱いは `LNMODE` に依存します。
-- **LNOBJ**: BMS の `#LNOBJ` で宣言する long note 終端オブジェクトです。
-- **LNMODE**: BMS long note の判定確定ルールです。`1`、`2`、`3` で終点判定や hold break 時の扱いが変わります。
-- **地雷 (mine)**: 押すとダメージを受けるノートです。このリポジトリでは `BAD` 相当として扱います。
-- **判定 (judge)**: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` の結果です。score、combo、gauge へ影響します。
-- **FAST / SLOW**: 判定タイミングの早押し/遅押しの補助表示です。現行実装では `GREAT` と `GOOD` のみ集計し、`PERFECT` では増やしません。
-- **EX-SCORE**: IIDX 互換のスコアです。一般に `PERFECT=2`, `GREAT=1`, それ以外 `0` で集計します。
-- **SCORE**: 20 万点満点の通常スコアです。judge と note 数から計算します。
-- **groove gauge**: クリア判定に使うゲージです。現状は LR2 互換の `NORMAL` のみ実装しています。
-- **HIGH-SPEED**: ノートの落下表示を拡大・縮小するユーザー設定です。譜面の時刻自体は変えません。
-- **MANUAL / AUTO SCRATCH / AUTO**: player の演奏モードです。`MANUAL` は手動、`AUTO SCRATCH` は scratch だけ自動、`AUTO` は全自動です。
-- **Music Select**: 選曲画面の画面名です。譜面一覧、metadata、preview、banner、操作ヘルプを表示します。画面名は music ですが、選択単位は chart です。
-- **制御構文 (control flow)**: BMS の `#RANDOM`、`#IF`、`#SWITCH` などの分岐命令です。parser は保持し、player や audio-renderer が実行時に評価します。
+### Playback and judgment
 
-## 内部実装で使う用語
+- **Channel**: A unit for identifying musical score data on BMS/BMSON. It refers to values ​​such as `11`, `16`, and `54` in BMS, and source-level identifiers based on `notes.x` in BMSON.
+- **LANE**: A unit in which the player actually performs input, drawing, and judgment. Assign source-level channels to lanes according to the performance mode.
+- **scratch**: Scratch lane. `16` corresponds to SP, and `16` and `26` correspond to DP.
+- **FREE ZONE**: A special note that uses `17` / `27`. For anything other than 9KEY, it is drawn over the scratch lane and excluded from normal score/gauge targets.
+- **measure**: A division on the musical score. `mmm` of `#mmmcc` in BMS and `measure` in IR correspond.
+- **beat**: The time unit on the musical score that normalizes the bar length. player and `@be-music/chart` calculate the time and display position based on beat.
+- **BPM**: Beats per minute. Determines the time progression of the score.
+- **STOP**: This is an event that stops the music score time for a certain period of time. It affects both appearance and judgment time.
+- **SCROLL**: A coefficient that changes how the notes flow visually. This affects the display position, not the judgment time.
+- **SPEED**: A factor that changes the visual distance of notes with interpolation. Used in conjunction with `SCROLL`.
+- **Long note (LN)**: A note with a start and end point. The handling of holding, releasing, and reaching the end point depends on `LNMODE`.
+- **LNOBJ**: Long note terminal object declared with `#LNOBJ` in BMS.- **LNMODE**: BMS long note judgment rule. `1`, `2`, and `3` change the handling of end point judgment and hold break.
+- **Mine**: A note that takes damage when pressed. This repository treats it as equivalent to `BAD`.
+- **Judge**: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` result. Affects score, combo, and gauge.
+- **FAST/SLOW**: This is an auxiliary display for fast/slow press of the judgment timing. In the current implementation, only `GREAT` and `GOOD` are aggregated, and `PERFECT` is not incremented.
+- **EX-SCORE**: IIDX compatible score. Generally, `PERFECT=2`, `GREAT=1`, otherwise `0` is used for aggregation.
+- **SCORE**: Standard score out of 200,000 points. Calculated from the number of judges and notes.
+- **groove gauge**: Gauge used for clearing judgment. Currently, only `NORMAL` which is compatible with LR2 is implemented.
+- **HIGH-SPEED**: User setting to enlarge or reduce the display of falling notes. The time itself on the music score cannot be changed.
+- **MANUAL / AUTO SCRATCH / AUTO**: Player's performance mode. `MANUAL` is manual, `AUTO SCRATCH` is automatic only for scratches, and `AUTO` is fully automatic.
+- **Music Select**: Screen name of the music selection screen. Displays the score list, metadata, preview, banner, and operation help. The screen name is music, but the selection unit is chart.
+- **control flow**: BMS branch instructions such as `#RANDOM`, `#IF`, `#SWITCH`. The parser maintains it, and the player and audio-renderer evaluate it at runtime.
 
-### データモデル
+## Terms used in internal implementation
 
-- **IR (`@be-music/json`)**: このリポジトリ内で BMS/BMSON を共通表現として扱うための中間表現です。外部交換フォーマットではなく、内部処理専用です。
-- **pure IR**: `@be-music/json` が譜面意味論を持たず、正規化済みデータ構造と補助情報の保持に徹する、という設計方針です。
-- **sourceFormat**: その IR がもともと `bms`、`bmson`、`json` のどれから来たかを示す属性です。
-- **round-trip**: `parse -> IR -> stringify` の往復で、元の譜面構造をできるだけ崩さず再現することです。
-- **preservation**: round-trip のために source-level 情報を保持する補助層です。正規化済みの `events` / `measures` とは分けて管理します。
-- **sourceLines**: BMS の全行を宣言順で保持する preservation 情報です。header / object / 制御構文の相対位置を保った再出力に使います。
-- **objectLines**: 制御構文の外側にある object 行だけを保持する preservation 情報です。
-- **event**: 正規化後の譜面イベントです。`measure`、`channel`、`position`、`value` を持ちます。
-- **position**: IR のイベント位置です。`[numerator, denominator]` で小節内相対位置を表します。
-- **chart semantics (`@be-music/chart`)**: beat 解決、イベント順序、long note 解決、sample trigger 判定など、IR の上にある譜面意味論です。
-- **bms.controlFlow**: parser が保持する BMS 制御構文の配列です。パース時には分岐を確定せず、再生/レンダリング時に評価します。
+### Data model
 
-### 実行時と表示
+- **IR (__PH_0__)**: Intermediate representation for handling BMS/BMSON as a common representation within this repository. It is not an external exchange format and is for internal processing only.
+- **pure IR**: The design policy is that `@be-music/json` does not have music score semantics, but only maintains a normalized data structure and auxiliary information.
+- **sourceFormat**: An attribute indicating whether the IR originally came from `bms`, `bmson`, or `json`.
+- **round-trip**: Reproduce the original score structure as much as possible by going back and forth from `parse -> IR -> stringify`.
+- **preservation**: An auxiliary layer that preserves source-level information for round-trips. Manage it separately from normalized `events` / `measures`.
+- **sourceLines**: Preservation information that maintains all lines of BMS in declaration order. header / object / Used to re-output control syntax while maintaining its relative position.
+- **objectLines**: Preservation information that preserves only object lines outside the control construct.
+- **event**: Music score event after normalization. It has `measure`, `channel`, `position`, and `value`.
+- **position**: IR event position. `[numerator, denominator]` represents the relative position within the measure.
+- **chart semantics (__PH_0__)**: Musical score semantics on top of IR, such as beat resolution, event order, long note resolution, sample trigger determination, etc.
+- **bms.controlFlow**: An array of BMS control syntax maintained by the parser. Branches are not finalized during parsing and are evaluated during playback/rendering.
 
-- **candidate note**: 入力イベントが来たときに、そのレーンで「今判定対象として探しに行く未判定ノート」です。candidate が無ければ、その入力は何もしません。
-- **keysound fallback**: 判定対象ノートは無いが、対応レーンに補助発音がある場合に鳴らす fallback 音です。空打鍵でも追加の判定や gauge 変動は起こしません。
-- **stateSignals / uiSignals**: engine 本体から UI へ状態を渡す信号群です。judge、combo、フレーム、lane flash、hold 状態などを通知します。
-- **UI runtime**: gameplay 中の表示実装をまとめた層です。player 本体と TUI/CLI 表示の橋渡しをします。
-- **gameplay worker / UI worker**: Node 実装で重い処理を分離する worker です。UI 描画や BGA 処理は UI worker 側で扱います。
-- **ANSI rendering**: 画像や BGA を terminal の文字セルと色付き文字列へ落とし込んで表示する方式です。
-- **Kitty graphics protocol**: 対応端末で画像を overlay として直接表示する方式です。このリポジトリでは `player` で既定有効とし、`--no-kitty-graphics` で無効化できます。
-- **render throttle**: TUI 描画を target fps に抑える仕組みです。描画更新が来ても、最終 render は一定間隔以下に間引きます。
-- **settle delay**: 選曲 preview をすぐには始めず、カーソルが少し落ち着くまで待つ短い遅延です。連続移動時の引っかかりを減らします。
-- **focus key**: Music Select で最後に選んでいた項目を directory ごとに保存するための識別子です。通常 chart だけでなく `random` entry も含みます。
-- **content hash**: 楽曲一覧 cache で、元の chart 本文が同一かを判定するための hash 値です。現行実装では raw bytes の `SHA-256` を使います。
-- **cache hash**: 保存済み cache entry 自体の改竄や破損を検知するための hash 値です。`content hash` と persisted summary から再計算して検証します。
-- **Sound / Visual status**: loading screen で別々に表示する audio 側・graphics 側の進捗状態です。並列読み込み時に、どちらで待っているかを見分けるために使います。
-- **structured log**: `player` が NDJSON で出力する実行ログです。`stdout` / `stderr` の TUI 描画とは分離し、既定では `~/.be-music/logs/player.ndjson` を使います。
-- **video BGA streaming**: 動画 BGA の最初のフレームだけ先に確保して再生開始を許可し、残りフレームを gameplay 開始後に段階的にデコードする実装方針です。
-- **PlayerSummary**: 再生終了後に得られる集計結果です。judge counts、`FAST` / `SLOW`、`EX-SCORE`、`SCORE`、`gauge` などを含みます。
+### Runtime and display
 
-## 関連文書
+- **candidate note**: When an input event arrives, this is the "unjudged note that is currently being searched for as a judgment target" in that lane. If there is no candidate, the input does nothing.
+- **keysound fallback**: This is the fallback sound that is played when there is no note to be judged, but there is an auxiliary sound in the corresponding lane. Even if a key is pressed blankly, no additional judgments or gauge changes will occur.
+- **stateSignals/uiSignals**: A group of signals that pass the state from the engine main body to the UI. Notifies judge, combo, frame, lane flash, hold state, etc.
+- **UI runtime**: A layer that summarizes the display implementation during gameplay. Serves as a bridge between the player itself and TUI/CLI display.
+- **gameplay worker / UI worker**: A worker that separates heavy processing in Node implementation. UI drawing and BGA processing are handled on the UI worker side.
+- **ANSI rendering**: A method of displaying images and BGA by converting them into character cells and colored strings on the terminal.
+- **Kitty graphics protocol**: A method for directly displaying images as overlays on compatible devices. In this repository, it is enabled by default with `player` and can be disabled with `--no-kitty-graphics`.
+- **render throttle**: A mechanism to limit TUI drawing to target fps. Even if a rendering update comes, the final render will be thinned out to a certain interval or less.
+- **settle delay**: A short delay that does not start the song selection preview immediately, but waits until the cursor has settled down a bit. Reduces getting caught during continuous movement.- **focus key**: An identifier to save the last selected item in Music Select for each directory. Usually includes a `random` entry as well as a chart.
+- **content hash**: This is a hash value to determine whether the original chart body is the same in the song list cache. The current implementation uses `SHA-256` with raw bytes.
+- **cache hash**: This is a hash value to detect tampering or corruption of the saved cache entry itself. Recalculate and verify from `content hash` and persisted summary.
+- **Sound/Visual status**: The progress status of the audio and graphics sides are displayed separately on the loading screen. Used to determine which part is waiting during parallel loading.
+- **structured log**: Execution log output by `player` in NDJSON. It is separated from the TUI drawing of `stdout` / `stderr`, and uses `~/.be-music/logs/player.ndjson` by default.
+- **video BGA streaming**: The implementation policy is to reserve only the first frame of the video BGA to allow playback to start, and then decode the remaining frames in stages after the gameplay starts.
+- **PlayerSummary**: This is the summary result after playback ends. Including judge counts, `FAST` / `SLOW`, `EX-SCORE`, `SCORE`, `gauge`, etc.
 
-- [仕様書トップ](./README.md)
-- [BMS 実装仕様](./bms-spec.md)
-- [BMSON 実装仕様](./bmson-spec.md)
-- [Player 実装仕様](./player-spec.md)
-- [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./json-spec.md)
+## Related documents
+
+- [Specification top](./README.md)
+- [BMS implementation specification](./bms-spec.md)
+- [BMSON implementation specification](./bmson-spec.md)
+- [Player implementation specification](./player-spec.md)
+- [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./json-spec.md)

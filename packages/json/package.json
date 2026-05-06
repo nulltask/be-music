@@ -1,7 +1,8 @@
 {
   "name": "@be-music/json",
-  "version": "0.1.0",
-  "description": "Internal Be-Music intermediate representation (not an exchange/distribution format)",
+  "version": "0.2.0",
+  "description": "Internal BMS/BMSON intermediate representation for be-music",
+  "license": "MIT",
   "files": [
     "dist"
   ],

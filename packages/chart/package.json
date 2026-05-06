@@ -1,7 +1,8 @@
 {
   "name": "@be-music/chart",
-  "version": "0.1.0",
-  "description": "Chart semantics and playback helpers for Be-Music IR",
+  "version": "0.2.0",
+  "description": "Chart semantics helpers for the be-music intermediate representation",
+  "license": "MIT",
   "files": [
     "dist"
   ],

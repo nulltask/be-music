@@ -1,15 +1,6 @@
-import {
-  createBeatResolver,
-  resolveBmsLongNotes,
-  resolveLnobjLongNotes,
-  sortEvents,
-} from '@be-music/chart';
-import {
-  type BeMusicEvent,
-  type BeMusicJson,
-  normalizeChannel,
-} from '@be-music/json';
-import { createTimingResolver } from '@be-music/audio-renderer';
+import { createBeatResolver, resolveBmsLongNotes, resolveLnobjLongNotes, sortEvents } from '@be-music/chart';
+import { type BeMusicEvent, type BeMusicJson, normalizeChannel } from '@be-music/json';
+import { createTimingResolver } from '@be-music/audio-renderer/triggers';
 const FREE_ZONE_BEAT_LENGTH = 1;
 const DEFAULT_BMS_LONG_NOTE_MODE = 1;
 const DEFAULT_OTHER_LONG_NOTE_MODE = 2;
@@ -67,10 +58,7 @@ interface TimedEventChannels {
   invisible?: string;
 }
 
-export function extractTimedNotes(
-  json: BeMusicJson,
-  options: ExtractTimedNotesOptions = {},
-): ExtractTimedNotesResult {
+export function extractTimedNotes(json: BeMusicJson, options: ExtractTimedNotesOptions = {}): ExtractTimedNotesResult {
   const context = createTimedExtractionContext(json);
   const { playableNotes, landmineNotes, invisibleNotes } = collectTimedNotes(context, {
     includePlayable: true,
@@ -310,7 +298,8 @@ function appendLegacyLongNotesIfNeeded(
     return;
   }
   for (const longNote of resolved.notes) {
-    const endBeat = typeof longNote.endBeat === 'number' && longNote.endBeat > longNote.beat ? longNote.endBeat : undefined;
+    const endBeat =
+      typeof longNote.endBeat === 'number' && longNote.endBeat > longNote.beat ? longNote.endBeat : undefined;
     notes.push({
       event: longNote.event,
       channel: longNote.channel,

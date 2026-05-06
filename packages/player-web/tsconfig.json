@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.build.options.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "emitDeclarationOnly": true
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"],
+  "references": [
+    { "path": "../audio-renderer" },
+    { "path": "../chart" },
+    { "path": "../json" },
+    { "path": "../lr2-skin" },
+    { "path": "../parser" },
+    { "path": "../player" },
+    { "path": "../utils" }
+  ]
+}

@@ -9,6 +9,7 @@ import { parseBms, parseBmson } from '@be-music/parser';
 import {
   normalizeChannel,
   normalizeObjectKey,
+  resolveBmsBase,
   type BmsObjectLineEntry,
   type BmsSourceLineEntry,
   type BmsonBpmEventEntry,
@@ -24,7 +25,7 @@ import {
   normalizeNonNegativeInt,
   normalizePositiveInt,
   normalizeSortedUniqueNonNegativeIntegers,
-} from '@be-music/utils';
+} from '@be-music/utils/core';
 export interface BmsStringifyOptions {
   eol?: '\n' | '\r\n';
   maxResolution?: number;
@@ -64,7 +65,8 @@ export function stringifyBms(json: BeMusicJson, options: BmsStringifyOptions = {
 export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions = {}): string {
   const resolution = resolveBmsonResolutionForOutput(json, options);
   const indent = options.indent ?? 2;
-  const preservedDocument = options.resolution === undefined ? resolvePreservedBmsonDocumentForOutput(json, resolution) : undefined;
+  const preservedDocument =
+    options.resolution === undefined ? resolvePreservedBmsonDocumentForOutput(json, resolution) : undefined;
   if (preservedDocument) {
     return `${JSON.stringify(preservedDocument, null, indent)}\n`;
   }
@@ -90,6 +92,9 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   >();
   const bpmEvents: Array<{ y: number; bpm: number }> = [];
   const stopEvents: Array<{ y: number; duration: number }> = [];
+  // Honor `#BASE 62` so a chart whose `event.value` is a case-sensitive lowercase ID resolves to the right sample /
+  // BPM / STOP slot when re-emitted as bmson.
+  const idBase = resolveBmsBase(json);
 
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
@@ -100,7 +105,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
 
     const y = Math.round(beatResolver.eventToBeat(event) * resolution);
     if (isSampleChannel) {
-      const key = normalizeObjectKey(event.value);
+      const key = normalizeObjectKey(event.value, idBase);
       const fileName = json.resources.wav[key] ?? key;
       const x = channel === '01' ? 0 : (xMap.get(channel) ?? 0);
       const length =
@@ -122,14 +127,14 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
       continue;
     }
     if (channel === '08') {
-      const bpm = json.resources.bpm[normalizeObjectKey(event.value)];
+      const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase)];
       if (typeof bpm === 'number' && bpm > 0) {
         bpmEvents.push({ y, bpm });
       }
       continue;
     }
     if (channel === '09') {
-      const duration = json.resources.stop[normalizeObjectKey(event.value)];
+      const duration = json.resources.stop[normalizeObjectKey(event.value, idBase)];
       if (typeof duration === 'number' && duration > 0) {
         stopEvents.push({ y, duration });
       }
@@ -173,7 +178,10 @@ function renderPreservedBmsSourceLines(sourceLines: BmsSourceLineEntry[]): strin
       continue;
     }
     if (entry.kind === 'header') {
-      lines.push(entry.value.length > 0 ? `#${entry.command} ${entry.value}` : `#${entry.command}`);
+      // Use the case-preserved `commandRaw` when present so e.g. `#WAV0a` survives the round-trip on a `#BASE 62`
+      // chart.
+      const commandText = entry.commandRaw ?? entry.command;
+      lines.push(entry.value.length > 0 ? `#${commandText} ${entry.value}` : `#${commandText}`);
       continue;
     }
     if (typeof entry.measureLength === 'number' && entry.measureLength > 0) {
@@ -338,6 +346,13 @@ function pushMetadataLines(lines: string[], json: BeMusicJson): void {
 }
 
 function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
+  const base = resolveJsonBase(json);
+  // `#BASE 62` opts the whole chart into the beatoraja base-62 ID extension, which affects every subsequent
+  // indexed-header / channel-stream token's case-sensitivity. Emit it FIRST so it takes effect before any `#WAVxx` /
+  // `#BMPxx` etc. lines below.
+  if (base === 62) {
+    lines.push('#BASE 62');
+  }
   if (typeof json.bms.preview === 'string' && json.bms.preview.length > 0) {
     lines.push(`#PREVIEW ${json.bms.preview}`);
   }
@@ -360,13 +375,7 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
   if (typeof json.bms.option === 'string' && json.bms.option.length > 0) {
     lines.push(`#OPTION ${json.bms.option}`);
   }
-  for (const [key, value] of Object.entries(json.bms.changeOption ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (value.length > 0) {
-      lines.push(`#CHANGEOPTION${normalizeObjectKey(key)} ${value}`);
-    }
-  }
+  pushIndexedStringLines(lines, 'CHANGEOPTION', json.bms.changeOption, base);
 
   if (typeof json.bms.wavCmd === 'string' && json.bms.wavCmd.length > 0) {
     lines.push(`#WAVCMD ${json.bms.wavCmd}`);
@@ -381,7 +390,7 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
   if ((json.bms.lnObjs?.length ?? 0) > 0) {
     for (const lnObj of json.bms.lnObjs ?? []) {
       if (typeof lnObj === 'string' && lnObj.length > 0) {
-        lines.push(`#LNOBJ ${normalizeObjectKey(lnObj)}`);
+        lines.push(`#LNOBJ ${normalizeObjectKey(lnObj, base)}`);
       }
     }
   }
@@ -392,62 +401,17 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
     lines.push(`#DEFEXRANK ${formatNumber(json.bms.defExRank)}`);
   }
 
-  for (const [key, value] of Object.entries(json.bms.exRank ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (value.length > 0) {
-      lines.push(`#EXRANK${normalizeObjectKey(key)} ${value}`);
-    }
-  }
-  for (const [key, value] of Object.entries(json.bms.argb ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
-    if (value.length > 0) {
-      lines.push(`#ARGB${normalizeObjectKey(key)} ${value}`);
-    }
-  }
-
-  for (const [key, value] of Object.entries(json.bms.exWav ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (value.length > 0) {
-      lines.push(`#EXWAV${normalizeObjectKey(key)} ${value}`);
-    }
-  }
-  for (const [key, value] of Object.entries(json.bms.exBmp ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (value.length > 0) {
-      lines.push(`#EXBMP${normalizeObjectKey(key)} ${value}`);
-    }
-  }
-  for (const [key, value] of Object.entries(json.bms.bga ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
-    if (value.length > 0) {
-      lines.push(`#BGA${normalizeObjectKey(key)} ${value}`);
-    }
-  }
-  for (const [key, value] of Object.entries(json.bms.scroll ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (Number.isFinite(value)) {
-      lines.push(`#SCROLL${normalizeObjectKey(key)} ${formatNumber(value)}`);
-    }
-  }
-  for (const [key, value] of Object.entries(json.bms.speed ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (Number.isFinite(value)) {
-      lines.push(`#SPEED${normalizeObjectKey(key)} ${formatNumber(value)}`);
-    }
-  }
+  pushIndexedStringLines(lines, 'EXRANK', json.bms.exRank, base);
+  pushIndexedStringLines(lines, 'ARGB', json.bms.argb, base);
+  pushIndexedStringLines(lines, 'EXWAV', json.bms.exWav, base);
+  pushIndexedStringLines(lines, 'EXBMP', json.bms.exBmp, base);
+  pushIndexedStringLines(lines, 'BGA', json.bms.bga, base);
+  pushIndexedNumberLines(lines, 'SCROLL', json.bms.scroll, base);
+  pushIndexedNumberLines(lines, 'SPEED', json.bms.speed, base);
   if (typeof json.bms.poorBga === 'string' && json.bms.poorBga.length > 0) {
     lines.push(`#POORBGA ${json.bms.poorBga}`);
   }
-  for (const [key, value] of Object.entries(json.bms.swBga ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    if (value.length > 0) {
-      lines.push(`#SWBGA${normalizeObjectKey(key)} ${value}`);
-    }
-  }
+  pushIndexedStringLines(lines, 'SWBGA', json.bms.swBga, base);
 
   if (typeof json.bms.videoFile === 'string' && json.bms.videoFile.length > 0) {
     lines.push(`#VIDEOFILE ${json.bms.videoFile}`);
@@ -467,26 +431,43 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
 }
 
 function pushResourceLines(lines: string[], json: BeMusicJson): void {
-  pushObjectResourceLines(lines, 'WAV', json.resources.wav);
-  pushObjectResourceLines(lines, 'BMP', json.resources.bmp);
-
-  const bpmEntries = Object.entries(json.resources.bpm).sort(([left], [right]) => left.localeCompare(right));
-  for (const [key, value] of bpmEntries) {
-    lines.push(`#BPM${normalizeObjectKey(key)} ${formatNumber(value)}`);
-  }
-
-  const stopEntries = Object.entries(json.resources.stop).sort(([left], [right]) => left.localeCompare(right));
-  for (const [key, value] of stopEntries) {
-    lines.push(`#STOP${normalizeObjectKey(key)} ${formatNumber(value)}`);
-  }
-
-  pushObjectResourceLines(lines, 'TEXT', json.resources.text);
+  const base = resolveJsonBase(json);
+  pushIndexedStringLines(lines, 'WAV', json.resources.wav, base);
+  pushIndexedStringLines(lines, 'BMP', json.resources.bmp, base);
+  pushIndexedNumberLines(lines, 'BPM', json.resources.bpm, base);
+  pushIndexedNumberLines(lines, 'STOP', json.resources.stop, base);
+  pushIndexedStringLines(lines, 'TEXT', json.resources.text, base);
 }
 
-function pushObjectResourceLines(lines: string[], command: string, values: Record<string, string>): void {
-  const entries = Object.entries(values).sort(([left], [right]) => left.localeCompare(right));
+function resolveJsonBase(json: BeMusicJson): 36 | 62 {
+  return json.bms.base === 62 ? 62 : 36;
+}
+
+function pushIndexedStringLines(
+  lines: string[],
+  command: string,
+  values: Record<string, string> | undefined,
+  base: 36 | 62 = 36,
+): void {
+  const entries = Object.entries(values ?? {}).sort(([left], [right]) => left.localeCompare(right));
   for (const [key, value] of entries) {
-    lines.push(`#${command}${normalizeObjectKey(key)} ${value}`);
+    if (value.length > 0) {
+      lines.push(`#${command}${normalizeObjectKey(key, base)} ${value}`);
+    }
+  }
+}
+
+function pushIndexedNumberLines(
+  lines: string[],
+  command: string,
+  values: Record<string, number> | undefined,
+  base: 36 | 62 = 36,
+): void {
+  const entries = Object.entries(values ?? {}).sort(([left], [right]) => left.localeCompare(right));
+  for (const [key, value] of entries) {
+    if (Number.isFinite(value)) {
+      lines.push(`#${command}${normalizeObjectKey(key, base)} ${formatNumber(value)}`);
+    }
   }
 }
 
@@ -517,7 +498,12 @@ function pushEventLines(
 ): void {
   if (preservedObjectLines) {
     for (const objectLine of preservedObjectLines) {
-      const serialized = serializeBmsObjectLineEvents(objectLine.measure, objectLine.channel, objectLine.events);
+      const serialized = serializeBmsObjectLineEvents(
+        objectLine.measure,
+        objectLine.channel,
+        objectLine.events,
+        resolveJsonBase(json),
+      );
       if (serialized) {
         lines.push(serialized);
       }
@@ -525,7 +511,8 @@ function pushEventLines(
     return;
   }
 
-  const grouped = groupEvents(sortEvents(json.events));
+  const base = resolveJsonBase(json);
+  const grouped = groupEvents(sortEvents(json.events), base);
   for (const group of grouped) {
     const { measure, channel, events } = group;
     const resolution = chooseResolution(events, maxResolution);
@@ -535,7 +522,7 @@ function pushEventLines(
       const { numerator, denominator } = resolveEventFraction(event);
       const scaled = Math.round((numerator * resolution) / denominator);
       const index = Math.min(resolution - 1, Math.max(0, scaled));
-      cells[index] = normalizeObjectKey(event.value);
+      cells[index] = normalizeObjectKey(event.value, base);
     }
 
     lines.push(`#${toMeasure(measure)}${channel}:${cells.join('')}`);
@@ -553,20 +540,24 @@ function resolvePreservedObjectLinesForOutput(json: BeMusicJson): BmsObjectLineE
 function doPreservedObjectLinesMatchChart(json: BeMusicJson, objectLines: BmsObjectLineEntry[]): boolean {
   const flattenedEvents: BeMusicEvent[] = [];
   const preservedMeasureLengths = new Map<number, number>();
+  // Compare values under the chart's authored radix so a base-62 chart's lowercase IDs aren't folded to uppercase
+  // before the event comparison below — that would falsely trigger a mismatch and force the stringifier to regenerate
+  // object lines even when the preserved entries are still consistent.
+  const idBase = resolveBmsBase(json);
 
   for (const objectLine of objectLines) {
     if (typeof objectLine.measureLength === 'number' && objectLine.measureLength > 0) {
       preservedMeasureLengths.set(Math.max(0, Math.floor(objectLine.measure)), objectLine.measureLength);
     }
     for (const event of objectLine.events) {
-      if (normalizeObjectKey(event.value) === '00') {
+      if (normalizeObjectKey(event.value, idBase) === '00') {
         continue;
       }
       flattenedEvents.push({
         measure: Math.max(0, Math.floor(objectLine.measure)),
         channel: normalizeChannel(objectLine.channel),
         position: event.position,
-        value: normalizeObjectKey(event.value),
+        value: normalizeObjectKey(event.value, idBase),
         ...(event.bmson ? { bmson: event.bmson } : {}),
       });
     }
@@ -662,7 +653,10 @@ function areMeasuresEqual(left: BeMusicJson['measures'], right: BeMusicJson['mea
     return false;
   }
   for (let index = 0; index < sortedLeft.length; index += 1) {
-    if (sortedLeft[index]!.index !== sortedRight[index]!.index || sortedLeft[index]!.length !== sortedRight[index]!.length) {
+    if (
+      sortedLeft[index]!.index !== sortedRight[index]!.index ||
+      sortedLeft[index]!.length !== sortedRight[index]!.length
+    ) {
       return false;
     }
   }
@@ -721,9 +715,7 @@ function areBmsExtensionsEqual(left: BeMusicJson['bms'], right: BeMusicJson['bms
 
 function areBmsonExtensionsEqual(left: BeMusicJson['bmson'], right: BeMusicJson['bmson']): boolean {
   return (
-    left.version === right.version &&
-    areBmsonInfoEqual(left.info, right.info) &&
-    areBmsonBgaEqual(left.bga, right.bga)
+    left.version === right.version && areBmsonInfoEqual(left.info, right.info) && areBmsonBgaEqual(left.bga, right.bga)
   );
 }
 
@@ -731,7 +723,10 @@ function areBmsPreservationEqual(
   left: BeMusicJson['preservation']['bms'],
   right: BeMusicJson['preservation']['bms'],
 ): boolean {
-  return areControlFlowEntriesEqual(left.sourceLines, right.sourceLines) && areBmsObjectLinesEqual(left.objectLines, right.objectLines);
+  return (
+    areControlFlowEntriesEqual(left.sourceLines, right.sourceLines) &&
+    areBmsObjectLinesEqual(left.objectLines, right.objectLines)
+  );
 }
 
 function areBmsonPreservationEqual(
@@ -925,10 +920,7 @@ function areStringMapsEqual(left: Record<string, string>, right: Record<string, 
     return false;
   }
   for (let index = 0; index < leftEntries.length; index += 1) {
-    if (
-      leftEntries[index]![0] !== rightEntries[index]![0] ||
-      leftEntries[index]![1] !== rightEntries[index]![1]
-    ) {
+    if (leftEntries[index]![0] !== rightEntries[index]![0] || leftEntries[index]![1] !== rightEntries[index]![1]) {
       return false;
     }
   }
@@ -942,10 +934,7 @@ function areNumberMapsEqual(left: Record<string, number>, right: Record<string, 
     return false;
   }
   for (let index = 0; index < leftEntries.length; index += 1) {
-    if (
-      leftEntries[index]![0] !== rightEntries[index]![0] ||
-      leftEntries[index]![1] !== rightEntries[index]![1]
-    ) {
+    if (leftEntries[index]![0] !== rightEntries[index]![0] || leftEntries[index]![1] !== rightEntries[index]![1]) {
       return false;
     }
   }
@@ -1008,20 +997,24 @@ function mapBmsonSoundChannelForOutput(channel: BmsonSoundChannelEntry): {
 }
 
 function pushControlFlowLines(lines: string[], json: BeMusicJson): void {
+  const base = resolveJsonBase(json);
   for (const entry of json.bms.controlFlow) {
     if (entry.kind === 'directive') {
       lines.push(entry.value ? `#${entry.command} ${entry.value}` : `#${entry.command}`);
       continue;
     }
     if (entry.kind === 'header') {
-      lines.push(entry.value.length > 0 ? `#${entry.command} ${entry.value}` : `#${entry.command}`);
+      // Use the case-preserved `commandRaw` when present so e.g. `#WAV0a` survives the round-trip on a `#BASE 62`
+      // chart.
+      const commandText = entry.commandRaw ?? entry.command;
+      lines.push(entry.value.length > 0 ? `#${commandText} ${entry.value}` : `#${commandText}`);
       continue;
     }
     if (typeof entry.measureLength === 'number' && entry.measureLength > 0) {
       lines.push(`#${toMeasure(entry.measure)}${normalizeChannel(entry.channel)}:${formatNumber(entry.measureLength)}`);
       continue;
     }
-    const serialized = serializeControlFlowObjectEvents(entry.measure, entry.channel, entry.events);
+    const serialized = serializeControlFlowObjectEvents(entry.measure, entry.channel, entry.events, base);
     if (serialized) {
       lines.push(serialized);
     }
@@ -1036,18 +1029,28 @@ function pushBmsSectionComment(lines: string[], section: string): void {
   lines.push('');
 }
 
-function serializeControlFlowObjectEvents(measure: number, channel: string, events: BeMusicEvent[]): string | undefined {
-  return serializeBmsObjectLineEvents(measure, channel, events);
+function serializeControlFlowObjectEvents(
+  measure: number,
+  channel: string,
+  events: BeMusicEvent[],
+  base: 36 | 62 = 36,
+): string | undefined {
+  return serializeBmsObjectLineEvents(measure, channel, events, base);
 }
 
-function serializeBmsObjectLineEvents(measure: number, channel: string, events: BeMusicEvent[]): string | undefined {
+function serializeBmsObjectLineEvents(
+  measure: number,
+  channel: string,
+  events: BeMusicEvent[],
+  base: 36 | 62 = 36,
+): string | undefined {
   const normalizedChannel = normalizeChannel(channel);
   const lineEvents: BeMusicEvent[] = [];
   for (const event of sortEvents(events)) {
     if (event.measure !== measure || normalizeChannel(event.channel) !== normalizedChannel) {
       continue;
     }
-    const value = normalizeObjectKey(event.value);
+    const value = normalizeObjectKey(event.value, base);
     if (value === '00') {
       continue;
     }
@@ -1069,7 +1072,7 @@ function serializeBmsObjectLineEvents(measure: number, channel: string, events: 
     const { numerator, denominator } = resolveEventFraction(event);
     const scaled = Math.round((numerator * resolution) / denominator);
     const index = Math.min(resolution - 1, Math.max(0, scaled));
-    cells[index] = normalizeObjectKey(event.value);
+    cells[index] = normalizeObjectKey(event.value, base);
   }
 
   return `#${toMeasure(measure)}${normalizedChannel}:${cells.join('')}`;
@@ -1081,7 +1084,7 @@ interface GroupedEventLine {
   events: BeMusicEvent[];
 }
 
-function groupEvents(events: BeMusicEvent[]): GroupedEventLine[] {
+function groupEvents(events: BeMusicEvent[], base: 36 | 62 = 36): GroupedEventLine[] {
   const groupedByMeasure = new Map<number, Map<string, BeMusicEvent[]>>();
   for (const event of events) {
     const measure = Math.max(0, Math.floor(event.measure));
@@ -1096,7 +1099,7 @@ function groupEvents(events: BeMusicEvent[]): GroupedEventLine[] {
       measure,
       channel,
       position: [numerator, denominator],
-      value: normalizeObjectKey(event.value),
+      value: normalizeObjectKey(event.value, base),
     });
     groupedByChannel.set(channel, slot);
   }
@@ -1280,11 +1283,11 @@ function resolveBmsonCompatiblePlayLevel(value: BeMusicJson['metadata']['playLev
 
 function createBmsonBgaForOutput(json: BeMusicJson):
   | {
-    bga_header: Array<{ id: number; name: string }>;
-    bga_events: Array<{ y: number; id: number }>;
-    layer_events: Array<{ y: number; id: number }>;
-    poor_events: Array<{ y: number; id: number }>;
-  }
+      bga_header: Array<{ id: number; name: string }>;
+      bga_events: Array<{ y: number; id: number }>;
+      layer_events: Array<{ y: number; id: number }>;
+      poor_events: Array<{ y: number; id: number }>;
+    }
   | undefined {
   const header: Array<{ id: number; name: string }> = [];
   for (const entry of json.bmson.bga.header ?? []) {
@@ -1369,7 +1372,9 @@ function mapBmsonLineValues(lines: ReadonlyArray<number>): Array<{ y: number }> 
   return mapped;
 }
 
-function normalizeBmsonBgaEventEntries(entries: ReadonlyArray<{ y: number; id: number }>): Array<{ y: number; id: number }> {
+function normalizeBmsonBgaEventEntries(
+  entries: ReadonlyArray<{ y: number; id: number }>,
+): Array<{ y: number; id: number }> {
   const normalized: Array<{ y: number; id: number }> = [];
   for (const entry of entries) {
     normalized.push({

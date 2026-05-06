@@ -1,4 +1,4 @@
-import { resolveCliPath } from '@be-music/utils';
+import { resolveCliPath } from '@be-music/utils/cli-path';
 import {
   addNote,
   createBlankJson,
