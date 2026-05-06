@@ -1,7 +1,17 @@
-import { access } from 'node:fs/promises';
-import { resolve, sep } from 'node:path';
 import { isAbortError, throwIfAborted } from './abort.ts';
 import { isMaliciousAssetPath } from './core.ts';
+
+// `node:fs/promises` and `node:path` are loaded lazily inside `resolveFirstExistingPath` / `pathExists` so this
+// module can be re-exported from `@be-music/utils` (the package root) without dragging the Node built-ins into a
+// browser bundle. Vite externalises `node:`-prefixed imports for browser targets, but only emits a runtime error
+// if the externalised symbol is actually accessed; keeping these lazy confines that to the Node-specific call
+// paths the browser never exercises.
+type NodeFsPromises = typeof import('node:fs/promises');
+type NodePath = typeof import('node:path');
+let nodeFsPromisesPromise: Promise<NodeFsPromises> | undefined;
+let nodePathPromise: Promise<NodePath> | undefined;
+const loadNodeFsPromises = (): Promise<NodeFsPromises> => (nodeFsPromisesPromise ??= import('node:fs/promises'));
+const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
 
 /**
  * Resolves the first existing path among `candidates`, interpreted relative to `baseDir`. Each candidate is vetted
@@ -21,6 +31,7 @@ export async function resolveFirstExistingPath(
   candidates: Iterable<string>,
   signal?: AbortSignal,
 ): Promise<string | undefined> {
+  const { resolve, sep } = await loadNodePath();
   const baseAbsolute = resolve(baseDir);
   // Trailing-separator normalized form lets the containment check work regardless of whether `baseDir` was passed with
   // or without a slash — `/foo` vs `/foo/` both produce `/foo/` for the prefix comparison.
@@ -47,6 +58,7 @@ export async function resolveFirstExistingPath(
 async function pathExists(path: string, signal?: AbortSignal): Promise<boolean> {
   try {
     throwIfAborted(signal);
+    const { access } = await loadNodeFsPromises();
     await access(path);
     throwIfAborted(signal);
     return true;

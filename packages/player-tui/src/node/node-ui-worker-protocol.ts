@@ -1,5 +1,5 @@
 import type { MessagePort } from 'node:worker_threads';
-import type { LogEntry } from '@be-music/utils';
+import type { LogEntry } from '@be-music/utils/log';
 import type { BeMusicJson } from '@be-music/json';
 import type { PlayerUiCommand } from '@be-music/player/core/ui-signal-bus';
 import type { LaneBinding } from '../manual-input.ts';

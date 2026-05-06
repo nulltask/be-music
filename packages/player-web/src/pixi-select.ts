@@ -15,16 +15,17 @@ import type {
   Lr2NumberElement,
   Lr2OnMouseElement,
   Lr2Skin,
-  Lr2SliderElement,
   Lr2SpecialGraphic,
   Lr2TextElement,
 } from '@be-music/lr2-skin';
-import { isLr2SpecialGraphic } from '@be-music/lr2-skin';
 import {
   applyDestinationToSprite,
   containerSpriteSink,
   createCroppedTexture,
+  evaluateElementDestination,
   evaluateKeyframes,
+  makeLr2SliderSprite,
+  makeLr2StaticImageSprite,
   normalizeRect,
   pickAnimatedCell,
   renderNumberElement,
@@ -77,6 +78,16 @@ const READTEXT_LINE_SCROLL = 36;
  * re-find their place after the jump.
  */
 const READTEXT_PAGE_SCROLL = 360;
+
+/**
+ * Minimum interval between two wheel-driven cursor moves in the bar list. Modern trackpads / high-resolution mice fire
+ * `wheel` events at ~60+ Hz with tiny per-event `deltaY`s, so an unthrottled handler advances the cursor a dozen+ slots
+ * per flick — far past the entry the user was aiming for, with the `cursor-move` SFX chattering on every notch and the
+ * smooth-scroll offset re-seeded before the previous slide finishes. 15 ms ≈ twice the rate of macOS's fastest key-
+ * repeat setting (~30 ms / repeat at the slider's max), so a sustained scroll feels noticeably snappier than holding
+ * an arrow key while still resolving a deliberate trackpad flick to a bounded number of steps instead of a dozen+.
+ */
+const WHEEL_THROTTLE_INTERVAL_MS = 15;
 
 /**
  * Serializable cursor / browse state. Used to round-trip the select view across `dispose()` / new-instance cycles (e.g.
@@ -703,6 +714,12 @@ export class PixiSongSelectView {
    */
   private lastScrollUpdate = 0;
   /**
+   * `performance.now()` of the most recent wheel-driven cursor move. Used by {@link handleWheel} to throttle high-rate
+   * trackpad / hi-res-mouse input to one cursor step per {@link WHEEL_THROTTLE_INTERVAL_MS} so a fast flick doesn't
+   * fly past the user's target. `-Infinity` lets the very first wheel tick after mount fire immediately.
+   */
+  private lastWheelMoveAt = Number.NEGATIVE_INFINITY;
+  /**
    * Last known pointer position in **design-space** coordinates, used by `#SRC_ONMOUSE` hit-tests and
    * `#SRC_MOUSECURSOR` follow. `-1` means "no pointer over canvas yet"; both renderers skip drawing in that case.
    */
@@ -1096,6 +1113,9 @@ export class PixiSongSelectView {
     // NaN or instantly zero out a fresh offset (depending on Math.exp's behavior).
     this.listScrollOffset = 0;
     this.lastScrollUpdate = 0;
+    // Reset the wheel throttle so the first wheel tick after a re-mount fires immediately rather than being eaten by
+    // a stale `lastWheelMoveAt` from before the play round-trip.
+    this.lastWheelMoveAt = Number.NEGATIVE_INFINITY;
   }
 
   /**
@@ -2221,6 +2241,13 @@ export class PixiSongSelectView {
     }
     const entries = this.currentEntries();
     if (entries.length === 0) return;
+    // Throttle high-rate wheel input. Modern trackpads emit a continuous stream of small `deltaY`s during a single
+    // flick — without this gate one flick advances the cursor 10+ slots, the smooth-scroll keeps re-seeding before
+    // the previous slide finishes, and `cursor-move` chatters on every notch. The floor is intentionally gentle:
+    // sustained scrolling still progresses ~11 entries / second, but discrete flicks resolve to roughly one step.
+    const now = performance.now();
+    if (now - this.lastWheelMoveAt < WHEEL_THROTTLE_INTERVAL_MS) return;
+    this.lastWheelMoveAt = now;
     const direction = event.deltaY > 0 ? 1 : -1;
     this.selectedIndex = (this.selectedIndex + direction + entries.length) % entries.length;
     // Use the wheel direction directly rather than the wrapped (new - old) delta. With a tiny list (e.g. 2 entries),
@@ -2974,11 +3001,7 @@ export class PixiSongSelectView {
     destination: Lr2DestinationRect;
     keyframes: Lr2DestinationRect[];
   }): Lr2DestinationRect {
-    if (element.keyframes.length > 1) {
-      const elapsed = this.elapsedSinceTimer(element.destination.timer);
-      return evaluateKeyframes(element.keyframes, elapsed);
-    }
-    return element.destination;
+    return evaluateElementDestination(element, this.elapsedSinceTimer);
   }
 
   /**
@@ -3205,7 +3228,7 @@ export class PixiSongSelectView {
         order: slider.declarationOrder,
         layer,
         paint: () => {
-          const sprite = this.makeSliderSprite(slider, dst, value);
+          const sprite = makeLr2SliderSprite(slider, dst, value, this.skinTextures.asReadonlyMap());
           if (sprite) layer.addChild(sprite);
         },
       });
@@ -3273,53 +3296,6 @@ export class PixiSongSelectView {
       return Math.max(0, Math.min(1, this.playOptions.shutter));
     }
     return undefined;
-  }
-
-  /**
-   * Builds a `Sprite` for an LR2 `#SRC_SLIDER` element placed at a position along its DST track determined by `value`
-   * (0..1) and the source's `muki` direction. Mirrors `pixi-result.ts::makeSliderSprite` — keeping the two
-   * implementations in lockstep avoids subtle slider-position drift between the two scenes.
-   *
-   * Drag interaction (clicking the knob to scroll the list) is NOT wired here; the bar is read-only on the select view
-   * for now. Adding drag support would mean intercepting pointer events on the slider's hit rect and translating drag
-   * delta back into a `selectedIndex` jump.
-   */
-  private makeSliderSprite(element: Lr2SliderElement, dst: Lr2DestinationRect, value: number): Sprite | undefined {
-    const texture = this.skinTextures.get(element.source.imagePath);
-    if (!texture) return undefined;
-    const rect = normalizeRect(dst);
-    if (rect.w <= 0 || rect.h <= 0) return undefined;
-    const ratio = Math.max(0, Math.min(1, value));
-    const cropped = createCroppedTexture(texture, {
-      x: element.source.x,
-      y: element.source.y,
-      w: element.source.w / Math.max(1, element.source.divx),
-      h: element.source.h / Math.max(1, element.source.divy),
-    });
-    if (!cropped) return undefined;
-    const sprite = new Sprite(cropped);
-    sprite.label = `slider[type=${element.type}]`;
-    let x = rect.x;
-    let y = rect.y;
-    switch (element.muki) {
-      case 'down':
-        y = rect.y + element.range * ratio;
-        break;
-      case 'up':
-        y = rect.y - element.range * ratio;
-        break;
-      case 'right':
-        x = rect.x + element.range * ratio;
-        break;
-      case 'left':
-        x = rect.x - element.range * ratio;
-        break;
-    }
-    sprite.position.set(x, y);
-    sprite.width = rect.w;
-    sprite.height = rect.h;
-    applyDestinationToSprite(sprite, dst);
-    return sprite;
   }
 
   /**
@@ -3582,49 +3558,12 @@ export class PixiSongSelectView {
     );
   }
 
-  private makeStaticImageSprite(image: Lr2ImageElement): Sprite | undefined {
-    const path = image.source.imagePath;
-    let texture = this.skinTextures.get(path);
-    if (!texture && isLr2SpecialGraphic(path)) {
-      texture = this.resolveSpecialGraphicTexture(path);
-    }
-    if (!texture) {
-      return undefined;
-    }
-    const dst = this.evaluateElementDst(image);
-    const rect = normalizeRect(dst);
-    if (rect.w <= 0 || rect.h <= 0) {
-      return undefined;
-    }
-    // For special graphics the SRC rect's `(x, y, w, h)` indexes into a 1×1 placeholder, not the real banner — sample
-    // the full live texture instead so the banner uses its native dimensions.
-    let cropped: Texture;
-    if (isLr2SpecialGraphic(path)) {
-      cropped = texture;
-    } else {
-      // `pickAnimatedCell` accepts a `textureSize` fallback so LR2's `w=0` / `h=0` "use native dimensions" shorthand is
-      // resolved against the real texture extents. Without that fallback, a `divx=N` source with `w=0` would produce a
-      // zero-width cell, `createCroppedTexture` would return `undefined`, and we'd fall through to the full untrimmed
-      // texture (which is the "every UI element squashed into each option-value box" corruption on the LR2 default
-      // skin's panel 1).
-      const elapsed = this.elapsedSinceTimer(image.source.timer);
-      const cell = pickAnimatedCell(image.source, elapsed, dst.loop, {
-        width: texture.width,
-        height: texture.height,
-      });
-      // Cell of zero size means the SRC was the LR2 "no-graphic" shorthand (`w=0,h=0,divx=0,divy=0`); skip rendering.
-      if (cell.w <= 0 || cell.h <= 0) return undefined;
-      const cellTexture = createCroppedTexture(texture, cell);
-      if (!cellTexture) return undefined;
-      cropped = cellTexture;
-    }
-    const sprite = new Sprite(cropped);
-    sprite.label = `image[${path}]`;
-    sprite.position.set(rect.x, rect.y);
-    sprite.width = rect.w;
-    sprite.height = rect.h;
-    applyDestinationToSprite(sprite, dst);
-    return sprite;
+  private makeStaticImageSprite(image: Lr2ImageElement) {
+    return makeLr2StaticImageSprite(image, this.evaluateElementDst(image), {
+      textures: this.skinTextures.asReadonlyMap(),
+      elapsedSinceTimer: this.elapsedSinceTimer,
+      resolveSpecialGraphicTexture: (path) => this.resolveSpecialGraphicTexture(path),
+    });
   }
 
   /**

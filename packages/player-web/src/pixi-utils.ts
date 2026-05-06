@@ -1,4 +1,4 @@
-import { Graphics, Sprite, Text, type Container, type Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
 import { destroyTextureAndRevokeBlobUrl } from './lr2-textures.ts';
 
 /**
@@ -48,14 +48,44 @@ export function disposeChildren(container: Container): void {
  * here too, which destroys every pooled child.
  */
 export class ChildPool {
+  /**
+   * Sub-container that hosts every pooled {@link Graphics}. Lives at z-index 0 inside the owner-supplied `layer` so
+   * its children render BEHIND every {@link Sprite} pooled by this same pool — the LR2 render order has measure
+   * lines and long-note bodies (Graphics) underneath note heads and skin sprites (Sprite). Keeping every Graphics
+   * grouped under one sub-container is the whole point of the split: Pixi's batcher walks children in order and
+   * issues a fresh draw call every time the type changes (Sprite → Graphics or vice-versa, see Pixi's
+   * `pixijs-performance` skill §Batching), so a layer that interleaves the two types fragments into many small
+   * draws. Putting all Graphics first, then all Sprites, then all Text reduces a dense frame's
+   * note-layer draw count from O(num type-switches) to ~3.
+   */
+  private readonly graphicsHost: Container;
+  private readonly spriteHost: Container;
+  private readonly textHost: Container;
   private readonly sprites: Sprite[] = [];
   private spriteCursor = 0;
   private readonly graphics: Graphics[] = [];
   private graphicsCursor = 0;
   private readonly texts: Text[] = [];
   private textCursor = 0;
+  /**
+   * Per-bucket count of consecutive frames where the bucket's high-water mark exceeded its actual usage by more than
+   * {@link CHILD_POOL_TRIM_SLACK}. When the count crosses {@link CHILD_POOL_TRIM_AFTER_FRAMES} we shrink the bucket
+   * back down to `cursor + CHILD_POOL_TRIM_SLACK` and reset the counter. Tracked separately per bucket so a still-hot
+   * sprite cursor doesn't keep an unused text tail pinned (and vice-versa).
+   */
+  private idleFramesSprites = 0;
+  private idleFramesGraphics = 0;
+  private idleFramesTexts = 0;
 
-  public constructor(private readonly layer: Container) {}
+  public constructor(private readonly layer: Container) {
+    this.graphicsHost = new Container();
+    this.spriteHost = new Container();
+    this.textHost = new Container();
+    // Z-order matches LR2 visual layering: Graphics (measure lines, LN body, fallback rects) → Sprite (notes,
+    // skin chrome) → Text (in-skin labels, fallback HUD). The hosts inherit the parent layer's `eventMode` so
+    // setting `layer.eventMode = 'none'` (as `pixi-gameplay.ts` does for render-only layers) propagates here too.
+    this.layer.addChild(this.graphicsHost, this.spriteHost, this.textHost);
+  }
 
   /** Resets every cursor. Call once at the top of every render pass. */
   public begin(): void {
@@ -74,7 +104,7 @@ export class ChildPool {
     let sprite = this.sprites[this.spriteCursor];
     if (!sprite) {
       sprite = new Sprite();
-      this.layer.addChild(sprite);
+      this.spriteHost.addChild(sprite);
       this.sprites.push(sprite);
     }
     // Keep `tint` / `alpha` reset so a previous pass's coloured / faded sprite doesn't leak into a fresh draw.
@@ -98,7 +128,7 @@ export class ChildPool {
     let graphics = this.graphics[this.graphicsCursor];
     if (!graphics) {
       graphics = new Graphics();
-      this.layer.addChild(graphics);
+      this.graphicsHost.addChild(graphics);
       this.graphics.push(graphics);
     }
     graphics.clear();
@@ -122,7 +152,7 @@ export class ChildPool {
     let text = this.texts[this.textCursor];
     if (!text) {
       text = new Text();
-      this.layer.addChild(text);
+      this.textHost.addChild(text);
       this.texts.push(text);
     }
     text.visible = true;
@@ -135,7 +165,18 @@ export class ChildPool {
     return text;
   }
 
-  /** Hides every pooled child the current pass didn't acquire. Call once at the bottom of every render pass. */
+  /**
+   * Hides every pooled child the current pass didn't acquire, and idle-decay-shrinks each bucket whose high-water
+   * mark hasn't been touched recently. Call once at the bottom of every render pass.
+   *
+   * Without the shrink, a single peak frame (e.g. a transition where dozens of skin sprites are visible at once) would
+   * pin the bucket's allocation for the rest of the scene's lifetime; downstream sections of the chart that draw far
+   * fewer children would still pay the memory cost. The decay is intentionally gentle — the bucket has to underflow by
+   * more than {@link CHILD_POOL_TRIM_SLACK} for {@link CHILD_POOL_TRIM_AFTER_FRAMES} consecutive frames before any
+   * children are destroyed — so a noisy frame-to-frame range (e.g. between bombs and no-bombs) never triggers the
+   * shrink. When it does fire, the bucket is trimmed back to `cursor + slack`; subsequent peaks just allocate fresh
+   * children, paying a one-frame allocation cost in exchange for the steady-state memory saving.
+   */
   public end(): void {
     for (let i = this.spriteCursor; i < this.sprites.length; i++) {
       this.sprites[i]!.visible = false;
@@ -146,6 +187,17 @@ export class ChildPool {
     for (let i = this.textCursor; i < this.texts.length; i++) {
       this.texts[i]!.visible = false;
     }
+    this.idleFramesSprites = trimIdleBucket(this.sprites, this.spriteCursor, this.idleFramesSprites);
+    this.idleFramesGraphics = trimIdleBucket(this.graphics, this.graphicsCursor, this.idleFramesGraphics);
+    this.idleFramesTexts = trimIdleBucket(this.texts, this.textCursor, this.idleFramesTexts);
+  }
+
+  /**
+   * Returns the bucket's currently-allocated child count for debugging / telemetry. The cursor is omitted on purpose;
+   * call sites only need the underlying capacity.
+   */
+  public size(): { sprites: number; graphics: number; texts: number } {
+    return { sprites: this.sprites.length, graphics: this.graphics.length, texts: this.texts.length };
   }
 
   /** Destroys every pooled child (and `clear()`s every Graphics' context). Call from the owner's `dispose()`. */
@@ -171,13 +223,71 @@ export class ChildPool {
         // ditto
       }
     }
+    // Tear down the sub-host Containers as well. The pooled children are already destroyed above so the host
+    // destroy is just freeing the empty Container shells; we nevertheless pass `children: true` defensively in
+    // case a caller injected something into the host directly (we don't, but a future caller might).
+    for (const host of [this.graphicsHost, this.spriteHost, this.textHost]) {
+      try {
+        host.destroy({ children: true });
+      } catch {
+        // ditto
+      }
+    }
     this.sprites.length = 0;
     this.graphics.length = 0;
     this.texts.length = 0;
     this.spriteCursor = 0;
     this.graphicsCursor = 0;
     this.textCursor = 0;
+    this.idleFramesSprites = 0;
+    this.idleFramesGraphics = 0;
+    this.idleFramesTexts = 0;
   }
+}
+
+/**
+ * Number of consecutive underutilized frames before the {@link ChildPool} shrinks the affected bucket. ~5 s at 60 fps —
+ * long enough that frame-to-frame noise never fires the shrink, short enough that a section of the chart that stops
+ * spawning bombs / particles releases its peak allocation while it's still paused.
+ */
+const CHILD_POOL_TRIM_AFTER_FRAMES = 300;
+/**
+ * Slack kept above the cursor when the {@link ChildPool} shrinks a bucket. Avoids re-allocating a child the very next
+ * frame after a one-frame valley between two peaks; also amortises the shrink/grow cycle if the chart keeps the cursor
+ * within a small band around its trim target.
+ */
+const CHILD_POOL_TRIM_SLACK = 8;
+
+/**
+ * Per-bucket helper for {@link ChildPool.end}: increments the idle-frame counter when the bucket is over-allocated by
+ * more than {@link CHILD_POOL_TRIM_SLACK}, fires the destroy + tail-pop when the counter crosses
+ * {@link CHILD_POOL_TRIM_AFTER_FRAMES}, and resets the counter as soon as utilization comes back up. Returns the new
+ * counter value so the caller can persist it on the pool.
+ */
+function trimIdleBucket<T extends Sprite | Graphics | Text>(bucket: T[], cursor: number, idleFrames: number): number {
+  if (bucket.length <= cursor + CHILD_POOL_TRIM_SLACK) {
+    return 0;
+  }
+  const next = idleFrames + 1;
+  if (next < CHILD_POOL_TRIM_AFTER_FRAMES) {
+    return next;
+  }
+  const target = cursor + CHILD_POOL_TRIM_SLACK;
+  while (bucket.length > target) {
+    const child = bucket.pop()!;
+    try {
+      // `Graphics` needs `context: true` to free its owned `GraphicsContext` (matches the destroy options used by
+      // {@link ChildPool.destroy}). For Sprite / Text the default options are correct.
+      if (child instanceof Graphics) {
+        child.destroy({ context: true });
+      } else {
+        child.destroy();
+      }
+    } catch {
+      // Already destroyed / detached — both terminal states; nothing to do.
+    }
+  }
+  return 0;
 }
 
 export function destroyUniqueTextures(textures: Iterable<Texture | undefined>, destroySource = true): number {
@@ -191,4 +301,64 @@ export function destroyUniqueTextures(textures: Iterable<Texture | undefined>, d
     destroyTextureAndRevokeBlobUrl(texture, destroySource);
   }
   return destroyed.size;
+}
+
+/**
+ * Drop-in {@link destroyUniqueTextures} replacement that spreads the destroy + blob-revoke calls across multiple
+ * frames via the supplied scheduler (typically `Application.ticker.add` / `requestAnimationFrame`). Returns the unique
+ * texture count immediately, identical to the synchronous variant; the actual destroy work runs in batches of
+ * `perFrame` per scheduler tick.
+ *
+ * Why this exists: the synchronous `destroyUniqueTextures` destroys every texture in one pass, which on a scene
+ * transition (gameplay → result) means several hundred `texture.destroy(true)` calls landing in the same frame.
+ * Pixi's GL backend issues a `gl.deleteTexture` per call; the driver-side flush adds up to a visible 30–80 ms freeze
+ * on the transition, observed as the result splash being late by one or two frames. Spreading the work over ~10
+ * frames keeps each frame's destroy pass under the per-frame budget while still releasing the GPU memory within
+ * 100–200 ms of dispose() returning. Mirrors the staggered teardown pattern in PixiJS's own `pixijs-performance`
+ * guidance.
+ *
+ * The scheduler signature is the lowest-common-denominator subset of `app.ticker.add` and `requestAnimationFrame`:
+ * pass a callback, get a stop function. Callers that don't have a host ticker handy can wrap `requestAnimationFrame`
+ * directly. The callback is fired once per frame and receives no arguments.
+ *
+ * Errors thrown by `destroyTextureAndRevokeBlobUrl` are swallowed so that one corrupted texture doesn't strand the
+ * remaining queue; the underlying call already runs the URL revoke before the texture destroy, so a half-finished
+ * destroy still releases the blob.
+ */
+export function staggerDestroyTextures(
+  textures: Iterable<Texture | undefined>,
+  scheduler: (callback: () => void) => () => void,
+  options: { perFrame?: number; destroySource?: boolean } = {},
+): number {
+  const perFrame = Math.max(1, options.perFrame ?? 8);
+  const destroySource = options.destroySource ?? true;
+  // Flatten + dedupe up-front so the iterable can't generate fresh references between frames (a `Map.values()` view
+  // of a Map that's still being mutated would otherwise give us shifting work). Filtering `undefined` here also
+  // simplifies the per-frame loop.
+  const queue: Texture[] = [];
+  const seen = new Set<Texture>();
+  for (const texture of textures) {
+    if (texture === undefined || seen.has(texture)) continue;
+    seen.add(texture);
+    queue.push(texture);
+  }
+  if (queue.length === 0) return 0;
+  let cursor = 0;
+  let stop: () => void = () => undefined;
+  const tick = (): void => {
+    const end = Math.min(cursor + perFrame, queue.length);
+    for (let i = cursor; i < end; i += 1) {
+      try {
+        destroyTextureAndRevokeBlobUrl(queue[i]!, destroySource);
+      } catch {
+        // Already destroyed / detached — keep walking the queue so a single corrupted entry doesn't strand the rest.
+      }
+    }
+    cursor = end;
+    if (cursor >= queue.length) {
+      stop();
+    }
+  };
+  stop = scheduler(tick);
+  return queue.length;
 }

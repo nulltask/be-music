@@ -1,7 +1,9 @@
 import { isPlayLaneSoundChannel } from '@be-music/chart';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { isAbortError, resolveFirstExistingPath, throwIfAborted, writeStereoPcm16Le } from '@be-music/utils';
+import { isAbortError, throwIfAborted } from '@be-music/utils/core';
+import { resolveFirstExistingPath } from '@be-music/utils/path';
+import { writeStereoPcm16Le } from '@be-music/utils/pcm';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { collectSampleTriggers, createTimingResolver, type RenderResult, renderJson } from '@be-music/audio-renderer';

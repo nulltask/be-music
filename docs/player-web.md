@@ -5,11 +5,25 @@
 This document summarizes the browser player added by `@be-music/player-web` and `@be-music/player-web-demo`.
 Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as timing, notes, judgment, score, gauge, and BGA event meaning.
 
-## Audit note
+## Shared runtime integration
 
-- Audit starting point commit: `97b05e825c60e2242b621f63a1ebbfccd415362b`
-- Audit point commit: `cef0f2f8a604c3a034e04b798953915e01a72549` (merge of PR #73)
-- Audit scope: browser player packages, shared CLI/browser playback helpers, web-focused tests, and benchmark additions from PR #73
+The browser player drives gameplay through `@be-music/player/core/engine`.
+The engine owns judgment, fallback keysound routing, long-note handling, mine priority, score, gauge, and chart-finish
+semantics. `PixiGameplayView` starts one engine run at the LR2 `PLAYSTART` gate, mirrors engine frame snapshots into
+the scene state, and translates engine UI commands into Pixi visual effects.
+
+The browser runtime uses these adapter modules:
+
+| module | role |
+| --- | --- |
+| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | Implements the engine's `AudioSession` contract with Web Audio. It handles immediate triggers, BGM scheduling, channel stops, pause/resume, key/BGM routing, dynamic volume changes, bmson `c=true` continuation, and `#WAVCMD` gain. |
+| [`web-input-runtime.ts`](../packages/player-web/src/web-input-runtime.ts) | Maps DOM `keydown` / `keyup` events to the engine input bus. It filters OS auto-repeat, routes `Escape` / `F5` / `Space` to command events, and sends lane presses with physical event timestamps. |
+| [`web-ui-runtime.ts`](../packages/player-web/src/web-ui-runtime.ts) | Drains engine UI signals into the Pixi host. Frame snapshots update notes, score, gauge, and result state; commands drive lane flashes, key holds, POOR BGA, and judge/combo effects. |
+| [`engine-driver.ts`](../packages/player-web/src/engine-driver.ts) | Wires audio, input, and UI adapters together and invokes `manualPlay` / `autoPlay` for one chart play. |
+
+`@be-music/player/core/engine` no longer imports `node:path` / `node:timers/promises`, so the module can be
+bundled into the browser as-is. The Node-only `createNodeAudioSink` backend is loaded lazily and is never reached
+when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `createWebAudioSession`).
 
 ## Scope
 
@@ -58,6 +72,11 @@ Implemented skin features include:
 - Case-insensitive and wildcard asset lookup for LR2 theme files
 
 The demo also loads LR2 theme BGM and system sounds for select and decide screens when those files exist in the dropped theme.
+
+Scene-independent LR2 Pixi helpers live in [`lr2-render.ts`](../packages/player-web/src/lr2-render.ts) and
+[`lr2-scene-render.ts`](../packages/player-web/src/lr2-scene-render.ts). They handle destination keyframe evaluation,
+sprite transforms, source-cell selection, text rendering, numbers, sliders, and bargraphs. Scene modules keep the
+state-specific value resolution, timers, and input behavior.
 
 ## Scene lifecycle
 

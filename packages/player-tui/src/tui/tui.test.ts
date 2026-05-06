@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { PlayerTui } from './tui.ts';
+import { formatJudgeComboDisplay, PlayerTui } from './tui.ts';
 import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
 
 function stripAnsi(value: string): string {
@@ -509,5 +509,44 @@ describe('player-tui', () => {
     } finally {
       process.stdout.write = originalWrite;
     }
+  });
+
+  describe('formatJudgeComboDisplay', () => {
+    // The TUI's NOWJUDGE plate pairs the judge verdict with the running combo for clean hits, but a
+    // beatoraja-compatible engine preserves combo through EMPTY POOR (空POOR — phantom press without a
+    // judged note). Without a verdict-side guard the combo number leaks into the POOR plate as
+    // "POOR 5", which conflicts with LR2 visual convention. Same logic for BAD (combo IS broken on
+    // BAD, but if the engine ever publishes BAD with a non-zero combo we still want the plate clean).
+    const NOW_MS = 1_000;
+
+    test('PERFECT shows the running combo', () => {
+      // PERFECT renders as a rainbow blink — strip the ANSI to assert on the visible text.
+      expect(stripAnsi(formatJudgeComboDisplay('PERFECT', 153, NOW_MS, false))).toContain('GREAT 153');
+    });
+
+    test('GREAT shows the running combo', () => {
+      expect(stripAnsi(formatJudgeComboDisplay('GREAT', 50, NOW_MS, false))).toContain('GREAT 50');
+    });
+
+    test('GOOD shows the running combo', () => {
+      expect(stripAnsi(formatJudgeComboDisplay('GOOD', 5, NOW_MS, false))).toContain('GOOD 5');
+    });
+
+    test('POOR omits the combo number even when the engine preserves combo through EMPTY POOR', () => {
+      const visible = stripAnsi(formatJudgeComboDisplay('POOR', 5, NOW_MS, false));
+      expect(visible).toContain('POOR');
+      expect(visible).not.toMatch(/POOR\s+\d/);
+    });
+
+    test('BAD omits the combo number for the same reason', () => {
+      const visible = stripAnsi(formatJudgeComboDisplay('BAD', 3, NOW_MS, false));
+      expect(visible).toContain('BAD');
+      expect(visible).not.toMatch(/BAD\s+\d/);
+    });
+
+    test('combo of 0 produces a bare verdict for any judge', () => {
+      expect(stripAnsi(formatJudgeComboDisplay('GREAT', 0, NOW_MS, false))).toContain('GREAT');
+      expect(stripAnsi(formatJudgeComboDisplay('GREAT', 0, NOW_MS, false))).not.toMatch(/GREAT\s+\d/);
+    });
   });
 });

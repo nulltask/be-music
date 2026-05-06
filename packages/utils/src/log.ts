@@ -1,7 +1,18 @@
-import { createWriteStream } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
 import pino from 'pino';
+
+// Lazy-load Node built-ins so the module remains importable from a browser bundle (the file logger is the only
+// caller that needs them, and the browser side never invokes `createFileLogger`). Vite externalises these
+// `node:` prefixes for browser targets but only emits a runtime error if code actually reaches them — keeping
+// the resolution lazy confines the error to the Node-only `createFileLogger` path that browsers never call.
+type NodeFs = typeof import('node:fs');
+type NodeFsPromises = typeof import('node:fs/promises');
+type NodePath = typeof import('node:path');
+let nodeFsPromise: Promise<NodeFs> | undefined;
+let nodeFsPromisesPromise: Promise<NodeFsPromises> | undefined;
+let nodePathPromise: Promise<NodePath> | undefined;
+const loadNodeFs = (): Promise<NodeFs> => (nodeFsPromise ??= import('node:fs'));
+const loadNodeFsPromises = (): Promise<NodeFsPromises> => (nodeFsPromisesPromise ??= import('node:fs/promises'));
+const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -18,6 +29,11 @@ export interface Logger {
 }
 
 export async function createFileLogger(logFilePath: string): Promise<Logger> {
+  const [{ mkdir }, { dirname }, { createWriteStream }] = await Promise.all([
+    loadNodeFsPromises(),
+    loadNodePath(),
+    loadNodeFs(),
+  ]);
   await mkdir(dirname(logFilePath), { recursive: true });
   const stream = createWriteStream(logFilePath, {
     flags: 'a',

@@ -16,5 +16,5 @@ Supplement:
 
 - These documents prioritize how this repository implements and interprets the formats over the original specifications themselves.
 - If there is a discrepancy with the official specifications, please first decide on an implementation policy and then update this document.
-- When performing large-scale follow-up updates, please specify the "audit starting point commit/audit point commit/audit scope" in each specification.
+- Keep these documents focused on the current implementation. Put past decisions in pull requests, commit messages, and changelogs.
 - `@be-music/json` is responsible for pure IR, and `@be-music/chart` is responsible for score semantics such as beat resolution and event order.

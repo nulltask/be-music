@@ -1,5 +1,5 @@
-import { extname } from 'node:path';
-import { resolveFirstExistingPath } from '@be-music/utils';
+import { extname } from '@be-music/utils/core';
+import { resolveFirstExistingPath } from '@be-music/utils/path';
 
 export interface ResolveSamplePathOptions {
   /**

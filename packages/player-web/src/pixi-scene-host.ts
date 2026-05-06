@@ -98,6 +98,21 @@ export class PixiSceneHost {
       // the previous fragment count; 1× / 2× displays (the common case) are unaffected.
       resolution: Math.min(2, globalThis.devicePixelRatio || 1),
       roundPixels: true,
+      // Force the discrete GPU on hybrid systems (every modern laptop with switchable graphics). Rhythm-game
+      // input-to-display latency is critical, and the integrated-GPU path adds variable frame-time on top of the
+      // base 60 Hz tick. The `'high-performance'` hint makes the browser request the dGPU at context creation,
+      // which on macOS / Windows pins the renderer to the powerful adapter for the rest of the session. Pixi v8
+      // forwards this option to both the WebGPU and WebGL2 backends.
+      powerPreference: 'high-performance',
+      // Tighten Pixi's TextureGCSystem windows. Defaults are 30 s check / 60 s idle-eviction; that's too lax for BMS
+      // playback where the BGA prepass loads dozens of frames that may be referenced exactly once and then never
+      // again (animated layered BGAs cycle through a frame band; a #BGA-defined freeze frame fires once and is dead
+      // for the rest of the chart). Halving both windows lets the GPU reclaim those one-shot textures within ~30 s
+      // of their last reference, smoothing peak texture-memory across long sessions. The CPU cost is the GC
+      // walk itself, which is a single pass over the texture cache every 15 s — negligible next to a per-frame
+      // render pass.
+      gcMaxUnusedTime: 30_000,
+      gcFrequency: 15_000,
       ...options?.appOptions,
     });
     // Surface the actual renderer type — the `preference` field is a *hint*, and the real backend may differ if WebGPU
@@ -108,6 +123,15 @@ export class PixiSceneHost {
     });
     this.app.canvas.tabIndex = 0;
     this.app.canvas.setAttribute('aria-label', 'be-music stage');
+    // Compositor isolation. `contain: content` (= `layout paint style`) tells the browser the canvas's visual
+    // contents can't affect — and aren't affected by — anything outside its box. The compositor can then skip
+    // walking siblings / ancestors when the canvas repaints (= every frame), trimming a few hundred μs of
+    // main-thread work per repaint on dense pages. We deliberately omit the `size` containment that the stricter
+    // `strict` value would add — Pixi sets `<canvas>` width/height explicitly via `resizeTo`, but `contain: size`
+    // ignores intrinsic content size during layout, which can interact poorly with the host's ResizeObserver
+    // path on some browsers. `pointer-events` is intentionally left at `auto` so Pixi's hit-testing
+    // (song-select buttons, debug menu, result-screen actions) keeps working.
+    this.app.canvas.style.contain = 'content';
     this.app.stage.label = 'host/stage';
     container.appendChild(this.app.canvas);
   }

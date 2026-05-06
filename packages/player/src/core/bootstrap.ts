@@ -1,4 +1,4 @@
-import { throwIfAborted } from '@be-music/utils';
+import { throwIfAborted } from '@be-music/utils/core';
 import { normalizeChannel, type BeMusicJson } from '@be-music/json';
 import {
   createGrooveGaugeState,
@@ -25,6 +25,19 @@ import {
 import { DEFAULT_IMAGE_RESIZE_ALGORITHM } from '../image-resize-algorithm.ts';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { DEFAULT_TUI_NOTE_HEIGHT } from './ui-options.ts';
+
+/**
+ * Browser-safe default for `audioBaseDir`. Browsers don't have `process.cwd()`, so a bare reference there
+ * `ReferenceError`s the moment any web caller leaves `audioBaseDir` undefined. Falls back to `'.'` (the
+ * conventional CWD shorthand). The asset-resolution path below then joins `'.'` against the chart-relative
+ * resource paths, which yields the same string the browser caller would have passed; the actual asset bytes
+ * land via the asset-source closure inside the host (drag-dropped File handles), not via Node fs reads, so the
+ * `baseDir` field is essentially a label here.
+ */
+function resolveDefaultBaseDir(): string {
+  const proc = (globalThis as { process?: { cwd?: () => string } }).process;
+  return proc?.cwd?.() ?? '.';
+}
 
 export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];
@@ -192,7 +205,7 @@ export async function initializePlayerUiRuntime({
     randomPatternSummary,
     stateSignals,
     uiSignals,
-    baseDir: options.audioBaseDir ?? process.cwd(),
+    baseDir: options.audioBaseDir ?? resolveDefaultBaseDir(),
     loadSignal: options.signal,
     onBgaLoadProgress: (progress) => {
       onLoadProgress(0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);

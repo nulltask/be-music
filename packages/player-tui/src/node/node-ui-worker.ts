@@ -1,4 +1,5 @@
-import { createAbortError, isAbortError, type LogLevel } from '@be-music/utils';
+import { createAbortError, isAbortError } from '@be-music/utils/core';
+import type { LogLevel } from '@be-music/utils/log';
 import { createBeatResolver } from '@be-music/chart';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import { createTimingResolver } from '@be-music/audio-renderer';

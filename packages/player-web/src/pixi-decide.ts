@@ -1,18 +1,11 @@
 import { Application, Color, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
-import {
-  applyDestinationToSprite,
-  createCroppedTexture,
-  evaluateKeyframes,
-  normalizeRect,
-  pickAnimatedCell,
-} from './lr2-render.ts';
+import { evaluateElementDestination, makeLr2StaticImageSprite } from './lr2-render.ts';
 import {
   type Lr2DestinationRect,
   type Lr2ImageElement,
   type Lr2Skin,
   type Lr2SpecialGraphic,
   LR2_SPECIAL_GRAPHIC,
-  isLr2SpecialGraphic,
 } from '@be-music/lr2-skin';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
 import { disposeChildren } from './pixi-utils.ts';
@@ -488,11 +481,7 @@ export class PixiDecideView {
     destination: Lr2DestinationRect;
     keyframes: Lr2DestinationRect[];
   }): Lr2DestinationRect {
-    if (element.keyframes.length > 1) {
-      const elapsed = this.elapsedSinceTimer(element.destination.timer);
-      return evaluateKeyframes(element.keyframes, elapsed);
-    }
-    return element.destination;
+    return evaluateElementDestination(element, this.elapsedSinceTimer);
   }
 
   private elapsedSinceTimer(timer: number): number {
@@ -506,37 +495,12 @@ export class PixiDecideView {
     return this.timerStartedAt.has(timer);
   };
 
-  private makeStaticImageSprite(image: Lr2ImageElement): Sprite | undefined {
-    const path = image.source.imagePath;
-    let texture = this.skinTextures.get(path);
-    if (!texture && isLr2SpecialGraphic(path)) {
-      texture = this.resolveSpecialGraphicTexture(path);
-    }
-    if (!texture) return undefined;
-    const dst = this.evaluateElementDst(image);
-    const rect = normalizeRect(dst);
-    if (rect.w <= 0 || rect.h <= 0) return undefined;
-    let cropped: Texture;
-    if (isLr2SpecialGraphic(path)) {
-      cropped = texture;
-    } else {
-      const elapsed = this.elapsedSinceTimer(image.source.timer);
-      const cell = pickAnimatedCell(image.source, elapsed, dst.loop, {
-        width: texture.width,
-        height: texture.height,
-      });
-      if (cell.w <= 0 || cell.h <= 0) return undefined;
-      const cellTexture = createCroppedTexture(texture, cell);
-      if (!cellTexture) return undefined;
-      cropped = cellTexture;
-    }
-    const sprite = new Sprite(cropped);
-    sprite.label = `image[${path}]`;
-    sprite.position.set(rect.x, rect.y);
-    sprite.width = rect.w;
-    sprite.height = rect.h;
-    applyDestinationToSprite(sprite, dst);
-    return sprite;
+  private makeStaticImageSprite(image: Lr2ImageElement) {
+    return makeLr2StaticImageSprite(image, this.evaluateElementDst(image), {
+      textures: this.skinTextures.asReadonlyMap(),
+      elapsedSinceTimer: this.elapsedSinceTimer,
+      resolveSpecialGraphicTexture: (path) => this.resolveSpecialGraphicTexture(path),
+    });
   }
 
   /**

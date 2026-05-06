@@ -8,7 +8,7 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 
 - `@be-music/json`: Be-Music 内部処理専用の BMS/BMSON 中間表現 (JSON互換) の pure IR
 - `@be-music/chart`: beat 解決、イベント順序、ロングノート解決などの譜面意味論 helper
-- `@be-music/utils`: 全パッケージで再利用する汎用ユーティリティ
+- `@be-music/utils`: 全パッケージで再利用する汎用ユーティリティ。browser-safe な core helper と Node 向け helper は狭い subpath export で分けています
 - `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON のパーサ
 - `@be-music/stringifier`: JSON から `.bms` / `.bmson` への文字列化
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
@@ -122,6 +122,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - dropped folder、ZIP、BMS/LR2 theme 混在 drop を扱う browser song library
 - 大きな audio / video file を lazy に扱い、case-insensitive に path lookup
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
+- destination 補間、sprite transform、number、text、slider、bargraph を扱う共通 LR2 Pixi helper
 - note、timing、scroll distance、BGA cue、score、result は CLI player と共通の再生意味論を使用
 - key / BGM / master を分けた compressor control 付き WebAudio preview / gameplay bus
 - BGA still / video 描画、browser-side video transcode fallback、WebM gameplay recording

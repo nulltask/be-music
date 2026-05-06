@@ -1,5 +1,6 @@
 import { effect } from 'alien-signals';
-import { createAbortError, type LogEntry, type LogLevel } from '@be-music/utils';
+import { createAbortError } from '@be-music/utils/core';
+import type { LogEntry, LogLevel } from '@be-music/utils/log';
 import type { BeMusicJson } from '@be-music/json';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import {

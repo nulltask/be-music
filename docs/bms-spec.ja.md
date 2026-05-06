@@ -15,7 +15,7 @@
 - Extended BPM (`#BPMxx` / `#EXBPM`): https://hitkey.nekokan.dyndns.info/exbpm-object.htm
 - `#OPTION` / `#CHANGEOPTION` 仕様: https://hitkey.nekokan.dyndns.info/option.htm
 - Sonorous 提案拡張 (補助一次参照): https://hitkey.nekokan.dyndns.info/bmsexts-ja.htm
-- Obj Tech Lovers | Guidance chapter3-2（`#WAV00` / 休符解釈 / 地雷の歴史的整理に関する補助一次参照）: https://nekokan.dyndns.info/~otlovers/guidance/guidance_3a_txt.html
+- Obj Tech Lovers | Guidance chapter3-2（`#WAV00` / 休符解釈 / 地雷挙動に関する補助一次参照）: https://nekokan.dyndns.info/~otlovers/guidance/guidance_3a_txt.html
 - Obj Tech Lovers | Guidance chapter4-7（地雷ダメージ解釈に関する補助一次参照）: https://nekokan.dyndns.info/~otlovers/guidance/guidance_4b.html
 - Bemuse BMS Extensions (補助一次参照): https://bemuse.ninja/project/docs/bms-extensions
 - beatoraja 楽曲製作者向け資料: https://github.com/exch-bms2/beatoraja/wiki/%E6%A5%BD%E6%9B%B2%E8%A3%BD%E4%BD%9C%E8%80%85%E5%90%91%E3%81%91%E8%B3%87%E6%96%99
@@ -30,14 +30,6 @@
 
 - 対応レベル: 部分対応
 - 方針: 仕様全域の完全再現ではなく、主要な譜面再生要素を優先して実装
-
-## リビジョン追従情報
-
-- 監査起点: `78dfb931952e617518629627f84919a5b2deeeaf` (`feat: initial commit`)
-- 監査時点: `335200e` (`fix(player): formalize scroll compatibility policy and tests`)
-- 監査対象: `packages/parser` / `packages/player` / `packages/audio-renderer` / `packages/json` / `packages/stringifier` / `docs`
-- 監査対象コミット数 (no-merge): `135` (`feat=52`, `fix=44`, `refactor=22`, `perf=2`, `test=4`, `docs=9`, `chore=2`)
-- この文書は上記範囲の実装差分を反映する
 
 ## 対応 (構文受理)
 
@@ -111,7 +103,7 @@
 地雷ダメージは BM98 時代の基礎 BMS 仕様には含まれていないため、現実装では後年公開された地雷拡張系の資料を根拠にしています。
 
 - 地雷ダメージを `value / 2` とする根拠は Hitkey の command memo です。`[01-ZZ]` をダメージ量とし、ゲージが `value / 2` だけ減る整理に従います。
-- `#WAV00` を地雷リアクション専用とする扱いと、`ZZ` を即死級の値とみなす歴史的文脈は Obj Tech Lovers chapter3-2 / chapter4-7 で補強しています。
+- `#WAV00` を地雷リアクション専用とする扱いと、`ZZ` を即死級の値とみなす根拠は Obj Tech Lovers chapter3-2 / chapter4-7 で補強しています。
 - `be-music` では groove gauge を LR2 互換の `2-100%` で実装しているため、`ZZ` の実際の効果はゲージ下限 `2%` への clamp です。
 - [x] チャンネル `SC` を `#SCROLLxx` 参照イベントとして保持
 - [x] チャンネル `SC` を音声トリガー対象から除外
@@ -223,7 +215,7 @@ runtime と round-trip の扱い:
 - `#VOLWAV 0`: 無音
 
 この倍率は `player` のリアルタイム再生、選曲画面プレビュー、`audio-renderer` の `renderJson()` / `renderChartFile()` に適用します。
-各 historical player やハードウェア固有の音量差は再現せず、現実装では単純な gain 倍率としてのみ扱います。
+各 player やハードウェア固有の音量差は再現せず、現実装では単純な gain 倍率としてのみ扱います。
 
 ### `#xxx97` / `#xxx98`
 

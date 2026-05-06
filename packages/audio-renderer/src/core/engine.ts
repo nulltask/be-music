@@ -7,16 +7,20 @@ import {
   isPlayLaneSoundChannel,
   parseBmsDynamicVolumeGain,
 } from '@be-music/chart';
-import { readFile, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import {
-  normalizeChannel,
-  normalizeObjectKey,
-  resolveBmsBase,
-  type BeMusicEvent,
-  type BeMusicJson,
-} from '@be-music/json';
-import { isAbortError, throwIfAborted } from '@be-music/utils';
+// `node:fs/promises` and `node:path` are loaded lazily inside the Node-only entry points (`renderChartFile`,
+// `writeAudioFile`, `getOrCreateSample`) so that bundling this module into a browser build doesn't statically
+// pull the Node built-ins into the browser bundle. Vite externalises `node:`-prefixed imports for browser
+// targets but emits a runtime error if any code path actually reaches them — keeping the imports dynamic
+// confines that error to the Node-specific paths the browser never executes (renderJson / renderSingleSample
+// stay browser-safe because they don't touch disk).
+type NodeFsPromises = typeof import('node:fs/promises');
+type NodePath = typeof import('node:path');
+let nodeFsPromisesPromise: Promise<NodeFsPromises> | undefined;
+let nodePathPromise: Promise<NodePath> | undefined;
+const loadNodeFsPromises = (): Promise<NodeFsPromises> => (nodeFsPromisesPromise ??= import('node:fs/promises'));
+const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
+import { normalizeChannel, normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
+import { isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { detectAudioFormat, encodeAiff16, encodeWav16 } from './file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './decode.ts';
@@ -494,6 +498,7 @@ export async function renderChartFile(
   outputPath: string,
   options: RenderOptions = {},
 ): Promise<RenderResult> {
+  const { resolve, dirname } = await loadNodePath();
   const chartPath = resolve(inputPath);
   const json = resolveBmsControlFlow(await parseChartFile(chartPath, { signal: options.signal }));
   const audioRendered = await renderJson(json, {
@@ -505,6 +510,7 @@ export async function renderChartFile(
 }
 
 export async function writeAudioFile(outputPath: string, result: RenderResult): Promise<void> {
+  const [{ resolve }, { writeFile }] = await Promise.all([loadNodePath(), loadNodeFsPromises()]);
   const destination = resolve(outputPath);
   const format = detectAudioFormat(destination);
   const encoded = format === 'aiff' ? encodeAiff16(result) : encodeWav16(result);
@@ -588,6 +594,7 @@ async function getOrCreateSample(params: {
       samplePath,
       resolvedPath,
     });
+    const { readFile } = await loadNodeFsPromises();
     const buffer = await readFile(resolvedPath, { signal });
     throwIfAborted(signal);
     const decoded = await decodeAudioSample(buffer, resolvedPath, signal);

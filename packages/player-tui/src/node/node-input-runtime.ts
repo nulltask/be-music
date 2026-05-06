@@ -1,5 +1,5 @@
 import readline from 'node:readline';
-import type { LogEntry } from '@be-music/utils';
+import type { LogEntry } from '@be-music/utils/log';
 import { beginStatefulKeyboardProtocolOptIn, resolveInputTokenEvent } from '../manual-input.ts';
 import {
   resolveHighSpeedControlActionFromLaneChannels,
@@ -71,6 +71,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
   const emitManualInput = (
     inputEvent: ReturnType<typeof resolveInputTokenEvent>,
     source: 'keypress' | 'data',
+    pressedAt: number,
   ): void => {
     const pressTokens = inputEvent.tokens;
     const repeatTokens = inputEvent.repeatTokens;
@@ -108,6 +109,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
         pressTokens: [...pressTokens],
         repeatTokens: [...repeatTokens],
         releaseTokens: [...releaseTokens],
+        pressedAt,
       });
     }
 
@@ -122,10 +124,10 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
       });
     }
 
-    handlePressedTokens(pressTokens);
+    handlePressedTokens(pressTokens, pressedAt);
   };
 
-  const handlePressedTokens = (tokens: readonly string[]): void => {
+  const handlePressedTokens = (tokens: readonly string[], pressedAt: number): void => {
     if (tokens.length === 0) {
       return;
     }
@@ -161,6 +163,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
     options.inputSignals.pushCommand({
       kind: 'lane-input',
       tokens: [...tokens],
+      pressedAt,
     });
   };
 
@@ -168,6 +171,15 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
     if (options.mode === 'manual' && Date.now() < suppressKeypressUntilMs) {
       return;
     }
+    // Wall-clock-ms snapshot at handler entry — `performance.timeOrigin + performance.now()` is
+    // `Date.now()`-equivalent but with sub-ms precision. We use the wall-clock domain (not raw
+    // `performance.now()`) because the engine runs in a `worker_threads` Worker on the TUI side and each
+    // thread has its own `performance.timeOrigin`, so a raw `performance.now()` from this main thread
+    // would always read as "in the future" from the worker's clock and the engine's defensive fallback
+    // would silently swallow the press. The engine subtracts the wall-clock delta against this when
+    // resolving the judge timestamp so a press that lands a few ms before the next 60 Hz tick still
+    // resolves at its true timing.
+    const pressedAt = performance.timeOrigin + performance.now();
     if (!loggedFirstKeyPress) {
       loggedFirstKeyPress = true;
       emitRuntimeLog('input-runtime.keypress.first', {
@@ -183,7 +195,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
 
     if (options.mode === 'manual') {
       for (const inputEvent of inputEvents) {
-        emitManualInput(inputEvent, 'keypress');
+        emitManualInput(inputEvent, 'keypress', pressedAt);
       }
       return;
     }
@@ -225,6 +237,8 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
     if (options.mode !== 'manual') {
       return;
     }
+    // Same wall-clock-ms snapshot rationale as `onKeyPress` — see that handler's comment.
+    const pressedAt = performance.timeOrigin + performance.now();
     const chunk = data.toString('utf8');
     const inputEvent = resolveInputTokenEvent(chunk, {
       name: undefined,
@@ -243,7 +257,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
         releaseTokens: inputEvent.releaseTokens.join(','),
       });
     }
-    emitManualInput(inputEvent, 'data');
+    emitManualInput(inputEvent, 'data', pressedAt);
   };
 
   const start = (): void => {

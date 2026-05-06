@@ -1,4 +1,9 @@
-import { Application, Container, Graphics, Rectangle, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Text, TextStyle, Texture, VideoSource } from 'pixi.js';
+// Side-effect import: registers Pixi's `PrepareSystem` on the renderer so {@link PixiGameplayView.preparePixiUpload}
+// can drive eager GPU uploads. Pixi v8 deliberately ships the prepare module out of the default bundle (it's a
+// large optional system that not every app needs); the import has to land before any `Application.init` runs that
+// expects `renderer.prepare` to exist.
+import 'pixi.js/prepare';
 import {
   collectSampleTriggers,
   createBmsonSamplePlaybackMap,
@@ -7,19 +12,16 @@ import {
 } from '@be-music/audio-renderer/triggers';
 import {
   createScoreTracker,
-  applyJudgeToSummary,
   computeScoreRate,
   resolveIidxRankLabel,
   type JudgeKind,
   type ScoreSummary,
 } from '@be-music/player/core/scoring';
-import { resolveJudgeWindowsMs } from '@be-music/player/core/judge-window';
-import {
-  applyGrooveGaugeJudge,
-  createGrooveGaugeState,
-  type GrooveGaugeJudgeKind,
-  type GrooveGaugeState,
-} from '@be-music/player/core/groove-gauge';
+import { PlayerInterruptedError } from '@be-music/player/core/engine';
+import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
+import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
+import { createGrooveGaugeState, type GrooveGaugeState } from '@be-music/player/core/groove-gauge';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   createScrollTimeline,
@@ -27,7 +29,6 @@ import {
 } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
-import { findClosestCandidateInWindow } from '@be-music/player/judging';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from './types.ts';
 import {
@@ -54,6 +55,7 @@ import { loadSkinAssetTexture, loadTextureFromBytes, loadVideoTextureFromBytes }
 import {
   applyDestinationToSprite,
   createCroppedTexture,
+  evaluateElementDestination,
   evaluateKeyframes,
   normalizeRect,
   pickAnimatedCell,
@@ -63,23 +65,21 @@ import { type AudioBusHandle, type CompressorMode, type CompressorStage, buildAu
 import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-recorder.ts';
 import { PerfTracker } from './pixi-perf.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
-import { ChildPool, destroyUniqueTextures, disposeChildren } from './pixi-utils.ts';
-import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { ChildPool, disposeChildren, staggerDestroyTextures } from './pixi-utils.ts';
+import { runEngineDriver } from './engine-driver.ts';
+import { createWebAudioSession, type WebAudioSession } from './web-audio-session.ts';
+import { drainWebUiSignals, type WebUiRuntimeCallbacks } from './web-ui-runtime.ts';
+import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
   collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
   createBeatResolver,
-  isBmsBgmVolumeChangeChannel,
-  isBmsDynamicVolumeChangeChannel,
-  isBmsKeyVolumeChangeChannel,
   parseBmsBga,
-  parseBmsDynamicVolumeGain,
   parseBmsSwBga,
   pickSwitchingBgaFrame,
   resolveBmsBmpArgb,
   resolveChartReferenceBpm,
-  sortEvents,
   type BmsSwitchingBga,
 } from '@be-music/chart';
 import {
@@ -118,7 +118,6 @@ import {
 import {
   isPlayableInputChannel,
   isScratch,
-  resolveKeyChannel,
   resolveLaneChannels,
   resolveLr2LaneIndex,
   resolveSideRelativeLaneIndex,
@@ -627,9 +626,6 @@ export class PixiGameplayView {
   private maxLongNoteBeatSpan = 0;
   private chartLastNoteEndSeconds = 0;
   private songDurationSeconds = 0;
-  private remainingNotes = 0;
-  private autoJudgeCursor = 0;
-  private autoMissCursor = 0;
   private laneChannels: string[] = [];
   /**
    * Cached `resolveChartPlayVariant` result for the loaded chart. Used to pick the right `play_<variant>.lr2skin`, the
@@ -684,6 +680,51 @@ export class PixiGameplayView {
    * `dispose` can finalize cleanly even if the chart ends mid- recording.
    */
   private recorder: GameplayRecorder | undefined;
+  /**
+   * Web Audio session built in {@link prepareAudio} once `decodedSamples` and `wavCmdVolumeMultipliers` are
+   * populated. Owns every sample-playback path the view used to manage in-tree (player keysound triggers, BGM
+   * scheduled triggers, landmine explosion, bmson `c=true` continuation, `#WAVCMD` per-slot gain, dynamic
+   * `#xxx97` / `#xxx98` volume changes). The view simply forwards `event` payloads to it; the session decides
+   * routing (`keyMixer` / `bgmMixer`), gain splicing, and lifecycle (`stopChannel` for engine-driven LN early
+   * release in Phase 4b-ii). Stays `undefined` until `prepareAudio` finishes — every call site guards.
+   */
+  private webAudioSession: WebAudioSession | undefined;
+  /**
+   * Promise returned by {@link runEngineDriver} once the shared-engine play loop is in flight. `undefined` while
+   * the driver hasn't started yet (engine launches at the same chart-start moment the LR2 PLAYSTART gate fires)
+   * and after `dispose` triggers a clean abort. Used here only as a "have we already launched" guard so a
+   * re-entered `start()` (defensive) doesn't kick off a second engine in parallel.
+   */
+  private sharedEnginePromise: Promise<unknown> | undefined;
+  /**
+   * Forwarded into the engine via `PlayerOptions.signal`. Aborted from {@link dispose} so the engine's
+   * `throwIfAborted` checks unwind cleanly instead of leaving the playback loop running on a torn-down audio bus.
+   */
+  private sharedEngineAbortController: AbortController | undefined;
+  /**
+   * Latch for the engine's `stateSignals.judgeComboTick`. {@link drainWebUiSignals} compares the current tick
+   * value against this latch on every poll and only fires the host's `onJudgeCombo` callback when a fresh
+   * judge / combo update has landed since the last drain.
+   */
+  private sharedEngineLastJudgeComboTick = 0;
+  /** Bus references handed back from the engine via `onSignalsReady`. Drained per-frame from {@link tick}. */
+  private sharedEngineSignals: { uiSignals: PlayerUiSignalBus; stateSignals?: PlayerStateSignals } | undefined;
+  /**
+   * Engine-side `inputSignals` bus captured during the input runtime's `onReady` hook. The view's own
+   * \`togglePause\` (Space-key handler + visibility/blur auto-pause) pushes \`{ kind: 'toggle-pause' }\` here so
+   * the engine's playback clock pauses in lock-step with the view's \`paused\` flag — without the propagation,
+   * the engine would keep advancing chart-time during the pause and fast-forward a burst of judges the moment
+   * the view resumed.
+   */
+  private sharedEngineInputSignals: PlayerInputSignalBus | undefined;
+  /**
+   * Latch flipped on the first non-zero `frame.currentSeconds` from the engine. The view's
+   * `audioContextStartTime` is re-anchored at that moment so the renderer's chart-time matches what the engine
+   * judges against — without this snap, the engine's `playbackClock` (which anchors at the moment it's
+   * constructed inside `manualPlay`'s prepare phase) sits a few ms to a few hundred ms behind the view's
+   * PLAYSTART anchor and notes pass the judgment line ahead of the engine's actual judge event.
+   */
+  private sharedEngineClockAnchored = false;
   private decodedSamples = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
@@ -715,26 +756,7 @@ export class PixiGameplayView {
   private bmsonSlicePlayback:
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
-  /**
-   * Most recent {@link AudioBufferSourceNode} per sample key, tracked so bmson `note.c = true` (continuation flag) can
-   * skip retriggering a sample that's still emitting from a previous note. The map entry is cleared by the node's
-   * `onended` callback once playback finishes naturally — the "still playing" check then reduces to `has(sampleKey)`.
-   *
-   * Populated by every successful `playSample` / `playSampleByKey` call regardless of source format; only consulted by
-   * bmson `c=true` callers, so BMS playback (which has no continuation flag) is unaffected.
-   */
-  private activeSampleNodes = new Map<string, AudioBufferSourceNode>();
-  private scheduled = new Set<RuntimeNote>();
   private autoSampleTriggers: TimedSampleTrigger[] = [];
-  private autoTriggerNextIndex = 0;
-  /**
-   * BMS dynamic-volume timeline (channels `97` BGM-volume / `98` key-volume). Each entry records the chart-time at
-   * which the corresponding bus's gain should switch to the authored 0..1 value. The cursor advances as the playhead
-   * crosses each event in `scheduleAutoSamples`. Empty for non-BMS charts (the source-format gate matches the CLI's
-   * `collectRealtimeAudioVolumeEvents`).
-   */
-  private volumeChangeEvents: Array<{ seconds: number; bus: 'key' | 'bgm'; gain: number }> = [];
-  private volumeChangeCursor = 0;
   private score: ScoreSummary = createEmptyScore(0);
   private tracker = createScoreTracker();
   /**
@@ -828,21 +850,6 @@ export class PixiGameplayView {
    * increases re-stamp the flash instead of letting a stale deferred-delete retire the freshly-stamped timer.
    */
   private gaugeIncreaseTimeout: number | undefined;
-  /**
-   * In-flight long-note holds keyed by channel. Populated when the head of an LN is judged (the press lands inside the
-   * note's judge window) and cleared either on release or when the chart times out the hold (see
-   * `finalizeOverheldLongNotes`). Until the tail is finalized the head's `applyJudgeToSummary` / `applyGaugeDelta`
-   * calls are deferred — earlier the gameplay committed the head verdict on press, which made every LN effectively a
-   * single-tap note and ignored the release timing entirely.
-   */
-  private readonly activeLongNotes = new Map<
-    string,
-    {
-      readonly note: RuntimeNote;
-      readonly headJudge: JudgeKind;
-      readonly headSignedDeltaMs: number;
-    }
-  >();
   private readonly bombStartedAt = new Map<string, number>();
   private bombTexture: Texture | undefined;
   private readonly runtimeOps = new Set<number>();
@@ -1108,8 +1115,12 @@ export class PixiGameplayView {
     // Attach to the host's already-initialized stage. The host owns the `Application` (canvas, ticker, WebGL context) —
     // we just contribute our scene-graph subtree.
     host.app.stage.addChild(this.sceneRoot);
-    window.addEventListener('keydown', this.handleKeyDown);
-    window.addEventListener('keyup', this.handleKeyUp);
+    // ESC / F5 / Space / ArrowUp / ArrowDown stay on the view so the LR2 `#FADEOUT` exit animation runs to
+    // completion BEFORE the engine's interrupt flow disposes the audio session, and so HiSpeed adjustment
+    // affects the visual scroll speed (which the engine doesn't own). The WebInputRuntime's `shouldSkipKey`
+    // filter mirrors this list so it doesn't also push duplicate `interrupt` / `toggle-pause` commands. Lane
+    // input goes through the WebInputRuntime's own `keydown` listener to the engine's input bus.
+    window.addEventListener('keydown', this.handleSharedEngineExitKey);
     this.app.canvas.addEventListener('pointerdown', this.focus);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
     // `visibilitychange` covers tab switching but not always app switching (Cmd-Tab / Alt-Tab) — fall back to window
@@ -1156,6 +1167,15 @@ export class PixiGameplayView {
     this.sceneRoot.visible = false;
     this.prepareSong(song);
     await this.prepareSkin();
+    if (this.disposed) return;
+    // Eager-upload every freshly loaded skin texture to the GPU before the first paint. Without this, Pixi's lazy
+    // upload-on-first-render path issues all the GL `texSubImage2D` calls in the chart's opening frames, which on
+    // lower-end devices stalls the very first rendered frames by 30–80 ms (visible as the LR2 intro slide-in being
+    // late by a beat or two). PrepareSystem walks the queue at its own cadence so this await stays bounded — the
+    // Decide splash above is already showing during this window. BGA textures get the same treatment per-batch
+    // inside `prepareBga` once each background load resolves.
+    await this.preparePixiUpload(this.textures.values());
+    if (this.bombTexture) await this.preparePixiUpload([this.bombTexture]);
     if (this.disposed) return;
     await this.prepareAudio();
     if (this.disposed) return;
@@ -1255,6 +1275,10 @@ export class PixiGameplayView {
       if (this.audioContext) {
         this.audioContextStartTime = this.audioContext.currentTime;
       }
+      // Hand chart playback over to `@be-music/player`'s engine. Fires only after the LR2 PLAYSTART gate (=
+      // same instant the legacy self-judge would have started consuming notes), so the engine's chart-time
+      // t=0 lines up with the view's `audioContextStartTime` anchor — no double-leadin.
+      this.launchSharedEngine();
     });
     this.app.canvas.focus();
     this.tick();
@@ -1418,8 +1442,7 @@ export class PixiGameplayView {
       this.frame = undefined;
     }
     // Detach window-level event listeners so a stray keypress doesn't hit a disposed view.
-    window.removeEventListener('keydown', this.handleKeyDown);
-    window.removeEventListener('keyup', this.handleKeyUp);
+    window.removeEventListener('keydown', this.handleSharedEngineExitKey);
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.focus);
     }
@@ -1478,6 +1501,28 @@ export class PixiGameplayView {
     // node, so the bus can be disposed cleanly afterwards.
     this.recorder?.dispose();
     this.recorder = undefined;
+    // WebAudioSession owns the in-flight BufferSource tracking that the bus's connected sources hang off of, so
+    // dispose it BEFORE we tear the bus down — that gives the session a chance to call `node.stop()` on every
+    // still-playing source so they don't survive into the next chart's bus and bleed audio through. Fire-and-
+    // forget the returned promise; the session's dispose path is best-effort.
+    // Abort the shared engine driver BEFORE the audio session tear-down so engine ticks don't fire fresh
+    // sample triggers onto a session that's about to lose its bus references. The engine catches the abort via
+    // `throwIfAborted` and unwinds; our launchSharedEngine catch swallows the resulting `AbortError` because
+    // the host already initiated dispose.
+    if (this.sharedEngineAbortController) {
+      try {
+        this.sharedEngineAbortController.abort();
+      } catch {
+        // Already aborted or unsupported environment — swallow.
+      }
+      this.sharedEngineAbortController = undefined;
+    }
+    this.sharedEngineSignals = undefined;
+    this.sharedEngineInputSignals = undefined;
+    this.sharedEngineClockAnchored = false;
+    this.sharedEnginePromise = undefined;
+    void this.webAudioSession?.dispose();
+    this.webAudioSession = undefined;
     // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
     // The bus doesn't own the AudioContext itself; closing that is the next step.
     this.audioBus?.dispose();
@@ -1492,13 +1537,43 @@ export class PixiGameplayView {
     // Free per-view textures. Order matters: textures BEFORE we destroy the sceneRoot / sprites, because
     // `Texture.destroy()` emits a `styleChange` event that traverses up to the live `GlTextureSystem` (still alive on
     // the shared host). With our sprites still parented to sceneRoot, the events route correctly.
+    //
+    // The destroys are spread across multiple frames via the shared host's ticker: a sync sweep over the gameplay
+    // view's full texture set (skin chrome + every #BGA frame slot + per-key bombs, often several hundred entries)
+    // hits the GL backend with one `gl.deleteTexture` per call back-to-back, and the driver-side flush stalls the
+    // transition into the result scene by 30–80 ms on lower-end devices. Staggering at 8 textures per frame keeps
+    // each frame's destroy pass under the per-frame budget while still releasing GPU memory within ~100–200 ms of
+    // dispose() returning. The result scene's first paint is unaffected — it draws its own freshly-loaded textures
+    // and never references the gameplay set.
     try {
-      destroyUniqueTextures([
+      const ticker = this.host?.app.ticker;
+      const queue: (Texture | undefined)[] = [
         ...this.textures.values(),
         ...this.bgaTextures.values(),
         ...this.bgaLayerTextures.values(),
         this.bombTexture,
-      ]);
+      ];
+      if (ticker) {
+        staggerDestroyTextures(queue, (callback) => {
+          ticker.add(callback);
+          return () => ticker.remove(callback);
+        });
+      } else {
+        // No live ticker (defensive — host is normally still alive at this point). Fall back to a microtask scheduler
+        // so the destroy chain still spreads across event-loop turns rather than blocking the dispose call.
+        staggerDestroyTextures(queue, (callback) => {
+          let cancelled = false;
+          const loop = (): void => {
+            if (cancelled) return;
+            callback();
+            queueMicrotask(loop);
+          };
+          queueMicrotask(loop);
+          return () => {
+            cancelled = true;
+          };
+        });
+      }
       this.textures.clear();
       this.bgaTextures.clear();
       this.bgaLayerTextures.clear();
@@ -1528,6 +1603,29 @@ export class PixiGameplayView {
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
     }
+    // Drop large per-song reference holders explicitly. The view instance itself becomes unreachable shortly after
+    // `dispose()` returns, but the maps below pin objects whose retained memory dwarfs everything else (decoded PCM
+    // for every #WAV slot, dozens of cached `TextStyle`s with paragraph-layout state) — clearing them here lets the
+    // GC reclaim that memory immediately, instead of waiting for the next major collection that happens to evict the
+    // view. `bgaActiveVideos` was already reset above; the rest of the small Maps / Sets follow the view to GC.
+    this.decodedSamples.clear();
+    this.skinTextStyleCache.clear();
+
+    this.runtimeOps.clear();
+    this.pressedChannels.clear();
+    this.timerStartedAt.clear();
+    this.bombStartedAt.clear();
+    this.keyOnFadeOutStart.clear();
+    this.keyOnFadeDurationMs.clear();
+    this.lnHoldFadeOutStart.clear();
+    this.lnHoldFadeDurationMs.clear();
+    this.bombDurationMs.clear();
+    this.gaugeTimerDurationMs.clear();
+    this.wavCmdVolumeMultipliers.clear();
+    this.switchingBgas.clear();
+    this.gaugeHistory.length = 0;
+    this.scoreHistory.length = 0;
+    this.invisibleNotes.length = 0;
     this.host = undefined;
   }
 
@@ -1622,17 +1720,11 @@ export class PixiGameplayView {
     }, 0);
     this.chartLastNoteEndSeconds = this.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
     this.songDurationSeconds = this.chartLastNoteEndSeconds;
-    this.remainingNotes = this.notes.length;
-    this.autoJudgeCursor = 0;
-    this.autoMissCursor = 0;
     this.chartEnded = false;
     // Drop the previous chart's active-sample tracking. Stale entries would otherwise let a `c=true` note on the new
     // chart suppress its own first trigger because a same-key node from the old play looks "still playing" until it
     // ends naturally.
-    this.activeSampleNodes.clear();
-    // Drop any held LN state from a previous song / restart. Without this the next chart's first release on a cleared
-    // channel would try to finalize the prior chart's hold and double-commit.
-    this.activeLongNotes.clear();
+
     // Reset the turntable physics so the disc starts each chart at angle 0, spinning at baseline. Without this,
     // F5-restarting mid-spin would leave the new play's first visible frame at a random angle (or with a residual brake
     // / forward state if the player had just scratched at song-end), and the alternation streak from the prior play
@@ -1684,30 +1776,6 @@ export class PixiGameplayView {
     this.autoSampleTriggers = collectSampleTriggers(resolved, resolver, { inferBmsLnTypeWhenMissing: true })
       .filter((trigger) => !isPlayableInputChannel(trigger.channel))
       .sort((left, right) => left.seconds - right.seconds);
-    this.autoTriggerNextIndex = 0;
-    // BMS dynamic volume — channels `97` (BGM bus) and `98` (key bus). hitkey BMS Memo encodes the value as a hex-style
-    // 2-digit pair where `01..FF` maps to 1/255..1.0 gain. Mirror the CLI's `collectRealtimeAudioVolumeEvents` gate
-    // (BMS source format only) so bmson charts (which use their own per-channel routing) don't get treated as BMS
-    // volume events.
-    this.volumeChangeEvents =
-      resolved.sourceFormat === 'bms'
-        ? sortEvents(resolved.events)
-            .filter((event) => isBmsDynamicVolumeChangeChannel(event.channel))
-            .flatMap<{ seconds: number; bus: 'key' | 'bgm'; gain: number }>((event) => {
-              const gain = parseBmsDynamicVolumeGain(event.value);
-              if (gain === undefined) return [];
-              const bus = isBmsKeyVolumeChangeChannel(event.channel)
-                ? 'key'
-                : isBmsBgmVolumeChangeChannel(event.channel)
-                  ? 'bgm'
-                  : undefined;
-              if (!bus) return [];
-              const seconds = Math.max(0, resolver.eventToSeconds(event));
-              return [{ seconds, bus, gain }];
-            })
-            .sort((left, right) => left.seconds - right.seconds)
-        : [];
-    this.volumeChangeCursor = 0;
     // bmson 1.0.0 slicing — for bmson charts, each `sound_channels[]` entry is a single audio file that gets sliced at
     // every distinct pulse where any of its notes fire, and each note plays its assigned slice (`audio_offset` ..
     // `audio_offset + slice_duration`) instead of the whole WAV from t=0. The audio-renderer already computes the
@@ -1719,7 +1787,16 @@ export class PixiGameplayView {
         ? createBmsonSamplePlaybackMap(
             resolved,
             resolver,
-            [...this.notes, ...this.mineNotes, ...this.invisibleNotes].map((note) => note.event),
+            // Include both playable notes and the auto-trigger BGM events so the {@link WebAudioSession} can resolve
+            // slice metadata for both code paths through a single Map lookup. Without the trigger events here, the
+            // session's `scheduleEvent` would fall back to "play whole WAV" for every BGM cue, regressing bmson
+            // sliced-WAV authoring intent (each note's `audio_offset` / `slice_duration` window).
+            [
+              ...this.notes.map((note) => note.event),
+              ...this.mineNotes.map((note) => note.event),
+              ...this.invisibleNotes.map((note) => note.event),
+              ...this.autoSampleTriggers.map((trigger) => trigger.event),
+            ],
             beatResolver,
           )
         : undefined;
@@ -1799,44 +1876,6 @@ export class PixiGameplayView {
       }
     }
     return Math.max(0, active.beat + ((seconds - active.seconds) * active.bpm) / 60);
-  }
-
-  /**
-   * Applies an LR2 NORMAL-gauge judge to the current state. Accepts `EMPTY_POOR` for input-on-empty-lane mispresses (-2
-   * to gauge).
-   *
-   * Also drives the LR2 1P-side gauge-rise (timer 42) and gauge- max (timer 44) timers off the before/after diff so
-   * authored skin elements (rise sparkle, max-glow overlay) animate at the right moment. 2P-side timers (43 / 45) wait
-   * for DP gauge support.
-   */
-  private applyGaugeDelta(judge: GrooveGaugeJudgeKind): void {
-    const previous = this.gaugeState.current;
-    applyGrooveGaugeJudge(this.gaugeState, judge);
-    const next = this.gaugeState.current;
-    if (next > previous) {
-      // Gauge increase — stamp timer 42 (1P rise) and schedule a deferred clear at the skin's authored span (or the
-      // fallback). Re-stamping is the natural behavior for back- to-back increases: cancel the in-flight cleanup so
-      // the flash restarts cleanly each time.
-      if (this.gaugeIncreaseTimeout !== undefined) {
-        window.clearTimeout(this.gaugeIncreaseTimeout);
-        this.gaugeIncreaseTimeout = undefined;
-      }
-      this.timerStartedAt.set(42, this.playClock());
-      const fadeMs = this.gaugeTimerDurationMs.get(42) ?? GAUGE_INCREASE_FALLBACK_MS;
-      this.gaugeIncreaseTimeout = window.setTimeout(() => {
-        this.gaugeIncreaseTimeout = undefined;
-        if (this.disposed) return;
-        this.timerStartedAt.delete(42);
-      }, fadeMs);
-    }
-    if (next >= 100 && previous < 100) {
-      // Gauge crossed into max territory — fire timer 44 so any skin-authored "ゲージ MAX" overlay starts cycling.
-      this.timerStartedAt.set(44, this.playClock());
-    } else if (next < 100 && previous >= 100) {
-      // Dropped back below max; the max overlay is no longer applicable. Per LR2 spec the timer should re-fire from t=0
-      // the next time we hit 100 %, which the branch above already handles.
-      this.timerStartedAt.delete(44);
-    }
   }
 
   /** Reset runtime DST-op state to a sensible default for a play session. */
@@ -2219,6 +2258,48 @@ export class PixiGameplayView {
     return loadSkinAssetTexture(skin, path);
   }
 
+  /**
+   * Hands `textures` to Pixi's `PrepareSystem` so the renderer's GPU upload happens NOW, before the first frame that
+   * would otherwise touch them. Without this, Pixi defers the upload to the moment a sprite first samples each
+   * texture — which means the chart's opening frames pay the cumulative `texSubImage2D` cost of the entire skin
+   * sheet (and, mid-chart, the first BGA cue stalls on its image upload). Eager-uploading at prepare time spreads
+   * the work across the Decide splash window where the gameplay scene isn't visible yet.
+   *
+   * The PrepareSystem is conditionally optional — the static `import 'pixi.js/prepare'` at the top of this module
+   * registers it when bundled, but we still defensively detect its presence so a future tree-shaking config that
+   * eliminates the side-effect import doesn't break the prepare flow at runtime. When absent we silently skip the
+   * upload; first-frame stutter returns to the pre-PrepareSystem baseline but nothing else breaks.
+   *
+   * Errors thrown by the upload (e.g. a corrupt texture, a transient WebGL context loss) are logged and the loop
+   * stops — there's no point queuing more uploads on a renderer that just rejected one. The chart still loads; the
+   * not-yet-uploaded textures will fall through to lazy upload on first paint, which is the original behavior.
+   */
+  private async preparePixiUpload(textures: Iterable<Texture | undefined>): Promise<void> {
+    const renderer = this.host?.app.renderer;
+    if (!renderer) return;
+    type PrepareLike = { upload: (resource: Texture) => Promise<unknown> };
+    const prepare = (renderer as { prepare?: PrepareLike }).prepare;
+    if (!prepare || typeof prepare.upload !== 'function') return;
+    for (const texture of textures) {
+      if (this.disposed) return;
+      if (!texture) continue;
+      // BGA video textures are skipped: the underlying `<video>` element hasn't decoded any frames yet at prepare
+      // time (the chart hasn't started, the cue hasn't fired), so its `videoFrame` / `videoSource` is empty.
+      // WebGPU's `copyExternalImageToTexture` rejects an unbacked `<video>` with "Failed to import texture from
+      // video element that doesn't have back resource", which Pixi propagates as an uncaught `OperationError`
+      // that recurs every frame inside the renderer's PrepareSystem queue. Skipping the eager upload here lets
+      // each video texture take Pixi's lazy first-frame path (`Texture.source.update()` once a frame is
+      // decoded), which is bounded by the video's natural decode latency rather than a runaway rAF loop.
+      if (isVideoTextureSource(texture)) continue;
+      try {
+        await prepare.upload(texture);
+      } catch (error) {
+        log.warn('prepare.upload failed; falling back to lazy upload for the rest', error);
+        return;
+      }
+    }
+  }
+
   private async prepareAudio(): Promise<void> {
     if (!this.source || !this.song) {
       return;
@@ -2310,6 +2391,20 @@ export class PixiGameplayView {
         }
       }),
     );
+    // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
+    // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
+    // playback path from this point on — `playSample` / `playSampleByKey` / `scheduleAutoSamples` all delegate to
+    // it. See the field doc for why this beats keeping the audio plumbing inline on the view.
+    if (!this.disposed && this.audioContext && this.audioBus) {
+      this.webAudioSession = createWebAudioSession({
+        audioContext: this.audioContext,
+        audioBus: this.audioBus,
+        chart: this.resolvedChart ?? this.song!.chart,
+        decodedSamples: this.decodedSamples,
+        wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
+        bmsonSlicePlayback: this.bmsonSlicePlayback,
+      });
+    }
   }
 
   /**
@@ -2438,6 +2533,14 @@ export class PixiGameplayView {
       }),
     );
     this.registerSubRegionBgaTextures(chart);
+    if (this.disposed) return;
+    // Eager-upload every freshly loaded BGA texture (and any sub-region aliases registered above) so the first BGA
+    // cue mid-chart doesn't stall on its own first sample. Mirrors the skin path in `prepare()`. This is fire-and-
+    // forget from the prepareBga callsite — `bgaReadyPromise` already gates chart start, and adding the upload to
+    // its tail just lengthens that promise by the upload work, which is what we want.
+    await this.preparePixiUpload(this.bgaTextures.values());
+    if (this.disposed) return;
+    await this.preparePixiUpload(this.bgaLayerTextures.values());
   }
 
   /**
@@ -2566,20 +2669,34 @@ export class PixiGameplayView {
     this.app.canvas.focus();
   };
 
-  private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape') {
+  /**
+   * Captures ESC / F5 in shared-engine mode so the LR2 `#FADEOUT` exit animation runs to completion BEFORE the
+   * engine's `PlayerInterruptedError` flow disposes the audio session. Without this intercept, pushing
+   * `interrupt(escape)` through the WebInputRuntime would tear down the audio session synchronously inside
+   * `manualPlay`'s `finally` block, killing every in-flight `BufferSource` mid-fade — the user hears the chart
+   * audio cut to silence the moment ESC fires while the LR2 fadeout overlay is still painting.
+   *
+   * The handler kicks off `beginExitSequence` (which fades `audioBus.fadeOutAudibleTo(0)` over the LR2 fadeout
+   * duration). Once the fade callback resolves, we abort the engine's `AbortController` so the engine throws and
+   * unwinds normally — the audio session is already silent by then, so the in-flight-source `node.stop()` calls
+   * have nothing audible to interrupt.
+   */
+  private readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => {
+    if (event.repeat) return;
+    if (event.code === 'Escape') {
       event.preventDefault();
-      // Run the LR2 #FADEOUT → #CLOSE timeline before handing control back so the skin's exit chrome (fade overlay,
-      // STAGE FAILED plate) gets a chance to animate. Idempotent when fired repeatedly.
-      this.beginExitSequence(() => this.options.onExit?.());
+      this.beginExitSequence(() => {
+        this.sharedEngineAbortController?.abort();
+        this.options.onExit?.();
+      });
       return;
     }
     if (event.code === 'F5') {
-      // Restart: convention follows beatoraja / LR2's F5-restart key. `preventDefault` blocks the browser-reload
-      // default; if the host hasn't supplied an `onRestart` handler we fall through to a no-op (still preventing the
-      // reload).
       event.preventDefault();
-      this.options.onRestart?.();
+      this.beginExitSequence(() => {
+        this.sharedEngineAbortController?.abort();
+        this.options.onRestart?.();
+      });
       return;
     }
     if (event.code === 'Space') {
@@ -2587,6 +2704,10 @@ export class PixiGameplayView {
       this.togglePause();
       return;
     }
+    // HiSpeed adjustment runs entirely on the view side — the engine has its own `high-speed` input command but
+    // the value it tracks is decoupled from the visual scroll speed (`PIXELS_PER_BEAT * this.hiSpeed`) the
+    // renderer applies. The WebInputRuntime's lane-input dispatch ignores arrow tokens, so the engine has no
+    // way to push HiSpeed changes back to the renderer; we handle them directly here.
     if (event.code === 'ArrowUp') {
       event.preventDefault();
       this.adjustHiSpeed(HISPEED_STEP);
@@ -2595,49 +2716,6 @@ export class PixiGameplayView {
     if (event.code === 'ArrowDown') {
       event.preventDefault();
       this.adjustHiSpeed(-HISPEED_STEP);
-      return;
-    }
-    const channel = resolveKeyChannel(event, this.laneChannels);
-    if (!channel || this.paused) {
-      return;
-    }
-    // Auto-scratch suppresses the player's scratch input — otherwise the user's stray Shift press would trigger an
-    // EMPTY_POOR judge (scratch note already auto-hit + cleared by `autoScratchJudge`).
-    if (isScratch(channel)) {
-      const autoSide = channel === '16' ? this.options.autoScratch1P : this.options.autoScratch2P;
-      if (autoSide) return;
-    }
-    event.preventDefault();
-    if (!event.repeat) {
-      this.pressedChannels.add(channel);
-      // Start the LR2 key-on timer for this lane so skin elements gated on timer 100..107 (lane lasers etc.) become
-      // visible while the key is held down.
-      this.startKeyOnTimer(channel);
-      // Spin the turntable on every scratch press, even an empty one — a DJ scratch with no note still rotates the
-      // disc. No-op for non-scratch channels.
-      this.applyTurntableImpulse(channel);
-      if (!this.options.autoPlay) {
-        // Bomb is triggered inside judge() when the press lands on a note -- empty presses (no note in window) do not
-        // produce a bomb flash.
-        this.judge(channel, this.currentSeconds());
-      }
-    }
-  };
-
-  private readonly handleKeyUp = (event: KeyboardEvent): void => {
-    const channel = resolveKeyChannel(event, this.laneChannels);
-    if (channel) {
-      this.pressedChannels.delete(channel);
-      // Same render-time alpha taper as the auto-judged LN release path so manual key-ups also decay smoothly instead
-      // of popping off. `releaseKeyOnTimer` schedules the timer's delete after `KEY_ON_FADE_OUT_MS`.
-      this.releaseKeyOnTimer(channel);
-      // Don't delete bombStartedAt here -- let renderBombs decide when the animation has finished. Otherwise releasing
-      // the key cuts off the bomb flash mid-animation. Manual play: a release on a channel currently holding an LN is
-      // the trigger to finalize the tail judgement. Auto-play never reaches this branch (the auto-judge path handles
-      // its own LN end timing).
-      if (!this.options.autoPlay) {
-        this.finalizeActiveLongNote(channel, this.currentSeconds());
-      }
     }
   };
 
@@ -2788,11 +2866,7 @@ export class PixiGameplayView {
     const timeout = window.setTimeout(() => {
       this.keyFlashTimeouts.delete(timeout);
       if (this.disposed) return;
-      // Don't retire the timer if a fresh LN head landed on the same lane during the fade window — that re-press has
-      // its own start/release lifecycle.
-      if (!this.activeLongNotes.has(channel)) {
-        this.timerStartedAt.delete(timerId);
-      }
+      this.timerStartedAt.delete(timerId);
       this.lnHoldFadeOutStart.delete(timerId);
     }, fadeMs);
     this.keyFlashTimeouts.add(timeout);
@@ -2814,19 +2888,19 @@ export class PixiGameplayView {
     // Stamp the fade origin unconditionally — the render-side cleanup uses it as the authoritative clock for the
     // 1 → 0 alpha taper, and the previous early-return on a missing `timerStartedAt` left the LN-end path stuck at
     // full brightness whenever the deferred startKeyOnTimer / releaseKeyOnTimer interleaving had already retired
-    // the slot (most visibly: `autoFinalizeLongNotes` calls release after `activeLongNotes.delete`, and a racy
-    // setTimeout cleanup from a previous press could have wiped `timerStartedAt` between the LN's startKeyOnTimer
-    // and this release). The `timerStartedAt.has` gate now controls only the deferred cleanup below — the fade
-    // start is committed regardless so `renderSkinImage` can taper any still-visible laser through to alpha=0.
+    // the slot (a racy setTimeout cleanup from a previous press could have wiped `timerStartedAt` between the LN's
+    // startKeyOnTimer and this release). The `timerStartedAt.has` gate now controls only the deferred cleanup
+    // below — the fade start is committed regardless so `renderSkinImage` can taper any still-visible laser
+    // through to alpha=0.
     this.keyOnFadeOutStart.set(timerId, this.playClock());
     if (!this.timerStartedAt.has(timerId)) return;
     const fadeMs = this.keyOnFadeDurationMs.get(timerId) ?? KEY_ON_FADE_OUT_MS;
     const timeout = window.setTimeout(() => {
       this.keyFlashTimeouts.delete(timeout);
       if (this.disposed) return;
-      // If the player (or autoplay) re-pressed the same lane during the fade window, leave the timer running and skip
-      // the delete — the new press has its own lifecycle.
-      if (!this.pressedChannels.has(channel) && !this.activeLongNotes.has(channel)) {
+      // If the player (or autoplay) re-pressed the same lane during the fade window, leave the timer running and
+      // skip the delete — the new press has its own lifecycle.
+      if (!this.pressedChannels.has(channel)) {
         this.timerStartedAt.delete(timerId);
       }
       this.keyOnFadeOutStart.delete(timerId);
@@ -2846,6 +2920,13 @@ export class PixiGameplayView {
       void this.audioContext?.suspend();
       this.pauseAllBgaVideos();
     }
+    // In shared-engine mode the engine maintains its own playback clock + per-tick scheduling; without flipping
+    // its pause flag the engine would keep advancing chart-time while the view sits paused, then fast-forward a
+    // burst of judge events the moment the view resumes. Propagate the toggle so both sides are aligned. The
+    // engine's pause path also calls `audioSession.pause()` / `resume()` which our WebAudioSession maps onto
+    // `audioContext.suspend()` / `resume()` — those are idempotent when the context is already in the matching
+    // state, so the redundant call from the engine side after our own `audioContext.suspend()` above is a no-op.
+    this.sharedEngineInputSignals?.pushCommand({ kind: 'toggle-pause' });
   }
 
   /**
@@ -2887,231 +2968,6 @@ export class PixiGameplayView {
       void handle.video.play().catch(() => {
         // Autoplay-policy / codec rejections — ignore silently.
       });
-    }
-  }
-
-  /**
-   * Sample key the BMS spec reserves for landmine "explosion" audio. Charts that author a `#WAV 00` register the
-   * explosion sound there and we play it on every mine hit; charts without a `#WAV 00` get silent mine hits (still
-   * scored / damaged).
-   */
-  private static readonly LANDMINE_EXPLOSION_SAMPLE_KEY = '00';
-
-  /**
-   * Hit-tests `mineNotes` for an un-judged landmine on `channel` within ±`badSeconds` of `seconds`. Returns `true` when
-   * a mine was consumed (caller must skip the regular note path), false otherwise.
-   *
-   * Mirrors the CLI engine's `mine-hit` branch (`packages/player/src/core/engine.ts:resolveLandmineGaugeEffect`):
-   *
-   * - - mark the mine as `hit` so it doesn't re-fire, - apply a BAD verdict to the score summary (BAD count up, combo
-   *   reset, no EX-score / IIDX-score change since BAD scores zero on both ladders anyway), - drain the gauge — the
-   *   chart-encoded damage value gets parsed from the BMS object value (`<value>/2` in base-36) and floored at
-   *   `DEFAULT_LANDMINE_GAUGE_DAMAGE` (= 4) when the value is missing / unparseable. We map that down onto
-   *   `applyGaugeDelta('BAD')` so the gauge type's normal BAD penalty still applies (HARD / DEATH stay punishing) and
-   *   leave per-mine custom damage as a future refinement, - play `#WAV 00` if the chart shipped one, - publish a BAD
-   *   judge event so the skin's NOWJUDGE plate flashes "BAD" and the bomb / lane-flash chrome reacts.
-   */
-  private tryHitMine(channel: string, seconds: number, badSeconds: number): boolean {
-    if (this.mineNotes.length === 0) return false;
-    const firstIndex = findFirstIndexAtOrAfter(this.mineNotes, seconds - badSeconds, (mine) => mine.seconds);
-    const target = findClosestCandidateInWindow(this.mineNotes, {
-      channel,
-      nowSec: seconds,
-      judgeWindowSec: badSeconds,
-      startIndex: firstIndex,
-      sortedBySeconds: true,
-      isConsumed: (mine) => mine.hit,
-    });
-    if (!target) return false;
-    target.hit = true;
-    // BAD verdict — combo reset + bad++. Same path the playable-note BAD branch uses, so the score panel ladder
-    // (PERFECT/GREAT/GOOD/BAD/POOR) reads consistently whether the BAD came from mistiming a real note or stepping on a
-    // mine.
-    applyJudgeToSummary(this.score, 'BAD', this.tracker);
-    this.applyGaugeDelta('BAD');
-    if (this.tracker.combo > this.maxCombo) {
-      this.maxCombo = this.tracker.combo;
-    }
-    this.publishJudge('BAD', seconds, channel);
-    // Mine explosion sample — `#WAV 00` if the chart authored one. Silent mines (no #WAV 00) just don't play anything.
-    this.playSampleByKey(PixiGameplayView.LANDMINE_EXPLOSION_SAMPLE_KEY, target.seconds);
-    // Bomb / key-on visuals fire so the lane flashes the same way it would on a real BAD hit. The skin's mine-specific
-    // explosion sprite (when authored) is gated by the regular bomb timer — LR2 doesn't carry a separate "mine
-    // explosion" timer, so reusing 50-69 matches the reference behavior.
-    this.triggerBomb(channel);
-    return true;
-  }
-
-  private judge(channel: string, seconds: number): void {
-    const windows = resolveJudgeWindowsMs(this.song!.chart);
-    const badSeconds = windows.bad / 1000;
-    // Landmine pre-check — a press inside the BAD window of an un-judged mine on this lane explodes the mine FIRST,
-    // skipping the regular note search. Mirrors LR2's behavior (`engine.ts:resolveLandmineGaugeEffect` in
-    // `packages/player`): BAD verdict, combo reset to 0, gauge drained by the chart-encoded damage value (default 4),
-    // and the mine's explosion sample (`#WAV 00`) plays. The playable-note loop below is skipped — the mine consumes
-    // the press.
-    if (this.tryHitMine(channel, seconds, badSeconds)) {
-      return;
-    }
-    const firstCandidateIndex = findFirstIndexAtOrAfter(this.notes, seconds - badSeconds, (note) => note.seconds);
-    const note = findClosestCandidateInWindow(this.notes, {
-      channel,
-      nowSec: seconds,
-      judgeWindowSec: badSeconds,
-      startIndex: firstCandidateIndex,
-      sortedBySeconds: true,
-      isConsumed: (candidate) => candidate.hit,
-    });
-    if (!note) {
-      // Empty press (no note in the BAD window for this lane) — LR2-compatible 空POOR (empty POOR). Per the LR2
-      // reference:
-      //
-      // - Gauge: penalty per gauge type (see `applyGrooveGaugeJudge('EMPTY_POOR')`): GROOVE / HARD -2, EASY -1, DEATH
-      //   -100. So NORMAL / EASY are nearly harmless; HARD / DEATH actually drain.
-      // - Combo: NOT broken (`tracker.combo` unchanged).
-      // - Score: NOT updated — `summary.poor` / EX-SCORE / IIDX score all untouched, so phantom presses don't hurt the
-      //   final tally.
-      // - POOR BGA: triggered just like a real POOR — `publishJudge` stamps `lastPoorAt` for the BGA-swap window.
-      // - Judge plate: flashes "POOR" for ~600 ms (NOWJUDGE timer 46 restart, `lastJudge` set). LR2 distinguishes index
-      //   0 (空) vs 1 (見逃し) at the skin level via op 246 / 245, but both map to the same `'poor'` kind in our skin model
-      //   so the rendered sprite is identical — close enough for now.
-      this.applyGaugeDelta('EMPTY_POOR');
-      this.publishJudge('POOR', seconds, channel);
-      return;
-    }
-    this.markNoteHit(note);
-    // Signed delta (ms): positive = player late, negative = player early. Used for FAST/SLOW classification on GREAT /
-    // GOOD judgements (PERFECT is "on time" by definition).
-    const signedDeltaMs = (seconds - note.seconds) * 1000;
-    const delta = Math.abs(signedDeltaMs);
-    const judge: JudgeKind =
-      delta <= windows.pgreat ? 'PERFECT' : delta <= windows.great ? 'GREAT' : delta <= windows.good ? 'GOOD' : 'BAD';
-    // Always play the keysound on press so the player gets immediate audio feedback even though the score commit might
-    // be deferred for an LN.
-    this.playSample(note);
-    if (judge === 'PERFECT' || judge === 'GREAT') {
-      // LR2 bomb (timer 50-69) fires on GREAT-or-better only — GOOD / BAD / POOR don't earn the lane explosion, so the
-      // animation reads as positive feedback for clean hits.
-      this.triggerBomb(channel);
-    }
-    if (isLongNote(note)) {
-      // LN: defer scoreboard / gauge / publish until the tail is finalized in `finalizeActiveLongNote`. The note is
-      // marked `hit = true` so subsequent presses on this channel target the next note rather than re-judging the same
-      // head.
-      this.activeLongNotes.set(channel, { note, headJudge: judge, headSignedDeltaMs: signedDeltaMs });
-      // Fire the LR2 LN-hold-effect timer (70-89) so authored sustain visuals (sparkle / glow) become visible during
-      // the hold. Released in `finalizeActiveLongNote` / `autoFinalizeLongNotes` / `finalizeOverheldLongNotes`.
-      this.startLnHoldTimer(channel);
-      return;
-    }
-    this.commitFinalJudge(judge, signedDeltaMs, seconds, channel);
-  }
-
-  /**
-   * Commits a finalized note judgement to every downstream sink: scoreboard counter, FAST/SLOW classifier, gauge delta,
-   * and the per-judge UI signal (`publishJudge`). Used by both the regular single-note path and the LN
-   * finalize-on-release path so the commit semantics stay consistent regardless of how the verdict was reached.
-   */
-  private commitFinalJudge(judge: JudgeKind, signedDeltaMs: number, seconds: number, channel: string): void {
-    applyJudgeToSummary(this.score, judge, this.tracker);
-    if (judge === 'GREAT' || judge === 'GOOD') {
-      if (signedDeltaMs < 0) this.fastCount += 1;
-      else if (signedDeltaMs > 0) this.slowCount += 1;
-    }
-    this.applyGaugeDelta(judge);
-    this.publishJudge(judge, seconds, channel);
-  }
-
-  /**
-   * Finalizes the LN currently held on `channel` (if any) using the release timing relative to the note's `endSeconds`.
-   * Behavior branches on `note.longNoteMode`:
-   *
-   * - **Mode 1** (BMS `#LNOBJ` default) — tail auto-completes on release within the bad-window of `endSeconds`.
-   *   Releasing significantly early downgrades the verdict to BAD. Late release after `endSeconds` is fine; the head
-   *   verdict stands.
-   * - **Mode 2 / 3** — tail timing matters. Release delta vs `endSeconds` produces a tail judgement on the same window
-   *   table the head uses; the final commit is the worst severity between head and tail (LR2 standard).
-   *
-   * If the matching LN was already finalized (e.g. by chart-end timeout via {@link finalizeOverheldLongNotes}) this is
-   * a no-op.
-   */
-  private finalizeActiveLongNote(channel: string, seconds: number): void {
-    const active = this.activeLongNotes.get(channel);
-    if (!active || !this.song) {
-      return;
-    }
-    this.activeLongNotes.delete(channel);
-    // Sustain visuals on the LR2 LN-hold-effect timer fade out here so the skin's release keyframes get a chance to
-    // play before the slot retires.
-    this.releaseLnHoldTimer(channel);
-    const { note, headJudge, headSignedDeltaMs } = active;
-    const endSeconds = note.endSeconds!;
-    const windows = resolveJudgeWindowsMs(this.song.chart);
-    const mode: 1 | 2 | 3 = note.longNoteMode ?? 1;
-    if (mode === 1) {
-      // Mode 1: tail auto-completes — only penalize *significant* early release. Within the bad window of `endSeconds`
-      // (or any time after) the head verdict carries.
-      const earlyByMs = (endSeconds - seconds) * 1000;
-      if (earlyByMs > windows.bad) {
-        this.commitFinalJudge('BAD', headSignedDeltaMs, seconds, channel);
-      } else {
-        this.commitFinalJudge(headJudge, headSignedDeltaMs, seconds, channel);
-        this.triggerBombOnNonMiss(channel, headJudge);
-      }
-      return;
-    }
-    // Mode 2 / 3: tail judgement based on release-vs-end delta.
-    const tailSignedDeltaMs = (seconds - endSeconds) * 1000;
-    const tailDelta = Math.abs(tailSignedDeltaMs);
-    const tailJudge: JudgeKind =
-      tailDelta <= windows.pgreat
-        ? 'PERFECT'
-        : tailDelta <= windows.great
-          ? 'GREAT'
-          : tailDelta <= windows.good
-            ? 'GOOD'
-            : tailDelta <= windows.bad
-              ? 'BAD'
-              : 'POOR';
-    // Combine: pick the worst severity (LR2 convention). On a tie we prefer the verdict whose delta is larger so
-    // FAST/SLOW classification reflects the genuinely-off side of the hold.
-    const finalJudge = judgeSeverity(headJudge) >= judgeSeverity(tailJudge) ? headJudge : tailJudge;
-    const finalSignedDeltaMs = finalJudge === headJudge ? headSignedDeltaMs : tailSignedDeltaMs;
-    this.commitFinalJudge(finalJudge, finalSignedDeltaMs, seconds, channel);
-    this.triggerBombOnNonMiss(channel, finalJudge);
-  }
-
-  /**
-   * Fires a lane bomb only when the verdict is "clean enough" (PERFECT / GREAT). GOOD / BAD / POOR are deliberately
-   * excluded so the lane explosion stays a positive-feedback cue for accurate hits. Single-note presses already gate
-   * inline at the call-site (`if (judge === 'PERFECT' || judge === 'GREAT')`); the LN finalize paths funnel through
-   * this helper instead so all four commit sites — single-note, manual LN release, manual auto-over-hold, auto LN tail
-   * — share the same gate without duplicating the predicate.
-   */
-  private triggerBombOnNonMiss(channel: string, judge: JudgeKind): void {
-    if (judge !== 'PERFECT' && judge !== 'GREAT') return;
-    this.triggerBomb(channel);
-  }
-
-  /**
-   * Auto-finalizes any active LN whose `endSeconds + bad-window` has passed without a release event. Maps to "user kept
-   * holding past the end" which LR2 treats as a clean tail (head verdict carries) so the chart can complete cleanly.
-   * Without this the `checkChartEnd` "every note hit" guard would be satisfied (the head set `hit = true`) but the LN's
-   * score would never reach the scoreboard.
-   */
-  private finalizeOverheldLongNotes(seconds: number): void {
-    if (this.activeLongNotes.size === 0 || !this.song) {
-      return;
-    }
-    const windows = resolveJudgeWindowsMs(this.song.chart);
-    const graceSec = windows.bad / 1000;
-    for (const [channel, active] of this.activeLongNotes) {
-      if (active.note.endSeconds! + graceSec < seconds) {
-        this.activeLongNotes.delete(channel);
-        this.commitFinalJudge(active.headJudge, active.headSignedDeltaMs, seconds, channel);
-        this.triggerBombOnNonMiss(channel, active.headJudge);
-        this.releaseLnHoldTimer(channel);
-      }
     }
   }
 
@@ -3255,29 +3111,12 @@ export class PixiGameplayView {
     this.perf.beginTick();
     const seconds = this.currentSeconds();
     if (!this.paused) {
-      this.perf.time('autoJudge', () => {
-        if (this.options.autoPlay) {
-          this.autoJudge(seconds);
-          // Drain LN holds whose tail timing has been reached. Fires the deferred PERFECT verdict + combo increment +
-          // lane laser release exactly at `endSeconds` so the visual completion lines up with the score event.
-          this.autoFinalizeLongNotes(seconds);
-        } else {
-          // Auto-scratch runs BEFORE the regular miss sweep so un-pressed scratch notes within the auto-side never
-          // reach `autoMiss` (and therefore never POOR-out).
-          if (this.options.autoScratch1P || this.options.autoScratch2P) {
-            this.autoScratchJudge(seconds);
-            // Scratch LNs may have been seeded into `activeLongNotes` by the auto-judge above — finalize their tails
-            // the same way the full-autoplay path does.
-            this.autoFinalizeLongNotes(seconds);
-          }
-          this.autoMiss(seconds);
-          // Manual play safety net: auto-finalize LNs the user forgot to release. Uses the head verdict (treats
-          // continued hold past end as a clean tail).
-          this.finalizeOverheldLongNotes(seconds);
-        }
-      });
-      this.perf.time('autoSamples', () => this.scheduleAutoSamples(seconds));
-      this.perf.time('checkChartEnd', () => this.checkChartEnd(seconds));
+      // Drain the engine's UI signal buses each frame so frame-snapshot-driven state (score panel, gauge,
+      // NOWJUDGE plate) and command-driven visual effects (lane flashes, POOR BGA) stay in sync. The
+      // state-applying callbacks were registered at engine launch; here we simply pull from the buses. The
+      // engine itself owns judge / sample / chart-end bookkeeping and runs its own tick loop at
+      // TUI_FRAME_INTERVAL_MS independent of this rAF.
+      this.drainSharedEngineSignals();
     }
     this.perf.time('updateFps', () => this.updateFps());
     this.perf.time('updateScores', () => {
@@ -3383,45 +3222,10 @@ export class PixiGameplayView {
   }
 
   /**
-   * Detects when the chart has finished playing — every playable note has been processed *and* the playhead is past the
-   * last note (with a small tail buffer for cymbal/sample decay) — and invokes the host's chart-end hook so the demo
-   * shell can transition out of gameplay. `onChartFinished` fires when supplied (host wants the result screen);
-   * otherwise we fall back to `onExit` for backwards compatibility (no-result-screen demos). We guard with `chartEnded`
-   * so the callback fires at most once.
+   * Latches at the moment the engine's `manualPlay` / `autoPlay` Promise resolves so the `onChartFinished` /
+   * `onExit` callback fires at most once. {@link handleSharedEngineChartFinished} is the only writer.
    */
   private chartEnded = false;
-  private checkChartEnd(seconds: number): void {
-    if (this.chartEnded || !this.song) {
-      return;
-    }
-    const endAt = this.songDurationSeconds + 3;
-    if (seconds < endAt) {
-      return;
-    }
-    if (this.remainingNotes > 0) {
-      // Manual play may still be working through trailing notes; only end once they are all judged or auto-missed.
-      return;
-    }
-    this.chartEnded = true;
-    // Snapshot before we defer — the gameplay state may keep changing for a few frames and we want the result data
-    // captured at the moment the chart "ended" (last note judged + tail buffer).
-    const result = this.getResultData();
-    // Defer one frame so the final render (with last judgement plate) is committed before we tear down — without this
-    // the user would see the playfield blank-flash to whatever scene comes next.
-    this.chartEndTimeout = window.setTimeout(() => {
-      this.chartEndTimeout = undefined;
-      if (this.disposed) {
-        return;
-      }
-      this.beginExitSequence(() => {
-        if (this.options.onChartFinished && result) {
-          this.options.onChartFinished(result);
-          return;
-        }
-        this.options.onExit?.();
-      });
-    }, 50);
-  }
 
   /**
    * Drives the LR2 scene-exit timeline (`#FADEOUT` → `#CLOSE`) before handing control back to the host. Seeds timer 2
@@ -3547,110 +3351,6 @@ export class PixiGameplayView {
    * `@be-music/player`'s engine does via `pendingAutoLongNotes`): one judgement event per LN, fired at the tail timing
    * so the combo pulse aligns with the LN visually completing rather than at its start.
    */
-  private autoJudge(seconds: number): void {
-    while (this.autoJudgeCursor < this.notes.length) {
-      const note = this.notes[this.autoJudgeCursor]!;
-      if (note.seconds > seconds) {
-        break;
-      }
-      this.autoJudgeCursor += 1;
-      if (note.hit) {
-        continue;
-      }
-      if (!isPlayableInputChannel(note.channel)) {
-        // Non-playable lanes (BGM-style notes that snuck into the playable collection, e.g. landmines) are not scored
-        // here; mark them consumed so chart-end bookkeeping does not keep revisiting them.
-        this.markNoteHit(note);
-        continue;
-      }
-      this.markNoteHit(note);
-      this.playSample(note);
-      this.triggerBomb(note.channel);
-      // Full-autoplay scratch hits drive the turntable too — otherwise the disc would sit motionless during a watch-
-      // mode replay even though the chart is being scratched.
-      this.applyTurntableImpulse(note.channel);
-      if (isLongNote(note)) {
-        // Defer the verdict — the tail timing is what the player actually sees as the LN body finishing. Hold the lane
-        // laser on (sustained key-on timer, no auto-fade) until `autoFinalizeLongNotes` releases it at endSeconds.
-        this.activeLongNotes.set(note.channel, {
-          note,
-          headJudge: 'PERFECT',
-          headSignedDeltaMs: 0,
-        });
-        this.startKeyOnTimer(note.channel);
-        this.startLnHoldTimer(note.channel);
-        continue;
-      }
-      this.commitFinalJudge('PERFECT', 0, seconds, note.channel);
-      this.flashKeyOnTimer(note.channel);
-    }
-  }
-
-  /**
-   * Drains active LN holds whose tail timing has been reached during autoplay. Each finalization commits PERFECT (head
-   * PERFECT + tail PERFECT, signedDelta 0 because auto-release is sample-accurate), increments the combo by one, and
-   * releases the lane laser. Mirrors `pendingAutoLongNotes` / `drainPendingAutoLongNotes` in the standalone engine.
-   *
-   * Distinct from {@link finalizeOverheldLongNotes}: that one fires only after the bad-window grace expires
-   * (manual-play safety net) and uses the **head** verdict; here we fire exactly at endSeconds with a clean PERFECT.
-   */
-  /**
-   * Auto-judges scratch notes on whichever side(s) have autoscratch enabled. Notes on the keyboard lanes pass through
-   * unchanged — only channel `16` (1P scratch) and `26` (2P scratch) are touched. Mirrors the {@link autoJudge}
-   * structure (PERFECT verdict, sample play, bomb trigger, LN head seeding) but skips advancing `autoJudgeCursor` so
-   * the full-autoplay path stays unaffected.
-   *
-   * Cost: one O(n) scan from `autoMissCursor` per frame, bounded by `bad-window seconds × note density`. Real charts
-   * have a handful of scratch notes within any miss window, so this is negligible.
-   */
-  private autoScratchJudge(seconds: number): void {
-    for (let index = this.autoMissCursor; index < this.notes.length; index += 1) {
-      const note = this.notes[index]!;
-      if (note.seconds > seconds) break;
-      if (note.hit) continue;
-      if (!isScratch(note.channel)) continue;
-      const enabled = note.channel === '16' ? this.options.autoScratch1P : this.options.autoScratch2P;
-      if (!enabled) continue;
-      this.markNoteHit(note);
-      this.playSample(note);
-      this.triggerBomb(note.channel);
-      // Auto-scratch is by definition the disc rotating itself. Pump an impulse here so the turntable visibly spins for
-      // each scratch note even when the player isn't pressing anything.
-      this.applyTurntableImpulse(note.channel);
-      if (isLongNote(note)) {
-        this.activeLongNotes.set(note.channel, {
-          note,
-          headJudge: 'PERFECT',
-          headSignedDeltaMs: 0,
-        });
-        this.startKeyOnTimer(note.channel);
-        this.startLnHoldTimer(note.channel);
-        continue;
-      }
-      this.commitFinalJudge('PERFECT', 0, seconds, note.channel);
-      this.flashKeyOnTimer(note.channel);
-    }
-  }
-
-  private autoFinalizeLongNotes(seconds: number): void {
-    if (this.activeLongNotes.size === 0) {
-      return;
-    }
-    for (const [channel, active] of this.activeLongNotes) {
-      const endSeconds = active.note.endSeconds!;
-      if (endSeconds <= seconds) {
-        this.activeLongNotes.delete(channel);
-        this.commitFinalJudge('PERFECT', 0, endSeconds, channel);
-        this.triggerBombOnNonMiss(channel, 'PERFECT');
-        // Same alpha-taper release as manual key-ups and auto- judged short notes (via `flashKeyOnTimer`) so the LN
-        // tail decays at the same speed without re-stamping the key-on timer. Pair with the LN-hold-effect release so
-        // any sustain visuals fade alongside the lane laser.
-        this.releaseKeyOnTimer(channel);
-        this.releaseLnHoldTimer(channel);
-      }
-    }
-  }
-
   /**
    * Brief key-on flash. We start the per-lane LR2 key-on timer (100..107 / 110..117) and schedule it to clear after a
    * short interval so the laser fades like a real keystroke. Used by autoplay (no real keyboard event) so the player
@@ -3667,9 +3367,9 @@ export class PixiGameplayView {
     const timeout = window.setTimeout(() => {
       this.keyFlashTimeouts.delete(timeout);
       if (this.disposed) return;
-      // A real press / sustained LN took over during the hold — skip the auto-release, the manual lifecycle is in
-      // charge.
-      if (this.pressedChannels.has(channel) || this.activeLongNotes.has(channel)) {
+      // A real press took over during the hold — skip the auto-release, the press lifecycle is in charge. (LN
+      // sustains drive their own `hold-lane-until-beat` timer keep-alive via `applyEngineCommand`.)
+      if (this.pressedChannels.has(channel)) {
         return;
       }
       this.releaseKeyOnTimer(channel);
@@ -3695,34 +3395,6 @@ export class PixiGameplayView {
       return Math.max(0, (this.pauseTime - this.startTime - this.pauseTotal) / 1000);
     }
     return Math.max(0, (performance.now() - this.startTime - this.pauseTotal) / 1000);
-  }
-
-  private autoMiss(seconds: number): void {
-    const bad = resolveJudgeWindowsMs(this.song!.chart).bad / 1000;
-    while (this.autoMissCursor < this.notes.length) {
-      const note = this.notes[this.autoMissCursor]!;
-      if (seconds - note.seconds <= bad) {
-        break;
-      }
-      this.autoMissCursor += 1;
-      if (note.hit) {
-        continue;
-      }
-      this.markNoteHit(note);
-      applyJudgeToSummary(this.score, 'POOR', this.tracker);
-      this.applyGaugeDelta('POOR');
-      this.publishJudge('POOR', seconds, note.channel);
-    }
-  }
-
-  private markNoteHit(note: RuntimeNote): void {
-    if (note.hit) {
-      return;
-    }
-    note.hit = true;
-    if (this.remainingNotes > 0) {
-      this.remainingNotes -= 1;
-    }
   }
 
   private publishJudge(judge: JudgeKind, seconds: number, channel?: string): void {
@@ -3789,225 +3461,6 @@ export class PixiGameplayView {
     this.timerStartedAt.set(48, now);
     this.timerStartedAt.set(49, now);
     log.info('FULL COMBO');
-  }
-
-  /**
-   * Pre-schedules every background sample whose chart-time is within the next `lookAhead` seconds. We hand each sample
-   * a precise audio-context start time (`audioContextStartTime + trigger.seconds`) so the Web Audio engine can fire it
-   * sample-accurately, independent of when this method is next polled. The ~0.5s look-ahead is large enough to absorb
-   * GC/stutters in the JS frame loop yet small enough that pause/resume timing remains responsive.
-   */
-  private scheduleAutoSamples(seconds: number): void {
-    // Hold off until the chart-start gate has fired and `audioContextStartTime` is anchored to the audio clock — until
-    // then `playSampleByKey` would clamp every queued chart-second to "now" and start playing the BGM during the LR2
-    // LOADING phase.
-    if (this.audioContextStartTime === 0) {
-      return;
-    }
-    const lookAhead = 0.5;
-    while (this.autoTriggerNextIndex < this.autoSampleTriggers.length) {
-      const trigger = this.autoSampleTriggers[this.autoTriggerNextIndex]!;
-      if (trigger.seconds > seconds + lookAhead) {
-        break;
-      }
-      this.autoTriggerNextIndex += 1;
-      this.playSampleByKey(trigger.sampleKey, trigger.seconds, {
-        continuationFlag: trigger.event.bmson?.c === true,
-        offsetSeconds: trigger.sampleOffsetSeconds,
-        durationSeconds: trigger.sampleDurationSeconds,
-      });
-    }
-    this.scheduleVolumeChanges(seconds, lookAhead);
-  }
-
-  /**
-   * Drains pending BMS dynamic-volume events (channels `97` / `98`) up to `chartSeconds + lookAhead` and writes their
-   * authored 0..1 gain to the appropriate audio bus mixer at the corresponding audio-context time. Mirrors the CLI's
-   * realtime-volume scheduling so a chart that quiets the BGM during a vocal break (or boosts the key bus for a
-   * climactic drop) sounds the same on the web side.
-   *
-   * The scheduled `setValueAtTime` calls overwrite each other — BMS volume events are absolute, not multiplicative — so
-   * a later `setValueAtTime(0.5, t2)` cleanly replaces an earlier `setValueAtTime(0.2, t1)` regardless of fire order.
-   */
-  private scheduleVolumeChanges(chartSeconds: number, lookAheadSeconds: number): void {
-    if (!this.audioContext || this.volumeChangeEvents.length === 0) {
-      return;
-    }
-    const horizon = chartSeconds + lookAheadSeconds;
-    while (this.volumeChangeCursor < this.volumeChangeEvents.length) {
-      const event = this.volumeChangeEvents[this.volumeChangeCursor]!;
-      if (event.seconds > horizon) {
-        break;
-      }
-      this.volumeChangeCursor += 1;
-      const mixer = event.bus === 'key' ? this.audioBus?.keyMixer : this.audioBus?.bgmMixer;
-      if (!mixer) continue;
-      const startAt = Math.max(this.audioContext.currentTime, this.audioContextStartTime + event.seconds);
-      // Web Audio raises an exception if `setValueAtTime` is handed a non-finite value — `parseBmsDynamicVolumeGain`
-      // already filtered those, so we just clamp into [0, 1] for safety.
-      const gain = Math.max(0, Math.min(1, event.gain));
-      try {
-        mixer.gain.setValueAtTime(gain, startAt);
-      } catch {
-        // Sealed AudioParam (extremely rare — only happens if the bus has been disposed mid-flight). Drop the event
-        // silently; the next play prepare resets the cursor.
-      }
-    }
-  }
-
-  /**
-   * Plays a WAV sample by its `#WAV` key. When `scheduledChartSeconds` is given, the buffer is *scheduled* to start at
-   * the corresponding audio-context timestamp (precise Web Audio timing). Without it, the buffer starts immediately --
-   * used for input-driven hit sounds, where the player's key press defines the start time.
-   *
-   * **Bus routing**: this is the auto-trigger path (`scheduleAutoSamples` is the only caller), so the sample is the BMS
-   * BGM bed and routes through `bgmMixer`. The split-bus compressor handles BGM and key sounds independently — see
-   * `audio-bus.ts` for why.
-   */
-  private playSampleByKey(
-    sampleKey: string,
-    scheduledChartSeconds?: number,
-    options: { continuationFlag?: boolean; offsetSeconds?: number; durationSeconds?: number } = {},
-  ): void {
-    if (!this.audioContext || !this.song) {
-      return;
-    }
-    const path = (this.resolvedChart ?? this.song.chart).resources.wav[sampleKey];
-    if (!path) {
-      return;
-    }
-    if (options.continuationFlag === true && this.activeSampleNodes.has(sampleKey)) {
-      // bmson `note.c = true` — a previous trigger of the same sample is still emitting, so skip the retrigger and let
-      // the sustained playback ride through. Mirrors the playable-note path in `playSample`.
-      return;
-    }
-    const buffer = this.decodedSamples.get(normalizePath(path).toLowerCase());
-    if (!buffer) {
-      return;
-    }
-    const node = this.audioContext.createBufferSource();
-    node.buffer = buffer;
-    node.onended = () => {
-      try {
-        node.disconnect();
-      } catch {
-        // Already disconnected or context closed.
-      }
-      // Drop the active-node tracking entry once the sample finishes naturally so the next bmson `c=true` lookup sees
-      // an empty slot and triggers a fresh start.
-      if (this.activeSampleNodes.get(sampleKey) === node) {
-        this.activeSampleNodes.delete(sampleKey);
-      }
-    };
-    // BGM bus. Falls back to direct destination if `prepareAudio` hasn't run yet (defensive — in practice the bus is
-    // always built before any `play*` call). When `#WAVCMD 01 xx vv` assigned a non-unity multiplier for this slot,
-    // splice a unity-cost GainNode in between so the per-WAV attenuation applies before the bus mixer sees the signal.
-    // Slots without a `#WAVCMD` entry skip the extra node entirely.
-    const sampleGainTarget = this.audioBus?.bgmMixer ?? this.audioContext.destination;
-    this.connectSampleNodeWithWavCmdGain(node, sampleKey, sampleGainTarget);
-    // bmson slicing — `offsetSeconds` seeks into the sound-channel WAV and `durationSeconds` caps how long this slice
-    // plays. Both are clamped against the buffer duration so a chart that mis-authors them (or that sourced its slice
-    // positions from a longer take) still produces audible output instead of an instant abort. BMS / json paths leave
-    // both fields undefined and play the whole WAV from t=0 — the historical behavior.
-    const offsetSeconds = clampSampleOffset(options.offsetSeconds, buffer.duration);
-    const durationSeconds = clampSampleDuration(options.durationSeconds, buffer.duration, offsetSeconds);
-    if (scheduledChartSeconds !== undefined) {
-      // Map chart seconds → audio-context time. Clamp to "now" so a slightly late trigger (look-ahead just elapsed)
-      // still fires immediately rather than throwing for a past timestamp.
-      const startAt = Math.max(this.audioContext.currentTime, this.audioContextStartTime + scheduledChartSeconds);
-      startSampleNode(node, startAt, offsetSeconds, durationSeconds);
-    } else {
-      startSampleNode(node, undefined, offsetSeconds, durationSeconds);
-    }
-    this.activeSampleNodes.set(sampleKey, node);
-  }
-
-  /**
-   * Connects a freshly-created `BufferSourceNode` to its target bus mixer, splicing in a per-slot GainNode when
-   * `#WAVCMD 01 xx vv` declared a non-unity multiplier. Slots with no `#WAVCMD` entry connect directly (no allocation,
-   * no extra hop).
-   *
-   * `node.onended` already cleans up its own outgoing edges, but the intermediate gain node (if we created one)
-   * survives by being referenced through the source node's edge until the next GC cycle — that's fine for short
-   * keysounds and acceptable for BGM since chart authors don't author thousands of `#WAVCMD` lines.
-   */
-  private connectSampleNodeWithWavCmdGain(node: AudioBufferSourceNode, sampleKey: string, target: AudioNode): void {
-    if (!this.audioContext) {
-      // Defensive — `playSample{,ByKey}` already gated on `audioContext`, but the type-narrowing doesn't carry.
-      node.connect(target);
-      return;
-    }
-    const multiplier = this.wavCmdVolumeMultipliers.get(sampleKey);
-    if (multiplier === undefined || multiplier === 1) {
-      node.connect(target);
-      return;
-    }
-    const gain = this.audioContext.createGain();
-    gain.gain.value = multiplier;
-    node.connect(gain);
-    gain.connect(target);
-  }
-
-  /**
-   * Plays the keysound attached to a judged input note. Routes through `keyMixer` so the key-bus compressor (split
-   * mode) sees the input transient stream independently of the BGM.
-   *
-   * Honors the bmson 1.0.0 `note.c` (continuation flag): when `c === true`, a still-playing instance of the same
-   * sample suppresses the new trigger so the audio plays through uninterrupted. Per the spec ("c=true → don't restart
-   * audio"), this lets chart authors hold one sample across a chord / burst of repeated notes without each hit
-   * re-attacking the envelope. Notes without `c` (BMS-derived events, plain bmson notes) keep the historical "every
-   * press triggers a fresh playback" behavior.
-   */
-  private playSample(note: RuntimeNote): void {
-    if (!this.audioContext || !this.song) {
-      return;
-    }
-    // `event.value` is already normalized under the chart's authored base (36 = case-folded, 62 = case-preserved). Look
-    // it up via `normalizeObjectKey(value, base)` rather than a hard-coded `toUpperCase()` so a `#BASE 62` chart's
-    // lowercase sample IDs (`#WAV0a`) hit their correct slot instead of collapsing onto the uppercase variant.
-    const chart = this.resolvedChart ?? this.song.chart;
-    const sampleKey = normalizeObjectKey(note.event.value, resolveBmsBase(chart));
-    const path = chart.resources.wav[sampleKey];
-    if (!path) {
-      return;
-    }
-    if (note.event.bmson?.c === true && this.activeSampleNodes.has(sampleKey)) {
-      // bmson continuation flag — previous instance of this sample is still playing, so do not retrigger.
-      return;
-    }
-    const buffer = this.decodedSamples.get(normalizePath(path).toLowerCase());
-    if (!buffer) {
-      return;
-    }
-    const node = this.audioContext.createBufferSource();
-    node.buffer = buffer;
-    node.onended = () => {
-      try {
-        node.disconnect();
-      } catch {
-        // Already disconnected or context closed.
-      }
-      // Drop the active-node tracking entry once the sample finishes naturally so the next bmson `c=true` lookup sees
-      // an empty slot and triggers a fresh start.
-      if (this.activeSampleNodes.get(sampleKey) === node) {
-        this.activeSampleNodes.delete(sampleKey);
-      }
-    };
-    // Key bus. Falls back to direct destination if `prepareAudio` hasn't run yet (defensive — in practice the bus is
-    // always built before any `play*` call). The `#WAVCMD 01 xx vv` gain splice mirrors `playSampleByKey` so input
-    // keysounds honor the same chart-author per-slot volume the BGM path does.
-    const sampleGainTarget = this.audioBus?.keyMixer ?? this.audioContext.destination;
-    this.connectSampleNodeWithWavCmdGain(node, sampleKey, sampleGainTarget);
-    // bmson slicing — for bmson charts, the playback map carries the per-event `(offsetSeconds, durationSeconds)` tuple
-    // produced by `createBmsonSamplePlaybackMap`. Honoring it here means a chart that splits one long WAV across many
-    // notes plays each note's intended slice instead of replaying the whole file from t=0 on every hit. BMS / json
-    // charts never populate `bmsonSlicePlayback` (slicing is a bmson- only concept), so the lookup misses and the
-    // historical play-from-zero behavior kicks in.
-    const slice = this.bmsonSlicePlayback?.get(note.event);
-    const offsetSeconds = clampSampleOffset(slice?.offsetSeconds, buffer.duration);
-    const durationSeconds = clampSampleDuration(slice?.durationSeconds, buffer.duration, offsetSeconds);
-    startSampleNode(node, undefined, offsetSeconds, durationSeconds);
-    this.activeSampleNodes.set(sampleKey, node);
   }
 
   private render(seconds: number): void {
@@ -4662,10 +4115,10 @@ export class PixiGameplayView {
         sprite.alpha = 0;
         // Belt-and-braces — keep the maps consistent so `isTimerActive` stops reporting the slot as active and the
         // next press starts from a clean fade-in keyframe. We mirror `releaseKeyOnTimer`'s deferred cleanup: only
-        // wipe `timerStartedAt` when neither a real keypress nor a still-active LN is keeping the slot alive.
+        // wipe `timerStartedAt` when no real keypress is keeping the slot alive.
         this.keyOnFadeOutStart.delete(fadeTimer);
         const channel = this.resolveChannelForKeyOnTimer(fadeTimer);
-        if (channel !== undefined && !this.pressedChannels.has(channel) && !this.activeLongNotes.has(channel)) {
+        if (channel !== undefined && !this.pressedChannels.has(channel)) {
           this.timerStartedAt.delete(fadeTimer);
         }
       } else {
@@ -4749,10 +4202,7 @@ export class PixiGameplayView {
     destination: Lr2DestinationRect;
     keyframes: Lr2DestinationRect[];
   }): Lr2DestinationRect {
-    if (element.keyframes.length > 1) {
-      return evaluateKeyframes(element.keyframes, this.elapsedSinceTimer(element.destination.timer));
-    }
-    return element.destination;
+    return evaluateElementDestination(element, this.elapsedSinceTimer);
   }
 
   /**
@@ -5733,15 +5183,390 @@ export class PixiGameplayView {
     // fallback-status text path needs to follow the same either-side rule.
     return Boolean(skin.judges[kind]?.length || skin.judges2P[kind]?.length);
   }
+
+  /**
+   * Kicks off the shared-engine playback loop in the background. Called from the LR2 PLAYSTART gate inside
+   * {@link start}. The returned promise is captured on `this.sharedEnginePromise` so a defensive re-entry
+   * doesn't spawn a second engine; we don't `await` it because the chart can run for several minutes and
+   * `start()` must return synchronously to the host's setVisible chain.
+   *
+   * Catches {@link PlayerInterruptedError} so the engine's `interrupt(escape)` / `interrupt(restart)` commands
+   * route to the host's `onExit` / `onRestart` callbacks the same way the legacy DOM keyhandler did.
+   */
+  /**
+   * Builds the `BeMusicJson` snapshot the engine sees in shared-engine mode, with playable-channel events
+   * re-mapped to match whichever shuffle the view's `applyRandomMode` produced for this play session
+   * (RANDOM / MIRROR / S-RANDOM / SCATTER + DP FLIP).
+   *
+   * The view's per-side shuffle mutates `runtimeNote.channel` on each entry of `this.notes` /
+   * `this.mineNotes` / `this.invisibleNotes`, but the underlying chart `event.channel` is untouched. The
+   * engine extracts its own runtime notes by walking `chart.events` and using `event.channel`, so without a
+   * remap it would judge against the original channel layout while the renderer paints the shuffled one. The
+   * player would press the key for a lane that visually contains note A and the engine would judge note B.
+   *
+   * The remap is built by walking the view's three runtime arrays and storing
+   * `event → post-shuffle channel`. Events present in `chart.events` but not on any runtime array (BGM,
+   * BGA, dynamic volume, …) keep their original channel; the engine never extracts them as playable lanes.
+   * The returned chart shares `events` references with the original chart wherever no remap applies, so the
+   * shallow-clone overhead is one new array plus one new object per actually-shuffled event.
+   */
+  private buildSharedEngineChart(): BeMusicJson {
+    const chart = this.resolvedChart ?? this.song!.chart;
+    if (!this.options.random1P && !this.options.random2P && !this.options.dpFlip) {
+      // Hot path: no shuffle / flip declared, so the runtime channels are guaranteed to match the chart-event
+      // channels and we can hand the original chart through unchanged. Saves a per-event Map probe on every
+      // chart launch.
+      return chart;
+    }
+    const remap = new Map<BeMusicEvent, string>();
+    const collect = (entries: ReadonlyArray<{ event: BeMusicEvent; channel: string }>): void => {
+      for (const entry of entries) {
+        if (entry.channel !== entry.event.channel) {
+          remap.set(entry.event, entry.channel);
+        }
+      }
+    };
+    collect(this.notes);
+    collect(this.mineNotes);
+    collect(this.invisibleNotes);
+    if (remap.size === 0) {
+      // The shuffle was a no-op for this chart's lane usage (e.g. MIRROR on a 1-lane chart). Skip the clone.
+      return chart;
+    }
+    return {
+      ...chart,
+      events: chart.events.map((event) => {
+        const remapped = remap.get(event);
+        return remapped === undefined ? event : { ...event, channel: remapped };
+      }),
+    };
+  }
+
+  private launchSharedEngine(): void {
+    if (this.disposed || this.sharedEnginePromise) return;
+    if (!this.song || !this.audioContext || !this.audioBus) return;
+    // Build the chart the engine sees from the view's already-shuffled notes / mines / invisibles. The view's
+    // `applyRandomMode` mutates `runtimeNote.channel` (NOT `event.channel`), so without this remap the engine
+    // would extract notes from `chart.events` with their ORIGINAL pre-shuffle channels — its judge would target
+    // a different lane than the visual the player is reading, so RANDOM / MIRROR / S-RANDOM / SCATTER would
+    // make the chart unplayable. Rebuilding `events` with the post-shuffle channel keeps the engine and the
+    // renderer on the same shuffle.
+    const chart = this.buildSharedEngineChart();
+    const callbacks: WebUiRuntimeCallbacks = {
+      onFrame: (frame) => this.applyEngineFrame(frame),
+      onCommand: (command) => this.applyEngineCommand(command),
+      onJudgeCombo: (state) => this.applyEngineJudgeCombo(state),
+      onSignalsReady: (signals) => {
+        this.sharedEngineSignals = signals;
+      },
+    };
+    this.sharedEnginePromise = runEngineDriver({
+      chart,
+      audio: {
+        audioContext: this.audioContext,
+        audioBus: this.audioBus,
+        decodedSamples: this.decodedSamples,
+        wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
+        bmsonSlicePlayback: this.bmsonSlicePlayback,
+      },
+      mode: this.options.autoPlay ? 'auto' : 'manual',
+      ui: callbacks,
+      onInputSignalsReady: (signals) => {
+        this.sharedEngineInputSignals = signals.inputSignals;
+      },
+      // Listen on the window (default) so the runtime sees keyboard events regardless of which DOM element
+      // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
+      // canvas's `tabIndex = 0` only makes it focusable, not auto-focused, so a canvas-scoped listener would
+      // only fire after the user clicked the canvas first.
+      shouldSkipKey: (event) => {
+        // Suppress lane-input dispatch when the user is typing into a focused text input (search box, etc.).
+        const target = event.target as HTMLElement | null;
+        if (target) {
+          const tag = target.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+          if (target.isContentEditable === true) return true;
+        }
+        // ESC and F5 are handled by the view's own listener (set up in `mount`) so the LR2 `#FADEOUT` animation
+        // runs to completion BEFORE the engine's `PlayerInterruptedError` flow disposes the audio session. If
+        // we let the runtime push `interrupt(escape)` directly, the engine's `dispose()` would `node.stop()`
+        // every in-flight BufferSource immediately, killing the chart audio mid-fade. Same idea for Space:
+        // routing the toggle through the view's `togglePause` keeps the view's `paused` flag, the audio bus's
+        // suspend, the BGA video pause, and the engine's playback clock all on the same single entry-point.
+        if (event.code === 'Escape' || event.code === 'F5' || event.code === 'Space') return true;
+        if (event.code === 'ArrowUp' || event.code === 'ArrowDown') return true;
+        return false;
+      },
+      engineOptions: {
+        // The view's own intro timing already gated the chart to PLAYSTART; tell the engine to start its chart
+        // immediately so its t=0 lines up with our `audioContextStartTime` anchor instead of imposing the
+        // engine's default 1.5 s lead-in on top.
+        leadInMs: 0,
+        // Forward AUTO SCRATCH: engine has a single boolean rather than per-side, so either-side AUTO SCRATCH
+        // turns scratch auto on for both 16 / 26 channels. That's a per-side fidelity loss for rare DP charts
+        // where only one player's scratch should auto-spin (the demo's lil-gui surfaces them as two separate
+        // toggles), but the alternative — leaving auto off — was worse: scratch notes the user expected to be
+        // auto-spun would just sit there as misses, and the legacy `autoScratchJudge` path is gated off in
+        // shared-engine mode. A future engine extension could split the flag per side.
+        autoScratch: this.options.autoScratch1P === true || this.options.autoScratch2P === true,
+        signal: (this.sharedEngineAbortController = new AbortController()).signal,
+      },
+    })
+      .then(() => {
+        log.info('shared engine driver finished');
+        this.handleSharedEngineChartFinished();
+      })
+      .catch((error: unknown) => {
+        // The view's own ESC / F5 handler (`handleSharedEngineExitKey`) drives the LR2 fadeout animation, calls
+        // the host's `onExit` / `onRestart` from the fade-completion callback, and then aborts the engine's
+        // signal — which is what produced this rejection. The view is already disposing (or about to), so the
+        // catch handler short-circuits to avoid double-firing the host transition. Same logic for any rejection
+        // landing after `dispose` has flipped `disposed` (e.g. parent component teardown without ESC).
+        if (this.disposed) return;
+        if (this.sharedEngineAbortController?.signal.aborted) return;
+        if (error instanceof PlayerInterruptedError) {
+          if (error.reason === 'escape') {
+            this.beginExitSequence(() => this.options.onExit?.());
+          } else if (error.reason === 'restart') {
+            this.options.onRestart?.();
+          }
+          return;
+        }
+        log.warn('shared engine driver threw', error);
+      });
+  }
+
+  /**
+   * Pulls the latest frame snapshot + queued commands + judge-combo state from the engine's signal buses. Called
+   * from {@link tick} when shared-engine mode is on; the per-call callbacks were registered at engine launch.
+   */
+  private drainSharedEngineSignals(): void {
+    if (!this.sharedEngineSignals) return;
+    const result = drainWebUiSignals(
+      this.sharedEngineSignals.uiSignals,
+      {
+        onFrame: (frame) => this.applyEngineFrame(frame),
+        onCommand: (command) => this.applyEngineCommand(command),
+        onJudgeCombo: (state) => this.applyEngineJudgeCombo(state),
+      },
+      {
+        stateSignals: this.sharedEngineSignals.stateSignals,
+        lastJudgeComboTick: this.sharedEngineLastJudgeComboTick,
+      },
+    );
+    this.sharedEngineLastJudgeComboTick = result.lastJudgeComboTick;
+  }
+
+  /**
+   * Mirrors the engine's per-frame snapshot into the view's score / gauge / fast-slow fields so the LR2 NUMBER
+   * elements + score-graph keep rendering from the existing source paths — they don't need to know the engine
+   * replaced the in-tree judge ladder. The summary's optional `gauge` payload populates `this.gaugeState` so the
+   * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative.
+   */
+  private applyEngineFrame(frame: Readonly<PlayerUiFramePayload>): void {
+    // Re-anchor the view's chart-time clock to the engine's the very first time the engine publishes a frame.
+    // The engine's `playbackClock` (and therefore the chart-time it stamps on every judge / sample / ui-signal
+    // event) anchors at the moment the engine creates the clock — which lands a few ms to a few hundred ms
+    // AFTER the view set `audioContextStartTime` in its PLAYSTART gate, since `manualPlay` runs through its
+    // entire prepare phase between those two points. Without re-anchoring, every note appears to pass the
+    // judgment line slightly EARLIER (in view time) than the engine actually judges it, so the visual hit
+    // doesn't line up with the score event.
+    //
+    // Using the first non-zero `frame.currentSeconds` snaps the view's `audioContextStartTime` so that
+    // `currentSeconds() === frame.currentSeconds` from now on. Subsequent frames don't re-anchor — both
+    // clocks tick on the AudioContext now, so the offset stays locked.
+    if (!this.sharedEngineClockAnchored && frame.currentSeconds > 0 && this.audioContext) {
+      this.audioContextStartTime = this.audioContext.currentTime - frame.currentSeconds;
+      this.sharedEngineClockAnchored = true;
+    }
+    const summary = frame.summary;
+    this.score.perfect = summary.perfect;
+    this.score.great = summary.great;
+    this.score.good = summary.good;
+    this.score.bad = summary.bad;
+    this.score.poor = summary.poor;
+    this.score.exScore = summary.exScore;
+    this.score.score = summary.score;
+    this.fastCount = summary.fast;
+    this.slowCount = summary.slow;
+    if (summary.gauge) {
+      const previous = this.gaugeState.current;
+      this.gaugeState.current = summary.gauge.current;
+      this.gaugeState.max = summary.gauge.max;
+      this.gaugeState.clearThreshold = summary.gauge.clearThreshold;
+      this.gaugeState.initial = summary.gauge.initial;
+      this.gaugeState.effectiveTotal = summary.gauge.effectiveTotal;
+      // LR2 gauge-rise (timer 42) / gauge-max (timer 44) visual feedback. Mirrors what the legacy
+      // `applyGaugeDelta` did — stamp on every transition so authored skin elements (rise sparkle, max-glow
+      // overlay) animate. We compare against the previous frame's value rather than against an "EMPTY_POOR-
+      // sized delta" because the engine drives gauge updates monotonically through `summary.gauge.current`,
+      // not through judge deltas.
+      const next = summary.gauge.current;
+      if (next > previous) {
+        if (this.gaugeIncreaseTimeout !== undefined) {
+          window.clearTimeout(this.gaugeIncreaseTimeout);
+          this.gaugeIncreaseTimeout = undefined;
+        }
+        this.timerStartedAt.set(42, this.playClock());
+        const fadeMs = this.gaugeTimerDurationMs.get(42) ?? GAUGE_INCREASE_FALLBACK_MS;
+        this.gaugeIncreaseTimeout = window.setTimeout(() => {
+          this.gaugeIncreaseTimeout = undefined;
+          if (this.disposed) return;
+          this.timerStartedAt.delete(42);
+        }, fadeMs);
+      }
+      if (next >= 100 && previous < 100) {
+        this.timerStartedAt.set(44, this.playClock());
+      } else if (next < 100 && previous >= 100) {
+        this.timerStartedAt.delete(44);
+      }
+    }
+    // Sync the engine's per-note `judged` flag onto the view's runtime notes so `renderNotes` knows to stop
+    // drawing them. Engine and view both extract the chart through `extractTimedNotes` and sort by (beat,
+    // seconds), so the arrays line up index-for-index. Without this sync, the view would keep painting every
+    // note past its judgment timing because `note.hit` would never flip.
+    const frameNotes = frame.notes;
+    const limit = Math.min(this.notes.length, frameNotes.length);
+    for (let i = 0; i < limit; i += 1) {
+      if (frameNotes[i]!.judged && !this.notes[i]!.hit) {
+        this.notes[i]!.hit = true;
+      }
+    }
+    // Same pattern for landmine hits — frame carries them on `landmineNotes`. The view paints these as a
+    // separate red plate so they need their own sync to disappear once the engine resolves a hit.
+    const frameMines = frame.landmineNotes;
+    if (frameMines && this.mineNotes.length > 0) {
+      const mineLimit = Math.min(this.mineNotes.length, frameMines.length);
+      for (let i = 0; i < mineLimit; i += 1) {
+        if (frameMines[i]!.judged && !this.mineNotes[i]!.hit) {
+          this.mineNotes[i]!.hit = true;
+        }
+      }
+    }
+  }
+
+  /**
+   * Maps an engine UI command to the matching view-side visual effect. The visual-effect helpers
+   * (`flashKeyOnTimer`, `startKeyOnTimer`, `releaseKeyOnTimer`, `startLnHoldTimer`, `releaseLnHoldTimer`,
+   * `triggerBomb`, `applyTurntableImpulse`) are kept in shared-engine mode because they own the per-lane LR2
+   * timer book-keeping the skin chrome animates against — only the judge / sample-trigger code paths above were
+   * removed.
+   */
+  private applyEngineCommand(command: PlayerUiCommand): void {
+    switch (command.kind) {
+      case 'flash-lane':
+        this.flashKeyOnTimer(command.channel);
+        this.applyTurntableImpulse(command.channel);
+        break;
+      case 'press-lane':
+        this.pressedChannels.add(command.channel);
+        this.startKeyOnTimer(command.channel);
+        this.applyTurntableImpulse(command.channel);
+        break;
+      case 'release-lane':
+        this.pressedChannels.delete(command.channel);
+        this.releaseKeyOnTimer(command.channel);
+        this.releaseLnHoldTimer(command.channel);
+        break;
+      case 'hold-lane-until-beat':
+        this.startKeyOnTimer(command.channel);
+        this.startLnHoldTimer(command.channel);
+        // The engine's hold-until-beat command implicitly says "the LN is firing now"; bomb-flash on the head
+        // mirrors the legacy autoJudge behavior so the lane still blinks a positive-feedback explosion at LN
+        // start in autoplay.
+        this.triggerBomb(command.channel);
+        break;
+      case 'trigger-poor-bga':
+        this.lastPoorAt = command.seconds;
+        // Empty POOR (the engine fires `trigger-poor-bga` for both real POOR judges AND for empty presses /
+        // unjudged-misses-past-window) doesn't go through `publishJudgeCombo` for empty-press cases, so the
+        // result-screen gauge / score polylines would skip those samples in shared-engine mode and the graph
+        // wouldn't match the legacy view's. Append history points here so the graph stays smooth across both
+        // paths. Real POOR judges that ALSO publish a judge-combo will get a second sample from
+        // `applyEngineJudgeCombo`'s `publishJudge` call — that's a no-op visually (both samples land at almost
+        // the same `progress`) and keeps the contract "every gauge / EX-score change records a sample."
+        this.recordSharedEngineHistorySample(command.seconds);
+        break;
+      case 'clear-poor-bga':
+        this.lastPoorAt = -Number.POSITIVE_INFINITY;
+        break;
+    }
+  }
+
+  /**
+   * Pushes one sample to {@link gaugeHistory} / {@link scoreHistory} using the current engine-derived
+   * \`gaugeState.current\` and \`score.exScore\` snapshots. Called from the shared-engine command handler when
+   * the engine reports a gauge / score change that doesn't flow through \`publishJudgeCombo\` (= empty POOR).
+   * In legacy mode the same arrays are pushed exclusively from \`publishJudge\`.
+   */
+  private recordSharedEngineHistorySample(seconds: number): void {
+    const totalSeconds = this.resolveSongDurationSeconds();
+    const progress = totalSeconds > 0 ? Math.max(0, Math.min(1, seconds / totalSeconds)) : 0;
+    this.gaugeHistory.push({ progress, value: this.gaugeState.current });
+    this.scoreHistory.push({ progress, exScore: this.score.exScore });
+  }
+
+  /**
+   * Drives every per-judge visual the LR2 skin animates against from the engine's stateSignals judge-combo bus:
+   *
+   * - `tracker.combo` mirrors the engine's running combo so `#SRC_NUMBER,st=70` (NOWCOMBO) renders the right
+   *   number, and the `maxCombo` high-water mark feeds the result screen's MAX COMBO readout.
+   * - `publishJudge` does the rest of the legacy per-judge work — it stamps timer 46 (1P) or 47 (2P) so the
+   *   `#DST_NOWJUDGE` / `#DST_NOWCOMBO` keyframe chains animate from time=0 on every hit (without this, the
+   *   plate stays invisible because the timer's playhead is parked at scene start), latches `lastJudge` /
+   *   `lastJudgeUntil` so the fallback `#SRC_TEXT` paints the verdict, snapshots `judgeSideState[side]` for DP
+   *   per-side rendering, swaps to the POOR BGA on POOR/BAD, appends a sample to gauge / score histories for
+   *   the result graph, and fires `maybeFireFullCombo` for timers 48/49.
+   * - On PERFECT / GREAT we additionally fire the lane bomb (the engine's `flash-lane` command is severity-
+   *   independent so we can't piggy-back on it; the bomb is a positive-feedback cue specifically for clean
+   *   hits). The legacy `commitFinalJudge` ran the same gate.
+   */
+  private applyEngineJudgeCombo(state: Readonly<PlayerJudgeComboSignalState>): void {
+    if (state.judge === 'READY') return;
+    this.tracker.combo = state.combo;
+    if (state.combo > this.maxCombo) this.maxCombo = state.combo;
+    const judgeKind = state.judge as JudgeKind;
+    this.publishJudge(judgeKind, this.currentSeconds(), state.channel);
+    if ((judgeKind === 'PERFECT' || judgeKind === 'GREAT') && state.channel) {
+      this.triggerBomb(state.channel);
+    }
+  }
+
+  /**
+   * Fires when the engine driver's `manualPlay` / `autoPlay` promise resolves cleanly (= chart played to its end
+   * without an interrupt). The host's `onChartFinished` callback receives a `PixiGameplayResultData` snapshot and
+   * the LR2 `#FADEOUT` → `#CLOSE` exit timeline runs before the result-screen transition. The engine's resolution
+   * is the authoritative end-of-chart signal — the view's `currentSeconds` clock lags slightly behind the engine's
+   * own bookkeeping, so we don't gate on it.
+   */
+  private handleSharedEngineChartFinished(): void {
+    if (this.disposed || this.chartEnded) return;
+    this.chartEnded = true;
+    const result = this.getResultData();
+    // Defer one frame so the final render (last judgement plate, terminal combo number) is committed before the
+    // exit fade kicks in.
+    this.chartEndTimeout = window.setTimeout(() => {
+      this.chartEndTimeout = undefined;
+      if (this.disposed) return;
+      this.beginExitSequence(() => {
+        if (this.options.onChartFinished && result) {
+          this.options.onChartFinished(result);
+          return;
+        }
+        this.options.onExit?.();
+      });
+    }, 50);
+  }
 }
 
 /**
- * Returns whether `note` carries a finite long-note tail. Mirrors the engine package's `resolveLongNoteEndSeconds`: a
- * missing / non-finite / non-positive `endSeconds` collapses to "single tap", and the judge / finalize logic falls back
- * to single-note semantics for it.
+ * Returns whether `texture` is backed by a Pixi `VideoSource` (i.e. a `<video>` element). Used by the
+ * `PrepareSystem` upload path to skip eager GPU uploads on video-backed textures: the underlying `<video>` may
+ * not have decoded any frames at prepare time, and WebGPU's `copyExternalImageToTexture` rejects an unbacked
+ * `<video>` with "Failed to import texture from video element that doesn't have back resource", which Pixi
+ * propagates as a re-firing `OperationError` inside its rAF queue.
  */
-function isLongNote(note: RuntimeNote): boolean {
-  return typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
+function isVideoTextureSource(texture: Texture): boolean {
+  return texture.source instanceof VideoSource;
 }
 
 /**
@@ -5894,25 +5719,6 @@ function shuffleArray<T>(array: T[], rng: () => number): T[] {
 }
 
 /**
- * 0..4 severity ordering used by `finalizeActiveLongNote` to pick the worst verdict between an LN's head and tail
- * (matches the engine's `resolveJudgeSeverity`). Higher = worse.
- */
-function judgeSeverity(judge: JudgeKind): number {
-  switch (judge) {
-    case 'PERFECT':
-      return 0;
-    case 'GREAT':
-      return 1;
-    case 'GOOD':
-      return 2;
-    case 'BAD':
-      return 3;
-    case 'POOR':
-      return 4;
-  }
-}
-
-/**
  * Note color for the no-skin fallback path, mirroring the IIDX / LR2 default convention:
  *
  * - - Scratch (`16` / `26`) — red. - Odd-numbered keys (1 / 3 / 5 / 7) — white. - Even-numbered keys (2 / 4 / 6) —
@@ -5928,72 +5734,7 @@ function noteFallbackColor(channel: string, laneIndex: number): typeof WHITE {
   return WHITE;
 }
 
-/**
- * Clamps a bmson slice offset against the loaded buffer's duration so a misauthored offset (or one that came from a
- * trimmed take) doesn't produce a `start()` call past EOF — Web Audio would silently emit nothing in that case. Any
- * non-finite / negative input collapses to 0 so the historical "play from t=0" behavior stays the default fallback.
- */
-function clampSampleOffset(offsetSeconds: number | undefined, bufferDuration: number): number {
-  if (typeof offsetSeconds !== 'number' || !Number.isFinite(offsetSeconds) || offsetSeconds <= 0) {
-    return 0;
-  }
-  if (offsetSeconds >= bufferDuration) {
-    return Math.max(0, bufferDuration - 1e-3);
-  }
-  return offsetSeconds;
-}
-
-/**
- * Caps a bmson slice duration against the loaded buffer's tail so the slice playback doesn't overshoot the file.
- * Returns `undefined` when no duration was authored — the caller then lets the buffer source play to its natural end
- * (matching BMS-style "trigger plays the whole sample" semantics).
- */
-function clampSampleDuration(
-  durationSeconds: number | undefined,
-  bufferDuration: number,
-  offsetSeconds: number,
-): number | undefined {
-  if (typeof durationSeconds !== 'number' || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-    return undefined;
-  }
-  const remaining = Math.max(0, bufferDuration - offsetSeconds);
-  if (remaining <= 0) {
-    return undefined;
-  }
-  return Math.min(durationSeconds, remaining);
-}
-
-/**
- * Wraps `AudioBufferSourceNode.start` so the offset / duration arguments only get supplied when meaningful — Web Audio
- * differentiates `start(when)` (whole buffer) from `start(when, offset)` (seek) from `start(when, offset, duration)`
- * (seek + cap), and we want to match the historical behavior for the two- and three-arg cases when slicing isn't in
- * play.
- *
- * `when` of `undefined` calls `start()` (immediate); a finite value calls `start(when)` (scheduled).
- */
-function startSampleNode(
-  node: AudioBufferSourceNode,
-  when: number | undefined,
-  offsetSeconds: number,
-  durationSeconds: number | undefined,
-): void {
-  const hasOffset = offsetSeconds > 0;
-  const hasDuration = typeof durationSeconds === 'number';
-  if (when !== undefined) {
-    if (hasDuration) {
-      node.start(when, offsetSeconds, durationSeconds);
-    } else if (hasOffset) {
-      node.start(when, offsetSeconds);
-    } else {
-      node.start(when);
-    }
-    return;
-  }
-  if (hasDuration) {
-    node.start(0, offsetSeconds, durationSeconds);
-  } else if (hasOffset) {
-    node.start(0, offsetSeconds);
-  } else {
-    node.start();
-  }
-}
+// `clampSampleOffset` / `clampSampleDuration` / `startSampleNode` lived here while the gameplay view managed its
+// own audio playback. With Phase 4b-i / 4b-ii routing every cue through {@link WebAudioSession}, the canonical
+// implementations now live in `web-audio-session.ts` (re-exported there for tests) — this module no longer needs
+// them.

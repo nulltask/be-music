@@ -1,24 +1,20 @@
-import { Application, Color, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+import { Application, Color, Container, Graphics, Text, TextStyle, Texture } from 'pixi.js';
 import { computeScoreRate, resolveIidxRankIndexFromScore, resolveIidxRankLabel } from '@be-music/player/core/scoring';
 import type {
-  Lr2BarGraphElement,
   Lr2DestinationRect,
   Lr2GaugeChartElement,
   Lr2ImageElement,
   Lr2ImageRect,
   Lr2ScoreChartElement,
   Lr2Skin,
-  Lr2SliderElement,
   Lr2SpecialGraphic,
 } from '@be-music/lr2-skin';
-import { isLr2SpecialGraphic } from '@be-music/lr2-skin';
 import {
-  applyDestinationToSprite,
   containerSpriteSink,
-  createCroppedTexture,
-  evaluateKeyframes,
-  normalizeRect,
-  pickAnimatedCell,
+  evaluateElementDestination,
+  makeLr2BargraphSprite,
+  makeLr2SliderSprite,
+  makeLr2StaticImageSprite,
   renderNumberElement,
 } from './lr2-render.ts';
 import { type PixiSceneHost } from './pixi-scene-host.ts';
@@ -605,7 +601,7 @@ export class PixiResultView {
       work.push({
         order: bargraph.declarationOrder,
         paint: () => {
-          const sprite = this.makeBargraphSprite(bargraph, dst, value);
+          const sprite = makeLr2BargraphSprite(bargraph, dst, value, this.skinTextures.asReadonlyMap());
           if (sprite) this.skinLayer.addChild(sprite);
         },
       });
@@ -619,7 +615,7 @@ export class PixiResultView {
       work.push({
         order: slider.declarationOrder,
         paint: () => {
-          const sprite = this.makeSliderSprite(slider, dst, value);
+          const sprite = makeLr2SliderSprite(slider, dst, value, this.skinTextures.asReadonlyMap());
           if (sprite) this.skinLayer.addChild(sprite);
         },
       });
@@ -1133,18 +1129,11 @@ export class PixiResultView {
     }
   }
 
-  /**
-   * Per-frame interpolated DST for an element with a keyframe sequence. Mirrors `pixi-select.evaluateElementDst`.
-   */
   private evaluateElementDst(element: {
     destination: Lr2DestinationRect;
     keyframes: Lr2DestinationRect[];
   }): Lr2DestinationRect {
-    if (element.keyframes.length > 1) {
-      const elapsed = this.elapsedSinceTimer(element.destination.timer);
-      return evaluateKeyframes(element.keyframes, elapsed);
-    }
-    return element.destination;
+    return evaluateElementDestination(element, this.elapsedSinceTimer);
   }
 
   /**
@@ -1226,37 +1215,12 @@ export class PixiResultView {
     this.options.onContinue?.();
   }
 
-  private makeStaticImageSprite(image: Lr2ImageElement): Sprite | undefined {
-    const path = image.source.imagePath;
-    let texture = this.skinTextures.get(path);
-    if (!texture && isLr2SpecialGraphic(path)) {
-      texture = this.resolveSpecialGraphicTexture(path);
-    }
-    if (!texture) return undefined;
-    const dst = this.evaluateElementDst(image);
-    const rect = normalizeRect(dst);
-    if (rect.w <= 0 || rect.h <= 0) return undefined;
-    let cropped: Texture;
-    if (isLr2SpecialGraphic(path)) {
-      cropped = texture;
-    } else {
-      const elapsed = this.elapsedSinceTimer(image.source.timer);
-      const cell = pickAnimatedCell(image.source, elapsed, dst.loop, {
-        width: texture.width,
-        height: texture.height,
-      });
-      if (cell.w <= 0 || cell.h <= 0) return undefined;
-      const cellTexture = createCroppedTexture(texture, cell);
-      if (!cellTexture) return undefined;
-      cropped = cellTexture;
-    }
-    const sprite = new Sprite(cropped);
-    sprite.label = `image[${path}]`;
-    sprite.position.set(rect.x, rect.y);
-    sprite.width = rect.w;
-    sprite.height = rect.h;
-    applyDestinationToSprite(sprite, dst);
-    return sprite;
+  private makeStaticImageSprite(image: Lr2ImageElement) {
+    return makeLr2StaticImageSprite(image, this.evaluateElementDst(image), {
+      textures: this.skinTextures.asReadonlyMap(),
+      elapsedSinceTimer: this.elapsedSinceTimer,
+      resolveSpecialGraphicTexture: (path) => this.resolveSpecialGraphicTexture(path),
+    });
   }
 
   /**
@@ -1277,83 +1241,9 @@ export class PixiResultView {
     if (!result || !collection) return undefined;
     return this.chartGraphicTextures.resolve(collection, result.song, path, () => this.render());
   }
-
-  /**
-   * Renders a `#SRC_BARGRAPH` element. The base sprite is sliced to a fraction of its source rect along the `muki` axis
-   * so the bar appears progressively filled as `value` (0..1) grows. Same approach as the gameplay bargraph — but
-   * standalone here so the result module doesn't have to reach into the gameplay file's class.
-   */
-  private makeBargraphSprite(element: Lr2BarGraphElement, dst: Lr2DestinationRect, value: number): Sprite | undefined {
-    const texture = this.skinTextures.get(element.source.imagePath);
-    if (!texture) return undefined;
-    const rect = normalizeRect(dst);
-    if (rect.w <= 0 || rect.h <= 0) return undefined;
-    const ratio = Math.max(0, Math.min(1, value));
-    const horizontal = element.muki === 'horizontal';
-    const cropW = horizontal ? element.source.w * ratio : element.source.w;
-    const cropH = horizontal ? element.source.h : element.source.h * ratio;
-    const cropY = horizontal ? element.source.y : element.source.y + (element.source.h - cropH);
-    const cropped = createCroppedTexture(texture, {
-      x: element.source.x,
-      y: cropY,
-      w: cropW,
-      h: cropH,
-    });
-    if (!cropped) return undefined;
-    const sprite = new Sprite(cropped);
-    sprite.label = `bargraph[type=${element.type}]`;
-    sprite.position.set(rect.x, horizontal ? rect.y : rect.y + rect.h * (1 - ratio));
-    sprite.width = horizontal ? rect.w * ratio : rect.w;
-    sprite.height = horizontal ? rect.h : rect.h * ratio;
-    applyDestinationToSprite(sprite, dst);
-    return sprite;
-  }
-
-  /**
-   * Renders a `#SRC_SLIDER` element. The slider's "knob" sits at a position along the DST track determined by `value`
-   * (0..1) and the source's `muki` direction. We don't (yet) support dragging the knob — sliders are read-only on the
-   * result screen, the spec primarily uses them to draw "score relative to perfect" indicators.
-   */
-  private makeSliderSprite(element: Lr2SliderElement, dst: Lr2DestinationRect, value: number): Sprite | undefined {
-    const texture = this.skinTextures.get(element.source.imagePath);
-    if (!texture) return undefined;
-    const rect = normalizeRect(dst);
-    if (rect.w <= 0 || rect.h <= 0) return undefined;
-    const ratio = Math.max(0, Math.min(1, value));
-    const cropped = createCroppedTexture(texture, {
-      x: element.source.x,
-      y: element.source.y,
-      w: element.source.w / Math.max(1, element.source.divx),
-      h: element.source.h / Math.max(1, element.source.divy),
-    });
-    if (!cropped) return undefined;
-    const sprite = new Sprite(cropped);
-    sprite.label = `slider[type=${element.type}]`;
-    let x = rect.x;
-    let y = rect.y;
-    switch (element.muki) {
-      case 'down':
-        y = rect.y + element.range * ratio;
-        break;
-      case 'up':
-        y = rect.y - element.range * ratio;
-        break;
-      case 'right':
-        x = rect.x + element.range * ratio;
-        break;
-      case 'left':
-        x = rect.x - element.range * ratio;
-        break;
-    }
-    sprite.position.set(x, y);
-    sprite.width = rect.w;
-    sprite.height = rect.h;
-    applyDestinationToSprite(sprite, dst);
-    return sprite;
-  }
 }
 
-// -- Free helpers (mirrors `pixi-select.ts`) --------------------------------
+// -- Free helpers ------------------------------------------------------------
 
 /**
  * Computes the LR2 op set for the result screen. Combines the always-true `RESULT_BASE_OPS` with per-result flags
@@ -1724,7 +1614,5 @@ function resolveRankLabel(exScore: number, total: number): string {
   return total <= 0 ? 'AAA' : resolveIidxRankLabel(exScore, total);
 }
 
-// `Lr2ImageRect` is referenced in the imports for `makeBargraphSprite`'s `element.source` type narrowing — exporting
-// nothing else from this module beyond the public API surface above. Re-export to keep downstream consumers from having
-// to import from `lr2-skin.ts` directly when wiring up a result scene.
+// Re-export this small LR2 geometry type so result-scene consumers do not have to import from `lr2-skin.ts` directly.
 export type { Lr2ImageRect };

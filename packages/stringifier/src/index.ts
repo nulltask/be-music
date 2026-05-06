@@ -25,7 +25,7 @@ import {
   normalizeNonNegativeInt,
   normalizePositiveInt,
   normalizeSortedUniqueNonNegativeIntegers,
-} from '@be-music/utils';
+} from '@be-music/utils/core';
 export interface BmsStringifyOptions {
   eol?: '\n' | '\r\n';
   maxResolution?: number;

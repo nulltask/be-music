@@ -1,4 +1,5 @@
-import { createAbortError, isAbortError, type LogEntry } from '@be-music/utils';
+import { createAbortError, isAbortError } from '@be-music/utils/core';
+import type { LogEntry } from '@be-music/utils/log';
 import { effect } from 'alien-signals';
 import { fileURLToPath } from 'node:url';
 import { MessageChannel, type MessagePort, Worker } from 'node:worker_threads';

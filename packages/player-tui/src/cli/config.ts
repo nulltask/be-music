@@ -1,6 +1,15 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
+import {
+  DEFAULT_HIGH_SPEED,
+  HIGH_SPEED_STEP,
+  MAX_HIGH_SPEED,
+  MIN_HIGH_SPEED,
+  resolveHighSpeedMultiplier,
+} from '@be-music/player/core/high-speed-control';
+
+export { DEFAULT_HIGH_SPEED, HIGH_SPEED_STEP, MAX_HIGH_SPEED, MIN_HIGH_SPEED };
 
 export type PlayMode = 'manual' | 'auto-scratch' | 'auto';
 
@@ -25,11 +34,7 @@ export interface CliConfigOverrideFlags {
   highSpeed: boolean;
 }
 
-export const MIN_HIGH_SPEED = 0.5;
-export const MAX_HIGH_SPEED = 10;
-export const HIGH_SPEED_STEP = 0.5;
 export const DEFAULT_PLAY_MODE: PlayMode = 'manual';
-export const DEFAULT_HIGH_SPEED = 1;
 
 export function resolvePlayModeFromArgs(args: PlayModeArgs): PlayMode {
   if (args.auto) {
@@ -81,9 +86,7 @@ export function formatPlayModeLabel(playMode: PlayMode): 'MANUAL' | 'AUTO SCRATC
 }
 
 export function normalizeHighSpeedValue(value: number | undefined): number {
-  const base = Number.isFinite(value) ? Number(value) : 1;
-  const clamped = Math.min(MAX_HIGH_SPEED, Math.max(MIN_HIGH_SPEED, base));
-  return Math.round(clamped / HIGH_SPEED_STEP) * HIGH_SPEED_STEP;
+  return resolveHighSpeedMultiplier(value);
 }
 
 export function increaseHighSpeed(value: number): number {

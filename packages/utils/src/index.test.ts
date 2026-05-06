@@ -6,6 +6,7 @@ import {
   basename,
   compareFractions,
   dirname,
+  extname,
   findFirstIndexAtOrAfter,
   findFirstIndexNumberAtOrAfter,
   findLastIndexAtOrBefore,
@@ -28,6 +29,24 @@ describe('utils', () => {
     expect(resolveCliPath('chart/test.bms', '/tmp')).toBe(resolve('/tmp', 'chart/test.bms'));
     expect(resolveCliPath('./chart/test.bms', '/tmp')).toBe(resolve('/tmp', './chart/test.bms'));
     expect(resolveCliPath('./', '/tmp')).toBe(resolve('/tmp', './'));
+  });
+
+  test('resolveCliPath: returns POSIX absolute paths verbatim regardless of cwd', () => {
+    // The previous implementation routed absolute inputs through the lazy `node:path` `require` slow
+    // path, which silently fell back to `cwd` on pure-ESM Node runtimes (`tsx`, `node --import tsx/esm`)
+    // because `eval('require')` throws in strict ESM. Result: every CLI invocation with an absolute
+    // argument turned into "scan cwd as a directory." Verify the fast-path branch never reaches that
+    // code path now by exercising it from a cwd that doesn't share a prefix with the input.
+    expect(resolveCliPath('/Users/foo/song/chart.bms', '/tmp')).toBe('/Users/foo/song/chart.bms');
+    expect(resolveCliPath('/abs', '/tmp')).toBe('/abs');
+  });
+
+  test('resolveCliPath: returns Windows drive-absolute paths verbatim', () => {
+    // Same regression class as the POSIX case — `C:\foo` / `C:/foo` would silently collapse to `cwd`
+    // when the slow path's `require` lookup failed.
+    expect(resolveCliPath('C:\\Users\\foo\\chart.bms', '/tmp')).toBe('C:\\Users\\foo\\chart.bms');
+    expect(resolveCliPath('C:/Users/foo/chart.bms', '/tmp')).toBe('C:/Users/foo/chart.bms');
+    expect(resolveCliPath('d:\\song.bms', '/tmp')).toBe('d:\\song.bms');
   });
 
   test('clamp/clampSignedUnit: clamps values to configured ranges', () => {
@@ -197,6 +216,14 @@ describe('utils', () => {
     expect(dirname(String.raw`root\\song/main.bms`)).toBe('root/song');
     expect(dirname('main.bms')).toBe('');
     expect(basename(String.raw`root\\song/main.bms`)).toBe('main.bms');
+  });
+
+  test('extname: returns Node-style trailing extensions without depending on node:path', () => {
+    expect(extname(String.raw`Songs\\chart/main.bms`)).toBe('.bms');
+    expect(extname('archive.tar.gz')).toBe('.gz');
+    expect(extname('README')).toBe('');
+    expect(extname('.env')).toBe('');
+    expect(extname('dir.with.dots/file')).toBe('');
   });
 
   test('isMaliciousAssetPath: rejects spec-named threat shapes', () => {

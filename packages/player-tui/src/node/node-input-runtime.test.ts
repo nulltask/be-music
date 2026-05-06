@@ -140,8 +140,11 @@ describe('node input runtime', () => {
 
     expect(stdin.setRawMode).toHaveBeenCalledWith(true);
     expect(stdin.resume).toHaveBeenCalled();
+    // `pressedAt: expect.any(Number)` reflects the runtime snapshotting `performance.now()` at handler entry —
+    // the value is non-deterministic but its presence and type are. The engine consumes this to judge against
+    // the physical press time rather than the drain time. See `node-input-runtime.ts` `onKeyPress`.
     expect(inputSignals.drainCommands()).toEqual([
-      { kind: 'lane-input', tokens: ['z'] },
+      { kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) },
       { kind: 'toggle-pause' },
       { kind: 'high-speed', action: 'decrease' },
       { kind: 'interrupt', reason: 'escape' },
@@ -194,13 +197,16 @@ describe('node input runtime', () => {
         pressTokens: ['z'],
         repeatTokens: ['x'],
         releaseTokens: ['c'],
+        pressedAt: expect.any(Number),
       },
-      { kind: 'lane-input', tokens: ['z'] },
+      { kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) },
     ]);
 
     vi.mocked(Date.now).mockReturnValue(1_100);
     process.stdin.emit('keypress', 'z', { name: 'z', sequence: 'z', ctrl: false, meta: false, shift: false });
-    expect(inputSignals.drainCommands()).toEqual([{ kind: 'lane-input', tokens: ['z'] }]);
+    expect(inputSignals.drainCommands()).toEqual([
+      { kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) },
+    ]);
 
     runtime.stop();
     platformSpy.mockRestore();
@@ -226,13 +232,16 @@ describe('node input runtime', () => {
         pressTokens: ['z'],
         repeatTokens: ['x'],
         releaseTokens: ['c'],
+        pressedAt: expect.any(Number),
       },
-      { kind: 'lane-input', tokens: ['z'] },
+      { kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) },
     ]);
 
     vi.mocked(Date.now).mockReturnValue(2_100);
     process.stdin.emit('keypress', 'z', { name: 'z', sequence: 'z', ctrl: false, meta: false, shift: false });
-    expect(inputSignals.drainCommands()).toEqual([{ kind: 'lane-input', tokens: ['z'] }]);
+    expect(inputSignals.drainCommands()).toEqual([
+      { kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) },
+    ]);
 
     runtime.stop();
     platformSpy.mockRestore();
@@ -249,7 +258,9 @@ describe('node input runtime', () => {
 
     runtime.start();
     process.stdin.emit('keypress', 'z', { name: 'z', sequence: 'z', ctrl: false, meta: false, shift: false });
-    expect(inputSignals.drainCommands()).toEqual([{ kind: 'lane-input', tokens: ['z'] }]);
+    expect(inputSignals.drainCommands()).toEqual([
+      { kind: 'lane-input', tokens: ['z'], pressedAt: expect.any(Number) },
+    ]);
 
     runtime.stop();
     platformSpy.mockRestore();
@@ -323,8 +334,9 @@ describe('node input runtime', () => {
         pressTokens: ['shift-left', 'shift'],
         repeatTokens: [],
         releaseTokens: [],
+        pressedAt: expect.any(Number),
       },
-      { kind: 'lane-input', tokens: ['shift-left', 'shift'] },
+      { kind: 'lane-input', tokens: ['shift-left', 'shift'], pressedAt: expect.any(Number) },
     ]);
 
     runtime.stop();
@@ -364,13 +376,15 @@ describe('node input runtime', () => {
         pressTokens: ['shift-left', 'shift'],
         repeatTokens: [],
         releaseTokens: [],
+        pressedAt: expect.any(Number),
       },
-      { kind: 'lane-input', tokens: ['shift-left', 'shift'] },
+      { kind: 'lane-input', tokens: ['shift-left', 'shift'], pressedAt: expect.any(Number) },
       {
         kind: 'kitty-state',
         pressTokens: [],
         repeatTokens: [],
         releaseTokens: ['shift-left', 'shift'],
+        pressedAt: expect.any(Number),
       },
     ]);
 

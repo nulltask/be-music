@@ -1,6 +1,6 @@
 import { effect, effectScope } from 'alien-signals';
 import type { BeMusicPlayLevel } from '@be-music/json';
-import { clamp } from '@be-music/utils';
+import { clamp } from '@be-music/utils/core';
 import type { BgaKittyImage } from '../bga.ts';
 import type { PlayerSummary } from '@be-music/player';
 import { formatSeconds, resolveAltModifierLabel } from '@be-music/player/utils';
@@ -1885,13 +1885,18 @@ function resolveVisibleJudgeComboLabel(state: JudgeComboDisplayState, nowMs: num
   return formatJudgeComboDisplay(state.latestJudge, state.combo, nowMs, false);
 }
 
-function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: number, paused: boolean): string {
+export function formatJudgeComboDisplay(latestJudge: string, combo: number, nowMs: number, paused: boolean): string {
   if (paused) {
     return colorizeText('PAUSE', PAUSE_FOREGROUND_RGB, PAUSE_BACKGROUND_RGB);
   }
   const normalizedJudge = latestJudge === 'PERFECT' ? 'GREAT' : latestJudge;
+  // LR2 convention: the judge plate pairs with the combo readout for clean hits (PERFECT / GREAT / GOOD)
+  // but reads as a bare verdict for misses (BAD / POOR). The previous code appended the combo unconditionally,
+  // which made `POOR 5` appear after an EMPTY POOR (空POOR — phantom press) — the engine preserves combo on
+  // empty POOR per beatoraja behavior, so the combo argument is non-zero there even though no note was hit.
+  const showCombo = latestJudge !== 'BAD' && latestJudge !== 'POOR';
   const safeCombo = Math.max(0, Math.floor(combo));
-  const baseText = `${normalizedJudge}${safeCombo > 0 ? ` ${safeCombo}` : ''}`;
+  const baseText = `${normalizedJudge}${showCombo && safeCombo > 0 ? ` ${safeCombo}` : ''}`;
 
   if (latestJudge === 'PERFECT') {
     return colorizeBlinkingRainbow(baseText, nowMs);

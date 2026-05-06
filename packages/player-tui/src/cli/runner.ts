@@ -1,15 +1,9 @@
 import { stat } from 'node:fs/promises';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  createFileLogger,
-  createNoopLogger,
-  isAbortError,
-  resolveCliPath,
-  type LogEntry,
-  type Logger,
-  type LogLevel,
-} from '@be-music/utils';
+import { isAbortError } from '@be-music/utils/core';
+import { resolveCliPath } from '@be-music/utils/cli-path';
+import { createFileLogger, createNoopLogger, type LogEntry, type Logger, type LogLevel } from '@be-music/utils/log';
 import readline from 'node:readline';
 import type { BeMusicPlayLevel } from '@be-music/json';
 import { parseChartFile } from '@be-music/parser';

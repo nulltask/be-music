@@ -138,7 +138,12 @@ export function isWebCodecsEncodeSupported(): boolean {
 }
 
 async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Promise<VideoTextureHandle | undefined> {
-  const blob = new Blob([new Uint8Array(bytes)], { type: guessVideoMimeType(path) });
+  // Pass `bytes` straight through — wrapping it in `new Uint8Array(bytes)` would force a full copy of the source
+  // bytes before the Blob internally copies them again, doubling peak memory for BGA video assets (which can be tens
+  // of megabytes). The `Uint8Array<ArrayBuffer>` cast narrows away the lib's `Uint8Array<ArrayBufferLike>` (which
+  // includes `SharedArrayBuffer`) — every caller in this package decodes regular `ArrayBuffer`s through
+  // `file.arrayBuffer()` / `entry.arrayBuffer()`, so SAB is unreachable here and the runtime payload is identical.
+  const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: guessVideoMimeType(path) });
   const objectUrl = URL.createObjectURL(blob);
   const video = document.createElement('video');
   video.src = objectUrl;
@@ -782,7 +787,11 @@ export async function loadTextureFromBytes(
   if (path.toLowerCase().endsWith('.tga')) {
     return decodeTgaTexture(bytes, options, path);
   }
-  const blob = new Blob([new Uint8Array(bytes)]);
+  // `bytes` is already a `Uint8Array`; `new Blob([bytes])` is sufficient. Wrapping it in another `new Uint8Array(...)`
+  // forces an extra copy of the entire byte buffer (the `Uint8Array(buffer)` ctor copies when the source is a typed
+  // array view) before the Blob makes its own internal copy — doubling the peak memory for skin / BGA bitmaps. See
+  // `tryLoadVideoTextureFromBytes` for the matching `ArrayBuffer` cast rationale.
+  const blob = new Blob([bytes as Uint8Array<ArrayBuffer>]);
   return loadTextureFromBlob(blob, path, options);
 }
 

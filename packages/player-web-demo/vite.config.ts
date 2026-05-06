@@ -338,8 +338,11 @@ function acknowledgementsPlugin(roots: string[]): Plugin {
   };
 }
 
-// Vite alias は string で starts-with マッチするので、長いサブパスを先に並べる必要がある。 `@be-music/audio-renderer` (root, Node 依存) と
-// `@be-music/utils` (root, Node 依存) は意図的に alias しない: ブラウザ向けには pure な subpath (`/triggers`, `/core`) のみ使わせる。
+// Vite alias は string で starts-with マッチするので、長いサブパスを先に並べる必要がある。
+//
+// `@be-music/utils` / `@be-music/audio-renderer` / `@be-music/player` keep Node-facing code behind subpath exports or
+// lazy dynamic imports. Browser imports stay on the browser-safe paths below; disk-facing functions such as
+// `renderChartFile` are not called from the demo runtime.
 const workspaceAliases = [
   {
     find: '@be-music/audio-renderer/triggers',
@@ -353,8 +356,19 @@ const workspaceAliases = [
     find: '@be-music/player/judging',
     replacement: resolve(repositoryDir, 'packages/player/src/judging.ts'),
   },
+  {
+    find: '@be-music/player/state-signals',
+    replacement: resolve(repositoryDir, 'packages/player/src/state-signals.ts'),
+  },
   { find: '@be-music/player/core', replacement: resolve(repositoryDir, 'packages/player/src/core') },
+  { find: '@be-music/player', replacement: resolve(repositoryDir, 'packages/player/src/index.ts') },
   { find: '@be-music/utils/core', replacement: resolve(repositoryDir, 'packages/utils/src/core.ts') },
+  { find: '@be-music/utils/cli-path', replacement: resolve(repositoryDir, 'packages/utils/src/cli-path.ts') },
+  { find: '@be-music/utils/log', replacement: resolve(repositoryDir, 'packages/utils/src/log.ts') },
+  { find: '@be-music/utils/path', replacement: resolve(repositoryDir, 'packages/utils/src/path.ts') },
+  { find: '@be-music/utils/pcm', replacement: resolve(repositoryDir, 'packages/utils/src/pcm.ts') },
+  { find: '@be-music/utils', replacement: resolve(repositoryDir, 'packages/utils/src/index.ts') },
+  { find: '@be-music/audio-renderer', replacement: resolve(repositoryDir, 'packages/audio-renderer/src/index.ts') },
   { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },
   { find: '@be-music/json', replacement: resolve(repositoryDir, 'packages/json/src/index.ts') },
   { find: '@be-music/lr2-skin', replacement: resolve(repositoryDir, 'packages/lr2-skin/src/index.ts') },

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { isAbortError } from '@be-music/utils';
+import { isAbortError } from '@be-music/utils/core';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { WorkerOptions } from 'node:worker_threads';
 import { createEmptyJson } from '../../../json/src/index.ts';

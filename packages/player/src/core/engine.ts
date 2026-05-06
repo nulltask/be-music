@@ -8,9 +8,42 @@ import {
   parseBmsDynamicVolumeGain,
   sortEvents,
 } from '@be-music/chart';
-import { basename } from 'node:path';
-import { setImmediate as delayImmediate, setTimeout as delay } from 'node:timers/promises';
-import { floatToInt16, throwIfAborted, type LogEntry, type LogLevel } from '@be-music/utils';
+// Hand-rolled polyfills replace what was previously imported from `node:path` / `node:timers/promises`. Keeping the
+// engine free of `node:`-prefixed imports lets the same module run unchanged in the browser (Phase 4 of the
+// web-engine integration plan) without depending on bundler-side aliases. The behaviors below are deliberately
+// minimal — `basename` only needs the trailing-segment semantics for log output, `delay` only needs to resolve
+// after `ms` ms (matches `node:timers/promises.setTimeout`), and `delayImmediate` matches
+// `node:timers/promises.setImmediate` whenever a global `setImmediate` is available (= Node) so the TUI's
+// frame-loop spin doesn't starve stdin / stdout I/O.
+const basename = (path: string): string => {
+  // Match `node:path.basename`'s "drop the trailing separator(s) and return the final segment" semantics for both
+  // POSIX and Windows-style separators. An all-separator input ("/" / "\\") returns an empty string.
+  const trimmed = path.replace(/[\\/]+$/, '');
+  const lastSep = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return lastSep === -1 ? trimmed : trimmed.slice(lastSep + 1);
+};
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Cooperative yield used by {@link waitPreciseOrInput}'s sub-8 ms tail spin. Prefers Node's `setImmediate` when
+ * available so the spin re-enters via the event loop's `check` phase — that gives the I/O / timers phases a
+ * chance to run between iterations, which matters in the TUI runtime where `process.stdin` keypress delivery
+ * and `process.stdout` flushes happen on those phases. Falls back to `queueMicrotask` only in environments
+ * without `setImmediate` (i.e. browsers), where the microtask-only path is fine because the runtime there is
+ * driven by `requestAnimationFrame` / Web Audio's clock instead of stdin polling. A bare `queueMicrotask`
+ * implementation would starve I/O during the tail spin under Node because `await queueMicrotask(...)` keeps
+ * appending continuations to the microtask queue, preventing the loop from descending into `poll` / `check`.
+ */
+const delayImmediate = (): Promise<void> => {
+  const setImmediateFn = (globalThis as { setImmediate?: (callback: () => void) => unknown }).setImmediate;
+  if (typeof setImmediateFn === 'function') {
+    return new Promise((resolve) => {
+      setImmediateFn(() => resolve());
+    });
+  }
+  return new Promise((resolve) => queueMicrotask(resolve));
+};
+import { floatToInt16, throwIfAborted } from '@be-music/utils/core';
+import type { LogEntry, LogLevel } from '@be-music/utils/log';
 import {
   type BeMusicEvent,
   type BeMusicJson,
@@ -43,6 +76,7 @@ import {
 } from './high-speed-control.ts';
 import { createPlayerUiSignalBus, type PlayerUiSignalBus } from './ui-signal-bus.ts';
 import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './input-signal-bus.ts';
+import { createInputWakeUp } from './input-wakeup.ts';
 import {
   applyGaugeDeltaWithLogging,
   applyGaugeJudgeWithLogging,
@@ -159,6 +193,17 @@ export interface PlayerOptions {
   laneModeExtension?: string;
   createUiRuntime?: (context: CreatePlayerUiRuntimeContext) => Promise<PlayerUiRuntime | undefined>;
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
+  /**
+   * Optional override for the audio playback backend. When provided, the engine routes every sample trigger / channel
+   * stop / pause-resume / finish-dispose through the returned {@link AudioSession} instead of the bundled Node
+   * `createNodeAudioSink` path. Used by the web (Pixi) runtime to wire a Web Audio API backend through the same
+   * judging code the TUI runs, so both runtimes hit the engine's beatoraja-compliant judge / fallback / LN logic
+   * without each one re-implementing it.
+   *
+   * Returning `undefined` (or omitting the option entirely) preserves the original behavior — the engine falls
+   * through to the Node sink, which is what every existing TUI / test path already relies on.
+   */
+  createAudioSession?: (context: CreateAudioSessionContext) => Promise<AudioSession | undefined>;
   onResolvedChart?: (json: BeMusicJson) => void;
   onLog?: (entry: LogEntry) => void;
   writeOutput?: (text: string) => void;
@@ -215,10 +260,26 @@ export class PlayerInterruptedError extends Error {
   }
 }
 
-interface AudioSession {
+/**
+ * The audio playback contract the engine uses regardless of which runtime backs it. The default Node implementation
+ * created in {@link createAudioSessionIfEnabled} wraps `node-web-audio-api`; alternative runtimes (browser Web Audio,
+ * test mocks) implement this same shape and plug in via {@link PlayerOptions.createAudioSession}.
+ *
+ * **Lifetime**: caller invokes `start()` once chart playback begins, `pause()` / `resume()` during input-driven
+ * pauses, and exactly one of `finish()` (graceful drain) or `dispose()` (abort, no drain) at the end of playback.
+ *
+ * **Optional methods** are absent on backends that don't model the corresponding concept — e.g. test mocks may
+ * skip clock state, and pure-render backends may not handle `triggerEvent` / `stopChannel`.
+ */
+export interface AudioSession {
   start: () => void;
   finish: () => Promise<void>;
   dispose: () => Promise<void>;
+  /**
+   * Milliseconds to wait between {@link start} and the chart's note-zero moment. Backends that need a known lead-in
+   * (e.g. to fully fill an audio output buffer before the chart's first note) report it here so the engine schedules
+   * note timings against this offset.
+   */
   chartStartDelayMs: number;
   backendLabel: string;
   pause: () => void;
@@ -228,6 +289,18 @@ interface AudioSession {
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
   stopChannel?: (channel: string) => void;
+}
+
+/**
+ * Context handed to a {@link PlayerOptions.createAudioSession} factory. Mirrors the inputs the engine's built-in
+ * Node session would consume so a custom backend can apply the same chart-derived gain / volume semantics. Forward-
+ * compatible: backends should ignore unrecognized fields.
+ */
+export interface CreateAudioSessionContext {
+  json: BeMusicJson;
+  options: PlayerOptions;
+  mode: 'auto' | 'manual';
+  onLoadProgress?: (progress: AudioSessionLoadProgress) => void;
 }
 
 export interface RandomPatternSelection {
@@ -1301,7 +1374,13 @@ function createNoTuiPlaybackEventTracer(params: {
   };
 }
 
-interface AudioSessionLoadProgress {
+/**
+ * Progress signal emitted while an {@link AudioSession} is loading. Values are normalized:
+ * - `ratio` is in `[0, 1]` (0 = just started, 1 = ready)
+ * - `message` is a short human-readable status (`"Loading key sounds..."`, `"Audio ready."`)
+ * - `detail` is optional context (the WAV currently decoding, the failed asset, etc.)
+ */
+export interface AudioSessionLoadProgress {
   ratio: number;
   message: string;
   detail?: string;
@@ -1910,6 +1989,13 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 
   inputRuntime?.start();
 
+  // Event-driven wake-up so the loop's inter-tick sleep can be cut short the moment a control command
+  // arrives (toggle-pause / interrupt / high-speed). autoPlay doesn't act on lane-input but every
+  // `pushCommand` still flips `inputSignals.tick` once and resolves the wake-up — that's harmless because
+  // the loop's next iteration just consumes-and-discards the lane-input. The wake-up is disposed in the
+  // outer `finally` below so its alien-signals subscription doesn't outlive the playback session.
+  const inputWakeUp = createInputWakeUp(inputSignals);
+
   try {
     await delay(leadInMs);
     consumeInputCommands();
@@ -2042,7 +2128,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         if (chartClock.isPaused()) {
           const nowSec = elapsedMsToGameSeconds(nowMs, speed);
           publishUiFrame(nowSec, beatAtSeconds(nowSec));
-          await waitPrecise(PAUSE_POLL_INTERVAL_MS);
+          // While paused, the only useful inputs are toggle-pause (resume) and interrupt — both processed
+          // by the next iteration's `consumeInputCommands`. Cutting the poll short on input arrival makes
+          // pause-resume feel instantaneous.
+          await waitPreciseOrInput(PAUSE_POLL_INTERVAL_MS, inputWakeUp);
           continue;
         }
 
@@ -2070,7 +2159,11 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           break;
         }
 
-        await waitPrecise(TUI_FRAME_INTERVAL_MS);
+        // Race the 60 Hz tick against the next input arrival so control commands (Space / ESC / high-speed)
+        // resolve within ~1 ms instead of waiting up to a full tick. autoPlay doesn't act on lane-input,
+        // but lane presses still wake the loop — that's harmless because the next iteration just
+        // consumes-and-discards them via `consumeInputCommands`.
+        await waitPreciseOrInput(TUI_FRAME_INTERVAL_MS, inputWakeUp);
       }
 
       if (!interruptedReason) {
@@ -2081,7 +2174,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         const totalScheduledMs = (totalSeconds * 1000) / speed;
         const totalWaitMs = Math.max(0, totalScheduledMs - chartClock.nowMs());
         if (totalWaitMs > 0) {
-          await waitPrecise(Math.min(totalWaitMs, TUI_FRAME_INTERVAL_MS));
+          // Trailing wait for chart end. ESC during this window should still abort promptly, so race the
+          // sleep against the wake-up the same way the main tick does.
+          await waitPreciseOrInput(Math.min(totalWaitMs, TUI_FRAME_INTERVAL_MS), inputWakeUp);
         }
         playbackEventTracer.flushUntil(totalSeconds);
         drainPendingAutoLongNotes(totalSeconds);
@@ -2103,6 +2198,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       await finalizeAudioSessionSafely(audioSession);
     }
     inputRuntime?.stop();
+    inputWakeUp.dispose();
     await settleMaybeAsyncWithTimeout(uiRuntime?.stop(), 300);
     await settleMaybeAsyncWithTimeout(uiRuntime?.dispose(), 300);
   }
@@ -2339,6 +2435,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
   await delay(leadInMs);
   inputRuntime?.start();
+  // Event-driven wake-up so a press lands within ~1 ms of consuming-and-judging instead of waiting up to
+  // a full 16.67 ms tick. The judge timestamp itself is already correct via `pressedAt`; what this saves
+  // is the AUDIO and VISUAL response window (keysound playback, lane flash queueing). Disposed in the
+  // outer `finally` so the alien-signals subscription doesn't outlive the playback session.
+  const inputWakeUp = createInputWakeUp(inputSignals);
   emitPlayerLog(options, 'info', 'audio.start', {
     mode: 'manual',
   });
@@ -2994,8 +3095,13 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         if (command.kind !== 'lane-input') {
           return;
         }
+        // The runtime adapter (web / node) snapshots `performance.now()` at OS-level event arrival and threads
+        // it through as `command.pressedAt`. Adjusting the playback clock backwards by the wall-clock delta
+        // means the judge resolves against the player's true press timing instead of the engine's drain time —
+        // up to ~16 ms of artificial late-bias is removed on the 60 Hz tick. See `resolveJudgeNowMsFromPressedAt`
+        // for the defensive bounds (negative / >50 ms deltas fall back to drain semantics).
         if (!uiEnabled) {
-          const commandNowMs = playbackClock.nowMs();
+          const commandNowMs = resolveJudgeNowMsFromPressedAt(playbackClock.nowMs(), command.pressedAt);
           const commandNowSec = elapsedMsToGameSeconds(commandNowMs, speed);
           writeRuntimeEventLog(writeOutput, 'input', [
             ['time', formatSeconds(commandNowSec)],
@@ -3008,7 +3114,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           handleMappedInputTokens(command.tokens, commandNowMs, commandNowSec);
           return;
         }
-        const nowMs = playbackClock.nowMs();
+        const nowMs = resolveJudgeNowMsFromPressedAt(playbackClock.nowMs(), command.pressedAt);
         const nowSec = elapsedMsToGameSeconds(nowMs, speed);
         const scheduledSec = elapsedMsToGameSeconds(playbackClock.scheduledMs(), speed);
         triggerRealtimeAudioVolumeEvents(scheduledSec);
@@ -3036,7 +3142,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (playbackClock.isPaused()) {
         const nowSec = elapsedMsToGameSeconds(nowMs, speed);
         publishUiFrame(nowSec, beatAtSeconds(nowSec));
-        await waitPrecise(PAUSE_POLL_INTERVAL_MS);
+        // Resume / ESC arrive as input commands; cutting the poll short on input arrival makes pause-resume
+        // feel instantaneous instead of after one ~16 ms poll boundary.
+        await waitPreciseOrInput(PAUSE_POLL_INTERVAL_MS, inputWakeUp);
         continue;
       }
       const scheduledMs = playbackClock.scheduledMs();
@@ -3232,7 +3340,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         break;
       }
 
-      await waitPrecise(TUI_FRAME_INTERVAL_MS);
+      // Race the 60 Hz tick against the next input arrival. The judge timestamp itself is recovered via
+      // `command.pressedAt`, so this race doesn't change *what* a press is judged as — it changes *when*
+      // the keysound and lane flash get triggered. Pressing right after a tick boundary used to wait the
+      // full ~16 ms before the keysound fired; with the race, the engine wakes within ~1 ms.
+      await waitPreciseOrInput(TUI_FRAME_INTERVAL_MS, inputWakeUp);
     }
 
     if (!interruptedReason) {
@@ -3268,6 +3380,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       await finalizeAudioSessionSafely(audioSession);
     }
     inputRuntime?.stop();
+    inputWakeUp.dispose();
     await settleMaybeAsyncWithTimeout(uiRuntime?.stop(), 300);
     await settleMaybeAsyncWithTimeout(uiRuntime?.dispose(), 300);
   }
@@ -3361,6 +3474,20 @@ async function createAudioSessionIfEnabled(
       message: 'Audio disabled; skipping audio setup.',
     });
     return undefined;
+  }
+  // Custom backend hook (web / browser / test). When supplied, the factory owns sample loading, mixing, and clock
+  // state — we only forward the standard load-progress reporter so the host UI's loading bar still ticks during the
+  // backend's own asset-decode phase. A factory that returns `undefined` is treated the same as omitting the hook
+  // (fall through to the Node sink); this lets a runtime conditionally opt out at runtime (e.g. browser without
+  // AudioContext support).
+  if (options.createAudioSession) {
+    const customSession = await options.createAudioSession({ json, options, mode, onLoadProgress });
+    throwIfAborted(options.signal);
+    if (customSession) {
+      writeOutput(`Audio backend: ${customSession.backendLabel}\n`);
+      onLoadProgress?.({ ratio: 1, message: 'Audio ready.' });
+      return customSession;
+    }
   }
 
   const headPaddingMs = options.audioHeadPaddingMs ?? 0;
@@ -4360,18 +4487,88 @@ function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
   return Math.max(0, (elapsedMs / 1000) * speed);
 }
 
-async function waitPrecise(delayMs: number): Promise<void> {
+/**
+ * Adjusts a drain-time playback timestamp backwards by the wall-clock delta between the OS-level press event and
+ * now, so judging a queued lane-input resolves against the player's actual press timing rather than the engine's
+ * next-tick drain time. Without this, a press that lands a few ms before the next 60 Hz tick gets judged up to
+ * ~16 ms late even though the player hit the note on time. With it, the judge timestamp matches the physical
+ * press to within event-handler latency (= ~1–3 ms on typical hardware).
+ *
+ * `pressedAt` is in the **wall-clock-ms domain** (`Date.now()`-equivalent, but with sub-ms precision via
+ * `performance.timeOrigin + performance.now()`), NOT the per-thread `performance.now()` domain. This matters
+ * because the TUI's input runtime runs on the main thread and the engine runs in a `worker_threads` Worker —
+ * each thread has its own `performance.timeOrigin`, so a raw `performance.now()` snapshot from the main thread
+ * compared against the worker's `performance.now()` would always read as "in the future" (negative delta) and
+ * the fallback would silently swallow every press. Wall-clock-ms is process-shared, so the comparison is
+ * stable across worker boundaries, and `KeyboardEvent.timeStamp` on the web (also `performance.timeOrigin`-
+ * relative) feeds the same domain after a `+ performance.timeOrigin` adjustment in the runtime adapter.
+ *
+ * Defensive bounds:
+ * - Negative delta (`pressedAt` in the future) → fall back to drain time. Happens with synthetic / test inputs
+ *   that supply a fixed timestamp ahead of the clock; the legacy semantics are still correct in that case.
+ * - Delta > {@link PRESSED_AT_MAX_DELTA_MS} → fall back to drain time. Long stalls (pause-then-resume, GC) can
+ *   make the wall-clock delta diverge from the playback delta because `playbackClock` pauses while the wall
+ *   clock keeps ticking. Capping the adjustment prevents stale presses from being judged in the past after a
+ *   pause.
+ */
+function resolveJudgeNowMsFromPressedAt(drainNowMs: number, pressedAt: number | undefined): number {
+  if (pressedAt === undefined) return drainNowMs;
+  const deltaMs = performance.timeOrigin + performance.now() - pressedAt;
+  if (deltaMs < 0 || deltaMs > PRESSED_AT_MAX_DELTA_MS) return drainNowMs;
+  return Math.max(0, drainNowMs - deltaMs);
+}
+
+/**
+ * Cap on the wall-clock delta we'll accept between `pressedAt` and drain time. Anything larger almost certainly
+ * indicates a paused-then-resumed segment (where `performance.now()` ticked but the playback clock didn't), so
+ * we fall back to drain-time semantics rather than over-subtract. 50 ms is comfortably above the engine's 16.67
+ * ms TUI tick + a stutter-frame margin and well below any real pause duration.
+ */
+const PRESSED_AT_MAX_DELTA_MS = 50;
+
+/**
+ * Precise sleep that cuts the wait short on the next input arrival
+ * (`inputSignals.pushCommand`). Returns `'timeout'` when the full delay elapsed and `'input'` when an input
+ * woke us up early. The caller decides what to do on `'input'` — typically re-drain the input queue and
+ * continue waiting for the rest of the original tick.
+ *
+ * The two sleep waiters race each other in the same `Promise.race`. The losing waiter (the timer when input
+ * arrived; the wake-up when timeout fired) is left to settle naturally — for the timer that's harmless
+ * (`setTimeout` resolves and the result is discarded), and for the wake-up it's harmless because the wake-up
+ * is a shared promise that resolves on the next `pushCommand` regardless of who's listening. Each call uses
+ * a fresh wake-up promise (it's re-armed inside `createInputWakeUp` after every resolve), so we never
+ * miss an edge by calling `wait()` after a `pushCommand` already happened.
+ *
+ * Why the race exists at all: `pressedAt` ensures the JUDGE timestamp is correct regardless of drain timing,
+ * but the audio / visual response (keysound playback, lane flash queueing) still happens at drain time.
+ * Without this race the engine sleeps a full 16.67 ms tick before processing inputs that arrived mid-tick,
+ * adding up to that much delay before the keysound is heard. With the race the engine wakes up within ~1 ms
+ * of the press and triggers audio at that point — perceived as "immediate."
+ */
+async function waitPreciseOrInput(
+  delayMs: number,
+  wakeUp: { wait: () => Promise<void> },
+): Promise<'timeout' | 'input'> {
   const target = performance.now() + Math.max(0, delayMs);
+  // Capture the wake-up promise once per call. `wait()` returns the SAME shared promise until it resolves
+  // (then re-arms internally), so racing it across multiple iterations of this function's inner loop is safe.
+  const inputArrival = wakeUp.wait().then(() => 'input' as const);
   while (true) {
     const remaining = target - performance.now();
     if (remaining <= 0) {
-      return;
+      return 'timeout';
     }
     if (remaining > 8) {
-      await delay(remaining - 4);
+      const winner = await Promise.race([delay(remaining - 4).then(() => 'timeout' as const), inputArrival]);
+      if (winner === 'input') {
+        return 'input';
+      }
       continue;
     }
-    await delayImmediate();
+    const winner = await Promise.race([delayImmediate().then(() => 'timeout' as const), inputArrival]);
+    if (winner === 'input') {
+      return 'input';
+    }
   }
 }
 

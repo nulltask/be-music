@@ -142,6 +142,17 @@ export function formatSeconds(seconds: number): string {
   return `${hours}:${minutesPart.toString().padStart(2, '0')}:${secondsPart.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
 }
 
-export function resolveAltModifierLabel(platform: NodeJS.Platform = process.platform): 'Alt' | 'Option' {
+export function resolveAltModifierLabel(platform: NodeJS.Platform = resolveDefaultPlatform()): 'Alt' | 'Option' {
   return platform === 'darwin' ? 'Option' : 'Alt';
+}
+
+/**
+ * Browser-safe `process.platform` lookup. Falls back to `'linux'` when running outside Node so a static
+ * `process.platform` reference doesn't `ReferenceError` the moment a web bundle calls a default-param consumer.
+ * The value's only consumer is the human-readable Alt/Option modifier label, and `'Alt'` is the right fallback
+ * for any non-Mac surface.
+ */
+function resolveDefaultPlatform(): NodeJS.Platform {
+  const proc = (globalThis as { process?: { platform?: NodeJS.Platform } }).process;
+  return proc?.platform ?? ('linux' as NodeJS.Platform);
 }

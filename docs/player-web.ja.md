@@ -5,11 +5,24 @@
 この文書は、`@be-music/player-web` と `@be-music/player-web-demo` で追加された browser player の実装メモです。
 timing、note、判定、score、gauge、BGA event の意味など、CLI と共有する runtime 意味論は [`player-spec.ja.md`](./player-spec.ja.md) を参照してください。
 
-## 監査メモ
+## 共通 runtime 連携
 
-- 監査起点コミット: `97b05e825c60e2242b621f63a1ebbfccd415362b`
-- 監査時点コミット: `cef0f2f8a604c3a034e04b798953915e01a72549` (PR #73 merge)
-- 監査対象範囲: PR #73 の browser player package、CLI/browser 共通 playback helper、web 関連 test、benchmark 追加
+browser player は gameplay を `@be-music/player/core/engine` 経由で駆動します。
+判定、fallback keysound routing、long note、地雷優先度、score、gauge、chart finish の意味論は engine が担当します。
+`PixiGameplayView` は LR2 の `PLAYSTART` gate で 1 回 engine を起動し、engine の frame snapshot を scene state へ反映し、UI command を Pixi の視覚効果へ変換します。
+
+browser runtime は次の adapter module を使います。
+
+| module | 役割 |
+| --- | --- |
+| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | engine の `AudioSession` 契約を Web Audio で実装します。即時発音、BGM scheduling、channel stop、pause/resume、key/BGM routing、動的 volume change、bmson `c=true` continuation、`#WAVCMD` gain を扱います。 |
+| [`web-input-runtime.ts`](../packages/player-web/src/web-input-runtime.ts) | DOM `keydown` / `keyup` を engine の input bus へ写像します。OS auto-repeat を除外し、`Escape` / `F5` / `Space` を command event へ送り、lane press には物理 event timestamp を付けます。 |
+| [`web-ui-runtime.ts`](../packages/player-web/src/web-ui-runtime.ts) | engine UI signal を Pixi host へ流します。frame snapshot は note、score、gauge、result state を更新し、command は lane flash、key hold、POOR BGA、judge/combo effect を駆動します。 |
+| [`engine-driver.ts`](../packages/player-web/src/engine-driver.ts) | audio、input、UI adapter を組み立て、1 譜面分の `manualPlay` / `autoPlay` を呼び出します。 |
+
+`@be-music/player/core/engine` は `node:path` / `node:timers/promises` 依存を排除済みで、 browser bundle にそのまま
+含められます。 `createNodeAudioSink` (Node 専用 audio backend) も lazy import なので、 host が
+`PlayerOptions.createAudioSession` factory (= `createWebAudioSession`) を渡す経路では一切到達しません。
 
 ## 対象範囲
 
@@ -58,6 +71,9 @@ play skin は key variant (`5`, `7`, `9`, `10`, `14`) ごとにまとめ、play 
 - LR2 theme file 向けの case-insensitive / wildcard asset lookup
 
 demo は、dropped theme に存在する場合、select / decide screen 向けの LR2 theme BGM と system sound も読み込みます。
+
+scene に依存しない LR2 Pixi helper は [`lr2-render.ts`](../packages/player-web/src/lr2-render.ts) と
+[`lr2-scene-render.ts`](../packages/player-web/src/lr2-scene-render.ts) にあります。destination keyframe 評価、sprite transform、source cell 選択、text rendering、number、slider、bargraph を共通化します。scene module は state 固有の値解決、timer、input behavior だけを保持します。
 
 ## Scene lifecycle
 
