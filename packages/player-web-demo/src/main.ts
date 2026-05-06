@@ -593,6 +593,14 @@ interface DemoGuiState {
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
+   * Phase 4c opt-in. When true, the gameplay view hands chart playback over to `@be-music/player`'s engine
+   * (judge / fallback / LN / sample triggering all flow through `manualPlay` / `autoPlay`); when false, the
+   * legacy in-tree self-judge ladder runs. Exposed as a Debug Menu toggle while the migration is under
+   * verification — flipping it mid-session takes effect on the next chart launch (the runtime reads it inside
+   * `preloadGameplay`'s `PixiGameplayView` constructor; live charts keep whichever flag they were started with).
+   */
+  useSharedEngine: boolean;
+  /**
    * Read-only status text (loading summaries, "Playing: …", recording state, etc.). Bound to a disabled string
    * controller so users can copy it out of the GUI but can't edit it. The runtime updates this via {@link setStatus}
    * which also pushes the new value into the controller.
@@ -726,6 +734,10 @@ class PlayerWebDemoApp {
       // users coming from those players expect. The dropdown lets users opt into the `'KEEP_SCROLLING'` mode (≈
       // beatoraja LANEEFFECT ON) for timing-learning play.
       judgedNoteDisplay: 'HIDE',
+      // Phase 4c opt-in flag. Defaults to OFF while the engine-driven path is under verification — the legacy
+      // self-judge ladder still runs end-to-end so the existing demo feel is preserved. Power users / contributors
+      // flip the GUI checkbox to drive the chart through `@be-music/player`'s `manualPlay` / `autoPlay` instead.
+      useSharedEngine: false,
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
@@ -1011,6 +1023,17 @@ class PlayerWebDemoApp {
       .onChange((value: 'KEEP_SCROLLING' | 'HIDE') => {
         this.guiState.judgedNoteDisplay = value;
         this.gameplayView?.setJudgedNoteDisplay(value);
+      });
+    // Phase 4c opt-in. Toggling this flag swaps which judge / sample / fallback path runs the chart: OFF
+    // (default) keeps the legacy in-tree self-judge ladder, ON hands playback to `@be-music/player`'s
+    // `manualPlay` / `autoPlay` engine through the `runEngineDriver` glue. The runtime reads the flag inside
+    // `preloadGameplay`'s `PixiGameplayView` constructor, so a mid-song flip takes effect on the NEXT chart
+    // launch — restart (F5) or pick a fresh song to apply the change.
+    gui
+      .add(this.guiState, 'useSharedEngine')
+      .name('Shared engine (Phase 4c)')
+      .onChange((value: boolean) => {
+        this.guiState.useSharedEngine = value;
       });
     this.recordController = gui.add(this.guiState, 'record').name('● Record');
     this.refreshCompressorStageVisibility();
@@ -1451,6 +1474,7 @@ class PlayerWebDemoApp {
       // on. Falls back to a flat green rectangle when the dropped theme didn't ship `play_9.lr2skin`.
       invisibleNoteSkin: this.playSkins['9'],
       judgedNoteDisplay: this.guiState.judgedNoteDisplay,
+      useSharedEngine: this.guiState.useSharedEngine,
       onExit: () => {
         void this.finishGameplayThen(() => this.showSelect());
       },
@@ -1557,6 +1581,7 @@ class PlayerWebDemoApp {
       // on. Falls back to a flat green rectangle when the dropped theme didn't ship `play_9.lr2skin`.
       invisibleNoteSkin: this.playSkins['9'],
       judgedNoteDisplay: this.guiState.judgedNoteDisplay,
+      useSharedEngine: this.guiState.useSharedEngine,
       onExit: () => {
         // Sequence finalize → transition. The transition methods (`showSelect` / `showResult` / `playSong`) all dispose
         // the gameplay view, which closes its AudioContext and tears down the bus the recorder taps. If we kicked the
