@@ -1158,6 +1158,12 @@ export class PixiGameplayView {
     if (!this.options.useSharedEngine) {
       window.addEventListener('keydown', this.handleKeyDown);
       window.addEventListener('keyup', this.handleKeyUp);
+    } else {
+      // Even in shared-engine mode, ESC / F5 stay on the view so the LR2 `#FADEOUT` exit animation runs to
+      // completion BEFORE the engine's interrupt flow disposes the audio session. The runtime's
+      // `shouldSkipKey` filter mirrors this list so the WebInputRuntime doesn't also push `interrupt(escape)`
+      // and double-trigger.
+      window.addEventListener('keydown', this.handleSharedEngineExitKey);
     }
     this.app.canvas.addEventListener('pointerdown', this.focus);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
@@ -1484,6 +1490,7 @@ export class PixiGameplayView {
     // Detach window-level event listeners so a stray keypress doesn't hit a disposed view.
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
+    window.removeEventListener('keydown', this.handleSharedEngineExitKey);
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.focus);
     }
@@ -2851,6 +2858,37 @@ export class PixiGameplayView {
       if (!this.options.autoPlay) {
         this.finalizeActiveLongNote(channel, this.currentSeconds());
       }
+    }
+  };
+
+  /**
+   * Captures ESC / F5 in shared-engine mode so the LR2 `#FADEOUT` exit animation runs to completion BEFORE the
+   * engine's `PlayerInterruptedError` flow disposes the audio session. Without this intercept, pushing
+   * `interrupt(escape)` through the WebInputRuntime would tear down the audio session synchronously inside
+   * `manualPlay`'s `finally` block, killing every in-flight `BufferSource` mid-fade — the user hears the chart
+   * audio cut to silence the moment ESC fires while the LR2 fadeout overlay is still painting.
+   *
+   * The handler kicks off `beginExitSequence` (which fades `audioBus.fadeOutAudibleTo(0)` over the LR2 fadeout
+   * duration). Once the fade callback resolves, we abort the engine's `AbortController` so the engine throws and
+   * unwinds normally — the audio session is already silent by then, so the in-flight-source `node.stop()` calls
+   * have nothing audible to interrupt.
+   */
+  private readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => {
+    if (event.repeat) return;
+    if (event.code === 'Escape') {
+      event.preventDefault();
+      this.beginExitSequence(() => {
+        this.sharedEngineAbortController?.abort();
+        this.options.onExit?.();
+      });
+      return;
+    }
+    if (event.code === 'F5') {
+      event.preventDefault();
+      this.beginExitSequence(() => {
+        this.sharedEngineAbortController?.abort();
+        this.options.onRestart?.();
+      });
     }
   };
 
@@ -5857,10 +5895,25 @@ export class PixiGameplayView {
       },
       mode: this.options.autoPlay ? 'auto' : 'manual',
       ui: callbacks,
-      // Restrict the input runtime's keyboard listeners to the gameplay canvas so other DOM widgets (e.g.
-      // the lil-gui debug panel) can keep receiving keystrokes — matches the legacy DOM key handler's
-      // implicit "canvas has focus" behavior.
-      inputTarget: this.host?.app.canvas as unknown as EventTarget,
+      // Listen on the window (default) so the runtime sees keyboard events regardless of which DOM element
+      // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
+      // canvas's `tabIndex = 0` only makes it focusable, not auto-focused, so a canvas-scoped listener would
+      // only fire after the user clicked the canvas first.
+      shouldSkipKey: (event) => {
+        // Suppress lane-input dispatch when the user is typing into a focused text input (search box, etc.).
+        const target = event.target as HTMLElement | null;
+        if (target) {
+          const tag = target.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+          if (target.isContentEditable === true) return true;
+        }
+        // ESC and F5 are handled by the view's own listener (set up in `mount`) so the LR2 `#FADEOUT` animation
+        // runs to completion BEFORE the engine's `PlayerInterruptedError` flow disposes the audio session. If
+        // we let the runtime push `interrupt(escape)` directly, the engine's `dispose()` would `node.stop()`
+        // every in-flight BufferSource immediately, killing the chart audio mid-fade.
+        if (event.code === 'Escape' || event.code === 'F5') return true;
+        return false;
+      },
       engineOptions: {
         // The view's own intro timing already gated the chart to PLAYSTART; tell the engine to start its chart
         // immediately so its t=0 lines up with our `audioContextStartTime` anchor instead of imposing the
@@ -5873,6 +5926,13 @@ export class PixiGameplayView {
         log.info('shared engine driver finished');
       })
       .catch((error: unknown) => {
+        // The view's own ESC / F5 handler (`handleSharedEngineExitKey`) drives the LR2 fadeout animation, calls
+        // the host's `onExit` / `onRestart` from the fade-completion callback, and then aborts the engine's
+        // signal — which is what produced this rejection. The view is already disposing (or about to), so the
+        // catch handler short-circuits to avoid double-firing the host transition. Same logic for any rejection
+        // landing after `dispose` has flipped `disposed` (e.g. parent component teardown without ESC).
+        if (this.disposed) return;
+        if (this.sharedEngineAbortController?.signal.aborted) return;
         if (error instanceof PlayerInterruptedError) {
           if (error.reason === 'escape') {
             this.beginExitSequence(() => this.options.onExit?.());
