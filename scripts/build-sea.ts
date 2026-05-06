@@ -199,13 +199,30 @@ function createWorkspaceAliasPlugin(aliases?: Record<string, string>) {
     return undefined;
   }
 
-  const entries = Object.entries(aliases);
+  // Iterate longest-prefix-first so a request like `@be-music/player/core/ui-options` matches the
+  // `@be-music/player/core` alias before the shorter `@be-music/player` one. Object iteration order
+  // already preserves the order specified in `SEA_TARGETS`, but sorting by length makes the contract
+  // explicit and survives a future map literal reorder.
+  const entries = Object.entries(aliases).sort(([a], [b]) => b.length - a.length);
+  // The plugin needs `this.resolve` access (provided by Rollup at call time) so the `async resolveId`
+  // method can delegate extension / index resolution to Rollup's downstream resolvers. Returning a bare
+  // path like `packages/player/src/core/ui-options` would otherwise fail because `@rollup/plugin-alias`
+  // bypasses the rest of the resolution pipeline once a plugin returns a string from `resolveId`.
   return {
     name: 'be-music-sea-workspace-alias',
-    resolveId(source: string) {
+    async resolveId(this: { resolve: (id: string, importer?: string, options?: { skipSelf?: boolean }) => Promise<{ id: string } | null> }, source: string): Promise<string | null> {
       for (const [find, replacement] of entries) {
+        let target: string | undefined;
         if (source === find) {
-          return replacement;
+          target = replacement;
+        } else if (source.startsWith(`${find}/`)) {
+          target = `${replacement}/${source.slice(find.length + 1)}`;
+        }
+        if (target !== undefined) {
+          // Delegate extension resolution (`.ts`, `.js`, `.tsx`, etc.) and index lookup to Rollup's
+          // built-in resolver. `skipSelf: true` prevents infinite recursion through this plugin.
+          const resolved = await this.resolve(target, undefined, { skipSelf: true });
+          return resolved?.id ?? target;
         }
       }
       return null;
