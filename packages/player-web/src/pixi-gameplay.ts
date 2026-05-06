@@ -5402,6 +5402,29 @@ export class PixiGameplayView {
     // Logs the first divergence (if any) to the browser console; remove once the sync regression is confirmed fixed.
     if (!this.sharedEngineNoteSyncDebugLogged) {
       this.sharedEngineNoteSyncDebugLogged = true;
+      // DEBUG: Snapshot of the chart inputs each side fed into `extractTimedNotes`. If `controlFlow.length` is non-
+      // zero on the engine-bound chart, the engine's `resolveBmsControlFlowForPlayback` is re-applying every
+      // captured object entry on top of `events`, which doubles up notes. If `events.length` already differs
+      // between the view and engine charts, the pre-extract pipelines (control-flow resolve / lane shuffle /
+      // post-shuffle remap) themselves drifted — the bug is upstream of `extractTimedNotes`.
+      const viewChart = this.resolvedChart ?? this.song?.chart;
+      const engineChart = this.buildSharedEngineChart();
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[be-music debug] chart inputs ${JSON.stringify(
+          {
+            viewEventsLength: viewChart?.events.length ?? -1,
+            viewControlFlowLength: viewChart?.bms.controlFlow.length ?? -1,
+            engineEventsLength: engineChart.events.length,
+            engineControlFlowLength: engineChart.bms.controlFlow.length,
+            sameEventsRef: viewChart?.events === engineChart.events,
+            sameChartRef: viewChart === engineChart,
+            lnType: viewChart?.bms.lnType,
+          },
+          null,
+          2,
+        )}`,
+      );
       const frameNotes = frame.notes;
       const viewNotes = this.notes;
       const limit = Math.min(viewNotes.length, frameNotes.length);
