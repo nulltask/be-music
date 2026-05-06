@@ -6055,20 +6055,28 @@ export class PixiGameplayView {
   }
 
   /**
-   * Drives the LR2 NOWJUDGE plate timer + combo readout from the engine's stateSignals judge-combo bus. The
-   * signal carries the verdict kind (`'PERFECT'` / etc.), running combo, and the lane channel so the per-side
-   * (`judgeSideState`) plate latch can pin to the correct side's chrome.
+   * Drives every per-judge visual the LR2 skin animates against from the engine's stateSignals judge-combo bus:
+   *
+   * - `tracker.combo` mirrors the engine's running combo so `#SRC_NUMBER,st=70` (NOWCOMBO) renders the right
+   *   number, and the `maxCombo` high-water mark feeds the result screen's MAX COMBO readout.
+   * - `publishJudge` does the rest of the legacy per-judge work — it stamps timer 46 (1P) or 47 (2P) so the
+   *   `#DST_NOWJUDGE` / `#DST_NOWCOMBO` keyframe chains animate from time=0 on every hit (without this, the
+   *   plate stays invisible because the timer's playhead is parked at scene start), latches `lastJudge` /
+   *   `lastJudgeUntil` so the fallback `#SRC_TEXT` paints the verdict, snapshots `judgeSideState[side]` for DP
+   *   per-side rendering, swaps to the POOR BGA on POOR/BAD, appends a sample to gauge / score histories for
+   *   the result graph, and fires `maybeFireFullCombo` for timers 48/49.
+   * - On PERFECT / GREAT we additionally fire the lane bomb (the engine's `flash-lane` command is severity-
+   *   independent so we can't piggy-back on it; the bomb is a positive-feedback cue specifically for clean
+   *   hits). The legacy `commitFinalJudge` ran the same gate.
    */
   private applyEngineJudgeCombo(state: Readonly<PlayerJudgeComboSignalState>): void {
     if (state.judge === 'READY') return;
     this.tracker.combo = state.combo;
     if (state.combo > this.maxCombo) this.maxCombo = state.combo;
     const judgeKind = state.judge as JudgeKind;
-    this.lastJudge = judgeKind;
-    this.lastJudgeUntil = this.currentSeconds() + 0.6;
-    if (state.channel) {
-      const side: '1P' | '2P' = state.channel.startsWith('2') ? '2P' : '1P';
-      this.judgeSideState[side] = { judge: judgeKind, until: this.lastJudgeUntil, combo: state.combo };
+    this.publishJudge(judgeKind, this.currentSeconds(), state.channel);
+    if ((judgeKind === 'PERFECT' || judgeKind === 'GREAT') && state.channel) {
+      this.triggerBomb(state.channel);
     }
   }
 }
