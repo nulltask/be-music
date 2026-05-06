@@ -1,0 +1,220 @@
+// Strict-typed normalization for beatoraja `destination[]` entries.
+//
+// Each entry binds an image (via `id`, matching `image[]`) to a list of `dst[]` keyframes. The renderer
+// interpolates between consecutive keyframes by `time` to drive position / size / color / alpha animations. Most
+// fields default to "no change" so an entry with `dst:[{time:0, x:0, y:0, w:100, h:100}]` is enough to render a
+// static rectangle.
+
+import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
+import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
+
+export interface BeatorajaDestinationKeyframe {
+  /** Milliseconds since `timer` started counting. Frame 0 (`time = 0`) anchors the animation. */
+  time: number;
+  /** Top-left position in skin-pixel units. */
+  x: number;
+  y: number;
+  /** Display rectangle size. */
+  w: number;
+  h: number;
+  /** Color tint (0..255 each). 255 / 255 / 255 means "untinted". */
+  r: number;
+  g: number;
+  b: number;
+  /** Alpha 0..255 (NOT 0..1). 255 means fully opaque. */
+  a: number;
+  /** Rotation in degrees. 360 = full revolution. */
+  angle: number;
+}
+
+export interface BeatorajaDestinationGroup {
+  /** Image id this destination targets. Match against {@link BeatorajaImageElement.id}. */
+  id: BeatorajaImageId;
+  /**
+   * Timer reference whose elapsed time drives the keyframe interpolation. `0` = scene start. The renderer reads
+   * the runtime timer table and computes `elapsed = now - timerStart[timer]` before sampling keyframes.
+   */
+  timer: number;
+  /**
+   * Loop offset in milliseconds. `-1` (or undefined → -1) hides the element after the last keyframe; `0` loops
+   * back to keyframe 0 once the last keyframe's time elapses; any other positive value loops to that time-stamp.
+   */
+  loop: number;
+  /**
+   * Z-order layer. Lower values draw earlier (further back). The reference theme uses `0..3` for chrome and
+   * `0..3` again offset by 50+ for chart-area elements.
+   */
+  offset: number;
+  /**
+   * Op-codes that gate visibility (group level, AND-merged with each parent `if`). Negative codes mean negation.
+   */
+  op: ReadonlyArray<number>;
+  /**
+   * Blend mode. 0 = normal alpha, 1 = additive, 2 = multiply, etc. Beatoraja uses LR2-compatible numbering.
+   */
+  blend: number;
+  /**
+   * Filter flag. `1` enables bilinear filtering on scaling. Defaults to `0` (nearest neighbour).
+   */
+  filter: number;
+  /** `if` codes from any wrapping conditional group, AND-merged with `op`. */
+  ifCodes: ReadonlyArray<number>;
+  /**
+   * Ordered keyframe list. Always at least one entry — entries with no `dst[]` are dropped at normalization time.
+   */
+  dst: ReadonlyArray<BeatorajaDestinationKeyframe>;
+  /**
+   * Author-given declaration order. Two destinations targeting the same image but emitted at different points in
+   * the source file render in source order; this field preserves that.
+   */
+  declarationOrder: number;
+}
+
+/**
+ * Convert a permissive `destination[]` array into a normalized list. Entries without a usable `id` or `dst[]` are
+ * dropped; all other fields take the documented defaults when missing.
+ */
+export function normalizeBeatorajaDestinations(input: unknown): BeatorajaDestinationGroup[] {
+  const flattened = flattenBeatorajaElements(input);
+  const out: BeatorajaDestinationGroup[] = [];
+  for (let i = 0; i < flattened.length; i += 1) {
+    const normalized = normalizeOne(flattened[i], i);
+    if (normalized !== undefined) out.push(normalized);
+  }
+  return out;
+}
+
+function normalizeOne(entry: NormalizedElement, declarationOrder: number): BeatorajaDestinationGroup | undefined {
+  const f = entry.fields;
+  const id = f.id;
+  if (typeof id !== 'string' && typeof id !== 'number') return undefined;
+  const rawDst = f.dst;
+  if (!Array.isArray(rawDst) || rawDst.length === 0) return undefined;
+
+  const keyframes = normalizeKeyframes(rawDst);
+  if (keyframes.length === 0) return undefined;
+
+  return {
+    id,
+    timer: numberField(f, 'timer', 0),
+    loop: numberField(f, 'loop', -1),
+    offset: numberField(f, 'offset', 0),
+    op: normalizeOpArray(f.op),
+    blend: numberField(f, 'blend', 0),
+    filter: numberField(f, 'filter', 0),
+    ifCodes: entry.ifCodes,
+    dst: keyframes,
+    declarationOrder,
+  };
+}
+
+function normalizeKeyframes(raw: ReadonlyArray<unknown>): BeatorajaDestinationKeyframe[] {
+  const out: BeatorajaDestinationKeyframe[] = [];
+  // Beatoraja keyframes carry forward the previous frame's value when a field is omitted. e.g.
+  //   {"time":0,"x":121,"y":140,"w":18,"h":580},{"time":100,"x":112,"w":36}
+  // means "at t=100 the rect is at x=112, y stays 140, w=36, h stays 580". Track a rolling state so the renderer
+  // gets a fully-populated keyframe for every entry.
+  const state: BeatorajaDestinationKeyframe = {
+    time: 0,
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0,
+    r: 255,
+    g: 255,
+    b: 255,
+    a: 255,
+    angle: 0,
+  };
+  for (const item of raw) {
+    if (item === null || typeof item !== 'object') continue;
+    const obj = item as Readonly<Record<string, unknown>>;
+    state.time = numberField(obj, 'time', state.time);
+    state.x = numberField(obj, 'x', state.x);
+    state.y = numberField(obj, 'y', state.y);
+    state.w = numberField(obj, 'w', state.w);
+    state.h = numberField(obj, 'h', state.h);
+    state.r = numberField(obj, 'r', state.r);
+    state.g = numberField(obj, 'g', state.g);
+    state.b = numberField(obj, 'b', state.b);
+    state.a = numberField(obj, 'a', state.a);
+    state.angle = numberField(obj, 'angle', state.angle);
+    // Push a fresh copy so future state mutations don't reach already-emitted keyframes.
+    out.push({ ...state });
+  }
+  return out;
+}
+
+function normalizeOpArray(value: unknown): ReadonlyArray<number> {
+  if (!Array.isArray(value)) return [];
+  const out: number[] = [];
+  for (const v of value) {
+    if (typeof v === 'number' && Number.isFinite(v)) out.push(v);
+  }
+  return out;
+}
+
+function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
+  const v = record[key];
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+/**
+ * Sample the destination state at a given elapsed time. Returns the interpolated keyframe (linear interpolation
+ * between adjacent stops). When the last keyframe is past:
+ *
+ * - `loop < 0` → returns `undefined` (element is hidden).
+ * - `loop >= 0` → wraps `elapsed` modulo `(lastKeyframe.time - loop)` after subtracting `loop`.
+ *
+ * Designed to be called per-frame from the renderer.
+ */
+export function sampleBeatorajaDestination(
+  group: BeatorajaDestinationGroup,
+  elapsedMs: number,
+): BeatorajaDestinationKeyframe | undefined {
+  const dst = group.dst;
+  if (dst.length === 0) return undefined;
+  const last = dst[dst.length - 1];
+  let t = elapsedMs;
+
+  if (t >= last.time) {
+    if (group.loop < 0) return undefined;
+    const period = last.time - group.loop;
+    if (period <= 0) return last;
+    t = group.loop + ((elapsedMs - group.loop) % period);
+  }
+
+  if (dst.length === 1 || t <= dst[0].time) {
+    return dst[0];
+  }
+
+  for (let i = 1; i < dst.length; i += 1) {
+    const a = dst[i - 1];
+    const b = dst[i];
+    if (t <= b.time) {
+      const span = b.time - a.time;
+      const u = span === 0 ? 0 : (t - a.time) / span;
+      return interpolate(a, b, u);
+    }
+  }
+  return last;
+}
+
+function interpolate(
+  a: BeatorajaDestinationKeyframe,
+  b: BeatorajaDestinationKeyframe,
+  u: number,
+): BeatorajaDestinationKeyframe {
+  return {
+    time: a.time + (b.time - a.time) * u,
+    x: a.x + (b.x - a.x) * u,
+    y: a.y + (b.y - a.y) * u,
+    w: a.w + (b.w - a.w) * u,
+    h: a.h + (b.h - a.h) * u,
+    r: a.r + (b.r - a.r) * u,
+    g: a.g + (b.g - a.g) * u,
+    b: a.b + (b.b - a.b) * u,
+    a: a.a + (b.a - a.a) * u,
+    angle: a.angle + (b.angle - a.angle) * u,
+  };
+}

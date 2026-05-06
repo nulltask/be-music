@@ -40,7 +40,23 @@ export { detectBeatorajaSkinFormat, loadBeatorajaSkin } from './beatoraja-skin.t
 export { parseBeatorajaSkinJson, parseBeatorajaSkinJsonHeader, stripTrailingCommas } from './beatoraja-skin-json.ts';
 export type { NormalizedElement, RawElement } from './beatoraja-skin-element.ts';
 export { buildBaseOpSet, flattenBeatorajaElements, isElementVisible } from './beatoraja-skin-element.ts';
+export type { BeatorajaImageElement, BeatorajaImageId } from './beatoraja-skin-image.ts';
+export {
+  imageFrameAt,
+  imageFrameRect,
+  imageRefFrame,
+  normalizeBeatorajaImages,
+} from './beatoraja-skin-image.ts';
+export type { BeatorajaDestinationGroup, BeatorajaDestinationKeyframe } from './beatoraja-skin-destination.ts';
+export { normalizeBeatorajaDestinations, sampleBeatorajaDestination } from './beatoraja-skin-destination.ts';
 export { expandBeatorajaWildcard, resolveBeatorajaPath, resolveSourcePath } from './beatoraja-skin-resolver.ts';
+export type {
+  BeatorajaSourceAsset,
+  BeatorajaSourceBundle,
+  BeatorajaUnresolvedSource,
+  BundleBeatorajaSourcesOptions,
+} from './beatoraja-skin-source.ts';
+export { bundleBeatorajaSources, listBeatorajaSourcePaths } from './beatoraja-skin-source.ts';
 export type {
   BeatorajaPlaySkinMap,
   BeatorajaSkinEntry,

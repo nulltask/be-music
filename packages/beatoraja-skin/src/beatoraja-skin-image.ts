@@ -1,0 +1,166 @@
+// Strict-typed normalization for beatoraja `image[]` entries.
+//
+// `BeatorajaSkin.image` arrives as a permissive `Record<string, unknown>[]` from the JSON / Lua loaders. The fields
+// follow beatoraja's upstream schema (`bms.player.beatoraja.skin.json.JSONSkin.Image`), but their presence is
+// inconsistent across hand-written skins — `divx` / `divy` default to 1, `timer` / `cycle` default to 0, and missing
+// `ref` / `len` mean "no dynamic frame selection". `normalizeBeatorajaImages` turns the loose objects into a flat
+// list of `BeatorajaImageElement` with every field present and validated.
+
+import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
+
+/**
+ * `id` of an `image[]` entry. Skins use both numeric ids (`100`, `400`) for op-code-driven references and string ids
+ * (`"keybeam1"`, `"close1"`) for symbolic names. We preserve whichever form the author used so downstream code can
+ * match on the raw key.
+ */
+export type BeatorajaImageId = number | string;
+
+export interface BeatorajaImageElement {
+  /** Unique identifier within the skin. Other elements (`destination[]`, `value[]`, `imageset[]`) reference it. */
+  id: BeatorajaImageId;
+  /** Index into `source[]`. -1 when the author left the field unset. */
+  src: number;
+  /** Source-rectangle origin within the texture, in source-pixel units. */
+  x: number;
+  y: number;
+  /**
+   * Source-rectangle size. `divx` / `divy` cells are calculated from this rect — a 200x220 image with `divy=11`
+   * exposes 11 frames of 200x20 each.
+   */
+  w: number;
+  h: number;
+  /**
+   * Cell grid for animated / multi-frame textures. `1` (the default) means the rect itself is the only frame.
+   * Total frame count is `divx * divy`.
+   */
+  divx: number;
+  divy: number;
+  /**
+   * Timer reference whose elapsed time selects the current frame for animations. `0` means "scene start" (which
+   * effectively disables the animation when paired with `cycle = 0`).
+   */
+  timer: number;
+  /**
+   * Full animation period in milliseconds. `0` disables the cycle (the rect stays on frame 0 unless `ref`/`len`
+   * pick a frame instead).
+   */
+  cycle: number;
+  /**
+   * Op-code reference for "static" frame selection (e.g. clear-lamp icons that pick one frame based on the runtime
+   * lamp state). `0` means "no ref" — frame is driven by `timer`/`cycle` instead.
+   */
+  ref: number;
+  /**
+   * Number of valid frames for the `ref` lookup. When `ref` is set and the op-code value is between `0..len`, the
+   * matching cell is shown. `0` means "use all `divx * divy` cells" (the upstream behavior when `len` is omitted).
+   */
+  len: number;
+  /**
+   * `act` field used by some skins to flag alternate-state textures. Beatoraja's reference theme sets it to `0` or
+   * leaves it absent; we preserve it for forward compatibility but it isn't read by the normalization layer.
+   */
+  act: number;
+  /**
+   * Op-codes that gate visibility (from `if`/`values` flattening). Empty array means always visible.
+   * Negative codes mean "must NOT be active". See {@link NormalizedElement.ifCodes} on `beatoraja-skin-element.ts`.
+   */
+  ifCodes: ReadonlyArray<number>;
+}
+
+/**
+ * Convert a permissive `image[]` array (typically `BeatorajaSkin['image']`) into normalized rectangles. Any entry
+ * that lacks `id` is dropped silently — those would be unreferenceable from `destination[]` so keeping them only
+ * serves to surface confusing index drift in downstream code.
+ */
+export function normalizeBeatorajaImages(input: unknown): BeatorajaImageElement[] {
+  const flattened = flattenBeatorajaElements(input);
+  const out: BeatorajaImageElement[] = [];
+  for (const entry of flattened) {
+    const normalized = normalizeOne(entry);
+    if (normalized !== undefined) out.push(normalized);
+  }
+  return out;
+}
+
+function normalizeOne(entry: NormalizedElement): BeatorajaImageElement | undefined {
+  const f = entry.fields;
+  const id = f.id;
+  if (typeof id !== 'string' && typeof id !== 'number') return undefined;
+  return {
+    id,
+    src: numberField(f, 'src', -1),
+    x: numberField(f, 'x', 0),
+    y: numberField(f, 'y', 0),
+    w: numberField(f, 'w', 0),
+    h: numberField(f, 'h', 0),
+    divx: positiveIntField(f, 'divx', 1),
+    divy: positiveIntField(f, 'divy', 1),
+    timer: numberField(f, 'timer', 0),
+    cycle: numberField(f, 'cycle', 0),
+    ref: numberField(f, 'ref', 0),
+    len: numberField(f, 'len', 0),
+    act: numberField(f, 'act', 0),
+    ifCodes: entry.ifCodes,
+  };
+}
+
+function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
+  const v = record[key];
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function positiveIntField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
+  const v = record[key];
+  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback;
+  const truncated = Math.trunc(v);
+  return truncated >= 1 ? truncated : fallback;
+}
+
+/**
+ * Pick the source rect for a given frame index. `frameIndex` is clamped to `[0, divx*divy - 1]`. The cell width /
+ * height are derived by integer-dividing `w` / `h` by the cell grid; for a 200x220 image with `divy=11` that yields
+ * cells of 200x20 each.
+ */
+export function imageFrameRect(
+  image: BeatorajaImageElement,
+  frameIndex: number,
+): { x: number; y: number; w: number; h: number } {
+  const totalFrames = image.divx * image.divy;
+  const safeIndex = totalFrames > 0 ? Math.max(0, Math.min(frameIndex, totalFrames - 1)) : 0;
+  const cellW = image.divx > 0 ? Math.floor(image.w / image.divx) : image.w;
+  const cellH = image.divy > 0 ? Math.floor(image.h / image.divy) : image.h;
+  const col = image.divx > 0 ? safeIndex % image.divx : 0;
+  const row = image.divx > 0 ? Math.floor(safeIndex / image.divx) : 0;
+  return {
+    x: image.x + col * cellW,
+    y: image.y + row * cellH,
+    w: cellW,
+    h: cellH,
+  };
+}
+
+/**
+ * Pick the displayed frame for an animated image at a given elapsed-time tick. Returns `0` when the cycle isn't set
+ * (frame stays on cell 0). Designed to be called per-frame from the renderer alongside the runtime `timer` lookup.
+ */
+export function imageFrameAt(image: BeatorajaImageElement, elapsedMs: number): number {
+  if (image.cycle <= 0) return 0;
+  const totalFrames = image.divx * image.divy;
+  if (totalFrames <= 1) return 0;
+  const t = ((elapsedMs % image.cycle) + image.cycle) % image.cycle;
+  const frame = Math.floor((t / image.cycle) * totalFrames);
+  return Math.min(frame, totalFrames - 1);
+}
+
+/**
+ * Pick the displayed frame for a `ref`-driven static lookup. `opValue` is whatever the op-code resolved to at
+ * runtime (e.g. clear-lamp index). When `len` is set, values are clamped to `[0, len-1]`; otherwise they fall back
+ * to `[0, totalFrames-1]`.
+ */
+export function imageRefFrame(image: BeatorajaImageElement, opValue: number): number {
+  const totalFrames = image.divx * image.divy;
+  const upper = image.len > 0 ? Math.min(image.len, totalFrames) : totalFrames;
+  if (upper <= 0) return 0;
+  if (opValue < 0) return 0;
+  return Math.min(opValue, upper - 1);
+}
