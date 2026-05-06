@@ -1,12 +1,25 @@
-import { resolve } from 'node:path';
-
 export * from './core.ts';
 export * from './log.ts';
 export * from './path.ts';
 export * from './pcm.ts';
-export * from './workerize.ts';
+// `./workerize.ts` is intentionally NOT re-exported here — it statically imports `node:sea`, which Vite
+// externalises and crashes the browser bundle on first load. Node-only callers (the TUI / CLI) reach the
+// helpers directly via the `@be-music/utils/workerize` sub-path export instead.
 
-export function resolveCliPath(path: string, cwd: string = process.env.INIT_CWD ?? process.cwd()): string {
+/**
+ * Resolves a CLI-supplied path string against `cwd`. CLI callers feed real file paths through here; the
+ * function falls into a `node:path.resolve` slow path only when the input contains parent traversal (`..`) or
+ * a Windows-style separator, which CLI invocations frequently produce on Windows. The fast paths (relative
+ * without traversal) are pure string concatenation and run unchanged in browsers.
+ *
+ * The slow path defers to `node:path` via a synchronous Node-only `require`. Browser bundles never reach the
+ * slow path under normal usage (CLI helpers aren't on the web call graph), and even if they did, the function
+ * returns `cwd` unchanged when running outside Node so a stray import doesn't crash the bundle.
+ *
+ * `process.env.INIT_CWD` / `process.cwd()` are read off `globalThis` so this module's static type signature
+ * doesn't pin it to a Node-only `process` global.
+ */
+export function resolveCliPath(path: string, cwd: string = resolveDefaultCwd()): string {
   if (path.length === 0 || path === '.') {
     return cwd;
   }
@@ -25,5 +38,40 @@ export function resolveCliPath(path: string, cwd: string = process.env.INIT_CWD 
       return cwd.endsWith('/') ? `${cwd}${path}` : `${cwd}/${path}`;
     }
   }
+  // `node:path` slow path — only needed for parent-traversal / Windows-separator inputs. Loaded synchronously
+  // through Node's built-in `require` so the import doesn't sit at module scope (which Vite would externalise
+  // and crash a browser bundle on first load). Browser bundles fall back to returning `cwd` unchanged, which
+  // is sufficient because the slow path isn't on the web's call graph.
+  const nodeRequire = resolveNodeRequire();
+  if (!nodeRequire) {
+    return cwd;
+  }
+  const { resolve } = nodeRequire('node:path') as typeof import('node:path');
   return resolve(cwd, path);
+}
+
+function resolveDefaultCwd(): string {
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined>; cwd?: () => string } }).process;
+  return proc?.env?.INIT_CWD ?? proc?.cwd?.() ?? '.';
+}
+
+type NodeRequire = (id: string) => unknown;
+
+function resolveNodeRequire(): NodeRequire | undefined {
+  const globalRequire = (globalThis as { require?: NodeRequire }).require;
+  if (typeof globalRequire === 'function') {
+    return globalRequire;
+  }
+  // ESM-only Node runtime — `require` isn't on the global, but the builtin can be resolved via `eval('require')`.
+  // Wrapped in a guard so non-Node environments (browsers) skip the eval entirely.
+  const proc = (globalThis as { process?: { versions?: { node?: string } } }).process;
+  if (typeof proc?.versions?.node !== 'string') {
+    return undefined;
+  }
+  try {
+    // eslint-disable-next-line no-eval
+    return (0, eval)('require') as NodeRequire;
+  } catch {
+    return undefined;
+  }
 }

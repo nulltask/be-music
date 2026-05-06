@@ -1,14 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import { extname } from 'node:path';
-import {
-  invokeWorkerizedFunction,
-  isAbortError,
-  resolveFirstExistingPath,
-  runWithConcurrency,
-  throwIfAborted,
-  workerize,
-} from '@be-music/utils';
+import { isAbortError, resolveFirstExistingPath, runWithConcurrency, throwIfAborted } from '@be-music/utils';
+// Worker-spawn helpers live behind the dedicated `/workerize` sub-path so the package root stays browser-safe
+// (the implementation file statically imports `node:sea`).
+import { invokeWorkerizedFunction, workerize } from '@be-music/utils/workerize';
 import type { BeMusicJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { buildBgaTimelines, pickActiveBgaCue, type BgaCue } from '@be-music/player/core/bga-timeline';

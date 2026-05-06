@@ -1,5 +1,4 @@
-import { extname } from 'node:path';
-import { writeStereoPcm16Be, writeStereoPcm16Le } from '@be-music/utils';
+import { extname, writeStereoPcm16Be, writeStereoPcm16Le } from '@be-music/utils';
 
 export type AudioFileFormat = 'wav' | 'aiff';
 

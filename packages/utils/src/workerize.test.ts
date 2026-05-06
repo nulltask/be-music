@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { invokeWorkerizedFunction, workerize } from './index.ts';
+import { invokeWorkerizedFunction, workerize } from './workerize.ts';
 
 describe('workerize utilities', () => {
   test('invokeWorkerizedFunction: resolves workerized results', async () => {

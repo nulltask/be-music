@@ -1,6 +1,5 @@
-import { extname } from 'node:path';
 import { OggVorbisDecoder } from '@wasm-audio-decoders/ogg-vorbis';
-import { clampSignedUnit, isAbortError, throwIfAborted } from '@be-music/utils';
+import { clampSignedUnit, extname, isAbortError, throwIfAborted } from '@be-music/utils';
 import { MPEGDecoder } from 'mpg123-decoder';
 import { OggOpusDecoder } from 'ogg-opus-decoder';
 

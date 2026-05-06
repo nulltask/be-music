@@ -1,5 +1,29 @@
 import { throwIfAborted } from './abort.ts';
 
+/**
+ * Browser-safe equivalent of `node:path.extname`. Returns the trailing-dot suffix of `path` (including the dot
+ * itself) or an empty string when the path has no extension. Matches Node's behavior for the cases the
+ * audio-renderer / chart loader feed in:
+ *
+ * - `'foo.wav'` → `'.wav'`
+ * - `'foo/bar.ogg'` → `'.ogg'`
+ * - `'foo'` → `''`
+ * - `'foo.tar.gz'` → `'.gz'` (only the last segment)
+ * - `'.bashrc'` → `''` (a leading dot on the basename isn't an extension, per Node)
+ *
+ * Lives in `core.ts` rather than `path.ts` so it stays browser-safe — `path.ts` re-exports `node:fs/promises`
+ * helpers that aren't reachable from the web bundle.
+ */
+export function extname(path: string): string {
+  const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  const basenameStart = lastSlash + 1;
+  const lastDot = path.lastIndexOf('.');
+  // `lastDot <= basenameStart` covers both "no dot at all in the basename" and "dot is the FIRST char of the
+  // basename" (the dotfile case Node treats as no-extension).
+  if (lastDot <= basenameStart) return '';
+  return path.slice(lastDot);
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return value <= min ? min : value >= max ? max : value;
 }

@@ -19,6 +19,11 @@
       "types": "./dist/core.d.ts",
       "source": "./src/core.ts",
       "default": "./dist/core.js"
+    },
+    "./workerize": {
+      "types": "./dist/workerize.d.ts",
+      "source": "./src/workerize.ts",
+      "default": "./dist/workerize.js"
     }
   },
   "scripts": {

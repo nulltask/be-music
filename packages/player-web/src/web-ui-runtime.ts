@@ -61,6 +61,15 @@ export interface WebUiRuntimeCallbacks {
    * combo readout on the play skin.
    */
   onJudgeCombo?: (state: Readonly<PlayerJudgeComboSignalState>) => void;
+  /**
+   * Fired once when the runtime is constructed, handing the engine's signal buses back to the host. Hosts that
+   * already drive their own per-frame loop (rAF in the gameplay view) can use this to call
+   * {@link drainWebUiSignals} from inside that loop, sharing one event-drain pass with their other Pixi work
+   * instead of spinning up an independent alien-signals subscription. The runtime still fires `onFrame` /
+   * `onCommand` / `onJudgeCombo` if the host doesn't poll — the two modes are interchangeable; pick whichever
+   * matches the host's render scheduling.
+   */
+  onSignalsReady?: (signals: { uiSignals: PlayerUiSignalBus; stateSignals?: PlayerStateSignals }) => void;
 }
 
 /**
@@ -90,6 +99,13 @@ export interface WebUiRuntimeOptions extends WebUiRuntimeCallbacks {
  */
 export function createWebUiRuntime(options: WebUiRuntimeOptions): PlayerUiRuntime {
   const { uiSignals } = options;
+  // Fire the signals-ready hook synchronously during construction so a host that prefers per-frame polling has
+  // the bus references in hand by the time the engine flips runtime.start().
+  try {
+    options.onSignalsReady?.({ uiSignals, stateSignals: options.stateSignals });
+  } catch (error) {
+    log.warn('onSignalsReady callback threw', error);
+  }
   let frameUnsub: (() => void) | undefined;
   let commandUnsub: (() => void) | undefined;
   let lastFrameTick = -1;
