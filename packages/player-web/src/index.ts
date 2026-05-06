@@ -1,4 +1,6 @@
 export * from './audio-bus.ts';
+export * from './beatoraja-render.ts';
+export * from './beatoraja-textures.ts';
 export * from './beatoraja-theme.ts';
 export * from './browser-compat.ts';
 export * from './chart-preview.ts';
