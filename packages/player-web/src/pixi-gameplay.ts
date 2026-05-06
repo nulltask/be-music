@@ -6177,11 +6177,32 @@ export class PixiGameplayView {
         break;
       case 'trigger-poor-bga':
         this.lastPoorAt = command.seconds;
+        // Empty POOR (the engine fires `trigger-poor-bga` for both real POOR judges AND for empty presses /
+        // unjudged-misses-past-window) doesn't go through `publishJudgeCombo` for empty-press cases, so the
+        // result-screen gauge / score polylines would skip those samples in shared-engine mode and the graph
+        // wouldn't match the legacy view's. Append history points here so the graph stays smooth across both
+        // paths. Real POOR judges that ALSO publish a judge-combo will get a second sample from
+        // `applyEngineJudgeCombo`'s `publishJudge` call — that's a no-op visually (both samples land at almost
+        // the same `progress`) and keeps the contract "every gauge / EX-score change records a sample."
+        this.recordSharedEngineHistorySample(command.seconds);
         break;
       case 'clear-poor-bga':
         this.lastPoorAt = -Number.POSITIVE_INFINITY;
         break;
     }
+  }
+
+  /**
+   * Pushes one sample to {@link gaugeHistory} / {@link scoreHistory} using the current engine-derived
+   * \`gaugeState.current\` and \`score.exScore\` snapshots. Called from the shared-engine command handler when
+   * the engine reports a gauge / score change that doesn't flow through \`publishJudgeCombo\` (= empty POOR).
+   * In legacy mode the same arrays are pushed exclusively from \`publishJudge\`.
+   */
+  private recordSharedEngineHistorySample(seconds: number): void {
+    const totalSeconds = this.resolveSongDurationSeconds();
+    const progress = totalSeconds > 0 ? Math.max(0, Math.min(1, seconds / totalSeconds)) : 0;
+    this.gaugeHistory.push({ progress, value: this.gaugeState.current });
+    this.scoreHistory.push({ progress, exScore: this.score.exScore });
   }
 
   /**
