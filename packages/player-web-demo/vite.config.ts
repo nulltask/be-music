@@ -369,6 +369,7 @@ const workspaceAliases = [
   { find: '@be-music/utils/pcm', replacement: resolve(repositoryDir, 'packages/utils/src/pcm.ts') },
   { find: '@be-music/utils', replacement: resolve(repositoryDir, 'packages/utils/src/index.ts') },
   { find: '@be-music/audio-renderer', replacement: resolve(repositoryDir, 'packages/audio-renderer/src/index.ts') },
+  { find: '@be-music/beatoraja-skin', replacement: resolve(repositoryDir, 'packages/beatoraja-skin/src/index.ts') },
   { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },
   { find: '@be-music/json', replacement: resolve(repositoryDir, 'packages/json/src/index.ts') },
   { find: '@be-music/lr2-skin', replacement: resolve(repositoryDir, 'packages/lr2-skin/src/index.ts') },

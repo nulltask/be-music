@@ -31,6 +31,12 @@ import {
   type Lr2PlayVariant,
   type Lr2Skin,
 } from '@be-music/lr2-skin';
+import {
+  isBeatorajaSkinIndicator,
+  loadBeatorajaThemeFromFiles,
+  summarizeBeatorajaPlaySkins,
+  type BeatorajaThemeBundle,
+} from '@be-music/player-web';
 
 const dropLog = logger('drop');
 const recordLog = logger('record');
@@ -626,6 +632,12 @@ class PlayerWebDemoApp {
    */
   private decideSkin: Lr2Skin | undefined;
   /**
+   * beatoraja theme bundle held in parallel with the LR2 state. We don't render beatoraja scenes yet — that PixiJS
+   * wiring is a follow-up — but we DO want to detect a beatoraja theme drop so the user gets a clear log line and
+   * the parser path stays exercised end-to-end.
+   */
+  private beatorajaTheme: BeatorajaThemeBundle | undefined;
+  /**
    * Loop-playable BGM bytes for the song-select scene (`LR2files/Bgm/<theme>/select.wav` from the dropped theme).
    * Forwarded to `PixiSongSelectView` via the constructor option on first mount and via `setSelectBgm` on subsequent
    * theme drops mid-session.
@@ -1203,12 +1215,23 @@ class PlayerWebDemoApp {
     const carriesLr2Theme = themeFiles.some((file) =>
       (file.webkitRelativePath || file.name).toLowerCase().endsWith('.lr2skin'),
     );
+    const carriesBeatorajaTheme = themeFiles.some((file) =>
+      isBeatorajaSkinIndicator(file.webkitRelativePath || file.name),
+    );
+    const themeMarkers = [carriesLr2Theme ? 'lr2' : null, carriesBeatorajaTheme ? 'beatoraja' : null].filter(
+      (marker): marker is string => marker !== null,
+    );
     dropLog.info(
-      `received ${files.length} file(s) · theme=${themeFiles.length}${carriesLr2Theme ? '' : ' (no .lr2skin → preserving current theme)'} · songs=${songFiles.length}`,
+      `received ${files.length} file(s) · theme=${themeFiles.length}${
+        themeMarkers.length > 0 ? ` (${themeMarkers.join('+')})` : ' (no skin entry → preserving current theme)'
+      } · songs=${songFiles.length}`,
     );
     const tasks: Array<Promise<unknown>> = [];
     if (carriesLr2Theme) {
       tasks.push(this.loadTheme(themeFiles));
+    }
+    if (carriesBeatorajaTheme) {
+      tasks.push(this.loadBeatorajaTheme(themeFiles));
     }
     if (songFiles.length > 0) {
       tasks.push(this.loadSongs(songFiles));
@@ -1219,10 +1242,15 @@ class PlayerWebDemoApp {
     }
     await Promise.all(tasks);
     const playSkinSummary = summarizeLr2PlaySkins(this.playSkins);
+    const beatorajaSummary = this.beatorajaTheme
+      ? summarizeBeatorajaPlaySkins(this.beatorajaTheme.theme.playSkins) || 'none'
+      : 'none';
     dropLog.info(
       `loaded · songs=${this.collection.songs.length} · errors=${
         this.collection.errors.length
-      } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin?.name ?? 'none'}`,
+      } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin?.name ?? 'none'}${
+        this.beatorajaTheme ? ` · beatoraja-skins=${beatorajaSummary}` : ''
+      }`,
     );
     if (this.collection.errors.length > 0) {
       dropLog.warn('parse errors:', this.collection.errors);
@@ -1288,6 +1316,44 @@ class PlayerWebDemoApp {
     // moment the user enters song-select; spelling it out in the toolbar status panel was redundant and made the
     // toolbar wider than it needed to be. `handleDrop` writes a terse "Theme loaded" / "N charts loaded" once
     // everything lands.
+  }
+
+  /**
+   * Load a beatoraja theme drop in parallel with the LR2 path. We currently parse the bundle and stash it on the
+   * host for inspection; PixiJS rendering for beatoraja skins is implemented in a follow-up patch. The beatoraja
+   * loader is independent of `loadTheme` — both states coexist so the user can drop both formats and switch between
+   * them later.
+   */
+  private async loadBeatorajaTheme(files: File[]): Promise<void> {
+    this.setStatus('Loading beatoraja theme...');
+    try {
+      const bundle = await loadBeatorajaThemeFromFiles(files, {
+        onProgress: (progress) => this.applyLoadProgress(progress),
+      });
+      this.beatorajaTheme = bundle;
+      const summary = summarizeBeatorajaPlaySkins(bundle.theme.playSkins) || 'none';
+      const sceneSummary = [
+        bundle.theme.selectSkin ? 'select' : null,
+        bundle.theme.decideSkin ? 'decide' : null,
+        bundle.theme.resultSkin ? 'result' : null,
+        bundle.theme.gradeResultSkin ? 'grade' : null,
+      ]
+        .filter((s): s is string => s !== null)
+        .join('+');
+      dropLog.info(
+        `beatoraja theme loaded · play=${summary}${sceneSummary ? ` · scenes=${sceneSummary}` : ''}${
+          bundle.warnings.length > 0 ? ` · warnings=${bundle.warnings.length}` : ''
+        }`,
+      );
+      if (bundle.warnings.length > 0) {
+        for (const w of bundle.warnings) {
+          dropLog.warn(`beatoraja skin warning: ${w.entryPath}: ${w.message}`);
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      dropLog.warn(`beatoraja theme load failed: ${message}`);
+    }
   }
 
   private async showSelect(): Promise<void> {

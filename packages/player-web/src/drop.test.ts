@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest';
-import { isChartFilePath, resolveDropFilePath, splitDroppedSongAndThemeFiles } from './drop.ts';
+import {
+  isBeatorajaLuaSkinFilePath,
+  isBeatorajaSkinIndicator,
+  isChartFilePath,
+  isLr2SkinFilePath,
+  resolveDropFilePath,
+  splitDroppedSongAndThemeFiles,
+} from './drop.ts';
 
 interface TestFile {
   name: string;
@@ -50,5 +57,26 @@ describe('drop helpers', () => {
     const result = splitDroppedSongAndThemeFiles([skin, image]);
     expect(result.songFiles).toEqual([]);
     expect(result.themeFiles).toEqual([skin, image]);
+  });
+
+  test('isLr2SkinFilePath only matches `.lr2skin`', () => {
+    expect(isLr2SkinFilePath('Theme/play.lr2skin')).toBe(true);
+    expect(isLr2SkinFilePath('Theme/play.LR2SKIN')).toBe(true);
+    expect(isLr2SkinFilePath('Theme/play.luaskin')).toBe(false);
+    expect(isLr2SkinFilePath('Theme/play.json')).toBe(false);
+  });
+
+  test('isBeatorajaLuaSkinFilePath only matches `.luaskin`', () => {
+    expect(isBeatorajaLuaSkinFilePath('skin/default/play.luaskin')).toBe(true);
+    expect(isBeatorajaLuaSkinFilePath('skin/default/PLAY.LUASKIN')).toBe(true);
+    expect(isBeatorajaLuaSkinFilePath('skin/default/play.lr2skin')).toBe(false);
+  });
+
+  test('isBeatorajaSkinIndicator triggers on .luaskin and skin-folder JSON', () => {
+    expect(isBeatorajaSkinIndicator('skin/default/play24.luaskin')).toBe(true);
+    expect(isBeatorajaSkinIndicator('skin/default/play24.json')).toBe(true);
+    expect(isBeatorajaSkinIndicator('beatoraja/skin/default/play24.json')).toBe(true);
+    expect(isBeatorajaSkinIndicator('Songs/foo/score.json')).toBe(false);
+    expect(isBeatorajaSkinIndicator('Songs/foo/main.bmson')).toBe(false);
   });
 });
