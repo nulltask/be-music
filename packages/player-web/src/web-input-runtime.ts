@@ -186,14 +186,26 @@ export function keyboardEventToTokens(event: KeyboardEvent): string[] {
  * Convenience factory matching the shape `PlayerOptions.createInputRuntime` expects. Closes over a single
  * {@link WebInputRuntimeOptions} so callers can pass `{ createInputRuntime: createWebInputRuntimeFactory(...) }`
  * directly to `manualPlay` / `autoPlay`.
+ *
+ * `onReady` fires synchronously during runtime construction with the engine-side `inputSignals` bus the runtime
+ * is wired into. Hosts that need to push their own input commands (`toggle-pause` from a Space-key handler the
+ * host kept on the view side, etc.) capture the reference here.
  */
 export function createWebInputRuntimeFactory(
-  baseOptions: Omit<WebInputRuntimeOptions, 'inputSignals' | 'inputTokenToChannels'>,
+  baseOptions: Omit<WebInputRuntimeOptions, 'inputSignals' | 'inputTokenToChannels'> & {
+    onReady?: (signals: { inputSignals: PlayerInputSignalBus }) => void;
+  },
 ): (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime {
-  return (context) =>
-    createWebInputRuntime({
+  return (context) => {
+    try {
+      baseOptions.onReady?.({ inputSignals: context.inputSignals });
+    } catch (error) {
+      log.warn('createWebInputRuntimeFactory.onReady threw', error);
+    }
+    return createWebInputRuntime({
       ...baseOptions,
       inputSignals: context.inputSignals,
       inputTokenToChannels: context.inputTokenToChannels,
     });
+  };
 }

@@ -20,6 +20,7 @@ import {
 } from '@be-music/player/core/scoring';
 import { resolveJudgeWindowsMs } from '@be-music/player/core/judge-window';
 import { PlayerInterruptedError } from '@be-music/player/core/engine';
+import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
 import {
@@ -737,6 +738,14 @@ export class PixiGameplayView {
   private sharedEngineLastJudgeComboTick = 0;
   /** Bus references handed back from the engine via `onSignalsReady`. Drained per-frame from {@link tick}. */
   private sharedEngineSignals: { uiSignals: PlayerUiSignalBus; stateSignals?: PlayerStateSignals } | undefined;
+  /**
+   * Engine-side `inputSignals` bus captured during the input runtime's `onReady` hook. The view's own
+   * \`togglePause\` (Space-key handler + visibility/blur auto-pause) pushes \`{ kind: 'toggle-pause' }\` here so
+   * the engine's playback clock pauses in lock-step with the view's \`paused\` flag — without the propagation,
+   * the engine would keep advancing chart-time during the pause and fast-forward a burst of judges the moment
+   * the view resumed.
+   */
+  private sharedEngineInputSignals: PlayerInputSignalBus | undefined;
   private decodedSamples = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
@@ -1566,6 +1575,7 @@ export class PixiGameplayView {
       this.sharedEngineAbortController = undefined;
     }
     this.sharedEngineSignals = undefined;
+    this.sharedEngineInputSignals = undefined;
     this.sharedEnginePromise = undefined;
     void this.webAudioSession?.dispose();
     this.webAudioSession = undefined;
@@ -2891,6 +2901,11 @@ export class PixiGameplayView {
       });
       return;
     }
+    if (event.code === 'Space') {
+      event.preventDefault();
+      this.togglePause();
+      return;
+    }
     // HiSpeed adjustment runs entirely on the view side regardless of who's judging the chart — the engine has
     // its own \`high-speed\` input command but the value it tracks is decoupled from the visual scroll speed
     // (`PIXELS_PER_BEAT * this.hiSpeed`) the renderer applies. Mirror the legacy `handleKeyDown` path here so
@@ -3112,6 +3127,13 @@ export class PixiGameplayView {
       void this.audioContext?.suspend();
       this.pauseAllBgaVideos();
     }
+    // In shared-engine mode the engine maintains its own playback clock + per-tick scheduling; without flipping
+    // its pause flag the engine would keep advancing chart-time while the view sits paused, then fast-forward a
+    // burst of judge events the moment the view resumes. Propagate the toggle so both sides are aligned. The
+    // engine's pause path also calls `audioSession.pause()` / `resume()` which our WebAudioSession maps onto
+    // `audioContext.suspend()` / `resume()` — those are idempotent when the context is already in the matching
+    // state, so the redundant call from the engine side after our own `audioContext.suspend()` above is a no-op.
+    this.sharedEngineInputSignals?.pushCommand({ kind: 'toggle-pause' });
   }
 
   /**
@@ -5910,6 +5932,9 @@ export class PixiGameplayView {
       },
       mode: this.options.autoPlay ? 'auto' : 'manual',
       ui: callbacks,
+      onInputSignalsReady: (signals) => {
+        this.sharedEngineInputSignals = signals.inputSignals;
+      },
       // Listen on the window (default) so the runtime sees keyboard events regardless of which DOM element
       // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
       // canvas's `tabIndex = 0` only makes it focusable, not auto-focused, so a canvas-scoped listener would
@@ -5925,8 +5950,11 @@ export class PixiGameplayView {
         // ESC and F5 are handled by the view's own listener (set up in `mount`) so the LR2 `#FADEOUT` animation
         // runs to completion BEFORE the engine's `PlayerInterruptedError` flow disposes the audio session. If
         // we let the runtime push `interrupt(escape)` directly, the engine's `dispose()` would `node.stop()`
-        // every in-flight BufferSource immediately, killing the chart audio mid-fade.
-        if (event.code === 'Escape' || event.code === 'F5') return true;
+        // every in-flight BufferSource immediately, killing the chart audio mid-fade. Same idea for Space:
+        // routing the toggle through the view's `togglePause` keeps the view's `paused` flag, the audio bus's
+        // suspend, the BGA video pause, and the engine's playback clock all on the same single entry-point.
+        if (event.code === 'Escape' || event.code === 'F5' || event.code === 'Space') return true;
+        if (event.code === 'ArrowUp' || event.code === 'ArrowDown') return true;
         return false;
       },
       engineOptions: {

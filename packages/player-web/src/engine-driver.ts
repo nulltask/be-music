@@ -1,4 +1,5 @@
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import {
   autoPlay as engineAutoPlay,
   manualPlay as engineManualPlay,
@@ -49,6 +50,12 @@ export interface EngineDriverOptions {
   inputTarget?: EventTarget;
   /** Optional hook for the input runtime — see {@link createWebInputRuntime}. */
   shouldSkipKey?: (event: KeyboardEvent) => boolean;
+  /**
+   * Fires synchronously when the engine constructs its input runtime, handing back the engine-side
+   * `inputSignals` bus. Hosts that keep their own keyboard listener for select keys (Space → toggle-pause, ESC
+   * fade, etc.) push commands through this reference to drive the engine alongside their own view-side state.
+   */
+  onInputSignalsReady?: (signals: { inputSignals: PlayerInputSignalBus }) => void;
   /** Forwarded to the engine. The driver supplies sensible defaults but a host can override any field. */
   engineOptions?: Omit<PlayerOptions, 'createAudioSession' | 'createInputRuntime' | 'createUiRuntime' | 'auto'>;
 }
@@ -79,7 +86,7 @@ export type EngineDriverResult = PlayerSummary;
  * - Multi-channel input mapping for scratch / Free-Zone aliases.
  */
 export async function runEngineDriver(options: EngineDriverOptions): Promise<EngineDriverResult> {
-  const { chart, audio, mode, ui, inputTarget, shouldSkipKey, engineOptions } = options;
+  const { chart, audio, mode, ui, inputTarget, shouldSkipKey, onInputSignalsReady, engineOptions } = options;
   const createAudioSession = async (context: CreateAudioSessionContext): Promise<AudioSession> => {
     log.debug('audio session factory invoked', { mode: context.mode });
     return createWebAudioSession({
@@ -91,7 +98,11 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
       bmsonSlicePlayback: audio.bmsonSlicePlayback,
     });
   };
-  const createInputRuntime = createWebInputRuntimeFactory({ target: inputTarget, shouldSkipKey });
+  const createInputRuntime = createWebInputRuntimeFactory({
+    target: inputTarget,
+    shouldSkipKey,
+    onReady: onInputSignalsReady,
+  });
   const createUiRuntime = createWebUiRuntimeFactory(ui);
   const compositeOptions: PlayerOptions = {
     ...engineOptions,
