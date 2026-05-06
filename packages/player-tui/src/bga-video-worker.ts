@@ -1,5 +1,5 @@
 import { parentPort, workerData } from 'node:worker_threads';
-import { createAbortError, isAbortError } from '@be-music/utils';
+import { createAbortError, isAbortError } from '@be-music/utils/core';
 import { decodeVideoFramesStreamDirect, type DecodedVideoFrame } from './bga-video.ts';
 
 const TRANSPARENT_ALPHA_THRESHOLD = 16;

@@ -16,7 +16,10 @@
       "@be-music/player/utils": ["./packages/player/src/utils.ts"],
       "@be-music/player/core/*": ["./packages/player/src/core/*.ts"],
       "@be-music/utils/core": ["./packages/utils/src/core.ts"],
+      "@be-music/utils/cli-path": ["./packages/utils/src/cli-path.ts"],
+      "@be-music/utils/log": ["./packages/utils/src/log.ts"],
       "@be-music/utils/path": ["./packages/utils/src/path.ts"],
+      "@be-music/utils/pcm": ["./packages/utils/src/pcm.ts"],
       "@be-music/utils/workerize": ["./packages/utils/src/workerize.ts"],
       "@be-music/*": ["./packages/*/src/index.ts"]
     }

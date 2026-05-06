@@ -36,7 +36,10 @@ const workspaceAliases = [
   { find: '@be-music/player/utils', replacement: resolve(rootDir, 'packages/player/src/utils.ts') },
   { find: '@be-music/player/core', replacement: resolve(rootDir, 'packages/player/src/core') },
   { find: '@be-music/utils/core', replacement: resolve(rootDir, 'packages/utils/src/core.ts') },
+  { find: '@be-music/utils/cli-path', replacement: resolve(rootDir, 'packages/utils/src/cli-path.ts') },
+  { find: '@be-music/utils/log', replacement: resolve(rootDir, 'packages/utils/src/log.ts') },
   { find: '@be-music/utils/path', replacement: resolve(rootDir, 'packages/utils/src/path.ts') },
+  { find: '@be-music/utils/pcm', replacement: resolve(rootDir, 'packages/utils/src/pcm.ts') },
   { find: '@be-music/utils/workerize', replacement: resolve(rootDir, 'packages/utils/src/workerize.ts') },
   ...workspacePackages.map((name) => ({
     find: `@be-music/${name}`,

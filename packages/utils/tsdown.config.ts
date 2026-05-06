@@ -11,7 +11,10 @@ export default createPackageTsdownConfig({
     // Carve out narrow subpath entry points so browser bundles can import only the helpers they need without routing
     // through the package root and pulling unrelated Node-facing modules into the graph.
     core: 'src/core.ts',
+    'cli-path': 'src/cli-path.ts',
+    log: 'src/log.ts',
     path: 'src/path.ts',
+    pcm: 'src/pcm.ts',
     workerize: 'src/workerize.ts',
   },
 });

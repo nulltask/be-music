@@ -1,5 +1,5 @@
 import readline from 'node:readline';
-import type { LogEntry } from '@be-music/utils';
+import type { LogEntry } from '@be-music/utils/log';
 import { beginStatefulKeyboardProtocolOptIn, resolveInputTokenEvent } from '../manual-input.ts';
 import {
   resolveHighSpeedControlActionFromLaneChannels,

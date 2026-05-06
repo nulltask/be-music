@@ -340,11 +340,9 @@ function acknowledgementsPlugin(roots: string[]): Plugin {
 
 // Vite alias は string で starts-with マッチするので、長いサブパスを先に並べる必要がある。
 //
-// `@be-music/utils` / `@be-music/audio-renderer` / `@be-music/player` の各 root は Phase 4 (engine 移行) で
-// Node 依存を lazy 化済み (`node:fs` / `node:path` / `node:sea` 等は呼ばれた時のみ動的 import)。 ブラウザ
-// から root をそのまま import しても、 disk アクセスをともなう関数 (`renderChartFile` 等) を呼び出さない
-// 限り `node:` 解決には到達しない。 player 側の engine driver は `manualPlay` / `autoPlay` を呼ぶだけなので
-// 安全。
+// `@be-music/utils` / `@be-music/audio-renderer` / `@be-music/player` keep Node-facing code behind subpath exports or
+// lazy dynamic imports. Browser imports stay on the browser-safe paths below; disk-facing functions such as
+// `renderChartFile` are not called from the demo runtime.
 const workspaceAliases = [
   {
     find: '@be-music/audio-renderer/triggers',
@@ -365,7 +363,10 @@ const workspaceAliases = [
   { find: '@be-music/player/core', replacement: resolve(repositoryDir, 'packages/player/src/core') },
   { find: '@be-music/player', replacement: resolve(repositoryDir, 'packages/player/src/index.ts') },
   { find: '@be-music/utils/core', replacement: resolve(repositoryDir, 'packages/utils/src/core.ts') },
+  { find: '@be-music/utils/cli-path', replacement: resolve(repositoryDir, 'packages/utils/src/cli-path.ts') },
+  { find: '@be-music/utils/log', replacement: resolve(repositoryDir, 'packages/utils/src/log.ts') },
   { find: '@be-music/utils/path', replacement: resolve(repositoryDir, 'packages/utils/src/path.ts') },
+  { find: '@be-music/utils/pcm', replacement: resolve(repositoryDir, 'packages/utils/src/pcm.ts') },
   { find: '@be-music/utils', replacement: resolve(repositoryDir, 'packages/utils/src/index.ts') },
   { find: '@be-music/audio-renderer', replacement: resolve(repositoryDir, 'packages/audio-renderer/src/index.ts') },
   { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },

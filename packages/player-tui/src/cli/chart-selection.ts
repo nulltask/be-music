@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { availableParallelism, homedir } from 'node:os';
 import { dirname, extname, relative, resolve } from 'node:path';
-import { isAbortError, throwIfAborted } from '@be-music/utils';
+import { isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { invokeWorkerizedFunction, workerize } from '@be-music/utils/workerize';
 import { type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
 import { decodeBmsText, parseChart, resolveBmsControlFlow } from '@be-music/parser';

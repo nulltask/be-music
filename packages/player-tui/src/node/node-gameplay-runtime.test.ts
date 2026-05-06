@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { MessageChannel, type MessagePort, type WorkerOptions } from 'node:worker_threads';
-import { createAbortError, isAbortError } from '@be-music/utils';
+import { createAbortError, isAbortError } from '@be-music/utils/core';
 import { createEmptyJson } from '../../../json/src/index.ts';
 import type { NodeInputRuntime } from './node-input-runtime.ts';
 import type { NodeUiRuntime } from './node-ui-runtime.ts';

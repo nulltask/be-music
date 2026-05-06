@@ -43,7 +43,7 @@ const delayImmediate = (): Promise<void> => {
   return new Promise((resolve) => queueMicrotask(resolve));
 };
 import { floatToInt16, throwIfAborted } from '@be-music/utils/core';
-import type { LogEntry, LogLevel } from '@be-music/utils';
+import type { LogEntry, LogLevel } from '@be-music/utils/log';
 import {
   type BeMusicEvent,
   type BeMusicJson,

@@ -1,5 +1,5 @@
 import type { MessagePort } from 'node:worker_threads';
-import type { LogEntry } from '@be-music/utils';
+import type { LogEntry } from '@be-music/utils/log';
 import type { BeMusicJson, BeMusicPlayLevel } from '@be-music/json';
 import type { PlayerInputCommand } from '@be-music/player/core/input-signal-bus';
 import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player/core/engine';

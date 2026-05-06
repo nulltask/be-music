@@ -20,10 +20,25 @@
       "source": "./src/core.ts",
       "default": "./dist/core.js"
     },
+    "./cli-path": {
+      "types": "./dist/cli-path.d.ts",
+      "source": "./src/cli-path.ts",
+      "default": "./dist/cli-path.js"
+    },
+    "./log": {
+      "types": "./dist/log.d.ts",
+      "source": "./src/log.ts",
+      "default": "./dist/log.js"
+    },
     "./path": {
       "types": "./dist/path.d.ts",
       "source": "./src/path.ts",
       "default": "./dist/path.js"
+    },
+    "./pcm": {
+      "types": "./dist/pcm.d.ts",
+      "source": "./src/pcm.ts",
+      "default": "./dist/pcm.js"
     },
     "./workerize": {
       "types": "./dist/workerize.d.ts",

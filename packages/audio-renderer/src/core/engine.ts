@@ -19,13 +19,7 @@ let nodeFsPromisesPromise: Promise<NodeFsPromises> | undefined;
 let nodePathPromise: Promise<NodePath> | undefined;
 const loadNodeFsPromises = (): Promise<NodeFsPromises> => (nodeFsPromisesPromise ??= import('node:fs/promises'));
 const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
-import {
-  normalizeChannel,
-  normalizeObjectKey,
-  resolveBmsBase,
-  type BeMusicEvent,
-  type BeMusicJson,
-} from '@be-music/json';
+import { normalizeChannel, normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import { isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { detectAudioFormat, encodeAiff16, encodeWav16 } from './file-codec.ts';

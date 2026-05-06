@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import { extname } from 'node:path';
-import { isAbortError, resolveFirstExistingPath, runWithConcurrency, throwIfAborted } from '@be-music/utils';
+import { isAbortError, runWithConcurrency, throwIfAborted } from '@be-music/utils/core';
+import { resolveFirstExistingPath } from '@be-music/utils/path';
 // Worker-spawn helpers live behind the dedicated `/workerize` sub-path so the package root stays browser-safe
 // (the implementation file statically imports `node:sea`).
 import { invokeWorkerizedFunction, workerize } from '@be-music/utils/workerize';

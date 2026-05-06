@@ -1,6 +1,6 @@
 import { effect, effectScope } from 'alien-signals';
 import type { BeMusicPlayLevel } from '@be-music/json';
-import { clamp } from '@be-music/utils';
+import { clamp } from '@be-music/utils/core';
 import type { BgaKittyImage } from '../bga.ts';
 import type { PlayerSummary } from '@be-music/player';
 import { formatSeconds, resolveAltModifierLabel } from '@be-music/player/utils';
