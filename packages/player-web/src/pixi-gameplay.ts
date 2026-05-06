@@ -2889,6 +2889,21 @@ export class PixiGameplayView {
         this.sharedEngineAbortController?.abort();
         this.options.onRestart?.();
       });
+      return;
+    }
+    // HiSpeed adjustment runs entirely on the view side regardless of who's judging the chart — the engine has
+    // its own \`high-speed\` input command but the value it tracks is decoupled from the visual scroll speed
+    // (`PIXELS_PER_BEAT * this.hiSpeed`) the renderer applies. Mirror the legacy `handleKeyDown` path here so
+    // ArrowUp / ArrowDown still work in shared-engine mode (the WebInputRuntime's lane-input dispatch ignores
+    // arrow tokens and the engine has no way to push them back to the renderer).
+    if (event.code === 'ArrowUp') {
+      event.preventDefault();
+      this.adjustHiSpeed(HISPEED_STEP);
+      return;
+    }
+    if (event.code === 'ArrowDown') {
+      event.preventDefault();
+      this.adjustHiSpeed(-HISPEED_STEP);
     }
   };
 
