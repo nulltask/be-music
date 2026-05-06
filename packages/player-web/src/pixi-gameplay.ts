@@ -725,6 +725,13 @@ export class PixiGameplayView {
    * PLAYSTART anchor and notes pass the judgment line ahead of the engine's actual judge event.
    */
   private sharedEngineClockAnchored = false;
+  /**
+   * Debug latch — flipped after the first `applyEngineFrame` call so the per-frame array-sanity log only fires once
+   * per chart. Used to confirm that the view's `this.notes` and the engine's `frame.notes` line up index-for-index;
+   * any divergence here produces the hide-on-judge dropout, mid-chart full-combo, and AUTO PLAY < 200_000 score
+   * regressions.
+   */
+  private sharedEngineNoteSyncDebugLogged = false;
   private decodedSamples = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
@@ -5374,6 +5381,42 @@ export class PixiGameplayView {
    * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative.
    */
   private applyEngineFrame(frame: Readonly<PlayerUiFramePayload>): void {
+    // DEBUG: One-shot sanity check of the view↔engine note-array index alignment that `applyEngineFrame` relies on.
+    // Logs the first divergence (if any) to the browser console; remove once the sync regression is confirmed fixed.
+    if (!this.sharedEngineNoteSyncDebugLogged) {
+      this.sharedEngineNoteSyncDebugLogged = true;
+      const frameNotes = frame.notes;
+      const viewNotes = this.notes;
+      const limit = Math.min(viewNotes.length, frameNotes.length);
+      let firstDivergence: {
+        index: number;
+        view: { channel: string; beat: number; endBeat: number | undefined };
+        engine: { channel: string; beat: number; endBeat: number | undefined };
+      } | null = null;
+      for (let i = 0; i < limit; i += 1) {
+        const v = viewNotes[i]!;
+        const e = frameNotes[i]!;
+        if (v.channel !== e.channel || Math.abs(v.beat - e.beat) > 1e-9 || (v.endBeat ?? -1) !== (e.endBeat ?? -1)) {
+          firstDivergence = {
+            index: i,
+            view: { channel: v.channel, beat: v.beat, endBeat: v.endBeat },
+            engine: { channel: e.channel, beat: e.beat, endBeat: e.endBeat },
+          };
+          break;
+        }
+      }
+      // eslint-disable-next-line no-console
+      console.warn('[be-music debug] note-array sync', {
+        viewLength: viewNotes.length,
+        engineLength: frameNotes.length,
+        lengthMatch: viewNotes.length === frameNotes.length,
+        firstDivergence,
+        viewFirst: viewNotes[0],
+        engineFirst: frameNotes[0],
+        viewLast: viewNotes[viewNotes.length - 1],
+        engineLast: frameNotes[frameNotes.length - 1],
+      });
+    }
     // Re-anchor the view's chart-time clock to the engine's the very first time the engine publishes a frame.
     // The engine's `playbackClock` (and therefore the chart-time it stamps on every judge / sample / ui-signal
     // event) anchors at the moment the engine creates the clock — which lands a few ms to a few hundred ms
