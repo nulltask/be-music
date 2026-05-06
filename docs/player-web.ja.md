@@ -5,7 +5,7 @@
 この文書は、`@be-music/player-web` と `@be-music/player-web-demo` で追加された browser player の実装メモです。
 timing、note、判定、score、gauge、BGA event の意味など、CLI と共有する runtime 意味論は [`player-spec.ja.md`](./player-spec.ja.md) を参照してください。
 
-## 共通 engine への移行 (Phase 1-4b 完了)
+## 共通 engine への移行 (完了)
 
 browser player は判定 (judge) / fallback / LN / Sample 演奏を `@be-music/player/core/engine` の `manualPlay` /
 `autoPlay` 経由で駆動する方針に移行しています。 beatoraja 互換挙動 (look-ahead lane keysound fallback、 Free-Zone
@@ -37,23 +37,27 @@ multi-channel input mapping) は engine 側にすべて実装済みで、 TUI / 
 - **Phase 4b-ii (済)** — BGM look-ahead を `WebAudioSession.scheduleEvent` 経由に統一、 view 内の `playSampleByKey` /
   `connectSampleNodeWithWavCmdGain` / `activeSampleNodes` / `clampSample*` / `startSampleNode` 削除 (-181 行)
 - **Phase 5 (済)** — このドキュメント
-- **Phase 4c (opt-in 済)** — `PixiGameplayViewOptions.useSharedEngine` フラグで `runEngineDriver` 経由の engine
-  駆動を opt-in 可能に。 ON の場合:
-  - DOM `keydown` / `keyup` listener は attach されず、 `WebInputRuntime` が入力を消費
-  - view の `tick()` 内 `autoJudge` / `autoScratchJudge` / `autoMiss` / `autoFinalizeLongNotes` /
-    `finalizeOverheldLongNotes` / `scheduleAutoSamples` / `checkChartEnd` 呼び出しは skip
-  - LR2 PLAYSTART gate 発火と同時に `runEngineDriver` を起動 (engine の chart-time t=0 が view の
+- **Phase 4c (済)** — engine 駆動が唯一の playback 経路に
+  - view が attach する DOM listener は ESC / F5 / Space / ArrowUp / ArrowDown 用 1 つのみ。 lane press は
+    `WebInputRuntime` が独自 listener で engine の input bus に流す。 各 press には `pressedAt`
+    (`KeyboardEvent.timeStamp` の snapshot) が乗っており、 engine は drain 時刻ではなく実際の press 時刻に対して
+    判定する (60 Hz tick 由来の最大 ~16 ms 遅延 bias を解消)。
+  - `tick()` は engine の UI signal bus を drain するだけ。 旧 `autoJudge` / `autoScratchJudge` / `autoMiss` /
+    `autoFinalizeLongNotes` / `finalizeOverheldLongNotes` / `scheduleAutoSamples` / `checkChartEnd` /
+    `judge` / `commitFinalJudge` / `triggerBombOnNonMiss` / `applyGaugeDelta` / `tryHitMine` / `playSample` /
+    `markNoteHit` メソッドは削除済 (~700 行)
+  - LR2 PLAYSTART gate 発火と同時に `runEngineDriver` を無条件で起動 (engine の chart-time t=0 が view の
     `audioContextStartTime` と一致)
-  - `applyEngineFrame` が `PlayerSummary` (score / exScore / fast / slow / gauge) を view fields に反映
+  - `applyEngineFrame` が `PlayerSummary` (score / exScore / fast / slow / gauge) を view fields に反映、
+    engine 側の `judged` flag を `notes[].hit` / `mineNotes[].hit` に同期、 LR2 gauge-rise (timer 42) /
+    gauge-max (timer 44) を gauge 遷移ごとに stamp
   - `applyEngineCommand` が `flash-lane` / `press-lane` / `release-lane` / `hold-lane-until-beat` /
     `trigger-poor-bga` / `clear-poor-bga` を視覚効果ヘルパー (`flashKeyOnTimer` 等) にディスパッチ
-  - `applyEngineJudgeCombo` が NOWJUDGE plate timer + combo readout を駆動
-  - frame.notes の `judged` flag を view の `notes[].hit` に同期 (判定済みノートを画面から消す)
+  - `applyEngineJudgeCombo` が `publishJudge` 経由で NOWJUDGE plate timer + combo readout + bomb を駆動
+  - `handleSharedEngineChartFinished` が engine の `manualPlay` / `autoPlay` Promise の正常解決に応答、 LR2
+    `#FADEOUT` → `#CLOSE` 終了 timeline 経由で `onChartFinished` / `onExit` を呼ぶ
   - `dispose` 時は `AbortController` で engine を中断
   - `PlayerInterruptedError` を捕捉して `escape` → `onExit` / `restart` → `onRestart` にルーティング
-
-  既定値は `false`。 旧 self-judge ladder は引き続き source code 上に残しており、 単独の検証コミットで default を
-  `true` に切り替え + dead code 撤去を行う想定。
 
 ## 監査メモ
 

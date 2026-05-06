@@ -5,7 +5,7 @@
 This document summarizes the browser player added by `@be-music/player-web` and `@be-music/player-web-demo`.
 Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as timing, notes, judgment, score, gauge, and BGA event meaning.
 
-## Migration to the shared engine (Phase 1-4b complete)
+## Migration to the shared engine (complete)
 
 The browser player is migrating its judge / fallback / LN / sample-playback paths to drive
 `@be-music/player/core/engine`'s `manualPlay` / `autoPlay` directly so the beatoraja-compatible behavior the engine
@@ -39,25 +39,27 @@ when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `creat
   `playSampleByKey` / `connectSampleNodeWithWavCmdGain` / `activeSampleNodes` / `clampSample*` / `startSampleNode`
   helpers are removed (-181 lines)
 - **Phase 5 (done)** — this document
-- **Phase 4c (opt-in landed)** — `PixiGameplayViewOptions.useSharedEngine` opts the chart into engine-driven
-  playback via `runEngineDriver`. When the flag is on:
-  - The view skips its `keydown` / `keyup` listeners; `WebInputRuntime` consumes input.
-  - `tick()` skips its `autoJudge` / `autoScratchJudge` / `autoMiss` / `autoFinalizeLongNotes` /
-    `finalizeOverheldLongNotes` / `scheduleAutoSamples` / `checkChartEnd` calls.
-  - The LR2 PLAYSTART gate launches `runEngineDriver` so the engine's chart-time t=0 lines up with the view's
-    `audioContextStartTime`.
-  - `applyEngineFrame` mirrors `PlayerSummary` (score / exScore / fast / slow / gauge) into the view fields.
+- **Phase 4c (done)** — engine-driven playback is now the only path.
+  - The view attaches a single `keydown` listener for ESC / F5 / Space / ArrowUp / ArrowDown view-side commands;
+    everything else goes through `WebInputRuntime`'s own listeners into the engine's input bus. Each lane press
+    carries a `pressedAt` (`KeyboardEvent.timeStamp`) snapshot the engine subtracts from its drain time so the
+    judge resolves against the physical press time, not the next 60 Hz tick.
+  - `tick()` only drains the engine's UI signal buses; the legacy `autoJudge` / `autoScratchJudge` / `autoMiss` /
+    `autoFinalizeLongNotes` / `finalizeOverheldLongNotes` / `scheduleAutoSamples` / `checkChartEnd` /
+    `judge` / `commitFinalJudge` / `triggerBombOnNonMiss` / `applyGaugeDelta` / `tryHitMine` / `playSample` /
+    `markNoteHit` methods are removed (~700 lines).
+  - The LR2 PLAYSTART gate launches `runEngineDriver` unconditionally so the engine's chart-time t=0 lines up
+    with the view's `audioContextStartTime`.
+  - `applyEngineFrame` mirrors `PlayerSummary` (score / exScore / fast / slow / gauge) into the view fields,
+    propagates engine-side `judged` flags onto the view's `notes[].hit` / `mineNotes[].hit`, and stamps the LR2
+    gauge-rise (timer 42) / gauge-max (timer 44) timers on every gauge transition.
   - `applyEngineCommand` translates `flash-lane` / `press-lane` / `release-lane` / `hold-lane-until-beat` /
     `trigger-poor-bga` / `clear-poor-bga` into the view-side visual-effect helpers.
-  - `applyEngineJudgeCombo` drives the NOWJUDGE plate timer and combo readout.
-  - The engine's `judged` flags propagate onto the view's `notes[].hit` / `mineNotes[].hit` so judged notes
-    correctly retire from the playfield.
+  - `applyEngineJudgeCombo` drives the NOWJUDGE plate timer and combo readout via `publishJudge`.
+  - `handleSharedEngineChartFinished` fires when the engine's `manualPlay` / `autoPlay` Promise resolves cleanly
+    and routes through the LR2 `#FADEOUT` → `#CLOSE` exit timeline before invoking `onChartFinished` / `onExit`.
   - `dispose` aborts the engine via `AbortController` before the audio bus tears down.
   - `PlayerInterruptedError` routes `escape` → `onExit` and `restart` → `onRestart`.
-
-  The flag defaults to `false`; the legacy self-judge ladder still lives in the source code so the existing demo
-  and test suite are untouched. A follow-up commit will flip the default to `true` and remove the duplicated
-  logic once the integration has been verified end-to-end.
 
 ## Audit note
 
