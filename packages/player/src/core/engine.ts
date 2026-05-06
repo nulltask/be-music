@@ -75,6 +75,7 @@ import {
 } from './high-speed-control.ts';
 import { createPlayerUiSignalBus, type PlayerUiSignalBus } from './ui-signal-bus.ts';
 import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './input-signal-bus.ts';
+import { createInputWakeUp } from './input-wakeup.ts';
 import {
   applyGaugeDeltaWithLogging,
   applyGaugeJudgeWithLogging,
@@ -1987,6 +1988,13 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 
   inputRuntime?.start();
 
+  // Event-driven wake-up so the loop's inter-tick sleep can be cut short the moment a control command
+  // arrives (toggle-pause / interrupt / high-speed). autoPlay doesn't act on lane-input but every
+  // `pushCommand` still flips `inputSignals.tick` once and resolves the wake-up — that's harmless because
+  // the loop's next iteration just consumes-and-discards the lane-input. The wake-up is disposed in the
+  // outer `finally` below so its alien-signals subscription doesn't outlive the playback session.
+  const inputWakeUp = createInputWakeUp(inputSignals);
+
   try {
     await delay(leadInMs);
     consumeInputCommands();
@@ -2119,7 +2127,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         if (chartClock.isPaused()) {
           const nowSec = elapsedMsToGameSeconds(nowMs, speed);
           publishUiFrame(nowSec, beatAtSeconds(nowSec));
-          await waitPrecise(PAUSE_POLL_INTERVAL_MS);
+          // While paused, the only useful inputs are toggle-pause (resume) and interrupt — both processed
+          // by the next iteration's `consumeInputCommands`. Cutting the poll short on input arrival makes
+          // pause-resume feel instantaneous.
+          await waitPreciseOrInput(PAUSE_POLL_INTERVAL_MS, inputWakeUp);
           continue;
         }
 
@@ -2147,7 +2158,11 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           break;
         }
 
-        await waitPrecise(TUI_FRAME_INTERVAL_MS);
+        // Race the 60 Hz tick against the next input arrival so control commands (Space / ESC / high-speed)
+        // resolve within ~1 ms instead of waiting up to a full tick. autoPlay doesn't act on lane-input,
+        // but lane presses still wake the loop — that's harmless because the next iteration just
+        // consumes-and-discards them via `consumeInputCommands`.
+        await waitPreciseOrInput(TUI_FRAME_INTERVAL_MS, inputWakeUp);
       }
 
       if (!interruptedReason) {
@@ -2158,7 +2173,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         const totalScheduledMs = (totalSeconds * 1000) / speed;
         const totalWaitMs = Math.max(0, totalScheduledMs - chartClock.nowMs());
         if (totalWaitMs > 0) {
-          await waitPrecise(Math.min(totalWaitMs, TUI_FRAME_INTERVAL_MS));
+          // Trailing wait for chart end. ESC during this window should still abort promptly, so race the
+          // sleep against the wake-up the same way the main tick does.
+          await waitPreciseOrInput(Math.min(totalWaitMs, TUI_FRAME_INTERVAL_MS), inputWakeUp);
         }
         playbackEventTracer.flushUntil(totalSeconds);
         drainPendingAutoLongNotes(totalSeconds);
@@ -2180,6 +2197,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       await finalizeAudioSessionSafely(audioSession);
     }
     inputRuntime?.stop();
+    inputWakeUp.dispose();
     await settleMaybeAsyncWithTimeout(uiRuntime?.stop(), 300);
     await settleMaybeAsyncWithTimeout(uiRuntime?.dispose(), 300);
   }
@@ -2416,6 +2434,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
 
   await delay(leadInMs);
   inputRuntime?.start();
+  // Event-driven wake-up so a press lands within ~1 ms of consuming-and-judging instead of waiting up to
+  // a full 16.67 ms tick. The judge timestamp itself is already correct via `pressedAt`; what this saves
+  // is the AUDIO and VISUAL response window (keysound playback, lane flash queueing). Disposed in the
+  // outer `finally` so the alien-signals subscription doesn't outlive the playback session.
+  const inputWakeUp = createInputWakeUp(inputSignals);
   emitPlayerLog(options, 'info', 'audio.start', {
     mode: 'manual',
   });
@@ -3118,7 +3141,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (playbackClock.isPaused()) {
         const nowSec = elapsedMsToGameSeconds(nowMs, speed);
         publishUiFrame(nowSec, beatAtSeconds(nowSec));
-        await waitPrecise(PAUSE_POLL_INTERVAL_MS);
+        // Resume / ESC arrive as input commands; cutting the poll short on input arrival makes pause-resume
+        // feel instantaneous instead of after one ~16 ms poll boundary.
+        await waitPreciseOrInput(PAUSE_POLL_INTERVAL_MS, inputWakeUp);
         continue;
       }
       const scheduledMs = playbackClock.scheduledMs();
@@ -3314,7 +3339,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         break;
       }
 
-      await waitPrecise(TUI_FRAME_INTERVAL_MS);
+      // Race the 60 Hz tick against the next input arrival. The judge timestamp itself is recovered via
+      // `command.pressedAt`, so this race doesn't change *what* a press is judged as — it changes *when*
+      // the keysound and lane flash get triggered. Pressing right after a tick boundary used to wait the
+      // full ~16 ms before the keysound fired; with the race, the engine wakes within ~1 ms.
+      await waitPreciseOrInput(TUI_FRAME_INTERVAL_MS, inputWakeUp);
     }
 
     if (!interruptedReason) {
@@ -3350,6 +3379,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       await finalizeAudioSessionSafely(audioSession);
     }
     inputRuntime?.stop();
+    inputWakeUp.dispose();
     await settleMaybeAsyncWithTimeout(uiRuntime?.stop(), 300);
     await settleMaybeAsyncWithTimeout(uiRuntime?.dispose(), 300);
   }
@@ -4503,6 +4533,52 @@ async function waitPrecise(delayMs: number): Promise<void> {
       continue;
     }
     await delayImmediate();
+  }
+}
+
+/**
+ * Same precise-sleep semantics as {@link waitPrecise}, but cuts the wait short on the next input arrival
+ * (`inputSignals.pushCommand`). Returns `'timeout'` when the full delay elapsed and `'input'` when an input
+ * woke us up early. The caller decides what to do on `'input'` — typically re-drain the input queue and
+ * continue waiting for the rest of the original tick.
+ *
+ * The two sleep waiters race each other in the same `Promise.race`. The losing waiter (the timer when input
+ * arrived; the wake-up when timeout fired) is left to settle naturally — for the timer that's harmless
+ * (`setTimeout` resolves and the result is discarded), and for the wake-up it's harmless because the wake-up
+ * is a shared promise that resolves on the next `pushCommand` regardless of who's listening. Each call uses
+ * a fresh wake-up promise (it's re-armed inside `createInputWakeUp` after every resolve), so we never
+ * miss an edge by calling `wait()` after a `pushCommand` already happened.
+ *
+ * Why the race exists at all: `pressedAt` ensures the JUDGE timestamp is correct regardless of drain timing,
+ * but the audio / visual response (keysound playback, lane flash queueing) still happens at drain time.
+ * Without this race the engine sleeps a full 16.67 ms tick before processing inputs that arrived mid-tick,
+ * adding up to that much delay before the keysound is heard. With the race the engine wakes up within ~1 ms
+ * of the press and triggers audio at that point — perceived as "immediate."
+ */
+async function waitPreciseOrInput(
+  delayMs: number,
+  wakeUp: { wait: () => Promise<void> },
+): Promise<'timeout' | 'input'> {
+  const target = performance.now() + Math.max(0, delayMs);
+  // Capture the wake-up promise once per call. `wait()` returns the SAME shared promise until it resolves
+  // (then re-arms internally), so racing it across multiple iterations of this function's inner loop is safe.
+  const inputArrival = wakeUp.wait().then(() => 'input' as const);
+  while (true) {
+    const remaining = target - performance.now();
+    if (remaining <= 0) {
+      return 'timeout';
+    }
+    if (remaining > 8) {
+      const winner = await Promise.race([delay(remaining - 4).then(() => 'timeout' as const), inputArrival]);
+      if (winner === 'input') {
+        return 'input';
+      }
+      continue;
+    }
+    const winner = await Promise.race([delayImmediate().then(() => 'timeout' as const), inputArrival]);
+    if (winner === 'input') {
+      return 'input';
+    }
   }
 }
 
