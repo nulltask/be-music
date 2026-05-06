@@ -15,7 +15,7 @@ This document defines how `packages/parser` / `packages/stringifier` / `packages
 - Extended BPM (`#BPMxx` / `#EXBPM`): https://hitkey.nekokan.dyndns.info/exbpm-object.htm
 - `#OPTION` / `#CHANGEOPTION` Specification: https://hitkey.nekokan.dyndns.info/option.htm
 - Sonorous Proposal Extension (Supplementary Primary Reference): https://hitkey.nekokan.dyndns.info/bmsexts-ja.htm
-- Obj Tech Lovers | Guidance chapter3-2 (Supplementary Primary Reference for `#WAV00` / rest semantics / landmine historical notes): https://nekokan.dyndns.info/~otlovers/guidance/guidance_3a_txt.html
+- Obj Tech Lovers | Guidance chapter3-2 (Supplementary Primary Reference for `#WAV00` / rest semantics / landmine behavior): https://nekokan.dyndns.info/~otlovers/guidance/guidance_3a_txt.html
 - Obj Tech Lovers | Guidance chapter4-7 (Supplementary Primary Reference for landmine damage semantics): https://nekokan.dyndns.info/~otlovers/guidance/guidance_4b.html
 - Bemuse BMS Extensions (auxiliary primary reference): https://bemuse.ninja/project/docs/bms-extensions
 - beatoraja Materials for music producers: https://github.com/exch-bms2/beatoraja/wiki/%E6%A5%BD%E6%9B%B2%E8%A3%BD%E4%BD%9C%E8%80%85%E5%90%91%E3%81%91%E8%B3%87%E6%96%99
@@ -30,14 +30,6 @@ This document defines how `packages/parser` / `packages/stringifier` / `packages
 
 - Compatibility level: Partial compliance
 - Policy: Rather than fully reproducing the entire specification, prioritize implementation of major score playback elements
-
-## Revision tracking information
-
-- Audit origin: `78dfb931952e617518629627f84919a5b2deeeaf` (`feat: initial commit`)
-- Audit point: `335200e` (`fix(player): formalize scroll compatibility policy and tests`)
-- Audit target: `packages/parser` / `packages/player` / `packages/audio-renderer` / `packages/json` / `packages/stringifier` / `docs`
-- Number of audited commits (no-merge): `135` (`feat=52`, `fix=44`, `refactor=22`, `perf=2`, `test=4`, `docs=9`, `chore=2`)
-- This document reflects implementation differences in the above range.
 
 ## Supported (syntax accepted)
 
@@ -111,7 +103,7 @@ However, the exact specification of control syntax compatibility for files conta
 The original BM98-era core BMS specifications do not define landmine damage as part of the base format, so this implementation follows later public extension references.
 
 - `value / 2` for landmine damage is based on Hitkey's command memo (`[01-ZZ]` damage amount, gauge decreases by `value / 2`).
-- `#WAV00` as the dedicated landmine reaction sound and the historical `ZZ` instant-death convention are corroborated by Obj Tech Lovers chapter3-2 and chapter4-7.
+- `#WAV00` as the dedicated landmine reaction sound and the `ZZ` instant-death convention are corroborated by Obj Tech Lovers chapter3-2 and chapter4-7.
 - In `be-music`, the practical effect of `ZZ` is a clamp to the implemented groove gauge minimum `2%`, because the player keeps the LR2-compatible `2-100%` gauge range.
 - [x] Keep channel `SC` as `#SCROLLxx` reference event
 - [x] Exclude channel `SC` from audio triggering
@@ -223,7 +215,7 @@ If omitted, the default value is `100` and the effective magnification is `n / 1
 - `#VOLWAV 0`: Silence
 
 This magnification applies to real-time playback of `player`, song selection screen preview, and `renderJson()` / `renderChartFile()` of `audio-renderer`.
-It does not reproduce the volume differences specific to each historical player or hardware, and is treated as a simple gain multiplication factor in actual equipment.
+It does not reproduce player- or hardware-specific volume differences, and is treated as a simple gain multiplication factor in actual equipment.
 
 ### `#xxx97` / `#xxx98`
 

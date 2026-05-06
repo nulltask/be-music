@@ -5,67 +5,25 @@
 This document summarizes the browser player added by `@be-music/player-web` and `@be-music/player-web-demo`.
 Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as timing, notes, judgment, score, gauge, and BGA event meaning.
 
-## Migration to the shared engine (complete)
+## Shared runtime integration
 
-The browser player is migrating its judge / fallback / LN / sample-playback paths to drive
-`@be-music/player/core/engine`'s `manualPlay` / `autoPlay` directly so the beatoraja-compatible behavior the engine
-already implements (look-ahead lane keysound fallback, Free-Zone `17` / `27`, LN suppress windows + 380 ms / 120 ms
-hold-grace, LN early-release audio cut, mine-vs-note delta priority, multi-channel input mapping) is shared with
-the TUI runtime instead of being re-implemented in `pixi-gameplay.ts`.
+The browser player drives gameplay through `@be-music/player/core/engine`.
+The engine owns judgment, fallback keysound routing, long-note handling, mine priority, score, gauge, and chart-finish
+semantics. `PixiGameplayView` starts one engine run at the LR2 `PLAYSTART` gate, mirrors engine frame snapshots into
+the scene state, and translates engine UI commands into Pixi visual effects.
 
-New modules introduced for the migration:
+The browser runtime uses these adapter modules:
 
 | module | role |
 | --- | --- |
-| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | Web Audio API implementation of the engine's `AudioSession` contract: `triggerEvent` (immediate) / `scheduleEvent` (BGM look-ahead) / `stopChannel` / pause / resume, plus `keyMixer` / `bgmMixer` routing, dynamic volume changes (`#xxx97` / `#xxx98`), bmson `c=true` continuation suppression, and `#WAVCMD` per-slot gain. |
-| [`web-input-runtime.ts`](../packages/player-web/src/web-input-runtime.ts) | Bridges DOM `keydown` / `keyup` events to the engine's `inputSignals` bus. Filters OS auto-repeat, routes `Escape` / `F5` / `Space` to interrupt / pause commands, sends everything else as `lane-input(tokens)`. |
-| [`web-ui-runtime.ts`](../packages/player-web/src/web-ui-runtime.ts) | Subscribes the host (Pixi) to the engine's `uiSignals` — frame snapshots + the `flash-lane` / `press-lane` / `trigger-poor-bga` command queue. |
-| [`engine-driver.ts`](../packages/player-web/src/engine-driver.ts) | Glue layer that wires the three adapters together and invokes `manualPlay` / `autoPlay`; hosts call `runEngineDriver({ chart, audio, mode, ui })` once per chart play. |
+| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | Implements the engine's `AudioSession` contract with Web Audio. It handles immediate triggers, BGM scheduling, channel stops, pause/resume, key/BGM routing, dynamic volume changes, bmson `c=true` continuation, and `#WAVCMD` gain. |
+| [`web-input-runtime.ts`](../packages/player-web/src/web-input-runtime.ts) | Maps DOM `keydown` / `keyup` events to the engine input bus. It filters OS auto-repeat, routes `Escape` / `F5` / `Space` to command events, and sends lane presses with physical event timestamps. |
+| [`web-ui-runtime.ts`](../packages/player-web/src/web-ui-runtime.ts) | Drains engine UI signals into the Pixi host. Frame snapshots update notes, score, gauge, and result state; commands drive lane flashes, key holds, POOR BGA, and judge/combo effects. |
+| [`engine-driver.ts`](../packages/player-web/src/engine-driver.ts) | Wires audio, input, and UI adapters together and invokes `manualPlay` / `autoPlay` for one chart play. |
 
 `@be-music/player/core/engine` no longer imports `node:path` / `node:timers/promises`, so the module can be
 bundled into the browser as-is. The Node-only `createNodeAudioSink` backend is loaded lazily and is never reached
 when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `createWebAudioSession`).
-
-### Migration phases
-
-- **Phase 1 (done)** — `PlayerOptions.createAudioSession` factory hook
-- **Phase 2 (done)** — `WebAudioSession` implementation
-- **Phase 3 (done)** — `WebInputRuntime` + `WebUiRuntime` adapters
-- **Phase 4 prereq (done)** — drop the engine's `node:` imports
-- **Phase 4a (done)** — `runEngineDriver` glue layer
-- **Phase 4b-i (done)** — `PixiGameplayView`'s `playSample` and landmine paths now delegate to
-  `WebAudioSession.triggerEvent`
-- **Phase 4b-ii (done)** — BGM look-ahead now flows through `WebAudioSession.scheduleEvent`; the in-tree
-  `playSampleByKey` / `connectSampleNodeWithWavCmdGain` / `activeSampleNodes` / `clampSample*` / `startSampleNode`
-  helpers are removed (-181 lines)
-- **Phase 5 (done)** — this document
-- **Phase 4c (done)** — engine-driven playback is now the only path.
-  - The view attaches a single `keydown` listener for ESC / F5 / Space / ArrowUp / ArrowDown view-side commands;
-    everything else goes through `WebInputRuntime`'s own listeners into the engine's input bus. Each lane press
-    carries a `pressedAt` (`KeyboardEvent.timeStamp`) snapshot the engine subtracts from its drain time so the
-    judge resolves against the physical press time, not the next 60 Hz tick.
-  - `tick()` only drains the engine's UI signal buses; the legacy `autoJudge` / `autoScratchJudge` / `autoMiss` /
-    `autoFinalizeLongNotes` / `finalizeOverheldLongNotes` / `scheduleAutoSamples` / `checkChartEnd` /
-    `judge` / `commitFinalJudge` / `triggerBombOnNonMiss` / `applyGaugeDelta` / `tryHitMine` / `playSample` /
-    `markNoteHit` methods are removed (~700 lines).
-  - The LR2 PLAYSTART gate launches `runEngineDriver` unconditionally so the engine's chart-time t=0 lines up
-    with the view's `audioContextStartTime`.
-  - `applyEngineFrame` mirrors `PlayerSummary` (score / exScore / fast / slow / gauge) into the view fields,
-    propagates engine-side `judged` flags onto the view's `notes[].hit` / `mineNotes[].hit`, and stamps the LR2
-    gauge-rise (timer 42) / gauge-max (timer 44) timers on every gauge transition.
-  - `applyEngineCommand` translates `flash-lane` / `press-lane` / `release-lane` / `hold-lane-until-beat` /
-    `trigger-poor-bga` / `clear-poor-bga` into the view-side visual-effect helpers.
-  - `applyEngineJudgeCombo` drives the NOWJUDGE plate timer and combo readout via `publishJudge`.
-  - `handleSharedEngineChartFinished` fires when the engine's `manualPlay` / `autoPlay` Promise resolves cleanly
-    and routes through the LR2 `#FADEOUT` → `#CLOSE` exit timeline before invoking `onChartFinished` / `onExit`.
-  - `dispose` aborts the engine via `AbortController` before the audio bus tears down.
-  - `PlayerInterruptedError` routes `escape` → `onExit` and `restart` → `onRestart`.
-
-## Audit note
-
-- Audit starting point commit: `97b05e825c60e2242b621f63a1ebbfccd415362b`
-- Audit point commit: `cef0f2f8a604c3a034e04b798953915e01a72549` (merge of PR #73)
-- Audit scope: browser player packages, shared CLI/browser playback helpers, web-focused tests, and benchmark additions from PR #73
 
 ## Scope
 
@@ -114,6 +72,11 @@ Implemented skin features include:
 - Case-insensitive and wildcard asset lookup for LR2 theme files
 
 The demo also loads LR2 theme BGM and system sounds for select and decide screens when those files exist in the dropped theme.
+
+Scene-independent LR2 Pixi helpers live in [`lr2-render.ts`](../packages/player-web/src/lr2-render.ts) and
+[`lr2-scene-render.ts`](../packages/player-web/src/lr2-scene-render.ts). They handle destination keyframe evaluation,
+sprite transforms, source-cell selection, text rendering, numbers, sliders, and bargraphs. Scene modules keep the
+state-specific value resolution, timers, and input behavior.
 
 ## Scene lifecycle
 

@@ -331,7 +331,7 @@ groove gauge ダメージは地雷オブジェクト値を大文字 base36 と�
 適用後のゲージ値は `2-100%` に clamp されるため、`ZZ` のような大きい値では実質 `2%` まで下がります。
 `#WAV00` が定義されている場合は、地雷ヒット経路でそのサンプルを鳴らします。
 
-このルールの根拠は [`bms-spec.ja.md`](./bms-spec.ja.md) に記載しています。`value / 2` の直接根拠は Hitkey の command memo で、`#WAV00` / `ZZ` の歴史的文脈は Obj Tech Lovers chapter3-2 / chapter4-7 を補助一次参照として採っています。
+このルールの根拠は [`bms-spec.ja.md`](./bms-spec.ja.md) に記載しています。`value / 2` の直接根拠は Hitkey の command memo で、`#WAV00` / `ZZ` の扱いは Obj Tech Lovers chapter3-2 / chapter4-7 を補助一次参照として採っています。
 
 ## NOTES・combo・score
 
@@ -476,6 +476,8 @@ scratch playable channel 上の演奏ノートだけを自動で処理し、そ�
 
 `highSpeed` は主に TUI の可視範囲とスクロール密度を変える表示用パラメータです。
 判定窓そのものは変えません。
+runtime は `@be-music/player/core/high-speed-control` で high-speed 値を正規化します。
+有効範囲は `0.5` から `10.0` で、`0.5` 刻みに丸めます。
 
 ### pause / restart / interrupt
 
@@ -507,7 +509,7 @@ BMS の `#VOLWAV` は譜面全体の音量倍率として扱います。
 - `#VOLWAV 0`: 無音
 
 この倍率は、リアルタイム再生の keysound、選曲画面プレビュー、`renderJson()` を使うオフライン音声レンダリングに適用します。
-現実装は線形 gain のみを適用し、歴史的な実装差やハードウェア依存の音量差までは再現しません。
+現実装は線形 gain のみを適用し、player やハードウェアに依存する音量差までは再現しません。
 
 ### `#xxx97` / `#xxx98`
 
@@ -631,5 +633,5 @@ TUI が無効な場合は、モード開始メッセージ、レーン割り当�
 
 - LR2 の `NORMAL` 以外のゲージ種別
 - ゲージ種別切り替えオプション
-- ゲージ推移の履歴表示
+- ゲージ推移タイムライン表示
 - `AUTO` での `#LNMODE` 分岐

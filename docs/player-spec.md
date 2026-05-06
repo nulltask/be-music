@@ -331,7 +331,7 @@ Groove gauge damage is calculated from the mine object value as uppercase base36
 The applied gauge result is still clamped to `2-100%`, so a large value such as `ZZ` practically drops the gauge to `2%`.
 If `#WAV00` is defined, trigger that sample on the mine hit path.
 
-The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md): the `value / 2` interpretation follows Hitkey's command memo, and the `#WAV00` / `ZZ` historical context is supplemented by Obj Tech Lovers chapter3-2 and chapter4-7.
+The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md): the `value / 2` interpretation follows Hitkey's command memo, and the `#WAV00` / `ZZ` convention is supplemented by Obj Tech Lovers chapter3-2 and chapter4-7.
 
 ## NOTES・combo・score
 
@@ -476,6 +476,8 @@ Both `AUTO` and `MANUAL` are used to convert seconds on the musical score to rea
 
 `highSpeed` is a display parameter that primarily changes the visible range and scrolling density of the TUI.
 The judgment window itself cannot be changed.
+The runtime normalizes high-speed values through `@be-music/player/core/high-speed-control`.
+Valid values range from `0.5` to `10.0` and snap to `0.5` increments.
 
 ### pause / restart / interrupt
 
@@ -507,7 +509,7 @@ If omitted, the default value is `100`, and the effective gain is `bms.volWav / 
 - `#VOLWAV 0`: Silence
 
 This scaling factor applies to keysound for real-time playback, song selection screen preview, and offline audio rendering using `renderJson()`.
-The actual device applies only linear gain and does not reproduce historical implementation differences or hardware-dependent volume differences.
+The actual device applies only linear gain and does not reproduce player- or hardware-dependent volume differences.
 
 ### `#xxx97` / `#xxx98`
 
@@ -631,5 +633,5 @@ The main items are:
 
 - Gauge type other than `NORMAL` of LR2
 - Gauge type switching option
-- Gauge history display
+- Gauge timeline display
 - `#LNMODE` branch on `AUTO`

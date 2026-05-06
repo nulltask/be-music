@@ -8,7 +8,7 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 
 - `@be-music/json`: pure IR of BMS/BMSON intermediate representation (JSON compatible) dedicated to Be-Music internal processing
 - `@be-music/chart`: chart semantics helper such as beat resolution, event order, long note resolution, etc.
-- `@be-music/utils`: Generic utilities reused across all packages
+- `@be-music/utils`: Generic utilities reused across all packages, with narrow subpath exports for browser-safe core helpers and Node-facing helpers
 - `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON parser
 - `@be-music/stringifier`: Stringization from JSON to `.bms` / `.bmson`
 - `@be-music/audio-renderer`: Render the music score and output `.wav` / `.aiff`
@@ -122,6 +122,7 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Browser song library for dropped folders, ZIPs, and mixed BMS/LR2 theme drops
 - Lazy browser asset loading for large audio/video files, with case-insensitive path lookup
 - LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
+- Shared LR2 Pixi helpers for destination interpolation, sprite transforms, numbers, text, sliders, and bargraphs
 - Shared playback semantics with the CLI player for notes, timing, scroll distance, BGA cues, score, and results
 - WebAudio preview and gameplay buses with split key/BGM/master compressor controls
 - BGA still/video rendering, browser-side video transcode fallback, and WebM gameplay recording
