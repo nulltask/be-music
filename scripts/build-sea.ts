@@ -42,6 +42,7 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
     optionalExternalModules: ['node-web-audio-api', '@uwx/libav.js-fat'],
     bundleBanner: SEA_WORKER_BANNER,
     aliases: {
+      '@be-music/audio-renderer/triggers': resolve(repositoryDir, 'packages/audio-renderer/src/core/triggers.ts'),
       '@be-music/audio-renderer': resolve(repositoryDir, 'packages/audio-renderer/src/index.ts'),
       '@be-music/chart': resolve(repositoryDir, 'packages/chart/src/index.ts'),
       '@be-music/json': resolve(repositoryDir, 'packages/json/src/index.ts'),
@@ -56,6 +57,15 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
       '@be-music/player/utils': resolve(repositoryDir, 'packages/player/src/utils.ts'),
       '@be-music/player/core': resolve(repositoryDir, 'packages/player/src/core'),
       '@be-music/player': resolve(repositoryDir, 'packages/player/src/index.ts'),
+      // Subpath aliases must come before the package-root alias — Vite picks the first matching entry, so a
+      // bare `@be-music/utils` alias would shadow `@be-music/utils/core` (= `packages/utils/src/index.ts/core`,
+      // invalid). Each subpath here mirrors a `package.json` `exports` entry plus the in-tree TS source.
+      '@be-music/utils/cli-path': resolve(repositoryDir, 'packages/utils/src/cli-path.ts'),
+      '@be-music/utils/core': resolve(repositoryDir, 'packages/utils/src/core.ts'),
+      '@be-music/utils/log': resolve(repositoryDir, 'packages/utils/src/log.ts'),
+      '@be-music/utils/path': resolve(repositoryDir, 'packages/utils/src/path.ts'),
+      '@be-music/utils/pcm': resolve(repositoryDir, 'packages/utils/src/pcm.ts'),
+      '@be-music/utils/workerize': resolve(repositoryDir, 'packages/utils/src/workerize.ts'),
       '@be-music/utils': resolve(repositoryDir, 'packages/utils/src/index.ts'),
     },
   },
@@ -67,6 +77,14 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
       '@be-music/chart': resolve(repositoryDir, 'packages/chart/src/index.ts'),
       '@be-music/json': resolve(repositoryDir, 'packages/json/src/index.ts'),
       '@be-music/parser': resolve(repositoryDir, 'packages/parser/src/index.ts'),
+      // Same subpath-before-root order as the player target above. audio-renderer imports `@be-music/utils/
+      // core` for `extname` / `isAbortError` and `@be-music/utils/path` for `resolveFirstExistingPath`.
+      '@be-music/utils/cli-path': resolve(repositoryDir, 'packages/utils/src/cli-path.ts'),
+      '@be-music/utils/core': resolve(repositoryDir, 'packages/utils/src/core.ts'),
+      '@be-music/utils/log': resolve(repositoryDir, 'packages/utils/src/log.ts'),
+      '@be-music/utils/path': resolve(repositoryDir, 'packages/utils/src/path.ts'),
+      '@be-music/utils/pcm': resolve(repositoryDir, 'packages/utils/src/pcm.ts'),
+      '@be-music/utils/workerize': resolve(repositoryDir, 'packages/utils/src/workerize.ts'),
       '@be-music/utils': resolve(repositoryDir, 'packages/utils/src/index.ts'),
     },
   },
