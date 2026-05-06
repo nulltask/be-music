@@ -755,7 +755,6 @@ export class PixiGameplayView {
   private bmsonSlicePlayback:
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
-  private scheduled = new Set<RuntimeNote>();
   private autoSampleTriggers: TimedSampleTrigger[] = [];
   private score: ScoreSummary = createEmptyScore(0);
   private tracker = createScoreTracker();
@@ -1611,7 +1610,6 @@ export class PixiGameplayView {
     this.decodedSamples.clear();
     this.skinTextStyleCache.clear();
 
-    this.scheduled.clear();
     this.runtimeOps.clear();
     this.pressedChannels.clear();
     this.timerStartedAt.clear();
