@@ -21,12 +21,7 @@ import { PlayerInterruptedError } from '@be-music/player/core/engine';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
-import {
-  applyGrooveGaugeJudge,
-  createGrooveGaugeState,
-  type GrooveGaugeJudgeKind,
-  type GrooveGaugeState,
-} from '@be-music/player/core/groove-gauge';
+import { createGrooveGaugeState, type GrooveGaugeState } from '@be-music/player/core/groove-gauge';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   createScrollTimeline,
@@ -630,7 +625,6 @@ export class PixiGameplayView {
   private maxLongNoteBeatSpan = 0;
   private chartLastNoteEndSeconds = 0;
   private songDurationSeconds = 0;
-  private remainingNotes = 0;
   private laneChannels: string[] = [];
   /**
    * Cached `resolveChartPlayVariant` result for the loaded chart. Used to pick the right `play_<variant>.lr2skin`, the
@@ -1727,7 +1721,6 @@ export class PixiGameplayView {
     }, 0);
     this.chartLastNoteEndSeconds = this.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
     this.songDurationSeconds = this.chartLastNoteEndSeconds;
-    this.remainingNotes = this.notes.length;
     this.chartEnded = false;
     // Drop the previous chart's active-sample tracking. Stale entries would otherwise let a `c=true` note on the new
     // chart suppress its own first trigger because a same-key node from the old play looks "still playing" until it
@@ -1884,44 +1877,6 @@ export class PixiGameplayView {
       }
     }
     return Math.max(0, active.beat + ((seconds - active.seconds) * active.bpm) / 60);
-  }
-
-  /**
-   * Applies an LR2 NORMAL-gauge judge to the current state. Accepts `EMPTY_POOR` for input-on-empty-lane mispresses (-2
-   * to gauge).
-   *
-   * Also drives the LR2 1P-side gauge-rise (timer 42) and gauge- max (timer 44) timers off the before/after diff so
-   * authored skin elements (rise sparkle, max-glow overlay) animate at the right moment. 2P-side timers (43 / 45) wait
-   * for DP gauge support.
-   */
-  private applyGaugeDelta(judge: GrooveGaugeJudgeKind): void {
-    const previous = this.gaugeState.current;
-    applyGrooveGaugeJudge(this.gaugeState, judge);
-    const next = this.gaugeState.current;
-    if (next > previous) {
-      // Gauge increase — stamp timer 42 (1P rise) and schedule a deferred clear at the skin's authored span (or the
-      // fallback). Re-stamping is the natural behavior for back- to-back increases: cancel the in-flight cleanup so
-      // the flash restarts cleanly each time.
-      if (this.gaugeIncreaseTimeout !== undefined) {
-        window.clearTimeout(this.gaugeIncreaseTimeout);
-        this.gaugeIncreaseTimeout = undefined;
-      }
-      this.timerStartedAt.set(42, this.playClock());
-      const fadeMs = this.gaugeTimerDurationMs.get(42) ?? GAUGE_INCREASE_FALLBACK_MS;
-      this.gaugeIncreaseTimeout = window.setTimeout(() => {
-        this.gaugeIncreaseTimeout = undefined;
-        if (this.disposed) return;
-        this.timerStartedAt.delete(42);
-      }, fadeMs);
-    }
-    if (next >= 100 && previous < 100) {
-      // Gauge crossed into max territory — fire timer 44 so any skin-authored "ゲージ MAX" overlay starts cycling.
-      this.timerStartedAt.set(44, this.playClock());
-    } else if (next < 100 && previous >= 100) {
-      // Dropped back below max; the max overlay is no longer applicable. Per LR2 spec the timer should re-fire from t=0
-      // the next time we hit 100 %, which the branch above already handles.
-      this.timerStartedAt.delete(44);
-    }
   }
 
   /** Reset runtime DST-op state to a sensible default for a play session. */
@@ -3268,45 +3223,10 @@ export class PixiGameplayView {
   }
 
   /**
-   * Detects when the chart has finished playing — every playable note has been processed *and* the playhead is past the
-   * last note (with a small tail buffer for cymbal/sample decay) — and invokes the host's chart-end hook so the demo
-   * shell can transition out of gameplay. `onChartFinished` fires when supplied (host wants the result screen);
-   * otherwise we fall back to `onExit` for backwards compatibility (no-result-screen demos). We guard with `chartEnded`
-   * so the callback fires at most once.
+   * Latches at the moment the engine's `manualPlay` / `autoPlay` Promise resolves so the `onChartFinished` /
+   * `onExit` callback fires at most once. {@link handleSharedEngineChartFinished} is the only writer.
    */
   private chartEnded = false;
-  private checkChartEnd(seconds: number): void {
-    if (this.chartEnded || !this.song) {
-      return;
-    }
-    const endAt = this.songDurationSeconds + 3;
-    if (seconds < endAt) {
-      return;
-    }
-    if (this.remainingNotes > 0) {
-      // Manual play may still be working through trailing notes; only end once they are all judged or auto-missed.
-      return;
-    }
-    this.chartEnded = true;
-    // Snapshot before we defer — the gameplay state may keep changing for a few frames and we want the result data
-    // captured at the moment the chart "ended" (last note judged + tail buffer).
-    const result = this.getResultData();
-    // Defer one frame so the final render (with last judgement plate) is committed before we tear down — without this
-    // the user would see the playfield blank-flash to whatever scene comes next.
-    this.chartEndTimeout = window.setTimeout(() => {
-      this.chartEndTimeout = undefined;
-      if (this.disposed) {
-        return;
-      }
-      this.beginExitSequence(() => {
-        if (this.options.onChartFinished && result) {
-          this.options.onChartFinished(result);
-          return;
-        }
-        this.options.onExit?.();
-      });
-    }, 50);
-  }
 
   /**
    * Drives the LR2 scene-exit timeline (`#FADEOUT` → `#CLOSE`) before handing control back to the host. Seeds timer 2
@@ -5473,11 +5393,36 @@ export class PixiGameplayView {
     this.fastCount = summary.fast;
     this.slowCount = summary.slow;
     if (summary.gauge) {
+      const previous = this.gaugeState.current;
       this.gaugeState.current = summary.gauge.current;
       this.gaugeState.max = summary.gauge.max;
       this.gaugeState.clearThreshold = summary.gauge.clearThreshold;
       this.gaugeState.initial = summary.gauge.initial;
       this.gaugeState.effectiveTotal = summary.gauge.effectiveTotal;
+      // LR2 gauge-rise (timer 42) / gauge-max (timer 44) visual feedback. Mirrors what the legacy
+      // `applyGaugeDelta` did — stamp on every transition so authored skin elements (rise sparkle, max-glow
+      // overlay) animate. We compare against the previous frame's value rather than against an "EMPTY_POOR-
+      // sized delta" because the engine drives gauge updates monotonically through `summary.gauge.current`,
+      // not through judge deltas.
+      const next = summary.gauge.current;
+      if (next > previous) {
+        if (this.gaugeIncreaseTimeout !== undefined) {
+          window.clearTimeout(this.gaugeIncreaseTimeout);
+          this.gaugeIncreaseTimeout = undefined;
+        }
+        this.timerStartedAt.set(42, this.playClock());
+        const fadeMs = this.gaugeTimerDurationMs.get(42) ?? GAUGE_INCREASE_FALLBACK_MS;
+        this.gaugeIncreaseTimeout = window.setTimeout(() => {
+          this.gaugeIncreaseTimeout = undefined;
+          if (this.disposed) return;
+          this.timerStartedAt.delete(42);
+        }, fadeMs);
+      }
+      if (next >= 100 && previous < 100) {
+        this.timerStartedAt.set(44, this.playClock());
+      } else if (next < 100 && previous >= 100) {
+        this.timerStartedAt.delete(44);
+      }
     }
     // Sync the engine's per-note `judged` flag onto the view's runtime notes so `renderNotes` knows to stop
     // drawing them. Engine and view both extract the chart through `extractTimedNotes` and sort by (beat,
@@ -5592,21 +5537,17 @@ export class PixiGameplayView {
 
   /**
    * Fires when the engine driver's `manualPlay` / `autoPlay` promise resolves cleanly (= chart played to its end
-   * without an interrupt). Mirrors the legacy {@link checkChartEnd} success branch so the host's
-   * `onChartFinished` callback receives the same `PixiGameplayResultData` shape and the LR2
-   * `#FADEOUT` → `#CLOSE` exit timeline runs before the result-screen transition.
-   *
-   * Bypasses `checkChartEnd`'s `seconds < endAt` / `remainingNotes > 0` gates because the engine's resolution is
-   * the authoritative end-of-chart signal in shared-engine mode — the view's `currentSeconds` clock and
-   * `remainingNotes` counter both lag slightly behind the engine's authoritative bookkeeping.
+   * without an interrupt). The host's `onChartFinished` callback receives a `PixiGameplayResultData` snapshot and
+   * the LR2 `#FADEOUT` → `#CLOSE` exit timeline runs before the result-screen transition. The engine's resolution
+   * is the authoritative end-of-chart signal — the view's `currentSeconds` clock lags slightly behind the engine's
+   * own bookkeeping, so we don't gate on it.
    */
   private handleSharedEngineChartFinished(): void {
     if (this.disposed || this.chartEnded) return;
     this.chartEnded = true;
     const result = this.getResultData();
     // Defer one frame so the final render (last judgement plate, terminal combo number) is committed before the
-    // exit fade kicks in — matches the 50 ms defer in `checkChartEnd` so the user always sees the closing frame
-    // regardless of which path retired the chart.
+    // exit fade kicks in.
     this.chartEndTimeout = window.setTimeout(() => {
       this.chartEndTimeout = undefined;
       if (this.disposed) return;
