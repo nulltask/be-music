@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Rectangle, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Sprite, Text, TextStyle, Texture, VideoSource } from 'pixi.js';
 // Side-effect import: registers Pixi's `PrepareSystem` on the renderer so {@link PixiGameplayView.preparePixiUpload}
 // can drive eager GPU uploads. Pixi v8 deliberately ships the prepare module out of the default bundle (it's a
 // large optional system that not every app needs); the import has to land before any `Application.init` runs that
@@ -2393,6 +2393,14 @@ export class PixiGameplayView {
     for (const texture of textures) {
       if (this.disposed) return;
       if (!texture) continue;
+      // BGA video textures are skipped: the underlying `<video>` element hasn't decoded any frames yet at prepare
+      // time (the chart hasn't started, the cue hasn't fired), so its `videoFrame` / `videoSource` is empty.
+      // WebGPU's `copyExternalImageToTexture` rejects an unbacked `<video>` with "Failed to import texture from
+      // video element that doesn't have back resource", which Pixi propagates as an uncaught `OperationError`
+      // that recurs every frame inside the renderer's PrepareSystem queue. Skipping the eager upload here lets
+      // each video texture take Pixi's lazy first-frame path (`Texture.source.update()` once a frame is
+      // decoded), which is bounded by the video's natural decode latency rather than a runaway rAF loop.
+      if (isVideoTextureSource(texture)) continue;
       try {
         await prepare.upload(texture);
       } catch (error) {
@@ -6012,6 +6020,17 @@ export class PixiGameplayView {
  */
 function isLongNote(note: RuntimeNote): boolean {
   return typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
+}
+
+/**
+ * Returns whether `texture` is backed by a Pixi `VideoSource` (i.e. a `<video>` element). Used by the
+ * `PrepareSystem` upload path to skip eager GPU uploads on video-backed textures: the underlying `<video>` may
+ * not have decoded any frames at prepare time, and WebGPU's `copyExternalImageToTexture` rejects an unbacked
+ * `<video>` with "Failed to import texture from video element that doesn't have back resource", which Pixi
+ * propagates as a re-firing `OperationError` inside its rAF queue.
+ */
+function isVideoTextureSource(texture: Texture): boolean {
+  return texture.source instanceof VideoSource;
 }
 
 /**
