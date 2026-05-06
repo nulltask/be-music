@@ -82,16 +82,11 @@ import {
   collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
   createBeatResolver,
-  isBmsBgmVolumeChangeChannel,
-  isBmsDynamicVolumeChangeChannel,
-  isBmsKeyVolumeChangeChannel,
   parseBmsBga,
-  parseBmsDynamicVolumeGain,
   parseBmsSwBga,
   pickSwitchingBgaFrame,
   resolveBmsBmpArgb,
   resolveChartReferenceBpm,
-  sortEvents,
   type BmsSwitchingBga,
 } from '@be-music/chart';
 import {
@@ -639,8 +634,6 @@ export class PixiGameplayView {
   private chartLastNoteEndSeconds = 0;
   private songDurationSeconds = 0;
   private remainingNotes = 0;
-  private autoJudgeCursor = 0;
-  private autoMissCursor = 0;
   private laneChannels: string[] = [];
   /**
    * Cached `resolveChartPlayVariant` result for the loaded chart. Used to pick the right `play_<variant>.lr2skin`, the
@@ -773,15 +766,6 @@ export class PixiGameplayView {
     | undefined;
   private scheduled = new Set<RuntimeNote>();
   private autoSampleTriggers: TimedSampleTrigger[] = [];
-  private autoTriggerNextIndex = 0;
-  /**
-   * BMS dynamic-volume timeline (channels `97` BGM-volume / `98` key-volume). Each entry records the chart-time at
-   * which the corresponding bus's gain should switch to the authored 0..1 value. The cursor advances as the playhead
-   * crosses each event in `scheduleAutoSamples`. Empty for non-BMS charts (the source-format gate matches the CLI's
-   * `collectRealtimeAudioVolumeEvents`).
-   */
-  private volumeChangeEvents: Array<{ seconds: number; bus: 'key' | 'bgm'; gain: number }> = [];
-  private volumeChangeCursor = 0;
   private score: ScoreSummary = createEmptyScore(0);
   private tracker = createScoreTracker();
   /**
@@ -1667,7 +1651,6 @@ export class PixiGameplayView {
     this.switchingBgas.clear();
     this.gaugeHistory.length = 0;
     this.scoreHistory.length = 0;
-    this.volumeChangeEvents.length = 0;
     this.invisibleNotes.length = 0;
     this.host = undefined;
   }
@@ -1764,8 +1747,6 @@ export class PixiGameplayView {
     this.chartLastNoteEndSeconds = this.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
     this.songDurationSeconds = this.chartLastNoteEndSeconds;
     this.remainingNotes = this.notes.length;
-    this.autoJudgeCursor = 0;
-    this.autoMissCursor = 0;
     this.chartEnded = false;
     // Drop the previous chart's active-sample tracking. Stale entries would otherwise let a `c=true` note on the new
     // chart suppress its own first trigger because a same-key node from the old play looks "still playing" until it
@@ -1825,30 +1806,6 @@ export class PixiGameplayView {
     this.autoSampleTriggers = collectSampleTriggers(resolved, resolver, { inferBmsLnTypeWhenMissing: true })
       .filter((trigger) => !isPlayableInputChannel(trigger.channel))
       .sort((left, right) => left.seconds - right.seconds);
-    this.autoTriggerNextIndex = 0;
-    // BMS dynamic volume — channels `97` (BGM bus) and `98` (key bus). hitkey BMS Memo encodes the value as a hex-style
-    // 2-digit pair where `01..FF` maps to 1/255..1.0 gain. Mirror the CLI's `collectRealtimeAudioVolumeEvents` gate
-    // (BMS source format only) so bmson charts (which use their own per-channel routing) don't get treated as BMS
-    // volume events.
-    this.volumeChangeEvents =
-      resolved.sourceFormat === 'bms'
-        ? sortEvents(resolved.events)
-            .filter((event) => isBmsDynamicVolumeChangeChannel(event.channel))
-            .flatMap<{ seconds: number; bus: 'key' | 'bgm'; gain: number }>((event) => {
-              const gain = parseBmsDynamicVolumeGain(event.value);
-              if (gain === undefined) return [];
-              const bus = isBmsKeyVolumeChangeChannel(event.channel)
-                ? 'key'
-                : isBmsBgmVolumeChangeChannel(event.channel)
-                  ? 'bgm'
-                  : undefined;
-              if (!bus) return [];
-              const seconds = Math.max(0, resolver.eventToSeconds(event));
-              return [{ seconds, bus, gain }];
-            })
-            .sort((left, right) => left.seconds - right.seconds)
-        : [];
-    this.volumeChangeCursor = 0;
     // bmson 1.0.0 slicing — for bmson charts, each `sound_channels[]` entry is a single audio file that gets sliced at
     // every distinct pulse where any of its notes fire, and each note plays its assigned slice (`audio_offset` ..
     // `audio_offset + slice_duration`) instead of the whole WAV from t=0. The audio-renderer already computes the
@@ -3734,110 +3691,6 @@ export class PixiGameplayView {
    * `@be-music/player`'s engine does via `pendingAutoLongNotes`): one judgement event per LN, fired at the tail timing
    * so the combo pulse aligns with the LN visually completing rather than at its start.
    */
-  private autoJudge(seconds: number): void {
-    while (this.autoJudgeCursor < this.notes.length) {
-      const note = this.notes[this.autoJudgeCursor]!;
-      if (note.seconds > seconds) {
-        break;
-      }
-      this.autoJudgeCursor += 1;
-      if (note.hit) {
-        continue;
-      }
-      if (!isPlayableInputChannel(note.channel)) {
-        // Non-playable lanes (BGM-style notes that snuck into the playable collection, e.g. landmines) are not scored
-        // here; mark them consumed so chart-end bookkeeping does not keep revisiting them.
-        this.markNoteHit(note);
-        continue;
-      }
-      this.markNoteHit(note);
-      this.playSample(note);
-      this.triggerBomb(note.channel);
-      // Full-autoplay scratch hits drive the turntable too — otherwise the disc would sit motionless during a watch-
-      // mode replay even though the chart is being scratched.
-      this.applyTurntableImpulse(note.channel);
-      if (isLongNote(note)) {
-        // Defer the verdict — the tail timing is what the player actually sees as the LN body finishing. Hold the lane
-        // laser on (sustained key-on timer, no auto-fade) until `autoFinalizeLongNotes` releases it at endSeconds.
-        this.activeLongNotes.set(note.channel, {
-          note,
-          headJudge: 'PERFECT',
-          headSignedDeltaMs: 0,
-        });
-        this.startKeyOnTimer(note.channel);
-        this.startLnHoldTimer(note.channel);
-        continue;
-      }
-      this.commitFinalJudge('PERFECT', 0, seconds, note.channel);
-      this.flashKeyOnTimer(note.channel);
-    }
-  }
-
-  /**
-   * Drains active LN holds whose tail timing has been reached during autoplay. Each finalization commits PERFECT (head
-   * PERFECT + tail PERFECT, signedDelta 0 because auto-release is sample-accurate), increments the combo by one, and
-   * releases the lane laser. Mirrors `pendingAutoLongNotes` / `drainPendingAutoLongNotes` in the standalone engine.
-   *
-   * Distinct from {@link finalizeOverheldLongNotes}: that one fires only after the bad-window grace expires
-   * (manual-play safety net) and uses the **head** verdict; here we fire exactly at endSeconds with a clean PERFECT.
-   */
-  /**
-   * Auto-judges scratch notes on whichever side(s) have autoscratch enabled. Notes on the keyboard lanes pass through
-   * unchanged — only channel `16` (1P scratch) and `26` (2P scratch) are touched. Mirrors the {@link autoJudge}
-   * structure (PERFECT verdict, sample play, bomb trigger, LN head seeding) but skips advancing `autoJudgeCursor` so
-   * the full-autoplay path stays unaffected.
-   *
-   * Cost: one O(n) scan from `autoMissCursor` per frame, bounded by `bad-window seconds × note density`. Real charts
-   * have a handful of scratch notes within any miss window, so this is negligible.
-   */
-  private autoScratchJudge(seconds: number): void {
-    for (let index = this.autoMissCursor; index < this.notes.length; index += 1) {
-      const note = this.notes[index]!;
-      if (note.seconds > seconds) break;
-      if (note.hit) continue;
-      if (!isScratch(note.channel)) continue;
-      const enabled = note.channel === '16' ? this.options.autoScratch1P : this.options.autoScratch2P;
-      if (!enabled) continue;
-      this.markNoteHit(note);
-      this.playSample(note);
-      this.triggerBomb(note.channel);
-      // Auto-scratch is by definition the disc rotating itself. Pump an impulse here so the turntable visibly spins for
-      // each scratch note even when the player isn't pressing anything.
-      this.applyTurntableImpulse(note.channel);
-      if (isLongNote(note)) {
-        this.activeLongNotes.set(note.channel, {
-          note,
-          headJudge: 'PERFECT',
-          headSignedDeltaMs: 0,
-        });
-        this.startKeyOnTimer(note.channel);
-        this.startLnHoldTimer(note.channel);
-        continue;
-      }
-      this.commitFinalJudge('PERFECT', 0, seconds, note.channel);
-      this.flashKeyOnTimer(note.channel);
-    }
-  }
-
-  private autoFinalizeLongNotes(seconds: number): void {
-    if (this.activeLongNotes.size === 0) {
-      return;
-    }
-    for (const [channel, active] of this.activeLongNotes) {
-      const endSeconds = active.note.endSeconds!;
-      if (endSeconds <= seconds) {
-        this.activeLongNotes.delete(channel);
-        this.commitFinalJudge('PERFECT', 0, endSeconds, channel);
-        this.triggerBombOnNonMiss(channel, 'PERFECT');
-        // Same alpha-taper release as manual key-ups and auto- judged short notes (via `flashKeyOnTimer`) so the LN
-        // tail decays at the same speed without re-stamping the key-on timer. Pair with the LN-hold-effect release so
-        // any sustain visuals fade alongside the lane laser.
-        this.releaseKeyOnTimer(channel);
-        this.releaseLnHoldTimer(channel);
-      }
-    }
-  }
-
   /**
    * Brief key-on flash. We start the per-lane LR2 key-on timer (100..107 / 110..117) and schedule it to clear after a
    * short interval so the laser fades like a real keystroke. Used by autoplay (no real keyboard event) so the player
@@ -3882,24 +3735,6 @@ export class PixiGameplayView {
       return Math.max(0, (this.pauseTime - this.startTime - this.pauseTotal) / 1000);
     }
     return Math.max(0, (performance.now() - this.startTime - this.pauseTotal) / 1000);
-  }
-
-  private autoMiss(seconds: number): void {
-    const bad = resolveJudgeWindowsMs(this.song!.chart).bad / 1000;
-    while (this.autoMissCursor < this.notes.length) {
-      const note = this.notes[this.autoMissCursor]!;
-      if (seconds - note.seconds <= bad) {
-        break;
-      }
-      this.autoMissCursor += 1;
-      if (note.hit) {
-        continue;
-      }
-      this.markNoteHit(note);
-      applyJudgeToSummary(this.score, 'POOR', this.tracker);
-      this.applyGaugeDelta('POOR');
-      this.publishJudge('POOR', seconds, note.channel);
-    }
   }
 
   private markNoteHit(note: RuntimeNote): void {
@@ -3976,72 +3811,6 @@ export class PixiGameplayView {
     this.timerStartedAt.set(48, now);
     this.timerStartedAt.set(49, now);
     log.info('FULL COMBO');
-  }
-
-  /**
-   * Pre-schedules every background sample whose chart-time is within the next `lookAhead` seconds. We hand each sample
-   * a precise audio-context start time (`audioContextStartTime + trigger.seconds`) so the Web Audio engine can fire it
-   * sample-accurately, independent of when this method is next polled. The ~0.5s look-ahead is large enough to absorb
-   * GC/stutters in the JS frame loop yet small enough that pause/resume timing remains responsive.
-   *
-   * Routes every cue through {@link WebAudioSession.scheduleEvent} so the session's `activeBySlot` map (which the
-   * player keysound path also writes to) is the single source of truth for bmson `c=true` continuation. Without
-   * this unification, a chart that maps the same `#WAVxx` slot to both a player lane and a BGM cue could double-
-   * trigger the keysound on chord-style entries.
-   */
-  private scheduleAutoSamples(seconds: number): void {
-    // Hold off until the chart-start gate has fired and `audioContextStartTime` is anchored to the audio clock — until
-    // then a queued chart-second would clamp to "now" inside the session and start playing the BGM during the LR2
-    // LOADING phase.
-    if (this.audioContextStartTime === 0 || !this.webAudioSession) {
-      return;
-    }
-    const lookAhead = 0.5;
-    while (this.autoTriggerNextIndex < this.autoSampleTriggers.length) {
-      const trigger = this.autoSampleTriggers[this.autoTriggerNextIndex]!;
-      if (trigger.seconds > seconds + lookAhead) {
-        break;
-      }
-      this.autoTriggerNextIndex += 1;
-      const startAt = this.audioContextStartTime + trigger.seconds;
-      this.webAudioSession.scheduleEvent(trigger.event, startAt);
-    }
-    this.scheduleVolumeChanges(seconds, lookAhead);
-  }
-
-  /**
-   * Drains pending BMS dynamic-volume events (channels `97` / `98`) up to `chartSeconds + lookAhead` and writes their
-   * authored 0..1 gain to the appropriate audio bus mixer at the corresponding audio-context time. Mirrors the CLI's
-   * realtime-volume scheduling so a chart that quiets the BGM during a vocal break (or boosts the key bus for a
-   * climactic drop) sounds the same on the web side.
-   *
-   * The scheduled `setValueAtTime` calls overwrite each other — BMS volume events are absolute, not multiplicative — so
-   * a later `setValueAtTime(0.5, t2)` cleanly replaces an earlier `setValueAtTime(0.2, t1)` regardless of fire order.
-   */
-  private scheduleVolumeChanges(chartSeconds: number, lookAheadSeconds: number): void {
-    if (!this.audioContext || this.volumeChangeEvents.length === 0) {
-      return;
-    }
-    const horizon = chartSeconds + lookAheadSeconds;
-    while (this.volumeChangeCursor < this.volumeChangeEvents.length) {
-      const event = this.volumeChangeEvents[this.volumeChangeCursor]!;
-      if (event.seconds > horizon) {
-        break;
-      }
-      this.volumeChangeCursor += 1;
-      const mixer = event.bus === 'key' ? this.audioBus?.keyMixer : this.audioBus?.bgmMixer;
-      if (!mixer) continue;
-      const startAt = Math.max(this.audioContext.currentTime, this.audioContextStartTime + event.seconds);
-      // Web Audio raises an exception if `setValueAtTime` is handed a non-finite value — `parseBmsDynamicVolumeGain`
-      // already filtered those, so we just clamp into [0, 1] for safety.
-      const gain = Math.max(0, Math.min(1, event.gain));
-      try {
-        mixer.gain.setValueAtTime(gain, startAt);
-      } catch {
-        // Sealed AudioParam (extremely rare — only happens if the bus has been disposed mid-flight). Drop the event
-        // silently; the next play prepare resets the cursor.
-      }
-    }
   }
 
   /**
