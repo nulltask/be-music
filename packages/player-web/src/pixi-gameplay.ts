@@ -5918,10 +5918,65 @@ export class PixiGameplayView {
    * Catches {@link PlayerInterruptedError} so the engine's `interrupt(escape)` / `interrupt(restart)` commands
    * route to the host's `onExit` / `onRestart` callbacks the same way the legacy DOM keyhandler did.
    */
+  /**
+   * Builds the `BeMusicJson` snapshot the engine sees in shared-engine mode, with playable-channel events
+   * re-mapped to match whichever shuffle the view's `applyRandomMode` produced for this play session
+   * (RANDOM / MIRROR / S-RANDOM / SCATTER + DP FLIP).
+   *
+   * The view's per-side shuffle mutates `runtimeNote.channel` on each entry of `this.notes` /
+   * `this.mineNotes` / `this.invisibleNotes`, but the underlying chart `event.channel` is untouched. The
+   * engine extracts its own runtime notes by walking `chart.events` and using `event.channel`, so without a
+   * remap it would judge against the original channel layout while the renderer paints the shuffled one. The
+   * player would press the key for a lane that visually contains note A and the engine would judge note B.
+   *
+   * The remap is built by walking the view's three runtime arrays and storing
+   * `event → post-shuffle channel`. Events present in `chart.events` but not on any runtime array (BGM,
+   * BGA, dynamic volume, …) keep their original channel; the engine never extracts them as playable lanes.
+   * The returned chart shares `events` references with the original chart wherever no remap applies, so the
+   * shallow-clone overhead is one new array plus one new object per actually-shuffled event.
+   */
+  private buildSharedEngineChart(): BeMusicJson {
+    const chart = this.resolvedChart ?? this.song!.chart;
+    if (!this.options.random1P && !this.options.random2P && !this.options.dpFlip) {
+      // Hot path: no shuffle / flip declared, so the runtime channels are guaranteed to match the chart-event
+      // channels and we can hand the original chart through unchanged. Saves a per-event Map probe on every
+      // chart launch.
+      return chart;
+    }
+    const remap = new Map<BeMusicEvent, string>();
+    const collect = (entries: ReadonlyArray<{ event: BeMusicEvent; channel: string }>): void => {
+      for (const entry of entries) {
+        if (entry.channel !== entry.event.channel) {
+          remap.set(entry.event, entry.channel);
+        }
+      }
+    };
+    collect(this.notes);
+    collect(this.mineNotes);
+    collect(this.invisibleNotes);
+    if (remap.size === 0) {
+      // The shuffle was a no-op for this chart's lane usage (e.g. MIRROR on a 1-lane chart). Skip the clone.
+      return chart;
+    }
+    return {
+      ...chart,
+      events: chart.events.map((event) => {
+        const remapped = remap.get(event);
+        return remapped === undefined ? event : { ...event, channel: remapped };
+      }),
+    };
+  }
+
   private launchSharedEngine(): void {
     if (this.disposed || this.sharedEnginePromise) return;
     if (!this.song || !this.audioContext || !this.audioBus) return;
-    const chart = this.resolvedChart ?? this.song.chart;
+    // Build the chart the engine sees from the view's already-shuffled notes / mines / invisibles. The view's
+    // `applyRandomMode` mutates `runtimeNote.channel` (NOT `event.channel`), so without this remap the engine
+    // would extract notes from `chart.events` with their ORIGINAL pre-shuffle channels — its judge would target
+    // a different lane than the visual the player is reading, so RANDOM / MIRROR / S-RANDOM / SCATTER would
+    // make the chart unplayable. Rebuilding `events` with the post-shuffle channel keeps the engine and the
+    // renderer on the same shuffle.
+    const chart = this.buildSharedEngineChart();
     const callbacks: WebUiRuntimeCallbacks = {
       onFrame: (frame) => this.applyEngineFrame(frame),
       onCommand: (command) => this.applyEngineCommand(command),
