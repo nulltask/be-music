@@ -78,6 +78,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playerApi.resolveBmsControlFlowForPlayback(fixtures.controlFlowJson, () => 0.42);
     },
   });
+  define('player.preparePlaybackChartData', {
+    run: (fixtures) => {
+      playerApi.preparePlaybackChartData(
+        fixtures.sampleBmsJson,
+        { showInvisibleNotes: true, laneModeExtension: '.bms' },
+        true /* inferBmsLnTypeWhenMissing */,
+        0 /* auxiliaryPlaybackEndSeconds */,
+      );
+    },
+  });
   define('player.judging.findClosestCandidateInWindow', {
     run: () => {
       judgingApi.findClosestCandidateInWindow(
