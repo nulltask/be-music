@@ -5,12 +5,16 @@ import { createWebInputRuntime, keyboardEventToTokens } from './web-input-runtim
 /**
  * Minimal stand-in for the {@link KeyboardEvent} surface the runtime touches. `repeat` defaults to `false` because
  * most tests want to exercise the un-repeated path; the auto-repeat suppression is its own dedicated test.
+ * `timeStamp` is omitted by default — existing assertions don't need to consider press timestamps, and
+ * `expect.toEqual` ignores `undefined` properties so a command with `pressedAt: undefined` still matches an
+ * expected shape that doesn't list it. The press-timestamp tests pass `timeStamp` explicitly.
  */
-function makeKeyEvent(code: string, options: { repeat?: boolean } = {}): KeyboardEvent {
+function makeKeyEvent(code: string, options: { repeat?: boolean; timeStamp?: number } = {}): KeyboardEvent {
   let prevented = false;
   const event = {
     code,
     repeat: options.repeat ?? false,
+    timeStamp: options.timeStamp,
     preventDefault: () => {
       prevented = true;
     },
@@ -74,6 +78,36 @@ describe('createWebInputRuntime', () => {
     dispatch('keydown', makeKeyEvent('KeyZ'));
     const commands = inputSignals.drainCommands();
     expect(commands).toEqual([{ kind: 'lane-input', tokens: ['z'] }]);
+  });
+
+  test('lane key press forwards `KeyboardEvent.timeStamp` as `pressedAt` so the engine can judge against the physical press time', () => {
+    // The engine's drain loop subtracts (`performance.now()` - `pressedAt`) from its playback clock to recover
+    // the press's true game-time. Forwarding `KeyboardEvent.timeStamp` (which is on the same time origin as
+    // `performance.now()`) is the runtime's half of that contract — without this, a press that lands a few ms
+    // before the next 60 Hz tick gets up to ~16 ms of artificial late-bias on judgment.
+    const inputSignals = createPlayerInputSignalBus();
+    const { target, dispatch } = makeMockTarget();
+    const runtime = createWebInputRuntime({ inputSignals, inputTokenToChannels: new Map(), target });
+    runtime.start();
+    dispatch('keydown', makeKeyEvent('KeyZ', { timeStamp: 12_345.6 }));
+    expect(inputSignals.drainCommands()).toEqual([{ kind: 'lane-input', tokens: ['z'], pressedAt: 12_345.6 }]);
+  });
+
+  test('lane key release forwards `KeyboardEvent.timeStamp` as `pressedAt` on the synthesized kitty-state release', () => {
+    const inputSignals = createPlayerInputSignalBus();
+    const { target, dispatch } = makeMockTarget();
+    const runtime = createWebInputRuntime({ inputSignals, inputTokenToChannels: new Map(), target });
+    runtime.start();
+    dispatch('keyup', makeKeyEvent('KeyZ', { timeStamp: 9_999 }));
+    expect(inputSignals.drainCommands()).toEqual([
+      {
+        kind: 'kitty-state',
+        pressTokens: [],
+        repeatTokens: [],
+        releaseTokens: ['z'],
+        pressedAt: 9_999,
+      },
+    ]);
   });
 
   test('Escape pushes interrupt(escape)', () => {

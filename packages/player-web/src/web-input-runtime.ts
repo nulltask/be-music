@@ -79,21 +79,29 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
     // The engine's `inputTokenToChannels` decides whether tokens map to lane channels, scratch channels, or no-op.
     // We just hand over the raw token list — the engine owns the rest of the lookup chain.
     keyEvent.preventDefault();
-    options.inputSignals.pushCommand({ kind: 'lane-input', tokens });
+    // `KeyboardEvent.timeStamp` is a `DOMHighResTimeStamp` on the same time origin as `performance.now()`. The
+    // engine subtracts the wall-clock delta between this and its drain time so the judge resolves against the
+    // true press moment instead of "next 60 Hz tick" — eliminates up to ~16 ms of late-bias on every press.
+    options.inputSignals.pushCommand({ kind: 'lane-input', tokens, pressedAt: keyEvent.timeStamp });
   };
 
   const handleKeyUp = (event: Event): void => {
     if (typeof (event as KeyboardEvent).code !== 'string') return;
-    const tokens = keyboardEventToTokens(event as KeyboardEvent);
+    const keyEvent = event as KeyboardEvent;
+    const tokens = keyboardEventToTokens(keyEvent);
     if (tokens.length === 0) return;
     // `kitty-state` carries press / repeat / release sets so the engine can model held inputs precisely. Web
     // browsers don't expose Kitty-style protocol events, so we synthesize a minimal release-only shape — the
     // engine's LN release path keys on `releaseTokens` and ignores press / repeat in this case.
+    // `pressedAt` here represents the release event's timestamp; the LN early-release window is wide (380 ms
+    // initial / 120 ms repeat), so this drift correction is less critical than for `lane-input`, but we forward
+    // it for symmetry and any future judges that consume it.
     options.inputSignals.pushCommand({
       kind: 'kitty-state',
       pressTokens: [],
       repeatTokens: [],
       releaseTokens: tokens,
+      pressedAt: keyEvent.timeStamp,
     });
   };
 

@@ -71,6 +71,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
   const emitManualInput = (
     inputEvent: ReturnType<typeof resolveInputTokenEvent>,
     source: 'keypress' | 'data',
+    pressedAt: number,
   ): void => {
     const pressTokens = inputEvent.tokens;
     const repeatTokens = inputEvent.repeatTokens;
@@ -108,6 +109,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
         pressTokens: [...pressTokens],
         repeatTokens: [...repeatTokens],
         releaseTokens: [...releaseTokens],
+        pressedAt,
       });
     }
 
@@ -122,10 +124,10 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
       });
     }
 
-    handlePressedTokens(pressTokens);
+    handlePressedTokens(pressTokens, pressedAt);
   };
 
-  const handlePressedTokens = (tokens: readonly string[]): void => {
+  const handlePressedTokens = (tokens: readonly string[], pressedAt: number): void => {
     if (tokens.length === 0) {
       return;
     }
@@ -161,6 +163,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
     options.inputSignals.pushCommand({
       kind: 'lane-input',
       tokens: [...tokens],
+      pressedAt,
     });
   };
 
@@ -168,6 +171,12 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
     if (options.mode === 'manual' && Date.now() < suppressKeypressUntilMs) {
       return;
     }
+    // `performance.now()` snapshot at handler entry — this is the closest we can get to the OS-level press time
+    // through Node's `readline` keypress event (which doesn't carry a hardware timestamp the way
+    // `KeyboardEvent.timeStamp` does on the DOM side). The engine subtracts the wall-clock delta against this
+    // when resolving the judge timestamp so a press that lands a few ms before the next 60 Hz tick still
+    // resolves at its true timing.
+    const pressedAt = performance.now();
     if (!loggedFirstKeyPress) {
       loggedFirstKeyPress = true;
       emitRuntimeLog('input-runtime.keypress.first', {
@@ -183,7 +192,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
 
     if (options.mode === 'manual') {
       for (const inputEvent of inputEvents) {
-        emitManualInput(inputEvent, 'keypress');
+        emitManualInput(inputEvent, 'keypress', pressedAt);
       }
       return;
     }
@@ -225,6 +234,8 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
     if (options.mode !== 'manual') {
       return;
     }
+    // Same `performance.now()` snapshot rationale as `onKeyPress` — see that handler's comment.
+    const pressedAt = performance.now();
     const chunk = data.toString('utf8');
     const inputEvent = resolveInputTokenEvent(chunk, {
       name: undefined,
@@ -243,7 +254,7 @@ export function createNodeInputRuntime(options: NodeInputRuntimeOptions): NodeIn
         releaseTokens: inputEvent.releaseTokens.join(','),
       });
     }
-    emitManualInput(inputEvent, 'data');
+    emitManualInput(inputEvent, 'data', pressedAt);
   };
 
   const start = (): void => {

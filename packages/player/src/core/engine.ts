@@ -3071,8 +3071,13 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         if (command.kind !== 'lane-input') {
           return;
         }
+        // The runtime adapter (web / node) snapshots `performance.now()` at OS-level event arrival and threads
+        // it through as `command.pressedAt`. Adjusting the playback clock backwards by the wall-clock delta
+        // means the judge resolves against the player's true press timing instead of the engine's drain time —
+        // up to ~16 ms of artificial late-bias is removed on the 60 Hz tick. See `resolveJudgeNowMsFromPressedAt`
+        // for the defensive bounds (negative / >50 ms deltas fall back to drain semantics).
         if (!uiEnabled) {
-          const commandNowMs = playbackClock.nowMs();
+          const commandNowMs = resolveJudgeNowMsFromPressedAt(playbackClock.nowMs(), command.pressedAt);
           const commandNowSec = elapsedMsToGameSeconds(commandNowMs, speed);
           writeRuntimeEventLog(writeOutput, 'input', [
             ['time', formatSeconds(commandNowSec)],
@@ -3085,7 +3090,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           handleMappedInputTokens(command.tokens, commandNowMs, commandNowSec);
           return;
         }
-        const nowMs = playbackClock.nowMs();
+        const nowMs = resolveJudgeNowMsFromPressedAt(playbackClock.nowMs(), command.pressedAt);
         const nowSec = elapsedMsToGameSeconds(nowMs, speed);
         const scheduledSec = elapsedMsToGameSeconds(playbackClock.scheduledMs(), speed);
         triggerRealtimeAudioVolumeEvents(scheduledSec);
@@ -4450,6 +4455,41 @@ function createPlaybackClock(source: PlaybackClockSource, startOffsetMs = 0): Pl
 function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
   return Math.max(0, (elapsedMs / 1000) * speed);
 }
+
+/**
+ * Adjusts a drain-time playback timestamp backwards by the wall-clock delta between the OS-level press event and
+ * now, so judging a queued lane-input resolves against the player's actual press timing rather than the engine's
+ * next-tick drain time. Without this, a press that lands a few ms before the next 60 Hz tick gets judged up to
+ * ~16 ms late even though the player hit the note on time. With it, the judge timestamp matches the physical
+ * press to within event-handler latency (= ~1–3 ms on typical hardware).
+ *
+ * The delta is computed in the same wall-clock domain (`performance.now()` ms) that both the runtime adapters
+ * and the engine consume, so this is safe for both the web (`KeyboardEvent.timeStamp` is on the same time
+ * origin as `performance.now()`) and the TUI (the node input runtime snapshots `performance.now()` directly at
+ * handler entry).
+ *
+ * Defensive bounds:
+ * - Negative delta (`pressedAt` in the future) → fall back to drain time. Happens with synthetic / test inputs
+ *   that supply a fixed timestamp ahead of the clock; the legacy semantics are still correct in that case.
+ * - Delta > {@link PRESSED_AT_MAX_DELTA_MS} → fall back to drain time. Long stalls (pause-then-resume, GC) can
+ *   make the wall-clock delta diverge from the playback delta because `playbackClock` pauses while
+ *   `performance.now()` keeps ticking. Capping the adjustment prevents stale presses from being judged in the
+ *   past after a pause.
+ */
+function resolveJudgeNowMsFromPressedAt(drainNowMs: number, pressedAt: number | undefined): number {
+  if (pressedAt === undefined) return drainNowMs;
+  const deltaMs = performance.now() - pressedAt;
+  if (deltaMs < 0 || deltaMs > PRESSED_AT_MAX_DELTA_MS) return drainNowMs;
+  return Math.max(0, drainNowMs - deltaMs);
+}
+
+/**
+ * Cap on the wall-clock delta we'll accept between `pressedAt` and drain time. Anything larger almost certainly
+ * indicates a paused-then-resumed segment (where `performance.now()` ticked but the playback clock didn't), so
+ * we fall back to drain-time semantics rather than over-subtract. 50 ms is comfortably above the engine's 16.67
+ * ms TUI tick + a stutter-frame margin and well below any real pause duration.
+ */
+const PRESSED_AT_MAX_DELTA_MS = 50;
 
 async function waitPrecise(delayMs: number): Promise<void> {
   const target = performance.now() + Math.max(0, delayMs);
