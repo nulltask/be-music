@@ -5409,6 +5409,18 @@ export class PixiGameplayView {
       // post-shuffle remap) themselves drifted — the bug is upstream of `extractTimedNotes`.
       const viewChart = this.resolvedChart ?? this.song?.chart;
       const engineChart = this.buildSharedEngineChart();
+      // Bucket events by their first character so we can spot channel-class drift between the two chart inputs.
+      // For BMS the buckets line up with the LR2 channel groups: '0x' control / BPM, '1x' 1P playable, '2x' 2P
+      // playable, '3x' 1P invisible, '4x' 2P invisible, '5x' 1P LNTYPE-1, '6x' 2P LNTYPE-1, 'Dx' 1P landmine,
+      // 'Ex' 2P landmine. A diff in bucket counts pinpoints which channel class lost or gained entries.
+      const bucketEvents = (events: ReadonlyArray<{ channel: string }>): Record<string, number> => {
+        const buckets: Record<string, number> = {};
+        for (const event of events) {
+          const key = event.channel.charAt(0) || '?';
+          buckets[key] = (buckets[key] ?? 0) + 1;
+        }
+        return buckets;
+      };
       // eslint-disable-next-line no-console
       console.warn(
         `[be-music debug] chart inputs ${JSON.stringify(
@@ -5420,6 +5432,9 @@ export class PixiGameplayView {
             sameEventsRef: viewChart?.events === engineChart.events,
             sameChartRef: viewChart === engineChart,
             lnType: viewChart?.bms.lnType,
+            lnObjs: viewChart?.bms.lnObjs,
+            viewBuckets: viewChart ? bucketEvents(viewChart.events) : null,
+            engineBuckets: bucketEvents(engineChart.events),
           },
           null,
           2,
