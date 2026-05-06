@@ -5924,6 +5924,7 @@ export class PixiGameplayView {
     })
       .then(() => {
         log.info('shared engine driver finished');
+        this.handleSharedEngineChartFinished();
       })
       .catch((error: unknown) => {
         // The view's own ESC / F5 handler (`handleSharedEngineExitKey`) drives the LR2 fadeout animation, calls
@@ -6078,6 +6079,36 @@ export class PixiGameplayView {
     if ((judgeKind === 'PERFECT' || judgeKind === 'GREAT') && state.channel) {
       this.triggerBomb(state.channel);
     }
+  }
+
+  /**
+   * Fires when the engine driver's `manualPlay` / `autoPlay` promise resolves cleanly (= chart played to its end
+   * without an interrupt). Mirrors the legacy {@link checkChartEnd} success branch so the host's
+   * `onChartFinished` callback receives the same `PixiGameplayResultData` shape and the LR2
+   * `#FADEOUT` → `#CLOSE` exit timeline runs before the result-screen transition.
+   *
+   * Bypasses `checkChartEnd`'s `seconds < endAt` / `remainingNotes > 0` gates because the engine's resolution is
+   * the authoritative end-of-chart signal in shared-engine mode — the view's `currentSeconds` clock and
+   * `remainingNotes` counter both lag slightly behind the engine's authoritative bookkeeping.
+   */
+  private handleSharedEngineChartFinished(): void {
+    if (this.disposed || this.chartEnded) return;
+    this.chartEnded = true;
+    const result = this.getResultData();
+    // Defer one frame so the final render (last judgement plate, terminal combo number) is committed before the
+    // exit fade kicks in — matches the 50 ms defer in `checkChartEnd` so the user always sees the closing frame
+    // regardless of which path retired the chart.
+    this.chartEndTimeout = window.setTimeout(() => {
+      this.chartEndTimeout = undefined;
+      if (this.disposed) return;
+      this.beginExitSequence(() => {
+        if (this.options.onChartFinished && result) {
+          this.options.onChartFinished(result);
+          return;
+        }
+        this.options.onExit?.();
+      });
+    }, 50);
   }
 }
 
