@@ -3001,7 +3001,7 @@ export class PixiSongSelectView {
     destination: Lr2DestinationRect;
     keyframes: Lr2DestinationRect[];
   }): Lr2DestinationRect {
-    return evaluateElementDestination(element, this.elapsedSinceTimer);
+    return evaluateElementDestination(element, (timer) => this.elapsedSinceTimer(timer));
   }
 
   /**
