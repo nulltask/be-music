@@ -164,9 +164,12 @@ describe('compressor parameter constants', () => {
   });
 
   it('keeps the master makeup gain near unity', () => {
-    // Anything wildly above 1 would be a loudness boost rather than a make-up — at these compression ratios the "lost"
-    // level is small, so >1.5 (≈ +3.5 dB) would suggest a typo.
-    expect(MASTER_MAKEUP_GAIN_LINEAR).toBeGreaterThan(1);
+    // Anything wildly above 1 would be a loudness boost rather than a make-up — at these compression ratios the
+    // "lost" level is small, so >1.5 (≈ +3.5 dB) would suggest a typo. The lower bound is 1.0 (= 0 dB, no
+    // makeup); Phase 4c pinned this at unity because the engine's beatoraja-compatible look-ahead lane keysound
+    // fallback / Free-Zone empty-press playback increased typical simultaneous-sample density and a non-unity
+    // makeup made compressor pumping audible.
+    expect(MASTER_MAKEUP_GAIN_LINEAR).toBeGreaterThanOrEqual(1);
     expect(MASTER_MAKEUP_GAIN_LINEAR).toBeLessThan(1.5);
   });
 });
