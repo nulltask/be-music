@@ -628,14 +628,6 @@ interface DemoGuiState {
   beatorajaPreview: () => void;
   /** Variant selection for the beatoraja preview. Limited to chart-shape variants the renderer wires today. */
   beatorajaPreviewVariant: '7' | '5' | '14' | '10' | '9';
-  /**
-   * When true and a beatoraja theme is loaded, songs play through `PixiBeatorajaGameplayView` instead of the
-   * default LR2 `PixiGameplayView`. Falls back to LR2 silently when no beatoraja theme is present, the chart
-   * shape isn't supported by beatoraja (e.g. PMS BME w/o a `9` variant in the theme), or the chart-prep
-   * helper rejects (corrupt audio etc.). Hidden behind a GUI toggle so the LR2 path stays the default
-   * (battle-tested) flow.
-   */
-  useBeatorajaGameplay: boolean;
 }
 
 class PlayerWebDemoApp {
@@ -785,10 +777,6 @@ class PlayerWebDemoApp {
         void this.openBeatorajaPreview();
       },
       beatorajaPreviewVariant: '7',
-      // Default off — the LR2 path is feature-complete (notes / BGA / judge plates / scratch physics /
-      // recording / etc.). Flip to true to route gameplay through the beatoraja-skin renderer instead.
-      // The toggle is a no-op until a beatoraja theme is dropped.
-      useBeatorajaGameplay: false,
     };
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
     // (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the runtime API.
@@ -969,7 +957,6 @@ class PlayerWebDemoApp {
     const beatorajaFolder = gui.addFolder('Beatoraja preview').close();
     beatorajaFolder.add(this.guiState, 'beatorajaPreviewVariant', ['7', '5', '14', '10', '9'] as const).name('Variant');
     beatorajaFolder.add(this.guiState, 'beatorajaPreview').name('Open preview');
-    beatorajaFolder.add(this.guiState, 'useBeatorajaGameplay').name('Use for gameplay');
     // Auto play used to be a lil-gui checkbox here too, but the in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on
     // the select skin) already exposes it — the duplicate toolbar controller just added another surface to keep in
     // sync. The `guiState.autoPlay` field stays as the seed/fallback value until the select panel publishes its own
@@ -1773,9 +1760,10 @@ class PlayerWebDemoApp {
   private async showDecide(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
     // Beatoraja gameplay path skips the LR2 decide splash entirely — `preloadGameplay` would build a
     // `PixiGameplayView` (LR2-only), and the beatoraja view has its own prep pipeline. Hand off to
-    // `playSong` so the same `useBeatorajaGameplay` branch in there picks up the chart. A dedicated
-    // beatoraja decide scene is a follow-up.
-    if (this.guiState.useBeatorajaGameplay && this.beatorajaTheme && this.canPlaySongBeatoraja(song)) {
+    // `playSong` so the beatoraja branch in there picks up the chart. A dedicated beatoraja decide
+    // scene is a follow-up. Whenever a beatoraja theme is loaded and has a variant covering the chart,
+    // we automatically take the beatoraja path — there's no GUI toggle.
+    if (this.canPlaySongBeatoraja(song)) {
       await this.playSong(song, overrides);
       return;
     }
@@ -1921,11 +1909,11 @@ class PlayerWebDemoApp {
   }
 
   private async playSong(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
-    // Beatoraja gameplay path. Branch out early when (a) the user toggled `useBeatorajaGameplay`, (b) a
-    // theme is loaded, and (c) the chart shape maps onto a variant the renderer supports. Falls through
-    // to the LR2 path otherwise — silently for cases (b) / (c), so a 24-key chart on a beatoraja-only
-    // theme still gets the LR2 frame chrome rather than blowing up.
-    if (this.guiState.useBeatorajaGameplay && this.beatorajaTheme && this.canPlaySongBeatoraja(song)) {
+    // Beatoraja gameplay path. Branch out early when a beatoraja theme is loaded and the chart shape
+    // resolves to a variant the renderer can mount (with `pickBeatorajaPlayableSkinVariant` fallback so
+    // a 5K chart on a 7-keys-only theme still takes this path). Falls through to the LR2 path
+    // otherwise — e.g. a 24-key chart on a beatoraja-only theme still gets the LR2 frame chrome.
+    if (this.canPlaySongBeatoraja(song)) {
       await this.playSongBeatoraja(song, overrides);
       return;
     }

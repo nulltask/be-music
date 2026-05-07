@@ -27,6 +27,30 @@ describe('relaxBeatorajaJson — trailing commas', () => {
   });
 });
 
+describe('relaxBeatorajaJson — doubled-open brace typo', () => {
+  it('elides the leading `{` from a `{{...}}` literal (libgdx typo)', () => {
+    // Note: only the OPEN is doubled in beatoraja's `play5.json` author typo. The matching close is
+    // single — `}}` at the line end closes the value object + the enclosing entry object, not the
+    // typo + value. Eliding only the leading open keeps the close braces correctly balanced.
+    const before = '[{"if": [920], "value": {{"x":20, "y":140}}]';
+    const after = relaxBeatorajaJson(before);
+    expect(JSON.parse(after)).toEqual([{ if: [920], value: { x: 20, y: 140 } }]);
+  });
+
+  it('reproduces the play5.json line-307 shape exactly', () => {
+    const before = '[{"if": [920], "value": {{"x":20, "y":140, "w":300, "h":1, "r":64, "g":192, "b":192}}]';
+    const after = relaxBeatorajaJson(before);
+    expect(JSON.parse(after)).toEqual([
+      { if: [920], value: { x: 20, y: 140, w: 300, h: 1, r: 64, g: 192, b: 192 } },
+    ]);
+  });
+
+  it('does not touch ordinary nested objects', () => {
+    const before = '{"a": {"b": {"c": 1}}}';
+    expect(relaxBeatorajaJson(before)).toBe(before);
+  });
+});
+
 describe('relaxBeatorajaJson — missing commas', () => {
   it('inserts a comma between adjacent objects on separate lines', () => {
     expect(relaxBeatorajaJson('[{"a":1}\n{"b":2}]')).toBe('[{"a":1},\n{"b":2}]');
@@ -84,12 +108,12 @@ describe('parseBeatorajaSkinJson', () => {
     expect(Array.isArray(skin.destination)).toBe(true);
   });
 
-  // The bundled `play5.json` contains a hand-written typo (`"value": {{...}}` — a double-brace) that libgdx's
-  // permissive JSON reader accepts but RFC-style readers don't. We deliberately don't try to repair it: the file
-  // surfaces as a discovery warning so the user can edit the skin instead of having the parser silently rewrite
-  // syntax it doesn't understand. Test left as a regression note rather than a passing assertion.
-  it('flags `play5.json` as a parse error (libgdx-only typo, not relaxed by default)', () => {
-    expect(() => parseBeatorajaSkinJson(readFixture('play5.json'))).toThrow();
+  it('parses the bundled beatoraja default play5.json (uses the `{{...}}` doubled-brace typo)', () => {
+    const skin = parseBeatorajaSkinJson(readFixture('play5.json'));
+    expect(skin.type).toBe(1);
+    expect(skin.w).toBe(1280);
+    expect(skin.h).toBe(720);
+    expect(Array.isArray(skin.destination)).toBe(true);
   });
 
   it('parses the bundled beatoraja default select.json', () => {
