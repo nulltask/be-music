@@ -55,8 +55,12 @@ import {
 import {
   buildDefaultSkinConfigOptions,
   bundleBeatorajaSources,
+  expandBeatorajaWildcard,
   normalizeBeatorajaFonts,
+  type BeatorajaSkinConfig,
+  type BeatorajaSkinHeader,
 } from '@be-music/beatoraja-skin';
+import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
 
 const dropLog = logger('drop');
 const recordLog = logger('record');
@@ -707,6 +711,18 @@ class PlayerWebDemoApp {
   private beatorajaGameplayPrep: PreparedBeatorajaGameplayChart | undefined;
   /** Beatoraja-skinned song select scene. Active when a beatoraja theme with a select skin is loaded. */
   private beatorajaSelectScene: PixiBeatorajaSelectScene | undefined;
+  /**
+   * Bottom-right lil-gui panel exposing the active beatoraja skin's `property[]` / `filepath[]` /
+   * note-offset for live editing. Lazily constructed once `start()` mounts the host (the panel is
+   * absolute-positioned inside the demo shell so the shell needs to exist first).
+   */
+  private beatorajaSkinOptionsGui: BeatorajaSkinOptionsGui | undefined;
+  /**
+   * Per-skin-entry config picks. The skin-options panel mutates these and the active scene re-mounts
+   * with the updated values. Survives scene transitions so navigating away and back preserves the
+   * user's choices for each skin (a select skin and a play skin can carry independent configs).
+   */
+  private readonly beatorajaSkinConfigByEntry = new Map<string, BeatorajaSkinConfig>();
   /**
    * Last beatoraja-select highlighted index — survives scene tear-down so coming back from gameplay
    * lands on the same song the user just played.
@@ -1610,8 +1626,9 @@ class PlayerWebDemoApp {
       void this.showSelect();
       return;
     }
-    const defaultOption = buildDefaultSkinConfigOptions(headerLoad.result.header);
-    const skinLoad = loadBeatorajaPlaySkinFromBundle(bundle, variant, { offset: 0, option: defaultOption });
+    // Resolve cached skin config (or seed defaults). The skin-options panel mutates this object.
+    const config = this.resolveBeatorajaSkinConfig(headerLoad.entry.entryPath, headerLoad.result.header);
+    const skinLoad = loadBeatorajaPlaySkinFromBundle(bundle, variant, config);
     if (!skinLoad || !skinLoad.result.ok || !skinLoad.result.skin) {
       const reason = skinLoad?.result.ok === false ? skinLoad.result.error.message : 'no skin available';
       gameplayLog.warn(`beatoraja gameplay: ${reason}`);
@@ -1628,7 +1645,7 @@ class PlayerWebDemoApp {
         entryPath: skinLoad.entry.entryPath,
         sources: (skinLoad.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
         filepathSchema: skinLoad.result.skin.filepath,
-        filepathOverrides: defaultOption ? undefined : undefined,
+        filepathOverrides: config.file,
       });
       gameplayLog.info(
         `beatoraja gameplay source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${skinLoad.entry.entryPath})`,
@@ -1683,7 +1700,7 @@ class PlayerWebDemoApp {
       skin: skinLoad.result.skin,
       textures,
       fonts,
-      skinConfig: { offset: 0, option: defaultOption },
+      skinConfig: config,
       variant,
       chart: prep.chart,
       audio: prep.audio,
@@ -1709,6 +1726,22 @@ class PlayerWebDemoApp {
     this.beatorajaGameplayView.root.zIndex = 0;
     await this.sceneHost.setScene(this.beatorajaGameplayView);
     this.setStatus(`Playing (beatoraja): ${song.title}`);
+
+    // Skin-options panel for the play skin's `property[]` / `filepath[]`. Changes apply on the
+    // next gameplay mount — mid-chart skin reloads would tear down the engine's audio session and
+    // wipe the player's progress, so we cache without a live re-mount.
+    this.refreshBeatorajaSkinOptionsGui({
+      title: `Play skin (${variant} keys)`,
+      entryPath: headerLoad.entry.entryPath,
+      header: headerLoad.result.header,
+      onApply: () => {
+        // Drop the texture cache for this skin entry — see the select-scene rationale; same applies
+        // for play skins where Lua `main()` builds `skin.source` based on the option set.
+        this.beatorajaTextureCachesByEntry.delete(skinLoad.entry.entryPath);
+        // No live re-mount during play. The panel-edited config will take effect when the user
+        // restarts the chart or starts a new one.
+      },
+    });
   }
 
   /**
@@ -1730,8 +1763,10 @@ class PlayerWebDemoApp {
       this.setStatus(`Beatoraja select unavailable: ${reason}`);
       return;
     }
-    const defaultOption = buildDefaultSkinConfigOptions(headerLoad.result.header);
-    const skinLoad = loadBeatorajaSelectSkinFromBundle(bundle, { offset: 0, option: defaultOption });
+    // Resolve cached skin config (or seed defaults from the header's property[] schema). The
+    // skin-options panel mutates this object as the user picks options.
+    const config = this.resolveBeatorajaSkinConfig(headerLoad.entry.entryPath, headerLoad.result.header);
+    const skinLoad = loadBeatorajaSelectSkinFromBundle(bundle, config);
     if (!skinLoad || !skinLoad.result.ok || !skinLoad.result.skin) {
       const reason = skinLoad?.result.ok === false ? skinLoad.result.error.message : 'no select skin';
       gameplayLog.warn(`beatoraja select: ${reason}`);
@@ -1774,7 +1809,7 @@ class PlayerWebDemoApp {
       skin: skinLoad.result.skin,
       textures,
       fonts,
-      skinConfig: { offset: 0, option: defaultOption },
+      skinConfig: config,
       songs: this.collection.songs,
       // Restore the last cursor so coming back from gameplay lands on the same song.
       initialIndex: this.beatorajaSelectIndex,
@@ -1791,10 +1826,99 @@ class PlayerWebDemoApp {
         void this.sceneHost.setScene(undefined);
         this.beatorajaSelectScene?.dispose();
         this.beatorajaSelectScene = undefined;
+        this.beatorajaSkinOptionsGui?.clear();
       },
     });
     await this.sceneHost.setScene(this.beatorajaSelectScene);
     this.setStatus(`Select (beatoraja): ${this.collection.songs.length} song(s)`);
+
+    // Build the bottom-right skin-options panel for this select skin's `property[]` / `filepath[]`.
+    // User picks flow back through `onApply` → cache → re-mount the select scene with the new
+    // config so visual changes (Play Side, Score Graph On/Off, etc.) take effect immediately.
+    this.refreshBeatorajaSkinOptionsGui({
+      title: `Select skin (${skinLoad.entry.entryPath.split('/').pop() ?? 'select'})`,
+      entryPath: headerLoad.entry.entryPath,
+      header: headerLoad.result.header,
+      onApply: () => {
+        // Drop the per-entry texture cache: a different option pick can change which `source[]`
+        // entries the skin's `main()` materializes (Lua skins build `skin.source` dynamically based
+        // on `skin_config.option`), and the previous cache may not cover the new sources.
+        this.beatorajaTextureCachesByEntry.delete(skinLoad.entry.entryPath);
+        void this.showSelect();
+      },
+    });
+  }
+
+  /**
+   * Pick the cached skin config for an entry — falling back to a fresh defaults-fill from the
+   * header's `property[]` schema. Mutating the returned object directly mutates the cache, but the
+   * skin-options panel emits fresh copies on change so the cached state never becomes accidentally
+   * shared with downstream consumers.
+   */
+  private resolveBeatorajaSkinConfig(entryPath: string, header: BeatorajaSkinHeader): BeatorajaSkinConfig {
+    let cached = this.beatorajaSkinConfigByEntry.get(entryPath);
+    if (cached === undefined) {
+      cached = { offset: 0, option: buildDefaultSkinConfigOptions(header), file: {} };
+      this.beatorajaSkinConfigByEntry.set(entryPath, cached);
+    }
+    return cached;
+  }
+
+  /**
+   * Pre-resolve `filepath[]` candidate lists for the skin-options panel. Each entry's `path` field
+   * is a wildcard relative to the skin directory; `expandBeatorajaWildcard` walks the dropped file
+   * map and returns every match. The panel hands these to lil-gui as dropdown options so the user
+   * can pick a specific file by name rather than guessing.
+   */
+  private collectBeatorajaFileCandidates(
+    entryPath: string,
+    header: BeatorajaSkinHeader,
+  ): ReadonlyMap<string, ReadonlyArray<string>> {
+    const map = new Map<string, ReadonlyArray<string>>();
+    const bundle = this.beatorajaTheme;
+    if (bundle === undefined) return map;
+    for (const fp of header.filepath ?? []) {
+      const matches = expandBeatorajaWildcard(bundle.files, entryPath, fp.path);
+      map.set(fp.name, matches);
+    }
+    return map;
+  }
+
+  /**
+   * Lazily instantiate the skin-options panel. Deferred from the constructor because the demo shell
+   * (the parent the panel attaches to) doesn't exist until `app.innerHTML` materializes.
+   */
+  private ensureBeatorajaSkinOptionsGui(): BeatorajaSkinOptionsGui {
+    if (this.beatorajaSkinOptionsGui === undefined) {
+      this.beatorajaSkinOptionsGui = new BeatorajaSkinOptionsGui({ container: this.elements.shell });
+    }
+    return this.beatorajaSkinOptionsGui;
+  }
+
+  /**
+   * Update the bottom-right skin-options panel for a freshly-mounted beatoraja scene. Subsequent
+   * user changes flow back through `onChange` → cache update → scene re-mount.
+   */
+  private refreshBeatorajaSkinOptionsGui(args: {
+    title: string;
+    entryPath: string;
+    header: BeatorajaSkinHeader;
+    onApply: (updatedConfig: BeatorajaSkinConfig) => void;
+  }): void {
+    const config = this.resolveBeatorajaSkinConfig(args.entryPath, args.header);
+    const candidates = this.collectBeatorajaFileCandidates(args.entryPath, args.header);
+    const gui = this.ensureBeatorajaSkinOptionsGui();
+    gui.setSkin({
+      title: args.title,
+      header: args.header,
+      config,
+      fileCandidates: candidates,
+      onChange: (next) => {
+        // Persist and notify the caller so it can re-mount the active scene with the new config.
+        this.beatorajaSkinConfigByEntry.set(args.entryPath, next);
+        args.onApply(next);
+      },
+    });
   }
 
   /** Tear down the active beatoraja gameplay view + its prep bundle. Idempotent. */
