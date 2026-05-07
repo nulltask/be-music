@@ -86,6 +86,10 @@ export class BeatorajaRuntimeAdapter {
   };
   private poorBgaActive = false;
   private lastHiSpeed = 1;
+  /** Running combo, latched from the engine's `judge-combo` publishes. Reset on combo-break verdicts. */
+  private runningCombo = 0;
+  /** Maximum combo seen this run. */
+  private maxCombo = 0;
   /**
    * Per-ref "we already logged that this isn't wired" set. Keeps `resolveNumberValue` quiet on the hot
    * path while still surfacing each missing prop.lua num exactly once per session.
@@ -203,6 +207,14 @@ export class BeatorajaRuntimeAdapter {
       sideState.lastJudgeOp = op;
     }
     this.markTimer(judgeTimerId(side));
+
+    // Latch the running combo for `prop.lua num.combo = 104` resolution. The engine emits the
+    // post-judge combo value on every publish — for combo-break verdicts (BAD / POOR) it's `0`,
+    // otherwise it's the new running combo. `maxCombo` tracks the highest value seen this run for
+    // `num.maxcombo2 = 105`.
+    this.runningCombo = state.combo;
+    if (state.combo > this.maxCombo) this.maxCombo = state.combo;
+
     // eslint-disable-next-line no-console
     console.log(
       '[beatoraja-adapter] apply judge',
@@ -211,6 +223,7 @@ export class BeatorajaRuntimeAdapter {
         kind: state.judge,
         op,
         combo: state.combo,
+        maxCombo: this.maxCombo,
         channel: state.channel,
       }),
     );
@@ -305,34 +318,126 @@ export class BeatorajaRuntimeAdapter {
     summary: PlayerUiFramePayload['summary'] | undefined,
   ): number | undefined {
     switch (refOp) {
-      // Score / EX-score (`num.score = 71`).
+      // ─── Best-record block (71-89) ─────────────────────────────────────────────────────
+      // These read from the per-chart score DB. We don't have a DB layer yet, so they all return 0.
+      // `num.score = 71` (best score), `num.maxscore = 72`, `num.totalnotes = 74`,
+      // `num.maxcombo = 75` (best max combo across runs), `num.misscount = 76`, etc.
       case 71:
-        return summary?.score ?? 0;
-      // Max combo achieved this run (`num.maxcombo = 75`).
+      case 72:
       case 75:
-        return summary?.total ?? 0;
-      // Miss count (`num.misscount = 76`) — bad + poor.
       case 76:
-        return (summary?.bad ?? 0) + (summary?.poor ?? 0);
-      // Per-judge counts (`num.perfect2 = 80`...`num.poor2 = 84`).
+      case 77:
+      case 78:
+      case 79:
       case 80:
-        return summary?.perfect ?? 0;
       case 81:
-        return summary?.great ?? 0;
       case 82:
-        return summary?.good ?? 0;
       case 83:
-        return summary?.bad ?? 0;
       case 84:
+        return 0;
+      // `num.totalnotes = 74` — the chart's total scorable note count. Pulled from the engine frame
+      // since the chart is already parsed at this point.
+      case 74:
+        return summary?.total ?? 0;
+
+      // ─── Live-play block (100-114, 420, 423-425) ───────────────────────────────────────
+      // `prop.lua num.point = 100` — current run's score (NOT the best record). Beatoraja uses this
+      // for the live readout while playing; `num.score = 71` is a separate "best ever" slot.
+      case 100:
+        return summary?.score ?? 0;
+      // `num.score2 = 101`, `num.score_rate = 102`, `num.score_rate_afterdot = 103` — derived
+      // displays. `score2` is the same as `score`; `score_rate` is the percentage with optional
+      // post-decimal split (`afterdot` carries the fractional digits).
+      case 101:
+        return summary?.score ?? 0;
+      case 102: {
+        const max = (summary?.total ?? 0) * 2;
+        return max > 0 ? Math.floor(((summary?.score ?? 0) / max) * 100) : 0;
+      }
+      case 103: {
+        // Two decimal digits of the score-rate percentage, beatoraja convention.
+        const max = (summary?.total ?? 0) * 2;
+        if (max <= 0) return 0;
+        const pct = ((summary?.score ?? 0) / max) * 100;
+        return Math.floor((pct - Math.floor(pct)) * 100);
+      }
+      // `num.combo = 104` — running combo, `num.maxcombo2 = 105` — max combo this run.
+      case 104:
+        return this.runningCombo;
+      case 105:
+        return this.maxCombo;
+      // `num.totalnotes2 = 106` — current run's total notes (same as `num.totalnotes`).
+      case 106:
+        return summary?.total ?? 0;
+      // `num.groovegauge = 107` — gauge percentage (0..100, integer part).
+      case 107: {
+        const gauge = summary?.gauge;
+        if (!gauge || gauge.max <= 0) return 0;
+        return Math.floor((gauge.current / gauge.max) * 100);
+      }
+      // `num.groovegauge_afterdot = 407` — gauge fractional digits.
+      case 407: {
+        const gauge = summary?.gauge;
+        if (!gauge || gauge.max <= 0) return 0;
+        const pct = (gauge.current / gauge.max) * 100;
+        return Math.floor((pct - Math.floor(pct)) * 100);
+      }
+      // `num.diff_exscore = 108` — current score delta vs target / rival. We don't track these yet;
+      // return 0 so the readout shows "0" instead of garbage.
+      case 108:
+        return 0;
+
+      // Per-judge LIVE counts (`num.perfect = 110` … `num.poor = 114`, `num.miss = 420`).
+      case 110:
+        return summary?.perfect ?? 0;
+      case 111:
+        return summary?.great ?? 0;
+      case 112:
+        return summary?.good ?? 0;
+      case 113:
+        return summary?.bad ?? 0;
+      case 114:
         return summary?.poor ?? 0;
-      // BPM range (`num.maxbpm = 90`, `num.minbpm = 91`, `num.mainbpm = 92`).
+      case 420:
+        // The engine doesn't separate "miss" from "poor" — empty-press POORs are just POORs. Most
+        // skin authors want the same value for both readouts; surface poor count.
+        return summary?.poor ?? 0;
+      // `num.totalearly = 423`, `num.totallate = 424` — running fast/slow tally.
+      case 423:
+        return summary?.fast ?? 0;
+      case 424:
+        return summary?.slow ?? 0;
+      // `num.combobreak = 425` — combo-break count = bad + poor + miss (in our engine, bad + poor).
+      case 425:
+        return (summary?.bad ?? 0) + (summary?.poor ?? 0);
+
+      // ─── Chart metadata (90-96) ────────────────────────────────────────────────────────
+      // `num.maxbpm = 90`, `num.minbpm = 91`, `num.mainbpm = 92` — the chart's BPM range. We expose
+      // `chart.metadata.bpm` (the canonical BPM); min/max would need a scan over all `bpm` events
+      // we don't yet do. Returning the canonical value for all three is a reasonable approximation.
       case 90:
       case 91:
       case 92:
         return Math.round(this.chart?.metadata?.bpm ?? 0);
-      // Hispeed (`num.hispeed = 310`). Falls back to the adapter's last-seen state-signals value.
+      // `num.playlevel = 96` — chart difficulty rating from `#PLAYLEVEL`.
+      case 96: {
+        const level = this.chart?.metadata?.playLevel;
+        if (typeof level === 'number') return Math.trunc(level);
+        if (typeof level === 'string') {
+          const parsed = Number.parseInt(level, 10);
+          return Number.isFinite(parsed) ? parsed : 0;
+        }
+        return 0;
+      }
+
+      // ─── Hispeed (310) ─────────────────────────────────────────────────────────────────
+      // `num.hispeed = 310` — display as integer ×100 (e.g. "1.5x" → 150).
       case 310:
         return Math.round(this.lastHiSpeed * 100);
+      // `num.hispeed_lr2 = 10` — alternative LR2-compatible hispeed slot.
+      case 10:
+        return Math.round(this.lastHiSpeed * 100);
+
       default:
         return undefined;
     }
@@ -419,6 +524,8 @@ export class BeatorajaRuntimeAdapter {
     this.judgeState[2].lastJudgeOp = undefined;
     this.judgeState[2].lastFastSlowOp = undefined;
     this.poorBgaActive = false;
+    this.runningCombo = 0;
+    this.maxCombo = 0;
     this.frame = null;
   }
 
