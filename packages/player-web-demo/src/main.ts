@@ -38,6 +38,7 @@ import {
   loadBeatorajaPlaySkinFromBundle,
   loadBeatorajaTexturesFromBundle,
   loadBeatorajaThemeFromFiles,
+  pickBeatorajaPlayableSkinVariant,
   pickBeatorajaPlayableVariant,
   prepareBeatorajaGameplayChart,
   resolveChartPlayVariant,
@@ -1525,15 +1526,26 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Returns true when the loaded beatoraja theme has a play skin matching the chart's shape. Used by
-   * `playSong` to decide whether to branch into the beatoraja gameplay path.
+   * Returns true when the loaded beatoraja theme has a play skin we can mount for this chart — directly
+   * or through the playable-variant fallback chain (a 5K chart will happily render on a 7K skin if the
+   * theme author only shipped the 7-keys variant). Used by `playSong` / `showDecide` to decide whether
+   * to branch into the beatoraja gameplay path.
    */
   private canPlaySongBeatoraja(song: BrowserSongEntry): boolean {
+    return this.resolveBeatorajaSkinVariant(song) !== undefined;
+  }
+
+  /**
+   * Resolve the actual skin variant the beatoraja gameplay path will mount for a chart. Returns the
+   * desired variant verbatim when the theme ships it, the closest playable fallback otherwise, or
+   * `undefined` when the theme has nothing playable.
+   */
+  private resolveBeatorajaSkinVariant(song: BrowserSongEntry) {
     const bundle = this.beatorajaTheme;
-    if (!bundle) return false;
-    const variant = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
-    if (variant === undefined) return false;
-    return bundle.theme.playSkins[variant] !== undefined;
+    if (!bundle) return undefined;
+    const desired = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
+    if (desired === undefined) return undefined;
+    return pickBeatorajaPlayableSkinVariant(bundle.theme.playSkins, desired);
   }
 
   /** Map a song's parsed chart onto the shape input `pickBeatorajaPlayableVariant` expects. */
@@ -1559,8 +1571,17 @@ class PlayerWebDemoApp {
   private async playSongBeatoraja(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<void> {
     const bundle = this.beatorajaTheme;
     if (!bundle) return;
-    const variant = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
+    // The skin variant may differ from the chart's natural variant when the theme doesn't ship one and
+    // we fall back (e.g. 5K chart played on the theme's 7-keys skin). The engine still drives the chart
+    // at its native variant; only the skin chrome / note layer geometry follows the loaded skin.
+    const variant = this.resolveBeatorajaSkinVariant(song);
     if (variant === undefined) return;
+    const desiredVariant = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
+    if (variant !== desiredVariant) {
+      gameplayLog.info(
+        `beatoraja gameplay: theme has no '${desiredVariant}' skin — falling back to '${variant}'`,
+      );
+    }
 
     this.elements.shell.classList.add('playing');
     await this.ensureHostMounted();

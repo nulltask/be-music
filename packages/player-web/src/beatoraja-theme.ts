@@ -156,6 +156,32 @@ export function pickBeatorajaPlayableVariant(chart: {
   return undefined;
 }
 
+/**
+ * Per-variant fallback chain limited to {@link BEATORAJA_PLAYABLE_VARIANTS}. When the user's theme doesn't
+ * ship the desired variant (very common — many themes only author the 7-keys variant and let smaller charts
+ * re-use it), this picks the closest playable substitute. Mirrors {@link pickBeatorajaPlaySkin}'s fallback
+ * ordering but never returns the 24-key variants the engine can't drive.
+ *
+ * Returns `undefined` when the theme has no playable variant at all.
+ */
+const PLAYABLE_FALLBACKS: Record<BeatorajaPlayableVariant, ReadonlyArray<BeatorajaPlayableVariant>> = {
+  '7': ['7', '14', '5', '10', '9'],
+  '5': ['5', '7', '14', '10', '9'],
+  '14': ['14', '7', '10', '5', '9'],
+  '10': ['10', '14', '7', '5', '9'],
+  '9': ['9', '7', '14', '5', '10'],
+};
+
+export function pickBeatorajaPlayableSkinVariant(
+  playSkins: BeatorajaPlaySkinMap,
+  desired: BeatorajaPlayableVariant,
+): BeatorajaPlayableVariant | undefined {
+  for (const v of PLAYABLE_FALLBACKS[desired]) {
+    if (playSkins[v] !== undefined) return v;
+  }
+  return undefined;
+}
+
 export type {
   BeatorajaPlaySkinMap,
   BeatorajaPlayVariant,
