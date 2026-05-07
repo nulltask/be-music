@@ -81,8 +81,18 @@ export class BeatorajaPlaySkinView {
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
-    this.width = options.skin.w;
-    this.height = options.skin.h;
+    // Skin canvas size is authored per-skin in the top-level `w` / `h` (= `skin.w` / `skin.h` in Lua,
+    // or top-level `"w"` / `"h"` in JSON). LR2 default is 640×480; beatoraja default is typically
+    // 1280×720 — and skin authors freely pick other values. We MUST track each skin's authored size,
+    // not a hardcoded constant, so `fitToStage`'s scale math produces the right design → screen ratio.
+    //
+    // Defaults to 1280×720 only when the skin emits a non-positive value (a corrupt header — refuse to
+    // crash, but log it). This is a safety net, NOT a normalization step: a well-formed skin always
+    // wins.
+    const rawW = (options.skin as { w?: unknown }).w;
+    const rawH = (options.skin as { h?: unknown }).h;
+    this.width = typeof rawW === 'number' && Number.isFinite(rawW) && rawW > 0 ? rawW : 1280;
+    this.height = typeof rawH === 'number' && Number.isFinite(rawH) && rawH > 0 ? rawH : 720;
     this.resolveRefValue = options.resolveRefValue ?? (() => 0);
     this.resolveTextContent = options.resolveTextContent ?? (() => undefined);
     this.resolveFontFamily = options.resolveFontFamily ?? (() => undefined);

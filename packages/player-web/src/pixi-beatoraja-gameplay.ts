@@ -23,7 +23,7 @@
 // glows, judge plates and HUD text from the engine state, but the actual scrolling notes and BGA video
 // land in follow-up patches that add a sub-container layered on top of the skin view.
 
-import { Container, type Ticker } from 'pixi.js';
+import { Container, Graphics, type Ticker } from 'pixi.js';
 import type { BeMusicJson } from '@be-music/json';
 import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
 import { buildBaseOpSet, normalizeBeatorajaNote } from '@be-music/beatoraja-skin';
@@ -95,6 +95,15 @@ export interface PixiBeatorajaGameplayViewOptions {
 
 export class PixiBeatorajaGameplayView implements PixiScene {
   readonly root = new Container();
+  /**
+   * Backdrop that fills the full canvas behind the (letterboxed) skin container. The Pixi `Application`
+   * runs with `backgroundAlpha: 0` so all scenes share a transparent canvas and decide for themselves
+   * what to paint behind their content. Without this Graphics, the page's white background bleeds into
+   * the letterbox bars on either side of a 16:9 skin in a non-16:9 viewport — which makes the rendered
+   * area look narrower than it actually is and was the most likely cause of "ステージサイズがおかしい"
+   * after the chrome was rendering correctly.
+   */
+  private readonly backdrop = new Graphics();
   private readonly view: BeatorajaPlaySkinView;
   private readonly noteLayer: BeatorajaNoteLayer;
   private readonly bgaLayer: BeatorajaBgaLayer | undefined;
@@ -143,6 +152,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveTextContent: (ref) => this.adapter.resolveTextContent(ref),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
     });
+    // Backdrop sits behind the skin container so the letterbox bars are filled with a stable color
+    // instead of leaking the page's CSS background through.
+    this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
 
     // Note layer paints inside the skin's coordinate system so it scales / positions with the skin chrome.
@@ -154,6 +166,14 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       variant: options.variant,
     });
     this.view.container.addChild(this.noteLayer.container);
+
+    log.info('beatoraja gameplay mounted', {
+      variant: options.variant,
+      skin: { w: this.view.width, h: this.view.height, name: options.skin.name },
+      autoPlay: options.mode === 'auto',
+      bga: options.bgaTextures !== undefined && options.bgaCues !== undefined,
+      fontsLoaded: options.fonts ? options.fonts.values().length : 0,
+    });
 
     // BGA layer mounts UNDER notes so scrolling notes draw on top of the BGA video; the LR2 default
     // skin's chart-area chrome paints on top of both via its own destination z-order. Only construct
@@ -336,6 +356,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     container.scale.set(scale, scale);
     container.x = (width - this.view.width * scale) / 2;
     container.y = (height - this.view.height * scale) / 2;
+    // Repaint the full-canvas backdrop. Drawn in stage coordinates (not skin space) so the rectangle
+    // is independent of the skin's scale transform.
+    this.backdrop.clear().rect(0, 0, width, height).fill(0x000000);
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {

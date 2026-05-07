@@ -9,7 +9,7 @@
 // (notes, judge flashes, BGA, key-on flashes, lamps) lands in follow-up patches that wire the engine signals into
 // `BeatorajaPlaySkinView`'s op-set / timer-start callbacks.
 
-import { Container, Ticker } from 'pixi.js';
+import { Container, Graphics, Ticker } from 'pixi.js';
 import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
 import { buildBaseOpSet } from '@be-music/beatoraja-skin';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
@@ -38,6 +38,8 @@ export interface BeatorajaPlaySkinPreviewOptions {
 
 export class BeatorajaPlaySkinPreviewScene implements PixiScene {
   readonly root = new Container();
+  /** Full-canvas backdrop behind the (letterboxed) skin container — see PixiBeatorajaGameplayView. */
+  private readonly backdrop = new Graphics();
   private readonly view: BeatorajaPlaySkinView;
   private readonly baseOps: ReadonlySet<number>;
   private readonly onExit?: () => void;
@@ -54,6 +56,7 @@ export class BeatorajaPlaySkinPreviewScene implements PixiScene {
       textures: options.textures,
       resolveTextContent: options.resolveTextContent,
     });
+    this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
   }
 
@@ -126,6 +129,7 @@ export class BeatorajaPlaySkinPreviewScene implements PixiScene {
     container.scale.set(scale, scale);
     container.x = (width - this.view.width * scale) / 2;
     container.y = (height - this.view.height * scale) / 2;
+    this.backdrop.clear().rect(0, 0, width, height).fill(0x000000);
   }
 
   private handleKeyDown = (event: KeyboardEvent): void => {
