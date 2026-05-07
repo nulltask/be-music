@@ -358,24 +358,34 @@ export class BeatorajaPlaySkinView {
 
     // Re-compose digit-cell textures only when the value changes. The composer hands back one
     // source-rect per digit slot; we crop a sub-texture per slot and assign it to the matching sprite.
+    let cells: ReturnType<typeof composeBeatorajaValueCells> | undefined;
     if (value !== entry.lastValue) {
       entry.lastValue = value;
-      const cells = composeBeatorajaValueCells(entry.value, value);
+      cells = composeBeatorajaValueCells(entry.value, value);
       for (let i = 0; i < entry.digitSprites.length; i += 1) {
-        const cell = cells[i] ?? cells[cells.length - 1]!;
+        const cell = cells[i];
+        if (cell === undefined || cell.hidden) continue;
         const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
         if (cropped !== undefined) {
           entry.digitSprites[i]!.texture = cropped;
         }
       }
     }
+    // Always recompute hidden flags — visibility depends on the latest value even when textures
+    // weren't refreshed (the composer might emit `hidden: true` for slots that don't paint).
+    if (cells === undefined) cells = composeBeatorajaValueCells(entry.value, value);
 
     // Lay the digit row across the destination rect. Each digit's slot width is `rect.w / digit`,
-    // height is the rect's full height. Alignment defaults to right-align — value displays in the
-    // reference theme are score / combo / BPM, all conventionally right-anchored.
+    // height is the rect's full height. Hidden slots have their sprites collapsed to invisible —
+    // beatoraja's reference behavior for `padding=0` + digits-only strips with a small value.
     const slotWidth = props.width / Math.max(1, entry.digitSprites.length);
     for (let i = 0; i < entry.digitSprites.length; i += 1) {
       const sprite = entry.digitSprites[i]!;
+      const cell = cells[i];
+      if (cell !== undefined && cell.hidden) {
+        sprite.visible = false;
+        continue;
+      }
       sprite.visible = true;
       sprite.x = props.x + i * slotWidth;
       sprite.y = props.y;

@@ -25,8 +25,13 @@
 
 import { Container, Graphics, type Ticker } from 'pixi.js';
 import type { BeMusicJson } from '@be-music/json';
-import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
-import { buildBaseOpSet, normalizeBeatorajaNote } from '@be-music/beatoraja-skin';
+import type {
+  BeatorajaImageElement,
+  BeatorajaImageId,
+  BeatorajaSkin,
+  BeatorajaSkinConfig,
+} from '@be-music/beatoraja-skin';
+import { buildBaseOpSet, normalizeBeatorajaImages, normalizeBeatorajaNote } from '@be-music/beatoraja-skin';
 import type { BeatorajaPlayableVariant } from './beatoraja-theme.ts';
 import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
 import { BeatorajaBgaLayer } from './pixi-beatoraja-bga.ts';
@@ -167,9 +172,18 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // Mounting onto `view.container` (rather than `this.root` directly) means `fitToStage`'s scale +
     // translation cascade applies to notes too, keeping the lane geometry in sync without a duplicate
     // transform.
+    // Per-id `image[]` map for the note layer's per-lane sprite resolution. The skin's `note.note[]`
+    // / `lnstart[]` / etc. lists are image-id strings (or numbers); the note layer looks them up here
+    // to find the source rect to crop.
+    const noteImageMap = new Map<BeatorajaImageId, BeatorajaImageElement>();
+    for (const image of normalizeBeatorajaImages(options.skin.image)) {
+      noteImageMap.set(image.id, image);
+    }
     this.noteLayer = new BeatorajaNoteLayer({
       noteSection: normalizeBeatorajaNote(options.skin.note),
       variant: options.variant,
+      images: noteImageMap,
+      textures: options.textures,
     });
     this.view.container.addChild(this.noteLayer.container);
 

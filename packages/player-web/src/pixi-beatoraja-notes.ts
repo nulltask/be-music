@@ -1,100 +1,109 @@
 // Note rendering layer for a beatoraja play skin.
 //
-// Drives a per-channel sprite stack from the engine's `frame.notes[]`. The skin's `note` block holds the
-// per-lane geometry (`pickBeatorajaNoteRects`) and a per-lane image ID list — for the MVP we render notes
-// as solid-colored Pixi `Graphics` rectangles inside each lane's authored rect; swapping to skin-authored
-// note sprites is a follow-up that resolves each per-lane `image[].id` through the texture cache. The
-// rectangle path is enough to validate end-to-end engine wiring (notes scroll on time, judge on beat,
-// disappear on hit).
+// Drives a per-channel sprite stack from the engine's `frame.notes[]`. The skin's `note` block holds
+// per-lane image IDs (`note[]`, `lnstart[]`, `lnbody[]`, `lnend[]`, `mine[]`) — each is an
+// `image[].id` that points at a source-bitmap rect — and per-lane geometry (`note.dst[]`). The
+// renderer:
 //
-// Design choices:
-//
-//   - Stateless re-render every Pixi tick. A single `Graphics` pool is rebuilt on every `update()` —
-//     simple to reason about, fast enough for a few hundred on-screen notes. The LR2 renderer's
-//     finer-grained sprite pool can come later if profiling shows a hotspot.
-//   - Hispeed comes from the engine's `PlayerStateSignals.highSpeed` — the host threads it in on each
-//     update; the layer doesn't consult signals directly to keep the dependency tree shallow.
-//   - Lane index resolution mirrors `resolveSideKeySlot` (so scratch / 8 / 9 collapse correctly), then
-//     applies a side-relative offset for double-play layouts (`14` / `10`).
+//   1. Resolves the active lane geometry against the runtime op set (`pickBeatorajaNoteRects`).
+//   2. For each in-flight engine note, picks the matching per-lane image id, looks up the image[]
+//      entry, crops the source texture to the image's `(x, y, w, h)`, and paints it as a Pixi sprite.
+//   3. Long notes (with `endBeat`) compose three sprites — start cap, tiled body, end cap — using
+//      the `lnstart[]` / `lnbody[]` / `lnend[]` ids respectively.
+//   4. Falls back to a colored Graphics rectangle when an image id can't be resolved (skin omitted
+//      the per-lane sprite, image[] entry missing, or texture decode failed). Keeps something visible
+//      so a partial-asset theme still plays — better than silent blanks.
 
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Sprite, type Texture, TilingSprite } from 'pixi.js';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
 import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
-import { pickBeatorajaNoteRects, type BeatorajaNoteRect, type BeatorajaNoteSection } from '@be-music/beatoraja-skin';
+import {
+  pickBeatorajaNoteRects,
+  type BeatorajaImageElement,
+  type BeatorajaImageId,
+  type BeatorajaNoteRect,
+  type BeatorajaNoteSection,
+} from '@be-music/beatoraja-skin';
+import { createCroppedBeatorajaTexture } from './beatoraja-render.ts';
+import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 
 /** Pixels per chart-beat at hispeed = 1.0. Mirrors the LR2 path's constant so the two layers scroll consistently. */
 export const BEATORAJA_PIXELS_PER_BEAT = 72;
 
-/**
- * Per-channel color for the rectangle fallback path. White / blue alternating mirrors the typical 7-key
- * skin palette (white = key 1/3/5/7, blue = key 2/4/6, red = scratch). The actual hex values match
- * beatoraja's default `note-w` / `note-b` / `note-s` palette eyeball-matched from the reference theme.
- */
+/** Fallback palette when the skin omits a per-lane sprite or texture decode fails. */
 const FALLBACK_COLOR_BY_KEY: Record<string, number> = {
   white: 0xf5f5f5,
   blue: 0x4ea8ff,
   red: 0xff5050,
 };
-
-/**
- * Pop'n / single-side key 1..7 / scratch keying convention used to pick a fallback rectangle color when
- * the skin doesn't provide a per-lane note sprite. Pop'n (variant `9`) uses its own coloring convention.
- */
 const SEVEN_KEY_PALETTE = ['red', 'white', 'blue', 'white', 'blue', 'white', 'blue', 'white'] as const;
 const POP_KEY_PALETTE = ['white', 'yellow', 'green', 'blue', 'red', 'blue', 'green', 'yellow', 'white'] as const;
-
 const PALETTE_COLOR: Record<string, number> = {
   white: FALLBACK_COLOR_BY_KEY.white!,
   blue: FALLBACK_COLOR_BY_KEY.blue!,
   red: FALLBACK_COLOR_BY_KEY.red!,
-  // Two extras for 9-key — picked from the LR2 default Pop'n skin's palette.
   yellow: 0xf2cf3a,
   green: 0x59c863,
 };
 
 export interface BeatorajaNoteLayerOptions {
   noteSection: BeatorajaNoteSection;
-  /** Play variant — informs lane-index resolution (`9` is single-side, others split into 1P / 2P). */
   variant: ChartPlayVariant;
   /**
-   * Y-coordinate of the judgement line in skin-canvas space. Notes spawn above the playfield and scroll
-   * down to this line. Pulled from the active `pickBeatorajaNoteRects` block's `y + h` (rect bottom)
-   * when omitted; rare custom skins that override this can pass an explicit value.
+   * `image[]` map keyed by id (string OR number). The renderer resolves per-lane image ids
+   * (`note-w`, `lns-b`, etc.) through this to find the source rect to crop. Pass an empty Map to
+   * disable sprite rendering and force the fallback rectangle path.
    */
+  images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>;
+  /** Texture cache the resolved image entries crop against. */
+  textures: BeatorajaTextureCache;
+  /** Optional override for the judgement-line Y. Defaults to the active lane rect's bottom edge. */
   judgementY?: number;
+}
+
+interface CroppedSprite {
+  sprite: Sprite;
+  /** Width of the cell, used to scale the sprite to the lane width while preserving aspect ratio. */
+  cellW: number;
+  cellH: number;
 }
 
 export class BeatorajaNoteLayer {
   readonly container = new Container();
   private readonly noteSection: BeatorajaNoteSection;
   private readonly variant: ChartPlayVariant;
-  private readonly graphicsPool: Graphics[] = [];
+  private readonly images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>;
+  private readonly textures: BeatorajaTextureCache;
   private readonly judgementYOverride?: number;
-  /** Cached lane rects from the most recent `pickBeatorajaNoteRects` lookup. Re-resolved when ops change. */
+  /** Pool of generic Graphics nodes for the fallback path. Reused across frames. */
+  private readonly graphicsPool: Graphics[] = [];
+  /** Pool of skin-sprite nodes (tap notes / mines / LN caps). One sprite per slot — texture swapped per use. */
+  private readonly spritePool: Sprite[] = [];
+  /** Pool of LN body tiling sprites. Separate because TilingSprite has its own size / position semantics. */
+  private readonly tilingPool: TilingSprite[] = [];
   private cachedActiveOps: ReadonlySet<number> | undefined;
   private cachedRects: ReadonlyArray<BeatorajaNoteRect> = [];
-  /** First-frame diagnostic emitted once when notes start arriving. */
+  /**
+   * Per-`(imageId)` cropped texture cache, populated lazily on first access. Each entry persists for
+   * the lifetime of the layer; same-skin notes always share the same cropped sub-texture.
+   */
+  private readonly croppedTextureCache = new Map<BeatorajaImageId, CroppedSprite | undefined>();
   private firstFrameLogged = false;
 
   constructor(options: BeatorajaNoteLayerOptions) {
     this.noteSection = options.noteSection;
     this.variant = options.variant;
+    this.images = options.images;
+    this.textures = options.textures;
     this.judgementYOverride = options.judgementY;
   }
 
-  /**
-   * Re-render the note layer for the current frame. Call once per Pixi tick from the gameplay view's
-   * tick handler — `update()` clears any previously-acquired graphics that aren't needed this frame and
-   * mints / repaints the rest in declaration order.
-   */
   update(frame: PlayerUiFramePayload, hiSpeed: number, activeOps: ReadonlySet<number>): void {
     const rects = this.resolveLaneRects(activeOps);
     if (rects.length === 0) {
       this.releaseAll();
       if (!this.firstFrameLogged && frame.notes.length > 0) {
-        // Notes arriving but lane geometry resolved to empty — usually means the skin's `note.dst[]`
-        // is gated on an op the runtime hasn't activated.
         this.firstFrameLogged = true;
         // eslint-disable-next-line no-console
         console.log('[beatoraja-notes] no lane rects matched activeOps', {
@@ -107,7 +116,9 @@ export class BeatorajaNoteLayer {
     }
     const judgementY = this.resolveJudgementY(rects);
     const pixelsPerBeat = BEATORAJA_PIXELS_PER_BEAT * hiSpeed;
-    let used = 0;
+    let usedG = 0;
+    let usedS = 0;
+    let usedT = 0;
     if (!this.firstFrameLogged) {
       this.firstFrameLogged = true;
       // eslint-disable-next-line no-console
@@ -117,12 +128,11 @@ export class BeatorajaNoteLayer {
         judgementY,
         pixelsPerBeat,
         notes: frame.notes.length,
+        spriteImages: this.images.size,
       });
     }
 
     for (const note of frame.notes) {
-      // The engine emits notes that are still in flight. Filter judged / off-screen entries here so the
-      // graphics pool doesn't waste a slot on a note that wouldn't paint anyway.
       if (note.judged) continue;
       const lane = this.resolveLane(note);
       if (lane === undefined) continue;
@@ -132,27 +142,32 @@ export class BeatorajaNoteLayer {
       const y = judgementY - (note.beat - frame.currentBeat) * pixelsPerBeat;
       if (y < rect.y - 24 || y > judgementY + 24) continue;
 
-      // LN body + caps when `endBeat` is set. Skip past LN bodies whose tail has already crossed the line
-      // (everything below it already painted, no need to redraw).
       if (note.endBeat !== undefined) {
         const yEnd = judgementY - (note.endBeat - frame.currentBeat) * pixelsPerBeat;
         if (yEnd > judgementY) continue;
-        used = this.paintLongNote(used, rect, lane, yEnd, y);
+        const r = this.paintLongNote(usedG, usedS, usedT, rect, lane, yEnd, y);
+        usedG = r.g;
+        usedS = r.s;
+        usedT = r.t;
         continue;
       }
 
-      used = this.paintTapNote(used, rect, lane, note, y);
+      const r = this.paintTapNote(usedG, usedS, rect, lane, note, y);
+      usedG = r.g;
+      usedS = r.s;
     }
 
-    this.shrinkPoolTo(used);
+    this.shrinkPoolsTo(usedG, usedS, usedT);
   }
 
-  /** Tear down. Pixi destroys child graphics through the container's own destroy. */
   dispose(): void {
     if (!this.container.destroyed) {
       this.container.destroy({ children: true });
     }
     this.graphicsPool.length = 0;
+    this.spritePool.length = 0;
+    this.tilingPool.length = 0;
+    this.croppedTextureCache.clear();
   }
 
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
@@ -167,57 +182,154 @@ export class BeatorajaNoteLayer {
   private resolveJudgementY(rects: ReadonlyArray<BeatorajaNoteRect>): number {
     if (this.judgementYOverride !== undefined) return this.judgementYOverride;
     let bottom = 0;
-    for (const rect of rects) {
-      bottom = Math.max(bottom, rect.y + rect.h);
-    }
+    for (const rect of rects) bottom = Math.max(bottom, rect.y + rect.h);
     return bottom;
   }
 
   private resolveLane(note: PlayerUiFrameNote): number | undefined {
     const slot = resolveSideKeySlot(note.channel, this.variant);
     if (slot < 0) return undefined;
-    if (this.variant === '9') {
-      // PMS / 9-key: lanes 0..8 (slot returned by `resolveSideKeySlot` is 1..9, since `9` strips the
-      // `0=scratch` convention). beatoraja's per-lane rect array is 0-indexed, so subtract 1.
-      return slot - 1;
-    }
-    // 7K / 5K: scratch (slot 0) lives at lane index 7 in beatoraja's rect order (`note-w / note-b / .../ note-s`).
-    // Keys 1..7 → lane 0..6; scratch (slot 0) → lane 7. Map the LR2 channel layout onto the beatoraja
-    // ordering so the rect index lines up with the per-lane sprite ID list.
-    const baseLane = slot === 0 ? 7 : slot - 1;
+    if (this.variant === '9') return slot - 1;
+    const numKeys = this.variant === '5' || this.variant === '10' ? 5 : 7;
+    const baseLane = slot === 0 ? numKeys : slot - 1;
     if (this.variant === '10' || this.variant === '14') {
-      // Double-play: 1P side uses lanes 0..7, 2P side uses lanes 8..15. The skin's rect list is authored
-      // in this exact order in the reference 14key skin (`{x = 1P side, ...}, ..., {x = 2P side, ...}`).
       const isPlayer2 = note.channel.startsWith('2');
-      return isPlayer2 ? 8 + baseLane : baseLane;
+      const sideLanes = numKeys + 1;
+      return isPlayer2 ? sideLanes + baseLane : baseLane;
     }
     return baseLane;
   }
 
+  /**
+   * Resolve a per-lane image id (`note-w`, `lns-b`, `lne-s`, `mine-w`, …) into a Pixi-ready sprite
+   * texture + cell dimensions, lazily caching the cropped result. Returns `undefined` when the skin
+   * doesn't declare a sprite for the slot or the image's source texture isn't bindable.
+   */
+  private resolveLaneSprite(imageId: BeatorajaImageId | undefined): CroppedSprite | undefined {
+    if (imageId === undefined || imageId === '') return undefined;
+    if (this.croppedTextureCache.has(imageId)) return this.croppedTextureCache.get(imageId);
+    const image = this.images.get(imageId);
+    if (image === undefined) {
+      this.croppedTextureCache.set(imageId, undefined);
+      return undefined;
+    }
+    const baseTexture = this.textures.get(image.src);
+    if (baseTexture === undefined) {
+      this.croppedTextureCache.set(imageId, undefined);
+      return undefined;
+    }
+    const cropped = createCroppedBeatorajaTexture(baseTexture, {
+      x: image.x,
+      y: image.y,
+      w: image.w,
+      h: image.h,
+    });
+    if (cropped === undefined) {
+      this.croppedTextureCache.set(imageId, undefined);
+      return undefined;
+    }
+    // Wrap in a singleton sprite to act as a "factory" — we re-use the texture across many sprite
+    // instances pulled from `spritePool`, so the cache only needs to keep the texture handle. We
+    // still allocate a placeholder Sprite for `cellW` / `cellH` bookkeeping.
+    const placeholder = new Sprite(cropped);
+    const result: CroppedSprite = { sprite: placeholder, cellW: image.w, cellH: image.h };
+    this.croppedTextureCache.set(imageId, result);
+    return result;
+  }
+
   private paintTapNote(
-    used: number,
+    usedG: number,
+    usedS: number,
     rect: BeatorajaNoteRect,
     lane: number,
     note: PlayerUiFrameNote,
     y: number,
-  ): number {
+  ): { g: number; s: number } {
+    const imageId = note.mine ? this.noteSection.mine[lane] : this.noteSection.note[lane];
+    const cropped = this.resolveLaneSprite(imageId);
+    if (cropped !== undefined) {
+      const sprite = this.acquireSprite(usedS);
+      sprite.texture = cropped.sprite.texture;
+      // Scale to fit the lane width; preserve the source aspect ratio. The sprite is pinned to the
+      // judgement line: top edge at `y - cellHScaledToLane` keeps the note's bottom flush with `y`.
+      const scaleX = rect.w / Math.max(1, cropped.cellW);
+      const drawH = cropped.cellH * scaleX;
+      sprite.x = rect.x;
+      sprite.y = y - drawH;
+      sprite.width = rect.w;
+      sprite.height = drawH;
+      sprite.tint = note.mine ? FALLBACK_COLOR_BY_KEY.red! : 0xffffff;
+      sprite.alpha = 1;
+      return { g: usedG, s: usedS + 1 };
+    }
+    // Fallback Graphics — the skin didn't ship a per-lane sprite for this slot or the cell-crop
+    // failed. Better than silent blanks.
     const color = note.mine ? FALLBACK_COLOR_BY_KEY.red! : this.fallbackColorForLane(lane);
-    const g = this.acquire(used);
+    const g = this.acquireGraphics(usedG);
     g.clear();
     g.rect(rect.x, y - 6, rect.w, 12).fill({ color });
-    return used + 1;
+    return { g: usedG + 1, s: usedS };
   }
 
-  private paintLongNote(used: number, rect: BeatorajaNoteRect, lane: number, yEnd: number, yStart: number): number {
-    const color = this.fallbackColorForLane(lane);
-    const g = this.acquire(used);
-    g.clear();
-    // Body
-    g.rect(rect.x + 4, yEnd, rect.w - 8, yStart - yEnd).fill({ color, alpha: 0.6 });
-    // Cap at the start (head — at the bottom in screen space) + cap at the end (tail — at the top).
-    g.rect(rect.x, yStart - 6, rect.w, 12).fill({ color });
-    g.rect(rect.x, yEnd - 6, rect.w, 12).fill({ color });
-    return used + 1;
+  private paintLongNote(
+    usedG: number,
+    usedS: number,
+    usedT: number,
+    rect: BeatorajaNoteRect,
+    lane: number,
+    yEnd: number,
+    yStart: number,
+  ): { g: number; s: number; t: number } {
+    const startCrop = this.resolveLaneSprite(this.noteSection.lnstart[lane]);
+    const endCrop = this.resolveLaneSprite(this.noteSection.lnend[lane]);
+    const bodyCrop = this.resolveLaneSprite(this.noteSection.lnbody[lane]);
+    if (startCrop === undefined || endCrop === undefined || bodyCrop === undefined) {
+      // Fall back to colored rectangles when any of the LN sprite slots is missing.
+      const color = this.fallbackColorForLane(lane);
+      const g = this.acquireGraphics(usedG);
+      g.clear();
+      g.rect(rect.x + 4, yEnd, rect.w - 8, yStart - yEnd).fill({ color, alpha: 0.6 });
+      g.rect(rect.x, yStart - 6, rect.w, 12).fill({ color });
+      g.rect(rect.x, yEnd - 6, rect.w, 12).fill({ color });
+      return { g: usedG + 1, s: usedS, t: usedT };
+    }
+    // Body — repeats the `lnbody` cell vertically across the LN duration. `TilingSprite`
+    // automatically wraps the texture to fit our requested width / height.
+    const body = this.acquireTiling(usedT, bodyCrop.sprite.texture);
+    const startScaleX = rect.w / Math.max(1, startCrop.cellW);
+    const endScaleX = rect.w / Math.max(1, endCrop.cellW);
+    const startH = startCrop.cellH * startScaleX;
+    const endH = endCrop.cellH * endScaleX;
+    body.x = rect.x;
+    body.width = rect.w;
+    // Body sits between the bottom of the start cap (yStart) and the top of the end cap (yEnd).
+    body.y = yEnd;
+    body.height = Math.max(0, yStart - yEnd);
+    body.tilePosition.set(0, 0);
+    body.tileScale.set(rect.w / Math.max(1, bodyCrop.cellW), 1);
+    body.alpha = 1;
+
+    // Start cap (visually closer to the judgement line — pinned at `yStart`).
+    const start = this.acquireSprite(usedS);
+    start.texture = startCrop.sprite.texture;
+    start.x = rect.x;
+    start.y = yStart - startH;
+    start.width = rect.w;
+    start.height = startH;
+    start.tint = 0xffffff;
+    start.alpha = 1;
+
+    // End cap (further from the judgement line — pinned at `yEnd`).
+    const end = this.acquireSprite(usedS + 1);
+    end.texture = endCrop.sprite.texture;
+    end.x = rect.x;
+    end.y = yEnd - endH;
+    end.width = rect.w;
+    end.height = endH;
+    end.tint = 0xffffff;
+    end.alpha = 1;
+
+    return { g: usedG, s: usedS + 2, t: usedT + 1 };
   }
 
   private fallbackColorForLane(lane: number): number {
@@ -227,7 +339,7 @@ export class BeatorajaNoteLayer {
     return PALETTE_COLOR[key] ?? PALETTE_COLOR.white!;
   }
 
-  private acquire(index: number): Graphics {
+  private acquireGraphics(index: number): Graphics {
     let g = this.graphicsPool[index];
     if (g === undefined) {
       g = new Graphics();
@@ -239,13 +351,40 @@ export class BeatorajaNoteLayer {
     return g;
   }
 
-  private shrinkPoolTo(used: number): void {
-    for (let i = used; i < this.graphicsPool.length; i += 1) {
-      this.graphicsPool[i]!.visible = false;
+  private acquireSprite(index: number): Sprite {
+    let s = this.spritePool[index];
+    if (s === undefined) {
+      s = new Sprite();
+      this.spritePool.push(s);
+      this.container.addChild(s);
+    } else {
+      s.visible = true;
     }
+    return s;
+  }
+
+  private acquireTiling(index: number, texture: Texture): TilingSprite {
+    let t = this.tilingPool[index];
+    if (t === undefined) {
+      t = new TilingSprite({ texture, width: 0, height: 0 });
+      this.tilingPool.push(t);
+      this.container.addChild(t);
+    } else {
+      t.visible = true;
+      t.texture = texture;
+    }
+    return t;
+  }
+
+  private shrinkPoolsTo(usedG: number, usedS: number, usedT: number): void {
+    for (let i = usedG; i < this.graphicsPool.length; i += 1) this.graphicsPool[i]!.visible = false;
+    for (let i = usedS; i < this.spritePool.length; i += 1) this.spritePool[i]!.visible = false;
+    for (let i = usedT; i < this.tilingPool.length; i += 1) this.tilingPool[i]!.visible = false;
   }
 
   private releaseAll(): void {
     for (const g of this.graphicsPool) g.visible = false;
+    for (const s of this.spritePool) s.visible = false;
+    for (const t of this.tilingPool) t.visible = false;
   }
 }

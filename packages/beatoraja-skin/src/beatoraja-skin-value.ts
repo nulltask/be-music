@@ -102,30 +102,43 @@ function positiveIntField(record: Readonly<Record<string, unknown>>, key: string
 }
 
 export interface BeatorajaValueDigitCell {
-  /** Source-rect coordinates for this digit's cell. */
+  /** Source-rect coordinates for this digit's cell. Ignored when {@link hidden} is `true`. */
   x: number;
   y: number;
   w: number;
   h: number;
   /**
-   * Cell index inside the strip (`0..divx-1`). Useful for renderers that want to skip emitting an
-   * invisible "blank" cell when `padding = 0` and the value doesn't fill the digit count.
+   * Cell index inside the strip (`0..divx-1`). `-1` when the slot has no glyph to display (only
+   * possible when {@link hidden} is `true`).
    */
   cell: number;
+  /**
+   * `true` for leading slots that should NOT paint anything — e.g. `value = 0` rendered into a 4-digit
+   * `padding = 0` slot of a `divx = 10` strip (digits-only, no blank cell). The renderer hides the
+   * matching sprite so the slot is visually empty rather than filled with a stray "9" cell.
+   */
+  hidden: boolean;
 }
 
 /**
  * Compose a numeric value into per-digit cells. Returns `digit` entries laid out left-to-right; the
  * caller positions each cell across the destination rect (typically by dividing rect width by digit).
  *
- * Rules (mirrors beatoraja's reference behavior):
- *   - Negative numbers borrow cell `divx-1` (= minus sign by convention) for the leading character; the
- *     rest of the cells render the absolute-value digits.
- *   - When `padding = 0`, leading cells are the "blank" cell at index `divx-1` (typical for BPM / time).
- *     When `padding = 1`, leading cells are "0" (cell index 0, typical for score / combo).
- *   - Digit cells beyond what the source strip provides clamp to the last valid cell — degrades
- *     gracefully when the author declared `digit = 8` against a `divx = 10` strip and the number is
- *     larger than 99 999 999 (rare).
+ * Rules (mirrors beatoraja's reference behavior, verified against `play24.json`):
+ *
+ * - **Padding 1 (leading zeros)**: leading slots use cell `0` (the "0" digit). Common for score /
+ *   combo / max-combo readouts ("00008722").
+ * - **Padding 0 (default)**: leading slots use either:
+ *   - cell `divx-1` if the strip carries an explicit blank glyph (`divx >= 11` — beatoraja's number
+ *     atlas typically reserves cell 10 for a blank, cell 11 for "+", cell 12 for "-"), OR
+ *   - **hidden** (`hidden: true`) when the strip is digits-only (`divx == 10`). The renderer omits
+ *     the slot entirely instead of falling through to cell 9 ("9"), which would paint stray digits
+ *     for every zero / short-of-`digit`-wide value (e.g. `value = 0`, `digit = 4` rendered "9990"
+ *     against a digits-only strip).
+ * - **Negative numbers**: cell `divx-1` (or `divx-2` for `divx == 12` where cell 11 is "+") is used
+ *   for the minus-sign slot. For digits-only strips, the sign is hidden along with leading blanks.
+ * - **Overflow**: a value wider than the digit count silently truncates to the lowest digits — beatoraja
+ *   itself behaves the same way, and the alternative ("show all 9s") is more confusing for the player.
  */
 export function composeBeatorajaValueCells(
   element: BeatorajaValueElement,
@@ -134,7 +147,8 @@ export function composeBeatorajaValueCells(
   const digits = Math.max(1, Math.trunc(element.digit));
   const cells: BeatorajaValueDigitCell[] = Array.from({ length: digits });
   const divx = Math.max(1, element.divx);
-  const blankCell = Math.min(divx - 1, divx - 1); // `divx - 1` is the conventional blank / sign cell.
+  const hasBlankCell = divx >= 11;
+  const blankCell = hasBlankCell ? divx - 1 : -1;
   const zeroCell = 0;
 
   // Stringify the absolute value with leading-zero padding wide enough to fit the digit count.
@@ -143,38 +157,42 @@ export function composeBeatorajaValueCells(
   const abs = Math.abs(safeValue);
   const raw = abs.toString(10);
 
-  // Compose the per-cell sequence right-to-left, then reverse for left-to-right layout.
-  const reversed: number[] = [];
+  type Slot = { cell: number; hidden: boolean };
+  const reversed: Slot[] = [];
   for (let i = 0; i < digits; i += 1) {
     if (i < raw.length) {
-      // Digit position from the right edge.
+      // Digit position from the right edge — always painted.
       const ch = raw[raw.length - 1 - i]!;
       const idx = ch.charCodeAt(0) - 48;
-      reversed.push(idx >= 0 && idx < divx ? idx : Math.min(divx - 1, idx));
+      reversed.push({ cell: idx >= 0 && idx < divx ? idx : Math.min(divx - 1, idx), hidden: false });
     } else if (isNegative && i === raw.length) {
-      // Place minus sign in the cell just before the highest-order digit. We honor `divx >= 11`
-      // (cell 10 = "-"); for `divx == 10` the strip has no minus cell, so we fall through to the
-      // padding rule.
-      reversed.push(divx >= 11 ? 10 : element.padding === 1 ? zeroCell : blankCell);
+      // Minus sign slot. When the strip carries no blank / sign cells, hide the slot entirely.
+      reversed.push({ cell: hasBlankCell ? blankCell : 0, hidden: !hasBlankCell });
+    } else if (element.padding === 1) {
+      // Leading-zero pad — paint cell 0.
+      reversed.push({ cell: zeroCell, hidden: false });
+    } else if (hasBlankCell) {
+      // Leading-blank pad — paint the strip's authored blank cell.
+      reversed.push({ cell: blankCell, hidden: false });
     } else {
-      reversed.push(element.padding === 1 ? zeroCell : blankCell);
+      // Digits-only strip + leading-blank pad → hide the slot. Renderer skips the matching sprite.
+      reversed.push({ cell: 0, hidden: true });
     }
   }
 
-  // Reverse into left-to-right.
   const sequence = reversed.reverse();
-
   const cellW = Math.floor(element.w / divx);
   const cellH = Math.floor(element.h / Math.max(1, element.divy));
 
   for (let i = 0; i < digits; i += 1) {
-    const idx = sequence[i] ?? 0;
+    const slot = sequence[i] ?? { cell: 0, hidden: true };
     cells[i] = {
-      x: element.x + idx * cellW,
-      y: element.y, // single-row strips; multi-row (divy > 1) is rare for digits and uses the first row.
+      x: element.x + slot.cell * cellW,
+      y: element.y,
       w: cellW,
       h: cellH,
-      cell: idx,
+      cell: slot.hidden ? -1 : slot.cell,
+      hidden: slot.hidden,
     };
   }
   return cells;
