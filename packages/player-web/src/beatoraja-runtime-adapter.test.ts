@@ -365,6 +365,37 @@ describe('BeatorajaRuntimeAdapter — lift slider', () => {
     adapter.setLift(0.25);
     expect(adapter.resolveOffset(3)?.y).toBeCloseTo(-145, 6);
   });
+
+  it('honors a per-skin `laneHeight` option for the OFFSET_LIFT scale', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      laneHeight: 720,
+    });
+    adapter.setLift(0.5);
+    // 0.5 * -720 = -360 (vs the default -580 → -290).
+    expect(adapter.resolveOffset(3)?.y).toBeCloseTo(-360, 6);
+  });
+
+  it('falls back to the default lane height when the option is missing or non-positive', () => {
+    const a = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      laneHeight: 0, // ignored
+    });
+    a.setLift(1);
+    expect(a.resolveOffset(3)?.y).toBe(-580);
+    const b = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      laneHeight: Number.NaN, // ignored
+    });
+    b.setLift(1);
+    expect(b.resolveOffset(3)?.y).toBe(-580);
+  });
 });
 
 describe('BeatorajaRuntimeAdapter — POOR BGA tracking', () => {

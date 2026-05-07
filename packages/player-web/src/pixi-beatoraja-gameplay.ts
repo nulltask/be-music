@@ -31,7 +31,12 @@ import type {
   BeatorajaSkin,
   BeatorajaSkinConfig,
 } from '@be-music/beatoraja-skin';
-import { buildBaseOpSet, normalizeBeatorajaImages, normalizeBeatorajaNote } from '@be-music/beatoraja-skin';
+import {
+  buildBaseOpSet,
+  normalizeBeatorajaImages,
+  normalizeBeatorajaNote,
+  normalizeBeatorajaSliders,
+} from '@be-music/beatoraja-skin';
 import type { BeatorajaPlayableVariant } from './beatoraja-theme.ts';
 import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
 import { BeatorajaMarkerLayer, BEATORAJA_MARKER_PIXELS_PER_BEAT } from './pixi-beatoraja-markers.ts';
@@ -184,6 +189,12 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // Adapter is constructed first so the skin view can route ref/text resolvers through it. The clock
     // captures `getNowMs` as a closure that reads `this.startMs`, which is set at `enter()` time — until
     // then, `getNowMs()` returns negative values. That's fine; the skin view only samples after `enter()`.
+    // Lane-height hint comes from the skin's lanecover slider range (= `slider[].type = 4`'s
+    // `range` field, the canonical authored value). The adapter scales `OFFSET_LIFT.y` against
+    // this so a `liftRatio = 1` shifts the hidden-cover edge by exactly one lane on whatever
+    // skin is mounted, not just the reference theme's 580.
+    const sliderDefs = normalizeBeatorajaSliders((options.skin as { slider?: unknown }).slider);
+    const lanecoverSliderRange = sliderDefs.find((s) => s.type === 4)?.range;
     this.adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: options.variant,
       baseOps: buildBaseOpSet(options.skinConfig?.option),
@@ -195,6 +206,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       skinHeaderName: options.skin.name,
       skinHeaderAuthor: options.skin.author,
       directoryLabel: options.directoryLabel,
+      laneHeight: lanecoverSliderRange,
     });
 
     // BPM curve is precomputed once — `bpmgraph[]` is static for the whole session, no point

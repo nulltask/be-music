@@ -77,6 +77,17 @@ export interface BeatorajaRuntimeAdapterOptions {
    * reference theme uses this to show the parent folder name on the play scene's status bar.
    */
   directoryLabel?: string;
+  /**
+   * Per-skin lane height in skin-pixel units. Used to scale `OFFSET_LIFT.y` so the lift slider's
+   * full range moves the hidden-cover edge across exactly one lane height (= the visual extent
+   * the cover should travel between `liftRatio = 0` and `1`).
+   *
+   * Hosts extract this from the skin's `slider[]` block — the `lanecover` / `lift` slider's
+   * authored `range` is the canonical value. Defaults to {@link DEFAULT_LANE_HEIGHT} when the
+   * caller doesn't supply it (matches the reference theme's 580; close enough for any skin
+   * that doesn't author this metadata explicitly).
+   */
+  laneHeight?: number;
 }
 
 interface SideJudgeState {
@@ -85,18 +96,12 @@ interface SideJudgeState {
 }
 
 /**
- * Maximum `OFFSET_LIFT.y` shift in skin-pixel Y-UP units when the lift slider sits at `1.0`. The
- * reference theme's lane height is 580 (matching `play7main.lua`'s `lanecover` slider `range =
- * 580`); using a fixed value here means lift slider operation produces visually-correct hidden-
- * cover travel on the reference theme without wiring per-skin metadata. Skins that author a
- * different lane height get a proportionally-different lift travel — close enough for the common
- * case; refinable when we surface skin geometry to the adapter.
- *
- * Sign is negative because lift "raises" the cover (libGDX Y-UP: up = increasing y, but the
- * cover itself sits BELOW the line and lifting it means subtracting `disapearLine`'s threshold
- * to expose more of the cover image).
+ * Default lane height (in skin-pixel units) when the host doesn't supply a per-skin value via
+ * `BeatorajaRuntimeAdapterOptions.laneHeight`. Matches `play7main.lua`'s `lanecover` slider
+ * `range = 580` — the reference theme value. Used to scale `OFFSET_LIFT.y` to a full-coverage
+ * shift at `liftRatio = 1`.
  */
-const LIFT_MAX_Y_OFFSET = -580;
+const DEFAULT_LANE_HEIGHT = 580;
 
 export class BeatorajaRuntimeAdapter {
   /**
@@ -113,6 +118,11 @@ export class BeatorajaRuntimeAdapter {
   private readonly skinHeaderName: string | undefined;
   private readonly skinHeaderAuthor: string | undefined;
   private readonly directoryLabel: string | undefined;
+  /**
+   * Skin-pixel lane height — used to scale `OFFSET_LIFT.y` so the lift slider's full extent
+   * matches one lane height. See {@link BeatorajaRuntimeAdapterOptions.laneHeight}.
+   */
+  private readonly laneHeight: number;
   private frame: PlayerUiFramePayload | null = null;
   private readonly judgeState: Record<BeatorajaSide, SideJudgeState> = {
     1: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
@@ -195,6 +205,10 @@ export class BeatorajaRuntimeAdapter {
     this.skinHeaderName = options.skinHeaderName;
     this.skinHeaderAuthor = options.skinHeaderAuthor;
     this.directoryLabel = options.directoryLabel;
+    this.laneHeight =
+      typeof options.laneHeight === 'number' && Number.isFinite(options.laneHeight) && options.laneHeight > 0
+        ? options.laneHeight
+        : DEFAULT_LANE_HEIGHT;
     // Autoplay flag — prop.lua `autoplayon = 33` / `autoplayoff = 32`. We surface BOTH so a skin gated on
     // either side picks up the correct state. (Some skins author the panel as `if[33]`, others as
     // `if[-32]`; both are valid in beatoraja's spec.)
@@ -508,11 +522,12 @@ export class BeatorajaRuntimeAdapter {
    */
   resolveOffset(offsetId: number): Readonly<BeatorajaSkinOffsetValue> | undefined {
     if (offsetId === 3) {
-      // OFFSET_LIFT — derived live from `liftRatio`. We let the manual `setOffset(3, ...)` path
-      // override only when no live ratio is set (= 0); once the player nudges the lift slider,
-      // this branch always wins. Other axes default to 0 / 255.
+      // OFFSET_LIFT — derived live from `liftRatio`, scaled by the skin's lane height so
+      // `liftRatio = 1` shifts the cover edge by exactly one lane. We let the manual
+      // `setOffset(3, ...)` path override only when no live ratio is set (= 0); once the player
+      // nudges the lift slider, this branch always wins. Other axes default to 0 / 255.
       if (this.liftRatio !== 0) {
-        return { x: 0, y: this.liftRatio * LIFT_MAX_Y_OFFSET, w: 0, h: 0, r: 0, a: 255 };
+        return { x: 0, y: this.liftRatio * -this.laneHeight, w: 0, h: 0, r: 0, a: 255 };
       }
     }
     return this.offsets.get(offsetId);
