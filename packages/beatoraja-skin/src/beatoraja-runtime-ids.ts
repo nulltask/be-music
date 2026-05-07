@@ -378,14 +378,20 @@ export function computeResultRankOp(exScore: number, maxExScore: number): number
  *
  *   PERFECT > FULLCOMBO > EXHARD > HARD > NORMAL > EASY > FAILED > NOPLAY
  *
- * We don't track gauge type here (NORMAL vs EASY vs HARD), so the heuristic is:
- * - All notes hit with `bad === 0 && poor === 0` AND every note was at least GREAT → PERFECT
- * - All notes hit with `bad === 0 && poor === 0` (any judges fine) → FULLCOMBO
- * - `cleared && bad+poor > 0` → NORMAL (the most common "you finished it" lamp)
- * - `!cleared` → FAILED
+ * Resolution order:
  *
- * Future: when the gauge type is exposed (EASY / GROOVE / HARD / EX-HARD), pick the matching
- * lamp instead of always returning NORMAL.
+ * 1. `!cleared` → FAILED
+ * 2. `bad === 0 && poor === 0` (no combo break) AND every note was PERFECT → PERFECT
+ * 3. `bad === 0 && poor === 0` (no combo break) → FULLCOMBO
+ * 4. Else map by gauge type:
+ *    - `'EASY'`  → EASY lamp
+ *    - `'HARD'`  → HARD lamp
+ *    - `'DEATH'` → EXHARD (closest match — DEATH is "any miss = fail")
+ *    - `'GROOVE'` / unspecified → NORMAL lamp
+ *
+ * Beatoraja additionally has `LIGHT_ASSIST_EASY` / `ASSIST_EASY` / `MAX` lamps for assist-mode
+ * runs and pure max-EX clears; we don't surface those (no assist mode in our engine, and a
+ * pure-MAX run already routes through PERFECT above when every judge was a PERFECT).
  */
 export function computeClearLampOp(args: {
   cleared: boolean;
@@ -395,19 +401,30 @@ export function computeClearLampOp(args: {
   bad: number;
   poor: number;
   total: number;
+  /** Gauge variant the run used. Defaults to `'GROOVE'` when unspecified. */
+  gaugeType?: 'GROOVE' | 'EASY' | 'HARD' | 'DEATH';
 }): number {
   if (!args.cleared) return BEATORAJA_OP.CLEAR_LAMP_FAILED;
-  // FULLCOMBO: every note resolved with no break verdict. POOR is empty-press in our engine but
-  // still counts as a combo break; same with BAD.
+  // FULLCOMBO / PERFECT — these don't depend on gauge type. A no-break run with all PERFECTs is
+  // a PERFECT regardless of which gauge it ran on.
   if (args.bad === 0 && args.poor === 0) {
-    // PERFECT: also every note was a PERFECT verdict. (GREAT counts as a non-perfect even though
-    // it doesn't break combo.)
     if (args.great === 0 && args.good === 0 && args.perfect === args.total) {
       return BEATORAJA_OP.CLEAR_LAMP_PERFECT;
     }
     return BEATORAJA_OP.CLEAR_LAMP_FULLCOMBO;
   }
-  return BEATORAJA_OP.CLEAR_LAMP_NORMAL;
+  // Cleared with breaks — gauge type decides the lamp tier. A clear under HARD gauge survived a
+  // chunk-loss-on-miss curve, which is harder than a GROOVE clear; the lamp surfaces that.
+  switch (args.gaugeType) {
+    case 'EASY':
+      return BEATORAJA_OP.CLEAR_LAMP_EASY;
+    case 'HARD':
+      return BEATORAJA_OP.CLEAR_LAMP_HARD;
+    case 'DEATH':
+      return BEATORAJA_OP.CLEAR_LAMP_EXHARD;
+    default:
+      return BEATORAJA_OP.CLEAR_LAMP_NORMAL;
+  }
 }
 
 /** Per-judge "this judge has occurred at least once" op set. Returns the active subset of

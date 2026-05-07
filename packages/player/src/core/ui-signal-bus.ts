@@ -23,6 +23,8 @@ export interface PlayerUiFrameSummary {
     initial: number;
     effectiveTotal: number;
     cleared: boolean;
+    /** Gauge variant — `'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`. */
+    type?: 'GROOVE' | 'EASY' | 'HARD' | 'DEATH';
   };
 }
 

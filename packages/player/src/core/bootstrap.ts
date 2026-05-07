@@ -75,6 +75,10 @@ export function createInitialPlayerSummary(
     initial: grooveGauge.initial,
     effectiveTotal: grooveGauge.effectiveTotal,
     cleared: isGrooveGaugeCleared(grooveGauge),
+    // The gauge state's `type` is fixed at construction; mirror it onto the summary so consumers
+    // can label the run's clear lamp without inferring from the threshold (which collides
+    // between EASY's 60 and DEATH's 0+ε).
+    type: grooveGauge.type,
   };
   const syncGrooveGaugeSummary = (): void => {
     gaugeSummary.current = grooveGauge.current;

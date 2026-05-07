@@ -95,7 +95,7 @@ import {
   createScoreTracker,
   type JudgeKind,
 } from './scoring.ts';
-import { type GrooveGaugeJudgeKind } from './groove-gauge.ts';
+import { type GrooveGaugeJudgeKind, type GrooveGaugeType } from './groove-gauge.ts';
 import { resolveBmsJudgeWindowsMsForPercent, resolveJudgeWindowsMs } from './judge-window.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
@@ -261,6 +261,13 @@ export interface PlayerGrooveGaugeSummary {
   initial: number;
   effectiveTotal: number;
   cleared: boolean;
+  /**
+   * Gauge variant the engine ran with — `'GROOVE'` (cumulative gain, default), `'EASY'` (gentler
+   * GROOVE, lower clear threshold), `'HARD'` (drains on miss, fails at 0), or `'DEATH'` (any miss
+   * ends the chart). Optional for backward compatibility with consumers that built summary
+   * payloads before this field existed; `'GROOVE'` is the documented default when absent.
+   */
+  type?: GrooveGaugeType;
 }
 
 export interface PlayerLoadProgress {

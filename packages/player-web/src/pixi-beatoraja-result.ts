@@ -251,9 +251,10 @@ export class PixiBeatorajaResultScene implements PixiScene {
     ops.add(computeGenericRankOp(summary.exScore, maxExScore));
     ops.add(computeResultRankOp(summary.exScore, maxExScore));
 
-    // Clear lamp + outcome flag. EXHARD / HARD / EASY gauges aren't surfaced on `PlayerSummary`
-    // yet — the lamp picker degrades to NORMAL when the run cleared without break verdicts. Once
-    // gauge type is plumbed, the picker can refine to EXHARD / HARD / EASY.
+    // Clear lamp + outcome flag. The gauge variant ('GROOVE' / 'EASY' / 'HARD' / 'DEATH') comes
+    // from `summary.gauge.type` if the engine surfaced it; the lamp picker uses it to pick
+    // between NORMAL / EASY / HARD / EXHARD lamps. PERFECT and FULLCOMBO short-circuit ahead of
+    // gauge-type discrimination — those are independent of the gauge curve.
     const cleared = summary.gauge?.cleared ?? false;
     ops.add(cleared ? BEATORAJA_OP.RESULT_CLEAR : BEATORAJA_OP.RESULT_FAIL);
     ops.add(
@@ -265,6 +266,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
         bad: summary.bad,
         poor: summary.poor,
         total: summary.total,
+        gaugeType: summary.gauge?.type,
       }),
     );
 
