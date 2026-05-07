@@ -13,6 +13,7 @@ import {
   imageRefFrame,
   normalizeBeatorajaBpmGraphs,
   normalizeBeatorajaDestinations,
+  normalizeBeatorajaJudgeGraphs,
   normalizeBeatorajaGauge,
   normalizeBeatorajaGraphs,
   normalizeBeatorajaImages,
@@ -25,6 +26,7 @@ import {
   pickBeatorajaGaugeNode,
   type BeatorajaBpmGraphElement,
   type BeatorajaDestinationGroup,
+  type BeatorajaJudgeGraphElement,
   type BeatorajaGaugeElement,
   type BeatorajaGraphElement,
   type BeatorajaImageElement,
@@ -133,6 +135,17 @@ export interface BeatorajaPlaySkinViewOptions {
    * the resolver. Returning `undefined` or an empty array hides every bpmgraph element.
    */
   resolveBpmGraphPoints?: () => ReadonlyArray<{ x: number; y: number }> | undefined;
+  /**
+   * Resolve a `judgegraph[].type` code into per-bar values for histogram rendering. The renderer
+   * normalizes the returned array to `[0, 1]` against its own max and paints equal-width bars
+   * stretching upward from the destination's bottom edge.
+   *
+   *   - `type = 1` (judgement spread) → `[perfect, great, good, bad, poor]`
+   *   - `type = 2` (early/late spread) → `[early, late]`
+   *
+   * Returning `undefined` or an array of all zeros hides the graph (no useful data to plot).
+   */
+  resolveJudgeGraphBars?: (type: number) => ReadonlyArray<number> | undefined;
 }
 
 interface SpriteEntry {
@@ -213,6 +226,23 @@ interface BpmGraphEntry {
   lastPointCount: number;
 }
 
+interface JudgeGraphEntry {
+  kind: 'judgegraph';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaJudgeGraphElement;
+  /**
+   * Pixi `Graphics` painting the judge histogram bars. Cleared and rebuilt every frame the bar
+   * values change — judge counts grow during a play, and the result scene's snapshot is a
+   * one-time paint, so the rebuild cost is bounded.
+   */
+  graphics: Graphics;
+  /**
+   * Cached signature of the bars last painted. Per-frame stroke is skipped when the signature
+   * hasn't moved, which is the common case (counts only change at judge events).
+   */
+  lastSignature: string;
+}
+
 interface SliderEntry {
   kind: 'slider';
   group: BeatorajaDestinationGroup;
@@ -277,6 +307,7 @@ type ViewEntry =
   | GraphEntry
   | PolylineGraphEntry
   | BpmGraphEntry
+  | JudgeGraphEntry
   | SliderEntry
   | ImagesetEntry
   | GaugeEntry;
@@ -310,6 +341,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveSliderValue: (type: number) => number | undefined;
   private readonly resolveGaugePercent: () => number | undefined;
   private readonly resolveBpmGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
+  private readonly resolveJudgeGraphBars: (type: number) => ReadonlyArray<number> | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -335,6 +367,7 @@ export class BeatorajaPlaySkinView {
     this.resolveSliderValue = options.resolveSliderValue ?? (() => undefined);
     this.resolveGaugePercent = options.resolveGaugePercent ?? (() => undefined);
     this.resolveBpmGraphPoints = options.resolveBpmGraphPoints ?? (() => undefined);
+    this.resolveJudgeGraphBars = options.resolveJudgeGraphBars ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -403,10 +436,25 @@ export class BeatorajaPlaySkinView {
         bpmGraphById.set(bpmGraph.id, bpmGraph);
       }
     }
+    // `judgegraph[]` — judgement / early-late histogram plotted across a destination box. Same
+    // id-namespace contention as bpmgraph (loses to every prior kind on collision).
+    const judgeGraphById = new Map<BeatorajaImageId, BeatorajaJudgeGraphElement>();
+    for (const judgeGraph of normalizeBeatorajaJudgeGraphs((options.skin as { judgegraph?: unknown }).judgegraph)) {
+      if (
+        !imageById.has(judgeGraph.id) &&
+        !valueById.has(judgeGraph.id) &&
+        !textById.has(judgeGraph.id) &&
+        !graphById.has(judgeGraph.id) &&
+        !sliderById.has(judgeGraph.id) &&
+        !bpmGraphById.has(judgeGraph.id)
+      ) {
+        judgeGraphById.set(judgeGraph.id, judgeGraph);
+      }
+    }
     // `imageset[]` declarations — multi-state images (lane keybeams, bomb cycles) that flip between
     // sub-images based on a runtime ref op. Lowest precedence after every other element kind: a
-    // direct `image[]` / `value[]` / `text[]` / `graph[]` / `slider[]` / `bpmgraph[]` with the
-    // same id wins.
+    // direct `image[]` / `value[]` / `text[]` / `graph[]` / `slider[]` / `bpmgraph[]` /
+    // `judgegraph[]` with the same id wins.
     const imagesetById = new Map<BeatorajaImageId, BeatorajaImagesetElement>();
     for (const imageset of normalizeBeatorajaImagesets(options.skin.imageset)) {
       if (
@@ -415,7 +463,8 @@ export class BeatorajaPlaySkinView {
         !textById.has(imageset.id) &&
         !graphById.has(imageset.id) &&
         !sliderById.has(imageset.id) &&
-        !bpmGraphById.has(imageset.id)
+        !bpmGraphById.has(imageset.id) &&
+        !judgeGraphById.has(imageset.id)
       ) {
         imagesetById.set(imageset.id, imageset);
       }
@@ -432,6 +481,7 @@ export class BeatorajaPlaySkinView {
       !graphById.has(gauge.id) &&
       !sliderById.has(gauge.id) &&
       !bpmGraphById.has(gauge.id) &&
+      !judgeGraphById.has(gauge.id) &&
       !imagesetById.has(gauge.id)
     ) {
       gaugeElement = gauge;
@@ -502,6 +552,11 @@ export class BeatorajaPlaySkinView {
         const bpmGraphElement = bpmGraphById.get(group.id);
         if (bpmGraphElement !== undefined) {
           this.entries.push(this.buildBpmGraphEntry(group, bpmGraphElement));
+          continue;
+        }
+        const judgeGraphElement = judgeGraphById.get(group.id);
+        if (judgeGraphElement !== undefined) {
+          this.entries.push(this.buildJudgeGraphEntry(group, judgeGraphElement));
           continue;
         }
         const imagesetElement = imagesetById.get(group.id);
@@ -846,6 +901,17 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Build a judgegraph entry. Same rebuild-on-change pattern as bpmgraph — the `Graphics` node is
+   * pre-allocated; bars are stroked when the resolver returns a different signature.
+   */
+  private buildJudgeGraphEntry(group: BeatorajaDestinationGroup, element: BeatorajaJudgeGraphElement): JudgeGraphEntry {
+    const graphics = new Graphics();
+    graphics.alpha = 0;
+    this.container.addChild(graphics);
+    return { kind: 'judgegraph', group, element, graphics, lastSignature: '' };
+  }
+
+  /**
    * Re-sample every destination at `context.nowMs` and update the matching `Sprite` / `Text`. Call once per frame.
    */
   update(context: BeatorajaRenderContext): void {
@@ -874,6 +940,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'bpmgraph':
           this.updateBpmGraphEntry(entry, props);
+          break;
+        case 'judgegraph':
+          this.updateJudgeGraphEntry(entry, props);
           break;
         case 'slider':
           this.updateSliderEntry(entry, props);
@@ -1228,6 +1297,66 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Update a judgegraph entry. Strokes equal-width filled bars along the destination box's bottom
+   * edge, each bar's height proportional to `bar / max(bars)` × `dst.h`. Bars are painted with
+   * the destination's tint (a single fill color for now — beatoraja's reference theme uses tinted
+   * lines, which loses the per-judgement color of the original `judgegraph` source texture but
+   * preserves the data shape).
+   *
+   * Hidden when:
+   *   - The destination's standard `props` say so (op gate, timer not started, alpha 0)
+   *   - The resolver returned `undefined` (the type isn't surfaced by the host)
+   *   - All bars are 0 (no judges yet — nothing to plot)
+   */
+  private updateJudgeGraphEntry(entry: JudgeGraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+    const graphics = entry.graphics;
+    graphics.visible = props.visible;
+    if (!props.visible) return;
+    const bars = this.resolveJudgeGraphBars(entry.element.type);
+    if (bars === undefined || bars.length === 0) {
+      graphics.visible = false;
+      return;
+    }
+    let max = 0;
+    for (const v of bars) {
+      if (Number.isFinite(v) && v > max) max = v;
+    }
+    if (max <= 0) {
+      // No judgements yet → hide. The first judgement re-shows the graph.
+      graphics.visible = false;
+      return;
+    }
+    const signature = `${bars.length}|${max}|${bars.join(',')}`;
+    if (signature !== entry.lastSignature) {
+      graphics.clear();
+      const barCount = bars.length;
+      const barWidth = props.width / barCount;
+      // Small horizontal gap between bars so adjacent values stay distinguishable. 10% of the
+      // slot width matches the look of beatoraja's reference judgegraph (which strokes thin
+      // tinted lines per bar).
+      const gap = barWidth * 0.1;
+      for (let i = 0; i < barCount; i += 1) {
+        const v = Number.isFinite(bars[i]) ? Math.max(0, bars[i]!) : 0;
+        if (v <= 0) continue;
+        const ratio = v / max;
+        const barH = props.height * ratio;
+        const x = i * barWidth + gap / 2;
+        const y = props.height - barH;
+        const w = barWidth - gap;
+        graphics.rect(x, y, w, barH);
+      }
+      graphics.fill({ color: 0xffffff, alpha: 1 });
+      entry.lastSignature = signature;
+    }
+    graphics.x = props.x;
+    graphics.y = props.y;
+    graphics.alpha = props.alpha;
+    graphics.tint = props.tint;
+    graphics.angle = props.angle;
+    graphics.blendMode = props.blendMode;
+  }
+
+  /**
    * Update a slider entry. Translates the sprite within the destination box by
    * `value * range` skin-pixels along its angle axis, leaving width / height at the source-rect
    * crop's natural size (sliders don't scale — they translate).
@@ -1450,6 +1579,9 @@ export class BeatorajaPlaySkinView {
           entry.graphics.destroy({ children: false, texture: false, textureSource: false });
           break;
         case 'bpmgraph':
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          break;
+        case 'judgegraph':
           entry.graphics.destroy({ children: false, texture: false, textureSource: false });
           break;
         case 'slider':

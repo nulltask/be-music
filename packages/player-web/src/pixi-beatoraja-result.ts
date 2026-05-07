@@ -119,6 +119,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
         if (gauge === undefined || gauge.max <= 0) return 0;
         return (gauge.current / gauge.max) * 100;
       },
+      resolveJudgeGraphBars: (type) => this.resolveResultJudgeBars(type),
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
@@ -453,6 +454,24 @@ export class PixiBeatorajaResultScene implements PixiScene {
           y: Math.max(0, Math.min(1, sample.value / 100)),
         }));
       }
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Resolve a `judgegraph[].type` for the result scene's per-judge histogram. Same convention as
+   * the live gameplay resolver — type `1` returns judgement counts, type `2` returns early/late
+   * counts. The result scene's snapshot is static, so the renderer paints once and short-circuits
+   * subsequent frames via the per-entry signature cache.
+   */
+  private resolveResultJudgeBars(type: number): ReadonlyArray<number> | undefined {
+    const summary = this.options.summary;
+    switch (type) {
+      case 1:
+        return [summary.perfect, summary.great, summary.good, summary.bad, summary.poor];
+      case 2:
+        return [summary.fast, summary.slow];
       default:
         return undefined;
     }

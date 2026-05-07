@@ -213,6 +213,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveSliderValue: (type) => this.adapter.resolveSliderValue(type),
       resolveGaugePercent: () => this.adapter.resolveGaugePercent(),
       resolveBpmGraphPoints: () => this.chartBpmCurve,
+      resolveJudgeGraphBars: (type) => this.adapter.resolveJudgeGraphBars(type),
     });
     // Backdrop sits behind the skin container so the letterbox bars are filled with a stable color
     // instead of leaking the page's CSS background through.
@@ -442,6 +443,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveSliderValue: (type) => this.adapter.resolveSliderValue(type),
       resolveGaugePercent: () => this.adapter.resolveGaugePercent(),
       resolveBpmGraphPoints: () => this.chartBpmCurve,
+      resolveJudgeGraphBars: (type) => this.adapter.resolveJudgeGraphBars(type),
     });
     const noteImageMap = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(opts.skin.image)) {

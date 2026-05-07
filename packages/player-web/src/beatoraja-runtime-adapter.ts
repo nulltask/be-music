@@ -585,6 +585,30 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
+   * Resolve a `judgegraph[].type` code into the per-bar values for histogram rendering. Beatoraja's
+   * convention:
+   *
+   *   - `1` (judgement spread) → `[perfect, great, good, bad, poor]` from the live summary
+   *   - `2` (early/late spread) → `[fast, slow]` from the live summary
+   *
+   * Returns `undefined` when no frame data is available yet (the renderer hides the graph until
+   * the first frame arrives). Returning all-zero arrays is also acceptable — the renderer hides
+   * the histogram until at least one judgement event has fired.
+   */
+  resolveJudgeGraphBars(type: number): ReadonlyArray<number> | undefined {
+    const summary = this.frame?.summary;
+    if (summary === undefined) return undefined;
+    switch (type) {
+      case 1:
+        return [summary.perfect, summary.great, summary.good, summary.bad, summary.poor];
+      case 2:
+        return [summary.fast, summary.slow];
+      default:
+        return undefined;
+    }
+  }
+
+  /**
    * Resolve a `graph[].type` code into a fill ratio in `[0, 1]`. The skin view scales the graph's
    * source-rect along its `angle` axis by the returned value. Returns `undefined` for codes the
    * adapter doesn't surface (the renderer hides the bar).

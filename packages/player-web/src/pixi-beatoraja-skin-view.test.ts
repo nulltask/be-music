@@ -297,6 +297,49 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
+  describe('judgegraph[] rendering', () => {
+    it('mounts a Graphics node per judgegraph destination', () => {
+      const skin: BeatorajaSkin = {
+        type: 0,
+        w: 1280,
+        h: 720,
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        ...({ judgegraph: [{ id: 'jg', type: 1, backTexOff: 1 }] } as Partial<BeatorajaSkin>),
+        destination: [{ id: 'jg', dst: [{ time: 0, x: 100, y: 100, w: 200, h: 100 }] }],
+      };
+      const view = new BeatorajaPlaySkinView({
+        skin,
+        textures: fakeTextureCache([0]),
+        resolveJudgeGraphBars: (type) => (type === 1 ? [10, 5, 2, 1, 0] : undefined),
+      });
+      view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+      // Single Graphics child mounted for the judgegraph entry.
+      expect(view.container.children).toHaveLength(1);
+      // After update with non-zero bars, the Graphics is visible.
+      expect((view.container.children[0] as { visible: boolean }).visible).toBe(true);
+      view.dispose();
+    });
+
+    it('hides the histogram until at least one judgement has fired', () => {
+      const skin: BeatorajaSkin = {
+        type: 0,
+        w: 1280,
+        h: 720,
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        ...({ judgegraph: [{ id: 'jg', type: 1 }] } as Partial<BeatorajaSkin>),
+        destination: [{ id: 'jg', dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100 }] }],
+      };
+      const view = new BeatorajaPlaySkinView({
+        skin,
+        textures: fakeTextureCache([0]),
+        resolveJudgeGraphBars: () => [0, 0, 0, 0, 0],
+      });
+      view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+      expect((view.container.children[0] as { visible: boolean }).visible).toBe(false);
+      view.dispose();
+    });
+  });
+
   describe('noteLayerInsertIndex (notes z-order anchor)', () => {
     it('captures the index where `{id = noteSection.id}` lives in the sorted destination stack', () => {
       // 3 destinations: bg (z=0) → notes anchor (z=10) → lanecover (z=20). Notes layer should

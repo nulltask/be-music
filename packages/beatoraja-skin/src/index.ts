@@ -68,6 +68,9 @@ export { normalizeBeatorajaGraphs } from './beatoraja-skin-graph.ts';
 export type { BeatorajaBpmGraphElement } from './beatoraja-skin-bpmgraph.ts';
 export { normalizeBeatorajaBpmGraphs } from './beatoraja-skin-bpmgraph.ts';
 
+export type { BeatorajaJudgeGraphElement } from './beatoraja-skin-judgegraph.ts';
+export { normalizeBeatorajaJudgeGraphs } from './beatoraja-skin-judgegraph.ts';
+
 export type { BeatorajaSliderDirection, BeatorajaSliderElement } from './beatoraja-skin-slider.ts';
 export { normalizeBeatorajaSliders } from './beatoraja-skin-slider.ts';
 
