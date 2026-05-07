@@ -1242,6 +1242,11 @@ export class BeatorajaPlaySkinView {
     sprite.y = props.y + center.y * visibleHeight;
     sprite.width = props.width;
     sprite.height = visibleHeight;
+    // Honor the destination's authored mirror flag (negative `w` / `h` in beatoraja's skin).
+    // `props.width` is already non-negative; we apply the mirror via `scale` so the texture
+    // flips horizontally without disturbing the positioning math above.
+    if (props.mirrorX) sprite.scale.x = -Math.abs(sprite.scale.x);
+    if (props.mirrorY) sprite.scale.y = -Math.abs(sprite.scale.y);
     sprite.alpha = props.alpha;
     sprite.tint = props.tint;
     sprite.angle = props.angle;

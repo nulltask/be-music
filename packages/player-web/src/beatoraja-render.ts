@@ -25,10 +25,29 @@ import {
 
 export interface BeatorajaSpriteProps {
   visible: boolean;
+  /**
+   * Top-left x of the rendered rect in Pixi screen-space, after libGDX → Pixi Y-flip AND after
+   * negative-width normalization. Beatoraja allows negative width (mirrors the texture
+   * horizontally and extends the rect LEFT of the authored x); the props normalize that into a
+   * positive {@link width} with the x shifted to the actual left edge. The {@link mirrorX}
+   * flag preserves the mirror behavior for the consumer to apply via `scale.x`.
+   */
   x: number;
   y: number;
+  /** Always non-negative — mirroring is surfaced via {@link mirrorX} / {@link mirrorY}. */
   width: number;
+  /** Always non-negative — mirroring is surfaced via {@link mirrorX} / {@link mirrorY}. */
   height: number;
+  /**
+   * `true` when the destination authored a NEGATIVE width (`w < 0`). Beatoraja mirrors the
+   * texture horizontally in this case — the reference play7 skin uses it for the lane
+   * background when scratch is on the right side. Renderers should multiply `scale.x` by `-1`
+   * to honor the mirror; geometry-only renderers can ignore this and the texture will appear
+   * at the correct position with its original orientation.
+   */
+  mirrorX: boolean;
+  /** Companion to {@link mirrorX}. Negative-height destinations don't appear in stock skins but the flag is symmetric. */
+  mirrorY: boolean;
   /** 0..1 (PixiJS uses 0..1 for `Sprite.alpha`, beatoraja uses 0..255 — this scaling is applied here). */
   alpha: number;
   /** Packed RGB tint as `0xRRGGBB` for `Sprite.tint`. */
@@ -51,6 +70,8 @@ const HIDDEN_PROPS: BeatorajaSpriteProps = {
   y: 0,
   width: 0,
   height: 0,
+  mirrorX: false,
+  mirrorY: false,
   alpha: 0,
   tint: 0xffffff,
   angle: 0,
@@ -152,14 +173,43 @@ export function destinationToSpriteProps(
   //   Pixi rect top-left:     (kx + ox, canvasHeight - (ky + oy) - (kh + oh))
   //
   // The skin parser stays in Y-UP space; this renderer is the only place the flip happens.
-  const width = keyframe.w + offset.w;
-  const height = keyframe.h + offset.h;
+  //
+  // Negative width / height handling: beatoraja's `SkinObject.draw` passes signed `w`/`h` into
+  // libGDX's `SpriteBatch.draw`, where a negative width spans `[x + w, x]` (mirroring the
+  // texture and extending LEFT of the authored x). The reference play7 skin uses this for the
+  // lane background when "Scratch Side = Right":
+  //
+  //     geometry.lanebg_x = geometry.lanes_x + geometry.lanes_w
+  //     geometry.lanebg_w = -geometry.lanes_w
+  //
+  // We surface this through {@link BeatorajaSpriteProps.x} / {@link width} (always non-negative,
+  // so consumers can `addressMode` / size sprites without sign-aware math) plus the
+  // {@link mirrorX} flag (so renderers that care about the texture orientation can flip the
+  // sprite via `scale.x = -1`). Without this normalization, downstream sprite-positioning code
+  // (which wants to apply `center` anchor offsets via `props.width`) had to deal with negative
+  // widths — and the play7 lane background painted at the wrong x in right-scratch mode.
+  const rawWidth = keyframe.w + offset.w;
+  const rawHeight = keyframe.h + offset.h;
+  const mirrorX = rawWidth < 0;
+  const mirrorY = rawHeight < 0;
+  const width = Math.abs(rawWidth);
+  const height = Math.abs(rawHeight);
+  // libGDX bottom-left: (xRaw, yRaw) where xRaw = kx + ox, yRaw = ky + oy.
+  // With negative width, the actual left edge in libGDX-X is xRaw + rawWidth.
+  // With negative height, the actual TOP edge in libGDX-Y is yRaw + rawHeight (since libGDX Y
+  // grows up, "top" is the highest y; but for negative height the rect grows downward from
+  // yRaw, so the bottom in Y-UP is yRaw + rawHeight which becomes the lower bound of the
+  // rect). Concretely: after Y-flip, Pixi-y = canvasH - yLibgdxBottom - heightAbs.
+  const xLeft = mirrorX ? keyframe.x + offset.x + rawWidth : keyframe.x + offset.x;
+  const yLibgdxBottom = mirrorY ? keyframe.y + offset.y + rawHeight : keyframe.y + offset.y;
   return {
     visible: true,
-    x: keyframe.x + offset.x,
-    y: canvasHeight - keyframe.y - offset.y - height,
+    x: xLeft,
+    y: canvasHeight - yLibgdxBottom - height,
     width,
     height,
+    mirrorX,
+    mirrorY,
     alpha,
     tint: packRgbTint(keyframe.r, keyframe.g, keyframe.b),
     angle: keyframe.angle + offset.r,

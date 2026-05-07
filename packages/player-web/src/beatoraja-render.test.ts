@@ -158,6 +158,34 @@ describe('destinationToSpriteProps', () => {
     expect(props.y).toBe(850);
   });
 
+  it('normalizes negative `w` to positive width with adjusted x and surfaces mirrorX', () => {
+    // Reference play7 skin uses `w = -lanes_w` on the lane background when scratch is on the
+    // right — the rect is authored at the RIGHT edge with negative width, meaning it spans
+    // LEFT from `x`. Beatoraja's libGDX renderer mirrors the texture in that direction.
+    // The renderer should normalize the geometry to positive width with the x at the actual
+    // left edge, and surface `mirrorX = true` so the consumer can flip the texture via scale.
+    const g = groupOf({
+      dst: [{ time: 0, x: 410, y: 0, w: -390, h: 580, a: 255 }],
+    });
+    const props = destinationToSpriteProps(g, ctx({ nowMs: 0 }), 720);
+    expect(props.visible).toBe(true);
+    // Authored x=410 with w=-390 → actual left edge at 410 + (-390) = 20.
+    expect(props.x).toBe(20);
+    expect(props.width).toBe(390);
+    expect(props.mirrorX).toBe(true);
+    expect(props.mirrorY).toBe(false);
+    // y=0 (libGDX bottom edge of rect) with h=580: Pixi y = 720 - 0 - 580 = 140.
+    expect(props.y).toBe(140);
+    expect(props.height).toBe(580);
+  });
+
+  it('does not flag mirrorX for normal positive-width destinations', () => {
+    const g = groupOf({ dst: [{ time: 0, x: 50, y: 100, w: 100, h: 50, a: 255 }] });
+    const props = destinationToSpriteProps(g, ctx({ nowMs: 0 }), TEST_CANVAS_HEIGHT);
+    expect(props.mirrorX).toBe(false);
+    expect(props.mirrorY).toBe(false);
+  });
+
   it('treats `offset === 0` as the no-offset sentinel (does not resolve id 0)', () => {
     let lookups = 0;
     const g = groupOf({ offset: 0, dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255 }] });
