@@ -25,6 +25,13 @@ export interface BeatorajaDestinationKeyframe {
   a: number;
   /** Rotation in degrees. 360 = full revolution. */
   angle: number;
+  /**
+   * Easing curve applied to the interpolation from THIS keyframe to the next. Beatoraja inherits
+   * LR2's `acc` semantics (`0` = linear, `1` = accelerate / slow-start, `2` = decelerate /
+   * fast-start, `3` = step / discontinuous). Defaults to `0`. The renderer reads this field on the
+   * "from" keyframe of each interpolation segment.
+   */
+  acc: number;
 }
 
 export interface BeatorajaDestinationGroup {
@@ -125,6 +132,7 @@ function normalizeKeyframes(raw: ReadonlyArray<unknown>): BeatorajaDestinationKe
     b: 255,
     a: 255,
     angle: 0,
+    acc: 0,
   };
   for (const item of raw) {
     if (item === null || typeof item !== 'object') continue;
@@ -139,6 +147,10 @@ function normalizeKeyframes(raw: ReadonlyArray<unknown>): BeatorajaDestinationKe
     state.b = numberField(obj, 'b', state.b);
     state.a = numberField(obj, 'a', state.a);
     state.angle = numberField(obj, 'angle', state.angle);
+    // `acc` does NOT carry forward — it's an explicit per-segment knob, not a styling default.
+    // Reset to 0 (linear) when the keyframe doesn't specify one so adjacent segments don't
+    // accidentally inherit a parent segment's easing.
+    state.acc = numberField(obj, 'acc', 0);
     // Push a fresh copy so future state mutations don't reach already-emitted keyframes.
     out.push({ ...state });
   }
@@ -197,11 +209,42 @@ export function sampleBeatorajaDestination(
     const b = dst[i];
     if (t <= b.time) {
       const span = b.time - a.time;
-      const u = span === 0 ? 0 : (t - a.time) / span;
-      return interpolate(a, b, u);
+      const linearU = span === 0 ? 0 : (t - a.time) / span;
+      // Apply the segment's easing — `acc` belongs to the FROM keyframe and parametrizes the
+      // interpolation up to the next stop. Without this, every animation collapses to linear
+      // motion, which is visually wrong on skins that author punchy decel / accel curves
+      // (notably GdbG's decide / select fades, which use `acc = 1` and `acc = 2` heavily).
+      const easedU = applyAccCurve(linearU, a.acc);
+      return interpolate(a, b, easedU);
     }
   }
   return last;
+}
+
+/**
+ * Beatoraja / LR2 `acc` easing curves applied to a linear time parameter `u ∈ [0, 1]`.
+ *
+ * - `acc = 0` (linear): `u' = u`
+ * - `acc = 1` (accelerate / slow-start): `u' = u²` — output starts slow and speeds up
+ * - `acc = 2` (decelerate / fast-start): `u' = u·(2 - u)` — output starts fast and slows down
+ * - `acc = 3` (step / discontinuous): `u' = 0` until `u >= 1` (the segment holds its FROM frame)
+ *
+ * Codes other than 0–3 fall back to linear. Both endpoints (`u = 0` and `u = 1`) always return
+ * exactly the FROM / TO values regardless of curve, mirroring beatoraja's behavior.
+ */
+function applyAccCurve(u: number, acc: number): number {
+  if (u <= 0) return 0;
+  if (u >= 1) return 1;
+  switch (acc) {
+    case 1:
+      return u * u;
+    case 2:
+      return u * (2 - u);
+    case 3:
+      return 0;
+    default:
+      return u;
+  }
 }
 
 function interpolate(
@@ -220,5 +263,8 @@ function interpolate(
     b: a.b + (b.b - a.b) * u,
     a: a.a + (b.a - a.a) * u,
     angle: a.angle + (b.angle - a.angle) * u,
+    // The interpolated keyframe uses the FROM frame's curve label — same convention beatoraja
+    // uses internally. Only matters if a downstream consumer inspects the curve flag.
+    acc: a.acc,
   };
 }

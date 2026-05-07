@@ -120,4 +120,83 @@ describe('sampleBeatorajaDestination', () => {
     const wrapped = sampleBeatorajaDestination(looping, 1500);
     expect(wrapped?.x).toBe(50); // 1500 % 1000 = 500 → halfway between x=0 and x=100
   });
+
+  describe('acc easing curves', () => {
+    function makeGroup(acc: number) {
+      return normalizeBeatorajaDestinations([
+        {
+          id: 'eased',
+          loop: -1,
+          dst: [
+            { time: 0, x: 0, y: 0, w: 1, h: 1, a: 255, acc },
+            { time: 1000, x: 100 },
+          ],
+        },
+      ])[0];
+    }
+
+    it('treats acc=0 as linear (identity)', () => {
+      const linear = makeGroup(0);
+      expect(sampleBeatorajaDestination(linear, 250)?.x).toBe(25);
+      expect(sampleBeatorajaDestination(linear, 500)?.x).toBe(50);
+      expect(sampleBeatorajaDestination(linear, 750)?.x).toBe(75);
+    });
+
+    it('accelerates with acc=1 (slow start, fast end — u²)', () => {
+      const accel = makeGroup(1);
+      // u = 0.25 → u² = 0.0625 → x = 6.25
+      expect(sampleBeatorajaDestination(accel, 250)?.x).toBeCloseTo(6.25, 6);
+      // u = 0.5 → 0.25 → x = 25
+      expect(sampleBeatorajaDestination(accel, 500)?.x).toBeCloseTo(25, 6);
+      // u = 0.75 → 0.5625 → x = 56.25
+      expect(sampleBeatorajaDestination(accel, 750)?.x).toBeCloseTo(56.25, 6);
+    });
+
+    it('decelerates with acc=2 (fast start, slow end — u·(2-u))', () => {
+      const decel = makeGroup(2);
+      // u = 0.25 → 0.25·1.75 = 0.4375 → x = 43.75
+      expect(sampleBeatorajaDestination(decel, 250)?.x).toBeCloseTo(43.75, 6);
+      // u = 0.5 → 0.5·1.5 = 0.75 → x = 75
+      expect(sampleBeatorajaDestination(decel, 500)?.x).toBeCloseTo(75, 6);
+      // u = 0.75 → 0.75·1.25 = 0.9375 → x = 93.75
+      expect(sampleBeatorajaDestination(decel, 750)?.x).toBeCloseTo(93.75, 6);
+    });
+
+    it('holds the FROM frame with acc=3 (step) until the segment ends', () => {
+      const step = makeGroup(3);
+      // u in (0,1) → eased to 0 → returns FROM frame's value
+      expect(sampleBeatorajaDestination(step, 250)?.x).toBe(0);
+      expect(sampleBeatorajaDestination(step, 500)?.x).toBe(0);
+      expect(sampleBeatorajaDestination(step, 999)?.x).toBe(0);
+    });
+
+    it('always starts at the FROM frame regardless of curve', () => {
+      // Endpoint `t = lastKeyframe.time` falls past the segment with `loop = -1` (returns
+      // undefined per the loop semantics), so we check `u → 0` and `u → 1` from inside the
+      // segment instead. The interpolation lands exactly on FROM at u=0 for every curve.
+      for (const acc of [0, 1, 2, 3]) {
+        const group = makeGroup(acc);
+        expect(sampleBeatorajaDestination(group, 0)?.x).toBe(0);
+      }
+    });
+
+    it('does not carry acc forward to the next segment', () => {
+      // Segment 0→1000 has acc=2 (decelerate); segment 1000→2000 has no acc → linear.
+      const mixed = normalizeBeatorajaDestinations([
+        {
+          id: 'mixed',
+          loop: -1,
+          dst: [
+            { time: 0, x: 0, y: 0, w: 1, h: 1, a: 255, acc: 2 },
+            { time: 1000, x: 100 },
+            { time: 2000, x: 0 },
+          ],
+        },
+      ])[0];
+      // First half-segment: acc=2 decelerate at u=0.5 → x = 75
+      expect(sampleBeatorajaDestination(mixed, 500)?.x).toBeCloseTo(75, 6);
+      // Second half-segment: linear at u=0.5 (1500 of 1000-2000) → halfway from 100 to 0 = 50
+      expect(sampleBeatorajaDestination(mixed, 1500)?.x).toBeCloseTo(50, 6);
+    });
+  });
 });
