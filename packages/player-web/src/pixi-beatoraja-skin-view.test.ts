@@ -167,15 +167,16 @@ describe('BeatorajaPlaySkinView', () => {
 
   it('renders the resolved number across the digit row when resolveNumberValue is wired', () => {
     // value[].ref=71 (prop.lua `score`) → host returns 12345 → with `digit=5` and `padding=1`
-    // (leading zeros), the cells should be [1, 2, 3, 4, 5]. Each digit slot is 40px wide
-    // (200 / 5), laid out left-to-right starting at the rect's x. The Y axis is Y-flipped from
-    // libGDX into Pixi but the digits' x coordinates are unchanged.
+    // (leading zeros), the cells should be [1, 2, 3, 4, 5]. Per beatoraja's convention `dst.w` is
+    // the PER-DIGIT slot width — `dst.w = 24` means each digit renders 24px wide, so the 5-digit
+    // strip spans 120px starting at the rect's x. The Y axis is Y-flipped from libGDX into Pixi
+    // but the digits' x coordinates are unchanged.
     const skin: BeatorajaSkin = {
       type: 0,
       w: 1280,
       h: 720,
       value: [{ id: 200, src: 0, x: 0, y: 0, w: 240, h: 24, divx: 10, digit: 5, padding: 1, ref: 71 }],
-      destination: [{ id: 200, dst: [{ time: 0, x: 100, y: 100, w: 200, h: 24 }] }],
+      destination: [{ id: 200, dst: [{ time: 0, x: 100, y: 100, w: 24, h: 24 }] }],
     };
     const view = new BeatorajaPlaySkinView({
       skin,
@@ -188,7 +189,8 @@ describe('BeatorajaPlaySkinView', () => {
     for (let i = 0; i < 5; i += 1) {
       const sprite = sprites[i];
       expect(sprite).toBeDefined();
-      expect((sprite as { x: number }).x).toBeCloseTo(100 + i * 40);
+      expect((sprite as { x: number; width: number }).x).toBeCloseTo(100 + i * 24);
+      expect((sprite as { x: number; width: number }).width).toBe(24);
     }
     view.dispose();
   });

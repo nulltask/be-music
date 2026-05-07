@@ -922,10 +922,13 @@ export class BeatorajaPlaySkinView {
     // weren't refreshed (the composer might emit `hidden: true` for slots that don't paint).
     if (cells === undefined) cells = composeBeatorajaValueCells(entry.value, value);
 
-    // Lay the digit row across the destination rect. Each digit's slot width is `rect.w / digit`,
-    // height is the rect's full height. Hidden slots have their sprites collapsed to invisible —
-    // beatoraja's reference behavior for `padding=0` + digits-only strips with a small value.
-    const slotWidth = props.width / Math.max(1, entry.digitSprites.length);
+    // Lay the digit row across the destination rect. Per beatoraja's convention, `dst.w` is the
+    // PER-DIGIT slot width (NOT the total strip width) — the reference theme writes things like
+    // `{w = 18, h = 18}` with `digit = 4` for BPM readouts and expects each digit to render as an
+    // 18×18 square (total strip = 72px wide). Treating `dst.w` as the total instead made every
+    // digit collapse to `dst.w / digit` pixels wide, which is what produced the "potsubureteru"
+    // (squashed-text) reports. Height stays at `dst.h`.
+    const slotWidth = props.width;
     // Apply the destination's center anchor across the whole digit strip — each digit slot
     // shares the same pivot proportions, computed against the strip's full width (not the per-
     // digit width) so rotation pivots around the strip's authored center, not each digit's
