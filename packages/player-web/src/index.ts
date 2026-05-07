@@ -8,6 +8,8 @@ export * from './drop.ts';
 export * from './gameplay-recorder.ts';
 export * from './library.ts';
 export * from './logger.ts';
+export * from './beatoraja-runtime-adapter.ts';
+export * from './pixi-beatoraja-gameplay.ts';
 export * from './pixi-beatoraja-preview.ts';
 export * from './pixi-beatoraja-skin-view.ts';
 export * from './pixi-decide.ts';
