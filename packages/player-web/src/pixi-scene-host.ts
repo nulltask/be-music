@@ -83,10 +83,20 @@ export class PixiSceneHost {
     // to be slower or buggier). Anything else falls through to the default. `?renderer=webgpu` is accepted as the
     // explicit form even though it's the default, useful for documenting the intent in deployed URLs.
     const preference = resolveRendererPreference();
+    // Pre-create the WebGPU device with the adapter's MAX texture-dimension limit when WebGPU is
+    // the requested backend. The default `requestDevice()` call grants only 8192×8192 textures
+    // — too small for some authored beatoraja skins (e.g. GdbG_Skin's `fonts/bitmap/Title_*.png`
+    // is 8000×12000). When the adapter advertises a higher limit (16384 on most modern GPUs),
+    // we ask for it explicitly so those textures upload without the fallback chain emitting a
+    // cascade of "Invalid Texture" / "BindGroup invalid" errors that black out the chrome.
+    // Failures here fall through to Pixi's stock device-creation path so we don't break boot on
+    // older hardware.
+    const gpu = preference === 'webgpu' ? await tryCreateMaxLimitsGpu() : undefined;
     await this.app.init({
       preference,
       backgroundAlpha: 0,
       resizeTo: container,
+      ...(gpu !== undefined ? { gpu } : {}),
       // LR2 skins and BGA frames are pixel-art; bilinear filtering and MSAA blur them visibly. Combined with
       // `roundPixels: true` and per-texture nearest sampling on each loaded asset, this gives a fully-crisp
       // pixel-art-style render.
@@ -198,6 +208,60 @@ export class PixiSceneHost {
     } catch (error) {
       log.warn('app.destroy threw', error);
     }
+  }
+}
+
+/**
+ * Pre-create a `(adapter, device)` pair with the adapter's MAX texture-dimension and texture-
+ * size limits, then hand it to Pixi via `app.init({ gpu })`. Returns `undefined` when WebGPU
+ * isn't available or the request fails — Pixi falls back to its stock device-creation path
+ * with default 8192-px limits in that case.
+ *
+ * Background: WebGPU's default `maxTextureDimension2D` is 8192 even on adapters that advertise
+ * 16384 (or more); the higher limit must be requested explicitly via `requiredLimits`. Some
+ * authored beatoraja skins ship enormous bitmap-font atlases (GdbG_Skin's `Title_*.png` is
+ * 8000×12000), which fail to upload at the default limit and surface as a cascade of
+ * "Invalid Texture" / "BindGroup invalid" errors blacking out the chrome.
+ *
+ * The function asks for the adapter's full advertised limits — the browser clamps to whatever
+ * the GPU actually supports, so this is safe across hardware. Limits requested:
+ *   - `maxTextureDimension1D` / `maxTextureDimension2D` / `maxTextureDimension3D`
+ *   - `maxBufferSize` (some skins ship large atlases that imply correspondingly large buffers)
+ *
+ * Errors are caught and logged so a single oddball adapter doesn't break boot.
+ */
+async function tryCreateMaxLimitsGpu(): Promise<{ adapter: GPUAdapter; device: GPUDevice } | undefined> {
+  if (typeof globalThis === 'undefined') return undefined;
+  const navGpu = (globalThis.navigator as { gpu?: GPU } | undefined)?.gpu;
+  if (navGpu === undefined) return undefined;
+  try {
+    const adapter = await navGpu.requestAdapter({ powerPreference: 'high-performance' });
+    if (adapter === null) return undefined;
+    // Pixi's own `_createDeviceAndAdaptor` path requests these features iff the adapter has
+    // them. Mirror that here so we don't downgrade compression-format support when we take
+    // over device creation.
+    const requiredFeatures = (
+      ['texture-compression-bc', 'texture-compression-astc', 'texture-compression-etc2'] as GPUFeatureName[]
+    ).filter((feature) => adapter.features.has(feature));
+    const limits: Record<string, number> = {};
+    const maxDim2D = adapter.limits.maxTextureDimension2D;
+    const maxDim1D = adapter.limits.maxTextureDimension1D;
+    const maxDim3D = adapter.limits.maxTextureDimension3D;
+    const maxBuf = adapter.limits.maxBufferSize;
+    if (Number.isFinite(maxDim2D) && maxDim2D > 0) limits.maxTextureDimension2D = maxDim2D;
+    if (Number.isFinite(maxDim1D) && maxDim1D > 0) limits.maxTextureDimension1D = maxDim1D;
+    if (Number.isFinite(maxDim3D) && maxDim3D > 0) limits.maxTextureDimension3D = maxDim3D;
+    if (Number.isFinite(maxBuf) && maxBuf > 0) limits.maxBufferSize = maxBuf;
+    const device = await adapter.requestDevice({ requiredFeatures, requiredLimits: limits });
+    log.info('webgpu device requested with adapter-max limits', {
+      maxTextureDimension2D: maxDim2D,
+      maxBufferSize: maxBuf,
+      features: requiredFeatures,
+    });
+    return { adapter, device };
+  } catch (error) {
+    log.warn('failed to pre-create webgpu device with adapter-max limits — falling back to defaults', error);
+    return undefined;
   }
 }
 

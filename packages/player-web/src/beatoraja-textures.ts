@@ -51,10 +51,25 @@ export async function loadBeatorajaTexturesFromBundle(bundle: BeatorajaSourceBun
   };
 }
 
+/**
+ * Conservative cap for source bitmap dimensions. WebGPU adapters typically max out at 16384 px;
+ * we pick a slightly-lower bound (16000) so we never have to second-guess whether the device
+ * was actually granted the higher limit at request time. Bitmaps that exceed this dimension are
+ * down-scaled to fit BEFORE upload so the GPU never sees an over-budget texture.
+ *
+ * Some authored beatoraja skins ship enormous bitmap-font atlases (e.g. GdbG_Skin's
+ * `fonts/bitmap/Title_*.png` is 8000×12000). 12000 fits inside 16000 with `requiredLimits` set,
+ * but a future-proof skin that ships a 17000-px atlas would still need the down-scale path.
+ */
+const MAX_TEXTURE_DIMENSION_PX = 16000;
+
 async function decodeAsset(asset: BeatorajaSourceAsset): Promise<Texture> {
   // The `Uint8Array<ArrayBuffer>` cast keeps Blob on the zero-copy path; mirrors the LR2 loader.
   const blob = new Blob([asset.bytes as Uint8Array<ArrayBuffer>]);
-  const bitmap = await createImageBitmap(blob);
+  let bitmap = await createImageBitmap(blob);
+  if (bitmap.width > MAX_TEXTURE_DIMENSION_PX || bitmap.height > MAX_TEXTURE_DIMENSION_PX) {
+    bitmap = await downscaleBitmap(bitmap, MAX_TEXTURE_DIMENSION_PX, asset.path);
+  }
   const texture = Texture.from(bitmap);
   // `scaleMode = 'nearest'` is for pixel-art correctness AND has a side effect we depend on: it eagerly
   // initializes the texture's `style`, dodging a `addressModeU` null-deref the WebGL2 / WebGPU bind-group
@@ -63,4 +78,55 @@ async function decodeAsset(asset: BeatorajaSourceAsset): Promise<Texture> {
   texture.label = asset.path;
   texture.source.label = asset.path;
   return texture;
+}
+
+/**
+ * Re-encode an oversized bitmap into a smaller one that fits within the GPU texture-size
+ * envelope. Aspect ratio is preserved; the longer dimension is clamped to `maxDim` and the
+ * shorter dimension scales proportionally. Uses an `OffscreenCanvas` when available (workers /
+ * modern browsers) and falls back to a DOM `HTMLCanvasElement` otherwise.
+ *
+ * The downscale is "best effort" — if the canvas API isn't available we throw, which the
+ * caller catches and logs as a per-asset decode failure (the texture slot stays empty,
+ * matching the behavior for corrupt source bytes). Text destinations using a downscaled
+ * bitmap-font atlas will look slightly blurrier than the authored asset, but the runtime
+ * stays stable instead of crashing on the WebGPU bind-group validation error.
+ */
+async function downscaleBitmap(bitmap: ImageBitmap, maxDim: number, label: string): Promise<ImageBitmap> {
+  const scale = Math.min(maxDim / bitmap.width, maxDim / bitmap.height);
+  const targetW = Math.max(1, Math.floor(bitmap.width * scale));
+  const targetH = Math.max(1, Math.floor(bitmap.height * scale));
+  log.warn(
+    `texture '${label}' is ${bitmap.width}×${bitmap.height} (exceeds ${maxDim}px GPU limit) — downscaling to ${targetW}×${targetH}`,
+  );
+  // Prefer OffscreenCanvas (no DOM dependency, works in workers and avoids triggering layout).
+  // Fall back to the global HTMLCanvasElement when the platform doesn't expose OffscreenCanvas.
+  let drawn: ImageBitmap;
+  if (typeof globalThis !== 'undefined' && typeof globalThis.OffscreenCanvas !== 'undefined') {
+    const canvas = new globalThis.OffscreenCanvas(targetW, targetH);
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) {
+      bitmap.close();
+      throw new Error(`OffscreenCanvas 2d context unavailable for '${label}'`);
+    }
+    ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+    bitmap.close();
+    drawn = await createImageBitmap(canvas);
+  } else if (typeof globalThis !== 'undefined' && typeof globalThis.document !== 'undefined') {
+    const canvas = globalThis.document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) {
+      bitmap.close();
+      throw new Error(`Canvas 2d context unavailable for '${label}'`);
+    }
+    ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+    bitmap.close();
+    drawn = await createImageBitmap(canvas);
+  } else {
+    bitmap.close();
+    throw new Error(`Canvas API unavailable — cannot downscale '${label}'`);
+  }
+  return drawn;
 }

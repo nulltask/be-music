@@ -154,12 +154,23 @@ export class BeatorajaNoteLayer {
       if (rect === undefined) continue;
 
       const y = judgementY - (note.beat - frame.currentBeat) * pixelsPerBeat;
-      if (y < rect.y - 24 || y > judgementY + 24) continue;
+      // Tight bottom cull at the judgement line — notes whose visual bottom has crossed the
+      // line are no longer judgable (the engine fires auto-POOR shortly after) and rendering
+      // them past the line looked like the note was "flying through" the chart's bottom edge.
+      // Top cull keeps a small lead-in margin so notes pop into view smoothly as they approach
+      // from above.
+      if (y < rect.y - 24 || y > judgementY) continue;
 
       if (note.endBeat !== undefined) {
         const yEnd = judgementY - (note.endBeat - frame.currentBeat) * pixelsPerBeat;
         if (yEnd > judgementY) continue;
-        const r = this.paintLongNote(usedG, usedS, usedT, rect, lane, yEnd, y);
+        // Clip the LN's start cap (player-facing head) to the judgement line so the body
+        // doesn't visually extend past the chart's bottom edge while the player is holding.
+        // The engine still drives the LN's actual judging window from `note.beat` /
+        // `note.endBeat`; this is purely a visual cap so the body stops growing once it has
+        // reached the line.
+        const yStartClipped = Math.min(y, judgementY);
+        const r = this.paintLongNote(usedG, usedS, usedT, rect, lane, yEnd, yStartClipped);
         usedG = r.g;
         usedS = r.s;
         usedT = r.t;
