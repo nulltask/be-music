@@ -256,8 +256,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       timeIntervalSec: noteSection.time.length > 0 ? 1 : undefined,
       totalSeconds: undefined,
     });
-    this.view.container.addChild(this.markerLayer.container);
-    this.view.container.addChild(this.noteLayer.container);
+    // Insert at the skin's "notes anchor" so destinations declared AFTER the anchor (lanecover,
+    // hidden-cover, score readouts, …) paint on top of the falling notes — matching beatoraja's
+    // own z-order. Skins without a notes anchor get the legacy "notes always on top" behavior
+    // because `noteLayerInsertIndex` defaults to `container.children.length`.
+    insertNoteAndMarkerLayers(this.view, this.markerLayer, this.noteLayer);
 
     log.info('beatoraja gameplay mounted', {
       variant: options.variant,
@@ -469,9 +472,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       });
     }
 
-    // 4. Re-attach in the original z-order: backdrop → skin → (BGA at the back of skin) → markers → notes.
-    this.view.container.addChild(this.markerLayer.container);
-    this.view.container.addChild(this.noteLayer.container);
+    // 4. Re-attach in the new skin's authored z-order: backdrop → background skin destinations →
+    //    markers → notes → foreground skin destinations (lanecover / hidden-cover / readouts).
+    //    The "notes anchor" inside `view.noteLayerInsertIndex` decides where the marker / note
+    //    layers slot in.
+    insertNoteAndMarkerLayers(this.view, this.markerLayer, this.noteLayer);
     if (this.bgaLayer !== undefined) {
       this.view.container.addChildAt(this.bgaLayer.container, 0);
     }
@@ -597,4 +602,26 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       this.requestExit();
     }
   };
+}
+
+/**
+ * Insert the marker + note layers into the play view's container at `view.noteLayerInsertIndex`
+ * — the position where the skin's `{id = noteSection.id}` z-anchor was found. Markers go BELOW
+ * notes (notes overlay measure / BPM / STOP / time markers in beatoraja's reference layering)
+ * but BOTH go above any skin destination authored before the anchor and below any after.
+ *
+ * Pixi `addChildAt(index, child)` shifts `children[index..]` one slot right, so calling it with
+ * the same index twice (markers, then notes) yields `[..., marker, note, ...post-anchor sprites]`,
+ * which is the required order: markers behind notes, both ahead of pre-anchor sprites, both
+ * behind post-anchor sprites. Refreshing `noteLayerInsertIndex` between calls would also work
+ * — using the cached index plus the +1 offset is just less branchy.
+ */
+function insertNoteAndMarkerLayers(
+  view: BeatorajaPlaySkinView,
+  markerLayer: BeatorajaMarkerLayer,
+  noteLayer: BeatorajaNoteLayer,
+): void {
+  const index = view.noteLayerInsertIndex;
+  view.container.addChildAt(markerLayer.container, index);
+  view.container.addChildAt(noteLayer.container, index + 1);
 }

@@ -17,6 +17,7 @@ import {
   normalizeBeatorajaGraphs,
   normalizeBeatorajaImages,
   normalizeBeatorajaImagesets,
+  normalizeBeatorajaNote,
   normalizeBeatorajaJudges,
   normalizeBeatorajaSliders,
   normalizeBeatorajaTexts,
@@ -284,6 +285,20 @@ export class BeatorajaPlaySkinView {
   readonly container = new Container();
   readonly width: number;
   readonly height: number;
+  /**
+   * Index inside `container.children` where note / marker layers should be inserted by the host
+   * to place them at the correct z-order. Beatoraja themes author a `{id = noteSection.id, offset
+   * = N}` destination — the "notes" anchor — that marks WHERE in the destination z-stack the
+   * playfield notes belong. Skin destinations sorted before the anchor render BEHIND notes; ones
+   * sorted after render IN FRONT (the reference theme uses this so `lanecover` / `hidden-cover`
+   * paint over notes). The view skips the anchor destination's sprite (it has no image content)
+   * and records the resulting child count here. Hosts that don't insert at this index get the
+   * legacy "notes always on top" behavior.
+   *
+   * Defaults to `container.children.length` (== "append at the end") when the skin omits the
+   * anchor entirely.
+   */
+  readonly noteLayerInsertIndex: number;
   private readonly entries: ViewEntry[] = [];
   private readonly resolveRefValue: (refOp: number) => number;
   private readonly resolveTextContent: (refOp: number) => string | undefined;
@@ -428,16 +443,37 @@ export class BeatorajaPlaySkinView {
     // Concatenated with `skin.destination` so the standard destination pipeline handles them.
     const judges = normalizeBeatorajaJudges(options.skin.judge);
     const expandedJudgeDestinations = expandBeatorajaJudgeDestinations(judges);
-    const allDestinations: ReadonlyArray<unknown> = Array.isArray(options.skin.destination)
-      ? [...options.skin.destination, ...expandedJudgeDestinations]
-      : expandedJudgeDestinations;
+    // Beatoraja themes mark the playfield's z-order with a `{id = noteSection.id, offset = N}`
+    // destination — the "notes anchor". Skin authors typically write it WITHOUT a `dst[]` field
+    // since it carries no visual content (`table.insert(skin.destination, {id = "notes", offset =
+    // 30})`), but our destination normalizer drops anything missing `dst[]`. Inject a sentinel
+    // keyframe so the anchor survives normalization + sorting and we can find its index later.
+    const noteSection = normalizeBeatorajaNote(options.skin.note);
+    const noteAnchorId: BeatorajaImageId | undefined =
+      typeof noteSection.id === 'string' && noteSection.id.length > 0 ? noteSection.id : undefined;
+    const rawDestinations: ReadonlyArray<unknown> = Array.isArray(options.skin.destination)
+      ? options.skin.destination.map((entry) => ensureNotesAnchorDst(entry, noteAnchorId))
+      : [];
+    const allDestinations: ReadonlyArray<unknown> = [...rawDestinations, ...expandedJudgeDestinations];
     const groups = normalizeBeatorajaDestinations(allDestinations);
 
     // Render order: lower `offset` (back layer) draws first, then by author declaration order. Matches beatoraja's
     // own back-to-front layering.
     groups.sort((a, b) => a.offset - b.offset || a.declarationOrder - b.declarationOrder);
 
+    // Walk the sorted destinations; capture the anchor's position so the host can splice in its
+    // note / marker layers at exactly that z-order. Skin destinations sorted BEFORE the anchor
+    // paint behind notes; ones AFTER paint in front (lanecover / hidden-cover / readouts).
+    let noteAnchorIndex: number | undefined;
+
     for (const group of groups) {
+      // Notes anchor: skip the sprite, record where in `container.children` the host should insert
+      // its note + marker layers. Only the FIRST anchor matching the section id wins — duplicates
+      // (uncommon in well-formed themes) are ignored.
+      if (noteAnchorId !== undefined && group.id === noteAnchorId && noteAnchorIndex === undefined) {
+        noteAnchorIndex = this.container.children.length;
+        continue;
+      }
       const image = imageById.get(group.id);
       if (image === undefined) {
         const valueElement = valueById.get(group.id);
@@ -505,6 +541,11 @@ export class BeatorajaPlaySkinView {
       this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame });
     }
 
+    // Resolve the note-layer insert position. Anchor was captured during the destination loop;
+    // skins that omit the anchor (decide / select / result themes don't have notes) get the
+    // legacy "append at the end" behavior, which matches the previous gameplay layering.
+    this.noteLayerInsertIndex = noteAnchorIndex ?? this.container.children.length;
+
     // Per-skin construction summary. `JSON.stringify` so devtools shows the full payload as a
     // selectable string (vs the collapsible tree `console.log(obj)` produces) — easier to copy
     // out and paste into a JSON formatter / a bug report.
@@ -515,7 +556,8 @@ export class BeatorajaPlaySkinView {
       },
       { image: 0, value: 0, text: 0 } as Record<ViewEntry['kind'], number>,
     );
-    const skipped = groups.length - this.entries.length;
+    const noteAnchorConsumed = noteAnchorIndex !== undefined ? 1 : 0;
+    const skipped = groups.length - this.entries.length - noteAnchorConsumed;
     // eslint-disable-next-line no-console
     console.log(
       '[beatoraja-view] skin view built',
@@ -526,11 +568,18 @@ export class BeatorajaPlaySkinView {
         value: { declared: valueById.size, mounted: counts.value },
         text: { declared: textById.size, mounted: counts.text },
         skipped,
+        noteAnchor: { id: noteAnchorId, index: this.noteLayerInsertIndex, found: noteAnchorIndex !== undefined },
       }),
     );
     if (skipped > 0) {
       const unmatchedIds = groups
-        .filter((group) => !imageById.has(group.id) && !valueById.has(group.id) && !textById.has(group.id))
+        .filter(
+          (group) =>
+            group.id !== noteAnchorId &&
+            !imageById.has(group.id) &&
+            !valueById.has(group.id) &&
+            !textById.has(group.id),
+        )
         .map((group) => group.id);
       // eslint-disable-next-line no-console
       console.log(
@@ -1463,4 +1512,20 @@ function clampUnit01(v: number): number {
   if (v <= 0) return 0;
   if (v >= 1) return 1;
   return v;
+}
+
+/**
+ * Inject a sentinel `dst[]` keyframe into the notes anchor destination so it survives
+ * `normalizeBeatorajaDestinations` (which drops anything missing `dst[]`). Skin authors typically
+ * write the anchor as `{id = "notes", offset = N}` with no `dst` field — the entry exists purely
+ * to mark a z-order slot, not to render anything. Inflating with a 0-sized keyframe lets the
+ * normalizer keep it; the view consumes the anchor and never builds a sprite for it.
+ */
+function ensureNotesAnchorDst(entry: unknown, noteAnchorId: BeatorajaImageId | undefined): unknown {
+  if (noteAnchorId === undefined) return entry;
+  if (entry === null || typeof entry !== 'object') return entry;
+  const obj = entry as Record<string, unknown>;
+  if (obj.id !== noteAnchorId) return entry;
+  if (Array.isArray(obj.dst) && obj.dst.length > 0) return entry;
+  return { ...obj, dst: [{ time: 0, x: 0, y: 0, w: 0, h: 0 }] };
 }

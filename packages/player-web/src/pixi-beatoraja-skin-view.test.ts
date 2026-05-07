@@ -297,6 +297,44 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
+  describe('noteLayerInsertIndex (notes z-order anchor)', () => {
+    it('captures the index where `{id = noteSection.id}` lives in the sorted destination stack', () => {
+      // 3 destinations: bg (z=0) → notes anchor (z=10) → lanecover (z=20). Notes layer should
+      // slot in BETWEEN bg and lanecover so lanecover paints on top of falling notes.
+      const skin: BeatorajaSkin = {
+        type: 0,
+        w: 1280,
+        h: 720,
+        image: [
+          { id: 'bg', src: 0, x: 0, y: 0, w: 1280, h: 720 },
+          { id: 'lanecover', src: 0, x: 0, y: 0, w: 100, h: 100 },
+        ],
+        note: { id: 'notes', note: ['note-w'] },
+        destination: [
+          { id: 'bg', offset: 0, dst: [{ time: 0, x: 0, y: 0, w: 1280, h: 720 }] },
+          { id: 'notes', offset: 10 },
+          { id: 'lanecover', offset: 20, dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100 }] },
+        ],
+      };
+      const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+      // 2 sprites mounted (bg + lanecover); the notes anchor is consumed without producing one.
+      expect(view.container.children).toHaveLength(2);
+      // Anchor sat between bg and lanecover → after bg was added (children.length == 1) and
+      // before lanecover was added.
+      expect(view.noteLayerInsertIndex).toBe(1);
+      view.dispose();
+    });
+
+    it('falls back to "append at end" when no notes anchor is authored', () => {
+      // Decide / select / result skins don't have a notes section, so they don't author the
+      // anchor. Insert index defaults to the end of the children list — preserving the legacy
+      // "marker/note layer goes on top" gameplay behavior.
+      const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
+      expect(view.noteLayerInsertIndex).toBe(view.container.children.length);
+      view.dispose();
+    });
+  });
+
   it('dispose() detaches sprites from the container without throwing', () => {
     const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
     expect(() => view.dispose()).not.toThrow();
