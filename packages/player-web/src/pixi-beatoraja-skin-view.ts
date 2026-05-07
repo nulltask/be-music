@@ -3,7 +3,7 @@
 // every destination keyframe per frame. Engine-driven dynamics (notes, judge flashes, key-on, BGA, lamps) are
 // owned by the gameplay scene that drives this view from outside.
 
-import { Container, Sprite, Text, Texture } from 'pixi.js';
+import { BitmapText, Container, Sprite, Text, Texture } from 'pixi.js';
 import {
   composeBeatorajaValueCells,
   imageFrameAt,
@@ -57,6 +57,14 @@ export interface BeatorajaPlaySkinViewOptions {
    * for an unknown id keeps the platform sans-serif fallback (matches the legacy behavior).
    */
   resolveFontFamily?: (fontId: number) => string | undefined;
+  /**
+   * Lookup `text[].font` slot id → which Pixi text pipe to instantiate. `'bitmap'` picks
+   * `BitmapText` (consumes a registered `BitmapFont` keyed by `family`); anything else picks the
+   * default `Text` (CSS-font pipe). Skins that ship AngelCode `.fnt` fonts (e.g. GroundbreakinG)
+   * MUST go through the bitmap pipe — `Text` can't render glyphs the browser's `FontFace` registry
+   * couldn't accept. Returning `undefined` is treated as `'css'`.
+   */
+  resolveFontKind?: (fontId: number) => 'css' | 'bitmap' | undefined;
 }
 
 interface SpriteEntry {
@@ -85,7 +93,13 @@ interface TextEntry {
   kind: 'text';
   group: BeatorajaDestinationGroup;
   element: BeatorajaTextElement;
-  text: Text;
+  /**
+   * Either a Pixi `Text` (CSS-fonts pipe) or a `BitmapText` (BMFont pipe). Both extend
+   * `AbstractText` and share `text` / position / `style.*` accessors, so the per-frame update path
+   * is identical. The pick is made once at build-time from `resolveFontKind` — no runtime
+   * branching during the `update` hot path.
+   */
+  text: Text | BitmapText;
 }
 
 type ViewEntry = SpriteEntry | ValueEntry | TextEntry;
@@ -99,6 +113,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveTextContent: (refOp: number) => string | undefined;
   private readonly resolveNumberValue: (refOp: number) => number | undefined;
   private readonly resolveFontFamily: (fontId: number) => string | undefined;
+  private readonly resolveFontKind: (fontId: number) => 'css' | 'bitmap' | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -118,6 +133,7 @@ export class BeatorajaPlaySkinView {
     this.resolveTextContent = options.resolveTextContent ?? (() => undefined);
     this.resolveNumberValue = options.resolveNumberValue ?? (() => undefined);
     this.resolveFontFamily = options.resolveFontFamily ?? (() => undefined);
+    this.resolveFontKind = options.resolveFontKind ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -254,13 +270,17 @@ export class BeatorajaPlaySkinView {
   }
 
   private buildTextEntry(group: BeatorajaDestinationGroup, element: BeatorajaTextElement): TextEntry {
-    // Pick the skin-author's TTF when one was loaded for this `font` slot; fall back to the platform
-    // sans-serif chain otherwise. The CSS font-stack fallback (`sans-serif` after the skin family)
-    // covers two cases at once: (1) the skin family hasn't finished registering yet, and (2) a glyph
-    // not present in the skin font (Japanese full-width, emoji, etc.) gets borrowed from the system
-    // font without showing tofu.
+    // Pick the skin-author's font (TTF or BMFont) when one was loaded for this `font` slot; fall
+    // back to the platform sans-serif chain otherwise. For CSS fonts the stack fallback
+    // (`sans-serif` after the skin family) covers two cases at once: (1) the skin family hasn't
+    // finished registering yet, and (2) a glyph not present in the skin font (Japanese full-width,
+    // emoji, etc.) gets borrowed from the system font without showing tofu. BMFonts don't get a
+    // sans-serif fallback baked into the family — Pixi's BitmapText cache lookup is exact, so
+    // appending `, sans-serif` would just miss the cache.
     const skinFamily = this.resolveFontFamily(element.fontId);
-    const fontFamily = skinFamily !== undefined ? `'${skinFamily}', sans-serif` : 'sans-serif';
+    const fontKind = this.resolveFontKind(element.fontId) ?? 'css';
+    const fontFamily =
+      skinFamily === undefined ? 'sans-serif' : fontKind === 'bitmap' ? skinFamily : `'${skinFamily}', sans-serif`;
     // beatoraja `text[].size` is the requested rendered height in skin-pixel units. Default to the
     // destination rect's height when the skin omits it — most authors set `size` explicitly, but
     // unset / non-positive values should fall back to "fit the box" semantics rather than a
@@ -268,7 +288,12 @@ export class BeatorajaPlaySkinView {
     const firstFrame = group.dst[0];
     const rectH = firstFrame !== undefined && firstFrame.h > 0 ? firstFrame.h : 24;
     const requestedSize = element.size > 0 ? element.size : rectH;
-    const text = new Text({
+    // Pick `BitmapText` for BMFonts and `Text` for everything else. Both share the same constructor
+    // surface (`text`, `style.fontFamily`, `style.fontSize`, `style.align`, `alpha`, anchors), so
+    // downstream update code doesn't branch — see `updateTextEntry`.
+    const TextCtor: typeof Text | typeof BitmapText =
+      fontKind === 'bitmap' && skinFamily !== undefined ? BitmapText : Text;
+    const text = new TextCtor({
       text: '',
       style: {
         fontFamily,
@@ -294,6 +319,7 @@ export class BeatorajaPlaySkinView {
         size: requestedSize,
         align: element.align,
         family: fontFamily,
+        kind: fontKind,
         firstRect: firstFrame ? { x: firstFrame.x, y: firstFrame.y, w: firstFrame.w, h: firstFrame.h } : undefined,
       }),
     );

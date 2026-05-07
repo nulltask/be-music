@@ -80,6 +80,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // therefore reflect the live cursor, matching beatoraja's own select-screen behavior.
       resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
+      resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
     });
 
     this.root.addChild(this.backdrop);
@@ -159,6 +160,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       textures: opts.textures,
       resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
+      resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
     });
     // The root currently holds [backdrop, oldView (destroyed), songList]. Re-add the new view
     // BETWEEN backdrop and songList so the layering stays correct (skin chrome behind the list).
