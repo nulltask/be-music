@@ -1,31 +1,22 @@
-// Named beatoraja runtime timer IDs and op-codes.
+// Named beatoraja runtime timer IDs, op-codes, and text references.
 //
-// Skins reference engine state through three numeric ID spaces:
+// Skins reference engine state through four numeric ID spaces:
 //   - `timer` IDs (per-element animation clock; element fades / cycles relative to when the timer fires)
 //   - `op` IDs (visibility gate via `if[]` / `op[]` — boolean engine state codes)
-//   - `ref` IDs (frame index inside an `image[]` cell strip, or text content via `text[].ref`)
+//   - `ref` IDs on `image[]` (frame index inside the cell strip)
+//   - `ref` IDs on `text[]` (string content the runtime resolves)
 //
-// beatoraja inherits LR2's numeric base layout for the conventional cases (1P side: 50..59 bombs, 70..79 LN
-// hold, 100..109 key-on, 120..129 key-off, judge timer 46), and reserves 1000+ ID extensions for the 24-key
-// and 9-key (PMS) variants the LR2 layout can't address. The exact layout used here is verified against
-// beatoraja's own `play24main.lua` reference theme (under `__fixtures__/lua-skin/`):
+// All IDs in this file are verified against ovnz/blanket's `prop.lua`
+// (https://github.com/ovnz/blanket/blob/main/prop.lua), the de-facto authoritative reference for
+// beatoraja's `SkinPropertyMapper` enumeration. `prop.lua` is the same table community skins import
+// when they want named access to op / timer / text codes; tracking it keeps us in lockstep with what the
+// reference theme and most third-party themes actually emit.
 //
-//     local function timer_key_bomb(index) -- 50..59 / 1000+
-//     local function timer_key_hold(index) -- 70..79 / 1200+
-//     local function timer_key_on(index)   -- 100..109 / 1400+
-//     local function timer_key_off(index)  -- 120..129 / 1600+
-//     local function value_judge(index)    -- 500..509 / 1500+   (per-lane judge ms)
-//
-// The engine adapter (`beatoraja-runtime-adapter.ts` in `player-web`) uses the helpers below to stamp the
-// matching slot when the engine raises the corresponding event — `flash-lane` → `keyOnTimerId(side, lane)`,
-// `flash-judge` → `judgeTimerId(side)`, etc. Each helper returns `undefined` when the side / lane index is
-// out of range so the adapter can simply skip the stamp.
-//
-// Op-codes are documented as ranges rather than enumerated — beatoraja's full set is multiple hundreds of
-// codes (lamp / clear-state / chart-info / option pick / judge-detail / etc.), but the Web renderer only
-// needs to reproduce the codes the engine can actually emit. The `BEATORAJA_OP` namespace below lists the
-// runtime ops the adapter currently sets; option ops keep flowing through `buildBaseOpSet` from the user's
-// `skin_config.option` selection without needing a name here.
+// IMPORTANT — DO NOT make up values. An earlier draft of this file used best-guess constants that
+// silently collided with unrelated codes (e.g. our `P1_JUDGE_PG: 50` was beatoraja's `bomb_1p_scratch`
+// timer; our `LOAD_END: 2` was `fadeout`). Skins that gated chrome on those slots would either show the
+// wrong thing or stay invisible during gameplay. Every entry below quotes its `prop.lua` name in the
+// JSDoc so future additions stay verifiable.
 
 /**
  * Discriminator for a beatoraja "side" — single-play / 1P-side of double / first-half of 9key uses `1`;
@@ -36,64 +27,81 @@
 export type BeatorajaSide = 1 | 2;
 
 // ─── Built-in scene timers ──────────────────────────────────────────────────────────────────────────
+// Sources: prop.lua `local timer = { ... }`. Names mirror prop.lua's; we keep the `TIMER_` prefix for
+// import readability.
 
 /** Anchored at the moment the play scene mounts. Always-on for elements with `timer = 0`. */
 export const TIMER_SCENE_START = 0;
-/** Fires when the loader starts decoding chart resources. */
-export const TIMER_LOAD_START = 1;
-/** Fires when the loader finishes; skins use this to fade in chrome before notes scroll. */
-export const TIMER_LOAD_END = 2;
-/** Fires when the engine begins audible playback (after `playstart` lead-in elapses). */
-export const TIMER_PLAY_START = 3;
-/** Fires when the chart ends (note timeline drained). */
-export const TIMER_FADEOUT_START = 4;
+/** prop.lua `startinput` — fires when input becomes responsive (during loading lead-in). */
+export const TIMER_STARTINPUT = 1;
+/** prop.lua `fadeout` — fires when the result fade-out starts. NOT a load-end signal! */
+export const TIMER_FADEOUT = 2;
+/** prop.lua `failed` — fires on the failed verdict (gauge below clear threshold at chart end). */
+export const TIMER_FAILED = 3;
+/** prop.lua `ready` — fires when the READY display flashes (≈ LR2 PLAY START − N ms). */
+export const TIMER_READY = 40;
+/** prop.lua `play` — fires when the chart begins audible playback. */
+export const TIMER_PLAY = 41;
 
-/** Per-side judge timer — restarts on every judgement on that side. */
+/** prop.lua `judge_1p` — restarts on every judgement on side 1. */
 export const TIMER_JUDGE_1P = 46;
-/** Per-side judge timer — restarts on every judgement on that side. */
+/** prop.lua `judge_2p` — restarts on every judgement on side 2. */
 export const TIMER_JUDGE_2P = 47;
 
-// ─── LR2-compatible per-lane timer bases ────────────────────────────────────────────────────────────
+/** prop.lua `combo_1p` / `combo_2p` — restarts when the combo counter advances. */
+export const TIMER_COMBO_1P = 446;
+export const TIMER_COMBO_2P = 447;
 
-/** Bomb / explosion timer — `50 + lane` for 1P keys 1..9, `60 + lane` for 2P. */
+/** prop.lua `endofnote_1p` / `endofnote_2p` — fires at the last note of each side. */
+export const TIMER_ENDOFNOTE_1P = 143;
+export const TIMER_ENDOFNOTE_2P = 144;
+
+/** prop.lua `rhythm` — beat-pulse timer the skin uses for "every beat" glow effects. */
+export const TIMER_RHYTHM = 140;
+
+// ─── Per-lane timer bases (1P side) ──────────────────────────────────────────────────────────────
+//
+// The `0` slot is SCRATCH on every category; keys 1..9 follow. So `bombTimerId(1, 0) = 50` is
+// `bomb_1p_scratch`, `bombTimerId(1, 1) = 51` is `bomb_1p_key1`, … (matches prop.lua exactly).
+
+/** prop.lua `bomb_1p_scratch = 50` … `bomb_1p_key9 = 59`. */
 export const TIMER_BOMB_1P_BASE = 50;
+/** prop.lua `bomb_2p_scratch = 60` … `bomb_2p_key9 = 69`. */
 export const TIMER_BOMB_2P_BASE = 60;
 
-/** LN hold timer — `70 + lane` for 1P, `80 + lane` for 2P. */
+/** prop.lua `hold_1p_scratch = 70` … `hold_1p_key9 = 79` (LN hold-effect timer). */
 export const TIMER_LN_HOLD_1P_BASE = 70;
+/** prop.lua `hold_2p_scratch = 80` … `hold_2p_key9 = 89`. */
 export const TIMER_LN_HOLD_2P_BASE = 80;
 
-/** Key-on (lane laser) timer — `100 + lane` for 1P, `110 + lane` for 2P. */
+/** prop.lua `keyon_1p_scratch = 100` … `keyon_1p_key9 = 109`. */
 export const TIMER_KEY_ON_1P_BASE = 100;
+/** prop.lua `keyon_2p_scratch = 110` … `keyon_2p_key9 = 119`. */
 export const TIMER_KEY_ON_2P_BASE = 110;
 
-/** Key-off (release fade) timer — `120 + lane` for 1P, `130 + lane` for 2P. */
+/** prop.lua `keyoff_1p_scratch = 120` … `keyoff_1p_key9 = 129`. */
 export const TIMER_KEY_OFF_1P_BASE = 120;
+/** prop.lua `keyoff_2p_scratch = 130` … `keyoff_2p_key9 = 139`. */
 export const TIMER_KEY_OFF_2P_BASE = 130;
 
-// ─── 24-key / 9-key extensions ──────────────────────────────────────────────────────────────────────
+// ─── 24-key extensions ─────────────────────────────────────────────────────────────────────────
 //
-// Lane indices > 9 fall outside the LR2 single-digit range, so beatoraja allocates `1000+` blocks for
-// each timer category. The play24 reference theme is the authoritative source for these values.
+// Lane indices ≥ 10 fall outside the single-digit range. prop.lua names the bases via `bomb_1p_key10 =
+// 1010` etc., consistent with `play24main.lua`'s `index <= 9 ? 50 + index : 1000 + index` formula.
 
 export const TIMER_BOMB_EXT_BASE = 1000;
 export const TIMER_LN_HOLD_EXT_BASE = 1200;
 export const TIMER_KEY_ON_EXT_BASE = 1400;
 export const TIMER_KEY_OFF_EXT_BASE = 1600;
 
-/** Per-lane judge-ms value (`500..509` / `1510..` for 24-key) — `value_judge(i)` in play24main.lua. */
-export const VALUE_JUDGE_BASE = 500;
-export const VALUE_JUDGE_EXT_BASE = 1500;
-
-/** Maximum lane index addressable by the LR2 / 1P / 2P bases (inclusive). Above this falls into 1000+ space. */
+/** Maximum lane index addressable by the 1P / 2P bases (inclusive). Above this falls into 1000+ space. */
 export const LR2_LANE_INDEX_MAX = 9;
 
 /**
- * Per-side base for a given timer category. Returns the value to which a 1..N lane index is added.
- * Lanes 1..9 use the LR2 base; 10+ uses the 1000-block extension regardless of side (matching beatoraja's
- * own `index <= 9` branch).
+ * Per-side base for a given timer category, returning the value to which a 0..N lane index is added.
+ * Lanes 0..9 use the side-relative base; 10+ uses the 1000-block extension regardless of side.
  */
-function lr2OrExtBase(category: 'bomb' | 'lnHold' | 'keyOn' | 'keyOff', side: BeatorajaSide, isExt: boolean): number {
+function timerBase(category: 'bomb' | 'lnHold' | 'keyOn' | 'keyOff', side: BeatorajaSide, isExt: boolean): number {
   if (isExt) {
     switch (category) {
       case 'bomb':
@@ -123,12 +131,13 @@ function laneTimerId(
   side: BeatorajaSide,
   lane: number,
 ): number | undefined {
-  if (!Number.isInteger(lane) || lane < 1) return undefined;
-  const base = lr2OrExtBase(category, side, lane > LR2_LANE_INDEX_MAX);
-  return base + lane;
+  // `lane === 0` is scratch — explicitly accepted. Negative or non-integer lanes are rejected so a stray
+  // engine event that produces an out-of-range slot doesn't quietly stamp the wrong timer.
+  if (!Number.isInteger(lane) || lane < 0) return undefined;
+  return timerBase(category, side, lane > LR2_LANE_INDEX_MAX) + lane;
 }
 
-/** Bomb timer for `(side, lane)`. Returns `undefined` if `lane` is out of range. */
+/** Bomb timer for `(side, lane)` — `lane === 0` is scratch. Returns `undefined` for negative / non-int lanes. */
 export function bombTimerId(side: BeatorajaSide, lane: number): number | undefined {
   return laneTimerId('bomb', side, lane);
 }
@@ -153,106 +162,126 @@ export function judgeTimerId(side: BeatorajaSide): number {
   return side === 1 ? TIMER_JUDGE_1P : TIMER_JUDGE_2P;
 }
 
-// ─── Runtime op-codes (engine-driven boolean state) ────────────────────────────────────────────────
-//
-// Skins reference these via `if[]` / `op[]` to gate visibility on engine state. Option ops (the user's
-// confirmed picks from `skin_config.option`) are surfaced through `buildBaseOpSet`; the codes below are
-// the runtime-only ops the adapter sets every frame from the engine's UI signals.
-//
-// The values match beatoraja's `SkinPropertyMapper` / `SkinPropertyMapper.optionMap()` definitions; the
-// subset here covers exactly what the Web engine adapter emits so far. Adding new ops is additive — the
-// adapter just inserts the code into `activeOps` and the skin's existing gates pick it up.
+// ─── Runtime op-codes ──────────────────────────────────────────────────────────────────────────────
+// Sources: prop.lua `local op = { ... }`. The codes below are the runtime-only ops the adapter sets
+// during gameplay; option ops (the user's confirmed `skin_config.option` picks) flow separately through
+// `buildBaseOpSet`.
 
 export const BEATORAJA_OP = {
-  /** Most-recent judgement on side 1 was PERFECT GREAT (PG, the best window). */
-  P1_JUDGE_PG: 50,
-  /** Most-recent judgement on side 1 was GREAT. */
-  P1_JUDGE_GR: 51,
-  /** Most-recent judgement on side 1 was GOOD. */
-  P1_JUDGE_GD: 52,
-  /** Most-recent judgement on side 1 was BAD. */
-  P1_JUDGE_BD: 53,
-  /** Most-recent judgement on side 1 was POOR (no-judge / passthrough). */
-  P1_JUDGE_PR: 54,
-  /** Most-recent judgement on side 1 was a MISS (zero-window POOR). */
-  P1_JUDGE_MS: 55,
+  /** prop.lua `now_loading = 80`. */
+  NOW_LOADING: 80,
+  /** prop.lua `loaded = 81`. */
+  LOADED: 81,
 
-  /** Same as the `P1_JUDGE_*` group, on side 2. */
-  P2_JUDGE_PG: 60,
-  P2_JUDGE_GR: 61,
-  P2_JUDGE_GD: 62,
-  P2_JUDGE_BD: 63,
-  P2_JUDGE_PR: 64,
-  P2_JUDGE_MS: 65,
+  /** prop.lua `autoplayoff = 32` / `autoplayon = 33`. */
+  AUTOPLAY_OFF: 32,
+  AUTOPLAY_ON: 33,
 
-  /** "Last judge was FAST" — pairs with `P1_JUDGE_LATE` for the early/late readout. */
-  P1_JUDGE_FAST: 240,
-  /** "Last judge was LATE". */
-  P1_JUDGE_LATE: 241,
-  /** "Last judge was FAST" on 2P side. */
-  P2_JUDGE_FAST: 242,
-  /** "Last judge was LATE" on 2P side. */
-  P2_JUDGE_LATE: 243,
+  /** prop.lua `bgaoff = 40` / `bgaon = 41`. */
+  BGA_OFF: 40,
+  BGA_ON: 41,
 
-  /** Loader is still running (`#LOADSTART` fired but `#LOADEND` hasn't). */
-  LOADING_IN_PROGRESS: 80,
+  // ─── 1P last-judge op (prop.lua `_1p_*`) ─────────────────────────────────────────────────────
+  /** prop.lua `_1p_perfect = 241`. */
+  P1_JUDGE_PERFECT: 241,
+  /** prop.lua `_1p_great = 242`. */
+  P1_JUDGE_GREAT: 242,
+  /** prop.lua `_1p_good = 243`. */
+  P1_JUDGE_GOOD: 243,
+  /** prop.lua `_1p_bad = 244`. */
+  P1_JUDGE_BAD: 244,
+  /** prop.lua `_1p_poor = 245`. */
+  P1_JUDGE_POOR: 245,
+  /** prop.lua `_1p_miss = 246`. */
+  P1_JUDGE_MISS: 246,
 
-  /** Auto-play is running (the host configured `mode: 'auto'`). */
-  AUTO_PLAY_ON: 70,
+  /** prop.lua `_1p_early = 1242` (current judge was on the early side of its window). */
+  P1_JUDGE_EARLY: 1242,
+  /** prop.lua `_1p_late = 1243` (current judge was on the late side of its window). */
+  P1_JUDGE_LATE: 1243,
 
-  /** "Currently in an LN-hold" gate — set on side 1 while any LN is held; cleared on release. */
-  P1_LN_HOLDING: 78,
-  /** Same on side 2. */
-  P2_LN_HOLDING: 79,
+  // ─── 2P last-judge op (prop.lua `_2p_*`) ─────────────────────────────────────────────────────
+  P2_JUDGE_PERFECT: 261,
+  P2_JUDGE_GREAT: 262,
+  P2_JUDGE_GOOD: 263,
+  P2_JUDGE_BAD: 264,
+  P2_JUDGE_POOR: 265,
+  P2_JUDGE_MISS: 266,
 
-  // Note: the play-mode (1=5K / 2=7K / 3=9K / 4=14K / 5=10K in beatoraja's enumeration) is
-  // intentionally NOT included here. It's implicit in the picked skin variant — the renderer
-  // already loads `play_7.lua` for 7K charts, etc. — and adding a speculative value would risk
-  // hiding chrome the skin gates on the correct one.
+  /** prop.lua `_2p_early = 1262`. */
+  P2_JUDGE_EARLY: 1262,
+  /** prop.lua `_2p_late = 1263`. */
+  P2_JUDGE_LATE: 1263,
 } as const;
 
 /**
- * Op-code corresponding to a parsed engine judge string. `undefined` for `MISS` slip-throughs the engine
- * uses internally — those don't contribute to the skin's last-judge gate (they're rendered through the
- * dedicated POOR BGA path).
+ * Op-code corresponding to a parsed engine judge string. Values come from `prop.lua`'s `_1p_*` /
+ * `_2p_*` block. Returns `undefined` for unrecognized kinds (FAST / SLOW are surfaced through the
+ * separate {@link BEATORAJA_OP.P1_JUDGE_EARLY} / `_LATE` ops).
  *
- * The mapping mirrors `pixi-gameplay.ts`'s LR2 judge-state latch — engine-side judge strings are
- * uppercase: `'PERFECT'` / `'GREAT'` / `'GOOD'` / `'BAD'` / `'POOR'` / `'MISS'` / `'FAST'` / `'SLOW'`.
+ * The mapping mirrors the engine's judge-state strings — `'PERFECT'` / `'GREAT'` / `'GOOD'` / `'BAD'` /
+ * `'POOR'` / `'MISS'` (case-insensitive).
  */
 export function judgeOpForKind(side: BeatorajaSide, kind: string): number | undefined {
   const upper = kind.toUpperCase();
   if (side === 1) {
     switch (upper) {
       case 'PERFECT':
-        return BEATORAJA_OP.P1_JUDGE_PG;
+        return BEATORAJA_OP.P1_JUDGE_PERFECT;
       case 'GREAT':
-        return BEATORAJA_OP.P1_JUDGE_GR;
+        return BEATORAJA_OP.P1_JUDGE_GREAT;
       case 'GOOD':
-        return BEATORAJA_OP.P1_JUDGE_GD;
+        return BEATORAJA_OP.P1_JUDGE_GOOD;
       case 'BAD':
-        return BEATORAJA_OP.P1_JUDGE_BD;
+        return BEATORAJA_OP.P1_JUDGE_BAD;
       case 'POOR':
-        return BEATORAJA_OP.P1_JUDGE_PR;
+        return BEATORAJA_OP.P1_JUDGE_POOR;
       case 'MISS':
-        return BEATORAJA_OP.P1_JUDGE_MS;
+        return BEATORAJA_OP.P1_JUDGE_MISS;
       default:
         return undefined;
     }
   }
   switch (upper) {
     case 'PERFECT':
-      return BEATORAJA_OP.P2_JUDGE_PG;
+      return BEATORAJA_OP.P2_JUDGE_PERFECT;
     case 'GREAT':
-      return BEATORAJA_OP.P2_JUDGE_GR;
+      return BEATORAJA_OP.P2_JUDGE_GREAT;
     case 'GOOD':
-      return BEATORAJA_OP.P2_JUDGE_GD;
+      return BEATORAJA_OP.P2_JUDGE_GOOD;
     case 'BAD':
-      return BEATORAJA_OP.P2_JUDGE_BD;
+      return BEATORAJA_OP.P2_JUDGE_BAD;
     case 'POOR':
-      return BEATORAJA_OP.P2_JUDGE_PR;
+      return BEATORAJA_OP.P2_JUDGE_POOR;
     case 'MISS':
-      return BEATORAJA_OP.P2_JUDGE_MS;
+      return BEATORAJA_OP.P2_JUDGE_MISS;
     default:
       return undefined;
   }
 }
+
+// ─── Text references (`text[].ref`) ────────────────────────────────────────────────────────────────
+// Sources: prop.lua `local text = { ... }`. Used by `BeatorajaPlaySkinView` text destinations to look
+// up the dynamic string the skin should display. Values not listed here resolve to `undefined` and the
+// text node renders empty.
+
+export const BEATORAJA_TEXT = {
+  /** prop.lua `rival = 1`. */
+  RIVAL: 1,
+  /** prop.lua `player = 2`. */
+  PLAYER: 2,
+  /** prop.lua `title = 10`. */
+  TITLE: 10,
+  /** prop.lua `subtitle = 11`. */
+  SUBTITLE: 11,
+  /** prop.lua `fulltitle = 12` (`title` + `" "` + `subtitle`). */
+  FULLTITLE: 12,
+  /** prop.lua `genre = 13`. */
+  GENRE: 13,
+  /** prop.lua `artist = 14`. */
+  ARTIST: 14,
+  /** prop.lua `subartist = 15`. */
+  SUBARTIST: 15,
+  /** prop.lua `fullartist = 16` (`artist` + `" "` + `subartist`). */
+  FULLARTIST: 16,
+} as const;

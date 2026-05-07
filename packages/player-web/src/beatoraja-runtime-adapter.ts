@@ -11,15 +11,16 @@
 //
 // The lifecycle is owned by `PixiBeatorajaGameplayView`:
 //
-//     1. `new BeatorajaRuntimeAdapter({ baseOps, getNowMs })`
-//     2. `adapter.markTimer(TIMER_LOAD_END)` once chart resources finish decoding
-//     3. `adapter.markTimer(TIMER_PLAY_START)` once the engine begins audible playback
+//     1. `new BeatorajaRuntimeAdapter({ baseOps, getNowMs, chart })`
+//     2. `adapter.markStartInput()` once the engine input runtime is wired
+//     3. `adapter.markPlay()` once the engine begins audible playback
 //     4. Per-frame:
 //        - `adapter.applyFrame(uiSignals.getFrame())`
 //        - drain commands → `adapter.applyCommand(cmd)`
 //        - drain judge-combo states → `adapter.applyJudgeCombo(state)`
 //        - `view.update(adapter.getRenderContext())`
 
+import type { BeMusicJson } from '@be-music/json';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
 import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
@@ -27,17 +28,18 @@ import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/cor
 import type { BeatorajaRenderContext } from './beatoraja-render.ts';
 import {
   BEATORAJA_OP,
+  BEATORAJA_TEXT,
   bombTimerId,
   judgeOpForKind,
   judgeTimerId,
   keyOffTimerId,
   keyOnTimerId,
   lnHoldTimerId,
-  TIMER_FADEOUT_START,
-  TIMER_LOAD_END,
-  TIMER_LOAD_START,
-  TIMER_PLAY_START,
+  TIMER_FADEOUT,
+  TIMER_PLAY,
+  TIMER_READY,
   TIMER_SCENE_START,
+  TIMER_STARTINPUT,
   type BeatorajaSide,
 } from '@be-music/beatoraja-skin';
 
@@ -51,15 +53,15 @@ export interface BeatorajaRuntimeAdapterOptions {
    * its own clock — the host (`PixiBeatorajaGameplayView`) owns the rAF / Pixi-ticker that drives this.
    */
   getNowMs: () => number;
-  /** `true` when the engine was started in autoplay mode. Surfaces the `AUTO_PLAY_ON` op. */
+  /** `true` when the engine was started in autoplay mode. Surfaces the `AUTOPLAY_ON` op. */
   autoPlay?: boolean;
+  /**
+   * Optional parsed chart — surfaces title / artist / genre via the `text[].ref` resolver. Without it the
+   * text-resolver leaves chart-info nodes empty (matches the preview path).
+   */
+  chart?: BeMusicJson;
 }
 
-/**
- * Per-side state the adapter tracks for the "last judgement" gate. `lastJudgeOp` is the op-code the
- * adapter last added to `activeOps`; the adapter clears it when a new judgement of a different kind comes
- * in so only one of the `P{1,2}_JUDGE_*` group is active at a time.
- */
 interface SideJudgeState {
   lastJudgeOp: number | undefined;
   lastFastSlowOp: number | undefined;
@@ -76,15 +78,12 @@ export class BeatorajaRuntimeAdapter {
   private readonly timerStartedAt = new Map<number, number>();
   private readonly chartPlayVariant: ChartPlayVariant;
   private readonly getNowMs: () => number;
+  private readonly chart: BeMusicJson | undefined;
   private frame: PlayerUiFramePayload | null = null;
   private readonly judgeState: Record<BeatorajaSide, SideJudgeState> = {
     1: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
     2: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
   };
-  /**
-   * `true` between `trigger-poor-bga` and `clear-poor-bga` engine commands. The BGA layer reads this to
-   * pick from the chart's POOR cue list; without it, the base / layer cues drive the BGA.
-   */
   private poorBgaActive = false;
 
   constructor(options: BeatorajaRuntimeAdapterOptions) {
@@ -92,21 +91,19 @@ export class BeatorajaRuntimeAdapter {
     this.baseOps = options.baseOps;
     this.activeOps = new Set(options.baseOps);
     this.getNowMs = options.getNowMs;
-    // NOTE: We deliberately do NOT add a "play-mode" op or an "auto-play" op here. beatoraja's
-    // canonical op enumeration assigns `1..5` to the play-mode (1=5K / 2=7K / 3=9K / 4=14K / 5=10K)
-    // and `70+` to clear-state / lamp / etc. — values we'd have to verify against
-    // `bms/player/beatoraja/skin/SkinPropertyMapper.java` before committing them. Adding speculative
-    // values would set the WRONG mode op and hide whatever chrome is gated on the right one (e.g. on
-    // a 7K chart, accidentally adding op 1 marks the skin as 5K and hides all 7K-specific chrome).
-    // The correct play-mode op is implicit in the picked skin variant (`play_7.lua` already only
-    // ships 7K chrome) so the gameplay path doesn't actually need the runtime op. When a future patch
-    // wires the verified mapping for clear-state / lamp / etc., add them here and confirm against the
-    // reference theme's `if`/`op` codes.
+    this.chart = options.chart;
+    // Autoplay flag — prop.lua `autoplayon = 33` / `autoplayoff = 32`. We surface BOTH so a skin gated on
+    // either side picks up the correct state. (Some skins author the panel as `if[33]`, others as
+    // `if[-32]`; both are valid in beatoraja's spec.)
     if (options.autoPlay) {
-      // Best-effort guess at the auto-play op (beatoraja documents it as 70). Skins that gate
-      // chrome on it will surface the AUTOPLAY indicator; skins that don't simply ignore the op.
-      this.activeOps.add(BEATORAJA_OP.AUTO_PLAY_ON);
+      this.activeOps.add(BEATORAJA_OP.AUTOPLAY_ON);
+    } else {
+      this.activeOps.add(BEATORAJA_OP.AUTOPLAY_OFF);
     }
+    // Until the engine signals 'loaded', the loading op is active. We don't actually have a separate
+    // 'loaded' transition wire from the engine yet — `markPlay` flips this when audible playback starts,
+    // so by the time the user sees notes the loaded gate is open.
+    this.activeOps.add(BEATORAJA_OP.NOW_LOADING);
     // Scene-start timer is always running — many skin elements default `timer = 0` and read it as the
     // global clock. Other built-in timers fire later via `markTimer`.
     this.timerStartedAt.set(TIMER_SCENE_START, 0);
@@ -117,32 +114,29 @@ export class BeatorajaRuntimeAdapter {
     this.timerStartedAt.set(timerId, this.getNowMs());
   }
 
-  /**
-   * Convenience wrapper: stamp `TIMER_LOAD_START` and add the `LOADING_IN_PROGRESS` op. Called by the
-   * host the moment chart resources begin decoding.
-   */
-  markLoadingStart(): void {
-    this.markTimer(TIMER_LOAD_START);
-    this.activeOps.add(BEATORAJA_OP.LOADING_IN_PROGRESS);
+  /** Stamp the `startinput` timer (prop.lua `startinput = 1`). Fires when the engine input bus is ready. */
+  markStartInput(): void {
+    this.markTimer(TIMER_STARTINPUT);
+  }
+
+  /** Stamp the `ready` timer (prop.lua `ready = 40`). Fires shortly before audible playback. */
+  markReady(): void {
+    this.markTimer(TIMER_READY);
   }
 
   /**
-   * Convenience wrapper: stamp `TIMER_LOAD_END` and clear `LOADING_IN_PROGRESS`. Called by the host once
-   * `Promise.all` for all chart resources resolves.
+   * Stamp the `play` timer (prop.lua `play = 41`) and flip the loading gates so chrome gated on
+   * `loaded` (op 81) becomes visible. Called when the engine emits `onStart`.
    */
-  markLoadingEnd(): void {
-    this.markTimer(TIMER_LOAD_END);
-    this.activeOps.delete(BEATORAJA_OP.LOADING_IN_PROGRESS);
+  markPlay(): void {
+    this.markTimer(TIMER_PLAY);
+    this.activeOps.delete(BEATORAJA_OP.NOW_LOADING);
+    this.activeOps.add(BEATORAJA_OP.LOADED);
   }
 
-  /** Stamp `TIMER_PLAY_START` — fires when the engine emits `onStart`. */
-  markPlayStart(): void {
-    this.markTimer(TIMER_PLAY_START);
-  }
-
-  /** Stamp `TIMER_FADEOUT_START` — fires at chart end (engine `onStop`). */
-  markFadeoutStart(): void {
-    this.markTimer(TIMER_FADEOUT_START);
+  /** Stamp the `fadeout` timer (prop.lua `fadeout = 2`). Fires at chart end / interrupt. */
+  markFadeout(): void {
+    this.markTimer(TIMER_FADEOUT);
   }
 
   /** Latch the current engine frame snapshot — drives text / ref content resolution. */
@@ -164,18 +158,13 @@ export class BeatorajaRuntimeAdapter {
         break;
       case 'flash-lane':
         // `flash-lane` fires when a note resolves with a non-MISS verdict. The skin's bomb sprite is
-        // gated on the lane's bomb timer — so we stamp it here. `applyJudgeCombo` separately handles
-        // the judge plate (NOWJUDGE).
+        // gated on the lane's bomb timer.
         this.startLaneBombTimer(command.channel);
         break;
       case 'hold-lane-until-beat':
-        // Long-note start: mark the LN-hold timer for this lane. `release-lane` clears it.
         this.startLaneLnHoldTimer(command.channel);
         break;
       case 'trigger-poor-bga':
-        // POOR-BGA window started. Surfaced via `isPoorBgaActive()` so the BGA layer can swap to the
-        // chart's POOR cue list. The skin's POOR overlay (gated on the per-side last-judge POOR op) is
-        // handled separately by `applyJudgeCombo`.
         this.poorBgaActive = true;
         break;
       case 'clear-poor-bga':
@@ -185,8 +174,9 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
-   * Fold one engine judge-combo publish into the side-relative judge timer + last-judge op gate. Called
-   * by the host once per `drainPendingJudgeCombos()` entry.
+   * Fold one engine judge-combo publish into the side-relative judge timer + last-judge op gate.
+   * Per-side: only one of `_*p_perfect` / `_*p_great` / etc. is active at a time, so a new judge clears
+   * the previous one. FAST / SLOW are surfaced separately via the `_*p_early` / `_*p_late` ops.
    */
   applyJudgeCombo(state: PlayerJudgeComboSignalState): void {
     const side: BeatorajaSide = state.channel?.startsWith('2') ? 2 : 1;
@@ -212,40 +202,55 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
-   * Resolve a `text[].ref` op-code into the string the skin should render. Returns `undefined` for codes
-   * the adapter doesn't currently surface — the skin view leaves the text empty in that case (matching
-   * the preview path's behavior).
-   *
-   * Only frame-derived strings are wired here for now (combo / score / judge counts). Chart metadata
-   * (title / artist / genre) lands in a follow-up patch alongside the chart-info plumbing — those need
-   * the host to thread the parsed `BeMusicJson` through, and stay outside this adapter's scope.
+   * Resolve a `text[].ref` op-code into the string the skin should render. Maps prop.lua's `text` block
+   * onto the parsed chart (when supplied) — title / artist / genre / subtitle / fulltitle / etc. Codes
+   * the adapter doesn't surface return `undefined` and the corresponding text node renders empty.
    */
-  resolveTextContent(_refOp: number): string | undefined {
-    if (this.frame === null) return undefined;
-    // Placeholder — wired in Phase 4 once the per-op code map is verified against beatoraja's
-    // `SkinPropertyMapper`. Returning undefined keeps text destinations empty rather than blasting the
-    // wrong content into them.
-    return undefined;
+  resolveTextContent(refOp: number): string | undefined {
+    const chart = this.chart;
+    if (chart === undefined) return undefined;
+    const meta = chart.metadata;
+    // bmson sub-artist list is an array of `"role:name"` strings — for the dynamic readout we just join
+    // them with `" "` so the skin sees something readable. Hosts that need structured access can
+    // post-process via `parseBmsonSubartist`.
+    const subartist = chart.bmson?.info?.subartists?.join(' ') ?? '';
+    switch (refOp) {
+      case BEATORAJA_TEXT.TITLE:
+        return meta.title ?? '';
+      case BEATORAJA_TEXT.SUBTITLE:
+        return meta.subtitle ?? '';
+      case BEATORAJA_TEXT.FULLTITLE:
+        return joinNonEmpty(meta.title, meta.subtitle);
+      case BEATORAJA_TEXT.GENRE:
+        return meta.genre ?? '';
+      case BEATORAJA_TEXT.ARTIST:
+        return meta.artist ?? '';
+      case BEATORAJA_TEXT.SUBARTIST:
+        return subartist;
+      case BEATORAJA_TEXT.FULLARTIST:
+        return joinNonEmpty(meta.artist, subartist);
+      default:
+        return undefined;
+    }
   }
 
   /**
    * Resolve an `image[].ref` op-code into the frame index the skin should pick from the cell strip. The
-   * default `0` keeps lamp / clear-state icons on their initial frame; once the engine surfaces gauge /
-   * lamp state through stateSignals (Phase 5), this fans out to the matching cell.
+   * default `0` keeps lamp / clear-state icons on their initial frame; once gauge / lamp / FC state is
+   * wired through state signals, this fans out to the matching cell.
    */
   resolveRefValue(_refOp: number): number {
     return 0;
   }
 
-  /**
-   * Re-set the auto-play op based on the current mode (mostly for symmetry with the engine driver — the
-   * mode doesn't change mid-chart in practice, but it's cheap to support).
-   */
+  /** Update the autoplay op (mostly for symmetry with the engine driver — mode rarely changes mid-chart). */
   setAutoPlay(active: boolean): void {
     if (active) {
-      this.activeOps.add(BEATORAJA_OP.AUTO_PLAY_ON);
+      this.activeOps.delete(BEATORAJA_OP.AUTOPLAY_OFF);
+      this.activeOps.add(BEATORAJA_OP.AUTOPLAY_ON);
     } else {
-      this.activeOps.delete(BEATORAJA_OP.AUTO_PLAY_ON);
+      this.activeOps.delete(BEATORAJA_OP.AUTOPLAY_ON);
+      this.activeOps.add(BEATORAJA_OP.AUTOPLAY_OFF);
     }
   }
 
@@ -265,13 +270,16 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
-   * Reset adapter state to the construction defaults. The host calls this on chart restart so per-chart
-   * timers (judge / key-on / bomb) don't bleed into the new run while the static skin chrome continues
-   * paging through scene-start animations.
+   * Reset adapter state to the construction defaults. Used on chart restart so per-chart timers don't
+   * bleed into the next run. The autoplay op latched at construction is preserved (the host re-creates
+   * the adapter on a mode change rather than mutating one in flight).
    */
   reset(): void {
+    const wasAutoplay = this.activeOps.has(BEATORAJA_OP.AUTOPLAY_ON);
     this.activeOps.clear();
     for (const op of this.baseOps) this.activeOps.add(op);
+    this.activeOps.add(wasAutoplay ? BEATORAJA_OP.AUTOPLAY_ON : BEATORAJA_OP.AUTOPLAY_OFF);
+    this.activeOps.add(BEATORAJA_OP.NOW_LOADING);
     this.timerStartedAt.clear();
     this.timerStartedAt.set(TIMER_SCENE_START, 0);
     this.judgeState[1].lastJudgeOp = undefined;
@@ -288,22 +296,17 @@ export class BeatorajaRuntimeAdapter {
     return channel.startsWith('2') ? 2 : 1;
   }
 
+  /**
+   * Map an engine channel to a beatoraja per-side lane index. Per prop.lua the convention is:
+   *   - lane 0 = scratch (`bomb_*p_scratch = 50/60`, `keyon_*p_scratch = 100/110`, …)
+   *   - lane 1..9 = keys 1..9 (`bomb_*p_key1 = 51`, etc.)
+   * `resolveSideKeySlot` already returns 0 for scratch and 1..N for keys, so we pass the slot through
+   * verbatim. (Earlier the adapter mapped scratch onto lane 8, which generated a `keyon_1p_key8` timer
+   * for every scratch press — the corresponding skin chrome never lit up.)
+   */
   private resolveLane(channel: string): number | undefined {
     const slot = resolveSideKeySlot(channel, this.chartPlayVariant);
     if (slot < 0) return undefined;
-    // `resolveSideKeySlot` returns 0 for scratch and 1..7 for keys (or 1..9 for 9-key). beatoraja's
-    // per-lane timer base is `100 + lane` where lane = 0 for scratch — but the LR2 / beatoraja
-    // convention is to use lane index as-is for both scratch and keys. Map slot 0 (scratch) to lane 8
-    // for the 1P side / 9 for 2P, matching beatoraja's `timer_key_on(8) = 108` for 1P scratch.
-    //
-    // Actually, beatoraja's convention (verified in play24main.lua's `keybeam_order`) treats scratch
-    // distinctly with named lane index 25 / 26 (`su` / `sd`). For 7-key / 5-key scratch on 1P, the
-    // engine's channel `16` maps onto beatoraja-side lane 8 (a slot that's not occupied by physical
-    // keys 1..7) — that's how the LR2 default 7keys skin authors `#DST_NOTE,7` for scratch.
-    if (slot === 0) {
-      // Scratch — use the LR2 convention `8` (1P) / `8` (2P side base 110 + 8 = 118).
-      return 8;
-    }
     return slot;
   }
 
@@ -331,4 +334,8 @@ export class BeatorajaRuntimeAdapter {
   private startLaneLnHoldTimer(channel: string): void {
     this.startLaneTimer(channel, lnHoldTimerId);
   }
+}
+
+function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
+  return parts.filter((p): p is string => typeof p === 'string' && p.length > 0).join(' ');
 }

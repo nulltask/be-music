@@ -6,10 +6,11 @@ import {
   keyOffTimerId,
   keyOnTimerId,
   lnHoldTimerId,
-  TIMER_LOAD_END,
-  TIMER_LOAD_START,
-  TIMER_PLAY_START,
+  TIMER_FADEOUT,
+  TIMER_PLAY,
+  TIMER_READY,
   TIMER_SCENE_START,
+  TIMER_STARTINPUT,
 } from '@be-music/beatoraja-skin';
 import { BeatorajaRuntimeAdapter } from './beatoraja-runtime-adapter.ts';
 
@@ -24,7 +25,7 @@ function makeClock(): { now: () => number; advance: (ms: number) => void } {
 }
 
 describe('BeatorajaRuntimeAdapter — construction', () => {
-  it('seeds activeOps with base option ops + scene-start timer', () => {
+  it('seeds activeOps with base option ops + scene-start timer + autoplay-off + now-loading', () => {
     const clock = makeClock();
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
@@ -33,14 +34,13 @@ describe('BeatorajaRuntimeAdapter — construction', () => {
     });
     expect(adapter.hasOp(920)).toBe(true);
     expect(adapter.hasOp(901)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.AUTOPLAY_OFF)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.AUTOPLAY_ON)).toBe(false);
+    expect(adapter.hasOp(BEATORAJA_OP.NOW_LOADING)).toBe(true);
     expect(adapter.getTimerStart(TIMER_SCENE_START)).toBe(0);
   });
 
-  it('does not seed a speculative play-mode op', () => {
-    // beatoraja's op `1..5` enumeration covers per-keys play modes (1=5K / 2=7K / etc.) but the
-    // exact mapping isn't captured here yet — adding the wrong value would HIDE chrome gated on the
-    // correct one. The skin variant is implicit in the picked play_*.lua entry, so the runtime op
-    // is intentionally absent until verified.
+  it('does not seed a speculative play-mode op (1..5 are reserved for per-keys mode)', () => {
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
       baseOps: new Set(),
@@ -51,19 +51,20 @@ describe('BeatorajaRuntimeAdapter — construction', () => {
     }
   });
 
-  it('surfaces the AUTO_PLAY_ON op when constructed in autoplay mode', () => {
+  it('surfaces AUTOPLAY_ON and clears AUTOPLAY_OFF in autoplay mode', () => {
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
       baseOps: new Set(),
       getNowMs: () => 0,
       autoPlay: true,
     });
-    expect(adapter.hasOp(BEATORAJA_OP.AUTO_PLAY_ON)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.AUTOPLAY_ON)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.AUTOPLAY_OFF)).toBe(false);
   });
 });
 
 describe('BeatorajaRuntimeAdapter — built-in timers', () => {
-  it('stamps the loading start / end timers and toggles the LOADING_IN_PROGRESS op', () => {
+  it('stamps `startinput` / `ready` / `play` / `fadeout` and flips loading gate on play', () => {
     const clock = makeClock();
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
@@ -71,23 +72,27 @@ describe('BeatorajaRuntimeAdapter — built-in timers', () => {
       getNowMs: clock.now,
     });
     clock.advance(120);
-    adapter.markLoadingStart();
-    expect(adapter.getTimerStart(TIMER_LOAD_START)).toBe(120);
-    expect(adapter.hasOp(BEATORAJA_OP.LOADING_IN_PROGRESS)).toBe(true);
-
-    clock.advance(2400);
-    adapter.markLoadingEnd();
-    expect(adapter.getTimerStart(TIMER_LOAD_END)).toBe(2520);
-    expect(adapter.hasOp(BEATORAJA_OP.LOADING_IN_PROGRESS)).toBe(false);
+    adapter.markStartInput();
+    expect(adapter.getTimerStart(TIMER_STARTINPUT)).toBe(120);
 
     clock.advance(800);
-    adapter.markPlayStart();
-    expect(adapter.getTimerStart(TIMER_PLAY_START)).toBe(3320);
+    adapter.markReady();
+    expect(adapter.getTimerStart(TIMER_READY)).toBe(920);
+
+    clock.advance(500);
+    adapter.markPlay();
+    expect(adapter.getTimerStart(TIMER_PLAY)).toBe(1420);
+    expect(adapter.hasOp(BEATORAJA_OP.NOW_LOADING)).toBe(false);
+    expect(adapter.hasOp(BEATORAJA_OP.LOADED)).toBe(true);
+
+    clock.advance(60_000);
+    adapter.markFadeout();
+    expect(adapter.getTimerStart(TIMER_FADEOUT)).toBe(61_420);
   });
 });
 
 describe('BeatorajaRuntimeAdapter — applyCommand', () => {
-  it('starts the per-lane key-on timer on press-lane (1P channel 13 → key 3)', () => {
+  it('starts the per-lane key-on timer on press-lane (1P channel 13 → key 3 → timer 103)', () => {
     const clock = makeClock();
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
@@ -99,7 +104,7 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     expect(adapter.getTimerStart(keyOnTimerId(1, 3)!)).toBe(500);
   });
 
-  it('starts the key-off timer on release-lane (2P channel 22 → key 2)', () => {
+  it('starts the key-off timer on release-lane (2P channel 22 → key 2 → timer 132)', () => {
     const clock = makeClock();
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '14',
@@ -131,13 +136,13 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
       getNowMs: clock.now,
     });
     clock.advance(2000);
-    // Channel `19` is BMS-side key 7 — `resolveSideKeySlot` collapses `9` onto slot 7. (Channels `17` /
-    // `27` are the Free-Zone empty-press lanes the engine handles separately; they don't hit a key slot.)
     adapter.applyCommand({ kind: 'hold-lane-until-beat', channel: '19', beat: 64 });
     expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(2000);
   });
 
-  it('routes scratch (16 / 26) onto the LR2 lane-8 slot', () => {
+  it('routes scratch (16 / 26) onto lane 0 → timer 100 (1P) / 110 (2P)', () => {
+    // prop.lua `keyon_1p_scratch = 100`, `keyon_2p_scratch = 110`. Earlier the adapter mapped scratch
+    // onto lane 8 → timer 108 (`keyon_1p_key8`), so scratch presses never lit the right beam.
     const clock = makeClock();
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
@@ -146,15 +151,15 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     });
     clock.advance(50);
     adapter.applyCommand({ kind: 'press-lane', channel: '16' });
-    expect(adapter.getTimerStart(keyOnTimerId(1, 8)!)).toBe(50);
+    expect(adapter.getTimerStart(100)).toBe(50);
     clock.advance(50);
     adapter.applyCommand({ kind: 'press-lane', channel: '26' });
-    expect(adapter.getTimerStart(keyOnTimerId(2, 8)!)).toBe(100);
+    expect(adapter.getTimerStart(110)).toBe(100);
   });
 });
 
 describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {
-  it('stamps the side-relative judge timer and adds the matching judge-kind op', () => {
+  it('stamps the side-relative judge timer + adds the prop.lua judge op (PERFECT 1P → 241)', () => {
     const clock = makeClock();
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
@@ -164,7 +169,7 @@ describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {
     clock.advance(1500);
     adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 12, channel: '13', updatedAtMs: 0 });
     expect(adapter.getTimerStart(judgeTimerId(1))).toBe(1500);
-    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PG)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(true);
   });
 
   it('clears the previous side-1 judge op when a new one comes in', () => {
@@ -174,10 +179,10 @@ describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {
       getNowMs: () => 0,
     });
     adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', updatedAtMs: 0 });
-    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PG)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(true);
     adapter.applyJudgeCombo({ judge: 'GREAT', combo: 2, channel: '11', updatedAtMs: 0 });
-    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PG)).toBe(false);
-    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_GR)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(false);
+    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_GREAT)).toBe(true);
   });
 
   it('keeps the side-2 judge op independent of the side-1 op', () => {
@@ -188,8 +193,8 @@ describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {
     });
     adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '13', updatedAtMs: 0 });
     adapter.applyJudgeCombo({ judge: 'BAD', combo: 1, channel: '23', updatedAtMs: 0 });
-    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PG)).toBe(true);
-    expect(adapter.hasOp(BEATORAJA_OP.P2_JUDGE_BD)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.P2_JUDGE_BAD)).toBe(true);
   });
 });
 
@@ -246,24 +251,59 @@ describe('BeatorajaRuntimeAdapter — POOR BGA tracking', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — resolveTextContent', () => {
+  it('resolves prop.lua text refs from the parsed chart metadata', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      // Minimal chart shape — only the metadata fields the resolver reads.
+      chart: {
+        metadata: { title: 'Demo Title', subtitle: '[ANOTHER]', genre: 'Electro', artist: 'me' },
+        bmson: { info: { subartists: ['obj:and you'] } },
+      } as unknown as import('@be-music/json').BeMusicJson,
+    });
+    expect(adapter.resolveTextContent(10)).toBe('Demo Title');
+    expect(adapter.resolveTextContent(11)).toBe('[ANOTHER]');
+    expect(adapter.resolveTextContent(12)).toBe('Demo Title [ANOTHER]');
+    expect(adapter.resolveTextContent(13)).toBe('Electro');
+    expect(adapter.resolveTextContent(14)).toBe('me');
+    expect(adapter.resolveTextContent(15)).toBe('obj:and you');
+    expect(adapter.resolveTextContent(16)).toBe('me obj:and you');
+  });
+
+  it('returns undefined for unknown refs (the text node renders empty)', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: { metadata: { title: 'X' } } as unknown as import('@be-music/json').BeMusicJson,
+    });
+    expect(adapter.resolveTextContent(9999)).toBeUndefined();
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — reset', () => {
-  it('clears runtime ops and timers but keeps the base option ops', () => {
+  it('clears runtime ops and timers but keeps the base option ops + autoplay state', () => {
     const clock = makeClock();
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
       baseOps: new Set([920]),
       getNowMs: clock.now,
+      autoPlay: true,
     });
     clock.advance(1000);
     adapter.applyCommand({ kind: 'press-lane', channel: '11' });
     adapter.applyJudgeCombo({ judge: 'GREAT', combo: 1, channel: '11', updatedAtMs: 0 });
-    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_GR)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_GREAT)).toBe(true);
     expect(adapter.getTimerStart(keyOnTimerId(1, 1)!)).toBe(1000);
 
     adapter.reset();
 
     expect(adapter.hasOp(920)).toBe(true);
-    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_GR)).toBe(false);
+    expect(adapter.hasOp(BEATORAJA_OP.AUTOPLAY_ON)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.NOW_LOADING)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_GREAT)).toBe(false);
     expect(adapter.getTimerStart(keyOnTimerId(1, 1)!)).toBeUndefined();
     expect(adapter.getTimerStart(TIMER_SCENE_START)).toBe(0);
   });

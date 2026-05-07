@@ -118,6 +118,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       baseOps: buildBaseOpSet(options.skinConfig?.option),
       getNowMs: () => performance.now() - this.startMs,
       autoPlay: options.mode === 'auto',
+      chart: options.chart,
     });
 
     this.view = new BeatorajaPlaySkinView({
@@ -165,7 +166,6 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       window.addEventListener('keydown', this.handleKeyDown);
     }
 
-    this.adapter.markLoadingStart();
     this.enginePromise = runEngineDriver({
       chart: this.options.chart,
       audio: this.options.audio,
@@ -175,6 +175,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       engineOptions: this.options.engineOptions,
       onInputSignalsReady: ({ inputSignals }) => {
         this.inputSignals = inputSignals;
+        // The engine input bus is up — stamp the `startinput` timer so chrome gated on it (input-active
+        // indicators, etc.) becomes visible.
+        this.adapter.markStartInput();
         // If the host requested exit before the engine constructed its input bus (e.g. user mashed ESC
         // mid-loading), forward the interrupt as soon as the bus exists.
         if (this.exitRequested) {
@@ -182,18 +185,18 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         }
       },
       ui: {
-        // The engine fires `onSignalsReady` synchronously during `createUiRuntime` — by the time the
-        // engine starts ticking, `this.uiSignals` is already populated and the per-Pixi-tick `tick()`
-        // can drain it.
         onSignalsReady: ({ uiSignals, stateSignals }) => {
           this.uiSignals = uiSignals;
           this.stateSignals = stateSignals;
-          // Loading completes the moment the engine spins up its UI runtime — the engine has already
-          // resolved chart resources by that point (the audio session + chart tree are ready).
-          this.adapter.markLoadingEnd();
         },
-        onStart: () => this.adapter.markPlayStart(),
-        onStop: () => this.adapter.markFadeoutStart(),
+        onStart: () => {
+          // The engine has begun audible playback. Stamp `ready` (skin's READY flash) and `play` (the
+          // main play timer most chrome anchors against). `markPlay` also flips `now_loading` →
+          // `loaded` so the skin's loading panel exits.
+          this.adapter.markReady();
+          this.adapter.markPlay();
+        },
+        onStop: () => this.adapter.markFadeout(),
         // The actual per-frame fan-out of frame / command / judge-combo events is handled by
         // `drainWebUiSignals` inside `tick()` so all engine state arrives at the renderer in a single
         // batched pass per Pixi frame. Leaving these callbacks unset would still work via the engine's
