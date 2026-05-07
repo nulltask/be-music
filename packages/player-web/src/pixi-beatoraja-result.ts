@@ -253,7 +253,18 @@ export class PixiBeatorajaResultScene implements PixiScene {
     const elapsed = performance.now() - this.startMs;
     this.view.update({
       activeOps: this.baseOps(),
-      getTimerStart: (timerId) => this.timerStartedAt.get(timerId) ?? 0,
+      // Pass through the raw timer value so unfired timers return `undefined` and the
+      // destination renderer's "hide gated content until the timer fires" gate works. The
+      // earlier `?? 0` fallback made every timer behave as if it fired at scene start —
+      // catastrophic for TIMER_FADEOUT (id=2): the default result skin authors a fullscreen
+      // BLACK fade-IN destination gated on `timer=2`, so once the player dismissed the screen
+      // the fade played. With the `?? 0` fallback the fade played from t=0 of scene mount —
+      // an opaque black overlay covering the entire skin chrome, leaving only the graph
+      // polylines (`Graphics` nodes drawn after the overlay) visible. Mirrors the pattern in
+      // beatoraja's reference themes; the gameplay scene has always done it correctly through
+      // `BeatorajaRuntimeAdapter.getTimerStart` which already returns `undefined` for unfired
+      // timers.
+      getTimerStart: (timerId) => this.timerStartedAt.get(timerId),
       nowMs: elapsed,
     });
   }

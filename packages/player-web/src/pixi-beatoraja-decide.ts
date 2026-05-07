@@ -249,11 +249,13 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     const elapsed = performance.now() - this.startMs;
     this.view.update({
       activeOps: this.baseOps(),
-      // Sample timers from the latched map. Entries returned as `0` for timers that haven't been
-      // stamped yet — the skin sees them as "fired at scene start" and animations gated on those
-      // timers play out from the start of the splash, which matches beatoraja's behavior on
-      // un-stamped timers.
-      getTimerStart: (timerId) => this.timerStartedAt.get(timerId) ?? 0,
+      // Pass through the raw value so unfired timers return `undefined` and the destination
+      // renderer hides any element gated on them. The earlier `?? 0` fallback made every
+      // timer behave as if it fired at scene start — wrong for `TIMER_FADEOUT` (id=2): the
+      // default decide skin authors a fullscreen black fade-IN destination keyed on
+      // `timer=2`, so the splash painted black from the moment it mounted instead of waiting
+      // for the auto-advance / user-dismiss path to stamp the timer.
+      getTimerStart: (timerId) => this.timerStartedAt.get(timerId),
       nowMs: elapsed,
     });
 

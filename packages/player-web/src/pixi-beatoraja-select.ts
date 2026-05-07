@@ -271,12 +271,15 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.refreshRowVisuals();
 
     const elapsed = performance.now() - this.startMs;
-    // Treat every timer as fired at scene start so the skin's load-fade-in / animations play out.
-    // No engine is running here so the only "clock" the skin can react to is this static scene
-    // tick — `getTimerStart() => 0` makes every authored timer fire from t=0.
+    // Pass through unfired timers as `undefined` so destinations gated on them stay hidden.
+    // Returning `0` for everything would render `timer=2` (TIMER_FADEOUT) gated chrome — most
+    // notably a fullscreen black fade-IN that the default skin authors — from the moment the
+    // scene mounts, blacking out the entire view. The destination renderer hardcodes the
+    // `timer=0` (scene-start) path to use 0 elapsed already, so passing `undefined` for
+    // anything else is the correct behaviour.
     this.view.update({
       activeOps: this.baseOps(),
-      getTimerStart: () => 0,
+      getTimerStart: () => undefined,
       nowMs: elapsed,
     });
   }
