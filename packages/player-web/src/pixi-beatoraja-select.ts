@@ -215,25 +215,39 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
   private resolveSelectionText(refOp: number): string | undefined {
     const song = this.options.songs[this.currentIndex];
-    if (song === undefined) return '';
+    const skin = this.options.skin;
     switch (refOp) {
       case BEATORAJA_TEXT.TITLE:
-        return song.title;
+        return song?.title ?? '';
       case BEATORAJA_TEXT.SUBTITLE:
-        return song.subtitle ?? '';
+        return song?.subtitle ?? '';
       case BEATORAJA_TEXT.FULLTITLE:
-        return joinNonEmpty(song.title, song.subtitle);
+        return joinNonEmpty(song?.title, song?.subtitle);
       case BEATORAJA_TEXT.GENRE:
-        return song.genre ?? '';
+        return song?.genre ?? '';
       case BEATORAJA_TEXT.ARTIST:
-        return song.artist ?? '';
+        return song?.artist ?? '';
       case BEATORAJA_TEXT.SUBARTIST:
         // BrowserSongEntry doesn't carry sub-artist, so we surface the empty string rather than
         // letting the resolver fall through to `undefined` (which would make the text destination
         // disappear — confusing in a select context where "no sub-artist" is a normal case).
         return '';
       case BEATORAJA_TEXT.FULLARTIST:
-        return song.artist ?? '';
+        return song?.artist ?? '';
+      // Skin name / author from the mounted skin's header. Useful for select skins that label
+      // themselves on the chrome panel ("[GdbG Skin] Music Select").
+      case BEATORAJA_TEXT.SKIN_NAME:
+        return skin.name ?? '';
+      case BEATORAJA_TEXT.SKIN_AUTHOR:
+        return skin.author ?? '';
+      // Highlighted song's parent directory — surfaced through the existing `directoryLabel`
+      // field on BrowserSongEntry. Empty string when the host didn't preserve folder info.
+      case BEATORAJA_TEXT.DIRECTORY:
+        return song?.directoryLabel ?? '';
+      // Search query — we don't expose a search UI yet, so the slot stays empty. Skins that
+      // author a search box still get a non-undefined result so the text node doesn't disappear.
+      case BEATORAJA_TEXT.SEARCHWORD:
+        return '';
       default:
         return undefined;
     }

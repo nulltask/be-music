@@ -69,6 +69,8 @@ export interface PixiBeatorajaGameplayViewOptions {
   chart: BeMusicJson;
   audio: EngineDriverAudioContext;
   mode: 'manual' | 'auto';
+  /** Optional song directory label (e.g. parent folder name). Surfaces `BEATORAJA_TEXT.DIRECTORY = 1000`. */
+  directoryLabel?: string;
   inputTarget?: EventTarget;
   shouldSkipKey?: (event: KeyboardEvent) => boolean;
   engineOptions?: Omit<PlayerOptions, 'createAudioSession' | 'createInputRuntime' | 'createUiRuntime' | 'auto'>;
@@ -171,6 +173,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       getNowMs: () => performance.now() - this.startMs,
       autoPlay: options.mode === 'auto',
       chart: options.chart,
+      // Surface skin / directory metadata so `BEATORAJA_TEXT.SKIN_NAME` / `SKIN_AUTHOR` /
+      // `DIRECTORY` resolve to real strings on the play scene's chrome panels.
+      skinHeaderName: options.skin.name,
+      skinHeaderAuthor: options.skin.author,
+      directoryLabel: options.directoryLabel,
     });
 
     this.view = new BeatorajaPlaySkinView({

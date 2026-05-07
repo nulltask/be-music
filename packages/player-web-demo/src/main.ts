@@ -1762,6 +1762,9 @@ class PlayerWebDemoApp {
       mode: (overrides.autoPlay ?? this.guiState.autoPlay) ? 'auto' : 'manual',
       bgaTextures: prep.bga.textures,
       bgaCues: prep.bga.cues,
+      // Directory label drives `BEATORAJA_TEXT.DIRECTORY = 1000` on the play scene. The browser
+      // song entry preserves the parent folder name through the dropped collection.
+      directoryLabel: song.directoryLabel,
       onExit: () => {
         void this.finishBeatorajaGameplayThen(() => this.showSelect());
       },

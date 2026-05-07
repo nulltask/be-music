@@ -64,6 +64,18 @@ export interface BeatorajaRuntimeAdapterOptions {
    * text-resolver leaves chart-info nodes empty (matches the preview path).
    */
   chart?: BeMusicJson;
+  /**
+   * Optional mounted skin's display name. Surfaced through `BEATORAJA_TEXT.SKIN_NAME = 50` so
+   * skins that print their own name on the play scene get a real string instead of empty.
+   */
+  skinHeaderName?: string;
+  /** Optional skin author name — surfaces `BEATORAJA_TEXT.SKIN_AUTHOR = 51`. */
+  skinHeaderAuthor?: string;
+  /**
+   * Optional song directory label — surfaces `BEATORAJA_TEXT.DIRECTORY = 1000`. Beatoraja's
+   * reference theme uses this to show the parent folder name on the play scene's status bar.
+   */
+  directoryLabel?: string;
 }
 
 interface SideJudgeState {
@@ -83,6 +95,9 @@ export class BeatorajaRuntimeAdapter {
   private readonly chartPlayVariant: ChartPlayVariant;
   private readonly getNowMs: () => number;
   private readonly chart: BeMusicJson | undefined;
+  private readonly skinHeaderName: string | undefined;
+  private readonly skinHeaderAuthor: string | undefined;
+  private readonly directoryLabel: string | undefined;
   private frame: PlayerUiFramePayload | null = null;
   private readonly judgeState: Record<BeatorajaSide, SideJudgeState> = {
     1: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
@@ -139,6 +154,9 @@ export class BeatorajaRuntimeAdapter {
     this.activeOps = new Set(options.baseOps);
     this.getNowMs = options.getNowMs;
     this.chart = options.chart;
+    this.skinHeaderName = options.skinHeaderName;
+    this.skinHeaderAuthor = options.skinHeaderAuthor;
+    this.directoryLabel = options.directoryLabel;
     // Autoplay flag — prop.lua `autoplayon = 33` / `autoplayoff = 32`. We surface BOTH so a skin gated on
     // either side picks up the correct state. (Some skins author the panel as `if[33]`, others as
     // `if[-32]`; both are valid in beatoraja's spec.)
@@ -379,6 +397,15 @@ export class BeatorajaRuntimeAdapter {
         return subartist;
       case BEATORAJA_TEXT.FULLARTIST:
         return joinNonEmpty(meta.artist, subartist);
+      // Skin metadata + directory don't live on the chart — the host provides them via the
+      // `skinHeader` / `directoryLabel` adapter options. Returning empty when those weren't
+      // wired keeps the chrome neutral instead of leaking `undefined` through the resolver.
+      case BEATORAJA_TEXT.SKIN_NAME:
+        return this.skinHeaderName ?? '';
+      case BEATORAJA_TEXT.SKIN_AUTHOR:
+        return this.skinHeaderAuthor ?? '';
+      case BEATORAJA_TEXT.DIRECTORY:
+        return this.directoryLabel ?? '';
       default:
         return undefined;
     }

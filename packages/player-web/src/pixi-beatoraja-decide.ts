@@ -270,24 +270,32 @@ export class PixiBeatorajaDecideScene implements PixiScene {
 
   private resolveSongText(refOp: number): string | undefined {
     const song = this.options.song;
-    if (song === undefined) return '';
+    const skin = this.options.skin;
     switch (refOp) {
       case BEATORAJA_TEXT.TITLE:
-        return song.title;
+        return song?.title ?? '';
       case BEATORAJA_TEXT.SUBTITLE:
-        return song.subtitle ?? '';
+        return song?.subtitle ?? '';
       case BEATORAJA_TEXT.FULLTITLE:
-        return joinNonEmpty(song.title, song.subtitle);
+        return joinNonEmpty(song?.title, song?.subtitle);
       case BEATORAJA_TEXT.GENRE:
-        return song.genre ?? '';
+        return song?.genre ?? '';
       case BEATORAJA_TEXT.ARTIST:
-        return song.artist ?? '';
+        return song?.artist ?? '';
       case BEATORAJA_TEXT.SUBARTIST:
         // BrowserSongEntry doesn't carry sub-artist — surface empty rather than `undefined` so the
         // text destination doesn't disappear (would confuse skins that style the row regardless).
         return '';
       case BEATORAJA_TEXT.FULLARTIST:
-        return song.artist ?? '';
+        return song?.artist ?? '';
+      // Skin / directory metadata. The skin header is always present (we just mounted it); the
+      // song's directory label may be empty when the host didn't preserve folder info.
+      case BEATORAJA_TEXT.SKIN_NAME:
+        return skin.name ?? '';
+      case BEATORAJA_TEXT.SKIN_AUTHOR:
+        return skin.author ?? '';
+      case BEATORAJA_TEXT.DIRECTORY:
+        return song?.directoryLabel ?? '';
       default:
         return undefined;
     }

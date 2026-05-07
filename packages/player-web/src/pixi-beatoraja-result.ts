@@ -280,22 +280,30 @@ export class PixiBeatorajaResultScene implements PixiScene {
 
   private resolveSongText(refOp: number): string | undefined {
     const song = this.options.song;
-    if (song === undefined) return '';
+    const skin = this.options.skin;
     switch (refOp) {
       case BEATORAJA_TEXT.TITLE:
-        return song.title;
+        return song?.title ?? '';
       case BEATORAJA_TEXT.SUBTITLE:
-        return song.subtitle ?? '';
+        return song?.subtitle ?? '';
       case BEATORAJA_TEXT.FULLTITLE:
-        return joinNonEmpty(song.title, song.subtitle);
+        return joinNonEmpty(song?.title, song?.subtitle);
       case BEATORAJA_TEXT.GENRE:
-        return song.genre ?? '';
+        return song?.genre ?? '';
       case BEATORAJA_TEXT.ARTIST:
-        return song.artist ?? '';
+        return song?.artist ?? '';
       case BEATORAJA_TEXT.SUBARTIST:
         return '';
       case BEATORAJA_TEXT.FULLARTIST:
-        return song.artist ?? '';
+        return song?.artist ?? '';
+      // Skin / directory metadata — same contract as decide / gameplay paths. Lets the result
+      // panel display "Played: <directory> / <song.title>" in skins that author the layout.
+      case BEATORAJA_TEXT.SKIN_NAME:
+        return skin.name ?? '';
+      case BEATORAJA_TEXT.SKIN_AUTHOR:
+        return skin.author ?? '';
+      case BEATORAJA_TEXT.DIRECTORY:
+        return song?.directoryLabel ?? '';
       default:
         return undefined;
     }

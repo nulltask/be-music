@@ -710,9 +710,9 @@ export const BEATORAJA_NUM = {
 } as const;
 
 export const BEATORAJA_TEXT = {
-  /** prop.lua `rival = 1`. */
+  /** prop.lua `rival = 1`. DB-backed; not wired. */
   RIVAL: 1,
-  /** prop.lua `player = 2`. */
+  /** prop.lua `player = 2`. DB-backed; not wired. */
   PLAYER: 2,
   /** prop.lua `title = 10`. */
   TITLE: 10,
@@ -728,4 +728,12 @@ export const BEATORAJA_TEXT = {
   SUBARTIST: 15,
   /** prop.lua `fullartist = 16` (`artist` + `" "` + `subartist`). */
   FULLARTIST: 16,
+  /** prop.lua `searchword = 30`. The select scene's current search query. */
+  SEARCHWORD: 30,
+  /** prop.lua `skin_name = 50`. The mounted skin's `header.name`. */
+  SKIN_NAME: 50,
+  /** prop.lua `skin_author = 51`. The mounted skin's `header.author`. */
+  SKIN_AUTHOR: 51,
+  /** prop.lua `directory = 1000`. The current song's parent directory label. */
+  DIRECTORY: 1000,
 } as const;
