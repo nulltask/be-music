@@ -109,9 +109,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
    * after the chrome was rendering correctly.
    */
   private readonly backdrop = new Graphics();
-  private readonly view: BeatorajaPlaySkinView;
-  private readonly noteLayer: BeatorajaNoteLayer;
-  private readonly bgaLayer: BeatorajaBgaLayer | undefined;
+  // Visual layers — re-built in `replaceSkin` so option changes can hot-swap the chrome without
+  // tearing down the engine driver.
+  private view: BeatorajaPlaySkinView;
+  private noteLayer: BeatorajaNoteLayer;
+  private bgaLayer: BeatorajaBgaLayer | undefined;
   private readonly adapter: BeatorajaRuntimeAdapter;
   private readonly options: PixiBeatorajaGameplayViewOptions;
   private currentFrame: PlayerUiFramePayload | null = null;
@@ -323,6 +325,84 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   /** Promise that resolves once the engine driver finishes (chart end / interrupt / error). */
   awaitCompletion(): Promise<EngineDriverResult> | undefined {
     return this.enginePromise;
+  }
+
+  /**
+   * Hot-swap the skin (and matching texture / font caches) without tearing down the engine driver.
+   * Used by the skin-options panel when the user re-picks a `property[]` or `filepath[]` value
+   * mid-chart — the chrome rebuilds instantly while audio / input / scoring keep running.
+   *
+   * The runtime adapter's `baseOps` is updated to reflect the new option set; per-side judge state,
+   * timer stamps, and the latched frame are preserved so visual continuity (judge plate fade-out,
+   * combo readout, etc.) carries through the swap.
+   */
+  replaceSkin(opts: {
+    skin: BeatorajaSkin;
+    skinConfig?: BeatorajaSkinConfig;
+    textures: BeatorajaTextureCache;
+    fonts?: BeatorajaFontCache;
+  }): void {
+    if (this.disposed) return;
+
+    // 1. Adapter: swap base ops while keeping runtime state.
+    this.adapter.setBaseOps(buildBaseOpSet(opts.skinConfig?.option));
+
+    // 2. Tear down the old visual layers. Textures live on the per-entry cache and survive disposal
+    // (we never destroy them through the cache by design — see `beatoraja-textures.ts`).
+    this.bgaLayer?.dispose();
+    this.bgaLayer = undefined;
+    this.noteLayer.dispose();
+    this.view.dispose();
+
+    // 3. Rebuild against the new skin.
+    this.view = new BeatorajaPlaySkinView({
+      skin: opts.skin,
+      textures: opts.textures,
+      resolveRefValue: (ref) => this.adapter.resolveRefValue(ref),
+      resolveTextContent: (ref) => this.adapter.resolveTextContent(ref),
+      resolveNumberValue: (ref) => this.adapter.resolveNumberValue(ref),
+      resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
+    });
+    const noteImageMap = new Map<BeatorajaImageId, BeatorajaImageElement>();
+    for (const image of normalizeBeatorajaImages(opts.skin.image)) {
+      noteImageMap.set(image.id, image);
+    }
+    this.noteLayer = new BeatorajaNoteLayer({
+      noteSection: normalizeBeatorajaNote(opts.skin.note),
+      variant: this.options.variant,
+      images: noteImageMap,
+      textures: opts.textures,
+    });
+    if (this.options.bgaTextures !== undefined && this.options.bgaCues !== undefined) {
+      this.bgaLayer = new BeatorajaBgaLayer({
+        skin: opts.skin,
+        textures: this.options.bgaTextures,
+        cues: this.options.bgaCues,
+      });
+    }
+
+    // 4. Re-attach in the original z-order: backdrop → skin → (BGA at the back of skin) → notes.
+    this.view.container.addChild(this.noteLayer.container);
+    if (this.bgaLayer !== undefined) {
+      this.view.container.addChildAt(this.bgaLayer.container, 0);
+    }
+    // The root already contains [backdrop, oldView]; replace the old view child with the new one.
+    // Old view's container was destroyed (children detach), so we just append the new view.
+    this.root.addChild(this.view.container);
+
+    // 5. Force a re-fit on next tick so the new skin's `w` / `h` are applied even when the screen
+    //    size hasn't changed since the last fit.
+    this.lastFitWidth = 0;
+    this.lastFitHeight = 0;
+
+    // eslint-disable-next-line no-console
+    console.log(
+      '[beatoraja-gameplay] skin replaced',
+      JSON.stringify({
+        canvas: { w: this.view.width, h: this.view.height },
+        name: opts.skin.name,
+      }),
+    );
   }
 
   private tick(): void {

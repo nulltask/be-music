@@ -47,6 +47,7 @@ import {
   resolveChartPlayVariant,
   summarizeBeatorajaPlaySkins,
   type BeatorajaFontCache,
+  type BeatorajaPlayableVariant,
   type BeatorajaPlayVariant,
   type BeatorajaTextureCache,
   type BeatorajaThemeBundle,
@@ -1727,20 +1728,50 @@ class PlayerWebDemoApp {
     await this.sceneHost.setScene(this.beatorajaGameplayView);
     this.setStatus(`Playing (beatoraja): ${song.title}`);
 
-    // Skin-options panel for the play skin's `property[]` / `filepath[]`. Changes apply on the
-    // next gameplay mount — mid-chart skin reloads would tear down the engine's audio session and
-    // wipe the player's progress, so we cache without a live re-mount.
+    // Skin-options panel for the play skin's `property[]` / `filepath[]`. Live edits flow through
+    // `applyBeatorajaPlaySkinConfig` → `replaceSkin` so the chrome rebuilds without tearing down
+    // the engine driver. The audio session, chart playback, and scoring all keep running.
     this.refreshBeatorajaSkinOptionsGui({
       title: `Play skin (${variant} keys)`,
       entryPath: headerLoad.entry.entryPath,
       header: headerLoad.result.header,
-      onApply: () => {
-        // Drop the texture cache for this skin entry — see the select-scene rationale; same applies
-        // for play skins where Lua `main()` builds `skin.source` based on the option set.
-        this.beatorajaTextureCachesByEntry.delete(skinLoad.entry.entryPath);
-        // No live re-mount during play. The panel-edited config will take effect when the user
-        // restarts the chart or starts a new one.
+      onApply: (nextConfig) => {
+        void this.applyBeatorajaPlaySkinConfig(headerLoad.entry.entryPath, variant, nextConfig);
       },
+    });
+  }
+
+  /**
+   * Apply a fresh skin-config to the active beatoraja gameplay scene WITHOUT restarting the chart.
+   * Re-loads the skin with the new options, rebuilds the per-entry texture cache, then calls
+   * `replaceSkin` on the live gameplay view. The runtime adapter's `setBaseOps` handles the option
+   * delta so per-side judge state / timer stamps / current frame all carry through unchanged.
+   */
+  private async applyBeatorajaPlaySkinConfig(
+    entryPath: string,
+    variant: BeatorajaPlayableVariant,
+    config: BeatorajaSkinConfig,
+  ): Promise<void> {
+    const bundle = this.beatorajaTheme;
+    if (!bundle || !this.beatorajaGameplayView) return;
+    const skinLoad = loadBeatorajaPlaySkinFromBundle(bundle, variant, config);
+    if (!skinLoad || !skinLoad.result.ok || !skinLoad.result.skin) return;
+    this.beatorajaTextureCachesByEntry.delete(entryPath);
+    const sourceBundle = bundleBeatorajaSources({
+      files: bundle.files,
+      entryPath: skinLoad.entry.entryPath,
+      sources: (skinLoad.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+      filepathSchema: skinLoad.result.skin.filepath,
+      filepathOverrides: config.file,
+    });
+    const textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
+    this.beatorajaTextureCachesByEntry.set(entryPath, textures);
+    const fonts = this.beatorajaFontCachesByEntry.get(entryPath);
+    this.beatorajaGameplayView.replaceSkin({
+      skin: skinLoad.result.skin,
+      skinConfig: config,
+      textures,
+      fonts,
     });
   }
 
@@ -1833,19 +1864,47 @@ class PlayerWebDemoApp {
     this.setStatus(`Select (beatoraja): ${this.collection.songs.length} song(s)`);
 
     // Build the bottom-right skin-options panel for this select skin's `property[]` / `filepath[]`.
-    // User picks flow back through `onApply` → cache → re-mount the select scene with the new
-    // config so visual changes (Play Side, Score Graph On/Off, etc.) take effect immediately.
+    // User picks flow back through `onApply` → live `replaceSkin` on the active scene so chrome
+    // changes (Play Side, Score Graph On/Off, etc.) take effect on the very next Pixi frame
+    // without disposing / re-mounting the scene.
     this.refreshBeatorajaSkinOptionsGui({
       title: `Select skin (${skinLoad.entry.entryPath.split('/').pop() ?? 'select'})`,
       entryPath: headerLoad.entry.entryPath,
       header: headerLoad.result.header,
-      onApply: () => {
-        // Drop the per-entry texture cache: a different option pick can change which `source[]`
-        // entries the skin's `main()` materializes (Lua skins build `skin.source` dynamically based
-        // on `skin_config.option`), and the previous cache may not cover the new sources.
-        this.beatorajaTextureCachesByEntry.delete(skinLoad.entry.entryPath);
-        void this.showSelect();
+      onApply: (nextConfig) => {
+        void this.applyBeatorajaSelectSkinConfig(headerLoad.entry.entryPath, nextConfig);
       },
+    });
+  }
+
+  /**
+   * Apply a fresh skin-config to the active beatoraja select scene WITHOUT disposing / re-mounting.
+   * Re-runs the skin's Lua `main()` (or re-parses the JSON) with the new options, refreshes the
+   * texture cache (Lua skins emit different `source[]` lists per option set), then calls
+   * `replaceSkin` on the live scene.
+   */
+  private async applyBeatorajaSelectSkinConfig(entryPath: string, config: BeatorajaSkinConfig): Promise<void> {
+    const bundle = this.beatorajaTheme;
+    if (!bundle || !this.beatorajaSelectScene) return;
+    const skinLoad = loadBeatorajaSelectSkinFromBundle(bundle, config);
+    if (!skinLoad || !skinLoad.result.ok || !skinLoad.result.skin) return;
+    // Drop and re-decode the texture cache for this entry — option changes can alter `source[]`.
+    this.beatorajaTextureCachesByEntry.delete(entryPath);
+    const sourceBundle = bundleBeatorajaSources({
+      files: bundle.files,
+      entryPath: skinLoad.entry.entryPath,
+      sources: (skinLoad.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+      filepathSchema: skinLoad.result.skin.filepath,
+      filepathOverrides: config.file,
+    });
+    const textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
+    this.beatorajaTextureCachesByEntry.set(entryPath, textures);
+    const fonts = this.beatorajaFontCachesByEntry.get(entryPath);
+    this.beatorajaSelectScene.replaceSkin({
+      skin: skinLoad.result.skin,
+      skinConfig: config,
+      textures,
+      fonts,
     });
   }
 

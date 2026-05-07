@@ -52,7 +52,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   readonly root = new Container();
   /** Full-canvas backdrop behind the skin container — see `PixiBeatorajaGameplayView` for rationale. */
   private readonly backdrop = new Graphics();
-  private readonly view: BeatorajaPlaySkinView;
+  private view: BeatorajaPlaySkinView;
   /**
    * Song-bar overlay. Painted on top of the skin in screen-space (NOT inside the skin's scaled
    * container) so the row layout doesn't compress with the letterbox. This is a placeholder UI: the
@@ -132,6 +132,52 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (!this.root.destroyed) {
       this.root.destroy({ children: false });
     }
+  }
+
+  /**
+   * Hot-swap the underlying skin / textures / fonts / config without losing the cursor position.
+   * Used by the skin-options panel for live `property[]` / `filepath[]` edits — rebuilds the chrome
+   * against the new skin while preserving `currentIndex`, the song list, and the navigation state.
+   */
+  replaceSkin(opts: {
+    skin: BeatorajaSkin;
+    skinConfig?: BeatorajaSkinConfig;
+    textures: BeatorajaTextureCache;
+    fonts?: BeatorajaFontCache;
+  }): void {
+    if (this.disposed) return;
+    this.view.dispose();
+    this.cachedBaseOps = undefined;
+
+    // Mutate the options' skin-config so subsequent `baseOps()` calls pick up the new value (it
+    // memoizes from `options.skinConfig?.option`). The other options' identity is preserved so the
+    // panel state, song list, callbacks all keep pointing at the same objects.
+    (this.options as { skinConfig?: BeatorajaSkinConfig }).skinConfig = opts.skinConfig;
+
+    this.view = new BeatorajaPlaySkinView({
+      skin: opts.skin,
+      textures: opts.textures,
+      resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
+      resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
+    });
+    // The root currently holds [backdrop, oldView (destroyed), songList]. Re-add the new view
+    // BETWEEN backdrop and songList so the layering stays correct (skin chrome behind the list).
+    this.root.removeChild(this.songListLayer);
+    this.root.addChild(this.view.container);
+    this.root.addChild(this.songListLayer);
+
+    // Force a re-fit so the new skin's `w` / `h` apply on the next tick.
+    this.lastFitWidth = 0;
+    this.lastFitHeight = 0;
+
+    // eslint-disable-next-line no-console
+    console.log(
+      '[beatoraja-select] skin replaced',
+      JSON.stringify({
+        canvas: { w: this.view.width, h: this.view.height },
+        name: opts.skin.name,
+      }),
+    );
   }
 
   /** Programmatically jump to a song index. Out-of-range values are clamped. */

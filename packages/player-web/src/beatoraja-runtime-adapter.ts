@@ -74,7 +74,7 @@ export class BeatorajaRuntimeAdapter {
    * reused every frame to avoid allocations on the hot path.
    */
   private readonly activeOps: Set<number>;
-  private readonly baseOps: ReadonlySet<number>;
+  private baseOps: ReadonlySet<number>;
   private readonly timerStartedAt = new Map<number, number>();
   private readonly chartPlayVariant: ChartPlayVariant;
   private readonly getNowMs: () => number;
@@ -345,6 +345,20 @@ export class BeatorajaRuntimeAdapter {
    */
   setHiSpeed(value: number): void {
     if (Number.isFinite(value) && value > 0) this.lastHiSpeed = value;
+  }
+
+  /**
+   * Replace the option-driven base op set with `next` while preserving runtime ops (last-judge gate,
+   * autoplay flag, loaded / now-loading state, etc.). Used when the user re-picks a skin's
+   * `property[]` mid-chart — the visual chrome should reflect the new option immediately without
+   * tearing down the engine driver. Old ops absent from `next` are removed; new ops are added.
+   */
+  setBaseOps(next: ReadonlySet<number>): void {
+    for (const op of this.baseOps) {
+      if (!next.has(op)) this.activeOps.delete(op);
+    }
+    for (const op of next) this.activeOps.add(op);
+    this.baseOps = next;
   }
 
   /** Update the autoplay op (mostly for symmetry with the engine driver — mode rarely changes mid-chart). */
