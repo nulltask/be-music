@@ -26,9 +26,6 @@ import {
   type BeatorajaRenderContext,
 } from './beatoraja-render.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
-import { logger } from './logger.ts';
-
-const log = logger('beatoraja-view');
 
 export interface BeatorajaPlaySkinViewOptions {
   skin: BeatorajaSkin;
@@ -189,10 +186,8 @@ export class BeatorajaPlaySkinView {
       this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame });
     }
 
-    // Per-skin construction summary. Visible only with Chrome devtools' "Verbose" filter on so it
-    // doesn't clutter the default console; flip Verbose on when investigating which destinations the
-    // skin view actually mounted (vs which were silently skipped because no `image[]` / `value[]` /
-    // `text[]` matched the destination's id).
+    // Per-skin construction summary. Direct `console.log` so devtools points at this exact line
+    // number when you click the source link (a `logger`-wrapped call would land in `logger.ts`).
     const counts = this.entries.reduce(
       (acc, entry) => {
         acc[entry.kind] += 1;
@@ -201,7 +196,8 @@ export class BeatorajaPlaySkinView {
       { image: 0, value: 0, text: 0 } as Record<ViewEntry['kind'], number>,
     );
     const skipped = groups.length - this.entries.length;
-    log.debug('skin view built', {
+    // eslint-disable-next-line no-console
+    console.log('[beatoraja-view] skin view built', {
       canvas: { w: this.width, h: this.height },
       destinations: groups.length,
       image: { declared: imageById.size, mounted: counts.image },
@@ -210,15 +206,14 @@ export class BeatorajaPlaySkinView {
       skipped,
     });
     if (skipped > 0) {
-      // Surface unmatched destination ids — typical cause is a typo or a destination targeting a
-      // host-provided element (judge plate / gauge / bga) the skin view doesn't render directly.
       const unmatchedIds = groups
         .filter(
           (group) =>
             !imageById.has(group.id) && !valueById.has(group.id) && !textById.has(group.id),
         )
         .map((group) => group.id);
-      log.debug('skin view skipped destinations (no matching image/value/text)', {
+      // eslint-disable-next-line no-console
+      console.log('[beatoraja-view] skipped destinations (no matching image/value/text)', {
         count: skipped,
         ids: unmatchedIds.slice(0, 32),
         truncated: unmatchedIds.length > 32,

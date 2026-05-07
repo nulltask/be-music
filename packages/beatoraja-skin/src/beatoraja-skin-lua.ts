@@ -406,15 +406,12 @@ function sanitizeSkinConfig(config: BeatorajaLuaSkinConfig): Record<string, unkn
 }
 
 /**
- * One-shot diagnostic for `require()` resolutions. Routes through `console.debug` so it stays out of
- * the default console (visible only with Chrome devtools' "Verbose" filter on); this package doesn't
- * carry a `@be-music/utils`-side logger, so we write directly without a scope label. Pair it with the
- * player-web `beatoraja-view` / `beatoraja-adapter` loggers when investigating a load issue — the
- * three streams together describe the full skin-load pipeline.
+ * Diagnostic for `require()` resolutions. Direct `console.log` (not via the player-web logger
+ * wrapper) so devtools resolves source-line clicks to this file rather than to a logger module.
  */
 function logRequire(name: string, kind: 'builtin' | 'module' | 'stub'): void {
   // eslint-disable-next-line no-console
-  console.debug(`[beatoraja-lua] require(${JSON.stringify(name)}) -> ${kind}`);
+  console.log(`[beatoraja-lua] require(${JSON.stringify(name)}) -> ${kind}`);
 }
 
 function pushJsValueAsLua(L: lua_State, value: unknown): void {

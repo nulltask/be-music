@@ -22,9 +22,6 @@ import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
 import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import { pickBeatorajaNoteRects, type BeatorajaNoteRect, type BeatorajaNoteSection } from '@be-music/beatoraja-skin';
-import { logger } from './logger.ts';
-
-const log = logger('beatoraja-notes');
 
 /** Pixels per chart-beat at hispeed = 1.0. Mirrors the LR2 path's constant so the two layers scroll consistently. */
 export const BEATORAJA_PIXELS_PER_BEAT = 72;
@@ -97,10 +94,10 @@ export class BeatorajaNoteLayer {
       this.releaseAll();
       if (!this.firstFrameLogged && frame.notes.length > 0) {
         // Notes arriving but lane geometry resolved to empty — usually means the skin's `note.dst[]`
-        // is gated on an op the runtime hasn't activated. Surface once so the user can correlate the
-        // missing chrome with the op set.
+        // is gated on an op the runtime hasn't activated.
         this.firstFrameLogged = true;
-        log.debug('note layer: no lane rects matched activeOps', {
+        // eslint-disable-next-line no-console
+        console.log('[beatoraja-notes] no lane rects matched activeOps', {
           variant: this.variant,
           dstBlocks: this.noteSection.dst.length,
           activeOpsCount: activeOps.size,
@@ -113,7 +110,8 @@ export class BeatorajaNoteLayer {
     let used = 0;
     if (!this.firstFrameLogged) {
       this.firstFrameLogged = true;
-      log.debug('note layer: first frame', {
+      // eslint-disable-next-line no-console
+      console.log('[beatoraja-notes] first frame', {
         variant: this.variant,
         rects: rects.length,
         judgementY,

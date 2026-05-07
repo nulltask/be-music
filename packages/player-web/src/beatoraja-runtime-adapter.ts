@@ -42,9 +42,6 @@ import {
   TIMER_STARTINPUT,
   type BeatorajaSide,
 } from '@be-music/beatoraja-skin';
-import { logger } from './logger.ts';
-
-const log = logger('beatoraja-adapter');
 
 export interface BeatorajaRuntimeAdapterOptions {
   /** Chart variant (matches `ChartPlayVariant` from `@be-music/player`). Used to resolve channel → lane index. */
@@ -124,9 +121,8 @@ export class BeatorajaRuntimeAdapter {
   markTimer(timerId: number): void {
     const now = this.getNowMs();
     this.timerStartedAt.set(timerId, now);
-    // Per-timer stamp — high volume during active gameplay (every key press / judge fires several).
-    // Filtered out of the default console; visible under devtools "Verbose".
-    log.debug('mark timer', { timer: timerId, atMs: now });
+    // eslint-disable-next-line no-console
+    console.log('[beatoraja-adapter] mark timer', { timer: timerId, atMs: now });
   }
 
   /** Stamp the `startinput` timer (prop.lua `startinput = 1`). Fires when the engine input bus is ready. */
@@ -164,7 +160,8 @@ export class BeatorajaRuntimeAdapter {
    * {@link PlayerUiCommand}. Unknown command kinds (forward-compat) are ignored.
    */
   applyCommand(command: PlayerUiCommand): void {
-    log.debug('apply command', command);
+    // eslint-disable-next-line no-console
+    console.log('[beatoraja-adapter] apply command', command);
     switch (command.kind) {
       case 'press-lane':
         this.startLaneKeyOnTimer(command.channel);
@@ -206,7 +203,14 @@ export class BeatorajaRuntimeAdapter {
       sideState.lastJudgeOp = op;
     }
     this.markTimer(judgeTimerId(side));
-    log.debug('apply judge', { side, kind: state.judge, op, combo: state.combo, channel: state.channel });
+    // eslint-disable-next-line no-console
+    console.log('[beatoraja-adapter] apply judge', {
+      side,
+      kind: state.judge,
+      op,
+      combo: state.combo,
+      channel: state.channel,
+    });
   }
 
   /** Read-only handle the skin view consumes per frame. The same object identity persists across calls. */
@@ -229,7 +233,8 @@ export class BeatorajaRuntimeAdapter {
     const value = this.resolveTextContentInner(refOp, chart);
     if (value === undefined && !this.unresolvedTextRefs.has(refOp)) {
       this.unresolvedTextRefs.add(refOp);
-      log.debug('resolveTextContent: ref not wired (returns empty)', { ref: refOp });
+      // eslint-disable-next-line no-console
+      console.log('[beatoraja-adapter] resolveTextContent: ref not wired (returns empty)', { ref: refOp });
     }
     return value;
   }
@@ -281,10 +286,10 @@ export class BeatorajaRuntimeAdapter {
     const value = this.resolveNumberValueInner(refOp, summary);
     if (value === undefined && !this.unresolvedNumberRefs.has(refOp)) {
       // Log each unresolved ref ONCE per session (Set-gated). Helps identify which prop.lua num codes
-      // the loaded skin uses but the adapter doesn't yet wire — the user can then prioritize adding
-      // them. Visible under devtools "Verbose" so the default console stays clean.
+      // the loaded skin uses but the adapter doesn't yet wire.
       this.unresolvedNumberRefs.add(refOp);
-      log.debug('resolveNumberValue: ref not wired (returns 0)', { ref: refOp });
+      // eslint-disable-next-line no-console
+      console.log('[beatoraja-adapter] resolveNumberValue: ref not wired (returns 0)', { ref: refOp });
     }
     return value;
   }

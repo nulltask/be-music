@@ -346,19 +346,24 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       this.bgaLayer?.update(this.currentFrame.currentSeconds, ctx, this.adapter.isPoorBgaActive());
     }
 
-    // Periodic state snapshot — every 300 frames (≈ 5 s at 60 fps). Gives a long-running diagnostic
-    // trail under devtools "Verbose" without flooding the console. Useful for "why did the chart
-    // freeze at second 47" forensics — visit the timeline of these snapshots and look for the last
-    // healthy one.
+    // Periodic state snapshot — every 300 frames (≈ 5 s at 60 fps). Direct `console.log` so devtools
+    // resolves the source link to this exact line rather than `logger.ts`.
     this.debugFrameCounter += 1;
     if (this.debugFrameCounter % 300 === 0 && this.currentFrame) {
       const summary = this.currentFrame.summary;
-      log.debug('frame snapshot', {
+      // eslint-disable-next-line no-console
+      console.log('[beatoraja-gameplay] frame snapshot', {
         seconds: +this.currentFrame.currentSeconds.toFixed(2),
         beat: +this.currentFrame.currentBeat.toFixed(2),
         notesInFlight: this.currentFrame.notes.length,
         score: summary.score,
-        combo: { perfect: summary.perfect, great: summary.great, good: summary.good, bad: summary.bad, poor: summary.poor },
+        judges: {
+          perfect: summary.perfect,
+          great: summary.great,
+          good: summary.good,
+          bad: summary.bad,
+          poor: summary.poor,
+        },
         hiSpeed: this.hiSpeed,
         activeOps: ctx.activeOps.size,
         timers: this.adapter.timerSnapshot().length,
