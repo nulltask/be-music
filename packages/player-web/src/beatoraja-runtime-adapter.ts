@@ -375,6 +375,48 @@ export class BeatorajaRuntimeAdapter {
     return value;
   }
 
+  /**
+   * Resolve a `graph[].type` code into a fill ratio in `[0, 1]`. The skin view scales the graph's
+   * source-rect along its `angle` axis by the returned value. Returns `undefined` for codes the
+   * adapter doesn't surface (the renderer hides the bar).
+   *
+   * The supported codes mirror beatoraja's reference theme conventions:
+   *
+   *   - `1` (gauge 1P) / `6` (gauge 2P): groove gauge percent
+   *   - `2`: chart-time progress
+   *   - `102`: load progress (always 1 in our pipeline — assets pre-decode before mount)
+   *
+   * Polyline-style codes (`110` / `113` / `115` — score history) intentionally aren't surfaced
+   * here because they don't fit the bar-scaling model. Skins that author them get hidden bars
+   * until a per-frame history mechanism ships.
+   */
+  resolveGraphValue(type: number): number | undefined {
+    const frame = this.frame;
+    if (frame === undefined || frame === null) return undefined;
+    switch (type) {
+      // Gauge bars — 1P (`1`) and 2P (`6`). Same data source for both since we're single-player.
+      case 1:
+      case 6: {
+        const gauge = frame.summary.gauge;
+        if (gauge === undefined || gauge.max <= 0) return 0;
+        return gauge.current / gauge.max;
+      }
+      // Chart-time progress — fills as the chart plays out. Saturates at 1 when the engine
+      // overruns `totalSeconds` slightly (last-note hold past the end-of-chart marker).
+      case 2: {
+        if (frame.totalSeconds <= 0) return 0;
+        return frame.currentSeconds / frame.totalSeconds;
+      }
+      // Load progress — beatoraja themes show this during the asset-decode window. Our pipeline
+      // pre-decodes everything before mounting the gameplay scene, so by the time this resolver
+      // is reachable, loading IS complete. Surface 1 to match the "fully loaded" visual.
+      case 102:
+        return 1;
+      default:
+        return undefined;
+    }
+  }
+
   private resolveNumberValueInner(
     refOp: number,
     summary: PlayerUiFramePayload['summary'] | undefined,

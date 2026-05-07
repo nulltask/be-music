@@ -103,6 +103,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
       resolveNumberValue: (refOp) => this.resolveResultNumber(refOp),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
+      resolveGraphValue: (type) => this.resolveResultGraph(type),
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
@@ -363,6 +364,34 @@ export class PixiBeatorajaResultScene implements PixiScene {
       // log clean.
       default:
         return 0;
+    }
+  }
+
+  /**
+   * Result-scene graph-value resolver. Surfaces the run's frozen ratios — gauge percent, score
+   * rate — for graph elements. Polyline-style graphs (`110` / `113` / `115`) return `undefined`
+   * so the renderer hides them; per-frame history rendering would require gameplay to plumb a
+   * `scoreHistory` array through `onComplete`, which it doesn't yet do.
+   */
+  private resolveResultGraph(type: number): number | undefined {
+    const summary = this.options.summary;
+    switch (type) {
+      // Gauge bars — 1P (`1`) and 2P (`6`). The result panel typically shows the final gauge level
+      // from the cleared / failed run.
+      case 1:
+      case 6: {
+        const gauge = summary.gauge;
+        if (gauge === undefined || gauge.max <= 0) return 0;
+        return gauge.current / gauge.max;
+      }
+      // EX-score rate — many result skins show a horizontal bar that fills with the score
+      // percentage. Mirrors the live `score_rate = 102` num convention.
+      case 7: {
+        const max = summary.total * 2;
+        return max > 0 ? summary.exScore / max : 0;
+      }
+      default:
+        return undefined;
     }
   }
 

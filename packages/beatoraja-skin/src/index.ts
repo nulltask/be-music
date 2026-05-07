@@ -54,6 +54,9 @@ export type { BeatorajaDestinationGroup, BeatorajaDestinationKeyframe } from './
 export { normalizeBeatorajaDestinations, sampleBeatorajaDestination } from './beatoraja-skin-destination.ts';
 export type { BeatorajaFontElement, BeatorajaTextAlign, BeatorajaTextElement } from './beatoraja-skin-text.ts';
 export { normalizeBeatorajaFonts, normalizeBeatorajaTexts } from './beatoraja-skin-text.ts';
+
+export type { BeatorajaGraphElement, BeatorajaGraphFillDirection } from './beatoraja-skin-graph.ts';
+export { normalizeBeatorajaGraphs } from './beatoraja-skin-graph.ts';
 export type { BeatorajaNoteDestinationBlock, BeatorajaNoteRect, BeatorajaNoteSection } from './beatoraja-skin-note.ts';
 export { normalizeBeatorajaNote, pickBeatorajaNoteRects } from './beatoraja-skin-note.ts';
 export { expandBeatorajaWildcard, resolveBeatorajaPath, resolveSourcePath } from './beatoraja-skin-resolver.ts';

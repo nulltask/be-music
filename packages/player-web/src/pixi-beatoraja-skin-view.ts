@@ -10,10 +10,12 @@ import {
   imageFrameRect,
   imageRefFrame,
   normalizeBeatorajaDestinations,
+  normalizeBeatorajaGraphs,
   normalizeBeatorajaImages,
   normalizeBeatorajaTexts,
   normalizeBeatorajaValues,
   type BeatorajaDestinationGroup,
+  type BeatorajaGraphElement,
   type BeatorajaImageElement,
   type BeatorajaImageId,
   type BeatorajaSkin,
@@ -65,6 +67,20 @@ export interface BeatorajaPlaySkinViewOptions {
    * couldn't accept. Returning `undefined` is treated as `'css'`.
    */
   resolveFontKind?: (fontId: number) => 'css' | 'bitmap' | undefined;
+  /**
+   * Lookup `graph[].type` → fill ratio in `[0, 1]`. The renderer scales the graph's source-rect
+   * along its `angle` axis by the returned value. Common types:
+   *
+   *   - `1` (gauge 1P) / `6` (gauge 2P) → `summary.gauge.current / summary.gauge.max`
+   *   - `2` (chart progress) → `currentSeconds / totalSeconds`
+   *   - `102` (load progress) → load %, currently always 1 in our pipeline (assets pre-decode)
+   *
+   * Polyline-style codes (`110` / `113` / `115` — score history) don't fit the "scale a sub-rect"
+   * model the renderer uses; the host should return `undefined` for those so the graph stays
+   * hidden until per-frame history tracking ships. Returning `undefined` for unknown types
+   * matches that — the graph's destination renders empty.
+   */
+  resolveGraphValue?: (type: number) => number | undefined;
 }
 
 interface SpriteEntry {
@@ -102,7 +118,21 @@ interface TextEntry {
   text: Text | BitmapText;
 }
 
-type ViewEntry = SpriteEntry | ValueEntry | TextEntry;
+interface GraphEntry {
+  kind: 'graph';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaGraphElement;
+  /** Base texture (whole source). The sprite's texture is a cropped sub-rect of this. */
+  baseTexture: ReturnType<BeatorajaTextureCache['get']>;
+  /**
+   * Sprite painting the graph's source crop. Width / height are scaled per-frame by the resolver's
+   * 0..1 ratio along `element.angle`. The full crop is `(element.x, element.y, element.w,
+   * element.h)`; the live render samples a sub-rect that grows from one edge based on the angle.
+   */
+  sprite: Sprite;
+}
+
+type ViewEntry = SpriteEntry | ValueEntry | TextEntry | GraphEntry;
 
 export class BeatorajaPlaySkinView {
   readonly container = new Container();
@@ -114,6 +144,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveNumberValue: (refOp: number) => number | undefined;
   private readonly resolveFontFamily: (fontId: number) => string | undefined;
   private readonly resolveFontKind: (fontId: number) => 'css' | 'bitmap' | undefined;
+  private readonly resolveGraphValue: (type: number) => number | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -134,6 +165,7 @@ export class BeatorajaPlaySkinView {
     this.resolveNumberValue = options.resolveNumberValue ?? (() => undefined);
     this.resolveFontFamily = options.resolveFontFamily ?? (() => undefined);
     this.resolveFontKind = options.resolveFontKind ?? (() => undefined);
+    this.resolveGraphValue = options.resolveGraphValue ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -156,6 +188,15 @@ export class BeatorajaPlaySkinView {
     for (const text of normalizeBeatorajaTexts(options.skin.text)) {
       textById.set(text.id, text);
     }
+    // `graph[]` declarations describe scaling-bar overlays — gauge fills, chart-progress bars, etc.
+    // Same id namespace as image / value / text; same "first wins" precedence with image / value /
+    // text taking priority on collisions (matches beatoraja's resolver order).
+    const graphById = new Map<BeatorajaImageId, BeatorajaGraphElement>();
+    for (const graph of normalizeBeatorajaGraphs(options.skin.graph)) {
+      if (!imageById.has(graph.id) && !valueById.has(graph.id) && !textById.has(graph.id)) {
+        graphById.set(graph.id, graph);
+      }
+    }
 
     const groups = normalizeBeatorajaDestinations(options.skin.destination);
 
@@ -175,6 +216,12 @@ export class BeatorajaPlaySkinView {
         const textElement = textById.get(group.id);
         if (textElement !== undefined) {
           this.entries.push(this.buildTextEntry(group, textElement));
+          continue;
+        }
+        const graphElement = graphById.get(group.id);
+        if (graphElement !== undefined) {
+          const graphEntry = this.buildGraphEntry(group, graphElement, options.textures);
+          if (graphEntry !== undefined) this.entries.push(graphEntry);
         }
         continue;
       }
@@ -327,6 +374,37 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Build a graph entry — a `Sprite` whose texture is the full source crop and whose `width` /
+   * `height` are scaled per-frame by the resolver's 0..1 ratio. The base texture is captured here
+   * so `updateGraphEntry` can re-crop along the angle axis on each frame without per-frame
+   * texture-cache lookups.
+   */
+  private buildGraphEntry(
+    group: BeatorajaDestinationGroup,
+    element: BeatorajaGraphElement,
+    textures: BeatorajaTextureCache,
+  ): GraphEntry | undefined {
+    const baseTexture = textures.get(element.src);
+    const baseIsBindable = baseTexture !== undefined && baseTexture !== Texture.EMPTY;
+    // Pre-build the cell-0 cropped sub-texture for the same WebGPU-bind-group warm-up reasoning
+    // used by `image` entries. The first render pass needs a fully-resolved texture; the per-frame
+    // sampling re-crops along the angle axis.
+    let initialTexture: Texture | undefined;
+    if (baseIsBindable) {
+      const cropped = createCroppedBeatorajaTexture(baseTexture, {
+        x: element.x,
+        y: element.y,
+        w: element.w,
+        h: element.h,
+      });
+      if (cropped !== undefined) initialTexture = cropped;
+    }
+    const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
+    this.container.addChild(sprite);
+    return { kind: 'graph', group, element, baseTexture, sprite };
+  }
+
+  /**
    * Re-sample every destination at `context.nowMs` and update the matching `Sprite` / `Text`. Call once per frame.
    */
   update(context: BeatorajaRenderContext): void {
@@ -342,6 +420,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'text':
           this.updateTextEntry(entry, props);
+          break;
+        case 'graph':
+          this.updateGraphEntry(entry, props);
           break;
       }
     }
@@ -486,6 +567,101 @@ export class BeatorajaPlaySkinView {
     text.blendMode = props.blendMode;
   }
 
+  /**
+   * Update a graph entry's sprite for the current frame. Renders the source crop into the
+   * destination box, then scales the painted region along `angle` by the resolver's 0..1 ratio.
+   *
+   * The crop semantics depend on the fill direction:
+   *   - `right` / `left`: scale source-rect width AND destination-rect width by `ratio`
+   *   - `up` / `down`: scale height by `ratio`
+   *
+   * For `left` and `up` the source rect is anchored to its right / bottom edge respectively, so
+   * the bar appears to "fill" inward from the opposite side. This matches LR2 / beatoraja's
+   * documented graph-direction semantics.
+   *
+   * Hidden when:
+   *   - The destination's standard `props` say so (op gate, timer not started, etc.)
+   *   - The graph's runtime resolver returns `undefined` (unknown / unsupported `type`)
+   *   - The base texture isn't bindable
+   *   - `ratio === 0` (the bar is empty — could also paint a 0-width sprite, but skipping the
+   *     bind-group setup avoids per-frame `Texture` allocations for hidden bars)
+   */
+  private updateGraphEntry(entry: GraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+    const sprite = entry.sprite;
+    sprite.visible = props.visible;
+    if (!props.visible) return;
+    const baseTexture = entry.baseTexture;
+    if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
+      sprite.visible = false;
+      return;
+    }
+    const rawRatio = this.resolveGraphValue(entry.element.type);
+    if (rawRatio === undefined) {
+      sprite.visible = false;
+      return;
+    }
+    const ratio = clampUnit01(rawRatio);
+    if (ratio === 0) {
+      sprite.visible = false;
+      return;
+    }
+    const el = entry.element;
+    // Compute the source-rect crop along the fill axis. Width / height shrink to `ratio` of full
+    // size; for `left` / `up`, the crop is anchored to the FAR edge so the painted area grows
+    // inward from there.
+    let cropX = el.x;
+    let cropY = el.y;
+    let cropW = el.w;
+    let cropH = el.h;
+    let destX = props.x;
+    let destY = props.y;
+    let destW = props.width;
+    let destH = props.height;
+    switch (el.angle) {
+      case 'right':
+        cropW = el.w * ratio;
+        destW = props.width * ratio;
+        break;
+      case 'left':
+        // Anchor the crop to the right edge so the bar fills leftward.
+        cropX = el.x + el.w * (1 - ratio);
+        cropW = el.w * ratio;
+        destX = props.x + props.width * (1 - ratio);
+        destW = props.width * ratio;
+        break;
+      case 'up':
+        // Anchor the crop to the bottom edge so the bar fills upward.
+        cropY = el.y + el.h * (1 - ratio);
+        cropH = el.h * ratio;
+        destY = props.y + props.height * (1 - ratio);
+        destH = props.height * ratio;
+        break;
+      case 'down':
+        cropH = el.h * ratio;
+        destH = props.height * ratio;
+        break;
+    }
+    const cropped = createCroppedBeatorajaTexture(baseTexture, {
+      x: cropX,
+      y: cropY,
+      w: cropW,
+      h: cropH,
+    });
+    if (cropped === undefined) {
+      sprite.visible = false;
+      return;
+    }
+    if (sprite.texture !== cropped) sprite.texture = cropped;
+    sprite.x = destX;
+    sprite.y = destY;
+    sprite.width = destW;
+    sprite.height = destH;
+    sprite.alpha = props.alpha;
+    sprite.tint = props.tint;
+    sprite.angle = props.angle;
+    sprite.blendMode = props.blendMode;
+  }
+
   /** Tear down sprites and the container. Textures live on the cache (no `dispose()` by design). */
   dispose(): void {
     if (this.disposed) return;
@@ -505,6 +681,9 @@ export class BeatorajaPlaySkinView {
           // destroy along with the node.
           entry.text.destroy({ children: false, texture: true, textureSource: true });
           break;
+        case 'graph':
+          entry.sprite.destroy({ children: false, texture: false, textureSource: false });
+          break;
       }
     }
     this.entries.length = 0;
@@ -520,4 +699,12 @@ function computeAnimationElapsed(entry: SpriteEntry, context: BeatorajaRenderCon
   const start = context.getTimerStart(entry.image.timer);
   if (start === undefined) return 0;
   return Math.max(0, context.nowMs - start);
+}
+
+/** Clamp a number to `[0, 1]`. NaN / negative / overshoot all collapse to a safe in-range value. */
+function clampUnit01(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  if (v <= 0) return 0;
+  if (v >= 1) return 1;
+  return v;
 }
