@@ -29,12 +29,13 @@ import type {
   BeatorajaSkin,
   BeatorajaSkinConfig,
 } from '@be-music/beatoraja-skin';
-import { buildBaseOpSet } from '@be-music/beatoraja-skin';
+import { buildBaseOpSet, normalizeBeatorajaNote } from '@be-music/beatoraja-skin';
 import type { BeatorajaPlayableVariant } from './beatoraja-theme.ts';
+import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
 import type { PlayerOptions, PlayerSummary } from '@be-music/player/core/engine';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerStateSignals } from '@be-music/player/state-signals';
-import type { PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
+import type { PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
 import { runEngineDriver, type EngineDriverAudioContext, type EngineDriverResult } from './engine-driver.ts';
 import { BeatorajaRuntimeAdapter } from './beatoraja-runtime-adapter.ts';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
@@ -78,8 +79,11 @@ export interface PixiBeatorajaGameplayViewOptions {
 export class PixiBeatorajaGameplayView implements PixiScene {
   readonly root = new Container();
   private readonly view: BeatorajaPlaySkinView;
+  private readonly noteLayer: BeatorajaNoteLayer;
   private readonly adapter: BeatorajaRuntimeAdapter;
   private readonly options: PixiBeatorajaGameplayViewOptions;
+  private currentFrame: PlayerUiFramePayload | null = null;
+  private hiSpeed = 1;
   private host?: PixiSceneHost;
   private startMs = 0;
   private tickerHandle?: (ticker: Ticker) => void;
@@ -112,6 +116,16 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveTextContent: (ref) => this.adapter.resolveTextContent(ref),
     });
     this.root.addChild(this.view.container);
+
+    // Note layer paints inside the skin's coordinate system so it scales / positions with the skin chrome.
+    // Mounting onto `view.container` (rather than `this.root` directly) means `fitToStage`'s scale +
+    // translation cascade applies to notes too, keeping the lane geometry in sync without a duplicate
+    // transform.
+    this.noteLayer = new BeatorajaNoteLayer({
+      noteSection: normalizeBeatorajaNote(options.skin.note),
+      variant: options.variant,
+    });
+    this.view.container.addChild(this.noteLayer.container);
   }
 
   enter(host: PixiSceneHost): void {
@@ -202,6 +216,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     if (!this.engineSettled && this.inputSignals) {
       this.inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
     }
+    this.noteLayer.dispose();
     this.view.dispose();
     if (!this.root.destroyed) {
       this.root.destroy({ children: false });
@@ -232,15 +247,27 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       const result = drainWebUiSignals(
         this.uiSignals,
         {
-          onFrame: (frame) => this.adapter.applyFrame(frame),
+          onFrame: (frame) => {
+            this.adapter.applyFrame(frame);
+            this.currentFrame = frame;
+          },
           onCommand: (command) => this.adapter.applyCommand(command),
           onJudgeCombo: (state) => this.adapter.applyJudgeCombo(state),
         },
         { stateSignals: this.stateSignals, lastJudgeComboTick: this.lastJudgeComboTick },
       );
       this.lastJudgeComboTick = result.lastJudgeComboTick;
+      // Hispeed lives on `stateSignals.highSpeed` — read it into a local instead of polling the signal
+      // every note draw. The signal is a function; calling it without an argument returns the latest.
+      if (this.stateSignals) {
+        const hs = this.stateSignals.highSpeed();
+        if (Number.isFinite(hs) && hs > 0) this.hiSpeed = hs;
+      }
     }
     this.view.update(this.adapter.getRenderContext());
+    if (this.currentFrame) {
+      this.noteLayer.update(this.currentFrame, this.hiSpeed, this.adapter.getRenderContext().activeOps);
+    }
   }
 
   private fitToStage(): void {
