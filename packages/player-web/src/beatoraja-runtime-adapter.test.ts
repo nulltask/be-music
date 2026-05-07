@@ -621,6 +621,149 @@ describe('BeatorajaRuntimeAdapter — applyFrame rhythm timer', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — TIMER_ENDOFNOTE (143 / 144)', () => {
+  function makeChartWithEvents(
+    events: Array<{ channel: string; measure: number; position?: readonly [number, number] }>,
+    measureLength = 1,
+  ): import('@be-music/json').BeMusicJson {
+    return {
+      metadata: { title: '', subtitle: '', artist: '', subartists: [], genre: '', bpm: 120 },
+      resources: { wav: {}, bmp: {}, bpm: {}, stop: {}, exrank: {} },
+      measures: events.map((e) => ({ index: e.measure, length: measureLength })),
+      events: events.map((e) => ({
+        measure: e.measure,
+        channel: e.channel,
+        position: e.position ?? [0, 1],
+        value: '01',
+      })),
+    } as unknown as import('@be-music/json').BeMusicJson;
+  }
+
+  function makeFrame(currentBeat: number): import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload {
+    return {
+      currentBeat,
+      currentSeconds: 0,
+      totalSeconds: 100,
+      summary: {
+        score: 0,
+        total: 0,
+        perfect: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        fast: 0,
+        slow: 0,
+        exScore: 0,
+      } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload['summary'],
+      notes: [],
+    };
+  }
+
+  it('stamps TIMER_ENDOFNOTE_1P (143) when currentBeat passes the 1P last-note beat', () => {
+    const clock = makeClock();
+    // Two 1P notes — one at measure 0 beat 0, one at measure 2 beat 2 (since 4 beats per
+    // standard measure: measure 2 base is 8, position 2/4 lands at beat 8 + 2 = 10).
+    const chart = makeChartWithEvents([
+      { channel: '11', measure: 0, position: [0, 1] },
+      { channel: '13', measure: 2, position: [2, 4] },
+    ]);
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+      chart,
+    });
+    // Before reaching the last note — timer not yet stamped.
+    clock.advance(100);
+    adapter.applyFrame(makeFrame(5));
+    expect(adapter.getTimerStart(143)).toBeUndefined();
+    // Crossing into the last-note beat — stamps.
+    clock.advance(50);
+    adapter.applyFrame(makeFrame(10));
+    expect(adapter.getTimerStart(143)).toBe(150);
+    // No 2P notes in this chart — its endofnote stays unset forever.
+    clock.advance(50);
+    adapter.applyFrame(makeFrame(20));
+    expect(adapter.getTimerStart(144)).toBeUndefined();
+  });
+
+  it('stamps TIMER_ENDOFNOTE_2P (144) independently when the chart has 2P notes', () => {
+    const clock = makeClock();
+    // 1P last note at beat 4 (measure 1, position 0/1), 2P last note at beat 12 (measure 3,
+    // position 0/1). Endofnote_1p should stamp first; endofnote_2p later.
+    const chart = makeChartWithEvents([
+      { channel: '12', measure: 1, position: [0, 1] },
+      { channel: '23', measure: 3, position: [0, 1] },
+    ]);
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '14',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+      chart,
+    });
+    clock.advance(100);
+    adapter.applyFrame(makeFrame(4.0));
+    expect(adapter.getTimerStart(143)).toBe(100);
+    expect(adapter.getTimerStart(144)).toBeUndefined();
+    clock.advance(200);
+    adapter.applyFrame(makeFrame(12.0));
+    expect(adapter.getTimerStart(143)).toBe(100);
+    expect(adapter.getTimerStart(144)).toBe(300);
+  });
+
+  it('also recognizes LN channels (5* for 1P, 6* for 2P) as note events', () => {
+    const clock = makeClock();
+    // LN 1P at beat 16 (measure 4 position 0/1), LN 2P at beat 20 (measure 5).
+    const chart = makeChartWithEvents([
+      { channel: '52', measure: 4, position: [0, 1] },
+      { channel: '63', measure: 5, position: [0, 1] },
+    ]);
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '14',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+      chart,
+    });
+    clock.advance(100);
+    adapter.applyFrame(makeFrame(20));
+    expect(adapter.getTimerStart(143)).toBe(100);
+    expect(adapter.getTimerStart(144)).toBe(100);
+  });
+
+  it('skips BGM (channel 01) so a chart with only background audio never fires endofnote', () => {
+    const clock = makeClock();
+    const chart = makeChartWithEvents([{ channel: '01', measure: 8, position: [0, 1] }]);
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+      chart,
+    });
+    clock.advance(100);
+    adapter.applyFrame(makeFrame(50));
+    expect(adapter.getTimerStart(143)).toBeUndefined();
+    expect(adapter.getTimerStart(144)).toBeUndefined();
+  });
+
+  it('does not re-stamp once latched (subsequent frames preserve the original timestamp)', () => {
+    const clock = makeClock();
+    const chart = makeChartWithEvents([{ channel: '11', measure: 0, position: [0, 1] }]);
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+      chart,
+    });
+    clock.advance(100);
+    adapter.applyFrame(makeFrame(0));
+    expect(adapter.getTimerStart(143)).toBe(100);
+    clock.advance(500);
+    adapter.applyFrame(makeFrame(20));
+    expect(adapter.getTimerStart(143)).toBe(100);
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — TIMER_FAILED (3)', () => {
   function makeFrameWithGauge(currentBeat: number, gaugeCurrent: number | undefined) {
     return {

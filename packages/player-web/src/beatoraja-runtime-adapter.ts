@@ -35,6 +35,7 @@ import {
   computeGenericRankOp,
   computeJudgeExistOps,
   computeRankOp,
+  endOfNoteTimerId,
   judgeOpForKind,
   judgeTimerId,
   keyOffTimerId,
@@ -249,6 +250,16 @@ export class BeatorajaRuntimeAdapter {
    */
   private failedTimerStamped = false;
   /**
+   * Last note beat per side, computed once at construction from the chart events.
+   * `undefined` for a side with no notes (e.g. SP chart has no `2x` channels). Drives the
+   * `TIMER_ENDOFNOTE_1P/2P` (143 / 144) re-stamp logic — when `frame.currentBeat` crosses the
+   * latched value we mark the side's endofnote timer so any "song complete" reveal animation
+   * gated on it can play out.
+   */
+  private readonly lastNoteBeatBySide: { 1: number | undefined; 2: number | undefined } = { 1: undefined, 2: undefined };
+  /** Latched once we stamp the side's endofnote timer so we don't re-stamp on subsequent frames. */
+  private readonly endOfNoteStamped: { 1: boolean; 2: boolean } = { 1: false, 2: false };
+  /**
    * Per-ref "we already logged that this isn't wired" set. Keeps `resolveNumberValue` quiet on the hot
    * path while still surfacing each missing prop.lua num exactly once per session.
    */
@@ -287,6 +298,15 @@ export class BeatorajaRuntimeAdapter {
     // or hide BPM-change indicators when NO_BPMCHANGE).
     this.applyChartVariantOps(options.chartPlayVariant);
     this.applyChartTraitOps(options.chart);
+    // Pre-compute the last note beat per side so `applyFrame` can detect the chart's
+    // end-of-notes moment and stamp `TIMER_ENDOFNOTE_*P` (143 / 144). This is a one-shot
+    // chart-data scan — `frame.notes` is the rendering window subset, not the full chart, so
+    // it can't be used as the signal source.
+    if (options.chart !== undefined) {
+      const last = computeLastNoteBeatBySide(options.chart);
+      this.lastNoteBeatBySide[1] = last[1];
+      this.lastNoteBeatBySide[2] = last[2];
+    }
     // Default gauge type — beatoraja sets exactly one of `gauge_groove / hard / ex` (1P side).
     // Without a runtime gauge-mode setting we default to GROOVE; the result-scene path can
     // refine via `summary.gauge.type` once we surface it.
@@ -411,6 +431,31 @@ export class BeatorajaRuntimeAdapter {
     this.refreshDerivedOps(frame.summary);
     this.refreshRhythmTimer(frame.currentBeat);
     this.refreshFailedTimer(frame.summary.gauge);
+    this.refreshEndOfNoteTimer(frame.currentBeat);
+  }
+
+  /**
+   * Re-stamp `TIMER_ENDOFNOTE_1P/2P` (143 / 144) when the playhead crosses the side's last
+   * note. Skins use this to trigger end-of-song reveal animations (e.g. "FULL COMBO" badges
+   * fading in once the chart's last note has been judged). Per-side and idempotent — once
+   * stamped, subsequent frames don't re-stamp even if the engine seeks backwards then forwards
+   * again.
+   *
+   * Skips sides with no notes (SP chart has `lastNoteBeatBySide[2] === undefined`); the side's
+   * endofnote timer simply never fires for those, which matches beatoraja's behavior — the
+   * authored chrome on the empty side stays in its idle state.
+   */
+  private refreshEndOfNoteTimer(currentBeat: number): void {
+    if (!Number.isFinite(currentBeat)) return;
+    for (const side of [1, 2] as const) {
+      if (this.endOfNoteStamped[side]) continue;
+      const lastBeat = this.lastNoteBeatBySide[side];
+      if (lastBeat === undefined) continue;
+      if (currentBeat >= lastBeat) {
+        this.markTimer(endOfNoteTimerId(side));
+        this.endOfNoteStamped[side] = true;
+      }
+    }
   }
 
   /**
@@ -1343,6 +1388,8 @@ export class BeatorajaRuntimeAdapter {
     this.lastFrameBeat = undefined;
     this.lastFrameGauge = undefined;
     this.failedTimerStamped = false;
+    this.endOfNoteStamped[1] = false;
+    this.endOfNoteStamped[2] = false;
   }
 
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
@@ -1404,6 +1451,95 @@ function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
 function isComboAdvanceJudge(kind: string): boolean {
   const upper = kind.toUpperCase();
   return upper === 'PERFECT' || upper === 'GREAT' || upper === 'GOOD';
+}
+
+/**
+ * Beats per measure used for the chart-time → beat conversion. BMS measures default to one full
+ * 4/4 bar, with `chart.measures[].length` scaling that 4-beat baseline. The same approximation
+ * used by `computeBeatorajaBpmCurve` and `computeBeatorajaChartMarkers`; refinable when we
+ * surface a richer beat-per-measure model.
+ */
+const BEATS_PER_STANDARD_MEASURE = 4;
+
+/**
+ * Compute the per-side beat position of the last "real" note in the chart. Used by the
+ * adapter to know when to stamp `TIMER_ENDOFNOTE_*P` so authored end-of-song animations fire
+ * at the right moment.
+ *
+ * Side classification (matches the engine's channel convention):
+ *   - 1P: channels starting with `1` (e.g. `11`-`19` visible), `5` (LN 1P), or `D` (mine 1P).
+ *   - 2P: channels starting with `2`, `6` (LN 2P), or `E` (mine 2P).
+ *   - Skipped: BGM (`01`), BPM (`03`/`08`), STOP (`09`), other non-note channels.
+ *
+ * Mines + invisible channels (`3*` / `4*`) intentionally NOT counted — endofnote should reflect
+ * the last *playable* note, not chrome / hazards. Likewise mines (`D*`/`E*`) are excluded
+ * because beatoraja's authored "you've finished the song" reveals shouldn't gate on a mine
+ * being the last hazard.
+ *
+ * Returns `{ 1: undefined, 2: undefined }` for charts with no detectable notes (e.g. empty
+ * chart fixtures); `undefined` per side means "this side never fires endofnote".
+ */
+function computeLastNoteBeatBySide(chart: BeMusicJson): { 1: number | undefined; 2: number | undefined } {
+  const measureBaseBeat = computeMeasureBaseBeat(chart);
+  let last1: number | undefined;
+  let last2: number | undefined;
+  for (const event of chart.events ?? []) {
+    if (event.value === '00' || event.value === '') continue;
+    const ch = event.channel;
+    if (ch.length < 2) continue;
+    // Side from the leading character. Visible (1*/2*), LN (5*/6*) — mines intentionally not
+    // included (see function-level comment).
+    const head = ch[0]!;
+    let side: 1 | 2 | undefined;
+    if (head === '1' || head === '5') side = 1;
+    else if (head === '2' || head === '6') side = 2;
+    else continue;
+    // BGM is `01`; visible-note channels start with `1` but the second char distinguishes
+    // them from BGM. Skip the explicit `01` literal.
+    if (ch === '01') continue;
+    const beat = computeEventBeat(event, measureBaseBeat);
+    if (beat === undefined) continue;
+    if (side === 1) {
+      if (last1 === undefined || beat > last1) last1 = beat;
+    } else {
+      if (last2 === undefined || beat > last2) last2 = beat;
+    }
+  }
+  return { 1: last1, 2: last2 };
+}
+
+function computeMeasureBaseBeat(chart: BeMusicJson): number[] {
+  const lengths = new Map<number, number>();
+  let maxMeasure = 0;
+  for (const event of chart.events ?? []) {
+    if (event.measure > maxMeasure) maxMeasure = event.measure;
+  }
+  for (const measure of chart.measures ?? []) {
+    const idx = Math.max(0, Math.floor(measure.index));
+    if (idx > maxMeasure) maxMeasure = idx;
+    if (Number.isFinite(measure.length) && measure.length > 0) {
+      lengths.set(idx, measure.length);
+    }
+  }
+  const out: number[] = [];
+  let beat = 0;
+  for (let m = 0; m <= maxMeasure; m += 1) {
+    out.push(beat);
+    const length = lengths.get(m) ?? 1;
+    beat += length * BEATS_PER_STANDARD_MEASURE;
+  }
+  return out;
+}
+
+function computeEventBeat(
+  event: { measure: number; position: readonly [number, number] },
+  measureBaseBeat: ReadonlyArray<number>,
+): number | undefined {
+  const base = measureBaseBeat[event.measure];
+  if (base === undefined) return undefined;
+  const [num, denom] = event.position;
+  if (!Number.isFinite(num) || !Number.isFinite(denom) || denom <= 0) return base;
+  return base + (num / denom) * BEATS_PER_STANDARD_MEASURE;
 }
 
 /**
