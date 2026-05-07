@@ -11,13 +11,16 @@ import {
   imageFrameRect,
   imageRefFrame,
   normalizeBeatorajaDestinations,
+  normalizeBeatorajaGauge,
   normalizeBeatorajaGraphs,
   normalizeBeatorajaImages,
   normalizeBeatorajaImagesets,
   normalizeBeatorajaSliders,
   normalizeBeatorajaTexts,
   normalizeBeatorajaValues,
+  pickBeatorajaGaugeNode,
   type BeatorajaDestinationGroup,
+  type BeatorajaGaugeElement,
   type BeatorajaGraphElement,
   type BeatorajaImageElement,
   type BeatorajaImageId,
@@ -111,6 +114,12 @@ export interface BeatorajaPlaySkinViewOptions {
    * (slider sits at its dst-rect home position).
    */
   resolveSliderValue?: (type: number) => number | undefined;
+  /**
+   * Resolve the live gauge percent in `[0, 100]` for the `gauge` element. Result determines how
+   * many cells of the gauge bar light up. Returning `undefined` defaults to 0 (gauge empty —
+   * matches what the result scene should display before any judge has occurred).
+   */
+  resolveGaugePercent?: () => number | undefined;
 }
 
 interface SpriteEntry {
@@ -191,6 +200,24 @@ interface SliderEntry {
   sprite: Sprite;
 }
 
+interface GaugeEntry {
+  kind: 'gauge';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaGaugeElement;
+  /**
+   * Per-cell sprite pool — sized to `element.parts` at build time. Each cell paints one of the
+   * `nodes[]` images, swapped per frame as the gauge value crosses thresholds. The cells share
+   * the destination's keyframe-driven (x, y, w, h) — total width is divided by `parts` for the
+   * per-cell width.
+   */
+  cells: Sprite[];
+  /**
+   * Pre-resolved `(nodeId → cropped Texture)` map. Only nodes referenced by `nodes[]` are
+   * present; the renderer queries by id during the per-cell texture swap.
+   */
+  nodeTextures: ReadonlyMap<BeatorajaImageId, Texture>;
+}
+
 interface ImagesetEntry {
   kind: 'imageset';
   group: BeatorajaDestinationGroup;
@@ -216,7 +243,15 @@ interface ImagesetEntry {
   lastFrame: number;
 }
 
-type ViewEntry = SpriteEntry | ValueEntry | TextEntry | GraphEntry | PolylineGraphEntry | SliderEntry | ImagesetEntry;
+type ViewEntry =
+  | SpriteEntry
+  | ValueEntry
+  | TextEntry
+  | GraphEntry
+  | PolylineGraphEntry
+  | SliderEntry
+  | ImagesetEntry
+  | GaugeEntry;
 
 export class BeatorajaPlaySkinView {
   readonly container = new Container();
@@ -231,6 +266,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveGraphValue: (type: number) => number | undefined;
   private readonly resolveGraphPolyline: (type: number) => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveSliderValue: (type: number) => number | undefined;
+  private readonly resolveGaugePercent: () => number | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -254,6 +290,7 @@ export class BeatorajaPlaySkinView {
     this.resolveGraphValue = options.resolveGraphValue ?? (() => undefined);
     this.resolveGraphPolyline = options.resolveGraphPolyline ?? (() => undefined);
     this.resolveSliderValue = options.resolveSliderValue ?? (() => undefined);
+    this.resolveGaugePercent = options.resolveGaugePercent ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -314,6 +351,21 @@ export class BeatorajaPlaySkinView {
         imagesetById.set(imageset.id, imageset);
       }
     }
+    // `gauge` element (singular — beatoraja's reference theme authors at most one gauge per
+    // skin). Same id-namespace contention rule as the others.
+    const gauge = normalizeBeatorajaGauge(options.skin.gauge);
+    let gaugeElement: BeatorajaGaugeElement | undefined;
+    if (
+      gauge !== undefined &&
+      !imageById.has(gauge.id) &&
+      !valueById.has(gauge.id) &&
+      !textById.has(gauge.id) &&
+      !graphById.has(gauge.id) &&
+      !sliderById.has(gauge.id) &&
+      !imagesetById.has(gauge.id)
+    ) {
+      gaugeElement = gauge;
+    }
 
     const groups = normalizeBeatorajaDestinations(options.skin.destination);
 
@@ -351,6 +403,11 @@ export class BeatorajaPlaySkinView {
         if (imagesetElement !== undefined) {
           const imagesetEntry = this.buildImagesetEntry(group, imagesetElement, imageById, options.textures);
           if (imagesetEntry !== undefined) this.entries.push(imagesetEntry);
+          continue;
+        }
+        if (gaugeElement !== undefined && group.id === gaugeElement.id) {
+          const gaugeEntry = this.buildGaugeEntry(group, gaugeElement, imageById, options.textures);
+          if (gaugeEntry !== undefined) this.entries.push(gaugeEntry);
         }
         continue;
       }
@@ -541,6 +598,46 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Build a gauge entry — `parts` cell sprites pre-cropped from the `nodes[]` images. The cell
+   * sprites share the destination's keyframe-driven (x, y, w, h); per-cell width is the total
+   * width divided by `parts`. Each frame, every cell's texture is swapped to the matching
+   * lit / off node based on the live gauge percent (`pickBeatorajaGaugeNode`).
+   */
+  private buildGaugeEntry(
+    group: BeatorajaDestinationGroup,
+    element: BeatorajaGaugeElement,
+    imageById: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>,
+    textures: BeatorajaTextureCache,
+  ): GaugeEntry | undefined {
+    const nodeTextures = new Map<BeatorajaImageId, Texture>();
+    for (const nodeId of element.nodes) {
+      if (nodeTextures.has(nodeId)) continue;
+      const image = imageById.get(nodeId);
+      if (image === undefined) continue;
+      const baseTexture = textures.get(image.src);
+      if (baseTexture === undefined) continue;
+      const cropped = createCroppedBeatorajaTexture(baseTexture, {
+        x: image.x,
+        y: image.y,
+        w: image.w,
+        h: image.h,
+      });
+      if (cropped !== undefined) nodeTextures.set(nodeId, cropped);
+    }
+    if (nodeTextures.size === 0) return undefined;
+    const cells: Sprite[] = [];
+    // Pick a default initial texture so the first render pass has something — `nodeTextures`
+    // values() is order-of-insertion, so this always exists when `size > 0`.
+    const firstTexture = nodeTextures.values().next().value;
+    for (let i = 0; i < element.parts; i += 1) {
+      const sprite = new Sprite({ texture: firstTexture, alpha: 0 });
+      this.container.addChild(sprite);
+      cells.push(sprite);
+    }
+    return { kind: 'gauge', group, element, cells, nodeTextures };
+  }
+
+  /**
    * Build an imageset entry. Pre-resolves each `images[]` slot to its `image[]` element + base
    * texture so the per-frame update only swaps the cropped texture without re-walking the
    * imageById map. Returns `undefined` when none of the sub-images resolved (skin omitted them
@@ -632,6 +729,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'imageset':
           this.updateImagesetEntry(entry, context, props);
+          break;
+        case 'gauge':
+          this.updateGaugeEntry(entry, props);
           break;
       }
     }
@@ -1088,6 +1188,48 @@ export class BeatorajaPlaySkinView {
     sprite.blendMode = props.blendMode;
   }
 
+  /**
+   * Update a gauge entry. Lays out `element.parts` cells horizontally inside the destination
+   * rect, picking each cell's node texture from `pickBeatorajaGaugeNode` based on the live gauge
+   * percent. Cells whose threshold is below the gauge value paint the lit-state node; those
+   * above paint the off-state node. The dst rect's center anchor still applies (whole bar
+   * pivots together).
+   */
+  private updateGaugeEntry(entry: GaugeEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+    const visible = props.visible;
+    if (!visible) {
+      for (const cell of entry.cells) cell.visible = false;
+      return;
+    }
+    const gaugePercent = this.resolveGaugePercent() ?? 0;
+    const cellWidth = props.width / Math.max(1, entry.element.parts);
+    const center = centerToAnchor(entry.group.center);
+    for (let i = 0; i < entry.cells.length; i += 1) {
+      const cell = entry.cells[i]!;
+      const pick = pickBeatorajaGaugeNode(entry.element, i, gaugePercent);
+      if (pick === undefined) {
+        cell.visible = false;
+        continue;
+      }
+      const texture = entry.nodeTextures.get(pick.nodeId);
+      if (texture === undefined) {
+        cell.visible = false;
+        continue;
+      }
+      cell.visible = true;
+      cell.texture = texture;
+      cell.anchor.set(center.x, center.y);
+      cell.x = props.x + i * cellWidth + center.x * cellWidth;
+      cell.y = props.y + center.y * props.height;
+      cell.width = cellWidth;
+      cell.height = props.height;
+      cell.alpha = props.alpha;
+      cell.tint = props.tint;
+      cell.angle = props.angle;
+      cell.blendMode = props.blendMode;
+    }
+  }
+
   /** Tear down sprites and the container. Textures live on the cache (no `dispose()` by design). */
   dispose(): void {
     if (this.disposed) return;
@@ -1118,6 +1260,11 @@ export class BeatorajaPlaySkinView {
           break;
         case 'imageset':
           entry.sprite.destroy({ children: false, texture: false, textureSource: false });
+          break;
+        case 'gauge':
+          for (const cell of entry.cells) {
+            cell.destroy({ children: false, texture: false, textureSource: false });
+          }
           break;
       }
     }

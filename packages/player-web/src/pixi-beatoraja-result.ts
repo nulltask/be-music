@@ -114,6 +114,11 @@ export class PixiBeatorajaResultScene implements PixiScene {
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
       resolveGraphValue: (type) => this.resolveResultGraph(type),
       resolveGraphPolyline: (type) => this.resolveResultPolyline(type),
+      resolveGaugePercent: () => {
+        const gauge = options.summary.gauge;
+        if (gauge === undefined || gauge.max <= 0) return 0;
+        return (gauge.current / gauge.max) * 100;
+      },
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);

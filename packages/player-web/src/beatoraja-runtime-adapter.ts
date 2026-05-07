@@ -441,6 +441,18 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
+   * Resolve the live gauge percent in `[0, 100]` for the `gauge` element renderer. The result
+   * scene typically exposes a frozen value, the gameplay path an updating one — both go through
+   * this single resolver. Returns 0 when the engine hasn't published a frame yet (gauge starts
+   * at the GROOVE init value once the first frame lands).
+   */
+  resolveGaugePercent(): number {
+    const gauge = this.frame?.summary.gauge;
+    if (gauge === undefined || gauge.max <= 0) return 0;
+    return (gauge.current / gauge.max) * 100;
+  }
+
+  /**
    * Resolve a `slider[].type` code into a translation ratio in `[0, 1]`. The skin view translates
    * the slider sprite by `value * range` skin-pixels along its angle axis. Most slider types map
    * to user-config values that aren't yet plumbed through the adapter (lanecover %, lift %, etc.);
