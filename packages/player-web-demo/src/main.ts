@@ -38,7 +38,6 @@ import {
   isBeatorajaSkinIndicator,
   loadBeatorajaFonts,
   loadBeatorajaPlaySkinFromBundle,
-  loadBeatorajaSelectSkinFromBundle,
   loadBeatorajaTexturesFromBundle,
   loadBeatorajaThemeFromFiles,
   pickBeatorajaPlayableSkinVariant,
@@ -54,14 +53,17 @@ import {
   type PreparedBeatorajaGameplayChart,
 } from '@be-music/player-web';
 import {
+  BEATORAJA_SKIN_TYPE,
   buildDefaultSkinConfigOptions,
   bundleBeatorajaSources,
   expandBeatorajaWildcard,
+  loadBeatorajaSkin,
   normalizeBeatorajaFonts,
   type BeatorajaSkinConfig,
+  type BeatorajaSkinEntry,
   type BeatorajaSkinHeader,
 } from '@be-music/beatoraja-skin';
-import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
+import { BeatorajaSkinOptionsGui, type SkinChoice } from './beatoraja-skin-options-gui.ts';
 
 const dropLog = logger('drop');
 const recordLog = logger('record');
@@ -724,6 +726,12 @@ class PlayerWebDemoApp {
    * user's choices for each skin (a select skin and a play skin can carry independent configs).
    */
   private readonly beatorajaSkinConfigByEntry = new Map<string, BeatorajaSkinConfig>();
+  /**
+   * Per-`SkinType` user-picked entry override. Lets the user choose between multiple discovered
+   * skins for a given scene type from the bottom-right GUI. Keyed by the numeric `header.type` so
+   * each scene (`MUSIC_SELECT = 5`, `PLAY_7KEYS = 0`, etc.) tracks its own override.
+   */
+  private readonly beatorajaSkinOverridesByType = new Map<number, string>();
   /**
    * Last beatoraja-select highlighted index — survives scene tear-down so coming back from gameplay
    * lands on the same song the user just played.
@@ -1617,26 +1625,45 @@ class PlayerWebDemoApp {
     this.disposeBeatorajaGameplay();
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
 
-    // 1. Resolve a default skin-config for the variant — same two-pass evaluation the preview uses so
-    // skins whose `main()` branches on `skin_config.option["..."]` actually populate `source[]`.
-    const headerLoad = loadBeatorajaPlaySkinFromBundle(bundle, variant);
-    if (!headerLoad || !headerLoad.result.ok) {
-      const reason = headerLoad?.result.ok === false ? headerLoad.result.error.message : 'no skin available';
-      gameplayLog.warn(`beatoraja gameplay header: ${reason}`);
-      this.setStatus(`Beatoraja gameplay unavailable: ${reason}`);
+    // 1. Pick the actual skin entry for this variant, honoring any user override from the
+    // bottom-right "Skin" dropdown. Falls back to `pickBeatorajaPlaySkin`'s discovery result.
+    const playTypeCode = playSkinTypeForVariant(variant);
+    const playCandidates = bundle.theme.entries.filter((entry) => entry.header.type === playTypeCode);
+    const fallbackEntry = bundle.theme.playSkins[variant];
+    const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(playTypeCode, playCandidates, fallbackEntry);
+    if (selectedEntry === undefined) {
+      gameplayLog.warn(`beatoraja gameplay: no skin entry for variant '${variant}'`);
+      this.setStatus(`Beatoraja gameplay unavailable: no '${variant}' skin`);
       void this.showSelect();
       return;
     }
-    // Resolve cached skin config (or seed defaults). The skin-options panel mutates this object.
-    const config = this.resolveBeatorajaSkinConfig(headerLoad.entry.entryPath, headerLoad.result.header);
-    const skinLoad = loadBeatorajaPlaySkinFromBundle(bundle, variant, config);
-    if (!skinLoad || !skinLoad.result.ok || !skinLoad.result.skin) {
-      const reason = skinLoad?.result.ok === false ? skinLoad.result.error.message : 'no skin available';
+
+    // Two-pass evaluation — same contract as the select scene.
+    const headerLoad = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files });
+    if (!headerLoad.ok) {
+      gameplayLog.warn(`beatoraja gameplay header: ${headerLoad.error.message}`);
+      this.setStatus(`Beatoraja gameplay unavailable: ${headerLoad.error.message}`);
+      void this.showSelect();
+      return;
+    }
+    const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
+    const result = loadBeatorajaSkin({
+      entryPath: selectedEntry.entryPath,
+      files: bundle.files,
+      skinConfig: config,
+    });
+    if (!result.ok || !result.skin) {
+      const reason = result.ok ? 'skin payload missing' : result.error.message;
       gameplayLog.warn(`beatoraja gameplay: ${reason}`);
       this.setStatus(`Beatoraja gameplay unavailable: ${reason}`);
       void this.showSelect();
       return;
     }
+    // Narrow the union by extracting the (now-known-defined) `skin` reference; subsequent uses
+    // type-check without `!` operators. Local `skinLoad` mirrors the legacy
+    // `loadBeatorajaPlaySkinFromBundle` shape so downstream destructuring stays unchanged.
+    const skin = result.skin;
+    const skinLoad = { entry: selectedEntry, skin };
 
     // 2. Texture cache for the skin variant — reuse if previously decoded.
     let textures = this.beatorajaTextureCachesByEntry.get(skinLoad.entry.entryPath);
@@ -1644,8 +1671,8 @@ class PlayerWebDemoApp {
       const sourceBundle = bundleBeatorajaSources({
         files: bundle.files,
         entryPath: skinLoad.entry.entryPath,
-        sources: (skinLoad.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-        filepathSchema: skinLoad.result.skin.filepath,
+        sources: (skinLoad.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+        filepathSchema: skinLoad.skin.filepath,
         filepathOverrides: config.file,
       });
       gameplayLog.info(
@@ -1662,7 +1689,7 @@ class PlayerWebDemoApp {
     // and the registered FontFace outlives every scene anyway.
     let fonts = this.beatorajaFontCachesByEntry.get(skinLoad.entry.entryPath);
     if (fonts === undefined) {
-      const fontDeclarations = normalizeBeatorajaFonts(skinLoad.result.skin.font);
+      const fontDeclarations = normalizeBeatorajaFonts(skinLoad.skin.font);
       fonts = await loadBeatorajaFonts({
         files: bundle.files,
         entryPath: skinLoad.entry.entryPath,
@@ -1698,7 +1725,7 @@ class PlayerWebDemoApp {
 
     // 4. Mount the gameplay view.
     this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
-      skin: skinLoad.result.skin,
+      skin: skinLoad.skin,
       textures,
       fonts,
       skinConfig: config,
@@ -1733,10 +1760,16 @@ class PlayerWebDemoApp {
     // the engine driver. The audio session, chart playback, and scoring all keep running.
     this.refreshBeatorajaSkinOptionsGui({
       title: `Play skin (${variant} keys)`,
-      entryPath: headerLoad.entry.entryPath,
-      header: headerLoad.result.header,
+      entryPath: selectedEntry.entryPath,
+      header: headerLoad.header,
+      availableSkins: this.collectBeatorajaSkinChoices([playTypeCode]),
+      onSkinChange: (nextEntryPath) => {
+        this.beatorajaSkinOverridesByType.set(playTypeCode, nextEntryPath);
+        const nextConfig = this.resolveBeatorajaSkinConfig(nextEntryPath, headerLoad.header);
+        void this.applyBeatorajaPlaySkinConfig(nextEntryPath, variant, nextConfig);
+      },
       onApply: (nextConfig) => {
-        void this.applyBeatorajaPlaySkinConfig(headerLoad.entry.entryPath, variant, nextConfig);
+        void this.applyBeatorajaPlaySkinConfig(selectedEntry.entryPath, variant, nextConfig);
       },
     });
   }
@@ -1754,24 +1787,45 @@ class PlayerWebDemoApp {
   ): Promise<void> {
     const bundle = this.beatorajaTheme;
     if (!bundle || !this.beatorajaGameplayView) return;
-    const skinLoad = loadBeatorajaPlaySkinFromBundle(bundle, variant, config);
-    if (!skinLoad || !skinLoad.result.ok || !skinLoad.result.skin) return;
+    // Load the SPECIFIC entry — different from the discovery's "best" pick when the user picked an
+    // alternate skin from the bottom-right "Skin" dropdown.
+    const result = loadBeatorajaSkin({ entryPath, files: bundle.files, skinConfig: config });
+    if (!result.ok || !result.skin) return;
     this.beatorajaTextureCachesByEntry.delete(entryPath);
     const sourceBundle = bundleBeatorajaSources({
       files: bundle.files,
-      entryPath: skinLoad.entry.entryPath,
-      sources: (skinLoad.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-      filepathSchema: skinLoad.result.skin.filepath,
+      entryPath,
+      sources: (result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+      filepathSchema: result.skin.filepath,
       filepathOverrides: config.file,
     });
     const textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
     this.beatorajaTextureCachesByEntry.set(entryPath, textures);
-    const fonts = this.beatorajaFontCachesByEntry.get(entryPath);
-    this.beatorajaGameplayView.replaceSkin({
-      skin: skinLoad.result.skin,
-      skinConfig: config,
-      textures,
-      fonts,
+    let fonts = this.beatorajaFontCachesByEntry.get(entryPath);
+    if (fonts === undefined) {
+      fonts = await loadBeatorajaFonts({
+        files: bundle.files,
+        entryPath,
+        fonts: normalizeBeatorajaFonts(result.skin.font),
+      });
+      this.beatorajaFontCachesByEntry.set(entryPath, fonts);
+    }
+    this.beatorajaGameplayView.replaceSkin({ skin: result.skin, skinConfig: config, textures, fonts });
+
+    const playTypeCode = playSkinTypeForVariant(variant);
+    this.refreshBeatorajaSkinOptionsGui({
+      title: `Play skin (${variant} keys)`,
+      entryPath,
+      header: result.header,
+      availableSkins: this.collectBeatorajaSkinChoices([playTypeCode]),
+      onSkinChange: (nextEntryPath) => {
+        this.beatorajaSkinOverridesByType.set(playTypeCode, nextEntryPath);
+        const nextConfig = this.resolveBeatorajaSkinConfig(nextEntryPath, result.header);
+        void this.applyBeatorajaPlaySkinConfig(nextEntryPath, variant, nextConfig);
+      },
+      onApply: (nextConfig) => {
+        void this.applyBeatorajaPlaySkinConfig(entryPath, variant, nextConfig);
+      },
     });
   }
 
@@ -1785,25 +1839,44 @@ class PlayerWebDemoApp {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return;
 
+    // Pick the actual entry to mount — honor a user override from the bottom-right "Skin" dropdown
+    // when one was set, otherwise fall back to the discovery's "best" pick (`theme.selectSkin`).
+    const selectCandidates = bundle.theme.entries.filter(
+      (entry) => entry.header.type === BEATORAJA_SKIN_TYPE.MUSIC_SELECT,
+    );
+    const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
+      BEATORAJA_SKIN_TYPE.MUSIC_SELECT,
+      selectCandidates,
+      bundle.theme.selectSkin,
+    );
+    if (selectedEntry === undefined) {
+      gameplayLog.warn('beatoraja select: no select skin in theme');
+      this.setStatus('Beatoraja select unavailable: no select skin');
+      return;
+    }
+
     // Two-pass evaluation — header pass picks up the skin's `property[]` schema, the second pass
     // re-runs `main()` with default option picks so dynamic `source[]` / `destination[]` populate.
-    const headerLoad = loadBeatorajaSelectSkinFromBundle(bundle);
-    if (!headerLoad || !headerLoad.result.ok) {
-      const reason = headerLoad?.result.ok === false ? headerLoad.result.error.message : 'no select skin';
-      gameplayLog.warn(`beatoraja select: ${reason}`);
-      this.setStatus(`Beatoraja select unavailable: ${reason}`);
+    const headerLoad = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files });
+    if (!headerLoad.ok) {
+      gameplayLog.warn(`beatoraja select: ${headerLoad.error.message}`);
+      this.setStatus(`Beatoraja select unavailable: ${headerLoad.error.message}`);
       return;
     }
     // Resolve cached skin config (or seed defaults from the header's property[] schema). The
     // skin-options panel mutates this object as the user picks options.
-    const config = this.resolveBeatorajaSkinConfig(headerLoad.entry.entryPath, headerLoad.result.header);
-    const skinLoad = loadBeatorajaSelectSkinFromBundle(bundle, config);
-    if (!skinLoad || !skinLoad.result.ok || !skinLoad.result.skin) {
-      const reason = skinLoad?.result.ok === false ? skinLoad.result.error.message : 'no select skin';
+    const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
+    const result = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files, skinConfig: config });
+    if (!result.ok || !result.skin) {
+      const reason = result.ok ? 'skin payload missing' : result.error.message;
       gameplayLog.warn(`beatoraja select: ${reason}`);
       this.setStatus(`Beatoraja select unavailable: ${reason}`);
       return;
     }
+    // Narrow the union by extracting the (now-known-defined) `skin` reference; subsequent uses
+    // type-check without `!` operators.
+    const skin = result.skin;
+    const skinLoad = { entry: selectedEntry, skin };
 
     // Texture + font cache — same per-entry memoization as the gameplay path. The select skin lives
     // at a different `entryPath` than `play_*.luaskin` so the caches are naturally segregated.
@@ -1812,8 +1885,8 @@ class PlayerWebDemoApp {
       const sourceBundle = bundleBeatorajaSources({
         files: bundle.files,
         entryPath: skinLoad.entry.entryPath,
-        sources: (skinLoad.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-        filepathSchema: skinLoad.result.skin.filepath,
+        sources: (skinLoad.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+        filepathSchema: skinLoad.skin.filepath,
       });
       gameplayLog.info(
         `beatoraja select source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${skinLoad.entry.entryPath})`,
@@ -1826,7 +1899,7 @@ class PlayerWebDemoApp {
     }
     let fonts = this.beatorajaFontCachesByEntry.get(skinLoad.entry.entryPath);
     if (fonts === undefined) {
-      const fontDeclarations = normalizeBeatorajaFonts(skinLoad.result.skin.font);
+      const fontDeclarations = normalizeBeatorajaFonts(skinLoad.skin.font);
       fonts = await loadBeatorajaFonts({
         files: bundle.files,
         entryPath: skinLoad.entry.entryPath,
@@ -1837,7 +1910,7 @@ class PlayerWebDemoApp {
 
     this.beatorajaSelectScene?.dispose();
     this.beatorajaSelectScene = new PixiBeatorajaSelectScene({
-      skin: skinLoad.result.skin,
+      skin: skinLoad.skin,
       textures,
       fonts,
       skinConfig: config,
@@ -1868,11 +1941,20 @@ class PlayerWebDemoApp {
     // changes (Play Side, Score Graph On/Off, etc.) take effect on the very next Pixi frame
     // without disposing / re-mounting the scene.
     this.refreshBeatorajaSkinOptionsGui({
-      title: `Select skin (${skinLoad.entry.entryPath.split('/').pop() ?? 'select'})`,
-      entryPath: headerLoad.entry.entryPath,
-      header: headerLoad.result.header,
+      title: `Select skin (${selectedEntry.entryPath.split('/').pop() ?? 'select'})`,
+      entryPath: selectedEntry.entryPath,
+      header: headerLoad.header,
+      availableSkins: this.collectBeatorajaSkinChoices([BEATORAJA_SKIN_TYPE.MUSIC_SELECT]),
+      onSkinChange: (nextEntryPath) => {
+        // Persist the user's pick so subsequent select-scene mounts use the new entry too.
+        this.beatorajaSkinOverridesByType.set(BEATORAJA_SKIN_TYPE.MUSIC_SELECT, nextEntryPath);
+        // Apply against the new entry. The cached config for the new entry (or its defaults) is
+        // resolved inside `applyBeatorajaSelectSkinConfig`; we don't need to pass it explicitly.
+        const nextConfig = this.resolveBeatorajaSkinConfig(nextEntryPath, headerLoad.header);
+        void this.applyBeatorajaSelectSkinConfig(nextEntryPath, nextConfig);
+      },
       onApply: (nextConfig) => {
-        void this.applyBeatorajaSelectSkinConfig(headerLoad.entry.entryPath, nextConfig);
+        void this.applyBeatorajaSelectSkinConfig(selectedEntry.entryPath, nextConfig);
       },
     });
   }
@@ -1886,26 +1968,84 @@ class PlayerWebDemoApp {
   private async applyBeatorajaSelectSkinConfig(entryPath: string, config: BeatorajaSkinConfig): Promise<void> {
     const bundle = this.beatorajaTheme;
     if (!bundle || !this.beatorajaSelectScene) return;
-    const skinLoad = loadBeatorajaSelectSkinFromBundle(bundle, config);
-    if (!skinLoad || !skinLoad.result.ok || !skinLoad.result.skin) return;
+    // Load the SPECIFIC entry — different from the discovery's "best" pick when the user picked an
+    // alternate skin from the bottom-right dropdown.
+    const result = loadBeatorajaSkin({ entryPath, files: bundle.files, skinConfig: config });
+    if (!result.ok || !result.skin) return;
     // Drop and re-decode the texture cache for this entry — option changes can alter `source[]`.
     this.beatorajaTextureCachesByEntry.delete(entryPath);
     const sourceBundle = bundleBeatorajaSources({
       files: bundle.files,
-      entryPath: skinLoad.entry.entryPath,
-      sources: (skinLoad.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-      filepathSchema: skinLoad.result.skin.filepath,
+      entryPath,
+      sources: (result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+      filepathSchema: result.skin.filepath,
       filepathOverrides: config.file,
     });
     const textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
     this.beatorajaTextureCachesByEntry.set(entryPath, textures);
-    const fonts = this.beatorajaFontCachesByEntry.get(entryPath);
-    this.beatorajaSelectScene.replaceSkin({
-      skin: skinLoad.result.skin,
-      skinConfig: config,
-      textures,
-      fonts,
+    let fonts = this.beatorajaFontCachesByEntry.get(entryPath);
+    if (fonts === undefined) {
+      // Per-entry font cache miss — fonts may differ between skins, so load fresh for this entry.
+      fonts = await loadBeatorajaFonts({
+        files: bundle.files,
+        entryPath,
+        fonts: normalizeBeatorajaFonts(result.skin.font),
+      });
+      this.beatorajaFontCachesByEntry.set(entryPath, fonts);
+    }
+    this.beatorajaSelectScene.replaceSkin({ skin: result.skin, skinConfig: config, textures, fonts });
+
+    // Refresh the skin-options panel against the new entry's header so the property dropdowns
+    // reflect the new skin's `property[]` schema.
+    this.refreshBeatorajaSkinOptionsGui({
+      title: `Select skin (${entryPath.split('/').pop() ?? 'select'})`,
+      entryPath,
+      header: result.header,
+      availableSkins: this.collectBeatorajaSkinChoices([BEATORAJA_SKIN_TYPE.MUSIC_SELECT]),
+      onSkinChange: (nextEntryPath) => {
+        this.beatorajaSkinOverridesByType.set(BEATORAJA_SKIN_TYPE.MUSIC_SELECT, nextEntryPath);
+        const nextConfig = this.resolveBeatorajaSkinConfig(nextEntryPath, result.header);
+        void this.applyBeatorajaSelectSkinConfig(nextEntryPath, nextConfig);
+      },
+      onApply: (nextConfig) => {
+        void this.applyBeatorajaSelectSkinConfig(entryPath, nextConfig);
+      },
     });
+  }
+
+  /**
+   * Collect the discovered skin entries whose `header.type` matches one of `acceptedTypes`. Used to
+   * populate the bottom-right GUI's "Skin" dropdown — the demo passes `[MUSIC_SELECT]` for the
+   * select scene, the active variant's type for the play scene, etc. Returns an empty array when
+   * no theme is loaded.
+   */
+  private collectBeatorajaSkinChoices(acceptedTypes: ReadonlyArray<number>): SkinChoice[] {
+    const bundle = this.beatorajaTheme;
+    if (bundle === undefined) return [];
+    const accepted = new Set(acceptedTypes);
+    return bundle.theme.entries
+      .filter((entry) => accepted.has(entry.header.type))
+      .map((entry) => ({ entryPath: entry.entryPath, label: skinChoiceLabel(entry) }));
+  }
+
+  /**
+   * Pick the actual skin entry to mount for a scene, honoring the user's override when one was
+   * recorded. Falls back to `fallback` (the discovery's "best" pick) when no override exists or
+   * when the override no longer points at a valid entry (e.g., the user dropped a different theme).
+   */
+  private pickBeatorajaSkinEntryWithOverride(
+    typeCode: number,
+    candidates: ReadonlyArray<BeatorajaSkinEntry>,
+    fallback: BeatorajaSkinEntry | undefined,
+  ): BeatorajaSkinEntry | undefined {
+    const override = this.beatorajaSkinOverridesByType.get(typeCode);
+    if (override !== undefined) {
+      const found = candidates.find((entry) => entry.entryPath === override);
+      if (found !== undefined) return found;
+      // Override stale (theme rotated) — drop it so the fallback takes over.
+      this.beatorajaSkinOverridesByType.delete(typeCode);
+    }
+    return fallback;
   }
 
   /**
@@ -1962,6 +2102,10 @@ class PlayerWebDemoApp {
     title: string;
     entryPath: string;
     header: BeatorajaSkinHeader;
+    /** Skin entries the user can switch to (typically all entries with matching `header.type`). */
+    availableSkins?: ReadonlyArray<SkinChoice>;
+    /** Fired when the user picks a different skin entry from the dropdown. */
+    onSkinChange?: (nextEntryPath: string) => void;
     onApply: (updatedConfig: BeatorajaSkinConfig) => void;
   }): void {
     const config = this.resolveBeatorajaSkinConfig(args.entryPath, args.header);
@@ -1972,6 +2116,9 @@ class PlayerWebDemoApp {
       header: args.header,
       config,
       fileCandidates: candidates,
+      availableSkins: args.availableSkins,
+      currentEntryPath: args.entryPath,
+      onSkinChange: args.onSkinChange,
       onChange: (next) => {
         // Persist and notify the caller so it can re-mount the active scene with the new config.
         this.beatorajaSkinConfigByEntry.set(args.entryPath, next);
@@ -2494,4 +2641,34 @@ function sanitizeFilenameStem(input: string): string {
     .replace(/\s+/gu, ' ')
     .trim()
     .slice(0, 80);
+}
+
+/** Map a playable variant to the matching `BEATORAJA_SKIN_TYPE` code. */
+function playSkinTypeForVariant(variant: BeatorajaPlayableVariant): number {
+  switch (variant) {
+    case '7':
+      return BEATORAJA_SKIN_TYPE.PLAY_7KEYS;
+    case '5':
+      return BEATORAJA_SKIN_TYPE.PLAY_5KEYS;
+    case '14':
+      return BEATORAJA_SKIN_TYPE.PLAY_14KEYS;
+    case '10':
+      return BEATORAJA_SKIN_TYPE.PLAY_10KEYS;
+    case '9':
+      return BEATORAJA_SKIN_TYPE.PLAY_9KEYS;
+  }
+}
+
+/**
+ * Format a discovered skin entry for the bottom-right GUI's "Skin" dropdown. Prefers the
+ * `header.name` set by the skin author, falling back to the entry's filename. Suffixes the
+ * filename in parens when both are available so duplicate-name skins (rare but possible) stay
+ * distinguishable.
+ */
+function skinChoiceLabel(entry: BeatorajaSkinEntry): string {
+  const name = entry.header.name?.trim();
+  const slash = entry.entryPath.lastIndexOf('/');
+  const filename = slash >= 0 ? entry.entryPath.slice(slash + 1) : entry.entryPath;
+  if (name !== undefined && name.length > 0) return `${name} (${filename})`;
+  return filename;
 }

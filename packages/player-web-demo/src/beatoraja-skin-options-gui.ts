@@ -37,6 +37,17 @@ export interface BeatorajaSkinOptionsGuiOptions {
   container: HTMLElement;
 }
 
+/**
+ * One discovered skin entry the user can pick for the active scene. The demo emits these from the
+ * theme bundle's `entries[]`, filtered to the scene's matching `header.type`.
+ */
+export interface SkinChoice {
+  /** Path inside the theme bundle (the canonical id). Used for override storage and re-mount. */
+  entryPath: string;
+  /** Human-readable label — typically `header.name` + filename. */
+  label: string;
+}
+
 export interface SetSkinOptions {
   /** Section title shown at the top of the panel. */
   title: string;
@@ -50,6 +61,21 @@ export interface SetSkinOptions {
    * pattern. Empty / missing → only the default ("(auto)") is offered.
    */
   fileCandidates?: ReadonlyMap<string, ReadonlyArray<string>>;
+  /**
+   * Discovered skin entries the user can switch to for this scene. The currently-mounted skin
+   * appears in the list (its `entryPath` matches `currentEntryPath`). The dropdown is hidden when
+   * `availableSkins.length <= 1` — no point showing a one-item picker.
+   */
+  availableSkins?: ReadonlyArray<SkinChoice>;
+  /** Currently-mounted entry path. The skin dropdown initializes to this value. */
+  currentEntryPath?: string;
+  /**
+   * Fired when the user picks a different skin entry from the top dropdown. The receiver should
+   * persist the override and re-mount the active scene against the new entry. After the new entry
+   * mounts, `setSkin` will be called again (with the new entry's header / config) — this lifecycle
+   * handles the cascade naturally.
+   */
+  onSkinChange?: (nextEntryPath: string) => void;
   /**
    * Fired whenever the user changes a property or file pick. The receiver is expected to write the new
    * config back to its per-entry cache and re-mount the active scene with the new values applied.
@@ -70,10 +96,17 @@ export class BeatorajaSkinOptionsGui {
    * so we maintain a target object the controllers mutate; `onChange` callbacks fire with a fresh
    * copy so the consumer never accidentally shares structure with our internal mutator state.
    */
-  private state: { offset: number; option: Record<string, number>; file: Record<string, string> } = {
+  private state: {
+    offset: number;
+    option: Record<string, number>;
+    file: Record<string, string>;
+    /** Currently-selected skin entry path (drives the top "Skin" dropdown). */
+    entryPath: string;
+  } = {
     offset: 0,
     option: {},
     file: {},
+    entryPath: '',
   };
 
   constructor(options: BeatorajaSkinOptionsGuiOptions) {
@@ -88,12 +121,15 @@ export class BeatorajaSkinOptionsGui {
     this.disposeGui();
     this.state = {
       offset: typeof options.config.offset === 'number' ? options.config.offset : 0,
-      option: { ...(options.config.option ?? {}) },
-      file: { ...(options.config.file ?? {}) },
+      option: { ...options.config.option },
+      file: { ...options.config.file },
+      entryPath: options.currentEntryPath ?? '',
     };
     const properties: ReadonlyArray<BeatorajaSkinProperty> = options.header.property ?? [];
     const filepaths: ReadonlyArray<BeatorajaSkinFilepath> = options.header.filepath ?? [];
-    if (properties.length === 0 && filepaths.length === 0) {
+    const skinChoices = options.availableSkins ?? [];
+    const showSkinPicker = skinChoices.length > 1 && options.onSkinChange !== undefined;
+    if (properties.length === 0 && filepaths.length === 0 && !showSkinPicker) {
       // Nothing to configure — leave the panel empty so the user isn't confused by a useless box.
       return;
     }
@@ -115,6 +151,23 @@ export class BeatorajaSkinOptionsGui {
       });
     };
 
+    if (showSkinPicker) {
+      // Top-level "Skin" dropdown — lets the user pick which discovered skin entry the scene mounts
+      // when several were detected for this scene type. lil-gui's dropdown takes a Record<label,
+      // value>; we map each candidate's display label to its `entryPath`. Picking a different entry
+      // fires `onSkinChange` which the demo treats as "re-mount the scene against this entry".
+      // Property / file controls below stay attached to the CURRENT mount until the new mount
+      // calls `setSkin` again; that's the moment the panel rebuilds with the new schema.
+      const skinOptionMap: Record<string, string> = {};
+      for (const choice of skinChoices) skinOptionMap[choice.label] = choice.entryPath;
+      gui
+        .add(this.state, 'entryPath', skinOptionMap)
+        .name('Skin')
+        .onChange((value: string) => {
+          options.onSkinChange?.(value);
+        });
+    }
+
     if (properties.length > 0) {
       const propsFolder = gui.addFolder('Options').open();
       for (const property of properties) {
@@ -129,18 +182,12 @@ export class BeatorajaSkinOptionsGui {
           labelByOp.set(item.op, item.name);
         }
         const initial = this.state.option[property.name];
-        const initialOp =
-          typeof initial === 'number' && labelByOp.has(initial)
-            ? initial
-            : (property.item[0]?.op ?? 0);
+        const initialOp = typeof initial === 'number' && labelByOp.has(initial) ? initial : (property.item[0]?.op ?? 0);
         // Seed the live state in case `config.option` was missing this property entirely (the skin's
         // first-pass evaluator does this with `buildDefaultSkinConfigOptions`, but a user-supplied
         // partial config might omit some).
         this.state.option[property.name] = initialOp;
-        propsFolder
-          .add(this.state.option, property.name, optionMap)
-          .name(property.name)
-          .onChange(emit);
+        propsFolder.add(this.state.option, property.name, optionMap).name(property.name).onChange(emit);
       }
     }
 
@@ -159,10 +206,7 @@ export class BeatorajaSkinOptionsGui {
 
     // `Offset` slider — chart timing offset in ms. Beatoraja accepts negative / positive integers in
     // the ±200 ms range; tighter control isn't typically necessary.
-    gui
-      .add(this.state, 'offset', -200, 200, 1)
-      .name('Note offset (ms)')
-      .onChange(emit);
+    gui.add(this.state, 'offset', -200, 200, 1).name('Note offset (ms)').onChange(emit);
   }
 
   /**
