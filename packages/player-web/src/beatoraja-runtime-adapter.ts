@@ -43,6 +43,7 @@ import {
   TIMER_FADEOUT,
   TIMER_PLAY,
   TIMER_READY,
+  TIMER_RHYTHM,
   TIMER_SCENE_START,
   TIMER_STARTINPUT,
   type BeatorajaSide,
@@ -226,6 +227,13 @@ export class BeatorajaRuntimeAdapter {
   private fpsRingHead = 0;
   private fpsRingFilled = 0;
   /**
+   * Last seen `frame.currentBeat` (latched on every `applyFrame`). Drives the `TIMER_RHYTHM`
+   * (= 140) re-stamp logic — when `Math.floor(currentBeat)` advances we restart the rhythm timer
+   * so any keyframe gated on it replays from t=0 on every beat boundary. `undefined` until the
+   * first frame arrives so the very first beat doesn't accidentally count as a crossing.
+   */
+  private lastFrameBeat: number | undefined;
+  /**
    * Per-ref "we already logged that this isn't wired" set. Keeps `resolveNumberValue` quiet on the hot
    * path while still surfacing each missing prop.lua num exactly once per session.
    */
@@ -386,6 +394,33 @@ export class BeatorajaRuntimeAdapter {
     this.fpsRingHead = (this.fpsRingHead + 1) % this.fpsRingMs.length;
     if (this.fpsRingFilled < this.fpsRingMs.length) this.fpsRingFilled += 1;
     this.refreshDerivedOps(frame.summary);
+    this.refreshRhythmTimer(frame.currentBeat);
+  }
+
+  /**
+   * Re-stamp the rhythm timer (prop.lua `rhythm = 140`) on every beat boundary. Skins gate
+   * pulse / strobe animations on this so visual elements throb in time with the music — a
+   * `dst[]` with `loop = 0` and `cycle`-equivalent timing reads `now - timerStart[140]` and
+   * replays from t=0 every time we re-stamp.
+   *
+   * Detection is based on the integer beat advancing (`Math.floor(beat)` change) rather than
+   * sub-beat interpolation: at typical BPMs (60..240) beats happen at 1..4 Hz while
+   * `applyFrame` runs at ~60 Hz, so the integer-crossing heuristic catches every boundary
+   * within one frame's worth of jitter (≤ 16 ms — imperceptible for a pulse animation).
+   *
+   * The very first frame doesn't count as a crossing (`lastFrameBeat === undefined`); it just
+   * latches the baseline so subsequent crossings are detectable. Reverse beat motion (engine
+   * seek backwards) re-stamps too — the timer should always reflect the most recent beat
+   * boundary regardless of direction.
+   */
+  private refreshRhythmTimer(currentBeat: number): void {
+    if (!Number.isFinite(currentBeat)) return;
+    const flooredNow = Math.floor(currentBeat);
+    const flooredPrev = this.lastFrameBeat !== undefined ? Math.floor(this.lastFrameBeat) : flooredNow;
+    if (this.lastFrameBeat === undefined || flooredNow !== flooredPrev) {
+      this.markTimer(TIMER_RHYTHM);
+    }
+    this.lastFrameBeat = currentBeat;
   }
 
   /**
@@ -1245,6 +1280,7 @@ export class BeatorajaRuntimeAdapter {
     this.runningCombo = 0;
     this.maxCombo = 0;
     this.frame = null;
+    this.lastFrameBeat = undefined;
   }
 
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────

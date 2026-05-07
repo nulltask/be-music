@@ -539,6 +539,88 @@ describe('BeatorajaRuntimeAdapter — lift slider', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — applyFrame rhythm timer', () => {
+  function makeFrame(currentBeat: number): import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload {
+    return {
+      currentBeat,
+      currentSeconds: 0,
+      totalSeconds: 100,
+      summary: {
+        score: 0,
+        total: 0,
+        perfect: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        fast: 0,
+        slow: 0,
+        exScore: 0,
+      } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload['summary'],
+      notes: [],
+    };
+  }
+
+  it('stamps the rhythm timer (140) on the very first applyFrame and on every beat boundary', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    // First frame at t=100 — baseline. Stamps the timer because we haven't seen a beat yet.
+    clock.advance(100);
+    adapter.applyFrame(makeFrame(0.0));
+    expect(adapter.getTimerStart(140)).toBe(100);
+    // Same beat (still on beat 0, fractional 0.7) — no re-stamp.
+    clock.advance(50);
+    adapter.applyFrame(makeFrame(0.7));
+    expect(adapter.getTimerStart(140)).toBe(100);
+    // Crossing into beat 1 at t=200 — timer re-stamps.
+    clock.advance(50);
+    adapter.applyFrame(makeFrame(1.05));
+    expect(adapter.getTimerStart(140)).toBe(200);
+    // Mid-beat-1 — no change.
+    clock.advance(100);
+    adapter.applyFrame(makeFrame(1.8));
+    expect(adapter.getTimerStart(140)).toBe(200);
+    // Crossing into beat 2.
+    clock.advance(50);
+    adapter.applyFrame(makeFrame(2.0));
+    expect(adapter.getTimerStart(140)).toBe(350);
+  });
+
+  it('re-stamps when the engine seeks backwards (reverse beat motion is also a boundary)', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyFrame(makeFrame(5.5));
+    expect(adapter.getTimerStart(140)).toBe(100);
+    clock.advance(50);
+    adapter.applyFrame(makeFrame(2.3));
+    expect(adapter.getTimerStart(140)).toBe(150);
+  });
+
+  it('ignores non-finite beat values (NaN / Infinity from a degenerate frame)', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyFrame(makeFrame(0));
+    expect(adapter.getTimerStart(140)).toBe(100);
+    clock.advance(50);
+    adapter.applyFrame(makeFrame(Number.NaN));
+    expect(adapter.getTimerStart(140)).toBe(100);
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — POOR BGA tracking', () => {
   it('flips between trigger-poor-bga and clear-poor-bga commands', () => {
     const adapter = new BeatorajaRuntimeAdapter({
