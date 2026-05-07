@@ -69,6 +69,7 @@ import {
 } from '@be-music/beatoraja-skin';
 import { BeatorajaSkinOptionsGui, type SkinChoice } from './beatoraja-skin-options-gui.ts';
 import type { BeMusicJson } from '@be-music/json';
+import { resolveBmsControlFlow } from '@be-music/parser';
 import type { PlayerSummary } from '@be-music/player/core/engine';
 
 const dropLog = logger('drop');
@@ -726,13 +727,21 @@ class PlayerWebDemoApp {
   /** The current chart's prepared assets (audio + BGA). Disposed alongside the gameplay view. */
   private beatorajaGameplayPrep: PreparedBeatorajaGameplayChart | undefined;
   /**
-   * Chart from the most recent beatoraja run, preserved across the gameplay → result transition
-   * so the result skin's `bpmgraph[]` element can still plot the BPM curve. The prep bundle
-   * itself is disposed before the result scene mounts (audio decoders + bga textures release
-   * their GPU/Web Audio resources), but `chart` is a plain JSON object — keeping a reference is
-   * cheap.
+   * The most recently resolved chart for a beatoraja run, paired with the song's `chartPath` so
+   * subsequent stages can verify the cached chart still matches the song they're handling.
+   *
+   * Lifecycle:
+   *   1. The decide scene resolves `#IF` / `#RANDOM` once at entry and stores the result here so
+   *      the bpmgraph (and the gameplay prep that follows) sees the SAME branches.
+   *   2. `playSongBeatoraja` reads it via `preResolvedChart` — only when `chartPath` matches the
+   *      song being played. Mismatched paths fall back to a fresh resolve (= the user reached
+   *      gameplay without going through decide; rare but possible via debug paths).
+   *   3. `disposeBeatorajaGameplay` re-stamps it from `prep.chart` so the result scene gets the
+   *      same chart for its bpmgraph.
+   *
+   * `chart` is a plain JSON object so retaining the reference is cheap.
    */
-  private lastBeatorajaChart: BeMusicJson | undefined;
+  private lastBeatorajaChart: { chart: BeMusicJson; chartPath: string } | undefined;
   /** Beatoraja-skinned song select scene. Active when a beatoraja theme with a select skin is loaded. */
   private beatorajaSelectScene: PixiBeatorajaSelectScene | undefined;
   /**
@@ -1746,10 +1755,18 @@ class PlayerWebDemoApp {
     }
     let prep: PreparedBeatorajaGameplayChart;
     try {
+      // Reuse the chart the decide scene resolved IFF it belongs to the song we're about to play
+      // — `#RANDOM` rolls fresh per `resolveBmsControlFlow` call, so resolving twice would pick
+      // different branches between decide and gameplay. When the cached chart is for a
+      // different `chartPath` (= the player reached gameplay via a path that bypassed decide),
+      // we fall through to a fresh resolve inside `prepareBeatorajaGameplayChart`.
+      const preResolvedChart =
+        this.lastBeatorajaChart?.chartPath === song.chartPath ? this.lastBeatorajaChart.chart : undefined;
       prep = await prepareBeatorajaGameplayChart({
         song,
         source,
         audioCompressorMode: this.guiState.compressor === false ? 'off' : this.compressorMode,
+        preResolvedChart,
       });
     } catch (error) {
       gameplayLog.warn('beatoraja prep failed', error);
@@ -2128,6 +2145,14 @@ class PlayerWebDemoApp {
     this.beatorajaSelectScene = undefined;
     this.beatorajaDecideScene?.dispose();
 
+    // Resolve `#IF` / `#RANDOM` once at decide entry so the decide skin's bpmgraph plots the
+    // SAME branches the gameplay scene will play. `resolveBmsControlFlow` rolls each `#RANDOM`
+    // fresh per call; resolving twice (here + inside `prepareBeatorajaGameplayChart`) would yield
+    // different branches between decide and gameplay. The resolved chart is cached on the demo
+    // and reused by `playSongBeatoraja` via `preResolvedChart`.
+    const resolvedChart = resolveBmsControlFlow(song.chart, { random: Math.random });
+    this.lastBeatorajaChart = { chart: resolvedChart, chartPath: song.chartPath };
+
     // Idempotency gate — `onContinue` and the auto-advance timer can race in theory; whichever
     // lands first wins. Same pattern as the LR2 decide path.
     let advanced = false;
@@ -2141,6 +2166,9 @@ class PlayerWebDemoApp {
       skin: result.skin,
       textures,
       fonts,
+      // Pass the resolved chart so the decide skin's bpmgraph element (when authored) plots the
+      // BPM curve of the about-to-play chart.
+      chart: resolvedChart,
       skinConfig: config,
       song,
       bgmBytes: this.beatorajaThemeBgm.decide,
@@ -2246,8 +2274,10 @@ class PlayerWebDemoApp {
       song,
       // Pass the just-played chart so any `bpmgraph[]` element in the result skin can plot the
       // chart's BPM curve. The prep bundle is disposed at gameplay teardown, so the chart
-      // reference is snapshot into `lastBeatorajaChart` for use here.
-      chart: this.lastBeatorajaChart,
+      // reference is snapshot into `lastBeatorajaChart` for use here. We only forward when the
+      // cached chart matches the song the result scene is rendering — otherwise the bpmgraph
+      // would plot the wrong chart's BPM curve.
+      chart: this.lastBeatorajaChart?.chartPath === song.chartPath ? this.lastBeatorajaChart.chart : undefined,
       summary,
       maxCombo,
       scoreHistory: history.scoreHistory,
@@ -2394,10 +2424,14 @@ class PlayerWebDemoApp {
     this.beatorajaGameplayView?.dispose();
     this.beatorajaGameplayView = undefined;
     if (this.beatorajaGameplayPrep) {
-      // Snapshot the chart reference BEFORE disposing the prep — `chart` is a plain JSON object
-      // we want to forward to the result scene's bpmgraph resolver. The audio / BGA resources
-      // owned by `prep` still get released by `dispose()`.
-      this.lastBeatorajaChart = this.beatorajaGameplayPrep.chart;
+      // Refresh the cached chart with whatever the prep ended up using — this preserves the
+      // `chartPath ⇒ chart` association even on the rare path where the prep had to fall back to
+      // a fresh resolve (e.g. gameplay reached without going through decide). The audio / BGA
+      // resources owned by `prep` still get released by `dispose()`.
+      const chartPath = this.lastBeatorajaChart?.chartPath;
+      if (chartPath !== undefined) {
+        this.lastBeatorajaChart = { chart: this.beatorajaGameplayPrep.chart, chartPath };
+      }
       void this.beatorajaGameplayPrep.dispose();
       this.beatorajaGameplayPrep = undefined;
     }

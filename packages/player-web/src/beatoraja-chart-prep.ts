@@ -65,6 +65,14 @@ export interface PrepareBeatorajaGameplayChartOptions {
    * with a master compressor fronting both). Pass `'off'` to bypass every compressor stage.
    */
   audioCompressorMode?: CompressorMode;
+  /**
+   * Pre-resolved chart from a prior `resolveBmsControlFlow(song.chart)` call. When set, the prep
+   * skips the resolve step and uses this chart verbatim. Required when the host already resolved
+   * the chart for an upstream scene (e.g. the decide screen's bpmgraph), since
+   * `resolveBmsControlFlow` re-evaluates `#RANDOM` on every call — running it twice would pick
+   * different branches and produce a different chart between decide and gameplay.
+   */
+  preResolvedChart?: BeMusicJson;
 }
 
 export interface PreparedBeatorajaGameplayChart {
@@ -95,7 +103,10 @@ export async function prepareBeatorajaGameplayChart(
   const { song, source } = options;
 
   // 1. Resolve `#IF` / `#RANDOM` control flow so every later step sees the same chosen branches.
-  const chart = resolveBmsControlFlow(song.chart, { random: Math.random });
+  // When the caller supplies `preResolvedChart`, skip the resolve — `resolveBmsControlFlow` rolls
+  // `#RANDOM` fresh each call, and rolling twice (decide-side + gameplay-side) would pick
+  // different branches per scene. The decide flow resolves once and threads the result through.
+  const chart = options.preResolvedChart ?? resolveBmsControlFlow(song.chart, { random: Math.random });
 
   // 2. Audio context + bus.
   const audioContext = new AudioContext({ latencyHint: 'interactive' });
