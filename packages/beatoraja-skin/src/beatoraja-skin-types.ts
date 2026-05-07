@@ -149,6 +149,15 @@ export interface BeatorajaSkin extends BeatorajaSkinHeader {
   slider?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   graph?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   bargraph?: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  /**
+   * Specialized chart-data graphs. Each plots dynamic data over its destination box rather than
+   * scaling a source-image sub-rect. See `beatoraja-skin-bpmgraph.ts` (and its peers, when those
+   * land) for the per-element shape.
+   */
+  bpmgraph?: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  judgegraph?: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  gaugegraph?: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  timingvisualizer?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   button?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   destination?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   bga?: Readonly<Record<string, unknown>>;

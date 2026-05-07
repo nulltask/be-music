@@ -11,6 +11,7 @@ import {
   imageFrameAt,
   imageFrameRect,
   imageRefFrame,
+  normalizeBeatorajaBpmGraphs,
   normalizeBeatorajaDestinations,
   normalizeBeatorajaGauge,
   normalizeBeatorajaGraphs,
@@ -21,6 +22,7 @@ import {
   normalizeBeatorajaTexts,
   normalizeBeatorajaValues,
   pickBeatorajaGaugeNode,
+  type BeatorajaBpmGraphElement,
   type BeatorajaDestinationGroup,
   type BeatorajaGaugeElement,
   type BeatorajaGraphElement,
@@ -122,6 +124,14 @@ export interface BeatorajaPlaySkinViewOptions {
    * matches what the result scene should display before any judge has occurred).
    */
   resolveGaugePercent?: () => number | undefined;
+  /**
+   * Resolve the chart's BPM curve as a polyline in `[0, 1]²`. Each `{x, y}` is a normalized
+   * point inside the bpmgraph's destination box (x = chart progress, y = (bpm − minBpm) /
+   * (maxBpm − minBpm)). The renderer maps these onto the dst rect with `y` inverted (high BPM
+   * paints toward the top of the box). Hosts compute this once per chart and hand it back from
+   * the resolver. Returning `undefined` or an empty array hides every bpmgraph element.
+   */
+  resolveBpmGraphPoints?: () => ReadonlyArray<{ x: number; y: number }> | undefined;
 }
 
 interface SpriteEntry {
@@ -188,6 +198,20 @@ interface PolylineGraphEntry {
   lastPointCount: number;
 }
 
+interface BpmGraphEntry {
+  kind: 'bpmgraph';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaBpmGraphElement;
+  /** Pixi `Graphics` painting the BPM curve. Same rebuild-on-change pattern as polyline-graph. */
+  graphics: Graphics;
+  /**
+   * Last point count painted. The chart's BPM curve is static for the whole session, so the
+   * polyline is built once and reused — `lastPointCount` flipping from `-1` to the actual count
+   * is the "first paint" trigger; subsequent frames short-circuit.
+   */
+  lastPointCount: number;
+}
+
 interface SliderEntry {
   kind: 'slider';
   group: BeatorajaDestinationGroup;
@@ -251,6 +275,7 @@ type ViewEntry =
   | TextEntry
   | GraphEntry
   | PolylineGraphEntry
+  | BpmGraphEntry
   | SliderEntry
   | ImagesetEntry
   | GaugeEntry;
@@ -269,6 +294,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveGraphPolyline: (type: number) => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveSliderValue: (type: number) => number | undefined;
   private readonly resolveGaugePercent: () => number | undefined;
+  private readonly resolveBpmGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -293,6 +319,7 @@ export class BeatorajaPlaySkinView {
     this.resolveGraphPolyline = options.resolveGraphPolyline ?? (() => undefined);
     this.resolveSliderValue = options.resolveSliderValue ?? (() => undefined);
     this.resolveGaugePercent = options.resolveGaugePercent ?? (() => undefined);
+    this.resolveBpmGraphPoints = options.resolveBpmGraphPoints ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -346,9 +373,25 @@ export class BeatorajaPlaySkinView {
         sliderById.set(slider.id, slider);
       }
     }
+    // `bpmgraph[]` — chart's BPM curve plotted across a destination box. Same id-namespace
+    // contention as the rest. Always loses to image / value / text / graph / slider on id
+    // collision (matches the "first kind to claim wins" rule).
+    const bpmGraphById = new Map<BeatorajaImageId, BeatorajaBpmGraphElement>();
+    for (const bpmGraph of normalizeBeatorajaBpmGraphs((options.skin as { bpmgraph?: unknown }).bpmgraph)) {
+      if (
+        !imageById.has(bpmGraph.id) &&
+        !valueById.has(bpmGraph.id) &&
+        !textById.has(bpmGraph.id) &&
+        !graphById.has(bpmGraph.id) &&
+        !sliderById.has(bpmGraph.id)
+      ) {
+        bpmGraphById.set(bpmGraph.id, bpmGraph);
+      }
+    }
     // `imageset[]` declarations — multi-state images (lane keybeams, bomb cycles) that flip between
     // sub-images based on a runtime ref op. Lowest precedence after every other element kind: a
-    // direct `image[]` / `value[]` / `text[]` / `graph[]` / `slider[]` with the same id wins.
+    // direct `image[]` / `value[]` / `text[]` / `graph[]` / `slider[]` / `bpmgraph[]` with the
+    // same id wins.
     const imagesetById = new Map<BeatorajaImageId, BeatorajaImagesetElement>();
     for (const imageset of normalizeBeatorajaImagesets(options.skin.imageset)) {
       if (
@@ -356,7 +399,8 @@ export class BeatorajaPlaySkinView {
         !valueById.has(imageset.id) &&
         !textById.has(imageset.id) &&
         !graphById.has(imageset.id) &&
-        !sliderById.has(imageset.id)
+        !sliderById.has(imageset.id) &&
+        !bpmGraphById.has(imageset.id)
       ) {
         imagesetById.set(imageset.id, imageset);
       }
@@ -372,6 +416,7 @@ export class BeatorajaPlaySkinView {
       !textById.has(gauge.id) &&
       !graphById.has(gauge.id) &&
       !sliderById.has(gauge.id) &&
+      !bpmGraphById.has(gauge.id) &&
       !imagesetById.has(gauge.id)
     ) {
       gaugeElement = gauge;
@@ -416,6 +461,11 @@ export class BeatorajaPlaySkinView {
         if (sliderElement !== undefined) {
           const sliderEntry = this.buildSliderEntry(group, sliderElement, options.textures);
           if (sliderEntry !== undefined) this.entries.push(sliderEntry);
+          continue;
+        }
+        const bpmGraphElement = bpmGraphById.get(group.id);
+        if (bpmGraphElement !== undefined) {
+          this.entries.push(this.buildBpmGraphEntry(group, bpmGraphElement));
           continue;
         }
         const imagesetElement = imagesetById.get(group.id);
@@ -736,6 +786,17 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Build a bpmgraph entry — pre-allocates the `Graphics` node; the actual polyline gets drawn
+   * once on first `update()` (the chart's BPM curve is static, so we don't re-stroke per frame).
+   */
+  private buildBpmGraphEntry(group: BeatorajaDestinationGroup, element: BeatorajaBpmGraphElement): BpmGraphEntry {
+    const graphics = new Graphics();
+    graphics.alpha = 0;
+    this.container.addChild(graphics);
+    return { kind: 'bpmgraph', group, element, graphics, lastPointCount: -1 };
+  }
+
+  /**
    * Re-sample every destination at `context.nowMs` and update the matching `Sprite` / `Text`. Call once per frame.
    */
   update(context: BeatorajaRenderContext): void {
@@ -761,6 +822,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'polyline-graph':
           this.updatePolylineGraphEntry(entry, props);
+          break;
+        case 'bpmgraph':
+          this.updateBpmGraphEntry(entry, props);
           break;
         case 'slider':
           this.updateSliderEntry(entry, props);
@@ -1072,6 +1136,46 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Update a bpmgraph entry. Strokes the chart's BPM polyline once on first paint (the curve is
+   * static for the whole session) and re-positions the `Graphics` to the destination box every
+   * frame after that. Y is inverted (`1 - p.y`) so a high BPM paints toward the top of the box —
+   * matches beatoraja's reference theme convention.
+   *
+   * Hidden when:
+   *   - The destination's standard `props` say so (op gate, timer not started, alpha 0)
+   *   - The resolver returned `undefined` or fewer than 2 points (no BPM data on this chart)
+   */
+  private updateBpmGraphEntry(entry: BpmGraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+    const graphics = entry.graphics;
+    graphics.visible = props.visible;
+    if (!props.visible) return;
+    const points = this.resolveBpmGraphPoints();
+    if (points === undefined || points.length < 2) {
+      graphics.visible = false;
+      return;
+    }
+    if (entry.lastPointCount !== points.length) {
+      graphics.clear();
+      const first = points[0]!;
+      graphics.moveTo(first.x * props.width, (1 - first.y) * props.height);
+      for (let i = 1; i < points.length; i += 1) {
+        const p = points[i]!;
+        graphics.lineTo(p.x * props.width, (1 - p.y) * props.height);
+      }
+      // 2-pixel stroke matches the polyline-graph convention. Author overrides aren't surfaced
+      // — the bpmgraph element shape doesn't carry stroke metadata.
+      graphics.stroke({ color: props.tint, width: 2, alpha: 1 });
+      entry.lastPointCount = points.length;
+    }
+    graphics.x = props.x;
+    graphics.y = props.y;
+    graphics.alpha = props.alpha;
+    graphics.tint = props.tint;
+    graphics.angle = props.angle;
+    graphics.blendMode = props.blendMode;
+  }
+
+  /**
    * Update a slider entry. Translates the sprite within the destination box by
    * `value * range` skin-pixels along its angle axis, leaving width / height at the source-rect
    * crop's natural size (sliders don't scale — they translate).
@@ -1291,6 +1395,9 @@ export class BeatorajaPlaySkinView {
           entry.sprite.destroy({ children: false, texture: false, textureSource: false });
           break;
         case 'polyline-graph':
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          break;
+        case 'bpmgraph':
           entry.graphics.destroy({ children: false, texture: false, textureSource: false });
           break;
         case 'slider':

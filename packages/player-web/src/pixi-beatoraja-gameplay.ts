@@ -36,6 +36,7 @@ import type { BeatorajaPlayableVariant } from './beatoraja-theme.ts';
 import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
 import { BeatorajaMarkerLayer, BEATORAJA_MARKER_PIXELS_PER_BEAT } from './pixi-beatoraja-markers.ts';
 import { computeBeatorajaChartMarkers } from './beatoraja-chart-markers.ts';
+import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
 import { BeatorajaBgaLayer } from './pixi-beatoraja-bga.ts';
 import type { BgaCue } from './pixi-gameplay-bga.ts';
 import type { Texture } from 'pixi.js';
@@ -141,6 +142,12 @@ export class PixiBeatorajaGameplayView implements PixiScene {
    */
   private markerLayer: BeatorajaMarkerLayer;
   private readonly chartMarkers: ReturnType<typeof computeBeatorajaChartMarkers>;
+  /**
+   * Chart's BPM curve as a polyline in `[0, 1]²` — computed once at construction and handed to
+   * the play skin view's `resolveBpmGraphPoints` so any `bpmgraph[]` element gets a real curve
+   * to plot. Static for the lifetime of the scene; the view caches the stroke after first paint.
+   */
+  private readonly chartBpmCurve: ReadonlyArray<BpmCurvePoint>;
   private bgaLayer: BeatorajaBgaLayer | undefined;
   private readonly adapter: BeatorajaRuntimeAdapter;
   private readonly options: PixiBeatorajaGameplayViewOptions;
@@ -190,6 +197,10 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       directoryLabel: options.directoryLabel,
     });
 
+    // BPM curve is precomputed once — `bpmgraph[]` is static for the whole session, no point
+    // recomputing per frame. Captured here so both the initial view and any hot-swapped view
+    // (`replaceSkin`) reuse the same curve.
+    this.chartBpmCurve = computeBeatorajaBpmCurve(options.chart);
     this.view = new BeatorajaPlaySkinView({
       skin: options.skin,
       textures: options.textures,
@@ -201,6 +212,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveGraphValue: (type) => this.adapter.resolveGraphValue(type),
       resolveSliderValue: (type) => this.adapter.resolveSliderValue(type),
       resolveGaugePercent: () => this.adapter.resolveGaugePercent(),
+      resolveBpmGraphPoints: () => this.chartBpmCurve,
     });
     // Backdrop sits behind the skin container so the letterbox bars are filled with a stable color
     // instead of leaking the page's CSS background through.
@@ -414,7 +426,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.markerLayer.dispose();
     this.view.dispose();
 
-    // 3. Rebuild against the new skin.
+    // 3. Rebuild against the new skin. Reuse `chartBpmCurve` — the chart hasn't changed.
     this.view = new BeatorajaPlaySkinView({
       skin: opts.skin,
       textures: opts.textures,
@@ -426,6 +438,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveGraphValue: (type) => this.adapter.resolveGraphValue(type),
       resolveSliderValue: (type) => this.adapter.resolveSliderValue(type),
       resolveGaugePercent: () => this.adapter.resolveGaugePercent(),
+      resolveBpmGraphPoints: () => this.chartBpmCurve,
     });
     const noteImageMap = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(opts.skin.image)) {
