@@ -381,6 +381,43 @@ describe('BeatorajaPlaySkinView', () => {
       expect(view.noteLayerInsertIndex).toBe(view.container.children.length);
       view.dispose();
     });
+
+    it('respects declaration order even when `offset` values are out of order (offset is OFFSET_* id, not z-layer)', () => {
+      // Author writes lanecover FIRST (offset=4 = OFFSET_LANECOVER), bg SECOND (offset=3 =
+      // OFFSET_LIFT) — pathological for "offset is z-layer" interpretation. Beatoraja's spec is
+      // declaration-order-wins, so the LATER-declared bg paints ON TOP of the EARLIER-declared
+      // lanecover. The notes anchor sits between them, so the note layer slot lands at index 1
+      // (after lanecover, before bg).
+      const skin: BeatorajaSkin = {
+        type: 0,
+        w: 1280,
+        h: 720,
+        image: [
+          { id: 'lanecover', src: 0, x: 0, y: 0, w: 100, h: 100 },
+          { id: 'bg', src: 0, x: 0, y: 0, w: 1280, h: 720 },
+        ],
+        note: { id: 'notes', note: ['note-w'] },
+        destination: [
+          { id: 'lanecover', offset: 4, dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100 }] },
+          { id: 'notes', offset: 3 },
+          { id: 'bg', offset: 3, dst: [{ time: 0, x: 0, y: 0, w: 1280, h: 720 }] },
+        ],
+      };
+      const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+      view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+      expect(view.container.children).toHaveLength(2);
+      // Lanecover is `children[0]`, bg is `children[1]` — declaration order preserved despite
+      // lanecover's offset (4) being greater than bg's (3). Under the old z-by-offset sort
+      // (`offset - offset || declarationOrder - declarationOrder`) the bg would have been
+      // pulled in front of lanecover (lower offset wins). Identify the sprites by their unique
+      // dst widths: lanecover authored w=100, bg w=1280.
+      const widths = view.container.children.map((c) => Math.round((c as unknown as { width: number }).width));
+      expect(widths[0]).toBe(100);
+      expect(widths[1]).toBe(1280);
+      // Notes anchor sat between the two destinations — index 1 (after lanecover, before bg).
+      expect(view.noteLayerInsertIndex).toBe(1);
+      view.dispose();
+    });
   });
 
   it('dispose() detaches sprites from the container without throwing', () => {

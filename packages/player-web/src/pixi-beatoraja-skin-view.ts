@@ -657,9 +657,20 @@ export class BeatorajaPlaySkinView {
     const allDestinations: ReadonlyArray<unknown> = [...rawDestinations, ...expandedJudgeDestinations];
     const groups = normalizeBeatorajaDestinations(allDestinations);
 
-    // Render order: lower `offset` (back layer) draws first, then by author declaration order. Matches beatoraja's
-    // own back-to-front layering.
-    groups.sort((a, b) => a.offset - b.offset || a.declarationOrder - b.declarationOrder);
+    // Render order: PURELY by author declaration order. Beatoraja's `JSONSkinLoader.loadJsonSkin`
+    // walks `sk.destination` in source order and `Skin.drawAllObjects` iterates without sorting,
+    // so the JSON's array index IS the z-order. Earlier drafts of this code sorted by `offset`
+    // first, mistaking it for a z-layer — but the singular `offset` field is just a convenience
+    // alias for `offsets[]` (a user-adjustable position offset id like `OFFSET_LIFT = 3`). Sorting
+    // by it bunched all lane-chrome elements together regardless of where they were authored,
+    // putting (e.g.) `disapearLine` and key-bombs at the same depth as their neighbors and
+    // breaking the carefully ordered "lane bg → keybeams → notes anchor → bombs → cover"
+    // sequence the reference themes rely on.
+    //
+    // `normalizeBeatorajaDestinations` assigns `declarationOrder = i` walking the input array, so
+    // the groups are already in the right order — this sort is a no-op for already-ordered input,
+    // but is kept defensively for the (rare) case where merging emits judges out of order.
+    groups.sort((a, b) => a.declarationOrder - b.declarationOrder);
 
     // Walk the sorted destinations; capture the anchor's position so the host can splice in its
     // note / marker layers at exactly that z-order. Skin destinations sorted BEFORE the anchor

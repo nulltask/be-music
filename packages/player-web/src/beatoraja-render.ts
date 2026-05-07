@@ -73,6 +73,28 @@ export interface BeatorajaRenderContext {
 }
 
 /**
+ * Merge the destination's singular `offset` and plural `offsets[]` into one id list for the
+ * combiner. Beatoraja's `JSONSkinLoader.setDestination` does the same — appends the singular
+ * value onto the array before passing it to `SkinObject.setOffsetID(int[])`. Returns
+ * `undefined` when there's nothing to apply (no plural list AND no non-zero singular), so the
+ * caller can short-circuit to {@link ZERO_BEATORAJA_OFFSET} without allocating.
+ *
+ * `0` (the singular default) is filtered out — it's the "no offset" sentinel, not a valid
+ * `OFFSET_*` id. Values inside `offsets[]` are passed through as-is; the resolver decides how
+ * to handle out-of-range entries.
+ */
+function collectOffsetIds(group: BeatorajaDestinationGroup): ReadonlyArray<number> | undefined {
+  const hasPlural = group.offsets.length > 0;
+  const hasSingular = group.offset !== 0;
+  if (!hasPlural && !hasSingular) return undefined;
+  if (hasPlural && !hasSingular) return group.offsets;
+  if (!hasPlural && hasSingular) return [group.offset];
+  // Both forms present — concat. Reference themes don't typically mix the two but the spec
+  // treats them as additive, so we follow.
+  return [...group.offsets, group.offset];
+}
+
+/**
  * Compute the sprite props for a destination group at the current frame. Returns the hidden state when:
  *
  * - the group's `op` codes don't pass against `activeOps`, or
@@ -102,13 +124,21 @@ export function destinationToSpriteProps(
   const keyframe = sampleBeatorajaDestination(group, elapsed);
   if (keyframe === undefined) return HIDDEN_PROPS;
 
-  // Apply the destination's `offsets[]` shift on top of the sampled keyframe. The combined
-  // offset multiplies alpha and adds to position / size / rotation. With `resolveOffset` unset
-  // (hosts without user offset adjustment), the offset is `ZERO_BEATORAJA_OFFSET` and the
-  // destination renders unchanged.
+  // Apply the destination's user-adjustable offset shifts on top of the sampled keyframe. Two
+  // sources contribute, both reading the same `OFFSET_*` table:
+  //   1. `offsets[]` (plural) — explicit list authored by the skin
+  //   2. `offset` (singular) — convenience alias beatoraja's `JSONSkinLoader.setDestination`
+  //      simply appends onto the array before calling `setOffsetID(int[])`. So `"offset":3` is
+  //      semantically identical to `"offsets":[3]`.
+  // Reference theme `play24.json` uses `"offset":3` (= `OFFSET_LIFT`) on every lane-chrome
+  // element so the lift slider shifts them as a group. Until this fix the singular form was
+  // parsed but never applied — lifts and other singular-offset shifts silently no-op'd.
+  // `0` is the no-offset sentinel and is filtered out before resolving so it doesn't trip a
+  // bogus lookup against an unrelated id.
+  const combinedOffsetIds = collectOffsetIds(group);
   const offset =
-    group.offsets.length > 0 && context.resolveOffset !== undefined
-      ? combineBeatorajaOffsets(group.offsets, context.resolveOffset)
+    combinedOffsetIds !== undefined && context.resolveOffset !== undefined
+      ? combineBeatorajaOffsets(combinedOffsetIds, context.resolveOffset)
       : ZERO_BEATORAJA_OFFSET;
   const alpha = clampUnit((keyframe.a / 255) * (offset.a / 255));
   if (alpha <= 0) return HIDDEN_PROPS;

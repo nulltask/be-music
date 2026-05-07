@@ -110,6 +110,70 @@ describe('destinationToSpriteProps', () => {
     );
     expect(props.tint).toBe((64 << 16) | (192 << 8) | 192);
   });
+
+  it('applies the singular `offset` field as a user-adjustable shift (treated as offsets[offset])', () => {
+    // Reference theme uses `"offset":3` (= OFFSET_LIFT) on lane chrome so the lift slider
+    // shifts the rect. Until this fix the singular form was parsed but never resolved against
+    // the offset table — only the plural `offsets[]` triggered the resolver.
+    const g = groupOf({
+      offset: 3,
+      dst: [{ time: 0, x: 50, y: 100, w: 100, h: 50, a: 255 }],
+    });
+    const lift = { x: 0, y: -200, w: 0, h: 0, r: 0, a: 255 };
+    const props = destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        resolveOffset: (id) => (id === 3 ? lift : undefined),
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+    expect(props.visible).toBe(true);
+    // dst.y=100 + offset.y=-200 → -100 in Y-UP space; Pixi y = 1000 - (-100) - 50 = 1050.
+    expect(props.y).toBe(1050);
+    expect(props.x).toBe(50);
+  });
+
+  it('combines the singular `offset` and plural `offsets[]` additively', () => {
+    const g = groupOf({
+      offset: 3,
+      offsets: [10],
+      dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255 }],
+    });
+    const props = destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        // Lift shifts y by 100, "ALL" shift shifts x by 25 — both apply.
+        resolveOffset: (id) => {
+          if (id === 3) return { x: 0, y: 100, w: 0, h: 0, r: 0, a: 255 };
+          if (id === 10) return { x: 25, y: 0, w: 0, h: 0, r: 0, a: 255 };
+          return undefined;
+        },
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+    expect(props.x).toBe(25);
+    // y=0 + 100 → 100 in Y-UP; Pixi = 1000 - 100 - 50 = 850.
+    expect(props.y).toBe(850);
+  });
+
+  it('treats `offset === 0` as the no-offset sentinel (does not resolve id 0)', () => {
+    let lookups = 0;
+    const g = groupOf({ offset: 0, dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255 }] });
+    destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        resolveOffset: () => {
+          lookups += 1;
+          return undefined;
+        },
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+    expect(lookups).toBe(0);
+  });
 });
 
 describe('flipRectToPixi', () => {

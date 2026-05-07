@@ -48,8 +48,18 @@ export interface BeatorajaDestinationGroup {
    */
   loop: number;
   /**
-   * Z-order layer. Lower values draw earlier (further back). The reference theme uses `0..3` for chrome and
-   * `0..3` again offset by 50+ for chart-area elements.
+   * Singular form of {@link offsets} — a single user-adjustable offset id (one of `SkinProperty.OFFSET_*`,
+   * e.g. `3` = `OFFSET_LIFT`, `4` = `OFFSET_LANECOVER`). Beatoraja's `JSONSkinLoader.setDestination` simply
+   * appends this onto the `offsets[]` array before calling `SkinObject.setOffsetID(int[])`, so the singular
+   * and plural forms are equivalent — authors use whichever shape is more convenient. The renderer treats
+   * `offset` and `offsets[]` symmetrically when summing position shifts.
+   *
+   * **Z-order:** beatoraja draws destinations in the order they appear in the JSON's `destination[]`
+   * array. There is NO sort by `offset` — earlier drafts of this player misread `offset` as a z-layer
+   * and produced incorrect layering for skins that use the singular form on lane-chrome elements.
+   * Declaration order is the only z-source; see {@link declarationOrder}.
+   *
+   * `0` (the default) means "no offset reference" and is omitted from the offset sum at render time.
    */
   offset: number;
   /**
