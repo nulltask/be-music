@@ -12,6 +12,7 @@ import {
   normalizeBeatorajaDestinations,
   normalizeBeatorajaGraphs,
   normalizeBeatorajaImages,
+  normalizeBeatorajaImagesets,
   normalizeBeatorajaSliders,
   normalizeBeatorajaTexts,
   normalizeBeatorajaValues,
@@ -19,6 +20,7 @@ import {
   type BeatorajaGraphElement,
   type BeatorajaImageElement,
   type BeatorajaImageId,
+  type BeatorajaImagesetElement,
   type BeatorajaSkin,
   type BeatorajaSliderElement,
   type BeatorajaTextElement,
@@ -188,7 +190,32 @@ interface SliderEntry {
   sprite: Sprite;
 }
 
-type ViewEntry = SpriteEntry | ValueEntry | TextEntry | GraphEntry | PolylineGraphEntry | SliderEntry;
+interface ImagesetEntry {
+  kind: 'imageset';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaImagesetElement;
+  /**
+   * Pre-resolved sub-image data, one entry per `images[]` slot. Each carries the matching
+   * `BeatorajaImageElement` (so per-frame stepping still works inside a sub-image with
+   * `divx` / `divy`) plus the cropped cell-0 texture for fast first-frame rendering. Slots
+   * whose image lookup failed are `undefined`; the renderer falls back to the previous valid
+   * slot (or hides the entry if none).
+   */
+  subImages: ReadonlyArray<
+    | {
+        image: BeatorajaImageElement;
+        baseTexture: ReturnType<BeatorajaTextureCache['get']>;
+      }
+    | undefined
+  >;
+  sprite: Sprite;
+  /** Last `images[]` index painted, used to skip the texture rebuild when the ref hasn't changed. */
+  lastSubIndex: number;
+  /** Last frame index uploaded to the sprite. -1 = never uploaded. */
+  lastFrame: number;
+}
+
+type ViewEntry = SpriteEntry | ValueEntry | TextEntry | GraphEntry | PolylineGraphEntry | SliderEntry | ImagesetEntry;
 
 export class BeatorajaPlaySkinView {
   readonly container = new Container();
@@ -271,6 +298,21 @@ export class BeatorajaPlaySkinView {
         sliderById.set(slider.id, slider);
       }
     }
+    // `imageset[]` declarations — multi-state images (lane keybeams, bomb cycles) that flip between
+    // sub-images based on a runtime ref op. Lowest precedence after every other element kind: a
+    // direct `image[]` / `value[]` / `text[]` / `graph[]` / `slider[]` with the same id wins.
+    const imagesetById = new Map<BeatorajaImageId, BeatorajaImagesetElement>();
+    for (const imageset of normalizeBeatorajaImagesets(options.skin.imageset)) {
+      if (
+        !imageById.has(imageset.id) &&
+        !valueById.has(imageset.id) &&
+        !textById.has(imageset.id) &&
+        !graphById.has(imageset.id) &&
+        !sliderById.has(imageset.id)
+      ) {
+        imagesetById.set(imageset.id, imageset);
+      }
+    }
 
     const groups = normalizeBeatorajaDestinations(options.skin.destination);
 
@@ -302,6 +344,12 @@ export class BeatorajaPlaySkinView {
         if (sliderElement !== undefined) {
           const sliderEntry = this.buildSliderEntry(group, sliderElement, options.textures);
           if (sliderEntry !== undefined) this.entries.push(sliderEntry);
+          continue;
+        }
+        const imagesetElement = imagesetById.get(group.id);
+        if (imagesetElement !== undefined) {
+          const imagesetEntry = this.buildImagesetEntry(group, imagesetElement, imageById, options.textures);
+          if (imagesetEntry !== undefined) this.entries.push(imagesetEntry);
         }
         continue;
       }
@@ -492,6 +540,43 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Build an imageset entry. Pre-resolves each `images[]` slot to its `image[]` element + base
+   * texture so the per-frame update only swaps the cropped texture without re-walking the
+   * imageById map. Returns `undefined` when none of the sub-images resolved (skin omitted them
+   * all — better to skip than render an always-hidden sprite).
+   */
+  private buildImagesetEntry(
+    group: BeatorajaDestinationGroup,
+    element: BeatorajaImagesetElement,
+    imageById: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>,
+    textures: BeatorajaTextureCache,
+  ): ImagesetEntry | undefined {
+    const subImages: ImagesetEntry['subImages'] = element.images.map((subId) => {
+      const image = imageById.get(subId);
+      if (image === undefined) return undefined;
+      const baseTexture = textures.get(image.src);
+      if (baseTexture === undefined) return undefined;
+      return { image, baseTexture };
+    });
+    if (subImages.every((s) => s === undefined)) return undefined;
+    // Pre-bind the first non-undefined sub-image's cell-0 texture so the first render pass has
+    // something to paint (same WebGPU bind-group warm-up reasoning as the image / graph paths).
+    let initialTexture: Texture | undefined;
+    for (const sub of subImages) {
+      if (sub === undefined) continue;
+      const cell = imageFrameRect(sub.image, 0);
+      const cropped = createCroppedBeatorajaTexture(sub.baseTexture, cell);
+      if (cropped !== undefined) {
+        initialTexture = cropped;
+        break;
+      }
+    }
+    const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
+    this.container.addChild(sprite);
+    return { kind: 'imageset', group, element, subImages, sprite, lastSubIndex: -1, lastFrame: -1 };
+  }
+
+  /**
    * Build a slider entry — a `Sprite` with a fixed source-rect crop that translates within its
    * destination box per frame. The base texture is captured once at build time; per-frame updates
    * only adjust position (no re-cropping needed since the slider's crop is constant).
@@ -543,6 +628,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'slider':
           this.updateSliderEntry(entry, props);
+          break;
+        case 'imageset':
+          this.updateImagesetEntry(entry, context, props);
           break;
       }
     }
@@ -885,6 +973,106 @@ export class BeatorajaPlaySkinView {
     sprite.blendMode = props.blendMode;
   }
 
+  /**
+   * Update an imageset entry. Resolves the runtime ref op to a sub-image index (clamped to the
+   * `images[]` range), then paints the matching sub-image's cell-0 texture into the sprite. The
+   * sub-image's own `divx` / `divy` / `timer` / `cycle` settings still apply — multi-frame
+   * sub-images animate the same way regular `image[]` entries do, with the extra wrinkle that
+   * the active sub-image switches based on `ref`.
+   *
+   * Hidden when:
+   *   - The destination's standard `props` say so
+   *   - The resolved sub-image is `undefined` (skin omitted that slot)
+   *   - The sub-image's frame crop fails (degenerate `divx` / `divy` / source-rect)
+   */
+  private updateImagesetEntry(
+    entry: ImagesetEntry,
+    context: BeatorajaRenderContext,
+    props: ReturnType<typeof destinationToSpriteProps>,
+  ): void {
+    const sprite = entry.sprite;
+    sprite.visible = props.visible;
+    if (!props.visible) return;
+    // Resolve the sub-image index from the ref op. `ref = 0` means "no ref" → always slot 0.
+    // Out-of-range values clamp to the available images so a runtime that pushes a 1 into a
+    // 1-slot imageset doesn't blank the sprite.
+    let subIndex = 0;
+    if (entry.element.ref !== 0) {
+      const raw = this.resolveRefValue(entry.element.ref);
+      if (Number.isFinite(raw) && raw >= 0) {
+        subIndex = Math.min(entry.element.images.length - 1, Math.floor(raw));
+      }
+    }
+    const sub = entry.subImages[subIndex];
+    if (sub === undefined) {
+      // Fall back to the first valid slot — better than blanking when the skin authored a sub-id
+      // that didn't resolve to a known image.
+      let fallback: (typeof entry.subImages)[number];
+      for (const s of entry.subImages) {
+        if (s !== undefined) {
+          fallback = s;
+          break;
+        }
+      }
+      if (fallback === undefined) {
+        sprite.visible = false;
+        return;
+      }
+      this.paintImagesetSprite(sprite, fallback, entry, context, props);
+      return;
+    }
+    // Track the last index so we can short-circuit the texture rebuild when the ref didn't change.
+    if (entry.lastSubIndex !== subIndex) {
+      entry.lastSubIndex = subIndex;
+      // Force a frame rebuild on the next branch so the sprite picks up the new sub-image.
+      entry.lastFrame = -1;
+    }
+    this.paintImagesetSprite(sprite, sub, entry, context, props);
+  }
+
+  /**
+   * Helper for `updateImagesetEntry`. Computes the active frame index for the picked sub-image
+   * (using its own `divx` / `divy` / `timer` / `cycle`), crops the matching cell, and writes
+   * sprite props. Extracted because the resolver-fallback path needs the same logic.
+   */
+  private paintImagesetSprite(
+    sprite: Sprite,
+    sub: NonNullable<ImagesetEntry['subImages'][number]>,
+    entry: ImagesetEntry,
+    context: BeatorajaRenderContext,
+    props: ReturnType<typeof destinationToSpriteProps>,
+  ): void {
+    const baseTexture = sub.baseTexture;
+    if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
+      sprite.visible = false;
+      return;
+    }
+    // Frame selection mirrors `updateImageEntry` — when the sub-image carries its own `ref` op,
+    // sample that and let `imageRefFrame` map the op value to a frame index; otherwise advance
+    // by timer / cycle. (Distinct from the OUTER `element.ref` which selects WHICH sub-image is
+    // active — that one already happened in `updateImagesetEntry`.)
+    const refFrame = sub.image.ref !== 0 ? imageRefFrame(sub.image, this.resolveRefValue(sub.image.ref)) : -1;
+    const frame = refFrame >= 0 ? refFrame : imageFrameAt(sub.image, computeImagesetTimerElapsed(sub.image, context));
+    if (frame !== entry.lastFrame) {
+      entry.lastFrame = frame;
+      const cell = imageFrameRect(sub.image, frame);
+      const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
+      if (cropped === undefined) {
+        sprite.visible = false;
+        return;
+      }
+      sprite.texture = cropped;
+    }
+    sprite.x = props.x;
+    sprite.y = props.y;
+    sprite.width = props.width;
+    sprite.height = props.height;
+    sprite.alpha = props.alpha;
+    sprite.tint = props.tint;
+    sprite.angle = props.angle;
+    sprite.blendMode = props.blendMode;
+  }
+
   /** Tear down sprites and the container. Textures live on the cache (no `dispose()` by design). */
   dispose(): void {
     if (this.disposed) return;
@@ -913,11 +1101,26 @@ export class BeatorajaPlaySkinView {
         case 'slider':
           entry.sprite.destroy({ children: false, texture: false, textureSource: false });
           break;
+        case 'imageset':
+          entry.sprite.destroy({ children: false, texture: false, textureSource: false });
+          break;
       }
     }
     this.entries.length = 0;
     this.container.destroy({ children: false });
   }
+}
+
+/**
+ * Per-sub-image animation clock — same lookup as `computeAnimationElapsed` but typed against the
+ * sub-image's own `BeatorajaImageElement` instead of the SpriteEntry wrapper. Imageset sub-images
+ * animate independently of one another even though they share an enclosing destination.
+ */
+function computeImagesetTimerElapsed(image: BeatorajaImageElement, context: BeatorajaRenderContext): number {
+  if (image.timer === 0) return context.nowMs;
+  const start = context.getTimerStart(image.timer);
+  if (start === undefined) return 0;
+  return Math.max(0, context.nowMs - start);
 }
 
 function computeAnimationElapsed(entry: SpriteEntry, context: BeatorajaRenderContext): number {
