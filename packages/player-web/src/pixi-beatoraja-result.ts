@@ -41,7 +41,9 @@ import {
   type BeatorajaSkin,
   type BeatorajaSkinConfig,
 } from '@be-music/beatoraja-skin';
+import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
+import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
@@ -56,6 +58,11 @@ export interface PixiBeatorajaResultSceneOptions {
   skinConfig?: BeatorajaSkinConfig;
   /** Song that was just played; drives the text-ref resolver. Optional → text destinations render empty. */
   song?: BrowserSongEntry;
+  /**
+   * Parsed chart that was just played. Used to compute the BPM curve for any `bpmgraph[]`
+   * element the result skin authors. Optional — when omitted, bpmgraph hides itself.
+   */
+  chart?: BeMusicJson;
   /** Final per-judge / score snapshot from gameplay's `onComplete`. */
   summary: PlayerSummary;
   /**
@@ -102,9 +109,12 @@ export class PixiBeatorajaResultScene implements PixiScene {
   /** Scene-owned `AudioContext` for the result jingle. Closed in `dispose()`. */
   private audioContext: AudioContext | undefined;
   private bgmSource: AudioBufferSourceNode | undefined;
+  /** Cached BPM polyline for the chart that was just played — `[]` when no chart was supplied. */
+  private readonly chartBpmCurve: ReadonlyArray<BpmCurvePoint>;
 
   constructor(options: PixiBeatorajaResultSceneOptions) {
     this.options = options;
+    this.chartBpmCurve = options.chart !== undefined ? computeBeatorajaBpmCurve(options.chart) : [];
     this.view = new BeatorajaPlaySkinView({
       skin: options.skin,
       textures: options.textures,
@@ -120,6 +130,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
         return (gauge.current / gauge.max) * 100;
       },
       resolveJudgeGraphBars: (type) => this.resolveResultJudgeBars(type),
+      resolveBpmGraphPoints: () => (this.chartBpmCurve.length > 0 ? this.chartBpmCurve : undefined),
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);

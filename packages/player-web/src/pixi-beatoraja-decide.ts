@@ -31,7 +31,9 @@ import {
   type BeatorajaSkin,
   type BeatorajaSkinConfig,
 } from '@be-music/beatoraja-skin';
+import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
+import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
@@ -46,6 +48,12 @@ export interface PixiBeatorajaDecideSceneOptions {
   skinConfig?: BeatorajaSkinConfig;
   /** Song the user picked; drives the text-ref resolver. Optional → text destinations render empty. */
   song?: BrowserSongEntry;
+  /**
+   * Parsed chart for the picked song. Used to compute the BPM curve for any `bpmgraph[]` element
+   * the decide skin authors. Optional — when omitted, bpmgraph hides (decide themes that don't
+   * preview the BPM curve work fine without this).
+   */
+  chart?: BeMusicJson;
   /**
    * Optional decide BGM bytes (WAV / OGG / MP3). Played once at scene `enter()`. The scene owns
    * its own short-lived `AudioContext` so the splash audio doesn't bleed into other scenes; the
@@ -104,9 +112,12 @@ export class PixiBeatorajaDecideScene implements PixiScene {
    */
   private audioContext: AudioContext | undefined;
   private bgmSource: AudioBufferSourceNode | undefined;
+  /** Cached BPM polyline for the picked chart — `[]` when no chart was supplied. */
+  private readonly chartBpmCurve: ReadonlyArray<BpmCurvePoint>;
 
   constructor(options: PixiBeatorajaDecideSceneOptions) {
     this.options = options;
+    this.chartBpmCurve = options.chart !== undefined ? computeBeatorajaBpmCurve(options.chart) : [];
     this.view = new BeatorajaPlaySkinView({
       skin: options.skin,
       textures: options.textures,
@@ -114,6 +125,7 @@ export class PixiBeatorajaDecideScene implements PixiScene {
       resolveNumberValue: (refOp) => this.resolveSongNumber(refOp),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
+      resolveBpmGraphPoints: () => (this.chartBpmCurve.length > 0 ? this.chartBpmCurve : undefined),
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);

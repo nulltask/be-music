@@ -68,6 +68,7 @@ import {
   type BeatorajaSkinHeader,
 } from '@be-music/beatoraja-skin';
 import { BeatorajaSkinOptionsGui, type SkinChoice } from './beatoraja-skin-options-gui.ts';
+import type { BeMusicJson } from '@be-music/json';
 import type { PlayerSummary } from '@be-music/player/core/engine';
 
 const dropLog = logger('drop');
@@ -724,6 +725,14 @@ class PlayerWebDemoApp {
   private beatorajaGameplayView: PixiBeatorajaGameplayView | undefined;
   /** The current chart's prepared assets (audio + BGA). Disposed alongside the gameplay view. */
   private beatorajaGameplayPrep: PreparedBeatorajaGameplayChart | undefined;
+  /**
+   * Chart from the most recent beatoraja run, preserved across the gameplay → result transition
+   * so the result skin's `bpmgraph[]` element can still plot the BPM curve. The prep bundle
+   * itself is disposed before the result scene mounts (audio decoders + bga textures release
+   * their GPU/Web Audio resources), but `chart` is a plain JSON object — keeping a reference is
+   * cheap.
+   */
+  private lastBeatorajaChart: BeMusicJson | undefined;
   /** Beatoraja-skinned song select scene. Active when a beatoraja theme with a select skin is loaded. */
   private beatorajaSelectScene: PixiBeatorajaSelectScene | undefined;
   /**
@@ -2235,6 +2244,10 @@ class PlayerWebDemoApp {
       fonts,
       skinConfig: config,
       song,
+      // Pass the just-played chart so any `bpmgraph[]` element in the result skin can plot the
+      // chart's BPM curve. The prep bundle is disposed at gameplay teardown, so the chart
+      // reference is snapshot into `lastBeatorajaChart` for use here.
+      chart: this.lastBeatorajaChart,
       summary,
       maxCombo,
       scoreHistory: history.scoreHistory,
@@ -2381,6 +2394,10 @@ class PlayerWebDemoApp {
     this.beatorajaGameplayView?.dispose();
     this.beatorajaGameplayView = undefined;
     if (this.beatorajaGameplayPrep) {
+      // Snapshot the chart reference BEFORE disposing the prep — `chart` is a plain JSON object
+      // we want to forward to the result scene's bpmgraph resolver. The audio / BGA resources
+      // owned by `prep` still get released by `dispose()`.
+      this.lastBeatorajaChart = this.beatorajaGameplayPrep.chart;
       void this.beatorajaGameplayPrep.dispose();
       this.beatorajaGameplayPrep = undefined;
     }
