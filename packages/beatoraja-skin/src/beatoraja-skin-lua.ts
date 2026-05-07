@@ -226,6 +226,7 @@ function setupCustomRequire(L: lua_State, modules: ReadonlyArray<BeatorajaLuaMod
       lua_pushvalue(state, -2); // duplicate the synthesized table
       lua_setfield(state, -2, to_luastring(name));
       lua_pop(state, 1); // pop cache table; module remains on top
+      logRequire(name, 'builtin');
       return 1;
     }
 
@@ -242,10 +243,12 @@ function setupCustomRequire(L: lua_State, modules: ReadonlyArray<BeatorajaLuaMod
       lua_pushvalue(state, -2); // duplicate stub
       lua_setfield(state, -2, to_luastring(name));
       lua_pop(state, 1); // pop cache table; stub remains on top
+      logRequire(name, 'stub');
       return 1;
     }
     const sourceBytes = readBytesFromTop(state);
     lua_pop(state, 2); // pop string + sources table
+    logRequire(name, 'module');
 
     const loadStatus = luaL_loadbufferx(
       state,
@@ -400,6 +403,18 @@ function sanitizeSkinConfig(config: BeatorajaLuaSkinConfig): Record<string, unkn
     file: config.file ?? {},
   };
   return result;
+}
+
+/**
+ * One-shot diagnostic for `require()` resolutions. Routes through `console.debug` so it stays out of
+ * the default console (visible only with Chrome devtools' "Verbose" filter on); this package doesn't
+ * carry a `@be-music/utils`-side logger, so we write directly without a scope label. Pair it with the
+ * player-web `beatoraja-view` / `beatoraja-adapter` loggers when investigating a load issue — the
+ * three streams together describe the full skin-load pipeline.
+ */
+function logRequire(name: string, kind: 'builtin' | 'module' | 'stub'): void {
+  // eslint-disable-next-line no-console
+  console.debug(`[beatoraja-lua] require(${JSON.stringify(name)}) -> ${kind}`);
 }
 
 function pushJsValueAsLua(L: lua_State, value: unknown): void {

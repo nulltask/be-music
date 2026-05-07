@@ -123,6 +123,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private exitRequested = false;
   private disposed = false;
   /**
+   * Frame-counter for periodic-summary debug logs. Avoids per-tick spam by gating heavy summaries on
+   * a multiple-of-300 (~5 s at 60 fps) frame counter.
+   */
+  private debugFrameCounter = 0;
+  /**
    * Last screen size we ran `fitToStage` against. The Pixi `Application` is `resizeTo: container`, which
    * means the canvas can resize asynchronously after `enter()` (e.g. when the demo's gameplay scene
    * mounts before the layout settles, or when the user resizes the window mid-chart). We re-fit on every
@@ -339,6 +344,26 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     if (this.currentFrame) {
       this.noteLayer.update(this.currentFrame, this.hiSpeed, ctx.activeOps);
       this.bgaLayer?.update(this.currentFrame.currentSeconds, ctx, this.adapter.isPoorBgaActive());
+    }
+
+    // Periodic state snapshot — every 300 frames (≈ 5 s at 60 fps). Gives a long-running diagnostic
+    // trail under devtools "Verbose" without flooding the console. Useful for "why did the chart
+    // freeze at second 47" forensics — visit the timeline of these snapshots and look for the last
+    // healthy one.
+    this.debugFrameCounter += 1;
+    if (this.debugFrameCounter % 300 === 0 && this.currentFrame) {
+      const summary = this.currentFrame.summary;
+      log.debug('frame snapshot', {
+        seconds: +this.currentFrame.currentSeconds.toFixed(2),
+        beat: +this.currentFrame.currentBeat.toFixed(2),
+        notesInFlight: this.currentFrame.notes.length,
+        score: summary.score,
+        combo: { perfect: summary.perfect, great: summary.great, good: summary.good, bad: summary.bad, poor: summary.poor },
+        hiSpeed: this.hiSpeed,
+        activeOps: ctx.activeOps.size,
+        timers: this.adapter.timerSnapshot().length,
+        poorBga: this.adapter.isPoorBgaActive(),
+      });
     }
   }
 

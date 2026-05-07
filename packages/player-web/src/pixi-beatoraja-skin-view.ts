@@ -26,6 +26,9 @@ import {
   type BeatorajaRenderContext,
 } from './beatoraja-render.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
+import { logger } from './logger.ts';
+
+const log = logger('beatoraja-view');
 
 export interface BeatorajaPlaySkinViewOptions {
   skin: BeatorajaSkin;
@@ -184,6 +187,42 @@ export class BeatorajaPlaySkinView {
       const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
       this.container.addChild(sprite);
       this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame });
+    }
+
+    // Per-skin construction summary. Visible only with Chrome devtools' "Verbose" filter on so it
+    // doesn't clutter the default console; flip Verbose on when investigating which destinations the
+    // skin view actually mounted (vs which were silently skipped because no `image[]` / `value[]` /
+    // `text[]` matched the destination's id).
+    const counts = this.entries.reduce(
+      (acc, entry) => {
+        acc[entry.kind] += 1;
+        return acc;
+      },
+      { image: 0, value: 0, text: 0 } as Record<ViewEntry['kind'], number>,
+    );
+    const skipped = groups.length - this.entries.length;
+    log.debug('skin view built', {
+      canvas: { w: this.width, h: this.height },
+      destinations: groups.length,
+      image: { declared: imageById.size, mounted: counts.image },
+      value: { declared: valueById.size, mounted: counts.value },
+      text: { declared: textById.size, mounted: counts.text },
+      skipped,
+    });
+    if (skipped > 0) {
+      // Surface unmatched destination ids — typical cause is a typo or a destination targeting a
+      // host-provided element (judge plate / gauge / bga) the skin view doesn't render directly.
+      const unmatchedIds = groups
+        .filter(
+          (group) =>
+            !imageById.has(group.id) && !valueById.has(group.id) && !textById.has(group.id),
+        )
+        .map((group) => group.id);
+      log.debug('skin view skipped destinations (no matching image/value/text)', {
+        count: skipped,
+        ids: unmatchedIds.slice(0, 32),
+        truncated: unmatchedIds.length > 32,
+      });
     }
   }
 

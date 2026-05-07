@@ -42,6 +42,9 @@ import {
   TIMER_STARTINPUT,
   type BeatorajaSide,
 } from '@be-music/beatoraja-skin';
+import { logger } from './logger.ts';
+
+const log = logger('beatoraja-adapter');
 
 export interface BeatorajaRuntimeAdapterOptions {
   /** Chart variant (matches `ChartPlayVariant` from `@be-music/player`). Used to resolve channel → lane index. */
@@ -86,6 +89,13 @@ export class BeatorajaRuntimeAdapter {
   };
   private poorBgaActive = false;
   private lastHiSpeed = 1;
+  /**
+   * Per-ref "we already logged that this isn't wired" set. Keeps `resolveNumberValue` quiet on the hot
+   * path while still surfacing each missing prop.lua num exactly once per session.
+   */
+  private readonly unresolvedNumberRefs = new Set<number>();
+  /** Mirror of {@link unresolvedNumberRefs} for `text[].ref`. */
+  private readonly unresolvedTextRefs = new Set<number>();
 
   constructor(options: BeatorajaRuntimeAdapterOptions) {
     this.chartPlayVariant = options.chartPlayVariant;
@@ -112,7 +122,11 @@ export class BeatorajaRuntimeAdapter {
 
   /** Stamp a built-in / per-event timer at the current `getNowMs()`. Idempotent — re-marks override. */
   markTimer(timerId: number): void {
-    this.timerStartedAt.set(timerId, this.getNowMs());
+    const now = this.getNowMs();
+    this.timerStartedAt.set(timerId, now);
+    // Per-timer stamp — high volume during active gameplay (every key press / judge fires several).
+    // Filtered out of the default console; visible under devtools "Verbose".
+    log.debug('mark timer', { timer: timerId, atMs: now });
   }
 
   /** Stamp the `startinput` timer (prop.lua `startinput = 1`). Fires when the engine input bus is ready. */
@@ -150,6 +164,7 @@ export class BeatorajaRuntimeAdapter {
    * {@link PlayerUiCommand}. Unknown command kinds (forward-compat) are ignored.
    */
   applyCommand(command: PlayerUiCommand): void {
+    log.debug('apply command', command);
     switch (command.kind) {
       case 'press-lane':
         this.startLaneKeyOnTimer(command.channel);
@@ -191,6 +206,7 @@ export class BeatorajaRuntimeAdapter {
       sideState.lastJudgeOp = op;
     }
     this.markTimer(judgeTimerId(side));
+    log.debug('apply judge', { side, kind: state.judge, op, combo: state.combo, channel: state.channel });
   }
 
   /** Read-only handle the skin view consumes per frame. The same object identity persists across calls. */
@@ -210,6 +226,15 @@ export class BeatorajaRuntimeAdapter {
   resolveTextContent(refOp: number): string | undefined {
     const chart = this.chart;
     if (chart === undefined) return undefined;
+    const value = this.resolveTextContentInner(refOp, chart);
+    if (value === undefined && !this.unresolvedTextRefs.has(refOp)) {
+      this.unresolvedTextRefs.add(refOp);
+      log.debug('resolveTextContent: ref not wired (returns empty)', { ref: refOp });
+    }
+    return value;
+  }
+
+  private resolveTextContentInner(refOp: number, chart: BeMusicJson): string | undefined {
     const meta = chart.metadata;
     // bmson sub-artist list is an array of `"role:name"` strings — for the dynamic readout we just join
     // them with `" "` so the skin sees something readable. Hosts that need structured access can
@@ -253,6 +278,21 @@ export class BeatorajaRuntimeAdapter {
    */
   resolveNumberValue(refOp: number): number | undefined {
     const summary = this.frame?.summary;
+    const value = this.resolveNumberValueInner(refOp, summary);
+    if (value === undefined && !this.unresolvedNumberRefs.has(refOp)) {
+      // Log each unresolved ref ONCE per session (Set-gated). Helps identify which prop.lua num codes
+      // the loaded skin uses but the adapter doesn't yet wire — the user can then prioritize adding
+      // them. Visible under devtools "Verbose" so the default console stays clean.
+      this.unresolvedNumberRefs.add(refOp);
+      log.debug('resolveNumberValue: ref not wired (returns 0)', { ref: refOp });
+    }
+    return value;
+  }
+
+  private resolveNumberValueInner(
+    refOp: number,
+    summary: PlayerUiFramePayload['summary'] | undefined,
+  ): number | undefined {
     switch (refOp) {
       // Score / EX-score (`num.score = 71`).
       case 71:
@@ -320,6 +360,20 @@ export class BeatorajaRuntimeAdapter {
   /** `true` between `trigger-poor-bga` and `clear-poor-bga` engine commands. */
   isPoorBgaActive(): boolean {
     return this.poorBgaActive;
+  }
+
+  /**
+   * Diagnostic snapshot of every stamped timer. Returned as an array of `[id, atMs]` pairs sorted by
+   * id so the output is stable across calls. Used by the gameplay view's periodic debug log to surface
+   * which timers fired during the run.
+   */
+  timerSnapshot(): ReadonlyArray<readonly [number, number]> {
+    return Array.from(this.timerStartedAt.entries()).sort((a, b) => a[0] - b[0]);
+  }
+
+  /** Diagnostic — current op set as a sorted array. Useful for "what's gating chrome right now" debugging. */
+  activeOpSnapshot(): ReadonlyArray<number> {
+    return Array.from(this.activeOps).sort((a, b) => a - b);
   }
 
   /**
