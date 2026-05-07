@@ -414,6 +414,36 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
+   * Resolve a `slider[].type` code into a translation ratio in `[0, 1]`. The skin view translates
+   * the slider sprite by `value * range` skin-pixels along its angle axis. Most slider types map
+   * to user-config values that aren't yet plumbed through the adapter (lanecover %, lift %, etc.);
+   * returning `undefined` from the default branch hides those sliders cleanly.
+   *
+   * Wired types:
+   *   - `4` (1P lanecover) / `5` (2P lanecover) → 0 (no live lanecover yet — slider stays at home)
+   *   - `6` (hispeed indicator) → `lastHiSpeed` clamped to a typical 0..10 range, normalized
+   *
+   * Future: when lanecover / lift / hidden are surfaced as user options, hook them here.
+   */
+  resolveSliderValue(type: number): number | undefined {
+    switch (type) {
+      case 4:
+      case 5:
+        // Lanecover position. Without a host-side wire-up we keep the slider at its home (0).
+        return 0;
+      case 6: {
+        // Hispeed indicator. Hispeed values typically fall in [0.5, 5]; clamp to [0, 10] and
+        // normalize so the slider's full range corresponds to that span. Authors typically draw
+        // the indicator's track at a length matching the upper end.
+        const clamped = Math.max(0, Math.min(10, this.lastHiSpeed));
+        return clamped / 10;
+      }
+      default:
+        return undefined;
+    }
+  }
+
+  /**
    * Resolve a `graph[].type` code into a fill ratio in `[0, 1]`. The skin view scales the graph's
    * source-rect along its `angle` axis by the returned value. Returns `undefined` for codes the
    * adapter doesn't surface (the renderer hides the bar).

@@ -12,6 +12,7 @@ import {
   normalizeBeatorajaDestinations,
   normalizeBeatorajaGraphs,
   normalizeBeatorajaImages,
+  normalizeBeatorajaSliders,
   normalizeBeatorajaTexts,
   normalizeBeatorajaValues,
   type BeatorajaDestinationGroup,
@@ -19,6 +20,7 @@ import {
   type BeatorajaImageElement,
   type BeatorajaImageId,
   type BeatorajaSkin,
+  type BeatorajaSliderElement,
   type BeatorajaTextElement,
   type BeatorajaValueElement,
 } from '@be-music/beatoraja-skin';
@@ -93,6 +95,19 @@ export interface BeatorajaPlaySkinViewOptions {
    * empty array hides the polyline (a chart that produced no judges has nothing to plot).
    */
   resolveGraphPolyline?: (type: number) => ReadonlyArray<{ x: number; y: number }> | undefined;
+  /**
+   * Lookup `slider[].type` → translation ratio in `[0, 1]`. The renderer translates the slider
+   * sprite by `value * range` skin-pixels along its `angle` axis. Common types:
+   *
+   *   - `4` — 1P lanecover position
+   *   - `5` — 2P lanecover position
+   *   - `6` — hispeed lift / hidden indicator
+   *
+   * Returning `undefined` hides the slider. Most slider types map to user-config values
+   * (lanecover / hispeed) the host hasn't surfaced yet; default behavior leaves them at 0
+   * (slider sits at its dst-rect home position).
+   */
+  resolveSliderValue?: (type: number) => number | undefined;
 }
 
 interface SpriteEntry {
@@ -159,7 +174,21 @@ interface PolylineGraphEntry {
   lastPointCount: number;
 }
 
-type ViewEntry = SpriteEntry | ValueEntry | TextEntry | GraphEntry | PolylineGraphEntry;
+interface SliderEntry {
+  kind: 'slider';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaSliderElement;
+  /** Base texture (whole source). Slider sprite uses a fixed-rect crop of this. */
+  baseTexture: ReturnType<BeatorajaTextureCache['get']>;
+  /**
+   * Sprite painting the source crop. Position is `dst.x/y + value * range` along the slider's
+   * angle axis — the dst rect anchors the home position (value = 0) and the range translates
+   * the sprite by up to `range` skin-pixels.
+   */
+  sprite: Sprite;
+}
+
+type ViewEntry = SpriteEntry | ValueEntry | TextEntry | GraphEntry | PolylineGraphEntry | SliderEntry;
 
 export class BeatorajaPlaySkinView {
   readonly container = new Container();
@@ -173,6 +202,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveFontKind: (fontId: number) => 'css' | 'bitmap' | undefined;
   private readonly resolveGraphValue: (type: number) => number | undefined;
   private readonly resolveGraphPolyline: (type: number) => ReadonlyArray<{ x: number; y: number }> | undefined;
+  private readonly resolveSliderValue: (type: number) => number | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -195,6 +225,7 @@ export class BeatorajaPlaySkinView {
     this.resolveFontKind = options.resolveFontKind ?? (() => undefined);
     this.resolveGraphValue = options.resolveGraphValue ?? (() => undefined);
     this.resolveGraphPolyline = options.resolveGraphPolyline ?? (() => undefined);
+    this.resolveSliderValue = options.resolveSliderValue ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -226,6 +257,20 @@ export class BeatorajaPlaySkinView {
         graphById.set(graph.id, graph);
       }
     }
+    // `slider[]` declarations — translatable sprites driven by a runtime value (lanecover line,
+    // hispeed lift, volume sliders). Same precedence semantics as `graph[]` — image / value /
+    // text / graph win on id collision.
+    const sliderById = new Map<BeatorajaImageId, BeatorajaSliderElement>();
+    for (const slider of normalizeBeatorajaSliders((options.skin as { slider?: unknown }).slider)) {
+      if (
+        !imageById.has(slider.id) &&
+        !valueById.has(slider.id) &&
+        !textById.has(slider.id) &&
+        !graphById.has(slider.id)
+      ) {
+        sliderById.set(slider.id, slider);
+      }
+    }
 
     const groups = normalizeBeatorajaDestinations(options.skin.destination);
 
@@ -251,6 +296,12 @@ export class BeatorajaPlaySkinView {
         if (graphElement !== undefined) {
           const graphEntry = this.buildGraphEntry(group, graphElement, options.textures);
           if (graphEntry !== undefined) this.entries.push(graphEntry);
+          continue;
+        }
+        const sliderElement = sliderById.get(group.id);
+        if (sliderElement !== undefined) {
+          const sliderEntry = this.buildSliderEntry(group, sliderElement, options.textures);
+          if (sliderEntry !== undefined) this.entries.push(sliderEntry);
         }
         continue;
       }
@@ -441,6 +492,33 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Build a slider entry — a `Sprite` with a fixed source-rect crop that translates within its
+   * destination box per frame. The base texture is captured once at build time; per-frame updates
+   * only adjust position (no re-cropping needed since the slider's crop is constant).
+   */
+  private buildSliderEntry(
+    group: BeatorajaDestinationGroup,
+    element: BeatorajaSliderElement,
+    textures: BeatorajaTextureCache,
+  ): SliderEntry | undefined {
+    const baseTexture = textures.get(element.src);
+    const baseIsBindable = baseTexture !== undefined && baseTexture !== Texture.EMPTY;
+    let initialTexture: Texture | undefined;
+    if (baseIsBindable) {
+      const cropped = createCroppedBeatorajaTexture(baseTexture, {
+        x: element.x,
+        y: element.y,
+        w: element.w,
+        h: element.h,
+      });
+      if (cropped !== undefined) initialTexture = cropped;
+    }
+    const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
+    this.container.addChild(sprite);
+    return { kind: 'slider', group, element, baseTexture, sprite };
+  }
+
+  /**
    * Re-sample every destination at `context.nowMs` and update the matching `Sprite` / `Text`. Call once per frame.
    */
   update(context: BeatorajaRenderContext): void {
@@ -462,6 +540,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'polyline-graph':
           this.updatePolylineGraphEntry(entry, props);
+          break;
+        case 'slider':
+          this.updateSliderEntry(entry, props);
           break;
       }
     }
@@ -753,6 +834,57 @@ export class BeatorajaPlaySkinView {
     graphics.blendMode = props.blendMode;
   }
 
+  /**
+   * Update a slider entry. Translates the sprite within the destination box by
+   * `value * range` skin-pixels along its angle axis, leaving width / height at the source-rect
+   * crop's natural size (sliders don't scale — they translate).
+   *
+   * Hidden when the resolver returns `undefined` (the runtime doesn't have data for this slider's
+   * `type`) or `props.visible` says so. Defaulting to `value = 0` (slider at home position) when
+   * the resolver returns 0 is intentional — that's the "neutral" pose for sliders that map to
+   * disabled-by-default user-config knobs (lanecover off → slider at the bottom of its track).
+   */
+  private updateSliderEntry(entry: SliderEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+    const sprite = entry.sprite;
+    sprite.visible = props.visible;
+    if (!props.visible) return;
+    if (entry.baseTexture === undefined || entry.baseTexture === Texture.EMPTY) {
+      sprite.visible = false;
+      return;
+    }
+    const rawValue = this.resolveSliderValue(entry.element.type);
+    if (rawValue === undefined) {
+      sprite.visible = false;
+      return;
+    }
+    const value = clampUnit01(rawValue);
+    const offset = value * entry.element.range;
+    let dx = 0;
+    let dy = 0;
+    switch (entry.element.angle) {
+      case 'right':
+        dx = offset;
+        break;
+      case 'left':
+        dx = -offset;
+        break;
+      case 'up':
+        dy = -offset;
+        break;
+      case 'down':
+        dy = offset;
+        break;
+    }
+    sprite.x = props.x + dx;
+    sprite.y = props.y + dy;
+    sprite.width = props.width;
+    sprite.height = props.height;
+    sprite.alpha = props.alpha;
+    sprite.tint = props.tint;
+    sprite.angle = props.angle;
+    sprite.blendMode = props.blendMode;
+  }
+
   /** Tear down sprites and the container. Textures live on the cache (no `dispose()` by design). */
   dispose(): void {
     if (this.disposed) return;
@@ -777,6 +909,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'polyline-graph':
           entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          break;
+        case 'slider':
+          entry.sprite.destroy({ children: false, texture: false, textureSource: false });
           break;
       }
     }

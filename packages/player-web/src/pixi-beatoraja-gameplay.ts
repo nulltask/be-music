@@ -182,6 +182,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
       resolveGraphValue: (type) => this.adapter.resolveGraphValue(type),
+      resolveSliderValue: (type) => this.adapter.resolveSliderValue(type),
     });
     // Backdrop sits behind the skin container so the letterbox bars are filled with a stable color
     // instead of leaking the page's CSS background through.
@@ -382,6 +383,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
       resolveGraphValue: (type) => this.adapter.resolveGraphValue(type),
+      resolveSliderValue: (type) => this.adapter.resolveSliderValue(type),
     });
     const noteImageMap = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(opts.skin.image)) {
