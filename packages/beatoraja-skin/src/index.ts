@@ -48,6 +48,8 @@ export type { NormalizedElement, RawElement } from './beatoraja-skin-element.ts'
 export { buildBaseOpSet, flattenBeatorajaElements, isElementVisible } from './beatoraja-skin-element.ts';
 export type { BeatorajaImageElement, BeatorajaImageId } from './beatoraja-skin-image.ts';
 export { imageFrameAt, imageFrameRect, imageRefFrame, normalizeBeatorajaImages } from './beatoraja-skin-image.ts';
+export type { BeatorajaValueDigitCell, BeatorajaValueElement } from './beatoraja-skin-value.ts';
+export { composeBeatorajaValueCells, normalizeBeatorajaValues } from './beatoraja-skin-value.ts';
 export type { BeatorajaDestinationGroup, BeatorajaDestinationKeyframe } from './beatoraja-skin-destination.ts';
 export { normalizeBeatorajaDestinations, sampleBeatorajaDestination } from './beatoraja-skin-destination.ts';
 export type { BeatorajaFontElement, BeatorajaTextAlign, BeatorajaTextElement } from './beatoraja-skin-text.ts';

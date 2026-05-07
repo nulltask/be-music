@@ -150,6 +150,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       textures: options.textures,
       resolveRefValue: (ref) => this.adapter.resolveRefValue(ref),
       resolveTextContent: (ref) => this.adapter.resolveTextContent(ref),
+      resolveNumberValue: (ref) => this.adapter.resolveNumberValue(ref),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
     });
     // Backdrop sits behind the skin container so the letterbox bars are filled with a stable color
@@ -330,6 +331,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       if (this.stateSignals) {
         const hs = this.stateSignals.highSpeed();
         if (Number.isFinite(hs) && hs > 0) this.hiSpeed = hs;
+        this.adapter.setHiSpeed(this.hiSpeed);
       }
     }
     const ctx = this.adapter.getRenderContext();

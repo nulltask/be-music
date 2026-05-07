@@ -85,6 +85,7 @@ export class BeatorajaRuntimeAdapter {
     2: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
   };
   private poorBgaActive = false;
+  private lastHiSpeed = 1;
 
   constructor(options: BeatorajaRuntimeAdapterOptions) {
     this.chartPlayVariant = options.chartPlayVariant;
@@ -241,6 +242,58 @@ export class BeatorajaRuntimeAdapter {
    */
   resolveRefValue(_refOp: number): number {
     return 0;
+  }
+
+  /**
+   * Resolve a `value[].ref` (prop.lua `num` table key) into the current numeric value to display.
+   * Score / combo / judge counts come from the latest engine `frame`; other surfaces (chart BPM,
+   * options, system info) come from the chart metadata. Codes the adapter doesn't surface yet return
+   * `undefined` and the corresponding digit cells render as `0` (matches reference behavior — the
+   * skin author can't tell whether the engine is waiting on data vs the value is genuinely zero).
+   */
+  resolveNumberValue(refOp: number): number | undefined {
+    const summary = this.frame?.summary;
+    switch (refOp) {
+      // Score / EX-score (`num.score = 71`).
+      case 71:
+        return summary?.score ?? 0;
+      // Max combo achieved this run (`num.maxcombo = 75`).
+      case 75:
+        return summary?.total ?? 0;
+      // Miss count (`num.misscount = 76`) — bad + poor.
+      case 76:
+        return (summary?.bad ?? 0) + (summary?.poor ?? 0);
+      // Per-judge counts (`num.perfect2 = 80`...`num.poor2 = 84`).
+      case 80:
+        return summary?.perfect ?? 0;
+      case 81:
+        return summary?.great ?? 0;
+      case 82:
+        return summary?.good ?? 0;
+      case 83:
+        return summary?.bad ?? 0;
+      case 84:
+        return summary?.poor ?? 0;
+      // BPM range (`num.maxbpm = 90`, `num.minbpm = 91`, `num.mainbpm = 92`).
+      case 90:
+      case 91:
+      case 92:
+        return Math.round(this.chart?.metadata?.bpm ?? 0);
+      // Hispeed (`num.hispeed = 310`). Falls back to the adapter's last-seen state-signals value.
+      case 310:
+        return Math.round(this.lastHiSpeed * 100);
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Latch the current high-speed multiplier. The host calls this once per frame from
+   * `stateSignals.highSpeed()` so {@link resolveNumberValue} can surface it without owning a
+   * subscription on the signal bus.
+   */
+  setHiSpeed(value: number): void {
+    if (Number.isFinite(value) && value > 0) this.lastHiSpeed = value;
   }
 
   /** Update the autoplay op (mostly for symmetry with the engine driver — mode rarely changes mid-chart). */

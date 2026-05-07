@@ -145,7 +145,9 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
-  it('treats `value[]` declarations as image-like sources for destination lookup', () => {
+  it('renders `value[]` declarations as one sprite per displayed digit', () => {
+    // `digit = 4` → 4 sprites laid out across the destination rect, one per displayed digit. Plus
+    // the unrelated image[id=1] entry contributes 1 sprite, for 1 + 4 = 5 children total.
     const skin: BeatorajaSkin = {
       type: 0,
       w: 1280,
@@ -158,7 +160,35 @@ describe('BeatorajaPlaySkinView', () => {
       ],
     };
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
-    expect(view.container.children).toHaveLength(2);
+    expect(view.container.children).toHaveLength(5);
+    view.dispose();
+  });
+
+  it('renders the resolved number across the digit row when resolveNumberValue is wired', () => {
+    // value[].ref=71 (prop.lua `score`) → host returns 12345 → with `digit=5` and `padding=1`
+    // (leading zeros), the cells should be [1, 2, 3, 4, 5].
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 1280,
+      h: 720,
+      value: [{ id: 200, src: 0, x: 0, y: 0, w: 240, h: 24, divx: 10, digit: 5, padding: 1, ref: 71 }],
+      destination: [{ id: 200, dst: [{ time: 0, x: 100, y: 100, w: 200, h: 24 }] }],
+    };
+    const view = new BeatorajaPlaySkinView({
+      skin,
+      textures: fakeTextureCache([0]),
+      resolveNumberValue: (ref) => (ref === 71 ? 12345 : undefined),
+    });
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+    // After update, the 5 digit sprites should be visible and laid out left-to-right within the
+    // 200-wide rect at y=100, each 40px wide.
+    const sprites = view.container.children;
+    expect(sprites).toHaveLength(5);
+    for (let i = 0; i < 5; i += 1) {
+      const sprite = sprites[i];
+      expect(sprite).toBeDefined();
+      expect((sprite as { x: number }).x).toBeCloseTo(100 + i * 40);
+    }
     view.dispose();
   });
 

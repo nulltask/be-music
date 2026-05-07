@@ -5,17 +5,20 @@
 
 import { Container, Sprite, Text, Texture } from 'pixi.js';
 import {
+  composeBeatorajaValueCells,
   imageFrameAt,
   imageFrameRect,
   imageRefFrame,
   normalizeBeatorajaDestinations,
   normalizeBeatorajaImages,
   normalizeBeatorajaTexts,
+  normalizeBeatorajaValues,
   type BeatorajaDestinationGroup,
   type BeatorajaImageElement,
   type BeatorajaImageId,
   type BeatorajaSkin,
   type BeatorajaTextElement,
+  type BeatorajaValueElement,
 } from '@be-music/beatoraja-skin';
 import {
   createCroppedBeatorajaTexture,
@@ -41,6 +44,12 @@ export interface BeatorajaPlaySkinViewOptions {
    */
   resolveTextContent?: (refOp: number) => string | undefined;
   /**
+   * Optional callback that resolves a `value[].ref` op-code (a prop.lua `num` table key) into the
+   * current numeric value to display — score / combo / BPM / etc. Returning `undefined` falls back to
+   * `0`. Hosts that don't have engine state wired (preview, tests) can omit it entirely.
+   */
+  resolveNumberValue?: (refOp: number) => number | undefined;
+  /**
    * Lookup `text[].font` slot id → registered CSS `font-family` name. Without this every label collapses
    * to the platform sans-serif, which on Japanese themes produces visibly garbled metrics — even when
    * the chart's title / artist resolve to correct UTF-8 strings, the wrong-typeface fallback re-flows
@@ -61,6 +70,17 @@ interface SpriteEntry {
   currentFrame: number;
 }
 
+interface ValueEntry {
+  kind: 'value';
+  group: BeatorajaDestinationGroup;
+  value: BeatorajaValueElement;
+  baseTexture: ReturnType<BeatorajaTextureCache['get']>;
+  /** One sprite per digit position. Created upfront sized to `value.digit`. */
+  digitSprites: Sprite[];
+  /** Last numeric value rendered, used to skip cell-texture rebuilds when the number hasn't changed. */
+  lastValue: number;
+}
+
 interface TextEntry {
   kind: 'text';
   group: BeatorajaDestinationGroup;
@@ -68,7 +88,7 @@ interface TextEntry {
   text: Text;
 }
 
-type ViewEntry = SpriteEntry | TextEntry;
+type ViewEntry = SpriteEntry | ValueEntry | TextEntry;
 
 export class BeatorajaPlaySkinView {
   readonly container = new Container();
@@ -77,6 +97,7 @@ export class BeatorajaPlaySkinView {
   private readonly entries: ViewEntry[] = [];
   private readonly resolveRefValue: (refOp: number) => number;
   private readonly resolveTextContent: (refOp: number) => string | undefined;
+  private readonly resolveNumberValue: (refOp: number) => number | undefined;
   private readonly resolveFontFamily: (fontId: number) => string | undefined;
   private disposed = false;
 
@@ -95,19 +116,21 @@ export class BeatorajaPlaySkinView {
     this.height = typeof rawH === 'number' && Number.isFinite(rawH) && rawH > 0 ? rawH : 720;
     this.resolveRefValue = options.resolveRefValue ?? (() => 0);
     this.resolveTextContent = options.resolveTextContent ?? (() => undefined);
+    this.resolveNumberValue = options.resolveNumberValue ?? (() => undefined);
     this.resolveFontFamily = options.resolveFontFamily ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
       imageById.set(image.id, image);
     }
-    // `value[]` shares the `id / src / x / y / w / h / divx / divy` shape with `image[]`; the formatting hints
-    // (`digit / padding / align`) are ignored until engine integration plugs in the dynamic numeric layout. The
-    // placeholder paints cell 0 of the source sheet ('0' on a number strip). `image[]` wins on id collision —
+    // `value[]` declarations carry numeric formatting metadata (`digit` / `padding` / `divx`) that
+    // `image[]` doesn't, so they're tracked in their own map and rendered through a dedicated
+    // multi-sprite digit composer (`composeBeatorajaValueCells`). `image[]` wins on id collision —
     // matches beatoraja's own resolver.
-    for (const value of normalizeBeatorajaImages(options.skin.value)) {
+    const valueById = new Map<BeatorajaImageId, BeatorajaValueElement>();
+    for (const value of normalizeBeatorajaValues(options.skin.value)) {
       if (!imageById.has(value.id)) {
-        imageById.set(value.id, value);
+        valueById.set(value.id, value);
       }
     }
     // `text[]` declarations carry no source rect — font / size / ref pairs the runtime resolves into strings.
@@ -127,6 +150,12 @@ export class BeatorajaPlaySkinView {
     for (const group of groups) {
       const image = imageById.get(group.id);
       if (image === undefined) {
+        const valueElement = valueById.get(group.id);
+        if (valueElement !== undefined) {
+          const valueEntry = this.buildValueEntry(group, valueElement, options.textures);
+          if (valueEntry !== undefined) this.entries.push(valueEntry);
+          continue;
+        }
         const textElement = textById.get(group.id);
         if (textElement !== undefined) {
           this.entries.push(this.buildTextEntry(group, textElement));
@@ -156,6 +185,34 @@ export class BeatorajaPlaySkinView {
       this.container.addChild(sprite);
       this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame });
     }
+  }
+
+  private buildValueEntry(
+    group: BeatorajaDestinationGroup,
+    element: BeatorajaValueElement,
+    textures: BeatorajaTextureCache,
+  ): ValueEntry | undefined {
+    const baseTexture = textures.get(element.src);
+    const digits = Math.max(1, Math.trunc(element.digit));
+    const digitSprites: Sprite[] = [];
+    // Pre-build one sprite per digit slot. Mount with `alpha: 0` to dodge the same first-pass
+    // bind-group race the image entries handle. The actual textures get cropped on first `update()`
+    // when we know the resolved numeric value — until then each slot uses cell 0 as a placeholder so
+    // PixiJS sees a non-EMPTY texture from frame 0.
+    const baseIsBindable = baseTexture !== undefined && baseTexture !== Texture.EMPTY;
+    for (let i = 0; i < digits; i += 1) {
+      let initialTexture: Texture | undefined;
+      if (baseIsBindable) {
+        const placeholderCells = composeBeatorajaValueCells(element, 0);
+        const cell = placeholderCells[i] ?? placeholderCells[0]!;
+        const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
+        if (cropped !== undefined) initialTexture = cropped;
+      }
+      const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
+      this.container.addChild(sprite);
+      digitSprites.push(sprite);
+    }
+    return { kind: 'value', group, value: element, baseTexture, digitSprites, lastValue: 0 };
   }
 
   private buildTextEntry(group: BeatorajaDestinationGroup, element: BeatorajaTextElement): TextEntry {
@@ -189,10 +246,16 @@ export class BeatorajaPlaySkinView {
     if (this.disposed) return;
     for (const entry of this.entries) {
       const props = destinationToSpriteProps(entry.group, context);
-      if (entry.kind === 'image') {
-        this.updateImageEntry(entry, context, props);
-      } else {
-        this.updateTextEntry(entry, props);
+      switch (entry.kind) {
+        case 'image':
+          this.updateImageEntry(entry, context, props);
+          break;
+        case 'value':
+          this.updateValueEntry(entry, props);
+          break;
+        case 'text':
+          this.updateTextEntry(entry, props);
+          break;
       }
     }
   }
@@ -244,6 +307,53 @@ export class BeatorajaPlaySkinView {
     sprite.blendMode = props.blendMode;
   }
 
+  private updateValueEntry(entry: ValueEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+    const baseTexture = entry.baseTexture;
+    if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
+      for (const sprite of entry.digitSprites) sprite.visible = false;
+      return;
+    }
+    if (!props.visible) {
+      for (const sprite of entry.digitSprites) sprite.visible = false;
+      return;
+    }
+
+    // Resolve the dynamic numeric value through the host's `prop.lua num` adapter. `0` when no value
+    // is wired — keeps the readout visually stable while engine state is wiring up.
+    const value = (entry.value.ref !== 0 ? this.resolveNumberValue(entry.value.ref) : 0) ?? 0;
+
+    // Re-compose digit-cell textures only when the value changes. The composer hands back one
+    // source-rect per digit slot; we crop a sub-texture per slot and assign it to the matching sprite.
+    if (value !== entry.lastValue) {
+      entry.lastValue = value;
+      const cells = composeBeatorajaValueCells(entry.value, value);
+      for (let i = 0; i < entry.digitSprites.length; i += 1) {
+        const cell = cells[i] ?? cells[cells.length - 1]!;
+        const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
+        if (cropped !== undefined) {
+          entry.digitSprites[i]!.texture = cropped;
+        }
+      }
+    }
+
+    // Lay the digit row across the destination rect. Each digit's slot width is `rect.w / digit`,
+    // height is the rect's full height. Alignment defaults to right-align — value displays in the
+    // reference theme are score / combo / BPM, all conventionally right-anchored.
+    const slotWidth = props.width / Math.max(1, entry.digitSprites.length);
+    for (let i = 0; i < entry.digitSprites.length; i += 1) {
+      const sprite = entry.digitSprites[i]!;
+      sprite.visible = true;
+      sprite.x = props.x + i * slotWidth;
+      sprite.y = props.y;
+      sprite.width = slotWidth;
+      sprite.height = props.height;
+      sprite.alpha = props.alpha;
+      sprite.tint = props.tint;
+      sprite.angle = props.angle;
+      sprite.blendMode = props.blendMode;
+    }
+  }
+
   private updateTextEntry(entry: TextEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
     const text = entry.text;
     text.visible = props.visible;
@@ -276,12 +386,20 @@ export class BeatorajaPlaySkinView {
     if (this.disposed) return;
     this.disposed = true;
     for (const entry of this.entries) {
-      if (entry.kind === 'image') {
-        entry.sprite.destroy({ children: false, texture: false, textureSource: false });
-      } else {
-        // Pixi `Text` owns an internal canvas-rendered texture that the cache doesn't track, so we destroy it
-        // along with the text container.
-        entry.text.destroy({ children: false, texture: true, textureSource: true });
+      switch (entry.kind) {
+        case 'image':
+          entry.sprite.destroy({ children: false, texture: false, textureSource: false });
+          break;
+        case 'value':
+          for (const sprite of entry.digitSprites) {
+            sprite.destroy({ children: false, texture: false, textureSource: false });
+          }
+          break;
+        case 'text':
+          // Pixi `Text` owns an internal canvas-rendered texture not tracked by our texture cache —
+          // destroy along with the node.
+          entry.text.destroy({ children: false, texture: true, textureSource: true });
+          break;
       }
     }
     this.entries.length = 0;
