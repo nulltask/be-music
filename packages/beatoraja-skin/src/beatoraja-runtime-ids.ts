@@ -814,3 +814,29 @@ export const BEATORAJA_TEXT = {
   /** prop.lua `directory = 1000`. The current song's parent directory label. */
   DIRECTORY: 1000,
 } as const;
+
+// ─── User-adjustable destination offsets ─────────────────────────────────────────────────────────
+// Sources: `bms.player.beatoraja.skin.SkinProperty.OFFSET_*` constants. Skins reference these via
+// `destination[].offsets[]` (the destination's offset shifts are summed across the listed ids) and
+// via `image.disapearLine` linkage (`isDisapearLineLinkLift = true` reads OFFSET_LIFT.y). Each id
+// resolves to a `(x, y, w, h, r, a)` 6-tuple at runtime — adjusted by the player through in-game
+// sliders (lift / lanecover position, judge offset, …).
+
+/** SkinProperty `OFFSET_SCRATCHANGLE_1P` — 1P scratch wheel rotation offset. */
+export const OFFSET_SCRATCHANGLE_1P = 1;
+/** SkinProperty `OFFSET_SCRATCHANGLE_2P` — 2P scratch wheel rotation offset. */
+export const OFFSET_SCRATCHANGLE_2P = 2;
+/** SkinProperty `OFFSET_LIFT` — vertical lift slider; reveals the bottom portion of the lane chrome. */
+export const OFFSET_LIFT = 3;
+/** SkinProperty `OFFSET_LANECOVER` — vertical lanecover slider; covers the top portion of the lane. */
+export const OFFSET_LANECOVER = 4;
+/** SkinProperty `OFFSET_HIDDEN_COVER` — vertical hidden-cover slider; refines hidden-mode coverage. */
+export const OFFSET_HIDDEN_COVER = 5;
+/** SkinProperty `OFFSET_ALL` — chart-area full-rect shift the player applies in skin-config. */
+export const OFFSET_ALL = 10;
+/** SkinProperty `OFFSET_NOTES_1P` — per-side notes shift (1P). */
+export const OFFSET_NOTES_1P = 30;
+/** SkinProperty `OFFSET_JUDGE_1P` — judge feedback shift (shared id across 1P/2P/3P in beatoraja). */
+export const OFFSET_JUDGE_1P = 32;
+/** SkinProperty `OFFSET_JUDGEDETAIL_1P` — judge detail (timing graph) shift. */
+export const OFFSET_JUDGEDETAIL_1P = 33;

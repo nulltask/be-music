@@ -1696,11 +1696,11 @@ function computeDisapearVisibleRatio(
 ): number {
   if (!(image.disapearLine >= 0)) return 1;
   if (props.height <= 0) return 0;
-  // OFFSET_LIFT.y is the player's lift slider in skin-pixel Y-UP units. Without a wired
-  // resolver we treat lift as 0 — the reference theme's default (= cover fully tucked away).
-  // `OFFSET_LIFT` is property id `0` in beatoraja's `SkinProperty` constants; if a host wants
-  // to support lift dragging, it surfaces that id through `resolveOffset`.
-  const liftY = image.isDisapearLineLinkLift && resolveOffset !== undefined ? (resolveOffset(0)?.y ?? 0) : 0;
+  // OFFSET_LIFT.y is the player's lift slider in skin-pixel Y-UP units. `OFFSET_LIFT` is
+  // property id `3` in beatoraja's `SkinProperty` constants. Without a wired resolver (or with
+  // the lift slider at home) the value is 0 and the cover stays fully tucked away — matching
+  // the reference theme's "lift hides the cover by default" behavior.
+  const liftY = image.isDisapearLineLinkLift && resolveOffset !== undefined ? (resolveOffset(3)?.y ?? 0) : 0;
   const lineSkin = image.disapearLine + liftY;
   // Convert the skin-Y-UP line to a Pixi Y-DOWN coordinate so we can compare against the
   // sprite's screen-space rect. `props.y` is the sprite's top in Pixi (smaller y = higher up);

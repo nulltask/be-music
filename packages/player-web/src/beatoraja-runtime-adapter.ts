@@ -45,6 +45,7 @@ import {
   TIMER_SCENE_START,
   TIMER_STARTINPUT,
   type BeatorajaSide,
+  type BeatorajaSkinOffsetValue,
 } from '@be-music/beatoraja-skin';
 
 export interface BeatorajaRuntimeAdapterOptions {
@@ -105,6 +106,14 @@ export class BeatorajaRuntimeAdapter {
   };
   private poorBgaActive = false;
   private lastHiSpeed = 1;
+  /**
+   * User-adjustable destination offsets keyed by `OFFSET_*` id (from `SkinProperty.OFFSET_LIFT`
+   * et al.). Values default to `ZERO_BEATORAJA_OFFSET` (no shift, full alpha) and stay there
+   * until a host plugs in slider input via {@link setOffset}. The skin view consumes this through
+   * `context.resolveOffset` — both the per-destination `offsets[]` adjustment and the hidden-
+   * cover `disapearLine` lift linkage read from this map.
+   */
+  private readonly offsets: Map<number, BeatorajaSkinOffsetValue> = new Map();
   /** Running combo, latched from the engine's `judge-combo` publishes. Reset on combo-break verdicts. */
   private runningCombo = 0;
   /** Maximum combo seen this run. */
@@ -455,7 +464,41 @@ export class BeatorajaRuntimeAdapter {
       activeOps: this.activeOps,
       getTimerStart: (id) => this.timerStartedAt.get(id),
       nowMs: this.getNowMs(),
+      resolveOffset: (id) => this.resolveOffset(id),
     };
+  }
+
+  /**
+   * Resolve a `SkinProperty.OFFSET_*` id into the player's current shift for that slot. Returns
+   * `undefined` when the host hasn't pushed any value for the id — the destination renderer
+   * treats this as "no shift" (defaults to `ZERO_BEATORAJA_OFFSET`).
+   *
+   * This is what the skin view's `disapearLine` linkage reads (`OFFSET_LIFT.y`), and what
+   * `destination[].offsets[]` consumes for the cumulative position / size shifts authors author
+   * (judge offset slider, lanecover position, …).
+   */
+  resolveOffset(offsetId: number): Readonly<BeatorajaSkinOffsetValue> | undefined {
+    return this.offsets.get(offsetId);
+  }
+
+  /**
+   * Push a value for a `SkinProperty.OFFSET_*` id. Called by the host whenever the player drags
+   * the matching slider (lift / lanecover / hidden-cover). Passing a partial object merges with
+   * the previous value — fields the caller doesn't touch stay at their last known value, which
+   * matches beatoraja's behavior of letting authors enable specific axes via the offset's
+   * authored `(x, y, w, h, r, a)` mask.
+   */
+  setOffset(offsetId: number, value: Readonly<Partial<BeatorajaSkinOffsetValue>>): void {
+    const previous = this.offsets.get(offsetId);
+    const merged: BeatorajaSkinOffsetValue = {
+      x: value.x ?? previous?.x ?? 0,
+      y: value.y ?? previous?.y ?? 0,
+      w: value.w ?? previous?.w ?? 0,
+      h: value.h ?? previous?.h ?? 0,
+      r: value.r ?? previous?.r ?? 0,
+      a: value.a ?? previous?.a ?? 255,
+    };
+    this.offsets.set(offsetId, merged);
   }
 
   /**

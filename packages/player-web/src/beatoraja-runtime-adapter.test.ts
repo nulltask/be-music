@@ -234,6 +234,37 @@ describe('BeatorajaRuntimeAdapter — getRenderContext', () => {
     expect(ctx.getTimerStart(keyOnTimerId(1, 4)!)).toBe(400);
     expect(ctx.getTimerStart(99999)).toBeUndefined();
   });
+
+  it('exposes resolveOffset — undefined for unset offsets, value for set ones', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    const ctx = adapter.getRenderContext();
+    // OFFSET_LIFT (id 3) defaults to undefined — no shift, hidden-cover stays tucked.
+    expect(ctx.resolveOffset?.(3)).toBeUndefined();
+    // After the host sets the lift slider, the resolver returns the merged value.
+    adapter.setOffset(3, { y: -120 });
+    const updated = adapter.getRenderContext().resolveOffset?.(3);
+    expect(updated?.y).toBe(-120);
+    // Default fields stay zero / 255 alpha (matching ZERO_BEATORAJA_OFFSET semantics).
+    expect(updated?.x).toBe(0);
+    expect(updated?.a).toBe(255);
+  });
+
+  it('merges partial setOffset values with the previously set ones', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.setOffset(4, { x: 10, y: 20 });
+    adapter.setOffset(4, { y: 50 }); // x stays at 10 from the previous push
+    const lanecover = adapter.resolveOffset(4);
+    expect(lanecover?.x).toBe(10);
+    expect(lanecover?.y).toBe(50);
+  });
 });
 
 describe('BeatorajaRuntimeAdapter — POOR BGA tracking', () => {
