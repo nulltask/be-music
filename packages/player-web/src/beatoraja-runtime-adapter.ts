@@ -31,6 +31,7 @@ import {
   BEATORAJA_OP,
   BEATORAJA_TEXT,
   bombTimerId,
+  comboTimerId,
   computeGenericRankOp,
   computeJudgeExistOps,
   computeRankOp,
@@ -487,6 +488,20 @@ export class BeatorajaRuntimeAdapter {
       sideState.lastJudgeOp = op;
     }
     this.markTimer(judgeTimerId(side));
+
+    // Restart the side's combo timer (prop.lua `combo_1p = 446` / `combo_2p = 447`) on every
+    // combo-keeping verdict. Skins use this to drive the combo number's pop-in / flicker
+    // animation — the keyframe sampler reads `now - timerStart[combo_*p]` so re-stamping makes
+    // the animation replay from t=0 on every successful hit. PERFECT / GREAT / GOOD all advance
+    // the combo; BAD / POOR / MISS break it (and intentionally DON'T restart the timer —
+    // beatoraja keeps the combo number's idle pose during a break, then resumes the animation
+    // from the next successful hit). Using judge kind directly (not the post-publish combo value)
+    // because the combo counter is shared across sides in double-play — a side-2 hit advancing
+    // the combo to N+1 wouldn't differ in `state.combo` from a side-1 hit, so the only reliable
+    // signal of "this side advanced" is the verdict.
+    if (isComboAdvanceJudge(state.judge)) {
+      this.markTimer(comboTimerId(side));
+    }
 
     // Latch the running combo for `prop.lua num.combo = 104` resolution. The engine emits the
     // post-judge combo value on every publish — for combo-break verdicts (BAD / POOR) it's `0`,
@@ -1280,6 +1295,17 @@ export class BeatorajaRuntimeAdapter {
 
 function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
   return parts.filter((p): p is string => typeof p === 'string' && p.length > 0).join(' ');
+}
+
+/**
+ * Whether a judge verdict represents a combo-advance (PERFECT / GREAT / GOOD) versus a combo-
+ * break (BAD / POOR / MISS). Drives the per-side `combo_*p` timer restart in
+ * {@link BeatorajaRuntimeAdapter.applyJudgeCombo}. Case-insensitive — the engine emits upper-
+ * case strings but the comparison stays defensive.
+ */
+function isComboAdvanceJudge(kind: string): boolean {
+  const upper = kind.toUpperCase();
+  return upper === 'PERFECT' || upper === 'GREAT' || upper === 'GOOD';
 }
 
 /**

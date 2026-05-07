@@ -3,6 +3,8 @@ import {
   BEATORAJA_OP,
   BEATORAJA_TEXT,
   bombTimerId,
+  comboTimerId,
+  endOfNoteTimerId,
   judgeOpForKind,
   judgeTimerId,
   keyOffTimerId,
@@ -11,6 +13,10 @@ import {
   TIMER_BOMB_1P_BASE,
   TIMER_BOMB_2P_BASE,
   TIMER_BOMB_EXT_BASE,
+  TIMER_COMBO_1P,
+  TIMER_COMBO_2P,
+  TIMER_ENDOFNOTE_1P,
+  TIMER_ENDOFNOTE_2P,
   TIMER_FADEOUT,
   TIMER_FAILED,
   TIMER_JUDGE_1P,
@@ -103,6 +109,22 @@ describe('judgeTimerId', () => {
   it('returns the side-specific judge timer base', () => {
     expect(judgeTimerId(1)).toBe(TIMER_JUDGE_1P);
     expect(judgeTimerId(2)).toBe(TIMER_JUDGE_2P);
+  });
+});
+
+describe('comboTimerId / endOfNoteTimerId — side-relative built-in timers', () => {
+  it('comboTimerId picks combo_1p / combo_2p (prop.lua 446 / 447)', () => {
+    expect(comboTimerId(1)).toBe(TIMER_COMBO_1P);
+    expect(comboTimerId(1)).toBe(446);
+    expect(comboTimerId(2)).toBe(TIMER_COMBO_2P);
+    expect(comboTimerId(2)).toBe(447);
+  });
+
+  it('endOfNoteTimerId picks endofnote_1p / endofnote_2p (prop.lua 143 / 144)', () => {
+    expect(endOfNoteTimerId(1)).toBe(TIMER_ENDOFNOTE_1P);
+    expect(endOfNoteTimerId(1)).toBe(143);
+    expect(endOfNoteTimerId(2)).toBe(TIMER_ENDOFNOTE_2P);
+    expect(endOfNoteTimerId(2)).toBe(144);
   });
 });
 

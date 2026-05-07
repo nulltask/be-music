@@ -162,6 +162,16 @@ export function judgeTimerId(side: BeatorajaSide): number {
   return side === 1 ? TIMER_JUDGE_1P : TIMER_JUDGE_2P;
 }
 
+/** Per-side combo timer (prop.lua `combo_1p = 446`, `combo_2p = 447`). Restarts when the combo advances. */
+export function comboTimerId(side: BeatorajaSide): number {
+  return side === 1 ? TIMER_COMBO_1P : TIMER_COMBO_2P;
+}
+
+/** Per-side end-of-note timer (prop.lua `endofnote_1p = 143`, `endofnote_2p = 144`). */
+export function endOfNoteTimerId(side: BeatorajaSide): number {
+  return side === 1 ? TIMER_ENDOFNOTE_1P : TIMER_ENDOFNOTE_2P;
+}
+
 // ─── Runtime op-codes ──────────────────────────────────────────────────────────────────────────────
 // Sources: prop.lua `local op = { ... }`. The codes below are the runtime-only ops the adapter sets
 // during gameplay; option ops (the user's confirmed `skin_config.option` picks) flow separately through

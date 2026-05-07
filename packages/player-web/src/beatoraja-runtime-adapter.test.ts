@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BEATORAJA_OP,
   bombTimerId,
+  comboTimerId,
   judgeTimerId,
   keyOffTimerId,
   keyOnTimerId,
@@ -195,6 +196,55 @@ describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {
     adapter.applyJudgeCombo({ judge: 'BAD', combo: 1, channel: '23', updatedAtMs: 0 });
     expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(true);
     expect(adapter.hasOp(BEATORAJA_OP.P2_JUDGE_BAD)).toBe(true);
+  });
+
+  it('restarts the side-relative combo timer (446 / 447) on every PERFECT / GREAT / GOOD verdict', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '14',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    // PERFECT on side 1 stamps combo_1p (446) at t=100.
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '13', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(comboTimerId(1))).toBe(100);
+    // Side 2's combo timer is independent — still unset.
+    expect(adapter.getTimerStart(comboTimerId(2))).toBeUndefined();
+    // GREAT on side 2 stamps combo_2p (447) at t=250. Side 1's stays at 100.
+    clock.advance(150);
+    adapter.applyJudgeCombo({ judge: 'GREAT', combo: 2, channel: '23', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(comboTimerId(2))).toBe(250);
+    expect(adapter.getTimerStart(comboTimerId(1))).toBe(100);
+    // Subsequent side-1 GOOD re-stamps combo_1p — every combo-keeping verdict replays the
+    // combo-pop animation from t=0.
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'GOOD', combo: 3, channel: '13', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(comboTimerId(1))).toBe(350);
+  });
+
+  it('does NOT restart the combo timer on combo-break verdicts (BAD / POOR / MISS)', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(50);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(comboTimerId(1))).toBe(50);
+    // BAD breaks combo — timer stays at 50, doesn't re-stamp.
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'BAD', combo: 0, channel: '11', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(comboTimerId(1))).toBe(50);
+    // POOR also doesn't restart.
+    clock.advance(50);
+    adapter.applyJudgeCombo({ judge: 'POOR', combo: 0, channel: '11', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(comboTimerId(1))).toBe(50);
+    // The next successful hit re-stamps it.
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(comboTimerId(1))).toBe(300);
   });
 });
 
