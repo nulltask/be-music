@@ -147,10 +147,12 @@ function normalizeKeyframes(raw: ReadonlyArray<unknown>): BeatorajaDestinationKe
     state.b = numberField(obj, 'b', state.b);
     state.a = numberField(obj, 'a', state.a);
     state.angle = numberField(obj, 'angle', state.angle);
-    // `acc` does NOT carry forward — it's an explicit per-segment knob, not a styling default.
-    // Reset to 0 (linear) when the keyframe doesn't specify one so adjacent segments don't
-    // accidentally inherit a parent segment's easing.
-    state.acc = numberField(obj, 'acc', 0);
+    // `acc` carries forward like every other field — `JSONSkinLoader.setDestination` does
+    // `a.acc = (a.acc == MIN_VALUE ? prev.acc : a.acc)`. Resetting to 0 each frame would break
+    // the common authoring pattern of declaring `acc=2` on the FROM frame of a long fade-in
+    // and leaving subsequent intermediate keyframes with no `acc` (which would re-linearize
+    // the back half of the fade in our implementation prior to this fix).
+    state.acc = numberField(obj, 'acc', state.acc);
     // Push a fresh copy so future state mutations don't reach already-emitted keyframes.
     out.push({ ...state });
   }

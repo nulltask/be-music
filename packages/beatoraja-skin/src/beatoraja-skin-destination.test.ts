@@ -180,8 +180,11 @@ describe('sampleBeatorajaDestination', () => {
       }
     });
 
-    it('does not carry acc forward to the next segment', () => {
-      // Segment 0→1000 has acc=2 (decelerate); segment 1000→2000 has no acc → linear.
+    it('carries acc forward to subsequent keyframes (matches JSONSkinLoader semantics)', () => {
+      // Segment 0→1000 has acc=2 (decelerate); segment 1000→2000 has no acc — beatoraja's
+      // setDestination keeps the previous frame's `acc` when the next is `MIN_VALUE`, so both
+      // segments use acc=2 here. Authors author long fades by declaring acc once on the FROM
+      // frame and omitting it on the rest.
       const mixed = normalizeBeatorajaDestinations([
         {
           id: 'mixed',
@@ -195,8 +198,23 @@ describe('sampleBeatorajaDestination', () => {
       ])[0];
       // First half-segment: acc=2 decelerate at u=0.5 → x = 75
       expect(sampleBeatorajaDestination(mixed, 500)?.x).toBeCloseTo(75, 6);
-      // Second half-segment: linear at u=0.5 (1500 of 1000-2000) → halfway from 100 to 0 = 50
-      expect(sampleBeatorajaDestination(mixed, 1500)?.x).toBeCloseTo(50, 6);
+      // Second half-segment: also acc=2 (carried forward). u=0.5 from 100 → 0 with decel.
+      // Decel curve `u·(2-u)` at 0.5 = 0.75 → x = 100 - 0.75·100 = 25.
+      expect(sampleBeatorajaDestination(mixed, 1500)?.x).toBeCloseTo(25, 6);
+    });
+
+    it('still defaults to acc=0 (linear) when no keyframe specifies acc', () => {
+      const linear = normalizeBeatorajaDestinations([
+        {
+          id: 'linear',
+          loop: -1,
+          dst: [
+            { time: 0, x: 0, y: 0, w: 1, h: 1, a: 255 },
+            { time: 1000, x: 100 },
+          ],
+        },
+      ])[0];
+      expect(sampleBeatorajaDestination(linear, 500)?.x).toBeCloseTo(50, 6);
     });
   });
 });
