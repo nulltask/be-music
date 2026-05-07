@@ -296,6 +296,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
 
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', this.handleKeyDown);
+      window.addEventListener('wheel', this.handleWheel, { passive: false });
     }
 
     this.enginePromise = runEngineDriver({
@@ -359,6 +360,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.tickerHandle = undefined;
     if (typeof window !== 'undefined') {
       window.removeEventListener('keydown', this.handleKeyDown);
+      window.removeEventListener('wheel', this.handleWheel);
     }
     this.host = undefined;
   }
@@ -602,7 +604,31 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     if (event.key === 'Escape') {
       event.preventDefault();
       this.requestExit();
+      return;
     }
+    // Lanecover position — `PageUp` / `PageDown` step the cover by 1% per press, holding `Shift`
+    // bumps it to 5% for coarse adjustment. Mirrors beatoraja's lanecover hotkey behaviour;
+    // `PageUp` raises the cover (more lane visible), `PageDown` lowers it (more cover).
+    if (event.key === 'PageUp' || event.key === 'PageDown') {
+      event.preventDefault();
+      const step = (event.shiftKey ? 0.05 : 0.01) * (event.key === 'PageUp' ? -1 : 1);
+      this.adapter.adjustLanecover(step);
+    }
+  };
+
+  /**
+   * Mouse-wheel input adjusts the lanecover ratio — gives players a quick way to dial cover
+   * during play without leaving the keyboard. `deltaY > 0` (scroll down) extends the cover;
+   * `deltaY < 0` (scroll up) retracts it. The 0.005-per-tick step is intentionally fine —
+   * trackpads emit dozens of small deltas; on a wheel mouse the per-detent unit is enough to
+   * notice. Holding Shift accelerates by 5x.
+   */
+  private readonly handleWheel = (event: WheelEvent): void => {
+    if (event.deltaY === 0) return;
+    event.preventDefault();
+    const direction = event.deltaY > 0 ? 1 : -1;
+    const magnitude = event.shiftKey ? 0.025 : 0.005;
+    this.adapter.adjustLanecover(direction * magnitude);
   };
 }
 

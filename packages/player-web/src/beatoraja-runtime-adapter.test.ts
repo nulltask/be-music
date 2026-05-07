@@ -267,6 +267,55 @@ describe('BeatorajaRuntimeAdapter — getRenderContext', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — lanecover slider', () => {
+  it('drives `slider[].type = 4` and `BEATORAJA_NUM.LANECOVER1` from the same `lanecoverRatio` field', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    // Default state: slider at home, percent readout at 0.
+    expect(adapter.resolveSliderValue(4)).toBe(0);
+    expect(adapter.resolveNumberValue(14)).toBe(0);
+    // Player drags the slider to 60% — both surfaces update.
+    adapter.setLanecover(0.6);
+    expect(adapter.resolveSliderValue(4)).toBeCloseTo(0.6, 6);
+    expect(adapter.resolveNumberValue(14)).toBe(60);
+    // 2P share the same ratio in single-side play (`type = 5` == `type = 4`).
+    expect(adapter.resolveSliderValue(5)).toBeCloseTo(0.6, 6);
+  });
+
+  it('clamps setLanecover and adjustLanecover to [0, 1]', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.setLanecover(2); // overshoot
+    expect(adapter.getLanecover()).toBe(1);
+    adapter.setLanecover(-0.5); // undershoot
+    expect(adapter.getLanecover()).toBe(0);
+    adapter.adjustLanecover(0.3);
+    adapter.adjustLanecover(0.5); // 0.3 + 0.5 = 0.8, in range
+    expect(adapter.getLanecover()).toBeCloseTo(0.8, 6);
+    adapter.adjustLanecover(0.5); // 0.8 + 0.5 = 1.3 → clamped to 1
+    expect(adapter.getLanecover()).toBe(1);
+  });
+
+  it('ignores non-finite inputs', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.setLanecover(0.4);
+    adapter.setLanecover(Number.NaN);
+    expect(adapter.getLanecover()).toBeCloseTo(0.4, 6);
+    adapter.adjustLanecover(Number.POSITIVE_INFINITY);
+    expect(adapter.getLanecover()).toBeCloseTo(0.4, 6);
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — POOR BGA tracking', () => {
   it('flips between trigger-poor-bga and clear-poor-bga commands', () => {
     const adapter = new BeatorajaRuntimeAdapter({

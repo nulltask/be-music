@@ -107,6 +107,14 @@ export class BeatorajaRuntimeAdapter {
   private poorBgaActive = false;
   private lastHiSpeed = 1;
   /**
+   * Player's lanecover position in `[0, 1]`. `0` = cover off (slider at home, no obscuring),
+   * `1` = cover fully extended (covers the upper portion of the lane). Drives the `slider[]`
+   * `type = 4` (1P) / `type = 5` (2P) value AND the `BEATORAJA_NUM.LANECOVER_1P` (= 14) percent
+   * readout. The host adjusts this through {@link adjustLanecover} / {@link setLanecover} as the
+   * player drags the slider, scrolls the wheel, or presses the lanecover hotkeys.
+   */
+  private lanecoverRatio = 0;
+  /**
    * User-adjustable destination offsets keyed by `OFFSET_*` id (from `SkinProperty.OFFSET_LIFT`
    * et al.). Values default to `ZERO_BEATORAJA_OFFSET` (no shift, full alpha) and stay there
    * until a host plugs in slider input via {@link setOffset}. The skin view consumes this through
@@ -604,17 +612,17 @@ export class BeatorajaRuntimeAdapter {
    * returning `undefined` from the default branch hides those sliders cleanly.
    *
    * Wired types:
-   *   - `4` (1P lanecover) / `5` (2P lanecover) → 0 (no live lanecover yet — slider stays at home)
+   *   - `4` (1P lanecover) / `5` (2P lanecover) → {@link lanecoverRatio}, the player's current
+   *     lanecover slider position. `0` = home (no cover); `1` = fully extended.
    *   - `6` (hispeed indicator) → `lastHiSpeed` clamped to a typical 0..10 range, normalized
    *
-   * Future: when lanecover / lift / hidden are surfaced as user options, hook them here.
+   * Future: lift / hidden-mode sliders (separate from lanecover) when those user options surface.
    */
   resolveSliderValue(type: number): number | undefined {
     switch (type) {
       case 4:
       case 5:
-        // Lanecover position. Without a host-side wire-up we keep the slider at its home (0).
-        return 0;
+        return this.lanecoverRatio;
       case 6: {
         // Hispeed indicator. Hispeed values typically fall in [0.5, 5]; clamp to [0, 10] and
         // normalize so the slider's full range corresponds to that span. Authors typically draw
@@ -719,11 +727,14 @@ export class BeatorajaRuntimeAdapter {
         // pulled from this op.
         return Math.round(this.lastHiSpeed * 100) % 100;
       }
-      // Lanecover / lift / hidden / judge timing — these are skin-config knobs the host doesn't yet
-      // surface. Returning 0 (not undefined) keeps the readout zero AND silences the "ref not
-      // wired" log so authors aren't spammed about features that simply aren't connected.
-      case BEATORAJA_NUM.JUDGETIMING:
+      // 1P lanecover percentage — the player's slider position rendered as `0..100`. Updated
+      // through {@link adjustLanecover} / {@link setLanecover}; reads back the shared state.
       case BEATORAJA_NUM.LANECOVER1:
+        return Math.round(this.lanecoverRatio * 100);
+      // Other skin-config knobs the host doesn't surface yet. Returning 0 (not undefined) keeps
+      // the readout zero AND silences the "ref not wired" log so authors aren't spammed about
+      // features that simply aren't connected.
+      case BEATORAJA_NUM.JUDGETIMING:
       case BEATORAJA_NUM.LIFT1:
       case BEATORAJA_NUM.HIDDEN1:
       case BEATORAJA_NUM.DURATION:
@@ -950,6 +961,32 @@ export class BeatorajaRuntimeAdapter {
    */
   setHiSpeed(value: number): void {
     if (Number.isFinite(value) && value > 0) this.lastHiSpeed = value;
+  }
+
+  /**
+   * Set the player's lanecover ratio directly. Clamped to `[0, 1]`. Drives the `slider[].type =
+   * 4|5` value (the visible lanecover sprite) and the `BEATORAJA_NUM.LANECOVER1 = 14` percent
+   * readout via the same shared field. Hosts call this when wiring a UI slider to an absolute
+   * value; for incremental key / scroll input use {@link adjustLanecover}.
+   */
+  setLanecover(value: number): void {
+    if (!Number.isFinite(value)) return;
+    this.lanecoverRatio = Math.max(0, Math.min(1, value));
+  }
+
+  /**
+   * Nudge the lanecover ratio by `delta` (positive grows the cover, negative shrinks). Clamped
+   * to `[0, 1]`. Typical key / scroll bindings step `±0.01` per event for fine control,
+   * `±0.05` for a coarser feel.
+   */
+  adjustLanecover(delta: number): void {
+    if (!Number.isFinite(delta)) return;
+    this.setLanecover(this.lanecoverRatio + delta);
+  }
+
+  /** Read-only handle on the lanecover ratio. Mostly for tests / host-side state mirroring. */
+  getLanecover(): number {
+    return this.lanecoverRatio;
   }
 
   /**
