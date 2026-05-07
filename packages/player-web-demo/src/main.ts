@@ -774,6 +774,18 @@ class PlayerWebDemoApp {
    */
   private readonly beatorajaSkinOverridesByType = new Map<number, string>();
   /**
+   * Debug-menu folder hosting one dropdown per skin scene type (Play 5K / 7K / 9K / 10K / 14K /
+   * 24K / 24Kdp / Music Select / Decide / Result / etc.). Empty until a beatoraja theme is
+   * dropped — `rebuildBeatorajaSkinPickers` (re-)populates it from `beatorajaTheme.entries`.
+   */
+  private beatorajaSkinPickerFolder: GUI | undefined;
+  /**
+   * Active controllers inside {@link beatorajaSkinPickerFolder}, keyed by scene type. Cleared
+   * and rebuilt on each `rebuildBeatorajaSkinPickers` call so dropdown options stay in sync with
+   * the latest theme drop.
+   */
+  private readonly beatorajaSkinPickerControllers: Map<number, Controller> = new Map();
+  /**
    * Last beatoraja-select highlighted index — survives scene tear-down so coming back from gameplay
    * lands on the same song the user just played.
    */
@@ -1038,6 +1050,11 @@ class PlayerWebDemoApp {
     const beatorajaFolder = gui.addFolder('Beatoraja preview').close();
     beatorajaFolder.add(this.guiState, 'beatorajaPreviewVariant', ['7', '5', '14', '10', '9'] as const).name('Variant');
     beatorajaFolder.add(this.guiState, 'beatorajaPreview').name('Open preview');
+    // Per-scene skin picker. Stays empty (and collapsed) until a beatoraja theme is dropped —
+    // `rebuildBeatorajaSkinPickers()` re-populates it on each load. Selecting a non-default entry
+    // for a scene records it on `beatorajaSkinOverridesByType`; the next mount picks it up via
+    // `pickBeatorajaSkinEntryWithOverride`.
+    this.beatorajaSkinPickerFolder = gui.addFolder('Beatoraja skins').close();
     // Auto play used to be a lil-gui checkbox here too, but the in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on
     // the select skin) already exposes it — the duplicate toolbar controller just added another surface to keep in
     // sync. The `guiState.autoPlay` field stays as the seed/fallback value until the select panel publishes its own
@@ -1459,6 +1476,13 @@ class PlayerWebDemoApp {
       this.beatorajaPreviewScene = undefined;
       this.beatorajaTextureCachesByEntry.clear();
       this.beatorajaTheme = bundle;
+      // Drop overrides from the previous theme — entryPaths from the old bundle will no longer
+      // resolve against the new entries. Without this `pickBeatorajaSkinEntryWithOverride`'s
+      // self-clearing fallback would still kick in, but the picker dropdowns would briefly show
+      // stale labels until the user opened a scene that hit that fallback. Clearing eagerly keeps
+      // the GUI honest.
+      this.beatorajaSkinOverridesByType.clear();
+      this.rebuildBeatorajaSkinPickers();
       // Scan the dropped bundle for decide / clear / fail / result BGM. Heuristic by basename —
       // see `findBeatorajaThemeBgm` for the rules. Awaited because some entries are read lazily;
       // the load is small (<1 MiB) and serialized so it doesn't add visible latency.
@@ -1824,7 +1848,7 @@ class PlayerWebDemoApp {
       header: headerLoad.header,
       availableSkins: this.collectBeatorajaSkinChoices([playTypeCode]),
       onSkinChange: (nextEntryPath) => {
-        this.beatorajaSkinOverridesByType.set(playTypeCode, nextEntryPath);
+        this.setBeatorajaSkinOverride(playTypeCode, nextEntryPath);
         const nextConfig = this.resolveBeatorajaSkinConfig(nextEntryPath, headerLoad.header);
         void this.applyBeatorajaPlaySkinConfig(nextEntryPath, variant, nextConfig);
       },
@@ -1879,7 +1903,7 @@ class PlayerWebDemoApp {
       header: result.header,
       availableSkins: this.collectBeatorajaSkinChoices([playTypeCode]),
       onSkinChange: (nextEntryPath) => {
-        this.beatorajaSkinOverridesByType.set(playTypeCode, nextEntryPath);
+        this.setBeatorajaSkinOverride(playTypeCode, nextEntryPath);
         const nextConfig = this.resolveBeatorajaSkinConfig(nextEntryPath, result.header);
         void this.applyBeatorajaPlaySkinConfig(nextEntryPath, variant, nextConfig);
       },
@@ -2007,7 +2031,7 @@ class PlayerWebDemoApp {
       availableSkins: this.collectBeatorajaSkinChoices([BEATORAJA_SKIN_TYPE.MUSIC_SELECT]),
       onSkinChange: (nextEntryPath) => {
         // Persist the user's pick so subsequent select-scene mounts use the new entry too.
-        this.beatorajaSkinOverridesByType.set(BEATORAJA_SKIN_TYPE.MUSIC_SELECT, nextEntryPath);
+        this.setBeatorajaSkinOverride(BEATORAJA_SKIN_TYPE.MUSIC_SELECT, nextEntryPath);
         // Apply against the new entry. The cached config for the new entry (or its defaults) is
         // resolved inside `applyBeatorajaSelectSkinConfig`; we don't need to pass it explicitly.
         const nextConfig = this.resolveBeatorajaSkinConfig(nextEntryPath, headerLoad.header);
@@ -2063,7 +2087,7 @@ class PlayerWebDemoApp {
       header: result.header,
       availableSkins: this.collectBeatorajaSkinChoices([BEATORAJA_SKIN_TYPE.MUSIC_SELECT]),
       onSkinChange: (nextEntryPath) => {
-        this.beatorajaSkinOverridesByType.set(BEATORAJA_SKIN_TYPE.MUSIC_SELECT, nextEntryPath);
+        this.setBeatorajaSkinOverride(BEATORAJA_SKIN_TYPE.MUSIC_SELECT, nextEntryPath);
         const nextConfig = this.resolveBeatorajaSkinConfig(nextEntryPath, result.header);
         void this.applyBeatorajaSelectSkinConfig(nextEntryPath, nextConfig);
       },
@@ -2323,6 +2347,32 @@ class PlayerWebDemoApp {
   }
 
   /**
+   * Record an in-scene skin override and sync the Debug Menu dropdown's displayed value so the
+   * two surfaces stay consistent. Called from the in-scene `BeatorajaSkinOptionsGui` callbacks
+   * (the popup the user opens with the skin's authored "options" button); the Debug Menu's own
+   * dropdown writes the override directly because its `onChange` is the source.
+   *
+   * Pass `entryPath = undefined` to clear the override (= fall back to the theme's discovery
+   * default). The picker dropdown also resets to the default option in that case.
+   */
+  private setBeatorajaSkinOverride(typeCode: number, entryPath: string | undefined): void {
+    if (entryPath === undefined) {
+      this.beatorajaSkinOverridesByType.delete(typeCode);
+    } else {
+      this.beatorajaSkinOverridesByType.set(typeCode, entryPath);
+    }
+    // Mirror the change onto the Debug Menu dropdown when one exists for this type. lil-gui's
+    // `setValue` writes to the underlying proxy AND repaints the option list to highlight the
+    // matching entry; without this the dropdown would still show the previous selection until
+    // the next `rebuildBeatorajaSkinPickers` call (= next theme drop).
+    const controller = this.beatorajaSkinPickerControllers.get(typeCode);
+    if (controller !== undefined) {
+      const fallbackPath = this.beatorajaTheme?.theme.entries.find((e) => e.header.type === typeCode)?.entryPath;
+      controller.setValue(entryPath ?? fallbackPath ?? '');
+    }
+  }
+
+  /**
    * Pick the actual skin entry to mount for a scene, honoring the user's override when one was
    * recorded. Falls back to `fallback` (the discovery's "best" pick) when no override exists or
    * when the override no longer points at a valid entry (e.g., the user dropped a different theme).
@@ -2340,6 +2390,81 @@ class PlayerWebDemoApp {
       this.beatorajaSkinOverridesByType.delete(typeCode);
     }
     return fallback;
+  }
+
+  /**
+   * Repopulate the "Beatoraja skins" debug-menu folder with one dropdown per scene type that the
+   * loaded theme actually ships an entry for. Called from `loadBeatorajaTheme` after each drop,
+   * so the dropdowns always reflect the live `beatorajaTheme.entries` list.
+   *
+   * Each dropdown:
+   *   - shows the scene's "best" entry (from theme discovery) as the default — selecting a
+   *     different option sets `beatorajaSkinOverridesByType` and the next scene mount uses it
+   *     via {@link pickBeatorajaSkinEntryWithOverride}.
+   *   - labels options by `${header.name} (${entryPath})` so the user can disambiguate same-
+   *     named skins from different folders.
+   *   - is omitted entirely for scene types the loaded theme doesn't ship at all (so the panel
+   *     stays compact). Single-entry types still get a dropdown so the user can see at a glance
+   *     which file is mounted.
+   */
+  private rebuildBeatorajaSkinPickers(): void {
+    const folder = this.beatorajaSkinPickerFolder;
+    if (folder === undefined) return;
+    // Tear down previous controllers so dropdown options match the current theme bundle. lil-gui
+    // doesn't support live-updating an `add(target, prop, options)` controller's option list, so
+    // recreating each time is the safe path.
+    for (const controller of this.beatorajaSkinPickerControllers.values()) {
+      controller.destroy();
+    }
+    this.beatorajaSkinPickerControllers.clear();
+    const theme = this.beatorajaTheme?.theme;
+    if (theme === undefined) return;
+    // Order matters here — the folder lays controllers out in insertion order, so we keep the
+    // play-variant types together (clustered by key count), then chrome scenes (select / decide
+    // / result / etc.) below them.
+    const sceneTypes: ReadonlyArray<{ typeCode: number; label: string; best?: BeatorajaSkinEntry }> = [
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_5KEYS, label: 'Play 5K', best: theme.playSkins['5'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_7KEYS, label: 'Play 7K', best: theme.playSkins['7'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_9KEYS, label: 'Play 9K', best: theme.playSkins['9'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_10KEYS, label: 'Play 10K', best: theme.playSkins['10'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_14KEYS, label: 'Play 14K', best: theme.playSkins['14'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_24KEYS, label: 'Play 24K', best: theme.playSkins['24'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_24KEYS_DOUBLE, label: 'Play 24K DP', best: theme.playSkins['24d'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.MUSIC_SELECT, label: 'Music Select', best: theme.selectSkin },
+      { typeCode: BEATORAJA_SKIN_TYPE.DECIDE, label: 'Decide', best: theme.decideSkin },
+      { typeCode: BEATORAJA_SKIN_TYPE.RESULT, label: 'Result', best: theme.resultSkin },
+      { typeCode: BEATORAJA_SKIN_TYPE.COURSE_RESULT, label: 'Course Result', best: theme.courseResultSkin },
+      { typeCode: BEATORAJA_SKIN_TYPE.GRADE_RESULT, label: 'Grade Result', best: theme.gradeResultSkin },
+    ];
+    for (const scene of sceneTypes) {
+      const candidates = theme.entries.filter((entry) => entry.header.type === scene.typeCode);
+      if (candidates.length === 0) continue;
+      // Build a label → entryPath map. lil-gui shows the keys in the dropdown and writes the
+      // matching value to the proxy. Using entryPath as the value lets us look up the entry on
+      // change without keeping a separate index.
+      const options: Record<string, string> = {};
+      for (const entry of candidates) {
+        const name = entry.header.name?.length ? entry.header.name : '(unnamed)';
+        const label = `${name} (${entry.entryPath})`;
+        options[label] = entry.entryPath;
+      }
+      // The proxy holds the currently-selected entryPath. Default to the discovery's best pick
+      // so the dropdown reflects what would actually mount if no override is set.
+      const proxy = { entryPath: scene.best?.entryPath ?? candidates[0]!.entryPath };
+      const controller = folder
+        .add(proxy, 'entryPath', options)
+        .name(`${scene.label} (${candidates.length})`)
+        .onChange((nextEntryPath: string) => {
+          if (scene.best !== undefined && nextEntryPath === scene.best.entryPath) {
+            // Picking the discovery default = "no override" — drop any prior override so future
+            // theme rotations pick up the new "best" automatically.
+            this.beatorajaSkinOverridesByType.delete(scene.typeCode);
+          } else {
+            this.beatorajaSkinOverridesByType.set(scene.typeCode, nextEntryPath);
+          }
+        });
+      this.beatorajaSkinPickerControllers.set(scene.typeCode, controller);
+    }
   }
 
   /**
