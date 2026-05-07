@@ -70,6 +70,9 @@ export { normalizeBeatorajaImagesets } from './beatoraja-skin-imageset.ts';
 
 export type { BeatorajaGaugeElement } from './beatoraja-skin-gauge.ts';
 export { normalizeBeatorajaGauge, pickBeatorajaGaugeNode } from './beatoraja-skin-gauge.ts';
+
+export type { BeatorajaJudgeElement } from './beatoraja-skin-judge.ts';
+export { expandBeatorajaJudgeDestinations, normalizeBeatorajaJudges } from './beatoraja-skin-judge.ts';
 export type { BeatorajaNoteDestinationBlock, BeatorajaNoteRect, BeatorajaNoteSection } from './beatoraja-skin-note.ts';
 export { normalizeBeatorajaNote, pickBeatorajaNoteRects } from './beatoraja-skin-note.ts';
 export { expandBeatorajaWildcard, resolveBeatorajaPath, resolveSourcePath } from './beatoraja-skin-resolver.ts';

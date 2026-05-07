@@ -7,6 +7,7 @@ import { BitmapText, Container, Graphics, Sprite, Text, Texture } from 'pixi.js'
 import {
   centerToAnchor,
   composeBeatorajaValueCells,
+  expandBeatorajaJudgeDestinations,
   imageFrameAt,
   imageFrameRect,
   imageRefFrame,
@@ -15,6 +16,7 @@ import {
   normalizeBeatorajaGraphs,
   normalizeBeatorajaImages,
   normalizeBeatorajaImagesets,
+  normalizeBeatorajaJudges,
   normalizeBeatorajaSliders,
   normalizeBeatorajaTexts,
   normalizeBeatorajaValues,
@@ -367,7 +369,16 @@ export class BeatorajaPlaySkinView {
       gaugeElement = gauge;
     }
 
-    const groups = normalizeBeatorajaDestinations(options.skin.destination);
+    // Expand `judge[]` entries into synthetic destinations gated on the matching judge ops
+    // (`P1_JUDGE_PERFECT = 241` etc.). The expansion adds one destination per (judge entry ×
+    // image / number sub-entry × judge kind), each with the per-judge op appended to the gate.
+    // Concatenated with `skin.destination` so the standard destination pipeline handles them.
+    const judges = normalizeBeatorajaJudges(options.skin.judge);
+    const expandedJudgeDestinations = expandBeatorajaJudgeDestinations(judges);
+    const allDestinations: ReadonlyArray<unknown> = Array.isArray(options.skin.destination)
+      ? [...options.skin.destination, ...expandedJudgeDestinations]
+      : expandedJudgeDestinations;
+    const groups = normalizeBeatorajaDestinations(allDestinations);
 
     // Render order: lower `offset` (back layer) draws first, then by author declaration order. Matches beatoraja's
     // own back-to-front layering.
