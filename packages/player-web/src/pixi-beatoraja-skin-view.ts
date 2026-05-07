@@ -211,10 +211,7 @@ export class BeatorajaPlaySkinView {
     );
     if (skipped > 0) {
       const unmatchedIds = groups
-        .filter(
-          (group) =>
-            !imageById.has(group.id) && !valueById.has(group.id) && !textById.has(group.id),
-        )
+        .filter((group) => !imageById.has(group.id) && !valueById.has(group.id) && !textById.has(group.id))
         .map((group) => group.id);
       // eslint-disable-next-line no-console
       console.log(

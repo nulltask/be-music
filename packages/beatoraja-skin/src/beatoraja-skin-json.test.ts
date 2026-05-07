@@ -40,9 +40,7 @@ describe('relaxBeatorajaJson — doubled-open brace typo', () => {
   it('reproduces the play5.json line-307 shape exactly', () => {
     const before = '[{"if": [920], "value": {{"x":20, "y":140, "w":300, "h":1, "r":64, "g":192, "b":192}}]';
     const after = relaxBeatorajaJson(before);
-    expect(JSON.parse(after)).toEqual([
-      { if: [920], value: { x: 20, y: 140, w: 300, h: 1, r: 64, g: 192, b: 192 } },
-    ]);
+    expect(JSON.parse(after)).toEqual([{ if: [920], value: { x: 20, y: 140, w: 300, h: 1, r: 64, g: 192, b: 192 } }]);
   });
 
   it('does not touch ordinary nested objects', () => {

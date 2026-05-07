@@ -140,10 +140,7 @@ export interface BeatorajaValueDigitCell {
  * - **Overflow**: a value wider than the digit count silently truncates to the lowest digits — beatoraja
  *   itself behaves the same way, and the alternative ("show all 9s") is more confusing for the player.
  */
-export function composeBeatorajaValueCells(
-  element: BeatorajaValueElement,
-  value: number,
-): BeatorajaValueDigitCell[] {
+export function composeBeatorajaValueCells(element: BeatorajaValueElement, value: number): BeatorajaValueDigitCell[] {
   const digits = Math.max(1, Math.trunc(element.digit));
   const cells: BeatorajaValueDigitCell[] = Array.from({ length: digits });
   const divx = Math.max(1, element.divx);

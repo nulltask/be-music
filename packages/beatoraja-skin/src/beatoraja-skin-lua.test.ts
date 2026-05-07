@@ -89,10 +89,7 @@ describe('evaluateBeatorajaLuaSkin', () => {
   it('returns an empty stub table for unknown require modules', () => {
     const result = evaluateBeatorajaLuaSkin({
       entry: enc(
-        [
-          'local t = require("some_unknown_helper")',
-          'return { has_table = type(t) == "table", count = 0 }',
-        ].join('\n'),
+        ['local t = require("some_unknown_helper")', 'return { has_table = type(t) == "table", count = 0 }'].join('\n'),
       ),
       modules: [],
     });

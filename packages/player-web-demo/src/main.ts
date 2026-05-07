@@ -34,9 +34,11 @@ import {
 import {
   BeatorajaPlaySkinPreviewScene,
   PixiBeatorajaGameplayView,
+  PixiBeatorajaSelectScene,
   isBeatorajaSkinIndicator,
   loadBeatorajaFonts,
   loadBeatorajaPlaySkinFromBundle,
+  loadBeatorajaSelectSkinFromBundle,
   loadBeatorajaTexturesFromBundle,
   loadBeatorajaThemeFromFiles,
   pickBeatorajaPlayableSkinVariant,
@@ -50,7 +52,11 @@ import {
   type BeatorajaThemeBundle,
   type PreparedBeatorajaGameplayChart,
 } from '@be-music/player-web';
-import { buildDefaultSkinConfigOptions, bundleBeatorajaSources, normalizeBeatorajaFonts } from '@be-music/beatoraja-skin';
+import {
+  buildDefaultSkinConfigOptions,
+  bundleBeatorajaSources,
+  normalizeBeatorajaFonts,
+} from '@be-music/beatoraja-skin';
 
 const dropLog = logger('drop');
 const recordLog = logger('record');
@@ -699,6 +705,13 @@ class PlayerWebDemoApp {
   private beatorajaGameplayView: PixiBeatorajaGameplayView | undefined;
   /** The current chart's prepared assets (audio + BGA). Disposed alongside the gameplay view. */
   private beatorajaGameplayPrep: PreparedBeatorajaGameplayChart | undefined;
+  /** Beatoraja-skinned song select scene. Active when a beatoraja theme with a select skin is loaded. */
+  private beatorajaSelectScene: PixiBeatorajaSelectScene | undefined;
+  /**
+   * Last beatoraja-select highlighted index — survives scene tear-down so coming back from gameplay
+   * lands on the same song the user just played.
+   */
+  private beatorajaSelectIndex = 0;
   private resultView: PixiResultView | undefined;
   private decideView: PixiDecideView | undefined;
   private hostMounted = false;
@@ -1573,9 +1586,7 @@ class PlayerWebDemoApp {
     if (variant === undefined) return;
     const desiredVariant = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
     if (variant !== desiredVariant) {
-      gameplayLog.info(
-        `beatoraja gameplay: theme has no '${desiredVariant}' skin — falling back to '${variant}'`,
-      );
+      gameplayLog.info(`beatoraja gameplay: theme has no '${desiredVariant}' skin — falling back to '${variant}'`);
     }
 
     this.elements.shell.classList.add('playing');
@@ -1700,6 +1711,92 @@ class PlayerWebDemoApp {
     this.setStatus(`Playing (beatoraja): ${song.title}`);
   }
 
+  /**
+   * Mount the beatoraja-skinned song select scene. Loads the theme's select skin (with a default
+   * `skin_config.option` fill from `buildDefaultSkinConfigOptions`), reuses cached textures / fonts
+   * when available, and hands the scene a callback that routes the chosen song through the existing
+   * `showDecide` / `playSong` flow.
+   */
+  private async showBeatorajaSelect(): Promise<void> {
+    const bundle = this.beatorajaTheme;
+    if (bundle === undefined) return;
+
+    // Two-pass evaluation — header pass picks up the skin's `property[]` schema, the second pass
+    // re-runs `main()` with default option picks so dynamic `source[]` / `destination[]` populate.
+    const headerLoad = loadBeatorajaSelectSkinFromBundle(bundle);
+    if (!headerLoad || !headerLoad.result.ok) {
+      const reason = headerLoad?.result.ok === false ? headerLoad.result.error.message : 'no select skin';
+      gameplayLog.warn(`beatoraja select: ${reason}`);
+      this.setStatus(`Beatoraja select unavailable: ${reason}`);
+      return;
+    }
+    const defaultOption = buildDefaultSkinConfigOptions(headerLoad.result.header);
+    const skinLoad = loadBeatorajaSelectSkinFromBundle(bundle, { offset: 0, option: defaultOption });
+    if (!skinLoad || !skinLoad.result.ok || !skinLoad.result.skin) {
+      const reason = skinLoad?.result.ok === false ? skinLoad.result.error.message : 'no select skin';
+      gameplayLog.warn(`beatoraja select: ${reason}`);
+      this.setStatus(`Beatoraja select unavailable: ${reason}`);
+      return;
+    }
+
+    // Texture + font cache — same per-entry memoization as the gameplay path. The select skin lives
+    // at a different `entryPath` than `play_*.luaskin` so the caches are naturally segregated.
+    let textures = this.beatorajaTextureCachesByEntry.get(skinLoad.entry.entryPath);
+    if (textures === undefined) {
+      const sourceBundle = bundleBeatorajaSources({
+        files: bundle.files,
+        entryPath: skinLoad.entry.entryPath,
+        sources: (skinLoad.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+        filepathSchema: skinLoad.result.skin.filepath,
+      });
+      gameplayLog.info(
+        `beatoraja select source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${skinLoad.entry.entryPath})`,
+      );
+      for (const u of sourceBundle.unresolved) {
+        gameplayLog.warn(`beatoraja select unresolved source[${u.id}] '${u.path}': ${u.reason}`);
+      }
+      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
+      this.beatorajaTextureCachesByEntry.set(skinLoad.entry.entryPath, textures);
+    }
+    let fonts = this.beatorajaFontCachesByEntry.get(skinLoad.entry.entryPath);
+    if (fonts === undefined) {
+      const fontDeclarations = normalizeBeatorajaFonts(skinLoad.result.skin.font);
+      fonts = await loadBeatorajaFonts({
+        files: bundle.files,
+        entryPath: skinLoad.entry.entryPath,
+        fonts: fontDeclarations,
+      });
+      this.beatorajaFontCachesByEntry.set(skinLoad.entry.entryPath, fonts);
+    }
+
+    this.beatorajaSelectScene?.dispose();
+    this.beatorajaSelectScene = new PixiBeatorajaSelectScene({
+      skin: skinLoad.result.skin,
+      textures,
+      fonts,
+      skinConfig: { offset: 0, option: defaultOption },
+      songs: this.collection.songs,
+      // Restore the last cursor so coming back from gameplay lands on the same song.
+      initialIndex: this.beatorajaSelectIndex,
+      onSongPicked: (song) => {
+        // Cache the index using the picked song's identity — survives the scene tear-down.
+        this.beatorajaSelectIndex = this.collection.songs.indexOf(song);
+        // Same flow as the LR2 select view: route to decide → gameplay. The decide branch in
+        // `showDecide` already detects the beatoraja gameplay case and skips its splash.
+        void this.showDecide(song);
+      },
+      onExit: () => {
+        // ESC from the beatoraja select returns to the empty drop screen.
+        this.elements.shell.classList.add('empty');
+        void this.sceneHost.setScene(undefined);
+        this.beatorajaSelectScene?.dispose();
+        this.beatorajaSelectScene = undefined;
+      },
+    });
+    await this.sceneHost.setScene(this.beatorajaSelectScene);
+    this.setStatus(`Select (beatoraja): ${this.collection.songs.length} song(s)`);
+  }
+
   /** Tear down the active beatoraja gameplay view + its prep bundle. Idempotent. */
   private disposeBeatorajaGameplay(): void {
     this.beatorajaGameplayView?.dispose();
@@ -1726,12 +1823,25 @@ class PlayerWebDemoApp {
     await this.ensureHostMounted();
     this.gameplayView?.dispose();
     this.gameplayView = undefined;
+    this.disposeBeatorajaGameplay();
     this.resultView?.dispose();
     this.resultView = undefined;
     // Decide splash is cleared too — Escape from the splash should land back on the select scene rather than leave the
     // splash drawing over it.
     this.decideView?.dispose();
     this.decideView = undefined;
+    // Beatoraja select scene takes precedence when a beatoraja theme with a select skin is loaded.
+    // Falls through to the LR2 select path otherwise — same heuristic as `canPlaySongBeatoraja` for
+    // gameplay: opt-in when the theme covers the surface, fall back when it doesn't.
+    if (this.beatorajaTheme?.theme.selectSkin !== undefined && this.collection.songs.length > 0) {
+      // Hide / dispose the LR2 select view if it was up — only one select can own the scene host.
+      this.selectView?.setVisible(false);
+      await this.showBeatorajaSelect();
+      return;
+    }
+    // Same teardown for the beatoraja select scene if we're falling back to LR2 (theme dropped, etc.).
+    this.beatorajaSelectScene?.dispose();
+    this.beatorajaSelectScene = undefined;
     if (this.selectView) {
       // Push the latest theme assets onto the view BEFORE flipping it visible. Order matters — `setSelectBgm` no-ops
       // when the bytes haven't changed, so back-from-play is silent; on a fresh theme drop it stops the old loop, swaps

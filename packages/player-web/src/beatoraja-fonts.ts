@@ -9,7 +9,12 @@
 // document via `FontFace`, and surface the per-id `(font-family-name, status)` so the skin view can pick
 // the right family name when constructing each `Text` node.
 
-import { asLoadedBytes, loadAssetBytes, resolveBeatorajaPath, type BeatorajaSkinFileEntry } from '@be-music/beatoraja-skin';
+import {
+  asLoadedBytes,
+  loadAssetBytes,
+  resolveBeatorajaPath,
+  type BeatorajaSkinFileEntry,
+} from '@be-music/beatoraja-skin';
 import { logger } from './logger.ts';
 
 const log = logger('beatoraja-fonts');

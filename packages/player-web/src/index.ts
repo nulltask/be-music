@@ -13,6 +13,7 @@ export * from './beatoraja-fonts.ts';
 export * from './beatoraja-runtime-adapter.ts';
 export * from './pixi-beatoraja-bga.ts';
 export * from './pixi-beatoraja-gameplay.ts';
+export * from './pixi-beatoraja-select.ts';
 export * from './pixi-beatoraja-notes.ts';
 export * from './pixi-beatoraja-preview.ts';
 export * from './pixi-beatoraja-skin-view.ts';

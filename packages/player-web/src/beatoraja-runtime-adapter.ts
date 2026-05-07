@@ -295,10 +295,7 @@ export class BeatorajaRuntimeAdapter {
       // the loaded skin uses but the adapter doesn't yet wire.
       this.unresolvedNumberRefs.add(refOp);
       // eslint-disable-next-line no-console
-      console.log(
-        '[beatoraja-adapter] resolveNumberValue: ref not wired (returns 0)',
-        JSON.stringify({ ref: refOp }),
-      );
+      console.log('[beatoraja-adapter] resolveNumberValue: ref not wired (returns 0)', JSON.stringify({ ref: refOp }));
     }
     return value;
   }
