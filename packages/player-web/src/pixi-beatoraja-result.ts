@@ -131,6 +131,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
       },
       resolveJudgeGraphBars: (type) => this.resolveResultJudgeBars(type),
       resolveBpmGraphPoints: () => (this.chartBpmCurve.length > 0 ? this.chartBpmCurve : undefined),
+      resolveGaugeGraphPoints: () => this.resolveResultGaugePolyline(),
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
@@ -468,6 +469,21 @@ export class PixiBeatorajaResultScene implements PixiScene {
       default:
         return undefined;
     }
+  }
+
+  /**
+   * Build the gauge polyline for the result scene's `gaugegraph[]`. Maps `gaugeHistory`
+   * (sampled per-judge during the run) into normalized `{x, y}` points: `x = sample.progress`,
+   * `y = sample.value / 100` (gauge values arrive in 0..100 already). Returns `undefined` when
+   * no history is available — the renderer hides the graph in that case.
+   */
+  private resolveResultGaugePolyline(): ReadonlyArray<{ x: number; y: number }> | undefined {
+    const history = this.options.gaugeHistory;
+    if (history === undefined || history.length === 0) return undefined;
+    return history.map((sample) => ({
+      x: sample.progress,
+      y: Math.max(0, Math.min(1, sample.value / 100)),
+    }));
   }
 
   /**

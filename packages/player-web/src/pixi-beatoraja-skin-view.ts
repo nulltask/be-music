@@ -13,6 +13,7 @@ import {
   imageRefFrame,
   normalizeBeatorajaBpmGraphs,
   normalizeBeatorajaDestinations,
+  normalizeBeatorajaGaugeGraphs,
   normalizeBeatorajaJudgeGraphs,
   normalizeBeatorajaGauge,
   normalizeBeatorajaGraphs,
@@ -26,6 +27,7 @@ import {
   pickBeatorajaGaugeNode,
   type BeatorajaBpmGraphElement,
   type BeatorajaDestinationGroup,
+  type BeatorajaGaugeGraphElement,
   type BeatorajaJudgeGraphElement,
   type BeatorajaGaugeElement,
   type BeatorajaGraphElement,
@@ -146,6 +148,15 @@ export interface BeatorajaPlaySkinViewOptions {
    * Returning `undefined` or an array of all zeros hides the graph (no useful data to plot).
    */
   resolveJudgeGraphBars?: (type: number) => ReadonlyArray<number> | undefined;
+  /**
+   * Resolve the gauge curve as a polyline in `[0, 1]²`. Each `{x, y}` is a normalized point
+   * inside the gaugegraph's destination box (x = chart progress, y = gauge / 100). Result skins
+   * use this to plot the gauge over time after the run. The renderer maps these onto the dst
+   * rect with `y` inverted so a high gauge paints toward the top.
+   *
+   * Returning `undefined` or fewer than 2 points hides the graph.
+   */
+  resolveGaugeGraphPoints?: () => ReadonlyArray<{ x: number; y: number }> | undefined;
 }
 
 interface SpriteEntry {
@@ -251,6 +262,19 @@ interface JudgeGraphEntry {
   lastSignature: string;
 }
 
+interface GaugeGraphEntry {
+  kind: 'gaugegraph';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaGaugeGraphElement;
+  /**
+   * Pixi `Graphics` painting the gauge polyline. Cleared and re-stroked when the host's resolver
+   * returns a different number of points (= a new sample landed); same rebuild-on-change pattern
+   * as `polyline-graph` and `bpmgraph`.
+   */
+  graphics: Graphics;
+  lastPointCount: number;
+}
+
 interface SliderEntry {
   kind: 'slider';
   group: BeatorajaDestinationGroup;
@@ -316,6 +340,7 @@ type ViewEntry =
   | PolylineGraphEntry
   | BpmGraphEntry
   | JudgeGraphEntry
+  | GaugeGraphEntry
   | SliderEntry
   | ImagesetEntry
   | GaugeEntry;
@@ -350,6 +375,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveGaugePercent: () => number | undefined;
   private readonly resolveBpmGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveJudgeGraphBars: (type: number) => ReadonlyArray<number> | undefined;
+  private readonly resolveGaugeGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -376,6 +402,7 @@ export class BeatorajaPlaySkinView {
     this.resolveGaugePercent = options.resolveGaugePercent ?? (() => undefined);
     this.resolveBpmGraphPoints = options.resolveBpmGraphPoints ?? (() => undefined);
     this.resolveJudgeGraphBars = options.resolveJudgeGraphBars ?? (() => undefined);
+    this.resolveGaugeGraphPoints = options.resolveGaugeGraphPoints ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -459,6 +486,22 @@ export class BeatorajaPlaySkinView {
         judgeGraphById.set(judgeGraph.id, judgeGraph);
       }
     }
+    // `gaugegraph[]` — gauge polyline plotted across the destination box on the result scene.
+    // Same id-namespace contention as judgegraph; loses to every prior kind on collision.
+    const gaugeGraphById = new Map<BeatorajaImageId, BeatorajaGaugeGraphElement>();
+    for (const gaugeGraph of normalizeBeatorajaGaugeGraphs((options.skin as { gaugegraph?: unknown }).gaugegraph)) {
+      if (
+        !imageById.has(gaugeGraph.id) &&
+        !valueById.has(gaugeGraph.id) &&
+        !textById.has(gaugeGraph.id) &&
+        !graphById.has(gaugeGraph.id) &&
+        !sliderById.has(gaugeGraph.id) &&
+        !bpmGraphById.has(gaugeGraph.id) &&
+        !judgeGraphById.has(gaugeGraph.id)
+      ) {
+        gaugeGraphById.set(gaugeGraph.id, gaugeGraph);
+      }
+    }
     // `imageset[]` declarations — multi-state images (lane keybeams, bomb cycles) that flip between
     // sub-images based on a runtime ref op. Lowest precedence after every other element kind: a
     // direct `image[]` / `value[]` / `text[]` / `graph[]` / `slider[]` / `bpmgraph[]` /
@@ -472,7 +515,8 @@ export class BeatorajaPlaySkinView {
         !graphById.has(imageset.id) &&
         !sliderById.has(imageset.id) &&
         !bpmGraphById.has(imageset.id) &&
-        !judgeGraphById.has(imageset.id)
+        !judgeGraphById.has(imageset.id) &&
+        !gaugeGraphById.has(imageset.id)
       ) {
         imagesetById.set(imageset.id, imageset);
       }
@@ -490,6 +534,7 @@ export class BeatorajaPlaySkinView {
       !sliderById.has(gauge.id) &&
       !bpmGraphById.has(gauge.id) &&
       !judgeGraphById.has(gauge.id) &&
+      !gaugeGraphById.has(gauge.id) &&
       !imagesetById.has(gauge.id)
     ) {
       gaugeElement = gauge;
@@ -565,6 +610,11 @@ export class BeatorajaPlaySkinView {
         const judgeGraphElement = judgeGraphById.get(group.id);
         if (judgeGraphElement !== undefined) {
           this.entries.push(this.buildJudgeGraphEntry(group, judgeGraphElement));
+          continue;
+        }
+        const gaugeGraphElement = gaugeGraphById.get(group.id);
+        if (gaugeGraphElement !== undefined) {
+          this.entries.push(this.buildGaugeGraphEntry(group, gaugeGraphElement));
           continue;
         }
         const imagesetElement = imagesetById.get(group.id);
@@ -919,6 +969,14 @@ export class BeatorajaPlaySkinView {
     return { kind: 'judgegraph', group, element, graphics, lastSignature: '' };
   }
 
+  /** Build a gaugegraph entry — same Graphics-node + rebuild-on-change pattern as bpmgraph. */
+  private buildGaugeGraphEntry(group: BeatorajaDestinationGroup, element: BeatorajaGaugeGraphElement): GaugeGraphEntry {
+    const graphics = new Graphics();
+    graphics.alpha = 0;
+    this.container.addChild(graphics);
+    return { kind: 'gaugegraph', group, element, graphics, lastPointCount: -1 };
+  }
+
   /**
    * Re-sample every destination at `context.nowMs` and update the matching `Sprite` / `Text`. Call once per frame.
    */
@@ -951,6 +1009,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'judgegraph':
           this.updateJudgeGraphEntry(entry, props);
+          break;
+        case 'gaugegraph':
+          this.updateGaugeGraphEntry(entry, props);
           break;
         case 'slider':
           this.updateSliderEntry(entry, props);
@@ -1392,6 +1453,47 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Update a gaugegraph entry. Strokes the gauge polyline (`{x ∈ [0, 1], y ∈ [0, 1]}` points,
+   * y = `gauge / 100`) across the destination box; y is inverted so a high gauge paints toward
+   * the top of the box (matches beatoraja's reference "gauge climbs upward" convention).
+   *
+   * Hidden when:
+   *   - The destination's standard `props` say so (op gate, alpha 0)
+   *   - The resolver returned `undefined` or fewer than 2 points (no run history yet)
+   */
+  private updateGaugeGraphEntry(entry: GaugeGraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+    const graphics = entry.graphics;
+    graphics.visible = props.visible;
+    if (!props.visible) return;
+    const points = this.resolveGaugeGraphPoints();
+    if (points === undefined || points.length < 2) {
+      graphics.visible = false;
+      return;
+    }
+    if (entry.lastPointCount !== points.length) {
+      graphics.clear();
+      const first = points[0]!;
+      graphics.moveTo(first.x * props.width, (1 - first.y) * props.height);
+      for (let i = 1; i < points.length; i += 1) {
+        const p = points[i]!;
+        graphics.lineTo(p.x * props.width, (1 - p.y) * props.height);
+      }
+      // Reference theme tints gaugegraph per gauge type; we don't surface the player's gauge
+      // type to the resolver yet, so paint the line in the destination's tint and let authors
+      // pick the color via dst rgb. 2px stroke matches the polyline-graph and bpmgraph
+      // conventions.
+      graphics.stroke({ color: props.tint, width: 2, alpha: 1 });
+      entry.lastPointCount = points.length;
+    }
+    graphics.x = props.x;
+    graphics.y = props.y;
+    graphics.alpha = props.alpha;
+    graphics.tint = props.tint;
+    graphics.angle = props.angle;
+    graphics.blendMode = props.blendMode;
+  }
+
+  /**
    * Update a slider entry. Translates the sprite within the destination box by
    * `value * range` skin-pixels along its angle axis, leaving width / height at the source-rect
    * crop's natural size (sliders don't scale — they translate).
@@ -1617,6 +1719,9 @@ export class BeatorajaPlaySkinView {
           entry.graphics.destroy({ children: false, texture: false, textureSource: false });
           break;
         case 'judgegraph':
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          break;
+        case 'gaugegraph':
           entry.graphics.destroy({ children: false, texture: false, textureSource: false });
           break;
         case 'slider':
