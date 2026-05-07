@@ -197,8 +197,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.fitToStage();
     const elapsed = performance.now() - this.startMs;
     // Treat every timer as fired at scene start so the skin's load-fade-in / animations play out.
-    // This mirrors `BeatorajaPlaySkinPreviewScene` — there's no engine running so timer events come
-    // from the static "scene clock" only.
+    // No engine is running here so the only "clock" the skin can react to is this static scene
+    // tick — `getTimerStart() => 0` makes every authored timer fire from t=0.
     this.view.update({
       activeOps: this.baseOps(),
       getTimerStart: () => 0,

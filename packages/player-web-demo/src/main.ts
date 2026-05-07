@@ -32,14 +32,12 @@ import {
   type Lr2Skin,
 } from '@be-music/lr2-skin';
 import {
-  BeatorajaPlaySkinPreviewScene,
   PixiBeatorajaDecideScene,
   PixiBeatorajaGameplayView,
   PixiBeatorajaResultScene,
   PixiBeatorajaSelectScene,
   isBeatorajaSkinIndicator,
   loadBeatorajaFonts,
-  loadBeatorajaPlaySkinFromBundle,
   loadBeatorajaTexturesFromBundle,
   findBeatorajaThemeBgm,
   loadBeatorajaThemeFromFiles,
@@ -50,7 +48,6 @@ import {
   summarizeBeatorajaPlaySkins,
   type BeatorajaFontCache,
   type BeatorajaPlayableVariant,
-  type BeatorajaPlayVariant,
   type BeatorajaTextureCache,
   type BeatorajaThemeBgm,
   type BeatorajaThemeBundle,
@@ -642,14 +639,6 @@ interface DemoGuiState {
   openFolder: () => void;
   /** Triggered by clicking the GUI's record toggle. */
   record: () => void;
-  /**
-   * Beatoraja preview action. Opens the `BeatorajaPlaySkinPreviewScene` over whatever scene is currently mounted,
-   * showing the static skin painted on screen. Picks the skin variant matching the dropdown below; falls back to
-   * the first available variant if the chosen one is missing in the loaded theme.
-   */
-  beatorajaPreview: () => void;
-  /** Variant selection for the beatoraja preview. Limited to chart-shape variants the renderer wires today. */
-  beatorajaPreviewVariant: '7' | '5' | '14' | '10' | '9';
 }
 
 class PlayerWebDemoApp {
@@ -866,10 +855,6 @@ class PlayerWebDemoApp {
       record: () => {
         void this.toggleRecording();
       },
-      beatorajaPreview: () => {
-        void this.openBeatorajaPreview();
-      },
-      beatorajaPreviewVariant: '7',
     };
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
     // (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the runtime API.
@@ -1045,11 +1030,6 @@ class PlayerWebDemoApp {
     this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open Folder');
-    // Beatoraja-skin preview controls. The dropdown picks which key-count variant to mount; the button opens the
-    // preview scene over whatever's currently active. Only available after a beatoraja theme has been dropped.
-    const beatorajaFolder = gui.addFolder('Beatoraja preview').close();
-    beatorajaFolder.add(this.guiState, 'beatorajaPreviewVariant', ['7', '5', '14', '10', '9'] as const).name('Variant');
-    beatorajaFolder.add(this.guiState, 'beatorajaPreview').name('Open preview');
     // Per-scene skin picker. Stays empty (and collapsed) until a beatoraja theme is dropped —
     // `rebuildBeatorajaSkinPickers()` re-populates it on each load. Selecting a non-default entry
     // for a scene records it on `beatorajaSkinOverridesByType`; the next mount picks it up via
@@ -1467,13 +1447,11 @@ class PlayerWebDemoApp {
       const bundle = await loadBeatorajaThemeFromFiles(files, {
         onProgress: (progress) => this.applyLoadProgress(progress),
       });
-      // Drop the previous preview scene's container, but keep the texture caches alive (we don't destroy
-      // beatoraja textures in this session — see `beatorajaTextureCachesByEntry`'s field comment). The map
-      // entries pointing at the old theme's bytes are released by clearing the map; the underlying Pixi
-      // textures stay allocated until page reload, but they're unreachable from the renderer once the new
-      // theme replaces `beatorajaTheme`.
-      this.beatorajaPreviewScene?.dispose();
-      this.beatorajaPreviewScene = undefined;
+      // Drop the per-entry texture caches from the previous theme (we don't destroy individual
+      // beatoraja textures in this session — see `beatorajaTextureCachesByEntry`'s field comment).
+      // Clearing the map releases the only reference to the old theme's decoded bytes; the
+      // underlying Pixi textures stay allocated until page reload, but they're unreachable from
+      // the renderer once the new theme replaces `beatorajaTheme`.
       this.beatorajaTextureCachesByEntry.clear();
       this.beatorajaTheme = bundle;
       // Drop overrides from the previous theme — entryPaths from the old bundle will no longer
@@ -1524,108 +1502,6 @@ class PlayerWebDemoApp {
    * without re-parsing the TTF bytes.
    */
   private readonly beatorajaFontCachesByEntry = new Map<string, BeatorajaFontCache>();
-  private beatorajaPreviewScene: BeatorajaPlaySkinPreviewScene | undefined;
-
-  /**
-   * Build the static-paint preview for the currently-loaded beatoraja theme and mount it on the shared
-   * scene host. This is intentionally minimal — the engine isn't running, so judge / combo / score / lamp ops are
-   * all on their initial frames. Goal: show that the parser → renderer → on-screen pipeline reaches the screen for
-   * `play 5 / 7 / 9 / 10 / 14`. Future patches will swap this for a full gameplay scene that drives the same view
-   * from engine signals.
-   */
-  private async openBeatorajaPreview(): Promise<void> {
-    const bundle = this.beatorajaTheme;
-    if (!bundle) {
-      dropLog.warn('beatoraja preview: no theme loaded — drop a beatoraja theme folder first');
-      this.setStatus('Beatoraja preview: drop a beatoraja theme folder first');
-      return;
-    }
-    const desired = this.guiState.beatorajaPreviewVariant as BeatorajaPlayVariant;
-    // Two-pass evaluation. The header pass surfaces the skin's `property[]` schema; we then materialize each
-    // property's first item into a default `option` map and run the second pass with it. Without this, Lua skins
-    // whose `main()` branches on `skin_config.option["Play Side"]` (and friends) hit none of their elseif arms and
-    // emit an empty `source[]` — which is what we saw in the dev-server logs for play7.
-    const headerLoad = loadBeatorajaPlaySkinFromBundle(bundle, desired);
-    if (!headerLoad || !headerLoad.result.ok) {
-      const reason = headerLoad?.result.ok === false ? headerLoad.result.error.message : 'no skin available';
-      dropLog.warn(`beatoraja preview header: ${reason}`);
-      this.setStatus(`Beatoraja preview: ${reason}`);
-      return;
-    }
-    const defaultOption = buildDefaultSkinConfigOptions(headerLoad.result.header);
-    const loaded = loadBeatorajaPlaySkinFromBundle(bundle, desired, { offset: 0, option: defaultOption });
-    if (!loaded || !loaded.result.ok || !loaded.result.skin) {
-      const reason = loaded?.result.ok === false ? loaded.result.error.message : 'no skin available';
-      dropLog.warn(`beatoraja preview: ${reason}`);
-      this.setStatus(`Beatoraja preview: ${reason}`);
-      return;
-    }
-    dropLog.info(
-      `beatoraja preview default options: ${
-        Object.keys(defaultOption).length === 0
-          ? '(none)'
-          : Object.entries(defaultOption)
-              .map(([k, v]) => `${k}=${v}`)
-              .join(' / ')
-      }`,
-    );
-
-    // Reuse the texture cache for this entry path if we've already built one, otherwise decode the variant's
-    // `source[]` once and cache the result for the rest of the session. We never destroy these caches — see the
-    // comment on `beatorajaTextureCachesByEntry` for the WebGPU / WebGL2 reason.
-    let textures = this.beatorajaTextureCachesByEntry.get(loaded.entry.entryPath);
-    if (textures === undefined) {
-      const sourceBundle = bundleBeatorajaSources({
-        files: bundle.files,
-        entryPath: loaded.entry.entryPath,
-        sources: (loaded.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-      });
-      dropLog.info(
-        `beatoraja preview source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length}`,
-      );
-      for (const u of sourceBundle.unresolved) {
-        dropLog.warn(`beatoraja preview unresolved source[${u.id}] '${u.path}': ${u.reason}`);
-      }
-      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
-      this.beatorajaTextureCachesByEntry.set(loaded.entry.entryPath, textures);
-    } else {
-      dropLog.info(`beatoraja preview source bundle: reused cached textures for ${loaded.entry.entryPath}`);
-    }
-
-    await this.ensureHostMounted();
-
-    // Tear down the LR2 gameplay view if one is up — the preview scene takes over the host's stage.
-    this.gameplayView?.dispose();
-    this.gameplayView = undefined;
-
-    // Drop the previous preview scene's container without touching its textures (those are owned by the cached
-    // texture map and survive the scene teardown).
-    this.beatorajaPreviewScene?.dispose();
-    this.beatorajaPreviewScene = new BeatorajaPlaySkinPreviewScene({
-      skin: loaded.result.skin,
-      textures,
-      onExit: () => {
-        void this.closeBeatorajaPreview();
-      },
-      // Placeholder text resolver — without an engine running we don't have the real song / score / state
-      // strings, so we substitute a per-ref-op label so the preview still shows where each text destination
-      // would render. Engine integration replaces this with a snapshot of the runtime text state.
-      resolveTextContent: (refOp) => `<text:${refOp}>`,
-    });
-
-    await this.sceneHost.setScene(this.beatorajaPreviewScene);
-    this.setStatus(`Beatoraja preview: ${desired}-keys (${loaded.entry.entryPath}) — press ESC to exit`);
-  }
-
-  private async closeBeatorajaPreview(): Promise<void> {
-    await this.sceneHost.setScene(undefined);
-    // Only the preview scene's container is detached; the texture cache stays alive in
-    // `beatorajaTextureCachesByEntry` so the next preview can reuse it. See the field-level comment for the
-    // dispose-avoidance rationale.
-    this.beatorajaPreviewScene?.dispose();
-    this.beatorajaPreviewScene = undefined;
-    await this.showSelect();
-  }
 
   /**
    * Returns true when the loaded beatoraja theme has a play skin we can mount for this chart — directly
@@ -1729,8 +1605,7 @@ class PlayerWebDemoApp {
       return;
     }
     // Narrow the union by extracting the (now-known-defined) `skin` reference; subsequent uses
-    // type-check without `!` operators. Local `skinLoad` mirrors the legacy
-    // `loadBeatorajaPlaySkinFromBundle` shape so downstream destructuring stays unchanged.
+    // type-check without `!` operators.
     const skin = result.skin;
     const skinLoad = { entry: selectedEntry, skin };
 

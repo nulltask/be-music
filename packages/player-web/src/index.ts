@@ -19,7 +19,6 @@ export * from './pixi-beatoraja-markers.ts';
 export * from './pixi-beatoraja-result.ts';
 export * from './pixi-beatoraja-select.ts';
 export * from './pixi-beatoraja-notes.ts';
-export * from './pixi-beatoraja-preview.ts';
 export * from './pixi-beatoraja-skin-view.ts';
 export * from './pixi-decide.ts';
 export * from './pixi-gameplay.ts';
