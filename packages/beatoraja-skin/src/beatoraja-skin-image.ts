@@ -61,6 +61,21 @@ export interface BeatorajaImageElement {
    */
   act: number;
   /**
+   * Disappearance Y line in skin-pixel units (libGDX Y-UP — bigger = higher on screen). When set
+   * (and the destination's lift offset is wired), the renderer hides the portion of the sprite
+   * BELOW this line so the image looks like it's being clipped from the bottom up. Used by
+   * `hiddenCover` entries: the reference theme writes `disapearLine = 140` so the cover starts
+   * out drawn from y=140 upward, and the player's lift slider shifts that boundary further up.
+   * `-1` (the default) means "no clip" — the renderer uses the full source rect.
+   */
+  disapearLine: number;
+  /**
+   * When `true`, the renderer adds the resolved `OFFSET_LIFT.y` shift to {@link disapearLine}
+   * before clipping, so dragging the lift slider visually lifts the hidden-cover bottom edge.
+   * False (the default) leaves the disappearance line static.
+   */
+  isDisapearLineLinkLift: boolean;
+  /**
    * Op-codes that gate visibility (from `if`/`values` flattening). Empty array means always visible.
    * Negative codes mean "must NOT be active". See {@link NormalizedElement.ifCodes} on `beatoraja-skin-element.ts`.
    */
@@ -100,6 +115,8 @@ function normalizeOne(entry: NormalizedElement): BeatorajaImageElement | undefin
     ref: numberField(f, 'ref', 0),
     len: numberField(f, 'len', 0),
     act: numberField(f, 'act', 0),
+    disapearLine: numberField(f, 'disapearLine', -1),
+    isDisapearLineLinkLift: boolField(f, 'isDisapearLineLinkLift', false),
     ifCodes: entry.ifCodes,
   };
 }
@@ -107,6 +124,15 @@ function normalizeOne(entry: NormalizedElement): BeatorajaImageElement | undefin
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
   const v = record[key];
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function boolField(record: Readonly<Record<string, unknown>>, key: string, fallback: boolean): boolean {
+  const v = record[key];
+  if (typeof v === 'boolean') return v;
+  // Lua serializes booleans into JS booleans, but JSON skin authors sometimes write `1` / `0`
+  // for boolean fields. Honor both shapes — `1` truthy, `0` falsy, anything else falls back.
+  if (typeof v === 'number') return v !== 0;
+  return fallback;
 }
 
 function positiveIntField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {

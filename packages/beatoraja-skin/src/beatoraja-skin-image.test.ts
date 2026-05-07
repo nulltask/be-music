@@ -19,9 +19,41 @@ describe('normalizeBeatorajaImages', () => {
         ref: 0,
         len: 0,
         act: 0,
+        // disapearLine defaults to -1 (= no clip). Hidden-cover entries set this to a positive
+        // value (e.g., 140 in the play7 reference theme).
+        disapearLine: -1,
+        isDisapearLineLinkLift: false,
         ifCodes: [],
       },
     ]);
+  });
+
+  it('parses hiddenCover-style fields (disapearLine + isDisapearLineLinkLift) as numbers / booleans', () => {
+    const out = normalizeBeatorajaImages([
+      {
+        id: 'hidden-cover',
+        src: 12,
+        x: 0,
+        y: 0,
+        w: 390,
+        h: 580,
+        disapearLine: 140,
+        isDisapearLineLinkLift: true,
+      },
+    ]);
+    expect(out[0]?.disapearLine).toBe(140);
+    expect(out[0]?.isDisapearLineLinkLift).toBe(true);
+  });
+
+  it('coerces 1/0 into booleans for `isDisapearLineLinkLift` (JSON skin convention)', () => {
+    const truthy = normalizeBeatorajaImages([
+      { id: 'a', src: 0, x: 0, y: 0, w: 1, h: 1, disapearLine: 100, isDisapearLineLinkLift: 1 },
+    ]);
+    const falsy = normalizeBeatorajaImages([
+      { id: 'b', src: 0, x: 0, y: 0, w: 1, h: 1, disapearLine: 100, isDisapearLineLinkLift: 0 },
+    ]);
+    expect(truthy[0]?.isDisapearLineLinkLift).toBe(true);
+    expect(falsy[0]?.isDisapearLineLinkLift).toBe(false);
   });
 
   it('preserves authored animation / ref fields verbatim', () => {

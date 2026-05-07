@@ -157,6 +157,14 @@ interface SpriteEntry {
   sprite: Sprite;
   /** Frame index currently uploaded to `sprite.texture`. -1 means "no texture set yet". */
   currentFrame: number;
+  /**
+   * Last visible-height ratio painted by the disapearLine clip path. Hidden-cover entries (with
+   * `image.disapearLine >= 0`) shrink the source crop and the sprite height proportionally as
+   * the lift slider moves; this caches the last applied ratio so the per-frame crop only
+   * rebuilds when the value actually changes. `1` (the default) is "no clip" — the full source
+   * crop is used.
+   */
+  lastDisapearRatio: number;
 }
 
 interface ValueEntry {
@@ -593,7 +601,7 @@ export class BeatorajaPlaySkinView {
       const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
       this.container.addChild(sprite);
       applyTextureFilterMode(baseTexture, group.filter);
-      this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame });
+      this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame, lastDisapearRatio: 1 });
     }
 
     // Resolve the note-layer insert position. Anchor was captured during the destination loop;
@@ -982,9 +990,33 @@ export class BeatorajaPlaySkinView {
         ? imageRefFrame(entry.image, this.resolveRefValue(entry.image.ref))
         : imageFrameAt(entry.image, computeAnimationElapsed(entry, context));
 
-    if (frameIndex !== entry.currentFrame) {
+    // `disapearLine` clip — hidden-cover sprites trim the BOTTOM portion of the rect (skin Y-UP
+    // semantics: only `y > disapearLineAddedLift` is shown). In Pixi Y-DOWN that means the
+    // sprite's TOP edge stays at `props.y` and the bottom edge gets pulled up to a Pixi y of
+    // `canvasH - disapearLineAddedLift`. Without this, hidden-cover entries paint as plain
+    // sprites at their full rect — which is why the reference theme's hidden-cover used to
+    // appear at the bottom of the screen even when the lift slider was at home. The lift offset
+    // resolution depends on `OFFSET_LIFT` going through `context.resolveOffset`; until that's
+    // wired, lift defaults to 0 and the hidden-cover collapses to invisible (matching beatoraja's
+    // "lift hides the cover by default" behavior — the player has to drag to reveal it).
+    const disapearRatio = computeDisapearVisibleRatio(entry.image, props, this.height, context.resolveOffset);
+    if (disapearRatio === 0) {
+      // Whole rect is below the disappear line → nothing to paint.
+      sprite.visible = false;
+      return;
+    }
+    const visibleHeight = props.height * disapearRatio;
+
+    if (frameIndex !== entry.currentFrame || disapearRatio !== entry.lastDisapearRatio) {
       const cell = imageFrameRect(entry.image, frameIndex);
-      const cropped = createCroppedBeatorajaTexture(entry.baseTexture, cell);
+      // Crop the texture's TOP `disapearRatio` of the source cell to match the visible portion of
+      // the dst rect (trimming the bottom in skin Y-UP space).
+      const cropped = createCroppedBeatorajaTexture(entry.baseTexture, {
+        x: cell.x,
+        y: cell.y,
+        w: cell.w,
+        h: cell.h * disapearRatio,
+      });
       if (cropped === undefined) {
         // Cell width/height collapsed to 0 — hiding avoids the same null-source bind-group crash above.
         sprite.visible = false;
@@ -992,14 +1024,17 @@ export class BeatorajaPlaySkinView {
       }
       sprite.texture = cropped;
       entry.currentFrame = frameIndex;
+      entry.lastDisapearRatio = disapearRatio;
     }
 
     const center = centerToAnchor(entry.group.center);
     sprite.anchor.set(center.x, center.y);
     sprite.x = props.x + center.x * props.width;
-    sprite.y = props.y + center.y * props.height;
+    // Top edge is fixed at `props.y`; clip shrinks the bottom. Anchor offset uses `visibleHeight`
+    // so a center anchor lands at the visible mid-point, not the original rect's mid-point.
+    sprite.y = props.y + center.y * visibleHeight;
     sprite.width = props.width;
-    sprite.height = props.height;
+    sprite.height = visibleHeight;
     sprite.alpha = props.alpha;
     sprite.tint = props.tint;
     sprite.angle = props.angle;
@@ -1644,6 +1679,36 @@ function clampUnit01(v: number): number {
   if (v <= 0) return 0;
   if (v >= 1) return 1;
   return v;
+}
+
+/**
+ * Compute the visible-height ratio for a sprite carrying a `disapearLine` clip (= the hidden-
+ * cover behavior). Returns `1` when no clip is active (no disapearLine on the image OR the
+ * line sits above the rect's top edge), `0` when the rect is entirely below the line (totally
+ * hidden), and a fractional `[0, 1]` when the rect straddles the line. Mirrors `SkinHidden.java`'s
+ * draw-time logic: only `y_skin > disapearLineAddedLift` shows.
+ */
+function computeDisapearVisibleRatio(
+  image: BeatorajaImageElement,
+  props: { y: number; height: number },
+  canvasHeight: number,
+  resolveOffset: BeatorajaRenderContext['resolveOffset'],
+): number {
+  if (!(image.disapearLine >= 0)) return 1;
+  if (props.height <= 0) return 0;
+  // OFFSET_LIFT.y is the player's lift slider in skin-pixel Y-UP units. Without a wired
+  // resolver we treat lift as 0 — the reference theme's default (= cover fully tucked away).
+  // `OFFSET_LIFT` is property id `0` in beatoraja's `SkinProperty` constants; if a host wants
+  // to support lift dragging, it surfaces that id through `resolveOffset`.
+  const liftY = image.isDisapearLineLinkLift && resolveOffset !== undefined ? (resolveOffset(0)?.y ?? 0) : 0;
+  const lineSkin = image.disapearLine + liftY;
+  // Convert the skin-Y-UP line to a Pixi Y-DOWN coordinate so we can compare against the
+  // sprite's screen-space rect. `props.y` is the sprite's top in Pixi (smaller y = higher up);
+  // `props.y + props.height` is the bottom.
+  const linePixi = canvasHeight - lineSkin;
+  if (linePixi <= props.y) return 0; // Entire rect below the line — nothing visible.
+  if (linePixi >= props.y + props.height) return 1; // Line above the rect's bottom — full draw.
+  return (linePixi - props.y) / props.height;
 }
 
 /**
