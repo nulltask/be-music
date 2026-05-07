@@ -7,18 +7,22 @@
 // per fully-previewed theme, cleared on page reload.
 
 import { Texture } from 'pixi.js';
-import type { BeatorajaSourceAsset, BeatorajaSourceBundle } from '@be-music/beatoraja-skin';
+import type { BeatorajaSkinSourceId, BeatorajaSourceAsset, BeatorajaSourceBundle } from '@be-music/beatoraja-skin';
 import { logger } from './logger.ts';
 
 const log = logger('beatoraja-tex');
 
 export interface BeatorajaTextureCache {
-  /** Numeric `source[].id` → loaded Pixi Texture. Missing ids returned `undefined`. */
-  get(sourceId: number): Texture | undefined;
+  /**
+   * `source[].id` → loaded Pixi Texture. Missing ids return `undefined`. Beatoraja allows both
+   * numeric (`0`, `1`, …) and symbolic-string ids (`"bg"`, `"notes_src"`, …); both flavors are
+   * keyed verbatim, so `cache.get(7)` and `cache.get("bg")` look up different slots.
+   */
+  get(sourceId: BeatorajaSkinSourceId): Texture | undefined;
   /** All loaded textures. Useful for renderer warm-up steps that need to upload everything to the GPU. */
   values(): IterableIterator<Texture>;
   /** Per-id source path (canonical case-corrected key from the file map). */
-  pathOf(sourceId: number): string | undefined;
+  pathOf(sourceId: BeatorajaSkinSourceId): string | undefined;
 }
 
 /**
@@ -28,8 +32,8 @@ export interface BeatorajaTextureCache {
  * transparent texture.
  */
 export async function loadBeatorajaTexturesFromBundle(bundle: BeatorajaSourceBundle): Promise<BeatorajaTextureCache> {
-  const textures = new Map<number, Texture>();
-  const paths = new Map<number, string>();
+  const textures = new Map<BeatorajaSkinSourceId, Texture>();
+  const paths = new Map<BeatorajaSkinSourceId, string>();
 
   await Promise.all(
     bundle.assets.map(async (asset) => {

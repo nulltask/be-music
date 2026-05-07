@@ -10,7 +10,7 @@ function fakeTextureCache(idsWithTextures: ReadonlyArray<number>): BeatorajaText
   // tests we synthesize a tiny non-empty `TextureSource` so the view treats the entry as a real texture; we
   // never actually paint these to a GPU, so the bytes are irrelevant.
   const fakeSource = new TextureSource({ resource: new Uint8Array(4), width: 1, height: 1 });
-  const map = new Map<number, Texture>();
+  const map = new Map<number | string, Texture>();
   for (const id of idsWithTextures) {
     map.set(id, new Texture({ source: fakeSource }));
   }

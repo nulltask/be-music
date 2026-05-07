@@ -19,6 +19,7 @@ export type {
   BeatorajaSkinProperty,
   BeatorajaSkinPropertyItem,
   BeatorajaSkinSource,
+  BeatorajaSkinSourceId,
 } from './beatoraja-skin-types.ts';
 export {
   BEATORAJA_SKIN_TYPE,

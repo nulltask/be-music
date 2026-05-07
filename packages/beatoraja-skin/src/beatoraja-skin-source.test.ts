@@ -81,10 +81,61 @@ describe('bundleBeatorajaSources', () => {
     const bundle = bundleBeatorajaSources({
       files,
       entryPath: 'skin/default/play24.json',
-      sources: [{ id: 'not-a-number' }, { path: 42 }, {}] as ReadonlyArray<Readonly<Record<string, unknown>>>,
+      // `id: true` (boolean) and `id: ''` (empty string) are both invalid; numeric `Infinity`
+      // gets rejected by the finite-check; the missing-fields entries fail field validation.
+      sources: [
+        { id: true, path: 'system.png' },
+        { id: '', path: 'system.png' },
+        { id: Infinity, path: 'system.png' },
+        { path: 42 },
+        {},
+      ] as ReadonlyArray<Readonly<Record<string, unknown>>>,
     });
     expect(bundle.assets).toEqual([]);
     expect(bundle.unresolved).toEqual([]);
+  });
+
+  it('accepts symbolic-string ids (e.g. GdbG_Skin uses `"bg_src"` / `"notes_src"`)', () => {
+    // Lua-authored beatoraja skins frequently key sources by symbolic name instead of numeric
+    // id (the LR2-derived `0..N` convention). Earlier the bundler rejected these as malformed,
+    // which made any string-id-only skin (GdbG_Skin's play scene is the most prominent
+    // example) load zero textures.
+    const files = makeFiles([
+      ['skin/gdbg/play/play7main.lua', ''],
+      ['skin/gdbg/play/parts/system/button.png', 'btn-bytes'],
+      ['skin/gdbg/play/backgrounds.png', 'bg-bytes'],
+    ]);
+    const bundle = bundleBeatorajaSources({
+      files,
+      entryPath: 'skin/gdbg/play/play7main.lua',
+      sources: [
+        { id: 'bg_src', path: 'backgrounds.png' },
+        { id: 'button', path: 'parts/system/button.png' },
+      ],
+    });
+    expect(bundle.unresolved).toEqual([]);
+    expect(bundle.assets.map((a) => a.id)).toEqual(['bg_src', 'button']);
+    expect(bundle.byId.get('bg_src')?.path).toBe('skin/gdbg/play/backgrounds.png');
+    expect(bundle.byId.get('button')?.path).toBe('skin/gdbg/play/parts/system/button.png');
+  });
+
+  it('honors filepath[] user overrides for string-id sources too', () => {
+    // Same flow as the numeric-id override test, but the source is keyed by a string id (matches
+    // GdbG_Skin's play-scene sources). The filepath schema entry's `path` matches the source's
+    // `path`, so the user's `filepathOverrides` selection wins regardless of id type.
+    const files = makeFiles([
+      ['skin/gdbg/play/play7main.lua', ''],
+      ['skin/gdbg/play/parts/notes/a.png', 'notes-a'],
+      ['skin/gdbg/play/parts/notes/b.png', 'notes-b'],
+    ]);
+    const bundle = bundleBeatorajaSources({
+      files,
+      entryPath: 'skin/gdbg/play/play7main.lua',
+      sources: [{ id: 'notes_src', path: 'parts/notes/*.png' }],
+      filepathSchema: [{ name: 'ノーツ', path: 'parts/notes/*.png' }],
+      filepathOverrides: { ノーツ: 'parts/notes/b.png' },
+    });
+    expect(bundle.byId.get('notes_src')?.path).toBe('skin/gdbg/play/parts/notes/b.png');
   });
 
   it('reports deferred file handles as unresolved', () => {

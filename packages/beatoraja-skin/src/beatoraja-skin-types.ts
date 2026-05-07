@@ -91,9 +91,16 @@ export interface BeatorajaSkinFilepath {
   def?: string;
 }
 
-/** `source[]` entry — a numbered slot that other elements reference via `src`. */
+/**
+ * `source[]` entry — a slot that other elements reference via `src`. Beatoraja allows BOTH
+ * numeric ids (the LR2-style `0`, `1`, `2`, …) AND symbolic string ids (`"bg"`, `"notes_src"`,
+ * `"keybeam_src"`, …). The reference theme uses numeric ids; community skins like GdbG_Skin use
+ * string ids exclusively. Both shapes are valid in beatoraja's loader.
+ */
+export type BeatorajaSkinSourceId = number | string;
+
 export interface BeatorajaSkinSource {
-  id: number;
+  id: BeatorajaSkinSourceId;
   /** Path relative to the skin file. May contain a `*` glob (resolved against the actual file map at load time). */
   path: string;
 }

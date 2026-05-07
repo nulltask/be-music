@@ -9,11 +9,15 @@ import { dirname, normalizePath } from '@be-music/utils/core';
 import { asLoadedBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
 import type { BeatorajaSkinFileEntry } from './file-lookup.ts';
 import { resolveSourcePath } from './beatoraja-skin-resolver.ts';
-import type { BeatorajaSkinFilepath, BeatorajaSkinSource } from './beatoraja-skin-types.ts';
+import type {
+  BeatorajaSkinFilepath,
+  BeatorajaSkinSource,
+  BeatorajaSkinSourceId,
+} from './beatoraja-skin-types.ts';
 
 export interface BeatorajaSourceAsset {
-  /** Source slot index — matches `image[].src`. */
-  id: number;
+  /** Source slot id — matches `image[].src`. May be numeric or a symbolic string. */
+  id: BeatorajaSkinSourceId;
   /** Canonical case-corrected path inside the bundle. Useful for cache keys. */
   path: string;
   /** Decoded bytes, ready to feed into `Texture.from(...)` / `Image.decode`. */
@@ -21,7 +25,7 @@ export interface BeatorajaSourceAsset {
 }
 
 export interface BeatorajaUnresolvedSource {
-  id: number;
+  id: BeatorajaSkinSourceId;
   /** Original path string from `source[]` (preserved verbatim for diagnostics). */
   path: string;
   /** Why we couldn't resolve it. Populated for both "wildcard matched nothing" and "file not loadable". */
@@ -32,7 +36,7 @@ export interface BeatorajaSourceBundle {
   /** All resolved `id → asset` pairs, ordered by declaration order. */
   assets: BeatorajaSourceAsset[];
   /** Quick lookup keyed by source id. */
-  byId: Map<number, BeatorajaSourceAsset>;
+  byId: Map<BeatorajaSkinSourceId, BeatorajaSourceAsset>;
   /** Sources whose path didn't resolve. Renderers fall back to a transparent texture for these. */
   unresolved: BeatorajaUnresolvedSource[];
 }
@@ -58,7 +62,7 @@ export interface BundleBeatorajaSourcesOptions {
  */
 export function bundleBeatorajaSources(options: BundleBeatorajaSourcesOptions): BeatorajaSourceBundle {
   const assets: BeatorajaSourceAsset[] = [];
-  const byId = new Map<number, BeatorajaSourceAsset>();
+  const byId = new Map<BeatorajaSkinSourceId, BeatorajaSourceAsset>();
   const unresolved: BeatorajaUnresolvedSource[] = [];
 
   for (const raw of options.sources) {
@@ -105,7 +109,15 @@ export function bundleBeatorajaSources(options: BundleBeatorajaSourcesOptions): 
 function coerceSource(raw: Readonly<Record<string, unknown>>): BeatorajaSkinSource | undefined {
   const id = raw.id;
   const path = raw.path;
-  if (typeof id !== 'number' || !Number.isFinite(id)) return undefined;
+  // Accept both numeric ids (LR2-style `0..N`) and symbolic string ids (`"bg"`,
+  // `"notes_src"`). Beatoraja's loader treats them interchangeably — `image[].src` and
+  // `source[].id` carry whichever shape the skin author chose, and the renderer keys its
+  // texture cache by the literal value (number or string). Earlier versions of this coercer
+  // dropped string-id sources entirely, which made any community skin that exclusively used
+  // string ids (e.g. GdbG_Skin) load no textures at all.
+  if (typeof id !== 'number' && typeof id !== 'string') return undefined;
+  if (typeof id === 'number' && !Number.isFinite(id)) return undefined;
+  if (typeof id === 'string' && id.length === 0) return undefined;
   if (typeof path !== 'string' || path.length === 0) return undefined;
   return { id, path };
 }
@@ -124,7 +136,7 @@ export function listBeatorajaSourcePaths(
   sources: ReadonlyArray<Readonly<Record<string, unknown>>>,
   filepathSchema?: ReadonlyArray<BeatorajaSkinFilepath>,
   filepathOverrides?: Readonly<Record<string, string>>,
-): Array<{ id: number; path: string; resolved: string | undefined }> {
+): Array<{ id: BeatorajaSkinSourceId; path: string; resolved: string | undefined }> {
   const normalizedEntry = normalizePath(entryPath);
   const baseDir = dirname(normalizedEntry);
   void baseDir; // Reserved for future per-id diagnostics; resolveSourcePath already takes the entry path.
