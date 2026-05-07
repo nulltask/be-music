@@ -360,29 +360,33 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       this.bgaLayer?.update(this.currentFrame.currentSeconds, ctx, this.adapter.isPoorBgaActive());
     }
 
-    // Periodic state snapshot — every 300 frames (≈ 5 s at 60 fps). Direct `console.log` so devtools
-    // resolves the source link to this exact line rather than `logger.ts`.
+    // Periodic state snapshot — every 300 frames (≈ 5 s at 60 fps). `JSON.stringify` so the payload
+    // is selectable / copy-pasteable from devtools (vs the collapsible tree the bare object form
+    // would render). Direct `console.log` so the source link points at this exact line.
     this.debugFrameCounter += 1;
     if (this.debugFrameCounter % 300 === 0 && this.currentFrame) {
       const summary = this.currentFrame.summary;
       // eslint-disable-next-line no-console
-      console.log('[beatoraja-gameplay] frame snapshot', {
-        seconds: +this.currentFrame.currentSeconds.toFixed(2),
-        beat: +this.currentFrame.currentBeat.toFixed(2),
-        notesInFlight: this.currentFrame.notes.length,
-        score: summary.score,
-        judges: {
-          perfect: summary.perfect,
-          great: summary.great,
-          good: summary.good,
-          bad: summary.bad,
-          poor: summary.poor,
-        },
-        hiSpeed: this.hiSpeed,
-        activeOps: ctx.activeOps.size,
-        timers: this.adapter.timerSnapshot().length,
-        poorBga: this.adapter.isPoorBgaActive(),
-      });
+      console.log(
+        '[beatoraja-gameplay] frame snapshot',
+        JSON.stringify({
+          seconds: +this.currentFrame.currentSeconds.toFixed(2),
+          beat: +this.currentFrame.currentBeat.toFixed(2),
+          notesInFlight: this.currentFrame.notes.length,
+          score: summary.score,
+          judges: {
+            perfect: summary.perfect,
+            great: summary.great,
+            good: summary.good,
+            bad: summary.bad,
+            poor: summary.poor,
+          },
+          hiSpeed: this.hiSpeed,
+          activeOps: ctx.activeOps.size,
+          timers: this.adapter.timerSnapshot().length,
+          poorBga: this.adapter.isPoorBgaActive(),
+        }),
+      );
     }
   }
 

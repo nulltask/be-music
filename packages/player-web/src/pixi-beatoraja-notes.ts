@@ -106,11 +106,14 @@ export class BeatorajaNoteLayer {
       if (!this.firstFrameLogged && frame.notes.length > 0) {
         this.firstFrameLogged = true;
         // eslint-disable-next-line no-console
-        console.log('[beatoraja-notes] no lane rects matched activeOps', {
-          variant: this.variant,
-          dstBlocks: this.noteSection.dst.length,
-          activeOpsCount: activeOps.size,
-        });
+        console.log(
+          '[beatoraja-notes] no lane rects matched activeOps',
+          JSON.stringify({
+            variant: this.variant,
+            dstBlocks: this.noteSection.dst.length,
+            activeOpsCount: activeOps.size,
+          }),
+        );
       }
       return;
     }
@@ -122,14 +125,17 @@ export class BeatorajaNoteLayer {
     if (!this.firstFrameLogged) {
       this.firstFrameLogged = true;
       // eslint-disable-next-line no-console
-      console.log('[beatoraja-notes] first frame', {
-        variant: this.variant,
-        rects: rects.length,
-        judgementY,
-        pixelsPerBeat,
-        notes: frame.notes.length,
-        spriteImages: this.images.size,
-      });
+      console.log(
+        '[beatoraja-notes] first frame',
+        JSON.stringify({
+          variant: this.variant,
+          rects: rects.length,
+          judgementY,
+          pixelsPerBeat,
+          notes: frame.notes.length,
+          spriteImages: this.images.size,
+        }),
+      );
     }
 
     for (const note of frame.notes) {

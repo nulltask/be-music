@@ -122,7 +122,7 @@ export class BeatorajaRuntimeAdapter {
     const now = this.getNowMs();
     this.timerStartedAt.set(timerId, now);
     // eslint-disable-next-line no-console
-    console.log('[beatoraja-adapter] mark timer', { timer: timerId, atMs: now });
+    console.log('[beatoraja-adapter] mark timer', JSON.stringify({ timer: timerId, atMs: now }));
   }
 
   /** Stamp the `startinput` timer (prop.lua `startinput = 1`). Fires when the engine input bus is ready. */
@@ -161,7 +161,7 @@ export class BeatorajaRuntimeAdapter {
    */
   applyCommand(command: PlayerUiCommand): void {
     // eslint-disable-next-line no-console
-    console.log('[beatoraja-adapter] apply command', command);
+    console.log('[beatoraja-adapter] apply command', JSON.stringify(command));
     switch (command.kind) {
       case 'press-lane':
         this.startLaneKeyOnTimer(command.channel);
@@ -204,13 +204,16 @@ export class BeatorajaRuntimeAdapter {
     }
     this.markTimer(judgeTimerId(side));
     // eslint-disable-next-line no-console
-    console.log('[beatoraja-adapter] apply judge', {
-      side,
-      kind: state.judge,
-      op,
-      combo: state.combo,
-      channel: state.channel,
-    });
+    console.log(
+      '[beatoraja-adapter] apply judge',
+      JSON.stringify({
+        side,
+        kind: state.judge,
+        op,
+        combo: state.combo,
+        channel: state.channel,
+      }),
+    );
   }
 
   /** Read-only handle the skin view consumes per frame. The same object identity persists across calls. */
@@ -234,7 +237,10 @@ export class BeatorajaRuntimeAdapter {
     if (value === undefined && !this.unresolvedTextRefs.has(refOp)) {
       this.unresolvedTextRefs.add(refOp);
       // eslint-disable-next-line no-console
-      console.log('[beatoraja-adapter] resolveTextContent: ref not wired (returns empty)', { ref: refOp });
+      console.log(
+        '[beatoraja-adapter] resolveTextContent: ref not wired (returns empty)',
+        JSON.stringify({ ref: refOp }),
+      );
     }
     return value;
   }
@@ -289,7 +295,10 @@ export class BeatorajaRuntimeAdapter {
       // the loaded skin uses but the adapter doesn't yet wire.
       this.unresolvedNumberRefs.add(refOp);
       // eslint-disable-next-line no-console
-      console.log('[beatoraja-adapter] resolveNumberValue: ref not wired (returns 0)', { ref: refOp });
+      console.log(
+        '[beatoraja-adapter] resolveNumberValue: ref not wired (returns 0)',
+        JSON.stringify({ ref: refOp }),
+      );
     }
     return value;
   }

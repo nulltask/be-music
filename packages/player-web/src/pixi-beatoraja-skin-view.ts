@@ -186,8 +186,9 @@ export class BeatorajaPlaySkinView {
       this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame });
     }
 
-    // Per-skin construction summary. Direct `console.log` so devtools points at this exact line
-    // number when you click the source link (a `logger`-wrapped call would land in `logger.ts`).
+    // Per-skin construction summary. `JSON.stringify` so devtools shows the full payload as a
+    // selectable string (vs the collapsible tree `console.log(obj)` produces) — easier to copy
+    // out and paste into a JSON formatter / a bug report.
     const counts = this.entries.reduce(
       (acc, entry) => {
         acc[entry.kind] += 1;
@@ -197,14 +198,17 @@ export class BeatorajaPlaySkinView {
     );
     const skipped = groups.length - this.entries.length;
     // eslint-disable-next-line no-console
-    console.log('[beatoraja-view] skin view built', {
-      canvas: { w: this.width, h: this.height },
-      destinations: groups.length,
-      image: { declared: imageById.size, mounted: counts.image },
-      value: { declared: valueById.size, mounted: counts.value },
-      text: { declared: textById.size, mounted: counts.text },
-      skipped,
-    });
+    console.log(
+      '[beatoraja-view] skin view built',
+      JSON.stringify({
+        canvas: { w: this.width, h: this.height },
+        destinations: groups.length,
+        image: { declared: imageById.size, mounted: counts.image },
+        value: { declared: valueById.size, mounted: counts.value },
+        text: { declared: textById.size, mounted: counts.text },
+        skipped,
+      }),
+    );
     if (skipped > 0) {
       const unmatchedIds = groups
         .filter(
@@ -213,11 +217,14 @@ export class BeatorajaPlaySkinView {
         )
         .map((group) => group.id);
       // eslint-disable-next-line no-console
-      console.log('[beatoraja-view] skipped destinations (no matching image/value/text)', {
-        count: skipped,
-        ids: unmatchedIds.slice(0, 32),
-        truncated: unmatchedIds.length > 32,
-      });
+      console.log(
+        '[beatoraja-view] skipped destinations (no matching image/value/text)',
+        JSON.stringify({
+          count: skipped,
+          ids: unmatchedIds.slice(0, 32),
+          truncated: unmatchedIds.length > 32,
+        }),
+      );
     }
   }
 
