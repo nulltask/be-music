@@ -116,6 +116,14 @@ export class BeatorajaMarkerLayer {
         if (y < args.laneTopY - 24 || y > args.judgementY + 24) continue;
         const sprite = this.acquireSprite(used);
         sprite.texture = proto.texture!;
+        // Anchor at the rect's BOTTOM-LEFT so the marker's bottom edge sits exactly on the beat
+        // line. Authors write `{y = judge_y, h = 1}` (libGDX Y-UP) intending the marker's
+        // bottom-left to be at `judge_y` — the rect extends `h` pixels UP from there. In Pixi
+        // Y-DOWN that means the bottom edge lands at the beat's screen y, with the rect
+        // extending up by `h` pixels. With anchor `(0, 1)`, `sprite.y = beat_y` puts the
+        // bottom-left exactly at the beat — matching the note layer's "judgement = bottom of
+        // note" convention.
+        sprite.anchor.set(0, 1);
         sprite.x = proto.rect.x;
         sprite.y = y;
         sprite.width = proto.rect.w;
