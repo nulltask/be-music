@@ -92,8 +92,12 @@ export interface PixiBeatorajaGameplayViewOptions {
   // Lifecycle hooks
   /** Called when the user requests exit (ESC) — the host should navigate away after the engine resolves. */
   onExit?: () => void;
-  /** Called once the engine resolves with a chart-end summary. */
-  onComplete?: (summary: PlayerSummary) => void;
+  /**
+   * Called once the engine resolves with a chart-end summary. `maxCombo` is plumbed alongside
+   * because `PlayerSummary` doesn't carry it (it's a derived value the adapter latches from the
+   * judge-state stream); result scenes need both halves to render the final score block.
+   */
+  onComplete?: (summary: PlayerSummary, maxCombo: number) => void;
   /** Called if the engine rejects (interrupt or fatal) — the host can branch on the error type. */
   onError?: (error: unknown) => void;
 }
@@ -265,7 +269,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       .then((summary) => {
         this.engineSettled = true;
         if (!this.disposed) {
-          this.options.onComplete?.(summary);
+          this.options.onComplete?.(summary, this.adapter.getMaxCombo());
         }
         return summary;
       })

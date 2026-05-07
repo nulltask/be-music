@@ -595,6 +595,15 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
+   * Snapshot the running combo's all-time-high for this run. The result scene needs it because
+   * `PlayerSummary` doesn't carry max combo (only judge counts) — combo is derived from the
+   * judge-state stream, which the adapter aggregates here.
+   */
+  getMaxCombo(): number {
+    return this.maxCombo;
+  }
+
+  /**
    * Replace the option-driven base op set with `next` while preserving runtime ops (last-judge gate,
    * autoplay flag, loaded / now-loading state, etc.). Used when the user re-picks a skin's
    * `property[]` mid-chart — the visual chrome should reflect the new option immediately without
