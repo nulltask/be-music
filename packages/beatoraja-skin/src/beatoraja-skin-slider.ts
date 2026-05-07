@@ -69,15 +69,19 @@ function normalizeOne(entry: NormalizedElement): BeatorajaSliderElement | undefi
 
 function angleField(value: unknown): BeatorajaSliderDirection {
   if (typeof value === 'number') {
+    // Beatoraja's `angle` parity: 0/2 → vertical, 1/3 → horizontal (verified in
+    // `JSONSkinLoader.java` via `angle == 1 || angle == 3 ? width : height`). The reference
+    // theme's lanecover slider uses `angle = 2` and slides upward, confirming `2 = up`. This
+    // mapping is INVERTED from LR2's convention — beatoraja and LR2 disagree on this.
     switch (value) {
       case 0:
-        return 'right';
-      case 1:
-        return 'up';
-      case 2:
-        return 'left';
-      case 3:
         return 'down';
+      case 1:
+        return 'right';
+      case 2:
+        return 'up';
+      case 3:
+        return 'left';
       default:
         return 'right';
     }

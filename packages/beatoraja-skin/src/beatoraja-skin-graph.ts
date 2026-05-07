@@ -12,7 +12,10 @@
 //   - `(x, y, w, h)` — source-rect crop inside that source image
 //   - `type` — what runtime value drives the bar (rank by prop.lua-ish op codes; common values
 //     listed below)
-//   - `angle` — fill direction code (`0` = right, `1` = up, `2` = left, `3` = down)
+//   - `angle` — fill direction code. **Beatoraja's mapping differs from LR2:**
+//     `0` = down (Y+), `1` = right (X+, default), `2` = up (Y-), `3` = left (X-).
+//     `JSONSkinLoader` confirms via `angle == 1 || angle == 3` for the horizontal-axis check,
+//     and the default-skin lanecover slider (`angle = 2`) slides upward.
 //
 // Common `type` codes the renderer surfaces:
 //
@@ -84,18 +87,19 @@ function normalizeOne(entry: NormalizedElement): BeatorajaGraphElement | undefin
 
 function angleField(value: unknown): BeatorajaGraphFillDirection {
   if (typeof value === 'number') {
-    // Beatoraja uses LR2's numeric angle codes for fill direction. The values here mirror the
-    // documented LR2 convention; skins that author angles in degrees fall back to the default
-    // `'right'` since the LR2 codes (0–3) are the only canonical encoding.
+    // Beatoraja's `angle` parity: 0/2 → vertical, 1/3 → horizontal (verified in
+    // `JSONSkinLoader.java` via `angle == 1 || angle == 3 ? width : height`). This is INVERTED
+    // from LR2's convention — beatoraja's reference theme uses `angle = 2` for the lanecover
+    // slider that slides upward, confirming `2 = up`.
     switch (value) {
       case 0:
-        return 'right';
-      case 1:
-        return 'up';
-      case 2:
-        return 'left';
-      case 3:
         return 'down';
+      case 1:
+        return 'right';
+      case 2:
+        return 'up';
+      case 3:
+        return 'left';
       default:
         return 'right';
     }
