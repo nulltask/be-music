@@ -230,6 +230,21 @@ describe('BeatorajaRuntimeAdapter — getRenderContext', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — POOR BGA tracking', () => {
+  it('flips between trigger-poor-bga and clear-poor-bga commands', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    expect(adapter.isPoorBgaActive()).toBe(false);
+    adapter.applyCommand({ kind: 'trigger-poor-bga', seconds: 12 });
+    expect(adapter.isPoorBgaActive()).toBe(true);
+    adapter.applyCommand({ kind: 'clear-poor-bga' });
+    expect(adapter.isPoorBgaActive()).toBe(false);
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — reset', () => {
   it('clears runtime ops and timers but keeps the base option ops', () => {
     const clock = makeClock();

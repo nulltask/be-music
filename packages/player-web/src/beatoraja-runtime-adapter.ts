@@ -81,6 +81,11 @@ export class BeatorajaRuntimeAdapter {
     1: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
     2: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
   };
+  /**
+   * `true` between `trigger-poor-bga` and `clear-poor-bga` engine commands. The BGA layer reads this to
+   * pick from the chart's POOR cue list; without it, the base / layer cues drive the BGA.
+   */
+  private poorBgaActive = false;
 
   constructor(options: BeatorajaRuntimeAdapterOptions) {
     this.chartPlayVariant = options.chartPlayVariant;
@@ -155,12 +160,13 @@ export class BeatorajaRuntimeAdapter {
         this.startLaneLnHoldTimer(command.channel);
         break;
       case 'trigger-poor-bga':
-        // POOR-BGA window started. The skin's POOR overlay is gated on the per-side last-judge POOR op
-        // (which `applyJudgeCombo` sets when the engine publishes a POOR verdict). Nothing to do here
-        // for the skin-level state — the actual POOR BGA texture swap is handled in the BGA layer.
+        // POOR-BGA window started. Surfaced via `isPoorBgaActive()` so the BGA layer can swap to the
+        // chart's POOR cue list. The skin's POOR overlay (gated on the per-side last-judge POOR op) is
+        // handled separately by `applyJudgeCombo`.
+        this.poorBgaActive = true;
         break;
       case 'clear-poor-bga':
-        // Mirror of trigger-poor-bga; no skin-state change.
+        this.poorBgaActive = false;
         break;
     }
   }
@@ -240,6 +246,11 @@ export class BeatorajaRuntimeAdapter {
     return this.timerStartedAt.get(timerId);
   }
 
+  /** `true` between `trigger-poor-bga` and `clear-poor-bga` engine commands. */
+  isPoorBgaActive(): boolean {
+    return this.poorBgaActive;
+  }
+
   /**
    * Reset adapter state to the construction defaults. The host calls this on chart restart so per-chart
    * timers (judge / key-on / bomb) don't bleed into the new run while the static skin chrome continues
@@ -255,6 +266,7 @@ export class BeatorajaRuntimeAdapter {
     this.judgeState[1].lastFastSlowOp = undefined;
     this.judgeState[2].lastJudgeOp = undefined;
     this.judgeState[2].lastFastSlowOp = undefined;
+    this.poorBgaActive = false;
     this.frame = null;
   }
 

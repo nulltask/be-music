@@ -32,6 +32,9 @@ import type {
 import { buildBaseOpSet, normalizeBeatorajaNote } from '@be-music/beatoraja-skin';
 import type { BeatorajaPlayableVariant } from './beatoraja-theme.ts';
 import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
+import { BeatorajaBgaLayer } from './pixi-beatoraja-bga.ts';
+import type { BgaCue } from './pixi-gameplay-bga.ts';
+import type { Texture } from 'pixi.js';
 import type { PlayerOptions, PlayerSummary } from '@be-music/player/core/engine';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerStateSignals } from '@be-music/player/state-signals';
@@ -67,6 +70,16 @@ export interface PixiBeatorajaGameplayViewOptions {
   shouldSkipKey?: (event: KeyboardEvent) => boolean;
   engineOptions?: Omit<PlayerOptions, 'createAudioSession' | 'createInputRuntime' | 'createUiRuntime' | 'auto'>;
 
+  // BGA inputs (optional — omitting means no BGA paints, only the skin chrome + notes)
+  /**
+   * Pre-decoded BGA textures keyed by `#BMPxx` slot label. The host typically builds this once via the
+   * same `decodeBmpTextures` helper the LR2 path uses; the gameplay view treats it as read-only and
+   * never disposes the textures.
+   */
+  bgaTextures?: ReadonlyMap<string, Texture>;
+  /** Chart-time BGA cues from `buildBgaTimeline(chart, resolver)`. Required when {@link bgaTextures} is set. */
+  bgaCues?: { base: ReadonlyArray<BgaCue>; layer: ReadonlyArray<BgaCue>; poor: ReadonlyArray<BgaCue> };
+
   // Lifecycle hooks
   /** Called when the user requests exit (ESC) — the host should navigate away after the engine resolves. */
   onExit?: () => void;
@@ -80,6 +93,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   readonly root = new Container();
   private readonly view: BeatorajaPlaySkinView;
   private readonly noteLayer: BeatorajaNoteLayer;
+  private readonly bgaLayer: BeatorajaBgaLayer | undefined;
   private readonly adapter: BeatorajaRuntimeAdapter;
   private readonly options: PixiBeatorajaGameplayViewOptions;
   private currentFrame: PlayerUiFramePayload | null = null;
@@ -126,6 +140,19 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       variant: options.variant,
     });
     this.view.container.addChild(this.noteLayer.container);
+
+    // BGA layer mounts UNDER notes so scrolling notes draw on top of the BGA video; the LR2 default
+    // skin's chart-area chrome paints on top of both via its own destination z-order. Only construct
+    // the layer when both texture map and cues are supplied — otherwise the chart has no BGA / the
+    // host hasn't decoded the bitmaps yet, and skipping the sprite avoids a black rect over the chrome.
+    if (options.bgaTextures !== undefined && options.bgaCues !== undefined) {
+      this.bgaLayer = new BeatorajaBgaLayer({
+        skin: options.skin,
+        textures: options.bgaTextures,
+        cues: options.bgaCues,
+      });
+      this.view.container.addChildAt(this.bgaLayer.container, 0);
+    }
   }
 
   enter(host: PixiSceneHost): void {
@@ -216,6 +243,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     if (!this.engineSettled && this.inputSignals) {
       this.inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
     }
+    this.bgaLayer?.dispose();
     this.noteLayer.dispose();
     this.view.dispose();
     if (!this.root.destroyed) {
@@ -264,9 +292,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         if (Number.isFinite(hs) && hs > 0) this.hiSpeed = hs;
       }
     }
-    this.view.update(this.adapter.getRenderContext());
+    const ctx = this.adapter.getRenderContext();
+    this.view.update(ctx);
     if (this.currentFrame) {
-      this.noteLayer.update(this.currentFrame, this.hiSpeed, this.adapter.getRenderContext().activeOps);
+      this.noteLayer.update(this.currentFrame, this.hiSpeed, ctx.activeOps);
+      this.bgaLayer?.update(this.currentFrame.currentSeconds, ctx, this.adapter.isPoorBgaActive());
     }
   }
 
