@@ -621,6 +621,110 @@ describe('BeatorajaRuntimeAdapter — applyFrame rhythm timer', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — TIMER_FAILED (3)', () => {
+  function makeFrameWithGauge(currentBeat: number, gaugeCurrent: number | undefined) {
+    return {
+      currentBeat,
+      currentSeconds: 0,
+      totalSeconds: 100,
+      summary: {
+        score: 0,
+        total: 0,
+        perfect: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        fast: 0,
+        slow: 0,
+        exScore: 0,
+        gauge:
+          gaugeCurrent !== undefined
+            ? { current: gaugeCurrent, max: 100, clearThreshold: 80, initial: 20, effectiveTotal: 200, cleared: false }
+            : undefined,
+      } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload['summary'],
+      notes: [],
+    } as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload;
+  }
+
+  it('stamps TIMER_FAILED on the gauge crossing into 0 mid-play', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyFrame(makeFrameWithGauge(0, 50));
+    expect(adapter.getTimerStart(3)).toBeUndefined();
+    clock.advance(50);
+    adapter.applyFrame(makeFrameWithGauge(0.2, 20));
+    expect(adapter.getTimerStart(3)).toBeUndefined();
+    // 20 → 0 — instant fail moment.
+    clock.advance(50);
+    adapter.applyFrame(makeFrameWithGauge(0.4, 0));
+    expect(adapter.getTimerStart(3)).toBe(200);
+  });
+
+  it('does not re-stamp on subsequent zero-gauge frames (latch is sticky)', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyFrame(makeFrameWithGauge(0, 10));
+    clock.advance(50);
+    adapter.applyFrame(makeFrameWithGauge(0.2, 0));
+    expect(adapter.getTimerStart(3)).toBe(150);
+    clock.advance(50);
+    adapter.applyFrame(makeFrameWithGauge(0.4, 0));
+    expect(adapter.getTimerStart(3)).toBe(150);
+  });
+
+  it('does not stamp when the very first frame already shows gauge=0 (load-state baseline)', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyFrame(makeFrameWithGauge(0, 0));
+    expect(adapter.getTimerStart(3)).toBeUndefined();
+  });
+
+  it('markFailed stamps TIMER_FAILED when invoked (end-of-chart fail path)', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(2500);
+    adapter.markFailed();
+    expect(adapter.getTimerStart(3)).toBe(2500);
+  });
+
+  it('markFailed is idempotent — leaves the earlier in-frame stamp in place', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyFrame(makeFrameWithGauge(0, 10));
+    clock.advance(50);
+    adapter.applyFrame(makeFrameWithGauge(0.2, 0));
+    expect(adapter.getTimerStart(3)).toBe(150);
+    clock.advance(2000);
+    adapter.markFailed();
+    expect(adapter.getTimerStart(3)).toBe(150);
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — POOR BGA tracking', () => {
   it('flips between trigger-poor-bga and clear-poor-bga commands', () => {
     const adapter = new BeatorajaRuntimeAdapter({

@@ -352,6 +352,16 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     })
       .then((summary) => {
         this.engineSettled = true;
+        // End-of-chart fail declaration. Mid-play instant fail (HARD / DEATH gauge → 0) is
+        // already caught by the adapter's per-frame gauge-zero detector; calling `markFailed`
+        // here covers the GROOVE / EASY case where the chart finishes with the gauge below
+        // the clear threshold but never reached zero. The adapter's idempotent latch makes
+        // this safe to call regardless of which path tripped first — only the EARLIER stamp
+        // wins, so the failure animation runs from the fail moment, not the chart's last
+        // frame.
+        if (summary.gauge !== undefined && !summary.gauge.cleared) {
+          this.adapter.markFailed();
+        }
         if (!this.disposed) {
           this.options.onComplete?.(summary, this.adapter.getMaxCombo(), this.adapter.getResultHistory());
         }

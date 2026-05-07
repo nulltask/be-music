@@ -41,6 +41,7 @@ import {
   keyOnTimerId,
   lnHoldTimerId,
   TIMER_FADEOUT,
+  TIMER_FAILED,
   TIMER_PLAY,
   TIMER_READY,
   TIMER_RHYTHM,
@@ -234,6 +235,20 @@ export class BeatorajaRuntimeAdapter {
    */
   private lastFrameBeat: number | undefined;
   /**
+   * Last seen `summary.gauge.current` (latched on every `applyFrame`). Drives the `TIMER_FAILED`
+   * (= 3) instant-fail detection — when the gauge transitions from a positive value to 0 we
+   * stamp the timer so HARD / DEATH gauge skins replay their fail-flash animation. `undefined`
+   * before the first frame so the very first 0 reading doesn't count as a transition.
+   */
+  private lastFrameGauge: number | undefined;
+  /**
+   * Whether `markFailed` (or the in-frame gauge-zero detection) already stamped the
+   * `TIMER_FAILED` timer this run. Idempotent — multiple host-level calls (instant fail then
+   * end-of-chart fail re-declaration) leave the original stamp in place so authored fail
+   * animations don't restart and replay.
+   */
+  private failedTimerStamped = false;
+  /**
    * Per-ref "we already logged that this isn't wired" set. Keeps `resolveNumberValue` quiet on the hot
    * path while still surfacing each missing prop.lua num exactly once per session.
    */
@@ -395,6 +410,51 @@ export class BeatorajaRuntimeAdapter {
     if (this.fpsRingFilled < this.fpsRingMs.length) this.fpsRingFilled += 1;
     this.refreshDerivedOps(frame.summary);
     this.refreshRhythmTimer(frame.currentBeat);
+    this.refreshFailedTimer(frame.summary.gauge);
+  }
+
+  /**
+   * Detect a mid-play instant-fail moment and stamp `TIMER_FAILED` (= 3) accordingly. HARD and
+   * DEATH gauge variants drain to 0 mid-play; the moment the gauge crosses zero is the natural
+   * trigger for the skin's authored fail-flash animation. GROOVE / EASY gauges don't reach 0
+   * during play (they bottom out at 2 with the standard `min` floor) so this detection is a
+   * no-op for them — the explicit {@link markFailed} call from the host's chart-end handler is
+   * the right path for those.
+   *
+   * Stamps once per run (`failedTimerStamped` latch). A re-clear (gauge climbs back above 0)
+   * doesn't unset the latch — once you've failed on HARD, the skin's fail visual is supposed to
+   * persist, mirroring beatoraja's authored chrome.
+   */
+  private refreshFailedTimer(gauge: PlayerUiFramePayload['summary']['gauge']): void {
+    if (gauge === undefined || this.failedTimerStamped) {
+      this.lastFrameGauge = gauge?.current;
+      return;
+    }
+    const prev = this.lastFrameGauge;
+    this.lastFrameGauge = gauge.current;
+    // Only stamp on a transition into 0 — a frame that arrives at 0 right after construction
+    // (without a preceding positive reading) is treated as the load-state baseline rather than
+    // a fail event. Without this guard a chart that mounts the gameplay scene before the
+    // engine's first frame has populated the gauge would mis-fire the failed timer.
+    if (prev !== undefined && prev > 0 && gauge.current <= 0) {
+      this.markTimer(TIMER_FAILED);
+      this.failedTimerStamped = true;
+    }
+  }
+
+  /**
+   * Stamp `TIMER_FAILED` (prop.lua `failed = 3`) for an end-of-chart fail outcome. Hosts call
+   * this from the engine's `onComplete` handler when `summary.gauge.cleared` is `false` so the
+   * result-bound fadeout plays the failed variant of authored animations.
+   *
+   * Idempotent — repeat calls (or a host call after a mid-play HARD-gauge instant fail already
+   * stamped via {@link refreshFailedTimer}) leave the original stamp in place. The skin's fail
+   * animation runs from the FIRST stamp, which matches beatoraja's behavior.
+   */
+  markFailed(): void {
+    if (this.failedTimerStamped) return;
+    this.markTimer(TIMER_FAILED);
+    this.failedTimerStamped = true;
   }
 
   /**
@@ -1281,6 +1341,8 @@ export class BeatorajaRuntimeAdapter {
     this.maxCombo = 0;
     this.frame = null;
     this.lastFrameBeat = undefined;
+    this.lastFrameGauge = undefined;
+    this.failedTimerStamped = false;
   }
 
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
