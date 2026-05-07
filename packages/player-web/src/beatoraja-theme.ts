@@ -5,7 +5,9 @@
 // only wires the dropped-File array up to that pipeline and doesn't open any PixiJS resources.
 
 import {
+  asLoadedBytes,
   discoverBeatorajaTheme,
+  loadAssetBytes,
   loadBeatorajaSkin,
   pickBeatorajaPlaySkin,
   readFilesIntoBytesMap,
@@ -190,3 +192,72 @@ export type {
   BeatorajaSkinHeader,
   BeatorajaTheme,
 };
+
+/** BGM byte arrays discovered inside a beatoraja theme bundle. Each slot is a decoded WAV / OGG / MP3
+ * payload ready to hand to `AudioContext.decodeAudioData`. Slots are `undefined` when no matching
+ * file exists in the dropped tree.
+ */
+export interface BeatorajaThemeBgm {
+  /** Splash audio for the decide scene — typically `decide.wav` / `*decide*.wav`. */
+  decide?: Uint8Array;
+  /** Result-scene jingle for cleared runs — `clear.wav`. */
+  clear?: Uint8Array;
+  /** Result-scene jingle for failed runs — `fail.wav`. */
+  fail?: Uint8Array;
+  /** Generic result jingle — `result.wav`. Used when neither `clear` nor `fail` matched the outcome. */
+  result?: Uint8Array;
+}
+
+const BGM_AUDIO_EXTENSIONS = ['.wav', '.ogg', '.mp3', '.flac'] as const;
+
+/**
+ * Scan a beatoraja theme bundle for BGM files. The lookup is heuristic — beatoraja's spec doesn't
+ * pin BGM to a fixed path, so we search every entry in `bundle.files` for a basename matching one
+ * of the conventional names (`decide`, `clear`, `fail`, `result`) followed by a recognized audio
+ * extension. The first match wins per slot; subsequent matches are ignored.
+ *
+ * Returns synchronously when every matched entry was eagerly loaded. When some entries are
+ * deferred (lazy file readers), the helper awaits each `loadAssetBytes` call serially — each BGM
+ * is small enough (<1 MiB) that the latency is negligible, and serializing avoids spawning a
+ * concurrent read storm on the dropped-file IO layer.
+ */
+export async function findBeatorajaThemeBgm(bundle: BeatorajaThemeBundle): Promise<BeatorajaThemeBgm> {
+  // Track only the FIRST match per slot. The bundle is iterated in `Map` insertion order, which
+  // gives a stable result on re-runs.
+  const slots: Record<keyof BeatorajaThemeBgm, string | undefined> = {
+    decide: undefined,
+    clear: undefined,
+    fail: undefined,
+    result: undefined,
+  };
+  for (const path of bundle.files.keys()) {
+    const lower = path.toLowerCase();
+    if (!BGM_AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext))) continue;
+    // Match on the file's basename — `sound/decide.wav` and `<theme-root>/decide.wav` and
+    // `LR2files/Sound/<theme>/decide.wav` all count. Stricter matching (e.g. requiring a
+    // `sound/` prefix) would miss themes that use unusual layouts.
+    const slash = lower.lastIndexOf('/');
+    const base = slash >= 0 ? lower.slice(slash + 1) : lower;
+    // Strip the extension before comparing to the slot name. `decide.wav` → `decide`.
+    const dot = base.lastIndexOf('.');
+    const stem = dot >= 0 ? base.slice(0, dot) : base;
+    // Match exact stem first (most precise), then fall back to substring match (`decide_v2`,
+    // `clear_loop`, etc.). The exact match wins via the early `slots[k] === undefined` gate.
+    for (const slot of ['decide', 'clear', 'fail', 'result'] as const) {
+      if (slots[slot] !== undefined) continue;
+      if (stem === slot || stem.includes(slot)) {
+        slots[slot] = path;
+        break;
+      }
+    }
+  }
+  const out: BeatorajaThemeBgm = {};
+  for (const slot of ['decide', 'clear', 'fail', 'result'] as const) {
+    const path = slots[slot];
+    if (path === undefined) continue;
+    const entry = bundle.files.get(path);
+    const bytes = asLoadedBytes(entry) ?? (await loadAssetBytes(entry));
+    if (bytes !== undefined) out[slot] = bytes;
+  }
+  return out;
+}

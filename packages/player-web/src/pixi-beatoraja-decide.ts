@@ -47,6 +47,13 @@ export interface PixiBeatorajaDecideSceneOptions {
   /** Song the user picked; drives the text-ref resolver. Optional → text destinations render empty. */
   song?: BrowserSongEntry;
   /**
+   * Optional decide BGM bytes (WAV / OGG / MP3). Played once at scene `enter()`. The scene owns
+   * its own short-lived `AudioContext` so the splash audio doesn't bleed into other scenes; the
+   * context is closed in `dispose()`. Decoding is lazy on `enter()` — passing pre-decoded bytes
+   * here keeps the scene constructor cheap.
+   */
+  bgmBytes?: Uint8Array;
+  /**
    * Auto-advance window in ms. The scene fires `onContinue` automatically after this many ms have
    * elapsed since `enter()`, mirroring beatoraja's reference behavior of holding the splash for a
    * short consistent window before kicking off gameplay. Set to `0` to disable auto-advance (the
@@ -90,6 +97,13 @@ export class PixiBeatorajaDecideScene implements PixiScene {
   private advanced = false;
   private disposed = false;
   private cachedBaseOps: ReadonlySet<number> | undefined;
+  /**
+   * Scene-owned `AudioContext` for the decide BGM. Lazily created on first `enter()` when
+   * `bgmBytes` is set. Closed in `dispose()` so the OS audio output isn't held open longer than
+   * the scene's visible lifetime.
+   */
+  private audioContext: AudioContext | undefined;
+  private bgmSource: AudioBufferSourceNode | undefined;
 
   constructor(options: PixiBeatorajaDecideSceneOptions) {
     this.options = options;
@@ -135,6 +149,7 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', this.handleKeyDown);
     }
+    void this.startBgm();
   }
 
   exit(): void {
@@ -152,9 +167,65 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     if (this.disposed) return;
     this.disposed = true;
     this.exit();
+    this.stopBgm();
     this.view.dispose();
     if (!this.root.destroyed) {
       this.root.destroy({ children: false });
+    }
+  }
+
+  /**
+   * Decode + start the decide BGM. Lazy in two senses: the `AudioContext` is constructed on
+   * demand (so headless tests that never `enter()` the scene don't allocate one), and the bytes
+   * are decoded inline on first play (cheap for the few hundred KB BGM payloads — fast enough
+   * that the splash isn't visibly silent on the first frame).
+   *
+   * No-op when `bgmBytes` is unset, the browser doesn't expose `AudioContext`, or the decode
+   * fails. Failures are logged once and don't tear down the scene — the user still sees the
+   * splash, just silent.
+   */
+  private async startBgm(): Promise<void> {
+    const bytes = this.options.bgmBytes;
+    if (bytes === undefined) return;
+    if (typeof globalThis === 'undefined' || typeof globalThis.AudioContext === 'undefined') return;
+    try {
+      if (this.audioContext === undefined) {
+        this.audioContext = new globalThis.AudioContext();
+      }
+      const ctx = this.audioContext;
+      // The user just confirmed a song pick — that gesture should be enough to satisfy autoplay
+      // policy. Ignore resume failures (they happen in tests / iframe sandboxes); the rest of
+      // the scene still works without sound.
+      void ctx.resume().catch(() => undefined);
+      const buffer = await ctx.decodeAudioData(bytes.slice().buffer);
+      if (this.disposed) return;
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start();
+      this.bgmSource = source;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[beatoraja-decide] bgm playback failed', error);
+    }
+  }
+
+  /** Halt + tear down the decide BGM. Idempotent; safe to call before `startBgm` ever ran. */
+  private stopBgm(): void {
+    if (this.bgmSource !== undefined) {
+      try {
+        this.bgmSource.stop();
+      } catch {
+        /* already stopped — ignore */
+      }
+      this.bgmSource.disconnect();
+      this.bgmSource = undefined;
+    }
+    if (this.audioContext !== undefined) {
+      // Closing the context is async but we don't await — the OS resource cleanup happens
+      // on its own schedule and we don't block the scene's tear-down on it.
+      void this.audioContext.close().catch(() => undefined);
+      this.audioContext = undefined;
     }
   }
 

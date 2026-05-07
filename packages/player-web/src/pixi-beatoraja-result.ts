@@ -64,6 +64,12 @@ export interface PixiBeatorajaResultSceneOptions {
    * observed before it resets on a break verdict.
    */
   maxCombo: number;
+  /**
+   * Optional result BGM bytes (WAV / OGG / MP3). The host typically picks between `clear.wav` /
+   * `fail.wav` / generic `result.wav` based on the run's outcome before passing it here. Played
+   * once at scene `enter()` through a scene-owned `AudioContext` (closed in `dispose()`).
+   */
+  bgmBytes?: Uint8Array;
   /** Fired exactly once when the user dismisses the result (Enter / Space / Escape). */
   onContinue?: () => void;
 }
@@ -84,6 +90,9 @@ export class PixiBeatorajaResultScene implements PixiScene {
   private dismissed = false;
   private disposed = false;
   private cachedBaseOps: ReadonlySet<number> | undefined;
+  /** Scene-owned `AudioContext` for the result jingle. Closed in `dispose()`. */
+  private audioContext: AudioContext | undefined;
+  private bgmSource: AudioBufferSourceNode | undefined;
 
   constructor(options: PixiBeatorajaResultSceneOptions) {
     this.options = options;
@@ -132,6 +141,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', this.handleKeyDown);
     }
+    void this.startBgm();
   }
 
   exit(): void {
@@ -149,9 +159,54 @@ export class PixiBeatorajaResultScene implements PixiScene {
     if (this.disposed) return;
     this.disposed = true;
     this.exit();
+    this.stopBgm();
     this.view.dispose();
     if (!this.root.destroyed) {
       this.root.destroy({ children: false });
+    }
+  }
+
+  /**
+   * Decode + start the result BGM. Same lazy-init pattern as the decide scene's `startBgm`. The
+   * jingle plays once (no loop) — beatoraja's result audio is typically a single-play fanfare,
+   * not a looping background track.
+   */
+  private async startBgm(): Promise<void> {
+    const bytes = this.options.bgmBytes;
+    if (bytes === undefined) return;
+    if (typeof globalThis === 'undefined' || typeof globalThis.AudioContext === 'undefined') return;
+    try {
+      if (this.audioContext === undefined) {
+        this.audioContext = new globalThis.AudioContext();
+      }
+      const ctx = this.audioContext;
+      void ctx.resume().catch(() => undefined);
+      const buffer = await ctx.decodeAudioData(bytes.slice().buffer);
+      if (this.disposed) return;
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start();
+      this.bgmSource = source;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[beatoraja-result] bgm playback failed', error);
+    }
+  }
+
+  private stopBgm(): void {
+    if (this.bgmSource !== undefined) {
+      try {
+        this.bgmSource.stop();
+      } catch {
+        /* already stopped */
+      }
+      this.bgmSource.disconnect();
+      this.bgmSource = undefined;
+    }
+    if (this.audioContext !== undefined) {
+      void this.audioContext.close().catch(() => undefined);
+      this.audioContext = undefined;
     }
   }
 

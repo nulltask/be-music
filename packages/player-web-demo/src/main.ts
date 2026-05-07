@@ -41,6 +41,7 @@ import {
   loadBeatorajaFonts,
   loadBeatorajaPlaySkinFromBundle,
   loadBeatorajaTexturesFromBundle,
+  findBeatorajaThemeBgm,
   loadBeatorajaThemeFromFiles,
   pickBeatorajaPlayableSkinVariant,
   pickBeatorajaPlayableVariant,
@@ -51,6 +52,7 @@ import {
   type BeatorajaPlayableVariant,
   type BeatorajaPlayVariant,
   type BeatorajaTextureCache,
+  type BeatorajaThemeBgm,
   type BeatorajaThemeBundle,
   type PreparedBeatorajaGameplayChart,
 } from '@be-music/player-web';
@@ -675,6 +677,13 @@ class PlayerWebDemoApp {
    * the parser path stays exercised end-to-end.
    */
   private beatorajaTheme: BeatorajaThemeBundle | undefined;
+  /**
+   * BGM bytes discovered inside the loaded beatoraja theme bundle (`decide.wav` / `clear.wav` /
+   * `fail.wav` / `result.wav`). Populated alongside `beatorajaTheme` after a successful drop.
+   * The decide / result scenes consume these directly — no separate caching layer needed since
+   * decoding happens lazily inside each scene's audio context.
+   */
+  private beatorajaThemeBgm: BeatorajaThemeBgm = {};
   /**
    * Loop-playable BGM bytes for the song-select scene (`LR2files/Bgm/<theme>/select.wav` from the dropped theme).
    * Forwarded to `PixiSongSelectView` via the constructor option on first mount and via `setSelectBgm` on subsequent
@@ -1432,6 +1441,10 @@ class PlayerWebDemoApp {
       this.beatorajaPreviewScene = undefined;
       this.beatorajaTextureCachesByEntry.clear();
       this.beatorajaTheme = bundle;
+      // Scan the dropped bundle for decide / clear / fail / result BGM. Heuristic by basename —
+      // see `findBeatorajaThemeBgm` for the rules. Awaited because some entries are read lazily;
+      // the load is small (<1 MiB) and serialized so it doesn't add visible latency.
+      this.beatorajaThemeBgm = await findBeatorajaThemeBgm(bundle);
       const summary = summarizeBeatorajaPlaySkins(bundle.theme.playSkins) || 'none';
       const sceneSummary = [
         bundle.theme.selectSkin ? 'select' : null,
@@ -2117,6 +2130,7 @@ class PlayerWebDemoApp {
       fonts,
       skinConfig: config,
       song,
+      bgmBytes: this.beatorajaThemeBgm.decide,
       onContinue: () =>
         advance(() => {
           // Drop the decide scene first so the gameplay scene gets a clean stage. `playSongBeatoraja`
@@ -2215,6 +2229,12 @@ class PlayerWebDemoApp {
       song,
       summary,
       maxCombo,
+      // Pick the outcome-specific jingle when one was discovered, falling back to the generic
+      // `result` slot. Beatoraja themes that ship a single result BGM authoredit as `result.*`,
+      // while themes that distinguish clear / fail (most reference themes) ship dedicated tracks.
+      bgmBytes:
+        ((summary.gauge?.cleared ?? false) ? this.beatorajaThemeBgm.clear : this.beatorajaThemeBgm.fail) ??
+        this.beatorajaThemeBgm.result,
       onContinue: () => {
         if (dismissed) return;
         dismissed = true;
