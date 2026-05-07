@@ -2209,6 +2209,7 @@ class PlayerWebDemoApp {
     history: {
       scoreHistory: ReadonlyArray<{ progress: number; exScore: number }>;
       gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
+      timingHistory: ReadonlyArray<{ deltaMs: number; kind: string }>;
     },
   ): Promise<boolean> {
     const bundle = this.beatorajaTheme;
@@ -2282,6 +2283,7 @@ class PlayerWebDemoApp {
       maxCombo,
       scoreHistory: history.scoreHistory,
       gaugeHistory: history.gaugeHistory,
+      timingHistory: history.timingHistory,
       // Pick the outcome-specific jingle when one was discovered, falling back to the generic
       // `result` slot. Beatoraja themes that ship a single result BGM authoredit as `result.*`,
       // while themes that distinguish clear / fail (most reference themes) ship dedicated tracks.

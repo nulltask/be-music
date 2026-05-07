@@ -15,6 +15,7 @@ import {
   normalizeBeatorajaDestinations,
   normalizeBeatorajaGaugeGraphs,
   normalizeBeatorajaJudgeGraphs,
+  normalizeBeatorajaTimingDistributionGraphs,
   normalizeBeatorajaTimingVisualizers,
   normalizeBeatorajaGauge,
   normalizeBeatorajaGraphs,
@@ -30,6 +31,7 @@ import {
   type BeatorajaDestinationGroup,
   type BeatorajaGaugeGraphElement,
   type BeatorajaJudgeGraphElement,
+  type BeatorajaTimingDistributionGraphElement,
   type BeatorajaTimingVisualizerElement,
   type BeatorajaGaugeElement,
   type BeatorajaGraphElement,
@@ -167,6 +169,14 @@ export interface BeatorajaPlaySkinViewOptions {
    * kind. Empty array hides the visualizer.
    */
   resolveTimingSamples?: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
+  /**
+   * Resolve the FULL run's timing samples for the `timingdistributiongraph[]` element. Same
+   * shape as {@link resolveTimingSamples} but returns every judgement, not just the live ring.
+   * The renderer bins these into a per-ms histogram and overlays optional average / std-dev
+   * guides. Used by the result scene; the play scene typically returns `undefined` (the
+   * histogram is meant for post-game review).
+   */
+  resolveTimingDistribution?: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
 }
 
 interface SpriteEntry {
@@ -299,6 +309,19 @@ interface TimingVisualizerEntry {
   lastSignature: string;
 }
 
+interface TimingDistributionEntry {
+  kind: 'timingdistribution';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaTimingDistributionGraphElement;
+  /**
+   * Pixi `Graphics` painting the per-ms histogram + optional average / std-dev overlays.
+   * Re-stroked whenever the sample count changes — typically a static result-scene paint.
+   */
+  graphics: Graphics;
+  /** Cached sample-count signature so per-frame stroke is skipped after first paint. */
+  lastSampleCount: number;
+}
+
 interface SliderEntry {
   kind: 'slider';
   group: BeatorajaDestinationGroup;
@@ -366,6 +389,7 @@ type ViewEntry =
   | JudgeGraphEntry
   | GaugeGraphEntry
   | TimingVisualizerEntry
+  | TimingDistributionEntry
   | SliderEntry
   | ImagesetEntry
   | GaugeEntry;
@@ -402,6 +426,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveJudgeGraphBars: (type: number) => ReadonlyArray<number> | undefined;
   private readonly resolveGaugeGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveTimingSamples: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
+  private readonly resolveTimingDistribution: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -430,6 +455,7 @@ export class BeatorajaPlaySkinView {
     this.resolveJudgeGraphBars = options.resolveJudgeGraphBars ?? (() => undefined);
     this.resolveGaugeGraphPoints = options.resolveGaugeGraphPoints ?? (() => undefined);
     this.resolveTimingSamples = options.resolveTimingSamples ?? (() => undefined);
+    this.resolveTimingDistribution = options.resolveTimingDistribution ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -549,6 +575,26 @@ export class BeatorajaPlaySkinView {
         timingVisualizerById.set(tv.id, tv);
       }
     }
+    // `timingdistributiongraph[]` — full-run timing histogram plotted across the destination box
+    // on the result scene. Same precedence as timingvisualizer + loses to it on collision.
+    const timingDistributionById = new Map<BeatorajaImageId, BeatorajaTimingDistributionGraphElement>();
+    for (const tdg of normalizeBeatorajaTimingDistributionGraphs(
+      (options.skin as { timingdistributiongraph?: unknown }).timingdistributiongraph,
+    )) {
+      if (
+        !imageById.has(tdg.id) &&
+        !valueById.has(tdg.id) &&
+        !textById.has(tdg.id) &&
+        !graphById.has(tdg.id) &&
+        !sliderById.has(tdg.id) &&
+        !bpmGraphById.has(tdg.id) &&
+        !judgeGraphById.has(tdg.id) &&
+        !gaugeGraphById.has(tdg.id) &&
+        !timingVisualizerById.has(tdg.id)
+      ) {
+        timingDistributionById.set(tdg.id, tdg);
+      }
+    }
     // `imageset[]` declarations — multi-state images (lane keybeams, bomb cycles) that flip between
     // sub-images based on a runtime ref op. Lowest precedence after every other element kind: a
     // direct `image[]` / `value[]` / `text[]` / `graph[]` / `slider[]` / `bpmgraph[]` /
@@ -564,7 +610,8 @@ export class BeatorajaPlaySkinView {
         !bpmGraphById.has(imageset.id) &&
         !judgeGraphById.has(imageset.id) &&
         !gaugeGraphById.has(imageset.id) &&
-        !timingVisualizerById.has(imageset.id)
+        !timingVisualizerById.has(imageset.id) &&
+        !timingDistributionById.has(imageset.id)
       ) {
         imagesetById.set(imageset.id, imageset);
       }
@@ -584,6 +631,7 @@ export class BeatorajaPlaySkinView {
       !judgeGraphById.has(gauge.id) &&
       !gaugeGraphById.has(gauge.id) &&
       !timingVisualizerById.has(gauge.id) &&
+      !timingDistributionById.has(gauge.id) &&
       !imagesetById.has(gauge.id)
     ) {
       gaugeElement = gauge;
@@ -669,6 +717,11 @@ export class BeatorajaPlaySkinView {
         const timingElement = timingVisualizerById.get(group.id);
         if (timingElement !== undefined) {
           this.entries.push(this.buildTimingVisualizerEntry(group, timingElement));
+          continue;
+        }
+        const tdgElement = timingDistributionById.get(group.id);
+        if (tdgElement !== undefined) {
+          this.entries.push(this.buildTimingDistributionEntry(group, tdgElement));
           continue;
         }
         const imagesetElement = imagesetById.get(group.id);
@@ -1042,6 +1095,17 @@ export class BeatorajaPlaySkinView {
     return { kind: 'timingvisualizer', group, element, graphics, lastSignature: '' };
   }
 
+  /** Build a timingdistributiongraph entry — same Graphics-node + rebuild-on-change pattern. */
+  private buildTimingDistributionEntry(
+    group: BeatorajaDestinationGroup,
+    element: BeatorajaTimingDistributionGraphElement,
+  ): TimingDistributionEntry {
+    const graphics = new Graphics();
+    graphics.alpha = 0;
+    this.container.addChild(graphics);
+    return { kind: 'timingdistribution', group, element, graphics, lastSampleCount: -1 };
+  }
+
   /**
    * Re-sample every destination at `context.nowMs` and update the matching `Sprite` / `Text`. Call once per frame.
    */
@@ -1080,6 +1144,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'timingvisualizer':
           this.updateTimingVisualizerEntry(entry, props);
+          break;
+        case 'timingdistribution':
+          this.updateTimingDistributionEntry(entry, props);
           break;
         case 'slider':
           this.updateSliderEntry(entry, props);
@@ -1623,6 +1690,102 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Update a timingdistribution entry. Bins every judgement's signed delta into a per-ms
+   * histogram across the destination box (one bar per ms bucket; bar height ∝ count). Each bar
+   * is colored by the most-recent judgement kind that landed at that bucket — a rough but
+   * informative cue. Optional average-line and stddev-band overlays draw on top.
+   *
+   * Hidden when:
+   *   - The destination's standard `props` say so
+   *   - The resolver returned `undefined` / fewer than 2 samples (no useful distribution)
+   */
+  private updateTimingDistributionEntry(
+    entry: TimingDistributionEntry,
+    props: ReturnType<typeof destinationToSpriteProps>,
+  ): void {
+    const graphics = entry.graphics;
+    graphics.visible = props.visible;
+    if (!props.visible) return;
+    const samples = this.resolveTimingDistribution();
+    if (samples === undefined || samples.length < 2) {
+      graphics.visible = false;
+      return;
+    }
+    if (entry.lastSampleCount !== samples.length) {
+      graphics.clear();
+      // Bin samples by ms bucket. We span the destination box from −halfWidthMs..+halfWidthMs;
+      // pick a half-width that covers the most-extreme samples (clipped to a sensible cap so
+      // a single outlier doesn't squish the visualization). 200ms covers the full BAD window.
+      let extreme = 0;
+      for (const s of samples) {
+        const abs = Math.abs(s.deltaMs);
+        if (abs > extreme) extreme = abs;
+      }
+      const halfWidthMs = Math.max(50, Math.min(200, Math.ceil(extreme)));
+      const binCount = halfWidthMs * 2 + 1; // one bin per ms, inclusive of 0
+      const counts = new Int32Array(binCount);
+      const lastKindByBin: Array<string | undefined> = Array.from({ length: binCount });
+      let sum = 0;
+      let sumSq = 0;
+      for (const s of samples) {
+        const idx = Math.round(s.deltaMs) + halfWidthMs;
+        if (idx < 0 || idx >= binCount) continue;
+        counts[idx]! += 1;
+        lastKindByBin[idx] = s.kind;
+        sum += s.deltaMs;
+        sumSq += s.deltaMs * s.deltaMs;
+      }
+      // Bar dimensions. `lineWidth` from the skin (or fallback to 1px / bin) governs bar
+      // thickness; the renderer never draws bars wider than `props.width / binCount` so the
+      // histogram fits.
+      const maxBarWidth = props.width / binCount;
+      const barWidth = Math.max(1, Math.min(maxBarWidth, entry.element.lineWidth || 1));
+      let maxCount = 0;
+      for (let i = 0; i < binCount; i += 1) {
+        if (counts[i]! > maxCount) maxCount = counts[i]!;
+      }
+      if (maxCount > 0) {
+        for (let i = 0; i < binCount; i += 1) {
+          const count = counts[i]!;
+          if (count === 0) continue;
+          const barH = (count / maxCount) * props.height;
+          const x = (i / binCount) * props.width;
+          const y = props.height - barH;
+          graphics.rect(x, y, barWidth, barH).fill({
+            color: judgeColorFor(lastKindByBin[i] ?? ''),
+            alpha: 1,
+          });
+        }
+      }
+      // Center guide — perfect-timing reference column.
+      graphics.rect(props.width / 2 - 0.5, 0, 1, props.height).fill({ color: 0xffffff, alpha: 0.4 });
+      // Average + stddev overlays (when authored).
+      if (samples.length > 0) {
+        const avg = sum / samples.length;
+        const variance = sumSq / samples.length - avg * avg;
+        const stddev = Math.sqrt(Math.max(0, variance));
+        const xForMs = (ms: number): number =>
+          ((Math.max(-halfWidthMs, Math.min(halfWidthMs, ms)) + halfWidthMs) / binCount) * props.width;
+        if (entry.element.drawAverage !== 0) {
+          graphics.rect(xForMs(avg) - 0.5, 0, 1, props.height).fill({ color: 0xffaa00, alpha: 0.8 });
+        }
+        if (entry.element.drawDev !== 0 && stddev > 0) {
+          const left = xForMs(avg - stddev);
+          const right = xForMs(avg + stddev);
+          graphics.rect(left, props.height - 2, Math.max(1, right - left), 2).fill({ color: 0x00aaff, alpha: 0.7 });
+        }
+      }
+      entry.lastSampleCount = samples.length;
+    }
+    graphics.x = props.x;
+    graphics.y = props.y;
+    graphics.alpha = props.alpha;
+    graphics.tint = props.tint;
+    graphics.angle = props.angle;
+    graphics.blendMode = props.blendMode;
+  }
+
+  /**
    * Update a slider entry. Translates the sprite within the destination box by
    * `value * range` skin-pixels along its angle axis, leaving width / height at the source-rect
    * crop's natural size (sliders don't scale — they translate).
@@ -1854,6 +2017,9 @@ export class BeatorajaPlaySkinView {
           entry.graphics.destroy({ children: false, texture: false, textureSource: false });
           break;
         case 'timingvisualizer':
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          break;
+        case 'timingdistribution':
           entry.graphics.destroy({ children: false, texture: false, textureSource: false });
           break;
         case 'slider':

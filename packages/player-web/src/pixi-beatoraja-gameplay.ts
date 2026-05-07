@@ -118,6 +118,7 @@ export interface PixiBeatorajaGameplayViewOptions {
     history: {
       scoreHistory: ReadonlyArray<{ progress: number; exScore: number }>;
       gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
+      timingHistory: ReadonlyArray<{ deltaMs: number; kind: string }>;
     },
   ) => void;
   /** Called if the engine rejects (interrupt or fatal) — the host can branch on the error type. */

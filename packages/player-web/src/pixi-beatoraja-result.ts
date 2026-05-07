@@ -81,6 +81,11 @@ export interface PixiBeatorajaResultSceneOptions {
   /** Per-judge `(progress, gauge%)` polyline samples. Drives gauge-history graph elements. */
   gaugeHistory?: ReadonlyArray<{ progress: number; value: number }>;
   /**
+   * Full-run timing samples (every judgement's signed deltaMs + kind). Drives the
+   * `timingdistributiongraph[]` histogram. Empty / omitted = no histogram drawn.
+   */
+  timingHistory?: ReadonlyArray<{ deltaMs: number; kind: string }>;
+  /**
    * Optional result BGM bytes (WAV / OGG / MP3). The host typically picks between `clear.wav` /
    * `fail.wav` / generic `result.wav` based on the run's outcome before passing it here. Played
    * once at scene `enter()` through a scene-owned `AudioContext` (closed in `dispose()`).
@@ -132,6 +137,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
       resolveJudgeGraphBars: (type) => this.resolveResultJudgeBars(type),
       resolveBpmGraphPoints: () => (this.chartBpmCurve.length > 0 ? this.chartBpmCurve : undefined),
       resolveGaugeGraphPoints: () => this.resolveResultGaugePolyline(),
+      resolveTimingDistribution: () => options.timingHistory,
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);

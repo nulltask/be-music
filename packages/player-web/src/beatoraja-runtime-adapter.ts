@@ -205,6 +205,12 @@ export class BeatorajaRuntimeAdapter {
    */
   private readonly recentTimings: Array<{ deltaMs: number; kind: string }> = [];
   /**
+   * Full timing-delta history for the entire run, kept unbounded across the chart so the result
+   * scene's `timingdistributiongraph[]` can render a per-ms histogram of every judgement. Memory
+   * cost is ~16 bytes per entry × note count (a 2k-note chart costs ~32KB), well within budget.
+   */
+  private readonly allTimings: Array<{ deltaMs: number; kind: string }> = [];
+  /**
    * Adapter-instance boot wallclock — surfaces prop.lua `operating_time_*` (run uptime). Beatoraja's
    * native semantics is "since beatoraja launched"; in our world the closest equivalent is "since
    * this gameplay scene mounted". Stored in `Date.now()` ms so subtraction yields wallclock seconds.
@@ -489,13 +495,16 @@ export class BeatorajaRuntimeAdapter {
     this.runningCombo = state.combo;
     if (state.combo > this.maxCombo) this.maxCombo = state.combo;
 
-    // Capture the signed timing delta when the engine supplied one — drives `timingvisualizer[]`
-    // sample plotting. Synthetic publishes (READY, AUTO PLAY, mine BAD) leave deltaMs undefined
-    // and don't show up on the visualizer. The ring drops the oldest sample at capacity so
-    // memory stays bounded across long runs.
+    // Capture the signed timing delta when the engine supplied one. Two sinks:
+    //   1. `recentTimings` — bounded ring drives the live `timingvisualizer[]` decay tail.
+    //   2. `allTimings` — unbounded full-run history feeds the result scene's
+    //      `timingdistributiongraph[]` histogram. Both sample only the same valid-delta events
+    //      (READY / AUTO PLAY / mine BAD all leave deltaMs undefined and skip both sinks).
     if (typeof state.deltaMs === 'number' && Number.isFinite(state.deltaMs)) {
-      this.recentTimings.push({ deltaMs: state.deltaMs, kind: state.judge });
+      const sample = { deltaMs: state.deltaMs, kind: state.judge };
+      this.recentTimings.push(sample);
       if (this.recentTimings.length > RECENT_TIMINGS_CAPACITY) this.recentTimings.shift();
+      this.allTimings.push(sample);
     }
 
     // Append a polyline sample. Mirrors what `PixiGameplayView.publishJudge` does on the LR2
@@ -533,10 +542,12 @@ export class BeatorajaRuntimeAdapter {
   getResultHistory(): {
     scoreHistory: ReadonlyArray<{ progress: number; exScore: number }>;
     gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
+    timingHistory: ReadonlyArray<{ deltaMs: number; kind: string }>;
   } {
     return {
       scoreHistory: this.scoreHistory.slice(),
       gaugeHistory: this.gaugeHistory.slice(),
+      timingHistory: this.allTimings.slice(),
     };
   }
 

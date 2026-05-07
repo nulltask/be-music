@@ -77,6 +77,9 @@ export { normalizeBeatorajaGaugeGraphs } from './beatoraja-skin-gaugegraph.ts';
 export type { BeatorajaTimingVisualizerElement } from './beatoraja-skin-timingvisualizer.ts';
 export { normalizeBeatorajaTimingVisualizers } from './beatoraja-skin-timingvisualizer.ts';
 
+export type { BeatorajaTimingDistributionGraphElement } from './beatoraja-skin-timingdistributiongraph.ts';
+export { normalizeBeatorajaTimingDistributionGraphs } from './beatoraja-skin-timingdistributiongraph.ts';
+
 export type { BeatorajaSliderDirection, BeatorajaSliderElement } from './beatoraja-skin-slider.ts';
 export { normalizeBeatorajaSliders } from './beatoraja-skin-slider.ts';
 
