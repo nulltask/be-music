@@ -256,24 +256,47 @@ export class BeatorajaPlaySkinView {
   private buildTextEntry(group: BeatorajaDestinationGroup, element: BeatorajaTextElement): TextEntry {
     // Pick the skin-author's TTF when one was loaded for this `font` slot; fall back to the platform
     // sans-serif chain otherwise. The CSS font-stack fallback (`sans-serif` after the skin family)
-    // covers two cases at once: (1) the skin family hasn't finished registering yet (rare; we await it
-    // before constructing the view), and (2) a glyph not present in the skin font (Japanese full-width,
-    // emoji, etc.) gets borrowed from the system font without showing tofu.
+    // covers two cases at once: (1) the skin family hasn't finished registering yet, and (2) a glyph
+    // not present in the skin font (Japanese full-width, emoji, etc.) gets borrowed from the system
+    // font without showing tofu.
     const skinFamily = this.resolveFontFamily(element.fontId);
     const fontFamily = skinFamily !== undefined ? `'${skinFamily}', sans-serif` : 'sans-serif';
+    // beatoraja `text[].size` is the requested rendered height in skin-pixel units. Default to the
+    // destination rect's height when the skin omits it — most authors set `size` explicitly, but
+    // unset / non-positive values should fall back to "fit the box" semantics rather than a
+    // hard-coded 24.
+    const firstFrame = group.dst[0];
+    const rectH = firstFrame !== undefined && firstFrame.h > 0 ? firstFrame.h : 24;
+    const requestedSize = element.size > 0 ? element.size : rectH;
     const text = new Text({
       text: '',
       style: {
         fontFamily,
-        fontSize: element.size,
+        fontSize: requestedSize,
         fill: 0xffffff,
         align: element.align,
       },
       alpha: 0,
     });
+    // Anchor controls the (x, y) origin point. Beatoraja's reference theme positions text by the
+    // dst rect's TOP-LEFT (or top-center / top-right with `align`); the y-anchor stays 0 so the
+    // text's top edge sits at `props.y`.
     if (element.align === 'center') text.anchor.set(0.5, 0);
     else if (element.align === 'right') text.anchor.set(1, 0);
     this.container.addChild(text);
+    // eslint-disable-next-line no-console
+    console.log(
+      '[beatoraja-view] text entry built',
+      JSON.stringify({
+        id: element.id,
+        ref: element.ref,
+        fontId: element.fontId,
+        size: requestedSize,
+        align: element.align,
+        family: fontFamily,
+        firstRect: firstFrame ? { x: firstFrame.x, y: firstFrame.y, w: firstFrame.w, h: firstFrame.h } : undefined,
+      }),
+    );
     return { kind: 'text', group, element, text };
   }
 
@@ -407,17 +430,25 @@ export class BeatorajaPlaySkinView {
     text.visible = props.visible;
     if (!props.visible) return;
 
-    // Skip the assignment when the string hasn't changed — assigning the same string still triggers a Pixi
-    // glyph relayout.
+    // Skip the assignment when the string hasn't changed — assigning the same string still triggers
+    // a Pixi glyph relayout, which is expensive (canvas rasterization).
     const next = entry.element.ref !== 0 ? (this.resolveTextContent(entry.element.ref) ?? '') : '';
     if (text.text !== next) {
       text.text = next;
+      // eslint-disable-next-line no-console
+      console.log(
+        '[beatoraja-view] text content',
+        JSON.stringify({ id: entry.element.id, ref: entry.element.ref, text: next }),
+      );
     }
 
-    // The destination's `x` is the bounding box's left edge. With `align: center` / `right` the Pixi anchor is
-    // 0.5 / 1.0 (set in `buildTextEntry`), so we must add half / full width of the destination box to land on
-    // the box's center / right edge respectively. Width / height themselves are intentionally NOT applied —
-    // Pixi `Text` auto-sizes to its glyphs and forcing a width via the keyframe rect would scale the type.
+    // The destination's `x` is the bounding box's left edge. With `align: center` / `right` the
+    // Pixi anchor is 0.5 / 1.0 (set in `buildTextEntry`), so we add half / full width of the
+    // destination box to land on the box's center / right edge respectively.
+    //
+    // Width / height aren't forced onto the Text node: beatoraja's `text[]` semantics is "render
+    // glyphs at `size` px with auto-width" — clamping to the dst rect would scale the type, which
+    // is what beatoraja explicitly avoids (the dst rect describes the *anchor*, not the text bbox).
     let x = props.x;
     if (entry.element.align === 'center') x += props.width / 2;
     else if (entry.element.align === 'right') x += props.width;
