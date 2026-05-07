@@ -1750,6 +1750,14 @@ class PlayerWebDemoApp {
    * time, and the splash visually masks the chart-load + gameplay-mount window that comes next.
    */
   private async showDecide(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
+    // Beatoraja gameplay path skips the LR2 decide splash entirely — `preloadGameplay` would build a
+    // `PixiGameplayView` (LR2-only), and the beatoraja view has its own prep pipeline. Hand off to
+    // `playSong` so the same `useBeatorajaGameplay` branch in there picks up the chart. A dedicated
+    // beatoraja decide scene is a follow-up.
+    if (this.guiState.useBeatorajaGameplay && this.beatorajaTheme && this.canPlaySongBeatoraja(song)) {
+      await this.playSong(song, overrides);
+      return;
+    }
     if (!this.decideSkin) {
       // No decide skin in the bundle (or skinless demo) — skip the splash entirely. The select view's `playDecideSound`
       // already fired so the audio cue still plays.
