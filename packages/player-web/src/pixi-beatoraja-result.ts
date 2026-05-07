@@ -25,6 +25,7 @@ import { Container, Graphics, type Ticker } from 'pixi.js';
 import type { PlayerSummary } from '@be-music/player/core/engine';
 import {
   BEATORAJA_NUM,
+  BEATORAJA_OP,
   BEATORAJA_TEXT,
   TIMER_FADEOUT,
   TIMER_PLAY,
@@ -32,6 +33,11 @@ import {
   TIMER_SCENE_START,
   TIMER_STARTINPUT,
   buildBaseOpSet,
+  computeClearLampOp,
+  computeGenericRankOp,
+  computeJudgeExistOps,
+  computeRankOp,
+  computeResultRankOp,
   type BeatorajaSkin,
   type BeatorajaSkinConfig,
 } from '@be-music/beatoraja-skin';
@@ -164,7 +170,43 @@ export class PixiBeatorajaResultScene implements PixiScene {
 
   private baseOps(): ReadonlySet<number> {
     if (this.cachedBaseOps !== undefined) return this.cachedBaseOps;
-    this.cachedBaseOps = buildBaseOpSet(this.options.skinConfig?.option);
+    // Start from the user's confirmed `property[]` picks, then merge in summary-derived gates
+    // (rank, clear lamp, result outcome, *_EXIST). The result scene's chrome is mostly built
+    // around these classifiers — without them the skin renders in a "no-data" state where
+    // every rank graphic is hidden and the clear-lamp panel stays blank.
+    const ops = new Set(buildBaseOpSet(this.options.skinConfig?.option));
+    const summary = this.options.summary;
+    const maxExScore = summary.total * 2;
+
+    // Rank ops — side / generic / result-only blocks. The first two mirror the live gameplay
+    // path (some skins reuse the live ops on result); the result-only block is set explicitly
+    // for skins that authored their rank graphics under `result_*_1p`.
+    ops.add(computeRankOp(summary.exScore, maxExScore, 1));
+    ops.add(computeGenericRankOp(summary.exScore, maxExScore));
+    ops.add(computeResultRankOp(summary.exScore, maxExScore));
+
+    // Clear lamp + outcome flag. EXHARD / HARD / EASY gauges aren't surfaced on `PlayerSummary`
+    // yet — the lamp picker degrades to NORMAL when the run cleared without break verdicts. Once
+    // gauge type is plumbed, the picker can refine to EXHARD / HARD / EASY.
+    const cleared = summary.gauge?.cleared ?? false;
+    ops.add(cleared ? BEATORAJA_OP.RESULT_CLEAR : BEATORAJA_OP.RESULT_FAIL);
+    ops.add(
+      computeClearLampOp({
+        cleared,
+        perfect: summary.perfect,
+        great: summary.great,
+        good: summary.good,
+        bad: summary.bad,
+        poor: summary.poor,
+        total: summary.total,
+      }),
+    );
+
+    // *_EXIST gates — same logic as the live adapter, but evaluated once against the final
+    // counters (no per-frame refresh needed).
+    for (const op of computeJudgeExistOps(summary)) ops.add(op);
+
+    this.cachedBaseOps = ops;
     return this.cachedBaseOps;
   }
 

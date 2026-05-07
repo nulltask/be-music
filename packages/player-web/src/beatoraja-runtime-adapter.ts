@@ -31,6 +31,9 @@ import {
   BEATORAJA_OP,
   BEATORAJA_TEXT,
   bombTimerId,
+  computeGenericRankOp,
+  computeJudgeExistOps,
+  computeRankOp,
   judgeOpForKind,
   judgeTimerId,
   keyOffTimerId,
@@ -91,6 +94,13 @@ export class BeatorajaRuntimeAdapter {
   private runningCombo = 0;
   /** Maximum combo seen this run. */
   private maxCombo = 0;
+  /**
+   * Last rank op classification — one each for the side-prefixed and generic rank-op blocks.
+   * `applyFrame` reads these to know which op to clear when the rank classification crosses a
+   * threshold. Without this we'd leave stale rank ops in `activeOps` (every threshold the run
+   * crossed would still gate chrome on).
+   */
+  private readonly lastRankOps: { side?: number; generic?: number } = {};
   /**
    * Adapter-instance boot wallclock — surfaces prop.lua `operating_time_*` (run uptime). Beatoraja's
    * native semantics is "since beatoraja launched"; in our world the closest equivalent is "since
@@ -179,6 +189,36 @@ export class BeatorajaRuntimeAdapter {
     this.fpsRingMs[this.fpsRingHead] = this.getNowMs();
     this.fpsRingHead = (this.fpsRingHead + 1) % this.fpsRingMs.length;
     if (this.fpsRingFilled < this.fpsRingMs.length) this.fpsRingFilled += 1;
+    this.refreshDerivedOps(frame.summary);
+  }
+
+  /**
+   * Recompute summary-derived op gates and toggle them in `activeOps`. Called once per frame from
+   * `applyFrame` because the rank classification can shift mid-chart (a single PERFECT can push
+   * the EX-score across an AAA threshold). Tracking which ops we last set lets us cleanly remove
+   * the previous ones — naively `add`-ing without a corresponding `delete` would leave AA, AAA,
+   * etc. all active simultaneously after a rank-up.
+   */
+  private refreshDerivedOps(summary: PlayerUiFramePayload['summary']): void {
+    // ─── Rank ops (P1_RANK_* + generic RANK_*) ──────────────────────────────────────────────
+    const maxExScore = summary.total * 2;
+    const sideRank = computeRankOp(summary.exScore, maxExScore, 1);
+    const genericRank = computeGenericRankOp(summary.exScore, maxExScore);
+    if (this.lastRankOps.side !== sideRank) {
+      if (this.lastRankOps.side !== undefined) this.activeOps.delete(this.lastRankOps.side);
+      this.activeOps.add(sideRank);
+      this.lastRankOps.side = sideRank;
+    }
+    if (this.lastRankOps.generic !== genericRank) {
+      if (this.lastRankOps.generic !== undefined) this.activeOps.delete(this.lastRankOps.generic);
+      this.activeOps.add(genericRank);
+      this.lastRankOps.generic = genericRank;
+    }
+
+    // ─── *_EXIST ops ────────────────────────────────────────────────────────────────────────
+    // These are sticky once set — a single observation latches the op for the rest of the run.
+    // No need to delete; only add as new judge counters cross 0.
+    for (const op of computeJudgeExistOps(summary)) this.activeOps.add(op);
   }
 
   /**

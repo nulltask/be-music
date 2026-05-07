@@ -212,7 +212,228 @@ export const BEATORAJA_OP = {
   P2_JUDGE_EARLY: 1262,
   /** prop.lua `_2p_late = 1263`. */
   P2_JUDGE_LATE: 1263,
+
+  // ─── Live rank ops (prop.lua `_1p_aaa = 200` ... `_1p_f = 207`) ────────────────────────────
+  // Set live during gameplay, recomputed every frame from `summary.exScore` vs the chart's
+  // theoretical EX-score max. Beatoraja's IIDX-derived rank thresholds are (max = `total * 2`):
+  //
+  //   AAA = exScore / max >= 8/9   (~88.9%)
+  //   AA  = exScore / max >= 7/9   (~77.8%)
+  //   A   = exScore / max >= 6/9   (~66.7%)
+  //   B   = exScore / max >= 5/9   (~55.6%)
+  //   C   = exScore / max >= 4/9   (~44.4%)
+  //   D   = exScore / max >= 3/9   (~33.3%)
+  //   E   = exScore / max >= 2/9   (~22.2%)
+  //   F   = otherwise
+  //
+  // Exactly one of these is active at any given moment; the renderer toggles them mutually
+  // exclusively via `computeRankOp`.
+  P1_RANK_AAA: 200,
+  P1_RANK_AA: 201,
+  P1_RANK_A: 202,
+  P1_RANK_B: 203,
+  P1_RANK_C: 204,
+  P1_RANK_D: 205,
+  P1_RANK_E: 206,
+  P1_RANK_F: 207,
+
+  P2_RANK_AAA: 210,
+  P2_RANK_AA: 211,
+  P2_RANK_A: 212,
+  P2_RANK_B: 213,
+  P2_RANK_C: 214,
+  P2_RANK_D: 215,
+  P2_RANK_E: 216,
+  P2_RANK_F: 217,
+
+  /** Generic active-player rank — most skins use these instead of the side-specific ones. */
+  RANK_AAA: 220,
+  RANK_AA: 221,
+  RANK_A: 222,
+  RANK_B: 223,
+  RANK_C: 224,
+  RANK_D: 225,
+  RANK_E: 226,
+  RANK_F: 227,
+
+  // ─── Result-scene rank ops (prop.lua `result_*_1p = 300` ... `result_0_1p = 308`) ─────────
+  // Same letter-rank logic as the live ops above, but only set on the result scene. Authors
+  // typically gate result-screen visuals on these to swap rank graphics by outcome.
+  RESULT_RANK_AAA_1P: 300,
+  RESULT_RANK_AA_1P: 301,
+  RESULT_RANK_A_1P: 302,
+  RESULT_RANK_B_1P: 303,
+  RESULT_RANK_C_1P: 304,
+  RESULT_RANK_D_1P: 305,
+  RESULT_RANK_E_1P: 306,
+  RESULT_RANK_F_1P: 307,
+  /** prop.lua `result_0_1p = 308` — no score (POOR everything). */
+  RESULT_RANK_ZERO_1P: 308,
+
+  // ─── Per-judge "exists" gates (prop.lua `perfect_exist = 2241` …) ─────────────────────────
+  // Active when at least one judgement of that kind has been observed this run. Skins use these
+  // to fade in judge-count badges only after the first occurrence.
+  PERFECT_EXIST: 2241,
+  GREAT_EXIST: 2242,
+  GOOD_EXIST: 2243,
+  BAD_EXIST: 2244,
+  POOR_EXIST: 2245,
+  MISS_EXIST: 2246,
+
+  // ─── Result outcome (prop.lua `result_clear = 90`, `result_fail = 91`) ────────────────────
+  /** Run cleared. Set when `summary.gauge.cleared === true`. */
+  RESULT_CLEAR: 90,
+  /** Run failed. The complement of {@link RESULT_CLEAR}; one or the other is active. */
+  RESULT_FAIL: 91,
+
+  // ─── Clear-lamp ops (prop.lua `clear_easy = 121` etc.) ────────────────────────────────────
+  // We only set the most-fitting one for the live run's outcome. NO_PLAY / FAILED / EASY /
+  // NORMAL / HARD / FULLCOMBO are mutually exclusive — picking the highest classification
+  // matches beatoraja's "best-of-this-run" semantics.
+  CLEAR_LAMP_NOPLAY: 100,
+  CLEAR_LAMP_FAILED: 101,
+  CLEAR_LAMP_ASSIST_EASY: 1100,
+  CLEAR_LAMP_LIGHT_ASSIST_EASY: 1101,
+  CLEAR_LAMP_EASY: 102,
+  CLEAR_LAMP_NORMAL: 103,
+  CLEAR_LAMP_HARD: 104,
+  CLEAR_LAMP_EXHARD: 1102,
+  CLEAR_LAMP_FULLCOMBO: 105,
+  CLEAR_LAMP_PERFECT: 1103,
+  CLEAR_LAMP_MAX: 1104,
 } as const;
+
+/**
+ * Letter-rank classification from `(exScore, maxExScore)`. Returns the matching `BEATORAJA_OP`
+ * code (`P1_RANK_*` for `side: 1`, `P2_RANK_*` for `side: 2`). Beatoraja's IIDX-derived rank
+ * thresholds are 8/9, 7/9, ... down to 2/9 of the theoretical max EX-score (= `total * 2`).
+ *
+ * Returns `BEATORAJA_OP.P1_RANK_F` when `maxExScore <= 0` (no scorable notes — degenerate chart);
+ * this matches beatoraja's "no rank" fallback rather than producing a NaN-driven gate that's
+ * neither active nor inactive.
+ */
+export function computeRankOp(exScore: number, maxExScore: number, side: BeatorajaSide = 1): number {
+  const ratio = maxExScore > 0 ? exScore / maxExScore : 0;
+  const thresholds: ReadonlyArray<readonly [number, number]> = [
+    [8 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_AAA : BEATORAJA_OP.P2_RANK_AAA],
+    [7 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_AA : BEATORAJA_OP.P2_RANK_AA],
+    [6 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_A : BEATORAJA_OP.P2_RANK_A],
+    [5 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_B : BEATORAJA_OP.P2_RANK_B],
+    [4 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_C : BEATORAJA_OP.P2_RANK_C],
+    [3 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_D : BEATORAJA_OP.P2_RANK_D],
+    [2 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_E : BEATORAJA_OP.P2_RANK_E],
+  ];
+  for (const [t, op] of thresholds) {
+    if (ratio >= t) return op;
+  }
+  return side === 1 ? BEATORAJA_OP.P1_RANK_F : BEATORAJA_OP.P2_RANK_F;
+}
+
+/**
+ * Generic-rank version of {@link computeRankOp} — surfaces the no-side-prefix `RANK_*` op.
+ * Skins that author rank graphics typically use this rather than the side-specific block.
+ */
+export function computeGenericRankOp(exScore: number, maxExScore: number): number {
+  const ratio = maxExScore > 0 ? exScore / maxExScore : 0;
+  const thresholds: ReadonlyArray<readonly [number, number]> = [
+    [8 / 9, BEATORAJA_OP.RANK_AAA],
+    [7 / 9, BEATORAJA_OP.RANK_AA],
+    [6 / 9, BEATORAJA_OP.RANK_A],
+    [5 / 9, BEATORAJA_OP.RANK_B],
+    [4 / 9, BEATORAJA_OP.RANK_C],
+    [3 / 9, BEATORAJA_OP.RANK_D],
+    [2 / 9, BEATORAJA_OP.RANK_E],
+  ];
+  for (const [t, op] of thresholds) {
+    if (ratio >= t) return op;
+  }
+  return BEATORAJA_OP.RANK_F;
+}
+
+/**
+ * Result-scene letter-rank (`RESULT_RANK_*_1P`). Same thresholds as {@link computeRankOp} but
+ * targets the result-only op block. The dedicated `RESULT_RANK_ZERO_1P` op fires on a literal
+ * 0-EX run (`exScore === 0`) — a separate state from F (`> 0` but below 2/9).
+ */
+export function computeResultRankOp(exScore: number, maxExScore: number): number {
+  if (exScore <= 0) return BEATORAJA_OP.RESULT_RANK_ZERO_1P;
+  const ratio = maxExScore > 0 ? exScore / maxExScore : 0;
+  const thresholds: ReadonlyArray<readonly [number, number]> = [
+    [8 / 9, BEATORAJA_OP.RESULT_RANK_AAA_1P],
+    [7 / 9, BEATORAJA_OP.RESULT_RANK_AA_1P],
+    [6 / 9, BEATORAJA_OP.RESULT_RANK_A_1P],
+    [5 / 9, BEATORAJA_OP.RESULT_RANK_B_1P],
+    [4 / 9, BEATORAJA_OP.RESULT_RANK_C_1P],
+    [3 / 9, BEATORAJA_OP.RESULT_RANK_D_1P],
+    [2 / 9, BEATORAJA_OP.RESULT_RANK_E_1P],
+  ];
+  for (const [t, op] of thresholds) {
+    if (ratio >= t) return op;
+  }
+  return BEATORAJA_OP.RESULT_RANK_F_1P;
+}
+
+/**
+ * Best-fit clear-lamp op for a run's outcome. Beatoraja's lamps form a partial order:
+ *
+ *   PERFECT > FULLCOMBO > EXHARD > HARD > NORMAL > EASY > FAILED > NOPLAY
+ *
+ * We don't track gauge type here (NORMAL vs EASY vs HARD), so the heuristic is:
+ * - All notes hit with `bad === 0 && poor === 0` AND every note was at least GREAT → PERFECT
+ * - All notes hit with `bad === 0 && poor === 0` (any judges fine) → FULLCOMBO
+ * - `cleared && bad+poor > 0` → NORMAL (the most common "you finished it" lamp)
+ * - `!cleared` → FAILED
+ *
+ * Future: when the gauge type is exposed (EASY / GROOVE / HARD / EX-HARD), pick the matching
+ * lamp instead of always returning NORMAL.
+ */
+export function computeClearLampOp(args: {
+  cleared: boolean;
+  perfect: number;
+  great: number;
+  good: number;
+  bad: number;
+  poor: number;
+  total: number;
+}): number {
+  if (!args.cleared) return BEATORAJA_OP.CLEAR_LAMP_FAILED;
+  // FULLCOMBO: every note resolved with no break verdict. POOR is empty-press in our engine but
+  // still counts as a combo break; same with BAD.
+  if (args.bad === 0 && args.poor === 0) {
+    // PERFECT: also every note was a PERFECT verdict. (GREAT counts as a non-perfect even though
+    // it doesn't break combo.)
+    if (args.great === 0 && args.good === 0 && args.perfect === args.total) {
+      return BEATORAJA_OP.CLEAR_LAMP_PERFECT;
+    }
+    return BEATORAJA_OP.CLEAR_LAMP_FULLCOMBO;
+  }
+  return BEATORAJA_OP.CLEAR_LAMP_NORMAL;
+}
+
+/** Per-judge "this judge has occurred at least once" op set. Returns the active subset of
+ * `*_EXIST` ops based on `summary` counters. Pure helper so the runtime adapter and the result
+ * scene can share the same classification logic.
+ */
+export function computeJudgeExistOps(args: {
+  perfect: number;
+  great: number;
+  good: number;
+  bad: number;
+  poor: number;
+}): ReadonlyArray<number> {
+  const ops: number[] = [];
+  if (args.perfect > 0) ops.push(BEATORAJA_OP.PERFECT_EXIST);
+  if (args.great > 0) ops.push(BEATORAJA_OP.GREAT_EXIST);
+  if (args.good > 0) ops.push(BEATORAJA_OP.GOOD_EXIST);
+  if (args.bad > 0) ops.push(BEATORAJA_OP.BAD_EXIST);
+  if (args.poor > 0) {
+    // We don't separate "miss" from "poor" — the live engine surfaces empty-press POORs as the
+    // generic POOR judge. Light up both ops so skins gated on either side reveal correctly.
+    ops.push(BEATORAJA_OP.POOR_EXIST);
+    ops.push(BEATORAJA_OP.MISS_EXIST);
+  }
+  return ops;
+}
 
 /**
  * Op-code corresponding to a parsed engine judge string. Values come from `prop.lua`'s `_1p_*` /
