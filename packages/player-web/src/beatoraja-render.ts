@@ -14,7 +14,14 @@
 //     sprite.blendMode = props.blendMode;
 
 import { Rectangle, Texture } from 'pixi.js';
-import { isElementVisible, sampleBeatorajaDestination, type BeatorajaDestinationGroup } from '@be-music/beatoraja-skin';
+import {
+  combineBeatorajaOffsets,
+  isElementVisible,
+  sampleBeatorajaDestination,
+  ZERO_BEATORAJA_OFFSET,
+  type BeatorajaDestinationGroup,
+  type BeatorajaSkinOffsetValue,
+} from '@be-music/beatoraja-skin';
 
 export interface BeatorajaSpriteProps {
   visible: boolean;
@@ -57,6 +64,12 @@ export interface BeatorajaRenderContext {
   getTimerStart: (timerId: number) => number | undefined;
   /** Current scene-relative time in milliseconds. */
   nowMs: number;
+  /**
+   * Lookup `(offsetId) → user-adjustable offset shift`. Used by destinations whose `offsets[]`
+   * lists `OFFSET_*` ids (judge offset slider, lanecover position, etc.). Returning `undefined`
+   * defaults to no shift. Optional — hosts that don't expose offset adjustment can omit it.
+   */
+  resolveOffset?: (offsetId: number) => Readonly<BeatorajaSkinOffsetValue> | undefined;
 }
 
 /**
@@ -83,18 +96,26 @@ export function destinationToSpriteProps(
   const keyframe = sampleBeatorajaDestination(group, elapsed);
   if (keyframe === undefined) return HIDDEN_PROPS;
 
-  const alpha = clampUnit(keyframe.a / 255);
+  // Apply the destination's `offsets[]` shift on top of the sampled keyframe. The combined
+  // offset multiplies alpha and adds to position / size / rotation. With `resolveOffset` unset
+  // (hosts without user offset adjustment), the offset is `ZERO_BEATORAJA_OFFSET` and the
+  // destination renders unchanged.
+  const offset =
+    group.offsets.length > 0 && context.resolveOffset !== undefined
+      ? combineBeatorajaOffsets(group.offsets, context.resolveOffset)
+      : ZERO_BEATORAJA_OFFSET;
+  const alpha = clampUnit((keyframe.a / 255) * (offset.a / 255));
   if (alpha <= 0) return HIDDEN_PROPS;
 
   return {
     visible: true,
-    x: keyframe.x,
-    y: keyframe.y,
-    width: keyframe.w,
-    height: keyframe.h,
+    x: keyframe.x + offset.x,
+    y: keyframe.y + offset.y,
+    width: keyframe.w + offset.w,
+    height: keyframe.h + offset.h,
     alpha,
     tint: packRgbTint(keyframe.r, keyframe.g, keyframe.b),
-    angle: keyframe.angle,
+    angle: keyframe.angle + offset.r,
     blendMode: blendCodeToPixi(group.blend),
   };
 }

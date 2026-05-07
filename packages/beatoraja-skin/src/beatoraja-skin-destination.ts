@@ -75,6 +75,15 @@ export interface BeatorajaDestinationGroup {
    * (matches `JSONSkinLoader.setDestination`'s `dst.center` field — Java zero-default).
    */
   center: number;
+  /**
+   * User-adjustable offset ids the renderer additively applies before painting. Each id maps to a
+   * `(x, y, w, h, r, a)` 6-tuple in the skin's offset table (`SkinProperty.OFFSET_*`); enabled
+   * skins let the user shift judge / lanecover / notes positions via in-game sliders. The
+   * cumulative effect is `dst.x += sum(offset[id].x)` etc.
+   *
+   * Empty when the author didn't author offsets on this destination. Defaults to `[]`.
+   */
+  offsets: ReadonlyArray<number>;
   /** `if` codes from any wrapping conditional group, AND-merged with `op`. */
   ifCodes: ReadonlyArray<number>;
   /**
@@ -121,6 +130,7 @@ function normalizeOne(entry: NormalizedElement, declarationOrder: number): Beato
     blend: numberField(f, 'blend', 0),
     filter: numberField(f, 'filter', 0),
     center: clampCenter(numberField(f, 'center', 0)),
+    offsets: normalizeOpArray(f.offsets),
     ifCodes: entry.ifCodes,
     dst: keyframes,
     declarationOrder,
@@ -133,6 +143,64 @@ function clampCenter(value: number): number {
   const v = Math.trunc(value);
   if (v < 0 || v > 8) return 0;
   return v;
+}
+
+/**
+ * User-adjustable destination offset, indexed by `OFFSET_*` ids on the skin's offset table.
+ * Each field defaults to `0` / `255` (alpha) when the user hasn't moved the matching slider.
+ * Beatoraja's reference theme exposes 5 base offsets (LIFT, LANECOVER, ALL, NOTES_1P,
+ * JUDGE_1P, JUDGEDETAIL_1P) plus author-defined `OFFSET_*` slots.
+ */
+export interface BeatorajaSkinOffsetValue {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Rotation delta in degrees. */
+  r: number;
+  /** Alpha multiplier (255 = unchanged, 0 = fully transparent). */
+  a: number;
+}
+
+/** Default offset = no displacement, alpha unchanged. Same shape `MainStateAccessor.offset` returns. */
+export const ZERO_BEATORAJA_OFFSET: Readonly<BeatorajaSkinOffsetValue> = Object.freeze({
+  x: 0,
+  y: 0,
+  w: 0,
+  h: 0,
+  r: 0,
+  a: 255,
+});
+
+/**
+ * Sum a destination's `offsets[]` ids into a single (x, y, w, h, r, a) shift. The renderer
+ * applies this on top of the keyframe-sampled position. `resolve` looks up each id's current
+ * value via the host (typically `state.getOffsetValue(id)` on the Java side); returning
+ * `undefined` for an unknown id treats it as `ZERO_BEATORAJA_OFFSET` (no shift).
+ */
+export function combineBeatorajaOffsets(
+  ids: ReadonlyArray<number>,
+  resolve: (offsetId: number) => Readonly<BeatorajaSkinOffsetValue> | undefined,
+): Readonly<BeatorajaSkinOffsetValue> {
+  if (ids.length === 0) return ZERO_BEATORAJA_OFFSET;
+  let x = 0;
+  let y = 0;
+  let w = 0;
+  let h = 0;
+  let r = 0;
+  // Alpha multiplies — start at 1 (unchanged) and divide each contribution by 255.
+  let alphaMultiplier = 1;
+  for (const id of ids) {
+    const v = resolve(id);
+    if (v === undefined) continue;
+    x += v.x;
+    y += v.y;
+    w += v.w;
+    h += v.h;
+    r += v.r;
+    alphaMultiplier *= Math.max(0, Math.min(1, v.a / 255));
+  }
+  return { x, y, w, h, r, a: Math.round(alphaMultiplier * 255) };
 }
 
 /**
