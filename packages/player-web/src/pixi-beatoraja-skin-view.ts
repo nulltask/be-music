@@ -15,6 +15,7 @@ import {
   normalizeBeatorajaDestinations,
   normalizeBeatorajaGaugeGraphs,
   normalizeBeatorajaJudgeGraphs,
+  normalizeBeatorajaTimingVisualizers,
   normalizeBeatorajaGauge,
   normalizeBeatorajaGraphs,
   normalizeBeatorajaImages,
@@ -29,6 +30,7 @@ import {
   type BeatorajaDestinationGroup,
   type BeatorajaGaugeGraphElement,
   type BeatorajaJudgeGraphElement,
+  type BeatorajaTimingVisualizerElement,
   type BeatorajaGaugeElement,
   type BeatorajaGraphElement,
   type BeatorajaImageElement,
@@ -157,6 +159,14 @@ export interface BeatorajaPlaySkinViewOptions {
    * Returning `undefined` or fewer than 2 points hides the graph.
    */
   resolveGaugeGraphPoints?: () => ReadonlyArray<{ x: number; y: number }> | undefined;
+  /**
+   * Resolve recent judgement timing samples for the `timingvisualizer[]` element. Returns the
+   * adapter's circular timing buffer in oldest-first order — each entry has the signed delta
+   * (positive = late, negative = early) and the judge kind (`PERFECT` / `GREAT` / ...). The
+   * renderer plots a sample per entry, fades older entries by index, and color-codes them by
+   * kind. Empty array hides the visualizer.
+   */
+  resolveTimingSamples?: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
 }
 
 interface SpriteEntry {
@@ -275,6 +285,20 @@ interface GaugeGraphEntry {
   lastPointCount: number;
 }
 
+interface TimingVisualizerEntry {
+  kind: 'timingvisualizer';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaTimingVisualizerElement;
+  /**
+   * Pixi `Graphics` painting the recent-timing tick marks + center / band guides. Re-stroked
+   * whenever the sample count or the most-recent sample changes; older samples shift up the
+   * decay tail without invalidating the buffer's earlier paint.
+   */
+  graphics: Graphics;
+  /** Cached signature of the last sample list — same idea as judgegraph's `lastSignature`. */
+  lastSignature: string;
+}
+
 interface SliderEntry {
   kind: 'slider';
   group: BeatorajaDestinationGroup;
@@ -341,6 +365,7 @@ type ViewEntry =
   | BpmGraphEntry
   | JudgeGraphEntry
   | GaugeGraphEntry
+  | TimingVisualizerEntry
   | SliderEntry
   | ImagesetEntry
   | GaugeEntry;
@@ -376,6 +401,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveBpmGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveJudgeGraphBars: (type: number) => ReadonlyArray<number> | undefined;
   private readonly resolveGaugeGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
+  private readonly resolveTimingSamples: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -403,6 +429,7 @@ export class BeatorajaPlaySkinView {
     this.resolveBpmGraphPoints = options.resolveBpmGraphPoints ?? (() => undefined);
     this.resolveJudgeGraphBars = options.resolveJudgeGraphBars ?? (() => undefined);
     this.resolveGaugeGraphPoints = options.resolveGaugeGraphPoints ?? (() => undefined);
+    this.resolveTimingSamples = options.resolveTimingSamples ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -502,6 +529,26 @@ export class BeatorajaPlaySkinView {
         gaugeGraphById.set(gaugeGraph.id, gaugeGraph);
       }
     }
+    // `timingvisualizer[]` — recent-timing tick visualizer plotted across the destination box on
+    // the play scene. Same precedence as gaugegraph (loses to image / value / text / graph /
+    // slider / bpmgraph / judgegraph / gaugegraph on id collision).
+    const timingVisualizerById = new Map<BeatorajaImageId, BeatorajaTimingVisualizerElement>();
+    for (const tv of normalizeBeatorajaTimingVisualizers(
+      (options.skin as { timingvisualizer?: unknown }).timingvisualizer,
+    )) {
+      if (
+        !imageById.has(tv.id) &&
+        !valueById.has(tv.id) &&
+        !textById.has(tv.id) &&
+        !graphById.has(tv.id) &&
+        !sliderById.has(tv.id) &&
+        !bpmGraphById.has(tv.id) &&
+        !judgeGraphById.has(tv.id) &&
+        !gaugeGraphById.has(tv.id)
+      ) {
+        timingVisualizerById.set(tv.id, tv);
+      }
+    }
     // `imageset[]` declarations — multi-state images (lane keybeams, bomb cycles) that flip between
     // sub-images based on a runtime ref op. Lowest precedence after every other element kind: a
     // direct `image[]` / `value[]` / `text[]` / `graph[]` / `slider[]` / `bpmgraph[]` /
@@ -516,7 +563,8 @@ export class BeatorajaPlaySkinView {
         !sliderById.has(imageset.id) &&
         !bpmGraphById.has(imageset.id) &&
         !judgeGraphById.has(imageset.id) &&
-        !gaugeGraphById.has(imageset.id)
+        !gaugeGraphById.has(imageset.id) &&
+        !timingVisualizerById.has(imageset.id)
       ) {
         imagesetById.set(imageset.id, imageset);
       }
@@ -535,6 +583,7 @@ export class BeatorajaPlaySkinView {
       !bpmGraphById.has(gauge.id) &&
       !judgeGraphById.has(gauge.id) &&
       !gaugeGraphById.has(gauge.id) &&
+      !timingVisualizerById.has(gauge.id) &&
       !imagesetById.has(gauge.id)
     ) {
       gaugeElement = gauge;
@@ -615,6 +664,11 @@ export class BeatorajaPlaySkinView {
         const gaugeGraphElement = gaugeGraphById.get(group.id);
         if (gaugeGraphElement !== undefined) {
           this.entries.push(this.buildGaugeGraphEntry(group, gaugeGraphElement));
+          continue;
+        }
+        const timingElement = timingVisualizerById.get(group.id);
+        if (timingElement !== undefined) {
+          this.entries.push(this.buildTimingVisualizerEntry(group, timingElement));
           continue;
         }
         const imagesetElement = imagesetById.get(group.id);
@@ -977,6 +1031,17 @@ export class BeatorajaPlaySkinView {
     return { kind: 'gaugegraph', group, element, graphics, lastPointCount: -1 };
   }
 
+  /** Build a timingvisualizer entry — same Graphics-node + rebuild-on-change pattern. */
+  private buildTimingVisualizerEntry(
+    group: BeatorajaDestinationGroup,
+    element: BeatorajaTimingVisualizerElement,
+  ): TimingVisualizerEntry {
+    const graphics = new Graphics();
+    graphics.alpha = 0;
+    this.container.addChild(graphics);
+    return { kind: 'timingvisualizer', group, element, graphics, lastSignature: '' };
+  }
+
   /**
    * Re-sample every destination at `context.nowMs` and update the matching `Sprite` / `Text`. Call once per frame.
    */
@@ -1012,6 +1077,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'gaugegraph':
           this.updateGaugeGraphEntry(entry, props);
+          break;
+        case 'timingvisualizer':
+          this.updateTimingVisualizerEntry(entry, props);
           break;
         case 'slider':
           this.updateSliderEntry(entry, props);
@@ -1494,6 +1562,67 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Update a timingvisualizer entry. Plots the recent-judge timing samples as colored ticks
+   * across the destination box: x = sample's signed `deltaMs` mapped onto the rect's horizontal
+   * span, y = age-decayed vertical position (oldest at the top, newest near the bottom). Each
+   * tick is colored by judge kind (PG/GR/GD/BD/PR) and fades out with age.
+   *
+   * Hidden when the resolver returns `undefined` / empty (no judgement has fired yet).
+   */
+  private updateTimingVisualizerEntry(
+    entry: TimingVisualizerEntry,
+    props: ReturnType<typeof destinationToSpriteProps>,
+  ): void {
+    const graphics = entry.graphics;
+    graphics.visible = props.visible;
+    if (!props.visible) return;
+    const samples = this.resolveTimingSamples();
+    if (samples === undefined || samples.length === 0) {
+      graphics.visible = false;
+      return;
+    }
+    // Build a cheap signature so the per-frame stroke skips when nothing changed. Length + last
+    // sample's deltaMs cover all the cases that need a re-stroke (new judgement, reset, …).
+    const last = samples[samples.length - 1]!;
+    const signature = `${samples.length}|${last.deltaMs.toFixed(1)}|${last.kind}`;
+    if (signature !== entry.lastSignature) {
+      graphics.clear();
+      // Half-width in ms — author-supplied or fallback. ±100ms covers the GOOD window in most
+      // judges; a reasonable default for skins that leave it unset.
+      const halfWidthMs = entry.element.judgeWidthMillis > 0 ? entry.element.judgeWidthMillis : 100;
+      const halfWidthPx = props.width / 2;
+      const lineWidthPx = entry.element.lineWidth > 0 ? entry.element.lineWidth : 1;
+      // Faint center line — perfect-timing reference. Only draw when the author didn't pin
+      // `centerColor` to an empty string AND only when the visualizer has space (props.height > 0).
+      if (props.height > 0) {
+        graphics.rect(halfWidthPx - 0.5, 0, 1, props.height).fill({ color: 0xffffff, alpha: 0.25 });
+      }
+      // Ticks — newest paints brightest, oldest faintest. Sample list is oldest-first; map each
+      // index to a vertical position (oldest at top, newest at bottom) and an alpha that decays
+      // toward the top. The judge kind picks the color (PG/GR/GD/BD/PR fall back to white).
+      for (let i = 0; i < samples.length; i += 1) {
+        const sample = samples[i]!;
+        const ageRatio = (i + 1) / samples.length; // 1 = newest, 0 ≈ oldest
+        const alpha = ageRatio; // linear fade — could be tuned by `drawDecay` later
+        const xRatio = Math.max(-1, Math.min(1, sample.deltaMs / halfWidthMs));
+        const x = halfWidthPx + xRatio * halfWidthPx;
+        const y = props.height * (1 - ageRatio);
+        graphics.rect(x - lineWidthPx / 2, y, lineWidthPx, 4).fill({
+          color: judgeColorFor(sample.kind),
+          alpha,
+        });
+      }
+      entry.lastSignature = signature;
+    }
+    graphics.x = props.x;
+    graphics.y = props.y;
+    graphics.alpha = props.alpha;
+    graphics.tint = props.tint;
+    graphics.angle = props.angle;
+    graphics.blendMode = props.blendMode;
+  }
+
+  /**
    * Update a slider entry. Translates the sprite within the destination box by
    * `value * range` skin-pixels along its angle axis, leaving width / height at the source-rect
    * crop's natural size (sliders don't scale — they translate).
@@ -1724,6 +1853,9 @@ export class BeatorajaPlaySkinView {
         case 'gaugegraph':
           entry.graphics.destroy({ children: false, texture: false, textureSource: false });
           break;
+        case 'timingvisualizer':
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          break;
         case 'slider':
           entry.sprite.destroy({ children: false, texture: false, textureSource: false });
           break;
@@ -1776,6 +1908,28 @@ function applyTextureFilterMode(texture: Texture | undefined, filter: number): v
   if (filter !== 1) return;
   if (texture === undefined || texture === Texture.EMPTY) return;
   if (texture.source) texture.source.scaleMode = 'linear';
+}
+
+/**
+ * Map a judge-kind string (`PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR`) to the tick color
+ * the timingvisualizer paints. Colors mirror beatoraja's reference theme palette — yellow for
+ * PERFECT (PG), green / blue / red / purple for the lower tiers. Unknown kinds default to white.
+ */
+function judgeColorFor(kind: string): number {
+  switch (kind) {
+    case 'PERFECT':
+      return 0xffff00;
+    case 'GREAT':
+      return 0x00ff00;
+    case 'GOOD':
+      return 0x00aaff;
+    case 'BAD':
+      return 0xff0000;
+    case 'POOR':
+      return 0xff00ff;
+    default:
+      return 0xffffff;
+  }
 }
 
 /** Clamp a number to `[0, 1]`. NaN / negative / overshoot all collapse to a safe in-range value. */

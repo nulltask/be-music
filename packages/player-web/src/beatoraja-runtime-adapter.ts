@@ -110,6 +110,13 @@ const DEFAULT_LANE_HEIGHT = 580;
  */
 const COVER_CHANGING_WINDOW_MS = 500;
 
+/**
+ * Maximum samples retained in the recent-timings ring for the timingvisualizer. 50 mirrors
+ * beatoraja's reference `SkinTimingVisualizer` decay tail — long enough to read the recent
+ * pattern at a glance, short enough that re-stroking the polyline every judge stays cheap.
+ */
+const RECENT_TIMINGS_CAPACITY = 50;
+
 export class BeatorajaRuntimeAdapter {
   /**
    * Live op set — option ops (from `baseOps`) plus runtime ops the engine has toggled. Exposed via
@@ -189,6 +196,14 @@ export class BeatorajaRuntimeAdapter {
   private readonly scoreHistory: Array<{ progress: number; exScore: number }> = [];
   /** Per-judge `(progress, gauge%)` samples — gauge polyline source. Same lifecycle as scoreHistory. */
   private readonly gaugeHistory: Array<{ progress: number; value: number }> = [];
+  /**
+   * Recent judgement timing samples — circular buffer keyed by insertion order. Each entry holds
+   * the signed delta (positive = late, negative = early) and the judge kind so the
+   * timingvisualizer can render judgement-tier-colored marks. Capped at
+   * {@link RECENT_TIMINGS_CAPACITY} — the oldest sample is dropped when capacity is reached so
+   * the visualizer paints a fixed-cost decay tail without unbounded memory growth.
+   */
+  private readonly recentTimings: Array<{ deltaMs: number; kind: string }> = [];
   /**
    * Adapter-instance boot wallclock — surfaces prop.lua `operating_time_*` (run uptime). Beatoraja's
    * native semantics is "since beatoraja launched"; in our world the closest equivalent is "since
@@ -474,6 +489,15 @@ export class BeatorajaRuntimeAdapter {
     this.runningCombo = state.combo;
     if (state.combo > this.maxCombo) this.maxCombo = state.combo;
 
+    // Capture the signed timing delta when the engine supplied one — drives `timingvisualizer[]`
+    // sample plotting. Synthetic publishes (READY, AUTO PLAY, mine BAD) leave deltaMs undefined
+    // and don't show up on the visualizer. The ring drops the oldest sample at capacity so
+    // memory stays bounded across long runs.
+    if (typeof state.deltaMs === 'number' && Number.isFinite(state.deltaMs)) {
+      this.recentTimings.push({ deltaMs: state.deltaMs, kind: state.judge });
+      if (this.recentTimings.length > RECENT_TIMINGS_CAPACITY) this.recentTimings.shift();
+    }
+
     // Append a polyline sample. Mirrors what `PixiGameplayView.publishJudge` does on the LR2
     // path — a `(progress, exScore)` / `(progress, gauge%)` pair captured at every judge so the
     // result polyline reflects the chart's structure (dense in busy stretches, sparse in calm
@@ -738,6 +762,18 @@ export class BeatorajaRuntimeAdapter {
       default:
         return undefined;
     }
+  }
+
+  /**
+   * Resolve recent judgement timings for `timingvisualizer[]` rendering. Returns oldest-first
+   * samples (`samples[0]` = oldest in buffer; `samples[length - 1]` = most recent), each with
+   * the signed delta and the judge kind. Empty array when no timed judgement has fired yet — the
+   * renderer hides the visualizer until the player makes their first judged input.
+   *
+   * Sign convention matches the engine: positive `deltaMs` = late, negative = early.
+   */
+  resolveTimingSamples(): ReadonlyArray<{ deltaMs: number; kind: string }> {
+    return this.recentTimings;
   }
 
   /**

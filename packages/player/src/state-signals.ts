@@ -9,6 +9,16 @@ export interface PlayerJudgeComboSignalState {
   judge: string;
   combo: number;
   channel?: string;
+  /**
+   * Hit timing offset for THIS judgement, in milliseconds. **Sign convention** matches the
+   * engine's `signedDeltaMs`: positive = LATE (player pressed AFTER the note's nominal time —
+   * this increments `summary.slow`), negative = EARLY (before the note — increments
+   * `summary.fast`). `undefined` for synthetic publishes that carry no real timing — `READY`
+   * resets, AUTO PLAY rebroadcasts (which are by definition timing-perfect), BAD/POOR verdicts
+   * triggered by non-press events (mine hits, miss-without-press). Drives `timingvisualizer[]`
+   * skin elements.
+   */
+  deltaMs?: number;
   updatedAtMs: number;
 }
 
@@ -36,7 +46,7 @@ export interface PlayerStateSignals {
   drainPendingJudgeCombos: () => Readonly<PlayerJudgeComboSignalState>[];
   setPaused: (value: boolean) => void;
   setHighSpeed: (value: number) => void;
-  publishJudgeCombo: (judge: string, combo: number, channel?: string, updatedAtMs?: number) => void;
+  publishJudgeCombo: (judge: string, combo: number, channel?: string, updatedAtMs?: number, deltaMs?: number) => void;
 }
 
 export function createPlayerStateSignals(initialHighSpeed: number): PlayerStateSignals {
@@ -66,16 +76,24 @@ export function createPlayerStateSignals(initialHighSpeed: number): PlayerStateS
     highSpeed(value);
   };
 
-  const publishJudgeCombo = (judge: string, combo: number, channel?: string, updatedAtMs = Date.now()): void => {
+  const publishJudgeCombo = (
+    judge: string,
+    combo: number,
+    channel?: string,
+    updatedAtMs = Date.now(),
+    deltaMs?: number,
+  ): void => {
     const sanitizedCombo = Math.max(0, Math.floor(combo));
+    const sanitizedDeltaMs = typeof deltaMs === 'number' && Number.isFinite(deltaMs) ? deltaMs : undefined;
     judgeComboState.judge = judge;
     judgeComboState.combo = sanitizedCombo;
     judgeComboState.channel = channel;
+    judgeComboState.deltaMs = sanitizedDeltaMs;
     judgeComboState.updatedAtMs = updatedAtMs;
     // Push a fresh snapshot rather than the shared `judgeComboState` reference — a queued consumer that drains
-    // late should still see the publish's exact `judge` / `combo` / `channel` values, even if subsequent
-    // publishes have since overwritten the latch.
-    pendingJudgeCombos.push({ judge, combo: sanitizedCombo, channel, updatedAtMs });
+    // late should still see the publish's exact `judge` / `combo` / `channel` / `deltaMs` values, even if
+    // subsequent publishes have since overwritten the latch.
+    pendingJudgeCombos.push({ judge, combo: sanitizedCombo, channel, deltaMs: sanitizedDeltaMs, updatedAtMs });
     judgeComboTick(judgeComboTick() + 1);
   };
 

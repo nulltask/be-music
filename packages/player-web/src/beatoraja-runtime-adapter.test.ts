@@ -316,6 +316,55 @@ describe('BeatorajaRuntimeAdapter — lanecover slider', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — timing samples', () => {
+  it('appends signed deltaMs samples on each judge publish (oldest-first)', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    expect(adapter.resolveTimingSamples()).toEqual([]);
+
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -8, updatedAtMs: 100 });
+    adapter.applyJudgeCombo({ judge: 'GREAT', combo: 2, channel: '11', deltaMs: 22, updatedAtMs: 200 });
+    adapter.applyJudgeCombo({ judge: 'BAD', combo: 0, channel: '12', deltaMs: -110, updatedAtMs: 300 });
+
+    expect(adapter.resolveTimingSamples()).toEqual([
+      { deltaMs: -8, kind: 'PERFECT' },
+      { deltaMs: 22, kind: 'GREAT' },
+      { deltaMs: -110, kind: 'BAD' },
+    ]);
+  });
+
+  it('skips publishes without a deltaMs (READY / AUTO PLAY / mine BAD)', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.applyJudgeCombo({ judge: 'READY', combo: 0, updatedAtMs: 0 });
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', updatedAtMs: 50 });
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 2, channel: '12', deltaMs: -3, updatedAtMs: 60 });
+    expect(adapter.resolveTimingSamples()).toEqual([{ deltaMs: -3, kind: 'PERFECT' }]);
+  });
+
+  it('caps the buffer to RECENT_TIMINGS_CAPACITY (50) — drops oldest at overflow', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    for (let i = 0; i < 60; i += 1) {
+      adapter.applyJudgeCombo({ judge: 'PERFECT', combo: i + 1, channel: '11', deltaMs: i, updatedAtMs: i });
+    }
+    const samples = adapter.resolveTimingSamples();
+    expect(samples).toHaveLength(50);
+    // Oldest 10 dropped — the surviving ring starts at deltaMs=10.
+    expect(samples[0]?.deltaMs).toBe(10);
+    expect(samples[samples.length - 1]?.deltaMs).toBe(59);
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — lift slider', () => {
   it('drives `OFFSET_LIFT` (id 3) y-shift and `BEATORAJA_NUM.LIFT1` from `liftRatio`', () => {
     const adapter = new BeatorajaRuntimeAdapter({

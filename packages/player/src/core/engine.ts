@@ -2742,7 +2742,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         playbackEventTracer.logPoorTriggered(referenceSeconds);
       }
       setLoggedCombo(referenceSeconds, 0, 'miss', 'POOR', note.channel);
-      activeStateSignals?.publishJudgeCombo('POOR', combo, note.channel);
+      // Miss-without-press: positive `signedDeltaMs` because the engine reached the note's
+      // judgement deadline without an input. The visualizer plots these in the "late" band.
+      activeStateSignals?.publishJudgeCombo(
+        'POOR',
+        combo,
+        note.channel,
+        undefined,
+        (referenceSeconds - note.seconds) * 1000,
+      );
     }
   };
 
@@ -2762,7 +2770,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           ['deltaMs', Math.round(deltaMs)],
         ]);
       } else {
-        activeStateSignals?.publishJudgeCombo(judge.kind, combo, channel);
+        activeStateSignals?.publishJudgeCombo(judge.kind, combo, channel, undefined, judge.signedDeltaMs);
       }
       if (!uiEnabled) {
         playbackEventTracer.logPoorCleared(atSeconds);
@@ -2779,7 +2787,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           ['deltaMs', Math.round(deltaMs)],
         ]);
       } else {
-        activeStateSignals?.publishJudgeCombo('BAD', combo, channel);
+        activeStateSignals?.publishJudgeCombo('BAD', combo, channel, undefined, judge.signedDeltaMs);
       }
       return;
     }
@@ -2796,7 +2804,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         ['deltaMs', Math.round(deltaMs)],
       ]);
     } else {
-      activeStateSignals?.publishJudgeCombo('POOR', combo, channel);
+      activeStateSignals?.publishJudgeCombo('POOR', combo, channel, undefined, judge.signedDeltaMs);
     }
   };
 
