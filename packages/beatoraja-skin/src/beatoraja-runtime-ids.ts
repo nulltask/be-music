@@ -265,6 +265,212 @@ export function judgeOpForKind(side: BeatorajaSide, kind: string): number | unde
 // up the dynamic string the skin should display. Values not listed here resolve to `undefined` and the
 // text node renders empty.
 
+/**
+ * Numeric value references (`value[].ref`). Values are pulled directly from prop.lua's `local num = { ... }`
+ * dump (https://github.com/ovnz/blanket/blob/main/prop.lua) — the canonical authority for beatoraja's
+ * numeric op IDs. Skin authors point a `value[].ref` at one of these to display the matching number on
+ * screen (score, combo, BPM, judge counts, gauge percent, etc.).
+ *
+ * Categories (mirroring prop.lua's grouping):
+ *
+ * - **Live-play** — `POINT` … `COMBOBREAK`, `*_RATE`, `*_AFTERDOT`. Sourced from the engine's
+ *   per-frame `summary` payload + the adapter's running-combo latch.
+ * - **Hispeed / lanecover** — `HISPEED`, `HISPEED_AFTERDOT`, `DURATION`, `LIFT1`, `HIDDEN1`. Sourced
+ *   from the adapter's hispeed latch (others default to 0 until the host wires a setter).
+ * - **Time / clock** — `PLAYTIME_*`, `TIMELEFT_*`, `SONGLENGTH_*`, `TIME_*` (wallclock), `CURRENT_FPS`.
+ *   Time-based ones come from `frame.currentSeconds` / `frame.totalSeconds`; wallclock from `Date.now()`.
+ * - **Chart metadata** — `MAXBPM` / `MINBPM` / `MAINBPM`, `PLAYLEVEL`. Sourced from `chart.metadata`.
+ * - **Best-record / DB-backed** — `SCORE` (best, NOT live), `MAXSCORE`, `MAXCOMBO` (best across runs),
+ *   `MISSCOUNT`, `PLAYCOUNT`, `CLEARCOUNT`, etc. Return 0 until the score DB layer ships.
+ * - **IR / rival / folder stats** — Online and per-folder aggregates. Return 0 (no IR / DB layer yet).
+ *
+ * Codes not represented here resolve to `undefined` and the matching `value[]` renders 0 — same fallback
+ * behavior as for codes that ARE represented but lack live data (best-record block).
+ */
+export const BEATORAJA_NUM = {
+  // ─── Hispeed / lanecover (10, 12-14, 310-315, 1312-1327) ──────────────────────────────────────
+  /** prop.lua `hispeed_lr2 = 10` — hispeed × 100, LR2-compatible slot. */
+  HISPEED_LR2: 10,
+  /** prop.lua `judgetiming = 12` — manual judge offset (skin config). */
+  JUDGETIMING: 12,
+  /** prop.lua `lanecover1 = 14` — 1P lanecover percentage (skin config). */
+  LANECOVER1: 14,
+  /** prop.lua `hispeed = 310` — current hispeed × 100 (e.g. 1.5× → 150). */
+  HISPEED: 310,
+  /** prop.lua `hispeed_afterdot = 311` — fractional digits of hispeed (e.g. 1.5× → 50). */
+  HISPEED_AFTERDOT: 311,
+  /** prop.lua `duration = 312` — green-number; ms a note takes from spawn to judgement. */
+  DURATION: 312,
+  /** prop.lua `duration_green = 313` — duration colored green (current variant). */
+  DURATION_GREEN: 313,
+  /** prop.lua `lift1 = 314` — 1P lanecover lift percentage. */
+  LIFT1: 314,
+  /** prop.lua `hidden1 = 315` — 1P lanecover hidden percentage. */
+  HIDDEN1: 315,
+
+  // ─── Wallclock / system (17-29) ───────────────────────────────────────────────────────────────
+  /** prop.lua `totalplaytime_hour = 17` — accumulated play time, hour part. */
+  TOTALPLAYTIME_HOUR: 17,
+  /** prop.lua `totalplaytime_minute = 18`. */
+  TOTALPLAYTIME_MINUTE: 18,
+  /** prop.lua `totalplaytime_second = 19`. */
+  TOTALPLAYTIME_SECOND: 19,
+  /** prop.lua `current_fps = 20` — moving-average FPS. */
+  CURRENT_FPS: 20,
+  /** prop.lua `time_year = 21`. */
+  TIME_YEAR: 21,
+  /** prop.lua `time_month = 22`. */
+  TIME_MONTH: 22,
+  /** prop.lua `time_day = 23`. */
+  TIME_DAY: 23,
+  /** prop.lua `time_hour = 24`. */
+  TIME_HOUR: 24,
+  /** prop.lua `time_minute = 25`. */
+  TIME_MINUTE: 25,
+  /** prop.lua `time_second = 26`. */
+  TIME_SECOND: 26,
+  /** prop.lua `operating_time_hour = 27` — beatoraja runtime hour part. */
+  OPERATING_TIME_HOUR: 27,
+  /** prop.lua `operating_time_minute = 28`. */
+  OPERATING_TIME_MINUTE: 28,
+  /** prop.lua `operating_time_second = 29`. */
+  OPERATING_TIME_SECOND: 29,
+
+  // ─── Best-record block (71-89) ────────────────────────────────────────────────────────────────
+  /** prop.lua `score = 71` — best-ever score for this chart. */
+  BEST_SCORE: 71,
+  /** prop.lua `maxscore = 72`. */
+  BEST_MAXSCORE: 72,
+  /** prop.lua `totalnotes = 74` — total scorable notes (also exposed as live `totalnotes2 = 106`). */
+  TOTALNOTES: 74,
+  /** prop.lua `maxcombo = 75` — best max-combo across runs. */
+  BEST_MAXCOMBO: 75,
+  /** prop.lua `misscount = 76`. */
+  BEST_MISSCOUNT: 76,
+  /** prop.lua `playcount = 77`. */
+  PLAYCOUNT: 77,
+  /** prop.lua `clearcount = 78`. */
+  CLEARCOUNT: 78,
+  /** prop.lua `failcount = 79`. */
+  FAILCOUNT: 79,
+  /** prop.lua `perfect2 = 80` — best run's perfect count. */
+  BEST_PERFECT: 80,
+  /** prop.lua `great2 = 81`. */
+  BEST_GREAT: 81,
+  /** prop.lua `good2 = 82`. */
+  BEST_GOOD: 82,
+  /** prop.lua `bad2 = 83`. */
+  BEST_BAD: 83,
+  /** prop.lua `poor2 = 84`. */
+  BEST_POOR: 84,
+
+  // ─── Chart metadata (90-92, 96) ───────────────────────────────────────────────────────────────
+  /** prop.lua `maxbpm = 90`. */
+  MAXBPM: 90,
+  /** prop.lua `minbpm = 91`. */
+  MINBPM: 91,
+  /** prop.lua `mainbpm = 92`. */
+  MAINBPM: 92,
+  /** prop.lua `playlevel = 96` — chart difficulty rating from `#PLAYLEVEL`. */
+  PLAYLEVEL: 96,
+
+  // ─── Live-play block (100-116, 121-128, 135-136, 407, 410-427) ────────────────────────────────
+  /** prop.lua `point = 100` — current run's score (NOT the best-ever record). */
+  POINT: 100,
+  /** prop.lua `score2 = 101` — alias of `point` for skins that prefer the legacy name. */
+  SCORE2: 101,
+  /** prop.lua `score_rate = 102` — EX-score percentage integer part. */
+  SCORE_RATE: 102,
+  /** prop.lua `score_rate_afterdot = 103` — EX-score percentage post-decimal digits. */
+  SCORE_RATE_AFTERDOT: 103,
+  /** prop.lua `combo = 104` — running combo. */
+  COMBO: 104,
+  /** prop.lua `maxcombo2 = 105` — max combo this run. */
+  MAXCOMBO_LIVE: 105,
+  /** prop.lua `totalnotes2 = 106`. */
+  TOTALNOTES_LIVE: 106,
+  /** prop.lua `groovegauge = 107` — gauge % (integer). */
+  GROOVEGAUGE: 107,
+  /** prop.lua `diff_exscore = 108`. */
+  DIFF_EXSCORE: 108,
+  /** prop.lua `perfect = 110`. */
+  PERFECT: 110,
+  /** prop.lua `great = 111`. */
+  GREAT: 111,
+  /** prop.lua `good = 112`. */
+  GOOD: 112,
+  /** prop.lua `bad = 113`. */
+  BAD: 113,
+  /** prop.lua `poor = 114`. */
+  POOR: 114,
+  /** prop.lua `total_rate = 115`. */
+  TOTAL_RATE: 115,
+  /** prop.lua `total_rate_afterdot = 116`. */
+  TOTAL_RATE_AFTERDOT: 116,
+  /** prop.lua `target_score = 121`. */
+  TARGET_SCORE: 121,
+  /** prop.lua `target_score_rate = 122`. */
+  TARGET_SCORE_RATE: 122,
+  /** prop.lua `target_score_rate_afterdot = 123`. */
+  TARGET_SCORE_RATE_AFTERDOT: 123,
+  /** prop.lua `groovegauge_afterdot = 407`. */
+  GROOVEGAUGE_AFTERDOT: 407,
+  /** prop.lua `early_perfect = 410`. */
+  EARLY_PERFECT: 410,
+  /** prop.lua `late_perfect = 411`. */
+  LATE_PERFECT: 411,
+  /** prop.lua `early_great = 412`. */
+  EARLY_GREAT: 412,
+  /** prop.lua `late_great = 413`. */
+  LATE_GREAT: 413,
+  /** prop.lua `early_good = 414`. */
+  EARLY_GOOD: 414,
+  /** prop.lua `late_good = 415`. */
+  LATE_GOOD: 415,
+  /** prop.lua `early_bad = 416`. */
+  EARLY_BAD: 416,
+  /** prop.lua `late_bad = 417`. */
+  LATE_BAD: 417,
+  /** prop.lua `early_poor = 418`. */
+  EARLY_POOR: 418,
+  /** prop.lua `late_poor = 419`. */
+  LATE_POOR: 419,
+  /** prop.lua `miss = 420` — empty-press POOR count (engine treats miss == poor). */
+  MISS: 420,
+  /** prop.lua `early_miss = 421`. */
+  EARLY_MISS: 421,
+  /** prop.lua `late_miss = 422`. */
+  LATE_MISS: 422,
+  /** prop.lua `totalearly = 423` — running fast tally. */
+  TOTALEARLY: 423,
+  /** prop.lua `totallate = 424` — running slow tally. */
+  TOTALLATE: 424,
+  /** prop.lua `combobreak = 425` — combo-break count = bad + poor. */
+  COMBOBREAK: 425,
+  /** prop.lua `poor_plus_miss = 426`. */
+  POOR_PLUS_MISS: 426,
+  /** prop.lua `bad_plus_poor_plus_miss = 427`. */
+  BAD_PLUS_POOR_PLUS_MISS: 427,
+
+  // ─── Time-based readouts (160-165, 1163-1164) ─────────────────────────────────────────────────
+  /** prop.lua `nowbpm = 160` — current BPM (best effort: chart's canonical BPM). */
+  NOWBPM: 160,
+  /** prop.lua `playtime_minute = 161`. */
+  PLAYTIME_MINUTE: 161,
+  /** prop.lua `playtime_second = 162`. */
+  PLAYTIME_SECOND: 162,
+  /** prop.lua `timeleft_minute = 163`. */
+  TIMELEFT_MINUTE: 163,
+  /** prop.lua `timeleft_second = 164`. */
+  TIMELEFT_SECOND: 164,
+  /** prop.lua `loading_progress = 165` — 0..100. */
+  LOADING_PROGRESS: 165,
+  /** prop.lua `songlength_minute = 1163`. */
+  SONGLENGTH_MINUTE: 1163,
+  /** prop.lua `songlength_second = 1164`. */
+  SONGLENGTH_SECOND: 1164,
+} as const;
+
 export const BEATORAJA_TEXT = {
   /** prop.lua `rival = 1`. */
   RIVAL: 1,

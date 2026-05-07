@@ -27,6 +27,7 @@ import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals
 import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { BeatorajaRenderContext } from './beatoraja-render.ts';
 import {
+  BEATORAJA_NUM,
   BEATORAJA_OP,
   BEATORAJA_TEXT,
   bombTimerId,
@@ -90,6 +91,20 @@ export class BeatorajaRuntimeAdapter {
   private runningCombo = 0;
   /** Maximum combo seen this run. */
   private maxCombo = 0;
+  /**
+   * Adapter-instance boot wallclock — surfaces prop.lua `operating_time_*` (run uptime). Beatoraja's
+   * native semantics is "since beatoraja launched"; in our world the closest equivalent is "since
+   * this gameplay scene mounted". Stored in `Date.now()` ms so subtraction yields wallclock seconds.
+   */
+  private readonly bootMs = Date.now();
+  /**
+   * Ring buffer of recent `getNowMs()` timestamps, captured by `applyFrame`. Used to derive the
+   * smoothed `current_fps` readout (prop.lua `current_fps = 20`). Sized for ~1 s of frames at 120
+   * Hz, which is more than enough to dampen single-frame jitter.
+   */
+  private readonly fpsRingMs = new Float64Array(120);
+  private fpsRingHead = 0;
+  private fpsRingFilled = 0;
   /**
    * Per-ref "we already logged that this isn't wired" set. Keeps `resolveNumberValue` quiet on the hot
    * path while still surfacing each missing prop.lua num exactly once per session.
@@ -157,6 +172,13 @@ export class BeatorajaRuntimeAdapter {
   /** Latch the current engine frame snapshot — drives text / ref content resolution. */
   applyFrame(frame: PlayerUiFramePayload): void {
     this.frame = frame;
+    // Record the frame's clock arrival in the FPS ring so `current_fps` (`BEATORAJA_NUM.CURRENT_FPS`)
+    // can derive a smoothed rate. Using `getNowMs()` (the same scene clock the timer/keyframe sampler
+    // uses) keeps the FPS readout consistent with on-screen timing — if the host throttles the
+    // ticker, `current_fps` reflects the throttle, not the wallclock.
+    this.fpsRingMs[this.fpsRingHead] = this.getNowMs();
+    this.fpsRingHead = (this.fpsRingHead + 1) % this.fpsRingMs.length;
+    if (this.fpsRingFilled < this.fpsRingMs.length) this.fpsRingFilled += 1;
   }
 
   /**
@@ -317,110 +339,119 @@ export class BeatorajaRuntimeAdapter {
     refOp: number,
     summary: PlayerUiFramePayload['summary'] | undefined,
   ): number | undefined {
+    // Helpers — defined inside the resolver so the switch arms stay readable. All return finite
+    // ints; the `Math.floor` calls in particular are deliberate (beatoraja's value displays are
+    // integer-only — fractional parts get their own `_afterdot` slot).
+    const exScoreMax = (summary?.total ?? 0) * 2;
+    const exScoreRatePct = exScoreMax > 0 ? ((summary?.exScore ?? 0) / exScoreMax) * 100 : 0;
+    const scoreRatePct = (summary?.total ?? 0) > 0 ? ((summary?.score ?? 0) / ((summary?.total ?? 0) * 1000)) * 100 : 0;
+    const gaugePct = summary?.gauge && summary.gauge.max > 0 ? (summary.gauge.current / summary.gauge.max) * 100 : 0;
+
     switch (refOp) {
-      // ─── Best-record block (71-89) ─────────────────────────────────────────────────────
-      // These read from the per-chart score DB. We don't have a DB layer yet, so they all return 0.
-      // `num.score = 71` (best score), `num.maxscore = 72`, `num.totalnotes = 74`,
-      // `num.maxcombo = 75` (best max combo across runs), `num.misscount = 76`, etc.
-      case 71:
-      case 72:
-      case 75:
-      case 76:
-      case 77:
-      case 78:
-      case 79:
-      case 80:
-      case 81:
-      case 82:
-      case 83:
-      case 84:
-        return 0;
-      // `num.totalnotes = 74` — the chart's total scorable note count. Pulled from the engine frame
-      // since the chart is already parsed at this point.
-      case 74:
-        return summary?.total ?? 0;
-
-      // ─── Live-play block (100-114, 420, 423-425) ───────────────────────────────────────
-      // `prop.lua num.point = 100` — current run's score (NOT the best record). Beatoraja uses this
-      // for the live readout while playing; `num.score = 71` is a separate "best ever" slot.
-      case 100:
-        return summary?.score ?? 0;
-      // `num.score2 = 101`, `num.score_rate = 102`, `num.score_rate_afterdot = 103` — derived
-      // displays. `score2` is the same as `score`; `score_rate` is the percentage with optional
-      // post-decimal split (`afterdot` carries the fractional digits).
-      case 101:
-        return summary?.score ?? 0;
-      case 102: {
-        const max = (summary?.total ?? 0) * 2;
-        return max > 0 ? Math.floor(((summary?.score ?? 0) / max) * 100) : 0;
+      // ─── Hispeed / lanecover slots ─────────────────────────────────────────────────────
+      // Hispeed displays the multiplier ×100 (e.g. 1.5× → 150). The "afterdot" slot carries the
+      // post-decimal digits ALONE so a skin can render `xxx.yy` with two separate value strips
+      // (`hispeed` / `hispeed_afterdot`). LR2 `hispeed_lr2 = 10` is the legacy slot — same payload.
+      case BEATORAJA_NUM.HISPEED:
+      case BEATORAJA_NUM.HISPEED_LR2:
+        return Math.round(this.lastHiSpeed * 100);
+      case BEATORAJA_NUM.HISPEED_AFTERDOT: {
+        // Two-digit fractional part of hispeed × 100 — i.e. (hispeed * 100) mod 100. For 1.50 → 50;
+        // for 2.00 → 0. Matches beatoraja's value-strip convention where `divx=10` digit slots are
+        // pulled from this op.
+        return Math.round(this.lastHiSpeed * 100) % 100;
       }
-      case 103: {
-        // Two decimal digits of the score-rate percentage, beatoraja convention.
-        const max = (summary?.total ?? 0) * 2;
-        if (max <= 0) return 0;
-        const pct = ((summary?.score ?? 0) / max) * 100;
-        return Math.floor((pct - Math.floor(pct)) * 100);
-      }
-      // `num.combo = 104` — running combo, `num.maxcombo2 = 105` — max combo this run.
-      case 104:
-        return this.runningCombo;
-      case 105:
-        return this.maxCombo;
-      // `num.totalnotes2 = 106` — current run's total notes (same as `num.totalnotes`).
-      case 106:
-        return summary?.total ?? 0;
-      // `num.groovegauge = 107` — gauge percentage (0..100, integer part).
-      case 107: {
-        const gauge = summary?.gauge;
-        if (!gauge || gauge.max <= 0) return 0;
-        return Math.floor((gauge.current / gauge.max) * 100);
-      }
-      // `num.groovegauge_afterdot = 407` — gauge fractional digits.
-      case 407: {
-        const gauge = summary?.gauge;
-        if (!gauge || gauge.max <= 0) return 0;
-        const pct = (gauge.current / gauge.max) * 100;
-        return Math.floor((pct - Math.floor(pct)) * 100);
-      }
-      // `num.diff_exscore = 108` — current score delta vs target / rival. We don't track these yet;
-      // return 0 so the readout shows "0" instead of garbage.
-      case 108:
+      // Lanecover / lift / hidden / judge timing — these are skin-config knobs the host doesn't yet
+      // surface. Returning 0 (not undefined) keeps the readout zero AND silences the "ref not
+      // wired" log so authors aren't spammed about features that simply aren't connected.
+      case BEATORAJA_NUM.JUDGETIMING:
+      case BEATORAJA_NUM.LANECOVER1:
+      case BEATORAJA_NUM.LIFT1:
+      case BEATORAJA_NUM.HIDDEN1:
+      case BEATORAJA_NUM.DURATION:
+      case BEATORAJA_NUM.DURATION_GREEN:
         return 0;
 
-      // Per-judge LIVE counts (`num.perfect = 110` … `num.poor = 114`, `num.miss = 420`).
-      case 110:
-        return summary?.perfect ?? 0;
-      case 111:
-        return summary?.great ?? 0;
-      case 112:
-        return summary?.good ?? 0;
-      case 113:
-        return summary?.bad ?? 0;
-      case 114:
-        return summary?.poor ?? 0;
-      case 420:
-        // The engine doesn't separate "miss" from "poor" — empty-press POORs are just POORs. Most
-        // skin authors want the same value for both readouts; surface poor count.
-        return summary?.poor ?? 0;
-      // `num.totalearly = 423`, `num.totallate = 424` — running fast/slow tally.
-      case 423:
-        return summary?.fast ?? 0;
-      case 424:
-        return summary?.slow ?? 0;
-      // `num.combobreak = 425` — combo-break count = bad + poor + miss (in our engine, bad + poor).
-      case 425:
-        return (summary?.bad ?? 0) + (summary?.poor ?? 0);
+      // ─── Wallclock + run uptime + FPS (17-29) ──────────────────────────────────────────
+      // `time_*` reads the local wallclock — what beatoraja prints in the corner of every scene.
+      // `JS Date` returns the user's local TZ which matches beatoraja's "your computer's clock"
+      // semantics on Windows. `getMonth()` is 0-indexed; +1 for the human convention.
+      case BEATORAJA_NUM.TIME_YEAR:
+        return new Date().getFullYear();
+      case BEATORAJA_NUM.TIME_MONTH:
+        return new Date().getMonth() + 1;
+      case BEATORAJA_NUM.TIME_DAY:
+        return new Date().getDate();
+      case BEATORAJA_NUM.TIME_HOUR:
+        return new Date().getHours();
+      case BEATORAJA_NUM.TIME_MINUTE:
+        return new Date().getMinutes();
+      case BEATORAJA_NUM.TIME_SECOND:
+        return new Date().getSeconds();
+      // `operating_time_*` is "how long has beatoraja been running" — we approximate with "how long
+      // has this adapter instance lived", split into hour / minute / second. Authors typically
+      // display this as a single `HH:MM:SS` row from the three slots, so all three need to agree.
+      case BEATORAJA_NUM.OPERATING_TIME_HOUR:
+        return Math.floor((Date.now() - this.bootMs) / 3_600_000);
+      case BEATORAJA_NUM.OPERATING_TIME_MINUTE:
+        return Math.floor(((Date.now() - this.bootMs) / 60_000) % 60);
+      case BEATORAJA_NUM.OPERATING_TIME_SECOND:
+        return Math.floor(((Date.now() - this.bootMs) / 1_000) % 60);
+      // `totalplaytime_*` — accumulated play time across ALL sessions. No persistence layer yet,
+      // so all three slots return 0. Mirror the adapter's existing best-record-block contract.
+      case BEATORAJA_NUM.TOTALPLAYTIME_HOUR:
+      case BEATORAJA_NUM.TOTALPLAYTIME_MINUTE:
+      case BEATORAJA_NUM.TOTALPLAYTIME_SECOND:
+        return 0;
+      // `current_fps` — smoothed FPS derived from the ring of recent `applyFrame` clock stamps. A
+      // single-frame measurement is too noisy (microtick jitter shows ±20 fps); the ring averages
+      // over up to ~1 s of frames so the readout is stable. Empty / single-sample → 0 (we'd
+      // divide by zero or by an arbitrarily-small interval otherwise).
+      case BEATORAJA_NUM.CURRENT_FPS: {
+        if (this.fpsRingFilled < 2) return 0;
+        const newestIdx = (this.fpsRingHead - 1 + this.fpsRingMs.length) % this.fpsRingMs.length;
+        const oldestIdx = (this.fpsRingHead - this.fpsRingFilled + this.fpsRingMs.length) % this.fpsRingMs.length;
+        const newest = this.fpsRingMs[newestIdx]!;
+        const oldest = this.fpsRingMs[oldestIdx]!;
+        const spanSec = (newest - oldest) / 1000;
+        if (spanSec <= 0) return 0;
+        // `fpsRingFilled - 1` because N samples bracket N-1 inter-frame intervals.
+        return Math.round((this.fpsRingFilled - 1) / spanSec);
+      }
 
-      // ─── Chart metadata (90-96) ────────────────────────────────────────────────────────
+      // ─── Best-record block (71-84) ─────────────────────────────────────────────────────
+      // These read from the per-chart score DB. We don't have a DB layer yet, so they all return
+      // 0 — same contract as `totalplaytime_*` above. The exception is `totalnotes = 74`, which
+      // duplicates the live engine `summary.total` (the chart is already parsed; we don't need
+      // a DB lookup for it).
+      case BEATORAJA_NUM.TOTALNOTES:
+        return summary?.total ?? 0;
+      case BEATORAJA_NUM.BEST_SCORE:
+      case BEATORAJA_NUM.BEST_MAXSCORE:
+      case BEATORAJA_NUM.BEST_MAXCOMBO:
+      case BEATORAJA_NUM.BEST_MISSCOUNT:
+      case BEATORAJA_NUM.PLAYCOUNT:
+      case BEATORAJA_NUM.CLEARCOUNT:
+      case BEATORAJA_NUM.FAILCOUNT:
+      case BEATORAJA_NUM.BEST_PERFECT:
+      case BEATORAJA_NUM.BEST_GREAT:
+      case BEATORAJA_NUM.BEST_GOOD:
+      case BEATORAJA_NUM.BEST_BAD:
+      case BEATORAJA_NUM.BEST_POOR:
+        return 0;
+
+      // ─── Chart metadata (90-92, 96) ────────────────────────────────────────────────────
       // `num.maxbpm = 90`, `num.minbpm = 91`, `num.mainbpm = 92` — the chart's BPM range. We expose
       // `chart.metadata.bpm` (the canonical BPM); min/max would need a scan over all `bpm` events
-      // we don't yet do. Returning the canonical value for all three is a reasonable approximation.
-      case 90:
-      case 91:
-      case 92:
+      // we don't yet do. Returning the canonical value for all three is a reasonable approximation
+      // and matches beatoraja's behavior on charts without dynamic BPM changes.
+      case BEATORAJA_NUM.MAXBPM:
+      case BEATORAJA_NUM.MINBPM:
+      case BEATORAJA_NUM.MAINBPM:
         return Math.round(this.chart?.metadata?.bpm ?? 0);
-      // `num.playlevel = 96` — chart difficulty rating from `#PLAYLEVEL`.
-      case 96: {
+      // `num.playlevel = 96` — chart difficulty rating from `#PLAYLEVEL`. The header is sometimes a
+      // string (e.g. `"☆12"`); coerce best-effort to an int with `parseInt`.
+      case BEATORAJA_NUM.PLAYLEVEL: {
         const level = this.chart?.metadata?.playLevel;
         if (typeof level === 'number') return Math.trunc(level);
         if (typeof level === 'string') {
@@ -430,13 +461,124 @@ export class BeatorajaRuntimeAdapter {
         return 0;
       }
 
-      // ─── Hispeed (310) ─────────────────────────────────────────────────────────────────
-      // `num.hispeed = 310` — display as integer ×100 (e.g. "1.5x" → 150).
-      case 310:
-        return Math.round(this.lastHiSpeed * 100);
-      // `num.hispeed_lr2 = 10` — alternative LR2-compatible hispeed slot.
-      case 10:
-        return Math.round(this.lastHiSpeed * 100);
+      // ─── Live-play block (100-116, 121-128, 407, 410-427) ──────────────────────────────
+      // `point = 100` is current run's score (NOT the best record); `score2 = 101` is the same
+      // value under beatoraja's legacy name (some skins author against either).
+      case BEATORAJA_NUM.POINT:
+      case BEATORAJA_NUM.SCORE2:
+        return summary?.score ?? 0;
+      // `score_rate` / `_afterdot` is the EX-score percentage. EX-score's max is `total * 2`
+      // (PERFECT = 2, GREAT = 1). Authors expect this to count up smoothly even when raw `score`
+      // (a band-step gauge value) doesn't.
+      case BEATORAJA_NUM.SCORE_RATE:
+        return Math.floor(exScoreRatePct);
+      case BEATORAJA_NUM.SCORE_RATE_AFTERDOT:
+        return Math.floor((exScoreRatePct - Math.floor(exScoreRatePct)) * 100);
+      // `total_rate = 115` / `_afterdot = 116` — score (NOT EX-score) percentage. Score in our
+      // engine is already a 0..1000 per-note value, so the max is `total * 1000`. (The exact cap
+      // depends on the skin author's expectation; this matches what the engine emits as
+      // `summary.score`.)
+      case BEATORAJA_NUM.TOTAL_RATE:
+        return Math.floor(scoreRatePct);
+      case BEATORAJA_NUM.TOTAL_RATE_AFTERDOT:
+        return Math.floor((scoreRatePct - Math.floor(scoreRatePct)) * 100);
+      case BEATORAJA_NUM.COMBO:
+        return this.runningCombo;
+      case BEATORAJA_NUM.MAXCOMBO_LIVE:
+        return this.maxCombo;
+      case BEATORAJA_NUM.TOTALNOTES_LIVE:
+        return summary?.total ?? 0;
+      case BEATORAJA_NUM.GROOVEGAUGE:
+        return Math.floor(gaugePct);
+      case BEATORAJA_NUM.GROOVEGAUGE_AFTERDOT:
+        return Math.floor((gaugePct - Math.floor(gaugePct)) * 100);
+      // Target / rival diff slots — no IR / DB layer, return 0 so the readout shows zero rather
+      // than garbage. (Authors gate these behind `if[ir_loaded]` / similar so the zero is benign.)
+      case BEATORAJA_NUM.DIFF_EXSCORE:
+      case BEATORAJA_NUM.TARGET_SCORE:
+      case BEATORAJA_NUM.TARGET_SCORE_RATE:
+      case BEATORAJA_NUM.TARGET_SCORE_RATE_AFTERDOT:
+        return 0;
+
+      // Per-judge LIVE counts.
+      case BEATORAJA_NUM.PERFECT:
+        return summary?.perfect ?? 0;
+      case BEATORAJA_NUM.GREAT:
+        return summary?.great ?? 0;
+      case BEATORAJA_NUM.GOOD:
+        return summary?.good ?? 0;
+      case BEATORAJA_NUM.BAD:
+        return summary?.bad ?? 0;
+      case BEATORAJA_NUM.POOR:
+        return summary?.poor ?? 0;
+      case BEATORAJA_NUM.MISS:
+        // Engine treats empty-press miss as POOR. Most skins want this readout; surface POOR.
+        return summary?.poor ?? 0;
+      // Per-judge fast/slow split — engine doesn't track this granularity (only summary totals
+      // exist), so all 12 slots return 0. The aggregated totals are surfaced via TOTALEARLY /
+      // TOTALLATE below.
+      case BEATORAJA_NUM.EARLY_PERFECT:
+      case BEATORAJA_NUM.LATE_PERFECT:
+      case BEATORAJA_NUM.EARLY_GREAT:
+      case BEATORAJA_NUM.LATE_GREAT:
+      case BEATORAJA_NUM.EARLY_GOOD:
+      case BEATORAJA_NUM.LATE_GOOD:
+      case BEATORAJA_NUM.EARLY_BAD:
+      case BEATORAJA_NUM.LATE_BAD:
+      case BEATORAJA_NUM.EARLY_POOR:
+      case BEATORAJA_NUM.LATE_POOR:
+      case BEATORAJA_NUM.EARLY_MISS:
+      case BEATORAJA_NUM.LATE_MISS:
+        return 0;
+      case BEATORAJA_NUM.TOTALEARLY:
+        return summary?.fast ?? 0;
+      case BEATORAJA_NUM.TOTALLATE:
+        return summary?.slow ?? 0;
+      // `combobreak` and its aliases. The engine treats POOR / MISS as the same kind so all three
+      // slots converge to `bad + poor` — beatoraja-side `poor_plus_miss` and the longer
+      // `bad_plus_poor_plus_miss` exist for skin authors who want different visual emphasis.
+      case BEATORAJA_NUM.COMBOBREAK:
+      case BEATORAJA_NUM.BAD_PLUS_POOR_PLUS_MISS:
+        return (summary?.bad ?? 0) + (summary?.poor ?? 0);
+      case BEATORAJA_NUM.POOR_PLUS_MISS:
+        return summary?.poor ?? 0;
+
+      // ─── Time-based readouts (160-165, 1163-1164) ──────────────────────────────────────
+      // `nowbpm = 160` — current BPM. Without a per-frame BPM signal we fall back to the chart's
+      // canonical BPM, which matches beatoraja's behavior on charts without dynamic BPM changes.
+      // Future: when the engine publishes `currentBpm`, hook it here.
+      case BEATORAJA_NUM.NOWBPM:
+        return Math.round(this.chart?.metadata?.bpm ?? 0);
+      // `playtime_*` — minute / second elapsed since playback started. Pulled from the engine
+      // frame's `currentSeconds` so it stays in lockstep with what the user hears (independent of
+      // wallclock drift, which would cause clock readouts to slip from chart progress).
+      case BEATORAJA_NUM.PLAYTIME_MINUTE:
+        return this.frame !== null ? Math.floor(this.frame.currentSeconds / 60) : 0;
+      case BEATORAJA_NUM.PLAYTIME_SECOND:
+        return this.frame !== null ? Math.floor(this.frame.currentSeconds % 60) : 0;
+      // `timeleft_*` — minute / second until chart end. Clamped to non-negative because the engine
+      // can over-run `totalSeconds` slightly when the last note is held past the end-of-chart marker.
+      case BEATORAJA_NUM.TIMELEFT_MINUTE: {
+        if (this.frame === null) return 0;
+        const left = Math.max(0, this.frame.totalSeconds - this.frame.currentSeconds);
+        return Math.floor(left / 60);
+      }
+      case BEATORAJA_NUM.TIMELEFT_SECOND: {
+        if (this.frame === null) return 0;
+        const left = Math.max(0, this.frame.totalSeconds - this.frame.currentSeconds);
+        return Math.floor(left % 60);
+      }
+      // `songlength_*` — total chart length, fixed for the run. `totalSeconds` includes any
+      // trailing fadeout the engine appends after the last note.
+      case BEATORAJA_NUM.SONGLENGTH_MINUTE:
+        return this.frame !== null ? Math.floor(this.frame.totalSeconds / 60) : 0;
+      case BEATORAJA_NUM.SONGLENGTH_SECOND:
+        return this.frame !== null ? Math.floor(this.frame.totalSeconds % 60) : 0;
+      // `loading_progress = 165` — 0..100. We don't track granular load progress, but the gameplay
+      // path only mounts after assets finished decoding, so by the time this resolver is reachable
+      // loading IS complete. Surface 100 to keep readouts that gate UI on "not yet 100" happy.
+      case BEATORAJA_NUM.LOADING_PROGRESS:
+        return 100;
 
       default:
         return undefined;

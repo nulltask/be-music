@@ -74,6 +74,7 @@ export type {
 export { discoverBeatorajaTheme, loadBeatorajaPlaySkin, pickBeatorajaPlaySkin } from './beatoraja-play-skin.ts';
 export type { BeatorajaSide } from './beatoraja-runtime-ids.ts';
 export {
+  BEATORAJA_NUM,
   BEATORAJA_OP,
   BEATORAJA_TEXT,
   bombTimerId,
