@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeBeatorajaDestinations, sampleBeatorajaDestination } from './beatoraja-skin-destination.ts';
+import {
+  centerToAnchor,
+  normalizeBeatorajaDestinations,
+  sampleBeatorajaDestination,
+} from './beatoraja-skin-destination.ts';
 
 describe('normalizeBeatorajaDestinations', () => {
   it('fills in default group fields and carries forward keyframe state', () => {
@@ -216,5 +220,32 @@ describe('sampleBeatorajaDestination', () => {
       ])[0];
       expect(sampleBeatorajaDestination(linear, 500)?.x).toBeCloseTo(50, 6);
     });
+  });
+});
+
+describe('centerToAnchor (beatoraja convention, mapped into Pixi Y-DOWN)', () => {
+  // Source: `SkinObject.java` CENTERX/CENTERY arrays (10 entries, 0=default mid-point, 1..9 are
+  // a 1-indexed grid in libGDX Y-UP). We Y-flip so 1 (libGDX bottom-left) lands at Pixi anchor
+  // (0, 1) — Pixi's bottom-left.
+  it('treats 0 as the rect mid-point (beatoraja default for unset center)', () => {
+    expect(centerToAnchor(0)).toEqual({ x: 0.5, y: 0.5 });
+  });
+
+  it('maps 1..9 to the Y-flipped grid (1 = bottom-left, 9 = top-right in Pixi visual space)', () => {
+    expect(centerToAnchor(1)).toEqual({ x: 0, y: 1 }); // libGDX bottom-left → Pixi bottom-left
+    expect(centerToAnchor(2)).toEqual({ x: 0.5, y: 1 });
+    expect(centerToAnchor(3)).toEqual({ x: 1, y: 1 }); // bottom-right
+    expect(centerToAnchor(4)).toEqual({ x: 0, y: 0.5 });
+    expect(centerToAnchor(5)).toEqual({ x: 0.5, y: 0.5 }); // middle (same as 0)
+    expect(centerToAnchor(6)).toEqual({ x: 1, y: 0.5 });
+    expect(centerToAnchor(7)).toEqual({ x: 0, y: 0 }); // libGDX top-left → Pixi top-left
+    expect(centerToAnchor(8)).toEqual({ x: 0.5, y: 0 });
+    expect(centerToAnchor(9)).toEqual({ x: 1, y: 0 }); // top-right
+  });
+
+  it('clamps out-of-range / NaN to 0 (mid-point)', () => {
+    expect(centerToAnchor(-1)).toEqual({ x: 0.5, y: 0.5 });
+    expect(centerToAnchor(10)).toEqual({ x: 0.5, y: 0.5 });
+    expect(centerToAnchor(Number.NaN)).toEqual({ x: 0.5, y: 0.5 });
   });
 });

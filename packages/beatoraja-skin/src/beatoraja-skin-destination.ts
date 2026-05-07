@@ -137,11 +137,17 @@ function normalizeOne(entry: NormalizedElement, declarationOrder: number): Beato
   };
 }
 
-/** Clamp a `center` value to its valid 0..8 range. Out-of-range falls back to `0` (top-left). */
+/**
+ * Clamp a `center` value to its valid 0..9 range. Out-of-range falls back to `0` (= the `(0.5,
+ * 0.5)` default origin in beatoraja, mid-point of the rect). Note the range is `0..9`, NOT
+ * `0..8`: beatoraja's `SkinObject.CENTERX/CENTERY` arrays are 10-element (`0` = default-center
+ * + a 1-indexed 9-cell grid), so the valid input range carries one more entry than LR2's `0..8`
+ * convention. See `centerToAnchor` for the full mapping.
+ */
 function clampCenter(value: number): number {
   if (!Number.isFinite(value)) return 0;
   const v = Math.trunc(value);
-  if (v < 0 || v > 8) return 0;
+  if (v < 0 || v > 9) return 0;
   return v;
 }
 
@@ -204,17 +210,34 @@ export function combineBeatorajaOffsets(
 }
 
 /**
- * Convert a `center` 0..8 grid value to a 2D anchor point in `[0, 1]²`. The renderer uses this as
- * Pixi `Sprite.anchor` so rotation pivots correctly AND so the dst rect's authored top-left stays
- * visually anchored at `(props.x, props.y)` after the position-offset adjustment downstream.
+ * Convert beatoraja's `center` (0..9) into a Pixi `Sprite.anchor` point in `[0, 1]²`. The
+ * mapping comes straight from `SkinObject.java`'s `CENTERX` / `CENTERY` tables in libGDX Y-UP
+ * coordinates (origin at the rect's bottom-left, y grows upward), then we Y-flip into Pixi
+ * Y-DOWN (`pixiAnchorY = 1 - libgdxOriginY`) so the sprite's anchor lands at the correct visual
+ * point on screen.
  *
- *   0 (0,0)  1 (.5,0)  2 (1,0)
- *   3 (0,.5) 4 (.5,.5) 5 (1,.5)
- *   6 (0,1)  7 (.5,1)  8 (1,1)
+ * Index `0` is the default — beatoraja initialises uninitialized `center` values to the rect's
+ * mid-point, NOT the top-left. Indices `1..9` form a 1-indexed 3×3 grid in Y-UP layout — bottom
+ * row first, top row last. The numeric arrangement intentionally diverges from LR2's `0..8`
+ * grid (where 0 is top-left), and skin authors are expected to use beatoraja's numbering when
+ * targeting beatoraja themes.
+ *
+ * Visual layout in Pixi (Y-DOWN, `(0,0)` at top-left of the destination rect):
+ *
+ *     7 (0, 0)   8 (.5, 0)   9 (1, 0)         ← top row in libGDX Y-UP, top row in Pixi Y-DOWN
+ *     4 (0, .5)  5 (.5, .5)  6 (1, .5)        ← (5 == 0 == default mid-point)
+ *     1 (0, 1)   2 (.5, 1)   3 (1, 1)         ← bottom row in libGDX Y-UP, bottom row in Pixi
  */
+const BEATORAJA_CENTER_X: ReadonlyArray<number> = [0.5, 0, 0.5, 1, 0, 0.5, 1, 0, 0.5, 1];
+/** libGDX Y-UP origin Y values. We subtract from 1 to land in Pixi Y-DOWN anchor space. */
+const BEATORAJA_CENTER_Y_UP: ReadonlyArray<number> = [0.5, 0, 0, 0, 0.5, 0.5, 0.5, 1, 1, 1];
+
 export function centerToAnchor(center: number): { x: number; y: number } {
   const c = clampCenter(center);
-  return { x: ((c % 3) * 1) / 2, y: (Math.floor(c / 3) * 1) / 2 };
+  return {
+    x: BEATORAJA_CENTER_X[c]!,
+    y: 1 - BEATORAJA_CENTER_Y_UP[c]!,
+  };
 }
 
 function normalizeKeyframes(raw: ReadonlyArray<unknown>): BeatorajaDestinationKeyframe[] {

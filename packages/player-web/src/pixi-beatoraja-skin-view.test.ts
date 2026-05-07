@@ -87,9 +87,12 @@ describe('BeatorajaPlaySkinView', () => {
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
     const sprite = view.container.children[0] as { x: number; y: number; visible: boolean; alpha: number };
     expect(sprite.visible).toBe(true);
-    expect(sprite.x).toBe(10);
-    // dst.y=20, h=100 inside a 720-tall skin → Pixi y = 720 - 20 - 100 = 600.
-    expect(sprite.y).toBe(600);
+    // beatoraja's default `center = 0` puts the anchor at the rect's mid-point (0.5, 0.5), so
+    // sprite.x = props.x + 0.5 * w = 10 + 50 = 60. Y is similarly offset by half the height.
+    expect(sprite.x).toBe(60);
+    // dst.y=20, h=100 inside a 720-tall skin → Pixi top-left y = 720 - 20 - 100 = 600. Plus the
+    // center.y = 0.5 anchor offset: 600 + 0.5 * 100 = 650.
+    expect(sprite.y).toBe(650);
     expect(sprite.alpha).toBe(1);
     view.dispose();
   });
@@ -186,10 +189,12 @@ describe('BeatorajaPlaySkinView', () => {
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
     const sprites = view.container.children;
     expect(sprites).toHaveLength(5);
+    // beatoraja's default `center = 0` shifts each digit's anchor by half a slot, so the per-
+    // digit x = dst.x + i * slotWidth + center.x * slotWidth = 100 + i * 24 + 12.
     for (let i = 0; i < 5; i += 1) {
       const sprite = sprites[i];
       expect(sprite).toBeDefined();
-      expect((sprite as { x: number; width: number }).x).toBeCloseTo(100 + i * 24);
+      expect((sprite as { x: number; width: number }).x).toBeCloseTo(112 + i * 24);
       expect((sprite as { x: number; width: number }).width).toBe(24);
     }
     view.dispose();
