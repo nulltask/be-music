@@ -51,7 +51,11 @@ export { imageFrameAt, imageFrameRect, imageRefFrame, normalizeBeatorajaImages }
 export type { BeatorajaValueDigitCell, BeatorajaValueElement } from './beatoraja-skin-value.ts';
 export { composeBeatorajaValueCells, normalizeBeatorajaValues } from './beatoraja-skin-value.ts';
 export type { BeatorajaDestinationGroup, BeatorajaDestinationKeyframe } from './beatoraja-skin-destination.ts';
-export { normalizeBeatorajaDestinations, sampleBeatorajaDestination } from './beatoraja-skin-destination.ts';
+export {
+  centerToAnchor,
+  normalizeBeatorajaDestinations,
+  sampleBeatorajaDestination,
+} from './beatoraja-skin-destination.ts';
 export type { BeatorajaFontElement, BeatorajaTextAlign, BeatorajaTextElement } from './beatoraja-skin-text.ts';
 export { normalizeBeatorajaFonts, normalizeBeatorajaTexts } from './beatoraja-skin-text.ts';
 

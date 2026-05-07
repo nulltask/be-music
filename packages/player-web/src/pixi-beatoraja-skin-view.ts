@@ -5,6 +5,7 @@
 
 import { BitmapText, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import {
+  centerToAnchor,
   composeBeatorajaValueCells,
   imageFrameAt,
   imageFrameRect,
@@ -673,8 +674,10 @@ export class BeatorajaPlaySkinView {
       entry.currentFrame = frameIndex;
     }
 
-    sprite.x = props.x;
-    sprite.y = props.y;
+    const center = centerToAnchor(entry.group.center);
+    sprite.anchor.set(center.x, center.y);
+    sprite.x = props.x + center.x * props.width;
+    sprite.y = props.y + center.y * props.height;
     sprite.width = props.width;
     sprite.height = props.height;
     sprite.alpha = props.alpha;
@@ -721,6 +724,11 @@ export class BeatorajaPlaySkinView {
     // height is the rect's full height. Hidden slots have their sprites collapsed to invisible —
     // beatoraja's reference behavior for `padding=0` + digits-only strips with a small value.
     const slotWidth = props.width / Math.max(1, entry.digitSprites.length);
+    // Apply the destination's center anchor across the whole digit strip — each digit slot
+    // shares the same pivot proportions, computed against the strip's full width (not the per-
+    // digit width) so rotation pivots around the strip's authored center, not each digit's
+    // local middle. The +i*slotWidth offset stays as before.
+    const center = centerToAnchor(entry.group.center);
     for (let i = 0; i < entry.digitSprites.length; i += 1) {
       const sprite = entry.digitSprites[i]!;
       const cell = cells[i];
@@ -729,8 +737,9 @@ export class BeatorajaPlaySkinView {
         continue;
       }
       sprite.visible = true;
-      sprite.x = props.x + i * slotWidth;
-      sprite.y = props.y;
+      sprite.anchor.set(center.x, center.y);
+      sprite.x = props.x + i * slotWidth + center.x * slotWidth;
+      sprite.y = props.y + center.y * props.height;
       sprite.width = slotWidth;
       sprite.height = props.height;
       sprite.alpha = props.alpha;
@@ -860,8 +869,10 @@ export class BeatorajaPlaySkinView {
       return;
     }
     if (sprite.texture !== cropped) sprite.texture = cropped;
-    sprite.x = destX;
-    sprite.y = destY;
+    const center = centerToAnchor(entry.group.center);
+    sprite.anchor.set(center.x, center.y);
+    sprite.x = destX + center.x * destW;
+    sprite.y = destY + center.y * destH;
     sprite.width = destW;
     sprite.height = destH;
     sprite.alpha = props.alpha;
@@ -963,8 +974,10 @@ export class BeatorajaPlaySkinView {
         dy = offset;
         break;
     }
-    sprite.x = props.x + dx;
-    sprite.y = props.y + dy;
+    const center = centerToAnchor(entry.group.center);
+    sprite.anchor.set(center.x, center.y);
+    sprite.x = props.x + dx + center.x * props.width;
+    sprite.y = props.y + dy + center.y * props.height;
     sprite.width = props.width;
     sprite.height = props.height;
     sprite.alpha = props.alpha;
@@ -1063,8 +1076,10 @@ export class BeatorajaPlaySkinView {
       }
       sprite.texture = cropped;
     }
-    sprite.x = props.x;
-    sprite.y = props.y;
+    const center = centerToAnchor(entry.group.center);
+    sprite.anchor.set(center.x, center.y);
+    sprite.x = props.x + center.x * props.width;
+    sprite.y = props.y + center.y * props.height;
     sprite.width = props.width;
     sprite.height = props.height;
     sprite.alpha = props.alpha;

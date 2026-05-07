@@ -64,6 +64,17 @@ export interface BeatorajaDestinationGroup {
    * Filter flag. `1` enables bilinear filtering on scaling. Defaults to `0` (nearest neighbour).
    */
   filter: number;
+  /**
+   * Rotation pivot anchor — a 0-8 grid mapping to the 9 corner / midpoint points of the destination rect:
+   *
+   *   0 ↖ top-left      1 ↑ top-center      2 ↗ top-right
+   *   3 ← middle-left   4 × middle (def.)   5 → middle-right
+   *   6 ↙ bottom-left   7 ↓ bottom-center   8 ↘ bottom-right
+   *
+   * Without this, sprites with non-zero `angle` rotate around the wrong point. Defaults to `0`
+   * (matches `JSONSkinLoader.setDestination`'s `dst.center` field — Java zero-default).
+   */
+  center: number;
   /** `if` codes from any wrapping conditional group, AND-merged with `op`. */
   ifCodes: ReadonlyArray<number>;
   /**
@@ -109,10 +120,33 @@ function normalizeOne(entry: NormalizedElement, declarationOrder: number): Beato
     op: normalizeOpArray(f.op),
     blend: numberField(f, 'blend', 0),
     filter: numberField(f, 'filter', 0),
+    center: clampCenter(numberField(f, 'center', 0)),
     ifCodes: entry.ifCodes,
     dst: keyframes,
     declarationOrder,
   };
+}
+
+/** Clamp a `center` value to its valid 0..8 range. Out-of-range falls back to `0` (top-left). */
+function clampCenter(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const v = Math.trunc(value);
+  if (v < 0 || v > 8) return 0;
+  return v;
+}
+
+/**
+ * Convert a `center` 0..8 grid value to a 2D anchor point in `[0, 1]²`. The renderer uses this as
+ * Pixi `Sprite.anchor` so rotation pivots correctly AND so the dst rect's authored top-left stays
+ * visually anchored at `(props.x, props.y)` after the position-offset adjustment downstream.
+ *
+ *   0 (0,0)  1 (.5,0)  2 (1,0)
+ *   3 (0,.5) 4 (.5,.5) 5 (1,.5)
+ *   6 (0,1)  7 (.5,1)  8 (1,1)
+ */
+export function centerToAnchor(center: number): { x: number; y: number } {
+  const c = clampCenter(center);
+  return { x: ((c % 3) * 1) / 2, y: (Math.floor(c / 3) * 1) / 2 };
 }
 
 function normalizeKeyframes(raw: ReadonlyArray<unknown>): BeatorajaDestinationKeyframe[] {
