@@ -502,9 +502,11 @@ function readLuaTableAt(L: lua_State, idx: number): LuaValue[] | { [key: string]
   }
 
   const obj: { [key: string]: LuaValue } = {};
+  let entries = 0;
   const absIdx = absoluteIndex(L, idx);
   lua_pushnil(L);
   while (lua_next(L, absIdx) !== 0) {
+    entries += 1;
     const keyType = lua_type(L, -2);
     let key: string | undefined;
     if (keyType === LUA_TSTRING) {
@@ -517,6 +519,16 @@ function readLuaTableAt(L: lua_State, idx: number): LuaValue[] | { [key: string]
     }
     lua_pop(L, 1); // pop value, keep key for next iteration
   }
+  // An empty Lua table (`{}`) is ambiguous — it could be an empty array or an empty record. The
+  // reference theme overwhelmingly uses the array reading: `filepath = {}`, `property = {}`,
+  // `image = {}` etc. all expect array semantics downstream (`for _, v in ipairs(...)`, JS-side
+  // `Array.isArray()` / `for..of` iteration). Returning `{}` here forces every consumer to
+  // double-check `Array.isArray(...)` before iterating, which we frequently miss — and the
+  // gdbg_bms_package_2022 decide skin trips this exact bug (`filepath = {}` → JS `{}` → consumers
+  // try to spread / iterate it → TypeError). Default empty tables to `[]` so the common case
+  // works; record-typed tables always populate at least one entry, so this only changes the
+  // ambiguous case.
+  if (entries === 0) return [];
   return obj;
 }
 

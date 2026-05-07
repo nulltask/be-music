@@ -76,6 +76,24 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect((main.value as Record<string, unknown>).offset).toBe(5);
   });
 
+  it('treats empty Lua tables as empty arrays (so `filepath = {}` is iterable JS-side)', () => {
+    // The reference theme writes `filepath = {}`, `property = {}`, etc. and expects the JS side
+    // to consume them with `Array.isArray(...)` / `for..of`. Defaulting empty tables to `[]`
+    // matches that contract — record-typed tables always have at least one entry, so this only
+    // disambiguates the empty case.
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc('return { name = "demo", filepath = {}, property = {}, image = {} }'),
+      modules: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error.message);
+    const skin = result.value as Record<string, unknown>;
+    expect(Array.isArray(skin.filepath)).toBe(true);
+    expect(Array.isArray(skin.property)).toBe(true);
+    expect(Array.isArray(skin.image)).toBe(true);
+    expect(skin.filepath).toEqual([]);
+  });
+
   it('reports syntax errors as a failure result', () => {
     const result = evaluateBeatorajaLuaSkin({
       entry: enc('return {'),

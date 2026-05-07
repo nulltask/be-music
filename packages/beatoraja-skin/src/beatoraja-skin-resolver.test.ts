@@ -96,4 +96,23 @@ describe('resolveSourcePath', () => {
     const result = resolveSourcePath(files, 'skin/default/play.json', 'play/background/*.png');
     expect(result).toBe('skin/default/play/background/a.png');
   });
+
+  it('ignores a non-array filepathSchema instead of crashing on `not iterable`', () => {
+    // Some Lua skins (and JSON skins with hand-edited filepath tables) end up handing us an
+    // object like `{}` instead of `[]`. Resolve gracefully by skipping the override path —
+    // matches the "no override supplied" behavior.
+    const files = makeFiles([
+      ['skin/default/play.json', '{}'],
+      ['skin/default/play/background/a.png', '1'],
+    ]);
+    const malformedSchema = {} as unknown as ReadonlyArray<{ name: string; path: string }>;
+    const result = resolveSourcePath(
+      files,
+      'skin/default/play.json',
+      'play/background/*.png',
+      { Background: 'play/background/a.png' },
+      malformedSchema,
+    );
+    expect(result).toBe('skin/default/play/background/a.png');
+  });
 });

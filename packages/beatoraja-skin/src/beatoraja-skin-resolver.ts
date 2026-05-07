@@ -91,8 +91,12 @@ export function resolveSourcePath(
   filepathOverrides?: Readonly<Record<string, string>>,
   filepathSchema?: ReadonlyArray<{ name: string; path: string }>,
 ): string | undefined {
-  // Honor explicit user override.
-  if (filepathOverrides && filepathSchema) {
+  // Honor explicit user override. Lua skins frequently authored as `filepath = {}` historically
+  // came through as `{}` (record) instead of `[]` (array) — guard against any non-iterable value
+  // here so a malformed schema doesn't crash the source bundler. (We also fixed the upstream Lua
+  // → JS conversion to default empty tables to arrays, but skins reading from JSON or hand-built
+  // configs still hit this path with arbitrary shapes.)
+  if (filepathOverrides && Array.isArray(filepathSchema)) {
     for (const f of filepathSchema) {
       if (f.path === sourcePath) {
         const chosen = filepathOverrides[f.name];
