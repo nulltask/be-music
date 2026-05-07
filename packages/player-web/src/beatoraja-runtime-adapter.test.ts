@@ -24,7 +24,7 @@ function makeClock(): { now: () => number; advance: (ms: number) => void } {
 }
 
 describe('BeatorajaRuntimeAdapter — construction', () => {
-  it('seeds activeOps with base option ops + the play-mode op + scene-start timer', () => {
+  it('seeds activeOps with base option ops + scene-start timer', () => {
     const clock = makeClock();
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
@@ -33,20 +33,21 @@ describe('BeatorajaRuntimeAdapter — construction', () => {
     });
     expect(adapter.hasOp(920)).toBe(true);
     expect(adapter.hasOp(901)).toBe(true);
-    expect(adapter.hasOp(BEATORAJA_OP.PLAY_MODE_SINGLE)).toBe(true);
-    expect(adapter.hasOp(BEATORAJA_OP.PLAY_MODE_DOUBLE)).toBe(false);
     expect(adapter.getTimerStart(TIMER_SCENE_START)).toBe(0);
   });
 
-  it('uses PLAY_MODE_DOUBLE for the double-play variants', () => {
-    for (const variant of ['10', '14'] as const) {
-      const adapter = new BeatorajaRuntimeAdapter({
-        chartPlayVariant: variant,
-        baseOps: new Set(),
-        getNowMs: () => 0,
-      });
-      expect(adapter.hasOp(BEATORAJA_OP.PLAY_MODE_DOUBLE)).toBe(true);
-      expect(adapter.hasOp(BEATORAJA_OP.PLAY_MODE_SINGLE)).toBe(false);
+  it('does not seed a speculative play-mode op', () => {
+    // beatoraja's op `1..5` enumeration covers per-keys play modes (1=5K / 2=7K / etc.) but the
+    // exact mapping isn't captured here yet — adding the wrong value would HIDE chrome gated on the
+    // correct one. The skin variant is implicit in the picked play_*.lua entry, so the runtime op
+    // is intentionally absent until verified.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    for (const op of [1, 2, 3, 4, 5]) {
+      expect(adapter.hasOp(op)).toBe(false);
     }
   });
 
@@ -262,7 +263,6 @@ describe('BeatorajaRuntimeAdapter — reset', () => {
     adapter.reset();
 
     expect(adapter.hasOp(920)).toBe(true);
-    expect(adapter.hasOp(BEATORAJA_OP.PLAY_MODE_SINGLE)).toBe(true);
     expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_GR)).toBe(false);
     expect(adapter.getTimerStart(keyOnTimerId(1, 1)!)).toBeUndefined();
     expect(adapter.getTimerStart(TIMER_SCENE_START)).toBe(0);

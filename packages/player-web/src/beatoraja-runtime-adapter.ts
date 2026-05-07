@@ -92,8 +92,21 @@ export class BeatorajaRuntimeAdapter {
     this.baseOps = options.baseOps;
     this.activeOps = new Set(options.baseOps);
     this.getNowMs = options.getNowMs;
-    if (options.autoPlay) this.activeOps.add(BEATORAJA_OP.AUTO_PLAY_ON);
-    this.activeOps.add(this.playModeOp());
+    // NOTE: We deliberately do NOT add a "play-mode" op or an "auto-play" op here. beatoraja's
+    // canonical op enumeration assigns `1..5` to the play-mode (1=5K / 2=7K / 3=9K / 4=14K / 5=10K)
+    // and `70+` to clear-state / lamp / etc. — values we'd have to verify against
+    // `bms/player/beatoraja/skin/SkinPropertyMapper.java` before committing them. Adding speculative
+    // values would set the WRONG mode op and hide whatever chrome is gated on the right one (e.g. on
+    // a 7K chart, accidentally adding op 1 marks the skin as 5K and hides all 7K-specific chrome).
+    // The correct play-mode op is implicit in the picked skin variant (`play_7.lua` already only
+    // ships 7K chrome) so the gameplay path doesn't actually need the runtime op. When a future patch
+    // wires the verified mapping for clear-state / lamp / etc., add them here and confirm against the
+    // reference theme's `if`/`op` codes.
+    if (options.autoPlay) {
+      // Best-effort guess at the auto-play op (beatoraja documents it as 70). Skins that gate
+      // chrome on it will surface the AUTOPLAY indicator; skins that don't simply ignore the op.
+      this.activeOps.add(BEATORAJA_OP.AUTO_PLAY_ON);
+    }
     // Scene-start timer is always running — many skin elements default `timer = 0` and read it as the
     // global clock. Other built-in timers fire later via `markTimer`.
     this.timerStartedAt.set(TIMER_SCENE_START, 0);
@@ -259,7 +272,6 @@ export class BeatorajaRuntimeAdapter {
   reset(): void {
     this.activeOps.clear();
     for (const op of this.baseOps) this.activeOps.add(op);
-    this.activeOps.add(this.playModeOp());
     this.timerStartedAt.clear();
     this.timerStartedAt.set(TIMER_SCENE_START, 0);
     this.judgeState[1].lastJudgeOp = undefined;
@@ -271,15 +283,6 @@ export class BeatorajaRuntimeAdapter {
   }
 
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
-
-  private playModeOp(): number {
-    // `BeatorajaPlayVariant` doesn't carry a battle-play flag (that's a separate engine option not
-    // surfaced by the variant string), so DOUBLE / SINGLE is the only distinction we set here. `'10'` /
-    // `'14'` are double-play variants; the rest collapse onto SINGLE.
-    return this.chartPlayVariant === '10' || this.chartPlayVariant === '14'
-      ? BEATORAJA_OP.PLAY_MODE_DOUBLE
-      : BEATORAJA_OP.PLAY_MODE_SINGLE;
-  }
 
   private resolveSide(channel: string): BeatorajaSide {
     return channel.startsWith('2') ? 2 : 1;

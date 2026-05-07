@@ -200,15 +200,15 @@ export const BEATORAJA_OP = {
   /** Auto-play is running (the host configured `mode: 'auto'`). */
   AUTO_PLAY_ON: 70,
 
-  /** Single-play, double-play, battle-play distinguishers — used by skins to swap layout banks. */
-  PLAY_MODE_SINGLE: 1,
-  PLAY_MODE_BATTLE: 2,
-  PLAY_MODE_DOUBLE: 3,
-
   /** "Currently in an LN-hold" gate — set on side 1 while any LN is held; cleared on release. */
   P1_LN_HOLDING: 78,
   /** Same on side 2. */
   P2_LN_HOLDING: 79,
+
+  // Note: the play-mode (1=5K / 2=7K / 3=9K / 4=14K / 5=10K in beatoraja's enumeration) is
+  // intentionally NOT included here. It's implicit in the picked skin variant — the renderer
+  // already loads `play_7.lua` for 7K charts, etc. — and adding a speculative value would risk
+  // hiding chrome the skin gates on the correct one.
 } as const;
 
 /**
