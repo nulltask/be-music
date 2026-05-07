@@ -20,10 +20,7 @@
 // shows it matters.
 
 import { Container, Sprite, Texture } from 'pixi.js';
-import {
-  destinationToSpriteProps,
-  type BeatorajaRenderContext,
-} from './beatoraja-render.ts';
+import { destinationToSpriteProps, type BeatorajaRenderContext } from './beatoraja-render.ts';
 import {
   normalizeBeatorajaDestinations,
   type BeatorajaDestinationGroup,

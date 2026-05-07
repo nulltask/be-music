@@ -21,11 +21,7 @@ import { Container, Graphics } from 'pixi.js';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
 import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
-import {
-  pickBeatorajaNoteRects,
-  type BeatorajaNoteRect,
-  type BeatorajaNoteSection,
-} from '@be-music/beatoraja-skin';
+import { pickBeatorajaNoteRects, type BeatorajaNoteRect, type BeatorajaNoteSection } from '@be-music/beatoraja-skin';
 
 /** Pixels per chart-beat at hispeed = 1.0. Mirrors the LR2 path's constant so the two layers scroll consistently. */
 export const BEATORAJA_PIXELS_PER_BEAT = 72;
@@ -174,7 +170,13 @@ export class BeatorajaNoteLayer {
     return baseLane;
   }
 
-  private paintTapNote(used: number, rect: BeatorajaNoteRect, lane: number, note: PlayerUiFrameNote, y: number): number {
+  private paintTapNote(
+    used: number,
+    rect: BeatorajaNoteRect,
+    lane: number,
+    note: PlayerUiFrameNote,
+    y: number,
+  ): number {
     const color = note.mine ? FALLBACK_COLOR_BY_KEY.red! : this.fallbackColorForLane(lane);
     const g = this.acquire(used);
     g.clear();

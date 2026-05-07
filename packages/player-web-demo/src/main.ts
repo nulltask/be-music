@@ -33,14 +33,19 @@ import {
 } from '@be-music/lr2-skin';
 import {
   BeatorajaPlaySkinPreviewScene,
+  PixiBeatorajaGameplayView,
   isBeatorajaSkinIndicator,
   loadBeatorajaPlaySkinFromBundle,
   loadBeatorajaTexturesFromBundle,
   loadBeatorajaThemeFromFiles,
+  pickBeatorajaPlayableVariant,
+  prepareBeatorajaGameplayChart,
+  resolveChartPlayVariant,
   summarizeBeatorajaPlaySkins,
   type BeatorajaPlayVariant,
   type BeatorajaTextureCache,
   type BeatorajaThemeBundle,
+  type PreparedBeatorajaGameplayChart,
 } from '@be-music/player-web';
 import { buildDefaultSkinConfigOptions, bundleBeatorajaSources } from '@be-music/beatoraja-skin';
 
@@ -622,6 +627,14 @@ interface DemoGuiState {
   beatorajaPreview: () => void;
   /** Variant selection for the beatoraja preview. Limited to chart-shape variants the renderer wires today. */
   beatorajaPreviewVariant: '7' | '5' | '14' | '10' | '9';
+  /**
+   * When true and a beatoraja theme is loaded, songs play through `PixiBeatorajaGameplayView` instead of the
+   * default LR2 `PixiGameplayView`. Falls back to LR2 silently when no beatoraja theme is present, the chart
+   * shape isn't supported by beatoraja (e.g. PMS BME w/o a `9` variant in the theme), or the chart-prep
+   * helper rejects (corrupt audio etc.). Hidden behind a GUI toggle so the LR2 path stays the default
+   * (battle-tested) flow.
+   */
+  useBeatorajaGameplay: boolean;
 }
 
 class PlayerWebDemoApp {
@@ -681,6 +694,16 @@ class PlayerWebDemoApp {
   } = {};
   private selectView: PixiSongSelectView | undefined;
   private gameplayView: PixiGameplayView | undefined;
+  /**
+   * Beatoraja gameplay view. Active in place of `gameplayView` when the user toggles
+   * `useBeatorajaGameplay` and the loaded theme has a skin variant matching the chart shape. Held
+   * separately because the two views don't share an interface — the LR2 view manages its own audio
+   * decoding internally, while this one consumes a `PreparedBeatorajaGameplayChart` from the
+   * `prepareBeatorajaGameplayChart` helper.
+   */
+  private beatorajaGameplayView: PixiBeatorajaGameplayView | undefined;
+  /** The current chart's prepared assets (audio + BGA). Disposed alongside the gameplay view. */
+  private beatorajaGameplayPrep: PreparedBeatorajaGameplayChart | undefined;
   private resultView: PixiResultView | undefined;
   private decideView: PixiDecideView | undefined;
   private hostMounted = false;
@@ -761,6 +784,10 @@ class PlayerWebDemoApp {
         void this.openBeatorajaPreview();
       },
       beatorajaPreviewVariant: '7',
+      // Default off — the LR2 path is feature-complete (notes / BGA / judge plates / scratch physics /
+      // recording / etc.). Flip to true to route gameplay through the beatoraja-skin renderer instead.
+      // The toggle is a no-op until a beatoraja theme is dropped.
+      useBeatorajaGameplay: false,
     };
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
     // (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the runtime API.
@@ -941,6 +968,7 @@ class PlayerWebDemoApp {
     const beatorajaFolder = gui.addFolder('Beatoraja preview').close();
     beatorajaFolder.add(this.guiState, 'beatorajaPreviewVariant', ['7', '5', '14', '10', '9'] as const).name('Variant');
     beatorajaFolder.add(this.guiState, 'beatorajaPreview').name('Open preview');
+    beatorajaFolder.add(this.guiState, 'useBeatorajaGameplay').name('Use for gameplay');
     // Auto play used to be a lil-gui checkbox here too, but the in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on
     // the select skin) already exposes it — the duplicate toolbar controller just added another surface to keep in
     // sync. The `guiState.autoPlay` field stays as the seed/fallback value until the select panel publishes its own
@@ -1496,6 +1524,158 @@ class PlayerWebDemoApp {
     await this.showSelect();
   }
 
+  /**
+   * Returns true when the loaded beatoraja theme has a play skin matching the chart's shape. Used by
+   * `playSong` to decide whether to branch into the beatoraja gameplay path.
+   */
+  private canPlaySongBeatoraja(song: BrowserSongEntry): boolean {
+    const bundle = this.beatorajaTheme;
+    if (!bundle) return false;
+    const variant = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
+    if (variant === undefined) return false;
+    return bundle.theme.playSkins[variant] !== undefined;
+  }
+
+  /** Map a song's parsed chart onto the shape input `pickBeatorajaPlayableVariant` expects. */
+  private chartShapeFor(song: BrowserSongEntry): { keys: number; isDouble: boolean; isPms: boolean } {
+    const variant = resolveChartPlayVariant(song);
+    return {
+      keys: variant === '14' ? 14 : variant === '10' ? 10 : variant === '7' ? 7 : variant === '5' ? 5 : 9,
+      isDouble: variant === '14' || variant === '10',
+      isPms: variant === '9',
+    };
+  }
+
+  /**
+   * Beatoraja gameplay flow. Mirrors the LR2 `playSong` lifecycle (mount + audio decode → run engine →
+   * route exit / completion to result / select), but routes audio through `runEngineDriver` and the
+   * scene through `PixiBeatorajaGameplayView` instead of the LR2 view's bespoke render pipeline.
+   *
+   * The view assumes pre-decoded audio + BGA — those come from `prepareBeatorajaGameplayChart`. Each
+   * play awaits the prep promise before constructing the view; if the prep fails, we surface the
+   * status and bail back to song select rather than silently falling back to LR2 (the user explicitly
+   * opted into the beatoraja path).
+   */
+  private async playSongBeatoraja(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<void> {
+    const bundle = this.beatorajaTheme;
+    if (!bundle) return;
+    const variant = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
+    if (variant === undefined) return;
+
+    this.elements.shell.classList.add('playing');
+    await this.ensureHostMounted();
+    this.lastSelectNavigation = this.selectView?.getNavigation();
+    this.selectView?.setVisible(false);
+    this.decideView?.dispose();
+    this.decideView = undefined;
+    this.gameplayView?.dispose();
+    this.gameplayView = undefined;
+    this.disposeBeatorajaGameplay();
+    this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
+
+    // 1. Resolve a default skin-config for the variant — same two-pass evaluation the preview uses so
+    // skins whose `main()` branches on `skin_config.option["..."]` actually populate `source[]`.
+    const headerLoad = loadBeatorajaPlaySkinFromBundle(bundle, variant);
+    if (!headerLoad || !headerLoad.result.ok) {
+      const reason = headerLoad?.result.ok === false ? headerLoad.result.error.message : 'no skin available';
+      gameplayLog.warn(`beatoraja gameplay header: ${reason}`);
+      this.setStatus(`Beatoraja gameplay unavailable: ${reason}`);
+      void this.showSelect();
+      return;
+    }
+    const defaultOption = buildDefaultSkinConfigOptions(headerLoad.result.header);
+    const skinLoad = loadBeatorajaPlaySkinFromBundle(bundle, variant, { offset: 0, option: defaultOption });
+    if (!skinLoad || !skinLoad.result.ok || !skinLoad.result.skin) {
+      const reason = skinLoad?.result.ok === false ? skinLoad.result.error.message : 'no skin available';
+      gameplayLog.warn(`beatoraja gameplay: ${reason}`);
+      this.setStatus(`Beatoraja gameplay unavailable: ${reason}`);
+      void this.showSelect();
+      return;
+    }
+
+    // 2. Texture cache for the skin variant — reuse if previously decoded.
+    let textures = this.beatorajaTextureCachesByEntry.get(skinLoad.entry.entryPath);
+    if (textures === undefined) {
+      const sourceBundle = bundleBeatorajaSources({
+        files: bundle.files,
+        entryPath: skinLoad.entry.entryPath,
+        sources: (skinLoad.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+      });
+      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
+      this.beatorajaTextureCachesByEntry.set(skinLoad.entry.entryPath, textures);
+    }
+
+    // 3. Audio + BGA prep — owns the AudioContext for this play.
+    const source = resolveSongSource(this.collection, song);
+    if (!source) {
+      this.setStatus(`Beatoraja gameplay: no source for ${song.title}`);
+      void this.showSelect();
+      return;
+    }
+    let prep: PreparedBeatorajaGameplayChart;
+    try {
+      prep = await prepareBeatorajaGameplayChart({
+        song,
+        source,
+        audioCompressorMode: this.guiState.compressor === false ? 'off' : this.compressorMode,
+      });
+    } catch (error) {
+      gameplayLog.warn('beatoraja prep failed', error);
+      this.setStatus(`Beatoraja prep failed: ${(error as Error).message}`);
+      void this.showSelect();
+      return;
+    }
+    this.beatorajaGameplayPrep = prep;
+
+    // 4. Mount the gameplay view.
+    this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
+      skin: skinLoad.result.skin,
+      textures,
+      skinConfig: { offset: 0, option: defaultOption },
+      variant,
+      chart: prep.chart,
+      audio: prep.audio,
+      mode: (overrides.autoPlay ?? this.guiState.autoPlay) ? 'auto' : 'manual',
+      bgaTextures: prep.bga.textures,
+      bgaCues: prep.bga.cues,
+      onExit: () => {
+        void this.finishBeatorajaGameplayThen(() => this.showSelect());
+      },
+      onComplete: () => {
+        // Result-screen integration for the beatoraja path is a follow-up patch — for the current
+        // milestone the chart's end navigates straight back to song select. The LR2 path's
+        // `PixiResultView` is heavily LR2-skin-driven and would need a beatoraja-side equivalent.
+        void this.finishBeatorajaGameplayThen(() => this.showSelect());
+      },
+      onError: (error) => {
+        // `PlayerInterruptedError` lands here for the ESC path — it's the expected exit for "user
+        // pressed ESC mid-chart". Treat it as a clean exit.
+        gameplayLog.info('beatoraja engine ended', { error: (error as Error).message });
+        void this.finishBeatorajaGameplayThen(() => this.showSelect());
+      },
+    });
+    this.beatorajaGameplayView.root.zIndex = 0;
+    await this.sceneHost.setScene(this.beatorajaGameplayView);
+    this.setStatus(`Playing (beatoraja): ${song.title}`);
+  }
+
+  /** Tear down the active beatoraja gameplay view + its prep bundle. Idempotent. */
+  private disposeBeatorajaGameplay(): void {
+    this.beatorajaGameplayView?.dispose();
+    this.beatorajaGameplayView = undefined;
+    if (this.beatorajaGameplayPrep) {
+      void this.beatorajaGameplayPrep.dispose();
+      this.beatorajaGameplayPrep = undefined;
+    }
+  }
+
+  /** Sequence beatoraja-gameplay teardown → caller-supplied transition (mirrors `finishGameplayThen`). */
+  private async finishBeatorajaGameplayThen(then: () => void | Promise<void>): Promise<void> {
+    await this.sceneHost.setScene(undefined);
+    this.disposeBeatorajaGameplay();
+    await then();
+  }
+
   private async showSelect(): Promise<void> {
     this.elements.shell.classList.remove('playing');
     // The `.empty` class drives the centered "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
@@ -1712,6 +1892,14 @@ class PlayerWebDemoApp {
   }
 
   private async playSong(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
+    // Beatoraja gameplay path. Branch out early when (a) the user toggled `useBeatorajaGameplay`, (b) a
+    // theme is loaded, and (c) the chart shape maps onto a variant the renderer supports. Falls through
+    // to the LR2 path otherwise — silently for cases (b) / (c), so a 24-key chart on a beatoraja-only
+    // theme still gets the LR2 frame chrome rather than blowing up.
+    if (this.guiState.useBeatorajaGameplay && this.beatorajaTheme && this.canPlaySongBeatoraja(song)) {
+      await this.playSongBeatoraja(song, overrides);
+      return;
+    }
     this.elements.shell.classList.add('playing');
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
@@ -1721,6 +1909,7 @@ class PlayerWebDemoApp {
     this.decideView?.dispose();
     this.decideView = undefined;
     this.gameplayView?.dispose();
+    this.disposeBeatorajaGameplay();
     // Refresh the recording filename base for the upcoming play — each session writes to a unique file in the user's
     // downloads folder rather than overwriting the previous one.
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;

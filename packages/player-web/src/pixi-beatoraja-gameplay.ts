@@ -25,10 +25,7 @@
 
 import { Container, type Ticker } from 'pixi.js';
 import type { BeMusicJson } from '@be-music/json';
-import type {
-  BeatorajaSkin,
-  BeatorajaSkinConfig,
-} from '@be-music/beatoraja-skin';
+import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
 import { buildBaseOpSet, normalizeBeatorajaNote } from '@be-music/beatoraja-skin';
 import type { BeatorajaPlayableVariant } from './beatoraja-theme.ts';
 import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
