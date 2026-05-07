@@ -1608,7 +1608,15 @@ class PlayerWebDemoApp {
         files: bundle.files,
         entryPath: skinLoad.entry.entryPath,
         sources: (skinLoad.result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+        filepathSchema: skinLoad.result.skin.filepath,
+        filepathOverrides: defaultOption ? undefined : undefined,
       });
+      gameplayLog.info(
+        `beatoraja gameplay source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${skinLoad.entry.entryPath})`,
+      );
+      for (const u of sourceBundle.unresolved) {
+        gameplayLog.warn(`beatoraja gameplay unresolved source[${u.id}] '${u.path}': ${u.reason}`);
+      }
       textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
       this.beatorajaTextureCachesByEntry.set(skinLoad.entry.entryPath, textures);
     }

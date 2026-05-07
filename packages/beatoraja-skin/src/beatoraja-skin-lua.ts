@@ -203,7 +203,11 @@ function setupCustomRequire(L: lua_State, modules: ReadonlyArray<BeatorajaLuaMod
       luaL_error(state, to_luastring("bad argument #1 to 'require' (string expected)"));
       return 0;
     }
-    const name = lua_tojsstring(state, 1);
+    // Beatoraja's Lua loader accepts both `/` and `.` as path separators (`require("result.util")` and
+    // `require("result/util")` are equivalent). Normalize to `/` so the module table lookup hits the
+    // collector's canonical key.
+    const rawName = lua_tojsstring(state, 1);
+    const name = rawName.replace(/\./g, '/');
 
     // Cache hit?
     lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
@@ -215,18 +219,24 @@ function setupCustomRequire(L: lua_State, modules: ReadonlyArray<BeatorajaLuaMod
     }
     lua_pop(state, 2); // pop nil + cache table
 
+    // Built-in module check — `main_state` and friends. These are emulated host-provided tables; if the
+    // module name matches one we synthesize, push the table and cache it.
+    if (pushBuiltinLuaModule(state, name)) {
+      lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
+      lua_pushvalue(state, -2); // duplicate the synthesized table
+      lua_setfield(state, -2, to_luastring(name));
+      lua_pop(state, 1); // pop cache table; module remains on top
+      return 1;
+    }
+
     // Source lookup.
     lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_SOURCES));
     lua_getfield(state, -1, to_luastring(name));
     if (lua_type(state, -1) !== LUA_TSTRING) {
       lua_pop(state, 2); // pop nil + sources table
-      // Beatoraja host-provided modules (`main_state`, `event_command`, …) live inside the Java runtime, not as
-      // `.lua` files alongside the skin. We can't satisfy them, but failing the `require()` outright would prevent
-      // the skin from even returning its `header` (the parser path most callers want). Return an empty table
-      // instead — the skin author's call sites read it and either get nil/0 back (harmless during header
-      // discovery) or branch on `if main_state then …` (the table is truthy so the branch runs but the actual
-      // values are unavailable, which the renderer side will handle). Cache the stub so all `require()` calls for
-      // the same name return the same table.
+      // Unknown module — return an empty table stub. Rare in well-formed skins; mostly happens when an
+      // author imports an experimental utility that didn't ship in the bundle. Cache the stub so all
+      // `require()` calls for the same name return the same table.
       lua_createtable(state, 0, 0);
       lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
       lua_pushvalue(state, -2); // duplicate stub
@@ -262,6 +272,115 @@ function setupCustomRequire(L: lua_State, modules: ReadonlyArray<BeatorajaLuaMod
 
   lua_pushjsfunction(L, requireFn);
   lua_setglobal(L, to_luastring('require'));
+}
+
+/**
+ * Push a beatoraja built-in Lua module onto the stack, returning `true` if `name` matches a known one.
+ *
+ * The Java reference player provides several modules that don't exist as `.lua` files inside themes:
+ *
+ * - `main_state` (`MainStateAccessor.java`) — runtime state accessors: `option`, `number`,
+ *   `float_number`, `text`, `offset`, `timer`, `time`, `set_timer`, `event_exec`, `event_index`,
+ *   `timer_off_value`, plus convenience wrappers (`rate`, `exscore`, `exscore_best`, `volume_sys`, …).
+ * - `event_command` / `event_index` / `timer_id` — namespaces enumerating known event / timer codes.
+ *
+ * Without these, third-party themes that `require("main_state")` blow up at the first
+ * `main_state.exscore()` call since our prior fallback returned an empty table. We synthesize a stub that
+ * covers the API surface with sensible defaults (numbers → 0, strings → '', booleans → false) so the
+ * skin's `main()` can complete and emit destinations even when no real engine state is wired. A future
+ * patch will let the host inject real implementations for runtime data.
+ */
+function pushBuiltinLuaModule(L: lua_State, name: string): boolean {
+  switch (name) {
+    case 'main_state':
+      pushMainStateStub(L);
+      return true;
+    default:
+      return false;
+  }
+}
+
+function pushMainStateStub(L: lua_State): void {
+  // Method names from `MainStateAccessor.export()`. Each is a JS callback that pops its arguments and
+  // pushes a default value matching the original Java return type. Stubs are pure — no side effects on
+  // engine state — which is the right behavior for skin-render purposes (the skin's `main()` typically
+  // calls these to materialize defaults at evaluation time, not to drive runtime).
+  lua_createtable(L, 0, 24);
+
+  const setNumberStub = (key: string): void => {
+    lua_pushjsfunction(L, (state) => {
+      lua_pushnumber(state, 0);
+      return 1;
+    });
+    lua_setfield(L, -2, to_luastring(key));
+  };
+  const setStringStub = (key: string): void => {
+    lua_pushjsfunction(L, (state) => {
+      lua_pushstring(state, to_luastring(''));
+      return 1;
+    });
+    lua_setfield(L, -2, to_luastring(key));
+  };
+  const setBooleanStub = (key: string): void => {
+    lua_pushjsfunction(L, (state) => {
+      lua_pushboolean(state, 0);
+      return 1;
+    });
+    lua_setfield(L, -2, to_luastring(key));
+  };
+  const setVoidStub = (key: string): void => {
+    lua_pushjsfunction(L, () => 0);
+    lua_setfield(L, -2, to_luastring(key));
+  };
+
+  // Generic accessors — return 0 / '' / false for any id.
+  setNumberStub('option');
+  setNumberStub('number');
+  setNumberStub('float_number');
+  setStringStub('text');
+  setNumberStub('offset');
+  setNumberStub('timer');
+  setNumberStub('time');
+  setNumberStub('event_index');
+
+  // Setters / commands — no return value.
+  setVoidStub('set_timer');
+  setVoidStub('event_exec');
+
+  // Boolean queries the renderer skins use to gate visibility.
+  setBooleanStub('is_event_active');
+
+  // Constant: the "timer not started" sentinel beatoraja uses (`Long.MIN_VALUE` on the Java side; we
+  // pick a JS-safe integer with the same "definitely-not-a-real-time-value" semantic).
+  lua_pushnumber(L, -1);
+  lua_setfield(L, -2, to_luastring('timer_off_value'));
+
+  // Convenience numeric accessors — same default as `number`.
+  for (const key of [
+    'rate',
+    'exscore',
+    'rate_best',
+    'exscore_best',
+    'rate_rival',
+    'exscore_rival',
+    'volume_sys',
+    'volume_key',
+    'volume_bgm',
+    'judge_perfect',
+    'judge_great',
+    'judge_good',
+    'judge_bad',
+    'judge_poor',
+    'judge_miss',
+    'combo',
+    'maxcombo',
+    'misscount',
+    'fast',
+    'slow',
+    'gauge',
+  ]) {
+    setNumberStub(key);
+  }
 }
 
 function setupSkinConfig(L: lua_State, config: BeatorajaLuaSkinConfig | undefined): void {

@@ -102,6 +102,39 @@ describe('loadBeatorajaSkin (Lua)', () => {
     expect(result.skin?.source?.[0]?.path).toBe('system.png');
   });
 
+  it('discovers `.lua` modules in subdirectories (e.g. `require("result/util")`)', () => {
+    // ovnz/blanket-style layout: the entry .luaskin imports per-scene helpers from a sibling directory.
+    // The collector must walk recursively and emit module keys with `/` separators preserved.
+    const subEntry = enc(
+      [
+        'local main = require("result/main")',
+        'if skin_config then return main.body() else return main.header end',
+      ].join('\n'),
+    );
+    const resultMain = enc(
+      [
+        'local util = require("result/util")',
+        'local M = {}',
+        'M.header = { type = 7, name = "blanket", w = 1280, h = 720 }',
+        'function M.body() return { type = 7, name = util.tag, w = 1, h = 1 } end',
+        'return M',
+      ].join('\n'),
+    );
+    const resultUtil = enc('return { tag = "from-subdir" }');
+    const files: Map<string, BeatorajaSkinFileEntry> = new Map([
+      ['theme/blanket/result.luaskin', subEntry],
+      ['theme/blanket/result/main.lua', resultMain],
+      ['theme/blanket/result/util.lua', resultUtil],
+    ]);
+    const result = loadBeatorajaSkin({
+      entryPath: 'theme/blanket/result.luaskin',
+      files,
+      skinConfig: { offset: 0 },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.skin?.name).toBe('from-subdir');
+  });
+
   it('discovers parent-directory `.lua` modules (e.g. shared `play_parts.lua`)', () => {
     const subEntry = enc(
       [

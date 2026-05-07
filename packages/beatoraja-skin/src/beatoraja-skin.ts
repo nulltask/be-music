@@ -109,33 +109,63 @@ export function loadBeatorajaSkin(options: LoadBeatorajaSkinOptions): LoadBeator
 }
 
 /**
- * Pull every `.lua` file in `baseDir` (and one directory up — beatoraja themes occasionally use `../play_parts.lua`)
- * into the Lua module table. The module name is the filename without the `.lua` suffix.
+ * Pull every `.lua` file reachable from `baseDir` (recursively, plus one directory up to support themes that
+ * keep shared modules at the theme root) into the Lua module table.
+ *
+ * Module names mirror beatoraja's resolution: the relative path under `baseDir`, with `/` separators
+ * preserved and the `.lua` suffix stripped. So `theme/blanket/result/util.lua` reachable from
+ * `theme/blanket/result.luaskin` becomes module `"result/util"` (`require("result/util")` matches). Flat
+ * `theme/blanket/prop.lua` becomes `"prop"`. A parent-directory `theme/play_parts.lua` becomes
+ * `"../play_parts"` (rare; same-directory module wins on collision).
+ *
+ * Beatoraja's actual `require` accepts both `/` and `.` as separators. The collector only emits the `/`
+ * form; the `setupCustomRequire` runtime then normalizes incoming names so a `require("result.util")`
+ * still matches the `"result/util"` key.
  */
 export function collectBeatorajaLuaModules(
   files: ReadonlyMap<string, BeatorajaSkinFileEntry>,
   baseDir: string,
 ): BeatorajaLuaModuleSource[] {
-  const baseDirLower = baseDir.toLowerCase();
-  const parentDirLower = dirname(baseDir).toLowerCase();
+  const baseDirNorm = normalizeDir(baseDir);
+  const parentDirNorm = normalizeDir(dirname(baseDir));
   const seen = new Map<string, BeatorajaLuaModuleSource>();
   for (const [path, entry] of files) {
     const lower = path.toLowerCase();
     if (!lower.endsWith('.lua')) continue;
     const lastSlash = lower.lastIndexOf('/');
     const fileDir = lastSlash >= 0 ? lower.slice(0, lastSlash) : '';
-    if (fileDir !== baseDirLower && fileDir !== parentDirLower) continue;
-    const fileName = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
-    const moduleName = fileName.slice(0, -'.lua'.length);
-    if (seen.has(moduleName)) {
-      // Same-directory module wins over parent-directory module (matches beatoraja's `require` lookup order).
-      if (fileDir !== baseDirLower) continue;
+    let moduleKey: string | undefined;
+    if (fileDir === baseDirNorm || fileDir.startsWith(`${baseDirNorm}/`)) {
+      // Inside (or a sub-directory of) the entry directory — strip the prefix to form the module key.
+      const relative = fileDir === baseDirNorm ? '' : fileDir.slice(baseDirNorm.length + 1);
+      const fileName = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+      const stem = fileName.slice(0, -'.lua'.length);
+      moduleKey = relative === '' ? stem : `${relative}/${stem}`;
+    } else if (fileDir === parentDirNorm) {
+      // Parent-directory shared module — beatoraja themes occasionally keep helpers (e.g. `play_parts.lua`)
+      // one level above the entry. Resolved as the bare stem; same-directory entries take precedence on
+      // collision because `require("play_parts")` should prefer the closer file.
+      const fileName = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+      moduleKey = fileName.slice(0, -'.lua'.length);
+    } else {
+      continue;
+    }
+    const isInside = fileDir === baseDirNorm || fileDir.startsWith(`${baseDirNorm}/`);
+    if (seen.has(moduleKey) && !isInside) {
+      // Same-key collision: a module already inside `baseDir` wins over the parent-directory fallback.
+      continue;
     }
     const bytes = asLoadedBytes(entry);
     if (bytes === undefined) continue;
-    seen.set(moduleName, { name: moduleName, source: bytes });
+    seen.set(moduleKey, { name: moduleKey, source: bytes });
   }
   return Array.from(seen.values());
+}
+
+/** Normalize a directory path for case-insensitive comparison: lowercased, no trailing slash. */
+function normalizeDir(dir: string): string {
+  const lower = dir.toLowerCase();
+  return lower.endsWith('/') ? lower.slice(0, -1) : lower;
 }
 
 /**

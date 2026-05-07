@@ -86,14 +86,16 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(result.error.message).toMatch(/syntax|unexpected/i);
   });
 
-  it('returns an empty stub table for unknown require modules so beatoraja host modules (e.g. main_state) load', () => {
+  it('returns an empty stub table for unknown require modules', () => {
     const result = evaluateBeatorajaLuaSkin({
       entry: enc(
-        ['local t = require("main_state")', 'return { has_table = type(t) == "table", count = 0 }'].join('\n'),
+        [
+          'local t = require("some_unknown_helper")',
+          'return { has_table = type(t) == "table", count = 0 }',
+        ].join('\n'),
       ),
       modules: [],
     });
-    expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.error.message);
     expect(result.value).toEqual({ has_table: true, count: 0 });
   });
@@ -101,13 +103,63 @@ describe('evaluateBeatorajaLuaSkin', () => {
   it('returns the SAME stub table on repeated require() calls', () => {
     const result = evaluateBeatorajaLuaSkin({
       entry: enc(
-        ['local a = require("main_state")', 'local b = require("main_state")', 'return { same = a == b }'].join('\n'),
+        [
+          'local a = require("some_unknown_helper")',
+          'local b = require("some_unknown_helper")',
+          'return { same = a == b }',
+        ].join('\n'),
       ),
       modules: [],
     });
-    expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.error.message);
     expect(result.value).toEqual({ same: true });
+  });
+
+  it('main_state built-in module exposes the MainStateAccessor surface as default-value stubs', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local m = require("main_state")',
+          'return {',
+          '  is_table = type(m) == "table",',
+          '  exscore = m.exscore(),',
+          '  rate = m.rate(),',
+          '  text = m.text(10),',
+          '  option = m.option(123),',
+          '  timer = m.timer(46),',
+          '  off_value = m.timer_off_value,',
+          '}',
+        ].join('\n'),
+      ),
+      modules: [],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    const value = result.value as Record<string, unknown>;
+    expect(value.is_table).toBe(true);
+    expect(value.exscore).toBe(0);
+    expect(value.rate).toBe(0);
+    expect(value.text).toBe('');
+    expect(value.option).toBe(0);
+    expect(value.timer).toBe(0);
+    expect(typeof value.off_value).toBe('number');
+  });
+
+  it('require accepts both `/` and `.` separators (so `result/util` and `result.util` both resolve)', () => {
+    // Both forms must hit the same canonical key in the module table — the loader normalizes `.` → `/`
+    // before lookup. We register the module under the slash form (matching how
+    // `collectBeatorajaLuaModules` emits keys for nested files).
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local a = require("result/util")',
+          'local b = require("result.util")',
+          'return { same = a == b, value = a.x }',
+        ].join('\n'),
+      ),
+      modules: [{ name: 'result/util', source: enc('return { x = 42 }') }],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ same: true, value: 42 });
   });
 
   it('disables os/io and similar dangerous globals', () => {
