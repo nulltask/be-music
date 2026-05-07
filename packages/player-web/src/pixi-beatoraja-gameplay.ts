@@ -32,6 +32,7 @@ import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
 import { BeatorajaBgaLayer } from './pixi-beatoraja-bga.ts';
 import type { BgaCue } from './pixi-gameplay-bga.ts';
 import type { Texture } from 'pixi.js';
+import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PlayerOptions, PlayerSummary } from '@be-music/player/core/engine';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerStateSignals } from '@be-music/player/state-signals';
@@ -66,6 +67,12 @@ export interface PixiBeatorajaGameplayViewOptions {
   inputTarget?: EventTarget;
   shouldSkipKey?: (event: KeyboardEvent) => boolean;
   engineOptions?: Omit<PlayerOptions, 'createAudioSession' | 'createInputRuntime' | 'createUiRuntime' | 'auto'>;
+
+  /**
+   * Pre-loaded skin TTF cache, keyed by `font[].id`. Built via `loadBeatorajaFonts` (parallel to the
+   * texture cache). Omitting it falls back to the platform sans-serif on every text destination.
+   */
+  fonts?: BeatorajaFontCache;
 
   // BGA inputs (optional — omitting means no BGA paints, only the skin chrome + notes)
   /**
@@ -106,6 +113,14 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private engineSettled = false;
   private exitRequested = false;
   private disposed = false;
+  /**
+   * Last screen size we ran `fitToStage` against. The Pixi `Application` is `resizeTo: container`, which
+   * means the canvas can resize asynchronously after `enter()` (e.g. when the demo's gameplay scene
+   * mounts before the layout settles, or when the user resizes the window mid-chart). We re-fit on every
+   * tick when the screen has actually changed; same idiom the LR2 path uses.
+   */
+  private lastFitWidth = 0;
+  private lastFitHeight = 0;
 
   constructor(options: PixiBeatorajaGameplayViewOptions) {
     this.options = options;
@@ -126,6 +141,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       textures: options.textures,
       resolveRefValue: (ref) => this.adapter.resolveRefValue(ref),
       resolveTextContent: (ref) => this.adapter.resolveTextContent(ref),
+      resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
     });
     this.root.addChild(this.view.container);
 
@@ -271,6 +287,10 @@ export class PixiBeatorajaGameplayView implements PixiScene {
 
   private tick(): void {
     if (this.disposed) return;
+    // Re-fit on every tick. The Pixi `Application`'s `resizeTo` may have changed `app.screen` after our
+    // last fit (mount-time layout, window resize, dev-tools open). Cheap when nothing changed — the
+    // setter early-outs when `(width, height)` matches the cached values.
+    this.fitToStage();
     if (this.uiSignals) {
       const result = drainWebUiSignals(
         this.uiSignals,
@@ -303,14 +323,19 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private fitToStage(): void {
     const host = this.host;
     if (!host) return;
-    const screen = host.app.screen;
-    const scaleX = screen.width / this.view.width;
-    const scaleY = screen.height / this.view.height;
+    const { width, height } = host.app.screen;
+    if (width === this.lastFitWidth && height === this.lastFitHeight) return;
+    if (width <= 0 || height <= 0) return;
+    this.lastFitWidth = width;
+    this.lastFitHeight = height;
+    const scaleX = width / this.view.width;
+    const scaleY = height / this.view.height;
     const scale = Math.min(scaleX, scaleY);
+    if (!Number.isFinite(scale) || scale <= 0) return;
     const container = this.view.container;
     container.scale.set(scale, scale);
-    container.x = (screen.width - this.view.width * scale) / 2;
-    container.y = (screen.height - this.view.height * scale) / 2;
+    container.x = (width - this.view.width * scale) / 2;
+    container.y = (height - this.view.height * scale) / 2;
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {

@@ -94,6 +94,9 @@ export class BeatorajaPlaySkinPreviewScene implements PixiScene {
 
   private tick(): void {
     if (this.disposed) return;
+    // Re-fit per tick — the Pixi app's `resizeTo: container` may grow / shrink after `enter()` (mount
+    // race, window resize). Cheap when nothing changed.
+    this.fitToStage();
     const elapsed = performance.now() - this.startMs;
     this.view.update({
       activeOps: this.baseOps,
@@ -104,17 +107,25 @@ export class BeatorajaPlaySkinPreviewScene implements PixiScene {
     });
   }
 
+  private lastFitWidth = 0;
+  private lastFitHeight = 0;
+
   private fitToStage(): void {
     const host = this.host;
     if (!host) return;
-    const screen = host.app.screen;
-    const scaleX = screen.width / this.view.width;
-    const scaleY = screen.height / this.view.height;
+    const { width, height } = host.app.screen;
+    if (width === this.lastFitWidth && height === this.lastFitHeight) return;
+    if (width <= 0 || height <= 0) return;
+    this.lastFitWidth = width;
+    this.lastFitHeight = height;
+    const scaleX = width / this.view.width;
+    const scaleY = height / this.view.height;
     const scale = Math.min(scaleX, scaleY);
+    if (!Number.isFinite(scale) || scale <= 0) return;
     const container = this.view.container;
     container.scale.set(scale, scale);
-    container.x = (screen.width - this.view.width * scale) / 2;
-    container.y = (screen.height - this.view.height * scale) / 2;
+    container.x = (width - this.view.width * scale) / 2;
+    container.y = (height - this.view.height * scale) / 2;
   }
 
   private handleKeyDown = (event: KeyboardEvent): void => {

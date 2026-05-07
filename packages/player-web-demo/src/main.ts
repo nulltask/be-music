@@ -35,6 +35,7 @@ import {
   BeatorajaPlaySkinPreviewScene,
   PixiBeatorajaGameplayView,
   isBeatorajaSkinIndicator,
+  loadBeatorajaFonts,
   loadBeatorajaPlaySkinFromBundle,
   loadBeatorajaTexturesFromBundle,
   loadBeatorajaThemeFromFiles,
@@ -43,12 +44,13 @@ import {
   prepareBeatorajaGameplayChart,
   resolveChartPlayVariant,
   summarizeBeatorajaPlaySkins,
+  type BeatorajaFontCache,
   type BeatorajaPlayVariant,
   type BeatorajaTextureCache,
   type BeatorajaThemeBundle,
   type PreparedBeatorajaGameplayChart,
 } from '@be-music/player-web';
-import { buildDefaultSkinConfigOptions, bundleBeatorajaSources } from '@be-music/beatoraja-skin';
+import { buildDefaultSkinConfigOptions, bundleBeatorajaSources, normalizeBeatorajaFonts } from '@be-music/beatoraja-skin';
 
 const dropLog = logger('drop');
 const recordLog = logger('record');
@@ -1409,6 +1411,12 @@ class PlayerWebDemoApp {
    * The same hazard is technically present in the LR2 path but LR2's flow doesn't re-mount the same skin.
    */
   private readonly beatorajaTextureCachesByEntry = new Map<string, BeatorajaTextureCache>();
+  /**
+   * Per-entry skin font cache. Same lifecycle as the texture cache — the registered `FontFace`s outlive
+   * the scene (they sit on `document.fonts`), so re-mounting the same skin reuses the family lookup
+   * without re-parsing the TTF bytes.
+   */
+  private readonly beatorajaFontCachesByEntry = new Map<string, BeatorajaFontCache>();
   private beatorajaPreviewScene: BeatorajaPlaySkinPreviewScene | undefined;
 
   /**
@@ -1621,6 +1629,22 @@ class PlayerWebDemoApp {
       this.beatorajaTextureCachesByEntry.set(skinLoad.entry.entryPath, textures);
     }
 
+    // 2b. Skin font cache. Same per-entry memoization as textures — TTFs are tiny (≤ a few hundred KB)
+    // and the registered FontFace outlives every scene anyway.
+    let fonts = this.beatorajaFontCachesByEntry.get(skinLoad.entry.entryPath);
+    if (fonts === undefined) {
+      const fontDeclarations = normalizeBeatorajaFonts(skinLoad.result.skin.font);
+      fonts = await loadBeatorajaFonts({
+        files: bundle.files,
+        entryPath: skinLoad.entry.entryPath,
+        fonts: fontDeclarations,
+      });
+      gameplayLog.info(
+        `beatoraja gameplay fonts: declared=${fontDeclarations.length} loaded=${fonts.values().length} (entry=${skinLoad.entry.entryPath})`,
+      );
+      this.beatorajaFontCachesByEntry.set(skinLoad.entry.entryPath, fonts);
+    }
+
     // 3. Audio + BGA prep — owns the AudioContext for this play.
     const source = resolveSongSource(this.collection, song);
     if (!source) {
@@ -1647,6 +1671,7 @@ class PlayerWebDemoApp {
     this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
       skin: skinLoad.result.skin,
       textures,
+      fonts,
       skinConfig: { offset: 0, option: defaultOption },
       variant,
       chart: prep.chart,

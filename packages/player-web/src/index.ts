@@ -9,6 +9,7 @@ export * from './gameplay-recorder.ts';
 export * from './library.ts';
 export * from './logger.ts';
 export * from './beatoraja-chart-prep.ts';
+export * from './beatoraja-fonts.ts';
 export * from './beatoraja-runtime-adapter.ts';
 export * from './pixi-beatoraja-bga.ts';
 export * from './pixi-beatoraja-gameplay.ts';

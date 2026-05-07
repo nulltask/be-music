@@ -40,6 +40,14 @@ export interface BeatorajaPlaySkinViewOptions {
    * preview if it wants to make text destinations visible without an engine running.
    */
   resolveTextContent?: (refOp: number) => string | undefined;
+  /**
+   * Lookup `text[].font` slot id → registered CSS `font-family` name. Without this every label collapses
+   * to the platform sans-serif, which on Japanese themes produces visibly garbled metrics — even when
+   * the chart's title / artist resolve to correct UTF-8 strings, the wrong-typeface fallback re-flows
+   * each glyph and looks "broken" to authors who tested on the skin's bundled TTF. Returning `undefined`
+   * for an unknown id keeps the platform sans-serif fallback (matches the legacy behavior).
+   */
+  resolveFontFamily?: (fontId: number) => string | undefined;
 }
 
 interface SpriteEntry {
@@ -69,6 +77,7 @@ export class BeatorajaPlaySkinView {
   private readonly entries: ViewEntry[] = [];
   private readonly resolveRefValue: (refOp: number) => number;
   private readonly resolveTextContent: (refOp: number) => string | undefined;
+  private readonly resolveFontFamily: (fontId: number) => string | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -76,6 +85,7 @@ export class BeatorajaPlaySkinView {
     this.height = options.skin.h;
     this.resolveRefValue = options.resolveRefValue ?? (() => 0);
     this.resolveTextContent = options.resolveTextContent ?? (() => undefined);
+    this.resolveFontFamily = options.resolveFontFamily ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -139,10 +149,17 @@ export class BeatorajaPlaySkinView {
   }
 
   private buildTextEntry(group: BeatorajaDestinationGroup, element: BeatorajaTextElement): TextEntry {
+    // Pick the skin-author's TTF when one was loaded for this `font` slot; fall back to the platform
+    // sans-serif chain otherwise. The CSS font-stack fallback (`sans-serif` after the skin family)
+    // covers two cases at once: (1) the skin family hasn't finished registering yet (rare; we await it
+    // before constructing the view), and (2) a glyph not present in the skin font (Japanese full-width,
+    // emoji, etc.) gets borrowed from the system font without showing tofu.
+    const skinFamily = this.resolveFontFamily(element.fontId);
+    const fontFamily = skinFamily !== undefined ? `'${skinFamily}', sans-serif` : 'sans-serif';
     const text = new Text({
       text: '',
       style: {
-        fontFamily: 'sans-serif',
+        fontFamily,
         fontSize: element.size,
         fill: 0xffffff,
         align: element.align,
