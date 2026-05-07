@@ -1765,12 +1765,13 @@ class PlayerWebDemoApp {
       onExit: () => {
         void this.finishBeatorajaGameplayThen(() => this.showSelect());
       },
-      onComplete: (summary, maxCombo) => {
+      onComplete: (summary, maxCombo, history) => {
         // Result skin (`type = 7`) when the bundle ships one — otherwise jump back to select.
         // `finishBeatorajaGameplayThen` drops the gameplay scene first so the result scene gets a
-        // clean stage; the result scene mounts in the `then` branch.
+        // clean stage; the result scene mounts in the `then` branch. `history` carries the
+        // per-judge score / gauge polyline samples for the result skin's graph elements.
         void this.finishBeatorajaGameplayThen(async () => {
-          const mounted = await this.showBeatorajaResult(song, summary, maxCombo);
+          const mounted = await this.showBeatorajaResult(song, summary, maxCombo, history);
           if (!mounted) await this.showSelect();
         });
       },
@@ -2165,6 +2166,10 @@ class PlayerWebDemoApp {
     song: BrowserSongEntry,
     summary: PlayerSummary,
     maxCombo: number,
+    history: {
+      scoreHistory: ReadonlyArray<{ progress: number; exScore: number }>;
+      gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
+    },
   ): Promise<boolean> {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return false;
@@ -2229,6 +2234,8 @@ class PlayerWebDemoApp {
       song,
       summary,
       maxCombo,
+      scoreHistory: history.scoreHistory,
+      gaugeHistory: history.gaugeHistory,
       // Pick the outcome-specific jingle when one was discovered, falling back to the generic
       // `result` slot. Beatoraja themes that ship a single result BGM authoredit as `result.*`,
       // while themes that distinguish clear / fail (most reference themes) ship dedicated tracks.

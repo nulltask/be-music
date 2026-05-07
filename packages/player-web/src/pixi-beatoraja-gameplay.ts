@@ -96,8 +96,20 @@ export interface PixiBeatorajaGameplayViewOptions {
    * Called once the engine resolves with a chart-end summary. `maxCombo` is plumbed alongside
    * because `PlayerSummary` doesn't carry it (it's a derived value the adapter latches from the
    * judge-state stream); result scenes need both halves to render the final score block.
+   *
+   * `history` carries the per-judge `(progress, exScore)` and `(progress, gauge%)` polylines the
+   * adapter accumulated during the run — result skins consume these for score-over-time graph
+   * elements (`graph[].type = 110` / `113` / `115` in beatoraja's reference). Empty arrays when
+   * the run produced no judges.
    */
-  onComplete?: (summary: PlayerSummary, maxCombo: number) => void;
+  onComplete?: (
+    summary: PlayerSummary,
+    maxCombo: number,
+    history: {
+      scoreHistory: ReadonlyArray<{ progress: number; exScore: number }>;
+      gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
+    },
+  ) => void;
   /** Called if the engine rejects (interrupt or fatal) — the host can branch on the error type. */
   onError?: (error: unknown) => void;
 }
@@ -270,7 +282,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       .then((summary) => {
         this.engineSettled = true;
         if (!this.disposed) {
-          this.options.onComplete?.(summary, this.adapter.getMaxCombo());
+          this.options.onComplete?.(summary, this.adapter.getMaxCombo(), this.adapter.getResultHistory());
         }
         return summary;
       })

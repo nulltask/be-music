@@ -102,6 +102,16 @@ export class BeatorajaRuntimeAdapter {
    */
   private readonly lastRankOps: { side?: number; generic?: number } = {};
   /**
+   * Per-judge `(progress, exScore)` samples accumulated during the run. Result skins consume
+   * this through `getResultHistory()` to draw score-over-time polyline graphs (`graph[].type =
+   * 110` / `113` / `115` in beatoraja's reference). Pushed inside `applyJudgeCombo` because every
+   * EX-score change funnels through the same judge path — sampling once per judge keeps the
+   * polyline density proportional to "how much actually happened" rather than wallclock time.
+   */
+  private readonly scoreHistory: Array<{ progress: number; exScore: number }> = [];
+  /** Per-judge `(progress, gauge%)` samples — gauge polyline source. Same lifecycle as scoreHistory. */
+  private readonly gaugeHistory: Array<{ progress: number; value: number }> = [];
+  /**
    * Adapter-instance boot wallclock — surfaces prop.lua `operating_time_*` (run uptime). Beatoraja's
    * native semantics is "since beatoraja launched"; in our world the closest equivalent is "since
    * this gameplay scene mounted". Stored in `Date.now()` ms so subtraction yields wallclock seconds.
@@ -277,6 +287,19 @@ export class BeatorajaRuntimeAdapter {
     this.runningCombo = state.combo;
     if (state.combo > this.maxCombo) this.maxCombo = state.combo;
 
+    // Append a polyline sample. Mirrors what `PixiGameplayView.publishJudge` does on the LR2
+    // path — a `(progress, exScore)` / `(progress, gauge%)` pair captured at every judge so the
+    // result polyline reflects the chart's structure (dense in busy stretches, sparse in calm
+    // ones) rather than wallclock-uniform sampling.
+    const frame = this.frame;
+    if (frame !== null) {
+      const progress = frame.totalSeconds > 0 ? Math.max(0, Math.min(1, frame.currentSeconds / frame.totalSeconds)) : 0;
+      this.scoreHistory.push({ progress, exScore: frame.summary.exScore });
+      const gauge = frame.summary.gauge;
+      const gaugePct = gauge !== undefined && gauge.max > 0 ? (gauge.current / gauge.max) * 100 : 0;
+      this.gaugeHistory.push({ progress, value: gaugePct });
+    }
+
     // eslint-disable-next-line no-console
     console.log(
       '[beatoraja-adapter] apply judge',
@@ -289,6 +312,21 @@ export class BeatorajaRuntimeAdapter {
         channel: state.channel,
       }),
     );
+  }
+
+  /**
+   * Snapshot the polyline histories accumulated this run. Returns frozen copies so consumers
+   * can't mutate adapter state. Used by gameplay's `onComplete` hand-off to seed the result
+   * scene's polyline-graph renderer.
+   */
+  getResultHistory(): {
+    scoreHistory: ReadonlyArray<{ progress: number; exScore: number }>;
+    gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
+  } {
+    return {
+      scoreHistory: this.scoreHistory.slice(),
+      gaugeHistory: this.gaugeHistory.slice(),
+    };
   }
 
   /** Read-only handle the skin view consumes per frame. The same object identity persists across calls. */

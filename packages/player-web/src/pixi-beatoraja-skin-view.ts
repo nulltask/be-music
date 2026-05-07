@@ -3,7 +3,7 @@
 // every destination keyframe per frame. Engine-driven dynamics (notes, judge flashes, key-on, BGA, lamps) are
 // owned by the gameplay scene that drives this view from outside.
 
-import { BitmapText, Container, Sprite, Text, Texture } from 'pixi.js';
+import { BitmapText, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import {
   composeBeatorajaValueCells,
   imageFrameAt,
@@ -75,12 +75,24 @@ export interface BeatorajaPlaySkinViewOptions {
    *   - `2` (chart progress) → `currentSeconds / totalSeconds`
    *   - `102` (load progress) → load %, currently always 1 in our pipeline (assets pre-decode)
    *
-   * Polyline-style codes (`110` / `113` / `115` — score history) don't fit the "scale a sub-rect"
-   * model the renderer uses; the host should return `undefined` for those so the graph stays
-   * hidden until per-frame history tracking ships. Returning `undefined` for unknown types
-   * matches that — the graph's destination renders empty.
+   * Polyline-style codes (`110` / `113` / `115`) should NOT be answered here — see
+   * `resolveGraphPolyline`. Returning `undefined` for unknown types hides the graph.
    */
   resolveGraphValue?: (type: number) => number | undefined;
+  /**
+   * Lookup `graph[].type` → polyline points in `[0, 1] × [0, 1]`. Each point is a normalized
+   * coordinate inside the destination's bounding box (`{x, y}` ∈ `[0, 1]²`); the renderer maps
+   * these onto the dst rect with `y` inverted (so a high score draws toward the top of the box).
+   * Common types:
+   *
+   *   - `110` — current run's EX-score over time
+   *   - `113` — best-record EX-score over time (DB-backed; not yet available)
+   *   - `115` — target EX-score over time (DB-backed; not yet available)
+   *
+   * Returning `undefined` falls through to {@link resolveGraphValue} (bar fill). Returning an
+   * empty array hides the polyline (a chart that produced no judges has nothing to plot).
+   */
+  resolveGraphPolyline?: (type: number) => ReadonlyArray<{ x: number; y: number }> | undefined;
 }
 
 interface SpriteEntry {
@@ -132,7 +144,22 @@ interface GraphEntry {
   sprite: Sprite;
 }
 
-type ViewEntry = SpriteEntry | ValueEntry | TextEntry | GraphEntry;
+interface PolylineGraphEntry {
+  kind: 'polyline-graph';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaGraphElement;
+  /**
+   * Pixi `Graphics` painting the polyline. Cleared and rebuilt every frame the points change —
+   * a single `Graphics` is fine here because the polyline cap is small (~few hundred judge
+   * samples), and `Graphics` rebatching is cheap relative to alternatives like keeping one
+   * `Sprite` per segment.
+   */
+  graphics: Graphics;
+  /** Last point count painted, used to skip the rebuild when the polyline hasn't grown. */
+  lastPointCount: number;
+}
+
+type ViewEntry = SpriteEntry | ValueEntry | TextEntry | GraphEntry | PolylineGraphEntry;
 
 export class BeatorajaPlaySkinView {
   readonly container = new Container();
@@ -145,6 +172,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveFontFamily: (fontId: number) => string | undefined;
   private readonly resolveFontKind: (fontId: number) => 'css' | 'bitmap' | undefined;
   private readonly resolveGraphValue: (type: number) => number | undefined;
+  private readonly resolveGraphPolyline: (type: number) => ReadonlyArray<{ x: number; y: number }> | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -166,6 +194,7 @@ export class BeatorajaPlaySkinView {
     this.resolveFontFamily = options.resolveFontFamily ?? (() => undefined);
     this.resolveFontKind = options.resolveFontKind ?? (() => undefined);
     this.resolveGraphValue = options.resolveGraphValue ?? (() => undefined);
+    this.resolveGraphPolyline = options.resolveGraphPolyline ?? (() => undefined);
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -374,16 +403,23 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
-   * Build a graph entry — a `Sprite` whose texture is the full source crop and whose `width` /
-   * `height` are scaled per-frame by the resolver's 0..1 ratio. The base texture is captured here
-   * so `updateGraphEntry` can re-crop along the angle axis on each frame without per-frame
-   * texture-cache lookups.
+   * Build a graph entry. Polyline-style graphs (whose `type` the host's `resolveGraphPolyline`
+   * answers) get a `PolylineGraphEntry` with a Pixi `Graphics` for line strokes. Everything else
+   * falls through to the bar-fill `GraphEntry` path. The polyline check uses `resolveGraphPolyline`
+   * — if it returns `undefined` for the type at build time, the renderer assumes that type will
+   * never produce polyline data and goes straight to the bar entry.
    */
   private buildGraphEntry(
     group: BeatorajaDestinationGroup,
     element: BeatorajaGraphElement,
     textures: BeatorajaTextureCache,
-  ): GraphEntry | undefined {
+  ): ViewEntry | undefined {
+    if (this.resolveGraphPolyline(element.type) !== undefined) {
+      const graphics = new Graphics();
+      graphics.alpha = 0;
+      this.container.addChild(graphics);
+      return { kind: 'polyline-graph', group, element, graphics, lastPointCount: -1 };
+    }
     const baseTexture = textures.get(element.src);
     const baseIsBindable = baseTexture !== undefined && baseTexture !== Texture.EMPTY;
     // Pre-build the cell-0 cropped sub-texture for the same WebGPU-bind-group warm-up reasoning
@@ -423,6 +459,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'graph':
           this.updateGraphEntry(entry, props);
+          break;
+        case 'polyline-graph':
+          this.updatePolylineGraphEntry(entry, props);
           break;
       }
     }
@@ -662,6 +701,58 @@ export class BeatorajaPlaySkinView {
     sprite.blendMode = props.blendMode;
   }
 
+  /**
+   * Update a polyline-graph entry. Plots the resolver's `(x, y)` points (each in `[0, 1]²`)
+   * across the destination's bounding box, with `y` inverted so a high score draws toward the
+   * top of the box (matches LR2 / beatoraja's "score climbs upward" convention).
+   *
+   * Skips the rebuild when the point count hasn't grown — polylines accumulate monotonically
+   * during a run, so most frames re-paint the same line; the cache check avoids the
+   * `clear() + moveTo() + lineTo()...` storm on every tick.
+   *
+   * Hidden when:
+   *   - The destination's `props` say so (op gate, timer not started, alpha 0)
+   *   - The resolver returned `undefined` (this graph isn't a polyline after all — should never
+   *     happen since `buildGraphEntry` already checked, but guard anyway)
+   *   - The polyline has fewer than 2 points (a single-point line is invisible)
+   */
+  private updatePolylineGraphEntry(
+    entry: PolylineGraphEntry,
+    props: ReturnType<typeof destinationToSpriteProps>,
+  ): void {
+    const graphics = entry.graphics;
+    graphics.visible = props.visible;
+    if (!props.visible) return;
+    const points = this.resolveGraphPolyline(entry.element.type);
+    if (points === undefined || points.length < 2) {
+      graphics.visible = false;
+      return;
+    }
+    if (entry.lastPointCount !== points.length) {
+      // Re-stroke the polyline. We use `props.tint` as the line color (beatoraja's reference
+      // theme paints score-history graphs with a tinted "line" texture; collapsing to a single
+      // color line is a simplification that loses texture detail but preserves the data shape).
+      graphics.clear();
+      const first = points[0]!;
+      graphics.moveTo(first.x * props.width, (1 - first.y) * props.height);
+      for (let i = 1; i < points.length; i += 1) {
+        const p = points[i]!;
+        graphics.lineTo(p.x * props.width, (1 - p.y) * props.height);
+      }
+      // 2-pixel stroke is readable across most skin canvas sizes (640×480 LR2 → 1920×1080
+      // beatoraja result skins). Authors who need a different thickness can revisit when
+      // we expose a per-graph stroke-width knob.
+      graphics.stroke({ color: props.tint, width: 2, alpha: 1 });
+      entry.lastPointCount = points.length;
+    }
+    graphics.x = props.x;
+    graphics.y = props.y;
+    graphics.alpha = props.alpha;
+    graphics.tint = props.tint;
+    graphics.angle = props.angle;
+    graphics.blendMode = props.blendMode;
+  }
+
   /** Tear down sprites and the container. Textures live on the cache (no `dispose()` by design). */
   dispose(): void {
     if (this.disposed) return;
@@ -683,6 +774,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'graph':
           entry.sprite.destroy({ children: false, texture: false, textureSource: false });
+          break;
+        case 'polyline-graph':
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
           break;
       }
     }

@@ -65,6 +65,15 @@ export interface PixiBeatorajaResultSceneOptions {
    */
   maxCombo: number;
   /**
+   * Per-judge `(progress, exScore)` polyline samples. Drives `graph[].type = 110` (current run's
+   * EX-score over time). Empty arrays render no polyline. Optional because the no-decide /
+   * no-engine fast path can mount the result scene without a real run (e.g., a debug entry from
+   * the host's GUI).
+   */
+  scoreHistory?: ReadonlyArray<{ progress: number; exScore: number }>;
+  /** Per-judge `(progress, gauge%)` polyline samples. Drives gauge-history graph elements. */
+  gaugeHistory?: ReadonlyArray<{ progress: number; value: number }>;
+  /**
    * Optional result BGM bytes (WAV / OGG / MP3). The host typically picks between `clear.wav` /
    * `fail.wav` / generic `result.wav` based on the run's outcome before passing it here. Played
    * once at scene `enter()` through a scene-owned `AudioContext` (closed in `dispose()`).
@@ -104,6 +113,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
       resolveGraphValue: (type) => this.resolveResultGraph(type),
+      resolveGraphPolyline: (type) => this.resolveResultPolyline(type),
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
@@ -389,6 +399,44 @@ export class PixiBeatorajaResultScene implements PixiScene {
       case 7: {
         const max = summary.total * 2;
         return max > 0 ? summary.exScore / max : 0;
+      }
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Result-scene polyline resolver. Maps `graph[].type` codes to normalized `(x, y)` points in
+   * `[0, 1]²`. Coordinates are progress along the chart on x and the value's fraction-of-max on
+   * y; the renderer flips y so high values draw upward.
+   *
+   * Supported types:
+   *   - `110` — current run's EX-score over time (from `scoreHistory`, normalized by `total*2`)
+   *   - `107` — running gauge over time (from `gaugeHistory`, normalized by 100)
+   *
+   * Best-record / target codes (`113` / `115`) need a DB layer to source the comparison run's
+   * polyline; until that ships they return `undefined` so the renderer hides them.
+   */
+  private resolveResultPolyline(type: number): ReadonlyArray<{ x: number; y: number }> | undefined {
+    const summary = this.options.summary;
+    switch (type) {
+      case 110: {
+        const history = this.options.scoreHistory;
+        if (history === undefined || history.length === 0) return undefined;
+        const max = summary.total * 2;
+        if (max <= 0) return undefined;
+        return history.map((sample) => ({
+          x: sample.progress,
+          y: Math.max(0, Math.min(1, sample.exScore / max)),
+        }));
+      }
+      case 107: {
+        const history = this.options.gaugeHistory;
+        if (history === undefined || history.length === 0) return undefined;
+        return history.map((sample) => ({
+          x: sample.progress,
+          y: Math.max(0, Math.min(1, sample.value / 100)),
+        }));
       }
       default:
         return undefined;
