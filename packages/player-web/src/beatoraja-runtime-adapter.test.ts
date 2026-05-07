@@ -117,7 +117,11 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     expect(adapter.getTimerStart(keyOffTimerId(2, 2)!)).toBe(800);
   });
 
-  it('starts the bomb timer on flash-lane', () => {
+  it('flash-lane stamps KEY_ON (not bomb) — autoplay path that bypasses press-lane', () => {
+    // `flash-lane` is the engine's "key was pressed / autoplay consumed a note" signal. It
+    // fires regardless of judge severity, so it can't drive the bomb explosion (which is a
+    // positive-feedback cue specifically for clean hits). Bomb is fired separately in
+    // `applyJudgeCombo` for PERFECT / GREAT — see those tests.
     const clock = makeClock();
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
@@ -126,7 +130,49 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     });
     clock.advance(1200);
     adapter.applyCommand({ kind: 'flash-lane', channel: '15' });
-    expect(adapter.getTimerStart(bombTimerId(1, 5)!)).toBe(1200);
+    expect(adapter.getTimerStart(keyOnTimerId(1, 5)!)).toBe(1200);
+    expect(adapter.getTimerStart(bombTimerId(1, 5)!)).toBeUndefined();
+  });
+
+  it('press-lane deactivates the previously-active KEY_OFF timer (lane laser visibility gate)', () => {
+    // Beatoraja's `KeyInputProccessor` does `setTimerOn(KEY_ON); setTimerOff(KEY_OFF)`
+    // symmetrically — `setTimerOff` clears the timer's "active" state so any element gated
+    // on it stops drawing. Without this deactivate, a destination keyed on KEY_OFF would
+    // stay visible after the player pressed the key, since its timer's start time is still
+    // set from the prior release.
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyCommand({ kind: 'release-lane', channel: '13' });
+    expect(adapter.getTimerStart(keyOffTimerId(1, 3)!)).toBe(100);
+    clock.advance(50);
+    adapter.applyCommand({ kind: 'press-lane', channel: '13' });
+    expect(adapter.getTimerStart(keyOffTimerId(1, 3)!)).toBeUndefined();
+    expect(adapter.getTimerStart(keyOnTimerId(1, 3)!)).toBe(150);
+  });
+
+  it('release-lane deactivates the previously-active KEY_ON timer (laser disappears on release)', () => {
+    // The user-visible bug: pressing a key once leaves the lane laser stuck on because
+    // KEY_ON timer's start time is set forever — release-lane MUST deactivate it (delete the
+    // entry) so the destination renderer's `getTimerStart` returns undefined and the
+    // laser sprite stops drawing.
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyCommand({ kind: 'press-lane', channel: '13' });
+    expect(adapter.getTimerStart(keyOnTimerId(1, 3)!)).toBe(100);
+    clock.advance(200);
+    adapter.applyCommand({ kind: 'release-lane', channel: '13' });
+    expect(adapter.getTimerStart(keyOnTimerId(1, 3)!)).toBeUndefined();
+    expect(adapter.getTimerStart(keyOffTimerId(1, 3)!)).toBe(300);
   });
 
   it('starts the LN-hold timer on hold-lane-until-beat', () => {
@@ -221,6 +267,42 @@ describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {
     clock.advance(100);
     adapter.applyJudgeCombo({ judge: 'GOOD', combo: 3, channel: '13', updatedAtMs: 0 });
     expect(adapter.getTimerStart(comboTimerId(1))).toBe(350);
+  });
+
+  it('fires the lane bomb timer on PERFECT and GREAT (clean hit verdicts)', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '14', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(bombTimerId(1, 4)!)).toBe(100);
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'GREAT', combo: 2, channel: '15', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(bombTimerId(1, 5)!)).toBe(200);
+  });
+
+  it('does NOT fire the bomb timer on GOOD / BAD / POOR / MISS (skin only flashes bomb on clean hits)', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'GOOD', combo: 1, channel: '11', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(bombTimerId(1, 1)!)).toBeUndefined();
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'BAD', combo: 0, channel: '12', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(bombTimerId(1, 2)!)).toBeUndefined();
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'POOR', combo: 0, channel: '13', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(bombTimerId(1, 3)!)).toBeUndefined();
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'MISS', combo: 0, channel: '14', updatedAtMs: 0 });
+    expect(adapter.getTimerStart(bombTimerId(1, 4)!)).toBeUndefined();
   });
 
   it('does NOT restart the combo timer on combo-break verdicts (BAD / POOR / MISS)', () => {

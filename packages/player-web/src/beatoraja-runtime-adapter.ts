@@ -589,15 +589,31 @@ export class BeatorajaRuntimeAdapter {
     console.log('[beatoraja-adapter] apply command', JSON.stringify(command));
     switch (command.kind) {
       case 'press-lane':
+        // Press: stamp KEY_ON, deactivate KEY_OFF. Beatoraja's `KeyInputProccessor` does
+        // `setTimerOn(keyOn); setTimerOff(keyOff)` symmetrically — the OFF state for the
+        // opposite timer is what hides any element gated on it (`SkinObject.prepareRegion`
+        // skips drawing when its timer is OFF). Without the deactivate, the lane laser /
+        // keybeam keyed on KEY_ON would stay visible after the player released the key
+        // because the timer's start time would still be set.
         this.startLaneKeyOnTimer(command.channel);
+        this.deactivateLaneKeyOffTimer(command.channel);
         break;
       case 'release-lane':
+        // Release: stamp KEY_OFF, deactivate KEY_ON. Symmetric to press-lane.
         this.startLaneKeyOffTimer(command.channel);
+        this.deactivateLaneKeyOnTimer(command.channel);
         break;
       case 'flash-lane':
-        // `flash-lane` fires when a note resolves with a non-MISS verdict. The skin's bomb sprite is
-        // gated on the lane's bomb timer.
-        this.startLaneBombTimer(command.channel);
+        // `flash-lane` is the engine's "key was pressed" signal. It fires for every input
+        // (manual press AND autoplay note consumption), regardless of judge severity. We
+        // mirror it onto KEY_ON so autoplay's keybeams light up the same way manual play's
+        // do — the bomb sprite is fired SEPARATELY in `applyJudgeCombo` for PERFECT / GREAT
+        // verdicts only (see the bomb-trigger logic there). Earlier the adapter triggered
+        // the bomb timer here, which lit the explosion sprite on every press including
+        // empty-press POORs and BAD verdicts — bomb is supposed to be a positive-feedback
+        // cue specifically for clean hits, never empty-press / low-judgement.
+        this.startLaneKeyOnTimer(command.channel);
+        this.deactivateLaneKeyOffTimer(command.channel);
         break;
       case 'hold-lane-until-beat':
         this.startLaneLnHoldTimer(command.channel);
@@ -641,6 +657,17 @@ export class BeatorajaRuntimeAdapter {
     // signal of "this side advanced" is the verdict.
     if (isComboAdvanceJudge(state.judge)) {
       this.markTimer(comboTimerId(side));
+    }
+
+    // Fire the lane bomb timer ONLY for clean hits (PERFECT / GREAT). The bomb is a positive-
+    // feedback explosion sprite — beatoraja's reference themes intentionally don't fire it on
+    // GOOD / BAD / POOR / MISS / empty-press, so the player gets a clear visual contrast
+    // between "clean hit" and "off-timing hit". The engine's `flash-lane` command alone can't
+    // gate this (it fires on every press regardless of judgement), so we drive bomb from the
+    // judge-publish path here. `state.channel` carries the lane the engine matched, so the
+    // bomb stamps the right per-lane timer (`bomb_*p_keyN` = 50+lane / 60+lane / 1000+lane).
+    if (isCleanHitJudge(state.judge) && state.channel !== undefined) {
+      this.startLaneBombTimer(state.channel);
     }
 
     // Latch the running combo for `prop.lua num.combo = 104` resolution. The engine emits the
@@ -1436,6 +1463,33 @@ export class BeatorajaRuntimeAdapter {
   private startLaneLnHoldTimer(channel: string): void {
     this.startLaneTimer(channel, lnHoldTimerId);
   }
+
+  /**
+   * Deactivate (= "turn off" in beatoraja's `TimerManager`) a per-lane timer so any
+   * destination gated on it stops drawing. We deactivate by deleting the entry from
+   * `timerStartedAt` — the destination renderer reads `getTimerStart(id)` and treats
+   * `undefined` as "timer not active", which mirrors beatoraja's `isOff` check inside
+   * `SkinObject.prepareRegion`.
+   *
+   * Used for the press → release symmetry (KEY_ON deactivates on release, KEY_OFF
+   * deactivates on press) so the lane laser doesn't get stuck visible after a key release.
+   */
+  private deactivateLaneTimer(channel: string, resolver: (side: BeatorajaSide, lane: number) => number | undefined): void {
+    const side = this.resolveSide(channel);
+    const lane = this.resolveLane(channel);
+    if (lane === undefined) return;
+    const id = resolver(side, lane);
+    if (id === undefined) return;
+    this.timerStartedAt.delete(id);
+  }
+
+  private deactivateLaneKeyOnTimer(channel: string): void {
+    this.deactivateLaneTimer(channel, keyOnTimerId);
+  }
+
+  private deactivateLaneKeyOffTimer(channel: string): void {
+    this.deactivateLaneTimer(channel, keyOffTimerId);
+  }
 }
 
 function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
@@ -1451,6 +1505,17 @@ function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
 function isComboAdvanceJudge(kind: string): boolean {
   const upper = kind.toUpperCase();
   return upper === 'PERFECT' || upper === 'GREAT' || upper === 'GOOD';
+}
+
+/**
+ * Whether a judge verdict is a "clean hit" that warrants firing the lane bomb explosion.
+ * Beatoraja's reference themes only show the bomb sprite for PERFECT and GREAT — GOOD is
+ * close-but-imprecise (it advances combo but is visibly distinct from a clean hit), and
+ * BAD / POOR / MISS / empty-press obviously shouldn't trigger a positive-feedback effect.
+ */
+function isCleanHitJudge(kind: string): boolean {
+  const upper = kind.toUpperCase();
+  return upper === 'PERFECT' || upper === 'GREAT';
 }
 
 /**
