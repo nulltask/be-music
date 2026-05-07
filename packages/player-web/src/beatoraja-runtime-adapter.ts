@@ -115,7 +115,7 @@ export class BeatorajaRuntimeAdapter {
    * threshold. Without this we'd leave stale rank ops in `activeOps` (every threshold the run
    * crossed would still gate chrome on).
    */
-  private readonly lastRankOps: { side?: number; generic?: number } = {};
+  private readonly lastRankOps: { side?: number; generic?: number; now?: number; band?: number } = {};
   /**
    * Per-judge `(progress, exScore)` samples accumulated during the run. Result skins consume
    * this through `getResultHistory()` to draw score-over-time polyline graphs (`graph[].type =
@@ -169,9 +169,88 @@ export class BeatorajaRuntimeAdapter {
     // 'loaded' transition wire from the engine yet — `markPlay` flips this when audible playback starts,
     // so by the time the user sees notes the loaded gate is open.
     this.activeOps.add(BEATORAJA_OP.NOW_LOADING);
+    // ─── Static chart-trait + variant op gates ──────────────────────────────────────────────
+    // These are computed once at construction from chart metadata and never change. Skins gate
+    // optional chrome on them (e.g. show LN-specific lane backgrounds only when HAS_LN is set,
+    // or hide BPM-change indicators when NO_BPMCHANGE).
+    this.applyChartVariantOps(options.chartPlayVariant);
+    this.applyChartTraitOps(options.chart);
+    // Default gauge type — beatoraja sets exactly one of `gauge_groove / hard / ex` (1P side).
+    // Without a runtime gauge-mode setting we default to GROOVE; the result-scene path can
+    // refine via `summary.gauge.type` once we surface it.
+    this.activeOps.add(BEATORAJA_OP.GAUGE_GROOVE);
     // Scene-start timer is always running — many skin elements default `timer = 0` and read it as the
     // global clock. Other built-in timers fire later via `markTimer`.
     this.timerStartedAt.set(TIMER_SCENE_START, 0);
+  }
+
+  /** Activate the matching `OPTION_*KEYSONG` op for the chart's variant. */
+  private applyChartVariantOps(variant: ChartPlayVariant): void {
+    switch (variant) {
+      case '7':
+        this.activeOps.add(BEATORAJA_OP.KEYSONG_7K);
+        break;
+      case '5':
+        this.activeOps.add(BEATORAJA_OP.KEYSONG_5K);
+        break;
+      case '14':
+        this.activeOps.add(BEATORAJA_OP.KEYSONG_14K);
+        break;
+      case '10':
+        this.activeOps.add(BEATORAJA_OP.KEYSONG_10K);
+        break;
+      case '9':
+        this.activeOps.add(BEATORAJA_OP.KEYSONG_9K);
+        break;
+    }
+  }
+
+  /**
+   * Activate static chart-trait gates derived from the chart payload:
+   *
+   *   - `HAS_LN` / `NO_LN` — does the chart contain long notes?
+   *   - `HAS_BPMCHANGE` / `NO_BPMCHANGE` — does the chart change BPM mid-song?
+   *   - `HAS_BPMSTOP` — does it use STOP events?
+   *   - `HAS_TEXT` / `NO_TEXT` — does it carry text channels?
+   *   - `HAS_STAGEFILE` / `HAS_BANNER` / `HAS_BACKBMP` — chart graphics presence
+   *   - `HAS_BGA` / `NO_BGA` — does the chart use BGA channels?
+   *
+   * Mirrors beatoraja's static analysis at chart load. Many skins gate optional chrome (e.g. an
+   * LN-specific lane indicator) on these, so the chrome doesn't appear on non-LN charts.
+   */
+  private applyChartTraitOps(chart: BeMusicJson | undefined): void {
+    if (chart === undefined) return;
+    const meta = chart.metadata;
+    // `HAS_LN`: the chart uses LN channels (channels in 50-69 range for LN, 53/54 for CN, etc.).
+    // The simplest signal is the presence of any event whose channel starts with '5'. This is a
+    // best-effort heuristic — beatoraja inspects the parsed note data; we approximate via channel
+    // prefixes since BeMusicJson doesn't expose a precomputed flag.
+    let hasLn = false;
+    let hasBpmChange = false;
+    let hasBpmStop = false;
+    let hasText = false;
+    for (const event of chart.events ?? []) {
+      const ch = event.channel;
+      if (ch.length === 2) {
+        const first = ch[0];
+        if (first === '5' || first === '6') hasLn = true;
+        else if (ch === '03' || ch === '08') hasBpmChange = true;
+        else if (ch === '09') hasBpmStop = true;
+        else if (ch === '99') hasText = true;
+      }
+      if (hasLn && hasBpmChange && hasBpmStop && hasText) break;
+    }
+    this.activeOps.add(hasLn ? BEATORAJA_OP.HAS_LN : BEATORAJA_OP.NO_LN);
+    this.activeOps.add(hasBpmChange ? BEATORAJA_OP.HAS_BPMCHANGE : BEATORAJA_OP.NO_BPMCHANGE);
+    if (hasBpmStop) this.activeOps.add(BEATORAJA_OP.HAS_BPMSTOP);
+    this.activeOps.add(hasText ? BEATORAJA_OP.HAS_TEXT : BEATORAJA_OP.NO_TEXT);
+    // BGA presence — the chart's `resources.bmp` map being non-empty is the simplest signal.
+    const hasBga = Object.keys(chart.resources?.bmp ?? {}).length > 0;
+    this.activeOps.add(hasBga ? BEATORAJA_OP.HAS_BGA : BEATORAJA_OP.NO_BGA);
+    // Chart graphic presence flags. These are static metadata fields on `BeMusicMetadata`.
+    this.activeOps.add(meta.stageFile ? BEATORAJA_OP.HAS_STAGEFILE : BEATORAJA_OP.NO_STAGEFILE);
+    this.activeOps.add(meta.banner ? BEATORAJA_OP.HAS_BANNER : BEATORAJA_OP.NO_BANNER);
+    this.activeOps.add(meta.backBmp ? BEATORAJA_OP.HAS_BACKBMP : BEATORAJA_OP.NO_BACKBMP);
   }
 
   /** Stamp a built-in / per-event timer at the current `getNowMs()`. Idempotent — re-marks override. */
@@ -228,7 +307,7 @@ export class BeatorajaRuntimeAdapter {
    * etc. all active simultaneously after a rank-up.
    */
   private refreshDerivedOps(summary: PlayerUiFramePayload['summary']): void {
-    // ─── Rank ops (P1_RANK_* + generic RANK_*) ──────────────────────────────────────────────
+    // ─── Rank ops (P1_RANK_* + generic RANK_* + NOW_*_1P) ───────────────────────────────────
     const maxExScore = summary.total * 2;
     const sideRank = computeRankOp(summary.exScore, maxExScore, 1);
     const genericRank = computeGenericRankOp(summary.exScore, maxExScore);
@@ -241,6 +320,29 @@ export class BeatorajaRuntimeAdapter {
       if (this.lastRankOps.generic !== undefined) this.activeOps.delete(this.lastRankOps.generic);
       this.activeOps.add(genericRank);
       this.lastRankOps.generic = genericRank;
+    }
+    // `NOW_*_1P` ops mirror the side rank but in the 340-347 range (separate from the 200-207
+    // `_1P_*` block). Skins that author "now playing" rank chrome gate on these.
+    const nowRank = mapSideRankToNowRank(sideRank);
+    if (this.lastRankOps.now !== nowRank) {
+      if (this.lastRankOps.now !== undefined) this.activeOps.delete(this.lastRankOps.now);
+      this.activeOps.add(nowRank);
+      this.lastRankOps.now = nowRank;
+    }
+
+    // ─── EX-score band ops (P1_BAND_0_9 .. P1_BAND_100, P1_BAND_BORDER_OR_MORE) ─────────────
+    // The active band based on EX-score / max ratio in 10% steps. Skins typically use this for
+    // an animated "you're in this band" indicator.
+    const band = computeScoreBandOp(summary.exScore, maxExScore);
+    if (this.lastRankOps.band !== band) {
+      if (this.lastRankOps.band !== undefined) this.activeOps.delete(this.lastRankOps.band);
+      this.activeOps.add(band);
+      this.lastRankOps.band = band;
+    }
+    // `P1_BAND_BORDER_OR_MORE` — sticky bit that activates once the EX-score crosses 80%
+    // (typical IIDX "border" / clear threshold). Stays on even if subsequent breaks drop below.
+    if (maxExScore > 0 && summary.exScore / maxExScore >= 0.8) {
+      this.activeOps.add(BEATORAJA_OP.P1_BAND_BORDER_OR_MORE);
     }
 
     // ─── *_EXIST ops ────────────────────────────────────────────────────────────────────────
@@ -917,4 +1019,36 @@ export class BeatorajaRuntimeAdapter {
 
 function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
   return parts.filter((p): p is string => typeof p === 'string' && p.length > 0).join(' ');
+}
+
+/**
+ * Map a side-rank op (200-207, `_1P_*`) to its `NOW_*_1P` counterpart (340-347). Beatoraja
+ * maintains both blocks for live play — `_1P_*` is the "during play" rank gate, `NOW_*_1P` is
+ * the "now playing" indicator some skins author separately. We mirror them in lockstep.
+ */
+function mapSideRankToNowRank(sideRank: number): number {
+  // 200..207 (1P_AAA..1P_F) → 340..347 (NOW_AAA_1P..NOW_F_1P)
+  if (sideRank >= 200 && sideRank <= 207) return sideRank + 140;
+  // For 2P or unknown, leave at NOW_F_1P. The op block doesn't have a 2P variant in this range.
+  return BEATORAJA_OP.NOW_F_1P;
+}
+
+/**
+ * Pick the active EX-score band op (`P1_BAND_0_9` .. `P1_BAND_100`). The band partition is in
+ * 10-percent steps of the EX-score / max ratio, snapping to 100 at exactly the max.
+ */
+function computeScoreBandOp(exScore: number, maxExScore: number): number {
+  if (maxExScore <= 0) return BEATORAJA_OP.P1_BAND_0_9;
+  const ratio = exScore / maxExScore;
+  if (ratio >= 1) return BEATORAJA_OP.P1_BAND_100;
+  if (ratio >= 0.9) return BEATORAJA_OP.P1_BAND_90_99;
+  if (ratio >= 0.8) return BEATORAJA_OP.P1_BAND_80_89;
+  if (ratio >= 0.7) return BEATORAJA_OP.P1_BAND_70_79;
+  if (ratio >= 0.6) return BEATORAJA_OP.P1_BAND_60_69;
+  if (ratio >= 0.5) return BEATORAJA_OP.P1_BAND_50_59;
+  if (ratio >= 0.4) return BEATORAJA_OP.P1_BAND_40_49;
+  if (ratio >= 0.3) return BEATORAJA_OP.P1_BAND_30_39;
+  if (ratio >= 0.2) return BEATORAJA_OP.P1_BAND_20_29;
+  if (ratio >= 0.1) return BEATORAJA_OP.P1_BAND_10_19;
+  return BEATORAJA_OP.P1_BAND_0_9;
 }

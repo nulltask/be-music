@@ -301,6 +301,83 @@ export const BEATORAJA_OP = {
   CLEAR_LAMP_FULLCOMBO: 105,
   CLEAR_LAMP_PERFECT: 1103,
   CLEAR_LAMP_MAX: 1104,
+
+  // ─── Gauge type ops (prop.lua `gauge_groove = 42` etc.) ───────────────────────────────────
+  // The active gauge variant. Beatoraja sets exactly one of these (1P side); skins gate the
+  // gauge graphic / clear-threshold marker on the matching op.
+  GAUGE_GROOVE: 42,
+  GAUGE_HARD: 43,
+  GAUGE_GROOVE_2P: 44,
+  GAUGE_HARD_2P: 45,
+  GAUGE_EX: 1046,
+  GAUGE_EX_2P: 1047,
+
+  // ─── Chart keys ops (prop.lua `_*keysong = 160-164` etc.) ─────────────────────────────────
+  // Set to indicate which chart variant is being played. Skins use these to gate per-keys
+  // chrome elements (e.g. show 7K-specific lane backgrounds only on _7keysong).
+  KEYSONG_7K: 160,
+  KEYSONG_5K: 161,
+  KEYSONG_14K: 162,
+  KEYSONG_10K: 163,
+  KEYSONG_9K: 164,
+  KEYSONG_24K: 1160,
+  KEYSONG_24K_DP: 1161,
+
+  // ─── Chart trait ops (prop.lua `bgaoff = 40` ... `randomsequence = 179`) ──────────────────
+  // Set based on chart content + user options. Skins use these to gate optional chrome
+  // (e.g. show LN-specific tracks only on `OPTION_LN`).
+  NO_BGA: 170,
+  HAS_BGA: 171,
+  NO_LN: 172,
+  HAS_LN: 173,
+  NO_TEXT: 174,
+  HAS_TEXT: 175,
+  NO_BPMCHANGE: 176,
+  HAS_BPMCHANGE: 177,
+  HAS_BPMSTOP: 1177,
+  NO_RANDOMSEQUENCE: 178,
+  HAS_RANDOMSEQUENCE: 179,
+  NO_STAGEFILE: 190,
+  HAS_STAGEFILE: 191,
+  NO_BANNER: 192,
+  HAS_BANNER: 193,
+  NO_BACKBMP: 194,
+  HAS_BACKBMP: 195,
+
+  // ─── Lanecover / lift / hidden state (prop.lua `lanecover1_changing = 270` etc.) ──────────
+  LANECOVER1_CHANGING: 270,
+  LANECOVER1_ON: 271,
+  LIFT1_ON: 272,
+  HIDDEN1_ON: 273,
+
+  // ─── Now-playing rank ops (prop.lua `now_aaa_1p = 340` ... `now_f_1p = 347`) ──────────────
+  // Set based on the active run's EX-score band (DIFFERENT from the live `_1p_*` rank ops at
+  // 200-207, which are the same data but a separate op block beatoraja maintains for the result
+  // scene's "during play" indicator).
+  NOW_AAA_1P: 340,
+  NOW_AA_1P: 341,
+  NOW_A_1P: 342,
+  NOW_B_1P: 343,
+  NOW_C_1P: 344,
+  NOW_D_1P: 345,
+  NOW_E_1P: 346,
+  NOW_F_1P: 347,
+
+  // ─── Score band ops (prop.lua `_1p_0_9 = 230` ... `_1p_100 = 240`, `_1p_border_or_more = 1240`) ──
+  // The active EX-score band. Many score-readout chrome elements gate on these. We set exactly
+  // one based on the EX-score percentage.
+  P1_BAND_0_9: 230,
+  P1_BAND_10_19: 231,
+  P1_BAND_20_29: 232,
+  P1_BAND_30_39: 233,
+  P1_BAND_40_49: 234,
+  P1_BAND_50_59: 235,
+  P1_BAND_60_69: 236,
+  P1_BAND_70_79: 237,
+  P1_BAND_80_89: 238,
+  P1_BAND_90_99: 239,
+  P1_BAND_100: 240,
+  P1_BAND_BORDER_OR_MORE: 1240,
 } as const;
 
 /**
