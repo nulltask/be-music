@@ -12,10 +12,13 @@
 //   - `(x, y, w, h)` — source-rect crop inside that source image
 //   - `type` — what runtime value drives the bar (rank by prop.lua-ish op codes; common values
 //     listed below)
-//   - `angle` — fill direction code. **Beatoraja's mapping differs from LR2:**
-//     `0` = down (Y+), `1` = right (X+, default), `2` = up (Y-), `3` = left (X-).
-//     `JSONSkinLoader` confirms via `angle == 1 || angle == 3` for the horizontal-axis check,
-//     and the default-skin lanecover slider (`angle = 2`) slides upward.
+//   - `angle` — fill direction code. Beatoraja's source is unambiguous: `SkinSlider.java` line 26
+//     comments `slider移動方向(0:上, 1:右, 2:下, 3:左)`, and the `draw()` math (`region.y + (dir==0 ?
+//     +v : dir==2 ? -v : 0)`) confirms beatoraja uses libGDX Y-UP coordinates internally — direction
+//     `0` ADDS to skin y (which means UP visually in Y-UP). So the canonical mapping is `0 = up`,
+//     `1 = right` (default), `2 = down`, `3 = left`. Our renderer Y-flips dst rects from libGDX
+//     Y-UP into Pixi Y-DOWN at draw time, so the visual labels here line up with the screen-space
+//     direction the bar fills toward.
 //
 // Common `type` codes the renderer surfaces:
 //
@@ -87,17 +90,18 @@ function normalizeOne(entry: NormalizedElement): BeatorajaGraphElement | undefin
 
 function angleField(value: unknown): BeatorajaGraphFillDirection {
   if (typeof value === 'number') {
-    // Beatoraja's `angle` parity: 0/2 → vertical, 1/3 → horizontal (verified in
-    // `JSONSkinLoader.java` via `angle == 1 || angle == 3 ? width : height`). This is INVERTED
-    // from LR2's convention — beatoraja's reference theme uses `angle = 2` for the lanecover
-    // slider that slides upward, confirming `2 = up`.
+    // Beatoraja's direction codes are explicit in `SkinSlider.java` line 26:
+    // `slider移動方向(0:上, 1:右, 2:下, 3:左)` (0=up, 1=right, 2=down, 3=left). The `draw()` math
+    // confirms libGDX Y-UP semantics — direction 0 ADDS to skin y, which is visually upward. We
+    // Y-flip dst rects when handing them to Pixi, so the screen-visual direction labels line up
+    // with the source labels as a happy coincidence.
     switch (value) {
       case 0:
-        return 'down';
+        return 'up';
       case 1:
         return 'right';
       case 2:
-        return 'up';
+        return 'down';
       case 3:
         return 'left';
       default:

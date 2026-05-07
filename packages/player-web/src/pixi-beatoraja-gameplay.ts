@@ -224,6 +224,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       variant: options.variant,
       images: noteImageMap,
       textures: options.textures,
+      canvasHeight: this.view.height,
     });
     // Marker layer goes ON the same container as notes — insertion order makes markers paint
     // first, then notes paint on top. Authors expect this so a falling note can visually cross
@@ -235,6 +236,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       time: noteSection.time,
       images: noteImageMap,
       textures: options.textures,
+      canvasHeight: this.view.height,
     });
     this.chartMarkers = computeBeatorajaChartMarkers(options.chart, {
       // 1-second time ticks when the skin authors `time[]` markers. Disabled when the skin
@@ -435,6 +437,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       variant: this.options.variant,
       images: noteImageMap,
       textures: opts.textures,
+      canvasHeight: this.view.height,
     });
     this.markerLayer = new BeatorajaMarkerLayer({
       group: noteSection.group,
@@ -443,6 +446,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       time: noteSection.time,
       images: noteImageMap,
       textures: opts.textures,
+      canvasHeight: this.view.height,
     });
     if (this.options.bgaTextures !== undefined && this.options.bgaCues !== undefined) {
       this.bgaLayer = new BeatorajaBgaLayer({

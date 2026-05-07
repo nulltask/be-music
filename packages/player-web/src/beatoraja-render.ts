@@ -79,10 +79,16 @@ export interface BeatorajaRenderContext {
  * - the parent `if` codes don't pass, or
  * - the group's timer hasn't started (and `timer > 0`), or
  * - the destination's keyframe sample returned `undefined` (animation past the end with `loop = -1`).
+ *
+ * `canvasHeight` is the skin's authored canvas height — needed to flip beatoraja's libGDX Y-UP
+ * dst coordinates (origin at canvas bottom-left) into Pixi Y-DOWN (origin at canvas top-left).
+ * Each renderer holds the canvasHeight as state (`view.height` for the play skin view, or the
+ * stored `skin.h` for sibling layers like BgaLayer) and passes it through here.
  */
 export function destinationToSpriteProps(
   group: BeatorajaDestinationGroup,
   context: BeatorajaRenderContext,
+  canvasHeight: number,
 ): BeatorajaSpriteProps {
   if (!isElementVisible(group.ifCodes, context.activeOps)) return HIDDEN_PROPS;
   if (!isElementVisible(group.op, context.activeOps)) return HIDDEN_PROPS;
@@ -107,16 +113,44 @@ export function destinationToSpriteProps(
   const alpha = clampUnit((keyframe.a / 255) * (offset.a / 255));
   if (alpha <= 0) return HIDDEN_PROPS;
 
+  // Y-flip from beatoraja's libGDX Y-UP coordinates (origin at canvas bottom-left, with `(x, y)`
+  // pointing at the rect's bottom-left corner) into Pixi Y-DOWN (origin at canvas top-left, with
+  // `(x, y)` pointing at the sprite's top-left corner). The X axis is unchanged — both engines
+  // grow X to the right.
+  //
+  //   beatoraja rect in Y-UP: bottom-left = (kx + ox, ky + oy), size = (kw + ow, kh + oh)
+  //   Pixi rect top-left:     (kx + ox, canvasHeight - (ky + oy) - (kh + oh))
+  //
+  // The skin parser stays in Y-UP space; this renderer is the only place the flip happens.
+  const width = keyframe.w + offset.w;
+  const height = keyframe.h + offset.h;
   return {
     visible: true,
     x: keyframe.x + offset.x,
-    y: keyframe.y + offset.y,
-    width: keyframe.w + offset.w,
-    height: keyframe.h + offset.h,
+    y: canvasHeight - keyframe.y - offset.y - height,
+    width,
+    height,
     alpha,
     tint: packRgbTint(keyframe.r, keyframe.g, keyframe.b),
     angle: keyframe.angle + offset.r,
     blendMode: blendCodeToPixi(group.blend),
+  };
+}
+
+/**
+ * Convert a raw skin-space rect (libGDX Y-UP, origin at canvas bottom-left) into a Pixi-space
+ * rect (Y-DOWN, origin at canvas top-left). Use this for layers that consume raw skin rects
+ * outside the `destination[]` keyframe pipeline — note lane geometry, marker prototypes, etc.
+ */
+export function flipRectToPixi(
+  rect: { x: number; y: number; w: number; h: number },
+  canvasHeight: number,
+): { x: number; y: number; w: number; h: number } {
+  return {
+    x: rect.x,
+    y: canvasHeight - rect.y - rect.h,
+    w: rect.w,
+    h: rect.h,
   };
 }
 

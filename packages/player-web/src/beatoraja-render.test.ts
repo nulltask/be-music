@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeBeatorajaDestinations } from '@be-music/beatoraja-skin';
-import { blendCodeToPixi, destinationToSpriteProps } from './beatoraja-render.ts';
+import { blendCodeToPixi, destinationToSpriteProps, flipRectToPixi } from './beatoraja-render.ts';
 
-const ctx = (overrides: Partial<Parameters<typeof destinationToSpriteProps>[1]> = {}) => ({
+// Use a 1000-tall canvas so Y-flipped values are easy to eyeball: a `dst.y = 0, h = 50` rect
+// lands at Pixi y = 1000 - 0 - 50 = 950 (anchored to the canvas bottom edge in screen coords).
+const TEST_CANVAS_HEIGHT = 1000;
+
+interface CtxOverrides {
+  activeOps?: ReadonlySet<number>;
+  getTimerStart?: (timerId: number) => number | undefined;
+  nowMs?: number;
+}
+
+const ctx = (overrides: CtxOverrides = {}) => ({
   activeOps: overrides.activeOps ?? new Set<number>(),
   getTimerStart: overrides.getTimerStart ?? (() => 0),
   nowMs: overrides.nowMs ?? 0,
@@ -25,30 +35,41 @@ const groupOf = (overrides: Record<string, unknown> = {}) => {
 };
 
 describe('destinationToSpriteProps', () => {
-  it('returns the head keyframe at scene start', () => {
-    const props = destinationToSpriteProps(groupOf(), ctx({ nowMs: 0 }));
+  it('returns the head keyframe at scene start, Y-flipped from libGDX Y-UP into Pixi Y-DOWN', () => {
+    const props = destinationToSpriteProps(groupOf(), ctx({ nowMs: 0 }), TEST_CANVAS_HEIGHT);
     expect(props.visible).toBe(true);
     expect(props.x).toBe(0);
-    expect(props.y).toBe(0);
+    // dst.y=0, h=50 with Y-UP origin at canvas bottom → Pixi top-left y = 1000 - 0 - 50 = 950.
+    expect(props.y).toBe(950);
     expect(props.width).toBe(100);
     expect(props.height).toBe(50);
     expect(props.alpha).toBe(1);
   });
 
-  it('linearly interpolates between adjacent keyframes', () => {
-    const props = destinationToSpriteProps(groupOf(), ctx({ nowMs: 500 }));
+  it('linearly interpolates between adjacent keyframes (X axis unchanged by the flip)', () => {
+    const props = destinationToSpriteProps(groupOf(), ctx({ nowMs: 500 }), TEST_CANVAS_HEIGHT);
     expect(props.x).toBe(50);
     expect(props.alpha).toBeCloseTo(0.5, 5);
   });
 
+  it('Y-flips dst rects against canvasHeight (libGDX Y-UP → Pixi Y-DOWN)', () => {
+    // dst.y=720 with h=580 inside a 720-tall canvas: Pixi y = 720 - 720 - 580 = -580 (off-screen
+    // above). This is the lanecover home position in beatoraja's reference theme — the cover
+    // sits ABOVE the canvas in Y-DOWN so the slider can drag it down into view.
+    const g = groupOf({ dst: [{ time: 0, x: 0, y: 720, w: 1280, h: 580, a: 255 }] });
+    const props = destinationToSpriteProps(g, ctx({ nowMs: 0 }), 720);
+    expect(props.y).toBe(-580);
+    expect(props.height).toBe(580);
+  });
+
   it('hides past the last keyframe when loop=-1 (default)', () => {
-    const props = destinationToSpriteProps(groupOf(), ctx({ nowMs: 1500 }));
+    const props = destinationToSpriteProps(groupOf(), ctx({ nowMs: 1500 }), TEST_CANVAS_HEIGHT);
     expect(props.visible).toBe(false);
     expect(props.alpha).toBe(0);
   });
 
   it('hides when alpha hits zero exactly', () => {
-    const props = destinationToSpriteProps(groupOf(), ctx({ nowMs: 1000 }));
+    const props = destinationToSpriteProps(groupOf(), ctx({ nowMs: 1000 }), TEST_CANVAS_HEIGHT);
     expect(props.visible).toBe(false);
   });
 
@@ -56,26 +77,27 @@ describe('destinationToSpriteProps', () => {
     const props = destinationToSpriteProps(
       groupOf({ if: [920], values: [{ id: 'demo', timer: 0, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] }] }),
       ctx({ activeOps: new Set([900]) }),
+      TEST_CANVAS_HEIGHT,
     );
     expect(props.visible).toBe(false);
   });
 
   it('hides when group op codes are unsatisfied', () => {
     const g = groupOf({ op: [901] });
-    const props = destinationToSpriteProps(g, ctx({ activeOps: new Set() }));
+    const props = destinationToSpriteProps(g, ctx({ activeOps: new Set() }), TEST_CANVAS_HEIGHT);
     expect(props.visible).toBe(false);
   });
 
   it('hides when the referenced timer has not fired yet', () => {
     const g = groupOf({ timer: 51, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] });
-    const props = destinationToSpriteProps(g, ctx({ getTimerStart: () => undefined, nowMs: 5000 }));
+    const props = destinationToSpriteProps(g, ctx({ getTimerStart: () => undefined, nowMs: 5000 }), TEST_CANVAS_HEIGHT);
     expect(props.visible).toBe(false);
   });
 
   it('respects negated op codes', () => {
     const g = groupOf({ op: [-905] });
-    expect(destinationToSpriteProps(g, ctx({ activeOps: new Set() })).visible).toBe(true);
-    expect(destinationToSpriteProps(g, ctx({ activeOps: new Set([905]) })).visible).toBe(false);
+    expect(destinationToSpriteProps(g, ctx({ activeOps: new Set() }), TEST_CANVAS_HEIGHT).visible).toBe(true);
+    expect(destinationToSpriteProps(g, ctx({ activeOps: new Set([905]) }), TEST_CANVAS_HEIGHT).visible).toBe(false);
   });
 
   it('packs RGB tint as 0xRRGGBB', () => {
@@ -84,8 +106,20 @@ describe('destinationToSpriteProps', () => {
         dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1, r: 64, g: 192, b: 192 }, { time: 1000 }],
       }),
       ctx({ nowMs: 0 }),
+      TEST_CANVAS_HEIGHT,
     );
     expect(props.tint).toBe((64 << 16) | (192 << 8) | 192);
+  });
+});
+
+describe('flipRectToPixi', () => {
+  it('flips the Y axis, leaves X / width / height alone', () => {
+    expect(flipRectToPixi({ x: 100, y: 50, w: 200, h: 30 }, 1000)).toEqual({
+      x: 100,
+      y: 920,
+      w: 200,
+      h: 30,
+    });
   });
 });
 

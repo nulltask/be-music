@@ -15,7 +15,7 @@ import {
   type BeatorajaImageElement,
   type BeatorajaImageId,
 } from '@be-music/beatoraja-skin';
-import { createCroppedBeatorajaTexture } from './beatoraja-render.ts';
+import { createCroppedBeatorajaTexture, flipRectToPixi } from './beatoraja-render.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 
 /** Beat positions per marker kind. Caller computes these from the chart once per play. */
@@ -50,6 +50,11 @@ export interface BeatorajaMarkerLayerOptions {
   /** `image[]` lookup for resolving destination ids → image elements. */
   images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>;
   textures: BeatorajaTextureCache;
+  /**
+   * Skin canvas height in skin-pixel units. Used to flip the prototype rect's Y from libGDX
+   * Y-UP into Pixi Y-DOWN, matching the note layer's lane rects and the play view's chrome.
+   */
+  canvasHeight: number;
 }
 
 /** Pixels per chart-beat at hispeed = 1.0 — must match the note layer's constant. */
@@ -70,10 +75,10 @@ export class BeatorajaMarkerLayer {
 
   constructor(options: BeatorajaMarkerLayerOptions) {
     this.kindData = {
-      group: this.resolveKind(options.group, options.images, options.textures),
-      bpm: this.resolveKind(options.bpm, options.images, options.textures),
-      stop: this.resolveKind(options.stop, options.images, options.textures),
-      time: this.resolveKind(options.time, options.images, options.textures),
+      group: this.resolveKind(options.group, options.images, options.textures, options.canvasHeight),
+      bpm: this.resolveKind(options.bpm, options.images, options.textures, options.canvasHeight),
+      stop: this.resolveKind(options.stop, options.images, options.textures, options.canvasHeight),
+      time: this.resolveKind(options.time, options.images, options.textures, options.canvasHeight),
     };
   }
 
@@ -154,6 +159,7 @@ export class BeatorajaMarkerLayer {
     inputs: ReadonlyArray<Readonly<Record<string, unknown>>>,
     images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>,
     textures: BeatorajaTextureCache,
+    canvasHeight: number,
   ): MarkerKindData[] {
     if (inputs.length === 0) return [];
     const groups = normalizeBeatorajaDestinations(inputs);
@@ -166,7 +172,14 @@ export class BeatorajaMarkerLayer {
           ? createCroppedBeatorajaTexture(baseTexture, { x: image.x, y: image.y, w: image.w, h: image.h })
           : undefined;
       const dst0 = group.dst[0];
-      const rect = dst0 !== undefined ? { x: dst0.x, y: dst0.y, w: dst0.w, h: dst0.h } : { x: 0, y: 0, w: 0, h: 0 };
+      // beatoraja's `dst[]` is libGDX Y-UP; flip into Pixi Y-DOWN to match the rest of the
+      // pipeline. Note: `update()` re-writes `sprite.y` per-marker (computed from `judgementY` in
+      // Pixi space), so the prototype's flipped y doesn't actually paint — but we flip it anyway
+      // so the stored value is consistent with the convention upstream consumers might assume.
+      const rect =
+        dst0 !== undefined
+          ? flipRectToPixi({ x: dst0.x, y: dst0.y, w: dst0.w, h: dst0.h }, canvasHeight)
+          : { x: 0, y: 0, w: 0, h: 0 };
       const tint = dst0 !== undefined ? ((dst0.r & 0xff) << 16) | ((dst0.g & 0xff) << 8) | (dst0.b & 0xff) : 0xffffff;
       const alpha = dst0 !== undefined ? Math.max(0, Math.min(1, dst0.a / 255)) : 1;
       out.push({ image, texture, rect, tint, alpha });

@@ -12,6 +12,8 @@
 //
 // The renderer treats sliders as read-only displays — drag interaction is the host's job. The
 // declaration pattern is identical to `graph[]` plus the `range` field.
+//
+// Direction codes (0=up, 1=right, 2=down, 3=left) are sourced from `SkinSlider.java` line 26.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
 import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
@@ -69,17 +71,18 @@ function normalizeOne(entry: NormalizedElement): BeatorajaSliderElement | undefi
 
 function angleField(value: unknown): BeatorajaSliderDirection {
   if (typeof value === 'number') {
-    // Beatoraja's `angle` parity: 0/2 → vertical, 1/3 → horizontal (verified in
-    // `JSONSkinLoader.java` via `angle == 1 || angle == 3 ? width : height`). The reference
-    // theme's lanecover slider uses `angle = 2` and slides upward, confirming `2 = up`. This
-    // mapping is INVERTED from LR2's convention — beatoraja and LR2 disagree on this.
+    // Beatoraja's direction codes are explicit in `SkinSlider.java` line 26:
+    // `slider移動方向(0:上, 1:右, 2:下, 3:左)` (0=up, 1=right, 2=down, 3=left). The `draw()` math
+    // (`region.y + (dir==0 ? +currentValue*range : dir==2 ? -currentValue*range : 0)`) confirms
+    // libGDX Y-UP — direction 0 ADDS to skin y, which is visually upward. We Y-flip dst rects on
+    // the way to Pixi, so the screen-visual direction labels line up with the source labels here.
     switch (value) {
       case 0:
-        return 'down';
+        return 'up';
       case 1:
         return 'right';
       case 2:
-        return 'up';
+        return 'down';
       case 3:
         return 'left';
       default:

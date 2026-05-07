@@ -48,6 +48,11 @@ export class BeatorajaBgaLayer {
   private readonly group: BeatorajaDestinationGroup | undefined;
   private readonly textures: ReadonlyMap<string, Texture>;
   private readonly cues: { base: ReadonlyArray<BgaCue>; layer: ReadonlyArray<BgaCue>; poor: ReadonlyArray<BgaCue> };
+  /**
+   * Skin canvas height in skin-pixel units. Read from `skin.h` at construction so we can flip
+   * the BGA's Y-UP dst rect into Pixi Y-DOWN — same convention the play skin view uses.
+   */
+  private readonly canvasHeight: number;
   private currentKey: string | undefined;
   private disposed = false;
 
@@ -55,6 +60,8 @@ export class BeatorajaBgaLayer {
     this.textures = options.textures;
     this.cues = options.cues;
     this.group = resolveBgaDestinationGroup(options.skin);
+    const rawH = (options.skin as { h?: unknown }).h;
+    this.canvasHeight = typeof rawH === 'number' && Number.isFinite(rawH) && rawH > 0 ? rawH : 720;
 
     // Mounted with no texture — `update()` swaps in the active BGA texture per frame. Kept invisible
     // until the destination group resolves with `visible = true` so a chart with no BGA stays clean.
@@ -74,7 +81,7 @@ export class BeatorajaBgaLayer {
       this.sprite.visible = false;
       return;
     }
-    const props = destinationToSpriteProps(this.group, context);
+    const props = destinationToSpriteProps(this.group, context, this.canvasHeight);
     this.sprite.visible = props.visible;
     if (!props.visible) return;
     this.sprite.x = props.x;

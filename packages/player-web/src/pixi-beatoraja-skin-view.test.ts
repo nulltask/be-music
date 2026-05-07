@@ -82,13 +82,14 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
-  it('updates sprite props from the keyframe sample', () => {
+  it('updates sprite props from the keyframe sample (Y-flipped from libGDX Y-UP into Pixi Y-DOWN)', () => {
     const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
     const sprite = view.container.children[0] as { x: number; y: number; visible: boolean; alpha: number };
     expect(sprite.visible).toBe(true);
     expect(sprite.x).toBe(10);
-    expect(sprite.y).toBe(20);
+    // dst.y=20, h=100 inside a 720-tall skin → Pixi y = 720 - 20 - 100 = 600.
+    expect(sprite.y).toBe(600);
     expect(sprite.alpha).toBe(1);
     view.dispose();
   });
@@ -166,7 +167,9 @@ describe('BeatorajaPlaySkinView', () => {
 
   it('renders the resolved number across the digit row when resolveNumberValue is wired', () => {
     // value[].ref=71 (prop.lua `score`) → host returns 12345 → with `digit=5` and `padding=1`
-    // (leading zeros), the cells should be [1, 2, 3, 4, 5].
+    // (leading zeros), the cells should be [1, 2, 3, 4, 5]. Each digit slot is 40px wide
+    // (200 / 5), laid out left-to-right starting at the rect's x. The Y axis is Y-flipped from
+    // libGDX into Pixi but the digits' x coordinates are unchanged.
     const skin: BeatorajaSkin = {
       type: 0,
       w: 1280,
@@ -180,8 +183,6 @@ describe('BeatorajaPlaySkinView', () => {
       resolveNumberValue: (ref) => (ref === 71 ? 12345 : undefined),
     });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    // After update, the 5 digit sprites should be visible and laid out left-to-right within the
-    // 200-wide rect at y=100, each 40px wide.
     const sprites = view.container.children;
     expect(sprites).toHaveLength(5);
     for (let i = 0; i < 5; i += 1) {
@@ -230,8 +231,8 @@ describe('BeatorajaPlaySkinView', () => {
   it('updates text nodes from the destination keyframe', () => {
     const skin: BeatorajaSkin = {
       type: 0,
-      w: 1,
-      h: 1,
+      w: 1280,
+      h: 720,
       text: [{ id: 'genre', font: 0, size: 24 }],
       destination: [{ id: 'genre', dst: [{ time: 0, x: 100, y: 50, w: 200, h: 24, a: 255 }] }],
     };
@@ -240,7 +241,8 @@ describe('BeatorajaPlaySkinView', () => {
     const node = view.container.children[0] as { x: number; y: number; alpha: number; visible: boolean };
     expect(node.visible).toBe(true);
     expect(node.x).toBe(100);
-    expect(node.y).toBe(50);
+    // dst.y=50, h=24 inside a 720-tall skin → Pixi y = 720 - 50 - 24 = 646.
+    expect(node.y).toBe(646);
     expect(node.alpha).toBe(1);
     view.dispose();
   });

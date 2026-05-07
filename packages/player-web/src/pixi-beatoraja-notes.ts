@@ -25,7 +25,7 @@ import {
   type BeatorajaNoteRect,
   type BeatorajaNoteSection,
 } from '@be-music/beatoraja-skin';
-import { createCroppedBeatorajaTexture } from './beatoraja-render.ts';
+import { createCroppedBeatorajaTexture, flipRectToPixi } from './beatoraja-render.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 
 /** Pixels per chart-beat at hispeed = 1.0. Mirrors the LR2 path's constant so the two layers scroll consistently. */
@@ -58,6 +58,12 @@ export interface BeatorajaNoteLayerOptions {
   images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>;
   /** Texture cache the resolved image entries crop against. */
   textures: BeatorajaTextureCache;
+  /**
+   * Skin canvas height in skin-pixel units. Used to flip the note section's libGDX Y-UP lane
+   * rects (origin at canvas bottom-left) into Pixi Y-DOWN screen rects, so the rest of the
+   * layer can treat lane rects as ordinary screen-space rectangles.
+   */
+  canvasHeight: number;
   /** Optional override for the judgement-line Y. Defaults to the active lane rect's bottom edge. */
   judgementY?: number;
 }
@@ -75,6 +81,7 @@ export class BeatorajaNoteLayer {
   private readonly variant: ChartPlayVariant;
   private readonly images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>;
   private readonly textures: BeatorajaTextureCache;
+  private readonly canvasHeight: number;
   private readonly judgementYOverride?: number;
   /** Pool of generic Graphics nodes for the fallback path. Reused across frames. */
   private readonly graphicsPool: Graphics[] = [];
@@ -96,6 +103,7 @@ export class BeatorajaNoteLayer {
     this.variant = options.variant;
     this.images = options.images;
     this.textures = options.textures;
+    this.canvasHeight = options.canvasHeight;
     this.judgementYOverride = options.judgementY;
   }
 
@@ -198,7 +206,11 @@ export class BeatorajaNoteLayer {
 
   private resolveLaneRects(activeOps: ReadonlySet<number>): ReadonlyArray<BeatorajaNoteRect> {
     if (this.cachedActiveOps === activeOps) return this.cachedRects;
-    this.cachedRects = pickBeatorajaNoteRects(this.noteSection, activeOps);
+    // beatoraja's `note.dst[]` rects are in libGDX Y-UP coordinates (origin at canvas bottom-
+    // left). Flip each rect once on resolve so the rest of the layer (judgement-Y, getLaneBounds,
+    // per-frame scroll math) can treat lane rects as ordinary Pixi Y-DOWN screen rects.
+    const raw = pickBeatorajaNoteRects(this.noteSection, activeOps);
+    this.cachedRects = raw.map((rect) => flipRectToPixi(rect, this.canvasHeight));
     this.cachedActiveOps = activeOps;
     return this.cachedRects;
   }

@@ -740,8 +740,12 @@ export class BeatorajaPlaySkinView {
    */
   update(context: BeatorajaRenderContext): void {
     if (this.disposed) return;
+    // Pass the skin's authored canvas height into the renderer so it can flip Y-UP dst rects
+    // (libGDX origin at canvas bottom-left) into Pixi Y-DOWN screen coords. The view owns this
+    // value (`skin.h`) — callers don't need to thread it through.
+    const canvasHeight = this.height;
     for (const entry of this.entries) {
-      const props = destinationToSpriteProps(entry.group, context);
+      const props = destinationToSpriteProps(entry.group, context, canvasHeight);
       switch (entry.kind) {
         case 'image':
           this.updateImageEntry(entry, context, props);
