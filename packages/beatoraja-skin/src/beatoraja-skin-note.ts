@@ -56,6 +56,17 @@ export interface BeatorajaNoteSection {
   processed: ReadonlyArray<string>;
   /** Conditional per-lane geometry blocks. Authors may emit a single block (no `if`) or several gated layouts. */
   dst: ReadonlyArray<BeatorajaNoteDestinationBlock>;
+  /**
+   * Per-marker destination prototypes. Each kind references one or more `image[].id` and an `(x,
+   * y, w, h)` rect that defines the marker's visual size on the lane. The renderer paints copies
+   * of this rect at every chart-time marker (measure boundary / BPM change / STOP / time tick),
+   * scrolled to the matching beat with the same hispeed math the note layer uses. Stored as raw
+   * destination records so the renderer's existing destination pipeline can ingest them.
+   */
+  group: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  bpm: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  stop: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  time: ReadonlyArray<Readonly<Record<string, unknown>>>;
 }
 
 /** One `dst` group from the note section — gated by `op` codes that must all be active. */
@@ -91,6 +102,10 @@ const EMPTY_SECTION: BeatorajaNoteSection = Object.freeze({
   hidden: [],
   processed: [],
   dst: [],
+  group: [],
+  bpm: [],
+  stop: [],
+  time: [],
 });
 
 /**
@@ -120,7 +135,27 @@ export function normalizeBeatorajaNote(input: unknown): BeatorajaNoteSection {
     hidden: stringArray(obj.hidden),
     processed: stringArray(obj.processed),
     dst: normalizeNoteDst(obj.dst),
+    group: rawObjectArray(obj.group),
+    bpm: rawObjectArray(obj.bpm),
+    stop: rawObjectArray(obj.stop),
+    time: rawObjectArray(obj.time),
   };
+}
+
+/**
+ * Coerce a possibly-array of objects to a frozen-shape `Record<string, unknown>[]`. Drops
+ * non-object entries — typically a defensive shape check, since the marker arrays are author-
+ * shaped destinations and we want them as opaque records.
+ */
+function rawObjectArray(input: unknown): ReadonlyArray<Readonly<Record<string, unknown>>> {
+  if (!Array.isArray(input)) return [];
+  const out: Array<Readonly<Record<string, unknown>>> = [];
+  for (const v of input) {
+    if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+      out.push(v as Readonly<Record<string, unknown>>);
+    }
+  }
+  return out;
 }
 
 /**

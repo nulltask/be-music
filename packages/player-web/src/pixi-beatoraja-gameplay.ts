@@ -34,6 +34,8 @@ import type {
 import { buildBaseOpSet, normalizeBeatorajaImages, normalizeBeatorajaNote } from '@be-music/beatoraja-skin';
 import type { BeatorajaPlayableVariant } from './beatoraja-theme.ts';
 import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
+import { BeatorajaMarkerLayer, BEATORAJA_MARKER_PIXELS_PER_BEAT } from './pixi-beatoraja-markers.ts';
+import { computeBeatorajaChartMarkers } from './beatoraja-chart-markers.ts';
 import { BeatorajaBgaLayer } from './pixi-beatoraja-bga.ts';
 import type { BgaCue } from './pixi-gameplay-bga.ts';
 import type { Texture } from 'pixi.js';
@@ -131,6 +133,14 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   // tearing down the engine driver.
   private view: BeatorajaPlaySkinView;
   private noteLayer: BeatorajaNoteLayer;
+  /**
+   * Lane markers — section lines, BPM-change indicators, STOP markers, optional time ticks.
+   * Drawn UNDER the note layer (via insertion order) so notes overlay markers, matching
+   * beatoraja's reference layering. Beat positions come from `chartMarkers` (computed once at
+   * construction); the layer only updates sprite positions per frame.
+   */
+  private markerLayer: BeatorajaMarkerLayer;
+  private readonly chartMarkers: ReturnType<typeof computeBeatorajaChartMarkers>;
   private bgaLayer: BeatorajaBgaLayer | undefined;
   private readonly adapter: BeatorajaRuntimeAdapter;
   private readonly options: PixiBeatorajaGameplayViewOptions;
@@ -208,12 +218,31 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
       noteImageMap.set(image.id, image);
     }
+    const noteSection = normalizeBeatorajaNote(options.skin.note);
     this.noteLayer = new BeatorajaNoteLayer({
-      noteSection: normalizeBeatorajaNote(options.skin.note),
+      noteSection,
       variant: options.variant,
       images: noteImageMap,
       textures: options.textures,
     });
+    // Marker layer goes ON the same container as notes — insertion order makes markers paint
+    // first, then notes paint on top. Authors expect this so a falling note can visually cross
+    // the section line without the line obscuring the note.
+    this.markerLayer = new BeatorajaMarkerLayer({
+      group: noteSection.group,
+      bpm: noteSection.bpm,
+      stop: noteSection.stop,
+      time: noteSection.time,
+      images: noteImageMap,
+      textures: options.textures,
+    });
+    this.chartMarkers = computeBeatorajaChartMarkers(options.chart, {
+      // 1-second time ticks when the skin authors `time[]` markers. Disabled when the skin
+      // doesn't author them — the marker layer culls the empty list anyway.
+      timeIntervalSec: noteSection.time.length > 0 ? 1 : undefined,
+      totalSeconds: undefined,
+    });
+    this.view.container.addChild(this.markerLayer.container);
     this.view.container.addChild(this.noteLayer.container);
 
     log.info('beatoraja gameplay mounted', {
@@ -330,6 +359,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     }
     this.bgaLayer?.dispose();
     this.noteLayer.dispose();
+    this.markerLayer.dispose();
     this.view.dispose();
     if (!this.root.destroyed) {
       this.root.destroy({ children: false });
@@ -379,6 +409,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.bgaLayer?.dispose();
     this.bgaLayer = undefined;
     this.noteLayer.dispose();
+    this.markerLayer.dispose();
     this.view.dispose();
 
     // 3. Rebuild against the new skin.
@@ -398,9 +429,18 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     for (const image of normalizeBeatorajaImages(opts.skin.image)) {
       noteImageMap.set(image.id, image);
     }
+    const noteSection = normalizeBeatorajaNote(opts.skin.note);
     this.noteLayer = new BeatorajaNoteLayer({
-      noteSection: normalizeBeatorajaNote(opts.skin.note),
+      noteSection,
       variant: this.options.variant,
+      images: noteImageMap,
+      textures: opts.textures,
+    });
+    this.markerLayer = new BeatorajaMarkerLayer({
+      group: noteSection.group,
+      bpm: noteSection.bpm,
+      stop: noteSection.stop,
+      time: noteSection.time,
       images: noteImageMap,
       textures: opts.textures,
     });
@@ -412,7 +452,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       });
     }
 
-    // 4. Re-attach in the original z-order: backdrop → skin → (BGA at the back of skin) → notes.
+    // 4. Re-attach in the original z-order: backdrop → skin → (BGA at the back of skin) → markers → notes.
+    this.view.container.addChild(this.markerLayer.container);
     this.view.container.addChild(this.noteLayer.container);
     if (this.bgaLayer !== undefined) {
       this.view.container.addChildAt(this.bgaLayer.container, 0);
@@ -468,6 +509,17 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.view.update(ctx);
     if (this.currentFrame) {
       this.noteLayer.update(this.currentFrame, this.hiSpeed, ctx.activeOps);
+      // Marker layer scrolls with the same hispeed math as notes, anchored to the same lane
+      // bounds (the active dst block resolves to the lane top + judgement Y). When no lane
+      // matched, fall back to skin-canvas defaults so any markers still render at sane Ys.
+      const laneBounds = this.noteLayer.getLaneBounds(ctx.activeOps) ?? { topY: 0, bottomY: this.view.height };
+      this.markerLayer.update({
+        currentBeat: this.currentFrame.currentBeat,
+        judgementY: laneBounds.bottomY,
+        laneTopY: laneBounds.topY,
+        pixelsPerBeat: BEATORAJA_MARKER_PIXELS_PER_BEAT * this.hiSpeed,
+        markers: this.chartMarkers,
+      });
       this.bgaLayer?.update(this.currentFrame.currentSeconds, ctx, this.adapter.isPoorBgaActive());
     }
 

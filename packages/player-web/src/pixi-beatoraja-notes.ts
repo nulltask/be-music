@@ -176,6 +176,24 @@ export class BeatorajaNoteLayer {
     this.croppedTextureCache.clear();
   }
 
+  /**
+   * Bounds of the lane area for the current frame's active op set, surfaced for sibling layers
+   * (marker layer, key-bomb layer, etc.) that need to scroll-align with notes. Returns
+   * `undefined` when no lane block matched — the caller should fall back to skin-canvas defaults.
+   */
+  getLaneBounds(activeOps: ReadonlySet<number>): { topY: number; bottomY: number } | undefined {
+    const rects = this.resolveLaneRects(activeOps);
+    if (rects.length === 0) return undefined;
+    let top = Number.POSITIVE_INFINITY;
+    let bottom = 0;
+    for (const rect of rects) {
+      if (rect.y < top) top = rect.y;
+      if (rect.y + rect.h > bottom) bottom = rect.y + rect.h;
+    }
+    if (!Number.isFinite(top)) return undefined;
+    return { topY: top, bottomY: this.judgementYOverride ?? bottom };
+  }
+
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
 
   private resolveLaneRects(activeOps: ReadonlySet<number>): ReadonlyArray<BeatorajaNoteRect> {

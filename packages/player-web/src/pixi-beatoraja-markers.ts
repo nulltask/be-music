@@ -1,0 +1,194 @@
+// Lane markers rendered alongside notes on the gameplay scene.
+//
+// Beatoraja's `note.group` / `note.bpm` / `note.stop` / `note.time` arrays describe how to draw
+// per-event chart-time markers — section lines at every measure boundary, BPM-change indicator
+// bars, STOP markers, and timed grid lines. Each entry is a destination-shaped record (`id`,
+// `dst[]`, optional `op` / `r` / `g` / `b`) referencing an `image[]` for the visual.
+//
+// The renderer paints one sprite per (marker kind × event) at the matching beat, scrolled to the
+// judgement line by the same hispeed math the note layer uses. Markers outside the visible lane
+// area are culled.
+
+import { Container, Sprite, type Texture } from 'pixi.js';
+import {
+  normalizeBeatorajaDestinations,
+  type BeatorajaImageElement,
+  type BeatorajaImageId,
+} from '@be-music/beatoraja-skin';
+import { createCroppedBeatorajaTexture } from './beatoraja-render.ts';
+import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
+
+/** Beat positions per marker kind. Caller computes these from the chart once per play. */
+export interface BeatorajaMarkerBeats {
+  /** Section-line beats — one per measure boundary. */
+  group: ReadonlyArray<number>;
+  /** BPM-change event beats. */
+  bpm: ReadonlyArray<number>;
+  /** STOP event beats. */
+  stop: ReadonlyArray<number>;
+  /** Time-tick beats — typically every 1 / 4 / 8 measures depending on the skin's authored style. */
+  time: ReadonlyArray<number>;
+}
+
+interface MarkerKindData {
+  /** Image element resolved from the destination's id. */
+  image: BeatorajaImageElement | undefined;
+  /** Texture cropped to the image's source-rect, ready for sprite assignment. */
+  texture: Texture | undefined;
+  /** Authored display rect — `dst[0]` of the destination. Position is replaced per-marker. */
+  rect: { x: number; y: number; w: number; h: number };
+  /** Authored tint / alpha (from `dst[0]`) — applied to every painted instance. */
+  tint: number;
+  alpha: number;
+}
+
+export interface BeatorajaMarkerLayerOptions {
+  group: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  bpm: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  stop: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  time: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  /** `image[]` lookup for resolving destination ids → image elements. */
+  images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>;
+  textures: BeatorajaTextureCache;
+}
+
+/** Pixels per chart-beat at hispeed = 1.0 — must match the note layer's constant. */
+export const BEATORAJA_MARKER_PIXELS_PER_BEAT = 72;
+
+export class BeatorajaMarkerLayer {
+  readonly container = new Container();
+  /** Resolved per-kind prototype data. `[]` means the skin didn't author markers of that kind. */
+  private readonly kindData: {
+    group: MarkerKindData[];
+    bpm: MarkerKindData[];
+    stop: MarkerKindData[];
+    time: MarkerKindData[];
+  };
+  /** Sprite pool — one entry per visible marker, reused across frames. */
+  private readonly spritePool: Sprite[] = [];
+  private firstFrameLogged = false;
+
+  constructor(options: BeatorajaMarkerLayerOptions) {
+    this.kindData = {
+      group: this.resolveKind(options.group, options.images, options.textures),
+      bpm: this.resolveKind(options.bpm, options.images, options.textures),
+      stop: this.resolveKind(options.stop, options.images, options.textures),
+      time: this.resolveKind(options.time, options.images, options.textures),
+    };
+  }
+
+  /**
+   * Paint markers for the current frame. `judgementY` and `pixelsPerBeat` are passed in so the
+   * marker layer stays in lockstep with the note layer's scroll math (avoids visual drift when
+   * the host tweaks judgement line or hispeed mid-play).
+   */
+  update(args: {
+    currentBeat: number;
+    judgementY: number;
+    laneTopY: number;
+    pixelsPerBeat: number;
+    markers: BeatorajaMarkerBeats;
+  }): void {
+    let used = 0;
+    const ranges: ReadonlyArray<{ kind: MarkerKindData[]; beats: ReadonlyArray<number> }> = [
+      { kind: this.kindData.group, beats: args.markers.group },
+      { kind: this.kindData.bpm, beats: args.markers.bpm },
+      { kind: this.kindData.stop, beats: args.markers.stop },
+      { kind: this.kindData.time, beats: args.markers.time },
+    ];
+    for (const { kind, beats } of ranges) {
+      if (kind.length === 0 || beats.length === 0) continue;
+      // Pick the first prototype with a resolved texture — most skins author at most one
+      // destination per marker kind. Multi-destination kinds (e.g., color-coded BPM markers)
+      // would need richer logic; treat them as "use the first" for now.
+      const proto = kind.find((k) => k.texture !== undefined);
+      if (proto === undefined) continue;
+      for (const beat of beats) {
+        const y = args.judgementY - (beat - args.currentBeat) * args.pixelsPerBeat;
+        // Cull markers outside the lane area (above the spawn line or below the judgement).
+        // The 24-pixel slack matches the note layer's culling so markers don't pop in/out at
+        // the edge.
+        if (y < args.laneTopY - 24 || y > args.judgementY + 24) continue;
+        const sprite = this.acquireSprite(used);
+        sprite.texture = proto.texture!;
+        sprite.x = proto.rect.x;
+        sprite.y = y;
+        sprite.width = proto.rect.w;
+        sprite.height = Math.max(1, proto.rect.h);
+        sprite.tint = proto.tint;
+        sprite.alpha = proto.alpha;
+        used += 1;
+      }
+    }
+    this.shrinkPoolTo(used);
+    if (!this.firstFrameLogged && used > 0) {
+      this.firstFrameLogged = true;
+      // eslint-disable-next-line no-console
+      console.log(
+        '[beatoraja-markers] first frame painted',
+        JSON.stringify({
+          group: args.markers.group.length,
+          bpm: args.markers.bpm.length,
+          stop: args.markers.stop.length,
+          time: args.markers.time.length,
+          painted: used,
+        }),
+      );
+    }
+  }
+
+  dispose(): void {
+    if (!this.container.destroyed) this.container.destroy({ children: true });
+    this.spritePool.length = 0;
+  }
+
+  // ─── Internals ────────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Resolve a marker-kind's authored destinations to a paintable prototype list. Each input
+   * record is normalized through the standard destination pipeline (so `if[]` / `op[]` gates,
+   * dst keyframes, etc. flow through), but only `dst[0]` is consumed — the marker's authored
+   * appearance is the static rect; the renderer overrides Y per-beat anyway.
+   */
+  private resolveKind(
+    inputs: ReadonlyArray<Readonly<Record<string, unknown>>>,
+    images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>,
+    textures: BeatorajaTextureCache,
+  ): MarkerKindData[] {
+    if (inputs.length === 0) return [];
+    const groups = normalizeBeatorajaDestinations(inputs);
+    const out: MarkerKindData[] = [];
+    for (const group of groups) {
+      const image = images.get(group.id);
+      const baseTexture = image !== undefined ? textures.get(image.src) : undefined;
+      const texture =
+        image !== undefined && baseTexture !== undefined
+          ? createCroppedBeatorajaTexture(baseTexture, { x: image.x, y: image.y, w: image.w, h: image.h })
+          : undefined;
+      const dst0 = group.dst[0];
+      const rect = dst0 !== undefined ? { x: dst0.x, y: dst0.y, w: dst0.w, h: dst0.h } : { x: 0, y: 0, w: 0, h: 0 };
+      const tint = dst0 !== undefined ? ((dst0.r & 0xff) << 16) | ((dst0.g & 0xff) << 8) | (dst0.b & 0xff) : 0xffffff;
+      const alpha = dst0 !== undefined ? Math.max(0, Math.min(1, dst0.a / 255)) : 1;
+      out.push({ image, texture, rect, tint, alpha });
+    }
+    return out;
+  }
+
+  private acquireSprite(index: number): Sprite {
+    let s = this.spritePool[index];
+    if (s === undefined) {
+      s = new Sprite();
+      this.spritePool.push(s);
+      this.container.addChild(s);
+    } else {
+      s.visible = true;
+    }
+    return s;
+  }
+
+  private shrinkPoolTo(used: number): void {
+    for (let i = used; i < this.spritePool.length; i += 1) {
+      this.spritePool[i]!.visible = false;
+    }
+  }
+}
