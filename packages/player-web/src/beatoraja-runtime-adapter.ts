@@ -84,6 +84,20 @@ interface SideJudgeState {
   lastFastSlowOp: number | undefined;
 }
 
+/**
+ * Maximum `OFFSET_LIFT.y` shift in skin-pixel Y-UP units when the lift slider sits at `1.0`. The
+ * reference theme's lane height is 580 (matching `play7main.lua`'s `lanecover` slider `range =
+ * 580`); using a fixed value here means lift slider operation produces visually-correct hidden-
+ * cover travel on the reference theme without wiring per-skin metadata. Skins that author a
+ * different lane height get a proportionally-different lift travel — close enough for the common
+ * case; refinable when we surface skin geometry to the adapter.
+ *
+ * Sign is negative because lift "raises" the cover (libGDX Y-UP: up = increasing y, but the
+ * cover itself sits BELOW the line and lifting it means subtracting `disapearLine`'s threshold
+ * to expose more of the cover image).
+ */
+const LIFT_MAX_Y_OFFSET = -580;
+
 export class BeatorajaRuntimeAdapter {
   /**
    * Live op set — option ops (from `baseOps`) plus runtime ops the engine has toggled. Exposed via
@@ -114,6 +128,13 @@ export class BeatorajaRuntimeAdapter {
    * player drags the slider, scrolls the wheel, or presses the lanecover hotkeys.
    */
   private lanecoverRatio = 0;
+  /**
+   * Player's lift slider position in `[0, 1]`. `0` = lift at home (hidden-cover collapsed at the
+   * bottom edge), `1` = lift fully extended (cover at maximum lift, exposing the upper part of
+   * the lane). Drives `OFFSET_LIFT.y` (mapped onto a skin-pixel Y-UP shift via
+   * {@link LIFT_MAX_Y_OFFSET}) AND the `BEATORAJA_NUM.LIFT1 = 314` percent readout.
+   */
+  private liftRatio = 0;
   /**
    * User-adjustable destination offsets keyed by `OFFSET_*` id (from `SkinProperty.OFFSET_LIFT`
    * et al.). Values default to `ZERO_BEATORAJA_OFFSET` (no shift, full alpha) and stay there
@@ -477,15 +498,23 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
-   * Resolve a `SkinProperty.OFFSET_*` id into the player's current shift for that slot. Returns
-   * `undefined` when the host hasn't pushed any value for the id — the destination renderer
-   * treats this as "no shift" (defaults to `ZERO_BEATORAJA_OFFSET`).
+   * Resolve a `SkinProperty.OFFSET_*` id into the player's current shift for that slot.
    *
-   * This is what the skin view's `disapearLine` linkage reads (`OFFSET_LIFT.y`), and what
-   * `destination[].offsets[]` consumes for the cumulative position / size shifts authors author
-   * (judge offset slider, lanecover position, …).
+   * `OFFSET_LIFT` (id `3`) is computed from the live {@link liftRatio} so that dragging the lift
+   * slider immediately propagates to the hidden-cover `disapearLine` linkage and any
+   * `destination[].offsets = {3}` author-shift. Other slots fall back to whatever was pushed via
+   * {@link setOffset}; if nothing was, returns `undefined` (the destination renderer treats this
+   * as `ZERO_BEATORAJA_OFFSET`).
    */
   resolveOffset(offsetId: number): Readonly<BeatorajaSkinOffsetValue> | undefined {
+    if (offsetId === 3) {
+      // OFFSET_LIFT — derived live from `liftRatio`. We let the manual `setOffset(3, ...)` path
+      // override only when no live ratio is set (= 0); once the player nudges the lift slider,
+      // this branch always wins. Other axes default to 0 / 255.
+      if (this.liftRatio !== 0) {
+        return { x: 0, y: this.liftRatio * LIFT_MAX_Y_OFFSET, w: 0, h: 0, r: 0, a: 255 };
+      }
+    }
     return this.offsets.get(offsetId);
   }
 
@@ -727,15 +756,17 @@ export class BeatorajaRuntimeAdapter {
         // pulled from this op.
         return Math.round(this.lastHiSpeed * 100) % 100;
       }
-      // 1P lanecover percentage — the player's slider position rendered as `0..100`. Updated
-      // through {@link adjustLanecover} / {@link setLanecover}; reads back the shared state.
+      // 1P lanecover / lift percentage — the player's slider position rendered as `0..100`.
+      // Both fields update through {@link adjustLanecover} / {@link setLanecover} (resp.
+      // {@link adjustLift} / {@link setLift}) and read back the shared state.
       case BEATORAJA_NUM.LANECOVER1:
         return Math.round(this.lanecoverRatio * 100);
+      case BEATORAJA_NUM.LIFT1:
+        return Math.round(this.liftRatio * 100);
       // Other skin-config knobs the host doesn't surface yet. Returning 0 (not undefined) keeps
       // the readout zero AND silences the "ref not wired" log so authors aren't spammed about
       // features that simply aren't connected.
       case BEATORAJA_NUM.JUDGETIMING:
-      case BEATORAJA_NUM.LIFT1:
       case BEATORAJA_NUM.HIDDEN1:
       case BEATORAJA_NUM.DURATION:
       case BEATORAJA_NUM.DURATION_GREEN:
@@ -987,6 +1018,31 @@ export class BeatorajaRuntimeAdapter {
   /** Read-only handle on the lanecover ratio. Mostly for tests / host-side state mirroring. */
   getLanecover(): number {
     return this.lanecoverRatio;
+  }
+
+  /**
+   * Set the player's lift ratio directly. Clamped to `[0, 1]`. Drives `OFFSET_LIFT.y` (mapped
+   * onto a Y-UP shift via {@link LIFT_MAX_Y_OFFSET}) AND the `BEATORAJA_NUM.LIFT1 = 314` percent
+   * readout. Hidden-cover sprites with `isDisapearLineLinkLift = true` re-clip on the next frame.
+   */
+  setLift(value: number): void {
+    if (!Number.isFinite(value)) return;
+    this.liftRatio = Math.max(0, Math.min(1, value));
+  }
+
+  /**
+   * Nudge the lift ratio by `delta` (positive raises the cover edge, negative lowers it).
+   * Clamped to `[0, 1]`. Same step conventions as {@link adjustLanecover} — `±0.01` per fine
+   * tap, `±0.05` for coarse.
+   */
+  adjustLift(delta: number): void {
+    if (!Number.isFinite(delta)) return;
+    this.setLift(this.liftRatio + delta);
+  }
+
+  /** Read-only handle on the lift ratio. Mostly for tests / host-side state mirroring. */
+  getLift(): number {
+    return this.liftRatio;
   }
 
   /**

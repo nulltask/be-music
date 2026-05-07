@@ -613,6 +613,16 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       event.preventDefault();
       const step = (event.shiftKey ? 0.05 : 0.01) * (event.key === 'PageUp' ? -1 : 1);
       this.adapter.adjustLanecover(step);
+      return;
+    }
+    // Lift slider — `Home` / `End` step the lift edge by 1% per press, Shift to 5%. The lift
+    // slider is independent of lanecover; it controls hidden-cover (the lower-edge mask used in
+    // hidden-mode play). `End` raises lift (cover opens further down the lane), `Home` lowers
+    // it (cover collapses back toward the bottom edge).
+    if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      const step = (event.shiftKey ? 0.05 : 0.01) * (event.key === 'End' ? 1 : -1);
+      this.adapter.adjustLift(step);
     }
   };
 

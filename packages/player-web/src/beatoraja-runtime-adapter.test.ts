@@ -316,6 +316,57 @@ describe('BeatorajaRuntimeAdapter — lanecover slider', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — lift slider', () => {
+  it('drives `OFFSET_LIFT` (id 3) y-shift and `BEATORAJA_NUM.LIFT1` from `liftRatio`', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    // Default state: lift at home → OFFSET_LIFT undefined (= no shift), readout 0.
+    expect(adapter.resolveOffset(3)).toBeUndefined();
+    expect(adapter.resolveNumberValue(314)).toBe(0);
+    // Player drags to 50% — OFFSET_LIFT.y = -290 (= 0.5 * -580 lane-height hint), readout = 50.
+    adapter.setLift(0.5);
+    const lift = adapter.resolveOffset(3);
+    expect(lift?.y).toBeCloseTo(-290, 6);
+    expect(lift?.x).toBe(0);
+    expect(lift?.a).toBe(255);
+    expect(adapter.resolveNumberValue(314)).toBe(50);
+  });
+
+  it('clamps setLift / adjustLift to [0, 1] and ignores NaN', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.setLift(2);
+    expect(adapter.getLift()).toBe(1);
+    adapter.setLift(-1);
+    expect(adapter.getLift()).toBe(0);
+    adapter.adjustLift(0.6);
+    adapter.adjustLift(0.5); // 0.6 + 0.5 = 1.1 → clamped to 1
+    expect(adapter.getLift()).toBe(1);
+    adapter.setLift(0.3);
+    adapter.adjustLift(Number.NaN);
+    expect(adapter.getLift()).toBeCloseTo(0.3, 6);
+  });
+
+  it('lets manual setOffset(3, ...) win when liftRatio is 0', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.setOffset(3, { y: -100 });
+    expect(adapter.resolveOffset(3)?.y).toBe(-100);
+    // Once a live ratio is in play, the derived value takes priority.
+    adapter.setLift(0.25);
+    expect(adapter.resolveOffset(3)?.y).toBeCloseTo(-145, 6);
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — POOR BGA tracking', () => {
   it('flips between trigger-poor-bga and clear-poor-bga commands', () => {
     const adapter = new BeatorajaRuntimeAdapter({
