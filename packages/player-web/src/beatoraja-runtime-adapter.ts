@@ -103,6 +103,13 @@ interface SideJudgeState {
  */
 const DEFAULT_LANE_HEIGHT = 580;
 
+/**
+ * How long `BEATORAJA_OP.LANECOVER1_CHANGING` (= 270) stays active after the player's last
+ * lanecover / lift input. Reference theme uses this op to gate the percentage popup that fades
+ * after each adjustment — 500ms feels right (long enough to read, short enough not to linger).
+ */
+const COVER_CHANGING_WINDOW_MS = 500;
+
 export class BeatorajaRuntimeAdapter {
   /**
    * Live op set — option ops (from `baseOps`) plus runtime ops the engine has toggled. Exposed via
@@ -138,6 +145,14 @@ export class BeatorajaRuntimeAdapter {
    * player drags the slider, scrolls the wheel, or presses the lanecover hotkeys.
    */
   private lanecoverRatio = 0;
+  /**
+   * Wallclock ms (`getNowMs`-relative) of the last lanecover or lift adjustment. Used to drive
+   * `BEATORAJA_OP.LANECOVER1_CHANGING = 270` — the op stays active for {@link COVER_CHANGING_WINDOW_MS}
+   * after the player's last input, so reference-theme destinations gated on the op (e.g. the
+   * `lanecover-value` percentage readout that pops up while the player is tweaking the cover)
+   * appear briefly and then fade out.
+   */
+  private coverLastChangedAtMs: number | undefined;
   /**
    * Player's lift slider position in `[0, 1]`. `0` = lift at home (hidden-cover collapsed at the
    * bottom edge), `1` = lift fully extended (cover at maximum lift, exposing the upper part of
@@ -501,14 +516,36 @@ export class BeatorajaRuntimeAdapter {
     };
   }
 
-  /** Read-only handle the skin view consumes per frame. The same object identity persists across calls. */
+  /**
+   * Read-only handle the skin view consumes per frame. The same `activeOps` Set instance
+   * persists across calls (no per-frame allocation), but membership is mutated as derived ops
+   * (lanecover / lift cover toggles, cover-changing window) come and go.
+   */
   getRenderContext(): BeatorajaRenderContext {
+    this.refreshCoverOps();
     return {
       activeOps: this.activeOps,
       getTimerStart: (id) => this.timerStartedAt.get(id),
       nowMs: this.getNowMs(),
       resolveOffset: (id) => this.resolveOffset(id),
     };
+  }
+
+  /**
+   * Toggle `BEATORAJA_OP.LANECOVER1_ON` / `LIFT1_ON` based on whichever ratio is non-zero, and
+   * keep `LANECOVER1_CHANGING` lit for {@link COVER_CHANGING_WINDOW_MS} after the player's last
+   * adjustment. Authors gate per-cover percentage popups on `op = {270}` (the changing op) so the
+   * popup briefly appears whenever the player nudges the cover and fades out otherwise.
+   */
+  private refreshCoverOps(): void {
+    if (this.lanecoverRatio > 0) this.activeOps.add(BEATORAJA_OP.LANECOVER1_ON);
+    else this.activeOps.delete(BEATORAJA_OP.LANECOVER1_ON);
+    if (this.liftRatio > 0) this.activeOps.add(BEATORAJA_OP.LIFT1_ON);
+    else this.activeOps.delete(BEATORAJA_OP.LIFT1_ON);
+    const changing =
+      this.coverLastChangedAtMs !== undefined && this.getNowMs() - this.coverLastChangedAtMs < COVER_CHANGING_WINDOW_MS;
+    if (changing) this.activeOps.add(BEATORAJA_OP.LANECOVER1_CHANGING);
+    else this.activeOps.delete(BEATORAJA_OP.LANECOVER1_CHANGING);
   }
 
   /**
@@ -1018,6 +1055,7 @@ export class BeatorajaRuntimeAdapter {
   setLanecover(value: number): void {
     if (!Number.isFinite(value)) return;
     this.lanecoverRatio = Math.max(0, Math.min(1, value));
+    this.coverLastChangedAtMs = this.getNowMs();
   }
 
   /**
@@ -1043,6 +1081,7 @@ export class BeatorajaRuntimeAdapter {
   setLift(value: number): void {
     if (!Number.isFinite(value)) return;
     this.liftRatio = Math.max(0, Math.min(1, value));
+    this.coverLastChangedAtMs = this.getNowMs();
   }
 
   /**

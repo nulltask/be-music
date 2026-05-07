@@ -378,6 +378,48 @@ describe('BeatorajaRuntimeAdapter — lift slider', () => {
     expect(adapter.resolveOffset(3)?.y).toBeCloseTo(-360, 6);
   });
 
+  it('toggles `LANECOVER1_ON` / `LIFT1_ON` based on the ratio, and keeps `LANECOVER1_CHANGING` lit briefly after each adjustment', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+
+    // Idle state — no cover ops.
+    let ctx = adapter.getRenderContext();
+    expect(ctx.activeOps.has(271)).toBe(false); // LANECOVER1_ON
+    expect(ctx.activeOps.has(272)).toBe(false); // LIFT1_ON
+    expect(ctx.activeOps.has(270)).toBe(false); // LANECOVER1_CHANGING
+
+    // Player nudges lanecover — *_ON and *_CHANGING both light up.
+    adapter.setLanecover(0.4);
+    ctx = adapter.getRenderContext();
+    expect(ctx.activeOps.has(271)).toBe(true);
+    expect(ctx.activeOps.has(270)).toBe(true);
+
+    // Wait past the 500ms window — *_CHANGING decays, *_ON persists.
+    clock.advance(600);
+    ctx = adapter.getRenderContext();
+    expect(ctx.activeOps.has(271)).toBe(true);
+    expect(ctx.activeOps.has(270)).toBe(false);
+
+    // Adjust lift — separate ratio, so LIFT1_ON joins (lanecover stays on too).
+    adapter.setLift(0.3);
+    ctx = adapter.getRenderContext();
+    expect(ctx.activeOps.has(272)).toBe(true);
+    expect(ctx.activeOps.has(270)).toBe(true); // changing window relit
+
+    // Reset both — *_ON drops.
+    adapter.setLanecover(0);
+    adapter.setLift(0);
+    clock.advance(600);
+    ctx = adapter.getRenderContext();
+    expect(ctx.activeOps.has(271)).toBe(false);
+    expect(ctx.activeOps.has(272)).toBe(false);
+    expect(ctx.activeOps.has(270)).toBe(false);
+  });
+
   it('falls back to the default lane height when the option is missing or non-positive', () => {
     const a = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
