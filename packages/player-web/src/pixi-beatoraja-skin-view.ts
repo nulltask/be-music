@@ -298,6 +298,14 @@ export class BeatorajaPlaySkinView {
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
       imageById.set(image.id, image);
     }
+    // `hiddenCover[]` shares the (id, src, x, y, w, h) shape with `image[]` plus extra
+    // `disapearLine` / `isDisapearLineLinkLift` fields tied to the lift / lanecover slider. Until
+    // those are surfaced through the resolver, the cover renders as a regular image at its
+    // authored dst rect — fold the array into `imageById` so destinations referencing
+    // `"hidden-cover"` etc. resolve and paint.
+    for (const cover of normalizeBeatorajaImages(options.skin.hiddenCover)) {
+      if (!imageById.has(cover.id)) imageById.set(cover.id, cover);
+    }
     // `value[]` declarations carry numeric formatting metadata (`digit` / `padding` / `divx`) that
     // `image[]` doesn't, so they're tracked in their own map and rendered through a dedicated
     // multi-sprite digit composer (`composeBeatorajaValueCells`). `image[]` wins on id collision —
@@ -443,6 +451,7 @@ export class BeatorajaPlaySkinView {
       }
       const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
       this.container.addChild(sprite);
+      applyTextureFilterMode(baseTexture, group.filter);
       this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame });
     }
 
@@ -605,6 +614,7 @@ export class BeatorajaPlaySkinView {
     }
     const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
     this.container.addChild(sprite);
+    applyTextureFilterMode(baseTexture, group.filter);
     return { kind: 'graph', group, element, baseTexture, sprite };
   }
 
@@ -645,6 +655,10 @@ export class BeatorajaPlaySkinView {
       this.container.addChild(sprite);
       cells.push(sprite);
     }
+    // Filter mode applies to every node texture used by this gauge, but they likely share a
+    // single source (the gauge atlas). Apply to the first one and trust that pattern.
+    const firstNode = nodeTextures.values().next().value;
+    if (firstNode !== undefined) applyTextureFilterMode(firstNode, group.filter);
     return { kind: 'gauge', group, element, cells, nodeTextures };
   }
 
@@ -682,6 +696,14 @@ export class BeatorajaPlaySkinView {
     }
     const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
     this.container.addChild(sprite);
+    // Apply filter mode to the first resolvable sub-image's source. Sub-images typically share
+    // a source (it's the same atlas), so this propagates to siblings.
+    for (const sub of subImages) {
+      if (sub !== undefined) {
+        applyTextureFilterMode(sub.baseTexture, group.filter);
+        break;
+      }
+    }
     return { kind: 'imageset', group, element, subImages, sprite, lastSubIndex: -1, lastFrame: -1 };
   }
 
@@ -709,6 +731,7 @@ export class BeatorajaPlaySkinView {
     }
     const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
     this.container.addChild(sprite);
+    applyTextureFilterMode(baseTexture, group.filter);
     return { kind: 'slider', group, element, baseTexture, sprite };
   }
 
@@ -1304,6 +1327,20 @@ function computeAnimationElapsed(entry: SpriteEntry, context: BeatorajaRenderCon
   const start = context.getTimerStart(entry.image.timer);
   if (start === undefined) return 0;
   return Math.max(0, context.nowMs - start);
+}
+
+/**
+ * Apply the destination's `filter` field to the underlying texture source. `1` requests bilinear
+ * filtering (smooth scaling); anything else is a no-op (sources default to `'nearest'` at decode
+ * time, set by `decodeAsset` in `beatoraja-textures.ts`). Filter is set on the source rather
+ * than the sprite — Pixi v8 exposes scale mode at the source level — so every sprite sharing
+ * the source picks up the change. In practice skin authors apply `filter=1` to atlases where
+ * every cell wants the same treatment, so the source-level scope is the right granularity.
+ */
+function applyTextureFilterMode(texture: Texture | undefined, filter: number): void {
+  if (filter !== 1) return;
+  if (texture === undefined || texture === Texture.EMPTY) return;
+  if (texture.source) texture.source.scaleMode = 'linear';
 }
 
 /** Clamp a number to `[0, 1]`. NaN / negative / overshoot all collapse to a safe in-range value. */
