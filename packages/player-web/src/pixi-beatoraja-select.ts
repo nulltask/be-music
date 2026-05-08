@@ -391,6 +391,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       ops.add(features.bga ? BEATORAJA_OP.HAS_BGA : BEATORAJA_OP.NO_BGA);
       ops.add(features.bpmChange ? BEATORAJA_OP.HAS_BPMCHANGE : BEATORAJA_OP.NO_BPMCHANGE);
       ops.add(features.random ? BEATORAJA_OP.HAS_RANDOMSEQUENCE : BEATORAJA_OP.NO_RANDOMSEQUENCE);
+      // HAS_BPMSTOP (1177) — chart stops are channel `09`. Default skin's `bpmgraph` swaps a
+      // "with stop" variant on this op (see `op:[1177]` in `select.json`). No companion `NO_*`
+      // op is defined in beatoraja's prop.lua for stops — `1177` alone toggles the right chrome.
+      const hasStop = chartHasStop(entry.song);
+      if (hasStop) ops.add(BEATORAJA_OP.HAS_BPMSTOP);
 
       // Asset presence — chrome that fades / hides depending on whether the chart shipped a
       // banner / loading-screen / select-screen image. Sourced directly from `metadata.*`.
@@ -973,6 +978,21 @@ function resolveWallClockField(refOp: number): number | undefined {
       return undefined;
   }
 }
+
+/**
+ * `true` when the chart authored at least one stop event (channel `09` in BMS, scaled stop in
+ * bmson). Used to fire `HAS_BPMSTOP` (1177). Iterates events linearly — at typical chart sizes
+ * (a few thousand events) this is microseconds; the WeakMap-cached `detectChartFeatures` next to
+ * it amortises any worst-case cost across the same select-scene tick.
+ */
+function chartHasStop(song: BrowserSongEntry): boolean {
+  const cached = STOP_PRESENCE_CACHE.get(song);
+  if (cached !== undefined) return cached;
+  const has = (song.chart.events ?? []).some((event) => event.channel === '09');
+  STOP_PRESENCE_CACHE.set(song, has);
+  return has;
+}
+const STOP_PRESENCE_CACHE = new WeakMap<BrowserSongEntry, boolean>();
 
 /** Keys-variant string → matching `BEATORAJA_OP.KEYSONG_*` code, or `undefined` for unknown. */
 function keysongOpForVariant(variant: '5' | '7' | '9' | '10' | '14' | undefined): number | undefined {
