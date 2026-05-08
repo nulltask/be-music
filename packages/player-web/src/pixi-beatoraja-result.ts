@@ -442,6 +442,34 @@ export class PixiBeatorajaResultScene implements PixiScene {
         return summary.fast;
       case BEATORAJA_NUM.TOTALLATE:
         return summary.slow;
+
+      // Per-judge fast / slow split — derived from `timingHistory`. Engine doesn't aggregate
+      // these per-kind, so we fan out the full sample list once and cache. Each pair sums to
+      // the per-kind total (PERFECT, GREAT, …); empty timingHistory leaves all at 0.
+      case BEATORAJA_NUM.EARLY_PERFECT:
+        return this.cachedJudgeFastSlow().earlyPerfect;
+      case BEATORAJA_NUM.LATE_PERFECT:
+        return this.cachedJudgeFastSlow().latePerfect;
+      case BEATORAJA_NUM.EARLY_GREAT:
+        return this.cachedJudgeFastSlow().earlyGreat;
+      case BEATORAJA_NUM.LATE_GREAT:
+        return this.cachedJudgeFastSlow().lateGreat;
+      case BEATORAJA_NUM.EARLY_GOOD:
+        return this.cachedJudgeFastSlow().earlyGood;
+      case BEATORAJA_NUM.LATE_GOOD:
+        return this.cachedJudgeFastSlow().lateGood;
+      case BEATORAJA_NUM.EARLY_BAD:
+        return this.cachedJudgeFastSlow().earlyBad;
+      case BEATORAJA_NUM.LATE_BAD:
+        return this.cachedJudgeFastSlow().lateBad;
+      case BEATORAJA_NUM.EARLY_POOR:
+        return this.cachedJudgeFastSlow().earlyPoor;
+      case BEATORAJA_NUM.LATE_POOR:
+        return this.cachedJudgeFastSlow().latePoor;
+      case BEATORAJA_NUM.EARLY_MISS:
+        return this.cachedJudgeFastSlow().earlyPoor;
+      case BEATORAJA_NUM.LATE_MISS:
+        return this.cachedJudgeFastSlow().latePoor;
       case BEATORAJA_NUM.COMBOBREAK:
       case BEATORAJA_NUM.BAD_PLUS_POOR_PLUS_MISS:
         return summary.bad + summary.poor;
@@ -500,6 +528,87 @@ export class PixiBeatorajaResultScene implements PixiScene {
     return this.timingStatsCache;
   }
   private timingStatsCache: { mean: number; stddev: number } | undefined;
+
+  /**
+   * Per-judge fast / slow counts derived from `timingHistory`. The engine emits a
+   * `(deltaMs, kind)` tuple for every judgement; we bucket by kind into the EARLY (deltaMs <
+   * 0) / LATE (deltaMs > 0) bins. Cached on first call — the history is static per run.
+   * Empty / missing history leaves every bucket at 0.
+   *
+   * MISS is mapped onto the POOR bucket because the engine treats missed-press as a POOR
+   * judgement (no separate kind). Skin authors who use ref 421 / 422 (EARLY_MISS / LATE_MISS)
+   * effectively see the same numbers as EARLY_POOR / LATE_POOR — same convention as our
+   * `MISS` (ref 420) which surfaces `summary.poor`.
+   */
+  private cachedJudgeFastSlow(): {
+    earlyPerfect: number;
+    latePerfect: number;
+    earlyGreat: number;
+    lateGreat: number;
+    earlyGood: number;
+    lateGood: number;
+    earlyBad: number;
+    lateBad: number;
+    earlyPoor: number;
+    latePoor: number;
+  } {
+    if (this.judgeFastSlowCache !== undefined) return this.judgeFastSlowCache;
+    const out = {
+      earlyPerfect: 0,
+      latePerfect: 0,
+      earlyGreat: 0,
+      lateGreat: 0,
+      earlyGood: 0,
+      lateGood: 0,
+      earlyBad: 0,
+      lateBad: 0,
+      earlyPoor: 0,
+      latePoor: 0,
+    };
+    for (const sample of this.options.timingHistory ?? []) {
+      const isEarly = sample.deltaMs < 0;
+      const isLate = sample.deltaMs > 0;
+      if (!isEarly && !isLate) continue; // Exactly-on-zero deltas don't count toward either bucket.
+      switch (sample.kind) {
+        case 'PERFECT':
+          if (isEarly) out.earlyPerfect += 1;
+          else out.latePerfect += 1;
+          break;
+        case 'GREAT':
+          if (isEarly) out.earlyGreat += 1;
+          else out.lateGreat += 1;
+          break;
+        case 'GOOD':
+          if (isEarly) out.earlyGood += 1;
+          else out.lateGood += 1;
+          break;
+        case 'BAD':
+          if (isEarly) out.earlyBad += 1;
+          else out.lateBad += 1;
+          break;
+        case 'POOR':
+          if (isEarly) out.earlyPoor += 1;
+          else out.latePoor += 1;
+          break;
+      }
+    }
+    this.judgeFastSlowCache = out;
+    return this.judgeFastSlowCache;
+  }
+  private judgeFastSlowCache:
+    | {
+        earlyPerfect: number;
+        latePerfect: number;
+        earlyGreat: number;
+        lateGreat: number;
+        earlyGood: number;
+        lateGood: number;
+        earlyBad: number;
+        lateBad: number;
+        earlyPoor: number;
+        latePoor: number;
+      }
+    | undefined;
 
   /**
    * Result-scene graph-value resolver. Surfaces the run's frozen ratios — gauge percent, score
