@@ -856,6 +856,12 @@ export const BEATORAJA_NUM = {
   POOR_PLUS_MISS: 426,
   /** prop.lua `bad_plus_poor_plus_miss = 427`. */
   BAD_PLUS_POOR_PLUS_MISS: 427,
+  /**
+   * prop.lua `judge_1p_duration = 525` — milliseconds elapsed since the most recent 1P
+   * judgement. Skins gate fade-out timing on this so the judge "PERFECT" / "GREAT" badge
+   * dims as the duration grows. Returns 0 before the first judgement.
+   */
+  JUDGE_1P_DURATION: 525,
 
   // ─── Time-based readouts (160-165, 1163-1164) ─────────────────────────────────────────────────
   /** prop.lua `nowbpm = 160` — current BPM (best effort: chart's canonical BPM). */

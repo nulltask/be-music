@@ -1186,6 +1186,14 @@ export class BeatorajaRuntimeAdapter {
         return Math.floor(gaugePct);
       case BEATORAJA_NUM.GROOVEGAUGE_AFTERDOT:
         return Math.floor((gaugePct - Math.floor(gaugePct)) * 100);
+      // Time elapsed (ms) since the last 1P judgement. Read from the JUDGE_1P timer's stamp;
+      // returns 0 before the first judgement (`getTimerStart` undefined). Skins use this to
+      // fade out the judge popup ("PERFECT" / "GREAT" badge) — `1 - duration/fadeMs` style.
+      case BEATORAJA_NUM.JUDGE_1P_DURATION: {
+        const stamp = this.timerStartedAt.get(judgeTimerId(1));
+        if (stamp === undefined) return 0;
+        return Math.max(0, Math.floor(this.getNowMs() - stamp));
+      }
       // Target / rival diff slots — no IR / DB layer, return 0 so the readout shows zero rather
       // than garbage. (Authors gate these behind `if[ir_loaded]` / similar so the zero is benign.)
       case BEATORAJA_NUM.DIFF_EXSCORE:
