@@ -322,6 +322,22 @@ export const BEATORAJA_OP = {
   GAUGE_EX: 1046,
   GAUGE_EX_2P: 1047,
 
+  // ─── Chart difficulty ops (SkinProperty `LEVEL_*`, codes 70-79) ───────────────────────────
+  // Set per-frame on the select scene based on the focused chart's `#DIFFICULTY` header value
+  // (1=BEGINNER, 2=NORMAL, 3=HYPER, 4=ANOTHER, 5=INSANE). The `_EXCEED` variants light up when
+  // the chart's playLevel exceeds the slot's typical max (e.g. an INSANE chart at level 12+ lights
+  // INSANE_EXCEED on top of INSANE itself); we don't surface that distinction yet.
+  LEVEL_BEGINNER: 70,
+  LEVEL_NORMAL: 71,
+  LEVEL_HYPER: 72,
+  LEVEL_ANOTHER: 73,
+  LEVEL_INSANE: 74,
+  LEVEL_BEGINNER_EXCEED: 75,
+  LEVEL_NORMAL_EXCEED: 76,
+  LEVEL_HYPER_EXCEED: 77,
+  LEVEL_ANOTHER_EXCEED: 78,
+  LEVEL_INSANE_EXCEED: 79,
+
   // ─── Music-select bar ops (SkinProperty: FOLDERBAR=1, SONGBAR=2, GRADEBAR=3, PLAYABLEBAR=5) ─
   // Set per-frame on the select scene based on what the cursor's focused bar is. Skins gate
   // per-bar chrome on these — songs_font/count behind FOLDERBAR (it's the "X songs" footer

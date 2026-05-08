@@ -424,6 +424,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       ops.add(meta.stageFile ? BEATORAJA_OP.HAS_STAGEFILE : BEATORAJA_OP.NO_STAGEFILE);
       ops.add(meta.banner ? BEATORAJA_OP.HAS_BANNER : BEATORAJA_OP.NO_BANNER);
       ops.add(meta.backBmp ? BEATORAJA_OP.HAS_BACKBMP : BEATORAJA_OP.NO_BACKBMP);
+
+      // Difficulty op — `#DIFFICULTY 1..5` lights up the matching LEVEL_* op (70..74). Skins
+      // gate per-difficulty chrome (e.g. the BEGINNER / NORMAL / HYPER / ANOTHER / INSANE label
+      // images in ModernChic) on these. Charts without a difficulty header → no op fires (skin
+      // shows fallback chrome).
+      const difficultyOp = difficultyLevelOp(meta.difficulty);
+      if (difficultyOp !== undefined) ops.add(difficultyOp);
     }
     return ops;
   }
@@ -1134,6 +1141,28 @@ function keymodeImagesetIndex(variant: '5' | '7' | '9' | '10' | '14' | undefined
       return 5;
     default:
       return 0;
+  }
+}
+
+/**
+ * BMS `#DIFFICULTY` value (1..5) → matching `BEATORAJA_OP.LEVEL_*` code. Returns `undefined`
+ * when the chart didn't author a difficulty header (a lot of older BMS files omit it) so the
+ * caller fires no op and the skin's fallback chrome (or no chrome) shows.
+ */
+function difficultyLevelOp(difficulty: number | undefined): number | undefined {
+  switch (difficulty) {
+    case 1:
+      return BEATORAJA_OP.LEVEL_BEGINNER;
+    case 2:
+      return BEATORAJA_OP.LEVEL_NORMAL;
+    case 3:
+      return BEATORAJA_OP.LEVEL_HYPER;
+    case 4:
+      return BEATORAJA_OP.LEVEL_ANOTHER;
+    case 5:
+      return BEATORAJA_OP.LEVEL_INSANE;
+    default:
+      return undefined;
   }
 }
 
