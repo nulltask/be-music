@@ -104,6 +104,13 @@ const SELECT_REF_KEYMODE_INDEX = 11;
 const SELECT_REF_LNMODE_INDEX = 308;
 
 /**
+ * Imageset ref 370 — best clear lamp for the focused chart. Default skin's `state_clear`
+ * imageset declares 11 sub-images for NOPLAY through MAX. We have no score DB so we always
+ * return 0 (NOPLAY), matching the `CLEAR_LAMP_NOPLAY` op we fire on every song.
+ */
+const SELECT_REF_BEST_CLEAR_LAMP_INDEX = 370;
+
+/**
  * Per-kind note-count refs (ModernChic's `bmsanalysis.lua` block):
  *
  *   - `350` TOTALNOTE_NORMAL — playable taps minus scratch / LN / BSS.
@@ -727,6 +734,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const song = this.focusedSong();
       const lnMode = song?.chart.bms?.lnMode;
       if (typeof lnMode === 'number' && lnMode >= 0 && lnMode <= 2) return lnMode;
+      return 0;
+    }
+    if (refOp === SELECT_REF_BEST_CLEAR_LAMP_INDEX) {
+      // Best clear lamp index — `state_clear` imageset's 11 slots map onto beatoraja's lamp
+      // ladder: 0=NOPLAY, 1=FAILED, 2=ASSIST_EASY, 3=LIGHT_ASSIST_EASY, 4=EASY, 5=NORMAL,
+      // 6=HARD, 7=EXHARD, 8=FULLCOMBO, 9=PERFECT, 10=MAX. We have no score DB so every chart
+      // reports as 0 (NOPLAY) — matches the `CLEAR_LAMP_NOPLAY` op we already fire.
       return 0;
     }
     return 0;
