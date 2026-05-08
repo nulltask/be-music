@@ -223,6 +223,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // ref 11 picks "5keys" / "7keys" / etc. from the skin's array based on the focused
       // chart's keymode) plus any other `ref`-driven selectors the skin authored.
       resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
+      // Slider values — volume / lanecover / lift translate sliders. Without a value the
+      // renderer hides the slider entirely; we report `1.0` (max position) for volume types
+      // so ModernChic's volume sliders sit at full instead of vanishing.
+      resolveSliderValue: (type) => resolveSelectionSliderValue(type),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
     });
@@ -315,6 +319,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
       resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
       resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
+      resolveSliderValue: (type) => resolveSelectionSliderValue(type),
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
     });
@@ -1264,6 +1269,28 @@ function keymodeImagesetIndex(variant: '5' | '7' | '9' | '10' | '14' | undefined
       return 5;
     default:
       return 0;
+  }
+}
+
+/**
+ * SkinProperty `MAIN.SLIDER` types relevant to the select scene. Beatoraja's master / key /
+ * BGM volume sliders are 17 / 18 / 19. We return a max-position value (1.0 = far end of the
+ * slider's authored range) so ModernChic's volume strip shows at "full" — there's no live
+ * volume state in the player today, but rendering a slider at 0 (= sprite at home position)
+ * looks broken.
+ *
+ * Lanecover / lift / hispeed sliders (types 4/5/6) aren't relevant on the select scene, but
+ * skins occasionally author them anyway; returning `undefined` for those keeps the sprite
+ * at its dst-rect home (effectively "off"), matching beatoraja's behavior.
+ */
+function resolveSelectionSliderValue(type: number): number | undefined {
+  switch (type) {
+    case 17: // MASTER_VOLUME
+    case 18: // KEY_VOLUME
+    case 19: // BGM_VOLUME
+      return 1;
+    default:
+      return undefined;
   }
 }
 
