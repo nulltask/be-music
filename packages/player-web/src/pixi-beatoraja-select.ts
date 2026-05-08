@@ -41,6 +41,7 @@ import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
 import { computeBeatorajaChartTotalSeconds } from './beatoraja-chart-duration.ts';
+import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import { groupSongsByFolder, resolveChartPlayVariant } from './library.ts';
 import { detectChartFeatures } from './select-ops.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongEntry } from './types.ts';
@@ -93,6 +94,19 @@ const SELECT_NUM_BMS_TOTAL = 368;
  * is `["allkeys","5keys","7keys","10keys","14keys","9keys","24keys","24keysDP"]`, indexes 0-7.
  */
 const SELECT_REF_KEYMODE_INDEX = 11;
+
+/**
+ * Per-kind note-count refs (ModernChic's `bmsanalysis.lua` block):
+ *
+ *   - `350` TOTALNOTE_NORMAL — playable taps minus scratch / LN / BSS.
+ *   - `351` TOTALNOTE_LN — long notes (excluding scratch LN).
+ *   - `352` TOTALNOTE_SCRATCH — single-tap scratches.
+ *   - `353` TOTALNOTE_BSS — back-spin scratches (long scratch).
+ */
+const SELECT_NUM_TOTALNOTE_NORMAL = 350;
+const SELECT_NUM_TOTALNOTE_LN = 351;
+const SELECT_NUM_TOTALNOTE_SCRATCH = 352;
+const SELECT_NUM_TOTALNOTE_BSS = 353;
 
 /**
  * Per-frame tween rate for `scrollPosition` chasing `currentIndex`. Fraction of the remaining
@@ -566,6 +580,20 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (refOp === SELECT_NUM_BMS_TOTAL) {
       const total = song.chart.metadata.total;
       return typeof total === 'number' && Number.isFinite(total) ? Math.floor(total) : undefined;
+    }
+
+    // Per-kind note breakdown (ModernChic `bmsanalysis.lua`). Each ref returns one bucket of
+    // `computeBeatorajaNoteBreakdown`; the cache below ensures the events scan happens once
+    // per song.
+    switch (refOp) {
+      case SELECT_NUM_TOTALNOTE_NORMAL:
+        return resolveNoteBreakdown(song).normal;
+      case SELECT_NUM_TOTALNOTE_LN:
+        return resolveNoteBreakdown(song).ln;
+      case SELECT_NUM_TOTALNOTE_SCRATCH:
+        return resolveNoteBreakdown(song).scratch;
+      case SELECT_NUM_TOTALNOTE_BSS:
+        return resolveNoteBreakdown(song).bss;
     }
 
     switch (refOp) {
@@ -1100,6 +1128,19 @@ function resolveSongLengthSeconds(song: BrowserSongEntry): number {
   return seconds;
 }
 const SONG_LENGTH_CACHE = new WeakMap<BrowserSongEntry, number>();
+
+/**
+ * Cached note breakdown for the focused song. Same caching pattern as the duration helper —
+ * the events scan happens once per song, then per-frame resolves are O(1) lookups.
+ */
+function resolveNoteBreakdown(song: BrowserSongEntry): NoteBreakdown {
+  const cached = NOTE_BREAKDOWN_CACHE.get(song);
+  if (cached !== undefined) return cached;
+  const breakdown = computeBeatorajaNoteBreakdown(song.chart);
+  NOTE_BREAKDOWN_CACHE.set(song, breakdown);
+  return breakdown;
+}
+const NOTE_BREAKDOWN_CACHE = new WeakMap<BrowserSongEntry, NoteBreakdown>();
 
 /**
  * Walk the chart's BPM-change events (channels `03` / `08`) and return the integer min / max
