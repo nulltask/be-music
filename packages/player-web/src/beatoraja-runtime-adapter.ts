@@ -1019,6 +1019,64 @@ export class BeatorajaRuntimeAdapter {
   private cachedNoteBreakdownBars: ReadonlyArray<number> | undefined;
 
   /**
+   * Visible playfield ratio (= what fraction of the lane is unobstructed by lanecover / lift).
+   * `withCover = true` reads the live cover state so DURATION_LANECOVER_ON resolvers reflect
+   * what the player currently sees; `false` returns the raw 1.0 so DURATION_LANECOVER_OFF
+   * tells the player "what would the duration be without cover". Clamped to [0, 1].
+   */
+  private visibleRatio(withCover: boolean): number {
+    if (!withCover) return 1;
+    return Math.max(0, Math.min(1, 1 - this.lanecoverRatio - this.liftRatio));
+  }
+
+  /**
+   * Current BPM for duration math. The frame payload doesn't carry a per-beat BPM today, so
+   * we fall back to the chart's main BPM. In practice this is fine — most charts spend most
+   * of their time at the main BPM, and the ModernChic panel surfaces the MIN / MAX variants
+   * separately for the player to read the range.
+   */
+  private currentBpmForDuration(): number {
+    return this.chart?.metadata.bpm ?? 0;
+  }
+
+  /**
+   * Min / max BPM across the chart's BPM-change events. Cached on first call (the events list
+   * is static for the chart's lifetime). Both fall back to the chart's main BPM when the chart
+   * is constant-tempo (no `03` / `08` events).
+   */
+  private cachedBpmRange(): { min: number; max: number } {
+    if (this.bpmRangeCache !== undefined) return this.bpmRangeCache;
+    const chart = this.chart;
+    const initial = chart?.metadata.bpm ?? 0;
+    let min = initial > 0 ? initial : Number.POSITIVE_INFINITY;
+    let max = initial;
+    const bpmTable = chart?.resources?.bpm ?? {};
+    for (const event of chart?.events ?? []) {
+      if (event.value === '00' || event.value === '') continue;
+      let bpm: number | undefined;
+      if (event.channel === '03') {
+        const parsed = parseInt(event.value, 16);
+        if (Number.isFinite(parsed) && parsed > 0) bpm = parsed;
+      } else if (event.channel === '08') {
+        const looked = bpmTable[event.value] ?? bpmTable[event.value.toLowerCase()] ?? bpmTable[event.value.toUpperCase()];
+        if (typeof looked === 'number') bpm = looked;
+        else if (typeof looked === 'string') {
+          const parsed = Number.parseFloat(looked);
+          bpm = Number.isFinite(parsed) ? parsed : undefined;
+        }
+      }
+      if (bpm !== undefined && bpm > 0) {
+        if (bpm < min) min = bpm;
+        if (bpm > max) max = bpm;
+      }
+    }
+    if (!Number.isFinite(min)) min = max > 0 ? max : 0;
+    this.bpmRangeCache = { min, max };
+    return this.bpmRangeCache;
+  }
+  private bpmRangeCache: { min: number; max: number } | undefined;
+
+  /**
    * Resolve recent judgement timings for `timingvisualizer[]` rendering. Returns oldest-first
    * samples (`samples[0]` = oldest in buffer; `samples[length - 1]` = most recent), each with
    * the signed delta and the judge kind. Empty array when no timed judgement has fired yet — the
@@ -1110,9 +1168,50 @@ export class BeatorajaRuntimeAdapter {
       // features that simply aren't connected.
       case BEATORAJA_NUM.JUDGETIMING:
       case BEATORAJA_NUM.HIDDEN1:
-      case BEATORAJA_NUM.DURATION:
-      case BEATORAJA_NUM.DURATION_GREEN:
         return 0;
+
+      // ─── Duration / green-number readouts (312, 313, 1312-1327) ────────────────────────
+      // "Duration" (= white number) is the time in ms for a note to traverse the visible
+      // playfield at the current BPM × hispeed × cover state. "Green" is BPM-normalised so
+      // it stays constant across BPM changes — the player's "scroll speed setting".
+      //
+      // Beatoraja exposes 8 white + 8 green variants (1312-1327) so ModernChic's hispeed
+      // panel can show "current / no-cover" × "current bpm / main / min / max bpm" combos.
+      // We compute all 16 from the same `whiteDurationMs` / `greenDurationMs` helpers below.
+      case BEATORAJA_NUM.DURATION:
+      case BEATORAJA_NUM.DURATION_LANECOVER_ON:
+        return whiteDurationMs(this.visibleRatio(true), this.lastHiSpeed, this.currentBpmForDuration());
+      case BEATORAJA_NUM.DURATION_GREEN:
+      case BEATORAJA_NUM.DURATION_GREEN_LANECOVER_ON:
+        return greenDurationMs(this.visibleRatio(true), this.lastHiSpeed);
+      case BEATORAJA_NUM.DURATION_LANECOVER_OFF:
+        return whiteDurationMs(this.visibleRatio(false), this.lastHiSpeed, this.currentBpmForDuration());
+      case BEATORAJA_NUM.DURATION_GREEN_LANECOVER_OFF:
+        return greenDurationMs(this.visibleRatio(false), this.lastHiSpeed);
+      case BEATORAJA_NUM.MAINBPM_DURATION_LANECOVER_ON:
+        return whiteDurationMs(this.visibleRatio(true), this.lastHiSpeed, this.chart?.metadata.bpm ?? 0);
+      case BEATORAJA_NUM.MAINBPM_DURATION_GREEN_LANECOVER_ON:
+        return greenDurationMs(this.visibleRatio(true), this.lastHiSpeed);
+      case BEATORAJA_NUM.MAINBPM_DURATION_LANECOVER_OFF:
+        return whiteDurationMs(this.visibleRatio(false), this.lastHiSpeed, this.chart?.metadata.bpm ?? 0);
+      case BEATORAJA_NUM.MAINBPM_DURATION_GREEN_LANECOVER_OFF:
+        return greenDurationMs(this.visibleRatio(false), this.lastHiSpeed);
+      case BEATORAJA_NUM.MINBPM_DURATION_LANECOVER_ON:
+        return whiteDurationMs(this.visibleRatio(true), this.lastHiSpeed, this.cachedBpmRange().min);
+      case BEATORAJA_NUM.MINBPM_DURATION_GREEN_LANECOVER_ON:
+        return greenDurationMs(this.visibleRatio(true), this.lastHiSpeed);
+      case BEATORAJA_NUM.MINBPM_DURATION_LANECOVER_OFF:
+        return whiteDurationMs(this.visibleRatio(false), this.lastHiSpeed, this.cachedBpmRange().min);
+      case BEATORAJA_NUM.MINBPM_DURATION_GREEN_LANECOVER_OFF:
+        return greenDurationMs(this.visibleRatio(false), this.lastHiSpeed);
+      case BEATORAJA_NUM.MAXBPM_DURATION_LANECOVER_ON:
+        return whiteDurationMs(this.visibleRatio(true), this.lastHiSpeed, this.cachedBpmRange().max);
+      case BEATORAJA_NUM.MAXBPM_DURATION_GREEN_LANECOVER_ON:
+        return greenDurationMs(this.visibleRatio(true), this.lastHiSpeed);
+      case BEATORAJA_NUM.MAXBPM_DURATION_LANECOVER_OFF:
+        return whiteDurationMs(this.visibleRatio(false), this.lastHiSpeed, this.cachedBpmRange().max);
+      case BEATORAJA_NUM.MAXBPM_DURATION_GREEN_LANECOVER_OFF:
+        return greenDurationMs(this.visibleRatio(false), this.lastHiSpeed);
 
       // ─── Wallclock + run uptime + FPS (17-29) ──────────────────────────────────────────
       // `time_*` reads the local wallclock — what beatoraja prints in the corner of every scene.
@@ -1694,6 +1793,33 @@ function mapSideRankToNowRank(sideRank: number): number {
   if (sideRank >= 200 && sideRank <= 207) return sideRank + 140;
   // For 2P or unknown, leave at NOW_F_1P. The op block doesn't have a 2P variant in this range.
   return BEATORAJA_OP.NOW_F_1P;
+}
+
+/**
+ * "White" duration — milliseconds for a note to traverse the visible playfield at the given
+ * BPM × hispeed × visible-ratio. Mirrors beatoraja's reference convention where white scales
+ * INVERSELY with bpm (faster song = less time on screen) but the player can read the value
+ * directly from the on-screen panel.
+ *
+ * Formula: `visibleRatio * 60000 / (hispeed * bpm) * 4` (= ms per 4-beat window). Returns 0
+ * for degenerate inputs (zero / negative bpm or hispeed) so the value display stays at zero
+ * rather than garbage. 4-beat window picked because IIDX-style charts measure scroll in
+ * 4-beat units (= 1 measure of 4/4 time).
+ */
+function whiteDurationMs(visibleRatio: number, hispeed: number, bpm: number): number {
+  if (hispeed <= 0 || bpm <= 0) return 0;
+  return Math.round((visibleRatio * 60000 * 4) / (hispeed * bpm));
+}
+
+/**
+ * "Green" duration — BPM-invariant equivalent of `whiteDurationMs`. Normalised to a constant
+ * 130 BPM reference so the player's "scroll setting" reading stays the same regardless of the
+ * chart's actual BPM. At BPM 130 the white and green numbers coincide; at higher BPMs green
+ * stays put while white shrinks (reflects "same setting, but song scrolls visibly faster").
+ */
+function greenDurationMs(visibleRatio: number, hispeed: number): number {
+  if (hispeed <= 0) return 0;
+  return Math.round((visibleRatio * 60000 * 4) / (hispeed * 130));
 }
 
 /**

@@ -898,6 +898,32 @@ export const BEATORAJA_NUM = {
    */
   BMS_TOTAL: 368,
 
+  // ─── ModernChic-extended duration / green-number variants (1312-1327) ────────────────────
+  // The "white number" (= visual scroll time, ms-to-traverse) and "green number" (= BPM-
+  // invariant equivalent) for every combination of:
+  //   - LANECOVER {ON = current cover state, OFF = no cover (raw scroll)}
+  //   - BPM source {current / MAINBPM / MINBPM / MAXBPM}
+  // ModernChic's `Play/lua/sp/cover.lua` surfaces all 16 so the player can read both
+  // "what's my current scroll speed" AND "what would it be without cover / at min BPM" from
+  // the cover-adjustment panel. Beatoraja's stock prop.lua doesn't define these; they live
+  // in ModernChic's own `mainnumber.lua` extension.
+  DURATION_LANECOVER_ON: 1312,
+  DURATION_GREEN_LANECOVER_ON: 1313,
+  DURATION_LANECOVER_OFF: 1314,
+  DURATION_GREEN_LANECOVER_OFF: 1315,
+  MAINBPM_DURATION_LANECOVER_ON: 1316,
+  MAINBPM_DURATION_GREEN_LANECOVER_ON: 1317,
+  MAINBPM_DURATION_LANECOVER_OFF: 1318,
+  MAINBPM_DURATION_GREEN_LANECOVER_OFF: 1319,
+  MINBPM_DURATION_LANECOVER_ON: 1320,
+  MINBPM_DURATION_GREEN_LANECOVER_ON: 1321,
+  MINBPM_DURATION_LANECOVER_OFF: 1322,
+  MINBPM_DURATION_GREEN_LANECOVER_OFF: 1323,
+  MAXBPM_DURATION_LANECOVER_ON: 1324,
+  MAXBPM_DURATION_GREEN_LANECOVER_ON: 1325,
+  MAXBPM_DURATION_LANECOVER_OFF: 1326,
+  MAXBPM_DURATION_GREEN_LANECOVER_OFF: 1327,
+
   // ─── Time-based readouts (160-165, 1163-1164) ─────────────────────────────────────────────────
   /** prop.lua `nowbpm = 160` — current BPM (best effort: chart's canonical BPM). */
   NOWBPM: 160,
