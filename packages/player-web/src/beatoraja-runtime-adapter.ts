@@ -46,6 +46,8 @@ import {
   TIMER_FAILED,
   TIMER_FULLCOMBO_1P,
   TIMER_FULLCOMBO_2P,
+  TIMER_GAUGE_INCREASE_1P,
+  TIMER_GAUGE_INCREASE_2P,
   TIMER_GAUGE_MAX_1P,
   TIMER_PLAY,
   TIMER_READY,
@@ -701,6 +703,14 @@ export class BeatorajaRuntimeAdapter {
     // bomb stamps the right per-lane timer (`bomb_*p_keyN` = 50+lane / 60+lane / 1000+lane).
     if (isCleanHitJudge(state.judge) && state.channel !== undefined) {
       this.startLaneBombTimer(state.channel);
+    }
+
+    // Re-stamp the gauge-increase timer on each clean hit. ModernChic's
+    // `lamp_gaugeinclease` cycles a 2-frame sparkle at `cycle = 50ms` keyed off this stamp;
+    // dirty hits (GOOD / BAD / POOR / MISS) typically don't gain gauge so we skip them.
+    // Side-aware (1P / 2P) so DP charts get the right per-side feedback.
+    if (isCleanHitJudge(state.judge)) {
+      this.markTimer(side === 1 ? TIMER_GAUGE_INCREASE_1P : TIMER_GAUGE_INCREASE_2P);
     }
 
     // Latch the running combo for `prop.lua num.combo = 104` resolution. The engine emits the
