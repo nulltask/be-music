@@ -40,6 +40,7 @@ import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
+import { computeBeatorajaChartTotalSeconds } from './beatoraja-chart-duration.ts';
 import { groupSongsByFolder, resolveChartPlayVariant } from './library.ts';
 import { detectChartFeatures } from './select-ops.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongEntry } from './types.ts';
@@ -511,6 +512,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         return resolveBpmRange(song)?.min;
       case BEATORAJA_NUM.PLAYLEVEL:
         return resolvePlayLevel(song.playLevel);
+      // Song length minutes / seconds (refs 1163 / 1164). Computed once per song from BPM
+      // segments + STOP events. Authors typically place these next to each other so the panel
+      // reads "M:SS" — the seconds value is `floor(totalSeconds) % 60`, NOT the fractional
+      // remainder, matching beatoraja's reference behavior.
+      case BEATORAJA_NUM.SONGLENGTH_MINUTE:
+        return Math.floor(resolveSongLengthSeconds(song) / 60);
+      case BEATORAJA_NUM.SONGLENGTH_SECOND:
+        return Math.floor(resolveSongLengthSeconds(song)) % 60;
       // Live-play counters all report 0 in the select scene — no engine running. Skins that
       // share a `value[]` element across select / play (rare) get sensible idle digits.
       case BEATORAJA_NUM.POINT:
@@ -980,6 +989,20 @@ function resolveWallClockField(refOp: number): number | undefined {
       return undefined;
   }
 }
+
+/**
+ * Cached chart duration in seconds for the focused song. The underlying computation walks the
+ * full event list + bpm/stop tables; caching keyed by the `BrowserSongEntry` reference (= the
+ * chart never changes once loaded) keeps per-frame resolves O(1).
+ */
+function resolveSongLengthSeconds(song: BrowserSongEntry): number {
+  const cached = SONG_LENGTH_CACHE.get(song);
+  if (cached !== undefined) return cached;
+  const seconds = computeBeatorajaChartTotalSeconds(song.chart);
+  SONG_LENGTH_CACHE.set(song, seconds);
+  return seconds;
+}
+const SONG_LENGTH_CACHE = new WeakMap<BrowserSongEntry, number>();
 
 /**
  * Walk the chart's BPM-change events (channels `03` / `08`) and return the integer min / max
