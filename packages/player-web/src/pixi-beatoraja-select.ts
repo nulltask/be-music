@@ -80,6 +80,14 @@ const FALLBACK_VISIBLE_ROW_COUNT = 13;
 const SELECT_NUM_SONGS_IN_FOLDER = 300;
 
 /**
+ * Ref 368 = BMS `#TOTAL` header value. ModernChic surfaces it as a chart-stats readout
+ * (`info.lua` → "TOTAL値"). No symbolic name in our `BEATORAJA_NUM` enum — beatoraja's
+ * documented prop.lua stops short of this code. Sourced from `chart.metadata.total`, which
+ * holds the parsed `#TOTAL` value (gauge total per BMS spec; defaults vary).
+ */
+const SELECT_NUM_BMS_TOTAL = 368;
+
+/**
  * Per-frame tween rate for `scrollPosition` chasing `currentIndex`. Fraction of the remaining
  * delta closed each frame at 60 Hz — `0.25` lands inside ~150 ms which feels responsive without
  * looking jumpy. We snap to the integer once the gap drops below `SCROLL_SNAP_THRESHOLD` so the
@@ -496,6 +504,15 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
     const song = this.focusedSong();
     if (song === undefined) return undefined;
+
+    // BMS `#TOTAL` value (gauge total per BMS spec). Returned as the integer floor — beatoraja's
+    // value digits don't carry a fraction part for this readout. `undefined` when the chart
+    // didn't author a TOTAL header (rare; older BMS files may omit it).
+    if (refOp === SELECT_NUM_BMS_TOTAL) {
+      const total = song.chart.metadata.total;
+      return typeof total === 'number' && Number.isFinite(total) ? Math.floor(total) : undefined;
+    }
+
     switch (refOp) {
       case BEATORAJA_NUM.TOTALNOTES:
       case BEATORAJA_NUM.TOTALNOTES_LIVE:
