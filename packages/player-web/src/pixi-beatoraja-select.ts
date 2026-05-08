@@ -13,9 +13,9 @@
 //   - **Smooth scroll** — `currentIndex` is the discrete cursor; `scrollPosition` is the
 //     animated value the renderer reads. `scrollPosition` tweens toward `currentIndex` on every
 //     tick so a long jump (PageDown / End) glides instead of teleporting.
-//   - **List background** — a semi-transparent rounded panel sits behind the row labels with a
-//     brighter highlight on the selected row, so the list reads against arbitrarily-busy skin
-//     chrome backgrounds.
+//   - **Selection highlight** — the row at the cursor renders in a warm yellow tint to stand
+//     out against arbitrarily-coloured skin chrome. No solid backdrop / row panel: the skin's
+//     authored chrome stays fully visible behind the list.
 //   - **Text resolver** — surfaces the *currently-highlighted* song's title / artist / genre /
 //     etc. via `text[].ref` so the skin's authored info panels reflect the live cursor.
 //   - **Keyboard navigation** — ArrowUp/Down (one row), PageUp/Down (10 rows), Home/End
@@ -67,18 +67,9 @@ const CENTRE_ROW_INDEX = Math.floor(VISIBLE_ROW_COUNT / 2);
 const SCROLL_TWEEN_RATE = 0.25;
 const SCROLL_SNAP_THRESHOLD = 0.005;
 
-/** Visual constants for the row backdrops + labels. */
+/** Padding inside the (now bg-less) list overlay area. Used by the row layout math. */
 const PANEL_PADDING_X = 14;
 const PANEL_PADDING_Y = 12;
-const PANEL_RADIUS = 10;
-const ROW_RADIUS = 6;
-const ROW_BG_ALPHA = 0.32;
-const ROW_BG_HIGHLIGHT_ALPHA = 0.78;
-const ROW_BG_FOLDER_TINT = 0x1d2c46;
-const ROW_BG_SONG_TINT = 0x14202f;
-const ROW_BG_HIGHLIGHT_TINT = 0xffe066;
-const PANEL_BG_TINT = 0x000000;
-const PANEL_BG_ALPHA = 0.55;
 
 export class PixiBeatorajaSelectScene implements PixiScene {
   readonly root = new Container();
@@ -92,17 +83,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * scene be usable in the meantime.
    */
   private readonly listLayer = new Container();
-  /** Semi-transparent rounded panel behind every row, painted before the per-row backgrounds. */
-  private readonly listPanel = new Graphics();
-  /** Per-row backgrounds (highlight when selected). `rowBackgrounds.length === VISIBLE_ROW_COUNT`. */
-  private readonly rowBackgrounds: Graphics[] = [];
-  /** Per-row label texts. Same length as {@link rowBackgrounds}. */
+  /** Per-row label texts. */
   private readonly rowLabels: Text[] = [];
   /** Per-row "kind icon" texts (folder ▸ vs song ♪). Length matches {@link rowLabels}. */
   private readonly rowKindIcons: Text[] = [];
   /** Per-row sub-label (artist / song count). Length matches {@link rowLabels}. */
   private readonly rowSublabels: Text[] = [];
-  /** Per-row click hit area. Sized to the row backdrop on layout. */
+  /** Per-row click hit area. Sized to the row's text band on layout. */
   private readonly rowHitAreas: Sprite[] = [];
 
   private readonly options: PixiBeatorajaSelectSceneOptions;
@@ -158,7 +145,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.root.addChild(this.view.container);
     this.listLayer.eventMode = 'static';
     this.root.addChild(this.listLayer);
-    this.listLayer.addChild(this.listPanel);
 
     this.buildRowVisuals(options.fonts);
     this.refreshEntries(options.initialIndex ?? 0);
@@ -412,12 +398,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const skinFamily = fonts?.values()[0]?.family;
     const fontFamily = skinFamily !== undefined ? `'${skinFamily}', sans-serif` : 'sans-serif';
     for (let i = 0; i < VISIBLE_ROW_COUNT; i += 1) {
-      // Background — drawn first so the labels paint on top.
-      const bg = new Graphics();
-      this.listLayer.addChild(bg);
-      this.rowBackgrounds.push(bg);
-
-      // Hit area sprite — invisible but interactive. Sized to match the row backdrop.
+      // Hit area sprite — invisible but interactive. Sized to the row's text band on layout.
       const hit = new Sprite({ texture: Texture.WHITE });
       hit.alpha = 0;
       hit.eventMode = 'static';
@@ -467,13 +448,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     for (let i = 0; i < VISIBLE_ROW_COUNT; i += 1) {
       const entryIndex = Math.round(centreEntry) + (i - CENTRE_ROW_INDEX);
       const entry = entryIndex >= 0 && entryIndex < total ? this.entries[entryIndex] : undefined;
-      const bg = this.rowBackgrounds[i]!;
       const icon = this.rowKindIcons[i]!;
       const label = this.rowLabels[i]!;
       const sub = this.rowSublabels[i]!;
       const hit = this.rowHitAreas[i]!;
       if (entry === undefined) {
-        bg.visible = false;
         icon.visible = false;
         label.visible = false;
         sub.visible = false;
@@ -481,7 +460,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         continue;
       }
       const isSelected = entryIndex === this.currentIndex;
-      bg.visible = true;
       icon.visible = true;
       label.visible = true;
       sub.visible = true;
@@ -516,8 +494,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const { width, height } = host.app.screen;
     if (width <= 0 || height <= 0) return;
 
-    // Right-half panel for the song bar list. The reference theme typically authors the song
-    // strip across the right ~40 % of the canvas; we mirror that.
+    // Right-half overlay for the song bar list. No panel rectangle is painted any more — the
+    // skin's authored chrome (banner / song-bar artwork / chart info) is what the user wants
+    // to see; an opaque overlay panel was hiding that. The list area's bounds still drive
+    // row positioning so the labels stay grouped on the right side of the canvas.
     const panelLeft = Math.floor(width * 0.5);
     const panelRight = Math.floor(width * 0.97);
     const panelWidth = Math.max(120, panelRight - panelLeft);
@@ -525,11 +505,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const panelBottom = Math.floor(height * 0.94);
     const panelHeight = Math.max(120, panelBottom - panelTop);
     const rowHeight = Math.max(28, Math.floor((panelHeight - PANEL_PADDING_Y * 2) / VISIBLE_ROW_COUNT));
-
-    this.listPanel
-      .clear()
-      .roundRect(panelLeft, panelTop, panelWidth, panelHeight, PANEL_RADIUS)
-      .fill({ color: PANEL_BG_TINT, alpha: PANEL_BG_ALPHA });
 
     const rowLeft = panelLeft + PANEL_PADDING_X;
     const rowWidth = panelWidth - PANEL_PADDING_X * 2;
@@ -539,23 +514,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const baseY = panelTop + PANEL_PADDING_Y + rowHeight / 2 - fractional * rowHeight;
 
     for (let i = 0; i < VISIBLE_ROW_COUNT; i += 1) {
-      const bg = this.rowBackgrounds[i]!;
       const hit = this.rowHitAreas[i]!;
       const icon = this.rowKindIcons[i]!;
       const label = this.rowLabels[i]!;
       const sub = this.rowSublabels[i]!;
-      if (!bg.visible) continue;
+      if (!label.visible) continue;
       const rowCentreY = baseY + (i - CENTRE_ROW_INDEX) * rowHeight;
       const rowTop = rowCentreY - rowHeight / 2 + 2;
       const rowH = rowHeight - 4;
 
       const isSelected = i === CENTRE_ROW_INDEX;
-      const entryIndex = Math.round(this.scrollPosition) + (i - CENTRE_ROW_INDEX);
-      const entry = this.entries[entryIndex];
-      const baseTint = entry?.kind === 'folder' ? ROW_BG_FOLDER_TINT : ROW_BG_SONG_TINT;
-      const tint = isSelected ? ROW_BG_HIGHLIGHT_TINT : baseTint;
-      const alpha = isSelected ? ROW_BG_HIGHLIGHT_ALPHA : ROW_BG_ALPHA;
-      bg.clear().roundRect(rowLeft, rowTop, rowWidth, rowH, ROW_RADIUS).fill({ color: tint, alpha });
 
       hit.x = rowLeft;
       hit.y = rowTop;
@@ -566,16 +534,18 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const iconX = rowLeft + 12;
       icon.x = iconX;
       icon.y = rowCentreY;
-      icon.tint = isSelected ? 0x000000 : 0xffffff;
+      // No backdrop now — selected row uses a warm yellow tint to stand out against
+      // arbitrarily-coloured skin chrome; non-selected stays plain white.
+      icon.tint = isSelected ? 0xffe066 : 0xffffff;
 
       const labelX = iconX + 24;
       label.x = labelX;
       label.y = rowCentreY - 2;
-      label.tint = isSelected ? 0x000000 : 0xffffff;
+      label.tint = isSelected ? 0xffe066 : 0xffffff;
 
       sub.x = labelX;
       sub.y = rowCentreY + (label.style.fontSize as number) * 0.55;
-      sub.tint = isSelected ? 0x222222 : 0xc0d0ff;
+      sub.tint = isSelected ? 0xffe066 : 0xc0d0ff;
     }
   }
 
