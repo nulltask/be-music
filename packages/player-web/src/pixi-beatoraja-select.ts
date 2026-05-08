@@ -67,9 +67,18 @@ const CENTRE_ROW_INDEX = Math.floor(VISIBLE_ROW_COUNT / 2);
 const SCROLL_TWEEN_RATE = 0.25;
 const SCROLL_SNAP_THRESHOLD = 0.005;
 
-/** Padding inside the (now bg-less) list overlay area. Used by the row layout math. */
+/** Padding inside the list overlay area. Drives the row layout math. */
 const PANEL_PADDING_X = 14;
-const PANEL_PADDING_Y = 12;
+
+/**
+ * Per-row vertical span in screen pixels. Beatoraja's reference + GdbG `bar-select`
+ * destinations sit around 75px tall in a 1080-tall skin canvas, giving roughly 56px on a 1×
+ * letterboxed render at 1080p. We pin this to a fixed screen-pixel value rather than deriving
+ * from canvas height — the labels are screen-space `Text` nodes whose font size doesn't scale
+ * with canvas resolution, so an auto-derived `panelHeight / VISIBLE_ROW_COUNT` ballooned to
+ * ~146px on 4K displays and made the list dominate the chrome.
+ */
+const ROW_HEIGHT_PX = 56;
 
 export class PixiBeatorajaSelectScene implements PixiScene {
   readonly root = new Container();
@@ -498,20 +507,26 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // skin's authored chrome (banner / song-bar artwork / chart info) is what the user wants
     // to see; an opaque overlay panel was hiding that. The list area's bounds still drive
     // row positioning so the labels stay grouped on the right side of the canvas.
+    //
+    // Vertical anchor: GdbG_Skin authors `bar-select` at `y = 670, h = 75` in a 1080-tall skin
+    // canvas (Pixi y ≈ 373 — slightly above geometric centre, which feels right for a song
+    // bar list). We want the focused row to land near that visual zone. Centring at
+    // `height * 0.42` is close enough to a 1080-canvas's authored 373 / 1080 ≈ 0.345 ratio
+    // while staying readable on shorter / taller viewports.
     const panelLeft = Math.floor(width * 0.5);
     const panelRight = Math.floor(width * 0.97);
     const panelWidth = Math.max(120, panelRight - panelLeft);
-    const panelTop = Math.floor(height * 0.06);
-    const panelBottom = Math.floor(height * 0.94);
-    const panelHeight = Math.max(120, panelBottom - panelTop);
-    const rowHeight = Math.max(28, Math.floor((panelHeight - PANEL_PADDING_Y * 2) / VISIBLE_ROW_COUNT));
+    const focusedRowCentreY = Math.floor(height * 0.42);
+    const rowHeight = ROW_HEIGHT_PX;
 
     const rowLeft = panelLeft + PANEL_PADDING_X;
     const rowWidth = panelWidth - PANEL_PADDING_X * 2;
     // Fractional cursor offset (the scroll tween's residual). Pixels to slide every row by so
     // an in-flight tween shows a sub-row scroll instead of jumping a whole row at the snap.
+    // `baseY` is the focused-row centre Y (where row `CENTRE_ROW_INDEX` lands). Other rows
+    // fan out via `(i - CENTRE_ROW_INDEX) * rowHeight`.
     const fractional = this.scrollPosition - Math.round(this.scrollPosition);
-    const baseY = panelTop + PANEL_PADDING_Y + rowHeight / 2 - fractional * rowHeight;
+    const baseY = focusedRowCentreY - fractional * rowHeight;
 
     for (let i = 0; i < VISIBLE_ROW_COUNT; i += 1) {
       const hit = this.rowHitAreas[i]!;
