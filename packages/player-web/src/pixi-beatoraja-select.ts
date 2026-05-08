@@ -247,6 +247,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    */
   private readonly favoriteSongs = new Set<string>();
   private readonly favoriteCharts = new Set<string>();
+  /**
+   * Global LN-mode override. When `undefined`, the focused chart's authored `#LNMODE` (or 0 =
+   * LN by default) drives the `lnmodeset` imageset. When set via the skin's LNMODE click
+   * (act=308), takes precedence — beatoraja's reference behaviour: the player picks "I want
+   * to play this chart as LN / CN / HCN" and the engine reinterprets long-note pairs at the
+   * new mode at gameplay time.
+   */
+  private lnModeOverride: 0 | 1 | 2 | undefined;
   private disposed = false;
 
   constructor(options: PixiBeatorajaSelectSceneOptions) {
@@ -763,10 +771,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       return keymodeImagesetIndex(safeResolveChartVariant(song));
     }
     if (refOp === SELECT_REF_LNMODE_INDEX) {
-      // 0 = LN, 1 = CN (charge note), 2 = HCN (hell charge note). Default skin's `lnmodeset`
-      // imageset declares `divy:3, len:3` — three sub-images keyed to the chart's `#LNMODE`.
-      // BMS files that don't author the directive default to 0 (LN), matching beatoraja's
-      // own fallback for pre-LNMODE charts.
+      // 0 = LN, 1 = CN (charge note), 2 = HCN (hell charge note). User's LNMODE-button click
+      // override (act=308) wins; otherwise fall back to the focused chart's authored `#LNMODE`
+      // (or 0 for legacy BMS that didn't author the directive).
+      if (this.lnModeOverride !== undefined) return this.lnModeOverride;
       const song = this.focusedSong();
       const lnMode = song?.chart.bms?.lnMode;
       if (typeof lnMode === 'number' && lnMode >= 0 && lnMode <= 2) return lnMode;
@@ -810,6 +818,22 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       option: { ...config.option },
       file: { ...config.file },
     };
+  }
+
+  /**
+   * Cycle the global LN-mode override forward (`step = +1`) or backward (`-1`). Starts from
+   * the focused chart's authored `#LNMODE` when no override is set yet so the first click
+   * advances from "LN" → "CN" rather than reverting an unset state. Wraps at 0..2.
+   */
+  private cycleLnModeOverride(step: number): void {
+    const song = this.focusedSong();
+    const authored = song?.chart.bms?.lnMode;
+    const current =
+      this.lnModeOverride ?? (typeof authored === 'number' && authored >= 0 && authored <= 2 ? authored : 0);
+    const next = (((current + step) % 3) + 3) % 3;
+    this.lnModeOverride = next as 0 | 1 | 2;
+    // eslint-disable-next-line no-console
+    console.log('[beatoraja-select] act=308 LNMODE cycled', JSON.stringify({ from: current, to: next }));
   }
 
   /**
@@ -904,6 +928,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         return;
       case 74: // JUDGE_TIMING — adjust note offset by ±1 ms (Shift = decrement). Wraps at ±200.
         this.adjustJudgeTiming(modifiers?.shift === true ? -1 : 1);
+        return;
+      case 308: // LNMODE — cycle 0 → 1 → 2 → 0 (LN / CN / HCN). Shift cycles in reverse.
+        this.cycleLnModeOverride(modifiers?.shift === true ? -1 : 1);
         return;
       default:
         // eslint-disable-next-line no-console
