@@ -96,6 +96,17 @@ export interface PixiBeatorajaGameplayViewOptions {
    * never disposes the textures.
    */
   bgaTextures?: ReadonlyMap<string, Texture>;
+  /**
+   * Pre-decoded chart imagery for the synthetic-id slots `-100 STAGEFILE` / `-101 BACKBMP` /
+   * `-102 BANNER`. ModernChic's `Play/lua/sp/cover.lua` paints the stagefile as the lane-cover
+   * backing; default's `play_parts.lua` references `-100` for "loading" chrome. Missing entries
+   * hide the matching destinations.
+   */
+  chartImages?: {
+    stageFile?: Texture;
+    backBmp?: Texture;
+    banner?: Texture;
+  };
   /** Chart-time BGA cues from `buildBgaTimeline(chart, resolver)`. Required when {@link bgaTextures} is set. */
   bgaCues?: { base: ReadonlyArray<BgaCue>; layer: ReadonlyArray<BgaCue>; poor: ReadonlyArray<BgaCue> };
 
@@ -228,6 +239,10 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveBpmGraphPoints: () => this.chartBpmCurve,
       resolveJudgeGraphBars: (type) => this.adapter.resolveJudgeGraphBars(type),
       resolveTimingSamples: () => this.adapter.resolveTimingSamples(),
+      // Chart-image synthetic ids (-100 STAGEFILE / -101 BACKBMP / -102 BANNER). ModernChic
+      // uses STAGEFILE under the lane cover; default skin's loading panel anchors on it too.
+      // Missing entries return undefined → matching destinations stay hidden.
+      chartImageProvider: (id) => resolveChartImage(this.options.chartImages, id),
     });
     // Backdrop sits behind the skin container so the letterbox bars are filled with a stable color
     // instead of leaking the page's CSS background through.
@@ -471,6 +486,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveBpmGraphPoints: () => this.chartBpmCurve,
       resolveJudgeGraphBars: (type) => this.adapter.resolveJudgeGraphBars(type),
       resolveTimingSamples: () => this.adapter.resolveTimingSamples(),
+      chartImageProvider: (id) => resolveChartImage(this.options.chartImages, id),
     });
     const noteImageMap = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(opts.skin.image)) {
@@ -687,4 +703,29 @@ function insertNoteAndMarkerLayers(
   const index = view.noteLayerInsertIndex;
   view.container.addChildAt(markerLayer.container, index);
   view.container.addChildAt(noteLayer.container, index + 1);
+}
+
+/**
+ * Map a synthetic chart-image id (`-100` STAGEFILE / `-101` BACKBMP / `-102` BANNER) onto
+ * the host-supplied texture. Returns `undefined` for unknown ids OR when the host didn't
+ * supply a texture for that slot — the renderer hides the destination in that case. Same
+ * shape as the resolver in `pixi-beatoraja-decide.ts`; lifted here so play scenes that
+ * authored chart-image destinations (ModernChic's lane-cover backing, default's loading
+ * panel) render correctly.
+ */
+function resolveChartImage(
+  images: PixiBeatorajaGameplayViewOptions['chartImages'] | undefined,
+  syntheticId: number,
+): Texture | undefined {
+  if (images === undefined) return undefined;
+  switch (syntheticId) {
+    case -100:
+      return images.stageFile;
+    case -101:
+      return images.backBmp;
+    case -102:
+      return images.banner;
+    default:
+      return undefined;
+  }
 }

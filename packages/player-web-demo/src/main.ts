@@ -1687,6 +1687,12 @@ class PlayerWebDemoApp {
     }
     this.beatorajaGameplayPrep = prep;
 
+    // Decode the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps so play-scene destinations
+    // referencing the synthetic ids (-100 / -101 / -102) can paint them. ModernChic's lane
+    // cover uses the stagefile as a frosted backdrop; default skin's loading panel anchors
+    // on it during the intro chrome.
+    const chartImages = await this.loadBeatorajaChartImages(song);
+
     // 4. Mount the gameplay view.
     this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
       skin: skinLoad.skin,
@@ -1699,6 +1705,7 @@ class PlayerWebDemoApp {
       mode: (overrides.autoPlay ?? this.guiState.autoPlay) ? 'auto' : 'manual',
       bgaTextures: prep.bga.textures,
       bgaCues: prep.bga.cues,
+      chartImages,
       // Directory label drives `BEATORAJA_TEXT.DIRECTORY = 1000` on the play scene. The browser
       // song entry preserves the parent folder name through the dropped collection.
       directoryLabel: song.directoryLabel,
