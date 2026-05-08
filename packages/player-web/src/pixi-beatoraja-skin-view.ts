@@ -1813,7 +1813,7 @@ export class BeatorajaPlaySkinView {
       graphics.visible = false;
       return;
     }
-    const signature = `${bars.length}|${max}|${bars.join(',')}`;
+    const signature = `${bars.length}|${max}|${bars.join(',')}|${entry.element.backTexOff}`;
     if (signature !== entry.lastSignature) {
       graphics.clear();
       const barCount = bars.length;
@@ -1822,6 +1822,21 @@ export class BeatorajaPlaySkinView {
       // slot width matches the look of beatoraja's reference judgegraph (which strokes thin
       // tinted lines per bar).
       const gap = barWidth * 0.1;
+      // Background "guide" panel — beatoraja's `backTexOff = 0` (the default) means draw a
+      // faint full-height panel BEHIND each bar so the player can read each value as a
+      // fraction of the box at a glance. `backTexOff = 1` skips the panel entirely. ModernChic
+      // explicitly authors `backTexOff = MAIN.JUDGEGRAPH.BACKTEX.OFF` (= 0) to opt INTO the
+      // backdrop on its play info pane.
+      const drawBackdrop = entry.element.backTexOff === 0;
+      if (drawBackdrop) {
+        for (let i = 0; i < barCount; i += 1) {
+          const x = i * barWidth + gap / 2;
+          const w = barWidth - gap;
+          graphics.rect(x, 0, w, props.height);
+        }
+        graphics.fill({ color: 0xffffff, alpha: 0.18 });
+      }
+      // Foreground bars — drawn AFTER the backdrop so they paint on top.
       for (let i = 0; i < barCount; i += 1) {
         const v = Number.isFinite(bars[i]) ? Math.max(0, bars[i]!) : 0;
         if (v <= 0) continue;
