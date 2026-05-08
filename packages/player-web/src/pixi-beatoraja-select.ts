@@ -653,6 +653,15 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         return resolveBpmRange(song)?.min;
       case BEATORAJA_NUM.PLAYLEVEL:
         return resolvePlayLevel(song.playLevel);
+      // JUDGETIMING (note offset in ms) — sourced from `skin_config.offset`. The default skin
+      // surfaces it as a small readout next to the option panel; user adjustments via the
+      // bottom-right "Note offset (ms)" slider should reflect live. Returns 0 when the config
+      // wasn't supplied or when offset is not a number (legacy `BeatorajaLuaSkinConfig` widened
+      // `offset` to a number-or-table union — only the number case is the offset readout).
+      case BEATORAJA_NUM.JUDGETIMING: {
+        const offset = this.options.skinConfig?.offset;
+        return typeof offset === 'number' && Number.isFinite(offset) ? offset : 0;
+      }
       // Song length minutes / seconds (refs 1163 / 1164). Computed once per song from BPM
       // segments + STOP events. Authors typically place these next to each other so the panel
       // reads "M:SS" — the seconds value is `floor(totalSeconds) % 60`, NOT the fractional
