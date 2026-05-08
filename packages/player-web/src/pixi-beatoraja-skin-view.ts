@@ -746,6 +746,28 @@ export class BeatorajaPlaySkinView {
         songListAnchorIndex = this.container.children.length;
         continue;
       }
+      // Synthetic image ids — beatoraja's renderer treats these as virtual images that don't
+      // need a `source[]` declaration. Skin authors reference them directly:
+      //   -110 BLACK — solid black panel (transitions / overlays / "letterbox-style" frames).
+      //   -100 STAGEFILE / -101 BACKBMP / -102 BANNER are wired separately when chart imagery
+      //     is available (see the host scene's `chartImageProvider` resolver).
+      // Without virtual handling, these destinations get filtered as "no matching image" and
+      // never render. ModernChic's decide pane authors a -110 panel that fades to fullscreen
+      // on FADEOUT — without this, the chart's stagefile bleeds through the overlay.
+      if (group.id === SYNTHETIC_IMAGE_BLACK_ID) {
+        const sprite = new Sprite({ texture: ensureBlackTexture(), alpha: 0 });
+        this.container.addChild(sprite);
+        this.entries.push({
+          kind: 'image',
+          group,
+          image: SYNTHETIC_BLACK_IMAGE,
+          baseTexture: ensureBlackTexture(),
+          sprite,
+          currentFrame: 0,
+          lastDisapearRatio: 1,
+        });
+        continue;
+      }
       const image = imageById.get(group.id);
       if (image === undefined) {
         const valueElement = valueById.get(group.id);
@@ -2347,6 +2369,63 @@ function computeDisapearVisibleRatio(
   if (linePixi <= props.y) return 0; // Entire rect below the line — nothing visible.
   if (linePixi >= props.y + props.height) return 1; // Line above the rect's bottom — full draw.
   return (linePixi - props.y) / props.height;
+}
+
+/**
+ * Synthetic image id `-110` BLACK — beatoraja's renderer recognises it as a virtual solid-black
+ * panel. Skin authors reference it directly in `destination[]` for transition overlays / panel
+ * backings without bundling a black PNG.
+ */
+const SYNTHETIC_IMAGE_BLACK_ID = -110;
+
+/**
+ * `BeatorajaImageElement` shape for the synthetic black panel. The `src` is irrelevant since we
+ * supply the texture directly (1×1 black canvas via `ensureBlackTexture`); the `w / h` need to
+ * be `1 × 1` so the destination's cell-cropping math leaves the texture intact.
+ */
+const SYNTHETIC_BLACK_IMAGE: BeatorajaImageElement = {
+  id: SYNTHETIC_IMAGE_BLACK_ID,
+  src: 0,
+  x: 0,
+  y: 0,
+  w: 1,
+  h: 1,
+  divx: 1,
+  divy: 1,
+  timer: 0,
+  cycle: 0,
+  ref: 0,
+  len: 0,
+  act: 0,
+  disapearLine: -1,
+  isDisapearLineLinkLift: false,
+  ifCodes: [],
+};
+
+/**
+ * Module-singleton 1×1 black texture. Built lazily on first use so headless test environments
+ * (no `document`) can construct `BeatorajaPlaySkinView` without crashing — they fall back to
+ * `Texture.EMPTY` (renders as transparent, which still keeps the rest of the scene functional).
+ */
+let blackTextureCache: Texture | undefined;
+function ensureBlackTexture(): Texture {
+  if (blackTextureCache !== undefined) return blackTextureCache;
+  if (typeof document === 'undefined') {
+    blackTextureCache = Texture.EMPTY;
+    return blackTextureCache;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) {
+    blackTextureCache = Texture.EMPTY;
+    return blackTextureCache;
+  }
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, 1, 1);
+  blackTextureCache = Texture.from(canvas);
+  return blackTextureCache;
 }
 
 /**
