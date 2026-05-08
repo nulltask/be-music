@@ -455,6 +455,21 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       return parent?.songs.length;
     }
 
+    // Wall-clock readouts (`time_year/month/day/hour/minute/second`, refs 21-26). The default
+    // skin authors these as `value[]` with `ref:21..` for the corner clock display; ModernChic
+    // / GdbG also surface them somewhere in the chrome. They're independent of the focused
+    // song so they resolve BEFORE the `focusedSong()` early-return — without that, the clock
+    // freezes whenever the cursor is on a non-song row (folder, empty list, etc.).
+    switch (refOp) {
+      case BEATORAJA_NUM.TIME_YEAR:
+      case BEATORAJA_NUM.TIME_MONTH:
+      case BEATORAJA_NUM.TIME_DAY:
+      case BEATORAJA_NUM.TIME_HOUR:
+      case BEATORAJA_NUM.TIME_MINUTE:
+      case BEATORAJA_NUM.TIME_SECOND:
+        return resolveWallClockField(refOp);
+    }
+
     const song = this.focusedSong();
     if (song === undefined) return undefined;
     switch (refOp) {
@@ -913,6 +928,31 @@ function safeResolveChartVariant(song: BrowserSongEntry): '5' | '7' | '9' | '10'
     return resolveChartPlayVariant(song);
   } catch {
     return undefined;
+  }
+}
+
+/**
+ * Resolve one wall-clock field — picks the right `Date` accessor for the given `BEATORAJA_NUM`
+ * `TIME_*` ref. Reads `Date.now()` per call so the seconds tick live as the renderer re-samples
+ * each frame. Months are 1-indexed (skin authors expect "1..12", not the JS `0..11`).
+ */
+function resolveWallClockField(refOp: number): number | undefined {
+  const now = new Date();
+  switch (refOp) {
+    case BEATORAJA_NUM.TIME_YEAR:
+      return now.getFullYear();
+    case BEATORAJA_NUM.TIME_MONTH:
+      return now.getMonth() + 1;
+    case BEATORAJA_NUM.TIME_DAY:
+      return now.getDate();
+    case BEATORAJA_NUM.TIME_HOUR:
+      return now.getHours();
+    case BEATORAJA_NUM.TIME_MINUTE:
+      return now.getMinutes();
+    case BEATORAJA_NUM.TIME_SECOND:
+      return now.getSeconds();
+    default:
+      return undefined;
   }
 }
 
