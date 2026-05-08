@@ -97,6 +97,13 @@ const SELECT_NUM_BMS_TOTAL = 368;
 const SELECT_REF_KEYMODE_INDEX = 11;
 
 /**
+ * Imageset ref 308 — the focused chart's `#LNMODE` (long-note variant: 0=LN, 1=CN, 2=HCN).
+ * Default skin's `lnmodeset` imageset shows the matching label. Charts without an explicit
+ * `#LNMODE` directive default to 0 (LN), matching beatoraja's pre-LNMODE fallback.
+ */
+const SELECT_REF_LNMODE_INDEX = 308;
+
+/**
  * Per-kind note-count refs (ModernChic's `bmsanalysis.lua` block):
  *
  *   - `350` TOTALNOTE_NORMAL — playable taps minus scratch / LN / BSS.
@@ -711,6 +718,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const song = this.focusedSong();
       if (song === undefined) return 0;
       return keymodeImagesetIndex(safeResolveChartVariant(song));
+    }
+    if (refOp === SELECT_REF_LNMODE_INDEX) {
+      // 0 = LN, 1 = CN (charge note), 2 = HCN (hell charge note). Default skin's `lnmodeset`
+      // imageset declares `divy:3, len:3` — three sub-images keyed to the chart's `#LNMODE`.
+      // BMS files that don't author the directive default to 0 (LN), matching beatoraja's
+      // own fallback for pre-LNMODE charts.
+      const song = this.focusedSong();
+      const lnMode = song?.chart.bms?.lnMode;
+      if (typeof lnMode === 'number' && lnMode >= 0 && lnMode <= 2) return lnMode;
+      return 0;
     }
     return 0;
   }
