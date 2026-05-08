@@ -178,3 +178,59 @@ export function resolveSourcePath(
   }
   return resolveBeatorajaPath(files, entryPath, sourcePath);
 }
+
+/**
+ * Build a parenthesized diagnostic suffix explaining WHY a wildcard expansion returned nothing.
+ * The unresolved-source warning concatenates this onto the user-facing message so the next
+ * reproduction is self-diagnostic — the warning alone tells the user whether their drop is
+ * missing the directory entirely vs. the basename pattern just doesn't match.
+ *
+ * Output shape, joined by `; ` inside parentheses:
+ *
+ *   - " (resolved dir: <abs>; <N> files under that dir; closest siblings: a, b, c)"
+ *
+ * `closest siblings` lists up to 3 lexicographically-earliest entries inside the resolved
+ * directory. Bounded so a directory with hundreds of assets doesn't dominate the log line.
+ *
+ * Returns the empty string when the input path doesn't include a wildcard — callers should
+ * gate on that themselves, but the no-op fallback keeps the helper safe to use unconditionally.
+ */
+export function describeMissingWildcardDirectory(
+  files: ReadonlyMap<string, BeatorajaSkinFileEntry>,
+  entryPath: string,
+  relative: string,
+): string {
+  if (!relative.includes('*')) return '';
+  const baseDir = dirname(normalizePath(entryPath));
+  const fullGlob = baseDir.length > 0 ? `${baseDir}/${relative}` : relative;
+  const normalizedGlob = normalizePath(fullGlob);
+  const slashIdx = normalizedGlob.lastIndexOf('/');
+  const dirPart = slashIdx >= 0 ? normalizedGlob.slice(0, slashIdx) : '';
+  const dirPartLower = dirPart.toLowerCase();
+  const insidePrefix = `${dirPartLower}/`;
+
+  const insideDir: string[] = [];
+  for (const key of files.keys()) {
+    const lower = key.toLowerCase();
+    const lastSlash = lower.lastIndexOf('/');
+    const keyDir = lastSlash >= 0 ? lower.slice(0, lastSlash) : '';
+    // Files DIRECTLY under the resolved directory; we deliberately don't recurse — the wildcard
+    // matcher itself doesn't recurse, so deeper files aren't relevant to this diagnostic.
+    if (keyDir === dirPartLower) insideDir.push(key);
+  }
+
+  // Count any entry whose path falls under the resolved directory tree (recursive). Useful
+  // when the basename pattern fails but the directory clearly exists with neighboring assets.
+  let underTree = 0;
+  for (const key of files.keys()) {
+    const lower = key.toLowerCase();
+    if (lower === dirPartLower || lower.startsWith(insidePrefix)) underTree += 1;
+  }
+
+  if (insideDir.length === 0 && underTree === 0) {
+    return ` (search dir '${dirPart}' absent from drop)`;
+  }
+  insideDir.sort();
+  const sample = insideDir.slice(0, 3).map((p) => p.slice(p.lastIndexOf('/') + 1));
+  return ` (search dir '${dirPart}'; ${insideDir.length} sibling file(s), ${underTree} entries under tree; samples: ${sample.join(', ')})`;
+}

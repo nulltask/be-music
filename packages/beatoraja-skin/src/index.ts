@@ -133,6 +133,7 @@ export type {
 export { normalizeBeatorajaPmCharas } from './beatoraja-skin-pmchara.ts';
 export {
   buildDefaultSkinConfigFiles,
+  describeMissingWildcardDirectory,
   expandBeatorajaWildcard,
   resolveBeatorajaPath,
   resolveSourcePath,

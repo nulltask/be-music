@@ -8,7 +8,7 @@
 import { dirname, normalizePath } from '@be-music/utils/core';
 import { asLoadedBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
 import type { BeatorajaSkinFileEntry } from './file-lookup.ts';
-import { resolveSourcePath } from './beatoraja-skin-resolver.ts';
+import { describeMissingWildcardDirectory, resolveSourcePath } from './beatoraja-skin-resolver.ts';
 import type {
   BeatorajaSkinFilepath,
   BeatorajaSkinSource,
@@ -77,13 +77,18 @@ export function bundleBeatorajaSources(options: BundleBeatorajaSourcesOptions): 
       options.filepathSchema,
     );
     if (resolved === undefined) {
-      unresolved.push({
-        id: source.id,
-        path: source.path,
-        reason: source.path.includes('*')
-          ? `no files matched wildcard '${source.path}'`
-          : `file not found: '${source.path}'`,
-      });
+      // For wildcard misses, append the resolved search directory + how many entries the file
+      // map has anywhere under that directory. This distinguishes the three failure modes the
+      // user typically hits:
+      //   - "search directory absent from drop"  → 0 nearby entries
+      //   - "directory present but no `.png`s"   → N nearby entries, none matching the basename
+      //   - "directory present, basename mismatch (typo / case)" → N nearby entries, hint at a sibling
+      // Without the breadcrumb the warning just says "no files matched wildcard" and the user
+      // can't tell which scenario they're in.
+      const reason = source.path.includes('*')
+        ? `no files matched wildcard '${source.path}'${describeMissingWildcardDirectory(options.files, options.entryPath, source.path)}`
+        : `file not found: '${source.path}'`;
+      unresolved.push({ id: source.id, path: source.path, reason });
       continue;
     }
 

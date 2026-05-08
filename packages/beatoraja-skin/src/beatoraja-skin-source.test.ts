@@ -73,7 +73,32 @@ describe('bundleBeatorajaSources', () => {
     expect(bundle.assets).toEqual([]);
     expect(bundle.unresolved).toHaveLength(2);
     expect(bundle.unresolved[0].reason).toMatch(/file not found/);
-    expect(bundle.unresolved[1].reason).toMatch(/wildcard/);
+    // Wildcard miss reason now carries a diagnostic suffix so the user can tell at a glance
+    // whether the directory exists or is missing entirely from their drop. With NO file under
+    // the resolved directory, the suffix declares it absent.
+    expect(bundle.unresolved[1].reason).toMatch(/wildcard 'play\/missing\/\*\.png'/);
+    expect(bundle.unresolved[1].reason).toContain("absent from drop");
+  });
+
+  it('annotates the wildcard miss with sibling files when the directory exists', () => {
+    // Mirrors the ModernChic-style scenario: directory IS in the drop with neighboring assets,
+    // but the basename pattern fails (typo, wrong extension, etc.). The diagnostic should hint
+    // at a few siblings so the user can spot the bug without dumping the whole bundle.
+    const files = makeFiles([
+      ['ModernChic/play7_hw.luaskin', '{}'],
+      ['ModernChic/Play/parts/common/bg/blue.png', ''],
+      ['ModernChic/Play/parts/common/bg/gray.png', ''],
+    ]);
+    const bundle = bundleBeatorajaSources({
+      files,
+      entryPath: 'ModernChic/play7_hw.luaskin',
+      sources: [{ id: 3, path: 'Play/parts/common/bg/*.jpg' }],
+    });
+    expect(bundle.unresolved).toHaveLength(1);
+    const reason = bundle.unresolved[0].reason;
+    expect(reason).toContain("search dir 'ModernChic/Play/parts/common/bg'");
+    expect(reason).toContain('2 sibling file(s)');
+    expect(reason).toContain('samples: blue.png, gray.png');
   });
 
   it('drops malformed entries (missing id or path)', () => {

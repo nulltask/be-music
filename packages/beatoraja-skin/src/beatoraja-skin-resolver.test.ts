@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDefaultSkinConfigFiles,
+  describeMissingWildcardDirectory,
   expandBeatorajaWildcard,
   resolveBeatorajaPath,
   resolveSourcePath,
@@ -209,5 +210,46 @@ describe('buildDefaultSkinConfigFiles', () => {
         'skin/play.json',
       ),
     ).toEqual({});
+  });
+});
+
+describe('describeMissingWildcardDirectory', () => {
+  it("flags the directory as absent when no entries live under it", () => {
+    // Most common scenario: the user's drop just doesn't include the directory the wildcard
+    // references — the warning needs to call this out plainly so the user knows to re-drop.
+    const files = makeFiles([
+      ['ModernChic/play7_hw.luaskin', '{}'],
+      ['ModernChic/play7_hw.lua', ''],
+    ]);
+    expect(
+      describeMissingWildcardDirectory(files, 'ModernChic/play7_hw.luaskin', 'Play/parts/common/bg/*.png'),
+    ).toBe(" (search dir 'ModernChic/Play/parts/common/bg' absent from drop)");
+  });
+
+  it("lists sibling files when the directory exists but the basename pattern doesn't match", () => {
+    // The directory IS in the drop but the wildcard's basename pattern is wrong (typo, wrong
+    // extension, etc). The diagnostic shows up to 3 siblings so the user can spot the bug.
+    const files = makeFiles([
+      ['ModernChic/play7_hw.luaskin', '{}'],
+      ['ModernChic/Play/parts/common/bg/blue.png', ''],
+      ['ModernChic/Play/parts/common/bg/gray.png', ''],
+      ['ModernChic/Play/parts/common/bg/red.png', ''],
+      ['ModernChic/Play/parts/common/bg/notes.txt', ''],
+    ]);
+    const out = describeMissingWildcardDirectory(
+      files,
+      'ModernChic/play7_hw.luaskin',
+      'Play/parts/common/bg/*.jpg',
+    );
+    expect(out).toContain("search dir 'ModernChic/Play/parts/common/bg'");
+    expect(out).toContain('4 sibling file(s)');
+    expect(out).toContain('samples: blue.png, gray.png, notes.txt');
+  });
+
+  it('returns an empty suffix when the path has no wildcard', () => {
+    // Defensive: helpers that wrap us shouldn't have to gate on wildcard presence themselves.
+    expect(
+      describeMissingWildcardDirectory(makeFiles([]), 'skin/play.json', 'system.png'),
+    ).toBe('');
   });
 });

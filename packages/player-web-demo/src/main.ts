@@ -1491,7 +1491,7 @@ class PlayerWebDemoApp {
         .filter((s): s is string => s !== null)
         .join('+');
       dropLog.info(
-        `beatoraja theme loaded · play=${summary}${sceneSummary ? ` · scenes=${sceneSummary}` : ''}${
+        `beatoraja theme loaded · files=${bundle.files.size} · play=${summary}${sceneSummary ? ` · scenes=${sceneSummary}` : ''}${
           bundle.warnings.length > 0 ? ` · warnings=${bundle.warnings.length}` : ''
         }`,
       );
