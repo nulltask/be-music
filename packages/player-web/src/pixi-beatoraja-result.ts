@@ -448,6 +448,23 @@ export class PixiBeatorajaResultScene implements PixiScene {
       case BEATORAJA_NUM.POOR_PLUS_MISS:
         return summary.poor;
 
+      // ─── Timing statistics (374-377) — computed from the run's timingHistory ───────────
+      // GdbG_Skin authors `Avg N ms` / `Stdev N ms` labels from these refs; ModernChic uses
+      // them on its impression / centerinfo panes. Computed once via a memoized helper so the
+      // ms-pass-through doesn't recompute the stddev every frame.
+      case BEATORAJA_NUM.AVERAGE_TIMING:
+        return Math.floor(Math.abs(this.cachedTimingStats().mean));
+      case BEATORAJA_NUM.AVERAGE_TIMING_AFTERDOT: {
+        const mean = Math.abs(this.cachedTimingStats().mean);
+        return Math.floor((mean - Math.floor(mean)) * 100);
+      }
+      case BEATORAJA_NUM.STDDEV_TIMING:
+        return Math.floor(this.cachedTimingStats().stddev);
+      case BEATORAJA_NUM.STDDEV_TIMING_AFTERDOT: {
+        const stddev = this.cachedTimingStats().stddev;
+        return Math.floor((stddev - Math.floor(stddev)) * 100);
+      }
+
       // ─── Best-record / target / IR — no live data, return 0 to silence "ref not wired" ──
       // The result skin authors a lot of "vs best" / "vs target" slots; without a DB layer they
       // all stay at 0. Returning 0 (not undefined) keeps the readouts visually present and the
@@ -456,6 +473,33 @@ export class PixiBeatorajaResultScene implements PixiScene {
         return 0;
     }
   }
+
+  /**
+   * Mean / stddev of the run's `timingHistory` deltas (positive = late, negative = early).
+   * Cached on first call — both stats are stable for the run's lifetime so per-frame resolves
+   * stay O(1). Empty history returns `{mean: 0, stddev: 0}` — matches beatoraja's "no data"
+   * behaviour where the stat readouts sit at 0.
+   */
+  private cachedTimingStats(): { mean: number; stddev: number } {
+    if (this.timingStatsCache !== undefined) return this.timingStatsCache;
+    const samples = this.options.timingHistory;
+    if (samples === undefined || samples.length === 0) {
+      this.timingStatsCache = { mean: 0, stddev: 0 };
+      return this.timingStatsCache;
+    }
+    let sum = 0;
+    for (const s of samples) sum += s.deltaMs;
+    const mean = sum / samples.length;
+    let sqSum = 0;
+    for (const s of samples) {
+      const d = s.deltaMs - mean;
+      sqSum += d * d;
+    }
+    const stddev = Math.sqrt(sqSum / samples.length);
+    this.timingStatsCache = { mean, stddev };
+    return this.timingStatsCache;
+  }
+  private timingStatsCache: { mean: number; stddev: number } | undefined;
 
   /**
    * Result-scene graph-value resolver. Surfaces the run's frozen ratios — gauge percent, score

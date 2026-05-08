@@ -897,6 +897,20 @@ export const BEATORAJA_NUM = {
    * surface it through `value[]` ref 368. Sourced from `chart.metadata.total`.
    */
   BMS_TOTAL: 368,
+  /**
+   * Result-scene timing-statistics block (374-377). GdbG_Skin's result authors
+   * `Avg X ms` / `Stdev X ms` text labels backed by these refs. ModernChic surfaces them on
+   * its impression panel.
+   *
+   * The split between integer (`AVERAGE_TIMING`) and the post-decimal helper
+   * (`AVERAGE_TIMING_AFTERDOT`) lets skins compose `M.NN` displays from two digit strips.
+   * Negative deltas (= early on net) get flipped to positive on the readout — beatoraja
+   * convention is to show magnitude, with the sign communicated through label icons.
+   */
+  AVERAGE_TIMING: 374,
+  AVERAGE_TIMING_AFTERDOT: 375,
+  STDDEV_TIMING: 376,
+  STDDEV_TIMING_AFTERDOT: 377,
 
   // ─── ModernChic-extended duration / green-number variants (1312-1327) ────────────────────
   // The "white number" (= visual scroll time, ms-to-traverse) and "green number" (= BPM-
