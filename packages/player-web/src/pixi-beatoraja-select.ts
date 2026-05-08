@@ -502,11 +502,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       case BEATORAJA_NUM.MAINBPM:
       case BEATORAJA_NUM.NOWBPM:
         return song.bpm !== undefined ? Math.round(song.bpm) : undefined;
-      // Without a parsed BPM-curve per song we report the same value for min/max — close
-      // enough for the value display until the loader exposes the per-chart range.
+      // MAX / MIN BPM — walk the chart's BPM-change events and pick the extremes. Falls back to
+      // the chart's main BPM when the chart is constant-tempo (no `03`/`08` events). Cached per
+      // song to avoid re-scanning events every frame.
       case BEATORAJA_NUM.MAXBPM:
+        return resolveBpmRange(song)?.max;
       case BEATORAJA_NUM.MINBPM:
-        return song.bpm !== undefined ? Math.round(song.bpm) : undefined;
+        return resolveBpmRange(song)?.min;
       case BEATORAJA_NUM.PLAYLEVEL:
         return resolvePlayLevel(song.playLevel);
       // Live-play counters all report 0 in the select scene — no engine running. Skins that
@@ -978,6 +980,47 @@ function resolveWallClockField(refOp: number): number | undefined {
       return undefined;
   }
 }
+
+/**
+ * Walk the chart's BPM-change events (channels `03` / `08`) and return the integer min / max
+ * BPM. Includes the chart's `metadata.bpm` so a chart that doesn't change BPM still gets a
+ * sensible (min === max === main) result. Returns `undefined` when neither metadata BPM nor
+ * any change event yields a finite positive number (corrupt / empty chart).
+ *
+ * Cached per song via WeakMap — the events array is iterated once and reused across frames.
+ */
+function resolveBpmRange(song: BrowserSongEntry): { min: number; max: number } | undefined {
+  const cached = BPM_RANGE_CACHE.get(song);
+  if (cached !== undefined) return cached === null ? undefined : cached;
+  let min = Number.POSITIVE_INFINITY;
+  let max = 0;
+  const considerBpm = (bpm: number): void => {
+    if (!Number.isFinite(bpm) || bpm <= 0) return;
+    if (bpm < min) min = bpm;
+    if (bpm > max) max = bpm;
+  };
+  considerBpm(song.chart.metadata.bpm);
+  const bpmTable = song.chart.resources?.bpm ?? {};
+  for (const event of song.chart.events ?? []) {
+    if (event.value === '00' || event.value === '') continue;
+    if (event.channel === '03') {
+      considerBpm(parseInt(event.value, 16));
+    } else if (event.channel === '08') {
+      const looked =
+        bpmTable[event.value] ?? bpmTable[event.value.toLowerCase()] ?? bpmTable[event.value.toUpperCase()];
+      if (typeof looked === 'number') considerBpm(looked);
+      else if (typeof looked === 'string') considerBpm(Number.parseFloat(looked));
+    }
+  }
+  if (!Number.isFinite(min) || max <= 0) {
+    BPM_RANGE_CACHE.set(song, null);
+    return undefined;
+  }
+  const result = { min: Math.round(min), max: Math.round(max) };
+  BPM_RANGE_CACHE.set(song, result);
+  return result;
+}
+const BPM_RANGE_CACHE = new WeakMap<BrowserSongEntry, { min: number; max: number } | null>();
 
 /**
  * `true` when the chart authored at least one stop event (channel `09` in BMS, scaled stop in
