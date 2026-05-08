@@ -297,6 +297,13 @@ export class BeatorajaRuntimeAdapter {
   /** Latched once we stamp the side's endofnote timer so we don't re-stamp on subsequent frames. */
   private readonly endOfNoteStamped: { 1: boolean; 2: boolean } = { 1: false, 2: false };
   /**
+   * Per-side latch — `true` once `TIMER_FULLCOMBO_*P` has been stamped this run. Mirrors
+   * `endOfNoteStamped` but for the FC celebration. A re-judge (engine seeks backwards then
+   * forwards) doesn't re-stamp; the FC animation runs once from the moment FC was first
+   * achieved, matching beatoraja's reference behaviour.
+   */
+  private readonly fullComboStamped: { 1: boolean; 2: boolean } = { 1: false, 2: false };
+  /**
    * Per-ref "we already logged that this isn't wired" set. Keeps `resolveNumberValue` quiet on the hot
    * path while still surfacing each missing prop.lua num exactly once per session.
    */
@@ -517,14 +524,10 @@ export class BeatorajaRuntimeAdapter {
       if (currentBeat >= lastBeat) {
         this.markTimer(endOfNoteTimerId(side));
         this.endOfNoteStamped[side] = true;
-        // Full-combo check — at the moment the side's last note passes, if no combo break
-        // has occurred (`bad === 0 && poor === 0`), stamp the FC celebration timer. ModernChic
-        // / GdbG_Skin gate end-of-chart "FULL COMBO" reveal animations on this. Engine treats
-        // miss-press as POOR so checking `poor` covers both empty-press and bad-timing breaks.
-        const summary = this.frame?.summary;
-        if (summary !== undefined && (summary.bad ?? 0) === 0 && (summary.poor ?? 0) === 0) {
-          this.markTimer(side === 1 ? TIMER_FULLCOMBO_1P : TIMER_FULLCOMBO_2P);
-        }
+        // FC stamping moved to `applyJudgeCombo` (combo === total). The previous trigger here
+        // fired up to a late-judge window early — a beat-passes-without-final-judge frame would
+        // see `bad === 0 && poor === 0` even though a still-pending late-press could break the
+        // combo a few frames later. The combo-equals-total path is unambiguous.
       }
     }
   }
@@ -775,6 +778,23 @@ export class BeatorajaRuntimeAdapter {
     // `num.maxcombo2 = 105`.
     this.runningCombo = state.combo;
     if (state.combo > this.maxCombo) this.maxCombo = state.combo;
+
+    // Stamp `TIMER_FULLCOMBO_*P` (= 48 / 49) the moment the running combo reaches the chart's
+    // total note count. The previous trigger (`refreshEndOfNoteTimer`'s `currentBeat >= lastBeat`
+    // check) fired at the LAST NOTE'S BEAT, which is up to one late-judge-window early — a player
+    // who was still going to land a late-press POOR within the next ~250 ms would have the FC
+    // animation stamped despite the run ending in a combo break. Tying the stamp directly to
+    // `state.combo === total` is unambiguous: combo can only reach total when every note has
+    // been judged AND the last judgement was a combo-keeper, so FC is genuinely achieved.
+    //
+    // `summary.total` is the chart's full note count (sourced from the engine's per-frame
+    // payload); we wait for at least one frame so this is populated before the first judgement
+    // can fire FC. Charts with `total === 0` (empty / parser edge case) skip the stamp.
+    const total = this.frame?.summary.total ?? 0;
+    if (total > 0 && state.combo >= total && !this.fullComboStamped[side]) {
+      this.markTimer(side === 1 ? TIMER_FULLCOMBO_1P : TIMER_FULLCOMBO_2P);
+      this.fullComboStamped[side] = true;
+    }
 
     // Capture the signed timing delta when the engine supplied one. Two sinks:
     //   1. `recentTimings` — bounded ring drives the live `timingvisualizer[]` decay tail.
@@ -1665,6 +1685,8 @@ export class BeatorajaRuntimeAdapter {
     this.failedTimerStamped = false;
     this.endOfNoteStamped[1] = false;
     this.endOfNoteStamped[2] = false;
+    this.fullComboStamped[1] = false;
+    this.fullComboStamped[2] = false;
   }
 
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
