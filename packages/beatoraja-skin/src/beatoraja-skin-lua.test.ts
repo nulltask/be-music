@@ -377,6 +377,58 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(result.value).toBe(1);
   });
 
+  it('runtimeContext.option flows into main_state.option(...) called during entry-script eval', () => {
+    // ModernChic decide.lua's `lockonAnimation` calls `CUSTOM.NUM.diffRGB()` which reads
+    // `main_state.option(MAIN.OP.DIFFICULTY1..)` from the entry-script eval's TOP LEVEL.
+    // Without a host-supplied runtimeContext, the accessor returns `false` and any nil
+    // indexing the theme does on the result (`RGB[1]`) crashes the eval. Pin that the host
+    // can pass an `option(id)` callback to surface chart-aware ops at load time.
+    //
+    // `main_state` is exposed via `require("main_state")`; the stub only carries real
+    // accessors when `skinConfig !== undefined` (= phase-2 eval), matching the production
+    // path where runtime ops only matter once the user has picked options.
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local main_state = require("main_state")',
+          // Mimics what diffRGB does: branch on a series of difficulty ops, return a value
+          // when one matches, else nil. Without a runtime context all branches fail and the
+          // function returns nil.
+          'local v',
+          'if main_state.option(151) then v = "beginner"',
+          'elseif main_state.option(152) then v = "normal"',
+          'elseif main_state.option(154) then v = "another"',
+          'else v = "unknown" end',
+          'return { picked = v }',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: { offset: 0, option: {}, file: {} },
+      runtimeContext: {
+        option: (id) => id === 154, // simulate the chart being classified ANOTHER
+      },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ picked: 'another' });
+  });
+
+  it('runtimeContext is optional — entry script still loads when the host omits it', () => {
+    // The legacy contract (no runtimeContext) keeps working — main_state stubs return safe
+    // defaults (`false` for option, `0` for numbers).
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local main_state = require("main_state")',
+          'return { active = main_state.option(151) }',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: { offset: 0, option: {}, file: {} },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ active: false });
+  });
+
   it('drives ModernChic-style customoption gating: skin_config.option picks select which optional dofile loads', () => {
     // ModernChic's `Play/lua/sp/property.lua` builds boolean predicates as closures over
     // `skin_config.option[parentName] == auto_num`, and `play7_hw.lua`'s `main()` gates

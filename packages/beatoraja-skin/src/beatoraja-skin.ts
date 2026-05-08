@@ -7,7 +7,11 @@
 import { dirname, normalizePath } from '@be-music/utils/core';
 import { asLoadedBytes, findCaseInsensitivePath, type BeatorajaSkinFileEntry } from './file-lookup.ts';
 import { parseBeatorajaSkinJson, parseBeatorajaSkinJsonHeader } from './beatoraja-skin-json.ts';
-import { evaluateBeatorajaLuaSkin, type BeatorajaLuaModuleSource } from './beatoraja-skin-lua.ts';
+import {
+  evaluateBeatorajaLuaSkin,
+  type BeatorajaLuaModuleSource,
+  type BeatorajaLuaRuntimeContext,
+} from './beatoraja-skin-lua.ts';
 import { normalizeBeatorajaSkinCustomOffsets } from './beatoraja-skin-types.ts';
 import type { BeatorajaSkin, BeatorajaSkinConfig, BeatorajaSkinHeader } from './beatoraja-skin-types.ts';
 
@@ -33,6 +37,16 @@ export interface LoadBeatorajaSkinOptions {
    * returns just the schema. Ignored for JSON skins (which are static).
    */
   skinConfig?: BeatorajaSkinConfig;
+  /**
+   * Optional runtime context for `main_state` accessors invoked at skin-load time. See
+   * {@link EvaluateBeatorajaLuaSkinOptions.runtimeContext} for the full rationale — short
+   * version: ModernChic-style themes call `main_state.option(MAIN.OP.DIFFICULTY1..)` from
+   * inside `main()` to pre-compute per-difficulty RGB triples; without a context the accessor
+   * returns `false` and the Lua eval crashes when the resulting `nil` is indexed. Hosts that
+   * know the chart's classification (difficulty / judge rank / etc.) should pass a context
+   * whose `option` reflects the chart's ops.
+   */
+  runtimeContext?: BeatorajaLuaRuntimeContext;
 }
 
 export type LoadBeatorajaSkinResult =
@@ -92,6 +106,7 @@ export function loadBeatorajaSkin(options: LoadBeatorajaSkinOptions): LoadBeator
     modules,
     skinConfig: options.skinConfig,
     skinBaseDir: baseDir,
+    runtimeContext: options.runtimeContext,
     // `dofile(skin_config.get_path("Play/lua/sp/info.lua"))` (the ModernChic pattern)
     // resolves to a path the skin built up via `get_path` — `${baseDir}/${rel}` after our
     // `setupSkinConfig` joins them. Look that up against the bundle's file map.

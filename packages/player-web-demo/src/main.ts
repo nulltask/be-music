@@ -56,13 +56,16 @@ import {
   type PreparedBeatorajaGameplayChart,
 } from '@be-music/player-web';
 import {
+  BEATORAJA_OP,
   BEATORAJA_SKIN_TYPE,
+  buildBaseOpSet,
   buildDefaultSkinConfigFiles,
   buildDefaultSkinConfigOptions,
   bundleBeatorajaSources,
   expandBeatorajaWildcard,
   loadBeatorajaSkin,
   normalizeBeatorajaFonts,
+  type BeatorajaLuaRuntimeContext,
   type BeatorajaSkinConfig,
   type BeatorajaSkinEntry,
   type BeatorajaSkinHeader,
@@ -1614,10 +1617,13 @@ class PlayerWebDemoApp {
       return;
     }
     const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
+    // Phase-2 eval gets the chart's difficulty ops via `runtimeContext` (consistency with
+    // decide / result, even though gameplay skins surveyed so far don't crash without it).
     const result = loadBeatorajaSkin({
       entryPath: selectedEntry.entryPath,
       files: bundle.files,
       skinConfig: config,
+      runtimeContext: this.buildBeatorajaSkinLoadContext(song, config),
     });
     if (!result.ok || !result.skin) {
       const reason = result.ok ? 'skin payload missing' : result.error.message;
@@ -2152,7 +2158,10 @@ class PlayerWebDemoApp {
 
     // Two-pass evaluation — same `loadBeatorajaSkin` contract as select / play. The first pass
     // gives us the header (used for `property[]` dropdown); the second runs the skin's `main()`
-    // with the resolved option set so dynamic destinations populate.
+    // with the resolved option set so dynamic destinations populate. The phase-2 eval also
+    // gets a `runtimeContext` populated with the chart's difficulty ops so themes that
+    // pre-compute per-difficulty values at load time (e.g. ModernChic's
+    // `CUSTOM.NUM.diffRGB()`) see a non-`nil` answer instead of crashing on `RGB[1]`.
     const headerLoad = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files });
     if (!headerLoad.ok) {
       gameplayLog.warn(`beatoraja decide: ${headerLoad.error.message}`);
@@ -2163,6 +2172,7 @@ class PlayerWebDemoApp {
       entryPath: selectedEntry.entryPath,
       files: bundle.files,
       skinConfig: config,
+      runtimeContext: this.buildBeatorajaSkinLoadContext(song, config),
     });
     if (!result.ok || !result.skin) {
       const reason = result.ok ? 'skin payload missing' : result.error.message;
@@ -2294,10 +2304,14 @@ class PlayerWebDemoApp {
       return false;
     }
     const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
+    // Phase-2 eval gets the chart's difficulty ops via `runtimeContext` so result themes that
+    // pre-compute per-difficulty values at load time (mirroring the decide path's
+    // ModernChic-style `diffRGB()` pattern) don't crash on `nil` indexing.
     const result = loadBeatorajaSkin({
       entryPath: selectedEntry.entryPath,
       files: bundle.files,
       skinConfig: config,
+      runtimeContext: this.buildBeatorajaSkinLoadContext(song, config),
     });
     if (!result.ok || !result.skin) {
       const reason = result.ok ? 'skin payload missing' : result.error.message;
@@ -2556,6 +2570,57 @@ class PlayerWebDemoApp {
    * skin-options panel emits fresh copies on change so the cached state never becomes accidentally
    * shared with downstream consumers.
    */
+  /**
+   * Build a `BeatorajaLuaRuntimeContext` for skin-load time so themes that compute values via
+   * `main_state.option(...)` inside `main()` see chart-aware ops. Without this:
+   *
+   *   ModernChic decide.lua's `lockonAnimation` calls `CUSTOM.NUM.diffRGB()` which does
+   *   `main_state.option(MAIN.OP.DIFFICULTY1..)` → returns false → falls through to `nil` →
+   *   `RGB[1]` index crashes the entire `main()` evaluation → the load fails silently and
+   *   `showBeatorajaDecide` returns false (= "演出されずすぐさま PLAY 画面に遷移" the user reported).
+   *
+   * The context's `option` reflects the same op set the scene would compute on mount, so any
+   * pre-computed RGB / position / asset choice the skin makes at load time matches what would
+   * render anyway. Surfacing the chart's difficulty + skin_config option picks is enough to
+   * unblock the surveyed cases (ModernChic decide / result); other accessors stay
+   * \`undefined\` and fall through to the stub defaults.
+   */
+  private buildBeatorajaSkinLoadContext(
+    song: BrowserSongEntry | undefined,
+    skinConfig: BeatorajaSkinConfig,
+  ): BeatorajaLuaRuntimeContext {
+    const ops = new Set(buildBaseOpSet(skinConfig.option));
+    const difficulty = song?.chart.metadata.difficulty;
+    switch (difficulty) {
+      case 1:
+        ops.add(BEATORAJA_OP.LEVEL_BEGINNER);
+        ops.add(BEATORAJA_OP.DIFFICULTY_BEGINNER);
+        break;
+      case 2:
+        ops.add(BEATORAJA_OP.LEVEL_NORMAL);
+        ops.add(BEATORAJA_OP.DIFFICULTY_NORMAL);
+        break;
+      case 3:
+        ops.add(BEATORAJA_OP.LEVEL_HYPER);
+        ops.add(BEATORAJA_OP.DIFFICULTY_HYPER);
+        break;
+      case 4:
+        ops.add(BEATORAJA_OP.LEVEL_ANOTHER);
+        ops.add(BEATORAJA_OP.DIFFICULTY_ANOTHER);
+        break;
+      case 5:
+        ops.add(BEATORAJA_OP.LEVEL_INSANE);
+        ops.add(BEATORAJA_OP.DIFFICULTY_INSANE);
+        break;
+      default:
+        ops.add(BEATORAJA_OP.DIFFICULTY_UNDEFINED);
+        break;
+    }
+    return {
+      option: (id) => ops.has(id),
+    };
+  }
+
   private resolveBeatorajaSkinConfig(entryPath: string, header: BeatorajaSkinHeader): BeatorajaSkinConfig {
     let cached = this.beatorajaSkinConfigByEntry.get(entryPath);
     if (cached === undefined) {

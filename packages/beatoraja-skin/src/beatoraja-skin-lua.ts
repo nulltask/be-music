@@ -187,6 +187,27 @@ export interface EvaluateBeatorajaLuaSkinOptions {
    * to `dofile`. Defaults to an empty string (then `get_path` returns `rel` verbatim).
    */
   skinBaseDir?: string;
+  /**
+   * Optional runtime context for `main_state.option(opcode)` / `main_state.number(...)` etc.
+   * called from the entry script's TOP-LEVEL or from `main()` during the second-pass eval.
+   *
+   * Beatoraja themes commonly compute values at skin-load time using these accessors — e.g.
+   * ModernChic's decide skin pre-resolves a per-difficulty RGB triple via
+   * `CUSTOM.NUM.diffRGB()` which calls `main_state.option(MAIN.OP.DIFFICULTY1..)` and returns
+   * `nil` when none of the DIFFICULTY ops are active. Without a host-supplied context the
+   * accessors return `false` / `0`, the Lua function falls through to `nil`, and the next
+   * `RGB[1]` indexing crashes the entire `main()` evaluation. The skin then fails to load
+   * silently (the demo's show-X helper just falls through to the next scene).
+   *
+   * Hosts that know the chart's classification (difficulty, judge rank, BPM, etc.) should
+   * pass a context whose `option` returns `true` for the matching `BEATORAJA_OP.DIFFICULTY_*`
+   * / `LEVEL_*` / `JUDGE_*` codes. Other accessors can be left `undefined` — the stub falls
+   * back to safe defaults (`0` for numbers, `''` for strings).
+   *
+   * Optional — themes that don't compute anything dynamic at load time (the reference theme,
+   * GdbG_Skin's decide / select) work fine without it.
+   */
+  runtimeContext?: BeatorajaLuaRuntimeContext;
 }
 
 export interface BeatorajaLuaEvaluationError {
@@ -321,6 +342,14 @@ export function evaluateBeatorajaLuaSkin(options: EvaluateBeatorajaLuaSkinOption
     setupSkinConfig(L, options.skinConfig, options.skinBaseDir ?? '');
     setupDofile(L, owner, options.dofileResolver);
     setupCompatStubs(L);
+
+    // Wire the host's runtime context (if any) so `main_state.option(...)` / `.number(...)` /
+    // etc. invoked at skin-load time see chart-aware values rather than the stub fallbacks.
+    // Theme code like ModernChic decide's `CUSTOM.NUM.diffRGB()` reads difficulty ops at the
+    // top level of `main()` to pre-compute per-difficulty colors — without a context the
+    // accessor returns `false`, the function falls through to `nil`, and downstream indexing
+    // (`RGB[1]`) crashes the entire eval.
+    owner.context = options.runtimeContext;
 
     const entryName = options.entryName ?? 'skin.luaskin';
     const loadStatus = luaL_loadbufferx(
