@@ -54,6 +54,7 @@ import { runEngineDriver, type EngineDriverAudioContext, type EngineDriverResult
 import { BeatorajaRuntimeAdapter } from './beatoraja-runtime-adapter.ts';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
+import { HISPEED_MAX, HISPEED_MIN } from './pixi-gameplay-constants.ts';
 import { drainWebUiSignals } from './web-ui-runtime.ts';
 import { logger } from './logger.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
@@ -664,8 +665,38 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       event.preventDefault();
       const step = (event.shiftKey ? 0.05 : 0.01) * (event.key === 'End' ? 1 : -1);
       this.adapter.adjustLift(step);
+      return;
+    }
+    // Hi-speed (note scroll multiplier) — `ArrowUp` / `ArrowDown` step by 0.1 per press, Shift
+    // to 0.5 for coarse adjustment. Same convention as the LR2 gameplay scene so muscle memory
+    // carries between the two paths. The engine's "Option + lane key" hispeed convention still
+    // works in parallel (it's wired through the player input runtime → state signals), but the
+    // arrow keys give a discoverable / non-conflicting alternative.
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      const step = (event.shiftKey ? 0.5 : 0.1) * (event.key === 'ArrowUp' ? 1 : -1);
+      this.adjustHiSpeed(step);
     }
   };
+
+  /**
+   * Adjust the visual scroll multiplier and propagate to the engine's state signal so the
+   * hispeed digit display + duration / green readouts pick the new value up on the next
+   * frame. Snapped to a 1/1000 grid to absorb float-rounding noise (0.1 has no exact IEEE-754
+   * representation; pressing 13 times in a row would otherwise drift to 1.300000000000001).
+   * Clamped to [HISPEED_MIN, HISPEED_MAX] so users can't soft-lock with hispeed=0 or runaway.
+   */
+  private adjustHiSpeed(delta: number): void {
+    if (!Number.isFinite(delta) || delta === 0) return;
+    const next = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, Math.round((this.hiSpeed + delta) * 1000) / 1000));
+    if (next === this.hiSpeed) return;
+    this.hiSpeed = next;
+    // Push back through `stateSignals` when present so any downstream consumer (engine
+    // playback support, the LR2-shared `applyPlaybackHighSpeedAction` path, future remote
+    // surfaces) sees the same value. The next tick reads it back into `this.hiSpeed` from
+    // the same signal, so no fight between sources.
+    this.stateSignals?.setHighSpeed(next);
+  }
 
   /**
    * Mouse-wheel input adjusts the lanecover ratio — gives players a quick way to dial cover
