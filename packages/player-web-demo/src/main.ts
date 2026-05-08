@@ -2134,13 +2134,19 @@ class PlayerWebDemoApp {
     if (bundle === undefined) return false;
 
     // Decide skin discovery — same shape as select / play. Picks the user's override when set,
-    // otherwise the bundle's first matching entry.
+    // otherwise the discovery's "best" pick (`theme.decideSkin`). Falling back to
+    // `decideCandidates[0]` here was the previous behaviour and a bug: that's whatever
+    // happens to come first in the file-walk iteration order, NOT the preferred entry. So
+    // when the user picked the discovery default in the Debug Menu (which CLEARS the
+    // override per `rebuildBeatorajaSkinPickers`), the next decide mount fell back to
+    // `decideCandidates[0]` and silently mounted whichever theme the file map iterated
+    // first (typically GdbG_Skin instead of the requested default). The Debug Menu's
+    // dropdown showed the right name but the wrong skin actually loaded.
     const decideCandidates = bundle.theme.entries.filter((entry) => entry.header.type === BEATORAJA_SKIN_TYPE.DECIDE);
-    const fallbackEntry = decideCandidates[0];
     const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
       BEATORAJA_SKIN_TYPE.DECIDE,
       decideCandidates,
-      fallbackEntry,
+      bundle.theme.decideSkin,
     );
     if (selectedEntry === undefined) return false;
 
@@ -2270,12 +2276,15 @@ class PlayerWebDemoApp {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return false;
 
+    // Same fix as decide — fall back to the discovery's `theme.resultSkin` rather than
+    // `resultCandidates[0]` (= file-walk iteration order), so picking the discovery default
+    // in the Debug Menu (which clears the override) actually mounts the discovery default
+    // instead of silently picking whatever theme happens to iterate first.
     const resultCandidates = bundle.theme.entries.filter((entry) => entry.header.type === BEATORAJA_SKIN_TYPE.RESULT);
-    const fallbackEntry = resultCandidates[0];
     const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
       BEATORAJA_SKIN_TYPE.RESULT,
       resultCandidates,
-      fallbackEntry,
+      bundle.theme.resultSkin,
     );
     if (selectedEntry === undefined) return false;
 
