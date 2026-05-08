@@ -35,6 +35,7 @@ import {
 import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
+import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
@@ -115,10 +116,22 @@ export class PixiBeatorajaDecideScene implements PixiScene {
   private bgmSource: AudioBufferSourceNode | undefined;
   /** Cached BPM polyline for the picked chart — `[]` when no chart was supplied. */
   private readonly chartBpmCurve: ReadonlyArray<BpmCurvePoint>;
+  /**
+   * Cached note-breakdown bars for the `judgegraph` `type:0` resolver — `[normal, ln, scratch,
+   * bss]` from the chart's playable events. Computed once at construction; `undefined` when no
+   * chart was supplied so the graph hides.
+   */
+  private readonly noteBreakdownBars: ReadonlyArray<number> | undefined;
 
   constructor(options: PixiBeatorajaDecideSceneOptions) {
     this.options = options;
     this.chartBpmCurve = options.chart !== undefined ? computeBeatorajaBpmCurve(options.chart) : [];
+    if (options.chart !== undefined) {
+      const breakdown = computeBeatorajaNoteBreakdown(options.chart);
+      this.noteBreakdownBars = [breakdown.normal, breakdown.ln, breakdown.scratch, breakdown.bss];
+    } else {
+      this.noteBreakdownBars = undefined;
+    }
     this.view = new BeatorajaPlaySkinView({
       skin: options.skin,
       textures: options.textures,
@@ -127,6 +140,11 @@ export class PixiBeatorajaDecideScene implements PixiScene {
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
       resolveBpmGraphPoints: () => (this.chartBpmCurve.length > 0 ? this.chartBpmCurve : undefined),
+      // Note-distribution graph (`judgegraph` `type:0`) — ModernChic's decide pane authors
+      // a 4-bar histogram of [normal / LN / scratch / BSS] from the chart's note breakdown.
+      // Skipped (returns `undefined` → graph hidden) for the live-judge histogram types
+      // (1=judge spread, 2=early/late) since decide is pre-play; those have no data yet.
+      resolveJudgeGraphBars: (type) => this.resolveJudgeGraphBars(type),
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
@@ -320,6 +338,17 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     if (this.advanced) return;
     this.advanced = true;
     then();
+  }
+
+  /**
+   * `judgegraph` resolver for the decide scene. Maps `type:0` (note distribution histogram)
+   * onto the chart's pre-computed `[normal, ln, scratch, bss]` breakdown — ModernChic's decide
+   * pane uses this for the centred 4-bar graph above the title text. Live-judge types (1=judge
+   * spread, 2=early/late) have no pre-play data and stay hidden.
+   */
+  private resolveJudgeGraphBars(type: number): ReadonlyArray<number> | undefined {
+    if (type === 0) return this.noteBreakdownBars;
+    return undefined;
   }
 
   private resolveSongText(refOp: number): string | undefined {

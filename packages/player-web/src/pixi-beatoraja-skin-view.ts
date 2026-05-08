@@ -155,6 +155,9 @@ export interface BeatorajaPlaySkinViewOptions {
    * normalizes the returned array to `[0, 1]` against its own max and paints equal-width bars
    * stretching upward from the destination's bottom edge.
    *
+   *   - `type = 0` (note distribution) → `[normal, ln, scratch, bss]` from the chart's
+   *     playable-event breakdown. Used by the decide scene for pre-play "what's in this chart"
+   *     readouts (ModernChic's centred chart-summary graph).
    *   - `type = 1` (judgement spread) → `[perfect, great, good, bad, poor]`
    *   - `type = 2` (early/late spread) → `[early, late]`
    *
