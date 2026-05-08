@@ -47,7 +47,10 @@ describe('evaluateBeatorajaLuaSkin', () => {
         '  local s = {}',
         '  for k, v in pairs(M.header) do s[k] = v end',
         '  s.option_x = skin_config.option["X"]',
-        '  s.offset = skin_config.offset',
+        // `skin_config.offset` is now a NAME-KEYED TABLE (matching beatoraja\'s actual Lua
+        // bridge); reach into a name-defaulted entry rather than reading the integer chart
+        // offset, which is no longer exposed to Lua.
+        '  s.offset_a = skin_config.offset["BgBrightness"].a',
         '  return s',
         'end',
         'return M',
@@ -74,12 +77,46 @@ describe('evaluateBeatorajaLuaSkin', () => {
     const main = evaluateBeatorajaLuaSkin({
       entry,
       modules,
-      skinConfig: { offset: 5, option: { X: 1 } },
+      skinConfig: { offset: { BgBrightness: { a: 128 } }, option: { X: 1 } },
     });
     expect(main.ok).toBe(true);
     if (!main.ok) throw new Error(main.error.message);
     expect((main.value as Record<string, unknown>).option_x).toBe(1);
-    expect((main.value as Record<string, unknown>).offset).toBe(5);
+    expect((main.value as Record<string, unknown>).offset_a).toBe(128);
+  });
+
+  it('skin_config.offset auto-vivifies unknown keys to a default zero record (no host pre-fill required)', () => {
+    // The killer ModernChic-pattern: deferred property closures inside
+    // `customoption.offset(name)` access `skin_config.offset[name].a` etc. at module-load
+    // time. If the host hasn\'t yet propagated a value for `name`, theme code would crash
+    // with "attempt to index a nil value". Beatoraja\'s reference Lua bridge auto-fills
+    // defaults; we mirror that via an `__index` metatable that yields
+    // `{x:0, y:0, w:0, h:0, r:0, a:0}` for any missing key.
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local rec = skin_config.offset["NeverDeclared"]',
+          'return { x = rec.x, y = rec.y, w = rec.w, h = rec.h, r = rec.r, a = rec.a }',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: { option: {}, file: {} },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ x: 0, y: 0, w: 0, h: 0, r: 0, a: 0 });
+  });
+
+  it('skin_config.offset accepts the legacy number form (chart timing offset) without crashing Lua access', () => {
+    // Backward-compat: existing `BeatorajaSkinConfig.offset = number` callers (the chart
+    // timing offset slider) still type-check. The number form just doesn\'t surface to Lua;
+    // theme code reads from the auto-zero metatable instead.
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc('return skin_config.offset["X"].a'),
+      modules: [],
+      skinConfig: { offset: 5, option: {} },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toBe(0);
   });
 
   it('treats empty Lua tables as empty arrays (so `filepath = {}` is iterable JS-side)', () => {

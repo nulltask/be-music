@@ -65,6 +65,8 @@ declare module 'fengari' {
     lua_rawseti: (L: lua_State, idx: number, n: number) => void;
     lua_settable: (L: lua_State, idx: number) => void;
     lua_concat: (L: lua_State, n: number) => void;
+    lua_setmetatable: (L: lua_State, idx: number) => number;
+    lua_getmetatable: (L: lua_State, idx: number) => number;
     lua_close: (L: lua_State) => void;
   };
 

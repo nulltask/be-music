@@ -52,6 +52,7 @@ const {
   lua_settop,
   lua_setfield,
   lua_setglobal,
+  lua_setmetatable,
   lua_toboolean,
   lua_tojsstring,
   lua_tonumber,
@@ -124,8 +125,22 @@ export type LuaValue =
  * beatoraja's Java side (`SkinHeader.CustomOption`).
  */
 export interface BeatorajaLuaSkinConfig {
-  /** Note offset in milliseconds. Defaults to 0. */
-  offset?: number;
+  /**
+   * Custom offset values. Two shapes accepted for backward compatibility:
+   *
+   * - **Number** — chart timing offset in ms (the historic `BeatorajaSkinConfig.offset`
+   *   convention). Lua doesn't read this; the host applies it directly to the engine.
+   * - **Record\<string, Partial\<OffsetValue\>\>** — per-name custom offset map keyed by
+   *   `header.offset[].name`. Beatoraja's Lua bridge exposes this as a TABLE; theme code
+   *   accesses `skin_config.offset[name].x` / `.y` / `.w` / `.h` / `.r` / `.a` (typically
+   *   inside deferred property closures evaluated at draw time).
+   *
+   * When the number form is supplied, the Lua-side `skin_config.offset` falls through to a
+   * empty table (with the auto-zero `__index` metatable still attached). When the record form
+   * is supplied, its entries pre-populate the table. Either way, theme closures that reach
+   * into `skin_config.offset[<unknown name>]` get a default zero record back via `__index`.
+   */
+  offset?: number | Readonly<Record<string, Partial<BeatorajaLuaOffsetValue>>>;
   /** Selected option per `property[].name` → option `op` integer. */
   option?: Readonly<Record<string, number>>;
   /** Selected file per `filepath[].name` → resolved relative path. */
@@ -912,15 +927,43 @@ function setupSkinConfig(L: lua_State, config: BeatorajaLuaSkinConfig | undefine
     lua_setglobal(L, to_luastring('skin_config'));
     return;
   }
-  pushJsValueAsLua(L, sanitizeSkinConfig(config));
+
+  // Build `skin_config` as a fresh Lua table directly (instead of going through
+  // `pushJsValueAsLua`) so we can attach a metatable to `skin_config.offset`. Beatoraja's
+  // Lua bridge exposes `skin_config.offset` as a NAME-KEYED TABLE — `skin_config.offset[name]`
+  // returns an `{x, y, w, h, r, a}` record per declared custom offset. ModernChic and other
+  // sophisticated skins access this in deferred property closures:
+  //
+  //     alpha = function() return skin_config.offset[name].a end
+  //     height = function() return skin_config.offset[name].h end
+  //
+  // Earlier we exposed `skin_config.offset` as a NUMBER (the chart timing offset), which
+  // crashed the entire load chain — `skin_config.offset[name]` on a number throws "attempt
+  // to index a number value". The chart timing offset stays accessible to the host through
+  // the JS-side `BeatorajaLuaSkinConfig.offset` field; nothing on the Lua side reads it.
+  lua_createtable(L, 0, 4);
+
+  // option / file tables — pre-populated with the user's confirmed picks.
+  pushJsValueAsLua(L, config.option ?? {});
+  lua_setfield(L, -2, to_luastring('option'));
+
+  pushJsValueAsLua(L, config.file ?? {});
+  lua_setfield(L, -2, to_luastring('file'));
+
+  // offset table with __index → default-zero record.
+  // Pre-populate with anything the host already provided (e.g. from the user's slider
+  // adjustments); auto-vivify defaults via __index for unknown keys so theme code that
+  // reaches into a not-yet-adjusted offset always gets a sensible zero record back.
+  pushOffsetTable(L, config.offset);
+  lua_setfield(L, -2, to_luastring('offset'));
+
   // Attach `get_path(rel)` so `dofile(skin_config.get_path("Play/lua/sp/info.lua"))` works.
   // Beatoraja's actual `SkinConfig.get_path` returns the absolute filesystem path; we return
-  // `${skinBaseDir}/${rel}` (or `rel` verbatim when no base dir) — a logical path string that
-  // `dofile` knows how to look up against the bundle's file map. Some skins also use the
-  // colon-call form (`skin_config:get_path(rel)`) which Lua passes the table as the first
-  // argument; the closure ignores that argument so both call styles work.
+  // `${skinBaseDir}/${rel}` — a logical path string that `dofile` knows how to look up
+  // against the bundle's file map. Some skins also use the colon-call form
+  // (`skin_config:get_path(rel)`) which Lua passes the table as the first argument; the
+  // closure ignores any `self` argument so both call styles work.
   const getPathFn: LuaCFunction = (state) => {
-    // Stack: [self?, rel] or [rel]. Pick the last string argument.
     const argTop = lua_gettop(state);
     let rel = '';
     for (let i = argTop; i >= 1; i -= 1) {
@@ -935,16 +978,55 @@ function setupSkinConfig(L: lua_State, config: BeatorajaLuaSkinConfig | undefine
   };
   lua_pushjsfunction(L, getPathFn);
   lua_setfield(L, -2, to_luastring('get_path'));
+
   lua_setglobal(L, to_luastring('skin_config'));
 }
 
-function sanitizeSkinConfig(config: BeatorajaLuaSkinConfig): Record<string, unknown> {
-  const result: Record<string, unknown> = {
-    offset: typeof config.offset === 'number' ? config.offset : 0,
-    option: config.option ?? {},
-    file: config.file ?? {},
+/**
+ * Push a Lua table that acts as the per-name custom-offset map. Pre-populated with whatever
+ * the host supplied; missing keys auto-vivify via __index to a default zero record
+ * (`{x=0, y=0, w=0, h=0, r=0, a=0}`). Theme closures like
+ * `function() return skin_config.offset[name].a end` therefore always succeed even when no
+ * explicit value was registered for that name.
+ */
+function pushOffsetTable(L: lua_State, populated: BeatorajaLuaSkinConfig['offset']): void {
+  lua_createtable(L, 0, 0);
+  // Only the record form contributes pre-populated entries. The number form (chart timing
+  // offset) doesn't surface to Lua — see the field-level docstring. Any unknown name
+  // auto-vivifies to a default zero record via the metatable below.
+  if (populated && typeof populated === 'object' && !Array.isArray(populated)) {
+    for (const [name, value] of Object.entries(populated as Readonly<Record<string, Partial<BeatorajaLuaOffsetValue>>>)) {
+      if (value === null || typeof value !== 'object') continue;
+      pushJsValueAsLua(L, sanitizeOffsetValue(value));
+      lua_setfield(L, -2, to_luastring(name));
+    }
+  }
+  // Metatable: any unknown key returns a default zero record so theme code always sees
+  // a `.a` / `.x` etc. accessor without raising. The default record is allocated fresh on
+  // each access (Lua's __index isn't allowed to return a global cached table without
+  // potential aliasing surprises if the theme mutates it; theme code is read-only against
+  // these records but cheap-to-recreate is safer).
+  lua_createtable(L, 0, 1);
+  const indexFn: LuaCFunction = (state) => {
+    pushJsValueAsLua(state, { x: 0, y: 0, w: 0, h: 0, r: 0, a: 0 });
+    return 1;
   };
-  return result;
+  lua_pushjsfunction(L, indexFn);
+  lua_setfield(L, -2, to_luastring('__index'));
+  lua_setmetatable(L, -2);
+}
+
+function sanitizeOffsetValue(value: Partial<BeatorajaLuaOffsetValue>): BeatorajaLuaOffsetValue {
+  const num = (v: unknown, fallback: number): number =>
+    typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+  return {
+    x: num(value.x, 0),
+    y: num(value.y, 0),
+    w: num(value.w, 0),
+    h: num(value.h, 0),
+    r: num(value.r, 0),
+    a: num(value.a, 0),
+  };
 }
 
 /**
