@@ -41,6 +41,7 @@ import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
 import { groupSongsByFolder, resolveChartPlayVariant } from './library.ts';
+import { detectChartFeatures } from './select-ops.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongEntry } from './types.ts';
 
 export interface PixiBeatorajaSelectSceneOptions {
@@ -380,6 +381,23 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const variant = safeResolveChartVariant(entry.song);
       const keysongOp = keysongOpForVariant(variant);
       if (keysongOp !== undefined) ops.add(keysongOp);
+
+      // Chart traits — gates per-feature chrome. Beatoraja's trait op codes match the LR2
+      // `dst_option` block 1:1 (HAS_LN=173, HAS_BGA=171, HAS_BPMCHANGE=177, HAS_RANDOMSEQUENCE=179),
+      // so reusing `detectChartFeatures` (originally written for the LR2 select scene) gives us
+      // matching semantics for free.
+      const features = detectChartFeatures(entry.song);
+      ops.add(features.longNote ? BEATORAJA_OP.HAS_LN : BEATORAJA_OP.NO_LN);
+      ops.add(features.bga ? BEATORAJA_OP.HAS_BGA : BEATORAJA_OP.NO_BGA);
+      ops.add(features.bpmChange ? BEATORAJA_OP.HAS_BPMCHANGE : BEATORAJA_OP.NO_BPMCHANGE);
+      ops.add(features.random ? BEATORAJA_OP.HAS_RANDOMSEQUENCE : BEATORAJA_OP.NO_RANDOMSEQUENCE);
+
+      // Asset presence — chrome that fades / hides depending on whether the chart shipped a
+      // banner / loading-screen / select-screen image. Sourced directly from `metadata.*`.
+      const meta = entry.song.chart.metadata;
+      ops.add(meta.stageFile ? BEATORAJA_OP.HAS_STAGEFILE : BEATORAJA_OP.NO_STAGEFILE);
+      ops.add(meta.banner ? BEATORAJA_OP.HAS_BANNER : BEATORAJA_OP.NO_BANNER);
+      ops.add(meta.backBmp ? BEATORAJA_OP.HAS_BACKBMP : BEATORAJA_OP.NO_BACKBMP);
     }
     return ops;
   }
