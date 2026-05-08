@@ -713,6 +713,13 @@ class PlayerWebDemoApp {
    * `prepareBeatorajaGameplayChart` helper.
    */
   private beatorajaGameplayView: PixiBeatorajaGameplayView | undefined;
+  /**
+   * The variant the active gameplay view is mounted against. Held alongside
+   * {@link beatorajaGameplayView} so the Debug Menu's "Play 7K / Play 5K / …" dropdowns can
+   * resolve their type-code → live-apply call without reaching into the view internals. Cleared
+   * on dispose so a stale value can never cause the next dropdown change to no-op silently.
+   */
+  private currentBeatorajaPlayVariant: BeatorajaPlayableVariant | undefined;
   /** The current chart's prepared assets (audio + BGA). Disposed alongside the gameplay view. */
   private beatorajaGameplayPrep: PreparedBeatorajaGameplayChart | undefined;
   /**
@@ -1714,6 +1721,9 @@ class PlayerWebDemoApp {
       },
     });
     this.beatorajaGameplayView.root.zIndex = 0;
+    // Track the live variant so the Debug Menu's "Play *K" dropdowns know whether their
+    // type-code matches the active scene before triggering a live re-mount.
+    this.currentBeatorajaPlayVariant = variant;
     await this.sceneHost.setScene(this.beatorajaGameplayView);
     this.setStatus(`Playing (beatoraja): ${song.title}`);
 
@@ -2339,8 +2349,46 @@ class PlayerWebDemoApp {
           } else {
             this.beatorajaSkinOverridesByType.set(scene.typeCode, nextEntryPath);
           }
+          // Live-apply: if the user's pick matches the currently-mounted scene type, re-mount it
+          // immediately against the new entry — same effect as picking from the bottom-right
+          // "Skin" dropdown. Without this the Debug Menu only takes effect on the NEXT scene
+          // transition, which felt broken to the user (drop a theme, pick a skin, nothing
+          // visible until you ESC and re-enter the scene).
+          this.applyBeatorajaSkinSwitchIfActive(scene.typeCode, nextEntryPath, candidates);
         });
       this.beatorajaSkinPickerControllers.set(scene.typeCode, controller);
+    }
+  }
+
+  /**
+   * If the active scene's type-code matches `typeCode`, re-mount it against `entryPath`. Mirrors
+   * the bottom-right `BeatorajaSkinOptionsGui`'s `onSkinChange` callback so the Debug Menu's
+   * dropdown and the in-scene panel produce the same result. No-op when no matching scene is
+   * active (e.g., user picks a Decide skin while the Select scene is on screen — the override
+   * still gets recorded by the caller for the next mount, but nothing visible changes now).
+   *
+   * `candidates` carries the dropdown's source list so we can recover the entry's `header` for
+   * config-defaults seeding without re-loading the skin to read it back. The header is also
+   * needed by `applyBeatoraja*SkinConfig` indirectly via the cached config map.
+   */
+  private applyBeatorajaSkinSwitchIfActive(
+    typeCode: number,
+    entryPath: string,
+    candidates: ReadonlyArray<BeatorajaSkinEntry>,
+  ): void {
+    const matched = candidates.find((entry) => entry.entryPath === entryPath);
+    if (matched === undefined) return;
+    const config = this.resolveBeatorajaSkinConfig(entryPath, matched.header);
+    if (typeCode === BEATORAJA_SKIN_TYPE.MUSIC_SELECT && this.beatorajaSelectScene !== undefined) {
+      void this.applyBeatorajaSelectSkinConfig(entryPath, config);
+      return;
+    }
+    if (
+      this.beatorajaGameplayView !== undefined &&
+      this.currentBeatorajaPlayVariant !== undefined &&
+      playSkinTypeForVariant(this.currentBeatorajaPlayVariant) === typeCode
+    ) {
+      void this.applyBeatorajaPlaySkinConfig(entryPath, this.currentBeatorajaPlayVariant, config);
     }
   }
 
@@ -2427,6 +2475,7 @@ class PlayerWebDemoApp {
   private disposeBeatorajaGameplay(): void {
     this.beatorajaGameplayView?.dispose();
     this.beatorajaGameplayView = undefined;
+    this.currentBeatorajaPlayVariant = undefined;
     if (this.beatorajaGameplayPrep) {
       // Refresh the cached chart with whatever the prep ended up using — this preserves the
       // `chartPath ⇒ chart` association even on the rare path where the prep had to fall back to
