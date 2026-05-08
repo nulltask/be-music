@@ -230,6 +230,15 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
   private lastFitWidth = 0;
   private lastFitHeight = 0;
+  /**
+   * Favorited songs / charts — keyed by `BrowserSongEntry.id`. Toggled via the skin's
+   * `FAVORITE_SONG` (act=89) / `FAVORITE_CHART` (act=90) buttons. Memory-only for now (no DB
+   * persistence); state is lost when the user reloads the page or drops a different theme.
+   * The two sets are tracked separately because beatoraja distinguishes "song-level" favorites
+   * (apply to all charts of a folder) from "chart-level" (apply to one specific .bms / .bmson).
+   */
+  private readonly favoriteSongs = new Set<string>();
+  private readonly favoriteCharts = new Set<string>();
   private disposed = false;
 
   constructor(options: PixiBeatorajaSelectSceneOptions) {
@@ -829,6 +838,30 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         } else {
           // eslint-disable-next-line no-console
           console.log('[beatoraja-select] act=17 READTEXT (no host hook)', JSON.stringify({ title: song?.title }));
+        }
+        return;
+      case 89: // FAVORITE_SONG — toggle the focused song's "favorite song" flag
+        if (song !== undefined) {
+          const next = !this.favoriteSongs.has(song.id);
+          if (next) this.favoriteSongs.add(song.id);
+          else this.favoriteSongs.delete(song.id);
+          // eslint-disable-next-line no-console
+          console.log(
+            '[beatoraja-select] act=89 FAVORITE_SONG toggled',
+            JSON.stringify({ title: song.title, favorite: next }),
+          );
+        }
+        return;
+      case 90: // FAVORITE_CHART — toggle the focused chart's "favorite chart" flag
+        if (song !== undefined) {
+          const next = !this.favoriteCharts.has(song.id);
+          if (next) this.favoriteCharts.add(song.id);
+          else this.favoriteCharts.delete(song.id);
+          // eslint-disable-next-line no-console
+          console.log(
+            '[beatoraja-select] act=90 FAVORITE_CHART toggled',
+            JSON.stringify({ title: song.title, favorite: next }),
+          );
         }
         return;
       default:
