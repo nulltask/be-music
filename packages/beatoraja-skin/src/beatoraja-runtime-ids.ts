@@ -322,6 +322,20 @@ export const BEATORAJA_OP = {
   GAUGE_EX: 1046,
   GAUGE_EX_2P: 1047,
 
+  // ─── Music-select bar ops (SkinProperty: FOLDERBAR=1, SONGBAR=2, GRADEBAR=3, PLAYABLEBAR=5) ─
+  // Set per-frame on the select scene based on what the cursor's focused bar is. Skins gate
+  // per-bar chrome on these — songs_font/count behind FOLDERBAR (it's the "X songs" footer
+  // shown on a folder bar), bpm / playlevel / score readouts behind SONGBAR, course-mod chrome
+  // behind GRADEBAR. Without these the entire song-info panel stays hidden.
+  /** Cursor is on a folder bar — show "X songs in this folder" chrome. */
+  FOLDERBAR: 1,
+  /** Cursor is on a song bar — show per-song info (BPM / level / title / score). */
+  SONGBAR: 2,
+  /** Cursor is on a grade / course bar — show course mods + score chrome. */
+  GRADEBAR: 3,
+  /** Cursor is on a playable bar (song OR grade). Used by chrome that's the same across both. */
+  PLAYABLEBAR: 5,
+
   // ─── Chart keys ops (prop.lua `_*keysong = 160-164` etc.) ─────────────────────────────────
   // Set to indicate which chart variant is being played. Skins use these to gate per-keys
   // chrome elements (e.g. show 7K-specific lane backgrounds only on _7keysong).

@@ -29,12 +29,18 @@
 
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, Texture, type Ticker } from 'pixi.js';
 import type { BeatorajaSkin, BeatorajaSkinConfig, BeatorajaSongListLayout } from '@be-music/beatoraja-skin';
-import { BEATORAJA_NUM, BEATORAJA_TEXT, buildBaseOpSet, parseBeatorajaSongList } from '@be-music/beatoraja-skin';
+import {
+  BEATORAJA_NUM,
+  BEATORAJA_OP,
+  BEATORAJA_TEXT,
+  buildBaseOpSet,
+  parseBeatorajaSongList,
+} from '@be-music/beatoraja-skin';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
-import { groupSongsByFolder } from './library.ts';
+import { groupSongsByFolder, resolveChartPlayVariant } from './library.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongEntry } from './types.ts';
 
 export interface PixiBeatorajaSelectSceneOptions {
@@ -60,6 +66,16 @@ export interface PixiBeatorajaSelectSceneOptions {
  * entries (default beatoraja theme has 21, ModernChic 17, GdbG 11, …).
  */
 const FALLBACK_VISIBLE_ROW_COUNT = 13;
+
+/**
+ * Beatoraja's `select.json` `value[]` block declares `{"id":"songs_count", … "ref":300}` for
+ * the "X songs" footer that shows on a folder bar. The `300` doesn't appear in beatoraja's
+ * standard `prop.lua` number table (the publicly-documented enum stops at the 100s); it's a
+ * select-scene-specific extension code the renderer answers from the focused folder's child
+ * count. We hardcode it here rather than promoting it to {@link BEATORAJA_NUM} because the
+ * value source is scene-specific (the select scene's entries[] state, not the runtime adapter).
+ */
+const SELECT_NUM_SONGS_IN_FOLDER = 300;
 
 /**
  * Per-frame tween rate for `scrollPosition` chasing `currentIndex`. Fraction of the remaining
@@ -312,18 +328,61 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // `timer=0` (scene-start) path to use 0 elapsed already, so passing `undefined` for
     // anything else is the correct behaviour.
     this.view.update({
-      activeOps: this.baseOps(),
+      activeOps: this.computeActiveOps(),
       getTimerStart: () => undefined,
       nowMs: elapsed,
     });
   }
 
+  /**
+   * Stable per-skin op set — `skin_config.option` picks plus any always-on flags. Cached because
+   * `buildBaseOpSet` walks the option map; recompute only when `replaceSkin` invalidates the
+   * cache. Live per-frame ops (focused-bar kind, chart keymode) are added on top in
+   * {@link computeActiveOps}.
+   */
   private baseOps(): ReadonlySet<number> {
     if (this.cachedBaseOps !== undefined) return this.cachedBaseOps;
     this.cachedBaseOps = buildBaseOpSet(this.options.skinConfig?.option);
     return this.cachedBaseOps;
   }
   private cachedBaseOps: ReadonlySet<number> | undefined;
+
+  /**
+   * Per-frame active op set. Combines the stable base ops with bar-state ops derived from the
+   * cursor's focused entry:
+   *
+   *   - `FOLDERBAR (1)` — focused entry is a folder bar. Default skin gates its `songs_font` /
+   *     `songs_count` and the bar-history `lamp` / `rank` graphs on this op.
+   *   - `SONGBAR (2)` — focused entry is a song bar. Gates the BPM / playlevel / score / miss /
+   *     combo / clear / play readouts that make up most of the left-pane info panel.
+   *   - `PLAYABLEBAR (5)` — folder OR song. (Reserved; we don't have grade bars.)
+   *   - `KEYSONG_*` (160-164 / 1160-1161) — variant of the focused song's chart, lights up the
+   *     "7KEYS" / "5KEYS" / etc. label image.
+   *
+   * Without these the entire info pane stays hidden because its destinations are gated on
+   * `op:[2]` in the authored skin.
+   */
+  private computeActiveOps(): ReadonlySet<number> {
+    const base = this.baseOps();
+    // Fast path: no active entry → just the base set (includes `skin_config.option` picks).
+    const entry = this.entries[this.currentIndex];
+    if (entry === undefined) return base;
+
+    const ops = new Set(base);
+    if (entry.kind === 'folder') {
+      ops.add(BEATORAJA_OP.FOLDERBAR);
+    } else {
+      ops.add(BEATORAJA_OP.SONGBAR);
+      ops.add(BEATORAJA_OP.PLAYABLEBAR);
+      // Map chart variant → keysong op. `resolveChartPlayVariant` returns one of the 5/7/9/10/14
+      // strings the LR2 / beatoraja paths share; 24K / 24K-DP variants aren't surfaced today
+      // but the destination gates still resolve correctly when those values land.
+      const variant = safeResolveChartVariant(entry.song);
+      const keysongOp = keysongOpForVariant(variant);
+      if (keysongOp !== undefined) ops.add(keysongOp);
+    }
+    return ops;
+  }
 
   /**
    * Recompute the entries the renderer should show given the current `folderStack`, then sync
@@ -385,6 +444,17 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * layer ships.
    */
   private resolveSelectionNumber(refOp: number): number | undefined {
+    // ref 300 = `songs_count` (number of songs in the focused folder). Resolved BEFORE the
+    // `focusedSong()` early-return below — it makes sense on a folder bar where focusedSong()
+    // returns the first child, but the more useful number is the folder's child count itself.
+    if (refOp === SELECT_NUM_SONGS_IN_FOLDER) {
+      const entry = this.entries[this.currentIndex];
+      if (entry?.kind === 'folder') return entry.folder.songs.length;
+      // On a song bar, the parent folder's count if known; otherwise undefined.
+      const parent = this.folderStack[this.folderStack.length - 1];
+      return parent?.songs.length;
+    }
+
     const song = this.focusedSong();
     if (song === undefined) return undefined;
     switch (refOp) {
@@ -831,4 +901,35 @@ function resolvePlayLevel(level: number | string | undefined): number | undefine
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
+}
+
+/**
+ * `resolveChartPlayVariant` walks the chart's events / metadata to classify keys mode. On a
+ * malformed entry it can throw; a per-frame op-set computation must never throw, so we wrap
+ * with a try/catch and fall back to `undefined` (= no `KEYSONG_*` op set, "modeless" bar).
+ */
+function safeResolveChartVariant(song: BrowserSongEntry): '5' | '7' | '9' | '10' | '14' | undefined {
+  try {
+    return resolveChartPlayVariant(song);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Keys-variant string → matching `BEATORAJA_OP.KEYSONG_*` code, or `undefined` for unknown. */
+function keysongOpForVariant(variant: '5' | '7' | '9' | '10' | '14' | undefined): number | undefined {
+  switch (variant) {
+    case '5':
+      return BEATORAJA_OP.KEYSONG_5K;
+    case '7':
+      return BEATORAJA_OP.KEYSONG_7K;
+    case '9':
+      return BEATORAJA_OP.KEYSONG_9K;
+    case '10':
+      return BEATORAJA_OP.KEYSONG_10K;
+    case '14':
+      return BEATORAJA_OP.KEYSONG_14K;
+    default:
+      return undefined;
+  }
 }
