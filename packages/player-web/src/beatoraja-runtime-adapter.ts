@@ -26,6 +26,7 @@ import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
 import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { BeatorajaRenderContext } from './beatoraja-render.ts';
+import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import {
   BEATORAJA_NUM,
   BEATORAJA_OP,
@@ -937,14 +938,25 @@ export class BeatorajaRuntimeAdapter {
    * Resolve a `judgegraph[].type` code into the per-bar values for histogram rendering. Beatoraja's
    * convention:
    *
+   *   - `0` (note distribution) → `[normal, ln, scratch, bss]` from the chart's static breakdown.
+   *     Computed once per chart (lazy on first call) and cached for subsequent frames. ModernChic
+   *     authors a `type=0` judgegraph for the chart-summary panel — without this resolver the
+   *     graph stays hidden during play.
    *   - `1` (judgement spread) → `[perfect, great, good, bad, poor]` from the live summary
    *   - `2` (early/late spread) → `[fast, slow]` from the live summary
    *
-   * Returns `undefined` when no frame data is available yet (the renderer hides the graph until
-   * the first frame arrives). Returning all-zero arrays is also acceptable — the renderer hides
-   * the histogram until at least one judgement event has fired.
+   * Returns `undefined` when no data is available yet (chart missing for type=0, or no live
+   * summary for types 1/2). The renderer hides the graph in that case.
    */
   resolveJudgeGraphBars(type: number): ReadonlyArray<number> | undefined {
+    if (type === 0) {
+      if (this.chart === undefined) return undefined;
+      if (this.cachedNoteBreakdownBars === undefined) {
+        const breakdown = computeBeatorajaNoteBreakdown(this.chart);
+        this.cachedNoteBreakdownBars = [breakdown.normal, breakdown.ln, breakdown.scratch, breakdown.bss];
+      }
+      return this.cachedNoteBreakdownBars;
+    }
     const summary = this.frame?.summary;
     if (summary === undefined) return undefined;
     switch (type) {
@@ -956,6 +968,7 @@ export class BeatorajaRuntimeAdapter {
         return undefined;
     }
   }
+  private cachedNoteBreakdownBars: ReadonlyArray<number> | undefined;
 
   /**
    * Resolve recent judgement timings for `timingvisualizer[]` rendering. Returns oldest-first
