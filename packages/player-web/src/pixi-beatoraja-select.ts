@@ -125,6 +125,12 @@ const SELECT_REF_KEYMODE_INDEX = 11;
 const SELECT_REF_LNMODE_INDEX = 308;
 
 /**
+ * Imageset ref 12 — the active sort-mode index. Default skin's `sortset` imageset declares
+ * `divy:8, len:8`; we map the slots to the 8 sort modes documented on `sortMode` field.
+ */
+const SELECT_REF_SORT_MODE_INDEX = 12;
+
+/**
  * Imageset ref 370 — best clear lamp for the focused chart. Default skin's `state_clear`
  * imageset declares 11 sub-images for NOPLAY through MAX. We have no score DB so we always
  * return 0 (NOPLAY), matching the `CLEAR_LAMP_NOPLAY` op we fire on every song.
@@ -263,6 +269,23 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * the visible label updates in step.
    */
   private keymodeFilter = 0;
+  /**
+   * Active sort mode — index into the song-sort enum the `sortset` imageset's `images[]`
+   * matches. `divy:8 / len:8` in default's declaration → 8 slots. We map them as:
+   *
+   *   0 DEFAULT         — original collection order (folder-grouped)
+   *   1 TITLE           — alphabetical by title
+   *   2 ARTIST          — alphabetical by artist
+   *   3 GENRE           — alphabetical by genre
+   *   4 PLAYLEVEL       — by `#PLAYLEVEL` ascending
+   *   5 BPM             — by main BPM ascending
+   *   6 TOTALNOTES      — by playable-note count ascending
+   *   7 LASTPLAY        — by most-recent play (DB-required; falls back to DEFAULT today)
+   *
+   * Cycled via the SORT button (act=12). Affects only flat song lists (inside a folder); at
+   * the root, songs are still grouped by `directoryLabel` so a sort would jumble folders.
+   */
+  private sortMode = 0;
   private disposed = false;
 
   constructor(options: PixiBeatorajaSelectSceneOptions) {
@@ -595,7 +618,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const top = this.folderStack[this.folderStack.length - 1]!;
       // When a filter is active, the folder's pre-stored `songs` may include charts the
       // current filter excludes — re-filter on read so what the user sees matches the badge.
-      const folderSongs = filter === 0 ? top.songs : top.songs.filter((s) => filtered.includes(s));
+      let folderSongs = filter === 0 ? top.songs : top.songs.filter((s) => filtered.includes(s));
+      if (this.sortMode !== 0) folderSongs = sortSongsByMode(folderSongs, this.sortMode);
       this.entries = folderSongs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }));
     }
     this.currentIndex = clampIndex(initialIndex, this.entries.length);
@@ -790,6 +814,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // separately, gating the "5KEYS" / "7KEYS" label image elements).
       return this.keymodeFilter;
     }
+    if (refOp === SELECT_REF_SORT_MODE_INDEX) {
+      // Active sort mode — drives the `sortset` imageset's badge (default / title / artist /
+      // genre / playlevel / bpm / totalnotes / lastplay).
+      return this.sortMode;
+    }
     if (refOp === SELECT_REF_LNMODE_INDEX) {
       // 0 = LN, 1 = CN (charge note), 2 = HCN (hell charge note). User's LNMODE-button click
       // override (act=308) wins; otherwise fall back to the focused chart's authored `#LNMODE`
@@ -838,6 +867,20 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       option: { ...config.option },
       file: { ...config.file },
     };
+  }
+
+  /**
+   * Cycle the sort mode and rebuild the song list against the new ordering. Wraps at 0..7.
+   * Stays within the current folder — sorting doesn't change which folder you're in, just the
+   * row order inside it.
+   */
+  private cycleSortMode(step: number): void {
+    const next = (((this.sortMode + step) % 8) + 8) % 8;
+    if (next === this.sortMode) return;
+    this.sortMode = next;
+    // eslint-disable-next-line no-console
+    console.log('[beatoraja-select] act=12 SORT cycled', JSON.stringify({ to: next }));
+    this.refreshEntries(this.currentIndex);
   }
 
   /**
@@ -970,6 +1013,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         return;
       case 11: // MODE — cycle keymode filter (ALL / 5K / 7K / 10K / 14K / 9K / 24K / 24K-DP)
         this.cycleKeymodeFilter(modifiers?.shift === true ? -1 : 1);
+        return;
+      case 12: // SORT — cycle sort order (default / title / artist / genre / level / bpm / notes / lastplay)
+        this.cycleSortMode(modifiers?.shift === true ? -1 : 1);
         return;
       default:
         // eslint-disable-next-line no-console
@@ -1401,6 +1447,59 @@ function safeResolveChartVariant(song: BrowserSongEntry): '5' | '7' | '9' | '10'
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Sort a song list by the given mode index. Mode `0` (DEFAULT) is the caller's responsibility
+ * — they pass the original collection in unchanged. The other modes are documented next to the
+ * `sortMode` field on the scene class.
+ *
+ * Returns a NEW array; never mutates the input. Sort is `localeCompare`-based for strings (so
+ * Japanese alphabetisation works) and numeric for level / BPM / notes.
+ */
+function sortSongsByMode(
+  songs: ReadonlyArray<BrowserSongEntry>,
+  mode: number,
+): ReadonlyArray<BrowserSongEntry> {
+  const out = [...songs];
+  switch (mode) {
+    case 1: // TITLE
+      out.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? '', 'ja'));
+      break;
+    case 2: // ARTIST
+      out.sort((a, b) => (a.artist ?? '').localeCompare(b.artist ?? '', 'ja'));
+      break;
+    case 3: // GENRE
+      out.sort((a, b) => (a.genre ?? '').localeCompare(b.genre ?? '', 'ja'));
+      break;
+    case 4: // PLAYLEVEL
+      out.sort((a, b) => sortableNumber(a.playLevel) - sortableNumber(b.playLevel));
+      break;
+    case 5: // BPM (main)
+      out.sort((a, b) => (a.bpm ?? 0) - (b.bpm ?? 0));
+      break;
+    case 6: // TOTALNOTES
+      out.sort((a, b) => (a.totalNotes ?? 0) - (b.totalNotes ?? 0));
+      break;
+    case 7: // LASTPLAY (DB-required) — currently no-op (returns original order)
+      break;
+    default:
+      break;
+  }
+  return out;
+}
+
+/**
+ * Coerce a `playLevel` (number | string | undefined) to a comparable number. Strings parse via
+ * `parseInt`; undefined / non-finite values get `+Infinity` so they sort to the end of the list.
+ */
+function sortableNumber(value: number | string | undefined): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+  }
+  return Number.POSITIVE_INFINITY;
 }
 
 /**
