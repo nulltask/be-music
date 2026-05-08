@@ -507,20 +507,38 @@ function setupDofile(
     lua_pop(state, 2);
 
     if (resolver === undefined) {
+      // eslint-disable-next-line no-console
+      console.warn(`[beatoraja-lua] dofile(${JSON.stringify(path)}) FAILED: no resolver wired`);
       luaL_error(state, to_luastring(`cannot open '${path}': dofile is not wired (no resolver)`));
       return 0;
     }
     const bytes = resolver(path);
     if (bytes === undefined) {
+      // eslint-disable-next-line no-console
+      console.warn(`[beatoraja-lua] dofile(${JSON.stringify(path)}) FAILED: file not in skin bundle`);
       luaL_error(state, to_luastring(`cannot open '${path}': not found in skin bundle`));
       return 0;
     }
     const loadStatus = luaL_loadbufferx(state, bytes, bytes.length, to_luastring(`@${path}`), to_luastring('t'));
     if (loadStatus !== LUA_OK) {
-      luaL_error(state, to_luastring(`failed to load '${path}': ${lua_tojsstring(state, -1)}`));
+      const msg = lua_tojsstring(state, -1);
+      // eslint-disable-next-line no-console
+      console.warn(`[beatoraja-lua] dofile(${JSON.stringify(path)}) FAILED to compile: ${msg}`);
+      luaL_error(state, to_luastring(`failed to load '${path}': ${msg}`));
       return 0;
     }
-    lua_call(state, 0, 1);
+    // pcall the actual chunk execution so a runtime error inside the loaded module surfaces with
+    // its own filename in the diagnostic, not the calling site's. Themes wrap their dofile
+    // invocations in their own pcall (the ModernChic pattern) — without our pcall here the
+    // runtime error message would be the OUTER chunk's prefix, which makes triage harder.
+    const callStatus = lua_pcall(state, 0, 1, 0);
+    if (callStatus !== LUA_OK) {
+      const msg = lua_tojsstring(state, -1);
+      // eslint-disable-next-line no-console
+      console.warn(`[beatoraja-lua] dofile(${JSON.stringify(path)}) THREW at runtime: ${msg}`);
+      luaL_error(state, to_luastring(`error executing '${path}': ${msg}`));
+      return 0;
+    }
 
     // Cache + return.
     lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_DOFILE_CACHE));

@@ -219,6 +219,13 @@ export interface BeatorajaSkin extends BeatorajaSkinHeader {
   judgegraph?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   gaugegraph?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   timingvisualizer?: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  /**
+   * Variant of `timingvisualizer` that some community skins (ModernChic) author for the
+   * "hit-error" graph beneath the play area. Same shape as {@link timingvisualizer} — recent
+   * judgement deltas plotted against time. Schema-compatible so the existing
+   * `BeatorajaTimingVisualizerElement` normalization can consume both fields.
+   */
+  hiterrorvisualizer?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   button?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   destination?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   bga?: Readonly<Record<string, unknown>>;
@@ -229,7 +236,23 @@ export interface BeatorajaSkin extends BeatorajaSkinHeader {
   images?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   nodes?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   hidden?: Readonly<Record<string, unknown>> | ReadonlyArray<Readonly<Record<string, unknown>>>;
-  hiddenCover?: Readonly<Record<string, unknown>>;
+  /**
+   * Hidden-cover declarations. Reference theme uses the singular object form
+   * (`hiddenCover = {id="...", src=N, ...}`); community skins (ModernChic) author the array
+   * form (`hiddenCover = {{id="...", ...}, {id="...", ...}}`) for multiple cover layers.
+   * Both shapes flow through the renderer's hidden-cover pipeline.
+   */
+  hiddenCover?:
+    | Readonly<Record<string, unknown>>
+    | ReadonlyArray<Readonly<Record<string, unknown>>>;
+  /**
+   * Lift-cover declarations. ModernChic-pattern: covers that follow the lift slider but with
+   * different artwork from the hidden-cover (lift = the bottom-edge cover, hidden = the
+   * top-edge cover). Array shape mirroring `hiddenCover[]`.
+   */
+  liftCover?:
+    | Readonly<Record<string, unknown>>
+    | ReadonlyArray<Readonly<Record<string, unknown>>>;
   disapearLine?: Readonly<Record<string, unknown>>;
   isDisapearLineLinkLift?: boolean | number;
   bpm?: Readonly<Record<string, unknown>>;

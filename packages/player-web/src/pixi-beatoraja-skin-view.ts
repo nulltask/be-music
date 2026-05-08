@@ -567,23 +567,30 @@ export class BeatorajaPlaySkinView {
     // `timingvisualizer[]` — recent-timing tick visualizer plotted across the destination box on
     // the play scene. Same precedence as gaugegraph (loses to image / value / text / graph /
     // slider / bpmgraph / judgegraph / gaugegraph on id collision).
+    //
+    // ModernChic and other community skins also author `hiterrorvisualizer[]` entries with
+    // identical shape — same `(deltaMs, kind)` decay tail rendered into the same destination
+    // box style. We feed both fields into the same normalizer + map so authors can use
+    // either name interchangeably without us shipping a duplicate render path.
     const timingVisualizerById = new Map<BeatorajaImageId, BeatorajaTimingVisualizerElement>();
-    for (const tv of normalizeBeatorajaTimingVisualizers(
-      (options.skin as { timingvisualizer?: unknown }).timingvisualizer,
-    )) {
-      if (
-        !imageById.has(tv.id) &&
-        !valueById.has(tv.id) &&
-        !textById.has(tv.id) &&
-        !graphById.has(tv.id) &&
-        !sliderById.has(tv.id) &&
-        !bpmGraphById.has(tv.id) &&
-        !judgeGraphById.has(tv.id) &&
-        !gaugeGraphById.has(tv.id)
-      ) {
-        timingVisualizerById.set(tv.id, tv);
+    const collectTimingVisualizers = (input: unknown): void => {
+      for (const tv of normalizeBeatorajaTimingVisualizers(input)) {
+        if (
+          !imageById.has(tv.id) &&
+          !valueById.has(tv.id) &&
+          !textById.has(tv.id) &&
+          !graphById.has(tv.id) &&
+          !sliderById.has(tv.id) &&
+          !bpmGraphById.has(tv.id) &&
+          !judgeGraphById.has(tv.id) &&
+          !gaugeGraphById.has(tv.id)
+        ) {
+          timingVisualizerById.set(tv.id, tv);
+        }
       }
-    }
+    };
+    collectTimingVisualizers((options.skin as { timingvisualizer?: unknown }).timingvisualizer);
+    collectTimingVisualizers((options.skin as { hiterrorvisualizer?: unknown }).hiterrorvisualizer);
     // `timingdistributiongraph[]` — full-run timing histogram plotted across the destination box
     // on the result scene. Same precedence as timingvisualizer + loses to it on collision.
     const timingDistributionById = new Map<BeatorajaImageId, BeatorajaTimingDistributionGraphElement>();
