@@ -37,7 +37,6 @@ import {
   computeJudgeExistOps,
   computeRankOp,
   endOfNoteTimerId,
-  isPerfectJudge,
   JUDGE_LANE_REF_1P_BASE,
   JUDGE_LANE_REF_2P_BASE,
   JUDGE_LANE_REF_RANGE,
@@ -133,12 +132,15 @@ const COVER_CHANGING_WINDOW_MS = 500;
 const RECENT_TIMINGS_CAPACITY = 50;
 
 /**
- * How long after a PERFECT verdict the per-lane keybeam imageset stays on its highlighted frame.
- * Beatoraja's reference theme uses a brief flash — 250ms feels right (the player keeps holding
- * the key after the hit; the highlight needs to read as a "yes you nailed it" pulse, not a
- * persistent state). Outside the window the imageset reverts to its neutral frame even if the key
- * is still held; subsequent PERFECTs re-stamp the timestamp so a held key during a stream stays
+ * How long after a verdict the per-lane keybeam / bomb imageset stays on its judge-flavored
+ * frame. Beatoraja's reference theme uses a brief flash — 250ms feels right (the player keeps
+ * holding the key after the hit; the highlight needs to read as a "yes you scored" pulse, not
+ * a persistent state). Outside the window the imageset reverts to its neutral frame even if
+ * the key is still held; subsequent verdicts re-stamp so a held key during a stream stays
  * highlighted continuously.
+ *
+ * Naming kept as `_PERFECT_` for legacy reasons — the gate now covers any judge tier (PG / GR
+ * / GD / BD / PR / MS), not just PERFECT. See {@link BeatorajaRuntimeAdapter.lastJudgeOnLane}.
  */
 const KEYBEAM_PERFECT_WINDOW_MS = 250;
 
@@ -168,20 +170,31 @@ export class BeatorajaRuntimeAdapter {
     2: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
   };
   /**
-   * Per-(side, lane) "last verdict was PERFECT" timestamp ring. Sized to `JUDGE_LANE_REF_RANGE`
-   * (10 lanes per side ⇒ keys 0..9 with 0 = scratch). Each slot holds the `getNowMs()` instant the
-   * latest PERFECT landed on that lane, or `-Infinity` when no PERFECT has fired yet (or it has
-   * since aged out). The keybeam imageset ref `JUDGE_LANE_REF_*P_BASE + lane` reads this to flip
-   * its frame (0 = neutral, 1 = perfect-flash) — see {@link resolveRefValue}.
+   * Per-(side, lane) most-recent-judge ring. Sized to `JUDGE_LANE_REF_RANGE` (10 lanes per side
+   * ⇒ keys 0..9 with 0 = scratch). Each slot holds the latest verdict's `(judgeIndex, atMs)`,
+   * driving the keybeam / bomb imagesets via the `JUDGE_LANE_REF_*P_BASE + lane` ref:
    *
-   * Why only PERFECT and not the full judgeIndex: the default skin's keybeam imageset has 2 frames,
-   * and beatoraja's clamp semantics (raw → `min(raw, images.length-1)`) collapse any non-zero
-   * value to "frame 1" regardless of which non-PERFECT verdict it was. Authors that want a
-   * 6-state imageset would extend this resolver, but no surveyed skin does today.
+   *   resolveRefValue(refOp) returns judgeIndex+1 within KEYBEAM_PERFECT_WINDOW_MS, else 0.
+   *
+   * Beatoraja's renderer clamps the resolved value to `images.length - 1`, so the ref encoding
+   * lets a single resolver feed imagesets of varying granularity:
+   *
+   *   - Default 7K's 2-frame `{ keybeam-w, keybeam-w-pg }`: any judge collapses to frame 1
+   *     (= "you scored a hit, here's a flash" — the bright variant fires on every clean
+   *     judgement, not just PERFECT).
+   *   - Default 9K's 4-frame `{ keybeam-w, keybeam-w-pg, keybeam-w-gr, keybeam-w-gr }`: PG and
+   *     GR get distinct color variants (frames 1 / 2), GD/BD/PR/MS clamp to frame 3 (= last GR
+   *     entry, which is intentionally the same image as frame 2).
+   *   - Default 7K's 4-entry bomb `{ bomb1, bomb2, bomb1, bomb3 }`: PG → bomb2, GR → bomb1
+   *     (same as no-judge — GR doesn't get its own bomb), GD → bomb3 (unreachable in practice
+   *     since bomb timer only fires on clean hits).
+   *
+   * `kind` uses `-1` to mean "no judge yet OR the latest judge has aged out"; the resolver maps
+   * `-1` to ref `0`. `at` is `getNowMs()`-relative.
    */
-  private readonly lastPerfectAtByLane: Record<BeatorajaSide, Float64Array> = {
-    1: new Float64Array(JUDGE_LANE_REF_RANGE).fill(Number.NEGATIVE_INFINITY),
-    2: new Float64Array(JUDGE_LANE_REF_RANGE).fill(Number.NEGATIVE_INFINITY),
+  private readonly lastJudgeOnLane: Record<BeatorajaSide, Array<{ kind: number; at: number }>> = {
+    1: createEmptyLaneJudgeRing(),
+    2: createEmptyLaneJudgeRing(),
   };
   private poorBgaActive = false;
   private lastHiSpeed = 1;
@@ -744,23 +757,25 @@ export class BeatorajaRuntimeAdapter {
       this.startLaneBombTimer(state.channel);
     }
 
-    // Stamp / clear the per-lane PERFECT timestamp. Drives the keybeam imageset (`ref =
+    // Update the per-(side, lane) most-recent-judge ring. Drives the keybeam imageset (`ref =
     // JUDGE_LANE_REF_*P_BASE + lane`) and the default skin's 4-entry bomb imageset (`{ bomb1,
-    // bomb2, bomb1, bomb3 }`) — both pick frame 1 ("perfect-flavored") only when the latest
-    // verdict on the lane was PERFECT within `KEYBEAM_PERFECT_WINDOW_MS`.
+    // bomb2, bomb1, bomb3 }`) — both pick a frame based on the verdict's judgeIndex+1, with the
+    // renderer's clamp degrading high-index verdicts to whatever the imageset's last frame is.
     //
-    // Critically: a non-PERFECT verdict on the SAME lane CLEARS the stamp. Without this, a GREAT
-    // hit landing 100 ms after a PERFECT on the same lane would still trigger the perfect-flash
-    // keybeam + the bomb2 sprite — the lingering 250 ms window would catch it. The default skin
-    // explicitly distinguishes the perfect feedback from the merely-clean-hit one, so a stamp
-    // overwrite is the right semantic. Only judgements with a known channel update the per-lane
-    // ring (READY / AUTO / global ticks all leave channel undefined and skip the update).
+    // A new verdict ALWAYS overwrites the previous one on the same lane (no PERFECT-only
+    // filter). The 2-frame keybeam clamps any judge to frame 1 ("you scored, here's a flash"),
+    // the 4-frame keybeam distinguishes PG vs GR explicitly, and the bomb imageset relies on
+    // its timer (clean-hit-only) to gate visibility regardless of the ref value.
+    //
+    // Only judgements with a known channel update the ring; READY / AUTO / global ticks all
+    // leave channel undefined and skip the update.
     if (state.channel !== undefined) {
       const lane = this.resolveLane(state.channel);
       if (lane !== undefined && lane >= 0 && lane < JUDGE_LANE_REF_RANGE) {
-        this.lastPerfectAtByLane[side][lane] = isPerfectJudge(state.judge)
-          ? this.getNowMs()
-          : Number.NEGATIVE_INFINITY;
+        const judgeIndex = judgeKindToIndex(state.judge);
+        if (judgeIndex >= 0) {
+          this.lastJudgeOnLane[side][lane] = { kind: judgeIndex, at: this.getNowMs() };
+        }
       }
     }
 
@@ -988,12 +1003,19 @@ export class BeatorajaRuntimeAdapter {
    * the matching cell.
    *
    * Wired ranges:
-   *   - `500..509` (1P) / `510..519` (2P) — per-lane "last verdict was PERFECT" gate. Drives the
-   *     default skin's keybeam imageset (`ref = value_judge(i) = base + lane`,
-   *     `images = { keybeam-w, keybeam-w-pg }`). Returns `1` when the lane saw a PERFECT within
-   *     {@link KEYBEAM_PERFECT_WINDOW_MS} of `getNowMs()`, `0` otherwise. The renderer clamps
-   *     to `images.length - 1`, so 2-frame imagesets collapse to a binary neutral / perfect-flash.
-   *     Lane 0 is scratch; 1..7 are keys 1..7; 8/9 are reserved for 9-key extensions.
+   *   - `500..509` (1P) / `510..519` (2P) — per-lane most-recent-judge gate. Drives the keybeam
+   *     and bomb imagesets (`ref = value_judge(i) = base + lane`). Returns `judgeIndex + 1`
+   *     when the lane saw a verdict within {@link KEYBEAM_PERFECT_WINDOW_MS} of `getNowMs()`,
+   *     `0` otherwise (= no recent judge). The renderer clamps to `images.length - 1`, so:
+   *
+   *       - 2-frame imagesets (default 7K's `{ keybeam-w, keybeam-w-pg }`) collapse any
+   *         judge to frame 1 (= "you scored a hit").
+   *       - 4-frame imagesets (default 9K's `{ keybeam-w, keybeam-w-pg, keybeam-w-gr,
+   *         keybeam-w-gr }`) distinguish PG (frame 1) and GR (frame 2); GD/BD/PR/MS clamp
+   *         to frame 3 (which the author intentionally aliases to GR's image).
+   *
+   *     judgeIndex follows beatoraja's enum: 0=PG, 1=GR, 2=GD, 3=BD, 4=PR, 5=MS. Lane 0 is
+   *     scratch; 1..7 are keys 1..7; 8/9 are 9-key extensions.
    */
   resolveRefValue(refOp: number): number {
     if (refOp >= JUDGE_LANE_REF_1P_BASE && refOp < JUDGE_LANE_REF_1P_BASE + JUDGE_LANE_REF_RANGE) {
@@ -1006,10 +1028,11 @@ export class BeatorajaRuntimeAdapter {
   }
 
   private resolveLaneJudgeRef(side: BeatorajaSide, lane: number): number {
-    const stamp = this.lastPerfectAtByLane[side][lane];
-    if (!Number.isFinite(stamp)) return 0;
-    const elapsed = this.getNowMs() - stamp;
-    return elapsed >= 0 && elapsed <= KEYBEAM_PERFECT_WINDOW_MS ? 1 : 0;
+    const slot = this.lastJudgeOnLane[side][lane];
+    if (slot === undefined || slot.kind < 0) return 0;
+    const elapsed = this.getNowMs() - slot.at;
+    if (!(elapsed >= 0 && elapsed <= KEYBEAM_PERFECT_WINDOW_MS)) return 0;
+    return slot.kind + 1;
   }
 
   /**
@@ -1687,6 +1710,14 @@ export class BeatorajaRuntimeAdapter {
     this.endOfNoteStamped[2] = false;
     this.fullComboStamped[1] = false;
     this.fullComboStamped[2] = false;
+    // Per-lane judge ring — clear both sides so the keybeam / bomb imageset revert to their
+    // neutral frame after a re-mount. Without this, a re-mounted scene carries the prior
+    // run's last-judge stamps until they age out, so the very first frame of the new run
+    // could show a phantom highlight from the previous chart.
+    for (let i = 0; i < JUDGE_LANE_REF_RANGE; i += 1) {
+      this.lastJudgeOnLane[1][i] = { kind: -1, at: 0 };
+      this.lastJudgeOnLane[2][i] = { kind: -1, at: 0 };
+    }
   }
 
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
@@ -1786,6 +1817,47 @@ function isComboAdvanceJudge(kind: string): boolean {
 function isCleanHitJudge(kind: string): boolean {
   const upper = kind.toUpperCase();
   return upper === 'PERFECT' || upper === 'GREAT';
+}
+
+/**
+ * Map a judge-string verdict to beatoraja's per-lane judge index. Returns `-1` for verdicts
+ * that don't fit the standard 6-tier ladder (READY ticks, AUTO PLAY without input, etc.).
+ *
+ * Beatoraja's enum order is canon: PG=0, GR=1, GD=2, BD=3, PR=4, MS=5. The keybeam / bomb
+ * imageset ref encoding in `resolveLaneJudgeRef` adds 1 so frame 0 stays reserved for the
+ * "no judge" case — see {@link BeatorajaRuntimeAdapter.lastJudgeOnLane} for the full table.
+ */
+function judgeKindToIndex(kind: string): number {
+  switch (kind.toUpperCase()) {
+    case 'PERFECT':
+      return 0;
+    case 'GREAT':
+      return 1;
+    case 'GOOD':
+      return 2;
+    case 'BAD':
+      return 3;
+    case 'POOR':
+      return 4;
+    case 'MISS':
+      return 5;
+    default:
+      return -1;
+  }
+}
+
+/**
+ * Build a fresh per-lane judge-ring buffer. Each slot is initialised to `{ kind: -1, at: 0 }`
+ * so the resolver's `kind < 0` short-circuit treats the lane as "no recent judgement" until a
+ * real verdict lands. Allocated as a plain array (not a typed array) because each entry is a
+ * 2-field record; `JUDGE_LANE_REF_RANGE = 10` slots × 2 sides = 20 records, negligible cost.
+ */
+function createEmptyLaneJudgeRing(): Array<{ kind: number; at: number }> {
+  const out = new Array<{ kind: number; at: number }>(JUDGE_LANE_REF_RANGE);
+  for (let i = 0; i < JUDGE_LANE_REF_RANGE; i += 1) {
+    out[i] = { kind: -1, at: 0 };
+  }
+  return out;
 }
 
 /**

@@ -372,6 +372,76 @@ describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {
     adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', updatedAtMs: 0 });
     expect(adapter.getTimerStart(comboTimerId(1))).toBe(300);
   });
+
+  it('per-lane keybeam ref encodes the latest verdict as judgeIndex+1 within the window', () => {
+    // Drives the keybeam imageset (`ref = 500 + lane`) AND the bomb imageset, both of which
+    // pick a frame based on this value. 7K's 2-frame imageset clamps anything ≥1 to frame 1
+    // ("you scored a hit"); 9K's 4-frame imageset distinguishes PG (1) and GR (2) with frame
+    // 3 reserved for GD/BD/PR/MS via clamp.
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    // No verdict yet → ref returns 0 (= "no recent judge").
+    expect(adapter.resolveRefValue(503)).toBe(0); // 1P key 3
+    // PERFECT on key 3 → judgeIndex 0 → ref returns 1.
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '13', updatedAtMs: 0 });
+    expect(adapter.resolveRefValue(503)).toBe(1);
+    // GREAT on the same lane → judgeIndex 1 → ref returns 2 (was previously 1 in the
+    // PERFECT-only resolver — the 9K skin's 4-frame imageset specifically expects this).
+    clock.advance(50);
+    adapter.applyJudgeCombo({ judge: 'GREAT', combo: 2, channel: '13', updatedAtMs: 0 });
+    expect(adapter.resolveRefValue(503)).toBe(2);
+    // GOOD → 3, BAD → 4, POOR → 5, MISS → 6.
+    clock.advance(20);
+    adapter.applyJudgeCombo({ judge: 'GOOD', combo: 3, channel: '13', updatedAtMs: 0 });
+    expect(adapter.resolveRefValue(503)).toBe(3);
+    clock.advance(20);
+    adapter.applyJudgeCombo({ judge: 'BAD', combo: 0, channel: '13', updatedAtMs: 0 });
+    expect(adapter.resolveRefValue(503)).toBe(4);
+    clock.advance(20);
+    adapter.applyJudgeCombo({ judge: 'POOR', combo: 0, channel: '13', updatedAtMs: 0 });
+    expect(adapter.resolveRefValue(503)).toBe(5);
+    clock.advance(20);
+    adapter.applyJudgeCombo({ judge: 'MISS', combo: 0, channel: '13', updatedAtMs: 0 });
+    expect(adapter.resolveRefValue(503)).toBe(6);
+  });
+
+  it('per-lane keybeam ref decays to 0 once the verdict ages past KEYBEAM_PERFECT_WINDOW_MS', () => {
+    // Window is 250 ms (file-local constant). Past the boundary the resolver returns 0
+    // even though the kind is still latched, so the keybeam reverts to its neutral frame
+    // even if the player is still holding the key.
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '14', updatedAtMs: 0 });
+    expect(adapter.resolveRefValue(504)).toBe(1); // within window
+    clock.advance(250); // exactly at the boundary — still inside (=)
+    expect(adapter.resolveRefValue(504)).toBe(1);
+    clock.advance(1); // 1 ms past the window → decays to 0
+    expect(adapter.resolveRefValue(504)).toBe(0);
+  });
+
+  it('per-lane keybeam ref is independent across lanes (one PERFECT does not light the others)', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '13', updatedAtMs: 0 });
+    expect(adapter.resolveRefValue(503)).toBe(1); // key 3 = PG
+    expect(adapter.resolveRefValue(504)).toBe(0); // key 4 = no judge
+    expect(adapter.resolveRefValue(505)).toBe(0); // key 5 = no judge
+  });
 });
 
 describe('BeatorajaRuntimeAdapter — getRenderContext', () => {
