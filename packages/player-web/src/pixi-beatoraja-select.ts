@@ -40,6 +40,7 @@ import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
+import { computeBeatorajaChartDensity, type ChartDensity } from './beatoraja-chart-density.ts';
 import { computeBeatorajaChartTotalSeconds } from './beatoraja-chart-duration.ts';
 import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import { groupSongsByFolder, resolveChartPlayVariant } from './library.ts';
@@ -107,6 +108,23 @@ const SELECT_NUM_TOTALNOTE_NORMAL = 350;
 const SELECT_NUM_TOTALNOTE_LN = 351;
 const SELECT_NUM_TOTALNOTE_SCRATCH = 352;
 const SELECT_NUM_TOTALNOTE_BSS = 353;
+
+/**
+ * Note-density refs (ModernChic `info.lua`):
+ *
+ *   - `360` / `361` peak NPS — integer + first-decimal digits.
+ *   - `362` / `363` end NPS (the chart's last 1-sec window).
+ *   - `364` / `365` average NPS (`totalNotes / totalSeconds`).
+ *
+ * Skin authors render the readout as `{integer}.{decimal} NPS` by placing the integer cell
+ * next to a literal "." next to the decimal cell.
+ */
+const SELECT_NUM_DENSITY_PEAK = 360;
+const SELECT_NUM_DENSITY_PEAK_AFTERDOT = 361;
+const SELECT_NUM_DENSITY_END = 362;
+const SELECT_NUM_DENSITY_END_AFTERDOT = 363;
+const SELECT_NUM_DENSITY_AVERAGE = 364;
+const SELECT_NUM_DENSITY_AVERAGE_AFTERDOT = 365;
 
 /**
  * Per-frame tween rate for `scrollPosition` chasing `currentIndex`. Fraction of the remaining
@@ -594,6 +612,24 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         return resolveNoteBreakdown(song).scratch;
       case SELECT_NUM_TOTALNOTE_BSS:
         return resolveNoteBreakdown(song).bss;
+    }
+
+    // Note density readouts (ModernChic `info.lua`). Each readout splits a float NPS value
+    // into integer + first-decimal cells. Skin authors render "12.4 NPS" via three cells:
+    // integer + literal "." + first-decimal.
+    switch (refOp) {
+      case SELECT_NUM_DENSITY_PEAK:
+        return resolveDensity(song).peak.whole;
+      case SELECT_NUM_DENSITY_PEAK_AFTERDOT:
+        return resolveDensity(song).peak.afterDot;
+      case SELECT_NUM_DENSITY_END:
+        return resolveDensity(song).end.whole;
+      case SELECT_NUM_DENSITY_END_AFTERDOT:
+        return resolveDensity(song).end.afterDot;
+      case SELECT_NUM_DENSITY_AVERAGE:
+        return resolveDensity(song).average.whole;
+      case SELECT_NUM_DENSITY_AVERAGE_AFTERDOT:
+        return resolveDensity(song).average.afterDot;
     }
 
     switch (refOp) {
@@ -1141,6 +1177,16 @@ function resolveNoteBreakdown(song: BrowserSongEntry): NoteBreakdown {
   return breakdown;
 }
 const NOTE_BREAKDOWN_CACHE = new WeakMap<BrowserSongEntry, NoteBreakdown>();
+
+/** Cached note density (peak / end / avg NPS) for the focused song. */
+function resolveDensity(song: BrowserSongEntry): ChartDensity {
+  const cached = NOTE_DENSITY_CACHE.get(song);
+  if (cached !== undefined) return cached;
+  const density = computeBeatorajaChartDensity(song.chart);
+  NOTE_DENSITY_CACHE.set(song, density);
+  return density;
+}
+const NOTE_DENSITY_CACHE = new WeakMap<BrowserSongEntry, ChartDensity>();
 
 /**
  * Walk the chart's BPM-change events (channels `03` / `08`) and return the integer min / max
