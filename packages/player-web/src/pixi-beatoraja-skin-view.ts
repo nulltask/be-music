@@ -7,6 +7,7 @@ import { BitmapText, Container, Graphics, Sprite, Text, Texture } from 'pixi.js'
 import {
   centerToAnchor,
   composeBeatorajaValueCells,
+  composeBeatorajaValueShift,
   BEATORAJA_LUA_TIMER_OFF_VALUE,
   BEATORAJA_NUM,
   evaluateBeatorajaLuaNumber,
@@ -1589,6 +1590,12 @@ export class BeatorajaPlaySkinView {
     // digit collapse to `dst.w / digit` pixels wide, which is what produced the "potsubureteru"
     // (squashed-text) reports. Height stays at `dst.h`.
     const slotWidth = props.width;
+    // Honor `value.align` (0 = right / no shift, 1 = left, 2 = center) — see
+    // `composeBeatorajaValueShift` for the formula. Without this, every authored `align: 1`
+    // (left-flush) and `align: 2` (centered) rendered identically to `align: 0`, which is what
+    // ModernChic's Result mainmenu (40+ sites) was hitting — score / miss / FAST / SLOW digits
+    // showed natural-right-aligned with leading blanks instead of flush-left.
+    const alignShift = composeBeatorajaValueShift(entry.value, value, slotWidth);
     // Apply the destination's center anchor across the whole digit strip — each digit slot
     // shares the same pivot proportions, computed against the strip's full width (not the per-
     // digit width) so rotation pivots around the strip's authored center, not each digit's
@@ -1603,7 +1610,7 @@ export class BeatorajaPlaySkinView {
       }
       sprite.visible = true;
       sprite.anchor.set(center.x, center.y);
-      sprite.x = props.x + i * slotWidth + center.x * slotWidth;
+      sprite.x = props.x + i * slotWidth + center.x * slotWidth - alignShift;
       sprite.y = props.y + center.y * props.height;
       sprite.width = slotWidth;
       sprite.height = props.height;

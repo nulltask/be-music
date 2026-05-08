@@ -70,7 +70,11 @@ export type {
   BeatorajaValueDigitCell,
   BeatorajaValueElement,
 } from './beatoraja-skin-value.ts';
-export { composeBeatorajaValueCells, normalizeBeatorajaValues } from './beatoraja-skin-value.ts';
+export {
+  composeBeatorajaValueCells,
+  composeBeatorajaValueShift,
+  normalizeBeatorajaValues,
+} from './beatoraja-skin-value.ts';
 export type {
   BeatorajaBooleanPropertyRef,
   BeatorajaDestinationGroup,

@@ -53,7 +53,24 @@ export interface BeatorajaValueElement {
   ref: number;
   /** Optional `value` IntegerProperty. Beatoraja evaluates this instead of `ref` when authored. */
   valueProperty?: BeatorajaIntegerPropertyRef;
-  /** Alignment hint. 0 = right-aligned (default), 1 = center, 2 = left. Most authors use 0. */
+  /**
+   * Horizontal alignment of the digit row within `dst.w * digit` (the strip's full visual width).
+   * Mirrors beatoraja's {@code SkinNumber.align}:
+   *
+   * - `0` — RIGHT (no shift; leading blank / zero / hidden slots stay on the LEFT, the actual
+   *   significant digits land on the right side of the strip). This is what most authors use for
+   *   score / combo / ms readouts.
+   * - `1` — LEFT. The whole digit row is shifted leftward by `shiftbase * (slotWidth + space)`,
+   *   where `shiftbase` is the number of leading non-significant slots (`digit - usedDigits -
+   *   signCount`). Visually: leading blanks slide off the left edge of the rect, the actual
+   *   digits flush against the rect's left edge.
+   * - `2` — CENTER. Same shift formula but halved, so the digits sit centered in the rect.
+   *
+   * The earlier comment incorrectly described `0 = right, 1 = center, 2 = left` (mirrored from
+   * an LR2 convention); beatoraja's renderer uses the layout above. The renderer applies the
+   * shift via `composeBeatorajaValueShift` rather than the composer, since the leading-slot
+   * count depends on the runtime value, not the static cell layout.
+   */
   align: number;
   /** Op-codes that gate visibility (from `if`/`values` flattening). */
   ifCodes: ReadonlyArray<number>;
@@ -218,4 +235,32 @@ export function composeBeatorajaValueCells(element: BeatorajaValueElement, value
     };
   }
   return cells;
+}
+
+/**
+ * Compute the horizontal pixel shift to apply across every digit slot to honor `element.align`.
+ * Mirrors the {@code shift = align == 0 ? 0 : (align == 1 ? (w+space)*shiftbase : (w+space)*0.5*shiftbase)}
+ * formula from beatoraja's `SkinNumber.prepare()`.
+ *
+ * `shiftbase` is the count of LEADING non-significant slots — the slots that would render as a
+ * blank glyph, a leading zero, or be hidden entirely (digits-only strip + leading-blank pad).
+ * For `value = 5`, `digit = 4`, `padding = 0` → `shiftbase = 3` (three leading nulls). For
+ * `value = -7`, `digit = 4` → `shiftbase = 2` (two leading nulls; the sign occupies one slot).
+ *
+ * `slotWidth` is the rendered width of one digit cell (typically `dst.w` since beatoraja
+ * authors set `dst.w` to the per-digit slot width). The renderer subtracts the returned
+ * shift from each slot's `x` coordinate, so positive values shift the whole row LEFT.
+ */
+export function composeBeatorajaValueShift(
+  element: Pick<BeatorajaValueElement, 'align' | 'digit'>,
+  value: number,
+  slotWidth: number,
+): number {
+  if (element.align !== 1 && element.align !== 2) return 0;
+  const digits = Math.max(1, Math.trunc(element.digit));
+  const safeValue = Number.isFinite(value) ? Math.trunc(value) : 0;
+  const significant = Math.abs(safeValue).toString(10).length + (safeValue < 0 ? 1 : 0);
+  const shiftbase = Math.max(0, digits - significant);
+  const baseShift = shiftbase * slotWidth;
+  return element.align === 1 ? baseShift : baseShift * 0.5;
 }
