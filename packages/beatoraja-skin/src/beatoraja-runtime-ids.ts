@@ -59,6 +59,14 @@ export const TIMER_ENDOFNOTE_2P = 144;
 /** prop.lua `rhythm` — beat-pulse timer the skin uses for "every beat" glow effects. */
 export const TIMER_RHYTHM = 140;
 
+/**
+ * prop.lua `preview = 141` — fires when the chart's "preview" state begins (post-decode,
+ * pre-audible-playback). ModernChic gates its lane chrome reveal on this so the playfield
+ * fades in once the chart has finished loading. Stamped at scene-start in our runtime since
+ * we don't have a separate preview phase.
+ */
+export const TIMER_PREVIEW = 141;
+
 /** prop.lua `fullcombo_1p = 48` — fires once at end-of-chart when 1P side has a full combo. */
 export const TIMER_FULLCOMBO_1P = 48;
 /** prop.lua `fullcombo_2p = 49`. */

@@ -50,6 +50,7 @@ import {
   TIMER_GAUGE_INCREASE_2P,
   TIMER_GAUGE_MAX_1P,
   TIMER_PLAY,
+  TIMER_PREVIEW,
   TIMER_READY,
   TIMER_RHYTHM,
   TIMER_SCENE_START,
@@ -320,6 +321,11 @@ export class BeatorajaRuntimeAdapter {
     // Scene-start timer is always running — many skin elements default `timer = 0` and read it as the
     // global clock. Other built-in timers fire later via `markTimer`.
     this.timerStartedAt.set(TIMER_SCENE_START, 0);
+    // Preview timer — beatoraja's runtime stamps it during the brief "chart loaded but not yet
+    // playing" window; we don't have that phase exposed separately, so we pin it to scene-start
+    // (= 0). ModernChic's `Play/lua/sp/lane.lua` gates the lane chrome reveal on `timer:preview`,
+    // so without this the playfield never fades in.
+    this.timerStartedAt.set(TIMER_PREVIEW, 0);
   }
 
   /** Activate the matching `OPTION_*KEYSONG` op for the chart's variant. */
@@ -1474,6 +1480,7 @@ export class BeatorajaRuntimeAdapter {
     this.activeOps.add(BEATORAJA_OP.NOW_LOADING);
     this.timerStartedAt.clear();
     this.timerStartedAt.set(TIMER_SCENE_START, 0);
+    this.timerStartedAt.set(TIMER_PREVIEW, 0);
     this.judgeState[1].lastJudgeOp = undefined;
     this.judgeState[1].lastFastSlowOp = undefined;
     this.judgeState[2].lastJudgeOp = undefined;
