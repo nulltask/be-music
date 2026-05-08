@@ -157,6 +157,21 @@ export interface EvaluateBeatorajaLuaSkinOptions {
    * script will then return the `header` branch.
    */
   skinConfig?: BeatorajaLuaSkinConfig;
+  /**
+   * Resolver for `dofile(path)` and `skin_config:get_path(rel)`. Beatoraja themes (e.g. ModernChic) split
+   * their layout into per-section `.lua` files that the entry script loads at runtime via
+   * `dofile(skin_config.get_path("Play/lua/sp/info.lua"))`. We can't go through a real
+   * filesystem in the browser; this callback bridges the gap by returning the bytes for any
+   * path the skin requests. Returning `undefined` triggers a Lua error from `dofile`. Optional —
+   * skins that only use `require()` (e.g. the bundled reference theme) work without it.
+   */
+  dofileResolver?: (path: string) => Uint8Array | undefined;
+  /**
+   * Base directory for relative-path resolution inside the Lua sandbox. `skin_config:get_path(rel)`
+   * concatenates `${skinBaseDir}/${rel}` so the returned string can later be passed straight back
+   * to `dofile`. Defaults to an empty string (then `get_path` returns `rel` verbatim).
+   */
+  skinBaseDir?: string;
 }
 
 export interface BeatorajaLuaEvaluationError {
@@ -288,7 +303,9 @@ export function evaluateBeatorajaLuaSkin(options: EvaluateBeatorajaLuaSkinOption
   try {
     openSkinSandbox(L);
     setupCustomRequire(L, options.modules, owner, options.skinConfig !== undefined);
-    setupSkinConfig(L, options.skinConfig);
+    setupSkinConfig(L, options.skinConfig, options.skinBaseDir ?? '');
+    setupDofile(L, owner, options.dofileResolver);
+    setupCompatStubs(L);
 
     const entryName = options.entryName ?? 'skin.luaskin';
     const loadStatus = luaL_loadbufferx(
@@ -372,9 +389,13 @@ function setupCustomRequire(
     }
     // Beatoraja's Lua loader accepts both `/` and `.` as path separators (`require("result.util")` and
     // `require("result/util")` are equivalent). Normalize to `/` so the module table lookup hits the
-    // collector's canonical key.
+    // collector's canonical key. Also lowercase to match the collector's case-insensitive convention
+    // — `collectBeatorajaLuaModules` keys everything by lowercased path so a Windows-authored skin
+    // that uses `require("Root.customfunction")` (case-mixed) still resolves to
+    // `root/customfunction.lua` on every host (Linux file-name case is identity, macOS HFS+ may
+    // preserve, Windows is insensitive — normalising both sides removes the ambiguity).
     const rawName = lua_tojsstring(state, 1);
-    const name = rawName.replace(/\./g, '/');
+    const name = rawName.replace(/\./g, '/').toLowerCase();
 
     // Cache hit?
     lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
@@ -444,6 +465,270 @@ function setupCustomRequire(
   lua_setglobal(L, to_luastring('require'));
 }
 
+const REGISTRY_DOFILE_CACHE = '__be_music_beatoraja_dofile_cache';
+
+/**
+ * Wire `dofile(path)` against the bundle. Beatoraja's reference theme rarely uses `dofile` —
+ * but elaborate community skins (ModernChic, etc.) split their layout into per-section
+ * `.lua` files and load them at runtime via:
+ *
+ *     dofile(skin_config.get_path("Play/lua/sp/info.lua"))
+ *
+ * The resolver maps the requested path to bundle bytes; we then compile + execute the chunk
+ * and cache the return value so subsequent `dofile(samePath)` calls are cheap. When no
+ * resolver is supplied (or the resolver returns `undefined`) we surface a Lua error matching
+ * the standard `dofile`'s "cannot open" diagnostic so skin authors can tell their require
+ * failed.
+ */
+function setupDofile(
+  L: lua_State,
+  owner: LuaRuntimeOwner,
+  resolver: ((path: string) => Uint8Array | undefined) | undefined,
+): void {
+  void owner; // Reserved for future Lua-function retention bookkeeping if dofile returns one.
+  // Per-evaluation cache keyed by path string.
+  lua_createtable(L, 0, 0);
+  lua_setfield(L, LUA_REGISTRYINDEX, to_luastring(REGISTRY_DOFILE_CACHE));
+
+  const dofileFn: LuaCFunction = (state) => {
+    if (lua_type(state, 1) !== LUA_TSTRING) {
+      luaL_error(state, to_luastring("bad argument #1 to 'dofile' (string expected)"));
+      return 0;
+    }
+    const path = lua_tojsstring(state, 1);
+
+    // Cache hit?
+    lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_DOFILE_CACHE));
+    lua_getfield(state, -1, to_luastring(path));
+    if (lua_type(state, -1) !== LUA_TNIL) {
+      lua_remove(state, -2); // drop cache table
+      return 1;
+    }
+    lua_pop(state, 2);
+
+    if (resolver === undefined) {
+      luaL_error(state, to_luastring(`cannot open '${path}': dofile is not wired (no resolver)`));
+      return 0;
+    }
+    const bytes = resolver(path);
+    if (bytes === undefined) {
+      luaL_error(state, to_luastring(`cannot open '${path}': not found in skin bundle`));
+      return 0;
+    }
+    const loadStatus = luaL_loadbufferx(state, bytes, bytes.length, to_luastring(`@${path}`), to_luastring('t'));
+    if (loadStatus !== LUA_OK) {
+      luaL_error(state, to_luastring(`failed to load '${path}': ${lua_tojsstring(state, -1)}`));
+      return 0;
+    }
+    lua_call(state, 0, 1);
+
+    // Cache + return.
+    lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_DOFILE_CACHE));
+    lua_pushvalue(state, -2);
+    lua_setfield(state, -2, to_luastring(path));
+    lua_pop(state, 1);
+    // eslint-disable-next-line no-console
+    console.log(`[beatoraja-lua] dofile(${JSON.stringify(path)}) -> ok (${bytes.length}B)`);
+    return 1;
+  };
+  lua_pushjsfunction(L, dofileFn);
+  lua_setglobal(L, to_luastring('dofile'));
+}
+
+/**
+ * Restore stripped globals as inert stubs so theme code that touches `io`, `os`, or
+ * `luajava` (typically inside utility modules that use them for "rotation" features —
+ * picking a random background image, persisting state across runs) loads without
+ * crashing. The stubs satisfy the Lua surface but do nothing useful — features built on
+ * top either silently no-op (file persistence) or fall back to time-based defaults
+ * (`os.time()`, `os.date(...)`).
+ *
+ * Without these, `customfunction.lua` modules in community skins crash at module-load
+ * time because `local luajava = require("luajava")` followed by
+ * `luajava.bindClass("java.io.File")` raises before any rendering helper has a chance to
+ * pcall around it.
+ */
+function setupCompatStubs(L: lua_State): void {
+  // ── `os` ────────────────────────────────────────────────────────────────────────
+  // Tiny shim covering `os.time()` and `os.date()` which themes use for log file naming
+  // and "today's banner" effects. Other `os.*` calls (`execute`, `remove`, `rename`)
+  // return safe defaults — most just need to not throw.
+  lua_createtable(L, 0, 4);
+  const osTimeFn: LuaCFunction = (state) => {
+    lua_pushnumber(state, Math.floor(Date.now() / 1000));
+    return 1;
+  };
+  const osDateFn: LuaCFunction = (state) => {
+    const fmt = lua_type(state, 1) === LUA_TSTRING ? lua_tojsstring(state, 1) : '%c';
+    const t = lua_type(state, 2) === LUA_TNUMBER ? lua_tonumber(state, 2) * 1000 : Date.now();
+    if (fmt === '*t' || fmt === '!*t') {
+      const d = new Date(t);
+      const useUtc = fmt.startsWith('!');
+      lua_createtable(state, 0, 8);
+      pushNumberField(state, 'year', useUtc ? d.getUTCFullYear() : d.getFullYear());
+      pushNumberField(state, 'month', (useUtc ? d.getUTCMonth() : d.getMonth()) + 1);
+      pushNumberField(state, 'day', useUtc ? d.getUTCDate() : d.getDate());
+      pushNumberField(state, 'hour', useUtc ? d.getUTCHours() : d.getHours());
+      pushNumberField(state, 'min', useUtc ? d.getUTCMinutes() : d.getMinutes());
+      pushNumberField(state, 'sec', useUtc ? d.getUTCSeconds() : d.getSeconds());
+      pushNumberField(state, 'wday', (useUtc ? d.getUTCDay() : d.getDay()) + 1);
+      pushNumberField(state, 'yday', dayOfYear(d, useUtc));
+      return 1;
+    }
+    lua_pushstring(state, to_luastring(formatLuaDate(fmt, new Date(t))));
+    return 1;
+  };
+  const noOpReturnNil: LuaCFunction = () => 0;
+  pushClosureField(L, 'time', osTimeFn);
+  pushClosureField(L, 'date', osDateFn);
+  pushClosureField(L, 'execute', noOpReturnNil);
+  pushClosureField(L, 'remove', noOpReturnNil);
+  pushClosureField(L, 'rename', noOpReturnNil);
+  pushClosureField(L, 'getenv', noOpReturnNil);
+  lua_setglobal(L, to_luastring('os'));
+
+  // ── `io` ────────────────────────────────────────────────────────────────────────
+  // `io.open` returns a fake file handle whose methods are no-ops — themes use this for
+  // log persistence (history files, "rotation" exclude lists). The handle's `:lines()`
+  // returns an empty iterator so loops over its lines simply terminate; `:read` returns
+  // nil; `:write` chains to itself; `:close` returns true.
+  lua_createtable(L, 0, 4);
+  const ioOpenFn: LuaCFunction = (state) => {
+    pushFakeFileHandle(state);
+    return 1;
+  };
+  const ioLinesFn: LuaCFunction = (state) => {
+    lua_pushjsfunction(state, () => {
+      lua_pushnil(state);
+      return 1;
+    });
+    return 1;
+  };
+  pushClosureField(L, 'open', ioOpenFn);
+  pushClosureField(L, 'lines', ioLinesFn);
+  pushClosureField(L, 'read', noOpReturnNil);
+  pushClosureField(L, 'write', noOpReturnNil);
+  pushClosureField(L, 'close', noOpReturnNil);
+  lua_setglobal(L, to_luastring('io'));
+
+  // ── `luajava` ───────────────────────────────────────────────────────────────────
+  // Common in Java-side beatoraja themes that bind `java.io.File` for filesystem
+  // walks. We return a deeply-stubbed object so chained calls
+  // (`luajava.new(File, path):isDirectory()`) keep returning safe defaults instead of
+  // raising. The stubs are exposed both as a global AND as a require-able module to
+  // match how beatoraja's Lua bridge surfaces it.
+  pushLuajavaStub(L);
+  lua_setglobal(L, to_luastring('luajava'));
+}
+
+function pushFakeFileHandle(L: lua_State): void {
+  lua_createtable(L, 0, 5);
+  pushClosureField(L, 'close', () => {
+    lua_pushboolean(L, 1);
+    return 1;
+  });
+  pushClosureField(L, 'read', () => 0);
+  pushClosureField(L, 'write', (state) => {
+    lua_pushvalue(state, 1); // chain to self for `f:write(a):write(b)`
+    return 1;
+  });
+  pushClosureField(L, 'lines', (state) => {
+    lua_pushjsfunction(state, () => {
+      lua_pushnil(state);
+      return 1;
+    });
+    return 1;
+  });
+  pushClosureField(L, 'seek', () => {
+    lua_pushinteger(L, 0);
+    return 1;
+  });
+}
+
+function pushLuajavaStub(L: lua_State): void {
+  lua_createtable(L, 0, 2);
+  // bindClass(name) → opaque table that lua_new can use as a "class" handle. The name
+  // is captured for diagnostics but doesn't affect behaviour — every method call on
+  // the resulting instance returns nil.
+  pushClosureField(L, 'bindClass', () => {
+    lua_createtable(L, 0, 0);
+    return 1;
+  });
+  pushClosureField(L, 'new', () => {
+    // Return a deeply-stubbed instance: every method call returns nil; `tostring`
+    // returns a placeholder. The fengari surface doesn't let us trap arbitrary
+    // method names cheaply, so we just hand back an empty table — most theme code
+    // chains via `pcall` so a "method missing" error gets swallowed.
+    lua_createtable(L, 0, 0);
+    return 1;
+  });
+}
+
+function pushClosureField(L: lua_State, key: string, fn: LuaCFunction): void {
+  lua_pushjsfunction(L, fn);
+  lua_setfield(L, -2, to_luastring(key));
+}
+
+function pushNumberField(L: lua_State, key: string, value: number): void {
+  lua_pushnumber(L, value);
+  lua_setfield(L, -2, to_luastring(key));
+}
+
+/**
+ * Format a `Date` against Lua's `os.date` format directives. Covers the directives
+ * actually used by community skins (`%y`, `%Y`, `%m`, `%d`, `%H`, `%M`, `%S`, `%c`,
+ * `%T`, `%R`); other directives pass through verbatim. Time zone follows JS local time
+ * unless the format starts with `!` (UTC).
+ */
+function formatLuaDate(fmt: string, date: Date): string {
+  const useUtc = fmt.startsWith('!');
+  const f = useUtc ? fmt.slice(1) : fmt;
+  const get = (utc: () => number, local: () => number): number => (useUtc ? utc.call(date) : local.call(date));
+  const pad = (n: number, w = 2): string => String(n).padStart(w, '0');
+  const year = get(date.getUTCFullYear, date.getFullYear);
+  const month = get(date.getUTCMonth, date.getMonth) + 1;
+  const day = get(date.getUTCDate, date.getDate);
+  const hour = get(date.getUTCHours, date.getHours);
+  const minute = get(date.getUTCMinutes, date.getMinutes);
+  const second = get(date.getUTCSeconds, date.getSeconds);
+  return f.replace(/%(.)/g, (_match, dir) => {
+    switch (dir) {
+      case 'Y':
+        return String(year);
+      case 'y':
+        return pad(year % 100);
+      case 'm':
+        return pad(month);
+      case 'd':
+        return pad(day);
+      case 'H':
+        return pad(hour);
+      case 'M':
+        return pad(minute);
+      case 'S':
+        return pad(second);
+      case 'T':
+        return `${pad(hour)}:${pad(minute)}:${pad(second)}`;
+      case 'R':
+        return `${pad(hour)}:${pad(minute)}`;
+      case 'c':
+        return `${pad(year)}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
+      case '%':
+        return '%';
+      default:
+        return `%${dir}`;
+    }
+  });
+}
+
+function dayOfYear(d: Date, useUtc: boolean): number {
+  const start = useUtc
+    ? Date.UTC(d.getUTCFullYear(), 0, 1)
+    : new Date(d.getFullYear(), 0, 1).getTime();
+  const cur = useUtc ? d.getTime() : d.getTime() - d.getTimezoneOffset() * 60000;
+  return Math.floor((cur - start) / 86400000) + 1;
+}
+
 /**
  * Push a beatoraja built-in Lua module onto the stack, returning `true` if `name` matches a known one.
  *
@@ -469,6 +754,21 @@ function pushBuiltinLuaModule(
   switch (name) {
     case 'main_state':
       pushMainStateStub(L, owner, exposeMainState);
+      return true;
+    case 'luajava':
+      // Same stub `setupCompatStubs` exposes as a global. Themes commonly do
+      // `local luajava = require("luajava")` (the canonical access pattern in
+      // beatoraja's Java bridge), so we hand back the same surface here too.
+      pushLuajavaStub(L);
+      return true;
+    case 'timer_util':
+      // `timer_util` ships as a small helper module inside beatoraja's reference theme;
+      // community themes occasionally `require()` it without bundling the file. The real
+      // implementation only exposes a few wrappers around `main_state.timer(...)` /
+      // `main_state.set_timer(...)`, so a stub returning the empty table is enough to
+      // unblock module load — actual functionality calls will resolve to nil and
+      // pcall-wrapped consumers swallow the error.
+      lua_createtable(L, 0, 0);
       return true;
     default:
       return false;
@@ -588,13 +888,35 @@ function pushMainStateStub(L: lua_State, owner: LuaRuntimeOwner, exposeMainState
   setNumberAccessor('gauge_type', (ctx) => ctx.gaugeType?.());
 }
 
-function setupSkinConfig(L: lua_State, config: BeatorajaLuaSkinConfig | undefined): void {
+function setupSkinConfig(L: lua_State, config: BeatorajaLuaSkinConfig | undefined, skinBaseDir: string): void {
   if (config === undefined) {
     lua_pushnil(L);
     lua_setglobal(L, to_luastring('skin_config'));
     return;
   }
   pushJsValueAsLua(L, sanitizeSkinConfig(config));
+  // Attach `get_path(rel)` so `dofile(skin_config.get_path("Play/lua/sp/info.lua"))` works.
+  // Beatoraja's actual `SkinConfig.get_path` returns the absolute filesystem path; we return
+  // `${skinBaseDir}/${rel}` (or `rel` verbatim when no base dir) — a logical path string that
+  // `dofile` knows how to look up against the bundle's file map. Some skins also use the
+  // colon-call form (`skin_config:get_path(rel)`) which Lua passes the table as the first
+  // argument; the closure ignores that argument so both call styles work.
+  const getPathFn: LuaCFunction = (state) => {
+    // Stack: [self?, rel] or [rel]. Pick the last string argument.
+    const argTop = lua_gettop(state);
+    let rel = '';
+    for (let i = argTop; i >= 1; i -= 1) {
+      if (lua_type(state, i) === LUA_TSTRING) {
+        rel = lua_tojsstring(state, i);
+        break;
+      }
+    }
+    const joined = skinBaseDir.length > 0 && rel.length > 0 ? `${skinBaseDir}/${rel}` : rel;
+    lua_pushstring(state, to_luastring(joined));
+    return 1;
+  };
+  lua_pushjsfunction(L, getPathFn);
+  lua_setfield(L, -2, to_luastring('get_path'));
   lua_setglobal(L, to_luastring('skin_config'));
 }
 

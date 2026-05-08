@@ -233,13 +233,110 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(result.value).toEqual({ same: true, value: 42 });
   });
 
-  it('disables os/io and similar dangerous globals', () => {
+  it('exposes inert stubs for `os` / `io` / `dofile` so themes that reference them load without crashing', () => {
+    // Earlier versions of the sandbox stripped `os`, `io`, and `dofile` outright. Community
+    // skins (ModernChic) require()-load utility modules whose top-level body unconditionally
+    // touches these globals (`local luajava = require("luajava"); local f = io.open(...)`),
+    // so a stripped global crashed the entire module load. We now provide inert stubs:
+    // `os.time()` / `os.date()` work; `os.execute` / `os.remove` / `os.rename` no-op; `io.open`
+    // returns a fake file handle whose methods are no-ops. `dofile` is wired against the bundle
+    // resolver — without one supplied, it raises a clear "no resolver" error if invoked.
     const result = evaluateBeatorajaLuaSkin({
-      entry: enc('return { has_os = os ~= nil, has_io = io ~= nil, has_dofile = dofile ~= nil }'),
+      entry: enc(
+        [
+          'return {',
+          '  has_os = os ~= nil,',
+          '  has_io = io ~= nil,',
+          '  has_dofile = dofile ~= nil,',
+          '  os_time_is_function = type(os.time) == "function",',
+          '  io_open_is_function = type(io.open) == "function",',
+          '}',
+        ].join('\n'),
+      ),
       modules: [],
     });
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.error.message);
-    expect(result.value).toEqual({ has_os: false, has_io: false, has_dofile: false });
+    expect(result.value).toEqual({
+      has_os: true,
+      has_io: true,
+      has_dofile: true,
+      os_time_is_function: true,
+      io_open_is_function: true,
+    });
+  });
+
+  it('skin_config:get_path returns `${baseDir}/${rel}` so dofile can round-trip the path', () => {
+    // ModernChic loads its layout via `dofile(skin_config.get_path("Play/lua/sp/info.lua"))`.
+    // Both the dot-call (`skin_config.get_path(...)`) and colon-call (`skin_config:get_path(...)`)
+    // forms appear in the wild — the closure ignores any `self` argument so both work.
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local a = skin_config.get_path("Play/lua/sp/info.lua")',
+          'local b = skin_config:get_path("Play/lua/sp/info.lua")',
+          'return { dot = a, colon = b }',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: { offset: 0, option: {}, file: {} },
+      skinBaseDir: 'skin/ModernChic',
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({
+      dot: 'skin/ModernChic/Play/lua/sp/info.lua',
+      colon: 'skin/ModernChic/Play/lua/sp/info.lua',
+    });
+  });
+
+  it('dofile loads + caches bundle files via the resolver', () => {
+    // First call hits the resolver; second call (same path) returns the cached value WITHOUT
+    // touching the resolver again — beatoraja's runtime caches similarly so themes can
+    // dofile the same helper from multiple entry points without paying repeated I/O.
+    const calls: string[] = [];
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local a = dofile("util/helper.lua")',
+          'local b = dofile("util/helper.lua")',
+          'return { a = a.value, b = b.value, same = a == b }',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: { offset: 0, option: {}, file: {} },
+      skinBaseDir: 'skin/test',
+      dofileResolver: (path) => {
+        calls.push(path);
+        if (path === 'util/helper.lua') return enc('return { value = 42 }');
+        return undefined;
+      },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ a: 42, b: 42, same: true });
+    expect(calls).toEqual(['util/helper.lua']); // resolver hit ONCE despite two dofile calls
+  });
+
+  it('dofile raises a clear error when the resolver has no entry for the requested path', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc('dofile("missing.lua")'),
+      modules: [],
+      skinConfig: { offset: 0, option: {}, file: {} },
+      dofileResolver: () => undefined,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toMatch(/cannot open 'missing\.lua'.*not found/);
+  });
+
+  it('require() is case-insensitive against module keys (matches the collector\'s lowercase convention)', () => {
+    // Windows-authored skins commonly capitalise directory components (`require("Root.define")`)
+    // even though the collector keys everything under lowercase. The resolver lowercases
+    // incoming names so the same Lua source loads on every host without case-tweaking.
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc('local d = require("Root.Define"); return d.x'),
+      modules: [{ name: 'root/define', source: enc('return { x = 1 }') }],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toBe(1);
   });
 });

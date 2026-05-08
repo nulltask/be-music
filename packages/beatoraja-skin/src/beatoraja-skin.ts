@@ -91,6 +91,15 @@ export function loadBeatorajaSkin(options: LoadBeatorajaSkinOptions): LoadBeator
     entryName: entryKey,
     modules,
     skinConfig: options.skinConfig,
+    skinBaseDir: baseDir,
+    // `dofile(skin_config.get_path("Play/lua/sp/info.lua"))` (the ModernChic pattern)
+    // resolves to a path the skin built up via `get_path` — `${baseDir}/${rel}` after our
+    // `setupSkinConfig` joins them. Look that up against the bundle's file map.
+    dofileResolver: (path) => {
+      const key = findCaseInsensitivePath(options.files, normalizePath(path));
+      if (key === undefined) return undefined;
+      return asLoadedBytes(options.files.get(key));
+    },
   });
   if (!evalResult.ok) {
     return { ok: false, error: { message: evalResult.error.message } };
@@ -138,15 +147,17 @@ export function collectBeatorajaLuaModules(
     let moduleKey: string | undefined;
     if (fileDir === baseDirNorm || fileDir.startsWith(`${baseDirNorm}/`)) {
       // Inside (or a sub-directory of) the entry directory — strip the prefix to form the module key.
+      // Use the lowercase form so the key is case-insensitive against `require()` lookups (the
+      // resolver also lowercases incoming names).
       const relative = fileDir === baseDirNorm ? '' : fileDir.slice(baseDirNorm.length + 1);
-      const fileName = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+      const fileName = lastSlash >= 0 ? lower.slice(lastSlash + 1) : lower;
       const stem = fileName.slice(0, -'.lua'.length);
       moduleKey = relative === '' ? stem : `${relative}/${stem}`;
     } else if (fileDir === parentDirNorm) {
       // Parent-directory shared module — beatoraja themes occasionally keep helpers (e.g. `play_parts.lua`)
       // one level above the entry. Resolved as the bare stem; same-directory entries take precedence on
       // collision because `require("play_parts")` should prefer the closer file.
-      const fileName = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+      const fileName = lastSlash >= 0 ? lower.slice(lastSlash + 1) : lower;
       moduleKey = fileName.slice(0, -'.lua'.length);
     } else {
       continue;
