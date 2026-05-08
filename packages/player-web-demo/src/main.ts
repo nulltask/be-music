@@ -57,6 +57,7 @@ import {
 } from '@be-music/player-web';
 import {
   BEATORAJA_SKIN_TYPE,
+  buildDefaultSkinConfigFiles,
   buildDefaultSkinConfigOptions,
   bundleBeatorajaSources,
   expandBeatorajaWildcard,
@@ -2549,7 +2550,18 @@ class PlayerWebDemoApp {
   private resolveBeatorajaSkinConfig(entryPath: string, header: BeatorajaSkinHeader): BeatorajaSkinConfig {
     let cached = this.beatorajaSkinConfigByEntry.get(entryPath);
     if (cached === undefined) {
-      cached = { offset: 0, option: buildDefaultSkinConfigOptions(header), file: {} };
+      // Seed both `option` (from `property[].def`) AND `file` (from `filepath[].def`). Earlier
+      // `file` started empty, which made the wildcard fallback inside `resolveSourcePath` pick
+      // whichever filename happened to sort first instead of the author's authored default —
+      // ModernChic's `key` filepath got `#default.png` instead of the intended `harf.png`,
+      // its `bomb` filepath got `Kakabomb.png` instead of `diamond SCUROed..png`, etc.
+      // `buildDefaultSkinConfigFiles` resolves each `filepath[].def` against the wildcard's
+      // match set so first-time mounts pick the author-intended file rather than a sort-order
+      // accident. The bundle's `files` map is the same one `loadBeatorajaSkin` consumed, so
+      // the wildcard expansion sees identical candidates either way.
+      const file =
+        this.beatorajaTheme !== undefined ? buildDefaultSkinConfigFiles(header, this.beatorajaTheme.files, entryPath) : {};
+      cached = { offset: 0, option: buildDefaultSkinConfigOptions(header), file };
       this.beatorajaSkinConfigByEntry.set(entryPath, cached);
     }
     return cached;
