@@ -9,6 +9,7 @@ import {
   describeSongCollection,
   downloadBlob,
   loadAssetBytes,
+  loadTextureFromBytes,
   logger,
   makeWebmSeekable,
   parseCompressorMode,
@@ -2002,6 +2003,55 @@ class PlayerWebDemoApp {
   }
 
   /**
+   * Decode the focused chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps to Pixi textures
+   * for the beatoraja decide scene's synthetic-id destinations (`-100` / `-101` / `-102`).
+   * Each entry is best-effort — missing or malformed bitmaps resolve to `undefined` and the
+   * matching destinations stay hidden. Uses the same `loadTextureFromBytes` decoder the LR2
+   * scenes use, so TGA / PNG / BMP / JPG all work transparently.
+   */
+  private async loadBeatorajaChartImages(song: BrowserSongEntry): Promise<{
+    stageFile?: ChartImageTexture;
+    backBmp?: ChartImageTexture;
+    banner?: ChartImageTexture;
+  }> {
+    const source = resolveSongSource(this.collection, song);
+    if (source === undefined) return {};
+    const meta = song.chart.metadata;
+    const out: { stageFile?: ChartImageTexture; backBmp?: ChartImageTexture; banner?: ChartImageTexture } = {};
+    const decode = async (relPath: string | undefined): Promise<ChartImageTexture | undefined> => {
+      if (relPath === undefined || relPath.length === 0) return undefined;
+      // Resolve relative to the chart's directory — `#STAGEFILE foo.png` lives next to the BMS
+      // unless the path starts with `/`. We strip any leading slash and join under the chart's
+      // dirname for the lookup.
+      const chartDir = song.chartPath.includes('/') ? song.chartPath.slice(0, song.chartPath.lastIndexOf('/')) : '';
+      const normalized = relPath.replace(/^\/+/, '');
+      const candidates = [chartDir.length > 0 ? `${chartDir}/${normalized}` : normalized, normalized];
+      for (const candidate of candidates) {
+        const entry = source.files.get(candidate);
+        if (entry === undefined) continue;
+        const bytes = await loadAssetBytes(entry);
+        if (bytes === undefined) continue;
+        try {
+          return await loadTextureFromBytes(candidate, bytes);
+        } catch (error) {
+          gameplayLog.info('beatoraja decide chart-image decode failed', { path: candidate, error });
+          return undefined;
+        }
+      }
+      return undefined;
+    };
+    const [stageFile, backBmp, banner] = await Promise.all([
+      decode(meta.stageFile),
+      decode(meta.backBmp),
+      decode(meta.banner),
+    ]);
+    if (stageFile !== undefined) out.stageFile = stageFile;
+    if (backBmp !== undefined) out.backBmp = backBmp;
+    if (banner !== undefined) out.banner = banner;
+    return out;
+  }
+
+  /**
    * Apply a fresh skin-config to the active beatoraja select scene WITHOUT disposing / re-mounting.
    * Re-runs the skin's Lua `main()` (or re-parses the JSON) with the new options, refreshes the
    * texture cache (Lua skins emit different `source[]` lists per option set), then calls
@@ -2144,6 +2194,11 @@ class PlayerWebDemoApp {
       then();
     };
 
+    // Resolve the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps to Pixi textures so the
+    // decide skin's synthetic-id destinations (-100 / -101 / -102) can paint them. Loading is
+    // best-effort — missing bitmaps just leave the matching destinations hidden.
+    const chartImages = await this.loadBeatorajaChartImages(song);
+
     this.beatorajaDecideScene = new PixiBeatorajaDecideScene({
       skin: result.skin,
       textures,
@@ -2153,6 +2208,7 @@ class PlayerWebDemoApp {
       chart: resolvedChart,
       skinConfig: config,
       song,
+      chartImages,
       bgmBytes: this.beatorajaThemeBgm.decide,
       onContinue: () =>
         advance(() => {
@@ -3086,6 +3142,14 @@ function playSkinTypeForVariant(variant: BeatorajaPlayableVariant): number {
       return BEATORAJA_SKIN_TYPE.PLAY_9KEYS;
   }
 }
+
+/**
+ * Pixi `Texture` type as exposed by player-web's re-exported `loadTextureFromBytes`. Derived
+ * from the function's return type so the demo doesn't need a direct `pixi.js` dependency for
+ * the chart-image plumbing. `Awaited<…>` strips the `Promise` wrapper; `NonNullable<…>` strips
+ * the `| undefined` so callers can branch on presence.
+ */
+type ChartImageTexture = NonNullable<Awaited<ReturnType<typeof loadTextureFromBytes>>>;
 
 /**
  * Decode a byte buffer with the named encoding via the platform `TextDecoder`. Throws if the

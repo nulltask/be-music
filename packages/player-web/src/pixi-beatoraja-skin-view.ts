@@ -202,6 +202,17 @@ export interface BeatorajaPlaySkinViewOptions {
    * of buttons (`JUDGE_TIMING` notably).
    */
   onButtonAction?: (act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }) => void;
+  /**
+   * Resolve a synthetic chart-image id (`-100` STAGEFILE / `-101` BACKBMP / `-102` BANNER) to
+   * a Pixi `Texture`. Beatoraja's renderer treats these ids as virtual sources keyed to the
+   * chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps; skins reference them in
+   * `destination[]` without bundling their own copy.
+   *
+   * Hosts that have the chart's image bytes pre-decoded (= the decide / select scenes once
+   * the song is focused) return the matching texture; everything else returns `undefined` so
+   * the destination stays hidden. The view itself doesn't know how to load chart bitmaps.
+   */
+  chartImageProvider?: (syntheticId: number) => Texture | undefined;
 }
 
 interface SpriteEntry {
@@ -466,6 +477,7 @@ export class BeatorajaPlaySkinView {
   private readonly onButtonAction:
     | ((act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }) => void)
     | undefined;
+  private readonly chartImageProvider: ((syntheticId: number) => Texture | undefined) | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -496,6 +508,7 @@ export class BeatorajaPlaySkinView {
     this.resolveTimingSamples = options.resolveTimingSamples ?? (() => undefined);
     this.resolveTimingDistribution = options.resolveTimingDistribution ?? (() => undefined);
     this.onButtonAction = options.onButtonAction;
+    this.chartImageProvider = options.chartImageProvider;
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -752,11 +765,12 @@ export class BeatorajaPlaySkinView {
       // Synthetic image ids — beatoraja's renderer treats these as virtual images that don't
       // need a `source[]` declaration. Skin authors reference them directly:
       //   -110 BLACK — solid black panel (transitions / overlays / "letterbox-style" frames).
-      //   -100 STAGEFILE / -101 BACKBMP / -102 BANNER are wired separately when chart imagery
-      //     is available (see the host scene's `chartImageProvider` resolver).
+      //   -100 STAGEFILE / -101 BACKBMP / -102 BANNER — chart-bitmap virtual sources keyed off
+      //     the host's `chartImageProvider` callback. Resolves to `undefined` (hidden) when no
+      //     chart imagery is available.
       // Without virtual handling, these destinations get filtered as "no matching image" and
       // never render. ModernChic's decide pane authors a -110 panel that fades to fullscreen
-      // on FADEOUT — without this, the chart's stagefile bleeds through the overlay.
+      // on FADEOUT and a -100 stagefile preview that scales out from the centre.
       if (group.id === SYNTHETIC_IMAGE_BLACK_ID) {
         const sprite = new Sprite({ texture: ensureBlackTexture(), alpha: 0 });
         this.container.addChild(sprite);
@@ -769,6 +783,29 @@ export class BeatorajaPlaySkinView {
           currentFrame: 0,
           lastDisapearRatio: 1,
         });
+        continue;
+      }
+      if (
+        group.id === SYNTHETIC_IMAGE_STAGEFILE_ID ||
+        group.id === SYNTHETIC_IMAGE_BACKBMP_ID ||
+        group.id === SYNTHETIC_IMAGE_BANNER_ID
+      ) {
+        const provided = this.chartImageProvider?.(group.id);
+        if (provided !== undefined && provided !== Texture.EMPTY) {
+          const sprite = new Sprite({ texture: provided, alpha: 0 });
+          this.container.addChild(sprite);
+          this.entries.push({
+            kind: 'image',
+            group,
+            // Synthesised image: source rect spans the texture's natural pixel bounds so the
+            // dst-rect scaling math works the same as for any normal image source.
+            image: makeSyntheticChartImage(group.id, provided.width, provided.height),
+            baseTexture: provided,
+            sprite,
+            currentFrame: 0,
+            lastDisapearRatio: 1,
+          });
+        }
         continue;
       }
       const image = imageById.get(group.id);
@@ -2380,6 +2417,38 @@ function computeDisapearVisibleRatio(
  * backings without bundling a black PNG.
  */
 const SYNTHETIC_IMAGE_BLACK_ID = -110;
+/** `-100` STAGEFILE — the chart's `#STAGEFILE` bitmap (loading-screen art). */
+const SYNTHETIC_IMAGE_STAGEFILE_ID = -100;
+/** `-101` BACKBMP — the chart's `#BACKBMP` bitmap (select-scene preview). */
+const SYNTHETIC_IMAGE_BACKBMP_ID = -101;
+/** `-102` BANNER — the chart's `#BANNER` bitmap (small song-bar banner). */
+const SYNTHETIC_IMAGE_BANNER_ID = -102;
+
+/**
+ * Build a synthetic `BeatorajaImageElement` for one of the chart-image sentinel ids. `w / h` are
+ * sourced from the texture's natural pixel size so the destination's cell-cropping math
+ * produces the right source rect — the dst rect handles the on-screen scaling separately.
+ */
+function makeSyntheticChartImage(id: number, w: number, h: number): BeatorajaImageElement {
+  return {
+    id,
+    src: 0,
+    x: 0,
+    y: 0,
+    w,
+    h,
+    divx: 1,
+    divy: 1,
+    timer: 0,
+    cycle: 0,
+    ref: 0,
+    len: 0,
+    act: 0,
+    disapearLine: -1,
+    isDisapearLineLinkLift: false,
+    ifCodes: [],
+  };
+}
 
 /**
  * `BeatorajaImageElement` shape for the synthetic black panel. The `src` is irrelevant since we

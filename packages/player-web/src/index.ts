@@ -26,3 +26,6 @@ export * from './pixi-result.ts';
 export * from './pixi-scene-host.ts';
 export * from './pixi-select.ts';
 export * from './types.ts';
+// Targeted re-exports of helpers used by the demo's beatoraja decide path so it can decode
+// the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps without reaching into private modules.
+export { loadTextureFromBytes } from './lr2-textures.ts';

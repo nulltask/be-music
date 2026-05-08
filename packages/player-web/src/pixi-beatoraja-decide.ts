@@ -64,6 +64,21 @@ export interface PixiBeatorajaDecideSceneOptions {
    */
   bgmBytes?: Uint8Array;
   /**
+   * Pre-decoded chart imagery for the synthetic-id slots `-100 STAGEFILE` / `-101 BACKBMP` /
+   * `-102 BANNER`. Default decide skin and ModernChic both author a `-100` destination that
+   * paints the chart's loading-screen art behind the title; ModernChic also uses `-110 BLACK`
+   * as an overlay (handled separately by the view as a synthetic black quad).
+   *
+   * Hosts that have decoded the chart's bitmaps pass them in here; missing entries hide the
+   * matching destinations. Loading is the host's responsibility — the scene doesn't own a
+   * decoder for arbitrary BMP / PNG / JPG paths.
+   */
+  chartImages?: {
+    stageFile?: import('pixi.js').Texture;
+    backBmp?: import('pixi.js').Texture;
+    banner?: import('pixi.js').Texture;
+  };
+  /**
    * Auto-advance window in ms. The scene fires `onContinue` automatically after this many ms have
    * elapsed since `enter()`, mirroring beatoraja's reference behavior of holding the splash for a
    * short consistent window before kicking off gameplay. Set to `0` to disable auto-advance (the
@@ -145,6 +160,10 @@ export class PixiBeatorajaDecideScene implements PixiScene {
       // Skipped (returns `undefined` → graph hidden) for the live-judge histogram types
       // (1=judge spread, 2=early/late) since decide is pre-play; those have no data yet.
       resolveJudgeGraphBars: (type) => this.resolveJudgeGraphBars(type),
+      // Synthetic-id chart-image lookup. `-100 STAGEFILE` / `-101 BACKBMP` / `-102 BANNER`
+      // resolve to the host-supplied textures; missing entries return `undefined` and the
+      // matching destinations stay hidden.
+      chartImageProvider: (id) => this.resolveChartImage(id),
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
@@ -349,6 +368,30 @@ export class PixiBeatorajaDecideScene implements PixiScene {
   private resolveJudgeGraphBars(type: number): ReadonlyArray<number> | undefined {
     if (type === 0) return this.noteBreakdownBars;
     return undefined;
+  }
+
+  /**
+   * Synthetic chart-image resolver. Maps the negative-id sentinels onto whichever pre-decoded
+   * chart bitmaps the host supplied via `chartImages`. Missing entries return `undefined`,
+   * which the view interprets as "destination hidden".
+   *
+   *   -100 STAGEFILE — the chart's `#STAGEFILE` (loading-screen art).
+   *   -101 BACKBMP   — the chart's `#BACKBMP` (select-screen preview).
+   *   -102 BANNER    — the chart's `#BANNER` (small song-bar banner).
+   */
+  private resolveChartImage(syntheticId: number): import('pixi.js').Texture | undefined {
+    const images = this.options.chartImages;
+    if (images === undefined) return undefined;
+    switch (syntheticId) {
+      case -100:
+        return images.stageFile;
+      case -101:
+        return images.backBmp;
+      case -102:
+        return images.banner;
+      default:
+        return undefined;
+    }
   }
 
   private resolveSongText(refOp: number): string | undefined {
