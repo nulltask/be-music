@@ -82,6 +82,13 @@ const SIDE_JUDGE_OPS: Record<1 | 2, ReadonlyArray<number>> = {
  * gate so only the active judge kind paints. The existing op gate (if the author set one) is
  * preserved by appending — both must be active for visibility.
  *
+ * Indices beyond the 6-tier `PG/GR/GD/BD/PR/MS` set alias back to PERFECT — beatoraja themes
+ * use the extra slots for popn-style PG-only secondary effects. Default 9K's `play9.json`
+ * authors a 7-image judge with `judgef-pg2` at index 6, and the engine fires both that AND
+ * the standard `judgef-pg` simultaneously on a PERFECT verdict. Without this aliasing the
+ * 7th entry was silently dropped (`i < ops.length` cap), so 9K plays missed half of the
+ * authored PG splash.
+ *
  * Returns the freshly-allocated destination records; caller concats them with `skin.destination`
  * before passing to `normalizeBeatorajaDestinations`.
  */
@@ -92,15 +99,17 @@ export function expandBeatorajaJudgeDestinations(
   for (const judge of judges) {
     const side: 1 | 2 = judge.index === 1 ? 2 : 1;
     const ops = SIDE_JUDGE_OPS[side];
-    for (let i = 0; i < judge.images.length && i < ops.length; i += 1) {
+    for (let i = 0; i < judge.images.length; i += 1) {
       const child = judge.images[i];
       if (child === undefined) continue;
-      out.push(addOpGate(child, ops[i]!));
+      const gate = ops[i] ?? ops[0]!;
+      out.push(addOpGate(child, gate));
     }
-    for (let i = 0; i < judge.numbers.length && i < ops.length; i += 1) {
+    for (let i = 0; i < judge.numbers.length; i += 1) {
       const child = judge.numbers[i];
       if (child === undefined) continue;
-      out.push(addOpGate(child, ops[i]!));
+      const gate = ops[i] ?? ops[0]!;
+      out.push(addOpGate(child, gate));
     }
   }
   return out;
