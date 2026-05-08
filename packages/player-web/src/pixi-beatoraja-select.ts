@@ -873,6 +873,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * Cycle the sort mode and rebuild the song list against the new ordering. Wraps at 0..7.
    * Stays within the current folder — sorting doesn't change which folder you're in, just the
    * row order inside it.
+   *
+   * Cursor preservation: capture the focused entry's IDENTITY (song reference for song bars,
+   * folder reference for folder bars) before the rebuild, then re-find it in the new entries
+   * array and re-anchor the cursor to that index. Without this the cursor stays on the
+   * `currentIndex` slot and a different song appears focused — the user has to manually
+   * scroll to find the song they were on.
    */
   private cycleSortMode(step: number): void {
     const next = (((this.sortMode + step) % 8) + 8) % 8;
@@ -880,7 +886,19 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.sortMode = next;
     // eslint-disable-next-line no-console
     console.log('[beatoraja-select] act=12 SORT cycled', JSON.stringify({ to: next }));
+    const previouslyFocused = this.entries[this.currentIndex];
     this.refreshEntries(this.currentIndex);
+    if (previouslyFocused !== undefined) {
+      // Re-locate the focused entry in the new (sorted) list. Identity comparison works
+      // because BrowserSongEntry / BrowserFolderNode objects are stable references — sorting
+      // produces a new array but reuses the same item references.
+      const newIndex = this.entries.findIndex((entry) => isSameEntry(entry, previouslyFocused));
+      if (newIndex >= 0) {
+        this.currentIndex = newIndex;
+        this.scrollPosition = newIndex;
+        this.refreshRowVisuals();
+      }
+    }
   }
 
   /**
@@ -1454,6 +1472,19 @@ function safeResolveChartVariant(song: BrowserSongEntry): '5' | '7' | '9' | '10'
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Identity-equality on browse entries. Songs compare by reference (BrowserSongEntry objects
+ * are stable across sort / filter rebuilds — array operations re-arrange but never re-allocate
+ * them). Folders compare by reference too, but `groupSongsByFolder` constructs a fresh
+ * BrowserFolderNode list on every call, so we fall back to the human label as a stable id.
+ */
+function isSameEntry(a: BrowserBrowseEntry, b: BrowserBrowseEntry): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'song' && b.kind === 'song') return a.song === b.song;
+  if (a.kind === 'folder' && b.kind === 'folder') return a.folder.label === b.folder.label;
+  return false;
 }
 
 /**
