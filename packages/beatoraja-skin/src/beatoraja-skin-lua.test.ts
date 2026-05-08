@@ -376,4 +376,94 @@ describe('evaluateBeatorajaLuaSkin', () => {
     if (!result.ok) throw new Error(result.error.message);
     expect(result.value).toBe(1);
   });
+
+  it('drives ModernChic-style customoption gating: skin_config.option picks select which optional dofile loads', () => {
+    // ModernChic's `Play/lua/sp/property.lua` builds boolean predicates as closures over
+    // `skin_config.option[parentName] == auto_num`, and `play7_hw.lua`'s `main()` gates
+    // `dofile` calls on those predicates:
+    //
+    //   if PROPERTY.isAttackModeOn() then
+    //     dofile(skin_config.get_path("Play/lua/sp/attack.lua"))
+    //   end
+    //
+    // The auto-numbered op is whatever the property module's counter assigned to the "戦闘モード/有効"
+    // child item. This test verifies the full chain: condition closure reads from skin_config,
+    // dofile fires only when the condition is true, and the gated module's contribution shows up
+    // in the returned skin.
+    const propertyModule = enc(
+      [
+        'local module = {}',
+        'local nextNum = 900',
+        'local function makeChild(parent, label)',
+        '  local num = nextNum',
+        '  nextNum = nextNum + 1',
+        '  -- Mirrors customoption.chiled — closure-captured num + parent name read live from skin_config.',
+        '  local cond = function() return skin_config.option[parent] == num end',
+        '  return num, cond',
+        'end',
+        'local attackOff, isAttackModeOff = makeChild("戦闘モード", "無効")',
+        'local attackOn, isAttackModeOn = makeChild("戦闘モード", "有効")',
+        'module.isAttackModeOn = isAttackModeOn',
+        'module.attackOnNum = attackOn',
+        'module.attackOffNum = attackOff',
+        'return module',
+      ].join('\n'),
+    );
+    const entry = enc(
+      [
+        'local property = require("property")',
+        'if not skin_config then',
+        '  -- Header pass — return the schema so the host can present the option.',
+        '  return { type = 0, w = 1280, h = 720, attackOn = property.attackOnNum, attackOff = property.attackOffNum }',
+        'end',
+        'local skin = {}',
+        'if property.isAttackModeOn() then',
+        '  local attack = dofile(skin_config.get_path("Play/lua/sp/attack.lua"))',
+        '  skin.attackPart = attack.label',
+        'else',
+        '  skin.attackPart = "(disabled)"',
+        'end',
+        'return skin',
+      ].join('\n'),
+    );
+    const dofileResolver = (path: string): Uint8Array | undefined => {
+      if (path === 'skin/Play/lua/sp/attack.lua') return enc('return { label = "attack-loaded" }');
+      return undefined;
+    };
+
+    // Header pass — no skin_config — exposes the auto-num so the host UI can wire the dropdown.
+    const headerResult = evaluateBeatorajaLuaSkin({
+      entry,
+      modules: [{ name: 'property', source: propertyModule }],
+      dofileResolver,
+      skinBaseDir: 'skin',
+    });
+    if (!headerResult.ok) throw new Error(headerResult.error.message);
+    const header = headerResult.value as { attackOn: number; attackOff: number };
+    expect(header.attackOff).toBe(900);
+    expect(header.attackOn).toBe(901);
+
+    // Main pass — user picked attackOn (= 901). dofile should fire and the skin gets the loaded label.
+    const onResult = evaluateBeatorajaLuaSkin({
+      entry,
+      modules: [{ name: 'property', source: propertyModule }],
+      dofileResolver,
+      skinBaseDir: 'skin',
+      skinConfig: { offset: 0, file: {}, option: { '戦闘モード': header.attackOn } },
+    });
+    if (!onResult.ok) throw new Error(onResult.error.message);
+    expect(onResult.value).toEqual({ attackPart: 'attack-loaded' });
+
+    // Main pass — user picked attackOff (= 900). dofile should NOT fire even though the resolver
+    // can produce the bytes; the predicate gates entry into the if-block.
+    const offResult = evaluateBeatorajaLuaSkin({
+      entry,
+      modules: [{ name: 'property', source: propertyModule }],
+      dofileResolver,
+      skinBaseDir: 'skin',
+      skinConfig: { offset: 0, file: {}, option: { '戦闘モード': header.attackOff } },
+    });
+    if (!offResult.ok) throw new Error(offResult.error.message);
+    expect(offResult.value).toEqual({ attackPart: '(disabled)' });
+  });
 });
