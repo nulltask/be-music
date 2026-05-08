@@ -98,6 +98,25 @@ export interface PixiBeatorajaDecideSceneOptions {
    * `onContinue` so the splash stays dismissable in any environment.
    */
   onCancel?: () => void;
+  /**
+   * Optional live load-progress hook in `[0, 1]`. The decide scene polls this once per tick and
+   * surfaces the value through:
+   *
+   *   - `value[].ref = 165` (`BEATORAJA_NUM.LOADING_PROGRESS`) — the integer percentage `0..100`
+   *     that beatoraja themes display next to the splash loading bar.
+   *   - `graph[].type = 102` — the proportional bar-fill the default skin authors as
+   *     `{ id = "load-progress", type = 102 }`. Filled from `0` (empty) to `1` (full).
+   *   - `op` set membership — `BEATORAJA_OP.NOW_LOADING` (80) is active while progress `< 1`,
+   *     `BEATORAJA_OP.LOADED` (81) is active at `>= 1`. Reference theme destinations gate
+   *     `load-progress` chrome on `op = {80}` and "press to continue" prompts on `op = {81}`.
+   *
+   * When omitted, the scene synthesizes a 0 → 1 ramp tied to the {@link autoAdvanceMs} window —
+   * good enough for the common case where assets pre-decode at the host before decide mounts
+   * (the splash is just a brief consistent dramatic pause). Hosts that DO have async asset prep
+   * running concurrently should override this with the prep's actual progress so the bar tracks
+   * reality instead of an arbitrary synthetic clock.
+   */
+  getLoadingProgress?: () => number;
 }
 
 const DEFAULT_AUTO_ADVANCE_MS = 1500;
@@ -160,6 +179,12 @@ export class PixiBeatorajaDecideScene implements PixiScene {
       // Skipped (returns `undefined` → graph hidden) for the live-judge histogram types
       // (1=judge spread, 2=early/late) since decide is pre-play; those have no data yet.
       resolveJudgeGraphBars: (type) => this.resolveJudgeGraphBars(type),
+      // Bar-fill graphs. `type = 102` is the loading-progress bar — default play7's
+      // `{ id = "load-progress", type = 102 }` graph. The decide scene fills this `0 → 1`
+      // across the splash window so the skin's authored bar visually progresses (rather than
+      // staying empty for the splash duration). Other `type` values fall through to
+      // `undefined` so unknown graph kinds hide cleanly.
+      resolveGraphValue: (type) => (type === 102 ? this.currentLoadingProgress() : undefined),
       // Synthetic-id chart-image lookup. `-100 STAGEFILE` / `-101 BACKBMP` / `-102 BANNER`
       // resolve to the host-supplied textures; missing entries return `undefined` and the
       // matching destinations stay hidden.
@@ -350,7 +375,45 @@ export class PixiBeatorajaDecideScene implements PixiScene {
         ops.add(BEATORAJA_OP.DIFFICULTY_UNDEFINED);
         break;
     }
+    // Loading-state op gates. Reference theme destinations gate the splash-progress chrome on
+    // `op = {80}` (NOW_LOADING) so the bar only appears WHILE loading, and "press to continue"
+    // prompts on `op = {81}` (LOADED) so they reveal once the load has finished. Mirror the
+    // same flip-flop here using {@link currentLoadingProgress} as the source of truth: while
+    // progress < 1 the bar is visible; at >= 1 the prompts (and any post-load chrome) reveal.
+    if (this.currentLoadingProgress() < 1) {
+      ops.add(BEATORAJA_OP.NOW_LOADING);
+    } else {
+      ops.add(BEATORAJA_OP.LOADED);
+    }
     return ops;
+  }
+
+  /**
+   * Resolve the active loading-progress ratio in `[0, 1]`. Order of precedence:
+   *
+   *   1. Host-supplied {@link PixiBeatorajaDecideSceneOptions.getLoadingProgress} when set —
+   *      lets a host with real async asset prep drive the bar from actual completion data.
+   *   2. Synthesized ramp tied to {@link autoAdvanceMs}: `elapsed / window`. Default 1500 ms
+   *      window means the bar fills smoothly across the splash duration. Clamped to `[0, 1]`
+   *      so the resolver never returns out-of-range values even if the host's clock drifts
+   *      past the auto-advance.
+   *
+   * The synthesized fallback is "honest enough" because the decide scene runs concurrently
+   * with — or after — the host's real prep step; the user perceives the splash as "loading"
+   * and the bar's smooth fill matches that mental model regardless of whether the prep is
+   * actually still working.
+   */
+  private currentLoadingProgress(): number {
+    const supplied = this.options.getLoadingProgress?.();
+    if (typeof supplied === 'number' && Number.isFinite(supplied)) {
+      return Math.max(0, Math.min(1, supplied));
+    }
+    const autoAdvance = this.options.autoAdvanceMs ?? DEFAULT_AUTO_ADVANCE_MS;
+    if (autoAdvance <= 0) return 1;
+    if (this.startMs === 0) return 0;
+    const elapsed = performance.now() - this.startMs;
+    if (elapsed <= 0) return 0;
+    return Math.min(1, elapsed / autoAdvance);
   }
 
   private advance(then: () => void): void {
@@ -457,6 +520,13 @@ export class PixiBeatorajaDecideScene implements PixiScene {
       case BEATORAJA_NUM.MINBPM:
       case BEATORAJA_NUM.NOWBPM:
         return Math.round(song?.bpm ?? 0);
+      // `loading_progress = 165` — integer percentage shown next to the splash loading bar.
+      // Driven by {@link currentLoadingProgress} so themes that author both the bar
+      // (`graph[].type = 102`) AND the percent readout (`value[].ref = 165`) see them rise
+      // together. Rounded to the nearest integer because beatoraja's value displays don't
+      // surface fractional digits for this slot.
+      case BEATORAJA_NUM.LOADING_PROGRESS:
+        return Math.round(this.currentLoadingProgress() * 100);
       // Decide is "between" select and gameplay — there's no live score / combo / judge to display
       // yet, but a skin author may still author value slots for them. Return 0 to keep the
       // readouts visually present without spamming "ref not wired" warnings.
