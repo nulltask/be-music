@@ -287,6 +287,14 @@ export interface BeatorajaSkin extends BeatorajaSkinHeader {
   liftCover?:
     | Readonly<Record<string, unknown>>
     | ReadonlyArray<Readonly<Record<string, unknown>>>;
+  /**
+   * `pmchara[]` — POMYU character display block authored on the popn-style 9K skin
+   * (`type=4` `play9.json`). Each entry pairs a destination id with a `source[]` slot that
+   * supplies frame images for the dancing-character animation. Schema lives in
+   * `beatoraja-skin-pmchara.ts`; the renderer treats entries as static sprites for now until
+   * frame-cycling animation support lands.
+   */
+  pmchara?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   disapearLine?: Readonly<Record<string, unknown>>;
   isDisapearLineLinkLift?: boolean | number;
   bpm?: Readonly<Record<string, unknown>>;

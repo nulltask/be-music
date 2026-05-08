@@ -25,6 +25,7 @@ import {
   normalizeBeatorajaGraphs,
   normalizeBeatorajaImages,
   normalizeBeatorajaImagesets,
+  normalizeBeatorajaPmCharas,
   normalizeBeatorajaNote,
   normalizeBeatorajaJudges,
   normalizeBeatorajaSliders,
@@ -43,6 +44,7 @@ import {
   type BeatorajaImageElement,
   type BeatorajaImageId,
   type BeatorajaImagesetElement,
+  type BeatorajaPmCharaElement,
   type BeatorajaIntegerPropertyRef,
   type BeatorajaLuaRuntimeContext,
   type BeatorajaSkin,
@@ -415,6 +417,23 @@ interface ImagesetEntry {
   lastFrame: number;
 }
 
+/**
+ * `pmchara[]` POMYU character entry. Popn-style 9K skins author dancing-character displays
+ * keyed off a `source[]` slot's full texture (no sub-rect crop). The renderer paints the
+ * source's whole image at the destination rect — frame-cycled animation driven by chart cues
+ * is a follow-up patch; until then this entry behaves like a static fullscreen image. Source
+ * resolution gracefully hides the sprite when the slot has no texture (typical case: the
+ * `def: "Off"` filepath default is set, so no character pack loads).
+ */
+interface PmCharaEntry {
+  kind: 'pmchara';
+  group: BeatorajaDestinationGroup;
+  element: BeatorajaPmCharaElement;
+  /** Full source texture (whole `source[].path` image) — `undefined` when no character pack loaded. */
+  baseTexture: ReturnType<BeatorajaTextureCache['get']>;
+  sprite: Sprite;
+}
+
 type ViewEntry =
   | SpriteEntry
   | ValueEntry
@@ -428,7 +447,8 @@ type ViewEntry =
   | TimingDistributionEntry
   | SliderEntry
   | ImagesetEntry
-  | GaugeEntry;
+  | GaugeEntry
+  | PmCharaEntry;
 
 export class BeatorajaPlaySkinView {
   readonly container = new Container();
@@ -697,6 +717,30 @@ export class BeatorajaPlaySkinView {
       gaugeElement = gauge;
     }
 
+    // `pmchara[]` — POMYU character display block, popn-style 9K skin only
+    // (`default/play9.json`). Same id-namespace contention rule as the others; loses to every
+    // prior kind on collision. Skins without `pmchara[]` get an empty map and the rest of the
+    // pipeline runs unchanged.
+    const pmcharaById = new Map<BeatorajaImageId, BeatorajaPmCharaElement>();
+    for (const pmchara of normalizeBeatorajaPmCharas((options.skin as { pmchara?: unknown }).pmchara)) {
+      if (
+        !imageById.has(pmchara.id) &&
+        !valueById.has(pmchara.id) &&
+        !textById.has(pmchara.id) &&
+        !graphById.has(pmchara.id) &&
+        !sliderById.has(pmchara.id) &&
+        !bpmGraphById.has(pmchara.id) &&
+        !judgeGraphById.has(pmchara.id) &&
+        !gaugeGraphById.has(pmchara.id) &&
+        !timingVisualizerById.has(pmchara.id) &&
+        !timingDistributionById.has(pmchara.id) &&
+        !imagesetById.has(pmchara.id) &&
+        gaugeElement?.id !== pmchara.id
+      ) {
+        pmcharaById.set(pmchara.id, pmchara);
+      }
+    }
+
     // Expand `judge[]` entries into synthetic destinations gated on the matching judge ops
     // (`P1_JUDGE_PERFECT = 241` etc.). The expansion adds one destination per (judge entry ×
     // image / number sub-entry × judge kind), each with the per-judge op appended to the gate.
@@ -862,6 +906,11 @@ export class BeatorajaPlaySkinView {
         if (imagesetElement !== undefined) {
           const imagesetEntry = this.buildImagesetEntry(group, imagesetElement, imageById, options.textures);
           if (imagesetEntry !== undefined) this.entries.push(imagesetEntry);
+          continue;
+        }
+        const pmcharaElement = pmcharaById.get(group.id);
+        if (pmcharaElement !== undefined) {
+          this.entries.push(this.buildPmCharaEntry(group, pmcharaElement, options.textures));
           continue;
         }
         if (gaugeElement !== undefined && group.id === gaugeElement.id) {
@@ -1196,6 +1245,25 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
+   * Build a `pmchara[]` entry — POMYU character display. The source's full texture is used as
+   * the sprite (no sub-rect crop, no cell-strip animation). Hidden cleanly when the source
+   * has no resolved texture (e.g. the user picked `def: "Off"` for the character filepath, or
+   * the wildcard's `|TAG|` syntax didn't match any file in the pack — both are graceful
+   * degradation paths for the common "no character pack dropped" case).
+   */
+  private buildPmCharaEntry(
+    group: BeatorajaDestinationGroup,
+    element: BeatorajaPmCharaElement,
+    textures: BeatorajaTextureCache,
+  ): PmCharaEntry {
+    const baseTexture = textures.get(element.src);
+    const sprite = new Sprite({ texture: baseTexture, alpha: 0 });
+    this.container.addChild(sprite);
+    applyTextureFilterMode(baseTexture, group.filter);
+    return { kind: 'pmchara', group, element, baseTexture, sprite };
+  }
+
+  /**
    * Build a slider entry — a `Sprite` with a fixed source-rect crop that translates within its
    * destination box per frame. The base texture is captured once at build time; per-frame updates
    * only adjust position (no re-cropping needed since the slider's crop is constant).
@@ -1384,6 +1452,9 @@ export class BeatorajaPlaySkinView {
           break;
         case 'gauge':
           this.updateGaugeEntry(entry, props);
+          break;
+        case 'pmchara':
+          this.updatePmCharaEntry(entry, props);
           break;
       }
     }
@@ -2290,6 +2361,38 @@ export class BeatorajaPlaySkinView {
     }
   }
 
+  /**
+   * Update a `pmchara` entry — popn-style 9K POMYU character. Paints the source's full texture
+   * at the destination rect (no sub-rect crop, no animation cycling). Hidden when:
+   *
+   *   - The destination's standard `props.visible` says so
+   *   - The source has no texture (no character pack loaded, the wildcard's `|TAG|` syntax
+   *     didn't match anything, or the `def: "Off"` filepath default is in effect)
+   *
+   * Frame-cycling animation driven by chart cues is a follow-up patch — most users running
+   * 9K charts won't have a character pack dropped anyway, so the static rendering is graceful
+   * out of the box.
+   */
+  private updatePmCharaEntry(entry: PmCharaEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+    const sprite = entry.sprite;
+    if (!props.visible || entry.baseTexture === undefined || entry.baseTexture === Texture.EMPTY) {
+      sprite.visible = false;
+      return;
+    }
+    sprite.visible = true;
+    sprite.texture = entry.baseTexture;
+    const center = centerToAnchor(entry.group.center);
+    sprite.anchor.set(center.x, center.y);
+    sprite.x = props.x + center.x * props.width;
+    sprite.y = props.y + center.y * props.height;
+    sprite.width = props.width;
+    sprite.height = props.height;
+    sprite.alpha = props.alpha;
+    sprite.tint = props.tint;
+    sprite.angle = props.angle;
+    sprite.blendMode = props.blendMode;
+  }
+
   /** Tear down sprites and the container. Textures live on the cache (no `dispose()` by design). */
   dispose(): void {
     if (this.disposed) return;
@@ -2340,6 +2443,9 @@ export class BeatorajaPlaySkinView {
           for (const cell of entry.cells) {
             cell.destroy({ children: false, texture: false, textureSource: false });
           }
+          break;
+        case 'pmchara':
+          entry.sprite.destroy({ children: false, texture: false, textureSource: false });
           break;
       }
     }
