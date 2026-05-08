@@ -1017,6 +1017,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       case 12: // SORT — cycle sort order (default / title / artist / genre / level / bpm / notes / lastplay)
         this.cycleSortMode(modifiers?.shift === true ? -1 : 1);
         return;
+      case 900: // GdbG_Skin's `volume` button — community extension, not in stock prop.lua.
+        // Player-web has no volume picker UI yet; we surface a console log so the click is
+        // visibly acknowledged. Future iteration: open a small volume-slider modal
+        // (master / key / BGM) reusing the same `<dialog>` pattern as READTEXT.
+        // eslint-disable-next-line no-console
+        console.log('[beatoraja-select] act=900 GdbG volume button (no volume UI yet)');
+        return;
       default:
         // eslint-disable-next-line no-console
         console.log('[beatoraja-select] unhandled button act', JSON.stringify({ act }));
