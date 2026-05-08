@@ -59,6 +59,11 @@ export const TIMER_ENDOFNOTE_2P = 144;
 /** prop.lua `rhythm` — beat-pulse timer the skin uses for "every beat" glow effects. */
 export const TIMER_RHYTHM = 140;
 
+/** prop.lua `fullcombo_1p = 48` — fires once at end-of-chart when 1P side has a full combo. */
+export const TIMER_FULLCOMBO_1P = 48;
+/** prop.lua `fullcombo_2p = 49`. */
+export const TIMER_FULLCOMBO_2P = 49;
+
 // ─── Per-lane timer bases (1P side) ──────────────────────────────────────────────────────────────
 //
 // The `0` slot is SCRATCH on every category; keys 1..9 follow. So `bombTimerId(1, 0) = 50` is

@@ -44,6 +44,8 @@ import {
   lnHoldTimerId,
   TIMER_FADEOUT,
   TIMER_FAILED,
+  TIMER_FULLCOMBO_1P,
+  TIMER_FULLCOMBO_2P,
   TIMER_PLAY,
   TIMER_READY,
   TIMER_RHYTHM,
@@ -455,6 +457,14 @@ export class BeatorajaRuntimeAdapter {
       if (currentBeat >= lastBeat) {
         this.markTimer(endOfNoteTimerId(side));
         this.endOfNoteStamped[side] = true;
+        // Full-combo check — at the moment the side's last note passes, if no combo break
+        // has occurred (`bad === 0 && poor === 0`), stamp the FC celebration timer. ModernChic
+        // / GdbG_Skin gate end-of-chart "FULL COMBO" reveal animations on this. Engine treats
+        // miss-press as POOR so checking `poor` covers both empty-press and bad-timing breaks.
+        const summary = this.frame?.summary;
+        if (summary !== undefined && (summary.bad ?? 0) === 0 && (summary.poor ?? 0) === 0) {
+          this.markTimer(side === 1 ? TIMER_FULLCOMBO_1P : TIMER_FULLCOMBO_2P);
+        }
       }
     }
   }
