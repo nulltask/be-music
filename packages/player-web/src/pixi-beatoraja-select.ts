@@ -255,6 +255,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * new mode at gameplay time.
    */
   private lnModeOverride: 0 | 1 | 2 | undefined;
+  /**
+   * Active keymode filter — index into beatoraja's MainState `["allkeys","5keys","7keys",
+   * "10keys","14keys","9keys","24keys","24keysDP"]` enum. `0` (ALL) shows every chart;
+   * non-zero filters the song list to charts matching the variant. Cycled via the skin's
+   * MODE button (act=11). The `modeset` imageset's `ref=11` resolver returns this value so
+   * the visible label updates in step.
+   */
+  private keymodeFilter = 0;
   private disposed = false;
 
   constructor(options: PixiBeatorajaSelectSceneOptions) {
@@ -572,12 +580,23 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * external `setSelectionIndex`.
    */
   private refreshEntries(initialIndex: number): void {
+    // Apply the current keymode filter (act=11 MODE button cycles it). `0` = ALL → no filter.
+    // Higher values restrict to charts whose `resolveChartPlayVariant` returns the matching
+    // variant; charts without a variant resolution are dropped from the filtered set.
+    const filter = this.keymodeFilter;
+    const filtered =
+      filter === 0
+        ? this.options.songs
+        : this.options.songs.filter((song) => keymodeImagesetIndex(safeResolveChartVariant(song)) === filter);
     if (this.folderStack.length === 0) {
-      const folders = groupSongsByFolder(this.options.songs);
+      const folders = groupSongsByFolder(filtered);
       this.entries = folders.map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
     } else {
       const top = this.folderStack[this.folderStack.length - 1]!;
-      this.entries = top.songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }));
+      // When a filter is active, the folder's pre-stored `songs` may include charts the
+      // current filter excludes — re-filter on read so what the user sees matches the badge.
+      const folderSongs = filter === 0 ? top.songs : top.songs.filter((s) => filtered.includes(s));
+      this.entries = folderSongs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }));
     }
     this.currentIndex = clampIndex(initialIndex, this.entries.length);
     this.scrollPosition = this.currentIndex;
@@ -766,9 +785,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    */
   private resolveSelectionRefValue(refOp: number): number {
     if (refOp === SELECT_REF_KEYMODE_INDEX) {
-      const song = this.focusedSong();
-      if (song === undefined) return 0;
-      return keymodeImagesetIndex(safeResolveChartVariant(song));
+      // Active keymode FILTER — drives the `modeset` imageset's "Showing 7K" badge etc. NOT
+      // the focused chart's own keymode (the per-chart mode lights up `KEYSONG_*` ops 160-164
+      // separately, gating the "5KEYS" / "7KEYS" label image elements).
+      return this.keymodeFilter;
     }
     if (refOp === SELECT_REF_LNMODE_INDEX) {
       // 0 = LN, 1 = CN (charge note), 2 = HCN (hell charge note). User's LNMODE-button click
@@ -818,6 +838,22 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       option: { ...config.option },
       file: { ...config.file },
     };
+  }
+
+  /**
+   * Cycle the keymode filter and rebuild the song list against the new filter. Wraps at 0..7.
+   * After the new filter takes effect we pop back to the root list — keeps the user out of a
+   * folder whose contents may have been filtered to empty by the new mode.
+   */
+  private cycleKeymodeFilter(step: number): void {
+    const next = (((this.keymodeFilter + step) % 8) + 8) % 8;
+    if (next === this.keymodeFilter) return;
+    this.keymodeFilter = next;
+    // eslint-disable-next-line no-console
+    console.log('[beatoraja-select] act=11 MODE filter cycled', JSON.stringify({ to: next }));
+    this.folderStack = [];
+    this.cursorStack = [0];
+    this.refreshEntries(0);
   }
 
   /**
@@ -931,6 +967,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         return;
       case 308: // LNMODE — cycle 0 → 1 → 2 → 0 (LN / CN / HCN). Shift cycles in reverse.
         this.cycleLnModeOverride(modifiers?.shift === true ? -1 : 1);
+        return;
+      case 11: // MODE — cycle keymode filter (ALL / 5K / 7K / 10K / 14K / 9K / 24K / 24K-DP)
+        this.cycleKeymodeFilter(modifiers?.shift === true ? -1 : 1);
         return;
       default:
         // eslint-disable-next-line no-console
