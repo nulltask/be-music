@@ -36,6 +36,35 @@ describe('resolveSideKeySlot', () => {
     expect(resolveSideKeySlot('21', '9')).toBe(-1);
     expect(resolveSideKeySlot('28', '9')).toBe(-1);
   });
+
+  test('5 KEY / 10 KEY — channels 18/19 (and 28/29) reject (no 6/7-key columns)', () => {
+    // 5K SP: keys 1..5 + scratch on 1P side. Channels 18/19 are not valid lane notes.
+    expect(resolveSideKeySlot('11', '5')).toBe(1);
+    expect(resolveSideKeySlot('15', '5')).toBe(5);
+    expect(resolveSideKeySlot('16', '5')).toBe(0);
+    expect(resolveSideKeySlot('18', '5')).toBe(-1);
+    expect(resolveSideKeySlot('19', '5')).toBe(-1);
+    // 10K DP: 5 keys + scratch per side. Same rejection on 2P side.
+    expect(resolveSideKeySlot('21', '10')).toBe(1);
+    expect(resolveSideKeySlot('25', '10')).toBe(5);
+    expect(resolveSideKeySlot('26', '10')).toBe(0);
+    expect(resolveSideKeySlot('28', '10')).toBe(-1);
+    expect(resolveSideKeySlot('29', '10')).toBe(-1);
+  });
+
+  test('7 KEY / 14 KEY — channels 18/19 stay valid (= slots 6/7)', () => {
+    // Sanity: the 5K-family clamp doesn't accidentally affect the 7K-family (where 18/19 ARE
+    // the 6/7-key columns). Without this regression test the clamp would silently break
+    // 7K play if someone misclassified the variant guard.
+    expect(resolveSideKeySlot('18', '7')).toBe(6);
+    expect(resolveSideKeySlot('19', '7')).toBe(7);
+    expect(resolveSideKeySlot('28', '14')).toBe(6);
+    expect(resolveSideKeySlot('29', '14')).toBe(7);
+    // Default (variant unset) keeps the legacy `'7'`-equivalent behavior — pre-existing callers
+    // that don't pass a variant still resolve 18/19 to 6/7 (matches the prior contract).
+    expect(resolveSideKeySlot('18')).toBe(6);
+    expect(resolveSideKeySlot('19')).toBe(7);
+  });
 });
 
 describe('resolveLr2LaneIndex', () => {

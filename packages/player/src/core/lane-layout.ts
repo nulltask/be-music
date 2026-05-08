@@ -123,6 +123,15 @@ export function resolveSideKeySlot(channel: string, playVariant?: ChartPlayVaria
   const digit = Number.parseInt(channel[1]!, 10);
   if (!Number.isFinite(digit)) return -1;
   if (digit >= 1 && digit <= 5) return digit;
+  // Channels 18/19 are valid LANE notes only on the 7-key family (`'7'` SP / `'14'` DP).
+  // 5-key family variants (`'5'` SP / `'10'` DP — 5 keys per side, no 6/7-key columns) reject
+  // them: a malformed BMS that authors notes on 18/19 in a 5K chart shouldn't trip the
+  // adapter into stamping ghost-lane bomb / keybeam / LN-hold timers for slots 6/7 that the
+  // mounted skin doesn't render. Returning `-1` here cascades through `resolveLane`'s
+  // `slot < 0 → undefined` guard, which all the lane-timer helpers already check.
+  if (playVariant === '5' || playVariant === '10') {
+    return -1;
+  }
   if (digit === 8) return 6;
   if (digit === 9) return 7;
   return -1;
