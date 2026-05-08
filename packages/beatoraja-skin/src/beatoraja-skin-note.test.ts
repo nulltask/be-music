@@ -83,6 +83,21 @@ describe('normalizeBeatorajaNote', () => {
     });
     expect(section.dst[0]!.rects[0]).toEqual({ x: 100, y: 0, w: 0, h: 600 });
   });
+
+  it('parses expansionrate as the [xPct, yPct] pair (default 9K authors [115, 112])', () => {
+    expect(normalizeBeatorajaNote({ expansionrate: [115, 112] }).expansionRate).toEqual({ x: 115, y: 112 });
+  });
+
+  it('falls back to [100, 100] when expansionrate is missing or malformed', () => {
+    expect(normalizeBeatorajaNote({}).expansionRate).toEqual({ x: 100, y: 100 });
+    expect(normalizeBeatorajaNote({ expansionrate: 'invalid' }).expansionRate).toEqual({ x: 100, y: 100 });
+    expect(normalizeBeatorajaNote({ expansionrate: [Number.NaN, -50] }).expansionRate).toEqual({ x: 100, y: 1 });
+  });
+
+  it('mirrors a single-element expansionrate to both axes', () => {
+    // Authors that want uniform scaling can write `[120]` instead of `[120, 120]`.
+    expect(normalizeBeatorajaNote({ expansionrate: [120] }).expansionRate).toEqual({ x: 120, y: 120 });
+  });
 });
 
 describe('pickBeatorajaNoteRects', () => {

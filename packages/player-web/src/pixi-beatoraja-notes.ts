@@ -301,10 +301,18 @@ export class BeatorajaNoteLayer {
       // judgement line: top edge at `y - cellHScaledToLane` keeps the note's bottom flush with `y`.
       const scaleX = rect.w / Math.max(1, cropped.cellW);
       const drawH = cropped.cellH * scaleX;
-      sprite.x = rect.x;
-      sprite.y = y - drawH;
-      sprite.width = rect.w;
-      sprite.height = drawH;
+      // Apply the skin's `note.expansionrate` (default `[100, 100]` = no scaling). 9K's
+      // `play9.json` authors `[115, 112]` (1.15× wider, 1.12× taller) for chunkier popn-style
+      // notes. The expansion is applied around the rect's centre so notes stay aligned to the
+      // lane while bleeding evenly into the gaps.
+      const exX = this.noteSection.expansionRate.x / 100;
+      const exY = this.noteSection.expansionRate.y / 100;
+      const drawW = rect.w * exX;
+      const drawHExpanded = drawH * exY;
+      sprite.x = rect.x - (drawW - rect.w) / 2;
+      sprite.y = y - drawHExpanded;
+      sprite.width = drawW;
+      sprite.height = drawHExpanded;
       sprite.tint = note.mine ? FALLBACK_COLOR_BY_KEY.red! : 0xffffff;
       sprite.alpha = 1;
       return { g: usedG, s: usedS + 1 };
@@ -347,32 +355,41 @@ export class BeatorajaNoteLayer {
     const endScaleX = rect.w / Math.max(1, endCrop.cellW);
     const startH = startCrop.cellH * startScaleX;
     const endH = endCrop.cellH * endScaleX;
-    body.x = rect.x;
-    body.width = rect.w;
+    // Apply `note.expansionrate` to LN width and cap heights — same convention as tap notes.
+    // Body Y positions stay anchored to `yStart` / `yEnd` so the LN connects the start / end
+    // caps without gaps; only the X / cap-H dimensions expand.
+    const exX = this.noteSection.expansionRate.x / 100;
+    const exY = this.noteSection.expansionRate.y / 100;
+    const drawW = rect.w * exX;
+    const drawX = rect.x - (drawW - rect.w) / 2;
+    const startHExpanded = startH * exY;
+    const endHExpanded = endH * exY;
+    body.x = drawX;
+    body.width = drawW;
     // Body sits between the bottom of the start cap (yStart) and the top of the end cap (yEnd).
     body.y = yEnd;
     body.height = Math.max(0, yStart - yEnd);
     body.tilePosition.set(0, 0);
-    body.tileScale.set(rect.w / Math.max(1, bodyCrop.cellW), 1);
+    body.tileScale.set(drawW / Math.max(1, bodyCrop.cellW), 1);
     body.alpha = 1;
 
     // Start cap (visually closer to the judgement line — pinned at `yStart`).
     const start = this.acquireSprite(usedS);
     start.texture = startCrop.sprite.texture;
-    start.x = rect.x;
-    start.y = yStart - startH;
-    start.width = rect.w;
-    start.height = startH;
+    start.x = drawX;
+    start.y = yStart - startHExpanded;
+    start.width = drawW;
+    start.height = startHExpanded;
     start.tint = 0xffffff;
     start.alpha = 1;
 
     // End cap (further from the judgement line — pinned at `yEnd`).
     const end = this.acquireSprite(usedS + 1);
     end.texture = endCrop.sprite.texture;
-    end.x = rect.x;
-    end.y = yEnd - endH;
-    end.width = rect.w;
-    end.height = endH;
+    end.x = drawX;
+    end.y = yEnd - endHExpanded;
+    end.width = drawW;
+    end.height = endHExpanded;
     end.tint = 0xffffff;
     end.alpha = 1;
 

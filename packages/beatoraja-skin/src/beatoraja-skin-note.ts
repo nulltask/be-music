@@ -67,6 +67,14 @@ export interface BeatorajaNoteSection {
   bpm: ReadonlyArray<Readonly<Record<string, unknown>>>;
   stop: ReadonlyArray<Readonly<Record<string, unknown>>>;
   time: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  /**
+   * Optional pair of integer percentages `[xPct, yPct]` that scale every painted note past the
+   * authored `dst[]` rect's natural size. Default 9K's `play9.json` authors `[115, 112]` (= 1.15×
+   * width, 1.12× height) for popn-style chunkier notes. `[100, 100]` (or omission) leaves notes
+   * at their authored size. Values are clamped to `[1, 1000]` to defensively reject NaN /
+   * negative entries.
+   */
+  expansionRate: { x: number; y: number };
 }
 
 /** One `dst` group from the note section — gated by `op` codes that must all be active. */
@@ -106,6 +114,7 @@ const EMPTY_SECTION: BeatorajaNoteSection = Object.freeze({
   bpm: [],
   stop: [],
   time: [],
+  expansionRate: { x: 100, y: 100 },
 });
 
 /**
@@ -139,7 +148,28 @@ export function normalizeBeatorajaNote(input: unknown): BeatorajaNoteSection {
     bpm: rawObjectArray(obj.bpm),
     stop: rawObjectArray(obj.stop),
     time: rawObjectArray(obj.time),
+    expansionRate: parseExpansionRate(obj.expansionrate),
   };
+}
+
+/**
+ * Parse the `expansionrate` array. Beatoraja authors a 2-element `[xPct, yPct]` (default 9K
+ * authors `[115, 112]`). Single-element arrays apply uniformly. Anything malformed / missing
+ * collapses to `[100, 100]` (= no scaling), matching the renderer's "no-op when factor is 1"
+ * fast path.
+ */
+function parseExpansionRate(input: unknown): { x: number; y: number } {
+  if (!Array.isArray(input)) return { x: 100, y: 100 };
+  const x = clampPercent(input[0], 100);
+  const y = clampPercent(input[1] ?? input[0], 100);
+  return { x, y };
+}
+
+function clampPercent(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  if (value < 1) return 1;
+  if (value > 1000) return 1000;
+  return value;
 }
 
 /**
