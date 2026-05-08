@@ -7,6 +7,10 @@ import { BitmapText, Container, Graphics, Sprite, Text, Texture } from 'pixi.js'
 import {
   centerToAnchor,
   composeBeatorajaValueCells,
+  BEATORAJA_LUA_TIMER_OFF_VALUE,
+  BEATORAJA_NUM,
+  evaluateBeatorajaLuaNumber,
+  evaluateBeatorajaLuaString,
   expandBeatorajaJudgeDestinations,
   imageFrameAt,
   imageFrameRect,
@@ -35,10 +39,15 @@ import {
   type BeatorajaTimingVisualizerElement,
   type BeatorajaGaugeElement,
   type BeatorajaGraphElement,
+  type BeatorajaFloatPropertyRef,
   type BeatorajaImageElement,
   type BeatorajaImageId,
   type BeatorajaImagesetElement,
+  type BeatorajaIntegerPropertyRef,
+  type BeatorajaLuaRuntimeContext,
   type BeatorajaSkin,
+  type BeatorajaSkinFontId,
+  type BeatorajaStringPropertyRef,
   type BeatorajaSliderElement,
   type BeatorajaTextElement,
   type BeatorajaValueElement,
@@ -79,7 +88,7 @@ export interface BeatorajaPlaySkinViewOptions {
    * each glyph and looks "broken" to authors who tested on the skin's bundled TTF. Returning `undefined`
    * for an unknown id keeps the platform sans-serif fallback (matches the legacy behavior).
    */
-  resolveFontFamily?: (fontId: number) => string | undefined;
+  resolveFontFamily?: (fontId: BeatorajaSkinFontId) => string | undefined;
   /**
    * Lookup `text[].font` slot id → which Pixi text pipe to instantiate. `'bitmap'` picks
    * `BitmapText` (consumes a registered `BitmapFont` keyed by `family`); anything else picks the
@@ -87,7 +96,7 @@ export interface BeatorajaPlaySkinViewOptions {
    * MUST go through the bitmap pipe — `Text` can't render glyphs the browser's `FontFace` registry
    * couldn't accept. Returning `undefined` is treated as `'css'`.
    */
-  resolveFontKind?: (fontId: number) => 'css' | 'bitmap' | undefined;
+  resolveFontKind?: (fontId: BeatorajaSkinFontId) => 'css' | 'bitmap' | undefined;
   /**
    * Lookup `graph[].type` → fill ratio in `[0, 1]`. The renderer scales the graph's source-rect
    * along its `angle` axis by the returned value. Common types:
@@ -416,8 +425,8 @@ export class BeatorajaPlaySkinView {
   private readonly resolveRefValue: (refOp: number) => number;
   private readonly resolveTextContent: (refOp: number) => string | undefined;
   private readonly resolveNumberValue: (refOp: number) => number | undefined;
-  private readonly resolveFontFamily: (fontId: number) => string | undefined;
-  private readonly resolveFontKind: (fontId: number) => 'css' | 'bitmap' | undefined;
+  private readonly resolveFontFamily: (fontId: BeatorajaSkinFontId) => string | undefined;
+  private readonly resolveFontKind: (fontId: BeatorajaSkinFontId) => 'css' | 'bitmap' | undefined;
   private readonly resolveGraphValue: (type: number) => number | undefined;
   private readonly resolveGraphPolyline: (type: number) => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveSliderValue: (type: number) => number | undefined;
@@ -1117,29 +1126,88 @@ export class BeatorajaPlaySkinView {
     return { kind: 'timingdistribution', group, element, graphics, lastSampleCount: -1 };
   }
 
+  private buildLuaRuntimeContext(context: BeatorajaRenderContext): BeatorajaLuaRuntimeContext {
+    return {
+      option: (id) => context.activeOps.has(id),
+      number: (id) => this.resolveNumberValue(id),
+      floatNumber: (id) => this.resolveSliderValue(id) ?? this.resolveGraphValue(id),
+      text: (id) => this.resolveTextContent(id),
+      offset: (id) => context.resolveOffset?.(id),
+      timer: (id) => {
+        const start = id === 0 ? 0 : context.getTimerStart(id);
+        return start === undefined ? BEATORAJA_LUA_TIMER_OFF_VALUE : start * 1000;
+      },
+      time: () => context.nowMs * 1000,
+      rate: () => this.resolveNumberValue(BEATORAJA_NUM.SCORE_RATE),
+      exscore: () => this.resolveNumberValue(BEATORAJA_NUM.POINT),
+      judge: (judge) => {
+        const refs = [
+          BEATORAJA_NUM.PERFECT,
+          BEATORAJA_NUM.GREAT,
+          BEATORAJA_NUM.GOOD,
+          BEATORAJA_NUM.BAD,
+          BEATORAJA_NUM.POOR,
+          BEATORAJA_NUM.COMBOBREAK,
+        ] as const;
+        const ref = refs[judge];
+        return ref === undefined ? undefined : this.resolveNumberValue(ref);
+      },
+      gauge: () => {
+        const percent = this.resolveGaugePercent();
+        return percent;
+      },
+    };
+  }
+
+  private resolveIntegerProperty(
+    property: BeatorajaIntegerPropertyRef,
+    luaContext: BeatorajaLuaRuntimeContext,
+  ): number {
+    if (typeof property === 'number') return this.resolveNumberValue(property) ?? 0;
+    return evaluateBeatorajaLuaNumber(property, luaContext) ?? 0;
+  }
+
+  private resolveStringProperty(property: BeatorajaStringPropertyRef, luaContext: BeatorajaLuaRuntimeContext): string {
+    if (typeof property === 'number') return this.resolveTextContent(property) ?? '';
+    return evaluateBeatorajaLuaString(property, luaContext) ?? '';
+  }
+
+  private resolveFloatProperty(
+    property: BeatorajaFloatPropertyRef,
+    luaContext: BeatorajaLuaRuntimeContext,
+    kind: 'graph' | 'slider',
+  ): number | undefined {
+    if (typeof property === 'number') {
+      return kind === 'graph' ? this.resolveGraphValue(property) : this.resolveSliderValue(property);
+    }
+    return evaluateBeatorajaLuaNumber(property, luaContext);
+  }
+
   /**
    * Re-sample every destination at `context.nowMs` and update the matching `Sprite` / `Text`. Call once per frame.
    */
   update(context: BeatorajaRenderContext): void {
     if (this.disposed) return;
+    const luaContext = this.buildLuaRuntimeContext(context);
+    const renderContext: BeatorajaRenderContext = { ...context, lua: luaContext };
     // Pass the skin's authored canvas height into the renderer so it can flip Y-UP dst rects
     // (libGDX origin at canvas bottom-left) into Pixi Y-DOWN screen coords. The view owns this
     // value (`skin.h`) — callers don't need to thread it through.
     const canvasHeight = this.height;
     for (const entry of this.entries) {
-      const props = destinationToSpriteProps(entry.group, context, canvasHeight);
+      const props = destinationToSpriteProps(entry.group, renderContext, canvasHeight);
       switch (entry.kind) {
         case 'image':
-          this.updateImageEntry(entry, context, props);
+          this.updateImageEntry(entry, renderContext, props);
           break;
         case 'value':
-          this.updateValueEntry(entry, props);
+          this.updateValueEntry(entry, props, luaContext);
           break;
         case 'text':
-          this.updateTextEntry(entry, props);
+          this.updateTextEntry(entry, props, luaContext);
           break;
         case 'graph':
-          this.updateGraphEntry(entry, props);
+          this.updateGraphEntry(entry, props, luaContext);
           break;
         case 'polyline-graph':
           this.updatePolylineGraphEntry(entry, props);
@@ -1160,10 +1228,10 @@ export class BeatorajaPlaySkinView {
           this.updateTimingDistributionEntry(entry, props);
           break;
         case 'slider':
-          this.updateSliderEntry(entry, props);
+          this.updateSliderEntry(entry, props, luaContext);
           break;
         case 'imageset':
-          this.updateImagesetEntry(entry, context, props);
+          this.updateImagesetEntry(entry, renderContext, props, luaContext);
           break;
         case 'gauge':
           this.updateGaugeEntry(entry, props);
@@ -1253,7 +1321,11 @@ export class BeatorajaPlaySkinView {
     sprite.blendMode = props.blendMode;
   }
 
-  private updateValueEntry(entry: ValueEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+  private updateValueEntry(
+    entry: ValueEntry,
+    props: ReturnType<typeof destinationToSpriteProps>,
+    luaContext: BeatorajaLuaRuntimeContext,
+  ): void {
     const baseTexture = entry.baseTexture;
     if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
       for (const sprite of entry.digitSprites) sprite.visible = false;
@@ -1266,7 +1338,10 @@ export class BeatorajaPlaySkinView {
 
     // Resolve the dynamic numeric value through the host's `prop.lua num` adapter. `0` when no value
     // is wired — keeps the readout visually stable while engine state is wiring up.
-    const value = (entry.value.ref !== 0 ? this.resolveNumberValue(entry.value.ref) : 0) ?? 0;
+    const value =
+      entry.value.valueProperty !== undefined
+        ? this.resolveIntegerProperty(entry.value.valueProperty, luaContext)
+        : ((entry.value.ref !== 0 ? this.resolveNumberValue(entry.value.ref) : 0) ?? 0);
 
     // Re-compose digit-cell textures only when the value changes. The composer hands back one
     // source-rect per digit slot; we crop a sub-texture per slot and assign it to the matching sprite.
@@ -1319,14 +1394,23 @@ export class BeatorajaPlaySkinView {
     }
   }
 
-  private updateTextEntry(entry: TextEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+  private updateTextEntry(
+    entry: TextEntry,
+    props: ReturnType<typeof destinationToSpriteProps>,
+    luaContext: BeatorajaLuaRuntimeContext,
+  ): void {
     const text = entry.text;
     text.visible = props.visible;
     if (!props.visible) return;
 
     // Skip the assignment when the string hasn't changed — assigning the same string still triggers
     // a Pixi glyph relayout, which is expensive (canvas rasterization).
-    const next = entry.element.ref !== 0 ? (this.resolveTextContent(entry.element.ref) ?? '') : '';
+    const next =
+      entry.element.valueProperty !== undefined
+        ? this.resolveStringProperty(entry.element.valueProperty, luaContext)
+        : entry.element.ref !== 0
+          ? (this.resolveTextContent(entry.element.ref) ?? '')
+          : '';
     if (text.text !== next) {
       text.text = next;
       // eslint-disable-next-line no-console
@@ -1373,7 +1457,11 @@ export class BeatorajaPlaySkinView {
    *   - `ratio === 0` (the bar is empty — could also paint a 0-width sprite, but skipping the
    *     bind-group setup avoids per-frame `Texture` allocations for hidden bars)
    */
-  private updateGraphEntry(entry: GraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+  private updateGraphEntry(
+    entry: GraphEntry,
+    props: ReturnType<typeof destinationToSpriteProps>,
+    luaContext: BeatorajaLuaRuntimeContext,
+  ): void {
     const sprite = entry.sprite;
     sprite.visible = props.visible;
     if (!props.visible) return;
@@ -1382,7 +1470,10 @@ export class BeatorajaPlaySkinView {
       sprite.visible = false;
       return;
     }
-    const rawRatio = this.resolveGraphValue(entry.element.type);
+    const rawRatio =
+      entry.element.valueProperty !== undefined
+        ? this.resolveFloatProperty(entry.element.valueProperty, luaContext, 'graph')
+        : this.resolveGraphValue(entry.element.type);
     if (rawRatio === undefined) {
       sprite.visible = false;
       return;
@@ -1811,7 +1902,11 @@ export class BeatorajaPlaySkinView {
    * the resolver returns 0 is intentional — that's the "neutral" pose for sliders that map to
    * disabled-by-default user-config knobs (lanecover off → slider at the bottom of its track).
    */
-  private updateSliderEntry(entry: SliderEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+  private updateSliderEntry(
+    entry: SliderEntry,
+    props: ReturnType<typeof destinationToSpriteProps>,
+    luaContext: BeatorajaLuaRuntimeContext,
+  ): void {
     const sprite = entry.sprite;
     sprite.visible = props.visible;
     if (!props.visible) return;
@@ -1819,7 +1914,10 @@ export class BeatorajaPlaySkinView {
       sprite.visible = false;
       return;
     }
-    const rawValue = this.resolveSliderValue(entry.element.type);
+    const rawValue =
+      entry.element.valueProperty !== undefined
+        ? this.resolveFloatProperty(entry.element.valueProperty, luaContext, 'slider')
+        : this.resolveSliderValue(entry.element.type);
     if (rawValue === undefined) {
       sprite.visible = false;
       return;
@@ -1870,6 +1968,7 @@ export class BeatorajaPlaySkinView {
     entry: ImagesetEntry,
     context: BeatorajaRenderContext,
     props: ReturnType<typeof destinationToSpriteProps>,
+    luaContext: BeatorajaLuaRuntimeContext,
   ): void {
     const sprite = entry.sprite;
     sprite.visible = props.visible;
@@ -1878,8 +1977,11 @@ export class BeatorajaPlaySkinView {
     // Out-of-range values clamp to the available images so a runtime that pushes a 1 into a
     // 1-slot imageset doesn't blank the sprite.
     let subIndex = 0;
-    if (entry.element.ref !== 0) {
-      const raw = this.resolveRefValue(entry.element.ref);
+    if (entry.element.valueProperty !== undefined || entry.element.ref !== 0) {
+      const raw =
+        entry.element.valueProperty !== undefined
+          ? this.resolveIntegerProperty(entry.element.valueProperty, luaContext)
+          : this.resolveRefValue(entry.element.ref);
       if (Number.isFinite(raw) && raw >= 0) {
         subIndex = Math.min(entry.element.images.length - 1, Math.floor(raw));
       }
@@ -2062,8 +2164,7 @@ export class BeatorajaPlaySkinView {
  * animate independently of one another even though they share an enclosing destination.
  */
 function computeImagesetTimerElapsed(image: BeatorajaImageElement, context: BeatorajaRenderContext): number {
-  if (image.timer === 0) return context.nowMs;
-  const start = context.getTimerStart(image.timer);
+  const start = imageTimerStart(image, context);
   if (start === undefined) return 0;
   return Math.max(0, context.nowMs - start);
 }
@@ -2072,10 +2173,19 @@ function computeAnimationElapsed(entry: SpriteEntry, context: BeatorajaRenderCon
   // Animation timer defaults to "scene start" when the image's `timer` is 0. Otherwise wait for the named timer to
   // fire before advancing the cycle (mirrors beatoraja's behavior — a key-bomb animation only animates after the
   // matching key-bomb timer started).
-  if (entry.image.timer === 0) return context.nowMs;
-  const start = context.getTimerStart(entry.image.timer);
+  const start = imageTimerStart(entry.image, context);
   if (start === undefined) return 0;
   return Math.max(0, context.nowMs - start);
+}
+
+function imageTimerStart(image: BeatorajaImageElement, context: BeatorajaRenderContext): number | undefined {
+  if (image.timerFunction !== undefined) {
+    const value = evaluateBeatorajaLuaNumber(image.timerFunction, context.lua);
+    if (value === undefined || value < 0) return undefined;
+    return value / 1000;
+  }
+  if (image.timer === 0) return 0;
+  return context.getTimerStart(image.timer);
 }
 
 /**

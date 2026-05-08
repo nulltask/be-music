@@ -20,7 +20,8 @@ describe('discoverBeatorajaTheme', () => {
       ['skin/default/play24.json', enc(jsonSkin(16))],
       ['skin/default/play24double.json', enc(jsonSkin(17))],
       ['skin/default/select.json', enc(jsonSkin(5))],
-      ['skin/default/graderesult.json', enc(jsonSkin(15))],
+      ['skin/default/courseresult.json', enc(jsonSkin(15))],
+      ['skin/default/soundset.json', enc(jsonSkin(10))],
     ]);
     const { theme, warnings } = discoverBeatorajaTheme(files);
     expect(warnings).toEqual([]);
@@ -32,7 +33,8 @@ describe('discoverBeatorajaTheme', () => {
     expect(theme.playSkins['24']?.entryPath).toBe('skin/default/play24.json');
     expect(theme.playSkins['24d']?.entryPath).toBe('skin/default/play24double.json');
     expect(theme.selectSkin?.entryPath).toBe('skin/default/select.json');
-    expect(theme.gradeResultSkin?.entryPath).toBe('skin/default/graderesult.json');
+    expect(theme.courseResultSkin?.entryPath).toBe('skin/default/courseresult.json');
+    expect(theme.entries.map((entry) => entry.entryPath)).toContain('skin/default/soundset.json');
   });
 
   it('classifies Lua skins by their evaluated header', () => {

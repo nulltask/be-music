@@ -13,7 +13,9 @@ export type {
   BeatorajaSkinScene,
   BeatorajaSkin,
   BeatorajaSkinConfig,
+  BeatorajaSkinCustomOffset,
   BeatorajaSkinFilepath,
+  BeatorajaSkinFontId,
   BeatorajaSkinFontEntry,
   BeatorajaSkinHeader,
   BeatorajaSkinProperty,
@@ -25,18 +27,31 @@ export {
   BEATORAJA_SKIN_TYPE,
   BEATORAJA_PLAY_VARIANTS,
   buildDefaultSkinConfigOptions,
+  defaultOpForBeatorajaSkinProperty,
+  normalizeBeatorajaSkinCustomOffsets,
   playVariantForSkinType,
   sceneForSkinType,
 } from './beatoraja-skin-types.ts';
 export type {
   BeatorajaLuaEvaluationError,
   BeatorajaLuaEvaluationResult,
+  BeatorajaLuaFunctionValue,
   BeatorajaLuaModuleSource,
+  BeatorajaLuaOffsetValue,
+  BeatorajaLuaRuntimeContext,
   BeatorajaLuaSkinConfig,
   EvaluateBeatorajaLuaSkinOptions,
   LuaValue,
 } from './beatoraja-skin-lua.ts';
-export { describeBeatorajaLuaError, evaluateBeatorajaLuaSkin } from './beatoraja-skin-lua.ts';
+export {
+  describeBeatorajaLuaError,
+  BEATORAJA_LUA_TIMER_OFF_VALUE,
+  evaluateBeatorajaLuaBoolean,
+  evaluateBeatorajaLuaNumber,
+  evaluateBeatorajaLuaSkin,
+  evaluateBeatorajaLuaString,
+  isBeatorajaLuaFunctionValue,
+} from './beatoraja-skin-lua.ts';
 export type { BeatorajaSkinFormat, LoadBeatorajaSkinOptions, LoadBeatorajaSkinResult } from './beatoraja-skin.ts';
 export {
   collectBeatorajaLuaModules,
@@ -49,9 +64,17 @@ export type { NormalizedElement, RawElement } from './beatoraja-skin-element.ts'
 export { buildBaseOpSet, flattenBeatorajaElements, isElementVisible } from './beatoraja-skin-element.ts';
 export type { BeatorajaImageElement, BeatorajaImageId } from './beatoraja-skin-image.ts';
 export { imageFrameAt, imageFrameRect, imageRefFrame, normalizeBeatorajaImages } from './beatoraja-skin-image.ts';
-export type { BeatorajaValueDigitCell, BeatorajaValueElement } from './beatoraja-skin-value.ts';
+export type {
+  BeatorajaIntegerPropertyRef,
+  BeatorajaValueDigitCell,
+  BeatorajaValueElement,
+} from './beatoraja-skin-value.ts';
 export { composeBeatorajaValueCells, normalizeBeatorajaValues } from './beatoraja-skin-value.ts';
-export type { BeatorajaDestinationGroup, BeatorajaDestinationKeyframe } from './beatoraja-skin-destination.ts';
+export type {
+  BeatorajaBooleanPropertyRef,
+  BeatorajaDestinationGroup,
+  BeatorajaDestinationKeyframe,
+} from './beatoraja-skin-destination.ts';
 export type { BeatorajaSkinOffsetValue } from './beatoraja-skin-destination.ts';
 export {
   centerToAnchor,
@@ -60,10 +83,15 @@ export {
   sampleBeatorajaDestination,
   ZERO_BEATORAJA_OFFSET,
 } from './beatoraja-skin-destination.ts';
-export type { BeatorajaFontElement, BeatorajaTextAlign, BeatorajaTextElement } from './beatoraja-skin-text.ts';
+export type {
+  BeatorajaFontElement,
+  BeatorajaStringPropertyRef,
+  BeatorajaTextAlign,
+  BeatorajaTextElement,
+} from './beatoraja-skin-text.ts';
 export { normalizeBeatorajaFonts, normalizeBeatorajaTexts } from './beatoraja-skin-text.ts';
 
-export type { BeatorajaGraphElement, BeatorajaGraphFillDirection } from './beatoraja-skin-graph.ts';
+export type { BeatorajaFloatPropertyRef, BeatorajaGraphElement, BeatorajaGraphFillDirection } from './beatoraja-skin-graph.ts';
 export { normalizeBeatorajaGraphs } from './beatoraja-skin-graph.ts';
 
 export type { BeatorajaBpmGraphElement } from './beatoraja-skin-bpmgraph.ts';

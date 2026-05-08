@@ -12,6 +12,11 @@ describe('normalizeBeatorajaTexts', () => {
     expect(out[0]).toMatchObject({ id: 'title', fontId: 1, size: 30, ref: 12, align: 'center' });
   });
 
+  it('preserves symbolic string font ids', () => {
+    const out = normalizeBeatorajaTexts([{ id: 'title', font: 'title_font', size: 30 }]);
+    expect(out[0]?.fontId).toBe('title_font');
+  });
+
   it('coerces numeric align codes (0=left, 1=center, 2=right)', () => {
     expect(normalizeBeatorajaTexts([{ id: 'a', align: 0 }])[0].align).toBe('left');
     expect(normalizeBeatorajaTexts([{ id: 'b', align: 1 }])[0].align).toBe('center');
@@ -38,14 +43,18 @@ describe('normalizeBeatorajaFonts', () => {
     expect(out).toEqual([{ id: 0, path: 'VL-Gothic-Regular.ttf' }]);
   });
 
-  it('skips entries with non-numeric id or empty path', () => {
+  it('keeps symbolic string ids and skips invalid ids or empty paths', () => {
     expect(
       normalizeBeatorajaFonts([
-        { id: '0', path: 'a.ttf' },
+        { id: 'title_font', path: 'a.ttf' },
+        { id: '', path: 'empty.ttf' },
         { id: 1, path: '' },
         { id: 2, path: 'b.ttf' },
       ]),
-    ).toEqual([{ id: 2, path: 'b.ttf' }]);
+    ).toEqual([
+      { id: 'title_font', path: 'a.ttf' },
+      { id: 2, path: 'b.ttf' },
+    ]);
   });
 
   it('returns an empty array when the input is missing or not an array', () => {

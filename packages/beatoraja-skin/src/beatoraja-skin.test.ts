@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { detectBeatorajaSkinFormat, loadBeatorajaSkin } from './beatoraja-skin.ts';
+import {
+  BEATORAJA_SKIN_TYPE,
+  buildDefaultSkinConfigOptions,
+  playVariantForSkinType,
+  sceneForSkinType,
+} from './beatoraja-skin-types.ts';
 import type { BeatorajaSkinFileEntry } from './file-lookup.ts';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
@@ -18,6 +24,63 @@ describe('detectBeatorajaSkinFormat', () => {
   });
 });
 
+describe('SkinType helpers', () => {
+  it('matches beatoraja SkinType codes for sound set and course result', () => {
+    expect(BEATORAJA_SKIN_TYPE.SOUND_SET).toBe(10);
+    expect(sceneForSkinType(10)).toBe('other');
+    expect(BEATORAJA_SKIN_TYPE.COURSE_RESULT).toBe(15);
+    expect(sceneForSkinType(15)).toBe('course-result');
+  });
+
+  it('keeps unsupported battle play types out of normal play variant selection', () => {
+    expect(sceneForSkinType(BEATORAJA_SKIN_TYPE.PLAY_7KEYS_BATTLE)).toBe('play');
+    expect(playVariantForSkinType(BEATORAJA_SKIN_TYPE.PLAY_7KEYS_BATTLE)).toBeUndefined();
+  });
+});
+
+describe('buildDefaultSkinConfigOptions', () => {
+  it('uses property.def as an item-name lookup', () => {
+    expect(
+      buildDefaultSkinConfigOptions({
+        property: [
+          {
+            name: 'Lane Cover',
+            def: 'Enabled',
+            item: [
+              { name: 'Disabled', op: 910 },
+              { name: 'Enabled', op: 911 },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({ 'Lane Cover': 911 });
+  });
+
+  it('falls back to the first item when property.def is missing or stale', () => {
+    expect(
+      buildDefaultSkinConfigOptions({
+        property: [
+          {
+            name: 'Play Side',
+            item: [
+              { name: '1P', op: 920 },
+              { name: '2P', op: 921 },
+            ],
+          },
+          {
+            name: 'Ghost',
+            def: 'Rival',
+            item: [
+              { name: 'Off', op: 930 },
+              { name: 'Self', op: 931 },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({ 'Play Side': 920, Ghost: 930 });
+  });
+});
+
 describe('loadBeatorajaSkin (JSON)', () => {
   it('returns the full skin and a derived header', () => {
     const files = makeFiles([
@@ -28,6 +91,7 @@ describe('loadBeatorajaSkin (JSON)', () => {
           name: 'demo',
           w: 1280,
           h: 720,
+          offset: [{ name: 'Judge Detail', id: 40, x: true, y: true, w: 0, h: 0, r: 1, a: true }],
           source: [{ id: 0, path: 'system.png' }],
           image: [{ id: 0, src: 0, x: 0, y: 0, w: 8, h: 8 }],
         }),
@@ -39,6 +103,9 @@ describe('loadBeatorajaSkin (JSON)', () => {
     if (!result.ok) throw new Error(result.error.message);
     expect(result.format).toBe('json');
     expect(result.header.type).toBe(5);
+    expect(result.header.offset).toEqual([
+      { name: 'Judge Detail', id: 40, x: true, y: true, w: false, h: false, r: true, a: true },
+    ]);
     expect(result.skin?.name).toBe('demo');
   });
 
@@ -64,7 +131,7 @@ describe('loadBeatorajaSkin (Lua)', () => {
   const playmain = enc(
     [
       'local M = {}',
-      'M.header = { type = 5, name = "demo", w = 1280, h = 720 }',
+      'M.header = { type = 5, name = "demo", w = 1280, h = 720, offset = {{ name = "Lift", id = 41, y = true, a = true }} }',
       'function M.main()',
       '  local s = {}; for k, v in pairs(M.header) do s[k] = v end',
       '  s.source = { { id = 0, path = "system.png" } }',
@@ -84,6 +151,9 @@ describe('loadBeatorajaSkin (Lua)', () => {
     if (!result.ok) throw new Error(result.error.message);
     expect(result.format).toBe('lua');
     expect(result.header.type).toBe(5);
+    expect(result.header.offset).toEqual([
+      { name: 'Lift', id: 41, x: false, y: true, w: false, h: false, r: false, a: true },
+    ]);
     expect(result.skin).toBeUndefined();
   });
 

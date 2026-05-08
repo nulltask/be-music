@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeBeatorajaDestinations } from '@be-music/beatoraja-skin';
+import {
+  evaluateBeatorajaLuaSkin,
+  isBeatorajaLuaFunctionValue,
+  normalizeBeatorajaDestinations,
+  type BeatorajaLuaFunctionValue,
+} from '@be-music/beatoraja-skin';
 import { blendCodeToPixi, destinationToSpriteProps, flipRectToPixi } from './beatoraja-render.ts';
 
 // Use a 1000-tall canvas so Y-flipped values are easy to eyeball: a `dst.y = 0, h = 50` rect
@@ -33,6 +38,20 @@ const groupOf = (overrides: Record<string, unknown> = {}) => {
   ]);
   return g;
 };
+
+const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
+
+function luaFunction(source: string): BeatorajaLuaFunctionValue {
+  const result = evaluateBeatorajaLuaSkin({
+    entry: enc(`return { fn = ${source} }`),
+    modules: [],
+    skinConfig: {},
+  });
+  if (!result.ok) throw new Error(result.error.message);
+  const value = result.value as Record<string, unknown>;
+  if (!isBeatorajaLuaFunctionValue(value.fn)) throw new Error('expected Lua function');
+  return value.fn;
+}
 
 describe('destinationToSpriteProps', () => {
   it('returns the head keyframe at scene start, Y-flipped from libGDX Y-UP into Pixi Y-DOWN', () => {
@@ -88,10 +107,44 @@ describe('destinationToSpriteProps', () => {
     expect(props.visible).toBe(false);
   });
 
+  it('honors runtime Lua draw functions before op gates', () => {
+    const draw = luaFunction('function() return true end');
+    try {
+      const g = groupOf({ op: [901], draw });
+      const props = destinationToSpriteProps(g, ctx({ activeOps: new Set(), nowMs: 0 }), TEST_CANVAS_HEIGHT);
+      expect(props.visible).toBe(true);
+    } finally {
+      draw.dispose();
+    }
+  });
+
+  it('hides when a runtime Lua draw function returns false', () => {
+    const draw = luaFunction('function() return false end');
+    try {
+      const g = groupOf({ draw });
+      const props = destinationToSpriteProps(g, ctx({ activeOps: new Set([901]), nowMs: 0 }), TEST_CANVAS_HEIGHT);
+      expect(props.visible).toBe(false);
+    } finally {
+      draw.dispose();
+    }
+  });
+
   it('hides when the referenced timer has not fired yet', () => {
     const g = groupOf({ timer: 51, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] });
     const props = destinationToSpriteProps(g, ctx({ getTimerStart: () => undefined, nowMs: 5000 }), TEST_CANVAS_HEIGHT);
     expect(props.visible).toBe(false);
+  });
+
+  it('uses runtime Lua timer functions as microsecond start times', () => {
+    const timer = luaFunction('function() return 500000 end');
+    try {
+      const g = groupOf({ timer });
+      const props = destinationToSpriteProps(g, ctx({ getTimerStart: () => undefined, nowMs: 750 }), TEST_CANVAS_HEIGHT);
+      expect(props.visible).toBe(true);
+      expect(props.x).toBe(25);
+    } finally {
+      timer.dispose();
+    }
   });
 
   it('respects negated op codes', () => {

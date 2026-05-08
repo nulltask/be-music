@@ -51,7 +51,6 @@
   across both runtimes.
 
   **Browser parity gains** (carried over from the engine):
-
   - Look-ahead lane keysound fallback: an empty press plays the next
     upcoming note's keysound on that lane, like beatoraja / LR2.
   - Free-Zone `17` / `27`: empty presses on these channels play the
@@ -65,7 +64,6 @@
     `summary.poor` increment, gauge penalty per gauge type, POOR BGA).
 
   **Engine surface (`@be-music/player`)**:
-
   - `PlayerOptions.createAudioSession` factory — host-supplied audio
     backend. Defaults to the bundled Node sink when omitted.
   - `PlayerOptions.createInputRuntime` / `createUiRuntime` — host-
@@ -88,7 +86,6 @@ performance.now()`).
     bundles can import the engine as-is.
 
   **Browser runtime adapters (`@be-music/player-web`)**:
-
   - `WebAudioSession` — Web Audio API implementation of the engine's
     `AudioSession` contract: immediate triggers, BGM scheduling,
     channel stops, pause / resume, key / BGM routing, dynamic volume
@@ -105,7 +102,6 @@ performance.now()`).
 mode, ui })` glue over the three adapters.
 
   **Browser performance / latency**:
-
   - Pixi `Application.init({ powerPreference: 'high-performance' })`
     — pin the renderer to the discrete GPU on hybrid laptops.
   - `<canvas style="contain: content">` — compositor isolation for
@@ -115,7 +111,6 @@ mode, ui })` glue over the three adapters.
     audible compressor pumping.
 
   **TUI fixes that came along**:
-
   - Absolute-path arguments now resolve correctly under pure-ESM
     Node runtimes (`tsx`, `node --import tsx/esm`); the previous
     `resolveCliPath` slow path silently fell back to `cwd` when its
@@ -130,7 +125,6 @@ mode, ui })` glue over the three adapters.
     share a comparable clock domain.
 
   **Demo (`@be-music/player-web-demo`)**:
-
   - The shared-engine path is the only playback path; the
     `useSharedEngine` opt-in flag has been removed along with the
     Debug Menu checkbox.

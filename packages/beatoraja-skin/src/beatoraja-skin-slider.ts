@@ -16,7 +16,10 @@
 // Direction codes (0=up, 1=right, 2=down, 3=left) are sourced from `SkinSlider.java` line 26.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
+import { isBeatorajaLuaFunctionValue } from './beatoraja-skin-lua.ts';
 import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
+import type { BeatorajaSkinSourceId } from './beatoraja-skin-types.ts';
+import type { BeatorajaFloatPropertyRef } from './beatoraja-skin-graph.ts';
 
 /** Direction the slider sprite translates as `value` rises from 0 to 1. */
 export type BeatorajaSliderDirection = 'right' | 'up' | 'left' | 'down';
@@ -24,8 +27,8 @@ export type BeatorajaSliderDirection = 'right' | 'up' | 'left' | 'down';
 export interface BeatorajaSliderElement {
   /** Destination id this slider targets. Same id space as `image[]` / `value[]` / `text[]` / `graph[]`. */
   id: BeatorajaImageId;
-  /** Source image index. */
-  src: number;
+  /** `source[].id` reference. Numeric and symbolic string ids are both valid. */
+  src: BeatorajaSkinSourceId;
   /** Source-rect crop. */
   x: number;
   y: number;
@@ -37,6 +40,8 @@ export interface BeatorajaSliderElement {
   range: number;
   /** Runtime value-source code. Renderer resolves it via the host's `resolveSliderValue` callback. */
   type: number;
+  /** Optional `value` FloatProperty. Beatoraja evaluates this instead of `type` when authored. */
+  valueProperty?: BeatorajaFloatPropertyRef;
   /** `if` codes that gate visibility. */
   ifCodes: ReadonlyArray<number>;
 }
@@ -55,9 +60,10 @@ function normalizeOne(entry: NormalizedElement): BeatorajaSliderElement | undefi
   const f = entry.fields;
   const id = f.id;
   if (typeof id !== 'string' && typeof id !== 'number') return undefined;
+  const valueProperty = floatPropertyField(f.value);
   return {
     id,
-    src: numberField(f, 'src', 0),
+    src: sourceIdField(f, 'src', 0),
     x: numberField(f, 'x', 0),
     y: numberField(f, 'y', 0),
     w: numberField(f, 'w', 0),
@@ -65,6 +71,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaSliderElement | undefi
     angle: angleField(f.angle),
     range: numberField(f, 'range', 0),
     type: numberField(f, 'type', 0),
+    ...(valueProperty !== undefined ? { valueProperty } : {}),
     ifCodes: entry.ifCodes,
   };
 }
@@ -95,4 +102,21 @@ function angleField(value: unknown): BeatorajaSliderDirection {
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
   const v = record[key];
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function floatPropertyField(value: unknown): BeatorajaFloatPropertyRef | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (isBeatorajaLuaFunctionValue(value)) return value;
+  return undefined;
+}
+
+function sourceIdField(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+  fallback: BeatorajaSkinSourceId,
+): BeatorajaSkinSourceId {
+  const v = record[key];
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.length > 0) return v;
+  return fallback;
 }

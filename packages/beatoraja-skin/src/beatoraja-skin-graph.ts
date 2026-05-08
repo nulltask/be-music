@@ -34,7 +34,11 @@
 // else is preserved verbatim for forward compat but not interpreted here.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
+import { isBeatorajaLuaFunctionValue, type BeatorajaLuaFunctionValue } from './beatoraja-skin-lua.ts';
 import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
+import type { BeatorajaSkinSourceId } from './beatoraja-skin-types.ts';
+
+export type BeatorajaFloatPropertyRef = number | BeatorajaLuaFunctionValue;
 
 /** Direction the bar fills toward as `value` rises from 0 to 1. */
 export type BeatorajaGraphFillDirection = 'right' | 'up' | 'left' | 'down';
@@ -42,8 +46,8 @@ export type BeatorajaGraphFillDirection = 'right' | 'up' | 'left' | 'down';
 export interface BeatorajaGraphElement {
   /** Destination id this graph targets. Same id space as `image[]` / `value[]` / `text[]`. */
   id: BeatorajaImageId;
-  /** Source image index this graph crops out of. */
-  src: number;
+  /** `source[].id` reference this graph crops out of. Numeric and symbolic string ids are both valid. */
+  src: BeatorajaSkinSourceId;
   /** Source-rect crop. */
   x: number;
   y: number;
@@ -55,6 +59,8 @@ export interface BeatorajaGraphElement {
    * codes from a known per-skin convention; see the file header for the live values surfaced.
    */
   type: number;
+  /** Optional `value` FloatProperty. Beatoraja evaluates this instead of `type` when authored. */
+  valueProperty?: BeatorajaFloatPropertyRef;
   /** Fill direction. Defaults to `'right'` (LR2-compatible default). */
   angle: BeatorajaGraphFillDirection;
   /** `if` codes that gate visibility (AND-merged with the destination's `op[]`). */
@@ -75,14 +81,16 @@ function normalizeOne(entry: NormalizedElement): BeatorajaGraphElement | undefin
   const f = entry.fields;
   const id = f.id;
   if (typeof id !== 'string' && typeof id !== 'number') return undefined;
+  const valueProperty = floatPropertyField(f.value);
   return {
     id,
-    src: numberField(f, 'src', 0),
+    src: sourceIdField(f, 'src', 0),
     x: numberField(f, 'x', 0),
     y: numberField(f, 'y', 0),
     w: numberField(f, 'w', 0),
     h: numberField(f, 'h', 0),
     type: numberField(f, 'type', 0),
+    ...(valueProperty !== undefined ? { valueProperty } : {}),
     angle: angleField(f.angle),
     ifCodes: entry.ifCodes,
   };
@@ -114,4 +122,21 @@ function angleField(value: unknown): BeatorajaGraphFillDirection {
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
   const v = record[key];
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function floatPropertyField(value: unknown): BeatorajaFloatPropertyRef | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (isBeatorajaLuaFunctionValue(value)) return value;
+  return undefined;
+}
+
+function sourceIdField(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+  fallback: BeatorajaSkinSourceId,
+): BeatorajaSkinSourceId {
+  const v = record[key];
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.length > 0) return v;
+  return fallback;
 }

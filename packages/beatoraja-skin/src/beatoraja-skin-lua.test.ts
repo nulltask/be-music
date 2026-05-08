@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateBeatorajaLuaSkin } from './beatoraja-skin-lua.ts';
+import {
+  BEATORAJA_LUA_TIMER_OFF_VALUE,
+  evaluateBeatorajaLuaBoolean,
+  evaluateBeatorajaLuaNumber,
+  evaluateBeatorajaLuaSkin,
+  isBeatorajaLuaFunctionValue,
+} from './beatoraja-skin-lua.ts';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
@@ -130,6 +136,45 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(result.value).toEqual({ same: true });
   });
 
+  it('preserves runtime Lua functions and evaluates them with a main_state context', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local main_state = require("main_state")',
+          'local count = 0',
+          'return {',
+          '  draw = function() return main_state.gauge() >= 80 end,',
+          '  value = function() count = count + 1; return main_state.number(10) + count end,',
+          '}',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: {},
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    const value = result.value as Record<string, unknown>;
+    expect(isBeatorajaLuaFunctionValue(value.draw)).toBe(true);
+    expect(isBeatorajaLuaFunctionValue(value.value)).toBe(true);
+    if (!isBeatorajaLuaFunctionValue(value.draw) || !isBeatorajaLuaFunctionValue(value.value)) {
+      throw new Error('expected runtime Lua functions');
+    }
+    expect(evaluateBeatorajaLuaBoolean(value.draw, { gauge: () => 79 })).toBe(false);
+    expect(evaluateBeatorajaLuaBoolean(value.draw, { gauge: () => 80 })).toBe(true);
+    expect(evaluateBeatorajaLuaNumber(value.value, { number: (id) => (id === 10 ? 5 : 0) })).toBe(6);
+    expect(evaluateBeatorajaLuaNumber(value.value, { number: (id) => (id === 10 ? 5 : 0) })).toBe(7);
+    value.draw.dispose();
+    value.value.dispose();
+  });
+
+  it('main_state is empty during the header pass', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc('local m = require("main_state"); return { has_gauge = m.gauge ~= nil }'),
+      modules: [],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ has_gauge: false });
+  });
+
   it('main_state built-in module exposes the MainStateAccessor surface as default-value stubs', () => {
     const result = evaluateBeatorajaLuaSkin({
       entry: enc(
@@ -141,12 +186,18 @@ describe('evaluateBeatorajaLuaSkin', () => {
           '  rate = m.rate(),',
           '  text = m.text(10),',
           '  option = m.option(123),',
-          '  timer = m.timer(46),',
+          '  offset_a = m.offset(3).a,',
+          '  timer_is_off = m.timer(46) == m.timer_off_value,',
           '  off_value = m.timer_off_value,',
+          '  volume_bg = m.volume_bg(),',
+          '  set_timer = m.set_timer(10000, 0),',
+          '  judge = m.judge(0),',
+          '  gauge_type = m.gauge_type(),',
           '}',
         ].join('\n'),
       ),
       modules: [],
+      skinConfig: {},
     });
     if (!result.ok) throw new Error(result.error.message);
     const value = result.value as Record<string, unknown>;
@@ -154,9 +205,14 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(value.exscore).toBe(0);
     expect(value.rate).toBe(0);
     expect(value.text).toBe('');
-    expect(value.option).toBe(0);
-    expect(value.timer).toBe(0);
-    expect(typeof value.off_value).toBe('number');
+    expect(value.option).toBe(false);
+    expect(value.offset_a).toBe(255);
+    expect(value.timer_is_off).toBe(true);
+    expect(value.off_value).toBe(BEATORAJA_LUA_TIMER_OFF_VALUE);
+    expect(value.volume_bg).toBe(0);
+    expect(value.set_timer).toBe(true);
+    expect(value.judge).toBe(0);
+    expect(value.gauge_type).toBe(0);
   });
 
   it('require accepts both `/` and `.` separators (so `result/util` and `result.util` both resolve)', () => {

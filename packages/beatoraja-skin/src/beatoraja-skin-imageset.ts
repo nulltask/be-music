@@ -17,6 +17,8 @@
 
 import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
 import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
+import { isBeatorajaLuaFunctionValue } from './beatoraja-skin-lua.ts';
+import type { BeatorajaIntegerPropertyRef } from './beatoraja-skin-value.ts';
 
 export interface BeatorajaImagesetElement {
   /** Destination id this imageset targets. Same id space as `image[]` / `value[]` / `text[]`. */
@@ -27,6 +29,8 @@ export interface BeatorajaImagesetElement {
    * `0` means "no ref" — always render `images[0]`.
    */
   ref: number;
+  /** Optional `value` IntegerProperty. Beatoraja evaluates this instead of `ref` when authored. */
+  valueProperty?: BeatorajaIntegerPropertyRef;
   /** Sub-image ids (each an `image[].id`). Empty array → renders nothing. */
   images: ReadonlyArray<BeatorajaImageId>;
   /** `if` codes that gate visibility (AND-merged with the destination's `op[]`). */
@@ -54,9 +58,11 @@ function normalizeOne(entry: NormalizedElement): BeatorajaImagesetElement | unde
     if (typeof v === 'string' || typeof v === 'number') images.push(v);
   }
   if (images.length === 0) return undefined;
+  const valueProperty = integerPropertyField(f.value);
   return {
     id,
     ref: numberField(f, 'ref', 0),
+    ...(valueProperty !== undefined ? { valueProperty } : {}),
     images,
     ifCodes: entry.ifCodes,
   };
@@ -65,4 +71,10 @@ function normalizeOne(entry: NormalizedElement): BeatorajaImagesetElement | unde
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
   const v = record[key];
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function integerPropertyField(value: unknown): BeatorajaIntegerPropertyRef | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (isBeatorajaLuaFunctionValue(value)) return value;
+  return undefined;
 }

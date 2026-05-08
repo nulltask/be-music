@@ -73,6 +73,11 @@ describe('normalizeBeatorajaImages', () => {
     expect(out[0]).toMatchObject({ id: 'bomb1-1', divx: 10, divy: 1, timer: 51, cycle: 160 });
   });
 
+  it('preserves symbolic string source ids', () => {
+    const out = normalizeBeatorajaImages([{ id: 'background', src: 'bg_src', x: 0, y: 0, w: 1280, h: 720 }]);
+    expect(out[0]?.src).toBe('bg_src');
+  });
+
   it('flattens conditional `if`/`values` blocks and attaches ifCodes', () => {
     const out = normalizeBeatorajaImages([
       { if: [920], values: [{ id: 'lane-bg', src: 7, x: 56, y: 0, w: 560, h: 80 }] },

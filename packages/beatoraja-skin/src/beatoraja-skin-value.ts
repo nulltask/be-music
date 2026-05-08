@@ -22,13 +22,17 @@
 // `divx = 10` declaration with `padding = 0` (leading-blank) silently falls back to leading zero.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
+import { isBeatorajaLuaFunctionValue, type BeatorajaLuaFunctionValue } from './beatoraja-skin-lua.ts';
 import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
+import type { BeatorajaSkinSourceId } from './beatoraja-skin-types.ts';
+
+export type BeatorajaIntegerPropertyRef = number | BeatorajaLuaFunctionValue;
 
 export interface BeatorajaValueElement {
   /** Element id; `destination[]` references this. */
   id: BeatorajaImageId;
-  /** Index into `source[]`. -1 when the author left it unset. */
-  src: number;
+  /** `source[].id` reference. Numeric and symbolic string ids are both valid. */
+  src: BeatorajaSkinSourceId;
   /** Source rect — full strip including every digit cell. */
   x: number;
   y: number;
@@ -47,6 +51,8 @@ export interface BeatorajaValueElement {
   padding: number;
   /** Source-strip cell-selection ref; resolves through the prop.lua num table. */
   ref: number;
+  /** Optional `value` IntegerProperty. Beatoraja evaluates this instead of `ref` when authored. */
+  valueProperty?: BeatorajaIntegerPropertyRef;
   /** Alignment hint. 0 = right-aligned (default), 1 = center, 2 = left. Most authors use 0. */
   align: number;
   /** Op-codes that gate visibility (from `if`/`values` flattening). */
@@ -72,9 +78,10 @@ function normalizeOne(entry: NormalizedElement): BeatorajaValueElement | undefin
   const id = f.id;
   if (typeof id !== 'string' && typeof id !== 'number') return undefined;
   const digit = positiveIntField(f, 'digit', 1);
+  const valueProperty = integerPropertyField(f.value);
   return {
     id,
-    src: numberField(f, 'src', -1),
+    src: sourceIdField(f, 'src', -1),
     x: numberField(f, 'x', 0),
     y: numberField(f, 'y', 0),
     w: numberField(f, 'w', 0),
@@ -84,6 +91,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaValueElement | undefin
     digit,
     padding: numberField(f, 'padding', 0),
     ref: numberField(f, 'ref', 0),
+    ...(valueProperty !== undefined ? { valueProperty } : {}),
     align: numberField(f, 'align', 0),
     ifCodes: entry.ifCodes,
   };
@@ -92,6 +100,23 @@ function normalizeOne(entry: NormalizedElement): BeatorajaValueElement | undefin
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
   const v = record[key];
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function integerPropertyField(value: unknown): BeatorajaIntegerPropertyRef | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (isBeatorajaLuaFunctionValue(value)) return value;
+  return undefined;
+}
+
+function sourceIdField(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+  fallback: BeatorajaSkinSourceId,
+): BeatorajaSkinSourceId {
+  const v = record[key];
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.length > 0) return v;
+  return fallback;
 }
 
 function positiveIntField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {

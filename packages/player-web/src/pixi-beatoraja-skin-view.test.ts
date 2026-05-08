@@ -1,8 +1,11 @@
 import { Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it, vi } from 'vitest';
+import { evaluateBeatorajaLuaSkin, isBeatorajaLuaFunctionValue } from '@be-music/beatoraja-skin';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
+
+const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
 function fakeTextureCache(idsWithTextures: ReadonlyArray<number>): BeatorajaTextureCache {
   // The view explicitly skips any sprite whose texture is `Texture.EMPTY` (the renderer crashes on WebGPU when a
@@ -134,6 +137,33 @@ describe('BeatorajaPlaySkinView', () => {
     expect((view.container.children[0] as { visible: boolean }).visible).toBe(false);
     view.update({ activeOps: new Set([920]), getTimerStart: () => 0, nowMs: 0 });
     expect((view.container.children[0] as { visible: boolean }).visible).toBe(true);
+    view.dispose();
+  });
+
+  it('passes gauge percent to runtime Lua draw functions without rescaling', () => {
+    const lua = evaluateBeatorajaLuaSkin({
+      entry: enc('local m = require("main_state"); return function() return m.gauge() >= 80 end'),
+      modules: [],
+      skinConfig: {},
+    });
+    if (!lua.ok) throw new Error(lua.error.message);
+    const draw = lua.value;
+    if (!isBeatorajaLuaFunctionValue(draw)) throw new Error('expected a runtime Lua function');
+    const skin = makeSkin({
+      destination: [{ id: 1, draw, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] }],
+    });
+    let gauge = 79;
+    const view = new BeatorajaPlaySkinView({
+      skin,
+      textures: fakeTextureCache([0]),
+      resolveGaugePercent: () => gauge,
+    });
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+    expect((view.container.children[0] as { visible: boolean }).visible).toBe(false);
+    gauge = 80;
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+    expect((view.container.children[0] as { visible: boolean }).visible).toBe(true);
+    draw.dispose();
     view.dispose();
   });
 

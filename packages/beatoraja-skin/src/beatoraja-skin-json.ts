@@ -4,6 +4,7 @@
 // `item` array with `,]`). We strip trailing commas before handing the text to `JSON.parse` so authors don't have to
 // worry about that gotcha.
 
+import { normalizeBeatorajaSkinCustomOffsets } from './beatoraja-skin-types.ts';
 import type { BeatorajaSkin, BeatorajaSkinHeader } from './beatoraja-skin-types.ts';
 
 /**
@@ -36,7 +37,10 @@ export function parseBeatorajaSkinJsonHeader(source: Uint8Array | string): Beato
     destination: _dst,
     ...header
   } = skin;
-  return header;
+  return {
+    ...header,
+    offset: normalizeBeatorajaSkinCustomOffsets((header as Readonly<Record<string, unknown>>).offset),
+  } as BeatorajaSkinHeader;
 }
 
 /**

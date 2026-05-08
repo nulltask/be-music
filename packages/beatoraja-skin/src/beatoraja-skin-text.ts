@@ -9,7 +9,11 @@
 // concerns that live in `@be-music/player-web`.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
+import { isBeatorajaLuaFunctionValue, type BeatorajaLuaFunctionValue } from './beatoraja-skin-lua.ts';
 import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
+import type { BeatorajaSkinFontId } from './beatoraja-skin-types.ts';
+
+export type BeatorajaStringPropertyRef = number | BeatorajaLuaFunctionValue;
 
 /** Optional alignment hint. Most authors leave it unset (`'left'` is the beatoraja default). */
 export type BeatorajaTextAlign = 'left' | 'center' | 'right';
@@ -19,8 +23,8 @@ export interface BeatorajaTextElement {
    * Same id space as `image[]` / `value[]` — destinations reference text elements with `dst[].id` matching this.
    */
   id: BeatorajaImageId;
-  /** Font slot index (`font[].id`). */
-  fontId: number;
+  /** Font slot id (`font[].id`). Numeric and symbolic string ids are both valid. */
+  fontId: BeatorajaSkinFontId;
   /** Font size in skin-pixel units. */
   size: number;
   /**
@@ -28,6 +32,8 @@ export interface BeatorajaTextElement {
    * `0` means "no ref" — a static label the author baked in.
    */
   ref: number;
+  /** Optional `value` StringProperty. Beatoraja evaluates this instead of `ref` when authored. */
+  valueProperty?: BeatorajaStringPropertyRef;
   /** Rendering alignment. Defaults to `'left'`. */
   align: BeatorajaTextAlign;
   /** `if` codes that gate visibility (from `if`/`values` flattening). */
@@ -35,7 +41,7 @@ export interface BeatorajaTextElement {
 }
 
 export interface BeatorajaFontElement {
-  id: number;
+  id: BeatorajaSkinFontId;
   /** Path relative to the skin file. */
   path: string;
 }
@@ -54,11 +60,13 @@ function normalizeOne(entry: NormalizedElement): BeatorajaTextElement | undefine
   const f = entry.fields;
   const id = f.id;
   if (typeof id !== 'string' && typeof id !== 'number') return undefined;
+  const valueProperty = stringPropertyField(f.value);
   return {
     id,
-    fontId: numberField(f, 'font', 0),
+    fontId: fontIdField(f, 'font', 0),
     size: numberField(f, 'size', 24),
     ref: numberField(f, 'ref', 0),
+    ...(valueProperty !== undefined ? { valueProperty } : {}),
     align: alignField(f.align),
     ifCodes: entry.ifCodes,
   };
@@ -82,6 +90,23 @@ function numberField(record: Readonly<Record<string, unknown>>, key: string, fal
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 
+function stringPropertyField(value: unknown): BeatorajaStringPropertyRef | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (isBeatorajaLuaFunctionValue(value)) return value;
+  return undefined;
+}
+
+function fontIdField(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+  fallback: BeatorajaSkinFontId,
+): BeatorajaSkinFontId {
+  const v = record[key];
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.length > 0) return v;
+  return fallback;
+}
+
 /**
  * Normalize the top-level `font[]` array. Returns `[]` when the skin doesn't declare any fonts. Paths are
  * preserved verbatim — the renderer is responsible for resolving them through the dropped file map.
@@ -94,7 +119,9 @@ export function normalizeBeatorajaFonts(input: unknown): BeatorajaFontElement[] 
     const obj = entry as Readonly<Record<string, unknown>>;
     const id = obj.id;
     const path = obj.path;
-    if (typeof id !== 'number' || !Number.isFinite(id)) continue;
+    if (typeof id !== 'number' && typeof id !== 'string') continue;
+    if (typeof id === 'number' && !Number.isFinite(id)) continue;
+    if (typeof id === 'string' && id.length === 0) continue;
     if (typeof path !== 'string' || path.length === 0) continue;
     out.push({ id, path });
   }

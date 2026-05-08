@@ -1470,7 +1470,7 @@ class PlayerWebDemoApp {
         bundle.theme.selectSkin ? 'select' : null,
         bundle.theme.decideSkin ? 'decide' : null,
         bundle.theme.resultSkin ? 'result' : null,
-        bundle.theme.gradeResultSkin ? 'grade' : null,
+        bundle.theme.courseResultSkin ? 'course-result' : null,
       ]
         .filter((s): s is string => s !== null)
         .join('+');
@@ -2309,7 +2309,6 @@ class PlayerWebDemoApp {
       { typeCode: BEATORAJA_SKIN_TYPE.DECIDE, label: 'Decide', best: theme.decideSkin },
       { typeCode: BEATORAJA_SKIN_TYPE.RESULT, label: 'Result', best: theme.resultSkin },
       { typeCode: BEATORAJA_SKIN_TYPE.COURSE_RESULT, label: 'Course Result', best: theme.courseResultSkin },
-      { typeCode: BEATORAJA_SKIN_TYPE.GRADE_RESULT, label: 'Grade Result', best: theme.gradeResultSkin },
     ];
     for (const scene of sceneTypes) {
       const candidates = theme.entries.filter((entry) => entry.header.type === scene.typeCode);

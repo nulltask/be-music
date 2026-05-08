@@ -33,13 +33,13 @@ describe('loadBeatorajaThemeFromFiles', () => {
     const files = [
       new FakeFile('skin/default/play24.json', enc(jsonSkin(16))),
       new FakeFile('skin/default/select.json', enc(jsonSkin(5))),
-      new FakeFile('skin/default/graderesult.json', enc(jsonSkin(15))),
+      new FakeFile('skin/default/courseresult.json', enc(jsonSkin(15))),
       new FakeFile('skin/default/system.png', enc('not-a-skin')),
     ];
     const bundle = await loadBeatorajaThemeFromFiles(files);
     expect(bundle.theme.playSkins['24']?.entryPath).toBe('skin/default/play24.json');
     expect(bundle.theme.selectSkin?.entryPath).toBe('skin/default/select.json');
-    expect(bundle.theme.gradeResultSkin?.entryPath).toBe('skin/default/graderesult.json');
+    expect(bundle.theme.courseResultSkin?.entryPath).toBe('skin/default/courseresult.json');
     expect(bundle.warnings).toEqual([]);
   });
 

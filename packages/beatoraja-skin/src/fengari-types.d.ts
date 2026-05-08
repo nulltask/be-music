@@ -86,6 +86,8 @@ declare module 'fengari' {
     luaL_checknumber: (L: lua_State, narg: number) => number;
     luaL_checkinteger: (L: lua_State, narg: number) => number;
     luaL_checkany: (L: lua_State, narg: number) => void;
+    luaL_ref: (L: lua_State, t: number) => number;
+    luaL_unref: (L: lua_State, t: number, ref: number) => void;
     luaL_optstring: (L: lua_State, narg: number, def: Uint8Array | string) => Uint8Array;
     luaL_optnumber: (L: lua_State, narg: number, def: number) => number;
     luaL_optinteger: (L: lua_State, narg: number, def: number) => number;

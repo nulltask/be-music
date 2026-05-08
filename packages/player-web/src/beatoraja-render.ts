@@ -16,10 +16,13 @@
 import { Rectangle, Texture } from 'pixi.js';
 import {
   combineBeatorajaOffsets,
+  evaluateBeatorajaLuaBoolean,
+  evaluateBeatorajaLuaNumber,
   isElementVisible,
   sampleBeatorajaDestination,
   ZERO_BEATORAJA_OFFSET,
   type BeatorajaDestinationGroup,
+  type BeatorajaLuaRuntimeContext,
   type BeatorajaSkinOffsetValue,
 } from '@be-music/beatoraja-skin';
 
@@ -85,6 +88,8 @@ export interface BeatorajaRenderContext {
   getTimerStart: (timerId: number) => number | undefined;
   /** Current scene-relative time in milliseconds. */
   nowMs: number;
+  /** Runtime Lua context used when a skin authored Lua functions in BooleanProperty / TimerProperty fields. */
+  lua?: BeatorajaLuaRuntimeContext;
   /**
    * Lookup `(offsetId) → user-adjustable offset shift`. Used by destinations whose `offsets[]`
    * lists `OFFSET_*` ids (judge offset slider, lanecover position, etc.). Returning `undefined`
@@ -134,9 +139,22 @@ export function destinationToSpriteProps(
   canvasHeight: number,
 ): BeatorajaSpriteProps {
   if (!isElementVisible(group.ifCodes, context.activeOps)) return HIDDEN_PROPS;
-  if (!isElementVisible(group.op, context.activeOps)) return HIDDEN_PROPS;
+  if (group.draw !== undefined) {
+    const visible =
+      typeof group.draw === 'number'
+        ? context.activeOps.has(group.draw)
+        : evaluateBeatorajaLuaBoolean(group.draw, context.lua);
+    if (!visible) return HIDDEN_PROPS;
+  } else if (!isElementVisible(group.op, context.activeOps)) {
+    return HIDDEN_PROPS;
+  }
 
-  const timerStart = group.timer === 0 ? 0 : context.getTimerStart(group.timer);
+  const timerStart =
+    group.timerFunction !== undefined
+      ? timerStartFromLuaFunction(group.timerFunction, context)
+      : group.timer === 0
+        ? 0
+        : context.getTimerStart(group.timer);
   if (timerStart === undefined) return HIDDEN_PROPS;
 
   const elapsed = context.nowMs - timerStart;
@@ -215,6 +233,15 @@ export function destinationToSpriteProps(
     angle: keyframe.angle + offset.r,
     blendMode: blendCodeToPixi(group.blend),
   };
+}
+
+function timerStartFromLuaFunction(
+  timerFunction: NonNullable<BeatorajaDestinationGroup['timerFunction']>,
+  context: BeatorajaRenderContext,
+): number | undefined {
+  const value = evaluateBeatorajaLuaNumber(timerFunction, context.lua);
+  if (value === undefined || value < 0) return undefined;
+  return value / 1000;
 }
 
 /**

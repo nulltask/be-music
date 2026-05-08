@@ -49,6 +49,7 @@ const {
   lua_rawlen,
   lua_rawseti,
   lua_remove,
+  lua_settop,
   lua_setfield,
   lua_setglobal,
   lua_toboolean,
@@ -57,8 +58,51 @@ const {
   lua_tostring,
   lua_type,
 } = lua;
-const { luaL_error, luaL_loadbufferx, luaL_newstate } = lauxlib;
+const { luaL_error, luaL_loadbufferx, luaL_newstate, luaL_ref, luaL_unref } = lauxlib;
 const { luaL_openlibs } = lualib;
+
+export interface BeatorajaLuaOffsetValue {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  r: number;
+  a: number;
+}
+
+export interface BeatorajaLuaRuntimeContext {
+  option?: (id: number) => boolean;
+  number?: (id: number) => number | undefined;
+  floatNumber?: (id: number) => number | undefined;
+  text?: (id: number) => string | undefined;
+  offset?: (id: number) => Readonly<Partial<BeatorajaLuaOffsetValue>> | undefined;
+  timer?: (id: number) => number | undefined;
+  time?: () => number | undefined;
+  eventIndex?: (id: number) => number | undefined;
+  setTimer?: (id: number, value: number) => boolean | undefined;
+  eventExec?: (id: number, args: ReadonlyArray<number>) => boolean | undefined;
+  rate?: () => number | undefined;
+  exscore?: () => number | undefined;
+  rateBest?: () => number | undefined;
+  exscoreBest?: () => number | undefined;
+  rateRival?: () => number | undefined;
+  exscoreRival?: () => number | undefined;
+  volumeSys?: () => number | undefined;
+  setVolumeSys?: (value: number) => boolean | undefined;
+  volumeKey?: () => number | undefined;
+  setVolumeKey?: (value: number) => boolean | undefined;
+  volumeBg?: () => number | undefined;
+  setVolumeBg?: (value: number) => boolean | undefined;
+  judge?: (judge: number) => number | undefined;
+  gauge?: () => number | undefined;
+  gaugeType?: () => number | undefined;
+}
+
+export interface BeatorajaLuaFunctionValue {
+  readonly kind: 'beatoraja-lua-function';
+  evaluate(context?: BeatorajaLuaRuntimeContext, args?: ReadonlyArray<unknown>): LuaValue | undefined;
+  dispose(): void;
+}
 
 /**
  * Plain-JS shape Lua tables get converted into. Lua doesn't distinguish list-from-record so we have to pick one
@@ -66,7 +110,14 @@ const { luaL_openlibs } = lualib;
  *
  * Keys are normalized to JS strings; numeric keys on records are stringified the same way `JSON.parse` does.
  */
-export type LuaValue = null | boolean | number | string | LuaValue[] | { [key: string]: LuaValue };
+export type LuaValue =
+  | null
+  | boolean
+  | number
+  | string
+  | BeatorajaLuaFunctionValue
+  | LuaValue[]
+  | { [key: string]: LuaValue };
 
 /**
  * `skin_config` table the host injects into the global environment between the two evaluation passes. Keys mirror
@@ -117,6 +168,114 @@ export type BeatorajaLuaEvaluationResult =
   | { ok: true; value: LuaValue }
   | { ok: false; error: BeatorajaLuaEvaluationError };
 
+export const BEATORAJA_LUA_TIMER_OFF_VALUE = -9223372036854775808;
+
+const ZERO_LUA_OFFSET: Readonly<BeatorajaLuaOffsetValue> = Object.freeze({
+  x: 0,
+  y: 0,
+  w: 0,
+  h: 0,
+  r: 0,
+  a: 255,
+});
+
+class LuaRuntimeOwner {
+  private refs = 0;
+  private closed = false;
+  context: BeatorajaLuaRuntimeContext | undefined;
+
+  constructor(readonly L: lua_State) {}
+
+  makeFunction(ref: number): BeatorajaLuaFunctionValue {
+    this.refs += 1;
+    let disposed = false;
+    return {
+      kind: 'beatoraja-lua-function',
+      evaluate: (context, args) => {
+        if (disposed || this.closed) return undefined;
+        return this.evaluateFunction(ref, context, args ?? []);
+      },
+      dispose: () => {
+        if (disposed || this.closed) return;
+        disposed = true;
+        luaL_unref(this.L, LUA_REGISTRYINDEX, ref);
+        this.refs -= 1;
+        if (this.refs <= 0) this.close();
+      },
+    };
+  }
+
+  hasRetainedFunctions(): boolean {
+    return this.refs > 0;
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    lua_close(this.L);
+  }
+
+  private evaluateFunction(
+    ref: number,
+    context: BeatorajaLuaRuntimeContext | undefined,
+    args: ReadonlyArray<unknown>,
+  ): LuaValue | undefined {
+    const top = lua_gettop(this.L);
+    const previousContext = this.context;
+    this.context = context;
+    try {
+      lua_rawgeti(this.L, LUA_REGISTRYINDEX, ref);
+      for (const arg of args) pushJsValueAsLua(this.L, arg);
+      const status = lua_pcall(this.L, args.length, 1, 0);
+      if (status !== LUA_OK) {
+        lua_settop(this.L, top);
+        return undefined;
+      }
+      const value = readLuaValueAt(this.L, -1, this);
+      lua_settop(this.L, top);
+      return value;
+    } finally {
+      this.context = previousContext;
+      lua_settop(this.L, top);
+    }
+  }
+}
+
+export function isBeatorajaLuaFunctionValue(value: unknown): value is BeatorajaLuaFunctionValue {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    (value as { kind?: unknown }).kind === 'beatoraja-lua-function' &&
+    typeof (value as { evaluate?: unknown }).evaluate === 'function'
+  );
+}
+
+export function evaluateBeatorajaLuaBoolean(
+  value: BeatorajaLuaFunctionValue,
+  context?: BeatorajaLuaRuntimeContext,
+): boolean | undefined {
+  const result = value.evaluate(context);
+  if (typeof result === 'boolean') return result;
+  if (typeof result === 'number') return result !== 0;
+  return undefined;
+}
+
+export function evaluateBeatorajaLuaNumber(
+  value: BeatorajaLuaFunctionValue,
+  context?: BeatorajaLuaRuntimeContext,
+): number | undefined {
+  const result = value.evaluate(context);
+  return typeof result === 'number' && Number.isFinite(result) ? result : undefined;
+}
+
+export function evaluateBeatorajaLuaString(
+  value: BeatorajaLuaFunctionValue,
+  context?: BeatorajaLuaRuntimeContext,
+): string | undefined {
+  const result = value.evaluate(context);
+  return typeof result === 'string' ? result : undefined;
+}
+
 /**
  * Evaluate a beatoraja `.luaskin` entry script and convert the returned Lua table into plain JS. Returns a Result
  * union rather than throwing so the caller can handle "skin had a syntax error" without try/catch ceremony — most
@@ -124,9 +283,11 @@ export type BeatorajaLuaEvaluationResult =
  */
 export function evaluateBeatorajaLuaSkin(options: EvaluateBeatorajaLuaSkinOptions): BeatorajaLuaEvaluationResult {
   const L = luaL_newstate();
+  const owner = new LuaRuntimeOwner(L);
+  let retainedByReturnValue = false;
   try {
     openSkinSandbox(L);
-    setupCustomRequire(L, options.modules);
+    setupCustomRequire(L, options.modules, owner, options.skinConfig !== undefined);
     setupSkinConfig(L, options.skinConfig);
 
     const entryName = options.entryName ?? 'skin.luaskin';
@@ -146,10 +307,11 @@ export function evaluateBeatorajaLuaSkin(options: EvaluateBeatorajaLuaSkinOption
       return errorResultFromTop(L);
     }
 
-    const value = popLuaValue(L);
+    const value = popLuaValue(L, owner);
+    retainedByReturnValue = owner.hasRetainedFunctions();
     return { ok: true, value };
   } finally {
-    lua_close(L);
+    if (!retainedByReturnValue) owner.close();
   }
 }
 
@@ -185,7 +347,12 @@ function openSkinSandbox(L: lua_State): void {
 const REGISTRY_MODULE_CACHE = '__be_music_beatoraja_module_cache';
 const REGISTRY_MODULE_SOURCES = '__be_music_beatoraja_module_sources';
 
-function setupCustomRequire(L: lua_State, modules: ReadonlyArray<BeatorajaLuaModuleSource>): void {
+function setupCustomRequire(
+  L: lua_State,
+  modules: ReadonlyArray<BeatorajaLuaModuleSource>,
+  owner: LuaRuntimeOwner,
+  exposeMainState: boolean,
+): void {
   // Registry sources table: { [name]: source }.
   lua_createtable(L, 0, modules.length);
   for (const m of modules) {
@@ -221,7 +388,7 @@ function setupCustomRequire(L: lua_State, modules: ReadonlyArray<BeatorajaLuaMod
 
     // Built-in module check — `main_state` and friends. These are emulated host-provided tables; if the
     // module name matches one we synthesize, push the table and cache it.
-    if (pushBuiltinLuaModule(state, name)) {
+    if (pushBuiltinLuaModule(state, name, owner, exposeMainState)) {
       lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
       lua_pushvalue(state, -2); // duplicate the synthesized table
       lua_setfield(state, -2, to_luastring(name));
@@ -293,97 +460,132 @@ function setupCustomRequire(L: lua_State, modules: ReadonlyArray<BeatorajaLuaMod
  * skin's `main()` can complete and emit destinations even when no real engine state is wired. A future
  * patch will let the host inject real implementations for runtime data.
  */
-function pushBuiltinLuaModule(L: lua_State, name: string): boolean {
+function pushBuiltinLuaModule(
+  L: lua_State,
+  name: string,
+  owner: LuaRuntimeOwner,
+  exposeMainState: boolean,
+): boolean {
   switch (name) {
     case 'main_state':
-      pushMainStateStub(L);
+      pushMainStateStub(L, owner, exposeMainState);
       return true;
     default:
       return false;
   }
 }
 
-function pushMainStateStub(L: lua_State): void {
+function pushMainStateStub(L: lua_State, owner: LuaRuntimeOwner, exposeMainState: boolean): void {
+  if (!exposeMainState) {
+    lua_createtable(L, 0, 0);
+    return;
+  }
   // Method names from `MainStateAccessor.export()`. Each is a JS callback that pops its arguments and
   // pushes a default value matching the original Java return type. Stubs are pure — no side effects on
   // engine state — which is the right behavior for skin-render purposes (the skin's `main()` typically
   // calls these to materialize defaults at evaluation time, not to drive runtime).
-  lua_createtable(L, 0, 24);
+  lua_createtable(L, 0, 32);
 
-  const setNumberStub = (key: string): void => {
+  const numberArg = (state: lua_State, index = 1): number => {
+    const value = lua_tonumber(state, index);
+    return Number.isFinite(value) ? Math.trunc(value) : 0;
+  };
+  const numberOrZero = (value: number | undefined): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+
+  const setNumberAccessor = (key: string, resolve: (ctx: BeatorajaLuaRuntimeContext, state: lua_State) => number | undefined): void => {
     lua_pushjsfunction(L, (state) => {
-      lua_pushnumber(state, 0);
+      lua_pushnumber(state, numberOrZero(resolve(owner.context ?? {}, state)));
       return 1;
     });
     lua_setfield(L, -2, to_luastring(key));
   };
-  const setStringStub = (key: string): void => {
+  const setBooleanAccessor = (
+    key: string,
+    resolve: (ctx: BeatorajaLuaRuntimeContext, state: lua_State) => boolean | undefined,
+  ): void => {
     lua_pushjsfunction(L, (state) => {
-      lua_pushstring(state, to_luastring(''));
+      lua_pushboolean(state, resolve(owner.context ?? {}, state) ? 1 : 0);
       return 1;
     });
     lua_setfield(L, -2, to_luastring(key));
   };
-  const setBooleanStub = (key: string): void => {
+  const setStringAccessor = (
+    key: string,
+    resolve: (ctx: BeatorajaLuaRuntimeContext, state: lua_State) => string | undefined,
+  ): void => {
     lua_pushjsfunction(L, (state) => {
-      lua_pushboolean(state, 0);
+      lua_pushstring(state, to_luastring(resolve(owner.context ?? {}, state) ?? ''));
       return 1;
     });
     lua_setfield(L, -2, to_luastring(key));
   };
-  const setVoidStub = (key: string): void => {
-    lua_pushjsfunction(L, () => 0);
+  const setBooleanCommand = (
+    key: string,
+    run: (ctx: BeatorajaLuaRuntimeContext, state: lua_State) => boolean | undefined,
+  ): void => {
+    lua_pushjsfunction(L, (state) => {
+      lua_pushboolean(state, run(owner.context ?? {}, state) === false ? 0 : 1);
+      return 1;
+    });
     lua_setfield(L, -2, to_luastring(key));
   };
 
-  // Generic accessors — return 0 / '' / false for any id.
-  setNumberStub('option');
-  setNumberStub('number');
-  setNumberStub('float_number');
-  setStringStub('text');
-  setNumberStub('offset');
-  setNumberStub('timer');
-  setNumberStub('time');
-  setNumberStub('event_index');
+  // Generic accessors.
+  setBooleanAccessor('option', (ctx, state) => ctx.option?.(numberArg(state)) ?? false);
+  setNumberAccessor('number', (ctx, state) => ctx.number?.(numberArg(state)));
+  setNumberAccessor('float_number', (ctx, state) => ctx.floatNumber?.(numberArg(state)));
+  setStringAccessor('text', (ctx, state) => ctx.text?.(numberArg(state)));
+  lua_pushjsfunction(L, (state) => {
+    const offset = owner.context?.offset?.(numberArg(state)) ?? ZERO_LUA_OFFSET;
+    pushJsValueAsLua(state, {
+      x: numberOrZero(offset.x),
+      y: numberOrZero(offset.y),
+      w: numberOrZero(offset.w),
+      h: numberOrZero(offset.h),
+      r: numberOrZero(offset.r),
+      a: numberOrZero(offset.a ?? ZERO_LUA_OFFSET.a),
+    });
+    return 1;
+  });
+  lua_setfield(L, -2, to_luastring('offset'));
+  setNumberAccessor('timer', (ctx, state) => ctx.timer?.(numberArg(state)) ?? BEATORAJA_LUA_TIMER_OFF_VALUE);
+  setNumberAccessor('time', (ctx) => ctx.time?.());
+  setNumberAccessor('event_index', (ctx, state) => ctx.eventIndex?.(numberArg(state)));
 
   // Setters / commands — no return value.
-  setVoidStub('set_timer');
-  setVoidStub('event_exec');
+  setBooleanCommand('set_timer', (ctx, state) => ctx.setTimer?.(numberArg(state, 1), lua_tonumber(state, 2)));
+  setBooleanCommand('event_exec', (ctx, state) => {
+    const id = numberArg(state, 1);
+    const top = lua_gettop(state);
+    const args: number[] = [];
+    for (let i = 2; i <= top; i += 1) args.push(numberArg(state, i));
+    return ctx.eventExec?.(id, args);
+  });
 
   // Boolean queries the renderer skins use to gate visibility.
-  setBooleanStub('is_event_active');
+  setBooleanAccessor('is_event_active', () => false);
 
-  // Constant: the "timer not started" sentinel beatoraja uses (`Long.MIN_VALUE` on the Java side; we
-  // pick a JS-safe integer with the same "definitely-not-a-real-time-value" semantic).
-  lua_pushnumber(L, -1);
+  // Constant: the "timer not started" sentinel beatoraja uses (`Long.MIN_VALUE` on the Java side).
+  lua_pushnumber(L, BEATORAJA_LUA_TIMER_OFF_VALUE);
   lua_setfield(L, -2, to_luastring('timer_off_value'));
 
   // Convenience numeric accessors — same default as `number`.
-  for (const key of [
-    'rate',
-    'exscore',
-    'rate_best',
-    'exscore_best',
-    'rate_rival',
-    'exscore_rival',
-    'volume_sys',
-    'volume_key',
-    'volume_bgm',
-    'judge_perfect',
-    'judge_great',
-    'judge_good',
-    'judge_bad',
-    'judge_poor',
-    'judge_miss',
-    'combo',
-    'maxcombo',
-    'misscount',
-    'fast',
-    'slow',
-    'gauge',
-  ]) {
-    setNumberStub(key);
-  }
+  setNumberAccessor('rate', (ctx) => ctx.rate?.());
+  setNumberAccessor('exscore', (ctx) => ctx.exscore?.());
+  setNumberAccessor('rate_best', (ctx) => ctx.rateBest?.());
+  setNumberAccessor('exscore_best', (ctx) => ctx.exscoreBest?.());
+  setNumberAccessor('rate_rival', (ctx) => ctx.rateRival?.());
+  setNumberAccessor('exscore_rival', (ctx) => ctx.exscoreRival?.());
+  setNumberAccessor('volume_sys', (ctx) => ctx.volumeSys?.());
+  setBooleanCommand('set_volume_sys', (ctx, state) => ctx.setVolumeSys?.(lua_tonumber(state, 1)));
+  setNumberAccessor('volume_key', (ctx) => ctx.volumeKey?.());
+  setBooleanCommand('set_volume_key', (ctx, state) => ctx.setVolumeKey?.(lua_tonumber(state, 1)));
+  setNumberAccessor('volume_bg', (ctx) => ctx.volumeBg?.());
+  setNumberAccessor('volume_bgm', (ctx) => ctx.volumeBg?.());
+  setBooleanCommand('set_volume_bg', (ctx, state) => ctx.setVolumeBg?.(lua_tonumber(state, 1)));
+  setNumberAccessor('judge', (ctx, state) => ctx.judge?.(numberArg(state)));
+  setNumberAccessor('gauge', (ctx) => ctx.gauge?.());
+  setNumberAccessor('gauge_type', (ctx) => ctx.gaugeType?.());
 }
 
 function setupSkinConfig(L: lua_State, config: BeatorajaLuaSkinConfig | undefined): void {
@@ -455,17 +657,17 @@ function pushJsValueAsLua(L: lua_State, value: unknown): void {
   lua_pushnil(L);
 }
 
-function popLuaValue(L: lua_State): LuaValue {
+function popLuaValue(L: lua_State, owner: LuaRuntimeOwner): LuaValue {
   if (lua_type(L, -1) === LUA_TNIL) {
     lua_pop(L, 1);
     return null;
   }
-  const value = readLuaValueAt(L, -1);
+  const value = readLuaValueAt(L, -1, owner);
   lua_pop(L, 1);
   return value;
 }
 
-function readLuaValueAt(L: lua_State, idx: number): LuaValue {
+function readLuaValueAt(L: lua_State, idx: number, owner: LuaRuntimeOwner): LuaValue {
   const t = lua_type(L, idx);
   switch (t) {
     case LUA_TNIL:
@@ -478,16 +680,16 @@ function readLuaValueAt(L: lua_State, idx: number): LuaValue {
     case LUA_TSTRING:
       return lua_tojsstring(L, idx);
     case LUA_TTABLE:
-      return readLuaTableAt(L, idx);
+      return readLuaTableAt(L, idx, owner);
     case LUA_TFUNCTION:
-      // Skin tables shouldn't carry functions; if they do, drop them rather than crashing.
-      return null;
+      lua_pushvalue(L, idx);
+      return owner.makeFunction(luaL_ref(L, LUA_REGISTRYINDEX));
     default:
       return null;
   }
 }
 
-function readLuaTableAt(L: lua_State, idx: number): LuaValue[] | { [key: string]: LuaValue } {
+function readLuaTableAt(L: lua_State, idx: number, owner: LuaRuntimeOwner): LuaValue[] | { [key: string]: LuaValue } {
   // Decide array vs record. A table is an array iff every key is a positive integer and they form a contiguous
   // [1..N] sequence with N == #t.
   const arrayLen = lua_rawlen(L, idx);
@@ -495,7 +697,7 @@ function readLuaTableAt(L: lua_State, idx: number): LuaValue[] | { [key: string]
     const arr: LuaValue[] = Array.from<LuaValue>({ length: arrayLen });
     for (let i = 1; i <= arrayLen; i += 1) {
       lua_rawgeti(L, idx, i);
-      arr[i - 1] = readLuaValueAt(L, -1);
+      arr[i - 1] = readLuaValueAt(L, -1, owner);
       lua_pop(L, 1);
     }
     return arr;
@@ -515,7 +717,7 @@ function readLuaTableAt(L: lua_State, idx: number): LuaValue[] | { [key: string]
       key = String(lua_tonumber(L, -2));
     }
     if (key !== undefined) {
-      obj[key] = readLuaValueAt(L, -1);
+      obj[key] = readLuaValueAt(L, -1, owner);
     }
     lua_pop(L, 1); // pop value, keep key for next iteration
   }

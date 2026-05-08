@@ -21,6 +21,7 @@
 // rebuilding is cheap (a few hundred μs even for a complex skin).
 
 import GUI from 'lil-gui';
+import { defaultOpForBeatorajaSkinProperty } from '@be-music/beatoraja-skin';
 import type {
   BeatorajaSkinConfig,
   BeatorajaSkinFilepath,
@@ -182,7 +183,8 @@ export class BeatorajaSkinOptionsGui {
           labelByOp.set(item.op, item.name);
         }
         const initial = this.state.option[property.name];
-        const initialOp = typeof initial === 'number' && labelByOp.has(initial) ? initial : (property.item[0]?.op ?? 0);
+        const fallbackOp = defaultOpForBeatorajaSkinProperty(property) ?? 0;
+        const initialOp = typeof initial === 'number' && labelByOp.has(initial) ? initial : fallbackOp;
         // Seed the live state in case `config.option` was missing this property entirely (the skin's
         // first-pass evaluator does this with `buildDefaultSkinConfigOptions`, but a user-supplied
         // partial config might omit some).

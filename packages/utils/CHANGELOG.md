@@ -7,7 +7,6 @@
 - 632f274: End-to-end support for the beatoraja `#BASE 62` ID extension
   (case-sensitive 62-character object IDs `0-9A-Za-z`, four
   times the address space of the original `0-9A-Z` 36-base).
-
   - **`@be-music/parser`**: detects the `#BASE 62` header and
     decodes channel-row IDs case-sensitively under it.
   - **`@be-music/chart`** / **`@be-music/stringifier`**: thread
@@ -33,7 +32,6 @@
 
   New subpaths (each emits its own dist entry; `package.json`
   `exports` map and `tsdown.config.ts` are updated accordingly):
-
   - `@be-music/utils/cli-path` — `resolveCliPath` (CLI argument →
     absolute path resolution, with POSIX / Windows-drive absolute
     fast paths and a Node-only `node:path` slow path for parent
@@ -60,7 +58,6 @@
   across both runtimes.
 
   **Browser parity gains** (carried over from the engine):
-
   - Look-ahead lane keysound fallback: an empty press plays the next
     upcoming note's keysound on that lane, like beatoraja / LR2.
   - Free-Zone `17` / `27`: empty presses on these channels play the
@@ -74,7 +71,6 @@
     `summary.poor` increment, gauge penalty per gauge type, POOR BGA).
 
   **Engine surface (`@be-music/player`)**:
-
   - `PlayerOptions.createAudioSession` factory — host-supplied audio
     backend. Defaults to the bundled Node sink when omitted.
   - `PlayerOptions.createInputRuntime` / `createUiRuntime` — host-
@@ -97,7 +93,6 @@ performance.now()`).
     bundles can import the engine as-is.
 
   **Browser runtime adapters (`@be-music/player-web`)**:
-
   - `WebAudioSession` — Web Audio API implementation of the engine's
     `AudioSession` contract: immediate triggers, BGM scheduling,
     channel stops, pause / resume, key / BGM routing, dynamic volume
@@ -114,7 +109,6 @@ performance.now()`).
 mode, ui })` glue over the three adapters.
 
   **Browser performance / latency**:
-
   - Pixi `Application.init({ powerPreference: 'high-performance' })`
     — pin the renderer to the discrete GPU on hybrid laptops.
   - `<canvas style="contain: content">` — compositor isolation for
@@ -124,7 +118,6 @@ mode, ui })` glue over the three adapters.
     audible compressor pumping.
 
   **TUI fixes that came along**:
-
   - Absolute-path arguments now resolve correctly under pure-ESM
     Node runtimes (`tsx`, `node --import tsx/esm`); the previous
     `resolveCliPath` slow path silently fell back to `cwd` when its
@@ -139,7 +132,6 @@ mode, ui })` glue over the three adapters.
     share a comparable clock domain.
 
   **Demo (`@be-music/player-web-demo`)**:
-
   - The shared-engine path is the only playback path; the
     `useSharedEngine` opt-in flag has been removed along with the
     Debug Menu checkbox.

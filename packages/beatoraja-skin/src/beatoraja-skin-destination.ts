@@ -7,6 +7,9 @@
 
 import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
 import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
+import { isBeatorajaLuaFunctionValue, type BeatorajaLuaFunctionValue } from './beatoraja-skin-lua.ts';
+
+export type BeatorajaBooleanPropertyRef = number | BeatorajaLuaFunctionValue;
 
 export interface BeatorajaDestinationKeyframe {
   /** Milliseconds since `timer` started counting. Frame 0 (`time = 0`) anchors the animation. */
@@ -42,6 +45,8 @@ export interface BeatorajaDestinationGroup {
    * the runtime timer table and computes `elapsed = now - timerStart[timer]` before sampling keyframes.
    */
   timer: number;
+  /** Runtime Lua timer function. When present, it supplies the timer start directly and takes precedence over `timer`. */
+  timerFunction?: BeatorajaLuaFunctionValue;
   /**
    * Loop offset in milliseconds. `-1` (or undefined → -1) hides the element after the last keyframe; `0` loops
    * back to keyframe 0 once the last keyframe's time elapses; any other positive value loops to that time-stamp.
@@ -66,6 +71,8 @@ export interface BeatorajaDestinationGroup {
    * Op-codes that gate visibility (group level, AND-merged with each parent `if`). Negative codes mean negation.
    */
   op: ReadonlyArray<number>;
+  /** Optional `draw` BooleanProperty. Beatoraja evaluates this instead of `op` when authored. */
+  draw?: BeatorajaBooleanPropertyRef;
   /**
    * Blend mode. 0 = normal alpha, 1 = additive, 2 = multiply, etc. Beatoraja uses LR2-compatible numbering.
    */
@@ -130,13 +137,17 @@ function normalizeOne(entry: NormalizedElement, declarationOrder: number): Beato
 
   const keyframes = normalizeKeyframes(rawDst);
   if (keyframes.length === 0) return undefined;
+  const timerFunction = isBeatorajaLuaFunctionValue(f.timer) ? f.timer : undefined;
+  const draw = booleanPropertyField(f.draw);
 
   return {
     id,
     timer: numberField(f, 'timer', 0),
+    ...(timerFunction !== undefined ? { timerFunction } : {}),
     loop: numberField(f, 'loop', -1),
     offset: numberField(f, 'offset', 0),
     op: normalizeOpArray(f.op),
+    ...(draw !== undefined ? { draw } : {}),
     blend: numberField(f, 'blend', 0),
     filter: numberField(f, 'filter', 0),
     center: clampCenter(numberField(f, 'center', 0)),
@@ -306,6 +317,12 @@ function normalizeOpArray(value: unknown): ReadonlyArray<number> {
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
   const v = record[key];
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function booleanPropertyField(value: unknown): BeatorajaBooleanPropertyRef | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (isBeatorajaLuaFunctionValue(value)) return value;
+  return undefined;
 }
 
 /**

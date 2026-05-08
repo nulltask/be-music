@@ -819,9 +819,7 @@ describe('player', () => {
 
     const holdIndex = commands.findIndex((c) => c.kind === 'hold-lane-until-beat' && c.channel === '11');
     expect(holdIndex).toBeGreaterThanOrEqual(0);
-    const releaseIndex = commands.findIndex(
-      (c, i) => i > holdIndex && c.kind === 'release-lane' && c.channel === '11',
-    );
+    const releaseIndex = commands.findIndex((c, i) => i > holdIndex && c.kind === 'release-lane' && c.channel === '11');
     expect(releaseIndex).toBeGreaterThan(holdIndex);
   });
 
@@ -854,9 +852,7 @@ describe('player', () => {
 
     const holdIndex = commands.findIndex((c) => c.kind === 'hold-lane-until-beat' && c.channel === '16');
     expect(holdIndex).toBeGreaterThanOrEqual(0);
-    const releaseIndex = commands.findIndex(
-      (c, i) => i > holdIndex && c.kind === 'release-lane' && c.channel === '16',
-    );
+    const releaseIndex = commands.findIndex((c, i) => i > holdIndex && c.kind === 'release-lane' && c.channel === '16');
     expect(releaseIndex).toBeGreaterThan(holdIndex);
   });
 

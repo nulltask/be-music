@@ -7,6 +7,8 @@
 // list of `BeatorajaImageElement` with every field present and validated.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
+import { isBeatorajaLuaFunctionValue, type BeatorajaLuaFunctionValue } from './beatoraja-skin-lua.ts';
+import type { BeatorajaSkinSourceId } from './beatoraja-skin-types.ts';
 
 /**
  * `id` of an `image[]` entry. Skins use both numeric ids (`100`, `400`) for op-code-driven references and string ids
@@ -18,8 +20,8 @@ export type BeatorajaImageId = number | string;
 export interface BeatorajaImageElement {
   /** Unique identifier within the skin. Other elements (`destination[]`, `value[]`, `imageset[]`) reference it. */
   id: BeatorajaImageId;
-  /** Index into `source[]`. -1 when the author left the field unset. */
-  src: number;
+  /** `source[].id` reference. Numeric and symbolic string ids are both valid. */
+  src: BeatorajaSkinSourceId;
   /** Source-rectangle origin within the texture, in source-pixel units. */
   x: number;
   y: number;
@@ -40,6 +42,8 @@ export interface BeatorajaImageElement {
    * effectively disables the animation when paired with `cycle = 0`).
    */
   timer: number;
+  /** Runtime Lua timer function. When present, it supplies the timer start directly and takes precedence over `timer`. */
+  timerFunction?: BeatorajaLuaFunctionValue;
   /**
    * Full animation period in milliseconds. `0` disables the cycle (the rect stays on frame 0 unless `ref`/`len`
    * pick a frame instead).
@@ -101,9 +105,10 @@ function normalizeOne(entry: NormalizedElement): BeatorajaImageElement | undefin
   const f = entry.fields;
   const id = f.id;
   if (typeof id !== 'string' && typeof id !== 'number') return undefined;
+  const timerFunction = isBeatorajaLuaFunctionValue(f.timer) ? f.timer : undefined;
   return {
     id,
-    src: numberField(f, 'src', -1),
+    src: sourceIdField(f, 'src', -1),
     x: numberField(f, 'x', 0),
     y: numberField(f, 'y', 0),
     w: numberField(f, 'w', 0),
@@ -111,6 +116,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaImageElement | undefin
     divx: positiveIntField(f, 'divx', 1),
     divy: positiveIntField(f, 'divy', 1),
     timer: numberField(f, 'timer', 0),
+    ...(timerFunction !== undefined ? { timerFunction } : {}),
     cycle: numberField(f, 'cycle', 0),
     ref: numberField(f, 'ref', 0),
     len: numberField(f, 'len', 0),
@@ -124,6 +130,17 @@ function normalizeOne(entry: NormalizedElement): BeatorajaImageElement | undefin
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
   const v = record[key];
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function sourceIdField(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+  fallback: BeatorajaSkinSourceId,
+): BeatorajaSkinSourceId {
+  const v = record[key];
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.length > 0) return v;
+  return fallback;
 }
 
 function boolField(record: Readonly<Record<string, unknown>>, key: string, fallback: boolean): boolean {

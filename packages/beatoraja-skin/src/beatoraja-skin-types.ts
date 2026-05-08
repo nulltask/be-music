@@ -21,10 +21,15 @@ export const BEATORAJA_SKIN_TYPE = {
   RESULT: 7,
   KEY_CONFIG: 8,
   SKIN_SELECT: 9,
-  COURSE_RESULT: 10,
-  GRADE_RESULT: 15,
+  SOUND_SET: 10,
+  THEME: 11,
+  PLAY_7KEYS_BATTLE: 12,
+  PLAY_5KEYS_BATTLE: 13,
+  PLAY_9KEYS_BATTLE: 14,
+  COURSE_RESULT: 15,
   PLAY_24KEYS: 16,
   PLAY_24KEYS_DOUBLE: 17,
+  PLAY_24KEYS_BATTLE: 18,
 } as const;
 
 export type BeatorajaSkinTypeName = keyof typeof BEATORAJA_SKIN_TYPE;
@@ -49,11 +54,16 @@ export function playVariantForSkinType(typeCode: number): BeatorajaPlayVariant |
 }
 
 /** Logical scene a skin belongs to, derived from `type`. */
-export type BeatorajaSkinScene = 'play' | 'select' | 'decide' | 'result' | 'course-result' | 'grade-result' | 'other';
+export type BeatorajaSkinScene = 'play' | 'select' | 'decide' | 'result' | 'course-result' | 'other';
 
 export function sceneForSkinType(typeCode: number): BeatorajaSkinScene {
   if (TYPE_TO_PLAY_VARIANT.has(typeCode as BeatorajaSkinTypeCode)) return 'play';
   switch (typeCode) {
+    case BEATORAJA_SKIN_TYPE.PLAY_7KEYS_BATTLE:
+    case BEATORAJA_SKIN_TYPE.PLAY_5KEYS_BATTLE:
+    case BEATORAJA_SKIN_TYPE.PLAY_9KEYS_BATTLE:
+    case BEATORAJA_SKIN_TYPE.PLAY_24KEYS_BATTLE:
+      return 'play';
     case BEATORAJA_SKIN_TYPE.MUSIC_SELECT:
       return 'select';
     case BEATORAJA_SKIN_TYPE.DECIDE:
@@ -62,8 +72,6 @@ export function sceneForSkinType(typeCode: number): BeatorajaSkinScene {
       return 'result';
     case BEATORAJA_SKIN_TYPE.COURSE_RESULT:
       return 'course-result';
-    case BEATORAJA_SKIN_TYPE.GRADE_RESULT:
-      return 'grade-result';
     default:
       return 'other';
   }
@@ -80,6 +88,8 @@ export interface BeatorajaSkinPropertyItem {
 
 export interface BeatorajaSkinProperty {
   name: string;
+  /** Optional default `item[].name` selected before the player changes this option. */
+  def?: string;
   item: BeatorajaSkinPropertyItem[];
 }
 
@@ -89,6 +99,47 @@ export interface BeatorajaSkinFilepath {
   path: string;
   /** Optional default selection used when the player has not yet chosen a file. */
   def?: string;
+}
+
+export interface BeatorajaSkinCustomOffset {
+  name: string;
+  id: number;
+  x: boolean;
+  y: boolean;
+  w: boolean;
+  h: boolean;
+  r: boolean;
+  a: boolean;
+}
+
+export function normalizeBeatorajaSkinCustomOffsets(input: unknown): BeatorajaSkinCustomOffset[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+  const out: BeatorajaSkinCustomOffset[] = [];
+  for (const entry of input) {
+    if (entry === null || typeof entry !== 'object') continue;
+    const obj = entry as Readonly<Record<string, unknown>>;
+    const name = obj.name;
+    const id = obj.id;
+    if (typeof name !== 'string' || name.length === 0) continue;
+    if (typeof id !== 'number' || !Number.isFinite(id)) continue;
+    out.push({
+      name,
+      id: Math.trunc(id),
+      x: boolField(obj.x),
+      y: boolField(obj.y),
+      w: boolField(obj.w),
+      h: boolField(obj.h),
+      r: boolField(obj.r),
+      a: boolField(obj.a),
+    });
+  }
+  return out;
+}
+
+function boolField(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  return false;
 }
 
 /**
@@ -105,8 +156,11 @@ export interface BeatorajaSkinSource {
   path: string;
 }
 
+/** `font[].id` / `text[].font` can be numeric or symbolic, matching beatoraja's string-backed JSON fields. */
+export type BeatorajaSkinFontId = number | string;
+
 export interface BeatorajaSkinFontEntry {
-  id: number;
+  id: BeatorajaSkinFontId;
   path: string;
 }
 
@@ -137,8 +191,8 @@ export interface BeatorajaSkinHeader {
   finishmargin?: number;
   property?: BeatorajaSkinProperty[];
   filepath?: BeatorajaSkinFilepath[];
-  /** Default note offset in milliseconds. */
-  offset?: number;
+  /** Custom offset schema exposed by the skin. Runtime note-offset belongs to `BeatorajaSkinConfig.offset`. */
+  offset?: BeatorajaSkinCustomOffset[];
 }
 
 /**
@@ -194,9 +248,24 @@ export interface BeatorajaSkinConfig {
 }
 
 /**
- * Build a default `option` map from a skin header's `property[]`. Each property's first item is treated as the
- * "no choice yet" pick — the same behavior beatoraja takes when the player hasn't opened the option dialog. This
- * matters for skins whose Lua `main()` branches on `skin_config.option["Play Side"]` (or similar): without a
+ * Pick the default `op` for a single `property[]` entry. Beatoraja first tries `property.def` as an
+ * `item[].name` lookup, then falls back to the first authored item when `def` is missing or stale.
+ */
+export function defaultOpForBeatorajaSkinProperty(property: BeatorajaSkinProperty): number | undefined {
+  const items = property.item;
+  if (!Array.isArray(items) || items.length === 0) return undefined;
+  const namedDefault =
+    typeof property.def === 'string'
+      ? items.find((item) => item?.name === property.def && typeof item.op === 'number' && Number.isFinite(item.op))
+      : undefined;
+  const selected = namedDefault ?? items[0];
+  return selected && typeof selected.op === 'number' && Number.isFinite(selected.op) ? selected.op : undefined;
+}
+
+/**
+ * Build a default `option` map from a skin header's `property[]`. Each property honors its `def` field when present,
+ * falling back to the first item — the same behavior beatoraja takes when the player hasn't opened the option dialog.
+ * This matters for skins whose Lua `main()` branches on `skin_config.option["Play Side"]` (or similar): without a
  * populated option map every branch fails and the skin returns an incomplete `source[]` / `destination[]`.
  *
  * Returns an empty record when the header has no `property[]`.
@@ -206,12 +275,8 @@ export function buildDefaultSkinConfigOptions(header: Pick<BeatorajaSkinHeader, 
   if (!Array.isArray(header.property)) return out;
   for (const property of header.property) {
     if (!property || typeof property.name !== 'string') continue;
-    const items = property.item;
-    if (!Array.isArray(items) || items.length === 0) continue;
-    const first = items[0];
-    if (first && typeof first.op === 'number' && Number.isFinite(first.op)) {
-      out[property.name] = first.op;
-    }
+    const op = defaultOpForBeatorajaSkinProperty(property);
+    if (op !== undefined) out[property.name] = op;
   }
   return out;
 }

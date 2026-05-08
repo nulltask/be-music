@@ -22,6 +22,7 @@ import {
   asLoadedBytes,
   loadAssetBytes,
   resolveBeatorajaPath,
+  type BeatorajaSkinFontId,
   type BeatorajaSkinFileEntry,
 } from '@be-music/beatoraja-skin';
 import { BitmapFont, Cache, Texture, bitmapFontTextParser } from 'pixi.js';
@@ -34,7 +35,7 @@ export type BeatorajaFontKind = 'css' | 'bitmap';
 
 export interface BeatorajaLoadedFont {
   /** Author-declared font slot id from `font[].id`. */
-  id: number;
+  id: BeatorajaSkinFontId;
   /**
    * `font-family` name that addresses this font:
    * - `kind: 'css'` → the family registered with `document.fonts`. Used in `style.fontFamily`.
@@ -51,9 +52,9 @@ export interface BeatorajaLoadedFont {
 
 export interface BeatorajaFontCache {
   /** Returns the registered family name for a font id, or `undefined` when the slot wasn't loaded. */
-  family(id: number): string | undefined;
+  family(id: BeatorajaSkinFontId): string | undefined;
   /** Returns the rendering kind for a loaded slot, or `undefined` when the slot wasn't loaded. */
-  kind(id: number): BeatorajaFontKind | undefined;
+  kind(id: BeatorajaSkinFontId): BeatorajaFontKind | undefined;
   /** All successfully-loaded fonts, in declaration order. */
   values(): ReadonlyArray<BeatorajaLoadedFont>;
 }
@@ -69,9 +70,9 @@ export interface BeatorajaFontCache {
 export async function loadBeatorajaFonts(options: {
   files: ReadonlyMap<string, BeatorajaSkinFileEntry>;
   entryPath: string;
-  fonts: ReadonlyArray<{ id: number; path: string }>;
+  fonts: ReadonlyArray<{ id: BeatorajaSkinFontId; path: string }>;
 }): Promise<BeatorajaFontCache> {
-  const out = new Map<number, BeatorajaLoadedFont>();
+  const out = new Map<BeatorajaSkinFontId, BeatorajaLoadedFont>();
   const familyPrefix = `beatoraja-skin-${stableEntryHash(options.entryPath)}`;
   // CSS-side prerequisites only matter for the FontFace branch. The BMFont branch needs Pixi's
   // runtime cache, which exists in any environment that loaded `pixi.js` — tests use jsdom which
@@ -96,7 +97,7 @@ export async function loadBeatorajaFonts(options: {
         log.warn(`font[${decl.id}] '${resolved}': bytes not available`);
         return;
       }
-      const family = `${familyPrefix}-${decl.id}`;
+      const family = `${familyPrefix}-${fontIdFamilySuffix(decl.id)}`;
       if (isAngelCodeFntPath(resolved)) {
         const loaded = await registerBitmapFont({
           declId: decl.id,
@@ -127,12 +128,16 @@ export async function loadBeatorajaFonts(options: {
   return makeCache(out);
 }
 
-function makeCache(map: Map<number, BeatorajaLoadedFont>): BeatorajaFontCache {
+function makeCache(map: Map<BeatorajaSkinFontId, BeatorajaLoadedFont>): BeatorajaFontCache {
   return {
     family: (id) => map.get(id)?.family,
     kind: (id) => map.get(id)?.kind,
     values: () => Array.from(map.values()),
   };
+}
+
+function fontIdFamilySuffix(id: BeatorajaSkinFontId): string {
+  return typeof id === 'number' ? String(id) : `s-${stableEntryHash(id)}`;
 }
 
 /** Identify AngelCode BMFont declarations by file extension — text-format `.fnt` is the only flavor we ship. */
@@ -151,7 +156,7 @@ function isAngelCodeFntPath(path: string): boolean {
  * the asset URL machinery.
  */
 async function registerBitmapFont(args: {
-  declId: number;
+  declId: BeatorajaSkinFontId;
   family: string;
   fntPath: string;
   fntBytes: Uint8Array;

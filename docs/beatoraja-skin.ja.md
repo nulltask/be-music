@@ -8,9 +8,9 @@ PixiJS rendering は `@be-music/player-web` の責務です。CLI/TUI render pat
 
 ## 対象範囲
 
-- `@be-music/beatoraja-skin` は play、select、decide、result、course-result、grade-result scene の `*.json` / `*.luaskin` entry を読み込みます。
+- `@be-music/beatoraja-skin` は play、select、decide、result、course-result scene の `*.json` / `*.luaskin` entry を読み込みます。
 - dropped folder や in-memory file map から theme asset を解決します。entry script の directory に対して path を normalize し、`*` wildcard (`play/background/*.png` 等) と case-insensitive lookup に対応します。
-- beatoraja の Lua 2-phase 評価契約を honor します。entry を `skin_config = nil` で 1 度評価し header (`property[]` + `filepath[]` schema) を取得、次に user の選択を inject して `main()` 経由で完全な skin table を得ます。
+- beatoraja の Lua 2-phase 評価契約を honor します。entry を `skin_config = nil` で 1 度評価し header (`property[]`、`filepath[]`、custom `offset[]` schema) を取得、次に user の選択を inject して `main()` 経由で完全な skin table を得ます。
 - package は plain TypeScript object のみを返します。PixiJS object、WebAudio node、browser DOM UI は作成しません。
 
 ## Skin formats
@@ -39,10 +39,17 @@ package は `BEATORAJA_SKIN_TYPE` 定数と `playVariantForSkinType` / `sceneFor
 | 5 | `MUSIC_SELECT` | select |
 | 6 | `DECIDE` | decide |
 | 7 | `RESULT` | result |
-| 10 | `COURSE_RESULT` | course-result |
-| 15 | `GRADE_RESULT` | grade-result |
+| 8 | `KEY_CONFIG` | other |
+| 9 | `SKIN_SELECT` | other |
+| 10 | `SOUND_SET` | other |
+| 11 | `THEME` | other |
+| 12 | `PLAY_7KEYS_BATTLE` | play (unsupported battle layout) |
+| 13 | `PLAY_5KEYS_BATTLE` | play (unsupported battle layout) |
+| 14 | `PLAY_9KEYS_BATTLE` | play (unsupported battle layout) |
+| 15 | `COURSE_RESULT` | course-result |
 | 16 | `PLAY_24KEYS` | play (`'24'`) |
 | 17 | `PLAY_24KEYS_DOUBLE` | play (`'24d'`) |
+| 18 | `PLAY_24KEYS_BATTLE` | play (unsupported battle layout) |
 
 ## Lua sandbox
 

@@ -38,7 +38,6 @@ export interface BeatorajaTheme {
   decideSkin?: BeatorajaSkinEntry;
   resultSkin?: BeatorajaSkinEntry;
   courseResultSkin?: BeatorajaSkinEntry;
-  gradeResultSkin?: BeatorajaSkinEntry;
   /** All entries discovered in the bundle. Useful for debugging or for custom UI. */
   entries: ReadonlyArray<BeatorajaSkinEntry>;
 }
@@ -155,7 +154,6 @@ function buildTheme(entries: ReadonlyArray<BeatorajaSkinEntry>): BeatorajaTheme 
   let decideSkin: BeatorajaSkinEntry | undefined;
   let resultSkin: BeatorajaSkinEntry | undefined;
   let courseResultSkin: BeatorajaSkinEntry | undefined;
-  let gradeResultSkin: BeatorajaSkinEntry | undefined;
 
   for (const entry of entries) {
     const scene = sceneForSkinType(entry.header.type);
@@ -172,8 +170,6 @@ function buildTheme(entries: ReadonlyArray<BeatorajaSkinEntry>): BeatorajaTheme 
     else if (scene === 'result' && (resultSkin === undefined || preferEntry(entry, resultSkin))) resultSkin = entry;
     else if (scene === 'course-result' && (courseResultSkin === undefined || preferEntry(entry, courseResultSkin)))
       courseResultSkin = entry;
-    else if (scene === 'grade-result' && (gradeResultSkin === undefined || preferEntry(entry, gradeResultSkin)))
-      gradeResultSkin = entry;
   }
 
   return {
@@ -182,7 +178,6 @@ function buildTheme(entries: ReadonlyArray<BeatorajaSkinEntry>): BeatorajaTheme 
     decideSkin,
     resultSkin,
     courseResultSkin,
-    gradeResultSkin,
     entries,
   };
 }

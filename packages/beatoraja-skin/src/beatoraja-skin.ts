@@ -8,6 +8,7 @@ import { dirname, normalizePath } from '@be-music/utils/core';
 import { asLoadedBytes, findCaseInsensitivePath, type BeatorajaSkinFileEntry } from './file-lookup.ts';
 import { parseBeatorajaSkinJson, parseBeatorajaSkinJsonHeader } from './beatoraja-skin-json.ts';
 import { evaluateBeatorajaLuaSkin, type BeatorajaLuaModuleSource } from './beatoraja-skin-lua.ts';
+import { normalizeBeatorajaSkinCustomOffsets } from './beatoraja-skin-types.ts';
 import type { BeatorajaSkin, BeatorajaSkinConfig, BeatorajaSkinHeader } from './beatoraja-skin-types.ts';
 
 export type BeatorajaSkinFormat = 'json' | 'lua';
@@ -188,7 +189,7 @@ export function extractBeatorajaSkinHeader(obj: Readonly<Record<string, unknown>
     finishmargin: typeof obj.finishmargin === 'number' ? obj.finishmargin : undefined,
     property: Array.isArray(obj.property) ? (obj.property as BeatorajaSkinHeader['property']) : undefined,
     filepath: Array.isArray(obj.filepath) ? (obj.filepath as BeatorajaSkinHeader['filepath']) : undefined,
-    offset: typeof obj.offset === 'number' ? obj.offset : undefined,
+    offset: normalizeBeatorajaSkinCustomOffsets(obj.offset),
   };
 }
 

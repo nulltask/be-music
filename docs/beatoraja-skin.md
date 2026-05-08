@@ -8,13 +8,13 @@ and Lua skin themes into renderer-independent data structures. PixiJS rendering 
 
 ## Scope
 
-- `@be-music/beatoraja-skin` reads `*.json` and `*.luaskin` entries for the play, select, decide, result, course-result,
-  and grade-result scenes.
+- `@be-music/beatoraja-skin` reads `*.json` and `*.luaskin` entries for the play, select, decide, result, and
+  course-result scenes.
 - Theme assets are resolved from a dropped folder or in-memory file map. Paths are normalized against the entry
   script's directory; `*` wildcards (e.g. `play/background/*.png`) and case-insensitive lookup are supported.
 - The 2-phase Lua evaluation contract used by beatoraja is honored: the entry runs once with `skin_config = nil` to
-  return a header (`property[]` + `filepath[]` schema) and a second time with the user's picks injected to return the
-  full skin table.
+  return a header (`property[]`, `filepath[]`, and custom `offset[]` schemas) and a second time with the user's picks
+  injected to return the full skin table.
 - The package returns plain TypeScript objects. It does not create PixiJS objects, WebAudio nodes, or browser DOM UI.
 
 ## Skin formats
@@ -44,10 +44,17 @@ without hard-coding integer literals.
 | 5 | `MUSIC_SELECT` | select |
 | 6 | `DECIDE` | decide |
 | 7 | `RESULT` | result |
-| 10 | `COURSE_RESULT` | course-result |
-| 15 | `GRADE_RESULT` | grade-result |
+| 8 | `KEY_CONFIG` | other |
+| 9 | `SKIN_SELECT` | other |
+| 10 | `SOUND_SET` | other |
+| 11 | `THEME` | other |
+| 12 | `PLAY_7KEYS_BATTLE` | play (unsupported battle layout) |
+| 13 | `PLAY_5KEYS_BATTLE` | play (unsupported battle layout) |
+| 14 | `PLAY_9KEYS_BATTLE` | play (unsupported battle layout) |
+| 15 | `COURSE_RESULT` | course-result |
 | 16 | `PLAY_24KEYS` | play (`'24'`) |
 | 17 | `PLAY_24KEYS_DOUBLE` | play (`'24d'`) |
+| 18 | `PLAY_24KEYS_BATTLE` | play (unsupported battle layout) |
 
 ## Lua sandbox
 
