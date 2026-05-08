@@ -44,6 +44,7 @@ import {
 import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
+import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
@@ -538,12 +539,25 @@ export class PixiBeatorajaResultScene implements PixiScene {
   }
 
   /**
-   * Resolve a `judgegraph[].type` for the result scene's per-judge histogram. Same convention as
-   * the live gameplay resolver — type `1` returns judgement counts, type `2` returns early/late
-   * counts. The result scene's snapshot is static, so the renderer paints once and short-circuits
+   * Resolve a `judgegraph[].type` for the result scene. Three histogram kinds:
+   *   - `0` note distribution → `[normal, ln, scratch, bss]` from the played chart's static
+   *     breakdown. ModernChic's centerinfo / impression panes author this for "what's in this
+   *     chart" stat strips. Cached on first call (the breakdown is static per chart).
+   *   - `1` judgement spread → `[perfect, great, good, bad, poor]` from the run's summary.
+   *   - `2` early/late → `[fast, slow]` from the run's summary.
+   *
+   * The result scene's snapshot is static, so the renderer paints once and short-circuits
    * subsequent frames via the per-entry signature cache.
    */
   private resolveResultJudgeBars(type: number): ReadonlyArray<number> | undefined {
+    if (type === 0) {
+      if (this.options.chart === undefined) return undefined;
+      if (this.cachedNoteBreakdownBars === undefined) {
+        const breakdown = computeBeatorajaNoteBreakdown(this.options.chart);
+        this.cachedNoteBreakdownBars = [breakdown.normal, breakdown.ln, breakdown.scratch, breakdown.bss];
+      }
+      return this.cachedNoteBreakdownBars;
+    }
     const summary = this.options.summary;
     switch (type) {
       case 1:
@@ -554,6 +568,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
         return undefined;
     }
   }
+  private cachedNoteBreakdownBars: ReadonlyArray<number> | undefined;
 
   private fitToStage(): void {
     const host = this.host;
