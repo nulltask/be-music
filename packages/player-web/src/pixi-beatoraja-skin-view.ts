@@ -1451,7 +1451,7 @@ export class BeatorajaPlaySkinView {
           this.updateImagesetEntry(entry, renderContext, props, luaContext);
           break;
         case 'gauge':
-          this.updateGaugeEntry(entry, props);
+          this.updateGaugeEntry(entry, props, renderContext);
           break;
         case 'pmchara':
           this.updatePmCharaEntry(entry, props);
@@ -2326,7 +2326,11 @@ export class BeatorajaPlaySkinView {
    * above paint the off-state node. The dst rect's center anchor still applies (whole bar
    * pivots together).
    */
-  private updateGaugeEntry(entry: GaugeEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+  private updateGaugeEntry(
+    entry: GaugeEntry,
+    props: ReturnType<typeof destinationToSpriteProps>,
+    context: BeatorajaRenderContext,
+  ): void {
     const visible = props.visible;
     if (!visible) {
       for (const cell of entry.cells) cell.visible = false;
@@ -2337,7 +2341,10 @@ export class BeatorajaPlaySkinView {
     const center = centerToAnchor(entry.group.center);
     for (let i = 0; i < entry.cells.length; i += 1) {
       const cell = entry.cells[i]!;
-      const pick = pickBeatorajaGaugeNode(entry.element, i, gaugePercent);
+      // `nowMs` drives the pulse phase for `gauge.type === 1 / 3`. Static gauges (`type === 0`)
+      // ignore it; passing it unconditionally keeps the renderer agnostic about which type the
+      // skin author chose. `context.nowMs` is the same scene clock destinations sample against.
+      const pick = pickBeatorajaGaugeNode(entry.element, i, gaugePercent, context.nowMs);
       if (pick === undefined) {
         cell.visible = false;
         continue;
