@@ -46,6 +46,7 @@ import {
   TIMER_FAILED,
   TIMER_FULLCOMBO_1P,
   TIMER_FULLCOMBO_2P,
+  TIMER_GAUGE_MAX_1P,
   TIMER_PLAY,
   TIMER_READY,
   TIMER_RHYTHM,
@@ -435,7 +436,28 @@ export class BeatorajaRuntimeAdapter {
     this.refreshRhythmTimer(frame.currentBeat);
     this.refreshFailedTimer(frame.summary.gauge);
     this.refreshEndOfNoteTimer(frame.currentBeat);
+    this.refreshGaugeMaxTimer(frame.summary.gauge);
   }
+
+  /**
+   * Stamp `TIMER_GAUGE_MAX_1P` (= 44) once when the 1P gauge first crosses 100%. ModernChic's
+   * `Play/lua/sp/info.lua` authors a "lamp_maxgauge" celebration animation gated on this timer
+   * — without the stamp the lamp stays at its idle keyframe even after the gauge maxes out.
+   *
+   * Idempotent — once stamped, subsequent frames don't re-fire even if the gauge dips and
+   * climbs again. Beatoraja's reference behaviour is "first reach wins"; the celebration runs
+   * once per chart.
+   */
+  private refreshGaugeMaxTimer(gauge: PlayerUiFramePayload['summary']['gauge']): void {
+    if (gauge === undefined) return;
+    if (this.gaugeMaxStamped) return;
+    if (gauge.max <= 0) return;
+    if (gauge.current >= gauge.max) {
+      this.markTimer(TIMER_GAUGE_MAX_1P);
+      this.gaugeMaxStamped = true;
+    }
+  }
+  private gaugeMaxStamped = false;
 
   /**
    * Re-stamp `TIMER_ENDOFNOTE_1P/2P` (143 / 144) when the playhead crosses the side's last

@@ -64,6 +64,22 @@ export const TIMER_FULLCOMBO_1P = 48;
 /** prop.lua `fullcombo_2p = 49`. */
 export const TIMER_FULLCOMBO_2P = 49;
 
+/**
+ * prop.lua `gauge_inclease_1p = 42` (note: beatoraja's actual spelling is "INCLEASE", a typo
+ * of "INCREASE" preserved for skin-author compatibility). Re-stamped on every judge that
+ * gains gauge — skins author a brief sparkle / flash animation gated on it.
+ */
+export const TIMER_GAUGE_INCREASE_1P = 42;
+/** prop.lua `gauge_inclease_2p = 43`. */
+export const TIMER_GAUGE_INCREASE_2P = 43;
+/**
+ * prop.lua `gauge_max_1p = 44` — fires once when 1P gauge first reaches 100%. Skins author
+ * a "max gauge" celebration lamp gated on it.
+ */
+export const TIMER_GAUGE_MAX_1P = 44;
+/** prop.lua `gauge_max_2p = 45`. */
+export const TIMER_GAUGE_MAX_2P = 45;
+
 // ─── Per-lane timer bases (1P side) ──────────────────────────────────────────────────────────────
 //
 // The `0` slot is SCRATCH on every category; keys 1..9 follow. So `bombTimerId(1, 0) = 50` is
