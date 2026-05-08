@@ -741,17 +741,23 @@ export class BeatorajaRuntimeAdapter {
       this.startLaneBombTimer(state.channel);
     }
 
-    // Stamp the per-lane PERFECT timestamp so the keybeam imageset (`ref =
-    // JUDGE_LANE_REF_*P_BASE + lane`) flips to its highlighted frame for the next
-    // `KEYBEAM_PERFECT_WINDOW_MS`. Only PERFECT triggers this — other clean hits (GREAT) keep the
-    // keybeam neutral, matching the default skin's 2-frame `{ keybeam-w, keybeam-w-pg }` intent
-    // where the highlighted frame is specifically the "you nailed it" cue. `state.channel` carries
-    // the input lane the engine matched; `resolveLane` translates it to the same 0..9 lane index
-    // the imageset's ref encodes (lane 0 = scratch, 1..7 = keys 1..7, 8/9 reserved for 9-key).
-    if (isPerfectJudge(state.judge) && state.channel !== undefined) {
+    // Stamp / clear the per-lane PERFECT timestamp. Drives the keybeam imageset (`ref =
+    // JUDGE_LANE_REF_*P_BASE + lane`) and the default skin's 4-entry bomb imageset (`{ bomb1,
+    // bomb2, bomb1, bomb3 }`) — both pick frame 1 ("perfect-flavored") only when the latest
+    // verdict on the lane was PERFECT within `KEYBEAM_PERFECT_WINDOW_MS`.
+    //
+    // Critically: a non-PERFECT verdict on the SAME lane CLEARS the stamp. Without this, a GREAT
+    // hit landing 100 ms after a PERFECT on the same lane would still trigger the perfect-flash
+    // keybeam + the bomb2 sprite — the lingering 250 ms window would catch it. The default skin
+    // explicitly distinguishes the perfect feedback from the merely-clean-hit one, so a stamp
+    // overwrite is the right semantic. Only judgements with a known channel update the per-lane
+    // ring (READY / AUTO / global ticks all leave channel undefined and skip the update).
+    if (state.channel !== undefined) {
       const lane = this.resolveLane(state.channel);
       if (lane !== undefined && lane >= 0 && lane < JUDGE_LANE_REF_RANGE) {
-        this.lastPerfectAtByLane[side][lane] = this.getNowMs();
+        this.lastPerfectAtByLane[side][lane] = isPerfectJudge(state.judge)
+          ? this.getNowMs()
+          : Number.NEGATIVE_INFINITY;
       }
     }
 
