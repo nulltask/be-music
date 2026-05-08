@@ -28,8 +28,8 @@
 //   - Chart-difficulty submenus inside a folder (currently flat song list)
 
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, Texture, type Ticker } from 'pixi.js';
-import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
-import { BEATORAJA_NUM, BEATORAJA_TEXT, buildBaseOpSet } from '@be-music/beatoraja-skin';
+import type { BeatorajaSkin, BeatorajaSkinConfig, BeatorajaSongListLayout } from '@be-music/beatoraja-skin';
+import { BEATORAJA_NUM, BEATORAJA_TEXT, buildBaseOpSet, parseBeatorajaSongList } from '@be-music/beatoraja-skin';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
@@ -54,9 +54,12 @@ export interface PixiBeatorajaSelectSceneOptions {
   onExit?: () => void;
 }
 
-/** Number of rows visible in the overlay list at once (odd so the cursor sits on the centre). */
-const VISIBLE_ROW_COUNT = 13;
-const CENTRE_ROW_INDEX = Math.floor(VISIBLE_ROW_COUNT / 2);
+/**
+ * Fallback visible-row count when the skin doesn't author a `songlist` block. Odd so the
+ * cursor sits on the centre. Real skins override this with the count of `songlist.liston`
+ * entries (default beatoraja theme has 21, ModernChic 17, GdbG 11, …).
+ */
+const FALLBACK_VISIBLE_ROW_COUNT = 13;
 
 /**
  * Per-frame tween rate for `scrollPosition` chasing `currentIndex`. Fraction of the remaining
@@ -66,19 +69,6 @@ const CENTRE_ROW_INDEX = Math.floor(VISIBLE_ROW_COUNT / 2);
  */
 const SCROLL_TWEEN_RATE = 0.25;
 const SCROLL_SNAP_THRESHOLD = 0.005;
-
-/** Padding inside the list overlay area. Drives the row layout math. */
-const PANEL_PADDING_X = 14;
-
-/**
- * Per-row vertical span in screen pixels. Beatoraja's reference + GdbG `bar-select`
- * destinations sit around 75px tall in a 1080-tall skin canvas, giving roughly 56px on a 1×
- * letterboxed render at 1080p. We pin this to a fixed screen-pixel value rather than deriving
- * from canvas height — the labels are screen-space `Text` nodes whose font size doesn't scale
- * with canvas resolution, so an auto-derived `panelHeight / VISIBLE_ROW_COUNT` ballooned to
- * ~146px on 4K displays and made the list dominate the chrome.
- */
-const ROW_HEIGHT_PX = 56;
 
 export class PixiBeatorajaSelectScene implements PixiScene {
   readonly root = new Container();
@@ -91,6 +81,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * song bars via its own `bar[]` declarations, which we don't parse yet — this overlay lets the
    * scene be usable in the meantime.
    */
+  /**
+   * Song-bar overlay. Mounted INSIDE `view.container` so it inherits the skin's scale +
+   * positional transform — the labels live in skin-space and follow whatever bar-list layout
+   * the skin authored (default reference theme: a column at x=800; ModernChic: an arched
+   * column on the right; GdbG: a strip on the lower-right; etc.). Without this the labels
+   * sat at hard-coded screen-space coordinates that ignored the skin's chrome.
+   */
   private readonly listLayer = new Container();
   /** Per-row label texts. */
   private readonly rowLabels: Text[] = [];
@@ -98,8 +95,19 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   private readonly rowKindIcons: Text[] = [];
   /** Per-row sub-label (artist / song count). Length matches {@link rowLabels}. */
   private readonly rowSublabels: Text[] = [];
-  /** Per-row click hit area. Sized to the row's text band on layout. */
+  /** Per-row click hit area. Sized to the row's authored rect on layout. */
   private readonly rowHitAreas: Sprite[] = [];
+  /**
+   * Skin-authored `songlist` layout (rect-per-row + focused row index). Parsed from
+   * `skin.songlist` at construction. `undefined` when the skin omits the block — the layout
+   * code falls back to a screen-space hard-coded grid so unsupported themes still get
+   * something usable.
+   */
+  private songList: BeatorajaSongListLayout | undefined;
+  /** Cached visible row count — `songList?.rows.length` or the fallback constant. */
+  private visibleRowCount = FALLBACK_VISIBLE_ROW_COUNT;
+  /** Cached focused row index within `0..visibleRowCount-1`. */
+  private centreRowIndex = Math.floor(FALLBACK_VISIBLE_ROW_COUNT / 2);
 
   private readonly options: PixiBeatorajaSelectSceneOptions;
   private host?: PixiSceneHost;
@@ -152,9 +160,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
+    // Mount the song-list overlay INSIDE the skin's view container so it inherits the same
+    // scale / position transform as the rest of the chrome. The labels live in skin-space
+    // (skin.w × skin.h) and follow the skin's authored bar-list layout.
     this.listLayer.eventMode = 'static';
-    this.root.addChild(this.listLayer);
+    this.view.container.addChild(this.listLayer);
 
+    this.songList = parseBeatorajaSongList(options.skin);
+    this.applySongListGeometry();
     this.buildRowVisuals(options.fonts);
     this.refreshEntries(options.initialIndex ?? 0);
 
@@ -229,11 +242,17 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
     });
-    // The root currently holds [backdrop, oldView (destroyed), listLayer]. Re-add the new view
-    // BETWEEN backdrop and listLayer so the layering stays correct (skin chrome behind the list).
-    this.root.removeChild(this.listLayer);
+    // The old view's `container.destroy({children: false})` (inside `view.dispose()`) detaches
+    // its children — listLayer was one of them, so it's now orphaned. Re-parent into the new
+    // view container, behind nothing else (skin chrome already rendered inside the view).
+    if (this.listLayer.parent) this.listLayer.parent.removeChild(this.listLayer);
     this.root.addChild(this.view.container);
-    this.root.addChild(this.listLayer);
+    this.view.container.addChild(this.listLayer);
+
+    // New skin → re-parse the songlist (different skin may declare a different layout).
+    this.songList = parseBeatorajaSongList(opts.skin);
+    this.applySongListGeometry();
+    this.refreshRowVisuals();
 
     this.lastFitWidth = 0;
     this.lastFitHeight = 0;
@@ -401,12 +420,70 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     return this.folderStack[this.folderStack.length - 1]!.label;
   }
 
-  // ─── Visuals ──────────────────────────────────────────────────────────────────────────────────
+  // ─── Layout / visuals ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Recompute `visibleRowCount` + `centreRowIndex` from the parsed `songlist`. When the skin
+   * doesn't author one we fall back to the legacy 13-row hardcoded grid.
+   *
+   * Called on construction and `replaceSkin` — the songlist parse depends on the skin
+   * payload, so it has to re-run when the skin payload changes.
+   */
+  private applySongListGeometry(): void {
+    if (this.songList !== undefined) {
+      this.visibleRowCount = this.songList.rows.length;
+      this.centreRowIndex = this.songList.focusedRowIndex;
+    } else {
+      this.visibleRowCount = FALLBACK_VISIBLE_ROW_COUNT;
+      this.centreRowIndex = Math.floor(FALLBACK_VISIBLE_ROW_COUNT / 2);
+    }
+  }
+
+  /**
+   * Get the per-row rect for visible-row index `i` in skin-space (top-left origin Y-DOWN).
+   * Reads directly from `songList.rows[i]` (Y-flipped from libGDX Y-UP) when available;
+   * otherwise synthesises a fallback grid on the right half of the canvas.
+   */
+  private rowRectAt(i: number): { x: number; y: number; w: number; h: number } {
+    const skinH = this.view.height;
+    if (this.songList !== undefined) {
+      const r = this.songList.rows[i];
+      if (r !== undefined) {
+        return { x: r.x, y: skinH - r.y - r.h, w: r.w, h: r.h };
+      }
+    }
+    // Fallback: right half, evenly spaced. Keeps unsupported skins (no songlist block)
+    // usable.
+    const skinW = this.view.width;
+    const fallbackRowH = 56 * (skinH / 720);
+    const focusedRowCentreY = skinH * 0.42;
+    const cx = skinW * 0.74;
+    const w = skinW * 0.4;
+    const yCentre = focusedRowCentreY + (i - this.centreRowIndex) * fallbackRowH;
+    return { x: cx - w / 2, y: yCentre - fallbackRowH / 2, w, h: fallbackRowH };
+  }
 
   private buildRowVisuals(fonts: BeatorajaFontCache | undefined): void {
     const skinFamily = fonts?.values()[0]?.family;
     const fontFamily = skinFamily !== undefined ? `'${skinFamily}', sans-serif` : 'sans-serif';
-    for (let i = 0; i < VISIBLE_ROW_COUNT; i += 1) {
+    // Tear down old visuals when rebuilding (e.g. on `replaceSkin` against a skin whose
+    // songlist length differs from the previous one). Pixi children stay attached to
+    // listLayer; clearing the arrays lets the new loop allocate the right count.
+    for (const t of this.rowLabels) t.destroy();
+    for (const t of this.rowKindIcons) t.destroy();
+    for (const t of this.rowSublabels) t.destroy();
+    for (const s of this.rowHitAreas) s.destroy();
+    this.rowLabels.length = 0;
+    this.rowKindIcons.length = 0;
+    this.rowSublabels.length = 0;
+    this.rowHitAreas.length = 0;
+    // Pick a font size proportional to the row height. Skins with tall bars (ModernChic
+    // 70px) get bigger text; skins with thin bars (default 36px) get smaller text. The 0.45
+    // multiplier leaves room for a sub-label below the primary one.
+    const sampleRect = this.rowRectAt(this.centreRowIndex);
+    const labelSize = Math.max(12, Math.floor(sampleRect.h * 0.45));
+    const subSize = Math.max(10, Math.floor(sampleRect.h * 0.25));
+    for (let i = 0; i < this.visibleRowCount; i += 1) {
       // Hit area sprite — invisible but interactive. Sized to the row's text band on layout.
       const hit = new Sprite({ texture: Texture.WHITE });
       hit.alpha = 0;
@@ -419,7 +496,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // Kind icon (▶ / ▸ / ♪) — narrow column at the row's left edge.
       const icon = new Text({
         text: '',
-        style: { fontFamily, fontSize: 18, fill: 0xffffff, fontWeight: '600' },
+        style: { fontFamily, fontSize: labelSize, fill: 0xffffff, fontWeight: '600' },
       });
       icon.anchor.set(0, 0.5);
       this.listLayer.addChild(icon);
@@ -428,7 +505,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // Primary label — title (song) / folder name (folder).
       const label = new Text({
         text: '',
-        style: { fontFamily, fontSize: 18, fill: 0xffffff, fontWeight: '600' },
+        style: { fontFamily, fontSize: labelSize, fill: 0xffffff, fontWeight: '600' },
       });
       label.anchor.set(0, 0.5);
       this.listLayer.addChild(label);
@@ -437,7 +514,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // Sub-label — artist (song) / song count (folder). Smaller, fainter.
       const sub = new Text({
         text: '',
-        style: { fontFamily, fontSize: 13, fill: 0xc0d0ff, fontStyle: 'italic' },
+        style: { fontFamily, fontSize: subSize, fill: 0xc0d0ff, fontStyle: 'italic' },
       });
       sub.anchor.set(0, 0.5);
       this.listLayer.addChild(sub);
@@ -454,12 +531,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // The "centre" of the visible window in entry-coordinates. As `scrollPosition` tweens
     // toward `currentIndex`, every row's index slides by the same amount. Indices that fall
     // outside `[0, total)` are wrapped — the list is circular, so the row above the first
-    // entry shows the LAST entry and vice versa. (After a wrap-jump in `moveCursor`,
-    // `scrollPosition` may sit transiently outside the range; the modulo here keeps the
-    // displayed entries consistent across the boundary.)
+    // entry shows the LAST entry and vice versa.
     const centreEntry = this.scrollPosition;
-    for (let i = 0; i < VISIBLE_ROW_COUNT; i += 1) {
-      const rawEntryIndex = Math.round(centreEntry) + (i - CENTRE_ROW_INDEX);
+    for (let i = 0; i < this.visibleRowCount; i += 1) {
+      const rawEntryIndex = Math.round(centreEntry) + (i - this.centreRowIndex);
       const wrappedIndex = total > 0 ? ((rawEntryIndex % total) + total) % total : -1;
       const entry = total > 0 ? this.entries[wrappedIndex] : undefined;
       const icon = this.rowKindIcons[i]!;
@@ -473,11 +548,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         hit.visible = false;
         continue;
       }
-      // Highlight the centred visible row (matches `layoutRows`'s tint logic). Like a music
-      // picker wheel — the highlight stays put while songs scroll past it. Using "row matches
-      // currentIndex" instead would make the highlight LEAD the tween, which looks like the
-      // selected song teleports across rows mid-scroll.
-      const isSelected = i === CENTRE_ROW_INDEX;
+      const isSelected = i === this.centreRowIndex;
       icon.visible = true;
       label.visible = true;
       sub.visible = true;
@@ -495,80 +566,63 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       }
       icon.alpha = isSelected ? 1 : 0.7;
       label.alpha = isSelected ? 1 : 0.75;
-      label.style.fontSize = isSelected ? 22 : 17;
       sub.alpha = isSelected ? 0.95 : 0.55;
     }
     this.layoutRows();
   }
 
   /**
-   * Position + size the row visuals against the current canvas. Recomputes on every `fitToStage`
-   * call AND every visual refresh so a smooth-scroll mid-frame keeps the rows in sync (the
-   * `scrollPosition` fractional drift is folded into the row Y offsets here).
+   * Position + size the row visuals using the skin's authored `songlist.liston` rects (or
+   * the synthesised fallback grid). Coordinates are skin-space — the listLayer is mounted
+   * inside `view.container` so the parent transform handles scaling / letterboxing.
+   *
+   * The fractional `scrollPosition` residual feeds into a per-row Y nudge so an in-flight
+   * tween shows a sub-row glide instead of jumping a whole row at the snap. The offset
+   * is applied along the AVERAGE row-height direction, which works for straight column
+   * layouts and degrades gracefully for arched / diagonal layouts (the rows still glide,
+   * just along a non-vertical axis).
    */
   private layoutRows(): void {
-    const host = this.host;
-    if (!host) return;
-    const { width, height } = host.app.screen;
-    if (width <= 0 || height <= 0) return;
+    if (this.visibleRowCount === 0) return;
 
-    // Right-half overlay for the song bar list. No panel rectangle is painted any more — the
-    // skin's authored chrome (banner / song-bar artwork / chart info) is what the user wants
-    // to see; an opaque overlay panel was hiding that. The list area's bounds still drive
-    // row positioning so the labels stay grouped on the right side of the canvas.
-    //
-    // Vertical anchor: GdbG_Skin authors `bar-select` at `y = 670, h = 75` in a 1080-tall skin
-    // canvas (Pixi y ≈ 373 — slightly above geometric centre, which feels right for a song
-    // bar list). We want the focused row to land near that visual zone. Centring at
-    // `height * 0.42` is close enough to a 1080-canvas's authored 373 / 1080 ≈ 0.345 ratio
-    // while staying readable on shorter / taller viewports.
-    const panelLeft = Math.floor(width * 0.5);
-    const panelRight = Math.floor(width * 0.97);
-    const panelWidth = Math.max(120, panelRight - panelLeft);
-    const focusedRowCentreY = Math.floor(height * 0.42);
-    const rowHeight = ROW_HEIGHT_PX;
-
-    const rowLeft = panelLeft + PANEL_PADDING_X;
-    const rowWidth = panelWidth - PANEL_PADDING_X * 2;
-    // Fractional cursor offset (the scroll tween's residual). Pixels to slide every row by so
-    // an in-flight tween shows a sub-row scroll instead of jumping a whole row at the snap.
-    // `baseY` is the focused-row centre Y (where row `CENTRE_ROW_INDEX` lands). Other rows
-    // fan out via `(i - CENTRE_ROW_INDEX) * rowHeight`.
+    // Average row height (skin-space) to scale the fractional scroll. For straight layouts
+    // this is the per-row vertical step; for arched layouts it's a reasonable approximation
+    // of the typical step magnitude.
+    const aboveCentre = this.rowRectAt(Math.max(0, this.centreRowIndex - 1));
+    const atCentre = this.rowRectAt(this.centreRowIndex);
+    const avgRowStep = Math.abs(aboveCentre.y - atCentre.y) || atCentre.h;
     const fractional = this.scrollPosition - Math.round(this.scrollPosition);
-    const baseY = focusedRowCentreY - fractional * rowHeight;
+    const fractionalNudge = -fractional * avgRowStep;
 
-    for (let i = 0; i < VISIBLE_ROW_COUNT; i += 1) {
+    for (let i = 0; i < this.visibleRowCount; i += 1) {
       const hit = this.rowHitAreas[i]!;
       const icon = this.rowKindIcons[i]!;
       const label = this.rowLabels[i]!;
       const sub = this.rowSublabels[i]!;
       if (!label.visible) continue;
-      const rowCentreY = baseY + (i - CENTRE_ROW_INDEX) * rowHeight;
-      const rowTop = rowCentreY - rowHeight / 2 + 2;
-      const rowH = rowHeight - 4;
+      const rect = this.rowRectAt(i);
+      const rowCentreY = rect.y + rect.h / 2 + fractionalNudge;
 
-      const isSelected = i === CENTRE_ROW_INDEX;
+      const isSelected = i === this.centreRowIndex;
 
-      hit.x = rowLeft;
-      hit.y = rowTop;
-      hit.width = rowWidth;
-      hit.height = rowH;
-      hit.hitArea = null; // sprite bounds are the hit area when null
+      hit.x = rect.x;
+      hit.y = rect.y + fractionalNudge;
+      hit.width = rect.w;
+      hit.height = rect.h;
+      hit.hitArea = null;
 
-      const iconX = rowLeft + 12;
+      const iconX = rect.x + Math.max(8, Math.floor(rect.h * 0.2));
       icon.x = iconX;
       icon.y = rowCentreY;
-      // No backdrop now — selected row uses a warm yellow tint to stand out against
-      // arbitrarily-coloured skin chrome; non-selected stays plain white.
       icon.tint = isSelected ? 0xffe066 : 0xffffff;
 
-      const labelX = iconX + 24;
+      const labelX = iconX + Math.max(20, Math.floor(rect.h * 0.5));
       label.x = labelX;
-      label.y = rowCentreY - 2;
+      label.y = rowCentreY - Math.floor(rect.h * 0.05);
       label.tint = isSelected ? 0xffe066 : 0xffffff;
 
       sub.x = labelX;
-      sub.y = rowCentreY + (label.style.fontSize as number) * 0.55;
+      sub.y = rowCentreY + Math.floor(rect.h * 0.25);
       sub.tint = isSelected ? 0xffe066 : 0xc0d0ff;
     }
   }
@@ -607,7 +661,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // showing a wrapped entry resolves to the right song. The cursor's smooth-scroll path is
     // chosen by direction-of-travel: if the visible row offset is forward (downward) we pull
     // `scrollPosition` to take the short forward path, and vice versa.
-    const rawIndex = Math.round(this.scrollPosition) + (rowOffset - CENTRE_ROW_INDEX);
+    const rawIndex = Math.round(this.scrollPosition) + (rowOffset - this.centreRowIndex);
     const next = ((rawIndex % total) + total) % total;
     if (next === this.currentIndex) {
       this.activateCurrentEntry();
