@@ -8,6 +8,7 @@ import {
   checkBrowserCompat,
   describeSongCollection,
   downloadBlob,
+  loadAssetBytes,
   logger,
   makeWebmSeekable,
   parseCompressorMode,
@@ -1906,6 +1907,12 @@ class PlayerWebDemoApp {
         this.beatorajaSelectScene = undefined;
         this.beatorajaSkinOptionsGui?.clear();
       },
+      onReadtextRequest: (song) => {
+        // Skin's READTEXT button (act=17 — "readme" / "btn-text" etc.). Find the chart's
+        // accompanying `.txt` next to its BMS file and show it in a transient browser dialog.
+        // No persistence / styling — just enough to surface chart-author notes.
+        void this.showBeatorajaReadtext(song);
+      },
     });
     await this.sceneHost.setScene(this.beatorajaSelectScene);
     this.setStatus(`Select (beatoraja): ${this.collection.songs.length} song(s)`);
@@ -1930,6 +1937,59 @@ class PlayerWebDemoApp {
       onApply: (nextConfig) => {
         void this.applyBeatorajaSelectSkinConfig(selectedEntry.entryPath, nextConfig);
       },
+    });
+  }
+
+  /**
+   * Find the focused song's accompanying README / notes text and surface it in a transient
+   * overlay. Searches the song's source for a `.txt` file in the same directory as the chart
+   * (BMS convention: `myhardchart.bms` ↔ `myhardchart.txt` / `readme.txt` / etc.). When more
+   * than one matches, picks alphabetically — chart-authors typically only ship one.
+   *
+   * The overlay is a lightweight `<dialog>` injected at runtime — no persistent UI, click
+   * outside or hit Escape to dismiss. Falls back to a `console.log` notice when no `.txt` is
+   * found so the user has a hint that the chart didn't ship readtext content.
+   */
+  private async showBeatorajaReadtext(song: BrowserSongEntry): Promise<void> {
+    const source = resolveSongSource(this.collection, song);
+    if (source === undefined) {
+      gameplayLog.info('beatoraja readtext: source not found', { songId: song.id });
+      return;
+    }
+    const chartDir = song.chartPath.includes('/') ? song.chartPath.slice(0, song.chartPath.lastIndexOf('/')) : '';
+    // Match `.txt` files inside the chart's folder (or root when the chart is at the top).
+    const textPaths: string[] = [];
+    for (const path of source.files.keys()) {
+      const lower = path.toLowerCase();
+      if (!lower.endsWith('.txt')) continue;
+      const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+      if (dir.toLowerCase() !== chartDir.toLowerCase()) continue;
+      textPaths.push(path);
+    }
+    textPaths.sort();
+    const textPath = textPaths[0];
+    if (textPath === undefined) {
+      gameplayLog.info('beatoraja readtext: no .txt found', { dir: chartDir });
+      return;
+    }
+    const entry = source.files.get(textPath);
+    if (entry === undefined) return;
+    const bytes = await loadAssetBytes(entry);
+    if (bytes === undefined) return;
+    // BMS-era authors typically ship Shift_JIS-encoded text. Try the BOM-aware UTF-8 first;
+    // fall back to a Shift_JIS decode when the result contains replacement characters.
+    let text = decodeText(bytes, 'utf-8');
+    if (text.includes('�')) {
+      try {
+        text = decodeText(bytes, 'shift_jis');
+      } catch {
+        // some browsers don't expose 'shift_jis' decoder; keep the UTF-8 best-effort.
+      }
+    }
+    showReadtextOverlay({
+      title: `${song.title}${song.artist ? ` — ${song.artist}` : ''}`,
+      filename: textPath.split('/').pop() ?? textPath,
+      body: text,
     });
   }
 
@@ -3017,6 +3077,74 @@ function playSkinTypeForVariant(variant: BeatorajaPlayableVariant): number {
     case '9':
       return BEATORAJA_SKIN_TYPE.PLAY_9KEYS;
   }
+}
+
+/**
+ * Decode a byte buffer with the named encoding via the platform `TextDecoder`. Throws if the
+ * runtime doesn't recognise the encoding name (some browsers gate non-UTF-8 decoders).
+ */
+function decodeText(bytes: Uint8Array, encoding: string): string {
+  return new TextDecoder(encoding).decode(bytes);
+}
+
+/**
+ * Lightweight read-text overlay. Injects a `<dialog>` at body root, populates it with the
+ * decoded chart notes, and wires Escape / outside-click dismissal. Replaces any prior overlay
+ * so repeated clicks just rebuild the panel against the latest song.
+ */
+function showReadtextOverlay(opts: { title: string; filename: string; body: string }): void {
+  if (typeof document === 'undefined') return;
+  // Tear down any prior overlay so back-to-back clicks don't stack.
+  const existing = document.getElementById('beatoraja-readtext-overlay');
+  if (existing !== null && existing instanceof HTMLDialogElement) {
+    existing.close();
+    existing.remove();
+  }
+  const dialog = document.createElement('dialog');
+  dialog.id = 'beatoraja-readtext-overlay';
+  // Inline styles — avoids needing a CSS file edit for this one-off surface.
+  dialog.style.maxWidth = 'min(640px, 80vw)';
+  dialog.style.maxHeight = '70vh';
+  dialog.style.padding = '0';
+  dialog.style.border = '1px solid #333';
+  dialog.style.borderRadius = '6px';
+  dialog.style.background = '#111';
+  dialog.style.color = '#eee';
+  dialog.style.fontFamily = 'sans-serif';
+  dialog.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.6)';
+
+  const header = document.createElement('div');
+  header.style.padding = '10px 14px';
+  header.style.borderBottom = '1px solid #333';
+  header.style.fontSize = '13px';
+  header.textContent = `${opts.title}  〔${opts.filename}〕`;
+  dialog.appendChild(header);
+
+  const body = document.createElement('pre');
+  body.textContent = opts.body;
+  body.style.margin = '0';
+  body.style.padding = '12px 14px';
+  body.style.maxHeight = 'calc(70vh - 80px)';
+  body.style.overflow = 'auto';
+  body.style.whiteSpace = 'pre-wrap';
+  body.style.wordBreak = 'break-word';
+  body.style.fontFamily = 'inherit';
+  body.style.fontSize = '13px';
+  body.style.lineHeight = '1.5';
+  dialog.appendChild(body);
+
+  document.body.appendChild(dialog);
+  // Native `<dialog>` Escape handling closes us; outside-click via the backdrop pattern.
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) {
+      dialog.close();
+      dialog.remove();
+    }
+  });
+  dialog.addEventListener('close', () => {
+    dialog.remove();
+  });
+  dialog.showModal();
 }
 
 /**

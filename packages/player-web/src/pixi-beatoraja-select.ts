@@ -68,6 +68,13 @@ export interface PixiBeatorajaSelectSceneOptions {
   onSongPicked: (song: BrowserSongEntry, options?: { autoPlay?: boolean }) => void;
   /** Called when the user backs out of the root list (`Escape` at root). */
   onExit?: () => void;
+  /**
+   * Called when the user clicks the skin's READTEXT button (act=17) — typically `readme` /
+   * `player-info` / `help` / `btn-text` etc. depending on the skin. The host is expected to
+   * find and display the chart's accompanying text file (`.txt` next to the chart, or
+   * `#TEXT`-resolved content). Omit to have the action fall through to a console log.
+   */
+  onReadtextRequest?: (song: BrowserSongEntry) => void;
 }
 
 /**
@@ -813,6 +820,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         return;
       case 210: // OPEN_IR_WEBSITE — IR ranking site for the focused chart
         openIrWebsite(song);
+        return;
+      case 17: // READTEXT — show the chart's accompanying `.txt` content
+        if (song !== undefined && this.options.onReadtextRequest !== undefined) {
+          // eslint-disable-next-line no-console
+          console.log('[beatoraja-select] act=17 READTEXT', JSON.stringify({ title: song.title }));
+          this.options.onReadtextRequest(song);
+        } else {
+          // eslint-disable-next-line no-console
+          console.log('[beatoraja-select] act=17 READTEXT (no host hook)', JSON.stringify({ title: song?.title }));
+        }
         return;
       default:
         // eslint-disable-next-line no-console
