@@ -12,6 +12,7 @@ export type {
   BeatorajaPlayVariant,
   BeatorajaSkinScene,
   BeatorajaSkin,
+  BeatorajaSkinCategoryGroup,
   BeatorajaSkinConfig,
   BeatorajaSkinCustomOffset,
   BeatorajaSkinFilepath,

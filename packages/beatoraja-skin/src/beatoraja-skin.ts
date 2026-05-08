@@ -201,6 +201,7 @@ export function extractBeatorajaSkinHeader(obj: Readonly<Record<string, unknown>
     property: Array.isArray(obj.property) ? (obj.property as BeatorajaSkinHeader['property']) : undefined,
     filepath: Array.isArray(obj.filepath) ? (obj.filepath as BeatorajaSkinHeader['filepath']) : undefined,
     offset: normalizeBeatorajaSkinCustomOffsets(obj.offset),
+    category: Array.isArray(obj.category) ? (obj.category as BeatorajaSkinHeader['category']) : undefined,
   };
 }
 

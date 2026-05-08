@@ -52,8 +52,8 @@ export interface SkinChoice {
 export interface SetSkinOptions {
   /** Section title shown at the top of the panel. */
   title: string;
-  /** Skin header carrying the `property[]` / `filepath[]` schema to expose. */
-  header: Pick<BeatorajaSkinHeader, 'property' | 'filepath'>;
+  /** Skin header carrying the `property[]` / `filepath[]` / `category[]` schema to expose. */
+  header: Pick<BeatorajaSkinHeader, 'property' | 'filepath' | 'category'>;
   /** Currently-applied skin config. Dropdowns initialize to these picks. */
   config: BeatorajaSkinConfig;
   /**
@@ -175,8 +175,43 @@ export class BeatorajaSkinOptionsGui {
         });
     }
 
+    // Build the category-id → display-label map up front. Header `category[]` (community-skin
+    // only — GdbG_Skin and ModernChic populate it) declares groups like `{name: "メイン", item:
+    // ["main_1", "main_2", …]}`. Each property's / filepath's `category` field is one of those
+    // ids; the GUI inverts the relationship to render category-named folders. Skins that don't
+    // author the table fall through to the legacy flat "Options" / "Files" folders, so existing
+    // single-folder skins (the reference theme) keep working unchanged.
+    const categoryGroups = options.header.category ?? [];
+    const labelByCategoryId = new Map<string, string>();
+    if (categoryGroups.length > 0) {
+      for (const group of categoryGroups) {
+        if (typeof group?.name !== 'string' || !Array.isArray(group.item)) continue;
+        for (const id of group.item) {
+          if (typeof id === 'string' && id.length > 0) labelByCategoryId.set(id, group.name);
+        }
+      }
+    }
+    /** Resolve a `category` field on a property / filepath to a folder label, or `undefined` to fall back to the legacy flat folder. */
+    const resolveCategoryFolderName = (categoryId: string | undefined): string | undefined => {
+      if (typeof categoryId !== 'string' || categoryId.length === 0) return undefined;
+      return labelByCategoryId.get(categoryId);
+    };
+
     if (properties.length > 0) {
-      const propsFolder = gui.addFolder('Options').open();
+      // Cache one folder per category label, lazily created on first member encounter so empty
+      // categories don't render as empty folders. The flat fallback (`'Options'`) covers
+      // properties without a category and is also lazy.
+      const folderByLabel = new Map<string, GUI>();
+      const folderFor = (label: string, open: boolean): GUI => {
+        let folder = folderByLabel.get(label);
+        if (folder === undefined) {
+          folder = gui.addFolder(label);
+          if (open) folder.open();
+          else folder.close();
+          folderByLabel.set(label, folder);
+        }
+        return folder;
+      };
       for (const property of properties) {
         if (property.item.length === 0) continue;
         // lil-gui's dropdown supports a `Record<label, value>` map for the option list. Build one
@@ -195,12 +230,30 @@ export class BeatorajaSkinOptionsGui {
         // first-pass evaluator does this with `buildDefaultSkinConfigOptions`, but a user-supplied
         // partial config might omit some).
         this.state.option[property.name] = initialOp;
-        propsFolder.add(this.state.option, property.name, optionMap).name(property.name).onChange(emit);
+        const categoryLabel = resolveCategoryFolderName(property.category) ?? 'Options';
+        // Open the flat `'Options'` fallback by default to preserve the prior UX (the reference
+        // theme uses no categories and expects the panel to land already-expanded). Categorized
+        // folders open too — surveyed community skins ship 2-3 groups, all worth showing at a
+        // glance — but a future skin with 6+ groups could hint via a separate `defaultOpen` flag.
+        const folder = folderFor(categoryLabel, true);
+        folder.add(this.state.option, property.name, optionMap).name(property.name).onChange(emit);
       }
     }
 
     if (filepaths.length > 0) {
-      const filesFolder = gui.addFolder('Files').close();
+      // Filepaths get their own folder root labeled by category (or 'Files' fallback). Folders
+      // start collapsed because file picks are usually power-user territory — most players never
+      // touch them, and showing N expanded file lists swamps the panel.
+      const folderByLabel = new Map<string, GUI>();
+      const folderFor = (label: string): GUI => {
+        let folder = folderByLabel.get(label);
+        if (folder === undefined) {
+          folder = gui.addFolder(label);
+          folder.close();
+          folderByLabel.set(label, folder);
+        }
+        return folder;
+      };
       for (const fp of filepaths) {
         const candidates = options.fileCandidates?.get(fp.name) ?? [];
         // Always offer the "auto" entry so the user can fall back to the wildcard's default match
@@ -208,7 +261,13 @@ export class BeatorajaSkinOptionsGui {
         const optionMap: Record<string, string> = { [AUTO_FILE_LABEL]: '' };
         for (const candidate of candidates) optionMap[candidate] = candidate;
         if (this.state.file[fp.name] === undefined) this.state.file[fp.name] = '';
-        filesFolder.add(this.state.file, fp.name, optionMap).name(fp.name).onChange(emit);
+        // Filepath folders prefix with `'Files: '` to disambiguate from property folders that
+        // happen to share a category label (e.g. GdbG's `'プレイ'` covers both options and
+        // files). Without the prefix the two would collide and lil-gui would error on duplicate
+        // folder names within the same parent.
+        const rawLabel = resolveCategoryFolderName(fp.category) ?? 'Files';
+        const folderLabel = rawLabel === 'Files' ? 'Files' : `Files: ${rawLabel}`;
+        folderFor(folderLabel).add(this.state.file, fp.name, optionMap).name(fp.name).onChange(emit);
       }
     }
 

@@ -90,6 +90,14 @@ export interface BeatorajaSkinProperty {
   name: string;
   /** Optional default `item[].name` selected before the player changes this option. */
   def?: string;
+  /**
+   * Optional category id (e.g. `"main_1"`, `"play_5"`) linking this property to one of the
+   * groups declared in {@link BeatorajaSkinHeader.category}. Beatoraja groups options under
+   * collapsible category headers in its in-game options dialog; community skins (GdbG_Skin,
+   * ModernChic) use this to keep ~20 options manageable. The host UI is responsible for
+   * resolving the id back to a display name via the header's `category[]` table.
+   */
+  category?: string;
   item: BeatorajaSkinPropertyItem[];
 }
 
@@ -99,6 +107,25 @@ export interface BeatorajaSkinFilepath {
   path: string;
   /** Optional default selection used when the player has not yet chosen a file. */
   def?: string;
+  /** Optional category id — see {@link BeatorajaSkinProperty.category}. */
+  category?: string;
+}
+
+/**
+ * Category group declared in `header.category[]`. Each entry pairs a display name (e.g.
+ * `"メイン"`) with the list of category ids (`"main_1"`, `"main_2"`, …) that belong under it.
+ * `BeatorajaSkinProperty.category` / `BeatorajaSkinFilepath.category` reference these ids; the
+ * host UI inverts the mapping to render category-named folders containing their members.
+ *
+ * Reference-theme skins don't author this — only community skins (GdbG_Skin, ModernChic) do, so
+ * the field is optional throughout. Skins without categories render properties / filepaths in a
+ * single flat folder.
+ */
+export interface BeatorajaSkinCategoryGroup {
+  /** Display label shown to the user (e.g. `"メイン"`, `"プレイ"`). */
+  name: string;
+  /** Category ids that belong under this group. Order matters: members render in this order. */
+  item: string[];
 }
 
 export interface BeatorajaSkinCustomOffset {
@@ -193,6 +220,13 @@ export interface BeatorajaSkinHeader {
   filepath?: BeatorajaSkinFilepath[];
   /** Custom offset schema exposed by the skin. Runtime note-offset belongs to `BeatorajaSkinConfig.offset`. */
   offset?: BeatorajaSkinCustomOffset[];
+  /**
+   * Optional category groups for the property / filepath UI — see
+   * {@link BeatorajaSkinCategoryGroup}. Reference-theme skins omit this and the host renders a
+   * flat options panel; GdbG_Skin and ModernChic populate it to group their ~20 options under
+   * `"メイン"` / `"プレイ"` etc. headings.
+   */
+  category?: BeatorajaSkinCategoryGroup[];
 }
 
 /**
