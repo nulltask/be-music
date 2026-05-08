@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { expandBeatorajaWildcard, resolveBeatorajaPath, resolveSourcePath } from './beatoraja-skin-resolver.ts';
+import {
+  buildDefaultSkinConfigFiles,
+  expandBeatorajaWildcard,
+  resolveBeatorajaPath,
+  resolveSourcePath,
+} from './beatoraja-skin-resolver.ts';
 import type { BeatorajaSkinFileEntry } from './file-lookup.ts';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
@@ -114,5 +119,95 @@ describe('resolveSourcePath', () => {
       malformedSchema,
     );
     expect(result).toBe('skin/default/play/background/a.png');
+  });
+});
+
+describe('buildDefaultSkinConfigFiles', () => {
+  it('resolves the entry whose stem matches `def` (lexicographic ordering bypassed)', () => {
+    // ModernChic's `key` filepath ships `#default.png` AND `harf.png`; `def = "harf"` says the
+    // author wants `harf.png` even though `#default.png` sorts first lexicographically (`#` =
+    // 0x23 < `h` = 0x68). Without honoring `def`, the wildcard fallback picks `#default.png`
+    // — the wrong file. Honoring it returns the canonical path of `harf.png`.
+    const files = makeFiles([
+      ['skin/play.json', '{}'],
+      ['skin/parts/key/#default.png', '1'],
+      ['skin/parts/key/harf.png', '2'],
+    ]);
+    const result = buildDefaultSkinConfigFiles(
+      { filepath: [{ name: 'キーイメージ', path: 'parts/key/*.png', def: 'harf' }] },
+      files,
+      'skin/play.json',
+    );
+    expect(result).toEqual({ キーイメージ: 'skin/parts/key/harf.png' });
+  });
+
+  it('strips ONLY the last extension so trailing dots in stems still match', () => {
+    // ModernChic's `bomb` folder ships `diamond SCUROed..png` (note the trailing dot in the
+    // stem). `def = "diamond SCUROed."` includes that trailing dot — naive stem extraction
+    // that strips at the FIRST dot would produce `diamond SCUROed` and miss the match.
+    const files = makeFiles([
+      ['skin/play.json', '{}'],
+      ['skin/parts/bomb/Kakabomb.png', '1'],
+      ['skin/parts/bomb/diamond SCUROed..png', '2'],
+    ]);
+    const result = buildDefaultSkinConfigFiles(
+      { filepath: [{ name: 'ボム', path: 'parts/bomb/*.png', def: 'diamond SCUROed.' }] },
+      files,
+      'skin/play.json',
+    );
+    expect(result).toEqual({ ボム: 'skin/parts/bomb/diamond SCUROed..png' });
+  });
+
+  it('falls back to case-insensitive matching when exact case fails', () => {
+    // Windows-authored themes occasionally drift case between `def` and the actual filename.
+    // `def = "DEFAULT"` should still resolve `Default.png` (or any case variant).
+    const files = makeFiles([
+      ['skin/play.json', '{}'],
+      ['skin/parts/x/Default.png', '1'],
+      ['skin/parts/x/other.png', '2'],
+    ]);
+    const result = buildDefaultSkinConfigFiles(
+      { filepath: [{ name: 'X', path: 'parts/x/*.png', def: 'DEFAULT' }] },
+      files,
+      'skin/play.json',
+    );
+    expect(result).toEqual({ X: 'skin/parts/x/Default.png' });
+  });
+
+  it('omits entries with no `def`, no candidates, or no stem match', () => {
+    // Only entries with a successfully-resolved default appear in the output. The other
+    // entries fall through to the wildcard fallback inside `resolveSourcePath` at render
+    // time, matching beatoraja's "first sorted match" behavior for unset filepaths.
+    const files = makeFiles([
+      ['skin/play.json', '{}'],
+      ['skin/parts/y/a.png', '1'],
+      ['skin/parts/y/b.png', '2'],
+    ]);
+    const result = buildDefaultSkinConfigFiles(
+      {
+        filepath: [
+          { name: 'NoDef', path: 'parts/y/*.png' }, // missing def
+          { name: 'EmptyDef', path: 'parts/y/*.png', def: '' },
+          { name: 'NoCandidates', path: 'parts/missing/*.png', def: 'a' },
+          { name: 'NoMatch', path: 'parts/y/*.png', def: 'nonexistent' },
+          { name: 'Matched', path: 'parts/y/*.png', def: 'b' },
+        ],
+      },
+      files,
+      'skin/play.json',
+    );
+    expect(result).toEqual({ Matched: 'skin/parts/y/b.png' });
+  });
+
+  it('returns an empty record when the header has no filepath array', () => {
+    expect(buildDefaultSkinConfigFiles({}, makeFiles([]), 'skin/play.json')).toEqual({});
+    // Also tolerates a non-array filepath value (defensive against malformed Lua tables).
+    expect(
+      buildDefaultSkinConfigFiles(
+        { filepath: undefined },
+        makeFiles([]),
+        'skin/play.json',
+      ),
+    ).toEqual({});
   });
 });

@@ -5,9 +5,10 @@
 // player hasn't chosen one explicitly via `filepath[]`. We resolve all of those here so consumers never need to know
 // about the original path syntax.
 
-import { dirname, normalizePath } from '@be-music/utils/core';
+import { basename, dirname, normalizePath } from '@be-music/utils/core';
 import { findCaseInsensitivePath } from './file-lookup.ts';
 import type { BeatorajaSkinFileEntry } from './file-lookup.ts';
+import type { BeatorajaSkinHeader } from './beatoraja-skin-types.ts';
 
 /**
  * Resolve a `path` field relative to an entry skin file. Handles `..` and `./` segments and lower-cases the lookup
@@ -77,6 +78,71 @@ function compileWildcard(pattern: string): (candidate: string) => boolean {
   const escaped = lower.replace(/[\\^$.+?()[\]{}|]/g, '\\$&').replace(/\*/g, '[^/]*');
   const re = new RegExp(`^${escaped}$`);
   return (candidate: string) => re.test(candidate);
+}
+
+/**
+ * Build a default `file` map (the {@link BeatorajaSkinConfig.file} field) by walking every
+ * `header.filepath[]` entry and resolving each `def` against the wildcard's match set.
+ *
+ * Beatoraja themes use `def` to declare the author's preferred default file inside a wildcard
+ * folder — e.g. ModernChic's `key` filepath has `def = "harf"` to point at `harf.png` even
+ * though `#default.png` sorts earlier alphabetically. Without this seed the host's
+ * `BeatorajaSkinConfig.file` starts empty (`{}`), the wildcard fallback inside
+ * `resolveSourcePath` fires, and authors that intended a non-alphabetic default see whichever
+ * filename happens to sort first instead.
+ *
+ * Matching:
+ *
+ *   1. Expand the entry's wildcard against the file map (sorted lexicographically by
+ *      `expandBeatorajaWildcard`).
+ *   2. Look for a candidate whose filename stem (basename without extension) matches `def`
+ *      EXACTLY first, then with case-insensitive comparison as a fallback so Windows-authored
+ *      themes with mixed-case `def` still resolve.
+ *   3. Skip the entry when `def` is missing / empty, the wildcard expanded to nothing, or no
+ *      candidate matched — `resolveSourcePath`'s wildcard fallback then fires for that entry.
+ *
+ * Returns the picked CANONICAL path string for each filepath name (matching the values the
+ * skin-options panel stores). Entries without a resolved default simply don't appear in the
+ * returned record.
+ */
+export function buildDefaultSkinConfigFiles(
+  header: Pick<BeatorajaSkinHeader, 'filepath'>,
+  files: ReadonlyMap<string, BeatorajaSkinFileEntry>,
+  entryPath: string,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!Array.isArray(header.filepath)) return out;
+  for (const fp of header.filepath) {
+    if (fp === null || typeof fp !== 'object') continue;
+    if (typeof fp.name !== 'string' || fp.name.length === 0) continue;
+    if (typeof fp.path !== 'string' || fp.path.length === 0) continue;
+    if (typeof fp.def !== 'string' || fp.def.length === 0) continue;
+    const candidates = expandBeatorajaWildcard(files, entryPath, fp.path);
+    if (candidates.length === 0) continue;
+    const matched = pickCandidateByStem(candidates, fp.def);
+    if (matched !== undefined) out[fp.name] = matched;
+  }
+  return out;
+}
+
+/**
+ * Locate the candidate path whose filename stem matches `def`. Stem extraction strips ONLY the
+ * last extension (e.g. `diamond SCUROed..png` → `diamond SCUROed.`) so authors who use trailing
+ * dots in their filenames still match correctly. Tries case-sensitive equality first, then
+ * case-insensitive — Windows-authored themes occasionally drift case between `def` and the
+ * actual filename.
+ */
+function pickCandidateByStem(candidates: ReadonlyArray<string>, def: string): string | undefined {
+  const exact = candidates.find((path) => stemOf(path) === def);
+  if (exact !== undefined) return exact;
+  const defLower = def.toLowerCase();
+  return candidates.find((path) => stemOf(path).toLowerCase() === defLower);
+}
+
+function stemOf(path: string): string {
+  const name = basename(path);
+  const dotIdx = name.lastIndexOf('.');
+  return dotIdx > 0 ? name.slice(0, dotIdx) : name;
 }
 
 /**

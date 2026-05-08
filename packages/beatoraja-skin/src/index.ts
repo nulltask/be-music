@@ -125,7 +125,12 @@ export type { BeatorajaNoteDestinationBlock, BeatorajaNoteRect, BeatorajaNoteSec
 export { normalizeBeatorajaNote, pickBeatorajaNoteRects } from './beatoraja-skin-note.ts';
 export type { BeatorajaSongListLayout, BeatorajaSongListRowRect } from './beatoraja-skin-songlist.ts';
 export { parseBeatorajaSongList } from './beatoraja-skin-songlist.ts';
-export { expandBeatorajaWildcard, resolveBeatorajaPath, resolveSourcePath } from './beatoraja-skin-resolver.ts';
+export {
+  buildDefaultSkinConfigFiles,
+  expandBeatorajaWildcard,
+  resolveBeatorajaPath,
+  resolveSourcePath,
+} from './beatoraja-skin-resolver.ts';
 export type {
   BeatorajaSourceAsset,
   BeatorajaSourceBundle,
