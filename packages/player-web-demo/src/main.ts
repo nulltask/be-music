@@ -1617,13 +1617,17 @@ class PlayerWebDemoApp {
       return;
     }
     const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
-    // Phase-2 eval gets the chart's difficulty ops via `runtimeContext` (consistency with
-    // decide / result, even though gameplay skins surveyed so far don't crash without it).
+    // Gameplay skins don't crash without runtimeContext (the load-time `main_state.option`
+    // pattern is unique to ModernChic decide; play scenes use op gates on destinations,
+    // evaluated at render time with a fresh per-frame context). Skip the load-time
+    // injection here — its earlier addition was "for consistency" and downstream gameplay
+    // skins reacted unexpectedly to mid-load `main_state.option` returning chart-aware
+    // values where they previously got `false`. Decide / result still inject because
+    // ModernChic specifically pre-computes per-difficulty values during `main()`.
     const result = loadBeatorajaSkin({
       entryPath: selectedEntry.entryPath,
       files: bundle.files,
       skinConfig: config,
-      runtimeContext: this.buildBeatorajaSkinLoadContext(song, config),
     });
     if (!result.ok || !result.skin) {
       const reason = result.ok ? 'skin payload missing' : result.error.message;
