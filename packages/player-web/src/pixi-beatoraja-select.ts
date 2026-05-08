@@ -29,7 +29,7 @@
 
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, Texture, type Ticker } from 'pixi.js';
 import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
-import { BEATORAJA_TEXT, buildBaseOpSet } from '@be-music/beatoraja-skin';
+import { BEATORAJA_NUM, BEATORAJA_TEXT, buildBaseOpSet } from '@be-music/beatoraja-skin';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
@@ -145,6 +145,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // Text content tracks the highlighted song. The skin's title / artist / genre text destinations
       // therefore reflect the live cursor, matching beatoraja's own select-screen behavior.
       resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
+      // Numeric values from the focused song — total notes, BPM, level. Skins render
+      // these via `value[]` elements with `ref = 74 (TOTALNOTES)`, `92 (MAINBPM)`,
+      // `96 (PLAYLEVEL)`, etc. Without this, the chart-info panel sits on its idle
+      // zeros even after the cursor moves to a different song.
+      resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
     });
@@ -225,6 +230,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       skin: opts.skin,
       textures: opts.textures,
       resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
+      resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
     });
@@ -335,6 +341,53 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         return song?.directoryLabel ?? this.currentFolderLabel();
       case BEATORAJA_TEXT.SEARCHWORD:
         return '';
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Numeric values for the focused song. Beatoraja's reference + GdbG_Skin select scenes both
+   * author `value[]` displays for the highlighted chart's note count, BPM, and difficulty
+   * level — without this resolver those `value[]` elements stay on their idle digits even as
+   * the cursor moves between songs.
+   *
+   * Best-record / play-count / IR refs (refs 71..89, 77..79) return `undefined` because we
+   * don't have a score DB yet; the matching number panels will render as blanks until that
+   * layer ships.
+   */
+  private resolveSelectionNumber(refOp: number): number | undefined {
+    const song = this.focusedSong();
+    if (song === undefined) return undefined;
+    switch (refOp) {
+      case BEATORAJA_NUM.TOTALNOTES:
+      case BEATORAJA_NUM.TOTALNOTES_LIVE:
+        return song.totalNotes;
+      case BEATORAJA_NUM.MAINBPM:
+      case BEATORAJA_NUM.NOWBPM:
+        return song.bpm !== undefined ? Math.round(song.bpm) : undefined;
+      // Without a parsed BPM-curve per song we report the same value for min/max — close
+      // enough for the value display until the loader exposes the per-chart range.
+      case BEATORAJA_NUM.MAXBPM:
+      case BEATORAJA_NUM.MINBPM:
+        return song.bpm !== undefined ? Math.round(song.bpm) : undefined;
+      case BEATORAJA_NUM.PLAYLEVEL:
+        return resolvePlayLevel(song.playLevel);
+      // Live-play counters all report 0 in the select scene — no engine running. Skins that
+      // share a `value[]` element across select / play (rare) get sensible idle digits.
+      case BEATORAJA_NUM.POINT:
+      case BEATORAJA_NUM.SCORE2:
+      case BEATORAJA_NUM.SCORE_RATE:
+      case BEATORAJA_NUM.SCORE_RATE_AFTERDOT:
+      case BEATORAJA_NUM.COMBO:
+      case BEATORAJA_NUM.MAXCOMBO_LIVE:
+      case BEATORAJA_NUM.GROOVEGAUGE:
+      case BEATORAJA_NUM.PERFECT:
+      case BEATORAJA_NUM.GREAT:
+      case BEATORAJA_NUM.GOOD:
+      case BEATORAJA_NUM.BAD:
+      case BEATORAJA_NUM.POOR:
+        return 0;
       default:
         return undefined;
     }
@@ -669,4 +722,19 @@ function clampIndex(value: number, length: number): number {
 
 function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
   return parts.filter((p): p is string => typeof p === 'string' && p.length > 0).join(' ');
+}
+
+/**
+ * `BrowserSongEntry.playLevel` arrives as either a number (BMS `#PLAYLEVEL 12`) or a string
+ * (some BMSON files / BMS variants store it as text). The skin's `value[]` resolver expects
+ * a number, so we coerce — strings parse via `parseInt`; non-finite results return
+ * `undefined` so the digit panel shows blanks rather than NaN garbage.
+ */
+function resolvePlayLevel(level: number | string | undefined): number | undefined {
+  if (typeof level === 'number') return Number.isFinite(level) ? level : undefined;
+  if (typeof level === 'string' && level.length > 0) {
+    const parsed = Number.parseInt(level, 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
 }
