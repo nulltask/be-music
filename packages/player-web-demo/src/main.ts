@@ -2311,6 +2311,11 @@ class PlayerWebDemoApp {
     await this.ensureHostMounted();
     this.beatorajaResultScene?.dispose();
 
+    // Decode the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps so the result skin's
+    // synthetic-id destinations (-100 / -101 / -102) can paint them. Reuses the same loader
+    // as decide / play so all three scenes share one decoder path.
+    const chartImages = await this.loadBeatorajaChartImages(song);
+
     let dismissed = false;
     this.beatorajaResultScene = new PixiBeatorajaResultScene({
       skin: result.skin,
@@ -2329,6 +2334,7 @@ class PlayerWebDemoApp {
       scoreHistory: history.scoreHistory,
       gaugeHistory: history.gaugeHistory,
       timingHistory: history.timingHistory,
+      chartImages,
       // Pick the outcome-specific jingle when one was discovered, falling back to the generic
       // `result` slot. Beatoraja themes that ship a single result BGM authoredit as `result.*`,
       // while themes that distinguish clear / fail (most reference themes) ship dedicated tracks.

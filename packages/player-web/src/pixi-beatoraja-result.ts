@@ -21,7 +21,7 @@
 //   - Result BGM (clear / fail jingles) — beatoraja themes ship per-theme audio that we
 //     haven't yet routed through the audio bus
 
-import { Container, Graphics, type Ticker } from 'pixi.js';
+import { Container, Graphics, type Texture, type Ticker } from 'pixi.js';
 import type { PlayerSummary } from '@be-music/player/core/engine';
 import {
   BEATORAJA_NUM,
@@ -91,6 +91,17 @@ export interface PixiBeatorajaResultSceneOptions {
    * once at scene `enter()` through a scene-owned `AudioContext` (closed in `dispose()`).
    */
   bgmBytes?: Uint8Array;
+  /**
+   * Pre-decoded chart imagery for the synthetic-id slots `-100 STAGEFILE` / `-101 BACKBMP` /
+   * `-102 BANNER`. GdbG_Skin's result authors a stagefile preview gated on
+   * `op:[910, 191]`; default skin paints the stagefile under the score readouts on cleared /
+   * failed outcomes. Missing entries hide the matching destinations.
+   */
+  chartImages?: {
+    stageFile?: Texture;
+    backBmp?: Texture;
+    banner?: Texture;
+  };
   /** Fired exactly once when the user dismisses the result (Enter / Space / Escape). */
   onContinue?: () => void;
 }
@@ -138,6 +149,10 @@ export class PixiBeatorajaResultScene implements PixiScene {
       resolveBpmGraphPoints: () => (this.chartBpmCurve.length > 0 ? this.chartBpmCurve : undefined),
       resolveGaugeGraphPoints: () => this.resolveResultGaugePolyline(),
       resolveTimingDistribution: () => options.timingHistory,
+      // Synthetic chart-image ids — GdbG_Skin's result paints `-100 STAGEFILE` under the
+      // top-right song-info pane gated on `op:[910, 191]`; default skin uses it for the
+      // results-screen background. Missing entries hide their destinations.
+      chartImageProvider: (id) => this.resolveChartImage(id),
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
@@ -311,6 +326,25 @@ export class PixiBeatorajaResultScene implements PixiScene {
 
     this.cachedBaseOps = ops;
     return this.cachedBaseOps;
+  }
+
+  /**
+   * Synthetic chart-image resolver. Maps the negative-id sentinels onto whichever pre-decoded
+   * chart bitmaps the host supplied via `chartImages`. Same shape as the decide / play scenes.
+   */
+  private resolveChartImage(syntheticId: number): Texture | undefined {
+    const images = this.options.chartImages;
+    if (images === undefined) return undefined;
+    switch (syntheticId) {
+      case -100:
+        return images.stageFile;
+      case -101:
+        return images.backBmp;
+      case -102:
+        return images.banner;
+      default:
+        return undefined;
+    }
   }
 
   private resolveSongText(refOp: number): string | undefined {
