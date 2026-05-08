@@ -652,6 +652,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         return song?.directoryLabel ?? this.currentFolderLabel();
       case BEATORAJA_TEXT.SEARCHWORD:
         return '';
+      // Difficulty-table refs — empty until table / dan-grade mode is wired.
+      case BEATORAJA_TEXT.TABLE_NAME:
+      case BEATORAJA_TEXT.TABLE_LEVEL:
+      case BEATORAJA_TEXT.TABLE_FULL:
+        return '';
       default:
         return undefined;
     }

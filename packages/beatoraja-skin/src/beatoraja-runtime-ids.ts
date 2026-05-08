@@ -903,6 +903,12 @@ export const BEATORAJA_TEXT = {
   SKIN_AUTHOR: 51,
   /** prop.lua `directory = 1000`. The current song's parent directory label. */
   DIRECTORY: 1000,
+  /** prop.lua `tablename = 1001`. Difficulty-table name (e.g. `"★1"`) for table / dan-grade play. */
+  TABLE_NAME: 1001,
+  /** prop.lua `tablelevel = 1002`. Difficulty-table level value (e.g. `"1"`). */
+  TABLE_LEVEL: 1002,
+  /** prop.lua `tablefull = 1003`. `TABLE_NAME` + `" "` + `TABLE_LEVEL` joined. */
+  TABLE_FULL: 1003,
 } as const;
 
 // ─── User-adjustable destination offsets ─────────────────────────────────────────────────────────

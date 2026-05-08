@@ -422,6 +422,14 @@ export class PixiBeatorajaDecideScene implements PixiScene {
         return skin.author ?? '';
       case BEATORAJA_TEXT.DIRECTORY:
         return song?.directoryLabel ?? '';
+      // Difficulty-table refs (1001/1002/1003) — used by GdbG_Skin's decide for "★1" labels
+      // when the user is playing through a dan-grade table course. We don't have table mode
+      // yet, so return empty strings — keeps the destinations alive (skin authors style the
+      // row regardless) without rendering stale / placeholder text.
+      case BEATORAJA_TEXT.TABLE_NAME:
+      case BEATORAJA_TEXT.TABLE_LEVEL:
+      case BEATORAJA_TEXT.TABLE_FULL:
+        return '';
       default:
         return undefined;
     }
