@@ -1568,7 +1568,16 @@ class PlayerWebDemoApp {
     if (variant === undefined) return;
     const desiredVariant = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
     if (variant !== desiredVariant) {
-      gameplayLog.info(`beatoraja gameplay: theme has no '${desiredVariant}' skin — falling back to '${variant}'`);
+      // Theme is missing the chart's native variant — a 5K chart on a theme that only ships a
+      // 7K skin, etc. The engine still drives input at the CHART's variant (`chartPlayVariant`
+      // ⇒ `BeatorajaRuntimeAdapter`), so notes / judges flow correctly; the skin chrome just
+      // shows the wrong lane count. On a 7K-skin/5K-chart pairing, columns 6 and 7 of the
+      // skin's lane art stay visually present but never receive notes. Bump to `warn` so the
+      // mismatch is visible in the console next to other skin-load warnings — `info` is too
+      // easy to miss for a configuration choice that visibly affects gameplay.
+      gameplayLog.warn(
+        `beatoraja gameplay: theme has no '${desiredVariant}' skin — falling back to '${variant}' (lane chrome may not match chart key count)`,
+      );
     }
 
     this.elements.shell.classList.add('playing');
