@@ -34,6 +34,12 @@ export interface BeatorajaTextElement {
   ref: number;
   /** Optional `value` StringProperty. Beatoraja evaluates this instead of `ref` when authored. */
   valueProperty?: BeatorajaStringPropertyRef;
+  /**
+   * Optional pre-rendered string. Beatoraja's Lua skins use this to bake in a literal label
+   * (e.g. `"Avg 5.23 ms"` computed at scene mount via `main_state.number(374)` and stored as a
+   * static string for the renderer). When set, takes precedence over `ref` / `valueProperty`.
+   */
+  constantText?: string;
   /** Rendering alignment. Defaults to `'left'`. */
   align: BeatorajaTextAlign;
   /** `if` codes that gate visibility (from `if`/`values` flattening). */
@@ -61,12 +67,14 @@ function normalizeOne(entry: NormalizedElement): BeatorajaTextElement | undefine
   const id = f.id;
   if (typeof id !== 'string' && typeof id !== 'number') return undefined;
   const valueProperty = stringPropertyField(f.value);
+  const constantText = typeof f.constantText === 'string' ? f.constantText : undefined;
   return {
     id,
     fontId: fontIdField(f, 'font', 0),
     size: numberField(f, 'size', 24),
     ref: numberField(f, 'ref', 0),
     ...(valueProperty !== undefined ? { valueProperty } : {}),
+    ...(constantText !== undefined ? { constantText } : {}),
     align: alignField(f.align),
     ifCodes: entry.ifCodes,
   };

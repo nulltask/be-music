@@ -1554,12 +1554,22 @@ export class BeatorajaPlaySkinView {
 
     // Skip the assignment when the string hasn't changed — assigning the same string still triggers
     // a Pixi glyph relayout, which is expensive (canvas rasterization).
+    //
+    // Resolution priority:
+    //   1. `constantText` — Lua-baked literal (GdbG result's `Avg N ms` strings, etc.) wins
+    //      unconditionally. Beatoraja's reference renderer treats this as a static label
+    //      regardless of `ref` / `valueProperty`.
+    //   2. `valueProperty` — Lua function-as-string-property (uncommon).
+    //   3. `ref` — runtime-resolved op code (titles / artists / etc.).
+    //   4. Empty fallback for `ref = 0` placeholder rows.
     const next =
-      entry.element.valueProperty !== undefined
-        ? this.resolveStringProperty(entry.element.valueProperty, luaContext)
-        : entry.element.ref !== 0
-          ? (this.resolveTextContent(entry.element.ref) ?? '')
-          : '';
+      entry.element.constantText !== undefined
+        ? entry.element.constantText
+        : entry.element.valueProperty !== undefined
+          ? this.resolveStringProperty(entry.element.valueProperty, luaContext)
+          : entry.element.ref !== 0
+            ? (this.resolveTextContent(entry.element.ref) ?? '')
+            : '';
     if (text.text !== next) {
       text.text = next;
       // eslint-disable-next-line no-console
