@@ -88,6 +88,13 @@ const SELECT_NUM_SONGS_IN_FOLDER = 300;
 const SELECT_NUM_BMS_TOTAL = 368;
 
 /**
+ * Imageset ref 11 — the focused chart's keymode index. Skin authors order their `images[]`
+ * array to match beatoraja's MainState enum; default's `modeset` declaration in `select.json`
+ * is `["allkeys","5keys","7keys","10keys","14keys","9keys","24keys","24keysDP"]`, indexes 0-7.
+ */
+const SELECT_REF_KEYMODE_INDEX = 11;
+
+/**
  * Per-frame tween rate for `scrollPosition` chasing `currentIndex`. Fraction of the remaining
  * delta closed each frame at 60 Hz — `0.25` lands inside ~150 ms which feels responsive without
  * looking jumpy. We snap to the integer once the gap drops below `SCROLL_SNAP_THRESHOLD` so the
@@ -180,6 +187,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // `96 (PLAYLEVEL)`, etc. Without this, the chart-info panel sits on its idle
       // zeros even after the cursor moves to a different song.
       resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
+      // Imageset / generic ref values. Drives `imageset[]` sub-image picks (e.g. `modeset`
+      // ref 11 picks "5keys" / "7keys" / etc. from the skin's array based on the focused
+      // chart's keymode) plus any other `ref`-driven selectors the skin authored.
+      resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
     });
@@ -271,6 +282,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       textures: opts.textures,
       resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
       resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
+      resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
     });
@@ -555,6 +567,31 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       default:
         return undefined;
     }
+  }
+
+  /**
+   * Generic `ref`-driven resolution for the imageset pipe (`{id="modeset", ref:11, images:[…]}`
+   * etc.). Returns the integer index that the imageset's `images[]` array should pick. Called by
+   * the view's `resolveRefValue` hook on every imageset paint.
+   *
+   * Skin authors order their `images[]` arrays to match beatoraja's MainState integer enums; the
+   * mapping below mirrors those enums:
+   *
+   *   - `ref:11` (`modeset`) — keymode index. 0 = ALL, 1 = 5K, 2 = 7K, 3 = 10K, 4 = 14K,
+   *     5 = 9K, 6 = 24K, 7 = 24K-DP. Matches default skin's `["allkeys","5keys","7keys",
+   *     "10keys","14keys","9keys","24keys","24keysDP"]` ordering.
+   *
+   * Unrecognised refs return 0 — the imageset renderer treats that as "first slot", which is the
+   * skin's authored "default / unknown" image and degrades gracefully for refs we haven't wired
+   * yet (option-* selectors, lnmodeset, sortset, etc.).
+   */
+  private resolveSelectionRefValue(refOp: number): number {
+    if (refOp === SELECT_REF_KEYMODE_INDEX) {
+      const song = this.focusedSong();
+      if (song === undefined) return 0;
+      return keymodeImagesetIndex(safeResolveChartVariant(song));
+    }
+    return 0;
   }
 
   /** Whichever song the current cursor points at — at root, picks the first song of the focused folder. */
@@ -1076,6 +1113,29 @@ function chartHasStop(song: BrowserSongEntry): boolean {
   return has;
 }
 const STOP_PRESENCE_CACHE = new WeakMap<BrowserSongEntry, boolean>();
+
+/**
+ * Keys-variant string → imageset index for `modeset` (ref 11). Mirrors beatoraja's MainState
+ * keymode enum used by the default skin: 0 = ALL_KEYS, 1 = 5K, 2 = 7K, 3 = 10K, 4 = 14K, 5 = 9K,
+ * 6 = 24K (not surfaced today), 7 = 24K-DP (not surfaced today). Unknown variants fall back to 0
+ * (skins author this slot as "allkeys" / "any").
+ */
+function keymodeImagesetIndex(variant: '5' | '7' | '9' | '10' | '14' | undefined): number {
+  switch (variant) {
+    case '5':
+      return 1;
+    case '7':
+      return 2;
+    case '10':
+      return 3;
+    case '14':
+      return 4;
+    case '9':
+      return 5;
+    default:
+      return 0;
+  }
+}
 
 /** Keys-variant string → matching `BEATORAJA_OP.KEYSONG_*` code, or `undefined` for unknown. */
 function keysongOpForVariant(variant: '5' | '7' | '9' | '10' | '14' | undefined): number | undefined {
