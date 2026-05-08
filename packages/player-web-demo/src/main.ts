@@ -1030,11 +1030,14 @@ class PlayerWebDemoApp {
     this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open Folder');
-    // Per-scene skin picker. Stays empty (and collapsed) until a beatoraja theme is dropped —
-    // `rebuildBeatorajaSkinPickers()` re-populates it on each load. Selecting a non-default entry
-    // for a scene records it on `beatorajaSkinOverridesByType`; the next mount picks it up via
-    // `pickBeatorajaSkinEntryWithOverride`.
-    this.beatorajaSkinPickerFolder = gui.addFolder('Beatoraja skins').close();
+    // Per-scene skin picker. Empty (= no controllers visible) until a beatoraja theme is
+    // dropped — `rebuildBeatorajaSkinPickers()` re-populates it on each load. Selecting a
+    // non-default entry for a scene records it on `beatorajaSkinOverridesByType`; the next
+    // mount picks it up via `pickBeatorajaSkinEntryWithOverride`. The folder is OPEN by
+    // default so the picker dropdowns are visible the moment a theme finishes loading
+    // — having the user hunt through a collapsed panel for a control they need on every
+    // theme drop didn't justify the extra click.
+    this.beatorajaSkinPickerFolder = gui.addFolder('Beatoraja skins').open();
     // Auto play used to be a lil-gui checkbox here too, but the in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on
     // the select skin) already exposes it — the duplicate toolbar controller just added another surface to keep in
     // sync. The `guiState.autoPlay` field stays as the seed/fallback value until the select panel publishes its own

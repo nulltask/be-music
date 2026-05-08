@@ -142,6 +142,12 @@ export class BeatorajaSkinOptionsGui {
     });
     this.gui = gui;
     this.applyDomStyles(gui.domElement);
+    // Bottom-right skin-options panel starts COLLAPSED. The skin's authored options panel
+    // (the in-scene popup activated by the skin's button_type 33 / 32 chrome) is the
+    // primary surface for runtime tweaks; this lil-gui mirror is a power-user / debug
+    // overlay that the user opens explicitly when they need it. Keeping it expanded by
+    // default crowded the lower-right corner over the rest of the UI.
+    gui.close();
 
     const emit = (): void => {
       // Fresh copy so downstream code never aliases our mutator state.
