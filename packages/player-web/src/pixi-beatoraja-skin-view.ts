@@ -1595,6 +1595,22 @@ export class BeatorajaPlaySkinView {
     text.tint = props.tint;
     text.angle = props.angle;
     text.blendMode = props.blendMode;
+    // `overflow = 1` (= shrink-to-fit): when the rendered text is wider than the destination box,
+    // scale it down proportionally so it stays inside. Beatoraja's reference does this so song
+    // titles / playernames that don't fit the chrome's reserved width don't bleed into adjacent
+    // panels. We measure via Pixi's own `text.width` (the post-glyph-layout bbox), divide by the
+    // box width, and apply the ratio to `text.scale` keeping aspect (community skins universally
+    // expect proportional shrink — anamorphic squish would distort the type). Boxes with no width
+    // (`props.width <= 0`) skip the math; oversized scale ratios (≥ 1) leave the text at its
+    // native size. Other `overflow` modes (`0` = no handling, `2` = clip — uncommon in practice)
+    // also leave scale at 1.
+    if (entry.element.overflow === 1 && props.width > 0) {
+      const measured = text.width;
+      const ratio = measured > 0 ? Math.min(1, props.width / measured) : 1;
+      text.scale.set(ratio);
+    } else {
+      text.scale.set(1);
+    }
   }
 
   /**

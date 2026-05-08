@@ -4,7 +4,7 @@ import { normalizeBeatorajaFonts, normalizeBeatorajaTexts } from './beatoraja-sk
 describe('normalizeBeatorajaTexts', () => {
   it('fills in default font / size / ref / align when omitted', () => {
     const out = normalizeBeatorajaTexts([{ id: 'genre' }]);
-    expect(out).toEqual([{ id: 'genre', fontId: 0, size: 24, ref: 0, align: 'left', ifCodes: [] }]);
+    expect(out).toEqual([{ id: 'genre', fontId: 0, size: 24, ref: 0, align: 'left', overflow: 0, ifCodes: [] }]);
   });
 
   it('preserves authored numeric and string fields verbatim', () => {

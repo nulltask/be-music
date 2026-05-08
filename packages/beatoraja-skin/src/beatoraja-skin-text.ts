@@ -42,6 +42,14 @@ export interface BeatorajaTextElement {
   constantText?: string;
   /** Rendering alignment. Defaults to `'left'`. */
   align: BeatorajaTextAlign;
+  /**
+   * Beatoraja's `overflow` flag controls how text wider than its destination box is handled. The
+   * surveyed skins (GdbG_Skin, ModernChic) only ever author `overflow = 1` (= shrink-to-fit, the
+   * mode that scales the rendered text down by `dst.w / measured.w` so it stays inside the box);
+   * other values (`0` = no handling, `2` = clip in the upstream Java) are uncommon in practice but
+   * preserved verbatim here so the renderer can branch on them. Defaults to `0`.
+   */
+  overflow: number;
   /** `if` codes that gate visibility (from `if`/`values` flattening). */
   ifCodes: ReadonlyArray<number>;
 }
@@ -76,6 +84,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaTextElement | undefine
     ...(valueProperty !== undefined ? { valueProperty } : {}),
     ...(constantText !== undefined ? { constantText } : {}),
     align: alignField(f.align),
+    overflow: numberField(f, 'overflow', 0),
     ifCodes: entry.ifCodes,
   };
 }
