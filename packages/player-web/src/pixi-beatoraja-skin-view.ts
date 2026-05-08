@@ -193,9 +193,12 @@ export interface BeatorajaPlaySkinViewOptions {
    * skins extend this with their own action codes (volume up/down, sort cycle, etc.).
    *
    * Hosts route the code to whatever scene-specific action it implies. The view itself doesn't
-   * know what each code means — it just surfaces the click + the authored code.
+   * know what each code means — it just surfaces the click + the authored code. The optional
+   * `modifiers` payload lets handlers branch on Shift / Ctrl etc. — beatoraja convention is
+   * "Shift = invert" (decrement instead of increment, prev instead of next, etc.) on a couple
+   * of buttons (`JUDGE_TIMING` notably).
    */
-  onButtonAction?: (act: number) => void;
+  onButtonAction?: (act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }) => void;
 }
 
 interface SpriteEntry {
@@ -457,7 +460,9 @@ export class BeatorajaPlaySkinView {
   private readonly resolveGaugeGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveTimingSamples: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
   private readonly resolveTimingDistribution: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
-  private readonly onButtonAction: ((act: number) => void) | undefined;
+  private readonly onButtonAction:
+    | ((act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }) => void)
+    | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -830,12 +835,26 @@ export class BeatorajaPlaySkinView {
       // wire the sprite up as a clickable surface and forward the action code to the host's
       // `onButtonAction` callback. The host (= scene) maps the code onto its real action
       // (start play, start autoplay, restore replay slot, …).
+      //
+      // Modifier keys (shift / ctrl / alt) are sniffed from the underlying DOM event and
+      // forwarded — beatoraja convention is "Shift = invert" on increment-style buttons
+      // (JUDGE_TIMING decrement, sort previous, etc.).
       if (image.act > 0 && this.onButtonAction !== undefined) {
         sprite.eventMode = 'static';
         sprite.cursor = 'pointer';
         const handler = this.onButtonAction;
         const actCode = image.act;
-        sprite.on('pointertap', () => handler(actCode));
+        sprite.on('pointertap', (event) => {
+          // Pixi's `FederatedPointerEvent` exposes the originating DOM event for modifier-key
+          // inspection. The `originalEvent` chain ends at a `KeyboardEvent`-shaped object that
+          // has the `shiftKey` / `ctrlKey` / `altKey` flags we need.
+          const orig = event as unknown as { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean };
+          handler(actCode, {
+            shift: orig.shiftKey === true,
+            ctrl: orig.ctrlKey === true,
+            alt: orig.altKey === true,
+          });
+        });
       }
       this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame, lastDisapearRatio: 1 });
     }

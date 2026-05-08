@@ -1913,6 +1913,14 @@ class PlayerWebDemoApp {
         // No persistence / styling — just enough to surface chart-author notes.
         void this.showBeatorajaReadtext(song);
       },
+      onSkinConfigChange: (next) => {
+        // Skin mutated its own config (currently only the `JUDGE_TIMING` button — note offset
+        // ±1 ms per click). Persist back into the per-entry cache so the next mount /
+        // `replaceSkin` keeps the adjustment, and re-apply through `applyBeatorajaSelectSkinConfig`
+        // so the bottom-right options panel re-renders with the new value.
+        this.beatorajaSkinConfigByEntry.set(skinLoad.entry.entryPath, next);
+        void this.applyBeatorajaSelectSkinConfig(skinLoad.entry.entryPath, next);
+      },
     });
     await this.sceneHost.setScene(this.beatorajaSelectScene);
     this.setStatus(`Select (beatoraja): ${this.collection.songs.length} song(s)`);

@@ -75,6 +75,14 @@ export interface PixiBeatorajaSelectSceneOptions {
    * `#TEXT`-resolved content). Omit to have the action fall through to a console log.
    */
   onReadtextRequest?: (song: BrowserSongEntry) => void;
+  /**
+   * Called when the scene mutates `skinConfig` in place — currently fires for `JUDGE_TIMING`
+   * (act=74) note-offset adjustments. The host should persist the new config (e.g. write it
+   * into its per-entry config cache) and refresh any external readouts (e.g. the bottom-right
+   * lil-gui's "Note offset" slider). Receives a fresh shallow clone so the callback never
+   * aliases the scene's mutator state.
+   */
+  onSkinConfigChange?: (config: BeatorajaSkinConfig) => void;
 }
 
 /**
@@ -267,7 +275,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // through `handleButtonAction` so the user can hit "AUTO PLAY" on the skin's chrome and
       // the scene starts the focused song in auto mode without round-tripping through a separate
       // toggle.
-      onButtonAction: (act) => this.handleButtonAction(act),
+      onButtonAction: (act, mods) => this.handleButtonAction(act, mods),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
     });
@@ -361,7 +369,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
       resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
       resolveSliderValue: (type) => resolveSelectionSliderValue(type),
-      onButtonAction: (act) => this.handleButtonAction(act),
+      onButtonAction: (act, mods) => this.handleButtonAction(act, mods),
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
     });
@@ -775,6 +783,36 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   }
 
   /**
+   * Adjust the active skin's `note offset` (ref 12 — JUDGETIMING) by `delta` milliseconds.
+   * Mutates the in-memory `skinConfig.offset` so the next-frame `JUDGETIMING` resolver returns
+   * the new value; also fires the host's `onSkinConfigChange` callback (when supplied) so the
+   * demo can persist the adjustment back into its skin-config cache.
+   *
+   * Clamped to the same `±200 ms` range the bottom-right options panel uses (beatoraja's own
+   * judge-offset slider has the same bounds).
+   */
+  private adjustJudgeTiming(delta: number): void {
+    const config = this.options.skinConfig;
+    if (config === undefined) return;
+    const current = typeof config.offset === 'number' && Number.isFinite(config.offset) ? config.offset : 0;
+    const next = Math.max(-200, Math.min(200, current + delta));
+    if (next === current) return;
+    (config as { offset: number }).offset = next;
+    // eslint-disable-next-line no-console
+    console.log('[beatoraja-select] act=74 JUDGE_TIMING adjusted', JSON.stringify({ from: current, to: next }));
+    this.options.onSkinConfigChange?.(this.cloneSkinConfig(config));
+  }
+
+  /** Shallow-clone the skin config so the host's callback never aliases our mutator state. */
+  private cloneSkinConfig(config: BeatorajaSkinConfig): BeatorajaSkinConfig {
+    return {
+      offset: typeof config.offset === 'number' ? config.offset : 0,
+      option: { ...config.option },
+      file: { ...config.file },
+    };
+  }
+
+  /**
    * Skin-authored button click handler. The view forwards `image[].act` codes from sprites
    * the user clicks; this method maps each to a select-scene action.
    *
@@ -794,7 +832,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * Other action codes log and return — community skins extend the table for sort cycling /
    * volume controls / etc., which the demo doesn't surface as clickable chrome yet.
    */
-  private handleButtonAction(act: number): void {
+  private handleButtonAction(act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }): void {
     if (this.disposed) return;
     const entry = this.entries[this.currentIndex];
     const song = entry?.kind === 'song' ? entry.song : entry?.folder.songs[0];
@@ -863,6 +901,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
             JSON.stringify({ title: song.title, favorite: next }),
           );
         }
+        return;
+      case 74: // JUDGE_TIMING — adjust note offset by ±1 ms (Shift = decrement). Wraps at ±200.
+        this.adjustJudgeTiming(modifiers?.shift === true ? -1 : 1);
         return;
       default:
         // eslint-disable-next-line no-console
