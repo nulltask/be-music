@@ -203,6 +203,50 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     adapter.applyCommand({ kind: 'press-lane', channel: '26' });
     expect(adapter.getTimerStart(110)).toBe(100);
   });
+
+  it('5K variant rejects channels 18/19 — no phantom KEY_ON timers stamped', () => {
+    // A malformed BMS that authored a 5K chart with stray notes on channels 18/19 (= the
+    // 6/7-key columns that don't exist in 5K) must NOT trip the adapter into stamping
+    // KEY_ON / KEY_OFF / bomb timers for slots 6/7. Pre-clamp `resolveSideKeySlot('18', '5')`
+    // returned 6 and the adapter happily marked timer 106 (`keyOnTimerId(1, 6)`); after the
+    // clamp the slot is `-1` → `resolveLane` returns undefined → every per-lane stamper
+    // short-circuits, so the timer table stays clean.
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '5',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(50);
+    adapter.applyCommand({ kind: 'press-lane', channel: '18' });
+    adapter.applyCommand({ kind: 'press-lane', channel: '19' });
+    // No KEY_ON timer for slots 6/7 (timers 106/107) on the 1P side. Sanity: a valid 5K
+    // channel still stamps as expected so we know the adapter didn't accidentally short-
+    // circuit ALL stamping.
+    expect(adapter.getTimerStart(keyOnTimerId(1, 6)!)).toBeUndefined();
+    expect(adapter.getTimerStart(keyOnTimerId(1, 7)!)).toBeUndefined();
+    adapter.applyCommand({ kind: 'press-lane', channel: '15' });
+    expect(adapter.getTimerStart(keyOnTimerId(1, 5)!)).toBe(50);
+  });
+
+  it('10K variant rejects channels 18/19/28/29 on both sides', () => {
+    // Same clamp on the DP side. 10K is 5+5 keys, so the 6/7-key columns don't exist for
+    // either 1P or 2P. Phantom timer suppression is symmetric.
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '10',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(75);
+    for (const channel of ['18', '19', '28', '29']) {
+      adapter.applyCommand({ kind: 'press-lane', channel });
+    }
+    expect(adapter.getTimerStart(keyOnTimerId(1, 6)!)).toBeUndefined();
+    expect(adapter.getTimerStart(keyOnTimerId(1, 7)!)).toBeUndefined();
+    expect(adapter.getTimerStart(keyOnTimerId(2, 6)!)).toBeUndefined();
+    expect(adapter.getTimerStart(keyOnTimerId(2, 7)!)).toBeUndefined();
+  });
 });
 
 describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {
