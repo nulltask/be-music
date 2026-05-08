@@ -1889,12 +1889,14 @@ class PlayerWebDemoApp {
       songs: this.collection.songs,
       // Restore the last cursor so coming back from gameplay lands on the same song.
       initialIndex: this.beatorajaSelectIndex,
-      onSongPicked: (song) => {
+      onSongPicked: (song, opts) => {
         // Cache the index using the picked song's identity — survives the scene tear-down.
         this.beatorajaSelectIndex = this.collection.songs.indexOf(song);
         // Same flow as the LR2 select view: route to decide → gameplay. The decide branch in
         // `showDecide` already detects the beatoraja gameplay case and skips its splash.
-        void this.showDecide(song);
+        // Forward the `autoPlay` override (set by the skin's AUTO PLAY button click → act=16);
+        // omitted otherwise so the user's global default applies.
+        void this.showDecide(song, { autoPlay: opts?.autoPlay });
       },
       onExit: () => {
         // ESC from the beatoraja select returns to the empty drop screen.

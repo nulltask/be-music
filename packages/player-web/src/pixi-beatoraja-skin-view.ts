@@ -186,6 +186,16 @@ export interface BeatorajaPlaySkinViewOptions {
    * histogram is meant for post-game review).
    */
   resolveTimingDistribution?: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
+  /**
+   * Fired when the user clicks (or taps) a skin-authored button — anything in `image[]` that
+   * carries a positive `act` field (beatoraja's `button_type` action code). Default skin
+   * declares 15=play / 16=autoplay / 315=practice / 19,316,317,318=replay slots; community
+   * skins extend this with their own action codes (volume up/down, sort cycle, etc.).
+   *
+   * Hosts route the code to whatever scene-specific action it implies. The view itself doesn't
+   * know what each code means — it just surfaces the click + the authored code.
+   */
+  onButtonAction?: (act: number) => void;
 }
 
 interface SpriteEntry {
@@ -447,6 +457,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveGaugeGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveTimingSamples: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
   private readonly resolveTimingDistribution: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
+  private readonly onButtonAction: ((act: number) => void) | undefined;
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -476,6 +487,7 @@ export class BeatorajaPlaySkinView {
     this.resolveGaugeGraphPoints = options.resolveGaugeGraphPoints ?? (() => undefined);
     this.resolveTimingSamples = options.resolveTimingSamples ?? (() => undefined);
     this.resolveTimingDistribution = options.resolveTimingDistribution ?? (() => undefined);
+    this.onButtonAction = options.onButtonAction;
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -813,6 +825,18 @@ export class BeatorajaPlaySkinView {
       const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
       this.container.addChild(sprite);
       applyTextureFilterMode(baseTexture, group.filter);
+      // Skin-authored interactive button — `image.act` carries beatoraja's `button_type` action
+      // code (15=play, 16=autoplay, 315=practice, 19/316/317/318=replay slots, etc.). When set,
+      // wire the sprite up as a clickable surface and forward the action code to the host's
+      // `onButtonAction` callback. The host (= scene) maps the code onto its real action
+      // (start play, start autoplay, restore replay slot, …).
+      if (image.act > 0 && this.onButtonAction !== undefined) {
+        sprite.eventMode = 'static';
+        sprite.cursor = 'pointer';
+        const handler = this.onButtonAction;
+        const actCode = image.act;
+        sprite.on('pointertap', () => handler(actCode));
+      }
       this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame, lastDisapearRatio: 1 });
     }
 

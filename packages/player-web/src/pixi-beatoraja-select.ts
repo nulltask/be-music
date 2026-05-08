@@ -58,8 +58,14 @@ export interface PixiBeatorajaSelectSceneOptions {
   songs: ReadonlyArray<BrowserSongEntry>;
   /** Initial highlighted index (within the song list at root). Defaults to 0. */
   initialIndex?: number;
-  /** Called when the user confirms a song (`Enter` on a song row, or click an already-selected song). */
-  onSongPicked: (song: BrowserSongEntry) => void;
+  /**
+   * Called when the user confirms a song (`Enter` on a song row, or click an already-selected
+   * song). The optional `options.autoPlay` is `true` when the source was the skin's authored
+   * `button_autoplay` (act=16) — the host should route to gameplay in auto mode rather than
+   * the user's default. When omitted / false, the host follows whatever the user has selected
+   * in their global play settings.
+   */
+  onSongPicked: (song: BrowserSongEntry, options?: { autoPlay?: boolean }) => void;
   /** Called when the user backs out of the root list (`Escape` at root). */
   onExit?: () => void;
 }
@@ -241,6 +247,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // renderer hides the slider entirely; we report `1.0` (max position) for volume types
       // so ModernChic's volume sliders sit at full instead of vanishing.
       resolveSliderValue: (type) => resolveSelectionSliderValue(type),
+      // Skin-authored button clicks — `image[].act` codes (15=play, 16=autoplay, etc.). Routed
+      // through `handleButtonAction` so the user can hit "AUTO PLAY" on the skin's chrome and
+      // the scene starts the focused song in auto mode without round-tripping through a separate
+      // toggle.
+      onButtonAction: (act) => this.handleButtonAction(act),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
     });
@@ -334,6 +345,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
       resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
       resolveSliderValue: (type) => resolveSelectionSliderValue(type),
+      onButtonAction: (act) => this.handleButtonAction(act),
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
     });
@@ -744,6 +756,66 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       return 0;
     }
     return 0;
+  }
+
+  /**
+   * Skin-authored button click handler. The view forwards `image[].act` codes from sprites
+   * the user clicks; this method maps each to a select-scene action.
+   *
+   * Supported beatoraja `button_type` codes (= the `act` field on default skin's `image[]`):
+   *
+   *   - `15` PLAY — start the focused song in the user's default mode (manual unless they've
+   *     toggled auto in the global settings).
+   *   - `16` AUTO PLAY — start the focused song in auto mode regardless of the user's global
+   *     setting. The host's `onSongPicked({autoPlay: true})` propagates the override into the
+   *     `playSongBeatoraja` mode argument.
+   *   - `315` PRACTICE — practice mode (no scoring). Currently routed as a normal play; the
+   *     practice runtime isn't implemented yet, but at least the click takes the user into
+   *     gameplay rather than no-op'ing.
+   *   - `19` / `316` / `317` / `318` REPLAY 1-4 — replay slots. Logged + ignored; no replay
+   *     system yet.
+   *
+   * Other action codes log and return — community skins extend the table for sort cycling /
+   * volume controls / etc., which the demo doesn't surface as clickable chrome yet.
+   */
+  private handleButtonAction(act: number): void {
+    if (this.disposed) return;
+    const entry = this.entries[this.currentIndex];
+    const song = entry?.kind === 'song' ? entry.song : entry?.folder.songs[0];
+    switch (act) {
+      case 15: // PLAY (user's default mode)
+        if (song !== undefined) {
+          // eslint-disable-next-line no-console
+          console.log('[beatoraja-select] act=15 PLAY', JSON.stringify({ title: song.title }));
+          this.options.onSongPicked(song);
+        }
+        return;
+      case 16: // AUTO PLAY
+        if (song !== undefined) {
+          // eslint-disable-next-line no-console
+          console.log('[beatoraja-select] act=16 AUTO PLAY', JSON.stringify({ title: song.title }));
+          this.options.onSongPicked(song, { autoPlay: true });
+        }
+        return;
+      case 315: // PRACTICE — practice runtime not implemented yet; fall through to plain play
+        if (song !== undefined) {
+          // eslint-disable-next-line no-console
+          console.log('[beatoraja-select] act=315 PRACTICE (routed as normal play)', JSON.stringify({ title: song.title }));
+          this.options.onSongPicked(song);
+        }
+        return;
+      case 19:
+      case 316:
+      case 317:
+      case 318:
+        // eslint-disable-next-line no-console
+        console.log('[beatoraja-select] replay slot click ignored', JSON.stringify({ act }));
+        return;
+      default:
+        // eslint-disable-next-line no-console
+        console.log('[beatoraja-select] unhandled button act', JSON.stringify({ act }));
+        return;
+    }
   }
 
   /** Whichever song the current cursor points at — at root, picks the first song of the focused folder. */
