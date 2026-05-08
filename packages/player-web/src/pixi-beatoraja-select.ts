@@ -452,11 +452,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   private refreshRowVisuals(): void {
     const total = this.entries.length;
     // The "centre" of the visible window in entry-coordinates. As `scrollPosition` tweens
-    // toward `currentIndex`, every row's index slides by the same amount.
+    // toward `currentIndex`, every row's index slides by the same amount. Indices that fall
+    // outside `[0, total)` are wrapped — the list is circular, so the row above the first
+    // entry shows the LAST entry and vice versa. (After a wrap-jump in `moveCursor`,
+    // `scrollPosition` may sit transiently outside the range; the modulo here keeps the
+    // displayed entries consistent across the boundary.)
     const centreEntry = this.scrollPosition;
     for (let i = 0; i < VISIBLE_ROW_COUNT; i += 1) {
-      const entryIndex = Math.round(centreEntry) + (i - CENTRE_ROW_INDEX);
-      const entry = entryIndex >= 0 && entryIndex < total ? this.entries[entryIndex] : undefined;
+      const rawEntryIndex = Math.round(centreEntry) + (i - CENTRE_ROW_INDEX);
+      const wrappedIndex = total > 0 ? ((rawEntryIndex % total) + total) % total : -1;
+      const entry = total > 0 ? this.entries[wrappedIndex] : undefined;
       const icon = this.rowKindIcons[i]!;
       const label = this.rowLabels[i]!;
       const sub = this.rowSublabels[i]!;
@@ -468,7 +473,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         hit.visible = false;
         continue;
       }
-      const isSelected = entryIndex === this.currentIndex;
+      // Highlight the centred visible row (matches `layoutRows`'s tint logic). Like a music
+      // picker wheel — the highlight stays put while songs scroll past it. Using "row matches
+      // currentIndex" instead would make the highlight LEAD the tween, which looks like the
+      // selected song teleports across rows mid-scroll.
+      const isSelected = i === CENTRE_ROW_INDEX;
       icon.visible = true;
       label.visible = true;
       sub.visible = true;
@@ -590,18 +599,26 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
   private handleRowPointerTap(rowOffset: number, _event: FederatedPointerEvent): void {
     if (this.disposed) return;
+    const total = this.entries.length;
+    if (total === 0) return;
     // Translate visible-row index into an entry index against the current scroll state. Use
     // `Math.round(this.scrollPosition)` so a click during a scroll-tween still lands on the
-    // entry currently displayed in that row.
-    const entryIndex = Math.round(this.scrollPosition) + (rowOffset - CENTRE_ROW_INDEX);
-    if (entryIndex < 0 || entryIndex >= this.entries.length) return;
-    if (entryIndex !== this.currentIndex) {
-      // First click: move cursor. Second click on the same row will enter / pick.
-      this.currentIndex = entryIndex;
-      this.refreshRowVisuals();
+    // entry currently displayed in that row. Wrap into `[0, total)` so a click on a row
+    // showing a wrapped entry resolves to the right song. The cursor's smooth-scroll path is
+    // chosen by direction-of-travel: if the visible row offset is forward (downward) we pull
+    // `scrollPosition` to take the short forward path, and vice versa.
+    const rawIndex = Math.round(this.scrollPosition) + (rowOffset - CENTRE_ROW_INDEX);
+    const next = ((rawIndex % total) + total) % total;
+    if (next === this.currentIndex) {
+      this.activateCurrentEntry();
       return;
     }
-    this.activateCurrentEntry();
+    // If the click landed on a wrapped row (rawIndex outside `[0, total)`), shift
+    // `scrollPosition` so the tween takes the visible direction the user clicked toward.
+    if (rawIndex >= total) this.scrollPosition -= total;
+    else if (rawIndex < 0) this.scrollPosition += total;
+    this.currentIndex = next;
+    this.refreshRowVisuals();
   }
 
   private activateCurrentEntry(): void {
@@ -636,15 +653,39 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.refreshEntries(restoredIndex);
   }
 
+  /**
+   * Move the cursor by `delta` rows, wrapping around list bounds (last row → first row on
+   * forward overflow, first row → last row on backward overflow). Beatoraja's reference song
+   * select wheel is circular and this matches that behavior — the user reported "選曲リストは循環します".
+   *
+   * Wrap detection adjusts `scrollPosition` so the smooth-scroll tween takes the SHORT path
+   * around the boundary instead of sliding visually through every row in between. Without
+   * this, going from the last song to the first via a single ArrowDown would look like a
+   * snap-back through the entire list.
+   */
   private moveCursor(delta: number): void {
-    if (this.entries.length === 0) return;
-    const next = clampIndex(this.currentIndex + delta, this.entries.length);
+    const total = this.entries.length;
+    if (total === 0) return;
+    const raw = this.currentIndex + delta;
+    const next = ((raw % total) + total) % total;
     if (next === this.currentIndex) return;
+    if (delta > 0 && raw >= total) {
+      // Forward wrap (e.g. last → first). Pull the animated scroll position down by `total`
+      // so the next tween glides forward by `delta` rows instead of slamming all the way back.
+      this.scrollPosition -= total;
+    } else if (delta < 0 && raw < 0) {
+      // Backward wrap (first → last). Push the scroll position up by `total` for the same
+      // reason — symmetric direction.
+      this.scrollPosition += total;
+    }
     this.currentIndex = next;
-    // Don't reset scrollPosition — let the tween pick it up.
     this.refreshRowVisuals();
   }
 
+  /**
+   * Absolute cursor jump (Home / End). Doesn't wrap — Home and End are explicit "go to the
+   * extremes" actions, not relative motion, so the user expectation matches a clamp.
+   */
   private setCursor(index: number): void {
     if (this.entries.length === 0) return;
     const next = clampIndex(index, this.entries.length);
