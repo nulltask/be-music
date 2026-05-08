@@ -575,12 +575,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       ops.add(meta.banner ? BEATORAJA_OP.HAS_BANNER : BEATORAJA_OP.NO_BANNER);
       ops.add(meta.backBmp ? BEATORAJA_OP.HAS_BACKBMP : BEATORAJA_OP.NO_BACKBMP);
 
-      // Difficulty op — `#DIFFICULTY 1..5` lights up the matching LEVEL_* op (70..74). Skins
-      // gate per-difficulty chrome (e.g. the BEGINNER / NORMAL / HYPER / ANOTHER / INSANE label
-      // images in ModernChic) on these. Charts without a difficulty header → no op fires (skin
-      // shows fallback chrome).
-      const difficultyOp = difficultyLevelOp(meta.difficulty);
-      if (difficultyOp !== undefined) ops.add(difficultyOp);
+      // Difficulty op — `#DIFFICULTY 1..5` lights up BOTH the beatoraja-native LEVEL_* block
+      // (70-74) and the LR2-style DIFFICULTY_* block (150-155). Skins gate per-difficulty
+      // chrome on either flavour; firing both keeps GdbG_Skin (LR2-derived) and ModernChic
+      // (mixed) rendering correctly without a per-skin convention check.
+      for (const op of difficultyOps(meta.difficulty)) ops.add(op);
 
       // Judge rank op — `#RANK 0..4` lights up JUDGE_VERYHARD / HARD / NORMAL / EASY /
       // VERYEASY. ModernChic / GdbG both gate the per-rank judgment-window labels on these.
@@ -1744,24 +1743,26 @@ function judgeRankOp(rank: number | undefined): number {
 }
 
 /**
- * BMS `#DIFFICULTY` value (1..5) → matching `BEATORAJA_OP.LEVEL_*` code. Returns `undefined`
- * when the chart didn't author a difficulty header (a lot of older BMS files omit it) so the
- * caller fires no op and the skin's fallback chrome (or no chrome) shows.
+ * BMS `#DIFFICULTY` value (0/missing..5) → matching beatoraja `LEVEL_*` op AND the LR2-style
+ * `DIFFICULTY_*` op (skins use either flavour, so we fire both). Returns an array because the
+ * "undefined / 0" case has only the LR2 alias (no LEVEL_UNDEFINED in the native block).
  */
-function difficultyLevelOp(difficulty: number | undefined): number | undefined {
+function difficultyOps(difficulty: number | undefined): ReadonlyArray<number> {
   switch (difficulty) {
     case 1:
-      return BEATORAJA_OP.LEVEL_BEGINNER;
+      return [BEATORAJA_OP.LEVEL_BEGINNER, BEATORAJA_OP.DIFFICULTY_BEGINNER];
     case 2:
-      return BEATORAJA_OP.LEVEL_NORMAL;
+      return [BEATORAJA_OP.LEVEL_NORMAL, BEATORAJA_OP.DIFFICULTY_NORMAL];
     case 3:
-      return BEATORAJA_OP.LEVEL_HYPER;
+      return [BEATORAJA_OP.LEVEL_HYPER, BEATORAJA_OP.DIFFICULTY_HYPER];
     case 4:
-      return BEATORAJA_OP.LEVEL_ANOTHER;
+      return [BEATORAJA_OP.LEVEL_ANOTHER, BEATORAJA_OP.DIFFICULTY_ANOTHER];
     case 5:
-      return BEATORAJA_OP.LEVEL_INSANE;
+      return [BEATORAJA_OP.LEVEL_INSANE, BEATORAJA_OP.DIFFICULTY_INSANE];
     default:
-      return undefined;
+      // No native counterpart for "undefined" — only the LR2 op fires. Skins that gate on
+      // `op:[150]` get a fallback "?" / "unknown" badge.
+      return [BEATORAJA_OP.DIFFICULTY_UNDEFINED];
   }
 }
 

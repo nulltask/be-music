@@ -360,6 +360,24 @@ export const BEATORAJA_OP = {
   LEVEL_ANOTHER_EXCEED: 78,
   LEVEL_INSANE_EXCEED: 79,
 
+  // ─── LR2-style difficulty ops (SkinProperty `DIFFICULTY_*`, codes 150-155) ────────────────
+  // Beatoraja keeps the LR2 dst_option block (150 = UNDEFINED, 151..155 = EASY/NORMAL/HYPER/
+  // ANOTHER/INSANE) as aliases for the native LEVEL_* (70-74) block — LR2-derived skins
+  // (GdbG_Skin, ModernChic's decide pane via `MAIN.OP.DIFFICULTY1..5/0`) gate per-difficulty
+  // chrome on these. We fire BOTH op blocks simultaneously so either flavour of skin renders.
+  /** LR2 `OP_DIFFICULTY_UNDEFINED` — `#DIFFICULTY` header missing or 0. */
+  DIFFICULTY_UNDEFINED: 150,
+  /** LR2 `OP_DIFFICULTY_BEGINNER` (= EASY in some skins) — `#DIFFICULTY 1`. */
+  DIFFICULTY_BEGINNER: 151,
+  /** LR2 `OP_DIFFICULTY_NORMAL` — `#DIFFICULTY 2`. */
+  DIFFICULTY_NORMAL: 152,
+  /** LR2 `OP_DIFFICULTY_HYPER` — `#DIFFICULTY 3`. */
+  DIFFICULTY_HYPER: 153,
+  /** LR2 `OP_DIFFICULTY_ANOTHER` — `#DIFFICULTY 4`. */
+  DIFFICULTY_ANOTHER: 154,
+  /** LR2 `OP_DIFFICULTY_INSANE` — `#DIFFICULTY 5`. */
+  DIFFICULTY_INSANE: 155,
+
   // ─── Music-select bar ops (SkinProperty: FOLDERBAR=1, SONGBAR=2, GRADEBAR=3, PLAYABLEBAR=5) ─
   // Set per-frame on the select scene based on what the cursor's focused bar is. Skins gate
   // per-bar chrome on these — songs_font/count behind FOLDERBAR (it's the "X songs" footer

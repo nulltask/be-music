@@ -21,6 +21,7 @@
 import { Container, Graphics, type Ticker } from 'pixi.js';
 import {
   BEATORAJA_NUM,
+  BEATORAJA_OP,
   BEATORAJA_TEXT,
   TIMER_FADEOUT,
   TIMER_PLAY,
@@ -248,7 +249,7 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     this.fitToStage();
     const elapsed = performance.now() - this.startMs;
     this.view.update({
-      activeOps: this.baseOps(),
+      activeOps: this.computeActiveOps(),
       // Pass through the raw value so unfired timers return `undefined` and the destination
       // renderer hides any element gated on them. The earlier `?? 0` fallback made every
       // timer behave as if it fired at scene start — wrong for `TIMER_FADEOUT` (id=2): the
@@ -270,10 +271,49 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     }
   }
 
+  /** Stable per-skin op set (skin_config.option picks). Live ops are added by `computeActiveOps`. */
   private baseOps(): ReadonlySet<number> {
     if (this.cachedBaseOps !== undefined) return this.cachedBaseOps;
     this.cachedBaseOps = buildBaseOpSet(this.options.skinConfig?.option);
     return this.cachedBaseOps;
+  }
+
+  /**
+   * Per-frame active op set. Combines the stable base ops with the picked song's chart-derived
+   * difficulty op block (both beatoraja-native LEVEL_* 70-74 and LR2-style DIFFICULTY_* 150-155
+   * fire so either flavour of skin renders). Without this, GdbG_Skin's per-difficulty labels +
+   * level numerals stay hidden, and ModernChic's tablename / genre / title / artist / category
+   * (all gated on `MAIN.OP.DIFFICULTY1..5,0` = 151..155, 150) never reveal.
+   */
+  private computeActiveOps(): ReadonlySet<number> {
+    const ops = new Set(this.baseOps());
+    const difficulty = this.options.song?.chart.metadata.difficulty;
+    switch (difficulty) {
+      case 1:
+        ops.add(BEATORAJA_OP.LEVEL_BEGINNER);
+        ops.add(BEATORAJA_OP.DIFFICULTY_BEGINNER);
+        break;
+      case 2:
+        ops.add(BEATORAJA_OP.LEVEL_NORMAL);
+        ops.add(BEATORAJA_OP.DIFFICULTY_NORMAL);
+        break;
+      case 3:
+        ops.add(BEATORAJA_OP.LEVEL_HYPER);
+        ops.add(BEATORAJA_OP.DIFFICULTY_HYPER);
+        break;
+      case 4:
+        ops.add(BEATORAJA_OP.LEVEL_ANOTHER);
+        ops.add(BEATORAJA_OP.DIFFICULTY_ANOTHER);
+        break;
+      case 5:
+        ops.add(BEATORAJA_OP.LEVEL_INSANE);
+        ops.add(BEATORAJA_OP.DIFFICULTY_INSANE);
+        break;
+      default:
+        ops.add(BEATORAJA_OP.DIFFICULTY_UNDEFINED);
+        break;
+    }
+    return ops;
   }
 
   private advance(then: () => void): void {
