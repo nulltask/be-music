@@ -37,6 +37,10 @@ import {
   computeJudgeExistOps,
   computeRankOp,
   endOfNoteTimerId,
+  isPerfectJudge,
+  JUDGE_LANE_REF_1P_BASE,
+  JUDGE_LANE_REF_2P_BASE,
+  JUDGE_LANE_REF_RANGE,
   judgeOpForKind,
   judgeTimerId,
   keyOffTimerId,
@@ -128,6 +132,16 @@ const COVER_CHANGING_WINDOW_MS = 500;
  */
 const RECENT_TIMINGS_CAPACITY = 50;
 
+/**
+ * How long after a PERFECT verdict the per-lane keybeam imageset stays on its highlighted frame.
+ * Beatoraja's reference theme uses a brief flash — 250ms feels right (the player keeps holding
+ * the key after the hit; the highlight needs to read as a "yes you nailed it" pulse, not a
+ * persistent state). Outside the window the imageset reverts to its neutral frame even if the key
+ * is still held; subsequent PERFECTs re-stamp the timestamp so a held key during a stream stays
+ * highlighted continuously.
+ */
+const KEYBEAM_PERFECT_WINDOW_MS = 250;
+
 export class BeatorajaRuntimeAdapter {
   /**
    * Live op set — option ops (from `baseOps`) plus runtime ops the engine has toggled. Exposed via
@@ -152,6 +166,22 @@ export class BeatorajaRuntimeAdapter {
   private readonly judgeState: Record<BeatorajaSide, SideJudgeState> = {
     1: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
     2: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
+  };
+  /**
+   * Per-(side, lane) "last verdict was PERFECT" timestamp ring. Sized to `JUDGE_LANE_REF_RANGE`
+   * (10 lanes per side ⇒ keys 0..9 with 0 = scratch). Each slot holds the `getNowMs()` instant the
+   * latest PERFECT landed on that lane, or `-Infinity` when no PERFECT has fired yet (or it has
+   * since aged out). The keybeam imageset ref `JUDGE_LANE_REF_*P_BASE + lane` reads this to flip
+   * its frame (0 = neutral, 1 = perfect-flash) — see {@link resolveRefValue}.
+   *
+   * Why only PERFECT and not the full judgeIndex: the default skin's keybeam imageset has 2 frames,
+   * and beatoraja's clamp semantics (raw → `min(raw, images.length-1)`) collapse any non-zero
+   * value to "frame 1" regardless of which non-PERFECT verdict it was. Authors that want a
+   * 6-state imageset would extend this resolver, but no surveyed skin does today.
+   */
+  private readonly lastPerfectAtByLane: Record<BeatorajaSide, Float64Array> = {
+    1: new Float64Array(JUDGE_LANE_REF_RANGE).fill(Number.NEGATIVE_INFINITY),
+    2: new Float64Array(JUDGE_LANE_REF_RANGE).fill(Number.NEGATIVE_INFINITY),
   };
   private poorBgaActive = false;
   private lastHiSpeed = 1;
@@ -711,6 +741,20 @@ export class BeatorajaRuntimeAdapter {
       this.startLaneBombTimer(state.channel);
     }
 
+    // Stamp the per-lane PERFECT timestamp so the keybeam imageset (`ref =
+    // JUDGE_LANE_REF_*P_BASE + lane`) flips to its highlighted frame for the next
+    // `KEYBEAM_PERFECT_WINDOW_MS`. Only PERFECT triggers this — other clean hits (GREAT) keep the
+    // keybeam neutral, matching the default skin's 2-frame `{ keybeam-w, keybeam-w-pg }` intent
+    // where the highlighted frame is specifically the "you nailed it" cue. `state.channel` carries
+    // the input lane the engine matched; `resolveLane` translates it to the same 0..9 lane index
+    // the imageset's ref encodes (lane 0 = scratch, 1..7 = keys 1..7, 8/9 reserved for 9-key).
+    if (isPerfectJudge(state.judge) && state.channel !== undefined) {
+      const lane = this.resolveLane(state.channel);
+      if (lane !== undefined && lane >= 0 && lane < JUDGE_LANE_REF_RANGE) {
+        this.lastPerfectAtByLane[side][lane] = this.getNowMs();
+      }
+    }
+
     // Re-stamp the gauge-increase timer on each clean hit. ModernChic's
     // `lamp_gaugeinclease` cycles a 2-frame sparkle at `cycle = 50ms` keyed off this stamp;
     // dirty hits (GOOD / BAD / POOR / MISS) typically don't gain gauge so we skip them.
@@ -912,12 +956,34 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
-   * Resolve an `image[].ref` op-code into the frame index the skin should pick from the cell strip. The
-   * default `0` keeps lamp / clear-state icons on their initial frame; once gauge / lamp / FC state is
-   * wired through state signals, this fans out to the matching cell.
+   * Resolve an `image[].ref` / `imageset[].ref` op-code into the frame index the skin should pick
+   * from the cell strip / sub-image array. The default `0` keeps lamp / clear-state icons on their
+   * initial frame; once gauge / lamp / FC state is wired through state signals, this fans out to
+   * the matching cell.
+   *
+   * Wired ranges:
+   *   - `500..509` (1P) / `510..519` (2P) — per-lane "last verdict was PERFECT" gate. Drives the
+   *     default skin's keybeam imageset (`ref = value_judge(i) = base + lane`,
+   *     `images = { keybeam-w, keybeam-w-pg }`). Returns `1` when the lane saw a PERFECT within
+   *     {@link KEYBEAM_PERFECT_WINDOW_MS} of `getNowMs()`, `0` otherwise. The renderer clamps
+   *     to `images.length - 1`, so 2-frame imagesets collapse to a binary neutral / perfect-flash.
+   *     Lane 0 is scratch; 1..7 are keys 1..7; 8/9 are reserved for 9-key extensions.
    */
-  resolveRefValue(_refOp: number): number {
+  resolveRefValue(refOp: number): number {
+    if (refOp >= JUDGE_LANE_REF_1P_BASE && refOp < JUDGE_LANE_REF_1P_BASE + JUDGE_LANE_REF_RANGE) {
+      return this.resolveLaneJudgeRef(1, refOp - JUDGE_LANE_REF_1P_BASE);
+    }
+    if (refOp >= JUDGE_LANE_REF_2P_BASE && refOp < JUDGE_LANE_REF_2P_BASE + JUDGE_LANE_REF_RANGE) {
+      return this.resolveLaneJudgeRef(2, refOp - JUDGE_LANE_REF_2P_BASE);
+    }
     return 0;
+  }
+
+  private resolveLaneJudgeRef(side: BeatorajaSide, lane: number): number {
+    const stamp = this.lastPerfectAtByLane[side][lane];
+    if (!Number.isFinite(stamp)) return 0;
+    const elapsed = this.getNowMs() - stamp;
+    return elapsed >= 0 && elapsed <= KEYBEAM_PERFECT_WINDOW_MS ? 1 : 0;
   }
 
   /**

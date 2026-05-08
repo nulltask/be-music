@@ -649,6 +649,30 @@ export function computeJudgeExistOps(args: {
 }
 
 /**
+ * Per-lane "last judgement" image-ref base. The default skin's keybeam imageset references this
+ * via `value_judge(i)` returning `500 + lane` (lane 0 = scratch, lane 1..7 = keys 1..7), expecting
+ * a frame index that picks between `keybeam-w` (frame 0, neutral) and `keybeam-w-pg` (frame 1,
+ * perfect-flash) as the player hits notes:
+ *
+ *   { id = "keybeam1", ref = 501, images = { "keybeam-w", "keybeam-w-pg" } }
+ *
+ * Beatoraja's reference theme returns `0` when there's been no recent judgement on the lane and
+ * `1` (= "perfect flash") only when the latest verdict on that lane was PERFECT within a short
+ * window (~500 ms). Values are clamped against `images.length - 1` by the renderer, so 2-frame
+ * imagesets collapse to a binary "neutral" / "perfect" toggle. Imagesets with more frames could
+ * use the same ref to distinguish PERFECT vs GREAT, but neither default nor the surveyed
+ * community skins exercise that path today.
+ */
+export const JUDGE_LANE_REF_1P_BASE = 500;
+export const JUDGE_LANE_REF_2P_BASE = 510;
+/**
+ * Inclusive upper bound for either side's lane-judge ref range. Matches beatoraja's 9-key
+ * extension layout (lanes 0..9 ⇒ refs 500..509 / 510..519). Used by the adapter to short-circuit
+ * the per-lane resolver before the generic ref-table lookup.
+ */
+export const JUDGE_LANE_REF_RANGE = 10;
+
+/**
  * Op-code corresponding to a parsed engine judge string. Values come from `prop.lua`'s `_1p_*` /
  * `_2p_*` block. Returns `undefined` for unrecognized kinds (FAST / SLOW are surfaced through the
  * separate {@link BEATORAJA_OP.P1_JUDGE_EARLY} / `_LATE` ops).
@@ -692,6 +716,16 @@ export function judgeOpForKind(side: BeatorajaSide, kind: string): number | unde
     default:
       return undefined;
   }
+}
+
+/**
+ * Whether a parsed engine judge string is a PERFECT verdict. Drives the per-lane keybeam
+ * "perfect flash" gate (refs {@link JUDGE_LANE_REF_1P_BASE}..) — only PERFECT lights the
+ * highlighted frame; every other verdict (including GREAT) keeps the keybeam neutral.
+ * Case-insensitive — the engine emits upper-case strings but this stays defensive.
+ */
+export function isPerfectJudge(kind: string): boolean {
+  return kind.toUpperCase() === 'PERFECT';
 }
 
 // ─── Text references (`text[].ref`) ────────────────────────────────────────────────────────────────
