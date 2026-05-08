@@ -1194,6 +1194,13 @@ export class BeatorajaRuntimeAdapter {
         if (stamp === undefined) return 0;
         return Math.max(0, Math.floor(this.getNowMs() - stamp));
       }
+      // BMS `#TOTAL` header value (gauge total). Same code (368) as the select scene's
+      // chart-summary readout — ModernChic / GdbG_Skin author it on play too. Returns 0 when
+      // the chart didn't author the directive (legacy / minimal BMS).
+      case BEATORAJA_NUM.BMS_TOTAL: {
+        const total = this.chart?.metadata?.total;
+        return typeof total === 'number' && Number.isFinite(total) ? Math.floor(total) : 0;
+      }
       // Target / rival diff slots — no IR / DB layer, return 0 so the readout shows zero rather
       // than garbage. (Authors gate these behind `if[ir_loaded]` / similar so the zero is benign.)
       case BEATORAJA_NUM.DIFF_EXSCORE:

@@ -862,6 +862,12 @@ export const BEATORAJA_NUM = {
    * dims as the duration grows. Returns 0 before the first judgement.
    */
   JUDGE_1P_DURATION: 525,
+  /**
+   * Community-extended `total = 368` — the chart's `#TOTAL` header value (gauge total per
+   * BMS spec). Not in beatoraja's stock public prop.lua but ModernChic / GdbG_Skin both
+   * surface it through `value[]` ref 368. Sourced from `chart.metadata.total`.
+   */
+  BMS_TOTAL: 368,
 
   // ─── Time-based readouts (160-165, 1163-1164) ─────────────────────────────────────────────────
   /** prop.lua `nowbpm = 160` — current BPM (best effort: chart's canonical BPM). */

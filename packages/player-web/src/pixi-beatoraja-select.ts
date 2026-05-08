@@ -102,13 +102,6 @@ const FALLBACK_VISIBLE_ROW_COUNT = 13;
  */
 const SELECT_NUM_SONGS_IN_FOLDER = 300;
 
-/**
- * Ref 368 = BMS `#TOTAL` header value. ModernChic surfaces it as a chart-stats readout
- * (`info.lua` → "TOTAL値"). No symbolic name in our `BEATORAJA_NUM` enum — beatoraja's
- * documented prop.lua stops short of this code. Sourced from `chart.metadata.total`, which
- * holds the parsed `#TOTAL` value (gauge total per BMS spec; defaults vary).
- */
-const SELECT_NUM_BMS_TOTAL = 368;
 
 /**
  * Imageset ref 11 — the focused chart's keymode index. Skin authors order their `images[]`
@@ -705,7 +698,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // BMS `#TOTAL` value (gauge total per BMS spec). Returned as the integer floor — beatoraja's
     // value digits don't carry a fraction part for this readout. `undefined` when the chart
     // didn't author a TOTAL header (rare; older BMS files may omit it).
-    if (refOp === SELECT_NUM_BMS_TOTAL) {
+    if (refOp === BEATORAJA_NUM.BMS_TOTAL) {
       const total = song.chart.metadata.total;
       return typeof total === 'number' && Number.isFinite(total) ? Math.floor(total) : undefined;
     }
