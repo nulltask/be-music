@@ -256,9 +256,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.root.addChild(this.view.container);
     this.view.container.addChildAt(this.listLayer, this.view.songListLayerInsertIndex);
 
-    // New skin → re-parse the songlist (different skin may declare a different layout).
+    // New skin → re-parse the songlist (different skin may declare a different layout) and
+    // REBUILD the row visuals against the new visible-row count. Different skins author
+    // different `liston[]` lengths (default reference theme = 21, ModernChic = 17, GdbG_Skin
+    // = 11), so the row arrays must be rebuilt — without this, `refreshRowVisuals` walks the
+    // new `visibleRowCount` and indexes past the still-old `rowLabels[]`, throwing "Cannot set
+    // properties of undefined". `buildRowVisuals` tears down stale entries first so this is
+    // safe to call repeatedly.
     this.songList = parseBeatorajaSongList(opts.skin);
     this.applySongListGeometry();
+    this.buildRowVisuals(opts.fonts);
     this.refreshRowVisuals();
 
     this.lastFitWidth = 0;
