@@ -431,6 +431,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // shows fallback chrome).
       const difficultyOp = difficultyLevelOp(meta.difficulty);
       if (difficultyOp !== undefined) ops.add(difficultyOp);
+
+      // Judge rank op — `#RANK 0..4` lights up JUDGE_VERYHARD / HARD / NORMAL / EASY /
+      // VERYEASY. ModernChic / GdbG both gate the per-rank judgment-window labels on these.
+      // Charts without `#RANK` default to NORMAL — matches beatoraja's behavior of treating
+      // "missing rank" as the standard window.
+      ops.add(judgeRankOp(meta.rank));
     }
     return ops;
   }
@@ -1141,6 +1147,27 @@ function keymodeImagesetIndex(variant: '5' | '7' | '9' | '10' | '14' | undefined
       return 5;
     default:
       return 0;
+  }
+}
+
+/**
+ * BMS `#RANK` value (0..4) → matching `BEATORAJA_OP.JUDGE_*` code. Falls back to JUDGE_NORMAL
+ * (the standard 7K window) for unknown / missing values, matching beatoraja's own treatment of
+ * legacy charts that don't author the header.
+ */
+function judgeRankOp(rank: number | undefined): number {
+  switch (rank) {
+    case 0:
+      return BEATORAJA_OP.JUDGE_VERYHARD;
+    case 1:
+      return BEATORAJA_OP.JUDGE_HARD;
+    case 3:
+      return BEATORAJA_OP.JUDGE_EASY;
+    case 4:
+      return BEATORAJA_OP.JUDGE_VERYEASY;
+    case 2:
+    default:
+      return BEATORAJA_OP.JUDGE_NORMAL;
   }
 }
 

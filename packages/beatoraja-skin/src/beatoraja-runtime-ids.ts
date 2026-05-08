@@ -363,6 +363,16 @@ export const BEATORAJA_OP = {
   KEYSONG_24K: 1160,
   KEYSONG_24K_DP: 1161,
 
+  // ─── Chart judge-rank ops (SkinProperty `JUDGE_*`, codes 180-184) ─────────────────────────
+  // Set per-frame on the select scene based on the focused chart's `#RANK` header value
+  // (0=VERYHARD, 1=HARD, 2=NORMAL, 3=EASY, 4=VERYEASY). Default skin's "judge" image swap
+  // chrome (GdbG_Skin / ModernChic both gate per-rank judgment-window labels) gates on these.
+  JUDGE_VERYHARD: 180,
+  JUDGE_HARD: 181,
+  JUDGE_NORMAL: 182,
+  JUDGE_EASY: 183,
+  JUDGE_VERYEASY: 184,
+
   // ─── Chart trait ops (prop.lua `bgaoff = 40` ... `randomsequence = 179`) ──────────────────
   // Set based on chart content + user options. Skins use these to gate optional chrome
   // (e.g. show LN-specific tracks only on `OPTION_LN`).
