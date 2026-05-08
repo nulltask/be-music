@@ -811,6 +811,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         // eslint-disable-next-line no-console
         console.log('[beatoraja-select] replay slot click ignored', JSON.stringify({ act }));
         return;
+      case 210: // OPEN_IR_WEBSITE — IR ranking site for the focused chart
+        openIrWebsite(song);
+        return;
       default:
         // eslint-disable-next-line no-console
         console.log('[beatoraja-select] unhandled button act', JSON.stringify({ act }));
@@ -1241,6 +1244,25 @@ function safeResolveChartVariant(song: BrowserSongEntry): '5' | '7' | '9' | '10'
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Open the IR (Internet Ranking) website for the given chart in a new browser tab. Beatoraja
+ * users typically run an LR2IR-compatible service (`http://www.dream-pro.info/~lavalse/LR2IR/`)
+ * — the URL takes a chart MD5 as its query. We don't compute MD5 today, so this resolves to
+ * the IR site's index page so the user can search manually.
+ *
+ * Falls back to the LR2IR home page when no song is focused (clicked from a folder bar). The
+ * `_blank` target + `noopener,noreferrer` ensures the demo can't be navigated by the IR site.
+ */
+function openIrWebsite(_song: BrowserSongEntry | undefined): void {
+  if (typeof window === 'undefined') return;
+  // The standard LR2 / beatoraja IR. Future iteration: compute the chart's MD5 and append it
+  // as a query parameter so the IR landing page deep-links to the chart's leaderboard.
+  const url = 'http://www.dream-pro.info/~lavalse/LR2IR/search.cgi?mode=ranking';
+  // eslint-disable-next-line no-console
+  console.log('[beatoraja-select] opening IR website', JSON.stringify({ url }));
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 /**
