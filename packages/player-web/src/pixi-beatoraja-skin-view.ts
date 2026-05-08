@@ -421,6 +421,17 @@ export class BeatorajaPlaySkinView {
    * anchor entirely.
    */
   readonly noteLayerInsertIndex: number;
+  /**
+   * Index inside `container.children` where the host should splice in its song-list overlay (the
+   * select-scene's per-row labels). Beatoraja's select skins author a `{id = "songlist"}`
+   * destination as the z-anchor for the song-bar grid — chrome declared earlier paints behind
+   * the bars (background, frame), chrome declared after paints on top (cursor highlight, info
+   * panels). Same anchor convention as {@link noteLayerInsertIndex}, just for a different layer.
+   *
+   * Defaults to `container.children.length` (= top-of-stack) when the skin doesn't author the
+   * songlist anchor (most LR2 / play / decide / result themes).
+   */
+  readonly songListLayerInsertIndex: number;
   private readonly entries: ViewEntry[] = [];
   private readonly resolveRefValue: (refOp: number) => number;
   private readonly resolveTextContent: (refOp: number) => string | undefined;
@@ -667,8 +678,16 @@ export class BeatorajaPlaySkinView {
     const noteSection = normalizeBeatorajaNote(options.skin.note);
     const noteAnchorId: BeatorajaImageId | undefined =
       typeof noteSection.id === 'string' && noteSection.id.length > 0 ? noteSection.id : undefined;
+    // Songlist anchor — `{id = "songlist"}` in select-scene destination[]. Same z-anchor pattern
+    // as the notes anchor: the host's per-row label layer splices in at this index. Only the
+    // select scene's skins author it, so most other scenes' destinations carry no `songlist`
+    // entry and the anchor is a no-op there.
+    const SONG_LIST_ANCHOR_ID: BeatorajaImageId = 'songlist';
+    const layerAnchorIds = new Set<BeatorajaImageId>();
+    if (noteAnchorId !== undefined) layerAnchorIds.add(noteAnchorId);
+    layerAnchorIds.add(SONG_LIST_ANCHOR_ID);
     const rawDestinations: ReadonlyArray<unknown> = Array.isArray(options.skin.destination)
-      ? options.skin.destination.map((entry) => ensureNotesAnchorDst(entry, noteAnchorId))
+      ? options.skin.destination.map((entry) => ensureLayerAnchorDst(entry, layerAnchorIds))
       : [];
     const allDestinations: ReadonlyArray<unknown> = [...rawDestinations, ...expandedJudgeDestinations];
     const groups = normalizeBeatorajaDestinations(allDestinations);
@@ -688,10 +707,12 @@ export class BeatorajaPlaySkinView {
     // but is kept defensively for the (rare) case where merging emits judges out of order.
     groups.sort((a, b) => a.declarationOrder - b.declarationOrder);
 
-    // Walk the sorted destinations; capture the anchor's position so the host can splice in its
-    // note / marker layers at exactly that z-order. Skin destinations sorted BEFORE the anchor
-    // paint behind notes; ones AFTER paint in front (lanecover / hidden-cover / readouts).
+    // Walk the sorted destinations; capture each anchor's position so the host can splice in its
+    // note / marker / song-list layers at exactly that z-order. Skin destinations sorted BEFORE
+    // an anchor paint behind that layer; ones AFTER paint in front (lanecover / hidden-cover /
+    // chrome over the song bars).
     let noteAnchorIndex: number | undefined;
+    let songListAnchorIndex: number | undefined;
 
     for (const group of groups) {
       // Notes anchor: skip the sprite, record where in `container.children` the host should insert
@@ -699,6 +720,13 @@ export class BeatorajaPlaySkinView {
       // (uncommon in well-formed themes) are ignored.
       if (noteAnchorId !== undefined && group.id === noteAnchorId && noteAnchorIndex === undefined) {
         noteAnchorIndex = this.container.children.length;
+        continue;
+      }
+      // Songlist anchor — same idea, different layer. Tells the select scene where to splice its
+      // per-row labels overlay so it sits between the background chrome and the cursor / info
+      // panels in the skin's authored z-stack.
+      if (group.id === SONG_LIST_ANCHOR_ID && songListAnchorIndex === undefined) {
+        songListAnchorIndex = this.container.children.length;
         continue;
       }
       const image = imageById.get(group.id);
@@ -788,10 +816,12 @@ export class BeatorajaPlaySkinView {
       this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame, lastDisapearRatio: 1 });
     }
 
-    // Resolve the note-layer insert position. Anchor was captured during the destination loop;
-    // skins that omit the anchor (decide / select / result themes don't have notes) get the
-    // legacy "append at the end" behavior, which matches the previous gameplay layering.
+    // Resolve each layer-anchor's insert position. Anchors were captured during the destination
+    // loop; skins that omit one (e.g. select / decide / result themes don't have notes; play
+    // skins don't have songlist) get the legacy "append at the end" behavior for the missing
+    // anchor, which matches the previous layering.
     this.noteLayerInsertIndex = noteAnchorIndex ?? this.container.children.length;
+    this.songListLayerInsertIndex = songListAnchorIndex ?? this.container.children.length;
 
     // Per-skin construction summary. `JSON.stringify` so devtools shows the full payload as a
     // selectable string (vs the collapsible tree `console.log(obj)` produces) — easier to copy
@@ -804,7 +834,8 @@ export class BeatorajaPlaySkinView {
       { image: 0, value: 0, text: 0 } as Record<ViewEntry['kind'], number>,
     );
     const noteAnchorConsumed = noteAnchorIndex !== undefined ? 1 : 0;
-    const skipped = groups.length - this.entries.length - noteAnchorConsumed;
+    const songListAnchorConsumed = songListAnchorIndex !== undefined ? 1 : 0;
+    const skipped = groups.length - this.entries.length - noteAnchorConsumed - songListAnchorConsumed;
     // eslint-disable-next-line no-console
     console.log(
       '[beatoraja-view] skin view built',
@@ -816,6 +847,11 @@ export class BeatorajaPlaySkinView {
         text: { declared: textById.size, mounted: counts.text },
         skipped,
         noteAnchor: { id: noteAnchorId, index: this.noteLayerInsertIndex, found: noteAnchorIndex !== undefined },
+        songListAnchor: {
+          id: SONG_LIST_ANCHOR_ID,
+          index: this.songListLayerInsertIndex,
+          found: songListAnchorIndex !== undefined,
+        },
       }),
     );
     if (skipped > 0) {
@@ -823,6 +859,7 @@ export class BeatorajaPlaySkinView {
         .filter(
           (group) =>
             group.id !== noteAnchorId &&
+            group.id !== SONG_LIST_ANCHOR_ID &&
             !imageById.has(group.id) &&
             !valueById.has(group.id) &&
             !textById.has(group.id),
@@ -2270,17 +2307,20 @@ function computeDisapearVisibleRatio(
 }
 
 /**
- * Inject a sentinel `dst[]` keyframe into the notes anchor destination so it survives
+ * Inject a sentinel `dst[]` keyframe into the named anchor destination(s) so they survive
  * `normalizeBeatorajaDestinations` (which drops anything missing `dst[]`). Skin authors typically
- * write the anchor as `{id = "notes", offset = N}` with no `dst` field — the entry exists purely
- * to mark a z-order slot, not to render anything. Inflating with a 0-sized keyframe lets the
- * normalizer keep it; the view consumes the anchor and never builds a sprite for it.
+ * write anchors as `{id = "notes", offset = N}` or `{id = "songlist"}` with no `dst` field — the
+ * entry exists purely to mark a z-order slot, not to render anything. Inflating with a 0-sized
+ * keyframe lets the normalizer keep it; the view consumes the anchor and never builds a sprite
+ * for it.
  */
-function ensureNotesAnchorDst(entry: unknown, noteAnchorId: BeatorajaImageId | undefined): unknown {
-  if (noteAnchorId === undefined) return entry;
+function ensureLayerAnchorDst(entry: unknown, anchorIds: ReadonlySet<BeatorajaImageId>): unknown {
+  if (anchorIds.size === 0) return entry;
   if (entry === null || typeof entry !== 'object') return entry;
   const obj = entry as Record<string, unknown>;
-  if (obj.id !== noteAnchorId) return entry;
+  const id = obj.id;
+  if (typeof id !== 'string' && typeof id !== 'number') return entry;
+  if (!anchorIds.has(id)) return entry;
   if (Array.isArray(obj.dst) && obj.dst.length > 0) return entry;
   return { ...obj, dst: [{ time: 0, x: 0, y: 0, w: 0, h: 0 }] };
 }

@@ -163,8 +163,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Mount the song-list overlay INSIDE the skin's view container so it inherits the same
     // scale / position transform as the rest of the chrome. The labels live in skin-space
     // (skin.w × skin.h) and follow the skin's authored bar-list layout.
+    //
+    // Splice it at `view.songListLayerInsertIndex` — the z-anchor the skin authored as
+    // `{id = "songlist"}` inside `destination[]`. Chrome declared earlier in the destination
+    // list (background, frame) paints behind the labels; chrome declared after (cursor highlight,
+    // info panels, decorative overlays) paints on top. Skins that omit the anchor get the
+    // top-of-stack fallback (legacy behavior).
     this.listLayer.eventMode = 'static';
-    this.view.container.addChild(this.listLayer);
+    this.view.container.addChildAt(this.listLayer, this.view.songListLayerInsertIndex);
 
     this.songList = parseBeatorajaSongList(options.skin);
     this.applySongListGeometry();
@@ -244,10 +250,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     });
     // The old view's `container.destroy({children: false})` (inside `view.dispose()`) detaches
     // its children — listLayer was one of them, so it's now orphaned. Re-parent into the new
-    // view container, behind nothing else (skin chrome already rendered inside the view).
+    // view container at the new view's authored songlist anchor (different skins place it at
+    // different z-indices).
     if (this.listLayer.parent) this.listLayer.parent.removeChild(this.listLayer);
     this.root.addChild(this.view.container);
-    this.view.container.addChild(this.listLayer);
+    this.view.container.addChildAt(this.listLayer, this.view.songListLayerInsertIndex);
 
     // New skin → re-parse the songlist (different skin may declare a different layout).
     this.songList = parseBeatorajaSongList(opts.skin);
