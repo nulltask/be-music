@@ -391,6 +391,30 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (entry === undefined) return base;
 
     const ops = new Set(base);
+
+    // Scene-wide defaults — system state we've made available consistently from the moment the
+    // scene mounts. These are independent of the focused entry so they live outside the song /
+    // folder branches.
+    //
+    //   - `LOADED` (81): assets / library finished loading (we never enter this scene before
+    //     the chart bundle is decoded, so it's always true).
+    //   - `OFFLINE` (50): IR (online ranking) is unavailable. We have no IR integration today
+    //     so the OFFLINE branch always wins; chrome gated on ONLINE stays hidden.
+    //   - `REPLAY_OFF` (82): replay system is disabled. No replay capture / playback yet.
+    //   - `DISABLE_SAVE_SCORE` (60) / `NO_SAVE_CLEAR` (62): score DB is unavailable. Chrome
+    //     gated on the ENABLE_* / *_SAVE_CLEAR variants stays hidden until DB layer ships.
+    //   - `BGAON` (41): play-scene BGA enabled. The select scene's "BGA: ON / OFF" indicator
+    //     gates on this; we have no BGA-disable toggle, so it's permanently on.
+    //
+    // Without this batch the skin's chrome at the bottom of the screen (replay / IR badges,
+    // save-status indicators) sits on its idle / unknown state.
+    ops.add(BEATORAJA_OP.LOADED);
+    ops.add(BEATORAJA_OP.OFFLINE);
+    ops.add(BEATORAJA_OP.REPLAY_OFF);
+    ops.add(BEATORAJA_OP.DISABLE_SAVE_SCORE);
+    ops.add(BEATORAJA_OP.NO_SAVE_CLEAR);
+    ops.add(BEATORAJA_OP.BGA_ON);
+
     if (entry.kind === 'folder') {
       ops.add(BEATORAJA_OP.FOLDERBAR);
     } else {
@@ -437,6 +461,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // Charts without `#RANK` default to NORMAL — matches beatoraja's behavior of treating
       // "missing rank" as the standard window.
       ops.add(judgeRankOp(meta.rank));
+
+      // Clear-lamp default — without a score DB we have no record of past plays, so every
+      // song reports as `CLEAR_LAMP_NOPLAY` (100). Skins gate the small "lamp" graphic on the
+      // bar list on this op; in the meantime the user sees the "no play" indicator instead of
+      // a blank bar.
+      ops.add(BEATORAJA_OP.CLEAR_LAMP_NOPLAY);
     }
     return ops;
   }

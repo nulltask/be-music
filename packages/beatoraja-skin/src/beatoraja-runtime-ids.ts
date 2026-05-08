@@ -183,6 +183,28 @@ export const BEATORAJA_OP = {
   /** prop.lua `loaded = 81`. */
   LOADED: 81,
 
+  // ─── IR / save-state / replay ops (50, 51, 60-66, 82-84) ──────────────────────────────────
+  // SkinProperty: OFFLINE / ONLINE — IR (online ranking) connection state. We have no IR
+  // integration today so the select scene fires OFFLINE; chrome that gates on ONLINE stays
+  // hidden, OFFLINE-gated chrome shows.
+  OFFLINE: 50,
+  ONLINE: 51,
+  // Save-state ops — declare whether the DB will save this run's score / clear lamp. Without a
+  // score DB we permanently fire DISABLE_SAVE_SCORE / NO_SAVE_CLEAR; chrome that gates on the
+  // ENABLE_* / *_SAVE_CLEAR variants stays hidden.
+  DISABLE_SAVE_SCORE: 60,
+  ENABLE_SAVE_SCORE: 61,
+  NO_SAVE_CLEAR: 62,
+  EASY_SAVE_CLEAR: 63,
+  NORMAL_SAVE_CLEAR: 64,
+  HARD_SAVE_CLEAR: 65,
+  FULLCOMBO_SAVE_CLEAR: 66,
+  // Replay system state — we have no replay capture / playback today, so REPLAY_OFF fires
+  // permanently. Chrome that gates on REPLAY_RECORDING / REPLAY_PLAYING stays hidden.
+  REPLAY_OFF: 82,
+  REPLAY_RECORDING: 83,
+  REPLAY_PLAYING: 84,
+
   /** prop.lua `autoplayoff = 32` / `autoplayon = 33`. */
   AUTOPLAY_OFF: 32,
   AUTOPLAY_ON: 33,
