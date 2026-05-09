@@ -187,6 +187,32 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(2000);
   });
 
+  it('isLaneLnHeld flips on hold-lane-until-beat and clears on release-lane', () => {
+    // Drives modern-mode `lnBodyHeld` ↔ `lnBodyUnheld` sprite switching at draw time. The
+    // hold flag must:
+    //   - start false (no LN in flight)
+    //   - flip true on hold-lane-until-beat (player is actively pressing)
+    //   - flip false on release-lane (player let go) WITHOUT clearing the lnHold timer
+    //     (skins anchor taper-fade chrome on the timer)
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    expect(adapter.isLaneLnHeld('19')).toBe(false);
+    clock.advance(1000);
+    adapter.applyCommand({ kind: 'hold-lane-until-beat', channel: '19', beat: 64 });
+    expect(adapter.isLaneLnHeld('19')).toBe(true);
+    // Other lanes are unaffected.
+    expect(adapter.isLaneLnHeld('11')).toBe(false);
+    clock.advance(500);
+    adapter.applyCommand({ kind: 'release-lane', channel: '19' });
+    expect(adapter.isLaneLnHeld('19')).toBe(false);
+    // Timer keeps its stamp through release — taper-fade chrome anchors on it.
+    expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(1000);
+  });
+
   it('routes scratch (16 / 26) onto lane 0 → timer 100 (1P) / 110 (2P)', () => {
     // prop.lua `keyon_1p_scratch = 100`, `keyon_2p_scratch = 110`. Earlier the adapter mapped scratch
     // onto lane 8 → timer 108 (`keyon_1p_key8`), so scratch presses never lit the right beam.

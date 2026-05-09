@@ -107,7 +107,19 @@ export class BeatorajaNoteLayer {
     this.judgementYOverride = options.judgementY;
   }
 
-  update(frame: PlayerUiFramePayload, hiSpeed: number, activeOps: ReadonlySet<number>): void {
+  update(
+    frame: PlayerUiFramePayload,
+    hiSpeed: number,
+    activeOps: ReadonlySet<number>,
+    /**
+     * Live "is the player currently holding the LN on this lane?" lookup. Returns the runtime
+     * adapter's `isLaneLnHeld(channel)` so the LN body sprite can flip between the held /
+     * unheld variants beatoraja's modern-mode skins author. When omitted the layer always
+     * paints the held variant — matches the legacy-mode skin behavior where `lnBodyHeld`
+     * resolves to the same sprite as `lnBodyUnheld`.
+     */
+    isLaneLnHeld?: (channel: string) => boolean,
+  ): void {
     const rects = this.resolveLaneRects(activeOps);
     if (rects.length === 0) {
       this.releaseAll();
@@ -170,7 +182,8 @@ export class BeatorajaNoteLayer {
         // `note.endBeat`; this is purely a visual cap so the body stops growing once it has
         // reached the line.
         const yStartClipped = Math.min(y, judgementY);
-        const r = this.paintLongNote(usedG, usedS, usedT, rect, lane, yEnd, yStartClipped);
+        const held = isLaneLnHeld !== undefined ? isLaneLnHeld(note.channel) : true;
+        const r = this.paintLongNote(usedG, usedS, usedT, rect, lane, yEnd, yStartClipped, held);
         usedG = r.g;
         usedS = r.s;
         usedT = r.t;
@@ -334,17 +347,31 @@ export class BeatorajaNoteLayer {
     lane: number,
     yEnd: number,
     yStart: number,
+    /**
+     * `true` when the player is actively holding this LN's lane (the runtime adapter's
+     * `isLaneLnHeld` returned true for the note's channel). Drives held-vs-unheld body
+     * sprite switching:
+     *
+     *   - `lnBodyHeld`   → painted while the player is holding (matches beatoraja's
+     *     `lns[2]` slot). Modern-mode authoring uses this for the "active" variant.
+     *   - `lnBodyUnheld` → painted while the player is NOT holding (matches `lns[3]`).
+     *     Modern-mode "neutral" body shown before / after the press window.
+     *
+     * Legacy-mode skins resolve both slots to the same sprite, so the held flag has no
+     * visible effect there — preserves the prior behavior on the 3 reference skins.
+     */
+    held: boolean,
   ): { g: number; s: number; t: number } {
     const startCrop = this.resolveLaneSprite(this.noteSection.lnstart[lane]);
     const endCrop = this.resolveLaneSprite(this.noteSection.lnend[lane]);
-    // Use the resolved `lnBodyHeld` slot (= beatoraja's lns[2]) instead of the raw `lnbody`
-    // field. In legacy mode (the only mode our 3 sample skins use today) `lnBodyHeld === lnbody`,
-    // so the visual is unchanged. In modern mode (where `lnbodyActive` is authored) the slot
-    // resolves to `lnbodyActive` instead — community 9K skins that follow the new naming
-    // convention now paint the held variant correctly. Held-vs-unheld switching at draw time is
-    // a follow-up that needs hold-state from the engine adapter; for now we always paint the
-    // held variant, matching beatoraja's typical visual when an LN is being played correctly.
-    const bodyCrop = this.resolveLaneSprite(this.noteSection.lnBodyHeld[lane]);
+    // Pick the held / unheld body slot based on the live press state. Falls back to the
+    // OTHER slot when the chosen one is empty — happens on legacy-mode skins where only
+    // `lnBodyHeld` is populated (`lnBodyUnheld === []` after parse), and we'd rather
+    // paint the held sprite than nothing.
+    const primaryBodyId = held ? this.noteSection.lnBodyHeld[lane] : this.noteSection.lnBodyUnheld[lane];
+    const fallbackBodyId = held ? this.noteSection.lnBodyUnheld[lane] : this.noteSection.lnBodyHeld[lane];
+    const bodyId = primaryBodyId !== undefined && primaryBodyId.length > 0 ? primaryBodyId : fallbackBodyId;
+    const bodyCrop = bodyId !== undefined ? this.resolveLaneSprite(bodyId) : undefined;
     if (startCrop === undefined || endCrop === undefined || bodyCrop === undefined) {
       // Fall back to colored rectangles when any of the LN sprite slots is missing.
       const color = this.fallbackColorForLane(lane);

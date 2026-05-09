@@ -607,7 +607,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
           },
     );
     if (this.currentFrame) {
-      this.noteLayer.update(this.currentFrame, this.hiSpeed, ctx.activeOps);
+      this.noteLayer.update(this.currentFrame, this.hiSpeed, ctx.activeOps, (channel) =>
+        this.adapter.isLaneLnHeld(channel),
+      );
       // Marker layer scrolls with the same hispeed math as notes, anchored to the same lane
       // bounds (the active dst block resolves to the lane top + judgement Y). When no lane
       // matched, fall back to skin-canvas defaults so any markers still render at sane Ys.

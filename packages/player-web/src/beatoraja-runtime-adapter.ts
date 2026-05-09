@@ -198,6 +198,16 @@ export class BeatorajaRuntimeAdapter {
     2: createEmptyLaneJudgeRing(),
   };
   private poorBgaActive = false;
+  /**
+   * Per-lane "is the player currently holding this LN?" set, keyed by engine `channel` string
+   * (e.g. `'11'`, `'26'`). Populated on `hold-lane-until-beat`, cleared on `release-lane`. The
+   * note layer reads this via {@link isLaneLnHeld} every frame to swap between the held / unheld
+   * LN body sprite slots that beatoraja's modern-mode `lnbody` + `lnbodyActive` pair
+   * declares. Distinct from the `lnHoldTimerId` per-lane timer which is "this LN started" —
+   * the timer keeps its stamp through release for taper-fade chrome, but this set tracks the
+   * live press state.
+   */
+  private readonly lnHoldHeldByChannel = new Set<string>();
   private lastHiSpeed = 1;
   /**
    * Player's lanecover position in `[0, 1]`. `0` = cover off (slider at home, no obscuring),
@@ -690,6 +700,14 @@ export class BeatorajaRuntimeAdapter {
         // Release: stamp KEY_OFF, deactivate KEY_ON. Symmetric to press-lane.
         this.startLaneKeyOffTimer(command.channel);
         this.deactivateLaneKeyOnTimer(command.channel);
+        // Clear the LN-hold flag for this lane so the body sprite flips back to the unheld
+        // variant (drives `lnBodyHeld` ↔ `lnBodyUnheld` switching at draw time). Note we DON'T
+        // deactivate the LN-hold timer here — beatoraja's `TIMER_LN_HOLD_*P_BASE` is supposed
+        // to keep its `started_at` for the duration of the LN even after release (skins
+        // anchor a "hold ribbon" sprite onto it that taper-fades). The held flag is the live
+        // "is the player currently pressing" signal; the timer is the "this LN is in flight"
+        // signal. They diverge when the player releases mid-LN.
+        this.lnHoldHeldByChannel.delete(command.channel);
         break;
       case 'flash-lane':
         // `flash-lane` is the engine's "key was pressed" signal. It fires for every input
@@ -705,6 +723,10 @@ export class BeatorajaRuntimeAdapter {
         break;
       case 'hold-lane-until-beat':
         this.startLaneLnHoldTimer(command.channel);
+        // Mark the lane as actively held so the LN body sprite swaps to the held variant
+        // (`note.lnBodyHeld` / `note.hcnBodyHeld`) for the duration. Cleared on
+        // `release-lane`.
+        this.lnHoldHeldByChannel.add(command.channel);
         break;
       case 'trigger-poor-bga':
         this.poorBgaActive = true;
@@ -1119,6 +1141,20 @@ export class BeatorajaRuntimeAdapter {
   resolveGaugeType(): number {
     const gauge = this.frame?.summary.gauge;
     return beatorajaGaugeModeFromString(gauge?.type);
+  }
+
+  /**
+   * Live "is the player currently holding the LN on this lane?" lookup. The note layer reads
+   * this every frame to flip the LN body sprite between `note.lnBodyHeld` (held) and
+   * `note.lnBodyUnheld` (unheld) variants — modern-mode skins (community 9K skins, future
+   * default play skins) author distinct sprites per state, and beatoraja's renderer paints
+   * the matching one. Legacy-mode skins resolve `lnBodyHeld === lnBodyUnheld` so this lookup
+   * has no visual effect for them.
+   *
+   * Returns `false` when the channel isn't held OR isn't currently in flight as an LN.
+   */
+  isLaneLnHeld(channel: string): boolean {
+    return this.lnHoldHeldByChannel.has(channel);
   }
 
   /**
