@@ -702,4 +702,48 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(result.value).toEqual({ ok: false });
     expect(invoked).toBe(false);
   });
+
+  it('places a placeholder in the cache before running a module body so circular requires terminate (audit 3.11)', () => {
+    // Beatoraja's PackageLib stores a sentinel in `package.loaded[name]` before executing
+    // the module body so that re-entrant `require()` calls during execution see the sentinel
+    // (a placeholder table) rather than re-entering the loader and infinite-recursing. We
+    // mirror that contract: cache an empty table BEFORE running the chunk; the chunk's return
+    // value replaces the placeholder afterwards.
+    //
+    // a → require b → require a → see placeholder (empty {}) → return → continue a's body.
+    const moduleA = enc(
+      [
+        'local a = {}',
+        'a.name = "a"',
+        'a.b = require("modb")',
+        'return a',
+      ].join('\n'),
+    );
+    const moduleB = enc(
+      [
+        'local b = {}',
+        'b.name = "b"',
+        // Cyclic require — receives the placeholder table for `moda` (empty at this point).
+        'b.a_ref = require("moda")',
+        'return b',
+      ].join('\n'),
+    );
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local moda = require("moda")',
+          'return { aname = moda.name, bname = moda.b.name }',
+        ].join('\n'),
+      ),
+      modules: [
+        { name: 'moda', source: moduleA },
+        { name: 'modb', source: moduleB },
+      ],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    // a runs first, b runs during a's body (sees placeholder for a), a finishes. By the time
+    // we read moda.name and moda.b.name they're populated; the cycle returned the placeholder
+    // (empty table at that moment) and didn't infinite-loop.
+    expect(result.value).toEqual({ aname: 'a', bname: 'b' });
+  });
 });

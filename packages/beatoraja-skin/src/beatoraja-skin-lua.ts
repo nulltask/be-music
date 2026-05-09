@@ -17,6 +17,7 @@
 // library, then we nil-out `package` / `io` / `os` / `debug` / `coroutine` from `_G` before the skin script runs.
 // The reference beatoraja themes only use `base` / `table` / `string` / `math` so the strip is non-disruptive.
 
+import { normalizePath } from '@be-music/utils/core';
 import { lauxlib, lua, lualib, to_luastring } from 'fengari-web';
 import type { lua_State, LuaCFunction } from 'fengari-web';
 
@@ -647,7 +648,12 @@ function setupCustomRequire(
       lua_pop(state, 2); // pop nil + sources table
       // Unknown module — return an empty table stub. Rare in well-formed skins; mostly happens when an
       // author imports an experimental utility that didn't ship in the bundle. Cache the stub so all
-      // `require()` calls for the same name return the same table.
+      // `require()` calls for the same name return the same table. We log a warning so the host can
+      // surface "missing module" diagnostics without crashing the eval — beatoraja itself raises
+      // `module 'X' not found` (audit 3.12), but a hard throw breaks pcall'd discovery patterns
+      // (`if pcall(require, "optional") then ... end`) that some skins use to gate experimental
+      // features. The empty-stub-with-warning compromise keeps both paths working.
+      console.warn(`[beatoraja-lua] require("${name}") -> stub (module not found, returning empty table)`);
       lua_createtable(state, 0, 0);
       lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
       lua_pushvalue(state, -2); // duplicate stub
@@ -659,6 +665,20 @@ function setupCustomRequire(
     const sourceBytes = readBytesFromTop(state);
     lua_pop(state, 2); // pop string + sources table
     logRequire(name, 'module');
+
+    // Cycle-detection sentinel (audit 3.11). Beatoraja's PackageLib stores a placeholder in
+    // `package.loaded[name]` BEFORE running the module body so that re-entrant `require()`
+    // calls during execution see a value (the placeholder) rather than re-entering the loader
+    // and infinite-recursing. We do the same: cache an empty table at this name now; replace
+    // it with the real return value once the chunk runs. Cyclic skins observe the placeholder
+    // table on the second `require` — fields populated AFTER the cycle-back resolve too,
+    // matching beatoraja's circular-import semantics.
+    lua_createtable(state, 0, 0);
+    lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
+    lua_pushvalue(state, -2); // duplicate placeholder above cache table
+    lua_setfield(state, -2, to_luastring(name));
+    lua_pop(state, 1); // pop cache table; placeholder still on top under the byte source we'll load
+    lua_pop(state, 1); // pop the placeholder — we no longer need it on the stack
 
     const loadStatus = luaL_loadbufferx(
       state,
@@ -674,7 +694,10 @@ function setupCustomRequire(
     }
     lua_call(state, 0, 1);
 
-    // Cache the result and leave a copy on top to return.
+    // Replace the placeholder cache entry with the real return value; leave a copy on top to
+    // return. If the chunk happens to return the placeholder table itself (e.g. modules that
+    // build up their export by mutating the table that re-entrant `require` calls observed),
+    // the assignment is a no-op.
     lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_CACHE));
     lua_pushvalue(state, -2); // duplicate result above cache table
     lua_setfield(state, -2, to_luastring(name));
@@ -717,7 +740,14 @@ function setupDofile(
       luaL_error(state, to_luastring("bad argument #1 to 'dofile' (string expected)"));
       return 0;
     }
-    const path = lua_tojsstring(state, 1);
+    const rawPath = lua_tojsstring(state, 1);
+    // Normalize the cache key (audit 3.10) so `dofile("Play/x.lua")` and
+    // `dofile("./Play/x.lua")` hit the same cache entry. Without this, equivalent paths
+    // re-execute the chunk each time — module-level state (e.g. one-shot init flags) gets
+    // re-run, breaking module identity. Beatoraja's `dofile` keys against the resolved
+    // `Path` for the same reason; `normalizePath` produces the equivalent canonical form
+    // by collapsing `.` / `..` segments and converting `\` to `/`.
+    const path = normalizePath(rawPath);
 
     // Cache hit?
     lua_getfield(state, LUA_REGISTRYINDEX, to_luastring(REGISTRY_DOFILE_CACHE));
@@ -1095,8 +1125,10 @@ function pushMainStateStub(L: lua_State, owner: LuaRuntimeOwner, exposeMainState
     return ctx.eventExec?.(id, args);
   });
 
-  // Boolean queries the renderer skins use to gate visibility.
-  setBooleanAccessor('is_event_active', () => false);
+  // (audit 3.13) `is_event_active` was a phantom binding — never present in beatoraja's
+  // `MainStateAccessor`. Skins that wrote against it would behave one way in our runtime
+  // (always false) and crash with `attempt to call a nil value` in real beatoraja, encouraging
+  // a non-portable surface. Drop the binding so portability tests catch the issue early.
 
   // Constant: the "timer not started" sentinel beatoraja uses (`Long.MIN_VALUE` on the Java side).
   lua_pushnumber(L, BEATORAJA_LUA_TIMER_OFF_VALUE);
@@ -1114,7 +1146,9 @@ function pushMainStateStub(L: lua_State, owner: LuaRuntimeOwner, exposeMainState
   setNumberAccessor('volume_key', (ctx) => ctx.volumeKey?.());
   setBooleanCommand('set_volume_key', (ctx, state) => ctx.setVolumeKey?.(lua_tonumber(state, 1)));
   setNumberAccessor('volume_bg', (ctx) => ctx.volumeBg?.());
-  setNumberAccessor('volume_bgm', (ctx) => ctx.volumeBg?.());
+  // (audit 3.13) `volume_bgm` was a phantom alias — beatoraja's `MainStateAccessor` only
+  // exposes `volume_bg`. The alias encouraged skin authors to write against a non-portable
+  // surface that would crash in real beatoraja. Removed.
   setBooleanCommand('set_volume_bg', (ctx, state) => ctx.setVolumeBg?.(lua_tonumber(state, 1)));
   setNumberAccessor('judge', (ctx, state) => ctx.judge?.(numberArg(state)));
   setNumberAccessor('gauge', (ctx) => ctx.gauge?.());
