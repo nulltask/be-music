@@ -311,6 +311,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.view = new BeatorajaPlaySkinView({
       skin: options.skin,
       textures: options.textures,
+      // Skin-config-level op set drives inner if-gated keyframe alternative resolution inside
+      // `normalizeBeatorajaDestinations`. Select-format skins (e.g. ModernChic Select) author
+      // layout-variant rects per skin option — without threading this set the resolver picks
+      // the catch-all fallback regardless of the user's chosen layout. Routed through
+      // `baseOps()` so a `replaceSkin` mid-session reuses the same cached set the per-frame
+      // op-resolution path uses.
+      skinConfigOps: this.baseOps(),
       // Text content tracks the highlighted song. The skin's title / artist / genre text destinations
       // therefore reflect the live cursor, matching beatoraja's own select-screen behavior.
       resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
@@ -421,6 +428,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.view = new BeatorajaPlaySkinView({
       skin: opts.skin,
       textures: opts.textures,
+      // `cachedBaseOps` was nulled above — `getCachedBaseOps` rebuilds against the NEW
+      // `skinConfig.option` map so layout-variant dst alts re-resolve to the user's
+      // (possibly changed) option picks for the swapped skin.
+      skinConfigOps: this.baseOps(),
       resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
       resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
       resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
