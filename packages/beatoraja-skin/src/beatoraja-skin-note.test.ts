@@ -91,7 +91,17 @@ describe('normalizeBeatorajaNote', () => {
   it('falls back to [100, 100] when expansionrate is missing or malformed', () => {
     expect(normalizeBeatorajaNote({}).expansionRate).toEqual({ x: 100, y: 100 });
     expect(normalizeBeatorajaNote({ expansionrate: 'invalid' }).expansionRate).toEqual({ x: 100, y: 100 });
-    expect(normalizeBeatorajaNote({ expansionrate: [Number.NaN, -50] }).expansionRate).toEqual({ x: 100, y: 1 });
+    // Audit 3.2: negative values clamp to 0 (the legitimate floor) — earlier the clamp
+    // pinned to 1, suppressing the "hide notes entirely" intent of `expansionrate = [0, 0]`.
+    expect(normalizeBeatorajaNote({ expansionrate: [Number.NaN, -50] }).expansionRate).toEqual({ x: 100, y: 0 });
+  });
+
+  it('preserves explicit zero expansionrate (= "hide notes entirely") (audit 3.2)', () => {
+    // Authors of debug / preview skins occasionally set `expansionrate = [0, 0]` to suppress
+    // note rendering while keeping the rest of the chrome. The previous clamp lifted 0 to 1
+    // (≈ 1% scale, almost invisible but not actually hidden); the renderer's "skip when scale
+    // = 0" fast path was unreachable.
+    expect(normalizeBeatorajaNote({ expansionrate: [0, 0] }).expansionRate).toEqual({ x: 0, y: 0 });
   });
 
   it('mirrors a single-element expansionrate to both axes', () => {

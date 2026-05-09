@@ -141,6 +141,19 @@ export interface BeatorajaDestinationGroup {
    */
   stretch: number;
   /**
+   * Custom mouse-hit rectangle (audit 3.8). Beatoraja's `JSONSkinLoader.setDestination` reads
+   * `dst.mouseRect` and forwards to `obj.setMouseRect(int)` — when authored, the renderer's
+   * pointer hit-test uses the indexed rect from a `mouseRect[]` table on the skin instead of
+   * the destination's natural bounding box. Used by clickable result-screen buttons whose
+   * visible art is smaller than their click area (or vice versa). `-1` (default) means "use
+   * the natural bounds" — same convention beatoraja uses.
+   *
+   * Today our renderer doesn't honor mouse hit-testing on destinations (clickable wiring
+   * lives on `image.act` / `imageset.act`). The field is preserved for forward-compat so
+   * later renderer extensions don't need to re-parse the JSON.
+   */
+  mouseRect: number;
+  /**
    * Author-given declaration order. Two destinations targeting the same image but emitted at different points in
    * the source file render in source order; this field preserves that.
    */
@@ -195,6 +208,7 @@ function normalizeOne(entry: NormalizedElement, declarationOrder: number): Beato
     // record, sometimes on individual keyframes; we read whichever the author chose, walking the
     // keyframes for the LAST non-default value.
     stretch: pickStretchMode(f, rawDst),
+    mouseRect: numberField(f, 'mouseRect', -1),
     declarationOrder,
   };
 }

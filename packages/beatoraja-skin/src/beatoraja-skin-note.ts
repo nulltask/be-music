@@ -262,7 +262,12 @@ function parseExpansionRate(input: unknown): { x: number; y: number } {
 
 function clampPercent(value: unknown, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
-  if (value < 1) return 1;
+  // Audit 3.2 — allow `0` so authors can set `expansionrate = [0, 0]` to hide notes entirely
+  // (a "preview without notes" debug mode some skins use). The previous `value < 1 → 1`
+  // clamp silently lifted 0 to 1, which made an authored-zero scale render at 1% (= almost
+  // invisible but not actually invisible). Negative values still clamp up to 0 since they're
+  // never meaningful here.
+  if (value < 0) return 0;
   if (value > 1000) return 1000;
   return value;
 }
