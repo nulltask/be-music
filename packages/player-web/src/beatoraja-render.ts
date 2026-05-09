@@ -96,6 +96,17 @@ export interface BeatorajaRenderContext {
    * defaults to no shift. Optional — hosts that don't expose offset adjustment can omit it.
    */
   resolveOffset?: (offsetId: number) => Readonly<BeatorajaSkinOffsetValue> | undefined;
+  /**
+   * Optional audio hooks for `main_state.audio_play / audio_loop / audio_stop` calls fired
+   * from BooleanProperty / TimerProperty / customEvent action closures at draw time.
+   * ModernChic's `Root/customsound.lua` exposes functions like `m.fcSound` that watch a
+   * fullcombo timer and call `audio_play` when it flips on; without these forwarded into the
+   * per-frame Lua runtime context, those callbacks see a `nil` `audio_play` and either crash
+   * or silently no-op. Hosts that don't want SE leave them undefined.
+   */
+  audioPlay?: (path: string, volume: number) => boolean | undefined;
+  audioLoop?: (path: string, volume: number) => boolean | undefined;
+  audioStop?: (path: string) => boolean | undefined;
 }
 
 /**

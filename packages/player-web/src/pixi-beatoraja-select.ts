@@ -39,6 +39,7 @@ import {
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
+import type { BeatorajaSkinAudio } from './beatoraja-skin-audio.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
 import { computeBeatorajaChartDensity, type ChartDensity } from './beatoraja-chart-density.ts';
 import { computeBeatorajaChartTotalSeconds } from './beatoraja-chart-duration.ts';
@@ -83,6 +84,8 @@ export interface PixiBeatorajaSelectSceneOptions {
    * aliases the scene's mutator state.
    */
   onSkinConfigChange?: (config: BeatorajaSkinConfig) => void;
+  /** Optional audio backend for `main_state.audio_play / loop / stop` Lua calls. */
+  skinAudio?: BeatorajaSkinAudio;
 }
 
 /**
@@ -468,10 +471,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // scene mounts, blacking out the entire view. The destination renderer hardcodes the
     // `timer=0` (scene-start) path to use 0 elapsed already, so passing `undefined` for
     // anything else is the correct behaviour.
+    const skinAudio = this.options.skinAudio;
     this.view.update({
       activeOps: this.computeActiveOps(),
       getTimerStart: () => undefined,
       nowMs: elapsed,
+      audioPlay: skinAudio === undefined ? undefined : (path, vol) => skinAudio.play(path, vol),
+      audioLoop: skinAudio === undefined ? undefined : (path, vol) => skinAudio.loop(path, vol),
+      audioStop: skinAudio === undefined ? undefined : (path) => skinAudio.stop(path),
     });
   }
 

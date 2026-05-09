@@ -47,6 +47,7 @@ import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-
 import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
+import type { BeatorajaSkinAudio } from './beatoraja-skin-audio.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
 import type { BrowserSongEntry } from './types.ts';
 
@@ -105,6 +106,8 @@ export interface PixiBeatorajaResultSceneOptions {
   };
   /** Fired exactly once when the user dismisses the result (Enter / Space / Escape). */
   onContinue?: () => void;
+  /** Optional audio backend for `main_state.audio_play / loop / stop` Lua calls. */
+  skinAudio?: BeatorajaSkinAudio;
 }
 
 const STARTINPUT_DELAY_MS = 500;
@@ -282,6 +285,16 @@ export class PixiBeatorajaResultScene implements PixiScene {
       // timers.
       getTimerStart: (timerId) => this.timerStartedAt.get(timerId),
       nowMs: elapsed,
+      audioPlay:
+        this.options.skinAudio === undefined
+          ? undefined
+          : (path, vol) => this.options.skinAudio!.play(path, vol),
+      audioLoop:
+        this.options.skinAudio === undefined
+          ? undefined
+          : (path, vol) => this.options.skinAudio!.loop(path, vol),
+      audioStop:
+        this.options.skinAudio === undefined ? undefined : (path) => this.options.skinAudio!.stop(path),
     });
   }
 

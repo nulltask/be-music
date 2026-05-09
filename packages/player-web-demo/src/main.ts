@@ -37,6 +37,7 @@ import {
   PixiBeatorajaDecideScene,
   PixiBeatorajaGameplayView,
   PixiBeatorajaResultScene,
+  BeatorajaSkinAudioPlayer,
   PixiBeatorajaSelectScene,
   isBeatorajaSkinIndicator,
   loadBeatorajaFonts,
@@ -681,6 +682,14 @@ class PlayerWebDemoApp {
    * decoding happens lazily inside each scene's audio context.
    */
   private beatorajaThemeBgm: BeatorajaThemeBgm = {};
+  /**
+   * Audio player driving `main_state.audio_play / loop / stop` from Lua. One per theme bundle —
+   * the path → AudioBuffer cache is keyed against the bundle's file map, so a fresh theme drop
+   * disposes the old player and creates a new one. Without this wired in, the Lua API surface
+   * exists but every call returns false (silent), so ModernChic's panel SE were dead even though
+   * the eval no longer crashed.
+   */
+  private beatorajaSkinAudio: BeatorajaSkinAudioPlayer | undefined;
   /**
    * Loop-playable BGM bytes for the song-select scene (`LR2files/Bgm/<theme>/select.wav` from the dropped theme).
    * Forwarded to `PixiSongSelectView` via the constructor option on first mount and via `setSelectBgm` on subsequent
@@ -1469,6 +1478,11 @@ class PlayerWebDemoApp {
       // underlying Pixi textures stay allocated until page reload, but they're unreachable from
       // the renderer once the new theme replaces `beatorajaTheme`.
       this.beatorajaTextureCachesByEntry.clear();
+      // Tear down the previous theme's audio player — its file-map cache references bytes from
+      // the old bundle that we're about to replace. A fresh player gets created below tied to
+      // the new bundle.
+      this.beatorajaSkinAudio?.dispose();
+      this.beatorajaSkinAudio = new BeatorajaSkinAudioPlayer({ files: bundle.files });
       this.beatorajaTheme = bundle;
       // Drop overrides from the previous theme — entryPaths from the old bundle will no longer
       // resolve against the new entries. Without this `pickBeatorajaSkinEntryWithOverride`'s
@@ -1722,6 +1736,7 @@ class PlayerWebDemoApp {
       variant,
       chart: prep.chart,
       audio: prep.audio,
+      skinAudio: this.beatorajaSkinAudio,
       mode: (overrides.autoPlay ?? this.guiState.autoPlay) ? 'auto' : 'manual',
       bgaTextures: prep.bga.textures,
       bgaCues: prep.bga.cues,
@@ -1915,6 +1930,7 @@ class PlayerWebDemoApp {
       textures,
       fonts,
       skinConfig: config,
+      skinAudio: this.beatorajaSkinAudio,
       songs: this.collection.songs,
       // Restore the last cursor so coming back from gameplay lands on the same song.
       initialIndex: this.beatorajaSelectIndex,
@@ -2247,6 +2263,7 @@ class PlayerWebDemoApp {
       song,
       chartImages,
       bgmBytes: this.beatorajaThemeBgm.decide,
+      skinAudio: this.beatorajaSkinAudio,
       onContinue: () =>
         advance(() => {
           // Drop the decide scene first so the gameplay scene gets a clean stage. `playSongBeatoraja`
@@ -2378,6 +2395,7 @@ class PlayerWebDemoApp {
       bgmBytes:
         ((summary.gauge?.cleared ?? false) ? this.beatorajaThemeBgm.clear : this.beatorajaThemeBgm.fail) ??
         this.beatorajaThemeBgm.result,
+      skinAudio: this.beatorajaSkinAudio,
       onContinue: () => {
         if (dismissed) return;
         dismissed = true;
@@ -2620,8 +2638,17 @@ class PlayerWebDemoApp {
         ops.add(BEATORAJA_OP.DIFFICULTY_UNDEFINED);
         break;
     }
+    const audio = this.beatorajaSkinAudio;
     return {
       option: (id) => ops.has(id),
+      // Wire `main_state.audio_play / audio_loop / audio_stop` to the theme-bundle audio
+      // player. ModernChic's `Root/customsound.lua` calls these from every panel-toggle /
+      // song-change / confirm — without them the menu UI feels dead even though the eval
+      // doesn't crash. Each callback returns false when the player isn't constructed (no
+      // theme bundle yet) so the Lua side gracefully no-ops.
+      audioPlay: audio === undefined ? undefined : (path, vol) => audio.play(path, vol),
+      audioLoop: audio === undefined ? undefined : (path, vol) => audio.loop(path, vol),
+      audioStop: audio === undefined ? undefined : (path) => audio.stop(path),
     };
   }
 

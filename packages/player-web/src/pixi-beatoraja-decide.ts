@@ -39,6 +39,7 @@ import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts'
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
+import type { BeatorajaSkinAudio } from './beatoraja-skin-audio.ts';
 import type { BrowserSongEntry } from './types.ts';
 
 export interface PixiBeatorajaDecideSceneOptions {
@@ -87,6 +88,13 @@ export interface PixiBeatorajaDecideSceneOptions {
    * @default 1500
    */
   autoAdvanceMs?: number;
+  /**
+   * Optional audio backend for `main_state.audio_play / loop / stop` calls fired by Lua-driven
+   * skins (ModernChic's `Root/customsound.lua` is the heavy user — every panel toggle / song
+   * change calls through it). Forwarded into the per-frame render context so BooleanProperty
+   * closures evaluated at draw time can fire SE. Hosts that don't want SE just leave this off.
+   */
+  skinAudio?: BeatorajaSkinAudio;
   /**
    * Fired exactly once when the scene transitions out toward gameplay — either the auto-advance
    * timer fired or the user confirmed with Enter / Space. The host typically chains into the
@@ -310,6 +318,7 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     if (this.disposed) return;
     this.fitToStage();
     const elapsed = performance.now() - this.startMs;
+    const skinAudio = this.options.skinAudio;
     this.view.update({
       activeOps: this.computeActiveOps(),
       // Pass through the raw value so unfired timers return `undefined` and the destination
@@ -320,6 +329,9 @@ export class PixiBeatorajaDecideScene implements PixiScene {
       // for the auto-advance / user-dismiss path to stamp the timer.
       getTimerStart: (timerId) => this.timerStartedAt.get(timerId),
       nowMs: elapsed,
+      audioPlay: skinAudio === undefined ? undefined : (path, vol) => skinAudio.play(path, vol),
+      audioLoop: skinAudio === undefined ? undefined : (path, vol) => skinAudio.loop(path, vol),
+      audioStop: skinAudio === undefined ? undefined : (path) => skinAudio.stop(path),
     });
 
     // Auto-advance hand-off. Fired once per scene; subsequent ticks no-op via `advanced`.

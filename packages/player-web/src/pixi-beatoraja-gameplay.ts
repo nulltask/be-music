@@ -37,6 +37,7 @@ import {
   normalizeBeatorajaNote,
   normalizeBeatorajaSliders,
 } from '@be-music/beatoraja-skin';
+import type { BeatorajaSkinAudio } from './beatoraja-skin-audio.ts';
 import type { BeatorajaPlayableVariant } from './beatoraja-theme.ts';
 import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
 import { BeatorajaMarkerLayer, BEATORAJA_MARKER_PIXELS_PER_BEAT } from './pixi-beatoraja-markers.ts';
@@ -135,6 +136,12 @@ export interface PixiBeatorajaGameplayViewOptions {
   ) => void;
   /** Called if the engine rejects (interrupt or fatal) — the host can branch on the error type. */
   onError?: (error: unknown) => void;
+  /**
+   * Optional audio backend for `main_state.audio_play / loop / stop` Lua calls. Distinct from
+   * {@link audio} — that field carries the engine's chart-audio context (BGM mixing, key
+   * sounds), this carries the SE backend the skin's Lua scripts call into.
+   */
+  skinAudio?: BeatorajaSkinAudio;
 }
 
 export class PixiBeatorajaGameplayView implements PixiScene {
@@ -574,7 +581,17 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       }
     }
     const ctx = this.adapter.getRenderContext();
-    this.view.update(ctx);
+    const skinAudio = this.options.skinAudio;
+    this.view.update(
+      skinAudio === undefined
+        ? ctx
+        : {
+            ...ctx,
+            audioPlay: (path, vol) => skinAudio.play(path, vol),
+            audioLoop: (path, vol) => skinAudio.loop(path, vol),
+            audioStop: (path) => skinAudio.stop(path),
+          },
+    );
     if (this.currentFrame) {
       this.noteLayer.update(this.currentFrame, this.hiSpeed, ctx.activeOps);
       // Marker layer scrolls with the same hispeed math as notes, anchored to the same lane

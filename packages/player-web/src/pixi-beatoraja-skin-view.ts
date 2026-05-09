@@ -1374,6 +1374,12 @@ export class BeatorajaPlaySkinView {
         const percent = this.resolveGaugePercent();
         return percent;
       },
+      // Forward host audio hooks so BooleanProperty / customEvent callbacks evaluated at draw
+      // time can fire SE. The hooks themselves come from the demo's `BeatorajaSkinAudioPlayer`
+      // (one per loaded theme bundle); the skin-view never owns audio state.
+      audioPlay: context.audioPlay,
+      audioLoop: context.audioLoop,
+      audioStop: context.audioStop,
     };
   }
 
