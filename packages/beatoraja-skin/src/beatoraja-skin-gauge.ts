@@ -1,80 +1,145 @@
-// Strict-typed normalization for beatoraja's `gauge` element.
+// Strict-typed normalization + per-cell node picker for beatoraja's `gauge` element.
 //
-// **Spec note (audit 1.4):** beatoraja's `SkinGauge.java` indexes nodes as
-// `images[exgauge + frameOffset + borderFlag]` where `exgauge = gaugeMode * 6` — i.e. each
-// runtime gauge mode (GROOVE / EASY / HARD / EX-HARD / HAZARD / CLASS) has its own 6-cell
-// slab (border-off + border-on × 3 frame slots). `gauge.type` (`0..3`) is the ANIMATION
-// style (`RANDOM` / `INCREASE` / `DECREASE` / `FLICKERING`) — NOT a layout selector — and
-// `range` controls the frame stride for the animation cycle, not a "rim distance threshold".
+// **Spec (audit 1.4):** beatoraja's `bms.player.beatoraja.play.SkinGauge` indexes nodes as
+//   `images[exgauge + frameOffset + (border < this.border ? 1 : 0)]`
+// where:
 //
-// Our impl below is a heuristic that produces visually acceptable output for default
-// play9.json (the only sample skin authoring `type=3`) but doesn't faithfully implement the
-// 6-cell-per-gauge-mode layout. A full rewrite is a separate project; the current code
-// degrades gracefully when beatoraja's strict layout doesn't match (cells fall back to
-// `nodes[lastIndex]` rather than throwing) so authoring drift stays survivable.
+// - `exgauge = (type >= CLASS ? type - 3 : type) * 6` — runtime gauge mode × 6. Each mode has
+//   its own 6-cell slab. CLASS / EXCLASS / EXHARDCLASS reuse HARD / EXHARD / HAZARD slabs.
+// - `frameOffset` is `0` (filled), `2` (transition tail), or `4` (animated top) depending on
+//   the cell's position relative to `notes` (= the topmost lit cell index).
+// - `borderFlag` is `+1` when the cell's threshold (`border = i * max / parts`) is below the
+//   gauge's clear border (`this.border`) — i.e., the cell is in the danger zone.
 //
-// `gauge` is a special destination kind: a horizontal row of `parts` cells (default 50) painted
-// from a per-zone palette of node images. Each cell's "lit" / "off" state is decided by comparing
-// its position against the live gauge percentage, and the lit cell's color shifts through the
-// authored zones (typically red → yellow → green → blue) as the gauge climbs.
+// So 6 cells per gauge mode = 3 frame slots × 2 (above / below clear threshold).
 //
-//   skin.gauge = {
-//     id = "gauge",                          -- destination id (matches `destination[].id`)
-//     nodes = { "gauge-r1", "gauge-p1", ... } -- per-zone image ids for off / on states
-//     parts = 50,                             -- total cell count
-//     type = 0,                               -- animation kind (1 = pulse-on-increase)
-//     range = 3,                              -- distance from the rim where state cuts over
-//     cycle = 33, starttime = 0, endtime = 500, -- per-cell pulse animation timing
-//   }
+// `gauge.type` (0..3) is the ANIMATION style:
+//   - 0 RANDOM:    `animation = floor(random() * (range + 1))`
+//   - 1 INCLEASE:  `animation = (animation + range) % (range + 1)`
+//   - 2 DECLEASE:  `animation = (animation + 1) % (range + 1)`
+//   - 3 FLICKERING: special case — `animation = (time % cycle)` is unused; instead the picker
+//     paints filled / empty + an extra "bright top" overlay at `i == notes`.
 //
-// Node layout convention (mirrors beatoraja's reference theme):
-//   - First half of `nodes[]`: OFF cells (one per zone — typically 3 or 4 zones)
-//   - Second half: ON cells (lit), same zone order
-//   - Zones are author-chosen "color bands" of the gauge — e.g. red (0-30%), yellow (30-60%),
-//     blue (60-80%), green (≥80%) for the LR2-style 4-zone groove gauge.
+// `range` is the animation frame stride (NOT a "rim distance threshold" as the previous
+// heuristic claimed). `cycle` (= `duration` in Java) is the per-frame interval in ms.
 //
-// Gates by type — beatoraja's `Gauge.type` distinguishes 6-node basic gauges (just off + lit) from
-// extended forms with breath-pulse / max-flash variants. We treat anything beyond 6 nodes as
-// "more frames per state available; repeat the first" — degrades gracefully.
+// **Node layout for default play9** (12 nodes, type=3 FLICKERING):
+//
+//   nodes[0..5]   = NORMAL gauge mode (above-border / below-border × 3 frame slots)
+//   nodes[6..11]  = (overlap; default play9 only authors enough for one mode)
+//
+// In practice authors don't ship the full 9 modes × 6 = 54 cells. They ship the modes their
+// chart actually exercises and the resolver clamps via `Math.min(idx, nodes.length - 1)` so
+// out-of-range indices fall back to the last available cell.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
 import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
 
+/**
+ * Animation style enum — beatoraja's `SkinGauge.ANIMATION_*` constants. Drives how the
+ * `animation` index advances per cycle (and which non-FLICKERING cells get the
+ * `frameOffset = 2` "transition tail" treatment).
+ */
+export const BEATORAJA_GAUGE_ANIMATION = {
+  /** `animation = floor(random() * (range + 1))` — random pick each cycle. */
+  RANDOM: 0,
+  /** `animation = (animation + range) % (range + 1)` — climbs by `range` per cycle. */
+  INCLEASE: 1,
+  /** `animation = (animation + 1) % (range + 1)` — slow climb. */
+  DECLEASE: 2,
+  /** Special path — fills are 0 / 2 only; an overlay paints at `i == notes`. */
+  FLICKERING: 3,
+} as const;
+
+/**
+ * Runtime gauge mode — beatoraja's `GrooveGauge` constants. Drives the `exgauge` base offset
+ * via `(type >= CLASS ? type - 3 : type) * 6`. Mirrored here so the renderer can map the
+ * engine's gauge state to a slab index.
+ */
+export const BEATORAJA_GAUGE_MODE = {
+  ASSISTEASY: 0,
+  EASY: 1,
+  /** Beatoraja's "groove" / standard recovery gauge. */
+  NORMAL: 2,
+  HARD: 3,
+  EXHARD: 4,
+  HAZARD: 5,
+  /** CLASS reuses HARD's slab (`exgauge = 18`). */
+  CLASS: 6,
+  /** EXCLASS reuses EXHARD's slab (`exgauge = 24`). */
+  EXCLASS: 7,
+  /** EXHARDCLASS reuses HAZARD's slab (`exgauge = 30`). */
+  EXHARDCLASS: 8,
+} as const;
+
+export type BeatorajaGaugeMode = (typeof BEATORAJA_GAUGE_MODE)[keyof typeof BEATORAJA_GAUGE_MODE];
+
+/** Compute `exgauge` (= base node-array offset) for a given gauge mode. */
+export function gaugeExBase(mode: number): number {
+  const m = mode >= BEATORAJA_GAUGE_MODE.CLASS ? mode - 3 : mode;
+  return Math.max(0, Math.trunc(m)) * 6;
+}
+
+/**
+ * Map our `GrooveGaugeType` string union (engine-side) to beatoraja's int constant. Returns
+ * `NORMAL` (= 2) for the default gauge variant, matching beatoraja's groove gauge default.
+ */
+export function beatorajaGaugeModeFromString(type: 'GROOVE' | 'EASY' | 'HARD' | 'DEATH' | undefined): BeatorajaGaugeMode {
+  switch (type) {
+    case 'EASY':
+      return BEATORAJA_GAUGE_MODE.EASY;
+    case 'HARD':
+      return BEATORAJA_GAUGE_MODE.HARD;
+    case 'DEATH':
+      return BEATORAJA_GAUGE_MODE.HAZARD;
+    case 'GROOVE':
+    default:
+      return BEATORAJA_GAUGE_MODE.NORMAL;
+  }
+}
+
 export interface BeatorajaGaugeElement {
   /** Destination id this gauge targets. Same id space as image / value / text / graph / slider. */
   id: BeatorajaImageId;
-  /** Sub-image ids for cell rendering (off + on states across N zones). */
+  /** Sub-image ids — packed in 6-cell slabs per gauge mode (see file header). */
   nodes: ReadonlyArray<BeatorajaImageId>;
   /** Total cell count painted across the destination rect's width. Defaults to 50. */
   parts: number;
   /**
-   * Animation style — beatoraja's `SkinGauge` enumerates `0` = RANDOM, `1` = INCREASE,
-   * `2` = DECREASE, `3` = FLICKERING. Our heuristic renderer treats `0` as static, `1`/`3`
-   * as pulse-on-lit. The full spec drives a frame-cycling state machine keyed off `range`
-   * (frame stride) and `cycle` (interval ms); this is documented here for spec parity but
-   * not yet implemented (audit 1.4).
+   * Animation style — see {@link BEATORAJA_GAUGE_ANIMATION}. Defaults to `0` (RANDOM).
    */
   type: number;
   /**
-   * Animation frame stride in beatoraja's spec (`SkinGauge.animationRange`); our heuristic
-   * uses it as a "rim distance threshold" for lit/off cutoff. The two interpretations
-   * diverge for `type=1`/`3` skins — most authoring is `range=0` or `range=3` and either
-   * value happens to look reasonable under our heuristic.
+   * Animation frame stride. The `animation` counter wraps modulo `range + 1` per cycle, so a
+   * range of `3` produces 4 distinct animation phases (0/1/2/3). Defaults to `3`.
    */
   range: number;
-  /** Animation interval in ms (`SkinGauge.duration`). Defaults to 33. */
+  /** Per-cycle interval in ms (beatoraja `SkinGauge.duration`). Defaults to `33`. */
   cycle: number;
-  /** Pulse keyframe times. */
+  /** Pulse keyframe times — preserved for forward compat; not consumed by the picker today. */
   starttime: number;
   endtime: number;
   /** `if` codes that gate visibility. */
   ifCodes: ReadonlyArray<number>;
 }
 
+/**
+ * Live gauge state the picker needs to compute the per-cell node index. The renderer derives
+ * this from the runtime adapter (engine's `summary.gauge`).
+ */
+export interface BeatorajaGaugeState {
+  /** Current gauge value in `[0, max]`. */
+  value: number;
+  /** Maximum gauge value for this mode (typically 100, but EXHARD / HAZARD differ). */
+  max: number;
+  /** Clear-threshold border in the same units as {@link value}. Cells below it are "danger". */
+  border: number;
+  /** Runtime gauge mode (= `BEATORAJA_GAUGE_MODE.*`). */
+  mode: number;
+}
+
 export function normalizeBeatorajaGauge(input: unknown): BeatorajaGaugeElement | undefined {
   if (input === undefined || input === null) return undefined;
-  // The gauge element is authored as a single object, not an array — but `flattenBeatorajaElements`
-  // tolerates both shapes (returns a 1-entry list for a bare object).
   const flattened = flattenBeatorajaElements(input);
   for (const entry of flattened) {
     const normalized = normalizeOne(entry);
@@ -108,85 +173,109 @@ function normalizeOne(entry: NormalizedElement): BeatorajaGaugeElement | undefin
 }
 
 /**
- * Number of state slabs the `gauge.nodes[]` array packs based on the authored `gauge.type`.
- * Beatoraja's 6-node basic gauges use 2 states (off / lit). Popn-style 12-node gauges (`type=3`,
- * authored on `default/play9.json`) use 3 states (off / lit / pulse-bright). Future variants
- * could carry more — the resolver clamps to whatever `nodes.length` actually supports.
+ * Compute the animation frame index given the gauge's animation style and the current time.
+ * Mirrors `SkinGauge.prepare()`'s animation update — except RANDOM uses a deterministic stamp
+ * (cycle-based) instead of `Math.random()` so the visual is stable across re-renders. The
+ * wraparound period is `range + 1` regardless of style.
+ *
+ * Returns a value in `[0, range]`.
  */
-function gaugeStateCount(gaugeType: number): number {
-  // `type === 3` is the popn 9K extended layout: 4 zones × 3 states (off / lit / bright). The
-  // bright slab drives the type-3 pulse animation (cells alternate between lit and bright over
-  // `cycle` ms when the cell is lit AND the gauge is in the pulse half of its cycle).
-  if (gaugeType === 3) return 3;
-  // All other types (`0` static, `1` simple pulse, etc.) use the standard 2-state layout: off
-  // and lit. `type === 1`'s pulse alternates *within* the lit slab if authors pack >1 lit node
-  // per zone, which the renderer can layer on later — for now both `0` and `1` collapse to the
-  // 2-state contract.
-  return 2;
+export function computeBeatorajaGaugeAnimation(gauge: BeatorajaGaugeElement, nowMs: number): number {
+  const range = Math.max(0, Math.trunc(gauge.range));
+  if (range === 0 || gauge.cycle <= 0 || !Number.isFinite(nowMs)) return 0;
+  const cycleCount = Math.floor(nowMs / gauge.cycle);
+  const period = range + 1;
+  switch (gauge.type) {
+    case BEATORAJA_GAUGE_ANIMATION.INCLEASE:
+      return (cycleCount * range) % period;
+    case BEATORAJA_GAUGE_ANIMATION.DECLEASE:
+      return cycleCount % period;
+    case BEATORAJA_GAUGE_ANIMATION.RANDOM:
+    case BEATORAJA_GAUGE_ANIMATION.FLICKERING:
+    default:
+      // RANDOM in beatoraja picks `floor(random() * period)` each cycle. We use a hash-like
+      // function over `cycleCount` so consecutive cycles produce different but deterministic
+      // values — matches the visual feel without the per-frame instability of true random.
+      return ((cycleCount * 1664525 + 1013904223) >>> 0) % period;
+  }
 }
 
 /**
- * Pick the active node for cell `partIndex` (0..parts-1) given the live gauge percent (0..100).
- * Returns `{ nodeId, lit, state }` — `lit = true` means the cell's threshold has been crossed
- * by the current gauge value, and `state` is the index into the per-cell state slab the
- * resolver picked (0 = off, 1 = lit, 2 = pulse-bright for `type=3`).
+ * Pick the active node for cell index `partIndex` (1..parts) at the given gauge state.
+ * Returns the resolved `nodeId` plus diagnostic flags (whether the cell is filled, whether
+ * it's in the "danger zone" below the clear border, and whether the FLICKERING overlay
+ * should fire).
  *
- * Zone partition mirrors the LR2 4-zone groove gauge:
- *   - parts 0..29% → zone 0 (red)
- *   - parts 30..59% → zone 1 (yellow)
- *   - parts 60..79% → zone 2 (blue)
- *   - parts 80..100% → zone 3 (green)
+ * Index formula (mirrors `SkinGauge.draw()`):
  *
- * Node layout: `nodes[zone + state * zonesPerState]` where
- * `zonesPerState = floor(nodes.length / stateCount)`. For default 7K's 8-node gauge with
- * `type=0` (stateCount=2): zonesPerState=4, nodes[0..3] = off / nodes[4..7] = lit. For default
- * 9K's 12-node gauge with `type=3` (stateCount=3): zonesPerState=4, nodes[0..3] = off /
- * nodes[4..7] = lit / nodes[8..11] = pulse-bright.
+ * Non-FLICKERING (RANDOM / INCLEASE / DECLEASE):
+ *   `index = exgauge + (notes == i ? 4 : (notes - animation > i ? 0 : 2)) + borderFlag`
  *
- * `nowMs` selects the pulse phase for `type` values that animate (`1` or `3`). Omitting it
- * keeps the cell on its base lit slab — used by tests and by callers that want a frozen
- * snapshot. The pulse alternates between state `1` (lit) and the highest available state on a
- * `cycle`-ms square wave.
+ * FLICKERING:
+ *   `index = exgauge + (notes >= i ? 0 : 2) + borderFlag`
+ *   Plus an overlay at `i == notes`: `flickerIndex = exgauge + 4 + borderFlag`
+ *
+ * `notes = max(1, value * parts / max)` when `value > 0`, else `0`.
+ *
+ * The picker returns `flickerOverlayId` populated only for the FLICKERING + `i == notes`
+ * case; the renderer paints it ON TOP of the base node when present.
  */
 export function pickBeatorajaGaugeNode(
   gauge: BeatorajaGaugeElement,
   partIndex: number,
-  gaugePercent: number,
-  nowMs?: number,
-): { nodeId: BeatorajaImageId; lit: boolean; state: number } | undefined {
-  if (gauge.parts <= 0 || gauge.nodes.length === 0) return undefined;
-  const partPercent = ((partIndex + 1) * 100) / gauge.parts;
-  const lit = gaugePercent >= partPercent;
-  const stateCount = Math.max(1, gaugeStateCount(gauge.type));
-  const zonesPerState = Math.max(1, Math.floor(gauge.nodes.length / stateCount));
-  let zone = 0;
-  if (partPercent >= 80) zone = Math.min(3, zonesPerState - 1);
-  else if (partPercent >= 60) zone = Math.min(2, zonesPerState - 1);
-  else if (partPercent >= 30) zone = Math.min(1, zonesPerState - 1);
-  else zone = 0;
-  // Pick which state slab the cell lands in:
-  //   - off → state 0 (always)
-  //   - lit + animated type with brigh slab + pulse half of cycle → highest available state
-  //   - lit + everything else → state 1
-  let state = 0;
-  if (lit) {
-    state = 1;
-    if (
-      stateCount > 2 &&
-      typeof nowMs === 'number' &&
-      Number.isFinite(nowMs) &&
-      gauge.cycle > 0 &&
-      (gauge.type === 1 || gauge.type === 3)
-    ) {
-      // Square-wave pulse: first half of the cycle = standard lit, second half = bright.
-      const phase = ((nowMs % gauge.cycle) + gauge.cycle) % gauge.cycle;
-      if (phase >= gauge.cycle / 2) state = stateCount - 1;
+  state: BeatorajaGaugeState,
+  animation: number,
+): { nodeId: BeatorajaImageId; flickerOverlayId?: BeatorajaImageId; lit: boolean; danger: boolean } | undefined {
+  const parts = Math.max(1, Math.trunc(gauge.parts));
+  if (gauge.nodes.length === 0) return undefined;
+  // Beatoraja's loop is 1-indexed (`for i = 1..parts`); we accept either 0- or 1-indexed
+  // input by clamping into the 1..parts range. The host iterates 0..parts-1 in JS; bump by 1
+  // before applying the formulas.
+  const i = Math.max(1, Math.min(parts, Math.trunc(partIndex) + (partIndex >= parts ? 0 : 1)));
+  const max = Math.max(0, state.max);
+  const value = Math.max(0, state.value);
+  const notes = value > 0 && max > 0 ? Math.max(1, Math.floor((value * parts) / max)) : 0;
+  const cellBorder = (i * max) / parts;
+  const danger = max > 0 && cellBorder < state.border;
+  const borderFlag = danger ? 1 : 0;
+  const exgauge = gaugeExBase(state.mode);
+  const lit = i <= notes;
+
+  let frameOffset: number;
+  let flickerOverlayId: BeatorajaImageId | undefined;
+  if (gauge.type === BEATORAJA_GAUGE_ANIMATION.FLICKERING) {
+    frameOffset = lit ? 0 : 2;
+    if (i === notes) {
+      const overlayIdx = exgauge + 4 + borderFlag;
+      flickerOverlayId = pickNode(gauge.nodes, overlayIdx);
+    }
+  } else {
+    if (i === notes) {
+      frameOffset = 4;
+    } else if (notes - animation > i) {
+      frameOffset = 0;
+    } else {
+      frameOffset = 2;
     }
   }
-  const idx = zone + state * zonesPerState;
-  const nodeId = gauge.nodes[Math.min(idx, gauge.nodes.length - 1)];
+  const baseIdx = exgauge + frameOffset + borderFlag;
+  const nodeId = pickNode(gauge.nodes, baseIdx);
   if (nodeId === undefined) return undefined;
-  return { nodeId, lit, state };
+  return {
+    nodeId,
+    ...(flickerOverlayId !== undefined ? { flickerOverlayId } : {}),
+    lit,
+    danger,
+  };
+}
+
+/** Clamp the index into `nodes` and return the matching id. Out-of-range falls back to the
+ * last authored node (matches beatoraja's "skin shipped a partial slab" graceful-degrade). */
+function pickNode(nodes: ReadonlyArray<BeatorajaImageId>, index: number): BeatorajaImageId | undefined {
+  if (nodes.length === 0) return undefined;
+  if (!Number.isFinite(index) || index < 0) return nodes[0];
+  if (index >= nodes.length) return nodes[nodes.length - 1];
+  return nodes[index];
 }
 
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {

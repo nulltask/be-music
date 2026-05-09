@@ -111,6 +111,13 @@ export interface BeatorajaRenderContext {
    */
   resolveOffset?: (offsetId: number) => Readonly<BeatorajaSkinOffsetValue> | undefined;
   /**
+   * Optional full gauge state for the spec-correct `pickBeatorajaGaugeNode` (audit 1.4).
+   * Exposes `value / max / border / mode` together so the gauge renderer can compute the
+   * correct per-cell node index. When omitted, the gauge renderer falls back to the legacy
+   * percent-only path via `BeatorajaPlaySkinView`'s `resolveGaugePercent` option.
+   */
+  resolveGaugeState?: () => { value: number; max: number; border: number; mode: number } | undefined;
+  /**
    * Optional audio hooks for `main_state.audio_play / audio_loop / audio_stop` calls fired
    * from BooleanProperty / TimerProperty / customEvent action closures at draw time.
    * ModernChic's `Root/customsound.lua` exposes functions like `m.fcSound` that watch a

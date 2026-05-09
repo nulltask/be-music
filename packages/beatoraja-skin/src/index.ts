@@ -133,8 +133,20 @@ export { normalizeBeatorajaSliders } from './beatoraja-skin-slider.ts';
 export type { BeatorajaImagesetElement } from './beatoraja-skin-imageset.ts';
 export { normalizeBeatorajaImagesets } from './beatoraja-skin-imageset.ts';
 
-export type { BeatorajaGaugeElement } from './beatoraja-skin-gauge.ts';
-export { normalizeBeatorajaGauge, pickBeatorajaGaugeNode } from './beatoraja-skin-gauge.ts';
+export type {
+  BeatorajaGaugeElement,
+  BeatorajaGaugeMode,
+  BeatorajaGaugeState,
+} from './beatoraja-skin-gauge.ts';
+export {
+  beatorajaGaugeModeFromString,
+  BEATORAJA_GAUGE_ANIMATION,
+  BEATORAJA_GAUGE_MODE,
+  computeBeatorajaGaugeAnimation,
+  gaugeExBase,
+  normalizeBeatorajaGauge,
+  pickBeatorajaGaugeNode,
+} from './beatoraja-skin-gauge.ts';
 
 export type { BeatorajaJudgeElement } from './beatoraja-skin-judge.ts';
 export { expandBeatorajaJudgeDestinations, normalizeBeatorajaJudges } from './beatoraja-skin-judge.ts';

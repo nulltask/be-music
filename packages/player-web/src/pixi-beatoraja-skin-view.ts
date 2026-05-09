@@ -8,6 +8,7 @@ import {
   centerToAnchor,
   composeBeatorajaValueCells,
   composeBeatorajaValueShift,
+  computeBeatorajaGaugeAnimation,
   evaluateBeatorajaCustomEvents,
   evaluateBeatorajaCustomTimers,
   normalizeBeatorajaCustomEvents,
@@ -1453,6 +1454,10 @@ export class BeatorajaPlaySkinView {
         const percent = this.resolveGaugePercent();
         return percent;
       },
+      // `main_state.gauge_type()` — beatoraja's `BEATORAJA_GAUGE_MODE.*` int constant.
+      // Sourced from the runtime adapter's `resolveGaugeState`. Returns `undefined` when no
+      // frame has landed yet; the Lua bridge defaults to 0 in that case.
+      gaugeType: () => context.resolveGaugeState?.()?.mode,
       // Forward host audio hooks so BooleanProperty / customEvent callbacks evaluated at draw
       // time can fire SE. The hooks themselves come from the demo's `BeatorajaSkinAudioPlayer`
       // (one per loaded theme bundle); the skin-view never owns audio state.
@@ -2471,15 +2476,24 @@ export class BeatorajaPlaySkinView {
       for (const cell of entry.cells) cell.visible = false;
       return;
     }
-    const gaugePercent = this.resolveGaugePercent() ?? 0;
+    // Pull the full gauge state for the spec-correct picker (audit 1.4). Falls back to a
+    // synthesized state derived from the legacy percent resolver when the host hasn't wired
+    // `resolveGaugeState` (= the test path or pre-frame state). `mode` defaults to NORMAL
+    // (= 2) which produces beatoraja's groove-gauge slab.
+    const fullState = context.resolveGaugeState?.();
+    const state =
+      fullState ??
+      (() => {
+        const pct = this.resolveGaugePercent() ?? 0;
+        return { value: pct, max: 100, border: 80, mode: 2 };
+      })();
+    // Compute animation phase once per frame — the picker reads it for non-FLICKERING types.
+    const animation = computeBeatorajaGaugeAnimation(entry.element, context.nowMs);
     const cellWidth = props.width / Math.max(1, entry.element.parts);
     const center = centerToAnchor(entry.group.center);
     for (let i = 0; i < entry.cells.length; i += 1) {
       const cell = entry.cells[i]!;
-      // `nowMs` drives the pulse phase for `gauge.type === 1 / 3`. Static gauges (`type === 0`)
-      // ignore it; passing it unconditionally keeps the renderer agnostic about which type the
-      // skin author chose. `context.nowMs` is the same scene clock destinations sample against.
-      const pick = pickBeatorajaGaugeNode(entry.element, i, gaugePercent, context.nowMs);
+      const pick = pickBeatorajaGaugeNode(entry.element, i, state, animation);
       if (pick === undefined) {
         cell.visible = false;
         continue;
@@ -2500,6 +2514,14 @@ export class BeatorajaPlaySkinView {
       cell.tint = props.tint;
       cell.angle = props.angle;
       cell.blendMode = props.blendMode;
+      // FLICKERING: when `pick.flickerOverlayId` is populated, the picker is asking us to
+      // paint a SECOND sprite on top of this cell. The current Pixi GaugeEntry only owns one
+      // sprite per cell — a future renderer pass can layer the overlay. For now the base
+      // node already conveys "this cell is the top" via the `notes` index, so the missing
+      // overlay is a small visual loss but not a structural break. (Not authored by any of
+      // our 3 sample skins beyond default play9, where the overlay matches `notes`-cell
+      // coloring closely enough that the absence isn't jarring.)
+      void pick.flickerOverlayId;
     }
   }
 

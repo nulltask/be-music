@@ -28,6 +28,7 @@ import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/cor
 import type { BeatorajaRenderContext } from './beatoraja-render.ts';
 import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import {
+  beatorajaGaugeModeFromString,
   BEATORAJA_NUM,
   BEATORAJA_OP,
   BEATORAJA_TEXT,
@@ -880,6 +881,7 @@ export class BeatorajaRuntimeAdapter {
       getTimerStart: (id) => this.timerStartedAt.get(id),
       nowMs: this.getNowMs(),
       resolveOffset: (id) => this.resolveOffset(id),
+      resolveGaugeState: () => this.resolveGaugeState(),
     };
   }
 
@@ -1086,6 +1088,37 @@ export class BeatorajaRuntimeAdapter {
     const gauge = this.frame?.summary.gauge;
     if (gauge === undefined || gauge.max <= 0) return 0;
     return (gauge.current / gauge.max) * 100;
+  }
+
+  /**
+   * Resolve the full gauge state for the spec-correct `pickBeatorajaGaugeNode` signature
+   * (audit 1.4). Beatoraja's `SkinGauge.draw()` indexes nodes as
+   * `images[exgauge + frameOffset + (cellBorder < gauge.border ? 1 : 0)]` and needs all four
+   * fields to compute the right cell.
+   *
+   * Returns `undefined` when no frame has landed yet — the gauge renderer hides cells in
+   * that case (matching beatoraja's "gauge not yet active" behavior).
+   */
+  resolveGaugeState():
+    | { value: number; max: number; border: number; mode: number }
+    | undefined {
+    const gauge = this.frame?.summary.gauge;
+    if (gauge === undefined || gauge.max <= 0) return undefined;
+    return {
+      value: gauge.current,
+      max: gauge.max,
+      border: gauge.clearThreshold,
+      mode: beatorajaGaugeModeFromString(gauge.type),
+    };
+  }
+
+  /**
+   * Resolve the gauge type as beatoraja's int constant (`BEATORAJA_GAUGE_MODE.*`). Exposed
+   * to Lua via `main_state.gauge_type()`. Defaults to `NORMAL` (= 2) when no frame yet.
+   */
+  resolveGaugeType(): number {
+    const gauge = this.frame?.summary.gauge;
+    return beatorajaGaugeModeFromString(gauge?.type);
   }
 
   /**
