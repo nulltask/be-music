@@ -41,6 +41,12 @@ export interface BeatorajaBgaLayerOptions {
    */
   cues: { base: ReadonlyArray<BgaCue>; layer: ReadonlyArray<BgaCue>; poor: ReadonlyArray<BgaCue> };
   /**
+   * Optional video-element map for keys whose BMPxx resolves to a video file. The layer
+   * pauses / plays / seeks these elements when their texture becomes the active cue.
+   * Sparse (only video keys present); empty / undefined = no video BGAs in the chart.
+   */
+  videoElements?: ReadonlyMap<string, HTMLVideoElement>;
+  /**
    * Skin-config-level op set (selected layout / option ops). Used to resolve INNER if-gated
    * keyframe alternatives — beatoraja's BGA destinations stash variant rects per layout option
    * (compact vs. full BGA, etc.) and the loader picks one at skin-load time. Without this set
@@ -55,6 +61,7 @@ export class BeatorajaBgaLayer {
   private readonly sprite: Sprite;
   private readonly group: BeatorajaDestinationGroup | undefined;
   private readonly textures: ReadonlyMap<string, Texture>;
+  private readonly videoElements: ReadonlyMap<string, HTMLVideoElement>;
   private readonly cues: { base: ReadonlyArray<BgaCue>; layer: ReadonlyArray<BgaCue>; poor: ReadonlyArray<BgaCue> };
   /**
    * Skin canvas height in skin-pixel units. Read from `skin.h` at construction so we can flip
@@ -66,6 +73,7 @@ export class BeatorajaBgaLayer {
 
   constructor(options: BeatorajaBgaLayerOptions) {
     this.textures = options.textures;
+    this.videoElements = options.videoElements ?? new Map();
     this.cues = options.cues;
     this.group = resolveBgaDestinationGroup(options.skin, options.skinConfigOps);
     const rawH = (options.skin as { h?: unknown }).h;
@@ -103,12 +111,38 @@ export class BeatorajaBgaLayer {
 
     const effectiveKey = this.pickEffectiveKey(seconds, poorBgaActive);
     if (effectiveKey !== this.currentKey) {
+      // Pause + reset the video on the OLD key (when one was a video) before swapping.
+      // Without this, multiple video BGAs queued back-to-back would keep playing in the
+      // background, contending for compositor frame callbacks.
+      if (this.currentKey !== undefined) {
+        const prevVideo = this.videoElements.get(this.currentKey);
+        if (prevVideo !== undefined) {
+          prevVideo.pause();
+          prevVideo.currentTime = 0;
+        }
+      }
       this.currentKey = effectiveKey;
       const texture = effectiveKey !== undefined ? this.textures.get(effectiveKey) : undefined;
       // Falling through to `Texture.EMPTY` rather than hiding the sprite preserves the skin-side BGA
       // chrome (the rectangle authored in the destination group) — the skin's frame keeps painting,
       // and the BGA-area sub-rect goes black until the next cue arrives. Matches LR2 behaviour.
       this.sprite.texture = texture ?? Texture.EMPTY;
+      // Start the new key's video from the beginning. Browsers gate `.play()` behind the
+      // user-gesture autoplay policy — when the gameplay scene mounts as a result of a
+      // click / keypress (the typical entry path), the gesture transfers and play() resolves
+      // synchronously. Otherwise the promise rejects silently and the video stays at frame
+      // 0 until the next cue brings it into focus.
+      if (effectiveKey !== undefined) {
+        const nextVideo = this.videoElements.get(effectiveKey);
+        if (nextVideo !== undefined) {
+          nextVideo.currentTime = 0;
+          // Use the promise form so we can swallow the autoplay-rejection cleanly.
+          const playPromise = nextVideo.play();
+          if (playPromise !== undefined && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => undefined);
+          }
+        }
+      }
     }
   }
 

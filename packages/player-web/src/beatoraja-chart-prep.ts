@@ -49,6 +49,7 @@ import { buildBgaTimelines, type BgaTimelines } from '@be-music/player/core/bga-
 import { buildAudioBus, type AudioBusHandle, type CompressorMode } from './audio-bus.ts';
 import type { EngineDriverAudioContext } from './engine-driver.ts';
 import { loadAssetBytes, resolveChartAudioAsset } from './library.ts';
+import { loadVideoTextureFromBytes } from './lr2-textures.ts';
 import { logger } from './logger.ts';
 import type { BgaCue } from './pixi-gameplay-bga.ts';
 import { isVideoExtension } from './pixi-gameplay-bga.ts';
@@ -88,6 +89,13 @@ export interface PreparedBeatorajaGameplayChart {
   bga: {
     textures: Map<string, Texture>;
     cues: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] };
+    /**
+     * `<video>` elements for keys whose `#BMPxx` resolved to a video file (mpg / mp4 /
+     * webm etc). The BGA layer pauses / plays / seeks these on cue boundaries — same key
+     * space as `textures`, sparse population (only video keys present). Empty when the
+     * chart has no video BGAs.
+     */
+    videoElements: Map<string, HTMLVideoElement>;
   };
   /** Closes the AudioContext and destroys BGA textures. Idempotent. */
   dispose: () => Promise<void>;
@@ -174,13 +182,45 @@ export async function prepareBeatorajaGameplayChart(
     }
   }
   const bgaTextures = new Map<string, Texture>();
+  // Video-element map for keys whose `#BMPxx` resolves to a video file (mpg / mp4 / webm
+  // etc). The BGA layer pauses / plays / seeks these elements when their texture becomes
+  // active, mirroring beatoraja's video-BGA behavior. Empty when the chart only ships
+  // still-image BGAs.
+  const bgaVideoElements = new Map<string, HTMLVideoElement>();
+  // Object URLs created by the video loader — must be revoked at dispose to free the
+  // underlying memory (Blob references hang around forever otherwise). Stored in parallel
+  // with `bgaVideoElements` for symmetric cleanup.
+  const bgaVideoObjectUrls: string[] = [];
   await Promise.all(
     [...referencedKeys].map(async (key) => {
       const path = chart.resources.bmp[key];
-      if (typeof path !== 'string' || isVideoExtension(path)) return;
+      if (typeof path !== 'string') return;
       const entry = resolveChartAudioAsset(source, song.chartPath, path, { pathPrefix: undefined });
       const bytes = await loadAssetBytes(entry);
       if (!bytes) return;
+      // Video paths route through the LR2-derived video loader. Browsers that can't
+      // natively decode the source codec fall through to the libav / ffmpeg.wasm
+      // transcode path inside `loadVideoTextureFromBytes`.
+      if (isVideoExtension(path)) {
+        try {
+          const handle = await loadVideoTextureFromBytes(path, bytes);
+          if (handle === undefined) return;
+          handle.texture.label = `bga[${key}]:video`;
+          handle.video.muted = true;
+          handle.video.loop = false;
+          handle.video.playsInline = true;
+          // Start paused — the BGA layer triggers `.play()` when this key becomes the
+          // active cue. Seeking to 0 first guarantees frame-0 is already decoded so the
+          // first paint isn't black.
+          handle.video.pause();
+          bgaTextures.set(key, handle.texture);
+          bgaVideoElements.set(key, handle.video);
+          bgaVideoObjectUrls.push(handle.objectUrl);
+        } catch (error) {
+          log.debug('bga video decode skipped', { key, path, error });
+        }
+        return;
+      }
       try {
         const blob = new Blob([bytes as Uint8Array<ArrayBuffer>]);
         const bitmap = await createImageBitmap(blob);
@@ -206,6 +246,27 @@ export async function prepareBeatorajaGameplayChart(
   const dispose = async (): Promise<void> => {
     if (disposed) return;
     disposed = true;
+    // Pause + clear src on every video element BEFORE destroying textures — destroying the
+    // VideoSource while the element is still playing leaves orphan frame requests on the
+    // browser's compositor thread.
+    for (const video of bgaVideoElements.values()) {
+      try {
+        video.pause();
+        video.src = '';
+        video.load();
+      } catch {
+        // Already-detached / disposed.
+      }
+    }
+    bgaVideoElements.clear();
+    for (const url of bgaVideoObjectUrls) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // Already revoked.
+      }
+    }
+    bgaVideoObjectUrls.length = 0;
     for (const texture of bgaTextures.values()) {
       try {
         // BGA textures are exclusive to this chart; the gameplay view's BGA layer doesn't outlive
@@ -229,7 +290,7 @@ export async function prepareBeatorajaGameplayChart(
     audioContext,
     audioBus,
     audio,
-    bga: { textures: bgaTextures, cues },
+    bga: { textures: bgaTextures, cues, videoElements: bgaVideoElements },
     dispose,
   };
 }

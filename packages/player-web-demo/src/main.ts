@@ -1796,6 +1796,7 @@ class PlayerWebDemoApp {
       // already drives `dpFlip` on the LR2 path).
       dpFlip: this.selectView?.getPlayOptions().dpFlip,
       bgaTextures: prep.bga.textures,
+      bgaVideoElements: prep.bga.videoElements,
       bgaCues: prep.bga.cues,
       chartImages,
       // Directory label drives `BEATORAJA_TEXT.DIRECTORY = 1000` on the play scene. The browser

@@ -111,6 +111,13 @@ export interface PixiBeatorajaGameplayViewOptions {
    */
   bgaTextures?: ReadonlyMap<string, Texture>;
   /**
+   * Optional `<video>` elements keyed by `#BMPxx` slot, for chart-shipped video BGAs (mp4 /
+   * webm / etc.). Sparse — only video keys present. The BGA layer pauses / plays / seeks
+   * the matching element when its texture becomes the active cue. Empty / undefined when
+   * the chart has no video BGAs (or when the host opts to skip video decode).
+   */
+  bgaVideoElements?: ReadonlyMap<string, HTMLVideoElement>;
+  /**
    * Pre-decoded chart imagery for the synthetic-id slots `-100 STAGEFILE` / `-101 BACKBMP` /
    * `-102 BANNER`. ModernChic's `Play/lua/sp/cover.lua` paints the stagefile as the lane-cover
    * backing; default's `play_parts.lua` references `-100` for "loading" chrome. Missing entries
@@ -357,6 +364,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       this.bgaLayer = new BeatorajaBgaLayer({
         skin: options.skin,
         textures: options.bgaTextures,
+        videoElements: options.bgaVideoElements,
         cues: options.bgaCues,
         skinConfigOps,
       });
@@ -571,6 +579,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       this.bgaLayer = new BeatorajaBgaLayer({
         skin: opts.skin,
         textures: this.options.bgaTextures,
+        videoElements: this.options.bgaVideoElements,
         cues: this.options.bgaCues,
         skinConfigOps,
       });
