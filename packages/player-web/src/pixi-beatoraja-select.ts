@@ -1587,8 +1587,37 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         event.preventDefault();
         this.leaveFolder();
         break;
+      case 'r':
+      case 'R':
+        // Random song / folder pick. Mirrors beatoraja's "random select" feature (the engine
+        // calls it RANDOM_SELECT in its key-config) — picks a random ENTRY from the current
+        // list (folder bars at root, song bars inside a folder). The user typically uses this
+        // to discover charts in a large library; pressing it repeatedly walks distinct random
+        // picks. Skip when only one entry exists (random-of-one is a no-op the user would
+        // perceive as nothing happening).
+        event.preventDefault();
+        this.pickRandomEntry();
+        break;
     }
   };
+
+  /**
+   * Jump the cursor to a uniformly-random entry within the current list. Used by the `R`
+   * keybinding (mirrors beatoraja's RANDOM_SELECT). Stays within the current folder — random
+   * doesn't traverse into subfolders.
+   */
+  private pickRandomEntry(): void {
+    const total = this.entries.length;
+    if (total <= 1) return;
+    // Pick a different index than the current one — guarantees the user perceives motion.
+    let next = Math.floor(Math.random() * total);
+    if (next === this.currentIndex) {
+      next = (next + 1) % total;
+    }
+    // eslint-disable-next-line no-console
+    console.log('[beatoraja-select] random-pick', JSON.stringify({ from: this.currentIndex, to: next, of: total }));
+    this.setCursor(next);
+  }
 }
 
 function clampIndex(value: number, length: number): number {
