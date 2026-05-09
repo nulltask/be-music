@@ -768,6 +768,35 @@ export class BeatorajaRuntimeAdapter {
       this.activeOps.add(op);
       sideState.lastJudgeOp = op;
     }
+    // FAST / SLOW gate (`_*p_early = 1242 / 1262`, `_*p_late = 1243 / 1263`) — beatoraja's
+    // default play skin gates a "FAST" / "SLOW" badge on these ops so the player sees which
+    // side of the judge window their hit landed on. Mirrors the `lastJudgeOp` pattern: only
+    // one of EARLY / LATE per side stays active at a time; the next judge with a delta swaps
+    // them. Hits without a `deltaMs` (READY publish, AUTO PLAY confirmation, mine BAD) leave
+    // the previous gate untouched — beatoraja keeps the badge until the NEXT judged hit.
+    //
+    // Sign convention matches our engine: `deltaMs > 0` = late (player pressed AFTER the
+    // note's exact time → SLOW); `deltaMs < 0` = early (BEFORE → FAST). A `deltaMs === 0`
+    // perfect-on-time hit clears any prior gate without setting a new one.
+    if (typeof state.deltaMs === 'number' && Number.isFinite(state.deltaMs)) {
+      const fastSlowOp =
+        state.deltaMs < 0
+          ? side === 1
+            ? BEATORAJA_OP.P1_JUDGE_EARLY
+            : BEATORAJA_OP.P2_JUDGE_EARLY
+          : state.deltaMs > 0
+            ? side === 1
+              ? BEATORAJA_OP.P1_JUDGE_LATE
+              : BEATORAJA_OP.P2_JUDGE_LATE
+            : undefined;
+      if (sideState.lastFastSlowOp !== undefined && sideState.lastFastSlowOp !== fastSlowOp) {
+        this.activeOps.delete(sideState.lastFastSlowOp);
+      }
+      if (fastSlowOp !== undefined) {
+        this.activeOps.add(fastSlowOp);
+      }
+      sideState.lastFastSlowOp = fastSlowOp;
+    }
     this.markTimer(judgeTimerId(side));
 
     // Restart the side's combo timer (prop.lua `combo_1p = 446` / `combo_2p = 447`) on every

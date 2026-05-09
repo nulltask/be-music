@@ -637,6 +637,53 @@ describe('BeatorajaRuntimeAdapter — timing samples', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — FAST / SLOW gate ops (1242 / 1243)', () => {
+  it('publishes P1_JUDGE_EARLY on a negative deltaMs and clears it on the next late hit', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    expect(adapter.getRenderContext().activeOps.has(1242)).toBe(false);
+    expect(adapter.getRenderContext().activeOps.has(1243)).toBe(false);
+    // Early hit → EARLY (1242) on, LATE off.
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -8, updatedAtMs: 100 });
+    expect(adapter.getRenderContext().activeOps.has(1242)).toBe(true);
+    expect(adapter.getRenderContext().activeOps.has(1243)).toBe(false);
+    // Late hit → swap: LATE on, EARLY cleared.
+    adapter.applyJudgeCombo({ judge: 'GREAT', combo: 2, channel: '11', deltaMs: 22, updatedAtMs: 200 });
+    expect(adapter.getRenderContext().activeOps.has(1242)).toBe(false);
+    expect(adapter.getRenderContext().activeOps.has(1243)).toBe(true);
+  });
+
+  it('clears both EARLY and LATE on a perfect-on-time hit (deltaMs === 0)', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.applyJudgeCombo({ judge: 'GREAT', combo: 1, channel: '11', deltaMs: 22, updatedAtMs: 100 });
+    expect(adapter.getRenderContext().activeOps.has(1243)).toBe(true);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 2, channel: '11', deltaMs: 0, updatedAtMs: 200 });
+    expect(adapter.getRenderContext().activeOps.has(1242)).toBe(false);
+    expect(adapter.getRenderContext().activeOps.has(1243)).toBe(false);
+  });
+
+  it('preserves the prior gate when a publish has no deltaMs (READY / AUTO PLAY / mine BAD)', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -8, updatedAtMs: 100 });
+    expect(adapter.getRenderContext().activeOps.has(1242)).toBe(true);
+    // Mine BAD has no deltaMs — beatoraja keeps the previous EARLY badge displayed until the
+    // next timed judgement.
+    adapter.applyJudgeCombo({ judge: 'BAD', combo: 0, channel: '11', updatedAtMs: 200 });
+    expect(adapter.getRenderContext().activeOps.has(1242)).toBe(true);
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — slider type=6 (SLIDER_MUSIC_PROGRESS)', () => {
   it('returns 0 before any frame has been applied', () => {
     const adapter = new BeatorajaRuntimeAdapter({
