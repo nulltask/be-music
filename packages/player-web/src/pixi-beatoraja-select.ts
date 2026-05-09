@@ -13,12 +13,13 @@
 //   - **Smooth scroll** — `currentIndex` is the discrete cursor; `scrollPosition` is the
 //     animated value the renderer reads. `scrollPosition` tweens toward `currentIndex` on every
 //     tick so a long jump (PageDown / End) glides instead of teleporting.
-//   - **Selection highlight** — driven by two stacked mechanisms. Skins that author the
-//     focused `liston[i]` entry with a different `id` than its peers (e.g. `list_on` vs
-//     `list`) get a per-row bar texture swap automatically — `parseBeatorajaSongList`
-//     captures the per-row id and we crop `image[id]` into a Sprite per row. ON TOP of
-//     that, the row at the cursor draws its label / icon in a warm yellow tint so the
-//     selection stays visible even for skins with no per-row bar texture authored.
+//   - **Selection highlight** — preferred path is the skin's own per-row bar-image swap:
+//     skins that author the focused `liston[i]` entry with a different `id` than its
+//     peers (e.g. `list_on` vs `list`) get a per-row bar texture swap automatically —
+//     `parseBeatorajaSongList` captures the per-row id and we crop `image[id]` into a
+//     Sprite per row. When the skin DOESN'T author a focused-row variant, we fall back to
+//     a warm-yellow label tint so the selection still stands out; when the skin DOES, we
+//     suppress the tint to avoid over-painting the authored cue.
 //   - **Text resolver** — surfaces the *currently-highlighted* song's title / artist / genre /
 //     etc. via `text[].ref` so the skin's authored info panels reflect the live cursor.
 //   - **Keyboard navigation** — ArrowUp/Down (one row), PageUp/Down (10 rows), Home/End
@@ -391,6 +392,17 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * something usable.
    */
   private songList: BeatorajaSongListLayout | undefined;
+  /**
+   * Whether the parsed songlist authors a different bar-image id for the focused row
+   * versus the rest (e.g. `list_on` on the cursor's row, `list` elsewhere). When true the
+   * texture swap visualises the cursor on its own and we suppress the warm-yellow label
+   * tint so we don't double up on the highlight cue.
+   *
+   * Recomputed in {@link applySongListGeometry} whenever the songlist is parsed (i.e.
+   * construction + `replaceSkin`). Stays `false` for skins authoring all rows with the
+   * same id (or no id at all) — those rely on the warm-yellow label fallback.
+   */
+  private hasFocusedBarVariant = false;
   /**
    * Per-song chart-image cache. Keyed by `BrowserSongEntry.id`; populated lazily by
    * {@link refreshChartImagesForFocus} as the user moves the cursor. Re-focusing a
@@ -1504,9 +1516,17 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (this.songList !== undefined) {
       this.visibleRowCount = this.songList.rows.length;
       this.centreRowIndex = this.songList.focusedRowIndex;
+      // Detect a per-row id variance (e.g. `list_on` for the focused row vs `list` for
+      // the rest). When true, the bar-texture swap is the skin-authored cursor highlight,
+      // and stacking our warm-yellow label tint on top would over-paint the cue.
+      const focusId = this.songList.rows[this.centreRowIndex]?.id;
+      const hasVariant =
+        focusId !== undefined && this.songList.rows.some((r, idx) => idx !== this.centreRowIndex && r.id !== focusId);
+      this.hasFocusedBarVariant = hasVariant;
     } else {
       this.visibleRowCount = FALLBACK_VISIBLE_ROW_COUNT;
       this.centreRowIndex = Math.floor(FALLBACK_VISIBLE_ROW_COUNT / 2);
+      this.hasFocusedBarVariant = false;
     }
   }
 
@@ -1807,7 +1827,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const labelX = labelTextOffsetX;
       label.x = labelX;
       label.y = rowCentreY;
-      label.tint = isSelected ? 0xffe066 : 0xffffff;
+      // Only paint the warm-yellow cursor tint when the skin doesn't already cue the
+      // focused row via a per-row bar-image swap (e.g. `list_on` vs `list`). Doubling up
+      // would over-paint the skin-authored highlight; leaving white-on-white otherwise
+      // keeps the title legible.
+      label.tint = isSelected && !this.hasFocusedBarVariant ? 0xffe066 : 0xffffff;
 
       // Per-row level overlay — only when the songlist authored a `level` sub-rect AND we
       // pre-allocated a label for this row. Sub-rect is RELATIVE to the bar rect; we
