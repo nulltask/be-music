@@ -850,6 +850,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       event.preventDefault();
       const step = (event.shiftKey ? 0.05 : 0.01) * (event.key === 'PageUp' ? -1 : 1);
       this.adapter.adjustLanecover(step);
+      this.flashCoverIndicator(`Lanecover ${Math.round(this.adapter.getLanecover() * 100)}%`);
       return;
     }
     // Lift slider — `Home` / `End` step the lift edge by 1% per press, Shift to 5%. The lift
@@ -860,6 +861,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       event.preventDefault();
       const step = (event.shiftKey ? 0.05 : 0.01) * (event.key === 'End' ? 1 : -1);
       this.adapter.adjustLift(step);
+      this.flashCoverIndicator(`Lift ${Math.round(this.adapter.getLift() * 100)}%`);
       return;
     }
     // Hidden cover — `H` toggles enable/disable; `J` / `K` adjust the ratio when enabled
