@@ -70,4 +70,43 @@ describe('expandBeatorajaJudgeDestinations', () => {
     ]);
     expect(expandBeatorajaJudgeDestinations(judges)[0]).toMatchObject({ op: [920, 241] });
   });
+
+  it('only emits judge.numbers[0..2] (PG/GR/GD) — drops BD/PR/MS slots (audit 1.3)', () => {
+    // Beatoraja's `SkinJudge.java:96` runs `nowCount = judgenow < 3 ? count[judgenow] : null`,
+    // so authoring numbers for tiers 3..5 produces nothing on screen. The TS impl previously
+    // emitted all 6 slots identically gated on the matching judge op, which made authors who
+    // referenced MAXCOMBO from every slot (ModernChic Play/lua/sp/judge.lua, GdbG values.lua)
+    // see a stale combo digit on every BAD/POOR/MISS — Java would render nothing instead.
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2010,
+        index: 0,
+        images: [],
+        numbers: [
+          { id: 'count-pg' },
+          { id: 'count-gr' },
+          { id: 'count-gd' },
+          { id: 'count-bd' },
+          { id: 'count-pr' },
+          { id: 'count-ms' },
+        ],
+      },
+    ]);
+    const expanded = expandBeatorajaJudgeDestinations(judges);
+    expect(expanded.map((d) => d.id)).toEqual(['count-pg', 'count-gr', 'count-gd']);
+    expect(expanded[0]).toMatchObject({ op: [241] }); // _1p_perfect
+    expect(expanded[1]).toMatchObject({ op: [242] }); // _1p_great
+    expect(expanded[2]).toMatchObject({ op: [243] }); // _1p_good
+  });
+
+  it('emits all authored numbers when fewer than 3 are present', () => {
+    // Authors that author only the PG count number (the most common case for
+    // single-overlay popn-style skins) still get that single entry emitted with the PG op.
+    const judges = normalizeBeatorajaJudges([
+      { id: 2010, index: 0, images: [], numbers: [{ id: 'pg-count-only' }] },
+    ]);
+    const expanded = expandBeatorajaJudgeDestinations(judges);
+    expect(expanded).toHaveLength(1);
+    expect(expanded[0]).toMatchObject({ id: 'pg-count-only', op: [241] });
+  });
 });

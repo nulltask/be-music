@@ -105,7 +105,17 @@ export function expandBeatorajaJudgeDestinations(
       const gate = ops[i] ?? ops[0]!;
       out.push(addOpGate(child, gate));
     }
-    for (let i = 0; i < judge.numbers.length; i += 1) {
+    // judge.numbers[] (the ms / count readouts paired with each judge tier) are only emitted
+    // for the top three tiers (PG / GR / GD) per beatoraja's `SkinJudge.java:96`:
+    //   `nowCount = judgenow < 3 ? count[judgenow] : null;`
+    // Tiers 3..5 (BD / PR / MS) get NO number — beatoraja deliberately hides the readout on
+    // failed judgments so a stale combo / FAST-SLOW digit doesn't linger over a miss splash.
+    // The previous TS impl emitted all 6 tiers identically, so authoring `judge.numbers[3..5]`
+    // (or, more commonly, having ALL 6 entries reference the same MAXCOMBO ref like
+    // ModernChic Play/lua/sp/judge.lua and GdbG play/values.lua do) painted a wrong digit on
+    // BAD/POOR/MISS where Java would render nothing (audit 1.3).
+    const numberLimit = Math.min(judge.numbers.length, 3);
+    for (let i = 0; i < numberLimit; i += 1) {
       const child = judge.numbers[i];
       if (child === undefined) continue;
       const gate = ops[i] ?? ops[0]!;
