@@ -55,6 +55,7 @@ import {
 } from './beatoraja-chart-note-distribution.ts';
 import {
   composeBeatorajaValueCells,
+  composeBeatorajaValueShift,
   normalizeBeatorajaImages,
   normalizeBeatorajaValues,
   type BeatorajaImageElement,
@@ -1969,16 +1970,31 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         // top. Skin Y-UP offset within the bar maps to Pixi:
         //   pixiY = rect.y + (rect.h - level.y - level.h)
         const subPixiY = rect.y + (rect.h - levelRect.y - levelRect.h) + fractionalNudge;
-        if (levelDigits !== undefined) {
-          // Digit sprites: split the level rect's width into `digit` evenly-sized slots.
-          // Each slot paints its cropped cell stretched to fill — same model as the
-          // skin-view's `value[]` renderer for ordinary digit destinations.
-          const slotW = levelRect.w / Math.max(1, levelDigits.length);
+        if (levelDigits !== undefined && this.levelValueElement !== undefined) {
+          // Digit sprites: per beatoraja's `value[]` convention, `dst.w` is the PER-DIGIT
+          // slot width (NOT the total strip width). The digit row extends rightward from
+          // `dst.x` for `slotWidth × digit` pixels (plus `space` gaps). Dividing
+          // `levelRect.w` by `digit count` would halve each slot — that's the squashed-
+          // text bug the standard skin-view value renderer documents at line 1922.
+          //
+          // `align` shifts the row left for `align=1` (left) / `align=2` (centre); align=0
+          // (right) leaves the row anchored at `dst.x`.
+          const valueElement = this.levelValueElement;
+          const slotWidth = levelRect.w;
+          const space = Number.isFinite(valueElement.space) ? valueElement.space : 0;
+          const slotStep = slotWidth + space;
+          // The row's width depends on the rendered value, so we look up the chart's
+          // playLevel here too and pass it to the shift composer. Folder rows skip this
+          // (no song.playLevel) — the shift collapses to 0 when value is 0 anyway.
+          const songForRow = entry?.kind === 'song' ? entry.song : undefined;
+          const lvlForShift = songForRow !== undefined ? resolvePlayLevel(songForRow.playLevel) ?? 0 : 0;
+          const alignShift = composeBeatorajaValueShift(valueElement, lvlForShift, slotWidth);
           for (let d = 0; d < levelDigits.length; d += 1) {
             const sprite = levelDigits[d]!;
-            sprite.x = rect.x + levelRect.x + d * slotW;
+            sprite.anchor.set(0, 0);
+            sprite.x = rect.x + levelRect.x + d * slotStep - alignShift;
             sprite.y = subPixiY;
-            sprite.width = slotW;
+            sprite.width = slotWidth;
             sprite.height = levelRect.h;
             sprite.alpha = isSelected ? 1 : 0.85;
           }
