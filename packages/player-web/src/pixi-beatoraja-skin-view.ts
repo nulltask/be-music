@@ -76,6 +76,7 @@ import {
   type BeatorajaRenderContext,
 } from './beatoraja-render.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
+import { NOTE_DISTRIBUTION_COLORS } from './beatoraja-chart-note-distribution.ts';
 
 export interface BeatorajaPlaySkinViewOptions {
   skin: BeatorajaSkin;
@@ -182,6 +183,36 @@ export interface BeatorajaPlaySkinViewOptions {
    * Returning `undefined` or an array of all zeros hides the graph (no useful data to plot).
    */
   resolveJudgeGraphBars?: (type: number) => ReadonlyArray<number> | undefined;
+  /**
+   * Resolve the note-distribution histogram for `judgegraph` type=0. Returns the per-second
+   * × per-category bucket data the spec-faithful renderer needs (matches upstream
+   * `SkinNoteDistributionGraph.updateData()` with TYPE_NORMAL). When supplied, the
+   * renderer uses this for type=0 instead of {@link resolveJudgeGraphBars}, which only
+   * carries aggregate counts insufficient for the time-series histogram.
+   *
+   * Returning `undefined` falls back to the bars resolver (backwards-compat path).
+   */
+  resolveNoteDistribution?: () => {
+    buckets: ReadonlyArray<ReadonlyArray<number>>;
+    maxCount: number;
+    totalMs: number;
+  } | undefined;
+  /**
+   * Resolve the BPM curve segments + mainbpm reference for `bpmgraph` destinations. Replaces
+   * the legacy `{x, y}` polyline ({@link resolveBpmGraphPoints}); the new shape carries the
+   * raw `(timeMs, bpm)` segments so the renderer can apply upstream's log-scaled,
+   * mainbpm-relative y projection AND color-code segments by BPM identity (mainbpm = green,
+   * minbpm = blue, maxbpm = red, others = yellow, stop = magenta).
+   *
+   * Returning `undefined` falls back to {@link resolveBpmGraphPoints}.
+   */
+  resolveBpmGraphData?: () => {
+    segments: ReadonlyArray<{ timeMs: number; bpm: number }>;
+    mainBpm: number;
+    minBpm: number;
+    maxBpm: number;
+    totalMs: number;
+  } | undefined;
   /**
    * Resolve the gauge curve as a polyline in `[0, 1]²`. Each `{x, y}` is a normalized point
    * inside the gaugegraph's destination box (x = chart progress, y = gauge / 100). Result skins
@@ -343,6 +374,12 @@ interface BpmGraphEntry {
    * is the "first paint" trigger; subsequent frames short-circuit.
    */
   lastPointCount: number;
+  /**
+   * Signature of the most-recent BPM graph data — `${segments.length}|${mainBpm}|...`.
+   * Used by the rich segment-data path to skip rebuilds when the underlying chart data
+   * hasn't changed (cursor moves through a folder still hit the same focused chart).
+   */
+  lastSignature: string;
 }
 
 interface JudgeGraphEntry {
@@ -545,6 +582,18 @@ export class BeatorajaPlaySkinView {
   private readonly resolveGaugePercent: () => number | undefined;
   private readonly resolveBpmGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveJudgeGraphBars: (type: number) => ReadonlyArray<number> | undefined;
+  private readonly resolveNoteDistribution: () =>
+    | { buckets: ReadonlyArray<ReadonlyArray<number>>; maxCount: number; totalMs: number }
+    | undefined;
+  private readonly resolveBpmGraphData: () =>
+    | {
+        segments: ReadonlyArray<{ timeMs: number; bpm: number }>;
+        mainBpm: number;
+        minBpm: number;
+        maxBpm: number;
+        totalMs: number;
+      }
+    | undefined;
   private readonly resolveGaugeGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveTimingSamples: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
   private readonly resolveTimingDistribution: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
@@ -581,7 +630,9 @@ export class BeatorajaPlaySkinView {
     this.resolveSliderValue = options.resolveSliderValue ?? (() => undefined);
     this.resolveGaugePercent = options.resolveGaugePercent ?? (() => undefined);
     this.resolveBpmGraphPoints = options.resolveBpmGraphPoints ?? (() => undefined);
+    this.resolveBpmGraphData = options.resolveBpmGraphData ?? (() => undefined);
     this.resolveJudgeGraphBars = options.resolveJudgeGraphBars ?? (() => undefined);
+    this.resolveNoteDistribution = options.resolveNoteDistribution ?? (() => undefined);
     this.resolveGaugeGraphPoints = options.resolveGaugeGraphPoints ?? (() => undefined);
     this.resolveTimingSamples = options.resolveTimingSamples ?? (() => undefined);
     this.resolveTimingDistribution = options.resolveTimingDistribution ?? (() => undefined);
@@ -1495,7 +1546,7 @@ export class BeatorajaPlaySkinView {
     const graphics = new Graphics();
     graphics.alpha = 0;
     this.container.addChild(graphics);
-    return { kind: 'bpmgraph', group, element, graphics, lastPointCount: -1 };
+    return { kind: 'bpmgraph', group, element, graphics, lastPointCount: -1, lastSignature: '' };
   }
 
   /**
@@ -2184,6 +2235,93 @@ export class BeatorajaPlaySkinView {
     const graphics = entry.graphics;
     graphics.visible = props.visible;
     if (!props.visible) return;
+    // Prefer the rich segment-data resolver (`{segments, mainBpm, minBpm, maxBpm, totalMs}`);
+    // matches upstream `SkinBPMGraph.draw()` which paints color-coded segments at log-scaled
+    // y positions relative to mainBpm. Falls back to the legacy `[{x, y}]` polyline resolver
+    // when the host hasn't wired the rich data — produces a single white curve instead of
+    // the per-segment color identity, but at least keeps something visible.
+    const data = this.resolveBpmGraphData();
+    if (data === undefined) {
+      this.updateBpmGraphLegacy(entry, props);
+      return;
+    }
+    const { segments, mainBpm, minBpm, maxBpm, totalMs } = data;
+    if (segments.length < 1 || totalMs <= 0 || mainBpm <= 0) {
+      graphics.visible = false;
+      return;
+    }
+    const signature = `${segments.length}|${mainBpm}|${minBpm}|${maxBpm}|${totalMs}`;
+    if (signature !== entry.lastSignature) {
+      graphics.clear();
+      // Log-scale window: BPM is plotted as `log10(bpm / mainBpm)` clamped to [1/8, 8] —
+      // the same range upstream uses (`SkinBPMGraph.minValue = 1/8, maxValue = 8`). Within
+      // this band, mainBpm sits at the middle of the destination box; values doubling
+      // above mainBpm climb toward the top edge, values halving below sink toward the
+      // bottom. Beyond 8x or below 1/8 clamp to the edges.
+      const minRatio = 1 / 8;
+      const maxRatio = 8;
+      const minRatioLog = Math.log10(minRatio);
+      const maxRatioLog = Math.log10(maxRatio);
+      const ratioLogRange = maxRatioLog - minRatioLog;
+      const projectY = (bpm: number): number => {
+        if (bpm <= 0) return props.height; // stop → bottom edge
+        const ratio = Math.min(maxRatio, Math.max(minRatio, bpm / mainBpm));
+        const norm = (Math.log10(ratio) - minRatioLog) / ratioLogRange;
+        // Pixi y grows DOWNWARD; invert so high BPM paints toward the top.
+        return (1 - norm) * props.height;
+      };
+      const colorFor = (bpm: number): number => {
+        if (bpm <= 0) return 0xff00ff; // stop → magenta
+        if (bpm === mainBpm) return 0x00ff00; // main → green
+        if (bpm === minBpm) return 0x0000ff; // min → blue
+        if (bpm === maxBpm) return 0xff0000; // max → red
+        return 0xffff00; // other → yellow
+      };
+      const transitionColor = 0x7f7f7f; // gray
+      const lineWidth = 2;
+      // Walk segments. Each segment's BPM applies from `segments[i].timeMs` until
+      // `segments[i+1].timeMs` (or `totalMs` for the last). Render as a horizontal line at
+      // `projectY(segments[i].bpm)`; render a vertical transition line where the BPM
+      // changes between adjacent segments.
+      for (let i = 0; i < segments.length; i += 1) {
+        const seg = segments[i]!;
+        const next = segments[i + 1];
+        const x1 = (seg.timeMs / totalMs) * props.width;
+        const x2 = ((next?.timeMs ?? totalMs) / totalMs) * props.width;
+        const y = projectY(seg.bpm);
+        // Horizontal line for the segment.
+        graphics.rect(x1, y - lineWidth / 2, Math.max(lineWidth, x2 - x1), lineWidth);
+        graphics.fill({ color: colorFor(seg.bpm), alpha: 1 });
+        // Vertical transition line at the segment boundary (when bpm changes).
+        if (next !== undefined && next.bpm !== seg.bpm) {
+          const yNext = projectY(next.bpm);
+          const yMin = Math.min(y, yNext);
+          const yMax = Math.max(y, yNext);
+          if (yMax - yMin > lineWidth) {
+            graphics.rect(x2 - lineWidth / 2, yMin, lineWidth, yMax - yMin);
+            graphics.fill({ color: transitionColor, alpha: 1 });
+          }
+        }
+      }
+      entry.lastSignature = signature;
+    }
+    graphics.x = props.x;
+    graphics.y = props.y;
+    graphics.alpha = props.alpha;
+    // Don't tint — segments already author their own colours per BPM identity. Tinting
+    // would multiply through (e.g. yellow segments would go red under a red tint), losing
+    // the color identity. Keep tint at white.
+    graphics.tint = 0xffffff;
+    graphics.angle = props.angle;
+    graphics.blendMode = props.blendMode;
+  }
+
+  /**
+   * Legacy `{x, y}` polyline path — used when `resolveBpmGraphData` isn't wired (older host
+   * code paths). Single white step curve, no per-segment colours.
+   */
+  private updateBpmGraphLegacy(entry: BpmGraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+    const graphics = entry.graphics;
     const points = this.resolveBpmGraphPoints();
     if (points === undefined || points.length < 2) {
       graphics.visible = false;
@@ -2197,8 +2335,6 @@ export class BeatorajaPlaySkinView {
         const p = points[i]!;
         graphics.lineTo(p.x * props.width, (1 - p.y) * props.height);
       }
-      // 2-pixel stroke matches the polyline-graph convention. Author overrides aren't surfaced
-      // — the bpmgraph element shape doesn't carry stroke metadata.
       graphics.stroke({ color: props.tint, width: 2, alpha: 1 });
       entry.lastPointCount = points.length;
     }
@@ -2226,6 +2362,17 @@ export class BeatorajaPlaySkinView {
     const graphics = entry.graphics;
     graphics.visible = props.visible;
     if (!props.visible) return;
+    // Type 0 (note distribution) — when the host wires `resolveNoteDistribution`, render
+    // the per-second × per-category histogram + olive background bands per upstream's
+    // `SkinNoteDistributionGraph`. Falls through to the bars resolver if no host has
+    // wired the rich data (legacy / decide-scene path).
+    if (entry.element.type === 0) {
+      const distribution = this.resolveNoteDistribution();
+      if (distribution !== undefined && distribution.buckets.length > 0) {
+        this.paintNoteDistribution(entry, props, distribution);
+        return;
+      }
+    }
     const bars = this.resolveJudgeGraphBars(entry.element.type);
     if (bars === undefined || bars.length === 0) {
       graphics.visible = false;
@@ -2281,6 +2428,112 @@ export class BeatorajaPlaySkinView {
     graphics.y = props.y;
     graphics.alpha = props.alpha;
     graphics.tint = props.tint;
+    graphics.angle = props.angle;
+    graphics.blendMode = props.blendMode;
+  }
+
+  /**
+   * Paint the spec-faithful note distribution (judgegraph type=0) — mirrors upstream
+   * `SkinNoteDistributionGraph.draw()`:
+   *
+   *   1. Background panel: black 80% alpha + olive bands every 10 height units +
+   *      time-axis guide lines (gray every 60 sec, dim gray every 10 sec)
+   *   2. Per-bucket stacked chips: each note paints as a 4-pixel-tall coloured block at
+   *      the appropriate height in the bucket's stack, color-coded by category
+   *      (`NOTE_DISTRIBUTION_COLORS`).
+   *
+   * The destination's `tint` is intentionally ignored — note categories carry their own
+   * colors, so a tint multiplier would distort the palette.
+   */
+  private paintNoteDistribution(
+    entry: JudgeGraphEntry,
+    props: ReturnType<typeof destinationToSpriteProps>,
+    data: { buckets: ReadonlyArray<ReadonlyArray<number>>; maxCount: number; totalMs: number },
+  ): void {
+    const graphics = entry.graphics;
+    const { buckets, maxCount } = data;
+    if (buckets.length === 0 || maxCount <= 0) {
+      graphics.visible = false;
+      return;
+    }
+    // Signature includes bucket count + maxCount + a sampled hash of bucket totals so
+    // cursor moves through a folder don't redraw if the focused chart's distribution is
+    // unchanged. Lightweight — full equality check would walk every bucket × category.
+    let totalsHash = 0;
+    for (let i = 0; i < buckets.length; i += 1) {
+      let total = 0;
+      for (const v of buckets[i]!) total += v;
+      totalsHash = (totalsHash * 31 + total) | 0;
+    }
+    const signature = `nd|${buckets.length}|${maxCount}|${totalsHash}|${entry.element.backTexOff}`;
+    if (signature !== entry.lastSignature) {
+      graphics.clear();
+      const bucketCount = buckets.length;
+      const bucketWidth = props.width / bucketCount;
+      // Bucket "chip" height = props.height / maxCount. One chip per note in the
+      // category stack; leave a 1-pixel gap (matches upstream's 4×4 chip in 5×5 cell).
+      const cellHeight = props.height / maxCount;
+      const chipHeight = Math.max(1, cellHeight * 0.8);
+      const chipWidth = Math.max(1, bucketWidth * 0.8);
+      const chipXOffset = (bucketWidth - chipWidth) / 2;
+
+      // Background — black 80% alpha (`backTexOff = 0` is upstream's default).
+      if (entry.element.backTexOff === 0) {
+        graphics.rect(0, 0, props.width, props.height);
+        graphics.fill({ color: 0x000000, alpha: 0.8 });
+
+        // Olive horizontal bands at every 10 height units. Color gradient: `(0.007*i,
+        // 0.007*i, 0)` — a slowly-darkening yellow-olive.
+        for (let i = 10; i < maxCount; i += 10) {
+          const bandColor = ((Math.floor(0.007 * i * 255) << 16) |
+            (Math.floor(0.007 * i * 255) << 8) |
+            0) >>> 0;
+          // Y from BOTTOM (Pixi y from top) — band at i*cellHeight from bottom = props.height - (i+10)*cellHeight from top.
+          const yTop = props.height - (i + 10) * cellHeight;
+          const bandHeight = 10 * cellHeight;
+          graphics.rect(0, yTop, props.width, bandHeight);
+          graphics.fill({ color: bandColor, alpha: 1 });
+        }
+
+        // Vertical x-axis guide lines: every 60 sec (gray) / 10 sec (dim gray).
+        for (let i = 0; i < bucketCount; i += 1) {
+          if (i % 60 === 0 && i > 0) {
+            graphics.rect(i * bucketWidth, 0, 1, props.height);
+            graphics.fill({ color: 0x404040, alpha: 1 });
+          } else if (i % 10 === 0 && i > 0) {
+            graphics.rect(i * bucketWidth, 0, 1, props.height);
+            graphics.fill({ color: 0x202020, alpha: 1 });
+          }
+        }
+      }
+
+      // Foreground — per-bucket stacked chips. Walk categories 0..6, stack each
+      // category's chip count at the bottom of the bucket. Pixi y is inverted so chip
+      // y_top = props.height - (stack_height + 1) * cellHeight.
+      for (let i = 0; i < bucketCount; i += 1) {
+        const bucket = buckets[i]!;
+        const x = i * bucketWidth + chipXOffset;
+        let stackedCount = 0;
+        for (let cat = 0; cat < bucket.length; cat += 1) {
+          const count = bucket[cat]!;
+          if (count === 0) continue;
+          const color = NOTE_DISTRIBUTION_COLORS[cat] ?? 0xffffff;
+          for (let chip = 0; chip < count && stackedCount < maxCount; chip += 1) {
+            const yTop = props.height - (stackedCount + 1) * cellHeight;
+            graphics.rect(x, yTop, chipWidth, chipHeight);
+            graphics.fill({ color, alpha: 1 });
+            stackedCount += 1;
+          }
+        }
+      }
+
+      entry.lastSignature = signature;
+    }
+    graphics.x = props.x;
+    graphics.y = props.y;
+    graphics.alpha = props.alpha;
+    // Don't tint — note categories have their own colors.
+    graphics.tint = 0xffffff;
     graphics.angle = props.angle;
     graphics.blendMode = props.blendMode;
   }

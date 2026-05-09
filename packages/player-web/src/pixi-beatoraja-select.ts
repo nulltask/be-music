@@ -44,7 +44,10 @@ import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
 import { computeBeatorajaChartDensity, type ChartDensity } from './beatoraja-chart-density.ts';
 import { computeBeatorajaChartTotalSeconds } from './beatoraja-chart-duration.ts';
 import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from './beatoraja-chart-note-counts.ts';
-import { computeBeatorajaBpmCurve } from './beatoraja-chart-bpm-curve.ts';
+import {
+  computeBeatorajaChartNoteDistribution,
+  type BeatorajaChartNoteDistribution,
+} from './beatoraja-chart-note-distribution.ts';
 import { normalizeBeatorajaImages, type BeatorajaImageElement } from '@be-music/beatoraja-skin';
 import { createCroppedBeatorajaTexture } from './beatoraja-render.ts';
 import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from './library.ts';
@@ -535,12 +538,15 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // select.json paints `-102` as the per-song banner; ModernChic uses `-100` as a
       // frosted backdrop on the chart-info panel.
       chartImageProvider: (id) => this.resolveChartImageForFocus(id),
-      // BPM curve for the focused chart's `bpmgraph` element — recomputed lazily on
-      // focus change inside `resolveBpmGraphPoints`.
-      resolveBpmGraphPoints: () => this.resolveBpmGraphPointsForFocus(),
-      // Note-distribution histogram (judgegraph type=0) for the focused chart. The
-      // default skin's `notes-graph` plots `[normal, ln, scratch, bss]` here.
-      resolveJudgeGraphBars: (type) => this.resolveJudgeGraphBarsForFocus(type),
+      // BPM segments + mainbpm reference for the focused chart's `bpmgraph` element.
+      // The spec-faithful renderer path uses these to apply log-scaled, mainbpm-relative
+      // y projection AND color-code segments by BPM identity (mainbpm = green, minbpm =
+      // blue, maxbpm = red, others = yellow, stop = magenta).
+      resolveBpmGraphData: () => this.resolveBpmGraphDataForFocus(),
+      // Per-second × per-category note distribution histogram for `judgegraph` type=0
+      // (= the `notes-graph` element on the default skin). Mirrors upstream
+      // `SkinNoteDistributionGraph.updateData()` with TYPE_NORMAL.
+      resolveNoteDistribution: () => this.resolveNoteDistributionForFocus(),
     });
 
     this.root.addChild(this.backdrop);
@@ -744,8 +750,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
       chartImageProvider: (id) => this.resolveChartImageForFocus(id),
-      resolveBpmGraphPoints: () => this.resolveBpmGraphPointsForFocus(),
-      resolveJudgeGraphBars: (type) => this.resolveJudgeGraphBarsForFocus(type),
+      resolveBpmGraphData: () => this.resolveBpmGraphDataForFocus(),
+      resolveNoteDistribution: () => this.resolveNoteDistributionForFocus(),
     });
     // The old view's `container.destroy({children: false})` (inside `view.dispose()`) detaches
     // its children — listLayer was one of them, so it's now orphaned. Re-parent into the new
@@ -2147,39 +2153,60 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   }
 
   /**
-   * Per-frame resolver for the focused chart's BPM curve (consumed by `bpmgraph`
-   * destinations). Computes the curve lazily from the chart's events and caches per
-   * song-id so cursor moves through a folder don't redundantly re-walk the chart.
+   * Lazy analysis cache for the focused chart. `computeBeatorajaChartNoteDistribution`
+   * walks the chart's events once and produces both the per-bucket histogram AND the BPM
+   * segment list — sharing the walk between the bpmgraph and notes-graph renderers. Cached
+   * per song-id so cursor moves through a folder don't redundantly re-analyse.
    */
-  private resolveBpmGraphPointsForFocus(): ReadonlyArray<{ x: number; y: number }> | undefined {
+  private analysisFor(song: BrowserSongEntry): BeatorajaChartNoteDistribution {
+    const cached = this.chartAnalysisCache.get(song.id);
+    if (cached !== undefined) return cached;
+    const result = computeBeatorajaChartNoteDistribution(song.chart);
+    this.chartAnalysisCache.set(song.id, result);
+    return result;
+  }
+  private readonly chartAnalysisCache = new Map<string, BeatorajaChartNoteDistribution>();
+
+  /**
+   * Per-frame resolver for the focused chart's BPM segment data (consumed by `bpmgraph`
+   * destinations under the spec-faithful renderer path).
+   */
+  private resolveBpmGraphDataForFocus():
+    | {
+        segments: ReadonlyArray<{ timeMs: number; bpm: number }>;
+        mainBpm: number;
+        minBpm: number;
+        maxBpm: number;
+        totalMs: number;
+      }
+    | undefined {
     const entry = this.entries[this.currentIndex];
     if (entry?.kind !== 'song') return undefined;
-    const cached = this.bpmGraphCache.get(entry.song.id);
-    if (cached !== undefined) return cached;
-    const points = computeBeatorajaBpmCurve(entry.song.chart);
-    this.bpmGraphCache.set(entry.song.id, points);
-    return points;
+    const analysis = this.analysisFor(entry.song);
+    if (analysis.bpmSegments.length === 0 || analysis.totalMs <= 0) return undefined;
+    return {
+      segments: analysis.bpmSegments,
+      mainBpm: analysis.mainBpm,
+      minBpm: analysis.minBpm,
+      maxBpm: analysis.maxBpm,
+      totalMs: analysis.totalMs,
+    };
   }
-  private readonly bpmGraphCache = new Map<string, ReadonlyArray<{ x: number; y: number }>>();
 
   /**
    * Per-frame resolver for the focused chart's note-distribution histogram (judgegraph
-   * type=0). Returns `[normal, ln, scratch, bss]` from the chart's playable-event
-   * breakdown. Higher type codes (judgement spread, etc.) need real engine state and
-   * stay undefined on the select scene.
+   * type=0 under the spec-faithful renderer path). Returns the per-second × per-category
+   * bucket data the renderer needs for the upstream `SkinNoteDistributionGraph` look.
    */
-  private resolveJudgeGraphBarsForFocus(type: number): ReadonlyArray<number> | undefined {
-    if (type !== 0) return undefined;
+  private resolveNoteDistributionForFocus():
+    | { buckets: ReadonlyArray<ReadonlyArray<number>>; maxCount: number; totalMs: number }
+    | undefined {
     const entry = this.entries[this.currentIndex];
     if (entry?.kind !== 'song') return undefined;
-    const cached = this.noteBreakdownCache.get(entry.song.id);
-    if (cached !== undefined) return cached;
-    const breakdown = computeBeatorajaNoteBreakdown(entry.song.chart);
-    const bars = [breakdown.normal, breakdown.ln, breakdown.scratch, breakdown.bss];
-    this.noteBreakdownCache.set(entry.song.id, bars);
-    return bars;
+    const analysis = this.analysisFor(entry.song);
+    if (analysis.buckets.length === 0) return undefined;
+    return { buckets: analysis.buckets, maxCount: analysis.maxCount, totalMs: analysis.totalMs };
   }
-  private readonly noteBreakdownCache = new Map<string, ReadonlyArray<number>>();
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed) return;

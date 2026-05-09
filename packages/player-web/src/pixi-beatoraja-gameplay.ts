@@ -44,6 +44,10 @@ import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
 import { BeatorajaMarkerLayer, BEATORAJA_MARKER_PIXELS_PER_BEAT } from './pixi-beatoraja-markers.ts';
 import { computeBeatorajaChartMarkers } from './beatoraja-chart-markers.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
+import {
+  computeBeatorajaChartNoteDistribution,
+  type BeatorajaChartNoteDistribution,
+} from './beatoraja-chart-note-distribution.ts';
 import { flipDpChart } from './beatoraja-chart-dp-flip.ts';
 import { BeatorajaBgaLayer } from './pixi-beatoraja-bga.ts';
 import type { BgaCue } from './pixi-gameplay-bga.ts';
@@ -192,6 +196,13 @@ export class PixiBeatorajaGameplayView implements PixiScene {
    * to plot. Static for the lifetime of the scene; the view caches the stroke after first paint.
    */
   private readonly chartBpmCurve: ReadonlyArray<BpmCurvePoint>;
+  /**
+   * Spec-faithful note-distribution + BPM-segment analysis (per-second × per-category histogram
+   * matching beatoraja's `notes-graph` / `judgegraph type=0`, plus the `bpmgraph` segments with
+   * mainBpm/min/max identity). Computed once at construction; both the initial view and
+   * `replaceSkin` re-use it through `resolveNoteDistribution` / `resolveBpmGraphData`.
+   */
+  private readonly chartAnalysis: BeatorajaChartNoteDistribution;
   private bgaLayer: BeatorajaBgaLayer | undefined;
   private readonly adapter: BeatorajaRuntimeAdapter;
   private readonly options: PixiBeatorajaGameplayViewOptions;
@@ -271,10 +282,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // `offsets: [50]` see no shift.
     this.applyCustomOffsets(options.skin.offset, options.skinConfig?.customOffset);
 
-    // BPM curve is precomputed once — `bpmgraph[]` is static for the whole session, no point
-    // recomputing per frame. Captured here so both the initial view and any hot-swapped view
-    // (`replaceSkin`) reuse the same curve.
+    // BPM curve + note distribution analysis are static for the chart's lifetime — compute
+    // both once here. Both the initial view and `replaceSkin` reuse them via the resolvers
+    // below.
     this.chartBpmCurve = computeBeatorajaBpmCurve(effectiveChart);
+    this.chartAnalysis = computeBeatorajaChartNoteDistribution(effectiveChart);
     this.view = new BeatorajaPlaySkinView({
       skin: options.skin,
       textures: options.textures,
@@ -288,7 +300,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveSliderValue: (type) => this.adapter.resolveSliderValue(type),
       resolveGaugePercent: () => this.adapter.resolveGaugePercent(),
       resolveBpmGraphPoints: () => this.chartBpmCurve,
+      resolveBpmGraphData: () => this.bpmGraphDataForCurrentChart(),
       resolveJudgeGraphBars: (type) => this.adapter.resolveJudgeGraphBars(type),
+      resolveNoteDistribution: () => this.noteDistributionForCurrentChart(),
       resolveTimingSamples: () => this.adapter.resolveTimingSamples(),
       // Chart-image synthetic ids (-100 STAGEFILE / -101 BACKBMP / -102 BANNER). ModernChic
       // uses STAGEFILE under the lane cover; default skin's loading panel anchors on it too.
@@ -559,7 +573,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveSliderValue: (type) => this.adapter.resolveSliderValue(type),
       resolveGaugePercent: () => this.adapter.resolveGaugePercent(),
       resolveBpmGraphPoints: () => this.chartBpmCurve,
+      resolveBpmGraphData: () => this.bpmGraphDataForCurrentChart(),
       resolveJudgeGraphBars: (type) => this.adapter.resolveJudgeGraphBars(type),
+      resolveNoteDistribution: () => this.noteDistributionForCurrentChart(),
       resolveTimingSamples: () => this.adapter.resolveTimingSamples(),
       chartImageProvider: (id) => resolveChartImage(this.options.chartImages, id),
       onButtonAction: (act, modifiers) => this.handleCoverButton(act, modifiers),
@@ -620,6 +636,43 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         name: opts.skin.name,
       }),
     );
+  }
+
+  /**
+   * Resolver for `bpmgraph` segment data. The skin view's spec-faithful `bpmgraph` painter
+   * needs the full segment timeline + `mainBpm`/`min`/`max` to color-code each segment by
+   * BPM identity (mainbpm = green, min = blue, max = red, other = yellow, stop = magenta).
+   *
+   * Returns `undefined` for charts with no BPM history yet (lets the view fall back to the
+   * legacy points-based path that paints a flat polyline).
+   */
+  private bpmGraphDataForCurrentChart() {
+    if (this.chartAnalysis.bpmSegments.length === 0 || this.chartAnalysis.totalMs <= 0) {
+      return undefined;
+    }
+    return {
+      segments: this.chartAnalysis.bpmSegments,
+      mainBpm: this.chartAnalysis.mainBpm,
+      minBpm: this.chartAnalysis.minBpm,
+      maxBpm: this.chartAnalysis.maxBpm,
+      totalMs: this.chartAnalysis.totalMs,
+    };
+  }
+
+  /**
+   * Resolver for `notes-graph` / `judgegraph type=0` per-second × per-category histogram. The
+   * skin view paints stacked chips per second bucket using the spec's seven categories.
+   *
+   * Returns `undefined` for an empty chart (no notes / no BPM transitions); the view then
+   * leaves the graph empty rather than rendering a single zero-height baseline.
+   */
+  private noteDistributionForCurrentChart() {
+    if (this.chartAnalysis.buckets.length === 0) return undefined;
+    return {
+      buckets: this.chartAnalysis.buckets,
+      maxCount: this.chartAnalysis.maxCount,
+      totalMs: this.chartAnalysis.totalMs,
+    };
   }
 
   /**
