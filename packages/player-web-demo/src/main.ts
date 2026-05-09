@@ -63,6 +63,7 @@ import {
   buildDefaultSkinConfigFiles,
   buildDefaultSkinConfigOptions,
   bundleBeatorajaSources,
+  computeClearLampOp,
   expandBeatorajaWildcard,
   loadBeatorajaSkin,
   normalizeBeatorajaFonts,
@@ -690,6 +691,16 @@ class PlayerWebDemoApp {
    * the eval no longer crashed.
    */
   private beatorajaSkinAudio: BeatorajaSkinAudioPlayer | undefined;
+  /**
+   * In-session per-song clear-lamp memory (audit 2.18). Keyed by `BrowserSongEntry.id` so
+   * each completed run updates the lamp the next time the user lands on that song in the
+   * select list. We don't persist across page reloads (no score DB on the web port today),
+   * but within a session the lamp icons gradually populate as the user plays charts.
+   *
+   * Stored as the resolved `BEATORAJA_OP.CLEAR_LAMP_*` op rather than a domain enum so the
+   * select scene's lookup stays a single map read with no per-frame translation.
+   */
+  private readonly beatorajaSessionLampOps = new Map<string, number>();
   /**
    * Loop-playable BGM bytes for the song-select scene (`LR2files/Bgm/<theme>/select.wav` from the dropped theme).
    * Forwarded to `PixiSongSelectView` via the constructor option on first mount and via `setSelectBgm` on subsequent
@@ -1932,6 +1943,10 @@ class PlayerWebDemoApp {
       skinConfig: config,
       skinAudio: this.beatorajaSkinAudio,
       songs: this.collection.songs,
+      // In-session lamp lookup — completed runs in this session light the focused song bar's
+      // lamp icon. Without this every bar reported as `CLEAR_LAMP_NOPLAY` regardless of how
+      // many times the user cleared the chart in the same session (audit 2.18).
+      resolveSongLampOp: (song) => this.beatorajaSessionLampOps.get(song.id),
       // Restore the last cursor so coming back from gameplay lands on the same song.
       initialIndex: this.beatorajaSelectIndex,
       onSongPicked: (song, opts) => {
@@ -2306,6 +2321,25 @@ class PlayerWebDemoApp {
   ): Promise<boolean> {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return false;
+
+    // Stash the run's clear-lamp into the in-session map (audit 2.18) so the next time the
+    // user lands on this song in the select scene the bar's lamp icon lights up. Cleared
+    // runs replace any previous lamp; a failed retry of a previously-cleared chart should
+    // not downgrade the lamp.
+    const newLamp = computeClearLampOp({
+      cleared: summary.gauge?.cleared ?? false,
+      perfect: summary.perfect,
+      great: summary.great,
+      good: summary.good,
+      bad: summary.bad,
+      poor: summary.poor,
+      total: summary.total,
+      gaugeType: summary.gauge?.type,
+    });
+    const previousLamp = this.beatorajaSessionLampOps.get(song.id);
+    if (newLamp !== BEATORAJA_OP.CLEAR_LAMP_FAILED || previousLamp === undefined) {
+      this.beatorajaSessionLampOps.set(song.id, newLamp);
+    }
 
     // Same fix as decide — fall back to the discovery's `theme.resultSkin` rather than
     // `resultCandidates[0]` (= file-walk iteration order), so picking the discovery default

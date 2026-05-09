@@ -86,6 +86,18 @@ export interface PixiBeatorajaSelectSceneOptions {
   onSkinConfigChange?: (config: BeatorajaSkinConfig) => void;
   /** Optional audio backend for `main_state.audio_play / loop / stop` Lua calls. */
   skinAudio?: BeatorajaSkinAudio;
+  /**
+   * Optional lookup that returns the focused song's clear-lamp op (one of
+   * `BEATORAJA_OP.CLEAR_LAMP_*`). When omitted, every song reports as `CLEAR_LAMP_NOPLAY`
+   * (= 100), which makes the song-list lamp icon always render the "no record" frame —
+   * audit 2.18.
+   *
+   * Hosts that track in-session play history (the demo does, keyed by `BrowserSongEntry.id`)
+   * supply the callback to light the lamp icon based on actual completed runs. The lookup is
+   * called on every frame for the focused entry only — caching at the host's discretion.
+   * Folder rows pass through unchanged (the lamp op is a song-bar concept).
+   */
+  resolveSongLampOp?: (song: BrowserSongEntry) => number | undefined;
 }
 
 /**
@@ -587,11 +599,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // "missing rank" as the standard window.
       ops.add(judgeRankOp(meta.rank));
 
-      // Clear-lamp default — without a score DB we have no record of past plays, so every
-      // song reports as `CLEAR_LAMP_NOPLAY` (100). Skins gate the small "lamp" graphic on the
-      // bar list on this op; in the meantime the user sees the "no play" indicator instead of
-      // a blank bar.
-      ops.add(BEATORAJA_OP.CLEAR_LAMP_NOPLAY);
+      // Clear-lamp op for the focused song bar (audit 2.18). Beatoraja's per-bar
+      // `OPTION_SELECT_BAR_*_CLEARED` block (100..1104) is the same numeric pool as the
+      // play-scene `CLEAR_LAMP_*`. The host supplies a lookup keyed by `BrowserSongEntry.id`
+      // so completed runs in this session light the bar's lamp icon. When the host omits the
+      // callback (or hasn't tracked this song's id yet), fall through to NOPLAY so the
+      // "no record" frame still shows.
+      const lampOp = this.options.resolveSongLampOp?.(entry.song) ?? BEATORAJA_OP.CLEAR_LAMP_NOPLAY;
+      ops.add(lampOp);
     }
     return ops;
   }
