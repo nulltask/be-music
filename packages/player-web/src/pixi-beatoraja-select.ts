@@ -1616,12 +1616,34 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       hit.height = rect.h;
       hit.hitArea = null;
 
-      const iconX = rect.x + Math.max(8, Math.floor(rect.h * 0.2));
+      // Kind icon position — when the skin authored `songlist.label[]`, anchor the icon
+      // inside the label sub-rect (Y-flipped from beatoraja's Y-UP-within-bar coords).
+      // Otherwise fall back to a small left-inset of the bar rect (legacy behaviour for
+      // skins without a label sub-destination).
+      const labelRect = this.songList?.label;
+      let iconX: number;
+      let iconY: number;
+      if (labelRect !== undefined) {
+        const labelPixiY = rect.y + (rect.h - labelRect.y - labelRect.h) + fractionalNudge;
+        iconX = rect.x + labelRect.x + labelRect.w / 2;
+        iconY = labelPixiY + labelRect.h / 2;
+        icon.anchor.set(0.5, 0.5);
+      } else {
+        iconX = rect.x + Math.max(8, Math.floor(rect.h * 0.2));
+        iconY = rowCentreY;
+        icon.anchor.set(0, 0.5);
+      }
       icon.x = iconX;
-      icon.y = rowCentreY;
+      icon.y = iconY;
       icon.tint = isSelected ? 0xffe066 : 0xffffff;
 
-      const labelX = iconX + Math.max(20, Math.floor(rect.h * 0.5));
+      // Title label x — pushed past either the label sub-rect's right edge (when
+      // authored) or the legacy icon-inset spacing.
+      const labelTextOffsetX =
+        labelRect !== undefined
+          ? rect.x + labelRect.x + labelRect.w + Math.max(8, Math.floor(rect.h * 0.2))
+          : iconX + Math.max(20, Math.floor(rect.h * 0.5));
+      const labelX = labelTextOffsetX;
       label.x = labelX;
       label.y = rowCentreY - Math.floor(rect.h * 0.05);
       label.tint = isSelected ? 0xffe066 : 0xffffff;
