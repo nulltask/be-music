@@ -304,6 +304,10 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveJudgeGraphBars: (type) => this.adapter.resolveJudgeGraphBars(type),
       resolveNoteDistribution: () => this.noteDistributionForCurrentChart(),
       resolveTimingSamples: () => this.adapter.resolveTimingSamples(),
+      // Live playhead position drives the cursor on `bpmgraph` / `notes-graph`. Reads the
+      // engine's currentSeconds latched into `currentFrame`; before the first frame lands
+      // we return undefined so the cursor stays hidden.
+      resolveCurrentTimeMs: () => this.currentTimeMsForCursor(),
       // Chart-image synthetic ids (-100 STAGEFILE / -101 BACKBMP / -102 BANNER). ModernChic
       // uses STAGEFILE under the lane cover; default skin's loading panel anchors on it too.
       // Missing entries return undefined → matching destinations stay hidden.
@@ -577,6 +581,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveJudgeGraphBars: (type) => this.adapter.resolveJudgeGraphBars(type),
       resolveNoteDistribution: () => this.noteDistributionForCurrentChart(),
       resolveTimingSamples: () => this.adapter.resolveTimingSamples(),
+      resolveCurrentTimeMs: () => this.currentTimeMsForCursor(),
       chartImageProvider: (id) => resolveChartImage(this.options.chartImages, id),
       onButtonAction: (act, modifiers) => this.handleCoverButton(act, modifiers),
     });
@@ -673,6 +678,19 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       maxCount: this.chartAnalysis.maxCount,
       totalMs: this.chartAnalysis.totalMs,
     };
+  }
+
+  /**
+   * Resolve the current playhead position in ms for graph cursor overlays
+   * (`bpmgraph` / `notes-graph`). Reads `currentFrame.currentSeconds` (the latest UI
+   * frame published by the engine driver) and converts to ms. Returns `undefined`
+   * before the first frame lands so the cursor stays hidden during the initial paint.
+   */
+  private currentTimeMsForCursor(): number | undefined {
+    const frame = this.currentFrame;
+    if (frame === null) return undefined;
+    if (typeof frame.currentSeconds !== 'number' || !Number.isFinite(frame.currentSeconds)) return undefined;
+    return Math.max(0, frame.currentSeconds * 1000);
   }
 
   /**

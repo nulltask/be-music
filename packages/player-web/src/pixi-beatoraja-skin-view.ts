@@ -239,6 +239,16 @@ export interface BeatorajaPlaySkinViewOptions {
    */
   resolveTimingDistribution?: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
   /**
+   * Resolve the current playhead position (ms since chart start) for graph cursor overlays.
+   * The renderer paints a thin vertical line at this position over `bpmgraph` and `notes-graph`
+   * so the player sees where they are within the chart's BPM curve / density timeline.
+   *
+   * Returning `undefined` (or the host omitting the resolver) hides the cursor — that's the
+   * select scene case (preview-only graphs have no playhead). The play / decide scenes wire
+   * this to `frame.currentSeconds * 1000` so the cursor follows the live engine clock.
+   */
+  resolveCurrentTimeMs?: () => number | undefined;
+  /**
    * Fired when the user clicks (or taps) a skin-authored button — anything in `image[]` that
    * carries a positive `act` field (beatoraja's `button_type` action code). Default skin
    * declares 15=play / 16=autoplay / 315=practice / 19,316,317,318=replay slots; community
@@ -369,6 +379,13 @@ interface BpmGraphEntry {
   /** Pixi `Graphics` painting the BPM curve. Same rebuild-on-change pattern as polyline-graph. */
   graphics: Graphics;
   /**
+   * Per-frame playhead cursor (thin vertical line at `currentTimeMs / totalMs * width`).
+   * Kept SEPARATE from {@link graphics} so the static curve's signature-cached redraw
+   * doesn't have to invalidate every tick — only this overlay's `x` position updates.
+   * Stays hidden when `resolveCurrentTimeMs` returns undefined (select scene case).
+   */
+  cursor: Graphics;
+  /**
    * Last point count painted. The chart's BPM curve is static for the whole session, so the
    * polyline is built once and reused — `lastPointCount` flipping from `-1` to the actual count
    * is the "first paint" trigger; subsequent frames short-circuit.
@@ -392,6 +409,13 @@ interface JudgeGraphEntry {
    * one-time paint, so the rebuild cost is bounded.
    */
   graphics: Graphics;
+  /**
+   * Per-frame playhead cursor for `type=0` (note distribution). Same model as
+   * {@link BpmGraphEntry.cursor} — separate Graphics so the static distribution stays
+   * cached while only the cursor's `x` updates per tick. Hidden for type 1 / 2 (those
+   * graphs don't have a time axis to plot a playhead on).
+   */
+  cursor: Graphics;
   /**
    * Cached signature of the bars last painted. Per-frame stroke is skipped when the signature
    * hasn't moved, which is the common case (counts only change at judge events).
@@ -597,6 +621,7 @@ export class BeatorajaPlaySkinView {
   private readonly resolveGaugeGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveTimingSamples: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
   private readonly resolveTimingDistribution: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
+  private readonly resolveCurrentTimeMs: () => number | undefined;
   private readonly onButtonAction:
     | ((act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }) => void)
     | undefined;
@@ -636,6 +661,7 @@ export class BeatorajaPlaySkinView {
     this.resolveGaugeGraphPoints = options.resolveGaugeGraphPoints ?? (() => undefined);
     this.resolveTimingSamples = options.resolveTimingSamples ?? (() => undefined);
     this.resolveTimingDistribution = options.resolveTimingDistribution ?? (() => undefined);
+    this.resolveCurrentTimeMs = options.resolveCurrentTimeMs ?? (() => undefined);
     this.onButtonAction = options.onButtonAction;
     this.chartImageProvider = options.chartImageProvider;
     // Parse customEvents / customTimers once at view construction. The per-frame evaluator
@@ -1546,7 +1572,13 @@ export class BeatorajaPlaySkinView {
     const graphics = new Graphics();
     graphics.alpha = 0;
     this.container.addChild(graphics);
-    return { kind: 'bpmgraph', group, element, graphics, lastPointCount: -1, lastSignature: '' };
+    // Playhead cursor — separate Graphics so curve stays cached. Stroke once at construction
+    // (a thin 2px-wide vertical line); per-frame updates only set `cursor.x` / `cursor.visible`.
+    const cursor = new Graphics();
+    cursor.rect(-1, 0, 2, 1).fill({ color: 0xffffff, alpha: 0.85 });
+    cursor.visible = false;
+    this.container.addChild(cursor);
+    return { kind: 'bpmgraph', group, element, graphics, cursor, lastPointCount: -1, lastSignature: '' };
   }
 
   /**
@@ -1557,7 +1589,11 @@ export class BeatorajaPlaySkinView {
     const graphics = new Graphics();
     graphics.alpha = 0;
     this.container.addChild(graphics);
-    return { kind: 'judgegraph', group, element, graphics, lastSignature: '' };
+    const cursor = new Graphics();
+    cursor.rect(-1, 0, 2, 1).fill({ color: 0xffffff, alpha: 0.85 });
+    cursor.visible = false;
+    this.container.addChild(cursor);
+    return { kind: 'judgegraph', group, element, graphics, cursor, lastSignature: '' };
   }
 
   /** Build a gaugegraph entry — same Graphics-node + rebuild-on-change pattern as bpmgraph. */
@@ -2234,7 +2270,10 @@ export class BeatorajaPlaySkinView {
   private updateBpmGraphEntry(entry: BpmGraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
     const graphics = entry.graphics;
     graphics.visible = props.visible;
-    if (!props.visible) return;
+    if (!props.visible) {
+      entry.cursor.visible = false;
+      return;
+    }
     // Prefer the rich segment-data resolver (`{segments, mainBpm, minBpm, maxBpm, totalMs}`);
     // matches upstream `SkinBPMGraph.draw()` which paints color-coded segments at log-scaled
     // y positions relative to mainBpm. Falls back to the legacy `[{x, y}]` polyline resolver
@@ -2243,11 +2282,13 @@ export class BeatorajaPlaySkinView {
     const data = this.resolveBpmGraphData();
     if (data === undefined) {
       this.updateBpmGraphLegacy(entry, props);
+      entry.cursor.visible = false;
       return;
     }
     const { segments, mainBpm, minBpm, maxBpm, totalMs } = data;
     if (segments.length < 1 || totalMs <= 0 || mainBpm <= 0) {
       graphics.visible = false;
+      entry.cursor.visible = false;
       return;
     }
     const signature = `${segments.length}|${mainBpm}|${minBpm}|${maxBpm}|${totalMs}`;
@@ -2314,6 +2355,7 @@ export class BeatorajaPlaySkinView {
     graphics.tint = 0xffffff;
     graphics.angle = props.angle;
     graphics.blendMode = props.blendMode;
+    this.positionGraphCursor(entry.cursor, props, totalMs);
   }
 
   /**
@@ -2361,7 +2403,10 @@ export class BeatorajaPlaySkinView {
   private updateJudgeGraphEntry(entry: JudgeGraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
     const graphics = entry.graphics;
     graphics.visible = props.visible;
-    if (!props.visible) return;
+    if (!props.visible) {
+      entry.cursor.visible = false;
+      return;
+    }
     // Type 0 (note distribution) — when the host wires `resolveNoteDistribution`, render
     // the per-second × per-category histogram + olive background bands per upstream's
     // `SkinNoteDistributionGraph`. Falls through to the bars resolver if no host has
@@ -2373,6 +2418,8 @@ export class BeatorajaPlaySkinView {
         return;
       }
     }
+    // Cursor is only meaningful for type=0 (time-axis graph). Hide on the bar paths below.
+    entry.cursor.visible = false;
     const bars = this.resolveJudgeGraphBars(entry.element.type);
     if (bars === undefined || bars.length === 0) {
       graphics.visible = false;
@@ -2454,6 +2501,7 @@ export class BeatorajaPlaySkinView {
     const { buckets, maxCount } = data;
     if (buckets.length === 0 || maxCount <= 0) {
       graphics.visible = false;
+      entry.cursor.visible = false;
       return;
     }
     // Signature includes bucket count + maxCount + a sampled hash of bucket totals so
@@ -2536,6 +2584,41 @@ export class BeatorajaPlaySkinView {
     graphics.tint = 0xffffff;
     graphics.angle = props.angle;
     graphics.blendMode = props.blendMode;
+    this.positionGraphCursor(entry.cursor, props, data.totalMs);
+  }
+
+  /**
+   * Position + show / hide the playhead cursor over a graph's destination rect. Called by
+   * `updateBpmGraphEntry` and `paintNoteDistribution`. Reads `resolveCurrentTimeMs()` and
+   * `totalMs` to compute the X position; hides the cursor when either is missing or when
+   * the destination's `props.visible` is false.
+   *
+   * Cursor is a 2-px-wide vertical line (drawn once at construction with `rect(-1, 0, 2, 1)`
+   * — height-1 unit then height-stretched here). `cursor.x` is the live position; `cursor.y`
+   * matches the graph's top edge so the line spans the full height.
+   */
+  private positionGraphCursor(
+    cursor: Graphics,
+    props: ReturnType<typeof destinationToSpriteProps>,
+    totalMs: number,
+  ): void {
+    if (!props.visible || totalMs <= 0) {
+      cursor.visible = false;
+      return;
+    }
+    const currentMs = this.resolveCurrentTimeMs();
+    if (currentMs === undefined || !Number.isFinite(currentMs) || currentMs < 0) {
+      cursor.visible = false;
+      return;
+    }
+    const ratio = Math.min(1, Math.max(0, currentMs / totalMs));
+    cursor.visible = true;
+    cursor.x = props.x + ratio * props.width;
+    cursor.y = props.y;
+    cursor.scale.set(1, props.height);
+    cursor.alpha = props.alpha;
+    cursor.angle = props.angle;
+    cursor.blendMode = props.blendMode;
   }
 
   /**

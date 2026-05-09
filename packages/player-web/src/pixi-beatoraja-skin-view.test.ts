@@ -348,10 +348,13 @@ describe('BeatorajaPlaySkinView', () => {
         resolveJudgeGraphBars: (type) => (type === 1 ? [10, 5, 2, 1, 0] : undefined),
       });
       view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-      // Single Graphics child mounted for the judgegraph entry.
-      expect(view.container.children).toHaveLength(1);
-      // After update with non-zero bars, the Graphics is visible.
+      // Two Graphics children mounted per judgegraph entry: the bars graph + the playhead
+      // cursor overlay (only used for type=0, hidden here on type=1).
+      expect(view.container.children).toHaveLength(2);
+      // After update with non-zero bars, the histogram Graphics is visible; the cursor stays
+      // hidden because type=1 doesn't carry a time axis.
       expect((view.container.children[0] as { visible: boolean }).visible).toBe(true);
+      expect((view.container.children[1] as { visible: boolean }).visible).toBe(false);
       view.dispose();
     });
 
