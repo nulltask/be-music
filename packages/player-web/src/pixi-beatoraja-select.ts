@@ -360,8 +360,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   private readonly rowBarSprites: (Sprite | undefined)[] = [];
   /** Per-row label texts. */
   private readonly rowLabels: Text[] = [];
-  /** Per-row sub-label (artist / song count). Length matches {@link rowLabels}. */
-  private readonly rowSublabels: Text[] = [];
   /**
    * Per-row chart-level overlay. Mounted only when `songList.level` is populated (the skin
    * author placed a `songlist.level[]` block) — sized + positioned via the level
@@ -1543,7 +1541,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // songlist length differs from the previous one). Pixi children stay attached to
     // listLayer; clearing the arrays lets the new loop allocate the right count.
     for (const t of this.rowLabels) t.destroy();
-    for (const t of this.rowSublabels) t.destroy();
     for (const t of this.rowLevelLabels) t.destroy();
     for (const row of this.rowFeatureLabels) {
       for (const sprite of row) sprite.destroy({ children: false, texture: false, textureSource: false });
@@ -1551,40 +1548,27 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     for (const s of this.rowHitAreas) s.destroy();
     for (const s of this.rowBarSprites) s?.destroy({ children: false, texture: false, textureSource: false });
     this.rowLabels.length = 0;
-    this.rowSublabels.length = 0;
     this.rowLevelLabels.length = 0;
     this.rowFeatureLabels.length = 0;
     this.rowHitAreas.length = 0;
     this.rowBarSprites.length = 0;
-    // Title / sub-label font sizes. Two cases:
+    // Title font size. Two cases:
     //
     //  - Skin authored `songlist.text[]` (default beatoraja, GdbG, ModernChic) — use
-    //    `text[0].rect.h` as the title size and `text[1].rect.h` as the sub size, which
-    //    matches upstream `SkinTextFont.draw`'s `font.setScale(region.height / parameter.size)`
-    //    behavior (the rendered glyph height IS the dst rect's height; the text element's
-    //    authored `size` only controls the bitmap load resolution). For the default skin's
-    //    36 px bar with `dst:{h:24}` this gives 24 px — the proportional-fallback path
-    //    below would produce only 16 px, visibly too small vs. beatoraja.
+    //    `text[0].rect.h` as the title size, which matches upstream `SkinTextFont.draw`'s
+    //    `font.setScale(region.height / parameter.size)` behavior (the rendered glyph
+    //    height IS the dst rect's height; the text element's authored `size` only controls
+    //    the bitmap load resolution). For the default skin's 36 px bar with `dst:{h:24}`
+    //    this gives 24 px.
     //
-    //  - Skin omitted the block — fall back to a row-height proportional pair so unsupported
-    //    skins still get readable text. `0.45 / 0.25` mirrors what the bundled fixtures of
-    //    older skins were authoring before we adopted the spec-faithful path.
-    //
-    // Sub size falls back to `Math.max(10, title * 0.6)` when the skin only authored ONE
-    // text entry (default beatoraja's `bartext` is title-only) so the artist line below
-    // the title stays readable.
+    //  - Skin omitted the block — fall back to a row-height proportional size so
+    //    unsupported skins still get readable text. `0.45` mirrors what the bundled
+    //    fixtures of older skins were authoring before we adopted the spec-faithful path.
     const sampleRect = this.rowRectAt(this.centreRowIndex);
     const songListText = this.songList?.text ?? [];
     const proportionalLabelSize = Math.max(12, Math.floor(sampleRect.h * 0.45));
-    const proportionalSubSize = Math.max(10, Math.floor(sampleRect.h * 0.25));
     const labelSize =
       songListText[0] !== undefined ? Math.max(8, Math.floor(songListText[0].rect.h)) : proportionalLabelSize;
-    const subSize =
-      songListText[1] !== undefined
-        ? Math.max(8, Math.floor(songListText[1].rect.h))
-        : songListText[0] !== undefined
-          ? Math.max(10, Math.floor(labelSize * 0.6))
-          : proportionalSubSize;
     for (let i = 0; i < this.visibleRowCount; i += 1) {
       // Per-row bar background. Mounted FIRST so it sits behind hit area / icon / labels.
       // Skins that author the focused row with a different `liston[i].id` (e.g. `list_on`
@@ -1607,7 +1591,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       this.listLayer.addChild(hit);
       this.rowHitAreas.push(hit);
 
-      // Primary label — title (song) / folder name (folder).
+      // Bar text — beatoraja's `bartext` named element, dynamically resolved by the
+      // music selector to the song's title / folder name. Default skin authors a single
+      // entry; multi-entry skins are not yet supported (only the first text entry's
+      // dst rect drives the layout for now).
       const label = new Text({
         text: '',
         style: { fontFamily, fontSize: labelSize, fill: 0xffffff, fontWeight: '600' },
@@ -1615,15 +1602,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       label.anchor.set(0, 0.5);
       this.listLayer.addChild(label);
       this.rowLabels.push(label);
-
-      // Sub-label — artist (song) / song count (folder). Smaller, fainter.
-      const sub = new Text({
-        text: '',
-        style: { fontFamily, fontSize: subSize, fill: 0xc0d0ff, fontStyle: 'italic' },
-      });
-      sub.anchor.set(0, 0.5);
-      this.listLayer.addChild(sub);
-      this.rowSublabels.push(sub);
 
       // Per-row chart-level overlay — only allocated when the songlist authored
       // `level[]`. Sized to the level sub-rect; tinted by difficulty band so a glance
@@ -1712,12 +1690,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const wrappedIndex = total > 0 ? ((rawEntryIndex % total) + total) % total : -1;
       const entry = total > 0 ? this.entries[wrappedIndex] : undefined;
       const label = this.rowLabels[i]!;
-      const sub = this.rowSublabels[i]!;
       const hit = this.rowHitAreas[i]!;
       const bar = this.rowBarSprites[i];
       if (entry === undefined) {
         label.visible = false;
-        sub.visible = false;
         hit.visible = false;
         // Hide the row bar background when no song / folder is mapped to this slot
         // (small libraries that don't fill the whole visible window). Otherwise an empty
@@ -1727,20 +1703,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       }
       const isSelected = i === this.centreRowIndex;
       label.visible = true;
-      sub.visible = true;
       hit.visible = true;
       if (bar !== undefined) bar.visible = true;
       const levelLabel = this.rowLevelLabels[i];
       if (entry.kind === 'folder') {
-        const folder = entry.folder;
-        label.text = folder.label;
-        sub.text = `${folder.songs.length} song${folder.songs.length === 1 ? '' : 's'}`;
-        // Folder rows have no chart level — hide the overlay if it exists for this row.
+        // Beatoraja's bartext renders just the folder name on folder rows.
+        label.text = entry.folder.label;
         if (levelLabel !== undefined) levelLabel.visible = false;
       } else {
         const song = entry.song;
         label.text = song.title;
-        sub.text = song.artist ?? '';
         if (levelLabel !== undefined) {
           const lvl = resolvePlayLevel(song.playLevel);
           if (lvl !== undefined && lvl > 0) {
@@ -1753,7 +1725,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         }
       }
       label.alpha = isSelected ? 1 : 0.75;
-      sub.alpha = isSelected ? 0.95 : 0.55;
     }
     this.layoutRows();
   }
@@ -1786,7 +1757,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     for (let i = 0; i < this.visibleRowCount; i += 1) {
       const hit = this.rowHitAreas[i]!;
       const label = this.rowLabels[i]!;
-      const sub = this.rowSublabels[i]!;
       if (!label.visible) continue;
       const rect = this.rowRectAt(i);
       const rowCentreY = rect.y + rect.h / 2 + fractionalNudge;
@@ -1836,12 +1806,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         subRectRightEdge > 0 ? rect.x + subRectRightEdge + leftPad : rect.x + leftPad;
       const labelX = labelTextOffsetX;
       label.x = labelX;
-      label.y = rowCentreY - Math.floor(rect.h * 0.05);
+      label.y = rowCentreY;
       label.tint = isSelected ? 0xffe066 : 0xffffff;
-
-      sub.x = labelX;
-      sub.y = rowCentreY + Math.floor(rect.h * 0.25);
-      sub.tint = isSelected ? 0xffe066 : 0xc0d0ff;
 
       // Per-row level overlay — only when the songlist authored a `level` sub-rect AND we
       // pre-allocated a label for this row. Sub-rect is RELATIVE to the bar rect; we
