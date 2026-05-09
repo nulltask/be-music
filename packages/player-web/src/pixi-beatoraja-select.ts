@@ -53,7 +53,13 @@ import {
   computeBeatorajaChartNoteDistribution,
   type BeatorajaChartNoteDistribution,
 } from './beatoraja-chart-note-distribution.ts';
-import { normalizeBeatorajaImages, type BeatorajaImageElement } from '@be-music/beatoraja-skin';
+import {
+  composeBeatorajaValueCells,
+  normalizeBeatorajaImages,
+  normalizeBeatorajaValues,
+  type BeatorajaImageElement,
+  type BeatorajaValueElement,
+} from '@be-music/beatoraja-skin';
 import { createCroppedBeatorajaTexture } from './beatoraja-render.ts';
 import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from './library.ts';
 import { detectChartFeatures } from './select-ops.ts';
@@ -362,25 +368,33 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   /** Per-row label texts. */
   private readonly rowLabels: Text[] = [];
   /**
-   * Per-row chart-level digit overlay (Pixi `Text`). Mounted only when `songList.level`
-   * is populated (the skin author placed a `songlist.level[]` block). Renders the
-   * chart's `#PLAYLEVEL` number; sized + positioned via the level sub-destination's
-   * relative rect plus the row's authored bar rect.
-   *
-   * Beatoraja's reference theme paints the level NUMBER as a per-digit number element
-   * driven by a separate `text[]` declaration (or directly by Lua); we emit text here as
-   * the most direct port. The bar background under it is painted by
-   * {@link rowLevelBars}, which crops the skin's `playlevel_bar` image when authored.
+   * Per-row chart-level digit overlay (Pixi `Text` fallback). Used ONLY when the skin's
+   * `songlist.level[].id` doesn't resolve to a `value[]` declaration — e.g. legacy skins
+   * that authored level as an `image[]` entry rather than a digit composer. Most modern
+   * skins (default beatoraja, GdbG, ModernChic) author it as `value[id="playlevel_bar"]`
+   * referencing `number.png`, so they take the sprite-digit path below and this field
+   * stays empty.
    */
-  private readonly rowLevelLabels: Text[] = [];
+  private readonly rowLevelLabels: (Text | undefined)[] = [];
   /**
-   * Per-row chart-level background sprites. Cropped from `skin.image[level.id]`
-   * (typically `playlevel_bar` — a colored frame around the digit). Mounted under
-   * {@link rowLevelLabels} so the digit renders on top. `undefined` slots mean the skin
-   * authored a `level[]` block but didn't reference a `skin.image[id]` we could crop —
-   * the digit text still paints, just without the colored background.
+   * Per-row chart-level digit sprites — one per `digit` slot, cropped from the strip
+   * texture referenced by the value declaration's `src` (typically `number.png` in
+   * beatoraja's default skin). Mirrors upstream `MusicSelector`'s rendering: the chart's
+   * `#PLAYLEVEL` value is composed via {@link composeBeatorajaValueCells} and each digit
+   * lands in a per-cell sprite sized to a fraction of the level sub-rect.
+   *
+   * `undefined` slot when the row's level path falls back to text rendering (above).
    */
-  private readonly rowLevelBars: (Sprite | undefined)[] = [];
+  private readonly rowLevelDigitSprites: (Sprite[] | undefined)[] = [];
+  /**
+   * Resolved `value[]` declaration referenced by `songlist.level[].id`. Single skin-wide
+   * value so we cache it once per skin instead of looking up every row build. `undefined`
+   * when the skin omits a `value[]` for the level id (then every row falls back to the
+   * Text path above).
+   */
+  private levelValueElement: BeatorajaValueElement | undefined;
+  /** Source-strip texture for {@link levelValueElement} — used to crop per-digit cells. */
+  private levelStripTexture: Texture | undefined;
   /**
    * Per-row chart-feature label sprites — one Sprite per `(visible row × songlist.label[]
    * entry)` combination. Each label is gated on a chart feature predicate (LN /
@@ -803,6 +817,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // safe to call repeatedly.
     this.songList = parseBeatorajaSongList(opts.skin);
     this.applySongListGeometry();
+    // Invalidate per-skin caches keyed on the OLD skin's declarations. `buildRowVisuals`
+    // re-resolves the level value entry / strip texture against the new skin via
+    // `resolveLevelValueElement`.
+    this.featureLabelImages = undefined;
+    this.valueElementsById = undefined;
     this.buildRowVisuals(opts.fonts);
     this.refreshRowVisuals();
 
@@ -1571,8 +1590,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // songlist length differs from the previous one). Pixi children stay attached to
     // listLayer; clearing the arrays lets the new loop allocate the right count.
     for (const t of this.rowLabels) t.destroy();
-    for (const t of this.rowLevelLabels) t.destroy();
-    for (const s of this.rowLevelBars) s?.destroy({ children: false, texture: false, textureSource: false });
+    for (const t of this.rowLevelLabels) t?.destroy();
+    for (const sprites of this.rowLevelDigitSprites) {
+      if (sprites === undefined) continue;
+      for (const s of sprites) s.destroy({ children: false, texture: false, textureSource: false });
+    }
     for (const row of this.rowFeatureLabels) {
       for (const sprite of row) sprite.destroy({ children: false, texture: false, textureSource: false });
     }
@@ -1580,10 +1602,19 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     for (const s of this.rowBarSprites) s?.destroy({ children: false, texture: false, textureSource: false });
     this.rowLabels.length = 0;
     this.rowLevelLabels.length = 0;
-    this.rowLevelBars.length = 0;
+    this.rowLevelDigitSprites.length = 0;
     this.rowFeatureLabels.length = 0;
     this.rowHitAreas.length = 0;
     this.rowBarSprites.length = 0;
+    // Resolve the songlist's `level[].id` against the skin's `value[]` declarations
+    // FIRST. When it matches (e.g. default beatoraja's `playlevel_bar` value points at
+    // `number.png`), each row's level slot composes per-digit sprites cropped from the
+    // strip — same path beatoraja's `MusicSelector` uses. When it doesn't (legacy skin
+    // authoring level as `image[]` instead, or no `value[]` for that id), every row
+    // falls back to system-font Pixi `Text`.
+    this.levelValueElement = this.resolveLevelValueElement();
+    this.levelStripTexture =
+      this.levelValueElement !== undefined ? this.options.textures.get(this.levelValueElement.src) : undefined;
     // Title font size. Two cases:
     //
     //  - Skin authored `songlist.text[]` (default beatoraja, GdbG, ModernChic) — use
@@ -1636,43 +1667,47 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       this.rowLabels.push(label);
 
       // Per-row chart-level overlay — only allocated when the songlist authored
-      // `level[]`. Two stacked nodes:
+      // `level[]`. Two paths:
       //
-      //  - `levelBar`: SPRITE cropped from `skin.image[level.id]` (e.g. `playlevel_bar`,
-      //    a colored frame). Mounted FIRST so the digit text below paints on top. Skipped
-      //    when the skin authored a `level[]` block but referenced an image we couldn't
-      //    crop (missing entry / texture not in cache).
-      //  - `level`: TEXT digit (chart's `#PLAYLEVEL`) sized to `level.h` per the
-      //    `SkinTextFont.draw` height-from-dst convention. Stroke 2 px black for legibility
-      //    against arbitrary frame colors.
-      //
-      // Beatoraja's reference theme paints both the frame AND a styled digit element from
-      // the skin; we still emit the digit as Pixi Text since wiring up the skin's number
-      // element pipeline for songlist sub-destinations is more involved.
+      //  - **Sprite-digit** (preferred, matches beatoraja's reference). When the level's
+      //    `id` resolves to a `value[]` declaration (e.g. default skin's `playlevel_bar`
+      //    → `number.png`), allocate one sprite per `digit` slot. Per-frame composes the
+      //    chart's `#PLAYLEVEL` via `composeBeatorajaValueCells` and crops the matching
+      //    cell from the strip texture.
+      //  - **Text fallback**. When no matching `value[]` exists (legacy skin authoring as
+      //    `image[]` or omitting the value declaration), render a system-font Pixi `Text`
+      //    digit so the player still sees the number — just without the skin's bitmap font.
       if (this.songList?.level !== undefined) {
         const levelDef = this.songList.level;
-        const levelBarId = levelDef.id;
-        const levelBar = levelBarId !== undefined ? this.buildFeatureLabelSprite(levelBarId) : undefined;
-        if (levelBar !== undefined) {
-          levelBar.visible = false;
-          this.listLayer.addChild(levelBar);
+        if (this.levelValueElement !== undefined && this.levelStripTexture !== undefined) {
+          const valueElement = this.levelValueElement;
+          const digitCount = Math.max(1, Math.trunc(valueElement.digit));
+          const sprites: Sprite[] = [];
+          for (let d = 0; d < digitCount; d += 1) {
+            const sprite = new Sprite();
+            sprite.visible = false;
+            this.listLayer.addChild(sprite);
+            sprites.push(sprite);
+          }
+          this.rowLevelDigitSprites.push(sprites);
+          this.rowLevelLabels.push(undefined);
+        } else {
+          const level = new Text({
+            text: '',
+            style: {
+              fontFamily,
+              // Floor at 12 so unusually short level rects stay legible.
+              fontSize: Math.max(12, Math.floor(levelDef.h)),
+              fill: 0xffffff,
+              fontWeight: '700',
+              stroke: { color: 0x000000, width: 2 },
+            },
+          });
+          level.anchor.set(0.5, 0.5);
+          this.listLayer.addChild(level);
+          this.rowLevelLabels.push(level);
+          this.rowLevelDigitSprites.push(undefined);
         }
-        this.rowLevelBars.push(levelBar);
-
-        const level = new Text({
-          text: '',
-          style: {
-            fontFamily,
-            // Floor at 12 so unusually short level rects stay legible.
-            fontSize: Math.max(12, Math.floor(levelDef.h)),
-            fill: 0xffffff,
-            fontWeight: '700',
-            stroke: { color: 0x000000, width: 2 },
-          },
-        });
-        level.anchor.set(0.5, 0.5);
-        this.listLayer.addChild(level);
-        this.rowLevelLabels.push(level);
       }
 
       // Per-row chart-feature label sprites (LN / random / mine / favorite / etc.). One
@@ -1698,6 +1733,30 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * the cache (deferred / failed decode), or the cropped texture comes back empty. The
    * sprite is sized later per the row's label sub-rect.
    */
+  /**
+   * Look up the `value[]` declaration the songlist's `level[].id` points at. Beatoraja's
+   * reference skin authors level as `value[id="playlevel_bar"]` referencing `number.png`
+   * — the digit composer template the renderer uses to crop per-cell glyphs from the
+   * strip. Returns `undefined` when the songlist either omits a level block, has no
+   * id captured on the level rect, or the id doesn't resolve to a value entry (legacy
+   * skins author the level frame as an `image[]` instead).
+   *
+   * Cached lazily into a per-skin Map; rebuilt on every `replaceSkin` since the lookup
+   * map binds to the new skin's `value[]` declarations.
+   */
+  private resolveLevelValueElement(): BeatorajaValueElement | undefined {
+    const levelId = this.songList?.level?.id;
+    if (typeof levelId !== 'string' && typeof levelId !== 'number') return undefined;
+    if (this.valueElementsById === undefined) {
+      this.valueElementsById = new Map();
+      for (const v of normalizeBeatorajaValues((this.options.skin as { value?: unknown }).value)) {
+        this.valueElementsById.set(v.id, v);
+      }
+    }
+    return this.valueElementsById.get(levelId);
+  }
+  private valueElementsById: Map<string | number, BeatorajaValueElement> | undefined;
+
   private buildFeatureLabelSprite(imageId: string | number): Sprite | undefined {
     if (this.featureLabelImages === undefined) {
       this.featureLabelImages = new Map();
@@ -1753,33 +1812,58 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       hit.visible = true;
       if (bar !== undefined) bar.visible = true;
       const levelLabel = this.rowLevelLabels[i];
-      const levelBar = this.rowLevelBars[i];
+      const levelDigits = this.rowLevelDigitSprites[i];
       if (entry.kind === 'folder') {
         // Beatoraja's bartext renders just the folder name on folder rows.
         label.text = entry.folder.label;
         if (levelLabel !== undefined) levelLabel.visible = false;
-        if (levelBar !== undefined) levelBar.visible = false;
+        if (levelDigits !== undefined) {
+          for (const sprite of levelDigits) sprite.visible = false;
+        }
       } else {
         const song = entry.song;
         label.text = song.title;
-        if (levelLabel !== undefined) {
-          const lvl = resolvePlayLevel(song.playLevel);
-          if (lvl !== undefined && lvl > 0) {
-            levelLabel.text = String(lvl);
-            levelLabel.tint = levelTintForDifficulty(lvl);
-            levelLabel.visible = true;
-            if (levelBar !== undefined) {
-              // Tint the playlevel_bar frame to match the digit's difficulty band so a
-              // glance shows whether a chart is beginner / intermediate / advanced. The
-              // skin authors per-difficulty color overrides on each `level[]` entry's
-              // dst, but we don't yet route those — this keeps the band cue visible
-              // until the per-entry color path lands.
-              levelBar.tint = levelTintForDifficulty(lvl);
-              levelBar.visible = true;
+        const lvl = resolvePlayLevel(song.playLevel);
+        const showLevel = lvl !== undefined && lvl > 0;
+        if (levelDigits !== undefined && this.levelValueElement !== undefined && this.levelStripTexture !== undefined) {
+          // Sprite-digit path. Compose the chart's `#PLAYLEVEL` into per-cell rects via
+          // upstream's value composer, then crop each cell from the strip texture and
+          // assign it to the matching slot sprite. Hidden cells leave the slot invisible
+          // (= leading-blank padding) so a 4-digit slot rendering "12" only paints two
+          // sprites on the right.
+          if (showLevel) {
+            const cells = composeBeatorajaValueCells(this.levelValueElement, lvl);
+            for (let d = 0; d < levelDigits.length; d += 1) {
+              const sprite = levelDigits[d]!;
+              const cell = cells[d];
+              if (cell === undefined || cell.hidden) {
+                sprite.visible = false;
+                continue;
+              }
+              const cropped = createCroppedBeatorajaTexture(this.levelStripTexture, {
+                x: cell.x,
+                y: cell.y,
+                w: cell.w,
+                h: cell.h,
+              });
+              if (cropped === undefined) {
+                sprite.visible = false;
+                continue;
+              }
+              sprite.texture = cropped;
+              sprite.visible = true;
             }
           } else {
+            for (const sprite of levelDigits) sprite.visible = false;
+          }
+        } else if (levelLabel !== undefined) {
+          // Text fallback path.
+          if (showLevel) {
+            levelLabel.text = String(Math.trunc(lvl));
+            levelLabel.tint = levelTintForDifficulty(lvl);
+            levelLabel.visible = true;
+          } else {
             levelLabel.visible = false;
-            if (levelBar !== undefined) levelBar.visible = false;
           }
         }
       }
@@ -1873,28 +1957,36 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       label.tint = isSelected && !this.hasFocusedBarVariant ? 0xffe066 : 0xffffff;
 
       // Per-row level overlay — only when the songlist authored a `level` sub-rect AND we
-      // pre-allocated a label for this row. Sub-rect is RELATIVE to the bar rect; we
-      // place the text at its centre, and stamp the optional `playlevel_bar` sprite
-      // beneath it sized to the full sub-rect.
+      // pre-allocated either a digit-sprite stack or a Text fallback for this row.
+      // Sub-rect is RELATIVE to the bar rect; we place each renderer at the corresponding
+      // position inside the level's dst region.
       const levelLabel = this.rowLevelLabels[i];
-      const levelBar = this.rowLevelBars[i];
+      const levelDigits = this.rowLevelDigitSprites[i];
       const levelRect = this.songList?.level;
-      if (levelLabel !== undefined && levelRect !== undefined) {
+      if (levelRect !== undefined) {
         // Beatoraja authors `level.dst` rects in skin Y-UP coords (origin at bar's
         // bottom-left). Our `rect` is already Pixi Y-DOWN with `rect.y` at the row's
         // top. Skin Y-UP offset within the bar maps to Pixi:
         //   pixiY = rect.y + (rect.h - level.y - level.h)
         const subPixiY = rect.y + (rect.h - levelRect.y - levelRect.h) + fractionalNudge;
-        if (levelBar !== undefined) {
-          levelBar.x = rect.x + levelRect.x;
-          levelBar.y = subPixiY;
-          levelBar.width = levelRect.w;
-          levelBar.height = levelRect.h;
-          levelBar.alpha = isSelected ? 1 : 0.85;
+        if (levelDigits !== undefined) {
+          // Digit sprites: split the level rect's width into `digit` evenly-sized slots.
+          // Each slot paints its cropped cell stretched to fill — same model as the
+          // skin-view's `value[]` renderer for ordinary digit destinations.
+          const slotW = levelRect.w / Math.max(1, levelDigits.length);
+          for (let d = 0; d < levelDigits.length; d += 1) {
+            const sprite = levelDigits[d]!;
+            sprite.x = rect.x + levelRect.x + d * slotW;
+            sprite.y = subPixiY;
+            sprite.width = slotW;
+            sprite.height = levelRect.h;
+            sprite.alpha = isSelected ? 1 : 0.85;
+          }
+        } else if (levelLabel !== undefined) {
+          levelLabel.x = rect.x + levelRect.x + levelRect.w / 2;
+          levelLabel.y = subPixiY + levelRect.h / 2;
+          levelLabel.alpha = isSelected ? 1 : 0.85;
         }
-        levelLabel.x = rect.x + levelRect.x + levelRect.w / 2;
-        levelLabel.y = subPixiY + levelRect.h / 2;
-        levelLabel.alpha = isSelected ? 1 : 0.85;
       }
 
       // Per-row feature label sprites — show / hide / position based on the focused
