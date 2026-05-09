@@ -1287,19 +1287,31 @@ export class BeatorajaPlaySkinView {
     //
     //     font.getData().setScale(region.height / parameter.size);
     //
-    // The font is loaded at `text[].size` glyph height, then scaled at draw time so the
-    // rendered glyph height matches the destination rect's `h`. Final on-screen text height
-    // is `dst.h` regardless of the authored `size` — that's why default beatoraja's
-    // `genre` / `artist` (dst.h=20) render visibly smaller than `title` (dst.h=24) even
-    // though all three set `size: 24`.
+    // The font is loaded ONCE at `text[].size` glyph height (= `parameter.size`), then
+    // scaled at draw time so the rendered glyph height matches the destination rect's
+    // current `h`. Final on-screen text height = `dst.h` regardless of the authored
+    // `size` — that's why default beatoraja's `genre` / `artist` (dst.h=20) render
+    // visibly smaller than `title` (dst.h=24) even though all three set `size: 24`.
     //
-    // Pixi's `Text` / `BitmapText` `fontSize` is the rendered height directly (no
-    // separate scale stage), so we set it to `dst.h`. Falls back to `text[].size` when
-    // the destination omits a height (rare); final guard at 24 for skins authoring
-    // neither.
+    // We rasterize Pixi's `Text` / `BitmapText` at the AUTHORED `text[].size` (so the
+    // glyph bitmap is sharp at the author's intended baseline), then apply a per-frame
+    // `text.scale.y = props.height / fontSize` in `updateTextEntry` to mirror upstream's
+    // `setScale`. This handles two cases the previous "fontSize = dst[0].h" approach
+    // got wrong:
+    //   1. Animated text (h changes over time): we used to lock fontSize at the t=0
+    //      keyframe and never updated, so a 540→24 zoom-down would render at 540 forever.
+    //      Now scale tracks the current keyframe's h.
+    //   2. Layout-variant gated dst[]: when the t=0 frame's `if[]` resolves to a huge
+    //      catch-all variant (because the matching layout op isn't in activeOps), we'd
+    //      lock fontSize at that giant value. Now the visible size is governed by the
+    //      runtime keyframe's h, which is bounded sensibly by the resolver fallback.
+    //
+    // Falls back to `dst[0].h` only when `text[].size` is omitted (some Lua skins author
+    // size on the destination rather than the element); final guard at 24 for skins
+    // authoring neither.
     const firstFrame = group.dst[0];
     const rectH = firstFrame !== undefined && firstFrame.h > 0 ? firstFrame.h : 0;
-    const requestedSize = rectH > 0 ? rectH : element.size > 0 ? element.size : 24;
+    const requestedSize = element.size > 0 ? element.size : rectH > 0 ? rectH : 24;
     // Pick `BitmapText` for BMFonts and `Text` for everything else. Both share the same constructor
     // surface (`text`, `style.fontFamily`, `style.fontSize`, `style.align`, `alpha`, anchors), so
     // downstream update code doesn't branch — see `updateTextEntry`.
@@ -2132,22 +2144,42 @@ export class BeatorajaPlaySkinView {
     text.tint = props.tint;
     text.angle = props.angle;
     text.blendMode = props.blendMode;
-    // `overflow = 1` (= shrink-to-fit): when the rendered text is wider than the destination box,
-    // scale it down proportionally so it stays inside. Beatoraja's reference does this so song
-    // titles / playernames that don't fit the chrome's reserved width don't bleed into adjacent
-    // panels. We measure via Pixi's own `text.width` (the post-glyph-layout bbox), divide by the
-    // box width, and apply the ratio to `text.scale` keeping aspect (community skins universally
-    // expect proportional shrink — anamorphic squish would distort the type). Boxes with no width
-    // (`props.width <= 0`) skip the math; oversized scale ratios (≥ 1) leave the text at its
-    // native size. Other `overflow` modes (`0` = no handling, `2` = clip — uncommon in practice)
-    // also leave scale at 1.
-    if (entry.element.overflow === 1 && props.width > 0) {
-      const measured = text.width;
-      const ratio = measured > 0 ? Math.min(1, props.width / measured) : 1;
-      text.scale.set(ratio);
-    } else {
-      text.scale.set(1);
+    // Word-wrap width — Pixi's text style treats `wordWrap` and `wordWrapWidth` as a pair, so
+    // when authors set `wrapping = true` we need a width or Pixi falls back to its 100px
+    // default. Mirror the destination's current width so wrapping happens at the dst rect
+    // boundary (matches beatoraja's libGDX `BitmapFontCache.addText(..., maxWidth, ...)` where
+    // `maxWidth = region.width`). Skip when wrapping is off — wordWrapWidth is harmless then,
+    // but keeping it untouched avoids gratuitous Pixi style invalidation on non-wrap text.
+    if (entry.element.wrapping && props.width > 0 && text.style.wordWrapWidth !== props.width) {
+      text.style.wordWrapWidth = props.width;
     }
+    // Per-frame uniform scale to mirror beatoraja's `font.getData().setScale(region.height /
+    // parameter.size)`. The text bitmap was rasterized at `text[].size` (= `parameter.size`)
+    // in `buildTextEntry`; multiplying by `props.height / fontSize` produces glyphs whose
+    // visual height equals the current keyframe's dst rect height. For animated text this
+    // tracks `h` as it changes; for static text where `h == fontSize` it's a no-op (scale = 1).
+    //
+    // `overflow = 1` (= shrink-to-fit): when the rendered text is wider than the destination
+    // box at the height-derived scale, x-shrink proportionally so it stays inside. Beatoraja's
+    // reference does this so song titles / playernames that don't fit the chrome's reserved
+    // width don't bleed into adjacent panels. Other `overflow` modes (`0` = no handling, `2` =
+    // clip — uncommon in practice) leave xScale at the height-derived value (no horizontal
+    // shrink applied).
+    const referenceSize = entry.element.size > 0 ? entry.element.size : 24;
+    const baseScale = props.height > 0 ? props.height / referenceSize : 1;
+    let scaleX = baseScale;
+    const scaleY = baseScale;
+    if (entry.element.overflow === 1 && props.width > 0) {
+      // text.width is the natural width at the current scale (Pixi reports post-scale
+      // dimensions). Multiply unscaled-width by baseScale to get the would-be drawn width,
+      // then shrink x further if it exceeds the box.
+      const unscaledWidth = baseScale > 0 ? text.width / Math.max(text.scale.x, 0.0001) : 0;
+      const drawnWidth = unscaledWidth * baseScale;
+      if (drawnWidth > props.width && drawnWidth > 0) {
+        scaleX = baseScale * (props.width / drawnWidth);
+      }
+    }
+    text.scale.set(scaleX, scaleY);
   }
 
   /**

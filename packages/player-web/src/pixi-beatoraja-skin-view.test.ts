@@ -309,6 +309,43 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
+  it('per-frame scales text uniformly to match dst rect height (mirrors upstream font.getData().setScale)', () => {
+    // Beatoraja's `SkinTextFont.draw()` does `font.getData().setScale(region.height /
+    // parameter.size)` per frame, so animated h shrinks/grows the text dynamically. Previously
+    // we rasterized the text bitmap at `dst[0].h` and never updated, so a text element whose
+    // dst.h animates would lock at the t=0 size forever.
+    //
+    // With size=24 and dst.h=48 the scale should be 48/24 = 2; with dst.h=12 the scale is
+    // 12/24 = 0.5. Static skins where dst.h == size land on scale=1 (no visible change).
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 100,
+      h: 100,
+      text: [{ id: 'animated', font: 0, size: 24 }],
+      destination: [
+        {
+          id: 'animated',
+          loop: 0,
+          dst: [
+            { time: 0, x: 0, y: 0, w: 200, h: 48, a: 255 },
+            { time: 1000, x: 0, y: 0, w: 200, h: 12, a: 255 },
+          ],
+        },
+      ],
+    };
+    const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+    // t=0: dst.h=48, size=24 → scale = 2.
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+    const node = view.container.children[0] as { scale: { x: number; y: number } };
+    expect(node.scale.y).toBeCloseTo(2, 6);
+    expect(node.scale.x).toBeCloseTo(2, 6);
+    // t=1000: dst.h=12, size=24 → scale = 0.5.
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 1000 });
+    expect(node.scale.y).toBeCloseTo(0.5, 6);
+    expect(node.scale.x).toBeCloseTo(0.5, 6);
+    view.dispose();
+  });
+
   it('hides text nodes when the destination is past its last keyframe with loop=-1', () => {
     const skin: BeatorajaSkin = {
       type: 0,
