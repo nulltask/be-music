@@ -37,6 +37,8 @@ import {
   normalizeBeatorajaSliders,
   normalizeBeatorajaTexts,
   normalizeBeatorajaValues,
+  OFFSET_HIDDEN_COVER,
+  OFFSET_LIFT,
   pickBeatorajaGaugeNode,
   type BeatorajaBpmGraphElement,
   type BeatorajaCustomEvent,
@@ -579,13 +581,30 @@ export class BeatorajaPlaySkinView {
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
       imageById.set(image.id, image);
     }
-    // `hiddenCover[]` shares the (id, src, x, y, w, h) shape with `image[]` plus extra
-    // `disapearLine` / `isDisapearLineLinkLift` fields tied to the lift / lanecover slider. Until
-    // those are surfaced through the resolver, the cover renders as a regular image at its
-    // authored dst rect — fold the array into `imageById` so destinations referencing
-    // `"hidden-cover"` etc. resolve and paint.
+    // `hiddenCover[]` / `liftCover[]` share the (id, src, x, y, w, h) shape with `image[]` plus
+    // extra `disapearLine` / `isDisapearLineLinkLift` fields tied to the lift / lanecover
+    // slider. Until those are surfaced through the resolver, each cover renders as a regular
+    // image at its authored dst rect — fold both arrays into `imageById` so destinations
+    // referencing `"hidden-cover"` / `"lift-cover"` etc. resolve and paint.
+    //
+    // Track which ids belong to each cover kind so we can later auto-append the implicit
+    // offset ids (mirrors `JsonPlaySkinObjectLoader`):
+    //
+    //   - hiddenCover dsts get OFFSET_LIFT + OFFSET_HIDDEN_COVER appended
+    //   - liftCover dsts get OFFSET_LIFT appended
+    //
+    // Without this auto-append, lift-cover and hidden-cover sprites stay frozen at their
+    // authored y when the user drags the lift / hidden-cover sliders — the matching offset
+    // ids never reach the destination's offset application path.
+    const hiddenCoverIds = new Set<BeatorajaImageId>();
+    const liftCoverIds = new Set<BeatorajaImageId>();
     for (const cover of normalizeBeatorajaImages(options.skin.hiddenCover)) {
       if (!imageById.has(cover.id)) imageById.set(cover.id, cover);
+      hiddenCoverIds.add(cover.id);
+    }
+    for (const cover of normalizeBeatorajaImages(options.skin.liftCover)) {
+      if (!imageById.has(cover.id)) imageById.set(cover.id, cover);
+      liftCoverIds.add(cover.id);
     }
     // `value[]` declarations carry numeric formatting metadata (`digit` / `padding` / `divx`) that
     // `image[]` doesn't, so they're tracked in their own map and rendered through a dedicated
@@ -828,6 +847,27 @@ export class BeatorajaPlaySkinView {
     // the groups are already in the right order — this sort is a no-op for already-ordered input,
     // but is kept defensively for the (rare) case where merging emits judges out of order.
     groups.sort((a, b) => a.declarationOrder - b.declarationOrder);
+
+    // Auto-append the implicit offset ids that beatoraja's `JsonPlaySkinObjectLoader` adds
+    // post-construction onto hidden-cover / lift-cover destinations:
+    //
+    //   - hiddenCover dsts → OFFSET_LIFT (3) + OFFSET_HIDDEN_COVER (5)
+    //   - liftCover dsts   → OFFSET_LIFT (3)
+    //
+    // Without this, dragging the lift / hidden-cover sliders does nothing visible — the
+    // sliders update the offset table fine, but the matching destinations have no link to
+    // those ids in their `offsets[]`. Skips ids already authored on the destination so we
+    // don't double-apply when an author manually listed the same id.
+    for (let i = 0; i < groups.length; i += 1) {
+      const group = groups[i]!;
+      const isHidden = hiddenCoverIds.has(group.id);
+      const isLift = liftCoverIds.has(group.id);
+      if (!isHidden && !isLift) continue;
+      const next: number[] = group.offsets.slice();
+      if (!next.includes(OFFSET_LIFT)) next.push(OFFSET_LIFT);
+      if (isHidden && !next.includes(OFFSET_HIDDEN_COVER)) next.push(OFFSET_HIDDEN_COVER);
+      groups[i] = { ...group, offsets: next };
+    }
 
     // Walk the sorted destinations; capture each anchor's position so the host can splice in its
     // note / marker / song-list layers at exactly that z-order. Skin destinations sorted BEFORE
