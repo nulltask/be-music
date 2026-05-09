@@ -4,11 +4,17 @@
 // runtime value in `[0, 1]`. The classic example is a lanecover line that the player drags up /
 // down — the dst rect anchors the bar's home position, the `(x, y, w, h)` defines a sub-rect of the
 // source image to paint, and `range` × the value determines how far the sprite slides along
-// `angle`. Common types in beatoraja's reference theme:
+// `angle`. Type values mirror upstream `SkinProperty.SLIDER_*` (sparse enum):
 //
-//   - `type = 4`: 1P lanecover position (slider moves with `num.lanecover1 = 14`)
-//   - `type = 5`: 2P lanecover
-//   - `type = 6`: hispeed lift / hidden indicator
+//   - `type = 1`: SLIDER_MUSICSELECT_POSITION — select-scene scroll position
+//   - `type = 4`: SLIDER_LANECOVER — 1P lanecover height (`num.lanecover1 = 14`)
+//   - `type = 5`: SLIDER_LANECOVER2 — 2P lanecover
+//   - `type = 6`: SLIDER_MUSIC_PROGRESS — playback progress during the song
+//   - `type = 7`: SLIDER_SKINSELECT_POSITION — skin-select scroll position
+//   - `type = 17 / 18 / 19`: master / key / BGM volume
+//
+// HISPEED / LIFT / HIDDEN are NOT slider types in upstream — those values are surfaced via
+// `value[]` digit displays (e.g. `num.hispeed = 310`), not slider indicators.
 //
 // The renderer treats sliders as read-only displays — drag interaction is the host's job. The
 // declaration pattern is identical to `graph[]` plus the `range` field.

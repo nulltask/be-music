@@ -637,6 +637,63 @@ describe('BeatorajaRuntimeAdapter — timing samples', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — slider type=6 (SLIDER_MUSIC_PROGRESS)', () => {
+  it('returns 0 before any frame has been applied', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    expect(adapter.resolveSliderValue(6)).toBe(0);
+  });
+
+  it('returns currentSeconds / totalSeconds clamped to [0, 1]', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.applyFrame({
+      currentSeconds: 0,
+      totalSeconds: 100,
+      summary: { fast: 0, slow: 0 } as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    expect(adapter.resolveSliderValue(6)).toBe(0);
+    adapter.applyFrame({
+      currentSeconds: 25,
+      totalSeconds: 100,
+      summary: { fast: 0, slow: 0 } as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    expect(adapter.resolveSliderValue(6)).toBe(0.25);
+    // Late-finish overrun: engine sometimes reports `currentSeconds > totalSeconds` while the
+    // last LN tail completes — saturate at 1 so the bar stays pinned at the end.
+    adapter.applyFrame({
+      currentSeconds: 110,
+      totalSeconds: 100,
+      summary: { fast: 0, slow: 0 } as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    expect(adapter.resolveSliderValue(6)).toBe(1);
+  });
+
+  it('returns 0 for a degenerate chart with totalSeconds <= 0', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.applyFrame({
+      currentSeconds: 5,
+      totalSeconds: 0,
+      summary: { fast: 0, slow: 0 } as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    expect(adapter.resolveSliderValue(6)).toBe(0);
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — JUDGE_1P_OFFSET_MS (ref 525)', () => {
   it('returns 0 before any 1P judgement has fired', () => {
     const adapter = new BeatorajaRuntimeAdapter({

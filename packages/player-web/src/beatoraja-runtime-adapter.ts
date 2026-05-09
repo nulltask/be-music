@@ -1210,16 +1210,26 @@ export class BeatorajaRuntimeAdapter {
 
   /**
    * Resolve a `slider[].type` code into a translation ratio in `[0, 1]`. The skin view translates
-   * the slider sprite by `value * range` skin-pixels along its angle axis. Most slider types map
-   * to user-config values that aren't yet plumbed through the adapter (lanecover %, lift %, etc.);
-   * returning `undefined` from the default branch hides those sliders cleanly.
+   * the slider sprite by `value * range` skin-pixels along its angle axis. The enum is sparse;
+   * values mirror upstream `SkinProperty.SLIDER_*` constants. Skins authoring un-surfaced types
+   * get `undefined` so their slider sprite stays at home (the renderer hides the indicator).
    *
    * Wired types:
-   *   - `4` (1P lanecover) / `5` (2P lanecover) → {@link lanecoverRatio}, the player's current
-   *     lanecover slider position. `0` = home (no cover); `1` = fully extended.
-   *   - `6` (hispeed indicator) → `lastHiSpeed` clamped to a typical 0..10 range, normalized
+   *   - `4` (`SLIDER_LANECOVER`) / `5` (`SLIDER_LANECOVER2`) → {@link lanecoverRatio}. `0` =
+   *     home (no cover), `1` = fully extended. We're single-player so 4 and 5 alias.
+   *   - `6` (`SLIDER_MUSIC_PROGRESS`) → `currentSeconds / totalSeconds` clamped to `[0, 1]`.
+   *     Drives the small progress-meter bars beatoraja's reference play skins author at the
+   *     screen edge (default `play5.json`'s `id=1050/1051`). Returns `0` before the first frame
+   *     lands.
    *
-   * Future: lift / hidden-mode sliders (separate from lanecover) when those user options surface.
+   * Unhandled (returns `undefined`):
+   *   - `1` (`SLIDER_MUSICSELECT_POSITION`) / `7` (`SLIDER_SKINSELECT_POSITION`) — select-scene
+   *     concerns; not driven from the play / decide / result adapter.
+   *   - `17`-`19` (`SLIDER_*_VOLUME`) — host-level volume sliders, not surfaced.
+   *
+   * Note: HISPEED / LIFT / HIDDEN do NOT have slider types in upstream `SkinProperty`. Skins
+   * surface those values through `value[]` digit displays (e.g. `BEATORAJA_NUM.HISPEED = 310`),
+   * not through `slider[]` indicators.
    */
   resolveSliderValue(type: number): number | undefined {
     switch (type) {
@@ -1227,11 +1237,13 @@ export class BeatorajaRuntimeAdapter {
       case 5:
         return this.lanecoverRatio;
       case 6: {
-        // Hispeed indicator. Hispeed values typically fall in [0.5, 5]; clamp to [0, 10] and
-        // normalize so the slider's full range corresponds to that span. Authors typically draw
-        // the indicator's track at a length matching the upper end.
-        const clamped = Math.max(0, Math.min(10, this.lastHiSpeed));
-        return clamped / 10;
+        // Song-playback progress. Falls back to 0 before the first frame lands or for a
+        // chart whose totalSeconds didn't resolve (degenerate / empty chart).
+        const frame = this.frame;
+        if (frame === undefined || frame === null) return 0;
+        if (!Number.isFinite(frame.totalSeconds) || frame.totalSeconds <= 0) return 0;
+        if (!Number.isFinite(frame.currentSeconds)) return 0;
+        return Math.max(0, Math.min(1, frame.currentSeconds / frame.totalSeconds));
       }
       default:
         return undefined;
