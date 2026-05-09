@@ -107,6 +107,49 @@ export interface PixiBeatorajaSelectSceneOptions {
    * silent on cursor moves, same as before this option existed.
    */
   collection?: import('./types.ts').BrowserSongCollection;
+  /**
+   * Optional snapshot from a previous mount — restores the user's prior cursor / folder /
+   * filter / sort / favorite state when re-entering the select scene (e.g. after returning
+   * from a play). Captured via {@link PixiBeatorajaSelectScene.captureSnapshot} on the
+   * outgoing scene before disposal; passed verbatim into the next mount's options. Takes
+   * precedence over {@link initialIndex} when both are set — snapshot already encodes the
+   * cursor's full position (including which folder the user was in), and `initialIndex`
+   * alone can't disambiguate between "song N of root" vs "song N of folder X".
+   *
+   * Folder identity is preserved by `label` (folder names are stable across mounts as long
+   * as the underlying `BrowserSongCollection` hasn't been reshuffled). When the new
+   * collection no longer contains a folder by that label (the user dropped a different
+   * library), the restore falls back to the root list with cursor 0 — a safe default that
+   * doesn't crash when stale state outlives its source.
+   */
+  restoreSnapshot?: PixiBeatorajaSelectSceneSnapshot;
+}
+
+/**
+ * Serializable scene state captured at scene-exit for restoration on the next mount. The host
+ * persists this opaquely (no field-by-field interpretation needed); the scene re-applies it on
+ * the next constructor call. All references are by VALUE — ids and labels rather than object
+ * pointers — so the snapshot survives `BrowserSongCollection` rebuilds (drop a new library and
+ * the snapshot still applies as long as the same folder labels / song ids exist).
+ */
+export interface PixiBeatorajaSelectSceneSnapshot {
+  /** Folder labels in nesting order. Empty = at root. */
+  folderPath: ReadonlyArray<string>;
+  /** Cursor index per stack depth. `[rootIdx]` at root, `[rootIdx, songIdxInFolder]` one deep. */
+  cursorStack: ReadonlyArray<number>;
+  /** Active keymode filter (act=11 MODE button cycle). 0 = ALL. */
+  keymodeFilter: number;
+  /** Active sort mode (act=12 SORT button cycle). 0 = DEFAULT. */
+  sortMode: number;
+  /**
+   * Global LN-mode override (act=308 LNMODE button cycle). `undefined` = use the chart's
+   * authored `#LNMODE`; `0..2` = user override (LN / CN / HCN).
+   */
+  lnModeOverride: 0 | 1 | 2 | undefined;
+  /** `BrowserSongEntry.id`s the user marked as song-level favorites. */
+  favoriteSongs: ReadonlyArray<string>;
+  /** `BrowserSongEntry.id`s the user marked as chart-level favorites. */
+  favoriteCharts: ReadonlyArray<string>;
 }
 
 /**
@@ -378,7 +421,51 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.songList = parseBeatorajaSongList(options.skin);
     this.applySongListGeometry();
     this.buildRowVisuals(options.fonts);
-    this.refreshEntries(options.initialIndex ?? 0);
+
+    // Apply the snapshot BEFORE the first refreshEntries so its `keymodeFilter` / `sortMode`
+    // shape the entry list immediately — applying after would briefly render the unfiltered
+    // root before re-running. Folder navigation is replayed by walking `folderPath` and
+    // pushing matching folders onto `folderStack`; missing labels short-circuit the walk
+    // (snapshot was captured against a now-stale collection).
+    const snapshot = options.restoreSnapshot;
+    if (snapshot !== undefined) {
+      this.keymodeFilter = snapshot.keymodeFilter;
+      this.sortMode = snapshot.sortMode;
+      this.lnModeOverride = snapshot.lnModeOverride;
+      for (const id of snapshot.favoriteSongs) this.favoriteSongs.add(id);
+      for (const id of snapshot.favoriteCharts) this.favoriteCharts.add(id);
+      this.cursorStack = snapshot.cursorStack.slice();
+      // Walk `folderPath` resolving each label to a folder node from the live collection.
+      // Re-runs `groupSongsByFolder` on the keymode-filtered set so the folders match what
+      // refreshEntries() will produce below.
+      const filtered =
+        this.keymodeFilter === 0
+          ? options.songs
+          : options.songs.filter((song) => keymodeImagesetIndex(safeResolveChartVariant(song)) === this.keymodeFilter);
+      const rootFolders = groupSongsByFolder(filtered);
+      let currentFolders: ReadonlyArray<BrowserFolderNode> = rootFolders;
+      for (const label of snapshot.folderPath) {
+        const match = currentFolders.find((f) => f.label === label);
+        if (match === undefined) {
+          // Snapshot referenced a folder no longer in the collection — abort the walk and
+          // pop the cursor stack back to where we successfully landed. Avoids a crash AND
+          // gives the user a sensible "near where I was" rather than a hard reset to root.
+          this.cursorStack = this.cursorStack.slice(0, this.folderStack.length + 1);
+          break;
+        }
+        this.folderStack.push(match);
+        // Inside one folder, the entries are songs (no nested folders). Subsequent labels
+        // in `folderPath` should never match if any exist (collection is flat) — the walk
+        // self-terminates on the first miss.
+        currentFolders = [];
+      }
+      // Honour the cursor for the deepest depth we successfully restored. `refreshEntries`
+      // will clamp it again on a length mismatch.
+      const initialIndex = this.cursorStack[this.cursorStack.length - 1] ?? snapshot.cursorStack[snapshot.cursorStack.length - 1] ?? 0;
+      this.refreshEntries(initialIndex);
+    } else {
+      this.refreshEntries(options.initialIndex ?? 0);
+    }
 
     // eslint-disable-next-line no-console
     console.log(
@@ -388,9 +475,35 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         songs: options.songs.length,
         folders: groupSongsByFolder(options.songs).length,
         initialIndex: this.currentIndex,
+        folderDepth: this.folderStack.length,
+        sortMode: this.sortMode,
+        keymodeFilter: this.keymodeFilter,
         skinName: options.skin.name,
+        restored: snapshot !== undefined,
       }),
     );
+  }
+
+  /**
+   * Snapshot the live scene state for restoration on the next mount. Hosts call this BEFORE
+   * disposing the scene (e.g. on PLAY transition) and pass the result back as
+   * `options.restoreSnapshot` when re-mounting on return. The snapshot is plain data — safe
+   * to JSON-stringify for session persistence if the host wants it to survive a page reload.
+   *
+   * Folder identity is preserved by `label` rather than object reference so the snapshot
+   * survives a `BrowserSongCollection` rebuild. See {@link PixiBeatorajaSelectSceneSnapshot}
+   * for the full shape and stale-snapshot fallback rules.
+   */
+  captureSnapshot(): PixiBeatorajaSelectSceneSnapshot {
+    return {
+      folderPath: this.folderStack.map((folder) => folder.label),
+      cursorStack: this.cursorStack.slice(0, this.folderStack.length + 1),
+      keymodeFilter: this.keymodeFilter,
+      sortMode: this.sortMode,
+      lnModeOverride: this.lnModeOverride,
+      favoriteSongs: Array.from(this.favoriteSongs),
+      favoriteCharts: Array.from(this.favoriteCharts),
+    };
   }
 
   enter(host: PixiSceneHost): void {

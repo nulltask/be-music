@@ -810,8 +810,19 @@ class PlayerWebDemoApp {
   /**
    * Last beatoraja-select highlighted index — survives scene tear-down so coming back from gameplay
    * lands on the same song the user just played.
+   *
+   * Subsumed by {@link beatorajaSelectSnapshot} for richer restore (folder / sort / filter / favorites).
+   * Kept for backward compatibility with code paths that haven't been migrated to the snapshot yet.
    */
   private beatorajaSelectIndex = 0;
+  /**
+   * Last beatoraja-select scene state captured at scene-exit. Re-applied on the next mount so the
+   * user lands on the same folder, cursor, sort, filter, and favorites set they left — not just
+   * the focused song. Captured via `selectScene.captureSnapshot()` at every dispose site that
+   * represents a "coming back later" transition (PLAY entry, decide entry, theme reload). Cleared
+   * by `onExit` (ESC at root) since that's the user explicitly leaving the select altogether.
+   */
+  private beatorajaSelectSnapshot: import('@be-music/player-web').PixiBeatorajaSelectSceneSnapshot | undefined;
   private resultView: PixiResultView | undefined;
   private decideView: PixiDecideView | undefined;
   private hostMounted = false;
@@ -1935,6 +1946,13 @@ class PlayerWebDemoApp {
       this.beatorajaFontCachesByEntry.set(skinLoad.entry.entryPath, fonts);
     }
 
+    // Capture the OUTGOING scene's state before disposing so the snapshot is fresh — covers
+    // the rare hot-swap case where `showBeatorajaSelect` runs while a scene is already up
+    // (e.g. theme reload). Normal PLAY → SELECT flow already captures via `playSongBeatoraja`
+    // / `showDecide`, but doing it here defensively ensures the snapshot is never stale.
+    if (this.beatorajaSelectScene !== undefined) {
+      this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
+    }
     this.beatorajaSelectScene?.dispose();
     this.beatorajaSelectScene = new PixiBeatorajaSelectScene({
       skin: skinLoad.skin,
@@ -1954,6 +1972,12 @@ class PlayerWebDemoApp {
       resolveSongLampOp: (song) => this.beatorajaSessionLampOps.get(song.id),
       // Restore the last cursor so coming back from gameplay lands on the same song.
       initialIndex: this.beatorajaSelectIndex,
+      // Restore richer scene state captured before the previous tear-down — folder /
+      // sort / filter / favorites / cursor stack. Takes precedence over `initialIndex` when
+      // both are set (snapshot encodes the full position; bare index can't disambiguate
+      // root vs. inside-folder). Cleared by `onExit` so a future fresh entry from the empty
+      // drop screen starts at root.
+      restoreSnapshot: this.beatorajaSelectSnapshot,
       onSongPicked: (song, opts) => {
         // Cache the index using the picked song's identity — survives the scene tear-down.
         this.beatorajaSelectIndex = this.collection.songs.indexOf(song);
@@ -1964,11 +1988,14 @@ class PlayerWebDemoApp {
         void this.showDecide(song, { autoPlay: opts?.autoPlay });
       },
       onExit: () => {
-        // ESC from the beatoraja select returns to the empty drop screen.
+        // ESC from the beatoraja select returns to the empty drop screen. Clear the snapshot
+        // because the user explicitly left — coming back via a fresh drop or theme reload
+        // should start at root, not pick up wherever they were.
         this.elements.shell.classList.add('empty');
         void this.sceneHost.setScene(undefined);
         this.beatorajaSelectScene?.dispose();
         this.beatorajaSelectScene = undefined;
+        this.beatorajaSelectSnapshot = undefined;
         this.beatorajaSkinOptionsGui?.clear();
       },
       onReadtextRequest: (song) => {
@@ -2246,6 +2273,13 @@ class PlayerWebDemoApp {
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
     this.selectView?.setVisible(false);
+    // Capture the select scene's state before disposing — the user picked a song and is
+    // heading into decide → play. When they come back via the result scene's "back to
+    // select" path we re-mount with this snapshot so they land in the same folder / cursor /
+    // sort / filter / favorites state, not at the root with default sort.
+    if (this.beatorajaSelectScene !== undefined) {
+      this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
+    }
     this.beatorajaSelectScene?.dispose();
     this.beatorajaSelectScene = undefined;
     this.beatorajaDecideScene?.dispose();
@@ -2827,6 +2861,12 @@ class PlayerWebDemoApp {
       return;
     }
     // Same teardown for the beatoraja select scene if we're falling back to LR2 (theme dropped, etc.).
+    // Capture before disposing so a future beatoraja-theme reload (e.g. user re-drops the same
+    // theme) restores the cursor / folder state. The snapshot is opaque data — harmless to retain
+    // even when the user has switched away.
+    if (this.beatorajaSelectScene !== undefined) {
+      this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
+    }
     this.beatorajaSelectScene?.dispose();
     this.beatorajaSelectScene = undefined;
     // Decide / result splashes don't outlive a return to select either — the gameplay-skinned
