@@ -123,6 +123,22 @@ describe('normalizeBeatorajaDestinations', () => {
     expect(out[0]?.dst[0]).toMatchObject({ x: 20, y: 20, w: 20, h: 20 });
   });
 
+  it('parses `relative: true` (boolean or numeric truthy) for offset center-anchoring opt-out', () => {
+    // Mirrors `SkinObject.relative` — when true, `prepareDraw` skips the
+    // `region.x += off.x - off.w/2` centering shift. Used by `JsonPlaySkinObjectLoader` on
+    // per-digit judgement-detail numbers. Default false.
+    const out = normalizeBeatorajaDestinations([
+      { id: 'a', dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] },
+      { id: 'b', relative: true, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] },
+      { id: 'c', relative: 1, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] },
+      { id: 'd', relative: 0, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] },
+    ]);
+    expect(out[0]?.relative).toBe(false);
+    expect(out[1]?.relative).toBe(true);
+    expect(out[2]?.relative).toBe(true); // numeric 1 truthy
+    expect(out[3]?.relative).toBe(false); // numeric 0 falsy
+  });
+
   it('honors negated `if` codes on inner alternatives', () => {
     // `if: [-924]` means "active when option 924 is NOT set". Same convention as element-level
     // ifCodes — a negative code is a negation guard.

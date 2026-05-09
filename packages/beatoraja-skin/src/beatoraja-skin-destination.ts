@@ -162,6 +162,22 @@ export interface BeatorajaDestinationGroup {
    */
   mouseRect: number;
   /**
+   * Mirrors beatoraja's `SkinObject.relative` flag. Controls how `offsets[]` reshape the rect:
+   *
+   *   - `false` (default) — offset is **center-anchored**. The rect grows around its center:
+   *     `x += offset.x - offset.w / 2; y += offset.y - offset.h / 2; w += offset.w; h += offset.h`.
+   *     Authors expect this for lanecover / hidden-cover / sprite expansions where the visual
+   *     should "breathe" around the same focal point as the original rect.
+   *   - `true` — offset is **anchor-relative**. The rect grows from its top-left corner:
+   *     `x += offset.x; y += offset.y; w += offset.w; h += offset.h`.
+   *     Set by `JsonPlaySkinObjectLoader` only on per-digit numbers inside the judgement-detail
+   *     value object — those digits are positioned by their own offset and shouldn't re-center
+   *     when the parent's offset.w/h grows.
+   *
+   * Authored as `relative: true` on the JSON record. Most destinations omit it (= `false`).
+   */
+  relative: boolean;
+  /**
    * Author-given declaration order. Two destinations targeting the same image but emitted at different points in
    * the source file render in source order; this field preserves that.
    */
@@ -235,8 +251,19 @@ function normalizeOne(
     // keyframes for the LAST non-default value.
     stretch: pickStretchMode(f, rawDst),
     mouseRect: numberField(f, 'mouseRect', -1),
+    // `relative` flips offset application from center-anchored to anchor-relative — see field
+    // doc. Boolean parse: any truthy authored value (including the literal `1` skins
+    // sometimes emit) flips it on.
+    relative: booleanField(f, 'relative', false),
     declarationOrder,
   };
+}
+
+function booleanField(record: Readonly<Record<string, unknown>>, key: string, fallback: boolean): boolean {
+  const v = record[key];
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number' && Number.isFinite(v)) return v !== 0;
+  return fallback;
 }
 
 /**

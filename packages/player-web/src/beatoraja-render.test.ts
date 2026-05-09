@@ -209,6 +209,62 @@ describe('destinationToSpriteProps', () => {
     expect(props.x).toBe(50);
   });
 
+  it('center-anchors the rect when `offset.w/h` are non-zero (matches SkinObject.prepareDraw)', () => {
+    // Beatoraja's `prepareDraw` does `region.x += off.x - off.w/2; width += off.w` — the rect
+    // grows around its CENTER, not the top-left corner. ModernChic / GdbG cover slabs depend on
+    // this for "breathing" expansions where the user's lift slider widens the cover without
+    // dragging it off the lane edge. Verify a pure +w expansion doesn't shift the visible center.
+    const g = groupOf({
+      offset: 3,
+      // 100x50 rect centered at (50, 25) in libGDX-Y-UP space (= visual center on canvas).
+      dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255 }],
+    });
+    // Offset adds 40px to width and 20px to height, no x/y translation. With centering:
+    //   x' = 0 + 0 - 40/2 = -20
+    //   y' = 0 + 0 - 20/2 = -10  (still in libGDX-Y-UP)
+    //   width' = 100 + 40 = 140
+    //   height' = 50 + 20 = 70
+    //   center of rect' = (-20 + 70, -10 + 35) = (50, 25)  ← unchanged
+    const props = destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        resolveOffset: (id) => (id === 3 ? { x: 0, y: 0, w: 40, h: 20, r: 0, a: 255 } : undefined),
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+    expect(props.x).toBe(-20);
+    expect(props.width).toBe(140);
+    // libGDX-Y-bottom = -10; Pixi-Y-top = 1000 - (-10) - 70 = 940.
+    expect(props.y).toBe(940);
+    expect(props.height).toBe(70);
+  });
+
+  it('honors `relative: true` to skip the centering shift (judgement-digit numbers)', () => {
+    // beatoraja's `JsonPlaySkinObjectLoader` calls `setRelative(true)` on per-digit numbers in
+    // the judgement-detail value — those digits are positioned at fixed slot offsets and must
+    // NOT re-center when the parent number's offset.w/h grows. With `relative=true` the rect
+    // grows from the top-left corner instead.
+    const g = groupOf({
+      offset: 3,
+      relative: true,
+      dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255 }],
+    });
+    const props = destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        resolveOffset: (id) => (id === 3 ? { x: 0, y: 0, w: 40, h: 20, r: 0, a: 255 } : undefined),
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+    // No centering shift. x = 0, width = 140. Pixi-Y-top = 1000 - 0 - 70 = 930.
+    expect(props.x).toBe(0);
+    expect(props.width).toBe(140);
+    expect(props.y).toBe(930);
+    expect(props.height).toBe(70);
+  });
+
   it('combines the singular `offset` and plural `offsets[]` additively', () => {
     const g = groupOf({
       offset: 3,

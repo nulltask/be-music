@@ -244,14 +244,41 @@ export function destinationToSpriteProps(
   const mirrorY = rawHeight < 0;
   const width = Math.abs(rawWidth);
   const height = Math.abs(rawHeight);
-  // libGDX bottom-left: (xRaw, yRaw) where xRaw = kx + ox, yRaw = ky + oy.
+  // Center-anchored offset application — mirrors beatoraja's `SkinObject.prepareDraw`:
+  //
+  //     if (!relative) {
+  //         region.x += off.x - off.w / 2;
+  //         region.y += off.y - off.h / 2;
+  //     }
+  //     region.width  += off.w;
+  //     region.height += off.h;
+  //
+  // The rect grows around its CENTER, not its top-left corner. Authors lean on this for
+  // lanecover / hidden-cover slabs that "breathe" without re-anchoring as their height
+  // changes — without the centering shift the cover would slide upward as the user widens
+  // it. The previous implementation skipped the `- off.w / 2` / `- off.h / 2` term and
+  // anchored every expansion to the top-left, which made the lanecover edge drift visibly
+  // when the user dragged the slider.
+  //
+  // `group.relative = true` opts out — beatoraja's `JsonPlaySkinObjectLoader` sets this on
+  // per-digit judgement-detail numbers so they stay anchored to their authored slot
+  // position rather than re-centering when an offset.w/h is applied to the parent number's
+  // box. Most destinations leave `relative` at `false` (the default), so the centering
+  // applies broadly.
+  //
+  // libGDX bottom-left: (xRaw, yRaw) where xRaw = kx + ox + (relative ? 0 : -ow/2),
+  // yRaw = ky + oy + (relative ? 0 : -oh/2).
   // With negative width, the actual left edge in libGDX-X is xRaw + rawWidth.
   // With negative height, the actual TOP edge in libGDX-Y is yRaw + rawHeight (since libGDX Y
   // grows up, "top" is the highest y; but for negative height the rect grows downward from
   // yRaw, so the bottom in Y-UP is yRaw + rawHeight which becomes the lower bound of the
   // rect). Concretely: after Y-flip, Pixi-y = canvasH - yLibgdxBottom - heightAbs.
-  const xLeft = mirrorX ? keyframe.x + offset.x + rawWidth : keyframe.x + offset.x;
-  const yLibgdxBottom = mirrorY ? keyframe.y + offset.y + rawHeight : keyframe.y + offset.y;
+  const centerShiftX = group.relative ? 0 : -offset.w / 2;
+  const centerShiftY = group.relative ? 0 : -offset.h / 2;
+  const baseX = keyframe.x + offset.x + centerShiftX;
+  const baseY = keyframe.y + offset.y + centerShiftY;
+  const xLeft = mirrorX ? baseX + rawWidth : baseX;
+  const yLibgdxBottom = mirrorY ? baseY + rawHeight : baseY;
   return {
     visible: true,
     x: xLeft,
