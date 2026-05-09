@@ -637,6 +637,76 @@ describe('BeatorajaRuntimeAdapter — timing samples', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — judgegraph type=2 (early/late histogram)', () => {
+  it('returns undefined when no judgements have fired yet', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.applyFrame({
+      currentSeconds: 0,
+      totalSeconds: 100,
+      summary: {
+        score: 0, exScore: 0, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, fast: 0, slow: 0,
+        combo: 0, maxCombo: 0, total: 100, gauge: undefined,
+      } as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    expect(adapter.resolveJudgeGraphBars(2)).toBeUndefined();
+  });
+
+  it('bins recent timings into 21 cells covering ±100 ms (10 ms each)', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.applyFrame({
+      currentSeconds: 0,
+      totalSeconds: 100,
+      summary: { fast: 0, slow: 0, perfect: 1 } as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    // Three samples at distinct ms offsets — one in the perfect bin, one early, one late.
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: 0, updatedAtMs: 100 });
+    adapter.applyJudgeCombo({ judge: 'GREAT', combo: 2, channel: '11', deltaMs: -35, updatedAtMs: 200 });
+    adapter.applyJudgeCombo({ judge: 'GREAT', combo: 3, channel: '11', deltaMs: 45, updatedAtMs: 300 });
+    const bars = adapter.resolveJudgeGraphBars(2);
+    expect(bars).toBeDefined();
+    expect(bars!.length).toBe(21);
+    // Bin index = floor((delta + 100) / 10):
+    //   delta=0   → idx 10 (centre)
+    //   delta=-35 → idx 6  ((-35+100)/10 = 6.5 → 6)
+    //   delta=45  → idx 14 ((45+100)/10 = 14.5 → 14)
+    expect(bars![10]).toBe(1);
+    expect(bars![6]).toBe(1);
+    expect(bars![14]).toBe(1);
+    // Empty bins stay 0.
+    expect(bars![0]).toBe(0);
+    expect(bars![20]).toBe(0);
+  });
+
+  it('saturates samples beyond ±100 ms into the edge bins', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.applyFrame({
+      currentSeconds: 0,
+      totalSeconds: 100,
+      summary: { fast: 0, slow: 0, perfect: 0 } as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    adapter.applyJudgeCombo({ judge: 'BAD', combo: 0, channel: '11', deltaMs: -250, updatedAtMs: 100 });
+    adapter.applyJudgeCombo({ judge: 'BAD', combo: 0, channel: '11', deltaMs: 200, updatedAtMs: 200 });
+    const bars = adapter.resolveJudgeGraphBars(2);
+    expect(bars![0]).toBe(1);
+    expect(bars![20]).toBe(1);
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — lift slider', () => {
   it('drives `OFFSET_LIFT` (id 3) y-shift and `BEATORAJA_NUM.LIFT1` from `liftRatio`', () => {
     const adapter = new BeatorajaRuntimeAdapter({

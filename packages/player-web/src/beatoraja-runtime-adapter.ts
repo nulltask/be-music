@@ -1247,10 +1247,15 @@ export class BeatorajaRuntimeAdapter {
    *     authors a `type=0` judgegraph for the chart-summary panel — without this resolver the
    *     graph stays hidden during play.
    *   - `1` (judgement spread) → `[perfect, great, good, bad, poor]` from the live summary
-   *   - `2` (early/late spread) → `[fast, slow]` from the live summary
+   *   - `2` (early/late spread) → 21 ms-binned counts from the recent timing buffer covering
+   *     the range `[-100 ms, +100 ms]` (10 ms per bin). Mirrors upstream `SkinJudgeGraph`'s
+   *     `TYPE_HIT_FAIL_DISTRIBUTION` shape — beatoraja paints one bar per offset bin so the
+   *     player sees how their hits cluster around the perfect window. The previous
+   *     `[summary.fast, summary.slow]` 2-bar return shape was visibly wrong (only two slabs
+   *     instead of a histogram).
    *
    * Returns `undefined` when no data is available yet (chart missing for type=0, or no live
-   * summary for types 1/2). The renderer hides the graph in that case.
+   * summary / no judgements for types 1/2). The renderer hides the graph in that case.
    */
   resolveJudgeGraphBars(type: number): ReadonlyArray<number> | undefined {
     if (type === 0) {
@@ -1267,12 +1272,38 @@ export class BeatorajaRuntimeAdapter {
       case 1:
         return [summary.perfect, summary.great, summary.good, summary.bad, summary.poor];
       case 2:
-        return [summary.fast, summary.slow];
+        return this.computeTimingHistogram();
       default:
         return undefined;
     }
   }
   private cachedNoteBreakdownBars: ReadonlyArray<number> | undefined;
+
+  /**
+   * Bin the live `recentTimings` ring buffer into a histogram for `judgegraph type=2`. Each
+   * bin covers a 10 ms slice; bin index 0 spans `[-100, -90)` ms (= max early), bin 20 spans
+   * `[+100, +inf)` ms (= max late). Out-of-range samples saturate at the edge bins so a
+   * single huge mistime doesn't drop off the chart.
+   *
+   * Returns `undefined` when no judgements have fired yet — the renderer hides the graph
+   * until the first hit lands.
+   */
+  private computeTimingHistogram(): ReadonlyArray<number> | undefined {
+    if (this.recentTimings.length === 0) return undefined;
+    const BIN_COUNT = 21;
+    const BIN_WIDTH_MS = 10;
+    const RANGE_HALF_MS = ((BIN_COUNT - 1) / 2) * BIN_WIDTH_MS; // 100 ms
+    const bins = new Array<number>(BIN_COUNT).fill(0);
+    for (const sample of this.recentTimings) {
+      const offset = sample.deltaMs;
+      // Map `[-100, +100]` ms to `[0, 20]` (10 ms per bin), saturating outside.
+      let idx = Math.floor((offset + RANGE_HALF_MS) / BIN_WIDTH_MS);
+      if (idx < 0) idx = 0;
+      else if (idx >= BIN_COUNT) idx = BIN_COUNT - 1;
+      bins[idx] = (bins[idx] ?? 0) + 1;
+    }
+    return bins;
+  }
 
   /**
    * Visible playfield ratio (= what fraction of the lane is unobstructed by lanecover / lift).
