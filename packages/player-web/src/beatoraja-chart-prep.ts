@@ -21,7 +21,9 @@
 //   - Note playback array preparation (the engine does this internally via `preparePlaybackChartData`).
 //   - `#SCROLL` / `#SPEED` distance integrators (the engine handles per-beat physics).
 //   - Random-mode lane shuffles (those are a play-mode option not yet surfaced for the beatoraja path).
-//   - DP flip (TODO when the demo wires that toggle through).
+//   - DP flip — applied at gameplay-view construction (`flipDpChart` in `pixi-beatoraja-gameplay`)
+//     rather than here, since the flip toggle comes from `BeatorajaPlayerOptions` which the prep
+//     pipeline doesn't see. Both produce the same end-state chart.
 //
 // Caller lifecycle:
 //

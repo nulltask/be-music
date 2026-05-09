@@ -202,6 +202,13 @@ export interface PixiBeatorajaSelectSceneSnapshot {
   favoriteSongs: ReadonlyArray<string>;
   /** `BrowserSongEntry.id`s the user marked as chart-level favorites. */
   favoriteCharts: ReadonlyArray<string>;
+  /**
+   * Live search query. Survives PLAY → SELECT round-trips so the user lands back on the
+   * same filtered list. Empty string = no filter (the typical case when the user hasn't
+   * touched search). The active-input flag isn't persisted — coming back from gameplay
+   * always starts in non-input mode so the user can navigate immediately.
+   */
+  searchQuery: string;
 }
 
 /**
@@ -511,6 +518,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       this.keymodeFilter = snapshot.keymodeFilter;
       this.sortMode = snapshot.sortMode;
       this.lnModeOverride = snapshot.lnModeOverride;
+      // Search query persists across the round-trip; the active-input flag does NOT —
+      // coming back from gameplay should land in navigation mode so arrow keys work
+      // immediately. Defensive `?? ''` covers older snapshots taken before the field
+      // existed (forward-compat with sessionStorage / localStorage payloads).
+      this.searchQuery = (snapshot as { searchQuery?: string }).searchQuery ?? '';
       for (const id of snapshot.favoriteSongs) this.favoriteSongs.add(id);
       for (const id of snapshot.favoriteCharts) this.favoriteCharts.add(id);
       this.cursorStack = snapshot.cursorStack.slice();
@@ -582,6 +594,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       lnModeOverride: this.lnModeOverride,
       favoriteSongs: Array.from(this.favoriteSongs),
       favoriteCharts: Array.from(this.favoriteCharts),
+      searchQuery: this.searchQuery,
     };
   }
 
@@ -2020,7 +2033,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       this.setSearchQuery(this.searchQuery.slice(0, -1));
       return;
     }
-    // ArrowUp/Down still navigate inside search mode so the user can type, then jump.
+    // Navigation keys still work inside search mode — the user can type a query, then
+    // page through the filtered results without exiting input mode. Mirrors the same set
+    // the navigation-mode handler exposes so muscle memory carries.
     if (event.key === 'ArrowUp') {
       event.preventDefault();
       this.moveCursor(-1);
@@ -2029,6 +2044,26 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       this.moveCursor(1);
+      return;
+    }
+    if (event.key === 'PageUp') {
+      event.preventDefault();
+      this.moveCursor(-10);
+      return;
+    }
+    if (event.key === 'PageDown') {
+      event.preventDefault();
+      this.moveCursor(10);
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      this.setCursor(0);
+      return;
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      this.setCursor(this.entries.length - 1);
       return;
     }
     // Printable single-character keys append to the query. Filter out chord modifiers

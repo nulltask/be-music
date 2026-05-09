@@ -149,6 +149,22 @@ export class BeatorajaBgaLayer {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    // Pause the active video before tearing down the container — otherwise the
+    // `requestVideoFrameCallback` poll keeps running on the compositor thread, fighting
+    // for frame slots even though no Pixi sprite consumes the frames anymore. The prep
+    // pipeline's `dispose()` clears `src` + revokes the URL on EVERY video; this layer
+    // pause is just the "stop the in-flight cue" half so a rapid scene-swap (replaceSkin
+    // mid-play) doesn't briefly drive two videos before the prep cleanup runs.
+    if (this.currentKey !== undefined) {
+      const active = this.videoElements.get(this.currentKey);
+      if (active !== undefined) {
+        try {
+          active.pause();
+        } catch {
+          // Already paused / disposed.
+        }
+      }
+    }
     if (!this.container.destroyed) {
       this.container.destroy({ children: true });
     }
