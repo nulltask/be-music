@@ -81,6 +81,24 @@ export interface BeatorajaSongListLayout {
    * id-to-feature mapping.
    */
   labels: ReadonlyArray<{ id: string; rect: BeatorajaSongListRowRect }>;
+  /**
+   * Per-row text destinations. Each entry references a top-level `skin.text[id == entry.id]`
+   * declaration (e.g. `"bartext"` in the default theme) and provides the per-bar rect that
+   * positions + sizes the text. The renderer paints one text node per `(visible row × text
+   * entry)` combination — content comes from the underlying text declaration's `ref`
+   * (matched against `BEATORAJA_TEXT.*` opcodes via the host's `resolveTextContent`).
+   *
+   * Rect is RELATIVE to the bar rect. The renderer should use `rect.h` as the font size
+   * to match upstream `SkinTextFont.draw`'s `font.setScale(region.height / parameter.size)`
+   * — the rendered glyph height is the dst rect's height, not the text element's authored
+   * `size` (which only controls the font bitmap's load resolution).
+   *
+   * Default beatoraja's `select.json` authors a single `bartext` entry (one line per bar).
+   * Skins that want both title + artist split into two entries; the renderer iterates them
+   * verbatim. `[]` when the skin omits the block — caller falls back to a synthesised
+   * label / sub-label pair sized proportionally to the bar height.
+   */
+  text: ReadonlyArray<{ id: string; rect: BeatorajaSongListRowRect }>;
 }
 
 /**
@@ -115,13 +133,21 @@ export function parseBeatorajaSongList(skin: BeatorajaSkin): BeatorajaSongListLa
   // Sub-destination rects. `level` is treated as a single rect (per-difficulty entries
   // typically share identical geometry — only the color tint varies). `label[]` is a LIST
   // of `{id, rect}` so per-feature gating (LN / random / mine) can show / hide each
-  // independently at draw time.
+  // independently at draw time. `text[]` is similar — each entry references a top-level
+  // `text[]` declaration by id and provides the per-bar rect, which the renderer should use
+  // as the dst (with `rect.h` as the font size).
   const level = collectFirstSubRect(obj.level);
   const labels = collectLabelEntries(obj.label);
+  // De-dupe text entries by id — beatoraja's default `select.json` authors the same id
+  // (e.g. `bartext`) twice with different `filter` / color overrides. Without a filter
+  // engine we'd render the same string twice on top of itself; keeping the first
+  // occurrence per id is the closest single-shot approximation.
+  const text = dedupeById(collectLabelEntries(obj.text));
   return {
     rows: rects,
     focusedRowIndex: bestIndex,
     labels,
+    text,
     ...(level !== undefined ? { level } : {}),
   };
 }
@@ -201,4 +227,15 @@ function collectListRects(input: unknown): BeatorajaSongListRowRect[] | undefine
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
   const v = record[key];
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function dedupeById<T extends { id: string }>(entries: ReadonlyArray<T>): ReadonlyArray<T> {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const entry of entries) {
+    if (seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    out.push(entry);
+  }
+  return out;
 }

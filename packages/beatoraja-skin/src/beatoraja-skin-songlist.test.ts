@@ -142,7 +142,7 @@ describe('parseBeatorajaSongList', () => {
     expect(layout?.level).toEqual({ x: 20, y: 8, w: 24, h: 24 });
   });
 
-  it('returns level as undefined / labels as empty when the songlist omits them', () => {
+  it('returns level as undefined / labels + text as empty when the songlist omits them', () => {
     const skin = makeSkin({
       songlist: {
         liston: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 100, h: 30 }] }],
@@ -151,6 +151,39 @@ describe('parseBeatorajaSongList', () => {
     const layout = parseBeatorajaSongList(skin);
     expect(layout?.level).toBeUndefined();
     expect(layout?.labels).toEqual([]);
+    expect(layout?.text).toEqual([]);
+  });
+
+  it('extracts `songlist.text[]` entries verbatim so renderers can size text from `dst.h`', () => {
+    // Default beatoraja `select.json` authors `bartext` per-bar at `{x:80, y:6, w:18, h:24}`
+    // — `dst.h:24` IS the rendered glyph height (matches `font.setScale(region.h / size)`
+    // upstream). The renderer needs the rect to position the text and size the font.
+    const skin = makeSkin({
+      songlist: {
+        liston: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 500, h: 36 }] }],
+        text: [{ id: 'bartext', dst: [{ x: 80, y: 6, w: 400, h: 24 }] }],
+      },
+    } as unknown as Partial<BeatorajaSkin>);
+    const layout = parseBeatorajaSongList(skin);
+    expect(layout?.text).toEqual([{ id: 'bartext', rect: { x: 80, y: 6, w: 400, h: 24 } }]);
+  });
+
+  it('de-dupes `songlist.text[]` by id (default skin authors `bartext` twice with filter variants)', () => {
+    // Real default `select.json` authors `bartext` twice — same `dst.h` but different colors
+    // gated on `filter`. Without a filter engine we'd paint the text twice on top of itself;
+    // keeping the first occurrence per id approximates the focused-row rendering.
+    const skin = makeSkin({
+      songlist: {
+        liston: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 500, h: 36 }] }],
+        text: [
+          { id: 'bartext', filter: 1, dst: [{ x: 80, y: 6, w: 18, h: 24 }] },
+          { id: 'bartext', filter: 1, dst: [{ x: 80, y: 6, w: 18, h: 24, b: 0 }] },
+        ],
+      },
+    } as unknown as Partial<BeatorajaSkin>);
+    const layout = parseBeatorajaSongList(skin);
+    expect(layout?.text).toHaveLength(1);
+    expect(layout?.text[0]?.id).toBe('bartext');
   });
 
   it('extracts every entry of `songlist.label[]` as `{id, rect}` for per-feature gating', () => {

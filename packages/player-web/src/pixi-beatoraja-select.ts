@@ -1560,12 +1560,35 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.rowFeatureLabels.length = 0;
     this.rowHitAreas.length = 0;
     this.rowBarSprites.length = 0;
-    // Pick a font size proportional to the row height. Skins with tall bars (ModernChic
-    // 70px) get bigger text; skins with thin bars (default 36px) get smaller text. The 0.45
-    // multiplier leaves room for a sub-label below the primary one.
+    // Title / sub-label font sizes. Two cases:
+    //
+    //  - Skin authored `songlist.text[]` (default beatoraja, GdbG, ModernChic) — use
+    //    `text[0].rect.h` as the title size and `text[1].rect.h` as the sub size, which
+    //    matches upstream `SkinTextFont.draw`'s `font.setScale(region.height / parameter.size)`
+    //    behavior (the rendered glyph height IS the dst rect's height; the text element's
+    //    authored `size` only controls the bitmap load resolution). For the default skin's
+    //    36 px bar with `dst:{h:24}` this gives 24 px — the proportional-fallback path
+    //    below would produce only 16 px, visibly too small vs. beatoraja.
+    //
+    //  - Skin omitted the block — fall back to a row-height proportional pair so unsupported
+    //    skins still get readable text. `0.45 / 0.25` mirrors what the bundled fixtures of
+    //    older skins were authoring before we adopted the spec-faithful path.
+    //
+    // Sub size falls back to `Math.max(10, title * 0.6)` when the skin only authored ONE
+    // text entry (default beatoraja's `bartext` is title-only) so the artist line below
+    // the title stays readable.
     const sampleRect = this.rowRectAt(this.centreRowIndex);
-    const labelSize = Math.max(12, Math.floor(sampleRect.h * 0.45));
-    const subSize = Math.max(10, Math.floor(sampleRect.h * 0.25));
+    const songListText = this.songList?.text ?? [];
+    const proportionalLabelSize = Math.max(12, Math.floor(sampleRect.h * 0.45));
+    const proportionalSubSize = Math.max(10, Math.floor(sampleRect.h * 0.25));
+    const labelSize =
+      songListText[0] !== undefined ? Math.max(8, Math.floor(songListText[0].rect.h)) : proportionalLabelSize;
+    const subSize =
+      songListText[1] !== undefined
+        ? Math.max(8, Math.floor(songListText[1].rect.h))
+        : songListText[0] !== undefined
+          ? Math.max(10, Math.floor(labelSize * 0.6))
+          : proportionalSubSize;
     for (let i = 0; i < this.visibleRowCount; i += 1) {
       // Per-row bar background. Mounted FIRST so it sits behind hit area / icon / labels.
       // Skins that author the focused row with a different `liston[i].id` (e.g. `list_on`
