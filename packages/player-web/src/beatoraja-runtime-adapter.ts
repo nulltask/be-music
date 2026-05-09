@@ -146,6 +146,15 @@ const RECENT_TIMINGS_CAPACITY = 50;
  */
 const KEYBEAM_PERFECT_WINDOW_MS = 250;
 
+/**
+ * How long after a `flash-lane` autoplay press the lane laser stays lit before the
+ * auto-release fires KEY_OFF. Matches LR2 path's `KEY_ON_FLASH_HOLD_MS = 60` so visual
+ * feedback for autoplay reads as a deliberate flash rather than staying stuck on for the
+ * rest of the chart. Skipped when the lane is actively held (real keypress / LN sustain
+ * arrived during the window).
+ */
+const FLASH_LANE_HOLD_MS = 60;
+
 export class BeatorajaRuntimeAdapter {
   /**
    * Live op set — option ops (from `baseOps`) plus runtime ops the engine has toggled. Exposed via
@@ -209,6 +218,18 @@ export class BeatorajaRuntimeAdapter {
    * live press state.
    */
   private readonly lnHoldHeldByChannel = new Set<string>();
+  /**
+   * Live "is the player currently holding this lane via a real keypress?" set. Populated on
+   * `press-lane`, cleared on `release-lane`. The auto-release path scheduled by
+   * `flash-lane` reads this so a real keypress during the brief flash window doesn't get
+   * stomped by the timed auto-release. Mirrors the LR2 path's `pressedChannels`.
+   */
+  private readonly pressedChannels = new Set<string>();
+  /**
+   * Active `setTimeout` handles for `flash-lane` auto-release. Cleared on dispose so a
+   * scene tear-down mid-flash doesn't fire the callback against a disposed adapter.
+   */
+  private readonly flashReleaseHandles = new Set<ReturnType<typeof setTimeout>>();
   private lastHiSpeed = 1;
   /**
    * Player's lanecover position in `[0, 1]`. `0` = cover off (slider at home, no obscuring),
@@ -708,11 +729,13 @@ export class BeatorajaRuntimeAdapter {
         // skips drawing when its timer is OFF). Without the deactivate, the lane laser /
         // keybeam keyed on KEY_ON would stay visible after the player released the key
         // because the timer's start time would still be set.
+        this.pressedChannels.add(command.channel);
         this.startLaneKeyOnTimer(command.channel);
         this.deactivateLaneKeyOffTimer(command.channel);
         break;
       case 'release-lane':
         // Release: stamp KEY_OFF, deactivate KEY_ON. Symmetric to press-lane.
+        this.pressedChannels.delete(command.channel);
         this.startLaneKeyOffTimer(command.channel);
         this.deactivateLaneKeyOnTimer(command.channel);
         // Clear the LN-hold flag for this lane so the body sprite flips back to the unheld
@@ -724,18 +747,31 @@ export class BeatorajaRuntimeAdapter {
         // signal. They diverge when the player releases mid-LN.
         this.lnHoldHeldByChannel.delete(command.channel);
         break;
-      case 'flash-lane':
+      case 'flash-lane': {
         // `flash-lane` is the engine's "key was pressed" signal. It fires for every input
         // (manual press AND autoplay note consumption), regardless of judge severity. We
         // mirror it onto KEY_ON so autoplay's keybeams light up the same way manual play's
         // do — the bomb sprite is fired SEPARATELY in `applyJudgeCombo` for PERFECT / GREAT
-        // verdicts only (see the bomb-trigger logic there). Earlier the adapter triggered
-        // the bomb timer here, which lit the explosion sprite on every press including
-        // empty-press POORs and BAD verdicts — bomb is supposed to be a positive-feedback
-        // cue specifically for clean hits, never empty-press / low-judgement.
-        this.startLaneKeyOnTimer(command.channel);
-        this.deactivateLaneKeyOffTimer(command.channel);
+        // verdicts only.
+        //
+        // Schedule an auto-release after `FLASH_LANE_HOLD_MS` so the laser fades like a
+        // real keystroke. Without this, autoplay would leave the laser stuck on after the
+        // first note since the engine never emits a matching `release-lane` for autoplay.
+        // Skips the auto-release if the lane gets a real `press-lane` (manual takeover) or
+        // `hold-lane-until-beat` (LN sustain) within the window — those have their own
+        // release lifecycles and clobbering them mid-hold would break visuals.
+        const channel = command.channel;
+        this.startLaneKeyOnTimer(channel);
+        this.deactivateLaneKeyOffTimer(channel);
+        const handle = setTimeout(() => {
+          this.flashReleaseHandles.delete(handle);
+          if (this.pressedChannels.has(channel) || this.lnHoldHeldByChannel.has(channel)) return;
+          this.startLaneKeyOffTimer(channel);
+          this.deactivateLaneKeyOnTimer(channel);
+        }, FLASH_LANE_HOLD_MS);
+        this.flashReleaseHandles.add(handle);
         break;
+      }
       case 'hold-lane-until-beat':
         this.startLaneLnHoldTimer(command.channel);
         // Mark the lane as actively held so the LN body sprite swaps to the held variant
@@ -1969,6 +2005,12 @@ export class BeatorajaRuntimeAdapter {
     this.endOfNoteStamped[2] = false;
     this.fullComboStamped[1] = false;
     this.fullComboStamped[2] = false;
+    this.pressedChannels.clear();
+    this.lnHoldHeldByChannel.clear();
+    // Cancel any in-flight `flash-lane` auto-release timeouts so the next run's first
+    // frames don't get a stale KEY_OFF stamp from the previous chart's tail flashes.
+    for (const handle of this.flashReleaseHandles) clearTimeout(handle);
+    this.flashReleaseHandles.clear();
     // Per-lane judge ring — clear both sides so the keybeam / bomb imageset revert to their
     // neutral frame after a re-mount. Without this, a re-mounted scene carries the prior
     // run's last-judge stamps until they age out, so the very first frame of the new run
