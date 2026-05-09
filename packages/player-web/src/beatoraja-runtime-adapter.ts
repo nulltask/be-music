@@ -312,6 +312,20 @@ export class BeatorajaRuntimeAdapter {
    */
   private readonly allTimings: Array<{ deltaMs: number; kind: string }> = [];
   /**
+   * Per-verdict early / late counters. Updated incrementally on every timed
+   * `applyJudgeCombo` so the resolver can return the per-judge breakdown
+   * (`prop.lua early_perfect = 410` etc.) in O(1). Engine's `summary` only carries the
+   * aggregate `fast` / `slow` totals — these per-kind splits are derived locally.
+   */
+  private readonly earlyLateCounts: Record<'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR' | 'MISS', { early: number; late: number }> = {
+    PERFECT: { early: 0, late: 0 },
+    GREAT: { early: 0, late: 0 },
+    GOOD: { early: 0, late: 0 },
+    BAD: { early: 0, late: 0 },
+    POOR: { early: 0, late: 0 },
+    MISS: { early: 0, late: 0 },
+  };
+  /**
    * Adapter-instance boot wallclock — surfaces prop.lua `operating_time_*` (run uptime). Beatoraja's
    * native semantics is "since beatoraja launched"; in our world the closest equivalent is "since
    * this gameplay scene mounted". Stored in `Date.now()` ms so subtraction yields wallclock seconds.
@@ -924,6 +938,15 @@ export class BeatorajaRuntimeAdapter {
       this.recentTimings.push(sample);
       if (this.recentTimings.length > RECENT_TIMINGS_CAPACITY) this.recentTimings.shift();
       this.allTimings.push(sample);
+      // Per-verdict early / late counter increment. Sign convention: `deltaMs > 0` =
+      // late (player pressed AFTER the note's exact time), `< 0` = early. `=== 0` (perfect-
+      // on-time) is rare but doesn't increment either bucket. Default `play5.json`'s
+      // judge-count panel reads these via `EARLY_*` / `LATE_*` refs (410-422).
+      const bucket = this.earlyLateCounts[state.judge as keyof typeof this.earlyLateCounts];
+      if (bucket !== undefined) {
+        if (state.deltaMs < 0) bucket.early += 1;
+        else if (state.deltaMs > 0) bucket.late += 1;
+      }
     }
 
     // Append a polyline sample. Mirrors what `PixiGameplayView.publishJudge` does on the LR2
@@ -1789,22 +1812,35 @@ export class BeatorajaRuntimeAdapter {
       case BEATORAJA_NUM.MISS:
         // Engine treats empty-press miss as POOR. Most skins want this readout; surface POOR.
         return summary?.poor ?? 0;
-      // Per-judge fast/slow split — engine doesn't track this granularity (only summary totals
-      // exist), so all 12 slots return 0. The aggregated totals are surfaced via TOTALEARLY /
-      // TOTALLATE below.
+      // Per-judge fast / slow split — derived locally from `applyJudgeCombo`'s sample
+      // stream (engine `summary` doesn't carry this granularity; only aggregate `fast` /
+      // `slow` totals). Default `play5.json`'s judge-count panel renders these as the per-
+      // verdict early / late breakdown ("PERFECT 12 EARLY 4 LATE 8" style), so without the
+      // breakdown the panel reads as zero.
       case BEATORAJA_NUM.EARLY_PERFECT:
+        return this.earlyLateCounts.PERFECT.early;
       case BEATORAJA_NUM.LATE_PERFECT:
+        return this.earlyLateCounts.PERFECT.late;
       case BEATORAJA_NUM.EARLY_GREAT:
+        return this.earlyLateCounts.GREAT.early;
       case BEATORAJA_NUM.LATE_GREAT:
+        return this.earlyLateCounts.GREAT.late;
       case BEATORAJA_NUM.EARLY_GOOD:
+        return this.earlyLateCounts.GOOD.early;
       case BEATORAJA_NUM.LATE_GOOD:
+        return this.earlyLateCounts.GOOD.late;
       case BEATORAJA_NUM.EARLY_BAD:
+        return this.earlyLateCounts.BAD.early;
       case BEATORAJA_NUM.LATE_BAD:
+        return this.earlyLateCounts.BAD.late;
       case BEATORAJA_NUM.EARLY_POOR:
+        return this.earlyLateCounts.POOR.early;
       case BEATORAJA_NUM.LATE_POOR:
+        return this.earlyLateCounts.POOR.late;
       case BEATORAJA_NUM.EARLY_MISS:
+        return this.earlyLateCounts.MISS.early;
       case BEATORAJA_NUM.LATE_MISS:
-        return 0;
+        return this.earlyLateCounts.MISS.late;
       case BEATORAJA_NUM.TOTALEARLY:
         return summary?.fast ?? 0;
       case BEATORAJA_NUM.TOTALLATE:
@@ -2044,6 +2080,10 @@ export class BeatorajaRuntimeAdapter {
     this.fullComboStamped[2] = false;
     this.pressedChannels.clear();
     this.lnHoldHeldByChannel.clear();
+    for (const kind of Object.keys(this.earlyLateCounts) as Array<keyof typeof this.earlyLateCounts>) {
+      this.earlyLateCounts[kind].early = 0;
+      this.earlyLateCounts[kind].late = 0;
+    }
     // Cancel any in-flight `flash-lane` auto-release timeouts so the next run's first
     // frames don't get a stale KEY_OFF stamp from the previous chart's tail flashes.
     for (const handle of this.flashReleaseHandles) clearTimeout(handle);
