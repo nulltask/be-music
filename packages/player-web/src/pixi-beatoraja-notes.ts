@@ -310,10 +310,14 @@ export class BeatorajaNoteLayer {
     if (cropped !== undefined) {
       const sprite = this.acquireSprite(usedS);
       sprite.texture = cropped.sprite.texture;
-      // Scale to fit the lane width; preserve the source aspect ratio. The sprite is pinned to the
-      // judgement line: top edge at `y - cellHScaledToLane` keeps the note's bottom flush with `y`.
-      const scaleX = rect.w / Math.max(1, cropped.cellW);
-      const drawH = cropped.cellH * scaleX;
+      // Width stretches to the lane rect; HEIGHT stays at the source `cellH` (no aspect
+      // scaling). Beatoraja's reference renderer paints notes at their authored cell
+      // height regardless of lane width — default skin's note images are 12 px tall but
+      // 21 / 27 / 46 px wide depending on key flavour, while lane widths are 40 / 50 / 70
+      // px. Scaling H by `lane.w / cellW` (the obvious "preserve aspect ratio" choice)
+      // produced 22-23 px tall notes — the user reported "ノートの高さが beatoraja より
+      // 高く". The pinned bottom edge stays at the judgement line via `y - drawH`.
+      const drawH = cropped.cellH;
       // Apply the skin's `note.expansionrate` (default `[100, 100]` = no scaling). 9K's
       // `play9.json` authors `[115, 112]` (1.15× wider, 1.12× taller) for chunkier popn-style
       // notes. The expansion is applied around the rect's centre so notes stay aligned to the
@@ -385,10 +389,13 @@ export class BeatorajaNoteLayer {
     // Body — repeats the `lnbody` cell vertically across the LN duration. `TilingSprite`
     // automatically wraps the texture to fit our requested width / height.
     const body = this.acquireTiling(usedT, bodyCrop.sprite.texture);
-    const startScaleX = rect.w / Math.max(1, startCrop.cellW);
-    const endScaleX = rect.w / Math.max(1, endCrop.cellW);
-    const startH = startCrop.cellH * startScaleX;
-    const endH = endCrop.cellH * endScaleX;
+    // LN start / end caps share the tap-note convention: cell height stays at the source
+    // value; width stretches to the lane. Scaling cap H by `lane.w / cellW` (= the
+    // `* scaleX` pattern) puffed the caps to ~2× their authored size, which is what made
+    // LNs read as visually too tall and made the body / cap junction ride high vs.
+    // beatoraja's reference rendering.
+    const startH = startCrop.cellH;
+    const endH = endCrop.cellH;
     // Apply `note.expansionrate` to LN width and cap heights — same convention as tap notes.
     // Body Y positions stay anchored to `yStart` / `yEnd` so the LN connects the start / end
     // caps without gaps; only the X / cap-H dimensions expand.
