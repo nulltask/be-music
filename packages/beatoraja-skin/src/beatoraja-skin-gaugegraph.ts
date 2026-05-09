@@ -26,8 +26,33 @@ export interface BeatorajaGaugeGraphElement {
    * beatoraja's `GrooveGauge` order. The renderer picks the lit color of the player's actual
    * gauge type for the foreground line and the dim color for the backdrop. Author-omitted →
    * empty array; the renderer falls back to a single neutral color.
+   *
+   * Legacy field — newer skins should author the named per-gauge color fields below
+   * ({@link assistClearBGColor} etc.). The legacy `color` array still wins on collision so
+   * authors that haven't migrated keep working.
    */
   colors: ReadonlyArray<string>;
+  /**
+   * Per-gauge-mode background and line colors (audit 3.3). Beatoraja's `JsonSkin.GaugeGraph`
+   * declares 14 named color fields plus `borderlineColor` / `borderColor`; defaults below
+   * mirror the upstream values. Hex strings without `#` prefix to match beatoraja's
+   * convention. The renderer picks the pair matching the player's actual gauge type at draw
+   * time.
+   */
+  assistClearBGColor: string;
+  assistAndEasyFailBGColor: string;
+  grooveFailBGColor: string;
+  grooveClearAndHardBGColor: string;
+  exHardBGColor: string;
+  hazardBGColor: string;
+  assistClearLineColor: string;
+  assistAndEasyFailLineColor: string;
+  grooveFailLineColor: string;
+  grooveClearAndHardLineColor: string;
+  exHardLineColor: string;
+  hazardLineColor: string;
+  borderlineColor: string;
+  borderColor: string;
   /** `if` codes that gate visibility (AND-merged with the destination's `op[]`). */
   ifCodes: ReadonlyArray<number>;
 }
@@ -49,8 +74,27 @@ function normalizeOne(entry: NormalizedElement): BeatorajaGaugeGraphElement | un
   return {
     id,
     colors: stringArray(f.color),
+    // Defaults mirror beatoraja's `JsonSkin.GaugeGraph` declarations (audit 3.3).
+    assistClearBGColor: stringField(f.assistClearBGColor, '440044'),
+    assistAndEasyFailBGColor: stringField(f.assistAndEasyFailBGColor, '004444'),
+    grooveFailBGColor: stringField(f.grooveFailBGColor, '004400'),
+    grooveClearAndHardBGColor: stringField(f.grooveClearAndHardBGColor, '440000'),
+    exHardBGColor: stringField(f.exHardBGColor, '444400'),
+    hazardBGColor: stringField(f.hazardBGColor, '444444'),
+    assistClearLineColor: stringField(f.assistClearLineColor, 'ff00ff'),
+    assistAndEasyFailLineColor: stringField(f.assistAndEasyFailLineColor, '00ffff'),
+    grooveFailLineColor: stringField(f.grooveFailLineColor, '00ff00'),
+    grooveClearAndHardLineColor: stringField(f.grooveClearAndHardLineColor, 'ff0000'),
+    exHardLineColor: stringField(f.exHardLineColor, 'ffff00'),
+    hazardLineColor: stringField(f.hazardLineColor, 'cccccc'),
+    borderlineColor: stringField(f.borderlineColor, 'ff0000'),
+    borderColor: stringField(f.borderColor, '440000'),
     ifCodes: entry.ifCodes,
   };
+}
+
+function stringField(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.length > 0 ? value : fallback;
 }
 
 function stringArray(input: unknown): ReadonlyArray<string> {

@@ -32,6 +32,29 @@ export interface BeatorajaJudgeGraphElement {
    * Preserved here for forward compat — not consumed by the current renderer.
    */
   backTexOff: number;
+  /**
+   * Delay in milliseconds before the bars start their reveal animation (audit 3.4). Mirrors
+   * beatoraja's `JsonSkin.JudgeGraph.delay = 500` default. The renderer can use this to stagger
+   * each bar's grow-from-baseline animation so the histogram fills in over time rather than
+   * snapping in.
+   */
+  delay: number;
+  /**
+   * `1` reverses the bar order (right-to-left layout) — beatoraja's `orderReverse = 0` default
+   * means left-to-right (PG, GR, GD, ...). Authors flipping a result-screen graph to mirror
+   * the score readout's right-anchored layout author this field.
+   */
+  orderReverse: number;
+  /**
+   * `1` removes the inter-bar gap (bars touch). `0` (default) leaves the renderer's natural
+   * spacing. Mirrors beatoraja's `noGap = 0` field.
+   */
+  noGap: number;
+  /**
+   * `1` removes the leading horizontal gap (bars start flush against the dst rect's left
+   * edge). `0` (default) preserves a small leading margin. Mirrors `noGapX = 0`.
+   */
+  noGapX: number;
   /** `if` codes that gate visibility (AND-merged with the destination's `op[]`). */
   ifCodes: ReadonlyArray<number>;
 }
@@ -54,6 +77,11 @@ function normalizeOne(entry: NormalizedElement): BeatorajaJudgeGraphElement | un
     id,
     type: numberField(f, 'type', 0),
     backTexOff: numberField(f, 'backTexOff', 0),
+    // Audit 3.4 — defaults mirror beatoraja's JsonSkin.JudgeGraph declarations.
+    delay: numberField(f, 'delay', 500),
+    orderReverse: numberField(f, 'orderReverse', 0),
+    noGap: numberField(f, 'noGap', 0),
+    noGapX: numberField(f, 'noGapX', 0),
     ifCodes: entry.ifCodes,
   };
 }
