@@ -206,6 +206,15 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   constructor(options: PixiBeatorajaGameplayViewOptions) {
     this.options = options;
 
+    // Skin-config-level op set built ONCE from the user's selected skin options. Threaded into
+    // every consumer that runs `normalizeBeatorajaDestinations` (the play-skin view, BGA layer,
+    // marker layer) so inner if-gated keyframe alternatives — beatoraja's per-layout BGA /
+    // lane-position presets — pick the variant matching the user's chosen options. Without it
+    // the resolver falls back to the catch-all alternative, which silently mismatches when the
+    // skin's default layout isn't the user's preference (e.g. compact-BGA setting selected but
+    // BGA paints at full-layout coordinates).
+    const skinConfigOps = buildBaseOpSet(options.skinConfig?.option);
+
     // Adapter is constructed first so the skin view can route ref/text resolvers through it. The clock
     // captures `getNowMs` as a closure that reads `this.startMs`, which is set at `enter()` time — until
     // then, `getNowMs()` returns negative values. That's fine; the skin view only samples after `enter()`.
@@ -217,7 +226,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     const lanecoverSliderRange = sliderDefs.find((s) => s.type === 4)?.range;
     this.adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: options.variant,
-      baseOps: buildBaseOpSet(options.skinConfig?.option),
+      baseOps: skinConfigOps,
       getNowMs: () => performance.now() - this.startMs,
       autoPlay: options.mode === 'auto',
       chart: options.chart,
@@ -236,6 +245,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.view = new BeatorajaPlaySkinView({
       skin: options.skin,
       textures: options.textures,
+      skinConfigOps,
       resolveRefValue: (ref) => this.adapter.resolveRefValue(ref),
       resolveTextContent: (ref) => this.adapter.resolveTextContent(ref),
       resolveNumberValue: (ref) => this.adapter.resolveNumberValue(ref),
@@ -317,6 +327,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         skin: options.skin,
         textures: options.bgaTextures,
         cues: options.bgaCues,
+        skinConfigOps,
       });
       this.view.container.addChildAt(this.bgaLayer.container, 0);
     }
@@ -469,7 +480,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     if (this.disposed) return;
 
     // 1. Adapter: swap base ops while keeping runtime state.
-    this.adapter.setBaseOps(buildBaseOpSet(opts.skinConfig?.option));
+    const skinConfigOps = buildBaseOpSet(opts.skinConfig?.option);
+    this.adapter.setBaseOps(skinConfigOps);
 
     // 2. Tear down the old visual layers. Textures live on the per-entry cache and survive disposal
     // (we never destroy them through the cache by design — see `beatoraja-textures.ts`).
@@ -483,6 +495,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.view = new BeatorajaPlaySkinView({
       skin: opts.skin,
       textures: opts.textures,
+      skinConfigOps,
       resolveRefValue: (ref) => this.adapter.resolveRefValue(ref),
       resolveTextContent: (ref) => this.adapter.resolveTextContent(ref),
       resolveNumberValue: (ref) => this.adapter.resolveNumberValue(ref),
@@ -522,6 +535,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         skin: opts.skin,
         textures: this.options.bgaTextures,
         cues: this.options.bgaCues,
+        skinConfigOps,
       });
     }
 

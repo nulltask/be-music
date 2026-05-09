@@ -40,6 +40,14 @@ export interface BeatorajaBgaLayerOptions {
    * Pass an empty `{ base: [], layer: [], poor: [] }` if the chart has no BGA — the layer hides itself.
    */
   cues: { base: ReadonlyArray<BgaCue>; layer: ReadonlyArray<BgaCue>; poor: ReadonlyArray<BgaCue> };
+  /**
+   * Skin-config-level op set (selected layout / option ops). Used to resolve INNER if-gated
+   * keyframe alternatives — beatoraja's BGA destinations stash variant rects per layout option
+   * (compact vs. full BGA, etc.) and the loader picks one at skin-load time. Without this set
+   * the resolver falls back to the catch-all (empty `if`) alternative — fine for the default
+   * layout but mismatches the rect when the user has a non-default skin option active.
+   */
+  skinConfigOps?: ReadonlySet<number>;
 }
 
 export class BeatorajaBgaLayer {
@@ -59,7 +67,7 @@ export class BeatorajaBgaLayer {
   constructor(options: BeatorajaBgaLayerOptions) {
     this.textures = options.textures;
     this.cues = options.cues;
-    this.group = resolveBgaDestinationGroup(options.skin);
+    this.group = resolveBgaDestinationGroup(options.skin, options.skinConfigOps);
     const rawH = (options.skin as { h?: unknown }).h;
     this.canvasHeight = typeof rawH === 'number' && Number.isFinite(rawH) && rawH > 0 ? rawH : 720;
 
@@ -125,9 +133,12 @@ export class BeatorajaBgaLayer {
  * `bga` block (some custom themes ship a chart-area-only play layout without BGA support) or when the
  * destination[] doesn't carry a matching id.
  */
-function resolveBgaDestinationGroup(skin: BeatorajaSkin): BeatorajaDestinationGroup | undefined {
+function resolveBgaDestinationGroup(
+  skin: BeatorajaSkin,
+  skinConfigOps: ReadonlySet<number> | undefined,
+): BeatorajaDestinationGroup | undefined {
   const bgaId = skin.bga?.id;
   if (typeof bgaId !== 'number' && typeof bgaId !== 'string') return undefined;
-  const groups = normalizeBeatorajaDestinations(skin.destination);
+  const groups = normalizeBeatorajaDestinations(skin.destination, skinConfigOps);
   return groups.find((group) => group.id === bgaId);
 }

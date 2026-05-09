@@ -225,6 +225,16 @@ export interface BeatorajaPlaySkinViewOptions {
    * the destination stays hidden. The view itself doesn't know how to load chart bitmaps.
    */
   chartImageProvider?: (syntheticId: number) => Texture | undefined;
+  /**
+   * Skin-config-level op set (selected layout / option ops). Used to resolve INNER if-gated
+   * keyframe alternatives at parse time — beatoraja's `JSONSkinLoader.setDestination` walks each
+   * keyframe's array of `{if, value}` alternatives and picks the first whose codes match the
+   * user's selected skin options. Without this set the resolver falls back to the catch-all
+   * (empty `if`) alternative, which is correct for the default layout but wrong when the user
+   * has a non-default layout option active. Pass `buildBaseOpSet(skinConfig?.option)` from the
+   * gameplay host so per-layout BGA / lane / panel rects resolve to the user's chosen variant.
+   */
+  skinConfigOps?: ReadonlySet<number>;
 }
 
 interface SpriteEntry {
@@ -791,7 +801,7 @@ export class BeatorajaPlaySkinView {
       ? options.skin.destination.map((entry) => ensureLayerAnchorDst(entry, layerAnchorIds))
       : [];
     const allDestinations: ReadonlyArray<unknown> = [...rawDestinations, ...expandedJudgeDestinations];
-    const groups = normalizeBeatorajaDestinations(allDestinations);
+    const groups = normalizeBeatorajaDestinations(allDestinations, options.skinConfigOps);
 
     // Render order: PURELY by author declaration order. Beatoraja's `JSONSkinLoader.loadJsonSkin`
     // walks `sk.destination` in source order and `Skin.drawAllObjects` iterates without sorting,

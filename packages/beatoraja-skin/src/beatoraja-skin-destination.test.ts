@@ -70,6 +70,76 @@ describe('normalizeBeatorajaDestinations', () => {
     ]);
     expect(out.map((g) => g.declarationOrder)).toEqual([0, 1, 2]);
   });
+
+  it('expands inner if-gated keyframe alternatives — picks first match against activeOps', () => {
+    // Beatoraja's BGA / lane-position destinations stash a SINGLE keyframe per slot but vary the
+    // rect by skin-config option. Each slot is an array of `{if, value}` alternatives:
+    //
+    //   {"id":2002, "dst":[
+    //     [
+    //       {"if":[924], "value":{"x":1000,"y":440,"w":256,"h":256}}, // option 924 = compact BGA
+    //       {"if":[],    "value":{"x":700, "y":144,"w":512,"h":512}}, // catch-all (default layout)
+    //     ]
+    //   ]}
+    //
+    // With option 924 active the first alt wins; otherwise the empty-if catch-all wins. Without
+    // expansion the renderer reads the array as a degenerate object (zero rect) — BGA invisible.
+    const withOption = normalizeBeatorajaDestinations(
+      [
+        { id: 2002, dst: [
+          [
+            { if: [924], value: { time: 0, x: 1000, y: 440, w: 256, h: 256 } },
+            { if: [],    value: { time: 0, x: 700,  y: 144, w: 512, h: 512 } },
+          ],
+        ] },
+      ],
+      new Set([924]),
+    );
+    expect(withOption[0]?.dst[0]).toMatchObject({ x: 1000, y: 440, w: 256, h: 256 });
+
+    const withoutOption = normalizeBeatorajaDestinations([
+      { id: 2002, dst: [
+        [
+          { if: [924], value: { time: 0, x: 1000, y: 440, w: 256, h: 256 } },
+          { if: [],    value: { time: 0, x: 700,  y: 144, w: 512, h: 512 } },
+        ],
+      ] },
+    ]);
+    expect(withoutOption[0]?.dst[0]).toMatchObject({ x: 700, y: 144, w: 512, h: 512 });
+  });
+
+  it('falls back to the last alternative when no `if` matches and no catch-all exists', () => {
+    // Authors occasionally omit the catch-all (every alt has a non-empty `if`); rather than drop
+    // the keyframe entirely (sprite invisible), beatoraja-style fallback uses the last alt. This
+    // is preferable to nothing — the skin is mis-authored, but the renderer still paints.
+    const out = normalizeBeatorajaDestinations([
+      { id: 'x', dst: [
+        [
+          { if: [101], value: { time: 0, x: 10, y: 10, w: 10, h: 10 } },
+          { if: [102], value: { time: 0, x: 20, y: 20, w: 20, h: 20 } },
+        ],
+      ] },
+    ]);
+    expect(out[0]?.dst[0]).toMatchObject({ x: 20, y: 20, w: 20, h: 20 });
+  });
+
+  it('honors negated `if` codes on inner alternatives', () => {
+    // `if: [-924]` means "active when option 924 is NOT set". Same convention as element-level
+    // ifCodes — a negative code is a negation guard.
+    const out = normalizeBeatorajaDestinations(
+      [
+        { id: 'g', dst: [
+          [
+            { if: [-924], value: { time: 0, x: 1, y: 2, w: 3, h: 4 } },
+            { if: [],     value: { time: 0, x: 5, y: 6, w: 7, h: 8 } },
+          ],
+        ] },
+      ],
+      new Set([924]),
+    );
+    // 924 IS set, so `-924` fails — falls through to the empty-if catch-all.
+    expect(out[0]?.dst[0]).toMatchObject({ x: 5, y: 6, w: 7, h: 8 });
+  });
 });
 
 describe('sampleBeatorajaDestination', () => {

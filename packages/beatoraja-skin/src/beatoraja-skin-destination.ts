@@ -171,25 +171,41 @@ export interface BeatorajaDestinationGroup {
 /**
  * Convert a permissive `destination[]` array into a normalized list. Entries without a usable `id` or `dst[]` are
  * dropped; all other fields take the documented defaults when missing.
+ *
+ * `activeOps` carries the skin-config-level op set (selected layout options, skin-config picks). It is used to
+ * resolve INNER if-gated keyframe alternatives — beatoraja's loader picks ONE alternative per keyframe at load
+ * time based on the user's selected skin options. When omitted, only the catch-all (empty `if`) alternative is
+ * matched (with last-alternative fallback if no catch-all exists), which matches the default-layout case for skins
+ * that don't depend on configured options.
  */
-export function normalizeBeatorajaDestinations(input: unknown): BeatorajaDestinationGroup[] {
+export function normalizeBeatorajaDestinations(
+  input: unknown,
+  activeOps?: ReadonlySet<number>,
+): BeatorajaDestinationGroup[] {
   const flattened = flattenBeatorajaElements(input);
   const out: BeatorajaDestinationGroup[] = [];
+  const ops = activeOps ?? EMPTY_OP_SET;
   for (let i = 0; i < flattened.length; i += 1) {
-    const normalized = normalizeOne(flattened[i], i);
+    const normalized = normalizeOne(flattened[i], i, ops);
     if (normalized !== undefined) out.push(normalized);
   }
   return out;
 }
 
-function normalizeOne(entry: NormalizedElement, declarationOrder: number): BeatorajaDestinationGroup | undefined {
+const EMPTY_OP_SET: ReadonlySet<number> = new Set();
+
+function normalizeOne(
+  entry: NormalizedElement,
+  declarationOrder: number,
+  activeOps: ReadonlySet<number>,
+): BeatorajaDestinationGroup | undefined {
   const f = entry.fields;
   const id = f.id;
   if (typeof id !== 'string' && typeof id !== 'number') return undefined;
   const rawDst = f.dst;
   if (!Array.isArray(rawDst) || rawDst.length === 0) return undefined;
 
-  const keyframes = normalizeKeyframes(rawDst);
+  const keyframes = normalizeKeyframes(rawDst, activeOps);
   if (keyframes.length === 0) return undefined;
   const timerFunction = isBeatorajaLuaFunctionValue(f.timer) ? f.timer : undefined;
   const draw = booleanPropertyField(f.draw);
@@ -362,7 +378,63 @@ export function centerToAnchor(center: number): { x: number; y: number } {
   };
 }
 
-function normalizeKeyframes(raw: ReadonlyArray<unknown>): BeatorajaDestinationKeyframe[] {
+/**
+ * Resolve a single inner if-gated keyframe slot. The input is an array of `{if: number[], value:
+ * {...rect}}` alternatives; the output is the chosen alternative's `value` record (or `undefined`
+ * if none match). Selection rules mirror beatoraja's `JSONSkinLoader.setDestination` logic:
+ *
+ * 1. Walk alternatives in declared order.
+ * 2. The first alternative whose every `if` code is in `activeOps` (or whose `if` is empty /
+ *    missing — the catch-all) wins.
+ * 3. If nothing matches, fall back to the LAST alternative — beatoraja itself short-circuits
+ *    on the first match so trailing alternatives are typically the catch-all default
+ *    (`{if:[]}`); when authors omit that, returning the last entry preserves something visible
+ *    rather than dropping the keyframe entirely.
+ *
+ * Negative `if` codes mean "must NOT be active", same convention as element-level `ifCodes`.
+ */
+function resolveKeyframeAlternative(
+  alternatives: ReadonlyArray<unknown>,
+  activeOps: ReadonlySet<number>,
+): Readonly<Record<string, unknown>> | undefined {
+  let lastValid: Readonly<Record<string, unknown>> | undefined;
+  for (const alt of alternatives) {
+    if (alt === null || typeof alt !== 'object' || Array.isArray(alt)) continue;
+    const obj = alt as Readonly<Record<string, unknown>>;
+    // Allow either nested `{if, value}` form (beatoraja's authored shape) OR a flat `{if, time,
+    // x, y, ...}` shape (common in Lua-emitted skins where the alt is the keyframe directly).
+    const value =
+      typeof obj.value === 'object' && obj.value !== null
+        ? (obj.value as Readonly<Record<string, unknown>>)
+        : obj;
+    lastValid = value;
+    const ifCodes = obj.if;
+    if (!Array.isArray(ifCodes) || ifCodes.length === 0) {
+      return value;
+    }
+    let allMatch = true;
+    for (const code of ifCodes) {
+      if (typeof code !== 'number' || !Number.isFinite(code)) continue;
+      if (code === 0) continue;
+      if (code > 0) {
+        if (!activeOps.has(code)) {
+          allMatch = false;
+          break;
+        }
+      } else if (activeOps.has(-code)) {
+        allMatch = false;
+        break;
+      }
+    }
+    if (allMatch) return value;
+  }
+  return lastValid;
+}
+
+function normalizeKeyframes(
+  raw: ReadonlyArray<unknown>,
+  activeOps: ReadonlySet<number>,
+): BeatorajaDestinationKeyframe[] {
   const out: BeatorajaDestinationKeyframe[] = [];
   // Beatoraja keyframes carry forward the previous frame's value when a field is omitted. e.g.
   //   {"time":0,"x":121,"y":140,"w":18,"h":580},{"time":100,"x":112,"w":36}
@@ -381,8 +453,15 @@ function normalizeKeyframes(raw: ReadonlyArray<unknown>): BeatorajaDestinationKe
     angle: 0,
     acc: 0,
   };
-  for (const item of raw) {
-    if (item === null || typeof item !== 'object') continue;
+  for (const rawItem of raw) {
+    // Inner if-gated array: a single keyframe slot whose rect varies by skin-config layout
+    // option. Beatoraja's loader walks alternatives in order and picks the first whose `if`
+    // codes all match the SELECTED skin options (resolved at skin load time, not runtime).
+    // Used by play24's BGA group, custom-events tables, and lane-position presets — without
+    // this expansion the renderer reads the array as a degenerate object and emits an
+    // all-zero keyframe (BGA invisible, lane offsets null, etc.).
+    const item = Array.isArray(rawItem) ? resolveKeyframeAlternative(rawItem, activeOps) : rawItem;
+    if (item === null || item === undefined || typeof item !== 'object') continue;
     const obj = item as Readonly<Record<string, unknown>>;
     state.time = numberField(obj, 'time', state.time);
     state.x = numberField(obj, 'x', state.x);
