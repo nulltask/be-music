@@ -1646,9 +1646,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
           text: '',
           style: {
             fontFamily,
-            // Sized to the level sub-rect's height when authored, falling back to the
-            // primary label size. Most skins author level slots ~24px tall.
-            fontSize: Math.max(12, Math.floor(this.songList.level.h * 0.7)),
+            // Match beatoraja's `SkinTextFont.draw` height-from-dst convention: the
+            // rendered glyph height = `dst.h`. (The reference theme actually paints level
+            // as a per-difficulty SPRITE cropped from `playlevel_bar`, filling the rect at
+            // `level.h`; we render text as a fallback so chart difficulty stays visible
+            // without bundling the playlevel images yet, but the size rule is the same.)
+            // Floor at 12 so unusually short level rects stay legible.
+            fontSize: Math.max(12, Math.floor(this.songList.level.h)),
             fill: 0xffffff,
             fontWeight: '700',
             stroke: { color: 0x000000, width: 2 },
