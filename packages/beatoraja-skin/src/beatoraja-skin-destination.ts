@@ -329,18 +329,35 @@ export interface BeatorajaSkinOffsetValue {
   h: number;
   /** Rotation delta in degrees. */
   r: number;
-  /** Alpha multiplier (255 = unchanged, 0 = fully transparent). */
+  /**
+   * Alpha additive delta in `[-255, 255]`. Applied as `keyframe.a / 255 + offset.a / 255`
+   * (clamped to `[0, 1]`), mirroring beatoraja's `SkinObject.prepareColor`:
+   *
+   *     float a = color.a + (off.a / 255.0f);
+   *     a = a > 1 ? 1 : (a < 0 ? 0 : a);
+   *     color.a = a;
+   *
+   * The previous TS impl multiplied `keyframe.a` by `offset.a / 255` with a default of `255`
+   * (= no scaling), which was equivalent to upstream only when offset.a stayed at its
+   * default. Skins authoring `offset.a = 64` to lighten an element by `64/255 ≈ 0.25` saw a
+   * `0.25` MULTIPLIER instead of a `+0.25` ADDITION, producing nearly invisible elements
+   * (`alpha = 1.0 * 0.25 = 0.25` instead of clamp(`1.0 + 0.25`) = 1.0).
+   *
+   * Default `0` matches Java's `float` field initialization — most destinations leave `a`
+   * at the default and the offset has no alpha effect. Skins author non-zero values to
+   * brighten / darken elements via the offset slider chain.
+   */
   a: number;
 }
 
-/** Default offset = no displacement, alpha unchanged. Same shape `MainStateAccessor.offset` returns. */
+/** Default offset = no displacement, no alpha shift. Same shape `MainStateAccessor.offset` returns. */
 export const ZERO_BEATORAJA_OFFSET: Readonly<BeatorajaSkinOffsetValue> = Object.freeze({
   x: 0,
   y: 0,
   w: 0,
   h: 0,
   r: 0,
-  a: 255,
+  a: 0,
 });
 
 /**
@@ -359,8 +376,13 @@ export function combineBeatorajaOffsets(
   let w = 0;
   let h = 0;
   let r = 0;
-  // Alpha multiplies — start at 1 (unchanged) and divide each contribution by 255.
-  let alphaMultiplier = 1;
+  // Alpha sums additively, mirroring beatoraja's `prepareColor` per-offset loop:
+  //   for each off: color.a += off.a / 255; clamp;
+  // The per-step clamp is collapsed into a final clamp at the call site (the sum stays in
+  // signed `[-N*255, +N*255]` until it's added to `keyframe.a/255` and clamped to `[0, 1]`).
+  // Ordering doesn't matter for plain addition, only for clamps; the spec doesn't surface
+  // intermediate clamping so the collapsed form is observably equivalent.
+  let aSum = 0;
   for (const id of ids) {
     const v = resolve(id);
     if (v === undefined) continue;
@@ -369,9 +391,9 @@ export function combineBeatorajaOffsets(
     w += v.w;
     h += v.h;
     r += v.r;
-    alphaMultiplier *= Math.max(0, Math.min(1, v.a / 255));
+    aSum += v.a;
   }
-  return { x, y, w, h, r, a: Math.round(alphaMultiplier * 255) };
+  return { x, y, w, h, r, a: aSum };
 }
 
 /**

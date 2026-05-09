@@ -245,13 +245,17 @@ export type BeatorajaLuaEvaluationResult =
 
 export const BEATORAJA_LUA_TIMER_OFF_VALUE = -9223372036854775808;
 
+// `a: 0` matches `ZERO_BEATORAJA_OFFSET.a = 0` and Java's `float` field default — additive
+// alpha math treats 0 as no-change. Previously 255 (multiplicative no-op under the old
+// semantics); after the switch to additive alpha, 255 is a +1.0 max-brightness delta and
+// would cap every alpha to 1.0 inside any Lua-driven offset readout.
 const ZERO_LUA_OFFSET: Readonly<BeatorajaLuaOffsetValue> = Object.freeze({
   x: 0,
   y: 0,
   w: 0,
   h: 0,
   r: 0,
-  a: 255,
+  a: 0,
 });
 
 class LuaRuntimeOwner {

@@ -520,9 +520,9 @@ describe('BeatorajaRuntimeAdapter — getRenderContext', () => {
     adapter.setOffset(3, { y: -120 });
     const updated = adapter.getRenderContext().resolveOffset?.(3);
     expect(updated?.y).toBe(-120);
-    // Default fields stay zero / 255 alpha (matching ZERO_BEATORAJA_OFFSET semantics).
+    // Default fields stay zero — including alpha (additive delta, 0 = no change).
     expect(updated?.x).toBe(0);
-    expect(updated?.a).toBe(255);
+    expect(updated?.a).toBe(0);
   });
 
   it('merges partial setOffset values with the previously set ones', () => {
@@ -652,7 +652,8 @@ describe('BeatorajaRuntimeAdapter — lift slider', () => {
     const lift = adapter.resolveOffset(3);
     expect(lift?.y).toBeCloseTo(-290, 6);
     expect(lift?.x).toBe(0);
-    expect(lift?.a).toBe(255);
+    // Lift offset emits no alpha delta — additive default 0 leaves the keyframe alpha alone.
+    expect(lift?.a).toBe(0);
     expect(adapter.resolveNumberValue(314)).toBe(50);
   });
 

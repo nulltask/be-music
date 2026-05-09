@@ -960,7 +960,10 @@ export class BeatorajaRuntimeAdapter {
       // `setOffset(3, ...)` path override only when no live ratio is set (= 0); once the player
       // nudges the lift slider, this branch always wins. Other axes default to 0 / 255.
       if (this.liftRatio !== 0) {
-        return { x: 0, y: this.liftRatio * -this.laneHeight, w: 0, h: 0, r: 0, a: 255 };
+        // alpha=0 = no change (additive default). Previously 255 was the multiplicative
+        // no-op default; matched the old offset semantics but became a +1.0 brightness
+        // delta after the alpha-additive switch.
+        return { x: 0, y: this.liftRatio * -this.laneHeight, w: 0, h: 0, r: 0, a: 0 };
       }
     }
     return this.offsets.get(offsetId);
@@ -981,7 +984,10 @@ export class BeatorajaRuntimeAdapter {
       w: value.w ?? previous?.w ?? 0,
       h: value.h ?? previous?.h ?? 0,
       r: value.r ?? previous?.r ?? 0,
-      a: value.a ?? previous?.a ?? 255,
+      // Default alpha delta = 0 (additive no-op), matching the new
+      // `ZERO_BEATORAJA_OFFSET.a = 0` convention. The previous `?? 255` default was a
+      // multiplicative no-op under the old math but is now a maximum-brightness +1.0 delta.
+      a: value.a ?? previous?.a ?? 0,
     };
     this.offsets.set(offsetId, merged);
   }

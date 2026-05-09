@@ -243,7 +243,9 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(value.rate).toBe(0);
     expect(value.text).toBe('');
     expect(value.option).toBe(false);
-    expect(value.offset_a).toBe(255);
+    // Additive alpha delta default = 0 (Java float field init). Previously 255 under the
+    // multiplicative semantics; now an additive +1.0 max-brightness delta if left at 255.
+    expect(value.offset_a).toBe(0);
     expect(value.timer_is_off).toBe(true);
     expect(value.off_value).toBe(BEATORAJA_LUA_TIMER_OFF_VALUE);
     expect(value.volume_bg).toBe(0);

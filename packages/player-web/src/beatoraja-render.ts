@@ -211,7 +211,18 @@ export function destinationToSpriteProps(
     combinedOffsetIds !== undefined && context.resolveOffset !== undefined
       ? combineBeatorajaOffsets(combinedOffsetIds, context.resolveOffset)
       : ZERO_BEATORAJA_OFFSET;
-  const alpha = clampUnit((keyframe.a / 255) * (offset.a / 255));
+  // Additive alpha math — mirrors `SkinObject.prepareColor`:
+  //
+  //     float a = color.a + (off.a / 255.0f);
+  //     a = a > 1 ? 1 : (a < 0 ? 0 : a);
+  //
+  // The previous impl multiplied `(keyframe.a / 255)` by `(offset.a / 255)` with a default
+  // offset.a of 255 (= no scaling). That was equivalent to upstream only at the default;
+  // skins authoring non-zero offset.a saw multiplication where upstream applied addition,
+  // which collapsed elements to near-invisible when authors meant to brighten them by a
+  // delta. Default offset.a is now 0 (Java's float field init) so the additive default is
+  // a no-op for the common case.
+  const alpha = clampUnit(keyframe.a / 255 + offset.a / 255);
   if (alpha <= 0) return HIDDEN_PROPS;
 
   // Y-flip from beatoraja's libGDX Y-UP coordinates (origin at canvas bottom-left, with `(x, y)`

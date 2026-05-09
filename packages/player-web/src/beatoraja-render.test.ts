@@ -209,6 +209,37 @@ describe('destinationToSpriteProps', () => {
     expect(props.x).toBe(50);
   });
 
+  it('adds offset.a to keyframe.a (matches SkinObject.prepareColor additive math)', () => {
+    // Beatoraja's `prepareColor` does `color.a = clamp(color.a + off.a / 255)`. A skin
+    // authoring `offset.a = -64` to dim an element should subtract ~25% from the keyframe
+    // alpha, not multiply by 0.25 (which the previous impl did, causing dimming offsets to
+    // collapse elements to near-invisible).
+    const g = groupOf({
+      offset: 3,
+      dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255 }], // keyframe alpha = 1.0
+    });
+    const dimProps = destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        // -64 = additive -0.25 delta. 1.0 + (-0.25) = 0.75.
+        resolveOffset: (id) => (id === 3 ? { x: 0, y: 0, w: 0, h: 0, r: 0, a: -64 } : undefined),
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+    expect(dimProps.alpha).toBeCloseTo(0.749, 2);
+    // Default offset.a = 0 leaves the keyframe alpha untouched (additive no-op).
+    const noopProps = destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        resolveOffset: (id) => (id === 3 ? { x: 0, y: 0, w: 0, h: 0, r: 0, a: 0 } : undefined),
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+    expect(noopProps.alpha).toBe(1);
+  });
+
   it('center-anchors the rect when `offset.w/h` are non-zero (matches SkinObject.prepareDraw)', () => {
     // Beatoraja's `prepareDraw` does `region.x += off.x - off.w/2; width += off.w` — the rect
     // grows around its CENTER, not the top-left corner. ModernChic / GdbG cover slabs depend on
