@@ -103,6 +103,22 @@ export function bundleBeatorajaSources(options: BundleBeatorajaSourcesOptions): 
       continue;
     }
 
+    // Movie / video sources (audit 3.7). Beatoraja's `JSONSkinLoader.getSource` dispatches
+    // `.mp4` / `.mov` / `.webm` / `.mkv` source paths to `SkinSourceMovie`. Our renderer
+    // only handles static textures today — surface the file as unresolved with a clear
+    // "movie sources not yet supported" reason so the host can warn the user (the wildcard
+    // diagnostic reuses the same `unresolved` array so the call site doesn't need a separate
+    // collection). Skins authoring movie sources stay otherwise functional; the matching
+    // destination just hides instead of crashing on a non-image bind.
+    if (isMovieSourcePath(resolved)) {
+      unresolved.push({
+        id: source.id,
+        path: source.path,
+        reason: `movie sources not yet supported (resolved to '${resolved}')`,
+      });
+      continue;
+    }
+
     const asset: BeatorajaSourceAsset = { id: source.id, path: resolved, bytes };
     assets.push(asset);
     byId.set(source.id, asset);
@@ -135,6 +151,17 @@ function coerceSource(raw: Readonly<Record<string, unknown>>): BeatorajaSkinSour
  * `entryPath` accepts the same shape as {@link BundleBeatorajaSourcesOptions.entryPath}; the helper normalizes it
  * the same way the bundler does.
  */
+/**
+ * Detect movie / video extensions beatoraja's `JSONSkinLoader.getSource` would route through
+ * `SkinSourceMovie`. Match upstream's set: `.mp4` / `.mov` / `.webm` / `.mkv` (case-insensitive
+ * via lowercased compare). Returning `true` means our renderer will hide the destination
+ * gracefully rather than crashing on a non-image bind.
+ */
+function isMovieSourcePath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.webm') || lower.endsWith('.mkv');
+}
+
 export function listBeatorajaSourcePaths(
   files: ReadonlyMap<string, BeatorajaSkinFileEntry>,
   entryPath: string,

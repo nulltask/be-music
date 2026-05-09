@@ -198,3 +198,33 @@ describe('listBeatorajaSourcePaths', () => {
     ]);
   });
 });
+
+describe('movie source handling (audit 3.7)', () => {
+  it('flags .mp4 / .webm / .mov / .mkv sources as unresolved (movie not yet supported)', () => {
+    const files = makeFiles([
+      ['skin/default/play24.json', '{}'],
+      ['skin/default/bg.mp4', 'movie-bytes'],
+      ['skin/default/over.webm', 'movie-bytes'],
+      ['skin/default/old.mov', 'movie-bytes'],
+      ['skin/default/raw.mkv', 'movie-bytes'],
+      ['skin/default/still.png', 'image-bytes'],
+    ]);
+    const bundle = bundleBeatorajaSources({
+      files,
+      entryPath: 'skin/default/play24.json',
+      sources: [
+        { id: 1, path: 'bg.mp4' },
+        { id: 2, path: 'over.webm' },
+        { id: 3, path: 'old.mov' },
+        { id: 4, path: 'raw.mkv' },
+        { id: 5, path: 'still.png' },
+      ],
+    });
+    // 4 movie sources flagged unresolved with a clear reason; 1 image source loads normally.
+    expect(bundle.assets.map((a) => a.id)).toEqual([5]);
+    expect(bundle.unresolved.map((u) => u.id)).toEqual([1, 2, 3, 4]);
+    for (const u of bundle.unresolved) {
+      expect(u.reason).toMatch(/movie sources not yet supported/);
+    }
+  });
+});
