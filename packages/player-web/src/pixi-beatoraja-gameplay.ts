@@ -23,7 +23,7 @@
 // glows, judge plates and HUD text from the engine state, but the actual scrolling notes and BGA video
 // land in follow-up patches that add a sub-container layered on top of the skin view.
 
-import { Container, Graphics, type Ticker } from 'pixi.js';
+import { Container, Graphics, Text, type Ticker } from 'pixi.js';
 import type { BeMusicJson } from '@be-music/json';
 import type {
   BeatorajaImageElement,
@@ -680,12 +680,60 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     }
   }
 
+  /**
+   * Show a transient overlay text on the gameplay canvas. Used by the cover-toggle keys
+   * (H / J / K) so the user gets visual feedback without dropping eyes from the lane.
+   * Fades out after {@link COVER_INDICATOR_FADE_MS}; re-firing while the previous fade is
+   * in flight resets the timer + replaces the text.
+   */
+  private flashCoverIndicator(text: string): void {
+    if (this.coverIndicatorText === undefined) {
+      const node = new Text({
+        text: '',
+        style: {
+          fontFamily: 'sans-serif',
+          fontSize: 28,
+          fill: 0xffe066,
+          fontWeight: '700',
+          stroke: { color: 0x000000, width: 4 },
+        },
+      });
+      node.anchor.set(0.5, 0.5);
+      node.eventMode = 'none';
+      this.root.addChild(node);
+      this.coverIndicatorText = node;
+    }
+    this.coverIndicatorText.text = text;
+    // Position recomputed each fire — root.scale changes as the user resizes the window;
+    // anchoring at canvas-centre via the live `view.width / height` keeps the indicator
+    // visually centred regardless of scale.
+    this.coverIndicatorText.x = this.view.width / 2;
+    this.coverIndicatorText.y = this.view.height * 0.2;
+    this.coverIndicatorText.alpha = 1;
+    this.coverIndicatorText.visible = true;
+    this.coverIndicatorShownAtMs = performance.now();
+  }
+  private coverIndicatorText: Text | undefined;
+  private coverIndicatorShownAtMs = 0;
+
   private tick(): void {
     if (this.disposed) return;
     // Re-fit on every tick. The Pixi `Application`'s `resizeTo` may have changed `app.screen` after our
     // last fit (mount-time layout, window resize, dev-tools open). Cheap when nothing changed — the
     // setter early-outs when `(width, height)` matches the cached values.
     this.fitToStage();
+    // Cover indicator fade — emitted when the user taps H / J / K. Lingers fully visible for
+    // 800ms then fades over the next 600ms. Single-Text node, cheap to update per frame.
+    if (this.coverIndicatorText !== undefined && this.coverIndicatorText.visible) {
+      const elapsed = performance.now() - this.coverIndicatorShownAtMs;
+      if (elapsed < 800) {
+        this.coverIndicatorText.alpha = 1;
+      } else if (elapsed < 1400) {
+        this.coverIndicatorText.alpha = 1 - (elapsed - 800) / 600;
+      } else {
+        this.coverIndicatorText.visible = false;
+      }
+    }
     if (this.uiSignals) {
       const result = drainWebUiSignals(
         this.uiSignals,
@@ -824,6 +872,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       event.preventDefault();
       const enabled = this.adapter.isHiddenCoverEnabled();
       this.adapter.setHiddenCover(this.adapter.getHiddenCover() || 0.25, !enabled);
+      this.flashCoverIndicator(
+        !enabled
+          ? `Hidden cover ON (${Math.round((this.adapter.getHiddenCover() || 0.25) * 100)}%)`
+          : 'Hidden cover OFF',
+      );
       return;
     }
     if (event.key === 'j' || event.key === 'J' || event.key === 'k' || event.key === 'K') {
@@ -835,6 +888,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       // for the common "I want a 25% hidden cover" interaction.
       const enable = this.adapter.isHiddenCoverEnabled() || (direction > 0 && next > 0);
       this.adapter.setHiddenCover(next, enable);
+      this.flashCoverIndicator(
+        enable ? `Hidden cover ${Math.round(next * 100)}%` : 'Hidden cover OFF',
+      );
       return;
     }
     // Hi-speed (note scroll multiplier) — `ArrowUp` / `ArrowDown` step by 0.1 per press, Shift
@@ -866,6 +922,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // surfaces) sees the same value. The next tick reads it back into `this.hiSpeed` from
     // the same signal, so no fight between sources.
     this.stateSignals?.setHighSpeed(next);
+    // Reuse the cover-indicator overlay for hispeed feedback — same fade timing, same
+    // anchor position. Single transient overlay node serves multiple key actions.
+    this.flashCoverIndicator(`Hi-Speed ×${next.toFixed(2)}`);
   }
 
   /**
