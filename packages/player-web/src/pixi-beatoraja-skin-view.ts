@@ -1085,6 +1085,30 @@ export class BeatorajaPlaySkinView {
     // downstream update code doesn't branch — see `updateTextEntry`.
     const TextCtor: typeof Text | typeof BitmapText =
       fontKind === 'bitmap' && skinFamily !== undefined ? BitmapText : Text;
+    // Outline / drop-shadow styling (audit 2.10). Beatoraja's text element carries
+    // `outlineColor`/`outlineWidth` and `shadowColor`/`shadowOffset{X,Y}`/`shadowSmoothness`;
+    // the alpha byte of the color string is `00` when the feature is disabled, so we gate
+    // application on `alpha > 0` (matching beatoraja's "outline color disabled" sentinel).
+    // ModernChic Decide's title / genre / artist / stage labels (textproperty.lua:62-71)
+    // rely on this — without the styling the text reads as flat white-on-bg with no outline,
+    // which loses the difficulty-tinted ring the skin uses to communicate the chart's
+    // difficulty level.
+    const stroke =
+      element.outlineColor.alpha > 0 && element.outlineWidth > 0
+        ? { color: element.outlineColor.rgb, alpha: element.outlineColor.alpha, width: element.outlineWidth }
+        : undefined;
+    // Pixi expresses drop shadow as `{ distance, angle }` polar coordinates. Beatoraja
+    // authors offsets in `(x, y)` cartesian — convert via hypot / atan2.
+    const dropShadow =
+      element.shadowColor.alpha > 0 && (element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0)
+        ? {
+            color: element.shadowColor.rgb,
+            alpha: element.shadowColor.alpha,
+            distance: Math.hypot(element.shadowOffsetX, element.shadowOffsetY),
+            angle: Math.atan2(element.shadowOffsetY, element.shadowOffsetX),
+            blur: element.shadowSmoothness,
+          }
+        : undefined;
     const text = new TextCtor({
       text: '',
       style: {
@@ -1092,6 +1116,12 @@ export class BeatorajaPlaySkinView {
         fontSize: requestedSize,
         fill: 0xffffff,
         align: element.align,
+        // Pixi types treat `wordWrap` and `wordWrapWidth` as a pair; we leave the width
+        // unset so it falls back to the dst rect bounds the entry sets per-frame in
+        // `updateTextEntry` (via `style.wordWrapWidth`).
+        wordWrap: element.wrapping,
+        ...(stroke !== undefined ? { stroke } : {}),
+        ...(dropShadow !== undefined ? { dropShadow } : {}),
       },
       alpha: 0,
     });
