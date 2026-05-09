@@ -134,19 +134,107 @@ export function expandBeatorajaJudgeDestinations(
     //   `nowCount = judgenow < 3 ? count[judgenow] : null;`
     // Tiers 3..5 (BD / PR / MS) get NO number — beatoraja deliberately hides the readout on
     // failed judgments so a stale combo / FAST-SLOW digit doesn't linger over a miss splash.
-    // The previous TS impl emitted all 6 tiers identically, so authoring `judge.numbers[3..5]`
-    // (or, more commonly, having ALL 6 entries reference the same MAXCOMBO ref like
-    // ModernChic Play/lua/sp/judge.lua and GdbG play/values.lua do) painted a wrong digit on
-    // BAD/POOR/MISS where Java would render nothing (audit 1.3).
+    //
+    // Position fold: `judge.numbers[i].dst` is RELATIVE to the matching `judge.images[i].dst`
+    // — beatoraja's `SkinJudge.draw()` paints the number at `(parent.x + child.x, parent.y +
+    // child.y)`. The previous TS impl emitted children verbatim with their `(child.x, child.y)`
+    // as ABSOLUTE skin coords, so default `play5.json`'s `judgen-pg` at `{x:200, y:0}` painted
+    // at the bottom of the screen (Y-UP `y=0`) next to DURATION instead of "to the right of
+    // the PERFECT word". Folded dst keyframes are emitted per parent variant (the parent's
+    // `if[layout]`-gated rect drives the absolute position; the child's `(x, y, w, h)` adds the
+    // offset and overrides the size). Pure-time keyframes (e.g. `{time:500}` fade-out) pass
+    // through unchanged so the animation timeline survives the fold.
     const numberLimit = Math.min(judge.numbers.length, 3);
     for (let i = 0; i < numberLimit; i += 1) {
       const child = judge.numbers[i];
+      const parent = judge.images[i];
       if (child === undefined) continue;
       const gate = ops[i] ?? ops[0]!;
-      out.push(addOpGate(child, gate));
+      const folded = parent !== undefined ? foldChildDestIntoParent(child, parent) : child;
+      out.push(addOpGate(folded, gate));
     }
   }
   return out;
+}
+
+/**
+ * Fold each child dst keyframe's `(x, y)` into the matching parent's authored position so the
+ * combined record paints at the parent's anchor + child offset. The CHILD'S `(w, h)` overrides
+ * the parent (numbers are typically smaller than the judgef word sprite); other fields like
+ * `r/g/b/a/angle` pass through from the child verbatim.
+ *
+ * Layout-variant handling: parent dst entries wrapped in `{if:[...], value:{...}}` (= dst alts
+ * gated on layout option ops) emit one matching `{if:[...], value:{...}}` entry per parent
+ * variant in the output, joined with the child's position-defining keyframe. Direct keyframes
+ * (`{time:N, x:X, ...}`) on the parent emit one position-folded keyframe per child position
+ * keyframe at that parent's coords. Pure-time child keyframes (e.g. `{time:500}` fade) pass
+ * through unchanged.
+ */
+function foldChildDestIntoParent(
+  child: Readonly<Record<string, unknown>>,
+  parent: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const childDst = Array.isArray(child.dst) ? (child.dst as ReadonlyArray<unknown>) : [];
+  const parentDst = Array.isArray(parent.dst) ? (parent.dst as ReadonlyArray<unknown>) : [];
+  if (childDst.length === 0 || parentDst.length === 0) return child;
+
+  // Split the child's keyframes: position-bearing entries get folded against parent positions;
+  // pure-time entries (no x/y) survive verbatim as fade-out / hold cues.
+  const childPositionKfs: Array<Readonly<Record<string, unknown>>> = [];
+  const childPureKfs: Array<Readonly<Record<string, unknown>>> = [];
+  for (const kf of childDst) {
+    if (kf === null || typeof kf !== 'object') continue;
+    const obj = kf as Readonly<Record<string, unknown>>;
+    if (typeof obj.x === 'number' || typeof obj.y === 'number') childPositionKfs.push(obj);
+    else childPureKfs.push(obj);
+  }
+  if (childPositionKfs.length === 0) return child;
+
+  // Walk parent keyframes. For each one that defines a position, emit folded child variants.
+  const out: Array<Readonly<Record<string, unknown>>> = [];
+  let parentHadPositionedKf = false;
+  for (const parentKf of parentDst) {
+    if (parentKf === null || typeof parentKf !== 'object') continue;
+    const parentObj = parentKf as Readonly<Record<string, unknown>>;
+    // `{if:[...], value:{...}}` wrapper — preserve the if-gating around the folded child entries.
+    if (Array.isArray(parentObj.if) && parentObj.value !== undefined) {
+      const inner = parentObj.value as Readonly<Record<string, unknown>>;
+      if (typeof inner.x === 'number' || typeof inner.y === 'number') {
+        parentHadPositionedKf = true;
+        const px = numberOrZero(inner.x);
+        const py = numberOrZero(inner.y);
+        for (const ckf of childPositionKfs) {
+          const folded: Record<string, unknown> = { ...ckf };
+          folded.x = px + numberOrZero(ckf.x);
+          folded.y = py + numberOrZero(ckf.y);
+          out.push({ if: parentObj.if, value: folded });
+        }
+      }
+      continue;
+    }
+    // Direct keyframe with x/y. Combine with each child position kf.
+    if (typeof parentObj.x === 'number' || typeof parentObj.y === 'number') {
+      parentHadPositionedKf = true;
+      const px = numberOrZero(parentObj.x);
+      const py = numberOrZero(parentObj.y);
+      for (const ckf of childPositionKfs) {
+        const folded: Record<string, unknown> = { ...ckf };
+        folded.x = px + numberOrZero(ckf.x);
+        folded.y = py + numberOrZero(ckf.y);
+        out.push(folded);
+      }
+    }
+  }
+  // Parent never authored a positioned keyframe → no fold to perform. Pass the child through
+  // verbatim so authors that intentionally pin numbers to absolute coords (rare; no in-tree
+  // skin currently does this) keep their authored layout.
+  if (!parentHadPositionedKf) return child;
+  for (const kf of childPureKfs) out.push(kf);
+  return { ...child, dst: out };
+}
+
+function numberOrZero(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 }
 
 /**

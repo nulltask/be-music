@@ -139,4 +139,72 @@ describe('expandBeatorajaJudgeDestinations', () => {
     expect(expanded).toHaveLength(1);
     expect(expanded[0]).toMatchObject({ id: 'pg-count-only', op: [241] });
   });
+
+  it('folds judge.numbers[i].dst into judge.images[i].dst per layout variant', () => {
+    // Beatoraja's `SkinJudge.draw()` paints `numbers[i]` at `(parent.x + child.x, parent.y +
+    // child.y)`. Default `play5.json` authors `judgef-pg.dst = {x:70, y:240}` (1P layout
+    // gated on `if[920]`) / `{x:1010, y:240}` (2P gated on `if[921]`) and `judgen-pg.dst =
+    // {x:200, y:0, w:40, h:40}`. The folded output should pin the number at `(70+200, 240+0)`
+    // for 1P and `(1010+200, 240+0)` for 2P — NOT at the literal `(200, 0)` (which would put
+    // the digit at Y-UP `y=0` = bottom of canvas next to DURATION). Pure-time fade-out kfs
+    // (no x/y) pass through unchanged.
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2010,
+        index: 0,
+        images: [
+          {
+            id: 'judgef-pg',
+            timer: 46,
+            dst: [
+              { if: [920], value: { time: 0, x: 70, y: 240, w: 180, h: 40 } },
+              { if: [921], value: { time: 0, x: 1010, y: 240, w: 180, h: 40 } },
+              { time: 500 },
+            ],
+          },
+        ],
+        numbers: [
+          {
+            id: 'judgen-pg',
+            timer: 46,
+            dst: [
+              { time: 0, x: 200, y: 0, w: 40, h: 40 },
+              { time: 500 },
+            ],
+          },
+        ],
+      },
+    ]);
+    const expanded = expandBeatorajaJudgeDestinations(judges);
+    // 1 image + 1 number = 2 destinations
+    expect(expanded).toHaveLength(2);
+    const number = expanded[1]! as Record<string, unknown>;
+    expect(number.id).toBe('judgen-pg');
+    expect(number.dst).toEqual([
+      // 1P-gated keyframe — `(70+200, 240+0, 40, 40)`
+      { if: [920], value: { time: 0, x: 270, y: 240, w: 40, h: 40 } },
+      // 2P-gated keyframe — `(1010+200, 240+0, 40, 40)`
+      { if: [921], value: { time: 0, x: 1210, y: 240, w: 40, h: 40 } },
+      // Pure-time fade-out passes through unchanged
+      { time: 500 },
+    ]);
+  });
+
+  it('passes the child through unchanged when the matching parent has no positioned dst', () => {
+    // Some skins author `judge.images[i]` with empty / time-only dst (e.g. an animation hold
+    // with no spatial keyframe). Folding has nothing to add to in that case — the child's
+    // own dst stays as authored. Verifies the fold doesn't drop kfs when there's no parent
+    // position to combine with.
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2010,
+        index: 0,
+        images: [{ id: 'judgef-pg', dst: [{ time: 0 }] }],
+        numbers: [{ id: 'judgen-pg', dst: [{ time: 0, x: 100, y: 200, w: 40, h: 40 }] }],
+      },
+    ]);
+    const expanded = expandBeatorajaJudgeDestinations(judges);
+    const number = expanded[1]! as Record<string, unknown>;
+    expect(number.dst).toEqual([{ time: 0, x: 100, y: 200, w: 40, h: 40 }]);
+  });
 });
