@@ -299,6 +299,22 @@ export interface BeatorajaSkin extends BeatorajaSkinHeader {
   isDisapearLineLinkLift?: boolean | number;
   bpm?: Readonly<Record<string, unknown>>;
   mine?: Readonly<Record<string, unknown>>;
+  /**
+   * Skin-driven event triggers (audit 2.2). Each entry pairs a `condition` (boolean Lua
+   * function or numeric op id) with an `action` (Lua function fired when condition flips
+   * true) and an optional `minInterval` rate-limit. The host invokes the matching actions
+   * each frame via the runtime adapter — see `evaluateBeatorajaCustomEvents` in the
+   * scene-tick path. ModernChic uses these heavily for SE triggers (full-combo voice,
+   * IR-rank-update notifications, panel-toggle transitions).
+   */
+  customEvents?: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  /**
+   * Skin-driven timer triggers (audit 2.2). Each entry pairs a numeric `id` with a `timer`
+   * Lua function — when the function returns true (or a non-off microsecond timestamp), the
+   * host stamps the matching engine timer slot. Used by skins to drive per-frame keyframe
+   * animations from a scripted condition the engine doesn't track natively.
+   */
+  customTimers?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   /** Anything else the skin author dropped in — preserved for forward compatibility. */
   [extra: string]: unknown;
 }

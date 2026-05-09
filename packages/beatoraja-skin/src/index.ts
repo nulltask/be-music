@@ -78,6 +78,17 @@ export {
 export type { BeatorajaFloatValueElement } from './beatoraja-skin-floatvalue.ts';
 export { normalizeBeatorajaFloatValues } from './beatoraja-skin-floatvalue.ts';
 export type {
+  BeatorajaCustomEvent,
+  BeatorajaCustomEventState,
+  BeatorajaCustomTimer,
+} from './beatoraja-skin-customevent.ts';
+export {
+  evaluateBeatorajaCustomEvents,
+  evaluateBeatorajaCustomTimers,
+  normalizeBeatorajaCustomEvents,
+  normalizeBeatorajaCustomTimers,
+} from './beatoraja-skin-customevent.ts';
+export type {
   BeatorajaBooleanPropertyRef,
   BeatorajaDestinationGroup,
   BeatorajaDestinationKeyframe,
