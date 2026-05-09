@@ -216,9 +216,25 @@ export function composeBeatorajaValueCells(element: BeatorajaValueElement, value
   const digits = Math.max(1, Math.trunc(element.digit));
   const cells: BeatorajaValueDigitCell[] = Array.from({ length: digits });
   const divx = Math.max(1, element.divx);
-  const hasBlankCell = divx >= 11;
-  const blankCell = hasBlankCell ? divx - 1 : -1;
-  const zeroCell = 0;
+
+  // 24-cell signed dual-strip detection (audit 2.7). Beatoraja's
+  // `JsonPlaySkinObjectLoader.java:103-115` checks `images.length % 24 == 0` and splits the
+  // strip into a 12-cell positive half (cells 0..11) + 12-cell negative half (cells 12..23).
+  // Cells 0..9 are the digits, 10 is the blank glyph, 11 is the sign — the negative half is
+  // the same layout offset by 12 (negative-coloured glyphs baked in, no separate sign cell
+  // needed at draw time). Compose against the active half, picking the offset based on the
+  // numeric sign.
+  const isSignedDualStrip = divx % 24 === 0;
+  const halfDivx = isSignedDualStrip ? divx / 2 : divx;
+  const hasBlankCell = halfDivx >= 11;
+  // For the 24-cell dual-strip path each half is `halfDivx = 12` cells: 0..9 digits, 10
+  // blank, 11 reserved (sign in beatoraja's atlas — unused since the sign is baked into
+  // negative-coloured digits). Blank lives at `halfDivx - 2 = 10`. The legacy single-strip
+  // path keeps the historic `divx - 1` cell for backward compat (a known imprecision when
+  // divx == 12 — the single-strip blank index lands on the sign cell, but every fix-tested
+  // skin authors against this), so only override the blank index for the dual-strip case.
+  const blankCellInHalf = !hasBlankCell ? -1 : isSignedDualStrip ? halfDivx - 2 : halfDivx - 1;
+  const zeroCellInHalf = 0;
 
   // Stringify the absolute value with leading-zero padding wide enough to fit the digit count.
   const safeValue = Number.isFinite(value) ? Math.trunc(value) : 0;
@@ -226,22 +242,32 @@ export function composeBeatorajaValueCells(element: BeatorajaValueElement, value
   const abs = Math.abs(safeValue);
   const raw = abs.toString(10);
 
+  // For dual-strip, every cell within the active half gets shifted to the matching half. The
+  // blank cell stays inside the half (so a blank slot in negative mode picks cell 22, not 10).
+  const halfOffset = isSignedDualStrip && isNegative ? halfDivx : 0;
+  const blankCell = blankCellInHalf >= 0 ? blankCellInHalf + halfOffset : -1;
+  const zeroCell = zeroCellInHalf + halfOffset;
+
   type Slot = { cell: number; hidden: boolean };
   const reversed: Slot[] = [];
   for (let i = 0; i < digits; i += 1) {
     if (i < raw.length) {
-      // Digit position from the right edge — always painted.
+      // Digit position from the right edge — always painted. Offset into the active half so
+      // negative dual-strip values pick the negative-coloured digit cells.
       const ch = raw[raw.length - 1 - i]!;
       const idx = ch.charCodeAt(0) - 48;
-      reversed.push({ cell: idx >= 0 && idx < divx ? idx : Math.min(divx - 1, idx), hidden: false });
-    } else if (isNegative && i === raw.length) {
-      // Minus sign slot. When the strip carries no blank / sign cells, hide the slot entirely.
+      const cellInHalf = idx >= 0 && idx < halfDivx ? idx : Math.min(halfDivx - 1, idx);
+      reversed.push({ cell: cellInHalf + halfOffset, hidden: false });
+    } else if (isNegative && i === raw.length && !isSignedDualStrip) {
+      // Minus sign slot for SINGLE-strip (`divx == 11/12`) layouts. The dual-strip path bakes
+      // the sign into the digits themselves, so this branch only fires for the legacy single
+      // strip. When the strip carries no sign / blank cell at all, hide the slot.
       reversed.push({ cell: hasBlankCell ? blankCell : 0, hidden: !hasBlankCell });
     } else if (element.padding === 1) {
-      // Leading-zero pad — paint cell 0.
+      // Leading-zero pad — paint cell 0 (within the active half for dual-strip).
       reversed.push({ cell: zeroCell, hidden: false });
     } else if (hasBlankCell) {
-      // Leading-blank pad — paint the strip's authored blank cell.
+      // Leading-blank pad — paint the strip's authored blank cell (within the active half).
       reversed.push({ cell: blankCell, hidden: false });
     } else {
       // Digits-only strip + leading-blank pad → hide the slot. Renderer skips the matching sprite.
