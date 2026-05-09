@@ -1663,11 +1663,19 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       icon.y = iconY;
       icon.tint = isSelected ? 0xffe066 : 0xffffff;
 
-      // Title label x — pushed past either the label sub-rect's right edge (when
-      // authored) or the legacy icon-inset spacing.
+      // Title label x — pushed past whichever of label / level sub-rects extends further
+      // right within the bar. Skins authoring `songlist.level[]` (default beatoraja, GdbG,
+      // ModernChic) place the chart-level number at a fixed offset from the bar's left;
+      // without including its right edge in the title-x computation, the title text
+      // overlaps with the level number (visible "Nig2t Parade Zoetrope" bug). Skins that
+      // omit both sub-rects fall back to the legacy icon-inset spacing.
+      const levelRectForOffset = this.songList?.level;
+      const labelRightEdge = labelRect !== undefined ? labelRect.x + labelRect.w : 0;
+      const levelRightEdge = levelRectForOffset !== undefined ? levelRectForOffset.x + levelRectForOffset.w : 0;
+      const subRectRightEdge = Math.max(labelRightEdge, levelRightEdge);
       const labelTextOffsetX =
-        labelRect !== undefined
-          ? rect.x + labelRect.x + labelRect.w + Math.max(8, Math.floor(rect.h * 0.2))
+        subRectRightEdge > 0
+          ? rect.x + subRectRightEdge + Math.max(8, Math.floor(rect.h * 0.2))
           : iconX + Math.max(20, Math.floor(rect.h * 0.5));
       const labelX = labelTextOffsetX;
       label.x = labelX;
