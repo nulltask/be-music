@@ -270,6 +270,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       // uses STAGEFILE under the lane cover; default skin's loading panel anchors on it too.
       // Missing entries return undefined → matching destinations stay hidden.
       chartImageProvider: (id) => resolveChartImage(this.options.chartImages, id),
+      // Skin-authored cover-adjustment buttons (LANECOVER / LIFT / HIDDEN). Each click steps
+      // the matching ratio; shift-click reverses direction. Without this routing, clicking
+      // the skin's authored cover buttons during play was inert — the skin visualised the
+      // press but the underlying offset stayed put.
+      onButtonAction: (act, modifiers) => this.handleCoverButton(act, modifiers),
     });
     // Backdrop sits behind the skin container so the letterbox bars are filled with a stable color
     // instead of leaking the page's CSS background through.
@@ -522,6 +527,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveJudgeGraphBars: (type) => this.adapter.resolveJudgeGraphBars(type),
       resolveTimingSamples: () => this.adapter.resolveTimingSamples(),
       chartImageProvider: (id) => resolveChartImage(this.options.chartImages, id),
+      onButtonAction: (act, modifiers) => this.handleCoverButton(act, modifiers),
     });
     const noteImageMap = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(opts.skin.image)) {
@@ -607,6 +613,44 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       if (slot.r && axes.r !== undefined) next.r = axes.r;
       if (slot.a && axes.a !== undefined) next.a = axes.a;
       this.adapter.setOffset(slot.id, next);
+    }
+  }
+
+  /**
+   * Route a skin-authored cover-button click (`act = LANECOVER (330) / LIFT (331) / HIDDEN
+   * (332)`) into the matching adapter setter. Each click steps the ratio by `0.05`; the
+   * `shift` modifier reverses direction. Hidden cover toggles between disabled and a
+   * stepped-up ratio so the player can flip it on with a single click and tap-to-cycle
+   * through finer adjustments.
+   *
+   * Other `act` codes (PLAY / AUTOPLAY / etc.) are no-ops here — those are select-scene
+   * concerns. Beatoraja's reference engine routes the same act codes through different
+   * handlers depending on the active scene.
+   */
+  private handleCoverButton(act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }): void {
+    const direction = modifiers?.shift === true ? -1 : 1;
+    const STEP = 0.05;
+    switch (act) {
+      case 330: // LANECOVER
+        this.adapter.adjustLanecover(direction * STEP);
+        return;
+      case 331: // LIFT
+        this.adapter.adjustLift(direction * STEP);
+        return;
+      case 332: // HIDDEN
+        // Toggle off → on at ratio 0.05; subsequent clicks step the ratio. Shift-click
+        // steps down and disables when crossing 0.
+        if (!this.adapter.isHiddenCoverEnabled()) {
+          this.adapter.setHiddenCover(STEP, true);
+          return;
+        }
+        const next = this.adapter.getHiddenCover() + direction * STEP;
+        if (next <= 0) {
+          this.adapter.setHiddenCover(0, false);
+        } else {
+          this.adapter.setHiddenCover(Math.min(1, next), true);
+        }
+        return;
     }
   }
 
@@ -742,6 +786,29 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       event.preventDefault();
       const step = (event.shiftKey ? 0.05 : 0.01) * (event.key === 'End' ? 1 : -1);
       this.adapter.adjustLift(step);
+      return;
+    }
+    // Hidden cover — `H` toggles enable/disable; `J` / `K` adjust the ratio when enabled
+    // (J = lower / less coverage, K = raise / more coverage). Mirrors `LaneRenderer`'s
+    // OFFSET_HIDDEN_COVER block: disabled emits `a = -255` (cover invisible), enabled
+    // shifts the cover edge by `ratio × laneHeight` (with `(1 - lift)` factor when lift
+    // is also active). Without this hotkey the only way to toggle hidden was via the
+    // skin's authored HIDDEN button (act 332) — most skins don't expose one.
+    if (event.key === 'h' || event.key === 'H') {
+      event.preventDefault();
+      const enabled = this.adapter.isHiddenCoverEnabled();
+      this.adapter.setHiddenCover(this.adapter.getHiddenCover() || 0.25, !enabled);
+      return;
+    }
+    if (event.key === 'j' || event.key === 'J' || event.key === 'k' || event.key === 'K') {
+      event.preventDefault();
+      const direction = event.key === 'k' || event.key === 'K' ? 1 : -1;
+      const step = (event.shiftKey ? 0.05 : 0.01) * direction;
+      const next = Math.max(0, Math.min(1, this.adapter.getHiddenCover() + step));
+      // Auto-enable when adjusting upward from a disabled state — saves one keypress
+      // for the common "I want a 25% hidden cover" interaction.
+      const enable = this.adapter.isHiddenCoverEnabled() || (direction > 0 && next > 0);
+      this.adapter.setHiddenCover(next, enable);
       return;
     }
     // Hi-speed (note scroll multiplier) — `ArrowUp` / `ArrowDown` step by 0.1 per press, Shift
